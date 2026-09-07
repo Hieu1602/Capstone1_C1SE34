@@ -1,2 +1,2 @@
 # Capstone1_C1SE34
-Capston1-NCKH
+Capstone1-NCKH
