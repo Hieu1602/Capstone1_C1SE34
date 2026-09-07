@@ -1,0 +1,12 @@
+{
+  "venvPath": "smart-elderly-care-ai/backend",
+  "venv": ".venv",
+  "extraPaths": [
+    "smart-elderly-care-ai/backend",
+    "smart-elderly-care-ai/backend/.venv/Lib/site-packages",
+    "smart-elderly-care-ai/edge/src"
+  ],
+  "reportMissingImports": "none",
+  "reportMissingModuleSource": "none",
+  "reportMissingTypeStubs": "none"
+}

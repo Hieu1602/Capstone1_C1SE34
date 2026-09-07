@@ -1,0 +1,2 @@
+include:
+  - path: ./smart-elderly-care-ai/docker-compose.yml

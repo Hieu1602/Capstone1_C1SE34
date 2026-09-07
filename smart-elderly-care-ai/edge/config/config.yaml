@@ -1,0 +1,128 @@
+# ============================================================
+# Edge Hub Configuration - Orange Pi 5
+# Smart Elderly Care AI System
+# ============================================================
+
+device:
+  id: "hub-orangepi5-001"
+  name: "Living Room Hub"
+  location: "Living Room"
+  timezone: "Asia/Ho_Chi_Minh"
+
+# ---- Camera Configuration ----
+camera:
+  source: "rtsp://192.168.1.100:554/stream"   # RTSP URL hoặc 0 cho USB cam
+  fps: 15
+  resolution:
+    width: 1280
+    height: 720
+  reconnect_interval_sec: 5
+
+# ---- AI Model Paths ----
+ai:
+  vision:
+    model_path: "src/ai/vision/models/yolov8n-pose.rknn"  # RKNN for NPU
+    fallback_model: "src/ai/vision/models/yolov8n-pose.onnx"
+    confidence_threshold: 0.60
+    fall_detection:
+      enabled: true
+      # Tỷ lệ chiều cao/rộng bounding box khi ngã (nằm ngang)
+      horizontal_ratio_threshold: 0.5
+      # Số frame liên tiếp phải phát hiện để xác nhận té ngã
+      consecutive_frames: 5
+  audio:
+    model_path: "src/ai/audio/models/yamnet.tflite"
+    sample_rate: 16000
+    chunk_duration_sec: 1.0
+    alert_classes:
+      - "Screaming"
+      - "Crying"
+      - "Glass shatter"
+      - "Thud"
+    alert_confidence_threshold: 0.75
+
+# ---- Sensor Thresholds (Ngưỡng cảnh báo) ----
+thresholds:
+  heart_rate:
+    min: 50   # bpm - Nhịp tim chậm bất thường
+    max: 120  # bpm - Nhịp tim nhanh bất thường
+  spo2:
+    min: 90   # % - SpO2 nguy hiểm < 90%
+    warning: 94  # % - SpO2 cảnh báo
+  temperature:
+    skin_max: 38.5  # °C - Nhiệt độ da (AMG8833)
+    skin_min: 35.0  # °C - Hạ thân nhiệt
+  presence:
+    timeout_minutes: 30  # Không phát hiện chuyển động sau N phút -> alert
+
+# ---- BLE Smart Band ----
+ble:
+  enabled: true
+  device_name: "SmartBand_001"
+  device_mac: "AA:BB:CC:DD:EE:FF"
+  service_uuid: "0000180d-0000-1000-8000-00805f9b34fb"   # Heart Rate Service
+  characteristic_uuid: "00002a37-0000-1000-8000-00805f9b34fb"
+  reconnect_interval_sec: 10
+  poll_interval_sec: 5
+
+# ---- Thermal Camera AMG8833 ----
+thermal:
+  enabled: true
+  i2c_bus: 1
+  i2c_address: 0x69  # hoặc 0x68
+  poll_interval_sec: 2
+
+# ---- MQTT Broker (EMQX) ----
+mqtt:
+  broker_host: "emqx.yourdomain.com"
+  broker_port: 1883
+  broker_tls_port: 8883
+  use_tls: false
+  username: "edge_hub"
+  password: "CHANGE_ME_IN_ENV"
+  client_id: "hub-orangepi5-001"
+  keepalive: 60
+  qos: 1
+  topics:
+    telemetry: "care/{device_id}/telemetry"
+    alert:     "care/{device_id}/alert"
+    command:   "care/{device_id}/command"
+    heartbeat: "care/{device_id}/heartbeat"
+
+# ---- Sensor Fusion / Decision Matrix ----
+fusion:
+  # Tối thiểu N nguồn phải đồng thuận để kích hoạt alert
+  fall_detection_min_sources: 2
+  # Thời gian debounce (giây) tránh spam alert
+  alert_debounce_sec: 30
+  # Thời gian lưu ring buffer video (giây)
+  ring_buffer_duration_sec: 5
+  alert_clip_after_sec: 2  # Clip thêm 2s sau sự kiện
+
+# ---- Local Speaker ----
+speaker:
+  enabled: true
+  device: "default"
+  volume: 0.85
+  language: "vi"
+  reminder_schedule:
+    - time: "08:00"
+      message: "Chào buổi sáng! Đã đến giờ uống thuốc buổi sáng."
+    - time: "12:30"
+      message: "Đã đến giờ ăn trưa và uống thuốc."
+    - time: "21:00"
+      message: "Đã đến giờ uống thuốc buổi tối. Chúc ngủ ngon!"
+
+# ---- Local Streaming ----
+streaming:
+  enabled: true
+  protocol: "rtsp"   # rtsp | webrtc
+  rtsp_port: 8554
+  webrtc_signaling_port: 8080
+
+# ---- Logging ----
+logging:
+  level: "INFO"   # DEBUG | INFO | WARNING | ERROR
+  file: "logs/edge.log"
+  max_bytes: 10485760  # 10 MB
+  backup_count: 5

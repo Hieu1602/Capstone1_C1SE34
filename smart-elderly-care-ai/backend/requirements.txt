@@ -1,0 +1,44 @@
+# Backend – FastAPI Cloud
+# Python 3.11+
+
+# ---- Web Framework ----
+fastapi==0.111.0
+uvicorn[standard]==0.29.0
+python-multipart==0.0.9
+
+# ---- Database ----
+sqlalchemy[asyncio]>=2.0.30
+asyncpg>=0.29.0
+alembic>=1.13.1
+
+# ---- Redis ----
+redis[asyncio]>=5.0.4
+
+# ---- Pydantic / Config ----
+pydantic>=2.7.1
+pydantic-settings>=2.2.1
+email-validator>=2.0.0
+pydantic[email]
+
+# ---- Auth / Security ----
+python-jose[cryptography]==3.3.0
+passlib[bcrypt]==1.7.4
+
+# ---- MQTT ----
+paho-mqtt==1.6.1
+
+# ---- Firebase FCM ----
+firebase-admin==6.5.0
+
+# ---- MinIO / S3 ----
+minio==7.2.7
+
+# ---- Reports ----
+reportlab==4.2.0
+openpyxl==3.1.2
+
+# ---- HTTP ----
+httpx==0.27.0
+
+# ---- Logging ----
+loguru==0.7.2

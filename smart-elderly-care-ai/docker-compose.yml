@@ -1,0 +1,152 @@
+# ============================================================
+# docker-compose.yml
+# Smart Elderly Care AI – Cloud Infrastructure
+# ============================================================
+# Dịch vụ: Backend FastAPI, TimescaleDB, Redis, EMQX, MinIO
+#
+# Khởi động:  docker-compose up -d
+# Dừng:       docker-compose down
+# Xem logs:   docker-compose logs -f backend
+# ============================================================
+
+version: "3.9"
+
+services:
+
+  # ---------------------------------------------------------------
+  # FastAPI Backend
+  # ---------------------------------------------------------------
+  backend:
+    build:
+      context: ./backend
+      dockerfile: Dockerfile
+    container_name: elderly_care_backend
+    restart: unless-stopped
+    ports:
+      - "8000:8000"
+    environment:
+      DATABASE_URL:   "postgresql+asyncpg://postgres:${POSTGRES_PASSWORD}@timescaledb:5432/elderly_care"
+      REDIS_URL:      "redis://redis:6379/0"
+      MQTT_BROKER_HOST: "emqx"
+      MQTT_BROKER_PORT: "1883"
+      MQTT_USERNAME:  "${MQTT_USERNAME}"
+      MQTT_PASSWORD:  "${MQTT_PASSWORD}"
+      MINIO_ENDPOINT: "minio:9000"
+      MINIO_ACCESS_KEY: "${MINIO_ACCESS_KEY}"
+      MINIO_SECRET_KEY: "${MINIO_SECRET_KEY}"
+      SECRET_KEY:     "${SECRET_KEY}"
+    depends_on:
+      timescaledb:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+      emqx:
+        condition: service_started
+    volumes:
+      - ./backend:/app
+    networks:
+      - elderly_care_net
+
+  # ---------------------------------------------------------------
+  # TimescaleDB (PostgreSQL + Time-series extension)
+  # ---------------------------------------------------------------
+  timescaledb:
+    image: timescale/timescaledb:latest-pg16
+    container_name: elderly_care_timescaledb
+    restart: unless-stopped
+    ports:
+      - "5432:5432"
+    environment:
+      POSTGRES_USER:     postgres
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD}
+      POSTGRES_DB:       elderly_care
+    volumes:
+      - timescale_data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U postgres"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+    networks:
+      - elderly_care_net
+
+  # ---------------------------------------------------------------
+  # Redis (Cache + WebSocket Pub/Sub)
+  # ---------------------------------------------------------------
+  redis:
+    image: redis:7.2-alpine
+    container_name: elderly_care_redis
+    restart: unless-stopped
+    ports:
+      - "6379:6379"
+    command: redis-server --requirepass ${REDIS_PASSWORD}
+    volumes:
+      - redis_data:/data
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+    networks:
+      - elderly_care_net
+
+  # ---------------------------------------------------------------
+  # EMQX – MQTT Broker
+  # ---------------------------------------------------------------
+  emqx:
+    image: emqx/emqx:5.6.0
+    container_name: elderly_care_emqx
+    restart: unless-stopped
+    ports:
+      - "1883:1883"     # MQTT
+      - "8883:8883"     # MQTT TLS
+      - "18083:18083"   # Dashboard UI
+    environment:
+      EMQX_NAME:      "elderly_care_broker"
+      EMQX_AUTH__MNESIA__PASSWORD_HASH: sha256
+    volumes:
+      - emqx_data:/opt/emqx/data
+      - emqx_log:/opt/emqx/log
+    networks:
+      - elderly_care_net
+
+  # ---------------------------------------------------------------
+  # MinIO – Object Storage (Video clips, thumbnails)
+  # ---------------------------------------------------------------
+  minio:
+    image: minio/minio:latest
+    container_name: elderly_care_minio
+    restart: unless-stopped
+    ports:
+      - "9000:9000"     # API
+      - "9001:9001"     # Console UI
+    environment:
+      MINIO_ROOT_USER:     ${MINIO_ACCESS_KEY}
+      MINIO_ROOT_PASSWORD: ${MINIO_SECRET_KEY}
+    volumes:
+      - minio_data:/data
+    command: server /data --console-address ":9001"
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:9000/minio/health/live"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+    networks:
+      - elderly_care_net
+
+# ---------------------------------------------------------------
+# Volumes
+# ---------------------------------------------------------------
+volumes:
+  timescale_data:
+  redis_data:
+  emqx_data:
+  emqx_log:
+  minio_data:
+
+# ---------------------------------------------------------------
+# Networks
+# ---------------------------------------------------------------
+networks:
+  elderly_care_net:
+    driver: bridge
