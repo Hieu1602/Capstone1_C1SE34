@@ -45,3 +45,7 @@ yarn-error.log*
 data/
 *.sqlite3
 minio_data/
+
+# Microsoft Office temporary files
+~$*
+*.tmp

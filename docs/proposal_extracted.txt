@@ -1,0 +1,1383 @@
+International School
+
+Course: Capstone Project 1
+
+CMU-SE 433 CIS 
+
+Group: 1
+
+Project Proposal
+
+Version 1.0
+
+Date: 23 Aug, 2026
+
+Project Title: Hệ thống giám sát thông minh dành cho người cao tuổi
+
+Submitted by
+
+Hieu, Duong Van
+
+- 29211155327
+
+Nghia, Nguyen Huu
+
+- 29219022025
+
+Duy, Tran Van
+
+- 29211155992
+
+Vinh, Ngo Le
+
+- 29211157943
+
+My, Phan Nguyen Giang
+
+- 29201155816
+
+Approved by 
+
+Huy, Truong Dinh
+
+Proposal Review Panel Representative:
+
+NameSignatureDate
+
+Capstone Project 1- Mentor
+
+Name: Huy, Truong DinhSignatureDate
+
+PROJECT INFORMATION
+
+Project acronym
+
+HTGSTM
+
+Project Title
+
+Hệ thống giám sát thông minh dành cho người cao tuổi
+
+Start Date
+
+21/08/2026
+
+End Date
+
+06/12/2026
+
+Lead Institution
+
+International School, Duy Tan University
+
+Project Mentor
+
+Huy, Truong Dinh
+
+Scrum master / Project Leader & contact details
+
+Nghia, Nguyen Huu
+
+Email: nghia12072003@gmail.com
+
+Tel: 0702523201
+
+Partner Organization
+
+Duy Tan University
+
+Project Web URL
+
+Team members
+
+Name
+
+Email
+
+Tel
+
+Nghia, Nguyen Huu
+
+nghia12072003@gmail.com
+
+0702523201
+
+Duy, Tran Van
+
+tvduy2807@gmail.com
+
+0337745630
+
+Vinh, Ngo Le
+
+ngolevinh233@gmail.com
+
+0382694409
+
+My, Phan Nguyen Giang
+
+1802giangmy@gmail.com
+
+0795520584
+
+DOCUMENT APPROVALS
+
+The following signatures are required for approval of this document.
+
+Name / Student ID / Role
+
+Signature
+
+Date
+
+Hieu, Duong Van
+
+Student ID: 29211155327
+
+Team Member
+
+Signature
+
+Date
+
+Nghia, Nguyen Huu
+
+Student ID: 29219022025
+
+Tea Scrum Master / Project Leader
+
+Signature
+
+Date
+
+Duy, Tran Van ID: 29211155992
+
+Team Member
+
+Signature
+
+Date
+
+Vinh, Ngo Le
+
+Student ID: 29211157943
+
+Team Member
+
+Signature
+
+Date
+
+REVISION HISTORY
+
+Version
+
+Date
+
+Comments
+
+Author
+
+1.0
+
+23 Aug , 2026
+
+Initial Release
+
+Giang My
+
+Table of Contents
+
+1. Project Title5
+
+2. Team Members5
+
+3. Supervisor(s)5
+
+4. Problem Statement6
+
+5. Survey / Existing Solution7
+
+6. Objectives and Scope9
+
+6.1 Objectives9
+
+6.1.1 Building a Multimodal Health Monitoring Ecosystem (ElderCare-AI)9
+
+6.1.2  In-scope10
+
+6.2 Scope not included11
+
+7. Key Features & Requirements12
+
+7.1 Key features12
+
+7.2 Requirement13
+
+7.2.1 Functional requirement13
+
+7.2.2 Non-Functional requirement15
+
+8. Constraints and Assumptions17
+
+8.1 Constraints17
+
+8.2 Assumption19
+
+9. Target Users / Stakeholders19
+
+9.1 Elderly Individuals (Primary Beneficiaries)19
+
+9.2 Family Caregivers20
+
+9.3 System Administrators20
+
+10. Technology Stack20
+
+11.1 Scrum Process21
+
+11.2 Development Plan22
+
+12. System Architecture Overview27
+
+Figure 1. System context diagram27
+
+13. Potential Risks and Mitigation Strategies28
+
+14. Expected Outcomes / Deliverables29
+
+15. References30
+
+1. Project Title
+
+Smart Elderly Care AI - A Multimodal AI System for Proactive Monitoring, Forecasting, and Care of Elderly Aged 60 and Above.
+
+2. Team Members
+
+Fullname
+
+Student ID
+
+Email
+
+Role
+
+Hieu, Duong Van
+
+29211155327
+
+hdvan884@gmail.com
+
+Scrum Master,Quality Assurance ,UX/UI Design,Front-End Dev,Tester ,Document, Back-End Dev
+
+Nghia, Nguyen Huu
+
+29219022025
+
+nghia12072003@gmail.com
+
+Back-End Dev, AI Dev, Front-End Dev,Tester
+
+Duy, Tran Van
+
+29211155992
+
+tvduy2807@gmail.com
+
+Back-End Dev, AI Dev,Tester, Front-End Dev
+
+Vinh, Ngo Le
+
+29211157943
+
+ngolevinh233@gmail.com
+
+Back -End Dev, Tester, Front-End Dev
+
+My, Phan Nguyen Giang
+
+29201155816
+
+1802giangmy@gmail.com
+
+Business Analyst, UX/UI Design, Front-End Dev, Back-End Dev, Document,Tester
+
+3. Supervisor(s)
+
+Fullname:PhD Dieu,Huynh Ba
+
+Email: dieuhb@gmail.com
+
+Phone number: 0914146868
+
+Department/Branch: International School - CMU
+
+Role: Mentor
+
+4. Problem Statement
+
+What challenges do users/customers face?
+
+Elderly individuals aged 60 and older may experience serious safety incidents while living alone, including falls, prolonged immobility, abnormal temperature, and other potentially dangerous events.These incidents may not be detected immediately when no caregiver is present. Current monitoring solutions have limitations: smartwatches are difficult for the elderly to use and have short battery lives (1–2 days), leading users to forget to charge or wear them; cameras compromise privacy by storing raw video in the cloud, suffer from high alert latency due to internet dependency, and have high false-alarm rates (failing to distinguish between sleeping and an actual fall). Notably, there is currently no system that integrates multiple sensors for cross-verification of incidents, nor is there a mechanism to automatically transmit video evidence and rapidly connect to family members or emergency services (115) when an accident occurs. 
+
+What is the impact of this issue?
+
+Delays in detecting incidents cause elderly people to miss the “golden time” for emergency medical treatment, resulting in a high risk of death or permanent disabilities (traumatic brain injuries, hemiplegia, bone necrosis). For families, caregivers are constantly anxious and worried when working far away. For healthcare facilities, hospitals and emergency medical teams (115) face difficulties due to receiving information late and lacking historical vital-sign data (heart rate, SpO2, fall progression) before the patient arrives at the hospital, reducing the effectiveness of initial diagnosis and treatment. In addition, standalone monitoring devices frequently generate false alarms, causing unnecessary overload for the healthcare system and families.
+
+Why did the team choose to solve this problem?
+
+The team aims to apply Edge AI technology combined with Multimodal Sensor Fusion, including visual cameras, thermal matrix sensors, audio analysis, image analysis, and wearable devices. This solution helps accurately detect incidents, eliminate false alarms, protect the privacy of images at home, and immediately send alerts along with vital-sign data to family members, authorized persons (family doctors), and the hospital emergency system (115 hotline), thereby optimizing medical intervention time and improving the quality of safety protection for elderly people.
+
+5. Survey / Existing Solution
+
+Criteria
+
+Smart Elderly Care AI
+
+SafelyYou
+
+Vayyar Care
+
+Sensi.AI
+
+Development Environment
+
+WEB
+
+Mobile App
+
+(Camera + Audio + Wearable)
+
+Mobile App + Cloud
+
+(AI Chamber)
+
+Web + Cloud Dashboard
+
+(Radar Sensor)
+
+Mobile App + Cloud
+
+(Audio pods)
+
+Sensor Method
+
+Multimodal (full)
+
+– combining Camera (image), Audio (voice/noise), and Wearable (vital indicators, movement) in the same system
+
+Camera-based
+
+– Recording when a fall is detected
+
+Radar millimeta -wave 
+
+– no cameras, no wearable devices; Through-wall/furniture sensors
+
+Audio pods
+
+– no cameras, no wearable devices; Environmental Sound Analysis
+
+Fall detection
+
+Yes
+
+(cross confirmation between Camera + Wearable, reduce false alarm)
+
+Yes
+
+(high accuracy, video fault verification)
+
+Yes
+
+(real-time, privacy protection)
+
+Indirect
+
+(inferred from fall sounds/cries for help, no image verification)
+
+AI Health Prediction/Assessment
+
+Advanced
+
+(AI predicts health risks, combining visual, audio, and vital signs data from wearables)
+
+Yes
+
+(Analyze fall data to create care insights)
+
+Yes
+
+(analysis of movement trends, care needs)
+
+Yes
+
+(early detection of signs of urinary infections, pneumonia, dementia, voice agitation)
+
+Privacy Security
+
+Medium
+
+(with camera + vital sign data, needs separate security/encryption mechanism)
+
+Medium
+
+(archive of incident images/videos)
+
+High
+
+(no camera, no image recognition)
+
+High
+
+(sound only, "privacy-first" design)
+
+Communicating with caregivers/families
+
+Advanced
+
+(real-time alert via Web + App, synchronize multi-source data for relatives/authors)
+
+Yes
+
+(send incident/alert video to the care team)
+
+Yes
+
+(real-time notifications on the dashboard for employees)
+
+Yes
+
+(send audio recordings, transcripts, recommendations for action)
+
+Event chat group 
+
+Optional
+
+(Automatically create a real-time chat tool to coordinate, communicate and coordinate events)
+
+None (Communication and coordination usually take place through personal channels such as Messenger, Zalo)
+
+None (Communication and coordination usually take place through personal channels such as Messenger, Zalo)
+
+None (Information is communicated one-way from the organizer via notification or email)
+
+6. Objectives and Scope
+
+6.1 Objectives
+
+6.1.1 Building a Multimodal Health Monitoring Ecosystem 
+
+S (Specific): Design and fully develop an integrated health monitoring system combining Edge AI (running on an Orange Pi 5 single-board computer), a cloud backend, and a mobile application (React Native). The system integrates four sensor channels—standard camera with audio, an AMG8833 thermal sensor, and a BLE vital-sign tracking wristband—to automatically detect falls, strokes, high fever, and respiratory distress. 
+
+M (Measurable): 
+
+Edge AI (YOLO) pose estimation inference speed reaches at least 30–35 frames per second. 
+
+Response time from incident occurrence to emergency alert activation is under 3.0 seconds. o Latency for MQTT alert packet transmission from the Edge Hub to the server and mobile application is under 500 ms. 
+
+The system will be evaluated using at least 50 controlled test scenarios covering falls, immobility, abnormal temperature, abnormal heart rate, low SpO2, and multimodal combinations.
+
+A (Achievable): With a team of software engineers proficient in Python, FastAPI, React Native, and IoT/AI processing, and a 3.5-month implementation timeline, completing the hardware-software prototype is entirely feasible. 
+
+R (Relevant): The product directly addresses safety concerns for elderly individuals living alone, alleviates psychological burdens on families, and optimizes hospital emergency response times. 
+
+T (Time-bound): Complete the entire development, system integration, and field testing phases prior to the final evaluation deadline.
+
+6.1.2  In-scope
+
+Function
+
+Hardware-accelerated or optimized Edge AI model for 17-keypoint skeletal pose estimation and immobility detection( Orange Pi 5 using the integrated Rockchip RK3588S NPU ). 
+
+AI-based audio event classification for distress sounds, calls for help, screams, and significant impact sounds.
+
+Contactless thermal screening to estimate forehead surface temperature and identify abnormal temperature patterns. 
+
+ Data collection (heart rate, SpO2, and impact acceleration) from a BLE wearable device. 
+
+ Multimodal sensor integration engine designed to minimize false alarms. 
+
+ High-priority emergency push alert system that overrides silent mode on the caregiver's device. 
+
+Automatic extraction of Short incident video clips extracted from a configurable circular media buffer around the detected event capturing the incident scene upon a "Red Alert" trigger.
+
+ Dashboard for monitoring time-series vital sign data and one-touch SOS (115) emergency calling. 
+
+ Live monitoring and playback: Supports live camera streaming (Live View) and a timeline slider (Web/Mobile) to review the rolling 1–2 day video history recorded at the Hub. 
+
+User
+
+Elderly User: Beneficiary of automated safety monitoring, receiving localized voice reminders from the Hub when forgetting to wear the wristband.
+
+Caregiver / Family Member: Receives red alert SOS alarm sirens, views incident video clips, monitors real-time vital signs, and places 115 emergency calls.
+
+Family Physician / Administrator: Sets vital sign alert thresholds, reviews medical history logs, and configures hardware devices.
+
+6.2 Scope not included
+
+Deep Medical Hardware Intervention: The system does not replace specialized intensive care unit (ICU) therapeutic equipment, such as mechanical ventilators, defibrillators, or 12-lead electrocardiogram (ECG) machines.
+
+Direct Integration into Emergency 115 Telecommunications Infrastructure: Emergency calls and location data dispatched to 115 emergency services are triggered through automated emergency speed-dial protocols via the caregiver’s mobile application, without directly interfacing with national emergency dispatch core systems.
+
+Legally Binding Automated Medical Diagnostics: Vital sign and body temperature alerts function strictly as early-warning remote monitoring tools and do not provide diagnostic medical conclusions in place of certified physician evaluation.
+
+Large-scale Commercialization: The project focuses on research, system integration, and testing of a functional Prototype/Beta version, excluding recurring subscription billing models, mass commercial production, or e-commerce payment gateways.
+
+7. Key Features & Requirements
+
+7.1 Key features 
+
+User Authentication and Role-Based Access Control (RBAC)
+
+Real-time vital signs monitoring dashboard (Heart rate, SpO2, Body temperature)
+
+Edge-AI Fall & Immobility Detection (AI identifies and detects fall events and prolonged motionless lying)
+
+Contactless forehead thermal fever screening
+
+Acoustic distress & impact sound classification (Detects Help/Scream calls and mechanical impacts)
+
+Multimodal Sensor Fusion to eliminate false alarms
+
+Critical Push Notification & Silence-override alarm siren
+
+Edge-buffered 5-second incident video clip auto-upload
+
+Live streaming & 24/48h interactive video timeline playback
+
+Historical incident review & Cloud media storage
+
+One-touch SOS Emergency 115 speed dial with auto-copied location
+
+Smart voice reminder for elderly users when forgetting the smart wristband
+
+Medical history time-series logging & report export
+
+7.2 Requirement
+
+7.2.1 Functional requirement
+
+Order ID
+
+Key Feature
+
+Description
+
+FR01
+
+User Authentication & Authorization
+
+Supports registration and login via Email/Password or Google OAuth2; issues fine-grained role permissions between primary Caregivers and authorized users (e.g., family physician).
+
+FR02
+
+Real-time Vital Signs Dashboard
+
+Mobile and Web application displaying real-time heart rate (BPM), blood oxygen level (SpO2), and body temperature updated via WebSocket protocol.
+
+FR03
+
+Edge-AI Fall & Posture Detection
+
+YOLO-Pose model running directly on edge hardware to recognize 17 skeletal keypoints, calculate spinal tilt angle, and detect fall events or motionless floor lying.
+
+FR04
+
+Contactless Thermal Mapping
+
+The system shall collect 8×8 thermal matrix data from the AMG8833 infrared thermal sensor, identify the relevant forehead region, estimate forehead surface temperature, and detect abnormal temperature patterns for early-warning purposes.
+
+FR05
+
+Acoustic Distress Analysis
+
+The system shall classify predefined acoustic events such as impacts, screams, calls for help, and selected abnormal breathing-related sounds.
+
+FR06
+
+Multimodal Sensor Fusion
+
+Central processing unit concurrently fuses 4 data streams (Vision + Thermal + Audio + BLE Wristband) using decision matrices to eliminate false positives before triggering alarms.
+
+FR07
+
+Critical Push Notification
+
+Upon detecting critical events, the backend server pushes highest-priority notifications (FCM High Priority), waking mobile screens and sounding max-volume sirens on caregiver devices.
+
+FR08
+
+Edge-Buffered Incident Clip
+
+Local Hub maintains a 5-second circular ring buffer in RAM; upon red alert, extracts a 5s video clip with snapshot image and auto-uploads to Cloud Object Storage.
+
+FR09
+
+Live Streaming & 24/48h Timeline Playback
+
+Caregivers can view live camera streams (via WebRTC/HLS) and drag the interactive playback timeline on Mobile/Web to review all daily activity recorded in the past 1–2 days (rolling buffer).
+
+FR10
+
+Historical Incident Review
+
+Allows querying past incident logs, retrieving media URLs from database, and replaying video snapshots and evidence images stored on Cloud Storage.
+
+FR11
+
+One-Touch SOS Emergency 115
+
+App integrates a single-tap emergency SOS button, enabling caregivers to place an immediate speed dial to Emergency Services (115) with auto-copied victim residential address.
+
+FR12
+
+Smart Voice Reminder
+
+Home Hub plays localized friendly audio voice prompts in Vietnamese upon detecting elderly individuals leaving bed or moving without wearing their smart BLE wristband.
+
+FR13
+
+Medical History & Data Export
+
+Stores time-series vital sign records in PostgreSQL database, allowing health history lookup and PDF/Excel health report export by week or month.
+
+7.2.2 Non-Functional requirement
+
+Order ID
+
+Name
+
+Description
+
+NFR01
+
+Performance & Latency
+
+- The edge skeleton pose estimation speed must achieve at least 30 FPS.
+
+- The on-device fall detection latency must be less than 3.0 seconds.
+
+- The end-to-end alert message transmission latency via MQTT/FCM to caregiver mobile devices must be under 500 ms.
+
+- The live camera stream connection latency must be under 1.0 second; incident video clip playback load time must be under 2.0 seconds.
+
+NFR02
+
+Security & Privacy
+
+- All AI vision inference processing must be executed locally on the Edge Hub, ensuring raw video streams are never continuously transmitted to the Internet.
+
+- Media uploads are strictly limited to authenticated incident images/short clips.
+
+- Media transmissions and WebRTC/HLS/MQTT connections must be encrypted via TLS/SSL and authenticated using JWT.
+
+NFR03
+
+Usability
+
+- The mobile app (React Native) and Web Dashboard user interface (UI) need to be intuitive, clean, and newbie-friendly.
+
+- The search and filtering features in the system should be quick and easy to use, featuring interactive timeline sliders for historical video review.
+
+NFR04
+
+Reliability & False Alarm Filtering
+
+- The home Edge Hub must operate continuously 24/7, with automatic service restoration (Systemd Daemon) upon power recovery without requiring manual operation by elderly users.
+
+- The system must maintain a True Positive Rate (TPR) ≥ 95% and keep the False Positive Rate (FPR) < 2% using a multimodal Sensor Fusion cross-verification mechanism.
+
+NFR05
+
+Scalability & Storage Tiering
+
+The backend system (FastAPI + EMQX Broker + Redis) is containerized via Docker and needs to be scalable to handle thousands of home Hubs without performance issues.
+
+- Tiered storage strategy: Local Hub storage (SD Card/USB) automatically overwrites in a circular (FIFO) loop after 24–48 hours; critical incident videos on Cloud Object Storage are automatically purged after 30–90 days.
+
+8. Constraints and Assumptions
+
+8.1 Constraints 
+
+Time: Time to complete the project within 3.5 months (from August 21, 2026 to December 06, 2026).
+
+Budget: The project cost does not exceed $500 USD.
+
+Category
+
+Item
+
+Cost
+
+Hardware
+
+Laptops/PCs for team (5 persons)
+
+$0
+
+Orange Pi 5 – Rockchip RK3588S
+
+$138
+
+Far-Infrared Thermal Sensor Matrix(AMG8833)
+
+$35
+
+IP Camera / USB Wide-Angle Camera Module
+
+$25
+
+BLE Smartband (Heart Rate, SpO2, Accelerometer)
+
+$30
+
+MicroSD High Endurance (64GB) + Official 5V/3A USB-C Power Supply
+
+$15
+
+Software & AI
+
+Open-source Frameworks (FastAPI, React Native, Next.js, Docker)
+
+$0 (open source)
+
+Edge AI Pretrained Models (YOLOv8n-Pose via, TFLite/ONNX Runtime YAMNet)
+
+$0 (open source)
+
+Database Engine (PostgreSQL, TimescaleDB, Redis)
+
+$0 (open source)
+
+Domain Name (.tech / .site for Web Dashboard & API)
+
+$1 / month
+
+Hosting & Cloud
+
+Cloud VPS / Server (Ubuntu Host for Backend & EMQX Broker)
+
+$12 / month
+
+Cloud Object Storage (MinIO / Firebase Storage for 5s Clips & Logs)
+
+$5 / month
+
+Development Tools
+
+IDEs & Editors (VS Code, Android Studio, DBeaver, MQTTX)
+
+$0
+
+Version Control (GitHub Free Tier / GitHub Team)
+
+$0
+
+Management Tool
+
+Jira Software (Atlassian Agile Free Plan for ≤10 users)
+
+$0
+
+Communication
+
+Google Meet, Discord, Zalo
+
+$0
+
+Total
+
+Hardware One-Time Cost + Operating Hosting Cost
+
+~$261 USD
+
+Human resource: 5 person
+
+8.2 Assumption
+
+Stable System Requirements: The functional and safety monitoring requirements are clearly defined from the beginning with no major architectural pivots during development.
+
+Sufficient Hardware Budget: The allocated personal budget is adequate to procure the physical hardware prototype (Orange Pi 5 – Rockchip RK3588S, AMG8833, Camera, Smartband) by October 2026.
+
+PC-First Simulation Validity: The core algorithms developed and tested on PC (via webcam and mock sensor telemetry) will The team assumes that the core algorithms developed and tested on PC can be adapted to Orange Pi 5 through model optimization, ONNX conversion, RKNN conversion, and hardware-specific runtime configuration.
+
+User Usability: Caregivers and family members can easily navigate the mobile app/web dashboard to monitor health data and respond to SOS alarms without specialized technical training.
+
+Reliable Operating Environment: The home test environment provides a stable 2.4GHz/5GHz Wi-Fi connection, continuous AC power supply, and standard residential lighting for optimal camera inference.
+
+9. Target Users / Stakeholders 
+
+9.1 Elderly Individuals (Primary Beneficiaries) 
+
+Target Group: Seniors aged 60 and older living independently, individuals with cardiovascular issues, reduced mobility, or high risks of stroke and mechanical falls. 
+
+Key Benefits:Passive 24/7 Safety Safeguard: Ambient and continuous protection without the burden of operating complex electronic devices.
+
+Autonomous Emergency Detection: Instantaneous detection of falls, immobility, and acute fevers without relying on manual panic buttons.
+
+Strict In-Home Privacy: Visual AI inference runs locally on the edge hub, eliminating private video streaming over the cloud. Smart Voice Guidance: Audio prompts from the hub automatically remind seniors to wear their biometric band.
+
+9.2 Family Caregivers 
+
+Target Group: Adult children, remote family members, or dedicated caregivers managing elderly relatives. 
+
+Key Benefits: Remote Health Visibility: Real-time monitoring of vital signs (Heart Rate, SpO2, Body Temperature) via a dedicated mobile application.
+
+Critical Incident Alerts: High-priority siren notifications overriding silent mode, accompanied by a 5-second incident verification clip.
+
+Rapid Emergency Coordination: Integrated one-touch 115 emergency dialer with automatic location sharing. 
+
+Cost Efficiency: Low-cost hardware deployment with zero recurring subscription maintenance fees.
+
+9.3 System Administrators 
+
+Target Group: Technical personnel responsible for operating, maintaining, and scaling the backend infrastructure.
+
+Key Benefits: Centralized Fleet Management: Real-time visibility into the connection status of distributed home hubs via Redis and MQTT. 
+
+Security and Data Integrity: Centralized access control via JWT authentication and encrypted data transmission using TLS protocols.
+
+10. Technology Stack
+
+Technology
+
+Frontend: React.js / Next.js (Web), React Native (Mobile), TypeScript
+
+Backend: Python, FastAPI
+
+Cloud & Message Broker: Firebase (FCM), EMQX (MQTT Broker)
+
+Database: PostgreSQL, Redis
+
+AI/ML & Embedded: Python, YOLOv8-Pose, YAMNet
+
+Development Tools
+
+Tools: Visual Studio Code, Android Studio, Postman, Docker
+
+Database: PostgreSQL, Redis
+
+Management Tools
+
+Tools: Git, GitHub, Jira
+
+11. Methodology & Development Plan
+
+11.1 Scrum Process
+
+Scrum is an iterative and incremental agile software development framework for  managing software projects and product or application development. 
+
+Scrum focuses on project management institutions where it is difficult to plan ahead. 
+
+Mechanisms of empirical process control, where feedback loops that constitute  the core management technique is used as opposed to traditional command-and -control management. 
+
+Its approach to planning and managing projects is by bringing decision-making  authority to the level of operation properties and certainties. 
+
+Benefit of the methodology: 
+
+The project can respond easily to change. 
+
+Problems are identified early. 
+
+Customers get the most beneficial work first. 
+
+Work done will better meet the customer’s needs. 
+
+Improved productivity. 
+
+Ability to maintain a predictable schedule for delivery. 
+
+11.2 Development Plan
+
+NO
+
+Task Name
+
+Duration
+
+Start
+
+Finish
+
+108 days
+
+21/08/2026
+
+06/12/2026
+
+1.
+
+Initial
+
+7 days
+
+21/08/2026
+
+27/08/2026
+
+1.1
+
+Gathering Requirements (Elderly Fall & Health Monitoring)
+
+4 days
+
+21/08/2026
+
+24/08/2026
+
+1.2
+
+Create Proposal Document & Hardware Feasibility
+
+3 days
+
+25/08/2026
+
+27/08/2026
+
+2.
+
+Start Up
+
+7 days
+
+28/08/2026
+
+03/09/2026
+
+2.1
+
+Project Kick-off Meeting & Setup Dev Environment
+
+3 days
+
+28/08/2026
+
+30/08/2026
+
+2.2
+
+Create System Architecture & DB Design Document
+
+4 days
+
+31/08/2026
+
+03/09/2026
+
+3.
+
+Development
+
+93 days
+
+03/09/2026
+
+04/12/2026
+
+3.1
+
+Sprint 1 (Code Core: AI Fall Detection on PC & Backend Foundation)
+
+25 days
+
+03/09/2026
+
+27/09/2026
+
+3.1.1
+
+Design Database Schema (PostgreSQL, TimescaleDB, Redis)
+
+3 days
+
+03/09/2026
+
+05/09/2026
+
+3.1.2
+
+Design UX/UI (Vitals Dashboard, Live Stream, SOS Alert, Timeline Playback)
+
+4 days
+
+06/09/2026
+
+09/09/2026
+
+3.1.3
+
+Develop YOLOv8-Pose Fall Detection on PC (Test via Webcam/Public Dataset)
+
+6 days
+
+10/09/2026
+
+15/09/2026
+
+3.1.4
+
+Develop Backend APIs (Auth, User Profile, MQTT Gateway, WebSocket Hub)
+
+5 days
+
+16/09/2026
+
+20/09/2026
+
+3.1.5
+
+Build Mock Sensor Generator (Simulate Heart Rate, SpO2 & Thermal Matrix)
+
+3 days
+
+21/09/2026
+
+23/09/2026
+
+3.1.6
+
+Test AI Inference & Backend APIs on PC
+
+2 days
+
+24/09/2026
+
+25/09/2026
+
+3.1.7
+
+Fix Bugs & Optimize Algorithm
+
+2 days
+
+26/09/2026
+
+27/09/2026
+
+3.2
+
+Sprint 2 (Hardware Procurement, NPU Porting & Sensor Integration)
+
+26 days
+
+28/09/2026
+
+23/10/2026
+
+3.2.1
+
+Purchase & Setup Physical Devices (Orange Pi 5, Camera, AMG8833, BLE Band)
+
+4 days
+
+28/09/2026
+
+01/10/2026
+
+3.2.2
+
+Convert YOLOv8-Pose ONNX to Deploy Orange Pi 5 NPU
+
+6 days
+
+02/10/2026
+
+07/10/2026
+
+3.2.3
+
+Implement Driver AMG8833 (I2C) & BLE GATT Client (Bleak for Smartband)
+
+6 days
+
+08/10/2026
+
+13/10/2026
+
+3.2.4
+
+Develop Multimodal Sensor Fusion Engine & Rolling Buffer (5s Incident Clip)
+
+5 days
+
+14/10/2026
+
+18/10/2026
+
+3.2.5
+
+Integration Test on Hardware (NPU + Thermal + Audio + BLE Band)
+
+3 days
+
+19/10/2026
+
+21/10/2026
+
+3.2.6
+
+Fix Bugs & Calibrate Sensor Thresholds
+
+2 days
+
+22/10/2026
+
+23/10/2026
+
+3.3
+
+Sprint 3 (Media Server, Cloud Storage & Midterm Report)
+
+24 days
+
+24/10/2026
+
+16/11/2026
+
+3.3.1
+
+Setup Media Server on Hub (WebRTC Live Stream & HLS Continuous Recording)
+
+4 days
+
+24/10/2026
+
+27/10/2026
+
+3.3.2
+
+Prepare & Present Midterm Report
+
+3 days
+
+28/10/2026
+
+30/10/2026
+
+3.3.3
+
+Cloud Storage Integration (MinIO / S3 for 5s Incident Clips & Snapshots)
+
+4 days
+
+31/10/2026
+
+03/11/2026
+
+3.3.4
+
+Implement Critical Push Alert & Siren Override (Firebase FCM + Notifee)
+
+4 days
+
+04/11/2026
+
+07/11/2026
+
+3.3.5
+
+Integrate Smart Voice Audio Reminder on Hub (Local Speaker Alert)
+
+3 days
+
+08/11/2026
+
+10/11/2026
+
+3.3.6
+
+End-to-End Test (Hub to Cloud Backend & Storage)
+
+3 days
+
+11/11/2026
+
+13/11/2026
+
+3.3.7
+
+Fix Bugs & Network Latency Tuning
+
+3 days
+
+14/11/2026
+
+16/11/2026
+
+3.4
+
+Sprint 4 (Mobile/Web Client, Field Testing & Deployment)
+
+18 days
+
+17/11/2026
+
+04/12/2026
+
+3.4.1
+
+Build Mobile App (React Native: Dashboard, Live WebRTC, SOS 115 Dial)
+
+5 days
+
+17/11/2026
+
+21/11/2026
+
+3.4.2
+
+Build Web Dashboard (Next.js: Vitals Analytics & Timeline Playback)
+
+4 days
+
+22/11/2026
+
+25/11/2026
+
+3.4.3
+
+End-to-End System Testing & Execute 50 Emergency Test Cases
+
+4 days
+
+26/11/2026
+
+29/11/2026
+
+3.4.4
+
+System Hardening, Systemd Auto-start Daemons & Dockerize Backend
+
+3 days
+
+30/11/2026
+
+02/12/2026
+
+3.4.5
+
+Fix Final Bugs & Deploy System Prototype
+
+2 days
+
+03/12/2026
+
+04/12/2026
+
+4.
+
+Project’s Retrospective Meeting
+
+1 day
+
+05/12/2026
+
+05/12/2026
+
+5.
+
+Final Release & Submission
+
+1 day
+
+05/12/2026
+
+06/12/2026
+
+12. System Architecture Overview
+
+Figure 1. System context diagram
+
+13. Potential Risks and Mitigation Strategies
+
+Categories
+
+Risk Name
+
+Potential Risks
+
+Mitigation Strategies
+
+Technology
+
+Sensor Failure / Noise
+
+AMG8833 thermal sensors, obscured cameras, or disconnected/dead BLE bands cause the system to collect insufficient monitoring data.
+
+• Implement a Heartbeat check mechanism and handle sensor errors instantly.• Set up a fallback logic: If 1 sensor is missing, the remaining channels are still active to issue a conformity alert. • Play a voice prompt at the Edge Hub when it detects that the user forgot to wear the BLE ring.
+
+Edge AI performance on Orange Pi 5 (Edge Performance)
+
+Simultaneous processing of camera frames, thermal matrix, and audio analysis on the Orange Pi 5 may experience overload, lag, or overheating of the NPU.
+
+• Optimize the AI model through conversion to ONNX/RKNN format to get the most out of the Rockchip NPU hardware (RK3588S). • Reduce the input resolution sufficiently (320x320 / 640x640) to ensure a minimum inference speed of 30 FPS.
+
+System
+
+Network & Power Outage
+
+A sudden loss of Internet connection or power outage interrupts the sending of FCM alerts to the relative's app and the Cloud.
+
+• AI processing and 100% local storage of rolling data (RAM/SD Card) at the Edge Hub.• Automatically re-synchronize crash data to the Cloud as soon as the Internet connection is restored.• Configure the service to automatically start (Systemd Daemons) as soon as power is restored without manual intervention.
+
+Security & Privacy
+
+Video & Data Privacy Leaks
+
+Videos of the elderly's personal activities in the home are leaked or illegally accessed via the Internet.
+
+• Never stream raw continuous video to the Cloud; all AI Vision processes 100% at Edge Hub.• Only extracts and encrypts 5-second clip uploads to the Cloud when there is a red alert issue.• Uses TLS/SSL protocols, JWT encryption, strict access permissions (RBAC), and automatically deletes data after the specified deadline.
+
+14. Expected Outcomes / Deliverables
+
+Software: Complete and deploy software systems with intelligent, easy-to-use interfaces, optimizing user experience (including Edge Gateway Daemon, Sensor Fusion Engine, Cloud Backend, Caregiver Mobile App, and Web Dashboard).
+
+Document: Provides technical documentation and hardware manuals, including Software Requirements Specification (SRS), User Story documentation, architectural design, APIs, installation, and system configuration instructions.
+
+Test report: A detailed report on the results of software and hardware testing, including unit tests, API integration tests, latency benchmarks, detected errors, and field test verification under real-world emergency scenarios.
+
+Project progress report: Provides progress tracking reports and milestones throughout the development process, including Sprint Reviews, Retrospectives, status reports, and midterm presentation evaluations.
+
+Source code updates: The system's source code is stored on the GitHub repository, with full commits, development branches, and containerized deployment scripts (Docker & Docker Compose).
+
+15. References
+
+World Health Organization (WHO), “Falls,” World Health Organization, 26 Apr. 2021. [Online]. Available: https://www.who.int/en/news-room/fact-sheets/detail/falls. [Accessed: 25 Aug. 2026].
+
+World Health Organization (WHO), “Ageing and health,” World Health Organization, 1 Oct. 2025. [Online]. Available: https://www.who.int/news-room/fact-sheets/detail/ageing-and-health. [Accessed: 25 Aug. 2026].
+
+Centers for Disease Control and Prevention (CDC), “Facts About Falls,” CDC, 27 Jan. 2026. [Online]. Available: https://www.cdc.gov/falls/data-research/facts-stats/. [Accessed: 25 Aug. 2026].
+
+World Health Organization (WHO), World Report on Ageing and Health. Geneva, Switzerland: World Health Organization, 2015. [Online]. Available: https://www.who.int/docs/default-source/mca-documents/ageing/9789240694811-eng.pdf. [Accessed: 25 Aug. 2026].
+
+World Health Organization (WHO), WHO Global Report on Falls Prevention in Older Age. Geneva, Switzerland: World Health Organization, 2008. [Online]. Available: https://www.who.int/publications-detail-redirect/9789241563536. [Accessed: 25 Aug. 2026].
+
+Ultralytics, “Pose Estimation with Ultralytics YOLO,” Ultralytics Documentation. [Online]. Available: https://docs.ultralytics.com/tasks/pose. [Accessed: 25 Aug. 2026].
+
+Ultralytics, “YOLOv8 Models,” Ultralytics Documentation. [Online]. Available: https://docs.ultralytics.com/models/yolov8/. [Accessed: 25 Aug. 2026].
+
+TensorFlow, “Transfer Learning with YAMNet for Environmental Sound Classification,” TensorFlow Core. [Online]. Available: https://www.tensorflow.org/tutorials/audio/transfer_learning_audio. [Accessed: 25 Aug. 2026].
+
+Melexis, “MLX90640 Far Infrared Thermal Sensor Array,” Melexis. [Online]. Available: https://www.melexis.com/en/product/mlx90640/far-infrared-thermal-sensor-array. [Accessed: 25 Aug. 2026].
+
+A. Banks, E. Briggs, K. Borgendale, and R. Gupta, “MQTT Version 5.0,” OASIS Standard, 7 Mar. 2019. [Online]. Available: https://docs.oasis-open.org/mqtt/mqtt/v5.0/mqtt-v5.0.html. [Accessed: 25 Aug. 2026].
+
+Firebase, “Set the Priority of a Message,” Firebase Cloud Messaging Documentation. [Online]. Available: https://firebase.google.com/docs/cloud-messaging/customize-messages/setting-message-priority. [Accessed: 25 Aug. 2026].
+
+Vayyar, “Vayyar Care – Senior Care Technology Based on RF Sensing,” Vayyar Care. [Online]. Available: https://vayyar.com/care-pages/how/. [Accessed: 25 Aug. 2026].
+
+Sensi AI, “Sensi – Agentic Operating System for Senior Care,” Sensi AI. [Online]. Available: https://www.sensi.ai/. [Accessed: 25 Aug. 2026].
+
+SafelyYou, “AI-Powered Fall Detection and Senior Care,” SafelyYou. [Online]. Available: https://www.safely-you.com/. [Accessed: 25 Aug. 2026].
+
+PostgreSQL Global Development Group, “PostgreSQL Documentation,” PostgreSQL. [Online]. Available: https://www.postgresql.org/docs/. [Accessed: 25 Aug. 2026].
+
+FastAPI, “FastAPI Documentation,” FastAPI. [Online]. Available: https://fastapi.tiangolo.com/. [Accessed: 25 Aug. 2026].
+
+Meta Platforms, Inc., “React Native Documentation,” React Native. [Online]. Available: https://reactnative.dev/docs/getting-started. [Accessed: 25 Aug. 2026].
+
+Redis Ltd., “Redis Documentation,” Redis. [Online]. Available: https://redis.io/docs/. [Accessed: 25 Aug. 2026].
+
+Docker Inc., “Docker Documentation,” Docker Documentation. [Online]. Available: https://docs.docker.com/. [Accessed: 25 Aug. 2026].
