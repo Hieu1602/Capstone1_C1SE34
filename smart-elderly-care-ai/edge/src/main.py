@@ -15,8 +15,12 @@ import asyncio
 import logging
 import os
 import signal
+import sys
 import time
 from pathlib import Path
+
+# Thêm thư mục gốc của edge vào sys.path để hỗ trợ chạy trực tiếp trên mọi OS
+sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
 
 import yaml
 
@@ -281,10 +285,13 @@ async def main():
 
     gateway = EdgeGateway(config)
 
-    # Graceful shutdown
+    # Graceful shutdown (Unix only, Windows fallback to KeyboardInterrupt)
     loop = asyncio.get_event_loop()
     for sig in (signal.SIGINT, signal.SIGTERM):
-        loop.add_signal_handler(sig, lambda: asyncio.ensure_future(gateway.stop()))
+        try:
+            loop.add_signal_handler(sig, lambda: asyncio.ensure_future(gateway.stop()))
+        except (NotImplementedError, AttributeError):
+            pass
 
     try:
         await gateway.start()

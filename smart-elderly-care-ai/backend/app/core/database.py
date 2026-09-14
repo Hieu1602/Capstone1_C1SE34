@@ -43,6 +43,7 @@ class Base(DeclarativeBase):
 async def init_db() -> None:
     """Tạo tất cả tables nếu chưa tồn tại (dev only, prod dùng Alembic)."""
     try:
+        import app.models  # noqa: F401
         async with engine.begin() as conn:
             await conn.run_sync(Base.metadata.create_all)
         logger.info("[DB] Database initialized.")

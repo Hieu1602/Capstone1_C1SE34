@@ -1209,7 +1209,7 @@ const styles = StyleSheet.create({
     fontWeight: '600',
   },
   privacyOverlay: {
-    ...StyleSheet.absoluteFillObject,
+    ...(StyleSheet.absoluteFill as object),
     backgroundColor: 'rgba(15, 23, 42, 0.94)',
     alignItems: 'center',
     justifyContent: 'center',
@@ -1254,7 +1254,7 @@ const styles = StyleSheet.create({
     fontWeight: '800',
   },
   cameraPausedOverlay: {
-    ...StyleSheet.absoluteFillObject,
+    ...(StyleSheet.absoluteFill as object),
     backgroundColor: 'rgba(15, 23, 42, 0.92)',
     alignItems: 'center',
     justifyContent: 'center',

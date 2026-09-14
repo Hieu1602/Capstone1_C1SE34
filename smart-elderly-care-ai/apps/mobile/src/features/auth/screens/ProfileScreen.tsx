@@ -63,21 +63,19 @@ export default function ProfileScreen({ navigation }: any) {
 
   const handleChangePassword = () => {
     if (!currentPassword || !newPassword || !confirmPassword) {
-      Alert.alert('Thiếu thông tin', 'Vui lòng nhập đầy đủ các trường mật khẩu.');
+      Alert.alert('Lỗi', 'Vui lòng nhập đầy đủ thông tin mật khẩu.');
       return;
     }
-
     if (newPassword.length < 6) {
       Alert.alert('Mật khẩu chưa hợp lệ', 'Mật khẩu mới phải có ít nhất 6 ký tự.');
       return;
     }
-
     if (newPassword !== confirmPassword) {
       Alert.alert('Mật khẩu không khớp', 'Vui lòng kiểm tra lại mật khẩu mới.');
       return;
     }
 
-    Alert.alert('Thành công', 'Mật khẩu đã được cập nhật.');
+    Alert.alert('Thành công', 'Đổi mật khẩu thành công!');
     setCurrentPassword('');
     setNewPassword('');
     setConfirmPassword('');

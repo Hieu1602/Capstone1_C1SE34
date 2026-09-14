@@ -11,11 +11,11 @@ device:
 
 # ---- Camera Configuration ----
 camera:
-  source: "rtsp://192.168.1.100:554/stream"   # RTSP URL hoặc 0 cho USB cam
+  source: "rtsp://admin162:16161616@192.168.1.4:554/stream1"   # RTSP IP Cam
   fps: 15
   resolution:
-    width: 1280
-    height: 720
+    width: 1920
+    height: 1080
   reconnect_interval_sec: 5
 
 # ---- AI Model Paths ----
