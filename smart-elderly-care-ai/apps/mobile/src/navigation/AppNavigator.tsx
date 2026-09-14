@@ -30,6 +30,8 @@ import AIModelDetailScreen from '../features/dashboard/screens/AIModelDetailScre
 import AlgoConfigScreen from '../features/dashboard/screens/AlgoConfigScreen';
 import MedicalReportScreen from '../features/history/MedicalReportScreen';
 import IncidentDetailScreen from '../features/alerts/screens/IncidentDetailScreen';
+import AddDeviceScreen from '../features/dashboard/screens/AddDeviceScreen';
+import SmartbandDetailScreen from '../features/dashboard/screens/SmartbandDetailScreen';
 
 const Stack = createNativeStackNavigator();
 const Tab = createBottomTabNavigator();
@@ -55,7 +57,7 @@ function MainTabNavigator() {
           if (route.name === 'Home') {
             iconName = focused ? 'home' : 'home-outline';
           } else if (route.name === 'Devices') {
-            iconName = focused ? 'bag-handle' : 'bag-handle-outline';
+            iconName = focused ? 'grid' : 'grid-outline';
           } else if (route.name === 'Alerts') {
             iconName = focused ? 'chatbubble-ellipses' : 'chatbubble-ellipses-outline';
           } else if (route.name === 'Profile') {
@@ -104,6 +106,8 @@ export default function AppNavigator() {
             <Stack.Screen name="AIModelDetail" component={AIModelDetailScreen} />
             <Stack.Screen name="AlgoConfig" component={AlgoConfigScreen} />
             <Stack.Screen name="MedicalReport" component={MedicalReportScreen} />
+            <Stack.Screen name="AddDevice" component={AddDeviceScreen} />
+            <Stack.Screen name="SmartbandDetail" component={SmartbandDetailScreen} />
             <Stack.Screen
               name="IncidentDetail"
               component={IncidentDetailScreen}

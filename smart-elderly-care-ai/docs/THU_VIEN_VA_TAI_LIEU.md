@@ -149,3 +149,4 @@ Gồm các dịch vụ container:
 4. Chạy Edge AI Hub: cd edge && python -m src.main
 5. Chạy Mobile App: cd apps/mobile && npx expo start
 ```
+
