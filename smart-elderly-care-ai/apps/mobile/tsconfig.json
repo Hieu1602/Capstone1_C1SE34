@@ -1,5 +1,7 @@
 {
+  "extends": "expo/tsconfig.base",
   "compilerOptions": {
+    "moduleResolution": "bundler",
     "target": "ES2020",
     "lib": [
       "ES2020",
@@ -8,8 +10,6 @@
       "dom.iterable"
     ],
     "jsx": "react-native",
-    "module": "commonjs",
-    "moduleResolution": "node",
     "strict": true,
     "esModuleInterop": true,
     "allowSyntheticDefaultImports": true,
@@ -20,22 +20,21 @@
       "react-native",
       "node"
     ],
-    "baseUrl": ".",
     "paths": {
       "@features/*": [
-        "src/features/*"
+        "./src/features/*"
       ],
       "@services/*": [
-        "src/services/*"
+        "./src/services/*"
       ],
       "@store/*": [
-        "src/store/*"
+        "./src/store/*"
       ],
       "@utils/*": [
-        "src/utils/*"
+        "./src/utils/*"
       ],
       "@components/*": [
-        "src/components/*"
+        "./src/components/*"
       ]
     }
   },
@@ -45,6 +44,5 @@
   ],
   "exclude": [
     "node_modules"
-  ],
-  "extends": "expo/tsconfig.base"
+  ]
 }

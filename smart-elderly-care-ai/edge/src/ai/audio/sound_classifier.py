@@ -75,12 +75,15 @@ class SoundClassifier:
             import tflite_runtime.interpreter as tflite  # type: ignore
         except ImportError:
             try:
-                import tensorflow as tf  # type: ignore
-                tflite = tf.lite
-            except ImportError as exc:
-                raise RuntimeError(
-                    "TFLite runtime không khả dụng. Cài tflite-runtime."
-                ) from exc
+                import ai_edge_litert.interpreter as tflite  # type: ignore
+            except ImportError:
+                try:
+                    import tensorflow as tf  # type: ignore
+                    tflite = tf.lite
+                except ImportError as exc:
+                    raise RuntimeError(
+                        "TFLite runtime không khả dụng. Cài tflite-runtime hoặc ai-edge-litert."
+                    ) from exc
 
         self._interpreter = tflite.Interpreter(model_path=self.model_path)
         self._interpreter.allocate_tensors()
