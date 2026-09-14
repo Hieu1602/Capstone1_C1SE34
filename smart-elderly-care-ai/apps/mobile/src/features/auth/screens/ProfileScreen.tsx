@@ -25,6 +25,7 @@ export default function ProfileScreen({ navigation }: any) {
   const { house } = useVitalStore();
   const [isUserMenuVisible, setUserMenuVisible] = React.useState(false);
   const [isSettingsVisible, setSettingsVisible] = React.useState(false);
+  const [isGeneralSettingsVisible, setGeneralSettingsVisible] = React.useState(false);
   const [isChangePasswordVisible, setChangePasswordVisible] = React.useState(false);
   const [currentPassword, setCurrentPassword] = React.useState('');
   const [newPassword, setNewPassword] = React.useState('');
@@ -260,75 +261,148 @@ export default function ProfileScreen({ navigation }: any) {
               <Text style={styles.settingsTitle}>Cài đặt</Text>
             </View>
 
-            <View style={styles.settingsList}>
-              <TouchableOpacity style={styles.settingsItem} activeOpacity={0.8}>
-                <View style={styles.settingsLeft}>
-                  <View style={styles.settingsIconWrap}>
-                    <Ionicons name="person-circle-outline" size={20} color="#475569" />
+            <View style={styles.settingsCard}>
+              <View style={styles.settingsList}>
+                <TouchableOpacity
+                  style={styles.settingsItem}
+                  activeOpacity={0.8}
+                  onPress={() => {
+                    setSettingsVisible(false);
+                    setUserMenuVisible(true);
+                  }}
+                >
+                  <View style={styles.settingsLeft}>
+                    <View style={styles.settingsIconWrap}>
+                      <Ionicons name="person-circle-outline" size={20} color="#475569" />
+                    </View>
+                    <Text style={styles.settingsLabel}>Hồ sơ của tôi</Text>
                   </View>
-                  <Text style={styles.settingsLabel}>Hồ sơ của tôi</Text>
+                  <Ionicons name="chevron-forward" size={18} color="#94A3B8" />
+                </TouchableOpacity>
+
+                <TouchableOpacity
+                  style={styles.settingsItem}
+                  activeOpacity={0.8}
+                  onPress={() => {
+                    setSettingsVisible(false);
+                    setGeneralSettingsVisible(true);
+                  }}
+                >
+                  <View style={styles.settingsLeft}>
+                    <View style={styles.settingsIconWrap}>
+                      <Ionicons name="settings-outline" size={20} color="#475569" />
+                    </View>
+                    <Text style={styles.settingsLabel}>Cài đặt chung</Text>
+                  </View>
+                  <Ionicons name="chevron-forward" size={18} color="#94A3B8" />
+                </TouchableOpacity>
+
+                <TouchableOpacity style={styles.settingsItem} activeOpacity={0.8}>
+                  <View style={styles.settingsLeft}>
+                    <View style={styles.settingsIconWrap}>
+                      <Ionicons name="notifications-outline" size={20} color="#475569" />
+                    </View>
+                    <Text style={styles.settingsLabel}>Thiết lập báo cáo</Text>
+                  </View>
+                  <View style={styles.settingsRightStatus}>
+                    <View style={styles.redBadge} />
+                    <Ionicons name="chevron-forward" size={18} color="#94A3B8" />
+                  </View>
+                </TouchableOpacity>
+
+                <TouchableOpacity style={styles.settingsItem} activeOpacity={0.8}>
+                  <View style={styles.settingsLeft}>
+                    <View style={styles.settingsIconWrap}>
+                      <Ionicons name="hardware-chip-outline" size={20} color="#475569" />
+                    </View>
+                    <Text style={styles.settingsLabel}>Các công cụ cùng thiết bị</Text>
+                  </View>
+                  <Ionicons name="chevron-forward" size={18} color="#94A3B8" />
+                </TouchableOpacity>
+
+                <TouchableOpacity style={styles.settingsItem} activeOpacity={0.8}>
+                  <View style={styles.settingsLeft}>
+                    <View style={styles.settingsIconWrap}>
+                      <Ionicons name="folder-open-outline" size={20} color="#475569" />
+                    </View>
+                    <Text style={styles.settingsLabel}>Xem trip tệp LAN</Text>
+                  </View>
+                  <Ionicons name="chevron-forward" size={18} color="#94A3B8" />
+                </TouchableOpacity>
+
+                <TouchableOpacity style={styles.settingsItem} activeOpacity={0.8}>
+                  <View style={styles.settingsLeft}>
+                    <View style={styles.settingsIconWrap}>
+                      <Ionicons name="shield-checkmark-outline" size={20} color="#475569" />
+                    </View>
+                    <Text style={styles.settingsLabel}>Cài đặt quyền hệ thống</Text>
+                  </View>
+                  <Ionicons name="chevron-forward" size={18} color="#94A3B8" />
+                </TouchableOpacity>
+
+                <TouchableOpacity style={styles.settingsItem} activeOpacity={0.8}>
+                  <View style={styles.settingsLeft}>
+                    <View style={styles.settingsIconWrap}>
+                      <Ionicons name="information-circle-outline" size={20} color="#475569" />
+                    </View>
+                    <Text style={styles.settingsLabel}>Về EZVIZ</Text>
+                  </View>
+                  <Ionicons name="chevron-forward" size={18} color="#94A3B8" />
+                </TouchableOpacity>
+              </View>
+            </View>
+          </Pressable>
+        </Pressable>
+      </Modal>
+
+      <Modal
+        transparent
+        visible={isGeneralSettingsVisible}
+        animationType="slide"
+        onRequestClose={() => setGeneralSettingsVisible(false)}
+      >
+        <Pressable style={styles.settingsOverlay} onPress={() => setGeneralSettingsVisible(false)}>
+          <Pressable style={styles.settingsSheet} onPress={() => {}}>
+            <View style={styles.settingsHeaderRow}>
+              <TouchableOpacity
+                style={styles.backButton}
+                onPress={() => setGeneralSettingsVisible(false)}
+                activeOpacity={0.7}
+              >
+                <Ionicons name="arrow-back" size={24} color={Colors.textPrimary} />
+              </TouchableOpacity>
+              <Text style={styles.settingsTitle}>Cài đặt chung</Text>
+            </View>
+
+            <View style={styles.generalSettingsList}>
+              <View style={styles.generalRow}>
+                <Text style={styles.generalRowLabel}>Vùng</Text>
+                <Text style={styles.generalRowValue}>Vietnam</Text>
+              </View>
+
+              <TouchableOpacity style={styles.generalRow} activeOpacity={0.8}>
+                <Text style={styles.generalRowLabel}>Ngôn ngữ</Text>
+                <View style={styles.generalValueWrap}>
+                  <Text style={styles.generalRowValue}>Tự động</Text>
+                  <Ionicons name="chevron-forward" size={18} color="#94A3B8" />
                 </View>
+              </TouchableOpacity>
+
+              <TouchableOpacity style={styles.generalRow} activeOpacity={0.8}>
+                <Text style={styles.generalRowLabel}>Chế độ tối</Text>
+                <View style={styles.generalValueWrap}>
+                  <Text style={styles.generalRowValue}>Tự động</Text>
+                  <Ionicons name="chevron-forward" size={18} color="#94A3B8" />
+                </View>
+              </TouchableOpacity>
+
+              <TouchableOpacity style={styles.generalRow} activeOpacity={0.8}>
+                <Text style={styles.generalRowLabel}>Quản lý phím tắt</Text>
                 <Ionicons name="chevron-forward" size={18} color="#94A3B8" />
               </TouchableOpacity>
 
-              <TouchableOpacity style={styles.settingsItem} activeOpacity={0.8}>
-                <View style={styles.settingsLeft}>
-                  <View style={styles.settingsIconWrap}>
-                    <Ionicons name="settings-outline" size={20} color="#475569" />
-                  </View>
-                  <Text style={styles.settingsLabel}>Cài đặt chung</Text>
-                </View>
-                <Ionicons name="chevron-forward" size={18} color="#94A3B8" />
-              </TouchableOpacity>
-
-              <TouchableOpacity style={styles.settingsItem} activeOpacity={0.8}>
-                <View style={styles.settingsLeft}>
-                  <View style={styles.settingsIconWrap}>
-                    <Ionicons name="notifications-outline" size={20} color="#475569" />
-                  </View>
-                  <Text style={styles.settingsLabel}>Thiết lập báo cáo</Text>
-                </View>
-                <View style={styles.redBadge} />
-                <Ionicons name="chevron-forward" size={18} color="#94A3B8" />
-              </TouchableOpacity>
-
-              <TouchableOpacity style={styles.settingsItem} activeOpacity={0.8}>
-                <View style={styles.settingsLeft}>
-                  <View style={styles.settingsIconWrap}>
-                    <Ionicons name="hardware-chip-outline" size={20} color="#475569" />
-                  </View>
-                  <Text style={styles.settingsLabel}>Các công cụ cùng thiết bị</Text>
-                </View>
-                <Ionicons name="chevron-forward" size={18} color="#94A3B8" />
-              </TouchableOpacity>
-
-              <TouchableOpacity style={styles.settingsItem} activeOpacity={0.8}>
-                <View style={styles.settingsLeft}>
-                  <View style={styles.settingsIconWrap}>
-                    <Ionicons name="folder-open-outline" size={20} color="#475569" />
-                  </View>
-                  <Text style={styles.settingsLabel}>Xem trip tệp LAN</Text>
-                </View>
-                <Ionicons name="chevron-forward" size={18} color="#94A3B8" />
-              </TouchableOpacity>
-
-              <TouchableOpacity style={styles.settingsItem} activeOpacity={0.8}>
-                <View style={styles.settingsLeft}>
-                  <View style={styles.settingsIconWrap}>
-                    <Ionicons name="shield-checkmark-outline" size={20} color="#475569" />
-                  </View>
-                  <Text style={styles.settingsLabel}>Cài đặt quyền hệ thống</Text>
-                </View>
-                <Ionicons name="chevron-forward" size={18} color="#94A3B8" />
-              </TouchableOpacity>
-
-              <TouchableOpacity style={styles.settingsItem} activeOpacity={0.8}>
-                <View style={styles.settingsLeft}>
-                  <View style={styles.settingsIconWrap}>
-                    <Ionicons name="information-circle-outline" size={20} color="#475569" />
-                  </View>
-                  <Text style={styles.settingsLabel}>Về EZVIZ</Text>
-                </View>
+              <TouchableOpacity style={styles.generalRow} activeOpacity={0.8}>
+                <Text style={styles.generalRowLabel}>Lưu trữ</Text>
                 <Ionicons name="chevron-forward" size={18} color="#94A3B8" />
               </TouchableOpacity>
             </View>
@@ -501,22 +575,51 @@ const styles = StyleSheet.create({
     width: '100%',
     backgroundColor: '#F8FAFC',
     paddingHorizontal: 18,
-    paddingTop: 4,
+    paddingTop: 8,
     paddingBottom: 18,
     marginTop: 0,
   },
   settingsHeaderRow: {
     flexDirection: 'row',
     alignItems: 'center',
-    marginBottom: 6,
-    marginTop: 0,
+    marginBottom: 20,
+    marginTop: 4,
     paddingTop: 0,
   },
   settingsTitle: {
     fontSize: 20,
     fontWeight: '800',
     color: Colors.textPrimary,
-    marginLeft: 8,
+    position: 'absolute',
+    left: 0,
+    right: 0,
+    textAlign: 'center',
+  },
+  generalSettingsList: {
+    marginTop: 8,
+  },
+  generalRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    paddingVertical: 14,
+    borderBottomWidth: 1,
+    borderBottomColor: '#E2E8F0',
+  },
+  generalRowLabel: {
+    fontSize: 17,
+    fontWeight: '600',
+    color: Colors.textPrimary,
+  },
+  generalRowValue: {
+    fontSize: 15,
+    color: '#64748B',
+    fontWeight: '500',
+  },
+  generalValueWrap: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 4,
   },
   backButton: {
     width: 36,
@@ -845,16 +948,23 @@ const styles = StyleSheet.create({
     backgroundColor: Colors.border,
     marginLeft: 50,
   },
+  settingsCard: {
+    borderWidth: 1,
+    borderColor: '#E2E8F0',
+    borderRadius: 26,
+    backgroundColor: '#F8FAFC',
+    overflow: 'hidden',
+    marginTop: 14,
+  },
   settingsList: {
-    marginTop: 8,
-    paddingBottom: 8,
+    paddingBottom: 0,
   },
   settingsItem: {
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'space-between',
-    paddingVertical: 14,
-    paddingHorizontal: 10,
+    paddingVertical: 12,
+    paddingHorizontal: 14,
     borderBottomWidth: 1,
     borderBottomColor: '#E2E8F0',
   },
@@ -869,19 +979,26 @@ const styles = StyleSheet.create({
     borderRadius: 15,
     alignItems: 'center',
     justifyContent: 'center',
-    marginRight: 10,
+    marginRight: 12,
   },
   settingsLabel: {
     fontSize: 15,
     fontWeight: '600',
     color: Colors.textPrimary,
   },
+  settingsRightStatus: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'flex-end',
+    gap: 8,
+    minWidth: 32,
+  },
   redBadge: {
     width: 8,
     height: 8,
     borderRadius: 4,
     backgroundColor: '#FF4D4F',
-    marginRight: 10,
+    marginRight: 8,
   },
   redUpdateDot: {
     width: 7,

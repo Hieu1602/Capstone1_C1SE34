@@ -130,27 +130,38 @@ export default function LoginScreen({ navigation }: any) {
           {activeTab === 'none' ? (
             /* --- GIAO DIỆN 1: Hiển thị các nút chọn phương thức --- */
             <View style={styles.methodsContainer}>
-              {/* Nút Email */}
               <TouchableOpacity 
                 style={styles.authButton} 
                 activeOpacity={0.7}
                 onPress={() => handleSelectMethod('email')}
               >
-                <View style={{ flexDirection: 'row', alignItems: 'center' }}>
+                <View style={styles.authButtonInner}>
                   <Ionicons name="mail-outline" size={20} color={Colors.textPrimary || '#0F172A'} style={styles.authIcon} />
                   <Text style={styles.authButtonText}>Email</Text>
                 </View>
               </TouchableOpacity>
 
-              {/* Nút Số điện thoại di động */}
               <TouchableOpacity 
                 style={styles.authButton} 
                 activeOpacity={0.7}
                 onPress={() => handleSelectMethod('phone')}
               >
-                <View style={{ flexDirection: 'row', alignItems: 'center' }}>
+                <View style={styles.authButtonInner}>
                   <Ionicons name="phone-portrait-outline" size={20} color={Colors.textPrimary || '#0F172A'} style={styles.authIcon} />
-                  <Text style={styles.authButtonText}>Số điện thoại di động</Text>
+                  <Text style={styles.authButtonText}>Số điện thoại</Text>
+                </View>
+              </TouchableOpacity>
+
+              <TouchableOpacity
+                style={styles.googleLoginButton}
+                onPress={() => Alert.alert('Thông báo', 'Đăng nhập Google đang phát triển')}
+                activeOpacity={0.8}
+              >
+                <View style={styles.googleInnerRow}>
+                  <View style={styles.googleIconWrap}>
+                    <Ionicons name="logo-google" size={20} color="#EA4335" />
+                  </View>
+                  <Text style={styles.googleButtonText}>Đăng nhập Google</Text>
                 </View>
               </TouchableOpacity>
             </View>
@@ -221,22 +232,7 @@ export default function LoginScreen({ navigation }: any) {
             <Text style={styles.registerLinkText}>Tạo tài khoản mới</Text>
           </TouchableOpacity>
 
-          {/* 5. Mạng xã hội (Chỉ hiển thị ở màn hình chính) */}
-          {activeTab === 'none' && (
-            <View style={styles.socialContainer}>
-
-
-              <TouchableOpacity 
-                style={styles.socialButton}
-                onPress={() => Alert.alert('Thông báo', 'Đăng nhập Google đang phát triển')}
-                activeOpacity={0.8}
-              >
-                <Ionicons name="logo-google" size={20} color="#EA4335" />
-              </TouchableOpacity>
-            </View>
-          )}
-
-          {/* 6. Checkbox Đồng ý điều khoản */}
+          {/* 5. Checkbox Đồng ý điều khoản */}
           <View style={styles.termsContainer}>
             <TouchableOpacity 
               style={styles.checkbox} 
@@ -328,17 +324,26 @@ const styles = StyleSheet.create({
     marginBottom: 16,
   },
   authButton: {
-    flexDirection: 'row',
-    alignItems: 'center',
+    height: 60,
     borderWidth: 1,
     borderColor: '#E2E8F0',
     borderRadius: 30,
     paddingVertical: 16,
     paddingHorizontal: 20,
     backgroundColor: '#FFFFFF',
+    justifyContent: 'center',
+  },
+  authButtonInner: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    width: '100%',
+    paddingLeft: 4,
+    paddingRight: 4,
   },
   authIcon: {
-    marginRight: 14,
+    marginRight: 12,
+    width: 20,
+    textAlign: 'center',
   },
   authButtonText: {
     fontSize: 15,
@@ -406,21 +411,36 @@ const styles = StyleSheet.create({
     fontWeight: '600',
     color: '#D97706',
   },
-  socialContainer: {
-    flexDirection: 'row',
-    justifyContent: 'center',
-    gap: 24,
-    marginVertical: 12,
-  },
-  socialButton: {
-    width: 56,
-    height: 56,
-    borderRadius: 28,
+  googleLoginButton: {
+    height: 60,
+    borderRadius: 30,
     borderWidth: 1,
     borderColor: '#E2E8F0',
-    justifyContent: 'center',
-    alignItems: 'center',
     backgroundColor: '#FFFFFF',
+    paddingVertical: 14,
+    paddingHorizontal: 18,
+    justifyContent: 'center',
+  },
+  googleInnerRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    width: '100%',
+    paddingLeft: 4,
+    paddingRight: 4,
+  },
+  googleIconWrap: {
+    width: 28,
+    height: 28,
+    borderRadius: 14,
+    backgroundColor: '#F8FAFC',
+    alignItems: 'center',
+    justifyContent: 'center',
+    marginRight: 12,
+  },
+  googleButtonText: {
+    fontSize: 15,
+    fontWeight: '600',
+    color: '#0F172A',
   },
   termsContainer: {
     flexDirection: 'row',
