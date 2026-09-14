@@ -63,8 +63,13 @@ export const authApi = {
       headers: { 'Content-Type': 'multipart/form-data' },
     });
   },
-  register: (data: { email: string; full_name: string; password: string; role: string }) =>
-    api.post('/auth/register', data),
+  register: (data: {
+    email?: string;
+    phone?: string;
+    full_name: string;
+    password: string;
+    role: string;
+  }) => api.post('/auth/register', data),
 };
 
 export const vitalsApi = {
