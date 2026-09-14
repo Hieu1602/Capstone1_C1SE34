@@ -523,7 +523,7 @@ const styles = StyleSheet.create({
     letterSpacing: 0.5,
   },
   sleepOverlay: {
-    ...StyleSheet.absoluteFillObject,
+    ...(StyleSheet.absoluteFill as object),
     backgroundColor: 'rgba(15, 23, 42, 0.92)',
     alignItems: 'center',
     justifyContent: 'center',

@@ -116,6 +116,8 @@ npx expo start
 
 # Android: a
 # iOS: i
+# Web: w (hoặc npm run web)
+# Hướng dẫn chi tiết chạy Web: xem apps/mobile/HUONG_DAN_CHAY_WEB.md
 ```
 
 ---
