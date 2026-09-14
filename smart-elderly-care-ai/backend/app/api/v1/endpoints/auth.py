@@ -19,13 +19,23 @@ async def register(
     user_in: UserCreate,
     db: AsyncSession = Depends(get_db),
 ):
-    """Đăng ký tài khoản Caregiver hoặc Bác sĩ."""
-    existing = await crud_user.get_by_email(db, email=user_in.email)
-    if existing:
-        raise HTTPException(
-            status_code=status.HTTP_400_BAD_REQUEST,
-            detail="Email đã được sử dụng.",
-        )
+    """Đăng ký tài khoản bằng email hoặc số điện thoại."""
+    if user_in.email:
+        existing = await crud_user.get_by_email(db, email=user_in.email)
+        if existing:
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail="Email đã được sử dụng.",
+            )
+
+    if user_in.phone:
+        existing_phone = await crud_user.get_by_phone(db, phone=user_in.phone)
+        if existing_phone:
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail="Số điện thoại đã được sử dụng.",
+            )
+
     user = await crud_user.create(db, obj_in=user_in)
     return user
 
@@ -37,10 +47,13 @@ async def login(
 ):
     """Đăng nhập với email/password. Trả về JWT access & refresh tokens."""
     user = await crud_user.get_by_email(db, email=form_data.username)
+    if not user:
+        user = await crud_user.get_by_phone(db, phone=form_data.username)
+
     if not user or not verify_password(form_data.password, user.hashed_password):
         raise HTTPException(
             status_code=status.HTTP_401_UNAUTHORIZED,
-            detail="Email hoặc mật khẩu không đúng.",
+            detail="Thông tin đăng nhập hoặc mật khẩu không đúng.",
             headers={"WWW-Authenticate": "Bearer"},
         )
     if not user.is_active:
