@@ -257,6 +257,7 @@ interface AuthStoreState {
   userEmail: string | null;
   userName: string | null;
 
+  login: (token: string, name: string, userId: string, email?: string) => void;
   setTokens: (access: string, refresh: string) => void;
   setUser: (id: string, email: string, name: string) => void;
   logout: () => void;
@@ -278,6 +279,15 @@ const createAuthStore: StateCreator<AuthStoreState, [], [['zustand/persist', Aut
   userId: null,
   userEmail: null,
   userName: null,
+
+  login: (token: string, name: string, userId: string, email?: string) =>
+    set({
+      accessToken: token,
+      refreshToken: token,
+      userId,
+      userEmail: email ?? null,
+      userName: name,
+    }),
 
   setTokens: (access: string, refresh: string) =>
     set({ accessToken: access, refreshToken: refresh }),

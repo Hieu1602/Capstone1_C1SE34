@@ -12,7 +12,12 @@ import { Colors } from '../theme/colors';
 import AIBotIcon from '../components/AIBotIcon';
 import { useVitalStore } from '../store/useVitalStore';
 
-// Main Tab screens (4 Tabs)
+// Auth screens
+import LoginScreen from '../features/auth/screens/LoginScreen';
+import RegisterScreen from '../features/auth/screens/RegisterScreen';
+import ForgotPasswordScreen from '../features/auth/screens/ForgotPasswordScreen';
+
+// 5 Main Tab screens
 import HomeScreen from '../features/dashboard/screens/HomeScreen';
 import AlertsListScreen from '../features/alerts/screens/AlertsListScreen';
 import AIAssistantScreen from '../features/dashboard/screens/AIAssistantScreen';
@@ -81,24 +86,37 @@ function MainTabNavigator() {
 // ---- Root Stack Navigator ----
 export default function AppNavigator() {
   return (
-    <NavigationContainer>
-      <Stack.Navigator screenOptions={{ headerShown: false }} initialRouteName="Main">
-        <Stack.Screen name="Main" component={MainTabNavigator} />
-        <Stack.Screen name="Devices" component={DevicesScreen} />
-        <Stack.Screen name="CameraDetail" component={CameraDetailScreen} />
-        <Stack.Screen name="MultiView" component={MultiViewScreen} />
-        <Stack.Screen name="HouseDetail" component={HouseDetailScreen} />
-        <Stack.Screen name="AIModelDetail" component={AIModelDetailScreen} />
-        <Stack.Screen name="AlgoConfig" component={AlgoConfigScreen} />
-        <Stack.Screen name="MedicalReport" component={MedicalReportScreen} />
-        <Stack.Screen
-          name="IncidentDetail"
-          component={IncidentDetailScreen}
-          options={{
-            presentation: 'modal',
-            headerShown: false,
-          }}
-        />
+    <NavigationContainer key={isAuthenticated ? 'authenticated' : 'unauthenticated'}>
+      <Stack.Navigator
+        key={isAuthenticated ? 'authenticated' : 'unauthenticated'}
+        screenOptions={{ headerShown: false }}
+      >
+        {!isAuthenticated ? (
+          // Auth Stack
+          <>
+            <Stack.Screen name="Login" component={LoginScreen} />
+            <Stack.Screen name="Register" component={RegisterScreen} />
+            <Stack.Screen name="ForgotPassword" component={ForgotPasswordScreen} />
+          </>
+        ) : (
+          // Main App Stack
+          <>
+            <Stack.Screen name="Main" component={MainTabNavigator} />
+            <Stack.Screen name="CameraDetail" component={CameraDetailScreen} />
+            <Stack.Screen name="HouseDetail" component={HouseDetailScreen} />
+            <Stack.Screen name="AIModelDetail" component={AIModelDetailScreen} />
+            <Stack.Screen name="AlgoConfig" component={AlgoConfigScreen} />
+            <Stack.Screen name="MedicalReport" component={MedicalReportScreen} />
+            <Stack.Screen
+              name="IncidentDetail"
+              component={IncidentDetailScreen}
+              options={{
+                presentation: 'modal',
+                headerShown: false,
+              }}
+            />
+          </>
+        )}
       </Stack.Navigator>
     </NavigationContainer>
   );
