@@ -26,7 +26,7 @@ services:
       - "8000:8000"
     environment:
       DATABASE_URL:   "postgresql+asyncpg://postgres:${POSTGRES_PASSWORD}@timescaledb:5432/elderly_care"
-      REDIS_URL:      "redis://redis:6379/0"
+      REDIS_URL:      "redis://:${REDIS_PASSWORD}@redis:6379/0"
       MQTT_BROKER_HOST: "emqx"
       MQTT_BROKER_PORT: "1883"
       MQTT_USERNAME:  "${MQTT_USERNAME}"
@@ -83,7 +83,7 @@ services:
     volumes:
       - redis_data:/data
     healthcheck:
-      test: ["CMD", "redis-cli", "ping"]
+      test: ["CMD", "redis-cli", "-a", "${REDIS_PASSWORD}", "ping"]
       interval: 10s
       timeout: 5s
       retries: 5
