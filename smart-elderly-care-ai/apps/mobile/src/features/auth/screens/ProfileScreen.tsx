@@ -21,7 +21,7 @@ import { Colors, Shadows } from '../../../theme/colors';
 import { useAuthStore, useVitalStore } from '../../../store/useVitalStore';
 
 export default function ProfileScreen({ navigation }: any) {
-  const { userId, userEmail, userName, logout } = useAuthStore();
+  const { userId, userEmail, userName } = useAuthStore();
   const { house } = useVitalStore();
   const [isUserMenuVisible, setUserMenuVisible] = React.useState(false);
   const [isSettingsVisible, setSettingsVisible] = React.useState(false);
