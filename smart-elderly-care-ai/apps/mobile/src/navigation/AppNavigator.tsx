@@ -25,6 +25,7 @@ import ProfileScreen from '../features/auth/screens/ProfileScreen';
 
 // Sub / Detail screens
 import CameraDetailScreen from '../features/livestream/screens/CameraDetailScreen';
+import MultiViewScreen from '../features/livestream/screens/MultiViewScreen';
 import HouseDetailScreen from '../features/dashboard/screens/HouseDetailScreen';
 import AIModelDetailScreen from '../features/dashboard/screens/AIModelDetailScreen';
 import AlgoConfigScreen from '../features/dashboard/screens/AlgoConfigScreen';
@@ -99,7 +100,9 @@ export default function AppNavigator() {
           // Main App Stack
           <>
             <Stack.Screen name="Main" component={MainTabNavigator} />
+            <Stack.Screen name="Devices" component={DevicesScreen} />
             <Stack.Screen name="CameraDetail" component={CameraDetailScreen} />
+            <Stack.Screen name="MultiView" component={MultiViewScreen} />
             <Stack.Screen name="HouseDetail" component={HouseDetailScreen} />
             <Stack.Screen name="AIModelDetail" component={AIModelDetailScreen} />
             <Stack.Screen name="AlgoConfig" component={AlgoConfigScreen} />
