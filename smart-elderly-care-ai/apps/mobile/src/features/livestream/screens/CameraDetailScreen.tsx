@@ -631,7 +631,7 @@ const styles = StyleSheet.create({
     height: '100%',
   },
   playMiniOverlay: {
-    ...StyleSheet.absoluteFillObject,
+    ...(StyleSheet.absoluteFill as object),
     backgroundColor: 'rgba(0,0,0,0.3)',
     alignItems: 'center',
     justifyContent: 'center',
@@ -701,7 +701,7 @@ const styles = StyleSheet.create({
     position: 'relative',
   },
   playCenterOverlay: {
-    ...StyleSheet.absoluteFillObject,
+    ...(StyleSheet.absoluteFill as object),
     alignItems: 'center',
     justifyContent: 'center',
     backgroundColor: 'rgba(0,0,0,0.2)',
