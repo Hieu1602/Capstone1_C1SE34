@@ -16,17 +16,17 @@ import { Colors, Shadows } from '../../../theme/colors';
 import { useAuthStore, useVitalStore } from '../../../store/useVitalStore';
 
 export default function ProfileScreen({ navigation }: any) {
-  const { userId, userEmail, userName } = useAuthStore();
+  const { userId, userEmail, userName, logout } = useAuthStore();
   const { house } = useVitalStore();
 
   const handleQRScan = () => {
     Alert.alert('Quét mã QR', 'Quét mã QR trên thân Hub Orange Pi 5 hoặc Vòng đeo tay BLE để ghép nối tự động.');
   };
 
-  const handleResetConnection = () => {
-    Alert.alert('Làm mới kết nối', 'Bạn có muốn làm mới kết nối với Hub Orange Pi 5 và vòng đeo tay?', [
+  const handleLogout = () => {
+    Alert.alert('Đăng xuất', 'Bạn có chắc chắn muốn đăng xuất khỏi hệ thống giám sát?', [
       { text: 'Hủy', style: 'cancel' },
-      { text: 'Đồng ý', onPress: () => Alert.alert('Đã kết nối', 'Hệ thống đã đồng bộ trạng thái Hub và Vòng đeo tay BLE thành công.') },
+      { text: 'Đăng xuất', style: 'destructive', onPress: logout },
     ]);
   };
 
@@ -201,14 +201,14 @@ export default function ProfileScreen({ navigation }: any) {
           </TouchableOpacity>
         </View>
 
-        {/* 6. Nút Làm mới kết nối thiết bị */}
+        {/* 6. Nút Đăng xuất */}
         <TouchableOpacity
           style={styles.logoutBtn}
-          onPress={handleResetConnection}
+          onPress={handleLogout}
           activeOpacity={0.8}
         >
-          <Ionicons name="refresh-circle-outline" size={20} color={Colors.primary} style={{ marginRight: 8 }} />
-          <Text style={[styles.logoutBtnText, { color: Colors.primary }]}>Làm mới kết nối Hub / Thiết bị</Text>
+          <Ionicons name="log-out-outline" size={20} color="#EF4444" style={{ marginRight: 8 }} />
+          <Text style={styles.logoutBtnText}>Đăng xuất tài khoản</Text>
         </TouchableOpacity>
       </ScrollView>
     </SafeAreaView>
