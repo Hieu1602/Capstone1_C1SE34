@@ -1,5 +1,5 @@
 // AppNavigator.tsx
-// React Navigation – 5 Tabs chuẩn phong cách Imou / SmartCare AI & Stack Screens
+// React Navigation – 4 Tabs chuẩn phong cách SmartCare AI & Stack Screens
 
 import React from 'react';
 import { View, StyleSheet } from 'react-native';
@@ -10,21 +10,18 @@ import { Ionicons } from '@expo/vector-icons';
 
 import { Colors } from '../theme/colors';
 import AIBotIcon from '../components/AIBotIcon';
-import { useAuthStore } from '../store/useVitalStore';
+import { useVitalStore } from '../store/useVitalStore';
 
-// Auth screens
-import LoginScreen from '../features/auth/screens/LoginScreen';
-import RegisterScreen from '../features/auth/screens/RegisterScreen';
-
-// 5 Main Tab screens
+// Main Tab screens (4 Tabs)
 import HomeScreen from '../features/dashboard/screens/HomeScreen';
-import DevicesScreen from '../features/dashboard/screens/DevicesScreen';
-import AIAssistantScreen from '../features/dashboard/screens/AIAssistantScreen';
 import AlertsListScreen from '../features/alerts/screens/AlertsListScreen';
+import AIAssistantScreen from '../features/dashboard/screens/AIAssistantScreen';
 import ProfileScreen from '../features/auth/screens/ProfileScreen';
 
 // Sub / Detail screens
+import DevicesScreen from '../features/dashboard/screens/DevicesScreen';
 import CameraDetailScreen from '../features/livestream/screens/CameraDetailScreen';
+import MultiViewScreen from '../features/livestream/screens/MultiViewScreen';
 import HouseDetailScreen from '../features/dashboard/screens/HouseDetailScreen';
 import AIModelDetailScreen from '../features/dashboard/screens/AIModelDetailScreen';
 import AlgoConfigScreen from '../features/dashboard/screens/AlgoConfigScreen';
@@ -34,19 +31,22 @@ import IncidentDetailScreen from '../features/alerts/screens/IncidentDetailScree
 const Stack = createNativeStackNavigator();
 const Tab = createBottomTabNavigator();
 
-// ---- 5-Tab Navigator (Trang chủ, Thiết bị, Bot AI, Cảnh báo, Tôi) ----
+// ---- 4-Tab Navigator (Trang chủ, Cảnh báo sự cố, Trợ lý AI, Tài khoản) ----
 function MainTabNavigator() {
+  const { incidents } = useVitalStore();
+  const hasUnreadAlerts = incidents.some((inc) => !inc.is_acknowledged);
+
   return (
     <Tab.Navigator
       initialRouteName="Home"
       screenOptions={({ route }) => ({
         headerShown: false,
-        tabBarShowLabel: false, // Thiết kế hiện đại tinh gọn như ảnh mẫu
+        tabBarShowLabel: false,
         tabBarStyle: styles.tabBar,
         tabBarActiveTintColor: Colors.primary,
         tabBarInactiveTintColor: '#94A3B8',
         tabBarIcon: ({ focused, color, size }) => {
-          // Tab giữa: Robot AI Bot
+          // Tab 3: Robot AI Bot
           if (route.name === 'AIAssistant') {
             return <AIBotIcon size={46} focused={focused} />;
           }
@@ -54,28 +54,25 @@ function MainTabNavigator() {
           let iconName: any = 'ellipse';
           if (route.name === 'Home') {
             iconName = focused ? 'home' : 'home-outline';
-          } else if (route.name === 'Devices') {
-            iconName = focused ? 'bag-handle' : 'bag-handle-outline';
           } else if (route.name === 'Alerts') {
-            iconName = focused ? 'chatbubble-ellipses' : 'chatbubble-ellipses-outline';
+            iconName = focused ? 'notifications' : 'notifications-outline';
           } else if (route.name === 'Profile') {
             iconName = focused ? 'person' : 'person-outline';
           }
 
           return (
             <View style={styles.iconContainer}>
-              <Ionicons name={iconName} size={26} color={focused ? Colors.primary : '#94A3B8'} />
-              {/* Chấm tròn đỏ cho thông báo mới */}
-              {route.name === 'Alerts' && !focused && <View style={styles.tabBadgeDot} />}
+              <Ionicons name={iconName} size={25} color={color} />
+              {/* Chấm tròn đỏ cho sự cố khẩn cấp chưa xử lý */}
+              {route.name === 'Alerts' && hasUnreadAlerts && <View style={styles.tabBadgeDot} />}
             </View>
           );
         },
       })}
     >
       <Tab.Screen name="Home" component={HomeScreen} />
-      <Tab.Screen name="Devices" component={DevicesScreen} />
-      <Tab.Screen name="AIAssistant" component={AIAssistantScreen} />
       <Tab.Screen name="Alerts" component={AlertsListScreen} />
+      <Tab.Screen name="AIAssistant" component={AIAssistantScreen} />
       <Tab.Screen name="Profile" component={ProfileScreen} />
     </Tab.Navigator>
   );
@@ -83,37 +80,25 @@ function MainTabNavigator() {
 
 // ---- Root Stack Navigator ----
 export default function AppNavigator() {
-  const { accessToken } = useAuthStore();
-  const isAuthenticated = Boolean(accessToken);
-
   return (
     <NavigationContainer>
-      <Stack.Navigator screenOptions={{ headerShown: false }}>
-        {!isAuthenticated ? (
-          // Auth Stack
-          <>
-            <Stack.Screen name="Login" component={LoginScreen} />
-            <Stack.Screen name="Register" component={RegisterScreen} />
-          </>
-        ) : (
-          // Main App Stack
-          <>
-            <Stack.Screen name="Main" component={MainTabNavigator} />
-            <Stack.Screen name="CameraDetail" component={CameraDetailScreen} />
-            <Stack.Screen name="HouseDetail" component={HouseDetailScreen} />
-            <Stack.Screen name="AIModelDetail" component={AIModelDetailScreen} />
-            <Stack.Screen name="AlgoConfig" component={AlgoConfigScreen} />
-            <Stack.Screen name="MedicalReport" component={MedicalReportScreen} />
-            <Stack.Screen
-              name="IncidentDetail"
-              component={IncidentDetailScreen}
-              options={{
-                presentation: 'modal',
-                headerShown: false,
-              }}
-            />
-          </>
-        )}
+      <Stack.Navigator screenOptions={{ headerShown: false }} initialRouteName="Main">
+        <Stack.Screen name="Main" component={MainTabNavigator} />
+        <Stack.Screen name="Devices" component={DevicesScreen} />
+        <Stack.Screen name="CameraDetail" component={CameraDetailScreen} />
+        <Stack.Screen name="MultiView" component={MultiViewScreen} />
+        <Stack.Screen name="HouseDetail" component={HouseDetailScreen} />
+        <Stack.Screen name="AIModelDetail" component={AIModelDetailScreen} />
+        <Stack.Screen name="AlgoConfig" component={AlgoConfigScreen} />
+        <Stack.Screen name="MedicalReport" component={MedicalReportScreen} />
+        <Stack.Screen
+          name="IncidentDetail"
+          component={IncidentDetailScreen}
+          options={{
+            presentation: 'modal',
+            headerShown: false,
+          }}
+        />
       </Stack.Navigator>
     </NavigationContainer>
   );
