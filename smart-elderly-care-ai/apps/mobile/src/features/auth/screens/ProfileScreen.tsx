@@ -55,11 +55,33 @@ export default function ProfileScreen({ navigation }: any) {
       });
     };
 
-  const handleLogout = () => {
     Alert.alert('Đăng xuất', 'Bạn có chắc chắn muốn đăng xuất khỏi hệ thống giám sát?', [
       { text: 'Hủy', style: 'cancel' },
-      { text: 'Đăng xuất', style: 'destructive', onPress: logout },
+      { text: 'Đăng xuất', style: 'destructive', onPress: performLogout },
     ]);
+  };
+
+  const handleChangePassword = () => {
+    if (!currentPassword || !newPassword || !confirmPassword) {
+      Alert.alert('Thiếu thông tin', 'Vui lòng nhập đầy đủ các trường mật khẩu.');
+      return;
+    }
+
+    if (newPassword.length < 6) {
+      Alert.alert('Mật khẩu chưa hợp lệ', 'Mật khẩu mới phải có ít nhất 6 ký tự.');
+      return;
+    }
+
+    if (newPassword !== confirmPassword) {
+      Alert.alert('Mật khẩu không khớp', 'Vui lòng kiểm tra lại mật khẩu mới.');
+      return;
+    }
+
+    Alert.alert('Thành công', 'Mật khẩu đã được cập nhật.');
+    setCurrentPassword('');
+    setNewPassword('');
+    setConfirmPassword('');
+    setChangePasswordVisible(false);
   };
 
   return (

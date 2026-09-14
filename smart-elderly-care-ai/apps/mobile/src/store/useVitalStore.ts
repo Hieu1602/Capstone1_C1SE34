@@ -13,6 +13,10 @@ export interface VitalData {
   person_count: number | null;
   fall_detected: boolean;
   timestamp: number | null;
+  acoustic_status?: string;
+  bracelet_battery?: number;
+  bracelet_connected?: boolean;
+  edge_hub_connected?: boolean;
 }
 
 export interface Incident {
@@ -39,7 +43,7 @@ export interface HouseInfo {
   name: string;
   address: string;
   membersCount: number;
-  currentMode: 'AWAY' | 'HOME' | 'PRIVACY';
+  currentMode: 'AWAY' | 'HOME' | 'DISARM' | 'ALARM' | 'PRIVACY';
 }
 
 export interface CameraDevice {
@@ -78,7 +82,7 @@ interface VitalStoreState {
   addIncident: (incident: Incident) => void;
   setActiveDevice: (device: Device | null) => void;
   setConnected: (connected: boolean) => void;
-  setHouseMode: (mode: 'AWAY' | 'HOME' | 'PRIVACY') => void;
+  setHouseMode: (mode: 'AWAY' | 'HOME' | 'DISARM' | 'ALARM' | 'PRIVACY') => void;
   updateHouseAddress: (address: string) => void;
   toggleCameraSleep: () => void;
   toggleCameraAIProtect: () => void;
@@ -103,6 +107,10 @@ const createVitalStore: StateCreator<VitalStoreState> = (set: VitalSet) => ({
     person_count: 1,
     fall_detected: false,
     timestamp: Date.now(),
+    acoustic_status: 'Bình thường',
+    bracelet_battery: 88,
+    bracelet_connected: true,
+    edge_hub_connected: true,
   },
   incidents: [
     {
@@ -173,12 +181,12 @@ const createVitalStore: StateCreator<VitalStoreState> = (set: VitalSet) => ({
     name: 'Nhà của tôi',
     address: '123 Hải Phòng, P. Thạch Thang, Q. Hải Châu, TP. Đà Nẵng',
     membersCount: 1,
-    currentMode: 'AWAY',
+    currentMode: 'HOME',
   },
   camera: {
     id: 'cam-ranger-2c',
-    name: 'Ranger 2C 3MP-08F2',
-    room: 'Phòng khách',
+    name: 'Camera Phòng Ngủ - Hub #01',
+    room: 'Phòng ngủ',
     isOnline: true,
     isSleep: false,
     isAIProtect: true,
@@ -212,7 +220,7 @@ const createVitalStore: StateCreator<VitalStoreState> = (set: VitalSet) => ({
   setActiveDevice: (device: Device | null) => set({ activeDevice: device }),
   setConnected: (connected: boolean) => set({ isConnected: connected }),
 
-  setHouseMode: (mode: 'AWAY' | 'HOME' | 'PRIVACY') =>
+  setHouseMode: (mode: 'AWAY' | 'HOME' | 'DISARM' | 'ALARM' | 'PRIVACY') =>
     set((state) => ({ house: { ...state.house, currentMode: mode } })),
 
   updateHouseAddress: (address: string) =>

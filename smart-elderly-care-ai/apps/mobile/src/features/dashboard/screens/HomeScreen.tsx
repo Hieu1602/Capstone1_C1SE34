@@ -1,5 +1,6 @@
 // HomeScreen.tsx
-// Màn hình Trang chủ thiết kế lại khớp chính xác Hình 1 (Phong cách Smart Home Imou / Elderly Care)
+// Màn hình Trang chủ Smart Home / Elderly Care AI
+// Tích hợp One-Touch SOS 115, Camera WebRTC & Playback 24/48h, Sinh hiệu & Âm thanh YAMNet, Sự cố gần đây
 
 import React, { useState } from 'react';
 import {
@@ -10,12 +11,64 @@ import {
   ScrollView,
   Image,
   Alert,
-  Modal,
+  Linking,
+  Platform,
+  Clipboard,
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
-import { Ionicons } from '@expo/vector-icons';
+import { Ionicons, MaterialCommunityIcons } from '@expo/vector-icons';
 import { Colors, Shadows } from '../../../theme/colors';
-import { useVitalStore } from '../../../store/useVitalStore';
+import { useVitalStore, Incident } from '../../../store/useVitalStore';
+
+const LEVEL_COLORS: Record<string, string> = {
+  CRITICAL: Colors.danger,
+  HIGH: '#F97316',
+  MEDIUM: '#F59E0B',
+  LOW: Colors.success,
+};
+
+// Hàm sao chép clipboard an toàn hỗ trợ cả native và web
+const copyAddressToClipboard = (text: string) => {
+  try {
+    if (Clipboard && typeof Clipboard.setString === 'function') {
+      Clipboard.setString(text);
+    } else if (
+      Platform.OS === 'web' &&
+      typeof navigator !== 'undefined' &&
+      (navigator as any).clipboard
+    ) {
+      (navigator as any).clipboard.writeText(text);
+    }
+  } catch (e) {
+    console.warn('Clipboard write error:', e);
+  }
+};
+
+const getIncidentIcon = (alertType: string): keyof typeof Ionicons.glyphMap => {
+  if (alertType.includes('FALL')) return 'warning';
+  if (alertType.includes('HEART') || alertType.includes('VITAL')) return 'heart';
+  if (alertType.includes('ACOUSTIC') || alertType.includes('SOUND')) return 'megaphone';
+  if (alertType.includes('TEMP')) return 'thermometer';
+  if (alertType.includes('PERSON')) return 'walk';
+  return 'alert-circle';
+};
+
+const formatAlertTypeName = (type: string): string => {
+  switch (type) {
+    case 'FALL_DETECTED':
+      return 'Té ngã nguy hiểm';
+    case 'ACOUSTIC_DISTRESS':
+      return 'Kêu cứu / Âm thanh';
+    case 'HIGH_HEART_RATE':
+      return 'Nhịp tim cao';
+    case 'HIGH_TEMPERATURE':
+      return 'Thân nhiệt cao';
+    case 'PERSON_DETECTED':
+      return 'Phát hiện người';
+    default:
+      return type.replace(/_/g, ' ');
+  }
+};
 
 export default function HomeScreen({ navigation }: any) {
   const {
@@ -25,10 +78,36 @@ export default function HomeScreen({ navigation }: any) {
     toggleCameraSleep,
     toggleCameraAIProtect,
     currentVitals,
+    incidents,
+    activeDevice,
   } = useVitalStore();
 
   const [isMicSpeaking, setIsMicSpeaking] = useState(false);
-  const [houseSelectorVisible, setHouseSelectorVisible] = useState(false);
+
+  // Xử lý One-Touch SOS 115
+  const handleSOS115 = () => {
+    // Tự động sao chép địa chỉ nhà vào Clipboard
+    copyAddressToClipboard(house.address);
+
+    // Kích hoạt quay số nhanh đến 115
+    Linking.openURL('tel:115').catch(() => {
+      console.log('Thiết bị không hỗ trợ cuộc gọi viễn thông trực tiếp');
+    });
+
+    // Thông báo Toast/Alert kèm địa chỉ đã sao chép
+    Alert.alert(
+      '🚨 ĐÃ KÍCH HOẠT ONE-TOUCH SOS 115',
+      `Đã sao chép địa chỉ nhà và mở cuộc gọi cấp cứu 115.\n\n📍 Địa chỉ đã sao chép:\n"${house.address}"\n\nBạn có thể dán hoặc đọc trực tiếp địa chỉ này cho tổng đài viên cấp cứu.`,
+      [
+        { text: 'Đóng', style: 'cancel' },
+        {
+          text: 'Quay số 115 lại',
+          style: 'destructive',
+          onPress: () => Linking.openURL('tel:115'),
+        },
+      ]
+    );
+  };
 
   const handleMicPress = () => {
     setIsMicSpeaking(!isMicSpeaking);
@@ -41,11 +120,61 @@ export default function HomeScreen({ navigation }: any) {
   };
 
   const handleMultiView = () => {
+    navigation.navigate('MultiView');
+  };
+
+  const handleSelectHouseMode = (mode: 'AWAY' | 'HOME' | 'DISARM') => {
+    // Radio / Segmented Control: Nếu đã chọn mode này thì giữ nguyên
+    if (house.currentMode === mode) return;
+
+    setHouseMode(mode);
+
+    if (mode === 'AWAY') {
+      Alert.alert(
+        '🚶 Chế độ Xa (Away) đã kích hoạt',
+        'Đã kích hoạt chế độ an ninh cao nhất: Tối đa độ nhạy cảm biến, phát hiện té ngã và chuông báo động 24/7. Camera tiếp tục phát trực tiếp bình thường.'
+      );
+    } else if (mode === 'HOME') {
+      Alert.alert(
+        '🏠 Chế độ Ở nhà (Home) đã kích hoạt',
+        'Đã giảm mức báo động xâm nhập khi gia đình sinh hoạt, nhưng vẫn duy trì theo dõi té ngã và sinh hiệu trực tiếp 24/7.'
+      );
+    } else if (mode === 'DISARM') {
+      Alert.alert(
+        '🛡️ Chế độ Tắt báo động (Disarm) đã kích hoạt',
+        'Đã tắt hoàn toàn còi hú và các thông báo báo động. Camera vẫn mở và hiển thị luồng trực tiếp bình thường.'
+      );
+    }
+  };
+
+  const handleTogglePrivacyMode = () => {
+    toggleCameraSleep();
     Alert.alert(
-      'Nhiều chế độ xem',
-      'Đang mở màn hình chia lưới 4 camera: Phòng khách, Phòng ngủ, Bếp, Ban công.'
+      camera.isSleep ? 'Đã mở lại ống kính camera' : 'Đã bật Chế độ riêng tư (Che camera)',
+      camera.isSleep
+        ? `Ống kính ${cameraDisplayName} đã mở lại và tiếp tục phát trực tiếp bình thường.`
+        : `Ống kính ${cameraDisplayName} đã cụp lại và che khung hình. Màn hình đen riêng tư đã được kích hoạt.`
     );
   };
+
+  const handleToggleAIProtect = () => {
+    toggleCameraAIProtect();
+    Alert.alert(
+      camera.isAIProtect
+        ? '⏸️ Đã tạm dừng tính năng AI'
+        : '🛡️ Đã bật giám sát AI thông minh',
+      camera.isAIProtect
+        ? `Đã tạm dừng các tính năng AI (nhận diện té ngã & âm thanh bất thường) cho ${cameraDisplayName}. Camera chuyển sang chế độ ghi hình thông thường.`
+        : `Đã kích hoạt toàn bộ tính năng AI cho ${cameraDisplayName}: Bật phát hiện té ngã 24/7 và nhận diện âm thanh bất thường YAMNet.`
+    );
+  };
+
+  const cameraDisplayName = camera.name || 'Camera Phòng Ngủ - Hub #01';
+  const isEdgeHubOnline = activeDevice?.is_online ?? true;
+  const braceletBattery = currentVitals.bracelet_battery ?? 88;
+  const acousticStatus = currentVitals.acoustic_status ?? 'Bình thường';
+  const isAcousticAlarm = acousticStatus.includes('la hét') || acousticStatus.includes('va đập');
+  const recentIncidents = incidents.slice(0, 3);
 
   return (
     <SafeAreaView style={styles.safeArea} edges={['top']}>
@@ -84,81 +213,145 @@ export default function HomeScreen({ navigation }: any) {
         showsVerticalScrollIndicator={false}
         contentContainerStyle={styles.scrollContent}
       >
-        {/* 2. Quick Mode Selector: Xa, Tại nhà, Riêng tư */}
+        {/* 2. Bộ chọn chế độ an ninh (House Security Mode) dạng Radio / Segmented Control: Xa - Ở nhà - Tắt báo động */}
         <View style={styles.modesRow}>
-          {/* Nút Xa */}
+          {/* Nút 1: Xa (Away) */}
           <TouchableOpacity
             style={[
               styles.modePill,
               house.currentMode === 'AWAY' ? styles.modePillActiveAway : styles.modePillInactive,
             ]}
-            onPress={() => setHouseMode('AWAY')}
-            activeOpacity={0.8}
+            onPress={() => handleSelectHouseMode('AWAY')}
+            activeOpacity={0.75}
           >
-            <View style={[styles.modeIconCircle, { backgroundColor: '#10B981' }]}>
-              <Ionicons name="exit-outline" size={16} color="#FFF" />
+            <View
+              style={[
+                styles.modeIconCircle,
+                { backgroundColor: house.currentMode === 'AWAY' ? '#10B981' : '#E2E8F0' },
+              ]}
+            >
+              <Ionicons
+                name="exit-outline"
+                size={14}
+                color={house.currentMode === 'AWAY' ? '#FFF' : '#94A3B8'}
+              />
             </View>
             <Text
               style={[
                 styles.modePillText,
-                house.currentMode === 'AWAY' ? { color: '#065F46', fontWeight: '700' } : { color: '#475569' },
+                { color: house.currentMode === 'AWAY' ? '#047857' : '#94A3B8' },
               ]}
+              numberOfLines={1}
             >
               Xa
             </Text>
           </TouchableOpacity>
 
-          {/* Nút Tại nhà */}
+          {/* Nút 2: Ở nhà (Home) */}
           <TouchableOpacity
             style={[
               styles.modePill,
               house.currentMode === 'HOME' ? styles.modePillActiveHome : styles.modePillInactive,
             ]}
-            onPress={() => setHouseMode('HOME')}
-            activeOpacity={0.8}
+            onPress={() => handleSelectHouseMode('HOME')}
+            activeOpacity={0.75}
           >
-            <View style={[styles.modeIconCircle, { backgroundColor: '#3B82F6' }]}>
-              <Ionicons name="home" size={16} color="#FFF" />
+            <View
+              style={[
+                styles.modeIconCircle,
+                { backgroundColor: house.currentMode === 'HOME' ? '#3B82F6' : '#E2E8F0' },
+              ]}
+            >
+              <Ionicons
+                name="home"
+                size={14}
+                color={house.currentMode === 'HOME' ? '#FFF' : '#94A3B8'}
+              />
             </View>
-            {house.currentMode === 'HOME' && (
-              <Text style={[styles.modePillText, { color: '#1D4ED8', fontWeight: '700' }]}>
-                Tại nhà
-              </Text>
-            )}
+            <Text
+              style={[
+                styles.modePillText,
+                { color: house.currentMode === 'HOME' ? '#1D4ED8' : '#94A3B8' },
+              ]}
+              numberOfLines={1}
+            >
+              Ở nhà
+            </Text>
           </TouchableOpacity>
 
-          {/* Nút Riêng tư / Tắt tiếng */}
+          {/* Nút 3: Tắt báo động / Bỏ canh gác (Disarm) */}
           <TouchableOpacity
             style={[
               styles.modePill,
-              house.currentMode === 'PRIVACY' ? styles.modePillActivePrivacy : styles.modePillInactive,
+              house.currentMode === 'DISARM' ? styles.modePillActiveDisarm : styles.modePillInactive,
             ]}
-            onPress={() => setHouseMode('PRIVACY')}
-            activeOpacity={0.8}
+            onPress={() => handleSelectHouseMode('DISARM')}
+            activeOpacity={0.75}
           >
-            <View style={[styles.modeIconCircle, { backgroundColor: '#F59E0B' }]}>
-              <Ionicons name="shield-outline" size={16} color="#FFF" />
+            <View
+              style={[
+                styles.modeIconCircle,
+                { backgroundColor: house.currentMode === 'DISARM' ? '#64748B' : '#E2E8F0' },
+              ]}
+            >
+              <MaterialCommunityIcons
+                name="shield-off-outline"
+                size={15}
+                color={house.currentMode === 'DISARM' ? '#FFF' : '#94A3B8'}
+              />
             </View>
-            {house.currentMode === 'PRIVACY' && (
-              <Text style={[styles.modePillText, { color: '#B45309', fontWeight: '700' }]}>
-                Riêng tư
-              </Text>
-            )}
+            <Text
+              style={[
+                styles.modePillText,
+                { color: house.currentMode === 'DISARM' ? '#1E293B' : '#94A3B8' },
+              ]}
+              numberOfLines={1}
+            >
+              Tắt báo động
+            </Text>
           </TouchableOpacity>
         </View>
 
-        {/* 3. Section Title: "Tất cả" & icon chế độ xem */}
+        {/* 3. NÚT KHẨN CẤP: ONE-TOUCH SOS 115 (Màu đỏ nổi bật, dễ quan sát) */}
+        <TouchableOpacity
+          style={styles.sosCard}
+          onPress={handleSOS115}
+          activeOpacity={0.9}
+        >
+          <View style={styles.sosLeftContent}>
+            <View style={styles.sosIconCircle}>
+              <Ionicons name="call" size={24} color="#FFF" />
+            </View>
+            <View style={styles.sosTextContainer}>
+              <View style={styles.sosTitleRow}>
+                <Text style={styles.sosTitleText}>ONE-TOUCH SOS 115</Text>
+                <View style={styles.sosTag}>
+                  <Text style={styles.sosTagText}>KHẨN CẤP</Text>
+                </View>
+              </View>
+              <Text style={styles.sosSubtitleText} numberOfLines={1}>
+                Quay số 115 &amp; tự động sao chép địa chỉ nhà
+              </Text>
+            </View>
+          </View>
+
+          <View style={styles.sosActionCircle}>
+            <Ionicons name="arrow-forward" size={18} color={Colors.danger} />
+          </View>
+        </TouchableOpacity>
+
+        {/* 4. Section Title: "Tất cả thiết bị" & icon chế độ xem */}
         <View style={styles.sectionHeaderRow}>
-          <Text style={styles.sectionTitleText}>Tất cả</Text>
+          <Text style={styles.sectionTitleText}>Tất cả thiết bị</Text>
           <View style={styles.viewLayoutIcons}>
             <View style={styles.dividerLineSmall} />
-            <TouchableOpacity onPress={() => {}}>
+            <TouchableOpacity onPress={() => navigation.navigate('Devices')}>
               <Ionicons name="reorder-three-outline" size={24} color={Colors.textPrimary} />
             </TouchableOpacity>
           </View>
         </View>
 
-        {/* 4. Banner "Nhiều chế độ xem" (Multi-view) */}
+        {/* 5. Banner "Nhiều chế độ xem" (Multi-view) */}
         <TouchableOpacity
           style={styles.multiViewCard}
           onPress={handleMultiView}
@@ -170,7 +363,7 @@ export default function HomeScreen({ navigation }: any) {
           </View>
         </TouchableOpacity>
 
-        {/* 5. Main Device Card: Ranger 2C 3MP-08F2 (Screenshot 1) */}
+        {/* 6. Main Camera Device Card (Live View & Playback) */}
         <View style={styles.cameraCard}>
           {/* Card Video Area (Clickable to open CameraDetail) */}
           <TouchableOpacity
@@ -187,15 +380,50 @@ export default function HomeScreen({ navigation }: any) {
               resizeMode="cover"
             />
 
-            {/* Simulated Live Stream Overlay Header */}
+            {/* Live Stream Overlay Header: Tên thiết bị thân thiện & Badge WebRTC / Edge Hub */}
             <View style={styles.cameraOverlayTop}>
-              <Text style={styles.cameraNameOverlay}>{camera.name}</Text>
+              <View style={styles.cameraTitleWithBadge}>
+                <Text style={styles.cameraNameOverlay} numberOfLines={1}>
+                  {cameraDisplayName}
+                </Text>
+                {/* Badge trạng thái kết nối WebRTC / Live */}
+                {camera.isSleep ? (
+                  <View style={styles.privacyLiveBadge}>
+                    <Ionicons name="eye-off" size={10} color="#F59E0B" style={{ marginRight: 4 }} />
+                    <Text style={styles.privacyLiveBadgeText}>Ống kính riêng tư • Đã che</Text>
+                  </View>
+                ) : !camera.isAIProtect ? (
+                  <View style={styles.normalModeBadge}>
+                    <View style={styles.normalGrayDot} />
+                    <Text style={styles.normalModeBadgeText}>Chế độ thường • AI Tắt</Text>
+                  </View>
+                ) : house.currentMode === 'AWAY' ? (
+                  <View style={styles.awayLiveBadge}>
+                    <View style={styles.liveGreenDot} />
+                    <Text style={styles.awayLiveBadgeText}>Vắng nhà • AI Giám sát 24/7</Text>
+                  </View>
+                ) : house.currentMode === 'DISARM' ? (
+                  <View style={styles.disarmLiveBadge}>
+                    <MaterialCommunityIcons name="shield-off-outline" size={11} color="#E2E8F0" style={{ marginRight: 4 }} />
+                    <Text style={styles.disarmLiveBadgeText}>Tắt báo động • AI Trực tiếp</Text>
+                  </View>
+                ) : (
+                  <View style={styles.liveWebRTCBadge}>
+                    <View style={styles.liveGreenDot} />
+                    <Text style={styles.liveWebRTCText}>Ở nhà • AI WebRTC</Text>
+                  </View>
+                )}
+              </View>
+
               <View style={styles.cameraStatusIcons}>
-                <View style={styles.sdCardBadge}>
-                  <Ionicons name="file-tray-full-outline" size={12} color="#FFF" />
+                <View style={styles.hubStatusPill}>
+                  <Text style={styles.hubStatusPillText}>Hub #01 Online</Text>
                 </View>
                 <Ionicons name="wifi" size={14} color="#10B981" style={{ marginLeft: 6 }} />
-                <TouchableOpacity style={{ marginLeft: 8 }} onPress={() => navigation.navigate('CameraDetail')}>
+                <TouchableOpacity
+                  style={{ marginLeft: 8 }}
+                  onPress={() => navigation.navigate('CameraDetail')}
+                >
                   <Ionicons name="ellipsis-horizontal" size={16} color="#FFF" />
                 </TouchableOpacity>
               </View>
@@ -206,28 +434,72 @@ export default function HomeScreen({ navigation }: any) {
               <Text style={styles.watermarkText}>SmartCare AI</Text>
             </View>
 
-            {/* Sleep Mode Overlay nếu đang ngủ */}
-            {camera.isSleep && (
-              <View style={styles.sleepOverlay}>
-                <Ionicons name="eye-off" size={40} color="#CBD5E1" />
-                <Text style={styles.sleepOverlayText}>Ống kính đang ở chế độ ngủ riêng tư</Text>
+            {/* Privacy Mode Overlay: Màn hình đen che camera vật lý khi camera.isSleep = true */}
+            {camera.isSleep ? (
+              <View style={styles.privacyOverlay}>
+                <View style={styles.privacyIconCircle}>
+                  <Ionicons name="eye-off" size={32} color="#F59E0B" />
+                </View>
+                <Text style={styles.privacyOverlayTitle}>Ống kính đang ở chế độ riêng tư</Text>
+                <Text style={styles.privacyOverlaySub}>
+                  Ống kính camera đã cụp lại và che khung hình. Luồng trực tiếp tạm thời tắt.
+                </Text>
+                <TouchableOpacity
+                  style={styles.privacyDisableBtn}
+                  onPress={handleTogglePrivacyMode}
+                  activeOpacity={0.8}
+                >
+                  <Ionicons name="eye" size={14} color="#FFF" style={{ marginRight: 4 }} />
+                  <Text style={styles.privacyDisableText}>Mở lại ống kính</Text>
+                </TouchableOpacity>
               </View>
-            )}
+            ) : null}
           </TouchableOpacity>
 
-          {/* 3 Quick Action Buttons Under Video (Sleep, Mic, AI Shield) */}
+          {/* NÚT TRUY CẬP NHANH: "Xem lại 24/48h" (Interactive Timeline Playback) ngay bên dưới video */}
+          <TouchableOpacity
+            style={styles.playbackQuickBar}
+            onPress={() => navigation.navigate('CameraDetail')}
+            activeOpacity={0.8}
+          >
+            <View style={styles.playbackLeftBox}>
+              <View style={styles.playbackIconCircle}>
+                <Ionicons name="play-back" size={16} color={Colors.primary} />
+              </View>
+              <View>
+                <Text style={styles.playbackTitle}>Xem lại 24/48h (Interactive Timeline Playback)</Text>
+                <Text style={styles.playbackSub}>Bộ đệm RAM Edge Hub &amp; lưu trữ MinIO Cloud</Text>
+              </View>
+            </View>
+            <View style={styles.playbackRightAction}>
+              <Text style={styles.playbackBadgeText}>24h - 48h</Text>
+              <Ionicons name="chevron-forward" size={16} color={Colors.primary} />
+            </View>
+          </TouchableOpacity>
+
+          {/* 3 Quick Action Buttons Under Video (Power/Standby, Mic, AI Shield) */}
           <View style={styles.cameraBottomToolbar}>
-            {/* 1. Nút Sleep / Chế độ ngủ (Icon mắt nhắm) */}
+            {/* 1. Nút Chế độ riêng tư của camera (Con mắt: eye / eye-off) */}
             <TouchableOpacity
               style={styles.toolBtn}
-              onPress={toggleCameraSleep}
+              onPress={handleTogglePrivacyMode}
               activeOpacity={0.7}
             >
-              <Ionicons
-                name={camera.isSleep ? 'eye' : 'eye-off-outline'}
-                size={22}
-                color={camera.isSleep ? Colors.primary : Colors.textPrimary}
-              />
+              <View style={styles.cameraPrivacyContainer}>
+                <Ionicons
+                  name={camera.isSleep ? 'eye-off' : 'eye-outline'}
+                  size={20}
+                  color={camera.isSleep ? '#F59E0B' : Colors.textPrimary}
+                />
+                <Text
+                  style={[
+                    styles.cameraPrivacyText,
+                    { color: camera.isSleep ? '#D97706' : Colors.textPrimary },
+                  ]}
+                >
+                  Riêng tư
+                </Text>
+              </View>
             </TouchableOpacity>
 
             <View style={styles.toolDivider} />
@@ -250,30 +522,40 @@ export default function HomeScreen({ navigation }: any) {
             {/* 3. Nút Chế độ bảo vệ AI (Khiên AI) */}
             <TouchableOpacity
               style={styles.toolBtn}
-              onPress={toggleCameraAIProtect}
+              onPress={handleToggleAIProtect}
               activeOpacity={0.7}
             >
               <View style={styles.aiShieldContainer}>
-                <Ionicons
-                  name={camera.isAIProtect ? 'shield-checkmark' : 'shield-outline'}
-                  size={20}
-                  color={camera.isAIProtect ? Colors.aiBlue : Colors.textPrimary}
-                />
+                {camera.isAIProtect ? (
+                  <Ionicons
+                    name="shield-checkmark"
+                    size={18}
+                    color="#2563EB"
+                  />
+                ) : (
+                  <MaterialCommunityIcons
+                    name="shield-off-outline"
+                    size={18}
+                    color="#94A3B8"
+                  />
+                )}
                 <Text
                   style={[
                     styles.aiShieldText,
-                    { color: camera.isAIProtect ? Colors.aiBlue : Colors.textPrimary },
+                    { color: camera.isAIProtect ? '#2563EB' : '#94A3B8' },
                   ]}
+                  numberOfLines={1}
                 >
-                  AI
+                  {camera.isAIProtect ? 'AI Bảo vệ: Bật' : 'AI: Tắt'}
                 </Text>
               </View>
             </TouchableOpacity>
           </View>
         </View>
 
-        {/* 6. Widget Tóm tắt Sinh hiệu thời gian thực (Proposal FR02) */}
+        {/* 7. Khối hiển thị Sinh hiệu & Thiết bị (lấy từ useVitalStore) */}
         <View style={styles.vitalsSummaryCard}>
+          {/* Header Card */}
           <View style={styles.vitalsSummaryHeader}>
             <View style={{ flexDirection: 'row', alignItems: 'center' }}>
               <View style={styles.livePulseDot} />
@@ -284,41 +566,219 @@ export default function HomeScreen({ navigation }: any) {
             </TouchableOpacity>
           </View>
 
+          {/* Thanh trạng thái Thiết bị & Hub: Edge Hub Online/Offline & % Pin vòng BLE */}
+          <View style={styles.deviceStatusBar}>
+            <View style={styles.deviceStatusItem}>
+              <Ionicons
+                name="hardware-chip-outline"
+                size={14}
+                color={isEdgeHubOnline ? Colors.success : Colors.danger}
+              />
+              <Text style={styles.deviceStatusText}>
+                Edge Hub:{' '}
+                <Text
+                  style={{
+                    color: isEdgeHubOnline ? Colors.success : Colors.danger,
+                    fontWeight: '700',
+                  }}
+                >
+                  {isEdgeHubOnline ? 'Online' : 'Offline'}
+                </Text>
+              </Text>
+            </View>
+
+            <View style={styles.deviceStatusDivider} />
+
+            <View style={styles.deviceStatusItem}>
+              <Ionicons name="battery-charging" size={15} color={Colors.aiBlue} />
+              <Text style={styles.deviceStatusText}>
+                Vòng BLE:{' '}
+                <Text style={{ color: Colors.textPrimary, fontWeight: '700' }}>
+                  {braceletBattery}% Pin
+                </Text>
+              </Text>
+            </View>
+          </View>
+
+          {/* Lưới 5 chỉ số sinh hiệu: Nhịp tim, SpO2, AMG8833, YOLO-Pose, Acoustic/YAMNet */}
           <View style={styles.vitalsGrid}>
+            {/* Nhịp tim */}
             <View style={styles.vitalItem}>
-              <Ionicons name="heart" size={18} color="#EF4444" />
-              <Text style={styles.vitalValText}>{currentVitals.heart_rate ?? 74} <Text style={styles.vitalUnit}>bpm</Text></Text>
+              <Ionicons name="heart" size={17} color="#EF4444" />
+              <Text style={styles.vitalValText} numberOfLines={1}>
+                {currentVitals.heart_rate ?? 74}{' '}
+                <Text style={styles.vitalUnit}>bpm</Text>
+              </Text>
               <Text style={styles.vitalLblText}>Nhịp tim</Text>
             </View>
             <View style={styles.vitalDivider} />
 
+            {/* SpO2 */}
             <View style={styles.vitalItem}>
-              <Ionicons name="water" size={18} color="#3B82F6" />
-              <Text style={styles.vitalValText}>{currentVitals.spo2 ?? 98} <Text style={styles.vitalUnit}>%</Text></Text>
+              <Ionicons name="water" size={17} color="#3B82F6" />
+              <Text style={styles.vitalValText} numberOfLines={1}>
+                {currentVitals.spo2 ?? 98}{' '}
+                <Text style={styles.vitalUnit}>%</Text>
+              </Text>
               <Text style={styles.vitalLblText}>SpO₂</Text>
             </View>
             <View style={styles.vitalDivider} />
 
+            {/* Thân nhiệt AMG8833 */}
             <View style={styles.vitalItem}>
-              <Ionicons name="thermometer" size={18} color="#F59E0B" />
-              <Text style={styles.vitalValText}>{currentVitals.skin_temp_max ?? 36.8} <Text style={styles.vitalUnit}>°C</Text></Text>
+              <Ionicons name="thermometer" size={17} color="#F59E0B" />
+              <Text style={styles.vitalValText} numberOfLines={1}>
+                {currentVitals.skin_temp_max ?? 36.8}{' '}
+                <Text style={styles.vitalUnit}>°C</Text>
+              </Text>
               <Text style={styles.vitalLblText}>AMG8833</Text>
             </View>
             <View style={styles.vitalDivider} />
 
+            {/* Tư thế YOLO-Pose */}
             <View style={styles.vitalItem}>
-              <Ionicons name="body" size={18} color="#10B981" />
-              <Text style={[styles.vitalValText, { fontSize: 13, color: '#10B981' }]}>Bình thường</Text>
+              <Ionicons
+                name="body"
+                size={17}
+                color={currentVitals.fall_detected ? Colors.danger : Colors.success}
+              />
+              <Text
+                style={[
+                  styles.vitalValText,
+                  {
+                    fontSize: 12,
+                    color: currentVitals.fall_detected ? Colors.danger : Colors.success,
+                  },
+                ]}
+                numberOfLines={1}
+              >
+                {currentVitals.fall_detected ? 'Ngã!' : 'Bình thường'}
+              </Text>
               <Text style={styles.vitalLblText}>YOLO-Pose</Text>
+            </View>
+            <View style={styles.vitalDivider} />
+
+            {/* Kênh âm thanh Acoustic / YAMNet */}
+            <View style={styles.vitalItem}>
+              <Ionicons
+                name={isAcousticAlarm ? 'warning' : 'mic'}
+                size={17}
+                color={isAcousticAlarm ? Colors.danger : '#8B5CF6'}
+              />
+              <Text
+                style={[
+                  styles.vitalValText,
+                  {
+                    fontSize: 12,
+                    color: isAcousticAlarm ? Colors.danger : '#8B5CF6',
+                  },
+                ]}
+                numberOfLines={1}
+              >
+                {isAcousticAlarm ? 'La hét!' : 'Bình thường'}
+              </Text>
+              <Text style={styles.vitalLblText}>YAMNet</Text>
             </View>
           </View>
         </View>
 
-        {/* 7. Dòng chữ kết thúc danh sách: "Không còn dữ liệu" */}
-        <View style={styles.endOfListContainer}>
-          <View style={styles.endLine} />
-          <Text style={styles.endOfListText}>Không còn dữ liệu</Text>
-          <View style={styles.endLine} />
+        {/* 8. Khối "Sự cố gần đây" (thay thế dòng chữ placeholder "Không còn dữ liệu") */}
+        <View style={styles.recentIncidentsSection}>
+          <View style={styles.recentIncidentsHeader}>
+            <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6 }}>
+              <Ionicons name="alert-circle" size={20} color={Colors.danger} />
+              <Text style={styles.recentIncidentsTitle}>Sự cố gần đây</Text>
+            </View>
+            <TouchableOpacity onPress={() => navigation.navigate('Alerts')}>
+              <Text style={styles.viewAllAlertsLink}>Xem tất cả &gt;</Text>
+            </TouchableOpacity>
+          </View>
+
+          {recentIncidents.length === 0 ? (
+            <View style={styles.emptyIncidentsCard}>
+              <Ionicons name="checkmark-circle-outline" size={26} color={Colors.success} />
+              <Text style={styles.emptyIncidentsText}>
+                Chưa ghi nhận sự cố bất thường nào trong 24 giờ qua.
+              </Text>
+            </View>
+          ) : (
+            recentIncidents.map((item: Incident) => {
+              const isCritical = item.alert_level === 'CRITICAL';
+              const isFall = item.alert_type === 'FALL_DETECTED';
+              const levelColor = LEVEL_COLORS[item.alert_level] ?? Colors.primary;
+              const typeIcon = getIncidentIcon(item.alert_type);
+              const typeLabel = formatAlertTypeName(item.alert_type);
+
+              return (
+                <TouchableOpacity
+                  key={item.id}
+                  style={[styles.incidentCard, isFall && styles.incidentCardCritical]}
+                  onPress={() => navigation.navigate('IncidentDetail', { incidentId: item.id })}
+                  activeOpacity={0.8}
+                >
+                  <View style={[styles.incidentLevelBar, { backgroundColor: levelColor }]} />
+
+                  <View
+                    style={[
+                      styles.incidentIconCircle,
+                      { backgroundColor: `${levelColor}18` },
+                    ]}
+                  >
+                    <Ionicons name={typeIcon} size={18} color={levelColor} />
+                  </View>
+
+                  <View style={styles.incidentBody}>
+                    <View style={styles.incidentTopMeta}>
+                      <View
+                        style={[
+                          styles.incidentTypeBadge,
+                          { backgroundColor: `${levelColor}15` },
+                        ]}
+                      >
+                        <Text style={[styles.incidentTypeBadgeText, { color: levelColor }]}>
+                          {typeLabel}
+                        </Text>
+                      </View>
+                      {!item.is_acknowledged && (
+                        <View style={styles.incidentNewBadge}>
+                          <Text style={styles.incidentNewBadgeText}>MỚI</Text>
+                        </View>
+                      )}
+                      <Text style={styles.incidentTimeText}>
+                        {new Date(item.created_at).toLocaleTimeString('vi-VN', {
+                          hour: '2-digit',
+                          minute: '2-digit',
+                        })}
+                      </Text>
+                    </View>
+
+                    <Text style={styles.incidentMsg} numberOfLines={2}>
+                      {item.message}
+                    </Text>
+                  </View>
+
+                  {item.thumbnail_url ? (
+                    <View style={styles.incidentThumbWrapper}>
+                      <Image source={{ uri: item.thumbnail_url }} style={styles.incidentThumbImg} />
+                      {item.video_clip_url && (
+                        <View style={styles.incidentPlayTag}>
+                          <Ionicons name="play" size={10} color="#FFF" />
+                          <Text style={styles.incidentPlayText}>5s Clip</Text>
+                        </View>
+                      )}
+                    </View>
+                  ) : (
+                    <Ionicons
+                      name="chevron-forward"
+                      size={16}
+                      color={Colors.textMuted}
+                      style={{ marginLeft: 6 }}
+                    />
+                  )}
+                </TouchableOpacity>
+              );
+            })
+          )}
         </View>
       </ScrollView>
     </SafeAreaView>
@@ -376,36 +836,42 @@ const styles = StyleSheet.create({
   modesRow: {
     flexDirection: 'row',
     alignItems: 'center',
-    gap: 12,
+    gap: 8,
     marginTop: 6,
-    marginBottom: 20,
+    marginBottom: 16,
   },
   modePill: {
+    flex: 1,
     flexDirection: 'row',
     alignItems: 'center',
-    paddingVertical: 8,
-    paddingHorizontal: 14,
-    borderRadius: 24,
-    backgroundColor: Colors.surface,
-    ...Shadows.soft,
+    justifyContent: 'center',
+    paddingVertical: 9,
+    paddingHorizontal: 6,
+    borderRadius: 14,
+    borderWidth: 1.5,
   },
   modePillActiveAway: {
-    backgroundColor: '#E6F9F5',
-    borderWidth: 1,
-    borderColor: '#99F6E4',
+    backgroundColor: '#ECFDF5',
+    borderColor: '#10B981',
+    opacity: 1,
+    ...Shadows.soft,
   },
   modePillActiveHome: {
     backgroundColor: '#EFF6FF',
-    borderWidth: 1,
-    borderColor: '#BFDBFE',
+    borderColor: '#3B82F6',
+    opacity: 1,
+    ...Shadows.soft,
   },
-  modePillActivePrivacy: {
-    backgroundColor: '#FFFBEB',
-    borderWidth: 1,
-    borderColor: '#FDE68A',
+  modePillActiveDisarm: {
+    backgroundColor: '#F1F5F9',
+    borderColor: '#64748B',
+    opacity: 1,
+    ...Shadows.soft,
   },
   modePillInactive: {
-    backgroundColor: Colors.surface,
+    backgroundColor: '#F8FAFC',
+    borderColor: '#E2E8F0',
+    opacity: 0.6,
   },
   modeIconCircle: {
     width: 24,
@@ -416,10 +882,78 @@ const styles = StyleSheet.create({
     marginRight: 6,
   },
   modePillText: {
-    fontSize: 14,
-    fontWeight: '600',
+    fontSize: 13,
+    fontWeight: '700',
   },
-  // Section Header "Tất cả"
+  // Khối One-Touch SOS 115
+  sosCard: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    backgroundColor: '#DC2626',
+    borderRadius: 18,
+    paddingVertical: 14,
+    paddingHorizontal: 16,
+    marginBottom: 18,
+    borderWidth: 1.5,
+    borderColor: '#EF4444',
+    ...Shadows.card,
+  },
+  sosLeftContent: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    flex: 1,
+  },
+  sosIconCircle: {
+    width: 44,
+    height: 44,
+    borderRadius: 22,
+    backgroundColor: 'rgba(255, 255, 255, 0.22)',
+    alignItems: 'center',
+    justifyContent: 'center',
+    marginRight: 12,
+  },
+  sosTextContainer: {
+    flex: 1,
+  },
+  sosTitleRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 8,
+  },
+  sosTitleText: {
+    color: '#FFF',
+    fontSize: 16,
+    fontWeight: '900',
+    letterSpacing: 0.5,
+  },
+  sosTag: {
+    backgroundColor: '#FFF',
+    paddingHorizontal: 6,
+    paddingVertical: 2,
+    borderRadius: 6,
+  },
+  sosTagText: {
+    color: '#DC2626',
+    fontSize: 9,
+    fontWeight: '900',
+  },
+  sosSubtitleText: {
+    color: 'rgba(255, 255, 255, 0.92)',
+    fontSize: 12,
+    marginTop: 2,
+    fontWeight: '500',
+  },
+  sosActionCircle: {
+    width: 32,
+    height: 32,
+    borderRadius: 16,
+    backgroundColor: '#FFF',
+    alignItems: 'center',
+    justifyContent: 'center',
+    marginLeft: 8,
+  },
+  // Section Header "Tất cả thiết bị"
   sectionHeaderRow: {
     flexDirection: 'row',
     alignItems: 'center',
@@ -492,24 +1026,164 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'space-between',
-    backgroundColor: 'rgba(0,0,0,0.3)',
-    borderRadius: 8,
-    paddingHorizontal: 8,
-    paddingVertical: 4,
+    backgroundColor: 'rgba(0,0,0,0.5)',
+    borderRadius: 10,
+    paddingHorizontal: 10,
+    paddingVertical: 6,
+  },
+  cameraTitleWithBadge: {
+    flexDirection: 'column',
+    maxWidth: '55%',
   },
   cameraNameOverlay: {
     fontSize: 13,
     fontWeight: '700',
     color: '#FFF',
   },
+  liveWebRTCBadge: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    marginTop: 2,
+  },
+  liveGreenDot: {
+    width: 6,
+    height: 6,
+    borderRadius: 3,
+    backgroundColor: '#10B981',
+    marginRight: 4,
+  },
+  liveWebRTCText: {
+    fontSize: 10,
+    fontWeight: '700',
+    color: '#A7F3D0',
+  },
+  privacyLiveBadge: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    marginTop: 2,
+    backgroundColor: 'rgba(245, 158, 11, 0.25)',
+    paddingHorizontal: 6,
+    paddingVertical: 2,
+    borderRadius: 6,
+    alignSelf: 'flex-start',
+  },
+  privacyLiveBadgeText: {
+    fontSize: 10,
+    fontWeight: '700',
+    color: '#FDE68A',
+  },
+  alarmLiveBadge: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    marginTop: 2,
+    backgroundColor: 'rgba(239, 68, 68, 0.25)',
+    paddingHorizontal: 6,
+    paddingVertical: 2,
+    borderRadius: 6,
+    alignSelf: 'flex-start',
+  },
+  alarmRedDot: {
+    width: 6,
+    height: 6,
+    borderRadius: 3,
+    backgroundColor: '#EF4444',
+    marginRight: 4,
+  },
+  alarmLiveBadgeText: {
+    fontSize: 10,
+    fontWeight: '700',
+    color: '#FECACA',
+  },
+  disarmLiveBadge: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    marginTop: 2,
+    backgroundColor: 'rgba(100, 116, 139, 0.3)',
+    paddingHorizontal: 6,
+    paddingVertical: 2,
+    borderRadius: 6,
+    alignSelf: 'flex-start',
+  },
+  disarmLiveBadgeText: {
+    fontSize: 10,
+    fontWeight: '700',
+    color: '#E2E8F0',
+  },
+  normalModeBadge: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    marginTop: 2,
+    backgroundColor: 'rgba(100, 116, 139, 0.45)',
+    paddingHorizontal: 6,
+    paddingVertical: 2,
+    borderRadius: 6,
+    alignSelf: 'flex-start',
+  },
+  normalGrayDot: {
+    width: 6,
+    height: 6,
+    borderRadius: 3,
+    backgroundColor: '#94A3B8',
+    marginRight: 4,
+  },
+  normalModeBadgeText: {
+    fontSize: 10,
+    fontWeight: '700',
+    color: '#E2E8F0',
+  },
+  awayLiveBadge: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    marginTop: 2,
+    backgroundColor: 'rgba(16, 185, 129, 0.25)',
+    paddingHorizontal: 6,
+    paddingVertical: 2,
+    borderRadius: 6,
+    alignSelf: 'flex-start',
+  },
+  awayLiveBadgeText: {
+    fontSize: 10,
+    fontWeight: '700',
+    color: '#A7F3D0',
+  },
+  cameraPausedBadge: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    marginTop: 2,
+    backgroundColor: 'rgba(100, 116, 139, 0.35)',
+    paddingHorizontal: 6,
+    paddingVertical: 2,
+    borderRadius: 6,
+    alignSelf: 'flex-start',
+  },
+  pausedDot: {
+    width: 6,
+    height: 6,
+    borderRadius: 3,
+    backgroundColor: '#94A3B8',
+    marginRight: 4,
+  },
+  cameraPausedBadgeText: {
+    fontSize: 10,
+    fontWeight: '700',
+    color: '#CBD5E1',
+  },
   cameraStatusIcons: {
     flexDirection: 'row',
     alignItems: 'center',
   },
-  sdCardBadge: {
-    backgroundColor: 'rgba(255,255,255,0.2)',
-    borderRadius: 4,
-    padding: 2,
+  hubStatusPill: {
+    backgroundColor: 'rgba(16, 185, 129, 0.25)',
+    borderRadius: 6,
+    paddingHorizontal: 6,
+    paddingVertical: 2,
+    borderWidth: 0.8,
+    borderColor: '#10B981',
+  },
+  hubStatusPillText: {
+    color: '#E6F9F5',
+    fontSize: 10,
+    fontWeight: '700',
   },
   watermarkTag: {
     position: 'absolute',
@@ -534,6 +1208,145 @@ const styles = StyleSheet.create({
     marginTop: 8,
     fontWeight: '600',
   },
+  privacyOverlay: {
+    ...StyleSheet.absoluteFillObject,
+    backgroundColor: 'rgba(15, 23, 42, 0.94)',
+    alignItems: 'center',
+    justifyContent: 'center',
+    paddingHorizontal: 20,
+  },
+  privacyIconCircle: {
+    width: 52,
+    height: 52,
+    borderRadius: 26,
+    backgroundColor: 'rgba(245, 158, 11, 0.15)',
+    alignItems: 'center',
+    justifyContent: 'center',
+    marginBottom: 8,
+    borderWidth: 1,
+    borderColor: 'rgba(245, 158, 11, 0.3)',
+  },
+  privacyOverlayTitle: {
+    color: '#FFF',
+    fontSize: 15,
+    fontWeight: '800',
+    marginBottom: 4,
+    textAlign: 'center',
+  },
+  privacyOverlaySub: {
+    color: '#94A3B8',
+    fontSize: 12,
+    textAlign: 'center',
+    marginBottom: 12,
+    lineHeight: 16,
+  },
+  privacyDisableBtn: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: '#F59E0B',
+    paddingHorizontal: 14,
+    paddingVertical: 7,
+    borderRadius: 18,
+  },
+  privacyDisableText: {
+    color: '#FFF',
+    fontSize: 12,
+    fontWeight: '800',
+  },
+  cameraPausedOverlay: {
+    ...StyleSheet.absoluteFillObject,
+    backgroundColor: 'rgba(15, 23, 42, 0.92)',
+    alignItems: 'center',
+    justifyContent: 'center',
+    paddingHorizontal: 20,
+  },
+  cameraPausedIconCircle: {
+    width: 52,
+    height: 52,
+    borderRadius: 26,
+    backgroundColor: 'rgba(148, 163, 184, 0.15)',
+    alignItems: 'center',
+    justifyContent: 'center',
+    marginBottom: 8,
+    borderWidth: 1,
+    borderColor: 'rgba(148, 163, 184, 0.3)',
+  },
+  cameraPausedTitle: {
+    color: '#FFF',
+    fontSize: 15,
+    fontWeight: '800',
+    marginBottom: 4,
+    textAlign: 'center',
+  },
+  cameraPausedSub: {
+    color: '#94A3B8',
+    fontSize: 12,
+    textAlign: 'center',
+    marginBottom: 12,
+    lineHeight: 16,
+  },
+  cameraResumeBtn: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: Colors.primary,
+    paddingHorizontal: 14,
+    paddingVertical: 7,
+    borderRadius: 18,
+  },
+  cameraResumeBtnText: {
+    color: '#FFF',
+    fontSize: 12,
+    fontWeight: '800',
+  },
+  // Nút truy cập nhanh: Xem lại 24/48h
+  playbackQuickBar: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    backgroundColor: '#F8FAFC',
+    paddingHorizontal: 16,
+    paddingVertical: 10,
+    borderBottomWidth: 1,
+    borderBottomColor: Colors.border,
+  },
+  playbackLeftBox: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    flex: 1,
+  },
+  playbackIconCircle: {
+    width: 32,
+    height: 32,
+    borderRadius: 16,
+    backgroundColor: Colors.primaryLight,
+    alignItems: 'center',
+    justifyContent: 'center',
+    marginRight: 10,
+  },
+  playbackTitle: {
+    fontSize: 13,
+    fontWeight: '700',
+    color: Colors.textPrimary,
+  },
+  playbackSub: {
+    fontSize: 11,
+    color: Colors.textSecondary,
+    marginTop: 1,
+  },
+  playbackRightAction: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 4,
+  },
+  playbackBadgeText: {
+    fontSize: 11,
+    fontWeight: '700',
+    color: Colors.primary,
+    backgroundColor: '#FFF7ED',
+    paddingHorizontal: 6,
+    paddingVertical: 2,
+    borderRadius: 6,
+  },
   cameraBottomToolbar: {
     flexDirection: 'row',
     alignItems: 'center',
@@ -555,9 +1368,27 @@ const styles = StyleSheet.create({
   aiShieldContainer: {
     flexDirection: 'row',
     alignItems: 'center',
-    gap: 2,
+    gap: 4,
   },
   aiShieldText: {
+    fontSize: 11,
+    fontWeight: '800',
+  },
+  cameraPowerContainer: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 4,
+  },
+  cameraPowerText: {
+    fontSize: 12,
+    fontWeight: '800',
+  },
+  cameraPrivacyContainer: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 4,
+  },
+  cameraPrivacyText: {
     fontSize: 12,
     fontWeight: '800',
   },
@@ -573,7 +1404,7 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'space-between',
-    marginBottom: 12,
+    marginBottom: 10,
   },
   livePulseDot: {
     width: 8,
@@ -592,10 +1423,36 @@ const styles = StyleSheet.create({
     fontWeight: '600',
     color: Colors.primary,
   },
+  deviceStatusBar: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: '#F8FAFC',
+    borderRadius: 10,
+    paddingVertical: 6,
+    paddingHorizontal: 12,
+    marginBottom: 12,
+    justifyContent: 'space-around',
+    borderWidth: 1,
+    borderColor: '#EDF2F7',
+  },
+  deviceStatusItem: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 5,
+  },
+  deviceStatusText: {
+    fontSize: 12,
+    color: Colors.textSecondary,
+  },
+  deviceStatusDivider: {
+    width: 1,
+    height: 14,
+    backgroundColor: Colors.borderDark,
+  },
   vitalsGrid: {
     flexDirection: 'row',
     alignItems: 'center',
-    justifyContent: 'space-around',
+    justifyContent: 'space-between',
     paddingTop: 4,
   },
   vitalItem: {
@@ -603,18 +1460,18 @@ const styles = StyleSheet.create({
     flex: 1,
   },
   vitalValText: {
-    fontSize: 16,
+    fontSize: 14,
     fontWeight: '800',
     color: Colors.textPrimary,
     marginTop: 4,
   },
   vitalUnit: {
-    fontSize: 11,
+    fontSize: 10,
     fontWeight: '500',
     color: Colors.textSecondary,
   },
   vitalLblText: {
-    fontSize: 11,
+    fontSize: 10,
     color: Colors.textSecondary,
     marginTop: 2,
   },
@@ -623,22 +1480,140 @@ const styles = StyleSheet.create({
     height: 28,
     backgroundColor: Colors.border,
   },
-  // End of list
-  endOfListContainer: {
+  // Khối Sự cố gần đây (Recent Incidents)
+  recentIncidentsSection: {
+    marginBottom: 20,
+  },
+  recentIncidentsHeader: {
     flexDirection: 'row',
     alignItems: 'center',
+    justifyContent: 'space-between',
+    marginBottom: 12,
+  },
+  recentIncidentsTitle: {
+    fontSize: 17,
+    fontWeight: '800',
+    color: Colors.textPrimary,
+  },
+  viewAllAlertsLink: {
+    fontSize: 13,
+    fontWeight: '700',
+    color: Colors.primary,
+  },
+  emptyIncidentsCard: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: Colors.surface,
+    padding: 16,
+    borderRadius: 14,
+    gap: 10,
+    ...Shadows.soft,
+  },
+  emptyIncidentsText: {
+    fontSize: 13,
+    color: Colors.textSecondary,
+    flex: 1,
+  },
+  incidentCard: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: Colors.surface,
+    borderRadius: 16,
+    padding: 12,
+    marginBottom: 10,
+    overflow: 'hidden',
+    position: 'relative',
+    ...Shadows.soft,
+  },
+  incidentCardCritical: {
+    borderWidth: 1,
+    borderColor: '#FECACA',
+    backgroundColor: '#FFFBFB',
+  },
+  incidentLevelBar: {
+    position: 'absolute',
+    left: 0,
+    top: 0,
+    bottom: 0,
+    width: 4,
+  },
+  incidentIconCircle: {
+    width: 36,
+    height: 36,
+    borderRadius: 18,
+    alignItems: 'center',
     justifyContent: 'center',
-    marginTop: 10,
-    marginBottom: 20,
-    gap: 12,
+    marginLeft: 4,
+    marginRight: 10,
   },
-  endLine: {
-    width: 50,
-    height: 1,
-    backgroundColor: Colors.borderDark,
+  incidentBody: {
+    flex: 1,
   },
-  endOfListText: {
-    fontSize: 12,
-    color: Colors.textMuted,
+  incidentTopMeta: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 6,
+    marginBottom: 4,
+  },
+  incidentTypeBadge: {
+    paddingHorizontal: 6,
+    paddingVertical: 2,
+    borderRadius: 6,
+  },
+  incidentTypeBadgeText: {
+    fontSize: 11,
+    fontWeight: '700',
+  },
+  incidentNewBadge: {
+    backgroundColor: Colors.danger,
+    borderRadius: 4,
+    paddingHorizontal: 4,
+    paddingVertical: 1,
+  },
+  incidentNewBadgeText: {
+    color: '#FFF',
+    fontSize: 9,
+    fontWeight: '800',
+  },
+  incidentTimeText: {
+    fontSize: 11,
+    color: Colors.textSecondary,
+    marginLeft: 'auto',
+  },
+  incidentMsg: {
+    fontSize: 13,
+    color: Colors.textPrimary,
+    fontWeight: '600',
+    lineHeight: 18,
+  },
+  incidentThumbWrapper: {
+    width: 58,
+    height: 44,
+    borderRadius: 8,
+    overflow: 'hidden',
+    position: 'relative',
+    marginLeft: 8,
+    backgroundColor: '#0F172A',
+  },
+  incidentThumbImg: {
+    width: '100%',
+    height: '100%',
+  },
+  incidentPlayTag: {
+    position: 'absolute',
+    bottom: 2,
+    right: 2,
+    backgroundColor: 'rgba(0,0,0,0.65)',
+    borderRadius: 4,
+    flexDirection: 'row',
+    alignItems: 'center',
+    paddingHorizontal: 3,
+    paddingVertical: 1,
+    gap: 2,
+  },
+  incidentPlayText: {
+    color: '#FFF',
+    fontSize: 8,
+    fontWeight: '800',
   },
 });

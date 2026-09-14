@@ -21,22 +21,21 @@
       "react-native",
       "node"
     ],
-    "baseUrl": ".",
     "paths": {
       "@features/*": [
-        "src/features/*"
+        "./src/features/*"
       ],
       "@services/*": [
-        "src/services/*"
+        "./src/services/*"
       ],
       "@store/*": [
-        "src/store/*"
+        "./src/store/*"
       ],
       "@utils/*": [
-        "src/utils/*"
+        "./src/utils/*"
       ],
       "@components/*": [
-        "src/components/*"
+        "./src/components/*"
       ]
     }
   },
