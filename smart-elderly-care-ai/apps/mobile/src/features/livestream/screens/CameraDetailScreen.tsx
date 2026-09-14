@@ -33,7 +33,6 @@ export default function CameraDetailScreen({ navigation }: any) {
   const [isRecording, setIsRecording] = useState(false);
   const [isSpeaking, setIsSpeaking] = useState(false);
   const [showSkeletonPose, setShowSkeletonPose] = useState(true);
-  const [activeSubTab, setActiveSubTab] = useState<'PLAYBACK' | 'EVENTS' | 'CLOUD' | 'PROTECT'>('EVENTS');
   const [selectedIncidentForReplay, setSelectedIncidentForReplay] = useState<any | null>(null);
 
   const handleSpeakerToggle = () => {
@@ -296,59 +295,68 @@ export default function CameraDetailScreen({ navigation }: any) {
           })}
         </ScrollView>
 
-        {/* 5. Sub-navigation tabs inside playback sheet: Playback, Events, Cloud, Protect */}
+        {/* 5. Bottom Navigation Bar on CameraDetail */}
         <View style={styles.subTabBar}>
+          {/* Tab 1: Play/Live -> Quay về màn hình chính Home */}
           <TouchableOpacity
             style={styles.subTabItem}
             onPress={() => {
-              setActiveSubTab('PLAYBACK');
-              Alert.alert('Xem lại 24/48h', 'Kéo thanh timeline để xem lại toàn bộ lịch sử 1-2 ngày lưu tại Hub.');
+              if (navigation.canGoBack()) {
+                navigation.goBack();
+              } else {
+                navigation.navigate('Main', { screen: 'Home' });
+              }
             }}
+            activeOpacity={0.7}
           >
             <Ionicons
-              name="play-circle-outline"
+              name="play-circle"
               size={22}
-              color={activeSubTab === 'PLAYBACK' ? Colors.primary : Colors.textMuted}
+              color={Colors.primary}
             />
+            <Text style={[styles.subTabLabel, { color: Colors.primary }]}>Play/Live</Text>
           </TouchableOpacity>
 
+          {/* Tab 2: Tin nhắn -> Trợ lý AI Bot */}
           <TouchableOpacity
             style={styles.subTabItem}
-            onPress={() => setActiveSubTab('EVENTS')}
+            onPress={() => navigation.navigate('Main', { screen: 'AIAssistant' })}
+            activeOpacity={0.7}
           >
             <Ionicons
-              name="chatbubble-ellipses"
+              name="chatbubble-ellipses-outline"
               size={22}
-              color={activeSubTab === 'EVENTS' ? Colors.primary : Colors.textMuted}
+              color={Colors.textSecondary}
             />
+            <Text style={styles.subTabLabel}>Tin nhắn</Text>
           </TouchableOpacity>
 
+          {/* Tab 3: Danh sách sự kiện -> Màn hình Cảnh báo sự cố */}
           <TouchableOpacity
             style={styles.subTabItem}
-            onPress={() => {
-              setActiveSubTab('CLOUD');
-              Alert.alert('Lưu trữ đám mây MinIO', 'Xem danh sách clip sự kiện đã được đồng bộ lên Cloud Object Storage.');
-            }}
+            onPress={() => navigation.navigate('Main', { screen: 'Alerts' })}
+            activeOpacity={0.7}
           >
             <Ionicons
-              name="list"
+              name="list-outline"
               size={22}
-              color={activeSubTab === 'CLOUD' ? Colors.primary : Colors.textMuted}
+              color={Colors.textSecondary}
             />
+            <Text style={styles.subTabLabel}>Sự kiện</Text>
           </TouchableOpacity>
 
+          {/* Tab 4: Bảo mật / Cài đặt -> Màn hình Cài đặt & Cá nhân */}
           <TouchableOpacity
             style={styles.subTabItem}
-            onPress={() => {
-              setActiveSubTab('PROTECT');
-              Alert.alert('Chế độ bảo vệ', 'Mô hình AI YOLO-Pose & AMG8833 đang giám sát liên tục.');
-            }}
+            onPress={() => navigation.navigate('Main', { screen: 'Profile' })}
+            activeOpacity={0.7}
           >
             <Ionicons
               name="shield-checkmark-outline"
               size={22}
-              color={activeSubTab === 'PROTECT' ? Colors.primary : Colors.textMuted}
+              color={Colors.textSecondary}
             />
+            <Text style={styles.subTabLabel}>Cài đặt</Text>
           </TouchableOpacity>
         </View>
       </View>
@@ -641,7 +649,8 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'space-around',
-    height: 48,
+    height: 56,
+    paddingVertical: 4,
     borderTopWidth: 1,
     borderTopColor: Colors.border,
     backgroundColor: Colors.surface,
@@ -651,10 +660,16 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     justifyContent: 'center',
   },
+  subTabLabel: {
+    fontSize: 10,
+    fontWeight: '600',
+    color: Colors.textSecondary,
+    marginTop: 2,
+  },
   // Floating SOS 115
   floatingSOSBtn: {
     position: 'absolute',
-    bottom: 60,
+    bottom: 68,
     right: 16,
     flexDirection: 'row',
     alignItems: 'center',
