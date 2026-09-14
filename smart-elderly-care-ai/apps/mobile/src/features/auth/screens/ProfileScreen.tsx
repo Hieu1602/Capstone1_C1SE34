@@ -21,7 +21,7 @@ import { Colors, Shadows } from '../../../theme/colors';
 import { useAuthStore, useVitalStore } from '../../../store/useVitalStore';
 
 export default function ProfileScreen({ navigation }: any) {
-  const { userId, userEmail, userName } = useAuthStore();
+  const { userId, userEmail, userName, logout } = useAuthStore();
   const { house } = useVitalStore();
   const [isUserMenuVisible, setUserMenuVisible] = React.useState(false);
   const [isSettingsVisible, setSettingsVisible] = React.useState(false);
@@ -54,38 +54,11 @@ export default function ProfileScreen({ navigation }: any) {
       });
     };
 
-    if (Platform.OS === 'web') {
-      performLogout();
-      return;
-    }
-
+  const handleLogout = () => {
     Alert.alert('Đăng xuất', 'Bạn có chắc chắn muốn đăng xuất khỏi hệ thống giám sát?', [
       { text: 'Hủy', style: 'cancel' },
-      { text: 'Đăng xuất', style: 'destructive', onPress: performLogout },
-    ]);                           
-  };
-
-  const handleChangePassword = () => {
-    if (!currentPassword || !newPassword || !confirmPassword) {
-      Alert.alert('Thiếu thông tin', 'Vui lòng điền đầy đủ các trường mật khẩu.');
-      return;
-    }
-
-    if (newPassword.length < 6) {
-      Alert.alert('Mật khẩu chưa đủ mạnh', 'Mật khẩu mới cần có ít nhất 6 ký tự.');
-      return;
-    }
-
-    if (newPassword !== confirmPassword) {
-      Alert.alert('Mật khẩu không khớp', 'Mật khẩu nhập lại chưa giống mật khẩu mới.');
-      return;
-    }
-
-    Alert.alert('Thành công', 'Mật khẩu của bạn đã được cập nhật.');
-    setCurrentPassword('');
-    setNewPassword('');
-    setConfirmPassword('');
-    setChangePasswordVisible(false);
+      { text: 'Đăng xuất', style: 'destructive', onPress: logout },
+    ]);
   };
 
   return (
@@ -462,6 +435,15 @@ export default function ProfileScreen({ navigation }: any) {
           </TouchableOpacity>
         </View>
 
+        {/* 6. Nút Đăng xuất */}
+        <TouchableOpacity
+          style={styles.logoutBtn}
+          onPress={handleLogout}
+          activeOpacity={0.8}
+        >
+          <Ionicons name="log-out-outline" size={20} color="#EF4444" style={{ marginRight: 8 }} />
+          <Text style={styles.logoutBtnText}>Đăng xuất tài khoản</Text>
+        </TouchableOpacity>
       </ScrollView>
     </SafeAreaView>
   );

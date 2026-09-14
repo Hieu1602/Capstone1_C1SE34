@@ -6,7 +6,6 @@ Pydantic Settings – Đọc cấu hình từ environment variables / .env file.
 from functools import lru_cache
 from typing import List
 
-from pydantic import field_validator
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
 
@@ -21,15 +20,6 @@ class Settings(BaseSettings):
     # ---- App ----
     APP_NAME: str = "Smart Elderly Care AI"
     DEBUG: bool = False
-
-    @field_validator("DEBUG", mode="before")
-    @classmethod
-    def parse_debug(cls, v: object) -> bool:
-        if isinstance(v, bool):
-            return v
-        if isinstance(v, str):
-            return v.lower() in ("true", "1", "yes", "dev", "development")
-        return bool(v)
     SECRET_KEY: str = "CHANGE_ME_IN_PRODUCTION_USE_RANDOM_256BIT"
     ALGORITHM: str = "HS256"
     ACCESS_TOKEN_EXPIRE_MINUTES: int = 60 * 24  # 24 hours

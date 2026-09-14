@@ -14,20 +14,8 @@ import {
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
 import { Colors, Shadows } from '../../../theme/colors';
-import AIBotIcon from '../../../components/AIBotIcon';
-import { useVitalStore } from '../../../store/useVitalStore';
 
 export default function DevicesScreen({ navigation }: any) {
-  const { incidents } = useVitalStore();
-  const hasUnreadAlerts = incidents.some((inc) => !inc.is_acknowledged);
-
-  const handleBack = () => {
-    if (navigation.canGoBack()) {
-      navigation.goBack();
-    } else {
-      navigation.navigate('Main', { screen: 'Home' });
-    }
-  };
   const devices = [
     {
       id: 'dev-01',
@@ -93,24 +81,12 @@ export default function DevicesScreen({ navigation }: any) {
 
   return (
     <SafeAreaView style={styles.safeArea} edges={['top']}>
-      {/* Header with Back button and Add button */}
+      {/* Header */}
       <View style={styles.headerRow}>
-        <View style={styles.headerLeftGroup}>
-          <TouchableOpacity
-            style={styles.backBtn}
-            onPress={handleBack}
-            activeOpacity={0.7}
-            hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}
-          >
-            <Ionicons name="chevron-back" size={24} color={Colors.textPrimary} />
-          </TouchableOpacity>
-          <Text style={styles.headerTitle}>Thiết bị &amp; Cảm biến IoT</Text>
-        </View>
-
+        <Text style={styles.headerTitle}>Thiết bị &amp; Cảm biến IoT</Text>
         <TouchableOpacity
           style={styles.addBtn}
           onPress={() => Alert.alert('Thêm thiết bị mới', 'Quét mã QR trên thân thiết bị hoặc bật Bluetooth để tìm kiếm.')}
-          activeOpacity={0.8}
         >
           <Ionicons name="add" size={24} color="#FFF" />
         </TouchableOpacity>
@@ -161,48 +137,6 @@ export default function DevicesScreen({ navigation }: any) {
           </TouchableOpacity>
         ))}
       </ScrollView>
-
-      {/* Bottom Navigation Bar */}
-      <View style={styles.bottomBar}>
-        <TouchableOpacity
-          style={styles.bottomTabItem}
-          onPress={() => navigation.navigate('Main', { screen: 'Home' })}
-          activeOpacity={0.7}
-        >
-          <View style={styles.iconContainer}>
-            <Ionicons name="home-outline" size={25} color="#94A3B8" />
-          </View>
-        </TouchableOpacity>
-
-        <TouchableOpacity
-          style={styles.bottomTabItem}
-          onPress={() => navigation.navigate('Main', { screen: 'Alerts' })}
-          activeOpacity={0.7}
-        >
-          <View style={styles.iconContainer}>
-            <Ionicons name="notifications-outline" size={25} color="#94A3B8" />
-            {hasUnreadAlerts && <View style={styles.tabBadgeDot} />}
-          </View>
-        </TouchableOpacity>
-
-        <TouchableOpacity
-          style={styles.bottomTabItem}
-          onPress={() => navigation.navigate('Main', { screen: 'AIAssistant' })}
-          activeOpacity={0.7}
-        >
-          <AIBotIcon size={46} focused={false} />
-        </TouchableOpacity>
-
-        <TouchableOpacity
-          style={styles.bottomTabItem}
-          onPress={() => navigation.navigate('Main', { screen: 'Profile' })}
-          activeOpacity={0.7}
-        >
-          <View style={styles.iconContainer}>
-            <Ionicons name="person-outline" size={25} color="#94A3B8" />
-          </View>
-        </TouchableOpacity>
-      </View>
     </SafeAreaView>
   );
 }
@@ -216,29 +150,12 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'space-between',
-    paddingHorizontal: 16,
-    paddingVertical: 12,
-    backgroundColor: Colors.surface,
-    borderBottomWidth: 1,
-    borderBottomColor: '#F1F5F9',
-  },
-  headerLeftGroup: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    flex: 1,
-  },
-  backBtn: {
-    width: 38,
-    height: 38,
-    borderRadius: 19,
-    backgroundColor: '#F1F5F9',
-    alignItems: 'center',
-    justifyContent: 'center',
-    marginRight: 10,
+    paddingHorizontal: 20,
+    paddingVertical: 14,
   },
   headerTitle: {
-    fontSize: 18,
-    fontWeight: '800',
+    fontSize: 22,
+    fontWeight: '900',
     color: Colors.textPrimary,
   },
   addBtn: {
@@ -248,12 +165,10 @@ const styles = StyleSheet.create({
     backgroundColor: Colors.primary,
     alignItems: 'center',
     justifyContent: 'center',
-    marginLeft: 10,
   },
   scrollContent: {
     paddingHorizontal: 16,
-    paddingTop: 12,
-    paddingBottom: 24,
+    paddingBottom: 32,
   },
   sectionSubtitle: {
     fontSize: 13,
@@ -302,41 +217,5 @@ const styles = StyleSheet.create({
     fontSize: 11,
     fontWeight: '700',
     color: Colors.textSecondary,
-  },
-  // Bottom Bar
-  bottomBar: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'space-around',
-    backgroundColor: '#FFFFFF',
-    borderTopColor: '#E2E8F0',
-    borderTopWidth: 1,
-    height: 62,
-    paddingTop: 8,
-    paddingBottom: 8,
-    elevation: 8,
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: -2 },
-    shadowOpacity: 0.05,
-    shadowRadius: 8,
-  },
-  bottomTabItem: {
-    flex: 1,
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
-  iconContainer: {
-    alignItems: 'center',
-    justifyContent: 'center',
-    position: 'relative',
-  },
-  tabBadgeDot: {
-    position: 'absolute',
-    top: -2,
-    right: -4,
-    width: 6,
-    height: 6,
-    borderRadius: 3,
-    backgroundColor: Colors.danger,
   },
 });
