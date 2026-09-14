@@ -16,13 +16,11 @@
     "allowSyntheticDefaultImports": true,
     "skipLibCheck": true,
     "resolveJsonModule": true,
-    "ignoreDeprecations": "5.0",
     "types": [
       "react",
       "react-native",
       "node"
     ],
-    "baseUrl": ".",
     "paths": {
       "@features/*": [
         "./src/features/*"
