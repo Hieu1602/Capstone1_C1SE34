@@ -10,7 +10,7 @@ import { Ionicons } from '@expo/vector-icons';
 
 import { Colors } from '../theme/colors';
 import AIBotIcon from '../components/AIBotIcon';
-import { useVitalStore } from '../store/useVitalStore';
+import { useAuthStore, useVitalStore } from '../store/useVitalStore';
 
 // Auth screens
 import LoginScreen from '../features/auth/screens/LoginScreen';
@@ -85,6 +85,9 @@ function MainTabNavigator() {
 
 // ---- Root Stack Navigator ----
 export default function AppNavigator() {
+  const { accessToken } = useAuthStore();
+  const isAuthenticated = Boolean(accessToken);
+
   return (
     <NavigationContainer key={isAuthenticated ? 'authenticated' : 'unauthenticated'}>
       <Stack.Navigator
