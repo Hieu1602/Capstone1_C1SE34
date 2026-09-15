@@ -15,7 +15,6 @@ import { Ionicons } from '@expo/vector-icons';
 import { Colors } from '../../../theme/colors';
 
 export default function ForgotPasswordScreen({ navigation }: any) {
-  const [resetMethod, setResetMethod] = useState<'email' | 'phone'>('email');
   const [contact, setContact] = useState('');
   const [otp, setOtp] = useState('');
   const [newPassword, setNewPassword] = useState('');
@@ -33,9 +32,7 @@ export default function ForgotPasswordScreen({ navigation }: any) {
 
   const description = useMemo(() => {
     if (step === 'request') {
-      return resetMethod === 'email'
-        ? 'Nhập email của bạn để nhận mã xác minh và đặt lại mật khẩu.'
-        : 'Nhập số điện thoại để nhận mã xác minh và đặt lại mật khẩu.';
+      return 'Nhập số điện thoại để nhận mã xác minh và đặt lại mật khẩu.';
     }
 
     if (step === 'verify') {
@@ -43,28 +40,20 @@ export default function ForgotPasswordScreen({ navigation }: any) {
     }
 
     return 'Vui lòng nhập mật khẩu mới và xác nhận lại để hoàn tất.';
-  }, [resetMethod, step]);
+  }, [step]);
 
   const handleSendCode = () => {
     const trimmedContact = contact.trim();
 
     if (!trimmedContact) {
-      Alert.alert('Thiếu thông tin', `Vui lòng nhập ${resetMethod === 'email' ? 'email' : 'số điện thoại'}.`);
+      Alert.alert('Thiếu thông tin', 'Vui lòng nhập số điện thoại.');
       return;
     }
 
-    if (resetMethod === 'email') {
-      const isValidEmail = /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(trimmedContact);
-      if (!isValidEmail) {
-        Alert.alert('Email không hợp lệ', 'Vui lòng nhập đúng định dạng email.');
-        return;
-      }
-    } else {
-      const isValidPhone = /^\+?[0-9]{9,15}$/.test(trimmedContact.replace(/\s+/g, ''));
-      if (!isValidPhone) {
-        Alert.alert('Số điện thoại không hợp lệ', 'Vui lòng kiểm tra lại số điện thoại.');
-        return;
-      }
+    const isValidPhone = /^\+?[0-9]{9,15}$/.test(trimmedContact.replace(/\s+/g, ''));
+    if (!isValidPhone) {
+      Alert.alert('Số điện thoại không hợp lệ', 'Vui lòng kiểm tra lại số điện thoại.');
+      return;
     }
 
     setLoading(true);
@@ -114,18 +103,18 @@ export default function ForgotPasswordScreen({ navigation }: any) {
       return (
         <View style={styles.inputContainer}>
           <Ionicons
-            name={resetMethod === 'email' ? 'mail-outline' : 'phone-portrait-outline'}
+            name="phone-portrait-outline"
             size={20}
             color={Colors.textSecondary || '#64748B'}
             style={styles.inputIcon}
           />
           <TextInput
             style={styles.input}
-            placeholder={resetMethod === 'email' ? 'Nhập email của bạn' : 'Nhập số điện thoại'}
+            placeholder="Nhập số điện thoại"
             placeholderTextColor="#94A3B8"
             value={contact}
             onChangeText={setContact}
-            keyboardType={resetMethod === 'email' ? 'email-address' : 'phone-pad'}
+            keyboardType="phone-pad"
             autoCapitalize="none"
           />
         </View>
@@ -218,30 +207,6 @@ export default function ForgotPasswordScreen({ navigation }: any) {
             <Text style={styles.subtitle}>{description}</Text>
           </View>
 
-          {step !== 'newPassword' && (
-            <View style={styles.methodSwitch}>
-              <TouchableOpacity
-                style={[styles.methodOption, resetMethod === 'email' && styles.methodOptionActive]}
-                onPress={() => {
-                  setResetMethod('email');
-                  setContact('');
-                }}
-              >
-                <Text style={[styles.methodText, resetMethod === 'email' && styles.methodTextActive]}>Email</Text>
-              </TouchableOpacity>
-
-              <TouchableOpacity
-                style={[styles.methodOption, resetMethod === 'phone' && styles.methodOptionActive]}
-                onPress={() => {
-                  setResetMethod('phone');
-                  setContact('');
-                }}
-              >
-                <Text style={[styles.methodText, resetMethod === 'phone' && styles.methodTextActive]}>Số điện thoại</Text>
-              </TouchableOpacity>
-            </View>
-          )}
-
           <View style={styles.formContainer}>{renderInput()}</View>
 
           {step === 'verify' && (
@@ -311,35 +276,6 @@ const styles = StyleSheet.create({
     fontSize: 14,
     lineHeight: 20,
     color: '#64748B',
-  },
-  methodSwitch: {
-    flexDirection: 'row',
-    backgroundColor: '#F1F5F9',
-    borderRadius: 18,
-    padding: 4,
-    marginBottom: 20,
-  },
-  methodOption: {
-    flex: 1,
-    borderRadius: 14,
-    paddingVertical: 10,
-    alignItems: 'center',
-  },
-  methodOptionActive: {
-    backgroundColor: '#FFFFFF',
-    shadowColor: '#0F172A',
-    shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.06,
-    shadowRadius: 8,
-    elevation: 2,
-  },
-  methodText: {
-    fontSize: 14,
-    fontWeight: '600',
-    color: '#64748B',
-  },
-  methodTextActive: {
-    color: '#0F172A',
   },
   formContainer: {
     gap: 12,
