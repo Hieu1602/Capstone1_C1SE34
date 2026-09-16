@@ -1,3 +1,5 @@
+# Capstone1_C1SE34
+Capstone1-NCKH
 # 🏥 Capstone 1 - Smart Elderly Care AI (Nhóm C1SE.34)
 
 > **Hệ thống chăm sóc người cao tuổi thông minh với AI Edge Computing, phát hiện té ngã, giám sát sinh hiệu 24/7 và cảnh báo khẩn cấp thời gian thực.**

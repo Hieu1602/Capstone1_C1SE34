@@ -59,6 +59,20 @@ export interface CameraDevice {
   streamUrl: string;
 }
 
+export interface IoTDeviceItem {
+  id: string;
+  name: string;
+  sub: string;
+  type: string;
+  status: string;
+  isOnline: boolean;
+  icon: string;
+  color: string;
+  location?: string;
+  streamUrl?: string;
+  macAddress?: string;
+}
+
 // ---- Vital Store ----
 interface VitalStoreState {
   currentVitals: VitalData;
@@ -67,6 +81,7 @@ interface VitalStoreState {
   isConnected: boolean;
   house: HouseInfo;
   camera: CameraDevice;
+  iotDevices: IoTDeviceItem[];
   selectedDate: string; // e.g. "09/07"
   algoSettings: {
     maxHeartRate: number;
@@ -89,6 +104,7 @@ interface VitalStoreState {
   setCameraResolution: (res: '2K' | 'FHD' | 'SD') => void;
   setSelectedDate: (date: string) => void;
   updateAlgoSettings: (settings: Partial<VitalStoreState['algoSettings']>) => void;
+  addIoTDevice: (device: IoTDeviceItem) => void;
 }
 
 type VitalSet = (
@@ -244,6 +260,80 @@ const createVitalStore: StateCreator<VitalStoreState> = (set: VitalSet) => ({
   updateAlgoSettings: (settings) =>
     set((state) => ({
       algoSettings: { ...state.algoSettings, ...settings },
+    })),
+
+  iotDevices: [
+    {
+      id: 'dev-01',
+      name: 'Orange Pi 5 - Edge AI Hub',
+      sub: 'Rockchip RK3588S NPU • 32 FPS YOLO-Pose • EMQX MQTT',
+      type: 'hub',
+      status: 'Trực tuyến (24/7)',
+      isOnline: true,
+      icon: 'server',
+      color: '#0284C7',
+      location: 'Phòng khách',
+    },
+    {
+      id: 'dev-02',
+      name: 'SECA_001',
+      sub: 'Camera góc rộng • 2K Super HD • Đàm thoại 2 chiều',
+      type: 'camera',
+      status: 'Đang ghi hình',
+      isOnline: true,
+      icon: 'videocam',
+      color: '#FF7A00',
+      location: 'Phòng khách',
+    },
+    {
+      id: 'dev-03',
+      name: 'Vòng đeo tay BLE Smartband',
+      sub: 'Nhịp tim • SpO₂ • Gia tốc kế phát hiện va đập',
+      type: 'watch',
+      status: 'Pin 84% • Đang đeo',
+      isOnline: true,
+      icon: 'watch',
+      color: '#10B981',
+      location: 'Phòng ngủ',
+    },
+    {
+      id: 'dev-04',
+      name: 'Cảm biến hồng ngoại AMG8833',
+      sub: 'Ma trận nhiệt 8x8 IR • Sàng lọc sốt vùng trán',
+      type: 'thermal',
+      status: '36.8°C • Hoạt động tốt',
+      isOnline: true,
+      icon: 'thermometer',
+      color: '#F59E0B',
+      location: 'Phòng khách',
+    },
+    {
+      id: 'dev-05',
+      name: 'Micro AI âm thanh YAMNet',
+      sub: 'Phát hiện tiếng kêu cứu, la hét, tiếng ngã đập mạnh',
+      type: 'audio',
+      status: 'Đang lắng nghe',
+      isOnline: true,
+      icon: 'mic',
+      color: '#8B5CF6',
+      location: 'Phòng ngủ',
+    },
+    {
+      id: 'dev-06',
+      name: 'Loa thông minh Hub (Voice Reminder)',
+      sub: 'Phát giọng nói tiếng Việt nhắc nhở người cao tuổi (FR12)',
+      type: 'speaker',
+      status: 'Sẵn sàng',
+      isOnline: true,
+      icon: 'volume-high',
+      color: '#EC4899',
+      location: 'Phòng khách',
+    },
+  ],
+
+  addIoTDevice: (device: IoTDeviceItem) =>
+    set((state) => ({
+      iotDevices: [device, ...state.iotDevices],
     })),
 });
 

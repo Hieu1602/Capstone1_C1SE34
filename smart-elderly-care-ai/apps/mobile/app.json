@@ -1,0 +1,10 @@
+{
+  "expo": {
+    "name": "smart-elderly-care-mobile",
+    "slug": "smart-elderly-care-mobile",
+    "owner": "nghia127",
+    "version": "1.0.0",
+    "orientation": "portrait",
+    "platforms": ["ios", "android", "web"]
+  }
+}
