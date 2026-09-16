@@ -28,7 +28,7 @@ import { Colors, Shadows } from '../../../theme/colors';
 import { useAuthStore, useVitalStore } from '../../../store/useVitalStore';
 
 export default function ProfileScreen({ navigation }: any) {
-  const { userId, userEmail, userName, logout, setUser } = useAuthStore();
+  const { userId, userName, logout, updateUserName } = useAuthStore();
   const { house } = useVitalStore();
   const [profileName, setProfileName] = React.useState(userName || 'ngolevinh233');
   const [profilePhone, setProfilePhone] = React.useState('0912 345 678');
@@ -45,6 +45,7 @@ export default function ProfileScreen({ navigation }: any) {
   const [isNotificationSettingsVisible, setNotificationSettingsVisible] = React.useState(false);
   const [isVibrationDetailVisible, setVibrationDetailVisible] = React.useState(false);
   const [isAboutInfoVisible, setAboutInfoVisible] = React.useState(false);
+  const [infoDetail, setInfoDetail] = React.useState<'terms' | 'app' | null>(null);
   const [isGeneralSettingsVisible, setGeneralSettingsVisible] = React.useState(false);
   const [isLanguageVisible, setLanguageVisible] = React.useState(false);
   const [languageMode, setLanguageMode] = React.useState<'vi' | 'en'>('vi');
@@ -194,7 +195,7 @@ export default function ProfileScreen({ navigation }: any) {
     }
 
     setProfileName(trimmed);
-    setUser(userId ?? 'demo-user-001', userEmail ?? 'ngolevinh233@gmail.com', trimmed);
+    updateUserName(userId ?? 'demo-user-001', trimmed);
     closeFieldEditor();
   };
 
@@ -527,15 +528,15 @@ export default function ProfileScreen({ navigation }: any) {
             >
               <Ionicons name="chevron-back-outline" size={28} color="#0F172A" />
             </TouchableOpacity>
-            <Text style={styles.securityDetailTitle}>
-              {securityDetail === 'twoFactor'
-                ? 'Xác minh hai bước'
-                : securityDetail === 'devices'
-                  ? 'Quản lý đầu cuối'
-                  : securityDetail === 'logins'
-                    ? 'Đăng nhập tài khoản'
-                    : 'Trợ giúp bảo mật'}
-            </Text>
+            {securityDetail !== 'question' && (
+              <Text style={styles.securityDetailTitle}>
+                {securityDetail === 'twoFactor'
+                  ? 'Xác minh hai bước'
+                  : securityDetail === 'devices'
+                    ? 'Quản lý đầu cuối'
+                    : 'Đăng nhập tài khoản'}
+              </Text>
+            )}
           </View>
 
           <ScrollView contentContainerStyle={styles.securityDetailContent}>
@@ -587,7 +588,7 @@ export default function ProfileScreen({ navigation }: any) {
                   <View key={loginItem} style={styles.securityLoginItem}>
                     <View style={styles.securityTimelineDot} />
                     <View style={styles.securityDeviceCopy}>
-                      <Text style={styles.securityDeviceName}>Đăng nhập tài khoản</Text>
+                      <Text style={styles.securityLoginName}>Đăng nhập tài khoản</Text>
                       <Text style={styles.securityDeviceMeta}>SM-A127F · Thiết bị hiện tại</Text>
                     </View>
                     <Text style={styles.securityLoginTime}>{loginItem}</Text>
@@ -597,10 +598,16 @@ export default function ProfileScreen({ navigation }: any) {
             )}
 
             {securityDetail === 'question' && (
-              <View style={styles.securityDetailCard}>
-                <Text style={styles.securityDetailCardTitle}>{selectedSecurityQuestion}</Text>
-                <Text style={styles.securityDetailDescription}>
-                  Hệ thống sử dụng các lớp bảo vệ tài khoản, xác minh thiết bị và mã xác thực để hạn chế truy cập trái phép. Bạn nên bật xác minh hai bước và thường xuyên kiểm tra lịch sử đăng nhập.
+              <View style={styles.securityQuestionDetail}>
+                <Text style={styles.securityQuestionDetailTitle}>{selectedSecurityQuestion}</Text>
+                <Text style={styles.securityQuestionDetailDescription}>
+                  {selectedSecurityQuestion === 'Mật khẩu mã hóa thiết bị là gì?'
+                    ? 'Mật khẩu mã hóa thiết bị là một mật khẩu đối xứng được sử dụng để mã hóa luồng video và hình ảnh của thiết bị, với giá trị mặc định giống với mã xác minh thiết bị. Đề nghị thay đổi mật khẩu mặc định thành một mật khẩu an toàn sau khi liên kết thiết bị lần đầu tiên. Mật khẩu mã hóa thiết bị là chìa khóa cho cơ chế "Bảo mật Hợp tác" được cung cấp bởi EZVIZ. EZVIZ không ghi lại hoặc lưu trữ mật khẩu mã hóa thiết bị. Những mật khẩu này chỉ được lưu trữ trên các thiết bị tương ứng và điện thoại di động của người dùng. Việc thiết lập, cập nhật, sử dụng và hủy bỏ mật khẩu mã hóa đều được quản lý bởi người dùng. EZVIZ kỹ thuật không có khả năng lấy lại, đặt lại hoặc khôi phục mật khẩu mã hóa thiết bị.'
+                    : selectedSecurityQuestion === 'Có ràng buộc một thiết bị an toàn không?'
+                      ? 'Để kết nối một thiết bị EZVIZ, ba điều kiện sau phải được đáp ứng đồng thời:\n\n1. Biết số serial của thiết bị và mã xác thực tương ứng của thiết bị;\n\n2. Thiết bị đang trực tuyến;\n\n3. Thiết bị không được ràng buộc;\n\nViệc lấy số serial và mã xác thực là điều kiện tiên quyết quan trọng, nhưng không đảm bảo việc kết nối thiết bị. Nếu một thiết bị đã được kết nối bởi chủ sở hữu, người khác không thể kết nối thiết bị đó ngay cả khi họ có số serial và mã xác thực của nó. Chỉ có tài khoản đã kết nối thiết bị đó mới có thể hủy kết nối. EZVIZ khuyến khích người dùng kết nối thiết bị của mình ngay sau khi kết nối với mạng.'
+                      : selectedSecurityQuestion === 'Việc sử dụng mã xác minh qua tin nhắn SMS'
+                        ? 'Mã xác minh SMS là một lớp bảo mật bổ sung được cung cấp bởi EZVIZ vượt ra ngoài cơ sở tên người dùng-mật khẩu. Khi người dùng thực hiện các hoạt động nhạy cảm (như đăng nhập vào một khách hàng mới, tắt mã hóa thiết bị hoặc lấy mật khẩu tạm thời cho khóa, v.v.), EZVIZ yêu cầu sử dụng mã xác minh SMS cho xác thực cấp độ hai để tăng cường bảo mật và giảm thiểu rủi ro mất mát hoặc đánh cắp tài khoản người dùng. Do đó, rất quan trọng đối với người dùng để đảm bảo tính bảo mật của mã xác minh SMS và không tiết lộ cho người khác.'
+                      : 'Hệ thống sử dụng các lớp bảo vệ tài khoản, xác minh thiết bị và mã xác thực để hạn chế truy cập trái phép. Bạn nên bật xác minh hai bước và thường xuyên kiểm tra lịch sử đăng nhập.'}
                 </Text>
               </View>
             )}
@@ -906,6 +913,14 @@ export default function ProfileScreen({ navigation }: any) {
               <TouchableOpacity onPress={() => setShowNewPassword(!showNewPassword)}>
                 <Ionicons name={showNewPassword ? 'eye-off-outline' : 'eye-outline'} size={21} color="#64748B" />
               </TouchableOpacity>
+            </View>
+
+            <View style={styles.passwordRequirements}>
+              <Text style={styles.passwordRequirementsTitle}>Các yêu cầu về mật khẩu:</Text>
+              <Text style={styles.passwordRequirement}>◯  Dài 8-16 ký tự</Text>
+              <Text style={styles.passwordRequirement}>
+                ◯  Bao gồm chữ hoa, chữ thường, số và ký hiệu đặc biệt.
+              </Text>
             </View>
 
             <Text style={styles.passwordLabel}>Nhập lại mật khẩu mới</Text>
@@ -1256,28 +1271,75 @@ export default function ProfileScreen({ navigation }: any) {
               <TouchableOpacity
                 style={[styles.backButton, styles.infoBackButton]}
                 onPress={() => {
-                  setAboutInfoVisible(false);
-                  setSettingsVisible(true);
+                  if (infoDetail) {
+                    setInfoDetail(null);
+                  } else {
+                    setAboutInfoVisible(false);
+                    setSettingsVisible(true);
+                  }
                 }}
                 activeOpacity={0.7}
               >
                 <Ionicons name="chevron-back-outline" size={24} color={Colors.textPrimary} />
               </TouchableOpacity>
-              <Text style={styles.infoTitle}>Thông tin</Text>
+              <Text style={styles.infoTitle}>
+                {infoDetail === 'terms' ? 'Điều khoản sử dụng' : infoDetail === 'app' ? 'Thông tin ứng dụng' : 'Thông tin'}
+              </Text>
             </View>
 
-   
-            <View style={styles.infoListCard}>
-              <TouchableOpacity style={styles.infoListRow} activeOpacity={0.8}>
-                <Text style={styles.infoRowText}>Điều khoản sử dụng</Text>
-                <Ionicons name="chevron-forward" size={18} color="#9CA3AF" />
-              </TouchableOpacity>
+            {infoDetail === null ? (
+              <View style={styles.infoListCard}>
+                <TouchableOpacity
+                  style={styles.infoListRow}
+                  activeOpacity={0.8}
+                  onPress={() => setInfoDetail('terms')}
+                >
+                  <Text style={styles.infoRowText}>Điều khoản sử dụng</Text>
+                  <Ionicons name="chevron-forward" size={18} color="#9CA3AF" />
+                </TouchableOpacity>
 
-              <TouchableOpacity style={styles.infoListRow} activeOpacity={0.8}>
-                <Text style={styles.infoRowText}>Thông tin ứng dụng</Text>
-                <Ionicons name="chevron-forward" size={18} color="#9CA3AF" />
-              </TouchableOpacity>
-            </View>
+                <TouchableOpacity
+                  style={styles.infoListRow}
+                  activeOpacity={0.8}
+                  onPress={() => setInfoDetail('app')}
+                >
+                  <Text style={styles.infoRowText}>Thông tin ứng dụng</Text>
+                  <Ionicons name="chevron-forward" size={18} color="#9CA3AF" />
+                </TouchableOpacity>
+              </View>
+            ) : (
+              <ScrollView
+                showsVerticalScrollIndicator={false}
+                contentContainerStyle={styles.infoDetailContent}
+              >
+                {infoDetail === 'terms' ? (
+                  <>
+                    <Text style={styles.infoDetailHeading}>Điều khoản sử dụng</Text>
+                    <Text style={styles.infoDetailText}>
+                      Ứng dụng Smart Elderly Care AI hỗ trợ theo dõi sinh hiệu, thiết bị và cảnh báo an toàn cho người cao tuổi. Người dùng cần cung cấp thông tin chính xác và sử dụng ứng dụng đúng mục đích.
+                    </Text>
+                    <Text style={styles.infoDetailText}>
+                      Người dùng chịu trách nhiệm bảo mật tài khoản, mã xác thực và các thiết bị đã liên kết. Không chia sẻ thông tin đăng nhập cho người khác.
+                    </Text>
+                    <Text style={styles.infoDetailText}>
+                      Các cảnh báo trong ứng dụng chỉ có tính chất hỗ trợ theo dõi, không thay thế cho chẩn đoán hoặc điều trị y tế chuyên môn.
+                    </Text>
+                  </>
+                ) : (
+                  <View style={styles.appInfoPanel}>
+                    <View style={styles.appInfoIcon}>
+                      <Ionicons name="shield-checkmark" size={38} color="#FFFFFF" />
+                    </View>
+                    <Text style={styles.infoDetailHeading}>Smart Elderly Care AI</Text>
+                    <Text style={styles.appInfoVersion}>Phiên bản 1.0.0</Text>
+                    <Text style={styles.infoDetailText}>
+                      Hệ thống giám sát thông minh giúp gia đình theo dõi sức khỏe, thiết bị và nhận cảnh báo kịp thời.
+                    </Text>
+                    <Text style={styles.appInfoCopyright}>© 2026 Smart Elderly Care AI</Text>
+                  </View>
+                )}
+              </ScrollView>
+            )}
           </Pressable>
         </Pressable>
       </Modal>
@@ -1933,13 +1995,11 @@ const styles = StyleSheet.create({
   securityDetailHeader: {
     flexDirection: 'row',
     alignItems: 'center',
-    justifyContent: 'space-between',
-    paddingHorizontal: 10,
-    paddingTop: 20,
-    paddingBottom: 18,
-    backgroundColor: '#FFFFFF',
-    borderBottomWidth: 1,
-    borderBottomColor: '#EEF2F7',
+    minHeight: 54,
+    paddingHorizontal: 18,
+    paddingTop: 10,
+    paddingBottom: 8,
+    backgroundColor: '#F6F8F8',
   },
   securityDetailTitle: {
     flex: 1,
@@ -1950,9 +2010,25 @@ const styles = StyleSheet.create({
     color: '#0F172A',
   },
   securityDetailContent: {
-    paddingHorizontal: 18,
-    paddingTop: 16,
-    paddingBottom: 24,
+    paddingHorizontal: 26,
+    paddingTop: 24,
+    paddingBottom: 32,
+  },
+  securityQuestionDetail: {
+    backgroundColor: 'transparent',
+  },
+  securityQuestionDetailTitle: {
+    marginBottom: 32,
+    fontSize: 25,
+    lineHeight: 34,
+    fontWeight: '400',
+    color: '#303236',
+  },
+  securityQuestionDetailDescription: {
+    fontSize: 16,
+    lineHeight: 27,
+    fontWeight: '400',
+    color: '#4B4D50',
   },
   securityDetailCard: {
     paddingHorizontal: 16,
@@ -2033,6 +2109,12 @@ const styles = StyleSheet.create({
     fontSize: 15,
     lineHeight: 22,
     fontWeight: '700',
+    color: '#111827',
+  },
+  securityLoginName: {
+    fontSize: 15,
+    lineHeight: 22,
+    fontWeight: '500',
     color: '#111827',
   },
   securityDeviceMeta: {
@@ -2242,10 +2324,6 @@ const styles = StyleSheet.create({
     fontWeight: '700',
     color: '#111827',
     marginBottom: 4,
-  },
-  avatarPickerEmail: {
-    fontSize: 18,
-    color: '#111827',
   },
   avatarPickerOptions: {
     backgroundColor: '#FFFFFF',
@@ -2651,6 +2729,45 @@ const styles = StyleSheet.create({
     fontWeight: '500',
     color: '#111827',
   },
+  infoDetailContent: {
+    paddingTop: 8,
+    paddingBottom: 32,
+  },
+  infoDetailHeading: {
+    marginBottom: 18,
+    fontSize: 22,
+    fontWeight: '800',
+    color: '#111827',
+  },
+  infoDetailText: {
+    marginBottom: 18,
+    fontSize: 15,
+    lineHeight: 24,
+    color: '#475569',
+  },
+  appInfoPanel: {
+    alignItems: 'center',
+    paddingTop: 20,
+  },
+  appInfoIcon: {
+    width: 78,
+    height: 78,
+    alignItems: 'center',
+    justifyContent: 'center',
+    marginBottom: 18,
+    borderRadius: 20,
+    backgroundColor: '#2563EB',
+  },
+  appInfoVersion: {
+    marginBottom: 24,
+    fontSize: 14,
+    color: '#64748B',
+  },
+  appInfoCopyright: {
+    marginTop: 6,
+    fontSize: 13,
+    color: '#94A3B8',
+  },
   generalSettingsList: {
     marginTop: 8,
   },
@@ -2924,9 +3041,10 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'space-between',
-    paddingHorizontal: 10,
-    paddingTop: 20,
-    paddingBottom: 18,
+    minHeight: 58,
+    paddingHorizontal: 14,
+    paddingTop: 10,
+    paddingBottom: 10,
     borderBottomWidth: 1,
     borderBottomColor: '#E2E8F0',
   },
@@ -2935,8 +3053,7 @@ const styles = StyleSheet.create({
     height: 36,
     alignItems: 'center',
     justifyContent: 'center',
-    marginLeft: -8,
-    marginTop: 1,
+    marginLeft: -6,
   },
   changePasswordHeaderRight: {
     width: 36,
@@ -2945,55 +3062,78 @@ const styles = StyleSheet.create({
   changePasswordTitle: {
     flex: 1,
     textAlign: 'center',
-    fontSize: 20,
+    fontSize: 19,
     fontWeight: '800',
     color: Colors.textPrimary,
   },
   changePasswordContent: {
-    paddingHorizontal: 18,
-    paddingTop: 16,
-    paddingBottom: 36,
+    paddingHorizontal: 14,
+    paddingTop: 14,
+    paddingBottom: 32,
   },
   changePasswordIntro: {
-    marginBottom: 22,
-    fontSize: 15,
-    lineHeight: 22,
+    marginBottom: 20,
+    fontSize: 14,
+    lineHeight: 20,
     color: '#64748B',
   },
   passwordLabel: {
-    marginBottom: 8,
-    fontSize: 15,
+    marginBottom: 7,
+    fontSize: 14,
     fontWeight: '700',
     color: '#111827',
   },
   passwordInputWrap: {
     flexDirection: 'row',
     alignItems: 'center',
-    minHeight: 52,
-    marginBottom: 18,
-    paddingHorizontal: 14,
+    minHeight: 50,
+    marginBottom: 17,
+    paddingHorizontal: 12,
     borderWidth: 1,
-    borderColor: '#D7DEE8',
-    borderRadius: 12,
+    borderColor: '#D9E2EC',
+    borderRadius: 11,
     backgroundColor: '#FFFFFF',
   },
   passwordInput: {
     flex: 1,
-    paddingVertical: 12,
-    paddingRight: 10,
-    fontSize: 15,
+    paddingVertical: 11,
+    paddingRight: 8,
+    fontSize: 14,
     color: '#0F172A',
+  },
+  passwordRequirements: {
+    marginBottom: 17,
+    paddingHorizontal: 14,
+    paddingVertical: 12,
+    borderRadius: 12,
+    backgroundColor: '#FFFFFF',
+    shadowColor: '#64748B',
+    shadowOffset: { width: 0, height: 3 },
+    shadowOpacity: 0.08,
+    shadowRadius: 10,
+    elevation: 2,
+  },
+  passwordRequirementsTitle: {
+    marginBottom: 6,
+    fontSize: 14,
+    color: '#64748B',
+  },
+  passwordRequirement: {
+    fontSize: 13,
+    lineHeight: 20,
+    color: '#64748B',
   },
   changePasswordButton: {
     alignItems: 'center',
-    marginTop: 14,
-    paddingVertical: 15,
-    borderRadius: 12,
+    justifyContent: 'center',
+    minHeight: 49,
+    marginTop: 13,
+    borderRadius: 11,
     backgroundColor: '#2563EB',
     width: '100%',
   },
   changePasswordButtonText: {
-    fontSize: 16,
+    fontSize: 15,
     fontWeight: '800',
     color: '#FFFFFF',
   },

@@ -418,6 +418,7 @@ interface AuthStoreState {
   login: (token: string, name: string, userId: string, email?: string) => void;
   setTokens: (access: string, refresh: string) => void;
   setUser: (id: string, email: string, name: string) => void;
+  updateUserName: (id: string, name: string) => void;
   logout: () => void;
 }
 
@@ -452,6 +453,9 @@ const createAuthStore: StateCreator<AuthStoreState, [], [['zustand/persist', Aut
 
   setUser: (id: string, email: string, name: string) =>
     set({ userId: id, userEmail: email, userName: name }),
+
+  updateUserName: (id: string, name: string) =>
+    set({ userId: id, userName: name }),
 
   logout: () =>
     set({
