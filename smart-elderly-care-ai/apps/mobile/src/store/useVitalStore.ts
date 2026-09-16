@@ -78,6 +78,7 @@ interface VitalStoreState {
   house: HouseInfo;
   camera: CameraDevice;
   iotDevices: IoTDeviceItem[];
+  deviceGroups: string[];
   selectedDate: string; // e.g. "09/07"
   algoSettings: {
     maxHeartRate: number;
@@ -101,6 +102,10 @@ interface VitalStoreState {
   setSelectedDate: (date: string) => void;
   updateAlgoSettings: (settings: Partial<VitalStoreState['algoSettings']>) => void;
   addIoTDevice: (device: IoTDeviceItem) => void;
+  addDeviceGroup: (groupName: string) => void;
+  updateDeviceGroup: (oldName: string, newName: string, deviceIds?: string[]) => void;
+  removeDeviceGroup: (groupName: string) => void;
+  assignDevicesToGroup: (deviceIds: string[], groupName: string) => void;
 }
 
 type VitalSet = (
@@ -323,9 +328,72 @@ const createVitalStore: StateCreator<VitalStoreState> = (set: VitalSet) => ({
     },
   ],
 
+  deviceGroups: ['Phòng khách', 'Phòng ngủ', 'Nhà tắm & Cửa'],
+
   addIoTDevice: (device: IoTDeviceItem) =>
     set((state) => ({
       iotDevices: [device, ...state.iotDevices],
+    })),
+
+  addDeviceGroup: (groupName: string) =>
+    set((state) => {
+      const trimmed = groupName.trim();
+      if (!trimmed) return state;
+      const exists = state.deviceGroups.some(
+        (g) => g.trim().toLowerCase() === trimmed.toLowerCase()
+      );
+      return {
+        deviceGroups: exists ? state.deviceGroups : [...state.deviceGroups, trimmed],
+      };
+    }),
+
+  updateDeviceGroup: (oldName: string, newName: string, deviceIds?: string[]) =>
+    set((state) => {
+      const trimmedNew = newName.trim();
+      const trimmedOld = oldName.trim();
+      const updatedGroups = state.deviceGroups.map((g) =>
+        g.trim().toLowerCase() === trimmedOld.toLowerCase() ? trimmedNew : g
+      );
+      let updatedDevices = state.iotDevices;
+      if (deviceIds) {
+        updatedDevices = updatedDevices.map((dev) => {
+          if (deviceIds.includes(dev.id)) {
+            return { ...dev, location: trimmedNew };
+          } else if (dev.location?.trim().toLowerCase() === trimmedOld.toLowerCase()) {
+            return { ...dev, location: 'Chưa nhóm' };
+          }
+          return dev;
+        });
+      } else if (trimmedOld.toLowerCase() !== trimmedNew.toLowerCase()) {
+        updatedDevices = updatedDevices.map((dev) =>
+          dev.location?.trim().toLowerCase() === trimmedOld.toLowerCase()
+            ? { ...dev, location: trimmedNew }
+            : dev
+        );
+      }
+      return {
+        deviceGroups: updatedGroups,
+        iotDevices: updatedDevices,
+      };
+    }),
+
+  removeDeviceGroup: (groupName: string) =>
+    set((state) => ({
+      deviceGroups: state.deviceGroups.filter(
+        (g) => g.trim().toLowerCase() !== groupName.trim().toLowerCase()
+      ),
+      iotDevices: state.iotDevices.map((dev) =>
+        dev.location?.trim().toLowerCase() === groupName.trim().toLowerCase()
+          ? { ...dev, location: 'Chưa nhóm' }
+          : dev
+      ),
+    })),
+
+  assignDevicesToGroup: (deviceIds: string[], groupName: string) =>
+    set((state) => ({
+      iotDevices: state.iotDevices.map((dev) =>
+        deviceIds.includes(dev.id) ? { ...dev, location: groupName } : dev
+      ),
     })),
 });
 
