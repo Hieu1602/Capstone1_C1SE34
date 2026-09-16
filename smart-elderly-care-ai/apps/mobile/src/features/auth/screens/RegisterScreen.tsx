@@ -9,9 +9,6 @@ import { authApi } from '../../../services/api';
 import { Colors } from '../../../theme/colors';
 
 export default function RegisterScreen({ navigation }: any) {
-  // State quản lý phương thức đăng ký: 'phone' (Số điện thoại) hoặc 'email'
-  const [registerMethod, setRegisterMethod] = useState<'phone' | 'email'>('phone');
-
   const [accountValue, setAccountValue] = useState('');
   const [password, setPassword] = useState('');
   const [confirmPassword, setConfirmPassword] = useState('');
@@ -30,18 +27,10 @@ export default function RegisterScreen({ navigation }: any) {
       return;
     }
 
-    if (registerMethod === 'phone') {
-      const phone = trimmedAccount.replace(/\s+/g, '');
-      if (!/^\+?[0-9]{9,15}$/.test(phone)) {
-        Alert.alert('Lỗi', 'Số điện thoại không hợp lệ.');
-        return;
-      }
-    } else {
-      const email = trimmedAccount;
-      if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) {
-        Alert.alert('Lỗi', 'Email không hợp lệ.');
-        return;
-      }
+    const phone = trimmedAccount.replace(/\s+/g, '');
+    if (!/^\+?[0-9]{9,15}$/.test(phone)) {
+      Alert.alert('Lỗi', 'Số điện thoại không hợp lệ.');
+      return;
     }
 
     if (password !== confirmPassword) {
@@ -51,9 +40,7 @@ export default function RegisterScreen({ navigation }: any) {
 
     setLoading(true);
     try {
-      const payload = registerMethod === 'phone'
-        ? { phone: trimmedAccount.replace(/\s+/g, ''), full_name: 'User', password, role: 'user' }
-        : { email: trimmedAccount, full_name: 'User', password, role: 'user' };
+      const payload = { phone, full_name: 'User', password, role: 'user' };
 
       await authApi.register(payload);
 
@@ -86,9 +73,7 @@ export default function RegisterScreen({ navigation }: any) {
             </TouchableOpacity>
             <Text style={styles.welcomeTitle}>Đăng kí tài khoản</Text>
             <Text style={styles.subtitle}>
-              {registerMethod === 'phone' 
-                ? 'Đăng kí tài khoản để quản lý thiết bị của bạn. Chúng tôi sẽ gửi tin nhắn kèm mã xác minh đến số điện thoại này.' 
-                : 'Đăng kí tài khoản để quản lý thiết bị của bạn. Chúng tôi sẽ gửi cho bạn một email đến địa chỉ này để xác minh.'}
+              Đăng kí tài khoản để quản lý thiết bị của bạn. Chúng tôi sẽ gửi tin nhắn kèm mã xác minh đến số điện thoại này.
             </Text>
           </View>
 
@@ -111,19 +96,19 @@ export default function RegisterScreen({ navigation }: any) {
             {/* Ô nhập Số điện thoại hoặc Email tùy theo lựa chọn */}
             <View style={styles.inputContainer}>
               <Ionicons 
-                name={registerMethod === 'phone' ? "phone-portrait-outline" : "mail-outline"} 
+                name="phone-portrait-outline"
                 size={20} 
                 color="#64748B" 
                 style={styles.inputIcon} 
               />
-              {registerMethod === 'phone' && <Text style={styles.prefixText}>+84  </Text>}
+              <Text style={styles.prefixText}>+84  </Text>
               <TextInput
                 style={styles.input}
-                placeholder={registerMethod === 'phone' ? 'Số điện thoại của bạn' : 'Gmail của bạn'}
+                placeholder="Số điện thoại của bạn"
                 placeholderTextColor="#94A3B8"
                 value={accountValue}
                 onChangeText={setAccountValue}
-                keyboardType={registerMethod === 'phone' ? 'phone-pad' : 'email-address'}
+                keyboardType="phone-pad"
                 autoCapitalize="none"
               />
             </View>
@@ -164,23 +149,6 @@ export default function RegisterScreen({ navigation }: any) {
 
           {/* Phần dưới cùng: Nút Tiếp / Đăng ký & biểu tượng chuyển đổi */}
           <View>
-            <View style={styles.bottomActionRow}>
-              <TouchableOpacity
-                onPress={() => {
-                  setRegisterMethod(registerMethod === 'phone' ? 'email' : 'phone');
-                  setAccountValue('');
-                }}
-                style={styles.switchFloatingButton}
-                activeOpacity={0.8}
-              >
-                <Ionicons
-                  name={registerMethod === 'phone' ? 'mail-outline' : 'phone-portrait-outline'}
-                  size={20}
-                  color="#2563EB"
-                />
-              </TouchableOpacity>
-            </View>
-
             <TouchableOpacity 
               style={styles.loginButton} 
               onPress={handleRegister} 
@@ -282,26 +250,6 @@ const styles = StyleSheet.create({
     color: '#0F172A',
     flex: 1,
     padding: 0,
-  },
-  bottomActionRow: {
-    alignItems: 'center',
-    justifyContent: 'center',
-    marginBottom: 14,
-  },
-  switchFloatingButton: {
-    width: 52,
-    height: 52,
-    borderRadius: 26,
-    backgroundColor: '#FFFFFF',
-    borderWidth: 2,
-    borderColor: '#E2E8F0',
-    alignItems: 'center',
-    justifyContent: 'center',
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.12,
-    shadowRadius: 6,
-    elevation: 4,
   },
   loginButton: {
     backgroundColor: '#2563EB',

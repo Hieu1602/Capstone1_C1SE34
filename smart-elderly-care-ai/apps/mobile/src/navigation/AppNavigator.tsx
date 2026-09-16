@@ -10,7 +10,7 @@ import { Ionicons } from '@expo/vector-icons';
 
 import { Colors } from '../theme/colors';
 import AIBotIcon from '../components/AIBotIcon';
-import { useAuthStore } from '../store/useVitalStore';
+import { useAuthStore, useVitalStore } from '../store/useVitalStore';
 
 // Auth screens
 import LoginScreen from '../features/auth/screens/LoginScreen';

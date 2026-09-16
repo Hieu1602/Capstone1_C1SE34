@@ -18,29 +18,22 @@ import { Colors, Shadows } from '../../../theme/colors';
 import { useVitalStore } from '../../../store/useVitalStore';
 
 export default function HouseDetailScreen({ navigation }: any) {
-  const { house, updateHouseAddress } = useVitalStore();
-  const [addressModalVisible, setAddressModalVisible] = useState(false);
-  const [addressInput, setAddressInput] = useState(house.address);
+  const { house } = useVitalStore();
   const [addMemberModalVisible, setAddMemberModalVisible] = useState(false);
-  const [newMemberEmail, setNewMemberEmail] = useState('');
+  const [newMemberPhone, setNewMemberPhone] = useState('');
   const [newMemberRole, setNewMemberRole] = useState<'CAREGIVER' | 'DOCTOR'>('CAREGIVER');
 
-  const handleSaveAddress = () => {
-    updateHouseAddress(addressInput);
-    setAddressModalVisible(false);
-    Alert.alert('Thành công', 'Đã cập nhật vị trí nhà người cao tuổi. Địa chỉ này sẽ được tự động sao chép khi kích hoạt SOS 115.');
-  };
 
   const handleAddMember = () => {
-    if (!newMemberEmail) {
-      Alert.alert('Lỗi', 'Vui lòng nhập email người thân hoặc bác sĩ.');
+    if (!newMemberPhone.trim()) {
+      Alert.alert('Lỗi', 'Vui lòng nhập số điện thoại người thân hoặc bác sĩ.');
       return;
     }
     setAddMemberModalVisible(false);
-    setNewMemberEmail('');
+    setNewMemberPhone('');
     Alert.alert(
       'Đã gửi lời mời',
-      `Đã gửi liên kết tham gia giám sát đến ${newMemberEmail} với vai trò ${
+      `Đã gửi liên kết tham gia giám sát đến số điện thoại ${newMemberPhone} với vai trò ${
         newMemberRole === 'DOCTOR' ? 'Bác sĩ gia đình' : 'Người chăm sóc'
       }. (FR01 RBAC)`
     );
@@ -108,33 +101,6 @@ export default function HouseDetailScreen({ navigation }: any) {
         {/* 3. Section: Quản lý Nhà */}
         <Text style={styles.sectionLabel}>Quản lý Nhà</Text>
         <View style={styles.cardContainer}>
-          {/* Vị trí */}
-          <TouchableOpacity
-            style={styles.actionRow}
-            onPress={() => setAddressModalVisible(true)}
-            activeOpacity={0.7}
-          >
-            <Text style={styles.rowTitleText}>Vị trí</Text>
-            <View style={styles.rowRightInfo}>
-              <Text style={styles.statusSettingText} numberOfLines={1}>
-                {house.address ? 'Cài Đặt' : 'Chưa đặt'}
-              </Text>
-              <Ionicons name="chevron-forward" size={18} color="#CBD5E1" />
-            </View>
-          </TouchableOpacity>
-
-          {/* Hiển thị địa chỉ chi tiết dưới hàng vị trí nếu có */}
-          {house.address ? (
-            <View style={styles.currentAddressBox}>
-              <Ionicons name="location-outline" size={16} color={Colors.primary} style={{ marginRight: 6 }} />
-              <Text style={styles.currentAddressText} numberOfLines={2}>
-                {house.address}
-              </Text>
-            </View>
-          ) : null}
-
-          <View style={styles.divider} />
-
           {/* Quản lý nhóm (Rooms) */}
           <TouchableOpacity
             style={styles.actionRow}
@@ -145,53 +111,7 @@ export default function HouseDetailScreen({ navigation }: any) {
             <Ionicons name="chevron-forward" size={18} color="#CBD5E1" />
           </TouchableOpacity>
         </View>
-
-        {/* 4. Section: Chế độ tại nhà */}
-        <Text style={styles.sectionLabel}>Chế độ tại nhà</Text>
-        <View style={styles.cardContainer}>
-          <TouchableOpacity
-            style={styles.actionRow}
-            onPress={() => Alert.alert('Cài đặt Chế độ Tại nhà', '1. Tự động bật vùng cấm ngã từ 22:00 đến 06:00.\n2. Cảnh báo rung & còi âm lượng tối đa ghi đè chế độ im lặng khi nhịp tim < 50 bpm hoặc > 120 bpm (FR07).\n3. Nhắc nhở giọng nói tiếng Việt nếu rời khỏi giường mà không đeo vòng (FR12).')}
-            activeOpacity={0.7}
-          >
-            <Text style={styles.rowTitleText}>Cài đặt Chế độ Tại nhà</Text>
-            <Ionicons name="chevron-forward" size={18} color="#CBD5E1" />
-          </TouchableOpacity>
-        </View>
       </ScrollView>
-
-      {/* Modal Cài đặt Vị trí */}
-      <Modal visible={addressModalVisible} transparent animationType="slide">
-        <View style={styles.modalOverlay}>
-          <View style={styles.modalCard}>
-            <Text style={styles.modalTitle}>Cài đặt vị trí nhà</Text>
-            <Text style={styles.modalSub}>
-              Địa chỉ này sẽ được tự động sao chép vào clipboard khi bạn nhấn nút SOS 115 cấp cứu để báo ngay vị trí cho y bác sĩ.
-            </Text>
-            <TextInput
-              style={styles.addressInput}
-              value={addressInput}
-              onChangeText={setAddressInput}
-              placeholder="Nhập địa chỉ nhà người cao tuổi..."
-              multiline
-            />
-            <View style={styles.modalActionButtons}>
-              <TouchableOpacity
-                style={styles.cancelBtn}
-                onPress={() => setAddressModalVisible(false)}
-              >
-                <Text style={styles.cancelBtnText}>Hủy</Text>
-              </TouchableOpacity>
-              <TouchableOpacity
-                style={styles.saveBtn}
-                onPress={handleSaveAddress}
-              >
-                <Text style={styles.saveBtnText}>Lưu vị trí</Text>
-              </TouchableOpacity>
-            </View>
-          </View>
-        </View>
-      </Modal>
 
       {/* Modal Thêm người (Phân quyền RBAC FR01) */}
       <Modal visible={addMemberModalVisible} transparent animationType="slide">
@@ -199,15 +119,14 @@ export default function HouseDetailScreen({ navigation }: any) {
           <View style={styles.modalCard}>
             <Text style={styles.modalTitle}>Thêm người chăm sóc / Bác sĩ</Text>
             <Text style={styles.modalSub}>
-              Mời người thân hoặc bác sĩ gia đình cùng theo dõi sinh hiệu và nhận thông báo khẩn cấp (FR01).
+              Mời người thân hoặc bác sĩ gia đình cùng theo dõi sinh hiệu và nhận thông báo khẩn cấp bằng số điện thoại (FR01).
             </Text>
-            <TextInput
+              <TextInput
               style={styles.addressInput}
-              value={newMemberEmail}
-              onChangeText={setNewMemberEmail}
-              placeholder="Nhập email (ví dụ: doctor@clinic.vn)"
-              keyboardType="email-address"
-              autoCapitalize="none"
+                value={newMemberPhone}
+                onChangeText={setNewMemberPhone}
+                placeholder="Nhập số điện thoại (ví dụ: 0912 345 678)"
+                keyboardType="phone-pad"
             />
             <View style={styles.rolePickerRow}>
               <TouchableOpacity
@@ -425,6 +344,19 @@ const styles = StyleSheet.create({
     borderWidth: 1,
     borderColor: Colors.border,
     minHeight: 54,
+  },
+  currentLocationButton: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    alignSelf: 'flex-start',
+    gap: 6,
+    marginTop: 10,
+    paddingVertical: 6,
+  },
+  currentLocationButtonText: {
+    fontSize: 14,
+    fontWeight: '700',
+    color: Colors.primary,
   },
   rolePickerRow: {
     flexDirection: 'row',
