@@ -15,6 +15,7 @@ import { useAuthStore, useVitalStore } from '../store/useVitalStore';
 // Auth screens
 import LoginScreen from '../features/auth/screens/LoginScreen';
 import RegisterScreen from '../features/auth/screens/RegisterScreen';
+import ForgotPasswordScreen from '../features/auth/screens/ForgotPasswordScreen';
 
 // 5 Main Tab screens
 import HomeScreen from '../features/dashboard/screens/HomeScreen';
@@ -97,6 +98,7 @@ export default function AppNavigator() {
           <>
             <Stack.Screen name="Login" component={LoginScreen} />
             <Stack.Screen name="Register" component={RegisterScreen} />
+            <Stack.Screen name="ForgotPassword" component={ForgotPasswordScreen} />
           </>
         ) : (
           // Main App Stack
