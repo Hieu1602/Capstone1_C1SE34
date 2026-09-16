@@ -69,6 +69,7 @@ export default function ProfileScreen({ navigation }: any) {
   const [vibrationEnabled, setVibrationEnabled] = React.useState(true);
   const [criticalAlertEnabled, setCriticalAlertEnabled] = React.useState(true);
 
+
   const handleVibrationToggle = (value: boolean) => {
     setVibrationEnabled(value);
 
@@ -301,6 +302,45 @@ export default function ProfileScreen({ navigation }: any) {
 
   return (
     <SafeAreaView style={styles.safeArea} edges={['top']}>
+      {/* Modal xác nhận đăng xuất */}
+      <Modal
+        transparent
+        visible={isLogoutConfirmVisible}
+        animationType="fade"
+        onRequestClose={() => setLogoutConfirmVisible(false)}
+      >
+        <Pressable
+          style={styles.confirmModalOverlay}
+          onPress={() => setLogoutConfirmVisible(false)}
+        >
+          <Pressable style={styles.confirmModalCard} onPress={() => {}}>
+            <View style={styles.confirmModalIconCircle}>
+              <Ionicons name="log-out-outline" size={32} color="#EF4444" />
+            </View>
+            <Text style={styles.confirmModalTitle}>Đăng xuất tài khoản</Text>
+            <Text style={styles.confirmModalMessage}>
+              Bạn có chắc chắn muốn đăng xuất khỏi hệ thống giám sát Smart Elderly Care?
+            </Text>
+            <View style={styles.confirmModalButtonRow}>
+              <TouchableOpacity
+                style={styles.confirmModalCancelBtn}
+                onPress={() => setLogoutConfirmVisible(false)}
+                activeOpacity={0.7}
+              >
+                <Text style={styles.confirmModalCancelText}>Hủy</Text>
+              </TouchableOpacity>
+              <TouchableOpacity
+                style={styles.confirmModalLogoutBtn}
+                onPress={performLogout}
+                activeOpacity={0.8}
+              >
+                <Text style={styles.confirmModalLogoutText}>Đăng xuất</Text>
+              </TouchableOpacity>
+            </View>
+          </Pressable>
+        </Pressable>
+      </Modal>
+
       <Modal
         transparent
         visible={isUserMenuVisible}
@@ -2642,5 +2682,75 @@ logoutButton: {
     color: '#EF4444',
     fontWeight: '700',
     fontSize: 15,
+  },
+  confirmModalOverlay: {
+    flex: 1,
+    backgroundColor: 'rgba(15, 23, 42, 0.6)',
+    justifyContent: 'center',
+    alignItems: 'center',
+    padding: 24,
+  },
+  confirmModalCard: {
+    backgroundColor: '#FFFFFF',
+    borderRadius: 20,
+    padding: 24,
+    width: '100%',
+    maxWidth: 340,
+    alignItems: 'center',
+    ...Shadows.card,
+  },
+  confirmModalIconCircle: {
+    width: 64,
+    height: 64,
+    borderRadius: 32,
+    backgroundColor: '#FEE2E2',
+    justifyContent: 'center',
+    alignItems: 'center',
+    marginBottom: 16,
+  },
+  confirmModalTitle: {
+    fontSize: 18,
+    fontWeight: '700',
+    color: Colors.textPrimary,
+    marginBottom: 8,
+    textAlign: 'center',
+  },
+  confirmModalMessage: {
+    fontSize: 14,
+    color: '#64748B',
+    textAlign: 'center',
+    lineHeight: 20,
+    marginBottom: 24,
+  },
+  confirmModalButtonRow: {
+    flexDirection: 'row',
+    width: '100%',
+    gap: 12,
+  },
+  confirmModalCancelBtn: {
+    flex: 1,
+    paddingVertical: 12,
+    borderRadius: 12,
+    backgroundColor: '#F1F5F9',
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  confirmModalCancelText: {
+    fontSize: 15,
+    fontWeight: '600',
+    color: '#475569',
+  },
+  confirmModalLogoutBtn: {
+    flex: 1,
+    paddingVertical: 12,
+    borderRadius: 12,
+    backgroundColor: '#EF4444',
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  confirmModalLogoutText: {
+    fontSize: 15,
+    fontWeight: '700',
+    color: '#FFFFFF',
   },
 });

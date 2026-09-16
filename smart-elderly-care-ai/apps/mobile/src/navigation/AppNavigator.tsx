@@ -33,6 +33,7 @@ import AlgoConfigScreen from '../features/dashboard/screens/AlgoConfigScreen';
 import MedicalReportScreen from '../features/history/MedicalReportScreen';
 import IncidentDetailScreen from '../features/alerts/screens/IncidentDetailScreen';
 import AddDeviceScreen from '../features/dashboard/screens/AddDeviceScreen';
+import CreateGroupScreen from '../features/dashboard/screens/CreateGroupScreen';
 import SmartbandDetailScreen from '../features/dashboard/screens/SmartbandDetailScreen';
 
 const Stack = createNativeStackNavigator();
@@ -112,6 +113,7 @@ export default function AppNavigator() {
             <Stack.Screen name="AlgoConfig" component={AlgoConfigScreen} />
             <Stack.Screen name="MedicalReport" component={MedicalReportScreen} />
             <Stack.Screen name="AddDevice" component={AddDeviceScreen} />
+            <Stack.Screen name="CreateGroup" component={CreateGroupScreen} />
             <Stack.Screen name="SmartbandDetail" component={SmartbandDetailScreen} />
             <Stack.Screen
               name="IncidentDetail"
