@@ -2630,15 +2630,15 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'center',
-    marginTop: 8,
-    marginBottom: 18,
+    marginTop: 6,
+    marginBottom: 10,
     paddingTop: 6,
     paddingBottom: 6,
     minHeight: 44,
   },
   settingsTitle: {
-    fontSize: 20,
-    fontWeight: '800',
+    fontSize: 18,
+    fontWeight: '700',
     color: Colors.textPrimary,
     position: 'absolute',
     left: 0,
@@ -2668,11 +2668,11 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'center',
-    marginBottom: 18,
+    marginBottom: 10,
     minHeight: 40,
   },
   infoTitle: {
-    fontSize: 22,
+    fontSize: 18,
     fontWeight: '700',
     color: '#111827',
     textAlign: 'center',
@@ -2725,8 +2725,8 @@ const styles = StyleSheet.create({
     borderBottomColor: '#E5E7EB',
   },
   infoRowText: {
-    fontSize: 17,
-    fontWeight: '500',
+    fontSize: 15,
+    fontWeight: '600',
     color: '#111827',
   },
   infoDetailContent: {
@@ -2793,8 +2793,8 @@ const styles = StyleSheet.create({
     borderBottomWidth: 0,
   },
   accessibilityLabel: {
-    fontSize: 18,
-    fontWeight: '500',
+    fontSize: 15,
+    fontWeight: '600',
     color: '#111827',
   },
   accessibilityValueWrap: {
@@ -2824,8 +2824,8 @@ const styles = StyleSheet.create({
     marginBottom: 12,
   },
   fontSizeOptionText: {
-    fontSize: 18,
-    fontWeight: '500',
+    fontSize: 15,
+    fontWeight: '600',
     color: '#111827',
   },
   customFontSliderPanel: {
@@ -2926,7 +2926,7 @@ const styles = StyleSheet.create({
     borderBottomColor: '#E2E8F0',
   },
   generalRowLabel: {
-    fontSize: 17,
+    fontSize: 15,
     fontWeight: '600',
     color: Colors.textPrimary,
   },
@@ -2961,7 +2961,7 @@ const styles = StyleSheet.create({
     justifyContent: 'space-between',
     minHeight: 52,
     paddingHorizontal: 18,
-    marginBottom: 8,
+    marginBottom: 6,
   },
   appearanceHeaderSpacer: {
     width: 36,
@@ -2975,7 +2975,7 @@ const styles = StyleSheet.create({
   },
   appearanceTitle: {
     flex: 1,
-    fontSize: 22,
+    fontSize: 18,
     fontWeight: '700',
     color: '#111827',
     textAlign: 'center',
@@ -3004,8 +3004,8 @@ const styles = StyleSheet.create({
     backgroundColor: '#FFFFFF',
   },
   appearanceOptionLabel: {
-    fontSize: 18,
-    fontWeight: '500',
+    fontSize: 15,
+    fontWeight: '600',
     color: '#111827',
   },
   backButton: {
@@ -3041,10 +3041,10 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'space-between',
-    minHeight: 58,
+    minHeight: 56,
     paddingHorizontal: 14,
-    paddingTop: 10,
-    paddingBottom: 10,
+    paddingTop: 8,
+    paddingBottom: 8,
     borderBottomWidth: 1,
     borderBottomColor: '#E2E8F0',
   },
@@ -3062,14 +3062,14 @@ const styles = StyleSheet.create({
   changePasswordTitle: {
     flex: 1,
     textAlign: 'center',
-    fontSize: 19,
-    fontWeight: '800',
+    fontSize: 18,
+    fontWeight: '700',
     color: Colors.textPrimary,
   },
   changePasswordContent: {
     paddingHorizontal: 14,
-    paddingTop: 14,
-    paddingBottom: 32,
+    paddingTop: 12,
+    paddingBottom: 20,
   },
   changePasswordIntro: {
     marginBottom: 20,
@@ -3079,7 +3079,7 @@ const styles = StyleSheet.create({
   },
   passwordLabel: {
     marginBottom: 7,
-    fontSize: 14,
+    fontSize: 15,
     fontWeight: '700',
     color: '#111827',
   },
@@ -3174,7 +3174,7 @@ const styles = StyleSheet.create({
   },
   notificationSettingTitle: {
     fontSize: 15,
-    fontWeight: '600',
+    fontWeight: '700',
     color: Colors.textPrimary,
   },
   notificationSettingDescription: {
@@ -3654,7 +3654,7 @@ logoutButton: {
     marginRight: 13,
   },
   settingsLabel: {
-    fontSize: 16,
+    fontSize: 15,
     fontWeight: '600',
     color: Colors.textPrimary,
   },

@@ -128,9 +128,9 @@ export default function ForgotPasswordScreen({ navigation }: any) {
 const styles = StyleSheet.create({
   safeArea: { flex: 1, backgroundColor: '#FFFFFF' },
   flex: { flex: 1 },
-  container: { flexGrow: 1, justifyContent: 'space-between', paddingHorizontal: 26, paddingTop: 16, paddingBottom: 24 },
-  backButton: { height: 42, justifyContent: 'center', alignItems: 'flex-start', marginBottom: 32 },
-  heading: { alignItems: 'flex-start', marginBottom: 54 },
+  container: { flexGrow: 1, justifyContent: 'space-between', paddingHorizontal: 26, paddingTop: 18, paddingBottom: 18 },
+  backButton: { height: 42, justifyContent: 'center', alignItems: 'flex-start', marginBottom: 20 },
+  heading: { alignItems: 'flex-start', marginBottom: 32 },
   title: { color: '#2F2F2F', fontSize: 29, fontWeight: '800', textAlign: 'left', marginBottom: 10 },
   subtitle: { color: '#333333', fontSize: 17, lineHeight: 23, textAlign: 'left', maxWidth: 350 },
   inputContainer: { minHeight: 56, flexDirection: 'row', alignItems: 'center', borderWidth: 1, borderColor: '#E5E5E5', borderRadius: 14, paddingHorizontal: 18 },
