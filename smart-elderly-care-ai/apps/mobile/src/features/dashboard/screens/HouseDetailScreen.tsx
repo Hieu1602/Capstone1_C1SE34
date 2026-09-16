@@ -41,7 +41,7 @@ export default function HouseDetailScreen({ navigation }: any) {
 
   return (
     <SafeAreaView style={styles.safeArea} edges={['top']}>
-      {/* 1. Header: Back Arrow, Title "Nhà của tôi", Edit Pencil in Orange */}
+      {/* 1. Header: Back Arrow, Title "Nhà của tôi" */}
       <View style={styles.topHeader}>
         <TouchableOpacity
           style={styles.backBtn}
@@ -50,16 +50,8 @@ export default function HouseDetailScreen({ navigation }: any) {
         >
           <Ionicons name="chevron-back" size={26} color={Colors.textPrimary} />
         </TouchableOpacity>
-        
-        <View style={styles.titleWithIcon}>
-          <Text style={styles.headerTitleText}>{house.name}</Text>
-          <TouchableOpacity
-            style={styles.pencilBtn}
-            onPress={() => Alert.alert('Đổi tên nhà', 'Nhập tên mới cho ngôi nhà của bạn.')}
-          >
-            <Ionicons name="pencil" size={16} color={Colors.primary} />
-          </TouchableOpacity>
-        </View>
+
+        <Text style={styles.headerTitleText}>Nhà của tôi</Text>
       </View>
 
       <ScrollView
@@ -180,8 +172,10 @@ const styles = StyleSheet.create({
   },
   topHeader: {
     paddingHorizontal: 16,
-    paddingTop: 8,
-    paddingBottom: 14,
+    paddingTop: 12,
+    paddingBottom: 10,
+    flexDirection: 'row',
+    alignItems: 'center',
   },
   backBtn: {
     width: 36,
@@ -189,20 +183,13 @@ const styles = StyleSheet.create({
     borderRadius: 18,
     alignItems: 'center',
     justifyContent: 'center',
-    marginBottom: 8,
-  },
-  titleWithIcon: {
-    flexDirection: 'row',
-    alignItems: 'center',
+    marginRight: 10,
   },
   headerTitleText: {
-    fontSize: 26,
+    fontSize: 27,
     fontWeight: '900',
     color: Colors.textPrimary,
-  },
-  pencilBtn: {
-    marginLeft: 8,
-    padding: 4,
+    letterSpacing: -0.8,
   },
   scrollContent: {
     paddingHorizontal: 16,
@@ -210,16 +197,18 @@ const styles = StyleSheet.create({
   },
   sectionLabel: {
     fontSize: 13,
-    fontWeight: '600',
-    color: Colors.textSecondary,
-    marginTop: 18,
-    marginBottom: 8,
+    fontWeight: '700',
+    color: '#64748B',
+    marginTop: 10,
+    marginBottom: 10,
   },
   cardContainer: {
-    backgroundColor: Colors.surface,
+    backgroundColor: '#FFFFFF',
     borderRadius: 18,
     paddingHorizontal: 16,
-    ...Shadows.card,
+    borderWidth: 1,
+    borderColor: '#E2E8F0',
+    overflow: 'hidden',
   },
   // Member row
   memberRow: {
@@ -228,29 +217,29 @@ const styles = StyleSheet.create({
     paddingVertical: 16,
   },
   memberAvatarCircle: {
-    width: 44,
-    height: 44,
-    borderRadius: 22,
+    width: 40,
+    height: 40,
+    borderRadius: 20,
     backgroundColor: '#E2E8F0',
     alignItems: 'center',
     justifyContent: 'center',
     marginRight: 12,
   },
   memberNameText: {
-    flex: 1,
-    fontSize: 16,
+    fontSize: 17,
     fontWeight: '700',
     color: Colors.textPrimary,
+    marginRight: 10,
   },
   ownerBadgeText: {
-    fontSize: 14,
-    fontWeight: '600',
-    color: Colors.primary,
+    fontSize: 13,
+    fontWeight: '700',
+    color: '#F59E0B',
     marginRight: 8,
   },
   divider: {
     height: 1,
-    backgroundColor: Colors.border,
+    backgroundColor: '#E2E8F0',
   },
   addMemberRow: {
     flexDirection: 'row',

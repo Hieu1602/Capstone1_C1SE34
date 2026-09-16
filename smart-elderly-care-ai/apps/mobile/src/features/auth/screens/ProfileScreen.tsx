@@ -18,8 +18,10 @@ import {
   Image,
   Vibration,
   PanResponder,
+  Linking,
 } from 'react-native';
 import * as ImagePicker from 'expo-image-picker';
+import { WebView } from 'react-native-webview';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
 import { Colors, Shadows } from '../../../theme/colors';
@@ -29,22 +31,23 @@ export default function ProfileScreen({ navigation }: any) {
   const { userId, userEmail, userName, logout, setUser } = useAuthStore();
   const { house } = useVitalStore();
   const [profileName, setProfileName] = React.useState(userName || 'ngolevinh233');
-  const [profileEmail, setProfileEmail] = React.useState(userEmail || 'ngolevinh233@gmail.com');
   const [profilePhone, setProfilePhone] = React.useState('0912 345 678');
-  const [editingField, setEditingField] = React.useState<'name' | 'email' | null>(null);
+  const [editingField, setEditingField] = React.useState<'name' | null>(null);
   const [draftValue, setDraftValue] = React.useState('');
-  const [otpCode, setOtpCode] = React.useState('');
-  const [otpSentForEmail, setOtpSentForEmail] = React.useState(false);
   const [isUserMenuVisible, setUserMenuVisible] = React.useState(false);
   const [isAvatarPickerVisible, setAvatarPickerVisible] = React.useState(false);
   const [isLocationVisible, setLocationVisible] = React.useState(false);
   const [locationAddress, setLocationAddress] = React.useState('');
+  const [locationCoords, setLocationCoords] = React.useState<{ latitude: number; longitude: number } | null>(null);
+  const [isLocationLoading, setLocationLoading] = React.useState(false);
   const [isSettingsVisible, setSettingsVisible] = React.useState(false);
   const [accountEntrySource, setAccountEntrySource] = React.useState<'main' | 'settings'>('main');
   const [isNotificationSettingsVisible, setNotificationSettingsVisible] = React.useState(false);
   const [isVibrationDetailVisible, setVibrationDetailVisible] = React.useState(false);
   const [isAboutInfoVisible, setAboutInfoVisible] = React.useState(false);
   const [isGeneralSettingsVisible, setGeneralSettingsVisible] = React.useState(false);
+  const [isLanguageVisible, setLanguageVisible] = React.useState(false);
+  const [languageMode, setLanguageMode] = React.useState<'vi' | 'en'>('vi');
   const [isAccessibilityVisible, setAccessibilityVisible] = React.useState(false);
   const [isFontSizeVisible, setFontSizeVisible] = React.useState(false);
   const [fontSizeMode, setFontSizeMode] = React.useState<'system' | 'custom'>('system');
@@ -68,6 +71,26 @@ export default function ProfileScreen({ navigation }: any) {
   const [alertSoundEnabled, setAlertSoundEnabled] = React.useState(true);
   const [vibrationEnabled, setVibrationEnabled] = React.useState(true);
   const [criticalAlertEnabled, setCriticalAlertEnabled] = React.useState(true);
+  const [isCustomerSupportVisible, setCustomerSupportVisible] = React.useState(false);
+  const [isSecurityCenterVisible, setSecurityCenterVisible] = React.useState(false);
+  const [twoFactorEnabled, setTwoFactorEnabled] = React.useState(false);
+  const [securityDetail, setSecurityDetail] = React.useState<'twoFactor' | 'devices' | 'logins' | 'question' | null>(null);
+  const [selectedSecurityQuestion, setSelectedSecurityQuestion] = React.useState('');
+
+  const openSecurityDetail = (detail: 'twoFactor' | 'devices' | 'logins' | 'question') => {
+    setSecurityCenterVisible(false);
+    setTimeout(() => setSecurityDetail(detail), 220);
+  };
+  const [returnToSecurityAfterPassword, setReturnToSecurityAfterPassword] = React.useState(false);
+
+  const closeChangePassword = () => {
+    setChangePasswordVisible(false);
+
+    if (returnToSecurityAfterPassword) {
+      setReturnToSecurityAfterPassword(false);
+      setSecurityCenterVisible(true);
+    }
+  };
 
 
   const handleVibrationToggle = (value: boolean) => {
@@ -79,6 +102,18 @@ export default function ProfileScreen({ navigation }: any) {
     }
 
     Vibration.cancel();
+  };
+
+  const handleCustomerSupportPress = () => {
+    setCustomerSupportVisible(true);
+  };
+
+  const callEmergencyService = async () => {
+    try {
+      await Linking.openURL('tel:115');
+    } catch {
+      Alert.alert('Không thể gọi', 'Thiết bị không hỗ trợ thực hiện cuộc gọi trực tiếp.');
+    }
   };
 
   const updateFontScaleFromPosition = React.useCallback((positionX: number) => {
@@ -138,36 +173,15 @@ export default function ProfileScreen({ navigation }: any) {
     setLogoutConfirmVisible(true);
   };
 
-  const openFieldEditor = (field: 'name' | 'email') => {
-    const value = field === 'name' ? profileName : profileEmail;
-    setDraftValue(value);
-    setOtpCode('');
-    setOtpSentForEmail(false);
+  const openFieldEditor = (field: 'name') => {
+    if (field !== 'name') return;
+    setDraftValue(profileName);
     setEditingField(field);
   };
 
   const closeFieldEditor = () => {
     setEditingField(null);
     setDraftValue('');
-    setOtpCode('');
-    setOtpSentForEmail(false);
-  };
-
-  const handleSendOtp = () => {
-    const trimmed = draftValue.trim();
-
-    if (!trimmed) {
-      Alert.alert('Lỗi', 'Email không được để trống.');
-      return;
-    }
-
-    if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(trimmed)) {
-      Alert.alert('Lỗi', 'Email không hợp lệ. Ví dụ: ten@gmail.com');
-      return;
-    }
-
-    setOtpSentForEmail(true);
-    Alert.alert('Đã gửi mã OTP', `Mã xác thực đã được gửi tới ${trimmed}`);
   };
 
   const saveEditedField = () => {
@@ -175,33 +189,12 @@ export default function ProfileScreen({ navigation }: any) {
 
     const trimmed = draftValue.trim();
     if (!trimmed) {
-      Alert.alert('Lỗi', editingField === 'name' ? 'Tên không được để trống.' : 'Email không được để trống.');
+      Alert.alert('Lỗi', 'Tên không được để trống.');
       return;
     }
 
-    if (editingField === 'name') {
-      setProfileName(trimmed);
-      setUser(userId ?? 'demo-user-001', userEmail ?? profileEmail, trimmed);
-      closeFieldEditor();
-      return;
-    }
-
-    if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(trimmed)) {
-      Alert.alert('Lỗi', 'Email không hợp lệ. Ví dụ: ten@gmail.com');
-      return;
-    }
-
-    if (!otpSentForEmail) {
-      Alert.alert('Lỗi', 'Vui lòng gửi mã OTP trước khi lưu thay đổi.');
-      return;
-    }
-
-    if (!otpCode.trim() || otpCode.trim().length < 6) {
-      Alert.alert('Lỗi', 'Vui lòng nhập mã OTP gồm 6 chữ số.');
-      return;
-    }
-
-    setProfileEmail(trimmed);
+    setProfileName(trimmed);
+    setUser(userId ?? 'demo-user-001', userEmail ?? 'ngolevinh233@gmail.com', trimmed);
     closeFieldEditor();
   };
 
@@ -223,7 +216,7 @@ export default function ProfileScreen({ navigation }: any) {
     setCurrentPassword('');
     setNewPassword('');
     setConfirmPassword('');
-    setChangePasswordVisible(false);
+    closeChangePassword();
   };
 
   const handleAvatarPress = async () => {
@@ -270,8 +263,10 @@ export default function ProfileScreen({ navigation }: any) {
   };
 
   const handleGetCurrentLocation = async () => {
+    setLocationLoading(true);
     const permission = await Location.requestForegroundPermissionsAsync();
     if (!permission.granted) {
+      setLocationLoading(false);
       Alert.alert('Quyền bị từ chối', 'Bạn cần cho phép truy cập vị trí để sử dụng định vị địa lý.');
       return;
     }
@@ -281,6 +276,7 @@ export default function ProfileScreen({ navigation }: any) {
         accuracy: Location.Accuracy.Balanced,
       });
       const { latitude, longitude } = position.coords;
+      setLocationCoords({ latitude, longitude });
       const places = await Location.reverseGeocodeAsync({ latitude, longitude });
       const place = places[0];
       const address = [
@@ -297,8 +293,20 @@ export default function ProfileScreen({ navigation }: any) {
       );
     } catch {
       Alert.alert('Không lấy được vị trí', 'Vui lòng bật GPS và thử lại.');
+    } finally {
+      setLocationLoading(false);
     }
   };
+
+  React.useEffect(() => {
+    if (isLocationVisible && !locationCoords) {
+      void handleGetCurrentLocation();
+    }
+  }, [isLocationVisible, locationCoords]);
+
+  const locationMapHtml = locationCoords
+    ? `<!doctype html><html><head><meta name="viewport" content="width=device-width, initial-scale=1.0"><style>html,body,#map{height:100%;margin:0}body{overflow:hidden}</style><link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" /></head><body><div id="map"></div><script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script><script>const point=[${locationCoords.latitude},${locationCoords.longitude}];const map=L.map('map',{zoomControl:false}).setView(point,16);L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png',{attribution:'© OpenStreetMap'}).addTo(map);L.marker(point).addTo(map).bindPopup('Vị trí hiện tại').openPopup();</script></body></html>`
+    : '';
 
   return (
     <SafeAreaView style={styles.safeArea} edges={['top']}>
@@ -361,7 +369,7 @@ export default function ProfileScreen({ navigation }: any) {
               onPress={closeUserMenu}
               activeOpacity={0.7}
             >
-              <Ionicons name="chevron-back" size={24} color={Colors.textPrimary} />
+              <Ionicons name="chevron-back-outline" size={24} color={Colors.textPrimary} />
             </TouchableOpacity>
 
             <View style={styles.avatarContainerLarge}>
@@ -406,7 +414,10 @@ export default function ProfileScreen({ navigation }: any) {
               <TouchableOpacity
                 style={styles.infoRow}
                 activeOpacity={0.8}
-                onPress={() => setChangePasswordVisible(true)}
+                onPress={() => {
+                  setReturnToSecurityAfterPassword(false);
+                  setChangePasswordVisible(true);
+                }}
               >
                 <View style={styles.infoLeftWrap}>
                   <Ionicons name="lock-closed-outline" size={22} color="#1F2937" />
@@ -436,61 +447,28 @@ export default function ProfileScreen({ navigation }: any) {
                       onPress={closeFieldEditor}
                       activeOpacity={0.7}
                     >
-                      <Ionicons name="chevron-back" size={26} color="#111827" />
+                      <Ionicons name="chevron-back-outline" size={26} color="#111827" />
                     </TouchableOpacity>
+                    <Text style={styles.editorTitle}>Chỉnh sửa tên</Text>
                   </View>
 
-                  <Text style={styles.editorTitle}>{editingField === 'name' ? 'Chỉnh sửa tên' : 'Chỉnh sửa Gmail'}</Text>
-
-                  {editingField === 'email' ? (
-                    <>
-                      <View style={styles.editorEmailRow}>
-                        <TextInput
-                          value={draftValue}
-                          onChangeText={setDraftValue}
-                          style={[styles.editorInput, styles.editorEmailInput]}
-                          placeholder="name@gmail.com"
-                          placeholderTextColor="#94A3B8"
-                          autoFocus
-                          autoCapitalize="none"
-                          keyboardType="email-address"
-                        />
-                        <TouchableOpacity style={styles.sendOtpButton} onPress={handleSendOtp}>
-                          <Text style={styles.sendOtpText}>Gửi OTP</Text>
-                        </TouchableOpacity>
-                      </View>
-
-                      {otpSentForEmail && (
-                        <TextInput
-                          value={otpCode}
-                          onChangeText={setOtpCode}
-                          style={[styles.editorInput, styles.otpInput]}
-                          placeholder="Nhập mã OTP"
-                          placeholderTextColor="#94A3B8"
-                          keyboardType="number-pad"
-                          maxLength={6}
-                        />
-                      )}
-                    </>
-                  ) : (
-                    <TextInput
-                      value={draftValue}
-                      onChangeText={setDraftValue}
-                      style={styles.editorInput}
-                      placeholder="Nhập tên mới"
-                      placeholderTextColor="#94A3B8"
-                      autoFocus
-                      autoCapitalize="words"
-                      keyboardType="default"
-                    />
-                  )}
+                  <TextInput
+                    value={draftValue}
+                    onChangeText={setDraftValue}
+                    style={styles.editorInput}
+                    placeholder="Nhập tên mới"
+                    placeholderTextColor="#94A3B8"
+                    autoFocus
+                    autoCapitalize="words"
+                    keyboardType="default"
+                  />
 
                   <View style={styles.editorActions}>
                     <TouchableOpacity style={styles.editorCancel} onPress={closeFieldEditor}>
                       <Text style={styles.editorCancelText}>Hủy</Text>
                     </TouchableOpacity>
                     <TouchableOpacity style={styles.editorSave} onPress={saveEditedField}>
-                      <Text style={styles.editorSaveText}>{editingField === 'email' ? 'Xác nhận' : 'Lưu'}</Text>
+                      <Text style={styles.editorSaveText}>Lưu</Text>
                     </TouchableOpacity>
                   </View>
                 </Pressable>
@@ -530,6 +508,238 @@ export default function ProfileScreen({ navigation }: any) {
       </Modal>
 
       <Modal
+        visible={securityDetail !== null}
+        animationType="slide"
+              onRequestClose={() => {
+                setSecurityDetail(null);
+                setSecurityCenterVisible(true);
+              }}
+      >
+        <SafeAreaView style={styles.securityDetailScreen} edges={['top']}>
+          <View style={styles.securityDetailHeader}>
+            <TouchableOpacity
+              style={styles.changePasswordBackButton}
+              onPress={() => {
+                setSecurityDetail(null);
+                setSecurityCenterVisible(true);
+              }}
+              activeOpacity={0.8}
+            >
+              <Ionicons name="chevron-back-outline" size={28} color="#0F172A" />
+            </TouchableOpacity>
+            <Text style={styles.securityDetailTitle}>
+              {securityDetail === 'twoFactor'
+                ? 'Xác minh hai bước'
+                : securityDetail === 'devices'
+                  ? 'Quản lý đầu cuối'
+                  : securityDetail === 'logins'
+                    ? 'Đăng nhập tài khoản'
+                    : 'Trợ giúp bảo mật'}
+            </Text>
+          </View>
+
+          <ScrollView contentContainerStyle={styles.securityDetailContent}>
+            {securityDetail === 'twoFactor' && (
+              <View style={styles.securityDetailCard}>
+                <View style={styles.securityDetailRowHeader}>
+                  <Text style={styles.securityDetailCardTitle}>Xác minh hai bước</Text>
+                  <Switch
+                    value={twoFactorEnabled}
+                    onValueChange={setTwoFactorEnabled}
+                    trackColor={{ false: '#CBD5E1', true: '#7DD3FC' }}
+                    thumbColor={twoFactorEnabled ? '#0284C7' : '#FFFFFF'}
+                  />
+                </View>
+                <Text style={styles.securityDetailDescription}>
+                  Để giữ bảo mật tài khoản, bạn sẽ được yêu cầu xác minh qua tin nhắn SMS khi đăng nhập trên thiết bị mới.
+                </Text>
+                <View style={styles.securityInfoBanner}>
+                  <Ionicons name="information-circle-outline" size={21} color="#2563EB" />
+                  <Text style={styles.securityInfoText}>
+                    {twoFactorEnabled ? 'Tính năng đang bật cho tài khoản của bạn.' : 'Bật tính năng để tăng bảo vệ tài khoản.'}
+                  </Text>
+                </View>
+              </View>
+            )}
+
+            {securityDetail === 'devices' && (
+              <View style={styles.securityDetailCard}>
+                <Text style={styles.securityDetailCardTitle}>Các thiết bị hiện tại: 1</Text>
+                <View style={styles.securityDeviceItem}>
+                  <View style={styles.securityDeviceIcon}>
+                    <Ionicons name="phone-portrait" size={22} color="#2563EB" />
+                  </View>
+                  <View style={styles.securityDeviceCopy}>
+                    <Text style={styles.securityDeviceName}>Thiết bị hiện tại</Text>
+                    <Text style={styles.securityDeviceMeta}>Android · Đang hoạt động</Text>
+                    <Text style={styles.securityDeviceMeta}>Đăng nhập lúc 20:41 hôm nay</Text>
+                  </View>
+                  <Text style={styles.securityCurrentLabel}>Hiện tại</Text>
+                </View>
+                <Text style={styles.securityDetailDescription}>Thiết bị không hoạt động trong 3 tháng sẽ được đề xuất loại bỏ tự động.</Text>
+              </View>
+            )}
+
+            {securityDetail === 'logins' && (
+              <View style={styles.securityDetailCard}>
+                <Text style={styles.securityDetailCardTitle}>Lịch sử đăng nhập</Text>
+                {['Hôm nay · 20:41', '09-14 · 21:20', '09-14 · 21:08', '09-12 · 00:07'].map((loginItem) => (
+                  <View key={loginItem} style={styles.securityLoginItem}>
+                    <View style={styles.securityTimelineDot} />
+                    <View style={styles.securityDeviceCopy}>
+                      <Text style={styles.securityDeviceName}>Đăng nhập tài khoản</Text>
+                      <Text style={styles.securityDeviceMeta}>SM-A127F · Thiết bị hiện tại</Text>
+                    </View>
+                    <Text style={styles.securityLoginTime}>{loginItem}</Text>
+                  </View>
+                ))}
+              </View>
+            )}
+
+            {securityDetail === 'question' && (
+              <View style={styles.securityDetailCard}>
+                <Text style={styles.securityDetailCardTitle}>{selectedSecurityQuestion}</Text>
+                <Text style={styles.securityDetailDescription}>
+                  Hệ thống sử dụng các lớp bảo vệ tài khoản, xác minh thiết bị và mã xác thực để hạn chế truy cập trái phép. Bạn nên bật xác minh hai bước và thường xuyên kiểm tra lịch sử đăng nhập.
+                </Text>
+              </View>
+            )}
+          </ScrollView>
+        </SafeAreaView>
+      </Modal>
+
+      <Modal
+        transparent
+        visible={isCustomerSupportVisible}
+        animationType="fade"
+        onRequestClose={() => setCustomerSupportVisible(false)}
+      >
+        <Pressable style={styles.customerSupportOverlay} onPress={() => setCustomerSupportVisible(false)}>
+          <Pressable style={styles.customerSupportDialog} onPress={() => {}}>
+            <Ionicons name="call" size={28} color="#DC2626" />
+            <Text style={styles.customerSupportTitle}>Hỗ trợ khẩn cấp</Text>
+            <Text style={styles.customerSupportMessage}>
+              Bạn muốn gọi tổng đài cấp cứu 115 ngay bây giờ?
+            </Text>
+            <View style={styles.customerSupportActions}>
+              <TouchableOpacity
+                style={styles.customerSupportCancelButton}
+                onPress={() => setCustomerSupportVisible(false)}
+                activeOpacity={0.8}
+              >
+                <Text style={styles.customerSupportCancelText}>Hủy</Text>
+              </TouchableOpacity>
+              <TouchableOpacity
+                style={styles.customerSupportCallButton}
+                onPress={() => {
+                  setCustomerSupportVisible(false);
+                  void callEmergencyService();
+                }}
+                activeOpacity={0.8}
+              >
+                <Ionicons name="call" size={17} color="#FFFFFF" />
+                <Text style={styles.customerSupportCallText}>Gọi 115</Text>
+              </TouchableOpacity>
+            </View>
+          </Pressable>
+        </Pressable>
+      </Modal>
+
+      <Modal
+        visible={isSecurityCenterVisible}
+        animationType="slide"
+        onRequestClose={() => setSecurityCenterVisible(false)}
+      >
+        <SafeAreaView style={styles.securityScreen} edges={['top']}>
+          <ScrollView showsVerticalScrollIndicator={false} contentContainerStyle={styles.securityScrollContent}>
+            <View style={styles.securityHero}>
+              <TouchableOpacity
+                style={styles.securityHeroBackButton}
+                onPress={() => setSecurityCenterVisible(false)}
+                activeOpacity={0.8}
+              >
+                <Ionicons name="chevron-back-outline" size={28} color="#0F172A" />
+              </TouchableOpacity>
+              <View style={styles.securityHeroShield}>
+                <Ionicons name="shield-checkmark" size={108} color="rgba(255,255,255,0.88)" />
+              </View>
+              <Text style={styles.securityHeroStatus}>Tốt</Text>
+              <Text style={styles.securityHeroDescription}>Có thể cải thiện 2 mục</Text>
+              <TouchableOpacity style={styles.securityImproveButton} activeOpacity={0.8}>
+                <Text style={styles.securityImproveText}>Cải thiện ngay bây giờ</Text>
+                <Ionicons name="chevron-forward" size={23} color="#0F172A" />
+              </TouchableOpacity>
+            </View>
+
+            <View style={styles.securitySectionCard}>
+              <View style={styles.securitySectionHeader}>
+                <Text style={styles.securitySectionTitle}>Bảo mật tài khoản</Text>
+                <Ionicons name="ellipsis-vertical" size={22} color="#0F172A" />
+              </View>
+              <View style={styles.securityTileGrid}>
+              <TouchableOpacity
+                style={styles.securityTile}
+                onPress={() => {
+                  setReturnToSecurityAfterPassword(true);
+                  setSecurityCenterVisible(false);
+                  setChangePasswordVisible(true);
+                }}
+                activeOpacity={0.8}
+              >
+                <Text style={styles.securityTileTitle}>Đổi mật khẩu</Text>
+                <Ionicons name="lock-closed" size={34} color="#38BDF8" style={styles.securityTileIcon} />
+              </TouchableOpacity>
+              <TouchableOpacity style={styles.securityTile} onPress={() => openSecurityDetail('twoFactor')} activeOpacity={0.8}>
+                <Text style={styles.securityTileTitle}>Xác minh hai bước</Text>
+                <Ionicons name="shield-checkmark" size={34} color="#38BDF8" style={styles.securityTileIcon} />
+                <Switch
+                  value={twoFactorEnabled}
+                  onValueChange={setTwoFactorEnabled}
+                  style={styles.securityTileSwitch}
+                  trackColor={{ false: '#CBD5E1', true: '#7DD3FC' }}
+                  thumbColor={twoFactorEnabled ? '#0284C7' : '#FFFFFF'}
+                />
+              </TouchableOpacity>
+              <TouchableOpacity
+                style={styles.securityTile}
+                onPress={() => openSecurityDetail('devices')}
+                activeOpacity={0.8}
+              >
+                <Text style={styles.securityTileTitle}>Quản lý đầu cuối</Text>
+                <Ionicons name="phone-portrait" size={34} color="#38BDF8" style={styles.securityTileIcon} />
+              </TouchableOpacity>
+              <TouchableOpacity style={styles.securityTile} onPress={() => openSecurityDetail('logins')} activeOpacity={0.8}>
+                <Text style={styles.securityTileTitle}>Đăng nhập tài khoản</Text>
+                <Ionicons name="card-outline" size={34} color="#38BDF8" style={styles.securityTileIcon} />
+              </TouchableOpacity>
+              </View>
+            </View>
+
+            <View style={styles.securitySectionCard}>
+              <View style={styles.securitySectionHeader}>
+                <Text style={styles.securitySectionTitle}>Bạn cũng có thể hỏi</Text>
+                <Ionicons name="ellipsis-vertical" size={22} color="#0F172A" />
+              </View>
+              {['Mật khẩu mã hóa thiết bị là gì?', 'Có ràng buộc một thiết bị an toàn không?', 'Bảo vệ quyền riêng tư của người dùng', 'Việc sử dụng mã xác minh qua tin nhắn SMS'].map((question) => (
+                <TouchableOpacity
+                  key={question}
+                  style={styles.securityQuestionRow}
+                  activeOpacity={0.8}
+                  onPress={() => {
+                    setSelectedSecurityQuestion(question);
+                    openSecurityDetail('question');
+                  }}
+                >
+                  <Text style={styles.securityQuestionText}>{question}</Text>
+                  <Ionicons name="chevron-forward" size={20} color="#64748B" />
+                </TouchableOpacity>
+              ))}
+            </View>
+          </ScrollView>
+        </SafeAreaView>
+      </Modal>
+
+      <Modal
         transparent
         visible={isLocationVisible}
         animationType="slide"
@@ -537,14 +747,64 @@ export default function ProfileScreen({ navigation }: any) {
       >
         <Pressable style={styles.locationOverlay} onPress={() => setLocationVisible(false)}>
           <Pressable style={styles.locationSheet} onPress={() => {}}>
-            <Text style={styles.locationTitle}>Định vị địa lý</Text>
-            <Text style={styles.locationDescription}>Lấy vị trí hiện tại của thiết bị để xác định địa chỉ.</Text>
+            <View style={styles.locationHeader}>
+              <View style={styles.locationHeaderIcon}>
+                <Ionicons name="navigate" size={22} color="#2563EB" />
+              </View>
+              <View style={styles.locationHeaderCopy}>
+                <Text style={styles.locationTitle}>Định vị địa lý</Text>
+                <Text style={styles.locationDescription}>Xác định vị trí hiện tại của thiết bị</Text>
+              </View>
+              <TouchableOpacity
+                style={styles.locationCloseIcon}
+                onPress={() => setLocationVisible(false)}
+                activeOpacity={0.8}
+              >
+                <Ionicons name="close" size={20} color="#64748B" />
+              </TouchableOpacity>
+            </View>
+
+            <View style={styles.locationMapFrame}>
+              {locationCoords ? (
+                <WebView
+                  originWhitelist={['*']}
+                  source={{ html: locationMapHtml }}
+                  style={styles.locationMap}
+                  javaScriptEnabled
+                  scrollEnabled={false}
+                />
+              ) : (
+                <View style={styles.locationMapLoading}>
+                  <Ionicons name="navigate-outline" size={30} color="#2563EB" />
+                  <Text style={styles.locationMapLoadingText}>
+                    {isLocationLoading ? 'Đang lấy vị trí hiện tại...' : 'Chưa có dữ liệu bản đồ'}
+                  </Text>
+                </View>
+              )}
+              <View style={styles.locationMapBadge}>
+                <View style={styles.locationMapBadgeDot} />
+                <Text style={styles.locationMapBadgeText}>Vị trí của bạn</Text>
+              </View>
+            </View>
 
             <View style={styles.locationResultBox}>
-              <Ionicons name="location" size={20} color="#2563EB" />
-              <Text style={styles.locationResultText}>
-                {locationAddress || 'Chưa lấy vị trí hiện tại'}
-              </Text>
+              <View style={styles.locationResultIcon}>
+                <Ionicons name="location" size={19} color="#2563EB" />
+              </View>
+              <View style={styles.locationResultCopy}>
+                <View style={styles.locationStatusRow}>
+                  <Text style={styles.locationResultLabel}>Vị trí hiện tại</Text>
+                  <View style={[styles.locationStatusBadge, locationAddress && styles.locationStatusBadgeActive]}>
+                    <View style={[styles.locationStatusDot, locationAddress && styles.locationStatusDotActive]} />
+                    <Text style={[styles.locationStatusText, locationAddress && styles.locationStatusTextActive]}>
+                      {locationAddress ? 'Đã cập nhật' : 'Chưa cập nhật'}
+                    </Text>
+                  </View>
+                </View>
+                <Text style={styles.locationResultText}>
+                  {locationAddress || 'Nhấn nút bên dưới để lấy địa chỉ hiện tại'}
+                </Text>
+              </View>
             </View>
 
             <TouchableOpacity
@@ -552,8 +812,8 @@ export default function ProfileScreen({ navigation }: any) {
               onPress={handleGetCurrentLocation}
               activeOpacity={0.85}
             >
-              <Ionicons name="locate-outline" size={20} color="#FFFFFF" />
-              <Text style={styles.locationButtonText}>Lấy vị trí hiện tại</Text>
+              <Ionicons name={isLocationLoading ? 'sync-outline' : 'locate-outline'} size={20} color="#FFFFFF" />
+              <Text style={styles.locationButtonText}>{isLocationLoading ? 'Đang định vị...' : 'Cập nhật vị trí'}</Text>
             </TouchableOpacity>
 
             <TouchableOpacity
@@ -561,7 +821,7 @@ export default function ProfileScreen({ navigation }: any) {
               onPress={() => setLocationVisible(false)}
               activeOpacity={0.8}
             >
-              <Text style={styles.locationCloseText}>Đóng</Text>
+              <Text style={styles.locationCloseText}>Để sau</Text>
             </TouchableOpacity>
           </Pressable>
         </Pressable>
@@ -593,16 +853,16 @@ export default function ProfileScreen({ navigation }: any) {
       <Modal
         visible={isChangePasswordVisible}
         animationType="slide"
-        onRequestClose={() => setChangePasswordVisible(false)}
+        onRequestClose={closeChangePassword}
       >
         <SafeAreaView style={styles.changePasswordScreen} edges={['top']}>
           <View style={styles.changePasswordHeader}>
             <TouchableOpacity
               style={styles.changePasswordBackButton}
-              onPress={() => setChangePasswordVisible(false)}
+              onPress={closeChangePassword}
               activeOpacity={0.7}
             >
-              <Ionicons name="chevron-back" size={24} color={Colors.textPrimary} />
+              <Ionicons name="chevron-back-outline" size={24} color={Colors.textPrimary} />
             </TouchableOpacity>
 
             <Text style={styles.changePasswordTitle}>Đổi mật khẩu</Text>
@@ -688,7 +948,7 @@ export default function ProfileScreen({ navigation }: any) {
                 onPress={() => setSettingsVisible(false)}
                 activeOpacity={0.7}
               >
-                <Ionicons name="chevron-back" size={24} color={Colors.textPrimary} />
+                <Ionicons name="chevron-back-outline" size={24} color={Colors.textPrimary} />
               </TouchableOpacity>
               <Text style={styles.settingsTitle}>Cài đặt</Text>
             </View>
@@ -697,114 +957,119 @@ export default function ProfileScreen({ navigation }: any) {
 
             <View style={styles.settingsCard}>
               <View style={styles.settingsList}>
-                <TouchableOpacity
-                  style={styles.settingsItem}
-                  activeOpacity={0.8}
-                  onPress={() => {
-                    setAccountEntrySource('settings');
-                    setSettingsVisible(false);
-                    setUserMenuVisible(true);
-                  }}
-                >
-                  <View style={styles.settingsLeft}>
-                    <View style={styles.settingsIconWrap}>
-                      <Ionicons name="person-circle-outline" size={20} color="#475569" />
+                <View style={styles.settingsGroupCard}>
+                  <TouchableOpacity
+                    style={styles.settingsItem}
+                    activeOpacity={0.8}
+                    onPress={() => {
+                      setAccountEntrySource('settings');
+                      setSettingsVisible(false);
+                      setUserMenuVisible(true);
+                    }}
+                  >
+                    <View style={styles.settingsLeft}>
+                      <View style={styles.settingsIconWrap}>
+                        <Ionicons name="person-circle-outline" size={20} color="#475569" />
+                      </View>
+                      <Text style={styles.settingsLabel}>Hồ sơ của tôi</Text>
                     </View>
-                    <Text style={styles.settingsLabel}>Hồ sơ của tôi</Text>
-                  </View>
-                  <Ionicons name="chevron-forward" size={18} color="#94A3B8" />
-                </TouchableOpacity>
-
-                <TouchableOpacity
-                  style={styles.settingsItem}
-                  activeOpacity={0.8}
-                  onPress={() => {
-                    setSettingsVisible(false);
-                    setGeneralSettingsVisible(true);
-                  }}
-                >
-                  <View style={styles.settingsLeft}>
-                    <View style={styles.settingsIconWrap}>
-                      <Ionicons name="settings-outline" size={20} color="#475569" />
-                    </View>
-                    <Text style={styles.settingsLabel}>Cài đặt chung</Text>
-                  </View>
-                  <Ionicons name="chevron-forward" size={18} color="#94A3B8" />
-                </TouchableOpacity>
-
-                <TouchableOpacity
-                  style={styles.settingsItem}
-                  activeOpacity={0.8}
-                  onPress={() => {
-                    setSettingsVisible(false);
-                    setNotificationSettingsVisible(true);
-                  }}
-                >
-                  <View style={styles.settingsLeft}>
-                    <View style={styles.settingsIconWrap}>
-                      <Ionicons name="notifications-outline" size={20} color="#475569" />
-                    </View>
-                    <Text style={styles.settingsLabel}>Thiết lập thông báo</Text>
-                  </View>
-                  <View style={styles.settingsRightStatus}>
                     <Ionicons name="chevron-forward" size={18} color="#94A3B8" />
-                  </View>
-                </TouchableOpacity>
+                  </TouchableOpacity>
+                </View>
 
-                <TouchableOpacity
-                  style={styles.settingsItem}
-                  activeOpacity={0.8}
-                  onPress={() => {
-                    setSettingsVisible(false);
-                    setVibrationDetailVisible(true);
-                  }}
-                >
-                  <View style={styles.settingsLeft}>
-                    <View style={styles.settingsIconWrap}>
-                      <Ionicons name="phone-portrait-outline" size={20} color="#475569" />
+                <View style={styles.settingsGroupCard}>
+                  <TouchableOpacity
+                    style={styles.settingsItem}
+                    activeOpacity={0.8}
+                    onPress={() => {
+                      setSettingsVisible(false);
+                      setGeneralSettingsVisible(true);
+                    }}
+                  >
+                    <View style={styles.settingsLeft}>
+                      <View style={styles.settingsIconWrap}>
+                        <Ionicons name="settings-outline" size={20} color="#475569" />
+                      </View>
+                      <Text style={styles.settingsLabel}>Cài đặt chung</Text>
                     </View>
-                    <Text style={styles.settingsLabel}>Rung</Text>
-                  </View>
-                  <View style={styles.settingsRightStatus}>
-                    <Text style={styles.settingsValueText}>{vibrationEnabled ? 'Mở' : 'Tắt'}</Text>
                     <Ionicons name="chevron-forward" size={18} color="#94A3B8" />
-                  </View>
-                </TouchableOpacity>
+                  </TouchableOpacity>
 
-                <TouchableOpacity
-                  style={styles.settingsItem}
-                  activeOpacity={0.8}
-                  onPress={() => {
-                    setSettingsVisible(false);
-                    setAccessibilityVisible(true);
-                  }}
-                >
-                  <View style={styles.settingsLeft}>
-                    <View style={styles.settingsIconWrap}>
-                      <Ionicons name="accessibility-outline" size={20} color="#475569" />
+                  <TouchableOpacity
+                    style={styles.settingsItem}
+                    activeOpacity={0.8}
+                    onPress={() => {
+                      setSettingsVisible(false);
+                      setAccessibilityVisible(true);
+                    }}
+                  >
+                    <View style={styles.settingsLeft}>
+                      <View style={styles.settingsIconWrap}>
+                        <Ionicons name="accessibility-outline" size={20} color="#475569" />
+                      </View>
+                      <Text style={styles.settingsLabel}>Khả năng tiếp cận</Text>
                     </View>
-                    <Text style={styles.settingsLabel}>Khả năng tiếp cận</Text>
-                  </View>
-                  <Ionicons name="chevron-forward" size={18} color="#94A3B8" />
-                </TouchableOpacity>
+                    <Ionicons name="chevron-forward" size={18} color="#94A3B8" />
+                  </TouchableOpacity>
 
-                <TouchableOpacity
-                  style={styles.settingsItem}
-                  activeOpacity={0.8}
-                  onPress={() => {
-                    setSettingsVisible(false);
-                    setAboutInfoVisible(true);
-                  }}
-                >
-                  <View style={styles.settingsLeft}>
-                    <View style={styles.settingsIconWrap}>
-                      <Ionicons name="information-circle-outline" size={20} color="#475569" />
+                  <TouchableOpacity
+                    style={[styles.settingsItem, styles.settingsItemLast]}
+                    activeOpacity={0.8}
+                    onPress={() => {
+                      setSettingsVisible(false);
+                      setAboutInfoVisible(true);
+                    }}
+                  >
+                    <View style={styles.settingsLeft}>
+                      <View style={styles.settingsIconWrap}>
+                        <Ionicons name="information-circle-outline" size={20} color="#475569" />
+                      </View>
+                      <Text style={styles.settingsLabel}>Thông tin</Text>
                     </View>
-                    <Text style={styles.settingsLabel}>Thông tin</Text>
-                  </View>
-                  <Ionicons name="chevron-forward" size={18} color="#94A3B8" />
-                </TouchableOpacity>
+                    <Ionicons name="chevron-forward" size={18} color="#94A3B8" />
+                  </TouchableOpacity>
+                </View>
 
+                <View style={styles.settingsGroupCard}>
+                  <TouchableOpacity
+                    style={styles.settingsItem}
+                    activeOpacity={0.8}
+                    onPress={() => {
+                      setSettingsVisible(false);
+                      setNotificationSettingsVisible(true);
+                    }}
+                  >
+                    <View style={styles.settingsLeft}>
+                      <View style={styles.settingsIconWrap}>
+                        <Ionicons name="notifications-outline" size={20} color="#475569" />
+                      </View>
+                      <Text style={styles.settingsLabel}>Thiết lập thông báo</Text>
+                    </View>
+                    <View style={styles.settingsRightStatus}>
+                      <Ionicons name="chevron-forward" size={18} color="#94A3B8" />
+                    </View>
+                  </TouchableOpacity>
+
+                  <TouchableOpacity
+                    style={[styles.settingsItem, styles.settingsItemLast]}
+                    activeOpacity={0.8}
+                    onPress={() => {
+                      setSettingsVisible(false);
+                      setVibrationDetailVisible(true);
+                    }}
+                  >
+                    <View style={styles.settingsLeft}>
+                      <View style={styles.settingsIconWrap}>
+                        <Ionicons name="phone-portrait-outline" size={20} color="#475569" />
+                      </View>
+                      <Text style={styles.settingsLabel}>Rung</Text>
+                    </View>
+                    <View style={styles.settingsRightStatus}>
+                      <Text style={styles.settingsValueText}>{vibrationEnabled ? 'Mở' : 'Tắt'}</Text>
+                      <Ionicons name="chevron-forward" size={18} color="#94A3B8" />
+                    </View>
+                  </TouchableOpacity>
+                </View>
               </View>
             </View>
           </Pressable>
@@ -834,7 +1099,7 @@ export default function ProfileScreen({ navigation }: any) {
                 }}
                 activeOpacity={0.7}
               >
-                <Ionicons name="chevron-back" size={24} color={Colors.textPrimary} />
+                <Ionicons name="chevron-back-outline" size={24} color={Colors.textPrimary} />
               </TouchableOpacity>
               <Text style={styles.settingsTitle}>Khả năng tiếp cận</Text>
             </View>
@@ -892,7 +1157,7 @@ export default function ProfileScreen({ navigation }: any) {
                 }}
                 activeOpacity={0.7}
               >
-                <Ionicons name="chevron-back" size={24} color={Colors.textPrimary} />
+                <Ionicons name="chevron-back-outline" size={24} color={Colors.textPrimary} />
               </TouchableOpacity>
               <Text style={styles.settingsTitle}>Kích thước phông chữ</Text>
             </View>
@@ -996,7 +1261,7 @@ export default function ProfileScreen({ navigation }: any) {
                 }}
                 activeOpacity={0.7}
               >
-                <Ionicons name="chevron-back" size={24} color={Colors.textPrimary} />
+                <Ionicons name="chevron-back-outline" size={24} color={Colors.textPrimary} />
               </TouchableOpacity>
               <Text style={styles.infoTitle}>Thông tin</Text>
             </View>
@@ -1009,12 +1274,7 @@ export default function ProfileScreen({ navigation }: any) {
               </TouchableOpacity>
 
               <TouchableOpacity style={styles.infoListRow} activeOpacity={0.8}>
-                <Text style={styles.infoRowText}>Chính sách bảo mật</Text>
-                <Ionicons name="chevron-forward" size={18} color="#9CA3AF" />
-              </TouchableOpacity>
-
-              <TouchableOpacity style={styles.infoListRow} activeOpacity={0.8}>
-                <Text style={styles.infoRowText}>Cài đặt bảo mật</Text>
+                <Text style={styles.infoRowText}>Thông tin ứng dụng</Text>
                 <Ionicons name="chevron-forward" size={18} color="#9CA3AF" />
               </TouchableOpacity>
             </View>
@@ -1045,7 +1305,7 @@ export default function ProfileScreen({ navigation }: any) {
                 }}
                 activeOpacity={0.7}
               >
-                <Ionicons name="chevron-back" size={24} color={Colors.textPrimary} />
+                <Ionicons name="chevron-back-outline" size={24} color={Colors.textPrimary} />
               </TouchableOpacity>
               <Text style={styles.settingsTitle}>Rung</Text>
             </View>
@@ -1085,7 +1345,7 @@ export default function ProfileScreen({ navigation }: any) {
                 }}
                 activeOpacity={0.7}
               >
-                <Ionicons name="chevron-back" size={24} color={Colors.textPrimary} />
+                <Ionicons name="chevron-back-outline" size={24} color={Colors.textPrimary} />
               </TouchableOpacity>
               <Text style={styles.settingsTitle}>Thiết lập thông báo</Text>
             </View>
@@ -1111,15 +1371,6 @@ export default function ProfileScreen({ navigation }: any) {
                     <Text style={styles.notificationSettingDescription}>Phát âm thanh khi có cảnh báo</Text>
                   </View>
                   <Switch value={alertSoundEnabled} onValueChange={setAlertSoundEnabled} />
-                </View>
-                <View style={styles.notificationSettingDivider} />
-
-                <View style={styles.notificationSettingRow}>
-                  <View style={styles.notificationSettingText}>
-                    <Text style={styles.notificationSettingTitle}>Rung</Text>
-                    <Text style={styles.notificationSettingDescription}>Rung thiết bị khi có cảnh báo</Text>
-                  </View>
-                  <Switch value={vibrationEnabled} onValueChange={handleVibrationToggle} />
                 </View>
                 <View style={styles.notificationSettingDivider} />
 
@@ -1153,7 +1404,7 @@ export default function ProfileScreen({ navigation }: any) {
                 }}
                 activeOpacity={0.7}
               >
-                <Ionicons name="chevron-back" size={24} color={Colors.textPrimary} />
+                <Ionicons name="chevron-back-outline" size={24} color={Colors.textPrimary} />
               </TouchableOpacity>
               <Text style={styles.settingsTitle}>Cài đặt chung</Text>
             </View>
@@ -1164,10 +1415,14 @@ export default function ProfileScreen({ navigation }: any) {
                 <Text style={styles.generalRowValue}>Vietnam</Text>
               </View>
 
-              <TouchableOpacity style={styles.generalRow} activeOpacity={0.8}>
+              <TouchableOpacity
+                style={styles.generalRow}
+                activeOpacity={0.8}
+                onPress={() => setLanguageVisible(true)}
+              >
                 <Text style={styles.generalRowLabel}>Ngôn ngữ</Text>
                 <View style={styles.generalValueWrap}>
-                  <Text style={styles.generalRowValue}>Tự động</Text>
+                  <Text style={styles.generalRowValue}>{languageMode === 'vi' ? 'Việt Nam' : 'English'}</Text>
                   <Ionicons name="chevron-forward" size={18} color="#94A3B8" />
                 </View>
               </TouchableOpacity>
@@ -1190,6 +1445,67 @@ export default function ProfileScreen({ navigation }: any) {
 
       <Modal
         transparent
+        visible={isLanguageVisible}
+        animationType="slide"
+        onRequestClose={() => setLanguageVisible(false)}
+      >
+        <Pressable style={styles.appearanceOverlay} onPress={() => setLanguageVisible(false)}>
+          <Pressable style={styles.appearanceSheet} onPress={() => {}}>
+            <View style={styles.appearanceHeader}>
+              <TouchableOpacity
+                style={styles.appearanceCloseButton}
+                onPress={() => setLanguageVisible(false)}
+                activeOpacity={0.7}
+              >
+                <Ionicons name="chevron-back-outline" size={28} color="#111827" />
+              </TouchableOpacity>
+
+              <Text style={styles.appearanceTitle}>Ngôn ngữ</Text>
+              <View style={styles.appearanceHeaderSpacer} />
+            </View>
+
+            <View style={styles.appearanceCard}>
+              <TouchableOpacity
+                style={[
+                  styles.appearanceOptionRow,
+                  languageMode === 'vi' && styles.appearanceOptionRowSelected,
+                ]}
+                activeOpacity={0.8}
+                onPress={() => {
+                  setLanguageMode('vi');
+                  setLanguageVisible(false);
+                }}
+              >
+                <Text style={styles.appearanceOptionLabel}>Việt Nam</Text>
+                {languageMode === 'vi' && (
+                  <Ionicons name="checkmark" size={22} color="#1D9BF0" />
+                )}
+              </TouchableOpacity>
+
+              <TouchableOpacity
+                style={[
+                  styles.appearanceOptionRow,
+                  languageMode === 'en' && styles.appearanceOptionRowSelected,
+                ]}
+                activeOpacity={0.8}
+                onPress={() => {
+                  setLanguageMode('en');
+                  setLanguageVisible(false);
+                }}
+              >
+                <Text style={styles.appearanceOptionLabel}>English</Text>
+                {languageMode === 'en' && (
+                  <Ionicons name="checkmark" size={22} color="#1D9BF0" />
+                )}
+              </TouchableOpacity>
+              
+            </View>
+          </Pressable>
+        </Pressable>
+      </Modal>
+
+      <Modal
+        transparent
         visible={isAppearanceVisible}
         animationType="slide"
         onRequestClose={() => setAppearanceVisible(false)}
@@ -1202,7 +1518,7 @@ export default function ProfileScreen({ navigation }: any) {
                 onPress={() => setAppearanceVisible(false)}
                 activeOpacity={0.7}
               >
-                <Ionicons name="chevron-back" size={28} color="#111827" />
+                <Ionicons name="chevron-back-outline" size={28} color="#111827" />
               </TouchableOpacity>
 
               <Text style={styles.appearanceTitle}>Về bề ngoài</Text>
@@ -1346,10 +1662,7 @@ export default function ProfileScreen({ navigation }: any) {
           <TouchableOpacity
             style={styles.menuRow}
             activeOpacity={0.7}
-            onPress={() => Alert.alert(
-              'Dịch vụ CSKH',
-              'Vui lòng liên hệ bộ phận chăm sóc khách hàng để được hỗ trợ khẩn cấp.'
-            )}
+            onPress={handleCustomerSupportPress}
           >
             <View style={[styles.menuIconBox, { backgroundColor: '#FEE2E2' }]}>
               <Ionicons name="call-outline" size={20} color="#EF4444" />
@@ -1368,6 +1681,23 @@ export default function ProfileScreen({ navigation }: any) {
               <Ionicons name="location-outline" size={20} color="#2563EB" />
             </View>
             <Text style={styles.menuTitleText}>Định vị địa lý</Text>
+            <Ionicons name="chevron-forward" size={18} color="#CBD5E1" />
+          </TouchableOpacity>
+        </View>
+
+        <View style={styles.menuGroupCard}>
+          <TouchableOpacity
+            style={styles.menuRow}
+            onPress={() => setSecurityCenterVisible(true)}
+            activeOpacity={0.7}
+          >
+            <View style={[styles.menuIconBox, { backgroundColor: '#CCFBF1' }]}>
+              <Ionicons name="shield-checkmark" size={20} color="#0F766E" />
+            </View>
+            <View style={styles.securityMenuCopy}>
+              <Text style={styles.menuTitleText}>Trung tâm bảo mật</Text>
+              <Text style={styles.menuSubText}>Bảo vệ tài khoản và thiết bị</Text>
+            </View>
             <Ionicons name="chevron-forward" size={18} color="#CBD5E1" />
           </TouchableOpacity>
           <View style={styles.menuDivider} />
@@ -1404,6 +1734,462 @@ const styles = StyleSheet.create({
   modalOverlay: {
     flex: 1,
     backgroundColor: '#F8FAFC',
+  },
+  customerSupportOverlay: {
+    flex: 1,
+    alignItems: 'center',
+    justifyContent: 'center',
+    paddingHorizontal: 24,
+    backgroundColor: 'rgba(15, 23, 42, 0.45)',
+  },
+  customerSupportDialog: {
+    width: '100%',
+    maxWidth: 380,
+    alignItems: 'center',
+    paddingHorizontal: 22,
+    paddingVertical: 24,
+    borderRadius: 18,
+    backgroundColor: '#FFFFFF',
+  },
+  customerSupportTitle: {
+    marginTop: 12,
+    fontSize: 20,
+    fontWeight: '800',
+    color: Colors.textPrimary,
+  },
+  customerSupportMessage: {
+    marginTop: 8,
+    fontSize: 15,
+    lineHeight: 22,
+    textAlign: 'center',
+    color: '#64748B',
+  },
+  customerSupportActions: {
+    flexDirection: 'row',
+    width: '100%',
+    gap: 10,
+    marginTop: 22,
+  },
+  customerSupportCancelButton: {
+    flex: 1,
+    alignItems: 'center',
+    paddingVertical: 13,
+    borderRadius: 11,
+    backgroundColor: '#E2E8F0',
+  },
+  customerSupportCancelText: {
+    fontSize: 15,
+    fontWeight: '700',
+    color: '#475569',
+  },
+  customerSupportCallButton: {
+    flex: 1,
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: 7,
+    paddingVertical: 13,
+    borderRadius: 11,
+    backgroundColor: '#DC2626',
+  },
+  customerSupportCallText: {
+    fontSize: 15,
+    fontWeight: '800',
+    color: '#FFFFFF',
+  },
+  securityScreen: {
+    flex: 1,
+    backgroundColor: '#F6F8F8',
+  },
+  securityScrollContent: {
+    paddingBottom: 28,
+  },
+  securityHero: {
+    position: 'relative',
+    minHeight: 324,
+    paddingHorizontal: 22,
+    paddingTop: 8,
+    backgroundColor: '#5ADCE5',
+    overflow: 'hidden',
+  },
+  securityBackButton: {
+    width: 36,
+    height: 36,
+    alignItems: 'center',
+    justifyContent: 'center',
+    marginLeft: -8,
+    marginTop: 1,
+  },
+  securityHeroBackButton: {
+    position: 'absolute',
+    left: 0,
+    top: 10,
+    width: 36,
+    height: 36,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  securityHeroShield: {
+    position: 'absolute',
+    right: 18,
+    top: 90,
+    opacity: 0.9,
+  },
+  securityHeroStatus: {
+    marginTop: 56,
+    fontSize: 34,
+    fontWeight: '800',
+    color: '#0F172A',
+  },
+  securityHeroDescription: {
+    marginTop: 14,
+    fontSize: 17,
+    fontWeight: '600',
+    color: '#0F172A',
+  },
+  securityImproveButton: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    alignSelf: 'flex-start',
+    marginTop: 30,
+  },
+  securityImproveText: {
+    fontSize: 20,
+    fontWeight: '700',
+    color: '#0F172A',
+  },
+  securitySectionCard: {
+    marginHorizontal: 14,
+    marginTop: 10,
+    padding: 14,
+    borderRadius: 20,
+    backgroundColor: '#FFFFFF',
+  },
+  securitySectionHeader: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    marginBottom: 14,
+  },
+  securitySectionTitle: {
+    fontSize: 19,
+    fontWeight: '800',
+    color: '#2F3338',
+  },
+  securityTileGrid: {
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+    justifyContent: 'space-between',
+    columnGap: 10,
+    rowGap: 14,
+  },
+  securityTile: {
+    width: '48.2%',
+    minHeight: 124,
+    justifyContent: 'space-between',
+    paddingHorizontal: 15,
+    paddingVertical: 17,
+    borderRadius: 17,
+    backgroundColor: '#EAF1FC',
+    position: 'relative',
+    overflow: 'hidden',
+  },
+  securityTileTitle: {
+    maxWidth: '92%',
+    fontSize: 16,
+    lineHeight: 22,
+    fontWeight: '700',
+    color: '#30343A',
+    textAlign: 'left',
+  },
+  securityTileIcon: {
+    alignSelf: 'flex-end',
+    marginTop: 6,
+  },
+  securityTileSwitch: {
+    position: 'absolute',
+    right: 9,
+    bottom: 9,
+    transform: [{ scale: 0.8 }],
+  },
+  securityQuestionRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    minHeight: 62,
+    borderTopWidth: 1,
+    borderTopColor: '#F1F3F5',
+  },
+  securityQuestionText: {
+    flex: 1,
+    paddingRight: 12,
+    fontSize: 15,
+    lineHeight: 21,
+    color: '#3C4045',
+  },
+  securityDetailScreen: {
+    flex: 1,
+    backgroundColor: '#F6F8F8',
+  },
+  securityDetailHeader: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    paddingHorizontal: 10,
+    paddingTop: 20,
+    paddingBottom: 18,
+    backgroundColor: '#FFFFFF',
+    borderBottomWidth: 1,
+    borderBottomColor: '#EEF2F7',
+  },
+  securityDetailTitle: {
+    flex: 1,
+    marginRight: 36,
+    fontSize: 20,
+    fontWeight: '800',
+    textAlign: 'center',
+    color: '#0F172A',
+  },
+  securityDetailContent: {
+    paddingHorizontal: 18,
+    paddingTop: 16,
+    paddingBottom: 24,
+  },
+  securityDetailCard: {
+    paddingHorizontal: 16,
+    paddingTop: 16,
+    paddingBottom: 10,
+    borderRadius: 18,
+    backgroundColor: '#FFFFFF',
+    borderWidth: 1,
+    borderColor: '#EEF2F7',
+    shadowColor: '#0F172A',
+    shadowOffset: { width: 0, height: 4 },
+    shadowOpacity: 0.06,
+    shadowRadius: 10,
+    elevation: 2,
+  },
+  securityDetailRowHeader: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+  },
+  securityDetailCardTitle: {
+    flex: 1,
+    marginBottom: 12,
+    fontSize: 18,
+    fontWeight: '800',
+    color: '#1F2937',
+  },
+  securityDetailDescription: {
+    marginTop: 18,
+    fontSize: 15,
+    lineHeight: 24,
+    color: '#475569',
+  },
+  securityInfoBanner: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    marginTop: 18,
+    paddingHorizontal: 12,
+    paddingVertical: 11,
+    borderRadius: 12,
+    backgroundColor: '#EFF6FF',
+    borderWidth: 1,
+    borderColor: '#DBEAFE',
+  },
+  securityInfoText: {
+    flex: 1,
+    marginLeft: 8,
+    fontSize: 13,
+    lineHeight: 19,
+    color: '#1D4ED8',
+    fontWeight: '600',
+  },
+  securityDeviceItem: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    marginTop: 18,
+    paddingHorizontal: 12,
+    paddingVertical: 12,
+    borderRadius: 16,
+    backgroundColor: '#F8FBFF',
+    borderWidth: 1,
+    borderColor: '#EAF0F8',
+  },
+  securityDeviceIcon: {
+    width: 42,
+    height: 42,
+    alignItems: 'center',
+    justifyContent: 'center',
+    borderRadius: 12,
+    backgroundColor: '#DBEAFE',
+  },
+  securityDeviceCopy: {
+    flex: 1,
+    marginHorizontal: 10,
+    minWidth: 0,
+  },
+  securityDeviceName: {
+    fontSize: 15,
+    lineHeight: 22,
+    fontWeight: '700',
+    color: '#111827',
+  },
+  securityDeviceMeta: {
+    marginTop: 2,
+    fontSize: 11,
+    color: '#64748B',
+    fontWeight: '500',
+  },
+  securityCurrentLabel: {
+    fontSize: 11,
+    fontWeight: '800',
+    color: '#2563EB',
+  },
+  securityLoginItem: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    paddingVertical: 12,
+    borderBottomWidth: 1,
+    borderBottomColor: '#EEF2F7',
+  },
+  securityTimelineDot: {
+    width: 9,
+    height: 9,
+    borderRadius: 4.5,
+    backgroundColor: '#5B8DEF',
+    marginRight: 12,
+    marginTop: 2,
+  },
+  securityLoginTime: {
+    marginLeft: 8,
+    fontSize: 11,
+    fontWeight: '600',
+    color: '#64748B',
+    textAlign: 'right',
+  },
+  securityOverlay: {
+    flex: 1,
+    justifyContent: 'flex-end',
+    backgroundColor: 'rgba(15, 23, 42, 0.42)',
+  },
+  securitySheet: {
+    paddingHorizontal: 18,
+    paddingTop: 18,
+    paddingBottom: 28,
+    borderTopLeftRadius: 24,
+    borderTopRightRadius: 24,
+    backgroundColor: '#F8FAFC',
+  },
+  securityHeader: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    marginBottom: 18,
+  },
+  securityHeaderIcon: {
+    width: 46,
+    height: 46,
+    alignItems: 'center',
+    justifyContent: 'center',
+    marginRight: 12,
+    borderRadius: 15,
+    backgroundColor: '#CCFBF1',
+  },
+  securityHeaderCopy: {
+    flex: 1,
+  },
+  securityTitle: {
+    fontSize: 20,
+    fontWeight: '800',
+    color: '#0F172A',
+  },
+  securitySubtitle: {
+    marginTop: 3,
+    fontSize: 12,
+    color: '#64748B',
+  },
+  securityCloseButton: {
+    width: 34,
+    height: 34,
+    alignItems: 'center',
+    justifyContent: 'center',
+    borderRadius: 17,
+    backgroundColor: '#E2E8F0',
+  },
+  securityScoreCard: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    padding: 14,
+    marginBottom: 14,
+    borderWidth: 1,
+    borderColor: '#A7F3D0',
+    borderRadius: 16,
+    backgroundColor: '#ECFDF5',
+  },
+  securityScoreIcon: {
+    width: 40,
+    height: 40,
+    alignItems: 'center',
+    justifyContent: 'center',
+    borderRadius: 20,
+    backgroundColor: '#BBF7D0',
+  },
+  securityScoreCopy: {
+    flex: 1,
+    marginLeft: 10,
+  },
+  securityScoreLabel: {
+    fontSize: 12,
+    color: '#166534',
+  },
+  securityScoreValue: {
+    marginTop: 2,
+    fontSize: 17,
+    fontWeight: '800',
+    color: '#15803D',
+  },
+  securityScorePercent: {
+    fontSize: 20,
+    fontWeight: '900',
+    color: '#15803D',
+  },
+  securityList: {
+    paddingHorizontal: 14,
+    borderRadius: 16,
+    backgroundColor: '#FFFFFF',
+  },
+  securityRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    minHeight: 68,
+  },
+  securityRowIcon: {
+    width: 36,
+    height: 36,
+    alignItems: 'center',
+    justifyContent: 'center',
+    borderRadius: 11,
+  },
+  securityRowCopy: {
+    flex: 1,
+    marginHorizontal: 10,
+  },
+  securityRowTitle: {
+    fontSize: 14,
+    fontWeight: '700',
+    color: '#0F172A',
+  },
+  securityRowDescription: {
+    marginTop: 3,
+    fontSize: 11,
+    color: '#64748B',
+  },
+  securityDivider: {
+    height: 1,
+    backgroundColor: '#EEF2F7',
+  },
+  securityMenuCopy: {
+    flex: 1,
   },
   avatarPickerOverlay: {
     flex: 1,
@@ -1491,48 +2277,175 @@ const styles = StyleSheet.create({
     backgroundColor: '#FFFFFF',
     borderTopLeftRadius: 22,
     borderTopRightRadius: 22,
-    paddingHorizontal: 20,
-    paddingTop: 22,
-    paddingBottom: 30,
+    paddingHorizontal: 18,
+    paddingTop: 18,
+    paddingBottom: 22,
+  },
+  locationHeader: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    marginBottom: 18,
+  },
+  locationHeaderIcon: {
+    width: 46,
+    height: 46,
+    alignItems: 'center',
+    justifyContent: 'center',
+    marginRight: 12,
+    borderRadius: 15,
+    backgroundColor: '#DBEAFE',
+  },
+  locationHeaderCopy: {
+    flex: 1,
   },
   locationTitle: {
-    fontSize: 21,
+    fontSize: 19,
     fontWeight: '800',
     color: '#0F172A',
-    marginBottom: 6,
   },
   locationDescription: {
-    fontSize: 14,
-    lineHeight: 20,
+    marginTop: 3,
+    fontSize: 12,
+    lineHeight: 17,
     color: '#64748B',
-    marginBottom: 16,
+  },
+  locationCloseIcon: {
+    width: 34,
+    height: 34,
+    alignItems: 'center',
+    justifyContent: 'center',
+    borderRadius: 17,
+    backgroundColor: '#F1F5F9',
+  },
+  locationMapFrame: {
+    height: 190,
+    marginBottom: 14,
+    overflow: 'hidden',
+    borderWidth: 1,
+    borderColor: '#D8E5F2',
+    borderRadius: 16,
+    backgroundColor: '#EAF2F8',
+    position: 'relative',
+  },
+  locationMap: {
+    flex: 1,
+  },
+  locationMapLoading: {
+    flex: 1,
+    alignItems: 'center',
+    justifyContent: 'center',
+    backgroundColor: '#EAF2F8',
+  },
+  locationMapLoadingText: {
+    marginTop: 8,
+    fontSize: 12,
+    fontWeight: '600',
+    color: '#42617E',
+  },
+  locationMapBadge: {
+    position: 'absolute',
+    top: 10,
+    left: 10,
+    flexDirection: 'row',
+    alignItems: 'center',
+    paddingHorizontal: 9,
+    paddingVertical: 6,
+    borderRadius: 12,
+    backgroundColor: 'rgba(255,255,255,0.94)',
+  },
+  locationMapBadgeDot: {
+    width: 7,
+    height: 7,
+    marginRight: 5,
+    borderRadius: 4,
+    backgroundColor: '#2563EB',
+  },
+  locationMapBadgeText: {
+    fontSize: 10,
+    fontWeight: '800',
+    color: '#1E3A8A',
   },
   locationResultBox: {
     flexDirection: 'row',
     alignItems: 'flex-start',
-    gap: 10,
-    minHeight: 62,
-    padding: 14,
+    minHeight: 86,
+    padding: 13,
     borderWidth: 1,
-    borderColor: '#DBEAFE',
+    borderColor: '#BFDBFE',
+    borderRadius: 16,
+    backgroundColor: '#F0F7FF',
+    marginBottom: 16,
+  },
+  locationResultIcon: {
+    width: 36,
+    height: 36,
+    alignItems: 'center',
+    justifyContent: 'center',
+    marginRight: 10,
     borderRadius: 12,
-    backgroundColor: '#EFF6FF',
-    marginBottom: 14,
+    backgroundColor: '#DBEAFE',
+  },
+  locationResultCopy: {
+    flex: 1,
+  },
+  locationStatusRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+  },
+  locationResultLabel: {
+    fontSize: 13,
+    fontWeight: '800',
+    color: '#1E3A8A',
+  },
+  locationStatusBadge: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    paddingHorizontal: 7,
+    paddingVertical: 4,
+    borderRadius: 10,
+    backgroundColor: '#E2E8F0',
+  },
+  locationStatusBadgeActive: {
+    backgroundColor: '#DCFCE7',
+  },
+  locationStatusDot: {
+    width: 6,
+    height: 6,
+    marginRight: 4,
+    borderRadius: 3,
+    backgroundColor: '#94A3B8',
+  },
+  locationStatusDotActive: {
+    backgroundColor: '#16A34A',
+  },
+  locationStatusText: {
+    fontSize: 10,
+    fontWeight: '700',
+    color: '#64748B',
+  },
+  locationStatusTextActive: {
+    color: '#15803D',
   },
   locationResultText: {
-    flex: 1,
-    fontSize: 14,
-    lineHeight: 20,
-    color: '#1E3A8A',
+    marginTop: 8,
+    fontSize: 13,
+    lineHeight: 19,
+    color: '#315A9A',
   },
   locationButton: {
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'center',
     gap: 8,
-    paddingVertical: 13,
-    borderRadius: 12,
+    paddingVertical: 14,
+    borderRadius: 14,
     backgroundColor: '#2563EB',
+    shadowColor: '#2563EB',
+    shadowOffset: { width: 0, height: 4 },
+    shadowOpacity: 0.18,
+    shadowRadius: 8,
+    elevation: 3,
   },
   locationButtonText: {
     fontSize: 15,
@@ -1541,7 +2454,8 @@ const styles = StyleSheet.create({
   },
   locationCloseButton: {
     alignItems: 'center',
-    paddingVertical: 12,
+    paddingVertical: 10,
+    marginTop: 2,
   },
   locationCloseText: {
     fontSize: 15,
@@ -1638,15 +2552,15 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'center',
-    marginTop: 4,
-    marginBottom: 16,
-    paddingTop: 2,
-    paddingBottom: 2,
-    minHeight: 40,
+    marginTop: 8,
+    marginBottom: 18,
+    paddingTop: 6,
+    paddingBottom: 6,
+    minHeight: 44,
   },
   settingsTitle: {
-    fontSize: 22,
-    fontWeight: '700',
+    fontSize: 20,
+    fontWeight: '800',
     color: Colors.textPrimary,
     position: 'absolute',
     left: 0,
@@ -1984,6 +2898,7 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
     marginTop: 0,
     marginBottom: 0,
+    marginLeft: -8,
     paddingTop: 0,
     zIndex: 2,
     elevation: 2,
@@ -2009,9 +2924,9 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'space-between',
-    paddingHorizontal: 18,
-    paddingTop: 10,
-    paddingBottom: 12,
+    paddingHorizontal: 10,
+    paddingTop: 20,
+    paddingBottom: 18,
     borderBottomWidth: 1,
     borderBottomColor: '#E2E8F0',
   },
@@ -2020,6 +2935,8 @@ const styles = StyleSheet.create({
     height: 36,
     alignItems: 'center',
     justifyContent: 'center',
+    marginLeft: -8,
+    marginTop: 1,
   },
   changePasswordHeaderRight: {
     width: 36,
@@ -2082,7 +2999,7 @@ const styles = StyleSheet.create({
   },
   notificationSettingsContent: {
     flex: 1,
-    paddingHorizontal: 18,
+    paddingHorizontal: 10,
     paddingTop: 18,
     backgroundColor: '#F8FAFC',
   },
@@ -2096,7 +3013,7 @@ const styles = StyleSheet.create({
     borderWidth: 1,
     borderColor: '#E5EAF1',
     borderRadius: 18,
-    paddingHorizontal: 16,
+    paddingHorizontal: 12,
     backgroundColor: '#FFFFFF',
     shadowColor: '#64748B',
     shadowOffset: { width: 0, height: 3 },
@@ -2297,68 +3214,51 @@ logoutButton: {
     justifyContent: 'flex-start',
   },
   editorHeader: {
-    height: 36,
-    justifyContent: 'center',
-    marginBottom: 10,
+    flexDirection: 'row',
+    alignItems: 'center',
+    minHeight: 42,
+    marginBottom: 12,
   },
   editorBackButton: {
     width: 36,
     height: 36,
     justifyContent: 'center',
     alignItems: 'center',
+    marginLeft: -8,
+    marginRight: 4,
   },
   editorTitle: {
-    fontSize: 18,
-    fontWeight: '700',
+    flex: 1,
+    fontSize: 22,
+    fontWeight: '800',
     color: '#0F172A',
-    marginBottom: 12,
+    marginLeft: 2,
   },
   editorInput: {
     borderWidth: 1,
-    borderColor: '#E2E8F0',
+    borderColor: '#D7DEE7',
     borderRadius: 12,
-    paddingHorizontal: 12,
-    paddingVertical: 10,
+    height: 48,
+    paddingHorizontal: 14,
     fontSize: 15,
     color: '#0F172A',
-    marginBottom: 14,
-  },
-  editorEmailRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 8,
-    marginBottom: 10,
-  },
-  editorEmailInput: {
-    flex: 1,
-    marginBottom: 0,
-  },
-  sendOtpButton: {
-    backgroundColor: '#E0F2FE',
-    borderRadius: 10,
-    paddingHorizontal: 10,
-    paddingVertical: 10,
-    minWidth: 90,
-    alignItems: 'center',
-  },
-  sendOtpText: {
-    fontSize: 12,
-    fontWeight: '700',
-    color: '#0369A1',
-  },
-  otpInput: {
-    marginBottom: 14,
+    backgroundColor: '#FFFFFF',
+    marginBottom: 16,
   },
   editorActions: {
     flexDirection: 'row',
     justifyContent: 'flex-end',
-    gap: 10,
+    alignItems: 'center',
+    gap: 12,
+    marginTop: 4,
   },
   editorCancel: {
+    minWidth: 78,
     paddingVertical: 10,
-    paddingHorizontal: 14,
+    paddingHorizontal: 16,
     borderRadius: 10,
     backgroundColor: '#F1F5F9',
+    alignItems: 'center',
   },
   editorCancelText: {
     fontSize: 14,
@@ -2366,10 +3266,12 @@ logoutButton: {
     color: '#475569',
   },
   editorSave: {
+    minWidth: 80,
     paddingVertical: 10,
     paddingHorizontal: 18,
     borderRadius: 10,
     backgroundColor: '#2563EB',
+    alignItems: 'center',
   },
   editorSaveText: {
     fontSize: 14,
@@ -2564,20 +3466,24 @@ logoutButton: {
     marginLeft: 50,
   },
   settingsCard: {
-    borderWidth: 1,
-    borderColor: '#E2E8F0',
-    borderRadius: 22,
-    backgroundColor: '#FFFFFF',
-    overflow: 'hidden',
+    backgroundColor: 'transparent',
     marginTop: 0,
-    shadowColor: '#64748B',
-    shadowOffset: { width: 0, height: 4 },
-    shadowOpacity: 0.07,
-    shadowRadius: 12,
-    elevation: 3,
   },
   settingsList: {
+    gap: 12,
     paddingBottom: 0,
+  },
+  settingsGroupCard: {
+    borderWidth: 1,
+    borderColor: '#E2E8F0',
+    borderRadius: 18,
+    backgroundColor: '#FFFFFF',
+    overflow: 'hidden',
+    shadowColor: '#64748B',
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.04,
+    shadowRadius: 8,
+    elevation: 2,
   },
   settingsItem: {
     flexDirection: 'row',
@@ -2589,6 +3495,9 @@ logoutButton: {
     borderBottomWidth: 1,
     borderBottomColor: '#EEF2F7',
     backgroundColor: '#FFFFFF',
+  },
+  settingsItemLast: {
+    borderBottomWidth: 0,
   },
   settingsLeft: {
     flexDirection: 'row',

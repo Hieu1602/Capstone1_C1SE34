@@ -160,24 +160,29 @@ const styles = StyleSheet.create({
     backgroundColor: Colors.background,
   },
   topHeader: {
+    position: 'relative',
     flexDirection: 'row',
     alignItems: 'center',
-    paddingHorizontal: 16,
+    justifyContent: 'center',
+    minHeight: 52,
+    paddingHorizontal: 10,
     paddingVertical: 12,
     borderBottomWidth: 1,
     borderBottomColor: Colors.border,
   },
   backBtn: {
+    position: 'absolute',
+    left: 10,
     width: 36,
     height: 36,
     alignItems: 'center',
     justifyContent: 'center',
-    marginRight: 8,
   },
   headerTitle: {
-    fontSize: 18,
+    fontSize: 20,
     fontWeight: '800',
     color: Colors.textPrimary,
+    textAlign: 'center',
   },
   scrollContent: {
     paddingHorizontal: 16,
@@ -188,7 +193,7 @@ const styles = StyleSheet.create({
     fontSize: 13,
     color: Colors.textSecondary,
     marginBottom: 16,
-    lineHeight: 18,
+    lineHeight: 20,
   },
   groupCard: {
     backgroundColor: Colors.surface,
@@ -198,7 +203,7 @@ const styles = StyleSheet.create({
     ...Shadows.card,
   },
   groupTitle: {
-    fontSize: 14,
+    fontSize: 15,
     fontWeight: '800',
     color: Colors.primary,
     marginBottom: 12,
@@ -208,12 +213,14 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     justifyContent: 'space-between',
     paddingVertical: 8,
+    gap: 12,
   },
   inputLabel: {
-    fontSize: 13,
+    fontSize: 14,
     color: Colors.textPrimary,
     fontWeight: '600',
     flex: 1,
+    lineHeight: 20,
   },
   inputBoxWrap: {
     flexDirection: 'row',
@@ -225,10 +232,10 @@ const styles = StyleSheet.create({
     borderColor: Colors.border,
   },
   inputVal: {
-    width: 44,
+    width: 52,
     paddingVertical: 6,
     textAlign: 'center',
-    fontSize: 14,
+    fontSize: 15,
     fontWeight: '700',
     color: Colors.textPrimary,
   },
@@ -247,7 +254,7 @@ const styles = StyleSheet.create({
   },
   saveBtnText: {
     color: '#FFF',
-    fontSize: 15,
+    fontSize: 17,
     fontWeight: '800',
   },
 });
