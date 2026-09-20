@@ -287,38 +287,48 @@ export default function HealthDetailScreen({ navigation, route }: any) {
   return (
     <SafeAreaView style={[styles.safeArea, { backgroundColor: colors.background }]} edges={['top']}>
       {/* 1. Header có nút Back & Toggle Theme */}
-      <View style={[styles.headerBar, isDarkMode && { backgroundColor: colors.card, borderBottomColor: colors.border }]}>
+      <View style={[styles.headerBar, isDarkMode && { backgroundColor: colors.background, borderBottomColor: colors.border }]}>
         <TouchableOpacity
-          style={styles.backBtn}
+          style={[
+            styles.backBtn,
+            isDarkMode && { backgroundColor: '#1E293B', borderColor: '#334155' },
+          ]}
           onPress={() => navigation.goBack()}
           activeOpacity={0.7}
           hitSlop={{ top: 12, bottom: 12, left: 12, right: 12 }}
         >
-          <Ionicons name="chevron-back" size={24} color={colors.textPrimary} />
+          <Ionicons name="chevron-back" size={22} color={isDarkMode ? '#FFFFFF' : '#0F172A'} />
         </TouchableOpacity>
 
         <Text style={[styles.headerTitle, { color: colors.textPrimary }]}>Tình trạng sức khoẻ</Text>
 
         <View style={{ flexDirection: 'row', alignItems: 'center' }}>
           <TouchableOpacity
-            style={[styles.refreshBtn, { marginRight: 8 }]}
+            style={[
+              styles.refreshBtn,
+              { marginRight: 8 },
+              isDarkMode && { backgroundColor: '#1E293B', borderColor: '#334155' },
+            ]}
             onPress={toggleTheme}
             activeOpacity={0.7}
             accessibilityLabel="Chuyển chế độ Sáng/Tối"
           >
             <Ionicons
               name={isDarkMode ? 'sunny-outline' : 'moon-outline'}
-              size={22}
-              color={isDarkMode ? '#F59E0B' : colors.textPrimary}
+              size={20}
+              color={isDarkMode ? '#F59E0B' : '#0F172A'}
             />
           </TouchableOpacity>
 
           <TouchableOpacity
-            style={styles.refreshBtn}
+            style={[
+              styles.refreshBtn,
+              isDarkMode && { backgroundColor: '#1E293B', borderColor: '#334155' },
+            ]}
             onPress={handleRefresh}
             activeOpacity={0.7}
           >
-            <Ionicons name="refresh-outline" size={22} color={Colors.primary} />
+            <Ionicons name="refresh-outline" size={20} color={Colors.primary} />
           </TouchableOpacity>
         </View>
       </View>
@@ -703,7 +713,9 @@ const styles = StyleSheet.create({
     width: 38,
     height: 38,
     borderRadius: 19,
-    backgroundColor: '#F1F5F9',
+    backgroundColor: '#FFFFFF',
+    borderWidth: 1,
+    borderColor: '#E2E8F0',
     alignItems: 'center',
     justifyContent: 'center',
   },
@@ -716,7 +728,9 @@ const styles = StyleSheet.create({
     width: 38,
     height: 38,
     borderRadius: 19,
-    backgroundColor: Colors.primaryLight,
+    backgroundColor: '#FFFFFF',
+    borderWidth: 1,
+    borderColor: '#E2E8F0',
     alignItems: 'center',
     justifyContent: 'center',
   },
