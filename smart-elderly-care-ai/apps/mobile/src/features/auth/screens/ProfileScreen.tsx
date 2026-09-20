@@ -997,9 +997,10 @@ export default function ProfileScreen({ navigation }: any) {
 
             <View style={styles.settingsCard}>
               <View style={styles.settingsList}>
-                <View style={[styles.settingsGroupCard, isDarkMode && { backgroundColor: '#1E293B', borderColor: '#334155' }]}>
+                {/* Khối 1: Hồ sơ của tôi */}
+                <View style={[styles.settingsGroupCard, isDarkMode ? { backgroundColor: '#1E293B', borderColor: '#334155', borderRadius: 16 } : { backgroundColor: '#FFFFFF', borderColor: '#F1F5F9', borderRadius: 16 }]}>
                   <TouchableOpacity
-                    style={styles.settingsItem}
+                    style={[styles.settingsItem, styles.settingsItemLast, isDarkMode && { borderBottomColor: '#334155' }]}
                     activeOpacity={0.8}
                     onPress={() => {
                       setAccountEntrySource('settings');
@@ -1011,15 +1012,16 @@ export default function ProfileScreen({ navigation }: any) {
                       <View style={[styles.settingsIconWrap, isDarkMode && { backgroundColor: '#0F172A' }]}>
                         <Ionicons name="person-circle-outline" size={20} color={isDarkMode ? '#94A3B8' : '#475569'} />
                       </View>
-                      <Text style={[styles.settingsLabel, isDarkMode && { color: '#F8FAFC' }]}>Hồ sơ của tôi</Text>
+                      <Text style={[styles.settingsLabel, isDarkMode ? { color: '#F8FAFC' } : { color: '#0F172A' }]}>Hồ sơ của tôi</Text>
                     </View>
                     <Ionicons name="chevron-forward" size={18} color="#94A3B8" />
                   </TouchableOpacity>
                 </View>
 
-                <View style={[styles.settingsGroupCard, isDarkMode && { backgroundColor: '#1E293B', borderColor: '#334155' }]}>
+                {/* Khối 2: Nhóm 3 mục */}
+                <View style={[styles.settingsGroupCard, isDarkMode ? { backgroundColor: '#1E293B', borderColor: '#334155', borderRadius: 16 } : { backgroundColor: '#FFFFFF', borderColor: '#F1F5F9', borderRadius: 16 }]}>
                   <TouchableOpacity
-                    style={styles.settingsItem}
+                    style={[styles.settingsItem, isDarkMode && { borderBottomColor: '#334155' }]}
                     activeOpacity={0.8}
                     onPress={() => {
                       setSettingsVisible(false);
@@ -1030,13 +1032,13 @@ export default function ProfileScreen({ navigation }: any) {
                       <View style={[styles.settingsIconWrap, isDarkMode && { backgroundColor: '#0F172A' }]}>
                         <Ionicons name="settings-outline" size={20} color={isDarkMode ? '#94A3B8' : '#475569'} />
                       </View>
-                      <Text style={[styles.settingsLabel, isDarkMode && { color: '#F8FAFC' }]}>Cài đặt chung</Text>
+                      <Text style={[styles.settingsLabel, isDarkMode ? { color: '#F8FAFC' } : { color: '#0F172A' }]}>Cài đặt chung</Text>
                     </View>
                     <Ionicons name="chevron-forward" size={18} color="#94A3B8" />
                   </TouchableOpacity>
 
                   <TouchableOpacity
-                    style={styles.settingsItem}
+                    style={[styles.settingsItem, isDarkMode && { borderBottomColor: '#334155' }]}
                     activeOpacity={0.8}
                     onPress={() => {
                       setSettingsVisible(false);
@@ -1047,7 +1049,7 @@ export default function ProfileScreen({ navigation }: any) {
                       <View style={[styles.settingsIconWrap, isDarkMode && { backgroundColor: '#0F172A' }]}>
                         <Ionicons name="accessibility-outline" size={20} color={isDarkMode ? '#94A3B8' : '#475569'} />
                       </View>
-                      <Text style={[styles.settingsLabel, isDarkMode && { color: '#F8FAFC' }]}>Khả năng tiếp cận</Text>
+                      <Text style={[styles.settingsLabel, isDarkMode ? { color: '#F8FAFC' } : { color: '#0F172A' }]}>Khả năng tiếp cận</Text>
                     </View>
                     <Ionicons name="chevron-forward" size={18} color="#94A3B8" />
                   </TouchableOpacity>
@@ -1064,15 +1066,16 @@ export default function ProfileScreen({ navigation }: any) {
                       <View style={[styles.settingsIconWrap, isDarkMode && { backgroundColor: '#0F172A' }]}>
                         <Ionicons name="information-circle-outline" size={20} color={isDarkMode ? '#94A3B8' : '#475569'} />
                       </View>
-                      <Text style={[styles.settingsLabel, isDarkMode && { color: '#F8FAFC' }]}>Thông tin</Text>
+                      <Text style={[styles.settingsLabel, isDarkMode ? { color: '#F8FAFC' } : { color: '#0F172A' }]}>Thông tin</Text>
                     </View>
                     <Ionicons name="chevron-forward" size={18} color="#94A3B8" />
                   </TouchableOpacity>
                 </View>
 
-                <View style={[styles.settingsGroupCard, isDarkMode && { backgroundColor: '#1E293B', borderColor: '#334155' }]}>
+                {/* Khối 3: Nhóm 2 mục */}
+                <View style={[styles.settingsGroupCard, isDarkMode ? { backgroundColor: '#1E293B', borderColor: '#334155', borderRadius: 16 } : { backgroundColor: '#FFFFFF', borderColor: '#F1F5F9', borderRadius: 16 }]}>
                   <TouchableOpacity
-                    style={styles.settingsItem}
+                    style={[styles.settingsItem, isDarkMode && { borderBottomColor: '#334155' }]}
                     activeOpacity={0.8}
                     onPress={() => {
                       setSettingsVisible(false);
@@ -1083,7 +1086,7 @@ export default function ProfileScreen({ navigation }: any) {
                       <View style={[styles.settingsIconWrap, isDarkMode && { backgroundColor: '#0F172A' }]}>
                         <Ionicons name="notifications-outline" size={20} color={isDarkMode ? '#94A3B8' : '#475569'} />
                       </View>
-                      <Text style={[styles.settingsLabel, isDarkMode && { color: '#F8FAFC' }]}>Thiết lập thông báo</Text>
+                      <Text style={[styles.settingsLabel, isDarkMode ? { color: '#F8FAFC' } : { color: '#0F172A' }]}>Thiết lập thông báo</Text>
                     </View>
                     <View style={styles.settingsRightStatus}>
                       <Ionicons name="chevron-forward" size={18} color="#94A3B8" />
@@ -1102,10 +1105,10 @@ export default function ProfileScreen({ navigation }: any) {
                       <View style={[styles.settingsIconWrap, isDarkMode && { backgroundColor: '#0F172A' }]}>
                         <Ionicons name="phone-portrait-outline" size={20} color={isDarkMode ? '#94A3B8' : '#475569'} />
                       </View>
-                      <Text style={[styles.settingsLabel, isDarkMode && { color: '#F8FAFC' }]}>Rung</Text>
+                      <Text style={[styles.settingsLabel, isDarkMode ? { color: '#F8FAFC' } : { color: '#0F172A' }]}>Rung</Text>
                     </View>
                     <View style={styles.settingsRightStatus}>
-                      <Text style={[styles.settingsValueText, isDarkMode && { color: '#94A3B8' }]}>{vibrationEnabled ? 'Mở' : 'Tắt'}</Text>
+                      <Text style={[styles.settingsValueText, isDarkMode ? { color: '#94A3B8' } : { color: '#64748B' }]}>{vibrationEnabled ? 'Mở' : 'Tắt'}</Text>
                       <Ionicons name="chevron-forward" size={18} color="#94A3B8" />
                     </View>
                   </TouchableOpacity>
@@ -3640,8 +3643,8 @@ logoutButton: {
   },
   settingsGroupCard: {
     borderWidth: 1,
-    borderColor: '#E2E8F0',
-    borderRadius: 18,
+    borderColor: '#F1F5F9',
+    borderRadius: 16,
     backgroundColor: '#FFFFFF',
     overflow: 'hidden',
     shadowColor: '#64748B',
@@ -3658,8 +3661,8 @@ logoutButton: {
     paddingVertical: 14,
     paddingHorizontal: 16,
     borderBottomWidth: 1,
-    borderBottomColor: '#EEF2F7',
-    backgroundColor: '#FFFFFF',
+    borderBottomColor: '#F1F5F9',
+    backgroundColor: 'transparent',
   },
   settingsItemLast: {
     borderBottomWidth: 0,
