@@ -4,6 +4,7 @@
 import { create, StateCreator } from 'zustand';
 import { persist, createJSONStorage, PersistOptions } from 'zustand/middleware';
 import AsyncStorage from '@react-native-async-storage/async-storage';
+import { useThemeStore } from './useThemeStore';
 
 // ---- Types ----
 export interface VitalData {
@@ -110,6 +111,9 @@ interface VitalStoreState {
   updateDeviceGroup: (oldName: string, newName: string, deviceIds?: string[]) => void;
   removeDeviceGroup: (groupName: string) => void;
   assignDevicesToGroup: (deviceIds: string[], groupName: string) => void;
+  isDarkMode: boolean;
+  toggleDarkMode: () => void;
+  setDarkMode: (isDark: boolean) => void;
 }
 
 type VitalSet = (
@@ -139,55 +143,55 @@ const createVitalStore: StateCreator<VitalStoreState> = (set: VitalSet) => ({
       device_id: 'hub-001',
       alert_type: 'PERSON_DETECTED',
       alert_level: 'LOW',
-      message: 'Đã phát hiện người',
+      message: 'Nhận diện người cao tuổi đang sinh hoạt tại phòng khách (YOLOv8)',
       video_clip_url: null,
       thumbnail_url: 'https://images.unsplash.com/photo-1576765608535-5f04d1e3f289?w=300&q=80',
       is_acknowledged: true,
-      created_at: '2026-09-07T17:35:22Z',
+      created_at: new Date(Date.now() - 45 * 1000).toISOString(),
     },
     {
       id: 'inc-02',
       device_id: 'hub-001',
       alert_type: 'PERSON_DETECTED',
       alert_level: 'LOW',
-      message: 'Đã phát hiện người',
+      message: 'Phát hiện chuyển động di chuyển ra khu vực cửa sổ',
       video_clip_url: null,
       thumbnail_url: 'https://images.unsplash.com/photo-1581056771107-24ca5f033842?w=300&q=80',
       is_acknowledged: true,
-      created_at: '2026-09-07T17:31:44Z',
+      created_at: new Date(Date.now() - 10 * 60 * 1000).toISOString(),
     },
     {
       id: 'inc-03',
       device_id: 'hub-001',
       alert_type: 'FALL_DETECTED',
       alert_level: 'CRITICAL',
-      message: '🚨 Cảnh báo té ngã (Fall Detected) - Clip 5s trích xuất RAM',
+      message: '🚨 Cảnh báo té ngã (Fall Detected) - Trích xuất clip 5s bộ đệm Edge Hub RAM',
       video_clip_url: 'https://commondatastorage.googleapis.com/gtv-videos-bucket/sample/BigBuckBunny.mp4',
       thumbnail_url: 'https://images.unsplash.com/photo-1516549655169-df83a0774514?w=300&q=80',
       is_acknowledged: false,
-      created_at: '2026-09-07T17:18:04Z',
+      created_at: new Date(Date.now() - 28 * 60 * 1000).toISOString(),
     },
     {
       id: 'inc-04',
       device_id: 'hub-001',
       alert_type: 'HIGH_HEART_RATE',
       alert_level: 'HIGH',
-      message: 'Nhịp tim bất thường cao: 128 bpm',
+      message: 'Nhịp tim đo được từ vòng đeo tay BLE Band: 128 bpm (Vượt ngưỡng 100 bpm)',
       video_clip_url: null,
       thumbnail_url: null,
       is_acknowledged: false,
-      created_at: '2026-09-07T16:45:10Z',
+      created_at: new Date(Date.now() - 52 * 60 * 1000).toISOString(),
     },
     {
       id: 'inc-05',
       device_id: 'hub-001',
       alert_type: 'ACOUSTIC_DISTRESS',
       alert_level: 'CRITICAL',
-      message: 'Phát hiện âm thanh cầu cứu: "Cứu tôi với!"',
+      message: 'Phát hiện âm thanh cầu cứu: "Cứu tôi với!" tại khu vực bếp (YAMNet AI)',
       video_clip_url: 'https://commondatastorage.googleapis.com/gtv-videos-bucket/sample/ForBiggerBlazes.mp4',
       thumbnail_url: 'https://images.unsplash.com/photo-1584515979956-d9f6e5d09982?w=300&q=80',
       is_acknowledged: false,
-      created_at: '2026-09-07T15:20:00Z',
+      created_at: new Date(Date.now() - 120 * 60 * 1000).toISOString(),
     },
   ],
   activeDevice: {
@@ -403,9 +407,32 @@ const createVitalStore: StateCreator<VitalStoreState> = (set: VitalSet) => ({
         deviceIds.includes(dev.id) ? { ...dev, location: groupName } : dev
       ),
     })),
+
+  isDarkMode: useThemeStore.getState().isDarkMode,
+  toggleDarkMode: () => {
+    useThemeStore.getState().toggleTheme();
+    set((state) => ({ isDarkMode: !state.isDarkMode }));
+  },
+  setDarkMode: (isDark: boolean) => {
+    useThemeStore.getState().setDarkMode(isDark);
+    set({ isDarkMode: isDark });
+  },
 });
 
 export const useVitalStore = create<VitalStoreState>()(createVitalStore);
+
+// Đồng bộ trạng thái Theme giữa useThemeStore và useVitalStore hai chiều
+useThemeStore.subscribe((state) => {
+  if (useVitalStore.getState().isDarkMode !== state.isDarkMode) {
+    useVitalStore.setState({ isDarkMode: state.isDarkMode });
+  }
+});
+
+useVitalStore.subscribe((state) => {
+  if (useThemeStore.getState().isDarkMode !== state.isDarkMode) {
+    useThemeStore.getState().setDarkMode(state.isDarkMode);
+  }
+});
 
 // ---- Auth Store (persisted) ----
 interface AuthStoreState {

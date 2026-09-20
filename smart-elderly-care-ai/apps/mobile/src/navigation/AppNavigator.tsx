@@ -35,21 +35,32 @@ import IncidentDetailScreen from '../features/alerts/screens/IncidentDetailScree
 import AddDeviceScreen from '../features/dashboard/screens/AddDeviceScreen';
 import CreateGroupScreen from '../features/dashboard/screens/CreateGroupScreen';
 import SmartbandDetailScreen from '../features/dashboard/screens/SmartbandDetailScreen';
+import HealthDetailScreen from '../features/dashboard/screens/HealthDetailScreen';
+import SettingsScreen from '../features/auth/screens/SettingsScreen';
+import { useTheme } from '../store/useThemeStore';
 
 const Stack = createNativeStackNavigator();
 const Tab = createBottomTabNavigator();
 
 // ---- 5-Tab Navigator (Trang chủ, Thiết bị, Bot AI, Cảnh báo, Tôi) ----
 function MainTabNavigator() {
+  const { isDarkMode, colors } = useTheme();
+
   return (
     <Tab.Navigator
       initialRouteName="Home"
       screenOptions={({ route }) => ({
         headerShown: false,
         tabBarShowLabel: false, // Thiết kế hiện đại tinh gọn như ảnh mẫu
-        tabBarStyle: styles.tabBar,
+        tabBarStyle: [
+          styles.tabBar,
+          {
+            backgroundColor: colors.card,
+            borderTopColor: colors.border,
+          },
+        ],
         tabBarActiveTintColor: Colors.primary,
-        tabBarInactiveTintColor: '#94A3B8',
+        tabBarInactiveTintColor: isDarkMode ? '#64748B' : '#94A3B8',
         tabBarIcon: ({ focused, color, size }) => {
           // Tab giữa: Robot AI Bot
           if (route.name === 'AIAssistant') {
@@ -62,16 +73,24 @@ function MainTabNavigator() {
           } else if (route.name === 'Devices') {
             iconName = focused ? 'grid' : 'grid-outline';
           } else if (route.name === 'Alerts') {
-            iconName = focused ? 'chatbubble-ellipses' : 'chatbubble-ellipses-outline';
+            iconName = focused ? 'notifications' : 'notifications-outline';
           } else if (route.name === 'Profile') {
             iconName = focused ? 'person' : 'person-outline';
           }
 
+          const iconSize = route.name === 'Alerts' ? 24 : 26;
+
           return (
             <View style={styles.iconContainer}>
-              <Ionicons name={iconName} size={26} color={focused ? Colors.primary : '#94A3B8'} />
+              <Ionicons
+                name={iconName}
+                size={iconSize}
+                color={focused ? Colors.primary : (isDarkMode ? '#64748B' : '#94A3B8')}
+              />
               {/* Chấm tròn đỏ cho thông báo mới */}
-              {route.name === 'Alerts' && !focused && <View style={styles.tabBadgeDot} />}
+              {route.name === 'Alerts' && (
+                <View style={[styles.tabBadgeDot, { borderColor: colors.card }]} />
+              )}
             </View>
           );
         },
@@ -90,9 +109,22 @@ function MainTabNavigator() {
 export default function AppNavigator() {
   const { accessToken } = useAuthStore();
   const isAuthenticated = Boolean(accessToken);
+  const { isDarkMode, colors } = useTheme();
 
   return (
-    <NavigationContainer>
+    <NavigationContainer
+      theme={{
+        dark: isDarkMode,
+        colors: {
+          primary: colors.primary,
+          background: colors.background,
+          card: colors.card,
+          text: colors.textPrimary,
+          border: colors.border,
+          notification: '#EF4444',
+        },
+      }}
+    >
       <Stack.Navigator screenOptions={{ headerShown: false }}>
         {!isAuthenticated ? (
           // Auth Stack
@@ -115,6 +147,8 @@ export default function AppNavigator() {
             <Stack.Screen name="AddDevice" component={AddDeviceScreen} />
             <Stack.Screen name="CreateGroup" component={CreateGroupScreen} />
             <Stack.Screen name="SmartbandDetail" component={SmartbandDetailScreen} />
+            <Stack.Screen name="HealthDetail" component={HealthDetailScreen} />
+            <Stack.Screen name="Settings" component={SettingsScreen} />
             <Stack.Screen
               name="IncidentDetail"
               component={IncidentDetailScreen}
@@ -151,11 +185,13 @@ const styles = StyleSheet.create({
   },
   tabBadgeDot: {
     position: 'absolute',
-    top: -2,
-    right: -4,
-    width: 6,
-    height: 6,
-    borderRadius: 3,
-    backgroundColor: Colors.danger,
+    top: -1,
+    right: -3,
+    width: 7,
+    height: 7,
+    borderRadius: 3.5,
+    backgroundColor: '#EF4444',
+    borderWidth: 1,
+    borderColor: '#FFFFFF',
   },
 });

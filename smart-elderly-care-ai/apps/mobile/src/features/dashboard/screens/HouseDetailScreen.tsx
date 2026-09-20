@@ -16,9 +16,11 @@ import { SafeAreaView } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
 import { Colors, Shadows } from '../../../theme/colors';
 import { useVitalStore } from '../../../store/useVitalStore';
+import { useTheme } from '../../../store/useThemeStore';
 
 export default function HouseDetailScreen({ navigation }: any) {
   const { house } = useVitalStore();
+  const { isDarkMode } = useTheme();
   const [addMemberModalVisible, setAddMemberModalVisible] = useState(false);
   const [newMemberPhone, setNewMemberPhone] = useState('');
   const [newMemberRole, setNewMemberRole] = useState<'CAREGIVER' | 'DOCTOR'>('CAREGIVER');
@@ -40,18 +42,18 @@ export default function HouseDetailScreen({ navigation }: any) {
   };
 
   return (
-    <SafeAreaView style={styles.safeArea} edges={['top']}>
+    <SafeAreaView style={[styles.safeArea, isDarkMode && { backgroundColor: '#0B0F19' }]} edges={['top']}>
       {/* 1. Header: Back Arrow, Title "Nhà của tôi" */}
-      <View style={styles.topHeader}>
+      <View style={[styles.topHeader, isDarkMode && { backgroundColor: '#0B0F19' }]}>
         <TouchableOpacity
-          style={styles.backBtn}
+          style={[styles.backBtn, isDarkMode && { backgroundColor: '#1E293B', borderColor: '#334155', borderWidth: 1 }]}
           onPress={() => navigation.goBack()}
           activeOpacity={0.7}
         >
-          <Ionicons name="chevron-back" size={26} color={Colors.textPrimary} />
+          <Ionicons name="chevron-back" size={24} color={isDarkMode ? '#F8FAFC' : Colors.textPrimary} />
         </TouchableOpacity>
 
-        <Text style={styles.headerTitleText}>Nhà của tôi</Text>
+        <Text style={[styles.headerTitleText, isDarkMode && { color: '#F8FAFC' }]}>Nhà của tôi</Text>
       </View>
 
       <ScrollView
@@ -59,23 +61,23 @@ export default function HouseDetailScreen({ navigation }: any) {
         contentContainerStyle={styles.scrollContent}
       >
         {/* 2. Section: Thành viên */}
-        <Text style={styles.sectionLabel}>Thành viên</Text>
-        <View style={styles.cardContainer}>
+        <Text style={[styles.sectionLabel, isDarkMode && { color: '#94A3B8' }]}>Thành viên</Text>
+        <View style={[styles.cardContainer, isDarkMode && { backgroundColor: '#1E293B', borderColor: '#334155' }]}>
           {/* Member Row: 1057(Me) - Người sở hữu */}
           <TouchableOpacity
             style={styles.memberRow}
             onPress={() => Alert.alert('Thông tin thành viên', 'Tài khoản: 1057(Me)\nVai trò: Người sở hữu (Primary Caregiver)\nQuyền hạn: Toàn quyền cấu hình AI và còi báo động.')}
             activeOpacity={0.7}
           >
-            <View style={styles.memberAvatarCircle}>
-              <Ionicons name="person" size={24} color="#CBD5E1" />
+            <View style={[styles.memberAvatarCircle, isDarkMode && { backgroundColor: '#0F172A' }]}>
+              <Ionicons name="person" size={24} color={isDarkMode ? '#64748B' : '#CBD5E1'} />
             </View>
-            <Text style={styles.memberNameText}>1057(Me)</Text>
+            <Text style={[styles.memberNameText, isDarkMode && { color: '#F8FAFC' }]}>1057(Me)</Text>
             <Text style={styles.ownerBadgeText}>Người sở hữu</Text>
-            <Ionicons name="chevron-forward" size={18} color="#CBD5E1" />
+            <Ionicons name="chevron-forward" size={18} color={isDarkMode ? '#64748B' : '#CBD5E1'} />
           </TouchableOpacity>
 
-          <View style={styles.divider} />
+          <View style={[styles.divider, isDarkMode && { backgroundColor: '#334155' }]} />
 
           {/* Add Member Button: + Thêm người */}
           <TouchableOpacity
@@ -83,7 +85,7 @@ export default function HouseDetailScreen({ navigation }: any) {
             onPress={() => setAddMemberModalVisible(true)}
             activeOpacity={0.7}
           >
-            <View style={styles.orangePlusCircle}>
+            <View style={[styles.orangePlusCircle, isDarkMode && { backgroundColor: '#4A2810', borderColor: '#7C2D12' }]}>
               <Ionicons name="add" size={16} color={Colors.primary} />
             </View>
             <Text style={styles.addMemberText}>Thêm người</Text>
@@ -91,65 +93,68 @@ export default function HouseDetailScreen({ navigation }: any) {
         </View>
 
         {/* 3. Section: Quản lý Nhà */}
-        <Text style={styles.sectionLabel}>Quản lý Nhà</Text>
-        <View style={styles.cardContainer}>
+        <Text style={[styles.sectionLabel, isDarkMode && { color: '#94A3B8' }]}>Quản lý Nhà</Text>
+        <View style={[styles.cardContainer, isDarkMode && { backgroundColor: '#1E293B', borderColor: '#334155' }]}>
           {/* Quản lý nhóm (Rooms) */}
           <TouchableOpacity
             style={styles.actionRow}
             onPress={() => Alert.alert('Quản lý nhóm phòng', 'Hiện có 3 khu vực giám sát:\n- Phòng khách (Camera Ranger 2C + Cảm biến nhiệt)\n- Phòng ngủ (Cảm biến nhiệt AMG8833)\n- Nhà vệ sinh (Cảm biến âm thanh YAMNet & Còi hú)')}
             activeOpacity={0.7}
           >
-            <Text style={styles.rowTitleText}>Quản lý nhóm</Text>
-            <Ionicons name="chevron-forward" size={18} color="#CBD5E1" />
+            <Text style={[styles.rowTitleText, isDarkMode && { color: '#F8FAFC' }]}>Quản lý nhóm</Text>
+            <Ionicons name="chevron-forward" size={18} color={isDarkMode ? '#64748B' : '#CBD5E1'} />
           </TouchableOpacity>
         </View>
       </ScrollView>
 
       {/* Modal Thêm người (Phân quyền RBAC FR01) */}
       <Modal visible={addMemberModalVisible} transparent animationType="slide">
-        <View style={styles.modalOverlay}>
-          <View style={styles.modalCard}>
-            <Text style={styles.modalTitle}>Thêm người chăm sóc / Bác sĩ</Text>
-            <Text style={styles.modalSub}>
-              Mời người thân hoặc bác sĩ gia đình cùng theo dõi sinh hiệu và nhận thông báo khẩn cấp bằng số điện thoại (FR01).
+        <View style={[styles.modalOverlay, isDarkMode && { backgroundColor: 'rgba(0, 0, 0, 0.7)' }]}>
+          <View style={[styles.modalCard, isDarkMode && { backgroundColor: '#1E293B', borderColor: '#334155' }]}>
+            <Text style={[styles.modalTitle, isDarkMode && { color: '#F8FAFC' }]}>Thêm người chăm sóc / Bác sĩ</Text>
+            <Text style={[styles.modalSub, isDarkMode && { color: '#94A3B8' }]}>
+              Mời người thân hoặc bác sĩ gia đình cùng theo dõi sức khoẻ và nhận thông báo khẩn cấp bằng số điện thoại (FR01).
             </Text>
               <TextInput
-              style={styles.addressInput}
+              style={[styles.addressInput, isDarkMode && { backgroundColor: '#0F172A', borderColor: '#334155', color: '#F8FAFC' }]}
                 value={newMemberPhone}
                 onChangeText={setNewMemberPhone}
                 placeholder="Nhập số điện thoại (ví dụ: 0912 345 678)"
+                placeholderTextColor="#94A3B8"
                 keyboardType="phone-pad"
             />
             <View style={styles.rolePickerRow}>
               <TouchableOpacity
                 style={[
                   styles.roleOptionBtn,
+                  isDarkMode && { backgroundColor: '#0F172A', borderColor: '#334155' },
                   newMemberRole === 'CAREGIVER' && styles.roleOptionActive,
                 ]}
                 onPress={() => setNewMemberRole('CAREGIVER')}
               >
-                <Text style={[styles.roleOptionText, newMemberRole === 'CAREGIVER' && styles.roleOptionTextActive]}>
+                <Text style={[styles.roleOptionText, isDarkMode && { color: '#CBD5E1' }, newMemberRole === 'CAREGIVER' && styles.roleOptionTextActive]}>
                   Người chăm sóc
                 </Text>
               </TouchableOpacity>
               <TouchableOpacity
                 style={[
                   styles.roleOptionBtn,
+                  isDarkMode && { backgroundColor: '#0F172A', borderColor: '#334155' },
                   newMemberRole === 'DOCTOR' && styles.roleOptionActive,
                 ]}
                 onPress={() => setNewMemberRole('DOCTOR')}
               >
-                <Text style={[styles.roleOptionText, newMemberRole === 'DOCTOR' && styles.roleOptionTextActive]}>
+                <Text style={[styles.roleOptionText, isDarkMode && { color: '#CBD5E1' }, newMemberRole === 'DOCTOR' && styles.roleOptionTextActive]}>
                   Bác sĩ gia đình
                 </Text>
               </TouchableOpacity>
             </View>
             <View style={styles.modalActionButtons}>
               <TouchableOpacity
-                style={styles.cancelBtn}
+                style={[styles.cancelBtn, isDarkMode && { backgroundColor: '#0F172A', borderColor: '#334155', borderWidth: 1 }]}
                 onPress={() => setAddMemberModalVisible(false)}
               >
-                <Text style={styles.cancelBtnText}>Hủy</Text>
+                <Text style={[styles.cancelBtnText, isDarkMode && { color: '#94A3B8' }]}>Hủy</Text>
               </TouchableOpacity>
               <TouchableOpacity
                 style={styles.saveBtn}

@@ -26,10 +26,12 @@ import { SafeAreaView } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
 import { Colors, Shadows } from '../../../theme/colors';
 import { useAuthStore, useVitalStore } from '../../../store/useVitalStore';
+import { useTheme } from '../../../store/useThemeStore';
 
 export default function ProfileScreen({ navigation }: any) {
   const { userId, userName, logout, updateUserName } = useAuthStore();
   const { house } = useVitalStore();
+  const { isDarkMode, colors, setDarkMode } = useTheme();
   const [profileName, setProfileName] = React.useState(userName || 'ngolevinh233');
   const [profilePhone, setProfilePhone] = React.useState('0912 345 678');
   const [editingField, setEditingField] = React.useState<'name' | null>(null);
@@ -54,7 +56,12 @@ export default function ProfileScreen({ navigation }: any) {
   const [fontSizeMode, setFontSizeMode] = React.useState<'system' | 'custom'>('system');
   const [customFontScale, setCustomFontScale] = React.useState(2);
   const [isAppearanceVisible, setAppearanceVisible] = React.useState(false);
-  const [appearanceMode, setAppearanceMode] = React.useState<'light' | 'dark'>('light');
+  const [appearanceMode, setAppearanceMode] = React.useState<'light' | 'dark'>(isDarkMode ? 'dark' : 'light');
+
+  React.useEffect(() => {
+    setAppearanceMode(isDarkMode ? 'dark' : 'light');
+  }, [isDarkMode]);
+
   const [highContrastEnabled, setHighContrastEnabled] = React.useState(false);
   const [sliderWidth, setSliderWidth] = React.useState(0);
   const sliderTrackPosition = React.useRef(0);
@@ -310,7 +317,7 @@ export default function ProfileScreen({ navigation }: any) {
     : '';
 
   return (
-    <SafeAreaView style={styles.safeArea} edges={['top']}>
+    <SafeAreaView style={[styles.safeArea, isDarkMode && { backgroundColor: colors.background }]} edges={['top']}>
       {/* Modal xác nhận đăng xuất */}
       <Modal
         transparent
@@ -322,21 +329,21 @@ export default function ProfileScreen({ navigation }: any) {
           style={styles.confirmModalOverlay}
           onPress={() => setLogoutConfirmVisible(false)}
         >
-          <Pressable style={styles.confirmModalCard} onPress={() => {}}>
+          <Pressable style={[styles.confirmModalCard, isDarkMode && { backgroundColor: '#1E293B', borderColor: '#334155', borderWidth: 1 }]} onPress={() => {}}>
             <View style={styles.confirmModalIconCircle}>
               <Ionicons name="log-out-outline" size={32} color="#EF4444" />
             </View>
-            <Text style={styles.confirmModalTitle}>Đăng xuất tài khoản</Text>
-            <Text style={styles.confirmModalMessage}>
+            <Text style={[styles.confirmModalTitle, isDarkMode && { color: '#F8FAFC' }]}>Đăng xuất tài khoản</Text>
+            <Text style={[styles.confirmModalMessage, isDarkMode && { color: '#94A3B8' }]}>
               Bạn có chắc chắn muốn đăng xuất khỏi hệ thống giám sát Smart Elderly Care?
             </Text>
             <View style={styles.confirmModalButtonRow}>
               <TouchableOpacity
-                style={styles.confirmModalCancelBtn}
+                style={[styles.confirmModalCancelBtn, isDarkMode && { backgroundColor: '#0F172A', borderColor: '#334155', borderWidth: 1 }]}
                 onPress={() => setLogoutConfirmVisible(false)}
                 activeOpacity={0.7}
               >
-                <Text style={styles.confirmModalCancelText}>Hủy</Text>
+                <Text style={[styles.confirmModalCancelText, isDarkMode && { color: '#94A3B8' }]}>Hủy</Text>
               </TouchableOpacity>
               <TouchableOpacity
                 style={styles.confirmModalLogoutBtn}
@@ -359,61 +366,61 @@ export default function ProfileScreen({ navigation }: any) {
         }}
       >
         <Pressable
-          style={styles.modalOverlay}
+          style={[styles.modalOverlay, isDarkMode && { backgroundColor: '#0B0F19' }]}
           onPress={() => {
             if (!isLogoutConfirmVisible) closeUserMenu();
           }}
         >
-          <Pressable style={styles.userMenuSheet} onPress={() => {}}>
+          <Pressable style={[styles.userMenuSheet, isDarkMode && { backgroundColor: '#0B0F19' }]} onPress={() => {}}>
             <TouchableOpacity
-              style={[styles.backButton, styles.userMenuBackButton]}
+              style={[styles.backButton, styles.userMenuBackButton, isDarkMode && { backgroundColor: '#1E293B', borderColor: '#334155', borderWidth: 1, borderRadius: 18 }]}
               onPress={closeUserMenu}
               activeOpacity={0.7}
             >
-              <Ionicons name="chevron-back-outline" size={24} color={Colors.textPrimary} />
+              <Ionicons name="chevron-back-outline" size={24} color={isDarkMode ? '#F8FAFC' : Colors.textPrimary} />
             </TouchableOpacity>
 
             <View style={styles.avatarContainerLarge}>
               <TouchableOpacity
-                style={styles.avatarCircleLarge}
+                style={[styles.avatarCircleLarge, isDarkMode && { backgroundColor: '#1E293B' }]}
                 activeOpacity={0.8}
                 onPress={handleAvatarPress}
               >
                 {avatarUri ? (
                   <Image source={{ uri: avatarUri }} style={styles.avatarImageLarge} />
                 ) : (
-                  <Ionicons name="person" size={42} color="#E8EEF5" />
+                  <Ionicons name="person" size={42} color={isDarkMode ? '#64748B' : '#E8EEF5'} />
                 )}
               </TouchableOpacity>
 
-              <Text style={styles.profileNameText}>{profileName || 'ngolevinh233'}</Text>
+              <Text style={[styles.profileNameText, isDarkMode && { color: '#F8FAFC' }]}>{profileName || 'ngolevinh233'}</Text>
             </View>
 
-            <View style={styles.profileInfoListCard}>
-              <TouchableOpacity style={styles.infoRow} activeOpacity={0.8} onPress={() => openFieldEditor('name')}>
+            <View style={[styles.profileInfoListCard, isDarkMode && { backgroundColor: '#1E293B', borderColor: '#334155' }]}>
+              <TouchableOpacity style={[styles.infoRow, isDarkMode && { borderBottomColor: '#334155' }]} activeOpacity={0.8} onPress={() => openFieldEditor('name')}>
                 <View style={styles.infoLeftWrap}>
-                  <Ionicons name="person-outline" size={22} color="#1F2937" />
-                  <Text style={styles.infoLabel}>Tên</Text>
+                  <Ionicons name="person-outline" size={22} color={isDarkMode ? '#94A3B8' : '#1F2937'} />
+                  <Text style={[styles.infoLabel, isDarkMode && { color: '#F8FAFC' }]}>Tên</Text>
                 </View>
                 <View style={styles.infoRightWrap}>
-                  <Text style={styles.infoValue}>{profileName || 'ngolevinh233'}</Text>
+                  <Text style={[styles.infoValue, isDarkMode && { color: '#94A3B8' }]}>{profileName || 'ngolevinh233'}</Text>
                   <Ionicons name="chevron-forward" size={18} color="#94A3B8" />
                 </View>
               </TouchableOpacity>
 
-              <TouchableOpacity style={styles.infoRow} activeOpacity={0.8}>
+              <TouchableOpacity style={[styles.infoRow, isDarkMode && { borderBottomColor: '#334155' }]} activeOpacity={0.8}>
                 <View style={styles.infoLeftWrap}>
-                  <Ionicons name="call-outline" size={22} color="#1F2937" />
-                  <Text style={styles.infoLabel}>Số điện thoại</Text>
+                  <Ionicons name="call-outline" size={22} color={isDarkMode ? '#94A3B8' : '#1F2937'} />
+                  <Text style={[styles.infoLabel, isDarkMode && { color: '#F8FAFC' }]}>Số điện thoại</Text>
                 </View>
                 <View style={styles.infoRightWrap}>
-                  <Text style={styles.infoValue}>{profilePhone}</Text>
+                  <Text style={[styles.infoValue, isDarkMode && { color: '#94A3B8' }]}>{profilePhone}</Text>
                   <Ionicons name="chevron-forward" size={18} color="#94A3B8" />
                 </View>
               </TouchableOpacity>
 
               <TouchableOpacity
-                style={styles.infoRow}
+                style={[styles.infoRow, { borderBottomWidth: 0 }]}
                 activeOpacity={0.8}
                 onPress={() => {
                   setReturnToSecurityAfterPassword(false);
@@ -421,8 +428,8 @@ export default function ProfileScreen({ navigation }: any) {
                 }}
               >
                 <View style={styles.infoLeftWrap}>
-                  <Ionicons name="lock-closed-outline" size={22} color="#1F2937" />
-                  <Text style={styles.infoLabel}>Thay đổi mật mã</Text>
+                  <Ionicons name="lock-closed-outline" size={22} color={isDarkMode ? '#94A3B8' : '#1F2937'} />
+                  <Text style={[styles.infoLabel, isDarkMode && { color: '#F8FAFC' }]}>Thay đổi mật mã</Text>
                 </View>
                 <Ionicons name="chevron-forward" size={18} color="#94A3B8" />
               </TouchableOpacity>
@@ -434,29 +441,29 @@ export default function ProfileScreen({ navigation }: any) {
               <Text style={styles.logoutButtonText}>Đăng xuất</Text>
             </TouchableOpacity>
 
-                      <Modal
+            <Modal
               transparent
               visible={editingField !== null}
               animationType="fade"
               onRequestClose={closeFieldEditor}
             >
               <Pressable style={styles.editorOverlay} onPress={closeFieldEditor}>
-                <Pressable style={styles.editorSheet} onPress={() => {}}>
+                <Pressable style={[styles.editorSheet, isDarkMode && { backgroundColor: '#1E293B', borderColor: '#334155', borderWidth: 1 }]} onPress={() => {}}>
                   <View style={styles.editorHeader}>
                     <TouchableOpacity
-                      style={styles.editorBackButton}
+                      style={[styles.editorBackButton, isDarkMode && { backgroundColor: '#0F172A', borderColor: '#334155', borderWidth: 1 }]}
                       onPress={closeFieldEditor}
                       activeOpacity={0.7}
                     >
-                      <Ionicons name="chevron-back-outline" size={26} color="#111827" />
+                      <Ionicons name="chevron-back-outline" size={26} color={isDarkMode ? '#F8FAFC' : '#111827'} />
                     </TouchableOpacity>
-                    <Text style={styles.editorTitle}>Chỉnh sửa tên</Text>
+                    <Text style={[styles.editorTitle, isDarkMode && { color: '#F8FAFC' }]}>Chỉnh sửa tên</Text>
                   </View>
 
                   <TextInput
                     value={draftValue}
                     onChangeText={setDraftValue}
-                    style={styles.editorInput}
+                    style={[styles.editorInput, isDarkMode && { backgroundColor: '#0F172A', borderColor: '#334155', color: '#F8FAFC' }]}
                     placeholder="Nhập tên mới"
                     placeholderTextColor="#94A3B8"
                     autoFocus
@@ -465,8 +472,8 @@ export default function ProfileScreen({ navigation }: any) {
                   />
 
                   <View style={styles.editorActions}>
-                    <TouchableOpacity style={styles.editorCancel} onPress={closeFieldEditor}>
-                      <Text style={styles.editorCancelText}>Hủy</Text>
+                    <TouchableOpacity style={[styles.editorCancel, isDarkMode && { backgroundColor: '#0F172A', borderColor: '#334155', borderWidth: 1 }]} onPress={closeFieldEditor}>
+                      <Text style={[styles.editorCancelText, isDarkMode && { color: '#94A3B8' }]}>Hủy</Text>
                     </TouchableOpacity>
                     <TouchableOpacity style={styles.editorSave} onPress={saveEditedField}>
                       <Text style={styles.editorSaveText}>Lưu</Text>
@@ -478,17 +485,17 @@ export default function ProfileScreen({ navigation }: any) {
 
             {isLogoutConfirmVisible && (
               <View style={styles.logoutInlineOverlay}>
-                <View style={styles.logoutDialog}>
-                  <Text style={styles.logoutTitle}>Đăng xuất</Text>
-                  <Text style={styles.logoutMessage}>
+                <View style={[styles.logoutDialog, isDarkMode && { backgroundColor: '#1E293B', borderColor: '#334155', borderWidth: 1 }]}>
+                  <Text style={[styles.logoutTitle, isDarkMode && { color: '#F8FAFC' }]}>Đăng xuất</Text>
+                  <Text style={[styles.logoutMessage, isDarkMode && { color: '#94A3B8' }]}>
                     Bạn có chắc chắn muốn đăng xuất khỏi hệ thống giám sát?
                   </Text>
                   <View style={styles.logoutActions}>
                     <TouchableOpacity
-                      style={styles.logoutCancelButton}
+                      style={[styles.logoutCancelButton, isDarkMode && { backgroundColor: '#0F172A', borderColor: '#334155', borderWidth: 1 }]}
                       onPress={() => setLogoutConfirmVisible(false)}
                     >
-                      <Text style={styles.logoutCancelText}>Hủy</Text>
+                      <Text style={[styles.logoutCancelText, isDarkMode && { color: '#94A3B8' }]}>Hủy</Text>
                     </TouchableOpacity>
                     <TouchableOpacity
                       style={styles.logoutConfirmButton}
@@ -622,19 +629,19 @@ export default function ProfileScreen({ navigation }: any) {
         onRequestClose={() => setCustomerSupportVisible(false)}
       >
         <Pressable style={styles.customerSupportOverlay} onPress={() => setCustomerSupportVisible(false)}>
-          <Pressable style={styles.customerSupportDialog} onPress={() => {}}>
+          <Pressable style={[styles.customerSupportDialog, isDarkMode && { backgroundColor: '#1E293B', borderColor: '#334155', borderWidth: 1 }]} onPress={() => {}}>
             <Ionicons name="call" size={28} color="#DC2626" />
-            <Text style={styles.customerSupportTitle}>Hỗ trợ khẩn cấp</Text>
-            <Text style={styles.customerSupportMessage}>
+            <Text style={[styles.customerSupportTitle, isDarkMode && { color: '#F8FAFC' }]}>Hỗ trợ khẩn cấp</Text>
+            <Text style={[styles.customerSupportMessage, isDarkMode && { color: '#94A3B8' }]}>
               Bạn muốn gọi tổng đài cấp cứu 115 ngay bây giờ?
             </Text>
             <View style={styles.customerSupportActions}>
               <TouchableOpacity
-                style={styles.customerSupportCancelButton}
+                style={[styles.customerSupportCancelButton, isDarkMode && { backgroundColor: '#0F172A', borderColor: '#334155', borderWidth: 1 }]}
                 onPress={() => setCustomerSupportVisible(false)}
                 activeOpacity={0.8}
               >
-                <Text style={styles.customerSupportCancelText}>Hủy</Text>
+                <Text style={[styles.customerSupportCancelText, isDarkMode && { color: '#94A3B8' }]}>Hủy</Text>
               </TouchableOpacity>
               <TouchableOpacity
                 style={styles.customerSupportCallButton}
@@ -657,35 +664,35 @@ export default function ProfileScreen({ navigation }: any) {
         animationType="slide"
         onRequestClose={() => setSecurityCenterVisible(false)}
       >
-        <SafeAreaView style={styles.securityScreen} edges={['top']}>
+        <SafeAreaView style={[styles.securityScreen, isDarkMode && { backgroundColor: '#0B0F19' }]} edges={['top']}>
           <ScrollView showsVerticalScrollIndicator={false} contentContainerStyle={styles.securityScrollContent}>
-            <View style={styles.securityHero}>
+            <View style={[styles.securityHero, isDarkMode && { backgroundColor: '#0F766E' }]}>
               <TouchableOpacity
                 style={styles.securityHeroBackButton}
                 onPress={() => setSecurityCenterVisible(false)}
                 activeOpacity={0.8}
               >
-                <Ionicons name="chevron-back-outline" size={28} color="#0F172A" />
+                <Ionicons name="chevron-back-outline" size={28} color={isDarkMode ? '#F8FAFC' : '#0F172A'} />
               </TouchableOpacity>
               <View style={styles.securityHeroShield}>
                 <Ionicons name="shield-checkmark" size={108} color="rgba(255,255,255,0.88)" />
               </View>
-              <Text style={styles.securityHeroStatus}>Tốt</Text>
-              <Text style={styles.securityHeroDescription}>Có thể cải thiện 2 mục</Text>
+              <Text style={[styles.securityHeroStatus, isDarkMode && { color: '#F8FAFC' }]}>Tốt</Text>
+              <Text style={[styles.securityHeroDescription, isDarkMode && { color: '#E2E8F0' }]}>Có thể cải thiện 2 mục</Text>
               <TouchableOpacity style={styles.securityImproveButton} activeOpacity={0.8}>
-                <Text style={styles.securityImproveText}>Cải thiện ngay bây giờ</Text>
-                <Ionicons name="chevron-forward" size={23} color="#0F172A" />
+                <Text style={[styles.securityImproveText, isDarkMode && { color: '#F8FAFC' }]}>Cải thiện ngay bây giờ</Text>
+                <Ionicons name="chevron-forward" size={23} color={isDarkMode ? '#F8FAFC' : '#0F172A'} />
               </TouchableOpacity>
             </View>
 
-            <View style={styles.securitySectionCard}>
+            <View style={[styles.securitySectionCard, isDarkMode && { backgroundColor: '#1E293B', borderColor: '#334155', borderWidth: 1 }]}>
               <View style={styles.securitySectionHeader}>
-                <Text style={styles.securitySectionTitle}>Bảo mật tài khoản</Text>
-                <Ionicons name="ellipsis-vertical" size={22} color="#0F172A" />
+                <Text style={[styles.securitySectionTitle, isDarkMode && { color: '#F8FAFC' }]}>Bảo mật tài khoản</Text>
+                <Ionicons name="ellipsis-vertical" size={22} color={isDarkMode ? '#F8FAFC' : '#0F172A'} />
               </View>
               <View style={styles.securityTileGrid}>
               <TouchableOpacity
-                style={styles.securityTile}
+                style={[styles.securityTile, isDarkMode && { backgroundColor: '#0F172A', borderColor: '#334155', borderWidth: 1 }]}
                 onPress={() => {
                   setReturnToSecurityAfterPassword(true);
                   setSecurityCenterVisible(false);
@@ -693,11 +700,15 @@ export default function ProfileScreen({ navigation }: any) {
                 }}
                 activeOpacity={0.8}
               >
-                <Text style={styles.securityTileTitle}>Đổi mật khẩu</Text>
+                <Text style={[styles.securityTileTitle, isDarkMode && { color: '#F8FAFC' }]}>Đổi mật khẩu</Text>
                 <Ionicons name="lock-closed" size={34} color="#38BDF8" style={styles.securityTileIcon} />
               </TouchableOpacity>
-              <TouchableOpacity style={styles.securityTile} onPress={() => openSecurityDetail('twoFactor')} activeOpacity={0.8}>
-                <Text style={styles.securityTileTitle}>Xác minh hai bước</Text>
+              <TouchableOpacity
+                style={[styles.securityTile, isDarkMode && { backgroundColor: '#0F172A', borderColor: '#334155', borderWidth: 1 }]}
+                onPress={() => openSecurityDetail('twoFactor')}
+                activeOpacity={0.8}
+              >
+                <Text style={[styles.securityTileTitle, isDarkMode && { color: '#F8FAFC' }]}>Xác minh hai bước</Text>
                 <Ionicons name="shield-checkmark" size={34} color="#38BDF8" style={styles.securityTileIcon} />
                 <Switch
                   value={twoFactorEnabled}
@@ -708,37 +719,41 @@ export default function ProfileScreen({ navigation }: any) {
                 />
               </TouchableOpacity>
               <TouchableOpacity
-                style={styles.securityTile}
+                style={[styles.securityTile, isDarkMode && { backgroundColor: '#0F172A', borderColor: '#334155', borderWidth: 1 }]}
                 onPress={() => openSecurityDetail('devices')}
                 activeOpacity={0.8}
               >
-                <Text style={styles.securityTileTitle}>Quản lý đầu cuối</Text>
+                <Text style={[styles.securityTileTitle, isDarkMode && { color: '#F8FAFC' }]}>Quản lý đầu cuối</Text>
                 <Ionicons name="phone-portrait" size={34} color="#38BDF8" style={styles.securityTileIcon} />
               </TouchableOpacity>
-              <TouchableOpacity style={styles.securityTile} onPress={() => openSecurityDetail('logins')} activeOpacity={0.8}>
-                <Text style={styles.securityTileTitle}>Đăng nhập tài khoản</Text>
+              <TouchableOpacity
+                style={[styles.securityTile, isDarkMode && { backgroundColor: '#0F172A', borderColor: '#334155', borderWidth: 1 }]}
+                onPress={() => openSecurityDetail('logins')}
+                activeOpacity={0.8}
+              >
+                <Text style={[styles.securityTileTitle, isDarkMode && { color: '#F8FAFC' }]}>Đăng nhập tài khoản</Text>
                 <Ionicons name="card-outline" size={34} color="#38BDF8" style={styles.securityTileIcon} />
               </TouchableOpacity>
               </View>
             </View>
 
-            <View style={styles.securitySectionCard}>
+            <View style={[styles.securitySectionCard, isDarkMode && { backgroundColor: '#1E293B', borderColor: '#334155', borderWidth: 1 }]}>
               <View style={styles.securitySectionHeader}>
-                <Text style={styles.securitySectionTitle}>Bạn cũng có thể hỏi</Text>
-                <Ionicons name="ellipsis-vertical" size={22} color="#0F172A" />
+                <Text style={[styles.securitySectionTitle, isDarkMode && { color: '#F8FAFC' }]}>Bạn cũng có thể hỏi</Text>
+                <Ionicons name="ellipsis-vertical" size={22} color={isDarkMode ? '#F8FAFC' : '#0F172A'} />
               </View>
               {['Mật khẩu mã hóa thiết bị là gì?', 'Có ràng buộc một thiết bị an toàn không?', 'Bảo vệ quyền riêng tư của người dùng', 'Việc sử dụng mã xác minh qua tin nhắn SMS'].map((question) => (
                 <TouchableOpacity
                   key={question}
-                  style={styles.securityQuestionRow}
+                  style={[styles.securityQuestionRow, isDarkMode && { borderTopColor: '#334155' }]}
                   activeOpacity={0.8}
                   onPress={() => {
                     setSelectedSecurityQuestion(question);
                     openSecurityDetail('question');
                   }}
                 >
-                  <Text style={styles.securityQuestionText}>{question}</Text>
-                  <Ionicons name="chevron-forward" size={20} color="#64748B" />
+                  <Text style={[styles.securityQuestionText, isDarkMode && { color: '#F8FAFC' }]}>{question}</Text>
+                  <Ionicons name="chevron-forward" size={20} color={isDarkMode ? '#94A3B8' : '#64748B'} />
                 </TouchableOpacity>
               ))}
             </View>
@@ -753,62 +768,74 @@ export default function ProfileScreen({ navigation }: any) {
         onRequestClose={() => setLocationVisible(false)}
       >
         <Pressable style={styles.locationOverlay} onPress={() => setLocationVisible(false)}>
-          <Pressable style={styles.locationSheet} onPress={() => {}}>
+          <Pressable style={[styles.locationSheet, isDarkMode && { backgroundColor: '#1E293B' }]} onPress={() => {}}>
             <View style={styles.locationHeader}>
               <View style={styles.locationHeaderIcon}>
                 <Ionicons name="navigate" size={22} color="#2563EB" />
               </View>
               <View style={styles.locationHeaderCopy}>
-                <Text style={styles.locationTitle}>Định vị địa lý</Text>
-                <Text style={styles.locationDescription}>Xác định vị trí hiện tại của thiết bị</Text>
+                <Text style={[styles.locationTitle, isDarkMode && { color: '#F8FAFC' }]}>Định vị địa lý</Text>
+                <Text style={[styles.locationDescription, isDarkMode && { color: '#94A3B8' }]}>Xác định vị trí hiện tại của thiết bị</Text>
               </View>
               <TouchableOpacity
                 style={styles.locationCloseIcon}
                 onPress={() => setLocationVisible(false)}
                 activeOpacity={0.8}
               >
-                <Ionicons name="close" size={20} color="#64748B" />
+                <Ionicons name="close" size={20} color={isDarkMode ? '#F8FAFC' : '#64748B'} />
               </TouchableOpacity>
             </View>
 
-            <View style={styles.locationMapFrame}>
+            <View style={[styles.locationMapFrame, isDarkMode && { borderColor: '#334155', backgroundColor: '#0F172A' }]}>
               {locationCoords ? (
-                <WebView
-                  originWhitelist={['*']}
-                  source={{ html: locationMapHtml }}
-                  style={styles.locationMap}
-                  javaScriptEnabled
-                  scrollEnabled={false}
-                />
+                Platform.OS === 'web' ? (
+                  <View style={[styles.locationMap, { backgroundColor: isDarkMode ? '#0F172A' : '#F1F5F9', alignItems: 'center', justifyContent: 'center' }]}>
+                    <Ionicons name="map" size={48} color="#2563EB" />
+                    <Text style={{ marginTop: 8, fontWeight: '700', color: isDarkMode ? '#F8FAFC' : '#0F172A', fontSize: 13 }}>
+                      Bản đồ OpenStreetMap
+                    </Text>
+                    <Text style={{ color: isDarkMode ? '#94A3B8' : '#64748B', fontSize: 11, marginTop: 4 }}>
+                      Tọa độ: {locationCoords.latitude.toFixed(4)}, {locationCoords.longitude.toFixed(4)}
+                    </Text>
+                  </View>
+                ) : (
+                  <WebView
+                    originWhitelist={['*']}
+                    source={{ html: locationMapHtml }}
+                    style={styles.locationMap}
+                    javaScriptEnabled
+                    scrollEnabled={false}
+                  />
+                )
               ) : (
                 <View style={styles.locationMapLoading}>
                   <Ionicons name="navigate-outline" size={30} color="#2563EB" />
-                  <Text style={styles.locationMapLoadingText}>
+                  <Text style={[styles.locationMapLoadingText, isDarkMode && { color: '#94A3B8' }]}>
                     {isLocationLoading ? 'Đang lấy vị trí hiện tại...' : 'Chưa có dữ liệu bản đồ'}
                   </Text>
                 </View>
               )}
-              <View style={styles.locationMapBadge}>
+              <View style={[styles.locationMapBadge, isDarkMode && { backgroundColor: 'rgba(15, 23, 42, 0.9)' }]}>
                 <View style={styles.locationMapBadgeDot} />
-                <Text style={styles.locationMapBadgeText}>Vị trí của bạn</Text>
+                <Text style={[styles.locationMapBadgeText, isDarkMode && { color: '#F8FAFC' }]}>Vị trí của bạn</Text>
               </View>
             </View>
 
-            <View style={styles.locationResultBox}>
+            <View style={[styles.locationResultBox, isDarkMode && { backgroundColor: '#0F172A', borderColor: '#334155' }]}>
               <View style={styles.locationResultIcon}>
                 <Ionicons name="location" size={19} color="#2563EB" />
               </View>
               <View style={styles.locationResultCopy}>
                 <View style={styles.locationStatusRow}>
-                  <Text style={styles.locationResultLabel}>Vị trí hiện tại</Text>
-                  <View style={[styles.locationStatusBadge, locationAddress && styles.locationStatusBadgeActive]}>
-                    <View style={[styles.locationStatusDot, locationAddress && styles.locationStatusDotActive]} />
-                    <Text style={[styles.locationStatusText, locationAddress && styles.locationStatusTextActive]}>
+                  <Text style={[styles.locationResultLabel, isDarkMode && { color: '#94A3B8' }]}>Vị trí hiện tại</Text>
+                  <View style={[styles.locationStatusBadge, locationAddress ? styles.locationStatusBadgeActive : null]}>
+                    <View style={[styles.locationStatusDot, locationAddress ? styles.locationStatusDotActive : null]} />
+                    <Text style={[styles.locationStatusText, locationAddress ? styles.locationStatusTextActive : null]}>
                       {locationAddress ? 'Đã cập nhật' : 'Chưa cập nhật'}
                     </Text>
                   </View>
                 </View>
-                <Text style={styles.locationResultText}>
+                <Text style={[styles.locationResultText, isDarkMode && { color: '#F8FAFC' }]}>
                   {locationAddress || 'Nhấn nút bên dưới để lấy địa chỉ hiện tại'}
                 </Text>
               </View>
@@ -828,7 +855,7 @@ export default function ProfileScreen({ navigation }: any) {
               onPress={() => setLocationVisible(false)}
               activeOpacity={0.8}
             >
-              <Text style={styles.locationCloseText}>Để sau</Text>
+              <Text style={[styles.locationCloseText, isDarkMode && { color: '#94A3B8' }]}>Để sau</Text>
             </TouchableOpacity>
           </Pressable>
         </Pressable>
@@ -841,16 +868,16 @@ export default function ProfileScreen({ navigation }: any) {
         onRequestClose={() => setAvatarPickerVisible(false)}
       >
         <Pressable style={styles.avatarPickerOverlay} onPress={() => setAvatarPickerVisible(false)}>
-          <Pressable style={styles.avatarPickerSheet} onPress={() => {}}>
+          <Pressable style={[styles.avatarPickerSheet, isDarkMode && { backgroundColor: '#1E293B', borderColor: '#334155', borderWidth: 1 }]} onPress={() => {}}>
             <View style={styles.avatarPickerOptions}>
-              <TouchableOpacity style={styles.avatarPickerRow} activeOpacity={0.8} onPress={pickAvatarFromCamera}>
-                <Ionicons name="camera-outline" size={24} color="#111827" />
-                <Text style={styles.avatarPickerText}>Chụp ảnh</Text>
+              <TouchableOpacity style={[styles.avatarPickerRow, isDarkMode && { borderBottomColor: '#334155' }]} activeOpacity={0.8} onPress={pickAvatarFromCamera}>
+                <Ionicons name="camera-outline" size={24} color={isDarkMode ? '#F8FAFC' : '#111827'} />
+                <Text style={[styles.avatarPickerText, isDarkMode && { color: '#F8FAFC' }]}>Chụp ảnh</Text>
               </TouchableOpacity>
 
               <TouchableOpacity style={[styles.avatarPickerRow, styles.avatarPickerLastRow]} activeOpacity={0.8} onPress={pickAvatarFromLibrary}>
-                <Ionicons name="images-outline" size={24} color="#111827" />
-                <Text style={styles.avatarPickerText}>Chọn từ Hình ảnh</Text>
+                <Ionicons name="images-outline" size={24} color={isDarkMode ? '#F8FAFC' : '#111827'} />
+                <Text style={[styles.avatarPickerText, isDarkMode && { color: '#F8FAFC' }]}>Chọn từ Hình ảnh</Text>
               </TouchableOpacity>
             </View>
           </Pressable>
@@ -862,17 +889,17 @@ export default function ProfileScreen({ navigation }: any) {
         animationType="slide"
         onRequestClose={closeChangePassword}
       >
-        <SafeAreaView style={styles.changePasswordScreen} edges={['top']}>
+        <SafeAreaView style={[styles.changePasswordScreen, isDarkMode && { backgroundColor: '#0B0F19' }]} edges={['top']}>
           <View style={styles.changePasswordHeader}>
             <TouchableOpacity
-              style={styles.changePasswordBackButton}
+              style={[styles.changePasswordBackButton, isDarkMode && { backgroundColor: '#1E293B', borderColor: '#334155', borderWidth: 1 }]}
               onPress={closeChangePassword}
               activeOpacity={0.7}
             >
-              <Ionicons name="chevron-back-outline" size={24} color={Colors.textPrimary} />
+              <Ionicons name="chevron-back-outline" size={24} color={isDarkMode ? '#F8FAFC' : Colors.textPrimary} />
             </TouchableOpacity>
 
-            <Text style={styles.changePasswordTitle}>Đổi mật khẩu</Text>
+            <Text style={[styles.changePasswordTitle, isDarkMode && { color: '#F8FAFC' }]}>Đổi mật khẩu</Text>
 
             <View style={styles.changePasswordHeaderRight} />
           </View>
@@ -881,14 +908,14 @@ export default function ProfileScreen({ navigation }: any) {
             contentContainerStyle={styles.changePasswordContent}
             keyboardShouldPersistTaps="handled"
           >
-            <Text style={styles.changePasswordIntro}>
+            <Text style={[styles.changePasswordIntro, isDarkMode && { color: '#94A3B8' }]}>
               Tạo mật khẩu mới để bảo vệ tài khoản của bạn.
             </Text>
 
-            <Text style={styles.passwordLabel}>Mật khẩu hiện tại</Text>
-            <View style={styles.passwordInputWrap}>
+            <Text style={[styles.passwordLabel, isDarkMode && { color: '#F8FAFC' }]}>Mật khẩu hiện tại</Text>
+            <View style={[styles.passwordInputWrap, isDarkMode && { backgroundColor: '#1E293B', borderColor: '#334155' }]}>
               <TextInput
-                style={styles.passwordInput}
+                style={[styles.passwordInput, isDarkMode && { color: '#F8FAFC' }]}
                 value={currentPassword}
                 onChangeText={setCurrentPassword}
                 placeholder="Nhập mật khẩu hiện tại"
@@ -900,10 +927,10 @@ export default function ProfileScreen({ navigation }: any) {
               </TouchableOpacity>
             </View>
 
-            <Text style={styles.passwordLabel}>Mật khẩu mới</Text>
-            <View style={styles.passwordInputWrap}>
+            <Text style={[styles.passwordLabel, isDarkMode && { color: '#F8FAFC' }]}>Mật khẩu mới</Text>
+            <View style={[styles.passwordInputWrap, isDarkMode && { backgroundColor: '#1E293B', borderColor: '#334155' }]}>
               <TextInput
-                style={styles.passwordInput}
+                style={[styles.passwordInput, isDarkMode && { color: '#F8FAFC' }]}
                 value={newPassword}
                 onChangeText={setNewPassword}
                 placeholder="Nhập mật khẩu mới"
@@ -915,18 +942,18 @@ export default function ProfileScreen({ navigation }: any) {
               </TouchableOpacity>
             </View>
 
-            <View style={styles.passwordRequirements}>
-              <Text style={styles.passwordRequirementsTitle}>Các yêu cầu về mật khẩu:</Text>
-              <Text style={styles.passwordRequirement}>◯  Dài 8-16 ký tự</Text>
-              <Text style={styles.passwordRequirement}>
+            <View style={[styles.passwordRequirements, isDarkMode && { backgroundColor: '#1E293B', borderColor: '#334155', borderWidth: 1 }]}>
+              <Text style={[styles.passwordRequirementsTitle, isDarkMode && { color: '#F8FAFC' }]}>Các yêu cầu về mật khẩu:</Text>
+              <Text style={[styles.passwordRequirement, isDarkMode && { color: '#94A3B8' }]}>◯  Dài 8-16 ký tự</Text>
+              <Text style={[styles.passwordRequirement, isDarkMode && { color: '#94A3B8' }]}>
                 ◯  Bao gồm chữ hoa, chữ thường, số và ký hiệu đặc biệt.
               </Text>
             </View>
 
-            <Text style={styles.passwordLabel}>Nhập lại mật khẩu mới</Text>
-            <View style={styles.passwordInputWrap}>
+            <Text style={[styles.passwordLabel, isDarkMode && { color: '#F8FAFC' }]}>Nhập lại mật khẩu mới</Text>
+            <View style={[styles.passwordInputWrap, isDarkMode && { backgroundColor: '#1E293B', borderColor: '#334155' }]}>
               <TextInput
-                style={styles.passwordInput}
+                style={[styles.passwordInput, isDarkMode && { color: '#F8FAFC' }]}
                 value={confirmPassword}
                 onChangeText={setConfirmPassword}
                 placeholder="Nhập lại mật khẩu mới"
@@ -955,26 +982,25 @@ export default function ProfileScreen({ navigation }: any) {
         animationType="slide"
         onRequestClose={() => setSettingsVisible(false)}
       >
-        <Pressable style={styles.settingsOverlay} onPress={() => setSettingsVisible(false)}>
-          <Pressable style={styles.settingsSheet} onPress={() => {}}>
+        <Pressable style={[styles.settingsOverlay, isDarkMode && { backgroundColor: '#0B0F19' }]} onPress={() => setSettingsVisible(false)}>
+          <Pressable style={[styles.settingsSheet, isDarkMode && { backgroundColor: '#0B0F19' }]} onPress={() => {}}>
             <View style={styles.settingsHeaderRow}>
               <TouchableOpacity
-                style={[styles.backButton, styles.settingsBackButton]}
+                style={[styles.backButton, styles.settingsBackButton, isDarkMode && { backgroundColor: '#1E293B', borderColor: '#334155', borderWidth: 1, borderRadius: 18 }]}
                 onPress={() => setSettingsVisible(false)}
                 activeOpacity={0.7}
               >
-                <Ionicons name="chevron-back-outline" size={24} color={Colors.textPrimary} />
+                <Ionicons name="chevron-back-outline" size={24} color={isDarkMode ? '#F8FAFC' : Colors.textPrimary} />
               </TouchableOpacity>
-              <Text style={styles.settingsTitle}>Cài đặt</Text>
+              <Text style={[styles.settingsTitle, isDarkMode && { color: '#F8FAFC' }]}>Cài đặt</Text>
             </View>
-
-  
 
             <View style={styles.settingsCard}>
               <View style={styles.settingsList}>
-                <View style={styles.settingsGroupCard}>
+                {/* Khối 1: Hồ sơ của tôi */}
+                <View style={[styles.settingsGroupCard, isDarkMode ? { backgroundColor: '#1E293B', borderColor: '#334155', borderRadius: 16 } : { backgroundColor: '#FFFFFF', borderColor: '#F1F5F9', borderRadius: 16 }]}>
                   <TouchableOpacity
-                    style={styles.settingsItem}
+                    style={[styles.settingsItem, styles.settingsItemLast, isDarkMode && { borderBottomColor: '#334155' }]}
                     activeOpacity={0.8}
                     onPress={() => {
                       setAccountEntrySource('settings');
@@ -983,18 +1009,19 @@ export default function ProfileScreen({ navigation }: any) {
                     }}
                   >
                     <View style={styles.settingsLeft}>
-                      <View style={styles.settingsIconWrap}>
-                        <Ionicons name="person-circle-outline" size={20} color="#475569" />
+                      <View style={[styles.settingsIconWrap, isDarkMode && { backgroundColor: '#0F172A' }]}>
+                        <Ionicons name="person-circle-outline" size={20} color={isDarkMode ? '#94A3B8' : '#475569'} />
                       </View>
-                      <Text style={styles.settingsLabel}>Hồ sơ của tôi</Text>
+                      <Text style={[styles.settingsLabel, isDarkMode ? { color: '#F8FAFC' } : { color: '#0F172A' }]}>Hồ sơ của tôi</Text>
                     </View>
                     <Ionicons name="chevron-forward" size={18} color="#94A3B8" />
                   </TouchableOpacity>
                 </View>
 
-                <View style={styles.settingsGroupCard}>
+                {/* Khối 2: Nhóm 3 mục */}
+                <View style={[styles.settingsGroupCard, isDarkMode ? { backgroundColor: '#1E293B', borderColor: '#334155', borderRadius: 16 } : { backgroundColor: '#FFFFFF', borderColor: '#F1F5F9', borderRadius: 16 }]}>
                   <TouchableOpacity
-                    style={styles.settingsItem}
+                    style={[styles.settingsItem, isDarkMode && { borderBottomColor: '#334155' }]}
                     activeOpacity={0.8}
                     onPress={() => {
                       setSettingsVisible(false);
@@ -1002,16 +1029,16 @@ export default function ProfileScreen({ navigation }: any) {
                     }}
                   >
                     <View style={styles.settingsLeft}>
-                      <View style={styles.settingsIconWrap}>
-                        <Ionicons name="settings-outline" size={20} color="#475569" />
+                      <View style={[styles.settingsIconWrap, isDarkMode && { backgroundColor: '#0F172A' }]}>
+                        <Ionicons name="settings-outline" size={20} color={isDarkMode ? '#94A3B8' : '#475569'} />
                       </View>
-                      <Text style={styles.settingsLabel}>Cài đặt chung</Text>
+                      <Text style={[styles.settingsLabel, isDarkMode ? { color: '#F8FAFC' } : { color: '#0F172A' }]}>Cài đặt chung</Text>
                     </View>
                     <Ionicons name="chevron-forward" size={18} color="#94A3B8" />
                   </TouchableOpacity>
 
                   <TouchableOpacity
-                    style={styles.settingsItem}
+                    style={[styles.settingsItem, isDarkMode && { borderBottomColor: '#334155' }]}
                     activeOpacity={0.8}
                     onPress={() => {
                       setSettingsVisible(false);
@@ -1019,10 +1046,10 @@ export default function ProfileScreen({ navigation }: any) {
                     }}
                   >
                     <View style={styles.settingsLeft}>
-                      <View style={styles.settingsIconWrap}>
-                        <Ionicons name="accessibility-outline" size={20} color="#475569" />
+                      <View style={[styles.settingsIconWrap, isDarkMode && { backgroundColor: '#0F172A' }]}>
+                        <Ionicons name="accessibility-outline" size={20} color={isDarkMode ? '#94A3B8' : '#475569'} />
                       </View>
-                      <Text style={styles.settingsLabel}>Khả năng tiếp cận</Text>
+                      <Text style={[styles.settingsLabel, isDarkMode ? { color: '#F8FAFC' } : { color: '#0F172A' }]}>Khả năng tiếp cận</Text>
                     </View>
                     <Ionicons name="chevron-forward" size={18} color="#94A3B8" />
                   </TouchableOpacity>
@@ -1036,18 +1063,19 @@ export default function ProfileScreen({ navigation }: any) {
                     }}
                   >
                     <View style={styles.settingsLeft}>
-                      <View style={styles.settingsIconWrap}>
-                        <Ionicons name="information-circle-outline" size={20} color="#475569" />
+                      <View style={[styles.settingsIconWrap, isDarkMode && { backgroundColor: '#0F172A' }]}>
+                        <Ionicons name="information-circle-outline" size={20} color={isDarkMode ? '#94A3B8' : '#475569'} />
                       </View>
-                      <Text style={styles.settingsLabel}>Thông tin</Text>
+                      <Text style={[styles.settingsLabel, isDarkMode ? { color: '#F8FAFC' } : { color: '#0F172A' }]}>Thông tin</Text>
                     </View>
                     <Ionicons name="chevron-forward" size={18} color="#94A3B8" />
                   </TouchableOpacity>
                 </View>
 
-                <View style={styles.settingsGroupCard}>
+                {/* Khối 3: Nhóm 2 mục */}
+                <View style={[styles.settingsGroupCard, isDarkMode ? { backgroundColor: '#1E293B', borderColor: '#334155', borderRadius: 16 } : { backgroundColor: '#FFFFFF', borderColor: '#F1F5F9', borderRadius: 16 }]}>
                   <TouchableOpacity
-                    style={styles.settingsItem}
+                    style={[styles.settingsItem, isDarkMode && { borderBottomColor: '#334155' }]}
                     activeOpacity={0.8}
                     onPress={() => {
                       setSettingsVisible(false);
@@ -1055,10 +1083,10 @@ export default function ProfileScreen({ navigation }: any) {
                     }}
                   >
                     <View style={styles.settingsLeft}>
-                      <View style={styles.settingsIconWrap}>
-                        <Ionicons name="notifications-outline" size={20} color="#475569" />
+                      <View style={[styles.settingsIconWrap, isDarkMode && { backgroundColor: '#0F172A' }]}>
+                        <Ionicons name="notifications-outline" size={20} color={isDarkMode ? '#94A3B8' : '#475569'} />
                       </View>
-                      <Text style={styles.settingsLabel}>Thiết lập thông báo</Text>
+                      <Text style={[styles.settingsLabel, isDarkMode ? { color: '#F8FAFC' } : { color: '#0F172A' }]}>Thiết lập thông báo</Text>
                     </View>
                     <View style={styles.settingsRightStatus}>
                       <Ionicons name="chevron-forward" size={18} color="#94A3B8" />
@@ -1074,13 +1102,13 @@ export default function ProfileScreen({ navigation }: any) {
                     }}
                   >
                     <View style={styles.settingsLeft}>
-                      <View style={styles.settingsIconWrap}>
-                        <Ionicons name="phone-portrait-outline" size={20} color="#475569" />
+                      <View style={[styles.settingsIconWrap, isDarkMode && { backgroundColor: '#0F172A' }]}>
+                        <Ionicons name="phone-portrait-outline" size={20} color={isDarkMode ? '#94A3B8' : '#475569'} />
                       </View>
-                      <Text style={styles.settingsLabel}>Rung</Text>
+                      <Text style={[styles.settingsLabel, isDarkMode ? { color: '#F8FAFC' } : { color: '#0F172A' }]}>Rung</Text>
                     </View>
                     <View style={styles.settingsRightStatus}>
-                      <Text style={styles.settingsValueText}>{vibrationEnabled ? 'Mở' : 'Tắt'}</Text>
+                      <Text style={[styles.settingsValueText, isDarkMode ? { color: '#94A3B8' } : { color: '#64748B' }]}>{vibrationEnabled ? 'Mở' : 'Tắt'}</Text>
                       <Ionicons name="chevron-forward" size={18} color="#94A3B8" />
                     </View>
                   </TouchableOpacity>
@@ -1098,45 +1126,45 @@ export default function ProfileScreen({ navigation }: any) {
         onRequestClose={() => setAccessibilityVisible(false)}
       >
         <Pressable
-          style={styles.settingsOverlay}
+          style={[styles.settingsOverlay, isDarkMode && { backgroundColor: '#0B0F19' }]}
           onPress={() => {
             setAccessibilityVisible(false);
             setSettingsVisible(true);
           }}
         >
-          <Pressable style={styles.settingsSheet} onPress={() => {}}>
+          <Pressable style={[styles.settingsSheet, isDarkMode && { backgroundColor: '#0B0F19' }]} onPress={() => {}}>
             <View style={styles.settingsHeaderRow}>
               <TouchableOpacity
-                style={[styles.backButton, styles.settingsBackButton]}
+                style={[styles.backButton, styles.settingsBackButton, isDarkMode && { backgroundColor: '#1E293B', borderColor: '#334155', borderWidth: 1, borderRadius: 18 }]}
                 onPress={() => {
                   setAccessibilityVisible(false);
                   setSettingsVisible(true);
                 }}
                 activeOpacity={0.7}
               >
-                <Ionicons name="chevron-back-outline" size={24} color={Colors.textPrimary} />
+                <Ionicons name="chevron-back-outline" size={24} color={isDarkMode ? '#F8FAFC' : Colors.textPrimary} />
               </TouchableOpacity>
-              <Text style={styles.settingsTitle}>Khả năng tiếp cận</Text>
+              <Text style={[styles.settingsTitle, isDarkMode && { color: '#F8FAFC' }]}>Khả năng tiếp cận</Text>
             </View>
 
-            <View style={styles.accessibilityList}>
+            <View style={[styles.accessibilityList, isDarkMode && { backgroundColor: '#1E293B', borderColor: '#334155' }]}>
               <TouchableOpacity
-                style={styles.accessibilityRow}
+                style={[styles.accessibilityRow, isDarkMode && { borderBottomColor: '#334155' }]}
                 activeOpacity={0.8}
                 onPress={() => {
                   setAccessibilityVisible(false);
                   setFontSizeVisible(true);
                 }}
               >
-                <Text style={styles.accessibilityLabel}>Kích thước phông chữ</Text>
+                <Text style={[styles.accessibilityLabel, isDarkMode && { color: '#F8FAFC' }]}>Kích thước phông chữ</Text>
                 <View style={styles.accessibilityValueWrap}>
-                  <Text style={styles.accessibilityValue}>{fontSizeMode === 'system' ? 'Theo hệ thống' : 'Tùy chỉnh'}</Text>
+                  <Text style={[styles.accessibilityValue, isDarkMode && { color: '#94A3B8' }]}>{fontSizeMode === 'system' ? 'Theo hệ thống' : 'Tùy chỉnh'}</Text>
                   <Ionicons name="chevron-forward" size={18} color="#94A3B8" />
                 </View>
               </TouchableOpacity>
 
               <View style={[styles.accessibilityRow, styles.accessibilityRowLast]}>
-                <Text style={styles.accessibilityLabel}>Tăng độ tương phản</Text>
+                <Text style={[styles.accessibilityLabel, isDarkMode && { color: '#F8FAFC' }]}>Tăng độ tương phản</Text>
                 <Switch
                   value={highContrastEnabled}
                   onValueChange={setHighContrastEnabled}
@@ -1156,58 +1184,58 @@ export default function ProfileScreen({ navigation }: any) {
         onRequestClose={() => setFontSizeVisible(false)}
       >
         <Pressable
-          style={styles.settingsOverlay}
+          style={[styles.settingsOverlay, isDarkMode && { backgroundColor: '#0B0F19' }]}
           onPress={() => {
             setFontSizeVisible(false);
             setAccessibilityVisible(true);
           }}
         >
-          <Pressable style={styles.settingsSheet} onPress={() => {}}>
+          <Pressable style={[styles.settingsSheet, isDarkMode && { backgroundColor: '#0B0F19' }]} onPress={() => {}}>
             <View style={styles.settingsHeaderRow}>
               <TouchableOpacity
-                style={[styles.backButton, styles.settingsBackButton]}
+                style={[styles.backButton, styles.settingsBackButton, isDarkMode && { backgroundColor: '#1E293B', borderColor: '#334155', borderWidth: 1, borderRadius: 18 }]}
                 onPress={() => {
                   setFontSizeVisible(false);
                   setAccessibilityVisible(true);
                 }}
                 activeOpacity={0.7}
               >
-                <Ionicons name="chevron-back-outline" size={24} color={Colors.textPrimary} />
+                <Ionicons name="chevron-back-outline" size={24} color={isDarkMode ? '#F8FAFC' : Colors.textPrimary} />
               </TouchableOpacity>
-              <Text style={styles.settingsTitle}>Kích thước phông chữ</Text>
+              <Text style={[styles.settingsTitle, isDarkMode && { color: '#F8FAFC' }]}>Kích thước phông chữ</Text>
             </View>
 
             <View style={styles.fontSizeList}>
               <TouchableOpacity
-                style={styles.fontSizeOption}
+                style={[styles.fontSizeOption, isDarkMode && { backgroundColor: '#1E293B', borderColor: '#334155' }]}
                 activeOpacity={0.8}
                 onPress={() => {
                   setFontSizeMode('system');
                 }}
               >
-                <Text style={styles.fontSizeOptionText}>Theo hệ thống</Text>
+                <Text style={[styles.fontSizeOptionText, isDarkMode && { color: '#F8FAFC' }]}>Theo hệ thống</Text>
                 {fontSizeMode === 'system' && (
                   <Ionicons name="checkmark" size={22} color="#1D9BF0" />
                 )}
               </TouchableOpacity>
 
               <TouchableOpacity
-                style={styles.fontSizeOption}
+                style={[styles.fontSizeOption, isDarkMode && { backgroundColor: '#1E293B', borderColor: '#334155' }]}
                 activeOpacity={0.8}
                 onPress={() => setFontSizeMode('custom')}
               >
-                <Text style={styles.fontSizeOptionText}>Tùy chỉnh</Text>
+                <Text style={[styles.fontSizeOptionText, isDarkMode && { color: '#F8FAFC' }]}>Tùy chỉnh</Text>
                 {fontSizeMode === 'custom' && (
                   <Ionicons name="checkmark" size={22} color="#1D9BF0" />
                 )}
               </TouchableOpacity>
 
               {fontSizeMode === 'custom' && (
-                <View style={styles.customFontSliderPanel}>
-                  <Text style={styles.customFontSliderTitle}>Mặc định</Text>
+                <View style={[styles.customFontSliderPanel, isDarkMode && { backgroundColor: '#1E293B', borderColor: '#334155', borderWidth: 1, borderRadius: 18, padding: 16 }]}>
+                  <Text style={[styles.customFontSliderTitle, isDarkMode && { color: '#F8FAFC' }]}>Mặc định</Text>
 
                   <View style={styles.customFontSliderRow}>
-                    <Text style={styles.customFontSmall}>Aa</Text>
+                    <Text style={[styles.customFontSmall, isDarkMode && { color: '#94A3B8' }]}>Aa</Text>
 
                     <View
                       style={styles.customFontTrackWrap}
@@ -1218,7 +1246,7 @@ export default function ProfileScreen({ navigation }: any) {
                       }}
                       {...fontSliderResponder.panHandlers}
                     >
-                      <View style={styles.customFontTrack}>
+                      <View style={[styles.customFontTrack, isDarkMode && { backgroundColor: '#334155' }]}>
                         {[0, 1, 2, 3, 4].map((value) => (
                           <View
                             key={value}
@@ -1238,12 +1266,12 @@ export default function ProfileScreen({ navigation }: any) {
                       </View>
                     </View>
 
-                    <Text style={styles.customFontLarge}>Aa</Text>
+                    <Text style={[styles.customFontLarge, isDarkMode && { color: '#F8FAFC' }]}>Aa</Text>
                   </View>
                 </View>
               )}
 
-              <Text style={styles.fontSizeNote}>
+              <Text style={[styles.fontSizeNote, isDarkMode && { color: '#94A3B8' }]}>
                 Nếu một số văn bản hoặc nội dung không được phóng to, hãy nhấn và giữ màn hình để kích hoạt tính năng Zoom.
               </Text>
 
@@ -1260,16 +1288,16 @@ export default function ProfileScreen({ navigation }: any) {
         onRequestClose={() => setAboutInfoVisible(false)}
       >
         <Pressable
-          style={styles.infoOverlay}
+          style={[styles.infoOverlay, isDarkMode && { backgroundColor: '#0B0F19' }]}
           onPress={() => {
             setAboutInfoVisible(false);
             setSettingsVisible(true);
           }}
         >
-          <Pressable style={styles.infoScreen} onPress={() => {}}>
+          <Pressable style={[styles.infoScreen, isDarkMode && { backgroundColor: '#0B0F19' }]} onPress={() => {}}>
             <View style={styles.infoHeaderRow}>
               <TouchableOpacity
-                style={[styles.backButton, styles.infoBackButton]}
+                style={[styles.backButton, styles.infoBackButton, isDarkMode && { backgroundColor: '#1E293B', borderColor: '#334155', borderWidth: 1, borderRadius: 18 }]}
                 onPress={() => {
                   if (infoDetail) {
                     setInfoDetail(null);
@@ -1280,30 +1308,30 @@ export default function ProfileScreen({ navigation }: any) {
                 }}
                 activeOpacity={0.7}
               >
-                <Ionicons name="chevron-back-outline" size={24} color={Colors.textPrimary} />
+                <Ionicons name="chevron-back-outline" size={24} color={isDarkMode ? '#F8FAFC' : Colors.textPrimary} />
               </TouchableOpacity>
-              <Text style={styles.infoTitle}>
+              <Text style={[styles.infoTitle, isDarkMode && { color: '#F8FAFC' }]}>
                 {infoDetail === 'terms' ? 'Điều khoản sử dụng' : infoDetail === 'app' ? 'Thông tin ứng dụng' : 'Thông tin'}
               </Text>
             </View>
 
             {infoDetail === null ? (
-              <View style={styles.infoListCard}>
+              <View style={[styles.infoListCard, isDarkMode && { backgroundColor: '#1E293B', borderColor: '#334155' }]}>
                 <TouchableOpacity
-                  style={styles.infoListRow}
+                  style={[styles.infoListRow, isDarkMode && { borderBottomColor: '#334155' }]}
                   activeOpacity={0.8}
                   onPress={() => setInfoDetail('terms')}
                 >
-                  <Text style={styles.infoRowText}>Điều khoản sử dụng</Text>
+                  <Text style={[styles.infoRowText, isDarkMode && { color: '#F8FAFC' }]}>Điều khoản sử dụng</Text>
                   <Ionicons name="chevron-forward" size={18} color="#9CA3AF" />
                 </TouchableOpacity>
 
                 <TouchableOpacity
-                  style={styles.infoListRow}
+                  style={[styles.infoListRow, { borderBottomWidth: 0 }]}
                   activeOpacity={0.8}
                   onPress={() => setInfoDetail('app')}
                 >
-                  <Text style={styles.infoRowText}>Thông tin ứng dụng</Text>
+                  <Text style={[styles.infoRowText, isDarkMode && { color: '#F8FAFC' }]}>Thông tin ứng dụng</Text>
                   <Ionicons name="chevron-forward" size={18} color="#9CA3AF" />
                 </TouchableOpacity>
               </View>
@@ -1314,14 +1342,14 @@ export default function ProfileScreen({ navigation }: any) {
               >
                 {infoDetail === 'terms' ? (
                   <>
-                    <Text style={styles.infoDetailHeading}>Điều khoản sử dụng</Text>
-                    <Text style={styles.infoDetailText}>
-                      Ứng dụng Smart Elderly Care AI hỗ trợ theo dõi sinh hiệu, thiết bị và cảnh báo an toàn cho người cao tuổi. Người dùng cần cung cấp thông tin chính xác và sử dụng ứng dụng đúng mục đích.
+                    <Text style={[styles.infoDetailHeading, isDarkMode && { color: '#F8FAFC' }]}>Điều khoản sử dụng</Text>
+                    <Text style={[styles.infoDetailText, isDarkMode && { color: '#94A3B8' }]}>
+                      Ứng dụng Smart Elderly Care AI hỗ trợ theo dõi sức khoẻ, thiết bị và cảnh báo an toàn cho người cao tuổi. Người dùng cần cung cấp thông tin chính xác và sử dụng ứng dụng đúng mục đích.
                     </Text>
-                    <Text style={styles.infoDetailText}>
+                    <Text style={[styles.infoDetailText, isDarkMode && { color: '#94A3B8' }]}>
                       Người dùng chịu trách nhiệm bảo mật tài khoản, mã xác thực và các thiết bị đã liên kết. Không chia sẻ thông tin đăng nhập cho người khác.
                     </Text>
-                    <Text style={styles.infoDetailText}>
+                    <Text style={[styles.infoDetailText, isDarkMode && { color: '#94A3B8' }]}>
                       Các cảnh báo trong ứng dụng chỉ có tính chất hỗ trợ theo dõi, không thay thế cho chẩn đoán hoặc điều trị y tế chuyên môn.
                     </Text>
                   </>
@@ -1330,12 +1358,12 @@ export default function ProfileScreen({ navigation }: any) {
                     <View style={styles.appInfoIcon}>
                       <Ionicons name="shield-checkmark" size={38} color="#FFFFFF" />
                     </View>
-                    <Text style={styles.infoDetailHeading}>Smart Elderly Care AI</Text>
-                    <Text style={styles.appInfoVersion}>Phiên bản 1.0.0</Text>
-                    <Text style={styles.infoDetailText}>
+                    <Text style={[styles.infoDetailHeading, isDarkMode && { color: '#F8FAFC' }]}>Smart Elderly Care AI</Text>
+                    <Text style={[styles.appInfoVersion, isDarkMode && { color: '#94A3B8' }]}>Phiên bản 1.0.0</Text>
+                    <Text style={[styles.infoDetailText, isDarkMode && { color: '#94A3B8' }]}>
                       Hệ thống giám sát thông minh giúp gia đình theo dõi sức khỏe, thiết bị và nhận cảnh báo kịp thời.
                     </Text>
-                    <Text style={styles.appInfoCopyright}>© 2026 Smart Elderly Care AI</Text>
+                    <Text style={[styles.appInfoCopyright, isDarkMode && { color: '#64748B' }]}>© 2026 Smart Elderly Care AI</Text>
                   </View>
                 )}
               </ScrollView>
@@ -1351,33 +1379,33 @@ export default function ProfileScreen({ navigation }: any) {
         onRequestClose={() => setVibrationDetailVisible(false)}
       >
         <Pressable
-          style={styles.settingsOverlay}
+          style={[styles.settingsOverlay, isDarkMode && { backgroundColor: '#0B0F19' }]}
           onPress={() => {
             setVibrationDetailVisible(false);
             setSettingsVisible(true);
           }}
         >
-          <Pressable style={styles.vibrationDetailSheet} onPress={() => {}}>
+          <Pressable style={[styles.vibrationDetailSheet, isDarkMode && { backgroundColor: '#0B0F19' }]} onPress={() => {}}>
             <View style={styles.settingsHeaderRow}>
               <TouchableOpacity
-                style={[styles.backButton, styles.settingsBackButton]}
+                style={[styles.backButton, styles.settingsBackButton, isDarkMode && { backgroundColor: '#1E293B', borderColor: '#334155', borderWidth: 1, borderRadius: 18 }]}
                 onPress={() => {
                   setVibrationDetailVisible(false);
                   setSettingsVisible(true);
                 }}
                 activeOpacity={0.7}
               >
-                <Ionicons name="chevron-back-outline" size={24} color={Colors.textPrimary} />
+                <Ionicons name="chevron-back-outline" size={24} color={isDarkMode ? '#F8FAFC' : Colors.textPrimary} />
               </TouchableOpacity>
-              <Text style={styles.settingsTitle}>Rung</Text>
+              <Text style={[styles.settingsTitle, isDarkMode && { color: '#F8FAFC' }]}>Rung</Text>
             </View>
 
-            <View style={styles.vibrationDetailRow}>
-              <Text style={styles.vibrationDetailLabel}>Rung</Text>
+            <View style={[styles.vibrationDetailRow, isDarkMode && { backgroundColor: '#1E293B', borderColor: '#334155' }]}>
+              <Text style={[styles.vibrationDetailLabel, isDarkMode && { color: '#F8FAFC' }]}>Rung</Text>
               <Switch value={vibrationEnabled} onValueChange={handleVibrationToggle} />
             </View>
 
-            <Text style={styles.vibrationDetailDescription}>
+            <Text style={[styles.vibrationDetailDescription, isDarkMode && { color: '#94A3B8' }]}>
               Khi được bật, điện thoại / máy tính bảng của bạn sẽ rung khi bật nhấn / 
             </Text>
           </Pressable>
@@ -1391,55 +1419,55 @@ export default function ProfileScreen({ navigation }: any) {
         onRequestClose={() => setNotificationSettingsVisible(false)}
       >
         <Pressable
-          style={styles.settingsOverlay}
+          style={[styles.settingsOverlay, isDarkMode && { backgroundColor: '#0B0F19' }]}
           onPress={() => {
             setNotificationSettingsVisible(false);
             setSettingsVisible(true);
           }}
         >
-          <Pressable style={styles.settingsSheet} onPress={() => {}}>
+          <Pressable style={[styles.settingsSheet, isDarkMode && { backgroundColor: '#0B0F19' }]} onPress={() => {}}>
             <View style={styles.settingsHeaderRow}>
               <TouchableOpacity
-                style={[styles.backButton, styles.settingsBackButton]}
+                style={[styles.backButton, styles.settingsBackButton, isDarkMode && { backgroundColor: '#1E293B', borderColor: '#334155', borderWidth: 1, borderRadius: 18 }]}
                 onPress={() => {
                   setNotificationSettingsVisible(false);
                   setSettingsVisible(true);
                 }}
                 activeOpacity={0.7}
               >
-                <Ionicons name="chevron-back-outline" size={24} color={Colors.textPrimary} />
+                <Ionicons name="chevron-back-outline" size={24} color={isDarkMode ? '#F8FAFC' : Colors.textPrimary} />
               </TouchableOpacity>
-              <Text style={styles.settingsTitle}>Thiết lập thông báo</Text>
+              <Text style={[styles.settingsTitle, isDarkMode && { color: '#F8FAFC' }]}>Thiết lập thông báo</Text>
             </View>
 
             <View style={styles.notificationSettingsContent}>
-              <Text style={styles.notificationSettingsIntro}>
+              <Text style={[styles.notificationSettingsIntro, isDarkMode && { color: '#94A3B8' }]}>
                 Chọn cách bạn muốn nhận cảnh báo từ hệ thống.
               </Text>
 
-              <View style={styles.notificationSettingsCard}>
+              <View style={[styles.notificationSettingsCard, isDarkMode && { backgroundColor: '#1E293B', borderColor: '#334155' }]}>
                 <View style={styles.notificationSettingRow}>
                   <View style={styles.notificationSettingText}>
-                    <Text style={styles.notificationSettingTitle}>Thông báo cảnh báo</Text>
-                    <Text style={styles.notificationSettingDescription}>Nhận cảnh báo sức khỏe mới</Text>
+                    <Text style={[styles.notificationSettingTitle, isDarkMode && { color: '#F8FAFC' }]}>Thông báo cảnh báo</Text>
+                    <Text style={[styles.notificationSettingDescription, isDarkMode && { color: '#94A3B8' }]}>Nhận cảnh báo sức khỏe mới</Text>
                   </View>
                   <Switch value={notificationsEnabled} onValueChange={setNotificationsEnabled} />
                 </View>
-                <View style={styles.notificationSettingDivider} />
+                <View style={[styles.notificationSettingDivider, isDarkMode && { backgroundColor: '#334155' }]} />
 
                 <View style={styles.notificationSettingRow}>
                   <View style={styles.notificationSettingText}>
-                    <Text style={styles.notificationSettingTitle}>Âm thanh cảnh báo</Text>
-                    <Text style={styles.notificationSettingDescription}>Phát âm thanh khi có cảnh báo</Text>
+                    <Text style={[styles.notificationSettingTitle, isDarkMode && { color: '#F8FAFC' }]}>Âm thanh cảnh báo</Text>
+                    <Text style={[styles.notificationSettingDescription, isDarkMode && { color: '#94A3B8' }]}>Phát âm thanh khi có cảnh báo</Text>
                   </View>
                   <Switch value={alertSoundEnabled} onValueChange={setAlertSoundEnabled} />
                 </View>
-                <View style={styles.notificationSettingDivider} />
+                <View style={[styles.notificationSettingDivider, isDarkMode && { backgroundColor: '#334155' }]} />
 
                 <View style={styles.notificationSettingRow}>
                   <View style={styles.notificationSettingText}>
-                    <Text style={styles.notificationSettingTitle}>Cảnh báo khẩn cấp</Text>
-                    <Text style={styles.notificationSettingDescription}>Luôn ưu tiên cảnh báo nguy hiểm</Text>
+                    <Text style={[styles.notificationSettingTitle, isDarkMode && { color: '#F8FAFC' }]}>Cảnh báo khẩn cấp</Text>
+                    <Text style={[styles.notificationSettingDescription, isDarkMode && { color: '#94A3B8' }]}>Luôn ưu tiên cảnh báo nguy hiểm</Text>
                   </View>
                   <Switch value={criticalAlertEnabled} onValueChange={setCriticalAlertEnabled} />
                 </View>
@@ -1455,48 +1483,48 @@ export default function ProfileScreen({ navigation }: any) {
         animationType="slide"
         onRequestClose={() => setGeneralSettingsVisible(false)}
       >
-        <Pressable style={styles.settingsOverlay} onPress={() => setGeneralSettingsVisible(false)}>
-          <Pressable style={styles.settingsSheet} onPress={() => {}}>
+        <Pressable style={[styles.settingsOverlay, isDarkMode && { backgroundColor: '#0B0F19' }]} onPress={() => setGeneralSettingsVisible(false)}>
+          <Pressable style={[styles.settingsSheet, isDarkMode && { backgroundColor: '#0B0F19' }]} onPress={() => {}}>
             <View style={styles.settingsHeaderRow}>
               <TouchableOpacity
-                style={[styles.backButton, styles.settingsBackButton]}
+                style={[styles.backButton, styles.settingsBackButton, isDarkMode && { backgroundColor: '#1E293B', borderColor: '#334155', borderWidth: 1, borderRadius: 18 }]}
                 onPress={() => {
                   setGeneralSettingsVisible(false);
                   setSettingsVisible(true);
                 }}
                 activeOpacity={0.7}
               >
-                <Ionicons name="chevron-back-outline" size={24} color={Colors.textPrimary} />
+                <Ionicons name="chevron-back-outline" size={24} color={isDarkMode ? '#F8FAFC' : Colors.textPrimary} />
               </TouchableOpacity>
-              <Text style={styles.settingsTitle}>Cài đặt chung</Text>
+              <Text style={[styles.settingsTitle, isDarkMode && { color: '#F8FAFC' }]}>Cài đặt chung</Text>
             </View>
 
-            <View style={styles.generalSettingsList}>
-              <View style={styles.generalRow}>
-                <Text style={styles.generalRowLabel}>Vùng</Text>
-                <Text style={styles.generalRowValue}>Vietnam</Text>
+            <View style={[styles.generalSettingsList, isDarkMode && { backgroundColor: '#1E293B', borderColor: '#334155', borderWidth: 1, borderRadius: 18, overflow: 'hidden' }]}>
+              <View style={[styles.generalRow, isDarkMode && { borderBottomColor: '#334155' }]}>
+                <Text style={[styles.generalRowLabel, isDarkMode && { color: '#F8FAFC' }]}>Vùng</Text>
+                <Text style={[styles.generalRowValue, isDarkMode && { color: '#94A3B8' }]}>Vietnam</Text>
               </View>
 
               <TouchableOpacity
-                style={styles.generalRow}
+                style={[styles.generalRow, isDarkMode && { borderBottomColor: '#334155' }]}
                 activeOpacity={0.8}
                 onPress={() => setLanguageVisible(true)}
               >
-                <Text style={styles.generalRowLabel}>Ngôn ngữ</Text>
+                <Text style={[styles.generalRowLabel, isDarkMode && { color: '#F8FAFC' }]}>Ngôn ngữ</Text>
                 <View style={styles.generalValueWrap}>
-                  <Text style={styles.generalRowValue}>{languageMode === 'vi' ? 'Việt Nam' : 'English'}</Text>
+                  <Text style={[styles.generalRowValue, isDarkMode && { color: '#94A3B8' }]}>{languageMode === 'vi' ? 'Việt Nam' : 'English'}</Text>
                   <Ionicons name="chevron-forward" size={18} color="#94A3B8" />
                 </View>
               </TouchableOpacity>
 
               <TouchableOpacity
-                style={styles.generalRow}
+                style={[styles.generalRow, { borderBottomWidth: 0 }]}
                 activeOpacity={0.8}
                 onPress={() => setAppearanceVisible(true)}
               >
-                <Text style={styles.generalRowLabel}>Chế độ tối</Text>
+                <Text style={[styles.generalRowLabel, isDarkMode && { color: '#F8FAFC' }]}>Chế độ tối</Text>
                 <View style={styles.generalValueWrap}>
-                  <Text style={styles.generalRowValue}>{appearanceMode === 'light' ? 'Màu sáng' : 'Tối'}</Text>
+                  <Text style={[styles.generalRowValue, isDarkMode && { color: '#94A3B8' }]}>{appearanceMode === 'light' ? 'Màu sáng' : 'Tối'}</Text>
                   <Ionicons name="chevron-forward" size={18} color="#94A3B8" />
                 </View>
               </TouchableOpacity>
@@ -1511,26 +1539,26 @@ export default function ProfileScreen({ navigation }: any) {
         animationType="slide"
         onRequestClose={() => setLanguageVisible(false)}
       >
-        <Pressable style={styles.appearanceOverlay} onPress={() => setLanguageVisible(false)}>
-          <Pressable style={styles.appearanceSheet} onPress={() => {}}>
+        <Pressable style={[styles.appearanceOverlay, isDarkMode && { backgroundColor: '#0B0F19' }]} onPress={() => setLanguageVisible(false)}>
+          <Pressable style={[styles.appearanceSheet, isDarkMode && { backgroundColor: '#0B0F19' }]} onPress={() => {}}>
             <View style={styles.appearanceHeader}>
               <TouchableOpacity
-                style={styles.appearanceCloseButton}
+                style={[styles.appearanceCloseButton, isDarkMode && { backgroundColor: '#1E293B', borderColor: '#334155', borderWidth: 1 }]}
                 onPress={() => setLanguageVisible(false)}
                 activeOpacity={0.7}
               >
-                <Ionicons name="chevron-back-outline" size={28} color="#111827" />
+                <Ionicons name="chevron-back-outline" size={28} color={isDarkMode ? '#F8FAFC' : '#111827'} />
               </TouchableOpacity>
 
-              <Text style={styles.appearanceTitle}>Ngôn ngữ</Text>
+              <Text style={[styles.appearanceTitle, isDarkMode && { color: '#F8FAFC' }]}>Ngôn ngữ</Text>
               <View style={styles.appearanceHeaderSpacer} />
             </View>
 
-            <View style={styles.appearanceCard}>
+            <View style={[styles.appearanceCard, isDarkMode && { backgroundColor: '#1E293B', borderColor: '#334155' }]}>
               <TouchableOpacity
                 style={[
                   styles.appearanceOptionRow,
-                  languageMode === 'vi' && styles.appearanceOptionRowSelected,
+                  languageMode === 'vi' && (isDarkMode ? { backgroundColor: '#0F172A' } : styles.appearanceOptionRowSelected),
                 ]}
                 activeOpacity={0.8}
                 onPress={() => {
@@ -1538,7 +1566,7 @@ export default function ProfileScreen({ navigation }: any) {
                   setLanguageVisible(false);
                 }}
               >
-                <Text style={styles.appearanceOptionLabel}>Việt Nam</Text>
+                <Text style={[styles.appearanceOptionLabel, isDarkMode && { color: '#F8FAFC' }]}>Việt Nam</Text>
                 {languageMode === 'vi' && (
                   <Ionicons name="checkmark" size={22} color="#1D9BF0" />
                 )}
@@ -1547,7 +1575,7 @@ export default function ProfileScreen({ navigation }: any) {
               <TouchableOpacity
                 style={[
                   styles.appearanceOptionRow,
-                  languageMode === 'en' && styles.appearanceOptionRowSelected,
+                  languageMode === 'en' && (isDarkMode ? { backgroundColor: '#0F172A' } : styles.appearanceOptionRowSelected),
                 ]}
                 activeOpacity={0.8}
                 onPress={() => {
@@ -1555,7 +1583,7 @@ export default function ProfileScreen({ navigation }: any) {
                   setLanguageVisible(false);
                 }}
               >
-                <Text style={styles.appearanceOptionLabel}>English</Text>
+                <Text style={[styles.appearanceOptionLabel, isDarkMode && { color: '#F8FAFC' }]}>English</Text>
                 {languageMode === 'en' && (
                   <Ionicons name="checkmark" size={22} color="#1D9BF0" />
                 )}
@@ -1573,21 +1601,21 @@ export default function ProfileScreen({ navigation }: any) {
         onRequestClose={() => setAppearanceVisible(false)}
       >
         <Pressable style={styles.appearanceOverlay} onPress={() => setAppearanceVisible(false)}>
-          <Pressable style={styles.appearanceSheet} onPress={() => {}}>
+          <Pressable style={[styles.appearanceSheet, isDarkMode && { backgroundColor: colors.background }]} onPress={() => {}}>
             <View style={styles.appearanceHeader}>
               <TouchableOpacity
                 style={styles.appearanceCloseButton}
                 onPress={() => setAppearanceVisible(false)}
                 activeOpacity={0.7}
               >
-                <Ionicons name="chevron-back-outline" size={28} color="#111827" />
+                <Ionicons name="chevron-back-outline" size={28} color={isDarkMode ? colors.textPrimary : '#111827'} />
               </TouchableOpacity>
 
-              <Text style={styles.appearanceTitle}>Về bề ngoài</Text>
+              <Text style={[styles.appearanceTitle, isDarkMode && { color: colors.textPrimary }]}>Về bề ngoài</Text>
               <View style={styles.appearanceHeaderSpacer} />
             </View>
 
-            <View style={styles.appearanceCard}>
+            <View style={[styles.appearanceCard, isDarkMode && { backgroundColor: colors.card, borderColor: colors.border }]}>
               <TouchableOpacity
                 style={[
                   styles.appearanceOptionRow,
@@ -1596,10 +1624,11 @@ export default function ProfileScreen({ navigation }: any) {
                 activeOpacity={0.8}
                 onPress={() => {
                   setAppearanceMode('light');
+                  setDarkMode(false);
                   setAppearanceVisible(false);
                 }}
               >
-                <Text style={styles.appearanceOptionLabel}>Màu sáng</Text>
+                <Text style={[styles.appearanceOptionLabel, isDarkMode && { color: colors.textPrimary }]}>Màu sáng</Text>
                 {appearanceMode === 'light' && (
                   <Ionicons name="checkmark" size={22} color="#1D9BF0" />
                 )}
@@ -1613,10 +1642,11 @@ export default function ProfileScreen({ navigation }: any) {
                 activeOpacity={0.8}
                 onPress={() => {
                   setAppearanceMode('dark');
+                  setDarkMode(true);
                   setAppearanceVisible(false);
                 }}
               >
-                <Text style={styles.appearanceOptionLabel}>Tối</Text>
+                <Text style={[styles.appearanceOptionLabel, isDarkMode && { color: colors.textPrimary }]}>Tối</Text>
                 {appearanceMode === 'dark' && (
                   <Ionicons name="checkmark" size={22} color="#1D9BF0" />
                 )}
@@ -1640,52 +1670,50 @@ export default function ProfileScreen({ navigation }: any) {
               setUserMenuVisible(true);
             }}
           >
-            <View style={styles.avatarCircle}>
-              <Ionicons name="person" size={38} color="#CBD5E1" />
+            <View style={[styles.avatarCircle, isDarkMode && { backgroundColor: colors.card }]}>
+              <Ionicons name="person" size={38} color={isDarkMode ? '#64748B' : '#CBD5E1'} />
             </View>
             <View style={{ marginLeft: 16 }}>
-              <Text style={styles.userIdText}>1057</Text>
-              <Text style={styles.userRoleText}>{userName || 'Người chăm sóc chính'}</Text>
-              <View style={styles.accountBadgeWrap}>
+              <Text style={[styles.userIdText, isDarkMode && { color: colors.textPrimary }]}>1057</Text>
+              <Text style={[styles.userRoleText, isDarkMode && { color: colors.textSecondary }]}>{userName || 'Người chăm sóc chính'}</Text>
+              <View style={[styles.accountBadgeWrap, isDarkMode && { backgroundColor: colors.card }]}>
                 <View style={styles.accountBadgeDot} />
-                <Text style={styles.accountBadgeText}>Xem tài khoản</Text>
+                <Text style={[styles.accountBadgeText, isDarkMode && { color: colors.textSecondary }]}>Xem tài khoản</Text>
               </View>
             </View>
           </TouchableOpacity>
-
         </View>
-
 
         {/* 3. Card "Nhà của tôi" (Thành viên: 1, icon add user -> mở Hình 3) */}
         <TouchableOpacity
-          style={styles.houseCard}
+          style={[styles.houseCard, isDarkMode && { backgroundColor: colors.card, borderColor: colors.border, borderWidth: 1 }]}
           onPress={() => navigation.navigate('HouseDetail')}
           activeOpacity={0.9}
         >
           <View>
-            <Text style={styles.houseCardTitle}>{house.name}</Text>
-            <Text style={styles.houseCardSub}>Thành viên: {house.membersCount}</Text>
+            <Text style={[styles.houseCardTitle, isDarkMode && { color: colors.textPrimary }]}>{house.name}</Text>
+            <Text style={[styles.houseCardSub, isDarkMode && { color: colors.textSecondary }]}>Thành viên: {house.membersCount}</Text>
           </View>
-          <View style={styles.addMemberCircleBtn}>
-            <Ionicons name="person-add" size={18} color="#94A3B8" />
+          <View style={[styles.addMemberCircleBtn, isDarkMode && { backgroundColor: colors.background }]}>
+            <Ionicons name="person-add" size={18} color={isDarkMode ? colors.textSecondary : '#94A3B8'} />
           </View>
         </TouchableOpacity>
 
         {/* 4. Menu Card 1: Thuật toán cảnh báo và thiết bị IoT */}
-        <View style={styles.menuGroupCard}>
+        <View style={[styles.menuGroupCard, isDarkMode && { backgroundColor: colors.card, borderColor: colors.border, borderWidth: 1 }]}>
           {/* Row 1: Chơi Algo (Thuật toán cảnh báo) */}
           <TouchableOpacity
             style={styles.menuRow}
             onPress={() => navigation.navigate('AlgoConfig')}
             activeOpacity={0.7}
           >
-            <View style={[styles.menuIconBox, { backgroundColor: '#F3E8FF' }]}>
+            <View style={[styles.menuIconBox, { backgroundColor: isDarkMode ? '#3B1D54' : '#F3E8FF' }]}>
               <Ionicons name="color-wand" size={20} color="#A855F7" />
             </View>
-            <Text style={styles.menuTitleText}>Chơi Algo</Text>
-            <Ionicons name="chevron-forward" size={18} color="#CBD5E1" />
+            <Text style={[styles.menuTitleText, isDarkMode && { color: colors.textPrimary }]}>Chơi Algo</Text>
+            <Ionicons name="chevron-forward" size={18} color={isDarkMode ? colors.textSecondary : '#CBD5E1'} />
           </TouchableOpacity>
-          <View style={styles.menuDivider} />
+          <View style={[styles.menuDivider, isDarkMode && { backgroundColor: colors.border }]} />
 
           {/* Row 2: Hoạt động với (Thiết bị IoT) */}
           <TouchableOpacity
@@ -1693,32 +1721,32 @@ export default function ProfileScreen({ navigation }: any) {
             onPress={() => navigation.navigate('Devices')}
             activeOpacity={0.7}
           >
-            <View style={[styles.menuIconBox, { backgroundColor: '#FFEDD5' }]}>
+            <View style={[styles.menuIconBox, { backgroundColor: isDarkMode ? '#4A2810' : '#FFEDD5' }]}>
               <Ionicons name="hardware-chip" size={20} color="#F97316" />
             </View>
-            <Text style={styles.menuTitleText}>Hoạt động với</Text>
-            <Ionicons name="chevron-forward" size={18} color="#CBD5E1" />
+            <Text style={[styles.menuTitleText, isDarkMode && { color: colors.textPrimary }]}>Hoạt động với</Text>
+            <Ionicons name="chevron-forward" size={18} color={isDarkMode ? colors.textSecondary : '#CBD5E1'} />
           </TouchableOpacity>
         </View>
 
         {/* 5. Menu Card 2: Báo cáo y tế & Cài Đặt */}
-        <View style={styles.menuGroupCard}>
+        <View style={[styles.menuGroupCard, isDarkMode && { backgroundColor: colors.card, borderColor: colors.border, borderWidth: 1 }]}>
           {/* Row 1: Đơn hàng của tôi / Báo cáo y tế xuất PDF/Excel */}
           <TouchableOpacity
             style={styles.menuRow}
             onPress={() => navigation.navigate('MedicalReport')}
             activeOpacity={0.7}
           >
-            <View style={[styles.menuIconBox, { backgroundColor: '#F3E8FF' }]}>
+            <View style={[styles.menuIconBox, { backgroundColor: isDarkMode ? '#3B1D54' : '#F3E8FF' }]}>
               <Ionicons name="bag-handle" size={20} color="#9333EA" />
             </View>
             <View style={{ flex: 1 }}>
-              <Text style={styles.menuTitleText}>Báo cáo</Text>
-              <Text style={styles.menuSubText}>Báo cáo y tế &amp; Xuất file (FR13)</Text>
+              <Text style={[styles.menuTitleText, isDarkMode && { color: colors.textPrimary }]}>Báo cáo</Text>
+              <Text style={[styles.menuSubText, isDarkMode && { color: colors.textSecondary }]}>Báo cáo y tế &amp; Xuất file (FR13)</Text>
             </View>
-            <Ionicons name="chevron-forward" size={18} color="#CBD5E1" />
+            <Ionicons name="chevron-forward" size={18} color={isDarkMode ? colors.textSecondary : '#CBD5E1'} />
           </TouchableOpacity>
-          <View style={styles.menuDivider} />
+          <View style={[styles.menuDivider, isDarkMode && { backgroundColor: colors.border }]} />
 
           {/* Row 2: Cài Đặt (Có chấm đỏ thông báo cập nhật) */}
           <TouchableOpacity
@@ -1726,54 +1754,54 @@ export default function ProfileScreen({ navigation }: any) {
             activeOpacity={0.7}
             onPress={handleCustomerSupportPress}
           >
-            <View style={[styles.menuIconBox, { backgroundColor: '#FEE2E2' }]}>
+            <View style={[styles.menuIconBox, { backgroundColor: isDarkMode ? '#4C1D1D' : '#FEE2E2' }]}>
               <Ionicons name="call-outline" size={20} color="#EF4444" />
             </View>
-            <Text style={styles.menuTitleText}>Liên hệ khẩn cấp tới dịch vụ CSKH</Text>
-            <Ionicons name="chevron-forward" size={18} color="#CBD5E1" />
+            <Text style={[styles.menuTitleText, isDarkMode && { color: colors.textPrimary }]}>Liên hệ khẩn cấp tới dịch vụ CSKH</Text>
+            <Ionicons name="chevron-forward" size={18} color={isDarkMode ? colors.textSecondary : '#CBD5E1'} />
           </TouchableOpacity>
-          <View style={styles.menuDivider} />
+          <View style={[styles.menuDivider, isDarkMode && { backgroundColor: colors.border }]} />
 
           <TouchableOpacity
             style={styles.menuRow}
             activeOpacity={0.7}
             onPress={() => setLocationVisible(true)}
           >
-            <View style={[styles.menuIconBox, { backgroundColor: '#DBEAFE' }]}>
+            <View style={[styles.menuIconBox, { backgroundColor: isDarkMode ? '#1E2958' : '#DBEAFE' }]}>
               <Ionicons name="location-outline" size={20} color="#2563EB" />
             </View>
-            <Text style={styles.menuTitleText}>Định vị địa lý</Text>
-            <Ionicons name="chevron-forward" size={18} color="#CBD5E1" />
+            <Text style={[styles.menuTitleText, isDarkMode && { color: colors.textPrimary }]}>Định vị địa lý</Text>
+            <Ionicons name="chevron-forward" size={18} color={isDarkMode ? colors.textSecondary : '#CBD5E1'} />
           </TouchableOpacity>
         </View>
 
-        <View style={styles.menuGroupCard}>
+        <View style={[styles.menuGroupCard, isDarkMode && { backgroundColor: colors.card, borderColor: colors.border, borderWidth: 1 }]}>
           <TouchableOpacity
             style={styles.menuRow}
             onPress={() => setSecurityCenterVisible(true)}
             activeOpacity={0.7}
           >
-            <View style={[styles.menuIconBox, { backgroundColor: '#CCFBF1' }]}>
+            <View style={[styles.menuIconBox, { backgroundColor: isDarkMode ? '#133E3B' : '#CCFBF1' }]}>
               <Ionicons name="shield-checkmark" size={20} color="#0F766E" />
             </View>
             <View style={styles.securityMenuCopy}>
-              <Text style={styles.menuTitleText}>Trung tâm bảo mật</Text>
-              <Text style={styles.menuSubText}>Bảo vệ tài khoản và thiết bị</Text>
+              <Text style={[styles.menuTitleText, isDarkMode && { color: colors.textPrimary }]}>Trung tâm bảo mật</Text>
+              <Text style={[styles.menuSubText, isDarkMode && { color: colors.textSecondary }]}>Bảo vệ tài khoản và thiết bị</Text>
             </View>
-            <Ionicons name="chevron-forward" size={18} color="#CBD5E1" />
+            <Ionicons name="chevron-forward" size={18} color={isDarkMode ? colors.textSecondary : '#CBD5E1'} />
           </TouchableOpacity>
-          <View style={styles.menuDivider} />
+          <View style={[styles.menuDivider, isDarkMode && { backgroundColor: colors.border }]} />
 
           <TouchableOpacity
             style={styles.menuRow}
             onPress={() => setSettingsVisible(true)}
             activeOpacity={0.7}
           >
-            <View style={[styles.menuIconBox, { backgroundColor: '#FEF3C7' }]}>
+            <View style={[styles.menuIconBox, { backgroundColor: isDarkMode ? '#452F10' : '#FEF3C7' }]}>
               <Ionicons name="settings" size={20} color="#D97706" />
             </View>
-            <Text style={styles.menuTitleText}>Cài Đặt</Text>
-            <Ionicons name="chevron-forward" size={18} color="#CBD5E1" />
+            <Text style={[styles.menuTitleText, isDarkMode && { color: colors.textPrimary }]}>Cài Đặt</Text>
+            <Ionicons name="chevron-forward" size={18} color={isDarkMode ? colors.textSecondary : '#CBD5E1'} />
           </TouchableOpacity>
         </View>
 
@@ -3615,8 +3643,8 @@ logoutButton: {
   },
   settingsGroupCard: {
     borderWidth: 1,
-    borderColor: '#E2E8F0',
-    borderRadius: 18,
+    borderColor: '#F1F5F9',
+    borderRadius: 16,
     backgroundColor: '#FFFFFF',
     overflow: 'hidden',
     shadowColor: '#64748B',
@@ -3633,8 +3661,8 @@ logoutButton: {
     paddingVertical: 14,
     paddingHorizontal: 16,
     borderBottomWidth: 1,
-    borderBottomColor: '#EEF2F7',
-    backgroundColor: '#FFFFFF',
+    borderBottomColor: '#F1F5F9',
+    backgroundColor: 'transparent',
   },
   settingsItemLast: {
     borderBottomWidth: 0,

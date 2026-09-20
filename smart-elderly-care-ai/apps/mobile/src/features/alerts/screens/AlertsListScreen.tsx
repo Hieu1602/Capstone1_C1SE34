@@ -16,67 +16,315 @@ import { SafeAreaView } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
 import { Colors, Shadows } from '../../../theme/colors';
 import { useVitalStore } from '../../../store/useVitalStore';
+import { useTheme } from '../../../store/useThemeStore';
 
-const LEVEL_COLORS: Record<string, string> = {
-  CRITICAL: '#EF4444',
-  HIGH: '#F97316',
-  MEDIUM: '#F59E0B',
-  LOW: '#10B981',
-};
+interface AlertConfig {
+  title: string;
+  badgeText: string;
+  badgeBg: string;
+  badgeColor: string;
+  iconName: keyof typeof Ionicons.glyphMap;
+  iconColor: string;
+  iconBg: string;
+  isCritical: boolean;
+}
+
+function getAlertConfig(alertType: string): AlertConfig {
+  switch (alertType) {
+    case 'FALL_DETECTED':
+      return {
+        title: 'CẢNH BÁO TÉ NGÃ KHẨN CẤP',
+        badgeText: 'CỰC KỲ NGUY HIỂM',
+        badgeBg: '#EF4444',
+        badgeColor: '#FFFFFF',
+        iconName: 'warning',
+        iconColor: '#DC2626',
+        iconBg: '#FEE2E2',
+        isCritical: true,
+      };
+    case 'HIGH_HEART_RATE':
+      return {
+        title: 'Nhịp tim tăng cao bất thường (128 bpm)',
+        badgeText: 'Cảnh báo tim',
+        badgeBg: '#FFF7ED',
+        badgeColor: '#EA580C',
+        iconName: 'heart',
+        iconColor: '#EA580C',
+        iconBg: '#FFEDD5',
+        isCritical: false,
+      };
+    case 'ACOUSTIC_DISTRESS':
+      return {
+        title: 'Phát hiện âm thanh kêu cứu',
+        badgeText: 'Âm thanh YAMNet',
+        badgeBg: '#F3E8FF',
+        badgeColor: '#7C3AED',
+        iconName: 'mic',
+        iconColor: '#9333EA',
+        iconBg: '#F3E8FF',
+        isCritical: true,
+      };
+    case 'PERSON_DETECTED':
+      return {
+        title: 'Phát hiện chuyển động người',
+        badgeText: 'Chuyển động',
+        badgeBg: '#ECFDF5',
+        badgeColor: '#059669',
+        iconName: 'person',
+        iconColor: '#10B981',
+        iconBg: '#DCFCE7',
+        isCritical: false,
+      };
+    default:
+      return {
+        title: alertType.replace(/_/g, ' '),
+        badgeText: 'Thông báo',
+        badgeBg: '#F1F5F9',
+        badgeColor: '#64748B',
+        iconName: 'notifications',
+        iconColor: Colors.primary,
+        iconBg: '#FFF4EC',
+        isCritical: false,
+      };
+  }
+}
+
+function formatFriendlyTime(dateStr: string) {
+  try {
+    const date = new Date(dateStr);
+    const now = new Date();
+    const diffMs = now.getTime() - date.getTime();
+    if (diffMs <= 60 * 1000) return 'Vừa xong';
+    const diffMin = Math.floor(diffMs / (60 * 1000));
+    if (diffMin < 60) return `${diffMin} phút trước`;
+    const diffHour = Math.floor(diffMin / 60);
+    if (diffHour < 24) return `${diffHour} giờ trước`;
+    const diffDay = Math.floor(diffHour / 24);
+    if (diffDay === 1) return 'Hôm qua';
+    if (diffDay < 7) return `${diffDay} ngày trước`;
+
+    const hours = String(date.getHours()).padStart(2, '0');
+    const minutes = String(date.getMinutes()).padStart(2, '0');
+    const day = String(date.getDate()).padStart(2, '0');
+    const month = String(date.getMonth() + 1).padStart(2, '0');
+    return `${hours}:${minutes} • ${day}/${month}`;
+  } catch {
+    return dateStr;
+  }
+}
 
 export default function AlertsListScreen({ navigation }: any) {
-  const { incidents } = useVitalStore();
+  const { isDarkMode, colors, toggleDarkMode } = useTheme();
+  const { incidents, setIncidents } = useVitalStore();
   const [refreshing, setRefreshing] = useState(false);
   const [filterType, setFilterType] = useState<'ALL' | 'CRITICAL' | 'VITAL'>('ALL');
 
+  const unreadCount = incidents.filter((item) => !item.is_acknowledged).length;
+
   const filteredIncidents = incidents.filter((item) => {
-    if (filterType === 'CRITICAL') return item.alert_level === 'CRITICAL';
-    if (filterType === 'VITAL') return item.alert_type.includes('HEART') || item.alert_type.includes('SPO2');
+    if (filterType === 'CRITICAL') {
+      return (
+        item.alert_level === 'CRITICAL' ||
+        item.alert_type === 'FALL_DETECTED' ||
+        item.alert_type === 'ACOUSTIC_DISTRESS'
+      );
+    }
+    if (filterType === 'VITAL') {
+      return (
+        item.alert_type.includes('HEART') ||
+        item.alert_type.includes('SPO2') ||
+        item.alert_type.includes('TEMP')
+      );
+    }
     return true;
   });
 
+  const handleMarkAllAsRead = () => {
+    if (unreadCount === 0) {
+      Alert.alert('Thông báo', 'Tất cả sự kiện đều đã được đánh dấu đọc.');
+      return;
+    }
+    setIncidents(incidents.map((i) => ({ ...i, is_acknowledged: true })));
+    Alert.alert('Thành công', 'Đã đánh dấu đã đọc tất cả thông báo.');
+  };
+
+  const handlePressCard = (item: any) => {
+    if (!item.is_acknowledged) {
+      setIncidents(
+        incidents.map((i) => (i.id === item.id ? { ...i, is_acknowledged: true } : i))
+      );
+    }
+
+    // a. Thông báo "Phát hiện chuyển động người"
+    if (item.alert_type === 'PERSON_DETECTED') {
+      navigation.navigate('CameraDetail', {
+        cameraId: 'cam_living_room',
+        tab: 'playback',
+      });
+      return;
+    }
+
+    // b. Thông báo "Nhịp tim tăng cao bất thường" (hoặc các cảnh báo về sức khoẻ)
+    if (
+      item.alert_type === 'HIGH_HEART_RATE' ||
+      item.alert_type.includes('HEART') ||
+      item.alert_type.includes('SPO2') ||
+      item.alert_type.includes('TEMP')
+    ) {
+      navigation.navigate('HealthDetail', {
+        initialTab: 'today',
+        focusMetric: 'heartRate',
+        metric: 'heartRate',
+      });
+      return;
+    }
+
+    // c. Thông báo "CẢNH BÁO TÉ NGÃ KHẨN CẤP"
+    if (item.alert_type === 'FALL_DETECTED') {
+      navigation.navigate('IncidentDetail', {
+        incidentId: item.id,
+        id: item.id,
+        type: 'FALL',
+        alert_type: 'FALL_DETECTED',
+        alert_level: 'CRITICAL',
+        confidence: '92%',
+        time: item.created_at ?? new Date().toISOString(),
+        created_at: item.created_at ?? new Date().toISOString(),
+        message: 'Phát hiện té ngã! Xác nhận bởi camera AI (YOLOv8-Pose 30 FPS) & Cảm biến âm thanh YAMNet.',
+        clipAvailable: true,
+        video_clip_url:
+          item.video_clip_url ??
+          'https://commondatastorage.googleapis.com/gtv-videos-bucket/sample/BigBuckBunny.mp4',
+        is_acknowledged: item.is_acknowledged ?? false,
+      });
+      return;
+    }
+
+    // Mặc định hoặc sự kiện âm thanh / sự cố khác
+    navigation.navigate('IncidentDetail', {
+      incidentId: item.id,
+      id: item.id,
+      type: item.alert_type === 'ACOUSTIC_DISTRESS' ? 'ACOUSTIC' : item.alert_type,
+      alert_type: item.alert_type,
+      alert_level: item.alert_level ?? 'CRITICAL',
+      confidence: '90%',
+      time: item.created_at ?? new Date().toISOString(),
+      created_at: item.created_at ?? new Date().toISOString(),
+      message: item.message,
+      clipAvailable: Boolean(item.video_clip_url || item.thumbnail_url),
+      video_clip_url:
+        item.video_clip_url ??
+        'https://commondatastorage.googleapis.com/gtv-videos-bucket/sample/ForBiggerBlazes.mp4',
+      is_acknowledged: item.is_acknowledged ?? false,
+    });
+  };
+
   return (
-    <SafeAreaView style={styles.safeArea} edges={['top']}>
-      {/* Header */}
-      <View style={styles.topHeader}>
-        <Text style={styles.headerTitle}>Thông Báo &amp; Sự Kiện</Text>
-        <TouchableOpacity
-          style={styles.sosQuickBtn}
-          onPress={() => navigation.navigate('CameraDetail')}
-        >
-          <Ionicons name="videocam" size={18} color="#FFF" />
-          <Text style={styles.sosQuickText}>Camera</Text>
-        </TouchableOpacity>
+    <SafeAreaView style={[styles.safeArea, isDarkMode && { backgroundColor: colors.background }]} edges={['top']}>
+      {/* 1. Header */}
+      <View style={[styles.topHeader, isDarkMode && { backgroundColor: colors.background, borderBottomColor: colors.border }]}>
+        <View style={styles.headerTitleCol}>
+          <Text style={[styles.headerTitle, isDarkMode && { color: colors.textPrimary }]}>Thông Báo &amp; Sự Kiện</Text>
+          <Text style={[styles.headerSubtitle, isDarkMode && { color: colors.textSecondary }]}>
+            {unreadCount > 0 ? `${unreadCount} thông báo mới chưa đọc` : 'Tất cả đã được xử lý'}
+          </Text>
+        </View>
+
+        <View style={styles.headerRightActions}>
+          {/* Nút chuyển đổi Sáng / Tối */}
+          <TouchableOpacity
+            style={[styles.themeToggleBtn, isDarkMode && { backgroundColor: colors.iconBg }]}
+            onPress={toggleDarkMode}
+            activeOpacity={0.7}
+            accessibilityLabel="Chuyển chế độ Sáng/Tối"
+          >
+            <Ionicons
+              name={isDarkMode ? 'sunny-outline' : 'moon-outline'}
+              size={18}
+              color={isDarkMode ? '#F59E0B' : colors.textPrimary}
+            />
+          </TouchableOpacity>
+
+          <TouchableOpacity
+            style={[styles.markAllReadBtn, isDarkMode && { backgroundColor: colors.card, borderColor: colors.border }]}
+            onPress={handleMarkAllAsRead}
+            activeOpacity={0.7}
+          >
+            <Ionicons
+              name="checkmark-done"
+              size={15}
+              color={unreadCount > 0 ? '#EA580C' : '#94A3B8'}
+            />
+            <Text
+              style={[
+                styles.markAllReadText,
+                unreadCount === 0 && { color: '#94A3B8' },
+              ]}
+            >
+              Đã đọc tất cả
+            </Text>
+          </TouchableOpacity>
+
+          <TouchableOpacity
+            style={styles.cameraQuickBtn}
+            onPress={() => navigation.navigate('CameraDetail')}
+            activeOpacity={0.7}
+          >
+            <Ionicons name="videocam" size={15} color="#FFF" />
+            <Text style={styles.cameraQuickText}>Camera</Text>
+          </TouchableOpacity>
+        </View>
       </View>
 
-      {/* Filter Tabs */}
-      <View style={styles.filterBar}>
+      {/* 2. Filter Bar (Filter Chips) */}
+      <View style={[styles.filterBar, isDarkMode && { backgroundColor: colors.background, borderBottomColor: colors.border }]}>
         <TouchableOpacity
-          style={[styles.filterPill, filterType === 'ALL' && styles.filterPillActive]}
+          style={[
+            styles.filterPill,
+            isDarkMode && filterType !== 'ALL' && { backgroundColor: colors.card, borderColor: colors.border },
+            filterType === 'ALL' && styles.filterPillActive,
+            filterType === 'ALL' && isDarkMode && { backgroundColor: 'rgba(255, 107, 0, 0.15)', borderColor: '#FF6B00' },
+          ]}
           onPress={() => setFilterType('ALL')}
+          activeOpacity={0.8}
         >
-          <Text style={[styles.filterText, filterType === 'ALL' && styles.filterTextActive]}>
+          <Text style={[styles.filterText, isDarkMode && filterType !== 'ALL' && { color: colors.textSecondary }, filterType === 'ALL' && styles.filterTextActive]}>
             Tất cả ({incidents.length})
           </Text>
         </TouchableOpacity>
+
         <TouchableOpacity
-          style={[styles.filterPill, filterType === 'CRITICAL' && styles.filterPillActive]}
+          style={[
+            styles.filterPill,
+            isDarkMode && filterType !== 'CRITICAL' && { backgroundColor: colors.card, borderColor: colors.border },
+            filterType === 'CRITICAL' && styles.filterPillActive,
+            filterType === 'CRITICAL' && isDarkMode && { backgroundColor: 'rgba(255, 107, 0, 0.15)', borderColor: '#FF6B00' },
+          ]}
           onPress={() => setFilterType('CRITICAL')}
+          activeOpacity={0.8}
         >
-          <Text style={[styles.filterText, filterType === 'CRITICAL' && styles.filterTextActive]}>
+          <Text style={[styles.filterText, isDarkMode && filterType !== 'CRITICAL' && { color: colors.textSecondary }, filterType === 'CRITICAL' && styles.filterTextActive]}>
             🚨 Nguy kịch (Red Alert)
           </Text>
         </TouchableOpacity>
+
         <TouchableOpacity
-          style={[styles.filterPill, filterType === 'VITAL' && styles.filterPillActive]}
+          style={[
+            styles.filterPill,
+            isDarkMode && filterType !== 'VITAL' && { backgroundColor: colors.card, borderColor: colors.border },
+            filterType === 'VITAL' && styles.filterPillActive,
+            filterType === 'VITAL' && isDarkMode && { backgroundColor: 'rgba(255, 107, 0, 0.15)', borderColor: '#FF6B00' },
+          ]}
           onPress={() => setFilterType('VITAL')}
+          activeOpacity={0.8}
         >
-          <Text style={[styles.filterText, filterType === 'VITAL' && styles.filterTextActive]}>
-            Sinh hiệu
+          <Text style={[styles.filterText, isDarkMode && filterType !== 'VITAL' && { color: colors.textSecondary }, filterType === 'VITAL' && styles.filterTextActive]}>
+            Sức khoẻ
           </Text>
         </TouchableOpacity>
       </View>
 
+      {/* 3. Notification Cards List */}
       <FlatList
         data={filteredIncidents}
         keyExtractor={(item) => item.id}
@@ -91,33 +339,35 @@ export default function AlertsListScreen({ navigation }: any) {
           />
         }
         renderItem={({ item }) => {
-          const isCritical = item.alert_level === 'CRITICAL';
-          const isFall = item.alert_type === 'FALL_DETECTED';
+          const config = getAlertConfig(item.alert_type);
+          const friendlyTime = formatFriendlyTime(item.created_at);
 
           return (
             <TouchableOpacity
-              style={[styles.card, isFall && styles.cardCritical]}
-              onPress={() => {
-                if (item.video_clip_url) {
-                  navigation.navigate('CameraDetail');
-                } else {
-                  navigation.navigate('IncidentDetail', { incidentId: item.id });
-                }
-              }}
+              style={[
+                styles.card,
+                isDarkMode && { backgroundColor: colors.card, borderColor: colors.border },
+                config.isCritical && styles.cardCritical,
+                config.isCritical && isDarkMode && { backgroundColor: '#3F1219', borderColor: '#7F1D1D' },
+                !item.is_acknowledged && styles.cardUnread,
+              ]}
+              onPress={() => handlePressCard(item)}
               activeOpacity={0.8}
             >
-              <View
-                style={[
-                  styles.dot,
-                  { backgroundColor: LEVEL_COLORS[item.alert_level] ?? Colors.primary },
-                ]}
-              />
+              {/* Icon phân loại bên trái */}
+              <View style={[styles.categoryIconCircle, { backgroundColor: isDarkMode ? (config.isCritical ? 'rgba(220, 38, 38, 0.25)' : 'rgba(255, 255, 255, 0.08)') : config.iconBg }]}>
+                <Ionicons name={config.iconName} size={22} color={config.iconColor} />
+              </View>
 
-              <View style={{ flex: 1 }}>
-                <View style={{ flexDirection: 'row', alignItems: 'center' }}>
-                  <Text style={styles.cardTitle}>
-                    {item.alert_type.replace(/_/g, ' ')}
-                  </Text>
+              {/* Nội dung trung tâm */}
+              <View style={styles.cardCenter}>
+                {/* Hàng badge & trạng thái */}
+                <View style={styles.cardMetaRow}>
+                  <View style={[styles.typeBadge, { backgroundColor: isDarkMode && config.badgeBg === '#FFF7ED' ? 'rgba(234, 88, 12, 0.2)' : config.badgeBg }]}>
+                    <Text style={[styles.typeBadgeText, { color: config.badgeColor }]}>
+                      {config.badgeText}
+                    </Text>
+                  </View>
                   {!item.is_acknowledged && (
                     <View style={styles.newBadge}>
                       <Text style={styles.newBadgeText}>MỚI</Text>
@@ -125,33 +375,63 @@ export default function AlertsListScreen({ navigation }: any) {
                   )}
                 </View>
 
-                <Text style={styles.cardMsg} numberOfLines={2}>
+                {/* Tiêu đề sự kiện chuẩn hóa tiếng Việt */}
+                <Text
+                  style={[
+                    styles.cardTitle,
+                    isDarkMode && { color: colors.textPrimary },
+                    config.isCritical && styles.cardTitleCritical,
+                  ]}
+                  numberOfLines={2}
+                >
+                  {config.title}
+                </Text>
+
+                {/* Chi tiết nội dung */}
+                <Text style={[styles.cardMsg, isDarkMode && { color: colors.textSecondary }]} numberOfLines={2}>
                   {item.message}
                 </Text>
-                <Text style={styles.cardTime}>
-                  {new Date(item.created_at).toLocaleString('vi-VN')}
-                </Text>
+
+                {/* Thời gian thân thiện */}
+                <View style={styles.timeRow}>
+                  <Ionicons name="time-outline" size={12} color={isDarkMode ? '#64748B' : '#94A3B8'} />
+                  <Text style={[styles.cardTime, isDarkMode && { color: colors.textSecondary }]}>{friendlyTime}</Text>
+                  <Text style={[styles.dotSeparator, isDarkMode && { color: colors.border }]}>•</Text>
+                  <Text style={[styles.deviceLocationText, isDarkMode && { color: colors.textSecondary }]}>Hub #01 (Phòng khách)</Text>
+                </View>
               </View>
 
+              {/* Hình ảnh/clip trích xuất 5s bên phải */}
               {item.thumbnail_url && (
                 <View style={styles.thumbWrapper}>
                   <Image source={{ uri: item.thumbnail_url }} style={styles.thumbImg} />
-                  {item.video_clip_url && (
-                    <View style={styles.playTag}>
-                      <Ionicons name="play" size={10} color="#FFF" />
-                      <Text style={styles.playTagText}>5s Clip</Text>
-                    </View>
-                  )}
+                  <View style={styles.thumbOverlay}>
+                    {item.video_clip_url && (
+                      <View style={styles.playCenterBtn}>
+                        <Ionicons name="play" size={12} color="#FFFFFF" style={{ marginLeft: 2 }} />
+                      </View>
+                    )}
+                    {item.video_clip_url && (
+                      <View style={styles.playTag}>
+                        <Text style={styles.playTagText}>5s Clip</Text>
+                      </View>
+                    )}
+                  </View>
                 </View>
               )}
             </TouchableOpacity>
           );
         }}
-        contentContainerStyle={{ padding: 16, gap: 12, paddingBottom: 40 }}
+        contentContainerStyle={styles.listContainer}
         ListEmptyComponent={
           <View style={styles.emptyBox}>
-            <Ionicons name="shield-checkmark-outline" size={48} color="#94A3B8" />
-            <Text style={styles.emptyText}>Không có cảnh báo bất thường nào</Text>
+            <View style={styles.emptyIconCircle}>
+              <Ionicons name="shield-checkmark-outline" size={36} color="#10B981" />
+            </View>
+            <Text style={[styles.emptyTitle, isDarkMode && { color: colors.textPrimary }]}>Không có cảnh báo bất thường nào</Text>
+            <Text style={[styles.emptySub, isDarkMode && { color: colors.textSecondary }]}>
+              Hệ thống AI đang giám sát an toàn 24/7 và mọi chỉ số sức khoẻ đều trong ngưỡng chuẩn.
+            </Text>
           </View>
         }
       />
@@ -162,35 +442,74 @@ export default function AlertsListScreen({ navigation }: any) {
 const styles = StyleSheet.create({
   safeArea: {
     flex: 1,
-    backgroundColor: Colors.background,
+    backgroundColor: '#F8FAFC',
   },
   topHeader: {
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'space-between',
-    paddingHorizontal: 20,
+    paddingHorizontal: 16,
     paddingVertical: 14,
-    backgroundColor: Colors.surface,
+    backgroundColor: '#FFFFFF',
     borderBottomWidth: 1,
-    borderBottomColor: Colors.border,
+    borderBottomColor: '#F1F5F9',
+  },
+  headerTitleCol: {
+    flex: 1,
+    marginRight: 8,
   },
   headerTitle: {
-    fontSize: 20,
+    fontSize: 19,
     fontWeight: '900',
     color: Colors.textPrimary,
   },
-  sosQuickBtn: {
+  headerSubtitle: {
+    fontSize: 11.5,
+    color: '#94A3B8',
+    marginTop: 2,
+    fontWeight: '500',
+  },
+  headerRightActions: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 8,
+  },
+  themeToggleBtn: {
+    width: 32,
+    height: 32,
+    borderRadius: 16,
+    backgroundColor: '#F1F5F9',
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  markAllReadBtn: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 4,
+    paddingHorizontal: 9,
+    paddingVertical: 6,
+    borderRadius: 16,
+    backgroundColor: '#FFF4EC',
+    borderWidth: 1,
+    borderColor: '#FED7AA',
+  },
+  markAllReadText: {
+    fontSize: 11,
+    fontWeight: '700',
+    color: '#EA580C',
+  },
+  cameraQuickBtn: {
     flexDirection: 'row',
     alignItems: 'center',
     backgroundColor: Colors.primary,
     borderRadius: 16,
-    paddingHorizontal: 12,
+    paddingHorizontal: 10,
     paddingVertical: 6,
     gap: 4,
   },
-  sosQuickText: {
+  cameraQuickText: {
     color: '#FFF',
-    fontSize: 12,
+    fontSize: 11.5,
     fontWeight: '700',
   },
   filterBar: {
@@ -198,113 +517,203 @@ const styles = StyleSheet.create({
     paddingHorizontal: 16,
     paddingVertical: 12,
     gap: 8,
+    backgroundColor: '#FFFFFF',
+    borderBottomWidth: 1,
+    borderBottomColor: '#F1F5F9',
   },
   filterPill: {
-    paddingVertical: 6,
-    paddingHorizontal: 14,
-    borderRadius: 16,
-    backgroundColor: Colors.surface,
+    paddingVertical: 7,
+    paddingHorizontal: 13,
+    borderRadius: 20,
+    backgroundColor: '#FFFFFF',
     borderWidth: 1,
-    borderColor: Colors.border,
+    borderColor: '#E2E8F0',
+    alignItems: 'center',
+    justifyContent: 'center',
   },
   filterPillActive: {
-    backgroundColor: Colors.primaryLight,
-    borderColor: Colors.primary,
+    backgroundColor: '#FFF4EC',
+    borderColor: '#FF6B00',
+    borderWidth: 1.5,
   },
   filterText: {
     fontSize: 12,
     fontWeight: '600',
-    color: Colors.textSecondary,
+    color: '#64748B',
   },
   filterTextActive: {
-    color: Colors.primary,
+    color: '#FF6B00',
     fontWeight: '700',
   },
-  card: {
-    backgroundColor: Colors.surface,
-    borderRadius: 18,
+  listContainer: {
     padding: 16,
-    flexDirection: 'row',
-    alignItems: 'center',
     gap: 12,
-    ...Shadows.card,
+    paddingBottom: 40,
+  },
+  card: {
+    backgroundColor: '#FFFFFF',
+    borderRadius: 16,
+    padding: 14,
+    flexDirection: 'row',
+    alignItems: 'flex-start',
+    gap: 12,
+    borderWidth: 1,
+    borderColor: '#F1F5F9',
+    ...Shadows.soft,
   },
   cardCritical: {
-    backgroundColor: '#FEF2F2',
-    borderWidth: 1,
+    backgroundColor: '#FFF1F2',
+    borderWidth: 1.5,
     borderColor: '#FECACA',
   },
-  dot: {
-    width: 10,
-    height: 10,
-    borderRadius: 5,
+  cardUnread: {
+    borderLeftWidth: 3.5,
+    borderLeftColor: '#FF6B00',
   },
-  cardTitle: {
-    fontSize: 14,
+  categoryIconCircle: {
+    width: 42,
+    height: 42,
+    borderRadius: 21,
+    alignItems: 'center',
+    justifyContent: 'center',
+    marginTop: 2,
+  },
+  cardCenter: {
+    flex: 1,
+  },
+  cardMetaRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 6,
+    marginBottom: 4,
+  },
+  typeBadge: {
+    paddingHorizontal: 7,
+    paddingVertical: 2,
+    borderRadius: 6,
+  },
+  typeBadgeText: {
+    fontSize: 9.5,
     fontWeight: '800',
-    color: Colors.textPrimary,
   },
   newBadge: {
-    backgroundColor: Colors.danger,
+    backgroundColor: '#EF4444',
     borderRadius: 6,
-    paddingHorizontal: 6,
-    paddingVertical: 2,
-    marginLeft: 8,
+    paddingHorizontal: 5,
+    paddingVertical: 1.5,
   },
   newBadgeText: {
     color: '#FFF',
-    fontSize: 9,
+    fontSize: 8.5,
+    fontWeight: '800',
+  },
+  cardTitle: {
+    fontSize: 13.5,
+    fontWeight: '700',
+    color: Colors.textPrimary,
+    lineHeight: 19,
+    marginBottom: 3,
+  },
+  cardTitleCritical: {
+    color: '#DC2626',
     fontWeight: '800',
   },
   cardMsg: {
-    fontSize: 13,
+    fontSize: 12.5,
     color: '#475569',
-    marginTop: 4,
     lineHeight: 18,
+    marginBottom: 6,
+  },
+  timeRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 4,
   },
   cardTime: {
     fontSize: 11,
-    color: Colors.textMuted,
-    marginTop: 4,
+    color: '#94A3B8',
+    fontWeight: '500',
+  },
+  dotSeparator: {
+    fontSize: 10,
+    color: '#CBD5E1',
+    marginHorizontal: 2,
+  },
+  deviceLocationText: {
+    fontSize: 11,
+    color: '#94A3B8',
+    fontWeight: '500',
   },
   thumbWrapper: {
-    width: 64,
-    height: 48,
-    borderRadius: 8,
+    width: 76,
+    height: 58,
+    borderRadius: 12,
     overflow: 'hidden',
     position: 'relative',
     backgroundColor: '#E2E8F0',
+    marginTop: 2,
   },
   thumbImg: {
     width: '100%',
     height: '100%',
+    borderRadius: 12,
+  },
+  thumbOverlay: {
+    ...StyleSheet.absoluteFill,
+    backgroundColor: 'rgba(0, 0, 0, 0.25)',
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+  playCenterBtn: {
+    width: 24,
+    height: 24,
+    borderRadius: 12,
+    backgroundColor: 'rgba(0, 0, 0, 0.55)',
+    alignItems: 'center',
+    justifyContent: 'center',
+    borderWidth: 1,
+    borderColor: 'rgba(255, 255, 255, 0.7)',
   },
   playTag: {
     position: 'absolute',
-    bottom: 2,
-    right: 2,
-    flexDirection: 'row',
-    alignItems: 'center',
-    backgroundColor: 'rgba(0,0,0,0.7)',
+    bottom: 3,
+    right: 3,
+    backgroundColor: 'rgba(0, 0, 0, 0.7)',
     borderRadius: 4,
     paddingHorizontal: 4,
     paddingVertical: 1,
-    gap: 2,
   },
   playTagText: {
-    color: '#FFF',
+    color: '#FFFFFF',
     fontSize: 8,
     fontWeight: '700',
   },
   emptyBox: {
     alignItems: 'center',
     justifyContent: 'center',
-    marginTop: 80,
-    gap: 12,
+    marginTop: 60,
+    paddingHorizontal: 24,
+    gap: 10,
   },
-  emptyText: {
-    fontSize: 14,
-    color: Colors.textSecondary,
-    fontWeight: '600',
+  emptyIconCircle: {
+    width: 64,
+    height: 64,
+    borderRadius: 32,
+    backgroundColor: '#ECFDF5',
+    alignItems: 'center',
+    justifyContent: 'center',
+    marginBottom: 4,
+  },
+  emptyTitle: {
+    fontSize: 15,
+    color: Colors.textPrimary,
+    fontWeight: '700',
+    textAlign: 'center',
+  },
+  emptySub: {
+    fontSize: 13,
+    color: '#64748B',
+    textAlign: 'center',
+    lineHeight: 19,
   },
 });

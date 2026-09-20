@@ -17,6 +17,7 @@ import { SafeAreaView } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
 import { Colors, Shadows } from '../../../theme/colors';
 import { useVitalStore } from '../../../store/useVitalStore';
+import { useTheme } from '../../../store/useThemeStore';
 
 const { width: SCREEN_WIDTH } = Dimensions.get('window');
 
@@ -33,6 +34,7 @@ interface CameraFeed {
 }
 
 export default function MultiViewScreen({ navigation }: any) {
+  const { isDarkMode, colors, toggleTheme } = useTheme();
   const { house } = useVitalStore();
   const [layoutMode, setLayoutMode] = useState<'GRID' | 'LIST'>('GRID');
   const [mutedFeeds, setMutedFeeds] = useState<{ [key: string]: boolean }>({
@@ -104,12 +106,12 @@ export default function MultiViewScreen({ navigation }: any) {
   };
 
   return (
-    <SafeAreaView style={styles.safeArea} edges={['top', 'bottom']}>
-      {/* 1. Header with Back button, Title and Layout Toggle */}
-      <View style={styles.headerRow}>
+    <SafeAreaView style={[styles.safeArea, { backgroundColor: isDarkMode ? '#0F172A' : '#F1F5F9' }]} edges={['top', 'bottom']}>
+      {/* 1. Header with Back button, Title, Theme Switcher and Layout Toggle */}
+      <View style={[styles.headerRow, { backgroundColor: isDarkMode ? '#111827' : '#FFFFFF', borderBottomColor: isDarkMode ? '#1F2937' : '#E2E8F0' }]}>
         <View style={styles.headerLeftGroup}>
           <TouchableOpacity
-            style={styles.backBtn}
+            style={[styles.backBtn, { backgroundColor: isDarkMode ? '#1F2937' : '#F1F5F9' }]}
             onPress={() => {
               if (navigation.canGoBack()) {
                 navigation.goBack();
@@ -120,20 +122,43 @@ export default function MultiViewScreen({ navigation }: any) {
             activeOpacity={0.7}
             hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}
           >
-            <Ionicons name="chevron-back" size={24} color="#FFF" />
+            <Ionicons name="chevron-back" size={24} color={isDarkMode ? '#FFF' : '#0F172A'} />
           </TouchableOpacity>
 
           <View style={{ marginLeft: 8 }}>
-            <Text style={styles.headerTitle}>Nhiều Chế Độ Xem</Text>
-            <Text style={styles.headerSub}>{house.name} • 4 Kênh WebRTC</Text>
+            <Text style={[styles.headerTitle, { color: isDarkMode ? '#FFF' : '#0F172A' }]}>Nhiều Chế Độ Xem</Text>
+            <Text style={[styles.headerSub, { color: isDarkMode ? '#94A3B8' : '#64748B' }]}>{house.name} • 4 Kênh WebRTC</Text>
           </View>
         </View>
 
         <View style={styles.headerRightActions}>
+          {/* Nút chuyển đổi Sáng / Tối */}
           <TouchableOpacity
             style={[
               styles.headerActionBtn,
-              layoutMode === 'GRID' ? styles.headerActionBtnActiveGrid : styles.headerActionBtnInactive,
+              {
+                marginRight: 8,
+                backgroundColor: isDarkMode ? '#1F2937' : '#F1F5F9',
+                borderColor: isDarkMode ? '#374151' : '#E2E8F0',
+              },
+            ]}
+            onPress={toggleTheme}
+            activeOpacity={0.8}
+            accessibilityLabel="Chuyển chế độ Sáng/Tối"
+          >
+            <Ionicons
+              name={isDarkMode ? 'sunny-outline' : 'moon-outline'}
+              size={18}
+              color={isDarkMode ? '#F59E0B' : '#0F172A'}
+            />
+          </TouchableOpacity>
+
+          <TouchableOpacity
+            style={[
+              styles.headerActionBtn,
+              layoutMode === 'GRID'
+                ? styles.headerActionBtnActiveGrid
+                : { backgroundColor: isDarkMode ? '#1F2937' : '#F1F5F9', borderColor: isDarkMode ? '#374151' : '#E2E8F0' },
             ]}
             onPress={() => setLayoutMode('GRID')}
             activeOpacity={0.8}
@@ -142,7 +167,7 @@ export default function MultiViewScreen({ navigation }: any) {
             <Ionicons
               name="grid"
               size={18}
-              color={layoutMode === 'GRID' ? '#FFF' : '#94A3B8'}
+              color={layoutMode === 'GRID' ? '#FFF' : (isDarkMode ? '#94A3B8' : '#64748B')}
             />
           </TouchableOpacity>
 
@@ -150,7 +175,9 @@ export default function MultiViewScreen({ navigation }: any) {
             style={[
               styles.headerActionBtn,
               { marginLeft: 8 },
-              layoutMode === 'LIST' ? styles.headerActionBtnActiveList : styles.headerActionBtnInactive,
+              layoutMode === 'LIST'
+                ? styles.headerActionBtnActiveList
+                : { backgroundColor: isDarkMode ? '#1F2937' : '#F1F5F9', borderColor: isDarkMode ? '#374151' : '#E2E8F0' },
             ]}
             onPress={() => setLayoutMode('LIST')}
             activeOpacity={0.8}
@@ -159,7 +186,7 @@ export default function MultiViewScreen({ navigation }: any) {
             <Ionicons
               name="list"
               size={20}
-              color={layoutMode === 'LIST' ? '#FFF' : '#94A3B8'}
+              color={layoutMode === 'LIST' ? '#FFF' : (isDarkMode ? '#94A3B8' : '#64748B')}
             />
           </TouchableOpacity>
         </View>
@@ -179,7 +206,24 @@ export default function MultiViewScreen({ navigation }: any) {
           return (
             <TouchableOpacity
               key={feed.id}
-              style={isGrid ? styles.gridCard : styles.listCard}
+              style={
+                isGrid
+                  ? [
+                      styles.gridCard,
+                      !isDarkMode && {
+                        backgroundColor: '#FFFFFF',
+                        borderColor: '#FFFFFF',
+                        borderWidth: 2,
+                      },
+                    ]
+                  : [
+                      styles.listCard,
+                      !isDarkMode && {
+                        backgroundColor: '#FFFFFF',
+                        borderColor: '#E2E8F0',
+                      },
+                    ]
+              }
               activeOpacity={0.9}
               onPress={() => handleOpenDetail(feed)}
             >
@@ -253,9 +297,9 @@ export default function MultiViewScreen({ navigation }: any) {
 
               {/* Feed Title under Card (for List Mode) */}
               {!isGrid && (
-                <View style={styles.listCardFooter}>
-                  <Text style={styles.listCardTitle}>{feed.name}</Text>
-                  <Text style={styles.listCardSub}>
+                <View style={[styles.listCardFooter, !isDarkMode && { backgroundColor: '#FFFFFF' }]}>
+                  <Text style={[styles.listCardTitle, !isDarkMode && { color: '#0F172A' }]}>{feed.name}</Text>
+                  <Text style={[styles.listCardSub, !isDarkMode && { color: '#64748B' }]}>
                     Băng thông: {feed.bitrate} • Suy luận NPU Hub RK3588S
                   </Text>
                 </View>
@@ -265,14 +309,25 @@ export default function MultiViewScreen({ navigation }: any) {
         })}
 
         {/* Info Banner at bottom */}
-        <View style={layoutMode === 'GRID' ? styles.multiViewNoticeBoxGrid : styles.multiViewNoticeBox}>
+        <View
+          style={[
+            layoutMode === 'GRID' ? styles.multiViewNoticeBoxGrid : styles.multiViewNoticeBox,
+            !isDarkMode && {
+              backgroundColor: '#E0F2FE',
+              borderColor: '#BAE6FD',
+            },
+          ]}
+        >
           <Ionicons
             name="information-circle-outline"
             size={layoutMode === 'GRID' ? 15 : 20}
-            color="#38BDF8"
+            color={!isDarkMode ? '#0284C7' : '#38BDF8'}
           />
           <Text
-            style={layoutMode === 'GRID' ? styles.multiViewNoticeTextGrid : styles.multiViewNoticeText}
+            style={[
+              layoutMode === 'GRID' ? styles.multiViewNoticeTextGrid : styles.multiViewNoticeText,
+              !isDarkMode && { color: '#0369A1' },
+            ]}
             numberOfLines={layoutMode === 'GRID' ? 1 : 2}
           >
             {layoutMode === 'GRID'
@@ -283,14 +338,27 @@ export default function MultiViewScreen({ navigation }: any) {
       </ScrollView>
 
       {/* 3. Bottom Action Bar: Quay lại Home & Gọi SOS 115 */}
-      <View style={styles.bottomBar}>
+      <View
+        style={[
+          styles.bottomBar,
+          !isDarkMode && {
+            backgroundColor: '#FFFFFF',
+            borderTopColor: '#E2E8F0',
+          },
+        ]}
+      >
         <TouchableOpacity
-          style={styles.backHomeBtn}
+          style={[
+            styles.backHomeBtn,
+            !isDarkMode && {
+              backgroundColor: '#F1F5F9',
+            },
+          ]}
           onPress={() => navigation.navigate('Main', { screen: 'Home' })}
           activeOpacity={0.8}
         >
-          <Ionicons name="home-outline" size={20} color="#FFF" />
-          <Text style={styles.backHomeBtnText}>Quay Về Trang Chủ</Text>
+          <Ionicons name="home-outline" size={20} color={!isDarkMode ? '#0F172A' : '#FFF'} />
+          <Text style={[styles.backHomeBtnText, !isDarkMode && { color: '#0F172A' }]}>Quay Về Trang Chủ</Text>
         </TouchableOpacity>
 
         <TouchableOpacity
