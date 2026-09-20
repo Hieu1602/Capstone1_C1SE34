@@ -801,9 +801,9 @@ export default function ProfileScreen({ navigation }: any) {
               <View style={styles.locationResultCopy}>
                 <View style={styles.locationStatusRow}>
                   <Text style={styles.locationResultLabel}>Vị trí hiện tại</Text>
-                  <View style={[styles.locationStatusBadge, locationAddress && styles.locationStatusBadgeActive]}>
-                    <View style={[styles.locationStatusDot, locationAddress && styles.locationStatusDotActive]} />
-                    <Text style={[styles.locationStatusText, locationAddress && styles.locationStatusTextActive]}>
+                  <View style={[styles.locationStatusBadge, locationAddress ? styles.locationStatusBadgeActive : null]}>
+                    <View style={[styles.locationStatusDot, locationAddress ? styles.locationStatusDotActive : null]} />
+                    <Text style={[styles.locationStatusText, locationAddress ? styles.locationStatusTextActive : null]}>
                       {locationAddress ? 'Đã cập nhật' : 'Chưa cập nhật'}
                     </Text>
                   </View>
