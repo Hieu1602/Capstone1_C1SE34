@@ -329,21 +329,21 @@ export default function ProfileScreen({ navigation }: any) {
           style={styles.confirmModalOverlay}
           onPress={() => setLogoutConfirmVisible(false)}
         >
-          <Pressable style={styles.confirmModalCard} onPress={() => {}}>
+          <Pressable style={[styles.confirmModalCard, isDarkMode && { backgroundColor: '#1E293B', borderColor: '#334155', borderWidth: 1 }]} onPress={() => {}}>
             <View style={styles.confirmModalIconCircle}>
               <Ionicons name="log-out-outline" size={32} color="#EF4444" />
             </View>
-            <Text style={styles.confirmModalTitle}>Đăng xuất tài khoản</Text>
-            <Text style={styles.confirmModalMessage}>
+            <Text style={[styles.confirmModalTitle, isDarkMode && { color: '#F8FAFC' }]}>Đăng xuất tài khoản</Text>
+            <Text style={[styles.confirmModalMessage, isDarkMode && { color: '#94A3B8' }]}>
               Bạn có chắc chắn muốn đăng xuất khỏi hệ thống giám sát Smart Elderly Care?
             </Text>
             <View style={styles.confirmModalButtonRow}>
               <TouchableOpacity
-                style={styles.confirmModalCancelBtn}
+                style={[styles.confirmModalCancelBtn, isDarkMode && { backgroundColor: '#0F172A', borderColor: '#334155', borderWidth: 1 }]}
                 onPress={() => setLogoutConfirmVisible(false)}
                 activeOpacity={0.7}
               >
-                <Text style={styles.confirmModalCancelText}>Hủy</Text>
+                <Text style={[styles.confirmModalCancelText, isDarkMode && { color: '#94A3B8' }]}>Hủy</Text>
               </TouchableOpacity>
               <TouchableOpacity
                 style={styles.confirmModalLogoutBtn}
@@ -366,61 +366,61 @@ export default function ProfileScreen({ navigation }: any) {
         }}
       >
         <Pressable
-          style={styles.modalOverlay}
+          style={[styles.modalOverlay, isDarkMode && { backgroundColor: '#0B0F19' }]}
           onPress={() => {
             if (!isLogoutConfirmVisible) closeUserMenu();
           }}
         >
-          <Pressable style={styles.userMenuSheet} onPress={() => {}}>
+          <Pressable style={[styles.userMenuSheet, isDarkMode && { backgroundColor: '#0B0F19' }]} onPress={() => {}}>
             <TouchableOpacity
-              style={[styles.backButton, styles.userMenuBackButton]}
+              style={[styles.backButton, styles.userMenuBackButton, isDarkMode && { backgroundColor: '#1E293B', borderColor: '#334155', borderWidth: 1, borderRadius: 18 }]}
               onPress={closeUserMenu}
               activeOpacity={0.7}
             >
-              <Ionicons name="chevron-back-outline" size={24} color={Colors.textPrimary} />
+              <Ionicons name="chevron-back-outline" size={24} color={isDarkMode ? '#F8FAFC' : Colors.textPrimary} />
             </TouchableOpacity>
 
             <View style={styles.avatarContainerLarge}>
               <TouchableOpacity
-                style={styles.avatarCircleLarge}
+                style={[styles.avatarCircleLarge, isDarkMode && { backgroundColor: '#1E293B' }]}
                 activeOpacity={0.8}
                 onPress={handleAvatarPress}
               >
                 {avatarUri ? (
                   <Image source={{ uri: avatarUri }} style={styles.avatarImageLarge} />
                 ) : (
-                  <Ionicons name="person" size={42} color="#E8EEF5" />
+                  <Ionicons name="person" size={42} color={isDarkMode ? '#64748B' : '#E8EEF5'} />
                 )}
               </TouchableOpacity>
 
-              <Text style={styles.profileNameText}>{profileName || 'ngolevinh233'}</Text>
+              <Text style={[styles.profileNameText, isDarkMode && { color: '#F8FAFC' }]}>{profileName || 'ngolevinh233'}</Text>
             </View>
 
-            <View style={styles.profileInfoListCard}>
-              <TouchableOpacity style={styles.infoRow} activeOpacity={0.8} onPress={() => openFieldEditor('name')}>
+            <View style={[styles.profileInfoListCard, isDarkMode && { backgroundColor: '#1E293B', borderColor: '#334155' }]}>
+              <TouchableOpacity style={[styles.infoRow, isDarkMode && { borderBottomColor: '#334155' }]} activeOpacity={0.8} onPress={() => openFieldEditor('name')}>
                 <View style={styles.infoLeftWrap}>
-                  <Ionicons name="person-outline" size={22} color="#1F2937" />
-                  <Text style={styles.infoLabel}>Tên</Text>
+                  <Ionicons name="person-outline" size={22} color={isDarkMode ? '#94A3B8' : '#1F2937'} />
+                  <Text style={[styles.infoLabel, isDarkMode && { color: '#F8FAFC' }]}>Tên</Text>
                 </View>
                 <View style={styles.infoRightWrap}>
-                  <Text style={styles.infoValue}>{profileName || 'ngolevinh233'}</Text>
+                  <Text style={[styles.infoValue, isDarkMode && { color: '#94A3B8' }]}>{profileName || 'ngolevinh233'}</Text>
                   <Ionicons name="chevron-forward" size={18} color="#94A3B8" />
                 </View>
               </TouchableOpacity>
 
-              <TouchableOpacity style={styles.infoRow} activeOpacity={0.8}>
+              <TouchableOpacity style={[styles.infoRow, isDarkMode && { borderBottomColor: '#334155' }]} activeOpacity={0.8}>
                 <View style={styles.infoLeftWrap}>
-                  <Ionicons name="call-outline" size={22} color="#1F2937" />
-                  <Text style={styles.infoLabel}>Số điện thoại</Text>
+                  <Ionicons name="call-outline" size={22} color={isDarkMode ? '#94A3B8' : '#1F2937'} />
+                  <Text style={[styles.infoLabel, isDarkMode && { color: '#F8FAFC' }]}>Số điện thoại</Text>
                 </View>
                 <View style={styles.infoRightWrap}>
-                  <Text style={styles.infoValue}>{profilePhone}</Text>
+                  <Text style={[styles.infoValue, isDarkMode && { color: '#94A3B8' }]}>{profilePhone}</Text>
                   <Ionicons name="chevron-forward" size={18} color="#94A3B8" />
                 </View>
               </TouchableOpacity>
 
               <TouchableOpacity
-                style={styles.infoRow}
+                style={[styles.infoRow, { borderBottomWidth: 0 }]}
                 activeOpacity={0.8}
                 onPress={() => {
                   setReturnToSecurityAfterPassword(false);
@@ -428,8 +428,8 @@ export default function ProfileScreen({ navigation }: any) {
                 }}
               >
                 <View style={styles.infoLeftWrap}>
-                  <Ionicons name="lock-closed-outline" size={22} color="#1F2937" />
-                  <Text style={styles.infoLabel}>Thay đổi mật mã</Text>
+                  <Ionicons name="lock-closed-outline" size={22} color={isDarkMode ? '#94A3B8' : '#1F2937'} />
+                  <Text style={[styles.infoLabel, isDarkMode && { color: '#F8FAFC' }]}>Thay đổi mật mã</Text>
                 </View>
                 <Ionicons name="chevron-forward" size={18} color="#94A3B8" />
               </TouchableOpacity>
@@ -441,29 +441,29 @@ export default function ProfileScreen({ navigation }: any) {
               <Text style={styles.logoutButtonText}>Đăng xuất</Text>
             </TouchableOpacity>
 
-                      <Modal
+            <Modal
               transparent
               visible={editingField !== null}
               animationType="fade"
               onRequestClose={closeFieldEditor}
             >
               <Pressable style={styles.editorOverlay} onPress={closeFieldEditor}>
-                <Pressable style={styles.editorSheet} onPress={() => {}}>
+                <Pressable style={[styles.editorSheet, isDarkMode && { backgroundColor: '#1E293B', borderColor: '#334155', borderWidth: 1 }]} onPress={() => {}}>
                   <View style={styles.editorHeader}>
                     <TouchableOpacity
-                      style={styles.editorBackButton}
+                      style={[styles.editorBackButton, isDarkMode && { backgroundColor: '#0F172A', borderColor: '#334155', borderWidth: 1 }]}
                       onPress={closeFieldEditor}
                       activeOpacity={0.7}
                     >
-                      <Ionicons name="chevron-back-outline" size={26} color="#111827" />
+                      <Ionicons name="chevron-back-outline" size={26} color={isDarkMode ? '#F8FAFC' : '#111827'} />
                     </TouchableOpacity>
-                    <Text style={styles.editorTitle}>Chỉnh sửa tên</Text>
+                    <Text style={[styles.editorTitle, isDarkMode && { color: '#F8FAFC' }]}>Chỉnh sửa tên</Text>
                   </View>
 
                   <TextInput
                     value={draftValue}
                     onChangeText={setDraftValue}
-                    style={styles.editorInput}
+                    style={[styles.editorInput, isDarkMode && { backgroundColor: '#0F172A', borderColor: '#334155', color: '#F8FAFC' }]}
                     placeholder="Nhập tên mới"
                     placeholderTextColor="#94A3B8"
                     autoFocus
@@ -472,8 +472,8 @@ export default function ProfileScreen({ navigation }: any) {
                   />
 
                   <View style={styles.editorActions}>
-                    <TouchableOpacity style={styles.editorCancel} onPress={closeFieldEditor}>
-                      <Text style={styles.editorCancelText}>Hủy</Text>
+                    <TouchableOpacity style={[styles.editorCancel, isDarkMode && { backgroundColor: '#0F172A', borderColor: '#334155', borderWidth: 1 }]} onPress={closeFieldEditor}>
+                      <Text style={[styles.editorCancelText, isDarkMode && { color: '#94A3B8' }]}>Hủy</Text>
                     </TouchableOpacity>
                     <TouchableOpacity style={styles.editorSave} onPress={saveEditedField}>
                       <Text style={styles.editorSaveText}>Lưu</Text>
@@ -485,17 +485,17 @@ export default function ProfileScreen({ navigation }: any) {
 
             {isLogoutConfirmVisible && (
               <View style={styles.logoutInlineOverlay}>
-                <View style={styles.logoutDialog}>
-                  <Text style={styles.logoutTitle}>Đăng xuất</Text>
-                  <Text style={styles.logoutMessage}>
+                <View style={[styles.logoutDialog, isDarkMode && { backgroundColor: '#1E293B', borderColor: '#334155', borderWidth: 1 }]}>
+                  <Text style={[styles.logoutTitle, isDarkMode && { color: '#F8FAFC' }]}>Đăng xuất</Text>
+                  <Text style={[styles.logoutMessage, isDarkMode && { color: '#94A3B8' }]}>
                     Bạn có chắc chắn muốn đăng xuất khỏi hệ thống giám sát?
                   </Text>
                   <View style={styles.logoutActions}>
                     <TouchableOpacity
-                      style={styles.logoutCancelButton}
+                      style={[styles.logoutCancelButton, isDarkMode && { backgroundColor: '#0F172A', borderColor: '#334155', borderWidth: 1 }]}
                       onPress={() => setLogoutConfirmVisible(false)}
                     >
-                      <Text style={styles.logoutCancelText}>Hủy</Text>
+                      <Text style={[styles.logoutCancelText, isDarkMode && { color: '#94A3B8' }]}>Hủy</Text>
                     </TouchableOpacity>
                     <TouchableOpacity
                       style={styles.logoutConfirmButton}
@@ -629,19 +629,19 @@ export default function ProfileScreen({ navigation }: any) {
         onRequestClose={() => setCustomerSupportVisible(false)}
       >
         <Pressable style={styles.customerSupportOverlay} onPress={() => setCustomerSupportVisible(false)}>
-          <Pressable style={styles.customerSupportDialog} onPress={() => {}}>
+          <Pressable style={[styles.customerSupportDialog, isDarkMode && { backgroundColor: '#1E293B', borderColor: '#334155', borderWidth: 1 }]} onPress={() => {}}>
             <Ionicons name="call" size={28} color="#DC2626" />
-            <Text style={styles.customerSupportTitle}>Hỗ trợ khẩn cấp</Text>
-            <Text style={styles.customerSupportMessage}>
+            <Text style={[styles.customerSupportTitle, isDarkMode && { color: '#F8FAFC' }]}>Hỗ trợ khẩn cấp</Text>
+            <Text style={[styles.customerSupportMessage, isDarkMode && { color: '#94A3B8' }]}>
               Bạn muốn gọi tổng đài cấp cứu 115 ngay bây giờ?
             </Text>
             <View style={styles.customerSupportActions}>
               <TouchableOpacity
-                style={styles.customerSupportCancelButton}
+                style={[styles.customerSupportCancelButton, isDarkMode && { backgroundColor: '#0F172A', borderColor: '#334155', borderWidth: 1 }]}
                 onPress={() => setCustomerSupportVisible(false)}
                 activeOpacity={0.8}
               >
-                <Text style={styles.customerSupportCancelText}>Hủy</Text>
+                <Text style={[styles.customerSupportCancelText, isDarkMode && { color: '#94A3B8' }]}>Hủy</Text>
               </TouchableOpacity>
               <TouchableOpacity
                 style={styles.customerSupportCallButton}
@@ -868,16 +868,16 @@ export default function ProfileScreen({ navigation }: any) {
         onRequestClose={() => setAvatarPickerVisible(false)}
       >
         <Pressable style={styles.avatarPickerOverlay} onPress={() => setAvatarPickerVisible(false)}>
-          <Pressable style={styles.avatarPickerSheet} onPress={() => {}}>
+          <Pressable style={[styles.avatarPickerSheet, isDarkMode && { backgroundColor: '#1E293B', borderColor: '#334155', borderWidth: 1 }]} onPress={() => {}}>
             <View style={styles.avatarPickerOptions}>
-              <TouchableOpacity style={styles.avatarPickerRow} activeOpacity={0.8} onPress={pickAvatarFromCamera}>
-                <Ionicons name="camera-outline" size={24} color="#111827" />
-                <Text style={styles.avatarPickerText}>Chụp ảnh</Text>
+              <TouchableOpacity style={[styles.avatarPickerRow, isDarkMode && { borderBottomColor: '#334155' }]} activeOpacity={0.8} onPress={pickAvatarFromCamera}>
+                <Ionicons name="camera-outline" size={24} color={isDarkMode ? '#F8FAFC' : '#111827'} />
+                <Text style={[styles.avatarPickerText, isDarkMode && { color: '#F8FAFC' }]}>Chụp ảnh</Text>
               </TouchableOpacity>
 
               <TouchableOpacity style={[styles.avatarPickerRow, styles.avatarPickerLastRow]} activeOpacity={0.8} onPress={pickAvatarFromLibrary}>
-                <Ionicons name="images-outline" size={24} color="#111827" />
-                <Text style={styles.avatarPickerText}>Chọn từ Hình ảnh</Text>
+                <Ionicons name="images-outline" size={24} color={isDarkMode ? '#F8FAFC' : '#111827'} />
+                <Text style={[styles.avatarPickerText, isDarkMode && { color: '#F8FAFC' }]}>Chọn từ Hình ảnh</Text>
               </TouchableOpacity>
             </View>
           </Pressable>
