@@ -21,6 +21,7 @@ if (Platform.OS !== 'web') {
 }
 
 import { incidentsApi } from '../../../services/api';
+import { useTheme } from '../../../store/useThemeStore';
 
 interface Incident {
   id: string;
@@ -50,6 +51,7 @@ const ALERT_TYPE_LABELS: Record<string, string> = {
 };
 
 export default function IncidentDetailScreen({ route, navigation }: any) {
+  const { isDarkMode, colors, toggleTheme } = useTheme();
   const params = route.params ?? {};
   const incidentId = params.incidentId ?? params.id ?? 'inc-03';
   const [incident, setIncident] = useState<Incident | null>(null);
@@ -137,13 +139,26 @@ export default function IncidentDetailScreen({ route, navigation }: any) {
   const typeLabel  = ALERT_TYPE_LABELS[incident.alert_type] ?? incident.alert_type;
 
   return (
-    <SafeAreaView style={styles.container}>
+    <SafeAreaView style={[styles.container, { backgroundColor: colors.background }]}>
       {/* Header */}
-      <View style={styles.header}>
+      <View style={[styles.header, { backgroundColor: colors.headerBg, borderBottomColor: colors.border }]}>
         <TouchableOpacity onPress={() => navigation.goBack()} style={styles.backBtn}>
-          <Ionicons name="arrow-back" size={24} color="#F8FAFC" />
+          <Ionicons name="arrow-back" size={24} color={colors.textPrimary} />
         </TouchableOpacity>
-        <Text style={styles.headerTitle}>Chi tiết sự kiện</Text>
+        <Text style={[styles.headerTitle, { color: colors.textPrimary }]}>Chi tiết sự kiện</Text>
+
+        <TouchableOpacity
+          onPress={toggleTheme}
+          activeOpacity={0.7}
+          style={{ marginLeft: 'auto' }}
+          accessibilityLabel="Chuyển chế độ Sáng/Tối"
+        >
+          <Ionicons
+            name={isDarkMode ? 'sunny-outline' : 'moon-outline'}
+            size={22}
+            color={isDarkMode ? '#F59E0B' : colors.textPrimary}
+          />
+        </TouchableOpacity>
       </View>
 
       <ScrollView contentContainerStyle={styles.content}>
@@ -155,27 +170,31 @@ export default function IncidentDetailScreen({ route, navigation }: any) {
         </View>
 
         {/* Type & Message */}
-        <Text style={styles.typeLabel}>{typeLabel}</Text>
-        <Text style={styles.message}>{incident.message}</Text>
+        <Text style={[styles.typeLabel, { color: colors.textPrimary }]}>{typeLabel}</Text>
+        <Text style={[styles.message, { color: colors.textSecondary }]}>{incident.message}</Text>
 
-        {/* Confidence */}
-        <View style={styles.row}>
-          <Text style={styles.rowLabel}>Độ tin cậy</Text>
-          <Text style={styles.rowValue}>{(incident.confidence * 100).toFixed(0)}%</Text>
-        </View>
+        {/* Details Card */}
+        <View style={[styles.infoCard, { backgroundColor: colors.card, borderColor: colors.border, borderWidth: 1 }]}>
+          <View style={styles.row}>
+            <Text style={[styles.rowLabel, { color: colors.textMuted }]}>Độ tin cậy</Text>
+            <Text style={[styles.rowValue, { color: colors.textPrimary }]}>{(incident.confidence * 100).toFixed(0)}%</Text>
+          </View>
 
-        {/* Timestamp */}
-        <View style={styles.row}>
-          <Text style={styles.rowLabel}>Thời gian</Text>
-          <Text style={styles.rowValue}>
-            {new Date(incident.created_at).toLocaleString('vi-VN')}
-          </Text>
+          <View style={[styles.rowDivider, { backgroundColor: colors.border }]} />
+
+          {/* Timestamp */}
+          <View style={styles.row}>
+            <Text style={[styles.rowLabel, { color: colors.textMuted }]}>Thời gian</Text>
+            <Text style={[styles.rowValue, { color: colors.textPrimary }]}>
+              {new Date(incident.created_at).toLocaleString('vi-VN')}
+            </Text>
+          </View>
         </View>
 
         {/* Video Clip */}
         {incident.video_clip_url ? (
           <View style={styles.videoSection}>
-            <Text style={styles.sectionTitle}>Video bằng chứng (5 giây)</Text>
+            <Text style={[styles.sectionTitle, { color: colors.textPrimary }]}>Video bằng chứng (5 giây)</Text>
             {Platform.OS === 'web' || !Video ? (
               <video
                 src={incident.video_clip_url}
@@ -193,9 +212,9 @@ export default function IncidentDetailScreen({ route, navigation }: any) {
             )}
           </View>
         ) : (
-          <View style={styles.noVideo}>
-            <Ionicons name="videocam-off" size={36} color="#475569" />
-            <Text style={styles.noVideoText}>Clip chưa có sẵn</Text>
+          <View style={[styles.noVideo, { backgroundColor: colors.card, borderColor: colors.border, borderWidth: 1 }]}>
+            <Ionicons name="videocam-off" size={36} color={colors.textMuted} />
+            <Text style={[styles.noVideoText, { color: colors.textMuted }]}>Clip chưa có sẵn</Text>
           </View>
         )}
 
@@ -242,6 +261,14 @@ const styles = StyleSheet.create({
   row: { flexDirection: 'row', justifyContent: 'space-between', paddingVertical: 4 },
   rowLabel: { color: '#64748B', fontSize: 14 },
   rowValue:  { color: '#F8FAFC', fontSize: 14, fontWeight: '600' },
+  infoCard: {
+    padding: 16,
+    borderRadius: 14,
+  },
+  rowDivider: {
+    height: 1,
+    marginVertical: 8,
+  },
   videoSection: { gap: 8 },
   sectionTitle: { color: '#F8FAFC', fontSize: 16, fontWeight: '600' },
   video: { width: '100%', height: 220, borderRadius: 12, backgroundColor: '#000' },

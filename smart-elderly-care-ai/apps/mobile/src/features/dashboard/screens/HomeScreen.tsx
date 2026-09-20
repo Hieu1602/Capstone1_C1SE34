@@ -19,6 +19,7 @@ import { SafeAreaView } from 'react-native-safe-area-context';
 import { Ionicons, MaterialCommunityIcons } from '@expo/vector-icons';
 import { Colors, Shadows } from '../../../theme/colors';
 import { useVitalStore } from '../../../store/useVitalStore';
+import { useTheme } from '../../../store/useThemeStore';
 
 // Hàm sao chép clipboard an toàn hỗ trợ cả native và web
 const copyAddressToClipboard = (text: string) => {
@@ -38,6 +39,7 @@ const copyAddressToClipboard = (text: string) => {
 };
 
 export default function HomeScreen({ navigation }: any) {
+  const { isDarkMode, colors, toggleTheme } = useTheme();
   const {
     house,
     setHouseMode,
@@ -143,34 +145,48 @@ export default function HomeScreen({ navigation }: any) {
   const isAcousticAlarm = acousticStatus.includes('la hét') || acousticStatus.includes('va đập');
 
   return (
-    <SafeAreaView style={styles.safeArea} edges={['top']}>
-      {/* 1. Header: "Nhà của tôi v", Bell with badge, Add button */}
+    <SafeAreaView style={[styles.safeArea, { backgroundColor: colors.background }]} edges={['top']}>
+      {/* 1. Header: "Nhà của tôi v", Theme switcher, Bell with badge, Add button */}
       <View style={styles.topHeader}>
         <TouchableOpacity
           style={styles.houseTitleRow}
           onPress={() => navigation.navigate('HouseDetail')}
           activeOpacity={0.7}
         >
-          <Text style={styles.houseTitleText}>{house.name}</Text>
-          <Ionicons name="chevron-down" size={16} color={Colors.textPrimary} style={{ marginLeft: 4 }} />
+          <Text style={[styles.houseTitleText, { color: colors.textPrimary }]}>{house.name}</Text>
+          <Ionicons name="chevron-down" size={16} color={colors.textPrimary} style={{ marginLeft: 4 }} />
         </TouchableOpacity>
 
         <View style={styles.topRightActions}>
+          {/* Nút chuyển đổi Sáng / Tối */}
           <TouchableOpacity
-            style={styles.iconCircleBtn}
+            style={[styles.iconCircleBtn, { marginRight: 6 }, isDarkMode && { backgroundColor: colors.iconBg }]}
+            onPress={toggleTheme}
+            activeOpacity={0.7}
+            accessibilityLabel="Chuyển chế độ Sáng/Tối"
+          >
+            <Ionicons
+              name={isDarkMode ? 'sunny-outline' : 'moon-outline'}
+              size={22}
+              color={isDarkMode ? '#F59E0B' : colors.textPrimary}
+            />
+          </TouchableOpacity>
+
+          <TouchableOpacity
+            style={[styles.iconCircleBtn, isDarkMode && { backgroundColor: colors.iconBg }]}
             onPress={() => navigation.navigate('Alerts')}
             activeOpacity={0.7}
           >
-            <Ionicons name="notifications-outline" size={22} color={Colors.textPrimary} />
+            <Ionicons name="notifications-outline" size={22} color={colors.textPrimary} />
             <View style={styles.redBadgeDot} />
           </TouchableOpacity>
 
           <TouchableOpacity
-            style={[styles.iconCircleBtn, { marginLeft: 12 }]}
+            style={[styles.iconCircleBtn, { marginLeft: 8 }, isDarkMode && { backgroundColor: colors.iconBg }]}
             onPress={() => navigation.navigate('Devices')}
             activeOpacity={0.7}
           >
-            <Ionicons name="add" size={26} color={Colors.textPrimary} />
+            <Ionicons name="add" size={26} color={colors.textPrimary} />
           </TouchableOpacity>
         </View>
       </View>
@@ -186,6 +202,7 @@ export default function HomeScreen({ navigation }: any) {
             style={[
               styles.modePill,
               house.currentMode === 'AWAY' ? styles.modePillActiveAway : styles.modePillInactive,
+              house.currentMode !== 'AWAY' && isDarkMode && { backgroundColor: colors.card, borderColor: colors.border },
             ]}
             onPress={() => handleSelectHouseMode('AWAY')}
             activeOpacity={0.75}
@@ -193,19 +210,19 @@ export default function HomeScreen({ navigation }: any) {
             <View
               style={[
                 styles.modeIconCircle,
-                { backgroundColor: house.currentMode === 'AWAY' ? '#10B981' : '#E2E8F0' },
+                { backgroundColor: house.currentMode === 'AWAY' ? '#10B981' : (isDarkMode ? colors.surfaceSubtle : '#E2E8F0') },
               ]}
             >
               <Ionicons
                 name="exit-outline"
                 size={14}
-                color={house.currentMode === 'AWAY' ? '#FFF' : '#94A3B8'}
+                color={house.currentMode === 'AWAY' ? '#FFF' : (isDarkMode ? colors.textMuted : '#94A3B8')}
               />
             </View>
             <Text
               style={[
                 styles.modePillText,
-                { color: house.currentMode === 'AWAY' ? '#047857' : '#94A3B8' },
+                { color: house.currentMode === 'AWAY' ? '#047857' : (isDarkMode ? colors.textMuted : '#94A3B8') },
               ]}
               numberOfLines={1}
             >
@@ -218,6 +235,7 @@ export default function HomeScreen({ navigation }: any) {
             style={[
               styles.modePill,
               house.currentMode === 'HOME' ? styles.modePillActiveHome : styles.modePillInactive,
+              house.currentMode !== 'HOME' && isDarkMode && { backgroundColor: colors.card, borderColor: colors.border },
             ]}
             onPress={() => handleSelectHouseMode('HOME')}
             activeOpacity={0.75}
@@ -225,19 +243,19 @@ export default function HomeScreen({ navigation }: any) {
             <View
               style={[
                 styles.modeIconCircle,
-                { backgroundColor: house.currentMode === 'HOME' ? '#3B82F6' : '#E2E8F0' },
+                { backgroundColor: house.currentMode === 'HOME' ? '#3B82F6' : (isDarkMode ? colors.surfaceSubtle : '#E2E8F0') },
               ]}
             >
               <Ionicons
                 name="home"
                 size={14}
-                color={house.currentMode === 'HOME' ? '#FFF' : '#94A3B8'}
+                color={house.currentMode === 'HOME' ? '#FFF' : (isDarkMode ? colors.textMuted : '#94A3B8')}
               />
             </View>
             <Text
               style={[
                 styles.modePillText,
-                { color: house.currentMode === 'HOME' ? '#1D4ED8' : '#94A3B8' },
+                { color: house.currentMode === 'HOME' ? '#1D4ED8' : (isDarkMode ? colors.textMuted : '#94A3B8') },
               ]}
               numberOfLines={1}
             >
@@ -250,6 +268,7 @@ export default function HomeScreen({ navigation }: any) {
             style={[
               styles.modePill,
               house.currentMode === 'DISARM' ? styles.modePillActiveDisarm : styles.modePillInactive,
+              house.currentMode !== 'DISARM' && isDarkMode && { backgroundColor: colors.card, borderColor: colors.border },
             ]}
             onPress={() => handleSelectHouseMode('DISARM')}
             activeOpacity={0.75}
@@ -257,19 +276,19 @@ export default function HomeScreen({ navigation }: any) {
             <View
               style={[
                 styles.modeIconCircle,
-                { backgroundColor: house.currentMode === 'DISARM' ? '#64748B' : '#E2E8F0' },
+                { backgroundColor: house.currentMode === 'DISARM' ? '#64748B' : (isDarkMode ? colors.surfaceSubtle : '#E2E8F0') },
               ]}
             >
               <MaterialCommunityIcons
                 name="shield-off-outline"
                 size={15}
-                color={house.currentMode === 'DISARM' ? '#FFF' : '#94A3B8'}
+                color={house.currentMode === 'DISARM' ? '#FFF' : (isDarkMode ? colors.textMuted : '#94A3B8')}
               />
             </View>
             <Text
               style={[
                 styles.modePillText,
-                { color: house.currentMode === 'DISARM' ? '#1E293B' : '#94A3B8' },
+                { color: house.currentMode === 'DISARM' ? '#475569' : (isDarkMode ? colors.textMuted : '#94A3B8') },
               ]}
               numberOfLines={1}
             >
@@ -308,18 +327,18 @@ export default function HomeScreen({ navigation }: any) {
 
         {/* 4. Banner "Nhiều chế độ xem" (Multi-view) */}
         <TouchableOpacity
-          style={styles.multiViewCard}
+          style={[styles.multiViewCard, isDarkMode && { backgroundColor: colors.card, borderColor: colors.border }]}
           onPress={handleMultiView}
           activeOpacity={0.9}
         >
-          <Text style={styles.multiViewText}>Nhiều chế độ xem</Text>
+          <Text style={[styles.multiViewText, isDarkMode && { color: colors.textPrimary }]}>Nhiều chế độ xem</Text>
           <View style={styles.playCircleBtn}>
             <Ionicons name="play" size={14} color={Colors.primary} style={{ marginLeft: 2 }} />
           </View>
         </TouchableOpacity>
 
         {/* 6. Main Camera Device Card (Live View & Playback) */}
-        <View style={styles.cameraCard}>
+        <View style={[styles.cameraCard, isDarkMode && { backgroundColor: colors.card, borderColor: colors.border }]}>
           {/* Card Video Area (Clickable to open CameraDetail) */}
           <TouchableOpacity
             activeOpacity={0.95}
@@ -405,7 +424,7 @@ export default function HomeScreen({ navigation }: any) {
                   activeOpacity={0.8}
                 >
                   <Ionicons name="eye" size={14} color="#FFF" style={{ marginRight: 4 }} />
-                  <Text style={styles.privacyDisableText}>Mở lại ống kính</Text>
+                  <Text style={styles.privacyDisableText}>Bật lại camera</Text>
                 </TouchableOpacity>
               </View>
             ) : null}
@@ -413,7 +432,7 @@ export default function HomeScreen({ navigation }: any) {
 
           {/* NÚT TRUY CẬP NHANH: "Xem lại 24/48h" (Interactive Timeline Playback) ngay bên dưới video */}
           <TouchableOpacity
-            style={styles.playbackQuickBar}
+            style={[styles.playbackQuickBar, isDarkMode && { backgroundColor: colors.surfaceSubtle, borderBottomColor: colors.border }]}
             onPress={() => navigation.navigate('CameraDetail')}
             activeOpacity={0.8}
           >
@@ -422,8 +441,8 @@ export default function HomeScreen({ navigation }: any) {
                 <Ionicons name="play-back" size={16} color={Colors.primary} />
               </View>
               <View>
-                <Text style={styles.playbackTitle}>Xem lại 24/48h (Interactive Timeline Playback)</Text>
-                <Text style={styles.playbackSub}>Bộ đệm RAM Edge Hub &amp; lưu trữ MinIO Cloud</Text>
+                <Text style={[styles.playbackTitle, isDarkMode && { color: colors.textPrimary }]}>Xem lại 24/48h (Interactive Timeline Playback)</Text>
+                <Text style={[styles.playbackSub, isDarkMode && { color: colors.textSecondary }]}>Bộ đệm RAM Edge Hub &amp; lưu trữ MinIO Cloud</Text>
               </View>
             </View>
             <View style={styles.playbackRightAction}>
@@ -433,7 +452,7 @@ export default function HomeScreen({ navigation }: any) {
           </TouchableOpacity>
 
           {/* 3 Quick Action Buttons Under Video (Power/Standby, Mic, AI Shield) */}
-          <View style={styles.cameraBottomToolbar}>
+          <View style={[styles.cameraBottomToolbar, isDarkMode && { backgroundColor: colors.card, borderTopColor: colors.border }]}>
             {/* 1. Nút Chế độ riêng tư của camera (Con mắt: eye / eye-off) */}
             <TouchableOpacity
               style={styles.toolBtn}
@@ -444,12 +463,12 @@ export default function HomeScreen({ navigation }: any) {
                 <Ionicons
                   name={camera.isSleep ? 'eye-off' : 'eye-outline'}
                   size={20}
-                  color={camera.isSleep ? '#F59E0B' : Colors.textPrimary}
+                  color={camera.isSleep ? '#F59E0B' : (isDarkMode ? colors.textPrimary : Colors.textPrimary)}
                 />
                 <Text
                   style={[
                     styles.cameraPrivacyText,
-                    { color: camera.isSleep ? '#D97706' : Colors.textPrimary },
+                    { color: camera.isSleep ? '#D97706' : (isDarkMode ? colors.textPrimary : Colors.textPrimary) },
                   ]}
                 >
                   Riêng tư
@@ -457,7 +476,7 @@ export default function HomeScreen({ navigation }: any) {
               </View>
             </TouchableOpacity>
 
-            <View style={styles.toolDivider} />
+            <View style={[styles.toolDivider, isDarkMode && { backgroundColor: colors.border }]} />
 
             {/* 2. Nút Đàm thoại 2 chiều (Micro ở giữa) */}
             <TouchableOpacity
@@ -468,11 +487,11 @@ export default function HomeScreen({ navigation }: any) {
               <Ionicons
                 name={isMicSpeaking ? 'mic' : 'mic-outline'}
                 size={22}
-                color={isMicSpeaking ? Colors.danger : Colors.textPrimary}
+                color={isMicSpeaking ? Colors.danger : (isDarkMode ? colors.textPrimary : Colors.textPrimary)}
               />
             </TouchableOpacity>
 
-            <View style={styles.toolDivider} />
+            <View style={[styles.toolDivider, isDarkMode && { backgroundColor: colors.border }]} />
 
             {/* 3. Nút Chế độ bảo vệ AI (Khiên AI) */}
             <TouchableOpacity
@@ -509,15 +528,15 @@ export default function HomeScreen({ navigation }: any) {
         </View>
 
         {/* 6. Khối hiển thị Tình trạng sức khoẻ (lấy từ useVitalStore) */}
-        <View style={styles.vitalsSummaryCard}>
+        <View style={[styles.vitalsSummaryCard, isDarkMode && { backgroundColor: colors.card, borderColor: colors.border }]}>
           {/* Header Card */}
           <View style={styles.vitalsSummaryHeader}>
             <View style={{ flexDirection: 'row', alignItems: 'center' }}>
               <View style={styles.livePulseDot} />
-              <Text style={styles.vitalsSummaryTitle}>Tình trạng sức khoẻ</Text>
+              <Text style={[styles.vitalsSummaryTitle, isDarkMode && { color: colors.textPrimary }]}>Tình trạng sức khoẻ</Text>
             </View>
             <TouchableOpacity
-              style={styles.vitalsDetailChip}
+              style={[styles.vitalsDetailChip, isDarkMode && { backgroundColor: 'rgba(255, 122, 0, 0.15)', borderColor: 'rgba(255, 122, 0, 0.3)' }]}
               onPress={() => navigation.navigate('HealthDetail')}
               activeOpacity={0.7}
             >
@@ -527,14 +546,14 @@ export default function HomeScreen({ navigation }: any) {
           </View>
 
           {/* Thanh trạng thái Thiết bị & Hub: Edge Hub Online/Offline & % Pin vòng BLE */}
-          <View style={styles.deviceStatusBar}>
+          <View style={[styles.deviceStatusBar, isDarkMode && { backgroundColor: colors.surfaceSubtle, borderColor: colors.border }]}>
             <View style={styles.deviceStatusItem}>
               <Ionicons
                 name="hardware-chip-outline"
                 size={14}
                 color={isEdgeHubOnline ? Colors.success : Colors.danger}
               />
-              <Text style={styles.deviceStatusText}>
+              <Text style={[styles.deviceStatusText, isDarkMode && { color: colors.textSecondary }]}>
                 Edge Hub:{' '}
                 <Text
                   style={{
@@ -547,13 +566,13 @@ export default function HomeScreen({ navigation }: any) {
               </Text>
             </View>
 
-            <View style={styles.deviceStatusDivider} />
+            <View style={[styles.deviceStatusDivider, isDarkMode && { backgroundColor: colors.border }]} />
 
             <View style={styles.deviceStatusItem}>
               <Ionicons name="battery-charging" size={15} color={Colors.aiBlue} />
-              <Text style={styles.deviceStatusText}>
+              <Text style={[styles.deviceStatusText, isDarkMode && { color: colors.textSecondary }]}>
                 Vòng BLE:{' '}
-                <Text style={{ color: Colors.textPrimary, fontWeight: '700' }}>
+                <Text style={{ color: isDarkMode ? colors.textPrimary : Colors.textPrimary, fontWeight: '700' }}>
                   {braceletBattery}% Pin
                 </Text>
               </Text>
@@ -565,35 +584,35 @@ export default function HomeScreen({ navigation }: any) {
             {/* Nhịp tim */}
             <View style={styles.vitalItem}>
               <Ionicons name="heart" size={17} color="#EF4444" />
-              <Text style={styles.vitalValText} numberOfLines={1}>
+              <Text style={[styles.vitalValText, isDarkMode && { color: colors.textPrimary }]} numberOfLines={1}>
                 {currentVitals.heart_rate ?? 74}{' '}
                 <Text style={styles.vitalUnit}>bpm</Text>
               </Text>
-              <Text style={styles.vitalLblText}>Nhịp tim</Text>
+              <Text style={[styles.vitalLblText, isDarkMode && { color: colors.textSecondary }]}>Nhịp tim</Text>
             </View>
-            <View style={styles.vitalDivider} />
+            <View style={[styles.vitalDivider, isDarkMode && { backgroundColor: colors.border }]} />
 
             {/* SpO2 */}
             <View style={styles.vitalItem}>
               <Ionicons name="water" size={17} color="#3B82F6" />
-              <Text style={styles.vitalValText} numberOfLines={1}>
+              <Text style={[styles.vitalValText, isDarkMode && { color: colors.textPrimary }]} numberOfLines={1}>
                 {currentVitals.spo2 ?? 98}{' '}
                 <Text style={styles.vitalUnit}>%</Text>
               </Text>
-              <Text style={styles.vitalLblText}>SpO₂</Text>
+              <Text style={[styles.vitalLblText, isDarkMode && { color: colors.textSecondary }]}>SpO₂</Text>
             </View>
-            <View style={styles.vitalDivider} />
+            <View style={[styles.vitalDivider, isDarkMode && { backgroundColor: colors.border }]} />
 
             {/* Thân nhiệt */}
             <View style={styles.vitalItem}>
               <Ionicons name="thermometer" size={17} color="#F59E0B" />
-              <Text style={styles.vitalValText} numberOfLines={1}>
+              <Text style={[styles.vitalValText, isDarkMode && { color: colors.textPrimary }]} numberOfLines={1}>
                 {currentVitals.skin_temp_max ?? 36.8}{' '}
                 <Text style={styles.vitalUnit}>°C</Text>
               </Text>
-              <Text style={styles.vitalLblText}>Thân nhiệt</Text>
+              <Text style={[styles.vitalLblText, isDarkMode && { color: colors.textSecondary }]}>Thân nhiệt</Text>
             </View>
-            <View style={styles.vitalDivider} />
+            <View style={[styles.vitalDivider, isDarkMode && { backgroundColor: colors.border }]} />
 
             {/* Trạng thái vận động */}
             <View style={styles.vitalItem}>
@@ -614,9 +633,9 @@ export default function HomeScreen({ navigation }: any) {
               >
                 {currentVitals.fall_detected ? 'Ngã!' : 'Sinh hoạt'}
               </Text>
-              <Text style={styles.vitalLblText}>Vận động</Text>
+              <Text style={[styles.vitalLblText, isDarkMode && { color: colors.textSecondary }]}>Vận động</Text>
             </View>
-            <View style={styles.vitalDivider} />
+            <View style={[styles.vitalDivider, isDarkMode && { backgroundColor: colors.border }]} />
 
             {/* Kênh âm thanh môi trường */}
             <View style={styles.vitalItem}>
@@ -637,7 +656,7 @@ export default function HomeScreen({ navigation }: any) {
               >
                 {isAcousticAlarm ? 'La hét!' : 'Bình thường'}
               </Text>
-              <Text style={styles.vitalLblText}>Âm thanh</Text>
+              <Text style={[styles.vitalLblText, isDarkMode && { color: colors.textSecondary }]}>Âm thanh</Text>
             </View>
           </View>
         </View>
@@ -647,7 +666,7 @@ export default function HomeScreen({ navigation }: any) {
           <View style={styles.trendSectionHeader}>
             <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6 }}>
               <Ionicons name="stats-chart" size={17} color={Colors.primary} />
-              <Text style={styles.trendSectionTitle}>Xu hướng sức khoẻ hôm nay</Text>
+              <Text style={[styles.trendSectionTitle, isDarkMode && { color: colors.textPrimary }]}>Xu hướng sức khoẻ hôm nay</Text>
             </View>
             <View style={styles.trendStandardBadge}>
               <Ionicons name="checkmark-circle" size={13} color="#15803D" />
@@ -659,12 +678,12 @@ export default function HomeScreen({ navigation }: any) {
           <View style={styles.miniChartsRow}>
             {/* Thẻ 1: Biểu đồ nhịp tim 12h qua */}
             <TouchableOpacity
-              style={styles.miniChartCard}
+              style={[styles.miniChartCard, isDarkMode && { backgroundColor: colors.card, borderColor: colors.border }]}
               activeOpacity={0.8}
               onPress={() => navigation.navigate('HealthDetail', { metric: 'heartRate' })}
             >
               <View style={styles.miniCardTop}>
-                <Text style={styles.miniCardTitle}>Nhịp tim 12h qua</Text>
+                <Text style={[styles.miniCardTitle, isDarkMode && { color: colors.textPrimary }]}>Nhịp tim 12h qua</Text>
                 <View style={styles.miniCardBadge}>
                   <Text style={styles.miniCardBadgeText}>TB 74</Text>
                 </View>
@@ -674,7 +693,7 @@ export default function HomeScreen({ navigation }: any) {
               <View style={styles.miniBarChartArea}>
                 <View style={styles.miniDashedRefLine}>
                   <View style={styles.miniDashedDash} />
-                  <Text style={styles.miniRefLabel}>74 bpm</Text>
+                  <Text style={[styles.miniRefLabel, isDarkMode && { color: colors.textSecondary }]}>74 bpm</Text>
                 </View>
 
                 <View style={styles.miniBarsRow}>
@@ -690,8 +709,8 @@ export default function HomeScreen({ navigation }: any) {
                     const isHigh = col.val >= 80;
                     return (
                       <View key={col.time} style={styles.miniBarCol}>
-                        <Text style={styles.miniBarValText}>{col.val}</Text>
-                        <View style={styles.miniBarTrack}>
+                        <Text style={[styles.miniBarValText, isDarkMode && { color: colors.textSecondary }]}>{col.val}</Text>
+                        <View style={[styles.miniBarTrack, isDarkMode && { backgroundColor: colors.surfaceSubtle }]}>
                           <View
                             style={[
                               styles.miniBarFill,
@@ -702,32 +721,32 @@ export default function HomeScreen({ navigation }: any) {
                             ]}
                           />
                         </View>
-                        <Text style={styles.miniBarTimeText}>{col.time}</Text>
+                        <Text style={[styles.miniBarTimeText, isDarkMode && { color: colors.textSecondary }]}>{col.time}</Text>
                       </View>
                     );
                   })}
                 </View>
               </View>
 
-              <View style={styles.miniCardFooter}>
+              <View style={[styles.miniCardFooter, isDarkMode && { borderTopColor: colors.border }]}>
                 <View style={styles.miniStatusDotGreen} />
-                <Text style={styles.miniStatusNote}>Chuẩn 60-100 bpm</Text>
+                <Text style={[styles.miniStatusNote, isDarkMode && { color: colors.textSecondary }]}>Chuẩn 60-100 bpm</Text>
               </View>
             </TouchableOpacity>
 
             {/* Thẻ 2: Mức độ vận động & sinh hoạt */}
             <TouchableOpacity
-              style={styles.miniChartCard}
+              style={[styles.miniChartCard, isDarkMode && { backgroundColor: colors.card, borderColor: colors.border }]}
               activeOpacity={0.8}
               onPress={() => navigation.navigate('HealthDetail', { metric: 'activity' })}
             >
               <View style={styles.miniCardTop}>
-                <Text style={styles.miniCardTitle}>Vận động & Sinh hoạt</Text>
+                <Text style={[styles.miniCardTitle, isDarkMode && { color: colors.textPrimary }]}>Vận động & Sinh hoạt</Text>
                 <Ionicons name="body" size={15} color="#0284C7" />
               </View>
 
               {/* Stacked progress bar (25% Xanh lá, 45% Xanh dương, 30% Tím) */}
-              <View style={styles.stackedBarTrack}>
+              <View style={[styles.stackedBarTrack, isDarkMode && { backgroundColor: colors.surfaceSubtle }]}>
                 <View style={[styles.stackedSegment, { flex: 25, backgroundColor: '#10B981' }]} />
                 <View style={[styles.stackedSegment, { flex: 45, backgroundColor: '#0284C7' }]} />
                 <View style={[styles.stackedSegment, { flex: 30, backgroundColor: '#8B5CF6' }]} />
@@ -737,20 +756,20 @@ export default function HomeScreen({ navigation }: any) {
               <View style={styles.stackedLegendGrid}>
                 <View style={styles.legendItem}>
                   <View style={[styles.legendDot, { backgroundColor: '#10B981' }]} />
-                  <Text style={styles.legendText}>Đi lại 25%</Text>
+                  <Text style={[styles.legendText, isDarkMode && { color: colors.textSecondary }]}>Đi lại 25%</Text>
                 </View>
                 <View style={styles.legendItem}>
                   <View style={[styles.legendDot, { backgroundColor: '#0284C7' }]} />
-                  <Text style={styles.legendText}>Ngồi 45%</Text>
+                  <Text style={[styles.legendText, isDarkMode && { color: colors.textSecondary }]}>Ngồi 45%</Text>
                 </View>
                 <View style={styles.legendItem}>
                   <View style={[styles.legendDot, { backgroundColor: '#8B5CF6' }]} />
-                  <Text style={styles.legendText}>Nghỉ 30%</Text>
+                  <Text style={[styles.legendText, isDarkMode && { color: colors.textSecondary }]}>Nghỉ 30%</Text>
                 </View>
               </View>
 
-              <View style={styles.activitySummaryCard}>
-                <Text style={styles.activitySummaryText}>
+              <View style={[styles.activitySummaryCard, isDarkMode && { backgroundColor: colors.surfaceSubtle }]}>
+                <Text style={[styles.activitySummaryText, isDarkMode && { color: colors.textSecondary }]}>
                   Vận động: <Text style={styles.boldGreen}>2.5h</Text> | Nghỉ: <Text style={styles.boldBlue}>6h</Text>
                 </Text>
               </View>
@@ -759,7 +778,7 @@ export default function HomeScreen({ navigation }: any) {
 
           {/* Thẻ 3: Toàn chiều rộng bên dưới - Thước đo Oxy máu SpO2 */}
           <TouchableOpacity
-            style={styles.spo2GaugeCard}
+            style={[styles.spo2GaugeCard, isDarkMode && { backgroundColor: colors.card, borderColor: colors.border }]}
             activeOpacity={0.8}
             onPress={() => navigation.navigate('HealthDetail', { metric: 'spo2' })}
           >
@@ -768,7 +787,7 @@ export default function HomeScreen({ navigation }: any) {
                 <View style={styles.spo2IconCircle}>
                   <Ionicons name="water" size={16} color="#0284C7" />
                 </View>
-                <Text style={styles.spo2CardTitle}>Chỉ số Oxy máu SpO₂</Text>
+                <Text style={[styles.spo2CardTitle, isDarkMode && { color: colors.textPrimary }]}>Chỉ số Oxy máu SpO₂</Text>
               </View>
               <View style={styles.spo2BadgeGreen}>
                 <Ionicons name="checkmark-circle" size={13} color="#15803D" />
@@ -792,17 +811,17 @@ export default function HomeScreen({ navigation }: any) {
 
               {/* Các mốc số trên thước đo */}
               <View style={styles.rulerTicksRow}>
-                <Text style={styles.rulerTickText}>90%</Text>
-                <Text style={styles.rulerTickText}>92%</Text>
+                <Text style={[styles.rulerTickText, isDarkMode && { color: colors.textSecondary }]}>90%</Text>
+                <Text style={[styles.rulerTickText, isDarkMode && { color: colors.textSecondary }]}>92%</Text>
                 <Text style={[styles.rulerTickText, { fontWeight: '700', color: Colors.primary }]}>95% (Chuẩn)</Text>
                 <Text style={[styles.rulerTickText, { fontWeight: '800', color: '#15803D' }]}>98%</Text>
-                <Text style={styles.rulerTickText}>100%</Text>
+                <Text style={[styles.rulerTickText, isDarkMode && { color: colors.textSecondary }]}>100%</Text>
               </View>
             </View>
 
             <View style={styles.spo2FooterRow}>
               <Ionicons name="shield-checkmark-outline" size={14} color="#15803D" />
-              <Text style={styles.spo2FooterNote}>
+              <Text style={[styles.spo2FooterNote, isDarkMode && { color: colors.textSecondary }]}>
                 Ngưỡng an toàn ≥ 95% • Nồng độ oxy bão hoà duy trì tối ưu
               </Text>
             </View>

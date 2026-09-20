@@ -16,12 +16,14 @@ import { SafeAreaView } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
 import { Colors, Shadows } from '../../../theme/colors';
 import { useVitalStore } from '../../../store/useVitalStore';
+import { useTheme } from '../../../store/useThemeStore';
 
 const { width: SCREEN_WIDTH } = Dimensions.get('window');
 
 type TimeRange = 'DAY' | 'WEEK' | 'MONTH';
 
 export default function HealthDetailScreen({ navigation, route }: any) {
+  const { isDarkMode, colors, toggleTheme } = useTheme();
   const metric = (route?.params?.focusMetric ?? route?.params?.metric) as 'heartRate' | 'activity' | 'spo2' | undefined;
   const initialTab = route?.params?.initialTab as 'today' | 'week' | 'month' | undefined;
   const { currentVitals } = useVitalStore();
@@ -283,27 +285,42 @@ export default function HealthDetailScreen({ navigation, route }: any) {
   const currentTabConfig = getTabConfig();
 
   return (
-    <SafeAreaView style={styles.safeArea} edges={['top']}>
-      {/* 1. Header có nút Back */}
-      <View style={styles.headerBar}>
+    <SafeAreaView style={[styles.safeArea, { backgroundColor: colors.background }]} edges={['top']}>
+      {/* 1. Header có nút Back & Toggle Theme */}
+      <View style={[styles.headerBar, isDarkMode && { backgroundColor: colors.card, borderBottomColor: colors.border }]}>
         <TouchableOpacity
           style={styles.backBtn}
           onPress={() => navigation.goBack()}
           activeOpacity={0.7}
           hitSlop={{ top: 12, bottom: 12, left: 12, right: 12 }}
         >
-          <Ionicons name="chevron-back" size={24} color={Colors.textPrimary} />
+          <Ionicons name="chevron-back" size={24} color={colors.textPrimary} />
         </TouchableOpacity>
 
-        <Text style={styles.headerTitle}>Tình trạng sức khoẻ</Text>
+        <Text style={[styles.headerTitle, { color: colors.textPrimary }]}>Tình trạng sức khoẻ</Text>
 
-        <TouchableOpacity
-          style={styles.refreshBtn}
-          onPress={handleRefresh}
-          activeOpacity={0.7}
-        >
-          <Ionicons name="refresh-outline" size={22} color={Colors.primary} />
-        </TouchableOpacity>
+        <View style={{ flexDirection: 'row', alignItems: 'center' }}>
+          <TouchableOpacity
+            style={[styles.refreshBtn, { marginRight: 8 }]}
+            onPress={toggleTheme}
+            activeOpacity={0.7}
+            accessibilityLabel="Chuyển chế độ Sáng/Tối"
+          >
+            <Ionicons
+              name={isDarkMode ? 'sunny-outline' : 'moon-outline'}
+              size={22}
+              color={isDarkMode ? '#F59E0B' : colors.textPrimary}
+            />
+          </TouchableOpacity>
+
+          <TouchableOpacity
+            style={styles.refreshBtn}
+            onPress={handleRefresh}
+            activeOpacity={0.7}
+          >
+            <Ionicons name="refresh-outline" size={22} color={Colors.primary} />
+          </TouchableOpacity>
+        </View>
       </View>
 
       <ScrollView
@@ -315,7 +332,9 @@ export default function HealthDetailScreen({ navigation, route }: any) {
         <View
           style={[
             styles.overallCard,
-            currentTabConfig.bannerAlert ? styles.overallCardAlert : styles.overallCardNormal,
+            currentTabConfig.bannerAlert
+              ? styles.overallCardAlert
+              : [styles.overallCardNormal, isDarkMode && { backgroundColor: colors.card }],
           ]}
         >
           <View
@@ -339,14 +358,14 @@ export default function HealthDetailScreen({ navigation, route }: any) {
             >
               {currentTabConfig.bannerTitle}
             </Text>
-            <Text style={styles.overallSubtitle}>
+            <Text style={[styles.overallSubtitle, isDarkMode && { color: colors.textSecondary }]}>
               {currentTabConfig.bannerSubtitle}
             </Text>
           </View>
         </View>
 
         {/* 3. Bộ lọc thời gian (Hôm nay / 7 ngày qua / 30 ngày) */}
-        <View style={styles.rangeSelector}>
+        <View style={[styles.rangeSelector, isDarkMode && { backgroundColor: colors.surfaceSubtle }]}>
           {(['DAY', 'WEEK', 'MONTH'] as const).map((range) => {
             const isActive = selectedRange === range;
             const labels: Record<TimeRange, string> = {
@@ -357,11 +376,21 @@ export default function HealthDetailScreen({ navigation, route }: any) {
             return (
               <TouchableOpacity
                 key={range}
-                style={[styles.rangePill, isActive && styles.rangePillActive]}
+                style={[
+                  styles.rangePill,
+                  isActive && [styles.rangePillActive, isDarkMode && { backgroundColor: colors.card }],
+                ]}
                 onPress={() => setSelectedRange(range)}
                 activeOpacity={0.8}
               >
-                <Text style={[styles.rangePillText, isActive && styles.rangePillTextActive]}>
+                <Text
+                  style={[
+                    styles.rangePillText,
+                    isActive
+                      ? [styles.rangePillTextActive, { color: colors.textPrimary }]
+                      : [isDarkMode && { color: colors.textSecondary }],
+                  ]}
+                >
                   {labels[range]}
                 </Text>
               </TouchableOpacity>
@@ -375,6 +404,7 @@ export default function HealthDetailScreen({ navigation, route }: any) {
           <TouchableOpacity
             style={[
               styles.vitalBox,
+              isDarkMode && { backgroundColor: colors.card, borderColor: colors.border },
               highlightedMetric === 'heartRate' && styles.vitalBoxHighlighted,
             ]}
             activeOpacity={0.8}
@@ -404,13 +434,13 @@ export default function HealthDetailScreen({ navigation, route }: any) {
                 </Text>
               </View>
             </View>
-            <Text style={styles.vitalBoxLabel}>{currentTabConfig.card1.label}</Text>
+            <Text style={[styles.vitalBoxLabel, isDarkMode && { color: colors.textSecondary }]}>{currentTabConfig.card1.label}</Text>
             <View style={styles.vitalValRow}>
-              <Text style={[styles.vitalValNumber, currentTabConfig.card1.value.length > 4 && { fontSize: 20 }]}>
+              <Text style={[styles.vitalValNumber, isDarkMode && { color: colors.textPrimary }, currentTabConfig.card1.value.length > 4 && { fontSize: 20 }]}>
                 {currentTabConfig.card1.value}
               </Text>
               {Boolean(currentTabConfig.card1.unit) && (
-                <Text style={styles.vitalValUnit}>{currentTabConfig.card1.unit}</Text>
+                <Text style={[styles.vitalValUnit, isDarkMode && { color: colors.textSecondary }]}>{currentTabConfig.card1.unit}</Text>
               )}
             </View>
             <Text style={styles.vitalNormalRange}>{currentTabConfig.card1.range}</Text>
@@ -420,6 +450,7 @@ export default function HealthDetailScreen({ navigation, route }: any) {
           <TouchableOpacity
             style={[
               styles.vitalBox,
+              isDarkMode && { backgroundColor: colors.card, borderColor: colors.border },
               highlightedMetric === 'spo2' && styles.vitalBoxHighlighted,
             ]}
             activeOpacity={0.8}
@@ -449,11 +480,11 @@ export default function HealthDetailScreen({ navigation, route }: any) {
                 </Text>
               </View>
             </View>
-            <Text style={styles.vitalBoxLabel}>{currentTabConfig.card2.label}</Text>
+            <Text style={[styles.vitalBoxLabel, isDarkMode && { color: colors.textSecondary }]}>{currentTabConfig.card2.label}</Text>
             <View style={styles.vitalValRow}>
-              <Text style={styles.vitalValNumber}>{currentTabConfig.card2.value}</Text>
+              <Text style={[styles.vitalValNumber, isDarkMode && { color: colors.textPrimary }]}>{currentTabConfig.card2.value}</Text>
               {Boolean(currentTabConfig.card2.unit) && (
-                <Text style={styles.vitalValUnit}>{currentTabConfig.card2.unit}</Text>
+                <Text style={[styles.vitalValUnit, isDarkMode && { color: colors.textSecondary }]}>{currentTabConfig.card2.unit}</Text>
               )}
             </View>
             <Text style={styles.vitalNormalRange}>{currentTabConfig.card2.range}</Text>
@@ -463,6 +494,7 @@ export default function HealthDetailScreen({ navigation, route }: any) {
           <TouchableOpacity
             style={[
               styles.vitalBox,
+              isDarkMode && { backgroundColor: colors.card, borderColor: colors.border },
               highlightedMetric === 'temp' && styles.vitalBoxHighlighted,
             ]}
             activeOpacity={0.8}
@@ -492,11 +524,11 @@ export default function HealthDetailScreen({ navigation, route }: any) {
                 </Text>
               </View>
             </View>
-            <Text style={styles.vitalBoxLabel}>{currentTabConfig.card3.label}</Text>
+            <Text style={[styles.vitalBoxLabel, isDarkMode && { color: colors.textSecondary }]}>{currentTabConfig.card3.label}</Text>
             <View style={styles.vitalValRow}>
-              <Text style={styles.vitalValNumber}>{currentTabConfig.card3.value}</Text>
+              <Text style={[styles.vitalValNumber, isDarkMode && { color: colors.textPrimary }]}>{currentTabConfig.card3.value}</Text>
               {Boolean(currentTabConfig.card3.unit) && (
-                <Text style={styles.vitalValUnit}>{currentTabConfig.card3.unit}</Text>
+                <Text style={[styles.vitalValUnit, isDarkMode && { color: colors.textSecondary }]}>{currentTabConfig.card3.unit}</Text>
               )}
             </View>
             <Text style={styles.vitalNormalRange}>{currentTabConfig.card3.range}</Text>
@@ -506,6 +538,7 @@ export default function HealthDetailScreen({ navigation, route }: any) {
           <TouchableOpacity
             style={[
               styles.vitalBox,
+              isDarkMode && { backgroundColor: colors.card, borderColor: colors.border },
               highlightedMetric === 'activity' && styles.vitalBoxHighlighted,
             ]}
             activeOpacity={0.8}
@@ -535,18 +568,19 @@ export default function HealthDetailScreen({ navigation, route }: any) {
                 </Text>
               </View>
             </View>
-            <Text style={styles.vitalBoxLabel}>{currentTabConfig.card4.label}</Text>
+            <Text style={[styles.vitalBoxLabel, isDarkMode && { color: colors.textSecondary }]}>{currentTabConfig.card4.label}</Text>
             <View style={styles.vitalValRow}>
               <Text
                 style={[
                   styles.vitalValNumber,
+                  isDarkMode && { color: colors.textPrimary },
                   currentTabConfig.card4.value.length > 3 && { fontSize: 20 },
                 ]}
               >
                 {currentTabConfig.card4.value}
               </Text>
               {Boolean(currentTabConfig.card4.unit) && (
-                <Text style={styles.vitalValUnit}>{currentTabConfig.card4.unit}</Text>
+                <Text style={[styles.vitalValUnit, isDarkMode && { color: colors.textSecondary }]}>{currentTabConfig.card4.unit}</Text>
               )}
             </View>
             <Text style={styles.vitalNormalRange}>{currentTabConfig.card4.range}</Text>
@@ -554,11 +588,11 @@ export default function HealthDetailScreen({ navigation, route }: any) {
         </View>
 
         {/* 5. Biểu đồ Dao động Nhịp tim */}
-        <View style={styles.chartCard}>
+        <View style={[styles.chartCard, isDarkMode && { backgroundColor: colors.card, borderWidth: 1, borderColor: colors.border }]}>
           <View style={styles.chartCardHeader}>
             <View style={{ flex: 1, marginRight: 8 }}>
-              <Text style={styles.chartCardTitle}>{currentTabConfig.chartTitle}</Text>
-              <Text style={styles.chartCardSubtitle}>{currentTabConfig.chartSubtitle}</Text>
+              <Text style={[styles.chartCardTitle, isDarkMode && { color: colors.textPrimary }]}>{currentTabConfig.chartTitle}</Text>
+              <Text style={[styles.chartCardSubtitle, isDarkMode && { color: colors.textSecondary }]}>{currentTabConfig.chartSubtitle}</Text>
             </View>
             <View style={styles.chartAvgBadge}>
               <Text style={styles.chartAvgText}>{currentTabConfig.chartAvg}</Text>
@@ -572,8 +606,8 @@ export default function HealthDetailScreen({ navigation, route }: any) {
               const isCurrent = idx === currentTabConfig.chartData.length - 1;
               return (
                 <View key={point.label} style={styles.barCol}>
-                  <Text style={styles.barValText}>{point.hr}</Text>
-                  <View style={styles.barTrack}>
+                  <Text style={[styles.barValText, isDarkMode && { color: colors.textSecondary }]}>{point.hr}</Text>
+                  <View style={[styles.barTrack, isDarkMode && { backgroundColor: colors.surfaceSubtle }]}>
                     <View
                       style={[
                         styles.barFill,
@@ -587,6 +621,7 @@ export default function HealthDetailScreen({ navigation, route }: any) {
                   <Text
                     style={[
                       styles.barTimeText,
+                      isDarkMode && { color: colors.textSecondary },
                       isCurrent && styles.barTimeTextActive,
                     ]}
                     numberOfLines={1}
@@ -600,16 +635,16 @@ export default function HealthDetailScreen({ navigation, route }: any) {
         </View>
 
         {/* 6. Trạng thái phần cứng & Âm thanh môi trường */}
-        <View style={styles.statusSectionCard}>
-          <Text style={styles.sectionHeading}>Trạng thái cảm biến & Môi trường</Text>
+        <View style={[styles.statusSectionCard, isDarkMode && { backgroundColor: colors.card, borderWidth: 1, borderColor: colors.border }]}>
+          <Text style={[styles.sectionHeading, isDarkMode && { color: colors.textPrimary }]}>Trạng thái cảm biến & Môi trường</Text>
 
           <View style={styles.statusRowItem}>
-            <View style={styles.statusIconBox}>
+            <View style={[styles.statusIconBox, isDarkMode && { backgroundColor: 'rgba(255, 122, 0, 0.15)' }]}>
               <Ionicons name="watch-outline" size={20} color={Colors.primary} />
             </View>
             <View style={{ flex: 1 }}>
-              <Text style={styles.statusItemTitle}>Vòng tay thông minh BLE</Text>
-              <Text style={styles.statusItemSub}>Pin: {battery}% • Kết nối liên tục</Text>
+              <Text style={[styles.statusItemTitle, isDarkMode && { color: colors.textPrimary }]}>Vòng tay thông minh BLE</Text>
+              <Text style={[styles.statusItemSub, isDarkMode && { color: colors.textSecondary }]}>Pin: {battery}% • Kết nối liên tục</Text>
             </View>
             <View style={styles.onlineBadge}>
               <View style={styles.onlineDot} />
@@ -617,15 +652,15 @@ export default function HealthDetailScreen({ navigation, route }: any) {
             </View>
           </View>
 
-          <View style={styles.divider} />
+          <View style={[styles.divider, isDarkMode && { backgroundColor: colors.border }]} />
 
           <View style={styles.statusRowItem}>
-            <View style={[styles.statusIconBox, { backgroundColor: '#EFF6FF' }]}>
+            <View style={[styles.statusIconBox, { backgroundColor: isDarkMode ? 'rgba(37, 99, 235, 0.15)' : '#EFF6FF' }]}>
               <Ionicons name="mic-outline" size={20} color="#2563EB" />
             </View>
             <View style={{ flex: 1 }}>
-              <Text style={styles.statusItemTitle}>Nhận diện âm thanh YAMNet</Text>
-              <Text style={styles.statusItemSub}>Môi trường: {acousticStatus}</Text>
+              <Text style={[styles.statusItemTitle, isDarkMode && { color: colors.textPrimary }]}>Nhận diện âm thanh YAMNet</Text>
+              <Text style={[styles.statusItemSub, isDarkMode && { color: colors.textSecondary }]}>Môi trường: {acousticStatus}</Text>
             </View>
             <View style={styles.safeBadge}>
               <Ionicons name="checkmark-circle" size={14} color={Colors.success} />
@@ -635,12 +670,12 @@ export default function HealthDetailScreen({ navigation, route }: any) {
         </View>
 
         {/* 7. Lời khuyên & Đánh giá của Trợ lý AI Bác Sĩ */}
-        <View style={styles.aiAdviceCard}>
+        <View style={[styles.aiAdviceCard, isDarkMode && { backgroundColor: '#1E293B', borderColor: '#334155' }]}>
           <View style={styles.aiAdviceHeader}>
             <Ionicons name="sparkles" size={18} color="#D97706" />
             <Text style={styles.aiAdviceTitle}>Lời khuyên Bác sĩ AI</Text>
           </View>
-          <Text style={styles.aiAdviceBody}>
+          <Text style={[styles.aiAdviceBody, isDarkMode && { color: '#CBD5E1' }]}>
             {currentTabConfig.aiAdvice}
           </Text>
         </View>

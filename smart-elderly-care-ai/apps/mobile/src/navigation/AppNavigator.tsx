@@ -36,21 +36,30 @@ import AddDeviceScreen from '../features/dashboard/screens/AddDeviceScreen';
 import CreateGroupScreen from '../features/dashboard/screens/CreateGroupScreen';
 import SmartbandDetailScreen from '../features/dashboard/screens/SmartbandDetailScreen';
 import HealthDetailScreen from '../features/dashboard/screens/HealthDetailScreen';
+import { useTheme } from '../store/useThemeStore';
 
 const Stack = createNativeStackNavigator();
 const Tab = createBottomTabNavigator();
 
 // ---- 5-Tab Navigator (Trang chủ, Thiết bị, Bot AI, Cảnh báo, Tôi) ----
 function MainTabNavigator() {
+  const { isDarkMode, colors } = useTheme();
+
   return (
     <Tab.Navigator
       initialRouteName="Home"
       screenOptions={({ route }) => ({
         headerShown: false,
         tabBarShowLabel: false, // Thiết kế hiện đại tinh gọn như ảnh mẫu
-        tabBarStyle: styles.tabBar,
+        tabBarStyle: [
+          styles.tabBar,
+          {
+            backgroundColor: colors.card,
+            borderTopColor: colors.border,
+          },
+        ],
         tabBarActiveTintColor: Colors.primary,
-        tabBarInactiveTintColor: '#94A3B8',
+        tabBarInactiveTintColor: isDarkMode ? '#64748B' : '#94A3B8',
         tabBarIcon: ({ focused, color, size }) => {
           // Tab giữa: Robot AI Bot
           if (route.name === 'AIAssistant') {
@@ -72,9 +81,15 @@ function MainTabNavigator() {
 
           return (
             <View style={styles.iconContainer}>
-              <Ionicons name={iconName} size={iconSize} color={focused ? Colors.primary : '#94A3B8'} />
+              <Ionicons
+                name={iconName}
+                size={iconSize}
+                color={focused ? Colors.primary : (isDarkMode ? '#64748B' : '#94A3B8')}
+              />
               {/* Chấm tròn đỏ cho thông báo mới */}
-              {route.name === 'Alerts' && <View style={styles.tabBadgeDot} />}
+              {route.name === 'Alerts' && (
+                <View style={[styles.tabBadgeDot, { borderColor: colors.card }]} />
+              )}
             </View>
           );
         },
