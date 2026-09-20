@@ -21,10 +21,29 @@ const { width: SCREEN_WIDTH } = Dimensions.get('window');
 
 type TimeRange = 'DAY' | 'WEEK' | 'MONTH';
 
-export default function HealthDetailScreen({ navigation }: any) {
+export default function HealthDetailScreen({ navigation, route }: any) {
+  const metric = route?.params?.metric as 'heartRate' | 'activity' | 'spo2' | undefined;
   const { currentVitals } = useVitalStore();
   const [selectedRange, setSelectedRange] = useState<TimeRange>('DAY');
   const [isRefreshing, setIsRefreshing] = useState(false);
+  const [highlightedMetric, setHighlightedMetric] = useState<string | null>(metric ?? null);
+  const scrollRef = React.useRef<ScrollView>(null);
+
+  React.useEffect(() => {
+    if (metric) {
+      setHighlightedMetric(metric);
+      const timer = setTimeout(() => {
+        if (metric === 'heartRate') {
+          scrollRef.current?.scrollTo({ y: 140, animated: true });
+        } else if (metric === 'spo2') {
+          scrollRef.current?.scrollTo({ y: 140, animated: true });
+        } else if (metric === 'activity') {
+          scrollRef.current?.scrollTo({ y: 220, animated: true });
+        }
+      }, 300);
+      return () => clearTimeout(timer);
+    }
+  }, [metric]);
 
   const acousticStatus = currentVitals.acoustic_status ?? 'Bình thường';
   const battery = currentVitals.bracelet_battery ?? 88;
@@ -280,6 +299,7 @@ export default function HealthDetailScreen({ navigation }: any) {
       </View>
 
       <ScrollView
+        ref={scrollRef}
         contentContainerStyle={styles.scrollContent}
         showsVerticalScrollIndicator={false}
       >
@@ -343,8 +363,15 @@ export default function HealthDetailScreen({ navigation }: any) {
 
         {/* 4. Lưới 4 Thẻ Sinh Hiệu / Thống kê */}
         <View style={styles.vitalsGrid}>
-          {/* Thẻ 1 */}
-          <View style={styles.vitalBox}>
+          {/* Thẻ 1: Nhịp tim */}
+          <TouchableOpacity
+            style={[
+              styles.vitalBox,
+              highlightedMetric === 'heartRate' && styles.vitalBoxHighlighted,
+            ]}
+            activeOpacity={0.8}
+            onPress={() => setHighlightedMetric(highlightedMetric === 'heartRate' ? null : 'heartRate')}
+          >
             <View style={styles.vitalBoxHeader}>
               <View style={[styles.vitalIconWrapper, { backgroundColor: currentTabConfig.card1.iconBg }]}>
                 <Ionicons
@@ -379,10 +406,17 @@ export default function HealthDetailScreen({ navigation }: any) {
               )}
             </View>
             <Text style={styles.vitalNormalRange}>{currentTabConfig.card1.range}</Text>
-          </View>
+          </TouchableOpacity>
 
-          {/* Thẻ 2 */}
-          <View style={styles.vitalBox}>
+          {/* Thẻ 2: SpO2 */}
+          <TouchableOpacity
+            style={[
+              styles.vitalBox,
+              highlightedMetric === 'spo2' && styles.vitalBoxHighlighted,
+            ]}
+            activeOpacity={0.8}
+            onPress={() => setHighlightedMetric(highlightedMetric === 'spo2' ? null : 'spo2')}
+          >
             <View style={styles.vitalBoxHeader}>
               <View style={[styles.vitalIconWrapper, { backgroundColor: currentTabConfig.card2.iconBg }]}>
                 <Ionicons
@@ -415,10 +449,17 @@ export default function HealthDetailScreen({ navigation }: any) {
               )}
             </View>
             <Text style={styles.vitalNormalRange}>{currentTabConfig.card2.range}</Text>
-          </View>
+          </TouchableOpacity>
 
-          {/* Thẻ 3 */}
-          <View style={styles.vitalBox}>
+          {/* Thẻ 3: Nhiệt độ da */}
+          <TouchableOpacity
+            style={[
+              styles.vitalBox,
+              highlightedMetric === 'temp' && styles.vitalBoxHighlighted,
+            ]}
+            activeOpacity={0.8}
+            onPress={() => setHighlightedMetric(highlightedMetric === 'temp' ? null : 'temp')}
+          >
             <View style={styles.vitalBoxHeader}>
               <View style={[styles.vitalIconWrapper, { backgroundColor: currentTabConfig.card3.iconBg }]}>
                 <Ionicons
@@ -451,10 +492,17 @@ export default function HealthDetailScreen({ navigation }: any) {
               )}
             </View>
             <Text style={styles.vitalNormalRange}>{currentTabConfig.card3.range}</Text>
-          </View>
+          </TouchableOpacity>
 
-          {/* Thẻ 4 */}
-          <View style={styles.vitalBox}>
+          {/* Thẻ 4: Tư thế / Vận động */}
+          <TouchableOpacity
+            style={[
+              styles.vitalBox,
+              highlightedMetric === 'activity' && styles.vitalBoxHighlighted,
+            ]}
+            activeOpacity={0.8}
+            onPress={() => setHighlightedMetric(highlightedMetric === 'activity' ? null : 'activity')}
+          >
             <View style={styles.vitalBoxHeader}>
               <View style={[styles.vitalIconWrapper, { backgroundColor: currentTabConfig.card4.iconBg }]}>
                 <Ionicons
@@ -494,7 +542,7 @@ export default function HealthDetailScreen({ navigation }: any) {
               )}
             </View>
             <Text style={styles.vitalNormalRange}>{currentTabConfig.card4.range}</Text>
-          </View>
+          </TouchableOpacity>
         </View>
 
         {/* 5. Biểu đồ Diễn tiến Nhịp tim */}
@@ -707,7 +755,18 @@ const styles = StyleSheet.create({
     borderRadius: 14,
     padding: 14,
     marginBottom: 12,
+    borderWidth: 1.5,
+    borderColor: '#F1F5F9',
     ...Shadows.soft,
+  },
+  vitalBoxHighlighted: {
+    borderColor: '#FF6B00',
+    backgroundColor: '#FFFBF5',
+    shadowColor: '#FF6B00',
+    shadowOffset: { width: 0, height: 4 },
+    shadowOpacity: 0.25,
+    shadowRadius: 8,
+    elevation: 4,
   },
   vitalBoxHeader: {
     flexDirection: 'row',

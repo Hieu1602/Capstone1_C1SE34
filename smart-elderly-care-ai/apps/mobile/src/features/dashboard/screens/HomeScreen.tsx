@@ -658,7 +658,11 @@ export default function HomeScreen({ navigation }: any) {
           {/* Hàng 2 thẻ biểu đồ mini */}
           <View style={styles.miniChartsRow}>
             {/* Thẻ 1: Biểu đồ nhịp tim 12h qua */}
-            <View style={styles.miniChartCard}>
+            <TouchableOpacity
+              style={styles.miniChartCard}
+              activeOpacity={0.8}
+              onPress={() => navigation.navigate('HealthDetail', { metric: 'heartRate' })}
+            >
               <View style={styles.miniCardTop}>
                 <Text style={styles.miniCardTitle}>Nhịp tim 12h qua</Text>
                 <View style={styles.miniCardBadge}>
@@ -709,10 +713,14 @@ export default function HomeScreen({ navigation }: any) {
                 <View style={styles.miniStatusDotGreen} />
                 <Text style={styles.miniStatusNote}>Chuẩn 60-100 bpm</Text>
               </View>
-            </View>
+            </TouchableOpacity>
 
             {/* Thẻ 2: Mức độ vận động & sinh hoạt */}
-            <View style={styles.miniChartCard}>
+            <TouchableOpacity
+              style={styles.miniChartCard}
+              activeOpacity={0.8}
+              onPress={() => navigation.navigate('HealthDetail', { metric: 'activity' })}
+            >
               <View style={styles.miniCardTop}>
                 <Text style={styles.miniCardTitle}>Vận động & Sinh hoạt</Text>
                 <Ionicons name="body" size={15} color="#0284C7" />
@@ -746,11 +754,15 @@ export default function HomeScreen({ navigation }: any) {
                   Vận động: <Text style={styles.boldGreen}>2.5h</Text> | Nghỉ: <Text style={styles.boldBlue}>6h</Text>
                 </Text>
               </View>
-            </View>
+            </TouchableOpacity>
           </View>
 
           {/* Thẻ 3: Toàn chiều rộng bên dưới - Thước đo Oxy máu SpO2 */}
-          <View style={styles.spo2GaugeCard}>
+          <TouchableOpacity
+            style={styles.spo2GaugeCard}
+            activeOpacity={0.8}
+            onPress={() => navigation.navigate('HealthDetail', { metric: 'spo2' })}
+          >
             <View style={styles.spo2CardTop}>
               <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6 }}>
                 <View style={styles.spo2IconCircle}>
@@ -794,7 +806,7 @@ export default function HomeScreen({ navigation }: any) {
                 Ngưỡng an toàn ≥ 95% • Nồng độ oxy bão hoà duy trì tối ưu
               </Text>
             </View>
-          </View>
+          </TouchableOpacity>
         </View>
       </ScrollView>
     </SafeAreaView>
