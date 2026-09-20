@@ -108,9 +108,22 @@ function MainTabNavigator() {
 export default function AppNavigator() {
   const { accessToken } = useAuthStore();
   const isAuthenticated = Boolean(accessToken);
+  const { isDarkMode, colors } = useTheme();
 
   return (
-    <NavigationContainer>
+    <NavigationContainer
+      theme={{
+        dark: isDarkMode,
+        colors: {
+          primary: colors.primary,
+          background: colors.background,
+          card: colors.card,
+          text: colors.textPrimary,
+          border: colors.border,
+          notification: '#EF4444',
+        },
+      }}
+    >
       <Stack.Navigator screenOptions={{ headerShown: false }}>
         {!isAuthenticated ? (
           // Auth Stack

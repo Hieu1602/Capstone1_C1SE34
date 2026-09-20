@@ -421,10 +421,16 @@ const createVitalStore: StateCreator<VitalStoreState> = (set: VitalSet) => ({
 
 export const useVitalStore = create<VitalStoreState>()(createVitalStore);
 
-// Đồng bộ trạng thái Theme giữa useThemeStore và useVitalStore
+// Đồng bộ trạng thái Theme giữa useThemeStore và useVitalStore hai chiều
 useThemeStore.subscribe((state) => {
   if (useVitalStore.getState().isDarkMode !== state.isDarkMode) {
     useVitalStore.setState({ isDarkMode: state.isDarkMode });
+  }
+});
+
+useVitalStore.subscribe((state) => {
+  if (useThemeStore.getState().isDarkMode !== state.isDarkMode) {
+    useThemeStore.getState().setDarkMode(state.isDarkMode);
   }
 });
 
