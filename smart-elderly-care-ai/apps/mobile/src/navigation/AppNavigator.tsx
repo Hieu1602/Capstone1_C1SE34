@@ -63,16 +63,18 @@ function MainTabNavigator() {
           } else if (route.name === 'Devices') {
             iconName = focused ? 'grid' : 'grid-outline';
           } else if (route.name === 'Alerts') {
-            iconName = focused ? 'chatbubble-ellipses' : 'chatbubble-ellipses-outline';
+            iconName = focused ? 'notifications' : 'notifications-outline';
           } else if (route.name === 'Profile') {
             iconName = focused ? 'person' : 'person-outline';
           }
 
+          const iconSize = route.name === 'Alerts' ? 24 : 26;
+
           return (
             <View style={styles.iconContainer}>
-              <Ionicons name={iconName} size={26} color={focused ? Colors.primary : '#94A3B8'} />
+              <Ionicons name={iconName} size={iconSize} color={focused ? Colors.primary : '#94A3B8'} />
               {/* Chấm tròn đỏ cho thông báo mới */}
-              {route.name === 'Alerts' && !focused && <View style={styles.tabBadgeDot} />}
+              {route.name === 'Alerts' && <View style={styles.tabBadgeDot} />}
             </View>
           );
         },
@@ -153,11 +155,13 @@ const styles = StyleSheet.create({
   },
   tabBadgeDot: {
     position: 'absolute',
-    top: -2,
-    right: -4,
-    width: 6,
-    height: 6,
-    borderRadius: 3,
-    backgroundColor: Colors.danger,
+    top: -1,
+    right: -3,
+    width: 7,
+    height: 7,
+    borderRadius: 3.5,
+    backgroundColor: '#EF4444',
+    borderWidth: 1,
+    borderColor: '#FFFFFF',
   },
 });
