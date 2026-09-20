@@ -19,14 +19,13 @@ import { useVitalStore } from '../../../store/useVitalStore';
 
 const { width: SCREEN_WIDTH } = Dimensions.get('window');
 
+type TimeRange = 'DAY' | 'WEEK' | 'MONTH';
+
 export default function HealthDetailScreen({ navigation }: any) {
-  const { currentVitals, setVitals } = useVitalStore();
-  const [selectedRange, setSelectedRange] = useState<'DAY' | 'WEEK' | 'MONTH'>('DAY');
+  const { currentVitals } = useVitalStore();
+  const [selectedRange, setSelectedRange] = useState<TimeRange>('DAY');
   const [isRefreshing, setIsRefreshing] = useState(false);
 
-  const heartRate = currentVitals.heart_rate ?? 75;
-  const spo2 = currentVitals.spo2 ?? 98;
-  const skinTemp = currentVitals.skin_temp_max ?? 36.6;
   const acousticStatus = currentVitals.acoustic_status ?? 'Bình thường';
   const battery = currentVitals.bracelet_battery ?? 88;
   const isFallDetected = currentVitals.fall_detected;
@@ -39,16 +38,222 @@ export default function HealthDetailScreen({ navigation }: any) {
     }, 600);
   };
 
-  // Dữ liệu mẫu biểu đồ nhịp tim theo mốc giờ trong ngày
-  const heartRateTimeline = [
-    { time: '06:00', hr: 68 },
-    { time: '08:00', hr: 74 },
-    { time: '10:00', hr: 82 },
-    { time: '12:00', hr: 71 },
-    { time: '14:00', hr: 76 },
-    { time: '16:00', hr: 79 },
-    { time: '18:00', hr: heartRate },
-  ];
+  // 1. Dữ liệu thay đổi tương ứng theo từng tab thời gian
+  const getTabConfig = () => {
+    switch (selectedRange) {
+      case 'WEEK':
+        return {
+          bannerTitle: 'Xu hướng tuần ổn định',
+          bannerSubtitle: 'Ghi nhận nhịp tim và oxy máu duy trì mức tốt, không có sự cố té ngã.',
+          bannerIcon: 'checkmark-circle' as keyof typeof Ionicons.glyphMap,
+          bannerAlert: false,
+          card1: {
+            label: 'Nhịp tim TB',
+            value: '76',
+            unit: 'bpm',
+            status: 'Chuẩn',
+            statusColor: '#15803D',
+            statusBg: '#DCFCE7',
+            range: 'Dao động: 68 - 84 bpm',
+            icon: 'heart' as keyof typeof Ionicons.glyphMap,
+            iconColor: '#EF4444',
+            iconBg: '#FEE2E2',
+          },
+          card2: {
+            label: 'Nồng độ Oxy TB',
+            value: '97',
+            unit: '%',
+            status: 'Tốt',
+            statusColor: '#15803D',
+            statusBg: '#DCFCE7',
+            range: 'Mức thấp nhất: 96%',
+            icon: 'water' as keyof typeof Ionicons.glyphMap,
+            iconColor: '#0284C7',
+            iconBg: '#E0F2FE',
+          },
+          card3: {
+            label: 'Nhiệt độ da TB',
+            value: '36.7',
+            unit: '°C',
+            status: 'Bình thường',
+            statusColor: '#15803D',
+            statusBg: '#DCFCE7',
+            range: 'Dao động: 36.5 - 37.0°C',
+            icon: 'thermometer' as keyof typeof Ionicons.glyphMap,
+            iconColor: '#D97706',
+            iconBg: '#FEF3C7',
+          },
+          card4: {
+            label: 'Sự cố té ngã',
+            value: '0',
+            unit: 'lần',
+            status: 'An toàn tuyệt đối',
+            statusColor: '#15803D',
+            statusBg: '#DCFCE7',
+            range: 'Không có cảnh báo ngã',
+            icon: 'shield-checkmark' as keyof typeof Ionicons.glyphMap,
+            iconColor: Colors.success,
+            iconBg: '#DCFCE7',
+          },
+          chartTitle: 'Nhịp tim trung bình 7 ngày',
+          chartSubtitle: 'Thống kê từ Thứ 2 đến Chủ Nhật',
+          chartAvg: 'Trung bình: 76 bpm',
+          chartData: [
+            { label: 'T2', hr: 72 },
+            { label: 'T3', hr: 75 },
+            { label: 'T4', hr: 78 },
+            { label: 'T5', hr: 74 },
+            { label: 'T6', hr: 80 },
+            { label: 'T7', hr: 76 },
+            { label: 'CN', hr: 75 },
+          ],
+          aiAdvice:
+            '• Tuần qua người cao tuổi có chất lượng giấc ngủ và nhịp tim phục hồi rất đều.\n• Không ghi nhận bất kỳ dấu hiệu mất thăng bằng hay trượt ngã nào.\n• Khuyến khích duy trì bài tập dưỡng sinh buổi sáng 15-20 phút.',
+        };
+
+      case 'MONTH':
+        return {
+          bannerTitle: 'Báo cáo 30 ngày',
+          bannerSubtitle: 'Chỉ số sinh hiệu đều đặn, không có biến động bất thường.',
+          bannerIcon: 'analytics' as keyof typeof Ionicons.glyphMap,
+          bannerAlert: false,
+          card1: {
+            label: 'Dao động nhịp tim',
+            value: '68 - 86',
+            unit: 'bpm',
+            status: 'Chuẩn',
+            statusColor: '#15803D',
+            statusBg: '#DCFCE7',
+            range: 'Mức an toàn tối ưu',
+            icon: 'heart' as keyof typeof Ionicons.glyphMap,
+            iconColor: '#EF4444',
+            iconBg: '#FEE2E2',
+          },
+          card2: {
+            label: 'SpO₂ trung bình',
+            value: '98',
+            unit: '%',
+            status: 'Tốt',
+            statusColor: '#15803D',
+            statusBg: '#DCFCE7',
+            range: 'Chỉ số ổn định cao',
+            icon: 'water' as keyof typeof Ionicons.glyphMap,
+            iconColor: '#0284C7',
+            iconBg: '#E0F2FE',
+          },
+          card3: {
+            label: 'Nhiệt độ ổn định',
+            value: '36.6',
+            unit: '°C',
+            status: 'Bình thường',
+            statusColor: '#15803D',
+            statusBg: '#DCFCE7',
+            range: 'Mức nhiệt tiêu chuẩn',
+            icon: 'thermometer' as keyof typeof Ionicons.glyphMap,
+            iconColor: '#D97706',
+            iconBg: '#FEF3C7',
+          },
+          card4: {
+            label: 'Tần suất cảnh báo',
+            value: '0',
+            unit: 'sự cố',
+            status: 'Tối ưu',
+            statusColor: '#B45309',
+            statusBg: '#FEF3C7',
+            range: 'Tối ưu 100%',
+            icon: 'sparkles' as keyof typeof Ionicons.glyphMap,
+            iconColor: '#D97706',
+            iconBg: '#FEF3C7',
+          },
+          chartTitle: 'Diễn tiến nhịp tim theo tuần (Tháng này)',
+          chartSubtitle: 'Tổng hợp 4 tuần gần nhất',
+          chartAvg: 'Trung bình: 75.5 bpm',
+          chartData: [
+            { label: 'Tuần 1', hr: 74 },
+            { label: 'Tuần 2', hr: 76 },
+            { label: 'Tuần 3', hr: 75 },
+            { label: 'Tuần 4', hr: 77 },
+          ],
+          aiAdvice:
+            '• Chỉ số sinh hiệu 30 ngày qua cho thấy thể trạng của cụ rất ổn định.\n• Các cảm biến Edge Hub và vòng tay duy trì hoạt động không gián đoạn.\n• Đề xuất hẹn lịch tái khám tim mạch định kỳ vào đầu tháng tới.',
+        };
+
+      case 'DAY':
+      default:
+        return {
+          bannerTitle: isFallDetected ? 'Cảnh báo nguy cơ té ngã!' : 'Sức khoẻ ổn định',
+          bannerSubtitle: isFallDetected
+            ? 'Hệ thống AI vừa nhận thấy chuyển động ngã đột ngột trong phòng.'
+            : 'Tất cả chỉ số sinh hiệu và âm thanh môi trường đều trong ngưỡng an toàn.',
+          bannerIcon: (isFallDetected ? 'warning' : 'shield-checkmark') as keyof typeof Ionicons.glyphMap,
+          bannerAlert: isFallDetected,
+          card1: {
+            label: 'Nhịp tim',
+            value: '74',
+            unit: 'bpm',
+            status: 'Chuẩn',
+            statusColor: '#15803D',
+            statusBg: '#DCFCE7',
+            range: 'Chuẩn: 60 - 100 bpm',
+            icon: 'heart' as keyof typeof Ionicons.glyphMap,
+            iconColor: '#EF4444',
+            iconBg: '#FEE2E2',
+          },
+          card2: {
+            label: 'Nồng độ Oxy (SpO₂)',
+            value: '98',
+            unit: '%',
+            status: 'Tốt',
+            statusColor: '#15803D',
+            statusBg: '#DCFCE7',
+            range: 'Chuẩn: ≥ 95%',
+            icon: 'water' as keyof typeof Ionicons.glyphMap,
+            iconColor: '#0284C7',
+            iconBg: '#E0F2FE',
+          },
+          card3: {
+            label: 'Nhiệt độ da',
+            value: '36.8',
+            unit: '°C',
+            status: 'Bình thường',
+            statusColor: '#15803D',
+            statusBg: '#DCFCE7',
+            range: 'Chuẩn: 36.0 - 37.2°C',
+            icon: 'thermometer' as keyof typeof Ionicons.glyphMap,
+            iconColor: '#D97706',
+            iconBg: '#FEF3C7',
+          },
+          card4: {
+            label: 'Tư thế cơ thể',
+            value: isFallDetected ? 'Nằm sàn' : 'Sinh hoạt',
+            unit: '',
+            status: isFallDetected ? 'Cảnh báo' : 'An toàn',
+            statusColor: isFallDetected ? Colors.danger : '#15803D',
+            statusBg: isFallDetected ? '#FEE2E2' : '#DCFCE7',
+            range: 'YOLOv8-Pose 30 FPS',
+            icon: 'body' as keyof typeof Ionicons.glyphMap,
+            iconColor: '#9333EA',
+            iconBg: '#F3E8FF',
+          },
+          chartTitle: 'Diễn tiến nhịp tim',
+          chartSubtitle: 'Ghi nhận từ vòng BLE & Hub AI',
+          chartAvg: 'Trung bình: 75 bpm',
+          chartData: [
+            { label: '06:00', hr: 68 },
+            { label: '08:00', hr: 74 },
+            { label: '10:00', hr: 82 },
+            { label: '12:00', hr: 71 },
+            { label: '14:00', hr: 74 },
+            { label: '16:00', hr: 79 },
+            { label: '18:00', hr: 74 },
+          ],
+          aiAdvice:
+            '• Nhịp tim và nồng độ SpO₂ của cụ duy trì rất đều đặn trong ngày.\n• Nhiệt độ phòng đang ở mức lý tưởng (36.8°C).\n• Nhắc cụ uống thêm 1 cốc nước ấm vào buổi chiều và vận động nhẹ nhàng quanh phòng khách.',
+        };
+    }
+  };
+
+  const currentTabConfig = getTabConfig();
 
   return (
     <SafeAreaView style={styles.safeArea} edges={['top']}>
@@ -79,31 +284,48 @@ export default function HealthDetailScreen({ navigation }: any) {
         showsVerticalScrollIndicator={false}
       >
         {/* 2. Banner Tình trạng Tổng quan */}
-        <View style={[styles.overallCard, isFallDetected ? styles.overallCardAlert : styles.overallCardNormal]}>
-          <View style={[styles.overallIconCircle, { backgroundColor: isFallDetected ? '#FEE2E2' : '#E8FDF3' }]}>
+        <View
+          style={[
+            styles.overallCard,
+            currentTabConfig.bannerAlert ? styles.overallCardAlert : styles.overallCardNormal,
+          ]}
+        >
+          <View
+            style={[
+              styles.overallIconCircle,
+              { backgroundColor: currentTabConfig.bannerAlert ? '#FEE2E2' : '#E8FDF3' },
+            ]}
+          >
             <Ionicons
-              name={isFallDetected ? 'warning' : 'shield-checkmark'}
+              name={currentTabConfig.bannerIcon}
               size={28}
-              color={isFallDetected ? Colors.danger : Colors.success}
+              color={currentTabConfig.bannerAlert ? Colors.danger : Colors.success}
             />
           </View>
           <View style={{ flex: 1 }}>
-            <Text style={[styles.overallTitle, { color: isFallDetected ? Colors.danger : Colors.success }]}>
-              {isFallDetected ? 'Cảnh báo nguy cơ té ngã!' : 'Sức khoẻ ổn định'}
+            <Text
+              style={[
+                styles.overallTitle,
+                { color: currentTabConfig.bannerAlert ? Colors.danger : Colors.success },
+              ]}
+            >
+              {currentTabConfig.bannerTitle}
             </Text>
             <Text style={styles.overallSubtitle}>
-              {isFallDetected
-                ? 'Hệ thống AI vừa nhận thấy chuyển động ngã đột ngột trong phòng.'
-                : 'Tất cả chỉ số sinh hiệu và âm thanh môi trường đều trong ngưỡng an toàn.'}
+              {currentTabConfig.bannerSubtitle}
             </Text>
           </View>
         </View>
 
-        {/* 3. Bộ lọc thời gian (Hôm nay / Tuần / Tháng) */}
+        {/* 3. Bộ lọc thời gian (Hôm nay / 7 ngày qua / 30 ngày) */}
         <View style={styles.rangeSelector}>
           {(['DAY', 'WEEK', 'MONTH'] as const).map((range) => {
             const isActive = selectedRange === range;
-            const labels = { DAY: 'Hôm nay', WEEK: '7 ngày qua', MONTH: '30 ngày' };
+            const labels: Record<TimeRange, string> = {
+              DAY: 'Hôm nay',
+              WEEK: '7 ngày qua',
+              MONTH: '30 ngày',
+            };
             return (
               <TouchableOpacity
                 key={range}
@@ -119,101 +341,181 @@ export default function HealthDetailScreen({ navigation }: any) {
           })}
         </View>
 
-        {/* 4. Lưới 4 Thẻ Sinh Hiệu Trọng Yếu */}
+        {/* 4. Lưới 4 Thẻ Sinh Hiệu / Thống kê */}
         <View style={styles.vitalsGrid}>
-          {/* Nhịp tim */}
+          {/* Thẻ 1 */}
           <View style={styles.vitalBox}>
             <View style={styles.vitalBoxHeader}>
-              <View style={[styles.vitalIconWrapper, { backgroundColor: '#FEE2E2' }]}>
-                <Ionicons name="heart" size={20} color="#EF4444" />
+              <View style={[styles.vitalIconWrapper, { backgroundColor: currentTabConfig.card1.iconBg }]}>
+                <Ionicons
+                  name={currentTabConfig.card1.icon}
+                  size={20}
+                  color={currentTabConfig.card1.iconColor}
+                />
               </View>
-              <View style={styles.vitalStatusTag}>
-                <Text style={styles.vitalStatusTextGreen}>Chuẩn</Text>
+              <View
+                style={[
+                  styles.vitalStatusTag,
+                  { backgroundColor: currentTabConfig.card1.statusBg },
+                ]}
+              >
+                <Text
+                  style={[
+                    styles.vitalStatusText,
+                    { color: currentTabConfig.card1.statusColor },
+                  ]}
+                >
+                  {currentTabConfig.card1.status}
+                </Text>
               </View>
             </View>
-            <Text style={styles.vitalBoxLabel}>Nhịp tim</Text>
+            <Text style={styles.vitalBoxLabel}>{currentTabConfig.card1.label}</Text>
             <View style={styles.vitalValRow}>
-              <Text style={styles.vitalValNumber}>{heartRate}</Text>
-              <Text style={styles.vitalValUnit}>bpm</Text>
-            </View>
-            <Text style={styles.vitalNormalRange}>Chuẩn: 60 - 100 bpm</Text>
-          </View>
-
-          {/* Nồng độ Oxy SpO2 */}
-          <View style={styles.vitalBox}>
-            <View style={styles.vitalBoxHeader}>
-              <View style={[styles.vitalIconWrapper, { backgroundColor: '#E0F2FE' }]}>
-                <Ionicons name="water" size={20} color="#0284C7" />
-              </View>
-              <View style={styles.vitalStatusTag}>
-                <Text style={styles.vitalStatusTextGreen}>Tốt</Text>
-              </View>
-            </View>
-            <Text style={styles.vitalBoxLabel}>Nồng độ Oxy (SpO₂)</Text>
-            <View style={styles.vitalValRow}>
-              <Text style={styles.vitalValNumber}>{spo2}</Text>
-              <Text style={styles.vitalValUnit}>%</Text>
-            </View>
-            <Text style={styles.vitalNormalRange}>Chuẩn: ≥ 95%</Text>
-          </View>
-
-          {/* Nhiệt độ cơ thể */}
-          <View style={styles.vitalBox}>
-            <View style={styles.vitalBoxHeader}>
-              <View style={[styles.vitalIconWrapper, { backgroundColor: '#FEF3C7' }]}>
-                <Ionicons name="thermometer" size={20} color="#D97706" />
-              </View>
-              <View style={styles.vitalStatusTag}>
-                <Text style={styles.vitalStatusTextGreen}>Bình thường</Text>
-              </View>
-            </View>
-            <Text style={styles.vitalBoxLabel}>Nhiệt độ da</Text>
-            <View style={styles.vitalValRow}>
-              <Text style={styles.vitalValNumber}>{skinTemp.toFixed(1)}</Text>
-              <Text style={styles.vitalValUnit}>°C</Text>
-            </View>
-            <Text style={styles.vitalNormalRange}>Chuẩn: 36.0 - 37.2°C</Text>
-          </View>
-
-          {/* Tư thế & Nguy cơ té ngã */}
-          <View style={styles.vitalBox}>
-            <View style={styles.vitalBoxHeader}>
-              <View style={[styles.vitalIconWrapper, { backgroundColor: '#F3E8FF' }]}>
-                <Ionicons name="body" size={20} color="#9333EA" />
-              </View>
-              <View style={styles.vitalStatusTag}>
-                <Text style={styles.vitalStatusTextGreen}>An toàn</Text>
-              </View>
-            </View>
-            <Text style={styles.vitalBoxLabel}>Tư thế cơ thể</Text>
-            <View style={styles.vitalValRow}>
-              <Text style={[styles.vitalValNumber, { fontSize: 20 }]}>
-                {isFallDetected ? 'Nằm sàn' : 'Sinh hoạt'}
+              <Text style={[styles.vitalValNumber, currentTabConfig.card1.value.length > 4 && { fontSize: 20 }]}>
+                {currentTabConfig.card1.value}
               </Text>
+              {Boolean(currentTabConfig.card1.unit) && (
+                <Text style={styles.vitalValUnit}>{currentTabConfig.card1.unit}</Text>
+              )}
             </View>
-            <Text style={styles.vitalNormalRange}>YOLOv8-Pose 30 FPS</Text>
+            <Text style={styles.vitalNormalRange}>{currentTabConfig.card1.range}</Text>
+          </View>
+
+          {/* Thẻ 2 */}
+          <View style={styles.vitalBox}>
+            <View style={styles.vitalBoxHeader}>
+              <View style={[styles.vitalIconWrapper, { backgroundColor: currentTabConfig.card2.iconBg }]}>
+                <Ionicons
+                  name={currentTabConfig.card2.icon}
+                  size={20}
+                  color={currentTabConfig.card2.iconColor}
+                />
+              </View>
+              <View
+                style={[
+                  styles.vitalStatusTag,
+                  { backgroundColor: currentTabConfig.card2.statusBg },
+                ]}
+              >
+                <Text
+                  style={[
+                    styles.vitalStatusText,
+                    { color: currentTabConfig.card2.statusColor },
+                  ]}
+                >
+                  {currentTabConfig.card2.status}
+                </Text>
+              </View>
+            </View>
+            <Text style={styles.vitalBoxLabel}>{currentTabConfig.card2.label}</Text>
+            <View style={styles.vitalValRow}>
+              <Text style={styles.vitalValNumber}>{currentTabConfig.card2.value}</Text>
+              {Boolean(currentTabConfig.card2.unit) && (
+                <Text style={styles.vitalValUnit}>{currentTabConfig.card2.unit}</Text>
+              )}
+            </View>
+            <Text style={styles.vitalNormalRange}>{currentTabConfig.card2.range}</Text>
+          </View>
+
+          {/* Thẻ 3 */}
+          <View style={styles.vitalBox}>
+            <View style={styles.vitalBoxHeader}>
+              <View style={[styles.vitalIconWrapper, { backgroundColor: currentTabConfig.card3.iconBg }]}>
+                <Ionicons
+                  name={currentTabConfig.card3.icon}
+                  size={20}
+                  color={currentTabConfig.card3.iconColor}
+                />
+              </View>
+              <View
+                style={[
+                  styles.vitalStatusTag,
+                  { backgroundColor: currentTabConfig.card3.statusBg },
+                ]}
+              >
+                <Text
+                  style={[
+                    styles.vitalStatusText,
+                    { color: currentTabConfig.card3.statusColor },
+                  ]}
+                >
+                  {currentTabConfig.card3.status}
+                </Text>
+              </View>
+            </View>
+            <Text style={styles.vitalBoxLabel}>{currentTabConfig.card3.label}</Text>
+            <View style={styles.vitalValRow}>
+              <Text style={styles.vitalValNumber}>{currentTabConfig.card3.value}</Text>
+              {Boolean(currentTabConfig.card3.unit) && (
+                <Text style={styles.vitalValUnit}>{currentTabConfig.card3.unit}</Text>
+              )}
+            </View>
+            <Text style={styles.vitalNormalRange}>{currentTabConfig.card3.range}</Text>
+          </View>
+
+          {/* Thẻ 4 */}
+          <View style={styles.vitalBox}>
+            <View style={styles.vitalBoxHeader}>
+              <View style={[styles.vitalIconWrapper, { backgroundColor: currentTabConfig.card4.iconBg }]}>
+                <Ionicons
+                  name={currentTabConfig.card4.icon}
+                  size={20}
+                  color={currentTabConfig.card4.iconColor}
+                />
+              </View>
+              <View
+                style={[
+                  styles.vitalStatusTag,
+                  { backgroundColor: currentTabConfig.card4.statusBg },
+                ]}
+              >
+                <Text
+                  style={[
+                    styles.vitalStatusText,
+                    { color: currentTabConfig.card4.statusColor },
+                  ]}
+                >
+                  {currentTabConfig.card4.status}
+                </Text>
+              </View>
+            </View>
+            <Text style={styles.vitalBoxLabel}>{currentTabConfig.card4.label}</Text>
+            <View style={styles.vitalValRow}>
+              <Text
+                style={[
+                  styles.vitalValNumber,
+                  currentTabConfig.card4.value.length > 3 && { fontSize: 20 },
+                ]}
+              >
+                {currentTabConfig.card4.value}
+              </Text>
+              {Boolean(currentTabConfig.card4.unit) && (
+                <Text style={styles.vitalValUnit}>{currentTabConfig.card4.unit}</Text>
+              )}
+            </View>
+            <Text style={styles.vitalNormalRange}>{currentTabConfig.card4.range}</Text>
           </View>
         </View>
 
-        {/* 5. Biểu đồ diễn tiến Nhịp tim trong ngày */}
+        {/* 5. Biểu đồ Diễn tiến Nhịp tim */}
         <View style={styles.chartCard}>
           <View style={styles.chartCardHeader}>
-            <View>
-              <Text style={styles.chartCardTitle}>Diễn tiến nhịp tim</Text>
-              <Text style={styles.chartCardSubtitle}>Ghi nhận từ vòng BLE & Hub AI</Text>
+            <View style={{ flex: 1, marginRight: 8 }}>
+              <Text style={styles.chartCardTitle}>{currentTabConfig.chartTitle}</Text>
+              <Text style={styles.chartCardSubtitle}>{currentTabConfig.chartSubtitle}</Text>
             </View>
             <View style={styles.chartAvgBadge}>
-              <Text style={styles.chartAvgText}>Trung bình: 75 bpm</Text>
+              <Text style={styles.chartAvgText}>{currentTabConfig.chartAvg}</Text>
             </View>
           </View>
 
-          {/* Visual Timeline Bar Chart */}
+          {/* Visual Bar Chart */}
           <View style={styles.barsContainer}>
-            {heartRateTimeline.map((point, idx) => {
-              const barHeight = Math.max(30, ((point.hr - 50) / 60) * 110);
-              const isCurrent = idx === heartRateTimeline.length - 1;
+            {currentTabConfig.chartData.map((point, idx) => {
+              const barHeight = Math.max(28, ((point.hr - 50) / 45) * 90);
+              const isCurrent = idx === currentTabConfig.chartData.length - 1;
               return (
-                <View key={point.time} style={styles.barCol}>
+                <View key={point.label} style={styles.barCol}>
                   <Text style={styles.barValText}>{point.hr}</Text>
                   <View style={styles.barTrack}>
                     <View
@@ -221,13 +523,19 @@ export default function HealthDetailScreen({ navigation }: any) {
                         styles.barFill,
                         {
                           height: barHeight,
-                          backgroundColor: isCurrent ? Colors.primary : '#94A3B8',
+                          backgroundColor: isCurrent ? Colors.primary : '#38BDF8',
                         },
                       ]}
                     />
                   </View>
-                  <Text style={[styles.barTimeText, isCurrent && styles.barTimeTextActive]}>
-                    {point.time}
+                  <Text
+                    style={[
+                      styles.barTimeText,
+                      isCurrent && styles.barTimeTextActive,
+                    ]}
+                    numberOfLines={1}
+                  >
+                    {point.label}
                   </Text>
                 </View>
               );
@@ -277,9 +585,7 @@ export default function HealthDetailScreen({ navigation }: any) {
             <Text style={styles.aiAdviceTitle}>Lời khuyên Bác sĩ AI</Text>
           </View>
           <Text style={styles.aiAdviceBody}>
-            • Nhịp tim và nồng độ SpO₂ của cụ duy trì rất đều đặn trong ngày.{'\n'}
-            • Nhiệt độ phòng đang ở mức lý tưởng ({skinTemp.toFixed(1)}°C).{'\n'}
-            • Nhắc cụ uống thêm 1 cốc nước ấm vào buổi chiều và vận động nhẹ nhàng quanh phòng khách.
+            {currentTabConfig.aiAdvice}
           </Text>
         </View>
       </ScrollView>
@@ -417,15 +723,13 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
   },
   vitalStatusTag: {
-    backgroundColor: '#DCFCE7',
     paddingHorizontal: 8,
     paddingVertical: 2,
     borderRadius: 6,
   },
-  vitalStatusTextGreen: {
+  vitalStatusText: {
     fontSize: 11,
     fontWeight: '700',
-    color: '#15803D',
   },
   vitalBoxLabel: {
     fontSize: 13,
@@ -439,7 +743,7 @@ const styles = StyleSheet.create({
     marginBottom: 4,
   },
   vitalValNumber: {
-    fontSize: 26,
+    fontSize: 24,
     fontWeight: '800',
     color: Colors.textPrimary,
     marginRight: 4,
@@ -493,7 +797,7 @@ const styles = StyleSheet.create({
     alignItems: 'flex-end',
     height: 140,
     paddingTop: 10,
-    paddingHorizontal: 6,
+    paddingHorizontal: 4,
   },
   barCol: {
     alignItems: 'center',
@@ -507,7 +811,7 @@ const styles = StyleSheet.create({
   },
   barTrack: {
     width: 14,
-    height: 100,
+    height: 95,
     backgroundColor: '#F1F5F9',
     borderRadius: 7,
     justifyContent: 'flex-end',
