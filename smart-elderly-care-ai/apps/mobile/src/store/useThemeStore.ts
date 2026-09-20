@@ -40,7 +40,7 @@ export const lightTheme: ThemeColors = {
 };
 
 export const darkTheme: ThemeColors = {
-  background: '#0F172A',
+  background: '#0B0F19',
   card: '#1E293B',
   surface: '#1E293B',
   surfaceSubtle: '#162032',
@@ -61,6 +61,7 @@ interface ThemeState {
   isDarkMode: boolean;
   colors: ThemeColors;
   toggleTheme: () => void;
+  toggleDarkMode: () => void;
   setDarkMode: (isDark: boolean) => void;
 }
 
@@ -68,6 +69,14 @@ export const useThemeStore = create<ThemeState>((set) => ({
   isDarkMode: false,
   colors: lightTheme,
   toggleTheme: () =>
+    set((state) => {
+      const next = !state.isDarkMode;
+      return {
+        isDarkMode: next,
+        colors: next ? darkTheme : lightTheme,
+      };
+    }),
+  toggleDarkMode: () =>
     set((state) => {
       const next = !state.isDarkMode;
       return {
@@ -86,6 +95,7 @@ export const useTheme = () => {
   const isDarkMode = useThemeStore((s) => s.isDarkMode);
   const colors = useThemeStore((s) => s.colors);
   const toggleTheme = useThemeStore((s) => s.toggleTheme);
+  const toggleDarkMode = useThemeStore((s) => s.toggleDarkMode);
   const setDarkMode = useThemeStore((s) => s.setDarkMode);
-  return { isDarkMode, colors, toggleTheme, setDarkMode };
+  return { isDarkMode, colors, toggleTheme, toggleDarkMode, setDarkMode };
 };

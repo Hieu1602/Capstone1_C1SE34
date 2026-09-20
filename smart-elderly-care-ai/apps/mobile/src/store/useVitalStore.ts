@@ -4,6 +4,7 @@
 import { create, StateCreator } from 'zustand';
 import { persist, createJSONStorage, PersistOptions } from 'zustand/middleware';
 import AsyncStorage from '@react-native-async-storage/async-storage';
+import { useThemeStore } from './useThemeStore';
 
 // ---- Types ----
 export interface VitalData {
@@ -110,6 +111,9 @@ interface VitalStoreState {
   updateDeviceGroup: (oldName: string, newName: string, deviceIds?: string[]) => void;
   removeDeviceGroup: (groupName: string) => void;
   assignDevicesToGroup: (deviceIds: string[], groupName: string) => void;
+  isDarkMode: boolean;
+  toggleDarkMode: () => void;
+  setDarkMode: (isDark: boolean) => void;
 }
 
 type VitalSet = (
@@ -403,9 +407,26 @@ const createVitalStore: StateCreator<VitalStoreState> = (set: VitalSet) => ({
         deviceIds.includes(dev.id) ? { ...dev, location: groupName } : dev
       ),
     })),
+
+  isDarkMode: useThemeStore.getState().isDarkMode,
+  toggleDarkMode: () => {
+    useThemeStore.getState().toggleTheme();
+    set((state) => ({ isDarkMode: !state.isDarkMode }));
+  },
+  setDarkMode: (isDark: boolean) => {
+    useThemeStore.getState().setDarkMode(isDark);
+    set({ isDarkMode: isDark });
+  },
 });
 
 export const useVitalStore = create<VitalStoreState>()(createVitalStore);
+
+// Đồng bộ trạng thái Theme giữa useThemeStore và useVitalStore
+useThemeStore.subscribe((state) => {
+  if (useVitalStore.getState().isDarkMode !== state.isDarkMode) {
+    useVitalStore.setState({ isDarkMode: state.isDarkMode });
+  }
+});
 
 // ---- Auth Store (persisted) ----
 interface AuthStoreState {

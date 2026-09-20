@@ -16,6 +16,7 @@ import { SafeAreaView } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
 import { Colors, Shadows } from '../../../theme/colors';
 import { useVitalStore } from '../../../store/useVitalStore';
+import { useTheme } from '../../../store/useThemeStore';
 
 interface AlertConfig {
   title: string;
@@ -113,6 +114,7 @@ function formatFriendlyTime(dateStr: string) {
 }
 
 export default function AlertsListScreen({ navigation }: any) {
+  const { isDarkMode, colors, toggleDarkMode } = useTheme();
   const { incidents, setIncidents } = useVitalStore();
   const [refreshing, setRefreshing] = useState(false);
   const [filterType, setFilterType] = useState<'ALL' | 'CRITICAL' | 'VITAL'>('ALL');
@@ -218,19 +220,33 @@ export default function AlertsListScreen({ navigation }: any) {
   };
 
   return (
-    <SafeAreaView style={styles.safeArea} edges={['top']}>
+    <SafeAreaView style={[styles.safeArea, isDarkMode && { backgroundColor: colors.background }]} edges={['top']}>
       {/* 1. Header */}
-      <View style={styles.topHeader}>
+      <View style={[styles.topHeader, isDarkMode && { backgroundColor: colors.background, borderBottomColor: colors.border }]}>
         <View style={styles.headerTitleCol}>
-          <Text style={styles.headerTitle}>Thông Báo &amp; Sự Kiện</Text>
-          <Text style={styles.headerSubtitle}>
+          <Text style={[styles.headerTitle, isDarkMode && { color: colors.textPrimary }]}>Thông Báo &amp; Sự Kiện</Text>
+          <Text style={[styles.headerSubtitle, isDarkMode && { color: colors.textSecondary }]}>
             {unreadCount > 0 ? `${unreadCount} thông báo mới chưa đọc` : 'Tất cả đã được xử lý'}
           </Text>
         </View>
 
         <View style={styles.headerRightActions}>
+          {/* Nút chuyển đổi Sáng / Tối */}
           <TouchableOpacity
-            style={styles.markAllReadBtn}
+            style={[styles.themeToggleBtn, isDarkMode && { backgroundColor: colors.iconBg }]}
+            onPress={toggleDarkMode}
+            activeOpacity={0.7}
+            accessibilityLabel="Chuyển chế độ Sáng/Tối"
+          >
+            <Ionicons
+              name={isDarkMode ? 'sunny-outline' : 'moon-outline'}
+              size={18}
+              color={isDarkMode ? '#F59E0B' : colors.textPrimary}
+            />
+          </TouchableOpacity>
+
+          <TouchableOpacity
+            style={[styles.markAllReadBtn, isDarkMode && { backgroundColor: colors.card, borderColor: colors.border }]}
             onPress={handleMarkAllAsRead}
             activeOpacity={0.7}
           >
@@ -261,33 +277,48 @@ export default function AlertsListScreen({ navigation }: any) {
       </View>
 
       {/* 2. Filter Bar (Filter Chips) */}
-      <View style={styles.filterBar}>
+      <View style={[styles.filterBar, isDarkMode && { backgroundColor: colors.background, borderBottomColor: colors.border }]}>
         <TouchableOpacity
-          style={[styles.filterPill, filterType === 'ALL' && styles.filterPillActive]}
+          style={[
+            styles.filterPill,
+            isDarkMode && filterType !== 'ALL' && { backgroundColor: colors.card, borderColor: colors.border },
+            filterType === 'ALL' && styles.filterPillActive,
+            filterType === 'ALL' && isDarkMode && { backgroundColor: 'rgba(255, 107, 0, 0.15)', borderColor: '#FF6B00' },
+          ]}
           onPress={() => setFilterType('ALL')}
           activeOpacity={0.8}
         >
-          <Text style={[styles.filterText, filterType === 'ALL' && styles.filterTextActive]}>
+          <Text style={[styles.filterText, isDarkMode && filterType !== 'ALL' && { color: colors.textSecondary }, filterType === 'ALL' && styles.filterTextActive]}>
             Tất cả ({incidents.length})
           </Text>
         </TouchableOpacity>
 
         <TouchableOpacity
-          style={[styles.filterPill, filterType === 'CRITICAL' && styles.filterPillActive]}
+          style={[
+            styles.filterPill,
+            isDarkMode && filterType !== 'CRITICAL' && { backgroundColor: colors.card, borderColor: colors.border },
+            filterType === 'CRITICAL' && styles.filterPillActive,
+            filterType === 'CRITICAL' && isDarkMode && { backgroundColor: 'rgba(255, 107, 0, 0.15)', borderColor: '#FF6B00' },
+          ]}
           onPress={() => setFilterType('CRITICAL')}
           activeOpacity={0.8}
         >
-          <Text style={[styles.filterText, filterType === 'CRITICAL' && styles.filterTextActive]}>
+          <Text style={[styles.filterText, isDarkMode && filterType !== 'CRITICAL' && { color: colors.textSecondary }, filterType === 'CRITICAL' && styles.filterTextActive]}>
             🚨 Nguy kịch (Red Alert)
           </Text>
         </TouchableOpacity>
 
         <TouchableOpacity
-          style={[styles.filterPill, filterType === 'VITAL' && styles.filterPillActive]}
+          style={[
+            styles.filterPill,
+            isDarkMode && filterType !== 'VITAL' && { backgroundColor: colors.card, borderColor: colors.border },
+            filterType === 'VITAL' && styles.filterPillActive,
+            filterType === 'VITAL' && isDarkMode && { backgroundColor: 'rgba(255, 107, 0, 0.15)', borderColor: '#FF6B00' },
+          ]}
           onPress={() => setFilterType('VITAL')}
           activeOpacity={0.8}
         >
-          <Text style={[styles.filterText, filterType === 'VITAL' && styles.filterTextActive]}>
+          <Text style={[styles.filterText, isDarkMode && filterType !== 'VITAL' && { color: colors.textSecondary }, filterType === 'VITAL' && styles.filterTextActive]}>
             Sức khoẻ
           </Text>
         </TouchableOpacity>
@@ -315,14 +346,16 @@ export default function AlertsListScreen({ navigation }: any) {
             <TouchableOpacity
               style={[
                 styles.card,
+                isDarkMode && { backgroundColor: colors.card, borderColor: colors.border },
                 config.isCritical && styles.cardCritical,
+                config.isCritical && isDarkMode && { backgroundColor: '#3F1219', borderColor: '#7F1D1D' },
                 !item.is_acknowledged && styles.cardUnread,
               ]}
               onPress={() => handlePressCard(item)}
               activeOpacity={0.8}
             >
               {/* Icon phân loại bên trái */}
-              <View style={[styles.categoryIconCircle, { backgroundColor: config.iconBg }]}>
+              <View style={[styles.categoryIconCircle, { backgroundColor: isDarkMode ? (config.isCritical ? 'rgba(220, 38, 38, 0.25)' : 'rgba(255, 255, 255, 0.08)') : config.iconBg }]}>
                 <Ionicons name={config.iconName} size={22} color={config.iconColor} />
               </View>
 
@@ -330,7 +363,7 @@ export default function AlertsListScreen({ navigation }: any) {
               <View style={styles.cardCenter}>
                 {/* Hàng badge & trạng thái */}
                 <View style={styles.cardMetaRow}>
-                  <View style={[styles.typeBadge, { backgroundColor: config.badgeBg }]}>
+                  <View style={[styles.typeBadge, { backgroundColor: isDarkMode && config.badgeBg === '#FFF7ED' ? 'rgba(234, 88, 12, 0.2)' : config.badgeBg }]}>
                     <Text style={[styles.typeBadgeText, { color: config.badgeColor }]}>
                       {config.badgeText}
                     </Text>
@@ -346,6 +379,7 @@ export default function AlertsListScreen({ navigation }: any) {
                 <Text
                   style={[
                     styles.cardTitle,
+                    isDarkMode && { color: colors.textPrimary },
                     config.isCritical && styles.cardTitleCritical,
                   ]}
                   numberOfLines={2}
@@ -354,16 +388,16 @@ export default function AlertsListScreen({ navigation }: any) {
                 </Text>
 
                 {/* Chi tiết nội dung */}
-                <Text style={styles.cardMsg} numberOfLines={2}>
+                <Text style={[styles.cardMsg, isDarkMode && { color: colors.textSecondary }]} numberOfLines={2}>
                   {item.message}
                 </Text>
 
                 {/* Thời gian thân thiện */}
                 <View style={styles.timeRow}>
-                  <Ionicons name="time-outline" size={12} color="#94A3B8" />
-                  <Text style={styles.cardTime}>{friendlyTime}</Text>
-                  <Text style={styles.dotSeparator}>•</Text>
-                  <Text style={styles.deviceLocationText}>Hub #01 (Phòng khách)</Text>
+                  <Ionicons name="time-outline" size={12} color={isDarkMode ? '#64748B' : '#94A3B8'} />
+                  <Text style={[styles.cardTime, isDarkMode && { color: colors.textSecondary }]}>{friendlyTime}</Text>
+                  <Text style={[styles.dotSeparator, isDarkMode && { color: colors.border }]}>•</Text>
+                  <Text style={[styles.deviceLocationText, isDarkMode && { color: colors.textSecondary }]}>Hub #01 (Phòng khách)</Text>
                 </View>
               </View>
 
@@ -394,9 +428,9 @@ export default function AlertsListScreen({ navigation }: any) {
             <View style={styles.emptyIconCircle}>
               <Ionicons name="shield-checkmark-outline" size={36} color="#10B981" />
             </View>
-            <Text style={styles.emptyTitle}>Không có cảnh báo bất thường nào</Text>
-            <Text style={styles.emptySub}>
-              Hệ thống AI đang giám sát an toàn 24/7 và mọi chỉ số sinh hiệu đều trong ngưỡng chuẩn.
+            <Text style={[styles.emptyTitle, isDarkMode && { color: colors.textPrimary }]}>Không có cảnh báo bất thường nào</Text>
+            <Text style={[styles.emptySub, isDarkMode && { color: colors.textSecondary }]}>
+              Hệ thống AI đang giám sát an toàn 24/7 và mọi chỉ số sức khoẻ đều trong ngưỡng chuẩn.
             </Text>
           </View>
         }
@@ -439,6 +473,14 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     alignItems: 'center',
     gap: 8,
+  },
+  themeToggleBtn: {
+    width: 32,
+    height: 32,
+    borderRadius: 16,
+    backgroundColor: '#F1F5F9',
+    alignItems: 'center',
+    justifyContent: 'center',
   },
   markAllReadBtn: {
     flexDirection: 'row',
