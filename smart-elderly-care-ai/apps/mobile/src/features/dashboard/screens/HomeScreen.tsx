@@ -516,8 +516,13 @@ export default function HomeScreen({ navigation }: any) {
               <View style={styles.livePulseDot} />
               <Text style={styles.vitalsSummaryTitle}>Tình trạng sức khoẻ</Text>
             </View>
-            <TouchableOpacity onPress={() => navigation.navigate('HealthDetail')}>
-              <Text style={styles.vitalsDetailLink}>Chi tiết &gt;</Text>
+            <TouchableOpacity
+              style={styles.vitalsDetailChip}
+              onPress={() => navigation.navigate('HealthDetail')}
+              activeOpacity={0.7}
+            >
+              <Text style={styles.vitalsDetailChipText}>Chi tiết</Text>
+              <Ionicons name="chevron-forward" size={14} color={Colors.primary} />
             </TouchableOpacity>
           </View>
 
@@ -1429,10 +1434,21 @@ const styles = StyleSheet.create({
     fontWeight: '700',
     color: Colors.textPrimary,
   },
-  vitalsDetailLink: {
-    fontSize: 13,
+  vitalsDetailChip: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 4,
+    backgroundColor: '#FFF4EC',
+    paddingHorizontal: 12,
+    paddingVertical: 6,
+    borderRadius: 20,
+    borderWidth: 1,
+    borderColor: 'rgba(255, 122, 0, 0.15)',
+  },
+  vitalsDetailChipText: {
+    fontSize: 12,
     fontWeight: '600',
-    color: Colors.primary,
+    color: '#FF6B00',
   },
   deviceStatusBar: {
     flexDirection: 'row',
