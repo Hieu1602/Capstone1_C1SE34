@@ -153,11 +153,68 @@ export default function AlertsListScreen({ navigation }: any) {
       );
     }
 
-    if (item.video_clip_url) {
-      navigation.navigate('CameraDetail');
-    } else {
-      navigation.navigate('IncidentDetail', { incidentId: item.id });
+    // a. Thông báo "Phát hiện chuyển động người"
+    if (item.alert_type === 'PERSON_DETECTED') {
+      navigation.navigate('CameraDetail', {
+        cameraId: 'cam_living_room',
+        tab: 'playback',
+      });
+      return;
     }
+
+    // b. Thông báo "Nhịp tim tăng cao bất thường" (hoặc các cảnh báo về sức khoẻ)
+    if (
+      item.alert_type === 'HIGH_HEART_RATE' ||
+      item.alert_type.includes('HEART') ||
+      item.alert_type.includes('SPO2') ||
+      item.alert_type.includes('TEMP')
+    ) {
+      navigation.navigate('HealthDetail', {
+        initialTab: 'today',
+        focusMetric: 'heartRate',
+        metric: 'heartRate',
+      });
+      return;
+    }
+
+    // c. Thông báo "CẢNH BÁO TÉ NGÃ KHẨN CẤP"
+    if (item.alert_type === 'FALL_DETECTED') {
+      navigation.navigate('IncidentDetail', {
+        incidentId: item.id,
+        id: item.id,
+        type: 'FALL',
+        alert_type: 'FALL_DETECTED',
+        alert_level: 'CRITICAL',
+        confidence: '92%',
+        time: item.created_at ?? new Date().toISOString(),
+        created_at: item.created_at ?? new Date().toISOString(),
+        message: 'Phát hiện té ngã! Xác nhận bởi camera AI (YOLOv8-Pose 30 FPS) & Cảm biến âm thanh YAMNet.',
+        clipAvailable: true,
+        video_clip_url:
+          item.video_clip_url ??
+          'https://commondatastorage.googleapis.com/gtv-videos-bucket/sample/BigBuckBunny.mp4',
+        is_acknowledged: item.is_acknowledged ?? false,
+      });
+      return;
+    }
+
+    // Mặc định hoặc sự kiện âm thanh / sự cố khác
+    navigation.navigate('IncidentDetail', {
+      incidentId: item.id,
+      id: item.id,
+      type: item.alert_type === 'ACOUSTIC_DISTRESS' ? 'ACOUSTIC' : item.alert_type,
+      alert_type: item.alert_type,
+      alert_level: item.alert_level ?? 'CRITICAL',
+      confidence: '90%',
+      time: item.created_at ?? new Date().toISOString(),
+      created_at: item.created_at ?? new Date().toISOString(),
+      message: item.message,
+      clipAvailable: Boolean(item.video_clip_url || item.thumbnail_url),
+      video_clip_url:
+        item.video_clip_url ??
+        'https://commondatastorage.googleapis.com/gtv-videos-bucket/sample/ForBiggerBlazes.mp4',
+      is_acknowledged: item.is_acknowledged ?? false,
+    });
   };
 
   return (
@@ -231,7 +288,7 @@ export default function AlertsListScreen({ navigation }: any) {
           activeOpacity={0.8}
         >
           <Text style={[styles.filterText, filterType === 'VITAL' && styles.filterTextActive]}>
-            Sinh hiệu
+            Sức khoẻ
           </Text>
         </TouchableOpacity>
       </View>

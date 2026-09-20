@@ -22,14 +22,22 @@ const { width: SCREEN_WIDTH } = Dimensions.get('window');
 type TimeRange = 'DAY' | 'WEEK' | 'MONTH';
 
 export default function HealthDetailScreen({ navigation, route }: any) {
-  const metric = route?.params?.metric as 'heartRate' | 'activity' | 'spo2' | undefined;
+  const metric = (route?.params?.focusMetric ?? route?.params?.metric) as 'heartRate' | 'activity' | 'spo2' | undefined;
+  const initialTab = route?.params?.initialTab as 'today' | 'week' | 'month' | undefined;
   const { currentVitals } = useVitalStore();
-  const [selectedRange, setSelectedRange] = useState<TimeRange>('DAY');
+  const [selectedRange, setSelectedRange] = useState<TimeRange>(
+    initialTab === 'week' ? 'WEEK' : initialTab === 'month' ? 'MONTH' : 'DAY'
+  );
   const [isRefreshing, setIsRefreshing] = useState(false);
   const [highlightedMetric, setHighlightedMetric] = useState<string | null>(metric ?? null);
   const scrollRef = React.useRef<ScrollView>(null);
 
   React.useEffect(() => {
+    if (initialTab) {
+      if (initialTab === 'today') setSelectedRange('DAY');
+      else if (initialTab === 'week') setSelectedRange('WEEK');
+      else if (initialTab === 'month') setSelectedRange('MONTH');
+    }
     if (metric) {
       setHighlightedMetric(metric);
       const timer = setTimeout(() => {
@@ -43,7 +51,7 @@ export default function HealthDetailScreen({ navigation, route }: any) {
       }, 300);
       return () => clearTimeout(timer);
     }
-  }, [metric]);
+  }, [metric, initialTab]);
 
   const acousticStatus = currentVitals.acoustic_status ?? 'Bình thường';
   const battery = currentVitals.bracelet_battery ?? 88;

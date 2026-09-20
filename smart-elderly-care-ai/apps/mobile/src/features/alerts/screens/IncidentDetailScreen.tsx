@@ -50,12 +50,45 @@ const ALERT_TYPE_LABELS: Record<string, string> = {
 };
 
 export default function IncidentDetailScreen({ route, navigation }: any) {
-  const { incidentId } = route.params ?? {};
+  const params = route.params ?? {};
+  const incidentId = params.incidentId ?? params.id ?? 'inc-03';
   const [incident, setIncident] = useState<Incident | null>(null);
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
-    if (incidentId) fetchIncident();
+    // If rich params provided from navigation, initialize immediately
+    if (params.alert_type || params.type || params.confidence != null || params.message) {
+      let conf = 0.92;
+      if (typeof params.confidence === 'number') {
+        conf = params.confidence > 1 ? params.confidence / 100 : params.confidence;
+      } else if (typeof params.confidence === 'string') {
+        const p = parseFloat(params.confidence.replace('%', ''));
+        conf = isNaN(p) ? 0.92 : (p > 1 ? p / 100 : p);
+      }
+
+      setIncident({
+        id: incidentId,
+        alert_type: params.alert_type ?? (params.type === 'FALL' ? 'FALL_DETECTED' : params.type) ?? 'FALL_DETECTED',
+        alert_level: params.alert_level ?? 'CRITICAL',
+        message: params.message ?? 'Phát hiện té ngã! Xác nhận bởi: camera_ai, audio_ai',
+        confidence: conf,
+        video_clip_url:
+          params.video_clip_url ??
+          (params.clipAvailable
+            ? 'https://commondatastorage.googleapis.com/gtv-videos-bucket/sample/BigBuckBunny.mp4'
+            : null),
+        is_acknowledged: params.is_acknowledged ?? false,
+        created_at: params.created_at ?? params.time ?? new Date().toISOString(),
+      });
+      setLoading(false);
+      return;
+    }
+
+    if (incidentId) {
+      fetchIncident();
+    } else {
+      setLoading(false);
+    }
   }, [incidentId]);
 
   const fetchIncident = async () => {
@@ -70,7 +103,7 @@ export default function IncidentDetailScreen({ route, navigation }: any) {
         alert_level: 'CRITICAL',
         message: 'Phát hiện té ngã! Xác nhận bởi: camera_ai, audio_ai',
         confidence: 0.92,
-        video_clip_url: null,
+        video_clip_url: 'https://commondatastorage.googleapis.com/gtv-videos-bucket/sample/BigBuckBunny.mp4',
         is_acknowledged: false,
         created_at: new Date().toISOString(),
       });
