@@ -14,8 +14,10 @@ import {
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
 import { Colors, Shadows } from '../../theme/colors';
+import { useTheme } from '../../store/useThemeStore';
 
 export default function MedicalReportScreen({ navigation }: any) {
+  const { isDarkMode } = useTheme();
   const [period, setPeriod] = useState<'WEEK' | 'MONTH'>('WEEK');
 
   const report = useMemo(() => {
@@ -69,20 +71,20 @@ export default function MedicalReportScreen({ navigation }: any) {
   };
 
   return (
-    <SafeAreaView style={styles.safeArea} edges={['top']}>
-      <View style={styles.topHeader}>
+    <SafeAreaView style={[styles.safeArea, isDarkMode && { backgroundColor: '#0B0F19' }]} edges={['top']}>
+      <View style={[styles.topHeader, isDarkMode && { backgroundColor: '#0B0F19', borderBottomColor: '#334155' }]}>
         <TouchableOpacity
-          style={styles.backBtn}
+          style={[styles.backBtn, isDarkMode && { backgroundColor: '#1E293B', borderRadius: 18, borderWidth: 1, borderColor: '#334155' }]}
           onPress={() => navigation.goBack()}
         >
-          <Ionicons name="chevron-back" size={26} color={Colors.textPrimary} />
+          <Ionicons name="chevron-back" size={24} color={isDarkMode ? '#F8FAFC' : Colors.textPrimary} />
         </TouchableOpacity>
         <View style={styles.headerCopy}>
-          <Text style={styles.headerEyebrow}>THEO DÕI SỨC KHỎE</Text>
-          <Text style={styles.headerTitle}>Báo cáo sức khỏe</Text>
+          <Text style={[styles.headerEyebrow, isDarkMode && { color: '#94A3B8' }]}>THEO DÕI SỨC KHỎE</Text>
+          <Text style={[styles.headerTitle, isDarkMode && { color: '#F8FAFC' }]}>Báo cáo sức khỏe</Text>
         </View>
-        <TouchableOpacity style={styles.headerAction} onPress={handleExportPDF} activeOpacity={0.8}>
-          <Ionicons name="download-outline" size={21} color={Colors.primary} />
+        <TouchableOpacity style={[styles.headerAction, isDarkMode && { backgroundColor: '#1E293B', borderRadius: 18, borderWidth: 1, borderColor: '#334155' }]} onPress={handleExportPDF} activeOpacity={0.8}>
+          <Ionicons name="download-outline" size={21} color={isDarkMode ? '#F8FAFC' : Colors.primary} />
         </TouchableOpacity>
       </View>
 
@@ -92,8 +94,8 @@ export default function MedicalReportScreen({ navigation }: any) {
       >
         <View style={styles.reportIntro}>
           <View>
-            <Text style={styles.reportIntroTitle}>Tổng quan</Text>
-            <Text style={styles.reportIntroDate}>{report.label}</Text>
+            <Text style={[styles.reportIntroTitle, isDarkMode && { color: '#F8FAFC' }]}>Tổng quan</Text>
+            <Text style={[styles.reportIntroDate, isDarkMode && { color: '#94A3B8' }]}>{report.label}</Text>
           </View>
           <View style={styles.liveBadge}>
             <View style={styles.liveDot} />
@@ -101,24 +103,24 @@ export default function MedicalReportScreen({ navigation }: any) {
           </View>
         </View>
 
-        <View style={styles.periodRow}>
+        <View style={[styles.periodRow, isDarkMode && { backgroundColor: '#1E293B', borderColor: '#334155', borderWidth: 1 }]}>
           <TouchableOpacity
-            style={[styles.periodBtn, period === 'WEEK' && styles.periodBtnActive]}
+            style={[styles.periodBtn, period === 'WEEK' && (isDarkMode ? { backgroundColor: '#0B0F19' } : styles.periodBtnActive)]}
             onPress={() => setPeriod('WEEK')}
             activeOpacity={0.8}
           >
-            <Text style={[styles.periodText, period === 'WEEK' && styles.periodTextActive]}>7 ngày</Text>
+            <Text style={[styles.periodText, isDarkMode && { color: '#94A3B8' }, period === 'WEEK' && (isDarkMode ? { color: '#F8FAFC', fontWeight: '800' } : styles.periodTextActive)]}>7 ngày</Text>
           </TouchableOpacity>
           <TouchableOpacity
-            style={[styles.periodBtn, period === 'MONTH' && styles.periodBtnActive]}
+            style={[styles.periodBtn, period === 'MONTH' && (isDarkMode ? { backgroundColor: '#0B0F19' } : styles.periodBtnActive)]}
             onPress={() => setPeriod('MONTH')}
             activeOpacity={0.8}
           >
-            <Text style={[styles.periodText, period === 'MONTH' && styles.periodTextActive]}>1 tháng</Text>
+            <Text style={[styles.periodText, isDarkMode && { color: '#94A3B8' }, period === 'MONTH' && (isDarkMode ? { color: '#F8FAFC', fontWeight: '800' } : styles.periodTextActive)]}>1 tháng</Text>
           </TouchableOpacity>
         </View>
 
-        <View style={styles.heroCard}>
+        <View style={[styles.heroCard, isDarkMode && { backgroundColor: '#134E4A' }]}>
           <View style={styles.heroTopRow}>
             <View>
               <Text style={styles.heroLabel}>Điểm sức khỏe</Text>
@@ -141,49 +143,49 @@ export default function MedicalReportScreen({ navigation }: any) {
         </View>
 
         <View style={styles.metricGrid}>
-          <View style={styles.metricCard}>
+          <View style={[styles.metricCard, isDarkMode && { backgroundColor: '#1E293B', borderColor: '#334155', borderWidth: 1 }]}>
             <View style={[styles.metricIcon, { backgroundColor: '#FEE2E2' }]}>
               <Ionicons name="pulse" size={18} color="#DC2626" />
             </View>
-            <Text style={styles.metricValue}>{report.heartRate}<Text style={styles.metricUnit}> bpm</Text></Text>
-            <Text style={styles.metricLabel}>Nhịp tim TB</Text>
-            <Text style={styles.metricDelta}>{report.heartRateDelta} so với kỳ trước</Text>
+            <Text style={[styles.metricValue, isDarkMode && { color: '#F8FAFC' }]}>{report.heartRate}<Text style={styles.metricUnit}> bpm</Text></Text>
+            <Text style={[styles.metricLabel, isDarkMode && { color: '#94A3B8' }]}>Nhịp tim TB</Text>
+            <Text style={[styles.metricDelta, isDarkMode && { color: '#CBD5E1' }]}>{report.heartRateDelta} so với kỳ trước</Text>
           </View>
-          <View style={styles.metricCard}>
+          <View style={[styles.metricCard, isDarkMode && { backgroundColor: '#1E293B', borderColor: '#334155', borderWidth: 1 }]}>
             <View style={[styles.metricIcon, { backgroundColor: '#DBEAFE' }]}>
               <Ionicons name="water" size={18} color="#2563EB" />
             </View>
-            <Text style={styles.metricValue}>{report.spo2}<Text style={styles.metricUnit}> %</Text></Text>
-            <Text style={styles.metricLabel}>SpO₂ trung bình</Text>
-            <Text style={styles.metricDelta}>Trong ngưỡng an toàn</Text>
+            <Text style={[styles.metricValue, isDarkMode && { color: '#F8FAFC' }]}>{report.spo2}<Text style={styles.metricUnit}> %</Text></Text>
+            <Text style={[styles.metricLabel, isDarkMode && { color: '#94A3B8' }]}>SpO₂ trung bình</Text>
+            <Text style={[styles.metricDelta, isDarkMode && { color: '#CBD5E1' }]}>Trong ngưỡng an toàn</Text>
           </View>
-          <View style={styles.metricCard}>
+          <View style={[styles.metricCard, isDarkMode && { backgroundColor: '#1E293B', borderColor: '#334155', borderWidth: 1 }]}>
             <View style={[styles.metricIcon, { backgroundColor: '#FEF3C7' }]}>
               <Ionicons name="thermometer" size={18} color="#D97706" />
             </View>
-            <Text style={styles.metricValue}>{report.temperature}<Text style={styles.metricUnit}> °C</Text></Text>
-            <Text style={styles.metricLabel}>Nhiệt độ cơ thể</Text>
-            <Text style={styles.metricDelta}>Ổn định</Text>
+            <Text style={[styles.metricValue, isDarkMode && { color: '#F8FAFC' }]}>{report.temperature}<Text style={styles.metricUnit}> °C</Text></Text>
+            <Text style={[styles.metricLabel, isDarkMode && { color: '#94A3B8' }]}>Nhiệt độ cơ thể</Text>
+            <Text style={[styles.metricDelta, isDarkMode && { color: '#CBD5E1' }]}>Ổn định</Text>
           </View>
-          <View style={styles.metricCard}>
+          <View style={[styles.metricCard, isDarkMode && { backgroundColor: '#1E293B', borderColor: '#334155', borderWidth: 1 }]}>
             <View style={[styles.metricIcon, { backgroundColor: '#DCFCE7' }]}>
               <Ionicons name="watch" size={18} color="#16A34A" />
             </View>
-            <Text style={styles.metricValue}>{report.adherence}</Text>
-            <Text style={styles.metricLabel}>Tuân thủ đeo vòng</Text>
-            <Text style={styles.metricDelta}>Mục tiêu &gt; 90%</Text>
+            <Text style={[styles.metricValue, isDarkMode && { color: '#F8FAFC' }]}>{report.adherence}</Text>
+            <Text style={[styles.metricLabel, isDarkMode && { color: '#94A3B8' }]}>Tuân thủ đeo vòng</Text>
+            <Text style={[styles.metricDelta, isDarkMode && { color: '#CBD5E1' }]}>Mục tiêu &gt; 90%</Text>
           </View>
         </View>
 
-        <View style={styles.chartCard}>
+        <View style={[styles.chartCard, isDarkMode && { backgroundColor: '#1E293B', borderColor: '#334155', borderWidth: 1 }]}>
           <View style={styles.sectionHeaderRow}>
             <View>
-              <Text style={styles.sectionTitle}>Xu hướng nhịp tim</Text>
-              <Text style={styles.sectionSubtitle}>Trung bình theo ngày</Text>
+              <Text style={[styles.sectionTitle, isDarkMode && { color: '#F8FAFC' }]}>Xu hướng nhịp tim</Text>
+              <Text style={[styles.sectionSubtitle, isDarkMode && { color: '#94A3B8' }]}>Trung bình theo ngày</Text>
             </View>
             <View style={styles.chartLegend}>
               <View style={styles.legendDot} />
-              <Text style={styles.legendText}>bpm</Text>
+              <Text style={[styles.legendText, isDarkMode && { color: '#94A3B8' }]}>bpm</Text>
             </View>
           </View>
           <View style={styles.chartArea}>
@@ -196,18 +198,18 @@ export default function MedicalReportScreen({ navigation }: any) {
               {report.heartRateData.map((value, index) => (
                 <View key={`${period}-heart-${index}`} style={styles.barColumn}>
                   <View style={[styles.bar, { height: `${Math.max(34, (value - 60) * 3.1)}%` }]} />
-                  <Text style={styles.barLabel}>{report.labels[index]}</Text>
+                  <Text style={[styles.barLabel, isDarkMode && { color: '#94A3B8' }]}>{report.labels[index]}</Text>
                 </View>
               ))}
             </View>
           </View>
         </View>
 
-        <View style={styles.alertSummaryCard}>
+        <View style={[styles.alertSummaryCard, isDarkMode && { backgroundColor: '#1E293B', borderColor: '#334155', borderWidth: 1 }]}>
           <View style={styles.sectionHeaderRow}>
             <View>
-              <Text style={styles.sectionTitle}>Cảnh báo & sự kiện</Text>
-              <Text style={styles.sectionSubtitle}>Cần chú ý trong kỳ báo cáo</Text>
+              <Text style={[styles.sectionTitle, isDarkMode && { color: '#F8FAFC' }]}>Cảnh báo & sự kiện</Text>
+              <Text style={[styles.sectionSubtitle, isDarkMode && { color: '#94A3B8' }]}>Cần chú ý trong kỳ báo cáo</Text>
             </View>
             <Ionicons name="shield-checkmark-outline" size={24} color="#0F766E" />
           </View>
@@ -215,22 +217,22 @@ export default function MedicalReportScreen({ navigation }: any) {
             <View style={[styles.alertIcon, { backgroundColor: '#FEE2E2' }]}>
               <Ionicons name="warning" size={17} color="#DC2626" />
             </View>
-            <Text style={styles.alertLabel}>Sự kiện té ngã</Text>
-            <Text style={styles.alertValue}>{report.falls} lần</Text>
+            <Text style={[styles.alertLabel, isDarkMode && { color: '#F8FAFC' }]}>Sự kiện té ngã</Text>
+            <Text style={[styles.alertValue, isDarkMode && { color: '#F8FAFC' }]}>{report.falls} lần</Text>
           </View>
           <View style={styles.alertRow}>
             <View style={[styles.alertIcon, { backgroundColor: '#FEF3C7' }]}>
               <Ionicons name="pulse" size={17} color="#D97706" />
             </View>
-            <Text style={styles.alertLabel}>Nhịp tim bất thường</Text>
-            <Text style={styles.alertValue}>{report.anomalies} lần</Text>
+            <Text style={[styles.alertLabel, isDarkMode && { color: '#F8FAFC' }]}>Nhịp tim bất thường</Text>
+            <Text style={[styles.alertValue, isDarkMode && { color: '#F8FAFC' }]}>{report.anomalies} lần</Text>
           </View>
         </View>
 
-        <Text style={styles.exportSectionTitle}>Xuất báo cáo</Text>
+        <Text style={[styles.exportSectionTitle, isDarkMode && { color: '#F8FAFC' }]}>Xuất báo cáo</Text>
 
         <TouchableOpacity
-          style={styles.pdfExportBtn}
+          style={[styles.pdfExportBtn, isDarkMode && { backgroundColor: '#1E293B', borderColor: '#334155', borderWidth: 1 }]}
           onPress={handleExportPDF}
           activeOpacity={0.85}
         >
@@ -238,14 +240,14 @@ export default function MedicalReportScreen({ navigation }: any) {
             <Ionicons name="document-text" size={21} color="#DC2626" />
           </View>
           <View style={{ flex: 1, marginLeft: 12 }}>
-            <Text style={styles.btnMainText}>Xuất báo cáo PDF</Text>
-            <Text style={styles.btnSubText}>Bản tóm tắt cho bác sĩ</Text>
+            <Text style={[styles.btnMainText, isDarkMode && { color: '#F8FAFC' }]}>Xuất báo cáo PDF</Text>
+            <Text style={[styles.btnSubText, isDarkMode && { color: '#94A3B8' }]}>Bản tóm tắt cho bác sĩ</Text>
           </View>
           <Ionicons name="arrow-forward" size={20} color="#DC2626" />
         </TouchableOpacity>
 
         <TouchableOpacity
-          style={styles.excelExportBtn}
+          style={[styles.excelExportBtn, isDarkMode && { backgroundColor: '#1E293B', borderColor: '#334155', borderWidth: 1 }]}
           onPress={handleExportExcel}
           activeOpacity={0.85}
         >
@@ -253,8 +255,8 @@ export default function MedicalReportScreen({ navigation }: any) {
             <Ionicons name="grid" size={21} color="#047857" />
           </View>
           <View style={{ flex: 1, marginLeft: 12 }}>
-            <Text style={[styles.btnMainText, { color: '#047857' }]}>Xuất dữ liệu Excel (.xlsx)</Text>
-            <Text style={[styles.btnSubText, { color: '#065F46' }]}>Dữ liệu chi tiết theo thời gian</Text>
+            <Text style={[styles.btnMainText, isDarkMode ? { color: '#34D399' } : { color: '#047857' }]}>Xuất dữ liệu Excel (.xlsx)</Text>
+            <Text style={[styles.btnSubText, isDarkMode ? { color: '#A7F3D0' } : { color: '#065F46' }]}>Dữ liệu chi tiết theo thời gian</Text>
           </View>
           <Ionicons name="arrow-forward" size={20} color="#047857" />
         </TouchableOpacity>
