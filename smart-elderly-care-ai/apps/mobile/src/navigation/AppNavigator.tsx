@@ -35,6 +35,7 @@ import IncidentDetailScreen from '../features/alerts/screens/IncidentDetailScree
 import AddDeviceScreen from '../features/dashboard/screens/AddDeviceScreen';
 import CreateGroupScreen from '../features/dashboard/screens/CreateGroupScreen';
 import SmartbandDetailScreen from '../features/dashboard/screens/SmartbandDetailScreen';
+import HealthDetailScreen from '../features/dashboard/screens/HealthDetailScreen';
 
 const Stack = createNativeStackNavigator();
 const Tab = createBottomTabNavigator();
@@ -115,6 +116,7 @@ export default function AppNavigator() {
             <Stack.Screen name="AddDevice" component={AddDeviceScreen} />
             <Stack.Screen name="CreateGroup" component={CreateGroupScreen} />
             <Stack.Screen name="SmartbandDetail" component={SmartbandDetailScreen} />
+            <Stack.Screen name="HealthDetail" component={HealthDetailScreen} />
             <Stack.Screen
               name="IncidentDetail"
               component={IncidentDetailScreen}

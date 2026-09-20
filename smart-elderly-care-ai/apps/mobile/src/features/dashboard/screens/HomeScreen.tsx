@@ -18,14 +18,7 @@ import {
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { Ionicons, MaterialCommunityIcons } from '@expo/vector-icons';
 import { Colors, Shadows } from '../../../theme/colors';
-import { useVitalStore, Incident } from '../../../store/useVitalStore';
-
-const LEVEL_COLORS: Record<string, string> = {
-  CRITICAL: Colors.danger,
-  HIGH: '#F97316',
-  MEDIUM: '#F59E0B',
-  LOW: Colors.success,
-};
+import { useVitalStore } from '../../../store/useVitalStore';
 
 // Hàm sao chép clipboard an toàn hỗ trợ cả native và web
 const copyAddressToClipboard = (text: string) => {
@@ -41,32 +34,6 @@ const copyAddressToClipboard = (text: string) => {
     }
   } catch (e) {
     console.warn('Clipboard write error:', e);
-  }
-};
-
-const getIncidentIcon = (alertType: string): keyof typeof Ionicons.glyphMap => {
-  if (alertType.includes('FALL')) return 'warning';
-  if (alertType.includes('HEART') || alertType.includes('VITAL')) return 'heart';
-  if (alertType.includes('ACOUSTIC') || alertType.includes('SOUND')) return 'megaphone';
-  if (alertType.includes('TEMP')) return 'thermometer';
-  if (alertType.includes('PERSON')) return 'walk';
-  return 'alert-circle';
-};
-
-const formatAlertTypeName = (type: string): string => {
-  switch (type) {
-    case 'FALL_DETECTED':
-      return 'Té ngã nguy hiểm';
-    case 'ACOUSTIC_DISTRESS':
-      return 'Kêu cứu / Âm thanh';
-    case 'HIGH_HEART_RATE':
-      return 'Nhịp tim cao';
-    case 'HIGH_TEMPERATURE':
-      return 'Thân nhiệt cao';
-    case 'PERSON_DETECTED':
-      return 'Phát hiện người';
-    default:
-      return type.replace(/_/g, ' ');
   }
 };
 
@@ -174,7 +141,6 @@ export default function HomeScreen({ navigation }: any) {
   const braceletBattery = currentVitals.bracelet_battery ?? 88;
   const acousticStatus = currentVitals.acoustic_status ?? 'Bình thường';
   const isAcousticAlarm = acousticStatus.includes('la hét') || acousticStatus.includes('va đập');
-  const recentIncidents = incidents.slice(0, 3);
 
   return (
     <SafeAreaView style={styles.safeArea} edges={['top']}>
@@ -340,18 +306,7 @@ export default function HomeScreen({ navigation }: any) {
           </View>
         </TouchableOpacity>
 
-        {/* 4. Section Title: "Tất cả thiết bị" & icon chế độ xem */}
-        <View style={styles.sectionHeaderRow}>
-          <Text style={styles.sectionTitleText}>Tất cả thiết bị</Text>
-          <View style={styles.viewLayoutIcons}>
-            <View style={styles.dividerLineSmall} />
-            <TouchableOpacity onPress={() => navigation.navigate('Devices')}>
-              <Ionicons name="reorder-three-outline" size={24} color={Colors.textPrimary} />
-            </TouchableOpacity>
-          </View>
-        </View>
-
-        {/* 5. Banner "Nhiều chế độ xem" (Multi-view) */}
+        {/* 4. Banner "Nhiều chế độ xem" (Multi-view) */}
         <TouchableOpacity
           style={styles.multiViewCard}
           onPress={handleMultiView}
@@ -553,15 +508,15 @@ export default function HomeScreen({ navigation }: any) {
           </View>
         </View>
 
-        {/* 7. Khối hiển thị Sinh hiệu & Thiết bị (lấy từ useVitalStore) */}
+        {/* 6. Khối hiển thị Tình trạng sức khoẻ (lấy từ useVitalStore) */}
         <View style={styles.vitalsSummaryCard}>
           {/* Header Card */}
           <View style={styles.vitalsSummaryHeader}>
             <View style={{ flexDirection: 'row', alignItems: 'center' }}>
               <View style={styles.livePulseDot} />
-              <Text style={styles.vitalsSummaryTitle}>Sinh hiệu người cao tuổi (Trực tiếp)</Text>
+              <Text style={styles.vitalsSummaryTitle}>Tình trạng sức khoẻ</Text>
             </View>
-            <TouchableOpacity onPress={() => navigation.navigate('AIAssistant')}>
+            <TouchableOpacity onPress={() => navigation.navigate('HealthDetail')}>
               <Text style={styles.vitalsDetailLink}>Chi tiết &gt;</Text>
             </TouchableOpacity>
           </View>
@@ -680,105 +635,6 @@ export default function HomeScreen({ navigation }: any) {
               <Text style={styles.vitalLblText}>YAMNet</Text>
             </View>
           </View>
-        </View>
-
-        {/* 8. Khối "Sự cố gần đây" (thay thế dòng chữ placeholder "Không còn dữ liệu") */}
-        <View style={styles.recentIncidentsSection}>
-          <View style={styles.recentIncidentsHeader}>
-            <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6 }}>
-              <Ionicons name="alert-circle" size={20} color={Colors.danger} />
-              <Text style={styles.recentIncidentsTitle}>Sự cố gần đây</Text>
-            </View>
-            <TouchableOpacity onPress={() => navigation.navigate('Alerts')}>
-              <Text style={styles.viewAllAlertsLink}>Xem tất cả &gt;</Text>
-            </TouchableOpacity>
-          </View>
-
-          {recentIncidents.length === 0 ? (
-            <View style={styles.emptyIncidentsCard}>
-              <Ionicons name="checkmark-circle-outline" size={26} color={Colors.success} />
-              <Text style={styles.emptyIncidentsText}>
-                Chưa ghi nhận sự cố bất thường nào trong 24 giờ qua.
-              </Text>
-            </View>
-          ) : (
-            recentIncidents.map((item: Incident) => {
-              const isCritical = item.alert_level === 'CRITICAL';
-              const isFall = item.alert_type === 'FALL_DETECTED';
-              const levelColor = LEVEL_COLORS[item.alert_level] ?? Colors.primary;
-              const typeIcon = getIncidentIcon(item.alert_type);
-              const typeLabel = formatAlertTypeName(item.alert_type);
-
-              return (
-                <TouchableOpacity
-                  key={item.id}
-                  style={[styles.incidentCard, isFall && styles.incidentCardCritical]}
-                  onPress={() => navigation.navigate('IncidentDetail', { incidentId: item.id })}
-                  activeOpacity={0.8}
-                >
-                  <View style={[styles.incidentLevelBar, { backgroundColor: levelColor }]} />
-
-                  <View
-                    style={[
-                      styles.incidentIconCircle,
-                      { backgroundColor: `${levelColor}18` },
-                    ]}
-                  >
-                    <Ionicons name={typeIcon} size={18} color={levelColor} />
-                  </View>
-
-                  <View style={styles.incidentBody}>
-                    <View style={styles.incidentTopMeta}>
-                      <View
-                        style={[
-                          styles.incidentTypeBadge,
-                          { backgroundColor: `${levelColor}15` },
-                        ]}
-                      >
-                        <Text style={[styles.incidentTypeBadgeText, { color: levelColor }]}>
-                          {typeLabel}
-                        </Text>
-                      </View>
-                      {!item.is_acknowledged && (
-                        <View style={styles.incidentNewBadge}>
-                          <Text style={styles.incidentNewBadgeText}>MỚI</Text>
-                        </View>
-                      )}
-                      <Text style={styles.incidentTimeText}>
-                        {new Date(item.created_at).toLocaleTimeString('vi-VN', {
-                          hour: '2-digit',
-                          minute: '2-digit',
-                        })}
-                      </Text>
-                    </View>
-
-                    <Text style={styles.incidentMsg} numberOfLines={2}>
-                      {item.message}
-                    </Text>
-                  </View>
-
-                  {item.thumbnail_url ? (
-                    <View style={styles.incidentThumbWrapper}>
-                      <Image source={{ uri: item.thumbnail_url }} style={styles.incidentThumbImg} />
-                      {item.video_clip_url && (
-                        <View style={styles.incidentPlayTag}>
-                          <Ionicons name="play" size={10} color="#FFF" />
-                          <Text style={styles.incidentPlayText}>5s Clip</Text>
-                        </View>
-                      )}
-                    </View>
-                  ) : (
-                    <Ionicons
-                      name="chevron-forward"
-                      size={16}
-                      color={Colors.textMuted}
-                      style={{ marginLeft: 6 }}
-                    />
-                  )}
-                </TouchableOpacity>
-              );
-            })
-          )}
         </View>
       </ScrollView>
     </SafeAreaView>
