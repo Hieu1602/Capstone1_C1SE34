@@ -87,9 +87,9 @@ export default function AlgoConfigScreen({ navigation }: any) {
           </View>
         </View>
 
-        {/* 2. Ngưỡng Sinh hiệu Vòng BLE (FR02) */}
+        {/* 2. Ngưỡng Sức khoẻ Vòng BLE (FR02) */}
         <View style={styles.groupCard}>
-          <Text style={styles.groupTitle}>2. Thuật toán sinh hiệu (Vòng đeo tay BLE)</Text>
+          <Text style={styles.groupTitle}>2. Thuật toán sức khoẻ (Vòng đeo tay BLE)</Text>
           <View style={styles.inputRow}>
             <Text style={styles.inputLabel}>Nhịp tim tối đa (Cảnh báo cao):</Text>
             <View style={styles.inputBoxWrap}>

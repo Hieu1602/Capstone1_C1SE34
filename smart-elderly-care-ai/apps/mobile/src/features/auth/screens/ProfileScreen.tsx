@@ -1316,7 +1316,7 @@ export default function ProfileScreen({ navigation }: any) {
                   <>
                     <Text style={styles.infoDetailHeading}>Điều khoản sử dụng</Text>
                     <Text style={styles.infoDetailText}>
-                      Ứng dụng Smart Elderly Care AI hỗ trợ theo dõi sinh hiệu, thiết bị và cảnh báo an toàn cho người cao tuổi. Người dùng cần cung cấp thông tin chính xác và sử dụng ứng dụng đúng mục đích.
+                      Ứng dụng Smart Elderly Care AI hỗ trợ theo dõi sức khoẻ, thiết bị và cảnh báo an toàn cho người cao tuổi. Người dùng cần cung cấp thông tin chính xác và sử dụng ứng dụng đúng mục đích.
                     </Text>
                     <Text style={styles.infoDetailText}>
                       Người dùng chịu trách nhiệm bảo mật tài khoản, mã xác thực và các thiết bị đã liên kết. Không chia sẻ thông tin đăng nhập cho người khác.

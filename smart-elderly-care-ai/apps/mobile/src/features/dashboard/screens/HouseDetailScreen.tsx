@@ -111,7 +111,7 @@ export default function HouseDetailScreen({ navigation }: any) {
           <View style={styles.modalCard}>
             <Text style={styles.modalTitle}>Thêm người chăm sóc / Bác sĩ</Text>
             <Text style={styles.modalSub}>
-              Mời người thân hoặc bác sĩ gia đình cùng theo dõi sinh hiệu và nhận thông báo khẩn cấp bằng số điện thoại (FR01).
+              Mời người thân hoặc bác sĩ gia đình cùng theo dõi sức khoẻ và nhận thông báo khẩn cấp bằng số điện thoại (FR01).
             </Text>
               <TextInput
               style={styles.addressInput}

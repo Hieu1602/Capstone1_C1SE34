@@ -61,7 +61,7 @@ const INITIAL_HISTORY_CHATS = [
       {
         id: 'msg-1-4',
         sender: 'ai',
-        text: 'Dạ rất tốt ạ! Huyết áp 138/85 mmHg đã hạ về ngưỡng an toàn. Bạn hãy tiếp tục theo dõi biến động sinh hiệu của cụ qua vòng đeo tay BLE trên ứng dụng nhé.',
+        text: 'Dạ rất tốt ạ! Huyết áp 138/85 mmHg đã hạ về ngưỡng an toàn. Bạn hãy tiếp tục theo dõi biến động sức khoẻ của cụ qua vòng đeo tay BLE trên ứng dụng nhé.',
         timestamp: '08:53',
       },
     ],
@@ -203,10 +203,10 @@ export default function AIAssistantScreen({ navigation }: any) {
       let reply = 'Tôi đã nhận được câu hỏi và đang liên tục giám sát an toàn cho người thân của bạn.';
       const lower = textToSend.toLowerCase();
 
-      if (lower.includes('nhịp tim') || lower.includes('spo2') || lower.includes('sinh hiệu')) {
-        reply = `❤️ Chỉ số sinh hiệu hiện tại:\n• Nhịp tim: ${currentVitals.heart_rate ?? 74} bpm (Ổn định)\n• Nồng độ Oxy SpO₂: ${currentVitals.spo2 ?? 98}% (Rất tốt)\n• Thân nhiệt trán AMG8833: ${currentVitals.skin_temp_max ?? 36.8}°C (Bình thường)\n\nKhông có dấu hiệu bất thường nào trong 24 giờ qua.`;
+      if (lower.includes('nhịp tim') || lower.includes('spo2') || lower.includes('sinh hiệu') || lower.includes('sức khoẻ')) {
+        reply = `❤️ Chỉ số sức khoẻ hiện tại:\n• Nhịp tim: ${currentVitals.heart_rate ?? 74} bpm (Ổn định)\n• Nồng độ Oxy SpO₂: ${currentVitals.spo2 ?? 98}% (Rất tốt)\n• Thân nhiệt AMG8833: ${currentVitals.skin_temp_max ?? 36.8}°C (Bình thường)\n\nKhông có dấu hiệu bất thường nào trong 24 giờ qua.`;
       } else if (lower.includes('ngã') || lower.includes('té') || lower.includes('fall')) {
-        reply = '🛡️ Hệ thống YOLO-Pose 17 khớp xương đang theo dõi liên tục ở tốc độ 32 FPS.\nHiện tại người cao tuổi đang ở tư thế an toàn, góc nghiêng cột sống < 20°.\nNếu phát hiện ngã hoặc nằm bất động quá 30 giây, còi báo động Red Alert và video 5s sẽ được kích hoạt ngay lập tức!';
+        reply = '🛡️ Hệ thống YOLO-Pose 17 khớp xương đang theo dõi liên tục ở tốc độ 32 FPS.\nHiện tại người cao tuổi đang ở trạng thái an toàn, góc nghiêng cột sống < 20°.\nNếu phát hiện ngã hoặc nằm bất động quá 30 giây, còi báo động Red Alert và video 5s sẽ được kích hoạt ngay lập tức!';
       } else if (lower.includes('sơ cứu') || lower.includes('cấp cứu')) {
         reply = '🚨 HƯỚNG DẪN SƠ CỨU KHI NGƯỜI GIÀ BỊ NGÃ:\n1. Giữ bình tĩnh, không vội vàng nâng cụ dậy ngay.\n2. Kiểm tra xem cụ còn tỉnh táo không, hỏi chỗ bị đau (khớp háng, đầu, cổ tay).\n3. Nếu nghi ngờ gãy xương hoặc cụ bất tỉnh, hãy bấm ngay nút "115" ở góc trên để mở bảng quản trị cấp cứu!\n4. Giữ ấm cơ thể cho cụ trong lúc chờ hỗ trợ y tế.';
       } else if (lower.includes('uống thuốc') || lower.includes('nhắc nhở') || lower.includes('loa')) {

@@ -55,7 +55,7 @@ export default function MedicalReportScreen({ navigation }: any) {
   const handleExportPDF = () => {
     Alert.alert(
       'Xuất Báo Cáo Y Tế (PDF)',
-      `Đang tổng hợp dữ liệu sinh hiệu (Nhịp tim, SpO2, Thân nhiệt AMG8833, Sự kiện ngã) trong ${
+      `Đang tổng hợp dữ liệu sức khoẻ (Nhịp tim, SpO2, Thân nhiệt AMG8833, Sự kiện ngã) trong ${
         period === 'WEEK' ? '7 ngày qua' : '30 ngày qua'
       } sang file PDF chuẩn y khoa (ReportLab). File đã sẵn sàng để gửi cho bác sĩ gia đình!`
     );
@@ -162,7 +162,7 @@ export default function MedicalReportScreen({ navigation }: any) {
               <Ionicons name="thermometer" size={18} color="#D97706" />
             </View>
             <Text style={styles.metricValue}>{report.temperature}<Text style={styles.metricUnit}> °C</Text></Text>
-            <Text style={styles.metricLabel}>Nhiệt độ da</Text>
+            <Text style={styles.metricLabel}>Nhiệt độ cơ thể</Text>
             <Text style={styles.metricDelta}>Ổn định</Text>
           </View>
           <View style={styles.metricCard}>

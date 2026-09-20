@@ -104,7 +104,7 @@ export default function HomeScreen({ navigation }: any) {
     } else if (mode === 'HOME') {
       Alert.alert(
         '🏠 Chế độ Ở nhà (Home) đã kích hoạt',
-        'Đã giảm mức báo động xâm nhập khi gia đình sinh hoạt, nhưng vẫn duy trì theo dõi té ngã và sinh hiệu trực tiếp 24/7.'
+        'Đã giảm mức báo động xâm nhập khi gia đình sinh hoạt, nhưng vẫn duy trì theo dõi té ngã và chỉ số sức khoẻ trực tiếp 24/7.'
       );
     } else if (mode === 'DISARM') {
       Alert.alert(
@@ -584,18 +584,18 @@ export default function HomeScreen({ navigation }: any) {
             </View>
             <View style={styles.vitalDivider} />
 
-            {/* Thân nhiệt AMG8833 */}
+            {/* Thân nhiệt */}
             <View style={styles.vitalItem}>
               <Ionicons name="thermometer" size={17} color="#F59E0B" />
               <Text style={styles.vitalValText} numberOfLines={1}>
                 {currentVitals.skin_temp_max ?? 36.8}{' '}
                 <Text style={styles.vitalUnit}>°C</Text>
               </Text>
-              <Text style={styles.vitalLblText}>AMG8833</Text>
+              <Text style={styles.vitalLblText}>Thân nhiệt</Text>
             </View>
             <View style={styles.vitalDivider} />
 
-            {/* Tư thế YOLO-Pose */}
+            {/* Trạng thái vận động */}
             <View style={styles.vitalItem}>
               <Ionicons
                 name="body"
@@ -612,13 +612,13 @@ export default function HomeScreen({ navigation }: any) {
                 ]}
                 numberOfLines={1}
               >
-                {currentVitals.fall_detected ? 'Ngã!' : 'Bình thường'}
+                {currentVitals.fall_detected ? 'Ngã!' : 'Sinh hoạt'}
               </Text>
-              <Text style={styles.vitalLblText}>YOLO-Pose</Text>
+              <Text style={styles.vitalLblText}>Vận động</Text>
             </View>
             <View style={styles.vitalDivider} />
 
-            {/* Kênh âm thanh Acoustic / YAMNet */}
+            {/* Kênh âm thanh môi trường */}
             <View style={styles.vitalItem}>
               <Ionicons
                 name={isAcousticAlarm ? 'warning' : 'mic'}
@@ -637,7 +637,7 @@ export default function HomeScreen({ navigation }: any) {
               >
                 {isAcousticAlarm ? 'La hét!' : 'Bình thường'}
               </Text>
-              <Text style={styles.vitalLblText}>YAMNet</Text>
+              <Text style={styles.vitalLblText}>Âm thanh</Text>
             </View>
           </View>
         </View>

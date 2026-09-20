@@ -61,7 +61,7 @@ export default function HealthDetailScreen({ navigation, route }: any) {
     setIsRefreshing(true);
     setTimeout(() => {
       setIsRefreshing(false);
-      Alert.alert('Đồng bộ thành công', 'Dữ liệu sinh hiệu từ Hub Orange Pi 5 và vòng đeo tay đã được làm mới.');
+      Alert.alert('Đồng bộ thành công', 'Dữ liệu sức khoẻ từ Hub Orange Pi 5 và vòng đeo tay đã được làm mới.');
     }, 600);
   };
 
@@ -99,7 +99,7 @@ export default function HealthDetailScreen({ navigation, route }: any) {
             iconBg: '#E0F2FE',
           },
           card3: {
-            label: 'Nhiệt độ da TB',
+            label: 'Thân nhiệt TB',
             value: '36.7',
             unit: '°C',
             status: 'Bình thường',
@@ -141,7 +141,7 @@ export default function HealthDetailScreen({ navigation, route }: any) {
       case 'MONTH':
         return {
           bannerTitle: 'Báo cáo 30 ngày',
-          bannerSubtitle: 'Chỉ số sinh hiệu đều đặn, không có biến động bất thường.',
+          bannerSubtitle: 'Chỉ số sức khoẻ đều đặn, không có biến động bất thường.',
           bannerIcon: 'analytics' as keyof typeof Ionicons.glyphMap,
           bannerAlert: false,
           card1: {
@@ -192,7 +192,7 @@ export default function HealthDetailScreen({ navigation, route }: any) {
             iconColor: '#D97706',
             iconBg: '#FEF3C7',
           },
-          chartTitle: 'Diễn tiến nhịp tim theo tuần (Tháng này)',
+          chartTitle: 'Dao động nhịp tim theo tuần (Tháng này)',
           chartSubtitle: 'Tổng hợp 4 tuần gần nhất',
           chartAvg: 'Trung bình: 75.5 bpm',
           chartData: [
@@ -202,7 +202,7 @@ export default function HealthDetailScreen({ navigation, route }: any) {
             { label: 'Tuần 4', hr: 77 },
           ],
           aiAdvice:
-            '• Chỉ số sinh hiệu 30 ngày qua cho thấy thể trạng của cụ rất ổn định.\n• Các cảm biến Edge Hub và vòng tay duy trì hoạt động không gián đoạn.\n• Đề xuất hẹn lịch tái khám tim mạch định kỳ vào đầu tháng tới.',
+            '• Chỉ số sức khoẻ 30 ngày qua cho thấy thể trạng của cụ rất ổn định.\n• Các cảm biến Edge Hub và vòng tay duy trì hoạt động không gián đoạn.\n• Đề xuất hẹn lịch tái khám tim mạch định kỳ vào đầu tháng tới.',
         };
 
       case 'DAY':
@@ -211,7 +211,7 @@ export default function HealthDetailScreen({ navigation, route }: any) {
           bannerTitle: isFallDetected ? 'Cảnh báo nguy cơ té ngã!' : 'Sức khoẻ ổn định',
           bannerSubtitle: isFallDetected
             ? 'Hệ thống AI vừa nhận thấy chuyển động ngã đột ngột trong phòng.'
-            : 'Tất cả chỉ số sinh hiệu và âm thanh môi trường đều trong ngưỡng an toàn.',
+            : 'Tất cả chỉ số sức khoẻ và âm thanh môi trường đều trong ngưỡng an toàn.',
           bannerIcon: (isFallDetected ? 'warning' : 'shield-checkmark') as keyof typeof Ionicons.glyphMap,
           bannerAlert: isFallDetected,
           card1: {
@@ -239,7 +239,7 @@ export default function HealthDetailScreen({ navigation, route }: any) {
             iconBg: '#E0F2FE',
           },
           card3: {
-            label: 'Nhiệt độ da',
+            label: 'Nhiệt độ cơ thể',
             value: '36.8',
             unit: '°C',
             status: 'Bình thường',
@@ -251,19 +251,19 @@ export default function HealthDetailScreen({ navigation, route }: any) {
             iconBg: '#FEF3C7',
           },
           card4: {
-            label: 'Tư thế cơ thể',
+            label: 'Trạng thái vận động',
             value: isFallDetected ? 'Nằm sàn' : 'Sinh hoạt',
             unit: '',
             status: isFallDetected ? 'Cảnh báo' : 'An toàn',
             statusColor: isFallDetected ? Colors.danger : '#15803D',
             statusBg: isFallDetected ? '#FEE2E2' : '#DCFCE7',
-            range: 'YOLOv8-Pose 30 FPS',
+            range: 'Sinh hoạt & Đi lại',
             icon: 'body' as keyof typeof Ionicons.glyphMap,
             iconColor: '#9333EA',
             iconBg: '#F3E8FF',
           },
-          chartTitle: 'Diễn tiến nhịp tim',
-          chartSubtitle: 'Ghi nhận từ vòng BLE & Hub AI',
+          chartTitle: 'Dao động nhịp tim',
+          chartSubtitle: 'Ghi nhận từ vòng tay & Hub AI',
           chartAvg: 'Trung bình: 75 bpm',
           chartData: [
             { label: '06:00', hr: 68 },
@@ -369,7 +369,7 @@ export default function HealthDetailScreen({ navigation, route }: any) {
           })}
         </View>
 
-        {/* 4. Lưới 4 Thẻ Sinh Hiệu / Thống kê */}
+        {/* 4. Lưới 4 Thẻ Chỉ Số Sức Khoẻ / Thống kê */}
         <View style={styles.vitalsGrid}>
           {/* Thẻ 1: Nhịp tim */}
           <TouchableOpacity
@@ -459,7 +459,7 @@ export default function HealthDetailScreen({ navigation, route }: any) {
             <Text style={styles.vitalNormalRange}>{currentTabConfig.card2.range}</Text>
           </TouchableOpacity>
 
-          {/* Thẻ 3: Nhiệt độ da */}
+          {/* Thẻ 3: Nhiệt độ cơ thể */}
           <TouchableOpacity
             style={[
               styles.vitalBox,
@@ -502,7 +502,7 @@ export default function HealthDetailScreen({ navigation, route }: any) {
             <Text style={styles.vitalNormalRange}>{currentTabConfig.card3.range}</Text>
           </TouchableOpacity>
 
-          {/* Thẻ 4: Tư thế / Vận động */}
+          {/* Thẻ 4: Trạng thái vận động */}
           <TouchableOpacity
             style={[
               styles.vitalBox,
@@ -553,7 +553,7 @@ export default function HealthDetailScreen({ navigation, route }: any) {
           </TouchableOpacity>
         </View>
 
-        {/* 5. Biểu đồ Diễn tiến Nhịp tim */}
+        {/* 5. Biểu đồ Dao động Nhịp tim */}
         <View style={styles.chartCard}>
           <View style={styles.chartCardHeader}>
             <View style={{ flex: 1, marginRight: 8 }}>
