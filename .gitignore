@@ -46,8 +46,7 @@ data/
 *.sqlite3
 minio_data/
 
-# Microsoft Office temporary files
-~$*
 *.tmp
-D:
-D:/
+
+# Camera test snapshots
+smart-elderly-care-ai/edge/test_snapshot.jpg
