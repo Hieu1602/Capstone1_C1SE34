@@ -1,5 +1,5 @@
 // src/components/AIBotIcon.tsx
-// Biểu tượng Robot Trợ lý AI đội tai nghe theo đúng hình ảnh người dùng cung cấp
+// Biểu tượng Robot Trợ lý AI đội tai nghe phiên bản 3D bo tròn phát sáng
 
 import React from 'react';
 import { View, Image, StyleSheet } from 'react-native';
