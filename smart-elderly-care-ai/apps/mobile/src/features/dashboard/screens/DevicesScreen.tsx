@@ -23,7 +23,7 @@ import { useVitalStore, IoTDeviceItem } from '../../../store/useVitalStore';
 import { useTheme } from '../../../store/useThemeStore';
 
 export default function DevicesScreen({ navigation }: any) {
-  const { isDarkMode, colors, toggleDarkMode } = useTheme();
+  const { isDarkMode, colors } = useTheme();
   const {
     iotDevices,
     addIoTDevice,
@@ -283,20 +283,6 @@ export default function DevicesScreen({ navigation }: any) {
         </View>
 
         <View style={styles.headerRightActions}>
-          {/* Nút chuyển đổi Sáng / Tối */}
-          <TouchableOpacity
-            style={[styles.themeToggleBtn, isDarkMode && { backgroundColor: colors.iconBg }]}
-            onPress={toggleDarkMode}
-            activeOpacity={0.7}
-            accessibilityLabel="Chuyển chế độ Sáng/Tối"
-          >
-            <Ionicons
-              name={isDarkMode ? 'sunny-outline' : 'moon-outline'}
-              size={20}
-              color={isDarkMode ? '#F59E0B' : colors.textPrimary}
-            />
-          </TouchableOpacity>
-
           {/* Nút dấu cộng (+) */}
           <TouchableOpacity
             style={[styles.addBtn, showAddMenu && styles.addBtnActive]}

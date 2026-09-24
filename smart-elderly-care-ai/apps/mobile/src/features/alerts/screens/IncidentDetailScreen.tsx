@@ -51,7 +51,7 @@ const ALERT_TYPE_LABELS: Record<string, string> = {
 };
 
 export default function IncidentDetailScreen({ route, navigation }: any) {
-  const { isDarkMode, colors, toggleTheme } = useTheme();
+  const { isDarkMode, colors } = useTheme();
   const params = route.params ?? {};
   const incidentId = params.incidentId ?? params.id ?? 'inc-03';
   const [incident, setIncident] = useState<Incident | null>(null);
@@ -146,19 +146,6 @@ export default function IncidentDetailScreen({ route, navigation }: any) {
           <Ionicons name="arrow-back" size={24} color={colors.textPrimary} />
         </TouchableOpacity>
         <Text style={[styles.headerTitle, { color: colors.textPrimary }]}>Chi tiết sự kiện</Text>
-
-        <TouchableOpacity
-          onPress={toggleTheme}
-          activeOpacity={0.7}
-          style={{ marginLeft: 'auto' }}
-          accessibilityLabel="Chuyển chế độ Sáng/Tối"
-        >
-          <Ionicons
-            name={isDarkMode ? 'sunny-outline' : 'moon-outline'}
-            size={22}
-            color={isDarkMode ? '#F59E0B' : colors.textPrimary}
-          />
-        </TouchableOpacity>
       </View>
 
       <ScrollView contentContainerStyle={styles.content}>

@@ -68,7 +68,7 @@ export default function SettingsScreen({ navigation }: any) {
         showsVerticalScrollIndicator={false}
         contentContainerStyle={styles.scrollContent}
       >
-        {/* Khối 1: Hồ sơ của tôi */}
+        {/* Khối 1: Hồ sơ người giám sát & Hồ sơ bệnh án người cao tuổi */}
         <View
           style={[
             styles.cardGroup,
@@ -78,6 +78,7 @@ export default function SettingsScreen({ navigation }: any) {
             },
           ]}
         >
+          {/* Mục 1: Hồ sơ người giám sát */}
           <TouchableOpacity
             style={styles.menuItem}
             activeOpacity={0.7}
@@ -87,23 +88,86 @@ export default function SettingsScreen({ navigation }: any) {
               <View
                 style={[
                   styles.iconWrap,
-                  { backgroundColor: isDarkMode ? '#0F172A' : '#F1F5F9' },
+                  { backgroundColor: isDarkMode ? '#1E1B4B' : '#EEF2FF' },
                 ]}
               >
                 <Ionicons
                   name="person-circle-outline"
                   size={20}
-                  color={isDarkMode ? '#94A3B8' : '#475569'}
+                  color="#6366F1"
                 />
               </View>
-              <Text
+              <View>
+                <Text
+                  style={[
+                    styles.itemTitle,
+                    { color: isDarkMode ? '#F8FAFC' : '#0F172A' },
+                  ]}
+                >
+                  Hồ sơ người giám sát
+                </Text>
+                <Text
+                  style={[
+                    styles.itemSubtitle,
+                    { color: isDarkMode ? '#94A3B8' : '#64748B' },
+                  ]}
+                >
+                  Tài khoản người thân theo dõi, SĐT liên hệ khẩn cấp
+                </Text>
+              </View>
+            </View>
+            <Ionicons name="chevron-forward" size={18} color="#94A3B8" />
+          </TouchableOpacity>
+
+          <View
+            style={[
+              styles.divider,
+              { backgroundColor: isDarkMode ? '#334155' : '#F1F5F9' },
+            ]}
+          />
+
+          {/* Mục 2: Hồ sơ bệnh án người cao tuổi */}
+          <TouchableOpacity
+            style={styles.menuItem}
+            activeOpacity={0.7}
+            onPress={() => navigation?.navigate?.('PatientMedicalRecord')}
+          >
+            <View style={styles.itemLeft}>
+              <View
                 style={[
-                  styles.itemTitle,
-                  { color: isDarkMode ? '#F8FAFC' : '#0F172A' },
+                  styles.iconWrap,
+                  { backgroundColor: isDarkMode ? '#082F49' : '#E0F2FE' },
                 ]}
               >
-                Hồ sơ của tôi
-              </Text>
+                <Ionicons
+                  name="medkit-outline"
+                  size={20}
+                  color="#0EA5E9"
+                />
+              </View>
+              <View style={{ flex: 1 }}>
+                <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6 }}>
+                  <Text
+                    style={[
+                      styles.itemTitle,
+                      { color: isDarkMode ? '#F8FAFC' : '#0F172A' },
+                    ]}
+                  >
+                    Hồ sơ bệnh án người cao tuổi
+                  </Text>
+                  <View style={styles.aesBadge}>
+                    <Text style={styles.aesBadgeText}>Bảo mật AES-256</Text>
+                  </View>
+                </View>
+                <Text
+                  style={[
+                    styles.itemSubtitle,
+                    { color: isDarkMode ? '#94A3B8' : '#64748B' },
+                  ]}
+                >
+                  Thông tin cụ, bệnh nền, nhóm máu &amp; đơn thuốc
+                </Text>
+              </View>
             </View>
             <Ionicons name="chevron-forward" size={18} color="#94A3B8" />
           </TouchableOpacity>
@@ -405,4 +469,20 @@ const styles = StyleSheet.create({
     height: 1,
     marginLeft: 62,
   },
+  itemSubtitle: {
+    fontSize: 11,
+    marginTop: 2,
+  },
+  aesBadge: {
+    backgroundColor: '#E0F2FE',
+    paddingHorizontal: 6,
+    paddingVertical: 2,
+    borderRadius: 4,
+  },
+  aesBadgeText: {
+    fontSize: 10,
+    fontWeight: '700',
+    color: '#0284C7',
+  },
 });
+

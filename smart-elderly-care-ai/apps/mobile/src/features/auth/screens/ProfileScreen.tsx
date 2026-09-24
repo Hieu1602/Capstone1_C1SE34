@@ -997,10 +997,11 @@ export default function ProfileScreen({ navigation }: any) {
 
             <View style={styles.settingsCard}>
               <View style={styles.settingsList}>
-                {/* Khối 1: Hồ sơ của tôi */}
+                {/* Khối 1: Hồ sơ người giám sát & Hồ sơ bệnh án người cao tuổi */}
                 <View style={[styles.settingsGroupCard, isDarkMode ? { backgroundColor: '#1E293B', borderColor: '#334155', borderRadius: 16 } : { backgroundColor: '#FFFFFF', borderColor: '#F1F5F9', borderRadius: 16 }]}>
+                  {/* Mục 1: Hồ sơ người giám sát */}
                   <TouchableOpacity
-                    style={[styles.settingsItem, styles.settingsItemLast, isDarkMode && { borderBottomColor: '#334155' }]}
+                    style={[styles.settingsItem, isDarkMode && { borderBottomColor: '#334155' }]}
                     activeOpacity={0.8}
                     onPress={() => {
                       setAccountEntrySource('settings');
@@ -1009,10 +1010,39 @@ export default function ProfileScreen({ navigation }: any) {
                     }}
                   >
                     <View style={styles.settingsLeft}>
-                      <View style={[styles.settingsIconWrap, isDarkMode && { backgroundColor: '#0F172A' }]}>
-                        <Ionicons name="person-circle-outline" size={20} color={isDarkMode ? '#94A3B8' : '#475569'} />
+                      <View style={[styles.settingsIconWrap, { backgroundColor: isDarkMode ? '#1E1B4B' : '#EEF2FF' }]}>
+                        <Ionicons name="person-circle-outline" size={20} color="#6366F1" />
                       </View>
-                      <Text style={[styles.settingsLabel, isDarkMode ? { color: '#F8FAFC' } : { color: '#0F172A' }]}>Hồ sơ của tôi</Text>
+                      <View style={{ flex: 1 }}>
+                        <Text style={[styles.settingsLabel, isDarkMode ? { color: '#F8FAFC' } : { color: '#0F172A' }]}>Hồ sơ người giám sát</Text>
+                        <Text style={[styles.settingsItemSub, { color: isDarkMode ? '#94A3B8' : '#64748B' }]}>Tài khoản người thân theo dõi, SĐT liên hệ khẩn cấp</Text>
+                      </View>
+                    </View>
+                    <Ionicons name="chevron-forward" size={18} color="#94A3B8" />
+                  </TouchableOpacity>
+
+                  {/* Mục 2: Hồ sơ bệnh án người cao tuổi */}
+                  <TouchableOpacity
+                    style={[styles.settingsItem, styles.settingsItemLast, isDarkMode && { borderBottomColor: '#334155' }]}
+                    activeOpacity={0.8}
+                    onPress={() => {
+                      setSettingsVisible(false);
+                      navigation.navigate('PatientMedicalRecord');
+                    }}
+                  >
+                    <View style={styles.settingsLeft}>
+                      <View style={[styles.settingsIconWrap, { backgroundColor: isDarkMode ? '#082F49' : '#E0F2FE' }]}>
+                        <Ionicons name="medkit-outline" size={20} color="#0EA5E9" />
+                      </View>
+                      <View style={{ flex: 1 }}>
+                        <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6 }}>
+                          <Text style={[styles.settingsLabel, isDarkMode ? { color: '#F8FAFC' } : { color: '#0F172A' }]}>Hồ sơ bệnh án người cao tuổi</Text>
+                          <View style={styles.profileAesBadge}>
+                            <Text style={styles.profileAesBadgeText}>Bảo mật AES-256</Text>
+                          </View>
+                        </View>
+                        <Text style={[styles.settingsItemSub, { color: isDarkMode ? '#94A3B8' : '#64748B' }]}>Thông tin cụ, bệnh nền, nhóm máu &amp; đơn thuốc</Text>
+                      </View>
                     </View>
                     <Ionicons name="chevron-forward" size={18} color="#94A3B8" />
                   </TouchableOpacity>
@@ -1681,6 +1711,51 @@ export default function ProfileScreen({ navigation }: any) {
                 <Text style={[styles.accountBadgeText, isDarkMode && { color: colors.textSecondary }]}>Xem tài khoản</Text>
               </View>
             </View>
+          </TouchableOpacity>
+        </View>
+
+        {/* Khối phân tách rõ ràng: Hồ sơ người giám sát & Hồ sơ bệnh án người cao tuổi */}
+        <View style={[styles.menuGroupCard, isDarkMode && { backgroundColor: colors.card, borderColor: colors.border, borderWidth: 1 }]}>
+          {/* Mục 1: Hồ sơ người giám sát */}
+          <TouchableOpacity
+            style={styles.menuRow}
+            onPress={() => {
+              setAccountEntrySource('main');
+              setUserMenuVisible(true);
+            }}
+            activeOpacity={0.7}
+          >
+            <View style={[styles.menuIconBox, { backgroundColor: isDarkMode ? '#1E1B4B' : '#EEF2FF' }]}>
+              <Ionicons name="person-circle-outline" size={22} color="#6366F1" />
+            </View>
+            <View style={{ flex: 1 }}>
+              <Text style={[styles.menuTitleText, isDarkMode && { color: colors.textPrimary }]}>Hồ sơ người giám sát</Text>
+              <Text style={[styles.menuSubText, isDarkMode && { color: colors.textSecondary }]}>Tài khoản người thân theo dõi, SĐT liên hệ khẩn cấp</Text>
+            </View>
+            <Ionicons name="chevron-forward" size={18} color={isDarkMode ? colors.textSecondary : '#CBD5E1'} />
+          </TouchableOpacity>
+
+          <View style={[styles.menuDivider, isDarkMode && { backgroundColor: colors.border }]} />
+
+          {/* Mục 2: Hồ sơ bệnh án người cao tuổi */}
+          <TouchableOpacity
+            style={styles.menuRow}
+            onPress={() => navigation.navigate('PatientMedicalRecord')}
+            activeOpacity={0.7}
+          >
+            <View style={[styles.menuIconBox, { backgroundColor: isDarkMode ? '#082F49' : '#E0F2FE' }]}>
+              <Ionicons name="medkit-outline" size={22} color="#0EA5E9" />
+            </View>
+            <View style={{ flex: 1 }}>
+              <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6 }}>
+                <Text style={[styles.menuTitleText, isDarkMode && { color: colors.textPrimary }]}>Hồ sơ bệnh án người cao tuổi</Text>
+                <View style={styles.profileAesBadge}>
+                  <Text style={styles.profileAesBadgeText}>Bảo mật AES-256</Text>
+                </View>
+              </View>
+              <Text style={[styles.menuSubText, isDarkMode && { color: colors.textSecondary }]}>Thông tin cụ, bệnh nền, nhóm máu &amp; đơn thuốc</Text>
+            </View>
+            <Ionicons name="chevron-forward" size={18} color={isDarkMode ? colors.textSecondary : '#CBD5E1'} />
           </TouchableOpacity>
         </View>
 
@@ -3829,5 +3904,21 @@ logoutButton: {
     fontSize: 15,
     fontWeight: '700',
     color: '#FFFFFF',
+  },
+  settingsItemSub: {
+    fontSize: 11,
+    marginTop: 2,
+    lineHeight: 15,
+  },
+  profileAesBadge: {
+    backgroundColor: '#E0F2FE',
+    paddingHorizontal: 6,
+    paddingVertical: 2,
+    borderRadius: 4,
+  },
+  profileAesBadgeText: {
+    fontSize: 10,
+    fontWeight: '700',
+    color: '#0284C7',
   },
 });
