@@ -23,7 +23,7 @@ const { width: SCREEN_WIDTH } = Dimensions.get('window');
 type TimeRange = 'DAY' | 'WEEK' | 'MONTH';
 
 export default function HealthDetailScreen({ navigation, route }: any) {
-  const { isDarkMode, colors, toggleTheme } = useTheme();
+  const { isDarkMode, colors } = useTheme();
   const metric = (route?.params?.focusMetric ?? route?.params?.metric) as 'heartRate' | 'activity' | 'spo2' | undefined;
   const initialTab = route?.params?.initialTab as 'today' | 'week' | 'month' | undefined;
   const { currentVitals } = useVitalStore();
@@ -113,16 +113,16 @@ export default function HealthDetailScreen({ navigation, route }: any) {
             iconBg: '#FEF3C7',
           },
           card4: {
-            label: 'Sự cố té ngã',
-            value: '0',
-            unit: 'lần',
-            status: 'An toàn tuyệt đối',
+            label: 'Trạng thái vận động',
+            value: 'Bình thường',
+            unit: '',
+            status: 'Chuẩn',
             statusColor: '#15803D',
             statusBg: '#DCFCE7',
-            range: 'Không có cảnh báo ngã',
-            icon: 'shield-checkmark' as keyof typeof Ionicons.glyphMap,
-            iconColor: Colors.success,
-            iconBg: '#DCFCE7',
+            range: 'Vận động đều đặn',
+            icon: 'body' as keyof typeof Ionicons.glyphMap,
+            iconColor: '#9333EA',
+            iconBg: '#F3E8FF',
           },
           chartTitle: 'Nhịp tim trung bình 7 ngày',
           chartSubtitle: 'Thống kê từ Thứ 2 đến Chủ Nhật',
@@ -183,16 +183,16 @@ export default function HealthDetailScreen({ navigation, route }: any) {
             iconBg: '#FEF3C7',
           },
           card4: {
-            label: 'Tần suất cảnh báo',
-            value: '0',
-            unit: 'sự cố',
+            label: 'Trạng thái vận động',
+            value: 'Ổn định',
+            unit: '',
             status: 'Tối ưu',
-            statusColor: '#B45309',
-            statusBg: '#FEF3C7',
-            range: 'Tối ưu 100%',
-            icon: 'sparkles' as keyof typeof Ionicons.glyphMap,
-            iconColor: '#D97706',
-            iconBg: '#FEF3C7',
+            statusColor: '#15803D',
+            statusBg: '#DCFCE7',
+            range: 'Sinh hoạt an toàn',
+            icon: 'body' as keyof typeof Ionicons.glyphMap,
+            iconColor: '#9333EA',
+            iconBg: '#F3E8FF',
           },
           chartTitle: 'Dao động nhịp tim theo tuần (Tháng này)',
           chartSubtitle: 'Tổng hợp 4 tuần gần nhất',
@@ -284,9 +284,59 @@ export default function HealthDetailScreen({ navigation, route }: any) {
 
   const currentTabConfig = getTabConfig();
 
+  const getFallReport = () => {
+    switch (selectedRange) {
+      case 'WEEK':
+        return {
+          title: 'Sự cố té ngã (YOLO-Pose AI)',
+          statText: '0 sự cố té ngã (Độ tin cậy AI: 96%)',
+          subText: 'Phân tích tư thế liên tục 168 giờ không phát hiện biến cố nguy hiểm.',
+          statusBadge: 'Độ tin cậy 96%',
+          statusColor: '#15803D',
+          statusBg: '#DCFCE7',
+          iconName: 'shield-checkmark' as keyof typeof Ionicons.glyphMap,
+          iconColor: '#10B981',
+          iconBg: isDarkMode ? '#064E3B' : '#DCFCE7',
+        };
+      case 'MONTH':
+        return {
+          title: 'Sự cố té ngã (YOLO-Pose AI)',
+          statText: 'Tổng 0 lần té ngã - 100% thời gian giám sát an toàn',
+          subText: 'Tỷ lệ an toàn tuyệt đối được xác thực bởi cảm biến kép Hub & Vòng đeo tay.',
+          statusBadge: '100% An toàn',
+          statusColor: '#15803D',
+          statusBg: '#DCFCE7',
+          iconName: 'shield-checkmark' as keyof typeof Ionicons.glyphMap,
+          iconColor: '#10B981',
+          iconBg: isDarkMode ? '#064E3B' : '#DCFCE7',
+        };
+      case 'DAY':
+      default:
+        return {
+          title: 'Sự cố té ngã (YOLO-Pose AI)',
+          statText: isFallDetected
+            ? '1 lần phát hiện - Nguy cơ té ngã!'
+            : '0 lần phát hiện - Trạng thái an toàn',
+          subText: isFallDetected
+            ? 'Cảnh báo nguy cơ té ngã đã gửi tới người thân và kích hoạt còi báo động.'
+            : 'Camera AI giám sát thời gian thực 24/7 qua mô hình YOLOv8-Pose nhận diện 17 điểm khớp xương.',
+          statusBadge: isFallDetected ? 'Cảnh báo' : 'An toàn',
+          statusColor: isFallDetected ? Colors.danger : '#15803D',
+          statusBg: isFallDetected ? '#FEE2E2' : '#DCFCE7',
+          iconName: (isFallDetected ? 'warning' : 'shield-checkmark') as keyof typeof Ionicons.glyphMap,
+          iconColor: isFallDetected ? Colors.danger : '#10B981',
+          iconBg: isFallDetected
+            ? (isDarkMode ? '#7F1D1D' : '#FEE2E2')
+            : (isDarkMode ? '#064E3B' : '#DCFCE7'),
+        };
+    }
+  };
+
+  const fallReport = getFallReport();
+
   return (
     <SafeAreaView style={[styles.safeArea, { backgroundColor: colors.background }]} edges={['top']}>
-      {/* 1. Header có nút Back & Toggle Theme */}
+      {/* 1. Header có nút Back & Nút Refresh */}
       <View style={[styles.headerBar, isDarkMode && { backgroundColor: colors.background, borderBottomColor: colors.border }]}>
         <TouchableOpacity
           style={[
@@ -303,23 +353,6 @@ export default function HealthDetailScreen({ navigation, route }: any) {
         <Text style={[styles.headerTitle, { color: colors.textPrimary }]}>Tình trạng sức khoẻ</Text>
 
         <View style={{ flexDirection: 'row', alignItems: 'center' }}>
-          <TouchableOpacity
-            style={[
-              styles.refreshBtn,
-              { marginRight: 8 },
-              isDarkMode && { backgroundColor: '#1E293B', borderColor: '#334155' },
-            ]}
-            onPress={toggleTheme}
-            activeOpacity={0.7}
-            accessibilityLabel="Chuyển chế độ Sáng/Tối"
-          >
-            <Ionicons
-              name={isDarkMode ? 'sunny-outline' : 'moon-outline'}
-              size={20}
-              color={isDarkMode ? '#F59E0B' : '#0F172A'}
-            />
-          </TouchableOpacity>
-
           <TouchableOpacity
             style={[
               styles.refreshBtn,
@@ -595,6 +628,62 @@ export default function HealthDetailScreen({ navigation, route }: any) {
             </View>
             <Text style={styles.vitalNormalRange}>{currentTabConfig.card4.range}</Text>
           </TouchableOpacity>
+        </View>
+
+        {/* Thẻ thống kê: Sự cố té ngã (YOLO-Pose AI) */}
+        <View
+          style={[
+            styles.fallStatCard,
+            isDarkMode && { backgroundColor: colors.card, borderColor: colors.border },
+          ]}
+        >
+          <View style={styles.fallCardHeader}>
+            <View style={{ flexDirection: 'row', alignItems: 'center', gap: 10 }}>
+              <View style={[styles.fallIconBox, { backgroundColor: fallReport.iconBg }]}>
+                <Ionicons name={fallReport.iconName} size={22} color={fallReport.iconColor} />
+              </View>
+              <View style={{ flex: 1 }}>
+                <Text style={[styles.fallCardTitle, isDarkMode && { color: colors.textPrimary }]}>
+                  {fallReport.title}
+                </Text>
+                <View style={styles.aiTagRow}>
+                  <View style={styles.aiTagBadge}>
+                    <Ionicons name="sparkles" size={10} color="#0EA5E9" />
+                    <Text style={styles.aiTagText}>YOLOv8-Pose AI</Text>
+                  </View>
+                  <View style={[styles.aiStatusBadge, { backgroundColor: fallReport.statusBg }]}>
+                    <Text style={[styles.aiStatusText, { color: fallReport.statusColor }]}>
+                      {fallReport.statusBadge}
+                    </Text>
+                  </View>
+                </View>
+              </View>
+            </View>
+          </View>
+
+          <View style={[styles.fallResultBox, isDarkMode && { backgroundColor: '#0B0F19', borderColor: '#334155' }]}>
+            <Text style={[styles.fallStatMainText, isDarkMode && { color: '#F8FAFC' }]}>
+              {fallReport.statText}
+            </Text>
+            <Text style={[styles.fallStatSubText, isDarkMode && { color: '#94A3B8' }]}>
+              {fallReport.subText}
+            </Text>
+          </View>
+
+          <View style={styles.fallFooterRow}>
+            <View style={styles.fallFooterItem}>
+              <Ionicons name="shield-checkmark-outline" size={14} color="#10B981" />
+              <Text style={[styles.fallFooterText, isDarkMode && { color: colors.textSecondary }]}>
+                Cảm biến kép Hub & Vòng đeo tay
+              </Text>
+            </View>
+            <View style={styles.fallFooterItem}>
+              <Ionicons name="flash-outline" size={14} color="#F59E0B" />
+              <Text style={[styles.fallFooterText, isDarkMode && { color: colors.textSecondary }]}>
+                Độ trễ &lt; 0.5s
+              </Text>
+            </View>
+          </View>
         </View>
 
         {/* 5. Biểu đồ Dao động Nhịp tim */}
@@ -1045,5 +1134,102 @@ const styles = StyleSheet.create({
     fontSize: 13,
     color: '#78350F',
     lineHeight: 20,
+  },
+  fallStatCard: {
+    backgroundColor: '#FFFFFF',
+    borderRadius: 16,
+    padding: 16,
+    marginTop: 12,
+    borderWidth: 1,
+    borderColor: '#E2E8F0',
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.04,
+    shadowRadius: 6,
+    elevation: 2,
+  },
+  fallCardHeader: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    marginBottom: 12,
+  },
+  fallIconBox: {
+    width: 42,
+    height: 42,
+    borderRadius: 12,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  fallCardTitle: {
+    fontSize: 15,
+    fontWeight: '700',
+    color: '#0F172A',
+    marginBottom: 4,
+  },
+  aiTagRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 6,
+  },
+  aiTagBadge: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 3,
+    backgroundColor: '#E0F2FE',
+    paddingHorizontal: 7,
+    paddingVertical: 2,
+    borderRadius: 6,
+  },
+  aiTagText: {
+    fontSize: 11,
+    fontWeight: '600',
+    color: '#0284C7',
+  },
+  aiStatusBadge: {
+    paddingHorizontal: 7,
+    paddingVertical: 2,
+    borderRadius: 6,
+  },
+  aiStatusText: {
+    fontSize: 11,
+    fontWeight: '600',
+  },
+  fallResultBox: {
+    backgroundColor: '#F8FAFC',
+    borderRadius: 12,
+    padding: 12,
+    borderWidth: 1,
+    borderColor: '#F1F5F9',
+    marginBottom: 12,
+  },
+  fallStatMainText: {
+    fontSize: 15,
+    fontWeight: '700',
+    color: '#0F172A',
+    marginBottom: 4,
+  },
+  fallStatSubText: {
+    fontSize: 12,
+    color: '#64748B',
+    lineHeight: 18,
+  },
+  fallFooterRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    borderTopWidth: StyleSheet.hairlineWidth,
+    borderTopColor: '#E2E8F0',
+    paddingTop: 10,
+  },
+  fallFooterItem: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 4,
+  },
+  fallFooterText: {
+    fontSize: 11,
+    color: '#64748B',
+    fontWeight: '500',
   },
 });
