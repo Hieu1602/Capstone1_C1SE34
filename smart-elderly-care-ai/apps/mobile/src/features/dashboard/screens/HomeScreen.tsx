@@ -77,6 +77,16 @@ export default function HomeScreen({ navigation }: any) {
     return () => clearInterval(interval);
   }, []);
 
+  // Tự động làm mới dữ liệu khi màn hình HomeScreen được focus (quay lại từ IncidentDetailScreen)
+  useEffect(() => {
+    const unsubscribe = navigation.addListener('focus', () => {
+      fetchVitals();
+      fetchNotifications();
+      fetchSystemMode();
+    });
+    return unsubscribe;
+  }, [navigation]);
+
   // State cho ActionSheet / BottomSheet "Tạm dừng chuông báo động"
   const [snoozeModalVisible, setSnoozeModalVisible] = useState(false);
   const [selectedDuration, setSelectedDuration] = useState<number>(alarmSnooze?.durationMinutes ?? 15);

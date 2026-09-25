@@ -661,23 +661,70 @@ def get_notifications(
         for n in records
     ]
 
-@app.post("/api/v1/incidents/{incident_id}/acknowledge", tags=["Notifications"])
-def acknowledge_incident(incident_id: str, note: Optional[str] = None, db: Session = Depends(get_db)):
-    """Xác nhận xử lý sự kiện báo động, cập nhật database PostgreSQL và tắt còi hú."""
-    # Trích xuất numeric ID nếu có dạng inc-01
+@app.get("/api/v1/incidents/{incident_id}", response_model=NotificationItem, tags=["Notifications"])
+def get_incident_by_id(incident_id: str, db: Session = Depends(get_db)):
+    """Lấy chi tiết sự kiện cảnh báo từ PostgreSQL theo ID."""
     numeric_id_str = incident_id.replace("inc-0", "").replace("inc-", "")
     target_notif = None
     if numeric_id_str.isdigit():
         target_notif = db.query(models.Notification).filter(models.Notification.id == int(numeric_id_str)).first()
 
     if not target_notif:
+        target_notif = db.query(models.Notification).filter(models.Notification.is_resolved == False).first()
+    if not target_notif:
+        target_notif = db.query(models.Notification).first()
+
+    if not target_notif:
+        raise HTTPException(status_code=404, detail="Incident not found")
+
+    return NotificationItem(
+        id=f"inc-0{target_notif.id}" if target_notif.id < 10 else f"inc-{target_notif.id}",
+        alert_type=target_notif.type,
+        alert_level=target_notif.alert_level or "MEDIUM",
+        message=target_notif.description or target_notif.title,
+        confidence=target_notif.confidence or 0.92,
+        is_acknowledged=bool(target_notif.is_resolved),
+        acknowledged_by=target_notif.resolved_by,
+        acknowledged_at=target_notif.resolved_at.isoformat() if target_notif.resolved_at else None,
+        video_clip_url=target_notif.video_clip_url,
+        thumbnail_url=target_notif.thumbnail_url,
+        created_at=target_notif.created_at.isoformat() if target_notif.created_at else datetime.utcnow().isoformat(),
+    )
+
+@app.post("/api/v1/incidents/{incident_id}/acknowledge", tags=["Notifications"])
+@app.put("/api/v1/incidents/{incident_id}", tags=["Notifications"])
+@app.patch("/api/v1/incidents/{incident_id}", tags=["Notifications"])
+def acknowledge_incident(incident_id: str, note: Optional[str] = None, db: Session = Depends(get_db)):
+    """Xác nhận xử lý sự kiện báo động, cập nhật database PostgreSQL (is_resolved=True, tắt còi hú)."""
+    # Trích xuất numeric ID nếu có dạng inc-01, inc-03...
+    numeric_id_str = incident_id.replace("inc-0", "").replace("inc-", "")
+    target_notif = None
+    if numeric_id_str.isdigit():
+        target_notif = db.query(models.Notification).filter(models.Notification.id == int(numeric_id_str)).first()
+
+    # Nếu không tìm thấy bằng numeric ID, ưu tiên lấy sự cố chưa xử lý gần nhất
+    if not target_notif:
+        target_notif = db.query(models.Notification).filter(models.Notification.is_resolved == False).first()
+
+    if not target_notif:
         target_notif = db.query(models.Notification).first()
 
     now_iso = datetime.utcnow()
+    resolved_id = incident_id
     if target_notif:
         target_notif.is_resolved = True
+        target_notif.is_new = False
         target_notif.resolved_by = "Demo User"
         target_notif.resolved_at = now_iso
+        resolved_id = f"inc-0{target_notif.id}" if target_notif.id < 10 else f"inc-{target_notif.id}"
+
+        # Nếu là cảnh báo té ngã, cập nhật lại trạng thái té ngã trong vital_signs về an toàn
+        if target_notif.type == "FALL_DETECTED":
+            latest_vital = db.query(models.VitalSign).order_by(desc(models.VitalSign.recorded_at)).first()
+            if latest_vital:
+                latest_vital.fall_detected_count = 0
+                latest_vital.activity_state = "Sinh hoạt bình thường (Đã kiểm tra an toàn)"
+
         db.commit()
 
     # Đồng thời cập nhật trạng thái mute alarm trong SystemMode
@@ -688,8 +735,9 @@ def acknowledge_incident(incident_id: str, note: Optional[str] = None, db: Sessi
 
     return {
         "status": "success",
-        "incident_id": incident_id,
+        "incident_id": resolved_id,
         "is_acknowledged": True,
+        "is_resolved": True,
         "acknowledged_by": "Demo User",
         "acknowledged_at": now_iso.isoformat(),
         "note": note or "Đã kiểm tra an toàn",

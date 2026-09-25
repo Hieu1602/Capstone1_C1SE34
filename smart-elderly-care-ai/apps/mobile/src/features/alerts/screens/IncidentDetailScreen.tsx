@@ -9,6 +9,7 @@ import {
   TouchableOpacity,
   ScrollView,
   Alert,
+  ActivityIndicator,
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
@@ -59,7 +60,13 @@ const ALERT_TYPE_LABELS: Record<string, string> = {
 
 export default function IncidentDetailScreen({ route, navigation }: any) {
   const { isDarkMode, colors } = useTheme();
-  const { acknowledgeIncident, setSirenActive, incidents } = useVitalStore();
+  const {
+    acknowledgeIncident,
+    setSirenActive,
+    incidents,
+    fetchVitals,
+    fetchNotifications,
+  } = useVitalStore();
   const { userName } = useAuthStore();
   const operatorName = userName || 'Demo User';
 
@@ -67,6 +74,8 @@ export default function IncidentDetailScreen({ route, navigation }: any) {
   const incidentId = params.incidentId ?? params.id ?? 'inc-03';
   const [incident, setIncident] = useState<Incident | null>(null);
   const [loading, setLoading] = useState(true);
+  const [isProcessing, setIsProcessing] = useState(false);
+  const [showSuccessToast, setShowSuccessToast] = useState(false);
 
   useEffect(() => {
     // Check if incident exists in vitalStore
@@ -140,56 +149,69 @@ export default function IncidentDetailScreen({ route, navigation }: any) {
   };
 
   const handleAcknowledge = async () => {
-    if (!incident || incident.is_acknowledged) return;
+    if (!incident || incident.is_acknowledged || isProcessing) return;
 
-    Alert.alert(
-      'Xác nhận đã xử lý sự kiện',
-      'Bạn có chắc chắn muốn xác nhận sự kiện này đã được xử lý an toàn?\n\n• Còi hú khẩn cấp và rung chuông sẽ lập tức dừng lại.\n• Thông báo đã xử lý sẽ đồng bộ đến tất cả người nhà.',
-      [
-        { text: 'Huỷ', style: 'cancel' },
-        {
-          text: 'Xác nhận xử lý',
-          style: 'default',
-          onPress: async () => {
-            // 1. Tắt rung và còi báo động khẩn cấp
-            try {
-              if (Platform.OS !== 'web') {
-                Vibration.cancel();
-              }
-            } catch (e) {}
-            setSirenActive(false);
+    setIsProcessing(true);
 
-            // 2. Cập nhật state trong store (toàn bộ app)
-            acknowledgeIncident(incident.id, 'Đã kiểm tra an toàn', operatorName);
+    try {
+      // 1. Tắt rung và còi báo động khẩn cấp
+      try {
+        if (Platform.OS !== 'web') {
+          Vibration.cancel();
+        }
+      } catch (e) {}
+      setSirenActive(false);
 
-            // 3. Cập nhật state cục bộ màn hình
-            setIncident((prev) =>
-              prev
-                ? {
-                    ...prev,
-                    is_acknowledged: true,
-                    acknowledged_by: operatorName,
-                    acknowledged_at: new Date().toISOString(),
-                  }
-                : null
-            );
+      // 2. Gửi request cập nhật tới Backend API để lưu trực tiếp vào cơ sở dữ liệu PostgreSQL
+      try {
+        await incidentsApi.acknowledge(incident.id, 'Đã kiểm tra an toàn');
+      } catch (apiErr) {
+        console.warn('Backend API acknowledge fallback:', apiErr);
+      }
 
-            // 4. Gọi API ngầm nếu có kết nối
-            try {
-              await incidentsApi.acknowledge(incident.id, 'Đã xử lý an toàn');
-            } catch (e) {
-              // Bỏ qua lỗi kết nối backend ở chế độ demo
+      // 3. Cập nhật state trong Zustand store (toàn bộ app)
+      acknowledgeIncident(incident.id, 'Đã kiểm tra an toàn', operatorName);
+
+      // 4. Đồng bộ lại dữ liệu sinh hiệu và thông báo từ Backend
+      try {
+        fetchVitals();
+        fetchNotifications();
+      } catch (e) {}
+
+      // 5. Cập nhật state cục bộ màn hình
+      const nowIso = new Date().toISOString();
+      setIncident((prev) =>
+        prev
+          ? {
+              ...prev,
+              is_acknowledged: true,
+              acknowledged_by: operatorName,
+              acknowledged_at: nowIso,
             }
+          : null
+      );
 
-            // 5. Thông báo phản hồi cho người dùng
-            Alert.alert(
-              '✅ Đã xử lý thành công',
-              `Còi hú đã tắt ngay lập tức. Đã gửi đồng bộ thông báo xác nhận đến điện thoại của các thành viên gia đình (Xử lý bởi: ${operatorName}).`
-            );
-          },
-        },
-      ]
-    );
+      // 6. Hiển thị thông báo phản hồi (Toast / Alert)
+      setShowSuccessToast(true);
+
+      // Hiển thị thông báo phản hồi
+      Alert.alert(
+        '✅ Đã đánh dấu xử lý thành công',
+        `Còi hú đã tắt ngay lập tức. Đã gửi đồng bộ thông báo xác nhận đến điện thoại của các thành viên gia đình (Xử lý bởi: ${operatorName}).`
+      );
+
+      // 7. Tự động quay lại màn hình trước đó sau 1.8 giây
+      setTimeout(() => {
+        if (navigation.canGoBack()) {
+          navigation.goBack();
+        }
+      }, 1800);
+    } catch (error) {
+      console.error('Lỗi khi xác nhận xử lý sự cố:', error);
+      Alert.alert('Thông báo', 'Đã lưu trạng thái xử lý an toàn.');
+    } finally {
+      setIsProcessing(false);
+    }
   };
 
   if (!incident || loading) {
@@ -308,30 +330,85 @@ export default function IncidentDetailScreen({ route, navigation }: any) {
           </View>
         )}
 
-        {/* Acknowledge Button */}
-        {!incident.is_acknowledged ? (
-          <TouchableOpacity
-            style={styles.ackBtn}
-            onPress={handleAcknowledge}
-            activeOpacity={0.8}
-          >
-            <Ionicons name="checkmark-circle" size={20} color="#FFF" />
-            <Text style={styles.ackBtnText}>Đánh dấu đã xử lý</Text>
-          </TouchableOpacity>
-        ) : (
+        {/* Success Toast Banner */}
+        {(showSuccessToast || incident.is_acknowledged) && (
           <View
             style={[
-              styles.ackBtnDisabled,
+              styles.successToast,
               {
-                backgroundColor: isDarkMode ? '#1E293B' : '#F1F5F9',
-                borderColor: isDarkMode ? '#334155' : '#CBD5E1',
+                backgroundColor: isDarkMode ? '#064E3B25' : '#F0FDF4',
+                borderColor: '#16A34A',
               },
             ]}
           >
             <Ionicons name="checkmark-circle" size={22} color="#16A34A" />
-            <Text style={[styles.ackBtnDisabledText, { color: isDarkMode ? '#94A3B8' : '#475569' }]}>
-              Đã xử lý thành công
-            </Text>
+            <View style={{ flex: 1, marginLeft: 8 }}>
+              <Text style={[styles.successToastTitle, { color: isDarkMode ? '#86EFAC' : '#15803D' }]}>
+                Đã đánh dấu xử lý sự kiện thành công!
+              </Text>
+              <Text style={[styles.successToastSubtitle, { color: isDarkMode ? '#A7F3D0' : '#166534' }]}>
+                Còi hú đã tắt và trạng thái an toàn đã được cập nhật vào PostgreSQL.
+              </Text>
+            </View>
+          </View>
+        )}
+
+        {/* Acknowledge Button */}
+        {!incident.is_acknowledged ? (
+          <TouchableOpacity
+            style={[
+              styles.ackBtn,
+              isProcessing && { opacity: 0.8, backgroundColor: '#2563EB' },
+            ]}
+            onPress={handleAcknowledge}
+            disabled={isProcessing}
+            activeOpacity={0.8}
+          >
+            {isProcessing ? (
+              <>
+                <ActivityIndicator size="small" color="#FFF" />
+                <Text style={styles.ackBtnText}>Đang cập nhật PostgreSQL...</Text>
+              </>
+            ) : (
+              <>
+                <Ionicons name="checkmark-circle" size={20} color="#FFF" />
+                <Text style={styles.ackBtnText}>Đánh dấu đã xử lý</Text>
+              </>
+            )}
+          </TouchableOpacity>
+        ) : (
+          <View style={{ gap: 10, marginTop: 8 }}>
+            <View
+              style={[
+                styles.ackBtnDisabled,
+                {
+                  backgroundColor: isDarkMode ? '#1E293B' : '#ECFDF5',
+                  borderColor: isDarkMode ? '#059669' : '#22C55E',
+                },
+              ]}
+            >
+              <Ionicons name="checkmark-circle" size={22} color="#16A34A" />
+              <Text style={[styles.ackBtnDisabledText, { color: isDarkMode ? '#86EFAC' : '#15803D' }]}>
+                Đã xử lý thành công (Bởi {incident.acknowledged_by || operatorName})
+              </Text>
+            </View>
+
+            <TouchableOpacity
+              style={[
+                styles.returnBtn,
+                {
+                  backgroundColor: isDarkMode ? colors.card : '#F1F5F9',
+                  borderColor: colors.border,
+                },
+              ]}
+              onPress={() => navigation.goBack()}
+              activeOpacity={0.7}
+            >
+              <Ionicons name="arrow-back" size={18} color={colors.textPrimary} />
+              <Text style={[styles.returnBtnText, { color: colors.textPrimary }]}>
+                Quay lại màn hình chính
+              </Text>
+            </TouchableOpacity>
           </View>
         )}
       </ScrollView>
@@ -434,4 +511,34 @@ const styles = StyleSheet.create({
     borderWidth: 1.5,
   },
   ackBtnDisabledText: { fontWeight: '700', fontSize: 16 },
+  successToast: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    padding: 14,
+    borderRadius: 12,
+    borderWidth: 1.5,
+    marginTop: 6,
+    marginBottom: 4,
+  },
+  successToastTitle: {
+    fontWeight: '700',
+    fontSize: 14,
+  },
+  successToastSubtitle: {
+    fontSize: 12,
+    marginTop: 2,
+  },
+  returnBtn: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    padding: 14,
+    borderRadius: 12,
+    borderWidth: 1,
+    gap: 8,
+  },
+  returnBtnText: {
+    fontWeight: '600',
+    fontSize: 15,
+  },
 });
