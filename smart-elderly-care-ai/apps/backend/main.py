@@ -214,9 +214,15 @@ def init_db_and_seed():
             db.add_all(notifications_data)
 
             db.commit()
-            print("[SUCCESS] Đã nạp thành công Seed Data vào PostgreSQL!")
+            print("[SUCCESS] Đã nạp thành công Seed Data ban đầu vào PostgreSQL!")
         else:
-            print("[INFO] PostgreSQL đã có dữ liệu bệnh nhân. Bỏ qua bước seed.")
+            print("[INFO] PostgreSQL đã có dữ liệu bệnh nhân. Tiếp tục kiểm tra dữ liệu sinh hiệu chi tiết.")
+
+        # Tự động nạp bổ sung 15 mốc đo 24h, 3 loại thuốc và 3 cảnh báo nếu chưa đủ
+        vital_count = db.query(models.VitalSign).count()
+        if vital_count < 10:
+            from .seed_enrich import seed_rich_data
+            seed_rich_data(db)
     except Exception as e:
         db.rollback()
         print(f"[ERROR] Lỗi khởi tạo Seed Data: {e}")
@@ -282,6 +288,17 @@ class CurrentVitalsResponse(BaseModel):
     bracelet_battery: int = 88
     edge_hub_connected: bool = True
     timestamp: int = Field(default_factory=lambda: int(datetime.utcnow().timestamp() * 1000))
+
+class VitalSignHistoryItem(BaseModel):
+    id: int
+    heart_rate: int
+    spo2: int
+    body_temp: float
+    activity: str
+    sound: str
+    fall_detected_count: int
+    recorded_at: str
+    timestamp: int
 
 class ReminderItem(BaseModel):
     id: str
@@ -460,6 +477,37 @@ def get_current_vitals(patient_id: int = 1, db: Session = Depends(get_db)):
         "edge_hub_connected": True,
         "timestamp": int(vital.recorded_at.timestamp() * 1000) if vital.recorded_at else int(datetime.utcnow().timestamp() * 1000),
     }
+
+@app.get("/api/v1/vitals/history", response_model=List[VitalSignHistoryItem], tags=["Vitals"])
+def get_vitals_history(
+    patient_id: int = 1,
+    limit: int = Query(default=24, ge=1, le=100),
+    db: Session = Depends(get_db)
+):
+    """Lấy danh sách các mốc đo nhịp tim & sinh hiệu trong 24 giờ qua từ PostgreSQL (15+ mốc đo thực tế)."""
+    vitals = (
+        db.query(models.VitalSign)
+        .filter(models.VitalSign.patient_id == patient_id)
+        .order_by(desc(models.VitalSign.recorded_at))
+        .limit(limit)
+        .all()
+    )
+    # Trả về theo thứ tự thời gian tăng dần để frontend tiện vẽ biểu đồ
+    vitals_sorted = sorted(vitals, key=lambda x: x.recorded_at)
+    return [
+        VitalSignHistoryItem(
+            id=v.id,
+            heart_rate=v.heart_rate or 74,
+            spo2=v.spo2 or 98,
+            body_temp=v.body_temp or 36.8,
+            activity=v.activity_state or "Sinh hoạt",
+            sound=v.sound_state or "Bình thường",
+            fall_detected_count=v.fall_detected_count or 0,
+            recorded_at=v.recorded_at.isoformat() if v.recorded_at else datetime.utcnow().isoformat(),
+            timestamp=int(v.recorded_at.timestamp() * 1000) if v.recorded_at else int(datetime.utcnow().timestamp() * 1000),
+        )
+        for v in vitals_sorted
+    ]
 
 # 4. Reminders Today API
 @app.get("/api/v1/reminders/today", response_model=RemindersResponse, tags=["Reminders"])
@@ -647,6 +695,17 @@ def acknowledge_incident(incident_id: str, note: Optional[str] = None, db: Sessi
         "note": note or "Đã kiểm tra an toàn",
         "message": "Còi hú đã được tắt và đồng bộ thông báo đến gia đình qua PostgreSQL.",
     }
+
+@app.post("/api/v1/system/seed-enrich", tags=["System"])
+def enrich_database(db: Session = Depends(get_db)):
+    """
+    Nạp dữ liệu thực tế vào PostgreSQL:
+    - 15 mốc đo nhịp tim & sinh hiệu trong 24 giờ qua
+    - 3 loại thuốc uống (Sáng - Trưa - Tối)
+    - 3 thông báo cảnh báo (Té ngã, Nhịp tim cao, Cảnh báo âm thanh)
+    """
+    from .seed_enrich import seed_rich_data
+    return seed_rich_data(db)
 
 if __name__ == "__main__":
     import uvicorn
