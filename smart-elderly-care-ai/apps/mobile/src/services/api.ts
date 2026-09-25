@@ -1,10 +1,25 @@
 // api.ts
-// Axios client setup – tất cả API calls đều qua file này
+// Axios client setup – kết nối Frontend React Native với Backend FastAPI (http://localhost:8000/api/v1)
 
 import axios, { AxiosInstance, AxiosError } from 'axios';
-import { useAuthStore } from '../store/useVitalStore';
+import { Platform } from 'react-native';
+import { useAuthStore } from '../store/useAuthStore';
 
-const BASE_URL: string = (typeof process !== 'undefined' && process.env.EXPO_PUBLIC_API_URL) || 'http://10.0.2.2:8000/api/v1';
+// Cấu hình BASE_URL tự động:
+// - Nếu có biến EXPO_PUBLIC_API_URL thì dùng nó
+// - Nếu chạy trên Web hoặc iOS simulator: dùng http://localhost:8000/api/v1
+// - Nếu chạy trên Android emulator: dùng http://10.0.2.2:8000/api/v1
+const getBaseUrl = (): string => {
+  if (typeof process !== 'undefined' && process.env.EXPO_PUBLIC_API_URL) {
+    return process.env.EXPO_PUBLIC_API_URL;
+  }
+  if (Platform.OS === 'web' || Platform.OS === 'ios') {
+    return 'http://localhost:8000/api/v1';
+  }
+  return 'http://10.0.2.2:8000/api/v1';
+};
+
+export const BASE_URL: string = getBaseUrl();
 
 const api: AxiosInstance = axios.create({
   baseURL: BASE_URL,
@@ -55,7 +70,6 @@ export default api;
 
 export const authApi = {
   login: (email: string, password: string) => {
-    // Use FormData for OAuth2 password flow (avoids URLSearchParams compatibility issues)
     const formData = new FormData();
     formData.append('username', email);
     formData.append('password', password);
@@ -72,20 +86,46 @@ export const authApi = {
   }) => api.post('/auth/register', data),
 };
 
+// 1. System Mode API
+export const systemApi = {
+  getMode: () => api.get('/system/mode'),
+  updateMode: (data: {
+    mode?: string;
+    is_mute_alarm?: boolean;
+    is_camera_privacy?: boolean;
+    mute_mode?: string;
+    duration_minutes?: number;
+  }) => api.put('/system/mode', data),
+};
+
+// 2. Vitals API
 export const vitalsApi = {
-  getLatest: (deviceId: string) =>
-    api.get(`/vitals/${deviceId}/latest`),
+  getCurrent: () => api.get('/vitals/current'),
+  getLatest: (deviceId: string) => api.get(`/vitals/${deviceId}/latest`),
   getHistory: (deviceId: string, limit = 100) =>
     api.get(`/vitals/${deviceId}/history`, { params: { limit } }),
   getStats: (deviceId: string, hours = 24) =>
     api.get(`/vitals/${deviceId}/stats`, { params: { hours } }),
 };
 
+// 3. Reminders API
+export const remindersApi = {
+  getToday: () => api.get('/reminders/today'),
+};
+
+// 4. Patients & Medical Record API
+export const patientApi = {
+  getMedicalRecord: (patientId: number = 1) =>
+    api.get(`/patients/${patientId}/medical-record`),
+};
+
+// 5. Notifications & Incidents API
 export const incidentsApi = {
   list: (deviceId?: string, limit = 20) =>
-    api.get('/incidents', { params: { device_id: deviceId, limit } }),
-  get: (id: string) =>
-    api.get(`/incidents/${id}`),
+    api.get('/notifications', { params: { device_id: deviceId, limit } }),
+  get: (id: string) => api.get(`/incidents/${id}`),
   acknowledge: (id: string, notes?: string) =>
-    api.patch(`/incidents/${id}/acknowledge`, { notes }),
+    api.post(`/incidents/${id}/acknowledge`, null, { params: { note: notes } }),
 };
+
+export const notificationsApi = incidentsApi;

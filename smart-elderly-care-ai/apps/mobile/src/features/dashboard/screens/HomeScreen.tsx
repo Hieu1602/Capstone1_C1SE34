@@ -54,10 +54,28 @@ export default function HomeScreen({ navigation }: any) {
     alarmSnooze,
     setAlarmSnooze,
     cancelAlarmSnooze,
+    todayReminders,
+    fetchVitals,
+    fetchSystemMode,
+    fetchReminders,
+    fetchNotifications,
   } = useVitalStore();
 
   const [isMicSpeaking, setIsMicSpeaking] = useState(false);
   const [nextMedTaken, setNextMedTaken] = useState(false);
+
+  // Tự động gọi API đồng bộ dữ liệu thời gian thực từ Backend FastAPI
+  useEffect(() => {
+    fetchVitals();
+    fetchSystemMode();
+    fetchReminders();
+    fetchNotifications();
+
+    const interval = setInterval(() => {
+      fetchVitals();
+    }, 15000);
+    return () => clearInterval(interval);
+  }, []);
 
   // State cho ActionSheet / BottomSheet "Tạm dừng chuông báo động"
   const [snoozeModalVisible, setSnoozeModalVisible] = useState(false);
@@ -236,6 +254,16 @@ export default function HomeScreen({ navigation }: any) {
       snoozeButtonLabel = 'Tắt chuông: Đang bật';
     }
   }
+
+  // Cữ thuốc kế tiếp từ Backend FastAPI
+  const nextMedication =
+    todayReminders?.medications?.find((m) => !m.taken) ||
+    todayReminders?.medications?.[3] || {
+      name: 'Uống thuốc huyết áp (Amlodipine 5mg)',
+      time: '18:30',
+      taken: false,
+    };
+  const isMedDone = nextMedTaken || Boolean(nextMedication.taken);
 
   return (
     <SafeAreaView style={[styles.safeArea, { backgroundColor: colors.background }]} edges={['top']}>
@@ -732,17 +760,17 @@ export default function HomeScreen({ navigation }: any) {
             <View style={styles.reminderContentRow}>
               <View style={styles.reminderClockBox}>
                 <Ionicons name="time" size={13} color="#0EA5E9" />
-                <Text style={styles.reminderClockText}>18:30</Text>
+                <Text style={styles.reminderClockText}>{nextMedication.time}</Text>
               </View>
               <Text
                 style={[
                   styles.reminderMedText,
                   isDarkMode && { color: colors.textPrimary },
-                  nextMedTaken && styles.reminderMedTextDone,
+                  isMedDone && styles.reminderMedTextDone,
                 ]}
                 numberOfLines={1}
               >
-                Uống thuốc huyết áp (Amlodipine 5mg)
+                {nextMedication.name}
               </Text>
             </View>
           </TouchableOpacity>
@@ -750,30 +778,30 @@ export default function HomeScreen({ navigation }: any) {
           <TouchableOpacity
             style={[
               styles.reminderTickBtn,
-              nextMedTaken ? styles.reminderTickBtnDone : styles.reminderTickBtnPending,
-              isDarkMode && !nextMedTaken && { backgroundColor: '#0F172A', borderColor: '#334155' },
+              isMedDone ? styles.reminderTickBtnDone : styles.reminderTickBtnPending,
+              isDarkMode && !isMedDone && { backgroundColor: '#0F172A', borderColor: '#334155' },
             ]}
             onPress={() => {
-              const next = !nextMedTaken;
+              const next = !isMedDone;
               setNextMedTaken(next);
               if (next) {
-                Alert.alert('Đã hoàn thành', 'Đã ghi nhận uống thuốc huyết áp Amlodipine 5mg.');
+                Alert.alert('Đã hoàn thành', `Đã ghi nhận: ${nextMedication.name}.`);
               }
             }}
             activeOpacity={0.7}
           >
             <Ionicons
-              name={nextMedTaken ? 'checkmark-circle' : 'checkmark'}
+              name={isMedDone ? 'checkmark-circle' : 'checkmark'}
               size={15}
-              color={nextMedTaken ? '#10B981' : (isDarkMode ? '#94A3B8' : '#64748B')}
+              color={isMedDone ? '#10B981' : (isDarkMode ? '#94A3B8' : '#64748B')}
             />
             <Text
               style={[
                 styles.reminderTickText,
-                { color: nextMedTaken ? '#10B981' : (isDarkMode ? '#94A3B8' : '#64748B') },
+                { color: isMedDone ? '#10B981' : (isDarkMode ? '#94A3B8' : '#64748B') },
               ]}
             >
-              {nextMedTaken ? 'Đã uống' : 'Đã uống'}
+              {isMedDone ? 'Đã uống' : 'Uống'}
             </Text>
           </TouchableOpacity>
         </View>

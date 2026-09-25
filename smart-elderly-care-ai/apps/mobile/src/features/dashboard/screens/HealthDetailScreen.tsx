@@ -26,13 +26,17 @@ export default function HealthDetailScreen({ navigation, route }: any) {
   const { isDarkMode, colors } = useTheme();
   const metric = (route?.params?.focusMetric ?? route?.params?.metric) as 'heartRate' | 'activity' | 'spo2' | undefined;
   const initialTab = route?.params?.initialTab as 'today' | 'week' | 'month' | undefined;
-  const { currentVitals } = useVitalStore();
+  const { currentVitals, fetchVitals } = useVitalStore();
   const [selectedRange, setSelectedRange] = useState<TimeRange>(
     initialTab === 'week' ? 'WEEK' : initialTab === 'month' ? 'MONTH' : 'DAY'
   );
   const [isRefreshing, setIsRefreshing] = useState(false);
   const [highlightedMetric, setHighlightedMetric] = useState<string | null>(metric ?? null);
   const scrollRef = React.useRef<ScrollView>(null);
+
+  React.useEffect(() => {
+    fetchVitals();
+  }, []);
 
   React.useEffect(() => {
     if (initialTab) {
