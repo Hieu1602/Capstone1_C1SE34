@@ -29,7 +29,18 @@ export interface Incident {
   video_clip_url: string | null;
   thumbnail_url: string | null;
   is_acknowledged: boolean;
+  acknowledged_by?: string | null;
+  acknowledged_at?: string | null;
+  note?: string | null;
   created_at: string;
+}
+
+export interface AlarmSnoozeInfo {
+  active: boolean;
+  until: number | null; // null if indefinitely until manually re-enabled
+  durationMinutes: number; // 15, 60, 120, 0
+  mode: 'VIBRATE' | 'SILENT';
+  syncAll: boolean;
 }
 
 export interface Device {
@@ -94,9 +105,16 @@ interface VitalStoreState {
     immobilitySec: number;
   };
 
+  alarmSnooze: AlarmSnoozeInfo;
+  sirenActive: boolean;
+
   setVitals: (data: Partial<VitalData>) => void;
   setIncidents: (incidents: Incident[]) => void;
   addIncident: (incident: Incident) => void;
+  acknowledgeIncident: (incidentId: string, note?: string, user?: string) => void;
+  setAlarmSnooze: (snooze: Partial<AlarmSnoozeInfo>) => void;
+  cancelAlarmSnooze: () => void;
+  setSirenActive: (active: boolean) => void;
   setActiveDevice: (device: Device | null) => void;
   setConnected: (connected: boolean) => void;
   setHouseMode: (mode: 'AWAY' | 'HOME' | 'DISARM' | 'ALARM' | 'PRIVACY') => void;
@@ -220,6 +238,14 @@ const createVitalStore: StateCreator<VitalStoreState> = (set: VitalSet) => ({
     wifiStrength: 3,
     streamUrl: 'http://10.0.2.2:8080',
   },
+  alarmSnooze: {
+    active: false,
+    until: null,
+    durationMinutes: 15,
+    mode: 'VIBRATE',
+    syncAll: true,
+  },
+  sirenActive: false,
   selectedDate: '09/07',
   algoSettings: {
     maxHeartRate: 120,
@@ -240,7 +266,57 @@ const createVitalStore: StateCreator<VitalStoreState> = (set: VitalSet) => ({
   addIncident: (incident: Incident) =>
     set((state: VitalStoreState) => ({
       incidents: [incident, ...state.incidents].slice(0, 100),
+      sirenActive: incident.alert_level === 'CRITICAL' ? true : state.sirenActive,
     })),
+
+  acknowledgeIncident: (incidentId: string, note?: string, user: string = 'Demo User') =>
+    set((state: VitalStoreState) => {
+      const updatedIncidents = state.incidents.map((inc) => {
+        if (inc.id === incidentId) {
+          return {
+            ...inc,
+            is_acknowledged: true,
+            acknowledged_by: user,
+            acknowledged_at: new Date().toISOString(),
+            note: note ?? inc.note,
+          };
+        }
+        return inc;
+      });
+
+      const hasOtherCritical = updatedIncidents.some(
+        (inc) => !inc.is_acknowledged && (inc.alert_level === 'CRITICAL' || inc.alert_type === 'FALL_DETECTED')
+      );
+
+      return {
+        incidents: updatedIncidents,
+        sirenActive: false,
+        currentVitals: {
+          ...state.currentVitals,
+          fall_detected: hasOtherCritical ? state.currentVitals.fall_detected : false,
+          acoustic_status: hasOtherCritical ? state.currentVitals.acoustic_status : 'Bình thường',
+        },
+      };
+    }),
+
+  setAlarmSnooze: (snooze: Partial<AlarmSnoozeInfo>) =>
+    set((state: VitalStoreState) => ({
+      alarmSnooze: { ...state.alarmSnooze, ...snooze },
+      sirenActive: false,
+    })),
+
+  cancelAlarmSnooze: () =>
+    set(() => ({
+      alarmSnooze: {
+        active: false,
+        until: null,
+        durationMinutes: 15,
+        mode: 'VIBRATE',
+        syncAll: true,
+      },
+    })),
+
+  setSirenActive: (active: boolean) => set({ sirenActive: active }),
 
   setActiveDevice: (device: Device | null) => set({ activeDevice: device }),
   setConnected: (connected: boolean) => set({ isConnected: connected }),

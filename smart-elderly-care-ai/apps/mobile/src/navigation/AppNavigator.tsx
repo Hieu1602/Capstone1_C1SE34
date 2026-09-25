@@ -161,6 +161,14 @@ export default function AppNavigator() {
                 headerShown: false,
               }}
             />
+            <Stack.Screen
+              name="EventDetail"
+              component={IncidentDetailScreen}
+              options={{
+                presentation: 'modal',
+                headerShown: false,
+              }}
+            />
           </>
         )}
       </Stack.Navigator>
