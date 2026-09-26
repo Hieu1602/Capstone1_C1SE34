@@ -744,6 +744,82 @@ def acknowledge_incident(incident_id: str, note: Optional[str] = None, db: Sessi
         "message": "Còi hú đã được tắt và đồng bộ thông báo đến gia đình qua PostgreSQL.",
     }
 
+@app.post("/api/v1/incidents/simulate-fall", tags=["Notifications"])
+@app.post("/api/v1/incidents/trigger-test-fall", tags=["Notifications"])
+def trigger_test_fall(
+    location: str = Query(default="Phòng khách", description="Vị trí xảy ra té ngã"),
+    patient_id: int = Query(default=1, description="ID bệnh nhân"),
+    db: Session = Depends(get_db)
+):
+    """
+    Tạo một sự cố cảnh báo té ngã khẩn cấp mới (is_resolved = False, CRITICAL) vào PostgreSQL
+    để test thanh cảnh báo khẩn cấp màu đỏ trên màn hình chính HomeScreen.
+    """
+    now = datetime.utcnow()
+    new_alert = models.Notification(
+        patient_id=patient_id,
+        type="FALL_DETECTED",
+        title=f"Cảnh báo té ngã khẩn cấp tại {location}",
+        description=f"🚨 Cảnh báo té ngã khẩn cấp (Fall Detected) tại {location} - YOLO-Pose AI phát hiện người cao tuổi ngã nghiêng đột ngột.",
+        alert_level="CRITICAL",
+        confidence=0.96,
+        video_clip_url="https://commondatastorage.googleapis.com/gtv-videos-bucket/sample/BigBuckBunny.mp4",
+        thumbnail_url="https://images.unsplash.com/photo-1516549655169-df83a0774514?w=300&q=80",
+        is_new=True,
+        is_resolved=False,
+        created_at=now,
+    )
+    db.add(new_alert)
+
+    # Cập nhật chỉ số sinh hiệu thành có té ngã và nằm sàn
+    latest_vital = (
+        db.query(models.VitalSign)
+        .filter(models.VitalSign.patient_id == patient_id)
+        .order_by(desc(models.VitalSign.recorded_at))
+        .first()
+    )
+    if latest_vital:
+        latest_vital.fall_detected_count = (latest_vital.fall_detected_count or 0) + 1
+        latest_vital.activity_state = f"Nằm sàn tại {location} (Cảnh báo té ngã)"
+        latest_vital.sound_state = "Âm thanh va đập mạnh"
+        latest_vital.recorded_at = now
+    else:
+        new_vital = models.VitalSign(
+            patient_id=patient_id,
+            heart_rate=88,
+            spo2=96,
+            body_temp=36.8,
+            activity_state=f"Nằm sàn tại {location}",
+            sound_state="Âm thanh va đập mạnh",
+            fall_detected_count=1,
+            recorded_at=now,
+        )
+        db.add(new_vital)
+
+    # Đảm bảo còi báo động không bị tắt mute
+    sys_mode = db.query(models.SystemMode).first()
+    if sys_mode:
+        sys_mode.is_mute_alarm = False
+
+    db.commit()
+    db.refresh(new_alert)
+
+    return {
+        "status": "success",
+        "message": f"Đã kích hoạt thành công cảnh báo té ngã tại {location} vào PostgreSQL!",
+        "incident": {
+            "id": f"inc-0{new_alert.id}" if new_alert.id < 10 else f"inc-{new_alert.id}",
+            "type": new_alert.type,
+            "title": new_alert.title,
+            "alert_level": new_alert.alert_level,
+            "message": new_alert.description,
+            "confidence": new_alert.confidence,
+            "is_resolved": new_alert.is_resolved,
+            "is_new": new_alert.is_new,
+            "created_at": new_alert.created_at.isoformat(),
+        },
+    }
+
 @app.post("/api/v1/system/seed-enrich", tags=["System"])
 def enrich_database(db: Session = Depends(get_db)):
     """
