@@ -120,7 +120,7 @@ export interface CameraDevice {
   isOnline: boolean;
   isSleep: boolean;
   isAIProtect: boolean;
-  resolution: '2K' | 'FHD' | 'SD';
+  resolution: 'HD' | 'BASIC';
   sdCardStatus: 'OK' | 'NO_CARD';
   wifiStrength: number; // 1-3
   streamUrl: string;
@@ -189,7 +189,7 @@ interface VitalStoreState {
   updateHouseAddress: (address: string) => void;
   toggleCameraSleep: () => void;
   toggleCameraAIProtect: () => void;
-  setCameraResolution: (res: '2K' | 'FHD' | 'SD') => void;
+  setCameraResolution: (res: 'HD' | 'BASIC') => void;
   setSelectedDate: (date: string) => void;
   updateAlgoSettings: (settings: Partial<VitalStoreState['algoSettings']>) => void;
   addIoTDevice: (device: IoTDeviceItem) => void;
@@ -301,7 +301,7 @@ const createVitalStore: StateCreator<VitalStoreState> = (set: VitalSet) => ({
     isOnline: true,
     isSleep: false,
     isAIProtect: true,
-    resolution: '2K',
+    resolution: 'HD',
     sdCardStatus: 'OK',
     wifiStrength: 3,
     streamUrl: 'http://10.0.2.2:8080',
@@ -514,7 +514,7 @@ const createVitalStore: StateCreator<VitalStoreState> = (set: VitalSet) => ({
       camera: { ...state.camera, isAIProtect: !state.camera.isAIProtect },
     })),
 
-  setCameraResolution: (res: '2K' | 'FHD' | 'SD') =>
+  setCameraResolution: (res: 'HD' | 'BASIC') =>
     set((state) => ({ camera: { ...state.camera, resolution: res } })),
 
   setSelectedDate: (date: string) => set({ selectedDate: date }),
@@ -689,3 +689,4 @@ useVitalStore.subscribe((state) => {
 
 // ---- Auth Store (persisted & decoupled) ----
 export { useAuthStore, AuthStoreState } from './useAuthStore';
+

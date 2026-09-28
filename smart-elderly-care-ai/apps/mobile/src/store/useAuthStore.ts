@@ -12,10 +12,10 @@ export interface AuthStoreState {
   userEmail: string | null;
   userName: string | null;
 
-  login: (token: string, name: string, userId: string, email?: string) => void;
+  login: (access: string, refreshOrName?: string, name?: string, userId?: string, email?: string) => void;
   setTokens: (access: string, refresh: string) => void;
-  setUser: (id: string, email: string, name: string) => void;
-  updateUserName: (id: string, name: string) => void;
+  setUser: (id: string, email?: string, name?: string) => void;
+  updateUserName: (nameOrId: string, name?: string) => void;
   logout: () => void;
 }
 
@@ -36,23 +36,43 @@ const createAuthStore: StateCreator<AuthStoreState, [], [['zustand/persist', Aut
   userEmail: null,
   userName: null,
 
-  login: (token: string, name: string, userId: string, email?: string) =>
-    set({
-      accessToken: token,
-      refreshToken: token,
-      userId,
-      userEmail: email ?? null,
-      userName: name,
-    }),
+  login: (access: string, refreshOrName?: string, name?: string, userId?: string, email?: string) => {
+    if (userId !== undefined) {
+      set({
+        accessToken: access,
+        refreshToken: refreshOrName ?? null,
+        userName: name ?? null,
+        userId: userId,
+        userEmail: email ?? null,
+      });
+    } else {
+      set({
+        accessToken: access,
+        refreshToken: access,
+        userName: refreshOrName ?? null,
+        userId: name ?? null,
+        userEmail: (userId as any) ?? null,
+      });
+    }
+  },
 
   setTokens: (access: string, refresh: string) =>
     set({ accessToken: access, refreshToken: refresh }),
 
-  setUser: (id: string, email: string, name: string) =>
-    set({ userId: id, userEmail: email, userName: name }),
+  setUser: (id: string, email?: string, name?: string) =>
+    set((state) => ({
+      userId: id,
+      userEmail: email ?? state.userEmail ?? null,
+      userName: name ?? state.userName ?? null,
+    })),
 
-  updateUserName: (id: string, name: string) =>
-    set({ userId: id, userName: name }),
+  updateUserName: (nameOrId: string, name?: string) => {
+    if (name !== undefined) {
+      set({ userId: nameOrId, userName: name });
+    } else {
+      set({ userName: nameOrId });
+    }
+  },
 
   logout: () =>
     set({
