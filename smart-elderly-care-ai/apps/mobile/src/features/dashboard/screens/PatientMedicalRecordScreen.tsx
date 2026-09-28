@@ -1,7 +1,7 @@
 // PatientMedicalRecordScreen.tsx
 // Màn hình Hồ sơ bệnh án người cao tuổi (Bảo mật y tế chuẩn AES-256)
 
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import {
   View,
   Text,
@@ -19,6 +19,7 @@ import { SafeAreaView } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
 import { useTheme } from '../../../store/useThemeStore';
 import { Colors } from '../../../theme/colors';
+import { useVitalStore } from '../../../store/useVitalStore';
 
 interface MedicalCondition {
   id: string;
@@ -29,11 +30,40 @@ interface MedicalCondition {
 
 export default function PatientMedicalRecordScreen({ navigation }: any) {
   const { isDarkMode, colors } = useTheme();
+  const { fetchPatientRecord, patientRecord, isLoadingPatient } = useVitalStore();
 
   // Patient Info State
   const [patientName, setPatientName] = useState('Nguyễn Văn An');
   const [birthYear, setBirthYear] = useState('1948');
   const [age, setAge] = useState(78);
+
+  // Tự động gọi API lấy dữ liệu hồ sơ bệnh án người cao tuổi từ Backend FastAPI
+  useEffect(() => {
+    const loadRecord = async () => {
+      const data = await fetchPatientRecord(1);
+      if (data) {
+        setPatientName(data.name);
+        setBirthYear(data.birth_year);
+        setAge(data.age);
+        setGender(data.gender);
+        setBloodType(data.blood_type);
+        setHeight(String(data.height_cm));
+        setWeight(String(data.weight_kg));
+        if (data.conditions && data.conditions.length > 0) {
+          setConditions(data.conditions);
+        }
+        if (data.drug_allergies) setDrugAllergies(data.drug_allergies);
+        if (data.food_allergies) setFoodAllergies(data.food_allergies);
+        if (data.dietary_notes) setDietaryNotes(data.dietary_notes);
+        if (data.doctor_name) setDoctorName(data.doctor_name);
+        if (data.doctor_phone) setDoctorPhone(data.doctor_phone);
+        if (data.doctor_specialty) setDoctorSpecialty(data.doctor_specialty);
+        if (data.hospital) setHospital(data.hospital);
+        if (data.next_appointment) setNextAppointment(data.next_appointment);
+      }
+    };
+    loadRecord();
+  }, []);
   const [gender, setGender] = useState('Nam');
   const [bloodType, setBloodType] = useState('O+');
   const [height, setHeight] = useState('165');

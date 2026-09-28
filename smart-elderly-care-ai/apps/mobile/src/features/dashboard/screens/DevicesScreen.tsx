@@ -154,9 +154,25 @@ export default function DevicesScreen({ navigation }: any) {
 
   // Xử lý khi nhấn vào thẻ thiết bị (Camera -> CameraDetail, Đồng hồ -> SmartbandDetail)
   const handleDevicePress = (dev: IoTDeviceItem) => {
-    if (checkIsCamera(dev)) {
-      navigation.navigate('CameraDetail');
-    } else if (checkIsWatch(dev)) {
+    const isCamera =
+      dev.type === 'camera' ||
+      dev.name.toLowerCase().includes('camera') ||
+      dev.name.includes('SECA') ||
+      dev.name.includes('Ranger');
+
+    const isWatch =
+      dev.type === 'band' ||
+      dev.type === 'watch' ||
+      dev.name.toLowerCase().includes('smartband') ||
+      dev.name.toLowerCase().includes('đồng hồ');
+
+    if (isCamera) {
+      navigation.navigate('CameraDetail', {
+        cameraId: dev.id,
+        cameraName: dev.name,
+        room: dev.location || dev.sub,
+      });
+    } else if (isWatch) {
       navigation.navigate('SmartbandDetail', { device: dev });
     } else {
       Alert.alert(dev.name, `${dev.sub}\nTrạng thái: ${dev.status}`);

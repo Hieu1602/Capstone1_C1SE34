@@ -17,18 +17,20 @@ redis[asyncio]>=5.0.4
 # ---- Pydantic / Config ----
 pydantic>=2.7.1
 pydantic-settings>=2.2.1
-email-validator>=2.0.0
-pydantic[email]
 
 # ---- Auth / Security ----
 python-jose[cryptography]==3.3.0
 passlib[bcrypt]==1.7.4
+bcrypt==4.1.2
 
 # ---- MQTT ----
 paho-mqtt==1.6.1
 
 # ---- Firebase FCM ----
 firebase-admin==6.5.0
+
+# ---- SMS OTP ----
+twilio==9.6.0
 
 # ---- MinIO / S3 ----
 minio==7.2.7
