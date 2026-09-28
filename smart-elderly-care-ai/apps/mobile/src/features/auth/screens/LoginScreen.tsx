@@ -1,5 +1,5 @@
 // LoginScreen.tsx
-// Màn hình Đăng nhập theo số điện thoại
+// Màn hình Chào mừng & Đăng nhập theo phong cách Pinterest Collage hiện đại
 
 import React, { useState } from 'react';
 import {
@@ -14,182 +14,344 @@ import {
   ScrollView,
   KeyboardAvoidingView,
   Platform,
+  Modal,
+  ActivityIndicator,
+  Dimensions,
 } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
-import { Colors } from '../../../theme/colors';
 import { useAuthStore } from '../../../store/useVitalStore';
 import { authApi } from '../../../services/api';
+
+const { width: SCREEN_WIDTH } = Dimensions.get('window');
+
+// Danh sách hình ảnh collage chất lượng cao (phong cách sống, chăm sóc gia đình, y tế)
+const COLLAGE_IMAGES = {
+  center: 'https://images.unsplash.com/photo-1576765608535-5f04d1e3f289?auto=format&fit=crop&w=600&q=80', // Nụ cười cụ bà hạnh phúc
+  topLeft: 'https://images.unsplash.com/photo-1513694203232-719a280e022f?auto=format&fit=crop&w=500&q=80', // Không gian sống ấm áp, gương & cây xanh
+  topRight: 'https://images.unsplash.com/photo-1595950653106-6c9ebd614d3a?auto=format&fit=crop&w=500&q=80', // Giày đi bộ rèn luyện sức khỏe
+  midRight: 'https://images.unsplash.com/photo-1581579438747-1dc8d17bbce4?auto=format&fit=crop&w=500&q=80', // Bác sĩ & chăm sóc ân cần
+  bottomLeft: 'https://images.unsplash.com/photo-1525351484163-7529414344d8?auto=format&fit=crop&w=500&q=80', // Bữa sáng dinh dưỡng, trái cây
+  bottomRight: 'https://images.unsplash.com/photo-1507473885765-e6ed057f782c?auto=format&fit=crop&w=500&q=80', // Đèn ngủ đầu giường bình yên
+};
 
 export default function LoginScreen({ navigation }: any) {
   const { login } = useAuthStore() as unknown as {
     login: (access: string, refresh: string, name: string, userId: string) => void;
   };
-  const [activeTab, setActiveTab] = useState<'none' | 'phone'>('none');
+
+  const [isLoginModalVisible, setIsLoginModalVisible] = useState(false);
   const [account, setAccount] = useState('');
   const [password, setPassword] = useState('');
   const [showPassword, setShowPassword] = useState(false);
-  const [agreed, setAgreed] = useState(true);
+  const [isLoading, setIsLoading] = useState(false);
 
-  const handleSelectMethod = () => {
-    setAccount('');
-    setPassword('');
-    setAgreed(true);
-    setShowPassword(false);
-    setActiveTab('phone');
-  };
-
+  // Đăng nhập vào hệ thống
   const handleLoginAction = async () => {
-    if (!agreed) {
-      setAgreed(true);
-    }
-
     if (!account.trim() || !password.trim()) {
       Alert.alert('Thiếu thông tin', 'Vui lòng nhập số điện thoại và mật khẩu.');
       return;
     }
 
+    setIsLoading(true);
     try {
       const rawAccount = account.trim();
       const normalizedAccount = rawAccount.startsWith('0')
         ? `+84${rawAccount.slice(1)}`
         : rawAccount.startsWith('84')
           ? `+${rawAccount}`
-          : rawAccount;
+          : rawAccount.startsWith('+')
+            ? rawAccount
+            : `+84${rawAccount}`;
+
       const response = await authApi.login(normalizedAccount, password);
       const { access_token, refresh_token } = response.data;
 
-      login(access_token, refresh_token, 'User', normalizedAccount);
-      Alert.alert('Đăng nhập thành công', 'Bạn đã đăng nhập vào hệ thống.');
+      // Lưu token vào Store để chuyển vào ứng dụng chính
+      login(access_token, refresh_token, 'Nguyễn Hữu Nghĩa', normalizedAccount);
+      setIsLoginModalVisible(false);
     } catch (error: any) {
-      const detail = error?.response?.data?.detail || 'Không thể đăng nhập. Vui lòng thử lại.';
+      const detail = error?.response?.data?.detail || 'Số điện thoại hoặc mật khẩu không chính xác.';
       Alert.alert('Đăng nhập thất bại', detail);
+    } finally {
+      setIsLoading(false);
     }
+  };
+
+  // Điền nhanh tài khoản mẫu để kiểm thử
+  const handleQuickFill = (phone: string, pass: string) => {
+    setAccount(phone);
+    setPassword(pass);
   };
 
   return (
     <SafeAreaView style={styles.safeArea}>
-      <KeyboardAvoidingView
-        behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
-        style={{ flex: 1 }}
+      <ScrollView
+        contentContainerStyle={styles.scrollContainer}
+        showsVerticalScrollIndicator={false}
+        bounces={false}
       >
-        <ScrollView contentContainerStyle={styles.container} showsVerticalScrollIndicator={false}>
-          <View style={styles.headerSection}>
-            {activeTab !== 'none' ? (
-              <TouchableOpacity
-                style={styles.backButton}
-                onPress={() => {
-                  setActiveTab('none');
-                  setAccount('');
-                  setPassword('');
-                }}
-              >
-                <Ionicons name="arrow-back" size={24} color={Colors.textPrimary || '#0F172A'} />
-              </TouchableOpacity>
-            ) : (
-              <View style={styles.appIconWrapper}>
-                <Image
-                  source={require('../../../assets/logo_icon.png')}
-                  style={styles.appIcon}
-                />
-              </View>
-            )}
-            <Text style={styles.welcomeTitle}>
-              {activeTab === 'phone' ? 'Đăng nhập SĐT' : 'Chào mừng'}
-            </Text>
+        {/* ================================================================= */}
+        {/* PHẦN 1: DYNAMIC PHOTO COLLAGE (PHONG CÁCH PINTEREST)              */}
+        {/* ================================================================= */}
+        <View style={styles.collageContainer}>
+          {/* Card Top Left: Gương & phòng khách Bắc Âu */}
+          <View style={[styles.card, styles.cardTopLeft]}>
+            <Image
+              source={{ uri: COLLAGE_IMAGES.topLeft }}
+              style={styles.cardImage}
+              resizeMode="cover"
+            />
           </View>
 
-          {activeTab === 'none' && (
-            <TouchableOpacity
-              style={styles.countryPickerBtn}
-              activeOpacity={0.7}
-              onPress={() => Alert.alert('Khu vực', 'Đã chọn: Vietnam (+84)')}
-            >
-              <View style={styles.countryLeftWrap}>
-                <View style={styles.countryIconWrap}>
-                  <Ionicons name="globe-outline" size={15} color={Colors.textPrimary || '#0F172A'} />
-                </View>
-                <Text style={styles.countryText}>Vietnam</Text>
-              </View>
-              <Ionicons name="chevron-forward" size={15} color={Colors.textSecondary || '#64748B'} />
-            </TouchableOpacity>
-          )}
+          {/* Card Top Right: Giày vận động thể thao */}
+          <View style={[styles.card, styles.cardTopRight]}>
+            <Image
+              source={{ uri: COLLAGE_IMAGES.topRight }}
+              style={styles.cardImage}
+              resizeMode="cover"
+            />
+          </View>
 
-          {activeTab === 'none' ? (
-            <View style={styles.methodsContainer}>
+          {/* Card Center: Hero chính (Nụ cười ấm áp tuổi già) */}
+          <View style={[styles.card, styles.cardCenterHero]}>
+            <Image
+              source={{ uri: COLLAGE_IMAGES.center }}
+              style={styles.cardImage}
+              resizeMode="cover"
+            />
+          </View>
+
+          {/* Card Middle Right: Chăm sóc & khám sức khỏe */}
+          <View style={[styles.card, styles.cardMidRight]}>
+            <Image
+              source={{ uri: COLLAGE_IMAGES.midRight }}
+              style={styles.cardImage}
+              resizeMode="cover"
+            />
+          </View>
+
+          {/* Card Bottom Left: Đĩa bánh dâu dinh dưỡng */}
+          <View style={[styles.card, styles.cardBottomLeft]}>
+            <Image
+              source={{ uri: COLLAGE_IMAGES.bottomLeft }}
+              style={styles.cardImage}
+              resizeMode="cover"
+            />
+          </View>
+
+          {/* Card Bottom Right: Đèn ngủ an lành */}
+          <View style={[styles.card, styles.cardBottomRight]}>
+            <Image
+              source={{ uri: COLLAGE_IMAGES.bottomRight }}
+              style={styles.cardImage}
+              resizeMode="cover"
+            />
+          </View>
+        </View>
+
+        {/* ================================================================= */}
+        {/* PHẦN 2: LOGO BADGE, TIÊU ĐỀ & NÚT HÀNH ĐỘNG                       */}
+        {/* ================================================================= */}
+        <View style={styles.bottomSection}>
+          {/* Logo Badge hình tròn đỏ đặc trưng phong cách Pinterest */}
+          <View style={styles.logoBadgeContainer}>
+            <View style={styles.logoBadge}>
+              <Ionicons name="heart" size={26} color="#FFFFFF" />
+            </View>
+          </View>
+
+          {/* Tiêu đề & Slogan */}
+          <Text style={styles.heroTitle}>
+            Tạo dựng cuộc sống{'\n'}bạn yêu thích
+          </Text>
+          <Text style={styles.heroSubtitle}>
+            Hệ sinh thái AI bảo vệ sức khỏe & an toàn người cao tuổi 24/7
+          </Text>
+
+          {/* Bộ 2 nút hành động Pill Button */}
+          <View style={styles.actionButtonsContainer}>
+            {/* Nút 1: Đăng ký (Red Primary Pill) */}
+            <TouchableOpacity
+              style={styles.btnRegister}
+              activeOpacity={0.88}
+              onPress={() => navigation.navigate('Register')}
+            >
+              <Text style={styles.btnRegisterText}>Đăng ký</Text>
+            </TouchableOpacity>
+
+            {/* Nút 2: Đăng nhập (Light Gray Secondary Pill) */}
+            <TouchableOpacity
+              style={styles.btnLogin}
+              activeOpacity={0.88}
+              onPress={() => setIsLoginModalVisible(true)}
+            >
+              <Text style={styles.btnLoginText}>Đăng nhập</Text>
+            </TouchableOpacity>
+          </View>
+
+          {/* Điều khoản pháp lý ở chân trang */}
+          <Text style={styles.termsNoticeText}>
+            Bằng cách tiếp tục, bạn đồng ý với{' '}
+            <Text
+              style={styles.termsLink}
+              onPress={() => Alert.alert('Điều khoản dịch vụ', 'Hệ thống Smart Elderly Care AI tuân thủ chuẩn an ninh y tế.')}
+            >
+              Điều khoản dịch vụ
+            </Text>{' '}
+            của SECA và xác nhận rằng bạn đã đọc{' '}
+            <Text
+              style={styles.termsLink}
+              onPress={() => Alert.alert('Chính sách bảo mật', 'Bảo mật thông tin sinh hiệu chuẩn mã hóa AES-256.')}
+            >
+              Chính sách quyền riêng tư
+            </Text>{' '}
+            của chúng tôi.{' '}
+            <Text
+              style={styles.termsLink}
+              onPress={() => Alert.alert('Thông báo thu thập', 'Dữ liệu được thu thập từ Camera AI và Vòng tay BLE.')}
+            >
+              Thông báo khi thu thập
+            </Text>
+            .
+          </Text>
+        </View>
+      </ScrollView>
+
+      {/* ================================================================= */}
+      {/* PHẦN 3: MODAL ĐĂNG NHẬP (BOTTOM SHEET HIỆN ĐẠI)                   */}
+      {/* ================================================================= */}
+      <Modal
+        visible={isLoginModalVisible}
+        animationType="slide"
+        transparent={true}
+        onRequestClose={() => setIsLoginModalVisible(false)}
+      >
+        <KeyboardAvoidingView
+          behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
+          style={styles.modalOverlay}
+        >
+          <View style={styles.modalSheet}>
+            {/* Thanh gạt trên đỉnh Sheet */}
+            <View style={styles.sheetHandle} />
+
+            {/* Header Sheet */}
+            <View style={styles.sheetHeader}>
+              <View>
+                <Text style={styles.sheetTitle}>Đăng nhập</Text>
+                <Text style={styles.sheetSubtitle}>Nhập thông tin tài khoản người nhà hoặc bác sĩ</Text>
+              </View>
               <TouchableOpacity
-                style={styles.authButton}
-                activeOpacity={0.7}
-                onPress={handleSelectMethod}
+                style={styles.sheetCloseBtn}
+                onPress={() => setIsLoginModalVisible(false)}
               >
-                <View style={styles.authButtonInner}>
-                  <Ionicons name="phone-portrait-outline" size={20} color={Colors.textPrimary || '#0F172A'} style={styles.authIcon} />
-                  <Text style={styles.authButtonText}>Số điện thoại</Text>
-                </View>
+                <Ionicons name="close" size={20} color="#64748B" />
               </TouchableOpacity>
             </View>
-          ) : (
-            <View style={styles.formContainer}>
-              <View style={styles.inputContainer}>
-                <Ionicons name="phone-portrait-outline" size={22} color={Colors.textSecondary || '#64748B'} style={styles.inputIcon} />
-                <TextInput
-                  style={styles.input}
-                  placeholder="Nhập số điện thoại"
-                  placeholderTextColor="#94A3B8"
-                  keyboardType="phone-pad"
-                  value={account}
-                  onChangeText={setAccount}
-                  autoCapitalize="none"
-                />
-              </View>
 
-              <View style={styles.inputContainer}>
-                <Ionicons name="lock-closed-outline" size={22} color={Colors.textSecondary || '#64748B'} style={styles.inputIcon} />
-                <TextInput
-                  style={[styles.input, { flex: 1 }]}
-                  placeholder="Nhập mật khẩu"
-                  placeholderTextColor="#94A3B8"
-                  secureTextEntry={!showPassword}
-                  value={password}
-                  onChangeText={setPassword}
+            {/* Input 1: Số điện thoại */}
+            <View style={styles.inputWrap}>
+              <View style={styles.inputPrefix}>
+                <Ionicons name="call-outline" size={18} color="#64748B" />
+                <Text style={styles.prefixText}>+84</Text>
+              </View>
+              <TextInput
+                style={styles.textInput}
+                placeholder="Nhập số điện thoại (VD: 0905123456)"
+                placeholderTextColor="#94A3B8"
+                keyboardType="phone-pad"
+                value={account}
+                onChangeText={setAccount}
+                autoCapitalize="none"
+              />
+            </View>
+
+            {/* Input 2: Mật khẩu */}
+            <View style={styles.inputWrap}>
+              <View style={styles.inputPrefix}>
+                <Ionicons name="lock-closed-outline" size={18} color="#64748B" />
+              </View>
+              <TextInput
+                style={[styles.textInput, { flex: 1 }]}
+                placeholder="Mật khẩu"
+                placeholderTextColor="#94A3B8"
+                secureTextEntry={!showPassword}
+                value={password}
+                onChangeText={setPassword}
+              />
+              <TouchableOpacity
+                style={styles.eyeBtn}
+                onPress={() => setShowPassword(!showPassword)}
+              >
+                <Ionicons
+                  name={showPassword ? 'eye-outline' : 'eye-off-outline'}
+                  size={20}
+                  color="#64748B"
                 />
-                <TouchableOpacity onPress={() => setShowPassword(!showPassword)}>
-                  <Ionicons name={showPassword ? 'eye-outline' : 'eye-off-outline'} size={20} color={Colors.textSecondary || '#64748B'} />
+              </TouchableOpacity>
+            </View>
+
+            {/* Quên mật khẩu */}
+            <TouchableOpacity
+              style={styles.forgotBtn}
+              onPress={() => {
+                setIsLoginModalVisible(false);
+                navigation.navigate('ForgotPassword');
+              }}
+            >
+              <Text style={styles.forgotText}>Quên mật khẩu?</Text>
+            </TouchableOpacity>
+
+            {/* Nút Đăng nhập ngay (Red Pill) */}
+            <TouchableOpacity
+              style={[styles.btnSubmitLogin, isLoading && { opacity: 0.7 }]}
+              activeOpacity={0.88}
+              onPress={handleLoginAction}
+              disabled={isLoading}
+            >
+              {isLoading ? (
+                <ActivityIndicator color="#FFFFFF" size="small" />
+              ) : (
+                <Text style={styles.btnSubmitLoginText}>Đăng nhập</Text>
+              )}
+            </TouchableOpacity>
+
+            {/* Tài khoản mẫu tiện lợi cho giảng viên / chấm điểm đồ án */}
+            <View style={styles.quickFillContainer}>
+              <Text style={styles.quickFillLabel}>Tài khoản mẫu thử nghiệm (chạm để điền):</Text>
+              <View style={styles.quickFillRow}>
+                <TouchableOpacity
+                  style={styles.quickFillChip}
+                  onPress={() => handleQuickFill('0905123456', '12345678')}
+                >
+                  <Ionicons name="person-circle-outline" size={14} color="#0284C7" />
+                  <Text style={styles.quickFillChipText}>Chủ nhà (Nghĩa)</Text>
+                </TouchableOpacity>
+
+                <TouchableOpacity
+                  style={styles.quickFillChip}
+                  onPress={() => handleQuickFill('0905111222', '12345678')}
+                >
+                  <Ionicons name="medkit-outline" size={14} color="#16A34A" />
+                  <Text style={styles.quickFillChipText}>Bác sĩ Minh</Text>
                 </TouchableOpacity>
               </View>
+            </View>
 
+            {/* Chuyển sang Đăng ký */}
+            <View style={styles.switchAuthRow}>
+              <Text style={styles.switchAuthText}>Chưa có tài khoản? </Text>
               <TouchableOpacity
-                style={styles.forgotPasswordContainer}
-                onPress={() => navigation.navigate('ForgotPassword')}
+                onPress={() => {
+                  setIsLoginModalVisible(false);
+                  navigation.navigate('Register');
+                }}
               >
-                <Text style={styles.forgotPasswordText}>Quên mật khẩu?</Text>
-              </TouchableOpacity>
-
-              <TouchableOpacity style={styles.loginButton} activeOpacity={0.8} onPress={handleLoginAction}>
-                <Text style={styles.loginButtonText}>Đăng nhập</Text>
+                <Text style={styles.switchAuthLink}>Đăng ký ngay</Text>
               </TouchableOpacity>
             </View>
-          )}
-
-          <TouchableOpacity style={styles.registerLinkWrapper} onPress={() => navigation.navigate('Register')}>
-            <Text style={styles.registerLinkText}>Tạo tài khoản mới</Text>
-          </TouchableOpacity>
-
-          <View style={styles.termsContainer}>
-            <TouchableOpacity style={styles.checkbox} onPress={() => setAgreed(!agreed)} activeOpacity={0.8}>
-              {agreed && <View style={styles.checkboxInner} />}
-            </TouchableOpacity>
-            <Text style={styles.termsText}>
-              Tôi đã đọc và đồng ý với thỏa thuận quyền riêng tư{' '}
-              <Text
-                style={styles.linkText}
-                onPress={() => Alert.alert('Chính sách bảo mật', 'Hiển thị nội dung chính sách quyền riêng tư.')}
-              >
-                Chính sách bảo mật
-              </Text>
-            </Text>
           </View>
-        </ScrollView>
-      </KeyboardAvoidingView>
+        </KeyboardAvoidingView>
+      </Modal>
     </SafeAreaView>
   );
 }
@@ -199,230 +361,312 @@ const styles = StyleSheet.create({
     flex: 1,
     backgroundColor: '#FFFFFF',
   },
-  container: {
-    paddingHorizontal: 24,
-    paddingTop: 20,
-    paddingBottom: 30,
+  scrollContainer: {
     flexGrow: 1,
     justifyContent: 'space-between',
+    backgroundColor: '#FFFFFF',
+    paddingBottom: 24,
   },
-  headerSection: {
-    marginBottom: 5,
+
+  // -------------------------------------------------------------------------
+  // PHOTO COLLAGE STYLES
+  // -------------------------------------------------------------------------
+  collageContainer: {
+    width: '100%',
+    height: 380,
+    position: 'relative',
+    overflow: 'hidden',
+    backgroundColor: '#F8FAFC',
   },
-  backButton: {
-    width: 40,
-    height: 40,
-    borderRadius: 20,
+  card: {
+    position: 'absolute',
+    borderRadius: 22,
+    overflow: 'hidden',
+    backgroundColor: '#E2E8F0',
+  },
+  cardImage: {
+    width: '100%',
+    height: '100%',
+  },
+
+  // Vị trí từng card theo đúng layout Pinterest
+  cardTopLeft: {
+    top: -15,
+    left: -20,
+    width: SCREEN_WIDTH * 0.38,
+    height: 220,
+    borderRadius: 24,
+  },
+  cardTopRight: {
+    top: -25,
+    right: -25,
+    width: SCREEN_WIDTH * 0.52,
+    height: 145,
+    borderRadius: 24,
+  },
+  cardCenterHero: {
+    top: 50,
+    left: SCREEN_WIDTH * 0.22,
+    width: SCREEN_WIDTH * 0.56,
+    height: 275,
+    borderRadius: 26,
+    zIndex: 10,
+    borderWidth: 3,
+    borderColor: '#FFFFFF',
+  },
+  cardMidRight: {
+    top: 130,
+    right: -30,
+    width: SCREEN_WIDTH * 0.35,
+    height: 120,
+    borderRadius: 22,
+    zIndex: 5,
+  },
+  cardBottomLeft: {
+    bottom: -20,
+    left: -15,
+    width: SCREEN_WIDTH * 0.44,
+    height: 170,
+    borderRadius: 24,
+    zIndex: 5,
+  },
+  cardBottomRight: {
+    bottom: -15,
+    right: -20,
+    width: SCREEN_WIDTH * 0.42,
+    height: 155,
+    borderRadius: 24,
+    zIndex: 4,
+  },
+
+  // -------------------------------------------------------------------------
+  // BOTTOM SECTION & BUTTONS
+  // -------------------------------------------------------------------------
+  bottomSection: {
+    paddingHorizontal: 28,
+    paddingTop: 16,
+    alignItems: 'center',
+    backgroundColor: '#FFFFFF',
+  },
+  logoBadgeContainer: {
+    marginBottom: 14,
+  },
+  logoBadge: {
+    width: 52,
+    height: 52,
+    borderRadius: 26,
+    backgroundColor: '#E60023', // Đỏ Pinterest nhận diện thương hiệu mạnh mẽ
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+  heroTitle: {
+    fontSize: 27,
+    fontWeight: '800',
+    color: '#0F172A',
+    textAlign: 'center',
+    lineHeight: 35,
+    letterSpacing: -0.5,
+    marginBottom: 8,
+  },
+  heroSubtitle: {
+    fontSize: 13,
+    color: '#64748B',
+    textAlign: 'center',
+    lineHeight: 18,
+    marginBottom: 24,
+    paddingHorizontal: 12,
+  },
+  actionButtonsContainer: {
+    width: '100%',
+    gap: 12,
+    marginBottom: 20,
+  },
+  btnRegister: {
+    backgroundColor: '#E60023', // Đỏ đặc trưng phong cách mẫu
+    height: 52,
+    borderRadius: 26,
+    justifyContent: 'center',
+    alignItems: 'center',
+    width: '100%',
+  },
+  btnRegisterText: {
+    color: '#FFFFFF',
+    fontSize: 16,
+    fontWeight: '700',
+  },
+  btnLogin: {
+    backgroundColor: '#EFEFEF', // Xám sáng phong cách Pinterest
+    height: 52,
+    borderRadius: 26,
+    justifyContent: 'center',
+    alignItems: 'center',
+    width: '100%',
+  },
+  btnLoginText: {
+    color: '#111111',
+    fontSize: 16,
+    fontWeight: '700',
+  },
+  termsNoticeText: {
+    fontSize: 11,
+    color: '#334155',
+    textAlign: 'center',
+    lineHeight: 16,
+    paddingHorizontal: 6,
+  },
+  termsLink: {
+    fontWeight: '700',
+    color: '#0F172A',
+    textDecorationLine: 'underline',
+  },
+
+  // -------------------------------------------------------------------------
+  // MODAL BOTTOM SHEET STYLES
+  // -------------------------------------------------------------------------
+  modalOverlay: {
+    flex: 1,
+    backgroundColor: 'rgba(15, 23, 42, 0.55)',
+    justifyContent: 'flex-end',
+  },
+  modalSheet: {
+    backgroundColor: '#FFFFFF',
+    borderTopLeftRadius: 28,
+    borderTopRightRadius: 28,
+    paddingHorizontal: 24,
+    paddingTop: 12,
+    paddingBottom: Platform.OS === 'ios' ? 36 : 24,
+    width: '100%',
+  },
+  sheetHandle: {
+    width: 44,
+    height: 5,
+    borderRadius: 3,
+    backgroundColor: '#E2E8F0',
+    alignSelf: 'center',
+    marginBottom: 16,
+  },
+  sheetHeader: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'flex-start',
+    marginBottom: 20,
+  },
+  sheetTitle: {
+    fontSize: 22,
+    fontWeight: '800',
+    color: '#0F172A',
+  },
+  sheetSubtitle: {
+    fontSize: 13,
+    color: '#64748B',
+    marginTop: 3,
+  },
+  sheetCloseBtn: {
+    width: 32,
+    height: 32,
+    borderRadius: 16,
     backgroundColor: '#F1F5F9',
     justifyContent: 'center',
     alignItems: 'center',
-    marginBottom: 16,
   },
-  appIconWrapper: {
-    width: 56,
-    height: 56,
-    borderRadius: 28,
-    backgroundColor: '#FFF7ED',
-    justifyContent: 'center',
-    alignItems: 'center',
-    marginBottom: 16,
-    overflow: 'hidden',
-    borderWidth: 1,
-    borderColor: '#FED7AA',
-  },
-  appIcon: {
-    width: 42,
-    height: 42,
-    resizeMode: 'contain',
-  },
-  welcomeTitle: {                       
-    fontSize: 30,
-    fontWeight: '800',
-    color: '#0F172A',
-    lineHeight: 44,
-  },
-  countryPickerBtn: {
+  inputWrap: {
     flexDirection: 'row',
     alignItems: 'center',
-    justifyContent: 'space-between',
-    borderWidth: 1.2,
-    borderColor: '#D9E3EE',
-    borderRadius: 999,
-    height: 38,
-    width: '50%',
-    maxWidth: 420,
-    alignSelf: 'stretch',
-    marginLeft: 0,
-    marginTop: -82,
-    paddingVertical: 4,
-    paddingHorizontal: 8,
-    marginBottom: 100,
-    backgroundColor: '#F8F9FB',
-  },
-  countryLeftWrap: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    flex: 1,
-    justifyContent: 'flex-start',
-    marginLeft: 0,
-    paddingLeft: 0,
-  },
-  countryIconWrap: {
-    width: 24,
-    height: 24,
-    borderRadius: 12,
-    borderWidth: 1.5,
-    borderColor: '#0F172A',
-    alignItems: 'center',
-    justifyContent: 'center',
-    marginRight: 8,
-    backgroundColor: '#FFFFFF',
-  },
-  countryText: {
-    fontSize: 15,
-    fontWeight: '400',
-    color: '#0F172A',
-    textAlign: 'left',
-    flex: 1,
-    marginLeft: 0,
-    paddingLeft: 0,
-    lineHeight: 19,
-  },
-  methodsContainer: {
-    gap: 12,
-    marginBottom: 16,
-  },
-  authButton: {
-    height: 60,
+    backgroundColor: '#F8FAFC',
     borderWidth: 1,
     borderColor: '#E2E8F0',
-    borderRadius: 30,
-    paddingVertical: 16,
-    paddingHorizontal: 20,
-    backgroundColor: '#FFFFFF',
-    justifyContent: 'center',
-    transform: [{ translateY: -85 }],
+    borderRadius: 16,
+    paddingHorizontal: 14,
+    height: 52,
+    marginBottom: 14,
   },
-  authButtonInner: {
+  inputPrefix: {
     flexDirection: 'row',
     alignItems: 'center',
-    width: '100%',
-    paddingLeft: 4,
-    paddingRight: 4,
+    marginRight: 10,
+    gap: 4,
   },
-  authIcon: {
-    marginRight: 12,
-    width: 20,
-    textAlign: 'center',
+  prefixText: {
+    fontSize: 14,
+    fontWeight: '700',
+    color: '#334155',
   },
-  authButtonText: {
+  textInput: {
+    flex: 1,
     fontSize: 15,
-    fontWeight: '600',
     color: '#0F172A',
   },
-  formContainer: {
-    gap: 12,
+  eyeBtn: {
+    padding: 6,
+  },
+  forgotBtn: {
+    alignSelf: 'flex-end',
+    marginBottom: 16,
+    marginTop: -4,
+  },
+  forgotText: {
+    fontSize: 13,
+    fontWeight: '600',
+    color: '#E60023',
+  },
+  btnSubmitLogin: {
+    backgroundColor: '#E60023',
+    height: 52,
+    borderRadius: 26,
+    justifyContent: 'center',
+    alignItems: 'center',
+    width: '100%',
     marginBottom: 16,
   },
-  inputContainer: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    borderWidth: 1.2,
-    borderColor: '#D9E3EE',
-    borderRadius: 999,
-    height: 52,
-    width: '100%',
-    maxWidth: 760,
-    alignSelf: 'stretch',
-    marginLeft: 0,
-    marginTop: 0,
-    paddingVertical: 8,
-    paddingHorizontal: 14,
-    backgroundColor: '#FFFFFF',
-  },
-  inputIcon: {
-    marginRight: 14,
-  },
-  input: {
-    fontSize: 17,
-    color: '#0F172A',
-    flex: 1,
-    padding: 0,
-    lineHeight: 22,
-  },
-  forgotPasswordContainer: {
-    alignItems: 'flex-end',
-    width: '100%',
-    marginTop: -2,
-    marginBottom: 8,
-    paddingRight: 14,
-  },
-  forgotPasswordText: {
-    fontSize: 14,
-    color: '#2563EB',
-    fontWeight: '600',
-  },
-  loginButton: {
-    backgroundColor: '#2563EB',
-    borderRadius: 30,
-    minHeight: 58,
-    paddingVertical: 18,
-    alignItems: 'center',
-    justifyContent: 'center',
-    marginTop: 6,
-    shadowColor: '#2563EB',
-    shadowOffset: { width: 0, height: 4 },
-    shadowOpacity: 0.2,
-    shadowRadius: 8,
-    elevation: 4,
-  },
-  loginButtonText: {
+  btnSubmitLoginText: {
+    color: '#FFFFFF',
     fontSize: 16,
     fontWeight: '700',
-    color: '#FFFFFF',
   },
-  registerLinkWrapper: {
-    alignItems: 'center',
-    marginVertical: 8,
+  quickFillContainer: {
+    backgroundColor: '#F1F5F9',
+    borderRadius: 14,
+    padding: 12,
+    marginBottom: 16,
   },
-  registerLinkText: {
-    fontSize: 14,
-    fontWeight: '600',
-    color: '#D97706',
-  },
-  termsContainer: {
-    flexDirection: 'row',
-    alignItems: 'flex-start',
-    marginTop: 10,
-    paddingHorizontal: 4,
-    width: '84%',
-    alignSelf: 'center',
-  },
-  checkbox: {
-    width: 18,
-    height: 18,
-    borderRadius: 4,
-    borderWidth: 2,
-    borderColor: '#CBD5E1',
-    alignItems: 'center',
-    justifyContent: 'center',
-    marginTop: 2,
-    marginRight: 10,
-  },
-  checkboxInner: {
-    width: 9,
-    height: 9,
-    borderRadius: 2,
-    backgroundColor: '#2563EB',
-  },
-  termsText: {
-    flex: 1,
+  quickFillLabel: {
     fontSize: 11,
-    color: '#64748B',
-    lineHeight: 18,
+    fontWeight: '600',
+    color: '#475569',
+    marginBottom: 8,
   },
-  linkText: {
-    color: '#2563EB',
-    textDecorationLine: 'underline',
+  quickFillRow: {
+    flexDirection: 'row',
+    gap: 8,
+  },
+  quickFillChip: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: '#FFFFFF',
+    paddingVertical: 6,
+    paddingHorizontal: 10,
+    borderRadius: 12,
+    borderWidth: 1,
+    borderColor: '#E2E8F0',
+    gap: 5,
+  },
+  quickFillChipText: {
+    fontSize: 12,
+    fontWeight: '600',
+    color: '#0F172A',
+  },
+  switchAuthRow: {
+    flexDirection: 'row',
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+  switchAuthText: {
+    fontSize: 14,
+    color: '#64748B',
+  },
+  switchAuthLink: {
+    fontSize: 14,
+    fontWeight: '700',
+    color: '#E60023',
   },
 });
