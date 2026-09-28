@@ -26,8 +26,16 @@ def normalize_phone(phone: str) -> str:
 class CRUDUser:
 
     async def get_by_phone(self, db: AsyncSession, phone: str) -> Optional[User]:
-        result = await db.execute(select(User).where(User.phone == phone))
+        normalized = normalize_phone(phone)
+        result = await db.execute(
+            select(User).where(
+                (User.phone == phone) | 
+                (User.phone == normalized) | 
+                (User.email == phone)
+            )
+        )
         return result.scalar_one_or_none()
+
 
     async def get_by_id(self, db: AsyncSession, user_id) -> Optional[User]:
         result = await db.execute(select(User).where(User.id == user_id))

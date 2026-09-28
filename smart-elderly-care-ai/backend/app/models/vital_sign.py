@@ -29,10 +29,12 @@ class VitalSign(Base):
     )
     time: Mapped[datetime] = mapped_column(
         DateTime(timezone=True),
+        primary_key=True,
         server_default=func.now(),
         nullable=False,
         index=True,
     )
+
     device_id: Mapped[uuid.UUID] = mapped_column(
         UUID(as_uuid=True), ForeignKey("devices.id"), nullable=False, index=True
     )

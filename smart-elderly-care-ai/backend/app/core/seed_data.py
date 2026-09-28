@@ -39,7 +39,7 @@ async def seed_master_data() -> None:
                 user = User(
                     email="admin@seca.vn",
                     full_name="Nguyễn Văn Quản Trị",
-                    phone="0905123456",
+                    phone="+84905123456",
                     hashed_password=hash_password("12345678"),
                     role=UserRole.ADMIN,
                     is_active=True,
