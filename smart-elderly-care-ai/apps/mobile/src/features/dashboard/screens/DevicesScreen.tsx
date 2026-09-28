@@ -165,7 +165,11 @@ export default function DevicesScreen({ navigation }: any) {
       dev.name.toLowerCase().includes('đồng hồ');
 
     if (isCamera) {
-      navigation.navigate('CameraDetail');
+      navigation.navigate('CameraDetail', {
+        cameraId: dev.id,
+        cameraName: dev.name,
+        room: dev.location || dev.sub,
+      });
     } else if (isWatch) {
       navigation.navigate('SmartbandDetail', { device: dev });
     } else {
