@@ -19,6 +19,7 @@ import {
   Dimensions,
 } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
+import { Colors } from '../../../theme/colors';
 import { useAuthStore } from '../../../store/useVitalStore';
 import { authApi } from '../../../services/api';
 
@@ -153,7 +154,7 @@ export default function LoginScreen({ navigation }: any) {
         {/* PHẦN 2: LOGO BADGE, TIÊU ĐỀ & NÚT HÀNH ĐỘNG                       */}
         {/* ================================================================= */}
         <View style={styles.bottomSection}>
-          {/* Logo Badge hình tròn đỏ đặc trưng phong cách Pinterest */}
+          {/* Logo Badge hình tròn màu cam thương hiệu */}
           <View style={styles.logoBadgeContainer}>
             <View style={styles.logoBadge}>
               <Ionicons name="heart" size={26} color="#FFFFFF" />
@@ -170,7 +171,7 @@ export default function LoginScreen({ navigation }: any) {
 
           {/* Bộ 2 nút hành động Pill Button */}
           <View style={styles.actionButtonsContainer}>
-            {/* Nút 1: Đăng ký (Red Primary Pill) */}
+            {/* Nút 1: Đăng ký (Orange Primary Pill) */}
             <TouchableOpacity
               style={styles.btnRegister}
               activeOpacity={0.88}
@@ -301,7 +302,7 @@ export default function LoginScreen({ navigation }: any) {
               <Text style={styles.forgotText}>Quên mật khẩu?</Text>
             </TouchableOpacity>
 
-            {/* Nút Đăng nhập ngay (Red Pill) */}
+            {/* Nút Đăng nhập ngay (Orange Pill) */}
             <TouchableOpacity
               style={[styles.btnSubmitLogin, isLoading && { opacity: 0.7 }]}
               activeOpacity={0.88}
@@ -455,7 +456,7 @@ const styles = StyleSheet.create({
     width: 52,
     height: 52,
     borderRadius: 26,
-    backgroundColor: '#E60023', // Đỏ Pinterest nhận diện thương hiệu mạnh mẽ
+    backgroundColor: Colors.primary, // Cam thương hiệu đặc trưng
     justifyContent: 'center',
     alignItems: 'center',
   },
@@ -482,7 +483,7 @@ const styles = StyleSheet.create({
     marginBottom: 20,
   },
   btnRegister: {
-    backgroundColor: '#E60023', // Đỏ đặc trưng phong cách mẫu
+    backgroundColor: Colors.primary, // Cam đặc trưng thương hiệu
     height: 52,
     borderRadius: 26,
     justifyContent: 'center',
@@ -607,10 +608,10 @@ const styles = StyleSheet.create({
   forgotText: {
     fontSize: 13,
     fontWeight: '600',
-    color: '#E60023',
+    color: Colors.primary,
   },
   btnSubmitLogin: {
-    backgroundColor: '#E60023',
+    backgroundColor: Colors.primary,
     height: 52,
     borderRadius: 26,
     justifyContent: 'center',
@@ -667,6 +668,6 @@ const styles = StyleSheet.create({
   switchAuthLink: {
     fontSize: 14,
     fontWeight: '700',
-    color: '#E60023',
+    color: Colors.primary,
   },
 });
