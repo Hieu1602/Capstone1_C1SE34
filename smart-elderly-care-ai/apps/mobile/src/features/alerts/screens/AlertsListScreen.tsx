@@ -114,7 +114,7 @@ function formatFriendlyTime(dateStr: string) {
 }
 
 export default function AlertsListScreen({ navigation }: any) {
-  const { isDarkMode, colors, toggleDarkMode } = useTheme();
+  const { isDarkMode, colors } = useTheme();
   const { incidents, setIncidents } = useVitalStore();
   const [refreshing, setRefreshing] = useState(false);
   const [filterType, setFilterType] = useState<'ALL' | 'CRITICAL' | 'VITAL'>('ALL');
@@ -231,20 +231,6 @@ export default function AlertsListScreen({ navigation }: any) {
         </View>
 
         <View style={styles.headerRightActions}>
-          {/* Nút chuyển đổi Sáng / Tối */}
-          <TouchableOpacity
-            style={[styles.themeToggleBtn, isDarkMode && { backgroundColor: colors.iconBg }]}
-            onPress={toggleDarkMode}
-            activeOpacity={0.7}
-            accessibilityLabel="Chuyển chế độ Sáng/Tối"
-          >
-            <Ionicons
-              name={isDarkMode ? 'sunny-outline' : 'moon-outline'}
-              size={18}
-              color={isDarkMode ? '#F59E0B' : colors.textPrimary}
-            />
-          </TouchableOpacity>
-
           <TouchableOpacity
             style={[styles.markAllReadBtn, isDarkMode && { backgroundColor: colors.card, borderColor: colors.border }]}
             onPress={handleMarkAllAsRead}

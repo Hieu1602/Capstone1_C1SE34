@@ -6,10 +6,12 @@ import { persist, createJSONStorage, PersistOptions } from 'zustand/middleware';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { useThemeStore } from './useThemeStore';
 import {
-  houseApi,
-  deviceGroupApi,
-  devicesApi,
-} from '../services/deviceService';
+  vitalsApi,
+  systemApi,
+  remindersApi,
+  patientApi,
+  incidentsApi,
+} from '../services/api';
 
 // ---- Types ----
 export interface VitalData {
@@ -34,7 +36,66 @@ export interface Incident {
   video_clip_url: string | null;
   thumbnail_url: string | null;
   is_acknowledged: boolean;
+  acknowledged_by?: string | null;
+  acknowledged_at?: string | null;
+  note?: string | null;
   created_at: string;
+}
+
+export interface AlarmSnoozeInfo {
+  active: boolean;
+  until: number | null; // null if indefinitely until manually re-enabled
+  durationMinutes: number; // 15, 60, 120, 0
+  mode: 'VIBRATE' | 'SILENT';
+  syncAll: boolean;
+}
+
+export interface MedicalConditionItem {
+  id: string;
+  name: string;
+  severity: 'warning' | 'danger' | 'info';
+  note: string;
+}
+
+export interface PatientMedicalRecord {
+  patient_id: number;
+  name: string;
+  birth_year: string;
+  age: number;
+  gender: string;
+  blood_type: string;
+  height_cm: number;
+  weight_kg: number;
+  bmi: number;
+  security_badge: string;
+  conditions: MedicalConditionItem[];
+  drug_allergies: string;
+  food_allergies: string;
+  dietary_notes: string;
+  doctor_name: string;
+  doctor_phone: string;
+  doctor_specialty: string;
+  hospital: string;
+  next_appointment: string;
+}
+
+export interface ReminderItem {
+  id: string;
+  name: string;
+  time: string;
+  session: 'MORNING' | 'NOON' | 'EVENING' | string;
+  dose: string;
+  purpose: string;
+  taken: boolean;
+}
+
+export interface RemindersData {
+  date: string;
+  total_medications: number;
+  completed_medications: number;
+  hub_voice_reminder_enabled: boolean;
+  medications: ReminderItem[];
+  meals: Array<{ name: string; time: string; completed: boolean; note: string }>;
 }
 
 export interface Device {
@@ -99,9 +160,29 @@ interface VitalStoreState {
     immobilitySec: number;
   };
 
+  alarmSnooze: AlarmSnoozeInfo;
+  sirenActive: boolean;
+
+  patientRecord: PatientMedicalRecord | null;
+  todayReminders: RemindersData | null;
+  isLoadingVitals: boolean;
+  isLoadingMode: boolean;
+  isLoadingReminders: boolean;
+  isLoadingPatient: boolean;
+
+  fetchVitals: () => Promise<VitalData | null>;
+  fetchSystemMode: () => Promise<{ mode: string; is_mute_alarm: boolean; is_camera_privacy: boolean } | null>;
+  fetchReminders: () => Promise<RemindersData | null>;
+  fetchPatientRecord: (patientId?: number) => Promise<PatientMedicalRecord | null>;
+  fetchNotifications: () => Promise<Incident[] | null>;
+
   setVitals: (data: Partial<VitalData>) => void;
   setIncidents: (incidents: Incident[]) => void;
   addIncident: (incident: Incident) => void;
+  acknowledgeIncident: (incidentId: string, note?: string, user?: string) => void;
+  setAlarmSnooze: (snooze: Partial<AlarmSnoozeInfo>) => void;
+  cancelAlarmSnooze: () => void;
+  setSirenActive: (active: boolean) => void;
   setActiveDevice: (device: Device | null) => void;
   setConnected: (connected: boolean) => void;
   setHouseMode: (mode: 'AWAY' | 'HOME' | 'DISARM' | 'ALARM' | 'PRIVACY') => void;
@@ -225,6 +306,14 @@ const createVitalStore: StateCreator<VitalStoreState> = (set, get) => ({
     wifiStrength: 3,
     streamUrl: 'http://10.0.2.2:8080',
   },
+  alarmSnooze: {
+    active: false,
+    until: null,
+    durationMinutes: 15,
+    mode: 'VIBRATE',
+    syncAll: true,
+  },
+  sirenActive: false,
   selectedDate: '09/07',
   algoSettings: {
     maxHeartRate: 120,
@@ -233,6 +322,115 @@ const createVitalStore: StateCreator<VitalStoreState> = (set, get) => ({
     maxTemp: 37.8,
     fallAngle: 60,
     immobilitySec: 30,
+  },
+
+  patientRecord: null,
+  todayReminders: null,
+  isLoadingVitals: false,
+  isLoadingMode: false,
+  isLoadingReminders: false,
+  isLoadingPatient: false,
+
+  fetchVitals: async () => {
+    set({ isLoadingVitals: true });
+    try {
+      const res = await vitalsApi.getCurrent();
+      if (res.data) {
+        const d = res.data;
+        const updatedVitals: VitalData = {
+          heart_rate: d.heart_rate ?? 74,
+          spo2: d.spo2 ?? 98,
+          skin_temp_max: d.body_temp ?? 36.8,
+          person_count: d.person_count ?? 1,
+          fall_detected: Boolean(d.fall_detected),
+          timestamp: d.timestamp ?? Date.now(),
+          acoustic_status: d.sound ?? 'Bình thường',
+          bracelet_battery: d.bracelet_battery ?? 88,
+          bracelet_connected: true,
+          edge_hub_connected: d.edge_hub_connected ?? true,
+        };
+        set({ currentVitals: updatedVitals, isLoadingVitals: false });
+        return updatedVitals;
+      }
+    } catch (e) {
+      console.warn('fetchVitals API fallback:', e);
+    }
+    set({ isLoadingVitals: false });
+    return null;
+  },
+
+  fetchSystemMode: async () => {
+    set({ isLoadingMode: true });
+    try {
+      const res = await systemApi.getMode();
+      if (res.data) {
+        const { mode, is_mute_alarm, is_camera_privacy, mute_mode } = res.data;
+        set((state) => ({
+          house: {
+            ...state.house,
+            currentMode: (mode as any) || state.house.currentMode,
+          },
+          alarmSnooze: {
+            ...state.alarmSnooze,
+            active: Boolean(is_mute_alarm),
+            mode: (mute_mode as any) || state.alarmSnooze.mode,
+          },
+          camera: {
+            ...state.camera,
+            isSleep: Boolean(is_camera_privacy),
+          },
+          isLoadingMode: false,
+        }));
+        return res.data;
+      }
+    } catch (e) {
+      console.warn('fetchSystemMode API fallback:', e);
+    }
+    set({ isLoadingMode: false });
+    return null;
+  },
+
+  fetchReminders: async () => {
+    set({ isLoadingReminders: true });
+    try {
+      const res = await remindersApi.getToday();
+      if (res.data) {
+        set({ todayReminders: res.data, isLoadingReminders: false });
+        return res.data;
+      }
+    } catch (e) {
+      console.warn('fetchReminders API fallback:', e);
+    }
+    set({ isLoadingReminders: false });
+    return null;
+  },
+
+  fetchPatientRecord: async (patientId: number = 1) => {
+    set({ isLoadingPatient: true });
+    try {
+      const res = await patientApi.getMedicalRecord(patientId);
+      if (res.data) {
+        set({ patientRecord: res.data, isLoadingPatient: false });
+        return res.data;
+      }
+    } catch (e) {
+      console.warn('fetchPatientRecord API fallback:', e);
+    }
+    set({ isLoadingPatient: false });
+    return null;
+  },
+
+  fetchNotifications: async () => {
+    try {
+      const res = await incidentsApi.list();
+      if (res.data && Array.isArray(res.data)) {
+        set({ incidents: res.data });
+        return res.data;
+      }
+    } catch (e) {
+      console.warn('fetchNotifications API fallback:', e);
+    }
+    return null;
   },
 
   setVitals: (data: Partial<VitalData>) =>
@@ -245,7 +443,57 @@ const createVitalStore: StateCreator<VitalStoreState> = (set, get) => ({
   addIncident: (incident: Incident) =>
     set((state: VitalStoreState) => ({
       incidents: [incident, ...state.incidents].slice(0, 100),
+      sirenActive: incident.alert_level === 'CRITICAL' ? true : state.sirenActive,
     })),
+
+  acknowledgeIncident: (incidentId: string, note?: string, user: string = 'Demo User') =>
+    set((state: VitalStoreState) => {
+      const updatedIncidents = state.incidents.map((inc) => {
+        if (inc.id === incidentId) {
+          return {
+            ...inc,
+            is_acknowledged: true,
+            acknowledged_by: user,
+            acknowledged_at: new Date().toISOString(),
+            note: note ?? inc.note,
+          };
+        }
+        return inc;
+      });
+
+      const hasOtherCritical = updatedIncidents.some(
+        (inc) => !inc.is_acknowledged && (inc.alert_level === 'CRITICAL' || inc.alert_type === 'FALL_DETECTED')
+      );
+
+      return {
+        incidents: updatedIncidents,
+        sirenActive: false,
+        currentVitals: {
+          ...state.currentVitals,
+          fall_detected: hasOtherCritical ? state.currentVitals.fall_detected : false,
+          acoustic_status: hasOtherCritical ? state.currentVitals.acoustic_status : 'Bình thường',
+        },
+      };
+    }),
+
+  setAlarmSnooze: (snooze: Partial<AlarmSnoozeInfo>) =>
+    set((state: VitalStoreState) => ({
+      alarmSnooze: { ...state.alarmSnooze, ...snooze },
+      sirenActive: false,
+    })),
+
+  cancelAlarmSnooze: () =>
+    set(() => ({
+      alarmSnooze: {
+        active: false,
+        until: null,
+        durationMinutes: 15,
+        mode: 'VIBRATE',
+        syncAll: true,
+      },
+    })),
+
+  setSirenActive: (active: boolean) => set({ sirenActive: active }),
 
   setActiveDevice: (device: Device | null) => set({ activeDevice: device }),
   setConnected: (connected: boolean) => set({ isConnected: connected }),
@@ -577,78 +825,6 @@ useVitalStore.subscribe((state) => {
   }
 });
 
-// ---- Auth Store (persisted) ----
-interface AuthStoreState {
-  accessToken: string | null;
-  refreshToken: string | null;
-  userId: string | null;
-  userName: string | null;
-  userEmail: string | null;
+// ---- Auth Store (persisted & decoupled) ----
+export { useAuthStore, AuthStoreState } from './useAuthStore';
 
-  login: (access: string, refresh: string, name: string, userId: string, email?: string) => void;
-  setTokens: (access: string, refresh: string) => void;
-  setUser: (id: string, email?: string, name?: string) => void;
-  updateUserName: (name: string) => void;
-  logout: () => void;
-}
-
-type AuthSet = (
-  partial:
-    | AuthStoreState
-    | Partial<AuthStoreState>
-    | ((state: AuthStoreState) => AuthStoreState | Partial<AuthStoreState>),
-  replace?: boolean
-) => void;
-
-const createAuthStore: StateCreator<AuthStoreState, [], [['zustand/persist', AuthStoreState]]> = (
-  set: AuthSet
-) => ({
-  accessToken: null,
-  refreshToken: null,
-  userId: null,
-  userName: null,
-  userEmail: null,
-
-  login: (access: string, refresh: string, name: string, userId: string, email?: string) =>
-    set({
-      accessToken: access,
-      refreshToken: refresh,
-      userId,
-      userName: name,
-      userEmail: email ?? null,
-    }),
-
-  setTokens: (access: string, refresh: string) =>
-    set({ accessToken: access, refreshToken: refresh }),
-
-  setUser: (id: string, email?: string, name?: string) =>
-    set((state) => ({
-      userId: id,
-      userEmail: email ?? state.userEmail ?? null,
-      userName: name ?? state.userName ?? null,
-    })),
-
-  updateUserName: (name: string) =>
-    set({ userName: name }),
-
-  updateUserName: (id: string, name: string) =>
-    set({ userId: id, userName: name }),
-
-  logout: () =>
-    set({
-      accessToken: null,
-      refreshToken: null,
-      userId: null,
-      userName: null,
-      userEmail: null,
-    }),
-});
-
-const persistOptions: PersistOptions<AuthStoreState> = {
-  name: 'auth-storage',
-  storage: createJSONStorage(() => AsyncStorage),
-};
-
-export const useAuthStore = create<AuthStoreState>()(
-  persist(createAuthStore, persistOptions)
-);
