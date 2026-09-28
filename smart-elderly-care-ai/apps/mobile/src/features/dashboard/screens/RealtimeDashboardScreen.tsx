@@ -99,7 +99,7 @@ export default function RealtimeDashboardScreen() {
           />
           <VitalCard
             icon="thermometer"
-            label="Nhiệt độ da"
+            label="Nhiệt độ cơ thể"
             value={currentVitals.skin_temp_max}
             unit="°C"
             normalRange={{ min: 35, max: 38 }}

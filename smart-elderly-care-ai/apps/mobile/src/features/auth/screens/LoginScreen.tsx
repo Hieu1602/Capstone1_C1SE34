@@ -23,48 +23,37 @@ export default function LoginScreen({ navigation }: any) {
   const { login } = useAuthStore() as unknown as {
     login: (token: string, name: string, userId: string) => void;
   };
-
-  // State quản lý luồng hiển thị: 'none' (hiện danh sách nút), 'email' (nhập email), 'phone' (nhập sđt)
-  const [activeTab, setActiveTab] = useState<'none' | 'email' | 'phone'>('none');
-
-  // State lưu giá trị nhập liệu
+  const [activeTab, setActiveTab] = useState<'none' | 'phone'>('none');
   const [account, setAccount] = useState('');
   const [password, setPassword] = useState('');
   const [showPassword, setShowPassword] = useState(false);
   const [agreed, setAgreed] = useState(true);
 
   const DEMO_PASSWORD = '123456';
-  const DEMO_EMAILS = ['demo@tp-link.com', 'ngolevinh233@gmail.com'];
   const DEMO_PHONES = ['0900000000', '0382694409'];
 
-  const handleSelectMethod = (method: 'email' | 'phone') => {
-    const defaultValue = method === 'email' ? DEMO_EMAILS[0] : DEMO_PHONES[0];
-    setAccount(defaultValue);
+  const handleSelectMethod = () => {
+    setAccount(DEMO_PHONES[0]);
     setPassword(DEMO_PASSWORD);
     setAgreed(true);
     setShowPassword(false);
-    setActiveTab(method);
+    setActiveTab('phone');
   };
 
-  // Xử lý hành động đăng nhập
   const handleLoginAction = () => {
     if (!agreed) {
       setAgreed(true);
     }
 
     if (!account.trim() || !password.trim()) {
-      Alert.alert('Thiếu thông tin', `Vui lòng nhập ${activeTab === 'email' ? 'Email' : 'Số điện thoại'} và Mật khẩu.`);
+      Alert.alert('Thiếu thông tin', 'Vui lòng nhập số điện thoại và mật khẩu.');
       return;
     }
 
     const normalizedAccount = account.trim();
     const isDemoLogin =
-      (activeTab === 'email' &&
-        DEMO_EMAILS.some((email) => normalizedAccount.toLowerCase() === email.toLowerCase()) &&
-        password === DEMO_PASSWORD) ||
-      (activeTab === 'phone' &&
-        DEMO_PHONES.some((phone) => normalizedAccount === phone) &&
-        password === DEMO_PASSWORD);
+      DEMO_PHONES.some((phone) => normalizedAccount === phone) &&
+      password === DEMO_PASSWORD;
 
     if (isDemoLogin) {
       login('fake-jwt-token-demo', 'Demo User', 'demo-user-001');
@@ -73,7 +62,7 @@ export default function LoginScreen({ navigation }: any) {
 
     Alert.alert(
       'Đăng nhập thất bại',
-      `Tài khoản demo có thể dùng:\n- Email: ${DEMO_EMAILS.join(', ')}\n- SĐT: ${DEMO_PHONES.join(', ')}\n- Mật khẩu: ${DEMO_PASSWORD}`
+      `Tài khoản demo có thể dùng:\n- SĐT: ${DEMO_PHONES.join(', ')}\n- Mật khẩu: ${DEMO_PASSWORD}`
     );
   };
 
@@ -84,11 +73,9 @@ export default function LoginScreen({ navigation }: any) {
         style={{ flex: 1 }}
       >
         <ScrollView contentContainerStyle={styles.container} showsVerticalScrollIndicator={false}>
-          
-          {/* 1. Header: Biểu tượng & Tiêu đề Chào mừng */}
           <View style={styles.headerSection}>
             {activeTab !== 'none' ? (
-              <TouchableOpacity 
+              <TouchableOpacity
                 style={styles.backButton}
                 onPress={() => {
                   setActiveTab('none');
@@ -107,79 +94,48 @@ export default function LoginScreen({ navigation }: any) {
               </View>
             )}
             <Text style={styles.welcomeTitle}>
-              {activeTab === 'email' ? 'Đăng nhập Email' : activeTab === 'phone' ? 'Đăng nhập SĐT' : 'Chào mừng'}
+              {activeTab === 'phone' ? 'Đăng nhập SĐT' : 'Chào mừng'}
             </Text>
           </View>
 
-          {/* 2. Nút chọn Quốc gia / Khu vực (Chỉ hiện khi ở màn hình chính) */}
           {activeTab === 'none' && (
-            <TouchableOpacity 
+            <TouchableOpacity
               style={styles.countryPickerBtn}
               activeOpacity={0.7}
               onPress={() => Alert.alert('Khu vực', 'Đã chọn: Vietnam (+84)')}
             >
-              <View style={{ flexDirection: 'row', alignItems: 'center' }}>
-                <Ionicons name="globe-outline" size={20} color={Colors.textPrimary || '#0F172A'} style={{ marginRight: 8 }} />
+              <View style={styles.countryLeftWrap}>
+                <View style={styles.countryIconWrap}>
+                  <Ionicons name="globe-outline" size={15} color={Colors.textPrimary || '#0F172A'} />
+                </View>
                 <Text style={styles.countryText}>Vietnam</Text>
               </View>
-              <Ionicons name="chevron-forward" size={18} color={Colors.textSecondary || '#64748B'} />
+              <Ionicons name="chevron-forward" size={15} color={Colors.textSecondary || '#64748B'} />
             </TouchableOpacity>
           )}
 
-          {/* 3. Hiển thị tương ứng dựa vào lựa chọn của người dùng */}
           {activeTab === 'none' ? (
-            /* --- GIAO DIỆN 1: Hiển thị các nút chọn phương thức --- */
             <View style={styles.methodsContainer}>
-              <TouchableOpacity 
-                style={styles.authButton} 
+              <TouchableOpacity
+                style={styles.authButton}
                 activeOpacity={0.7}
-                onPress={() => handleSelectMethod('email')}
-              >
-                <View style={styles.authButtonInner}>
-                  <Ionicons name="mail-outline" size={20} color={Colors.textPrimary || '#0F172A'} style={styles.authIcon} />
-                  <Text style={styles.authButtonText}>Email</Text>
-                </View>
-              </TouchableOpacity>
-
-              <TouchableOpacity 
-                style={styles.authButton} 
-                activeOpacity={0.7}
-                onPress={() => handleSelectMethod('phone')}
+                onPress={handleSelectMethod}
               >
                 <View style={styles.authButtonInner}>
                   <Ionicons name="phone-portrait-outline" size={20} color={Colors.textPrimary || '#0F172A'} style={styles.authIcon} />
                   <Text style={styles.authButtonText}>Số điện thoại</Text>
                 </View>
               </TouchableOpacity>
-
-              <TouchableOpacity
-                style={styles.googleLoginButton}
-                onPress={() => Alert.alert('Thông báo', 'Đăng nhập Google đang phát triển')}
-                activeOpacity={0.8}
-              >
-                <View style={styles.googleInnerRow}>
-                  <View style={styles.googleIconWrap}>
-                    <Ionicons name="logo-google" size={20} color="#EA4335" />
-                  </View>
-                  <Text style={styles.googleButtonText}>Đăng nhập Google</Text>
-                </View>
-              </TouchableOpacity>
             </View>
           ) : (
-            /* --- GIAO DIỆN 2: Khung nhập Email/SĐT và Mật khẩu tương ứng --- */
             <View style={styles.formContainer}>
               <View style={styles.inputContainer}>
-                <Ionicons 
-                  name={activeTab === 'email' ? "mail-outline" : "phone-portrait-outline"} 
-                  size={20} 
-                  color={Colors.textSecondary || '#64748B'} 
-                  style={styles.inputIcon} 
-                />
+                <Ionicons name="phone-portrait-outline" size={22} color={Colors.textSecondary || '#64748B'} style={styles.inputIcon} />
                 <TextInput
                   style={styles.input}
-                  placeholder={activeTab === 'email' ? "Nhập địa chỉ Email" : "Nhập số điện thoại"}
+                  placeholder="Nhập số điện thoại"
                   placeholderTextColor="#94A3B8"
-                  keyboardType={activeTab === 'email' ? 'email-address' : 'phone-pad'}
+                  keyboardType="phone-pad"
                   value={account}
                   onChangeText={setAccount}
                   autoCapitalize="none"
@@ -187,7 +143,7 @@ export default function LoginScreen({ navigation }: any) {
               </View>
 
               <View style={styles.inputContainer}>
-                <Ionicons name="lock-closed-outline" size={20} color={Colors.textSecondary || '#64748B'} style={styles.inputIcon} />
+                <Ionicons name="lock-closed-outline" size={22} color={Colors.textSecondary || '#64748B'} style={styles.inputIcon} />
                 <TextInput
                   style={[styles.input, { flex: 1 }]}
                   placeholder="Nhập mật khẩu"
@@ -197,53 +153,34 @@ export default function LoginScreen({ navigation }: any) {
                   onChangeText={setPassword}
                 />
                 <TouchableOpacity onPress={() => setShowPassword(!showPassword)}>
-                  <Ionicons
-                    name={showPassword ? "eye-outline" : "eye-off-outline"}
-                    size={20}
-                    color={Colors.textSecondary || '#64748B'}
-                  />
+                  <Ionicons name={showPassword ? 'eye-outline' : 'eye-off-outline'} size={20} color={Colors.textSecondary || '#64748B'} />
                 </TouchableOpacity>
               </View>
 
-              {/* Dòng Quên mật khẩu căn lề phải */}
-              <TouchableOpacity 
+              <TouchableOpacity
                 style={styles.forgotPasswordContainer}
                 onPress={() => navigation.navigate('ForgotPassword')}
               >
                 <Text style={styles.forgotPasswordText}>Quên mật khẩu?</Text>
               </TouchableOpacity>
 
-              {/* Nút Đăng nhập chính */}
-              <TouchableOpacity 
-                style={styles.loginButton} 
-                activeOpacity={0.8}
-                onPress={handleLoginAction}
-              >
+              <TouchableOpacity style={styles.loginButton} activeOpacity={0.8} onPress={handleLoginAction}>
                 <Text style={styles.loginButtonText}>Đăng nhập</Text>
               </TouchableOpacity>
             </View>
           )}
 
-          {/* 4. Link: Tạo tài khoản mới */}
-          <TouchableOpacity 
-            style={styles.registerLinkWrapper}
-            onPress={() => navigation.navigate('Register')}
-          >
+          <TouchableOpacity style={styles.registerLinkWrapper} onPress={() => navigation.navigate('Register')}>
             <Text style={styles.registerLinkText}>Tạo tài khoản mới</Text>
           </TouchableOpacity>
 
-          {/* 5. Checkbox Đồng ý điều khoản */}
           <View style={styles.termsContainer}>
-            <TouchableOpacity 
-              style={styles.checkbox} 
-              onPress={() => setAgreed(!agreed)}
-              activeOpacity={0.8}
-            >
+            <TouchableOpacity style={styles.checkbox} onPress={() => setAgreed(!agreed)} activeOpacity={0.8}>
               {agreed && <View style={styles.checkboxInner} />}
             </TouchableOpacity>
             <Text style={styles.termsText}>
               Tôi đã đọc và đồng ý với thỏa thuận quyền riêng tư{' '}
-              <Text 
+              <Text
                 style={styles.linkText}
                 onPress={() => Alert.alert('Chính sách bảo mật', 'Hiển thị nội dung chính sách quyền riêng tư.')}
               >
@@ -251,7 +188,6 @@ export default function LoginScreen({ navigation }: any) {
               </Text>
             </Text>
           </View>
-
         </ScrollView>
       </KeyboardAvoidingView>
     </SafeAreaView>
@@ -271,7 +207,7 @@ const styles = StyleSheet.create({
     justifyContent: 'space-between',
   },
   headerSection: {
-    marginBottom: 20,
+    marginBottom: 5,
   },
   backButton: {
     width: 40,
@@ -297,27 +233,58 @@ const styles = StyleSheet.create({
     height: 32,
     resizeMode: 'contain',
   },
-  welcomeTitle: {
-    fontSize: 32,
+  welcomeTitle: {                       
+    fontSize: 30,
     fontWeight: '800',
     color: '#0F172A',
+    lineHeight: 44,
   },
   countryPickerBtn: {
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'space-between',
-    borderWidth: 1,
-    borderColor: '#E2E8F0',
-    borderRadius: 30,
-    paddingVertical: 14,
-    paddingHorizontal: 20,
-    marginBottom: 16,
-    backgroundColor: '#FAFAFA',
+    borderWidth: 1.2,
+    borderColor: '#D9E3EE',
+    borderRadius: 999,
+    height: 38,
+    width: '50%',
+    maxWidth: 420,
+    alignSelf: 'stretch',
+    marginLeft: 0,
+    marginTop: -82,
+    paddingVertical: 4,
+    paddingHorizontal: 8,
+    marginBottom: 100,
+    backgroundColor: '#F8F9FB',
+  },
+  countryLeftWrap: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    flex: 1,
+    justifyContent: 'flex-start',
+    marginLeft: 0,
+    paddingLeft: 0,
+  },
+  countryIconWrap: {
+    width: 24,
+    height: 24,
+    borderRadius: 12,
+    borderWidth: 1.5,
+    borderColor: '#0F172A',
+    alignItems: 'center',
+    justifyContent: 'center',
+    marginRight: 8,
+    backgroundColor: '#FFFFFF',
   },
   countryText: {
     fontSize: 15,
-    fontWeight: '600',
+    fontWeight: '400',
     color: '#0F172A',
+    textAlign: 'left',
+    flex: 1,
+    marginLeft: 0,
+    paddingLeft: 0,
+    lineHeight: 19,
   },
   methodsContainer: {
     gap: 12,
@@ -332,6 +299,7 @@ const styles = StyleSheet.create({
     paddingHorizontal: 20,
     backgroundColor: '#FFFFFF',
     justifyContent: 'center',
+    transform: [{ translateY: -85 }],
   },
   authButtonInner: {
     flexDirection: 'row',
@@ -357,27 +325,35 @@ const styles = StyleSheet.create({
   inputContainer: {
     flexDirection: 'row',
     alignItems: 'center',
-    borderWidth: 1,
-    borderColor: '#E2E8F0',
-    borderRadius: 30,
-    paddingVertical: 14,
-    paddingHorizontal: 20,
+    borderWidth: 1.2,
+    borderColor: '#D9E3EE',
+    borderRadius: 999,
+    height: 52,
+    width: '100%',
+    maxWidth: 760,
+    alignSelf: 'stretch',
+    marginLeft: 0,
+    marginTop: 0,
+    paddingVertical: 8,
+    paddingHorizontal: 14,
     backgroundColor: '#FFFFFF',
   },
   inputIcon: {
-    marginRight: 12,
+    marginRight: 14,
   },
   input: {
-    fontSize: 15,
+    fontSize: 17,
     color: '#0F172A',
     flex: 1,
     padding: 0,
+    lineHeight: 22,
   },
   forgotPasswordContainer: {
     alignItems: 'flex-end',
-    marginTop: -4,
-    marginBottom: 4,
-    paddingRight: 4,
+    width: '100%',
+    marginTop: -2,
+    marginBottom: 8,
+    paddingRight: 14,
   },
   forgotPasswordText: {
     fontSize: 14,
@@ -387,7 +363,8 @@ const styles = StyleSheet.create({
   loginButton: {
     backgroundColor: '#2563EB',
     borderRadius: 30,
-    paddingVertical: 16,
+    minHeight: 58,
+    paddingVertical: 18,
     alignItems: 'center',
     justifyContent: 'center',
     marginTop: 6,
@@ -407,50 +384,21 @@ const styles = StyleSheet.create({
     marginVertical: 8,
   },
   registerLinkText: {
-    fontSize: 15,
+    fontSize: 14,
     fontWeight: '600',
     color: '#D97706',
-  },
-  googleLoginButton: {
-    height: 60,
-    borderRadius: 30,
-    borderWidth: 1,
-    borderColor: '#E2E8F0',
-    backgroundColor: '#FFFFFF',
-    paddingVertical: 14,
-    paddingHorizontal: 18,
-    justifyContent: 'center',
-  },
-  googleInnerRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    width: '100%',
-    paddingLeft: 4,
-    paddingRight: 4,
-  },
-  googleIconWrap: {
-    width: 28,
-    height: 28,
-    borderRadius: 14,
-    backgroundColor: '#F8FAFC',
-    alignItems: 'center',
-    justifyContent: 'center',
-    marginRight: 12,
-  },
-  googleButtonText: {
-    fontSize: 15,
-    fontWeight: '600',
-    color: '#0F172A',
   },
   termsContainer: {
     flexDirection: 'row',
     alignItems: 'flex-start',
     marginTop: 10,
     paddingHorizontal: 4,
+    width: '84%',
+    alignSelf: 'center',
   },
   checkbox: {
-    width: 20,
-    height: 20,
+    width: 18,
+    height: 18,
     borderRadius: 4,
     borderWidth: 2,
     borderColor: '#CBD5E1',
@@ -460,14 +408,14 @@ const styles = StyleSheet.create({
     marginRight: 10,
   },
   checkboxInner: {
-    width: 10,
-    height: 10,
+    width: 9,
+    height: 9,
     borderRadius: 2,
     backgroundColor: '#2563EB',
   },
   termsText: {
     flex: 1,
-    fontSize: 12,
+    fontSize: 11,
     color: '#64748B',
     lineHeight: 18,
   },

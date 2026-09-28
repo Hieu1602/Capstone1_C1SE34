@@ -23,6 +23,7 @@ import { Ionicons, MaterialCommunityIcons } from '@expo/vector-icons';
 import Svg, { Path, Circle, Ellipse, Polygon } from 'react-native-svg';
 import { Colors, Shadows } from '../../../theme/colors';
 import { useVitalStore } from '../../../store/useVitalStore';
+import { useTheme } from '../../../store/useThemeStore';
 
 // Safe dynamic require for video modules
 let NativeVideo: any = null;
@@ -715,15 +716,15 @@ export default function CameraDetailScreen({ navigation, route }: any) {
   };
 
   return (
-    <SafeAreaView style={styles.safeArea} edges={['top', 'bottom']}>
+    <SafeAreaView style={[styles.safeArea, isDarkMode && { backgroundColor: colors.background }]} edges={['top', 'bottom']}>
       {/* ═══ 1. HEADER ═══ */}
-      <View style={styles.header}>
+      <View style={[styles.header, isDarkMode && { backgroundColor: colors.background, borderBottomColor: colors.border }]}>
         <TouchableOpacity
           style={styles.headerBackBtn}
           onPress={() => navigation.goBack()}
           activeOpacity={0.7}
         >
-          <Ionicons name="chevron-back" size={26} color="#0F172A" />
+          <Ionicons name="chevron-back" size={26} color={isDarkMode ? colors.textPrimary : '#0F172A'} />
         </TouchableOpacity>
 
         <Text style={styles.headerTitle} numberOfLines={1}>
@@ -1815,21 +1816,21 @@ export default function CameraDetailScreen({ navigation, route }: any) {
       {/* ═══ MODAL: SETTINGS ═══ */}
       <Modal visible={showSettingsModal} transparent animationType="slide">
         <View style={styles.settingsOverlay}>
-          <View style={styles.settingsCard}>
+          <View style={[styles.settingsCard, isDarkMode && { backgroundColor: colors.card, borderColor: colors.border, borderWidth: 1 }]}>
             <View style={styles.settingsHeader}>
-              <Text style={styles.settingsTitle}>Cài Đặt Camera</Text>
+              <Text style={[styles.settingsTitle, isDarkMode && { color: colors.textPrimary }]}>Cài Đặt Camera</Text>
               <TouchableOpacity onPress={() => setShowSettingsModal(false)}>
-                <Ionicons name="close-circle" size={28} color="#94A3B8" />
+                <Ionicons name="close-circle" size={28} color={isDarkMode ? colors.textMuted : '#94A3B8'} />
               </TouchableOpacity>
             </View>
 
-            <View style={styles.settingsCamInfo}>
-              <View style={styles.settingsCamIcon}>
-                <Ionicons name="camera-outline" size={22} color="#1E293B" />
+            <View style={[styles.settingsCamInfo, isDarkMode && { backgroundColor: colors.background, borderColor: colors.border, borderWidth: 1 }]}>
+              <View style={[styles.settingsCamIcon, isDarkMode && { backgroundColor: colors.card }]}>
+                <Ionicons name="camera-outline" size={22} color={isDarkMode ? colors.textPrimary : '#1E293B'} />
               </View>
               <View style={{ flex: 1, marginLeft: 12 }}>
-                <Text style={styles.settingsCamName}>{camera.name}</Text>
-                <Text style={styles.settingsCamRoom}>{camera.room} • Imou Ranger 2C</Text>
+                <Text style={[styles.settingsCamName, isDarkMode && { color: colors.textPrimary }]}>{camera.name}</Text>
+                <Text style={[styles.settingsCamRoom, isDarkMode && { color: colors.textSecondary }]}>{camera.room} • Imou Ranger 2C</Text>
               </View>
               <View style={[styles.onlinePill, !camera.isOnline && { backgroundColor: '#FEE2E2' }]}>
                 <View style={[styles.onlineDot, !camera.isOnline && { backgroundColor: '#EF4444' }]} />
@@ -1839,17 +1840,17 @@ export default function CameraDetailScreen({ navigation, route }: any) {
               </View>
             </View>
 
-            <View style={styles.settingsDivider} />
+            <View style={[styles.settingsDivider, isDarkMode && { backgroundColor: colors.border }]} />
 
             {/* Toggle: Privacy */}
             <TouchableOpacity style={styles.settingsRow} onPress={toggleCameraSleep} activeOpacity={0.7}>
               <View style={styles.settingsRowLeft}>
-                <View style={styles.settingsIconBox}>
-                  <Ionicons name="eye-off-outline" size={20} color="#1E293B" />
+                <View style={[styles.settingsIconBox, isDarkMode && { backgroundColor: colors.background }]}>
+                  <Ionicons name="eye-off-outline" size={20} color={isDarkMode ? colors.textPrimary : '#1E293B'} />
                 </View>
                 <View style={{ marginLeft: 12 }}>
-                  <Text style={styles.settingsRowTitle}>Chế Độ Riêng Tư</Text>
-                  <Text style={styles.settingsRowSub}>Cụp ống kính, tắt luồng video</Text>
+                  <Text style={[styles.settingsRowTitle, isDarkMode && { color: colors.textPrimary }]}>Chế Độ Riêng Tư</Text>
+                  <Text style={[styles.settingsRowSub, isDarkMode && { color: colors.textSecondary }]}>Cụp ống kính, tắt luồng video</Text>
                 </View>
               </View>
               <View style={[styles.toggle, camera.isSleep && styles.toggleOn]}>
@@ -1860,12 +1861,12 @@ export default function CameraDetailScreen({ navigation, route }: any) {
             {/* Toggle: AI Protect */}
             <TouchableOpacity style={styles.settingsRow} onPress={toggleCameraAIProtect} activeOpacity={0.7}>
               <View style={styles.settingsRowLeft}>
-                <View style={styles.settingsIconBox}>
-                  <Ionicons name="shield-checkmark-outline" size={20} color="#1E293B" />
+                <View style={[styles.settingsIconBox, isDarkMode && { backgroundColor: colors.background }]}>
+                  <Ionicons name="shield-checkmark-outline" size={20} color={isDarkMode ? colors.textPrimary : '#1E293B'} />
                 </View>
                 <View style={{ marginLeft: 12 }}>
-                  <Text style={styles.settingsRowTitle}>AI Protect (YOLO-Pose)</Text>
-                  <Text style={styles.settingsRowSub}>Nhận dạng tư thế & phát hiện té ngã</Text>
+                  <Text style={[styles.settingsRowTitle, isDarkMode && { color: colors.textPrimary }]}>AI Protect (YOLO-Pose)</Text>
+                  <Text style={[styles.settingsRowSub, isDarkMode && { color: colors.textSecondary }]}>Nhận dạng tư thế & phát hiện té ngã</Text>
                 </View>
               </View>
               <View style={[styles.toggle, camera.isAIProtect && styles.toggleOn]}>
@@ -1876,12 +1877,12 @@ export default function CameraDetailScreen({ navigation, route }: any) {
             {/* Toggle: Smart Tracking (Control) */}
             <TouchableOpacity style={styles.settingsRow} onPress={() => setSmartTracking(!smartTracking)} activeOpacity={0.7}>
               <View style={styles.settingsRowLeft}>
-                <View style={styles.settingsIconBox}>
-                  <Ionicons name="person-outline" size={20} color="#1E293B" />
+                <View style={[styles.settingsIconBox, isDarkMode && { backgroundColor: colors.background }]}>
+                  <Ionicons name="person-outline" size={20} color={isDarkMode ? colors.textPrimary : '#1E293B'} />
                 </View>
                 <View style={{ marginLeft: 12 }}>
-                  <Text style={styles.settingsRowTitle}>Smart Tracking (Theo Dõi Đối Tượng)</Text>
-                  <Text style={styles.settingsRowSub}>Tự động xoay PTZ 355° bám sát người</Text>
+                  <Text style={[styles.settingsRowTitle, isDarkMode && { color: colors.textPrimary }]}>Smart Tracking (Theo Dõi Đối Tượng)</Text>
+                  <Text style={[styles.settingsRowSub, isDarkMode && { color: colors.textSecondary }]}>Tự động xoay PTZ 355° bám sát người</Text>
                 </View>
               </View>
               <View style={[styles.toggle, smartTracking && styles.toggleOn]}>
@@ -1910,10 +1911,10 @@ export default function CameraDetailScreen({ navigation, route }: any) {
               <Ionicons name="chevron-forward" size={18} color="#94A3B8" />
             </TouchableOpacity>
 
-            <View style={styles.settingsDivider} />
+            <View style={[styles.settingsDivider, isDarkMode && { backgroundColor: colors.border }]} />
 
             {/* Resolution */}
-            <Text style={styles.settingsLabel}>Độ Phân Giải</Text>
+            <Text style={[styles.settingsLabel, isDarkMode && { color: colors.textPrimary }]}>Độ Phân Giải</Text>
             <View style={styles.resRow}>
               {(['HD', 'BASIC'] as const).map((res) => {
                 const active = camera.resolution === res;
@@ -1926,24 +1927,24 @@ export default function CameraDetailScreen({ navigation, route }: any) {
                       showPtzFeedback(`Đã chuyển độ phân giải sang ${res}`);
                     }}
                   >
-                    <Text style={[styles.resChipText, active && styles.resChipTextActive]}>{res}</Text>
+                    <Text style={[styles.resChipText, isDarkMode && { color: colors.textSecondary }, active && styles.resChipTextActive]}>{res}</Text>
                   </TouchableOpacity>
                 );
               })}
             </View>
 
             {/* Hardware */}
-            <View style={styles.hwBox}>
-              <View style={styles.hwRow}>
-                <Text style={styles.hwKey}>Bộ đệm RAM</Text>
-                <Text style={styles.hwVal}>5 giây (FR08)</Text>
+            <View style={[styles.hwBox, isDarkMode && { backgroundColor: colors.background, borderColor: colors.border, borderWidth: 1 }]}>
+              <View style={[styles.hwRow, isDarkMode && { borderBottomColor: colors.border }]}>
+                <Text style={[styles.hwKey, isDarkMode && { color: colors.textSecondary }]}>Bộ đệm RAM</Text>
+                <Text style={[styles.hwVal, isDarkMode && { color: colors.textPrimary }]}>5 giây (FR08)</Text>
               </View>
-              <View style={styles.hwRow}>
-                <Text style={styles.hwKey}>Mã thiết bị</Text>
-                <Text style={styles.hwVal}>{camera.id}</Text>
+              <View style={[styles.hwRow, isDarkMode && { borderBottomColor: colors.border }]}>
+                <Text style={[styles.hwKey, isDarkMode && { color: colors.textSecondary }]}>Mã thiết bị</Text>
+                <Text style={[styles.hwVal, isDarkMode && { color: colors.textPrimary }]}>{camera.id}</Text>
               </View>
               <View style={[styles.hwRow, { borderBottomWidth: 0 }]}>
-                <Text style={styles.hwKey}>Stream URL</Text>
+                <Text style={[styles.hwKey, isDarkMode && { color: colors.textSecondary }]}>Stream URL</Text>
                 <Text style={[styles.hwVal, { color: '#0284C7' }]}>{camera.streamUrl}</Text>
               </View>
             </View>

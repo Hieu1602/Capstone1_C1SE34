@@ -250,6 +250,14 @@ export default function AddDeviceScreen({ navigation }: any) {
     }
   };
 
+  const handleExit = () => {
+    if (navigation.canGoBack?.()) {
+      navigation.goBack();
+    } else {
+      navigation.navigate('Main');
+    }
+  };
+
   // -------------------------------------------------------------
   // LOGIC NHÁNH WI-FI AP (Camera)
   // -------------------------------------------------------------
@@ -671,7 +679,13 @@ export default function AddDeviceScreen({ navigation }: any) {
             {currentStep === 'SETUP_SUCCESS' && 'Hoàn tất cấu hình'}
           </Text>
         </View>
-        <View style={{ width: 38 }} />
+        <TouchableOpacity
+          style={styles.closeButton}
+          onPress={handleExit}
+          activeOpacity={0.7}
+        >
+          <Ionicons name="close" size={24} color="#1E293B" />
+        </TouchableOpacity>
       </View>
 
       {/* Tiến trình trực quan (Step Tracker Bar) */}
@@ -752,29 +766,6 @@ export default function AddDeviceScreen({ navigation }: any) {
                 </View>
                 <Text style={styles.categoryDesc}>
                   Vòng đeo tay y tế, cảm biến quang PPG đo nhịp tim, SpO₂ và gia tốc kế cảnh báo va đập.
-                </Text>
-              </View>
-              <Ionicons name="chevron-forward" size={20} color="#94A3B8" />
-            </TouchableOpacity>
-
-            {/* Option 3: Khác */}
-            <TouchableOpacity
-              style={styles.categoryCard}
-              onPress={() => setCurrentStep('OTHER_LIST')}
-              activeOpacity={0.8}
-            >
-              <View style={[styles.categoryIconBox, { backgroundColor: '#F5F3FF' }]}>
-                <Ionicons name="hardware-chip" size={30} color="#7C3AED" />
-              </View>
-              <View style={styles.categoryInfo}>
-                <View style={styles.categoryBadgeRow}>
-                  <Text style={styles.categoryName}>Thiết bị khác (IoT Hub)</Text>
-                  <View style={[styles.protoBadge, { backgroundColor: '#EDE9FE' }]}>
-                    <Text style={[styles.protoBadgeText, { color: '#6D28D9' }]}>GATEWAY</Text>
-                  </View>
-                </View>
-                <Text style={styles.categoryDesc}>
-                  Cảm biến hồng ngoại AMG8833, Micro AI YAMNet, Loa nhắc nhở tiếng Việt, Nút bấm SOS.
                 </Text>
               </View>
               <Ionicons name="chevron-forward" size={20} color="#94A3B8" />
@@ -1962,6 +1953,14 @@ const styles = StyleSheet.create({
     borderBottomColor: '#F1F5F9',
   },
   backButton: {
+    width: 38,
+    height: 38,
+    borderRadius: 19,
+    backgroundColor: '#F1F5F9',
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  closeButton: {
     width: 38,
     height: 38,
     borderRadius: 19,
