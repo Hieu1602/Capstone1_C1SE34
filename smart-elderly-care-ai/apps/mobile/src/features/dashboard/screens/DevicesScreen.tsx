@@ -30,8 +30,14 @@ export default function DevicesScreen({ navigation }: any) {
     deviceGroups,
     updateDeviceGroup,
     removeDeviceGroup,
+    syncAllWithBackend,
   } = useVitalStore();
-  const groups = deviceGroups || ['Phòng khách', 'Phòng ngủ', 'Nhà tắm & Cửa'];
+  const groups = deviceGroups || ['Phòng khách', 'Phòng ngủ'];
+
+  // Đồng bộ danh sách thiết bị và nhóm từ Backend khi mở màn hình
+  useEffect(() => {
+    syncAllWithBackend?.();
+  }, []);
 
   // State menu thả xuống khi bấm dấu cộng (+)
   const [showAddMenu, setShowAddMenu] = useState(false);
@@ -356,16 +362,19 @@ export default function DevicesScreen({ navigation }: any) {
         <Text style={[styles.sectionSubtitle, isDarkMode && { color: colors.textSecondary }]}>
           {activeTab === 'Nhóm'
             ? 'Danh sách các nhóm khu vực đã thiết lập trong nhà'
-            : 'Hệ sinh thái giám sát đa phương thức (Multimodal Sensor Fusion)'}
+            : 'Danh sách thiết bị giám sát an toàn & sức khỏe trong nhà'}
         </Text>
 
         {activeTab === 'Nhóm' ? (
           <View style={styles.groupViewSection}>
-            {/* Thanh tiêu đề & nút tạo nhóm mới */}
             <View style={[styles.groupHeaderBar, isDarkMode && { backgroundColor: colors.card, borderColor: colors.border }]}>
-              <View>
-                <Text style={[styles.groupHeaderTitle, isDarkMode && { color: colors.textPrimary }]}>Phân vùng thiết bị theo nhóm</Text>
-                <Text style={[styles.groupHeaderSub, isDarkMode && { color: colors.textSecondary }]}>{groups.length} nhóm khu vực trong nhà</Text>
+              <View style={styles.groupHeaderLeft}>
+                <Text style={[styles.groupHeaderTitle, isDarkMode && { color: colors.textPrimary }]} numberOfLines={1}>
+                  Phân vùng theo nhóm
+                </Text>
+                <Text style={[styles.groupHeaderSub, isDarkMode && { color: colors.textSecondary }]} numberOfLines={1}>
+                  {groups.length} nhóm khu vực trong nhà
+                </Text>
               </View>
               <TouchableOpacity
                 style={styles.createGroupHeaderBtn}
@@ -1540,12 +1549,17 @@ const styles = StyleSheet.create({
     justifyContent: 'space-between',
     backgroundColor: '#FFF',
     paddingHorizontal: 16,
-    paddingVertical: 14,
+    paddingVertical: 12,
     borderRadius: 16,
     borderWidth: 1,
     borderColor: '#E2E8F0',
     marginBottom: 8,
+    gap: 10,
     ...Shadows.card,
+  },
+  groupHeaderLeft: {
+    flex: 1,
+    marginRight: 8,
   },
   groupHeaderTitle: {
     fontSize: 15,
@@ -1561,10 +1575,11 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     alignItems: 'center',
     backgroundColor: '#7C3AED',
-    paddingHorizontal: 14,
+    paddingHorizontal: 12,
     paddingVertical: 8,
     borderRadius: 10,
     gap: 4,
+    flexShrink: 0,
   },
   createGroupHeaderBtnText: {
     fontSize: 13,

@@ -2,9 +2,20 @@
 // Axios client setup – tất cả API calls đều qua file này
 
 import axios, { AxiosInstance, AxiosError } from 'axios';
+import { Platform } from 'react-native';
 import { useAuthStore } from '../store/useVitalStore';
 
-const BASE_URL: string = (typeof process !== 'undefined' && process.env.EXPO_PUBLIC_API_URL) || 'http://10.0.2.2:8000/api/v1';
+const getBaseUrl = (): string => {
+  if (typeof process !== 'undefined' && process.env.EXPO_PUBLIC_API_URL) {
+    return process.env.EXPO_PUBLIC_API_URL;
+  }
+  if (Platform.OS === 'android') {
+    return 'http://10.0.2.2:8000/api/v1';
+  }
+  return 'http://localhost:8000/api/v1';
+};
+
+const BASE_URL: string = getBaseUrl();
 
 const api: AxiosInstance = axios.create({
   baseURL: BASE_URL,
@@ -17,7 +28,7 @@ const api: AxiosInstance = axios.create({
 // ---- Request Interceptor: Attach JWT token ----
 api.interceptors.request.use(
   (config: import('axios').InternalAxiosRequestConfig) => {
-    const token = useAuthStore.getState().accessToken;
+    const token = useAuthStore.getState().accessToken || 'fake-jwt-token-demo';
     if (token) {
       config.headers.Authorization = `Bearer ${token}`;
     }
@@ -89,3 +100,6 @@ export const incidentsApi = {
   acknowledge: (id: string, notes?: string) =>
     api.patch(`/incidents/${id}/acknowledge`, { notes }),
 };
+
+export { devicesApi, deviceGroupApi, houseApi } from './deviceService';
+

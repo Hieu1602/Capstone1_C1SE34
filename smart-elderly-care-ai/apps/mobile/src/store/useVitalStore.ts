@@ -5,6 +5,11 @@ import { create, StateCreator } from 'zustand';
 import { persist, createJSONStorage, PersistOptions } from 'zustand/middleware';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { useThemeStore } from './useThemeStore';
+import {
+  houseApi,
+  deviceGroupApi,
+  devicesApi,
+} from '../services/deviceService';
 
 // ---- Types ----
 export interface VitalData {
@@ -107,6 +112,7 @@ interface VitalStoreState {
   setSelectedDate: (date: string) => void;
   updateAlgoSettings: (settings: Partial<VitalStoreState['algoSettings']>) => void;
   addIoTDevice: (device: IoTDeviceItem) => void;
+  removeIoTDevice: (deviceId: string) => void;
   addDeviceGroup: (groupName: string) => void;
   updateDeviceGroup: (oldName: string, newName: string, deviceIds?: string[]) => void;
   removeDeviceGroup: (groupName: string) => void;
@@ -114,17 +120,16 @@ interface VitalStoreState {
   isDarkMode: boolean;
   toggleDarkMode: () => void;
   setDarkMode: (isDark: boolean) => void;
+
+  // Backend Sync State & Actions
+  isLoadingDevices: boolean;
+  fetchHouseFromBackend: () => Promise<void>;
+  fetchGroupsFromBackend: () => Promise<void>;
+  fetchDevicesFromBackend: () => Promise<void>;
+  syncAllWithBackend: () => Promise<void>;
 }
 
-type VitalSet = (
-  partial:
-    | VitalStoreState
-    | Partial<VitalStoreState>
-    | ((state: VitalStoreState) => VitalStoreState | Partial<VitalStoreState>),
-  replace?: boolean
-) => void;
-
-const createVitalStore: StateCreator<VitalStoreState> = (set: VitalSet) => ({
+const createVitalStore: StateCreator<VitalStoreState> = (set, get) => ({
   currentVitals: {
     heart_rate: 74,
     spo2: 98,
@@ -209,9 +214,9 @@ const createVitalStore: StateCreator<VitalStoreState> = (set: VitalSet) => ({
     currentMode: 'HOME',
   },
   camera: {
-    id: 'cam-ranger-2c',
-    name: 'Camera Phòng Ngủ - Hub #01',
-    room: 'Phòng ngủ',
+    id: 'SECA_001',
+    name: 'Camera Góc Rộng AI - SECA_001',
+    room: 'Phòng khách',
     isOnline: true,
     isSleep: false,
     isAIProtect: true,
@@ -245,24 +250,46 @@ const createVitalStore: StateCreator<VitalStoreState> = (set: VitalSet) => ({
   setActiveDevice: (device: Device | null) => set({ activeDevice: device }),
   setConnected: (connected: boolean) => set({ isConnected: connected }),
 
-  setHouseMode: (mode: 'AWAY' | 'HOME' | 'DISARM' | 'ALARM' | 'PRIVACY') =>
-    set((state) => ({ house: { ...state.house, currentMode: mode } })),
+  setHouseMode: (mode: 'AWAY' | 'HOME' | 'DISARM' | 'ALARM' | 'PRIVACY') => {
+    set((state) => ({ house: { ...state.house, currentMode: mode } }));
+    houseApi.updateHouseMode(mode).catch((err) =>
+      console.log('[Store] Không thể đồng bộ chế độ nhà lên backend:', err)
+    );
+  },
 
-  updateHouseAddress: (address: string) =>
-    set((state) => ({ house: { ...state.house, address } })),
+  updateHouseAddress: (address: string) => {
+    set((state) => ({ house: { ...state.house, address } }));
+    houseApi.updateHouse({ address }).catch((err) =>
+      console.log('[Store] Không thể đồng bộ địa chỉ nhà lên backend:', err)
+    );
+  },
 
-  toggleCameraSleep: () =>
+  toggleCameraSleep: () => {
+    const nextVal = !get().camera.isSleep;
     set((state) => ({
-      camera: { ...state.camera, isSleep: !state.camera.isSleep },
-    })),
+      camera: { ...state.camera, isSleep: nextVal },
+    }));
+    devicesApi.updateDeviceConfig(get().camera.id, { is_sleep: nextVal }).catch((err) =>
+      console.log('[Store] Không thể đồng bộ trạng thái ngủ camera lên backend:', err)
+    );
+  },
 
-  toggleCameraAIProtect: () =>
+  toggleCameraAIProtect: () => {
+    const nextVal = !get().camera.isAIProtect;
     set((state) => ({
-      camera: { ...state.camera, isAIProtect: !state.camera.isAIProtect },
-    })),
+      camera: { ...state.camera, isAIProtect: nextVal },
+    }));
+    devicesApi.updateDeviceConfig(get().camera.id, { is_ai_protect: nextVal }).catch((err) =>
+      console.log('[Store] Không thể đồng bộ AI Protect camera lên backend:', err)
+    );
+  },
 
-  setCameraResolution: (res: '2K' | 'FHD' | 'SD') =>
-    set((state) => ({ camera: { ...state.camera, resolution: res } })),
+  setCameraResolution: (res: '2K' | 'FHD' | 'SD') => {
+    set((state) => ({ camera: { ...state.camera, resolution: res } }));
+    devicesApi.updateDeviceConfig(get().camera.id, { resolution: res }).catch((err) =>
+      console.log('[Store] Không thể đồng bộ độ phân giải camera lên backend:', err)
+    );
+  },
 
   setSelectedDate: (date: string) => set({ selectedDate: date }),
 
@@ -273,18 +300,7 @@ const createVitalStore: StateCreator<VitalStoreState> = (set: VitalSet) => ({
 
   iotDevices: [
     {
-      id: 'dev-01',
-      name: 'Orange Pi 5 - Edge AI Hub',
-      sub: 'Rockchip RK3588S NPU • 32 FPS YOLO-Pose • EMQX MQTT',
-      type: 'hub',
-      status: 'Trực tuyến (24/7)',
-      isOnline: true,
-      icon: 'server',
-      color: '#0284C7',
-      location: 'Phòng khách',
-    },
-    {
-      id: 'dev-02',
+      id: 'SECA_001',
       name: 'SECA_001',
       sub: 'Camera góc rộng • 2K Super HD • Đàm thoại 2 chiều',
       type: 'camera',
@@ -295,7 +311,7 @@ const createVitalStore: StateCreator<VitalStoreState> = (set: VitalSet) => ({
       location: 'Phòng khách',
     },
     {
-      id: 'dev-03',
+      id: 'BLE_BAND_001',
       name: 'Vòng đeo tay BLE Smartband',
       sub: 'Nhịp tim • SpO₂ • Gia tốc kế phát hiện va đập',
       type: 'watch',
@@ -305,91 +321,98 @@ const createVitalStore: StateCreator<VitalStoreState> = (set: VitalSet) => ({
       color: '#10B981',
       location: 'Phòng ngủ',
     },
-    {
-      id: 'dev-04',
-      name: 'Cảm biến hồng ngoại AMG8833',
-      sub: 'Ma trận nhiệt 8x8 IR • Sàng lọc sốt vùng trán',
-      type: 'thermal',
-      status: '36.8°C • Hoạt động tốt',
-      isOnline: true,
-      icon: 'thermometer',
-      color: '#F59E0B',
-      location: 'Phòng khách',
-    },
-    {
-      id: 'dev-05',
-      name: 'Micro AI âm thanh YAMNet',
-      sub: 'Phát hiện tiếng kêu cứu, la hét, tiếng ngã đập mạnh',
-      type: 'audio',
-      status: 'Đang lắng nghe',
-      isOnline: true,
-      icon: 'mic',
-      color: '#8B5CF6',
-      location: 'Phòng ngủ',
-    },
-    {
-      id: 'dev-06',
-      name: 'Loa thông minh Hub (Voice Reminder)',
-      sub: 'Phát giọng nói tiếng Việt nhắc nhở người cao tuổi (FR12)',
-      type: 'speaker',
-      status: 'Sẵn sàng',
-      isOnline: true,
-      icon: 'volume-high',
-      color: '#EC4899',
-      location: 'Phòng khách',
-    },
   ],
 
-  deviceGroups: ['Phòng khách', 'Phòng ngủ', 'Nhà tắm & Cửa'],
+  deviceGroups: ['Phòng khách', 'Phòng ngủ'],
 
-  addIoTDevice: (device: IoTDeviceItem) =>
+  addIoTDevice: (device: IoTDeviceItem) => {
     set((state) => ({
       iotDevices: [device, ...state.iotDevices],
-    })),
-
-  addDeviceGroup: (groupName: string) =>
-    set((state) => {
-      const trimmed = groupName.trim();
-      if (!trimmed) return state;
-      const exists = state.deviceGroups.some(
-        (g) => g.trim().toLowerCase() === trimmed.toLowerCase()
+    }));
+    // Đăng ký lên backend nếu có kết nối
+    const isCam = device.type === 'camera';
+    devicesApi
+      .createDevice({
+        device_id: device.id,
+        name: device.name,
+        sub_title: device.sub,
+        device_type: isCam ? 'CAMERA' : 'SMARTBAND',
+        location: device.location || 'Phòng khách',
+      })
+      .catch((err) =>
+        console.log('[Store] Thiết bị lưu local cache, đồng bộ backend sau:', err)
       );
-      return {
-        deviceGroups: exists ? state.deviceGroups : [...state.deviceGroups, trimmed],
-      };
-    }),
+  },
 
-  updateDeviceGroup: (oldName: string, newName: string, deviceIds?: string[]) =>
-    set((state) => {
-      const trimmedNew = newName.trim();
-      const trimmedOld = oldName.trim();
-      const updatedGroups = state.deviceGroups.map((g) =>
-        g.trim().toLowerCase() === trimmedOld.toLowerCase() ? trimmedNew : g
+  removeIoTDevice: (deviceId: string) => {
+    set((state) => ({
+      iotDevices: state.iotDevices.filter((d) => d.id !== deviceId),
+    }));
+    devicesApi.deleteDevice(deviceId).catch((err) =>
+      console.log('[Store] Xóa thiết bị backend failed:', err)
+    );
+  },
+
+  addDeviceGroup: (groupName: string) => {
+    const trimmed = groupName.trim();
+    if (!trimmed) return;
+    const exists = get().deviceGroups.some(
+      (g) => g.trim().toLowerCase() === trimmed.toLowerCase()
+    );
+    if (!exists) {
+      set((state) => ({
+        deviceGroups: [...state.deviceGroups, trimmed],
+      }));
+      deviceGroupApi.createGroup({ name: trimmed }).catch((err) =>
+        console.log('[Store] Tạo nhóm backend failed:', err)
       );
-      let updatedDevices = state.iotDevices;
-      if (deviceIds) {
-        updatedDevices = updatedDevices.map((dev) => {
-          if (deviceIds.includes(dev.id)) {
-            return { ...dev, location: trimmedNew };
-          } else if (dev.location?.trim().toLowerCase() === trimmedOld.toLowerCase()) {
-            return { ...dev, location: 'Chưa nhóm' };
-          }
-          return dev;
-        });
-      } else if (trimmedOld.toLowerCase() !== trimmedNew.toLowerCase()) {
-        updatedDevices = updatedDevices.map((dev) =>
-          dev.location?.trim().toLowerCase() === trimmedOld.toLowerCase()
-            ? { ...dev, location: trimmedNew }
-            : dev
+    }
+  },
+
+  updateDeviceGroup: (oldName: string, newName: string, deviceIds?: string[]) => {
+    const trimmedNew = newName.trim();
+    const trimmedOld = oldName.trim();
+    const updatedGroups = get().deviceGroups.map((g) =>
+      g.trim().toLowerCase() === trimmedOld.toLowerCase() ? trimmedNew : g
+    );
+    let updatedDevices = get().iotDevices;
+    if (deviceIds) {
+      updatedDevices = updatedDevices.map((dev) => {
+        if (deviceIds.includes(dev.id)) {
+          return { ...dev, location: trimmedNew };
+        } else if (dev.location?.trim().toLowerCase() === trimmedOld.toLowerCase()) {
+          return { ...dev, location: 'Chưa nhóm' };
+        }
+        return dev;
+      });
+    } else if (trimmedOld.toLowerCase() !== trimmedNew.toLowerCase()) {
+      updatedDevices = updatedDevices.map((dev) =>
+        dev.location?.trim().toLowerCase() === trimmedOld.toLowerCase()
+          ? { ...dev, location: trimmedNew }
+          : dev
+      );
+    }
+    set({
+      deviceGroups: updatedGroups,
+      iotDevices: updatedDevices,
+    });
+
+    (async () => {
+      try {
+        const groupsRes = await deviceGroupApi.listGroups();
+        const found = groupsRes.data.find(
+          (g) => g.name.toLowerCase() === trimmedOld.toLowerCase()
         );
+        if (found) {
+          await deviceGroupApi.updateGroup(found.id, { name: trimmedNew });
+        }
+      } catch (err) {
+        console.log('[Store] Cập nhật nhóm backend failed:', err);
       }
-      return {
-        deviceGroups: updatedGroups,
-        iotDevices: updatedDevices,
-      };
-    }),
+    })();
+  },
 
-  removeDeviceGroup: (groupName: string) =>
+  removeDeviceGroup: (groupName: string) => {
     set((state) => ({
       deviceGroups: state.deviceGroups.filter(
         (g) => g.trim().toLowerCase() !== groupName.trim().toLowerCase()
@@ -399,14 +422,44 @@ const createVitalStore: StateCreator<VitalStoreState> = (set: VitalSet) => ({
           ? { ...dev, location: 'Chưa nhóm' }
           : dev
       ),
-    })),
+    }));
 
-  assignDevicesToGroup: (deviceIds: string[], groupName: string) =>
+    (async () => {
+      try {
+        const groupsRes = await deviceGroupApi.listGroups();
+        const found = groupsRes.data.find(
+          (g) => g.name.toLowerCase() === groupName.trim().toLowerCase()
+        );
+        if (found) {
+          await deviceGroupApi.deleteGroup(found.id);
+        }
+      } catch (err) {
+        console.log('[Store] Xóa nhóm backend failed:', err);
+      }
+    })();
+  },
+
+  assignDevicesToGroup: (deviceIds: string[], groupName: string) => {
     set((state) => ({
       iotDevices: state.iotDevices.map((dev) =>
         deviceIds.includes(dev.id) ? { ...dev, location: groupName } : dev
       ),
-    })),
+    }));
+
+    (async () => {
+      try {
+        const groupsRes = await deviceGroupApi.listGroups();
+        const found = groupsRes.data.find(
+          (g) => g.name.toLowerCase() === groupName.trim().toLowerCase()
+        );
+        if (found) {
+          await deviceGroupApi.assignDevices(deviceIds, found.id);
+        }
+      } catch (err) {
+        console.log('[Store] Gán thiết bị vào nhóm backend failed:', err);
+      }
+    })();
+  },
 
   isDarkMode: useThemeStore.getState().isDarkMode,
   toggleDarkMode: () => {
@@ -416,6 +469,100 @@ const createVitalStore: StateCreator<VitalStoreState> = (set: VitalSet) => ({
   setDarkMode: (isDark: boolean) => {
     useThemeStore.getState().setDarkMode(isDark);
     set({ isDarkMode: isDark });
+  },
+
+  // ---- Backend Sync Operations ----
+  isLoadingDevices: false,
+
+  fetchHouseFromBackend: async () => {
+    try {
+      const res = await houseApi.getCurrentHouse();
+      if (res.data) {
+        set((state) => ({
+          house: {
+            ...state.house,
+            name: res.data.name,
+            address: res.data.address || state.house.address,
+            currentMode: res.data.current_mode,
+          },
+        }));
+      }
+    } catch (e) {
+      console.log('[Store] fetchHouseFromBackend fallback to cache');
+    }
+  },
+
+  fetchGroupsFromBackend: async () => {
+    try {
+      const res = await deviceGroupApi.listGroups();
+      if (res.data && Array.isArray(res.data) && res.data.length > 0) {
+        const names = res.data.map((g) => g.name);
+        set({ deviceGroups: names });
+      }
+    } catch (e) {
+      console.log('[Store] fetchGroupsFromBackend fallback to cache');
+    }
+  },
+
+  fetchDevicesFromBackend: async () => {
+    try {
+      const res = await devicesApi.listDevices();
+      if (res.data && Array.isArray(res.data) && res.data.length > 0) {
+        const mapped: IoTDeviceItem[] = res.data.map((dev) => {
+          const isCam = dev.device_type === 'CAMERA';
+          return {
+            id: dev.device_id || dev.id,
+            name: dev.name,
+            sub:
+              dev.sub_title ||
+              (isCam
+                ? 'Camera góc rộng • 2K Super HD • Đàm thoại 2 chiều'
+                : 'Nhịp tim • SpO₂ • Gia tốc kế phát hiện va đập'),
+            type: isCam ? 'camera' : 'watch',
+            status: dev.status_text || (dev.is_online ? 'Trực tuyến' : 'Ngoại tuyến'),
+            isOnline: dev.is_online,
+            icon: isCam ? 'videocam' : 'watch',
+            color: isCam ? '#FF7A00' : '#10B981',
+            location: dev.location || 'Chưa nhóm',
+            streamUrl: dev.config?.stream_url || undefined,
+            macAddress: dev.mac_address || undefined,
+          };
+        });
+        set({ iotDevices: mapped });
+
+        const firstCam = res.data.find((d) => d.device_type === 'CAMERA');
+        if (firstCam && firstCam.config) {
+          set((state) => ({
+            camera: {
+              ...state.camera,
+              id: firstCam.device_id,
+              name: firstCam.name,
+              room: firstCam.location || 'Phòng khách',
+              isOnline: firstCam.is_online,
+              isSleep: Boolean(firstCam.config?.is_sleep),
+              isAIProtect: Boolean(firstCam.config?.is_ai_protect),
+              resolution: (firstCam.config?.resolution as '2K' | 'FHD' | 'SD') || '2K',
+              streamUrl: firstCam.config?.stream_url || state.camera.streamUrl,
+            },
+          }));
+        }
+      }
+    } catch (e) {
+      console.log('[Store] fetchDevicesFromBackend fallback to cache');
+    }
+  },
+
+  syncAllWithBackend: async () => {
+    set({ isLoadingDevices: true });
+    try {
+      await Promise.allSettled([
+        get().fetchHouseFromBackend(),
+        get().fetchGroupsFromBackend(),
+        get().fetchDevicesFromBackend(),
+      ]);
+    } finally {
+      set({ isLoadingDevices: false });
+    }
   },
 });
 
