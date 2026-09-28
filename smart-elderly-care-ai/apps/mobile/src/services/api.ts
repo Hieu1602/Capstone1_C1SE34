@@ -11,20 +11,16 @@ import { useAuthStore } from '../store/useAuthStore';
 // - Nếu chạy trên Web hoặc iOS simulator cục bộ: dùng http://localhost:8000/api/v1
 // - Nếu chạy trên Android emulator: dùng http://10.0.2.2:8000/api/v1
 const getBaseUrl = (): string => {
-  if (typeof process !== 'undefined' && process.env.EXPO_PUBLIC_API_URL) {
-    return process.env.EXPO_PUBLIC_API_URL;
-  }
   if (Platform.OS === 'web' && typeof window !== 'undefined' && window.location?.hostname) {
     const host = window.location.hostname;
     if (host !== 'localhost' && host !== '127.0.0.1') {
       return `http://${host}:8000/api/v1`;
     }
-    return 'http://localhost:8000/api/v1';
   }
-  if (Platform.OS === 'android') {
-    return 'http://10.0.2.2:8000/api/v1';
+  if (typeof process !== 'undefined' && process.env.EXPO_PUBLIC_API_URL) {
+    return process.env.EXPO_PUBLIC_API_URL;
   }
-  return 'http://localhost:8000/api/v1';
+  return 'http://192.168.1.34:8000/api/v1';
 };
 
 export const BASE_URL: string = getBaseUrl();

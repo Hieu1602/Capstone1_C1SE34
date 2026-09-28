@@ -11,7 +11,7 @@ from pydantic import BaseModel, model_validator
 class UserBase(BaseModel):
     full_name: str
     phone: str
-    role: str = "caregiver"
+    role: str = "user"
 
     @model_validator(mode="after")
     def validate_identifier(self):

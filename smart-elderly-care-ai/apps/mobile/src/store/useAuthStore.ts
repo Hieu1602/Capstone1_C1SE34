@@ -9,12 +9,12 @@ export interface AuthStoreState {
   accessToken: string | null;
   refreshToken: string | null;
   userId: string | null;
-  userEmail: string | null;
+  userPhone: string | null;
   userName: string | null;
 
-  login: (access: string, refreshOrName?: string, name?: string, userId?: string, email?: string) => void;
+  login: (access: string, refreshOrName?: string, name?: string, userId?: string, phone?: string) => void;
   setTokens: (access: string, refresh: string) => void;
-  setUser: (id: string, email?: string, name?: string) => void;
+  setUser: (id: string, phone?: string, name?: string) => void;
   updateUserName: (nameOrId: string, name?: string) => void;
   logout: () => void;
 }
@@ -33,17 +33,17 @@ const createAuthStore: StateCreator<AuthStoreState, [], [['zustand/persist', Aut
   accessToken: null,
   refreshToken: null,
   userId: null,
-  userEmail: null,
+  userPhone: null,
   userName: null,
 
-  login: (access: string, refreshOrName?: string, name?: string, userId?: string, email?: string) => {
+  login: (access: string, refreshOrName?: string, name?: string, userId?: string, phone?: string) => {
     if (userId !== undefined) {
       set({
         accessToken: access,
         refreshToken: refreshOrName ?? null,
         userName: name ?? null,
         userId: userId,
-        userEmail: email ?? null,
+        userPhone: phone ?? null,
       });
     } else {
       set({
@@ -51,7 +51,7 @@ const createAuthStore: StateCreator<AuthStoreState, [], [['zustand/persist', Aut
         refreshToken: access,
         userName: refreshOrName ?? null,
         userId: name ?? null,
-        userEmail: (userId as any) ?? null,
+        userPhone: (userId as any) ?? null,
       });
     }
   },
@@ -59,10 +59,10 @@ const createAuthStore: StateCreator<AuthStoreState, [], [['zustand/persist', Aut
   setTokens: (access: string, refresh: string) =>
     set({ accessToken: access, refreshToken: refresh }),
 
-  setUser: (id: string, email?: string, name?: string) =>
+  setUser: (id: string, phone?: string, name?: string) =>
     set((state) => ({
       userId: id,
-      userEmail: email ?? state.userEmail ?? null,
+      userPhone: phone ?? state.userPhone ?? null,
       userName: name ?? state.userName ?? null,
     })),
 
@@ -79,7 +79,7 @@ const createAuthStore: StateCreator<AuthStoreState, [], [['zustand/persist', Aut
       accessToken: null,
       refreshToken: null,
       userId: null,
-      userEmail: null,
+      userPhone: null,
       userName: null,
     }),
 });

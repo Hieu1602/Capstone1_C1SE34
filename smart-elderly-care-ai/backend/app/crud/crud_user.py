@@ -30,15 +30,9 @@ class CRUDUser:
         result = await db.execute(
             select(User).where(
                 (User.phone == phone) | 
-                (User.phone == normalized) | 
-                (User.email == phone)
+                (User.phone == normalized)
             )
         )
-        return result.scalar_one_or_none()
-
-
-    async def get_by_email(self, db: AsyncSession, email: str) -> Optional[User]:
-        result = await db.execute(select(User).where(User.email == email))
         return result.scalar_one_or_none()
 
     async def get_by_id(self, db: AsyncSession, user_id) -> Optional[User]:

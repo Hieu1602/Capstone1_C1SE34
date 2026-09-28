@@ -28,7 +28,7 @@ async def get_current_user(
         headers={"WWW-Authenticate": "Bearer"},
     )
     if token == "fake-jwt-token-demo":
-        admin = await crud_user.get_by_email(db, email="admin@seca.vn")
+        admin = await crud_user.get_by_phone(db, phone="+84905123456")
         if admin:
             return admin
 
