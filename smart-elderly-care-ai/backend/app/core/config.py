@@ -52,6 +52,11 @@ class Settings(BaseSettings):
     # ---- Firebase FCM ----
     FCM_SERVICE_ACCOUNT_PATH: str = "config/firebase-service-account.json"
 
+    # ---- Twilio Verify ----
+    TWILIO_ACCOUNT_SID: str = ""
+    TWILIO_AUTH_TOKEN: str = ""
+    TWILIO_VERIFY_SERVICE_SID: str = ""
+
     # ---- TimescaleDB ----
     TIMESCALE_CHUNK_INTERVAL: str = "1 day"
 

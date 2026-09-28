@@ -59,7 +59,7 @@ export interface CameraDevice {
   isOnline: boolean;
   isSleep: boolean;
   isAIProtect: boolean;
-  resolution: '2K' | 'FHD' | 'SD';
+  resolution: 'HD' | 'BASIC';
   sdCardStatus: 'OK' | 'NO_CARD';
   wifiStrength: number; // 1-3
   streamUrl: string;
@@ -108,7 +108,7 @@ interface VitalStoreState {
   updateHouseAddress: (address: string) => void;
   toggleCameraSleep: () => void;
   toggleCameraAIProtect: () => void;
-  setCameraResolution: (res: '2K' | 'FHD' | 'SD') => void;
+  setCameraResolution: (res: 'HD' | 'BASIC') => void;
   setSelectedDate: (date: string) => void;
   updateAlgoSettings: (settings: Partial<VitalStoreState['algoSettings']>) => void;
   addIoTDevice: (device: IoTDeviceItem) => void;
@@ -220,7 +220,7 @@ const createVitalStore: StateCreator<VitalStoreState> = (set, get) => ({
     isOnline: true,
     isSleep: false,
     isAIProtect: true,
-    resolution: '2K',
+    resolution: 'HD',
     sdCardStatus: 'OK',
     wifiStrength: 3,
     streamUrl: 'http://10.0.2.2:8080',
@@ -284,12 +284,8 @@ const createVitalStore: StateCreator<VitalStoreState> = (set, get) => ({
     );
   },
 
-  setCameraResolution: (res: '2K' | 'FHD' | 'SD') => {
-    set((state) => ({ camera: { ...state.camera, resolution: res } }));
-    devicesApi.updateDeviceConfig(get().camera.id, { resolution: res }).catch((err) =>
-      console.log('[Store] Không thể đồng bộ độ phân giải camera lên backend:', err)
-    );
-  },
+  setCameraResolution: (res: 'HD' | 'BASIC') =>
+    set((state) => ({ camera: { ...state.camera, resolution: res } })),
 
   setSelectedDate: (date: string) => set({ selectedDate: date }),
 
@@ -586,13 +582,13 @@ interface AuthStoreState {
   accessToken: string | null;
   refreshToken: string | null;
   userId: string | null;
-  userEmail: string | null;
   userName: string | null;
+  userEmail: string | null;
 
-  login: (token: string, name: string, userId: string, email?: string) => void;
+  login: (access: string, refresh: string, name: string, userId: string, email?: string) => void;
   setTokens: (access: string, refresh: string) => void;
-  setUser: (id: string, email: string, name: string) => void;
-  updateUserName: (id: string, name: string) => void;
+  setUser: (id: string, email?: string, name?: string) => void;
+  updateUserName: (name: string) => void;
   logout: () => void;
 }
 
@@ -610,23 +606,30 @@ const createAuthStore: StateCreator<AuthStoreState, [], [['zustand/persist', Aut
   accessToken: null,
   refreshToken: null,
   userId: null,
-  userEmail: null,
   userName: null,
+  userEmail: null,
 
-  login: (token: string, name: string, userId: string, email?: string) =>
+  login: (access: string, refresh: string, name: string, userId: string, email?: string) =>
     set({
-      accessToken: token,
-      refreshToken: token,
+      accessToken: access,
+      refreshToken: refresh,
       userId,
-      userEmail: email ?? null,
       userName: name,
+      userEmail: email ?? null,
     }),
 
   setTokens: (access: string, refresh: string) =>
     set({ accessToken: access, refreshToken: refresh }),
 
-  setUser: (id: string, email: string, name: string) =>
-    set({ userId: id, userEmail: email, userName: name }),
+  setUser: (id: string, email?: string, name?: string) =>
+    set((state) => ({
+      userId: id,
+      userEmail: email ?? state.userEmail ?? null,
+      userName: name ?? state.userName ?? null,
+    })),
+
+  updateUserName: (name: string) =>
+    set({ userName: name }),
 
   updateUserName: (id: string, name: string) =>
     set({ userId: id, userName: name }),
@@ -636,8 +639,8 @@ const createAuthStore: StateCreator<AuthStoreState, [], [['zustand/persist', Aut
       accessToken: null,
       refreshToken: null,
       userId: null,
-      userEmail: null,
       userName: null,
+      userEmail: null,
     }),
 });
 
