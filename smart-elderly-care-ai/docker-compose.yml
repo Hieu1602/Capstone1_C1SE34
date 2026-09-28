@@ -22,6 +22,8 @@ services:
       dockerfile: Dockerfile
     container_name: elderly_care_backend
     restart: unless-stopped
+    env_file:
+      - .env
     ports:
       - "8000:8000"
     environment:

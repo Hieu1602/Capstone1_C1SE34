@@ -1,5 +1,5 @@
 // LoginScreen.tsx
-// Màn hình Đăng nhập linh hoạt: Chọn Email hoặc Số điện thoại để nhập thông tin
+// Màn hình Đăng nhập theo số điện thoại
 
 import React, { useState } from 'react';
 import {
@@ -16,12 +16,13 @@ import {
   Platform,
 } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
-import { Colors } from '../../../theme/colors'; // Điều chỉnh đường dẫn theme nếu cần
-import { useAuthStore } from '../../../store/useVitalStore'; // Đường dẫn tới store của bạn
+import { Colors } from '../../../theme/colors';
+import { useAuthStore } from '../../../store/useVitalStore';
+import { authApi } from '../../../services/api';
 
 export default function LoginScreen({ navigation }: any) {
   const { login } = useAuthStore() as unknown as {
-    login: (token: string, name: string, userId: string) => void;
+    login: (access: string, refresh: string, name: string, userId: string) => void;
   };
   const [activeTab, setActiveTab] = useState<'none' | 'phone'>('none');
   const [account, setAccount] = useState('');
@@ -29,18 +30,15 @@ export default function LoginScreen({ navigation }: any) {
   const [showPassword, setShowPassword] = useState(false);
   const [agreed, setAgreed] = useState(true);
 
-  const DEMO_PASSWORD = '123456';
-  const DEMO_PHONES = ['0900000000', '0382694409'];
-
   const handleSelectMethod = () => {
-    setAccount(DEMO_PHONES[0]);
-    setPassword(DEMO_PASSWORD);
+    setAccount('');
+    setPassword('');
     setAgreed(true);
     setShowPassword(false);
     setActiveTab('phone');
   };
 
-  const handleLoginAction = () => {
+  const handleLoginAction = async () => {
     if (!agreed) {
       setAgreed(true);
     }
@@ -50,20 +48,22 @@ export default function LoginScreen({ navigation }: any) {
       return;
     }
 
-    const normalizedAccount = account.trim();
-    const isDemoLogin =
-      DEMO_PHONES.some((phone) => normalizedAccount === phone) &&
-      password === DEMO_PASSWORD;
+    try {
+      const rawAccount = account.trim();
+      const normalizedAccount = rawAccount.startsWith('0')
+        ? `+84${rawAccount.slice(1)}`
+        : rawAccount.startsWith('84')
+          ? `+${rawAccount}`
+          : rawAccount;
+      const response = await authApi.login(normalizedAccount, password);
+      const { access_token, refresh_token } = response.data;
 
-    if (isDemoLogin) {
-      login('fake-jwt-token-demo', 'Demo User', 'demo-user-001');
-      return;
+      login(access_token, refresh_token, 'User', normalizedAccount);
+      Alert.alert('Đăng nhập thành công', 'Bạn đã đăng nhập vào hệ thống.');
+    } catch (error: any) {
+      const detail = error?.response?.data?.detail || 'Không thể đăng nhập. Vui lòng thử lại.';
+      Alert.alert('Đăng nhập thất bại', detail);
     }
-
-    Alert.alert(
-      'Đăng nhập thất bại',
-      `Tài khoản demo có thể dùng:\n- SĐT: ${DEMO_PHONES.join(', ')}\n- Mật khẩu: ${DEMO_PASSWORD}`
-    );
   };
 
   return (
