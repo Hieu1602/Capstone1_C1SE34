@@ -16,9 +16,11 @@ import { SafeAreaView } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
 import { Colors, Shadows } from '../../../theme/colors';
 import { useVitalStore } from '../../../store/useVitalStore';
+import { useTheme } from '../../../store/useThemeStore';
 
 export default function HouseDetailScreen({ navigation }: any) {
   const { house } = useVitalStore();
+  const { isDarkMode } = useTheme();
   const [addMemberModalVisible, setAddMemberModalVisible] = useState(false);
   const [newMemberPhone, setNewMemberPhone] = useState('');
   const [newMemberRole, setNewMemberRole] = useState<'CAREGIVER' | 'DOCTOR'>('CAREGIVER');
@@ -40,26 +42,18 @@ export default function HouseDetailScreen({ navigation }: any) {
   };
 
   return (
-    <SafeAreaView style={styles.safeArea} edges={['top']}>
-      {/* 1. Header: Back Arrow, Title "Nhà của tôi", Edit Pencil in Orange */}
-      <View style={styles.topHeader}>
+    <SafeAreaView style={[styles.safeArea, isDarkMode && { backgroundColor: '#0B0F19' }]} edges={['top']}>
+      {/* 1. Header: Back Arrow, Title "Nhà của tôi" */}
+      <View style={[styles.topHeader, isDarkMode && { backgroundColor: '#0B0F19' }]}>
         <TouchableOpacity
-          style={styles.backBtn}
+          style={[styles.backBtn, isDarkMode && { backgroundColor: '#1E293B', borderColor: '#334155', borderWidth: 1 }]}
           onPress={() => navigation.goBack()}
           activeOpacity={0.7}
         >
-          <Ionicons name="chevron-back" size={26} color={Colors.textPrimary} />
+          <Ionicons name="chevron-back" size={24} color={isDarkMode ? '#F8FAFC' : Colors.textPrimary} />
         </TouchableOpacity>
-        
-        <View style={styles.titleWithIcon}>
-          <Text style={styles.headerTitleText}>{house.name}</Text>
-          <TouchableOpacity
-            style={styles.pencilBtn}
-            onPress={() => Alert.alert('Đổi tên nhà', 'Nhập tên mới cho ngôi nhà của bạn.')}
-          >
-            <Ionicons name="pencil" size={16} color={Colors.primary} />
-          </TouchableOpacity>
-        </View>
+
+        <Text style={[styles.headerTitleText, isDarkMode && { color: '#F8FAFC' }]}>Nhà của tôi</Text>
       </View>
 
       <ScrollView
@@ -67,23 +61,23 @@ export default function HouseDetailScreen({ navigation }: any) {
         contentContainerStyle={styles.scrollContent}
       >
         {/* 2. Section: Thành viên */}
-        <Text style={styles.sectionLabel}>Thành viên</Text>
-        <View style={styles.cardContainer}>
+        <Text style={[styles.sectionLabel, isDarkMode && { color: '#94A3B8' }]}>Thành viên</Text>
+        <View style={[styles.cardContainer, isDarkMode && { backgroundColor: '#1E293B', borderColor: '#334155' }]}>
           {/* Member Row: 1057(Me) - Người sở hữu */}
           <TouchableOpacity
             style={styles.memberRow}
             onPress={() => Alert.alert('Thông tin thành viên', 'Tài khoản: 1057(Me)\nVai trò: Người sở hữu (Primary Caregiver)\nQuyền hạn: Toàn quyền cấu hình AI và còi báo động.')}
             activeOpacity={0.7}
           >
-            <View style={styles.memberAvatarCircle}>
-              <Ionicons name="person" size={24} color="#CBD5E1" />
+            <View style={[styles.memberAvatarCircle, isDarkMode && { backgroundColor: '#0F172A' }]}>
+              <Ionicons name="person" size={24} color={isDarkMode ? '#64748B' : '#CBD5E1'} />
             </View>
-            <Text style={styles.memberNameText}>1057(Me)</Text>
+            <Text style={[styles.memberNameText, isDarkMode && { color: '#F8FAFC' }]}>1057(Me)</Text>
             <Text style={styles.ownerBadgeText}>Người sở hữu</Text>
-            <Ionicons name="chevron-forward" size={18} color="#CBD5E1" />
+            <Ionicons name="chevron-forward" size={18} color={isDarkMode ? '#64748B' : '#CBD5E1'} />
           </TouchableOpacity>
 
-          <View style={styles.divider} />
+          <View style={[styles.divider, isDarkMode && { backgroundColor: '#334155' }]} />
 
           {/* Add Member Button: + Thêm người */}
           <TouchableOpacity
@@ -91,7 +85,7 @@ export default function HouseDetailScreen({ navigation }: any) {
             onPress={() => setAddMemberModalVisible(true)}
             activeOpacity={0.7}
           >
-            <View style={styles.orangePlusCircle}>
+            <View style={[styles.orangePlusCircle, isDarkMode && { backgroundColor: '#4A2810', borderColor: '#7C2D12' }]}>
               <Ionicons name="add" size={16} color={Colors.primary} />
             </View>
             <Text style={styles.addMemberText}>Thêm người</Text>
@@ -99,65 +93,68 @@ export default function HouseDetailScreen({ navigation }: any) {
         </View>
 
         {/* 3. Section: Quản lý Nhà */}
-        <Text style={styles.sectionLabel}>Quản lý Nhà</Text>
-        <View style={styles.cardContainer}>
+        <Text style={[styles.sectionLabel, isDarkMode && { color: '#94A3B8' }]}>Quản lý Nhà</Text>
+        <View style={[styles.cardContainer, isDarkMode && { backgroundColor: '#1E293B', borderColor: '#334155' }]}>
           {/* Quản lý nhóm (Rooms) */}
           <TouchableOpacity
             style={styles.actionRow}
             onPress={() => Alert.alert('Quản lý nhóm phòng', 'Hiện có 3 khu vực giám sát:\n- Phòng khách (Camera Ranger 2C + Cảm biến nhiệt)\n- Phòng ngủ (Cảm biến nhiệt AMG8833)\n- Nhà vệ sinh (Cảm biến âm thanh YAMNet & Còi hú)')}
             activeOpacity={0.7}
           >
-            <Text style={styles.rowTitleText}>Quản lý nhóm</Text>
-            <Ionicons name="chevron-forward" size={18} color="#CBD5E1" />
+            <Text style={[styles.rowTitleText, isDarkMode && { color: '#F8FAFC' }]}>Quản lý nhóm</Text>
+            <Ionicons name="chevron-forward" size={18} color={isDarkMode ? '#64748B' : '#CBD5E1'} />
           </TouchableOpacity>
         </View>
       </ScrollView>
 
       {/* Modal Thêm người (Phân quyền RBAC FR01) */}
       <Modal visible={addMemberModalVisible} transparent animationType="slide">
-        <View style={styles.modalOverlay}>
-          <View style={styles.modalCard}>
-            <Text style={styles.modalTitle}>Thêm người chăm sóc / Bác sĩ</Text>
-            <Text style={styles.modalSub}>
-              Mời người thân hoặc bác sĩ gia đình cùng theo dõi sinh hiệu và nhận thông báo khẩn cấp bằng số điện thoại (FR01).
+        <View style={[styles.modalOverlay, isDarkMode && { backgroundColor: 'rgba(0, 0, 0, 0.7)' }]}>
+          <View style={[styles.modalCard, isDarkMode && { backgroundColor: '#1E293B', borderColor: '#334155' }]}>
+            <Text style={[styles.modalTitle, isDarkMode && { color: '#F8FAFC' }]}>Thêm người chăm sóc / Bác sĩ</Text>
+            <Text style={[styles.modalSub, isDarkMode && { color: '#94A3B8' }]}>
+              Mời người thân hoặc bác sĩ gia đình cùng theo dõi sức khoẻ và nhận thông báo khẩn cấp bằng số điện thoại (FR01).
             </Text>
               <TextInput
-              style={styles.addressInput}
+              style={[styles.addressInput, isDarkMode && { backgroundColor: '#0F172A', borderColor: '#334155', color: '#F8FAFC' }]}
                 value={newMemberPhone}
                 onChangeText={setNewMemberPhone}
                 placeholder="Nhập số điện thoại (ví dụ: 0912 345 678)"
+                placeholderTextColor="#94A3B8"
                 keyboardType="phone-pad"
             />
             <View style={styles.rolePickerRow}>
               <TouchableOpacity
                 style={[
                   styles.roleOptionBtn,
+                  isDarkMode && { backgroundColor: '#0F172A', borderColor: '#334155' },
                   newMemberRole === 'CAREGIVER' && styles.roleOptionActive,
                 ]}
                 onPress={() => setNewMemberRole('CAREGIVER')}
               >
-                <Text style={[styles.roleOptionText, newMemberRole === 'CAREGIVER' && styles.roleOptionTextActive]}>
+                <Text style={[styles.roleOptionText, isDarkMode && { color: '#CBD5E1' }, newMemberRole === 'CAREGIVER' && styles.roleOptionTextActive]}>
                   Người chăm sóc
                 </Text>
               </TouchableOpacity>
               <TouchableOpacity
                 style={[
                   styles.roleOptionBtn,
+                  isDarkMode && { backgroundColor: '#0F172A', borderColor: '#334155' },
                   newMemberRole === 'DOCTOR' && styles.roleOptionActive,
                 ]}
                 onPress={() => setNewMemberRole('DOCTOR')}
               >
-                <Text style={[styles.roleOptionText, newMemberRole === 'DOCTOR' && styles.roleOptionTextActive]}>
+                <Text style={[styles.roleOptionText, isDarkMode && { color: '#CBD5E1' }, newMemberRole === 'DOCTOR' && styles.roleOptionTextActive]}>
                   Bác sĩ gia đình
                 </Text>
               </TouchableOpacity>
             </View>
             <View style={styles.modalActionButtons}>
               <TouchableOpacity
-                style={styles.cancelBtn}
+                style={[styles.cancelBtn, isDarkMode && { backgroundColor: '#0F172A', borderColor: '#334155', borderWidth: 1 }]}
                 onPress={() => setAddMemberModalVisible(false)}
               >
-                <Text style={styles.cancelBtnText}>Hủy</Text>
+                <Text style={[styles.cancelBtnText, isDarkMode && { color: '#94A3B8' }]}>Hủy</Text>
               </TouchableOpacity>
               <TouchableOpacity
                 style={styles.saveBtn}
@@ -180,8 +177,10 @@ const styles = StyleSheet.create({
   },
   topHeader: {
     paddingHorizontal: 16,
-    paddingTop: 8,
-    paddingBottom: 14,
+    paddingTop: 12,
+    paddingBottom: 10,
+    flexDirection: 'row',
+    alignItems: 'center',
   },
   backBtn: {
     width: 36,
@@ -189,20 +188,13 @@ const styles = StyleSheet.create({
     borderRadius: 18,
     alignItems: 'center',
     justifyContent: 'center',
-    marginBottom: 8,
-  },
-  titleWithIcon: {
-    flexDirection: 'row',
-    alignItems: 'center',
+    marginRight: 10,
   },
   headerTitleText: {
-    fontSize: 26,
+    fontSize: 27,
     fontWeight: '900',
     color: Colors.textPrimary,
-  },
-  pencilBtn: {
-    marginLeft: 8,
-    padding: 4,
+    letterSpacing: -0.8,
   },
   scrollContent: {
     paddingHorizontal: 16,
@@ -210,16 +202,18 @@ const styles = StyleSheet.create({
   },
   sectionLabel: {
     fontSize: 13,
-    fontWeight: '600',
-    color: Colors.textSecondary,
-    marginTop: 18,
-    marginBottom: 8,
+    fontWeight: '700',
+    color: '#64748B',
+    marginTop: 10,
+    marginBottom: 10,
   },
   cardContainer: {
-    backgroundColor: Colors.surface,
+    backgroundColor: '#FFFFFF',
     borderRadius: 18,
     paddingHorizontal: 16,
-    ...Shadows.card,
+    borderWidth: 1,
+    borderColor: '#E2E8F0',
+    overflow: 'hidden',
   },
   // Member row
   memberRow: {
@@ -228,29 +222,29 @@ const styles = StyleSheet.create({
     paddingVertical: 16,
   },
   memberAvatarCircle: {
-    width: 44,
-    height: 44,
-    borderRadius: 22,
+    width: 40,
+    height: 40,
+    borderRadius: 20,
     backgroundColor: '#E2E8F0',
     alignItems: 'center',
     justifyContent: 'center',
     marginRight: 12,
   },
   memberNameText: {
-    flex: 1,
-    fontSize: 16,
+    fontSize: 17,
     fontWeight: '700',
     color: Colors.textPrimary,
+    marginRight: 10,
   },
   ownerBadgeText: {
-    fontSize: 14,
-    fontWeight: '600',
-    color: Colors.primary,
+    fontSize: 13,
+    fontWeight: '700',
+    color: '#F59E0B',
     marginRight: 8,
   },
   divider: {
     height: 1,
-    backgroundColor: Colors.border,
+    backgroundColor: '#E2E8F0',
   },
   addMemberRow: {
     flexDirection: 'row',
@@ -313,37 +307,50 @@ const styles = StyleSheet.create({
   // Modal
   modalOverlay: {
     flex: 1,
-    backgroundColor: 'rgba(0,0,0,0.5)',
+    backgroundColor: 'rgba(15, 23, 42, 0.28)',
     justifyContent: 'center',
-    padding: 24,
+    paddingHorizontal: 18,
+    paddingVertical: 20,
   },
   modalCard: {
-    backgroundColor: Colors.surface,
-    borderRadius: 20,
-    padding: 20,
-    ...Shadows.card,
+    width: '100%',
+    maxWidth: 420,
+    alignSelf: 'center',
+    backgroundColor: '#FFFFFF',
+    borderRadius: 18,
+    paddingHorizontal: 18,
+    paddingTop: 18,
+    paddingBottom: 16,
+    borderWidth: 1,
+    borderColor: '#E5E7EB',
+    shadowColor: '#0F172A',
+    shadowOffset: { width: 0, height: 8 },
+    shadowOpacity: 0.1,
+    shadowRadius: 16,
+    elevation: 8,
   },
   modalTitle: {
-    fontSize: 18,
+    fontSize: 19,
     fontWeight: '800',
-    color: Colors.textPrimary,
-    marginBottom: 6,
+    color: '#111827',
+    marginBottom: 10,
   },
   modalSub: {
     fontSize: 13,
-    color: Colors.textSecondary,
-    lineHeight: 18,
-    marginBottom: 14,
+    color: '#475569',
+    lineHeight: 19,
+    marginBottom: 16,
   },
   addressInput: {
-    backgroundColor: '#F1F5F9',
+    backgroundColor: '#F8FAFC',
     borderRadius: 12,
-    padding: 12,
-    fontSize: 14,
-    color: Colors.textPrimary,
-    borderWidth: 1,
-    borderColor: Colors.border,
-    minHeight: 54,
+    paddingHorizontal: 14,
+    paddingVertical: 13,
+    fontSize: 15,
+    color: '#0F172A',
+    borderWidth: 1.5,
+    borderColor: '#D7DEE7',
+    minHeight: 52,
   },
   currentLocationButton: {
     flexDirection: 'row',
@@ -361,51 +368,60 @@ const styles = StyleSheet.create({
   rolePickerRow: {
     flexDirection: 'row',
     gap: 10,
-    marginTop: 12,
+    marginTop: 16,
   },
   roleOptionBtn: {
     flex: 1,
-    paddingVertical: 10,
+    minHeight: 42,
+    paddingVertical: 11,
     borderRadius: 10,
-    backgroundColor: '#F1F5F9',
+    backgroundColor: '#E5E7EB',
+    borderWidth: 1,
+    borderColor: '#E5E7EB',
     alignItems: 'center',
+    justifyContent: 'center',
   },
   roleOptionActive: {
-    backgroundColor: Colors.primaryLight,
-    borderWidth: 1,
-    borderColor: Colors.primary,
+    backgroundColor: '#FFF7ED',
+    borderColor: '#F59E0B',
   },
   roleOptionText: {
-    fontSize: 13,
-    fontWeight: '600',
-    color: Colors.textSecondary,
+    fontSize: 14,
+    fontWeight: '700',
+    color: '#4B5563',
   },
   roleOptionTextActive: {
-    color: Colors.primary,
-    fontWeight: '700',
+    color: '#F97316',
+    fontWeight: '800',
   },
   modalActionButtons: {
     flexDirection: 'row',
-    justifyContent: 'flex-end',
+    justifyContent: 'space-between',
     gap: 12,
     marginTop: 18,
   },
   cancelBtn: {
-    paddingVertical: 10,
-    paddingHorizontal: 16,
+    flex: 1,
+    paddingVertical: 12,
+    borderRadius: 10,
+    backgroundColor: '#E5E7EB',
+    alignItems: 'center',
   },
   cancelBtnText: {
-    color: Colors.textSecondary,
-    fontWeight: '600',
+    color: '#475569',
+    fontWeight: '700',
+    fontSize: 15,
   },
   saveBtn: {
-    backgroundColor: Colors.primary,
+    flex: 1,
+    backgroundColor: '#F97316',
     borderRadius: 10,
-    paddingVertical: 10,
-    paddingHorizontal: 20,
+    paddingVertical: 12,
+    alignItems: 'center',
   },
   saveBtnText: {
     color: '#FFF',
     fontWeight: '700',
+    fontSize: 15,
   },
 });

@@ -20,9 +20,18 @@ import { SafeAreaView } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
 import { Colors, Shadows } from '../../../theme/colors';
 import { useVitalStore, IoTDeviceItem } from '../../../store/useVitalStore';
+import { useTheme } from '../../../store/useThemeStore';
 
 export default function DevicesScreen({ navigation }: any) {
-  const { iotDevices, addIoTDevice } = useVitalStore();
+  const { isDarkMode, colors, toggleDarkMode } = useTheme();
+  const {
+    iotDevices,
+    addIoTDevice,
+    deviceGroups,
+    updateDeviceGroup,
+    removeDeviceGroup,
+  } = useVitalStore();
+  const groups = deviceGroups || ['Phòng khách', 'Phòng ngủ', 'Nhà tắm & Cửa'];
 
   // State menu thả xuống khi bấm dấu cộng (+)
   const [showAddMenu, setShowAddMenu] = useState(false);
@@ -32,19 +41,25 @@ export default function DevicesScreen({ navigation }: any) {
   const [isFlashOn, setIsFlashOn] = useState(false);
   const laserAnim = useRef(new Animated.Value(0)).current;
 
-  // State 5 Tab Bộ lọc: Tất cả, Camera, Đồng hồ, Nhóm, Khác
-  type FilterTab = 'Tất cả' | 'Camera' | 'Đồng hồ' | 'Nhóm' | 'Khác';
-  const filterTabs: FilterTab[] = ['Tất cả', 'Camera', 'Đồng hồ', 'Nhóm', 'Khác'];
-  const [activeTab, setActiveTab] = useState<FilterTab>('Tất cả');
+  // State Action Menu cho Nhóm (Nút 3 chấm)
+  const [selectedGroupForAction, setSelectedGroupForAction] = useState<string | null>(null);
+  const [showGroupActionModal, setShowGroupActionModal] = useState<boolean>(false);
 
-  // State Modal Nhóm thiết bị
-  const [showGroupModal, setShowGroupModal] = useState(false);
-  const [groups, setGroups] = useState<string[]>([
-    'Phòng khách',
-    'Phòng ngủ',
-    'Nhà tắm & Cửa',
-  ]);
-  const [newGroupName, setNewGroupName] = useState('');
+  // State Modal Xác nhận Xóa Nhóm
+  const [showDeleteConfirmModal, setShowDeleteConfirmModal] = useState<boolean>(false);
+
+  // State Modal Chỉnh Sửa Nhóm
+  const [showEditGroupModal, setShowEditGroupModal] = useState<boolean>(false);
+  const [editOldGroupName, setEditOldGroupName] = useState<string>('');
+  const [editNewGroupName, setEditNewGroupName] = useState<string>('');
+  const [editSelectedDeviceIds, setEditSelectedDeviceIds] = useState<string[]>([]);
+  const [editDeviceFilter, setEditDeviceFilter] = useState<'Tất cả' | 'Camera' | 'Đồng hồ'>('Tất cả');
+  const [editAttempted, setEditAttempted] = useState<boolean>(false);
+
+  // State 4 Tab Bộ lọc: Tất cả, Camera, Đồng hồ, Nhóm
+  type FilterTab = 'Tất cả' | 'Camera' | 'Đồng hồ' | 'Nhóm';
+  const filterTabs: FilterTab[] = ['Tất cả', 'Camera', 'Đồng hồ', 'Nhóm'];
+  const [activeTab, setActiveTab] = useState<FilterTab>('Tất cả');
   const [selectedGroupFilter, setSelectedGroupFilter] = useState<string>('Tất cả');
 
   // Animation tia laser quét QR
@@ -69,24 +84,18 @@ export default function DevicesScreen({ navigation }: any) {
     }
   }, [showQrModal]);
 
-  // Xử lý thêm nhóm mới
-  const handleCreateGroup = () => {
-    if (!newGroupName.trim()) {
-      Alert.alert('Thông báo', 'Vui lòng nhập tên nhóm thiết bị');
-      return;
-    }
-    const createdName = newGroupName.trim();
-    if (groups.includes(createdName)) {
-      Alert.alert('Thông báo', 'Nhóm này đã tồn tại');
-      return;
-    }
-    setGroups([...groups, createdName]);
-    setActiveTab('Nhóm');
-    setSelectedGroupFilter('Tất cả');
-    setNewGroupName('');
-    setShowGroupModal(false);
-    Alert.alert('Thành công', `Đã tạo nhóm "${createdName}" thành công!`);
-  };
+  // Helper phân loại thiết bị
+  const checkIsCamera = (dev: IoTDeviceItem) =>
+    dev.type === 'camera' ||
+    dev.name.toLowerCase().includes('camera') ||
+    dev.name.includes('SECA') ||
+    dev.name.includes('Ranger');
+
+  const checkIsWatch = (dev: IoTDeviceItem) =>
+    dev.type === 'band' ||
+    dev.type === 'watch' ||
+    dev.name.toLowerCase().includes('smartband') ||
+    dev.name.toLowerCase().includes('đồng hồ');
 
   // Giả lập quét thành công mã QR
   const handleSimulateQrScan = (type: 'camera' | 'watch') => {
@@ -128,24 +137,11 @@ export default function DevicesScreen({ navigation }: any) {
     }
   };
 
-  // Lọc danh sách thiết bị theo 5 tab: Tất cả, Camera, Đồng hồ, Nhóm, Khác
+  // Lọc danh sách thiết bị theo 4 tab: Tất cả, Camera, Đồng hồ, Nhóm
   const filteredDevices = iotDevices.filter((dev) => {
-    const isCamera =
-      dev.type === 'camera' ||
-      dev.name.toLowerCase().includes('camera') ||
-      dev.name.includes('SECA') ||
-      dev.name.includes('Ranger');
-
-    const isWatch =
-      dev.type === 'band' ||
-      dev.type === 'watch' ||
-      dev.name.toLowerCase().includes('smartband') ||
-      dev.name.toLowerCase().includes('đồng hồ');
-
     if (activeTab === 'Tất cả') return true;
-    if (activeTab === 'Camera') return isCamera;
-    if (activeTab === 'Đồng hồ') return isWatch;
-    if (activeTab === 'Khác') return !isCamera && !isWatch;
+    if (activeTab === 'Camera') return checkIsCamera(dev);
+    if (activeTab === 'Đồng hồ') return checkIsWatch(dev);
     // Tab 'Nhóm': Hiển thị tất cả nhưng có phân vùng nhóm
     return true;
   });
@@ -165,7 +161,11 @@ export default function DevicesScreen({ navigation }: any) {
       dev.name.toLowerCase().includes('đồng hồ');
 
     if (isCamera) {
-      navigation.navigate('CameraDetail');
+      navigation.navigate('CameraDetail', {
+        cameraId: dev.id,
+        cameraName: dev.name,
+        room: dev.location || dev.sub,
+      });
     } else if (isWatch) {
       navigation.navigate('SmartbandDetail', { device: dev });
     } else {
@@ -173,60 +173,195 @@ export default function DevicesScreen({ navigation }: any) {
     }
   };
 
+  // Lọc thiết bị cho modal chỉnh sửa
+  const filteredEditDevices = iotDevices.filter((dev) => {
+    if (editDeviceFilter === 'Camera') return checkIsCamera(dev);
+    if (editDeviceFilter === 'Đồng hồ') return checkIsWatch(dev);
+    return true;
+  });
+
+  const currentTabEditDeviceIds = filteredEditDevices.map((d) => d.id);
+  const isAllEditTabSelected =
+    currentTabEditDeviceIds.length > 0 &&
+    currentTabEditDeviceIds.every((id) => editSelectedDeviceIds.includes(id));
+
+  const toggleEditDeviceSelection = (id: string) => {
+    setEditSelectedDeviceIds((prev) =>
+      prev.includes(id) ? prev.filter((x) => x !== id) : [...prev, id]
+    );
+  };
+
+  const handleToggleEditSelectAll = () => {
+    if (isAllEditTabSelected) {
+      setEditSelectedDeviceIds((prev) =>
+        prev.filter((id) => !currentTabEditDeviceIds.includes(id))
+      );
+    } else {
+      setEditSelectedDeviceIds((prev) =>
+        Array.from(new Set([...prev, ...currentTabEditDeviceIds]))
+      );
+    }
+  };
+
+  // Validation form Chỉnh sửa
+  const trimmedEditName = editNewGroupName.trim();
+  const isEditNameEmpty = trimmedEditName.length === 0;
+  const isEditNameDuplicate =
+    !isEditNameEmpty &&
+    groups.some(
+      (g) =>
+        g.toLowerCase() !== editOldGroupName.toLowerCase() &&
+        g.toLowerCase() === trimmedEditName.toLowerCase()
+    );
+  const isEditNameValid = !isEditNameEmpty && !isEditNameDuplicate;
+  const hasEditDevices = editSelectedDeviceIds.length >= 1;
+  const isEditFormValid = isEditNameValid && hasEditDevices;
+
+  // Xử lý khi nhấn nút 3 chấm ở góc phải thẻ nhóm
+  const handleOpenGroupActionMenu = (groupName: string) => {
+    setSelectedGroupForAction(groupName);
+    setShowGroupActionModal(true);
+  };
+
+  // Mở modal Chỉnh sửa nhóm
+  const handleStartEditGroup = () => {
+    if (!selectedGroupForAction) return;
+    const target = selectedGroupForAction;
+    setShowGroupActionModal(false);
+    setEditOldGroupName(target);
+    setEditNewGroupName(target);
+
+    const devIdsInGroup = iotDevices
+      .filter((d) => d.location?.toLowerCase() === target.toLowerCase())
+      .map((d) => d.id);
+    setEditSelectedDeviceIds(devIdsInGroup);
+    setEditDeviceFilter('Tất cả');
+    setEditAttempted(false);
+    setShowEditGroupModal(true);
+  };
+
+  // Mở modal xác nhận Xóa nhóm
+  const handlePromptDeleteGroup = () => {
+    setShowGroupActionModal(false);
+    setShowDeleteConfirmModal(true);
+  };
+
+  // Xác nhận Xóa nhóm
+  const handleConfirmDeleteGroup = () => {
+    if (!selectedGroupForAction) return;
+    const targetGroup = selectedGroupForAction;
+    removeDeviceGroup(targetGroup);
+    if (selectedGroupFilter === targetGroup) {
+      setSelectedGroupFilter('Tất cả');
+    }
+    setShowDeleteConfirmModal(false);
+    setSelectedGroupForAction(null);
+    Alert.alert('Thành công', `Đã xóa nhóm "${targetGroup}" thành công.`);
+  };
+
+  // Lưu chỉnh sửa nhóm
+  const handleSaveEditGroup = () => {
+    setEditAttempted(true);
+    if (isEditNameEmpty) {
+      Alert.alert('Thông báo', 'Tên nhóm không được để trống.');
+      return;
+    }
+    if (isEditNameDuplicate) {
+      Alert.alert(
+        'Thông báo',
+        `Tên nhóm "${trimmedEditName}" đã tồn tại. Tên nhóm mới phải là duy nhất.`
+      );
+      return;
+    }
+    if (!hasEditDevices) {
+      Alert.alert('Thông báo', 'Cần chọn ít nhất 1 thiết bị để duy trì nhóm.');
+      return;
+    }
+
+    updateDeviceGroup(editOldGroupName, trimmedEditName, editSelectedDeviceIds);
+    if (selectedGroupFilter === editOldGroupName) {
+      setSelectedGroupFilter(trimmedEditName);
+    }
+    setShowEditGroupModal(false);
+    setSelectedGroupForAction(null);
+    Alert.alert('Thành công', `Đã cập nhật nhóm "${trimmedEditName}" thành công.`);
+  };
+
   return (
-    <SafeAreaView style={styles.safeArea} edges={['top']}>
+    <SafeAreaView style={[styles.safeArea, isDarkMode && { backgroundColor: colors.background }]} edges={['top']}>
       {/* Header */}
-      <View style={styles.headerRow}>
+      <View style={[styles.headerRow, isDarkMode && { backgroundColor: colors.background }]}>
         <View>
-          <Text style={styles.headerTitle}>Thiết bị</Text>
-          <Text style={styles.headerSubtitleTop}>
+          <Text style={[styles.headerTitle, isDarkMode && { color: colors.textPrimary }]}>Thiết bị</Text>
+          <Text style={[styles.headerSubtitleTop, isDarkMode && { color: colors.textSecondary }]}>
             {iotDevices.length} thiết bị đang kết nối
           </Text>
         </View>
 
-        {/* Nút dấu cộng (+) */}
-        <TouchableOpacity
-          style={[styles.addBtn, showAddMenu && styles.addBtnActive]}
-          onPress={() => setShowAddMenu(!showAddMenu)}
-          activeOpacity={0.8}
-        >
-          <Ionicons
-            name={showAddMenu ? 'close' : 'add'}
-            size={24}
-            color="#FFF"
-          />
-        </TouchableOpacity>
+        <View style={styles.headerRightActions}>
+          {/* Nút chuyển đổi Sáng / Tối */}
+          <TouchableOpacity
+            style={[styles.themeToggleBtn, isDarkMode && { backgroundColor: colors.iconBg }]}
+            onPress={toggleDarkMode}
+            activeOpacity={0.7}
+            accessibilityLabel="Chuyển chế độ Sáng/Tối"
+          >
+            <Ionicons
+              name={isDarkMode ? 'sunny-outline' : 'moon-outline'}
+              size={20}
+              color={isDarkMode ? '#F59E0B' : colors.textPrimary}
+            />
+          </TouchableOpacity>
+
+          {/* Nút dấu cộng (+) */}
+          <TouchableOpacity
+            style={[styles.addBtn, showAddMenu && styles.addBtnActive]}
+            onPress={() => setShowAddMenu(!showAddMenu)}
+            activeOpacity={0.8}
+          >
+            <Ionicons
+              name={showAddMenu ? 'close' : 'add'}
+              size={24}
+              color="#FFF"
+            />
+          </TouchableOpacity>
+        </View>
       </View>
 
-      {/* Thanh tab bộ lọc 5 mục: Tất cả, Camera, Đồng hồ, Nhóm, Khác */}
-      <View style={styles.groupTabsWrapper}>
+      {/* Thanh tab bộ lọc 4 mục: Tất cả, Camera, Đồng hồ, Nhóm */}
+      <View style={[styles.groupTabsWrapper, isDarkMode && { backgroundColor: colors.background, borderBottomColor: colors.border }]}>
         <ScrollView
           horizontal
           showsHorizontalScrollIndicator={false}
           contentContainerStyle={styles.groupTabsContainer}
         >
-          {filterTabs.map((tab) => (
-            <TouchableOpacity
-              key={tab}
-              style={[
-                styles.groupChip,
-                activeTab === tab && styles.groupChipActive,
-              ]}
-              onPress={() => {
-                setActiveTab(tab);
-              }}
-              activeOpacity={0.8}
-            >
-              <Text
+          {filterTabs.map((tab) => {
+            const isActive = activeTab === tab;
+            return (
+              <TouchableOpacity
+                key={tab}
                 style={[
-                  styles.groupChipText,
-                  activeTab === tab && styles.groupChipTextActive,
+                  styles.groupChip,
+                  isDarkMode && !isActive && { backgroundColor: colors.card, borderWidth: 1, borderColor: colors.border },
+                  isActive && styles.groupChipActive,
                 ]}
+                onPress={() => {
+                  setActiveTab(tab);
+                }}
+                activeOpacity={0.8}
               >
-                {tab}
-              </Text>
-            </TouchableOpacity>
-          ))}
+                <Text
+                  style={[
+                    styles.groupChipText,
+                    isDarkMode && !isActive && { color: colors.textSecondary },
+                    isActive && styles.groupChipTextActive,
+                  ]}
+                >
+                  {tab}
+                </Text>
+              </TouchableOpacity>
+            );
+          })}
         </ScrollView>
       </View>
 
@@ -234,7 +369,7 @@ export default function DevicesScreen({ navigation }: any) {
         showsVerticalScrollIndicator={false}
         contentContainerStyle={styles.scrollContent}
       >
-        <Text style={styles.sectionSubtitle}>
+        <Text style={[styles.sectionSubtitle, isDarkMode && { color: colors.textSecondary }]}>
           {activeTab === 'Nhóm'
             ? 'Danh sách các nhóm khu vực đã thiết lập trong nhà'
             : 'Hệ sinh thái giám sát đa phương thức (Multimodal Sensor Fusion)'}
@@ -242,6 +377,22 @@ export default function DevicesScreen({ navigation }: any) {
 
         {activeTab === 'Nhóm' ? (
           <View style={styles.groupViewSection}>
+            {/* Thanh tiêu đề & nút tạo nhóm mới */}
+            <View style={[styles.groupHeaderBar, isDarkMode && { backgroundColor: colors.card, borderColor: colors.border }]}>
+              <View>
+                <Text style={[styles.groupHeaderTitle, isDarkMode && { color: colors.textPrimary }]}>Phân vùng thiết bị theo nhóm</Text>
+                <Text style={[styles.groupHeaderSub, isDarkMode && { color: colors.textSecondary }]}>{groups.length} nhóm khu vực trong nhà</Text>
+              </View>
+              <TouchableOpacity
+                style={styles.createGroupHeaderBtn}
+                onPress={() => navigation.navigate('CreateGroup')}
+                activeOpacity={0.8}
+              >
+                <Ionicons name="add" size={16} color="#FFF" />
+                <Text style={styles.createGroupHeaderBtnText}>Tạo nhóm mới</Text>
+              </TouchableOpacity>
+            </View>
+
             {/* Thanh lọc các nhóm đã lập */}
             <ScrollView
               horizontal
@@ -251,6 +402,7 @@ export default function DevicesScreen({ navigation }: any) {
               <TouchableOpacity
                 style={[
                   styles.subGroupChip,
+                  isDarkMode && selectedGroupFilter !== 'Tất cả' && { backgroundColor: colors.card, borderColor: colors.border },
                   selectedGroupFilter === 'Tất cả' && styles.subGroupChipActive,
                 ]}
                 onPress={() => setSelectedGroupFilter('Tất cả')}
@@ -259,6 +411,7 @@ export default function DevicesScreen({ navigation }: any) {
                 <Text
                   style={[
                     styles.subGroupChipText,
+                    isDarkMode && selectedGroupFilter !== 'Tất cả' && { color: '#C084FC' },
                     selectedGroupFilter === 'Tất cả' && styles.subGroupChipTextActive,
                   ]}
                 >
@@ -270,12 +423,14 @@ export default function DevicesScreen({ navigation }: any) {
                 const count = iotDevices.filter(
                   (d) => d.location?.toLowerCase() === g.toLowerCase()
                 ).length;
+                const isSelected = selectedGroupFilter === g;
                 return (
                   <TouchableOpacity
                     key={g}
                     style={[
                       styles.subGroupChip,
-                      selectedGroupFilter === g && styles.subGroupChipActive,
+                      isDarkMode && !isSelected && { backgroundColor: colors.card, borderColor: colors.border },
+                      isSelected && styles.subGroupChipActive,
                     ]}
                     onPress={() => setSelectedGroupFilter(g)}
                     activeOpacity={0.8}
@@ -283,13 +438,14 @@ export default function DevicesScreen({ navigation }: any) {
                     <Ionicons
                       name="folder-outline"
                       size={13}
-                      color={selectedGroupFilter === g ? '#FFF' : '#7C3AED'}
+                      color={isSelected ? '#FFF' : '#7C3AED'}
                       style={{ marginRight: 4 }}
                     />
                     <Text
                       style={[
                         styles.subGroupChipText,
-                        selectedGroupFilter === g && styles.subGroupChipTextActive,
+                        isDarkMode && !isSelected && { color: '#C084FC' },
+                        isSelected && styles.subGroupChipTextActive,
                       ]}
                     >
                       {g} ({count})
@@ -310,25 +466,35 @@ export default function DevicesScreen({ navigation }: any) {
               const onlineCount = devicesInGroup.filter((d) => d.isOnline).length;
 
               return (
-                <View key={groupName} style={styles.groupCardWrapper}>
+                <View key={groupName} style={[styles.groupCardWrapper, isDarkMode && { backgroundColor: colors.card, borderColor: colors.border }]}>
                   {/* Tiêu đề nhóm */}
-                  <View style={styles.groupCardHeader}>
+                  <View style={[styles.groupCardHeader, isDarkMode && { backgroundColor: '#1E1B4B', borderBottomColor: '#2E1065' }]}>
                     <View style={styles.groupCardHeaderLeft}>
                       <View style={styles.groupFolderIconBox}>
                         <Ionicons name="folder" size={18} color="#7C3AED" />
                       </View>
                       <View style={{ marginLeft: 10 }}>
-                        <Text style={styles.groupCardName}>{groupName}</Text>
-                        <Text style={styles.groupCardMeta}>
+                        <Text style={[styles.groupCardName, isDarkMode && { color: '#F8FAFC' }]}>{groupName}</Text>
+                        <Text style={[styles.groupCardMeta, isDarkMode && { color: '#94A3B8' }]}>
                           {devicesInGroup.length} thiết bị • {onlineCount} trực tuyến
                         </Text>
                       </View>
                     </View>
 
-                    <View style={styles.groupCountBadge}>
-                      <Text style={styles.groupCountBadgeText}>
-                        {devicesInGroup.length} thiết bị
-                      </Text>
+                    <View style={styles.groupCardHeaderRight}>
+                      <View style={[styles.groupCountBadge, isDarkMode && { backgroundColor: 'rgba(124, 58, 237, 0.25)' }]}>
+                        <Text style={[styles.groupCountBadgeText, isDarkMode && { color: '#DDD6FE' }]}>
+                          {devicesInGroup.length} thiết bị
+                        </Text>
+                      </View>
+                      <TouchableOpacity
+                        style={styles.groupMoreBtn}
+                        onPress={() => handleOpenGroupActionMenu(groupName)}
+                        activeOpacity={0.7}
+                        hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
+                      >
+                        <Ionicons name="ellipsis-vertical" size={18} color={isDarkMode ? '#94A3B8' : '#64748B'} />
+                      </TouchableOpacity>
                     </View>
                   </View>
 
@@ -341,6 +507,7 @@ export default function DevicesScreen({ navigation }: any) {
                           style={[
                             styles.deviceItemInGroup,
                             idx > 0 && styles.deviceItemInGroupDivider,
+                            idx > 0 && isDarkMode && { borderTopColor: colors.border },
                           ]}
                           onPress={() => handleDevicePress(dev)}
                           activeOpacity={0.7}
@@ -359,9 +526,9 @@ export default function DevicesScreen({ navigation }: any) {
                           </View>
 
                           <View style={{ flex: 1, marginLeft: 12 }}>
-                            <Text style={styles.deviceNameText}>{dev.name}</Text>
+                            <Text style={[styles.deviceNameText, isDarkMode && { color: colors.textPrimary }]}>{dev.name}</Text>
                             <Text
-                              style={styles.deviceSubText}
+                              style={[styles.deviceSubText, isDarkMode && { color: colors.textSecondary }]}
                               numberOfLines={1}
                             >
                               {dev.sub}
@@ -377,22 +544,22 @@ export default function DevicesScreen({ navigation }: any) {
                                   },
                                 ]}
                               />
-                              <Text style={styles.statusText}>{dev.status}</Text>
+                              <Text style={[styles.statusText, isDarkMode && { color: colors.textSecondary }]}>{dev.status}</Text>
                             </View>
                           </View>
 
                           <Ionicons
                             name="chevron-forward"
                             size={16}
-                            color="#CBD5E1"
+                            color={isDarkMode ? '#64748B' : '#CBD5E1'}
                           />
                         </TouchableOpacity>
                       ))}
                     </View>
                   ) : (
                     <View style={styles.emptyGroupContent}>
-                      <Ionicons name="cube-outline" size={24} color="#94A3B8" />
-                      <Text style={styles.emptyGroupContentText}>
+                      <Ionicons name="cube-outline" size={24} color={isDarkMode ? '#64748B' : '#94A3B8'} />
+                      <Text style={[styles.emptyGroupContentText, isDarkMode && { color: colors.textSecondary }]}>
                         Chưa có thiết bị nào trong nhóm "{groupName}"
                       </Text>
                     </View>
@@ -406,7 +573,10 @@ export default function DevicesScreen({ navigation }: any) {
             {filteredDevices.map((dev) => (
               <TouchableOpacity
                 key={dev.id}
-                style={styles.deviceCard}
+                style={[
+                  styles.deviceCard,
+                  isDarkMode && { backgroundColor: colors.card, borderWidth: 1, borderColor: colors.border },
+                ]}
                 onPress={() => handleDevicePress(dev)}
                 activeOpacity={0.8}
               >
@@ -415,8 +585,8 @@ export default function DevicesScreen({ navigation }: any) {
                 </View>
 
                 <View style={{ flex: 1, marginLeft: 14 }}>
-                  <Text style={styles.deviceNameText}>{dev.name}</Text>
-                  <Text style={styles.deviceSubText} numberOfLines={2}>
+                  <Text style={[styles.deviceNameText, isDarkMode && { color: colors.textPrimary }]}>{dev.name}</Text>
+                  <Text style={[styles.deviceSubText, isDarkMode && { color: colors.textSecondary }]} numberOfLines={2}>
                     {dev.sub}
                   </Text>
                   <View style={styles.statusRow}>
@@ -426,19 +596,19 @@ export default function DevicesScreen({ navigation }: any) {
                         { backgroundColor: dev.isOnline ? Colors.success : Colors.danger },
                       ]}
                     />
-                    <Text style={styles.statusText}>{dev.status}</Text>
+                    <Text style={[styles.statusText, isDarkMode && { color: colors.textSecondary }]}>{dev.status}</Text>
                   </View>
                 </View>
 
-                <Ionicons name="chevron-forward" size={18} color="#CBD5E1" />
+                <Ionicons name="chevron-forward" size={18} color={isDarkMode ? '#64748B' : '#CBD5E1'} />
               </TouchableOpacity>
             ))}
 
             {filteredDevices.length === 0 && (
               <View style={styles.emptyGroupContainer}>
-                <Ionicons name="layers-outline" size={44} color="#CBD5E1" />
-                <Text style={styles.emptyGroupTitle}>Không có thiết bị trong nhóm này</Text>
-                <Text style={styles.emptyGroupDesc}>
+                <Ionicons name="layers-outline" size={44} color={isDarkMode ? '#475569' : '#CBD5E1'} />
+                <Text style={[styles.emptyGroupTitle, isDarkMode && { color: colors.textPrimary }]}>Không có thiết bị trong nhóm này</Text>
+                <Text style={[styles.emptyGroupDesc, isDarkMode && { color: colors.textSecondary }]}>
                   Bấm nút (+) ở góc trên để thêm thiết bị mới vào danh mục "{activeTab}".
                 </Text>
               </View>
@@ -455,9 +625,9 @@ export default function DevicesScreen({ navigation }: any) {
         <TouchableWithoutFeedback onPress={() => setShowAddMenu(false)}>
           <View style={styles.menuOverlay}>
             <TouchableWithoutFeedback>
-              <View style={styles.floatingMenuCard}>
+              <View style={[styles.floatingMenuCard, isDarkMode && { backgroundColor: colors.card, borderColor: colors.border }]}>
                 <View style={styles.menuHeaderIndicator}>
-                  <Text style={styles.menuHeaderLabel}>Tùy chọn thiết bị</Text>
+                  <Text style={[styles.menuHeaderLabel, isDarkMode && { color: colors.textSecondary }]}>Tùy chọn thiết bị</Text>
                 </View>
 
                 {/* 1. Thêm thủ công */}
@@ -473,13 +643,13 @@ export default function DevicesScreen({ navigation }: any) {
                     <Ionicons name="construct-outline" size={20} color="#EA580C" />
                   </View>
                   <View style={styles.menuItemContent}>
-                    <Text style={styles.menuItemTitle}>Thêm thủ công</Text>
-                    <Text style={styles.menuItemDesc}>Camera Wi-Fi, Đồng hồ BLE, IoT Hub</Text>
+                    <Text style={[styles.menuItemTitle, isDarkMode && { color: colors.textPrimary }]}>Thêm thủ công</Text>
+                    <Text style={[styles.menuItemDesc, isDarkMode && { color: colors.textSecondary }]}>Camera Wi-Fi, Đồng hồ BLE, IoT Hub</Text>
                   </View>
-                  <Ionicons name="chevron-forward" size={16} color="#CBD5E1" />
+                  <Ionicons name="chevron-forward" size={16} color={isDarkMode ? '#64748B' : '#CBD5E1'} />
                 </TouchableOpacity>
 
-                <View style={styles.menuDivider} />
+                <View style={[styles.menuDivider, isDarkMode && { backgroundColor: colors.border }]} />
 
                 {/* 2. Quét mã QR */}
                 <TouchableOpacity
@@ -494,20 +664,20 @@ export default function DevicesScreen({ navigation }: any) {
                     <Ionicons name="qr-code-outline" size={20} color="#0284C7" />
                   </View>
                   <View style={styles.menuItemContent}>
-                    <Text style={styles.menuItemTitle}>Quét mã QR</Text>
-                    <Text style={styles.menuItemDesc}>Quét tem QR trên thân camera/vòng tay</Text>
+                    <Text style={[styles.menuItemTitle, isDarkMode && { color: colors.textPrimary }]}>Quét mã QR</Text>
+                    <Text style={[styles.menuItemDesc, isDarkMode && { color: colors.textSecondary }]}>Quét tem QR trên thân camera/vòng tay</Text>
                   </View>
-                  <Ionicons name="chevron-forward" size={16} color="#CBD5E1" />
+                  <Ionicons name="chevron-forward" size={16} color={isDarkMode ? '#64748B' : '#CBD5E1'} />
                 </TouchableOpacity>
 
-                <View style={styles.menuDivider} />
+                <View style={[styles.menuDivider, isDarkMode && { backgroundColor: colors.border }]} />
 
                 {/* 3. Nhóm */}
                 <TouchableOpacity
                   style={styles.menuItem}
                   onPress={() => {
                     setShowAddMenu(false);
-                    setShowGroupModal(true);
+                    navigation.navigate('CreateGroup');
                   }}
                   activeOpacity={0.7}
                 >
@@ -515,10 +685,10 @@ export default function DevicesScreen({ navigation }: any) {
                     <Ionicons name="layers-outline" size={20} color="#7C3AED" />
                   </View>
                   <View style={styles.menuItemContent}>
-                    <Text style={styles.menuItemTitle}>Nhóm thiết bị</Text>
-                    <Text style={styles.menuItemDesc}>Tạo & quản lý nhóm phòng, người đeo</Text>
+                    <Text style={[styles.menuItemTitle, isDarkMode && { color: colors.textPrimary }]}>Nhóm thiết bị</Text>
+                    <Text style={[styles.menuItemDesc, isDarkMode && { color: colors.textSecondary }]}>Tạo & quản lý nhóm phòng, người đeo</Text>
                   </View>
-                  <Ionicons name="chevron-forward" size={16} color="#CBD5E1" />
+                  <Ionicons name="chevron-forward" size={16} color={isDarkMode ? '#64748B' : '#CBD5E1'} />
                 </TouchableOpacity>
               </View>
             </TouchableWithoutFeedback>
@@ -613,68 +783,377 @@ export default function DevicesScreen({ navigation }: any) {
       </Modal>
 
       {/* ============================================================== */}
-      {/* MODAL 3: Quản lý & Tạo Nhóm Thiết Bị                           */}
+      {/* MODAL 3: Menu Tùy chọn Nhóm (Chỉnh sửa / Xóa)                  */}
       {/* ============================================================== */}
       <Modal
-        visible={showGroupModal}
+        visible={showGroupActionModal}
         transparent
         animationType="fade"
-        onRequestClose={() => setShowGroupModal(false)}
+        onRequestClose={() => setShowGroupActionModal(false)}
       >
-        <View style={styles.groupModalOverlay}>
-          <View style={styles.groupModalCard}>
-            <View style={styles.groupModalHeader}>
-              <View style={[styles.menuItemIconBox, { backgroundColor: '#F5F3FF' }]}>
-                <Ionicons name="layers" size={24} color="#7C3AED" />
-              </View>
-              <View style={{ flex: 1, marginLeft: 12 }}>
-                <Text style={styles.groupModalTitle}>Quản Lý Nhóm Thiết Bị</Text>
-                <Text style={styles.groupModalSub}>Phân vùng theo phòng hoặc người thân</Text>
-              </View>
-              <TouchableOpacity onPress={() => setShowGroupModal(false)}>
-                <Ionicons name="close" size={22} color="#94A3B8" />
-              </TouchableOpacity>
-            </View>
-
-            {/* Danh sách các nhóm hiện tại */}
-            <Text style={styles.groupListLabel}>Các nhóm hiện có:</Text>
-            <View style={styles.groupBadgesRow}>
-              {groups.map((g) => (
-                <View key={g} style={styles.groupBadgeItem}>
-                  <Ionicons name="folder-outline" size={14} color="#6D28D9" />
-                  <Text style={styles.groupBadgeItemText}>{g}</Text>
+        <TouchableWithoutFeedback onPress={() => setShowGroupActionModal(false)}>
+          <View style={styles.actionModalOverlay}>
+            <TouchableWithoutFeedback>
+              <View style={[styles.actionModalCard, isDarkMode && { backgroundColor: colors.card }]}>
+                {/* Header action modal */}
+                <View style={styles.actionModalHeader}>
+                  <View style={styles.actionModalIconBox}>
+                    <Ionicons name="folder" size={22} color="#7C3AED" />
+                  </View>
+                  <View style={{ flex: 1, marginLeft: 12 }}>
+                    <Text style={styles.actionModalSubtitle}>TÙY CHỌN NHÓM THIẾT BỊ</Text>
+                    <Text style={[styles.actionModalTitle, isDarkMode && { color: colors.textPrimary }]}>{selectedGroupForAction}</Text>
+                  </View>
+                  <TouchableOpacity
+                    style={styles.actionModalCloseBtn}
+                    onPress={() => setShowGroupActionModal(false)}
+                    activeOpacity={0.7}
+                  >
+                    <Ionicons name="close" size={20} color={isDarkMode ? '#94A3B8' : '#64748B'} />
+                  </TouchableOpacity>
                 </View>
-              ))}
-            </View>
 
-            {/* Ô nhập tạo nhóm mới */}
-            <View style={styles.createGroupSection}>
-              <Text style={styles.inputLabel}>Tạo nhóm thiết bị mới:</Text>
-              <TextInput
-                style={styles.groupTextInput}
-                value={newGroupName}
-                onChangeText={setNewGroupName}
-                placeholder="Ví dụ: Tầng 2, Phòng Ăn, Cụ Bà..."
-              />
-            </View>
+                <View style={[styles.actionMenuDivider, isDarkMode && { backgroundColor: colors.border }]} />
 
-            <View style={styles.groupModalActions}>
-              <TouchableOpacity
-                style={styles.cancelGroupBtn}
-                onPress={() => setShowGroupModal(false)}
-              >
-                <Text style={styles.cancelGroupBtnText}>Đóng</Text>
-              </TouchableOpacity>
-              <TouchableOpacity
-                style={styles.saveGroupBtn}
-                onPress={handleCreateGroup}
-              >
-                <Ionicons name="add" size={18} color="#FFF" />
-                <Text style={styles.saveGroupBtnText}>Tạo Nhóm</Text>
-              </TouchableOpacity>
+                {/* Option 1: Chỉnh sửa */}
+                <TouchableOpacity
+                  style={styles.actionMenuItem}
+                  onPress={handleStartEditGroup}
+                  activeOpacity={0.7}
+                >
+                  <View style={[styles.actionMenuIconCircle, { backgroundColor: isDarkMode ? 'rgba(124, 58, 237, 0.2)' : '#F5F3FF' }]}>
+                    <Ionicons name="create-outline" size={20} color="#7C3AED" />
+                  </View>
+                  <View style={{ flex: 1, marginLeft: 14 }}>
+                    <Text style={[styles.actionMenuText, isDarkMode && { color: colors.textPrimary }]}>Chỉnh sửa</Text>
+                    <Text style={[styles.actionMenuSub, isDarkMode && { color: colors.textSecondary }]}>
+                      Đổi tên nhóm hoặc thay đổi các thiết bị thuộc nhóm
+                    </Text>
+                  </View>
+                  <Ionicons name="chevron-forward" size={18} color={isDarkMode ? '#64748B' : '#CBD5E1'} />
+                </TouchableOpacity>
+
+                <View style={[styles.actionMenuDivider, isDarkMode && { backgroundColor: colors.border }]} />
+
+                {/* Option 2: Xóa */}
+                <TouchableOpacity
+                  style={styles.actionMenuItem}
+                  onPress={handlePromptDeleteGroup}
+                  activeOpacity={0.7}
+                >
+                  <View style={[styles.actionMenuIconCircle, { backgroundColor: isDarkMode ? 'rgba(239, 68, 68, 0.2)' : '#FEF2F2' }]}>
+                    <Ionicons name="trash-outline" size={20} color="#EF4444" />
+                  </View>
+                  <View style={{ flex: 1, marginLeft: 14 }}>
+                    <Text style={[styles.actionMenuText, { color: '#DC2626' }]}>
+                      Xóa
+                    </Text>
+                    <Text style={[styles.actionMenuSub, isDarkMode && { color: colors.textSecondary }]}>
+                      Xóa nhóm này, thiết bị sẽ chuyển về trạng thái Chưa nhóm
+                    </Text>
+                  </View>
+                  <Ionicons name="chevron-forward" size={18} color={isDarkMode ? '#64748B' : '#CBD5E1'} />
+                </TouchableOpacity>
+
+                <View style={[styles.actionMenuDivider, isDarkMode && { backgroundColor: colors.border }]} />
+
+                {/* Nút Đóng */}
+                <TouchableOpacity
+                  style={[styles.actionCancelBtn, isDarkMode && { backgroundColor: colors.surfaceSubtle }]}
+                  onPress={() => setShowGroupActionModal(false)}
+                  activeOpacity={0.7}
+                >
+                  <Text style={[styles.actionCancelBtnText, isDarkMode && { color: colors.textSecondary }]}>Hủy bỏ</Text>
+                </TouchableOpacity>
+              </View>
+            </TouchableWithoutFeedback>
+          </View>
+        </TouchableWithoutFeedback>
+      </Modal>
+
+      {/* ============================================================== */}
+      {/* MODAL 4: Xác nhận Xóa Nhóm                                    */}
+      {/* ============================================================== */}
+      <Modal
+        visible={showDeleteConfirmModal}
+        transparent
+        animationType="fade"
+        onRequestClose={() => setShowDeleteConfirmModal(false)}
+      >
+        <TouchableWithoutFeedback onPress={() => setShowDeleteConfirmModal(false)}>
+          <View style={styles.confirmModalOverlay}>
+            <TouchableWithoutFeedback>
+              <View style={[styles.confirmModalCard, isDarkMode && { backgroundColor: colors.card }]}>
+                <View style={styles.confirmModalIconRing}>
+                  <Ionicons name="trash" size={32} color="#EF4444" />
+                </View>
+                <Text style={[styles.confirmModalTitle, isDarkMode && { color: colors.textPrimary }]}>Xác Nhận Xóa Nhóm?</Text>
+                <Text style={[styles.confirmModalDesc, isDarkMode && { color: colors.textSecondary }]}>
+                  Bạn có chắc chắn muốn xóa nhóm{' '}
+                  <Text style={{ fontWeight: '800', color: isDarkMode ? '#A78BFA' : '#1E1B4B' }}>
+                    "{selectedGroupForAction}"
+                  </Text>
+                  ?{'\n\n'}
+                  Các thiết bị trong nhóm sẽ{' '}
+                  <Text style={{ fontWeight: '700', color: '#16A34A' }}>không bị xóa</Text> mà
+                  được tự động chuyển về trạng thái{' '}
+                  <Text style={{ fontWeight: '700', color: '#7C3AED' }}>"Chưa nhóm"</Text>.
+                </Text>
+
+                <View style={styles.confirmModalActions}>
+                  <TouchableOpacity
+                    style={[styles.confirmModalCancelBtn, isDarkMode && { backgroundColor: colors.surfaceSubtle }]}
+                    onPress={() => setShowDeleteConfirmModal(false)}
+                    activeOpacity={0.7}
+                  >
+                    <Text style={[styles.confirmModalCancelBtnText, isDarkMode && { color: colors.textSecondary }]}>Hủy bỏ</Text>
+                  </TouchableOpacity>
+
+                  <TouchableOpacity
+                    style={styles.confirmModalDeleteBtn}
+                    onPress={handleConfirmDeleteGroup}
+                    activeOpacity={0.8}
+                  >
+                    <Ionicons name="trash-outline" size={18} color="#FFF" />
+                    <Text style={styles.confirmModalDeleteBtnText}>Xóa nhóm</Text>
+                  </TouchableOpacity>
+                </View>
+              </View>
+            </TouchableWithoutFeedback>
+          </View>
+        </TouchableWithoutFeedback>
+      </Modal>
+
+      {/* ============================================================== */}
+      {/* MODAL 5: Chỉnh sửa Nhóm (Đổi tên & Quản lý thiết bị)           */}
+      {/* ============================================================== */}
+      <Modal
+        visible={showEditGroupModal}
+        transparent
+        animationType="slide"
+        onRequestClose={() => setShowEditGroupModal(false)}
+      >
+        <SafeAreaView style={[styles.editModalSafeArea, isDarkMode && { backgroundColor: colors.background }]}>
+          <View style={[styles.editModalHeader, isDarkMode && { backgroundColor: colors.card, borderBottomColor: colors.border }]}>
+            <TouchableOpacity
+              style={styles.editModalCloseBtn}
+              onPress={() => setShowEditGroupModal(false)}
+              activeOpacity={0.7}
+            >
+              <Ionicons name="close" size={24} color={isDarkMode ? '#94A3B8' : '#1E293B'} />
+            </TouchableOpacity>
+            <View style={{ flex: 1, marginLeft: 10 }}>
+              <Text style={[styles.editModalTitle, isDarkMode && { color: colors.textPrimary }]}>Chỉnh Sửa Nhóm</Text>
+              <Text style={[styles.editModalSubtitle, isDarkMode && { color: colors.textSecondary }]}>
+                Đổi tên và phân công thiết bị cho nhóm
+              </Text>
             </View>
           </View>
-        </View>
+
+          <ScrollView style={styles.editModalBody} showsVerticalScrollIndicator={false}>
+            {/* Card 1: Tên nhóm */}
+            <View style={[styles.editSectionCard, isDarkMode && { backgroundColor: colors.card, borderColor: colors.border }]}>
+              <View style={styles.editSectionHeader}>
+                <View style={[styles.editIconBox, { backgroundColor: '#F5F3FF' }]}>
+                  <Ionicons name="folder-outline" size={18} color="#7C3AED" />
+                </View>
+                <View style={{ flex: 1, marginLeft: 10 }}>
+                  <Text style={[styles.editSectionTitle, isDarkMode && { color: colors.textPrimary }]}>1. Tên nhóm *</Text>
+                  <Text style={[styles.editSectionSub, isDarkMode && { color: colors.textSecondary }]}>
+                    Duy nhất và không được để trống
+                  </Text>
+                </View>
+                {isEditNameValid && (
+                  <View style={styles.editValidBadge}>
+                    <Ionicons name="checkmark-circle" size={13} color="#16A34A" />
+                    <Text style={styles.editValidBadgeText}>Hợp lệ</Text>
+                  </View>
+                )}
+              </View>
+
+              <TextInput
+                style={[
+                  styles.editTextInput,
+                  isDarkMode && { backgroundColor: colors.background, color: colors.textPrimary, borderColor: colors.border },
+                  isEditNameDuplicate || (editAttempted && isEditNameEmpty)
+                    ? styles.editTextInputError
+                    : isEditNameValid
+                    ? styles.editTextInputValid
+                    : null,
+                ]}
+                value={editNewGroupName}
+                onChangeText={(t) => {
+                  setEditNewGroupName(t);
+                  if (editAttempted) setEditAttempted(false);
+                }}
+                placeholder="Nhập tên nhóm..."
+                placeholderTextColor={isDarkMode ? '#64748B' : '#94A3B8'}
+              />
+
+              {isEditNameDuplicate && (
+                <View style={styles.editFeedbackRow}>
+                  <Ionicons name="close-circle" size={15} color="#DC2626" />
+                  <Text style={styles.editFeedbackError}>
+                    Tên nhóm "{trimmedEditName}" đã tồn tại. Tên nhóm phải là duy nhất!
+                  </Text>
+                </View>
+              )}
+              {editAttempted && isEditNameEmpty && (
+                <View style={styles.editFeedbackRow}>
+                  <Ionicons name="alert-circle" size={15} color="#DC2626" />
+                  <Text style={styles.editFeedbackError}>
+                    Tên nhóm không được để trống!
+                  </Text>
+                </View>
+              )}
+            </View>
+
+            {/* Card 2: Thiết bị trong nhóm */}
+            <View style={[styles.editSectionCard, isDarkMode && { backgroundColor: colors.card, borderColor: colors.border }]}>
+              <View style={styles.editSectionHeader}>
+                <View style={[styles.editIconBox, { backgroundColor: '#EDE9FE' }]}>
+                  <Ionicons name="hardware-chip-outline" size={18} color="#7C3AED" />
+                </View>
+                <View style={{ flex: 1, marginLeft: 10 }}>
+                  <Text style={[styles.editSectionTitle, isDarkMode && { color: colors.textPrimary }]}>2. Thiết bị thuộc nhóm *</Text>
+                  <Text
+                    style={[
+                      styles.editSectionSub,
+                      isDarkMode && { color: colors.textSecondary },
+                      !hasEditDevices && editAttempted && styles.editSectionSubError,
+                    ]}
+                  >
+                    {!hasEditDevices
+                      ? 'Cần ít nhất 1 thiết bị để duy trì nhóm'
+                      : `Đã chọn ${editSelectedDeviceIds.length} / ${iotDevices.length} thiết bị`}
+                  </Text>
+                </View>
+                <TouchableOpacity
+                  style={styles.editSelectAllBtn}
+                  onPress={handleToggleEditSelectAll}
+                  activeOpacity={0.7}
+                >
+                  <Text style={styles.editSelectAllBtnText}>
+                    {isAllEditTabSelected ? 'Bỏ chọn' : 'Chọn tất cả'}
+                  </Text>
+                </TouchableOpacity>
+              </View>
+
+              {/* Warning banner nếu 0 thiết bị */}
+              {!hasEditDevices && editAttempted && (
+                <View style={styles.editWarningBanner}>
+                  <Ionicons name="alert-circle" size={18} color="#DC2626" />
+                  <Text style={styles.editWarningText}>
+                    Cần có ít nhất 1 thiết bị mới duy trì nhóm được. Vui lòng chọn thiết bị!
+                  </Text>
+                </View>
+              )}
+
+              {/* 3 Tab lọc thiết bị */}
+              <View style={styles.editFilterTabsRow}>
+                {(['Tất cả', 'Camera', 'Đồng hồ'] as const).map((tab) => {
+                  const isActive = editDeviceFilter === tab;
+                  return (
+                    <TouchableOpacity
+                      key={tab}
+                      style={[
+                        styles.editFilterTab,
+                        isDarkMode && !isActive && { backgroundColor: colors.background, borderColor: colors.border },
+                        isActive && styles.editFilterTabActive,
+                      ]}
+                      onPress={() => setEditDeviceFilter(tab)}
+                      activeOpacity={0.7}
+                    >
+                      <Text
+                        style={[
+                          styles.editFilterTabText,
+                          isDarkMode && !isActive && { color: colors.textSecondary },
+                          isActive && styles.editFilterTabTextActive,
+                        ]}
+                      >
+                        {tab}
+                      </Text>
+                    </TouchableOpacity>
+                  );
+                })}
+              </View>
+
+              {/* Danh sách thiết bị */}
+              <View style={styles.editDeviceList}>
+                {filteredEditDevices.map((dev) => {
+                  const isSelected = editSelectedDeviceIds.includes(dev.id);
+                  return (
+                    <TouchableOpacity
+                      key={dev.id}
+                      style={[
+                        styles.editDeviceCard,
+                        isDarkMode && { backgroundColor: colors.background, borderColor: colors.border },
+                        isSelected && styles.editDeviceCardSelected,
+                        isSelected && isDarkMode && { backgroundColor: 'rgba(124, 58, 237, 0.15)', borderColor: '#7C3AED' },
+                      ]}
+                      onPress={() => toggleEditDeviceSelection(dev.id)}
+                      activeOpacity={0.7}
+                    >
+                      <Ionicons
+                        name={isSelected ? 'checkbox' : 'square-outline'}
+                        size={20}
+                        color={isSelected ? '#7C3AED' : '#94A3B8'}
+                        style={{ marginRight: 10 }}
+                      />
+                      <View
+                        style={[
+                          styles.iconBoxSmall,
+                          { backgroundColor: `${dev.color}18` },
+                        ]}
+                      >
+                        <Ionicons name={dev.icon as any} size={18} color={dev.color} />
+                      </View>
+                      <View style={{ flex: 1, marginLeft: 10 }}>
+                        <Text style={[styles.editDeviceName, isDarkMode && { color: colors.textPrimary }]} numberOfLines={1}>
+                          {dev.name}
+                        </Text>
+                        <Text style={[styles.editDeviceSub, isDarkMode && { color: colors.textSecondary }]} numberOfLines={1}>
+                          Vị trí hiện tại:{' '}
+                          <Text style={{ fontWeight: '700', color: isDarkMode ? '#94A3B8' : '#475569' }}>
+                            {dev.location || 'Chưa nhóm'}
+                          </Text>
+                        </Text>
+                      </View>
+                      <View
+                        style={[
+                          styles.statusDot,
+                          { backgroundColor: dev.isOnline ? Colors.success : '#CBD5E1' },
+                        ]}
+                      />
+                    </TouchableOpacity>
+                  );
+                })}
+              </View>
+            </View>
+          </ScrollView>
+
+          {/* Footer Action */}
+          <View style={[styles.editModalFooter, isDarkMode && { backgroundColor: colors.card, borderTopColor: colors.border }]}>
+            <TouchableOpacity
+              style={[styles.editModalCancelBtn, isDarkMode && { backgroundColor: colors.surfaceSubtle }]}
+              onPress={() => setShowEditGroupModal(false)}
+              activeOpacity={0.7}
+            >
+              <Text style={[styles.editModalCancelBtnText, isDarkMode && { color: colors.textSecondary }]}>Hủy</Text>
+            </TouchableOpacity>
+            <TouchableOpacity
+              style={[
+                styles.editModalSaveBtn,
+                !isEditFormValid && styles.editModalSaveBtnDisabled,
+              ]}
+              onPress={handleSaveEditGroup}
+              activeOpacity={0.8}
+            >
+              <Ionicons name="checkmark" size={18} color="#FFF" />
+              <Text style={styles.editModalSaveBtnText}>Lưu Thay Đổi</Text>
+            </TouchableOpacity>
+          </View>
+        </SafeAreaView>
       </Modal>
     </SafeAreaView>
   );
@@ -704,6 +1183,19 @@ const styles = StyleSheet.create({
     fontSize: 12,
     color: Colors.textSecondary,
     marginTop: 2,
+  },
+  headerRightActions: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 8,
+  },
+  themeToggleBtn: {
+    width: 38,
+    height: 38,
+    borderRadius: 19,
+    backgroundColor: '#F1F5F9',
+    alignItems: 'center',
+    justifyContent: 'center',
   },
   addBtn: {
     width: 38,
@@ -1056,111 +1548,42 @@ const styles = StyleSheet.create({
   },
 
   // =========================================================
-  // Group Management Modal
+  // Group Header Bar (Tab "Nhóm")
   // =========================================================
-  groupModalOverlay: {
-    flex: 1,
-    backgroundColor: 'rgba(15, 23, 42, 0.6)',
-    alignItems: 'center',
-    justifyContent: 'center',
-    padding: 20,
-  },
-  groupModalCard: {
-    width: '100%',
-    backgroundColor: '#FFF',
-    borderRadius: 20,
-    padding: 20,
-  },
-  groupModalHeader: {
+  groupHeaderBar: {
     flexDirection: 'row',
     alignItems: 'center',
-    marginBottom: 16,
+    justifyContent: 'space-between',
+    backgroundColor: '#FFF',
+    paddingHorizontal: 16,
+    paddingVertical: 14,
+    borderRadius: 16,
+    borderWidth: 1,
+    borderColor: '#E2E8F0',
+    marginBottom: 8,
+    ...Shadows.card,
   },
-  groupModalTitle: {
-    fontSize: 16,
+  groupHeaderTitle: {
+    fontSize: 15,
     fontWeight: '800',
     color: '#0F172A',
   },
-  groupModalSub: {
+  groupHeaderSub: {
     fontSize: 12,
     color: '#64748B',
     marginTop: 2,
   },
-  groupListLabel: {
-    fontSize: 13,
-    fontWeight: '700',
-    color: '#334155',
-    marginBottom: 8,
-  },
-  groupBadgesRow: {
-    flexDirection: 'row',
-    flexWrap: 'wrap',
-    gap: 8,
-    marginBottom: 16,
-  },
-  groupBadgeItem: {
+  createGroupHeaderBtn: {
     flexDirection: 'row',
     alignItems: 'center',
-    backgroundColor: '#F5F3FF',
-    paddingHorizontal: 10,
-    paddingVertical: 6,
-    borderRadius: 8,
-    gap: 6,
-    borderWidth: 1,
-    borderColor: '#EDE9FE',
-  },
-  groupBadgeItemText: {
-    fontSize: 12,
-    color: '#6D28D9',
-    fontWeight: '600',
-  },
-  createGroupSection: {
-    marginBottom: 20,
-  },
-  inputLabel: {
-    fontSize: 13,
-    fontWeight: '700',
-    color: '#334155',
-    marginBottom: 6,
-  },
-  groupTextInput: {
-    backgroundColor: '#F8FAFC',
-    borderWidth: 1,
-    borderColor: '#CBD5E1',
-    borderRadius: 12,
-    paddingHorizontal: 14,
-    paddingVertical: 10,
-    fontSize: 14,
-    color: '#0F172A',
-  },
-  groupModalActions: {
-    flexDirection: 'row',
-    gap: 12,
-  },
-  cancelGroupBtn: {
-    flex: 1,
-    paddingVertical: 12,
-    borderRadius: 12,
-    backgroundColor: '#F1F5F9',
-    alignItems: 'center',
-  },
-  cancelGroupBtnText: {
-    fontSize: 14,
-    fontWeight: '600',
-    color: '#64748B',
-  },
-  saveGroupBtn: {
-    flex: 1.5,
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'center',
-    paddingVertical: 12,
-    borderRadius: 12,
     backgroundColor: '#7C3AED',
-    gap: 6,
+    paddingHorizontal: 14,
+    paddingVertical: 8,
+    borderRadius: 10,
+    gap: 4,
   },
-  saveGroupBtnText: {
-    fontSize: 14,
+  createGroupHeaderBtnText: {
+    fontSize: 13,
     fontWeight: '700',
     color: '#FFF',
   },
@@ -1283,5 +1706,419 @@ const styles = StyleSheet.create({
     color: '#94A3B8',
     marginTop: 6,
     fontStyle: 'italic',
+  },
+
+  groupCardHeaderRight: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 8,
+  },
+  groupMoreBtn: {
+    width: 32,
+    height: 32,
+    borderRadius: 8,
+    alignItems: 'center',
+    justifyContent: 'center',
+    backgroundColor: '#F3E8FF',
+    borderWidth: 1,
+    borderColor: '#E9D5FF',
+  },
+
+  // Action Modal (3 chấm)
+  actionModalOverlay: {
+    flex: 1,
+    backgroundColor: 'rgba(15, 23, 42, 0.45)',
+    justifyContent: 'flex-end',
+  },
+  actionModalCard: {
+    backgroundColor: '#FFF',
+    borderTopLeftRadius: 24,
+    borderTopRightRadius: 24,
+    padding: 20,
+    paddingBottom: 32,
+    ...Shadows.card,
+  },
+  actionModalHeader: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    marginBottom: 12,
+  },
+  actionModalIconBox: {
+    width: 44,
+    height: 44,
+    borderRadius: 12,
+    backgroundColor: '#EDE9FE',
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  actionModalSubtitle: {
+    fontSize: 11,
+    fontWeight: '700',
+    color: '#7C3AED',
+    letterSpacing: 0.5,
+  },
+  actionModalTitle: {
+    fontSize: 18,
+    fontWeight: '800',
+    color: '#0F172A',
+    marginTop: 2,
+  },
+  actionModalCloseBtn: {
+    width: 36,
+    height: 36,
+    borderRadius: 18,
+    backgroundColor: '#F1F5F9',
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  actionMenuDivider: {
+    height: 1,
+    backgroundColor: '#F1F5F9',
+    marginVertical: 4,
+  },
+  actionMenuItem: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    paddingVertical: 14,
+    paddingHorizontal: 4,
+  },
+  actionMenuIconCircle: {
+    width: 42,
+    height: 42,
+    borderRadius: 12,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  actionMenuText: {
+    fontSize: 15,
+    fontWeight: '700',
+    color: '#1E293B',
+  },
+  actionMenuSub: {
+    fontSize: 12,
+    color: '#64748B',
+    marginTop: 2,
+  },
+  actionCancelBtn: {
+    marginTop: 10,
+    backgroundColor: '#F1F5F9',
+    borderRadius: 14,
+    paddingVertical: 14,
+    alignItems: 'center',
+  },
+  actionCancelBtnText: {
+    fontSize: 15,
+    fontWeight: '700',
+    color: '#64748B',
+  },
+
+  // Confirm Delete Modal
+  confirmModalOverlay: {
+    flex: 1,
+    backgroundColor: 'rgba(15, 23, 42, 0.5)',
+    alignItems: 'center',
+    justifyContent: 'center',
+    padding: 24,
+  },
+  confirmModalCard: {
+    backgroundColor: '#FFF',
+    borderRadius: 20,
+    padding: 24,
+    width: '100%',
+    maxWidth: 380,
+    alignItems: 'center',
+    ...Shadows.card,
+  },
+  confirmModalIconRing: {
+    width: 68,
+    height: 68,
+    borderRadius: 34,
+    backgroundColor: '#FEF2F2',
+    alignItems: 'center',
+    justifyContent: 'center',
+    marginBottom: 16,
+    borderWidth: 2,
+    borderColor: '#FEE2E2',
+  },
+  confirmModalTitle: {
+    fontSize: 18,
+    fontWeight: '800',
+    color: '#1E1B4B',
+    marginBottom: 8,
+  },
+  confirmModalDesc: {
+    fontSize: 13,
+    color: '#64748B',
+    textAlign: 'center',
+    lineHeight: 20,
+    marginBottom: 20,
+  },
+  confirmModalActions: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 12,
+    width: '100%',
+  },
+  confirmModalCancelBtn: {
+    flex: 1,
+    backgroundColor: '#F1F5F9',
+    paddingVertical: 13,
+    borderRadius: 12,
+    alignItems: 'center',
+  },
+  confirmModalCancelBtnText: {
+    fontSize: 14,
+    fontWeight: '700',
+    color: '#64748B',
+  },
+  confirmModalDeleteBtn: {
+    flex: 1.2,
+    backgroundColor: '#EF4444',
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    paddingVertical: 13,
+    borderRadius: 12,
+    gap: 6,
+  },
+  confirmModalDeleteBtnText: {
+    fontSize: 14,
+    fontWeight: '700',
+    color: '#FFF',
+  },
+
+  // Edit Modal
+  editModalSafeArea: {
+    flex: 1,
+    backgroundColor: '#F8FAFC',
+  },
+  editModalHeader: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    paddingHorizontal: 16,
+    paddingVertical: 14,
+    backgroundColor: '#FFF',
+    borderBottomWidth: 1,
+    borderBottomColor: '#F1F5F9',
+  },
+  editModalCloseBtn: {
+    width: 38,
+    height: 38,
+    borderRadius: 12,
+    backgroundColor: '#F8FAFC',
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  editModalTitle: {
+    fontSize: 17,
+    fontWeight: '800',
+    color: '#0F172A',
+  },
+  editModalSubtitle: {
+    fontSize: 12,
+    color: '#64748B',
+    marginTop: 2,
+  },
+  editModalBody: {
+    flex: 1,
+    padding: 16,
+  },
+  editSectionCard: {
+    backgroundColor: '#FFF',
+    borderRadius: 16,
+    padding: 16,
+    borderWidth: 1,
+    borderColor: '#E2E8F0',
+    marginBottom: 16,
+    ...Shadows.card,
+  },
+  editSectionHeader: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    marginBottom: 12,
+  },
+  editIconBox: {
+    width: 36,
+    height: 36,
+    borderRadius: 10,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  editSectionTitle: {
+    fontSize: 14,
+    fontWeight: '800',
+    color: '#1E293B',
+  },
+  editSectionSub: {
+    fontSize: 11,
+    color: '#64748B',
+    marginTop: 1,
+  },
+  editSectionSubError: {
+    color: '#DC2626',
+    fontWeight: '700',
+  },
+  editValidBadge: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: '#DCFCE7',
+    paddingHorizontal: 8,
+    paddingVertical: 4,
+    borderRadius: 8,
+    gap: 4,
+  },
+  editValidBadgeText: {
+    fontSize: 11,
+    fontWeight: '700',
+    color: '#16A34A',
+  },
+  editTextInput: {
+    backgroundColor: '#F8FAFC',
+    borderWidth: 1.5,
+    borderColor: '#CBD5E1',
+    borderRadius: 12,
+    paddingHorizontal: 14,
+    paddingVertical: 10,
+    fontSize: 15,
+    color: '#0F172A',
+  },
+  editTextInputValid: {
+    borderColor: '#10B981',
+    backgroundColor: '#F0FDF4',
+  },
+  editTextInputError: {
+    borderColor: '#EF4444',
+    backgroundColor: '#FEF2F2',
+  },
+  editFeedbackRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    marginTop: 6,
+    gap: 6,
+  },
+  editFeedbackError: {
+    fontSize: 12,
+    color: '#DC2626',
+    fontWeight: '600',
+  },
+  editSelectAllBtn: {
+    paddingHorizontal: 10,
+    paddingVertical: 5,
+    borderRadius: 8,
+    backgroundColor: '#F5F3FF',
+  },
+  editSelectAllBtnText: {
+    fontSize: 12,
+    fontWeight: '700',
+    color: '#7C3AED',
+  },
+  editWarningBanner: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: '#FEF2F2',
+    borderWidth: 1,
+    borderColor: '#FCA5A5',
+    padding: 10,
+    borderRadius: 10,
+    gap: 8,
+    marginBottom: 12,
+  },
+  editWarningText: {
+    fontSize: 12,
+    color: '#B91C1C',
+    fontWeight: '600',
+    flex: 1,
+  },
+  editFilterTabsRow: {
+    flexDirection: 'row',
+    gap: 8,
+    marginBottom: 12,
+  },
+  editFilterTab: {
+    flex: 1,
+    paddingVertical: 7,
+    alignItems: 'center',
+    justifyContent: 'center',
+    borderRadius: 8,
+    backgroundColor: '#F1F5F9',
+  },
+  editFilterTabActive: {
+    backgroundColor: '#7C3AED',
+  },
+  editFilterTabText: {
+    fontSize: 12,
+    fontWeight: '600',
+    color: '#64748B',
+  },
+  editFilterTabTextActive: {
+    color: '#FFF',
+    fontWeight: '700',
+  },
+  editDeviceList: {
+    gap: 8,
+  },
+  editDeviceCard: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: '#F8FAFC',
+    padding: 10,
+    borderRadius: 10,
+    borderWidth: 1,
+    borderColor: '#F1F5F9',
+  },
+  editDeviceCardSelected: {
+    borderColor: '#DDD6FE',
+    backgroundColor: '#FAF5FF',
+  },
+  editDeviceName: {
+    fontSize: 13,
+    fontWeight: '700',
+    color: '#1E293B',
+  },
+  editDeviceSub: {
+    fontSize: 11,
+    color: '#64748B',
+    marginTop: 2,
+  },
+  editModalFooter: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    padding: 16,
+    backgroundColor: '#FFF',
+    borderTopWidth: 1,
+    borderTopColor: '#F1F5F9',
+    gap: 12,
+  },
+  editModalCancelBtn: {
+    flex: 1,
+    paddingVertical: 14,
+    borderRadius: 12,
+    backgroundColor: '#F1F5F9',
+    alignItems: 'center',
+  },
+  editModalCancelBtnText: {
+    fontSize: 14,
+    fontWeight: '700',
+    color: '#64748B',
+  },
+  editModalSaveBtn: {
+    flex: 1.6,
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    paddingVertical: 14,
+    borderRadius: 12,
+    backgroundColor: '#7C3AED',
+    gap: 6,
+    ...Shadows.card,
+  },
+  editModalSaveBtnDisabled: {
+    backgroundColor: '#94A3B8',
+    opacity: 0.85,
+  },
+  editModalSaveBtnText: {
+    fontSize: 14,
+    fontWeight: '700',
+    color: '#FFF',
   },
 });

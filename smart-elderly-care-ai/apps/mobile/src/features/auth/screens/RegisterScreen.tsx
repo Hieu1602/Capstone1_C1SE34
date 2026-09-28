@@ -10,10 +10,8 @@ import {
   Platform,
   ScrollView,
 } from 'react-native';
-import { SafeAreaView } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
 import { authApi } from '../../../services/api';
-import { Colors } from '../../../theme/colors';
 
 export default function RegisterScreen({ navigation }: any) {
   const [phone, setPhone] = useState('');
@@ -52,7 +50,6 @@ export default function RegisterScreen({ navigation }: any) {
       Alert.alert('Lỗi', 'Số điện thoại không hợp lệ.');
       return;
     }
-
     if (password !== confirmPassword) {
       Alert.alert('Mật khẩu không khớp', 'Vui lòng nhập lại mật khẩu xác nhận.');
       return;
@@ -242,11 +239,8 @@ export default function RegisterScreen({ navigation }: any) {
             >
               <Text style={styles.loginButtonText}>{loading ? 'Đang xử lý...' : step === 'form' ? 'Tiếp' : 'Xác nhận'}</Text>
             </TouchableOpacity>
-
-            <TouchableOpacity onPress={() => navigation.goBack()} style={styles.registerLinkWrapper}>
-              <Text style={styles.registerLinkText}>
-                Tôi đã là một thành viên. <Text style={{ color: '#2563EB', fontWeight: '700' }}>Đăng nhập</Text>
-              </Text>
+            <TouchableOpacity style={styles.loginLink} onPress={() => step === 'verify' ? setStep('form') : navigation.goBack()}>
+              <Text style={styles.loginText}>{step === 'verify' ? 'Quay lại chỉnh sửa thông tin' : <>Tôi đã có tài khoản. <Text style={styles.link}>Đăng nhập</Text></>}</Text>
             </TouchableOpacity>
           </View>
         </ScrollView>
@@ -256,83 +250,88 @@ export default function RegisterScreen({ navigation }: any) {
 }
 
 const styles = StyleSheet.create({
-  safeArea: {
-    flex: 1,
-    backgroundColor: '#FFFFFF',
-  },
+  safeArea: { flex: 1, backgroundColor: '#FFFFFF' },
+  flex: { flex: 1 },
   container: {
-    paddingHorizontal: 24,
-    paddingTop: 20,
-    paddingBottom: 30,
     flexGrow: 1,
     justifyContent: 'space-between',
-  },
-  headerSection: {
-    marginBottom: 20,
+    paddingHorizontal: 24,
+    paddingTop: 14,
+    paddingBottom: 16,
   },
   backButton: {
-    width: 40,
-    height: 40,
-    borderRadius: 20,
-    backgroundColor: '#F1F5F9',
+    height: 38,
     justifyContent: 'center',
-    alignItems: 'center',
+    alignItems: 'flex-start',
     marginBottom: 16,
   },
-  welcomeTitle: {
+  heading: {
+    alignItems: 'center',
+    marginBottom: 22,
+  },
+  title: {
+    color: '#2F2F2F',
     fontSize: 28,
     fontWeight: '800',
-    color: '#0F172A',
+    textAlign: 'center',
+    marginBottom: 8,
+    width: '100%',
   },
   subtitle: {
-    color: '#64748B',
-    fontSize: 13,
-    marginTop: 6,
-    lineHeight: 18,
-  },
-  formContainer: {
-    gap: 12,
-    marginBottom: 20,
-  },
-  countryPickerBtn: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'space-between',
-    borderWidth: 1,
-    borderColor: '#E2E8F0',
-    borderRadius: 30,
-    paddingVertical: 14,
-    paddingHorizontal: 20,
-    backgroundColor: '#FAFAFA',
-  },
-  countryText: {
+    color: '#333333',
     fontSize: 15,
-    fontWeight: '600',
-    color: '#0F172A',
+    lineHeight: 21,
+    textAlign: 'center',
+    maxWidth: 330,
   },
+  form: { gap: 12 },
   inputContainer: {
+    minHeight: 52,
     flexDirection: 'row',
     alignItems: 'center',
     borderWidth: 1,
-    borderColor: '#E2E8F0',
-    borderRadius: 30,
-    paddingVertical: 14,
-    paddingHorizontal: 20,
-    backgroundColor: '#FFFFFF',
+    borderColor: '#E5E5E5',
+    borderRadius: 12,
+    paddingHorizontal: 14,
   },
-  inputIcon: {
-    marginRight: 12,
-  },
-  prefixText: {
-    fontSize: 15,
-    fontWeight: '600',
-    color: '#0F172A',
-    marginRight: 4,
-  },
+  icon: { marginRight: 12 },
   input: {
-    fontSize: 15,
-    color: '#0F172A',
     flex: 1,
+    color: '#2F2F2F',
+    fontSize: 16,
+    padding: 0,
+  },
+  requirements: {
+    backgroundColor: '#FFFFFF',
+    borderRadius: 12,
+    paddingHorizontal: 14,
+    paddingVertical: 12,
+    shadowColor: '#000',
+    shadowOpacity: 0.08,
+    shadowRadius: 12,
+    elevation: 2,
+  },
+  requirementTitle: {
+    color: '#666666',
+    fontSize: 15,
+    marginBottom: 8,
+  },
+  requirement: {
+    color: '#666666',
+    fontSize: 13,
+    lineHeight: 20,
+  },
+  otpRow: { flexDirection: 'row', justifyContent: 'space-between' },
+  otpInput: {
+    width: 44,
+    height: 58,
+    borderWidth: 1,
+    borderColor: '#E5E5E5',
+    borderRadius: 12,
+    color: '#2F2F2F',
+    fontSize: 22,
+    textAlign: 'center',
+    textAlignVertical: 'center',
     padding: 0,
   },
   otpRow: {
@@ -373,23 +372,30 @@ const styles = StyleSheet.create({
     paddingVertical: 16,
     alignItems: 'center',
     justifyContent: 'center',
-    shadowColor: '#2563EB',
-    shadowOffset: { width: 0, height: 4 },
-    shadowOpacity: 0.2,
-    shadowRadius: 8,
-    elevation: 4,
+    alignSelf: 'center',
+    width: '100%',
   },
-  loginButtonText: {
-    fontSize: 16,
-    fontWeight: '700',
+  disabled: { opacity: 0.55 },
+  primaryText: {
     color: '#FFFFFF',
+    fontSize: 16,
+    fontWeight: '600',
+    textAlign: 'center',
   },
-  registerLinkWrapper: {
+  loginLink: {
     alignItems: 'center',
-    marginTop: 16,
+    justifyContent: 'center',
+    alignSelf: 'center',
+    marginTop: 14,
+    width: '100%',
   },
-  registerLinkText: {
-    fontSize: 14,
-    color: '#64748B',
+  loginText: {
+    color: '#333333',
+    fontSize: 15,
+    textAlign: 'center',
+  },
+  link: {
+    color: '#638EF1',
+    fontWeight: '600',
   },
 });

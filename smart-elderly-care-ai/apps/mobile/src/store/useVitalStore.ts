@@ -4,6 +4,7 @@
 import { create, StateCreator } from 'zustand';
 import { persist, createJSONStorage, PersistOptions } from 'zustand/middleware';
 import AsyncStorage from '@react-native-async-storage/async-storage';
+import { useThemeStore } from './useThemeStore';
 
 // ---- Types ----
 export interface VitalData {
@@ -53,7 +54,7 @@ export interface CameraDevice {
   isOnline: boolean;
   isSleep: boolean;
   isAIProtect: boolean;
-  resolution: '2K' | 'FHD' | 'SD';
+  resolution: 'HD' | 'BASIC';
   sdCardStatus: 'OK' | 'NO_CARD';
   wifiStrength: number; // 1-3
   streamUrl: string;
@@ -82,6 +83,7 @@ interface VitalStoreState {
   house: HouseInfo;
   camera: CameraDevice;
   iotDevices: IoTDeviceItem[];
+  deviceGroups: string[];
   selectedDate: string; // e.g. "09/07"
   algoSettings: {
     maxHeartRate: number;
@@ -101,10 +103,17 @@ interface VitalStoreState {
   updateHouseAddress: (address: string) => void;
   toggleCameraSleep: () => void;
   toggleCameraAIProtect: () => void;
-  setCameraResolution: (res: '2K' | 'FHD' | 'SD') => void;
+  setCameraResolution: (res: 'HD' | 'BASIC') => void;
   setSelectedDate: (date: string) => void;
   updateAlgoSettings: (settings: Partial<VitalStoreState['algoSettings']>) => void;
   addIoTDevice: (device: IoTDeviceItem) => void;
+  addDeviceGroup: (groupName: string) => void;
+  updateDeviceGroup: (oldName: string, newName: string, deviceIds?: string[]) => void;
+  removeDeviceGroup: (groupName: string) => void;
+  assignDevicesToGroup: (deviceIds: string[], groupName: string) => void;
+  isDarkMode: boolean;
+  toggleDarkMode: () => void;
+  setDarkMode: (isDark: boolean) => void;
 }
 
 type VitalSet = (
@@ -134,55 +143,55 @@ const createVitalStore: StateCreator<VitalStoreState> = (set: VitalSet) => ({
       device_id: 'hub-001',
       alert_type: 'PERSON_DETECTED',
       alert_level: 'LOW',
-      message: 'Đã phát hiện người',
+      message: 'Nhận diện người cao tuổi đang sinh hoạt tại phòng khách (YOLOv8)',
       video_clip_url: null,
       thumbnail_url: 'https://images.unsplash.com/photo-1576765608535-5f04d1e3f289?w=300&q=80',
       is_acknowledged: true,
-      created_at: '2026-09-07T17:35:22Z',
+      created_at: new Date(Date.now() - 45 * 1000).toISOString(),
     },
     {
       id: 'inc-02',
       device_id: 'hub-001',
       alert_type: 'PERSON_DETECTED',
       alert_level: 'LOW',
-      message: 'Đã phát hiện người',
+      message: 'Phát hiện chuyển động di chuyển ra khu vực cửa sổ',
       video_clip_url: null,
       thumbnail_url: 'https://images.unsplash.com/photo-1581056771107-24ca5f033842?w=300&q=80',
       is_acknowledged: true,
-      created_at: '2026-09-07T17:31:44Z',
+      created_at: new Date(Date.now() - 10 * 60 * 1000).toISOString(),
     },
     {
       id: 'inc-03',
       device_id: 'hub-001',
       alert_type: 'FALL_DETECTED',
       alert_level: 'CRITICAL',
-      message: '🚨 Cảnh báo té ngã (Fall Detected) - Clip 5s trích xuất RAM',
+      message: '🚨 Cảnh báo té ngã (Fall Detected) - Trích xuất clip 5s bộ đệm Edge Hub RAM',
       video_clip_url: 'https://commondatastorage.googleapis.com/gtv-videos-bucket/sample/BigBuckBunny.mp4',
       thumbnail_url: 'https://images.unsplash.com/photo-1516549655169-df83a0774514?w=300&q=80',
       is_acknowledged: false,
-      created_at: '2026-09-07T17:18:04Z',
+      created_at: new Date(Date.now() - 28 * 60 * 1000).toISOString(),
     },
     {
       id: 'inc-04',
       device_id: 'hub-001',
       alert_type: 'HIGH_HEART_RATE',
       alert_level: 'HIGH',
-      message: 'Nhịp tim bất thường cao: 128 bpm',
+      message: 'Nhịp tim đo được từ vòng đeo tay BLE Band: 128 bpm (Vượt ngưỡng 100 bpm)',
       video_clip_url: null,
       thumbnail_url: null,
       is_acknowledged: false,
-      created_at: '2026-09-07T16:45:10Z',
+      created_at: new Date(Date.now() - 52 * 60 * 1000).toISOString(),
     },
     {
       id: 'inc-05',
       device_id: 'hub-001',
       alert_type: 'ACOUSTIC_DISTRESS',
       alert_level: 'CRITICAL',
-      message: 'Phát hiện âm thanh cầu cứu: "Cứu tôi với!"',
+      message: 'Phát hiện âm thanh cầu cứu: "Cứu tôi với!" tại khu vực bếp (YAMNet AI)',
       video_clip_url: 'https://commondatastorage.googleapis.com/gtv-videos-bucket/sample/ForBiggerBlazes.mp4',
       thumbnail_url: 'https://images.unsplash.com/photo-1584515979956-d9f6e5d09982?w=300&q=80',
       is_acknowledged: false,
-      created_at: '2026-09-07T15:20:00Z',
+      created_at: new Date(Date.now() - 120 * 60 * 1000).toISOString(),
     },
   ],
   activeDevice: {
@@ -206,7 +215,7 @@ const createVitalStore: StateCreator<VitalStoreState> = (set: VitalSet) => ({
     isOnline: true,
     isSleep: false,
     isAIProtect: true,
-    resolution: '2K',
+    resolution: 'HD',
     sdCardStatus: 'OK',
     wifiStrength: 3,
     streamUrl: 'http://10.0.2.2:8080',
@@ -252,7 +261,7 @@ const createVitalStore: StateCreator<VitalStoreState> = (set: VitalSet) => ({
       camera: { ...state.camera, isAIProtect: !state.camera.isAIProtect },
     })),
 
-  setCameraResolution: (res: '2K' | 'FHD' | 'SD') =>
+  setCameraResolution: (res: 'HD' | 'BASIC') =>
     set((state) => ({ camera: { ...state.camera, resolution: res } })),
 
   setSelectedDate: (date: string) => set({ selectedDate: date }),
@@ -331,13 +340,99 @@ const createVitalStore: StateCreator<VitalStoreState> = (set: VitalSet) => ({
     },
   ],
 
+  deviceGroups: ['Phòng khách', 'Phòng ngủ', 'Nhà tắm & Cửa'],
+
   addIoTDevice: (device: IoTDeviceItem) =>
     set((state) => ({
       iotDevices: [device, ...state.iotDevices],
     })),
+
+  addDeviceGroup: (groupName: string) =>
+    set((state) => {
+      const trimmed = groupName.trim();
+      if (!trimmed) return state;
+      const exists = state.deviceGroups.some(
+        (g) => g.trim().toLowerCase() === trimmed.toLowerCase()
+      );
+      return {
+        deviceGroups: exists ? state.deviceGroups : [...state.deviceGroups, trimmed],
+      };
+    }),
+
+  updateDeviceGroup: (oldName: string, newName: string, deviceIds?: string[]) =>
+    set((state) => {
+      const trimmedNew = newName.trim();
+      const trimmedOld = oldName.trim();
+      const updatedGroups = state.deviceGroups.map((g) =>
+        g.trim().toLowerCase() === trimmedOld.toLowerCase() ? trimmedNew : g
+      );
+      let updatedDevices = state.iotDevices;
+      if (deviceIds) {
+        updatedDevices = updatedDevices.map((dev) => {
+          if (deviceIds.includes(dev.id)) {
+            return { ...dev, location: trimmedNew };
+          } else if (dev.location?.trim().toLowerCase() === trimmedOld.toLowerCase()) {
+            return { ...dev, location: 'Chưa nhóm' };
+          }
+          return dev;
+        });
+      } else if (trimmedOld.toLowerCase() !== trimmedNew.toLowerCase()) {
+        updatedDevices = updatedDevices.map((dev) =>
+          dev.location?.trim().toLowerCase() === trimmedOld.toLowerCase()
+            ? { ...dev, location: trimmedNew }
+            : dev
+        );
+      }
+      return {
+        deviceGroups: updatedGroups,
+        iotDevices: updatedDevices,
+      };
+    }),
+
+  removeDeviceGroup: (groupName: string) =>
+    set((state) => ({
+      deviceGroups: state.deviceGroups.filter(
+        (g) => g.trim().toLowerCase() !== groupName.trim().toLowerCase()
+      ),
+      iotDevices: state.iotDevices.map((dev) =>
+        dev.location?.trim().toLowerCase() === groupName.trim().toLowerCase()
+          ? { ...dev, location: 'Chưa nhóm' }
+          : dev
+      ),
+    })),
+
+  assignDevicesToGroup: (deviceIds: string[], groupName: string) =>
+    set((state) => ({
+      iotDevices: state.iotDevices.map((dev) =>
+        deviceIds.includes(dev.id) ? { ...dev, location: groupName } : dev
+      ),
+    })),
+
+  isDarkMode: useThemeStore.getState().isDarkMode,
+  toggleDarkMode: () => {
+    useThemeStore.getState().toggleTheme();
+    set((state) => ({ isDarkMode: !state.isDarkMode }));
+  },
+  setDarkMode: (isDark: boolean) => {
+    useThemeStore.getState().setDarkMode(isDark);
+    set({ isDarkMode: isDark });
+  },
 });
 
 export const useVitalStore = create<VitalStoreState>()(createVitalStore);
+
+// Đồng bộ trạng thái Theme giữa useThemeStore và useVitalStore hai chiều
+useThemeStore.subscribe((state) => {
+  if (useVitalStore.getState().isDarkMode !== state.isDarkMode) {
+    useVitalStore.setState({ isDarkMode: state.isDarkMode });
+  }
+});
+
+useVitalStore.subscribe((state) => {
+  if (useThemeStore.getState().isDarkMode !== state.isDarkMode) {
+    useThemeStore.getState().setDarkMode(state.isDarkMode);
+  }
+});
 
 // ---- Auth Store (persisted) ----
 interface AuthStoreState {
@@ -392,6 +487,9 @@ const createAuthStore: StateCreator<AuthStoreState, [], [['zustand/persist', Aut
 
   updateUserName: (name: string) =>
     set({ userName: name }),
+
+  updateUserName: (id: string, name: string) =>
+    set({ userId: id, userName: name }),
 
   logout: () =>
     set({

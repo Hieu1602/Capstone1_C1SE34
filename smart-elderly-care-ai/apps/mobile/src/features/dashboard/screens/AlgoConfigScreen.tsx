@@ -16,8 +16,10 @@ import { SafeAreaView } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
 import { Colors, Shadows } from '../../../theme/colors';
 import { useVitalStore } from '../../../store/useVitalStore';
+import { useTheme } from '../../../store/useThemeStore';
 
 export default function AlgoConfigScreen({ navigation }: any) {
+  const { isDarkMode } = useTheme();
   const { algoSettings, updateAlgoSettings } = useVitalStore();
   const [maxHR, setMaxHR] = useState(algoSettings.maxHeartRate.toString());
   const [minHR, setMinHR] = useState(algoSettings.minHeartRate.toString());
@@ -39,108 +41,111 @@ export default function AlgoConfigScreen({ navigation }: any) {
   };
 
   return (
-    <SafeAreaView style={styles.safeArea} edges={['top']}>
-      <View style={styles.topHeader}>
+    <SafeAreaView style={[styles.safeArea, isDarkMode && { backgroundColor: '#0B0F19' }]} edges={['top']}>
+      <View style={[styles.topHeader, isDarkMode && { backgroundColor: '#0B0F19', borderBottomColor: '#334155' }]}>
         <TouchableOpacity
-          style={styles.backBtn}
+          style={[
+            styles.backBtn,
+            isDarkMode && { backgroundColor: '#1E293B', borderRadius: 18, borderWidth: 1, borderColor: '#334155' },
+          ]}
           onPress={() => navigation.goBack()}
         >
-          <Ionicons name="chevron-back" size={26} color={Colors.textPrimary} />
+          <Ionicons name="chevron-back" size={24} color={isDarkMode ? '#F8FAFC' : Colors.textPrimary} />
         </TouchableOpacity>
-        <Text style={styles.headerTitle}>Cài Đặt Thuật Toán (Algo)</Text>
+        <Text style={[styles.headerTitle, isDarkMode && { color: '#F8FAFC' }]}>Cài Đặt Thuật Toán (Algo)</Text>
       </View>
 
       <ScrollView
         showsVerticalScrollIndicator={false}
         contentContainerStyle={styles.scrollContent}
       >
-        <Text style={styles.introText}>
+        <Text style={[styles.introText, isDarkMode && { color: '#94A3B8' }]}>
           Tùy chỉnh ngưỡng kích hoạt báo động khẩn cấp (Red Alert) để phù hợp với tình trạng sức khỏe cụ thể của người cao tuổi.
         </Text>
 
         {/* 1. Ngưỡng Té ngã (FR03) */}
-        <View style={styles.groupCard}>
+        <View style={[styles.groupCard, isDarkMode && { backgroundColor: '#1E293B', borderColor: '#334155', borderWidth: 1 }]}>
           <Text style={styles.groupTitle}>1. Thuật toán phát hiện ngã (YOLO-Pose)</Text>
           <View style={styles.inputRow}>
-            <Text style={styles.inputLabel}>Góc nghiêng cột sống tối đa:</Text>
-            <View style={styles.inputBoxWrap}>
+            <Text style={[styles.inputLabel, isDarkMode && { color: '#F8FAFC' }]}>Góc nghiêng cột sống tối đa:</Text>
+            <View style={[styles.inputBoxWrap, isDarkMode && { backgroundColor: '#0F172A', borderColor: '#334155' }]}>
               <TextInput
-                style={styles.inputVal}
+                style={[styles.inputVal, isDarkMode && { color: '#F8FAFC' }]}
                 keyboardType="numeric"
                 value={fallAngle}
                 onChangeText={setFallAngle}
               />
-              <Text style={styles.inputUnit}>độ (°)</Text>
+              <Text style={[styles.inputUnit, isDarkMode && { color: '#94A3B8' }]}>độ (°)</Text>
             </View>
           </View>
           <View style={styles.inputRow}>
-            <Text style={styles.inputLabel}>Thời gian nằm bất động:</Text>
-            <View style={styles.inputBoxWrap}>
+            <Text style={[styles.inputLabel, isDarkMode && { color: '#F8FAFC' }]}>Thời gian nằm bất động:</Text>
+            <View style={[styles.inputBoxWrap, isDarkMode && { backgroundColor: '#0F172A', borderColor: '#334155' }]}>
               <TextInput
-                style={styles.inputVal}
+                style={[styles.inputVal, isDarkMode && { color: '#F8FAFC' }]}
                 keyboardType="numeric"
                 value={immobilitySec}
                 onChangeText={setImmobilitySec}
               />
-              <Text style={styles.inputUnit}>giây</Text>
+              <Text style={[styles.inputUnit, isDarkMode && { color: '#94A3B8' }]}>giây</Text>
             </View>
           </View>
         </View>
 
-        {/* 2. Ngưỡng Sinh hiệu Vòng BLE (FR02) */}
-        <View style={styles.groupCard}>
-          <Text style={styles.groupTitle}>2. Thuật toán sinh hiệu (Vòng đeo tay BLE)</Text>
+        {/* 2. Ngưỡng Sức khoẻ Vòng BLE (FR02) */}
+        <View style={[styles.groupCard, isDarkMode && { backgroundColor: '#1E293B', borderColor: '#334155', borderWidth: 1 }]}>
+          <Text style={styles.groupTitle}>2. Thuật toán sức khoẻ (Vòng đeo tay BLE)</Text>
           <View style={styles.inputRow}>
-            <Text style={styles.inputLabel}>Nhịp tim tối đa (Cảnh báo cao):</Text>
-            <View style={styles.inputBoxWrap}>
+            <Text style={[styles.inputLabel, isDarkMode && { color: '#F8FAFC' }]}>Nhịp tim tối đa (Cảnh báo cao):</Text>
+            <View style={[styles.inputBoxWrap, isDarkMode && { backgroundColor: '#0F172A', borderColor: '#334155' }]}>
               <TextInput
-                style={styles.inputVal}
+                style={[styles.inputVal, isDarkMode && { color: '#F8FAFC' }]}
                 keyboardType="numeric"
                 value={maxHR}
                 onChangeText={setMaxHR}
               />
-              <Text style={styles.inputUnit}>bpm</Text>
+              <Text style={[styles.inputUnit, isDarkMode && { color: '#94A3B8' }]}>bpm</Text>
             </View>
           </View>
           <View style={styles.inputRow}>
-            <Text style={styles.inputLabel}>Nhịp tim tối thiểu (Cảnh báo thấp):</Text>
-            <View style={styles.inputBoxWrap}>
+            <Text style={[styles.inputLabel, isDarkMode && { color: '#F8FAFC' }]}>Nhịp tim tối thiểu (Cảnh báo thấp):</Text>
+            <View style={[styles.inputBoxWrap, isDarkMode && { backgroundColor: '#0F172A', borderColor: '#334155' }]}>
               <TextInput
-                style={styles.inputVal}
+                style={[styles.inputVal, isDarkMode && { color: '#F8FAFC' }]}
                 keyboardType="numeric"
                 value={minHR}
                 onChangeText={setMinHR}
               />
-              <Text style={styles.inputUnit}>bpm</Text>
+              <Text style={[styles.inputUnit, isDarkMode && { color: '#94A3B8' }]}>bpm</Text>
             </View>
           </View>
           <View style={styles.inputRow}>
-            <Text style={styles.inputLabel}>Nồng độ oxy SpO₂ tối thiểu:</Text>
-            <View style={styles.inputBoxWrap}>
+            <Text style={[styles.inputLabel, isDarkMode && { color: '#F8FAFC' }]}>Nồng độ oxy SpO₂ tối thiểu:</Text>
+            <View style={[styles.inputBoxWrap, isDarkMode && { backgroundColor: '#0F172A', borderColor: '#334155' }]}>
               <TextInput
-                style={styles.inputVal}
+                style={[styles.inputVal, isDarkMode && { color: '#F8FAFC' }]}
                 keyboardType="numeric"
                 value={minSpO2}
                 onChangeText={setMinSpO2}
               />
-              <Text style={styles.inputUnit}>%</Text>
+              <Text style={[styles.inputUnit, isDarkMode && { color: '#94A3B8' }]}>%</Text>
             </View>
           </View>
         </View>
 
         {/* 3. Ngưỡng Cảm biến nhiệt AMG8833 (FR04) */}
-        <View style={styles.groupCard}>
+        <View style={[styles.groupCard, isDarkMode && { backgroundColor: '#1E293B', borderColor: '#334155', borderWidth: 1 }]}>
           <Text style={styles.groupTitle}>3. Thuật toán nhiệt độ trán (AMG8833)</Text>
           <View style={styles.inputRow}>
-            <Text style={styles.inputLabel}>Ngưỡng sốt cao bất thường:</Text>
-            <View style={styles.inputBoxWrap}>
+            <Text style={[styles.inputLabel, isDarkMode && { color: '#F8FAFC' }]}>Ngưỡng sốt cao bất thường:</Text>
+            <View style={[styles.inputBoxWrap, isDarkMode && { backgroundColor: '#0F172A', borderColor: '#334155' }]}>
               <TextInput
-                style={styles.inputVal}
+                style={[styles.inputVal, isDarkMode && { color: '#F8FAFC' }]}
                 keyboardType="numeric"
                 value={maxTemp}
                 onChangeText={setMaxTemp}
               />
-              <Text style={styles.inputUnit}>°C</Text>
+              <Text style={[styles.inputUnit, isDarkMode && { color: '#94A3B8' }]}>°C</Text>
             </View>
           </View>
         </View>
@@ -160,24 +165,29 @@ const styles = StyleSheet.create({
     backgroundColor: Colors.background,
   },
   topHeader: {
+    position: 'relative',
     flexDirection: 'row',
     alignItems: 'center',
-    paddingHorizontal: 16,
+    justifyContent: 'center',
+    minHeight: 52,
+    paddingHorizontal: 10,
     paddingVertical: 12,
     borderBottomWidth: 1,
     borderBottomColor: Colors.border,
   },
   backBtn: {
+    position: 'absolute',
+    left: 10,
     width: 36,
     height: 36,
     alignItems: 'center',
     justifyContent: 'center',
-    marginRight: 8,
   },
   headerTitle: {
-    fontSize: 18,
+    fontSize: 20,
     fontWeight: '800',
     color: Colors.textPrimary,
+    textAlign: 'center',
   },
   scrollContent: {
     paddingHorizontal: 16,
@@ -188,7 +198,7 @@ const styles = StyleSheet.create({
     fontSize: 13,
     color: Colors.textSecondary,
     marginBottom: 16,
-    lineHeight: 18,
+    lineHeight: 20,
   },
   groupCard: {
     backgroundColor: Colors.surface,
@@ -198,7 +208,7 @@ const styles = StyleSheet.create({
     ...Shadows.card,
   },
   groupTitle: {
-    fontSize: 14,
+    fontSize: 15,
     fontWeight: '800',
     color: Colors.primary,
     marginBottom: 12,
@@ -208,12 +218,14 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     justifyContent: 'space-between',
     paddingVertical: 8,
+    gap: 12,
   },
   inputLabel: {
-    fontSize: 13,
+    fontSize: 14,
     color: Colors.textPrimary,
     fontWeight: '600',
     flex: 1,
+    lineHeight: 20,
   },
   inputBoxWrap: {
     flexDirection: 'row',
@@ -225,10 +237,10 @@ const styles = StyleSheet.create({
     borderColor: Colors.border,
   },
   inputVal: {
-    width: 44,
+    width: 52,
     paddingVertical: 6,
     textAlign: 'center',
-    fontSize: 14,
+    fontSize: 15,
     fontWeight: '700',
     color: Colors.textPrimary,
   },
@@ -247,7 +259,7 @@ const styles = StyleSheet.create({
   },
   saveBtnText: {
     color: '#FFF',
-    fontSize: 15,
+    fontSize: 17,
     fontWeight: '800',
   },
 });

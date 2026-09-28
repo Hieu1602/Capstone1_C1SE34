@@ -23,7 +23,7 @@ export default function HistoryScreen() {
             onPress={() => setActiveTab(tab)}
           >
             <Text style={[styles.tabText, activeTab === tab && styles.tabTextActive]}>
-              {tab === 'vitals' ? 'Sinh hiệu' : 'Sự kiện'}
+              {tab === 'vitals' ? 'Sức khoẻ' : 'Sự kiện'}
             </Text>
           </TouchableOpacity>
         ))}
@@ -32,7 +32,7 @@ export default function HistoryScreen() {
       <ScrollView contentContainerStyle={{ padding: 16 }}>
         <Text style={styles.placeholder}>
           {activeTab === 'vitals'
-            ? 'Biểu đồ lịch sử sinh hiệu theo ngày/tuần/tháng'
+            ? 'Biểu đồ lịch sử sức khoẻ theo ngày/tuần/tháng'
             : 'Danh sách sự kiện đã qua theo thời gian'}
         </Text>
         <Text style={styles.placeholderSub}>
