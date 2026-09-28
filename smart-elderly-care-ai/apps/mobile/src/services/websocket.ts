@@ -1,7 +1,17 @@
 // websocket.ts
 // WebSocket client – Nhận chỉ số sinh hiệu real-time từ Backend
 
-const WS_BASE_URL: string = (typeof process !== 'undefined' && process.env.EXPO_PUBLIC_WS_URL) || 'ws://10.0.2.2:8000/ws';
+const getWsBaseUrl = (): string => {
+  if (typeof window !== 'undefined' && window.location?.hostname) {
+    const host = window.location.hostname;
+    if (host !== 'localhost' && host !== '127.0.0.1') {
+      return `ws://${host}:8000/ws`;
+    }
+  }
+  return (typeof process !== 'undefined' && process.env.EXPO_PUBLIC_WS_URL) || 'ws://localhost:8000/ws';
+};
+
+const WS_BASE_URL: string = getWsBaseUrl();
 
 export type VitalPayload = {
   type: 'telemetry';

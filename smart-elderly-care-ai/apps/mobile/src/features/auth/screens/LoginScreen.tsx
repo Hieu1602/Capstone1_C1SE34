@@ -88,7 +88,7 @@ export default function LoginScreen({ navigation }: any) {
             ) : (
               <View style={styles.appIconWrapper}>
                 <Image
-                  source={{ uri: 'https://cdn-icons-png.flaticon.com/512/3135/3135715.png' }}
+                  source={require('../../../assets/logo_icon.png')}
                   style={styles.appIcon}
                 />
               </View>
@@ -219,18 +219,20 @@ const styles = StyleSheet.create({
     marginBottom: 16,
   },
   appIconWrapper: {
-    width: 48,
-    height: 48,
-    borderRadius: 24,
-    backgroundColor: '#F1F5F9',
+    width: 56,
+    height: 56,
+    borderRadius: 28,
+    backgroundColor: '#FFF7ED',
     justifyContent: 'center',
     alignItems: 'center',
     marginBottom: 16,
     overflow: 'hidden',
+    borderWidth: 1,
+    borderColor: '#FED7AA',
   },
   appIcon: {
-    width: 32,
-    height: 32,
+    width: 42,
+    height: 42,
     resizeMode: 'contain',
   },
   welcomeTitle: {                       

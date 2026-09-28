@@ -4,7 +4,17 @@
 import axios, { AxiosInstance, AxiosError } from 'axios';
 import { useAuthStore } from '../store/useVitalStore';
 
-const BASE_URL: string = (typeof process !== 'undefined' && process.env.EXPO_PUBLIC_API_URL) || 'http://10.0.2.2:8000/api/v1';
+const getBaseUrl = (): string => {
+  if (typeof window !== 'undefined' && window.location?.hostname) {
+    const host = window.location.hostname;
+    if (host !== 'localhost' && host !== '127.0.0.1') {
+      return `http://${host}:8000/api/v1`;
+    }
+  }
+  return (typeof process !== 'undefined' && process.env.EXPO_PUBLIC_API_URL) || 'http://localhost:8000/api/v1';
+};
+
+const BASE_URL: string = getBaseUrl();
 
 const api: AxiosInstance = axios.create({
   baseURL: BASE_URL,
