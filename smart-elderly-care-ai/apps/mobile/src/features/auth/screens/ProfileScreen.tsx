@@ -27,13 +27,17 @@ import { Ionicons } from '@expo/vector-icons';
 import { Colors, Shadows } from '../../../theme/colors';
 import { useAuthStore, useVitalStore } from '../../../store/useVitalStore';
 import { useTheme } from '../../../store/useThemeStore';
+import api from '../../../services/api';
 
 export default function ProfileScreen({ navigation }: any) {
-  const { userId, userName, logout, updateUserName } = useAuthStore();
+  const { userId, userName, userPhone, logout, updateUserName } = useAuthStore();
   const { house } = useVitalStore();
   const { isDarkMode, colors, setDarkMode } = useTheme();
-  const [profileName, setProfileName] = React.useState(userName || 'ngolevinh233');
-  const [profilePhone, setProfilePhone] = React.useState('0912 345 678');
+  const [profileName, setProfileName] = React.useState(userName || 'Nguyễn Hữu Nghĩa');
+  const [profilePhone, setProfilePhone] = React.useState(userPhone || '0905 123 456');
+  const [showMoreGrid, setShowMoreGrid] = React.useState(false);
+  const [isHelpExpanded, setIsHelpExpanded] = React.useState(false);
+  const [isSettingsExpanded, setIsSettingsExpanded] = React.useState(false);
   const [editingField, setEditingField] = React.useState<'name' | null>(null);
   const [draftValue, setDraftValue] = React.useState('');
   const [isUserMenuVisible, setUserMenuVisible] = React.useState(false);
@@ -175,7 +179,26 @@ export default function ProfileScreen({ navigation }: any) {
     if (userName) {
       setProfileName(userName);
     }
-  }, [userName]);
+    if (userPhone) {
+      setProfilePhone(userPhone);
+    }
+
+    // Đồng bộ thông tin profile mới nhất từ Database qua backend API /users/me
+    const fetchUserProfile = async () => {
+      try {
+        const res = await api.get('/users/me');
+        if (res.data?.full_name) {
+          setProfileName(res.data.full_name);
+        }
+        if (res.data?.phone) {
+          setProfilePhone(res.data.phone);
+        }
+      } catch {
+        // Fallback to store
+      }
+    };
+    fetchUserProfile();
+  }, [userName, userPhone]);
 
   const handleLogout = () => {
     setLogoutConfirmVisible(true);
@@ -1688,199 +1711,664 @@ export default function ProfileScreen({ navigation }: any) {
 
       <ScrollView
         showsVerticalScrollIndicator={false}
-        contentContainerStyle={styles.scrollContent}
+        contentContainerStyle={[styles.scrollContent, isDarkMode && { backgroundColor: colors.background }]}
       >
-        {/* 1. Top Header: Avatar, User ID "1057", QR Scanner */}
-        <View style={styles.topProfileRow}>
+        {/* ================================================================= */}
+        {/* HEADER: TITLE "Menu" & QUICK ACTIONS (SEARCH, SETTINGS)           */}
+        {/* ================================================================= */}
+        <View style={styles.fbHeaderRow}>
+          <Text style={[styles.fbHeaderTitle, isDarkMode && { color: colors.textPrimary }]}>Menu</Text>
+          <View style={styles.fbHeaderActionIcons}>
+            <TouchableOpacity
+              style={[styles.fbHeaderCircleBtn, isDarkMode && { backgroundColor: colors.card }]}
+              onPress={() => setSettingsVisible(true)}
+              activeOpacity={0.7}
+            >
+              <Ionicons name="search" size={20} color={isDarkMode ? colors.textPrimary : '#1E293B'} />
+            </TouchableOpacity>
+            <TouchableOpacity
+              style={[styles.fbHeaderCircleBtn, isDarkMode && { backgroundColor: colors.card }]}
+              onPress={() => setSettingsVisible(true)}
+              activeOpacity={0.7}
+            >
+              <Ionicons name="settings-sharp" size={20} color={isDarkMode ? colors.textPrimary : '#1E293B'} />
+            </TouchableOpacity>
+          </View>
+        </View>
+
+        {/* ================================================================= */}
+        {/* USER PROFILE CARD (CARD THÔNG TIN NGƯỜI DÙNG PHONG CÁCH FB)      */}
+        {/* ================================================================= */}
+        <View style={[styles.fbProfileCard, isDarkMode && { backgroundColor: colors.card, borderColor: colors.border }]}>
+          {/* Hàng 1: Avatar, Tên người dùng thật, SĐT, Badge vai trò & Dropdown */}
           <TouchableOpacity
-            style={styles.avatarContainer}
+            style={styles.fbProfileInfoRow}
             activeOpacity={0.8}
             onPress={() => {
               setAccountEntrySource('main');
               setUserMenuVisible(true);
             }}
           >
-            <View style={[styles.avatarCircle, isDarkMode && { backgroundColor: colors.card }]}>
-              <Ionicons name="person" size={38} color={isDarkMode ? '#64748B' : '#CBD5E1'} />
+            <View style={styles.fbAvatarCircle}>
+              {avatarUri ? (
+                <Image source={{ uri: avatarUri }} style={styles.fbAvatarImg} />
+              ) : (
+                <Ionicons name="person" size={26} color="#FFFFFF" />
+              )}
             </View>
-            <View style={{ marginLeft: 16 }}>
-              <Text style={[styles.userIdText, isDarkMode && { color: colors.textPrimary }]}>1057</Text>
-              <Text style={[styles.userRoleText, isDarkMode && { color: colors.textSecondary }]}>{userName || 'Người chăm sóc chính'}</Text>
-              <View style={[styles.accountBadgeWrap, isDarkMode && { backgroundColor: colors.card }]}>
-                <View style={styles.accountBadgeDot} />
-                <Text style={[styles.accountBadgeText, isDarkMode && { color: colors.textSecondary }]}>Xem tài khoản</Text>
+            <View style={{ flex: 1, marginLeft: 12 }}>
+              <Text style={[styles.fbProfileName, isDarkMode && { color: colors.textPrimary }]}>
+                {profileName || userName || 'Nguyễn Hữu Nghĩa'}
+              </Text>
+              <Text style={[styles.fbProfileRole, isDarkMode && { color: colors.textSecondary }]}>
+                {profilePhone || '0905 123 456'} • Chủ nhà (Giám sát)
+              </Text>
+            </View>
+            {/* Badge thông báo & icon switch */}
+            <View style={styles.fbProfileRightBadge}>
+              <Ionicons name="chevron-down-circle" size={24} color="#64748B" />
+              <View style={styles.fbNotiCountBadge}>
+                <Text style={styles.fbNotiCountText}>2</Text>
               </View>
             </View>
           </TouchableOpacity>
+
+          <View style={[styles.fbCardDivider, isDarkMode && { backgroundColor: colors.border }]} />
+
+          {/* Hàng 2: Quick action "+ Thêm thành viên hoặc người cần chăm sóc" */}
+          <TouchableOpacity
+            style={styles.fbSubActionRow}
+            activeOpacity={0.7}
+            onPress={() => navigation.navigate('HouseDetail')}
+          >
+            <View style={styles.fbPlusCircleBtn}>
+              <Ionicons name="add" size={20} color="#FFFFFF" />
+            </View>
+            <Text style={[styles.fbSubActionText, isDarkMode && { color: colors.textPrimary }]}>
+              Thêm thành viên gia đình & Cụ cần chăm sóc
+            </Text>
+          </TouchableOpacity>
         </View>
 
-        {/* Khối phân tách rõ ràng: Hồ sơ người giám sát & Hồ sơ bệnh án người cao tuổi */}
-        <View style={[styles.menuGroupCard, isDarkMode && { backgroundColor: colors.card, borderColor: colors.border, borderWidth: 1 }]}>
-          {/* Mục 1: Hồ sơ người giám sát */}
+        {/* ================================================================= */}
+        {/* LỐI TẮT CỦA BẠN (YOUR SHORTCUTS - CAROUSEL NGANG PHONG CÁCH FB)   */}
+        {/* ================================================================= */}
+        <View style={styles.fbShortcutsSection}>
+          <Text style={[styles.fbSectionTitle, isDarkMode && { color: colors.textPrimary }]}>
+            Lối tắt của bạn
+          </Text>
+          <ScrollView
+            horizontal
+            showsHorizontalScrollIndicator={false}
+            contentContainerStyle={styles.fbShortcutsScroll}
+          >
+            {/* Lối tắt 1: Cụ Nguyễn Văn An (Bệnh án) */}
+            <TouchableOpacity
+              style={styles.fbShortcutItem}
+              activeOpacity={0.8}
+              onPress={() => navigation.navigate('PatientMedicalRecord')}
+            >
+              <View style={styles.fbShortcutThumbWrap}>
+                <Image
+                  source={{ uri: 'https://images.unsplash.com/photo-1576765608535-5f04d1e3f289?auto=format&fit=crop&w=200&q=80' }}
+                  style={styles.fbShortcutThumb}
+                />
+                <View style={[styles.fbShortcutBadge, { backgroundColor: '#EF4444' }]}>
+                  <Ionicons name="heart" size={10} color="#FFFFFF" />
+                </View>
+              </View>
+              <Text numberOfLines={1} style={[styles.fbShortcutLabel, isDarkMode && { color: colors.textSecondary }]}>
+                Cụ Nguyễn...
+              </Text>
+            </TouchableOpacity>
+
+            {/* Lối tắt 2: Camera AI Phòng Khách */}
+            <TouchableOpacity
+              style={styles.fbShortcutItem}
+              activeOpacity={0.8}
+              onPress={() => navigation.navigate('CameraDetail', { deviceId: 'SECA_001', name: 'Camera AI Phòng Khách' })}
+            >
+              <View style={styles.fbShortcutThumbWrap}>
+                <Image
+                  source={{ uri: 'https://images.unsplash.com/photo-1513694203232-719a280e022f?auto=format&fit=crop&w=200&q=80' }}
+                  style={styles.fbShortcutThumb}
+                />
+                <View style={[styles.fbShortcutBadge, { backgroundColor: '#0284C7' }]}>
+                  <Ionicons name="videocam" size={10} color="#FFFFFF" />
+                </View>
+              </View>
+              <Text numberOfLines={1} style={[styles.fbShortcutLabel, isDarkMode && { color: colors.textSecondary }]}>
+                Camera PK
+              </Text>
+            </TouchableOpacity>
+
+            {/* Lối tắt 3: Vòng đeo tay BLE */}
+            <TouchableOpacity
+              style={styles.fbShortcutItem}
+              activeOpacity={0.8}
+              onPress={() => navigation.navigate('SmartbandDetail')}
+            >
+              <View style={styles.fbShortcutThumbWrap}>
+                <Image
+                  source={{ uri: 'https://images.unsplash.com/photo-1575311373937-040b8e1fd5b6?auto=format&fit=crop&w=200&q=80' }}
+                  style={styles.fbShortcutThumb}
+                />
+                <View style={[styles.fbShortcutBadge, { backgroundColor: '#FF7A00' }]}>
+                  <Ionicons name="pulse" size={10} color="#FFFFFF" />
+                </View>
+              </View>
+              <Text numberOfLines={1} style={[styles.fbShortcutLabel, isDarkMode && { color: colors.textSecondary }]}>
+                Vòng tay BLE
+              </Text>
+            </TouchableOpacity>
+
+            {/* Lối tắt 4: Lịch nhắc thuốc */}
+            <TouchableOpacity
+              style={styles.fbShortcutItem}
+              activeOpacity={0.8}
+              onPress={() => navigation.navigate('MedicationReminder')}
+            >
+              <View style={styles.fbShortcutThumbWrap}>
+                <Image
+                  source={{ uri: 'https://images.unsplash.com/photo-1584308666744-24d5c474f2ae?auto=format&fit=crop&w=200&q=80' }}
+                  style={styles.fbShortcutThumb}
+                />
+                <View style={[styles.fbShortcutBadge, { backgroundColor: '#10B981' }]}>
+                  <Ionicons name="medkit" size={10} color="#FFFFFF" />
+                </View>
+              </View>
+              <Text numberOfLines={1} style={[styles.fbShortcutLabel, isDarkMode && { color: colors.textSecondary }]}>
+                Nhắc thuốc
+              </Text>
+            </TouchableOpacity>
+
+            {/* Lối tắt 5: Báo cáo y tế */}
+            <TouchableOpacity
+              style={styles.fbShortcutItem}
+              activeOpacity={0.8}
+              onPress={() => navigation.navigate('MedicalReport')}
+            >
+              <View style={styles.fbShortcutThumbWrap}>
+                <Image
+                  source={{ uri: 'https://images.unsplash.com/photo-1576091160399-112ba8d25d1d?auto=format&fit=crop&w=200&q=80' }}
+                  style={styles.fbShortcutThumb}
+                />
+                <View style={[styles.fbShortcutBadge, { backgroundColor: '#8B5CF6' }]}>
+                  <Ionicons name="document-text" size={10} color="#FFFFFF" />
+                </View>
+              </View>
+              <Text numberOfLines={1} style={[styles.fbShortcutLabel, isDarkMode && { color: colors.textSecondary }]}>
+                Báo cáo y tế
+              </Text>
+            </TouchableOpacity>
+
+            {/* Lối tắt 6: Nhà của tôi */}
+            <TouchableOpacity
+              style={styles.fbShortcutItem}
+              activeOpacity={0.8}
+              onPress={() => navigation.navigate('HouseDetail')}
+            >
+              <View style={styles.fbShortcutThumbWrap}>
+                <Image
+                  source={{ uri: 'https://images.unsplash.com/photo-1600585154340-be6161a56a0c?auto=format&fit=crop&w=200&q=80' }}
+                  style={styles.fbShortcutThumb}
+                />
+                <View style={[styles.fbShortcutBadge, { backgroundColor: '#0EA5E9' }]}>
+                  <Ionicons name="home" size={10} color="#FFFFFF" />
+                </View>
+              </View>
+              <Text numberOfLines={1} style={[styles.fbShortcutLabel, isDarkMode && { color: colors.textSecondary }]}>
+                Nhà của tôi
+              </Text>
+            </TouchableOpacity>
+          </ScrollView>
+        </View>
+
+        {/* ================================================================= */}
+        {/* LƯỚI TÍNH NĂNG 2 CỘT (2-COLUMN FUNCTIONAL GRID - PHONG CÁCH FB)   */}
+        {/* Sửa lại toàn bộ tên đúng chuẩn, không dùng tên kỳ quặc           */}
+        {/* ================================================================= */}
+        <View style={styles.fbGridContainer}>
+          {/* Ô 1: Hồ sơ giám sát */}
           <TouchableOpacity
-            style={styles.menuRow}
+            style={[styles.fbGridCard, isDarkMode && { backgroundColor: colors.card, borderColor: colors.border }]}
+            activeOpacity={0.8}
             onPress={() => {
               setAccountEntrySource('main');
               setUserMenuVisible(true);
             }}
-            activeOpacity={0.7}
           >
-            <View style={[styles.menuIconBox, { backgroundColor: isDarkMode ? '#1E1B4B' : '#EEF2FF' }]}>
-              <Ionicons name="person-circle-outline" size={22} color="#6366F1" />
+            <View style={[styles.fbGridIconBox, { backgroundColor: isDarkMode ? '#1E1B4B' : '#EEF2FF' }]}>
+              <Ionicons name="person-circle-outline" size={24} color="#6366F1" />
             </View>
-            <View style={{ flex: 1 }}>
-              <Text style={[styles.menuTitleText, isDarkMode && { color: colors.textPrimary }]}>Hồ sơ người giám sát</Text>
-              <Text style={[styles.menuSubText, isDarkMode && { color: colors.textSecondary }]}>Tài khoản người thân theo dõi, SĐT liên hệ khẩn cấp</Text>
-            </View>
-            <Ionicons name="chevron-forward" size={18} color={isDarkMode ? colors.textSecondary : '#CBD5E1'} />
+            <Text style={[styles.fbGridCardTitle, isDarkMode && { color: colors.textPrimary }]}>
+              Hồ sơ giám sát
+            </Text>
+            <Text style={[styles.fbGridCardSub, isDarkMode && { color: colors.textSecondary }]}>
+              Tài khoản người thân & SĐT khẩn cấp
+            </Text>
           </TouchableOpacity>
 
-          <View style={[styles.menuDivider, isDarkMode && { backgroundColor: colors.border }]} />
-
-          {/* Mục 2: Hồ sơ bệnh án người cao tuổi */}
+          {/* Ô 2: Hồ sơ bệnh án người cao tuổi */}
           <TouchableOpacity
-            style={styles.menuRow}
+            style={[styles.fbGridCard, isDarkMode && { backgroundColor: colors.card, borderColor: colors.border }]}
+            activeOpacity={0.8}
             onPress={() => navigation.navigate('PatientMedicalRecord')}
-            activeOpacity={0.7}
           >
-            <View style={[styles.menuIconBox, { backgroundColor: isDarkMode ? '#082F49' : '#E0F2FE' }]}>
-              <Ionicons name="medkit-outline" size={22} color="#0EA5E9" />
-            </View>
-            <View style={{ flex: 1 }}>
-              <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6 }}>
-                <Text style={[styles.menuTitleText, isDarkMode && { color: colors.textPrimary }]}>Hồ sơ bệnh án người cao tuổi</Text>
-                <View style={styles.profileAesBadge}>
-                  <Text style={styles.profileAesBadgeText}>Bảo mật AES-256</Text>
-                </View>
+            <View style={styles.fbGridCardTopRow}>
+              <View style={[styles.fbGridIconBox, { backgroundColor: isDarkMode ? '#082F49' : '#E0F2FE' }]}>
+                <Ionicons name="medkit-outline" size={24} color="#0EA5E9" />
               </View>
-              <Text style={[styles.menuSubText, isDarkMode && { color: colors.textSecondary }]}>Thông tin cụ, bệnh nền, nhóm máu &amp; đơn thuốc</Text>
+              <View style={styles.fbAesBadge}>
+                <Text style={styles.fbAesBadgeText}>AES-256</Text>
+              </View>
             </View>
-            <Ionicons name="chevron-forward" size={18} color={isDarkMode ? colors.textSecondary : '#CBD5E1'} />
+            <Text style={[styles.fbGridCardTitle, isDarkMode && { color: colors.textPrimary }]}>
+              Hồ sơ bệnh án
+            </Text>
+            <Text style={[styles.fbGridCardSub, isDarkMode && { color: colors.textSecondary }]}>
+              Cụ An, bệnh nền, nhóm máu & đơn thuốc
+            </Text>
           </TouchableOpacity>
-        </View>
 
-        {/* 3. Card "Nhà của tôi" (Thành viên: 1, icon add user -> mở Hình 3) */}
-        <TouchableOpacity
-          style={[styles.houseCard, isDarkMode && { backgroundColor: colors.card, borderColor: colors.border, borderWidth: 1 }]}
-          onPress={() => navigation.navigate('HouseDetail')}
-          activeOpacity={0.9}
-        >
-          <View>
-            <Text style={[styles.houseCardTitle, isDarkMode && { color: colors.textPrimary }]}>{house.name}</Text>
-            <Text style={[styles.houseCardSub, isDarkMode && { color: colors.textSecondary }]}>Thành viên: {house.membersCount}</Text>
-          </View>
-          <View style={[styles.addMemberCircleBtn, isDarkMode && { backgroundColor: colors.background }]}>
-            <Ionicons name="person-add" size={18} color={isDarkMode ? colors.textSecondary : '#94A3B8'} />
-          </View>
-        </TouchableOpacity>
-
-        {/* 4. Menu Card 1: Thuật toán cảnh báo và thiết bị IoT */}
-        <View style={[styles.menuGroupCard, isDarkMode && { backgroundColor: colors.card, borderColor: colors.border, borderWidth: 1 }]}>
-          {/* Row 1: Chơi Algo (Thuật toán cảnh báo) */}
+          {/* Ô 3: Nhà của tôi */}
           <TouchableOpacity
-            style={styles.menuRow}
-            onPress={() => navigation.navigate('AlgoConfig')}
-            activeOpacity={0.7}
+            style={[styles.fbGridCard, isDarkMode && { backgroundColor: colors.card, borderColor: colors.border }]}
+            activeOpacity={0.8}
+            onPress={() => navigation.navigate('HouseDetail')}
           >
-            <View style={[styles.menuIconBox, { backgroundColor: isDarkMode ? '#3B1D54' : '#F3E8FF' }]}>
-              <Ionicons name="color-wand" size={20} color="#A855F7" />
+            <View style={[styles.fbGridIconBox, { backgroundColor: isDarkMode ? '#064E3B' : '#ECFDF5' }]}>
+              <Ionicons name="home-outline" size={24} color="#10B981" />
             </View>
-            <Text style={[styles.menuTitleText, isDarkMode && { color: colors.textPrimary }]}>Chơi Algo</Text>
-            <Ionicons name="chevron-forward" size={18} color={isDarkMode ? colors.textSecondary : '#CBD5E1'} />
+            <Text style={[styles.fbGridCardTitle, isDarkMode && { color: colors.textPrimary }]}>
+              {house.name || 'Nhà của tôi'}
+            </Text>
+            <Text style={[styles.fbGridCardSub, isDarkMode && { color: colors.textSecondary }]}>
+              Thành viên: {house.membersCount || 1} • Phòng khách
+            </Text>
           </TouchableOpacity>
-          <View style={[styles.menuDivider, isDarkMode && { backgroundColor: colors.border }]} />
 
-          {/* Row 2: Hoạt động với (Thiết bị IoT) */}
+          {/* Ô 4: Thiết bị kết nối (Sửa từ "Hoạt động với") */}
           <TouchableOpacity
-            style={styles.menuRow}
+            style={[styles.fbGridCard, isDarkMode && { backgroundColor: colors.card, borderColor: colors.border }]}
+            activeOpacity={0.8}
             onPress={() => navigation.navigate('Devices')}
-            activeOpacity={0.7}
           >
-            <View style={[styles.menuIconBox, { backgroundColor: isDarkMode ? '#4A2810' : '#FFEDD5' }]}>
-              <Ionicons name="hardware-chip" size={20} color="#F97316" />
+            <View style={[styles.fbGridIconBox, { backgroundColor: isDarkMode ? '#451A03' : '#FFF7ED' }]}>
+              <Ionicons name="hardware-chip-outline" size={24} color="#FF7A00" />
             </View>
-            <Text style={[styles.menuTitleText, isDarkMode && { color: colors.textPrimary }]}>Hoạt động với</Text>
-            <Ionicons name="chevron-forward" size={18} color={isDarkMode ? colors.textSecondary : '#CBD5E1'} />
+            <Text style={[styles.fbGridCardTitle, isDarkMode && { color: colors.textPrimary }]}>
+              Thiết bị kết nối
+            </Text>
+            <Text style={[styles.fbGridCardSub, isDarkMode && { color: colors.textSecondary }]}>
+              Camera AI, Vòng BLE & Cảm biến
+            </Text>
           </TouchableOpacity>
-        </View>
 
-        {/* 5. Menu Card 2: Báo cáo y tế & Cài Đặt */}
-        <View style={[styles.menuGroupCard, isDarkMode && { backgroundColor: colors.card, borderColor: colors.border, borderWidth: 1 }]}>
-          {/* Row 1: Đơn hàng của tôi / Báo cáo y tế xuất PDF/Excel */}
+          {/* Ô 5: Cấu hình AI & Cảnh báo (Sửa từ "Chơi Algo") */}
           <TouchableOpacity
-            style={styles.menuRow}
+            style={[styles.fbGridCard, isDarkMode && { backgroundColor: colors.card, borderColor: colors.border }]}
+            activeOpacity={0.8}
+            onPress={() => navigation.navigate('AlgoConfig')}
+          >
+            <View style={[styles.fbGridIconBox, { backgroundColor: isDarkMode ? '#3B1D54' : '#F5F3FF' }]}>
+              <Ionicons name="color-wand-outline" size={24} color="#8B5CF6" />
+            </View>
+            <Text style={[styles.fbGridCardTitle, isDarkMode && { color: colors.textPrimary }]}>
+              Cấu hình AI & Ngưỡng
+            </Text>
+            <Text style={[styles.fbGridCardSub, isDarkMode && { color: colors.textSecondary }]}>
+              Độ nhạy té ngã, ngưỡng nhịp tim & SpO2
+            </Text>
+          </TouchableOpacity>
+
+          {/* Ô 6: Báo cáo sức khỏe (Sửa từ "Báo cáo y tế & Xuất file (FR13)") */}
+          <TouchableOpacity
+            style={[styles.fbGridCard, isDarkMode && { backgroundColor: colors.card, borderColor: colors.border }]}
+            activeOpacity={0.8}
             onPress={() => navigation.navigate('MedicalReport')}
-            activeOpacity={0.7}
           >
-            <View style={[styles.menuIconBox, { backgroundColor: isDarkMode ? '#3B1D54' : '#F3E8FF' }]}>
-              <Ionicons name="bag-handle" size={20} color="#9333EA" />
+            <View style={[styles.fbGridIconBox, { backgroundColor: isDarkMode ? '#1E293B' : '#EFF6FF' }]}>
+              <Ionicons name="document-text-outline" size={24} color="#2563EB" />
             </View>
-            <View style={{ flex: 1 }}>
-              <Text style={[styles.menuTitleText, isDarkMode && { color: colors.textPrimary }]}>Báo cáo</Text>
-              <Text style={[styles.menuSubText, isDarkMode && { color: colors.textSecondary }]}>Báo cáo y tế &amp; Xuất file (FR13)</Text>
-            </View>
-            <Ionicons name="chevron-forward" size={18} color={isDarkMode ? colors.textSecondary : '#CBD5E1'} />
+            <Text style={[styles.fbGridCardTitle, isDarkMode && { color: colors.textPrimary }]}>
+              Báo cáo sức khỏe
+            </Text>
+            <Text style={[styles.fbGridCardSub, isDarkMode && { color: colors.textSecondary }]}>
+              Xuất file PDF & Excel gửi bác sĩ
+            </Text>
           </TouchableOpacity>
-          <View style={[styles.menuDivider, isDarkMode && { backgroundColor: colors.border }]} />
 
-          {/* Row 2: Cài Đặt (Có chấm đỏ thông báo cập nhật) */}
+          {/* Ô 7: Định vị & Bản đồ (Sửa từ "Định vị địa lý") */}
           <TouchableOpacity
-            style={styles.menuRow}
-            activeOpacity={0.7}
-            onPress={handleCustomerSupportPress}
-          >
-            <View style={[styles.menuIconBox, { backgroundColor: isDarkMode ? '#4C1D1D' : '#FEE2E2' }]}>
-              <Ionicons name="call-outline" size={20} color="#EF4444" />
-            </View>
-            <Text style={[styles.menuTitleText, isDarkMode && { color: colors.textPrimary }]}>Liên hệ khẩn cấp tới dịch vụ CSKH</Text>
-            <Ionicons name="chevron-forward" size={18} color={isDarkMode ? colors.textSecondary : '#CBD5E1'} />
-          </TouchableOpacity>
-          <View style={[styles.menuDivider, isDarkMode && { backgroundColor: colors.border }]} />
-
-          <TouchableOpacity
-            style={styles.menuRow}
-            activeOpacity={0.7}
+            style={[styles.fbGridCard, isDarkMode && { backgroundColor: colors.card, borderColor: colors.border }]}
+            activeOpacity={0.8}
             onPress={() => setLocationVisible(true)}
           >
-            <View style={[styles.menuIconBox, { backgroundColor: isDarkMode ? '#1E2958' : '#DBEAFE' }]}>
-              <Ionicons name="location-outline" size={20} color="#2563EB" />
+            <View style={[styles.fbGridIconBox, { backgroundColor: isDarkMode ? '#4C0519' : '#FFF1F2' }]}>
+              <Ionicons name="location-outline" size={24} color="#F43F5E" />
             </View>
-            <Text style={[styles.menuTitleText, isDarkMode && { color: colors.textPrimary }]}>Định vị địa lý</Text>
-            <Ionicons name="chevron-forward" size={18} color={isDarkMode ? colors.textSecondary : '#CBD5E1'} />
+            <Text style={[styles.fbGridCardTitle, isDarkMode && { color: colors.textPrimary }]}>
+              Định vị & Vùng an toàn
+            </Text>
+            <Text style={[styles.fbGridCardSub, isDarkMode && { color: colors.textSecondary }]}>
+              GPS định vị & Geofencing nhà an toàn
+            </Text>
           </TouchableOpacity>
-        </View>
 
-        <View style={[styles.menuGroupCard, isDarkMode && { backgroundColor: colors.card, borderColor: colors.border, borderWidth: 1 }]}>
+          {/* Ô 8: Trung tâm bảo mật */}
           <TouchableOpacity
-            style={styles.menuRow}
+            style={[styles.fbGridCard, isDarkMode && { backgroundColor: colors.card, borderColor: colors.border }]}
+            activeOpacity={0.8}
             onPress={() => setSecurityCenterVisible(true)}
-            activeOpacity={0.7}
           >
-            <View style={[styles.menuIconBox, { backgroundColor: isDarkMode ? '#133E3B' : '#CCFBF1' }]}>
-              <Ionicons name="shield-checkmark" size={20} color="#0F766E" />
+            <View style={[styles.fbGridIconBox, { backgroundColor: isDarkMode ? '#133E3B' : '#F0FDFA' }]}>
+              <Ionicons name="shield-checkmark-outline" size={24} color="#0D9488" />
             </View>
-            <View style={styles.securityMenuCopy}>
-              <Text style={[styles.menuTitleText, isDarkMode && { color: colors.textPrimary }]}>Trung tâm bảo mật</Text>
-              <Text style={[styles.menuSubText, isDarkMode && { color: colors.textSecondary }]}>Bảo vệ tài khoản và thiết bị</Text>
-            </View>
-            <Ionicons name="chevron-forward" size={18} color={isDarkMode ? colors.textSecondary : '#CBD5E1'} />
+            <Text style={[styles.fbGridCardTitle, isDarkMode && { color: colors.textPrimary }]}>
+              Trung tâm bảo mật
+            </Text>
+            <Text style={[styles.fbGridCardSub, isDarkMode && { color: colors.textSecondary }]}>
+              Xác thực 2FA & Quản lý phiên đăng nhập
+            </Text>
           </TouchableOpacity>
-          <View style={[styles.menuDivider, isDarkMode && { backgroundColor: colors.border }]} />
 
-          <TouchableOpacity
-            style={styles.menuRow}
-            onPress={() => setSettingsVisible(true)}
-            activeOpacity={0.7}
-          >
-            <View style={[styles.menuIconBox, { backgroundColor: isDarkMode ? '#452F10' : '#FEF3C7' }]}>
-              <Ionicons name="settings" size={20} color="#D97706" />
-            </View>
-            <Text style={[styles.menuTitleText, isDarkMode && { color: colors.textPrimary }]}>Cài Đặt</Text>
-            <Ionicons name="chevron-forward" size={18} color={isDarkMode ? colors.textSecondary : '#CBD5E1'} />
-          </TouchableOpacity>
+          {/* HIỂN THỊ THÊM KHI BẤM "XEM THÊM" (GIỐNG HÌNH 1) */}
+          {showMoreGrid && (
+            <>
+              {/* Ô 9: Lịch nhắc thuốc */}
+              <TouchableOpacity
+                style={[styles.fbGridCard, isDarkMode && { backgroundColor: colors.card, borderColor: colors.border }]}
+                activeOpacity={0.8}
+                onPress={() => navigation.navigate('MedicationReminder')}
+              >
+                <View style={[styles.fbGridIconBox, { backgroundColor: isDarkMode ? '#451A03' : '#FEF3C7' }]}>
+                  <Ionicons name="calendar-outline" size={24} color="#D97706" />
+                </View>
+                <Text style={[styles.fbGridCardTitle, isDarkMode && { color: colors.textPrimary }]}>
+                  Lịch nhắc thuốc
+                </Text>
+                <Text style={[styles.fbGridCardSub, isDarkMode && { color: colors.textSecondary }]}>
+                  Đơn thuốc & Lịch tái khám bác sĩ
+                </Text>
+              </TouchableOpacity>
+
+              {/* Ô 10: Nhật ký cảnh báo SOS */}
+              <TouchableOpacity
+                style={[styles.fbGridCard, isDarkMode && { backgroundColor: colors.card, borderColor: colors.border }]}
+                activeOpacity={0.8}
+                onPress={() => navigation.navigate('Alerts')}
+              >
+                <View style={[styles.fbGridIconBox, { backgroundColor: isDarkMode ? '#450A0A' : '#FEE2E2' }]}>
+                  <Ionicons name="notifications-outline" size={24} color="#EF4444" />
+                </View>
+                <Text style={[styles.fbGridCardTitle, isDarkMode && { color: colors.textPrimary }]}>
+                  Nhật ký cảnh báo
+                </Text>
+                <Text style={[styles.fbGridCardSub, isDarkMode && { color: colors.textSecondary }]}>
+                  Sự kiện té ngã & Sinh hiệu bất thường
+                </Text>
+              </TouchableOpacity>
+
+              {/* Ô 11: Trợ lý Bác sĩ AI */}
+              <TouchableOpacity
+                style={[styles.fbGridCard, isDarkMode && { backgroundColor: colors.card, borderColor: colors.border }]}
+                activeOpacity={0.8}
+                onPress={() => navigation.navigate('AIAssistant')}
+              >
+                <View style={[styles.fbGridIconBox, { backgroundColor: isDarkMode ? '#164E63' : '#ECFEFF' }]}>
+                  <Ionicons name="chatbubble-ellipses-outline" size={24} color="#06B6D4" />
+                </View>
+                <Text style={[styles.fbGridCardTitle, isDarkMode && { color: colors.textPrimary }]}>
+                  Trợ lý Bác sĩ AI
+                </Text>
+                <Text style={[styles.fbGridCardSub, isDarkMode && { color: colors.textSecondary }]}>
+                  Tư vấn dinh dưỡng & Vận động 24/7
+                </Text>
+              </TouchableOpacity>
+
+              {/* Ô 12: Giám sát đa màn hình */}
+              <TouchableOpacity
+                style={[styles.fbGridCard, isDarkMode && { backgroundColor: colors.card, borderColor: colors.border }]}
+                activeOpacity={0.8}
+                onPress={() => navigation.navigate('MultiView')}
+              >
+                <View style={[styles.fbGridIconBox, { backgroundColor: isDarkMode ? '#2E1065' : '#F3E8FF' }]}>
+                  <Ionicons name="grid-outline" size={24} color="#7C3AED" />
+                </View>
+                <Text style={[styles.fbGridCardTitle, isDarkMode && { color: colors.textPrimary }]}>
+                  Multi-View Camera
+                </Text>
+                <Text style={[styles.fbGridCardSub, isDarkMode && { color: colors.textSecondary }]}>
+                  Xem nhiều góc quay camera cùng lúc
+                </Text>
+              </TouchableOpacity>
+            </>
+          )}
         </View>
 
-        
+        {/* NÚT "XEM THÊM" / "ẨN BỚT" (GIỐNG HỆT HÌNH 1) */}
+        <TouchableOpacity
+          style={[styles.fbViewMoreBtn, isDarkMode && { backgroundColor: colors.card, borderColor: colors.border }]}
+          activeOpacity={0.8}
+          onPress={() => setShowMoreGrid(!showMoreGrid)}
+        >
+          <Text style={[styles.fbViewMoreText, isDarkMode && { color: colors.textPrimary }]}>
+            {showMoreGrid ? 'Ẩn bớt' : 'Xem thêm'}
+          </Text>
+          <Ionicons
+            name={showMoreGrid ? 'chevron-up' : 'chevron-down'}
+            size={18}
+            color={isDarkMode ? colors.textPrimary : '#1E293B'}
+          />
+        </TouchableOpacity>
+
+        {/* ================================================================= */}
+        {/* ACCORDION 1: TRỢ GIÚP VÀ HỖ TRỢ (GIỐNG HÌNH 1)                    */}
+        {/* ================================================================= */}
+        <View style={[styles.fbAccordionCard, isDarkMode && { backgroundColor: colors.card, borderColor: colors.border }]}>
+          <TouchableOpacity
+            style={styles.fbAccordionHeader}
+            activeOpacity={0.7}
+            onPress={() => setIsHelpExpanded(!isHelpExpanded)}
+          >
+            <View style={styles.fbAccordionHeaderLeft}>
+              <Ionicons name="help-circle-outline" size={24} color={isDarkMode ? colors.textPrimary : '#0F172A'} />
+              <Text style={[styles.fbAccordionTitle, isDarkMode && { color: colors.textPrimary }]}>
+                Trợ giúp và hỗ trợ
+              </Text>
+            </View>
+            <Ionicons
+              name={isHelpExpanded ? 'chevron-up' : 'chevron-down'}
+              size={20}
+              color="#64748B"
+            />
+          </TouchableOpacity>
+
+          {isHelpExpanded && (
+            <View style={styles.fbAccordionBody}>
+              {/* Cấp cứu 115 */}
+              <TouchableOpacity
+                style={styles.fbAccordionSubRow}
+                activeOpacity={0.7}
+                onPress={callEmergencyService}
+              >
+                <View style={[styles.fbSubIconBox, { backgroundColor: '#FEE2E2' }]}>
+                  <Ionicons name="call" size={18} color="#EF4444" />
+                </View>
+                <View style={{ flex: 1 }}>
+                  <Text style={[styles.fbSubRowTitle, { color: '#EF4444', fontWeight: '800' }]}>
+                    Gọi cấp cứu y tế khẩn cấp 115
+                  </Text>
+                  <Text style={styles.fbSubRowSub}>Kết nối trực tiếp đường dây nóng y tế</Text>
+                </View>
+                <Ionicons name="chevron-forward" size={16} color="#CBD5E1" />
+              </TouchableOpacity>
+
+              <View style={[styles.fbSubDivider, isDarkMode && { backgroundColor: colors.border }]} />
+
+              {/* Dịch vụ CSKH */}
+              <TouchableOpacity
+                style={styles.fbAccordionSubRow}
+                activeOpacity={0.7}
+                onPress={handleCustomerSupportPress}
+              >
+                <View style={[styles.fbSubIconBox, { backgroundColor: '#EFF6FF' }]}>
+                  <Ionicons name="headset" size={18} color="#2563EB" />
+                </View>
+                <View style={{ flex: 1 }}>
+                  <Text style={[styles.fbSubRowTitle, isDarkMode && { color: colors.textPrimary }]}>
+                    Tổng đài hỗ trợ kỹ thuật CSKH 24/7
+                  </Text>
+                  <Text style={styles.fbSubRowSub}>Hỗ trợ kết nối camera, vòng tay, hub AI</Text>
+                </View>
+                <Ionicons name="chevron-forward" size={16} color="#CBD5E1" />
+              </TouchableOpacity>
+
+              <View style={[styles.fbSubDivider, isDarkMode && { backgroundColor: colors.border }]} />
+
+              {/* Hướng dẫn sử dụng */}
+              <TouchableOpacity
+                style={styles.fbAccordionSubRow}
+                activeOpacity={0.7}
+                onPress={() => {
+                  setInfoDetail('app');
+                  setAboutInfoVisible(true);
+                }}
+              >
+                <View style={[styles.fbSubIconBox, { backgroundColor: '#F3E8FF' }]}>
+                  <Ionicons name="book-outline" size={18} color="#8B5CF6" />
+                </View>
+                <View style={{ flex: 1 }}>
+                  <Text style={[styles.fbSubRowTitle, isDarkMode && { color: colors.textPrimary }]}>
+                    Hướng dẫn sử dụng & Giới thiệu đồ án
+                  </Text>
+                  <Text style={styles.fbSubRowSub}>Tài liệu kỹ thuật Smart Elderly Care AI</Text>
+                </View>
+                <Ionicons name="chevron-forward" size={16} color="#CBD5E1" />
+              </TouchableOpacity>
+            </View>
+          )}
+        </View>
+
+        {/* ================================================================= */}
+        {/* ACCORDION 2: CÀI ĐẶT VÀ QUYỀN RIÊNG TƯ (GIỐNG HÌNH 1)             */}
+        {/* ================================================================= */}
+        <View style={[styles.fbAccordionCard, isDarkMode && { backgroundColor: colors.card, borderColor: colors.border }]}>
+          <TouchableOpacity
+            style={styles.fbAccordionHeader}
+            activeOpacity={0.7}
+            onPress={() => setIsSettingsExpanded(!isSettingsExpanded)}
+          >
+            <View style={styles.fbAccordionHeaderLeft}>
+              <Ionicons name="settings-outline" size={24} color={isDarkMode ? colors.textPrimary : '#0F172A'} />
+              <Text style={[styles.fbAccordionTitle, isDarkMode && { color: colors.textPrimary }]}>
+                Cài đặt và quyền riêng tư
+              </Text>
+            </View>
+            <Ionicons
+              name={isSettingsExpanded ? 'chevron-up' : 'chevron-down'}
+              size={20}
+              color="#64748B"
+            />
+          </TouchableOpacity>
+
+          {isSettingsExpanded && (
+            <View style={styles.fbAccordionBody}>
+              {/* Cài đặt thông báo & Âm thanh */}
+              <TouchableOpacity
+                style={styles.fbAccordionSubRow}
+                activeOpacity={0.7}
+                onPress={() => setNotificationSettingsVisible(true)}
+              >
+                <View style={[styles.fbSubIconBox, { backgroundColor: '#FEF3C7' }]}>
+                  <Ionicons name="notifications-outline" size={18} color="#D97706" />
+                </View>
+                <View style={{ flex: 1 }}>
+                  <Text style={[styles.fbSubRowTitle, isDarkMode && { color: colors.textPrimary }]}>
+                    Cài đặt thông báo & Âm thanh báo động
+                  </Text>
+                  <Text style={styles.fbSubRowSub}>Chuông còi hú, rung, thông báo đẩy</Text>
+                </View>
+                <Ionicons name="chevron-forward" size={16} color="#CBD5E1" />
+              </TouchableOpacity>
+
+              <View style={[styles.fbSubDivider, isDarkMode && { backgroundColor: colors.border }]} />
+
+              {/* Kích thước chữ cho người cao tuổi */}
+              <TouchableOpacity
+                style={styles.fbAccordionSubRow}
+                activeOpacity={0.7}
+                onPress={() => setFontSizeVisible(true)}
+              >
+                <View style={[styles.fbSubIconBox, { backgroundColor: '#ECFDF5' }]}>
+                  <Ionicons name="text-outline" size={18} color="#10B981" />
+                </View>
+                <View style={{ flex: 1 }}>
+                  <Text style={[styles.fbSubRowTitle, isDarkMode && { color: colors.textPrimary }]}>
+                    Cỡ chữ lớn (Dành cho người cao tuổi)
+                  </Text>
+                  <Text style={styles.fbSubRowSub}>Điều chỉnh độ phóng to chữ đọc dễ dàng</Text>
+                </View>
+                <Ionicons name="chevron-forward" size={16} color="#CBD5E1" />
+              </TouchableOpacity>
+
+              <View style={[styles.fbSubDivider, isDarkMode && { backgroundColor: colors.border }]} />
+
+              {/* Chế độ Sáng / Tối */}
+              <TouchableOpacity
+                style={styles.fbAccordionSubRow}
+                activeOpacity={0.7}
+                onPress={() => setAppearanceVisible(true)}
+              >
+                <View style={[styles.fbSubIconBox, { backgroundColor: '#F1F5F9' }]}>
+                  <Ionicons name="contrast-outline" size={18} color="#475569" />
+                </View>
+                <View style={{ flex: 1 }}>
+                  <Text style={[styles.fbSubRowTitle, isDarkMode && { color: colors.textPrimary }]}>
+                    Chế độ giao diện Sáng / Tối
+                  </Text>
+                  <Text style={styles.fbSubRowSub}>
+                    {isDarkMode ? 'Đang dùng Giao diện Tối' : 'Đang dùng Giao diện Sáng'}
+                  </Text>
+                </View>
+                <Ionicons name="chevron-forward" size={16} color="#CBD5E1" />
+              </TouchableOpacity>
+
+              <View style={[styles.fbSubDivider, isDarkMode && { backgroundColor: colors.border }]} />
+
+              {/* Đổi mật khẩu */}
+              <TouchableOpacity
+                style={styles.fbAccordionSubRow}
+                activeOpacity={0.7}
+                onPress={() => setChangePasswordVisible(true)}
+              >
+                <View style={[styles.fbSubIconBox, { backgroundColor: '#FEE2E2' }]}>
+                  <Ionicons name="lock-closed-outline" size={18} color="#EF4444" />
+                </View>
+                <View style={{ flex: 1 }}>
+                  <Text style={[styles.fbSubRowTitle, isDarkMode && { color: colors.textPrimary }]}>
+                    Đổi mật khẩu tài khoản
+                  </Text>
+                  <Text style={styles.fbSubRowSub}>Cập nhật mã bảo mật đăng nhập</Text>
+                </View>
+                <Ionicons name="chevron-forward" size={16} color="#CBD5E1" />
+              </TouchableOpacity>
+            </View>
+          )}
+        </View>
+
+        {/* ================================================================= */}
+        {/* NÚT ĐĂNG XUẤT (NẰM DƯỚI CÙNG PHONG CÁCH THANH LỊCH)              */}
+        {/* ================================================================= */}
+        <TouchableOpacity
+          style={[styles.fbLogoutBtn, isDarkMode && { backgroundColor: 'rgba(239, 68, 68, 0.15)', borderColor: '#EF4444' }]}
+          activeOpacity={0.8}
+          onPress={handleLogout}
+        >
+          <Ionicons name="log-out-outline" size={20} color="#EF4444" />
+          <Text style={styles.fbLogoutBtnText}>Đăng xuất</Text>
+        </TouchableOpacity>
       </ScrollView>
     </SafeAreaView>
   );
@@ -3920,5 +4408,338 @@ logoutButton: {
     fontSize: 10,
     fontWeight: '700',
     color: '#0284C7',
+  },
+
+  // -------------------------------------------------------------------------
+  // FACEBOOK MENU STYLES (MATCHING SCREENSHOT 1)
+  // -------------------------------------------------------------------------
+  fbHeaderRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    paddingHorizontal: 4,
+    marginBottom: 16,
+    marginTop: 4,
+  },
+  fbHeaderTitle: {
+    fontSize: 28,
+    fontWeight: '800',
+    color: '#0F172A',
+    letterSpacing: -0.5,
+  },
+  fbHeaderActionIcons: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 8,
+  },
+  fbHeaderCircleBtn: {
+    width: 38,
+    height: 38,
+    borderRadius: 19,
+    backgroundColor: '#E4E6EB',
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+
+  // User Profile Card
+  fbProfileCard: {
+    backgroundColor: '#FFFFFF',
+    borderRadius: 16,
+    padding: 14,
+    marginBottom: 20,
+    borderWidth: 1,
+    borderColor: '#E2E8F0',
+    shadowColor: '#64748B',
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.05,
+    shadowRadius: 8,
+    elevation: 2,
+  },
+  fbProfileInfoRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    paddingBottom: 12,
+  },
+  fbAvatarCircle: {
+    width: 48,
+    height: 48,
+    borderRadius: 24,
+    backgroundColor: Colors.primary,
+    alignItems: 'center',
+    justifyContent: 'center',
+    overflow: 'hidden',
+  },
+  fbAvatarImg: {
+    width: 48,
+    height: 48,
+    borderRadius: 24,
+  },
+  fbProfileName: {
+    fontSize: 17,
+    fontWeight: '700',
+    color: '#0F172A',
+  },
+  fbProfileRole: {
+    fontSize: 12,
+    color: '#64748B',
+    marginTop: 3,
+  },
+  fbProfileRightBadge: {
+    position: 'relative',
+    padding: 4,
+  },
+  fbNotiCountBadge: {
+    position: 'absolute',
+    top: 0,
+    right: 0,
+    backgroundColor: '#E41E3F',
+    borderRadius: 9,
+    minWidth: 18,
+    height: 18,
+    alignItems: 'center',
+    justifyContent: 'center',
+    paddingHorizontal: 4,
+  },
+  fbNotiCountText: {
+    color: '#FFFFFF',
+    fontSize: 10,
+    fontWeight: '800',
+  },
+  fbCardDivider: {
+    height: 1,
+    backgroundColor: '#F1F5F9',
+    marginBottom: 10,
+  },
+  fbSubActionRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 10,
+    paddingVertical: 4,
+  },
+  fbPlusCircleBtn: {
+    width: 32,
+    height: 32,
+    borderRadius: 16,
+    backgroundColor: '#475569',
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  fbSubActionText: {
+    fontSize: 14,
+    fontWeight: '600',
+    color: '#0F172A',
+  },
+
+  // Shortcuts Section
+  fbShortcutsSection: {
+    marginBottom: 20,
+  },
+  fbSectionTitle: {
+    fontSize: 16,
+    fontWeight: '700',
+    color: '#0F172A',
+    marginBottom: 12,
+    paddingHorizontal: 2,
+  },
+  fbShortcutsScroll: {
+    gap: 12,
+    paddingHorizontal: 2,
+    paddingBottom: 4,
+  },
+  fbShortcutItem: {
+    alignItems: 'center',
+    width: 76,
+  },
+  fbShortcutThumbWrap: {
+    width: 68,
+    height: 68,
+    borderRadius: 16,
+    backgroundColor: '#E2E8F0',
+    position: 'relative',
+    overflow: 'visible',
+    marginBottom: 6,
+  },
+  fbShortcutThumb: {
+    width: 68,
+    height: 68,
+    borderRadius: 16,
+  },
+  fbShortcutBadge: {
+    position: 'absolute',
+    bottom: -3,
+    right: -3,
+    width: 22,
+    height: 22,
+    borderRadius: 11,
+    alignItems: 'center',
+    justifyContent: 'center',
+    borderWidth: 2,
+    borderColor: '#FFFFFF',
+  },
+  fbShortcutLabel: {
+    fontSize: 12,
+    fontWeight: '600',
+    color: '#334155',
+    textAlign: 'center',
+  },
+
+  // 2-Column Grid
+  fbGridContainer: {
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+    justifyContent: 'space-between',
+    gap: 10,
+    marginBottom: 12,
+  },
+  fbGridCard: {
+    width: '48.5%',
+    backgroundColor: '#FFFFFF',
+    borderRadius: 16,
+    padding: 14,
+    borderWidth: 1,
+    borderColor: '#E2E8F0',
+    minHeight: 120,
+    justifyContent: 'space-between',
+    shadowColor: '#64748B',
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.04,
+    shadowRadius: 6,
+    elevation: 2,
+  },
+  fbGridCardTopRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+  },
+  fbGridIconBox: {
+    width: 40,
+    height: 40,
+    borderRadius: 12,
+    alignItems: 'center',
+    justifyContent: 'center',
+    marginBottom: 10,
+  },
+  fbAesBadge: {
+    backgroundColor: '#E0F2FE',
+    paddingHorizontal: 6,
+    paddingVertical: 2,
+    borderRadius: 6,
+    borderWidth: 1,
+    borderColor: '#BAE6FD',
+  },
+  fbAesBadgeText: {
+    fontSize: 9,
+    fontWeight: '700',
+    color: '#0284C7',
+  },
+  fbGridCardTitle: {
+    fontSize: 15,
+    fontWeight: '700',
+    color: '#0F172A',
+    marginBottom: 4,
+    lineHeight: 20,
+  },
+  fbGridCardSub: {
+    fontSize: 11,
+    color: '#64748B',
+    lineHeight: 15,
+  },
+
+  // View More Button
+  fbViewMoreBtn: {
+    height: 44,
+    backgroundColor: '#E4E6EB',
+    borderRadius: 10,
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: 6,
+    marginBottom: 16,
+    borderWidth: 1,
+    borderColor: '#CBD5E1',
+  },
+  fbViewMoreText: {
+    fontSize: 15,
+    fontWeight: '700',
+    color: '#0F172A',
+  },
+
+  // Accordion Sections
+  fbAccordionCard: {
+    backgroundColor: '#FFFFFF',
+    borderRadius: 16,
+    marginBottom: 12,
+    borderWidth: 1,
+    borderColor: '#E2E8F0',
+    overflow: 'hidden',
+  },
+  fbAccordionHeader: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    paddingVertical: 14,
+    paddingHorizontal: 16,
+  },
+  fbAccordionHeaderLeft: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 12,
+  },
+  fbAccordionTitle: {
+    fontSize: 16,
+    fontWeight: '700',
+    color: '#0F172A',
+  },
+  fbAccordionBody: {
+    paddingHorizontal: 16,
+    paddingBottom: 12,
+  },
+  fbAccordionSubRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    paddingVertical: 10,
+    gap: 12,
+  },
+  fbSubIconBox: {
+    width: 34,
+    height: 34,
+    borderRadius: 10,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  fbSubRowTitle: {
+    fontSize: 14,
+    fontWeight: '600',
+    color: '#0F172A',
+  },
+  fbSubRowSub: {
+    fontSize: 11,
+    color: '#64748B',
+    marginTop: 2,
+  },
+  fbSubDivider: {
+    height: 1,
+    backgroundColor: '#F1F5F9',
+    marginLeft: 46,
+  },
+
+  // Logout Button
+  fbLogoutBtn: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: 8,
+    height: 48,
+    backgroundColor: '#FEF2F2',
+    borderRadius: 12,
+    borderWidth: 1,
+    borderColor: '#FECACA',
+    marginTop: 8,
+    marginBottom: 20,
+  },
+  fbLogoutBtnText: {
+    fontSize: 15,
+    fontWeight: '700',
+    color: '#EF4444',
   },
 });
