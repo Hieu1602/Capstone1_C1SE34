@@ -69,9 +69,9 @@ app = FastAPI(
         "Nhận telemetry từ Edge Hub, xử lý cảnh báo, cung cấp API cho Mobile & Web."
     ),
     version="1.0.0",
-    docs_url="/api/docs",
-    redoc_url="/api/redoc",
-    openapi_url="/api/openapi.json",
+    docs_url="/docs",
+    redoc_url="/redoc",
+    openapi_url="/openapi.json",
     lifespan=lifespan,
 )
 
@@ -94,12 +94,24 @@ app.include_router(api_router, prefix="/api/v1")
 app.include_router(ws_router, prefix="/ws")
 
 
-# ---- Health & Root ----
+# ---- Health, Docs & Root ----
 @app.get("/", include_in_schema=False)
 async def root():
     """Chuyển hướng trang chủ về tài liệu Swagger API."""
     from fastapi.responses import RedirectResponse
-    return RedirectResponse(url="/api/docs")
+    return RedirectResponse(url="/docs")
+
+
+@app.get("/api/docs", include_in_schema=False)
+async def api_docs_redirect():
+    from fastapi.responses import RedirectResponse
+    return RedirectResponse(url="/docs")
+
+
+@app.get("/api/redoc", include_in_schema=False)
+async def api_redoc_redirect():
+    from fastapi.responses import RedirectResponse
+    return RedirectResponse(url="/redoc")
 
 
 @app.get("/health", tags=["System"])

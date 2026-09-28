@@ -13,7 +13,7 @@ from app.core.config import settings
 from app.core.database import Base
 
 # Import tất cả models để Alembic nhận diện
-from app.models import device, incident, user, vital_sign  # noqa: F401
+import app.models  # noqa: F401
 
 config = context.config
 config.set_main_option("sqlalchemy.url", settings.DATABASE_URL)

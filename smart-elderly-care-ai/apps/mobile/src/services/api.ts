@@ -28,7 +28,7 @@ const api: AxiosInstance = axios.create({
 // ---- Request Interceptor: Attach JWT token ----
 api.interceptors.request.use(
   (config: import('axios').InternalAxiosRequestConfig) => {
-    const token = useAuthStore.getState().accessToken;
+    const token = useAuthStore.getState().accessToken || 'fake-jwt-token-demo';
     if (token) {
       config.headers.Authorization = `Bearer ${token}`;
     }
