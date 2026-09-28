@@ -12,6 +12,12 @@ import {
   patientApi,
   incidentsApi,
 } from '../services/api';
+import {
+  houseApi,
+  deviceGroupApi,
+  devicesApi,
+} from '../services/deviceService';
+
 
 // ---- Types ----
 export interface VitalData {
@@ -120,7 +126,7 @@ export interface CameraDevice {
   isOnline: boolean;
   isSleep: boolean;
   isAIProtect: boolean;
-  resolution: 'HD' | 'BASIC';
+  resolution: 'HD' | 'BASIC' | '2K' | 'FHD' | 'SD';
   sdCardStatus: 'OK' | 'NO_CARD';
   wifiStrength: number; // 1-3
   streamUrl: string;
@@ -189,7 +195,7 @@ interface VitalStoreState {
   updateHouseAddress: (address: string) => void;
   toggleCameraSleep: () => void;
   toggleCameraAIProtect: () => void;
-  setCameraResolution: (res: 'HD' | 'BASIC') => void;
+  setCameraResolution: (res: 'HD' | 'BASIC' | '2K' | 'FHD' | 'SD') => void;
   setSelectedDate: (date: string) => void;
   updateAlgoSettings: (settings: Partial<VitalStoreState['algoSettings']>) => void;
   addIoTDevice: (device: IoTDeviceItem) => void;
@@ -532,7 +538,7 @@ const createVitalStore: StateCreator<VitalStoreState> = (set, get) => ({
     );
   },
 
-  setCameraResolution: (res: 'HD' | 'BASIC') =>
+  setCameraResolution: (res: 'HD' | 'BASIC' | '2K' | 'FHD' | 'SD') =>
     set((state) => ({ camera: { ...state.camera, resolution: res } })),
 
   setSelectedDate: (date: string) => set({ selectedDate: date }),
