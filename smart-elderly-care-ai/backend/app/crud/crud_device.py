@@ -46,6 +46,21 @@ class CRUDDevice:
         )
         return result.scalar_one_or_none()
 
+    async def get_by_id_or_device_id(
+        self, db: AsyncSession, id_or_device_id: str
+    ) -> Optional[Device]:
+        """
+        Tìm kiếm thiết bị linh hoạt theo UUID hoặc mã định danh chuỗi (SECA_001, BLE_BAND_001).
+        """
+        try:
+            val_uuid = UUID(id_or_device_id)
+            device = await self.get_by_id(db, val_uuid)
+            if device:
+                return device
+        except (ValueError, TypeError):
+            pass
+        return await self.get_by_device_id(db, id_or_device_id)
+
     async def get_by_owner(
         self,
         db: AsyncSession,

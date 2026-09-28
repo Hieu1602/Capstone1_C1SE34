@@ -86,6 +86,35 @@ async def create_device_group(
     )
 
 
+@router.get("/{group_id}", response_model=DeviceGroupOut)
+async def get_device_group(
+    group_id: UUID,
+    current_user: User = Depends(get_current_user),
+    db: AsyncSession = Depends(get_db),
+):
+    """Lấy thông tin chi tiết một nhóm khu vực."""
+    group = await crud_device_group.get_by_id(db, id=group_id)
+    if not group:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="Nhóm khu vực không tồn tại.",
+        )
+    devs = group.devices or []
+    return DeviceGroupOut(
+        id=group.id,
+        house_id=group.house_id,
+        name=group.name,
+        description=group.description,
+        icon=group.icon,
+        color=group.color,
+        sort_order=group.sort_order,
+        device_count=len(devs),
+        online_count=sum(1 for d in devs if d.is_online),
+        created_at=group.created_at,
+        updated_at=group.updated_at,
+    )
+
+
 @router.get("/{group_id}/devices", response_model=List[DeviceOut])
 async def get_devices_in_group(
     group_id: UUID,
@@ -103,6 +132,7 @@ async def get_devices_in_group(
 
 
 @router.patch("/{group_id}", response_model=DeviceGroupOut)
+@router.put("/{group_id}", response_model=DeviceGroupOut)
 async def update_device_group(
     group_id: UUID,
     obj_in: DeviceGroupUpdate,
@@ -147,7 +177,7 @@ async def update_device_group(
     )
 
 
-@router.delete("/{group_id}", status_code=status.HTTP_204_NO_CONTENT)
+@router.delete("/{group_id}", status_code=status.HTTP_200_OK)
 async def delete_device_group(
     group_id: UUID,
     current_user: User = Depends(get_current_user),
@@ -165,7 +195,33 @@ async def delete_device_group(
             detail="Nhóm khu vực không tồn tại.",
         )
 
+    group_name = group.name
     await crud_device_group.delete(db, group=group)
+    return {"message": f"Đã xóa nhóm '{group_name}' thành công."}
+
+
+@router.post("/assign", status_code=status.HTTP_200_OK)
+async def assign_devices_to_group_body(
+    payload: dict,
+    current_user: User = Depends(get_current_user),
+    db: AsyncSession = Depends(get_db),
+):
+    """Gán thiết bị vào nhóm với body chứa group_id và device_ids."""
+    raw_group_id = payload.get("group_id")
+    device_ids = payload.get("device_ids", [])
+    if not raw_group_id:
+        raise HTTPException(status_code=400, detail="Thiếu group_id")
+
+    group = await crud_device_group.get_by_id(db, id=UUID(str(raw_group_id)))
+    if not group:
+        raise HTTPException(status_code=404, detail="Nhóm khu vực không tồn tại.")
+
+    parsed_dev_ids = [UUID(str(d)) for d in device_ids]
+    await crud_device_group.assign_devices(db, group=group, device_ids=parsed_dev_ids)
+    return {
+        "message": f"Đã gán {len(parsed_dev_ids)} thiết bị vào nhóm '{group.name}'.",
+        "updated_count": len(parsed_dev_ids),
+    }
 
 
 @router.post("/{group_id}/assign", status_code=status.HTTP_200_OK)
@@ -186,5 +242,8 @@ async def assign_devices_to_group(
     await crud_device_group.assign_devices(
         db, group=group, device_ids=assign_in.device_ids
     )
-    return {"message": f"Đã gán {len(assign_in.device_ids)} thiết bị vào nhóm '{group.name}'."}
+    return {
+        "message": f"Đã gán {len(assign_in.device_ids)} thiết bị vào nhóm '{group.name}'.",
+        "updated_count": len(assign_in.device_ids),
+    }
 

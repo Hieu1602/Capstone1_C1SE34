@@ -88,3 +88,55 @@ async def login(
         refresh_token=create_refresh_token(subject=user.id),
         token_type="bearer",
     )
+
+
+class RefreshTokenRequest(BaseModel):
+    refresh_token: str
+
+
+@router.post("/refresh", response_model=Token)
+async def refresh_token(
+    payload: RefreshTokenRequest,
+    db: AsyncSession = Depends(get_db),
+):
+    """Làm mới Access Token từ Refresh Token hợp lệ."""
+    from uuid import UUID
+    from jose import JWTError
+    from app.core.security import decode_token
+
+    try:
+        data = decode_token(payload.refresh_token)
+        if data.get("type") != "refresh":
+            raise HTTPException(status_code=400, detail="Token không phải Refresh Token.")
+        user_id = UUID(data["sub"])
+    except (JWTError, ValueError, KeyError):
+        raise HTTPException(
+            status_code=status.HTTP_401_UNAUTHORIZED,
+            detail="Refresh token không hợp lệ hoặc đã hết hạn.",
+        )
+
+    user = await crud_user.get(db, user_id)
+    if not user or not user.is_active:
+        raise HTTPException(
+            status_code=status.HTTP_401_UNAUTHORIZED,
+            detail="Người dùng không tồn tại hoặc đã bị vô hiệu hóa.",
+        )
+
+    return Token(
+        access_token=create_access_token(subject=user.id),
+        refresh_token=create_refresh_token(subject=user.id),
+        token_type="bearer",
+    )
+
+
+from app.api.deps import get_current_user
+from app.models.user import User
+
+
+@router.get("/me", response_model=UserOut)
+async def get_current_auth_user(
+    current_user: User = Depends(get_current_user),
+):
+    """Lấy thông tin người dùng đang đăng nhập."""
+    return current_user
+

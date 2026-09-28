@@ -45,8 +45,43 @@ async def lifespan(app: FastAPI):
 
     # MQTT Subscriber (background thread)
     mqtt_subscriber = MQTTSubscriber()
+
+    import asyncio
+    loop = asyncio.get_running_loop()
+
+    def handle_telemetry(payload: dict):
+        async def _save():
+            try:
+                from app.core.database import AsyncSessionFactory
+                from app.crud.crud_vital import crud_vital
+                async with AsyncSessionFactory() as session:
+                    await crud_vital.create(session, payload)
+                    await session.commit()
+            except Exception as e:
+                logger.error("[Lifespan] Error saving MQTT telemetry: %s", e)
+        asyncio.run_coroutine_threadsafe(_save(), loop)
+
+    def handle_alert(payload: dict):
+        async def _save_alert():
+            try:
+                from app.core.database import AsyncSessionFactory
+                from app.crud.crud_incident import crud_incident
+                from app.crud.crud_vital import crud_vital
+                async with AsyncSessionFactory() as session:
+                    raw_dev = payload.get("device_id")
+                    dev_uuid = await crud_vital.resolve_device_uuid(session, raw_dev)
+                    if dev_uuid:
+                        payload["device_id"] = dev_uuid
+                    await crud_incident.create(session, payload)
+                    await session.commit()
+            except Exception as e:
+                logger.error("[Lifespan] Error saving MQTT alert: %s", e)
+        asyncio.run_coroutine_threadsafe(_save_alert(), loop)
+
+    mqtt_subscriber.on_telemetry(handle_telemetry)
+    mqtt_subscriber.on_alert(handle_alert)
     mqtt_subscriber.start()
-    logger.info("✅ MQTT Subscriber started.")
+    logger.info("✅ MQTT Subscriber started and handlers registered.")
 
     yield
 

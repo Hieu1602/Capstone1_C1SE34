@@ -4,9 +4,14 @@ API Quản lý Trạng thái Hệ thống & Redis Cache Diagnostics.
 Cung cấp các endpoint giám sát bộ nhớ đệm Redis, thiết bị Online và cảnh báo khẩn cấp.
 """
 
-from typing import Any, Dict, List
-from fastapi import APIRouter, Query, status
+from typing import Any, Dict, List, Optional
+from fastapi import APIRouter, Body, Depends, Query, status
+from sqlalchemy.ext.asyncio import AsyncSession
 
+from app.api.deps import get_current_user_optional
+from app.core.database import get_db
+from app.crud.crud_house import crud_house
+from app.models.user import User
 from app.services.redis import redis_service
 
 router = APIRouter()
@@ -55,3 +60,42 @@ async def get_online_devices() -> List[str]:
     Trả về danh sách các mã thiết bị (device_id) đang phát tín hiệu định kỳ lên máy chủ.
     """
     return await redis_service.get_online_devices()
+
+
+@router.get("/mode", summary="Lấy trạng thái chế độ an ninh hệ thống")
+async def get_system_mode(
+    current_user: Optional[User] = Depends(get_current_user_optional),
+    db: AsyncSession = Depends(get_db),
+) -> Dict[str, Any]:
+    """Lấy chế độ an ninh hệ thống và cấu hình báo động hiện tại."""
+    mode = "HOME"
+    if current_user:
+        house = await crud_house.get_or_create_default_house(db, owner_id=current_user.id)
+        mode = house.current_mode
+    return {
+        "mode": mode,
+        "is_mute_alarm": False,
+        "is_camera_privacy": mode == "PRIVACY",
+        "mute_mode": "SILENT",
+        "duration_minutes": 60,
+    }
+
+
+@router.put("/mode", summary="Cập nhật chế độ an ninh hệ thống")
+async def update_system_mode(
+    payload: Dict[str, Any] = Body(...),
+    current_user: Optional[User] = Depends(get_current_user_optional),
+    db: AsyncSession = Depends(get_db),
+) -> Dict[str, Any]:
+    """Cập nhật chế độ an ninh (HOME, AWAY, DISARM, ALARM, PRIVACY) và chế độ còi báo động."""
+    mode = str(payload.get("mode", "HOME")).upper().strip()
+    if current_user:
+        house = await crud_house.get_or_create_default_house(db, owner_id=current_user.id)
+        await crud_house.update_mode(db, house=house, mode=mode)
+    return {
+        "status": "success",
+        "mode": mode,
+        "is_mute_alarm": payload.get("is_mute_alarm", False),
+        "is_camera_privacy": mode == "PRIVACY",
+    }
+

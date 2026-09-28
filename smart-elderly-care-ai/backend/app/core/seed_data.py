@@ -169,6 +169,28 @@ async def seed_master_data() -> None:
             else:
                 logger.info("[SEED] Vòng đeo tay BLE Smartband đã tồn tại")
 
+            # 6. Tạo Hồ sơ Người cao tuổi mặc định: Cụ Nguyễn Văn An
+            from app.models.elderly_profile import ElderlyProfile
+            eld_res = await db.execute(select(ElderlyProfile).where(ElderlyProfile.house_id == house.id))
+            elderly = eld_res.scalar_one_or_none()
+            if not elderly:
+                elderly = ElderlyProfile(
+                    house_id=house.id,
+                    full_name="Nguyễn Văn An",
+                    birth_year=1948,
+                    gender="MALE",
+                    medical_history="Cao huyết áp (Độ 2), Đái tháo đường Type 2, Thoái hóa khớp gối",
+                    emergency_contact_phone="+84905123456",
+                )
+                db.add(elderly)
+                await db.flush()
+                await db.refresh(elderly)
+                logger.info("[SEED] Đã tạo Hồ sơ Người cao tuổi: Nguyễn Văn An")
+
+            if band and not band.elderly_id and elderly:
+                band.elderly_id = elderly.id
+                logger.info("[SEED] Đã gán Vòng đeo tay BLE_BAND_001 cho Cụ Nguyễn Văn An")
+
             await db.commit()
             logger.info("[SEED] Hoàn tất nạp dữ liệu Master thành công 100%!")
 

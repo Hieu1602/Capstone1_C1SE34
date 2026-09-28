@@ -19,7 +19,7 @@ router = APIRouter()
 
 @router.get("/{device_id}/pdf")
 async def export_pdf_report(
-    device_id: UUID,
+    device_id: str,
     days: int = Query(default=7, le=90),
     db: AsyncSession = Depends(get_db),
 ):
@@ -27,10 +27,11 @@ async def export_pdf_report(
     Xuất báo cáo y tế PDF cho N ngày gần nhất.
     Bao gồm: biểu đồ sinh hiệu, danh sách sự kiện, thống kê.
     """
+    uuid_val = await crud_vital.resolve_device_uuid(db, device_id)
     vitals = await crud_vital.get_history(db, device_id=device_id, limit=days * 24 * 6)
-    incidents = await crud_incident.list(db, device_id=device_id, limit=100)
+    incidents = await crud_incident.list(db, device_id=uuid_val, limit=100)
 
-    pdf_bytes = report_service.generate_pdf(device_id, vitals=vitals, incidents=incidents)
+    pdf_bytes = report_service.generate_pdf(uuid_val or device_id, vitals=vitals, incidents=incidents)
     return StreamingResponse(
         io.BytesIO(pdf_bytes),
         media_type="application/pdf",
@@ -40,17 +41,18 @@ async def export_pdf_report(
 
 @router.get("/{device_id}/excel")
 async def export_excel_report(
-    device_id: UUID,
+    device_id: str,
     days: int = Query(default=30, le=365),
     db: AsyncSession = Depends(get_db),
 ):
     """
     Xuất báo cáo Excel với raw data sinh hiệu và incidents.
     """
+    uuid_val = await crud_vital.resolve_device_uuid(db, device_id)
     vitals = await crud_vital.get_history(db, device_id=device_id, limit=days * 24 * 6)
-    incidents = await crud_incident.list(db, device_id=device_id, limit=500)
+    incidents = await crud_incident.list(db, device_id=uuid_val, limit=500)
 
-    excel_bytes = report_service.generate_excel(device_id, vitals=vitals, incidents=incidents)
+    excel_bytes = report_service.generate_excel(uuid_val or device_id, vitals=vitals, incidents=incidents)
     return StreamingResponse(
         io.BytesIO(excel_bytes),
         media_type="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
