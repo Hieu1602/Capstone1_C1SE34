@@ -5,19 +5,20 @@ user.py – Pydantic Schemas cho User endpoints.
 import uuid
 from typing import Optional
 
-from pydantic import BaseModel, EmailStr, model_validator
+from pydantic import BaseModel, model_validator
 
 
 class UserBase(BaseModel):
-    email: Optional[EmailStr] = None
     full_name: str
-    phone: Optional[str] = None
+    phone: str
     role: str = "caregiver"
 
     @model_validator(mode="after")
     def validate_identifier(self):
-        if not self.email and not self.phone:
-            raise ValueError("Phải nhập ít nhất một trong hai: email hoặc số điện thoại.")
+        normalized_phone = self.phone.strip() if self.phone else ""
+        if not normalized_phone:
+            raise ValueError("Số điện thoại không được để trống.")
+        self.phone = normalized_phone
         return self
 
 

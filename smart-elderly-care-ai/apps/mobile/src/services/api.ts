@@ -2,9 +2,16 @@
 // Axios client setup – tất cả API calls đều qua file này
 
 import axios, { AxiosInstance, AxiosError } from 'axios';
+import { Platform } from 'react-native';
 import { useAuthStore } from '../store/useVitalStore';
 
-const BASE_URL: string = (typeof process !== 'undefined' && process.env.EXPO_PUBLIC_API_URL) || 'http://10.0.2.2:8000/api/v1';
+const defaultBaseUrl = Platform.OS === 'web'
+  ? 'http://localhost:8000/api/v1'
+  : Platform.OS === 'android'
+    ? 'http://10.0.2.2:8000/api/v1'
+    : 'http://localhost:8000/api/v1';
+
+const BASE_URL: string = (typeof process !== 'undefined' && process.env.EXPO_PUBLIC_API_URL) || defaultBaseUrl;
 
 const api: AxiosInstance = axios.create({
   baseURL: BASE_URL,
@@ -54,18 +61,19 @@ export default api;
 // ---- API Service Functions ----
 
 export const authApi = {
-  login: (email: string, password: string) => {
+  requestOtp: (phone: string) => api.post('/auth/request-otp', { phone }),
+  verifyOtp: (phone: string, code: string) => api.post('/auth/verify-otp', { phone, code }),
+  login: (phone: string, password: string) => {
     // Use FormData for OAuth2 password flow (avoids URLSearchParams compatibility issues)
     const formData = new FormData();
-    formData.append('username', email);
+    formData.append('username', phone);
     formData.append('password', password);
     return api.post('/auth/login', formData, {
       headers: { 'Content-Type': 'multipart/form-data' },
     });
   },
   register: (data: {
-    email?: string;
-    phone?: string;
+    phone: string;
     full_name: string;
     password: string;
     role: string;

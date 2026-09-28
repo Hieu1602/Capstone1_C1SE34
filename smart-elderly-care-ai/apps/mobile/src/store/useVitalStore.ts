@@ -344,12 +344,13 @@ interface AuthStoreState {
   accessToken: string | null;
   refreshToken: string | null;
   userId: string | null;
-  userEmail: string | null;
   userName: string | null;
+  userEmail: string | null;
 
-  login: (token: string, name: string, userId: string, email?: string) => void;
+  login: (access: string, refresh: string, name: string, userId: string, email?: string) => void;
   setTokens: (access: string, refresh: string) => void;
-  setUser: (id: string, email: string, name: string) => void;
+  setUser: (id: string, email?: string, name?: string) => void;
+  updateUserName: (name: string) => void;
   logout: () => void;
 }
 
@@ -367,31 +368,38 @@ const createAuthStore: StateCreator<AuthStoreState, [], [['zustand/persist', Aut
   accessToken: null,
   refreshToken: null,
   userId: null,
-  userEmail: null,
   userName: null,
+  userEmail: null,
 
-  login: (token: string, name: string, userId: string, email?: string) =>
+  login: (access: string, refresh: string, name: string, userId: string, email?: string) =>
     set({
-      accessToken: token,
-      refreshToken: token,
+      accessToken: access,
+      refreshToken: refresh,
       userId,
-      userEmail: email ?? null,
       userName: name,
+      userEmail: email ?? null,
     }),
 
   setTokens: (access: string, refresh: string) =>
     set({ accessToken: access, refreshToken: refresh }),
 
-  setUser: (id: string, email: string, name: string) =>
-    set({ userId: id, userEmail: email, userName: name }),
+  setUser: (id: string, email?: string, name?: string) =>
+    set((state) => ({
+      userId: id,
+      userEmail: email ?? state.userEmail ?? null,
+      userName: name ?? state.userName ?? null,
+    })),
+
+  updateUserName: (name: string) =>
+    set({ userName: name }),
 
   logout: () =>
     set({
       accessToken: null,
       refreshToken: null,
       userId: null,
-      userEmail: null,
       userName: null,
+      userEmail: null,
     }),
 });
 
