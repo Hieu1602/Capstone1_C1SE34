@@ -162,6 +162,11 @@ export default function HomeScreen({ navigation }: any) {
     );
   };
 
+  // Đồng bộ thông tin nhà và camera từ Backend khi mở HomeScreen
+  React.useEffect(() => {
+    syncAllWithBackend?.();
+  }, []);
+
   // Xử lý One-Touch SOS 115
   const handleSOS115 = () => {
     // Tự động sao chép địa chỉ nhà vào Clipboard
