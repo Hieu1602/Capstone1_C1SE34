@@ -4,7 +4,7 @@ report_service.py – Dịch vụ tạo báo cáo y tế (PDF / Excel) từ dữ
 
 import io
 from datetime import datetime
-from typing import List
+from typing import List, Union
 from uuid import UUID
 
 from openpyxl import Workbook
@@ -22,7 +22,7 @@ class ReportService:
 
     @staticmethod
     def generate_pdf(
-        device_id: UUID,
+        device_id: Union[UUID, str],
         vitals: List[VitalSign],
         incidents: List[Incident],
     ) -> bytes:
@@ -100,7 +100,7 @@ class ReportService:
 
     @staticmethod
     def generate_excel(
-        device_id: UUID,
+        device_id: Union[UUID, str],
         vitals: List[VitalSign],
         incidents: List[Incident],
     ) -> bytes:

@@ -97,7 +97,7 @@ class CRUDElderly:
         if not profile:
             # Fallback nếu không có house_id
             return PatientMedicalRecordOut(
-                id=str(patient_id_or_serial),
+                id=patient_id_or_serial,
                 name="Nguyễn Văn An",
                 birth_year="1948",
                 age=78,

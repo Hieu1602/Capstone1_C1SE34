@@ -69,9 +69,10 @@ async def lifespan(app: FastAPI):
                 from app.crud.crud_vital import crud_vital
                 async with AsyncSessionFactory() as session:
                     raw_dev = payload.get("device_id")
-                    dev_uuid = await crud_vital.resolve_device_uuid(session, raw_dev)
-                    if dev_uuid:
-                        payload["device_id"] = dev_uuid
+                    if raw_dev:
+                        dev_uuid = await crud_vital.resolve_device_uuid(session, raw_dev)
+                        if dev_uuid:
+                            payload["device_id"] = dev_uuid
                     await crud_incident.create(session, payload)
                     await session.commit()
             except Exception as e:

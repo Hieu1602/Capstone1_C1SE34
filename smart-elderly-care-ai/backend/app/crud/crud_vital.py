@@ -26,7 +26,7 @@ logger = logging.getLogger(__name__)
 class CRUDVital:
 
     async def resolve_device_uuid(
-        self, db: AsyncSession, device_identifier: Union[str, UUID]
+        self, db: AsyncSession, device_identifier: Optional[Union[str, UUID]]
     ) -> Optional[UUID]:
         """
         Phân giải linh hoạt mã định danh thiết bị:
@@ -34,10 +34,13 @@ class CRUDVital:
         - Nếu là chuỗi UUID chuẩn (VD: 'd0000002-...') -> Parse thành UUID.
         - Nếu là mã phần cứng Serial (VD: 'BLE_BAND_001', 'SECA_001') -> Tìm trong bảng devices để lấy UUID.
         """
+        if not device_identifier:
+            return None
+
         if isinstance(device_identifier, UUID):
             return device_identifier
 
-        clean_str = str(device_identifier).strip()
+        clean_str = device_identifier.strip()
         try:
             return UUID(clean_str)
         except ValueError:
