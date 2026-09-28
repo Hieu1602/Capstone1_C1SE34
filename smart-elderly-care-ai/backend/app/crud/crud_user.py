@@ -12,11 +12,18 @@ from app.models.user import User
 from app.schemas.user import UserCreate
 
 
-class CRUDUser:
+def normalize_phone(phone: str) -> str:
+    value = (phone or "").strip().replace(" ", "")
+    if not value:
+        return ""
+    if value.startswith("0"):
+        return "+84" + value[1:]
+    if value.startswith("84"):
+        return "+" + value
+    return value
 
-    async def get_by_email(self, db: AsyncSession, email: str) -> Optional[User]:
-        result = await db.execute(select(User).where(User.email == email))
-        return result.scalar_one_or_none()
+
+class CRUDUser:
 
     async def get_by_phone(self, db: AsyncSession, phone: str) -> Optional[User]:
         result = await db.execute(select(User).where(User.phone == phone))
@@ -28,7 +35,6 @@ class CRUDUser:
 
     async def create(self, db: AsyncSession, obj_in: UserCreate) -> User:
         db_obj = User(
-            email=obj_in.email,
             full_name=obj_in.full_name,
             phone=obj_in.phone,
             role=obj_in.role,

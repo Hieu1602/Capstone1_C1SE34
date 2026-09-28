@@ -1,20 +1,34 @@
 // api.ts
-// Axios client setup – tất cả API calls đều qua file này
+// Axios client setup – kết nối Frontend React Native với Backend FastAPI (http://localhost:8000/api/v1)
 
 import axios, { AxiosInstance, AxiosError } from 'axios';
-import { useAuthStore } from '../store/useVitalStore';
+import { Platform } from 'react-native';
+import { useAuthStore } from '../store/useAuthStore';
 
+// Cấu hình BASE_URL tự động:
+// - Nếu có biến EXPO_PUBLIC_API_URL thì dùng nó
+// - Nếu chạy trên Web và truy cập qua LAN IP (ví dụ từ điện thoại): tự động kết nối API qua IP đó
+// - Nếu chạy trên Web hoặc iOS simulator cục bộ: dùng http://localhost:8000/api/v1
+// - Nếu chạy trên Android emulator: dùng http://10.0.2.2:8000/api/v1
 const getBaseUrl = (): string => {
-  if (typeof window !== 'undefined' && window.location?.hostname) {
+  if (typeof process !== 'undefined' && process.env.EXPO_PUBLIC_API_URL) {
+    return process.env.EXPO_PUBLIC_API_URL;
+  }
+  if (Platform.OS === 'web' && typeof window !== 'undefined' && window.location?.hostname) {
     const host = window.location.hostname;
     if (host !== 'localhost' && host !== '127.0.0.1') {
       return `http://${host}:8000/api/v1`;
     }
+    return 'http://localhost:8000/api/v1';
   }
-  return (typeof process !== 'undefined' && process.env.EXPO_PUBLIC_API_URL) || 'http://localhost:8000/api/v1';
+  if (Platform.OS === 'android') {
+    return 'http://10.0.2.2:8000/api/v1';
+  }
+  return 'http://localhost:8000/api/v1';
 };
 
-const BASE_URL: string = getBaseUrl();
+export const BASE_URL: string = getBaseUrl();
+
 
 const api: AxiosInstance = axios.create({
   baseURL: BASE_URL,
@@ -27,7 +41,7 @@ const api: AxiosInstance = axios.create({
 // ---- Request Interceptor: Attach JWT token ----
 api.interceptors.request.use(
   (config: import('axios').InternalAxiosRequestConfig) => {
-    const token = useAuthStore.getState().accessToken;
+    const token = useAuthStore.getState().accessToken || 'fake-jwt-token-demo';
     if (token) {
       config.headers.Authorization = `Bearer ${token}`;
     }
@@ -64,38 +78,65 @@ export default api;
 // ---- API Service Functions ----
 
 export const authApi = {
-  login: (email: string, password: string) => {
+  requestOtp: (phone: string) => api.post('/auth/request-otp', { phone }),
+  verifyOtp: (phone: string, code: string) => api.post('/auth/verify-otp', { phone, code }),
+  login: (phone: string, password: string) => {
     // Use FormData for OAuth2 password flow (avoids URLSearchParams compatibility issues)
     const formData = new FormData();
-    formData.append('username', email);
+    formData.append('username', phone);
     formData.append('password', password);
     return api.post('/auth/login', formData, {
       headers: { 'Content-Type': 'multipart/form-data' },
     });
   },
   register: (data: {
-    email?: string;
-    phone?: string;
+    phone: string;
     full_name: string;
     password: string;
     role: string;
   }) => api.post('/auth/register', data),
 };
 
+// 1. System Mode API
+export const systemApi = {
+  getMode: () => api.get('/system/mode'),
+  updateMode: (data: {
+    mode?: string;
+    is_mute_alarm?: boolean;
+    is_camera_privacy?: boolean;
+    mute_mode?: string;
+    duration_minutes?: number;
+  }) => api.put('/system/mode', data),
+};
+
+// 2. Vitals API
 export const vitalsApi = {
-  getLatest: (deviceId: string) =>
-    api.get(`/vitals/${deviceId}/latest`),
+  getCurrent: () => api.get('/vitals/current'),
+  getLatest: (deviceId: string) => api.get(`/vitals/${deviceId}/latest`),
   getHistory: (deviceId: string, limit = 100) =>
     api.get(`/vitals/${deviceId}/history`, { params: { limit } }),
   getStats: (deviceId: string, hours = 24) =>
     api.get(`/vitals/${deviceId}/stats`, { params: { hours } }),
 };
 
+// 3. Reminders API
+export const remindersApi = {
+  getToday: () => api.get('/reminders/today'),
+};
+
+// 4. Patients & Medical Record API
+export const patientApi = {
+  getMedicalRecord: (patientId: number = 1) =>
+    api.get(`/patients/${patientId}/medical-record`),
+};
+
+// 5. Notifications & Incidents API
 export const incidentsApi = {
   list: (deviceId?: string, limit = 20) =>
-    api.get('/incidents', { params: { device_id: deviceId, limit } }),
-  get: (id: string) =>
-    api.get(`/incidents/${id}`),
+    api.get('/notifications', { params: { device_id: deviceId, limit } }),
+  get: (id: string) => api.get(`/incidents/${id}`),
   acknowledge: (id: string, notes?: string) =>
-    api.patch(`/incidents/${id}/acknowledge`, { notes }),
+    api.post(`/incidents/${id}/acknowledge`, null, { params: { note: notes } }),
 };
+
+export const notificationsApi = incidentsApi;

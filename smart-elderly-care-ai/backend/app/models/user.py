@@ -1,5 +1,6 @@
 """
-user.py – SQLAlchemy ORM Model cho User (Caregiver / Bác sĩ)
+user.py – SQLAlchemy ORM Model cho User (Caregiver / Bác sĩ / Quản trị viên).
+Vị trí: backend/app/models/user.py
 """
 
 from __future__ import annotations
@@ -10,8 +11,9 @@ from datetime import datetime
 
 if TYPE_CHECKING:
     from app.models.device import Device
+    from app.models.house import House, HouseMember
 
-from sqlalchemy import Boolean, DateTime, Enum, String
+from sqlalchemy import Boolean, DateTime, String
 from sqlalchemy.dialects.postgresql import UUID
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 from sqlalchemy.sql import func
@@ -31,9 +33,6 @@ class User(Base):
     id: Mapped[uuid.UUID] = mapped_column(
         UUID(as_uuid=True), primary_key=True, default=uuid.uuid4
     )
-    email: Mapped[str | None] = mapped_column(
-        String(255), unique=True, nullable=True, index=True
-    )
     full_name: Mapped[str] = mapped_column(String(255), nullable=False)
     hashed_password: Mapped[str] = mapped_column(String(255), nullable=False)
     phone: Mapped[str | None] = mapped_column(String(20), nullable=True)
@@ -49,7 +48,13 @@ class User(Base):
         DateTime(timezone=True), server_default=func.now(), onupdate=func.now()
     )
 
-    # Relationships
-    devices: Mapped[list["Device"]] = relationship(  # noqa: F821
+    # ---- Relationships ----
+    devices: Mapped[list["Device"]] = relationship(
         "Device", back_populates="owner", lazy="selectin"
+    )
+    owned_houses: Mapped[list["House"]] = relationship(
+        "House", back_populates="owner", lazy="selectin"
+    )
+    house_memberships: Mapped[list["HouseMember"]] = relationship(
+        "HouseMember", back_populates="user", lazy="selectin"
     )

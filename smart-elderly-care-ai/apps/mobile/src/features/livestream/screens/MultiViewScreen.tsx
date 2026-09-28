@@ -34,7 +34,7 @@ interface CameraFeed {
 }
 
 export default function MultiViewScreen({ navigation }: any) {
-  const { isDarkMode, colors, toggleTheme } = useTheme();
+  const { isDarkMode, colors } = useTheme();
   const { house } = useVitalStore();
   const [layoutMode, setLayoutMode] = useState<'GRID' | 'LIST'>('GRID');
   const [mutedFeeds, setMutedFeeds] = useState<{ [key: string]: boolean }>({
@@ -132,27 +132,6 @@ export default function MultiViewScreen({ navigation }: any) {
         </View>
 
         <View style={styles.headerRightActions}>
-          {/* Nút chuyển đổi Sáng / Tối */}
-          <TouchableOpacity
-            style={[
-              styles.headerActionBtn,
-              {
-                marginRight: 8,
-                backgroundColor: isDarkMode ? '#1F2937' : '#F1F5F9',
-                borderColor: isDarkMode ? '#374151' : '#E2E8F0',
-              },
-            ]}
-            onPress={toggleTheme}
-            activeOpacity={0.8}
-            accessibilityLabel="Chuyển chế độ Sáng/Tối"
-          >
-            <Ionicons
-              name={isDarkMode ? 'sunny-outline' : 'moon-outline'}
-              size={18}
-              color={isDarkMode ? '#F59E0B' : '#0F172A'}
-            />
-          </TouchableOpacity>
-
           <TouchableOpacity
             style={[
               styles.headerActionBtn,

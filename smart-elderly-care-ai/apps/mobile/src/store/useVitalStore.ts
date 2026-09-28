@@ -5,6 +5,13 @@ import { create, StateCreator } from 'zustand';
 import { persist, createJSONStorage, PersistOptions } from 'zustand/middleware';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { useThemeStore } from './useThemeStore';
+import {
+  vitalsApi,
+  systemApi,
+  remindersApi,
+  patientApi,
+  incidentsApi,
+} from '../services/api';
 
 // ---- Types ----
 export interface VitalData {
@@ -29,7 +36,66 @@ export interface Incident {
   video_clip_url: string | null;
   thumbnail_url: string | null;
   is_acknowledged: boolean;
+  acknowledged_by?: string | null;
+  acknowledged_at?: string | null;
+  note?: string | null;
   created_at: string;
+}
+
+export interface AlarmSnoozeInfo {
+  active: boolean;
+  until: number | null; // null if indefinitely until manually re-enabled
+  durationMinutes: number; // 15, 60, 120, 0
+  mode: 'VIBRATE' | 'SILENT';
+  syncAll: boolean;
+}
+
+export interface MedicalConditionItem {
+  id: string;
+  name: string;
+  severity: 'warning' | 'danger' | 'info';
+  note: string;
+}
+
+export interface PatientMedicalRecord {
+  patient_id: number;
+  name: string;
+  birth_year: string;
+  age: number;
+  gender: string;
+  blood_type: string;
+  height_cm: number;
+  weight_kg: number;
+  bmi: number;
+  security_badge: string;
+  conditions: MedicalConditionItem[];
+  drug_allergies: string;
+  food_allergies: string;
+  dietary_notes: string;
+  doctor_name: string;
+  doctor_phone: string;
+  doctor_specialty: string;
+  hospital: string;
+  next_appointment: string;
+}
+
+export interface ReminderItem {
+  id: string;
+  name: string;
+  time: string;
+  session: 'MORNING' | 'NOON' | 'EVENING' | string;
+  dose: string;
+  purpose: string;
+  taken: boolean;
+}
+
+export interface RemindersData {
+  date: string;
+  total_medications: number;
+  completed_medications: number;
+  hub_voice_reminder_enabled: boolean;
+  medications: ReminderItem[];
+  meals: Array<{ name: string; time: string; completed: boolean; note: string }>;
 }
 
 export interface Device {
@@ -54,7 +120,7 @@ export interface CameraDevice {
   isOnline: boolean;
   isSleep: boolean;
   isAIProtect: boolean;
-  resolution: '2K' | 'FHD' | 'SD';
+  resolution: 'HD' | 'BASIC';
   sdCardStatus: 'OK' | 'NO_CARD';
   wifiStrength: number; // 1-3
   streamUrl: string;
@@ -94,19 +160,40 @@ interface VitalStoreState {
     immobilitySec: number;
   };
 
+  alarmSnooze: AlarmSnoozeInfo;
+  sirenActive: boolean;
+
+  patientRecord: PatientMedicalRecord | null;
+  todayReminders: RemindersData | null;
+  isLoadingVitals: boolean;
+  isLoadingMode: boolean;
+  isLoadingReminders: boolean;
+  isLoadingPatient: boolean;
+
+  fetchVitals: () => Promise<VitalData | null>;
+  fetchSystemMode: () => Promise<{ mode: string; is_mute_alarm: boolean; is_camera_privacy: boolean } | null>;
+  fetchReminders: () => Promise<RemindersData | null>;
+  fetchPatientRecord: (patientId?: number) => Promise<PatientMedicalRecord | null>;
+  fetchNotifications: () => Promise<Incident[] | null>;
+
   setVitals: (data: Partial<VitalData>) => void;
   setIncidents: (incidents: Incident[]) => void;
   addIncident: (incident: Incident) => void;
+  acknowledgeIncident: (incidentId: string, note?: string, user?: string) => void;
+  setAlarmSnooze: (snooze: Partial<AlarmSnoozeInfo>) => void;
+  cancelAlarmSnooze: () => void;
+  setSirenActive: (active: boolean) => void;
   setActiveDevice: (device: Device | null) => void;
   setConnected: (connected: boolean) => void;
   setHouseMode: (mode: 'AWAY' | 'HOME' | 'DISARM' | 'ALARM' | 'PRIVACY') => void;
   updateHouseAddress: (address: string) => void;
   toggleCameraSleep: () => void;
   toggleCameraAIProtect: () => void;
-  setCameraResolution: (res: '2K' | 'FHD' | 'SD') => void;
+  setCameraResolution: (res: 'HD' | 'BASIC') => void;
   setSelectedDate: (date: string) => void;
   updateAlgoSettings: (settings: Partial<VitalStoreState['algoSettings']>) => void;
   addIoTDevice: (device: IoTDeviceItem) => void;
+  removeIoTDevice: (deviceId: string) => void;
   addDeviceGroup: (groupName: string) => void;
   updateDeviceGroup: (oldName: string, newName: string, deviceIds?: string[]) => void;
   removeDeviceGroup: (groupName: string) => void;
@@ -114,17 +201,16 @@ interface VitalStoreState {
   isDarkMode: boolean;
   toggleDarkMode: () => void;
   setDarkMode: (isDark: boolean) => void;
+
+  // Backend Sync State & Actions
+  isLoadingDevices: boolean;
+  fetchHouseFromBackend: () => Promise<void>;
+  fetchGroupsFromBackend: () => Promise<void>;
+  fetchDevicesFromBackend: () => Promise<void>;
+  syncAllWithBackend: () => Promise<void>;
 }
 
-type VitalSet = (
-  partial:
-    | VitalStoreState
-    | Partial<VitalStoreState>
-    | ((state: VitalStoreState) => VitalStoreState | Partial<VitalStoreState>),
-  replace?: boolean
-) => void;
-
-const createVitalStore: StateCreator<VitalStoreState> = (set: VitalSet) => ({
+const createVitalStore: StateCreator<VitalStoreState> = (set, get) => ({
   currentVitals: {
     heart_rate: 74,
     spo2: 98,
@@ -209,17 +295,25 @@ const createVitalStore: StateCreator<VitalStoreState> = (set: VitalSet) => ({
     currentMode: 'HOME',
   },
   camera: {
-    id: 'cam-ranger-2c',
-    name: 'Camera Phòng Ngủ - Hub #01',
-    room: 'Phòng ngủ',
+    id: 'SECA_001',
+    name: 'Camera Góc Rộng AI - SECA_001',
+    room: 'Phòng khách',
     isOnline: true,
     isSleep: false,
     isAIProtect: true,
-    resolution: '2K',
+    resolution: 'HD',
     sdCardStatus: 'OK',
     wifiStrength: 3,
     streamUrl: 'http://10.0.2.2:8080',
   },
+  alarmSnooze: {
+    active: false,
+    until: null,
+    durationMinutes: 15,
+    mode: 'VIBRATE',
+    syncAll: true,
+  },
+  sirenActive: false,
   selectedDate: '09/07',
   algoSettings: {
     maxHeartRate: 120,
@@ -228,6 +322,115 @@ const createVitalStore: StateCreator<VitalStoreState> = (set: VitalSet) => ({
     maxTemp: 37.8,
     fallAngle: 60,
     immobilitySec: 30,
+  },
+
+  patientRecord: null,
+  todayReminders: null,
+  isLoadingVitals: false,
+  isLoadingMode: false,
+  isLoadingReminders: false,
+  isLoadingPatient: false,
+
+  fetchVitals: async () => {
+    set({ isLoadingVitals: true });
+    try {
+      const res = await vitalsApi.getCurrent();
+      if (res.data) {
+        const d = res.data;
+        const updatedVitals: VitalData = {
+          heart_rate: d.heart_rate ?? 74,
+          spo2: d.spo2 ?? 98,
+          skin_temp_max: d.body_temp ?? 36.8,
+          person_count: d.person_count ?? 1,
+          fall_detected: Boolean(d.fall_detected),
+          timestamp: d.timestamp ?? Date.now(),
+          acoustic_status: d.sound ?? 'Bình thường',
+          bracelet_battery: d.bracelet_battery ?? 88,
+          bracelet_connected: true,
+          edge_hub_connected: d.edge_hub_connected ?? true,
+        };
+        set({ currentVitals: updatedVitals, isLoadingVitals: false });
+        return updatedVitals;
+      }
+    } catch (e) {
+      console.warn('fetchVitals API fallback:', e);
+    }
+    set({ isLoadingVitals: false });
+    return null;
+  },
+
+  fetchSystemMode: async () => {
+    set({ isLoadingMode: true });
+    try {
+      const res = await systemApi.getMode();
+      if (res.data) {
+        const { mode, is_mute_alarm, is_camera_privacy, mute_mode } = res.data;
+        set((state) => ({
+          house: {
+            ...state.house,
+            currentMode: (mode as any) || state.house.currentMode,
+          },
+          alarmSnooze: {
+            ...state.alarmSnooze,
+            active: Boolean(is_mute_alarm),
+            mode: (mute_mode as any) || state.alarmSnooze.mode,
+          },
+          camera: {
+            ...state.camera,
+            isSleep: Boolean(is_camera_privacy),
+          },
+          isLoadingMode: false,
+        }));
+        return res.data;
+      }
+    } catch (e) {
+      console.warn('fetchSystemMode API fallback:', e);
+    }
+    set({ isLoadingMode: false });
+    return null;
+  },
+
+  fetchReminders: async () => {
+    set({ isLoadingReminders: true });
+    try {
+      const res = await remindersApi.getToday();
+      if (res.data) {
+        set({ todayReminders: res.data, isLoadingReminders: false });
+        return res.data;
+      }
+    } catch (e) {
+      console.warn('fetchReminders API fallback:', e);
+    }
+    set({ isLoadingReminders: false });
+    return null;
+  },
+
+  fetchPatientRecord: async (patientId: number = 1) => {
+    set({ isLoadingPatient: true });
+    try {
+      const res = await patientApi.getMedicalRecord(patientId);
+      if (res.data) {
+        set({ patientRecord: res.data, isLoadingPatient: false });
+        return res.data;
+      }
+    } catch (e) {
+      console.warn('fetchPatientRecord API fallback:', e);
+    }
+    set({ isLoadingPatient: false });
+    return null;
+  },
+
+  fetchNotifications: async () => {
+    try {
+      const res = await incidentsApi.list();
+      if (res.data && Array.isArray(res.data)) {
+        set({ incidents: res.data });
+        return res.data;
+      }
+    } catch (e) {
+      console.warn('fetchNotifications API fallback:', e);
+    }
+    return null;
   },
 
   setVitals: (data: Partial<VitalData>) =>
@@ -240,28 +443,96 @@ const createVitalStore: StateCreator<VitalStoreState> = (set: VitalSet) => ({
   addIncident: (incident: Incident) =>
     set((state: VitalStoreState) => ({
       incidents: [incident, ...state.incidents].slice(0, 100),
+      sirenActive: incident.alert_level === 'CRITICAL' ? true : state.sirenActive,
     })),
+
+  acknowledgeIncident: (incidentId: string, note?: string, user: string = 'Demo User') =>
+    set((state: VitalStoreState) => {
+      const updatedIncidents = state.incidents.map((inc) => {
+        if (inc.id === incidentId) {
+          return {
+            ...inc,
+            is_acknowledged: true,
+            acknowledged_by: user,
+            acknowledged_at: new Date().toISOString(),
+            note: note ?? inc.note,
+          };
+        }
+        return inc;
+      });
+
+      const hasOtherCritical = updatedIncidents.some(
+        (inc) => !inc.is_acknowledged && (inc.alert_level === 'CRITICAL' || inc.alert_type === 'FALL_DETECTED')
+      );
+
+      return {
+        incidents: updatedIncidents,
+        sirenActive: false,
+        currentVitals: {
+          ...state.currentVitals,
+          fall_detected: hasOtherCritical ? state.currentVitals.fall_detected : false,
+          acoustic_status: hasOtherCritical ? state.currentVitals.acoustic_status : 'Bình thường',
+        },
+      };
+    }),
+
+  setAlarmSnooze: (snooze: Partial<AlarmSnoozeInfo>) =>
+    set((state: VitalStoreState) => ({
+      alarmSnooze: { ...state.alarmSnooze, ...snooze },
+      sirenActive: false,
+    })),
+
+  cancelAlarmSnooze: () =>
+    set(() => ({
+      alarmSnooze: {
+        active: false,
+        until: null,
+        durationMinutes: 15,
+        mode: 'VIBRATE',
+        syncAll: true,
+      },
+    })),
+
+  setSirenActive: (active: boolean) => set({ sirenActive: active }),
 
   setActiveDevice: (device: Device | null) => set({ activeDevice: device }),
   setConnected: (connected: boolean) => set({ isConnected: connected }),
 
-  setHouseMode: (mode: 'AWAY' | 'HOME' | 'DISARM' | 'ALARM' | 'PRIVACY') =>
-    set((state) => ({ house: { ...state.house, currentMode: mode } })),
+  setHouseMode: (mode: 'AWAY' | 'HOME' | 'DISARM' | 'ALARM' | 'PRIVACY') => {
+    set((state) => ({ house: { ...state.house, currentMode: mode } }));
+    houseApi.updateHouseMode(mode).catch((err) =>
+      console.log('[Store] Không thể đồng bộ chế độ nhà lên backend:', err)
+    );
+  },
 
-  updateHouseAddress: (address: string) =>
-    set((state) => ({ house: { ...state.house, address } })),
+  updateHouseAddress: (address: string) => {
+    set((state) => ({ house: { ...state.house, address } }));
+    houseApi.updateHouse({ address }).catch((err) =>
+      console.log('[Store] Không thể đồng bộ địa chỉ nhà lên backend:', err)
+    );
+  },
 
-  toggleCameraSleep: () =>
+  toggleCameraSleep: () => {
+    const nextVal = !get().camera.isSleep;
     set((state) => ({
-      camera: { ...state.camera, isSleep: !state.camera.isSleep },
-    })),
+      camera: { ...state.camera, isSleep: nextVal },
+    }));
+    devicesApi.updateDeviceConfig(get().camera.id, { is_sleep: nextVal }).catch((err) =>
+      console.log('[Store] Không thể đồng bộ trạng thái ngủ camera lên backend:', err)
+    );
+  },
 
-  toggleCameraAIProtect: () =>
+  toggleCameraAIProtect: () => {
+    const nextVal = !get().camera.isAIProtect;
     set((state) => ({
-      camera: { ...state.camera, isAIProtect: !state.camera.isAIProtect },
-    })),
+      camera: { ...state.camera, isAIProtect: nextVal },
+    }));
+    devicesApi.updateDeviceConfig(get().camera.id, { is_ai_protect: nextVal }).catch((err) =>
+      console.log('[Store] Không thể đồng bộ AI Protect camera lên backend:', err)
+    );
+  },
 
-  setCameraResolution: (res: '2K' | 'FHD' | 'SD') =>
+  setCameraResolution: (res: 'HD' | 'BASIC') =>
     set((state) => ({ camera: { ...state.camera, resolution: res } })),
 
   setSelectedDate: (date: string) => set({ selectedDate: date }),
@@ -273,18 +544,7 @@ const createVitalStore: StateCreator<VitalStoreState> = (set: VitalSet) => ({
 
   iotDevices: [
     {
-      id: 'dev-01',
-      name: 'Orange Pi 5 - Edge AI Hub',
-      sub: 'Rockchip RK3588S NPU • 32 FPS YOLO-Pose • EMQX MQTT',
-      type: 'hub',
-      status: 'Trực tuyến (24/7)',
-      isOnline: true,
-      icon: 'server',
-      color: '#0284C7',
-      location: 'Phòng khách',
-    },
-    {
-      id: 'dev-02',
+      id: 'SECA_001',
       name: 'SECA_001',
       sub: 'Camera góc rộng • 2K Super HD • Đàm thoại 2 chiều',
       type: 'camera',
@@ -295,7 +555,7 @@ const createVitalStore: StateCreator<VitalStoreState> = (set: VitalSet) => ({
       location: 'Phòng khách',
     },
     {
-      id: 'dev-03',
+      id: 'BLE_BAND_001',
       name: 'Vòng đeo tay BLE Smartband',
       sub: 'Nhịp tim • SpO₂ • Gia tốc kế phát hiện va đập',
       type: 'watch',
@@ -305,91 +565,98 @@ const createVitalStore: StateCreator<VitalStoreState> = (set: VitalSet) => ({
       color: '#10B981',
       location: 'Phòng ngủ',
     },
-    {
-      id: 'dev-04',
-      name: 'Cảm biến hồng ngoại AMG8833',
-      sub: 'Ma trận nhiệt 8x8 IR • Sàng lọc sốt vùng trán',
-      type: 'thermal',
-      status: '36.8°C • Hoạt động tốt',
-      isOnline: true,
-      icon: 'thermometer',
-      color: '#F59E0B',
-      location: 'Phòng khách',
-    },
-    {
-      id: 'dev-05',
-      name: 'Micro AI âm thanh YAMNet',
-      sub: 'Phát hiện tiếng kêu cứu, la hét, tiếng ngã đập mạnh',
-      type: 'audio',
-      status: 'Đang lắng nghe',
-      isOnline: true,
-      icon: 'mic',
-      color: '#8B5CF6',
-      location: 'Phòng ngủ',
-    },
-    {
-      id: 'dev-06',
-      name: 'Loa thông minh Hub (Voice Reminder)',
-      sub: 'Phát giọng nói tiếng Việt nhắc nhở người cao tuổi (FR12)',
-      type: 'speaker',
-      status: 'Sẵn sàng',
-      isOnline: true,
-      icon: 'volume-high',
-      color: '#EC4899',
-      location: 'Phòng khách',
-    },
   ],
 
-  deviceGroups: ['Phòng khách', 'Phòng ngủ', 'Nhà tắm & Cửa'],
+  deviceGroups: ['Phòng khách', 'Phòng ngủ'],
 
-  addIoTDevice: (device: IoTDeviceItem) =>
+  addIoTDevice: (device: IoTDeviceItem) => {
     set((state) => ({
       iotDevices: [device, ...state.iotDevices],
-    })),
-
-  addDeviceGroup: (groupName: string) =>
-    set((state) => {
-      const trimmed = groupName.trim();
-      if (!trimmed) return state;
-      const exists = state.deviceGroups.some(
-        (g) => g.trim().toLowerCase() === trimmed.toLowerCase()
+    }));
+    // Đăng ký lên backend nếu có kết nối
+    const isCam = device.type === 'camera';
+    devicesApi
+      .createDevice({
+        device_id: device.id,
+        name: device.name,
+        sub_title: device.sub,
+        device_type: isCam ? 'CAMERA' : 'SMARTBAND',
+        location: device.location || 'Phòng khách',
+      })
+      .catch((err) =>
+        console.log('[Store] Thiết bị lưu local cache, đồng bộ backend sau:', err)
       );
-      return {
-        deviceGroups: exists ? state.deviceGroups : [...state.deviceGroups, trimmed],
-      };
-    }),
+  },
 
-  updateDeviceGroup: (oldName: string, newName: string, deviceIds?: string[]) =>
-    set((state) => {
-      const trimmedNew = newName.trim();
-      const trimmedOld = oldName.trim();
-      const updatedGroups = state.deviceGroups.map((g) =>
-        g.trim().toLowerCase() === trimmedOld.toLowerCase() ? trimmedNew : g
+  removeIoTDevice: (deviceId: string) => {
+    set((state) => ({
+      iotDevices: state.iotDevices.filter((d) => d.id !== deviceId),
+    }));
+    devicesApi.deleteDevice(deviceId).catch((err) =>
+      console.log('[Store] Xóa thiết bị backend failed:', err)
+    );
+  },
+
+  addDeviceGroup: (groupName: string) => {
+    const trimmed = groupName.trim();
+    if (!trimmed) return;
+    const exists = get().deviceGroups.some(
+      (g) => g.trim().toLowerCase() === trimmed.toLowerCase()
+    );
+    if (!exists) {
+      set((state) => ({
+        deviceGroups: [...state.deviceGroups, trimmed],
+      }));
+      deviceGroupApi.createGroup({ name: trimmed }).catch((err) =>
+        console.log('[Store] Tạo nhóm backend failed:', err)
       );
-      let updatedDevices = state.iotDevices;
-      if (deviceIds) {
-        updatedDevices = updatedDevices.map((dev) => {
-          if (deviceIds.includes(dev.id)) {
-            return { ...dev, location: trimmedNew };
-          } else if (dev.location?.trim().toLowerCase() === trimmedOld.toLowerCase()) {
-            return { ...dev, location: 'Chưa nhóm' };
-          }
-          return dev;
-        });
-      } else if (trimmedOld.toLowerCase() !== trimmedNew.toLowerCase()) {
-        updatedDevices = updatedDevices.map((dev) =>
-          dev.location?.trim().toLowerCase() === trimmedOld.toLowerCase()
-            ? { ...dev, location: trimmedNew }
-            : dev
+    }
+  },
+
+  updateDeviceGroup: (oldName: string, newName: string, deviceIds?: string[]) => {
+    const trimmedNew = newName.trim();
+    const trimmedOld = oldName.trim();
+    const updatedGroups = get().deviceGroups.map((g) =>
+      g.trim().toLowerCase() === trimmedOld.toLowerCase() ? trimmedNew : g
+    );
+    let updatedDevices = get().iotDevices;
+    if (deviceIds) {
+      updatedDevices = updatedDevices.map((dev) => {
+        if (deviceIds.includes(dev.id)) {
+          return { ...dev, location: trimmedNew };
+        } else if (dev.location?.trim().toLowerCase() === trimmedOld.toLowerCase()) {
+          return { ...dev, location: 'Chưa nhóm' };
+        }
+        return dev;
+      });
+    } else if (trimmedOld.toLowerCase() !== trimmedNew.toLowerCase()) {
+      updatedDevices = updatedDevices.map((dev) =>
+        dev.location?.trim().toLowerCase() === trimmedOld.toLowerCase()
+          ? { ...dev, location: trimmedNew }
+          : dev
+      );
+    }
+    set({
+      deviceGroups: updatedGroups,
+      iotDevices: updatedDevices,
+    });
+
+    (async () => {
+      try {
+        const groupsRes = await deviceGroupApi.listGroups();
+        const found = groupsRes.data.find(
+          (g) => g.name.toLowerCase() === trimmedOld.toLowerCase()
         );
+        if (found) {
+          await deviceGroupApi.updateGroup(found.id, { name: trimmedNew });
+        }
+      } catch (err) {
+        console.log('[Store] Cập nhật nhóm backend failed:', err);
       }
-      return {
-        deviceGroups: updatedGroups,
-        iotDevices: updatedDevices,
-      };
-    }),
+    })();
+  },
 
-  removeDeviceGroup: (groupName: string) =>
+  removeDeviceGroup: (groupName: string) => {
     set((state) => ({
       deviceGroups: state.deviceGroups.filter(
         (g) => g.trim().toLowerCase() !== groupName.trim().toLowerCase()
@@ -399,14 +666,44 @@ const createVitalStore: StateCreator<VitalStoreState> = (set: VitalSet) => ({
           ? { ...dev, location: 'Chưa nhóm' }
           : dev
       ),
-    })),
+    }));
 
-  assignDevicesToGroup: (deviceIds: string[], groupName: string) =>
+    (async () => {
+      try {
+        const groupsRes = await deviceGroupApi.listGroups();
+        const found = groupsRes.data.find(
+          (g) => g.name.toLowerCase() === groupName.trim().toLowerCase()
+        );
+        if (found) {
+          await deviceGroupApi.deleteGroup(found.id);
+        }
+      } catch (err) {
+        console.log('[Store] Xóa nhóm backend failed:', err);
+      }
+    })();
+  },
+
+  assignDevicesToGroup: (deviceIds: string[], groupName: string) => {
     set((state) => ({
       iotDevices: state.iotDevices.map((dev) =>
         deviceIds.includes(dev.id) ? { ...dev, location: groupName } : dev
       ),
-    })),
+    }));
+
+    (async () => {
+      try {
+        const groupsRes = await deviceGroupApi.listGroups();
+        const found = groupsRes.data.find(
+          (g) => g.name.toLowerCase() === groupName.trim().toLowerCase()
+        );
+        if (found) {
+          await deviceGroupApi.assignDevices(deviceIds, found.id);
+        }
+      } catch (err) {
+        console.log('[Store] Gán thiết bị vào nhóm backend failed:', err);
+      }
+    })();
+  },
 
   isDarkMode: useThemeStore.getState().isDarkMode,
   toggleDarkMode: () => {
@@ -416,6 +713,100 @@ const createVitalStore: StateCreator<VitalStoreState> = (set: VitalSet) => ({
   setDarkMode: (isDark: boolean) => {
     useThemeStore.getState().setDarkMode(isDark);
     set({ isDarkMode: isDark });
+  },
+
+  // ---- Backend Sync Operations ----
+  isLoadingDevices: false,
+
+  fetchHouseFromBackend: async () => {
+    try {
+      const res = await houseApi.getCurrentHouse();
+      if (res.data) {
+        set((state) => ({
+          house: {
+            ...state.house,
+            name: res.data.name,
+            address: res.data.address || state.house.address,
+            currentMode: res.data.current_mode,
+          },
+        }));
+      }
+    } catch (e) {
+      console.log('[Store] fetchHouseFromBackend fallback to cache');
+    }
+  },
+
+  fetchGroupsFromBackend: async () => {
+    try {
+      const res = await deviceGroupApi.listGroups();
+      if (res.data && Array.isArray(res.data) && res.data.length > 0) {
+        const names = res.data.map((g) => g.name);
+        set({ deviceGroups: names });
+      }
+    } catch (e) {
+      console.log('[Store] fetchGroupsFromBackend fallback to cache');
+    }
+  },
+
+  fetchDevicesFromBackend: async () => {
+    try {
+      const res = await devicesApi.listDevices();
+      if (res.data && Array.isArray(res.data) && res.data.length > 0) {
+        const mapped: IoTDeviceItem[] = res.data.map((dev) => {
+          const isCam = dev.device_type === 'CAMERA';
+          return {
+            id: dev.device_id || dev.id,
+            name: dev.name,
+            sub:
+              dev.sub_title ||
+              (isCam
+                ? 'Camera góc rộng • 2K Super HD • Đàm thoại 2 chiều'
+                : 'Nhịp tim • SpO₂ • Gia tốc kế phát hiện va đập'),
+            type: isCam ? 'camera' : 'watch',
+            status: dev.status_text || (dev.is_online ? 'Trực tuyến' : 'Ngoại tuyến'),
+            isOnline: dev.is_online,
+            icon: isCam ? 'videocam' : 'watch',
+            color: isCam ? '#FF7A00' : '#10B981',
+            location: dev.location || 'Chưa nhóm',
+            streamUrl: dev.config?.stream_url || undefined,
+            macAddress: dev.mac_address || undefined,
+          };
+        });
+        set({ iotDevices: mapped });
+
+        const firstCam = res.data.find((d) => d.device_type === 'CAMERA');
+        if (firstCam && firstCam.config) {
+          set((state) => ({
+            camera: {
+              ...state.camera,
+              id: firstCam.device_id,
+              name: firstCam.name,
+              room: firstCam.location || 'Phòng khách',
+              isOnline: firstCam.is_online,
+              isSleep: Boolean(firstCam.config?.is_sleep),
+              isAIProtect: Boolean(firstCam.config?.is_ai_protect),
+              resolution: (firstCam.config?.resolution as '2K' | 'FHD' | 'SD') || '2K',
+              streamUrl: firstCam.config?.stream_url || state.camera.streamUrl,
+            },
+          }));
+        }
+      }
+    } catch (e) {
+      console.log('[Store] fetchDevicesFromBackend fallback to cache');
+    }
+  },
+
+  syncAllWithBackend: async () => {
+    set({ isLoadingDevices: true });
+    try {
+      await Promise.allSettled([
+        get().fetchHouseFromBackend(),
+        get().fetchGroupsFromBackend(),
+        get().fetchDevicesFromBackend(),
+      ]);
+    } finally {
+      set({ isLoadingDevices: false });
+    }
   },
 });
 
@@ -434,71 +825,6 @@ useVitalStore.subscribe((state) => {
   }
 });
 
-// ---- Auth Store (persisted) ----
-interface AuthStoreState {
-  accessToken: string | null;
-  refreshToken: string | null;
-  userId: string | null;
-  userEmail: string | null;
-  userName: string | null;
+// ---- Auth Store (persisted & decoupled) ----
+export { useAuthStore, AuthStoreState } from './useAuthStore';
 
-  login: (token: string, name: string, userId: string, email?: string) => void;
-  setTokens: (access: string, refresh: string) => void;
-  setUser: (id: string, email: string, name: string) => void;
-  updateUserName: (id: string, name: string) => void;
-  logout: () => void;
-}
-
-type AuthSet = (
-  partial:
-    | AuthStoreState
-    | Partial<AuthStoreState>
-    | ((state: AuthStoreState) => AuthStoreState | Partial<AuthStoreState>),
-  replace?: boolean
-) => void;
-
-const createAuthStore: StateCreator<AuthStoreState, [], [['zustand/persist', AuthStoreState]]> = (
-  set: AuthSet
-) => ({
-  accessToken: null,
-  refreshToken: null,
-  userId: null,
-  userEmail: null,
-  userName: null,
-
-  login: (token: string, name: string, userId: string, email?: string) =>
-    set({
-      accessToken: token,
-      refreshToken: token,
-      userId,
-      userEmail: email ?? null,
-      userName: name,
-    }),
-
-  setTokens: (access: string, refresh: string) =>
-    set({ accessToken: access, refreshToken: refresh }),
-
-  setUser: (id: string, email: string, name: string) =>
-    set({ userId: id, userEmail: email, userName: name }),
-
-  updateUserName: (id: string, name: string) =>
-    set({ userId: id, userName: name }),
-
-  logout: () =>
-    set({
-      accessToken: null,
-      refreshToken: null,
-      userId: null,
-      userEmail: null,
-      userName: null,
-    }),
-});
-
-const persistOptions: PersistOptions<AuthStoreState> = {
-  name: 'auth-storage',
-  storage: createJSONStorage(() => AsyncStorage),
-};
-
-export const useAuthStore = create<AuthStoreState>()(
-  persist(createAuthStore, persistOptions)
-);

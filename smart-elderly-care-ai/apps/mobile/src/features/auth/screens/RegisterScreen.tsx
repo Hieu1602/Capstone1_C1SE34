@@ -1,15 +1,14 @@
-import React, { useState } from 'react';
+import React, { useEffect, useState } from 'react';
 import {
-  Alert,
-  KeyboardAvoidingView,
-  Platform,
-  SafeAreaView,
-  ScrollView,
-  StyleSheet,
+  View,
   Text,
   TextInput,
   TouchableOpacity,
-  View,
+  StyleSheet,
+  Alert,
+  KeyboardAvoidingView,
+  Platform,
+  ScrollView,
 } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { authApi } from '../../../services/api';
@@ -18,34 +17,83 @@ export default function RegisterScreen({ navigation }: any) {
   const [phone, setPhone] = useState('');
   const [password, setPassword] = useState('');
   const [confirmPassword, setConfirmPassword] = useState('');
-  const [otp, setOtp] = useState('');
-  const [step, setStep] = useState<'form' | 'verify'>('form');
   const [showPassword, setShowPassword] = useState(false);
   const [showConfirmPassword, setShowConfirmPassword] = useState(false);
+  const [step, setStep] = useState<'form' | 'verify'>('form');
+  const [otp, setOtp] = useState('');
   const [loading, setLoading] = useState(false);
+  const [resendSeconds, setResendSeconds] = useState(0);
 
-  const handleRegister = () => {
-    if (!phone.trim() || !password || !confirmPassword) {
+  useEffect(() => {
+    if (resendSeconds <= 0) {
+      return undefined;
+    }
+
+    const timer = setInterval(() => {
+      setResendSeconds((seconds) => Math.max(seconds - 1, 0));
+    }, 1000);
+
+    return () => clearInterval(timer);
+  }, [resendSeconds]);
+
+  const startResendCountdown = () => setResendSeconds(60);
+
+  const handleRegister = async () => {
+    const normalizedPhone = phone.trim().replace(/\s+/g, '');
+
+    if (!normalizedPhone || !password || !confirmPassword) {
       Alert.alert('Thiếu thông tin', 'Vui lòng điền đầy đủ thông tin.');
       return;
     }
-    const normalizedPhone = phone.replace(/\s+/g, '');
+
     if (!/^\+?[0-9]{9,15}$/.test(normalizedPhone)) {
-      Alert.alert('Số điện thoại không hợp lệ', 'Vui lòng kiểm tra lại số điện thoại.');
-      return;
-    }
-    if (password.length < 8 || password.length > 16) {
-      Alert.alert('Mật khẩu chưa hợp lệ', 'Mật khẩu cần dài 8-16 ký tự.');
+      Alert.alert('Lỗi', 'Số điện thoại không hợp lệ.');
       return;
     }
     if (password !== confirmPassword) {
       Alert.alert('Mật khẩu không khớp', 'Vui lòng nhập lại mật khẩu xác nhận.');
       return;
     }
-    setStep('verify');
+
+    setLoading(true);
+    try {
+      await authApi.requestOtp(normalizedPhone);
+      setStep('verify');
+      startResendCountdown();
+      Alert.alert('Đã gửi mã', `Mã xác minh đã được gửi tới ${normalizedPhone}.`);
+    } catch (error: any) {
+      Alert.alert('Không gửi được mã', error.response?.data?.detail || 'Không thể kết nối đến máy chủ SMS.');
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const resendOtp = async () => {
+    if (resendSeconds > 0) {
+      return;
+    }
+
+    const normalizedPhone = phone.trim().replace(/\s+/g, '');
+    if (!normalizedPhone) {
+      Alert.alert('Thiếu thông tin', 'Vui lòng nhập số điện thoại trước.');
+      return;
+    }
+
+    setLoading(true);
+    try {
+      await authApi.requestOtp(normalizedPhone);
+      startResendCountdown();
+      Alert.alert('Đã gửi lại mã', 'Vui lòng kiểm tra tin nhắn SMS.');
+    } catch (error: any) {
+      Alert.alert('Không gửi được mã', error.response?.data?.detail || 'Không thể kết nối đến máy chủ SMS.');
+    } finally {
+      setLoading(false);
+    }
   };
 
   const completeRegistration = async () => {
+    const normalizedPhone = phone.trim().replace(/\s+/g, '');
+
     if (otp.length !== 6) {
       Alert.alert('Mã xác minh không hợp lệ', 'Vui lòng nhập đủ 6 chữ số.');
       return;
@@ -53,9 +101,17 @@ export default function RegisterScreen({ navigation }: any) {
 
     setLoading(true);
     try {
-      const normalizedPhone = phone.replace(/\s+/g, '');
-      await authApi.register({ phone: normalizedPhone, full_name: 'User', password, role: 'user' });
-      Alert.alert('Đăng ký thành công', 'Tài khoản đã được tạo. Vui lòng đăng nhập.', [{ text: 'Đăng nhập', onPress: () => navigation.navigate('Login') }]);
+      await authApi.verifyOtp(normalizedPhone, otp);
+      await authApi.register({
+        phone: normalizedPhone,
+        full_name: 'User',
+        password,
+        role: 'user',
+      });
+
+      Alert.alert('Đăng ký thành công', 'Tài khoản đã được tạo. Vui lòng đăng nhập.', [
+        { text: 'Đăng nhập', onPress: () => navigation.navigate('Login') },
+      ]);
     } catch (error: any) {
       Alert.alert('Đăng ký thất bại', error.response?.data?.detail || 'Không thể kết nối đến máy chủ.');
     } finally {
@@ -65,61 +121,123 @@ export default function RegisterScreen({ navigation }: any) {
 
   return (
     <SafeAreaView style={styles.safeArea}>
-      <KeyboardAvoidingView style={styles.flex} behavior={Platform.OS === 'ios' ? 'padding' : 'height'}>
-        <ScrollView contentContainerStyle={styles.container} keyboardShouldPersistTaps="handled">
-          <View>
-            <TouchableOpacity style={styles.backButton} onPress={() => navigation.goBack()}>
-              <Ionicons name="arrow-back" size={28} color="#2F2F2F" />
+      <KeyboardAvoidingView
+        behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
+        style={{ flex: 1 }}
+      >
+        <ScrollView contentContainerStyle={styles.container} showsVerticalScrollIndicator={false}>
+          <View style={styles.headerSection}>
+            <TouchableOpacity
+              style={styles.backButton}
+              onPress={() => navigation.goBack()}
+            >
+              <Ionicons name="arrow-back" size={24} color={Colors.textPrimary || '#0F172A'} />
             </TouchableOpacity>
-            <View style={styles.heading}>
-              <Text style={styles.title}>{step === 'form' ? 'Tạo tài khoản.' : 'Xác minh số điện thoại.'}</Text>
-              <Text style={styles.subtitle}>
-                {step === 'form' ? 'Đăng ký để quản lý thiết bị và chăm sóc sức khỏe dễ dàng hơn.' : `Nhập mã xác minh 6 số được gửi tới ${phone}.`}
-              </Text>
-            </View>
+            <Text style={styles.welcomeTitle}>Đăng kí tài khoản</Text>
+            <Text style={styles.subtitle}>
+              Đăng kí tài khoản để quản lý thiết bị của bạn. Chúng tôi sẽ gửi tin nhắn kèm mã xác minh đến số điện thoại này.
+            </Text>
+          </View>
+
+          <View style={styles.formContainer}>
+            <TouchableOpacity
+              style={styles.countryPickerBtn}
+              activeOpacity={0.7}
+              onPress={() => Alert.alert('Khu vực', 'Đã chọn: Việt Nam (+84)')}
+            >
+              <View style={{ flexDirection: 'row', alignItems: 'center' }}>
+                <Ionicons name="location-outline" size={20} color={Colors.textPrimary || '#0F172A'} style={{ marginRight: 10 }} />
+                <Text style={styles.countryText}>Việt Nam</Text>
+              </View>
+              <Ionicons name="chevron-forward" size={18} color={Colors.textSecondary || '#64748B'} />
+            </TouchableOpacity>
 
             {step === 'form' ? (
-              <View style={styles.form}>
+              <>
                 <View style={styles.inputContainer}>
-                  <Ionicons name="call-outline" size={23} color="#333333" style={styles.icon} />
-                  <TextInput style={styles.input} placeholder="Số điện thoại của bạn" placeholderTextColor="#B8B8B8" value={phone} onChangeText={setPhone} keyboardType="phone-pad" />
+                  <Ionicons name="phone-portrait-outline" size={20} color="#64748B" style={styles.inputIcon} />
+                  <Text style={styles.prefixText}>+84 </Text>
+                  <TextInput
+                    style={styles.input}
+                    placeholder="Số điện thoại của bạn"
+                    placeholderTextColor="#94A3B8"
+                    value={phone}
+                    onChangeText={setPhone}
+                    keyboardType="phone-pad"
+                    autoCapitalize="none"
+                  />
                 </View>
+
                 <View style={styles.inputContainer}>
-                  <TextInput style={styles.input} placeholder="Mật khẩu" placeholderTextColor="#B8B8B8" value={password} onChangeText={setPassword} secureTextEntry={!showPassword} />
-                  <TouchableOpacity onPress={() => setShowPassword(!showPassword)}><Ionicons name={showPassword ? 'eye-outline' : 'eye-off-outline'} size={25} color="#333333" /></TouchableOpacity>
-                </View>
-                <View style={styles.requirements}>
-                  <Text style={styles.requirementTitle}>Các yêu cầu về mật khẩu:</Text>
-                  <Text style={styles.requirement}>◯  Dài 8-16 ký tự</Text>
-                  <Text style={styles.requirement}>◯  Bao gồm chữ hoa, chữ thường, số và ký hiệu đặc biệt.</Text>
-                </View>
-                <View style={styles.inputContainer}>
-                  <TextInput style={styles.input} placeholder="Xác nhận mật khẩu" placeholderTextColor="#B8B8B8" value={confirmPassword} onChangeText={setConfirmPassword} secureTextEntry={!showConfirmPassword} />
-                  <TouchableOpacity onPress={() => setShowConfirmPassword(!showConfirmPassword)}>
-                    <Ionicons name={showConfirmPassword ? 'eye-outline' : 'eye-off-outline'} size={25} color="#333333" />
+                  <Ionicons name="lock-closed-outline" size={20} color="#64748B" style={styles.inputIcon} />
+                  <TextInput
+                    style={[styles.input, { flex: 1 }]}
+                    placeholder="Mật khẩu"
+                    placeholderTextColor="#94A3B8"
+                    value={password}
+                    onChangeText={setPassword}
+                    secureTextEntry={!showPassword}
+                  />
+                  <TouchableOpacity onPress={() => setShowPassword(!showPassword)}>
+                    <Ionicons name={showPassword ? 'eye-outline' : 'eye-off-outline'} size={20} color="#64748B" />
                   </TouchableOpacity>
                 </View>
-              </View>
-            ) : (
-              <View style={styles.otpRow}>
-                {[0, 1, 2, 3, 4, 5].map((index) => (
+
+                <View style={styles.inputContainer}>
+                  <Ionicons name="shield-checkmark-outline" size={20} color="#64748B" style={styles.inputIcon} />
                   <TextInput
-                    key={index}
-                    style={[styles.otpInput, otp.length === index && styles.otpInputActive]}
-                    value={otp[index] || ''}
-                    onChangeText={(value) => setOtp(`${otp.slice(0, index)}${value.replace(/[^0-9]/g, '').slice(-1)}${otp.slice(index + 1)}`.slice(0, 6))}
-                    keyboardType="number-pad"
-                    maxLength={1}
-                    textAlign="center"
+                    style={[styles.input, { flex: 1 }]}
+                    placeholder="Xác nhận mật khẩu"
+                    placeholderTextColor="#94A3B8"
+                    value={confirmPassword}
+                    onChangeText={setConfirmPassword}
+                    secureTextEntry={!showConfirmPassword}
                   />
-                ))}
+                  <TouchableOpacity onPress={() => setShowConfirmPassword(!showConfirmPassword)}>
+                    <Ionicons name={showConfirmPassword ? 'eye-outline' : 'eye-off-outline'} size={20} color="#64748B" />
+                  </TouchableOpacity>
+                </View>
+              </>
+            ) : (
+              <View>
+                <View style={styles.otpRow}>
+                  {[0, 1, 2, 3, 4, 5].map((index) => (
+                    <TextInput
+                      key={index}
+                      style={[styles.otpInput, otp.length === index && styles.otpInputActive]}
+                      value={otp[index] || ''}
+                      onChangeText={(value) => {
+                        const nextValue = `${otp.slice(0, index)}${value.replace(/[^0-9]/g, '').slice(-1)}${otp.slice(index + 1)}`.slice(0, 6);
+                        setOtp(nextValue);
+                      }}
+                      keyboardType="number-pad"
+                      maxLength={1}
+                      textAlign="center"
+                    />
+                  ))}
+                </View>
+
+                <TouchableOpacity
+                  style={styles.resendButton}
+                  onPress={resendOtp}
+                  disabled={resendSeconds > 0 || loading}
+                >
+                  <Text style={[styles.resendText, resendSeconds > 0 && styles.resendDisabled]}>
+                    {resendSeconds > 0 ? `Gửi lại mã sau ${resendSeconds}s` : 'Gửi lại mã'}
+                  </Text>
+                </TouchableOpacity>
               </View>
             )}
           </View>
 
           <View>
-            <TouchableOpacity style={[styles.primaryButton, loading && styles.disabled]} onPress={step === 'form' ? handleRegister : completeRegistration} disabled={loading} activeOpacity={0.8}>
-              <Text style={styles.primaryText}>{loading ? 'Đang xử lý...' : step === 'form' ? 'Tạo tài khoản' : 'Xác nhận'}</Text>
+            <TouchableOpacity
+              style={styles.loginButton}
+              onPress={step === 'form' ? handleRegister : completeRegistration}
+              disabled={loading}
+              activeOpacity={0.8}
+            >
+              <Text style={styles.loginButtonText}>{loading ? 'Đang xử lý...' : step === 'form' ? 'Tiếp' : 'Xác nhận'}</Text>
             </TouchableOpacity>
             <TouchableOpacity style={styles.loginLink} onPress={() => step === 'verify' ? setStep('form') : navigation.goBack()}>
               <Text style={styles.loginText}>{step === 'verify' ? 'Quay lại chỉnh sửa thông tin' : <>Tôi đã có tài khoản. <Text style={styles.link}>Đăng nhập</Text></>}</Text>
@@ -216,11 +334,42 @@ const styles = StyleSheet.create({
     textAlignVertical: 'center',
     padding: 0,
   },
-  otpInputActive: { borderColor: '#638EF1', borderWidth: 2 },
-  primaryButton: {
-    minHeight: 50,
+  otpRow: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    marginTop: 8,
+  },
+  otpInput: {
+    width: 42,
+    height: 52,
+    borderWidth: 1,
+    borderColor: '#E2E8F0',
     borderRadius: 12,
-    backgroundColor: '#638EF1',
+    fontSize: 18,
+    fontWeight: '700',
+    color: '#0F172A',
+    backgroundColor: '#F8FAFC',
+  },
+  otpInputActive: {
+    borderColor: '#2563EB',
+    borderWidth: 2,
+  },
+  resendButton: {
+    alignItems: 'center',
+    marginTop: 16,
+  },
+  resendText: {
+    color: '#2563EB',
+    fontSize: 14,
+    fontWeight: '600',
+  },
+  resendDisabled: {
+    color: '#9CA3AF',
+  },
+  loginButton: {
+    backgroundColor: '#2563EB',
+    borderRadius: 30,
+    paddingVertical: 16,
     alignItems: 'center',
     justifyContent: 'center',
     alignSelf: 'center',
