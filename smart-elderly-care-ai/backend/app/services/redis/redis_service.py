@@ -162,7 +162,7 @@ class RedisService:
             active_devices = []
 
             for dev in all_devices:
-                dev_id: str = dev.decode("utf-8") if isinstance(dev, bytes) else str(dev)
+                dev_id: str = dev.decode("utf-8") if isinstance(dev, bytes) else dev
                 # Kiểm tra xem key status còn sống không
                 if await self.is_device_online(dev_id):
                     active_devices.append(dev_id)
