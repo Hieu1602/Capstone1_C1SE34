@@ -49,10 +49,16 @@ export default function HomeScreen({ navigation }: any) {
     currentVitals,
     incidents,
     activeDevice,
+    syncAllWithBackend,
   } = useVitalStore();
 
   const [isMicSpeaking, setIsMicSpeaking] = useState(false);
   const [nextMedTaken, setNextMedTaken] = useState(false);
+
+  // Đồng bộ thông tin nhà và camera từ Backend khi mở HomeScreen
+  React.useEffect(() => {
+    syncAllWithBackend?.();
+  }, []);
 
   // Xử lý One-Touch SOS 115
   const handleSOS115 = () => {
