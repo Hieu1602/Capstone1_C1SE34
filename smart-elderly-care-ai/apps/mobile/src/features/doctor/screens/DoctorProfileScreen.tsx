@@ -27,7 +27,7 @@ import { useAuthStore } from '../../../store/useAuthStore';
 export default function DoctorProfileScreen() {
   const insets = useSafeAreaInsets();
   const { isDarkMode, colors, toggleTheme } = useTheme();
-  const { userName, userPhone, toggleViewRole, logout } = useAuthStore();
+  const { userName, userPhone, logout } = useAuthStore();
 
   // Thông tin chuyên môn bác sĩ
   const [docInfo, setDocInfo] = useState({
@@ -40,10 +40,6 @@ export default function DoctorProfileScreen() {
     phone: userPhone || '0905 111 222',
     email: 'dr.tranvanminh@dananghospital.vn',
   });
-
-  // Trạng thái cấu hình trực y tế
-  const [isEmergencyDuty, setIsEmergencyDuty] = useState(true);
-  const [isPrioritySound, setIsPrioritySound] = useState(true);
 
   // Modal 1: Sửa thông tin bác sĩ
   const [editModalVisible, setEditModalVisible] = useState(false);
@@ -110,17 +106,6 @@ export default function DoctorProfileScreen() {
       { text: 'Hủy', style: 'cancel' },
       { text: 'Đăng xuất', style: 'destructive', onPress: () => logout() },
     ]);
-  };
-
-  const handleSwitchToCaregiver = () => {
-    Alert.alert(
-      'Chuyển đổi giao diện',
-      'Chuyển sang giao diện Người nhà (Caregiver) để kiểm tra góc nhìn của gia đình?',
-      [
-        { text: 'Hủy', style: 'cancel' },
-        { text: 'Chuyển đổi', onPress: () => toggleViewRole() },
-      ]
-    );
   };
 
   const handleCall115 = () => {
@@ -219,126 +204,7 @@ export default function DoctorProfileScreen() {
           </View>
         </View>
 
-        {/* THÔNG TIN PHÁP LÝ & CHỨNG CHỈ HÀNH NGHỀ */}
-        <View
-          style={[
-            styles.sectionCard,
-            { backgroundColor: isDarkMode ? '#1E293B' : '#FFFFFF', borderColor: colors.border },
-          ]}
-        >
-          <View style={styles.sectionCardHeader}>
-            <Ionicons name="shield-checkmark" size={18} color="#0284C7" style={{ marginRight: 6 }} />
-            <Text style={[styles.sectionCardTitle, { color: colors.textPrimary }]}>
-              Chứng Chỉ & Pháp Lý Y Khoa
-            </Text>
-          </View>
-
-          <View style={styles.credRow}>
-            <Text style={styles.credLabel}>Số CCHN:</Text>
-            <Text style={[styles.credVal, { color: colors.textPrimary }]}>{docInfo.cchn}</Text>
-          </View>
-          <View style={styles.credRow}>
-            <Text style={styles.credLabel}>Đơn vị công tác:</Text>
-            <Text style={[styles.credVal, { color: colors.textPrimary }]}>{docInfo.department}</Text>
-          </View>
-          <View style={styles.credRow}>
-            <Text style={styles.credLabel}>Điện thoại trực:</Text>
-            <Text style={[styles.credVal, { color: '#0284C7', fontWeight: '700' }]}>{docInfo.phone}</Text>
-          </View>
-          <View style={styles.credRow}>
-            <Text style={styles.credLabel}>Email y tế:</Text>
-            <Text style={[styles.credVal, { color: colors.textPrimary }]}>{docInfo.email}</Text>
-          </View>
-
-          {/* Dấu xác nhận Chữ ký số */}
-          <View style={[styles.digitalSignatureBox, { backgroundColor: isDarkMode ? '#064E3B44' : '#ECFDF5', borderColor: '#A7F3D0' }]}>
-            <Ionicons name="ribbon" size={16} color="#059669" style={{ marginRight: 6 }} />
-            <Text style={styles.digitalSignatureText}>
-              Chữ ký số y tế điện tử: <Text style={{ fontWeight: '800' }}>ĐÃ XÁC THỰC HỢP LỆ</Text>
-            </Text>
-          </View>
-        </View>
-
-        {/* CHUYỂN ĐỔI GIAO DIỆN CAPSTONE 1 DEMO */}
-        <TouchableOpacity
-          style={[
-            styles.switchModeCard,
-            { backgroundColor: isDarkMode ? '#1E293B' : '#EFF6FF', borderColor: '#3B82F666' },
-          ]}
-          onPress={handleSwitchToCaregiver}
-          activeOpacity={0.85}
-        >
-          <View style={styles.switchIconBox}>
-            <Ionicons name="repeat" size={22} color="#2563EB" />
-          </View>
-          <View style={{ flex: 1, marginLeft: 12 }}>
-            <View style={{ flexDirection: 'row', alignItems: 'center' }}>
-              <Text style={[styles.switchModeTitle, { color: colors.textPrimary }]}>
-                Chuyển sang Giao diện Người nhà
-              </Text>
-              <View style={styles.demoPill}>
-                <Text style={styles.demoPillText}>Demo</Text>
-              </View>
-            </View>
-            <Text style={[styles.switchModeSub, { color: isDarkMode ? '#94A3B8' : '#64748B' }]}>
-              Trải nghiệm góc nhìn của gia đình, camera an ninh và trợ lý AI Bot
-            </Text>
-          </View>
-          <Ionicons name="chevron-forward" size={18} color="#2563EB" />
-        </TouchableOpacity>
-
-        {/* CẤU HÌNH TRỰC CẤP CỨU & CẢNH BÁO SOS */}
-        <View
-          style={[
-            styles.sectionCard,
-            { backgroundColor: isDarkMode ? '#1E293B' : '#FFFFFF', borderColor: colors.border },
-          ]}
-        >
-          <View style={styles.sectionCardHeader}>
-            <Ionicons name="flash" size={18} color="#F59E0B" style={{ marginRight: 6 }} />
-            <Text style={[styles.sectionCardTitle, { color: colors.textPrimary }]}>
-              Trực Cấp Cứu & Cảnh Báo Edge Hub
-            </Text>
-          </View>
-
-          {/* Toggle Trực cấp cứu */}
-          <View style={styles.switchRow}>
-            <View style={{ flex: 1, marginRight: 10 }}>
-              <Text style={[styles.switchRowTitle, { color: colors.textPrimary }]}>
-                Chế độ trực cấp cứu 24/7
-              </Text>
-              <Text style={[styles.switchRowDesc, { color: isDarkMode ? '#94A3B8' : '#64748B' }]}>
-                Nhận thông báo đẩy ưu tiên khi có sự cố té ngã hoặc nhịp tim nguy hiểm
-              </Text>
-            </View>
-            <Switch
-              value={isEmergencyDuty}
-              onValueChange={setIsEmergencyDuty}
-              trackColor={{ false: '#CBD5E1', true: '#0284C7' }}
-              thumbColor="#FFFFFF"
-            />
-          </View>
-
-          {/* Toggle Chuông báo động */}
-          <View style={[styles.switchRow, { borderTopWidth: StyleSheet.hairlineWidth, borderTopColor: '#E2E8F066', marginTop: 10, paddingTop: 10 }]}>
-            <View style={{ flex: 1, marginRight: 10 }}>
-              <Text style={[styles.switchRowTitle, { color: colors.textPrimary }]}>
-                Âm thanh cảnh báo mức tối đa
-              </Text>
-              <Text style={[styles.switchRowDesc, { color: isDarkMode ? '#94A3B8' : '#64748B' }]}>
-                Phát chuông báo động bỏ qua chế độ im lặng của máy khi phát hiện nguy cấp
-              </Text>
-            </View>
-            <Switch
-              value={isPrioritySound}
-              onValueChange={setIsPrioritySound}
-              trackColor={{ false: '#CBD5E1', true: '#10B981' }}
-              thumbColor="#FFFFFF"
-            />
-          </View>
-        </View>
-
-        {/* TIỆN ÍCH LÂM SÀNG & BẢO MẬT */}
+        {/* TIỆN ÍCH LÂM SÀNG & HỆ THỐNG */}
         <View
           style={[
             styles.sectionCard,
@@ -748,70 +614,6 @@ const styles = StyleSheet.create({
     borderWidth: 1,
     marginBottom: 14,
   },
-  sectionCardHeader: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    marginBottom: 12,
-  },
-  sectionCardTitle: { fontSize: 14.5, fontWeight: '700' },
-
-  credRow: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    paddingVertical: 5,
-    borderBottomWidth: StyleSheet.hairlineWidth,
-    borderBottomColor: '#E2E8F044',
-  },
-  credLabel: { fontSize: 12, color: '#64748B', fontWeight: '500' },
-  credVal: { fontSize: 12, fontWeight: '600', maxWidth: '65%', textAlign: 'right' },
-
-  digitalSignatureBox: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'center',
-    paddingVertical: 8,
-    paddingHorizontal: 10,
-    borderRadius: 8,
-    borderWidth: 1,
-    marginTop: 10,
-  },
-  digitalSignatureText: { fontSize: 11.5, color: '#059669', fontWeight: '600' },
-
-  switchModeCard: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    padding: 14,
-    borderRadius: 14,
-    borderWidth: 1,
-    marginBottom: 14,
-  },
-  switchIconBox: {
-    width: 42,
-    height: 42,
-    borderRadius: 21,
-    backgroundColor: '#DBEAFE',
-    justifyContent: 'center',
-    alignItems: 'center',
-  },
-  switchModeTitle: { fontSize: 13.5, fontWeight: '700' },
-  demoPill: {
-    backgroundColor: '#2563EB',
-    paddingHorizontal: 6,
-    paddingVertical: 2,
-    borderRadius: 6,
-    marginLeft: 6,
-  },
-  demoPillText: { color: '#FFFFFF', fontSize: 9.5, fontWeight: '800' },
-  switchModeSub: { fontSize: 11, marginTop: 2 },
-
-  switchRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'space-between',
-  },
-  switchRowTitle: { fontSize: 13, fontWeight: '700' },
-  switchRowDesc: { fontSize: 11, marginTop: 2, lineHeight: 15 },
-
   groupTitle: { fontSize: 11, fontWeight: '700', marginBottom: 8, letterSpacing: 0.5 },
   menuItem: {
     flexDirection: 'row',
