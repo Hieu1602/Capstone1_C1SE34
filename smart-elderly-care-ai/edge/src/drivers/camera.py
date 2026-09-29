@@ -11,7 +11,7 @@ Hỗ trợ:
 import logging
 import threading
 import time
-from typing import Optional
+from typing import Any, Optional
 
 import numpy as np
 
@@ -36,7 +36,7 @@ class CameraDriver:
         self.height: int = config.get("resolution", {}).get("height", 720)
         self.reconnect_interval: float = config.get("reconnect_interval_sec", 5.0)
 
-        self._cap = None
+        self._cap: Any = None
         self._frame: Optional[np.ndarray] = None
         self._lock = threading.Lock()
         self._running = False
@@ -83,9 +83,9 @@ class CameraDriver:
 
     def _capture_loop(self) -> None:
         while self._running:
-            if not self.is_connected():
+            if not self.is_connected() or self._cap is None:
                 self._connect()
-                if not self.is_connected():
+                if not self.is_connected() or self._cap is None:
                     logger.warning(
                         "[Camera] Không kết nối được, thử lại sau %.1fs",
                         self.reconnect_interval,

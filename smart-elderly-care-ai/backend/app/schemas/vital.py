@@ -22,6 +22,32 @@ class VitalOut(BaseModel):
     model_config = {"from_attributes": True}
 
 
+class VitalCreate(BaseModel):
+    device_id: Optional[str] = None
+    heart_rate: Optional[int] = None
+    spo2: Optional[int] = None
+    skin_temp_max: Optional[float] = None
+    person_count: Optional[int] = None
+    fall_detected: Optional[bool] = False
+    raw_payload: Optional[dict] = None
+
+
+class VitalCurrentOut(BaseModel):
+    heart_rate: Optional[int] = 76
+    spo2: Optional[int] = 98
+    skin_temp_max: Optional[float] = 36.6
+    body_temp: Optional[float] = 36.6
+    person_count: Optional[int] = 1
+    fall_detected: bool = False
+    timestamp: Optional[int] = None
+    sound: Optional[str] = "Bình thường"
+    bracelet_battery: Optional[int] = 84
+    bracelet_connected: bool = True
+    edge_hub_connected: bool = True
+    device_id: Optional[str] = None
+    time: Optional[datetime] = None
+
+
 class VitalStats(BaseModel):
     device_id: uuid.UUID
     period_hours: int

@@ -59,6 +59,7 @@ export default function HomeScreen({ navigation }: any) {
     fetchSystemMode,
     fetchReminders,
     fetchNotifications,
+    syncAllWithBackend,
   } = useVitalStore();
 
   const [isMicSpeaking, setIsMicSpeaking] = useState(false);
@@ -161,6 +162,11 @@ export default function HomeScreen({ navigation }: any) {
       'Chuông báo động và còi hú Loa Hub đã được kích hoạt lại ở mức bình thường.'
     );
   };
+
+  // Đồng bộ thông tin nhà và camera từ Backend khi mở HomeScreen
+  React.useEffect(() => {
+    syncAllWithBackend?.();
+  }, []);
 
   // Xử lý One-Touch SOS 115
   const handleSOS115 = () => {

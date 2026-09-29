@@ -4,7 +4,7 @@ report_service.py – Dịch vụ tạo báo cáo y tế (PDF / Excel) từ dữ
 
 import io
 from datetime import datetime
-from typing import List
+from typing import List, Union
 from uuid import UUID
 
 from openpyxl import Workbook
@@ -22,7 +22,7 @@ class ReportService:
 
     @staticmethod
     def generate_pdf(
-        device_id: UUID,
+        device_id: Union[UUID, str],
         vitals: List[VitalSign],
         incidents: List[Incident],
     ) -> bytes:
@@ -100,7 +100,7 @@ class ReportService:
 
     @staticmethod
     def generate_excel(
-        device_id: UUID,
+        device_id: Union[UUID, str],
         vitals: List[VitalSign],
         incidents: List[Incident],
     ) -> bytes:
@@ -117,9 +117,10 @@ class ReportService:
         ws_vitals.append(["ID", "Thời gian", "Device ID", "Nhịp tim (bpm)", "SpO2 (%)", "Nhiệt độ (°C)", "Số người", "Té ngã"])
         header_fill = PatternFill(start_color="1F4E79", end_color="1F4E79", fill_type="solid")
         header_font = Font(color="FFFFFF", bold=True)
-        for cell in ws_vitals[1]:
-            cell.fill = header_fill
-            cell.font = header_font
+        for col_idx in range(1, 9):
+            v_cell = ws_vitals.cell(row=1, column=col_idx)
+            v_cell.fill = header_fill
+            v_cell.font = header_font
 
         for v in vitals:
             ws_vitals.append([
@@ -136,9 +137,12 @@ class ReportService:
         # Sheet 2: Incidents
         ws_inc = wb.create_sheet(title="Incidents")
         ws_inc.append(["ID", "Device ID", "Loại cảnh báo", "Mức độ", "Thông điệp", "Độ tin cậy", "Video URL", "Đã xử lý", "Thời gian"])
-        for cell in ws_inc[1]:
-            cell.fill = PatternFill(start_color="C00000", end_color="C00000", fill_type="solid")
-            cell.font = header_font
+        inc_fill = PatternFill(start_color="C00000", end_color="C00000", fill_type="solid")
+        for col_idx in range(1, 10):
+            inc_cell = ws_inc.cell(row=1, column=col_idx)
+            inc_cell.fill = inc_fill
+            inc_cell.font = header_font
+
 
         for inc in incidents:
             ws_inc.append([

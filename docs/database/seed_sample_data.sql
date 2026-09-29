@@ -1,64 +1,129 @@
 -- =================================================================
--- SMART ELDERLY CARE AI - SEED DATA FOR TESTING
--- Group: C1SE.34
+-- SMART ELDERLY CARE AI (SECA) - DỮ LIỆU MẪU CHUẨN (SEED DATA)
+-- Kịch bản: Người nhà đăng ký -> Tạo nhà -> Lắp thiết bị & Cụ già 
+--           -> Chia sẻ cho người thân & Bác sĩ gia đình
 -- =================================================================
 
--- 1. Insert Users mẫu
-INSERT INTO Users (Email, PasswordHash, FullName, Phone, Role)
-VALUES 
-('admin@elderlycare.ai', '$2b$12$e80yq9gC8t0qf.q2r...dummyhash', 'Nguyễn Quản Trị', '0901234567', 'Admin'),
-('caregiver1@gmail.com', '$2b$12$e80yq9gC8t0qf.q2r...dummyhash', 'Trần Thị Chăm Sóc', '0912345678', 'Caregiver'),
-('dr.nam@hospital.vn', '$2b$12$e80yq9gC8t0qf.q2r...dummyhash', 'BS. Lê Văn Nam', '0923456789', 'Doctor');
+-- 1. TẠO CÁC TÀI KHOẢN NGƯỜI DÙNG (MẬT KHẨU CHUNG: 12345678)
+--    Mật khẩu bcrypt: $2b$12$gzojPtKekxkEyY5oiuJBtOAzf1rUGOi5WPHIRO.lR5hnMuoqp5age
+INSERT INTO users (id, phone, full_name, hashed_password, role, is_active)
+VALUES
+    -- [1] Người nhà (Tài khoản chuẩn):
+    ('640e3d97-b4e1-4b08-b2d3-d949a0eb075c', '+84905123456', 'Nguyễn Hữu Nghĩa', '$2b$12$gzojPtKekxkEyY5oiuJBtOAzf1rUGOi5WPHIRO.lR5hnMuoqp5age', 'user', TRUE),
+    -- [2] Người thân trong gia đình (Tài khoản chuẩn):
+    ('a1111111-b4e1-4b08-b2d3-d949a0eb075c', '+84905999888', 'Nguyễn Thị Lan', '$2b$12$gzojPtKekxkEyY5oiuJBtOAzf1rUGOi5WPHIRO.lR5hnMuoqp5age', 'user', TRUE),
+    -- [3] Bác sĩ gia đình (Tài khoản chuẩn):
+    ('b2222222-b4e1-4b08-b2d3-d949a0eb075c', '+84905111222', 'BS. Trần Văn Minh', '$2b$12$gzojPtKekxkEyY5oiuJBtOAzf1rUGOi5WPHIRO.lR5hnMuoqp5age', 'user', TRUE)
+ON CONFLICT (phone) DO UPDATE 
+SET full_name = EXCLUDED.full_name,
+    role = EXCLUDED.role,
+    hashed_password = EXCLUDED.hashed_password;
 
--- 2. Insert Hồ sơ người cao tuổi mẫu
-INSERT INTO ElderlyProfiles (FullName, DateOfBirth, Gender, ResidentialAddress, HubDeviceID, MedicalNotes)
-VALUES 
-('Cụ Nguyễn Văn An', '1945-05-12', 'Male', '123 Nguyễn Văn Linh, Q. Hải Châu, Đà Nẵng', 'HUB-OPI5-001', 'Tiền sử tăng huyết áp, rối loạn tiền đình, đi lại chậm.'),
-('Cụ Lê Thị Bình', '1950-10-20', 'Female', '456 Lê Duẩn, Q. Thanh Khê, Đà Nẵng', 'HUB-OPI5-002', 'Bệnh tim mạch nhẹ, hay quên uống thuốc.');
+-- 2. TẠO CĂN NHÀ THÔNG MINH (CHỦ SỞ HỮU: NGUYỄN HỮU NGHĨA)
+INSERT INTO houses (id, name, address, current_mode, owner_id)
+VALUES (
+    'c3333333-b4e1-4b08-b2d3-d949a0eb075c',
+    'Nhà của tôi',
+    '123 Hải Phòng, P. Thạch Thang, Q. Hải Châu, TP. Đà Nẵng',
+    'HOME',
+    '640e3d97-b4e1-4b08-b2d3-d949a0eb075c'
+) ON CONFLICT (id) DO NOTHING;
 
--- 3. Phân quyền Người chăm sóc theo dõi Người cao tuổi
-INSERT INTO CaregiverElderly (UserID, ElderlyID, Relationship, IsPrimaryContact)
-VALUES 
-(2, 1, 'Con gái', TRUE),
-(2, 2, 'Điều dưỡng viên', TRUE),
-(3, 1, 'Bác sĩ phụ trách', FALSE);
+-- 3. PHÂN QUYỀN CHIA SẺ CĂN NHÀ (HOUSE MEMBERS)
+INSERT INTO house_members (id, house_id, user_id, role_in_house, permissions)
+VALUES
+    -- Nguyễn Hữu Nghĩa: Chủ sở hữu (OWNER) - Toàn quyền (ADMIN)
+    ('d4444444-b4e1-4b08-b2d3-d949a0eb075c', 'c3333333-b4e1-4b08-b2d3-d949a0eb075c', '640e3d97-b4e1-4b08-b2d3-d949a0eb075c', 'OWNER', 'ADMIN'),
+    -- Nguyễn Thị Lan: Người thân gia đình (MEMBER) - Quyền chỉnh sửa cấu hình (EDIT)
+    ('e5555555-b4e1-4b08-b2d3-d949a0eb075c', 'c3333333-b4e1-4b08-b2d3-d949a0eb075c', 'a1111111-b4e1-4b08-b2d3-d949a0eb075c', 'MEMBER', 'EDIT'),
+    -- Bác sĩ Trần Văn Minh: Bác sĩ theo dõi (DOCTOR) - Quyền xem sinh hiệu & camera (VIEW)
+    ('f6666666-b4e1-4b08-b2d3-d949a0eb075c', 'c3333333-b4e1-4b08-b2d3-d949a0eb075c', 'b2222222-b4e1-4b08-b2d3-d949a0eb075c', 'DOCTOR', 'VIEW')
+ON CONFLICT (house_id, user_id) DO NOTHING;
 
--- 4. Cấu hình ngưỡng cảnh báo cho thiết bị
-INSERT INTO DeviceSettings (ElderlyID, HeartRateMin, HeartRateMax, SpO2Min, TempMax, ImmobilityThresholdSec)
-VALUES 
-(1, 55, 110, 93.0, 38.0, 60),
-(2, 60, 105, 94.0, 37.8, 90);
+-- 4. TẠO HỒ SƠ NGƯỜI CAO TUỔI CẦN GIÁM SÁT
+INSERT INTO elderly_profiles (id, house_id, full_name, birth_year, gender, medical_history, emergency_contact_phone)
+VALUES (
+    'e0000000-b4e1-4b08-b2d3-d949a0eb075c',
+    'c3333333-b4e1-4b08-b2d3-d949a0eb075c',
+    'Cụ Nguyễn Văn An',
+    1948,
+    'MALE',
+    'Tiền sử tăng huyết áp độ 2, thiếu máu cơ tim cục bộ, loãng xương, rối loạn tiền đình.',
+    '+84905123456'
+) ON CONFLICT (id) DO NOTHING;
 
--- 5. Người liên hệ khẩn cấp
-INSERT INTO EmergencyContacts (ElderlyID, ContactName, PhoneNumber, PriorityOrder)
-VALUES 
-(1, 'Trần Thị Chăm Sóc (Con gái)', '0912345678', 1),
-(1, 'Trung tâm Cấp cứu 115', '115', 2),
-(2, 'Nguyễn Văn Con (Con trai)', '0988776655', 1);
+-- 5. TẠO CÁC NHÓM PHÂN VÙNG / PHÒNG TRONG NHÀ
+INSERT INTO device_groups (id, house_id, name, description, icon, color, sort_order)
+VALUES
+    ('a0000001-b4e1-4b08-b2d3-d949a0eb075c', 'c3333333-b4e1-4b08-b2d3-d949a0eb075c', 'Phòng khách', 'Khu vực sinh hoạt chung & giám sát té ngã AI', 'folder', '#7C3AED', 1),
+    ('a0000002-b4e1-4b08-b2d3-d949a0eb075c', 'c3333333-b4e1-4b08-b2d3-d949a0eb075c', 'Phòng ngủ', 'Khu vực nghỉ ngơi & theo dõi sinh hiệu ban đêm', 'folder', '#7C3AED', 2)
+ON CONFLICT (house_id, name) DO NOTHING;
 
--- 6. Dữ liệu sinh hiệu mẫu (VitalsData - TimescaleDB)
-INSERT INTO VitalsData (RecordedAt, ElderlyID, HeartRate, SpO2, BodyTemperature, IsWearingBand)
-VALUES 
-(CURRENT_TIMESTAMP - INTERVAL '10 minutes', 1, 75, 98.0, 36.8, TRUE),
-(CURRENT_TIMESTAMP - INTERVAL '5 minutes', 1, 78, 97.5, 36.9, TRUE),
-(CURRENT_TIMESTAMP - INTERVAL '1 minute', 1, 115, 91.0, 38.2, TRUE),
-(CURRENT_TIMESTAMP - INTERVAL '1 minute', 2, 72, 98.5, 36.5, TRUE);
+-- 6. TẠO CÁC THIẾT BỊ IOT THÔNG MINH
+INSERT INTO devices (id, device_id, name, sub_title, device_type, location, is_online, status_text, battery_level, owner_id, house_id, group_id, elderly_id)
+VALUES
+    -- Thiết bị 1: Camera AI an ninh (Phòng khách)
+    (
+        'd0000001-b4e1-4b08-b2d3-d949a0eb075c',
+        'SECA_001',
+        'SECA_001',
+        'Camera góc rộng • 2K Super HD • Đàm thoại 2 chiều',
+        'CAMERA',
+        'Phòng khách',
+        TRUE,
+        'Đang ghi hình',
+        NULL,
+        '640e3d97-b4e1-4b08-b2d3-d949a0eb075c',
+        'c3333333-b4e1-4b08-b2d3-d949a0eb075c',
+        'a0000001-b4e1-4b08-b2d3-d949a0eb075c',
+        NULL
+    ),
+    -- Thiết bị 2: Vòng đeo tay BLE Smartband (Gán trực tiếp cho cụ Nguyễn Văn An)
+    (
+        'd0000002-b4e1-4b08-b2d3-d949a0eb075c',
+        'BLE_BAND_001',
+        'Vòng đeo tay BLE Smartband',
+        'Nhịp tim • SpO₂ • Gia tốc kế phát hiện va đập',
+        'SMARTBAND',
+        'Phòng ngủ',
+        TRUE,
+        'Pin 84% • Đang đeo',
+        84,
+        '640e3d97-b4e1-4b08-b2d3-d949a0eb075c',
+        'c3333333-b4e1-4b08-b2d3-d949a0eb075c',
+        'a0000002-b4e1-4b08-b2d3-d949a0eb075c',
+        'e0000000-b4e1-4b08-b2d3-d949a0eb075c'
+    )
+ON CONFLICT (device_id) DO NOTHING;
 
--- 7. Sự cố mẫu (Incidents)
-INSERT INTO Incidents (ElderlyID, IncidentType, SeverityLevel, IncidentTime, SensorFusionDetails, IsSOSDialed, Status)
-VALUES 
-(1, 'Fall', 'RedAlert', CURRENT_TIMESTAMP - INTERVAL '1 minute', 
- '{"yolo_pose": {"fall_confidence": 0.94, "state": "lying_floor"}, "yamnet": {"audio_class": "Thud/Scream", "prob": 0.88}, "thermal_amg8833": {"body_temp_c": 37.1, "floor_temp_diff": 8.5}}'::jsonb, 
- TRUE, 'Triggered');
+-- 7. CẤU HÌNH NGƯỠNG Y TẾ & THIẾT BỊ (DEVICE CONFIGS)
+INSERT INTO device_configs (device_id, stream_url, resolution, is_sleep, is_ai_protect, has_two_way_audio, hr_threshold_high, hr_threshold_low, spo2_threshold_low, fall_impact_threshold, immobility_seconds)
+VALUES
+    -- Cấu hình Camera AI SECA_001
+    ('d0000001-b4e1-4b08-b2d3-d949a0eb075c', 'http://10.0.2.2:8080', '2K', FALSE, TRUE, TRUE, 120, 50, 90, 2.5, 60),
+    -- Cấu hình Vòng tay BLE_BAND_001
+    ('d0000002-b4e1-4b08-b2d3-d949a0eb075c', NULL, '1080p', FALSE, TRUE, FALSE, 120, 50, 90, 2.5, 60)
+ON CONFLICT (device_id) DO NOTHING;
 
--- 8. File Media đính kèm sự cố
-INSERT INTO IncidentMedia (IncidentID, MediaType, MediaURL)
-VALUES 
-(1, 'SnapshotImage', 'http://localhost:9000/elderly-incidents/2026/09/incident_1_snapshot.jpg'),
-(1, 'VideoClip5s', 'http://localhost:9000/elderly-incidents/2026/09/incident_1_5s_clip.mp4');
+-- 8. DỮ LIỆU SINH HIỆU THỜI GIAN THỰC (TIMESCALEDB HYPERTABLE)
+INSERT INTO vital_signs (id, "time", device_id, heart_rate, spo2, skin_temp_max, person_count, fall_detected)
+VALUES
+    (gen_random_uuid(), NOW() - INTERVAL '10 minutes', 'd0000002-b4e1-4b08-b2d3-d949a0eb075c', 76, 98, 36.5, 1, FALSE),
+    (gen_random_uuid(), NOW() - INTERVAL '5 minutes',  'd0000002-b4e1-4b08-b2d3-d949a0eb075c', 78, 97, 36.6, 1, FALSE),
+    (gen_random_uuid(), NOW(),                        'd0000002-b4e1-4b08-b2d3-d949a0eb075c', 80, 98, 36.6, 1, FALSE);
 
--- 9. Lịch sử nhắc nhở giọng nói
-INSERT INTO VoiceReminders (ElderlyID, ReminderTime, TriggerReason, WasAcknowledged)
-VALUES 
-(1, CURRENT_TIMESTAMP - INTERVAL '2 hours', 'Đã đến giờ uống thuốc huyết áp buổi sáng', TRUE),
-(2, CURRENT_TIMESTAMP - INTERVAL '1 hour', 'Đã 2 tiếng chưa phát hiện vận động, vui lòng uống nước', FALSE);
+-- 9. SỰ CỐ MẪU ĐÃ XÁC NHẬN (INCIDENTS)
+INSERT INTO incidents (id, device_id, alert_type, alert_level, message, confidence, sources, is_acknowledged, acknowledged_by, acknowledged_at, notes)
+VALUES (
+    gen_random_uuid(),
+    'd0000001-b4e1-4b08-b2d3-d949a0eb075c',
+    'FALL_DETECTED',
+    'HIGH',
+    'Phát hiện người cao tuổi té ngã tại khu vực Phòng khách. Hệ thống đã tự động cảnh báo.',
+    0.94,
+    'FUSION',
+    TRUE,
+    '640e3d97-b4e1-4b08-b2d3-d949a0eb075c',
+    NOW(),
+    'Người nhà đã kiểm tra qua Camera, cụ đã được hỗ trợ đứng dậy an toàn.'
+);
