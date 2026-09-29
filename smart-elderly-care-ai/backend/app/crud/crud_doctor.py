@@ -24,14 +24,63 @@ from app.schemas.doctor import (
     DoctorPatientDetail,
     PrescriptionItem,
     PrescriptionCreate,
+    PrescriptionUpdate,
+    DoctorMedicalRecordUpdate,
     DoctorVitalsAnalytics,
     ThresholdsUpdate,
 )
-from app.schemas.patient import PatientMedicalRecordUpdate
+from app.schemas.patient import MedicalCondition, PatientMedicalRecordUpdate
 
 
 # In-memory store cho đơn thuốc y khoa của Bác sĩ (có khởi tạo sẵn dữ liệu mẫu thực tế)
 _PRESCRIPTION_STORE: Dict[str, List[PrescriptionItem]] = {}
+
+# In-memory store cho hồ sơ lâm sàng có thể chỉnh sửa của Bác sĩ
+_CLINICAL_STORE: Dict[str, Dict[str, Any]] = {}
+
+
+def _init_default_conditions() -> List[MedicalCondition]:
+    """Khởi tạo danh mục bệnh lý nền y khoa chuẩn theo tiền sử bệnh án cụ Nguyễn Văn An."""
+    return [
+        MedicalCondition(
+            id="c-001",
+            name="Tăng huyết áp (Độ 2)",
+            severity="danger",
+            note="Huyết áp nền 145/90 mmHg, uống Amlodipine 5mg buổi sáng, mục tiêu < 140/90 mmHg",
+        ),
+        MedicalCondition(
+            id="c-002",
+            name="Thiếu máu cơ tim cục bộ",
+            severity="warning",
+            note="Dùng Vastarel 20mg, theo dõi đau tức ngực, tránh làm việc nặng gắng sức",
+        ),
+        MedicalCondition(
+            id="c-003",
+            name="Loãng xương tuổi già",
+            severity="warning",
+            note="Nguy cơ té ngã gãy xương, cần dùng gậy hỗ trợ di chuyển và bổ sung Canxi + D3",
+        ),
+        MedicalCondition(
+            id="c-004",
+            name="Rối loạn tiền đình",
+            severity="info",
+            note="Uống Tanakan 40mg, cẩn trọng hoa mắt chóng mặt khi đổi tư thế đột ngột từ nằm sang đứng",
+        ),
+    ]
+
+
+def _init_clinical_data(patient_id: str) -> Dict[str, Any]:
+    return {
+        "conditions": _init_default_conditions(),
+        "drug_allergies": "Penicillin (dị ứng nổi mề đay, khó thở nhẹ)",
+        "food_allergies": "Hải sản có vỏ (tôm, cua, sò)",
+        "dietary_notes": "Ăn nhạt, giảm muối < 3g/ngày, bổ sung canxi & vitamin D3, uống đủ 1.5L nước ấm, ăn lỏng dễ tiêu",
+        "doctor_notes": "Bệnh nhân ổn định, đáp ứng tốt với thuốc huyết áp. Nhắc người nhà đo SpO2 mỗi sáng.",
+        "next_appointment": "15/10/2026 - 08:30",
+        "blood_type": "O+",
+        "height_cm": 165,
+        "weight_kg": 62,
+    }
 
 
 def _init_default_prescriptions(patient_id: str) -> List[PrescriptionItem]:
@@ -209,6 +258,11 @@ class CRUDDoctor:
         med_record = await crud_elderly.get_medical_record(db, elderly_id_or_serial)
         prescriptions = self.get_prescriptions(elderly_id_or_serial)
 
+        # Khởi tạo dữ liệu lâm sàng riêng của bác sĩ nếu chưa có
+        if elderly_id_or_serial not in _CLINICAL_STORE:
+            _CLINICAL_STORE[elderly_id_or_serial] = _init_clinical_data(elderly_id_or_serial)
+        clinical = _CLINICAL_STORE[elderly_id_or_serial]
+
         # Tìm hồ sơ trong DB
         elderly = None
         try:
@@ -225,6 +279,10 @@ class CRUDDoctor:
         house_id = str(elderly.house_id) if elderly else "c3333333-b4e1-4b08-b2d3-d949a0eb075c"
         house_name = elderly.house.name if elderly and elderly.house else "Nhà của tôi"
         house_address = elderly.house.address if elderly and elderly.house else "123 Hải Phòng, Đà Nẵng"
+
+        height = clinical.get("height_cm", 165)
+        weight = clinical.get("weight_kg", 62)
+        bmi = round(weight / ((height / 100) ** 2), 1)
 
         return DoctorPatientDetail(
             id=med_record.id,
@@ -246,16 +304,16 @@ class CRUDDoctor:
             blood_pressure="120/80 mmHg",
             health_status="NORMAL",
             last_updated="Vừa xong",
-            conditions=med_record.conditions,
-            drug_allergies=med_record.drug_allergies,
-            food_allergies=med_record.food_allergies,
-            dietary_notes=med_record.dietary_notes,
-            doctor_notes="Bệnh nhân ổn định, đáp ứng tốt với thuốc huyết áp. Nhắc người nhà đo SpO2 mỗi sáng.",
-            blood_type=med_record.blood_type,
-            height_cm=med_record.height_cm,
-            weight_kg=med_record.weight_kg,
-            bmi=round(med_record.weight_kg / ((med_record.height_cm / 100) ** 2), 1),
-            next_appointment=med_record.next_appointment,
+            conditions=clinical.get("conditions", _init_default_conditions()),
+            drug_allergies=clinical.get("drug_allergies", "Penicillin (dị ứng nổi mề đay, khó thở nhẹ)"),
+            food_allergies=clinical.get("food_allergies", "Hải sản có vỏ (tôm, cua, sò)"),
+            dietary_notes=clinical.get("dietary_notes", "Ăn nhạt, giảm muối < 3g/ngày, bổ sung Canxi + D3"),
+            doctor_notes=clinical.get("doctor_notes", "Bệnh nhân ổn định, đáp ứng tốt với thuốc huyết áp. Nhắc người nhà đo SpO2 mỗi sáng."),
+            blood_type=clinical.get("blood_type", "O+"),
+            height_cm=height,
+            weight_kg=weight,
+            bmi=bmi,
+            next_appointment=clinical.get("next_appointment", "15/10/2026 - 08:30"),
             prescriptions_count=len(prescriptions),
         )
 
@@ -286,6 +344,76 @@ class CRUDDoctor:
         )
         _PRESCRIPTION_STORE[elderly_id].insert(0, new_item)
         return new_item
+
+    def update_prescription(
+        self, elderly_id: str, rx_id: str, obj_in: PrescriptionUpdate
+    ) -> Optional[PrescriptionItem]:
+        """Cập nhật đơn thuốc hiện có."""
+        rx_list = self.get_prescriptions(elderly_id)
+        for rx in rx_list:
+            if rx.id == rx_id:
+                if obj_in.medication_name is not None:
+                    rx.medication_name = obj_in.medication_name
+                if obj_in.dosage is not None:
+                    rx.dosage = obj_in.dosage
+                if obj_in.frequency is not None:
+                    rx.frequency = obj_in.frequency
+                if obj_in.schedule_times is not None:
+                    rx.schedule_times = obj_in.schedule_times
+                if obj_in.instructions is not None:
+                    rx.instructions = obj_in.instructions
+                if obj_in.enable_speaker_reminder is not None:
+                    rx.enable_speaker_reminder = obj_in.enable_speaker_reminder
+                return rx
+        return None
+
+    def delete_prescription(self, elderly_id: str, rx_id: str) -> bool:
+        """Ngừng dùng hoặc xóa một đơn thuốc."""
+        rx_list = self.get_prescriptions(elderly_id)
+        initial_len = len(rx_list)
+        _PRESCRIPTION_STORE[elderly_id] = [rx for rx in rx_list if rx.id != rx_id]
+        return len(_PRESCRIPTION_STORE[elderly_id]) < initial_len
+
+    def toggle_prescription_reminder(
+        self, elderly_id: str, rx_id: str
+    ) -> Optional[PrescriptionItem]:
+        """Bật/tắt nhanh thông báo giọng nói qua loa Hub."""
+        rx_list = self.get_prescriptions(elderly_id)
+        for rx in rx_list:
+            if rx.id == rx_id:
+                rx.enable_speaker_reminder = not rx.enable_speaker_reminder
+                return rx
+        return None
+
+    async def update_clinical_record(
+        self, db: AsyncSession, elderly_id: str, obj_in: DoctorMedicalRecordUpdate
+    ) -> DoctorPatientDetail:
+        """Bác sĩ cập nhật hồ sơ bệnh án, bệnh nền, dị ứng, dinh dưỡng và dặn dò."""
+        if elderly_id not in _CLINICAL_STORE:
+            _CLINICAL_STORE[elderly_id] = _init_clinical_data(elderly_id)
+        clinical = _CLINICAL_STORE[elderly_id]
+
+        if obj_in.doctor_notes is not None:
+            clinical["doctor_notes"] = obj_in.doctor_notes
+        if obj_in.next_appointment is not None:
+            clinical["next_appointment"] = obj_in.next_appointment
+        if obj_in.conditions is not None:
+            clinical["conditions"] = obj_in.conditions
+        if obj_in.drug_allergies is not None:
+            clinical["drug_allergies"] = obj_in.drug_allergies
+        if obj_in.food_allergies is not None:
+            clinical["food_allergies"] = obj_in.food_allergies
+        if obj_in.dietary_notes is not None:
+            clinical["dietary_notes"] = obj_in.dietary_notes
+        if obj_in.blood_type is not None:
+            clinical["blood_type"] = obj_in.blood_type
+        if obj_in.height_cm is not None:
+            clinical["height_cm"] = obj_in.height_cm
+        if obj_in.weight_kg is not None:
+            clinical["weight_kg"] = obj_in.weight_kg
+
+        return await self.get_patient_detail(db, elderly_id)
+
 
     async def get_vitals_analytics(
         self, db: AsyncSession, elderly_id: str, days: int = 7

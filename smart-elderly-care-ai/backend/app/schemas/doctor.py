@@ -71,6 +71,29 @@ class PrescriptionCreate(BaseModel):
     enable_speaker_reminder: bool = True
 
 
+class PrescriptionUpdate(BaseModel):
+    """Cập nhật đơn thuốc hiện có."""
+    medication_name: Optional[str] = None
+    dosage: Optional[str] = None
+    frequency: Optional[str] = None
+    schedule_times: Optional[List[str]] = None
+    instructions: Optional[str] = None
+    enable_speaker_reminder: Optional[bool] = None
+
+
+class DoctorMedicalRecordUpdate(BaseModel):
+    """Bác sĩ cập nhật hồ sơ bệnh án, bệnh lý nền, dị ứng, dinh dưỡng và dặn dò."""
+    doctor_notes: Optional[str] = None
+    next_appointment: Optional[str] = None
+    conditions: Optional[List[MedicalCondition]] = None
+    drug_allergies: Optional[str] = None
+    food_allergies: Optional[str] = None
+    dietary_notes: Optional[str] = None
+    blood_type: Optional[str] = None
+    height_cm: Optional[int] = None
+    weight_kg: Optional[int] = None
+
+
 class DoctorVitalsAnalytics(BaseModel):
     """Dữ liệu phân tích sinh hiệu chuỗi thời gian dài hạn từ TimescaleDB."""
     patient_id: str

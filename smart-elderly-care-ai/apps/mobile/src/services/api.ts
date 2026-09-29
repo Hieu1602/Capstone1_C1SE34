@@ -155,6 +155,22 @@ export const doctorApi = {
       enable_speaker_reminder?: boolean;
     }
   ) => api.post(`/doctor/patients/${id}/prescriptions`, data),
+  updatePrescription: (
+    patientId: string,
+    rxId: string,
+    data: {
+      medication_name?: string;
+      dosage?: string;
+      frequency?: string;
+      schedule_times?: string[];
+      instructions?: string;
+      enable_speaker_reminder?: boolean;
+    }
+  ) => api.put(`/doctor/patients/${patientId}/prescriptions/${rxId}`, data),
+  deletePrescription: (patientId: string, rxId: string) =>
+    api.delete(`/doctor/patients/${patientId}/prescriptions/${rxId}`),
+  togglePrescriptionReminder: (patientId: string, rxId: string) =>
+    api.patch(`/doctor/patients/${patientId}/prescriptions/${rxId}/toggle-reminder`),
   updateMedicalRecord: (id: string, data: any) =>
     api.put(`/doctor/patients/${id}/medical-record`, data),
   getAnalytics: (id: string, days = 7) =>
@@ -162,3 +178,4 @@ export const doctorApi = {
   updateThresholds: (id: string, data: any) =>
     api.put(`/doctor/patients/${id}/thresholds`, data),
 };
+

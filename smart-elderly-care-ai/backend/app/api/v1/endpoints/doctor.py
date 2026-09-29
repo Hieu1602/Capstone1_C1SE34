@@ -17,6 +17,8 @@ from app.schemas.doctor import (
     DoctorPatientDetail,
     PrescriptionItem,
     PrescriptionCreate,
+    PrescriptionUpdate,
+    DoctorMedicalRecordUpdate,
     DoctorVitalsAnalytics,
     ThresholdsUpdate,
 )
@@ -41,7 +43,6 @@ async def get_doctor_assigned_patients(
     Trả về danh sách người cao tuổi trong tất cả các căn nhà mà Bác sĩ được phân quyền (house_members).
     Bao gồm thông tin sinh hiệu tức thời (nhịp tim, SpO2, nhiệt độ da) và trạng thái y tế.
     """
-    # Nếu không có token (đang test/demo), tạo mock User với ID bác sĩ mẫu
     if not current_user:
         current_user = User(
             id="b2222222-b4e1-4b08-b2d3-d949a0eb075c",
@@ -101,20 +102,68 @@ async def create_prescription(
 
 
 @router.put(
+    "/patients/{elderly_id}/prescriptions/{rx_id}",
+    response_model=PrescriptionItem,
+    summary="Bác sĩ cập nhật đơn thuốc hiện có",
+)
+async def update_prescription(
+    elderly_id: str,
+    rx_id: str,
+    prescription_in: PrescriptionUpdate,
+):
+    """Chỉnh sửa liều lượng, giờ uống hoặc hướng dẫn của đơn thuốc."""
+    updated = crud_doctor.update_prescription(elderly_id, rx_id, prescription_in)
+    if not updated:
+        raise HTTPException(status_code=404, detail="Không tìm thấy đơn thuốc.")
+    return updated
+
+
+@router.delete(
+    "/patients/{elderly_id}/prescriptions/{rx_id}",
+    summary="Bác sĩ ngừng hoặc xóa đơn thuốc",
+)
+async def delete_prescription(
+    elderly_id: str,
+    rx_id: str,
+):
+    """Ngừng dùng hoặc loại bỏ đơn thuốc khỏi phác đồ."""
+    success = crud_doctor.delete_prescription(elderly_id, rx_id)
+    if not success:
+        raise HTTPException(status_code=404, detail="Không tìm thấy đơn thuốc cần xóa.")
+    return {"success": True, "message": "Đã ngừng đơn thuốc thành công."}
+
+
+@router.patch(
+    "/patients/{elderly_id}/prescriptions/{rx_id}/toggle-reminder",
+    response_model=PrescriptionItem,
+    summary="Bật/tắt phát loa thông minh nhắc uống thuốc",
+)
+async def toggle_prescription_reminder(
+    elderly_id: str,
+    rx_id: str,
+):
+    """Bật/tắt tính năng loa thông minh Hub nhắc giờ uống thuốc."""
+    updated = crud_doctor.toggle_prescription_reminder(elderly_id, rx_id)
+    if not updated:
+        raise HTTPException(status_code=404, detail="Không tìm thấy đơn thuốc.")
+    return updated
+
+
+@router.put(
     "/patients/{elderly_id}/medical-record",
-    response_model=PatientMedicalRecordOut,
-    summary="Bác sĩ cập nhật hồ sơ bệnh án & dặn dò y khoa",
+    response_model=DoctorPatientDetail,
+    summary="Bác sĩ cập nhật hồ sơ bệnh án, bệnh nền, dị ứng, dinh dưỡng & dặn dò y khoa",
 )
 async def update_patient_medical_record(
     elderly_id: str,
-    record_in: PatientMedicalRecordUpdate,
+    record_in: DoctorMedicalRecordUpdate,
     db: AsyncSession = Depends(get_db),
 ):
-    """Cập nhật chẩn đoán, tiền sử bệnh án, ghi chú dinh dưỡng hoặc ngày hẹn tái khám."""
-    return await crud_elderly.update_medical_record(
+    """Cập nhật chẩn đoán bệnh nền, dị ứng, chế độ ăn hoặc ngày hẹn tái khám."""
+    return await crud_doctor.update_clinical_record(
         db=db,
-        patient_id_or_serial=elderly_id,
-        update_in=record_in,
+        elderly_id=elderly_id,
+        obj_in=record_in,
     )
 
 

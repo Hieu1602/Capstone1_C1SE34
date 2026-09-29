@@ -437,9 +437,15 @@ export default function DoctorPatientsScreen() {
 
                 {/* Footer action button */}
                 <View style={styles.cardFooter}>
-                  <Text style={[styles.updatedText, { color: isDarkMode ? '#64748B' : '#94A3B8' }]}>
-                    Đồng bộ qua BLE Smartband • {patient.last_updated}
-                  </Text>
+                  <View style={{ flexDirection: 'row', alignItems: 'center', flex: 1, marginRight: 8 }}>
+                    <Ionicons name="bluetooth" size={12} color="#0284C7" style={{ marginRight: 4 }} />
+                    <Text
+                      style={[styles.updatedText, { color: isDarkMode ? '#94A3B8' : '#64748B' }]}
+                      numberOfLines={1}
+                    >
+                      BLE Smartband • {patient.last_updated}
+                    </Text>
+                  </View>
                   <View style={styles.viewDetailBtn}>
                     <Text style={styles.viewDetailText}>Xem bệnh án & Kê đơn</Text>
                     <Ionicons name="chevron-forward" size={14} color={Colors.primary} />
