@@ -219,17 +219,17 @@ export default function DoctorPrescriptionsScreen() {
         <View style={styles.statsRow}>
           <View style={[styles.statBox, { backgroundColor: isDarkMode ? '#334155' : '#EFF6FF' }]}>
             <Text style={[styles.statNumber, { color: '#2563EB' }]}>{prescriptions.length}</Text>
-            <Text style={styles.statLabel}>Đơn thuốc đang dùng</Text>
+            <Text style={styles.statLabel} numberOfLines={1}>Đang kê đơn</Text>
           </View>
           <View style={[styles.statBox, { backgroundColor: isDarkMode ? '#334155' : '#ECFDF5' }]}>
             <Text style={[styles.statNumber, { color: '#059669' }]}>
               {prescriptions.filter((r) => r.enable_speaker_reminder).length}
             </Text>
-            <Text style={styles.statLabel}>Bật nhắc loa Orange Pi</Text>
+            <Text style={styles.statLabel} numberOfLines={1}>Phát loa Hub</Text>
           </View>
           <View style={[styles.statBox, { backgroundColor: isDarkMode ? '#334155' : '#FFFBEB' }]}>
             <Text style={[styles.statNumber, { color: '#D97706' }]}>1</Text>
-            <Text style={styles.statLabel}>Bệnh nhân áp dụng</Text>
+            <Text style={styles.statLabel} numberOfLines={1}>Bệnh nhân</Text>
           </View>
         </View>
       </View>
@@ -315,12 +315,12 @@ export default function DoctorPrescriptionsScreen() {
 
               {/* FOOTER & NÚT SỬA / XÓA */}
               <View style={styles.rxFooter}>
-                <View>
-                  <Text style={[styles.footerText, { color: isDarkMode ? '#64748B' : '#94A3B8' }]}>
-                    Bệnh nhân: Cụ Nguyễn Văn An (Nhà của tôi)
+                <View style={{ flex: 1, marginRight: 8 }}>
+                  <Text style={[styles.footerText, { color: isDarkMode ? '#64748B' : '#94A3B8' }]} numberOfLines={1}>
+                    Cụ Nguyễn Văn An (Nhà của tôi)
                   </Text>
-                  <Text style={[styles.footerDoctor, { color: isDarkMode ? '#64748B' : '#94A3B8' }]}>
-                    Kê bởi: {rx.doctor_name || 'BS. Trần Văn Minh'}
+                  <Text style={[styles.footerDoctor, { color: isDarkMode ? '#64748B' : '#94A3B8' }]} numberOfLines={1}>
+                    BS: {rx.doctor_name || 'BS. Trần Văn Minh'}
                   </Text>
                 </View>
 
@@ -498,7 +498,7 @@ const styles = StyleSheet.create({
   statNumber: { fontSize: 18, fontWeight: '800' },
   statLabel: { fontSize: 10, color: '#64748B', marginTop: 2, textAlign: 'center' },
 
-  scrollContent: { padding: 16, paddingBottom: 40 },
+  scrollContent: { padding: 16, paddingBottom: 95 },
   emptyBox: { alignItems: 'center', paddingVertical: 60 },
   emptyText: { fontSize: 14, marginTop: 10 },
 

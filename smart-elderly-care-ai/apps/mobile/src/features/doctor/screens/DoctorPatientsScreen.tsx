@@ -40,6 +40,7 @@ export interface PatientCardData {
   spo2?: number;
   skin_temp_max?: number;
   blood_pressure?: string;
+  blood_type?: string;
   health_status: 'NORMAL' | 'WARNING' | 'DANGER' | string;
   last_updated?: string;
 }
@@ -189,14 +190,12 @@ export default function DoctorPatientsScreen() {
             ]}
           >
             <View style={[styles.statIconBox, { backgroundColor: '#EFF6FF' }]}>
-              <Ionicons name="people" size={18} color="#2563EB" />
+              <Ionicons name="people" size={16} color="#2563EB" />
             </View>
-            <View>
-              <Text style={styles.statNumber}>{totalPatients}</Text>
-              <Text style={[styles.statLabel, { color: isDarkMode ? '#94A3B8' : '#64748B' }]}>
-                Tổng bệnh nhân
-              </Text>
-            </View>
+            <Text style={[styles.statNumber, { color: colors.textPrimary }]}>{totalPatients}</Text>
+            <Text style={[styles.statLabel, { color: isDarkMode ? '#94A3B8' : '#64748B' }]} numberOfLines={1}>
+              Tổng số
+            </Text>
           </View>
 
           <View
@@ -206,16 +205,14 @@ export default function DoctorPatientsScreen() {
             ]}
           >
             <View style={[styles.statIconBox, { backgroundColor: '#ECFDF5' }]}>
-              <Ionicons name="shield-checkmark" size={18} color="#059669" />
+              <Ionicons name="shield-checkmark" size={16} color="#059669" />
             </View>
-            <View>
-              <Text style={[styles.statNumber, { color: '#059669' }]}>
-                {totalPatients - warningCount}
-              </Text>
-              <Text style={[styles.statLabel, { color: isDarkMode ? '#94A3B8' : '#64748B' }]}>
-                Sinh hiệu ổn định
-              </Text>
-            </View>
+            <Text style={[styles.statNumber, { color: '#059669' }]}>
+              {totalPatients - warningCount}
+            </Text>
+            <Text style={[styles.statLabel, { color: isDarkMode ? '#94A3B8' : '#64748B' }]} numberOfLines={1}>
+              Ổn định
+            </Text>
           </View>
 
           <View
@@ -225,16 +222,14 @@ export default function DoctorPatientsScreen() {
             ]}
           >
             <View style={[styles.statIconBox, { backgroundColor: '#FFFBEB' }]}>
-              <Ionicons name="pulse" size={18} color="#D97706" />
+              <Ionicons name="pulse" size={16} color="#D97706" />
             </View>
-            <View>
-              <Text style={[styles.statNumber, { color: warningCount > 0 ? '#DC2626' : '#D97706' }]}>
-                {warningCount}
-              </Text>
-              <Text style={[styles.statLabel, { color: isDarkMode ? '#94A3B8' : '#64748B' }]}>
-                Cần lưu ý
-              </Text>
-            </View>
+            <Text style={[styles.statNumber, { color: warningCount > 0 ? '#DC2626' : '#D97706' }]}>
+              {warningCount}
+            </Text>
+            <Text style={[styles.statLabel, { color: isDarkMode ? '#94A3B8' : '#64748B' }]} numberOfLines={1}>
+              Cần lưu ý
+            </Text>
           </View>
         </View>
 
@@ -332,58 +327,55 @@ export default function DoctorPatientsScreen() {
               >
                 {/* Header card */}
                 <View style={styles.cardHeader}>
-                  <View style={styles.avatarRow}>
-                    <View style={styles.patientAvatar}>
-                      <Text style={styles.patientAvatarText}>
-                        {patient.name.split(' ').slice(-1)[0][0] || 'C'}
+                  <View style={styles.patientAvatar}>
+                    <Text style={styles.patientAvatarText}>
+                      {patient.name.trim().split(/\s+/).slice(-1)[0][0]?.toUpperCase() || 'A'}
+                    </Text>
+                  </View>
+                  <View style={styles.cardHeaderInfo}>
+                    <View style={styles.nameBadgeRow}>
+                      <Text style={[styles.patientName, { color: colors.textPrimary }]} numberOfLines={1}>
+                        {patient.name}
                       </Text>
-                    </View>
-                    <View style={{ marginLeft: 12, flex: 1 }}>
-                      <View style={{ flexDirection: 'row', alignItems: 'center' }}>
-                        <Text style={[styles.patientName, { color: colors.textPrimary }]}>
-                          {patient.name}
-                        </Text>
-                        <Text style={[styles.patientAge, { color: isDarkMode ? '#94A3B8' : '#64748B' }]}>
-                          ({patient.age} tuổi • {patient.gender})
+                      <View
+                        style={[
+                          styles.statusBadge,
+                          isDanger
+                            ? { backgroundColor: '#FEE2E2' }
+                            : isWarn
+                            ? { backgroundColor: '#FEF3C7' }
+                            : { backgroundColor: '#D1FAE5' },
+                        ]}
+                      >
+                        <Text
+                          style={[
+                            styles.statusBadgeText,
+                            isDanger
+                              ? { color: '#DC2626' }
+                              : isWarn
+                              ? { color: '#D97706' }
+                              : { color: '#059669' },
+                          ]}
+                        >
+                          {isDanger ? 'NGUY CƠ' : isWarn ? 'CHÚ Ý' : 'ỔN ĐỊNH'}
                         </Text>
                       </View>
-                      <Text style={[styles.patientAddress, { color: isDarkMode ? '#94A3B8' : '#64748B' }]}>
-                        🏠 {patient.house_name} • {patient.house_address}
-                      </Text>
                     </View>
-                  </View>
-
-                  <View
-                    style={[
-                      styles.statusBadge,
-                      isDanger
-                        ? { backgroundColor: '#FEE2E2' }
-                        : isWarn
-                        ? { backgroundColor: '#FEF3C7' }
-                        : { backgroundColor: '#D1FAE5' },
-                    ]}
-                  >
-                    <Text
-                      style={[
-                        styles.statusBadgeText,
-                        isDanger
-                          ? { color: '#DC2626' }
-                          : isWarn
-                          ? { color: '#D97706' }
-                          : { color: '#059669' },
-                      ]}
-                    >
-                      {isDanger ? 'NGUY CƠ CAO' : isWarn ? 'CẦN CHÚ Ý' : 'ỔN ĐỊNH'}
+                    <Text style={[styles.patientMeta, { color: isDarkMode ? '#94A3B8' : '#64748B' }]} numberOfLines={1}>
+                      {patient.age} tuổi • {patient.gender} • Nhóm máu {patient.blood_type || 'O+'}
+                    </Text>
+                    <Text style={[styles.patientAddress, { color: isDarkMode ? '#94A3B8' : '#64748B' }]} numberOfLines={1}>
+                      🏠 {patient.house_name} • {patient.house_address}
                     </Text>
                   </View>
                 </View>
 
                 {/* Medical History Tags */}
                 {patient.medical_history ? (
-                  <View style={styles.historyRow}>
-                    <Ionicons name="medical" size={13} color="#EF4444" style={{ marginRight: 4 }} />
+                  <View style={[styles.historyRow, { backgroundColor: isDarkMode ? '#33415544' : '#F1F5F9' }]}>
+                    <Ionicons name="medical" size={13} color="#EF4444" style={{ marginRight: 5 }} />
                     <Text style={[styles.historyText, { color: isDarkMode ? '#CBD5E1' : '#475569' }]} numberOfLines={1}>
-                      {patient.medical_history}
+                      Bệnh nền: {patient.medical_history}
                     </Text>
                   </View>
                 ) : null}
@@ -421,7 +413,7 @@ export default function DoctorPatientsScreen() {
                       {patient.skin_temp_max ?? 36.6}
                       <Text style={styles.vitalUnit}>°C</Text>
                     </Text>
-                    <Text style={styles.vitalLabel}>Nhiệt độ da</Text>
+                    <Text style={styles.vitalLabel}>Nhiệt độ</Text>
                   </View>
 
                   {/* Vòng đeo / Pin */}
@@ -437,13 +429,13 @@ export default function DoctorPatientsScreen() {
 
                 {/* Footer action button */}
                 <View style={styles.cardFooter}>
-                  <View style={{ flexDirection: 'row', alignItems: 'center', flex: 1, marginRight: 8 }}>
+                  <View style={styles.syncWrap}>
                     <Ionicons name="bluetooth" size={12} color="#0284C7" style={{ marginRight: 4 }} />
                     <Text
                       style={[styles.updatedText, { color: isDarkMode ? '#94A3B8' : '#64748B' }]}
                       numberOfLines={1}
                     >
-                      BLE Smartband • {patient.last_updated}
+                      BLE Hub • {patient.last_updated}
                     </Text>
                   </View>
                   <View style={styles.viewDetailBtn}>
@@ -500,22 +492,23 @@ const styles = StyleSheet.create({
   },
   summaryCard: {
     flex: 1,
-    flexDirection: 'row',
     alignItems: 'center',
-    padding: 8,
+    justifyContent: 'center',
+    paddingVertical: 10,
+    paddingHorizontal: 4,
     borderRadius: 12,
     borderWidth: 1,
   },
   statIconBox: {
-    width: 30,
-    height: 30,
-    borderRadius: 8,
+    width: 28,
+    height: 28,
+    borderRadius: 14,
     justifyContent: 'center',
     alignItems: 'center',
-    marginRight: 6,
+    marginBottom: 4,
   },
-  statNumber: { fontSize: 15, fontWeight: '800', color: '#0F172A' },
-  statLabel: { fontSize: 10, fontWeight: '500' },
+  statNumber: { fontSize: 16, fontWeight: '800' },
+  statLabel: { fontSize: 11, fontWeight: '600', textAlign: 'center', marginTop: 2 },
   searchBar: {
     flexDirection: 'row',
     alignItems: 'center',
@@ -529,7 +522,7 @@ const styles = StyleSheet.create({
   filterRow: { flexDirection: 'row', gap: 8 },
   filterChip: { paddingHorizontal: 12, paddingVertical: 6, borderRadius: 20 },
   filterChipText: { fontSize: 12 },
-  listContent: { padding: 16, paddingBottom: 80 },
+  listContent: { padding: 16, paddingBottom: 95 },
   emptyBox: { alignItems: 'center', marginTop: 40 },
   emptyText: { marginTop: 12, fontSize: 14 },
   patientCard: {
@@ -545,33 +538,36 @@ const styles = StyleSheet.create({
   },
   cardHeader: {
     flexDirection: 'row',
-    justifyContent: 'space-between',
     alignItems: 'flex-start',
   },
-  avatarRow: { flexDirection: 'row', alignItems: 'center', flex: 1 },
   patientAvatar: {
     width: 44,
     height: 44,
     borderRadius: 22,
-    backgroundColor: '#3B82F6',
+    backgroundColor: '#0284C7',
     justifyContent: 'center',
     alignItems: 'center',
   },
-  patientAvatarText: { color: '#FFFFFF', fontSize: 18, fontWeight: '700' },
-  patientName: { fontSize: 16, fontWeight: '700', marginRight: 6 },
-  patientAge: { fontSize: 13 },
-  patientAddress: { fontSize: 12, marginTop: 2 },
+  patientAvatarText: { color: '#FFFFFF', fontSize: 18, fontWeight: '800' },
+  cardHeaderInfo: { flex: 1, marginLeft: 12 },
+  nameBadgeRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    marginBottom: 2,
+  },
+  patientName: { fontSize: 16, fontWeight: '800', flex: 1, marginRight: 8 },
+  patientMeta: { fontSize: 12, marginTop: 1 },
+  patientAddress: { fontSize: 11.5, marginTop: 3 },
   statusBadge: {
-    paddingHorizontal: 8,
-    paddingVertical: 4,
-    borderRadius: 8,
-    marginLeft: 6,
+    paddingHorizontal: 7,
+    paddingVertical: 3,
+    borderRadius: 6,
   },
   statusBadgeText: { fontSize: 10, fontWeight: '700' },
   historyRow: {
     flexDirection: 'row',
     alignItems: 'center',
-    backgroundColor: '#FEE2E222',
     paddingHorizontal: 8,
     paddingVertical: 4,
     borderRadius: 6,
@@ -602,7 +598,8 @@ const styles = StyleSheet.create({
     borderTopWidth: StyleSheet.hairlineWidth,
     borderTopColor: '#E2E8F044',
   },
-  updatedText: { fontSize: 11 },
+  syncWrap: { flexDirection: 'row', alignItems: 'center' },
+  updatedText: { fontSize: 11, fontWeight: '500' },
   viewDetailBtn: { flexDirection: 'row', alignItems: 'center' },
-  viewDetailText: { fontSize: 12, fontWeight: '600', color: Colors.primary, marginRight: 2 },
+  viewDetailText: { fontSize: 12, fontWeight: '700', color: Colors.primary, marginRight: 2 },
 });

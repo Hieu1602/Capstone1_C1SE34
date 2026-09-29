@@ -372,7 +372,7 @@ const styles = StyleSheet.create({
   daysFilterRow: { flexDirection: 'row', gap: 8 },
   dayChip: { paddingHorizontal: 14, paddingVertical: 6, borderRadius: 20 },
   dayChipText: { fontSize: 12 },
-  scrollContent: { padding: 16, paddingBottom: 80 },
+  scrollContent: { padding: 16, paddingBottom: 95 },
   patientBanner: {
     flexDirection: 'row',
     alignItems: 'center',

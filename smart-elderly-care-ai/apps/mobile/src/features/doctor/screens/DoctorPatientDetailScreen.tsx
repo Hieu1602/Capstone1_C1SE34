@@ -1,5 +1,6 @@
 // DoctorPatientDetailScreen.tsx
 // Chi tiết hồ sơ bệnh nhân, quản lý phác đồ điều trị, danh mục bệnh lý, dị ứng, dinh dưỡng & kê đơn thuốc cho Bác sĩ
+// Thiết kế chuẩn chỉnh giao diện y tế cao cấp, không bể layout, hỗ trợ chỉnh sửa toàn diện mọi mục
 
 import React, { useState, useEffect, useCallback } from 'react';
 import {
@@ -61,7 +62,7 @@ export default function DoctorPatientDetailScreen() {
   const [prescriptions, setPrescriptions] = useState<PrescriptionItem[]>([]);
 
   // ---------------------------------------------------------------------------
-  // 1. MODAL: SỬA GHI CHÚ & LỊCH TÁI KHÁM
+  // 1. MODAL: SỬA GHI CHÚ BÁC SĨ & LỊCH TÁI KHÁM
   // ---------------------------------------------------------------------------
   const [modalNotesVisible, setModalNotesVisible] = useState(false);
   const [editNotes, setEditNotes] = useState('');
@@ -209,14 +210,12 @@ export default function DoctorPatientDetailScreen() {
 
       let updatedConditions: ConditionItem[];
       if (editingConditionId) {
-        // Chỉnh sửa bệnh hiện tại
         updatedConditions = currentConditions.map((item) =>
           item.id === editingConditionId
             ? { ...item, name: condName.trim(), severity: condSeverity, note: condNote.trim() }
             : item
         );
       } else {
-        // Thêm bệnh mới
         const newCondition: ConditionItem = {
           id: `c-${Date.now()}`,
           name: condName.trim(),
@@ -360,7 +359,6 @@ export default function DoctorPatientDetailScreen() {
       };
 
       if (editingRxId) {
-        // Cập nhật đơn thuốc
         const res = await doctorApi.updatePrescription(patientId, editingRxId, payload);
         if (res.data) {
           setPrescriptions((prev) =>
@@ -370,7 +368,6 @@ export default function DoctorPatientDetailScreen() {
         setModalPrescribeVisible(false);
         Alert.alert('Thành công', `Đã cập nhật đơn thuốc "${payload.medication_name}".`);
       } else {
-        // Kê đơn thuốc mới
         const res = await doctorApi.createPrescription(patientId, payload);
         if (res.data) {
           setPrescriptions([res.data, ...prescriptions]);
@@ -416,7 +413,6 @@ export default function DoctorPatientDetailScreen() {
         );
       }
     } catch {
-      // Toggle local fallback
       setPrescriptions((prev) =>
         prev.map((r) => (r.id === rxId ? { ...r, enable_speaker_reminder: !r.enable_speaker_reminder } : r))
       );
@@ -440,7 +436,7 @@ export default function DoctorPatientDetailScreen() {
     }
   };
 
-  // Trích xuất chữ cái đại diện chuẩn cho Avatar (Tên gọi chính của cụ, ví dụ "Cụ Nguyễn Văn An" -> "A")
+  // Trích xuất chữ cái đại diện chuẩn cho Avatar (Tên gọi chính của cụ: "Cụ Nguyễn Văn An" -> "A")
   const patientName = detail?.name || 'Cụ Nguyễn Văn An';
   const nameParts = patientName.trim().split(/\s+/);
   const initialLetter = nameParts[nameParts.length - 1]?.[0]?.toUpperCase() || 'A';
@@ -491,17 +487,19 @@ export default function DoctorPatientDetailScreen() {
             <View style={styles.avatarBig}>
               <Text style={styles.avatarBigText}>{initialLetter}</Text>
             </View>
-            <View style={{ flex: 1, marginLeft: 14 }}>
-              <View style={{ flexDirection: 'row', alignItems: 'center', flexWrap: 'wrap' }}>
-                <Text style={[styles.heroName, { color: colors.textPrimary }]}>{patientName}</Text>
+            <View style={{ flex: 1, marginLeft: 12 }}>
+              <View style={styles.heroNameRow}>
+                <Text style={[styles.heroName, { color: colors.textPrimary }]} numberOfLines={1}>
+                  {patientName}
+                </Text>
                 <View style={styles.badgeAge}>
                   <Text style={styles.badgeAgeText}>{detail?.age || 78} tuổi</Text>
                 </View>
               </View>
-              <Text style={[styles.heroSub, { color: isDarkMode ? '#94A3B8' : '#64748B' }]}>
+              <Text style={[styles.heroSub, { color: isDarkMode ? '#94A3B8' : '#64748B' }]} numberOfLines={1}>
                 Giới tính: {detail?.gender || 'Nam'} • Nhóm máu: {detail?.blood_type || 'O+'} • BMI: {detail?.bmi || 22.8}
               </Text>
-              <Text style={[styles.heroAddress, { color: isDarkMode ? '#CBD5E1' : '#475569' }]}>
+              <Text style={[styles.heroAddress, { color: isDarkMode ? '#CBD5E1' : '#475569' }]} numberOfLines={1}>
                 📍 {detail?.house_name || 'Nhà của tôi'} • {detail?.house_address || '123 Hải Phòng, Đà Nẵng'}
               </Text>
             </View>
@@ -510,13 +508,13 @@ export default function DoctorPatientDetailScreen() {
           {/* DẢI 4 SINH HIỆU TỨC THỜI */}
           <View style={styles.metricsBar}>
             <View style={styles.metricItem}>
-              <Text style={[styles.metricVal, { color: '#EF4444' }]}>{detail?.heart_rate || 76}</Text>
-              <Text style={styles.metricLabel}>Nhịp tim (bpm)</Text>
+              <Text style={[styles.metricVal, { color: '#EF4444' }]}>{detail?.heart_rate || 76} <Text style={styles.metricUnit}>bpm</Text></Text>
+              <Text style={styles.metricLabel}>Nhịp tim</Text>
             </View>
             <View style={styles.metricDivider} />
             <View style={styles.metricItem}>
-              <Text style={[styles.metricVal, { color: '#0284C7' }]}>{detail?.spo2 || 98}%</Text>
-              <Text style={styles.metricLabel}>SpO₂ máu</Text>
+              <Text style={[styles.metricVal, { color: '#0284C7' }]}>{detail?.spo2 || 98}<Text style={styles.metricUnit}>%</Text></Text>
+              <Text style={styles.metricLabel}>SpO₂</Text>
             </View>
             <View style={styles.metricDivider} />
             <View style={styles.metricItem}>
@@ -525,23 +523,19 @@ export default function DoctorPatientDetailScreen() {
             </View>
             <View style={styles.metricDivider} />
             <View style={styles.metricItem}>
-              <Text style={[styles.metricVal, { color: '#F59E0B' }]}>{detail?.skin_temp_max || 36.6}°C</Text>
-              <Text style={styles.metricLabel}>Nhiệt độ da</Text>
+              <Text style={[styles.metricVal, { color: '#F59E0B' }]}>{detail?.skin_temp_max || 36.6}<Text style={styles.metricUnit}>°C</Text></Text>
+              <Text style={styles.metricLabel}>Nhiệt độ</Text>
             </View>
           </View>
         </View>
 
-        {/* THANH 3 TAB CHỨC NĂNG */}
+        {/* THANH 3 TAB CHỨC NĂNG (CHUẨN CHỈNH, KHÔNG BỂ CHỮ TRÊN MỌI MÀN HÌNH) */}
         <View style={[styles.segmentContainer, { backgroundColor: isDarkMode ? '#1E293B' : '#EEF2F6' }]}>
           <TouchableOpacity
             style={[styles.segmentBtn, activeTab === 'RECORD' && styles.segmentBtnActive]}
             onPress={() => setActiveTab('RECORD')}
+            activeOpacity={0.8}
           >
-            <Ionicons
-              name="document-text-outline"
-              size={16}
-              color={activeTab === 'RECORD' ? Colors.primary : isDarkMode ? '#94A3B8' : '#64748B'}
-            />
             <Text
               style={[
                 styles.segmentText,
@@ -549,20 +543,17 @@ export default function DoctorPatientDetailScreen() {
                   ? { color: Colors.primary, fontWeight: '700' }
                   : { color: isDarkMode ? '#94A3B8' : '#64748B' },
               ]}
+              numberOfLines={1}
             >
-              Bệnh án & Tiền sử
+              Bệnh án
             </Text>
           </TouchableOpacity>
 
           <TouchableOpacity
             style={[styles.segmentBtn, activeTab === 'PRESCRIPTIONS' && styles.segmentBtnActive]}
             onPress={() => setActiveTab('PRESCRIPTIONS')}
+            activeOpacity={0.8}
           >
-            <Ionicons
-              name="medkit-outline"
-              size={16}
-              color={activeTab === 'PRESCRIPTIONS' ? Colors.primary : isDarkMode ? '#94A3B8' : '#64748B'}
-            />
             <Text
               style={[
                 styles.segmentText,
@@ -570,6 +561,7 @@ export default function DoctorPatientDetailScreen() {
                   ? { color: Colors.primary, fontWeight: '700' }
                   : { color: isDarkMode ? '#94A3B8' : '#64748B' },
               ]}
+              numberOfLines={1}
             >
               Đơn thuốc ({prescriptions.length})
             </Text>
@@ -578,12 +570,8 @@ export default function DoctorPatientDetailScreen() {
           <TouchableOpacity
             style={[styles.segmentBtn, activeTab === 'VITALS' && styles.segmentBtnActive]}
             onPress={() => setActiveTab('VITALS')}
+            activeOpacity={0.8}
           >
-            <Ionicons
-              name="pulse-outline"
-              size={16}
-              color={activeTab === 'VITALS' ? Colors.primary : isDarkMode ? '#94A3B8' : '#64748B'}
-            />
             <Text
               style={[
                 styles.segmentText,
@@ -591,8 +579,9 @@ export default function DoctorPatientDetailScreen() {
                   ? { color: Colors.primary, fontWeight: '700' }
                   : { color: isDarkMode ? '#94A3B8' : '#64748B' },
               ]}
+              numberOfLines={1}
             >
-              Ngưỡng & Đồ thị
+              Sinh hiệu & Ngưỡng
             </Text>
           </TouchableOpacity>
         </View>
@@ -622,11 +611,15 @@ export default function DoctorPatientDetailScreen() {
                   <Text style={styles.btnActionSmallText}>Chỉnh sửa</Text>
                 </TouchableOpacity>
               </View>
-              <Text style={[styles.notesBody, { color: isDarkMode ? '#CBD5E1' : '#334155' }]}>
-                {detail?.doctor_notes || 'Bệnh nhân ổn định, đáp ứng tốt với thuốc huyết áp. Cần duy trì uống thuốc đúng giờ.'}
-              </Text>
+
+              <View style={[styles.notesQuoteBox, { borderLeftColor: Colors.primary }]}>
+                <Text style={[styles.notesBody, { color: isDarkMode ? '#CBD5E1' : '#334155' }]}>
+                  "{detail?.doctor_notes || 'Bệnh nhân ổn định, đáp ứng tốt với thuốc huyết áp. Cần duy trì uống thuốc đúng giờ.'}"
+                </Text>
+              </View>
+
               <View style={styles.appointmentBadge}>
-                <Ionicons name="calendar-outline" size={14} color="#0284C7" />
+                <Ionicons name="calendar-outline" size={15} color="#0284C7" />
                 <Text style={styles.appointmentText}>
                   Tái khám định kỳ: {detail?.next_appointment || '15/10/2026 - 08:30'}
                 </Text>
@@ -664,10 +657,10 @@ export default function DoctorPatientDetailScreen() {
                 detail.conditions.map((c: ConditionItem) => {
                   const isDanger = c.severity === 'danger';
                   const isWarn = c.severity === 'warning';
-                  const dotColor = isDanger ? '#EF4444' : isWarn ? '#F59E0B' : '#0284C7';
                   const badgeBg = isDanger ? '#FEE2E2' : isWarn ? '#FEF3C7' : '#E0F2FE';
                   const badgeTextColor = isDanger ? '#DC2626' : isWarn ? '#D97706' : '#0369A1';
-                  const badgeLabel = isDanger ? 'Nguy cơ cao' : isWarn ? 'Theo dõi' : 'Ổn định';
+                  const badgeLabel = isDanger ? 'Nguy cơ cao' : isWarn ? 'Cần theo dõi' : 'Ổn định';
+                  const borderColor = isDanger ? '#EF444444' : isWarn ? '#F59E0B44' : '#0284C744';
 
                   return (
                     <View
@@ -676,47 +669,47 @@ export default function DoctorPatientDetailScreen() {
                         styles.conditionCardItem,
                         {
                           backgroundColor: isDarkMode ? '#0F172A' : '#F8FAFC',
-                          borderColor: isDarkMode ? '#334155' : '#E2E8F0',
+                          borderColor: isDarkMode ? '#334155' : borderColor,
                         },
                       ]}
                     >
-                      <View style={{ flexDirection: 'row', alignItems: 'flex-start', flex: 1 }}>
-                        <View style={[styles.conditionDot, { backgroundColor: dotColor, marginTop: 4 }]} />
-                        <View style={{ flex: 1, marginLeft: 10 }}>
-                          <View style={{ flexDirection: 'row', alignItems: 'center', flexWrap: 'wrap' }}>
-                            <Text style={[styles.conditionName, { color: colors.textPrimary }]}>{c.name}</Text>
-                            <View style={[styles.severityPill, { backgroundColor: badgeBg }]}>
-                              <Text style={[styles.severityPillText, { color: badgeTextColor }]}>{badgeLabel}</Text>
-                            </View>
-                          </View>
-                          <Text style={[styles.conditionNote, { color: isDarkMode ? '#94A3B8' : '#64748B' }]}>
-                            {c.note}
-                          </Text>
+                      {/* Dòng trên: Huy hiệu mức độ & Nút Sửa / Xóa */}
+                      <View style={styles.conditionCardTop}>
+                        <View style={[styles.severityPill, { backgroundColor: badgeBg }]}>
+                          <Text style={[styles.severityPillText, { color: badgeTextColor }]}>{badgeLabel}</Text>
+                        </View>
+                        <View style={styles.conditionActionRow}>
+                          <TouchableOpacity
+                            style={styles.iconActionBtn}
+                            onPress={() => handleOpenEditCondition(c)}
+                          >
+                            <Ionicons name="pencil" size={14} color="#0284C7" />
+                          </TouchableOpacity>
+                          <TouchableOpacity
+                            style={[styles.iconActionBtn, { marginLeft: 6 }]}
+                            onPress={() => handleDeleteCondition(c.id, c.name)}
+                          >
+                            <Ionicons name="trash-outline" size={14} color="#EF4444" />
+                          </TouchableOpacity>
                         </View>
                       </View>
 
-                      {/* Các nút sửa / xóa từng bệnh lý */}
-                      <View style={styles.conditionActionCol}>
-                        <TouchableOpacity
-                          style={styles.iconCircleBtn}
-                          onPress={() => handleOpenEditCondition(c)}
-                        >
-                          <Ionicons name="create-outline" size={16} color="#0284C7" />
-                        </TouchableOpacity>
-                        <TouchableOpacity
-                          style={[styles.iconCircleBtn, { marginTop: 6 }]}
-                          onPress={() => handleDeleteCondition(c.id, c.name)}
-                        >
-                          <Ionicons name="trash-outline" size={16} color="#EF4444" />
-                        </TouchableOpacity>
-                      </View>
+                      {/* Tiêu đề chẩn đoán */}
+                      <Text style={[styles.conditionName, { color: colors.textPrimary }]}>{c.name}</Text>
+
+                      {/* Lời dặn / Ghi chú lâm sàng */}
+                      {c.note ? (
+                        <Text style={[styles.conditionNote, { color: isDarkMode ? '#94A3B8' : '#64748B' }]}>
+                          {c.note}
+                        </Text>
+                      ) : null}
                     </View>
                   );
                 })
               )}
             </View>
 
-            {/* PHẦN 3: DỊ ỨNG & DINH DƯỠNG KHUYẾN NGHỊ (CÓ NÚT CHỈNH SỬA) */}
+            {/* PHẦN 3: DỊ ỨNG & DINH DƯỠNG KHUYẾN NGHỊ (THẺ ĐỘC LẬP TOÀN CHIỀU RỘNG, KHÔNG SƠ BÉ) */}
             <View
               style={[
                 styles.sectionBox,
@@ -739,33 +732,36 @@ export default function DoctorPatientDetailScreen() {
                 </TouchableOpacity>
               </View>
 
-              <View style={styles.infoRow}>
-                <View style={styles.infoLabelWrap}>
-                  <Ionicons name="warning" size={14} color="#EF4444" style={{ marginRight: 4 }} />
-                  <Text style={styles.infoLabel}>Dị ứng thuốc:</Text>
+              {/* Thẻ Dị ứng thuốc */}
+              <View style={[styles.dietSubCard, { backgroundColor: isDarkMode ? '#450A0A33' : '#FEF2F2', borderColor: '#FCA5A5' }]}>
+                <View style={styles.dietSubHeader}>
+                  <Ionicons name="warning" size={16} color="#DC2626" style={{ marginRight: 6 }} />
+                  <Text style={[styles.dietSubTitle, { color: '#DC2626' }]}>Dị ứng thuốc y tế</Text>
                 </View>
-                <Text style={[styles.infoVal, { color: '#EF4444', fontWeight: '700' }]}>
-                  {detail?.drug_allergies || 'Penicillin (dị ứng nổi mề đay)'}
+                <Text style={[styles.dietSubContent, { color: isDarkMode ? '#FCA5A5' : '#991B1B' }]}>
+                  {detail?.drug_allergies || 'Không có dị ứng thuốc đã ghi nhận.'}
                 </Text>
               </View>
 
-              <View style={styles.infoRow}>
-                <View style={styles.infoLabelWrap}>
-                  <Ionicons name="fish" size={14} color="#F59E0B" style={{ marginRight: 4 }} />
-                  <Text style={styles.infoLabel}>Dị ứng đồ ăn:</Text>
+              {/* Thẻ Dị ứng đồ ăn */}
+              <View style={[styles.dietSubCard, { backgroundColor: isDarkMode ? '#451A0333' : '#FFFBEB', borderColor: '#FCD34D', marginTop: 10 }]}>
+                <View style={styles.dietSubHeader}>
+                  <Ionicons name="restaurant" size={16} color="#D97706" style={{ marginRight: 6 }} />
+                  <Text style={[styles.dietSubTitle, { color: '#D97706' }]}>Dị ứng thực phẩm / đồ ăn</Text>
                 </View>
-                <Text style={[styles.infoVal, { color: isDarkMode ? '#CBD5E1' : '#334155' }]}>
-                  {detail?.food_allergies || 'Hải sản có vỏ (tôm, cua)'}
+                <Text style={[styles.dietSubContent, { color: isDarkMode ? '#FDE68A' : '#92400E' }]}>
+                  {detail?.food_allergies || 'Không có dị ứng thực phẩm ghi nhận.'}
                 </Text>
               </View>
 
-              <View style={styles.infoRow}>
-                <View style={styles.infoLabelWrap}>
-                  <Ionicons name="leaf" size={14} color="#10B981" style={{ marginRight: 4 }} />
-                  <Text style={styles.infoLabel}>Chế độ ăn:</Text>
+              {/* Thẻ Chế độ ăn uống */}
+              <View style={[styles.dietSubCard, { backgroundColor: isDarkMode ? '#064E3B33' : '#ECFDF5', borderColor: '#6EE7B7', marginTop: 10 }]}>
+                <View style={styles.dietSubHeader}>
+                  <Ionicons name="leaf" size={16} color="#059669" style={{ marginRight: 6 }} />
+                  <Text style={[styles.dietSubTitle, { color: '#059669' }]}>Chế độ ăn khuyến nghị</Text>
                 </View>
-                <Text style={[styles.infoVal, { color: isDarkMode ? '#CBD5E1' : '#334155' }]}>
-                  {detail?.dietary_notes || 'Ăn nhạt, giảm muối < 3g/ngày, bổ sung Canxi + D3'}
+                <Text style={[styles.dietSubContent, { color: isDarkMode ? '#A7F3D0' : '#065F46' }]}>
+                  {detail?.dietary_notes || 'Ăn uống bình thường, đảm bảo dinh dưỡng đầy đủ.'}
                 </Text>
               </View>
             </View>
@@ -803,12 +799,12 @@ export default function DoctorPatientDetailScreen() {
                   ]}
                 >
                   <View style={styles.rxHeader}>
-                    <View style={{ flex: 1 }}>
+                    <View style={{ flex: 1, marginRight: 8 }}>
                       <Text style={[styles.rxMedName, { color: colors.textPrimary }]}>
                         💊 {rx.medication_name}
                       </Text>
                       <Text style={[styles.rxDosage, { color: isDarkMode ? '#94A3B8' : '#64748B' }]}>
-                        Liều lượng: {rx.dosage} • {rx.frequency}
+                        {rx.dosage} • {rx.frequency}
                       </Text>
                     </View>
 
@@ -834,7 +830,7 @@ export default function DoctorPatientDetailScreen() {
                           { color: rx.enable_speaker_reminder ? '#059669' : '#64748B' },
                         ]}
                       >
-                        {rx.enable_speaker_reminder ? 'Loa Hub: BẬT' : 'Loa Hub: TẮT'}
+                        {rx.enable_speaker_reminder ? 'Loa: BẬT' : 'Loa: TẮT'}
                       </Text>
                     </TouchableOpacity>
                   </View>
@@ -860,7 +856,7 @@ export default function DoctorPatientDetailScreen() {
                   {/* Hàng nút hành động: Chỉnh sửa & Xóa */}
                   <View style={styles.rxActionRow}>
                     <Text style={[styles.rxDoctorCredit, { color: isDarkMode ? '#64748B' : '#94A3B8' }]}>
-                      Kê bởi: {rx.doctor_name || 'BS. Trần Văn Minh'}
+                      BS: {rx.doctor_name || 'BS. Trần Văn Minh'}
                     </Text>
                     <View style={{ flexDirection: 'row', gap: 8 }}>
                       <TouchableOpacity
@@ -929,7 +925,7 @@ export default function DoctorPatientDetailScreen() {
             <TouchableOpacity
               style={styles.btnOpenAnalytics}
               activeOpacity={0.88}
-              onPress={() => navigation.navigate('DoctorAnalyticsReport', { patientId })}
+              onPress={() => navigation.navigate('DoctorAnalytics', { patientId })}
             >
               <Ionicons name="bar-chart" size={18} color="#FFFFFF" style={{ marginRight: 6 }} />
               <Text style={styles.btnOpenAnalyticsText}>Xem Phân tích Đồ thị 7-30 ngày & Xuất Báo cáo</Text>
@@ -1210,7 +1206,7 @@ export default function DoctorPatientDetailScreen() {
             />
 
             <View style={styles.switchRow}>
-              <View style={{ flex: 1 }}>
+              <View style={{ flex: 1, marginRight: 8 }}>
                 <Text style={[styles.switchTitle, { color: colors.textPrimary }]}>
                   Phát loa tiếng Việt trên Hub Orange Pi 5
                 </Text>
@@ -1303,7 +1299,7 @@ const styles = StyleSheet.create({
   backBtn: { padding: 4 },
   topTitle: { fontSize: 17, fontWeight: '700' },
   moreBtn: { padding: 4 },
-  scrollContent: { padding: 16, paddingBottom: 40 },
+  scrollContent: { padding: 16, paddingBottom: 90 },
 
   heroCard: {
     borderRadius: 16,
@@ -1318,18 +1314,19 @@ const styles = StyleSheet.create({
   },
   heroRow: { flexDirection: 'row', alignItems: 'center' },
   avatarBig: {
-    width: 56,
-    height: 56,
-    borderRadius: 28,
-    backgroundColor: '#3B82F6',
+    width: 52,
+    height: 52,
+    borderRadius: 26,
+    backgroundColor: '#0284C7',
     justifyContent: 'center',
     alignItems: 'center',
   },
-  avatarBigText: { color: '#FFFFFF', fontSize: 24, fontWeight: '800' },
-  heroName: { fontSize: 18, fontWeight: '800', marginRight: 8 },
+  avatarBigText: { color: '#FFFFFF', fontSize: 22, fontWeight: '800' },
+  heroNameRow: { flexDirection: 'row', alignItems: 'center', flexWrap: 'wrap' },
+  heroName: { fontSize: 17, fontWeight: '800', marginRight: 8 },
   badgeAge: {
     backgroundColor: '#EFF6FF',
-    paddingHorizontal: 8,
+    paddingHorizontal: 7,
     paddingVertical: 2,
     borderRadius: 6,
   },
@@ -1341,15 +1338,16 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     justifyContent: 'space-between',
     alignItems: 'center',
-    marginTop: 16,
+    marginTop: 14,
     paddingTop: 12,
     borderTopWidth: StyleSheet.hairlineWidth,
     borderTopColor: '#E2E8F0',
   },
   metricItem: { flex: 1, alignItems: 'center' },
-  metricVal: { fontSize: 16, fontWeight: '800' },
-  metricLabel: { fontSize: 10, color: '#94A3B8', marginTop: 2 },
-  metricDivider: { width: 1, height: 24, backgroundColor: '#E2E8F0' },
+  metricVal: { fontSize: 15, fontWeight: '800' },
+  metricUnit: { fontSize: 10, fontWeight: '500' },
+  metricLabel: { fontSize: 10, color: '#94A3B8', marginTop: 2, textAlign: 'center' },
+  metricDivider: { width: 1, height: 22, backgroundColor: '#E2E8F0' },
 
   segmentContainer: {
     flexDirection: 'row',
@@ -1359,12 +1357,11 @@ const styles = StyleSheet.create({
   },
   segmentBtn: {
     flex: 1,
-    flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'center',
     paddingVertical: 9,
+    paddingHorizontal: 4,
     borderRadius: 10,
-    gap: 5,
   },
   segmentBtnActive: {
     backgroundColor: '#FFFFFF',
@@ -1373,7 +1370,7 @@ const styles = StyleSheet.create({
     shadowRadius: 4,
     elevation: 2,
   },
-  segmentText: { fontSize: 12, fontWeight: '600' },
+  segmentText: { fontSize: 11.5, textAlign: 'center' },
 
   sectionBox: {
     borderRadius: 14,
@@ -1395,16 +1392,21 @@ const styles = StyleSheet.create({
   btnActionSmall: {
     flexDirection: 'row',
     alignItems: 'center',
-    paddingHorizontal: 8,
-    paddingVertical: 4,
-    borderRadius: 6,
+    paddingHorizontal: 9,
+    paddingVertical: 5,
+    borderRadius: 7,
     borderWidth: 1,
     borderColor: '#3B82F633',
     backgroundColor: '#EFF6FF55',
   },
   btnActionSmallText: { fontSize: 12, color: Colors.primary, fontWeight: '700' },
 
-  notesBody: { fontSize: 14, lineHeight: 21, marginBottom: 12 },
+  notesQuoteBox: {
+    borderLeftWidth: 3,
+    paddingLeft: 12,
+    marginVertical: 4,
+  },
+  notesBody: { fontSize: 14, lineHeight: 21, fontStyle: 'italic' },
   appointmentBadge: {
     flexDirection: 'row',
     alignItems: 'center',
@@ -1413,6 +1415,7 @@ const styles = StyleSheet.create({
     paddingVertical: 6,
     borderRadius: 8,
     alignSelf: 'flex-start',
+    marginTop: 10,
     gap: 6,
   },
   appointmentText: { fontSize: 12, color: '#0369A1', fontWeight: '700' },
@@ -1420,21 +1423,21 @@ const styles = StyleSheet.create({
   emptyHintText: { fontSize: 13, fontStyle: 'italic', marginVertical: 8 },
 
   conditionCardItem: {
+    borderRadius: 12,
+    borderWidth: 1,
+    padding: 12,
+    marginBottom: 10,
+  },
+  conditionCardTop: {
     flexDirection: 'row',
     justifyContent: 'space-between',
     alignItems: 'center',
-    padding: 12,
-    borderRadius: 10,
-    borderWidth: 1,
-    marginBottom: 8,
+    marginBottom: 6,
   },
-  conditionDot: { width: 8, height: 8, borderRadius: 4 },
-  conditionName: { fontSize: 14, fontWeight: '700', marginRight: 6 },
-  conditionNote: { fontSize: 12, marginTop: 3, lineHeight: 18 },
-  severityPill: { paddingHorizontal: 6, paddingVertical: 2, borderRadius: 4 },
+  severityPill: { paddingHorizontal: 7, paddingVertical: 3, borderRadius: 5 },
   severityPillText: { fontSize: 10, fontWeight: '700' },
-  conditionActionCol: { flexDirection: 'row', gap: 6, marginLeft: 8 },
-  iconCircleBtn: {
+  conditionActionRow: { flexDirection: 'row' },
+  iconActionBtn: {
     width: 28,
     height: 28,
     borderRadius: 14,
@@ -1444,17 +1447,22 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
     alignItems: 'center',
   },
+  conditionName: { fontSize: 14, fontWeight: '700', marginBottom: 2 },
+  conditionNote: { fontSize: 12, lineHeight: 18 },
+  conditionDot: { width: 8, height: 8, borderRadius: 4 },
 
-  infoRow: {
-    flexDirection: 'row',
-    alignItems: 'flex-start',
-    paddingVertical: 7,
-    borderBottomWidth: StyleSheet.hairlineWidth,
-    borderBottomColor: '#E2E8F044',
+  dietSubCard: {
+    borderRadius: 10,
+    borderWidth: 1,
+    padding: 12,
   },
-  infoLabelWrap: { flexDirection: 'row', alignItems: 'center', width: 120 },
-  infoLabel: { fontSize: 13, color: '#64748B', fontWeight: '600' },
-  infoVal: { fontSize: 13, flex: 1 },
+  dietSubHeader: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    marginBottom: 4,
+  },
+  dietSubTitle: { fontSize: 12, fontWeight: '700' },
+  dietSubContent: { fontSize: 13, lineHeight: 19, fontWeight: '500' },
 
   btnPrescribeNew: {
     flexDirection: 'row',
