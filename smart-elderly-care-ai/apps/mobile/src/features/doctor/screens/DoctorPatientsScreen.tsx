@@ -438,9 +438,21 @@ export default function DoctorPatientsScreen() {
                       BLE Hub • {patient.last_updated}
                     </Text>
                   </View>
-                  <View style={styles.viewDetailBtn}>
-                    <Text style={styles.viewDetailText}>Xem bệnh án & Kê đơn</Text>
-                    <Ionicons name="chevron-forward" size={14} color={Colors.primary} />
+                  <View style={styles.footerActionGroup}>
+                    <TouchableOpacity
+                      style={[styles.btnMiniReport, { backgroundColor: isDarkMode ? '#334155' : '#E0F2FE' }]}
+                      onPress={(e) => {
+                        e.stopPropagation();
+                        navigation.navigate('DoctorAnalytics', { patientId: patient.id });
+                      }}
+                    >
+                      <Ionicons name="bar-chart-outline" size={13} color="#0284C7" style={{ marginRight: 4 }} />
+                      <Text style={styles.btnMiniReportText}>Báo cáo</Text>
+                    </TouchableOpacity>
+                    <View style={styles.viewDetailBtn}>
+                      <Text style={styles.viewDetailText}>Bệnh án</Text>
+                      <Ionicons name="chevron-forward" size={14} color={Colors.primary} />
+                    </View>
                   </View>
                 </View>
               </TouchableOpacity>
@@ -600,6 +612,15 @@ const styles = StyleSheet.create({
   },
   syncWrap: { flexDirection: 'row', alignItems: 'center' },
   updatedText: { fontSize: 11, fontWeight: '500' },
+  footerActionGroup: { flexDirection: 'row', alignItems: 'center', gap: 8 },
+  btnMiniReport: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    paddingHorizontal: 8,
+    paddingVertical: 4,
+    borderRadius: 6,
+  },
+  btnMiniReportText: { fontSize: 11.5, fontWeight: '700', color: '#0284C7' },
   viewDetailBtn: { flexDirection: 'row', alignItems: 'center' },
   viewDetailText: { fontSize: 12, fontWeight: '700', color: Colors.primary, marginRight: 2 },
 });

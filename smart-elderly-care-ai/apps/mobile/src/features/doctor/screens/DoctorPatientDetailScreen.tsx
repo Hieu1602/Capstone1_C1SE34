@@ -527,6 +527,17 @@ export default function DoctorPatientDetailScreen() {
               <Text style={styles.metricLabel}>Nhiệt độ</Text>
             </View>
           </View>
+
+          {/* NÚT XEM BÁO CÁO Y KHOA TRỰC TIẾP */}
+          <TouchableOpacity
+            style={[styles.heroReportBtn, { backgroundColor: isDarkMode ? '#0284C722' : '#E0F2FE' }]}
+            activeOpacity={0.85}
+            onPress={() => navigation.navigate('DoctorAnalytics', { patientId })}
+          >
+            <Ionicons name="bar-chart" size={15} color="#0284C7" style={{ marginRight: 6 }} />
+            <Text style={styles.heroReportBtnText}>Xem Báo Cáo Sinh Hiệu & Xuất File (PDF/Excel)</Text>
+            <Ionicons name="chevron-forward" size={14} color="#0284C7" />
+          </TouchableOpacity>
         </View>
 
         {/* THANH 3 TAB CHỨC NĂNG (CHUẨN CHỈNH, KHÔNG BỂ CHỮ TRÊN MỌI MÀN HÌNH) */}
@@ -1348,6 +1359,21 @@ const styles = StyleSheet.create({
   metricUnit: { fontSize: 10, fontWeight: '500' },
   metricLabel: { fontSize: 10, color: '#94A3B8', marginTop: 2, textAlign: 'center' },
   metricDivider: { width: 1, height: 22, backgroundColor: '#E2E8F0' },
+  heroReportBtn: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    paddingVertical: 9,
+    paddingHorizontal: 12,
+    borderRadius: 8,
+    marginTop: 12,
+  },
+  heroReportBtnText: {
+    fontSize: 12.5,
+    fontWeight: '700',
+    color: '#0284C7',
+    marginRight: 4,
+  },
 
   segmentContainer: {
     flexDirection: 'row',
