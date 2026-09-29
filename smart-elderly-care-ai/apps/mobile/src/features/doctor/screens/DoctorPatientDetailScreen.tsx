@@ -535,7 +535,7 @@ export default function DoctorPatientDetailScreen() {
             onPress={() => navigation.navigate('DoctorAnalytics', { patientId })}
           >
             <Ionicons name="bar-chart" size={15} color="#0284C7" style={{ marginRight: 6 }} />
-            <Text style={styles.heroReportBtnText}>Xem Báo Cáo Sinh Hiệu & Xuất File (PDF/Excel)</Text>
+            <Text style={styles.heroReportBtnText}>Xem Báo Cáo & Phân Tích Sinh Hiệu</Text>
             <Ionicons name="chevron-forward" size={14} color="#0284C7" />
           </TouchableOpacity>
         </View>

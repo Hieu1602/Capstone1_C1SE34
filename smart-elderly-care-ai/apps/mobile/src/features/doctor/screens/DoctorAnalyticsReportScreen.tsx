@@ -1,5 +1,5 @@
 // DoctorAnalyticsReportScreen.tsx
-// Phân tích đồ thị y khoa chuỗi thời gian, đánh giá sức khỏe AI & Xuất báo cáo PDF/Excel chuẩn y tế
+// Phân tích đồ thị y khoa chuỗi thời gian, đánh giá sức khỏe AI dành cho Bác sĩ
 // Hỗ trợ chọn bệnh nhân từ danh sách toàn bộ người cao tuổi phụ trách
 
 import React, { useState, useEffect, useCallback, useMemo } from 'react';
@@ -10,12 +10,8 @@ import {
   ScrollView,
   TouchableOpacity,
   TextInput,
-  Alert,
   ActivityIndicator,
   StatusBar,
-  Linking,
-  Platform,
-  Modal,
 } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
@@ -126,13 +122,11 @@ export default function DoctorAnalyticsReportScreen() {
   const [searchQuery, setSearchQuery] = useState('');
   const [filterStatus, setFilterStatus] = useState<'ALL' | 'WARNING' | 'NORMAL'>('ALL');
 
-  // Cấu hình báo cáo
+  // Cấu hình phân tích báo cáo
   const [days, setDays] = useState<number>(7);
   const [chartMode, setChartMode] = useState<'HR' | 'SPO2' | 'STEPS'>('HR');
   const [loading, setLoading] = useState(false);
   const [analytics, setAnalytics] = useState<any>(null);
-  const [exportingType, setExportingType] = useState<'pdf' | 'excel' | null>(null);
-  const [previewModalVisible, setPreviewModalVisible] = useState(false);
 
   // 1. Tải danh sách bệnh nhân từ backend
   const loadPatients = useCallback(async () => {
@@ -196,28 +190,6 @@ export default function DoctorAnalyticsReportScreen() {
       fetchAnalytics();
     }
   }, [selectedPatient, fetchAnalytics]);
-
-  // Xử lý xuất file PDF / Excel
-  const handleExport = (type: 'pdf' | 'excel') => {
-    if (!selectedPatient) return;
-    setExportingType(type);
-    const backendBase = Platform.OS === 'android' ? 'http://10.0.2.2:8000' : 'http://127.0.0.1:8000';
-    const endpoint =
-      type === 'pdf'
-        ? `${backendBase}/api/v1/reports/${selectedPatient.deviceId}/pdf?days=${days}`
-        : `${backendBase}/api/v1/reports/${selectedPatient.deviceId}/excel?days=${days}`;
-
-    setTimeout(() => {
-      setExportingType(null);
-      if (Platform.OS === 'web') {
-        window.open(endpoint, '_blank');
-      } else {
-        Linking.openURL(endpoint).catch(() => {
-          Alert.alert('Thông báo', `Tải file báo cáo từ: ${endpoint}`);
-        });
-      }
-    }, 600);
-  };
 
   // Lọc danh sách bệnh nhân theo từ khóa và trạng thái
   const filteredPatients = useMemo(() => {
@@ -288,7 +260,7 @@ export default function DoctorAnalyticsReportScreen() {
           </View>
 
           <Text style={[styles.selectionGuideText, { color: isDarkMode ? '#CBD5E1' : '#475569' }]}>
-            👨‍⚕️ Nhấn vào bệnh nhân bên dưới để xem đồ thị diễn tiến và xuất tóm tắt y khoa:
+            👨‍⚕️ Nhấn vào bệnh nhân bên dưới để xem đồ thị phân tích sinh hiệu:
           </Text>
 
           {/* Ô tìm kiếm bệnh nhân */}
@@ -436,7 +408,7 @@ export default function DoctorAnalyticsReportScreen() {
                   <View style={styles.cardActionFooter}>
                     <View style={styles.actionPromptBtn}>
                       <Ionicons name="bar-chart-outline" size={15} color="#0284C7" style={{ marginRight: 6 }} />
-                      <Text style={styles.actionPromptBtnText}>Nhấn để xem báo cáo & xuất file</Text>
+                      <Text style={styles.actionPromptBtnText}>Nhấn để xem phân tích diễn tiến sinh hiệu</Text>
                       <Ionicons name="arrow-forward" size={14} color="#0284C7" style={{ marginLeft: 4 }} />
                     </View>
                   </View>
@@ -740,139 +712,7 @@ export default function DoctorAnalyticsReportScreen() {
             </View>
           ))}
         </View>
-
-        {/* KHU VỰC XUẤT BÁO CÁO Y KHOA CHUẨN */}
-        <View style={[styles.exportBox, { backgroundColor: isDarkMode ? '#1E293B' : '#FFFFFF', borderColor: colors.border }]}>
-          <View style={styles.exportHeader}>
-            <Ionicons name="document-attach" size={20} color={Colors.primary} style={{ marginRight: 6 }} />
-            <Text style={[styles.exportBoxTitle, { color: colors.textPrimary }]}>
-              Xuất Báo Cáo Y Khoa Cho {selectedPatient.name}
-            </Text>
-          </View>
-          <Text style={[styles.exportBoxDesc, { color: isDarkMode ? '#94A3B8' : '#64748B' }]}>
-            Tự động trích xuất chuỗi thời gian TimescaleDB, phác đồ điều trị và nhận định lâm sàng thành bản tóm tắt y khoa.
-          </Text>
-
-          {/* Nút Xem Trước Báo Cáo */}
-          <TouchableOpacity
-            style={styles.btnPreview}
-            onPress={() => setPreviewModalVisible(true)}
-            activeOpacity={0.85}
-          >
-            <Ionicons name="eye-outline" size={17} color="#0284C7" style={{ marginRight: 6 }} />
-            <Text style={styles.btnPreviewText}>Xem trước Tóm tắt Báo cáo Y khoa</Text>
-          </TouchableOpacity>
-
-          {/* 2 Nút Xuất PDF và Excel */}
-          <View style={styles.exportBtnRow}>
-            <TouchableOpacity
-              style={[styles.btnExport, { backgroundColor: '#DC2626' }]}
-              onPress={() => handleExport('pdf')}
-              disabled={exportingType !== null}
-            >
-              {exportingType === 'pdf' ? (
-                <ActivityIndicator color="#FFFFFF" size="small" />
-              ) : (
-                <>
-                  <Ionicons name="document-text" size={17} color="#FFFFFF" style={{ marginRight: 6 }} />
-                  <Text style={styles.btnExportText}>Tải Bản PDF</Text>
-                </>
-              )}
-            </TouchableOpacity>
-
-            <TouchableOpacity
-              style={[styles.btnExport, { backgroundColor: '#059669' }]}
-              onPress={() => handleExport('excel')}
-              disabled={exportingType !== null}
-            >
-              {exportingType === 'excel' ? (
-                <ActivityIndicator color="#FFFFFF" size="small" />
-              ) : (
-                <>
-                  <Ionicons name="grid-outline" size={17} color="#FFFFFF" style={{ marginRight: 6 }} />
-                  <Text style={styles.btnExportText}>Tải File Excel</Text>
-                </>
-              )}
-            </TouchableOpacity>
-          </View>
-        </View>
       </ScrollView>
-
-      {/* MODAL: XEM TRƯỚC BÁO CÁO Y KHOA */}
-      <Modal visible={previewModalVisible} animationType="slide" transparent>
-        <View style={styles.modalOverlay}>
-          <View style={[styles.modalBox, { backgroundColor: isDarkMode ? '#1E293B' : '#FFFFFF' }]}>
-            <View style={styles.modalHeader}>
-              <View style={{ flexDirection: 'row', alignItems: 'center' }}>
-                <Ionicons name="newspaper" size={20} color={Colors.primary} style={{ marginRight: 6 }} />
-                <Text style={[styles.modalTitle, { color: colors.textPrimary }]}>Bản Tóm Tắt Y Khoa</Text>
-              </View>
-              <TouchableOpacity onPress={() => setPreviewModalVisible(false)}>
-                <Ionicons name="close" size={24} color="#94A3B8" />
-              </TouchableOpacity>
-            </View>
-
-            <ScrollView showsVerticalScrollIndicator={false} style={{ marginVertical: 10 }}>
-              <View style={styles.docHospitalHeader}>
-                <Text style={styles.docHospitalName}>BỆNH VIỆN ĐA KHOA ĐÀ NẴNG</Text>
-                <Text style={styles.docSub}>KHOA TIM MẠCH & LÃO KHOA • HỆ THỐNG SMART ELDERLY CARE</Text>
-                <View style={styles.docDivider} />
-              </View>
-
-              <Text style={styles.docMainTitle}>BÁO CÁO THEO DÕI SỨC KHỎE NGƯỜI CAO TUỔI</Text>
-
-              <View style={styles.docMetaGrid}>
-                <Text style={styles.docMetaItem}><Text style={{ fontWeight: '700' }}>Bệnh nhân:</Text> {selectedPatient.name}</Text>
-                <Text style={styles.docMetaItem}><Text style={{ fontWeight: '700' }}>Tuổi / Giới:</Text> {selectedPatient.age} tuổi ({selectedPatient.gender})</Text>
-                <Text style={styles.docMetaItem}><Text style={{ fontWeight: '700' }}>Bác sĩ phụ trách:</Text> BS. Trần Văn Minh</Text>
-                <Text style={styles.docMetaItem}><Text style={{ fontWeight: '700' }}>Chu kỳ theo dõi:</Text> {days} ngày gần nhất</Text>
-              </View>
-
-              <Text style={styles.docSectionTitle}>1. Tiền sử & Bệnh lý nền chẩn đoán</Text>
-              <Text style={styles.docBodyText}>
-                {selectedPatient.condition}{'\n'}
-                - Huyết áp mục tiêu &lt; 140/90 mmHg{'\n'}
-                - Giám sát nguy cơ rung nhĩ, khó thở về đêm
-              </Text>
-
-              <Text style={styles.docSectionTitle}>2. Tổng hợp chỉ số sinh hiệu {days} ngày qua</Text>
-              <View style={styles.docTableBox}>
-                <Text style={styles.docTableCell}>• Nhịp tim trung bình: <Text style={{ fontWeight: '700' }}>{analytics?.avg_heart_rate || selectedPatient.heartRate || 75.6} bpm</Text> (60 - 98 bpm)</Text>
-                <Text style={styles.docTableCell}>• Nồng độ SpO₂ trung bình: <Text style={{ fontWeight: '700' }}>{analytics?.avg_spo2 || selectedPatient.spo2 || 97.8}%</Text> (Thấp nhất: 92%)</Text>
-                <Text style={styles.docTableCell}>• Huyết áp trung bình: <Text style={{ fontWeight: '700' }}>{selectedPatient.bloodPressure || '120/80 mmHg'}</Text></Text>
-                <Text style={styles.docTableCell}>• Nhiệt độ da trung bình: <Text style={{ fontWeight: '700' }}>36.6°C</Text></Text>
-                <Text style={styles.docTableCell}>• Sự kiện té ngã: <Text style={{ fontWeight: '700', color: '#059669' }}>0 lần (An toàn)</Text></Text>
-              </View>
-
-              <Text style={styles.docSectionTitle}>3. Kết luận lâm sàng & Dặn dò y khoa</Text>
-              <Text style={styles.docBodyText}>
-                Bệnh nhân tuân thủ dùng thuốc đều đặn. Sinh hiệu nằm trong ngưỡng an toàn cho phép. Tiếp tục duy trì phác đồ điều trị và đo huyết áp mỗi sáng. Tái khám định kỳ theo lịch hẹn.
-              </Text>
-            </ScrollView>
-
-            {/* Hàng nút modal */}
-            <View style={styles.modalBtnRow}>
-              <TouchableOpacity
-                style={[styles.btnCancel, { borderColor: colors.border }]}
-                onPress={() => setPreviewModalVisible(false)}
-              >
-                <Text style={{ fontSize: 13, fontWeight: '700', color: isDarkMode ? '#CBD5E1' : '#64748B' }}>Đóng</Text>
-              </TouchableOpacity>
-
-              <TouchableOpacity
-                style={[styles.btnSave, { backgroundColor: '#DC2626' }]}
-                onPress={() => {
-                  setPreviewModalVisible(false);
-                  handleExport('pdf');
-                }}
-              >
-                <Ionicons name="download-outline" size={16} color="#FFFFFF" style={{ marginRight: 4 }} />
-                <Text style={{ color: '#FFFFFF', fontSize: 13, fontWeight: '700' }}>Tải PDF Ngay</Text>
-              </TouchableOpacity>
-            </View>
-          </View>
-        </View>
-      </Modal>
     </View>
   );
 }
@@ -1235,109 +1075,4 @@ const styles = StyleSheet.create({
   tableColHeader: { fontSize: 11, fontWeight: '700', color: '#64748B' },
   tableRow: { flexDirection: 'row', paddingVertical: 8, alignItems: 'center' },
   tableCell: { fontSize: 11.5 },
-
-  exportBox: {
-    borderRadius: 14,
-    padding: 16,
-    borderWidth: 1,
-    marginBottom: 14,
-  },
-  exportHeader: { flexDirection: 'row', alignItems: 'center', marginBottom: 6 },
-  exportBoxTitle: { fontSize: 15, fontWeight: '800', flex: 1 },
-  exportBoxDesc: { fontSize: 12, lineHeight: 18, marginBottom: 12 },
-  btnPreview: {
-    flexDirection: 'row',
-    justifyContent: 'center',
-    alignItems: 'center',
-    paddingVertical: 10,
-    borderRadius: 10,
-    backgroundColor: '#E0F2FE',
-    borderWidth: 1,
-    borderColor: '#7DD3FC',
-    marginBottom: 10,
-  },
-  btnPreviewText: { fontSize: 13, fontWeight: '700', color: '#0284C7' },
-  exportBtnRow: { flexDirection: 'row', gap: 10 },
-  btnExport: {
-    flex: 1,
-    flexDirection: 'row',
-    justifyContent: 'center',
-    alignItems: 'center',
-    paddingVertical: 12,
-    borderRadius: 10,
-  },
-  btnExportText: { color: '#FFFFFF', fontSize: 13, fontWeight: '700' },
-
-  // Modal Preview
-  modalOverlay: {
-    flex: 1,
-    backgroundColor: 'rgba(0,0,0,0.6)',
-    justifyContent: 'center',
-    padding: 16,
-  },
-  modalBox: {
-    borderRadius: 16,
-    padding: 16,
-    maxHeight: '90%',
-  },
-  modalHeader: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    alignItems: 'center',
-    borderBottomWidth: StyleSheet.hairlineWidth,
-    borderBottomColor: '#CBD5E1',
-    paddingBottom: 10,
-  },
-  modalTitle: { fontSize: 16, fontWeight: '800' },
-  docHospitalHeader: { alignItems: 'center', marginTop: 10, marginBottom: 10 },
-  docHospitalName: { fontSize: 14, fontWeight: '900', color: '#0369A1', letterSpacing: 0.5 },
-  docSub: { fontSize: 9.5, color: '#64748B', marginTop: 2, textAlign: 'center' },
-  docDivider: { width: '80%', height: 1, backgroundColor: '#CBD5E1', marginTop: 8 },
-  docMainTitle: {
-    fontSize: 14,
-    fontWeight: '800',
-    color: '#0F172A',
-    textAlign: 'center',
-    marginVertical: 8,
-  },
-  docMetaGrid: {
-    backgroundColor: '#F8FAFC',
-    borderRadius: 8,
-    padding: 10,
-    marginBottom: 10,
-    gap: 4,
-  },
-  docMetaItem: { fontSize: 11.5, color: '#334155' },
-  docSectionTitle: { fontSize: 12.5, fontWeight: '800', color: '#0284C7', marginTop: 8, marginBottom: 4 },
-  docBodyText: { fontSize: 11.5, lineHeight: 18, color: '#475569' },
-  docTableBox: {
-    backgroundColor: '#F8FAFC',
-    borderRadius: 8,
-    padding: 8,
-    marginVertical: 4,
-    gap: 4,
-  },
-  docTableCell: { fontSize: 11.5, color: '#334155' },
-  modalBtnRow: {
-    flexDirection: 'row',
-    justifyContent: 'flex-end',
-    gap: 8,
-    marginTop: 12,
-    borderTopWidth: StyleSheet.hairlineWidth,
-    borderTopColor: '#CBD5E1',
-    paddingTop: 10,
-  },
-  btnCancel: {
-    paddingVertical: 9,
-    paddingHorizontal: 16,
-    borderRadius: 8,
-    borderWidth: 1,
-  },
-  btnSave: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    paddingVertical: 9,
-    paddingHorizontal: 16,
-    borderRadius: 8,
-  },
 });
