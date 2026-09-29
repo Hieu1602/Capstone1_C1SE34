@@ -41,6 +41,12 @@ import MedicationReminderScreen from '../features/dashboard/screens/MedicationRe
 import SettingsScreen from '../features/auth/screens/SettingsScreen';
 import { useTheme } from '../store/useThemeStore';
 
+// Doctor Subsystem screens
+import DoctorTabNavigator from './DoctorTabNavigator';
+import DoctorPatientDetailScreen from '../features/doctor/screens/DoctorPatientDetailScreen';
+import DoctorAnalyticsReportScreen from '../features/doctor/screens/DoctorAnalyticsReportScreen';
+import DoctorPrescriptionsScreen from '../features/doctor/screens/DoctorPrescriptionsScreen';
+
 const Stack = createNativeStackNavigator();
 const Tab = createBottomTabNavigator();
 
@@ -109,7 +115,7 @@ function MainTabNavigator() {
 
 // ---- Root Stack Navigator ----
 export default function AppNavigator() {
-  const { accessToken } = useAuthStore();
+  const { accessToken, viewRole } = useAuthStore();
   const isAuthenticated = Boolean(accessToken);
   const { isDarkMode, colors } = useTheme();
 
@@ -138,7 +144,14 @@ export default function AppNavigator() {
         ) : (
           // Main App Stack
           <>
-            <Stack.Screen name="Main" component={MainTabNavigator} />
+            {viewRole === 'DOCTOR' ? (
+              <Stack.Screen name="DoctorMain" component={DoctorTabNavigator} />
+            ) : (
+              <Stack.Screen name="Main" component={MainTabNavigator} />
+            )}
+            <Stack.Screen name="DoctorPatientDetail" component={DoctorPatientDetailScreen} />
+            <Stack.Screen name="DoctorAnalytics" component={DoctorAnalyticsReportScreen} />
+            <Stack.Screen name="DoctorPrescriptions" component={DoctorPrescriptionsScreen} />
             <Stack.Screen name="Devices" component={DevicesScreen} />
             <Stack.Screen name="CameraDetail" component={CameraDetailScreen} />
             <Stack.Screen name="MultiView" component={MultiViewScreen} />

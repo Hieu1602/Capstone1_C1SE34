@@ -11,16 +11,18 @@ import { useAuthStore } from '../store/useAuthStore';
 // - Nếu chạy trên Web hoặc iOS simulator cục bộ: dùng http://localhost:8000/api/v1
 // - Nếu chạy trên Android emulator: dùng http://10.0.2.2:8000/api/v1
 const getBaseUrl = (): string => {
+  // Khi chạy trên Web: Luôn dùng hostname hiện tại của trình duyệt (localhost hoặc LAN IP)
   if (Platform.OS === 'web' && typeof window !== 'undefined' && window.location?.hostname) {
     const host = window.location.hostname;
-    if (host !== 'localhost' && host !== '127.0.0.1') {
-      return `http://${host}:8000/api/v1`;
-    }
+    return `http://${host}:8000/api/v1`;
   }
   if (typeof process !== 'undefined' && process.env.EXPO_PUBLIC_API_URL) {
     return process.env.EXPO_PUBLIC_API_URL;
   }
-  return 'http://192.168.1.34:8000/api/v1';
+  if (Platform.OS === 'android') {
+    return 'http://10.0.2.2:8000/api/v1';
+  }
+  return 'http://192.168.1.8:8000/api/v1';
 };
 
 export const BASE_URL: string = getBaseUrl();
@@ -77,12 +79,12 @@ export const authApi = {
   requestOtp: (phone: string) => api.post('/auth/request-otp', { phone }),
   verifyOtp: (phone: string, code: string) => api.post('/auth/verify-otp', { phone, code }),
   login: (phone: string, password: string) => {
-    // Use FormData for OAuth2 password flow (avoids URLSearchParams compatibility issues)
-    const formData = new FormData();
-    formData.append('username', phone);
-    formData.append('password', password);
-    return api.post('/auth/login', formData, {
-      headers: { 'Content-Type': 'multipart/form-data' },
+    // Chuẩn OAuth2 Password Request quy định application/x-www-form-urlencoded
+    const params = new URLSearchParams();
+    params.append('username', phone);
+    params.append('password', password);
+    return api.post('/auth/login', params.toString(), {
+      headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
     });
   },
   register: (data: {
@@ -136,3 +138,27 @@ export const incidentsApi = {
 };
 
 export const notificationsApi = incidentsApi;
+
+// 6. Doctor Subsystem API
+export const doctorApi = {
+  getPatients: () => api.get('/doctor/patients'),
+  getPatientDetail: (id: string) => api.get(`/doctor/patients/${id}`),
+  getPrescriptions: (id: string) => api.get(`/doctor/patients/${id}/prescriptions`),
+  createPrescription: (
+    id: string,
+    data: {
+      medication_name: string;
+      dosage: string;
+      frequency?: string;
+      schedule_times?: string[];
+      instructions?: string;
+      enable_speaker_reminder?: boolean;
+    }
+  ) => api.post(`/doctor/patients/${id}/prescriptions`, data),
+  updateMedicalRecord: (id: string, data: any) =>
+    api.put(`/doctor/patients/${id}/medical-record`, data),
+  getAnalytics: (id: string, days = 7) =>
+    api.get(`/doctor/patients/${id}/analytics`, { params: { days } }),
+  updateThresholds: (id: string, data: any) =>
+    api.put(`/doctor/patients/${id}/thresholds`, data),
+};

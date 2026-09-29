@@ -30,7 +30,7 @@ import { useTheme } from '../../../store/useThemeStore';
 import api from '../../../services/api';
 
 export default function ProfileScreen({ navigation }: any) {
-  const { userId, userName, userPhone, logout, updateUserName } = useAuthStore();
+  const { userId, userName, userPhone, logout, updateUserName, toggleViewRole } = useAuthStore();
   const { house } = useVitalStore();
   const { isDarkMode, colors, setDarkMode } = useTheme();
   const [profileName, setProfileName] = React.useState(userName || 'Nguyễn Hữu Nghĩa');
@@ -2141,6 +2141,32 @@ export default function ProfileScreen({ navigation }: any) {
                 </Text>
                 <Text style={[styles.fbGridCardSub, isDarkMode && { color: colors.textSecondary }]}>
                   Xem nhiều góc quay camera cùng lúc
+                </Text>
+              </TouchableOpacity>
+
+              {/* Ô 13: Chế độ Bác sĩ Gia đình */}
+              <TouchableOpacity
+                style={[styles.fbGridCard, isDarkMode && { backgroundColor: colors.card, borderColor: '#0284C7' }]}
+                activeOpacity={0.8}
+                onPress={() => {
+                  Alert.alert(
+                    'Chuyển sang Chế độ Bác sĩ',
+                    'Bạn muốn chuyển sang giao diện chuyên môn của Bác sĩ gia đình (Danh sách bệnh nhân, Kê đơn thuốc, Báo cáo y tế)?',
+                    [
+                      { text: 'Hủy', style: 'cancel' },
+                      { text: 'Chuyển ngay', onPress: () => toggleViewRole() },
+                    ]
+                  );
+                }}
+              >
+                <View style={[styles.fbGridIconBox, { backgroundColor: isDarkMode ? '#082F49' : '#E0F2FE' }]}>
+                  <Ionicons name="medical-outline" size={24} color="#0284C7" />
+                </View>
+                <Text style={[styles.fbGridCardTitle, isDarkMode && { color: colors.textPrimary }]}>
+                  Chế độ Bác sĩ
+                </Text>
+                <Text style={[styles.fbGridCardSub, isDarkMode && { color: colors.textSecondary }]}>
+                  Bệnh án, Kê đơn & Báo cáo y tế
                 </Text>
               </TouchableOpacity>
             </>

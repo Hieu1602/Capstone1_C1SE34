@@ -36,9 +36,7 @@ const COLLAGE_IMAGES = {
 };
 
 export default function LoginScreen({ navigation }: any) {
-  const { login } = useAuthStore() as unknown as {
-    login: (access: string, refresh: string, name: string, userId: string) => void;
-  };
+  const { login } = useAuthStore();
 
   const [isLoginModalVisible, setIsLoginModalVisible] = useState(false);
   const [account, setAccount] = useState('');
@@ -55,24 +53,36 @@ export default function LoginScreen({ navigation }: any) {
 
     setIsLoading(true);
     try {
-      const rawAccount = account.trim();
-      const normalizedAccount = rawAccount.startsWith('0')
-        ? `+84${rawAccount.slice(1)}`
-        : rawAccount.startsWith('84')
-          ? `+${rawAccount}`
-          : rawAccount.startsWith('+')
-            ? rawAccount
-            : `+84${rawAccount}`;
+      const cleanAccount = account.replace(/\s+/g, '').replace(/^\+84/, '0');
+      const normalizedAccount = cleanAccount.startsWith('0')
+        ? `+84${cleanAccount.slice(1)}`
+        : cleanAccount.startsWith('+')
+          ? cleanAccount
+          : `+84${cleanAccount}`;
 
       const response = await authApi.login(normalizedAccount, password);
       const { access_token, refresh_token } = response.data;
 
-      // Lưu token vào Store để chuyển vào ứng dụng chính
-      login(access_token, refresh_token, 'Nguyễn Hữu Nghĩa', normalizedAccount);
+      let resolvedName = 'Nguyễn Hữu Nghĩa';
+      let resolvedRole = 'user';
+      if (normalizedAccount.includes('111222')) {
+        resolvedName = 'BS. Trần Văn Minh';
+        resolvedRole = 'doctor';
+      } else if (normalizedAccount.includes('999888')) {
+        resolvedName = 'Nguyễn Thị Lan';
+        resolvedRole = 'user';
+      }
+
+      // Lưu token và chuyển đổi giao diện dựa trên vai trò Bác sĩ / Người nhà
+      login(access_token, refresh_token, resolvedName, normalizedAccount, normalizedAccount, resolvedRole);
       setIsLoginModalVisible(false);
     } catch (error: any) {
-      const detail = error?.response?.data?.detail || 'Số điện thoại hoặc mật khẩu không chính xác.';
-      Alert.alert('Đăng nhập thất bại', detail);
+      console.error('[Login] Error:', error);
+      const detail =
+        error?.response?.data?.detail ||
+        error?.message ||
+        'Số điện thoại hoặc mật khẩu không chính xác.';
+      Alert.alert('Đăng nhập thất bại', String(detail));
     } finally {
       setIsLoading(false);
     }
