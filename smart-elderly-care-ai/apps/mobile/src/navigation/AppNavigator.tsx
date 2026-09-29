@@ -46,6 +46,7 @@ import DoctorTabNavigator from './DoctorTabNavigator';
 import DoctorPatientDetailScreen from '../features/doctor/screens/DoctorPatientDetailScreen';
 import DoctorAnalyticsReportScreen from '../features/doctor/screens/DoctorAnalyticsReportScreen';
 import DoctorPrescriptionsScreen from '../features/doctor/screens/DoctorPrescriptionsScreen';
+import DoctorAppointmentsScreen from '../features/doctor/screens/DoctorAppointmentsScreen';
 
 const Stack = createNativeStackNavigator();
 const Tab = createBottomTabNavigator();
@@ -151,6 +152,7 @@ export default function AppNavigator() {
             )}
             <Stack.Screen name="DoctorPatientDetail" component={DoctorPatientDetailScreen} />
             <Stack.Screen name="DoctorAnalytics" component={DoctorAnalyticsReportScreen} />
+            <Stack.Screen name="DoctorAppointments" component={DoctorAppointmentsScreen} />
             <Stack.Screen name="DoctorPrescriptions" component={DoctorPrescriptionsScreen} />
             <Stack.Screen name="Devices" component={DevicesScreen} />
             <Stack.Screen name="CameraDetail" component={CameraDetailScreen} />

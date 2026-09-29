@@ -116,3 +116,38 @@ class ThresholdsUpdate(BaseModel):
     hr_threshold_low: Optional[int] = Field(None, ge=40, le=90)
     spo2_threshold_low: Optional[int] = Field(None, ge=75, le=95)
     immobility_seconds: Optional[int] = Field(None, ge=10, le=600)
+
+
+class AppointmentItem(BaseModel):
+    """Mục lịch hẹn và tái khám y tế dành cho Bác sĩ gia đình."""
+    id: str
+    patient_id: str
+    patient_name: str
+    scheduled_at: str
+    exam_type: str
+    location: str
+    status: str = "UPCOMING"  # UPCOMING | COMPLETED | CANCELLED
+    instructions: Optional[str] = None
+    doctor_name: str = "BS. Trần Văn Minh"
+    enable_speaker_reminder: bool = True
+    created_at: Optional[str] = None
+
+
+class AppointmentCreate(BaseModel):
+    patient_id: str
+    patient_name: str
+    scheduled_at: str
+    exam_type: str = "Tái khám định kỳ"
+    location: str = "Tại nhà (Khám tại gia)"
+    instructions: Optional[str] = "Người nhà chuẩn bị sổ đo huyết áp và các đơn thuốc đang dùng."
+    enable_speaker_reminder: bool = True
+
+
+class AppointmentUpdate(BaseModel):
+    scheduled_at: Optional[str] = None
+    exam_type: Optional[str] = None
+    location: Optional[str] = None
+    status: Optional[str] = None
+    instructions: Optional[str] = None
+    enable_speaker_reminder: Optional[bool] = None
+

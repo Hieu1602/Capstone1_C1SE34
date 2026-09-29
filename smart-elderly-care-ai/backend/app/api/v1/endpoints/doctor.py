@@ -21,6 +21,9 @@ from app.schemas.doctor import (
     DoctorMedicalRecordUpdate,
     DoctorVitalsAnalytics,
     ThresholdsUpdate,
+    AppointmentItem,
+    AppointmentCreate,
+    AppointmentUpdate,
 )
 from app.schemas.patient import (
     PatientMedicalRecordOut,
@@ -194,3 +197,70 @@ async def update_patient_thresholds(
     return await crud_doctor.update_thresholds(
         db=db, elderly_id=elderly_id, thresholds_in=thresholds_in
     )
+
+
+# ==============================================================================
+# QUẢN LÝ LỊCH HẸN & TÁI KHÁM ĐỊNH KỲ (APPOINTMENTS)
+# ==============================================================================
+
+@router.get(
+    "/appointments",
+    response_model=List[AppointmentItem],
+    summary="Danh sách lịch khám và tái khám định kỳ cho các bệnh nhân",
+)
+async def get_doctor_appointments(
+    status: Optional[str] = Query(None, description="Trạng thái lịch khám (UPCOMING | COMPLETED | CANCELLED)"),
+):
+    """Lấy danh sách các cuộc hẹn tái khám, xét nghiệm và kiểm tra định kỳ của Bác sĩ."""
+    return crud_doctor.get_appointments(status=status)
+
+
+@router.post(
+    "/appointments",
+    response_model=AppointmentItem,
+    status_code=status.HTTP_201_CREATED,
+    summary="Tạo lịch khám/tái khám mới & hẹn lịch nhắc loa",
+)
+async def create_doctor_appointment(
+    appointment_in: AppointmentCreate,
+    current_user: Optional[User] = Depends(get_current_user_optional),
+):
+    """Bác sĩ lên lịch tái khám mới và tự động kích hoạt nhắc nhở bằng loa thông minh trước giờ hẹn."""
+    doctor_name = current_user.full_name if current_user else "BS. Trần Văn Minh"
+    return crud_doctor.create_appointment(obj_in=appointment_in, doctor_name=doctor_name)
+
+
+@router.put(
+    "/appointments/{appointment_id}",
+    response_model=AppointmentItem,
+    summary="Cập nhật hoặc hoàn thành lịch khám",
+)
+async def update_doctor_appointment(
+    appointment_id: str,
+    appointment_in: AppointmentUpdate,
+):
+    """Cập nhật thông tin lịch khám hoặc đánh dấu đã khám xong (COMPLETED)."""
+    updated = crud_doctor.update_appointment(appointment_id=appointment_id, obj_in=appointment_in)
+    if not updated:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="Không tìm thấy lịch khám yêu cầu",
+        )
+    return updated
+
+
+@router.delete(
+    "/appointments/{appointment_id}",
+    status_code=status.HTTP_200_OK,
+    summary="Hủy bỏ lịch khám",
+)
+async def delete_doctor_appointment(appointment_id: str):
+    """Hủy cuộc hẹn hoặc dời lịch khám."""
+    success = crud_doctor.delete_appointment(appointment_id=appointment_id)
+    if not success:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="Không tìm thấy lịch khám để hủy",
+        )
+    return {"success": True, "message": "Đã hủy lịch khám thành công"}
+

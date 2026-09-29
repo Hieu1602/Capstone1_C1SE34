@@ -10,7 +10,7 @@ import { Colors } from '../theme/colors';
 import { useTheme } from '../store/useThemeStore';
 
 import DoctorPatientsScreen from '../features/doctor/screens/DoctorPatientsScreen';
-import DoctorPrescriptionsScreen from '../features/doctor/screens/DoctorPrescriptionsScreen';
+import DoctorAppointmentsScreen from '../features/doctor/screens/DoctorAppointmentsScreen';
 import DoctorAnalyticsReportScreen from '../features/doctor/screens/DoctorAnalyticsReportScreen';
 import DoctorProfileScreen from '../features/doctor/screens/DoctorProfileScreen';
 
@@ -40,8 +40,8 @@ export default function DoctorTabNavigator() {
 
           if (route.name === 'DoctorPatients') {
             iconName = focused ? 'people' : 'people-outline';
-          } else if (route.name === 'DoctorPrescriptions') {
-            iconName = focused ? 'medkit' : 'medkit-outline';
+          } else if (route.name === 'DoctorAppointments') {
+            iconName = focused ? 'calendar' : 'calendar-outline';
           } else if (route.name === 'DoctorAnalytics') {
             iconName = focused ? 'analytics' : 'analytics-outline';
           } else if (route.name === 'DoctorProfile') {
@@ -62,9 +62,9 @@ export default function DoctorTabNavigator() {
         options={{ tabBarLabel: 'Bệnh nhân' }}
       />
       <Tab.Screen
-        name="DoctorPrescriptions"
-        component={DoctorPrescriptionsScreen}
-        options={{ tabBarLabel: 'Đơn thuốc' }}
+        name="DoctorAppointments"
+        component={DoctorAppointmentsScreen}
+        options={{ tabBarLabel: 'Lịch khám' }}
       />
       <Tab.Screen
         name="DoctorAnalytics"

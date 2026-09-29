@@ -28,6 +28,9 @@ from app.schemas.doctor import (
     DoctorMedicalRecordUpdate,
     DoctorVitalsAnalytics,
     ThresholdsUpdate,
+    AppointmentItem,
+    AppointmentCreate,
+    AppointmentUpdate,
 )
 from app.schemas.patient import MedicalCondition, PatientMedicalRecordUpdate
 
@@ -37,6 +40,49 @@ _PRESCRIPTION_STORE: Dict[str, List[PrescriptionItem]] = {}
 
 # In-memory store cho hồ sơ lâm sàng có thể chỉnh sửa của Bác sĩ
 _CLINICAL_STORE: Dict[str, Dict[str, Any]] = {}
+
+# In-memory store cho lịch hẹn & tái khám y tế
+_APPOINTMENT_STORE: List[AppointmentItem] = [
+    AppointmentItem(
+        id="apt-001",
+        patient_id="e0000000-b4e1-4b08-b2d3-d949a0eb075c",
+        patient_name="Cụ Nguyễn Văn An",
+        scheduled_at="15/10/2026 - 08:30",
+        exam_type="Tái khám tim mạch & huyết áp",
+        location="Tại nhà (Khám tại gia)",
+        status="UPCOMING",
+        instructions="Đo huyết áp liên tục 3 ngày trước khám. Nhịn ăn sáng để lấy máu xét nghiệm đường huyết & chức năng thận.",
+        doctor_name="BS. Trần Văn Minh",
+        enable_speaker_reminder=True,
+        created_at=datetime.now().strftime("%d/%m/%Y"),
+    ),
+    AppointmentItem(
+        id="apt-002",
+        patient_id="e0000000-b4e1-4b08-b2d3-d949a0eb075c",
+        patient_name="Cụ Nguyễn Văn An",
+        scheduled_at="28/10/2026 - 14:00",
+        exam_type="Đo điện tâm đồ (ECG) & Đo loãng xương",
+        location="Bệnh viện Đa khoa Đà Nẵng",
+        status="UPCOMING",
+        instructions="Mang theo thẻ BHYT và các phim chụp X-quang khớp gối cũ. Đi cùng người nhà.",
+        doctor_name="BS. Trần Văn Minh",
+        enable_speaker_reminder=True,
+        created_at=datetime.now().strftime("%d/%m/%Y"),
+    ),
+    AppointmentItem(
+        id="apt-003",
+        patient_id="e0000000-b4e1-4b08-b2d3-d949a0eb075c",
+        patient_name="Cụ Nguyễn Văn An",
+        scheduled_at="15/09/2026 - 09:00",
+        exam_type="Khám sức khỏe tổng quát định kỳ",
+        location="Tại nhà (Khám tại gia)",
+        status="COMPLETED",
+        instructions="Đã đo sinh hiệu ổn định: HA 135/85 mmHg, SpO2 97%. Bác sĩ đã điều chỉnh liều Amlodipine.",
+        doctor_name="BS. Trần Văn Minh",
+        enable_speaker_reminder=False,
+        created_at=datetime.now().strftime("%d/%m/%Y"),
+    ),
+]
 
 
 def _init_default_conditions() -> List[MedicalCondition]:
@@ -463,6 +509,53 @@ class CRUDDoctor:
             "message": "Đã cập nhật ngưỡng an toàn y tế thành công và đồng bộ xuống Hub.",
             "thresholds": thresholds_in.model_dump(exclude_unset=True),
         }
+
+    def get_appointments(self, status: Optional[str] = None) -> List[AppointmentItem]:
+        """Lấy danh sách các cuộc hẹn và tái khám định kỳ."""
+        if status and status != "ALL":
+            return [apt for apt in _APPOINTMENT_STORE if apt.status == status]
+        return _APPOINTMENT_STORE
+
+    def create_appointment(
+        self, obj_in: AppointmentCreate, doctor_name: str = "BS. Trần Văn Minh"
+    ) -> AppointmentItem:
+        """Tạo lịch tái khám mới và đồng bộ xuống Hub để nhắc nhở người nhà."""
+        new_apt = AppointmentItem(
+            id=f"apt-{uuid.uuid4().hex[:6]}",
+            patient_id=obj_in.patient_id,
+            patient_name=obj_in.patient_name,
+            scheduled_at=obj_in.scheduled_at,
+            exam_type=obj_in.exam_type,
+            location=obj_in.location,
+            status="UPCOMING",
+            instructions=obj_in.instructions,
+            doctor_name=doctor_name,
+            enable_speaker_reminder=obj_in.enable_speaker_reminder,
+            created_at=datetime.now().strftime("%d/%m/%Y"),
+        )
+        _APPOINTMENT_STORE.insert(0, new_apt)
+        return new_apt
+
+    def update_appointment(
+        self, appointment_id: str, obj_in: AppointmentUpdate
+    ) -> Optional[AppointmentItem]:
+        """Cập nhật thông tin lịch khám hoặc đổi trạng thái (COMPLETED/CANCELLED)."""
+        for idx, apt in enumerate(_APPOINTMENT_STORE):
+            if apt.id == appointment_id:
+                updated_data = apt.model_dump()
+                update_fields = obj_in.model_dump(exclude_unset=True)
+                updated_data.update(update_fields)
+                updated_apt = AppointmentItem(**updated_data)
+                _APPOINTMENT_STORE[idx] = updated_apt
+                return updated_apt
+        return None
+
+    def delete_appointment(self, appointment_id: str) -> bool:
+        """Hủy bỏ cuộc hẹn khỏi hệ thống."""
+        global _APPOINTMENT_STORE
+        initial_len = len(_APPOINTMENT_STORE)
+        _APPOINTMENT_STORE = [apt for apt in _APPOINTMENT_STORE if apt.id != appointment_id]
+        return len(_APPOINTMENT_STORE) < initial_len
 
 
 crud_doctor = CRUDDoctor()

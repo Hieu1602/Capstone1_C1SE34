@@ -177,5 +177,30 @@ export const doctorApi = {
     api.get(`/doctor/patients/${id}/analytics`, { params: { days } }),
   updateThresholds: (id: string, data: any) =>
     api.put(`/doctor/patients/${id}/thresholds`, data),
+  getAppointments: (status?: string) =>
+    api.get('/doctor/appointments', { params: status ? { status } : undefined }),
+  createAppointment: (data: {
+    patient_id: string;
+    patient_name: string;
+    scheduled_at: string;
+    exam_type?: string;
+    location?: string;
+    instructions?: string;
+    enable_speaker_reminder?: boolean;
+  }) => api.post('/doctor/appointments', data),
+  updateAppointment: (
+    appointmentId: string,
+    data: {
+      scheduled_at?: string;
+      exam_type?: string;
+      location?: string;
+      status?: string;
+      instructions?: string;
+      enable_speaker_reminder?: boolean;
+    }
+  ) => api.put(`/doctor/appointments/${appointmentId}`, data),
+  deleteAppointment: (appointmentId: string) =>
+    api.delete(`/doctor/appointments/${appointmentId}`),
 };
+
 
