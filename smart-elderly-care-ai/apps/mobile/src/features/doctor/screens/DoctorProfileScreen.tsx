@@ -1,5 +1,5 @@
 // DoctorProfileScreen.tsx
-// Hồ sơ Bác sĩ gia đình, thông tin chuyên môn, chứng chỉ hành nghề, cấu hình trực cấp cứu & tiện ích y khoa
+// Hồ sơ Bác sĩ gia đình, thông tin chuyên môn, đổi ảnh đại diện & đổi mật khẩu
 
 import React, { useState } from 'react';
 import {
@@ -13,12 +13,13 @@ import {
   Switch,
   Modal,
   TextInput,
-  Linking,
-  Platform,
+  Image,
   KeyboardAvoidingView,
+  Platform,
 } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
+import * as ImagePicker from 'expo-image-picker';
 
 import { Colors } from '../../../theme/colors';
 import { useTheme } from '../../../store/useThemeStore';
@@ -36,10 +37,13 @@ export default function DoctorProfileScreen() {
     specialty: 'Tim mạch Can thiệp & Lão khoa',
     hospital: 'Bệnh viện Đa khoa Đà Nẵng',
     department: 'Khoa Hồi sức Tim mạch & Lão khoa',
-    cchn: '014285/BYT-CCHN (Bộ Y tế cấp)',
     phone: userPhone || '0905 111 222',
-    email: 'dr.tranvanminh@dananghospital.vn',
   });
+
+  // Ảnh đại diện bác sĩ
+  const [avatarUri, setAvatarUri] = useState<string | null>(
+    'https://images.unsplash.com/photo-1622253692010-333f2da6031d?w=300&auto=format&fit=crop&q=80'
+  );
 
   // Modal 1: Sửa thông tin bác sĩ
   const [editModalVisible, setEditModalVisible] = useState(false);
@@ -49,16 +53,37 @@ export default function DoctorProfileScreen() {
   const [editHospital, setEditHospital] = useState(docInfo.hospital);
   const [editDepartment, setEditDepartment] = useState(docInfo.department);
   const [editPhone, setEditPhone] = useState(docInfo.phone);
-  const [editEmail, setEditEmail] = useState(docInfo.email);
+  const [editAvatarUri, setEditAvatarUri] = useState<string | null>(avatarUri);
 
-  // Modal 2: Protocol cấp cứu 115
-  const [protocolModalVisible, setProtocolModalVisible] = useState(false);
-
-  // Modal 3: Đổi mật khẩu
+  // Modal 2: Đổi mật khẩu
   const [passwordModalVisible, setPasswordModalVisible] = useState(false);
   const [oldPassword, setOldPassword] = useState('');
   const [newPassword, setNewPassword] = useState('');
   const [confirmPassword, setConfirmPassword] = useState('');
+
+  // Hàm chọn ảnh từ thư viện thiết bị
+  const pickImage = async () => {
+    try {
+      const permission = await ImagePicker.requestMediaLibraryPermissionsAsync();
+      if (!permission.granted) {
+        Alert.alert('Quyền bị từ chối', 'Ứng dụng cần quyền truy cập thư viện để chọn ảnh đại diện.');
+        return;
+      }
+      const result = await ImagePicker.launchImageLibraryAsync({
+        mediaTypes: ['images'],
+        allowsEditing: true,
+        aspect: [1, 1],
+        quality: 0.8,
+      });
+      if (!result.canceled && result.assets?.[0]?.uri) {
+        const selectedUri = result.assets[0].uri;
+        setEditAvatarUri(selectedUri);
+        setAvatarUri(selectedUri);
+      }
+    } catch {
+      Alert.alert('Lỗi', 'Không thể chọn ảnh từ thư viện.');
+    }
+  };
 
   // Lưu sửa thông tin
   const handleSaveProfile = () => {
@@ -73,9 +98,10 @@ export default function DoctorProfileScreen() {
       hospital: editHospital.trim(),
       department: editDepartment.trim(),
       phone: editPhone.trim(),
-      email: editEmail.trim(),
-      cchn: docInfo.cchn,
     });
+    if (editAvatarUri) {
+      setAvatarUri(editAvatarUri);
+    }
     setEditModalVisible(false);
     Alert.alert('Thành công', 'Đã cập nhật hồ sơ chuyên môn Bác sĩ thành công.');
   };
@@ -108,17 +134,6 @@ export default function DoctorProfileScreen() {
     ]);
   };
 
-  const handleCall115 = () => {
-    const url = 'tel:115';
-    if (Platform.OS === 'web') {
-      Alert.alert('Cuộc gọi Cấp cứu 115', 'Đang kết nối Tổng đài Cấp cứu 115...');
-    } else {
-      Linking.openURL(url).catch(() => {
-        Alert.alert('Lỗi', 'Không thể khởi chạy cuộc gọi trên thiết bị này.');
-      });
-    }
-  };
-
   return (
     <View style={[styles.container, { backgroundColor: isDarkMode ? '#0F172A' : '#F8FAFC' }]}>
       <StatusBar barStyle={isDarkMode ? 'light-content' : 'dark-content'} />
@@ -145,7 +160,7 @@ export default function DoctorProfileScreen() {
               setEditHospital(docInfo.hospital);
               setEditDepartment(docInfo.department);
               setEditPhone(docInfo.phone);
-              setEditEmail(docInfo.email);
+              setEditAvatarUri(avatarUri);
               setEditModalVisible(true);
             }}
           >
@@ -163,14 +178,23 @@ export default function DoctorProfileScreen() {
             { backgroundColor: isDarkMode ? '#1E293B' : '#FFFFFF', borderColor: colors.border },
           ]}
         >
-          <View style={styles.avatarContainer}>
+          {/* Avatar Bác sĩ có thể chạm để đổi ảnh */}
+          <TouchableOpacity
+            style={styles.avatarContainer}
+            activeOpacity={0.85}
+            onPress={pickImage}
+          >
             <View style={styles.avatarBig}>
-              <Ionicons name="medkit" size={38} color="#FFFFFF" />
+              {avatarUri ? (
+                <Image source={{ uri: avatarUri }} style={styles.avatarImage} />
+              ) : (
+                <Ionicons name="medkit" size={38} color="#FFFFFF" />
+              )}
             </View>
-            <View style={styles.verifiedBadge}>
-              <Ionicons name="checkmark-circle" size={20} color="#10B981" />
+            <View style={styles.cameraIconBadge}>
+              <Ionicons name="camera" size={13} color="#FFFFFF" />
             </View>
-          </View>
+          </TouchableOpacity>
 
           <Text style={[styles.docName, { color: colors.textPrimary }]}>{docInfo.name}</Text>
           <Text style={styles.docDegree}>{docInfo.degree}</Text>
@@ -183,7 +207,7 @@ export default function DoctorProfileScreen() {
             </Text>
           </View>
 
-          {/* 4 HỘP CHỈ SỐ HOẠT ĐỘNG Y KHOA */}
+          {/* 2 HỘP CHỈ SỐ HOẠT ĐỘNG Y KHOA (ĐÃ BỎ 18 ĐÃ XỬ TRÍ VÀ 98.5% TUÂN THỦ) */}
           <View style={styles.statsGrid}>
             <View style={[styles.statBox, { backgroundColor: isDarkMode ? '#0F172A' : '#F8FAFC' }]}>
               <Text style={[styles.statNum, { color: '#0284C7' }]}>5</Text>
@@ -193,18 +217,10 @@ export default function DoctorProfileScreen() {
               <Text style={[styles.statNum, { color: '#8B5CF6' }]}>3</Text>
               <Text style={styles.statLabel}>Lịch khám</Text>
             </View>
-            <View style={[styles.statBox, { backgroundColor: isDarkMode ? '#0F172A' : '#F8FAFC' }]}>
-              <Text style={[styles.statNum, { color: '#10B981' }]}>18</Text>
-              <Text style={styles.statLabel}>Đã xử trí</Text>
-            </View>
-            <View style={[styles.statBox, { backgroundColor: isDarkMode ? '#0F172A' : '#F8FAFC' }]}>
-              <Text style={[styles.statNum, { color: '#F59E0B' }]}>98.5%</Text>
-              <Text style={styles.statLabel}>Tuân thủ</Text>
-            </View>
           </View>
         </View>
 
-        {/* TIỆN ÍCH LÂM SÀNG & HỆ THỐNG */}
+        {/* TIỆN ÍCH LÂM SÀNG & HỆ THỐNG (ĐÃ BỎ PROTOCOL 115) */}
         <View
           style={[
             styles.sectionCard,
@@ -214,21 +230,6 @@ export default function DoctorProfileScreen() {
           <Text style={[styles.groupTitle, { color: isDarkMode ? '#94A3B8' : '#64748B' }]}>
             TIỆN ÍCH LÂM SÀNG & HỆ THỐNG
           </Text>
-
-          {/* Xem Protocol 115 */}
-          <TouchableOpacity
-            style={styles.menuItem}
-            onPress={() => setProtocolModalVisible(true)}
-            activeOpacity={0.7}
-          >
-            <View style={[styles.menuIconBox, { backgroundColor: '#FEE2E2' }]}>
-              <Ionicons name="call" size={17} color="#DC2626" />
-            </View>
-            <Text style={[styles.menuItemText, { color: colors.textPrimary }]}>
-              Protocol Cấp cứu 115 & Chấn thương
-            </Text>
-            <Ionicons name="chevron-forward" size={16} color="#94A3B8" />
-          </TouchableOpacity>
 
           {/* Chế độ Sáng / Tối */}
           <View style={styles.menuItem}>
@@ -280,7 +281,7 @@ export default function DoctorProfileScreen() {
       </ScrollView>
 
       {/* =================================================================== */}
-      {/* MODAL 1: CHỈNH SỬA THÔNG TIN BÁC SĨ                                */}
+      {/* MODAL 1: CHỈNH SỬA THÔNG TIN BÁC SĨ (CÓ ĐỔI ẢNH, ĐÃ BỎ EMAIL)      */}
       {/* =================================================================== */}
       <Modal visible={editModalVisible} animationType="slide" transparent>
         <KeyboardAvoidingView
@@ -301,6 +302,23 @@ export default function DoctorProfileScreen() {
             </View>
 
             <ScrollView showsVerticalScrollIndicator={false} style={{ marginVertical: 10 }}>
+              {/* KHU VỰC ĐỔI ẢNH ĐẠI DIỆN TRONG MODAL */}
+              <View style={styles.modalAvatarRow}>
+                <View style={styles.modalAvatarWrap}>
+                  {editAvatarUri ? (
+                    <Image source={{ uri: editAvatarUri }} style={styles.modalAvatarImage} />
+                  ) : (
+                    <View style={styles.modalAvatarPlaceholder}>
+                      <Ionicons name="person" size={28} color="#FFFFFF" />
+                    </View>
+                  )}
+                </View>
+                <TouchableOpacity style={styles.btnPickImage} onPress={pickImage} activeOpacity={0.8}>
+                  <Ionicons name="camera-outline" size={16} color="#0284C7" style={{ marginRight: 6 }} />
+                  <Text style={styles.btnPickImageText}>Chọn / Đổi ảnh đại diện</Text>
+                </TouchableOpacity>
+              </View>
+
               <Text style={styles.fieldLabel}>Họ và tên Bác sĩ (*)</Text>
               <TextInput
                 style={[styles.inputField, { color: colors.textPrimary, borderColor: colors.border }]}
@@ -355,16 +373,6 @@ export default function DoctorProfileScreen() {
                 placeholder="VD: 0905 111 222"
                 placeholderTextColor="#94A3B8"
               />
-
-              <Text style={styles.fieldLabel}>Email y tế</Text>
-              <TextInput
-                style={[styles.inputField, { color: colors.textPrimary, borderColor: colors.border }]}
-                value={editEmail}
-                onChangeText={setEditEmail}
-                keyboardType="email-address"
-                placeholder="VD: dr.minh@dananghospital.vn"
-                placeholderTextColor="#94A3B8"
-              />
             </ScrollView>
 
             <View style={styles.modalBtnRow}>
@@ -386,73 +394,7 @@ export default function DoctorProfileScreen() {
       </Modal>
 
       {/* =================================================================== */}
-      {/* MODAL 2: PROTOCOL CẤP CỨU 115 & CHẤN THƯƠNG                        */}
-      {/* =================================================================== */}
-      <Modal visible={protocolModalVisible} animationType="slide" transparent>
-        <View style={styles.modalOverlay}>
-          <View style={[styles.modalBox, { backgroundColor: isDarkMode ? '#1E293B' : '#FFFFFF' }]}>
-            <View style={styles.modalHeader}>
-              <View style={{ flexDirection: 'row', alignItems: 'center' }}>
-                <Ionicons name="warning" size={22} color="#DC2626" style={{ marginRight: 6 }} />
-                <Text style={[styles.modalTitle, { color: colors.textPrimary }]}>
-                  Quy Trình Cấp Cứu 115
-                </Text>
-              </View>
-              <TouchableOpacity onPress={() => setProtocolModalVisible(false)}>
-                <Ionicons name="close" size={24} color="#94A3B8" />
-              </TouchableOpacity>
-            </View>
-
-            <ScrollView showsVerticalScrollIndicator={false} style={{ marginVertical: 10 }}>
-              <View style={styles.protocolStepCard}>
-                <Text style={styles.protocolStepNum}>BƯỚC 1</Text>
-                <Text style={styles.protocolStepTitle}>Khảo sát hiện trường & Mức độ tri giác (AVPU)</Text>
-                <Text style={styles.protocolStepBody}>
-                  - Mở camera kiểm tra tư thế ngã của cụ.{'\n'}
-                  - Gọi to kiểm tra phản ứng: Tỉnh táo (Alert), Đáp ứng tiếng gọi (Voice), Đáp ứng đau (Pain), hay Bất tỉnh (Unresponsive).
-                </Text>
-              </View>
-
-              <View style={styles.protocolStepCard}>
-                <Text style={styles.protocolStepNum}>BƯỚC 2</Text>
-                <Text style={styles.protocolStepTitle}>Bất động cột sống cổ & Chấn thương sọ não</Text>
-                <Text style={styles.protocolStepBody}>
-                  - TUYỆT ĐỐI KHÔNG bế thốc hoặc di chuyển người cao tuổi nếu nghi ngờ chấn thương cột sống cổ/lưng.{'\n'}
-                  - Đặt bệnh nhân nằm nghiêng an toàn nếu có nôn ói để tránh sặc đường thở.
-                </Text>
-              </View>
-
-              <View style={styles.protocolStepCard}>
-                <Text style={styles.protocolStepNum}>BƯỚC 3</Text>
-                <Text style={styles.protocolStepTitle}>Kích hoạt Cấp cứu 115 & Báo người nhà</Text>
-                <Text style={styles.protocolStepBody}>
-                  - Bấm nút gọi Tổng đài 115 ngay bên dưới.{'\n'}
-                  - Cung cấp chính xác địa chỉ nhà, tình trạng sinh hiệu (nhịp tim, SpO2) trích xuất từ Smartband.
-                </Text>
-              </View>
-            </ScrollView>
-
-            <View style={styles.modalBtnRow}>
-              <TouchableOpacity
-                style={[styles.modalCancelBtn, { borderColor: colors.border }]}
-                onPress={() => setProtocolModalVisible(false)}
-              >
-                <Text style={{ fontSize: 13, fontWeight: '700', color: isDarkMode ? '#CBD5E1' : '#64748B' }}>Đóng</Text>
-              </TouchableOpacity>
-              <TouchableOpacity
-                style={[styles.modalSaveBtn, { backgroundColor: '#DC2626' }]}
-                onPress={handleCall115}
-              >
-                <Ionicons name="call" size={16} color="#FFFFFF" style={{ marginRight: 6 }} />
-                <Text style={{ color: '#FFFFFF', fontSize: 13, fontWeight: '800' }}>GỌI 115 NGAY</Text>
-              </TouchableOpacity>
-            </View>
-          </View>
-        </View>
-      </Modal>
-
-      {/* =================================================================== */}
-      {/* MODAL 3: ĐỔI MẬT KHẨU TÀI KHOẢN BÁC SĨ                             */}
+      {/* MODAL 2: ĐỔI MẬT KHẨU TÀI KHOẢN BÁC SĨ                             */}
       {/* =================================================================== */}
       <Modal visible={passwordModalVisible} animationType="slide" transparent>
         <KeyboardAvoidingView
@@ -566,21 +508,33 @@ const styles = StyleSheet.create({
   },
   avatarContainer: { position: 'relative', marginBottom: 10 },
   avatarBig: {
-    width: 76,
-    height: 76,
-    borderRadius: 38,
+    width: 84,
+    height: 84,
+    borderRadius: 42,
     backgroundColor: '#0284C7',
     justifyContent: 'center',
     alignItems: 'center',
+    overflow: 'hidden',
   },
-  verifiedBadge: {
+  avatarImage: {
+    width: '100%',
+    height: '100%',
+    borderRadius: 42,
+  },
+  cameraIconBadge: {
     position: 'absolute',
     bottom: -2,
     right: -2,
-    backgroundColor: '#FFFFFF',
-    borderRadius: 10,
+    backgroundColor: '#0284C7',
+    width: 26,
+    height: 26,
+    borderRadius: 13,
+    justifyContent: 'center',
+    alignItems: 'center',
+    borderWidth: 2,
+    borderColor: '#FFFFFF',
   },
-  docName: { fontSize: 20, fontWeight: '800' },
+  docName: { fontSize: 20, fontWeight: '800', marginTop: 4 },
   docDegree: { fontSize: 12.5, color: '#0284C7', fontWeight: '700', marginTop: 2 },
   docSpecialty: { fontSize: 12, color: '#64748B', marginTop: 2 },
   hospitalBadge: {
@@ -595,18 +549,18 @@ const styles = StyleSheet.create({
 
   statsGrid: {
     flexDirection: 'row',
-    gap: 8,
+    gap: 12,
     marginTop: 16,
     width: '100%',
   },
   statBox: {
     flex: 1,
     alignItems: 'center',
-    paddingVertical: 10,
+    paddingVertical: 12,
     borderRadius: 10,
   },
-  statNum: { fontSize: 18, fontWeight: '800' },
-  statLabel: { fontSize: 10.5, color: '#94A3B8', marginTop: 2, fontWeight: '600' },
+  statNum: { fontSize: 20, fontWeight: '800' },
+  statLabel: { fontSize: 11, color: '#94A3B8', marginTop: 2, fontWeight: '600' },
 
   sectionCard: {
     borderRadius: 14,
@@ -671,6 +625,49 @@ const styles = StyleSheet.create({
     paddingBottom: 10,
   },
   modalTitle: { fontSize: 16, fontWeight: '800' },
+
+  modalAvatarRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    marginVertical: 10,
+    padding: 10,
+    backgroundColor: '#F8FAFC',
+    borderRadius: 10,
+  },
+  modalAvatarWrap: {
+    width: 50,
+    height: 50,
+    borderRadius: 25,
+    overflow: 'hidden',
+    backgroundColor: '#0284C7',
+    justifyContent: 'center',
+    alignItems: 'center',
+    marginRight: 12,
+  },
+  modalAvatarImage: {
+    width: '100%',
+    height: '100%',
+  },
+  modalAvatarPlaceholder: {
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+  btnPickImage: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    paddingHorizontal: 12,
+    paddingVertical: 8,
+    borderRadius: 8,
+    backgroundColor: '#E0F2FE',
+    borderWidth: 1,
+    borderColor: '#7DD3FC',
+  },
+  btnPickImageText: {
+    fontSize: 12.5,
+    fontWeight: '700',
+    color: '#0284C7',
+  },
+
   fieldLabel: {
     fontSize: 12,
     fontWeight: '600',
@@ -707,16 +704,4 @@ const styles = StyleSheet.create({
     paddingHorizontal: 16,
     borderRadius: 8,
   },
-
-  protocolStepCard: {
-    backgroundColor: '#F8FAFC',
-    borderRadius: 10,
-    padding: 10,
-    marginBottom: 10,
-    borderLeftWidth: 3,
-    borderLeftColor: '#DC2626',
-  },
-  protocolStepNum: { fontSize: 10, fontWeight: '800', color: '#DC2626' },
-  protocolStepTitle: { fontSize: 13, fontWeight: '700', color: '#0F172A', marginTop: 2, marginBottom: 4 },
-  protocolStepBody: { fontSize: 11.5, color: '#475569', lineHeight: 17 },
 });
