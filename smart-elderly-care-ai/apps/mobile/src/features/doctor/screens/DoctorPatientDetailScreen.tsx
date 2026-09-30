@@ -251,25 +251,38 @@ export default function DoctorPatientDetailScreen() {
   };
 
   const handleDeleteCondition = (condId: string, name: string) => {
+    const doDelete = async () => {
+      try {
+        const currentConditions: ConditionItem[] = detail?.conditions ? [...detail.conditions] : [];
+        const updated = currentConditions.filter((c) => c.id !== condId);
+        const res = await doctorApi.updateMedicalRecord(patientId, { conditions: updated });
+        if (res.data) {
+          setDetail(res.data);
+        } else {
+          setDetail((prev: any) => ({ ...prev, conditions: updated }));
+        }
+      } catch {
+        if (Platform.OS === 'web') {
+          window.alert('Không thể xóa chẩn đoán.');
+        } else {
+          Alert.alert('Lỗi', 'Không thể xóa chẩn đoán.');
+        }
+      }
+    };
+
+    if (Platform.OS === 'web') {
+      if (typeof window !== 'undefined' && window.confirm(`Xác nhận xóa: Bác sĩ có chắc chắn muốn xóa chẩn đoán "${name}" khỏi danh mục bệnh nền?`)) {
+        void doDelete();
+      }
+      return;
+    }
+
     Alert.alert('Xác nhận xóa', `Bác sĩ có chắc chắn muốn xóa chẩn đoán "${name}" khỏi danh mục bệnh nền?`, [
       { text: 'Hủy', style: 'cancel' },
       {
         text: 'Xóa',
         style: 'destructive',
-        onPress: async () => {
-          try {
-            const currentConditions: ConditionItem[] = detail?.conditions ? [...detail.conditions] : [];
-            const updated = currentConditions.filter((c) => c.id !== condId);
-            const res = await doctorApi.updateMedicalRecord(patientId, { conditions: updated });
-            if (res.data) {
-              setDetail(res.data);
-            } else {
-              setDetail((prev: any) => ({ ...prev, conditions: updated }));
-            }
-          } catch {
-            Alert.alert('Lỗi', 'Không thể xóa chẩn đoán.');
-          }
-        },
+        onPress: doDelete,
       },
     ]);
   };
@@ -386,20 +399,37 @@ export default function DoctorPatientDetailScreen() {
   };
 
   const handleDeletePrescription = (rxId: string, name: string) => {
+    const doDelete = async () => {
+      try {
+        await doctorApi.deletePrescription(patientId, rxId);
+        setPrescriptions((prev) => prev.filter((r) => r.id !== rxId));
+        if (Platform.OS === 'web') {
+          window.alert(`Đã loại bỏ "${name}" khỏi phác đồ điều trị.`);
+        } else {
+          Alert.alert('Đã ngừng thuốc', `Đã loại bỏ "${name}" khỏi phác đồ điều trị.`);
+        }
+      } catch {
+        if (Platform.OS === 'web') {
+          window.alert('Không thể ngừng thuốc.');
+        } else {
+          Alert.alert('Lỗi', 'Không thể ngừng thuốc.');
+        }
+      }
+    };
+
+    if (Platform.OS === 'web') {
+      if (typeof window !== 'undefined' && window.confirm(`Ngừng dùng thuốc: Bác sĩ có chắc chắn muốn ngừng kê đơn thuốc "${name}"?`)) {
+        void doDelete();
+      }
+      return;
+    }
+
     Alert.alert('Ngừng dùng thuốc', `Bác sĩ có chắc chắn muốn ngừng kê đơn thuốc "${name}"?`, [
       { text: 'Hủy', style: 'cancel' },
       {
         text: 'Ngừng thuốc',
         style: 'destructive',
-        onPress: async () => {
-          try {
-            await doctorApi.deletePrescription(patientId, rxId);
-            setPrescriptions((prev) => prev.filter((r) => r.id !== rxId));
-            Alert.alert('Đã ngừng thuốc', `Đã loại bỏ "${name}" khỏi phác đồ điều trị.`);
-          } catch {
-            Alert.alert('Lỗi', 'Không thể ngừng thuốc.');
-          }
-        },
+        onPress: doDelete,
       },
     ]);
   };

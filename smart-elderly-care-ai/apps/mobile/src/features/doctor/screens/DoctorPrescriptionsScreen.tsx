@@ -155,20 +155,37 @@ export default function DoctorPrescriptionsScreen() {
   };
 
   const handleDeleteRx = (rxId: string, name: string) => {
+    const doDelete = async () => {
+      try {
+        await doctorApi.deletePrescription(patientId, rxId);
+        setPrescriptions((prev) => prev.filter((r) => r.id !== rxId));
+        if (Platform.OS === 'web') {
+          window.alert(`Đã loại bỏ "${name}" khỏi phác đồ.`);
+        } else {
+          Alert.alert('Đã ngừng thuốc', `Đã loại bỏ "${name}" khỏi phác đồ.`);
+        }
+      } catch {
+        if (Platform.OS === 'web') {
+          window.alert('Lỗi: Không thể ngừng thuốc.');
+        } else {
+          Alert.alert('Lỗi', 'Không thể ngừng thuốc.');
+        }
+      }
+    };
+
+    if (Platform.OS === 'web') {
+      if (typeof window !== 'undefined' && window.confirm(`Ngừng dùng thuốc: Bác sĩ có chắc chắn muốn ngừng kê đơn thuốc "${name}"?`)) {
+        void doDelete();
+      }
+      return;
+    }
+
     Alert.alert('Ngừng dùng thuốc', `Bác sĩ có chắc chắn muốn ngừng kê đơn thuốc "${name}"?`, [
       { text: 'Hủy', style: 'cancel' },
       {
         text: 'Ngừng thuốc',
         style: 'destructive',
-        onPress: async () => {
-          try {
-            await doctorApi.deletePrescription(patientId, rxId);
-            setPrescriptions((prev) => prev.filter((r) => r.id !== rxId));
-            Alert.alert('Đã ngừng thuốc', `Đã loại bỏ "${name}" khỏi phác đồ.`);
-          } catch {
-            Alert.alert('Lỗi', 'Không thể ngừng thuốc.');
-          }
-        },
+        onPress: doDelete,
       },
     ]);
   };
