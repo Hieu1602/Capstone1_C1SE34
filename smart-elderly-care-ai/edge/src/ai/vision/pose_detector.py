@@ -16,6 +16,10 @@ from typing import Any, List, Optional, Tuple
 
 import numpy as np
 
+from .kinematics import PostureState
+from .tracker import PersonTracker, TrackedPerson
+from .utils import blur_faces
+
 logger = logging.getLogger(__name__)
 
 # ---------------------------------------------------------------------------
@@ -39,6 +43,10 @@ class PoseResult:
     keypoints: List[List[Keypoint]] = field(default_factory=list)
     confidence: float = 0.0
     raw_frame: Optional[np.ndarray] = None
+    # Mở rộng từ Repo 1 & 2: Tracking, Cảnh báo đột quỵ/bất động, Làm mờ mặt bảo vệ quyền riêng tư
+    is_immobile_detected: bool = False
+    tracks: List[TrackedPerson] = field(default_factory=list)
+    anonymized_frame: Optional[np.ndarray] = None
 
 
 # ---------------------------------------------------------------------------
@@ -47,7 +55,7 @@ class PoseResult:
 
 class PoseDetector:
     """
-    YOLOv8-Pose based human pose estimator and fall detector.
+    YOLOv8-Pose based human pose estimator, multi-person tracker and fall detector.
 
     Usage:
         detector = PoseDetector(config)
@@ -61,13 +69,23 @@ class PoseDetector:
         self.backend = None  # 'rknn' | 'onnx'
         self.input_shape = (640, 640)
         self.conf_threshold: float = config.get("confidence_threshold", 0.60)
-        self.horizontal_ratio_threshold: float = config.get(
-            "fall_detection", {}
-        ).get("horizontal_ratio_threshold", 0.5)
-        self.consecutive_frames: int = config.get(
-            "fall_detection", {}
-        ).get("consecutive_frames", 5)
+        fall_cfg = config.get("fall_detection", {})
+        self.horizontal_ratio_threshold: float = fall_cfg.get(
+            "horizontal_ratio_threshold", 0.5
+        )
+        self.consecutive_frames: int = fall_cfg.get(
+            "consecutive_frames", 5
+        )
+        self.enable_face_blur: bool = config.get("face_blurring", True)
         self._fall_frame_counter: int = 0
+
+        # Bộ theo dõi đa người và động học té ngã / đột quỵ
+        self.tracker = PersonTracker(
+            iou_threshold=fall_cfg.get("tracker_iou_threshold", 0.30),
+            max_missed_frames=fall_cfg.get("max_missed_frames", 15),
+            stitching_distance_threshold=fall_cfg.get("stitching_distance_threshold", 120.0),
+        )
+
 
     # ------------------------------------------------------------------
     # Model Loading
@@ -134,17 +152,61 @@ class PoseDetector:
             raw_output = self._infer_onnx(preprocessed)
 
         bboxes, keypoints_list = self._postprocess(raw_output, frame.shape)
-        is_fall = self._analyze_fall(bboxes, keypoints_list)
+        now = time.time()
+
+        # Cập nhật bộ theo dõi Multi-Person Tracker với Causal Track Stitching
+        kps_tuples = [
+            [(kp.x, kp.y, kp.confidence) for kp in kps]
+            for kps in keypoints_list
+        ]
+        active_tracks = self.tracker.update(bboxes, kps_tuples, now=now)
+
+        # Đánh giá sự kiện ngã & bất động kéo dài từ các track
+        is_fall_detected = False
+        is_immobile_detected = False
+        track_confidences = []
+
+        for track in active_tracks:
+            track_confidences.append(track.confidence)
+            if track.is_fall_alerted:
+                is_fall_detected = True
+                track.is_fall_alerted = False  # Reset cờ kích hoạt sau khi đọc
+            elif track.posture_state in (PostureState.FALLEN, PostureState.FALLING):
+                is_fall_detected = True
+
+            if track.is_stroke_alerted or track.posture_state == PostureState.IMMOBILE:
+                is_immobile_detected = True
+                track.is_stroke_alerted = False
+
+        # Fallback kiểm tra tĩnh nếu chưa đủ số frame theo dõi
+        if not active_tracks and bboxes:
+            is_fall_detected = self._analyze_fall(bboxes, keypoints_list)
+
+        # Làm mờ khuôn mặt thời gian thực (bảo vệ quyền riêng tư người cao tuổi)
+        anonymized = None
+        if self.enable_face_blur:
+            anonymized = blur_faces(frame, keypoints_list)
+
+        max_conf = max(
+            track_confidences
+            if track_confidences
+            else [kp.confidence for kps in keypoints_list for kp in kps],
+            default=0.0,
+        )
 
         return PoseResult(
-            timestamp=time.time(),
-            person_count=len(bboxes),
-            is_fall_detected=is_fall,
+            timestamp=now,
+            person_count=len(active_tracks) if active_tracks else len(bboxes),
+            is_fall_detected=is_fall_detected,
             bounding_boxes=bboxes,
             keypoints=keypoints_list,
-            confidence=max((kp.confidence for kps in keypoints_list for kp in kps), default=0.0),
+            confidence=float(max_conf),
             raw_frame=frame,
+            is_immobile_detected=is_immobile_detected,
+            tracks=active_tracks,
+            anonymized_frame=anonymized,
         )
+
 
     def _preprocess(self, frame: np.ndarray) -> np.ndarray:
         """Resize + normalize frame về input model."""

@@ -24,12 +24,23 @@ ai:
     model_path: "src/ai/vision/models/yolov8n-pose.rknn"  # RKNN for NPU
     fallback_model: "src/ai/vision/models/yolov8n-pose.onnx"
     confidence_threshold: 0.60
+    face_blurring: true  # Làm mờ mặt thời gian thực bảo vệ quyền riêng tư người già
     fall_detection:
       enabled: true
       # Tỷ lệ chiều cao/rộng bounding box khi ngã (nằm ngang)
       horizontal_ratio_threshold: 0.5
-      # Số frame liên tiếp phải phát hiện để xác nhận té ngã
+      aspect_ratio_threshold: 1.1
+      fallen_angle_threshold: 60.0        # Góc nghiêng cột sống > 60°
+      drop_velocity_threshold: 1.2        # Vận tốc rơi hông (chiều cao/giây)
+      min_fallen_duration: 0.5            # Thời gian duy trì tư thế thấp (giây)
+      immobility_alert_sec: 15.0          # Bất động > 15s sau ngã -> Cảnh báo đột quỵ/hôn mê
+      motion_energy_threshold: 8.0        # Ngưỡng dịch chuyển keypoint
+      # Multi-person Tracking & Causal Stitching
+      tracker_iou_threshold: 0.30
+      max_missed_frames: 15               # 1s tại 15fps
+      stitching_distance_threshold: 120.0 # Khoảng cách ghép track khi ngã (pixels)
       consecutive_frames: 5
+
   audio:
     model_path: "src/ai/audio/models/yamnet.tflite"
     sample_rate: 16000

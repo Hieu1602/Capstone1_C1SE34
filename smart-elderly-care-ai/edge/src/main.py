@@ -174,33 +174,48 @@ class EdgeGateway:
             # Lưu vào ring buffer
             self.ring_buffer.push(frame)
 
-            # Đẩy lên RTSP stream
-            if self.config["streaming"]["enabled"]:
-                self.rtsp_stream.push_frame(frame)
-
-            # Chạy pose detection trong thread pool
+            # Chạy pose detection và tracking trong thread pool
             result = await asyncio.get_event_loop().run_in_executor(
                 None, self.pose_detector.detect, frame
             )
 
-            # Cập nhật signals
-            self._signals.fall_detected_camera = result.is_fall_detected
-            self._signals.person_count         = result.person_count
+            # Đẩy lên RTSP stream (sử dụng frame đã làm mờ mặt nếu bật quyền riêng tư)
+            if self.config["streaming"]["enabled"]:
+                stream_frame = result.anonymized_frame if result.anonymized_frame is not None else frame
+                self.rtsp_stream.push_frame(stream_frame)
+
+            # Cập nhật signals đa cảm biến
+            self._signals.fall_detected_camera       = result.is_fall_detected
+            self._signals.immobility_detected_camera = result.is_immobile_detected
+            self._signals.fall_confidence            = result.confidence
+            self._signals.person_count               = result.person_count
 
             if result.person_count > 0:
                 self._last_motion_time = time.time()
                 self._signals.last_motion_time = self._last_motion_time
 
-            # Publish telemetry MQTT
-            self.mqtt_client.publish_telemetry({
+            # Publish telemetry MQTT kèm thông tin tracking
+            telemetry_data = {
                 "person_count": result.person_count,
                 "fall_detected": result.is_fall_detected,
-            })
+                "immobile_detected": result.is_immobile_detected,
+                "confidence": round(result.confidence, 2),
+            }
+            if result.tracks:
+                telemetry_data["tracks"] = [
+                    {
+                        "track_id": t.track_id,
+                        "state": getattr(t.posture_state, "value", str(t.posture_state)),
+                    }
+                    for t in result.tracks
+                ]
+            self.mqtt_client.publish_telemetry(telemetry_data)
 
             # Đánh giá Decision Matrix
             await self._evaluate_and_alert()
 
             await asyncio.sleep(interval)
+
 
     async def _thermal_loop(self) -> None:
         """Vòng lặp đọc cảm biến nhiệt AMG8833."""
@@ -257,20 +272,26 @@ class EdgeGateway:
             decision.message_vi,
         )
 
-        # Gửi alert MQTT
+        # Lưu video clip bằng chứng (5s) và 3 ảnh snapshot (-3s, -1.5s, 0s)
+        incident_id = int(time.time())
+        clip_path = f"/tmp/incident_{incident_id}.mp4"
+        self.ring_buffer.save_clip(clip_path, pre_event_sec=5.0)
+        snapshot_paths = self.ring_buffer.save_incident_snapshots(f"/tmp/incident_{incident_id}")
+
+        # Gửi alert MQTT kèm bằng chứng
         self.mqtt_client.publish_alert({
             "alert_type":  decision.alert_type.value,
             "alert_level": decision.alert_level.value,
             "message":     decision.message_vi,
             "confidence":  decision.confidence,
             "sources":     decision.sources,
+            "incident_id": incident_id,
+            "snapshots":   snapshot_paths,
+            "clip_path":   clip_path,
         })
 
-        # Lưu video clip bằng chứng
-        clip_path = f"/tmp/incident_{int(time.time())}.mp4"
-        self.ring_buffer.save_clip(clip_path, pre_event_sec=5.0)
-
         # Phát cảnh báo qua loa
+
         asyncio.ensure_future(self.speaker.speak(decision.message_vi))
         if decision.alert_level.value in ("HIGH", "CRITICAL"):
             asyncio.ensure_future(self.speaker.play_alert_sound())

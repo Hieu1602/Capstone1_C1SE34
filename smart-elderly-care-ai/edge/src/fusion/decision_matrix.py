@@ -30,13 +30,14 @@ class AlertLevel(str, Enum):
 
 
 class AlertType(str, Enum):
-    FALL_DETECTED     = "FALL_DETECTED"
-    ABNORMAL_HR       = "ABNORMAL_HR"
-    LOW_SPO2          = "LOW_SPO2"
-    HIGH_TEMPERATURE  = "HIGH_TEMPERATURE"
-    EMERGENCY_SOUND   = "EMERGENCY_SOUND"
-    INACTIVITY        = "INACTIVITY"
-    COMPOUND          = "COMPOUND"  # Kết hợp nhiều nguồn
+    FALL_DETECTED         = "FALL_DETECTED"
+    PROLONGED_IMMOBILITY  = "PROLONGED_IMMOBILITY"  # Cảnh báo bất động kéo dài / đột quỵ
+    ABNORMAL_HR           = "ABNORMAL_HR"
+    LOW_SPO2              = "LOW_SPO2"
+    HIGH_TEMPERATURE      = "HIGH_TEMPERATURE"
+    EMERGENCY_SOUND       = "EMERGENCY_SOUND"
+    INACTIVITY            = "INACTIVITY"
+    COMPOUND              = "COMPOUND"  # Kết hợp nhiều nguồn
 
 
 @dataclass
@@ -46,7 +47,10 @@ class SensorSignals:
 
     # Vision
     fall_detected_camera: bool = False
+    immobility_detected_camera: bool = False
+    fall_confidence: float = 0.0
     person_count: int = 0
+
 
     # Audio
     emergency_sound_detected: bool = False
@@ -154,7 +158,18 @@ class DecisionMatrix:
                 message=f"Phát hiện té ngã! Xác nhận bởi: {', '.join(fall_sources)}",
             )
 
+        # ---- Kiểm tra bất động kéo dài (nguy cơ đột quỵ / bất tỉnh) ----
+        if signals.immobility_detected_camera:
+            return self._make_result(
+                alert_type=AlertType.PROLONGED_IMMOBILITY,
+                level=AlertLevel.CRITICAL,
+                confidence=0.92,
+                sources=["camera_ai"],
+                message="CẢNH BÁO KHẨN CẤP: Phát hiện người cao tuổi nằm bất động kéo dài (nguy cơ đột quỵ/hôn mê)! Cần kiểm tra ngay!",
+            )
+
         # ---- Kiểm tra HR bất thường ----
+
         if signals.heart_rate is not None:
             if signals.heart_rate > self.hr_max or signals.heart_rate < self.hr_min:
                 return self._make_result(

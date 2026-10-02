@@ -8,7 +8,7 @@ Provides:
 - Coordinate transformation helpers
 """
 
-from typing import List, Tuple
+from typing import List, Optional, Tuple
 import numpy as np
 import logging
 
@@ -31,23 +31,84 @@ SKELETON_CONNECTIONS: List[Tuple[int, int]] = [
 ]
 
 
+def blur_faces(
+    frame: np.ndarray,
+    keypoints_list: List,
+    kernel_size: Tuple[int, int] = (51, 51),
+    sigma: float = 30.0,
+) -> np.ndarray:
+    """
+    Làm mờ khuôn mặt người cao tuổi để bảo vệ quyền riêng tư (Privacy Preservation).
+    Trích xuất từ vị trí 5 keypoints vùng đầu (nose, eyes, ears) của COCO Pose.
+    """
+    try:
+        import cv2  # type: ignore
+    except ImportError:
+        return frame
+
+    if not keypoints_list:
+        return frame
+
+    h_img, w_img = frame.shape[:2]
+    blurred = frame.copy()
+
+    for kps in keypoints_list:
+        # Lấy 5 keypoints vùng đầu: 0=nose, 1=left_eye, 2=right_eye, 3=left_ear, 4=right_ear
+        head_pts = []
+        for i in range(min(5, len(kps))):
+            kp = kps[i]
+            # Keypoint object hoặc tuple (x, y, conf)
+            conf = getattr(kp, "confidence", kp[2] if len(kp) > 2 else 0.0)
+            x = getattr(kp, "x", kp[0])
+            y = getattr(kp, "y", kp[1])
+            if conf > 0.25:
+                head_pts.append((x, y))
+
+        if not head_pts:
+            continue
+
+        xs = [p[0] for p in head_pts]
+        ys = [p[1] for p in head_pts]
+
+        min_x, max_x = min(xs), max(xs)
+        min_y, max_y = min(ys), max(ys)
+
+        head_w = max(max_x - min_x, 30.0)
+        head_h = max(max_y - min_y, 30.0)
+
+        # Mở rộng vùng mặt thêm margin 40% để che trọn khuôn mặt
+        margin_x = head_w * 0.4
+        margin_y = head_h * 0.5
+
+        x1 = max(0, int(min_x - margin_x))
+        y1 = max(0, int(min_y - margin_y))
+        x2 = min(w_img, int(max_x + margin_x))
+        y2 = min(h_img, int(max_y + margin_y))
+
+        if x2 > x1 and y2 > y1:
+            face_roi = blurred[y1:y2, x1:x2]
+            face_roi = cv2.GaussianBlur(face_roi, kernel_size, sigma)
+            blurred[y1:y2, x1:x2] = face_roi
+
+    return blurred
+
+
 def draw_pose(
     frame: np.ndarray,
     keypoints: List,
     bboxes: List[Tuple[float, float, float, float]],
     is_fall: bool = False,
+    tracks: Optional[List] = None,
 ) -> np.ndarray:
     """
-    Vẽ skeleton và bounding box lên frame để debug/visualization.
+    Vẽ skeleton, bounding box và trạng thái tracking lên frame để hiển thị.
 
     Args:
         frame: BGR numpy array
         keypoints: List of Keypoint lists (one per person)
         bboxes: Bounding boxes (x1,y1,x2,y2)
         is_fall: True nếu phát hiện té ngã (vẽ màu đỏ)
-
-    Returns:
-        Annotated frame
+        tracks: Danh sách TrackedPerson (nếu có)
     """
     try:
         import cv2  # type: ignore
@@ -56,35 +117,70 @@ def draw_pose(
         return frame
 
     output = frame.copy()
-    color_normal = (0, 255, 0)   # Green
-    color_fall   = (0, 0, 255)   # Red
-    color_kp     = (255, 0, 0)   # Blue for keypoints
+    color_normal   = (0, 255, 0)     # Green
+    color_fall     = (0, 0, 255)     # Red
+    color_immobile = (0, 140, 255)   # Orange (Cảnh báo đột quỵ/bất động)
+    color_kp       = (255, 200, 0)   # Cyan/Yellow
+
+    # Map track theo index nếu có
+    track_dict = {}
+    if tracks:
+        for t in tracks:
+            track_dict[t.track_id] = t
 
     for i, (x1, y1, x2, y2) in enumerate(bboxes):
-        color = color_fall if is_fall else color_normal
+        current_track = tracks[i] if (tracks and i < len(tracks)) else None
+
+        # Xác định màu sắc và nhãn
+        color = color_normal
+        label = "Person"
+
+        if current_track:
+            state = getattr(current_track, "posture_state", "STANDING")
+            state_val = getattr(state, "value", str(state))
+            track_id = getattr(current_track, "track_id", i + 1)
+            
+            if state_val in ("FALLEN", "FALLING") or is_fall:
+                color = color_fall
+                label = f"ID:{track_id} [FALL DETECTED!]"
+            elif state_val == "IMMOBILE":
+                color = color_immobile
+                label = f"ID:{track_id} [IMMOBILE / STROKE RISK]"
+            else:
+                label = f"ID:{track_id} [{state_val}]"
+        elif is_fall:
+            color = color_fall
+            label = "FALL DETECTED!"
+
         cv2.rectangle(output, (int(x1), int(y1)), (int(x2), int(y2)), color, 2)
-        label = "FALL DETECTED!" if is_fall else "Person"
         cv2.putText(
-            output, label, (int(x1), int(y1) - 8),
-            cv2.FONT_HERSHEY_SIMPLEX, 0.6, color, 2
+            output, label, (int(x1), max(20, int(y1) - 8)),
+            cv2.FONT_HERSHEY_SIMPLEX, 0.55, color, 2
         )
 
         if i < len(keypoints):
             kps = keypoints[i]
             # Draw keypoints
             for kp in kps:
-                if kp.confidence > 0.3:
-                    cv2.circle(output, (int(kp.x), int(kp.y)), 4, color_kp, -1)
+                conf = getattr(kp, "confidence", kp[2] if len(kp) > 2 else 0.0)
+                kx = getattr(kp, "x", kp[0])
+                ky = getattr(kp, "y", kp[1])
+                if conf > 0.3:
+                    cv2.circle(output, (int(kx), int(ky)), 3, color_kp, -1)
 
             # Draw skeleton
             for (a, b) in SKELETON_CONNECTIONS:
                 if a < len(kps) and b < len(kps):
-                    if kps[a].confidence > 0.3 and kps[b].confidence > 0.3:
-                        pt_a = (int(kps[a].x), int(kps[a].y))
-                        pt_b = (int(kps[b].x), int(kps[b].y))
-                        cv2.line(output, pt_a, pt_b, color_normal, 2)
+                    ka, kb = kps[a], kps[b]
+                    ca = getattr(ka, "confidence", ka[2] if len(ka) > 2 else 0.0)
+                    cb = getattr(kb, "confidence", kb[2] if len(kb) > 2 else 0.0)
+                    if ca > 0.3 and cb > 0.3:
+                        pt_a = (int(getattr(ka, "x", ka[0])), int(getattr(ka, "y", ka[1])))
+                        pt_b = (int(getattr(kb, "x", kb[0])), int(getattr(kb, "y", kb[1])))
+                        cv2.line(output, pt_a, pt_b, color, 2)
 
     return output
+
 
 
 def nms(
