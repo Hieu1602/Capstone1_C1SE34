@@ -31,6 +31,7 @@ import HouseDetailScreen from '../features/dashboard/screens/HouseDetailScreen';
 import AIModelDetailScreen from '../features/dashboard/screens/AIModelDetailScreen';
 import AlgoConfigScreen from '../features/dashboard/screens/AlgoConfigScreen';
 import MedicalReportScreen from '../features/history/MedicalReportScreen';
+import HistoryScreen from '../features/history/HistoryScreen';
 import IncidentDetailScreen from '../features/alerts/screens/IncidentDetailScreen';
 import AddDeviceScreen from '../features/dashboard/screens/AddDeviceScreen';
 import CreateGroupScreen from '../features/dashboard/screens/CreateGroupScreen';
@@ -161,6 +162,7 @@ export default function AppNavigator() {
             <Stack.Screen name="AIModelDetail" component={AIModelDetailScreen} />
             <Stack.Screen name="AlgoConfig" component={AlgoConfigScreen} />
             <Stack.Screen name="MedicalReport" component={MedicalReportScreen} />
+            <Stack.Screen name="History" component={HistoryScreen} />
             <Stack.Screen name="AddDevice" component={AddDeviceScreen} />
             <Stack.Screen name="CreateGroup" component={CreateGroupScreen} />
             <Stack.Screen name="SmartbandDetail" component={SmartbandDetailScreen} />

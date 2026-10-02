@@ -139,15 +139,21 @@ def draw_pose(
             state = getattr(current_track, "posture_state", "STANDING")
             state_val = getattr(state, "value", str(state))
             track_id = getattr(current_track, "track_id", i + 1)
-            
+            is_elderly = getattr(current_track, "is_elderly", False)
+            person_name = getattr(current_track, "person_name", f"ID:{track_id}")
+
             if state_val in ("FALLEN", "FALLING") or is_fall:
                 color = color_fall
-                label = f"ID:{track_id} [FALL DETECTED!]"
+                label = f"[{person_name}] [FALL DETECTED!]"
             elif state_val == "IMMOBILE":
                 color = color_immobile
-                label = f"ID:{track_id} [IMMOBILE / STROKE RISK]"
+                label = f"[{person_name}] [IMMOBILE / STROKE RISK]"
+            elif is_elderly:
+                color = (0, 255, 128)  # Xanh ngọc nổi bật cho Người cao tuổi
+                label = f"[{person_name}] [{state_val}]"
             else:
-                label = f"ID:{track_id} [{state_val}]"
+                color = (255, 220, 50)  # Vàng cam cho Khách / Người nhà
+                label = f"ID:{track_id} [{person_name}] [{state_val}]"
         elif is_fall:
             color = color_fall
             label = "FALL DETECTED!"

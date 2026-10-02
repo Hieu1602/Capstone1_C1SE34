@@ -35,75 +35,12 @@ interface ChatMessage {
 // Các loại cảnh báo lỗi AI
 type AIErrorType = 'NONE' | 'HUB_OFFLINE' | 'BLE_DISCONNECTED' | 'CAMERA_OCCLUDED' | 'NETWORK_TIMEOUT';
 
-// Dữ liệu mẫu các cuộc trò chuyện y tế trong lịch sử
-const INITIAL_HISTORY_CHATS = [
-  {
-    id: 'chat-1',
-    title: 'Tư vấn xử lý huyết áp cao tại nhà',
-    messages: [
-      {
-        id: 'msg-1-1',
-        sender: 'user',
-        text: 'Huyết áp của mẹ tôi đo được 155/95 mmHg, có cao quá không và cần xử lý thế nào?',
-        timestamp: '08:30',
-      },
-      {
-        id: 'msg-1-2',
-        sender: 'ai',
-        text: '❤️ Chỉ số 155/95 mmHg thuộc mức Tăng huyết áp độ 1.\n\n1. Giữ bình tĩnh: Cho cụ ngồi nghỉ ngơi tĩnh lặng ở nơi thoáng mát 15-20 phút, tựa lưng thoải mái, không nói chuyện.\n2. Uống một cốc nước ấm, kiểm tra xem cụ đã uống thuốc huyết áp buổi sáng theo đơn của bác sĩ chưa.\n3. Tiến hành đo lại sau 20 phút. Nếu huyết áp tăng > 180 mmHg hoặc cụ có biểu hiện đau đầu, chóng mặt, buồn nôn, hãy gọi cấp cứu hoặc đưa cụ đến cơ sở y tế ngay.\n\nHiện tại nhịp tim đo qua vòng BLE là 74 bpm (Bình thường).',
-        timestamp: '08:31',
-      },
-      {
-        id: 'msg-1-3',
-        sender: 'user',
-        text: 'Đo lại sau 20 phút thì xuống 138/85 rồi, cảm ơn AI!',
-        timestamp: '08:52',
-      },
-      {
-        id: 'msg-1-4',
-        sender: 'ai',
-        text: 'Dạ rất tốt ạ! Huyết áp 138/85 mmHg đã hạ về ngưỡng an toàn. Bạn hãy tiếp tục theo dõi biến động sức khoẻ của cụ qua vòng đeo tay BLE trên ứng dụng nhé.',
-        timestamp: '08:53',
-      },
-    ],
-  },
-  {
-    id: 'chat-2',
-    title: 'Giải thích chỉ số SpO₂ 93% có nguy hiểm không',
-    messages: [
-      {
-        id: 'msg-2-1',
-        sender: 'user',
-        text: 'Vòng tay báo nồng độ oxy SpO2 của cụ là 93%, mức này có nguy hiểm không?',
-        timestamp: '14:15',
-      },
-      {
-        id: 'msg-2-2',
-        sender: 'ai',
-        text: '⚠️ Chỉ số SpO₂ 93% là dấu hiệu cảnh báo giảm oxy máu nhẹ (mức an toàn chuẩn của người cao tuổi là từ 95% - 100%).\n\n• Hãy kiểm tra ngay xem cụ có bị khó thở, thở gấp, hụt hơi hoặc mệt mỏi tím tái môi không.\n• Nhắc cụ ngồi tựa lưng thẳng, nới lỏng cúc áo ngực, hít sâu bằng mũi và thở chậm bằng miệng.\n• Kiểm tra xem đầu cảm biến quang học của vòng tay có bị lỏng, xoay lệch hoặc bám mồ hôi không và thử đo lại.\n\nNếu chỉ số SpO₂ duy trì dưới 93% quá 15 phút, cần cho cụ thở oxy hỗ trợ hoặc liên hệ bác sĩ gia đình.',
-        timestamp: '14:16',
-      },
-    ],
-  },
-  {
-    id: 'chat-3',
-    title: 'Quy trình sơ cứu khi người già bị trượt chân',
-    messages: [
-      {
-        id: 'msg-3-1',
-        sender: 'user',
-        text: 'Mẹ tôi vừa bị trượt chân ngã trong phòng khách, tôi nên làm gì đầu tiên?',
-        timestamp: '19:00',
-      },
-      {
-        id: 'msg-3-2',
-        sender: 'ai',
-        text: '🚨 HƯỚNG DẪN SƠ CỨU TRƯỢT NGÃ Ở NGƯỜI CAO TUỔI:\n\n1. GIỮ BÌNH TĨNH: Tuyệt đối không vội vàng nâng cụ dậy ngay! Việc kéo giật cụ có thể làm lệch vị trí gãy xương nếu có chấn thương.\n2. KIỂM TRA TRI GIÁC: Hỏi xem cụ còn tỉnh táo không, hỏi vị trí đau (khớp háng, cổ xương đùi, cổ tay, gáy).\n3. QUAN SÁT TƯ THẾ: Nếu một bên chân ngắn hơn hoặc bàn chân xoay ngoài bất thường, nghi ngờ gãy cổ xương đùi, tuyệt đối giữ nguyên tư thế.\n4. Đắp chăn mỏng giữ ấm cơ thể cho cụ trong khi chờ hỗ trợ y tế.\n\nCamera AI phòng khách đang theo dõi liên tục ở tốc độ 32 FPS để đảm bảo an toàn.',
-        timestamp: '19:01',
-      },
-    ],
-  },
-];
+// Lịch sử các cuộc trò chuyện y tế
+export interface HistoryChat {
+  id: string;
+  title: string;
+  messages: ChatMessage[];
+}
 
 export default function AIAssistantScreen({ navigation }: any) {
   const { isDarkMode, colors } = useTheme();
@@ -150,22 +87,23 @@ export default function AIAssistantScreen({ navigation }: any) {
   // 5. Cảnh báo lỗi AI (chỉ đưa ra cảnh báo lỗi, không có nút mô phỏng test)
   const [aiError, setAiError] = useState<AIErrorType>('NONE');
 
-  // 6. State tìm kiếm trong các cuộc trò chuyện lịch sử
+  // 6. State tìm kiếm và danh sách cuộc trò chuyện lịch sử
+  const [historyChats, setHistoryChats] = useState<HistoryChat[]>([]);
   const [isSearching, setIsSearching] = useState(false);
   const [searchQuery, setSearchQuery] = useState('');
 
   // Hàm mở lại cuộc trò chuyện từ lịch sử khi người dùng bấm vào
-  const handleOpenHistoryChat = (chat: (typeof INITIAL_HISTORY_CHATS)[0]) => {
-    setMessages(chat.messages as ChatMessage[]);
+  const handleOpenHistoryChat = (chat: HistoryChat) => {
+    setMessages(chat.messages);
     closeSidebar();
   };
 
   // Lọc danh sách cuộc trò chuyện theo từ khóa tìm kiếm (tìm cả tiêu đề lẫn nội dung câu hỏi)
-  const filteredChats = INITIAL_HISTORY_CHATS.filter((chat) => {
+  const filteredChats = historyChats.filter((chat: HistoryChat) => {
     if (!searchQuery.trim()) return true;
     const q = searchQuery.toLowerCase();
     const matchTitle = chat.title.toLowerCase().includes(q);
-    const matchMsg = chat.messages.some((m) => m.text.toLowerCase().includes(q));
+    const matchMsg = chat.messages.some((m: ChatMessage) => m.text.toLowerCase().includes(q));
     return matchTitle || matchMsg;
   });
 
@@ -206,7 +144,10 @@ export default function AIAssistantScreen({ navigation }: any) {
       const lower = textToSend.toLowerCase();
 
       if (lower.includes('nhịp tim') || lower.includes('spo2') || lower.includes('sinh hiệu') || lower.includes('sức khoẻ')) {
-        reply = `❤️ Chỉ số sức khoẻ hiện tại:\n• Nhịp tim: ${currentVitals.heart_rate ?? 74} bpm (Ổn định)\n• Nồng độ Oxy SpO₂: ${currentVitals.spo2 ?? 98}% (Rất tốt)\n• Thân nhiệt AMG8833: ${currentVitals.skin_temp_max ?? 36.8}°C (Bình thường)\n\nKhông có dấu hiệu bất thường nào trong 24 giờ qua.`;
+        const hrText = currentVitals?.heart_rate != null ? `${currentVitals.heart_rate} bpm` : 'Chưa có tín hiệu';
+        const spo2Text = currentVitals?.spo2 != null ? `${currentVitals.spo2}%` : 'Chưa có tín hiệu';
+        const tempText = currentVitals?.skin_temp_max != null ? `${currentVitals.skin_temp_max}°C` : 'Chưa có tín hiệu';
+        reply = `❤️ Chỉ số sức khoẻ thời gian thực:\n• Nhịp tim: ${hrText}\n• Nồng độ Oxy SpO₂: ${spo2Text}\n• Thân nhiệt AMG8833: ${tempText}\n\nĐang kết nối giám sát trực tiếp từ cảm biến.`;
       } else if (lower.includes('ngã') || lower.includes('té') || lower.includes('fall')) {
         reply = '🛡️ Hệ thống YOLO-Pose 17 khớp xương đang theo dõi liên tục ở tốc độ 32 FPS.\nHiện tại người cao tuổi đang ở trạng thái an toàn, góc nghiêng cột sống < 20°.\nNếu phát hiện ngã hoặc nằm bất động quá 30 giây, còi báo động Red Alert và video 5s sẽ được kích hoạt ngay lập tức!';
       } else if (lower.includes('sơ cứu') || lower.includes('cấp cứu')) {
@@ -227,6 +168,18 @@ export default function AIAssistantScreen({ navigation }: any) {
 
   // Tạo cuộc trò chuyện mới
   const handleNewChat = () => {
+    if (messages.length > 0) {
+      const firstUserMsg = messages.find((m: ChatMessage) => m.sender === 'user');
+      const title = firstUserMsg ? firstUserMsg.text.slice(0, 30) : 'Cuộc trò chuyện';
+      setHistoryChats((prev: HistoryChat[]) => [
+        {
+          id: Date.now().toString(),
+          title: title + (firstUserMsg && firstUserMsg.text.length > 30 ? '...' : ''),
+          messages: [...messages],
+        },
+        ...prev,
+      ]);
+    }
     setMessages([]);
     setSearchQuery('');
     setIsSearching(false);
@@ -541,7 +494,7 @@ export default function AIAssistantScreen({ navigation }: any) {
                   <Text style={[styles.emptySearchText, isDarkMode && { color: colors.textSecondary }]}>Không tìm thấy cuộc trò chuyện phù hợp</Text>
                 </View>
               ) : (
-                filteredChats.map((chat) => (
+                filteredChats.map((chat: HistoryChat) => (
                   <TouchableOpacity
                     key={chat.id}
                     style={[styles.sidebarItemRow, isDarkMode && { backgroundColor: colors.card }]}

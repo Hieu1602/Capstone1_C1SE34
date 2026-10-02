@@ -131,18 +131,9 @@ export default function IncidentDetailScreen({ route, navigation }: any) {
     try {
       const res = await incidentsApi.get(incidentId);
       setIncident(res.data);
-    } catch {
-      // Mock data
-      setIncident({
-        id: incidentId,
-        alert_type: 'FALL_DETECTED',
-        alert_level: 'CRITICAL',
-        message: 'Phát hiện té ngã! Xác nhận bởi: camera_ai, audio_ai',
-        confidence: 0.92,
-        video_clip_url: 'https://commondatastorage.googleapis.com/gtv-videos-bucket/sample/BigBuckBunny.mp4',
-        is_acknowledged: false,
-        created_at: new Date().toISOString(),
-      });
+    } catch (err) {
+      console.warn('Không tìm thấy sự cố thực tế từ backend API:', err);
+      setIncident(null);
     } finally {
       setLoading(false);
     }
@@ -214,10 +205,31 @@ export default function IncidentDetailScreen({ route, navigation }: any) {
     }
   };
 
-  if (!incident || loading) {
+  if (loading) {
     return (
-      <SafeAreaView style={styles.container}>
-        <Text style={styles.loadingText}>Đang tải...</Text>
+      <SafeAreaView style={[styles.container, { backgroundColor: colors.background, justifyContent: 'center', alignItems: 'center' }]}>
+        <ActivityIndicator size="large" color="#FF7A00" />
+        <Text style={[styles.loadingText, { color: colors.textSecondary, marginTop: 12 }]}>Đang tải chi tiết sự cố thực tế...</Text>
+      </SafeAreaView>
+    );
+  }
+
+  if (!incident) {
+    return (
+      <SafeAreaView style={[styles.container, { backgroundColor: colors.background, justifyContent: 'center', alignItems: 'center', padding: 24 }]}>
+        <Ionicons name="alert-circle-outline" size={54} color="#94A3B8" />
+        <Text style={{ color: colors.textPrimary, fontSize: 16, fontWeight: '700', marginTop: 16, textAlign: 'center' }}>
+          Không tìm thấy sự cố thực tế
+        </Text>
+        <Text style={{ color: colors.textSecondary, fontSize: 13, marginTop: 8, textAlign: 'center', lineHeight: 20 }}>
+          Sự cố có thể đã được xử lý xong hoặc không tồn tại trong hệ thống.
+        </Text>
+        <TouchableOpacity
+          onPress={() => navigation.goBack()}
+          style={{ marginTop: 24, paddingVertical: 12, paddingHorizontal: 24, backgroundColor: '#FF7A00', borderRadius: 10 }}
+        >
+          <Text style={{ color: '#FFFFFF', fontWeight: '600' }}>Quay lại danh sách</Text>
+        </TouchableOpacity>
       </SafeAreaView>
     );
   }

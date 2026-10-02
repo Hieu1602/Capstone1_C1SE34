@@ -56,12 +56,14 @@ def load_config(path: str = "config/config.yaml") -> dict:
     """Load YAML config. Override with environment variables nếu có."""
     config_path = Path(__file__).parent.parent / path
     with open(config_path, "r", encoding="utf-8") as f:
-        cfg = yaml.safe_load(f)
+        loaded = yaml.safe_load(f)
+    cfg: dict = loaded if isinstance(loaded, dict) else {}
 
     # Override nhạy cảm từ environment
     mqtt_cfg = cfg.setdefault("mqtt", {})
-    mqtt_cfg["password"] = os.environ.get("MQTT_PASSWORD", mqtt_cfg.get("password", ""))
-    mqtt_cfg["username"] = os.environ.get("MQTT_USERNAME", mqtt_cfg.get("username", ""))
+    if isinstance(mqtt_cfg, dict):
+        mqtt_cfg["password"] = os.environ.get("MQTT_PASSWORD", mqtt_cfg.get("password", ""))
+        mqtt_cfg["username"] = os.environ.get("MQTT_USERNAME", mqtt_cfg.get("username", ""))
 
     return cfg
 
@@ -194,7 +196,7 @@ class EdgeGateway:
                 self._last_motion_time = time.time()
                 self._signals.last_motion_time = self._last_motion_time
 
-            # Publish telemetry MQTT kèm thông tin tracking
+            # Publish telemetry MQTT kèm thông tin tracking & sinh hoạt thường nhật (ADL)
             telemetry_data = {
                 "person_count": result.person_count,
                 "fall_detected": result.is_fall_detected,
@@ -202,10 +204,24 @@ class EdgeGateway:
                 "confidence": round(result.confidence, 2),
             }
             if result.tracks:
+                primary = result.tracks[0]
+                telemetry_data["primary_activity"] = getattr(
+                    primary.posture_state, "value", str(primary.posture_state)
+                )
+                telemetry_data["adl_stats"] = {
+                    "activity": getattr(primary.posture_state, "value", str(primary.posture_state)),
+                    "sitting_duration_sec": round(primary.adl_stats.sitting_duration_sec, 1),
+                    "standing_duration_sec": round(primary.adl_stats.standing_duration_sec, 1),
+                    "lying_duration_sec": round(primary.adl_stats.lying_duration_sec, 1),
+                    "drinking_count": primary.adl_stats.drinking_count,
+                    "sedentary_warning": primary.adl_stats.sedentary_warning,
+                }
                 telemetry_data["tracks"] = [
                     {
                         "track_id": t.track_id,
                         "state": getattr(t.posture_state, "value", str(t.posture_state)),
+                        "activity_duration_sec": round(time.time() - t.state_enter_time, 1),
+                        "sedentary_warning": t.adl_stats.sedentary_warning,
                     }
                     for t in result.tracks
                 ]

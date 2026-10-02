@@ -28,7 +28,7 @@ export interface VitalData {
   fall_detected: boolean;
   timestamp: number | null;
   acoustic_status?: string;
-  bracelet_battery?: number;
+  bracelet_battery?: number | null;
   bracelet_connected?: boolean;
   edge_hub_connected?: boolean;
 }
@@ -83,6 +83,8 @@ export interface PatientMedicalRecord {
   doctor_specialty: string;
   hospital: string;
   next_appointment: string;
+  avatar_url?: string | null;
+  has_face_enrolled?: boolean;
 }
 
 export interface ReminderItem {
@@ -180,6 +182,7 @@ interface VitalStoreState {
   fetchSystemMode: () => Promise<{ mode: string; is_mute_alarm: boolean; is_camera_privacy: boolean } | null>;
   fetchReminders: () => Promise<RemindersData | null>;
   fetchPatientRecord: (patientId?: number) => Promise<PatientMedicalRecord | null>;
+  enrollPatientFace: (patientId: number, formData: FormData) => Promise<any>;
   fetchNotifications: () => Promise<Incident[] | null>;
 
   setVitals: (data: Partial<VitalData>) => void;
@@ -218,74 +221,18 @@ interface VitalStoreState {
 
 const createVitalStore: StateCreator<VitalStoreState> = (set, get) => ({
   currentVitals: {
-    heart_rate: 74,
-    spo2: 98,
-    skin_temp_max: 36.8,
-    person_count: 1,
+    heart_rate: null,
+    spo2: null,
+    skin_temp_max: null,
+    person_count: null,
     fall_detected: false,
-    timestamp: Date.now(),
+    timestamp: null,
     acoustic_status: 'Bình thường',
-    bracelet_battery: 88,
-    bracelet_connected: true,
-    edge_hub_connected: true,
+    bracelet_battery: null,
+    bracelet_connected: false,
+    edge_hub_connected: false,
   },
-  incidents: [
-    {
-      id: 'inc-01',
-      device_id: 'hub-001',
-      alert_type: 'PERSON_DETECTED',
-      alert_level: 'LOW',
-      message: 'Nhận diện người cao tuổi đang sinh hoạt tại phòng khách (YOLOv8)',
-      video_clip_url: null,
-      thumbnail_url: 'https://images.unsplash.com/photo-1576765608535-5f04d1e3f289?w=300&q=80',
-      is_acknowledged: true,
-      created_at: new Date(Date.now() - 45 * 1000).toISOString(),
-    },
-    {
-      id: 'inc-02',
-      device_id: 'hub-001',
-      alert_type: 'PERSON_DETECTED',
-      alert_level: 'LOW',
-      message: 'Phát hiện chuyển động di chuyển ra khu vực cửa sổ',
-      video_clip_url: null,
-      thumbnail_url: 'https://images.unsplash.com/photo-1581056771107-24ca5f033842?w=300&q=80',
-      is_acknowledged: true,
-      created_at: new Date(Date.now() - 10 * 60 * 1000).toISOString(),
-    },
-    {
-      id: 'inc-03',
-      device_id: 'hub-001',
-      alert_type: 'FALL_DETECTED',
-      alert_level: 'CRITICAL',
-      message: '🚨 Cảnh báo té ngã (Fall Detected) - Trích xuất clip 5s bộ đệm Edge Hub RAM',
-      video_clip_url: 'https://commondatastorage.googleapis.com/gtv-videos-bucket/sample/BigBuckBunny.mp4',
-      thumbnail_url: 'https://images.unsplash.com/photo-1516549655169-df83a0774514?w=300&q=80',
-      is_acknowledged: false,
-      created_at: new Date(Date.now() - 28 * 60 * 1000).toISOString(),
-    },
-    {
-      id: 'inc-04',
-      device_id: 'hub-001',
-      alert_type: 'HIGH_HEART_RATE',
-      alert_level: 'HIGH',
-      message: 'Nhịp tim đo được từ vòng đeo tay BLE Band: 128 bpm (Vượt ngưỡng 100 bpm)',
-      video_clip_url: null,
-      thumbnail_url: null,
-      is_acknowledged: false,
-      created_at: new Date(Date.now() - 52 * 60 * 1000).toISOString(),
-    },
-    {
-      id: 'inc-05',
-      device_id: 'hub-001',
-      alert_type: 'ACOUSTIC_DISTRESS',
-      alert_level: 'CRITICAL',
-      message: 'Phát hiện âm thanh cầu cứu: "Cứu tôi với!" tại khu vực bếp (YAMNet AI)',
-      video_clip_url: 'https://commondatastorage.googleapis.com/gtv-videos-bucket/sample/ForBiggerBlazes.mp4',
-      thumbnail_url: 'https://images.unsplash.com/photo-1584515979956-d9f6e5d09982?w=300&q=80',
-      is_acknowledged: false,
-      created_at: new Date(Date.now() - 120 * 60 * 1000).toISOString(),
-    },
-  ],
+  incidents: [],
   activeDevice: {
     id: 'hub-001',
     device_id: 'hub-001',
@@ -344,16 +291,16 @@ const createVitalStore: StateCreator<VitalStoreState> = (set, get) => ({
       if (res.data) {
         const d = res.data;
         const updatedVitals: VitalData = {
-          heart_rate: d.heart_rate ?? 74,
-          spo2: d.spo2 ?? 98,
-          skin_temp_max: d.body_temp ?? 36.8,
-          person_count: d.person_count ?? 1,
+          heart_rate: d.heart_rate ?? null,
+          spo2: d.spo2 ?? null,
+          skin_temp_max: d.skin_temp_max ?? d.body_temp ?? null,
+          person_count: d.person_count ?? 0,
           fall_detected: Boolean(d.fall_detected),
           timestamp: d.timestamp ?? Date.now(),
           acoustic_status: d.sound ?? 'Bình thường',
-          bracelet_battery: d.bracelet_battery ?? 88,
-          bracelet_connected: true,
-          edge_hub_connected: d.edge_hub_connected ?? true,
+          bracelet_battery: d.bracelet_battery ?? null,
+          bracelet_connected: d.bracelet_connected !== undefined ? Boolean(d.bracelet_connected) : true,
+          edge_hub_connected: d.edge_hub_connected !== undefined ? Boolean(d.edge_hub_connected) : true,
         };
         set({ currentVitals: updatedVitals, isLoadingVitals: false });
         return updatedVitals;
@@ -423,6 +370,29 @@ const createVitalStore: StateCreator<VitalStoreState> = (set, get) => ({
       console.warn('fetchPatientRecord API fallback:', e);
     }
     set({ isLoadingPatient: false });
+    return null;
+  },
+
+  enrollPatientFace: async (patientId: number, formData: FormData) => {
+    try {
+      const res = await patientApi.enrollFace(patientId, formData);
+      if (res.data) {
+        set((state) => {
+          if (!state.patientRecord) return state;
+          return {
+            patientRecord: {
+              ...state.patientRecord,
+              avatar_url: res.data.avatar_url,
+              has_face_enrolled: true,
+            },
+          };
+        });
+        return res.data;
+      }
+    } catch (e) {
+      console.warn('enrollPatientFace API error:', e);
+      throw e;
+    }
     return null;
   },
 

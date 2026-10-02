@@ -130,6 +130,12 @@ app.add_middleware(
 app.include_router(api_router, prefix="/api/v1")
 app.include_router(ws_router, prefix="/ws")
 
+# ---- Static Files (Ảnh hồ sơ khuôn mặt người cao tuổi) ----
+import os
+from fastapi.staticfiles import StaticFiles
+os.makedirs("static/faces", exist_ok=True)
+app.mount("/static", StaticFiles(directory="static"), name="static")
+
 
 # ---- Health, Docs & Root ----
 @app.get("/", include_in_schema=False)

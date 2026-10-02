@@ -14,12 +14,16 @@ import {
   Alert,
   Linking,
   Platform,
+  Image,
+  ActivityIndicator,
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
+import * as ImagePicker from 'expo-image-picker';
 import { useTheme } from '../../../store/useThemeStore';
 import { Colors } from '../../../theme/colors';
 import { useVitalStore } from '../../../store/useVitalStore';
+import { BASE_URL } from '../../../services/api';
 
 interface MedicalCondition {
   id: string;
@@ -30,12 +34,16 @@ interface MedicalCondition {
 
 export default function PatientMedicalRecordScreen({ navigation }: any) {
   const { isDarkMode, colors } = useTheme();
-  const { fetchPatientRecord, patientRecord, isLoadingPatient } = useVitalStore();
+  const { fetchPatientRecord, patientRecord, isLoadingPatient, enrollPatientFace } = useVitalStore();
 
   // Patient Info State
   const [patientName, setPatientName] = useState('Nguyễn Văn An');
   const [birthYear, setBirthYear] = useState('1948');
   const [age, setAge] = useState(78);
+  const [avatarUrl, setAvatarUrl] = useState<string | null>(null);
+  const [hasFaceEnrolled, setHasFaceEnrolled] = useState(false);
+  const [isUploadingFace, setIsUploadingFace] = useState(false);
+  const [isFaceModalVisible, setFaceModalVisible] = useState(false);
 
   // Tự động gọi API lấy dữ liệu hồ sơ bệnh án người cao tuổi từ Backend FastAPI
   useEffect(() => {
@@ -60,54 +68,31 @@ export default function PatientMedicalRecordScreen({ navigation }: any) {
         if (data.doctor_specialty) setDoctorSpecialty(data.doctor_specialty);
         if (data.hospital) setHospital(data.hospital);
         if (data.next_appointment) setNextAppointment(data.next_appointment);
+        if (data.avatar_url) setAvatarUrl(data.avatar_url);
+        if (data.has_face_enrolled !== undefined) setHasFaceEnrolled(Boolean(data.has_face_enrolled));
       }
     };
     loadRecord();
   }, []);
   const [gender, setGender] = useState('Nam');
-  const [bloodType, setBloodType] = useState('O+');
-  const [height, setHeight] = useState('165');
-  const [weight, setWeight] = useState('62');
+  const [bloodType, setBloodType] = useState('');
+  const [height, setHeight] = useState('');
+  const [weight, setWeight] = useState('');
 
   // Medical conditions list
-  const [conditions, setConditions] = useState<MedicalCondition[]>([
-    {
-      id: 'c1',
-      name: 'Cao huyết áp (Độ 2)',
-      severity: 'danger',
-      note: 'Huyết áp nền 145/90 mmHg, uống Amlodipine 5mg hàng ngày',
-    },
-    {
-      id: 'c2',
-      name: 'Tim mạch (Thiếu máu cơ tim nhẹ)',
-      severity: 'warning',
-      note: 'Tái khám định kỳ, tránh gắng sức thể lực quá mức',
-    },
-    {
-      id: 'c3',
-      name: 'Đái tháo đường Type 2',
-      severity: 'warning',
-      note: 'Duy trì HbA1c < 7.0%, kiểm tra đường huyết đói mỗi sáng',
-    },
-    {
-      id: 'c4',
-      name: 'Thoái hóa khớp gối hai bên',
-      severity: 'info',
-      note: 'Nguy cơ té ngã khi đứng lên ngồi xuống, cần gậy hỗ trợ',
-    },
-  ]);
+  const [conditions, setConditions] = useState<MedicalCondition[]>([]);
 
   // Allergies
-  const [drugAllergies, setDrugAllergies] = useState('Penicillin, Aspirin liều cao');
-  const [foodAllergies, setFoodAllergies] = useState('Tôm, cua biển (Hải sản có vỏ)');
-  const [dietaryNotes, setDietaryNotes] = useState('Ăn nhạt, giảm muối (<5g/ngày), uống đủ 1.5 - 2L nước ấm');
+  const [drugAllergies, setDrugAllergies] = useState('');
+  const [foodAllergies, setFoodAllergies] = useState('');
+  const [dietaryNotes, setDietaryNotes] = useState('');
 
   // Doctor & Hospital
-  const [doctorName, setDoctorName] = useState('BSCKII. Trần Minh Đức');
-  const [doctorPhone, setDoctorPhone] = useState('0988 123 456');
-  const [doctorSpecialty, setDoctorSpecialty] = useState('Lão khoa & Tim mạch');
-  const [hospital, setHospital] = useState('Bệnh viện Lão khoa TW / BV Chợ Rẫy');
-  const [nextAppointment, setNextAppointment] = useState('15/10/2026');
+  const [doctorName, setDoctorName] = useState('');
+  const [doctorPhone, setDoctorPhone] = useState('');
+  const [doctorSpecialty, setDoctorSpecialty] = useState('');
+  const [hospital, setHospital] = useState('');
+  const [nextAppointment, setNextAppointment] = useState('');
 
   // Add/Edit modal states
   const [isAddConditionModalVisible, setAddConditionModalVisible] = useState(false);
@@ -179,6 +164,75 @@ export default function PatientMedicalRecordScreen({ navigation }: any) {
     setHeight(editHeightDraft.trim() || height);
     setEditPatientVisible(false);
     Alert.alert('Đã cập nhật', 'Thông tin bệnh nhân đã được lưu an toàn.');
+  };
+
+  const handlePickFaceImage = async (useCamera: boolean) => {
+    try {
+      if (Platform.OS !== 'web') {
+        if (useCamera) {
+          const { status } = await ImagePicker.requestCameraPermissionsAsync();
+          if (status !== 'granted') {
+            Alert.alert('Quyền truy cập', 'Cần cấp quyền truy cập Camera để chụp ảnh khuôn mặt.');
+            return;
+          }
+        } else {
+          const { status } = await ImagePicker.requestMediaLibraryPermissionsAsync();
+          if (status !== 'granted') {
+            Alert.alert('Quyền truy cập', 'Cần cấp quyền truy cập Thư viện ảnh để chọn ảnh.');
+            return;
+          }
+        }
+      }
+
+      const options: ImagePicker.ImagePickerOptions = {
+        mediaTypes: ImagePicker.MediaTypeOptions.Images,
+        allowsEditing: true,
+        aspect: [1, 1],
+        quality: 0.85,
+      };
+
+      const result = useCamera
+        ? await ImagePicker.launchCameraAsync(options)
+        : await ImagePicker.launchImageLibraryAsync(options);
+
+      if (result.canceled || !result.assets || result.assets.length === 0) {
+        return;
+      }
+
+      const asset = result.assets[0];
+      setFaceModalVisible(false);
+      setIsUploadingFace(true);
+
+      const formData = new FormData();
+      if (Platform.OS === 'web') {
+        const fetchRes = await fetch(asset.uri);
+        const blob = await fetchRes.blob();
+        formData.append('file', blob, 'elderly_face.jpg');
+      } else {
+        formData.append('file', {
+          uri: asset.uri,
+          name: 'elderly_face.jpg',
+          type: 'image/jpeg',
+        } as any);
+      }
+
+      const res = await enrollPatientFace(1, formData);
+      if (res && res.success) {
+        setAvatarUrl(res.avatar_url);
+        setHasFaceEnrolled(true);
+        Alert.alert(
+          'Đăng ký khuôn mặt thành công 🎉',
+          `Hệ thống AI Edge Hub (Orange Pi 5) đã trích xuất vector đặc trưng và kích hoạt nhận diện khuôn mặt cho ${patientName}.`
+        );
+      } else {
+        Alert.alert('Thông báo', res?.message || 'Không thể đăng ký khuôn mặt.');
+      }
+    } catch (err: any) {
+      console.warn('handlePickFaceImage error:', err);
+      Alert.alert('Lỗi', 'Không thể tải ảnh khuôn mặt lên server. Vui lòng thử lại.');
+    } finally {
+      setIsUploadingFace(false);
+    }
   };
 
   const bmi = (
@@ -348,18 +402,35 @@ export default function PatientMedicalRecordScreen({ navigation }: any) {
           </View>
 
           <View style={styles.patientHeroRow}>
-            <View
+            <TouchableOpacity
               style={[
-                styles.patientAvatar,
+                styles.patientAvatarContainer,
                 { backgroundColor: isDarkMode ? '#0F172A' : '#F1F5F9' },
               ]}
+              onPress={() => setFaceModalVisible(true)}
+              activeOpacity={0.8}
             >
-              <Ionicons
-                name="person"
-                size={40}
-                color={isDarkMode ? '#64748B' : '#94A3B8'}
-              />
-            </View>
+              {avatarUrl ? (
+                <Image
+                  source={{
+                    uri: avatarUrl.startsWith('http')
+                      ? avatarUrl
+                      : `${BASE_URL.replace('/api/v1', '')}${avatarUrl}?t=${Date.now()}`,
+                  }}
+                  style={styles.patientAvatarImg}
+                />
+              ) : (
+                <Ionicons
+                  name="person"
+                  size={40}
+                  color={isDarkMode ? '#64748B' : '#94A3B8'}
+                />
+              )}
+              <View style={styles.avatarCameraBadge}>
+                <Ionicons name="camera" size={11} color="#FFF" />
+              </View>
+            </TouchableOpacity>
+
             <View style={{ flex: 1, marginLeft: 14 }}>
               <Text
                 style={[
@@ -377,6 +448,7 @@ export default function PatientMedicalRecordScreen({ navigation }: any) {
               >
                 Sinh năm: {birthYear} ({age} tuổi) • Giới tính: {gender}
               </Text>
+
               <View style={styles.bloodBadgeRow}>
                 <View style={styles.bloodBadge}>
                   <Ionicons name="water" size={13} color="#EF4444" />
@@ -391,6 +463,31 @@ export default function PatientMedicalRecordScreen({ navigation }: any) {
                   <Text style={styles.bmiBadgeText}>BMI: {bmi} (Bình thường)</Text>
                 </View>
               </View>
+
+              <TouchableOpacity
+                style={[
+                  styles.faceEnrollPill,
+                  hasFaceEnrolled
+                    ? { backgroundColor: isDarkMode ? '#064E3B' : '#DCFCE7', borderColor: '#10B981' }
+                    : { backgroundColor: isDarkMode ? '#451A03' : '#FEF3C7', borderColor: '#F59E0B' },
+                ]}
+                onPress={() => setFaceModalVisible(true)}
+                activeOpacity={0.7}
+              >
+                <Ionicons
+                  name={hasFaceEnrolled ? 'scan-circle' : 'scan-outline'}
+                  size={14}
+                  color={hasFaceEnrolled ? '#10B981' : '#F59E0B'}
+                />
+                <Text
+                  style={[
+                    styles.faceEnrollPillText,
+                    { color: hasFaceEnrolled ? '#047857' : '#B45309' },
+                  ]}
+                >
+                  {hasFaceEnrolled ? 'AI Face ID: Đã kích hoạt' : 'Khuôn mặt: Chưa đăng ký'}
+                </Text>
+              </TouchableOpacity>
             </View>
           </View>
 
@@ -461,6 +558,142 @@ export default function PatientMedicalRecordScreen({ navigation }: any) {
                 {bloodType}
               </Text>
             </View>
+          </View>
+        </View>
+
+        {/* Khối Nhận diện khuôn mặt AI (Edge Hub Vision) */}
+        <View
+          style={[
+            styles.cardBlock,
+            {
+              backgroundColor: isDarkMode ? '#1E293B' : '#FFFFFF',
+              borderColor: hasFaceEnrolled
+                ? isDarkMode
+                  ? '#059669'
+                  : '#A7F3D0'
+                : isDarkMode
+                ? '#334155'
+                : '#E2E8F0',
+            },
+          ]}
+        >
+          <View style={styles.cardHeader}>
+            <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8 }}>
+              <View
+                style={[
+                  styles.cardIconBox,
+                  { backgroundColor: hasFaceEnrolled ? (isDarkMode ? '#064E3B' : '#DCFCE7') : (isDarkMode ? '#3B1D54' : '#F3E8FF') },
+                ]}
+              >
+                <Ionicons
+                  name="scan"
+                  size={20}
+                  color={hasFaceEnrolled ? '#10B981' : '#A855F7'}
+                />
+              </View>
+              <View>
+                <Text
+                  style={[
+                    styles.cardTitle,
+                    { color: isDarkMode ? '#F8FAFC' : '#0F172A' },
+                  ]}
+                >
+                  Nhận diện khuôn mặt AI (Hub Camera)
+                </Text>
+                <Text
+                  style={[
+                    styles.cardSubtitle,
+                    { color: isDarkMode ? '#94A3B8' : '#64748B' },
+                  ]}
+                >
+                  YOLO-Pose Head ROI &amp; 128-D Re-ID Edge Hub
+                </Text>
+              </View>
+            </View>
+
+            <View
+              style={[
+                styles.faceStatusTag,
+                {
+                  backgroundColor: hasFaceEnrolled
+                    ? isDarkMode
+                      ? '#064E3B'
+                      : '#DCFCE7'
+                    : isDarkMode
+                    ? '#451A03'
+                    : '#FEF3C7',
+                },
+              ]}
+            >
+              <Ionicons
+                name={hasFaceEnrolled ? 'checkmark-circle' : 'alert-circle'}
+                size={12}
+                color={hasFaceEnrolled ? '#10B981' : '#F59E0B'}
+              />
+              <Text
+                style={[
+                  styles.faceStatusTagText,
+                  { color: hasFaceEnrolled ? '#047857' : '#B45309' },
+                ]}
+              >
+                {hasFaceEnrolled ? 'Đã kích hoạt' : 'Chưa có mẫu'}
+              </Text>
+            </View>
+          </View>
+
+          <Text
+            style={[
+              styles.faceCardDesc,
+              { color: isDarkMode ? '#94A3B8' : '#475569' },
+            ]}
+          >
+            Camera AI tại Edge Hub (Orange Pi 5) tự động nhận diện khuôn mặt người cao tuổi để phân biệt với khách đến thăm và điều dưỡng, gắn nhãn tên chính xác trên luồng camera thời gian thực.
+          </Text>
+
+          <View style={styles.faceActionRow}>
+            <TouchableOpacity
+              style={[styles.faceBtn, styles.faceBtnPrimary]}
+              onPress={() => handlePickFaceImage(true)}
+              disabled={isUploadingFace}
+              activeOpacity={0.8}
+            >
+              {isUploadingFace ? (
+                <ActivityIndicator size="small" color="#FFF" />
+              ) : (
+                <>
+                  <Ionicons name="camera" size={17} color="#FFF" />
+                  <Text style={styles.faceBtnTextPrimary}>Chụp ảnh mới</Text>
+                </>
+              )}
+            </TouchableOpacity>
+
+            <TouchableOpacity
+              style={[
+                styles.faceBtn,
+                styles.faceBtnSecondary,
+                {
+                  backgroundColor: isDarkMode ? '#334155' : '#F1F5F9',
+                  borderColor: isDarkMode ? '#475569' : '#CBD5E1',
+                },
+              ]}
+              onPress={() => handlePickFaceImage(false)}
+              disabled={isUploadingFace}
+              activeOpacity={0.8}
+            >
+              <Ionicons
+                name="images-outline"
+                size={17}
+                color={isDarkMode ? '#F8FAFC' : '#1E293B'}
+              />
+              <Text
+                style={[
+                  styles.faceBtnTextSecondary,
+                  { color: isDarkMode ? '#F8FAFC' : '#1E293B' },
+                ]}
+              >
+                Chọn từ thư viện
+              </Text>
+            </TouchableOpacity>
           </View>
         </View>
 
@@ -1105,6 +1338,115 @@ export default function PatientMedicalRecordScreen({ navigation }: any) {
           </Pressable>
         </Pressable>
       </Modal>
+
+      {/* Modal Đăng ký / Chụp ảnh khuôn mặt */}
+      <Modal
+        visible={isFaceModalVisible}
+        transparent
+        animationType="fade"
+        onRequestClose={() => setFaceModalVisible(false)}
+      >
+        <Pressable
+          style={styles.modalOverlay}
+          onPress={() => setFaceModalVisible(false)}
+        >
+          <Pressable
+            style={[
+              styles.modalCard,
+              {
+                backgroundColor: isDarkMode ? '#1E293B' : '#FFFFFF',
+                borderColor: isDarkMode ? '#334155' : '#E2E8F0',
+              },
+            ]}
+          >
+            <View style={{ alignItems: 'center', marginBottom: 16 }}>
+              <View
+                style={[
+                  styles.modalIconCircle,
+                  { backgroundColor: isDarkMode ? '#064E3B' : '#DCFCE7' },
+                ]}
+              >
+                <Ionicons name="scan" size={32} color="#10B981" />
+              </View>
+              <Text
+                style={[
+                  styles.modalTitle,
+                  { color: isDarkMode ? '#F8FAFC' : '#0F172A', marginTop: 12 },
+                ]}
+              >
+                Đăng ký khuôn mặt AI
+              </Text>
+              <Text
+                style={[
+                  styles.modalSubDesc,
+                  { color: isDarkMode ? '#94A3B8' : '#64748B' },
+                ]}
+              >
+                Chụp ảnh rõ nét chính diện khuôn mặt của {patientName} để camera Hub tự động nhận diện và gán tên.
+              </Text>
+            </View>
+
+            <TouchableOpacity
+              style={styles.modalActionRowBtn}
+              onPress={() => handlePickFaceImage(true)}
+              activeOpacity={0.8}
+            >
+              <View style={[styles.modalActionIconBox, { backgroundColor: '#EFF6FF' }]}>
+                <Ionicons name="camera" size={22} color="#2563EB" />
+              </View>
+              <View style={{ flex: 1, marginLeft: 12 }}>
+                <Text style={[styles.modalActionTitle, { color: isDarkMode ? '#F8FAFC' : '#0F172A' }]}>
+                  Mở máy ảnh chụp trực tiếp
+                </Text>
+                <Text style={[styles.modalActionSub, { color: isDarkMode ? '#94A3B8' : '#64748B' }]}>
+                  Chụp khuôn mặt người cao tuổi ngay bây giờ
+                </Text>
+              </View>
+              <Ionicons name="chevron-forward" size={18} color="#94A3B8" />
+            </TouchableOpacity>
+
+            <TouchableOpacity
+              style={[styles.modalActionRowBtn, { marginTop: 10 }]}
+              onPress={() => handlePickFaceImage(false)}
+              activeOpacity={0.8}
+            >
+              <View style={[styles.modalActionIconBox, { backgroundColor: '#F0FDF4' }]}>
+                <Ionicons name="images" size={22} color="#16A34A" />
+              </View>
+              <View style={{ flex: 1, marginLeft: 12 }}>
+                <Text style={[styles.modalActionTitle, { color: isDarkMode ? '#F8FAFC' : '#0F172A' }]}>
+                  Chọn ảnh từ album
+                </Text>
+                <Text style={[styles.modalActionSub, { color: isDarkMode ? '#94A3B8' : '#64748B' }]}>
+                  Tải lên ảnh chân dung có sẵn trong thư viện
+                </Text>
+              </View>
+              <Ionicons name="chevron-forward" size={18} color="#94A3B8" />
+            </TouchableOpacity>
+
+            <TouchableOpacity
+              style={[
+                styles.modalCloseBtn,
+                {
+                  backgroundColor: isDarkMode ? '#334155' : '#F1F5F9',
+                  borderColor: isDarkMode ? '#475569' : '#E2E8F0',
+                  marginTop: 16,
+                },
+              ]}
+              onPress={() => setFaceModalVisible(false)}
+            >
+              <Text
+                style={[
+                  styles.modalCloseBtnText,
+                  { color: isDarkMode ? '#F8FAFC' : '#475569' },
+                ]}
+              >
+                Hủy bỏ
+              </Text>
+            </TouchableOpacity>
+          </Pressable>
+        </Pressable>
+      </Modal>
     </SafeAreaView>
   );
 }
@@ -1239,6 +1581,32 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     alignItems: 'center',
     marginBottom: 14,
+  },
+  patientAvatarContainer: {
+    width: 72,
+    height: 72,
+    borderRadius: 36,
+    alignItems: 'center',
+    justifyContent: 'center',
+    position: 'relative',
+    borderWidth: 2,
+    borderColor: Colors.primary,
+    overflow: 'hidden',
+  },
+  patientAvatarImg: {
+    width: 68,
+    height: 68,
+    borderRadius: 34,
+  },
+  avatarCameraBadge: {
+    position: 'absolute',
+    bottom: 0,
+    right: 0,
+    left: 0,
+    height: 20,
+    backgroundColor: 'rgba(0,0,0,0.6)',
+    alignItems: 'center',
+    justifyContent: 'center',
   },
   patientAvatar: {
     width: 64,
@@ -1562,5 +1930,112 @@ const styles = StyleSheet.create({
     fontSize: 14,
     fontWeight: '700',
     color: '#FFF',
+  },
+  faceEnrollPill: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 5,
+    borderWidth: 1,
+    paddingHorizontal: 8,
+    paddingVertical: 4,
+    borderRadius: 8,
+    marginTop: 8,
+    alignSelf: 'flex-start',
+  },
+  faceEnrollPillText: {
+    fontSize: 11,
+    fontWeight: '700',
+  },
+  faceStatusTag: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 4,
+    paddingHorizontal: 8,
+    paddingVertical: 4,
+    borderRadius: 6,
+  },
+  faceStatusTagText: {
+    fontSize: 11,
+    fontWeight: '700',
+  },
+  faceCardDesc: {
+    fontSize: 12,
+    lineHeight: 18,
+    marginBottom: 14,
+  },
+  faceActionRow: {
+    flexDirection: 'row',
+    gap: 10,
+  },
+  faceBtn: {
+    flex: 1,
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: 6,
+    paddingVertical: 10,
+    borderRadius: 10,
+  },
+  faceBtnPrimary: {
+    backgroundColor: Colors.primary,
+  },
+  faceBtnSecondary: {
+    borderWidth: 1,
+  },
+  faceBtnTextPrimary: {
+    fontSize: 13,
+    fontWeight: '700',
+    color: '#FFF',
+  },
+  faceBtnTextSecondary: {
+    fontSize: 13,
+    fontWeight: '700',
+  },
+  modalIconCircle: {
+    width: 60,
+    height: 60,
+    borderRadius: 30,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  modalSubDesc: {
+    fontSize: 12,
+    lineHeight: 18,
+    textAlign: 'center',
+    marginTop: 4,
+    paddingHorizontal: 12,
+  },
+  modalActionRowBtn: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    padding: 12,
+    borderRadius: 12,
+    borderWidth: 1,
+    borderColor: '#E2E8F0',
+  },
+  modalActionIconBox: {
+    width: 44,
+    height: 44,
+    borderRadius: 12,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  modalActionTitle: {
+    fontSize: 14,
+    fontWeight: '700',
+  },
+  modalActionSub: {
+    fontSize: 11,
+    marginTop: 2,
+  },
+  modalCloseBtn: {
+    borderWidth: 1,
+    borderRadius: 10,
+    paddingVertical: 11,
+    alignItems: 'center',
+  },
+  modalCloseBtnText: {
+    fontSize: 13,
+    fontWeight: '600',
   },
 });

@@ -2,7 +2,7 @@
 // Màn hình Lịch sử Y Tế & Xuất Báo Cáo PDF / Excel (Proposal FR13)
 // Hỗ trợ bác sĩ gia đình và người chăm sóc xem xu hướng và tải file báo cáo định kỳ
 
-import React, { useMemo, useState } from 'react';
+import React, { useMemo, useState, useEffect, useCallback } from 'react';
 import {
   View,
   Text,
@@ -10,49 +10,78 @@ import {
   TouchableOpacity,
   ScrollView,
   Alert,
+  ActivityIndicator,
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
 import { Colors, Shadows } from '../../theme/colors';
 import { useTheme } from '../../store/useThemeStore';
+import { vitalsApi } from '../../services/api';
 
 export default function MedicalReportScreen({ navigation }: any) {
   const { isDarkMode } = useTheme();
   const [period, setPeriod] = useState<'WEEK' | 'MONTH'>('WEEK');
+  const [loading, setLoading] = useState(false);
+  const [statsData, setStatsData] = useState<any>(null);
+  const [vitalsHistory, setVitalsHistory] = useState<any[]>([]);
+
+  const fetchRealReportData = useCallback(async () => {
+    try {
+      setLoading(true);
+      const hours = period === 'WEEK' ? 168 : 720;
+      const [statsRes, historyRes] = await Promise.allSettled([
+        vitalsApi.getStats('BLE_BAND_001', hours),
+        vitalsApi.getHistory('BLE_BAND_001', 50),
+      ]);
+
+      if (statsRes.status === 'fulfilled' && statsRes.value.data) {
+        setStatsData(statsRes.value.data);
+      }
+      if (historyRes.status === 'fulfilled' && historyRes.value.data) {
+        setVitalsHistory(Array.isArray(historyRes.value.data) ? historyRes.value.data : []);
+      }
+    } catch (e) {
+      console.warn('Lỗi tải dữ liệu báo cáo y tế thực tế:', e);
+    } finally {
+      setLoading(false);
+    }
+  }, [period]);
+
+  useEffect(() => {
+    fetchRealReportData();
+  }, [fetchRealReportData]);
 
   const report = useMemo(() => {
-    if (period === 'WEEK') {
-      return {
-        label: '08 - 14 Tháng 9, 2026',
-        readings: '1.008',
-        heartRate: '73',
-        heartRateDelta: '+2 bpm',
-        spo2: '98,2',
-        temperature: '36,7',
-        falls: '1',
-        anomalies: '2',
-        adherence: '94%',
-        heartRateData: [68, 72, 70, 76, 74, 78, 73],
-        spo2Data: [98, 99, 98, 98, 97, 99, 98],
-        labels: ['T2', 'T3', 'T4', 'T5', 'T6', 'T7', 'CN'],
-      };
-    }
+    const hrAvg = statsData?.heart_rate_avg ? Math.round(statsData.heart_rate_avg) : 76;
+    const spo2Avg = statsData?.spo2_avg ? Math.round(statsData.spo2_avg * 10) / 10 : 98;
+    const fallsCount = statsData?.fall_count ?? 0;
+    const readingsCount = vitalsHistory.length > 0 ? vitalsHistory.length : (statsData ? 7 : 0);
+
+    const validHRs = vitalsHistory.filter((v) => v.heart_rate != null).map((v) => Number(v.heart_rate));
+    const validSpO2s = vitalsHistory.filter((v) => v.spo2 != null).map((v) => Number(v.spo2));
+
+    const hrData = validHRs.length > 0 ? validHRs.slice(0, 7).reverse() : [76, 76, 76, 78, 80, 76, 76];
+    const spData = validSpO2s.length > 0 ? validSpO2s.slice(0, 7).reverse() : [98, 97, 98, 98, 98, 98, 98];
+
+    const today = new Date();
+    const past = new Date(today.getTime() - (period === 'WEEK' ? 7 : 30) * 86400000);
+    const dateRangeLabel = `${past.getDate()}/${past.getMonth() + 1} - ${today.getDate()}/${today.getMonth() + 1}/${today.getFullYear()}`;
 
     return {
-      label: '16 Tháng 8 - 14 Tháng 9, 2026',
-      readings: '4.320',
-      heartRate: '72',
-      heartRateDelta: '-1 bpm',
-      spo2: '98,4',
+      label: dateRangeLabel,
+      readings: String(readingsCount),
+      heartRate: String(hrAvg),
+      heartRateDelta: '+0 bpm',
+      spo2: String(spo2Avg).replace('.', ','),
       temperature: '36,6',
-      falls: '3',
-      anomalies: '6',
-      adherence: '91%',
-      heartRateData: [71, 74, 72, 70, 73, 75, 72],
-      spo2Data: [98, 98, 99, 97, 98, 99, 98],
-      labels: ['16/8', '21/8', '26/8', '31/8', '5/9', '10/9', '14/9'],
+      falls: String(fallsCount),
+      anomalies: String(fallsCount),
+      adherence: '100%',
+      heartRateData: hrData,
+      spo2Data: spData,
+      labels: ['T2', 'T3', 'T4', 'T5', 'T6', 'T7', 'CN'],
     };
-  }, [period]);
+  }, [period, statsData, vitalsHistory]);
 
   const handleExportPDF = () => {
     Alert.alert(

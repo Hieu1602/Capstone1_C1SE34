@@ -15,7 +15,9 @@ from dataclasses import dataclass, field
 from typing import Any, Dict, List, Optional, Sequence, Tuple, Union
 import numpy as np
 
+from .face_reid import FaceReIDManager, extract_face_roi
 from .kinematics import (
+    ADLStatistics,
     FrameKeypointSnapshot,
     KinematicFallEngine,
     PostureState,
@@ -37,6 +39,18 @@ class TrackedPerson:
     is_fall_alerted: bool = False
     is_stroke_alerted: bool = False
 
+    # Thống kê hoạt động hàng ngày (ADL - Activities of Daily Living)
+    adl_stats: ADLStatistics = field(default_factory=ADLStatistics)
+    consecutive_sitting_sec: float = 0.0
+    _drinking_counted: bool = False
+    _last_update_ts: float = field(default_factory=time.time)
+
+    # Nhận diện người cao tuổi qua khuôn mặt (Face Re-ID)
+    person_name: str = "Khách / Người nhà"
+    is_elderly: bool = False
+    elderly_id: Optional[str] = None
+    face_similarity: float = 0.0
+
 
 class PersonTracker:
     """
@@ -48,14 +62,18 @@ class PersonTracker:
         iou_threshold: float = 0.30,
         max_missed_frames: int = 15,  # 15 frames @ 15fps = 1.0 giây
         stitching_distance_threshold: float = 120.0,  # pixels
+        sedentary_threshold_sec: float = 3600.0,  # Ngồi liên tục > 60 phút cảnh báo lười vận động
+        face_cache_file: Optional[str] = None,
     ):
         self.iou_threshold = iou_threshold
         self.max_missed_frames = max_missed_frames
         self.stitching_distance_threshold = stitching_distance_threshold
+        self.sedentary_threshold_sec = sedentary_threshold_sec
         self.next_track_id: int = 1
         self.tracks: Dict[int, TrackedPerson] = {}
         self.recently_lost_tracks: List[TrackedPerson] = []
         self.kinematic_engine = KinematicFallEngine()
+        self.face_manager = FaceReIDManager(cache_file=face_cache_file)
 
     @staticmethod
     def _compute_iou(boxA: Tuple[float, float, float, float], boxB: Tuple[float, float, float, float]) -> float:
@@ -83,6 +101,7 @@ class PersonTracker:
         detections: Sequence[Tuple[float, float, float, float]],
         keypoints_list: Sequence[Sequence[Tuple[Union[float, int], ...]]],
         now: Optional[float] = None,
+        raw_frame: Optional[np.ndarray] = None,
     ) -> List[TrackedPerson]:
         """
         Cập nhật danh sách phát hiện mới vào bộ theo dõi.
@@ -91,6 +110,7 @@ class PersonTracker:
             detections: Danh sách bounding box (x1, y1, x2, y2)
             keypoints_list: Danh sách 17 keypoint tương ứng
             now: Thời gian timestamp hiện tại
+            raw_frame: Khung hình gốc để nhận diện khuôn mặt người cao tuổi
 
         Returns:
             Danh sách TrackedPerson hiện đang hoạt động
@@ -121,11 +141,10 @@ class PersonTracker:
                 matched_tracks.add(best_track_id)
                 matched_detections.add(det_idx)
                 self._update_track(
-                    self.tracks[best_track_id], det_box, keypoints_list[det_idx], now
+                    self.tracks[best_track_id], det_box, keypoints_list[det_idx], now, raw_frame=raw_frame
                 )
 
         # 2. Causal Track Stitching: Với detection chưa khớp, thử ghép với track active chưa khớp hoặc track vừa mất
-        # Khi một người ngã, bounding box biến từ dọc (đứng) sang ngang (nằm) khiến IoU tụt xuống 0
         unmatched_dets = [i for i in range(num_det) if i not in matched_detections]
         candidates_to_stitch = [
             t for t_id, t in self.tracks.items() if t_id not in matched_tracks
@@ -145,7 +164,6 @@ class PersonTracker:
                 cand_center = self._get_center(candidate.bbox)
                 cand_feet = ((candidate.bbox[0] + candidate.bbox[2]) / 2.0, candidate.bbox[3])
                 
-                # Tính khoảng cách tâm hoặc khoảng cách vị trí chân tiếp sàn
                 dist_center = np.hypot(det_center[0] - cand_center[0], det_center[1] - cand_center[1])
                 dist_feet = np.hypot(det_feet[0] - cand_feet[0], det_feet[1] - cand_feet[1])
                 dist = min(dist_center, dist_feet)
@@ -162,7 +180,7 @@ class PersonTracker:
                 matched_detections.add(det_idx)
                 candidates_to_stitch.remove(stitched_track)
                 self._update_track(
-                    stitched_track, det_box, keypoints_list[det_idx], now
+                    stitched_track, det_box, keypoints_list[det_idx], now, raw_frame=raw_frame
                 )
 
         # 3. Tạo track mới cho các detection còn lại
@@ -175,7 +193,7 @@ class PersonTracker:
                 )
                 self.next_track_id += 1
                 self._update_track(
-                    new_track, detections[det_idx], keypoints_list[det_idx], now
+                    new_track, detections[det_idx], keypoints_list[det_idx], now, raw_frame=raw_frame
                 )
                 self.tracks[new_track.track_id] = new_track
                 matched_tracks.add(new_track.track_id)
@@ -187,16 +205,13 @@ class PersonTracker:
                 track = self.tracks[track_id]
                 track.missed_frames += 1
                 if track.missed_frames > self.max_missed_frames:
-                    # Chuyển vào recently_lost_tracks để hỗ trợ nối vết
                     self.recently_lost_tracks.append(track)
                     del self.tracks[track_id]
 
-        # Giữ danh sách recently_lost_tracks tối đa 5 người trong 3 giây
         self.recently_lost_tracks = [
             t for t in self.recently_lost_tracks if (now - t.last_seen_time) < 3.0
         ][-5:]
 
-        # Chỉ trả về các track xuất hiện trong frame hiện tại
         return [t for t in self.tracks.values() if t.missed_frames == 0]
 
 
@@ -206,6 +221,7 @@ class PersonTracker:
         bbox: Tuple[float, float, float, float],
         keypoints: Sequence[Tuple[Union[float, int], ...]],
         now: float,
+        raw_frame: Optional[np.ndarray] = None,
     ) -> None:
         """Cập nhật frame và chạy đánh giá động học thời gian cho track."""
         float_kps: List[Tuple[float, float, float]] = [
@@ -216,6 +232,17 @@ class PersonTracker:
         track.keypoints = float_kps
         track.last_seen_time = now
         track.missed_frames = 0
+
+        # Nhận diện khuôn mặt người cao tuổi từ 5 keypoints đầu nếu chưa được định danh
+        if not track.is_elderly and raw_frame is not None:
+            face_crop = extract_face_roi(raw_frame, float_kps)
+            if face_crop is not None:
+                e_id, name, score = self.face_manager.identify_face(face_crop)
+                if e_id is not None and name is not None and score >= self.face_manager.similarity_threshold:
+                    track.elderly_id = e_id
+                    track.person_name = name
+                    track.is_elderly = True
+                    track.face_similarity = score
 
         # Phân tích góc cột sống và trọng tâm hông
         spine_angle = KinematicFallEngine.calculate_spine_angle(float_kps)
@@ -251,3 +278,29 @@ class PersonTracker:
             track.is_fall_alerted = True
         if is_immobile:
             track.is_stroke_alerted = True
+
+        # Cập nhật thời gian tích lũy và thống kê sinh hoạt thường nhật (ADL)
+        dt = max(0.0, min(1.0, now - track._last_update_ts))
+        track._last_update_ts = now
+
+        if track.posture_state == PostureState.SITTING:
+            track.adl_stats.sitting_duration_sec += dt
+            track.consecutive_sitting_sec += dt
+            if track.consecutive_sitting_sec >= self.sedentary_threshold_sec:
+                track.adl_stats.sedentary_warning = True
+        elif track.posture_state == PostureState.STANDING:
+            track.adl_stats.standing_duration_sec += dt
+            track.consecutive_sitting_sec = 0.0
+            track.adl_stats.sedentary_warning = False
+        elif track.posture_state == PostureState.LYING:
+            track.adl_stats.lying_duration_sec += dt
+            track.consecutive_sitting_sec = 0.0
+            track.adl_stats.sedentary_warning = False
+        elif track.posture_state == PostureState.DRINKING:
+            track.adl_stats.sitting_duration_sec += dt
+            if not track._drinking_counted:
+                track.adl_stats.drinking_count += 1
+                track._drinking_counted = True
+
+        if track.posture_state != PostureState.DRINKING:
+            track._drinking_counted = False

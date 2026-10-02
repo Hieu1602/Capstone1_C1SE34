@@ -9,7 +9,6 @@ import {
   StyleSheet,
   TouchableOpacity,
   ScrollView,
-  Alert,
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
@@ -33,7 +32,7 @@ export default function AIModelDetailScreen({ navigation }: any) {
         contentContainerStyle={styles.scrollContent}
       >
         <Text style={styles.introText}>
-          Tất cả mô hình AI suy luận trực tiếp trên Hub Orange Pi 5 (NPU 6 TOPS), bảo vệ quyền riêng tư tuyệt đối (NFR02) và độ trễ &lt; 500ms (NFR01).
+          Tất cả mô hình AI suy luận trực tiếp trên Hub Orange Pi 5 (NPU 6 TOPS), bảo vệ quyền riêng tư tuyệt đối (NFR02) và độ trễ {'<'} 500ms (NFR01).
         </Text>
 
         {/* 1. YOLO-Pose 17 Keypoints (FR03) */}
@@ -48,7 +47,7 @@ export default function AIModelDetailScreen({ navigation }: any) {
             </View>
           </View>
           <Text style={styles.modelDesc}>
-            Theo dõi góc nghiêng cột sống và thời gian nằm bất động trên sàn. Tự động kích hoạt Red Alert khi góc nghiêng &gt; 60° và không có chuyển động &gt; 30 giây.
+            Theo dõi góc nghiêng cột sống và thời gian nằm bất động trên sàn. Tự động kích hoạt Red Alert khi góc nghiêng {'>'} 60° và không có chuyển động {'>'} 30 giây.
           </Text>
         </View>
 
@@ -92,7 +91,7 @@ export default function AIModelDetailScreen({ navigation }: any) {
             </View>
             <View style={{ flex: 1, marginLeft: 12 }}>
               <Text style={[styles.modelTitle, { color: '#15803D' }]}>Hợp Nhất Đa Cảm Biến (FR06)</Text>
-              <Text style={styles.modelStatusText}>Độ chính xác: TPR ≥ 95% • Báo giả: FPR &lt; 2%</Text>
+              <Text style={styles.modelStatusText}>Độ chính xác: TPR ≥ 95% • Báo giả: FPR {'<'} 2%</Text>
             </View>
           </View>
           <Text style={styles.modelDesc}>

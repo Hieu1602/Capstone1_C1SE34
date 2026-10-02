@@ -79,11 +79,15 @@ class PoseDetector:
         self.enable_face_blur: bool = config.get("face_blurring", True)
         self._fall_frame_counter: int = 0
 
-        # Bộ theo dõi đa người và động học té ngã / đột quỵ
+        adl_cfg = config.get("adl_monitoring", {})
+        sedentary_alert_sec = adl_cfg.get("sedentary_alert_sec", 3600.0)
+
+        # Bộ theo dõi đa người, động học té ngã / đột quỵ và sinh hoạt thường nhật (ADL)
         self.tracker = PersonTracker(
             iou_threshold=fall_cfg.get("tracker_iou_threshold", 0.30),
             max_missed_frames=fall_cfg.get("max_missed_frames", 15),
             stitching_distance_threshold=fall_cfg.get("stitching_distance_threshold", 120.0),
+            sedentary_threshold_sec=sedentary_alert_sec,
         )
 
 
@@ -159,7 +163,7 @@ class PoseDetector:
             [(kp.x, kp.y, kp.confidence) for kp in kps]
             for kps in keypoints_list
         ]
-        active_tracks = self.tracker.update(bboxes, kps_tuples, now=now)
+        active_tracks = self.tracker.update(bboxes, kps_tuples, now=now, raw_frame=frame)
 
         # Đánh giá sự kiện ngã & bất động kéo dài từ các track
         is_fall_detected = False

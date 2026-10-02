@@ -36,86 +36,13 @@ export interface PatientOption {
   lastUpdated?: string;
 }
 
-const DEFAULT_PATIENTS: PatientOption[] = [
-  {
-    id: 'e0000000-b4e1-4b08-b2d3-d949a0eb075c',
-    name: 'Cụ Nguyễn Văn An',
-    age: 78,
-    gender: 'Nam',
-    condition: 'Tăng huyết áp Đ2 • Thiếu máu cơ tim cục bộ • Tiền đình',
-    deviceId: 'BLE_BAND_001',
-    houseName: 'Nhà của tôi • 123 Hải Phòng, P. Thạch Thang, Đà Nẵng',
-    bloodPressure: '120/80 mmHg',
-    heartRate: 76,
-    spo2: 98,
-    healthStatus: 'NORMAL',
-    lastUpdated: 'Vừa xong',
-  },
-  {
-    id: 'e1111111-b4e1-4b08-b2d3-d949a0eb075c',
-    name: 'Cụ Trần Thị Mai',
-    age: 75,
-    gender: 'Nữ',
-    condition: 'Đái tháo đường T2 • Rối loạn tiền đình • Thoái hóa khớp',
-    deviceId: 'BLE_BAND_002',
-    houseName: 'Gia đình Chị Lan • 45 Lê Duẩn, Q. Hải Châu, Đà Nẵng',
-    bloodPressure: '135/85 mmHg',
-    heartRate: 88,
-    spo2: 94,
-    healthStatus: 'WARNING',
-    lastUpdated: '3 phút trước',
-  },
-  {
-    id: 'e2222222-b4e1-4b08-b2d3-d949a0eb075c',
-    name: 'Cụ Lê Văn Thành',
-    age: 82,
-    gender: 'Nam',
-    condition: 'Bệnh phổi tắc nghẽn (COPD) • Suy tim độ 1 • Loãng xương',
-    deviceId: 'BLE_BAND_003',
-    houseName: 'Phòng 204 • Trung tâm Y tế Dưỡng lão Hòa Vang',
-    bloodPressure: '142/90 mmHg',
-    heartRate: 84,
-    spo2: 91,
-    healthStatus: 'DANGER',
-    lastUpdated: '5 phút trước',
-  },
-  {
-    id: 'e3333333-b4e1-4b08-b2d3-d949a0eb075c',
-    name: 'Cụ Phạm Thị Cúc',
-    age: 71,
-    gender: 'Nữ',
-    condition: 'Loãng xương tuổi già • Nguy cơ té ngã nhẹ',
-    deviceId: 'BLE_BAND_004',
-    houseName: 'Căn hộ 802 • Tòa Indochina Riverside, Đà Nẵng',
-    bloodPressure: '118/76 mmHg',
-    heartRate: 72,
-    spo2: 99,
-    healthStatus: 'NORMAL',
-    lastUpdated: '10 phút trước',
-  },
-  {
-    id: 'e4444444-b4e1-4b08-b2d3-d949a0eb075c',
-    name: 'Cụ Hoàng Trọng Nghĩa',
-    age: 79,
-    gender: 'Nam',
-    condition: 'Di chứng tai biến nhẹ • Xơ vữa mạch máu não',
-    deviceId: 'BLE_BAND_005',
-    houseName: 'Nhà A3 • Khu dân cư Nam Cầu Tuyên Sơn, Đà Nẵng',
-    bloodPressure: '128/82 mmHg',
-    heartRate: 75,
-    spo2: 96,
-    healthStatus: 'NORMAL',
-    lastUpdated: '15 phút trước',
-  },
-];
-
 export default function DoctorAnalyticsReportScreen() {
   const insets = useSafeAreaInsets();
   const route = useRoute<any>();
   const { isDarkMode, colors } = useTheme();
 
   // Danh sách bệnh nhân & bệnh nhân đang chọn
-  const [patients, setPatients] = useState<PatientOption[]>(DEFAULT_PATIENTS);
+  const [patients, setPatients] = useState<PatientOption[]>([]);
   const [selectedPatient, setSelectedPatient] = useState<PatientOption | null>(null);
 
   // Bộ lọc tìm kiếm cho màn hình chọn bệnh nhân
@@ -132,11 +59,11 @@ export default function DoctorAnalyticsReportScreen() {
   const loadPatients = useCallback(async () => {
     try {
       const res = await doctorApi.getPatients();
-      if (res.data && Array.isArray(res.data) && res.data.length > 0) {
+      if (res.data && Array.isArray(res.data)) {
         const mapped: PatientOption[] = res.data.map((item: any) => ({
           id: item.id,
           name: item.name,
-          age: item.age || 75,
+          age: item.age || 78,
           gender: item.gender || 'Nam',
           condition: item.medical_history || 'Tăng huyết áp • Theo dõi',
           deviceId: item.device_id || 'BLE_BAND_001',
@@ -148,9 +75,13 @@ export default function DoctorAnalyticsReportScreen() {
           lastUpdated: item.last_updated || 'Vừa xong',
         }));
         setPatients(mapped);
+        if (mapped.length > 0) {
+          setSelectedPatient((prev) => prev || mapped[0]);
+        }
       }
-    } catch {
-      // Giữ DEFAULT_PATIENTS
+    } catch (e) {
+      console.warn('Lỗi tải danh sách bệnh nhân phân tích thực tế:', e);
+      setPatients([]);
     }
   }, []);
 

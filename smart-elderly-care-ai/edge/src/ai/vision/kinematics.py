@@ -21,10 +21,25 @@ from typing import Dict, List, Optional, Tuple
 class PostureState(str, Enum):
     STANDING = "STANDING"
     SITTING = "SITTING"
-    FALLING = "FALLING"
-    FALLEN = "FALLEN"
-    IMMOBILE = "IMMOBILE"
-    RECOVERING = "RECOVERING"
+    LYING = "LYING"          # Nằm nghỉ ngơi / Ngủ bình thường (không có gia tốc ngã)
+    DRINKING = "DRINKING"    # Uống nước / Cử động tay lên miệng
+    FALLING = "FALLING"      # Đang rơi tự do
+    FALLEN = "FALLEN"        # Đã ngã trên sàn
+    IMMOBILE = "IMMOBILE"    # Bất động kéo dài sau ngã (nguy cơ đột quỵ)
+    RECOVERING = "RECOVERING"# Hồi phục / Gượng dậy
+
+
+@dataclass
+class ADLStatistics:
+    """
+    Thống kê các hoạt động sinh hoạt hàng ngày (Activities of Daily Living - ADL).
+    Phục vụ Nhật ký Sức khỏe (Daily Health Diary) trên Mobile App.
+    """
+    sitting_duration_sec: float = 0.0
+    standing_duration_sec: float = 0.0
+    lying_duration_sec: float = 0.0
+    drinking_count: int = 0
+    sedentary_warning: bool = False
 
 
 @dataclass
@@ -110,6 +125,74 @@ class KinematicFallEngine:
                 return max(h_bbox * 0.8, (ank_y - sh_y) * 1.2)
         return max(h_bbox, 50.0)
 
+    @staticmethod
+    def calculate_knee_angle(kps: List[Tuple[float, float, float]]) -> float:
+        """
+        Tính góc gập khớp gối (Hip - Knee - Ankle) bằng công thức vector.
+        Đứng thẳng: ~160° - 180°
+        Ngồi: ~70° - 120°
+        """
+        angles = []
+        # Chân trái: Hip=11, Knee=13, Ankle=15
+        if len(kps) > 15 and kps[11][2] > 0.25 and kps[13][2] > 0.25 and kps[15][2] > 0.25:
+            v1 = (kps[11][0] - kps[13][0], kps[11][1] - kps[13][1])
+            v2 = (kps[15][0] - kps[13][0], kps[15][1] - kps[13][1])
+            dot = v1[0] * v2[0] + v1[1] * v2[1]
+            mag1 = math.hypot(v1[0], v1[1])
+            mag2 = math.hypot(v2[0], v2[1])
+            if mag1 > 1e-4 and mag2 > 1e-4:
+                cos_val = max(-1.0, min(1.0, dot / (mag1 * mag2)))
+                angles.append(math.degrees(math.acos(cos_val)))
+
+        # Chân phải: Hip=12, Knee=14, Ankle=16
+        if len(kps) > 16 and kps[12][2] > 0.25 and kps[14][2] > 0.25 and kps[16][2] > 0.25:
+            v1 = (kps[12][0] - kps[14][0], kps[12][1] - kps[14][1])
+            v2 = (kps[16][0] - kps[14][0], kps[16][1] - kps[14][1])
+            dot = v1[0] * v2[0] + v1[1] * v2[1]
+            mag1 = math.hypot(v1[0], v1[1])
+            mag2 = math.hypot(v2[0], v2[1])
+            if mag1 > 1e-4 and mag2 > 1e-4:
+                cos_val = max(-1.0, min(1.0, dot / (mag1 * mag2)))
+                angles.append(math.degrees(math.acos(cos_val)))
+
+        if angles:
+            return sum(angles) / len(angles)
+        return 180.0
+
+    @staticmethod
+    def is_hand_to_mouth_gesture(kps: List[Tuple[float, float, float]]) -> bool:
+        """
+        Kiểm tra cử động đưa tay lên gần miệng/mặt (uống nước / ăn / nghe điện thoại).
+        Khoảng cách giữa cổ tay (Wrist: 9 hoặc 10) và mũi (Nose: 0) / miệng
+        nhỏ hơn 0.65 lần chiều rộng vai (Shoulder width).
+        """
+        if len(kps) < 11 or kps[0][2] < 0.2:
+            return False
+
+        nose = kps[0]
+        l_sh, r_sh = kps[5], kps[6]
+        shoulder_width = math.hypot(l_sh[0] - r_sh[0], l_sh[1] - r_sh[1])
+        if shoulder_width < 10.0:
+            return False
+
+        threshold_dist = 0.65 * shoulder_width
+
+        # Cổ tay trái (9)
+        l_wrist = kps[9]
+        if l_wrist[2] > 0.25:
+            dist_l = math.hypot(l_wrist[0] - nose[0], l_wrist[1] - nose[1])
+            if dist_l <= threshold_dist and l_wrist[1] <= l_sh[1] + 25.0:
+                return True
+
+        # Cổ tay phải (10)
+        r_wrist = kps[10]
+        if r_wrist[2] > 0.25:
+            dist_r = math.hypot(r_wrist[0] - nose[0], r_wrist[1] - nose[1])
+            if dist_r <= threshold_dist and r_wrist[1] <= r_sh[1] + 25.0:
+                return True
+
+        return False
+
     def analyze_track(
         self,
         history: deque,  # Deque chứa FrameKeypointSnapshot
@@ -118,6 +201,7 @@ class KinematicFallEngine:
     ) -> Tuple[PostureState, float, bool, bool]:
         """
         Phân tích chuỗi snapshot thời gian của một track ID.
+        Nhận diện cả ADL (Đứng, Ngồi, Nằm ngủ, Uống nước) và các tình huống té ngã / đột quỵ.
 
         Returns:
             (new_state, confidence, is_fall_event, is_prolonged_immobility)
@@ -131,16 +215,14 @@ class KinematicFallEngine:
         h = max(curr_snap.bbox[3] - curr_snap.bbox[1], 1.0)
         aspect_ratio = w / h
 
-        # 1. Tính vận tốc rơi của hông (Hip drop velocity) trong 0.3s - 0.5s gần nhất
+        # 1. Tính vận tốc rơi của hông (Hip drop velocity) trong 0.2s - 0.6s gần nhất
         drop_velocity = 0.0
         body_h = self.estimate_body_height(curr_snap.keypoints, curr_snap.bbox)
 
         for past_snap in reversed(list(history)[:-1]):
             dt = now - past_snap.timestamp
             if 0.2 <= dt <= 0.6:
-                # Độ dịch chuyển theo trục Y (hướng xuống sàn là Y tăng)
                 dy = curr_snap.hip_center_y - past_snap.hip_center_y
-                # Vận tốc tính theo [chiều cao cơ thể / giây]
                 drop_velocity = (dy / body_h) / dt
                 break
 
@@ -153,7 +235,6 @@ class KinematicFallEngine:
         # 3. Tính năng lượng chuyển động (Motion Energy) để phát hiện bất động
         recent_movement = 0.0
         if len(history) >= 5:
-            # Lấy 5 frame gần nhất
             snaps = list(history)[-5:]
             diffs = []
             for s1, s2 in zip(snaps[:-1], snaps[1:]):
@@ -171,18 +252,40 @@ class KinematicFallEngine:
 
         is_immobile = recent_movement < self.motion_energy_threshold
 
-        # 4. Máy trạng thái (Finite State Machine)
+        # 4. Máy trạng thái phân loại ADL & Fall Detection
         new_state = current_state
         is_fall_event = False
         is_stroke_alert = False
 
-        if current_state == PostureState.STANDING or current_state == PostureState.SITTING:
-            # Phát hiện đang rơi nhanh xuống
+        if current_state in (PostureState.STANDING, PostureState.SITTING, PostureState.DRINKING):
+            # A. Kiểm tra nguy cơ té ngã
             if drop_velocity >= self.drop_velocity_threshold and is_low_posture:
                 new_state = PostureState.FALLING
-            elif is_low_posture and aspect_ratio > 1.4:
-                # Trường hợp ngã từ từ (trượt ngã không có gia tốc lớn)
+            elif is_low_posture and aspect_ratio > 1.4 and drop_velocity > 0.6:
+                # Trượt ngã có gia tốc rơi đáng kể
                 new_state = PostureState.FALLING
+            elif is_low_posture and drop_velocity < 0.6:
+                # Nằm xuống giường/sofa từ từ nghỉ ngơi hoặc ngủ (không phải ngã)
+                new_state = PostureState.LYING
+            else:
+                # B. Phân loại sinh hoạt thường nhật (ADL)
+                if self.is_hand_to_mouth_gesture(curr_snap.keypoints):
+                    new_state = PostureState.DRINKING
+                else:
+                    knee_angle = self.calculate_knee_angle(curr_snap.keypoints)
+                    if knee_angle < 135.0 or (aspect_ratio > 0.55 and curr_snap.spine_angle_deg > 20.0):
+                        new_state = PostureState.SITTING
+                    else:
+                        new_state = PostureState.STANDING
+
+        elif current_state == PostureState.LYING:
+            # Người nằm nghỉ / ngủ: kiểm tra xem khi nào ngồi dậy hoặc đứng dậy
+            if not is_low_posture and curr_snap.spine_angle_deg < 45.0:
+                knee_angle = self.calculate_knee_angle(curr_snap.keypoints)
+                if knee_angle < 135.0 or aspect_ratio > 0.55:
+                    new_state = PostureState.SITTING
+                else:
+                    new_state = PostureState.STANDING
 
         elif current_state == PostureState.FALLING:
             # Nếu duy trì tư thế thấp trên sàn đủ lâu -> xác nhận đã ngã
@@ -190,24 +293,22 @@ class KinematicFallEngine:
             if is_low_posture:
                 if fallen_duration >= self.min_fallen_duration:
                     new_state = PostureState.FALLEN
-                    is_fall_event = True  # Kích hoạt báo động ngã
+                    is_fall_event = True  # Kích hoạt báo động ngã khẩn cấp
             else:
                 # Người đó đứng lên hoặc ngồi dậy ngay -> Báo giả hoặc phục hồi
                 new_state = PostureState.STANDING
 
         elif current_state == PostureState.FALLEN:
-            # Người đó đã ngã và đang nằm trên sàn
+            # Đang nằm ngã trên sàn
             time_since_fallen = now - state_enter_time
-            # Nếu người đó đã tự đứng dậy (góc cột sống thẳng, aspect ratio dọc)
             if not is_low_posture and curr_snap.spine_angle_deg < 35.0 and aspect_ratio < 0.8:
                 new_state = PostureState.RECOVERING
-            # Nếu nằm bất động quá ngưỡng quy định -> Cảnh báo nguy cơ đột quỵ/hôn mê
             elif is_immobile and time_since_fallen >= self.immobility_alert_sec:
                 new_state = PostureState.IMMOBILE
                 is_stroke_alert = True
 
         elif current_state == PostureState.IMMOBILE:
-            # Đang ở trạng thái bất động nguy hiểm, kiểm tra xem có dấu hiệu phục hồi không
+            # Bất động nguy hiểm, kiểm tra xem có dấu hiệu gượng dậy không
             if not is_low_posture and curr_snap.spine_angle_deg < 35.0:
                 new_state = PostureState.RECOVERING
 

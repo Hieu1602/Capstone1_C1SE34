@@ -33,6 +33,17 @@ class PatientMedicalRecordOut(BaseModel):
     doctor_specialty: str = "Chuyên khoa Tim mạch & Lão khoa"
     hospital: str = "Bệnh viện Đa khoa Đà Nẵng"
     next_appointment: str = "15/10/2026 - 08:30"
+    avatar_url: Optional[str] = None
+    has_face_enrolled: bool = False
+
+
+class FaceEnrollResponse(BaseModel):
+    success: bool
+    message: str
+    elderly_id: str
+    full_name: str
+    avatar_url: str
+    has_face_enrolled: bool = True
 
 
 class PatientMedicalRecordUpdate(BaseModel):

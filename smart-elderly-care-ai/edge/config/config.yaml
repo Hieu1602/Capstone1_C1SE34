@@ -40,6 +40,10 @@ ai:
       max_missed_frames: 15               # 1s tại 15fps
       stitching_distance_threshold: 120.0 # Khoảng cách ghép track khi ngã (pixels)
       consecutive_frames: 5
+    # Giám sát sinh hoạt thường nhật (ADL - Activities of Daily Living)
+    adl_monitoring:
+      enabled: true
+      sedentary_alert_sec: 3600.0        # Cảnh báo ngồi liên tục quá 60 phút
 
   audio:
     model_path: "src/ai/audio/models/yamnet.tflite"
