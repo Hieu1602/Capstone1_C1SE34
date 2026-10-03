@@ -2,7 +2,7 @@
 // Module Trợ lý AI thiết kế theo phong cách Gemini (Hình 2 & 3)
 // Được tùy biến chuyên biệt cho Hệ thống Giám sát & Chăm sóc Người Cao Tuổi
 
-import React, { useState } from 'react';
+import React, { useState, useRef } from 'react';
 import {
   View,
   Text,
@@ -14,6 +14,7 @@ import {
   Alert,
   Platform,
   Animated,
+  ActivityIndicator,
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
@@ -22,6 +23,8 @@ import { Ionicons } from '@expo/vector-icons';
 import AIBotIcon from '../../../components/AIBotIcon';
 import { useVitalStore } from '../../../store/useVitalStore';
 import { useTheme } from '../../../store/useThemeStore';
+import api from '../../../services/api';
+
 
 // Định nghĩa cấu trúc dữ liệu cho tin nhắn chat
 interface ChatMessage {
@@ -52,6 +55,7 @@ export default function AIAssistantScreen({ navigation }: any) {
   const [isSidebarOpen, setIsSidebarOpen] = useState(false);
   // Giá trị tọa độ trượt translateX (-340 ẩn bên trái -> 0 hiển thị trên màn hình)
   const slideAnim = React.useRef(new Animated.Value(-340)).current;
+  const scrollViewRef = useRef<ScrollView>(null);
 
   // Hàm mở Sidebar: trượt mượt mà từ cạnh trái sang
   const openSidebar = () => {
@@ -87,6 +91,10 @@ export default function AIAssistantScreen({ navigation }: any) {
   // 5. Cảnh báo lỗi AI (chỉ đưa ra cảnh báo lỗi, không có nút mô phỏng test)
   const [aiError, setAiError] = useState<AIErrorType>('NONE');
 
+  // 6. State loading khi đang chờ AI phản hồi
+  const [isLoading, setIsLoading] = useState(false);
+
+
   // 6. State tìm kiếm và danh sách cuộc trò chuyện lịch sử
   const [historyChats, setHistoryChats] = useState<HistoryChat[]>([]);
   const [isSearching, setIsSearching] = useState(false);
@@ -108,9 +116,9 @@ export default function AIAssistantScreen({ navigation }: any) {
   });
 
   // ---- HÀM XỬ LÝ GỬI TIN NHẮN TƯ VẤN ----
-  const handleSend = (customText?: string) => {
+  const handleSend = async (customText?: string) => {
     const textToSend = customText || inputText;
-    if (!textToSend.trim()) return;
+    if (!textToSend.trim() || isLoading) return;
 
     // Thêm tin nhắn của người dùng vào danh sách
     const userMsg: ChatMessage = {
@@ -119,42 +127,32 @@ export default function AIAssistantScreen({ navigation }: any) {
       text: textToSend,
       timestamp: new Date().toLocaleTimeString('vi-VN', { hour: '2-digit', minute: '2-digit' }),
     };
-
     setMessages((prev) => [...prev, userMsg]);
     if (!customText) setInputText('');
 
     // Nếu gặp lỗi mạng thì cảnh báo lỗi ngay
     if (aiError === 'NETWORK_TIMEOUT') {
-      setTimeout(() => {
-        const errorMsg: ChatMessage = {
-          id: (Date.now() + 1).toString(),
-          sender: 'ai',
-          text: '⚠️ Không thể kết nối đến máy chủ AI Cloud (Timeout). Vui lòng kiểm tra đường truyền mạng hoặc bấm Thử lại.',
-          timestamp: new Date().toLocaleTimeString('vi-VN', { hour: '2-digit', minute: '2-digit' }),
-          isError: true,
-        };
-        setMessages((prev) => [...prev, errorMsg]);
-      }, 700);
+      const errorMsg: ChatMessage = {
+        id: (Date.now() + 1).toString(),
+        sender: 'ai',
+        text: '⚠️ Không thể kết nối đến máy chủ AI (Timeout). Vui lòng kiểm tra kết nối mạng.',
+        timestamp: new Date().toLocaleTimeString('vi-VN', { hour: '2-digit', minute: '2-digit' }),
+        isError: true,
+      };
+      setMessages((prev) => [...prev, errorMsg]);
       return;
     }
 
-    // AI phân tích thông minh và phản hồi dữ liệu sinh hiệu
-    setTimeout(() => {
-      let reply = 'Tôi đã nhận được câu hỏi và đang liên tục giám sát an toàn cho người thân của bạn.';
-      const lower = textToSend.toLowerCase();
+    // Gọi RAG Chatbot API thật
+    setIsLoading(true);
+    try {
+      const response = await api.post('/chatbot/chat', {
+        message: textToSend,
+        context_window: 8,
+      });
 
-      if (lower.includes('nhịp tim') || lower.includes('spo2') || lower.includes('sinh hiệu') || lower.includes('sức khoẻ')) {
-        const hrText = currentVitals?.heart_rate != null ? `${currentVitals.heart_rate} bpm` : 'Chưa có tín hiệu';
-        const spo2Text = currentVitals?.spo2 != null ? `${currentVitals.spo2}%` : 'Chưa có tín hiệu';
-        const tempText = currentVitals?.skin_temp_max != null ? `${currentVitals.skin_temp_max}°C` : 'Chưa có tín hiệu';
-        reply = `❤️ Chỉ số sức khoẻ thời gian thực:\n• Nhịp tim: ${hrText}\n• Nồng độ Oxy SpO₂: ${spo2Text}\n• Thân nhiệt AMG8833: ${tempText}\n\nĐang kết nối giám sát trực tiếp từ cảm biến.`;
-      } else if (lower.includes('ngã') || lower.includes('té') || lower.includes('fall')) {
-        reply = '🛡️ Hệ thống YOLO-Pose 17 khớp xương đang theo dõi liên tục ở tốc độ 32 FPS.\nHiện tại người cao tuổi đang ở trạng thái an toàn, góc nghiêng cột sống < 20°.\nNếu phát hiện ngã hoặc nằm bất động quá 30 giây, còi báo động Red Alert và video 5s sẽ được kích hoạt ngay lập tức!';
-      } else if (lower.includes('sơ cứu') || lower.includes('cấp cứu')) {
-        reply = '🚨 HƯỚNG DẪN SƠ CỨU KHI NGƯỜI GIÀ BỊ NGÃ:\n1. Giữ bình tĩnh, không vội vàng nâng cụ dậy ngay.\n2. Kiểm tra xem cụ còn tỉnh táo không, hỏi chỗ bị đau (khớp háng, đầu, cổ tay).\n3. Nếu nghi ngờ gãy xương hoặc cụ bất tỉnh, hãy bấm ngay nút "115" ở góc trên để mở bảng quản trị cấp cứu!\n4. Giữ ấm cơ thể cho cụ trong lúc chờ hỗ trợ y tế.';
-      } else if (lower.includes('uống thuốc') || lower.includes('nhắc nhở') || lower.includes('loa')) {
-        reply = '🔊 Đã kích hoạt lệnh phát loa tiếng Việt trên Hub Orange Pi 5:\n"Bác ơi, đã đến giờ uống thuốc theo đơn của bác sĩ rồi ạ!" (FR12).';
-      }
+      const data = response.data;
+      const reply = data.answer || 'Tôi đã nhận được câu hỏi nhưng chưa có câu trả lời.';
 
       const aiMsg: ChatMessage = {
         id: (Date.now() + 1).toString(),
@@ -163,8 +161,29 @@ export default function AIAssistantScreen({ navigation }: any) {
         timestamp: new Date().toLocaleTimeString('vi-VN', { hour: '2-digit', minute: '2-digit' }),
       };
       setMessages((prev) => [...prev, aiMsg]);
-    }, 600);
+
+    } catch (error: any) {
+      // Fallback nếu chatbot service chưa chạy
+      const isOffline =
+        error?.response?.status === 503 ||
+        error?.code === 'ECONNREFUSED' ||
+        error?.message?.includes('Network Error');
+
+      const errorMsg: ChatMessage = {
+        id: (Date.now() + 1).toString(),
+        sender: 'ai',
+        text: isOffline
+          ? '⚠️ Không thể kết nối đến máy chủ Backend. Vui lòng kiểm tra lại kết nối mạng hoặc thử lại sau.'
+          : `⚠️ Lỗi kết nối AI: ${error?.response?.data?.detail || error?.message}`,
+        timestamp: new Date().toLocaleTimeString('vi-VN', { hour: '2-digit', minute: '2-digit' }),
+        isError: true,
+      };
+      setMessages((prev) => [...prev, errorMsg]);
+    } finally {
+      setIsLoading(false);
+    }
   };
+
 
   // Tạo cuộc trò chuyện mới
   const handleNewChat = () => {
@@ -267,8 +286,10 @@ export default function AIAssistantScreen({ navigation }: any) {
       {/* 3. VÙNG NỘI DUNG CHÍNH (HERO KHI CHƯA CHAT HOẶC DANH SÁCH TIN NHẮN)        */}
       {/* ========================================================================= */}
       <ScrollView
+        ref={scrollViewRef}
         showsVerticalScrollIndicator={false}
         contentContainerStyle={styles.mainScroll}
+        onContentSizeChange={() => scrollViewRef.current?.scrollToEnd({ animated: true })}
       >
         {/* NẾU CHƯA CÓ TIN NHẮN: Hiển thị giao diện chào mừng Hero chuẩn Hình 3 */}
         {messages.length === 0 ? (
@@ -373,6 +394,28 @@ export default function AIAssistantScreen({ navigation }: any) {
                 </View>
               </View>
             ))}
+
+            {/* Typing indicator - hiển thị khi AI đang suy nghĩ */}
+            {isLoading && (
+              <View style={[styles.msgRow, styles.aiRow]}>
+                <View style={styles.aiAvatarSmall}>
+                  <AIBotIcon size={24} />
+                </View>
+                <View
+                  style={[
+                    styles.bubble,
+                    styles.aiBubble,
+                    isDarkMode && { backgroundColor: colors.card, borderColor: colors.border },
+                    { flexDirection: 'row', alignItems: 'center', paddingVertical: 12, paddingHorizontal: 16 },
+                  ]}
+                >
+                  <ActivityIndicator size="small" color="#0284C7" style={{ marginRight: 8 }} />
+                  <Text style={[styles.aiMsgText, { fontStyle: 'italic' }, isDarkMode && { color: colors.textMuted }]}>
+                    AI đang suy nghĩ...
+                  </Text>
+                </View>
+              </View>
+            )}
           </View>
         )}
       </ScrollView>
@@ -395,8 +438,17 @@ export default function AIAssistantScreen({ navigation }: any) {
 
           {/* Nút Ghi âm giọng nói (Chỉ giữ nút ghi âm, đã bỏ nút sóng bên phải theo yêu cầu của bạn) */}
           {inputText.trim() ? (
-            <TouchableOpacity style={styles.sendBtn} onPress={() => handleSend()} activeOpacity={0.8}>
-              <Ionicons name="arrow-up" size={18} color="#FFF" />
+            <TouchableOpacity
+              style={[styles.sendBtn, isLoading && { opacity: 0.6 }]}
+              onPress={() => handleSend()}
+              disabled={isLoading}
+              activeOpacity={0.8}
+            >
+              {isLoading ? (
+                <ActivityIndicator size="small" color="#FFF" />
+              ) : (
+                <Ionicons name="arrow-up" size={18} color="#FFF" />
+              )}
             </TouchableOpacity>
           ) : (
             <TouchableOpacity
