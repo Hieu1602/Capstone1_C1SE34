@@ -8,7 +8,7 @@ import { incidentsApi } from '../services/api';
 // ---- Types ----
 export interface Incident {
   id: string;
-  device_id: string;
+  device_id?: string;
   alert_type: string;
   alert_level: 'LOW' | 'MEDIUM' | 'HIGH' | 'CRITICAL';
   message: string;

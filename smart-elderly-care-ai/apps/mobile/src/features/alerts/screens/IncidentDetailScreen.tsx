@@ -40,22 +40,7 @@ if (Platform.OS !== 'web') {
 import { incidentsApi } from '../../../services/api';
 import { useTheme } from '../../../store/useThemeStore';
 import { useAlertStore, useAuthStore } from '../../../store';
-
-// Định nghĩa kiểu dữ liệu sự cố
-interface Incident {
-  id: string;
-  alert_type: string;
-  alert_level: string;
-  message: string;
-  confidence: number;
-  video_clip_url: string | null;
-  thumbnail_url?: string | null;
-  is_acknowledged: boolean;
-  acknowledged_by?: string | null;
-  acknowledged_at?: string | null;
-  note?: string | null;
-  created_at: string;
-}
+import type { Incident } from '../../../store/useAlertStore';
 
 // Bảng màu tương ứng với các cấp độ nghiêm trọng của sự cố
 const LEVEL_COLORS: Record<string, string> = {
@@ -77,10 +62,6 @@ const ALERT_TYPE_LABELS: Record<string, string> = {
   INACTIVITY:       '⏱️ Không có hoạt động',
 };
 
-const DEFAULT_VIDEO_URL = 'https://commondatastorage.googleapis.com/gtv-videos-bucket/sample/BigBuckBunny.mp4';
-const DEFAULT_EVIDENCE_IMG = 'http://localhost:8000/static/evidence/fall_evidence_ai.jpg';
-const FALLBACK_ONLINE_IMG = 'https://images.unsplash.com/photo-1516549655169-df83a0774514?w=800&q=80';
-
 export default function IncidentDetailScreen({ route, navigation }: any) {
   // Lấy trạng thái màu giao diện Sáng / Tối
   const { isDarkMode, colors } = useTheme();
@@ -99,7 +80,7 @@ export default function IncidentDetailScreen({ route, navigation }: any) {
 
   // Lấy các tham số truyền qua navigation route
   const params = route.params ?? {};
-  const incidentId = params.incidentId ?? params.id ?? 'inc-03';
+  const incidentId = params.incidentId ?? params.id;
   const [incident, setIncident] = useState<Incident | null>(null);
   const [loading, setLoading] = useState(true);
   const [isProcessing, setIsProcessing] = useState(false);
@@ -111,27 +92,33 @@ export default function IncidentDetailScreen({ route, navigation }: any) {
   // Lifecycle: Khởi tạo dữ liệu sự cố từ params hoặc tải từ Backend API
   // ----------------------------------------------------------------------------
   useEffect(() => {
+    if (!incidentId) {
+      setLoading(false);
+      return;
+    }
+
     // 1. Kiểm tra xem sự cố đã có sẵn trong AlertStore chưa
     const storeInc = incidents.find((i) => i.id === incidentId);
 
     // 2. Nếu navigation có truyền sẵn thông tin chi tiết: Nạp ngay để hiển thị tức thì
     if (params.alert_type || params.type || params.confidence != null || params.message) {
-      let conf = 0.94;
+      let conf: number | undefined = undefined;
       if (typeof params.confidence === 'number') {
         conf = params.confidence > 1 ? params.confidence / 100 : params.confidence;
       } else if (typeof params.confidence === 'string') {
         const p = parseFloat(params.confidence.replace('%', ''));
-        conf = isNaN(p) ? 0.94 : (p > 1 ? p / 100 : p);
+        conf = isNaN(p) ? undefined : (p > 1 ? p / 100 : p);
       }
 
       setIncident({
         id: incidentId,
+        device_id: params.device_id ?? storeInc?.device_id,
         alert_type: params.alert_type ?? (params.type === 'FALL' ? 'FALL_DETECTED' : params.type) ?? 'FALL_DETECTED',
         alert_level: params.alert_level ?? 'CRITICAL',
-        message: params.message ?? '🚨 Cảnh báo té ngã (Fall Detected) tại phòng ngủ - YOLO-Pose AI phát hiện người cao tuổi ngã nghiêng đột ngột.',
+        message: params.message ?? 'Cảnh báo khẩn cấp ghi nhận từ hệ thống cảm biến.',
         confidence: conf,
-        video_clip_url: params.video_clip_url || DEFAULT_VIDEO_URL,
-        thumbnail_url: params.thumbnail_url || DEFAULT_EVIDENCE_IMG,
+        video_clip_url: params.video_clip_url ?? null,
+        thumbnail_url: params.thumbnail_url ?? null,
         is_acknowledged: storeInc ? storeInc.is_acknowledged : (params.is_acknowledged ?? false),
         acknowledged_by: storeInc?.acknowledged_by ?? params.acknowledged_by ?? (storeInc?.is_acknowledged ? operatorName : null),
         acknowledged_at: storeInc?.acknowledged_at ?? params.acknowledged_at,
@@ -143,47 +130,26 @@ export default function IncidentDetailScreen({ route, navigation }: any) {
 
     // 3. Nếu tìm thấy trong store: Sử dụng trực tiếp
     if (storeInc) {
-      setIncident({
-        ...storeInc,
-        confidence: storeInc.confidence ?? 0.94,
-        video_clip_url: storeInc.video_clip_url || DEFAULT_VIDEO_URL,
-        thumbnail_url: storeInc.thumbnail_url || DEFAULT_EVIDENCE_IMG,
-      });
+      setIncident(storeInc);
       setLoading(false);
       return;
     }
 
     // 4. Nếu chưa có: Gọi API Backend để lấy chi tiết sự kiện
-    if (incidentId) {
-      fetchIncident();
-    } else {
-      setLoading(false);
-    }
+    fetchIncident();
   }, [incidentId, incidents]);
 
   const fetchIncident = async () => {
     try {
       const res = await incidentsApi.get(incidentId);
-      const data = res.data;
-      setIncident({
-        ...data,
-        video_clip_url: data.video_clip_url || DEFAULT_VIDEO_URL,
-        thumbnail_url: data.thumbnail_url || DEFAULT_EVIDENCE_IMG,
-      });
+      if (res.data) {
+        setIncident(res.data);
+      } else {
+        setIncident(null);
+      }
     } catch (err) {
-      console.warn('Không tìm thấy sự cố thực tế từ backend API, dùng dữ liệu mẫu:', err);
-      // Fallback
-      setIncident({
-        id: incidentId,
-        alert_type: 'FALL_DETECTED',
-        alert_level: 'CRITICAL',
-        message: '🚨 Cảnh báo té ngã (Fall Detected) tại phòng ngủ - YOLO-Pose AI phát hiện người cao tuổi ngã nghiêng đột ngột.',
-        confidence: 0.94,
-        video_clip_url: DEFAULT_VIDEO_URL,
-        thumbnail_url: DEFAULT_EVIDENCE_IMG,
-        is_acknowledged: false,
-        created_at: new Date().toISOString(),
-      });
+      console.warn('Lỗi khi tải chi tiết sự cố từ backend API:', err);
+      setIncident(null);
     } finally {
       setLoading(false);
     }
@@ -292,10 +258,8 @@ export default function IncidentDetailScreen({ route, navigation }: any) {
 
   const levelColor = LEVEL_COLORS[incident.alert_level] ?? '#64748B';
   const typeLabel  = ALERT_TYPE_LABELS[incident.alert_type] ?? incident.alert_type;
-  const videoUrl   = incident.video_clip_url || DEFAULT_VIDEO_URL;
-  const evidenceImg= imgError
-    ? FALLBACK_ONLINE_IMG
-    : (incident.thumbnail_url || DEFAULT_EVIDENCE_IMG);
+  const videoUrl   = incident.video_clip_url || null;
+  const evidenceImg= imgError ? null : (incident.thumbnail_url || null);
 
   return (
     <SafeAreaView style={[styles.container, { backgroundColor: colors.background }]}>
@@ -339,17 +303,20 @@ export default function IncidentDetailScreen({ route, navigation }: any) {
 
         {/* Details Card */}
         <View style={[styles.infoCard, { backgroundColor: colors.card, borderColor: colors.border, borderWidth: 1 }]}>
-          <View style={styles.row}>
-            <Text style={[styles.rowLabel, { color: colors.textMuted }]}>Độ tin cậy AI</Text>
-            <View style={{ flexDirection: 'row', alignItems: 'center' }}>
-              <Ionicons name="sparkles" size={14} color="#EF4444" style={{ marginRight: 4 }} />
-              <Text style={[styles.rowValue, { color: '#EF4444', fontWeight: '700' }]}>
-                {((incident.confidence || 0.94) * 100).toFixed(0)}% (YOLO-Pose AI)
-              </Text>
-            </View>
-          </View>
-
-          <View style={[styles.rowDivider, { backgroundColor: colors.border }]} />
+          {incident.confidence != null && (
+            <>
+              <View style={styles.row}>
+                <Text style={[styles.rowLabel, { color: colors.textMuted }]}>Độ tin cậy AI</Text>
+                <View style={{ flexDirection: 'row', alignItems: 'center' }}>
+                  <Ionicons name="sparkles" size={14} color="#EF4444" style={{ marginRight: 4 }} />
+                  <Text style={[styles.rowValue, { color: '#EF4444', fontWeight: '700' }]}>
+                    {(incident.confidence * 100).toFixed(0)}% (AI)
+                  </Text>
+                </View>
+              </View>
+              <View style={[styles.rowDivider, { backgroundColor: colors.border }]} />
+            </>
+          )}
 
           {/* Timestamp */}
           <View style={styles.row}>
@@ -364,7 +331,7 @@ export default function IncidentDetailScreen({ route, navigation }: any) {
           <View style={styles.row}>
             <Text style={[styles.rowLabel, { color: colors.textMuted }]}>Vị trí cảm biến</Text>
             <Text style={[styles.rowValue, { color: colors.textPrimary }]}>
-              Camera #01 • Phòng ngủ (Edge Hub #01)
+              {incident.device_id ? `Thiết bị: ${incident.device_id}` : 'Cảm biến giám sát'}
             </Text>
           </View>
 
@@ -395,15 +362,17 @@ export default function IncidentDetailScreen({ route, navigation }: any) {
             <Text style={[styles.sectionTitle, { color: colors.textPrimary }]}>
               Bằng chứng hình ảnh / clip sự cố
             </Text>
-            <View style={styles.confidenceBadge}>
-              <Ionicons name="shield-checkmark" size={13} color="#EF4444" style={{ marginRight: 4 }} />
-              <Text style={styles.confidenceBadgeText}>
-                Độ tin cậy: {((incident.confidence || 0.94) * 100).toFixed(0)}%
-              </Text>
-            </View>
+            {incident.confidence != null && (
+              <View style={styles.confidenceBadge}>
+                <Ionicons name="shield-checkmark" size={13} color="#EF4444" style={{ marginRight: 4 }} />
+                <Text style={styles.confidenceBadgeText}>
+                  Độ tin cậy: {(incident.confidence * 100).toFixed(0)}%
+                </Text>
+              </View>
+            )}
           </View>
 
-          {/* Tab selector giữa Ảnh AI Bounding Box và Video Clip 5s */}
+          {/* Tab selector giữa Ảnh AI Bounding Box và Video Clip */}
           <View style={[styles.tabSelector, { backgroundColor: isDarkMode ? '#1E293B' : '#E2E8F0' }]}>
             <TouchableOpacity
               style={[styles.tabItem, viewMode === 'ai_box' && styles.tabItemActive]}
@@ -417,7 +386,7 @@ export default function IncidentDetailScreen({ route, navigation }: any) {
                 style={{ marginRight: 6 }}
               />
               <Text style={[styles.tabText, viewMode === 'ai_box' && styles.tabTextActive]}>
-                Ảnh AI Bounding Box
+                Ảnh bằng chứng AI
               </Text>
             </TouchableOpacity>
 
@@ -433,78 +402,106 @@ export default function IncidentDetailScreen({ route, navigation }: any) {
                 style={{ marginRight: 6 }}
               />
               <Text style={[styles.tabText, viewMode === 'video' && styles.tabTextActive]}>
-                Video Clip 5 giây
+                Video Clip trích xuất
               </Text>
             </TouchableOpacity>
           </View>
 
-          {/* VIEW MODE 1: Ảnh mô phỏng có Bounding Box phát hiện ngã AI */}
+          {/* VIEW MODE 1: Ảnh có Bounding Box phát hiện ngã AI nếu có ảnh */}
           {viewMode === 'ai_box' ? (
-            <View style={[styles.evidenceCard, { backgroundColor: '#0B0F19', borderColor: colors.border }]}>
-              <Image
-                source={{ uri: evidenceImg }}
-                style={styles.evidenceImage}
-                resizeMode="cover"
-                onError={() => setImgError(true)}
-              />
+            evidenceImg ? (
+              <View style={[styles.evidenceCard, { backgroundColor: '#0B0F19', borderColor: colors.border }]}>
+                <Image
+                  source={{ uri: evidenceImg }}
+                  style={styles.evidenceImage}
+                  resizeMode="cover"
+                  onError={() => setImgError(true)}
+                />
 
-              {/* Lớp phủ OSD giám sát camera an ninh */}
-              <View style={styles.evidenceOverlayHeader}>
-                <View style={styles.recDot} />
-                <Text style={styles.evidenceOsdText}>REC ● TRÍCH XUẤT BUFFER RAM 5s</Text>
-                <Text style={[styles.evidenceOsdText, { marginLeft: 'auto' }]}>CAM-01 • 30 FPS</Text>
-              </View>
-
-              {/* Khung Bounding Box AI màu đỏ mô phỏng chuẩn YOLOv8-Pose */}
-              <View style={styles.aiBoundingBox}>
-                <View style={styles.boxTag}>
-                  <Ionicons name="warning" size={11} color="#FFF" style={{ marginRight: 3 }} />
-                  <Text style={styles.boxTagText}>FALL DETECTED (94.2%)</Text>
+                {/* Lớp phủ OSD giám sát camera an ninh */}
+                <View style={styles.evidenceOverlayHeader}>
+                  <View style={styles.recDot} />
+                  <Text style={styles.evidenceOsdText}>REC ● TRÍCH XUẤT BUFFER</Text>
+                  <Text style={[styles.evidenceOsdText, { marginLeft: 'auto' }]}>
+                    {incident.device_id || 'CAM-01'}
+                  </Text>
                 </View>
 
-                {/* Các điểm khớp xương tư thế (Pose Estimation Skeleton Nodes) */}
-                <View style={[styles.skeletonJoint, { top: 12, left: '46%' }]} />
-                <View style={[styles.skeletonJoint, { top: 38, left: '32%' }]} />
-                <View style={[styles.skeletonJoint, { top: 38, left: '60%' }]} />
-                <View style={[styles.skeletonJoint, { top: 82, left: '40%' }]} />
-                <View style={[styles.skeletonJoint, { top: 110, left: '26%' }]} />
-                <View style={[styles.skeletonJoint, { top: 125, left: '72%' }]} />
-              </View>
+                {/* Khung Bounding Box AI màu đỏ khi phát hiện ngã */}
+                {incident.alert_type === 'FALL_DETECTED' && (
+                  <View style={styles.aiBoundingBox}>
+                    <View style={styles.boxTag}>
+                      <Ionicons name="warning" size={11} color="#FFF" style={{ marginRight: 3 }} />
+                      <Text style={styles.boxTagText}>
+                        FALL DETECTED{incident.confidence != null ? ` (${(incident.confidence * 100).toFixed(1)}%)` : ''}
+                      </Text>
+                    </View>
 
-              {/* Thanh trạng thái dưới đáy ảnh */}
-              <View style={styles.evidenceOverlayFooter}>
-                <View style={styles.aiTag}>
-                  <Ionicons name="scan-outline" size={13} color="#FFF" style={{ marginRight: 4 }} />
-                  <Text style={styles.aiTagText}>YOLOv8-Pose AI • Khung Bounding Box</Text>
+                    {/* Các điểm khớp xương tư thế (Pose Estimation Skeleton Nodes) */}
+                    <View style={[styles.skeletonJoint, { top: 12, left: '46%' }]} />
+                    <View style={[styles.skeletonJoint, { top: 38, left: '32%' }]} />
+                    <View style={[styles.skeletonJoint, { top: 38, left: '60%' }]} />
+                    <View style={[styles.skeletonJoint, { top: 82, left: '40%' }]} />
+                    <View style={[styles.skeletonJoint, { top: 110, left: '26%' }]} />
+                    <View style={[styles.skeletonJoint, { top: 125, left: '72%' }]} />
+                  </View>
+                )}
+
+                {/* Thanh trạng thái dưới đáy ảnh */}
+                <View style={styles.evidenceOverlayFooter}>
+                  <View style={styles.aiTag}>
+                    <Ionicons name="scan-outline" size={13} color="#FFF" style={{ marginRight: 4 }} />
+                    <Text style={styles.aiTagText}>YOLO-Pose AI • Bằng chứng sự cố</Text>
+                  </View>
+                  {incident.confidence != null && (
+                    <Text style={styles.evidenceOsdText}>
+                      Độ tin cậy: {(incident.confidence * 100).toFixed(0)}%
+                    </Text>
+                  )}
                 </View>
-                <Text style={styles.evidenceOsdText}>Độ tin cậy AI: 94%</Text>
               </View>
-            </View>
+            ) : (
+              <View style={[styles.evidenceCard, { backgroundColor: isDarkMode ? '#1E293B' : '#F1F5F9', borderColor: colors.border, height: 180, justifyContent: 'center', alignItems: 'center' }]}>
+                <Ionicons name="image-outline" size={38} color={colors.textMuted} />
+                <Text style={{ color: colors.textSecondary, marginTop: 8, fontSize: 13, fontWeight: '500' }}>
+                  Không có hình ảnh bằng chứng cho sự cố này
+                </Text>
+              </View>
+            )
           ) : (
-            /* VIEW MODE 2: Video Player trích xuất 5s */
-            <View style={[styles.evidenceCard, { backgroundColor: '#000', borderColor: colors.border }]}>
-              {Platform.OS === 'web' || !Video ? (
-                <video
-                  src={videoUrl}
-                  style={{ width: '100%', height: 230, borderRadius: 12, backgroundColor: '#000', objectFit: 'contain' }}
-                  controls
-                  autoPlay
-                  loop
-                />
-              ) : (
-                <Video
-                  source={{ uri: videoUrl }}
-                  style={styles.video}
-                  controls
-                  resizeMode="contain"
-                  paused={false}
-                />
-              )}
-              <View style={styles.videoOsdBar}>
-                <View style={styles.recDot} />
-                <Text style={styles.evidenceOsdText}>CLIP 5s ĐÃ LƯU TỰ ĐỘNG VÀO HỒ SƠ SỰ CỐ</Text>
+            /* VIEW MODE 2: Video Player trích xuất */
+            videoUrl ? (
+              <View style={[styles.evidenceCard, { backgroundColor: '#000', borderColor: colors.border }]}>
+                {Platform.OS === 'web' || !Video ? (
+                  <video
+                    src={videoUrl}
+                    style={{ width: '100%', height: 230, borderRadius: 12, backgroundColor: '#000', objectFit: 'contain' }}
+                    controls
+                    autoPlay
+                    loop
+                  />
+                ) : (
+                  <Video
+                    source={{ uri: videoUrl }}
+                    style={styles.video}
+                    controls
+                    resizeMode="contain"
+                    paused={false}
+                  />
+                )}
+                <View style={styles.videoOsdBar}>
+                  <View style={styles.recDot} />
+                  <Text style={styles.evidenceOsdText}>CLIP ĐÃ LƯU VÀO HỒ SƠ SỰ CỐ</Text>
+                </View>
               </View>
-            </View>
+            ) : (
+              <View style={[styles.evidenceCard, { backgroundColor: isDarkMode ? '#1E293B' : '#F1F5F9', borderColor: colors.border, height: 180, justifyContent: 'center', alignItems: 'center' }]}>
+                <Ionicons name="videocam-off-outline" size={38} color={colors.textMuted} />
+                <Text style={{ color: colors.textSecondary, marginTop: 8, fontSize: 13, fontWeight: '500' }}>
+                  Không có video clip trích xuất cho sự cố này
+                </Text>
+              </View>
+            )
           )}
         </View>
 
