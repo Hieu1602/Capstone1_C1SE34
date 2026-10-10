@@ -1,0 +1,205 @@
+================================================================================
+                    SMART ELDERLY CARE AI - SYSTEM CONTEXT
+             TÀI LIỆU CHI TIẾT TÁC NHÂN VÀ CÁC NHÁNH BỐI CẢNH HỆ THỐNG
+================================================================================
+Dự án: Capstone 1 - C1SE.34 (Smart Elderly Care AI)
+Phiên bản: 1.0
+Mục tiêu tài liệu: Mô tả đầy đủ bức tranh bối cảnh hệ thống (System Context - C4 Model Level 1),
+phân loại chi tiết các tác nhân (Actors/Stakeholders), các hệ sinh thái nhánh chính (System Branches),
+và các luồng giao tiếp tương tác thời gian thực.
+================================================================================
+
+I. TỔNG QUAN BỐI CẢNH HỆ THỐNG (SYSTEM CONTEXT OVERVIEW)
+--------------------------------------------------------------------------------
+Hệ thống "Smart Elderly Care AI" được thiết kế theo mô hình lai (Hybrid Edge-Cloud Architecture)
+nhằm cung cấp giải pháp bảo vệ, giám sát sức khoẻ 24/7 và cảnh báo té ngã thời gian thực cho
+người cao tuổi tại gia đình.
+
+Phạm vi biên giới hệ thống (System Boundary) bao gồm 3 phân vùng chính:
+1. Phân vùng Thiết bị & Cảm biến tại nhà (In-Home Edge & Peripherals Zone).
+2. Phân vùng Xử lý Đám mây & Cơ sở dữ liệu (Cloud Backend & Storage Zone).
+3. Phân vùng Ứng dụng người dùng đầu cuối (Client Apps: Mobile, Web, Doctor Portal).
+
+
+II. CÁC TÁC NHÂN CHÍNH THAM GIA HỆ THỐNG (SYSTEM ACTORS & STAKEHOLDERS)
+--------------------------------------------------------------------------------
+
+1. TÁC NHÂN 1: NGƯỜI CAO TUỔI (ELDERLY INDIVIDUAL / PATIENT - ĐỐI TƯỢNG THỤ HƯỞNG)
+   - Vai trò: Là đối tượng trung tâm được bảo vệ, sinh hoạt tại gia đình hoặc trung tâm dưỡng lão.
+   - Tương tác với hệ thống:
+     + Đeo vòng tay thông minh BLE Smartband (đo liên tục nhịp tim, nồng độ oxy SpO2).
+     + Di chuyển trong phạm vi giám sát của Camera IP và cảm biến nhiệt hồng ngoại AMG8833.
+     + Nhận hướng dẫn nhắc nhở qua giọng nói (Voice Prompts) phát ra từ loa của Edge Hub
+       (ví dụ: nhắc đeo vòng tay khi pin yếu/quên đeo, nhắc uống thuốc đúng giờ).
+     + Không cần phải thực hiện bất kỳ thao tác công nghệ phức tạp nào (Passive Protection).
+     + Quyền riêng tư được bảo mật tuyệt đối: Luồng video thô chỉ xử lý tại chỗ (Edge), không phát tán ra ngoài.
+
+2. TÁC NHÂN 2: NGƯỜI GIÁM HỘ / NGƯỜI THÂN GIA ĐÌNH (FAMILY CAREGIVERS / HOME OWNERS)
+   - Đại diện tiêu biểu trong hệ thống: Chủ hộ (Nguyễn Hữu Nghĩa - SĐT: 0905123456).
+   - Thiết bị sử dụng: Ứng dụng di động (React Native / Expo Mobile App) và Web Dashboard.
+   - Tương tác với hệ thống:
+     + Nhận cảnh báo té ngã khẩn cấp (Push Notification FCM & Còi hú báo động) ngay lập tức (<500ms).
+     + Xem trực tiếp ảnh chụp AI và video clip ngắn 5 giây (Incident Evidence Clip) với bounding box
+       và nhãn độ tin cậy AI (94%) để kiểm tra nhanh mức độ nghiêm trọng.
+     + Giám sát các chỉ số sinh hiệu trực tiếp (Live Vitals Dashboard): Nhịp tim, SpO2, thân nhiệt, vận động.
+     + Tra cứu lịch sử sức khỏe, chọn ngày trên lịch (Date Picker) và tua dòng thời gian (Interactive Timeline Slider).
+     + Điều khiển chế độ an ninh nhà: Chuyển đổi giữa chế độ "Ở nhà", "Xa nhà", "Tắt còi báo động",
+       hoặc kích hoạt chế độ riêng tư (Privacy Mode) che mờ camera phòng ngủ.
+     + Bấm nút gọi cấp cứu khẩn cấp 1 chạm (SOS 115) kèm chia sẻ vị trí nhà tự động.
+
+3. TÁC NHÂN 3: BÁC SĨ CHUYÊN KHOA PHỤ TRÁCH (HEALTHCARE SPECIALIST / DOCTOR)
+   - Đại diện tiêu biểu trong hệ thống: BSCKII. Nguyễn Văn Minh (Khoa Lão khoa & Tim mạch - SĐT: 0905888999).
+   - Thiết bị sử dụng: Ứng dụng Bác sĩ (Doctor Portal / Doctor Mobile Module).
+   - Tương tác với hệ thống:
+     + Truy cập hồ sơ bệnh án điện tử (EHR): Tiền sử bệnh nền, thuốc đang điều trị, chỉ số dị ứng, nhóm máu.
+     + Xem biểu đồ dao động sinh hiệu dài hạn (theo Ngày, Tuần, Tháng) phục vụ chẩn đoán bệnh lý tim mạch, huyết áp.
+     + Nhận báo cáo phân tích tổng hợp từ AI và ghi chú phác đồ theo dõi định kỳ.
+     + Tiếp nhận cuộc gọi khẩn cấp hoặc tin nhắn tư vấn y tế từ người nhà khi có biến chứng sức khỏe.
+
+4. TÁC NHÂN 4: QUẢN TRỊ VIÊN HỆ THỐNG (SYSTEM ADMINISTRATOR / DEVOPS)
+   - Vai trò: Vận hành, bảo trì và đảm bảo an toàn toàn bộ hạ tầng công nghệ.
+   - Tương tác với hệ thống:
+     + Quản lý danh mục người dùng, phân quyền truy cập (RBAC: Admin, Caregiver, Doctor).
+     + Theo dõi tình trạng kết nối mạng của đội thiết bị Edge Hub (Fleet Management) qua MQTT & Redis Heartbeat.
+     + Quản lý dung lượng lưu trữ phân tầng (Tiered Storage: MinIO, TimescaleDB, Redis).
+     + Cấu hình và cập nhật thuật toán AI (Over-The-Air - OTA Model Updates).
+
+
+III. CÁC NHÁNH CHÍNH VỀ SYSTEM CONTEXT (MAIN ARCHITECTURAL BRANCHES)
+--------------------------------------------------------------------------------
+
+Hệ thống được phân bổ thành 4 NHÁNH CỐT LÕI (4 Major Architectural Branches):
+
+┌──────────────────────────────────────────────────────────────────────────────────┐
+│                   BỐI CẢNH HỆ THỐNG (SYSTEM CONTEXT LEVEL 1)                     │
+└──────────────────────────────────────────────────────────────────────────────────┘
+
+                       [1. CẢM BIẾN & NGOẠI VI]
+                      (In-Home Hardware Layer)
+                       • Camera IP (RTSP 30 FPS)
+                       • Vòng đeo BLE Band (HR, SpO2)
+                       • Cảm biến nhiệt AMG8833 (I2C)
+                       • Microphone USB (Audio)
+                       • Còi hú / Loa thông minh
+                                  │
+                                  ▼ (RTSP, BLE GATT, I2C, USB)
+                       [2. TRẠM AI TẠI BIÊN]
+                      (Edge Hub - Orange Pi 5)
+                       • YOLOv8-Pose (Fall Detection)
+                       • YAMNet (Sound Event Detection)
+                       • Vision Re-ID (Nhận diện khuôn mặt)
+                       • Sensor Fusion Decision Matrix
+                       • Ring Buffer (Video bằng chứng 5s)
+                                  │
+                                  ▼ (MQTT over TLS / WebSocket / HTTPS)
+                       [3. ĐÁM MÂY & DỮ LIỆU]
+                      (Cloud Backend & Data Tier)
+                       • FastAPI Server (:8000)
+                       • EMQX Message Broker (:1883/8883)
+                       • PostgreSQL 16 + TimescaleDB (:5435)
+                       • Redis Cache & Pub/Sub (:6379)
+                       • MinIO Object Storage (:9000)
+                                  │
+                   ┌──────────────┴──────────────┐
+                   ▼                             ▼
+       [4. DỊCH VỤ NGOÀI]              [ỨNG DỤNG NGƯỜI DÙNG]
+      (External Services)             (Client Interfaces)
+       • Firebase Cloud Messaging      • Mobile App (React Native / Expo)
+       • Tổng đài Cấp cứu 115          • Web Dashboard (Next.js)
+       • Bản đồ & Định vị GPS          • Doctor Portal (Hồ sơ Bác sĩ)
+
+
+Chi tiết từng nhánh:
+
+1. NHÁNH 1: THIẾT BỊ PHẦN CỨNG & CẢM BIẾN TẠI NHÀ (IN-HOME HARDWARE & SENSORS)
+   - IP Camera / USB Camera: Truyền luồng hình ảnh thời gian thực 30 FPS qua giao thức RTSP.
+   - BLE Smartband: Đo nhịp tim (Heart Rate), nồng độ oxy trong máu (SpO2), gửi qua kết nối BLE (Bleak GATT Client).
+   - Ma trận cảm biến nhiệt độ hồng ngoại AMG8833: Lưới nhiệt 8x8 phát hiện nguồn nhiệt sống cơ thể, phân biệt người ngã với đồ vật rơi rớt (kết nối I2C).
+   - USB Microphone: Thu nhận âm thanh môi trường xung quanh phục vụ phân tích tiếng la hét, va đập mạnh.
+   - Còi hú báo động & Loa cục bộ: Phát âm thanh báo động tại chỗ khi phát hiện nguy cấp và phát giọng nói hướng dẫn.
+
+2. NHÁNH 2: TRẠM XỬ LÝ TRÍ TUỆ NHÂN TẠO TẠI BIÊN (EDGE HUB - ORANGE PI 5 / RK3588S)
+   - Bộ suy luận Thị giác máy tính (Vision AI): Chạy mô hình YOLOv8-Pose đã lượng tử hoá (RKNN/ONNX) đạt tốc độ ≥30 FPS trên NPU, trích xuất 17 khớp xương cơ thể để phát hiện góc ngã và vận tốc rơi tự do.
+   - Bộ nhận diện khuôn mặt (Edge Hub Vision Face Re-ID): Trích xuất vector đặc trưng 128 chiều khuôn mặt, phân biệt người cao tuổi trong nhà với khách đến thăm.
+   - Bộ phân loại âm thanh (Audio AI): YAMNet (TFLite) phát hiện tiếng kêu cứu "Help me / Cứu với" hoặc tiếng va chạm lớn trên sàn.
+   - Động cơ dung hợp đa cảm biến (Multimodal Sensor Fusion Engine): Ma trận ra quyết định tổng hợp đồng thời hình ảnh + âm thanh + nhiệt độ + nhịp tim để đạt tỷ lệ chính xác TPR ≥ 95% và triệt tiêu báo động giả FPR < 2%.
+   - Bộ đệm vòng quay (Rolling Ring Buffer): Lưu trữ liên tục 5 giây video trong RAM; khi xảy ra sự cố đỏ, lập tức đóng gói và trích xuất thành clip bằng chứng (Incident Clip).
+   - MQTT Client: Mã hóa TLS gửi gói tin cảnh báo JSON lên Cloud Broker.
+
+3. NHÁNH 3: HỆ THỐNG ĐÁM MÂY VÀ LƯU TRỮ TRUNG TÂM (CLOUD BACKEND & DATA TIER)
+   - FastAPI Backend Server: Cung cấp toàn bộ RESTful API (vitals, incidents, medical records, devices, auth) và WebSocket endpoint (`/ws/alerts`) đồng bộ thời gian thực.
+   - EMQX MQTT Broker: Điều phối luồng dữ liệu truyền thông hai chiều giữa hàng nghìn Edge Hub và Cloud Backend với độ trễ thấp.
+   - PostgreSQL 16 + TimescaleDB: 
+     + Bảng quan hệ: Quản lý người dùng, hộ gia đình, thiết bị, hồ sơ bệnh án, thông báo sự cố.
+     + Bảng chuỗi thời gian (Hypertable): Lưu trữ hàng triệu bản ghi sinh hiệu (Heart Rate, SpO2, Temp) phục vụ truy vấn theo ngày và biểu đồ dao động.
+   - Redis In-Memory: Lưu trữ phiên đăng nhập, bộ đệm trạng thái thiết bị thời gian thực (Heartbeat) và Pub/Sub nội bộ.
+   - MinIO / Cloud Object Storage: Lưu trữ an toàn các tệp bằng chứng sự cố (ảnh và clip 5s) có thời hạn tự động dọn dẹp (Storage Tiering).
+
+4. NHÁNH 4: DỊCH VỤ NGOÀI & TÍCH HỢP BÊN THỨ BA (EXTERNAL SERVICES)
+   - Firebase Cloud Messaging (Google FCM): Dịch vụ thông báo đẩy khẩn cấp, đánh thức ứng dụng di động ngay cả khi điện thoại tắt màn hình hoặc bật chế độ im lặng.
+   - Hệ thống Cấp cứu Y tế (115 Emergency Dispatcher): Tích hợp luồng gọi cứu thương khẩn cấp, cung cấp thông tin vị trí địa chỉ và tóm tắt chỉ số sinh tồn của bệnh nhân.
+   - Dịch vụ Bản đồ & Định vị (Geolocation Services): Xác thực tọa độ ngôi nhà và điều hướng phương tiện y tế tới nhanh nhất.
+
+
+IV. CÁC LUỒNG TƯƠNG TÁC CHÍNH (KEY SYSTEM CONTEXT FLOWS)
+--------------------------------------------------------------------------------
+
+1. LUỒNG PHÁT HIỆN TÉ NGÃ KHẨN CẤP (EMERGENCY FALL DETECTION FLOW):
+   [Người cao tuổi ngã]
+           │
+           ▼
+   [Camera + Mic + AMG8833 ghi nhận]
+           │
+           ▼
+   [Edge Hub: YOLOv8-Pose + YAMNet kích hoạt Sensor Fusion] (Độ trễ < 500ms)
+           │
+           ├─► [Kích hoạt Còi hú & Loa cảnh báo tại chỗ]
+           ├─► [Cắt Ring Buffer 5s thành Video/Ảnh bằng chứng AI]
+           │
+           ▼ (MQTT TLS)
+   [EMQX Broker & FastAPI Backend]
+           │
+           ├─► [Lưu sự cố vào bảng Notification trong PostgreSQL (CRITICAL, is_resolved=False)]
+           ├─► [Broadcast sự kiện qua WebSocket: ws://localhost:8000/ws/alerts]
+           ├─► [Gửi Push Notification khẩn cấp qua Google FCM]
+           │
+           ▼
+   [HomeScreen Mobile App / Web]: Banner đỏ khẩn cấp bật sáng tức thì + Chuông điện thoại reo
+           │
+           ▼
+   [Người thân bấm xem chi tiết]: Xem ảnh/clip bằng chứng có bounding box AI -> Bấm SOS 115 hoặc gọi bác sĩ.
+
+2. LUỒNG GIÁM SÁT SINH HIỆU THỜI GIAN THỰC (REAL-TIME VITALS STREAMING FLOW):
+   [Vòng tay BLE Band] ──(GATT)──► [Edge Hub] ──(MQTT)──► [Cloud Backend / Simulator]
+                                                                  │
+                                                                  ├─► [Lưu bảng VitalSign trong PostgreSQL]
+                                                                  └─► [Broadcast qua WebSocket /ws/alerts]
+                                                                                │
+                                                                                ▼
+                                                                [Mobile/Web Dashboard]: Cập nhật nhịp tim,
+                                                                SpO2, nhiệt độ nhảy số sống mỗi 5 giây.
+
+3. LUỒNG XỬ LÝ SỰ CỐ & TẮT CHUÔNG (INCIDENT RESOLUTION FLOW):
+   [Người giám hộ kiểm tra an toàn] ──► Bấm "Đánh dấu đã xử lý" trên Mobile/Web
+           │
+           ▼ (PUT /api/v1/incidents/{id})
+   [FastAPI Backend]: Cập nhật is_resolved = True, tắt còi hú trong SystemMode
+           │
+           ▼ (Broadcast WebSocket: INCIDENT_RESOLVED)
+   [Tất cả Client kết nối]: Tự động ẩn banner đỏ, hiển thị lại thanh xanh an toàn "Tình trạng ổn định".
+
+4. LUỒNG TRA CỨU HỒ SƠ BỆNH ÁN & TUA DÒNG THỜI GIAN (MEDICAL RECORD & TIMELINE FLOW):
+   [Bác sĩ / Người giám hộ] ──► Mở màn hình Bệnh án ──► Chọn ngày trên Date Picker (VD: 2026-09-28)
+           │
+           ▼ (GET /api/v1/patients/1/vitals?target_date=2026-09-28)
+   [PostgreSQL Database]: Lọc dữ liệu theo đúng ngày đã chọn
+           │
+           ▼
+   [Giao diện Client]: Render lại biểu đồ dao động nhịp tim theo ngày + Kéo thanh trượt Scrubber
+   (00:00 - 23:59) để xem chính xác chỉ số sinh tồn tại từng mốc thời gian trong quá khứ.
+
+
+================================================================================
+Tệp tin được khởi tạo tự động bởi hệ sinh thái Smart Elderly Care AI (Capstone 1 - C1SE.34).
+Đường dẫn lưu trữ: docs/SYSTEM_CONTEXT_ACTORS.txt
+================================================================================
