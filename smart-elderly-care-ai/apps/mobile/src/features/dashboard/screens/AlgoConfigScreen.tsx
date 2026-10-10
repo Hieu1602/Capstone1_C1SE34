@@ -3,20 +3,14 @@
 // Cho phép thiết lập các ngưỡng kích hoạt cảnh báo theo yêu cầu Proposal
 
 import React, { useState } from 'react';
-import {
-  View,
-  Text,
-  StyleSheet,
-  TouchableOpacity,
-  ScrollView,
-  TextInput,
-  Alert,
-} from 'react-native';
+import { View, StyleSheet, TouchableOpacity, ScrollView } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
 import { Colors, Shadows } from '../../../theme/colors';
 import { useVitalStore } from '../../../store/useVitalStore';
 import { useTheme } from '../../../store/useThemeStore';
+import { LocalizedAlert, LocalizedText, LocalizedTextInput } from '../../../i18n/LocalizedComponents';
+
 
 export default function AlgoConfigScreen({ navigation }: any) {
   const { isDarkMode } = useTheme();
@@ -37,7 +31,7 @@ export default function AlgoConfigScreen({ navigation }: any) {
       fallAngle: Number(fallAngle) || 60,
       immobilitySec: Number(immobilitySec) || 30,
     });
-    Alert.alert('Thành công', 'Đã cập nhật các tham số thuật toán cảnh báo cho Hub Edge AI.');
+    LocalizedAlert.alert('Thành công', 'Đã cập nhật các tham số thuật toán cảnh báo cho Hub Edge AI.');
   };
 
   return (
@@ -52,107 +46,107 @@ export default function AlgoConfigScreen({ navigation }: any) {
         >
           <Ionicons name="chevron-back" size={24} color={isDarkMode ? '#F8FAFC' : Colors.textPrimary} />
         </TouchableOpacity>
-        <Text style={[styles.headerTitle, isDarkMode && { color: '#F8FAFC' }]}>Cài Đặt Thuật Toán (Algo)</Text>
+        <LocalizedText style={[styles.headerTitle, isDarkMode && { color: '#F8FAFC' }]}>Cài Đặt Thuật Toán (Algo)</LocalizedText>
       </View>
 
       <ScrollView
         showsVerticalScrollIndicator={false}
         contentContainerStyle={styles.scrollContent}
       >
-        <Text style={[styles.introText, isDarkMode && { color: '#94A3B8' }]}>
+        <LocalizedText style={[styles.introText, isDarkMode && { color: '#94A3B8' }]}>
           Tùy chỉnh ngưỡng kích hoạt báo động khẩn cấp (Red Alert) để phù hợp với tình trạng sức khỏe cụ thể của người cao tuổi.
-        </Text>
+        </LocalizedText>
 
         {/* 1. Ngưỡng Té ngã (FR03) */}
         <View style={[styles.groupCard, isDarkMode && { backgroundColor: '#1E293B', borderColor: '#334155', borderWidth: 1 }]}>
-          <Text style={styles.groupTitle}>1. Thuật toán phát hiện ngã (YOLO-Pose)</Text>
+          <LocalizedText style={styles.groupTitle}>1. Thuật toán phát hiện ngã (YOLO-Pose)</LocalizedText>
           <View style={styles.inputRow}>
-            <Text style={[styles.inputLabel, isDarkMode && { color: '#F8FAFC' }]}>Góc nghiêng cột sống tối đa:</Text>
+            <LocalizedText style={[styles.inputLabel, isDarkMode && { color: '#F8FAFC' }]}>Góc nghiêng cột sống tối đa:</LocalizedText>
             <View style={[styles.inputBoxWrap, isDarkMode && { backgroundColor: '#0F172A', borderColor: '#334155' }]}>
-              <TextInput
+              <LocalizedTextInput
                 style={[styles.inputVal, isDarkMode && { color: '#F8FAFC' }]}
                 keyboardType="numeric"
                 value={fallAngle}
                 onChangeText={setFallAngle}
               />
-              <Text style={[styles.inputUnit, isDarkMode && { color: '#94A3B8' }]}>độ (°)</Text>
+              <LocalizedText style={[styles.inputUnit, isDarkMode && { color: '#94A3B8' }]}>độ (°)</LocalizedText>
             </View>
           </View>
           <View style={styles.inputRow}>
-            <Text style={[styles.inputLabel, isDarkMode && { color: '#F8FAFC' }]}>Thời gian nằm bất động:</Text>
+            <LocalizedText style={[styles.inputLabel, isDarkMode && { color: '#F8FAFC' }]}>Thời gian nằm bất động:</LocalizedText>
             <View style={[styles.inputBoxWrap, isDarkMode && { backgroundColor: '#0F172A', borderColor: '#334155' }]}>
-              <TextInput
+              <LocalizedTextInput
                 style={[styles.inputVal, isDarkMode && { color: '#F8FAFC' }]}
                 keyboardType="numeric"
                 value={immobilitySec}
                 onChangeText={setImmobilitySec}
               />
-              <Text style={[styles.inputUnit, isDarkMode && { color: '#94A3B8' }]}>giây</Text>
+              <LocalizedText style={[styles.inputUnit, isDarkMode && { color: '#94A3B8' }]}>giây</LocalizedText>
             </View>
           </View>
         </View>
 
         {/* 2. Ngưỡng Sức khoẻ Vòng BLE (FR02) */}
         <View style={[styles.groupCard, isDarkMode && { backgroundColor: '#1E293B', borderColor: '#334155', borderWidth: 1 }]}>
-          <Text style={styles.groupTitle}>2. Thuật toán sức khoẻ (Vòng đeo tay BLE)</Text>
+          <LocalizedText style={styles.groupTitle}>2. Thuật toán sức khoẻ (Vòng đeo tay BLE)</LocalizedText>
           <View style={styles.inputRow}>
-            <Text style={[styles.inputLabel, isDarkMode && { color: '#F8FAFC' }]}>Nhịp tim tối đa (Cảnh báo cao):</Text>
+            <LocalizedText style={[styles.inputLabel, isDarkMode && { color: '#F8FAFC' }]}>Nhịp tim tối đa (Cảnh báo cao):</LocalizedText>
             <View style={[styles.inputBoxWrap, isDarkMode && { backgroundColor: '#0F172A', borderColor: '#334155' }]}>
-              <TextInput
+              <LocalizedTextInput
                 style={[styles.inputVal, isDarkMode && { color: '#F8FAFC' }]}
                 keyboardType="numeric"
                 value={maxHR}
                 onChangeText={setMaxHR}
               />
-              <Text style={[styles.inputUnit, isDarkMode && { color: '#94A3B8' }]}>bpm</Text>
+              <LocalizedText style={[styles.inputUnit, isDarkMode && { color: '#94A3B8' }]}>bpm</LocalizedText>
             </View>
           </View>
           <View style={styles.inputRow}>
-            <Text style={[styles.inputLabel, isDarkMode && { color: '#F8FAFC' }]}>Nhịp tim tối thiểu (Cảnh báo thấp):</Text>
+            <LocalizedText style={[styles.inputLabel, isDarkMode && { color: '#F8FAFC' }]}>Nhịp tim tối thiểu (Cảnh báo thấp):</LocalizedText>
             <View style={[styles.inputBoxWrap, isDarkMode && { backgroundColor: '#0F172A', borderColor: '#334155' }]}>
-              <TextInput
+              <LocalizedTextInput
                 style={[styles.inputVal, isDarkMode && { color: '#F8FAFC' }]}
                 keyboardType="numeric"
                 value={minHR}
                 onChangeText={setMinHR}
               />
-              <Text style={[styles.inputUnit, isDarkMode && { color: '#94A3B8' }]}>bpm</Text>
+              <LocalizedText style={[styles.inputUnit, isDarkMode && { color: '#94A3B8' }]}>bpm</LocalizedText>
             </View>
           </View>
           <View style={styles.inputRow}>
-            <Text style={[styles.inputLabel, isDarkMode && { color: '#F8FAFC' }]}>Nồng độ oxy SpO₂ tối thiểu:</Text>
+            <LocalizedText style={[styles.inputLabel, isDarkMode && { color: '#F8FAFC' }]}>Nồng độ oxy SpO₂ tối thiểu:</LocalizedText>
             <View style={[styles.inputBoxWrap, isDarkMode && { backgroundColor: '#0F172A', borderColor: '#334155' }]}>
-              <TextInput
+              <LocalizedTextInput
                 style={[styles.inputVal, isDarkMode && { color: '#F8FAFC' }]}
                 keyboardType="numeric"
                 value={minSpO2}
                 onChangeText={setMinSpO2}
               />
-              <Text style={[styles.inputUnit, isDarkMode && { color: '#94A3B8' }]}>%</Text>
+              <LocalizedText style={[styles.inputUnit, isDarkMode && { color: '#94A3B8' }]}>%</LocalizedText>
             </View>
           </View>
         </View>
 
         {/* 3. Ngưỡng Cảm biến nhiệt AMG8833 (FR04) */}
         <View style={[styles.groupCard, isDarkMode && { backgroundColor: '#1E293B', borderColor: '#334155', borderWidth: 1 }]}>
-          <Text style={styles.groupTitle}>3. Thuật toán nhiệt độ trán (AMG8833)</Text>
+          <LocalizedText style={styles.groupTitle}>3. Thuật toán nhiệt độ trán (AMG8833)</LocalizedText>
           <View style={styles.inputRow}>
-            <Text style={[styles.inputLabel, isDarkMode && { color: '#F8FAFC' }]}>Ngưỡng sốt cao bất thường:</Text>
+            <LocalizedText style={[styles.inputLabel, isDarkMode && { color: '#F8FAFC' }]}>Ngưỡng sốt cao bất thường:</LocalizedText>
             <View style={[styles.inputBoxWrap, isDarkMode && { backgroundColor: '#0F172A', borderColor: '#334155' }]}>
-              <TextInput
+              <LocalizedTextInput
                 style={[styles.inputVal, isDarkMode && { color: '#F8FAFC' }]}
                 keyboardType="numeric"
                 value={maxTemp}
                 onChangeText={setMaxTemp}
               />
-              <Text style={[styles.inputUnit, isDarkMode && { color: '#94A3B8' }]}>°C</Text>
+              <LocalizedText style={[styles.inputUnit, isDarkMode && { color: '#94A3B8' }]}>°C</LocalizedText>
             </View>
           </View>
         </View>
 
         {/* Nút lưu */}
         <TouchableOpacity style={styles.saveBtn} onPress={handleSave} activeOpacity={0.85}>
-          <Text style={styles.saveBtnText}>Lưu cấu hình thuật toán</Text>
+          <LocalizedText style={styles.saveBtnText}>Lưu cấu hình thuật toán</LocalizedText>
         </TouchableOpacity>
       </ScrollView>
     </SafeAreaView>

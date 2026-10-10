@@ -60,14 +60,17 @@ export const darkTheme: ThemeColors = {
 interface ThemeState {
   isDarkMode: boolean;
   colors: ThemeColors;
+  fontScale: number;
   toggleTheme: () => void;
   toggleDarkMode: () => void;
   setDarkMode: (isDark: boolean) => void;
+  setFontScale: (scale: number) => void;
 }
 
 export const useThemeStore = create<ThemeState>((set) => ({
   isDarkMode: false,
   colors: lightTheme,
+  fontScale: 1,
   toggleTheme: () =>
     set((state) => {
       const next = !state.isDarkMode;
@@ -89,13 +92,19 @@ export const useThemeStore = create<ThemeState>((set) => ({
       isDarkMode: isDark,
       colors: isDark ? darkTheme : lightTheme,
     }),
+  setFontScale: (scale: number) =>
+    set({
+      fontScale: Math.min(Math.max(scale, 0.8), 1.8),
+    }),
 }));
 
 export const useTheme = () => {
   const isDarkMode = useThemeStore((s) => s.isDarkMode);
   const colors = useThemeStore((s) => s.colors);
+  const fontScale = useThemeStore((s) => s.fontScale);
   const toggleTheme = useThemeStore((s) => s.toggleTheme);
   const toggleDarkMode = useThemeStore((s) => s.toggleDarkMode);
   const setDarkMode = useThemeStore((s) => s.setDarkMode);
-  return { isDarkMode, colors, toggleTheme, toggleDarkMode, setDarkMode };
+  const setFontScale = useThemeStore((s) => s.setFontScale);
+  return { isDarkMode, colors, fontScale, toggleTheme, toggleDarkMode, setDarkMode, setFontScale };
 };

@@ -2,7 +2,7 @@
 // 4-Tab Navigator dành riêng cho Bác sĩ gia đình
 
 import React from 'react';
-import { View, StyleSheet, Text } from 'react-native';
+import { View, StyleSheet } from 'react-native';
 import { createBottomTabNavigator } from '@react-navigation/bottom-tabs';
 import { Ionicons } from '@expo/vector-icons';
 
@@ -13,6 +13,8 @@ import DoctorPatientsScreen from '../features/doctor/screens/DoctorPatientsScree
 import DoctorAppointmentsScreen from '../features/doctor/screens/DoctorAppointmentsScreen';
 import DoctorAnalyticsReportScreen from '../features/doctor/screens/DoctorAnalyticsReportScreen';
 import DoctorProfileScreen from '../features/doctor/screens/DoctorProfileScreen';
+import { LocalizedText } from '../i18n/LocalizedComponents';
+
 
 const Tab = createBottomTabNavigator();
 

@@ -3,9 +3,11 @@ crud_user.py – CRUD / Repository cho User model.
 """
 
 from typing import Optional
+import re
 
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
+from sqlalchemy.orm import noload
 
 from app.core.security import hash_password
 from app.models.user import User
@@ -13,13 +15,21 @@ from app.schemas.user import UserCreate
 
 
 def normalize_phone(phone: str) -> str:
-    value = (phone or "").strip().replace(" ", "")
+    value = re.sub(r"[\s().-]", "", phone or "")
     if not value:
         return ""
+    if value.startswith("0084"):
+        value = "+84" + value[4:]
+    elif value.startswith("84"):
+        value = "+" + value
+
+    if value.startswith("+84"):
+        national_number = value[3:]
+        if national_number.startswith("0"):
+            national_number = national_number[1:]
+        return "+84" + national_number
     if value.startswith("0"):
         return "+84" + value[1:]
-    if value.startswith("84"):
-        return "+" + value
     return value
 
 
@@ -28,7 +38,9 @@ class CRUDUser:
     async def get_by_phone(self, db: AsyncSession, phone: str) -> Optional[User]:
         normalized = normalize_phone(phone)
         result = await db.execute(
-            select(User).where(
+            select(User).options(
+                noload(User.devices),
+            ).where(
                 (User.phone == phone) | 
                 (User.phone == normalized)
             )
@@ -48,7 +60,6 @@ class CRUDUser:
         )
         db.add(db_obj)
         await db.flush()
-        await db.refresh(db_obj)
         return db_obj
 
     async def get(self, db: AsyncSession, user_id) -> Optional[User]:

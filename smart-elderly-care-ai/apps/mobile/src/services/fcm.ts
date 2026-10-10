@@ -2,7 +2,9 @@
 // Firebase Cloud Messaging – xử lý push notification khẩn cấp
 // Còi hú ghi đè chế độ im lặng trên Android / iOS
 
-import { Alert, Platform, Vibration } from 'react-native';
+import { Platform, Vibration } from 'react-native';
+import { LocalizedAlert } from '../i18n/LocalizedComponents';
+
 
 type AlertLevel = 'LOW' | 'MEDIUM' | 'HIGH' | 'CRITICAL';
 
@@ -140,7 +142,7 @@ class FCMService {
         Vibration.vibrate([0, 500, 200, 500, 200, 500], false);
       }
 
-      Alert.alert(
+      LocalizedAlert.alert(
         level === 'CRITICAL' ? '🚨 KHẨN CẤP!' : '⚠️ CẢNH BÁO!',
         message,
         [
