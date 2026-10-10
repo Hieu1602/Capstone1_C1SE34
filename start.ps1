@@ -1,4 +1,4 @@
-﻿# ==============================================================================
+# ==============================================================================
 # SMART ELDERLY CARE AI - SCRIPT KHOI DONG NHANH DU AN (C1SE.34)
 # ==============================================================================
 
@@ -146,6 +146,7 @@ function Start-BackendService {
 
     Write-Success "Da mo tien trinh Backend FastAPI tren port 8000."
     Write-Host "     - API Docs (Swagger UI)       : http://localhost:8000/api/docs" -ForegroundColor Yellow
+    Write-Host "     - Chatbot AI API              : http://localhost:8000/api/v1/chatbot/chat" -ForegroundColor Yellow
     Write-Host "     - Health Check                : http://localhost:8000/health" -ForegroundColor Gray
     Write-Host ""
 }
@@ -295,7 +296,8 @@ function Start-AllServices {
     Write-Host "================================================================================" -ForegroundColor Cyan
     Write-Host "  DIA CHI TRUY CAP CAC DICH VU:" -ForegroundColor Yellow
     Write-Host "  - Mobile App Web        : http://localhost:8081" -ForegroundColor White
-    Write-Host "  - Swagger API Docs      : http://localhost:8000/api/docs" -ForegroundColor White
+    Write-Host "  - Backend Swagger Docs  : http://localhost:8000/api/docs" -ForegroundColor White
+    Write-Host "  - Chatbot AI API        : http://localhost:8000/api/v1/chatbot/chat" -ForegroundColor White
     Write-Host "  - EMQX MQTT Dashboard   : http://localhost:18083  (User: admin / public)" -ForegroundColor White
     Write-Host "================================================================================" -ForegroundColor Cyan
     Write-Host ""

@@ -18,6 +18,7 @@ import {
   RefreshControl,
   KeyboardAvoidingView,
   Platform,
+  Image,
 } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
@@ -25,7 +26,7 @@ import { useNavigation, useRoute } from '@react-navigation/native';
 
 import { Colors } from '../../../theme/colors';
 import { useTheme } from '../../../store/useThemeStore';
-import { doctorApi } from '../../../services/api';
+import { doctorApi, BASE_URL } from '../../../services/api';
 
 interface ConditionItem {
   id: string;
@@ -251,25 +252,38 @@ export default function DoctorPatientDetailScreen() {
   };
 
   const handleDeleteCondition = (condId: string, name: string) => {
+    const doDelete = async () => {
+      try {
+        const currentConditions: ConditionItem[] = detail?.conditions ? [...detail.conditions] : [];
+        const updated = currentConditions.filter((c) => c.id !== condId);
+        const res = await doctorApi.updateMedicalRecord(patientId, { conditions: updated });
+        if (res.data) {
+          setDetail(res.data);
+        } else {
+          setDetail((prev: any) => ({ ...prev, conditions: updated }));
+        }
+      } catch {
+        if (Platform.OS === 'web') {
+          window.alert('Không thể xóa chẩn đoán.');
+        } else {
+          Alert.alert('Lỗi', 'Không thể xóa chẩn đoán.');
+        }
+      }
+    };
+
+    if (Platform.OS === 'web') {
+      if (typeof window !== 'undefined' && window.confirm(`Xác nhận xóa: Bác sĩ có chắc chắn muốn xóa chẩn đoán "${name}" khỏi danh mục bệnh nền?`)) {
+        void doDelete();
+      }
+      return;
+    }
+
     Alert.alert('Xác nhận xóa', `Bác sĩ có chắc chắn muốn xóa chẩn đoán "${name}" khỏi danh mục bệnh nền?`, [
       { text: 'Hủy', style: 'cancel' },
       {
         text: 'Xóa',
         style: 'destructive',
-        onPress: async () => {
-          try {
-            const currentConditions: ConditionItem[] = detail?.conditions ? [...detail.conditions] : [];
-            const updated = currentConditions.filter((c) => c.id !== condId);
-            const res = await doctorApi.updateMedicalRecord(patientId, { conditions: updated });
-            if (res.data) {
-              setDetail(res.data);
-            } else {
-              setDetail((prev: any) => ({ ...prev, conditions: updated }));
-            }
-          } catch {
-            Alert.alert('Lỗi', 'Không thể xóa chẩn đoán.');
-          }
-        },
+        onPress: doDelete,
       },
     ]);
   };
@@ -386,20 +400,37 @@ export default function DoctorPatientDetailScreen() {
   };
 
   const handleDeletePrescription = (rxId: string, name: string) => {
+    const doDelete = async () => {
+      try {
+        await doctorApi.deletePrescription(patientId, rxId);
+        setPrescriptions((prev) => prev.filter((r) => r.id !== rxId));
+        if (Platform.OS === 'web') {
+          window.alert(`Đã loại bỏ "${name}" khỏi phác đồ điều trị.`);
+        } else {
+          Alert.alert('Đã ngừng thuốc', `Đã loại bỏ "${name}" khỏi phác đồ điều trị.`);
+        }
+      } catch {
+        if (Platform.OS === 'web') {
+          window.alert('Không thể ngừng thuốc.');
+        } else {
+          Alert.alert('Lỗi', 'Không thể ngừng thuốc.');
+        }
+      }
+    };
+
+    if (Platform.OS === 'web') {
+      if (typeof window !== 'undefined' && window.confirm(`Ngừng dùng thuốc: Bác sĩ có chắc chắn muốn ngừng kê đơn thuốc "${name}"?`)) {
+        void doDelete();
+      }
+      return;
+    }
+
     Alert.alert('Ngừng dùng thuốc', `Bác sĩ có chắc chắn muốn ngừng kê đơn thuốc "${name}"?`, [
       { text: 'Hủy', style: 'cancel' },
       {
         text: 'Ngừng thuốc',
         style: 'destructive',
-        onPress: async () => {
-          try {
-            await doctorApi.deletePrescription(patientId, rxId);
-            setPrescriptions((prev) => prev.filter((r) => r.id !== rxId));
-            Alert.alert('Đã ngừng thuốc', `Đã loại bỏ "${name}" khỏi phác đồ điều trị.`);
-          } catch {
-            Alert.alert('Lỗi', 'Không thể ngừng thuốc.');
-          }
-        },
+        onPress: doDelete,
       },
     ]);
   };
@@ -485,7 +516,18 @@ export default function DoctorPatientDetailScreen() {
         >
           <View style={styles.heroRow}>
             <View style={styles.avatarBig}>
-              <Text style={styles.avatarBigText}>{initialLetter}</Text>
+              {detail?.avatar_url ? (
+                <Image
+                  source={{
+                    uri: detail.avatar_url.startsWith('http')
+                      ? detail.avatar_url
+                      : `${BASE_URL.replace('/api/v1', '')}${detail.avatar_url}`,
+                  }}
+                  style={styles.avatarBigImg}
+                />
+              ) : (
+                <Text style={styles.avatarBigText}>{initialLetter}</Text>
+              )}
             </View>
             <View style={{ flex: 1, marginLeft: 12 }}>
               <View style={styles.heroNameRow}>
@@ -502,6 +544,32 @@ export default function DoctorPatientDetailScreen() {
               <Text style={[styles.heroAddress, { color: isDarkMode ? '#CBD5E1' : '#475569' }]} numberOfLines={1}>
                 📍 {detail?.house_name || 'Nhà của tôi'} • {detail?.house_address || '123 Hải Phòng, Đà Nẵng'}
               </Text>
+
+              {/* Huy hiệu AI Face ID cho Bác sĩ */}
+              <View style={styles.faceIdPillRow}>
+                <View
+                  style={[
+                    styles.faceIdPill,
+                    detail?.has_face_enrolled
+                      ? { backgroundColor: isDarkMode ? '#064E3B' : '#DCFCE7', borderColor: '#10B981' }
+                      : { backgroundColor: isDarkMode ? '#451A03' : '#FEF3C7', borderColor: '#F59E0B' },
+                  ]}
+                >
+                  <Ionicons
+                    name={detail?.has_face_enrolled ? 'scan-circle' : 'scan-outline'}
+                    size={12}
+                    color={detail?.has_face_enrolled ? '#10B981' : '#F59E0B'}
+                  />
+                  <Text
+                    style={[
+                      styles.faceIdPillText,
+                      { color: detail?.has_face_enrolled ? '#047857' : '#B45309' },
+                    ]}
+                  >
+                    {detail?.has_face_enrolled ? 'AI Face ID: Đã kích hoạt' : 'Khuôn mặt: Chưa đăng ký'}
+                  </Text>
+                </View>
+              </View>
             </View>
           </View>
 
@@ -1331,8 +1399,31 @@ const styles = StyleSheet.create({
     backgroundColor: '#0284C7',
     justifyContent: 'center',
     alignItems: 'center',
+    overflow: 'hidden',
+  },
+  avatarBigImg: {
+    width: 52,
+    height: 52,
+    borderRadius: 26,
   },
   avatarBigText: { color: '#FFFFFF', fontSize: 22, fontWeight: '800' },
+  faceIdPillRow: {
+    flexDirection: 'row',
+    marginTop: 6,
+  },
+  faceIdPill: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 4,
+    borderWidth: 1,
+    paddingHorizontal: 8,
+    paddingVertical: 3,
+    borderRadius: 6,
+  },
+  faceIdPillText: {
+    fontSize: 10,
+    fontWeight: '700',
+  },
   heroNameRow: { flexDirection: 'row', alignItems: 'center', flexWrap: 'wrap' },
   heroName: { fontSize: 17, fontWeight: '800', marginRight: 8 },
   badgeAge: {

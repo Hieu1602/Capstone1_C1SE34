@@ -28,7 +28,7 @@ import { useAuthStore } from '../../../store/useAuthStore';
 export default function DoctorProfileScreen() {
   const insets = useSafeAreaInsets();
   const { isDarkMode, colors, toggleTheme } = useTheme();
-  const { userName, userPhone, logout } = useAuthStore();
+  const { userName, userPhone, logout, toggleViewRole } = useAuthStore();
 
   // Thông tin chuyên môn bác sĩ
   const [docInfo, setDocInfo] = useState({
@@ -60,6 +60,9 @@ export default function DoctorProfileScreen() {
   const [oldPassword, setOldPassword] = useState('');
   const [newPassword, setNewPassword] = useState('');
   const [confirmPassword, setConfirmPassword] = useState('');
+
+  // Modal 3: Xác nhận đăng xuất
+  const [logoutModalVisible, setLogoutModalVisible] = useState(false);
 
   // Hàm chọn ảnh từ thư viện thiết bị
   const pickImage = async () => {
@@ -128,10 +131,17 @@ export default function DoctorProfileScreen() {
   };
 
   const handleLogout = () => {
-    Alert.alert('Đăng xuất', 'Bạn có chắc chắn muốn đăng xuất khỏi tài khoản Bác sĩ?', [
-      { text: 'Hủy', style: 'cancel' },
-      { text: 'Đăng xuất', style: 'destructive', onPress: () => logout() },
-    ]);
+    setLogoutModalVisible(true);
+  };
+
+  const performLogout = async () => {
+    setLogoutModalVisible(false);
+    logout();
+    try {
+      await useAuthStore.persist?.clearStorage?.();
+    } catch (e) {
+      console.error('Error clearing auth storage:', e);
+    }
   };
 
   return (
@@ -258,6 +268,21 @@ export default function DoctorProfileScreen() {
             </View>
             <Text style={[styles.menuItemText, { color: colors.textPrimary }]}>
               Đổi mật khẩu tài khoản Bác sĩ
+            </Text>
+            <Ionicons name="chevron-forward" size={16} color="#94A3B8" />
+          </TouchableOpacity>
+
+          {/* Chuyển sang Giao diện Người thân */}
+          <TouchableOpacity
+            style={styles.menuItem}
+            onPress={toggleViewRole}
+            activeOpacity={0.7}
+          >
+            <View style={[styles.menuIconBox, { backgroundColor: '#E0F2FE' }]}>
+              <Ionicons name="swap-horizontal" size={17} color="#0284C7" />
+            </View>
+            <Text style={[styles.menuItemText, { color: colors.textPrimary }]}>
+              Chuyển sang Giao diện Người thân
             </Text>
             <Ionicons name="chevron-forward" size={16} color="#94A3B8" />
           </TouchableOpacity>
@@ -463,6 +488,63 @@ export default function DoctorProfileScreen() {
           </View>
         </KeyboardAvoidingView>
       </Modal>
+
+      {/* =================================================================== */}
+      {/* MODAL 3: XÁC NHẬN ĐĂNG XUẤT TÀI KHOẢN BÁC SĨ                       */}
+      {/* =================================================================== */}
+      <Modal
+        visible={logoutModalVisible}
+        animationType="fade"
+        transparent
+        onRequestClose={() => setLogoutModalVisible(false)}
+      >
+        <View style={styles.modalOverlay}>
+          <View
+            style={[
+              styles.logoutModalBox,
+              {
+                backgroundColor: isDarkMode ? '#1E293B' : '#FFFFFF',
+                borderColor: isDarkMode ? '#334155' : '#E2E8F0',
+              },
+            ]}
+          >
+            <View style={{ flexDirection: 'row', alignItems: 'center', marginBottom: 12 }}>
+              <View style={styles.logoutIconBox}>
+                <Ionicons name="log-out" size={22} color="#DC2626" />
+              </View>
+              <Text style={[styles.modalTitle, { color: colors.textPrimary, marginLeft: 10, fontSize: 17 }]}>
+                Xác nhận Đăng xuất
+              </Text>
+            </View>
+
+            <Text style={[styles.logoutModalDesc, { color: isDarkMode ? '#94A3B8' : '#64748B' }]}>
+              Bạn có chắc chắn muốn đăng xuất khỏi tài khoản Bác sĩ? Phiên làm việc hiện tại sẽ kết thúc và quay về màn hình đăng nhập.
+            </Text>
+
+            <View style={styles.modalBtnRow}>
+              <TouchableOpacity
+                style={[styles.modalCancelBtn, { borderColor: isDarkMode ? '#475569' : '#CBD5E1' }]}
+                onPress={() => setLogoutModalVisible(false)}
+                activeOpacity={0.7}
+              >
+                <Text style={{ fontSize: 13, fontWeight: '700', color: isDarkMode ? '#CBD5E1' : '#64748B' }}>
+                  Hủy
+                </Text>
+              </TouchableOpacity>
+              <TouchableOpacity
+                style={[styles.modalSaveBtn, { backgroundColor: '#DC2626' }]}
+                onPress={performLogout}
+                activeOpacity={0.8}
+              >
+                <Ionicons name="log-out-outline" size={16} color="#FFFFFF" style={{ marginRight: 6 }} />
+                <Text style={{ color: '#FFFFFF', fontSize: 13, fontWeight: '700' }}>
+                  Đăng xuất
+                </Text>
+              </TouchableOpacity>
+            </View>
+          </View>
+        </View>
+      </Modal>
     </View>
   );
 }
@@ -603,6 +685,33 @@ const styles = StyleSheet.create({
     marginTop: 4,
   },
   logoutBtnText: { color: '#DC2626', fontSize: 13.5, fontWeight: '700' },
+
+  logoutModalBox: {
+    borderRadius: 16,
+    padding: 20,
+    width: '100%',
+    maxWidth: 380,
+    alignSelf: 'center',
+    borderWidth: 1,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 4 },
+    shadowOpacity: 0.15,
+    shadowRadius: 12,
+    elevation: 8,
+  },
+  logoutIconBox: {
+    width: 42,
+    height: 42,
+    borderRadius: 21,
+    backgroundColor: '#FEE2E2',
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+  logoutModalDesc: {
+    fontSize: 14,
+    lineHeight: 20,
+    marginBottom: 16,
+  },
 
   // Modal styles
   modalOverlay: {

@@ -40,48 +40,6 @@ export interface AppointmentItem {
   created_at?: string;
 }
 
-const FALLBACK_APPOINTMENTS: AppointmentItem[] = [
-  {
-    id: 'apt-001',
-    patient_id: 'e0000000-b4e1-4b08-b2d3-d949a0eb075c',
-    patient_name: 'Cụ Nguyễn Văn An',
-    scheduled_at: '15/10/2026 - 08:30',
-    exam_type: 'Tái khám tim mạch & huyết áp',
-    location: 'Tại nhà (Khám tại gia)',
-    status: 'UPCOMING',
-    instructions: 'Đo huyết áp liên tục 3 ngày trước khám. Nhịn ăn sáng để lấy máu xét nghiệm đường huyết & chức năng thận.',
-    doctor_name: 'BS. Trần Văn Minh',
-    enable_speaker_reminder: true,
-    created_at: '29/09/2026',
-  },
-  {
-    id: 'apt-002',
-    patient_id: 'e0000000-b4e1-4b08-b2d3-d949a0eb075c',
-    patient_name: 'Cụ Nguyễn Văn An',
-    scheduled_at: '28/10/2026 - 14:00',
-    exam_type: 'Đo điện tâm đồ (ECG) & Đo loãng xương',
-    location: 'Bệnh viện Đa khoa Đà Nẵng',
-    status: 'UPCOMING',
-    instructions: 'Mang theo thẻ BHYT và các phim chụp X-quang khớp gối cũ. Người nhà đi cùng để hỗ trợ cụ.',
-    doctor_name: 'BS. Trần Văn Minh',
-    enable_speaker_reminder: true,
-    created_at: '29/09/2026',
-  },
-  {
-    id: 'apt-003',
-    patient_id: 'e0000000-b4e1-4b08-b2d3-d949a0eb075c',
-    patient_name: 'Cụ Nguyễn Văn An',
-    scheduled_at: '15/09/2026 - 09:00',
-    exam_type: 'Khám sức khỏe tổng quát định kỳ',
-    location: 'Tại nhà (Khám tại gia)',
-    status: 'COMPLETED',
-    instructions: 'Đã đo sinh hiệu ổn định: HA 135/85 mmHg, SpO2 97%. Bác sĩ đã kê toa duy trì Amlodipine.',
-    doctor_name: 'BS. Trần Văn Minh',
-    enable_speaker_reminder: false,
-    created_at: '15/09/2026',
-  },
-];
-
 export default function DoctorAppointmentsScreen() {
   const insets = useSafeAreaInsets();
   const navigation = useNavigation<any>();
@@ -89,7 +47,7 @@ export default function DoctorAppointmentsScreen() {
 
   const [loading, setLoading] = useState(false);
   const [refreshing, setRefreshing] = useState(false);
-  const [appointments, setAppointments] = useState<AppointmentItem[]>(FALLBACK_APPOINTMENTS);
+  const [appointments, setAppointments] = useState<AppointmentItem[]>([]);
   const [filterTab, setFilterTab] = useState<'ALL' | 'UPCOMING' | 'COMPLETED'>('ALL');
 
   // Modal State
@@ -108,11 +66,12 @@ export default function DoctorAppointmentsScreen() {
     try {
       setLoading(true);
       const res = await doctorApi.getAppointments();
-      if (res.data && Array.isArray(res.data) && res.data.length > 0) {
+      if (res.data && Array.isArray(res.data)) {
         setAppointments(res.data);
       }
-    } catch {
-      // Giữ fallback mẫu
+    } catch (e) {
+      console.warn('Lỗi tải lịch khám thực tế:', e);
+      setAppointments([]);
     } finally {
       setLoading(false);
       setRefreshing(false);

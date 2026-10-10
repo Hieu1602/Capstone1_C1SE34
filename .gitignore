@@ -51,5 +51,7 @@ minio_data/
 # Camera test snapshots
 smart-elderly-care-ai/edge/test_snapshot.jpg
 
-D:/
-
+# Binary document files
+*.doc
+*.docx
+*.pdf

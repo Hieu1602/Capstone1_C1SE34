@@ -12,6 +12,7 @@ import {
   RefreshControl,
   StatusBar,
   ActivityIndicator,
+  Image,
 } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
@@ -20,7 +21,7 @@ import { useNavigation } from '@react-navigation/native';
 import { Colors } from '../../../theme/colors';
 import { useTheme } from '../../../store/useThemeStore';
 import { useAuthStore } from '../../../store/useAuthStore';
-import { doctorApi } from '../../../services/api';
+import { doctorApi, BASE_URL } from '../../../services/api';
 
 export interface PatientCardData {
   id: string;
@@ -33,6 +34,8 @@ export interface PatientCardData {
   house_address?: string;
   medical_history?: string;
   emergency_contact_phone?: string;
+  avatar_url?: string | null;
+  has_face_enrolled?: boolean;
   device_id: string;
   is_online: boolean;
   battery_level?: number;
@@ -45,58 +48,13 @@ export interface PatientCardData {
   last_updated?: string;
 }
 
-const FALLBACK_PATIENTS: PatientCardData[] = [
-  {
-    id: 'e0000000-b4e1-4b08-b2d3-d949a0eb075c',
-    name: 'Cụ Nguyễn Văn An',
-    birth_year: 1948,
-    age: 78,
-    gender: 'Nam',
-    house_id: 'c3333333-b4e1-4b08-b2d3-d949a0eb075c',
-    house_name: 'Nhà của tôi',
-    house_address: '123 Hải Phòng, P. Thạch Thang, Đà Nẵng',
-    medical_history: 'Tăng huyết áp độ 2, Thiếu máu cơ tim nhẹ, Tiền đình',
-    emergency_contact_phone: '+84905123456',
-    device_id: 'BLE_BAND_001',
-    is_online: true,
-    battery_level: 84,
-    heart_rate: 76,
-    spo2: 98,
-    skin_temp_max: 36.6,
-    blood_pressure: '120/80 mmHg',
-    health_status: 'NORMAL',
-    last_updated: 'Vừa xong',
-  },
-  {
-    id: 'e1111111-b4e1-4b08-b2d3-d949a0eb075c',
-    name: 'Cụ Trần Thị Mai',
-    birth_year: 1951,
-    age: 75,
-    gender: 'Nữ',
-    house_id: 'c4444444-b4e1-4b08-b2d3-d949a0eb075c',
-    house_name: 'Gia đình Chị Lan',
-    house_address: '45 Lê Duẩn, Q. Hải Châu, Đà Nẵng',
-    medical_history: 'Đái tháo đường Type 2, Thoái hóa khớp gối',
-    emergency_contact_phone: '+84905999888',
-    device_id: 'BLE_BAND_002',
-    is_online: true,
-    battery_level: 68,
-    heart_rate: 88,
-    spo2: 94,
-    skin_temp_max: 36.8,
-    blood_pressure: '135/85 mmHg',
-    health_status: 'WARNING',
-    last_updated: '3 phút trước',
-  },
-];
-
 export default function DoctorPatientsScreen() {
   const insets = useSafeAreaInsets();
   const navigation = useNavigation<any>();
   const { isDarkMode, colors } = useTheme();
   const { userName } = useAuthStore();
 
-  const [patients, setPatients] = useState<PatientCardData[]>(FALLBACK_PATIENTS);
+  const [patients, setPatients] = useState<PatientCardData[]>([]);
   const [loading, setLoading] = useState(false);
   const [refreshing, setRefreshing] = useState(false);
   const [searchQuery, setSearchQuery] = useState('');
@@ -106,11 +64,12 @@ export default function DoctorPatientsScreen() {
     try {
       setLoading(true);
       const res = await doctorApi.getPatients();
-      if (res.data && Array.isArray(res.data) && res.data.length > 0) {
+      if (res.data && Array.isArray(res.data)) {
         setPatients(res.data);
       }
-    } catch {
-      // Fallback
+    } catch (e) {
+      console.warn('Lỗi tải danh sách bệnh nhân thực tế:', e);
+      setPatients([]);
     } finally {
       setLoading(false);
       setRefreshing(false);
@@ -328,15 +287,34 @@ export default function DoctorPatientsScreen() {
                 {/* Header card */}
                 <View style={styles.cardHeader}>
                   <View style={styles.patientAvatar}>
-                    <Text style={styles.patientAvatarText}>
-                      {patient.name.trim().split(/\s+/).slice(-1)[0][0]?.toUpperCase() || 'A'}
-                    </Text>
+                    {patient.avatar_url ? (
+                      <Image
+                        source={{
+                          uri: patient.avatar_url.startsWith('http')
+                            ? patient.avatar_url
+                            : `${BASE_URL.replace('/api/v1', '')}${patient.avatar_url}`,
+                        }}
+                        style={styles.patientAvatarImg}
+                      />
+                    ) : (
+                      <Text style={styles.patientAvatarText}>
+                        {patient.name.trim().split(/\s+/).slice(-1)[0][0]?.toUpperCase() || 'A'}
+                      </Text>
+                    )}
                   </View>
                   <View style={styles.cardHeaderInfo}>
                     <View style={styles.nameBadgeRow}>
-                      <Text style={[styles.patientName, { color: colors.textPrimary }]} numberOfLines={1}>
-                        {patient.name}
-                      </Text>
+                      <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6, flex: 1 }}>
+                        <Text style={[styles.patientName, { color: colors.textPrimary }]} numberOfLines={1}>
+                          {patient.name}
+                        </Text>
+                        {patient.has_face_enrolled && (
+                          <View style={styles.aiFaceTag}>
+                            <Ionicons name="scan-circle" size={12} color="#10B981" />
+                            <Text style={styles.aiFaceTagText}>Face ID</Text>
+                          </View>
+                        )}
+                      </View>
                       <View
                         style={[
                           styles.statusBadge,
@@ -559,6 +537,12 @@ const styles = StyleSheet.create({
     backgroundColor: '#0284C7',
     justifyContent: 'center',
     alignItems: 'center',
+    overflow: 'hidden',
+  },
+  patientAvatarImg: {
+    width: 44,
+    height: 44,
+    borderRadius: 22,
   },
   patientAvatarText: { color: '#FFFFFF', fontSize: 18, fontWeight: '800' },
   cardHeaderInfo: { flex: 1, marginLeft: 12 },
@@ -568,7 +552,21 @@ const styles = StyleSheet.create({
     justifyContent: 'space-between',
     marginBottom: 2,
   },
-  patientName: { fontSize: 16, fontWeight: '800', flex: 1, marginRight: 8 },
+  patientName: { fontSize: 16, fontWeight: '800' },
+  aiFaceTag: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 3,
+    backgroundColor: '#DCFCE7',
+    paddingHorizontal: 5,
+    paddingVertical: 1,
+    borderRadius: 4,
+  },
+  aiFaceTagText: {
+    fontSize: 9,
+    fontWeight: '700',
+    color: '#047857',
+  },
   patientMeta: { fontSize: 12, marginTop: 1 },
   patientAddress: { fontSize: 11.5, marginTop: 3 },
   statusBadge: {
