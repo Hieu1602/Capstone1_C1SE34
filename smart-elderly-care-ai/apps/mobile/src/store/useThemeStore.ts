@@ -1,7 +1,9 @@
 // src/store/useThemeStore.ts
-// Quản lý trạng thái Light / Dark Theme toàn cục cho hệ thống Smart Elderly Care AI
+// Quản lý trạng thái Light / Dark Theme toàn cục cho hệ thống Smart Elderly Care AI (Persisted)
 
 import { create } from 'zustand';
+import { persist, createJSONStorage } from 'zustand/middleware';
+import AsyncStorage from '@react-native-async-storage/async-storage';
 
 export interface ThemeColors {
   background: string;
@@ -67,36 +69,53 @@ interface ThemeState {
   setFontScale: (scale: number) => void;
 }
 
-export const useThemeStore = create<ThemeState>((set) => ({
-  isDarkMode: false,
-  colors: lightTheme,
-  fontScale: 1,
-  toggleTheme: () =>
-    set((state) => {
-      const next = !state.isDarkMode;
-      return {
-        isDarkMode: next,
-        colors: next ? darkTheme : lightTheme,
-      };
+export const useThemeStore = create<ThemeState>()(
+  persist(
+    (set) => ({
+      isDarkMode: false,
+      colors: lightTheme,
+      fontScale: 1,
+      toggleTheme: () =>
+        set((state) => {
+          const next = !state.isDarkMode;
+          return {
+            isDarkMode: next,
+            colors: next ? darkTheme : lightTheme,
+          };
+        }),
+      toggleDarkMode: () =>
+        set((state) => {
+          const next = !state.isDarkMode;
+          return {
+            isDarkMode: next,
+            colors: next ? darkTheme : lightTheme,
+          };
+        }),
+      setDarkMode: (isDark: boolean) =>
+        set({
+          isDarkMode: isDark,
+          colors: isDark ? darkTheme : lightTheme,
+        }),
+      setFontScale: (scale: number) =>
+        set({
+          fontScale: Math.min(Math.max(scale, 0.8), 1.8),
+        }),
     }),
-  toggleDarkMode: () =>
-    set((state) => {
-      const next = !state.isDarkMode;
-      return {
-        isDarkMode: next,
-        colors: next ? darkTheme : lightTheme,
-      };
-    }),
-  setDarkMode: (isDark) =>
-    set({
-      isDarkMode: isDark,
-      colors: isDark ? darkTheme : lightTheme,
-    }),
-  setFontScale: (scale: number) =>
-    set({
-      fontScale: Math.min(Math.max(scale, 0.8), 1.8),
-    }),
-}));
+    {
+      name: 'smartcare-theme-storage',
+      storage: createJSONStorage(() => AsyncStorage),
+      partialize: (state) => ({
+        isDarkMode: state.isDarkMode,
+        fontScale: state.fontScale,
+      }),
+      onRehydrateStorage: () => (state) => {
+        if (state) {
+          state.colors = state.isDarkMode ? darkTheme : lightTheme;
+        }
+      },
+    }
+  )
+);
 
 export const useTheme = () => {
   const isDarkMode = useThemeStore((s) => s.isDarkMode);

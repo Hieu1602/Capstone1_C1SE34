@@ -31,6 +31,7 @@ class UserUpdate(BaseModel):
     phone: Optional[str] = None
     fcm_token: Optional[str] = None
     preferred_language: Optional[Literal["vi", "en"]] = None
+    language: Optional[Literal["vi", "en"]] = None
     font_size_mode: Optional[Literal["system", "custom"]] = None
     custom_font_scale: Optional[int] = None
     vibration_enabled: Optional[bool] = None
@@ -38,6 +39,14 @@ class UserUpdate(BaseModel):
     location_latitude: Optional[float] = None
     location_longitude: Optional[float] = None
     location_address: Optional[str] = None
+
+    @model_validator(mode="before")
+    @classmethod
+    def normalize_language_fields(cls, data):
+        if isinstance(data, dict):
+            if "language" in data and "preferred_language" not in data:
+                data["preferred_language"] = data["language"]
+        return data
 
 
 class PasswordChange(BaseModel):
@@ -56,6 +65,7 @@ class UserOut(UserBase):
     id: uuid.UUID
     is_active: bool
     preferred_language: Literal["vi", "en"] = "vi"
+    language: Optional[Literal["vi", "en"]] = None
     font_size_mode: Literal["system", "custom"] = "system"
     custom_font_scale: int = 2
     vibration_enabled: bool = True
@@ -63,6 +73,11 @@ class UserOut(UserBase):
     location_latitude: Optional[float] = None
     location_longitude: Optional[float] = None
     location_address: Optional[str] = None
+
+    @model_validator(mode="after")
+    def set_language_alias(self) -> "UserOut":
+        self.language = self.preferred_language
+        return self
 
     model_config = {"from_attributes": True}
 

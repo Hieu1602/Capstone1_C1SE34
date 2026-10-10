@@ -53,10 +53,13 @@ api.interceptors.response.use(
   (response: import('axios').AxiosResponse) => response,
   async (error: AxiosError) => {
     const original = error.config as any;
-    if (error.response?.status === 401 && !original._retry) {
+    const isAuthRoute =
+      original?.url?.includes('/auth/login') || original?.url?.includes('/auth/refresh');
+    if (error.response?.status === 401 && !original._retry && !isAuthRoute) {
       original._retry = true;
       try {
         const refreshToken = useAuthStore.getState().refreshToken;
+        if (!refreshToken) throw new Error('No refresh token');
         const { data } = await axios.post(`${BASE_URL}/auth/refresh`, {
           refresh_token: refreshToken,
         });
@@ -92,7 +95,21 @@ export const authApi = {
     full_name: string;
     password: string;
     role: string;
+    otp_code?: string;
   }) => api.post('/auth/register', data),
+  resetPassword: (data: {
+    phone: string;
+    otp_code: string;
+    new_password: string;
+  }) => api.post('/auth/reset-password', data),
+};
+
+// 0. Users API
+export const usersApi = {
+  getMe: () => api.get('/users/me'),
+  updateMe: (data: any) => api.patch('/users/me', data),
+  updateLanguage: (language: 'vi' | 'en') =>
+    api.patch('/users/me/language', { preferred_language: language, language }),
 };
 
 // 1. System Mode API

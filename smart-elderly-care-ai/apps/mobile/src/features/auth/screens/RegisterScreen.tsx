@@ -172,7 +172,7 @@ export default function RegisterScreen({ navigation, route }: any) {
                   setStep('form');
                   return;
                 }
-                navigation.goBack();
+                navigation.navigate('Welcome');
               }}
             >
               <Ionicons name="arrow-back" size={20} color="#0F172A" />
@@ -415,6 +415,11 @@ const styles = StyleSheet.create({
     paddingHorizontal: 14,
     borderRadius: 20,
     backgroundColor: '#FFFFFF',
+    shadowColor: '#000000',
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.12,
+    shadowRadius: 4,
+    elevation: 4,
   },
   backButtonText: {
     color: '#0F172A',

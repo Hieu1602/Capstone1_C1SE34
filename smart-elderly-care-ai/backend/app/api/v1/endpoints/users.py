@@ -29,9 +29,26 @@ async def update_profile(
     current_user: User = Depends(get_current_user),
     db: AsyncSession = Depends(get_db),
 ):
-    """Cập nhật thông tin profile (tên, số điện thoại, FCM token)."""
+    """Cập nhật thông tin profile (tên, số điện thoại, FCM token, ngôn ngữ)."""
     update_data = update_in.model_dump(exclude_unset=True)
     return await crud_user.update(db, db_obj=current_user, obj_in=update_data)
+
+
+@router.patch("/me/language", response_model=UserOut)
+@router.put("/me/language", response_model=UserOut)
+async def update_language(
+    payload: dict = Body(...),
+    current_user: User = Depends(get_current_user),
+    db: AsyncSession = Depends(get_db),
+):
+    """Cập nhật ngôn ngữ giao diện của người dùng (vi hoặc en)."""
+    lang = (payload.get("preferred_language") or payload.get("language") or "").strip().lower()
+    if lang not in ["vi", "en"]:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="Ngôn ngữ không hợp lệ. Chỉ chấp nhận 'vi' hoặc 'en'.",
+        )
+    return await crud_user.update(db, db_obj=current_user, obj_in={"preferred_language": lang})
 
 
 @router.patch("/me/password")

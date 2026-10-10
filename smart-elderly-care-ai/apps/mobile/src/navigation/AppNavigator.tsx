@@ -13,6 +13,7 @@ import AIBotIcon from '../components/AIBotIcon';
 import { useAuthStore, useVitalStore } from '../store/useVitalStore';
 
 // Auth screens
+import WelcomeScreen from '../features/auth/screens/WelcomeScreen';
 import LoginScreen from '../features/auth/screens/LoginScreen';
 import RegisterScreen from '../features/auth/screens/RegisterScreen';
 import ForgotPasswordScreen from '../features/auth/screens/ForgotPasswordScreen';
@@ -135,6 +136,7 @@ export default function AppNavigator() {
         {!isAuthenticated ? (
           // Auth Stack
           <>
+            <Stack.Screen name="Welcome" component={WelcomeScreen} />
             <Stack.Screen name="Login" component={LoginScreen} />
             <Stack.Screen name="Register" component={RegisterScreen} />
             <Stack.Screen name="ForgotPassword" component={ForgotPasswordScreen} />
@@ -142,7 +144,7 @@ export default function AppNavigator() {
         ) : (
           // Main App Stack
           <>
-            {viewRole === 'doctor' ? (
+            {viewRole === 'DOCTOR' ? (
               <Stack.Screen name="DoctorMain" component={DoctorTabNavigator} />
             ) : (
               <Stack.Screen name="Main" component={MainTabNavigator} />

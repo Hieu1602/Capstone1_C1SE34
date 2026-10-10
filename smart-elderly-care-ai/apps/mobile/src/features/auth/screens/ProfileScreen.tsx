@@ -27,7 +27,9 @@ import { Ionicons } from '@expo/vector-icons';
 import { Colors, Shadows } from '../../../theme/colors';
 import { useAuthStore, useVitalStore } from '../../../store/useVitalStore';
 import { useTheme } from '../../../store/useThemeStore';
-import api from '../../../services/api';
+import AsyncStorage from '@react-native-async-storage/async-storage';
+import i18n from '../../../i18n/config';
+import api, { usersApi } from '../../../services/api';
 
 export default function ProfileScreen({ navigation }: any) {
   const { userId, user_id, userName, full_name, userPhone, phone_number, role, logout, updateUserName, toggleViewRole, setProfile } = useAuthStore();
@@ -55,7 +57,46 @@ export default function ProfileScreen({ navigation }: any) {
   const [infoDetail, setInfoDetail] = React.useState<'terms' | 'app' | null>(null);
   const [isGeneralSettingsVisible, setGeneralSettingsVisible] = React.useState(false);
   const [isLanguageVisible, setLanguageVisible] = React.useState(false);
-  const [languageMode, setLanguageMode] = React.useState<'vi' | 'en'>('vi');
+  const [languageMode, setLanguageMode] = React.useState<'vi' | 'en'>(
+    (i18n.language === 'en' ? 'en' : 'vi') as 'vi' | 'en'
+  );
+
+  React.useEffect(() => {
+    if (i18n.language === 'en' || i18n.language === 'vi') {
+      setLanguageMode(i18n.language as 'vi' | 'en');
+    }
+    usersApi
+      .getMe()
+      .then((res: any) => {
+        const backendLang = res?.data?.preferred_language || res?.data?.language;
+        if (backendLang && (backendLang === 'vi' || backendLang === 'en')) {
+          setLanguageMode(backendLang);
+          if (i18n.language !== backendLang) {
+            void i18n.changeLanguage(backendLang);
+            void AsyncStorage.setItem('smartcare-user-language', backendLang);
+          }
+        }
+      })
+      .catch(() => {});
+  }, []);
+
+  const handleLanguageChange = async (lang: 'vi' | 'en') => {
+    try {
+      setLanguageMode(lang);
+      await i18n.changeLanguage(lang);
+      await AsyncStorage.setItem('smartcare-user-language', lang);
+      setLanguageVisible(false);
+
+      try {
+        await usersApi.updateLanguage(lang);
+      } catch (apiErr) {
+        await usersApi.updateMe({ preferred_language: lang, language: lang });
+      }
+    } catch (err) {
+      console.warn('[ProfileScreen] Error changing language:', err);
+      setLanguageVisible(false);
+    }
+  };
   const [isAccessibilityVisible, setAccessibilityVisible] = React.useState(false);
   const [isFontSizeVisible, setFontSizeVisible] = React.useState(false);
   const [fontSizeMode, setFontSizeMode] = React.useState<'system' | 'custom'>('system');
@@ -1613,11 +1654,11 @@ export default function ProfileScreen({ navigation }: any) {
           <Pressable style={[styles.appearanceSheet, isDarkMode && { backgroundColor: '#0B0F19' }]} onPress={() => {}}>
             <View style={styles.appearanceHeader}>
               <TouchableOpacity
-                style={[styles.appearanceCloseButton, isDarkMode && { backgroundColor: '#1E293B', borderColor: '#334155', borderWidth: 1 }]}
+                style={[styles.appearanceCloseButton, isDarkMode && { backgroundColor: '#1E293B', borderColor: '#334155', borderWidth: 1, borderRadius: 18 }]}
                 onPress={() => setLanguageVisible(false)}
                 activeOpacity={0.7}
               >
-                <Ionicons name="chevron-back-outline" size={28} color={isDarkMode ? '#F8FAFC' : '#111827'} />
+                <Ionicons name="chevron-back-outline" size={24} color={isDarkMode ? '#F8FAFC' : '#111827'} />
               </TouchableOpacity>
 
               <Text style={[styles.appearanceTitle, isDarkMode && { color: '#F8FAFC' }]}>Ngôn ngữ</Text>
@@ -1628,13 +1669,11 @@ export default function ProfileScreen({ navigation }: any) {
               <TouchableOpacity
                 style={[
                   styles.appearanceOptionRow,
+                  isDarkMode ? { backgroundColor: '#1E293B', borderBottomColor: '#334155' } : { backgroundColor: '#FFFFFF', borderBottomColor: '#E5E7EB' },
                   languageMode === 'vi' && (isDarkMode ? { backgroundColor: '#0F172A' } : styles.appearanceOptionRowSelected),
                 ]}
                 activeOpacity={0.8}
-                onPress={() => {
-                  setLanguageMode('vi');
-                  setLanguageVisible(false);
-                }}
+                onPress={() => handleLanguageChange('vi')}
               >
                 <Text style={[styles.appearanceOptionLabel, isDarkMode && { color: '#F8FAFC' }]}>Việt Nam</Text>
                 {languageMode === 'vi' && (
@@ -1645,20 +1684,17 @@ export default function ProfileScreen({ navigation }: any) {
               <TouchableOpacity
                 style={[
                   styles.appearanceOptionRow,
+                  isDarkMode ? { backgroundColor: '#1E293B', borderBottomColor: '#334155', borderBottomWidth: 0 } : { backgroundColor: '#FFFFFF', borderBottomColor: '#E5E7EB', borderBottomWidth: 0 },
                   languageMode === 'en' && (isDarkMode ? { backgroundColor: '#0F172A' } : styles.appearanceOptionRowSelected),
                 ]}
                 activeOpacity={0.8}
-                onPress={() => {
-                  setLanguageMode('en');
-                  setLanguageVisible(false);
-                }}
+                onPress={() => handleLanguageChange('en')}
               >
                 <Text style={[styles.appearanceOptionLabel, isDarkMode && { color: '#F8FAFC' }]}>English</Text>
                 {languageMode === 'en' && (
                   <Ionicons name="checkmark" size={22} color="#1D9BF0" />
                 )}
               </TouchableOpacity>
-              
             </View>
           </Pressable>
         </Pressable>
@@ -1670,26 +1706,27 @@ export default function ProfileScreen({ navigation }: any) {
         animationType="slide"
         onRequestClose={() => setAppearanceVisible(false)}
       >
-        <Pressable style={styles.appearanceOverlay} onPress={() => setAppearanceVisible(false)}>
-          <Pressable style={[styles.appearanceSheet, isDarkMode && { backgroundColor: colors.background }]} onPress={() => {}}>
+        <Pressable style={[styles.appearanceOverlay, isDarkMode && { backgroundColor: '#0B0F19' }]} onPress={() => setAppearanceVisible(false)}>
+          <Pressable style={[styles.appearanceSheet, isDarkMode && { backgroundColor: '#0B0F19' }]} onPress={() => {}}>
             <View style={styles.appearanceHeader}>
               <TouchableOpacity
-                style={styles.appearanceCloseButton}
+                style={[styles.appearanceCloseButton, isDarkMode && { backgroundColor: '#1E293B', borderColor: '#334155', borderWidth: 1, borderRadius: 18 }]}
                 onPress={() => setAppearanceVisible(false)}
                 activeOpacity={0.7}
               >
-                <Ionicons name="chevron-back-outline" size={28} color={isDarkMode ? colors.textPrimary : '#111827'} />
+                <Ionicons name="chevron-back-outline" size={24} color={isDarkMode ? '#F8FAFC' : '#111827'} />
               </TouchableOpacity>
 
-              <Text style={[styles.appearanceTitle, isDarkMode && { color: colors.textPrimary }]}>Về bề ngoài</Text>
+              <Text style={[styles.appearanceTitle, isDarkMode && { color: '#F8FAFC' }]}>Vẻ bề ngoài</Text>
               <View style={styles.appearanceHeaderSpacer} />
             </View>
 
-            <View style={[styles.appearanceCard, isDarkMode && { backgroundColor: colors.card, borderColor: colors.border }]}>
+            <View style={[styles.appearanceCard, isDarkMode && { backgroundColor: '#1E293B', borderColor: '#334155' }]}>
               <TouchableOpacity
                 style={[
                   styles.appearanceOptionRow,
-                  appearanceMode === 'light' && styles.appearanceOptionRowSelected,
+                  isDarkMode ? { backgroundColor: '#1E293B', borderBottomColor: '#334155' } : { backgroundColor: '#FFFFFF', borderBottomColor: '#E5E7EB' },
+                  appearanceMode === 'light' && (isDarkMode ? { backgroundColor: '#0F172A' } : styles.appearanceOptionRowSelected),
                 ]}
                 activeOpacity={0.8}
                 onPress={() => {
@@ -1698,7 +1735,7 @@ export default function ProfileScreen({ navigation }: any) {
                   setAppearanceVisible(false);
                 }}
               >
-                <Text style={[styles.appearanceOptionLabel, isDarkMode && { color: colors.textPrimary }]}>Màu sáng</Text>
+                <Text style={[styles.appearanceOptionLabel, isDarkMode && { color: '#F8FAFC' }]}>Màu sáng</Text>
                 {appearanceMode === 'light' && (
                   <Ionicons name="checkmark" size={22} color="#1D9BF0" />
                 )}
@@ -1707,7 +1744,8 @@ export default function ProfileScreen({ navigation }: any) {
               <TouchableOpacity
                 style={[
                   styles.appearanceOptionRow,
-                  appearanceMode === 'dark' && styles.appearanceOptionRowSelected,
+                  isDarkMode ? { backgroundColor: '#1E293B', borderBottomColor: '#334155', borderBottomWidth: 0 } : { backgroundColor: '#FFFFFF', borderBottomColor: '#E5E7EB', borderBottomWidth: 0 },
+                  appearanceMode === 'dark' && (isDarkMode ? { backgroundColor: '#0F172A' } : styles.appearanceOptionRowSelected),
                 ]}
                 activeOpacity={0.8}
                 onPress={() => {
@@ -1716,7 +1754,7 @@ export default function ProfileScreen({ navigation }: any) {
                   setAppearanceVisible(false);
                 }}
               >
-                <Text style={[styles.appearanceOptionLabel, isDarkMode && { color: colors.textPrimary }]}>Tối</Text>
+                <Text style={[styles.appearanceOptionLabel, isDarkMode && { color: '#F8FAFC' }]}>Tối</Text>
                 {appearanceMode === 'dark' && (
                   <Ionicons name="checkmark" size={22} color="#1D9BF0" />
                 )}
@@ -3635,7 +3673,7 @@ const styles = StyleSheet.create({
     borderBottomColor: '#E5E7EB',
   },
   appearanceOptionRowSelected: {
-    backgroundColor: '#FFFFFF',
+    backgroundColor: '#F8FAFC',
   },
   appearanceOptionLabel: {
     fontSize: 15,

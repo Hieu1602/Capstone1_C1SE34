@@ -184,7 +184,16 @@ export default function ForgotPasswordScreen({ navigation }: any) {
         <ScrollView contentContainerStyle={styles.container} keyboardShouldPersistTaps="handled">
           <View>
             {/* Nút quay lại màn hình trước */}
-            <TouchableOpacity style={styles.backButton} onPress={() => navigation.goBack()}>
+            <TouchableOpacity
+              style={styles.backButton}
+              onPress={() => {
+                if (navigation.canGoBack?.()) {
+                  navigation.goBack();
+                } else {
+                  navigation.navigate('Login');
+                }
+              }}
+            >
               <Ionicons name="arrow-back" size={28} color="#2F2F2F" />
             </TouchableOpacity>
 
