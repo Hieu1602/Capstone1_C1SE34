@@ -3,19 +3,13 @@
 // Tương tự AddDeviceScreen (Thêm thủ công): SELECT -> REVIEW -> CONFIRM -> SUCCESS
 
 import React, { useState } from 'react';
-import {
-  View,
-  Text,
-  StyleSheet,
-  TouchableOpacity,
-  ScrollView,
-  TextInput,
-  Alert,
-} from 'react-native';
+import { View, StyleSheet, TouchableOpacity, ScrollView } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
 import { Colors, Shadows } from '../../../theme/colors';
 import { useVitalStore, IoTDeviceItem } from '../../../store/useVitalStore';
+import { LocalizedAlert, LocalizedText, LocalizedTextInput } from '../../../i18n/LocalizedComponents';
+
 
 type GroupStep = 'SELECT' | 'REVIEW' | 'CONFIRM' | 'SUCCESS';
 type GroupDeviceFilter = 'Tất cả' | 'Camera' | 'Đồng hồ';
@@ -130,7 +124,7 @@ export default function CreateGroupScreen({ navigation }: any) {
 
     // Điều kiện 1: Tên nhóm không được bỏ trống
     if (isNameEmpty) {
-      Alert.alert(
+      LocalizedAlert.alert(
         'Tên nhóm không được để trống',
         'Vui lòng nhập tên cho nhóm thiết bị mới để tiếp tục.'
       );
@@ -139,7 +133,7 @@ export default function CreateGroupScreen({ navigation }: any) {
 
     // Điều kiện 2: Tên nhóm mới phải là duy nhất
     if (isDuplicateName) {
-      Alert.alert(
+      LocalizedAlert.alert(
         'Tên nhóm đã tồn tại',
         `Nhóm "${trimmedName}" đã có trong hệ thống. Tên nhóm mới phải là duy nhất, vui lòng đặt tên khác.`
       );
@@ -148,7 +142,7 @@ export default function CreateGroupScreen({ navigation }: any) {
 
     // Điều kiện 3: Có ít nhất 1 thiết bị mới thành lập nhóm
     if (!hasSelectedDevices) {
-      Alert.alert(
+      LocalizedAlert.alert(
         'Chưa chọn thiết bị',
         'Cần có ít nhất 1 thiết bị mới thành lập nhóm. Vui lòng chọn ít nhất một thiết bị trong danh sách bên dưới.'
       );
@@ -161,7 +155,7 @@ export default function CreateGroupScreen({ navigation }: any) {
   // Bước 2 -> Bước 3: Chuyển sang Xác nhận
   const handleProceedToConfirm = () => {
     if (isNameEmpty || isDuplicateName || !hasSelectedDevices) {
-      Alert.alert('Thông báo', 'Dữ liệu nhóm không hợp lệ, vui lòng kiểm tra lại');
+      LocalizedAlert.alert('Thông báo', 'Dữ liệu nhóm không hợp lệ, vui lòng kiểm tra lại');
       setCurrentStep('SELECT');
       return;
     }
@@ -171,7 +165,7 @@ export default function CreateGroupScreen({ navigation }: any) {
   // Bước 3 -> Hoàn tất tạo nhóm
   const handleConfirmCreate = () => {
     if (isNameEmpty || isDuplicateName || !hasSelectedDevices) {
-      Alert.alert(
+      LocalizedAlert.alert(
         'Không thể tạo nhóm',
         'Tên nhóm phải là duy nhất, không được bỏ trống và cần có ít nhất 1 thiết bị.'
       );
@@ -212,13 +206,13 @@ export default function CreateGroupScreen({ navigation }: any) {
           <Ionicons name="chevron-back" size={26} color="#1E293B" />
         </TouchableOpacity>
         <View style={styles.headerTitleContainer}>
-          <Text style={styles.headerTitle}>Tạo Nhóm Thiết Bị</Text>
-          <Text style={styles.headerSubtitle}>
+          <LocalizedText style={styles.headerTitle}>Tạo Nhóm Thiết Bị</LocalizedText>
+          <LocalizedText style={styles.headerSubtitle}>
             {currentStep === 'SELECT' && 'Bước 1/3: Đặt tên & chọn thiết bị'}
             {currentStep === 'REVIEW' && 'Bước 2/3: Bản thể hiện tổng quan nhóm'}
             {currentStep === 'CONFIRM' && 'Bước 3/3: Bảng thông báo xác nhận'}
             {currentStep === 'SUCCESS' && 'Hoàn tất: Đã tạo nhóm thành công'}
-          </Text>
+          </LocalizedText>
         </View>
         <TouchableOpacity
           style={styles.closeButton}
@@ -246,20 +240,20 @@ export default function CreateGroupScreen({ navigation }: any) {
                   <Ionicons name="folder-outline" size={20} color="#7C3AED" />
                 </View>
                 <View style={{ flex: 1, marginLeft: 10 }}>
-                  <Text style={styles.sectionTitle}>1. Đặt tên nhóm mới *</Text>
-                  <Text style={styles.sectionSub}>
+                  <LocalizedText style={styles.sectionTitle}>1. Đặt tên nhóm mới *</LocalizedText>
+                  <LocalizedText style={styles.sectionSub}>
                     Tên nhóm là duy nhất và không được để trống
-                  </Text>
+                  </LocalizedText>
                 </View>
                 {isNameValid && (
                   <View style={styles.validStatusBadge}>
                     <Ionicons name="checkmark-circle" size={13} color="#16A34A" />
-                    <Text style={styles.validStatusBadgeText}>Hợp lệ</Text>
+                    <LocalizedText style={styles.validStatusBadgeText}>Hợp lệ</LocalizedText>
                   </View>
                 )}
               </View>
 
-              <TextInput
+              <LocalizedTextInput
                 style={[
                   styles.groupTextInput,
                   isDuplicateName || (hasAttemptedProceed && isNameEmpty)
@@ -281,25 +275,25 @@ export default function CreateGroupScreen({ navigation }: any) {
               {isDuplicateName && (
                 <View style={styles.feedbackRow}>
                   <Ionicons name="close-circle" size={16} color="#DC2626" />
-                  <Text style={styles.feedbackErrorText}>
+                  <LocalizedText style={styles.feedbackErrorText}>
                     Tên nhóm "{trimmedName}" đã tồn tại. Tên nhóm mới phải là duy nhất!
-                  </Text>
+                  </LocalizedText>
                 </View>
               )}
               {hasAttemptedProceed && isNameEmpty && (
                 <View style={styles.feedbackRow}>
                   <Ionicons name="alert-circle" size={16} color="#DC2626" />
-                  <Text style={styles.feedbackErrorText}>
+                  <LocalizedText style={styles.feedbackErrorText}>
                     Tên nhóm không được để trống. Vui lòng nhập tên nhóm!
-                  </Text>
+                  </LocalizedText>
                 </View>
               )}
               {isNameValid && (
                 <View style={styles.feedbackRow}>
                   <Ionicons name="checkmark-circle" size={16} color="#16A34A" />
-                  <Text style={styles.feedbackSuccessText}>
+                  <LocalizedText style={styles.feedbackSuccessText}>
                     Tên nhóm hợp lệ và khả dụng.
-                  </Text>
+                  </LocalizedText>
                 </View>
               )}
             </View>
@@ -311,8 +305,8 @@ export default function CreateGroupScreen({ navigation }: any) {
                   <Ionicons name="hardware-chip-outline" size={20} color="#7C3AED" />
                 </View>
                 <View style={{ flex: 1, marginLeft: 10 }}>
-                  <Text style={styles.sectionTitle}>2. Chọn thiết bị đưa vào nhóm *</Text>
-                  <Text
+                  <LocalizedText style={styles.sectionTitle}>2. Chọn thiết bị đưa vào nhóm *</LocalizedText>
+                  <LocalizedText
                     style={[
                       styles.sectionSub,
                       !hasSelectedDevices && hasAttemptedProceed && styles.sectionSubError,
@@ -321,14 +315,14 @@ export default function CreateGroupScreen({ navigation }: any) {
                     {!hasSelectedDevices
                       ? 'Cần ít nhất 1 thiết bị để thành lập nhóm'
                       : `Đã chọn ${selectedDeviceIds.length} / ${totalCount} thiết bị`}
-                  </Text>
+                  </LocalizedText>
                 </View>
                 {hasSelectedDevices ? (
                   <View style={styles.validStatusBadge}>
                     <Ionicons name="checkmark-circle" size={13} color="#16A34A" />
-                    <Text style={styles.validStatusBadgeText}>
+                    <LocalizedText style={styles.validStatusBadgeText}>
                       {selectedDeviceIds.length} thiết bị
-                    </Text>
+                    </LocalizedText>
                   </View>
                 ) : (
                   <TouchableOpacity
@@ -336,9 +330,9 @@ export default function CreateGroupScreen({ navigation }: any) {
                     onPress={handleToggleSelectAll}
                     activeOpacity={0.7}
                   >
-                    <Text style={styles.selectAllBtnText}>
+                    <LocalizedText style={styles.selectAllBtnText}>
                       {isAllCurrentTabSelected ? 'Bỏ chọn' : 'Chọn tất cả'}
-                    </Text>
+                    </LocalizedText>
                   </TouchableOpacity>
                 )}
               </View>
@@ -347,9 +341,9 @@ export default function CreateGroupScreen({ navigation }: any) {
               {!hasSelectedDevices && hasAttemptedProceed && (
                 <View style={styles.deviceWarningBanner}>
                   <Ionicons name="alert-circle" size={18} color="#DC2626" />
-                  <Text style={styles.deviceWarningText}>
+                  <LocalizedText style={styles.deviceWarningText}>
                     Cần có ít nhất 1 thiết bị mới thành lập nhóm. Vui lòng chọn thiết bị bên dưới!
-                  </Text>
+                  </LocalizedText>
                 </View>
               )}
 
@@ -382,14 +376,14 @@ export default function CreateGroupScreen({ navigation }: any) {
                         color={isActive ? '#FFF' : '#64748B'}
                         style={{ marginRight: 6 }}
                       />
-                      <Text
+                      <LocalizedText
                         style={[
                           styles.filterTabText,
                           isActive && styles.filterTabTextActive,
                         ]}
                       >
                         {tab} ({count})
-                      </Text>
+                      </LocalizedText>
                     </TouchableOpacity>
                   );
                 })}
@@ -400,9 +394,9 @@ export default function CreateGroupScreen({ navigation }: any) {
                 {filteredDevices.length === 0 ? (
                   <View style={styles.emptyDeviceBox}>
                     <Ionicons name="cube-outline" size={36} color="#CBD5E1" />
-                    <Text style={styles.emptyDeviceText}>
+                    <LocalizedText style={styles.emptyDeviceText}>
                       Không có thiết bị thuộc danh mục này
-                    </Text>
+                    </LocalizedText>
                   </View>
                 ) : (
                   filteredDevices.map((dev) => {
@@ -436,7 +430,7 @@ export default function CreateGroupScreen({ navigation }: any) {
                           />
                         </View>
                         <View style={{ flex: 1, marginLeft: 12 }}>
-                          <Text
+                          <LocalizedText
                             style={[
                               styles.deviceName,
                               isSelected && styles.deviceNameSelected,
@@ -444,13 +438,13 @@ export default function CreateGroupScreen({ navigation }: any) {
                             numberOfLines={1}
                           >
                             {dev.name}
-                          </Text>
-                          <Text style={styles.deviceSub} numberOfLines={1}>
+                          </LocalizedText>
+                          <LocalizedText style={styles.deviceSub} numberOfLines={1}>
                             Vị trí hiện tại:{' '}
-                            <Text style={{ fontWeight: '700', color: '#475569' }}>
+                            <LocalizedText style={{ fontWeight: '700', color: '#475569' }}>
                               {dev.location || 'Chưa nhóm'}
-                            </Text>
-                          </Text>
+                            </LocalizedText>
+                          </LocalizedText>
                         </View>
                         <View
                           style={[
@@ -477,7 +471,7 @@ export default function CreateGroupScreen({ navigation }: any) {
               onPress={() => navigation.goBack()}
               activeOpacity={0.7}
             >
-              <Text style={styles.cancelBtnText}>Hủy</Text>
+              <LocalizedText style={styles.cancelBtnText}>Hủy</LocalizedText>
             </TouchableOpacity>
             <TouchableOpacity
               style={[
@@ -487,9 +481,9 @@ export default function CreateGroupScreen({ navigation }: any) {
               onPress={handleProceedToReview}
               activeOpacity={0.8}
             >
-              <Text style={styles.primaryBtnText}>
+              <LocalizedText style={styles.primaryBtnText}>
                 Tiếp tục {selectedDeviceIds.length > 0 ? `(${selectedDeviceIds.length})` : ''}
-              </Text>
+              </LocalizedText>
               <Ionicons name="arrow-forward" size={18} color="#FFF" />
             </TouchableOpacity>
           </View>
@@ -513,13 +507,13 @@ export default function CreateGroupScreen({ navigation }: any) {
                   <Ionicons name="folder" size={28} color="#7C3AED" />
                 </View>
                 <View style={{ flex: 1, marginLeft: 14 }}>
-                  <Text style={styles.overviewBadge}>NHÓM THIẾT BỊ MỚI</Text>
-                  <Text style={styles.overviewGroupName}>{groupName.trim()}</Text>
+                  <LocalizedText style={styles.overviewBadge}>NHÓM THIẾT BỊ MỚI</LocalizedText>
+                  <LocalizedText style={styles.overviewGroupName}>{groupName.trim()}</LocalizedText>
                 </View>
                 <View style={styles.overviewCountBadge}>
-                  <Text style={styles.overviewCountBadgeText}>
+                  <LocalizedText style={styles.overviewCountBadgeText}>
                     {selectedDeviceIds.length} thiết bị
-                  </Text>
+                  </LocalizedText>
                 </View>
               </View>
 
@@ -527,20 +521,20 @@ export default function CreateGroupScreen({ navigation }: any) {
               <View style={styles.overviewStatsGrid}>
                 <View style={styles.overviewStatCol}>
                   <Ionicons name="videocam" size={18} color="#7C3AED" />
-                  <Text style={styles.overviewStatVal}>{selectedCamCount}</Text>
-                  <Text style={styles.overviewStatLbl}>Camera AI</Text>
+                  <LocalizedText style={styles.overviewStatVal}>{selectedCamCount}</LocalizedText>
+                  <LocalizedText style={styles.overviewStatLbl}>Camera AI</LocalizedText>
                 </View>
                 <View style={styles.overviewStatDivider} />
                 <View style={styles.overviewStatCol}>
                   <Ionicons name="watch" size={18} color="#10B981" />
-                  <Text style={styles.overviewStatVal}>{selectedWatchCount}</Text>
-                  <Text style={styles.overviewStatLbl}>Đồng hồ BLE</Text>
+                  <LocalizedText style={styles.overviewStatVal}>{selectedWatchCount}</LocalizedText>
+                  <LocalizedText style={styles.overviewStatLbl}>Đồng hồ BLE</LocalizedText>
                 </View>
                 <View style={styles.overviewStatDivider} />
                 <View style={styles.overviewStatCol}>
                   <Ionicons name="shield-checkmark" size={18} color="#3B82F6" />
-                  <Text style={styles.overviewStatVal}>24/7</Text>
-                  <Text style={styles.overviewStatLbl}>Giám sát</Text>
+                  <LocalizedText style={styles.overviewStatVal}>24/7</LocalizedText>
+                  <LocalizedText style={styles.overviewStatLbl}>Giám sát</LocalizedText>
                 </View>
               </View>
             </View>
@@ -552,12 +546,12 @@ export default function CreateGroupScreen({ navigation }: any) {
                   <Ionicons name="list" size={20} color="#7C3AED" />
                 </View>
                 <View style={{ flex: 1, marginLeft: 10 }}>
-                  <Text style={styles.sectionTitle}>
+                  <LocalizedText style={styles.sectionTitle}>
                     Danh sách thiết bị gom vào nhóm ({selectedDevicesList.length})
-                  </Text>
-                  <Text style={styles.sectionSub}>
+                  </LocalizedText>
+                  <LocalizedText style={styles.sectionSub}>
                     Các thiết bị sẽ được gán sang phân vùng "{groupName.trim()}"
-                  </Text>
+                  </LocalizedText>
                 </View>
               </View>
 
@@ -577,22 +571,22 @@ export default function CreateGroupScreen({ navigation }: any) {
                       />
                     </View>
                     <View style={{ flex: 1, marginLeft: 12 }}>
-                      <Text style={styles.reviewDeviceName} numberOfLines={1}>
+                      <LocalizedText style={styles.reviewDeviceName} numberOfLines={1}>
                         {dev.name}
-                      </Text>
+                      </LocalizedText>
                       <View style={styles.reviewLocationChangeRow}>
-                        <Text style={styles.reviewLocOld} numberOfLines={1}>
+                        <LocalizedText style={styles.reviewLocOld} numberOfLines={1}>
                           {dev.location || 'Chưa nhóm'}
-                        </Text>
+                        </LocalizedText>
                         <Ionicons
                           name="arrow-forward"
                           size={14}
                           color="#7C3AED"
                           style={{ marginHorizontal: 6 }}
                         />
-                        <Text style={styles.reviewLocNew} numberOfLines={1}>
+                        <LocalizedText style={styles.reviewLocNew} numberOfLines={1}>
                           {groupName.trim()}
-                        </Text>
+                        </LocalizedText>
                       </View>
                     </View>
                     <View
@@ -622,14 +616,14 @@ export default function CreateGroupScreen({ navigation }: any) {
                 color="#64748B"
                 style={{ marginRight: 6 }}
               />
-              <Text style={styles.cancelBtnText}>Quay lại</Text>
+              <LocalizedText style={styles.cancelBtnText}>Quay lại</LocalizedText>
             </TouchableOpacity>
             <TouchableOpacity
               style={styles.primaryBtn}
               onPress={handleProceedToConfirm}
               activeOpacity={0.8}
             >
-              <Text style={styles.primaryBtnText}>Tiếp tục tạo</Text>
+              <LocalizedText style={styles.primaryBtnText}>Tiếp tục tạo</LocalizedText>
               <Ionicons name="arrow-forward" size={18} color="#FFF" />
             </TouchableOpacity>
           </View>
@@ -651,45 +645,45 @@ export default function CreateGroupScreen({ navigation }: any) {
                 <Ionicons name="help-circle" size={56} color="#7C3AED" />
               </View>
 
-              <Text style={styles.confirmHeading}>Xác Nhận Tạo Nhóm?</Text>
-              <Text style={styles.confirmDesc}>
+              <LocalizedText style={styles.confirmHeading}>Xác Nhận Tạo Nhóm?</LocalizedText>
+              <LocalizedText style={styles.confirmDesc}>
                 Bạn có chắc chắn muốn tạo nhóm{' '}
-                <Text style={{ fontWeight: '800', color: '#1E1B4B' }}>
+                <LocalizedText style={{ fontWeight: '800', color: '#1E1B4B' }}>
                   "{groupName.trim()}"
-                </Text>{' '}
+                </LocalizedText>{' '}
                 và gán{' '}
-                <Text style={{ fontWeight: '800', color: '#7C3AED' }}>
+                <LocalizedText style={{ fontWeight: '800', color: '#7C3AED' }}>
                   {selectedDeviceIds.length} thiết bị
-                </Text>{' '}
+                </LocalizedText>{' '}
                 đã chọn vào nhóm này không?
-              </Text>
+              </LocalizedText>
 
               {/* Bảng thông số chi tiết */}
               <View style={styles.confirmTable}>
                 <View style={styles.confirmRow}>
-                  <Text style={styles.confirmLabel}>Tên nhóm mới:</Text>
-                  <Text style={styles.confirmValue}>{groupName.trim()}</Text>
+                  <LocalizedText style={styles.confirmLabel}>Tên nhóm mới:</LocalizedText>
+                  <LocalizedText style={styles.confirmValue}>{groupName.trim()}</LocalizedText>
                 </View>
                 <View style={styles.confirmDivider} />
                 <View style={styles.confirmRow}>
-                  <Text style={styles.confirmLabel}>Số lượng thiết bị:</Text>
-                  <Text style={styles.confirmValue}>
+                  <LocalizedText style={styles.confirmLabel}>Số lượng thiết bị:</LocalizedText>
+                  <LocalizedText style={styles.confirmValue}>
                     {selectedDeviceIds.length} thiết bị
-                  </Text>
+                  </LocalizedText>
                 </View>
                 <View style={styles.confirmDivider} />
                 <View style={styles.confirmRow}>
-                  <Text style={styles.confirmLabel}>Phân loại chi tiết:</Text>
-                  <Text style={styles.confirmValue}>
+                  <LocalizedText style={styles.confirmLabel}>Phân loại chi tiết:</LocalizedText>
+                  <LocalizedText style={styles.confirmValue}>
                     {selectedCamCount} Camera • {selectedWatchCount} Đồng hồ
-                  </Text>
+                  </LocalizedText>
                 </View>
                 <View style={styles.confirmDivider} />
                 <View style={styles.confirmRow}>
-                  <Text style={styles.confirmLabel}>Vị trí áp dụng:</Text>
-                  <Text style={styles.confirmValue}>
+                  <LocalizedText style={styles.confirmLabel}>Vị trí áp dụng:</LocalizedText>
+                  <LocalizedText style={styles.confirmValue}>
                     Cập nhật đồng bộ vào hệ thống
-                  </Text>
+                  </LocalizedText>
                 </View>
               </View>
 
@@ -700,9 +694,9 @@ export default function CreateGroupScreen({ navigation }: any) {
                   size={18}
                   color="#1E40AF"
                 />
-                <Text style={styles.confirmNoteText}>
+                <LocalizedText style={styles.confirmNoteText}>
                   Vị trí của {selectedDeviceIds.length} thiết bị này sẽ lập tức được cập nhật sang "{groupName.trim()}". Bạn có thể thay đổi lại cấu hình bất kỳ lúc nào.
-                </Text>
+                </LocalizedText>
               </View>
             </View>
           </ScrollView>
@@ -714,7 +708,7 @@ export default function CreateGroupScreen({ navigation }: any) {
               onPress={() => setCurrentStep('REVIEW')}
               activeOpacity={0.7}
             >
-              <Text style={styles.cancelBtnText}>Quay lại xem</Text>
+              <LocalizedText style={styles.cancelBtnText}>Quay lại xem</LocalizedText>
             </TouchableOpacity>
             <TouchableOpacity
               style={styles.confirmActionBtn}
@@ -727,7 +721,7 @@ export default function CreateGroupScreen({ navigation }: any) {
                 color="#FFF"
                 style={{ marginRight: 6 }}
               />
-              <Text style={styles.confirmActionBtnText}>Xác Nhận Tạo Nhóm</Text>
+              <LocalizedText style={styles.confirmActionBtnText}>Xác Nhận Tạo Nhóm</LocalizedText>
             </TouchableOpacity>
           </View>
         </View>
@@ -742,28 +736,28 @@ export default function CreateGroupScreen({ navigation }: any) {
             <View style={styles.successIconCircle}>
               <Ionicons name="checkmark" size={60} color="#FFF" />
             </View>
-            <Text style={styles.successTitle}>Tạo Nhóm Thành Công!</Text>
-            <Text style={styles.successDesc}>
+            <LocalizedText style={styles.successTitle}>Tạo Nhóm Thành Công!</LocalizedText>
+            <LocalizedText style={styles.successDesc}>
               Nhóm{' '}
-              <Text style={{ fontWeight: '800', color: '#1E1B4B' }}>
+              <LocalizedText style={{ fontWeight: '800', color: '#1E1B4B' }}>
                 "{createdGroupName}"
-              </Text>{' '}
+              </LocalizedText>{' '}
               đã được tạo với{' '}
-              <Text style={{ fontWeight: '800', color: '#7C3AED' }}>
+              <LocalizedText style={{ fontWeight: '800', color: '#7C3AED' }}>
                 {selectedDeviceIds.length} thiết bị
-              </Text>{' '}
+              </LocalizedText>{' '}
               được liên kết thành công.
-            </Text>
+            </LocalizedText>
 
             {/* Thẻ tóm tắt thành công */}
             <View style={styles.successCard}>
               <View style={styles.successCardRow}>
                 <Ionicons name="folder-open" size={20} color="#7C3AED" />
-                <Text style={styles.successCardGroupName}>{createdGroupName}</Text>
+                <LocalizedText style={styles.successCardGroupName}>{createdGroupName}</LocalizedText>
               </View>
-              <Text style={styles.successCardMeta}>
+              <LocalizedText style={styles.successCardMeta}>
                 Bao gồm: {selectedCamCount} Camera • {selectedWatchCount} Đồng hồ BLE
-              </Text>
+              </LocalizedText>
             </View>
           </View>
 
@@ -780,7 +774,7 @@ export default function CreateGroupScreen({ navigation }: any) {
                 color="#FFF"
                 style={{ marginRight: 6 }}
               />
-              <Text style={styles.primaryBtnText}>Xem danh sách nhóm</Text>
+              <LocalizedText style={styles.primaryBtnText}>Xem danh sách nhóm</LocalizedText>
             </TouchableOpacity>
 
             <TouchableOpacity
@@ -794,7 +788,7 @@ export default function CreateGroupScreen({ navigation }: any) {
                 color="#7C3AED"
                 style={{ marginRight: 6 }}
               />
-              <Text style={styles.anotherBtnText}>Tạo thêm nhóm khác</Text>
+              <LocalizedText style={styles.anotherBtnText}>Tạo thêm nhóm khác</LocalizedText>
             </TouchableOpacity>
           </View>
         </View>

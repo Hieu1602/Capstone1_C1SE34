@@ -29,6 +29,8 @@ export interface Incident {
   video_clip_url: string | null;
   thumbnail_url: string | null;
   is_acknowledged: boolean;
+  acknowledged_by?: string | null;
+  acknowledged_at?: string | null;
   created_at: string;
 }
 
@@ -114,6 +116,22 @@ interface VitalStoreState {
   isDarkMode: boolean;
   toggleDarkMode: () => void;
   setDarkMode: (isDark: boolean) => void;
+
+  acknowledgeIncident: (id: string, noteOrOperator?: string, operatorName?: string) => void;
+  isSirenActive: boolean;
+  setSirenActive: (active: boolean) => void;
+  fetchVitals: () => Promise<void>;
+  fetchNotifications: () => Promise<void>;
+  syncAllWithBackend: () => Promise<void>;
+  alarmSnooze: any;
+  setAlarmSnooze: (val: any) => void;
+  cancelAlarmSnooze: () => void;
+  todayReminders: any;
+  fetchSystemMode: () => Promise<void>;
+  fetchReminders: () => Promise<void>;
+  patientRecord: any;
+  fetchPatientRecord: (patientId?: any) => Promise<any>;
+  isLoadingPatient: boolean;
 }
 
 type VitalSet = (
@@ -124,7 +142,7 @@ type VitalSet = (
   replace?: boolean
 ) => void;
 
-const createVitalStore: StateCreator<VitalStoreState> = (set: VitalSet) => ({
+const createVitalStore: StateCreator<VitalStoreState> = (set: VitalSet, get: any) => ({
   currentVitals: {
     heart_rate: 74,
     spo2: 98,
@@ -417,6 +435,111 @@ const createVitalStore: StateCreator<VitalStoreState> = (set: VitalSet) => ({
     useThemeStore.getState().setDarkMode(isDark);
     set({ isDarkMode: isDark });
   },
+
+  acknowledgeIncident: (id: string, noteOrOperator?: string, operatorName?: string) => {
+    const operator = operatorName || noteOrOperator || 'Người chăm sóc';
+    set((state) => ({
+      incidents: state.incidents.map((inc) =>
+        inc.id === id
+          ? {
+              ...inc,
+              is_acknowledged: true,
+              acknowledged_by: operator,
+              acknowledged_at: new Date().toISOString(),
+            }
+          : inc
+      ),
+    }));
+  },
+  isSirenActive: false,
+  setSirenActive: (active: boolean) => set({ isSirenActive: active }),
+  fetchVitals: async () => {
+    try {
+      const activeDev = get ? get().activeDevice : null;
+      const deviceId = activeDev?.device_id || 'dev-001';
+      const { vitalsApi } = await import('../services/api');
+      const res = await vitalsApi.getLatest(deviceId);
+      if (res.data) {
+        set((state) => ({
+          currentVitals: {
+            ...state.currentVitals,
+            heart_rate: res.data.heart_rate ?? state.currentVitals.heart_rate,
+            spo2: res.data.spo2 ?? state.currentVitals.spo2,
+            skin_temp_max: res.data.skin_temp_max ?? state.currentVitals.skin_temp_max,
+            fall_detected: res.data.fall_detected ?? state.currentVitals.fall_detected,
+            person_count: res.data.person_count ?? state.currentVitals.person_count,
+            timestamp: res.data.timestamp ? new Date(res.data.timestamp).getTime() : Date.now(),
+          },
+        }));
+      }
+    } catch {
+      // Keep existing vitals
+    }
+  },
+  fetchNotifications: async () => {
+    try {
+      const { incidentsApi } = await import('../services/api');
+      const res = await incidentsApi.list();
+      if (res.data && Array.isArray(res.data) && res.data.length > 0) {
+        set({ incidents: res.data });
+      }
+    } catch {
+      // Keep existing incidents
+    }
+  },
+  syncAllWithBackend: async () => {
+    try {
+      await Promise.allSettled([
+        get().fetchVitals(),
+        get().fetchNotifications(),
+        get().fetchReminders(),
+        get().fetchSystemMode(),
+      ]);
+    } catch {
+      // Ignore sync error
+    }
+  },
+  alarmSnooze: { active: false, durationMinutes: 15, mode: 'VIBRATE', syncAll: true, until: null },
+  setAlarmSnooze: (val: any) => set({ alarmSnooze: val }),
+  cancelAlarmSnooze: () =>
+    set({
+      alarmSnooze: { active: false, durationMinutes: 15, mode: 'VIBRATE', syncAll: true, until: null },
+    }),
+  todayReminders: {
+    medications: [
+      { name: 'Uống thuốc tim mạch (Digoxin 0.25mg)', time: '08:00', taken: true },
+      { name: 'Uống canxi & Vitamin D3', time: '12:00', taken: true },
+      { name: 'Đo huyết áp & đường huyết', time: '15:00', taken: true },
+      { name: 'Uống thuốc huyết áp (Amlodipine 5mg)', time: '18:30', taken: false },
+    ],
+  },
+  fetchSystemMode: async () => {},
+  fetchReminders: async () => {},
+  patientRecord: {
+    name: 'Nguyễn Văn An',
+    birth_year: '1948',
+    age: 78,
+    gender: 'Nam',
+    blood_type: 'O+',
+    height_cm: 165,
+    weight_kg: 62,
+    conditions: [
+      { id: '1', name: 'Tăng huyết áp vô căn (Grade 2)', severity: 'warning', note: 'Uống thuốc đều đặn' },
+      { id: '2', name: 'Đái tháo đường Type 2', severity: 'warning', note: 'Kiểm soát đường huyết sau ăn' },
+    ],
+    drug_allergies: 'Penicillin, Aspirin',
+    food_allergies: 'Hải sản (Tôm, Cua)',
+    dietary_notes: 'Giảm muối dưới 5g/ngày, hạn chế chất béo bão hòa',
+    doctor_name: 'BS. Trần Văn Minh',
+    doctor_phone: '0905 111 222',
+    doctor_specialty: 'Tim mạch Can thiệp & Lão khoa',
+    hospital: 'Bệnh viện Đa khoa Đà Nẵng',
+    next_appointment: '2026-10-25 09:00',
+  },
+  fetchPatientRecord: async (patientId?: any) => {
+    return get().patientRecord;
+  },
+  isLoadingPatient: false,
 });
 
 export const useVitalStore = create<VitalStoreState>()(createVitalStore);
@@ -441,11 +564,15 @@ interface AuthStoreState {
   userId: string | null;
   userName: string | null;
   userEmail: string | null;
+  userPhone: string | null;
+  role: string;
+  viewRole: 'family' | 'doctor';
 
-  login: (access: string, refresh: string, name: string, userId: string, email?: string) => void;
+  login: (access: string, refresh: string, name: string, userId: string, emailOrPhone?: string, role?: string) => void;
   setTokens: (access: string, refresh: string) => void;
-  setUser: (id: string, email?: string, name?: string) => void;
-  updateUserName: (name: string) => void;
+  setUser: (id: string, email?: string, name?: string, phone?: string) => void;
+  updateUserName: (arg1: string, arg2?: string) => void;
+  toggleViewRole: () => void;
   logout: () => void;
 }
 
@@ -465,31 +592,47 @@ const createAuthStore: StateCreator<AuthStoreState, [], [['zustand/persist', Aut
   userId: null,
   userName: null,
   userEmail: null,
+  userPhone: null,
+  role: 'family',
+  viewRole: 'family',
 
-  login: (access: string, refresh: string, name: string, userId: string, email?: string) =>
+  login: (access: string, refresh: string, name: string, userId: string, emailOrPhone?: string, role?: string) => {
+    const isEmail = emailOrPhone?.includes('@');
     set({
       accessToken: access,
       refreshToken: refresh,
       userId,
       userName: name,
-      userEmail: email ?? null,
-    }),
+      userEmail: isEmail ? emailOrPhone : null,
+      userPhone: !isEmail ? (emailOrPhone || null) : null,
+      role: role || 'family',
+      viewRole: role === 'doctor' ? 'doctor' : 'family',
+    });
+  },
 
   setTokens: (access: string, refresh: string) =>
     set({ accessToken: access, refreshToken: refresh }),
 
-  setUser: (id: string, email?: string, name?: string) =>
+  setUser: (id: string, email?: string, name?: string, phone?: string) =>
     set((state) => ({
       userId: id,
       userEmail: email ?? state.userEmail ?? null,
       userName: name ?? state.userName ?? null,
+      userPhone: phone ?? state.userPhone ?? null,
     })),
 
-  updateUserName: (name: string) =>
-    set({ userName: name }),
+  updateUserName: (arg1: string, arg2?: string) => {
+    if (arg2 !== undefined) {
+      set({ userId: arg1, userName: arg2 });
+    } else {
+      set({ userName: arg1 });
+    }
+  },
 
-  updateUserName: (id: string, name: string) =>
-    set({ userId: id, userName: name }),
+  toggleViewRole: () =>
+    set((state) => ({
+      viewRole: state.viewRole === 'doctor' ? 'family' : 'doctor',
+    })),
 
   logout: () =>
     set({
@@ -498,6 +641,9 @@ const createAuthStore: StateCreator<AuthStoreState, [], [['zustand/persist', Aut
       userId: null,
       userName: null,
       userEmail: null,
+      userPhone: null,
+      role: 'family',
+      viewRole: 'family',
     }),
 });
 

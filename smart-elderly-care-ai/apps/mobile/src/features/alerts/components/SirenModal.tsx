@@ -2,16 +2,10 @@
 // Modal cảnh báo khẩn cấp – Hiển thị còi SOS khi nhận alert CRITICAL
 
 import React, { useEffect, useRef } from 'react';
-import {
-  Modal,
-  View,
-  Text,
-  StyleSheet,
-  TouchableOpacity,
-  Animated,
-  Vibration,
-} from 'react-native';
+import { Modal, View, StyleSheet, TouchableOpacity, Animated, Vibration } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
+import { LocalizedText } from '../../../i18n/LocalizedComponents';
+
 
 interface SirenModalProps {
   visible: boolean;
@@ -80,18 +74,18 @@ export default function SirenModal({
             <Ionicons name="warning" size={56} color="#EF4444" />
           </Animated.View>
 
-          <Text style={styles.title}>🚨 KHẨN CẤP!</Text>
-          <Text style={styles.alertType}>{alertType}</Text>
-          <Text style={styles.message}>{message}</Text>
+          <LocalizedText style={styles.title}>🚨 KHẨN CẤP!</LocalizedText>
+          <LocalizedText style={styles.alertType}>{alertType}</LocalizedText>
+          <LocalizedText style={styles.message}>{message}</LocalizedText>
 
           {/* Actions */}
           <TouchableOpacity style={styles.detailBtn} onPress={onViewDetails}>
             <Ionicons name="eye" size={18} color="#FFF" />
-            <Text style={styles.detailBtnText}>Xem chi tiết</Text>
+            <LocalizedText style={styles.detailBtnText}>Xem chi tiết</LocalizedText>
           </TouchableOpacity>
 
           <TouchableOpacity style={styles.dismissBtn} onPress={onDismiss}>
-            <Text style={styles.dismissBtnText}>Đã xử lý</Text>
+            <LocalizedText style={styles.dismissBtnText}>Đã xử lý</LocalizedText>
           </TouchableOpacity>
         </Animated.View>
       </View>

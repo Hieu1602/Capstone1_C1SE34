@@ -3,18 +3,7 @@
 // Được tùy biến chuyên biệt cho Hệ thống Giám sát & Chăm sóc Người Cao Tuổi
 
 import React, { useState } from 'react';
-import {
-  View,
-  Text,
-  StyleSheet,
-  TouchableOpacity,
-  ScrollView,
-  TextInput,
-  Modal,
-  Alert,
-  Platform,
-  Animated,
-} from 'react-native';
+import { View, StyleSheet, TouchableOpacity, ScrollView, Modal, Platform, Animated } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
 
@@ -22,6 +11,8 @@ import { Ionicons } from '@expo/vector-icons';
 import AIBotIcon from '../../../components/AIBotIcon';
 import { useVitalStore } from '../../../store/useVitalStore';
 import { useTheme } from '../../../store/useThemeStore';
+import { LocalizedAlert, LocalizedText, LocalizedTextInput } from '../../../i18n/LocalizedComponents';
+
 
 // Định nghĩa cấu trúc dữ liệu cho tin nhắn chat
 interface ChatMessage {
@@ -262,9 +253,9 @@ export default function AIAssistantScreen({ navigation }: any) {
           onPress={() => setIsModelPickerOpen(true)}
           activeOpacity={0.8}
         >
-          <Text style={[styles.modelText, isDarkMode && { color: colors.textPrimary }]} numberOfLines={1}>
+          <LocalizedText style={[styles.modelText, isDarkMode && { color: colors.textPrimary }]} numberOfLines={1}>
             {selectedModel}
-          </Text>
+          </LocalizedText>
           <Ionicons name="chevron-down" size={14} color={isDarkMode ? colors.textSecondary : '#64748B'} style={{ marginLeft: 4 }} />
         </TouchableOpacity>
 
@@ -285,7 +276,7 @@ export default function AIAssistantScreen({ navigation }: any) {
         <View style={styles.errorBox}>
           <Ionicons name="alert-circle" size={20} color="#DC2626" />
           <View style={{ flex: 1, marginLeft: 8 }}>
-            <Text style={styles.errorTitle}>
+            <LocalizedText style={styles.errorTitle}>
               {!isConnected || aiError === 'HUB_OFFLINE'
                 ? 'Cảnh báo: Hub Edge AI mất kết nối (Offline)'
                 : aiError === 'BLE_DISCONNECTED'
@@ -293,8 +284,8 @@ export default function AIAssistantScreen({ navigation }: any) {
                 : aiError === 'CAMERA_OCCLUDED'
                 ? 'Cảnh báo: Camera bị che khuất / Thiếu sáng'
                 : 'Cảnh báo: Mất kết nối máy chủ AI Cloud (Timeout)'}
-            </Text>
-            <Text style={styles.errorDesc}>
+            </LocalizedText>
+            <LocalizedText style={styles.errorDesc}>
               {!isConnected || aiError === 'HUB_OFFLINE'
                 ? 'Hub Orange Pi 5 đang ngoại tuyến. Dữ liệu camera tạm ngưng cập nhật.'
                 : aiError === 'BLE_DISCONNECTED'
@@ -302,10 +293,10 @@ export default function AIAssistantScreen({ navigation }: any) {
                 : aiError === 'CAMERA_OCCLUDED'
                 ? 'Độ tin cậy YOLO-Pose < 40%. Hệ thống chuyển sang cảm biến nhiệt AMG8833.'
                 : 'Vui lòng kiểm tra kết nối Wi-Fi / 4G hoặc chạm Thử lại.'}
-            </Text>
+            </LocalizedText>
           </View>
           <TouchableOpacity style={styles.retryBtn} onPress={() => setAiError('NONE')}>
-            <Text style={styles.retryText}>Đóng</Text>
+            <LocalizedText style={styles.retryText}>Đóng</LocalizedText>
           </TouchableOpacity>
         </View>
       )}
@@ -326,10 +317,10 @@ export default function AIAssistantScreen({ navigation }: any) {
             </View>
 
             {/* Dòng chữ chào đón chuẩn hình mẫu */}
-            <Text style={[styles.heroTitle, isDarkMode && { color: colors.textPrimary }]}>Mình sẵn sàng, chỉ chờ bạn thôi</Text>
-            <Text style={[styles.heroSub, isDarkMode && { color: colors.textSecondary }]}>
+            <LocalizedText style={[styles.heroTitle, isDarkMode && { color: colors.textPrimary }]}>Mình sẵn sàng, chỉ chờ bạn thôi</LocalizedText>
+            <LocalizedText style={[styles.heroSub, isDarkMode && { color: colors.textSecondary }]}>
               Hỏi bất kỳ điều gì về sức khỏe, nhịp tim, giấc ngủ hoặc phát hiện té ngã của người thân.
-            </Text>
+            </LocalizedText>
 
             {/* Các thẻ gợi ý câu hỏi nhanh (Prompt Suggestions) */}
             <View style={styles.promptList}>
@@ -339,7 +330,7 @@ export default function AIAssistantScreen({ navigation }: any) {
                 activeOpacity={0.7}
               >
                 <Ionicons name="heart-outline" size={16} color={isDarkMode ? '#38BDF8' : '#0284C7'} style={{ marginRight: 8 }} />
-                <Text style={[styles.promptText, isDarkMode && { color: colors.textPrimary }]}>Kiểm tra nhịp tim &amp; SpO₂ hiện tại</Text>
+                <LocalizedText style={[styles.promptText, isDarkMode && { color: colors.textPrimary }]}>Kiểm tra nhịp tim &amp; SpO₂ hiện tại</LocalizedText>
               </TouchableOpacity>
 
               <TouchableOpacity
@@ -348,7 +339,7 @@ export default function AIAssistantScreen({ navigation }: any) {
                 activeOpacity={0.7}
               >
                 <Ionicons name="body-outline" size={16} color={isDarkMode ? '#38BDF8' : '#0284C7'} style={{ marginRight: 8 }} />
-                <Text style={[styles.promptText, isDarkMode && { color: colors.textPrimary }]}>Tình trạng té ngã hôm nay thế nào?</Text>
+                <LocalizedText style={[styles.promptText, isDarkMode && { color: colors.textPrimary }]}>Tình trạng té ngã hôm nay thế nào?</LocalizedText>
               </TouchableOpacity>
 
               <TouchableOpacity
@@ -357,7 +348,7 @@ export default function AIAssistantScreen({ navigation }: any) {
                 activeOpacity={0.7}
               >
                 <Ionicons name="medkit-outline" size={16} color={isDarkMode ? '#38BDF8' : '#0284C7'} style={{ marginRight: 8 }} />
-                <Text style={[styles.promptText, isDarkMode && { color: colors.textPrimary }]}>Hướng dẫn sơ cứu khi người già bị ngã</Text>
+                <LocalizedText style={[styles.promptText, isDarkMode && { color: colors.textPrimary }]}>Hướng dẫn sơ cứu khi người già bị ngã</LocalizedText>
               </TouchableOpacity>
 
               <TouchableOpacity
@@ -366,7 +357,7 @@ export default function AIAssistantScreen({ navigation }: any) {
                 activeOpacity={0.7}
               >
                 <Ionicons name="volume-high-outline" size={16} color={isDarkMode ? '#38BDF8' : '#0284C7'} style={{ marginRight: 8 }} />
-                <Text style={[styles.promptText, isDarkMode && { color: colors.textPrimary }]}>Phát loa nhắc cụ uống thuốc (FR12)</Text>
+                <LocalizedText style={[styles.promptText, isDarkMode && { color: colors.textPrimary }]}>Phát loa nhắc cụ uống thuốc (FR12)</LocalizedText>
               </TouchableOpacity>
             </View>
           </View>
@@ -397,7 +388,7 @@ export default function AIAssistantScreen({ navigation }: any) {
                     m.isError && styles.errorBubble,
                   ]}
                 >
-                  <Text
+                  <LocalizedText
                     style={[
                       styles.msgText,
                       m.sender === 'user'
@@ -406,8 +397,8 @@ export default function AIAssistantScreen({ navigation }: any) {
                     ]}
                   >
                     {m.text}
-                  </Text>
-                  <Text
+                  </LocalizedText>
+                  <LocalizedText
                     style={[
                       styles.timeText,
                       m.sender === 'user'
@@ -416,7 +407,7 @@ export default function AIAssistantScreen({ navigation }: any) {
                     ]}
                   >
                     {m.timestamp}
-                  </Text>
+                  </LocalizedText>
                 </View>
               </View>
             ))}
@@ -430,7 +421,7 @@ export default function AIAssistantScreen({ navigation }: any) {
       <View style={styles.bottomBarWrap}>
         <View style={[styles.pillInput, isDarkMode && { backgroundColor: colors.card, borderColor: colors.border }]}>
           {/* Ô nhập nội dung câu hỏi (đã bỏ nút dấu cộng theo yêu cầu của bạn) */}
-          <TextInput
+          <LocalizedTextInput
             style={[styles.textInput, isDarkMode && { color: colors.textPrimary }]}
             placeholder="Hỏi SmartCare AI..."
             placeholderTextColor={isDarkMode ? '#64748B' : '#94A3B8'}
@@ -449,7 +440,7 @@ export default function AIAssistantScreen({ navigation }: any) {
             <TouchableOpacity
               style={[styles.micBtn, isDarkMode && { borderColor: colors.border, backgroundColor: colors.card }]}
               onPress={() =>
-                Alert.alert(
+                LocalizedAlert.alert(
                   'Ghi âm giọng nói 🎙️',
                   'Đang lắng nghe câu hỏi của bạn... Hãy nói vào micro để AI tự động chuyển thành văn bản và trả lời.'
                 )
@@ -479,7 +470,7 @@ export default function AIAssistantScreen({ navigation }: any) {
             <View style={[styles.sidebarHeader, isDarkMode && { borderBottomColor: colors.border }]}>
               <View style={{ flexDirection: 'row', alignItems: 'center' }}>
                 <AIBotIcon size={28} />
-                <Text style={[styles.sidebarBrandTitle, isDarkMode && { color: colors.textPrimary }]}>SmartCare AI</Text>
+                <LocalizedText style={[styles.sidebarBrandTitle, isDarkMode && { color: colors.textPrimary }]}>SmartCare AI</LocalizedText>
               </View>
               <TouchableOpacity onPress={closeSidebar} style={styles.iconBtn}>
                 <Ionicons name="close" size={24} color={isDarkMode ? colors.textPrimary : '#0F172A'} />
@@ -494,14 +485,14 @@ export default function AIAssistantScreen({ navigation }: any) {
                 activeOpacity={0.8}
               >
                 <Ionicons name="create-outline" size={20} color={isDarkMode ? colors.textPrimary : '#0F172A'} style={{ marginRight: 12 }} />
-                <Text style={[styles.newChatPillText, isDarkMode && { color: colors.textPrimary }]}>Cuộc trò chuyện mới</Text>
+                <LocalizedText style={[styles.newChatPillText, isDarkMode && { color: colors.textPrimary }]}>Cuộc trò chuyện mới</LocalizedText>
               </TouchableOpacity>
 
               {/* Nút / Khung: Tìm kiếm trong các cuộc trò chuyện (Hỗ trợ gõ từ khóa lọc thật) */}
               {isSearching ? (
                 <View style={[styles.searchBarBox, isDarkMode && { backgroundColor: colors.card, borderColor: colors.border }]}>
                   <Ionicons name="search-outline" size={18} color="#64748B" style={{ marginRight: 8 }} />
-                  <TextInput
+                  <LocalizedTextInput
                     style={[styles.searchBarInput, isDarkMode && { color: colors.textPrimary }]}
                     placeholder="Tìm theo từ khóa (huyết áp, SpO2, ngã...)"
                     placeholderTextColor={isDarkMode ? '#64748B' : '#94A3B8'}
@@ -526,19 +517,19 @@ export default function AIAssistantScreen({ navigation }: any) {
                   activeOpacity={0.7}
                 >
                   <Ionicons name="search-outline" size={20} color="#64748B" style={{ marginRight: 12 }} />
-                  <Text style={[styles.searchRowText, isDarkMode && { color: colors.textSecondary }]}>Tìm kiếm trong các cuộc trò chuyện</Text>
+                  <LocalizedText style={[styles.searchRowText, isDarkMode && { color: colors.textSecondary }]}>Tìm kiếm trong các cuộc trò chuyện</LocalizedText>
                 </TouchableOpacity>
               )}
 
               {/* Section: Gần đây (Recent Conversations) */}
-              <Text style={[styles.sidebarGroupTitle, isDarkMode && { color: colors.textSecondary }]}>
+              <LocalizedText style={[styles.sidebarGroupTitle, isDarkMode && { color: colors.textSecondary }]}>
                 {isSearching && searchQuery.trim() ? `Kết quả tìm kiếm (${filteredChats.length})` : 'Gần đây'}
-              </Text>
+              </LocalizedText>
 
               {filteredChats.length === 0 ? (
                 <View style={styles.emptySearchBox}>
                   <Ionicons name="alert-circle-outline" size={18} color="#94A3B8" />
-                  <Text style={[styles.emptySearchText, isDarkMode && { color: colors.textSecondary }]}>Không tìm thấy cuộc trò chuyện phù hợp</Text>
+                  <LocalizedText style={[styles.emptySearchText, isDarkMode && { color: colors.textSecondary }]}>Không tìm thấy cuộc trò chuyện phù hợp</LocalizedText>
                 </View>
               ) : (
                 filteredChats.map((chat) => (
@@ -549,9 +540,9 @@ export default function AIAssistantScreen({ navigation }: any) {
                     activeOpacity={0.7}
                   >
                     <Ionicons name="chatbubble-ellipses-outline" size={16} color="#0284C7" style={{ marginRight: 10 }} />
-                    <Text style={[styles.sidebarItemText, isDarkMode && { color: colors.textPrimary }]} numberOfLines={1}>
+                    <LocalizedText style={[styles.sidebarItemText, isDarkMode && { color: colors.textPrimary }]} numberOfLines={1}>
                       {chat.title}
-                    </Text>
+                    </LocalizedText>
                   </TouchableOpacity>
                 ))
               )}
@@ -570,7 +561,7 @@ export default function AIAssistantScreen({ navigation }: any) {
                   <Ionicons name="person" size={20} color="#0284C7" />
                 </View>
                 <View style={{ flex: 1, marginLeft: 10 }}>
-                  <Text style={[styles.userNameText, isDarkMode && { color: colors.textPrimary }]}>Nghia Nguyen</Text>
+                  <LocalizedText style={[styles.userNameText, isDarkMode && { color: colors.textPrimary }]}>Nghia Nguyen</LocalizedText>
                 </View>
                 <Ionicons name="chevron-forward" size={18} color="#94A3B8" />
               </TouchableOpacity>
@@ -588,7 +579,7 @@ export default function AIAssistantScreen({ navigation }: any) {
       <Modal visible={isModelPickerOpen} transparent animationType="fade">
         <View style={styles.pickerOverlay}>
           <View style={[styles.pickerCard, isDarkMode && { backgroundColor: colors.card, borderColor: colors.border }]}>
-            <Text style={[styles.pickerTitle, isDarkMode && { color: colors.textPrimary }]}>Chọn Mô Hình AI</Text>
+            <LocalizedText style={[styles.pickerTitle, isDarkMode && { color: colors.textPrimary }]}>Chọn Mô Hình AI</LocalizedText>
 
             <TouchableOpacity
               style={[
@@ -601,10 +592,10 @@ export default function AIAssistantScreen({ navigation }: any) {
                 setIsModelPickerOpen(false);
               }}
             >
-              <Text style={[styles.pickerOptionTitle, isDarkMode && { color: colors.textPrimary }]}>SmartCare Flash 1 (Mới nhất)</Text>
-              <Text style={[styles.pickerOptionSub, isDarkMode && { color: colors.textSecondary }]}>
+              <LocalizedText style={[styles.pickerOptionTitle, isDarkMode && { color: colors.textPrimary }]}>SmartCare Flash 1 (Mới nhất)</LocalizedText>
+              <LocalizedText style={[styles.pickerOptionSub, isDarkMode && { color: colors.textSecondary }]}>
                 Mô hình AI đa phương thức mới nhất kết hợp YOLO-Pose, YAMNet và AMG8833.
-              </Text>
+              </LocalizedText>
             </TouchableOpacity>
 
             <TouchableOpacity
@@ -618,17 +609,17 @@ export default function AIAssistantScreen({ navigation }: any) {
                 setIsModelPickerOpen(false);
               }}
             >
-              <Text style={[styles.pickerOptionTitle, isDarkMode && { color: colors.textPrimary }]}>SmartCare Pro 1</Text>
-              <Text style={[styles.pickerOptionSub, isDarkMode && { color: colors.textSecondary }]}>
+              <LocalizedText style={[styles.pickerOptionTitle, isDarkMode && { color: colors.textPrimary }]}>SmartCare Pro 1</LocalizedText>
+              <LocalizedText style={[styles.pickerOptionSub, isDarkMode && { color: colors.textSecondary }]}>
                 Mô hình phân tích y khoa chuyên sâu và chẩn đoán nguy cơ té ngã dài hạn.
-              </Text>
+              </LocalizedText>
             </TouchableOpacity>
 
             <TouchableOpacity
               style={[styles.pickerCloseBtn, isDarkMode && { backgroundColor: colors.background }]}
               onPress={() => setIsModelPickerOpen(false)}
             >
-              <Text style={[styles.pickerCloseBtnText, isDarkMode && { color: colors.textPrimary }]}>Đóng</Text>
+              <LocalizedText style={[styles.pickerCloseBtnText, isDarkMode && { color: colors.textPrimary }]}>Đóng</LocalizedText>
             </TouchableOpacity>
           </View>
         </View>

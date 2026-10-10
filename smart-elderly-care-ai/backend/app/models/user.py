@@ -11,7 +11,7 @@ from datetime import datetime
 if TYPE_CHECKING:
     from app.models.device import Device
 
-from sqlalchemy import Boolean, DateTime, Enum, String
+from sqlalchemy import Boolean, DateTime, Float, Integer, String
 from sqlalchemy.dialects.postgresql import UUID
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 from sqlalchemy.sql import func
@@ -37,6 +37,24 @@ class User(Base):
     role: Mapped[str] = mapped_column(
         String(20), nullable=False, default="caregiver"
     )
+    preferred_language: Mapped[str] = mapped_column(
+        String(5), nullable=False, default="vi", server_default="vi"
+    )
+    font_size_mode: Mapped[str] = mapped_column(
+        String(20), nullable=False, default="system", server_default="system"
+    )
+    custom_font_scale: Mapped[int] = mapped_column(
+        Integer, nullable=False, default=2, server_default="2"
+    )
+    vibration_enabled: Mapped[bool] = mapped_column(
+        Boolean, nullable=False, default=True, server_default="true"
+    )
+    location_enabled: Mapped[bool] = mapped_column(
+        Boolean, nullable=False, default=True, server_default="true"
+    )
+    location_latitude: Mapped[float | None] = mapped_column(Float, nullable=True)
+    location_longitude: Mapped[float | None] = mapped_column(Float, nullable=True)
+    location_address: Mapped[str | None] = mapped_column(String(500), nullable=True)
     is_active: Mapped[bool] = mapped_column(Boolean, default=True)
     fcm_token: Mapped[str | None] = mapped_column(String(500), nullable=True)
     created_at: Mapped[datetime] = mapped_column(

@@ -2,13 +2,7 @@
 // Màn hình chính – Theo dõi chỉ số sinh hiệu thời gian thực
 
 import React, { useEffect, useCallback } from 'react';
-import {
-  View,
-  Text,
-  ScrollView,
-  StyleSheet,
-  RefreshControl,
-} from 'react-native';
+import { View, ScrollView, StyleSheet, RefreshControl } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 
 import VitalCard from '../components/VitalCard';
@@ -16,6 +10,8 @@ import HeartRateChart from '../components/HeartRateChart';
 import { vitalsWS } from '../../../services/websocket';
 import type { VitalPayload } from '../../../services/websocket';
 import { useVitalStore } from '../../../store/useVitalStore';
+import { LocalizedText } from '../../../i18n/LocalizedComponents';
+
 
 export default function RealtimeDashboardScreen() {
   const { currentVitals, setVitals, activeDevice, isConnected, setConnected } =
@@ -63,9 +59,9 @@ export default function RealtimeDashboardScreen() {
     <SafeAreaView style={styles.container}>
       {/* Header */}
       <View style={styles.header}>
-        <Text style={styles.headerTitle}>Theo dõi sức khỏe</Text>
+        <LocalizedText style={styles.headerTitle}>Theo dõi sức khỏe</LocalizedText>
         <View style={[styles.statusDot, { backgroundColor: isConnected ? '#22C55E' : '#6B7280' }]} />
-        <Text style={styles.statusText}>{isConnected ? 'Trực tiếp' : 'Ngoại tuyến'}</Text>
+        <LocalizedText style={styles.statusText}>{isConnected ? 'Trực tiếp' : 'Ngoại tuyến'}</LocalizedText>
       </View>
 
       <ScrollView
@@ -75,7 +71,7 @@ export default function RealtimeDashboardScreen() {
         {/* Fall Alert Banner */}
         {currentVitals.fall_detected && (
           <View style={styles.alertBanner}>
-            <Text style={styles.alertBannerText}>🚨 PHÁT HIỆN TÉ NGÃ!</Text>
+            <LocalizedText style={styles.alertBannerText}>🚨 PHÁT HIỆN TÉ NGÃ!</LocalizedText>
           </View>
         )}
 
@@ -117,7 +113,7 @@ export default function RealtimeDashboardScreen() {
 
         {/* Heart Rate Chart */}
         <View style={styles.chartSection}>
-          <Text style={styles.sectionTitle}>Biểu đồ nhịp tim (24h)</Text>
+          <LocalizedText style={styles.sectionTitle}>Biểu đồ nhịp tim (24h)</LocalizedText>
           <HeartRateChart />
         </View>
       </ScrollView>

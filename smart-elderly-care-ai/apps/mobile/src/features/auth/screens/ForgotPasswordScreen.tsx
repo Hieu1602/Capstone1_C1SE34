@@ -1,17 +1,9 @@
 import React, { useState } from 'react';
-import {
-  Alert,
-  KeyboardAvoidingView,
-  Platform,
-  SafeAreaView,
-  ScrollView,
-  StyleSheet,
-  Text,
-  TextInput,
-  TouchableOpacity,
-  View,
-} from 'react-native';
+import { ActivityIndicator, KeyboardAvoidingView, Platform, SafeAreaView, ScrollView, StyleSheet, TouchableOpacity, View } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
+import { authApi } from '../../../services/api';
+import { LocalizedAlert, LocalizedText, LocalizedTextInput } from '../../../i18n/LocalizedComponents';
+
 
 type Step = 'request' | 'verify' | 'newPassword';
 
@@ -23,30 +15,65 @@ export default function ForgotPasswordScreen({ navigation }: any) {
   const [confirmPassword, setConfirmPassword] = useState('');
   const [showPassword, setShowPassword] = useState(false);
   const [showConfirmPassword, setShowConfirmPassword] = useState(false);
+  const [loading, setLoading] = useState(false);
 
-  const sendCode = () => {
+  const sendCode = async () => {
     const normalizedPhone = phone.replace(/\s+/g, '');
     if (!/^\+?[0-9]{9,15}$/.test(normalizedPhone)) {
-      Alert.alert('Số điện thoại không hợp lệ', 'Vui lòng nhập lại số điện thoại.');
+      LocalizedAlert.alert('Số điện thoại không hợp lệ', 'Vui lòng nhập lại số điện thoại.');
       return;
     }
-    setStep('verify');
+
+    setLoading(true);
+    try {
+      await authApi.requestPasswordResetOtp(normalizedPhone);
+      setPhone(normalizedPhone);
+      setOtp('');
+      setStep('verify');
+    } catch (error: any) {
+      const detail = error?.response?.data?.detail;
+      LocalizedAlert.alert(
+        'Không gửi được mã xác minh',
+        typeof detail === 'string' ? detail : 'Vui lòng kiểm tra kết nối và thử lại.',
+      );
+    } finally {
+      setLoading(false);
+    }
   };
 
   const verifyCode = () => {
     if (otp.length !== 6) {
-      Alert.alert('Mã xác minh không hợp lệ', 'Vui lòng nhập đủ 6 chữ số.');
+      LocalizedAlert.alert('Mã xác minh không hợp lệ', 'Vui lòng nhập đủ 6 chữ số.');
       return;
     }
     setStep('newPassword');
   };
 
-  const resetPassword = () => {
+  const resetPassword = async () => {
     if (password.length < 8 || password.length > 16 || password !== confirmPassword) {
-      Alert.alert('Mật khẩu chưa hợp lệ', 'Mật khẩu cần dài 8-16 ký tự và hai ô phải trùng nhau.');
+      LocalizedAlert.alert('Mật khẩu chưa hợp lệ', 'Mật khẩu cần dài 8-16 ký tự và hai ô phải trùng nhau.');
       return;
     }
-    Alert.alert('Thành công', 'Mật khẩu đã được cập nhật.', [{ text: 'Đăng nhập', onPress: () => navigation.navigate('Login') }]);
+
+    setLoading(true);
+    try {
+      await authApi.resetPassword({
+        phone: phone.replace(/\s+/g, ''),
+        otp_code: otp,
+        new_password: password,
+      });
+      LocalizedAlert.alert('Thành công', 'Mật khẩu mới đã được lưu.', [
+        { text: 'Đăng nhập', onPress: () => navigation.navigate('Login') },
+      ]);
+    } catch (error: any) {
+      const detail = error?.response?.data?.detail;
+      LocalizedAlert.alert(
+        'Không thể đặt lại mật khẩu',
+        typeof detail === 'string' ? detail : 'Mã xác minh không đúng hoặc đã hết hạn. Vui lòng thử lại.',
+      );
+    } finally {
+      setLoading(false);
+    }
   };
 
   const primaryAction = step === 'request' ? sendCode : step === 'verify' ? verifyCode : resetPassword;
@@ -55,7 +82,7 @@ export default function ForgotPasswordScreen({ navigation }: any) {
     ? 'Nhập số điện thoại để nhận mã xác minh, sau đó đặt lại mật khẩu.'
     : step === 'verify'
       ? `Nhập mã xác minh được gửi tới ${phone}.`
-      : 'Xác minh thành công. Vui lòng đặt mật khẩu mới.';
+      : 'Nhập mật khẩu mới để hoàn tất việc khôi phục tài khoản.';
 
   return (
     <SafeAreaView style={styles.safeArea}>
@@ -66,21 +93,21 @@ export default function ForgotPasswordScreen({ navigation }: any) {
               <Ionicons name="arrow-back" size={28} color="#2F2F2F" />
             </TouchableOpacity>
             <View style={styles.heading}>
-              <Text style={styles.title}>{title}</Text>
-              <Text style={styles.subtitle}>{description}</Text>
+              <LocalizedText style={styles.title}>{title}</LocalizedText>
+              <LocalizedText style={styles.subtitle}>{description}</LocalizedText>
             </View>
 
             {step === 'request' && (
               <View style={styles.inputContainer}>
                 <Ionicons name="call-outline" size={24} color="#333333" style={styles.inputIcon} />
-                <TextInput style={styles.input} placeholder="Nhập số điện thoại của bạn" placeholderTextColor="#B8B8B8" value={phone} onChangeText={setPhone} keyboardType="phone-pad" />
+                <LocalizedTextInput style={styles.input} placeholder="Nhập số điện thoại của bạn" placeholderTextColor="#B8B8B8" value={phone} onChangeText={setPhone} keyboardType="phone-pad" />
               </View>
             )}
 
             {step === 'verify' && (
               <View style={styles.otpRow}>
                 {[0, 1, 2, 3, 4, 5].map((index) => (
-                  <TextInput
+                  <LocalizedTextInput
                     key={index}
                     style={[styles.otpInput, otp.length === index && styles.otpInputActive]}
                     value={otp[index] || ''}
@@ -96,16 +123,16 @@ export default function ForgotPasswordScreen({ navigation }: any) {
             {step === 'newPassword' && (
               <View style={styles.passwordGroup}>
                 <View style={styles.inputContainer}>
-                  <TextInput style={styles.input} placeholder="Mật khẩu mới" placeholderTextColor="#B8B8B8" value={password} onChangeText={setPassword} secureTextEntry={!showPassword} />
+                  <LocalizedTextInput style={styles.input} placeholder="Mật khẩu mới" placeholderTextColor="#B8B8B8" value={password} onChangeText={setPassword} secureTextEntry={!showPassword} />
                   <TouchableOpacity onPress={() => setShowPassword(!showPassword)}><Ionicons name={showPassword ? 'eye-outline' : 'eye-off-outline'} size={25} color="#333333" /></TouchableOpacity>
                 </View>
                 <View style={styles.requirements}>
-                  <Text style={styles.requirementTitle}>Các yêu cầu về mật khẩu:</Text>
-                  <Text style={styles.requirement}>◯  Dài 8-16 ký tự</Text>
-                  <Text style={styles.requirement}>◯  Bao gồm chữ hoa, chữ thường, số và ký hiệu đặc biệt.</Text>
+                  <LocalizedText style={styles.requirementTitle}>Các yêu cầu về mật khẩu:</LocalizedText>
+                  <LocalizedText style={styles.requirement}>◯  Dài 8-16 ký tự</LocalizedText>
+                  <LocalizedText style={styles.requirement}>◯  Bao gồm chữ hoa, chữ thường, số và ký hiệu đặc biệt.</LocalizedText>
                 </View>
                 <View style={styles.inputContainer}>
-                  <TextInput style={styles.input} placeholder="Xác nhận mật khẩu" placeholderTextColor="#B8B8B8" value={confirmPassword} onChangeText={setConfirmPassword} secureTextEntry={!showConfirmPassword} />
+                  <LocalizedTextInput style={styles.input} placeholder="Xác nhận mật khẩu" placeholderTextColor="#B8B8B8" value={confirmPassword} onChangeText={setConfirmPassword} secureTextEntry={!showConfirmPassword} />
                   <TouchableOpacity onPress={() => setShowConfirmPassword(!showConfirmPassword)}><Ionicons name={showConfirmPassword ? 'eye-outline' : 'eye-off-outline'} size={25} color="#333333" /></TouchableOpacity>
                 </View>
               </View>
@@ -113,11 +140,24 @@ export default function ForgotPasswordScreen({ navigation }: any) {
           </View>
 
           <View>
-            {step === 'verify' && <TouchableOpacity style={styles.resend} onPress={() => Alert.alert('Đã gửi lại', `Mã mới đã được gửi tới ${phone}.`)}><Text style={styles.link}>Gửi lại mã</Text></TouchableOpacity>}
-            <TouchableOpacity style={styles.primaryButton} onPress={primaryAction} activeOpacity={0.8}>
-              <Text style={styles.primaryText}>{step === 'request' ? 'Gửi' : step === 'verify' ? 'Tiếp tục' : 'Lưu'}</Text>
+            {step === 'verify' && (
+              <TouchableOpacity style={styles.resend} onPress={() => void sendCode()} disabled={loading}>
+                <LocalizedText style={styles.link}>Gửi lại mã</LocalizedText>
+              </TouchableOpacity>
+            )}
+            <TouchableOpacity
+              style={[styles.primaryButton, loading && styles.primaryButtonDisabled]}
+              onPress={primaryAction}
+              activeOpacity={0.8}
+              disabled={loading}
+            >
+              {loading ? (
+                <ActivityIndicator color="#FFFFFF" />
+              ) : (
+                <LocalizedText style={styles.primaryText}>{step === 'request' ? 'Gửi mã' : step === 'verify' ? 'Tiếp tục' : 'Lưu mật khẩu'}</LocalizedText>
+              )}
             </TouchableOpacity>
-            <TouchableOpacity style={styles.loginLink} onPress={() => navigation.navigate('Login')}><Text style={styles.link}>Quay lại đăng nhập</Text></TouchableOpacity>
+            <TouchableOpacity style={styles.loginLink} onPress={() => navigation.navigate('Login')}><LocalizedText style={styles.link}>Quay lại đăng nhập</LocalizedText></TouchableOpacity>
           </View>
         </ScrollView>
       </KeyboardAvoidingView>
@@ -145,6 +185,7 @@ const styles = StyleSheet.create({
   requirement: { color: '#666666', fontSize: 15, lineHeight: 22 },
   resend: { alignItems: 'flex-start', marginBottom: 14 },
   primaryButton: { minHeight: 54, borderRadius: 14, backgroundColor: '#638EF1', alignItems: 'center', justifyContent: 'center' },
+  primaryButtonDisabled: { opacity: 0.7 },
   primaryText: { color: '#FFFFFF', fontSize: 18, fontWeight: '500' },
   loginLink: { alignItems: 'flex-start', marginTop: 18 },
   link: { color: '#638EF1', fontSize: 16, fontWeight: '500' },

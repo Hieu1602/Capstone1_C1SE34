@@ -2,24 +2,15 @@
 // Màn hình Trang chủ Smart Home / Elderly Care AI
 // Tích hợp One-Touch SOS 115, Camera WebRTC & Playback 24/48h, Sinh hiệu & Âm thanh YAMNet, Sự cố gần đây
 
-import React, { useState } from 'react';
-import {
-  View,
-  Text,
-  StyleSheet,
-  TouchableOpacity,
-  ScrollView,
-  Image,
-  Alert,
-  Linking,
-  Platform,
-  Clipboard,
-} from 'react-native';
+import React, { useState, useEffect } from 'react';
+import { View, StyleSheet, TouchableOpacity, ScrollView, Image, Linking, Platform, Clipboard, Modal, Switch } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { Ionicons, MaterialCommunityIcons } from '@expo/vector-icons';
 import { Colors, Shadows } from '../../../theme/colors';
 import { useVitalStore } from '../../../store/useVitalStore';
 import { useTheme } from '../../../store/useThemeStore';
+import { LocalizedAlert, LocalizedText } from '../../../i18n/LocalizedComponents';
+
 
 // Hàm sao chép clipboard an toàn hỗ trợ cả native và web
 const copyAddressToClipboard = (text: string) => {
@@ -49,9 +40,122 @@ export default function HomeScreen({ navigation }: any) {
     currentVitals,
     incidents,
     activeDevice,
+    alarmSnooze,
+    setAlarmSnooze,
+    cancelAlarmSnooze,
+    todayReminders,
+    fetchVitals,
+    fetchSystemMode,
+    fetchReminders,
+    fetchNotifications,
+    syncAllWithBackend,
   } = useVitalStore();
 
   const [isMicSpeaking, setIsMicSpeaking] = useState(false);
+  const [nextMedTaken, setNextMedTaken] = useState(false);
+
+  // Tự động gọi API đồng bộ dữ liệu thời gian thực từ Backend FastAPI
+  useEffect(() => {
+    fetchVitals();
+    fetchSystemMode();
+    fetchReminders();
+    fetchNotifications();
+
+    const interval = setInterval(() => {
+      fetchVitals();
+    }, 15000);
+    return () => clearInterval(interval);
+  }, []);
+
+  // Tự động làm mới dữ liệu khi màn hình HomeScreen được focus (quay lại từ IncidentDetailScreen)
+  useEffect(() => {
+    const unsubscribe = navigation.addListener('focus', () => {
+      fetchVitals();
+      fetchNotifications();
+      fetchSystemMode();
+    });
+    return unsubscribe;
+  }, [navigation]);
+
+  // State cho ActionSheet / BottomSheet "Tạm dừng chuông báo động"
+  const [snoozeModalVisible, setSnoozeModalVisible] = useState(false);
+  const [selectedDuration, setSelectedDuration] = useState<number>(alarmSnooze?.durationMinutes ?? 15);
+  const [selectedMode, setSelectedMode] = useState<'VIBRATE' | 'SILENT'>(alarmSnooze?.mode ?? 'VIBRATE');
+  const [syncAllFamily, setSyncAllFamily] = useState<boolean>(alarmSnooze?.syncAll ?? true);
+  const [remainingMinutes, setRemainingMinutes] = useState<number>(0);
+
+  // Đồng bộ state khi alarmSnooze thay đổi
+  useEffect(() => {
+    if (alarmSnooze) {
+      setSelectedDuration(alarmSnooze.durationMinutes ?? 15);
+      setSelectedMode(alarmSnooze.mode ?? 'VIBRATE');
+      setSyncAllFamily(alarmSnooze.syncAll ?? true);
+    }
+  }, [alarmSnooze]);
+
+  // Bộ đếm ngược thời gian tạm tắt chuông
+  useEffect(() => {
+    const updateCountdown = () => {
+      if (alarmSnooze?.active) {
+        if (alarmSnooze.until) {
+          const diff = alarmSnooze.until - Date.now();
+          if (diff <= 0) {
+            cancelAlarmSnooze();
+            setRemainingMinutes(0);
+          } else {
+            setRemainingMinutes(Math.max(1, Math.ceil(diff / (60 * 1000))));
+          }
+        } else {
+          setRemainingMinutes(0); // Vô thời hạn
+        }
+      } else {
+        setRemainingMinutes(0);
+      }
+    };
+
+    updateCountdown();
+    const timer = setInterval(updateCountdown, 10000);
+    return () => clearInterval(timer);
+  }, [alarmSnooze, cancelAlarmSnooze]);
+
+  // Kiểm tra sự cố khẩn cấp (té ngã / critical incident chưa xử lý)
+  const criticalIncidents = incidents.filter(
+    (i) => !i.is_acknowledged && (i.alert_level === 'CRITICAL' || i.alert_type === 'FALL_DETECTED')
+  );
+  const activeEmergency = criticalIncidents[0];
+  const hasEmergency = Boolean(activeEmergency || currentVitals.fall_detected);
+
+  const handleConfirmSnooze = () => {
+    const until = selectedDuration > 0 ? Date.now() + selectedDuration * 60 * 1000 : null;
+    setAlarmSnooze({
+      active: true,
+      durationMinutes: selectedDuration,
+      until,
+      mode: selectedMode,
+      syncAll: syncAllFamily,
+    });
+    setSnoozeModalVisible(false);
+    LocalizedAlert.alert(
+      '🔕 Đã tạm dừng chuông báo động',
+      `Đã thiết lập tạm dừng chuông báo động ${
+        selectedDuration > 0 ? `trong ${selectedDuration} phút` : 'cho đến khi bật lại'
+      }.\n\n• Kiểu báo: ${selectedMode === 'VIBRATE' ? 'Chỉ rung (Vibrate Mode - không phát còi loa Hub)' : 'Tắt hoàn toàn âm thanh'}\n• Đồng bộ: ${syncAllFamily ? 'Áp dụng cho tất cả tài khoản người nhà đang theo dõi' : 'Chỉ áp dụng trên máy này'}\n• Chế độ bảo vệ "${house.currentMode === 'AWAY' ? 'Xa' : 'Ở nhà'}" và AI camera vẫn tiếp tục hoạt động ghi hình bình thường.`
+    );
+  };
+
+  const handleCancelSnooze = () => {
+    cancelAlarmSnooze();
+    setSnoozeModalVisible(false);
+    LocalizedAlert.alert(
+      '🔔 Đã bật lại chuông báo động',
+      'Chuông báo động và còi hú Loa Hub đã được kích hoạt lại ở mức bình thường.'
+    );
+  };
+
+  // Đồng bộ thông tin nhà và camera từ Backend khi mở HomeScreen
+  React.useEffect(() => {
+    syncAllWithBackend?.();
+  }, []);
 
   // Xử lý One-Touch SOS 115
   const handleSOS115 = () => {
@@ -64,7 +168,7 @@ export default function HomeScreen({ navigation }: any) {
     });
 
     // Thông báo Toast/Alert kèm địa chỉ đã sao chép
-    Alert.alert(
+    LocalizedAlert.alert(
       '🚨 ĐÃ KÍCH HOẠT ONE-TOUCH SOS 115',
       `Đã sao chép địa chỉ nhà và mở cuộc gọi cấp cứu 115.\n\n📍 Địa chỉ đã sao chép:\n"${house.address}"\n\nBạn có thể dán hoặc đọc trực tiếp địa chỉ này cho tổng đài viên cấp cứu.`,
       [
@@ -80,7 +184,7 @@ export default function HomeScreen({ navigation }: any) {
 
   const handleMicPress = () => {
     setIsMicSpeaking(!isMicSpeaking);
-    Alert.alert(
+    LocalizedAlert.alert(
       isMicSpeaking ? 'Đã tắt đàm thoại' : 'Đang bật đàm thoại 2 chiều 🎙️',
       isMicSpeaking
         ? 'Loa tại nhà đã đóng.'
@@ -99,17 +203,17 @@ export default function HomeScreen({ navigation }: any) {
     setHouseMode(mode);
 
     if (mode === 'AWAY') {
-      Alert.alert(
+      LocalizedAlert.alert(
         '🚶 Chế độ Xa (Away) đã kích hoạt',
         'Đã kích hoạt chế độ an ninh cao nhất: Tối đa độ nhạy cảm biến, phát hiện té ngã và chuông báo động 24/7. Camera tiếp tục phát trực tiếp bình thường.'
       );
     } else if (mode === 'HOME') {
-      Alert.alert(
+      LocalizedAlert.alert(
         '🏠 Chế độ Ở nhà (Home) đã kích hoạt',
         'Đã giảm mức báo động xâm nhập khi gia đình sinh hoạt, nhưng vẫn duy trì theo dõi té ngã và chỉ số sức khoẻ trực tiếp 24/7.'
       );
     } else if (mode === 'DISARM') {
-      Alert.alert(
+      LocalizedAlert.alert(
         '🛡️ Chế độ Tắt báo động (Disarm) đã kích hoạt',
         'Đã tắt hoàn toàn còi hú và các thông báo báo động. Camera vẫn mở và hiển thị luồng trực tiếp bình thường.'
       );
@@ -118,7 +222,7 @@ export default function HomeScreen({ navigation }: any) {
 
   const handleTogglePrivacyMode = () => {
     toggleCameraSleep();
-    Alert.alert(
+    LocalizedAlert.alert(
       camera.isSleep ? 'Đã mở lại ống kính camera' : 'Đã bật Chế độ riêng tư (Che camera)',
       camera.isSleep
         ? `Ống kính ${cameraDisplayName} đã mở lại và tiếp tục phát trực tiếp bình thường.`
@@ -128,7 +232,7 @@ export default function HomeScreen({ navigation }: any) {
 
   const handleToggleAIProtect = () => {
     toggleCameraAIProtect();
-    Alert.alert(
+    LocalizedAlert.alert(
       camera.isAIProtect
         ? '⏸️ Đã tạm dừng tính năng AI'
         : '🛡️ Đã bật giám sát AI thông minh',
@@ -144,6 +248,28 @@ export default function HomeScreen({ navigation }: any) {
   const acousticStatus = currentVitals.acoustic_status ?? 'Bình thường';
   const isAcousticAlarm = acousticStatus.includes('la hét') || acousticStatus.includes('va đập');
 
+  const isSnoozeActive = Boolean(alarmSnooze?.active);
+  let snoozeButtonLabel = 'Tắt báo động';
+  if (isSnoozeActive) {
+    if (alarmSnooze.until && remainingMinutes > 0) {
+      snoozeButtonLabel = `Tắt chuông: còn ${remainingMinutes}p`;
+    } else if (alarmSnooze.durationMinutes === 0) {
+      snoozeButtonLabel = 'Tắt chuông: Vô hạn';
+    } else {
+      snoozeButtonLabel = 'Tắt chuông: Đang bật';
+    }
+  }
+
+  // Cữ thuốc kế tiếp từ Backend FastAPI
+  const nextMedication =
+    todayReminders?.medications?.find((m: any) => !m.taken) ||
+    todayReminders?.medications?.[3] || {
+      name: 'Uống thuốc huyết áp (Amlodipine 5mg)',
+      time: '18:30',
+      taken: false,
+    };
+  const isMedDone = nextMedTaken || Boolean(nextMedication.taken);
+
   return (
     <SafeAreaView style={[styles.safeArea, { backgroundColor: colors.background }]} edges={['top']}>
       {/* 1. Header: "Nhà của tôi v", Theme switcher, Bell with badge, Add button */}
@@ -153,7 +279,7 @@ export default function HomeScreen({ navigation }: any) {
           onPress={() => navigation.navigate('HouseDetail')}
           activeOpacity={0.7}
         >
-          <Text style={[styles.houseTitleText, { color: colors.textPrimary }]}>{house.name}</Text>
+          <LocalizedText style={[styles.houseTitleText, { color: colors.textPrimary }]}>{house.name}</LocalizedText>
           <Ionicons name="chevron-down" size={16} color={colors.textPrimary} style={{ marginLeft: 4 }} />
         </TouchableOpacity>
 
@@ -219,7 +345,7 @@ export default function HomeScreen({ navigation }: any) {
                 color={house.currentMode === 'AWAY' ? '#FFF' : (isDarkMode ? colors.textMuted : '#94A3B8')}
               />
             </View>
-            <Text
+            <LocalizedText
               style={[
                 styles.modePillText,
                 { color: house.currentMode === 'AWAY' ? '#047857' : (isDarkMode ? colors.textMuted : '#94A3B8') },
@@ -227,7 +353,7 @@ export default function HomeScreen({ navigation }: any) {
               numberOfLines={1}
             >
               Xa
-            </Text>
+            </LocalizedText>
           </TouchableOpacity>
 
           {/* Nút 2: Ở nhà (Home) */}
@@ -252,7 +378,7 @@ export default function HomeScreen({ navigation }: any) {
                 color={house.currentMode === 'HOME' ? '#FFF' : (isDarkMode ? colors.textMuted : '#94A3B8')}
               />
             </View>
-            <Text
+            <LocalizedText
               style={[
                 styles.modePillText,
                 { color: house.currentMode === 'HOME' ? '#1D4ED8' : (isDarkMode ? colors.textMuted : '#94A3B8') },
@@ -260,42 +386,121 @@ export default function HomeScreen({ navigation }: any) {
               numberOfLines={1}
             >
               Ở nhà
-            </Text>
+            </LocalizedText>
           </TouchableOpacity>
 
-          {/* Nút 3: Tắt báo động / Bỏ canh gác (Disarm) */}
+          {/* Nút 3: Tắt báo động / Tạm dừng chuông báo động (Snooze) */}
           <TouchableOpacity
             style={[
               styles.modePill,
-              house.currentMode === 'DISARM' ? styles.modePillActiveDisarm : styles.modePillInactive,
-              house.currentMode !== 'DISARM' && isDarkMode && { backgroundColor: colors.card, borderColor: colors.border },
+              isSnoozeActive
+                ? [
+                    styles.modePillActiveSnooze,
+                    isDarkMode && { backgroundColor: 'rgba(245, 158, 11, 0.18)', borderColor: '#F59E0B' },
+                  ]
+                : house.currentMode === 'DISARM'
+                ? styles.modePillActiveDisarm
+                : styles.modePillInactive,
+              !isSnoozeActive && house.currentMode !== 'DISARM' && isDarkMode && { backgroundColor: colors.card, borderColor: colors.border },
             ]}
-            onPress={() => handleSelectHouseMode('DISARM')}
+            onPress={() => {
+              setSelectedDuration(alarmSnooze?.durationMinutes || 15);
+              setSelectedMode(alarmSnooze?.mode || 'VIBRATE');
+              setSyncAllFamily(alarmSnooze?.syncAll ?? true);
+              setSnoozeModalVisible(true);
+            }}
             activeOpacity={0.75}
           >
             <View
               style={[
                 styles.modeIconCircle,
-                { backgroundColor: house.currentMode === 'DISARM' ? '#64748B' : (isDarkMode ? colors.surfaceSubtle : '#E2E8F0') },
+                {
+                  backgroundColor: isSnoozeActive
+                    ? '#F59E0B'
+                    : house.currentMode === 'DISARM'
+                    ? '#64748B'
+                    : isDarkMode
+                    ? colors.surfaceSubtle
+                    : '#E2E8F0',
+                },
               ]}
             >
-              <MaterialCommunityIcons
-                name="shield-off-outline"
-                size={15}
-                color={house.currentMode === 'DISARM' ? '#FFF' : (isDarkMode ? colors.textMuted : '#94A3B8')}
+              <Ionicons
+                name={isSnoozeActive ? 'volume-mute' : 'notifications-off-outline'}
+                size={14}
+                color={isSnoozeActive || house.currentMode === 'DISARM' ? '#FFF' : isDarkMode ? colors.textMuted : '#94A3B8'}
               />
             </View>
-            <Text
+            <LocalizedText
               style={[
                 styles.modePillText,
-                { color: house.currentMode === 'DISARM' ? '#475569' : (isDarkMode ? colors.textMuted : '#94A3B8') },
+                {
+                  color: isSnoozeActive
+                    ? (isDarkMode ? '#FBBF24' : '#D97706')
+                    : house.currentMode === 'DISARM'
+                    ? '#475569'
+                    : isDarkMode
+                    ? colors.textMuted
+                    : '#94A3B8',
+                  fontWeight: isSnoozeActive ? '700' : '600',
+                },
               ]}
               numberOfLines={1}
             >
-              Tắt báo động
-            </Text>
+              {snoozeButtonLabel}
+            </LocalizedText>
           </TouchableOpacity>
         </View>
+
+        {/* 2.5. Banner Cảnh báo Khẩn cấp màu đỏ (hoặc Trạng thái Sức khoẻ ổn định) */}
+        {hasEmergency ? (
+          <TouchableOpacity
+            style={styles.emergencyBanner}
+            activeOpacity={0.9}
+            onPress={() => {
+              navigation.navigate('EventDetail', {
+                incidentId: activeEmergency?.id || 'inc-03',
+                alert_type: activeEmergency?.alert_type || 'FALL_DETECTED',
+                alert_level: activeEmergency?.alert_level || 'CRITICAL',
+                message: activeEmergency?.message || '🚨 Cảnh báo té ngã (Fall Detected) - Trích xuất clip 5s bộ đệm Edge Hub RAM',
+                confidence: 0.94,
+                is_acknowledged: false,
+              });
+            }}
+          >
+            <View style={styles.emergencyBannerHeader}>
+              <View style={styles.emergencySirenPulse}>
+                <Ionicons name="warning" size={20} color="#FFF" />
+              </View>
+              <View style={{ flex: 1, marginLeft: 10 }}>
+                <LocalizedText style={styles.emergencyBannerTitle}>🚨 CẢNH BÁO KHẨN CẤP ĐANG KÍCH HOẠT</LocalizedText>
+                <LocalizedText style={styles.emergencyBannerMessage} numberOfLines={2}>
+                  {activeEmergency?.message || 'Phát hiện sự cố té ngã (YOLO-Pose AI). Cần kiểm tra video và xác nhận xử lý ngay!'}
+                </LocalizedText>
+              </View>
+              <View style={styles.emergencyActionBtn}>
+                <LocalizedText style={styles.emergencyActionBtnText}>Xem & Xử lý</LocalizedText>
+                <Ionicons name="chevron-forward" size={14} color="#DC2626" />
+              </View>
+            </View>
+          </TouchableOpacity>
+        ) : (
+          <View
+            style={[
+              styles.stableHealthCard,
+              {
+                backgroundColor: isDarkMode ? '#064E3B18' : '#F0FDF4',
+                borderColor: isDarkMode ? '#065F46' : '#BBF7D0',
+              },
+            ]}
+          >
+            <View style={styles.stablePulseDot} />
+            <Ionicons name="shield-checkmark" size={18} color="#16A34A" />
+            <LocalizedText style={[styles.stableHealthText, { color: isDarkMode ? '#86EFAC' : '#15803D' }]}>
+              Sức khoẻ ổn định • Hệ thống giám sát AI đang bảo vệ 24/7
+            </LocalizedText>
+          </View>
+        )}
 
         {/* 3. NÚT KHẨN CẤP: ONE-TOUCH SOS 115 (Màu đỏ nổi bật, dễ quan sát) */}
         <TouchableOpacity
@@ -309,14 +514,14 @@ export default function HomeScreen({ navigation }: any) {
             </View>
             <View style={styles.sosTextContainer}>
               <View style={styles.sosTitleRow}>
-                <Text style={styles.sosTitleText}>ONE-TOUCH SOS 115</Text>
+                <LocalizedText style={styles.sosTitleText}>ONE-TOUCH SOS 115</LocalizedText>
                 <View style={styles.sosTag}>
-                  <Text style={styles.sosTagText}>KHẨN CẤP</Text>
+                  <LocalizedText style={styles.sosTagText}>KHẨN CẤP</LocalizedText>
                 </View>
               </View>
-              <Text style={styles.sosSubtitleText} numberOfLines={1}>
+              <LocalizedText style={styles.sosSubtitleText} numberOfLines={1}>
                 Quay số 115 &amp; tự động sao chép địa chỉ nhà
-              </Text>
+              </LocalizedText>
             </View>
           </View>
 
@@ -331,7 +536,7 @@ export default function HomeScreen({ navigation }: any) {
           onPress={handleMultiView}
           activeOpacity={0.9}
         >
-          <Text style={[styles.multiViewText, isDarkMode && { color: colors.textPrimary }]}>Nhiều chế độ xem</Text>
+          <LocalizedText style={[styles.multiViewText, isDarkMode && { color: colors.textPrimary }]}>Nhiều chế độ xem</LocalizedText>
           <View style={styles.playCircleBtn}>
             <Ionicons name="play" size={14} color={Colors.primary} style={{ marginLeft: 2 }} />
           </View>
@@ -357,41 +562,41 @@ export default function HomeScreen({ navigation }: any) {
             {/* Live Stream Overlay Header: Tên thiết bị thân thiện & Badge WebRTC / Edge Hub */}
             <View style={styles.cameraOverlayTop}>
               <View style={styles.cameraTitleWithBadge}>
-                <Text style={styles.cameraNameOverlay} numberOfLines={1}>
+                <LocalizedText style={styles.cameraNameOverlay} numberOfLines={1}>
                   {cameraDisplayName}
-                </Text>
+                </LocalizedText>
                 {/* Badge trạng thái kết nối WebRTC / Live */}
                 {camera.isSleep ? (
                   <View style={styles.privacyLiveBadge}>
                     <Ionicons name="eye-off" size={10} color="#F59E0B" style={{ marginRight: 4 }} />
-                    <Text style={styles.privacyLiveBadgeText}>Ống kính riêng tư • Đã che</Text>
+                    <LocalizedText style={styles.privacyLiveBadgeText}>Ống kính riêng tư • Đã che</LocalizedText>
                   </View>
                 ) : !camera.isAIProtect ? (
                   <View style={styles.normalModeBadge}>
                     <View style={styles.normalGrayDot} />
-                    <Text style={styles.normalModeBadgeText}>Chế độ thường • AI Tắt</Text>
+                    <LocalizedText style={styles.normalModeBadgeText}>Chế độ thường • AI Tắt</LocalizedText>
                   </View>
                 ) : house.currentMode === 'AWAY' ? (
                   <View style={styles.awayLiveBadge}>
                     <View style={styles.liveGreenDot} />
-                    <Text style={styles.awayLiveBadgeText}>Vắng nhà • AI Giám sát 24/7</Text>
+                    <LocalizedText style={styles.awayLiveBadgeText}>Vắng nhà • AI Giám sát 24/7</LocalizedText>
                   </View>
                 ) : house.currentMode === 'DISARM' ? (
                   <View style={styles.disarmLiveBadge}>
                     <MaterialCommunityIcons name="shield-off-outline" size={11} color="#E2E8F0" style={{ marginRight: 4 }} />
-                    <Text style={styles.disarmLiveBadgeText}>Tắt báo động • AI Trực tiếp</Text>
+                    <LocalizedText style={styles.disarmLiveBadgeText}>Tắt báo động • AI Trực tiếp</LocalizedText>
                   </View>
                 ) : (
                   <View style={styles.liveWebRTCBadge}>
                     <View style={styles.liveGreenDot} />
-                    <Text style={styles.liveWebRTCText}>Ở nhà • AI WebRTC</Text>
+                    <LocalizedText style={styles.liveWebRTCText}>Ở nhà • AI WebRTC</LocalizedText>
                   </View>
                 )}
               </View>
 
               <View style={styles.cameraStatusIcons}>
                 <View style={styles.hubStatusPill}>
-                  <Text style={styles.hubStatusPillText}>Hub #01 Online</Text>
+                  <LocalizedText style={styles.hubStatusPillText}>Hub #01 Online</LocalizedText>
                 </View>
                 <Ionicons name="wifi" size={14} color="#10B981" style={{ marginLeft: 6 }} />
                 <TouchableOpacity
@@ -405,7 +610,7 @@ export default function HomeScreen({ navigation }: any) {
 
             {/* SmartCare Watermark góc dưới phải */}
             <View style={styles.watermarkTag}>
-              <Text style={styles.watermarkText}>SmartCare AI</Text>
+              <LocalizedText style={styles.watermarkText}>SmartCare AI</LocalizedText>
             </View>
 
             {/* Privacy Mode Overlay: Màn hình đen che camera vật lý khi camera.isSleep = true */}
@@ -414,17 +619,17 @@ export default function HomeScreen({ navigation }: any) {
                 <View style={styles.privacyIconCircle}>
                   <Ionicons name="eye-off" size={32} color="#F59E0B" />
                 </View>
-                <Text style={styles.privacyOverlayTitle}>Ống kính đang ở chế độ riêng tư</Text>
-                <Text style={styles.privacyOverlaySub}>
+                <LocalizedText style={styles.privacyOverlayTitle}>Ống kính đang ở chế độ riêng tư</LocalizedText>
+                <LocalizedText style={styles.privacyOverlaySub}>
                   Ống kính camera đã cụp lại và che khung hình. Luồng trực tiếp tạm thời tắt.
-                </Text>
+                </LocalizedText>
                 <TouchableOpacity
                   style={styles.privacyDisableBtn}
                   onPress={handleTogglePrivacyMode}
                   activeOpacity={0.8}
                 >
                   <Ionicons name="eye" size={14} color="#FFF" style={{ marginRight: 4 }} />
-                  <Text style={styles.privacyDisableText}>Bật lại camera</Text>
+                  <LocalizedText style={styles.privacyDisableText}>Bật lại camera</LocalizedText>
                 </TouchableOpacity>
               </View>
             ) : null}
@@ -441,12 +646,12 @@ export default function HomeScreen({ navigation }: any) {
                 <Ionicons name="play-back" size={16} color={Colors.primary} />
               </View>
               <View>
-                <Text style={[styles.playbackTitle, isDarkMode && { color: colors.textPrimary }]}>Xem lại 24/48h (Interactive Timeline Playback)</Text>
-                <Text style={[styles.playbackSub, isDarkMode && { color: colors.textSecondary }]}>Bộ đệm RAM Edge Hub &amp; lưu trữ MinIO Cloud</Text>
+                <LocalizedText style={[styles.playbackTitle, isDarkMode && { color: colors.textPrimary }]}>Xem lại 24/48h (Interactive Timeline Playback)</LocalizedText>
+                <LocalizedText style={[styles.playbackSub, isDarkMode && { color: colors.textSecondary }]}>Bộ đệm RAM Edge Hub &amp; lưu trữ MinIO Cloud</LocalizedText>
               </View>
             </View>
             <View style={styles.playbackRightAction}>
-              <Text style={styles.playbackBadgeText}>24h - 48h</Text>
+              <LocalizedText style={styles.playbackBadgeText}>24h - 48h</LocalizedText>
               <Ionicons name="chevron-forward" size={16} color={Colors.primary} />
             </View>
           </TouchableOpacity>
@@ -465,14 +670,14 @@ export default function HomeScreen({ navigation }: any) {
                   size={20}
                   color={camera.isSleep ? '#F59E0B' : (isDarkMode ? colors.textPrimary : Colors.textPrimary)}
                 />
-                <Text
+                <LocalizedText
                   style={[
                     styles.cameraPrivacyText,
                     { color: camera.isSleep ? '#D97706' : (isDarkMode ? colors.textPrimary : Colors.textPrimary) },
                   ]}
                 >
                   Riêng tư
-                </Text>
+                </LocalizedText>
               </View>
             </TouchableOpacity>
 
@@ -513,7 +718,7 @@ export default function HomeScreen({ navigation }: any) {
                     color="#94A3B8"
                   />
                 )}
-                <Text
+                <LocalizedText
                   style={[
                     styles.aiShieldText,
                     { color: camera.isAIProtect ? '#2563EB' : '#94A3B8' },
@@ -521,10 +726,89 @@ export default function HomeScreen({ navigation }: any) {
                   numberOfLines={1}
                 >
                   {camera.isAIProtect ? 'AI Bảo vệ: Bật' : 'AI: Tắt'}
-                </Text>
+                </LocalizedText>
               </View>
             </TouchableOpacity>
           </View>
+        </View>
+
+        {/* 5b. Widget Nhắc nhở uống thuốc & Ăn uống sinh hoạt */}
+        <View
+          style={[
+            styles.reminderWidgetCard,
+            isDarkMode && { backgroundColor: colors.card, borderColor: colors.border },
+          ]}
+        >
+          <TouchableOpacity
+            style={styles.reminderWidgetMain}
+            activeOpacity={0.8}
+            onPress={() => navigation.navigate('MedicationReminder')}
+          >
+            <View style={styles.reminderWidgetHeader}>
+              <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6 }}>
+                <View style={[styles.reminderIconCircle, { backgroundColor: isDarkMode ? '#432005' : '#FFF7ED' }]}>
+                  <Ionicons name="medical" size={15} color={Colors.primary} />
+                </View>
+                <LocalizedText style={[styles.reminderWidgetTitle, isDarkMode && { color: colors.textPrimary }]}>
+                  Lịch nhắc nhở tiếp theo
+                </LocalizedText>
+              </View>
+              <View style={styles.reminderRightHeader}>
+                <View style={styles.reminderLiveVoiceBadge}>
+                  <Ionicons name="volume-medium" size={11} color="#0EA5E9" />
+                  <LocalizedText style={styles.reminderLiveVoiceText}>Loa Hub</LocalizedText>
+                </View>
+                <Ionicons name="chevron-forward" size={14} color={isDarkMode ? colors.textSecondary : '#94A3B8'} />
+              </View>
+            </View>
+
+            <View style={styles.reminderContentRow}>
+              <View style={styles.reminderClockBox}>
+                <Ionicons name="time" size={13} color="#0EA5E9" />
+                <LocalizedText style={styles.reminderClockText}>{nextMedication.time}</LocalizedText>
+              </View>
+              <LocalizedText
+                style={[
+                  styles.reminderMedText,
+                  isDarkMode && { color: colors.textPrimary },
+                  isMedDone && styles.reminderMedTextDone,
+                ]}
+                numberOfLines={1}
+              >
+                {nextMedication.name}
+              </LocalizedText>
+            </View>
+          </TouchableOpacity>
+
+          <TouchableOpacity
+            style={[
+              styles.reminderTickBtn,
+              isMedDone ? styles.reminderTickBtnDone : styles.reminderTickBtnPending,
+              isDarkMode && !isMedDone && { backgroundColor: '#0F172A', borderColor: '#334155' },
+            ]}
+            onPress={() => {
+              const next = !isMedDone;
+              setNextMedTaken(next);
+              if (next) {
+                LocalizedAlert.alert('Đã hoàn thành', `Đã ghi nhận: ${nextMedication.name}.`);
+              }
+            }}
+            activeOpacity={0.7}
+          >
+            <Ionicons
+              name={isMedDone ? 'checkmark-circle' : 'checkmark'}
+              size={15}
+              color={isMedDone ? '#10B981' : (isDarkMode ? '#94A3B8' : '#64748B')}
+            />
+            <LocalizedText
+              style={[
+                styles.reminderTickText,
+                { color: isMedDone ? '#10B981' : (isDarkMode ? '#94A3B8' : '#64748B') },
+              ]}
+            >
+              {isMedDone ? 'Đã uống' : 'Uống'}
+            </LocalizedText>
+          </TouchableOpacity>
         </View>
 
         {/* 6. Khối hiển thị Tình trạng sức khoẻ (lấy từ useVitalStore) */}
@@ -533,14 +817,14 @@ export default function HomeScreen({ navigation }: any) {
           <View style={styles.vitalsSummaryHeader}>
             <View style={{ flexDirection: 'row', alignItems: 'center' }}>
               <View style={styles.livePulseDot} />
-              <Text style={[styles.vitalsSummaryTitle, isDarkMode && { color: colors.textPrimary }]}>Tình trạng sức khoẻ</Text>
+              <LocalizedText style={[styles.vitalsSummaryTitle, isDarkMode && { color: colors.textPrimary }]}>Tình trạng sức khoẻ</LocalizedText>
             </View>
             <TouchableOpacity
               style={[styles.vitalsDetailChip, isDarkMode && { backgroundColor: 'rgba(255, 122, 0, 0.15)', borderColor: 'rgba(255, 122, 0, 0.3)' }]}
               onPress={() => navigation.navigate('HealthDetail')}
               activeOpacity={0.7}
             >
-              <Text style={styles.vitalsDetailChipText}>Chi tiết</Text>
+              <LocalizedText style={styles.vitalsDetailChipText}>Chi tiết</LocalizedText>
               <Ionicons name="chevron-forward" size={14} color={Colors.primary} />
             </TouchableOpacity>
           </View>
@@ -553,29 +837,29 @@ export default function HomeScreen({ navigation }: any) {
                 size={14}
                 color={isEdgeHubOnline ? Colors.success : Colors.danger}
               />
-              <Text style={[styles.deviceStatusText, isDarkMode && { color: colors.textSecondary }]}>
+              <LocalizedText style={[styles.deviceStatusText, isDarkMode && { color: colors.textSecondary }]}>
                 Edge Hub:{' '}
-                <Text
+                <LocalizedText
                   style={{
                     color: isEdgeHubOnline ? Colors.success : Colors.danger,
                     fontWeight: '700',
                   }}
                 >
                   {isEdgeHubOnline ? 'Online' : 'Offline'}
-                </Text>
-              </Text>
+                </LocalizedText>
+              </LocalizedText>
             </View>
 
             <View style={[styles.deviceStatusDivider, isDarkMode && { backgroundColor: colors.border }]} />
 
             <View style={styles.deviceStatusItem}>
               <Ionicons name="battery-charging" size={15} color={Colors.aiBlue} />
-              <Text style={[styles.deviceStatusText, isDarkMode && { color: colors.textSecondary }]}>
+              <LocalizedText style={[styles.deviceStatusText, isDarkMode && { color: colors.textSecondary }]}>
                 Vòng BLE:{' '}
-                <Text style={{ color: isDarkMode ? colors.textPrimary : Colors.textPrimary, fontWeight: '700' }}>
+                <LocalizedText style={{ color: isDarkMode ? colors.textPrimary : Colors.textPrimary, fontWeight: '700' }}>
                   {braceletBattery}% Pin
-                </Text>
-              </Text>
+                </LocalizedText>
+              </LocalizedText>
             </View>
           </View>
 
@@ -584,33 +868,33 @@ export default function HomeScreen({ navigation }: any) {
             {/* Nhịp tim */}
             <View style={styles.vitalItem}>
               <Ionicons name="heart" size={17} color="#EF4444" />
-              <Text style={[styles.vitalValText, isDarkMode && { color: colors.textPrimary }]} numberOfLines={1}>
+              <LocalizedText style={[styles.vitalValText, isDarkMode && { color: colors.textPrimary }]} numberOfLines={1}>
                 {currentVitals.heart_rate ?? 74}{' '}
-                <Text style={styles.vitalUnit}>bpm</Text>
-              </Text>
-              <Text style={[styles.vitalLblText, isDarkMode && { color: colors.textSecondary }]}>Nhịp tim</Text>
+                <LocalizedText style={styles.vitalUnit}>bpm</LocalizedText>
+              </LocalizedText>
+              <LocalizedText style={[styles.vitalLblText, isDarkMode && { color: colors.textSecondary }]}>Nhịp tim</LocalizedText>
             </View>
             <View style={[styles.vitalDivider, isDarkMode && { backgroundColor: colors.border }]} />
 
             {/* SpO2 */}
             <View style={styles.vitalItem}>
               <Ionicons name="water" size={17} color="#3B82F6" />
-              <Text style={[styles.vitalValText, isDarkMode && { color: colors.textPrimary }]} numberOfLines={1}>
+              <LocalizedText style={[styles.vitalValText, isDarkMode && { color: colors.textPrimary }]} numberOfLines={1}>
                 {currentVitals.spo2 ?? 98}{' '}
-                <Text style={styles.vitalUnit}>%</Text>
-              </Text>
-              <Text style={[styles.vitalLblText, isDarkMode && { color: colors.textSecondary }]}>SpO₂</Text>
+                <LocalizedText style={styles.vitalUnit}>%</LocalizedText>
+              </LocalizedText>
+              <LocalizedText style={[styles.vitalLblText, isDarkMode && { color: colors.textSecondary }]}>SpO₂</LocalizedText>
             </View>
             <View style={[styles.vitalDivider, isDarkMode && { backgroundColor: colors.border }]} />
 
             {/* Thân nhiệt */}
             <View style={styles.vitalItem}>
               <Ionicons name="thermometer" size={17} color="#F59E0B" />
-              <Text style={[styles.vitalValText, isDarkMode && { color: colors.textPrimary }]} numberOfLines={1}>
+              <LocalizedText style={[styles.vitalValText, isDarkMode && { color: colors.textPrimary }]} numberOfLines={1}>
                 {currentVitals.skin_temp_max ?? 36.8}{' '}
-                <Text style={styles.vitalUnit}>°C</Text>
-              </Text>
-              <Text style={[styles.vitalLblText, isDarkMode && { color: colors.textSecondary }]}>Thân nhiệt</Text>
+                <LocalizedText style={styles.vitalUnit}>°C</LocalizedText>
+              </LocalizedText>
+              <LocalizedText style={[styles.vitalLblText, isDarkMode && { color: colors.textSecondary }]}>Thân nhiệt</LocalizedText>
             </View>
             <View style={[styles.vitalDivider, isDarkMode && { backgroundColor: colors.border }]} />
 
@@ -621,7 +905,7 @@ export default function HomeScreen({ navigation }: any) {
                 size={17}
                 color={currentVitals.fall_detected ? Colors.danger : Colors.success}
               />
-              <Text
+              <LocalizedText
                 style={[
                   styles.vitalValText,
                   {
@@ -632,8 +916,8 @@ export default function HomeScreen({ navigation }: any) {
                 numberOfLines={1}
               >
                 {currentVitals.fall_detected ? 'Ngã!' : 'Sinh hoạt'}
-              </Text>
-              <Text style={[styles.vitalLblText, isDarkMode && { color: colors.textSecondary }]}>Vận động</Text>
+              </LocalizedText>
+              <LocalizedText style={[styles.vitalLblText, isDarkMode && { color: colors.textSecondary }]}>Vận động</LocalizedText>
             </View>
             <View style={[styles.vitalDivider, isDarkMode && { backgroundColor: colors.border }]} />
 
@@ -644,7 +928,7 @@ export default function HomeScreen({ navigation }: any) {
                 size={17}
                 color={isAcousticAlarm ? Colors.danger : '#8B5CF6'}
               />
-              <Text
+              <LocalizedText
                 style={[
                   styles.vitalValText,
                   {
@@ -655,8 +939,8 @@ export default function HomeScreen({ navigation }: any) {
                 numberOfLines={1}
               >
                 {isAcousticAlarm ? 'La hét!' : 'Bình thường'}
-              </Text>
-              <Text style={[styles.vitalLblText, isDarkMode && { color: colors.textSecondary }]}>Âm thanh</Text>
+              </LocalizedText>
+              <LocalizedText style={[styles.vitalLblText, isDarkMode && { color: colors.textSecondary }]}>Âm thanh</LocalizedText>
             </View>
           </View>
         </View>
@@ -666,11 +950,11 @@ export default function HomeScreen({ navigation }: any) {
           <View style={styles.trendSectionHeader}>
             <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6 }}>
               <Ionicons name="stats-chart" size={17} color={Colors.primary} />
-              <Text style={[styles.trendSectionTitle, isDarkMode && { color: colors.textPrimary }]}>Xu hướng sức khoẻ hôm nay</Text>
+              <LocalizedText style={[styles.trendSectionTitle, isDarkMode && { color: colors.textPrimary }]}>Xu hướng sức khoẻ hôm nay</LocalizedText>
             </View>
             <View style={styles.trendStandardBadge}>
               <Ionicons name="checkmark-circle" size={13} color="#15803D" />
-              <Text style={styles.trendStandardBadgeText}>Đạt chuẩn</Text>
+              <LocalizedText style={styles.trendStandardBadgeText}>Đạt chuẩn</LocalizedText>
             </View>
           </View>
 
@@ -683,9 +967,9 @@ export default function HomeScreen({ navigation }: any) {
               onPress={() => navigation.navigate('HealthDetail', { metric: 'heartRate' })}
             >
               <View style={styles.miniCardTop}>
-                <Text style={[styles.miniCardTitle, isDarkMode && { color: colors.textPrimary }]}>Nhịp tim 12h qua</Text>
+                <LocalizedText style={[styles.miniCardTitle, isDarkMode && { color: colors.textPrimary }]}>Nhịp tim 12h qua</LocalizedText>
                 <View style={styles.miniCardBadge}>
-                  <Text style={styles.miniCardBadgeText}>TB 74</Text>
+                  <LocalizedText style={styles.miniCardBadgeText}>TB 74</LocalizedText>
                 </View>
               </View>
 
@@ -693,7 +977,7 @@ export default function HomeScreen({ navigation }: any) {
               <View style={styles.miniBarChartArea}>
                 <View style={styles.miniDashedRefLine}>
                   <View style={styles.miniDashedDash} />
-                  <Text style={[styles.miniRefLabel, isDarkMode && { color: colors.textSecondary }]}>74 bpm</Text>
+                  <LocalizedText style={[styles.miniRefLabel, isDarkMode && { color: colors.textSecondary }]}>74 bpm</LocalizedText>
                 </View>
 
                 <View style={styles.miniBarsRow}>
@@ -709,7 +993,7 @@ export default function HomeScreen({ navigation }: any) {
                     const isHigh = col.val >= 80;
                     return (
                       <View key={col.time} style={styles.miniBarCol}>
-                        <Text style={[styles.miniBarValText, isDarkMode && { color: colors.textSecondary }]}>{col.val}</Text>
+                        <LocalizedText style={[styles.miniBarValText, isDarkMode && { color: colors.textSecondary }]}>{col.val}</LocalizedText>
                         <View style={[styles.miniBarTrack, isDarkMode && { backgroundColor: colors.surfaceSubtle }]}>
                           <View
                             style={[
@@ -721,7 +1005,7 @@ export default function HomeScreen({ navigation }: any) {
                             ]}
                           />
                         </View>
-                        <Text style={[styles.miniBarTimeText, isDarkMode && { color: colors.textSecondary }]}>{col.time}</Text>
+                        <LocalizedText style={[styles.miniBarTimeText, isDarkMode && { color: colors.textSecondary }]}>{col.time}</LocalizedText>
                       </View>
                     );
                   })}
@@ -730,7 +1014,7 @@ export default function HomeScreen({ navigation }: any) {
 
               <View style={[styles.miniCardFooter, isDarkMode && { borderTopColor: colors.border }]}>
                 <View style={styles.miniStatusDotGreen} />
-                <Text style={[styles.miniStatusNote, isDarkMode && { color: colors.textSecondary }]}>Chuẩn 60-100 bpm</Text>
+                <LocalizedText style={[styles.miniStatusNote, isDarkMode && { color: colors.textSecondary }]}>Chuẩn 60-100 bpm</LocalizedText>
               </View>
             </TouchableOpacity>
 
@@ -741,7 +1025,7 @@ export default function HomeScreen({ navigation }: any) {
               onPress={() => navigation.navigate('HealthDetail', { metric: 'activity' })}
             >
               <View style={styles.miniCardTop}>
-                <Text style={[styles.miniCardTitle, isDarkMode && { color: colors.textPrimary }]}>Vận động & Sinh hoạt</Text>
+                <LocalizedText style={[styles.miniCardTitle, isDarkMode && { color: colors.textPrimary }]}>Vận động & Sinh hoạt</LocalizedText>
                 <Ionicons name="body" size={15} color="#0284C7" />
               </View>
 
@@ -756,22 +1040,22 @@ export default function HomeScreen({ navigation }: any) {
               <View style={styles.stackedLegendGrid}>
                 <View style={styles.legendItem}>
                   <View style={[styles.legendDot, { backgroundColor: '#10B981' }]} />
-                  <Text style={[styles.legendText, isDarkMode && { color: colors.textSecondary }]}>Đi lại 25%</Text>
+                  <LocalizedText style={[styles.legendText, isDarkMode && { color: colors.textSecondary }]}>Đi lại 25%</LocalizedText>
                 </View>
                 <View style={styles.legendItem}>
                   <View style={[styles.legendDot, { backgroundColor: '#0284C7' }]} />
-                  <Text style={[styles.legendText, isDarkMode && { color: colors.textSecondary }]}>Ngồi 45%</Text>
+                  <LocalizedText style={[styles.legendText, isDarkMode && { color: colors.textSecondary }]}>Ngồi 45%</LocalizedText>
                 </View>
                 <View style={styles.legendItem}>
                   <View style={[styles.legendDot, { backgroundColor: '#8B5CF6' }]} />
-                  <Text style={[styles.legendText, isDarkMode && { color: colors.textSecondary }]}>Nghỉ 30%</Text>
+                  <LocalizedText style={[styles.legendText, isDarkMode && { color: colors.textSecondary }]}>Nghỉ 30%</LocalizedText>
                 </View>
               </View>
 
               <View style={[styles.activitySummaryCard, isDarkMode && { backgroundColor: colors.surfaceSubtle }]}>
-                <Text style={[styles.activitySummaryText, isDarkMode && { color: colors.textSecondary }]}>
-                  Vận động: <Text style={styles.boldGreen}>2.5h</Text> | Nghỉ: <Text style={styles.boldBlue}>6h</Text>
-                </Text>
+                <LocalizedText style={[styles.activitySummaryText, isDarkMode && { color: colors.textSecondary }]}>
+                  Vận động: <LocalizedText style={styles.boldGreen}>2.5h</LocalizedText> | Nghỉ: <LocalizedText style={styles.boldBlue}>6h</LocalizedText>
+                </LocalizedText>
               </View>
             </TouchableOpacity>
           </View>
@@ -787,11 +1071,11 @@ export default function HomeScreen({ navigation }: any) {
                 <View style={styles.spo2IconCircle}>
                   <Ionicons name="water" size={16} color="#0284C7" />
                 </View>
-                <Text style={[styles.spo2CardTitle, isDarkMode && { color: colors.textPrimary }]}>Chỉ số Oxy máu SpO₂</Text>
+                <LocalizedText style={[styles.spo2CardTitle, isDarkMode && { color: colors.textPrimary }]}>Chỉ số Oxy máu SpO₂</LocalizedText>
               </View>
               <View style={styles.spo2BadgeGreen}>
                 <Ionicons name="checkmark-circle" size={13} color="#15803D" />
-                <Text style={styles.spo2BadgeGreenText}>98% - Rất tốt</Text>
+                <LocalizedText style={styles.spo2BadgeGreenText}>98% - Rất tốt</LocalizedText>
               </View>
             </View>
 
@@ -811,23 +1095,263 @@ export default function HomeScreen({ navigation }: any) {
 
               {/* Các mốc số trên thước đo */}
               <View style={styles.rulerTicksRow}>
-                <Text style={[styles.rulerTickText, isDarkMode && { color: colors.textSecondary }]}>90%</Text>
-                <Text style={[styles.rulerTickText, isDarkMode && { color: colors.textSecondary }]}>92%</Text>
-                <Text style={[styles.rulerTickText, { fontWeight: '700', color: Colors.primary }]}>95% (Chuẩn)</Text>
-                <Text style={[styles.rulerTickText, { fontWeight: '800', color: '#15803D' }]}>98%</Text>
-                <Text style={[styles.rulerTickText, isDarkMode && { color: colors.textSecondary }]}>100%</Text>
+                <LocalizedText style={[styles.rulerTickText, isDarkMode && { color: colors.textSecondary }]}>90%</LocalizedText>
+                <LocalizedText style={[styles.rulerTickText, isDarkMode && { color: colors.textSecondary }]}>92%</LocalizedText>
+                <LocalizedText style={[styles.rulerTickText, { fontWeight: '700', color: Colors.primary }]}>95% (Chuẩn)</LocalizedText>
+                <LocalizedText style={[styles.rulerTickText, { fontWeight: '800', color: '#15803D' }]}>98%</LocalizedText>
+                <LocalizedText style={[styles.rulerTickText, isDarkMode && { color: colors.textSecondary }]}>100%</LocalizedText>
               </View>
             </View>
 
             <View style={styles.spo2FooterRow}>
               <Ionicons name="shield-checkmark-outline" size={14} color="#15803D" />
-              <Text style={[styles.spo2FooterNote, isDarkMode && { color: colors.textSecondary }]}>
+              <LocalizedText style={[styles.spo2FooterNote, isDarkMode && { color: colors.textSecondary }]}>
                 Ngưỡng an toàn ≥ 95% • Nồng độ oxy bão hoà duy trì tối ưu
-              </Text>
+              </LocalizedText>
             </View>
           </TouchableOpacity>
         </View>
       </ScrollView>
+
+      {/* ActionSheet / BottomSheet Modal "Tạm dừng chuông báo động" */}
+      <Modal
+        visible={snoozeModalVisible}
+        transparent
+        animationType="slide"
+        onRequestClose={() => setSnoozeModalVisible(false)}
+      >
+        <View style={styles.modalOverlay}>
+          <TouchableOpacity
+            style={styles.modalBackdrop}
+            activeOpacity={1}
+            onPress={() => setSnoozeModalVisible(false)}
+          />
+
+          <View style={[styles.bottomSheetContainer, { backgroundColor: colors.card, borderColor: colors.border }]}>
+            {/* Thanh kéo nhỏ (Handle) */}
+            <View style={[styles.sheetHandle, isDarkMode && { backgroundColor: '#475569' }]} />
+
+            {/* Header */}
+            <View style={styles.sheetHeader}>
+              <View style={{ flex: 1 }}>
+                <LocalizedText style={[styles.sheetTitle, { color: colors.textPrimary }]}>Tạm dừng chuông báo động</LocalizedText>
+                <LocalizedText style={[styles.sheetSubtitle, { color: colors.textSecondary }]}>
+                  Tạm tắt âm thanh còi hú mà vẫn duy trì giám sát AI & ghi hình 24/7
+                </LocalizedText>
+              </View>
+              <TouchableOpacity
+                style={[styles.sheetCloseBtn, { backgroundColor: isDarkMode ? colors.surfaceSubtle : '#F1F5F9' }]}
+                onPress={() => setSnoozeModalVisible(false)}
+              >
+                <Ionicons name="close" size={20} color={colors.textPrimary} />
+              </TouchableOpacity>
+            </View>
+
+            {/* Banner trạng thái nếu đang tạm tắt */}
+            {isSnoozeActive && (
+              <View
+                style={[
+                  styles.activeSnoozeBanner,
+                  {
+                    backgroundColor: isDarkMode ? 'rgba(245, 158, 11, 0.15)' : '#FEF3C7',
+                    borderColor: '#F59E0B',
+                  },
+                ]}
+              >
+                <Ionicons name="time" size={20} color="#D97706" />
+                <View style={{ flex: 1, marginLeft: 10 }}>
+                  <LocalizedText style={[styles.activeSnoozeBannerTitle, { color: isDarkMode ? '#FBBF24' : '#B45309' }]}>
+                    Chuông báo động đang tạm tắt
+                  </LocalizedText>
+                  <LocalizedText style={[styles.activeSnoozeBannerSub, { color: isDarkMode ? '#FDE68A' : '#92400E' }]}>
+                    {alarmSnooze.until
+                      ? `Thời gian còn lại: ${remainingMinutes} phút`
+                      : 'Chế độ: Đến khi bật lại'} • {alarmSnooze.mode === 'VIBRATE' ? 'Chỉ rung' : 'Tắt hoàn toàn âm thanh'}
+                  </LocalizedText>
+                </View>
+              </View>
+            )}
+
+            {/* 1. Tùy chọn thời gian */}
+            <LocalizedText style={[styles.sheetSectionTitle, { color: colors.textPrimary }]}>
+              1. Tùy chọn thời gian tạm tắt:
+            </LocalizedText>
+            <View style={styles.durationOptionsGrid}>
+              {[
+                { label: 'Tắt 15 phút', value: 15 },
+                { label: 'Tắt 1 giờ', value: 60 },
+                { label: 'Tắt 2 giờ', value: 120 },
+                { label: 'Đến khi bật lại', value: 0 },
+              ].map((item) => {
+                const isSelected = selectedDuration === item.value;
+                return (
+                  <TouchableOpacity
+                    key={item.value}
+                    style={[
+                      styles.durationOptionBtn,
+                      {
+                        backgroundColor: isSelected
+                          ? (isDarkMode ? 'rgba(14, 165, 233, 0.2)' : '#E0F2FE')
+                          : (isDarkMode ? colors.surfaceSubtle : '#F8FAFC'),
+                        borderColor: isSelected ? '#0284C7' : colors.border,
+                      },
+                    ]}
+                    onPress={() => setSelectedDuration(item.value)}
+                    activeOpacity={0.7}
+                  >
+                    <Ionicons
+                      name={isSelected ? 'radio-button-on' : 'radio-button-off'}
+                      size={18}
+                      color={isSelected ? '#0284C7' : colors.textMuted}
+                    />
+                    <LocalizedText
+                      style={[
+                        styles.durationOptionText,
+                        {
+                          color: isSelected ? (isDarkMode ? '#38BDF8' : '#0369A1') : colors.textPrimary,
+                          fontWeight: isSelected ? '700' : '500',
+                        },
+                      ]}
+                    >
+                      {item.label}
+                    </LocalizedText>
+                  </TouchableOpacity>
+                );
+              })}
+            </View>
+
+            {/* 2. Tùy chọn kiểu báo */}
+            <LocalizedText style={[styles.sheetSectionTitle, { color: colors.textPrimary }]}>
+              2. Tùy chọn kiểu báo khi có sự cố:
+            </LocalizedText>
+            <View style={styles.modeOptionList}>
+              {[
+                {
+                  key: 'VIBRATE',
+                  title: 'Chỉ rung (Vibrate Mode)',
+                  desc: 'Rung điện thoại người nhà, không phát còi loa Hub tại nhà',
+                  icon: 'phone-portrait-outline',
+                },
+                {
+                  key: 'SILENT',
+                  title: 'Tắt hoàn toàn âm thanh',
+                  desc: 'Không phát còi hú và không rung chuông, chỉ gửi thông báo đẩy',
+                  icon: 'volume-mute-outline',
+                },
+              ].map((item) => {
+                const isSelected = selectedMode === item.key;
+                return (
+                  <TouchableOpacity
+                    key={item.key}
+                    style={[
+                      styles.modeOptionCard,
+                      {
+                        backgroundColor: isSelected
+                          ? (isDarkMode ? 'rgba(14, 165, 233, 0.15)' : '#F0F9FF')
+                          : (isDarkMode ? colors.surfaceSubtle : '#F8FAFC'),
+                        borderColor: isSelected ? '#0284C7' : colors.border,
+                      },
+                    ]}
+                    onPress={() => setSelectedMode(item.key as any)}
+                    activeOpacity={0.7}
+                  >
+                    <View
+                      style={[
+                        styles.modeOptionIconCircle,
+                        {
+                          backgroundColor: isSelected
+                            ? '#0284C7'
+                            : (isDarkMode ? '#334155' : '#E2E8F0'),
+                        },
+                      ]}
+                    >
+                      <Ionicons
+                        name={item.icon as any}
+                        size={18}
+                        color={isSelected ? '#FFF' : colors.textSecondary}
+                      />
+                    </View>
+                    <View style={{ flex: 1, marginLeft: 12 }}>
+                      <LocalizedText
+                        style={[
+                          styles.modeOptionCardTitle,
+                          {
+                            color: isSelected
+                              ? (isDarkMode ? '#38BDF8' : '#0369A1')
+                              : colors.textPrimary,
+                            fontWeight: isSelected ? '700' : '600',
+                          },
+                        ]}
+                      >
+                        {item.title}
+                      </LocalizedText>
+                      <LocalizedText style={[styles.modeOptionCardDesc, { color: colors.textSecondary }]}>
+                        {item.desc}
+                      </LocalizedText>
+                    </View>
+                    <Ionicons
+                      name={isSelected ? 'checkmark-circle' : 'ellipse-outline'}
+                      size={22}
+                      color={isSelected ? '#0284C7' : colors.textMuted}
+                    />
+                  </TouchableOpacity>
+                );
+              })}
+            </View>
+
+            {/* 3. Tùy chọn đồng bộ */}
+            <View
+              style={[
+                styles.syncSectionRow,
+                {
+                  backgroundColor: isDarkMode ? colors.surfaceSubtle : '#F8FAFC',
+                  borderColor: colors.border,
+                },
+              ]}
+            >
+              <View style={{ flex: 1, marginRight: 12 }}>
+                <LocalizedText style={[styles.syncTitle, { color: colors.textPrimary }]}>
+                  Đồng bộ tất cả tài khoản
+                </LocalizedText>
+                <LocalizedText style={[styles.syncSubtitle, { color: colors.textSecondary }]}>
+                  Áp dụng cho tất cả tài khoản người nhà đang theo dõi
+                </LocalizedText>
+              </View>
+              <Switch
+                value={syncAllFamily}
+                onValueChange={setSyncAllFamily}
+                trackColor={{ false: '#CBD5E1', true: '#38BDF8' }}
+                thumbColor={syncAllFamily ? '#0284C7' : '#F1F5F9'}
+              />
+            </View>
+
+            {/* Action Buttons */}
+            <View style={styles.sheetActionRow}>
+              {isSnoozeActive && (
+                <TouchableOpacity
+                  style={styles.cancelSnoozeBtn}
+                  onPress={handleCancelSnooze}
+                  activeOpacity={0.8}
+                >
+                  <Ionicons name="notifications" size={18} color="#EF4444" />
+                  <LocalizedText style={styles.cancelSnoozeBtnText}>Bật lại chuông</LocalizedText>
+                </TouchableOpacity>
+              )}
+
+              <TouchableOpacity
+                style={[styles.confirmSnoozeBtn, { flex: 1 }]}
+                onPress={handleConfirmSnooze}
+                activeOpacity={0.8}
+              >
+                <Ionicons name="checkmark-sharp" size={20} color="#FFF" />
+                <LocalizedText style={styles.confirmSnoozeBtnText}>
+                  {isSnoozeActive ? 'Cập nhật tạm dừng' : 'Xác nhận tạm dừng'}
+                </LocalizedText>
+              </TouchableOpacity>
+            </View>
+          </View>
+        </View>
+      </Modal>
     </SafeAreaView>
   );
 }
@@ -920,6 +1444,12 @@ const styles = StyleSheet.create({
     borderColor: '#E2E8F0',
     opacity: 0.6,
   },
+  modePillActiveSnooze: {
+    backgroundColor: '#FFFBEB',
+    borderColor: '#F59E0B',
+    opacity: 1,
+    ...Shadows.soft,
+  },
   modeIconCircle: {
     width: 24,
     height: 24,
@@ -931,6 +1461,76 @@ const styles = StyleSheet.create({
   modePillText: {
     fontSize: 13,
     fontWeight: '700',
+  },
+  // Emergency Banner
+  emergencyBanner: {
+    backgroundColor: '#FEF2F2',
+    borderWidth: 1.5,
+    borderColor: '#EF4444',
+    borderRadius: 16,
+    padding: 14,
+    marginBottom: 16,
+    ...Shadows.card,
+  },
+  emergencyBannerHeader: {
+    flexDirection: 'row',
+    alignItems: 'center',
+  },
+  emergencySirenPulse: {
+    width: 38,
+    height: 38,
+    borderRadius: 19,
+    backgroundColor: '#DC2626',
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  emergencyBannerTitle: {
+    fontSize: 13,
+    fontWeight: '800',
+    color: '#DC2626',
+    marginBottom: 2,
+  },
+  emergencyBannerMessage: {
+    fontSize: 12,
+    color: '#475569',
+    lineHeight: 16,
+    fontWeight: '500',
+  },
+  emergencyActionBtn: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: '#FEE2E2',
+    paddingHorizontal: 10,
+    paddingVertical: 6,
+    borderRadius: 12,
+    marginLeft: 8,
+    gap: 2,
+  },
+  emergencyActionBtnText: {
+    fontSize: 12,
+    fontWeight: '700',
+    color: '#DC2626',
+  },
+  // Stable Health Status
+  stableHealthCard: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    paddingVertical: 9,
+    paddingHorizontal: 12,
+    borderRadius: 12,
+    borderWidth: 1,
+    marginBottom: 16,
+    gap: 8,
+  },
+  stablePulseDot: {
+    width: 8,
+    height: 8,
+    borderRadius: 4,
+    backgroundColor: '#10B981',
+  },
+  stableHealthText: {
+    fontSize: 12.5,
+    fontWeight: '600',
   },
   // Khối One-Touch SOS 115
   sosCard: {
@@ -1854,5 +2454,286 @@ const styles = StyleSheet.create({
     fontSize: 11,
     color: Colors.textSecondary,
     fontWeight: '500',
+  },
+  reminderWidgetCard: {
+    backgroundColor: '#FFFFFF',
+    borderRadius: 16,
+    padding: 12,
+    marginTop: 10,
+    borderWidth: 1,
+    borderColor: '#E2E8F0',
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.04,
+    shadowRadius: 6,
+    elevation: 2,
+  },
+  reminderWidgetMain: {
+    flex: 1,
+    marginRight: 10,
+  },
+  reminderWidgetHeader: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    marginBottom: 6,
+  },
+  reminderIconCircle: {
+    width: 26,
+    height: 26,
+    borderRadius: 13,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  reminderWidgetTitle: {
+    fontSize: 13,
+    fontWeight: '700',
+  },
+  reminderRightHeader: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 4,
+  },
+  reminderLiveVoiceBadge: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 3,
+    backgroundColor: '#E0F2FE',
+    paddingHorizontal: 6,
+    paddingVertical: 2,
+    borderRadius: 6,
+  },
+  reminderLiveVoiceText: {
+    fontSize: 10,
+    fontWeight: '700',
+    color: '#0284C7',
+  },
+  reminderContentRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 8,
+  },
+  reminderClockBox: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 3,
+    backgroundColor: '#E0F2FE',
+    paddingHorizontal: 6,
+    paddingVertical: 2,
+    borderRadius: 6,
+  },
+  reminderClockText: {
+    fontSize: 11,
+    fontWeight: '800',
+    color: '#0284C7',
+  },
+  reminderMedText: {
+    fontSize: 13,
+    fontWeight: '600',
+    flex: 1,
+  },
+  reminderMedTextDone: {
+    textDecorationLine: 'line-through',
+    color: '#10B981',
+    opacity: 0.8,
+  },
+  reminderTickBtn: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 4,
+    paddingHorizontal: 10,
+    paddingVertical: 8,
+    borderRadius: 10,
+    borderWidth: 1,
+  },
+  reminderTickBtnPending: {
+    backgroundColor: '#F8FAFC',
+    borderColor: '#E2E8F0',
+  },
+  reminderTickBtnDone: {
+    backgroundColor: '#DCFCE7',
+    borderColor: '#10B981',
+  },
+  reminderTickText: {
+    fontSize: 12,
+    fontWeight: '700',
+  },
+  // ActionSheet / BottomSheet Modal Styles
+  modalOverlay: {
+    flex: 1,
+    justifyContent: 'flex-end',
+  },
+  modalBackdrop: {
+    ...StyleSheet.absoluteFill,
+    backgroundColor: 'rgba(0, 0, 0, 0.55)',
+  },
+  bottomSheetContainer: {
+    borderTopLeftRadius: 24,
+    borderTopRightRadius: 24,
+    borderTopWidth: 1,
+    paddingTop: 12,
+    paddingHorizontal: 20,
+    paddingBottom: Platform.OS === 'ios' ? 36 : 24,
+    maxHeight: '85%',
+  },
+  sheetHandle: {
+    width: 44,
+    height: 5,
+    borderRadius: 3,
+    backgroundColor: '#CBD5E1',
+    alignSelf: 'center',
+    marginBottom: 14,
+  },
+  sheetHeader: {
+    flexDirection: 'row',
+    alignItems: 'flex-start',
+    justifyContent: 'space-between',
+    marginBottom: 16,
+  },
+  sheetTitle: {
+    fontSize: 18,
+    fontWeight: '800',
+    marginBottom: 4,
+  },
+  sheetSubtitle: {
+    fontSize: 12.5,
+    lineHeight: 17,
+  },
+  sheetCloseBtn: {
+    width: 32,
+    height: 32,
+    borderRadius: 16,
+    alignItems: 'center',
+    justifyContent: 'center',
+    marginLeft: 8,
+  },
+  activeSnoozeBanner: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    padding: 12,
+    borderRadius: 12,
+    borderWidth: 1,
+    marginBottom: 16,
+  },
+  activeSnoozeBannerTitle: {
+    fontSize: 13,
+    fontWeight: '700',
+  },
+  activeSnoozeBannerSub: {
+    fontSize: 11.5,
+    marginTop: 2,
+    fontWeight: '500',
+  },
+  sheetSectionTitle: {
+    fontSize: 13.5,
+    fontWeight: '700',
+    marginBottom: 10,
+    marginTop: 4,
+  },
+  durationOptionsGrid: {
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+    gap: 8,
+    marginBottom: 16,
+  },
+  durationOptionBtn: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    paddingVertical: 10,
+    paddingHorizontal: 12,
+    borderRadius: 12,
+    borderWidth: 1.5,
+    gap: 6,
+    minWidth: '47%',
+    flex: 1,
+  },
+  durationOptionText: {
+    fontSize: 13,
+  },
+  modeOptionList: {
+    gap: 8,
+    marginBottom: 16,
+  },
+  modeOptionCard: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    padding: 12,
+    borderRadius: 14,
+    borderWidth: 1.5,
+  },
+  modeOptionIconCircle: {
+    width: 36,
+    height: 36,
+    borderRadius: 18,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  modeOptionCardTitle: {
+    fontSize: 13.5,
+    marginBottom: 2,
+  },
+  modeOptionCardDesc: {
+    fontSize: 11.5,
+    lineHeight: 16,
+  },
+  syncSectionRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    padding: 14,
+    borderRadius: 14,
+    borderWidth: 1,
+    marginBottom: 20,
+  },
+  syncTitle: {
+    fontSize: 13.5,
+    fontWeight: '700',
+    marginBottom: 2,
+  },
+  syncSubtitle: {
+    fontSize: 11.5,
+    lineHeight: 16,
+  },
+  sheetActionRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 10,
+  },
+  confirmSnoozeBtn: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    backgroundColor: '#0284C7',
+    paddingVertical: 14,
+    borderRadius: 14,
+    gap: 6,
+    shadowColor: '#0284C7',
+    shadowOffset: { width: 0, height: 4 },
+    shadowOpacity: 0.3,
+    shadowRadius: 8,
+    elevation: 4,
+  },
+  confirmSnoozeBtnText: {
+    color: '#FFF',
+    fontSize: 15,
+    fontWeight: '700',
+  },
+  cancelSnoozeBtn: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    backgroundColor: '#FEE2E2',
+    paddingVertical: 14,
+    paddingHorizontal: 16,
+    borderRadius: 14,
+    gap: 6,
+  },
+  cancelSnoozeBtnText: {
+    color: '#DC2626',
+    fontSize: 14,
+    fontWeight: '700',
   },
 });

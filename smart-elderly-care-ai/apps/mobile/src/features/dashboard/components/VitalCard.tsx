@@ -2,8 +2,10 @@
 // Component hiển thị một chỉ số sinh hiệu với màu sắc theo trạng thái
 
 import React from 'react';
-import { View, Text, StyleSheet } from 'react-native';
+import { View, StyleSheet } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
+import { LocalizedText } from '../../../i18n/LocalizedComponents';
+
 
 interface NormalRange {
   min: number;
@@ -54,12 +56,12 @@ export default function VitalCard({
       </View>
 
       {/* Label */}
-      <Text style={styles.label}>{label}</Text>
+      <LocalizedText style={styles.label}>{label}</LocalizedText>
 
       {/* Value */}
       <View style={styles.valueRow}>
-        <Text style={[styles.value, { color: statusColor }]}>{displayValue}</Text>
-        <Text style={styles.unit}>{unit}</Text>
+        <LocalizedText style={[styles.value, { color: statusColor }]}>{displayValue}</LocalizedText>
+        <LocalizedText style={styles.unit}>{unit}</LocalizedText>
       </View>
 
       {/* Status indicator */}

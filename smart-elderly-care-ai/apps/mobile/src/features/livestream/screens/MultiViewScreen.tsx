@@ -3,21 +3,14 @@
 // Hỗ trợ hiển thị 4 kênh giám sát theo thời gian thực (WebRTC / RTSP)
 
 import React, { useState } from 'react';
-import {
-  View,
-  Text,
-  StyleSheet,
-  TouchableOpacity,
-  ScrollView,
-  Image,
-  Alert,
-  Dimensions,
-} from 'react-native';
+import { View, StyleSheet, TouchableOpacity, ScrollView, Image, Dimensions } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
 import { Colors, Shadows } from '../../../theme/colors';
 import { useVitalStore } from '../../../store/useVitalStore';
 import { useTheme } from '../../../store/useThemeStore';
+import { LocalizedAlert, LocalizedText } from '../../../i18n/LocalizedComponents';
+
 
 const { width: SCREEN_WIDTH } = Dimensions.get('window');
 
@@ -126,8 +119,8 @@ export default function MultiViewScreen({ navigation }: any) {
           </TouchableOpacity>
 
           <View style={{ marginLeft: 8 }}>
-            <Text style={[styles.headerTitle, { color: isDarkMode ? '#FFF' : '#0F172A' }]}>Nhiều Chế Độ Xem</Text>
-            <Text style={[styles.headerSub, { color: isDarkMode ? '#94A3B8' : '#64748B' }]}>{house.name} • 4 Kênh WebRTC</Text>
+            <LocalizedText style={[styles.headerTitle, { color: isDarkMode ? '#FFF' : '#0F172A' }]}>Nhiều Chế Độ Xem</LocalizedText>
+            <LocalizedText style={[styles.headerSub, { color: isDarkMode ? '#94A3B8' : '#64748B' }]}>{house.name} • 4 Kênh WebRTC</LocalizedText>
           </View>
         </View>
 
@@ -238,18 +231,18 @@ export default function MultiViewScreen({ navigation }: any) {
                 <View style={isGrid ? styles.feedTopRowGrid : styles.feedTopRow}>
                   <View style={isGrid ? styles.roomBadgeGrid : styles.roomBadge}>
                     <View style={isGrid ? styles.greenDotGrid : styles.greenDot} />
-                    <Text
+                    <LocalizedText
                       style={isGrid ? styles.roomBadgeTextGrid : styles.roomBadgeText}
                       numberOfLines={1}
                     >
                       {feed.room}
-                    </Text>
+                    </LocalizedText>
                   </View>
 
                   <View style={isGrid ? styles.fpsBadgeGrid : styles.fpsBadge}>
-                    <Text style={isGrid ? styles.fpsBadgeTextGrid : styles.fpsBadgeText}>
+                    <LocalizedText style={isGrid ? styles.fpsBadgeTextGrid : styles.fpsBadgeText}>
                       {feed.fps} FPS
-                    </Text>
+                    </LocalizedText>
                   </View>
                 </View>
 
@@ -262,12 +255,12 @@ export default function MultiViewScreen({ navigation }: any) {
                       color="#38BDF8"
                       style={{ marginRight: 3 }}
                     />
-                    <Text
+                    <LocalizedText
                       style={isGrid ? styles.aiTagTextGrid : styles.aiTagText}
                       numberOfLines={1}
                     >
                       {feed.aiTag}
-                    </Text>
+                    </LocalizedText>
                   </View>
 
                   <View style={styles.feedControlButtons}>
@@ -298,10 +291,10 @@ export default function MultiViewScreen({ navigation }: any) {
               {/* Feed Title under Card (for List Mode) */}
               {!isGrid && (
                 <View style={[styles.listCardFooter, !isDarkMode && { backgroundColor: '#FFFFFF' }]}>
-                  <Text style={[styles.listCardTitle, !isDarkMode && { color: '#0F172A' }]}>{feed.name}</Text>
-                  <Text style={[styles.listCardSub, !isDarkMode && { color: '#64748B' }]}>
+                  <LocalizedText style={[styles.listCardTitle, !isDarkMode && { color: '#0F172A' }]}>{feed.name}</LocalizedText>
+                  <LocalizedText style={[styles.listCardSub, !isDarkMode && { color: '#64748B' }]}>
                     Băng thông: {feed.bitrate} • Suy luận NPU Hub RK3588S
-                  </Text>
+                  </LocalizedText>
                 </View>
               )}
             </TouchableOpacity>
@@ -323,7 +316,7 @@ export default function MultiViewScreen({ navigation }: any) {
             size={layoutMode === 'GRID' ? 15 : 20}
             color={!isDarkMode ? '#0284C7' : '#38BDF8'}
           />
-          <Text
+          <LocalizedText
             style={[
               layoutMode === 'GRID' ? styles.multiViewNoticeTextGrid : styles.multiViewNoticeText,
               !isDarkMode && { color: '#0369A1' },
@@ -333,7 +326,7 @@ export default function MultiViewScreen({ navigation }: any) {
             {layoutMode === 'GRID'
               ? 'Chạm vào ô camera bất kỳ để phóng to & xem chi tiết.'
               : 'Chạm vào bất kỳ ô camera nào để mở màn hình chi tiết, xem dòng thời gian 24/48h và kích hoạt đàm thoại 2 chiều.'}
-          </Text>
+          </LocalizedText>
         </View>
       </ScrollView>
 
@@ -358,13 +351,13 @@ export default function MultiViewScreen({ navigation }: any) {
           activeOpacity={0.8}
         >
           <Ionicons name="home-outline" size={20} color={!isDarkMode ? '#0F172A' : '#FFF'} />
-          <Text style={[styles.backHomeBtnText, !isDarkMode && { color: '#0F172A' }]}>Quay Về Trang Chủ</Text>
+          <LocalizedText style={[styles.backHomeBtnText, !isDarkMode && { color: '#0F172A' }]}>Quay Về Trang Chủ</LocalizedText>
         </TouchableOpacity>
 
         <TouchableOpacity
           style={styles.sosActionBtn}
           onPress={() => {
-            Alert.alert(
+            LocalizedAlert.alert(
               '🚨 KÍCH HOẠT SOS 115',
               `Gọi cấp cứu 115 và sao chép vị trí:\n"${house.address}"`,
               [
@@ -372,7 +365,7 @@ export default function MultiViewScreen({ navigation }: any) {
                 {
                   text: 'Gọi 115',
                   style: 'destructive',
-                  onPress: () => Alert.alert('Đã kết nối', 'Đang thực hiện cuộc gọi khẩn cấp 115.'),
+                  onPress: () => LocalizedAlert.alert('Đã kết nối', 'Đang thực hiện cuộc gọi khẩn cấp 115.'),
                 },
               ]
             );
@@ -380,7 +373,7 @@ export default function MultiViewScreen({ navigation }: any) {
           activeOpacity={0.8}
         >
           <Ionicons name="call" size={18} color="#FFF" />
-          <Text style={styles.sosActionBtnText}>SOS 115</Text>
+          <LocalizedText style={styles.sosActionBtnText}>SOS 115</LocalizedText>
         </TouchableOpacity>
       </View>
     </SafeAreaView>

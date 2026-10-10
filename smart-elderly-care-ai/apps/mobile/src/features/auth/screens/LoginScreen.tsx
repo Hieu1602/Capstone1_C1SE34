@@ -1,195 +1,490 @@
 // LoginScreen.tsx
-// Màn hình Đăng nhập theo số điện thoại
+// Màn hình Chào mừng & Đăng nhập theo phong cách Pinterest Collage hiện đại
 
 import React, { useState } from 'react';
-import {
-  View,
-  Text,
-  StyleSheet,
-  TextInput,
-  TouchableOpacity,
-  SafeAreaView,
-  Image,
-  Alert,
-  ScrollView,
-  KeyboardAvoidingView,
-  Platform,
-} from 'react-native';
+import { View, StyleSheet, TouchableOpacity, SafeAreaView, Image, ScrollView, KeyboardAvoidingView, Platform, Modal, ActivityIndicator, Dimensions } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { Colors } from '../../../theme/colors';
 import { useAuthStore } from '../../../store/useVitalStore';
 import { authApi } from '../../../services/api';
+import { LocalizedAlert, LocalizedText, LocalizedTextInput } from '../../../i18n/LocalizedComponents';
+
+
+const { width: SCREEN_WIDTH } = Dimensions.get('window');
+
+// Danh sách hình ảnh collage chất lượng cao (phong cách sống, chăm sóc gia đình, y tế)
+const COLLAGE_IMAGES = {
+  center: 'https://images.unsplash.com/photo-1576765608535-5f04d1e3f289?auto=format&fit=crop&w=600&q=80', // Nụ cười cụ bà hạnh phúc
+  topLeft: 'https://images.unsplash.com/photo-1513694203232-719a280e022f?auto=format&fit=crop&w=500&q=80', // Không gian sống ấm áp, gương & cây xanh
+  topRight: 'https://images.unsplash.com/photo-1595950653106-6c9ebd614d3a?auto=format&fit=crop&w=500&q=80', // Giày đi bộ rèn luyện sức khỏe
+  midRight: 'https://images.unsplash.com/photo-1581579438747-1dc8d17bbce4?auto=format&fit=crop&w=500&q=80', // Bác sĩ & chăm sóc ân cần
+  bottomLeft: 'https://images.unsplash.com/photo-1525351484163-7529414344d8?auto=format&fit=crop&w=500&q=80', // Bữa sáng dinh dưỡng, trái cây
+  bottomRight: 'https://images.unsplash.com/photo-1507473885765-e6ed057f782c?auto=format&fit=crop&w=500&q=80', // Đèn ngủ đầu giường bình yên
+};
 
 export default function LoginScreen({ navigation }: any) {
-  const { login } = useAuthStore() as unknown as {
-    login: (access: string, refresh: string, name: string, userId: string) => void;
-  };
-  const [activeTab, setActiveTab] = useState<'none' | 'phone'>('none');
+  const { login } = useAuthStore();
+
+  const [authMode, setAuthMode] = useState<'login' | 'register'>('login');
+  const [isLoginModalVisible, setIsLoginModalVisible] = useState(false);
   const [account, setAccount] = useState('');
   const [password, setPassword] = useState('');
+  const [registerPhone, setRegisterPhone] = useState('');
+  const [registerPassword, setRegisterPassword] = useState('');
+  const [registerConfirmPassword, setRegisterConfirmPassword] = useState('');
   const [showPassword, setShowPassword] = useState(false);
-  const [agreed, setAgreed] = useState(true);
+  const [showRegisterPassword, setShowRegisterPassword] = useState(false);
+  const [showRegisterConfirmPassword, setShowRegisterConfirmPassword] = useState(false);
+  const [isLoading, setIsLoading] = useState(false);
+  const [loginError, setLoginError] = useState('');
 
-  const handleSelectMethod = () => {
-    setAccount('');
-    setPassword('');
-    setAgreed(true);
-    setShowPassword(false);
-    setActiveTab('phone');
-  };
-
+  // Đăng nhập vào hệ thống
   const handleLoginAction = async () => {
-    if (!agreed) {
-      setAgreed(true);
-    }
-
+    setLoginError('');
     if (!account.trim() || !password.trim()) {
-      Alert.alert('Thiếu thông tin', 'Vui lòng nhập số điện thoại và mật khẩu.');
+      setLoginError('Vui lòng nhập số điện thoại và mật khẩu.');
       return;
     }
 
+    setIsLoading(true);
     try {
-      const rawAccount = account.trim();
-      const normalizedAccount = rawAccount.startsWith('0')
-        ? `+84${rawAccount.slice(1)}`
-        : rawAccount.startsWith('84')
-          ? `+${rawAccount}`
-          : rawAccount;
+      const cleanAccount = account.replace(/\s+/g, '').replace(/^\+84/, '0');
+      const normalizedAccount = cleanAccount.startsWith('0')
+        ? `+84${cleanAccount.slice(1)}`
+        : cleanAccount.startsWith('+')
+          ? cleanAccount
+          : `+84${cleanAccount}`;
+
       const response = await authApi.login(normalizedAccount, password);
       const { access_token, refresh_token } = response.data;
 
-      login(access_token, refresh_token, 'User', normalizedAccount);
-      Alert.alert('Đăng nhập thành công', 'Bạn đã đăng nhập vào hệ thống.');
+      let resolvedName = 'Nguyễn Hữu Nghĩa';
+      let resolvedRole = 'user';
+      if (normalizedAccount.includes('111222')) {
+        resolvedName = 'BS. Trần Văn Minh';
+        resolvedRole = 'doctor';
+      } else if (normalizedAccount.includes('999888')) {
+        resolvedName = 'Nguyễn Thị Lan';
+        resolvedRole = 'user';
+      }
+
+      // Lưu token và chuyển đổi giao diện dựa trên vai trò Bác sĩ / Người nhà
+      login(access_token, refresh_token, resolvedName, normalizedAccount, normalizedAccount, resolvedRole);
+      setIsLoginModalVisible(false);
     } catch (error: any) {
-      const detail = error?.response?.data?.detail || 'Không thể đăng nhập. Vui lòng thử lại.';
-      Alert.alert('Đăng nhập thất bại', detail);
+      const status = error?.response?.status;
+      const detail = error?.response?.data?.detail;
+      if (!error?.response) {
+        setLoginError('Không kết nối được máy chủ. Vui lòng kiểm tra kết nối và thử lại.');
+      } else if (status === 401) {
+        setLoginError('Số điện thoại hoặc mật khẩu không đúng. Vui lòng kiểm tra lại.');
+      } else if (status === 403) {
+        setLoginError('Tài khoản hiện đã bị vô hiệu hóa. Vui lòng liên hệ quản trị viên.');
+      } else {
+        setLoginError(typeof detail === 'string' ? detail : 'Đăng nhập chưa thành công. Vui lòng thử lại.');
+      }
+    } finally {
+      setIsLoading(false);
     }
+  };
+
+  // Điền nhanh tài khoản mẫu để kiểm thử
+  const handleQuickFill = (phone: string, pass: string) => {
+    setAccount(phone);
+    setPassword(pass);
+    setLoginError('');
+  };
+
+  const openAuthModal = (mode: 'login' | 'register') => {
+    setAuthMode(mode);
+    setIsLoginModalVisible(true);
+  };
+
+  const handleRegisterInModal = () => {
+    if (!registerPhone.trim() || !registerPassword.trim() || !registerConfirmPassword.trim()) {
+      LocalizedAlert.alert('Thiếu thông tin', 'Vui lòng nhập đầy đủ số điện thoại và mật khẩu.');
+      return;
+    }
+
+    if (registerPassword !== registerConfirmPassword) {
+      LocalizedAlert.alert('Hai mật khẩu chưa khớp', 'Hãy nhập cùng một mật khẩu ở cả hai ô.');
+      return;
+    }
+
+    setIsLoginModalVisible(false);
+    navigation.navigate('Register', {
+      phone: registerPhone.trim(),
+      password: registerPassword,
+      confirmPassword: registerConfirmPassword,
+    });
   };
 
   return (
     <SafeAreaView style={styles.safeArea}>
-      <KeyboardAvoidingView
-        behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
-        style={{ flex: 1 }}
+      <ScrollView
+        contentContainerStyle={styles.scrollContainer}
+        showsVerticalScrollIndicator={false}
+        bounces={false}
       >
-        <ScrollView contentContainerStyle={styles.container} showsVerticalScrollIndicator={false}>
-          <View style={styles.headerSection}>
-            {activeTab !== 'none' ? (
-              <TouchableOpacity
-                style={styles.backButton}
-                onPress={() => {
-                  setActiveTab('none');
-                  setAccount('');
-                  setPassword('');
-                }}
-              >
-                <Ionicons name="arrow-back" size={24} color={Colors.textPrimary || '#0F172A'} />
-              </TouchableOpacity>
-            ) : (
-              <View style={styles.appIconWrapper}>
-                <Image
-                  source={{ uri: 'https://cdn-icons-png.flaticon.com/512/3135/3135715.png' }}
-                  style={styles.appIcon}
-                />
-              </View>
-            )}
-            <Text style={styles.welcomeTitle}>
-              {activeTab === 'phone' ? 'Đăng nhập SĐT' : 'Chào mừng'}
-            </Text>
+        {/* ================================================================= */}
+        {/* PHẦN 1: DYNAMIC PHOTO COLLAGE (PHONG CÁCH PINTEREST)              */}
+        {/* ================================================================= */}
+        <View style={styles.collageContainer}>
+          {/* Card Top Left: Gương & phòng khách Bắc Âu */}
+          <View style={[styles.card, styles.cardTopLeft]}>
+            <Image
+              source={{ uri: COLLAGE_IMAGES.topLeft }}
+              style={styles.cardImage}
+              resizeMode="cover"
+            />
           </View>
 
-          {activeTab === 'none' && (
+          {/* Card Top Right: Giày vận động thể thao */}
+          <View style={[styles.card, styles.cardTopRight]}>
+            <Image
+              source={{ uri: COLLAGE_IMAGES.topRight }}
+              style={styles.cardImage}
+              resizeMode="cover"
+            />
+          </View>
+
+          {/* Card Center: Hero chính (Nụ cười ấm áp tuổi già) */}
+          <View style={[styles.card, styles.cardCenterHero]}>
+            <Image
+              source={{ uri: COLLAGE_IMAGES.center }}
+              style={styles.cardImage}
+              resizeMode="cover"
+            />
+          </View>
+
+          {/* Card Middle Right: Chăm sóc & khám sức khỏe */}
+          <View style={[styles.card, styles.cardMidRight]}>
+            <Image
+              source={{ uri: COLLAGE_IMAGES.midRight }}
+              style={styles.cardImage}
+              resizeMode="cover"
+            />
+          </View>
+
+          {/* Card Bottom Left: Đĩa bánh dâu dinh dưỡng */}
+          <View style={[styles.card, styles.cardBottomLeft]}>
+            <Image
+              source={{ uri: COLLAGE_IMAGES.bottomLeft }}
+              style={styles.cardImage}
+              resizeMode="cover"
+            />
+          </View>
+
+          {/* Card Bottom Right: Đèn ngủ an lành */}
+          <View style={[styles.card, styles.cardBottomRight]}>
+            <Image
+              source={{ uri: COLLAGE_IMAGES.bottomRight }}
+              style={styles.cardImage}
+              resizeMode="cover"
+            />
+          </View>
+        </View>
+
+        {/* ================================================================= */}
+        {/* PHẦN 2: LOGO BADGE, TIÊU ĐỀ & NÚT HÀNH ĐỘNG                       */}
+        {/* ================================================================= */}
+        <View style={styles.bottomSection}>
+          {/* Logo Badge hình tròn màu cam thương hiệu */}
+          <View style={styles.logoBadgeContainer}>
+            <View style={styles.logoBadge}>
+              <Ionicons name="heart" size={26} color="#FFFFFF" />
+            </View>
+          </View>
+
+          {/* Tiêu đề & Slogan */}
+          <LocalizedText style={styles.heroTitle}>
+            Tạo dựng cuộc sống{'\n'}bạn yêu thích
+          </LocalizedText>
+          <LocalizedText style={styles.heroSubtitle}>
+            Hệ sinh thái AI bảo vệ sức khỏe & an toàn người cao tuổi 24/7
+          </LocalizedText>
+
+          {/* Bộ 2 nút hành động theo mockup full-screen */}
+          <View style={styles.actionButtonsContainer}>
             <TouchableOpacity
-              style={styles.countryPickerBtn}
-              activeOpacity={0.7}
-              onPress={() => Alert.alert('Khu vực', 'Đã chọn: Vietnam (+84)')}
+              style={styles.btnRegister}
+              activeOpacity={0.88}
+              onPress={() => navigation.navigate('Register')}
             >
-              <View style={styles.countryLeftWrap}>
-                <View style={styles.countryIconWrap}>
-                  <Ionicons name="globe-outline" size={15} color={Colors.textPrimary || '#0F172A'} />
-                </View>
-                <Text style={styles.countryText}>Vietnam</Text>
-              </View>
-              <Ionicons name="chevron-forward" size={15} color={Colors.textSecondary || '#64748B'} />
+              <LocalizedText style={styles.btnRegisterText}>Đăng ký</LocalizedText>
             </TouchableOpacity>
-          )}
 
-          {activeTab === 'none' ? (
-            <View style={styles.methodsContainer}>
-              <TouchableOpacity
-                style={styles.authButton}
-                activeOpacity={0.7}
-                onPress={handleSelectMethod}
-              >
-                <View style={styles.authButtonInner}>
-                  <Ionicons name="phone-portrait-outline" size={20} color={Colors.textPrimary || '#0F172A'} style={styles.authIcon} />
-                  <Text style={styles.authButtonText}>Số điện thoại</Text>
-                </View>
-              </TouchableOpacity>
-            </View>
-          ) : (
-            <View style={styles.formContainer}>
-              <View style={styles.inputContainer}>
-                <Ionicons name="phone-portrait-outline" size={22} color={Colors.textSecondary || '#64748B'} style={styles.inputIcon} />
-                <TextInput
-                  style={styles.input}
-                  placeholder="Nhập số điện thoại"
-                  placeholderTextColor="#94A3B8"
-                  keyboardType="phone-pad"
-                  value={account}
-                  onChangeText={setAccount}
-                  autoCapitalize="none"
-                />
-              </View>
-
-              <View style={styles.inputContainer}>
-                <Ionicons name="lock-closed-outline" size={22} color={Colors.textSecondary || '#64748B'} style={styles.inputIcon} />
-                <TextInput
-                  style={[styles.input, { flex: 1 }]}
-                  placeholder="Nhập mật khẩu"
-                  placeholderTextColor="#94A3B8"
-                  secureTextEntry={!showPassword}
-                  value={password}
-                  onChangeText={setPassword}
-                />
-                <TouchableOpacity onPress={() => setShowPassword(!showPassword)}>
-                  <Ionicons name={showPassword ? 'eye-outline' : 'eye-off-outline'} size={20} color={Colors.textSecondary || '#64748B'} />
-                </TouchableOpacity>
-              </View>
-
-              <TouchableOpacity
-                style={styles.forgotPasswordContainer}
-                onPress={() => navigation.navigate('ForgotPassword')}
-              >
-                <Text style={styles.forgotPasswordText}>Quên mật khẩu?</Text>
-              </TouchableOpacity>
-
-              <TouchableOpacity style={styles.loginButton} activeOpacity={0.8} onPress={handleLoginAction}>
-                <Text style={styles.loginButtonText}>Đăng nhập</Text>
-              </TouchableOpacity>
-            </View>
-          )}
-
-          <TouchableOpacity style={styles.registerLinkWrapper} onPress={() => navigation.navigate('Register')}>
-            <Text style={styles.registerLinkText}>Tạo tài khoản mới</Text>
-          </TouchableOpacity>
-
-          <View style={styles.termsContainer}>
-            <TouchableOpacity style={styles.checkbox} onPress={() => setAgreed(!agreed)} activeOpacity={0.8}>
-              {agreed && <View style={styles.checkboxInner} />}
+            <TouchableOpacity
+              style={styles.btnLogin}
+              activeOpacity={0.88}
+              onPress={() => setIsLoginModalVisible(true)}
+            >
+              <LocalizedText style={styles.btnLoginText}>Đăng nhập</LocalizedText>
             </TouchableOpacity>
-            <Text style={styles.termsText}>
-              Tôi đã đọc và đồng ý với thỏa thuận quyền riêng tư{' '}
-              <Text
-                style={styles.linkText}
-                onPress={() => Alert.alert('Chính sách bảo mật', 'Hiển thị nội dung chính sách quyền riêng tư.')}
-              >
-                Chính sách bảo mật
-              </Text>
-            </Text>
           </View>
-        </ScrollView>
-      </KeyboardAvoidingView>
+
+          {/* Điều khoản pháp lý ở chân trang */}
+          <LocalizedText style={styles.termsNoticeText}>
+            Bằng cách tiếp tục, bạn đồng ý với{' '}
+            <LocalizedText
+              style={styles.termsLink}
+              onPress={() => LocalizedAlert.alert('Điều khoản dịch vụ', 'Hệ thống Smart Elderly Care AI tuân thủ chuẩn an ninh y tế.')}
+            >
+              Điều khoản dịch vụ
+            </LocalizedText>{' '}
+            của SECA và xác nhận rằng bạn đã đọc{' '}
+            <LocalizedText
+              style={styles.termsLink}
+              onPress={() => LocalizedAlert.alert('Chính sách bảo mật', 'Bảo mật thông tin sinh hiệu chuẩn mã hóa AES-256.')}
+            >
+              Chính sách quyền riêng tư
+            </LocalizedText>{' '}
+            của chúng tôi.{' '}
+            <LocalizedText
+              style={styles.termsLink}
+              onPress={() => LocalizedAlert.alert('Thông báo thu thập', 'Dữ liệu được thu thập từ Camera AI và Vòng tay BLE.')}
+            >
+              Thông báo khi thu thập
+            </LocalizedText>
+            .
+          </LocalizedText>
+        </View>
+      </ScrollView>
+
+      {/* ================================================================= */}
+      {/* PHẦN 3: MODAL ĐĂNG NHẬP (BOTTOM SHEET HIỆN ĐẠI)                   */}
+      {/* ================================================================= */}
+      <Modal
+        visible={isLoginModalVisible}
+        animationType="fade"
+        transparent={false}
+        onRequestClose={() => setIsLoginModalVisible(false)}
+      >
+        <KeyboardAvoidingView
+          behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
+          style={styles.modalOverlay}
+        >
+          <View style={styles.modalSheet}>
+            <ScrollView
+              contentContainerStyle={styles.modalScrollContainer}
+              showsVerticalScrollIndicator={false}
+              bounces={false}
+            >
+              <View style={styles.collageContainer}>
+                <TouchableOpacity
+                  style={styles.backToWelcomeButton}
+                  accessibilityRole="button"
+                  accessibilityLabel="Quay lại màn hình đầu tiên"
+                  onPress={() => {
+                    setIsLoginModalVisible(false);
+                    setAuthMode('login');
+                  }}
+                >
+                  <Ionicons name="arrow-back" size={20} color="#0F172A" />
+                  <LocalizedText style={styles.backToWelcomeText}>Quay lại</LocalizedText>
+                </TouchableOpacity>
+                <View style={[styles.card, styles.cardTopLeft]}>
+                  <Image source={{ uri: COLLAGE_IMAGES.topLeft }} style={styles.cardImage} resizeMode="cover" />
+                </View>
+                <View style={[styles.card, styles.cardTopRight]}>
+                  <Image source={{ uri: COLLAGE_IMAGES.topRight }} style={styles.cardImage} resizeMode="cover" />
+                </View>
+                <View style={[styles.card, styles.cardCenterHero]}>
+                  <Image source={{ uri: COLLAGE_IMAGES.center }} style={styles.cardImage} resizeMode="cover" />
+                </View>
+                <View style={[styles.card, styles.cardMidRight]}>
+                  <Image source={{ uri: COLLAGE_IMAGES.midRight }} style={styles.cardImage} resizeMode="cover" />
+                </View>
+                <View style={[styles.card, styles.cardBottomLeft]}>
+                  <Image source={{ uri: COLLAGE_IMAGES.bottomLeft }} style={styles.cardImage} resizeMode="cover" />
+                </View>
+                <View style={[styles.card, styles.cardBottomRight]}>
+                  <Image source={{ uri: COLLAGE_IMAGES.bottomRight }} style={styles.cardImage} resizeMode="cover" />
+                </View>
+              </View>
+
+              <View style={styles.bottomSection}>
+                <View style={styles.logoBadgeContainer}>
+                  <View style={styles.logoBadge}>
+                    <Ionicons name="heart" size={26} color="#FFFFFF" />
+                  </View>
+                </View>
+
+                <LocalizedText style={styles.heroTitle}>
+                  {authMode === 'login' ? 'Chào mừng bạn trở lại' : 'Tạo tài khoản mới'}
+                </LocalizedText>
+
+                <LocalizedText style={styles.heroSubtitle}>
+                  {authMode === 'login'
+                    ? 'Nhập thông tin tài khoản người nhà hoặc bác sĩ để tiếp tục.'
+                    : 'Tạo tài khoản để trải nghiệm đầy đủ dịch vụ chăm sóc người cao tuổi.'}
+                </LocalizedText>
+
+                <View style={styles.formCard}>
+                  {authMode === 'login' ? (
+                    <>
+                      <View style={styles.inputWrap}>
+                        <View style={styles.inputPrefix}>
+                          <Ionicons name="call-outline" size={18} color="#64748B" />
+                          <LocalizedText style={styles.prefixText}>+84</LocalizedText>
+                        </View>
+                        <LocalizedTextInput
+                          style={styles.textInput}
+                          placeholder="Nhập số điện thoại"
+                          placeholderTextColor="#94A3B8"
+                          keyboardType="phone-pad"
+                          value={account}
+                          onChangeText={(value) => {
+                            setAccount(value);
+                            setLoginError('');
+                          }}
+                          autoCapitalize="none"
+                        />
+                      </View>
+
+                      <View style={styles.inputWrap}>
+                        <View style={styles.inputPrefix}>
+                          <Ionicons name="lock-closed-outline" size={18} color="#64748B" />
+                        </View>
+                        <LocalizedTextInput
+                          style={[styles.textInput, { flex: 1 }]}
+                          placeholder="Mật khẩu"
+                          placeholderTextColor="#94A3B8"
+                          secureTextEntry={!showPassword}
+                          value={password}
+                          onChangeText={(value) => {
+                            setPassword(value);
+                            setLoginError('');
+                          }}
+                        />
+                        <TouchableOpacity style={styles.eyeBtn} onPress={() => setShowPassword(!showPassword)}>
+                          <Ionicons name={showPassword ? 'eye-outline' : 'eye-off-outline'} size={20} color="#64748B" />
+                        </TouchableOpacity>
+                      </View>
+
+                      {loginError ? (
+                        <View style={styles.loginErrorBox} accessibilityRole="alert">
+                          <Ionicons name="alert-circle-outline" size={18} color="#B42318" />
+                          <LocalizedText style={styles.loginErrorText}>{loginError}</LocalizedText>
+                        </View>
+                      ) : null}
+
+                      <TouchableOpacity
+                        style={styles.forgotBtn}
+                        onPress={() => {
+                          setIsLoginModalVisible(false);
+                          navigation.navigate('ForgotPassword');
+                        }}
+                      >
+                        <LocalizedText style={styles.forgotText}>Quên mật khẩu?</LocalizedText>
+                      </TouchableOpacity>
+
+                      <View style={styles.quickFillContainer}>
+                        <LocalizedText style={styles.quickFillLabel}>Tài khoản mẫu thử nghiệm</LocalizedText>
+                        <View style={styles.quickFillRow}>
+                          <TouchableOpacity style={styles.quickFillChip} onPress={() => handleQuickFill('0905123456', '12345678')}>
+                            <Ionicons name="person-circle-outline" size={14} color="#0284C7" />
+                            <LocalizedText style={styles.quickFillChipText}>Chủ nhà</LocalizedText>
+                          </TouchableOpacity>
+
+                          <TouchableOpacity style={styles.quickFillChip} onPress={() => handleQuickFill('0905111222', '12345678')}>
+                            <Ionicons name="medkit-outline" size={14} color="#16A34A" />
+                            <LocalizedText style={styles.quickFillChipText}>Bác sĩ</LocalizedText>
+                          </TouchableOpacity>
+                        </View>
+                      </View>
+                    </>
+                  ) : (
+                    <>
+                      <View style={styles.inputWrap}>
+                        <View style={styles.inputPrefix}>
+                          <Ionicons name="call-outline" size={18} color="#64748B" />
+                          <LocalizedText style={styles.prefixText}>+84</LocalizedText>
+                        </View>
+                        <LocalizedTextInput
+                          style={styles.textInput}
+                          placeholder="Nhập số điện thoại"
+                          placeholderTextColor="#94A3B8"
+                          keyboardType="phone-pad"
+                          value={registerPhone}
+                          onChangeText={setRegisterPhone}
+                          autoCapitalize="none"
+                        />
+                      </View>
+
+                      <View style={styles.inputWrap}>
+                        <View style={styles.inputPrefix}>
+                          <Ionicons name="lock-closed-outline" size={18} color="#64748B" />
+                        </View>
+                        <LocalizedTextInput
+                          style={[styles.textInput, { flex: 1 }]}
+                          placeholder="Mật khẩu"
+                          placeholderTextColor="#94A3B8"
+                          secureTextEntry={!showRegisterPassword}
+                          value={registerPassword}
+                          onChangeText={setRegisterPassword}
+                        />
+                        <TouchableOpacity style={styles.eyeBtn} onPress={() => setShowRegisterPassword(!showRegisterPassword)}>
+                          <Ionicons name={showRegisterPassword ? 'eye-outline' : 'eye-off-outline'} size={20} color="#64748B" />
+                        </TouchableOpacity>
+                      </View>
+
+                      <View style={styles.inputWrap}>
+                        <View style={styles.inputPrefix}>
+                          <Ionicons name="shield-checkmark-outline" size={18} color="#64748B" />
+                        </View>
+                        <LocalizedTextInput
+                          style={[styles.textInput, { flex: 1 }]}
+                          placeholder="Xác nhận mật khẩu"
+                          placeholderTextColor="#94A3B8"
+                          secureTextEntry={!showRegisterConfirmPassword}
+                          value={registerConfirmPassword}
+                          onChangeText={setRegisterConfirmPassword}
+                        />
+                        <TouchableOpacity style={styles.eyeBtn} onPress={() => setShowRegisterConfirmPassword(!showRegisterConfirmPassword)}>
+                          <Ionicons name={showRegisterConfirmPassword ? 'eye-outline' : 'eye-off-outline'} size={20} color="#64748B" />
+                        </TouchableOpacity>
+                      </View>
+                    </>
+                  )}
+                </View>
+
+                <View style={styles.actionButtonsContainer}>
+                  <TouchableOpacity
+                    style={[styles.btnSubmitLogin, isLoading && { opacity: 0.7 }]}
+                    activeOpacity={0.88}
+                    onPress={authMode === 'login' ? handleLoginAction : handleRegisterInModal}
+                    disabled={isLoading}
+                  >
+                    {isLoading ? (
+                      <ActivityIndicator color="#FFFFFF" size="small" />
+                    ) : (
+                      <LocalizedText style={styles.btnSubmitLoginText}>{authMode === 'login' ? 'Đăng nhập' : 'Đăng ký'}</LocalizedText>
+                    )}
+                  </TouchableOpacity>
+                </View>
+
+                <View style={styles.switchAuthRow}>
+                  <LocalizedText style={styles.switchAuthText}>
+                    {authMode === 'login' ? 'Chưa có tài khoản? ' : 'Đã có tài khoản? '}
+                  </LocalizedText>
+                  <TouchableOpacity onPress={() => setAuthMode(authMode === 'login' ? 'register' : 'login')}>
+                    <LocalizedText style={styles.switchAuthLink}>{authMode === 'login' ? 'Đăng ký ngay' : 'Đăng nhập'}</LocalizedText>
+                  </TouchableOpacity>
+                </View>
+
+                <LocalizedText style={styles.termsNoticeText}>
+                  Bằng cách tiếp tục, bạn đồng ý với{' '}
+                  <LocalizedText style={styles.termsLink}>Điều khoản dịch vụ</LocalizedText>{' '}
+                  của SECA và xác nhận rằng bạn đã đọc{' '}
+                  <LocalizedText style={styles.termsLink}>Chính sách quyền riêng tư</LocalizedText>{' '}
+                  của chúng tôi.
+                </LocalizedText>
+              </View>
+            </ScrollView>
+          </View>
+        </KeyboardAvoidingView>
+      </Modal>
     </SafeAreaView>
   );
 }
@@ -199,228 +494,387 @@ const styles = StyleSheet.create({
     flex: 1,
     backgroundColor: '#FFFFFF',
   },
-  container: {
-    paddingHorizontal: 24,
-    paddingTop: 20,
-    paddingBottom: 30,
+  scrollContainer: {
     flexGrow: 1,
     justifyContent: 'space-between',
+    backgroundColor: '#FFFFFF',
+    paddingBottom: 24,
   },
-  headerSection: {
-    marginBottom: 5,
-  },
-  backButton: {
-    width: 40,
-    height: 40,
-    borderRadius: 20,
-    backgroundColor: '#F1F5F9',
-    justifyContent: 'center',
-    alignItems: 'center',
-    marginBottom: 16,
-  },
-  appIconWrapper: {
-    width: 48,
-    height: 48,
-    borderRadius: 24,
-    backgroundColor: '#F1F5F9',
-    justifyContent: 'center',
-    alignItems: 'center',
-    marginBottom: 16,
+
+  // -------------------------------------------------------------------------
+  // PHOTO COLLAGE STYLES
+  // -------------------------------------------------------------------------
+  collageContainer: {
+    width: '100%',
+    height: 380,
+    position: 'relative',
     overflow: 'hidden',
+    backgroundColor: '#F8FAFC',
   },
-  appIcon: {
-    width: 32,
-    height: 32,
-    resizeMode: 'contain',
+  backToWelcomeButton: {
+    position: 'absolute',
+    top: 14,
+    left: 16,
+    zIndex: 20,
+    height: 40,
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 6,
+    paddingHorizontal: 14,
+    borderRadius: 20,
+    backgroundColor: '#FFFFFF',
   },
-  welcomeTitle: {                       
-    fontSize: 30,
+  backToWelcomeText: {
+    color: '#0F172A',
+    fontSize: 14,
+    fontWeight: '600',
+  },
+  card: {
+    position: 'absolute',
+    borderRadius: 22,
+    overflow: 'hidden',
+    backgroundColor: '#E2E8F0',
+  },
+  cardImage: {
+    width: '100%',
+    height: '100%',
+  },
+
+  // Vị trí từng card theo đúng layout Pinterest
+  cardTopLeft: {
+    top: -15,
+    left: -20,
+    width: SCREEN_WIDTH * 0.38,
+    height: 220,
+    borderRadius: 24,
+  },
+  cardTopRight: {
+    top: -25,
+    right: -25,
+    width: SCREEN_WIDTH * 0.52,
+    height: 145,
+    borderRadius: 24,
+  },
+  cardCenterHero: {
+    top: 50,
+    left: SCREEN_WIDTH * 0.22,
+    width: SCREEN_WIDTH * 0.56,
+    height: 275,
+    borderRadius: 26,
+    zIndex: 10,
+    borderWidth: 3,
+    borderColor: '#FFFFFF',
+  },
+  cardMidRight: {
+    top: 130,
+    right: -30,
+    width: SCREEN_WIDTH * 0.35,
+    height: 120,
+    borderRadius: 22,
+    zIndex: 5,
+  },
+  cardBottomLeft: {
+    bottom: -20,
+    left: -15,
+    width: SCREEN_WIDTH * 0.44,
+    height: 170,
+    borderRadius: 24,
+    zIndex: 5,
+  },
+  cardBottomRight: {
+    bottom: -15,
+    right: -20,
+    width: SCREEN_WIDTH * 0.42,
+    height: 155,
+    borderRadius: 24,
+    zIndex: 4,
+  },
+
+  // -------------------------------------------------------------------------
+  // BOTTOM SECTION & BUTTONS
+  // -------------------------------------------------------------------------
+  bottomSection: {
+    paddingHorizontal: 28,
+    paddingTop: 16,
+    alignItems: 'center',
+    backgroundColor: '#FFFFFF',
+  },
+  logoBadgeContainer: {
+    marginBottom: 14,
+  },
+  logoBadge: {
+    width: 52,
+    height: 52,
+    borderRadius: 26,
+    backgroundColor: Colors.primary, // Cam thương hiệu đặc trưng
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+  heroTitle: {
+    fontSize: 27,
     fontWeight: '800',
     color: '#0F172A',
-    lineHeight: 44,
-  },
-  countryPickerBtn: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'space-between',
-    borderWidth: 1.2,
-    borderColor: '#D9E3EE',
-    borderRadius: 999,
-    height: 38,
-    width: '50%',
-    maxWidth: 420,
-    alignSelf: 'stretch',
-    marginLeft: 0,
-    marginTop: -82,
-    paddingVertical: 4,
-    paddingHorizontal: 8,
-    marginBottom: 100,
-    backgroundColor: '#F8F9FB',
-  },
-  countryLeftWrap: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    flex: 1,
-    justifyContent: 'flex-start',
-    marginLeft: 0,
-    paddingLeft: 0,
-  },
-  countryIconWrap: {
-    width: 24,
-    height: 24,
-    borderRadius: 12,
-    borderWidth: 1.5,
-    borderColor: '#0F172A',
-    alignItems: 'center',
-    justifyContent: 'center',
-    marginRight: 8,
-    backgroundColor: '#FFFFFF',
-  },
-  countryText: {
-    fontSize: 15,
-    fontWeight: '400',
-    color: '#0F172A',
-    textAlign: 'left',
-    flex: 1,
-    marginLeft: 0,
-    paddingLeft: 0,
-    lineHeight: 19,
-  },
-  methodsContainer: {
-    gap: 12,
-    marginBottom: 16,
-  },
-  authButton: {
-    height: 60,
-    borderWidth: 1,
-    borderColor: '#E2E8F0',
-    borderRadius: 30,
-    paddingVertical: 16,
-    paddingHorizontal: 20,
-    backgroundColor: '#FFFFFF',
-    justifyContent: 'center',
-    transform: [{ translateY: -85 }],
-  },
-  authButtonInner: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    width: '100%',
-    paddingLeft: 4,
-    paddingRight: 4,
-  },
-  authIcon: {
-    marginRight: 12,
-    width: 20,
     textAlign: 'center',
-  },
-  authButtonText: {
-    fontSize: 15,
-    fontWeight: '600',
-    color: '#0F172A',
-  },
-  formContainer: {
-    gap: 12,
-    marginBottom: 16,
-  },
-  inputContainer: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    borderWidth: 1.2,
-    borderColor: '#D9E3EE',
-    borderRadius: 999,
-    height: 52,
-    width: '100%',
-    maxWidth: 760,
-    alignSelf: 'stretch',
-    marginLeft: 0,
-    marginTop: 0,
-    paddingVertical: 8,
-    paddingHorizontal: 14,
-    backgroundColor: '#FFFFFF',
-  },
-  inputIcon: {
-    marginRight: 14,
-  },
-  input: {
-    fontSize: 17,
-    color: '#0F172A',
-    flex: 1,
-    padding: 0,
-    lineHeight: 22,
-  },
-  forgotPasswordContainer: {
-    alignItems: 'flex-end',
-    width: '100%',
-    marginTop: -2,
+    lineHeight: 35,
+    letterSpacing: -0.5,
     marginBottom: 8,
-    paddingRight: 14,
   },
-  forgotPasswordText: {
-    fontSize: 14,
-    color: '#2563EB',
-    fontWeight: '600',
+  heroSubtitle: {
+    fontSize: 13,
+    color: '#64748B',
+    textAlign: 'center',
+    lineHeight: 18,
+    marginBottom: 24,
+    paddingHorizontal: 12,
   },
-  loginButton: {
-    backgroundColor: '#2563EB',
-    borderRadius: 30,
-    minHeight: 58,
-    paddingVertical: 18,
-    alignItems: 'center',
+  actionButtonsContainer: {
+    width: '100%',
+    flexDirection: 'column',
+    gap: 12,
+    marginBottom: 20,
+  },
+  btnRegister: {
+    backgroundColor: Colors.primary,
+    width: '100%',
+    height: 52,
+    borderRadius: 26,
     justifyContent: 'center',
-    marginTop: 6,
-    shadowColor: '#2563EB',
-    shadowOffset: { width: 0, height: 4 },
-    shadowOpacity: 0.2,
-    shadowRadius: 8,
-    elevation: 4,
+    alignItems: 'center',
   },
-  loginButtonText: {
+  btnRegisterText: {
+    color: '#FFFFFF',
     fontSize: 16,
     fontWeight: '700',
-    color: '#FFFFFF',
   },
-  registerLinkWrapper: {
+  btnLogin: {
+    backgroundColor: '#EFEFEF',
+    width: '100%',
+    height: 52,
+    borderRadius: 26,
+    justifyContent: 'center',
     alignItems: 'center',
-    marginVertical: 8,
   },
-  registerLinkText: {
+  btnLoginText: {
+    color: '#111111',
+    fontSize: 16,
+    fontWeight: '700',
+  },
+  termsNoticeText: {
+    fontSize: 11,
+    color: '#334155',
+    textAlign: 'center',
+    lineHeight: 16,
+    paddingHorizontal: 6,
+  },
+  termsLink: {
+    fontWeight: '700',
+    color: '#0F172A',
+    textDecorationLine: 'underline',
+  },
+
+  // -------------------------------------------------------------------------
+  // MODAL BOTTOM SHEET STYLES
+  // -------------------------------------------------------------------------
+  modalOverlay: {
+    flex: 1,
+    backgroundColor: '#FFFFFF',
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+  modalSheet: {
+    flex: 1,
+    backgroundColor: '#FFFFFF',
+    width: '100%',
+    paddingTop: 0,
+    paddingBottom: 0,
+  },
+  modalScrollContainer: {
+    flexGrow: 1,
+    backgroundColor: '#FFFFFF',
+    paddingBottom: 24,
+  },
+  sheetHeader: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'flex-start',
+    marginBottom: 20,
+  },
+  sheetHeaderContent: {
+    flex: 1,
+    marginRight: 12,
+  },
+  sheetTabRow: {
+    flexDirection: 'row',
+    backgroundColor: '#F1F5F9',
+    borderRadius: 12,
+    padding: 4,
+    marginBottom: 10,
+  },
+  sheetTab: {
+    flex: 1,
+    height: 36,
+    borderRadius: 10,
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+  sheetTabActive: {
+    backgroundColor: '#FFFFFF',
+    shadowColor: '#000',
+    shadowOpacity: 0.06,
+    shadowRadius: 8,
+    elevation: 2,
+  },
+  sheetTabText: {
+    fontSize: 13,
+    fontWeight: '700',
+    color: '#64748B',
+  },
+  sheetTabTextActive: {
+    color: '#0F172A',
+  },
+  sheetTitle: {
+    fontSize: 22,
+    fontWeight: '800',
+    color: '#0F172A',
+  },
+  sheetSubtitle: {
+    fontSize: 13,
+    color: '#64748B',
+    marginTop: 3,
+  },
+  sheetCloseBtn: {
+    width: 32,
+    height: 32,
+    borderRadius: 16,
+    backgroundColor: '#F1F5F9',
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+  inputWrap: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: '#F8FAFC',
+    borderWidth: 1,
+    borderColor: '#E2E8F0',
+    borderRadius: 16,
+    paddingHorizontal: 14,
+    height: 52,
+    marginBottom: 14,
+  },
+  inputPrefix: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    marginRight: 10,
+    gap: 4,
+  },
+  prefixText: {
     fontSize: 14,
-    fontWeight: '600',
-    color: '#D97706',
+    fontWeight: '700',
+    color: '#334155',
   },
-  termsContainer: {
+  textInput: {
+    flex: 1,
+    fontSize: 15,
+    color: '#0F172A',
+  },
+  eyeBtn: {
+    padding: 6,
+  },
+  forgotBtn: {
+    alignSelf: 'flex-end',
+    marginBottom: 16,
+    marginTop: -4,
+  },
+  loginErrorBox: {
     flexDirection: 'row',
     alignItems: 'flex-start',
-    marginTop: 10,
-    paddingHorizontal: 4,
-    width: '84%',
-    alignSelf: 'center',
+    gap: 8,
+    backgroundColor: '#FEF3F2',
+    borderColor: '#FDA29B',
+    borderWidth: 1,
+    borderRadius: 12,
+    padding: 10,
+    marginBottom: 12,
   },
-  checkbox: {
-    width: 18,
-    height: 18,
-    borderRadius: 4,
-    borderWidth: 2,
-    borderColor: '#CBD5E1',
-    alignItems: 'center',
-    justifyContent: 'center',
-    marginTop: 2,
-    marginRight: 10,
-  },
-  checkboxInner: {
-    width: 9,
-    height: 9,
-    borderRadius: 2,
-    backgroundColor: '#2563EB',
-  },
-  termsText: {
+  loginErrorText: {
     flex: 1,
-    fontSize: 11,
-    color: '#64748B',
+    color: '#B42318',
+    fontSize: 13,
     lineHeight: 18,
   },
-  linkText: {
-    color: '#2563EB',
-    textDecorationLine: 'underline',
+  forgotText: {
+    fontSize: 13,
+    fontWeight: '600',
+    color: Colors.primary,
+  },
+  btnSubmitLogin: {
+    backgroundColor: Colors.primary,
+    height: 52,
+    borderRadius: 26,
+    justifyContent: 'center',
+    alignItems: 'center',
+    width: '100%',
+    marginBottom: 12,
+  },
+  btnSubmitLoginText: {
+    color: '#FFFFFF',
+    fontSize: 16,
+    fontWeight: '700',
+  },
+  quickFillContainer: {
+    backgroundColor: '#F1F5F9',
+    borderRadius: 14,
+    padding: 12,
+    marginBottom: 12,
+  },
+  quickFillLabel: {
+    fontSize: 11,
+    fontWeight: '600',
+    color: '#475569',
+    marginBottom: 8,
+  },
+  quickFillRow: {
+    flexDirection: 'row',
+    gap: 8,
+  },
+  quickFillChip: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: '#FFFFFF',
+    paddingVertical: 6,
+    paddingHorizontal: 10,
+    borderRadius: 12,
+    borderWidth: 1,
+    borderColor: '#E2E8F0',
+    gap: 5,
+  },
+  quickFillChipText: {
+    fontSize: 12,
+    fontWeight: '600',
+    color: '#0F172A',
+  },
+  switchAuthRow: {
+    flexDirection: 'row',
+    justifyContent: 'center',
+    alignItems: 'center',
+    marginBottom: 18,
+  },
+  switchAuthText: {
+    fontSize: 14,
+    color: '#64748B',
+  },
+  switchAuthLink: {
+    fontSize: 14,
+    fontWeight: '700',
+    color: Colors.primary,
+  },
+  formCard: {
+    width: '100%',
+    backgroundColor: '#F8FAFC',
+    borderRadius: 18,
+    padding: 14,
+    marginBottom: 18,
+    borderWidth: 1,
+    borderColor: '#E2E8F0',
   },
 });

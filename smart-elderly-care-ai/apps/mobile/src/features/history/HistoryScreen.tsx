@@ -1,7 +1,9 @@
 // HistoryScreen.tsx – Xem lại nhật ký y tế & lịch sử sự kiện
 import React, { useState } from 'react';
-import { View, Text, StyleSheet, TouchableOpacity, ScrollView } from 'react-native';
+import { View, StyleSheet, TouchableOpacity, ScrollView } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
+import { LocalizedText } from '../../i18n/LocalizedComponents';
+
 
 type Tab = 'vitals' | 'incidents';
 
@@ -11,7 +13,7 @@ export default function HistoryScreen() {
   return (
     <SafeAreaView style={{ flex: 1, backgroundColor: '#0F172A' }}>
       <View style={styles.header}>
-        <Text style={styles.title}>Lịch sử</Text>
+        <LocalizedText style={styles.title}>Lịch sử</LocalizedText>
       </View>
 
       {/* Tabs */}
@@ -22,22 +24,22 @@ export default function HistoryScreen() {
             style={[styles.tab, activeTab === tab && styles.tabActive]}
             onPress={() => setActiveTab(tab)}
           >
-            <Text style={[styles.tabText, activeTab === tab && styles.tabTextActive]}>
+            <LocalizedText style={[styles.tabText, activeTab === tab && styles.tabTextActive]}>
               {tab === 'vitals' ? 'Sức khoẻ' : 'Sự kiện'}
-            </Text>
+            </LocalizedText>
           </TouchableOpacity>
         ))}
       </View>
 
       <ScrollView contentContainerStyle={{ padding: 16 }}>
-        <Text style={styles.placeholder}>
+        <LocalizedText style={styles.placeholder}>
           {activeTab === 'vitals'
             ? 'Biểu đồ lịch sử sức khoẻ theo ngày/tuần/tháng'
             : 'Danh sách sự kiện đã qua theo thời gian'}
-        </Text>
-        <Text style={styles.placeholderSub}>
+        </LocalizedText>
+        <LocalizedText style={styles.placeholderSub}>
           (Sẽ được triển khai với dữ liệu thực từ API)
-        </Text>
+        </LocalizedText>
       </ScrollView>
     </SafeAreaView>
   );

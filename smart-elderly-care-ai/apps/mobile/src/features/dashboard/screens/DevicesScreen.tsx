@@ -4,34 +4,31 @@
 // Hỗ trợ Menu 3 lựa chọn khi nhấn nút (+): Thêm thủ công, Quét mã QR, Nhóm thiết bị
 
 import React, { useState, useRef, useEffect } from 'react';
-import {
-  View,
-  Text,
-  StyleSheet,
-  TouchableOpacity,
-  ScrollView,
-  Alert,
-  Modal,
-  Animated,
-  TextInput,
-  TouchableWithoutFeedback,
-} from 'react-native';
+import { View, StyleSheet, TouchableOpacity, ScrollView, Modal, Animated, TouchableWithoutFeedback } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
 import { Colors, Shadows } from '../../../theme/colors';
 import { useVitalStore, IoTDeviceItem } from '../../../store/useVitalStore';
 import { useTheme } from '../../../store/useThemeStore';
+import { LocalizedAlert, LocalizedText, LocalizedTextInput } from '../../../i18n/LocalizedComponents';
+
 
 export default function DevicesScreen({ navigation }: any) {
-  const { isDarkMode, colors, toggleDarkMode } = useTheme();
+  const { isDarkMode, colors } = useTheme();
   const {
     iotDevices,
     addIoTDevice,
     deviceGroups,
     updateDeviceGroup,
     removeDeviceGroup,
+    syncAllWithBackend,
   } = useVitalStore();
-  const groups = deviceGroups || ['Phòng khách', 'Phòng ngủ', 'Nhà tắm & Cửa'];
+  const groups = deviceGroups || ['Phòng khách', 'Phòng ngủ'];
+
+  // Đồng bộ danh sách thiết bị và nhóm từ Backend khi mở màn hình
+  useEffect(() => {
+    syncAllWithBackend?.();
+  }, []);
 
   // State menu thả xuống khi bấm dấu cộng (+)
   const [showAddMenu, setShowAddMenu] = useState(false);
@@ -113,7 +110,7 @@ export default function DevicesScreen({ navigation }: any) {
         location: 'Phòng khách',
       };
       addIoTDevice(newCam);
-      Alert.alert(
+      LocalizedAlert.alert(
         'Quét QR Thành Công',
         'Đã nhận diện thiết bị Camera SECA_001 và kích hoạt kết nối nhanh!'
       );
@@ -130,7 +127,7 @@ export default function DevicesScreen({ navigation }: any) {
         location: 'Cụ Ông',
       };
       addIoTDevice(newWatch);
-      Alert.alert(
+      LocalizedAlert.alert(
         'Quét QR Thành Công',
         'Đã nhận diện Vòng đeo tay thông minh BLE và hoàn tất ghép đôi!'
       );
@@ -169,7 +166,7 @@ export default function DevicesScreen({ navigation }: any) {
     } else if (isWatch) {
       navigation.navigate('SmartbandDetail', { device: dev });
     } else {
-      Alert.alert(dev.name, `${dev.sub}\nTrạng thái: ${dev.status}`);
+      LocalizedAlert.alert(dev.name, `${dev.sub}\nTrạng thái: ${dev.status}`);
     }
   };
 
@@ -256,25 +253,25 @@ export default function DevicesScreen({ navigation }: any) {
     }
     setShowDeleteConfirmModal(false);
     setSelectedGroupForAction(null);
-    Alert.alert('Thành công', `Đã xóa nhóm "${targetGroup}" thành công.`);
+    LocalizedAlert.alert('Thành công', `Đã xóa nhóm "${targetGroup}" thành công.`);
   };
 
   // Lưu chỉnh sửa nhóm
   const handleSaveEditGroup = () => {
     setEditAttempted(true);
     if (isEditNameEmpty) {
-      Alert.alert('Thông báo', 'Tên nhóm không được để trống.');
+      LocalizedAlert.alert('Thông báo', 'Tên nhóm không được để trống.');
       return;
     }
     if (isEditNameDuplicate) {
-      Alert.alert(
+      LocalizedAlert.alert(
         'Thông báo',
         `Tên nhóm "${trimmedEditName}" đã tồn tại. Tên nhóm mới phải là duy nhất.`
       );
       return;
     }
     if (!hasEditDevices) {
-      Alert.alert('Thông báo', 'Cần chọn ít nhất 1 thiết bị để duy trì nhóm.');
+      LocalizedAlert.alert('Thông báo', 'Cần chọn ít nhất 1 thiết bị để duy trì nhóm.');
       return;
     }
 
@@ -284,7 +281,7 @@ export default function DevicesScreen({ navigation }: any) {
     }
     setShowEditGroupModal(false);
     setSelectedGroupForAction(null);
-    Alert.alert('Thành công', `Đã cập nhật nhóm "${trimmedEditName}" thành công.`);
+    LocalizedAlert.alert('Thành công', `Đã cập nhật nhóm "${trimmedEditName}" thành công.`);
   };
 
   return (
@@ -292,27 +289,13 @@ export default function DevicesScreen({ navigation }: any) {
       {/* Header */}
       <View style={[styles.headerRow, isDarkMode && { backgroundColor: colors.background }]}>
         <View>
-          <Text style={[styles.headerTitle, isDarkMode && { color: colors.textPrimary }]}>Thiết bị</Text>
-          <Text style={[styles.headerSubtitleTop, isDarkMode && { color: colors.textSecondary }]}>
+          <LocalizedText style={[styles.headerTitle, isDarkMode && { color: colors.textPrimary }]}>Thiết bị</LocalizedText>
+          <LocalizedText style={[styles.headerSubtitleTop, isDarkMode && { color: colors.textSecondary }]}>
             {iotDevices.length} thiết bị đang kết nối
-          </Text>
+          </LocalizedText>
         </View>
 
         <View style={styles.headerRightActions}>
-          {/* Nút chuyển đổi Sáng / Tối */}
-          <TouchableOpacity
-            style={[styles.themeToggleBtn, isDarkMode && { backgroundColor: colors.iconBg }]}
-            onPress={toggleDarkMode}
-            activeOpacity={0.7}
-            accessibilityLabel="Chuyển chế độ Sáng/Tối"
-          >
-            <Ionicons
-              name={isDarkMode ? 'sunny-outline' : 'moon-outline'}
-              size={20}
-              color={isDarkMode ? '#F59E0B' : colors.textPrimary}
-            />
-          </TouchableOpacity>
-
           {/* Nút dấu cộng (+) */}
           <TouchableOpacity
             style={[styles.addBtn, showAddMenu && styles.addBtnActive]}
@@ -350,7 +333,7 @@ export default function DevicesScreen({ navigation }: any) {
                 }}
                 activeOpacity={0.8}
               >
-                <Text
+                <LocalizedText
                   style={[
                     styles.groupChipText,
                     isDarkMode && !isActive && { color: colors.textSecondary },
@@ -358,7 +341,7 @@ export default function DevicesScreen({ navigation }: any) {
                   ]}
                 >
                   {tab}
-                </Text>
+                </LocalizedText>
               </TouchableOpacity>
             );
           })}
@@ -369,19 +352,22 @@ export default function DevicesScreen({ navigation }: any) {
         showsVerticalScrollIndicator={false}
         contentContainerStyle={styles.scrollContent}
       >
-        <Text style={[styles.sectionSubtitle, isDarkMode && { color: colors.textSecondary }]}>
+        <LocalizedText style={[styles.sectionSubtitle, isDarkMode && { color: colors.textSecondary }]}>
           {activeTab === 'Nhóm'
             ? 'Danh sách các nhóm khu vực đã thiết lập trong nhà'
-            : 'Hệ sinh thái giám sát đa phương thức (Multimodal Sensor Fusion)'}
-        </Text>
+            : 'Danh sách thiết bị giám sát an toàn & sức khỏe trong nhà'}
+        </LocalizedText>
 
         {activeTab === 'Nhóm' ? (
           <View style={styles.groupViewSection}>
-            {/* Thanh tiêu đề & nút tạo nhóm mới */}
             <View style={[styles.groupHeaderBar, isDarkMode && { backgroundColor: colors.card, borderColor: colors.border }]}>
-              <View>
-                <Text style={[styles.groupHeaderTitle, isDarkMode && { color: colors.textPrimary }]}>Phân vùng thiết bị theo nhóm</Text>
-                <Text style={[styles.groupHeaderSub, isDarkMode && { color: colors.textSecondary }]}>{groups.length} nhóm khu vực trong nhà</Text>
+              <View style={styles.groupHeaderLeft}>
+                <LocalizedText style={[styles.groupHeaderTitle, isDarkMode && { color: colors.textPrimary }]} numberOfLines={1}>
+                  Phân vùng theo nhóm
+                </LocalizedText>
+                <LocalizedText style={[styles.groupHeaderSub, isDarkMode && { color: colors.textSecondary }]} numberOfLines={1}>
+                  {groups.length} nhóm khu vực trong nhà
+                </LocalizedText>
               </View>
               <TouchableOpacity
                 style={styles.createGroupHeaderBtn}
@@ -389,7 +375,7 @@ export default function DevicesScreen({ navigation }: any) {
                 activeOpacity={0.8}
               >
                 <Ionicons name="add" size={16} color="#FFF" />
-                <Text style={styles.createGroupHeaderBtnText}>Tạo nhóm mới</Text>
+                <LocalizedText style={styles.createGroupHeaderBtnText}>Tạo nhóm mới</LocalizedText>
               </TouchableOpacity>
             </View>
 
@@ -408,7 +394,7 @@ export default function DevicesScreen({ navigation }: any) {
                 onPress={() => setSelectedGroupFilter('Tất cả')}
                 activeOpacity={0.8}
               >
-                <Text
+                <LocalizedText
                   style={[
                     styles.subGroupChipText,
                     isDarkMode && selectedGroupFilter !== 'Tất cả' && { color: '#C084FC' },
@@ -416,7 +402,7 @@ export default function DevicesScreen({ navigation }: any) {
                   ]}
                 >
                   Tất cả nhóm ({groups.length})
-                </Text>
+                </LocalizedText>
               </TouchableOpacity>
 
               {groups.map((g) => {
@@ -441,7 +427,7 @@ export default function DevicesScreen({ navigation }: any) {
                       color={isSelected ? '#FFF' : '#7C3AED'}
                       style={{ marginRight: 4 }}
                     />
-                    <Text
+                    <LocalizedText
                       style={[
                         styles.subGroupChipText,
                         isDarkMode && !isSelected && { color: '#C084FC' },
@@ -449,7 +435,7 @@ export default function DevicesScreen({ navigation }: any) {
                       ]}
                     >
                       {g} ({count})
-                    </Text>
+                    </LocalizedText>
                   </TouchableOpacity>
                 );
               })}
@@ -474,18 +460,18 @@ export default function DevicesScreen({ navigation }: any) {
                         <Ionicons name="folder" size={18} color="#7C3AED" />
                       </View>
                       <View style={{ marginLeft: 10 }}>
-                        <Text style={[styles.groupCardName, isDarkMode && { color: '#F8FAFC' }]}>{groupName}</Text>
-                        <Text style={[styles.groupCardMeta, isDarkMode && { color: '#94A3B8' }]}>
+                        <LocalizedText style={[styles.groupCardName, isDarkMode && { color: '#F8FAFC' }]}>{groupName}</LocalizedText>
+                        <LocalizedText style={[styles.groupCardMeta, isDarkMode && { color: '#94A3B8' }]}>
                           {devicesInGroup.length} thiết bị • {onlineCount} trực tuyến
-                        </Text>
+                        </LocalizedText>
                       </View>
                     </View>
 
                     <View style={styles.groupCardHeaderRight}>
                       <View style={[styles.groupCountBadge, isDarkMode && { backgroundColor: 'rgba(124, 58, 237, 0.25)' }]}>
-                        <Text style={[styles.groupCountBadgeText, isDarkMode && { color: '#DDD6FE' }]}>
+                        <LocalizedText style={[styles.groupCountBadgeText, isDarkMode && { color: '#DDD6FE' }]}>
                           {devicesInGroup.length} thiết bị
-                        </Text>
+                        </LocalizedText>
                       </View>
                       <TouchableOpacity
                         style={styles.groupMoreBtn}
@@ -526,13 +512,13 @@ export default function DevicesScreen({ navigation }: any) {
                           </View>
 
                           <View style={{ flex: 1, marginLeft: 12 }}>
-                            <Text style={[styles.deviceNameText, isDarkMode && { color: colors.textPrimary }]}>{dev.name}</Text>
-                            <Text
+                            <LocalizedText style={[styles.deviceNameText, isDarkMode && { color: colors.textPrimary }]}>{dev.name}</LocalizedText>
+                            <LocalizedText
                               style={[styles.deviceSubText, isDarkMode && { color: colors.textSecondary }]}
                               numberOfLines={1}
                             >
                               {dev.sub}
-                            </Text>
+                            </LocalizedText>
                             <View style={styles.statusRow}>
                               <View
                                 style={[
@@ -544,7 +530,7 @@ export default function DevicesScreen({ navigation }: any) {
                                   },
                                 ]}
                               />
-                              <Text style={[styles.statusText, isDarkMode && { color: colors.textSecondary }]}>{dev.status}</Text>
+                              <LocalizedText style={[styles.statusText, isDarkMode && { color: colors.textSecondary }]}>{dev.status}</LocalizedText>
                             </View>
                           </View>
 
@@ -559,9 +545,9 @@ export default function DevicesScreen({ navigation }: any) {
                   ) : (
                     <View style={styles.emptyGroupContent}>
                       <Ionicons name="cube-outline" size={24} color={isDarkMode ? '#64748B' : '#94A3B8'} />
-                      <Text style={[styles.emptyGroupContentText, isDarkMode && { color: colors.textSecondary }]}>
+                      <LocalizedText style={[styles.emptyGroupContentText, isDarkMode && { color: colors.textSecondary }]}>
                         Chưa có thiết bị nào trong nhóm "{groupName}"
-                      </Text>
+                      </LocalizedText>
                     </View>
                   )}
                 </View>
@@ -585,10 +571,10 @@ export default function DevicesScreen({ navigation }: any) {
                 </View>
 
                 <View style={{ flex: 1, marginLeft: 14 }}>
-                  <Text style={[styles.deviceNameText, isDarkMode && { color: colors.textPrimary }]}>{dev.name}</Text>
-                  <Text style={[styles.deviceSubText, isDarkMode && { color: colors.textSecondary }]} numberOfLines={2}>
+                  <LocalizedText style={[styles.deviceNameText, isDarkMode && { color: colors.textPrimary }]}>{dev.name}</LocalizedText>
+                  <LocalizedText style={[styles.deviceSubText, isDarkMode && { color: colors.textSecondary }]} numberOfLines={2}>
                     {dev.sub}
-                  </Text>
+                  </LocalizedText>
                   <View style={styles.statusRow}>
                     <View
                       style={[
@@ -596,7 +582,7 @@ export default function DevicesScreen({ navigation }: any) {
                         { backgroundColor: dev.isOnline ? Colors.success : Colors.danger },
                       ]}
                     />
-                    <Text style={[styles.statusText, isDarkMode && { color: colors.textSecondary }]}>{dev.status}</Text>
+                    <LocalizedText style={[styles.statusText, isDarkMode && { color: colors.textSecondary }]}>{dev.status}</LocalizedText>
                   </View>
                 </View>
 
@@ -607,10 +593,10 @@ export default function DevicesScreen({ navigation }: any) {
             {filteredDevices.length === 0 && (
               <View style={styles.emptyGroupContainer}>
                 <Ionicons name="layers-outline" size={44} color={isDarkMode ? '#475569' : '#CBD5E1'} />
-                <Text style={[styles.emptyGroupTitle, isDarkMode && { color: colors.textPrimary }]}>Không có thiết bị trong nhóm này</Text>
-                <Text style={[styles.emptyGroupDesc, isDarkMode && { color: colors.textSecondary }]}>
+                <LocalizedText style={[styles.emptyGroupTitle, isDarkMode && { color: colors.textPrimary }]}>Không có thiết bị trong nhóm này</LocalizedText>
+                <LocalizedText style={[styles.emptyGroupDesc, isDarkMode && { color: colors.textSecondary }]}>
                   Bấm nút (+) ở góc trên để thêm thiết bị mới vào danh mục "{activeTab}".
-                </Text>
+                </LocalizedText>
               </View>
             )}
           </>
@@ -627,7 +613,7 @@ export default function DevicesScreen({ navigation }: any) {
             <TouchableWithoutFeedback>
               <View style={[styles.floatingMenuCard, isDarkMode && { backgroundColor: colors.card, borderColor: colors.border }]}>
                 <View style={styles.menuHeaderIndicator}>
-                  <Text style={[styles.menuHeaderLabel, isDarkMode && { color: colors.textSecondary }]}>Tùy chọn thiết bị</Text>
+                  <LocalizedText style={[styles.menuHeaderLabel, isDarkMode && { color: colors.textSecondary }]}>Tùy chọn thiết bị</LocalizedText>
                 </View>
 
                 {/* 1. Thêm thủ công */}
@@ -643,8 +629,8 @@ export default function DevicesScreen({ navigation }: any) {
                     <Ionicons name="construct-outline" size={20} color="#EA580C" />
                   </View>
                   <View style={styles.menuItemContent}>
-                    <Text style={[styles.menuItemTitle, isDarkMode && { color: colors.textPrimary }]}>Thêm thủ công</Text>
-                    <Text style={[styles.menuItemDesc, isDarkMode && { color: colors.textSecondary }]}>Camera Wi-Fi, Đồng hồ BLE, IoT Hub</Text>
+                    <LocalizedText style={[styles.menuItemTitle, isDarkMode && { color: colors.textPrimary }]}>Thêm thủ công</LocalizedText>
+                    <LocalizedText style={[styles.menuItemDesc, isDarkMode && { color: colors.textSecondary }]}>Camera Wi-Fi, Đồng hồ BLE, IoT Hub</LocalizedText>
                   </View>
                   <Ionicons name="chevron-forward" size={16} color={isDarkMode ? '#64748B' : '#CBD5E1'} />
                 </TouchableOpacity>
@@ -664,8 +650,8 @@ export default function DevicesScreen({ navigation }: any) {
                     <Ionicons name="qr-code-outline" size={20} color="#0284C7" />
                   </View>
                   <View style={styles.menuItemContent}>
-                    <Text style={[styles.menuItemTitle, isDarkMode && { color: colors.textPrimary }]}>Quét mã QR</Text>
-                    <Text style={[styles.menuItemDesc, isDarkMode && { color: colors.textSecondary }]}>Quét tem QR trên thân camera/vòng tay</Text>
+                    <LocalizedText style={[styles.menuItemTitle, isDarkMode && { color: colors.textPrimary }]}>Quét mã QR</LocalizedText>
+                    <LocalizedText style={[styles.menuItemDesc, isDarkMode && { color: colors.textSecondary }]}>Quét tem QR trên thân camera/vòng tay</LocalizedText>
                   </View>
                   <Ionicons name="chevron-forward" size={16} color={isDarkMode ? '#64748B' : '#CBD5E1'} />
                 </TouchableOpacity>
@@ -685,8 +671,8 @@ export default function DevicesScreen({ navigation }: any) {
                     <Ionicons name="layers-outline" size={20} color="#7C3AED" />
                   </View>
                   <View style={styles.menuItemContent}>
-                    <Text style={[styles.menuItemTitle, isDarkMode && { color: colors.textPrimary }]}>Nhóm thiết bị</Text>
-                    <Text style={[styles.menuItemDesc, isDarkMode && { color: colors.textSecondary }]}>Tạo & quản lý nhóm phòng, người đeo</Text>
+                    <LocalizedText style={[styles.menuItemTitle, isDarkMode && { color: colors.textPrimary }]}>Nhóm thiết bị</LocalizedText>
+                    <LocalizedText style={[styles.menuItemDesc, isDarkMode && { color: colors.textSecondary }]}>Tạo & quản lý nhóm phòng, người đeo</LocalizedText>
                   </View>
                   <Ionicons name="chevron-forward" size={16} color={isDarkMode ? '#64748B' : '#CBD5E1'} />
                 </TouchableOpacity>
@@ -715,7 +701,7 @@ export default function DevicesScreen({ navigation }: any) {
               >
                 <Ionicons name="close" size={24} color="#FFF" />
               </TouchableOpacity>
-              <Text style={styles.qrHeaderTitle}>Quét Mã QR Thiết Bị</Text>
+              <LocalizedText style={styles.qrHeaderTitle}>Quét Mã QR Thiết Bị</LocalizedText>
               <TouchableOpacity
                 style={styles.qrFlashBtn}
                 onPress={() => setIsFlashOn(!isFlashOn)}
@@ -750,23 +736,23 @@ export default function DevicesScreen({ navigation }: any) {
                 <Ionicons name="scan-outline" size={80} color="rgba(255,255,255,0.2)" />
               </View>
 
-              <Text style={styles.qrGuideText}>
+              <LocalizedText style={styles.qrGuideText}>
                 Căn chỉnh mã QR ở mặt đáy Camera{' '}
-                <Text style={{ fontWeight: 'bold', color: '#38BDF8' }}>SECA_001</Text> hoặc mặt sau{' '}
-                <Text style={{ fontWeight: 'bold', color: '#34D399' }}>Vòng đeo tay BLE</Text> vào trong khung hình.
-              </Text>
+                <LocalizedText style={{ fontWeight: 'bold', color: '#38BDF8' }}>SECA_001</LocalizedText> hoặc mặt sau{' '}
+                <LocalizedText style={{ fontWeight: 'bold', color: '#34D399' }}>Vòng đeo tay BLE</LocalizedText> vào trong khung hình.
+              </LocalizedText>
             </View>
 
             {/* Các nút bấm mô phỏng kiểm thử nhanh */}
             <View style={styles.qrBottomBar}>
-              <Text style={styles.qrSimLabel}>Hoặc chọn mô phỏng quét thực tế:</Text>
+              <LocalizedText style={styles.qrSimLabel}>Hoặc chọn mô phỏng quét thực tế:</LocalizedText>
               <View style={styles.qrSimRow}>
                 <TouchableOpacity
                   style={[styles.qrSimBtn, { backgroundColor: '#EA580C' }]}
                   onPress={() => handleSimulateQrScan('camera')}
                 >
                   <Ionicons name="videocam" size={18} color="#FFF" />
-                  <Text style={styles.qrSimBtnText}>Quét Camera SECA_001</Text>
+                  <LocalizedText style={styles.qrSimBtnText}>Quét Camera SECA_001</LocalizedText>
                 </TouchableOpacity>
 
                 <TouchableOpacity
@@ -774,7 +760,7 @@ export default function DevicesScreen({ navigation }: any) {
                   onPress={() => handleSimulateQrScan('watch')}
                 >
                   <Ionicons name="watch" size={18} color="#FFF" />
-                  <Text style={styles.qrSimBtnText}>Quét Vòng Tay BLE</Text>
+                  <LocalizedText style={styles.qrSimBtnText}>Quét Vòng Tay BLE</LocalizedText>
                 </TouchableOpacity>
               </View>
             </View>
@@ -801,8 +787,8 @@ export default function DevicesScreen({ navigation }: any) {
                     <Ionicons name="folder" size={22} color="#7C3AED" />
                   </View>
                   <View style={{ flex: 1, marginLeft: 12 }}>
-                    <Text style={styles.actionModalSubtitle}>TÙY CHỌN NHÓM THIẾT BỊ</Text>
-                    <Text style={[styles.actionModalTitle, isDarkMode && { color: colors.textPrimary }]}>{selectedGroupForAction}</Text>
+                    <LocalizedText style={styles.actionModalSubtitle}>TÙY CHỌN NHÓM THIẾT BỊ</LocalizedText>
+                    <LocalizedText style={[styles.actionModalTitle, isDarkMode && { color: colors.textPrimary }]}>{selectedGroupForAction}</LocalizedText>
                   </View>
                   <TouchableOpacity
                     style={styles.actionModalCloseBtn}
@@ -825,10 +811,10 @@ export default function DevicesScreen({ navigation }: any) {
                     <Ionicons name="create-outline" size={20} color="#7C3AED" />
                   </View>
                   <View style={{ flex: 1, marginLeft: 14 }}>
-                    <Text style={[styles.actionMenuText, isDarkMode && { color: colors.textPrimary }]}>Chỉnh sửa</Text>
-                    <Text style={[styles.actionMenuSub, isDarkMode && { color: colors.textSecondary }]}>
+                    <LocalizedText style={[styles.actionMenuText, isDarkMode && { color: colors.textPrimary }]}>Chỉnh sửa</LocalizedText>
+                    <LocalizedText style={[styles.actionMenuSub, isDarkMode && { color: colors.textSecondary }]}>
                       Đổi tên nhóm hoặc thay đổi các thiết bị thuộc nhóm
-                    </Text>
+                    </LocalizedText>
                   </View>
                   <Ionicons name="chevron-forward" size={18} color={isDarkMode ? '#64748B' : '#CBD5E1'} />
                 </TouchableOpacity>
@@ -845,12 +831,12 @@ export default function DevicesScreen({ navigation }: any) {
                     <Ionicons name="trash-outline" size={20} color="#EF4444" />
                   </View>
                   <View style={{ flex: 1, marginLeft: 14 }}>
-                    <Text style={[styles.actionMenuText, { color: '#DC2626' }]}>
+                    <LocalizedText style={[styles.actionMenuText, { color: '#DC2626' }]}>
                       Xóa
-                    </Text>
-                    <Text style={[styles.actionMenuSub, isDarkMode && { color: colors.textSecondary }]}>
+                    </LocalizedText>
+                    <LocalizedText style={[styles.actionMenuSub, isDarkMode && { color: colors.textSecondary }]}>
                       Xóa nhóm này, thiết bị sẽ chuyển về trạng thái Chưa nhóm
-                    </Text>
+                    </LocalizedText>
                   </View>
                   <Ionicons name="chevron-forward" size={18} color={isDarkMode ? '#64748B' : '#CBD5E1'} />
                 </TouchableOpacity>
@@ -863,7 +849,7 @@ export default function DevicesScreen({ navigation }: any) {
                   onPress={() => setShowGroupActionModal(false)}
                   activeOpacity={0.7}
                 >
-                  <Text style={[styles.actionCancelBtnText, isDarkMode && { color: colors.textSecondary }]}>Hủy bỏ</Text>
+                  <LocalizedText style={[styles.actionCancelBtnText, isDarkMode && { color: colors.textSecondary }]}>Hủy bỏ</LocalizedText>
                 </TouchableOpacity>
               </View>
             </TouchableWithoutFeedback>
@@ -887,18 +873,18 @@ export default function DevicesScreen({ navigation }: any) {
                 <View style={styles.confirmModalIconRing}>
                   <Ionicons name="trash" size={32} color="#EF4444" />
                 </View>
-                <Text style={[styles.confirmModalTitle, isDarkMode && { color: colors.textPrimary }]}>Xác Nhận Xóa Nhóm?</Text>
-                <Text style={[styles.confirmModalDesc, isDarkMode && { color: colors.textSecondary }]}>
+                <LocalizedText style={[styles.confirmModalTitle, isDarkMode && { color: colors.textPrimary }]}>Xác Nhận Xóa Nhóm?</LocalizedText>
+                <LocalizedText style={[styles.confirmModalDesc, isDarkMode && { color: colors.textSecondary }]}>
                   Bạn có chắc chắn muốn xóa nhóm{' '}
-                  <Text style={{ fontWeight: '800', color: isDarkMode ? '#A78BFA' : '#1E1B4B' }}>
+                  <LocalizedText style={{ fontWeight: '800', color: isDarkMode ? '#A78BFA' : '#1E1B4B' }}>
                     "{selectedGroupForAction}"
-                  </Text>
+                  </LocalizedText>
                   ?{'\n\n'}
                   Các thiết bị trong nhóm sẽ{' '}
-                  <Text style={{ fontWeight: '700', color: '#16A34A' }}>không bị xóa</Text> mà
+                  <LocalizedText style={{ fontWeight: '700', color: '#16A34A' }}>không bị xóa</LocalizedText> mà
                   được tự động chuyển về trạng thái{' '}
-                  <Text style={{ fontWeight: '700', color: '#7C3AED' }}>"Chưa nhóm"</Text>.
-                </Text>
+                  <LocalizedText style={{ fontWeight: '700', color: '#7C3AED' }}>"Chưa nhóm"</LocalizedText>.
+                </LocalizedText>
 
                 <View style={styles.confirmModalActions}>
                   <TouchableOpacity
@@ -906,7 +892,7 @@ export default function DevicesScreen({ navigation }: any) {
                     onPress={() => setShowDeleteConfirmModal(false)}
                     activeOpacity={0.7}
                   >
-                    <Text style={[styles.confirmModalCancelBtnText, isDarkMode && { color: colors.textSecondary }]}>Hủy bỏ</Text>
+                    <LocalizedText style={[styles.confirmModalCancelBtnText, isDarkMode && { color: colors.textSecondary }]}>Hủy bỏ</LocalizedText>
                   </TouchableOpacity>
 
                   <TouchableOpacity
@@ -915,7 +901,7 @@ export default function DevicesScreen({ navigation }: any) {
                     activeOpacity={0.8}
                   >
                     <Ionicons name="trash-outline" size={18} color="#FFF" />
-                    <Text style={styles.confirmModalDeleteBtnText}>Xóa nhóm</Text>
+                    <LocalizedText style={styles.confirmModalDeleteBtnText}>Xóa nhóm</LocalizedText>
                   </TouchableOpacity>
                 </View>
               </View>
@@ -943,10 +929,10 @@ export default function DevicesScreen({ navigation }: any) {
               <Ionicons name="close" size={24} color={isDarkMode ? '#94A3B8' : '#1E293B'} />
             </TouchableOpacity>
             <View style={{ flex: 1, marginLeft: 10 }}>
-              <Text style={[styles.editModalTitle, isDarkMode && { color: colors.textPrimary }]}>Chỉnh Sửa Nhóm</Text>
-              <Text style={[styles.editModalSubtitle, isDarkMode && { color: colors.textSecondary }]}>
+              <LocalizedText style={[styles.editModalTitle, isDarkMode && { color: colors.textPrimary }]}>Chỉnh Sửa Nhóm</LocalizedText>
+              <LocalizedText style={[styles.editModalSubtitle, isDarkMode && { color: colors.textSecondary }]}>
                 Đổi tên và phân công thiết bị cho nhóm
-              </Text>
+              </LocalizedText>
             </View>
           </View>
 
@@ -958,20 +944,20 @@ export default function DevicesScreen({ navigation }: any) {
                   <Ionicons name="folder-outline" size={18} color="#7C3AED" />
                 </View>
                 <View style={{ flex: 1, marginLeft: 10 }}>
-                  <Text style={[styles.editSectionTitle, isDarkMode && { color: colors.textPrimary }]}>1. Tên nhóm *</Text>
-                  <Text style={[styles.editSectionSub, isDarkMode && { color: colors.textSecondary }]}>
+                  <LocalizedText style={[styles.editSectionTitle, isDarkMode && { color: colors.textPrimary }]}>1. Tên nhóm *</LocalizedText>
+                  <LocalizedText style={[styles.editSectionSub, isDarkMode && { color: colors.textSecondary }]}>
                     Duy nhất và không được để trống
-                  </Text>
+                  </LocalizedText>
                 </View>
                 {isEditNameValid && (
                   <View style={styles.editValidBadge}>
                     <Ionicons name="checkmark-circle" size={13} color="#16A34A" />
-                    <Text style={styles.editValidBadgeText}>Hợp lệ</Text>
+                    <LocalizedText style={styles.editValidBadgeText}>Hợp lệ</LocalizedText>
                   </View>
                 )}
               </View>
 
-              <TextInput
+              <LocalizedTextInput
                 style={[
                   styles.editTextInput,
                   isDarkMode && { backgroundColor: colors.background, color: colors.textPrimary, borderColor: colors.border },
@@ -993,17 +979,17 @@ export default function DevicesScreen({ navigation }: any) {
               {isEditNameDuplicate && (
                 <View style={styles.editFeedbackRow}>
                   <Ionicons name="close-circle" size={15} color="#DC2626" />
-                  <Text style={styles.editFeedbackError}>
+                  <LocalizedText style={styles.editFeedbackError}>
                     Tên nhóm "{trimmedEditName}" đã tồn tại. Tên nhóm phải là duy nhất!
-                  </Text>
+                  </LocalizedText>
                 </View>
               )}
               {editAttempted && isEditNameEmpty && (
                 <View style={styles.editFeedbackRow}>
                   <Ionicons name="alert-circle" size={15} color="#DC2626" />
-                  <Text style={styles.editFeedbackError}>
+                  <LocalizedText style={styles.editFeedbackError}>
                     Tên nhóm không được để trống!
-                  </Text>
+                  </LocalizedText>
                 </View>
               )}
             </View>
@@ -1015,8 +1001,8 @@ export default function DevicesScreen({ navigation }: any) {
                   <Ionicons name="hardware-chip-outline" size={18} color="#7C3AED" />
                 </View>
                 <View style={{ flex: 1, marginLeft: 10 }}>
-                  <Text style={[styles.editSectionTitle, isDarkMode && { color: colors.textPrimary }]}>2. Thiết bị thuộc nhóm *</Text>
-                  <Text
+                  <LocalizedText style={[styles.editSectionTitle, isDarkMode && { color: colors.textPrimary }]}>2. Thiết bị thuộc nhóm *</LocalizedText>
+                  <LocalizedText
                     style={[
                       styles.editSectionSub,
                       isDarkMode && { color: colors.textSecondary },
@@ -1026,16 +1012,16 @@ export default function DevicesScreen({ navigation }: any) {
                     {!hasEditDevices
                       ? 'Cần ít nhất 1 thiết bị để duy trì nhóm'
                       : `Đã chọn ${editSelectedDeviceIds.length} / ${iotDevices.length} thiết bị`}
-                  </Text>
+                  </LocalizedText>
                 </View>
                 <TouchableOpacity
                   style={styles.editSelectAllBtn}
                   onPress={handleToggleEditSelectAll}
                   activeOpacity={0.7}
                 >
-                  <Text style={styles.editSelectAllBtnText}>
+                  <LocalizedText style={styles.editSelectAllBtnText}>
                     {isAllEditTabSelected ? 'Bỏ chọn' : 'Chọn tất cả'}
-                  </Text>
+                  </LocalizedText>
                 </TouchableOpacity>
               </View>
 
@@ -1043,9 +1029,9 @@ export default function DevicesScreen({ navigation }: any) {
               {!hasEditDevices && editAttempted && (
                 <View style={styles.editWarningBanner}>
                   <Ionicons name="alert-circle" size={18} color="#DC2626" />
-                  <Text style={styles.editWarningText}>
+                  <LocalizedText style={styles.editWarningText}>
                     Cần có ít nhất 1 thiết bị mới duy trì nhóm được. Vui lòng chọn thiết bị!
-                  </Text>
+                  </LocalizedText>
                 </View>
               )}
 
@@ -1064,7 +1050,7 @@ export default function DevicesScreen({ navigation }: any) {
                       onPress={() => setEditDeviceFilter(tab)}
                       activeOpacity={0.7}
                     >
-                      <Text
+                      <LocalizedText
                         style={[
                           styles.editFilterTabText,
                           isDarkMode && !isActive && { color: colors.textSecondary },
@@ -1072,7 +1058,7 @@ export default function DevicesScreen({ navigation }: any) {
                         ]}
                       >
                         {tab}
-                      </Text>
+                      </LocalizedText>
                     </TouchableOpacity>
                   );
                 })}
@@ -1109,15 +1095,15 @@ export default function DevicesScreen({ navigation }: any) {
                         <Ionicons name={dev.icon as any} size={18} color={dev.color} />
                       </View>
                       <View style={{ flex: 1, marginLeft: 10 }}>
-                        <Text style={[styles.editDeviceName, isDarkMode && { color: colors.textPrimary }]} numberOfLines={1}>
+                        <LocalizedText style={[styles.editDeviceName, isDarkMode && { color: colors.textPrimary }]} numberOfLines={1}>
                           {dev.name}
-                        </Text>
-                        <Text style={[styles.editDeviceSub, isDarkMode && { color: colors.textSecondary }]} numberOfLines={1}>
+                        </LocalizedText>
+                        <LocalizedText style={[styles.editDeviceSub, isDarkMode && { color: colors.textSecondary }]} numberOfLines={1}>
                           Vị trí hiện tại:{' '}
-                          <Text style={{ fontWeight: '700', color: isDarkMode ? '#94A3B8' : '#475569' }}>
+                          <LocalizedText style={{ fontWeight: '700', color: isDarkMode ? '#94A3B8' : '#475569' }}>
                             {dev.location || 'Chưa nhóm'}
-                          </Text>
-                        </Text>
+                          </LocalizedText>
+                        </LocalizedText>
                       </View>
                       <View
                         style={[
@@ -1139,7 +1125,7 @@ export default function DevicesScreen({ navigation }: any) {
               onPress={() => setShowEditGroupModal(false)}
               activeOpacity={0.7}
             >
-              <Text style={[styles.editModalCancelBtnText, isDarkMode && { color: colors.textSecondary }]}>Hủy</Text>
+              <LocalizedText style={[styles.editModalCancelBtnText, isDarkMode && { color: colors.textSecondary }]}>Hủy</LocalizedText>
             </TouchableOpacity>
             <TouchableOpacity
               style={[
@@ -1150,7 +1136,7 @@ export default function DevicesScreen({ navigation }: any) {
               activeOpacity={0.8}
             >
               <Ionicons name="checkmark" size={18} color="#FFF" />
-              <Text style={styles.editModalSaveBtnText}>Lưu Thay Đổi</Text>
+              <LocalizedText style={styles.editModalSaveBtnText}>Lưu Thay Đổi</LocalizedText>
             </TouchableOpacity>
           </View>
         </SafeAreaView>
@@ -1556,12 +1542,17 @@ const styles = StyleSheet.create({
     justifyContent: 'space-between',
     backgroundColor: '#FFF',
     paddingHorizontal: 16,
-    paddingVertical: 14,
+    paddingVertical: 12,
     borderRadius: 16,
     borderWidth: 1,
     borderColor: '#E2E8F0',
     marginBottom: 8,
+    gap: 10,
     ...Shadows.card,
+  },
+  groupHeaderLeft: {
+    flex: 1,
+    marginRight: 8,
   },
   groupHeaderTitle: {
     fontSize: 15,
@@ -1577,10 +1568,11 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     alignItems: 'center',
     backgroundColor: '#7C3AED',
-    paddingHorizontal: 14,
+    paddingHorizontal: 12,
     paddingVertical: 8,
     borderRadius: 10,
     gap: 4,
+    flexShrink: 0,
   },
   createGroupHeaderBtnText: {
     fontSize: 13,

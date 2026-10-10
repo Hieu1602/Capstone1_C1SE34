@@ -20,12 +20,27 @@ pwd_context = CryptContext(schemes=["bcrypt"], deprecated="auto")
 
 def hash_password(plain_password: str) -> str:
     """Hash mật khẩu với bcrypt."""
-    return pwd_context.hash(plain_password)
+    try:
+        return pwd_context.hash(plain_password)
+    except Exception:
+        import bcrypt
+        pwd_bytes = plain_password.encode("utf-8")
+        salt = bcrypt.gensalt()
+        return bcrypt.hashpw(pwd_bytes, salt).decode("utf-8")
 
 
 def verify_password(plain_password: str, hashed_password: str) -> bool:
     """Xác minh mật khẩu so với hash đã lưu."""
-    return pwd_context.verify(plain_password, hashed_password)
+    try:
+        return pwd_context.verify(plain_password, hashed_password)
+    except Exception:
+        try:
+            import bcrypt
+            pwd_bytes = plain_password.encode("utf-8")
+            hash_bytes = hashed_password.encode("utf-8")
+            return bcrypt.checkpw(pwd_bytes, hash_bytes)
+        except Exception:
+            return False
 
 
 # ---------------------------------------------------------------------------

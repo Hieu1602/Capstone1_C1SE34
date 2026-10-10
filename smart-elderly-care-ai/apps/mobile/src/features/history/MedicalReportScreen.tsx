@@ -3,18 +3,13 @@
 // Hỗ trợ bác sĩ gia đình và người chăm sóc xem xu hướng và tải file báo cáo định kỳ
 
 import React, { useMemo, useState } from 'react';
-import {
-  View,
-  Text,
-  StyleSheet,
-  TouchableOpacity,
-  ScrollView,
-  Alert,
-} from 'react-native';
+import { View, StyleSheet, TouchableOpacity, ScrollView } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
 import { Colors, Shadows } from '../../theme/colors';
 import { useTheme } from '../../store/useThemeStore';
+import { LocalizedAlert, LocalizedText } from '../../i18n/LocalizedComponents';
+
 
 export default function MedicalReportScreen({ navigation }: any) {
   const { isDarkMode } = useTheme();
@@ -55,7 +50,7 @@ export default function MedicalReportScreen({ navigation }: any) {
   }, [period]);
 
   const handleExportPDF = () => {
-    Alert.alert(
+    LocalizedAlert.alert(
       'Xuất Báo Cáo Y Tế (PDF)',
       `Đang tổng hợp dữ liệu sức khoẻ (Nhịp tim, SpO2, Thân nhiệt AMG8833, Sự kiện ngã) trong ${
         period === 'WEEK' ? '7 ngày qua' : '30 ngày qua'
@@ -64,7 +59,7 @@ export default function MedicalReportScreen({ navigation }: any) {
   };
 
   const handleExportExcel = () => {
-    Alert.alert(
+    LocalizedAlert.alert(
       'Xuất Dữ Liệu Thô (Excel)',
       `Đang xuất dữ liệu chuỗi thời gian PostgreSQL sang bảng tính Excel (Openpyxl) với đầy đủ dấu thời gian và độ tin cậy AI.`
     );
@@ -80,8 +75,8 @@ export default function MedicalReportScreen({ navigation }: any) {
           <Ionicons name="chevron-back" size={24} color={isDarkMode ? '#F8FAFC' : Colors.textPrimary} />
         </TouchableOpacity>
         <View style={styles.headerCopy}>
-          <Text style={[styles.headerEyebrow, isDarkMode && { color: '#94A3B8' }]}>THEO DÕI SỨC KHỎE</Text>
-          <Text style={[styles.headerTitle, isDarkMode && { color: '#F8FAFC' }]}>Báo cáo sức khỏe</Text>
+          <LocalizedText style={[styles.headerEyebrow, isDarkMode && { color: '#94A3B8' }]}>THEO DÕI SỨC KHỎE</LocalizedText>
+          <LocalizedText style={[styles.headerTitle, isDarkMode && { color: '#F8FAFC' }]}>Báo cáo sức khỏe</LocalizedText>
         </View>
         <TouchableOpacity style={[styles.headerAction, isDarkMode && { backgroundColor: '#1E293B', borderRadius: 18, borderWidth: 1, borderColor: '#334155' }]} onPress={handleExportPDF} activeOpacity={0.8}>
           <Ionicons name="download-outline" size={21} color={isDarkMode ? '#F8FAFC' : Colors.primary} />
@@ -94,12 +89,12 @@ export default function MedicalReportScreen({ navigation }: any) {
       >
         <View style={styles.reportIntro}>
           <View>
-            <Text style={[styles.reportIntroTitle, isDarkMode && { color: '#F8FAFC' }]}>Tổng quan</Text>
-            <Text style={[styles.reportIntroDate, isDarkMode && { color: '#94A3B8' }]}>{report.label}</Text>
+            <LocalizedText style={[styles.reportIntroTitle, isDarkMode && { color: '#F8FAFC' }]}>Tổng quan</LocalizedText>
+            <LocalizedText style={[styles.reportIntroDate, isDarkMode && { color: '#94A3B8' }]}>{report.label}</LocalizedText>
           </View>
           <View style={styles.liveBadge}>
             <View style={styles.liveDot} />
-            <Text style={styles.liveBadgeText}>Đã đồng bộ</Text>
+            <LocalizedText style={styles.liveBadgeText}>Đã đồng bộ</LocalizedText>
           </View>
         </View>
 
@@ -109,26 +104,26 @@ export default function MedicalReportScreen({ navigation }: any) {
             onPress={() => setPeriod('WEEK')}
             activeOpacity={0.8}
           >
-            <Text style={[styles.periodText, isDarkMode && { color: '#94A3B8' }, period === 'WEEK' && (isDarkMode ? { color: '#F8FAFC', fontWeight: '800' } : styles.periodTextActive)]}>7 ngày</Text>
+            <LocalizedText style={[styles.periodText, isDarkMode && { color: '#94A3B8' }, period === 'WEEK' && (isDarkMode ? { color: '#F8FAFC', fontWeight: '800' } : styles.periodTextActive)]}>7 ngày</LocalizedText>
           </TouchableOpacity>
           <TouchableOpacity
             style={[styles.periodBtn, period === 'MONTH' && (isDarkMode ? { backgroundColor: '#0B0F19' } : styles.periodBtnActive)]}
             onPress={() => setPeriod('MONTH')}
             activeOpacity={0.8}
           >
-            <Text style={[styles.periodText, isDarkMode && { color: '#94A3B8' }, period === 'MONTH' && (isDarkMode ? { color: '#F8FAFC', fontWeight: '800' } : styles.periodTextActive)]}>1 tháng</Text>
+            <LocalizedText style={[styles.periodText, isDarkMode && { color: '#94A3B8' }, period === 'MONTH' && (isDarkMode ? { color: '#F8FAFC', fontWeight: '800' } : styles.periodTextActive)]}>1 tháng</LocalizedText>
           </TouchableOpacity>
         </View>
 
         <View style={[styles.heroCard, isDarkMode && { backgroundColor: '#134E4A' }]}>
           <View style={styles.heroTopRow}>
             <View>
-              <Text style={styles.heroLabel}>Điểm sức khỏe</Text>
+              <LocalizedText style={styles.heroLabel}>Điểm sức khỏe</LocalizedText>
               <View style={styles.heroScoreRow}>
-                <Text style={styles.heroScore}>Ổn định</Text>
+                <LocalizedText style={styles.heroScore}>Ổn định</LocalizedText>
                 <View style={styles.heroTrend}>
                   <Ionicons name="arrow-up" size={13} color="#0F766E" />
-                  <Text style={styles.heroTrendText}>Tốt</Text>
+                  <LocalizedText style={styles.heroTrendText}>Tốt</LocalizedText>
                 </View>
               </View>
             </View>
@@ -139,7 +134,7 @@ export default function MedicalReportScreen({ navigation }: any) {
           <View style={styles.heroProgressTrack}>
             <View style={styles.heroProgressValue} />
           </View>
-          <Text style={styles.heroFootnote}>Dữ liệu được tổng hợp từ {report.readings} lần đo</Text>
+          <LocalizedText style={styles.heroFootnote}>Dữ liệu được tổng hợp từ {report.readings} lần đo</LocalizedText>
         </View>
 
         <View style={styles.metricGrid}>
@@ -147,45 +142,45 @@ export default function MedicalReportScreen({ navigation }: any) {
             <View style={[styles.metricIcon, { backgroundColor: '#FEE2E2' }]}>
               <Ionicons name="pulse" size={18} color="#DC2626" />
             </View>
-            <Text style={[styles.metricValue, isDarkMode && { color: '#F8FAFC' }]}>{report.heartRate}<Text style={styles.metricUnit}> bpm</Text></Text>
-            <Text style={[styles.metricLabel, isDarkMode && { color: '#94A3B8' }]}>Nhịp tim TB</Text>
-            <Text style={[styles.metricDelta, isDarkMode && { color: '#CBD5E1' }]}>{report.heartRateDelta} so với kỳ trước</Text>
+            <LocalizedText style={[styles.metricValue, isDarkMode && { color: '#F8FAFC' }]}>{report.heartRate}<LocalizedText style={styles.metricUnit}> bpm</LocalizedText></LocalizedText>
+            <LocalizedText style={[styles.metricLabel, isDarkMode && { color: '#94A3B8' }]}>Nhịp tim TB</LocalizedText>
+            <LocalizedText style={[styles.metricDelta, isDarkMode && { color: '#CBD5E1' }]}>{report.heartRateDelta} so với kỳ trước</LocalizedText>
           </View>
           <View style={[styles.metricCard, isDarkMode && { backgroundColor: '#1E293B', borderColor: '#334155', borderWidth: 1 }]}>
             <View style={[styles.metricIcon, { backgroundColor: '#DBEAFE' }]}>
               <Ionicons name="water" size={18} color="#2563EB" />
             </View>
-            <Text style={[styles.metricValue, isDarkMode && { color: '#F8FAFC' }]}>{report.spo2}<Text style={styles.metricUnit}> %</Text></Text>
-            <Text style={[styles.metricLabel, isDarkMode && { color: '#94A3B8' }]}>SpO₂ trung bình</Text>
-            <Text style={[styles.metricDelta, isDarkMode && { color: '#CBD5E1' }]}>Trong ngưỡng an toàn</Text>
+            <LocalizedText style={[styles.metricValue, isDarkMode && { color: '#F8FAFC' }]}>{report.spo2}<LocalizedText style={styles.metricUnit}> %</LocalizedText></LocalizedText>
+            <LocalizedText style={[styles.metricLabel, isDarkMode && { color: '#94A3B8' }]}>SpO₂ trung bình</LocalizedText>
+            <LocalizedText style={[styles.metricDelta, isDarkMode && { color: '#CBD5E1' }]}>Trong ngưỡng an toàn</LocalizedText>
           </View>
           <View style={[styles.metricCard, isDarkMode && { backgroundColor: '#1E293B', borderColor: '#334155', borderWidth: 1 }]}>
             <View style={[styles.metricIcon, { backgroundColor: '#FEF3C7' }]}>
               <Ionicons name="thermometer" size={18} color="#D97706" />
             </View>
-            <Text style={[styles.metricValue, isDarkMode && { color: '#F8FAFC' }]}>{report.temperature}<Text style={styles.metricUnit}> °C</Text></Text>
-            <Text style={[styles.metricLabel, isDarkMode && { color: '#94A3B8' }]}>Nhiệt độ cơ thể</Text>
-            <Text style={[styles.metricDelta, isDarkMode && { color: '#CBD5E1' }]}>Ổn định</Text>
+            <LocalizedText style={[styles.metricValue, isDarkMode && { color: '#F8FAFC' }]}>{report.temperature}<LocalizedText style={styles.metricUnit}> °C</LocalizedText></LocalizedText>
+            <LocalizedText style={[styles.metricLabel, isDarkMode && { color: '#94A3B8' }]}>Nhiệt độ cơ thể</LocalizedText>
+            <LocalizedText style={[styles.metricDelta, isDarkMode && { color: '#CBD5E1' }]}>Ổn định</LocalizedText>
           </View>
           <View style={[styles.metricCard, isDarkMode && { backgroundColor: '#1E293B', borderColor: '#334155', borderWidth: 1 }]}>
             <View style={[styles.metricIcon, { backgroundColor: '#DCFCE7' }]}>
               <Ionicons name="watch" size={18} color="#16A34A" />
             </View>
-            <Text style={[styles.metricValue, isDarkMode && { color: '#F8FAFC' }]}>{report.adherence}</Text>
-            <Text style={[styles.metricLabel, isDarkMode && { color: '#94A3B8' }]}>Tuân thủ đeo vòng</Text>
-            <Text style={[styles.metricDelta, isDarkMode && { color: '#CBD5E1' }]}>Mục tiêu &gt; 90%</Text>
+            <LocalizedText style={[styles.metricValue, isDarkMode && { color: '#F8FAFC' }]}>{report.adherence}</LocalizedText>
+            <LocalizedText style={[styles.metricLabel, isDarkMode && { color: '#94A3B8' }]}>Tuân thủ đeo vòng</LocalizedText>
+            <LocalizedText style={[styles.metricDelta, isDarkMode && { color: '#CBD5E1' }]}>Mục tiêu &gt; 90%</LocalizedText>
           </View>
         </View>
 
         <View style={[styles.chartCard, isDarkMode && { backgroundColor: '#1E293B', borderColor: '#334155', borderWidth: 1 }]}>
           <View style={styles.sectionHeaderRow}>
             <View>
-              <Text style={[styles.sectionTitle, isDarkMode && { color: '#F8FAFC' }]}>Xu hướng nhịp tim</Text>
-              <Text style={[styles.sectionSubtitle, isDarkMode && { color: '#94A3B8' }]}>Trung bình theo ngày</Text>
+              <LocalizedText style={[styles.sectionTitle, isDarkMode && { color: '#F8FAFC' }]}>Xu hướng nhịp tim</LocalizedText>
+              <LocalizedText style={[styles.sectionSubtitle, isDarkMode && { color: '#94A3B8' }]}>Trung bình theo ngày</LocalizedText>
             </View>
             <View style={styles.chartLegend}>
               <View style={styles.legendDot} />
-              <Text style={[styles.legendText, isDarkMode && { color: '#94A3B8' }]}>bpm</Text>
+              <LocalizedText style={[styles.legendText, isDarkMode && { color: '#94A3B8' }]}>bpm</LocalizedText>
             </View>
           </View>
           <View style={styles.chartArea}>
@@ -198,7 +193,7 @@ export default function MedicalReportScreen({ navigation }: any) {
               {report.heartRateData.map((value, index) => (
                 <View key={`${period}-heart-${index}`} style={styles.barColumn}>
                   <View style={[styles.bar, { height: `${Math.max(34, (value - 60) * 3.1)}%` }]} />
-                  <Text style={[styles.barLabel, isDarkMode && { color: '#94A3B8' }]}>{report.labels[index]}</Text>
+                  <LocalizedText style={[styles.barLabel, isDarkMode && { color: '#94A3B8' }]}>{report.labels[index]}</LocalizedText>
                 </View>
               ))}
             </View>
@@ -208,8 +203,8 @@ export default function MedicalReportScreen({ navigation }: any) {
         <View style={[styles.alertSummaryCard, isDarkMode && { backgroundColor: '#1E293B', borderColor: '#334155', borderWidth: 1 }]}>
           <View style={styles.sectionHeaderRow}>
             <View>
-              <Text style={[styles.sectionTitle, isDarkMode && { color: '#F8FAFC' }]}>Cảnh báo & sự kiện</Text>
-              <Text style={[styles.sectionSubtitle, isDarkMode && { color: '#94A3B8' }]}>Cần chú ý trong kỳ báo cáo</Text>
+              <LocalizedText style={[styles.sectionTitle, isDarkMode && { color: '#F8FAFC' }]}>Cảnh báo & sự kiện</LocalizedText>
+              <LocalizedText style={[styles.sectionSubtitle, isDarkMode && { color: '#94A3B8' }]}>Cần chú ý trong kỳ báo cáo</LocalizedText>
             </View>
             <Ionicons name="shield-checkmark-outline" size={24} color="#0F766E" />
           </View>
@@ -217,19 +212,19 @@ export default function MedicalReportScreen({ navigation }: any) {
             <View style={[styles.alertIcon, { backgroundColor: '#FEE2E2' }]}>
               <Ionicons name="warning" size={17} color="#DC2626" />
             </View>
-            <Text style={[styles.alertLabel, isDarkMode && { color: '#F8FAFC' }]}>Sự kiện té ngã</Text>
-            <Text style={[styles.alertValue, isDarkMode && { color: '#F8FAFC' }]}>{report.falls} lần</Text>
+            <LocalizedText style={[styles.alertLabel, isDarkMode && { color: '#F8FAFC' }]}>Sự kiện té ngã</LocalizedText>
+            <LocalizedText style={[styles.alertValue, isDarkMode && { color: '#F8FAFC' }]}>{report.falls} lần</LocalizedText>
           </View>
           <View style={styles.alertRow}>
             <View style={[styles.alertIcon, { backgroundColor: '#FEF3C7' }]}>
               <Ionicons name="pulse" size={17} color="#D97706" />
             </View>
-            <Text style={[styles.alertLabel, isDarkMode && { color: '#F8FAFC' }]}>Nhịp tim bất thường</Text>
-            <Text style={[styles.alertValue, isDarkMode && { color: '#F8FAFC' }]}>{report.anomalies} lần</Text>
+            <LocalizedText style={[styles.alertLabel, isDarkMode && { color: '#F8FAFC' }]}>Nhịp tim bất thường</LocalizedText>
+            <LocalizedText style={[styles.alertValue, isDarkMode && { color: '#F8FAFC' }]}>{report.anomalies} lần</LocalizedText>
           </View>
         </View>
 
-        <Text style={[styles.exportSectionTitle, isDarkMode && { color: '#F8FAFC' }]}>Xuất báo cáo</Text>
+        <LocalizedText style={[styles.exportSectionTitle, isDarkMode && { color: '#F8FAFC' }]}>Xuất báo cáo</LocalizedText>
 
         <TouchableOpacity
           style={[styles.pdfExportBtn, isDarkMode && { backgroundColor: '#1E293B', borderColor: '#334155', borderWidth: 1 }]}
@@ -240,8 +235,8 @@ export default function MedicalReportScreen({ navigation }: any) {
             <Ionicons name="document-text" size={21} color="#DC2626" />
           </View>
           <View style={{ flex: 1, marginLeft: 12 }}>
-            <Text style={[styles.btnMainText, isDarkMode && { color: '#F8FAFC' }]}>Xuất báo cáo PDF</Text>
-            <Text style={[styles.btnSubText, isDarkMode && { color: '#94A3B8' }]}>Bản tóm tắt cho bác sĩ</Text>
+            <LocalizedText style={[styles.btnMainText, isDarkMode && { color: '#F8FAFC' }]}>Xuất báo cáo PDF</LocalizedText>
+            <LocalizedText style={[styles.btnSubText, isDarkMode && { color: '#94A3B8' }]}>Bản tóm tắt cho bác sĩ</LocalizedText>
           </View>
           <Ionicons name="arrow-forward" size={20} color="#DC2626" />
         </TouchableOpacity>
@@ -255,8 +250,8 @@ export default function MedicalReportScreen({ navigation }: any) {
             <Ionicons name="grid" size={21} color="#047857" />
           </View>
           <View style={{ flex: 1, marginLeft: 12 }}>
-            <Text style={[styles.btnMainText, isDarkMode ? { color: '#34D399' } : { color: '#047857' }]}>Xuất dữ liệu Excel (.xlsx)</Text>
-            <Text style={[styles.btnSubText, isDarkMode ? { color: '#A7F3D0' } : { color: '#065F46' }]}>Dữ liệu chi tiết theo thời gian</Text>
+            <LocalizedText style={[styles.btnMainText, isDarkMode ? { color: '#34D399' } : { color: '#047857' }]}>Xuất dữ liệu Excel (.xlsx)</LocalizedText>
+            <LocalizedText style={[styles.btnSubText, isDarkMode ? { color: '#A7F3D0' } : { color: '#065F46' }]}>Dữ liệu chi tiết theo thời gian</LocalizedText>
           </View>
           <Ionicons name="arrow-forward" size={20} color="#047857" />
         </TouchableOpacity>

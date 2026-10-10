@@ -37,6 +37,12 @@ import CreateGroupScreen from '../features/dashboard/screens/CreateGroupScreen';
 import SmartbandDetailScreen from '../features/dashboard/screens/SmartbandDetailScreen';
 import HealthDetailScreen from '../features/dashboard/screens/HealthDetailScreen';
 import SettingsScreen from '../features/auth/screens/SettingsScreen';
+import MedicationReminderScreen from '../features/dashboard/screens/MedicationReminderScreen';
+import PatientMedicalRecordScreen from '../features/dashboard/screens/PatientMedicalRecordScreen';
+import DoctorTabNavigator from './DoctorTabNavigator';
+import DoctorPatientDetailScreen from '../features/doctor/screens/DoctorPatientDetailScreen';
+import DoctorPrescriptionsScreen from '../features/doctor/screens/DoctorPrescriptionsScreen';
+import DoctorAnalyticsReportScreen from '../features/doctor/screens/DoctorAnalyticsReportScreen';
 import { useTheme } from '../store/useThemeStore';
 
 const Stack = createNativeStackNavigator();
@@ -107,7 +113,7 @@ function MainTabNavigator() {
 
 // ---- Root Stack Navigator ----
 export default function AppNavigator() {
-  const { accessToken } = useAuthStore();
+  const { accessToken, viewRole } = useAuthStore();
   const isAuthenticated = Boolean(accessToken);
   const { isDarkMode, colors } = useTheme();
 
@@ -136,7 +142,17 @@ export default function AppNavigator() {
         ) : (
           // Main App Stack
           <>
-            <Stack.Screen name="Main" component={MainTabNavigator} />
+            {viewRole === 'doctor' ? (
+              <Stack.Screen name="DoctorMain" component={DoctorTabNavigator} />
+            ) : (
+              <Stack.Screen name="Main" component={MainTabNavigator} />
+            )}
+            <Stack.Screen name="DoctorTabNavigator" component={DoctorTabNavigator} />
+            <Stack.Screen name="DoctorPatientDetail" component={DoctorPatientDetailScreen} />
+            <Stack.Screen name="DoctorPrescriptions" component={DoctorPrescriptionsScreen} />
+            <Stack.Screen name="DoctorAnalytics" component={DoctorAnalyticsReportScreen} />
+            <Stack.Screen name="MedicationReminder" component={MedicationReminderScreen} />
+            <Stack.Screen name="PatientMedicalRecord" component={PatientMedicalRecordScreen} />
             <Stack.Screen name="Devices" component={DevicesScreen} />
             <Stack.Screen name="CameraDetail" component={CameraDetailScreen} />
             <Stack.Screen name="MultiView" component={MultiViewScreen} />

@@ -38,10 +38,11 @@ api.interceptors.response.use(
   (response: import('axios').AxiosResponse) => response,
   async (error: AxiosError) => {
     const original = error.config as any;
-    if (error.response?.status === 401 && !original._retry) {
+    const refreshToken = useAuthStore.getState().refreshToken;
+    const isLoginRequest = original?.url?.includes('/auth/login');
+    if (error.response?.status === 401 && !original?._retry && !isLoginRequest && refreshToken) {
       original._retry = true;
       try {
-        const refreshToken = useAuthStore.getState().refreshToken;
         const { data } = await axios.post(`${BASE_URL}/auth/refresh`, {
           refresh_token: refreshToken,
         });
@@ -63,6 +64,11 @@ export default api;
 export const authApi = {
   requestOtp: (phone: string) => api.post('/auth/request-otp', { phone }),
   verifyOtp: (phone: string, code: string) => api.post('/auth/verify-otp', { phone, code }),
+  requestPasswordResetOtp: (phone: string) => api.post('/auth/password/request-otp', { phone }),
+  resetPassword: (data: { phone: string; otp_code: string; new_password: string }) =>
+    api.post('/auth/password/reset', data),
+  changePassword: (data: { current_password: string; new_password: string }) =>
+    api.patch('/users/me/password', data),
   login: (phone: string, password: string) => {
     // Use FormData for OAuth2 password flow (avoids URLSearchParams compatibility issues)
     const formData = new FormData();
@@ -77,6 +83,7 @@ export const authApi = {
     full_name: string;
     password: string;
     role: string;
+    otp_code: string;
   }) => api.post('/auth/register', data),
 };
 
@@ -97,3 +104,30 @@ export const incidentsApi = {
   acknowledge: (id: string, notes?: string) =>
     api.patch(`/incidents/${id}/acknowledge`, { notes }),
 };
+
+export const doctorApi = {
+  getPatients: () => api.get('/doctor/patients'),
+  getAnalytics: (patientId: any, days = 7) =>
+    api.get('/doctor/analytics', { params: { patient_id: patientId, days } }),
+  getAppointments: () => api.get('/doctor/appointments'),
+  createAppointment: (payload: any) => api.post('/doctor/appointments', payload),
+  updateAppointment: (aptId: any, payload: any) =>
+    api.patch(`/doctor/appointments/${aptId}`, payload),
+  deleteAppointment: (aptId: any) => api.delete(`/doctor/appointments/${aptId}`),
+  getPatientDetail: (patientId: any) => api.get(`/doctor/patients/${patientId}`),
+  getPrescriptions: (patientId: any) =>
+    api.get(`/doctor/patients/${patientId}/prescriptions`),
+  createPrescription: (patientId: any, payload: any) =>
+    api.post(`/doctor/patients/${patientId}/prescriptions`, payload),
+  updatePrescription: (patientId: any, rxId: any, payload: any) =>
+    api.patch(`/doctor/patients/${patientId}/prescriptions/${rxId}`, payload),
+  deletePrescription: (patientId: any, rxId: any) =>
+    api.delete(`/doctor/patients/${patientId}/prescriptions/${rxId}`),
+  togglePrescriptionReminder: (patientId: any, rxId: any) =>
+    api.post(`/doctor/patients/${patientId}/prescriptions/${rxId}/toggle-reminder`),
+  updateMedicalRecord: (patientId: any, payload: any) =>
+    api.patch(`/doctor/patients/${patientId}/medical-record`, payload),
+  updateThresholds: (patientId: any, payload: any) =>
+    api.patch(`/doctor/patients/${patientId}/thresholds`, payload),
+};
+

@@ -2,11 +2,13 @@
 // Biểu đồ nhịp tim dạng đường (line chart) với Victory Native
 
 import React, { useEffect, useState } from 'react';
-import { View, Text, StyleSheet, Dimensions } from 'react-native';
+import { View, StyleSheet, Dimensions } from 'react-native';
 import { VictoryChart, VictoryLine, VictoryArea, VictoryAxis, VictoryTheme } from 'victory-native';
 
 import { vitalsApi } from '../../../services/api';
 import { useVitalStore } from '../../../store/useVitalStore';
+import { LocalizedText } from '../../../i18n/LocalizedComponents';
+
 
 const SCREEN_WIDTH = Dimensions.get('window').width;
 
@@ -65,7 +67,7 @@ export default function HeartRateChart() {
   if (loading || data.length === 0) {
     return (
       <View style={styles.placeholder}>
-        <Text style={styles.placeholderText}>Đang tải biểu đồ...</Text>
+        <LocalizedText style={styles.placeholderText}>Đang tải biểu đồ...</LocalizedText>
       </View>
     );
   }
@@ -121,7 +123,7 @@ export default function HeartRateChart() {
       {/* Legend */}
       <View style={styles.legend}>
         <View style={[styles.legendDot, { backgroundColor: '#EF4444' }]} />
-        <Text style={styles.legendText}>Nhịp tim (bpm)</Text>
+        <LocalizedText style={styles.legendText}>Nhịp tim (bpm)</LocalizedText>
       </View>
     </View>
   );
