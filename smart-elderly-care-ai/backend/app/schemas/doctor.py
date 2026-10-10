@@ -21,6 +21,7 @@ class DoctorPatientCard(BaseModel):
     medical_history: Optional[str] = None
     emergency_contact_phone: Optional[str] = None
     avatar_url: Optional[str] = None
+    has_face_enrolled: bool = False
     device_id: str = "BLE_BAND_001"
     is_online: bool = True
     battery_level: Optional[int] = 85

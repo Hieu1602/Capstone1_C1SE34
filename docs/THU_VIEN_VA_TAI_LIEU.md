@@ -3,17 +3,17 @@
 
 ---
 
-## 📁 1. Danh sách file Word và tài liệu trong mục `docs/`
+## 📁 1. Danh mục tài liệu kỹ thuật trong thư mục `docs/`
 
-Tất cả các tài liệu đề cương, đăng ký đề tài và báo cáo của nhóm đã được đưa vào thư mục `docs/`:
+Để đảm bảo dung lượng repository gọn nhẹ, các file tài liệu nhị phân (`.doc`, `.docx`, `.pdf`) đã được loại bỏ khỏi kho mã nguồn Git. Thư mục `docs/` lưu trữ các tài liệu kiến trúc kỹ thuật dạng Markdown và văn bản trích xuất:
 
 | STT | Tên tập tin | Định dạng | Mô tả nội dung |
 |:---:|:---|:---:|:---|
-| 1 | `C1SE.34-Proposal_Smart Elderly Care AI_version-1 (2).docx` | `.docx` / `.pdf` | **Bản thuyết minh đề tài Capstone 1 (Proposal)**: Trình bày chi tiết bài toán, kiến trúc hệ thống, các yêu cầu chức năng (FR01 - FR13), phi chức năng (NFR01 - NFR07), giải pháp kết hợp AI Edge & Cloud. |
-| 2 | `C1SE.34_NCKH_2026.doc` | `.doc` | **Thuyết minh đề tài Nghiên cứu Khoa học (NCKH 2026)**: Đề xuất nghiên cứu giải pháp AI chăm sóc người cao tuổi, thuật toán Sensor Fusion và Edge Computing. |
-| 3 | `CAPSTONE PROJECT REGISTRATION FORM (1).docx` | `.docx` / `.pdf` | **Đơn đăng ký đề tài Capstone Project**: Thông tin giảng viên hướng dẫn, danh sách thành viên nhóm C1SE.34, mục tiêu và phạm vi đề tài. |
-| 4 | `2- AI USAGE DISCLOSURE STATEMENT (CMU).docx` | `.docx` / `.pdf` | **Báo cáo minh bạch sử dụng AI (AI Usage Disclosure Statement)**: Bản kê khai sử dụng các công cụ Generative AI hỗ trợ lập trình và nghiên cứu theo chuẩn CMU. |
-| 5 | `proposal_extracted.txt` | `.txt` | Văn bản trích xuất toàn bộ nội dung text từ bản thuyết minh đề tài để tiện tìm kiếm nhanh. |
+| 1 | `ARCHITECTURE.md` | `.md` | **Tài liệu kiến trúc hệ thống tổng thể**: Trình bày chi tiết bài toán, mô hình phân hệ Edge - Cloud - Mobile, các luồng dữ liệu và giao thức giao tiếp. |
+| 2 | `REDIS_ARCHITECTURE.md` | `.md` | **Kiến trúc Redis & Realtime Pub/Sub**: Thiết kế lưu trữ đệm, cơ chế phân phối sự kiện cảnh báo và đồng bộ sinh hiệu tức thời. |
+| 3 | `THU_VIEN_VA_TAI_LIEU.md` | `.md` | **Tài liệu tổng hợp**: Danh mục thư viện cần cài đặt cho từng phân hệ (Mobile, Backend, Edge). |
+| 4 | `proposal_extracted.txt` | `.txt` | Văn bản trích xuất toàn bộ nội dung text từ bản thuyết minh đề tài để tra cứu nhanh. |
+| 5 | `database/` | Thư mục | Sơ đồ ERD, tài liệu mô tả CSDL và script khởi tạo bảng PostgreSQL + TimescaleDB. |
 
 ---
 

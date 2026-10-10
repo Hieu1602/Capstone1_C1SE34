@@ -39,7 +39,7 @@ const api: AxiosInstance = axios.create({
 // ---- Request Interceptor: Attach JWT token ----
 api.interceptors.request.use(
   (config: import('axios').InternalAxiosRequestConfig) => {
-    const token = useAuthStore.getState().accessToken || 'fake-jwt-token-demo';
+    const token = useAuthStore.getState().accessToken;
     if (token) {
       config.headers.Authorization = `Bearer ${token}`;
     }
@@ -128,6 +128,10 @@ export const patientApi = {
     api.get(`/patients/${patientId}/medical-record`, { params: { target_date } }),
   getVitals: (patientId: number = 1, target_date?: string) =>
     api.get(`/patients/${patientId}/vitals`, { params: { target_date } }),
+  enrollFace: (patientId: number, formData: FormData) =>
+    api.post(`/patients/${patientId}/face-enroll`, formData, {
+      headers: { 'Content-Type': 'multipart/form-data' },
+    }),
 };
 
 // 5. Notifications & Incidents API

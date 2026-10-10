@@ -29,7 +29,7 @@ import AsyncStorage from '@react-native-async-storage/async-storage';
 export default function DoctorProfileScreen({ navigation }: any) {
   const insets = useSafeAreaInsets();
   const { isDarkMode, colors, toggleTheme } = useTheme();
-  const { userName, userPhone, logout } = useAuthStore();
+  const { userName, userPhone, logout, toggleViewRole } = useAuthStore();
 
   // Thông tin chuyên môn bác sĩ
   const [docInfo, setDocInfo] = useState({
@@ -63,6 +63,9 @@ export default function DoctorProfileScreen({ navigation }: any) {
   const [oldPassword, setOldPassword] = useState('');
   const [newPassword, setNewPassword] = useState('');
   const [confirmPassword, setConfirmPassword] = useState('');
+
+  // Modal 3: Xác nhận đăng xuất
+  const [logoutModalVisible, setLogoutModalVisible] = useState(false);
 
   // Hàm chọn ảnh từ thư viện thiết bị
   const pickImage = async () => {
@@ -288,6 +291,21 @@ export default function DoctorProfileScreen({ navigation }: any) {
             </View>
             <Text style={[styles.menuItemText, { color: colors.textPrimary }]}>
               Đổi mật khẩu tài khoản Bác sĩ
+            </Text>
+            <Ionicons name="chevron-forward" size={16} color="#94A3B8" />
+          </TouchableOpacity>
+
+          {/* Chuyển sang Giao diện Người thân */}
+          <TouchableOpacity
+            style={styles.menuItem}
+            onPress={toggleViewRole}
+            activeOpacity={0.7}
+          >
+            <View style={[styles.menuIconBox, { backgroundColor: '#E0F2FE' }]}>
+              <Ionicons name="swap-horizontal" size={17} color="#0284C7" />
+            </View>
+            <Text style={[styles.menuItemText, { color: colors.textPrimary }]}>
+              Chuyển sang Giao diện Người thân
             </Text>
             <Ionicons name="chevron-forward" size={16} color="#94A3B8" />
           </TouchableOpacity>
@@ -669,6 +687,33 @@ const styles = StyleSheet.create({
     marginTop: 4,
   },
   logoutBtnText: { color: '#DC2626', fontSize: 13.5, fontWeight: '700' },
+
+  logoutModalBox: {
+    borderRadius: 16,
+    padding: 20,
+    width: '100%',
+    maxWidth: 380,
+    alignSelf: 'center',
+    borderWidth: 1,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 4 },
+    shadowOpacity: 0.15,
+    shadowRadius: 12,
+    elevation: 8,
+  },
+  logoutIconBox: {
+    width: 42,
+    height: 42,
+    borderRadius: 21,
+    backgroundColor: '#FEE2E2',
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+  logoutModalDesc: {
+    fontSize: 14,
+    lineHeight: 20,
+    marginBottom: 16,
+  },
 
   // Modal styles
   modalOverlay: {

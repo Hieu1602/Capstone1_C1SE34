@@ -145,8 +145,9 @@ export default function IncidentDetailScreen({ route, navigation }: any) {
         video_clip_url: data.video_clip_url || DEFAULT_VIDEO_URL,
         thumbnail_url: data.thumbnail_url || DEFAULT_EVIDENCE_IMG,
       });
-    } catch {
-      // Mock data
+    } catch (err) {
+      console.warn('Không tìm thấy sự cố thực tế từ backend API, dùng dữ liệu mẫu:', err);
+      // Fallback
       setIncident({
         id: incidentId,
         alert_type: 'FALL_DETECTED',
@@ -236,10 +237,31 @@ export default function IncidentDetailScreen({ route, navigation }: any) {
     }
   };
 
-  if (!incident || loading) {
+  if (loading) {
     return (
-      <SafeAreaView style={styles.container}>
-        <Text style={styles.loadingText}>Đang tải dữ liệu sự kiện...</Text>
+      <SafeAreaView style={[styles.container, { backgroundColor: colors.background, justifyContent: 'center', alignItems: 'center' }]}>
+        <ActivityIndicator size="large" color="#FF7A00" />
+        <Text style={[styles.loadingText, { color: colors.textSecondary, marginTop: 12 }]}>Đang tải chi tiết sự cố...</Text>
+      </SafeAreaView>
+    );
+  }
+
+  if (!incident) {
+    return (
+      <SafeAreaView style={[styles.container, { backgroundColor: colors.background, justifyContent: 'center', alignItems: 'center', padding: 24 }]}>
+        <Ionicons name="alert-circle-outline" size={54} color="#94A3B8" />
+        <Text style={{ color: colors.textPrimary, fontSize: 16, fontWeight: '700', marginTop: 16, textAlign: 'center' }}>
+          Không tìm thấy sự cố
+        </Text>
+        <Text style={{ color: colors.textSecondary, fontSize: 13, marginTop: 8, textAlign: 'center', lineHeight: 20 }}>
+          Sự cố có thể đã được xử lý xong hoặc không tồn tại trong hệ thống.
+        </Text>
+        <TouchableOpacity
+          onPress={() => navigation.goBack()}
+          style={{ marginTop: 24, paddingVertical: 12, paddingHorizontal: 24, backgroundColor: '#FF7A00', borderRadius: 10 }}
+        >
+          <Text style={{ color: '#FFFFFF', fontWeight: '600' }}>Quay lại danh sách</Text>
+        </TouchableOpacity>
       </SafeAreaView>
     );
   }
