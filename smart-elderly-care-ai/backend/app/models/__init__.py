@@ -11,6 +11,7 @@ from app.models.device import Device, DeviceType
 from app.models.device_config import DeviceConfig
 from app.models.vital_sign import VitalSign
 from app.models.incident import Incident
+from app.models.chat import ChatSession, ChatMessage
 
 __all__ = [
     "User",
@@ -24,4 +25,7 @@ __all__ = [
     "DeviceConfig",
     "VitalSign",
     "Incident",
+    "ChatSession",
+    "ChatMessage",
 ]
+

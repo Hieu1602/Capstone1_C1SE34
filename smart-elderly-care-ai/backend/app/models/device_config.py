@@ -22,6 +22,7 @@ from app.core.database import Base
 
 if TYPE_CHECKING:
     from app.models.device import Device
+    from app.models.user import User
 
 
 class DeviceConfig(Base):
@@ -56,6 +57,14 @@ class DeviceConfig(Base):
     hr_threshold_low: Mapped[int] = mapped_column(Integer, default=50, nullable=False)
     # Ngưỡng nồng độ oxy trong máu SpO2 cảnh báo nguy hiểm (default: 90%)
     spo2_threshold_low: Mapped[int] = mapped_column(Integer, default=90, nullable=False)
+
+    # Ngưỡng huyết áp tâm thu cao / thấp (cảnh báo tăng / tụt huyết áp, mmHg)
+    bp_systolic_high: Mapped[int] = mapped_column(Integer, default=140, nullable=False)
+    bp_systolic_low: Mapped[int] = mapped_column(Integer, default=90, nullable=False)
+    # Ngưỡng huyết áp tâm trương cao / thấp (mmHg)
+    bp_diastolic_high: Mapped[int] = mapped_column(Integer, default=90, nullable=False)
+    bp_diastolic_low: Mapped[int] = mapped_column(Integer, default=60, nullable=False)
+
     # Ngưỡng va đập gia tốc kế MPU6050 (đơn vị: g)
     fall_impact_threshold: Mapped[float] = mapped_column(Float, default=2.5, nullable=False)
 
@@ -65,13 +74,24 @@ class DeviceConfig(Base):
     # Topic MQTT chuyên biệt của thiết bị (care/hub-001/...)
     mqtt_topic: Mapped[str | None] = mapped_column(String(150), nullable=True)
 
-    # ---- 4. Cấu hình mở rộng dạng JSONB linh hoạt ----
+    # ---- 4. Phân quyền & Quản lý thiết lập (Chủ nhà hoặc Bác sĩ tự set up) ----
+    # Cờ đánh dấu đã tùy chỉnh ngưỡng riêng cho cụ hay vẫn dùng chuẩn mặc định y tế
+    is_custom_thresholds: Mapped[bool] = mapped_column(Boolean, default=False, nullable=False)
+    # ID người thực hiện thiết lập (Chủ nhà hoặc Bác sĩ)
+    configured_by_user_id: Mapped[uuid.UUID | None] = mapped_column(
+        UUID(as_uuid=True), ForeignKey("users.id", ondelete="SET NULL"), nullable=True, index=True
+    )
+    # Vai trò người thực hiện: 'OWNER', 'DOCTOR', 'SYSTEM'
+    configured_by_role: Mapped[str | None] = mapped_column(String(20), default="SYSTEM", nullable=True)
+
+    # ---- 5. Cấu hình mở rộng dạng JSONB linh hoạt ----
     extra_settings: Mapped[dict[str, Any] | None] = mapped_column(JSONB, nullable=True, default=dict)
 
     updated_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True), server_default=func.now(), onupdate=func.now()
     )
 
-    # Relationship
+    # Relationships
     device: Mapped["Device"] = relationship("Device", back_populates="config")
+    configured_by: Mapped["User | None"] = relationship("User", foreign_keys=[configured_by_user_id])
 

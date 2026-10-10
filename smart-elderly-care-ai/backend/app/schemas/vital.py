@@ -15,6 +15,8 @@ class VitalOut(BaseModel):
     device_id: uuid.UUID
     heart_rate: Optional[int] = None
     spo2: Optional[int] = None
+    bp_systolic: Optional[int] = None
+    bp_diastolic: Optional[int] = None
     skin_temp_max: Optional[float] = None
     person_count: Optional[int] = None
     fall_detected: Optional[bool] = None
@@ -26,6 +28,8 @@ class VitalCreate(BaseModel):
     device_id: Optional[str] = None
     heart_rate: Optional[int] = None
     spo2: Optional[int] = None
+    bp_systolic: Optional[int] = None
+    bp_diastolic: Optional[int] = None
     skin_temp_max: Optional[float] = None
     person_count: Optional[int] = None
     fall_detected: Optional[bool] = False
@@ -35,6 +39,8 @@ class VitalCreate(BaseModel):
 class VitalCurrentOut(BaseModel):
     heart_rate: Optional[int] = 76
     spo2: Optional[int] = 98
+    bp_systolic: Optional[int] = 120
+    bp_diastolic: Optional[int] = 80
     skin_temp_max: Optional[float] = 36.6
     body_temp: Optional[float] = 36.6
     person_count: Optional[int] = 1

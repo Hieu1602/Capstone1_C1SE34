@@ -13,6 +13,8 @@ CREATE EXTENSION IF NOT EXISTS "timescaledb" CASCADE;
 -- PHẦN 2: XÓA BẢNG CŨ THEO THỨ TỰ RÀNG BUỘC KHÓA NGOẠI (NẾU CẦN RESET)
 DROP TABLE IF EXISTS vital_signs CASCADE;
 DROP TABLE IF EXISTS incidents CASCADE;
+DROP TABLE IF EXISTS chat_messages CASCADE;
+DROP TABLE IF EXISTS chat_sessions CASCADE;
 DROP TABLE IF EXISTS device_configs CASCADE;
 DROP TABLE IF EXISTS devices CASCADE;
 DROP TABLE IF EXISTS device_groups CASCADE;
@@ -34,7 +36,16 @@ CREATE TABLE users (
     phone VARCHAR(20) NOT NULL,                        -- SỐ ĐIỆN THOẠI ĐĂNG NHẬP CHÍNH
     full_name VARCHAR(255) NOT NULL,
     hashed_password VARCHAR(255) NOT NULL,
-    role VARCHAR(20) NOT NULL DEFAULT 'user',          -- 'user' (mặc định), 'admin' (quản trị hệ thống)
+    role VARCHAR(20) NOT NULL DEFAULT 'user' CHECK (role IN ('user', 'admin')),  -- 'user' (mặc định), 'admin' (quản trị hệ thống)
+    preferred_language VARCHAR(5) NOT NULL DEFAULT 'vi', -- Ngôn ngữ hiển thị ('vi', 'en')
+    font_size_mode VARCHAR(20) NOT NULL DEFAULT 'system', -- Cỡ chữ ('system', 'custom')
+    custom_font_scale INT NOT NULL DEFAULT 2,          -- Tỷ lệ phóng to chữ
+    vibration_enabled BOOLEAN NOT NULL DEFAULT TRUE,   -- Rung thông báo SOS
+    location_enabled BOOLEAN NOT NULL DEFAULT TRUE,    -- Định vị GPS
+    location_latitude DOUBLE PRECISION,                -- Vĩ độ GPS
+    location_longitude DOUBLE PRECISION,               -- Kinh độ GPS
+    location_address VARCHAR(500),                     -- Địa chỉ GPS
+    avatar_url VARCHAR(500),                           -- Ảnh đại diện người dùng
     is_active BOOLEAN NOT NULL DEFAULT TRUE,
     fcm_token VARCHAR(500),
     created_at TIMESTAMPTZ NOT NULL DEFAULT CURRENT_TIMESTAMP,
@@ -54,7 +65,7 @@ CREATE TABLE houses (
     id UUID NOT NULL DEFAULT gen_random_uuid(),
     name VARCHAR(150) NOT NULL,
     address VARCHAR(300),
-    current_mode VARCHAR(20) NOT NULL DEFAULT 'HOME',  -- 'HOME', 'AWAY', 'NIGHT'
+    current_mode VARCHAR(20) NOT NULL DEFAULT 'HOME' CHECK (current_mode IN ('HOME', 'AWAY', 'NIGHT', 'DISARM', 'ALARM', 'PRIVACY')),  -- Chế độ an ninh đồng bộ Mobile App
     owner_id UUID NOT NULL,
     created_at TIMESTAMPTZ NOT NULL DEFAULT CURRENT_TIMESTAMP,
     updated_at TIMESTAMPTZ NOT NULL DEFAULT CURRENT_TIMESTAMP,
@@ -75,8 +86,8 @@ CREATE TABLE house_members (
     id UUID NOT NULL DEFAULT gen_random_uuid(),
     house_id UUID NOT NULL,
     user_id UUID NOT NULL,
-    role_in_house VARCHAR(50) NOT NULL DEFAULT 'MEMBER', -- 'OWNER', 'ADMIN', 'MEMBER'
-    permissions VARCHAR(50) NOT NULL DEFAULT 'VIEW',     -- 'ADMIN', 'EDIT', 'VIEW'
+    role_in_house VARCHAR(50) NOT NULL DEFAULT 'OWNER' CHECK (role_in_house IN ('OWNER', 'CAREGIVER', 'DOCTOR', 'RELATIVE')), -- 'OWNER', 'CAREGIVER', 'DOCTOR', 'RELATIVE'
+    permissions VARCHAR(50) NOT NULL DEFAULT 'VIEW' CHECK (permissions IN ('ADMIN', 'EDIT', 'VIEW', 'OPERATOR')),     -- 'ADMIN', 'EDIT', 'VIEW', 'OPERATOR'
     joined_at TIMESTAMPTZ NOT NULL DEFAULT CURRENT_TIMESTAMP,
 
     CONSTRAINT pk_house_members PRIMARY KEY (id),
@@ -101,10 +112,11 @@ CREATE TABLE elderly_profiles (
     house_id UUID NOT NULL,
     full_name VARCHAR(150) NOT NULL,
     birth_year INT,
-    gender VARCHAR(20),                                -- 'MALE', 'FEMALE', 'OTHER'
+    gender VARCHAR(20) CHECK (gender IN ('MALE', 'FEMALE')),        -- 'MALE', 'FEMALE'
     medical_history TEXT,                              -- Tiền sử bệnh án (tim mạch, huyết áp...)
     emergency_contact_phone VARCHAR(20),               -- SĐT người thân khẩn cấp
     avatar_url VARCHAR(500),
+    face_embedding TEXT,                               -- Vector 128-D nhận diện khuôn mặt AI
     created_at TIMESTAMPTZ NOT NULL DEFAULT CURRENT_TIMESTAMP,
     updated_at TIMESTAMPTZ NOT NULL DEFAULT CURRENT_TIMESTAMP,
 
@@ -149,10 +161,10 @@ CREATE INDEX ix_device_groups_house_id ON device_groups(house_id);
 -- -----------------------------------------------------------------
 CREATE TABLE devices (
     id UUID NOT NULL DEFAULT gen_random_uuid(),
-    device_id VARCHAR(100) NOT NULL,                   -- Mã phần cứng duy nhất (VD: 'SECA_001', 'BLE_BAND_001')
+    device_id VARCHAR(100) NOT NULL,                   -- Mã phần cứng duy nhất (VD: 'SECA_001', 'BLE_BAND_001', 'HUB_001')
     name VARCHAR(150) NOT NULL,
     sub_title VARCHAR(255),
-    device_type VARCHAR(30) NOT NULL DEFAULT 'CAMERA', -- 'CAMERA', 'SMARTBAND', 'SENSOR'
+    device_type VARCHAR(30) NOT NULL DEFAULT 'CAMERA' CHECK (device_type IN ('CAMERA', 'SMARTBAND', 'SENSOR', 'EDGE_HUB')), -- 'CAMERA', 'SMARTBAND', 'SENSOR', 'EDGE_HUB'
     location VARCHAR(100),
     is_online BOOLEAN NOT NULL DEFAULT FALSE,
     status_text VARCHAR(150),
@@ -190,8 +202,11 @@ CREATE INDEX ix_devices_elderly_id ON devices(elderly_id);
 
 -- -----------------------------------------------------------------
 -- 7. Bảng device_configs: Cấu hình chi tiết & ngưỡng y tế cho thiết bị
+-- -----------------------------------------------------------------
+-- 7. Bảng device_configs: CẤU HÌNH THIẾT BỊ & THAM SỐ THUẬT TOÁN (Quan hệ 1 - 1)
 --    MỐI QUAN HỆ:
 --    - [devices] 1 -- 1 [device_configs]: Mỗi thiết bị có đúng một bộ cấu hình ngưỡng
+--    - [users] 1 -- n [device_configs]: Chủ nhà hoặc Bác sĩ trực tiếp thiết lập ngưỡng chỉ số
 -- -----------------------------------------------------------------
 CREATE TABLE device_configs (
     device_id UUID NOT NULL,
@@ -200,11 +215,27 @@ CREATE TABLE device_configs (
     is_sleep BOOLEAN NOT NULL DEFAULT FALSE,
     is_ai_protect BOOLEAN NOT NULL DEFAULT TRUE,
     has_two_way_audio BOOLEAN NOT NULL DEFAULT TRUE,
+
+    -- Cấu hình ngưỡng sinh hiệu nhịp tim & SpO2
     hr_threshold_high INT NOT NULL DEFAULT 120,       -- Ngưỡng nhịp tim cao (BPM)
     hr_threshold_low INT NOT NULL DEFAULT 50,         -- Ngưỡng nhịp tim thấp (BPM)
     spo2_threshold_low INT NOT NULL DEFAULT 90,       -- Ngưỡng SpO2 nguy hiểm (%)
+
+    -- Cấu hình ngưỡng huyết áp (Blood Pressure: Tâm thu / Tâm trương)
+    bp_systolic_high INT NOT NULL DEFAULT 140,        -- Ngưỡng huyết áp tâm thu cao (cảnh báo tăng huyết áp, mmHg)
+    bp_systolic_low INT NOT NULL DEFAULT 90,          -- Ngưỡng huyết áp tâm thu thấp (cảnh báo hạ huyết áp, mmHg)
+    bp_diastolic_high INT NOT NULL DEFAULT 90,        -- Ngưỡng huyết áp tâm trương cao (mmHg)
+    bp_diastolic_low INT NOT NULL DEFAULT 60,         -- Ngưỡng huyết áp tâm trương thấp (mmHg)
+
+    -- Cấu hình ngưỡng an toàn & phát hiện té ngã
     fall_impact_threshold DOUBLE PRECISION NOT NULL DEFAULT 2.5, -- Gia tốc va chạm té ngã (G)
     immobility_seconds INT NOT NULL DEFAULT 60,       -- Ngưỡng thời gian bất động (giây)
+
+    -- Phân quyền & Quản lý thiết lập (Chủ nhà hoặc Bác sĩ tự set up)
+    is_custom_thresholds BOOLEAN NOT NULL DEFAULT FALSE, -- FALSE: Mặc định y tế; TRUE: Do chủ nhà/bác sĩ tự tùy chỉnh riêng
+    configured_by_user_id UUID,                       -- ID người thực hiện thiết lập (Chủ nhà hoặc Bác sĩ)
+    configured_by_role VARCHAR(20) CHECK (configured_by_role IN ('OWNER', 'DOCTOR', 'SYSTEM')) DEFAULT 'SYSTEM', -- Vai trò người thiết lập
+
     mqtt_topic VARCHAR(150),
     extra_settings JSONB,
     updated_at TIMESTAMPTZ NOT NULL DEFAULT CURRENT_TIMESTAMP,
@@ -212,8 +243,12 @@ CREATE TABLE device_configs (
     CONSTRAINT pk_device_configs PRIMARY KEY (device_id),
     -- Khóa ngoại quan hệ 1 - 1 với thiết bị:
     CONSTRAINT fk_device_configs_device FOREIGN KEY (device_id) 
-        REFERENCES devices(id) ON DELETE CASCADE
+        REFERENCES devices(id) ON DELETE CASCADE,
+    -- Khóa ngoại liên kết tới người thực hiện cấu hình (users):
+    CONSTRAINT fk_device_configs_configured_by FOREIGN KEY (configured_by_user_id) 
+        REFERENCES users(id) ON DELETE SET NULL
 );
+CREATE INDEX ix_device_configs_configured_by ON device_configs(configured_by_user_id);
 
 -- -----------------------------------------------------------------
 -- 8. Bảng vital_signs: Dữ liệu chuỗi thời gian (TimescaleDB Hypertable)
@@ -226,6 +261,8 @@ CREATE TABLE vital_signs (
     device_id UUID NOT NULL,
     heart_rate INT,                                   -- Nhịp tim (bpm)
     spo2 INT,                                         -- Nồng độ oxy trong máu (%)
+    bp_systolic INT,                                  -- Huyết áp tâm thu đo được (mmHg)
+    bp_diastolic INT,                                 -- Huyết áp tâm trương đo được (mmHg)
     skin_temp_max DOUBLE PRECISION,                   -- Nhiệt độ da (°C)
     person_count INT,                                 -- Số người phát hiện qua Camera AI
     fall_detected BOOLEAN,                            -- Cờ phát hiện té ngã
@@ -251,7 +288,7 @@ CREATE TABLE incidents (
     id UUID NOT NULL DEFAULT gen_random_uuid(),
     device_id UUID NOT NULL,
     alert_type VARCHAR(50) NOT NULL,                  -- 'FALL_DETECTED', 'LOW_SPO2', 'HIGH_HR', 'IMMOBILITY', 'SOS'
-    alert_level VARCHAR(20) NOT NULL DEFAULT 'HIGH',  -- 'LOW', 'MEDIUM', 'HIGH', 'CRITICAL'
+    alert_level VARCHAR(20) NOT NULL DEFAULT 'HIGH' CHECK (alert_level IN ('LOW', 'MEDIUM', 'HIGH', 'CRITICAL')),  -- 'LOW', 'MEDIUM', 'HIGH', 'CRITICAL'
     message TEXT NOT NULL,
     confidence DOUBLE PRECISION,                      -- Độ tin cậy thuật toán AI (0.0 -> 1.0)
     sources VARCHAR(255),                             -- Nguồn phát hiện ('VISION', 'SENSOR', 'FUSION')
@@ -273,6 +310,51 @@ CREATE TABLE incidents (
 CREATE INDEX ix_incidents_device_id ON incidents(device_id);
 CREATE INDEX ix_incidents_created_at ON incidents(created_at DESC);
 
+-- -----------------------------------------------------------------
+-- 10. Bảng chat_sessions: Phiên hội thoại AI Assistant
+--     MỐI QUAN HỆ:
+--     - [users] 1 -- n [chat_sessions]: Một người dùng có nhiều phiên chat
+--     - [houses] 1 -- n [chat_sessions]: Chat gắn với căn nhà (context người cao tuổi)
+-- -----------------------------------------------------------------
+CREATE TABLE chat_sessions (
+    id UUID NOT NULL DEFAULT gen_random_uuid(),
+    user_id UUID NOT NULL,
+    house_id UUID,                                    -- Context căn nhà được hỏi (óptíonal)
+    title VARCHAR(200) NOT NULL DEFAULT 'Cuộc trò chuyện', -- Tiêu đề tự động tạo từ tin nhắn đầu
+    model_name VARCHAR(100) NOT NULL DEFAULT 'SmartCare Flash 1', -- Mô hình AI đã dùng
+    is_active BOOLEAN NOT NULL DEFAULT TRUE,
+    created_at TIMESTAMPTZ NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    updated_at TIMESTAMPTZ NOT NULL DEFAULT CURRENT_TIMESTAMP,
+
+    CONSTRAINT pk_chat_sessions PRIMARY KEY (id),
+    CONSTRAINT fk_chat_sessions_user FOREIGN KEY (user_id)
+        REFERENCES users(id) ON DELETE CASCADE,
+    CONSTRAINT fk_chat_sessions_house FOREIGN KEY (house_id)
+        REFERENCES houses(id) ON DELETE SET NULL
+);
+CREATE INDEX ix_chat_sessions_user_id ON chat_sessions(user_id);
+CREATE INDEX ix_chat_sessions_created_at ON chat_sessions(created_at DESC);
+
+-- -----------------------------------------------------------------
+-- 11. Bảng chat_messages: Từng tin nhắn trong phiên hội thoại
+--     MỐI QUAN HỆ:
+--     - [chat_sessions] 1 -- n [chat_messages]: Một phiên có nhiều tin nhắn
+-- -----------------------------------------------------------------
+CREATE TABLE chat_messages (
+    id UUID NOT NULL DEFAULT gen_random_uuid(),
+    session_id UUID NOT NULL,
+    sender VARCHAR(10) NOT NULL CHECK (sender IN ('user', 'ai')), -- 'user' | 'ai'
+    text TEXT NOT NULL,
+    is_error BOOLEAN NOT NULL DEFAULT FALSE,
+    created_at TIMESTAMPTZ NOT NULL DEFAULT CURRENT_TIMESTAMP,
+
+    CONSTRAINT pk_chat_messages PRIMARY KEY (id),
+    CONSTRAINT fk_chat_messages_session FOREIGN KEY (session_id)
+        REFERENCES chat_sessions(id) ON DELETE CASCADE
+);
+CREATE INDEX ix_chat_messages_session_id ON chat_messages(session_id);
+CREATE INDEX ix_chat_messages_created_at ON chat_messages(created_at ASC);
+
 -- =================================================================
 -- PHẦN 4: DỮ LIỆU KHỞI TẠO MẪU (SEED DATA CHO HỆ THỐNG)
 -- Kịch bản nghiệp vụ:
@@ -287,10 +369,12 @@ INSERT INTO users (id, phone, full_name, hashed_password, role, is_active)
 VALUES
     -- [1] Người nhà chính (Chủ sở hữu hệ thống):
     ('640e3d97-b4e1-4b08-b2d3-d949a0eb075c', '+84905123456', 'Nguyễn Hữu Nghĩa', '$2b$12$gzojPtKekxkEyY5oiuJBtOAzf1rUGOi5WPHIRO.lR5hnMuoqp5age', 'user', TRUE),
-    -- [2] Người thân trong gia đình (Được chia sẻ):
+    -- [2] Người thân trong gia đình được uỷ quyền (Secondary Caregiver):
     ('a1111111-b4e1-4b08-b2d3-d949a0eb075c', '+84905999888', 'Nguyễn Thị Lan', '$2b$12$gzojPtKekxkEyY5oiuJBtOAzf1rUGOi5WPHIRO.lR5hnMuoqp5age', 'user', TRUE),
-    -- [3] Bác sĩ gia đình (Được mời theo dõi y tế):
-    ('b2222222-b4e1-4b08-b2d3-d949a0eb075c', '+84905111222', 'BS. Trần Văn Minh', '$2b$12$gzojPtKekxkEyY5oiuJBtOAzf1rUGOi5WPHIRO.lR5hnMuoqp5age', 'user', TRUE)
+    -- [3] Bác sĩ gia đình (Family Physician):
+    ('b2222222-b4e1-4b08-b2d3-d949a0eb075c', '+84905111222', 'BS. Trần Văn Minh', '$2b$12$gzojPtKekxkEyY5oiuJBtOAzf1rUGOi5WPHIRO.lR5hnMuoqp5age', 'user', TRUE),
+    -- [4] Quản trị hệ thống (System Administrator):
+    ('c9999999-b4e1-4b08-b2d3-d949a0eb075c', '+84900000000', 'System Admin', '$2b$12$gzojPtKekxkEyY5oiuJBtOAzf1rUGOi5WPHIRO.lR5hnMuoqp5age', 'admin', TRUE)
 ON CONFLICT (phone) DO UPDATE 
 SET full_name = EXCLUDED.full_name,
     role = EXCLUDED.role,
@@ -374,18 +458,26 @@ VALUES
 ON CONFLICT (device_id) DO NOTHING;
 
 -- 7. Cấu hình ngưỡng cảnh báo thiết bị (device_configs - Quan hệ 1-1)
-INSERT INTO device_configs (device_id, stream_url, resolution, is_sleep, is_ai_protect, has_two_way_audio, hr_threshold_high, hr_threshold_low, spo2_threshold_low, fall_impact_threshold, immobility_seconds)
+INSERT INTO device_configs (
+    device_id, stream_url, resolution, is_sleep, is_ai_protect, has_two_way_audio,
+    hr_threshold_high, hr_threshold_low, spo2_threshold_low,
+    bp_systolic_high, bp_systolic_low, bp_diastolic_high, bp_diastolic_low,
+    fall_impact_threshold, immobility_seconds,
+    is_custom_thresholds, configured_by_user_id, configured_by_role
+)
 VALUES
-    ('d0000001-b4e1-4b08-b2d3-d949a0eb075c', 'http://10.0.2.2:8080', '2K', FALSE, TRUE, TRUE, 120, 50, 90, 2.5, 60),
-    ('d0000002-b4e1-4b08-b2d3-d949a0eb075c', NULL, '1080p', FALSE, TRUE, FALSE, 120, 50, 90, 2.5, 60)
+    -- Cấu hình Camera AI SECA_001 (Chủ nhà thiết lập mặc định hệ thống)
+    ('d0000001-b4e1-4b08-b2d3-d949a0eb075c', 'http://10.0.2.2:8080', '2K', FALSE, TRUE, TRUE, 120, 50, 90, 140, 90, 90, 60, 2.5, 60, FALSE, '640e3d97-b4e1-4b08-b2d3-d949a0eb075c', 'OWNER'),
+    -- Cấu hình Vòng tay BLE_BAND_001 (Bác sĩ Trần Văn Minh thiết lập chuyên sâu cho cụ An có tiền sử cao huyết áp)
+    ('d0000002-b4e1-4b08-b2d3-d949a0eb075c', NULL, '1080p', FALSE, TRUE, FALSE, 115, 55, 92, 135, 95, 85, 60, 2.5, 45, TRUE, 'b2222222-b4e1-4b08-b2d3-d949a0eb075c', 'DOCTOR')
 ON CONFLICT (device_id) DO NOTHING;
 
 -- 8. Dữ liệu chuỗi thời gian sinh hiệu (vital_signs - Hypertable)
-INSERT INTO vital_signs (id, "time", device_id, heart_rate, spo2, skin_temp_max, person_count, fall_detected)
+INSERT INTO vital_signs (id, "time", device_id, heart_rate, spo2, bp_systolic, bp_diastolic, skin_temp_max, person_count, fall_detected)
 VALUES
-    (gen_random_uuid(), NOW() - INTERVAL '10 minutes', 'd0000002-b4e1-4b08-b2d3-d949a0eb075c', 76, 98, 36.5, 1, FALSE),
-    (gen_random_uuid(), NOW() - INTERVAL '5 minutes',  'd0000002-b4e1-4b08-b2d3-d949a0eb075c', 78, 97, 36.6, 1, FALSE),
-    (gen_random_uuid(), NOW(),                        'd0000002-b4e1-4b08-b2d3-d949a0eb075c', 80, 98, 36.6, 1, FALSE);
+    (gen_random_uuid(), NOW() - INTERVAL '10 minutes', 'd0000002-b4e1-4b08-b2d3-d949a0eb075c', 76, 98, 122, 80, 36.5, 1, FALSE),
+    (gen_random_uuid(), NOW() - INTERVAL '5 minutes',  'd0000002-b4e1-4b08-b2d3-d949a0eb075c', 78, 97, 125, 82, 36.6, 1, FALSE),
+    (gen_random_uuid(), NOW(),                        'd0000002-b4e1-4b08-b2d3-d949a0eb075c', 80, 98, 128, 83, 36.6, 1, FALSE);
 
 -- 9. Nhật ký sự cố khẩn cấp (incidents)
 INSERT INTO incidents (id, device_id, alert_type, alert_level, message, confidence, sources, is_acknowledged, acknowledged_by, acknowledged_at, notes)
