@@ -1,5 +1,16 @@
-// IncidentDetailScreen.tsx
-// Màn hình chi tiết sự kiện cảnh báo – Xem thông tin, video clip 5s và ảnh mô phỏng AI Bounding Box
+// ==============================================================================
+// IncidentDetailScreen.tsx – Màn hình Chi tiết Sự cố & Bằng chứng Video Clip
+// ------------------------------------------------------------------------------
+// Hệ thống giám sát người cao tuổi Smart Elderly Care AI (C1SE.34)
+//
+// Trách nhiệm của màn hình:
+// 1. Hiển thị chi tiết toàn diện về sự cố (Loại sự cố, Độ tin cậy AI, Mốc thời gian).
+// 2. Trình chiếu video clip bằng chứng 5 giây trích xuất từ camera Edge (hoặc MinIO).
+// 3. Cung cấp nút bấm "Đánh dấu đã xử lý":
+//    - Tắt còi hú và rung SOS trên điện thoại người nhà.
+//    - Đồng bộ API lên PostgreSQL Cloud Backend.
+//    - Cập nhật trạng thái acknowledged cho toàn bộ ứng dụng (Zustand store).
+// ==============================================================================
 
 import React, { useEffect, useState } from 'react';
 import {
@@ -18,6 +29,7 @@ import {
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
 
+// Nạp thư viện video native (trên Web dùng thẻ video HTML5 tiêu chuẩn)
 let Video: any = null;
 if (Platform.OS !== 'web') {
   try {
@@ -27,8 +39,9 @@ if (Platform.OS !== 'web') {
 
 import { incidentsApi } from '../../../services/api';
 import { useTheme } from '../../../store/useThemeStore';
-import { useVitalStore, useAuthStore } from '../../../store/useVitalStore';
+import { useAlertStore, useAuthStore } from '../../../store';
 
+// Định nghĩa kiểu dữ liệu sự cố
 interface Incident {
   id: string;
   alert_type: string;
@@ -44,6 +57,7 @@ interface Incident {
   created_at: string;
 }
 
+// Bảng màu tương ứng với các cấp độ nghiêm trọng của sự cố
 const LEVEL_COLORS: Record<string, string> = {
   CRITICAL: '#EF4444',
   HIGH:     '#F97316',
@@ -51,6 +65,7 @@ const LEVEL_COLORS: Record<string, string> = {
   LOW:      '#22C55E',
 };
 
+// Nhãn tiếng Việt trực quan cho từng mã sự kiện
 const ALERT_TYPE_LABELS: Record<string, string> = {
   FALL_DETECTED:    '🤸 Cảnh báo té ngã khẩn cấp',
   ABNORMAL_HR:      '💓 Nhịp tim bất thường',
@@ -67,17 +82,22 @@ const DEFAULT_EVIDENCE_IMG = 'http://localhost:8000/static/evidence/fall_evidenc
 const FALLBACK_ONLINE_IMG = 'https://images.unsplash.com/photo-1516549655169-df83a0774514?w=800&q=80';
 
 export default function IncidentDetailScreen({ route, navigation }: any) {
+  // Lấy trạng thái màu giao diện Sáng / Tối
   const { isDarkMode, colors } = useTheme();
+
+  // Kết nối Domain Store useAlertStore để quản lý còi hú và sự cố
   const {
     acknowledgeIncident,
     setSirenActive,
     incidents,
-    fetchVitals,
     fetchNotifications,
-  } = useVitalStore();
-  const { userName } = useAuthStore();
-  const operatorName = userName || 'Demo User';
+  } = useAlertStore();
 
+  // Lấy tên người dùng đang đăng nhập để gán vào mục "Người xử lý"
+  const { userName } = useAuthStore();
+  const operatorName = userName || 'Người nhà';
+
+  // Lấy các tham số truyền qua navigation route
   const params = route.params ?? {};
   const incidentId = params.incidentId ?? params.id ?? 'inc-03';
   const [incident, setIncident] = useState<Incident | null>(null);
@@ -87,11 +107,14 @@ export default function IncidentDetailScreen({ route, navigation }: any) {
   const [imgError, setImgError] = useState(false);
   const [viewMode, setViewMode] = useState<'ai_box' | 'video'>('ai_box');
 
+  // ----------------------------------------------------------------------------
+  // Lifecycle: Khởi tạo dữ liệu sự cố từ params hoặc tải từ Backend API
+  // ----------------------------------------------------------------------------
   useEffect(() => {
-    // Check if incident exists in vitalStore
+    // 1. Kiểm tra xem sự cố đã có sẵn trong AlertStore chưa
     const storeInc = incidents.find((i) => i.id === incidentId);
 
-    // If rich params provided from navigation, initialize immediately
+    // 2. Nếu navigation có truyền sẵn thông tin chi tiết: Nạp ngay để hiển thị tức thì
     if (params.alert_type || params.type || params.confidence != null || params.message) {
       let conf = 0.94;
       if (typeof params.confidence === 'number') {
@@ -118,10 +141,11 @@ export default function IncidentDetailScreen({ route, navigation }: any) {
       return;
     }
 
+    // 3. Nếu tìm thấy trong store: Sử dụng trực tiếp
     if (storeInc) {
       setIncident({
         ...storeInc,
-        confidence: 0.94,
+        confidence: storeInc.confidence ?? 0.94,
         video_clip_url: storeInc.video_clip_url || DEFAULT_VIDEO_URL,
         thumbnail_url: storeInc.thumbnail_url || DEFAULT_EVIDENCE_IMG,
       });
@@ -129,6 +153,7 @@ export default function IncidentDetailScreen({ route, navigation }: any) {
       return;
     }
 
+    // 4. Nếu chưa có: Gọi API Backend để lấy chi tiết sự kiện
     if (incidentId) {
       fetchIncident();
     } else {
@@ -188,9 +213,8 @@ export default function IncidentDetailScreen({ route, navigation }: any) {
       // 3. Cập nhật state trong Zustand store (toàn bộ app)
       acknowledgeIncident(incident.id, 'Đã kiểm tra an toàn', operatorName);
 
-      // 4. Đồng bộ lại dữ liệu sinh hiệu và thông báo từ Backend
+      // 4. Đồng bộ lại dữ liệu thông báo từ Backend
       try {
-        fetchVitals();
         fetchNotifications();
       } catch (e) {}
 

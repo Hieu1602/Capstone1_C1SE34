@@ -153,7 +153,7 @@ class AlertsWebSocket {
       }
       // Kiểm tra lại nếu không còn sự cố Critical chưa xử lý nào thì tắt còi & tắt cờ té ngã
       const remainingCritical = useVitalStore.getState().incidents.some(
-        (i) => !i.is_acknowledged && (i.alert_level === 'CRITICAL' || i.alert_type === 'FALL_DETECTED')
+        (i: any) => !i.is_acknowledged && (i.alert_level === 'CRITICAL' || i.alert_type === 'FALL_DETECTED')
       );
       if (!remainingCritical) {
         store.setVitals({ fall_detected: false, acoustic_status: 'Bình thường' });
