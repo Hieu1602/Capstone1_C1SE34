@@ -38,34 +38,41 @@ export default function HeartRateChart() {
   }, [currentVitals.heart_rate, currentVitals.timestamp]);
 
   const loadHistory = async () => {
-    if (!activeDevice) return;
+    const devId = activeDevice?.device_id || 'BLE_BAND_001';
     try {
-      const res = await vitalsApi.getHistory(activeDevice.device_id, 50);
-      const points: DataPoint[] = res.data
-        .filter((v: any) => v.heart_rate != null)
-        .map((v: any) => ({
-          x: new Date(v.time).getTime() / 1000,
-          y: v.heart_rate,
-        }))
-        .reverse();
-      setData(points);
+      const res = await vitalsApi.getHistory(devId, 50);
+      if (res.data && Array.isArray(res.data)) {
+        const points: DataPoint[] = res.data
+          .filter((v: any) => v.heart_rate != null)
+          .map((v: any) => ({
+            x: new Date(v.time).getTime() / 1000,
+            y: Number(v.heart_rate),
+          }))
+          .reverse();
+        setData(points);
+      } else {
+        setData([]);
+      }
     } catch (e) {
-      // Sử dụng mock data khi không có API
-      setData(
-        Array.from({ length: 20 }, (_, i) => ({
-          x: Date.now() / 1000 - (20 - i) * 60,
-          y: 65 + Math.random() * 20,
-        }))
-      );
+      console.warn('[HeartRateChart] Không thể tải lịch sử nhịp tim:', e);
+      setData([]);
     } finally {
       setLoading(false);
     }
   };
 
-  if (loading || data.length === 0) {
+  if (loading) {
     return (
       <View style={styles.placeholder}>
-        <Text style={styles.placeholderText}>Đang tải biểu đồ...</Text>
+        <Text style={styles.placeholderText}>Đang tải biểu đồ nhịp tim thực tế...</Text>
+      </View>
+    );
+  }
+
+  if (data.length === 0) {
+    return (
+      <View style={styles.placeholder}>
+        <Text style={styles.placeholderText}>Chưa có bản ghi nhịp tim thực tế từ vòng đeo tay.</Text>
       </View>
     );
   }

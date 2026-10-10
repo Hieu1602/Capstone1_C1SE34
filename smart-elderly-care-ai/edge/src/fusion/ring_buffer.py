@@ -134,3 +134,45 @@ class VideoRingBuffer:
             "[RingBuffer] Đã lưu clip %d frames → %s", len(frames), output_path
         )
         return True
+
+    def save_incident_snapshots(
+        self,
+        base_path: str,
+    ) -> List[str]:
+        """
+        Trích xuất 3 snapshots bằng chứng (-3s, -1.5s, 0s tại thời điểm alert)
+        theo thiết kế từ ElderCare Vision (Repo 1).
+
+        Args:
+            base_path: Tiền tố đường dẫn lưu ảnh (e.g. '/tmp/incident_1720000000')
+
+        Returns:
+            Danh sách đường dẫn các ảnh đã lưu thành công
+        """
+        try:
+            import cv2  # type: ignore
+        except ImportError:
+            return []
+
+        with self._lock:
+            buf = list(self._buffer)
+
+        if not buf:
+            return []
+
+        saved_paths = []
+        # Các mốc thời gian: -3.0s (trước khi ngã), -1.5s (trong lúc ngã), 0.0s (sau khi ngã)
+        time_offsets = [3.0, 1.5, 0.0]
+        labels = ["t_minus_3s", "t_minus_1_5s", "t_alert"]
+
+        for offset, label in zip(time_offsets, labels):
+            idx = int(offset * self.fps)
+            frame_idx = max(0, len(buf) - 1 - idx) if idx > 0 else (len(buf) - 1)
+            frame = buf[frame_idx]
+            img_path = f"{base_path}_{label}.jpg"
+            if cv2.imwrite(img_path, frame):
+                saved_paths.append(img_path)
+
+        logger.info("[RingBuffer] Đã lưu %d ảnh bằng chứng sự kiện", len(saved_paths))
+        return saved_paths
+

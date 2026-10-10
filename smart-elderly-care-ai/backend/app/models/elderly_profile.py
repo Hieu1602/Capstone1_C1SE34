@@ -45,6 +45,7 @@ class ElderlyProfile(Base):
     # Số điện thoại liên lạc người thân khẩn cấp
     emergency_contact_phone: Mapped[str | None] = mapped_column(String(20), nullable=True)
     avatar_url: Mapped[str | None] = mapped_column(String(500), nullable=True)
+    face_embedding: Mapped[str | None] = mapped_column(Text, nullable=True)  # JSON 128-D vector cho nhận diện AI
 
     created_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True), server_default=func.now()

@@ -17,6 +17,7 @@ from app.api.v1.endpoints.reports       import router as reports_router
 from app.api.v1.endpoints.system        import router as system_router
 from app.api.v1.endpoints.users         import router as users_router
 from app.api.v1.endpoints.vitals        import router as vitals_router
+from app.api.v1.endpoints.chatbot       import router as chatbot_router
 
 api_router = APIRouter()
 
@@ -33,3 +34,4 @@ api_router.include_router(patients_router,      prefix="/patients",      tags=["
 api_router.include_router(doctor_router,        prefix="/doctor",        tags=["Doctor Subsystem"])
 api_router.include_router(reports_router,       prefix="/reports",       tags=["Reports"])
 api_router.include_router(system_router,        prefix="/system",        tags=["System & Redis Cache"])
+api_router.include_router(chatbot_router,       prefix="/chatbot",       tags=["Chatbot AI (RAG)"])

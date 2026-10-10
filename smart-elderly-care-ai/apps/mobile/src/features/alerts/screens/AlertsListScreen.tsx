@@ -115,9 +115,19 @@ function formatFriendlyTime(dateStr: string) {
 
 export default function AlertsListScreen({ navigation }: any) {
   const { isDarkMode, colors } = useTheme();
-  const { incidents, setIncidents } = useVitalStore();
+  const { incidents, setIncidents, fetchNotifications } = useVitalStore();
   const [refreshing, setRefreshing] = useState(false);
   const [filterType, setFilterType] = useState<'ALL' | 'CRITICAL' | 'VITAL'>('ALL');
+
+  React.useEffect(() => {
+    fetchNotifications();
+  }, []);
+
+  const handleRefresh = async () => {
+    setRefreshing(true);
+    await fetchNotifications();
+    setRefreshing(false);
+  };
 
   const unreadCount = incidents.filter((item) => !item.is_acknowledged).length;
 
@@ -317,10 +327,7 @@ export default function AlertsListScreen({ navigation }: any) {
         refreshControl={
           <RefreshControl
             refreshing={refreshing}
-            onRefresh={() => {
-              setRefreshing(true);
-              setTimeout(() => setRefreshing(false), 800);
-            }}
+            onRefresh={handleRefresh}
             tintColor={Colors.primary}
           />
         }
