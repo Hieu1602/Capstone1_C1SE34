@@ -320,7 +320,7 @@ export default function DoctorPrescriptionsScreen() {
                     Cụ Nguyễn Văn An (Nhà của tôi)
                   </Text>
                   <Text style={[styles.footerDoctor, { color: isDarkMode ? '#64748B' : '#94A3B8' }]} numberOfLines={1}>
-                    BS: {rx.doctor_name || 'BS. Trần Văn Minh'}
+                    BS: {rx.doctor_name || 'BSCKII. Nguyễn Văn Minh'}
                   </Text>
                 </View>
 

@@ -42,69 +42,60 @@ def seed_rich_data(db: Session = None) -> Dict[str, Any]:
 
         now = datetime.utcnow()
 
-        # 2. Nạp 15 mốc đo nhịp tim & sinh hiệu trong 24 giờ qua
-        # Tạo chuỗi thời gian lùi dần từ hiện tại về 24h trước
-        time_offsets_hours = [
-            0.1,   # 6 phút trước (Mới nhất)
-            1.0,   # 1 giờ trước
-            2.0,   # 2 giờ trước
-            3.5,   # 3.5 giờ trước
-            5.0,   # 5 giờ trước
-            6.5,   # 6.5 giờ trước
-            8.0,   # 8 giờ trước
-            10.0,  # 10 giờ trước
-            12.0,  # 12 giờ trước
-            14.0,  # 14 giờ trước
-            16.0,  # 16 giờ trước
-            18.0,  # 18 giờ trước
-            20.0,  # 20 giờ trước
-            22.0,  # 22 giờ trước
-            24.0,  # 24 giờ trước
-        ]
-
-        # Bộ thông số sinh hiệu thực tế tương ứng với các thời điểm trong ngày
-        vitals_profiles = [
-            # hr, spo2, temp, activity, sound, fall_count
-            (74, 98, 36.8, "Sinh hoạt bình thường", "Bình thường", 0),
-            (72, 98, 36.7, "Nghỉ ngơi phòng khách", "Bình thường", 0),
-            (76, 99, 36.8, "Uống trà chiều", "Bình thường", 0),
-            (79, 97, 36.9, "Đi bộ nhẹ quanh sân", "Bình thường", 0),
-            (82, 98, 37.0, "Tập vận động nhẹ", "Bình thường", 0),
-            (75, 98, 36.8, "Xem tivi phòng khách", "Bình thường", 0),
-            (68, 98, 36.6, "Nghỉ trưa", "Yên tĩnh", 0),
-            (78, 97, 36.8, "Ăn trưa", "Bình thường", 0),
-            (73, 98, 36.7, "Đọc sách buổi sáng", "Bình thường", 0),
-            (81, 99, 36.9, "Tập dưỡng sinh buổi sáng", "Bình thường", 0),
-            (71, 98, 36.6, "Thức giấc buổi sáng", "Bình thường", 0),
-            (64, 97, 36.5, "Ngủ say", "Yên tĩnh", 0),
-            (62, 98, 36.4, "Ngủ sâu ban đêm", "Yên tĩnh", 0),
-            (65, 97, 36.5, "Ngủ say", "Yên tĩnh", 0),
-            (69, 98, 36.6, "Chuẩn bị đi ngủ", "Yên tĩnh", 0),
+        # 2. Nạp mốc đo nhịp tim & sinh hiệu trải dài qua Hôm nay, Hôm qua và 2-3 ngày gần nhất
+        daily_schedule = [
+            # (hour, minute, base_hr, spo2, temp, activity, sound)
+            (3, 0, 62, 98, 36.4, "Ngủ sâu ban đêm", "Yên tĩnh"),
+            (6, 0, 71, 98, 36.6, "Thức giấc buổi sáng", "Bình thường"),
+            (7, 15, 82, 99, 36.9, "Tập dưỡng sinh buổi sáng", "Bình thường"),
+            (8, 30, 75, 98, 36.7, "Ăn sáng & uống thuốc", "Bình thường"),
+            (9, 45, 73, 98, 36.8, "Đọc sách, tưới cây", "Bình thường"),
+            (11, 30, 78, 97, 36.8, "Chuẩn bị ăn trưa", "Bình thường"),
+            (12, 45, 66, 98, 36.5, "Nghỉ trưa", "Yên tĩnh"),
+            (14, 15, 70, 98, 36.6, "Thức dậy uống nước ấm", "Bình thường"),
+            (15, 30, 76, 99, 36.8, "Uống trà chiều", "Bình thường"),
+            (17, 0, 81, 97, 36.9, "Đi bộ nhẹ quanh sân", "Bình thường"),
+            (18, 30, 77, 98, 36.8, "Ăn tối & uống thuốc", "Bình thường"),
+            (19, 45, 74, 98, 36.7, "Xem tivi phòng khách", "Bình thường"),
+            (21, 0, 72, 98, 36.7, "Sinh hoạt cùng gia đình", "Bình thường"),
+            (22, 15, 68, 98, 36.6, "Chuẩn bị đi ngủ", "Yên tĩnh"),
+            (23, 30, 64, 97, 36.4, "Ngủ say", "Yên tĩnh"),
         ]
 
         added_vitals = []
-        for offset, (hr, spo2, temp, act, snd, fall) in zip(time_offsets_hours, vitals_profiles):
-            rec_time = now - timedelta(hours=offset)
-            # Kiểm tra xem mốc thời gian này đã có chưa (trong khoảng 10 phút)
-            exist = db.query(models.VitalSign).filter(
-                models.VitalSign.patient_id == patient.id,
-                models.VitalSign.recorded_at >= rec_time - timedelta(minutes=10),
-                models.VitalSign.recorded_at <= rec_time + timedelta(minutes=10),
-            ).first()
+        for day_offset in [0, 1, 2, 3]:
+            target_date = (now - timedelta(days=day_offset)).date()
+            for (h, m, base_hr, spo2, temp, act, snd) in daily_schedule:
+                rec_time = datetime(target_date.year, target_date.month, target_date.day, h, m, 0)
+                # Nếu là ngày hôm nay và mốc đo trong tương lai thì bỏ qua
+                if rec_time > now + timedelta(minutes=5):
+                    continue
 
-            if not exist:
-                v = models.VitalSign(
-                    patient_id=patient.id,
-                    heart_rate=hr,
-                    spo2=spo2,
-                    body_temp=temp,
-                    activity_state=act,
-                    sound_state=snd,
-                    fall_detected_count=fall,
-                    recorded_at=rec_time,
-                )
-                db.add(v)
-                added_vitals.append(v)
+                # Tạo dao động nhẹ giữa các ngày để dữ liệu nhìn chân thực
+                variation = (day_offset * 3 + h) % 5 - 2
+                final_hr = base_hr + variation
+                final_spo2 = min(99, max(95, spo2 + ((day_offset + m) % 3 - 1)))
+                final_temp = round(temp + ((day_offset + h) % 3 * 0.1), 1)
+
+                exist = db.query(models.VitalSign).filter(
+                    models.VitalSign.patient_id == patient.id,
+                    models.VitalSign.recorded_at >= rec_time - timedelta(minutes=15),
+                    models.VitalSign.recorded_at <= rec_time + timedelta(minutes=15),
+                ).first()
+
+                if not exist:
+                    v = models.VitalSign(
+                        patient_id=patient.id,
+                        heart_rate=final_hr,
+                        spo2=final_spo2,
+                        body_temp=final_temp,
+                        activity_state=act,
+                        sound_state=snd,
+                        fall_detected_count=0,
+                        recorded_at=rec_time,
+                    )
+                    db.add(v)
+                    added_vitals.append(v)
 
         # 3. Thêm 3 loại thuốc uống phân bổ trong ngày (Sáng, Trưa, Tối)
         new_medications_data = [
@@ -190,7 +181,7 @@ def seed_rich_data(db: Session = None) -> Dict[str, Any]:
                 "thumbnail_url": "https://images.unsplash.com/photo-1516549655169-df83a0774514?w=300&q=80",
                 "is_new": False,
                 "is_resolved": True,
-                "resolved_by": "BSCKII. Trần Minh Đức",
+                "resolved_by": "BSCKII. Nguyễn Văn Minh",
                 "resolved_at": now - timedelta(hours=8),
                 "created_at": now - timedelta(hours=10),
             },

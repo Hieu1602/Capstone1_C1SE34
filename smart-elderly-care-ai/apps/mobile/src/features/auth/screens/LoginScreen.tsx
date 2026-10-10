@@ -61,20 +61,16 @@ export default function LoginScreen({ navigation }: any) {
           : `+84${cleanAccount}`;
 
       const response = await authApi.login(normalizedAccount, password);
-      const { access_token, refresh_token } = response.data;
+      const { access_token, refresh_token, user } = response.data;
 
-      let resolvedName = 'Nguyễn Hữu Nghĩa';
-      let resolvedRole = 'user';
-      if (normalizedAccount.includes('111222')) {
-        resolvedName = 'BS. Trần Văn Minh';
-        resolvedRole = 'doctor';
-      } else if (normalizedAccount.includes('999888')) {
-        resolvedName = 'Nguyễn Thị Lan';
-        resolvedRole = 'user';
-      }
+      const full_name = user?.full_name || (normalizedAccount.includes('888') || normalizedAccount.includes('999') || normalizedAccount.includes('111222') ? 'BS. Nguyễn Văn Minh' : 'Nguyễn Hữu Nghĩa');
+      const phone_number = user?.phone_number || user?.phone || cleanAccount;
+      const role_str = user?.role || (normalizedAccount.includes('888') || normalizedAccount.includes('999') ? 'Bác sĩ phụ trách' : 'Chủ nhà / Người sở hữu');
+      const user_id = user?.user_id || user?.id || (role_str.includes('Bác sĩ') ? 2 : 1);
+      const household_id = user?.household_id || 1;
 
-      // Lưu token và chuyển đổi giao diện dựa trên vai trò Bác sĩ / Người nhà
-      login(access_token, refresh_token, resolvedName, normalizedAccount, normalizedAccount, resolvedRole);
+      // Lưu token và đồng bộ thông tin tài khoản người dùng & vai trò
+      login(access_token, refresh_token, full_name, user_id, phone_number, role_str, household_id);
       setIsLoginModalVisible(false);
     } catch (error: any) {
       console.error('[Login] Error:', error);
@@ -340,10 +336,10 @@ export default function LoginScreen({ navigation }: any) {
 
                 <TouchableOpacity
                   style={styles.quickFillChip}
-                  onPress={() => handleQuickFill('0905111222', '12345678')}
+                  onPress={() => handleQuickFill('0905888999', '12345678')}
                 >
                   <Ionicons name="medkit-outline" size={14} color="#16A34A" />
-                  <Text style={styles.quickFillChipText}>Bác sĩ Minh</Text>
+                  <Text style={styles.quickFillChipText}>Bác sĩ Minh (0905888999)</Text>
                 </TouchableOpacity>
               </View>
             </View>

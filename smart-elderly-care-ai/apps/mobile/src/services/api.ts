@@ -111,8 +111,8 @@ export const systemApi = {
 export const vitalsApi = {
   getCurrent: () => api.get('/vitals/current'),
   getLatest: (deviceId: string) => api.get(`/vitals/${deviceId}/latest`),
-  getHistory: (deviceId: string, limit = 100) =>
-    api.get(`/vitals/${deviceId}/history`, { params: { limit } }),
+  getHistory: (deviceId: string = 'hub-01', limit = 100, target_date?: string) =>
+    api.get('/vitals/history', { params: { device_id: deviceId, limit, target_date } }),
   getStats: (deviceId: string, hours = 24) =>
     api.get(`/vitals/${deviceId}/stats`, { params: { hours } }),
 };
@@ -124,8 +124,10 @@ export const remindersApi = {
 
 // 4. Patients & Medical Record API
 export const patientApi = {
-  getMedicalRecord: (patientId: number = 1) =>
-    api.get(`/patients/${patientId}/medical-record`),
+  getMedicalRecord: (patientId: number = 1, target_date?: string) =>
+    api.get(`/patients/${patientId}/medical-record`, { params: { target_date } }),
+  getVitals: (patientId: number = 1, target_date?: string) =>
+    api.get(`/patients/${patientId}/vitals`, { params: { target_date } }),
 };
 
 // 5. Notifications & Incidents API
@@ -201,6 +203,22 @@ export const doctorApi = {
   ) => api.put(`/doctor/appointments/${appointmentId}`, data),
   deleteAppointment: (appointmentId: string) =>
     api.delete(`/doctor/appointments/${appointmentId}`),
+};
+
+// 7. User & Household Profile API
+export const userApi = {
+  getMe: (params?: { phone?: string; user_id?: number }) => api.get('/users/me', { params }),
+  updateProfile: (data: { full_name?: string; phone_number?: string }) => api.put('/users/me', data),
+};
+
+export const householdApi = {
+  getMembers: (householdId: number | string = 1) => api.get(`/households/${householdId}/members`),
+  addMember: (
+    householdId: number | string = 1,
+    data: { phone_number: string; role_in_house?: string; role?: string; full_name?: string }
+  ) => api.post(`/households/${householdId}/members`, data),
+  removeMember: (householdId: number | string = 1, memberId: number | string) =>
+    api.delete(`/households/${householdId}/members/${memberId}`),
 };
 
 

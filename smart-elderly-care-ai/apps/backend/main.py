@@ -2,18 +2,23 @@
 # SmartCare AI - Backend API Service
 # FastAPI với cơ sở dữ liệu PostgreSQL lưu trữ dữ liệu thật
 
+import os
 import json
+import random
+import asyncio
 from contextlib import asynccontextmanager
-from datetime import datetime
+from datetime import datetime, timedelta
 from typing import List, Optional
-from fastapi import FastAPI, HTTPException, Query, status, Depends
+from fastapi import FastAPI, HTTPException, Query, status, Depends, Request, WebSocket, WebSocketDisconnect
 from fastapi.middleware.cors import CORSMiddleware
+from fastapi.staticfiles import StaticFiles
 from pydantic import BaseModel, Field
 from sqlalchemy.orm import Session
-from sqlalchemy import text, desc
+from sqlalchemy import text, desc, asc
 
 from .database import engine, Base, SessionLocal, get_db
 from . import models
+
 
 # ---- Database Seeding ----
 def init_db_and_seed():
@@ -35,7 +40,7 @@ def init_db_and_seed():
                 blood_type="O+",
                 height_cm=165,
                 weight_kg=62,
-                emergency_contact="0988 123 456 (BSCKII. Trần Minh Đức)",
+                emergency_contact="0905888999 (BSCKII. Nguyễn Văn Minh)",
             )
             db.add(patient)
             db.flush()
@@ -78,9 +83,9 @@ def init_db_and_seed():
                 medical_history=json.dumps(conditions_data, ensure_ascii=False),
                 allergies=json.dumps(allergies_data, ensure_ascii=False),
                 dietary_notes="Ăn nhạt, giảm muối (<5g/ngày), uống đủ 1.5 - 2L nước ấm",
-                doctor_name="BSCKII. Trần Minh Đức",
-                doctor_hospital="Bệnh viện Lão khoa TW / BV Chợ Rẫy",
-                doctor_phone="0988 123 456",
+                doctor_name="BSCKII. Nguyễn Văn Minh",
+                doctor_hospital="Bệnh viện Lão khoa TW / BV Đà Nẵng",
+                doctor_phone="0905888999",
                 next_checkup_date="15/10/2026",
             )
             db.add(med_record)
@@ -180,7 +185,7 @@ def init_db_and_seed():
                     confidence=0.96,
                     is_new=False,
                     is_resolved=True,
-                    resolved_by="BSCKII. Trần Minh Đức",
+                    resolved_by="BSCKII. Nguyễn Văn Minh",
                     resolved_at=datetime.utcnow(),
                 ),
                 models.Notification(
@@ -223,6 +228,100 @@ def init_db_and_seed():
         if vital_count < 10:
             from .seed_enrich import seed_rich_data
             seed_rich_data(db)
+
+        # 7. Khởi tạo Household & Users chuẩn theo yêu cầu
+        existing_household = db.query(models.Household).filter(models.Household.id == 1).first()
+        if not existing_household:
+            hh = models.Household(
+                id=1,
+                name="Nhà của Cụ An",
+                address="123 Hải Phòng, P. Thạch Thang, Q. Hải Châu, TP. Đà Nẵng",
+                current_mode="HOME"
+            )
+            db.add(hh)
+            db.flush()
+
+        # Tài khoản 1: Tên "Nguyễn Hữu Nghĩa", SĐT "0905123456", vai trò "Chủ nhà / Người sở hữu", ID nhà: 1.
+        u1 = db.query(models.User).filter(models.User.id == 1).first()
+        if not u1:
+            u1 = models.User(
+                id=1,
+                full_name="Nguyễn Hữu Nghĩa",
+                phone_number="0905123456",
+                role="Chủ nhà / Người sở hữu",
+                household_id=1,
+                email="caregiver@smartcare.vn"
+            )
+            db.add(u1)
+        else:
+            u1.full_name = "Nguyễn Hữu Nghĩa"
+            u1.phone_number = "0905123456"
+            u1.role = "Chủ nhà / Người sở hữu"
+            u1.household_id = 1
+
+        # Tài khoản 2: Tên "BSCKII. Nguyễn Văn Minh", SĐT "0905888999", vai trò "Bác sĩ phụ trách".
+        u2 = db.query(models.User).filter(models.User.id == 2).first()
+        if not u2:
+            u2 = models.User(
+                id=2,
+                full_name="BSCKII. Nguyễn Văn Minh",
+                phone_number="0905888999",
+                role="Bác sĩ phụ trách",
+                household_id=1,
+                email="doctor.minh@smartcare.vn"
+            )
+            db.add(u2)
+        else:
+            u2.full_name = "BSCKII. Nguyễn Văn Minh"
+            u2.phone_number = "0905888999"
+            u2.role = "Bác sĩ phụ trách"
+            u2.household_id = 1
+
+        db.flush()
+
+        # Luôn đồng bộ dữ liệu Bác sĩ phụ trách chuẩn cho Cụ An
+        p1 = db.query(models.Patient).filter(models.Patient.id == 1).first()
+        if p1:
+            p1.emergency_contact = "0905888999 (BSCKII. Nguyễn Văn Minh)"
+        med_rec = db.query(models.MedicalRecord).filter(models.MedicalRecord.patient_id == 1).first()
+        if med_rec:
+            med_rec.doctor_name = "BSCKII. Nguyễn Văn Minh"
+            med_rec.doctor_phone = "0905888999"
+            med_rec.doctor_hospital = "Bệnh viện Lão khoa TW / BV Đà Nẵng"
+
+        # Thành viên trong gia đình (HouseholdMember)
+        m1 = db.query(models.HouseholdMember).filter(models.HouseholdMember.user_id == 1, models.HouseholdMember.household_id == 1).first()
+        if not m1:
+            m1 = models.HouseholdMember(
+                household_id=1,
+                user_id=1,
+                role_in_house="Người sở hữu",
+                permissions="Toàn quyền cấu hình AI và còi báo động"
+            )
+            db.add(m1)
+
+        m2 = db.query(models.HouseholdMember).filter(models.HouseholdMember.user_id == 2, models.HouseholdMember.household_id == 1).first()
+        if not m2:
+            m2 = models.HouseholdMember(
+                household_id=1,
+                user_id=2,
+                role_in_house="Bác sĩ phụ trách",
+                permissions="Theo dõi & Tư vấn y tế"
+            )
+            db.add(m2)
+        else:
+            m2.role_in_house = "Bác sĩ phụ trách"
+
+        db.commit()
+        # Đồng bộ sequence cho PostgreSQL
+        try:
+            db.execute(text("SELECT setval(pg_get_serial_sequence('users', 'id'), COALESCE((SELECT MAX(id) FROM users), 1));"))
+            db.execute(text("SELECT setval(pg_get_serial_sequence('households', 'id'), COALESCE((SELECT MAX(id) FROM households), 1));"))
+            db.execute(text("SELECT setval(pg_get_serial_sequence('household_members', 'id'), COALESCE((SELECT MAX(id) FROM household_members), 1));"))
+            db.commit()
+        except Exception:
+            pass
+        print("[SUCCESS] Đã đồng bộ tài khoản mẫu và hộ gia đình chuẩn vào PostgreSQL.")
     except Exception as e:
         db.rollback()
         print(f"[ERROR] Lỗi khởi tạo Seed Data: {e}")
@@ -230,12 +329,111 @@ def init_db_and_seed():
         db.close()
 
 
+# ---- WebSocket Connection Manager ----
+class ConnectionManager:
+    def __init__(self):
+        self.active_connections: list[WebSocket] = []
+
+    async def connect(self, websocket: WebSocket):
+        await websocket.accept()
+        self.active_connections.append(websocket)
+        print(f"[WS] Client connected. Total active clients: {len(self.active_connections)}")
+
+    def disconnect(self, websocket: WebSocket):
+        if websocket in self.active_connections:
+            self.active_connections.remove(websocket)
+            print(f"[WS] Client disconnected. Total active clients: {len(self.active_connections)}")
+
+    async def broadcast(self, message: dict):
+        for connection in list(self.active_connections):
+            try:
+                await connection.send_json(message)
+            except Exception:
+                self.disconnect(connection)
+
+manager = ConnectionManager()
+
+
+# ---- Live Vital Simulator (Feature 3) ----
+async def vital_simulator_loop():
+    """
+    Bộ mô phỏng chỉ số sinh tồn thời gian thực:
+    - Mỗi 5 giây sinh ngẫu nhiên nhịp tim (68-82 bpm), SpO2 (97-99%), nhiệt độ (36.5 - 37.0°C)
+    - Lưu bản ghi vào bảng VitalSign trong PostgreSQL
+    - Broadcast chỉ số mới nhất qua WebSocket (/ws/alerts) để HomeScreen cập nhật số đo tức thì
+    """
+    print("[SIMULATOR] Bắt đầu vòng lặp mô phỏng sinh hiệu real-time (chu kỳ 5s)...")
+    while True:
+        try:
+            await asyncio.sleep(5)
+            heart_rate = random.randint(68, 82)
+            spo2 = random.randint(97, 99)
+            body_temp = round(random.uniform(36.5, 37.0), 1)
+
+            db = SessionLocal()
+            try:
+                # Kiểm tra xem có cảnh báo té ngã chưa xử lý không
+                unresolved_fall = db.query(models.Notification).filter(
+                    models.Notification.type == "FALL_DETECTED",
+                    models.Notification.is_resolved == False
+                ).first()
+
+                fall_detected = bool(unresolved_fall)
+                sound_state = "Tiếng va đập mạnh" if unresolved_fall else "Bình thường"
+                activity_state = "Té ngã / Cần trợ giúp" if unresolved_fall else ("Nghỉ ngơi" if heart_rate < 75 else "Vận động nhẹ")
+
+                vital_record = models.VitalSign(
+                    patient_id=1,
+                    heart_rate=heart_rate,
+                    spo2=spo2,
+                    body_temp=body_temp,
+                    activity_state=activity_state,
+                    sound_state=sound_state,
+                    fall_detected_count=1 if fall_detected else 0,
+                    recorded_at=datetime.utcnow()
+                )
+                db.add(vital_record)
+                db.commit()
+            except Exception as dberr:
+                print(f"[SIMULATOR] Lỗi lưu VitalSign vào DB: {dberr}")
+            finally:
+                db.close()
+
+            # Broadcast qua WebSocket tới tất cả web/mobile clients
+            vitals_payload = {
+                "type": "VITALS_UPDATE",
+                "data": {
+                    "heart_rate": heart_rate,
+                    "spo2": spo2,
+                    "body_temp": body_temp,
+                    "person_count": 1,
+                    "fall_detected": fall_detected,
+                    "sound": sound_state,
+                    "activity_state": activity_state,
+                    "bracelet_battery": 88,
+                    "bracelet_connected": True,
+                    "edge_hub_connected": True,
+                    "timestamp": int(datetime.utcnow().timestamp() * 1000)
+                }
+            }
+            await manager.broadcast(vitals_payload)
+        except asyncio.CancelledError:
+            print("[SIMULATOR] Dừng vòng lặp mô phỏng sinh hiệu.")
+            break
+        except Exception as e:
+            print(f"[SIMULATOR] Lỗi trong vòng lặp sinh hiệu: {e}")
+
+
 # ---- FastAPI Lifespan Manager ----
 @asynccontextmanager
 async def lifespan(app: FastAPI):
     # Khởi tạo bảng và seed data khi server khởi động
     init_db_and_seed()
+    # Khởi động Live Vital Simulator background task
+    simulator_task = asyncio.create_task(vital_simulator_loop())
     yield
+    # Dọn dẹp background task khi server dừng
+    simulator_task.cancel()
 
 
 app = FastAPI(
@@ -253,6 +451,49 @@ app.add_middleware(
     allow_methods=["*"],
     allow_headers=["*"],
 )
+
+# Mount thư mục static phục vụ ảnh/video bằng chứng sự cố (evidence - Feature 2)
+static_dir = os.path.join(os.path.dirname(os.path.abspath(__file__)), "static")
+os.makedirs(os.path.join(static_dir, "evidence"), exist_ok=True)
+app.mount("/static", StaticFiles(directory=static_dir), name="static")
+
+
+# ---- WebSocket Endpoints (Feature 1 & Feature 3) ----
+@app.websocket("/ws/alerts")
+async def websocket_alerts(websocket: WebSocket):
+    """
+    WebSocket endpoint phục vụ real-time alerts, vitals & system mode.
+    Client kết nối để nhận các sự kiện:
+    - ALERT_NEW: Cảnh báo té ngã / sự cố mới
+    - INCIDENT_RESOLVED: Sự cố đã được xử lý (tắt banner đỏ)
+    - VITALS_UPDATE: Dữ liệu sinh hiệu 5s/lần
+    - SYSTEM_MODE_UPDATE: Thay đổi chế độ an ninh / tắt còi
+    """
+    await manager.connect(websocket)
+    try:
+        while True:
+            data = await websocket.receive_text()
+            if data == "ping":
+                await websocket.send_text("pong")
+    except WebSocketDisconnect:
+        manager.disconnect(websocket)
+    except Exception:
+        manager.disconnect(websocket)
+
+@app.websocket("/ws/vitals/{device_id}")
+async def websocket_vitals_device(websocket: WebSocket, device_id: str):
+    """WebSocket endpoint alias tương thích với client đăng ký telemetry theo device."""
+    await manager.connect(websocket)
+    try:
+        while True:
+            data = await websocket.receive_text()
+            if data == "ping":
+                await websocket.send_text("pong")
+    except WebSocketDisconnect:
+        manager.disconnect(websocket)
+    except Exception:
+        manager.disconnect(websocket)
+
 
 
 # ---- Pydantic Schemas ----
@@ -323,6 +564,19 @@ class MedicalCondition(BaseModel):
     severity: str
     note: str
 
+class NotificationItem(BaseModel):
+    id: str
+    alert_type: str
+    alert_level: str
+    message: str
+    confidence: float
+    is_acknowledged: bool
+    acknowledged_by: Optional[str] = None
+    acknowledged_at: Optional[str] = None
+    video_clip_url: Optional[str] = None
+    thumbnail_url: Optional[str] = None
+    created_at: str
+
 class PatientMedicalRecordResponse(BaseModel):
     patient_id: int
     name: str
@@ -343,19 +597,9 @@ class PatientMedicalRecordResponse(BaseModel):
     doctor_specialty: str
     hospital: str
     next_appointment: str
-
-class NotificationItem(BaseModel):
-    id: str
-    alert_type: str
-    alert_level: str
-    message: str
-    confidence: float
-    is_acknowledged: bool
-    acknowledged_by: Optional[str] = None
-    acknowledged_at: Optional[str] = None
-    video_clip_url: Optional[str] = None
-    thumbnail_url: Optional[str] = None
-    created_at: str
+    target_date: Optional[str] = None
+    daily_vitals: Optional[List[VitalSignHistoryItem]] = None
+    daily_events: Optional[List[NotificationItem]] = None
 
 
 # ---- API Endpoints (Lưu trữ và đọc dữ liệu thật từ PostgreSQL) ----
@@ -412,8 +656,13 @@ def get_system_mode(db: Session = Depends(get_db)):
     }
 
 @app.put("/api/v1/system/mode", response_model=SystemModeResponse, tags=["System"])
-def update_system_mode(payload: SystemModeUpdate, db: Session = Depends(get_db)):
-    """Cập nhật chế độ bảo vệ nhà hoặc tạm tắt chuông báo động vào PostgreSQL."""
+async def update_system_mode(payload: SystemModeUpdate, db: Session = Depends(get_db)):
+    """
+    Cập nhật chế độ bảo vệ nhà hoặc tạm tắt chuông báo động vào PostgreSQL.
+    Tự động kích hoạt/bỏ kích hoạt trạng thái Riêng tư của camera:
+    - Ở nhà (HOME): Bật riêng tư (che camera phòng ngủ)
+    - Xa (AWAY): Tắt riêng tư (mở camera giám sát 24/7)
+    """
     mode_obj = db.query(models.SystemMode).first()
     if not mode_obj:
         mode_obj = models.SystemMode(id=1)
@@ -421,6 +670,13 @@ def update_system_mode(payload: SystemModeUpdate, db: Session = Depends(get_db))
 
     if payload.mode is not None:
         mode_obj.mode = payload.mode
+        # Tự động điều chỉnh trạng thái riêng tư camera nếu không chỉ định rõ
+        if payload.is_camera_privacy is None:
+            if payload.mode == "HOME":
+                mode_obj.is_camera_privacy = True
+            elif payload.mode == "AWAY":
+                mode_obj.is_camera_privacy = False
+
     if payload.is_mute_alarm is not None:
         mode_obj.is_mute_alarm = payload.is_mute_alarm
     if payload.is_camera_privacy is not None:
@@ -431,13 +687,23 @@ def update_system_mode(payload: SystemModeUpdate, db: Session = Depends(get_db))
     db.commit()
     db.refresh(mode_obj)
 
-    return {
+    response_data = {
         "mode": mode_obj.mode or "HOME",
         "is_mute_alarm": bool(mode_obj.is_mute_alarm),
         "is_camera_privacy": bool(mode_obj.is_camera_privacy),
         "alarm_snooze_until": mode_obj.alarm_snooze_until,
         "mute_mode": mode_obj.mute_mode or "VIBRATE",
     }
+
+    # Broadcast sự kiện cập nhật chế độ nhà qua WebSocket
+    await manager.broadcast({
+        "type": "SYSTEM_MODE_UPDATE",
+        "data": response_data,
+        "timestamp": datetime.utcnow().isoformat()
+    })
+
+    return response_data
+
 
 # 3. Current Vitals API
 @app.get("/api/v1/vitals/current", response_model=CurrentVitalsResponse, tags=["Vitals"])
@@ -479,21 +745,37 @@ def get_current_vitals(patient_id: int = 1, db: Session = Depends(get_db)):
     }
 
 @app.get("/api/v1/vitals/history", response_model=List[VitalSignHistoryItem], tags=["Vitals"])
+@app.get("/api/v1/vitals/{device_id}/history", response_model=List[VitalSignHistoryItem], tags=["Vitals"])
+@app.get("/api/v1/patients/{patient_id}/vitals", response_model=List[VitalSignHistoryItem], tags=["Vitals"])
 def get_vitals_history(
     patient_id: int = 1,
-    limit: int = Query(default=24, ge=1, le=100),
+    device_id: Optional[str] = None,
+    limit: int = Query(default=100, ge=1, le=500),
+    target_date: Optional[str] = Query(default=None, description="Lọc theo ngày YYYY-MM-DD"),
     db: Session = Depends(get_db)
 ):
-    """Lấy danh sách các mốc đo nhịp tim & sinh hiệu trong 24 giờ qua từ PostgreSQL (15+ mốc đo thực tế)."""
-    vitals = (
-        db.query(models.VitalSign)
-        .filter(models.VitalSign.patient_id == patient_id)
-        .order_by(desc(models.VitalSign.recorded_at))
-        .limit(limit)
-        .all()
-    )
-    # Trả về theo thứ tự thời gian tăng dần để frontend tiện vẽ biểu đồ
-    vitals_sorted = sorted(vitals, key=lambda x: x.recorded_at)
+    """
+    Lấy danh sách các mốc đo nhịp tim & sinh hiệu trong PostgreSQL.
+    Hỗ trợ query parameter target_date (YYYY-MM-DD) để lọc dữ liệu theo ngày.
+    """
+    query = db.query(models.VitalSign).filter(models.VitalSign.patient_id == patient_id)
+
+    if target_date:
+        try:
+            start_dt = datetime.strptime(target_date.strip(), "%Y-%m-%d")
+            end_dt = start_dt + timedelta(days=1)
+            query = query.filter(models.VitalSign.recorded_at >= start_dt, models.VitalSign.recorded_at < end_dt)
+            vitals = query.order_by(asc(models.VitalSign.recorded_at)).limit(limit).all()
+        except ValueError:
+            vitals = []
+    else:
+        vitals = (
+            query.order_by(desc(models.VitalSign.recorded_at))
+            .limit(limit)
+            .all()
+        )
+        vitals = sorted(vitals, key=lambda x: x.recorded_at)
+
     return [
         VitalSignHistoryItem(
             id=v.id,
@@ -506,7 +788,7 @@ def get_vitals_history(
             recorded_at=v.recorded_at.isoformat() if v.recorded_at else datetime.utcnow().isoformat(),
             timestamp=int(v.recorded_at.timestamp() * 1000) if v.recorded_at else int(datetime.utcnow().timestamp() * 1000),
         )
-        for v in vitals_sorted
+        for v in vitals
     ]
 
 # 4. Reminders Today API
@@ -557,8 +839,12 @@ def get_today_reminders(patient_id: int = 1, db: Session = Depends(get_db)):
     response_model=PatientMedicalRecordResponse,
     tags=["Patients"],
 )
-def get_patient_medical_record(patient_id: int, db: Session = Depends(get_db)):
-    """Lấy hồ sơ bệnh án người cao tuổi (Bảo mật chuẩn AES-256) từ PostgreSQL."""
+def get_patient_medical_record(
+    patient_id: int,
+    target_date: Optional[str] = Query(default=None, description="Lọc nhật ký sinh tồn theo ngày YYYY-MM-DD"),
+    db: Session = Depends(get_db)
+):
+    """Lấy hồ sơ bệnh án người cao tuổi (Bảo mật chuẩn AES-256) từ PostgreSQL. Hỗ trợ lọc theo target_date."""
     patient = db.query(models.Patient).filter(models.Patient.id == patient_id).first()
     if not patient:
         raise HTTPException(
@@ -604,6 +890,68 @@ def get_patient_medical_record(patient_id: int, db: Session = Depends(get_db)):
     w_kg = patient.weight_kg or 62
     calc_bmi = round(w_kg / (h_m * h_m), 1)
 
+    # Lấy danh sách sinh hiệu và sự kiện theo ngày nếu target_date được truyền
+    daily_vitals_list = None
+    daily_events_list = None
+    if target_date:
+        try:
+            start_dt = datetime.strptime(target_date.strip(), "%Y-%m-%d")
+            end_dt = start_dt + timedelta(days=1)
+
+            v_query = (
+                db.query(models.VitalSign)
+                .filter(
+                    models.VitalSign.patient_id == patient.id,
+                    models.VitalSign.recorded_at >= start_dt,
+                    models.VitalSign.recorded_at < end_dt,
+                )
+                .order_by(asc(models.VitalSign.recorded_at))
+                .all()
+            )
+            daily_vitals_list = [
+                VitalSignHistoryItem(
+                    id=v.id,
+                    heart_rate=v.heart_rate or 74,
+                    spo2=v.spo2 or 98,
+                    body_temp=v.body_temp or 36.8,
+                    activity=v.activity_state or "Sinh hoạt",
+                    sound=v.sound_state or "Bình thường",
+                    fall_detected_count=v.fall_detected_count or 0,
+                    recorded_at=v.recorded_at.isoformat() if v.recorded_at else datetime.utcnow().isoformat(),
+                    timestamp=int(v.recorded_at.timestamp() * 1000) if v.recorded_at else int(datetime.utcnow().timestamp() * 1000),
+                )
+                for v in v_query
+            ]
+
+            e_query = (
+                db.query(models.Notification)
+                .filter(
+                    models.Notification.patient_id == patient.id,
+                    models.Notification.created_at >= start_dt,
+                    models.Notification.created_at < end_dt,
+                )
+                .order_by(asc(models.Notification.created_at))
+                .all()
+            )
+            daily_events_list = [
+                NotificationItem(
+                    id=f"inc-0{n.id}" if n.id < 10 else f"inc-{n.id}",
+                    alert_type=n.type,
+                    alert_level=n.alert_level or "MEDIUM",
+                    message=n.description or n.title,
+                    confidence=n.confidence or 0.92,
+                    is_acknowledged=bool(n.is_resolved),
+                    acknowledged_by=n.resolved_by,
+                    acknowledged_at=n.resolved_at.isoformat() if n.resolved_at else None,
+                    video_clip_url=n.video_clip_url,
+                    thumbnail_url=n.thumbnail_url,
+                    created_at=n.created_at.isoformat() if n.created_at else datetime.utcnow().isoformat(),
+                )
+                for n in e_query
+            ]
+        except Exception as e:
+            print(f"[ERROR] target_date parse error: {e}")
+
     return {
         "patient_id": patient.id,
         "name": patient.full_name,
@@ -619,11 +967,14 @@ def get_patient_medical_record(patient_id: int, db: Session = Depends(get_db)):
         "drug_allergies": drug_allergies,
         "food_allergies": food_allergies,
         "dietary_notes": med_record.dietary_notes if med_record else "Ăn nhạt, giảm muối (<5g/ngày), uống đủ 1.5 - 2L nước ấm",
-        "doctor_name": med_record.doctor_name if med_record else "BSCKII. Trần Minh Đức",
-        "doctor_phone": med_record.doctor_phone if med_record else "0988 123 456",
+        "doctor_name": med_record.doctor_name if med_record else "BSCKII. Nguyễn Văn Minh",
+        "doctor_phone": med_record.doctor_phone if med_record else "0905888999",
         "doctor_specialty": "Lão khoa & Tim mạch",
-        "hospital": med_record.doctor_hospital if med_record else "Bệnh viện Lão khoa TW / BV Chợ Rẫy",
+        "hospital": med_record.doctor_hospital if med_record else "Bệnh viện Lão khoa TW / BV Đà Nẵng",
         "next_appointment": med_record.next_checkup_date if med_record else "15/10/2026",
+        "target_date": target_date,
+        "daily_vitals": daily_vitals_list,
+        "daily_events": daily_events_list,
     }
 
 # 6. Notifications & Incidents API
@@ -663,7 +1014,7 @@ def get_notifications(
 
 @app.get("/api/v1/incidents/{incident_id}", response_model=NotificationItem, tags=["Notifications"])
 def get_incident_by_id(incident_id: str, db: Session = Depends(get_db)):
-    """Lấy chi tiết sự kiện cảnh báo từ PostgreSQL theo ID."""
+    """Lấy chi tiết sự kiện cảnh báo từ PostgreSQL theo ID kèm ảnh bằng chứng AI."""
     numeric_id_str = incident_id.replace("inc-0", "").replace("inc-", "")
     target_notif = None
     if numeric_id_str.isdigit():
@@ -677,25 +1028,29 @@ def get_incident_by_id(incident_id: str, db: Session = Depends(get_db)):
     if not target_notif:
         raise HTTPException(status_code=404, detail="Incident not found")
 
+    evidence_url = "http://localhost:8000/static/evidence/fall_evidence_ai.jpg"
+    video_url = target_notif.video_clip_url or "https://commondatastorage.googleapis.com/gtv-videos-bucket/sample/BigBuckBunny.mp4"
+    thumb_url = target_notif.thumbnail_url or evidence_url
+
     return NotificationItem(
         id=f"inc-0{target_notif.id}" if target_notif.id < 10 else f"inc-{target_notif.id}",
         alert_type=target_notif.type,
-        alert_level=target_notif.alert_level or "MEDIUM",
+        alert_level=target_notif.alert_level or "CRITICAL",
         message=target_notif.description or target_notif.title,
-        confidence=target_notif.confidence or 0.92,
+        confidence=target_notif.confidence or 0.94,
         is_acknowledged=bool(target_notif.is_resolved),
         acknowledged_by=target_notif.resolved_by,
         acknowledged_at=target_notif.resolved_at.isoformat() if target_notif.resolved_at else None,
-        video_clip_url=target_notif.video_clip_url,
-        thumbnail_url=target_notif.thumbnail_url,
+        video_clip_url=video_url,
+        thumbnail_url=thumb_url,
         created_at=target_notif.created_at.isoformat() if target_notif.created_at else datetime.utcnow().isoformat(),
     )
 
 @app.post("/api/v1/incidents/{incident_id}/acknowledge", tags=["Notifications"])
 @app.put("/api/v1/incidents/{incident_id}", tags=["Notifications"])
 @app.patch("/api/v1/incidents/{incident_id}", tags=["Notifications"])
-def acknowledge_incident(incident_id: str, note: Optional[str] = None, db: Session = Depends(get_db)):
-    """Xác nhận xử lý sự kiện báo động, cập nhật database PostgreSQL (is_resolved=True, tắt còi hú)."""
+async def acknowledge_incident(incident_id: str, note: Optional[str] = None, db: Session = Depends(get_db)):
+    """Xác nhận xử lý sự kiện báo động, cập nhật database PostgreSQL (is_resolved=True, tắt còi hú) và broadcast WebSocket."""
     # Trích xuất numeric ID nếu có dạng inc-01, inc-03...
     numeric_id_str = incident_id.replace("inc-0", "").replace("inc-", "")
     target_notif = None
@@ -733,6 +1088,21 @@ def acknowledge_incident(incident_id: str, note: Optional[str] = None, db: Sessi
         sys_mode.is_mute_alarm = True
         db.commit()
 
+    # Broadcast sự kiện xử lý thành công qua WebSocket để HomeScreen tắt banner đỏ ngay lập tức (Feature 1)
+    await manager.broadcast({
+        "type": "INCIDENT_RESOLVED",
+        "incident_id": resolved_id,
+        "data": {
+            "id": resolved_id,
+            "is_acknowledged": True,
+            "is_resolved": True,
+            "resolved_by": "Demo User",
+            "acknowledged_at": now_iso.isoformat(),
+            "note": note or "Đã kiểm tra an toàn",
+        },
+        "timestamp": now_iso.isoformat()
+    })
+
     return {
         "status": "success",
         "incident_id": resolved_id,
@@ -746,25 +1116,26 @@ def acknowledge_incident(incident_id: str, note: Optional[str] = None, db: Sessi
 
 @app.post("/api/v1/incidents/simulate-fall", tags=["Notifications"])
 @app.post("/api/v1/incidents/trigger-test-fall", tags=["Notifications"])
-def trigger_test_fall(
+async def trigger_test_fall(
     location: str = Query(default="Phòng khách", description="Vị trí xảy ra té ngã"),
     patient_id: int = Query(default=1, description="ID bệnh nhân"),
     db: Session = Depends(get_db)
 ):
     """
     Tạo một sự cố cảnh báo té ngã khẩn cấp mới (is_resolved = False, CRITICAL) vào PostgreSQL
-    để test thanh cảnh báo khẩn cấp màu đỏ trên màn hình chính HomeScreen.
+    và broadcast qua WebSocket tới tất cả client để hiện thanh cảnh báo khẩn cấp màu đỏ ngay lập tức.
     """
     now = datetime.utcnow()
+    evidence_url = "http://localhost:8000/static/evidence/fall_evidence_ai.jpg"
     new_alert = models.Notification(
         patient_id=patient_id,
         type="FALL_DETECTED",
         title=f"Cảnh báo té ngã khẩn cấp tại {location}",
         description=f"🚨 Cảnh báo té ngã khẩn cấp (Fall Detected) tại {location} - YOLO-Pose AI phát hiện người cao tuổi ngã nghiêng đột ngột.",
         alert_level="CRITICAL",
-        confidence=0.96,
+        confidence=0.94,
         video_clip_url="https://commondatastorage.googleapis.com/gtv-videos-bucket/sample/BigBuckBunny.mp4",
-        thumbnail_url="https://images.unsplash.com/photo-1516549655169-df83a0774514?w=300&q=80",
+        thumbnail_url=evidence_url,
         is_new=True,
         is_resolved=False,
         created_at=now,
@@ -804,21 +1175,46 @@ def trigger_test_fall(
     db.commit()
     db.refresh(new_alert)
 
-    return {
-        "status": "success",
-        "message": f"Đã kích hoạt thành công cảnh báo té ngã tại {location} vào PostgreSQL!",
-        "incident": {
-            "id": f"inc-0{new_alert.id}" if new_alert.id < 10 else f"inc-{new_alert.id}",
+    alert_id = f"inc-0{new_alert.id}" if new_alert.id < 10 else f"inc-{new_alert.id}"
+
+    # Broadcast cảnh báo té ngã mới qua WebSocket để HomeScreen hiện banner đỏ ngay lập tức (Feature 1)
+    await manager.broadcast({
+        "type": "ALERT_NEW",
+        "alert_type": "FALL_DETECTED",
+        "data": {
+            "id": alert_id,
             "type": new_alert.type,
             "title": new_alert.title,
             "alert_level": new_alert.alert_level,
             "message": new_alert.description,
-            "confidence": new_alert.confidence,
+            "confidence": 0.94,
+            "thumbnail_url": new_alert.thumbnail_url,
+            "video_clip_url": new_alert.video_clip_url,
+            "is_resolved": False,
+            "is_new": True,
+            "created_at": new_alert.created_at.isoformat(),
+        },
+        "timestamp": now.isoformat()
+    })
+
+    return {
+        "status": "success",
+        "message": f"Đã kích hoạt thành công cảnh báo té ngã tại {location} vào PostgreSQL!",
+        "incident": {
+            "id": alert_id,
+            "type": new_alert.type,
+            "title": new_alert.title,
+            "alert_level": new_alert.alert_level,
+            "message": new_alert.description,
+            "confidence": 0.94,
+            "thumbnail_url": new_alert.thumbnail_url,
+            "video_clip_url": new_alert.video_clip_url,
             "is_resolved": new_alert.is_resolved,
             "is_new": new_alert.is_new,
             "created_at": new_alert.created_at.isoformat(),
         },
     }
+
 
 @app.post("/api/v1/system/seed-enrich", tags=["System"])
 def enrich_database(db: Session = Depends(get_db)):
@@ -831,6 +1227,395 @@ def enrich_database(db: Session = Depends(get_db)):
     from .seed_enrich import seed_rich_data
     return seed_rich_data(db)
 
+# ==========================================
+# Auth, User, House & Device Endpoints
+# ==========================================
+
+@app.post("/api/v1/auth/login", tags=["Auth"])
+async def auth_login(request: Request, db: Session = Depends(get_db)):
+    """Xác thực đăng nhập tài khoản người dùng/bác sĩ."""
+    username = ""
+    content_type = request.headers.get("content-type", "")
+    if "application/x-www-form-urlencoded" in content_type or "multipart/form-data" in content_type:
+        form = await request.form()
+        username = str(form.get("username", ""))
+    else:
+        try:
+            body = await request.json()
+            username = str(body.get("username", "") or body.get("phone", "") or body.get("email", ""))
+        except Exception:
+            pass
+
+    clean_phone = username.replace(" ", "").replace("+84", "0") if username else ""
+    user = None
+    if clean_phone:
+        user = db.query(models.User).filter(
+            (models.User.phone_number == clean_phone) | (models.User.phone_number == username)
+        ).first()
+
+    if not user:
+        # Nhận diện tài khoản bác sĩ hoặc chủ nhà dựa trên số hoặc tên
+        if "888" in username or "999" in username or "111222" in username or "doctor" in username.lower() or "minh" in username.lower():
+            user = db.query(models.User).filter(models.User.id == 2).first()
+        else:
+            user = db.query(models.User).filter(models.User.id == 1).first()
+
+    # Fallback an toàn nếu chưa truy vấn được
+    user_id = user.id if user else 1
+    full_name = user.full_name if user else ("BS. Nguyễn Văn Minh" if "888" in username or "minh" in username.lower() else "Nguyễn Hữu Nghĩa")
+    phone_number = user.phone_number if user else ("0905888999" if "888" in username or "minh" in username.lower() else "0905123456")
+    role = user.role if user else ("Bác sĩ phụ trách" if "888" in username or "minh" in username.lower() else "Chủ nhà / Người sở hữu")
+    household_id = (user.household_id if user and user.household_id else 1)
+
+    return {
+        "access_token": "fake-jwt-token-demo-smartcare",
+        "refresh_token": "fake-jwt-refresh-token-demo",
+        "token_type": "bearer",
+        "user": {
+            "user_id": user_id,
+            "id": str(user_id),
+            "full_name": full_name,
+            "phone_number": phone_number,
+            "phone": phone_number,
+            "role": role,
+            "household_id": household_id,
+        }
+    }
+
+@app.post("/api/v1/auth/register", tags=["Auth"])
+async def auth_register(request: Request, db: Session = Depends(get_db)):
+    data = await request.json()
+    phone = data.get("phone", "")
+    full_name = data.get("full_name", "Người dùng")
+    role = data.get("role", "Chủ nhà / Người sở hữu")
+
+    user = models.User(
+        full_name=full_name,
+        phone_number=phone,
+        role=role,
+        household_id=1
+    )
+    db.add(user)
+    db.commit()
+    db.refresh(user)
+
+    return {
+        "status": "success",
+        "message": "Đăng ký thành công",
+        "user": {
+            "user_id": user.id,
+            "id": str(user.id),
+            "phone_number": user.phone_number,
+            "phone": user.phone_number,
+            "full_name": user.full_name,
+            "role": user.role,
+            "household_id": user.household_id
+        }
+    }
+
+@app.post("/api/v1/auth/request-otp", tags=["Auth"])
+async def auth_request_otp(request: Request):
+    data = await request.json()
+    return {"status": "success", "message": f"Mã OTP đã được gửi tới {data.get('phone')}", "otp": "123456"}
+
+@app.post("/api/v1/auth/verify-otp", tags=["Auth"])
+async def auth_verify_otp(request: Request):
+    return {"status": "success", "message": "Xác thực OTP thành công"}
+
+@app.post("/api/v1/auth/refresh", tags=["Auth"])
+async def auth_refresh():
+    return {
+        "access_token": "fake-jwt-token-refreshed",
+        "refresh_token": "fake-jwt-refresh-token-new",
+        "token_type": "bearer"
+    }
+
+@app.get("/api/v1/users/me", tags=["Users"])
+def get_current_user(phone: Optional[str] = None, user_id: Optional[int] = None, db: Session = Depends(get_db)):
+    user = None
+    if user_id:
+        user = db.query(models.User).filter(models.User.id == user_id).first()
+    elif phone:
+        clean_phone = phone.replace(" ", "").replace("+84", "0")
+        user = db.query(models.User).filter(
+            (models.User.phone_number == clean_phone) | (models.User.phone_number == phone)
+        ).first()
+
+    if not user:
+        user = db.query(models.User).filter(models.User.id == 1).first()
+
+    if not user:
+        return {
+            "user_id": 1,
+            "id": "1",
+            "full_name": "Nguyễn Hữu Nghĩa",
+            "phone_number": "0905123456",
+            "phone": "0905123456",
+            "email": "caregiver@smartcare.vn",
+            "role": "Chủ nhà / Người sở hữu",
+            "household_id": 1,
+            "avatar_url": None,
+        }
+
+    return {
+        "user_id": user.id,
+        "id": str(user.id),
+        "full_name": user.full_name,
+        "phone_number": user.phone_number,
+        "phone": user.phone_number,
+        "email": user.email or "caregiver@smartcare.vn",
+        "role": user.role,
+        "household_id": user.household_id or 1,
+        "avatar_url": user.avatar_url,
+    }
+
+@app.put("/api/v1/users/me", tags=["Users"])
+async def update_current_user(request: Request, db: Session = Depends(get_db)):
+    data = await request.json()
+    user = db.query(models.User).filter(models.User.id == 1).first()
+    if user:
+        if "full_name" in data and data["full_name"]:
+            user.full_name = data["full_name"]
+        if "phone_number" in data and data["phone_number"]:
+            user.phone_number = data["phone_number"]
+        db.commit()
+        db.refresh(user)
+        return {
+            "user_id": user.id,
+            "id": str(user.id),
+            "full_name": user.full_name,
+            "phone_number": user.phone_number,
+            "phone": user.phone_number,
+            "role": user.role,
+            "household_id": user.household_id or 1,
+        }
+    return {"status": "success"}
+
+# Household Members Endpoints
+@app.get("/api/v1/households/{household_id}/members", tags=["Households"])
+@app.get("/api/v1/houses/{household_id}/members", tags=["Households"])
+def get_household_members(household_id: str = "1", db: Session = Depends(get_db)):
+    try:
+        h_id = int(household_id)
+    except:
+        h_id = 1
+
+    members = db.query(models.HouseholdMember).filter(models.HouseholdMember.household_id == h_id).all()
+    if not members:
+        return [
+            {
+                "id": 1,
+                "household_id": h_id,
+                "user_id": 1,
+                "full_name": "Nguyễn Hữu Nghĩa",
+                "phone_number": "0905123456",
+                "role": "Chủ nhà / Người sở hữu",
+                "role_in_house": "Người sở hữu",
+                "permissions": "Toàn quyền cấu hình AI và còi báo động",
+                "is_owner": True,
+            },
+            {
+                "id": 2,
+                "household_id": h_id,
+                "user_id": 2,
+                "full_name": "BS. Nguyễn Văn Minh",
+                "phone_number": "0905888999",
+                "role": "Bác sĩ phụ trách",
+                "role_in_house": "Bác sĩ gia đình",
+                "permissions": "Theo dõi & Tư vấn y tế",
+                "is_owner": False,
+            }
+        ]
+
+    results = []
+    for m in members:
+        u = m.user or db.query(models.User).filter(models.User.id == m.user_id).first()
+        results.append({
+            "id": m.id,
+            "household_id": m.household_id,
+            "user_id": m.user_id,
+            "full_name": u.full_name if u else "Thành viên gia đình",
+            "phone_number": u.phone_number if u else "",
+            "role": u.role if u else m.role_in_house,
+            "role_in_house": m.role_in_house,
+            "permissions": m.permissions,
+            "is_owner": m.role_in_house == "Người sở hữu"
+        })
+    return results
+
+@app.post("/api/v1/households/{household_id}/members", tags=["Households"])
+@app.post("/api/v1/houses/{household_id}/members", tags=["Households"])
+async def add_household_member(household_id: str, request: Request, db: Session = Depends(get_db)):
+    try:
+        h_id = int(household_id)
+    except:
+        h_id = 1
+
+    body = await request.json()
+    phone = str(body.get("phone_number") or body.get("phone", "")).strip()
+    raw_role = body.get("role_in_house") or body.get("role", "CAREGIVER")
+    role_in_house = "Bác sĩ gia đình" if raw_role == "DOCTOR" else "Người chăm sóc"
+    full_name = body.get("full_name") or ("BS. Gia Đình" if raw_role == "DOCTOR" else "Người chăm sóc")
+
+    clean_phone = phone.replace(" ", "").replace("+84", "0")
+    user = db.query(models.User).filter(
+        (models.User.phone_number == clean_phone) | (models.User.phone_number == phone)
+    ).first()
+
+    if not user:
+        user = models.User(
+            full_name=full_name,
+            phone_number=clean_phone or phone,
+            role=role_in_house,
+            household_id=h_id
+        )
+        db.add(user)
+        db.flush()
+
+    member = models.HouseholdMember(
+        household_id=h_id,
+        user_id=user.id,
+        role_in_house=role_in_house,
+        permissions="Theo dõi & Nhận cảnh báo khẩn cấp"
+    )
+    db.add(member)
+    db.commit()
+    db.refresh(member)
+
+    return {
+        "status": "success",
+        "message": "Thêm thành viên thành công",
+        "member": {
+            "id": member.id,
+            "household_id": member.household_id,
+            "user_id": user.id,
+            "full_name": user.full_name,
+            "phone_number": user.phone_number,
+            "role": user.role,
+            "role_in_house": member.role_in_house,
+            "permissions": member.permissions,
+            "is_owner": False
+        }
+    }
+
+@app.delete("/api/v1/households/{household_id}/members/{member_id}", tags=["Households"])
+@app.delete("/api/v1/houses/{household_id}/members/{member_id}", tags=["Households"])
+def delete_household_member(household_id: str, member_id: int, db: Session = Depends(get_db)):
+    member = db.query(models.HouseholdMember).filter(models.HouseholdMember.id == member_id).first()
+    if member:
+        db.delete(member)
+        db.commit()
+    return {"status": "success", "message": "Đã xóa thành viên khỏi ngôi nhà"}
+
+@app.get("/api/v1/houses/current", tags=["Houses"])
+def get_current_house(db: Session = Depends(get_db)):
+    sys_mode = db.query(models.SystemMode).first()
+    mode = sys_mode.mode if sys_mode else "HOME"
+    return {
+        "id": "house-001",
+        "owner_id": "demo-user-001",
+        "name": "Nhà của Cụ An",
+        "address": "123 Hải Phòng, P. Thạch Thang, Q. Hải Châu, TP. Đà Nẵng",
+        "current_mode": mode,
+        "created_at": datetime.now().isoformat(),
+        "updated_at": datetime.now().isoformat(),
+    }
+
+@app.patch("/api/v1/houses/current", tags=["Houses"])
+async def update_current_house(request: Request):
+    data = await request.json()
+    return {
+        "id": "house-001",
+        "owner_id": "demo-user-001",
+        "name": data.get("name", "Nhà của Cụ An"),
+        "address": data.get("address", "123 Hải Phòng, P. Thạch Thang, Q. Hải Châu, TP. Đà Nẵng"),
+        "current_mode": "HOME",
+        "created_at": datetime.now().isoformat(),
+        "updated_at": datetime.now().isoformat(),
+    }
+
+@app.patch("/api/v1/houses/current/mode", tags=["Houses"])
+async def update_current_house_mode(request: Request, db: Session = Depends(get_db)):
+    data = await request.json()
+    mode = data.get("mode", "HOME")
+    sys_mode = db.query(models.SystemMode).first()
+    if sys_mode:
+        sys_mode.mode = mode
+        db.commit()
+    return {
+        "id": "house-001",
+        "current_mode": mode,
+        "message": f"Chuyển chế độ thành công sang {mode}"
+    }
+
+@app.get("/api/v1/device-groups", tags=["Devices"])
+def list_device_groups():
+    return [
+        {"id": "grp-1", "house_id": "house-001", "name": "Phòng khách", "sort_order": 1, "device_count": 2, "created_at": datetime.now().isoformat(), "updated_at": datetime.now().isoformat()},
+        {"id": "grp-2", "house_id": "house-001", "name": "Phòng ngủ", "sort_order": 2, "device_count": 2, "created_at": datetime.now().isoformat(), "updated_at": datetime.now().isoformat()},
+        {"id": "grp-3", "house_id": "house-001", "name": "Nhà tắm & Cửa", "sort_order": 3, "device_count": 1, "created_at": datetime.now().isoformat(), "updated_at": datetime.now().isoformat()},
+    ]
+
+@app.get("/api/v1/devices", tags=["Devices"])
+def list_devices():
+    return [
+        {
+            "id": "dev-01",
+            "device_id": "hub-001",
+            "name": "Orange Pi 5 - Edge AI Hub",
+            "sub_title": "Rockchip RK3588S NPU • 32 FPS YOLO-Pose • EMQX MQTT",
+            "device_type": "CAMERA",
+            "location": "Phòng khách",
+            "is_online": True,
+            "status_text": "Trực tuyến (24/7)",
+            "battery_level": None,
+            "group_id": "grp-1",
+            "created_at": datetime.now().isoformat(),
+            "updated_at": datetime.now().isoformat(),
+            "config": {
+                "stream_url": "http://10.0.2.2:8080",
+                "resolution": "HD",
+                "is_sleep": False,
+                "is_ai_protect": True,
+            }
+        },
+        {
+            "id": "dev-02",
+            "device_id": "cam-001",
+            "name": "SECA_001",
+            "sub_title": "Camera góc rộng • 2K Super HD • Đàm thoại 2 chiều",
+            "device_type": "CAMERA",
+            "location": "Phòng khách",
+            "is_online": True,
+            "status_text": "Đang ghi hình",
+            "battery_level": None,
+            "group_id": "grp-1",
+            "created_at": datetime.now().isoformat(),
+            "updated_at": datetime.now().isoformat(),
+            "config": {
+                "stream_url": "http://10.0.2.2:8080",
+                "resolution": "HD",
+                "is_sleep": False,
+                "is_ai_protect": True,
+            }
+        },
+        {
+            "id": "dev-03",
+            "device_id": "band-001",
+            "name": "Vòng đeo tay BLE Smartband",
+            "sub_title": "Nhịp tim • SpO₂ • Gia tốc kế phát hiện va đập",
+            "device_type": "SMARTBAND",
+            "location": "Phòng ngủ",
+            "is_online": True,
+            "status_text": "Pin 88% • Đang đeo",
+            "battery_level": 88,
+            "group_id": "grp-2",
+            "created_at": datetime.now().isoformat(),
+            "updated_at": datetime.now().isoformat(),
+        },
+    ]
+
 if __name__ == "__main__":
+
     import uvicorn
     uvicorn.run("apps.backend.main:app", host="0.0.0.0", port=8000, reload=True)

@@ -867,7 +867,7 @@ export default function DoctorPatientDetailScreen() {
                   {/* Hàng nút hành động: Chỉnh sửa & Xóa */}
                   <View style={styles.rxActionRow}>
                     <Text style={[styles.rxDoctorCredit, { color: isDarkMode ? '#64748B' : '#94A3B8' }]}>
-                      BS: {rx.doctor_name || 'BS. Trần Văn Minh'}
+                      BS: {rx.doctor_name || 'BSCKII. Nguyễn Văn Minh'}
                     </Text>
                     <View style={{ flexDirection: 'row', gap: 8 }}>
                       <TouchableOpacity

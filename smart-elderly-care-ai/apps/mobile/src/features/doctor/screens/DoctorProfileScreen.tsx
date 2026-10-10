@@ -24,21 +24,24 @@ import * as ImagePicker from 'expo-image-picker';
 import { Colors } from '../../../theme/colors';
 import { useTheme } from '../../../store/useThemeStore';
 import { useAuthStore } from '../../../store/useAuthStore';
+import AsyncStorage from '@react-native-async-storage/async-storage';
 
-export default function DoctorProfileScreen() {
+export default function DoctorProfileScreen({ navigation }: any) {
   const insets = useSafeAreaInsets();
   const { isDarkMode, colors, toggleTheme } = useTheme();
   const { userName, userPhone, logout } = useAuthStore();
 
   // Thông tin chuyên môn bác sĩ
   const [docInfo, setDocInfo] = useState({
-    name: userName || 'BS. Trần Văn Minh',
+    name: userName || 'BSCKII. Nguyễn Văn Minh',
     degree: 'Thạc sĩ, Bác sĩ Chuyên khoa II',
     specialty: 'Tim mạch Can thiệp & Lão khoa',
-    hospital: 'Bệnh viện Đa khoa Đà Nẵng',
+    hospital: 'Bệnh viện Lão khoa TW / BV Đà Nẵng',
     department: 'Khoa Hồi sức Tim mạch & Lão khoa',
-    phone: userPhone || '0905 111 222',
+    phone: userPhone || '0905888999',
   });
+
+  const [logoutModalVisible, setLogoutModalVisible] = useState(false);
 
   // Ảnh đại diện bác sĩ
   const [avatarUri, setAvatarUri] = useState<string | null>(
@@ -128,10 +131,37 @@ export default function DoctorProfileScreen() {
   };
 
   const handleLogout = () => {
-    Alert.alert('Đăng xuất', 'Bạn có chắc chắn muốn đăng xuất khỏi tài khoản Bác sĩ?', [
-      { text: 'Hủy', style: 'cancel' },
-      { text: 'Đăng xuất', style: 'destructive', onPress: () => logout() },
-    ]);
+    setLogoutModalVisible(true);
+  };
+
+  const performLogout = async () => {
+    try {
+      setLogoutModalVisible(false);
+      logout();
+      await useAuthStore.persist?.clearStorage?.();
+      await AsyncStorage.multiRemove([
+        'auth-storage',
+        'auth_token',
+        'token',
+        'user_role',
+        'user_info',
+      ]);
+    } catch (e) {
+      console.warn('Lỗi khi đăng xuất tài khoản Bác sĩ:', e);
+    }
+
+    try {
+      if (navigation?.getParent()) {
+        navigation.getParent()?.reset({
+          index: 0,
+          routes: [{ name: 'Login' }],
+        });
+      } else if (navigation?.navigate) {
+        navigation.navigate('Login');
+      }
+    } catch (err) {
+      console.warn('Lỗi điều hướng sau đăng xuất:', err);
+    }
   };
 
   return (
@@ -463,6 +493,42 @@ export default function DoctorProfileScreen() {
           </View>
         </KeyboardAvoidingView>
       </Modal>
+
+      {/* =================================================================== */}
+      {/* MODAL 3: XÁC NHẬN ĐĂNG XUẤT TÀI KHOẢN BÁC SĨ                       */}
+      {/* =================================================================== */}
+      <Modal visible={logoutModalVisible} animationType="fade" transparent onRequestClose={() => setLogoutModalVisible(false)}>
+        <View style={styles.logoutModalOverlay}>
+          <View style={[styles.logoutModalBox, { backgroundColor: isDarkMode ? '#1E293B' : '#FFFFFF' }]}>
+            <View style={styles.logoutModalIconBox}>
+              <Ionicons name="log-out-outline" size={32} color="#DC2626" />
+            </View>
+            <Text style={[styles.logoutModalTitle, { color: colors.textPrimary }]}>
+              Đăng xuất tài khoản Bác sĩ
+            </Text>
+            <Text style={[styles.logoutModalSub, { color: isDarkMode ? '#94A3B8' : '#64748B' }]}>
+              Bạn có chắc chắn muốn đăng xuất khỏi hệ thống? Mọi phiên làm việc và bảo mật hồ sơ bệnh án sẽ được kết thúc.
+            </Text>
+            <View style={styles.logoutModalActions}>
+              <TouchableOpacity
+                style={[styles.logoutCancelBtn, { borderColor: isDarkMode ? '#334155' : '#E2E8F0' }]}
+                onPress={() => setLogoutModalVisible(false)}
+                activeOpacity={0.8}
+              >
+                <Text style={[styles.logoutCancelText, { color: isDarkMode ? '#CBD5E1' : '#64748B' }]}>Hủy bỏ</Text>
+              </TouchableOpacity>
+              <TouchableOpacity
+                style={styles.logoutConfirmBtn}
+                onPress={performLogout}
+                activeOpacity={0.85}
+              >
+                <Ionicons name="log-out" size={16} color="#FFFFFF" style={{ marginRight: 6 }} />
+                <Text style={styles.logoutConfirmText}>Đăng xuất ngay</Text>
+              </TouchableOpacity>
+            </View>
+          </View>
+        </View>
+      </Modal>
     </View>
   );
 }
@@ -703,5 +769,78 @@ const styles = StyleSheet.create({
     paddingVertical: 8,
     paddingHorizontal: 16,
     borderRadius: 8,
+  },
+
+  // ── Logout Modal Styles ──
+  logoutModalOverlay: {
+    flex: 1,
+    backgroundColor: 'rgba(0,0,0,0.6)',
+    justifyContent: 'center',
+    alignItems: 'center',
+    padding: 24,
+  },
+  logoutModalBox: {
+    width: '100%',
+    maxWidth: 420,
+    borderRadius: 20,
+    padding: 24,
+    alignItems: 'center',
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 8 },
+    shadowOpacity: 0.15,
+    shadowRadius: 20,
+    elevation: 10,
+  },
+  logoutModalIconBox: {
+    width: 60,
+    height: 60,
+    borderRadius: 30,
+    backgroundColor: 'rgba(220, 38, 38, 0.12)',
+    alignItems: 'center',
+    justifyContent: 'center',
+    marginBottom: 16,
+  },
+  logoutModalTitle: {
+    fontSize: 18,
+    fontWeight: '700',
+    marginBottom: 8,
+    textAlign: 'center',
+  },
+  logoutModalSub: {
+    fontSize: 13,
+    lineHeight: 20,
+    textAlign: 'center',
+    marginBottom: 20,
+  },
+  logoutModalActions: {
+    flexDirection: 'row',
+    gap: 12,
+    width: '100%',
+  },
+  logoutCancelBtn: {
+    flex: 1,
+    paddingVertical: 12,
+    borderRadius: 12,
+    borderWidth: 1,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  logoutCancelText: {
+    fontSize: 14,
+    fontWeight: '600',
+  },
+  logoutConfirmBtn: {
+    flex: 1,
+    flexDirection: 'row',
+    paddingVertical: 12,
+    borderRadius: 12,
+    backgroundColor: '#DC2626',
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  logoutConfirmText: {
+    color: '#FFFFFF',
+    fontSize: 14,
+    fontWeight: '700',
   },
 });

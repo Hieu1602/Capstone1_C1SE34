@@ -116,3 +116,44 @@ class Notification(Base):
     created_at = Column(DateTime, default=datetime.utcnow, index=True)
 
     patient = relationship("Patient", back_populates="notifications")
+
+
+class Household(Base):
+    __tablename__ = "households"
+
+    id = Column(Integer, primary_key=True, index=True, autoincrement=True)
+    name = Column(String(255), nullable=False, default="Nhà của Cụ An")
+    address = Column(String(300), nullable=True, default="123 Hải Phòng, P. Thạch Thang, Q. Hải Châu, TP. Đà Nẵng")
+    current_mode = Column(String(50), default="HOME")
+    created_at = Column(DateTime, default=datetime.utcnow)
+
+    members = relationship("HouseholdMember", back_populates="household", cascade="all, delete-orphan")
+
+
+class User(Base):
+    __tablename__ = "users"
+
+    id = Column(Integer, primary_key=True, index=True, autoincrement=True)
+    full_name = Column(String(255), nullable=False)
+    phone_number = Column(String(50), unique=True, index=True, nullable=False)
+    role = Column(String(100), default="Chủ nhà / Người sở hữu")  # "Chủ nhà / Người sở hữu", "Bác sĩ phụ trách", "Người chăm sóc"
+    household_id = Column(Integer, ForeignKey("households.id"), nullable=True)
+    email = Column(String(255), nullable=True)
+    avatar_url = Column(String(500), nullable=True)
+    created_at = Column(DateTime, default=datetime.utcnow)
+
+    household_memberships = relationship("HouseholdMember", back_populates="user", cascade="all, delete-orphan")
+
+
+class HouseholdMember(Base):
+    __tablename__ = "household_members"
+
+    id = Column(Integer, primary_key=True, index=True, autoincrement=True)
+    household_id = Column(Integer, ForeignKey("households.id"), nullable=False, index=True)
+    user_id = Column(Integer, ForeignKey("users.id"), nullable=False, index=True)
+    role_in_house = Column(String(100), default="Người chăm sóc")  # "Người sở hữu", "Bác sĩ phụ trách", "Người chăm sóc"
+    permissions = Column(String(100), default="Toàn quyền quản trị")
+    joined_at = Column(DateTime, default=datetime.utcnow)
+
+    household = relationship("Household", back_populates="members")
+    user = relationship("User", back_populates="household_memberships")

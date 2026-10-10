@@ -22,6 +22,9 @@ import { Ionicons, MaterialCommunityIcons } from '@expo/vector-icons';
 import { Colors, Shadows } from '../../../theme/colors';
 import { useVitalStore } from '../../../store/useVitalStore';
 import { useTheme } from '../../../store/useThemeStore';
+import { systemApi } from '../../../services/api';
+import { alertsWS } from '../../../services/websocket';
+
 
 // Hàm sao chép clipboard an toàn hỗ trợ cả native và web
 const copyAddressToClipboard = (text: string) => {
@@ -65,18 +68,22 @@ export default function HomeScreen({ navigation }: any) {
   const [isMicSpeaking, setIsMicSpeaking] = useState(false);
   const [nextMedTaken, setNextMedTaken] = useState(false);
 
-  // Tự động gọi API đồng bộ dữ liệu thời gian thực từ Backend FastAPI
+  // Tự động gọi API đồng bộ dữ liệu thời gian thực từ Backend FastAPI & mở WebSocket
   useEffect(() => {
     fetchVitals();
     fetchSystemMode();
     fetchReminders();
     fetchNotifications();
 
+    // Kết nối WebSocket nhận cảnh báo té ngã thời gian thực & sinh hiệu 5s/lần
+    alertsWS.connect();
+
     const interval = setInterval(() => {
       fetchVitals();
     }, 15000);
     return () => clearInterval(interval);
   }, []);
+
 
   // Tự động làm mới dữ liệu khi màn hình HomeScreen được focus (quay lại từ IncidentDetailScreen)
   useEffect(() => {
@@ -136,7 +143,7 @@ export default function HomeScreen({ navigation }: any) {
   const activeEmergency = criticalIncidents[0];
   const hasEmergency = Boolean(activeEmergency || currentVitals.fall_detected);
 
-  const handleConfirmSnooze = () => {
+  const handleConfirmSnooze = async () => {
     const until = selectedDuration > 0 ? Date.now() + selectedDuration * 60 * 1000 : null;
     setAlarmSnooze({
       active: true,
@@ -146,6 +153,17 @@ export default function HomeScreen({ navigation }: any) {
       syncAll: syncAllFamily,
     });
     setSnoozeModalVisible(false);
+
+    try {
+      await systemApi.updateMode({
+        is_mute_alarm: true,
+        mute_mode: selectedMode,
+        duration_minutes: selectedDuration,
+      });
+    } catch (e) {
+      console.warn('API updateMode snooze error:', e);
+    }
+
     Alert.alert(
       '🔕 Đã tạm dừng chuông báo động',
       `Đã thiết lập tạm dừng chuông báo động ${
@@ -154,13 +172,52 @@ export default function HomeScreen({ navigation }: any) {
     );
   };
 
-  const handleCancelSnooze = () => {
+  const handleCancelSnooze = async () => {
     cancelAlarmSnooze();
     setSnoozeModalVisible(false);
+
+    try {
+      await systemApi.updateMode({
+        is_mute_alarm: false,
+      });
+    } catch (e) {
+      console.warn('API updateMode cancel snooze error:', e);
+    }
+
     Alert.alert(
       '🔔 Đã bật lại chuông báo động',
       'Chuông báo động và còi hú Loa Hub đã được kích hoạt lại ở mức bình thường.'
     );
+  };
+
+  const handlePressSnoozeButton = () => {
+    if (isSnoozeActive) {
+      Alert.alert(
+        'Chuông báo động đang tắt',
+        'Bạn muốn bật lại chuông báo động hay tùy chỉnh thời gian tạm tắt?',
+        [
+          { text: 'Đóng', style: 'cancel' },
+          {
+            text: '🔔 Bật lại ngay',
+            onPress: handleCancelSnooze,
+          },
+          {
+            text: '⚙️ Cài đặt lại',
+            onPress: () => {
+              setSelectedDuration(alarmSnooze?.durationMinutes || 15);
+              setSelectedMode(alarmSnooze?.mode || 'VIBRATE');
+              setSyncAllFamily(alarmSnooze?.syncAll ?? true);
+              setSnoozeModalVisible(true);
+            },
+          },
+        ]
+      );
+    } else {
+      setSelectedDuration(alarmSnooze?.durationMinutes || 15);
+      setSelectedMode(alarmSnooze?.mode || 'VIBRATE');
+      setSyncAllFamily(alarmSnooze?.syncAll ?? true);
+      setSnoozeModalVisible(true);
+    }
   };
 
   // Đồng bộ thông tin nhà và camera từ Backend khi mở HomeScreen
@@ -207,29 +264,47 @@ export default function HomeScreen({ navigation }: any) {
     navigation.navigate('MultiView');
   };
 
-  const handleSelectHouseMode = (mode: 'AWAY' | 'HOME' | 'DISARM') => {
+  const handleSelectHouseMode = async (mode: 'AWAY' | 'HOME' | 'DISARM') => {
     // Radio / Segmented Control: Nếu đã chọn mode này thì giữ nguyên
     if (house.currentMode === mode) return;
 
     setHouseMode(mode);
 
+    // Feature 4: Tự động kích hoạt/bỏ kích hoạt trạng thái "Riêng tư" của camera phòng ngủ
+    // Ở nhà (HOME) -> Riêng tư = True (che camera phòng ngủ)
+    // Xa (AWAY) -> Riêng tư = False (mở camera giám sát 24/7)
+    const isPrivacy = mode === 'HOME';
+    if (camera.isSleep !== isPrivacy) {
+      toggleCameraSleep();
+    }
+
+    try {
+      await systemApi.updateMode({
+        mode,
+        is_camera_privacy: isPrivacy,
+      });
+    } catch (e) {
+      console.warn('API updateMode house mode error:', e);
+    }
+
     if (mode === 'AWAY') {
       Alert.alert(
         '🚶 Chế độ Xa (Away) đã kích hoạt',
-        'Đã kích hoạt chế độ an ninh cao nhất: Tối đa độ nhạy cảm biến, phát hiện té ngã và chuông báo động 24/7. Camera tiếp tục phát trực tiếp bình thường.'
+        'Đã kích hoạt chế độ an ninh cao nhất: Camera phòng ngủ đã mở giám sát 24/7 và sẵn sàng phát hiện té ngã. Đã lưu vào PostgreSQL.'
       );
     } else if (mode === 'HOME') {
       Alert.alert(
         '🏠 Chế độ Ở nhà (Home) đã kích hoạt',
-        'Đã giảm mức báo động xâm nhập khi gia đình sinh hoạt, nhưng vẫn duy trì theo dõi té ngã và chỉ số sức khoẻ trực tiếp 24/7.'
+        'Đã kích hoạt chế độ riêng tư: Ống kính camera phòng ngủ đã tạm cụp/che lại, vẫn duy trì theo dõi nhịp tim và té ngã 24/7. Đã lưu vào PostgreSQL.'
       );
     } else if (mode === 'DISARM') {
       Alert.alert(
         '🛡️ Chế độ Tắt báo động (Disarm) đã kích hoạt',
-        'Đã tắt hoàn toàn còi hú và các thông báo báo động. Camera vẫn mở và hiển thị luồng trực tiếp bình thường.'
+        'Đã tắt hoàn toàn còi hú và các thông báo báo động. Đã lưu vào PostgreSQL.'
       );
     }
   };
+
 
   const handleTogglePrivacyMode = () => {
     toggleCameraSleep();
@@ -414,13 +489,9 @@ export default function HomeScreen({ navigation }: any) {
                 : styles.modePillInactive,
               !isSnoozeActive && house.currentMode !== 'DISARM' && isDarkMode && { backgroundColor: colors.card, borderColor: colors.border },
             ]}
-            onPress={() => {
-              setSelectedDuration(alarmSnooze?.durationMinutes || 15);
-              setSelectedMode(alarmSnooze?.mode || 'VIBRATE');
-              setSyncAllFamily(alarmSnooze?.syncAll ?? true);
-              setSnoozeModalVisible(true);
-            }}
+            onPress={handlePressSnoozeButton}
             activeOpacity={0.75}
+
           >
             <View
               style={[
@@ -471,10 +542,13 @@ export default function HomeScreen({ navigation }: any) {
             onPress={() => {
               navigation.navigate('EventDetail', {
                 incidentId: activeEmergency?.id || 'inc-03',
+                id: activeEmergency?.id || 'inc-03',
                 alert_type: activeEmergency?.alert_type || 'FALL_DETECTED',
                 alert_level: activeEmergency?.alert_level || 'CRITICAL',
                 message: activeEmergency?.message || '🚨 Cảnh báo té ngã (Fall Detected) - Trích xuất clip 5s bộ đệm Edge Hub RAM',
                 confidence: 0.94,
+                thumbnail_url: activeEmergency?.thumbnail_url || 'http://localhost:8000/static/evidence/fall_evidence_ai.jpg',
+                video_clip_url: activeEmergency?.video_clip_url || 'https://commondatastorage.googleapis.com/gtv-videos-bucket/sample/BigBuckBunny.mp4',
                 is_acknowledged: false,
               });
             }}

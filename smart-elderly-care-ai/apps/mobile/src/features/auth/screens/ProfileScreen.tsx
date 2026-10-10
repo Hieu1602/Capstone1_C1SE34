@@ -30,11 +30,12 @@ import { useTheme } from '../../../store/useThemeStore';
 import api from '../../../services/api';
 
 export default function ProfileScreen({ navigation }: any) {
-  const { userId, userName, userPhone, logout, updateUserName, toggleViewRole } = useAuthStore();
+  const { userId, user_id, userName, full_name, userPhone, phone_number, role, logout, updateUserName, toggleViewRole, setProfile } = useAuthStore();
   const { house } = useVitalStore();
   const { isDarkMode, colors, setDarkMode } = useTheme();
-  const [profileName, setProfileName] = React.useState(userName || 'Nguyễn Hữu Nghĩa');
-  const [profilePhone, setProfilePhone] = React.useState(userPhone || '0905 123 456');
+  const [profileName, setProfileName] = React.useState(full_name || userName || 'Nguyễn Hữu Nghĩa');
+  const [profilePhone, setProfilePhone] = React.useState(phone_number || userPhone || '0905123456');
+  const [profileRole, setProfileRole] = React.useState(role || 'Chủ nhà / Người sở hữu');
   const [showMoreGrid, setShowMoreGrid] = React.useState(false);
   const [isHelpExpanded, setIsHelpExpanded] = React.useState(false);
   const [isSettingsExpanded, setIsSettingsExpanded] = React.useState(false);
@@ -176,29 +177,45 @@ export default function ProfileScreen({ navigation }: any) {
   };
 
   React.useEffect(() => {
-    if (userName) {
-      setProfileName(userName);
+    if (full_name || userName) {
+      setProfileName(full_name || userName || 'Nguyễn Hữu Nghĩa');
     }
-    if (userPhone) {
-      setProfilePhone(userPhone);
+    if (phone_number || userPhone) {
+      setProfilePhone(phone_number || userPhone || '0905123456');
+    }
+    if (role) {
+      setProfileRole(role);
     }
 
     // Đồng bộ thông tin profile mới nhất từ Database qua backend API /users/me
     const fetchUserProfile = async () => {
       try {
-        const res = await api.get('/users/me');
-        if (res.data?.full_name) {
-          setProfileName(res.data.full_name);
-        }
-        if (res.data?.phone) {
-          setProfilePhone(res.data.phone);
+        const activePhone = phone_number || userPhone || '0905123456';
+        const res = await api.get('/users/me', { params: { phone: activePhone } });
+        if (res.data) {
+          if (res.data.full_name) {
+            setProfileName(res.data.full_name);
+          }
+          if (res.data.phone_number || res.data.phone) {
+            setProfilePhone(res.data.phone_number || res.data.phone);
+          }
+          if (res.data.role) {
+            setProfileRole(res.data.role);
+          }
+          setProfile?.({
+            user_id: res.data.user_id || res.data.id,
+            full_name: res.data.full_name,
+            phone_number: res.data.phone_number || res.data.phone,
+            role: res.data.role,
+            household_id: res.data.household_id,
+          });
         }
       } catch {
         // Fallback to store
       }
     };
     fetchUserProfile();
-  }, [userName, userPhone]);
+  }, [userName, full_name, userPhone, phone_number, role]);
 
   const handleLogout = () => {
     setLogoutConfirmVisible(true);
@@ -1758,10 +1775,10 @@ export default function ProfileScreen({ navigation }: any) {
             </View>
             <View style={{ flex: 1, marginLeft: 12 }}>
               <Text style={[styles.fbProfileName, isDarkMode && { color: colors.textPrimary }]}>
-                {profileName || userName || 'Nguyễn Hữu Nghĩa'}
+                {profileName || full_name || userName || 'Nguyễn Hữu Nghĩa'}
               </Text>
               <Text style={[styles.fbProfileRole, isDarkMode && { color: colors.textSecondary }]}>
-                {profilePhone || '0905 123 456'} • Chủ nhà (Giám sát)
+                {profilePhone || phone_number || userPhone || '0905123456'} • {profileRole || role || 'Chủ nhà / Người sở hữu'}
               </Text>
             </View>
             {/* Badge thông báo & icon switch */}

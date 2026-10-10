@@ -83,6 +83,9 @@ export interface PatientMedicalRecord {
   doctor_specialty: string;
   hospital: string;
   next_appointment: string;
+  target_date?: string;
+  daily_vitals?: any[];
+  daily_events?: any[];
 }
 
 export interface ReminderItem {
@@ -179,7 +182,7 @@ interface VitalStoreState {
   fetchVitals: () => Promise<VitalData | null>;
   fetchSystemMode: () => Promise<{ mode: string; is_mute_alarm: boolean; is_camera_privacy: boolean } | null>;
   fetchReminders: () => Promise<RemindersData | null>;
-  fetchPatientRecord: (patientId?: number) => Promise<PatientMedicalRecord | null>;
+  fetchPatientRecord: (patientId?: number, target_date?: string) => Promise<PatientMedicalRecord | null>;
   fetchNotifications: () => Promise<Incident[] | null>;
 
   setVitals: (data: Partial<VitalData>) => void;
@@ -411,10 +414,10 @@ const createVitalStore: StateCreator<VitalStoreState> = (set, get) => ({
     return null;
   },
 
-  fetchPatientRecord: async (patientId: number = 1) => {
+  fetchPatientRecord: async (patientId: number = 1, target_date?: string) => {
     set({ isLoadingPatient: true });
     try {
-      const res = await patientApi.getMedicalRecord(patientId);
+      const res = await patientApi.getMedicalRecord(patientId, target_date);
       if (res.data) {
         set({ patientRecord: res.data, isLoadingPatient: false });
         return res.data;
