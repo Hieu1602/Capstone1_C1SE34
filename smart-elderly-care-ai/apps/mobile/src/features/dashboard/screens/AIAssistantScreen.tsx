@@ -1,6 +1,14 @@
-// AIAssistantScreen.tsx
-// Module Trợ lý AI thiết kế theo phong cách Gemini (Hình 2 & 3)
-// Được tùy biến chuyên biệt cho Hệ thống Giám sát & Chăm sóc Người Cao Tuổi
+// ============================================================================
+// MÀN HÌNH TRỢ LÝ SỨC KHỎE AI (AI ASSISTANT SCREEN)
+// Hệ thống: Smart Elderly Care AI (SECA)
+// Thiết kế: Phong cách đàm thoại trực quan Gemini Assistant
+// Chức năng:
+//   - Trò chuyện, tư vấn hỏi đáp sức khỏe và tình trạng người cao tuổi thông qua RAG Chatbot API
+//   - Tích hợp nhận diện giọng nói, thanh nhập liệu nổi (Floating Pill Bar)
+//   - Quản lý lịch sử hội thoại có thanh tìm kiếm nhanh trong Sidebar trượt
+//   - Tự động cuộn xuống cuối danh sách tin nhắn khi có phản hồi mới
+//   - Tương thích chế độ giao diện Sáng / Tối (Light & Dark Theme)
+// ============================================================================
 
 import React, { useState, useRef } from 'react';
 import {
@@ -19,9 +27,10 @@ import {
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
 
-// Import biểu tượng Robot Trợ lý AI theo hình mẫu người dùng cung cấp
+// Import biểu tượng Robot Trợ lý AI và các Store quản trị trạng thái
 import AIBotIcon from '../../../components/AIBotIcon';
 import { useVitalStore } from '../../../store/useVitalStore';
+import { useAuthStore } from '../../../store/useAuthStore';
 import { useTheme } from '../../../store/useThemeStore';
 import api from '../../../services/api';
 
@@ -49,6 +58,9 @@ export default function AIAssistantScreen({ navigation }: any) {
   const { isDarkMode, colors } = useTheme();
   // Lấy dữ liệu sinh hiệu và trạng thái kết nối từ Store
   const { currentVitals, isConnected } = useVitalStore();
+  // Lấy thông tin tài khoản người dùng thực tế từ AuthStore (loại bỏ dữ liệu giả lập)
+  const { userName, full_name } = useAuthStore();
+  const displayName = full_name || userName || 'Người dùng';
 
   // ---- CÁC STATE QUẢN LÝ GIAO DIỆN ----
   // 1. Trạng thái mở/đóng Sidebar trượt từ bên trái sang (Hình 2)
@@ -562,7 +574,7 @@ export default function AIAssistantScreen({ navigation }: any) {
               )}
             </ScrollView>
 
-            {/* Chân trang Sidebar: Chỉ để tên người dùng theo đúng yêu cầu Hình 1 */}
+            {/* Chân trang Sidebar: Hiển thị tên người dùng thực tế từ AuthStore */}
             <View style={[styles.sidebarFooter, isDarkMode && { borderTopColor: colors.border }]}>
               <TouchableOpacity
                 style={styles.userProfileRow}
@@ -575,7 +587,7 @@ export default function AIAssistantScreen({ navigation }: any) {
                   <Ionicons name="person" size={20} color="#0284C7" />
                 </View>
                 <View style={{ flex: 1, marginLeft: 10 }}>
-                  <Text style={[styles.userNameText, isDarkMode && { color: colors.textPrimary }]}>Nghia Nguyen</Text>
+                  <Text style={[styles.userNameText, isDarkMode && { color: colors.textPrimary }]}>{displayName}</Text>
                 </View>
                 <Ionicons name="chevron-forward" size={18} color="#94A3B8" />
               </TouchableOpacity>

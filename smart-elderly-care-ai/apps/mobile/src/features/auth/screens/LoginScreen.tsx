@@ -1,5 +1,13 @@
-// LoginScreen.tsx
-// Màn hình Chào mừng & Đăng nhập theo phong cách Pinterest Collage hiện đại
+// ============================================================================
+// MÀN HÌNH ĐĂNG NHẬP & CHÀO MỪNG (LOGIN SCREEN)
+// Hệ thống: Smart Elderly Care AI (SECA)
+// Giao diện: Thiết kế phong cách Pinterest Collage + Bottom Sheet Modal
+// Chức năng:
+//   - Trưng bày bộ ảnh trực quan mang thông điệp chăm sóc sức khỏe người cao tuổi
+//   - Điều hướng sang màn hình Đăng ký tài khoản (RegisterScreen)
+//   - Modal Bottom Sheet đăng nhập hỗ trợ chuẩn hóa số điện thoại E.164 (+84)
+//   - Tích hợp gọi API OAuth2 Password Bearer và lưu phiên vào useAuthStore
+// ============================================================================
 
 import React, { useState } from 'react';
 import {
@@ -23,29 +31,45 @@ import { Colors } from '../../../theme/colors';
 import { useAuthStore } from '../../../store/useVitalStore';
 import { authApi } from '../../../services/api';
 
+// Lấy kích thước chiều rộng màn hình để tính toán tỉ lệ cho bố cục Collage
 const { width: SCREEN_WIDTH } = Dimensions.get('window');
 
-// Danh sách hình ảnh collage chất lượng cao (phong cách sống, chăm sóc gia đình, y tế)
+/**
+ * Danh sách hình ảnh chất lượng cao phục vụ bố cục Collage
+ * Mang thông điệp: niềm vui tuổi già, không gian sống ấm áp, y tế ân cần và sinh hoạt lành mạnh
+ */
 const COLLAGE_IMAGES = {
-  center: 'https://images.unsplash.com/photo-1576765608535-5f04d1e3f289?auto=format&fit=crop&w=600&q=80', // Nụ cười cụ bà hạnh phúc
-  topLeft: 'https://images.unsplash.com/photo-1513694203232-719a280e022f?auto=format&fit=crop&w=500&q=80', // Không gian sống ấm áp, gương & cây xanh
-  topRight: 'https://images.unsplash.com/photo-1595950653106-6c9ebd614d3a?auto=format&fit=crop&w=500&q=80', // Giày đi bộ rèn luyện sức khỏe
+  center: 'https://images.unsplash.com/photo-1576765608535-5f04d1e3f289?auto=format&fit=crop&w=600&q=80', // Nụ cười cụ bà hạnh phúc (Ảnh trung tâm Hero)
+  topLeft: 'https://images.unsplash.com/photo-1513694203232-719a280e022f?auto=format&fit=crop&w=500&q=80', // Không gian sống ấm áp
+  topRight: 'https://images.unsplash.com/photo-1595950653106-6c9ebd614d3a?auto=format&fit=crop&w=500&q=80', // Giày rèn luyện sức khỏe
   midRight: 'https://images.unsplash.com/photo-1581579438747-1dc8d17bbce4?auto=format&fit=crop&w=500&q=80', // Bác sĩ & chăm sóc ân cần
-  bottomLeft: 'https://images.unsplash.com/photo-1525351484163-7529414344d8?auto=format&fit=crop&w=500&q=80', // Bữa sáng dinh dưỡng, trái cây
-  bottomRight: 'https://images.unsplash.com/photo-1507473885765-e6ed057f782c?auto=format&fit=crop&w=500&q=80', // Đèn ngủ đầu giường bình yên
+  bottomLeft: 'https://images.unsplash.com/photo-1525351484163-7529414344d8?auto=format&fit=crop&w=500&q=80', // Bữa ăn dinh dưỡng
+  bottomRight: 'https://images.unsplash.com/photo-1507473885765-e6ed057f782c?auto=format&fit=crop&w=500&q=80', // Không gian bình yên
 };
 
 export default function LoginScreen({ navigation }: any) {
+  // Hook quản lý trạng thái phiên đăng nhập toàn cục (Zustand Store)
   const { login } = useAuthStore();
 
+  // Quản lý hiển thị modal Bottom Sheet đăng nhập
   const [isLoginModalVisible, setIsLoginModalVisible] = useState(false);
+
+  // Trạng thái nhập liệu của biểu mẫu
   const [account, setAccount] = useState('');
   const [password, setPassword] = useState('');
   const [showPassword, setShowPassword] = useState(false);
   const [isLoading, setIsLoading] = useState(false);
 
-  // Đăng nhập vào hệ thống
+  /**
+   * Xử lý xác thực đăng nhập người dùng
+   * 1. Kiểm tra tính hợp lệ dữ liệu đầu vào (số điện thoại và mật khẩu không rỗng)
+   * 2. Chuẩn hóa số điện thoại về định dạng quốc tế chuẩn E.164 (+84...)
+   * 3. Gửi request đến FastAPI backend qua authApi.login (OAuth2 Password Request Form)
+   * 4. Nhận access_token, refresh_token và thông tin hồ sơ tài khoản người dùng thực tế
+   * 5. Lưu phiên đăng nhập vào useAuthStore và đóng Modal
+   */
   const handleLoginAction = async () => {
+    // Kiểm tra dữ liệu bắt buộc
     if (!account.trim() || !password.trim()) {
       Alert.alert('Thiếu thông tin', 'Vui lòng nhập số điện thoại và mật khẩu.');
       return;
@@ -53,6 +77,7 @@ export default function LoginScreen({ navigation }: any) {
 
     setIsLoading(true);
     try {
+      // Chuẩn hóa số điện thoại: loại bỏ khoảng trắng và chuyển đầu số 0 sang mã quốc tế +84
       const cleanAccount = account.replace(/\s+/g, '').replace(/^\+84/, '0');
       const normalizedAccount = cleanAccount.startsWith('0')
         ? `+84${cleanAccount.slice(1)}`
@@ -60,17 +85,21 @@ export default function LoginScreen({ navigation }: any) {
           ? cleanAccount
           : `+84${cleanAccount}`;
 
+      // Gọi API đăng nhập hệ thống backend
       const response = await authApi.login(normalizedAccount, password);
       const { access_token, refresh_token, user } = response.data;
 
-      const full_name = user?.full_name || (normalizedAccount.includes('888') || normalizedAccount.includes('999') || normalizedAccount.includes('111222') ? 'BS. Nguyễn Văn Minh' : 'Nguyễn Hữu Nghĩa');
+      // Trích xuất dữ liệu người dùng từ response API backend (không sử dụng dữ liệu giả định)
+      const full_name = user?.full_name || 'Người dùng';
       const phone_number = user?.phone_number || user?.phone || cleanAccount;
-      const role_str = user?.role || (normalizedAccount.includes('888') || normalizedAccount.includes('999') ? 'Bác sĩ phụ trách' : 'Chủ nhà / Người sở hữu');
-      const user_id = user?.user_id || user?.id || (role_str.includes('Bác sĩ') ? 2 : 1);
-      const household_id = user?.household_id || 1;
+      const role_str = user?.role || 'Chủ nhà';
+      const user_id = user?.user_id || user?.id || 1;
+      const household_id = user?.household_id ?? 1;
 
-      // Lưu token và đồng bộ thông tin tài khoản người dùng & vai trò
+      // Lưu trữ phiên làm việc vào Store Zustand và đồng bộ trạng thái ứng dụng
       login(access_token, refresh_token, full_name, user_id, phone_number, role_str, household_id);
+
+      // Đóng modal đăng nhập thành công
       setIsLoginModalVisible(false);
     } catch (error: any) {
       console.error('[Login] Error:', error);
@@ -84,12 +113,6 @@ export default function LoginScreen({ navigation }: any) {
     }
   };
 
-  // Điền nhanh tài khoản mẫu để kiểm thử
-  const handleQuickFill = (phone: string, pass: string) => {
-    setAccount(phone);
-    setPassword(pass);
-  };
-
   return (
     <SafeAreaView style={styles.safeArea}>
       <ScrollView
@@ -98,10 +121,10 @@ export default function LoginScreen({ navigation }: any) {
         bounces={false}
       >
         {/* ================================================================= */}
-        {/* PHẦN 1: DYNAMIC PHOTO COLLAGE (PHONG CÁCH PINTEREST)              */}
+        {/* PHẦN 1: BỐ CỤC ẢNH NGHỆ THUẬT COLLAGE (PINTEREST STYLE)           */}
         {/* ================================================================= */}
         <View style={styles.collageContainer}>
-          {/* Card Top Left: Gương & phòng khách Bắc Âu */}
+          {/* Card góc trên bên trái */}
           <View style={[styles.card, styles.cardTopLeft]}>
             <Image
               source={{ uri: COLLAGE_IMAGES.topLeft }}
@@ -110,7 +133,7 @@ export default function LoginScreen({ navigation }: any) {
             />
           </View>
 
-          {/* Card Top Right: Giày vận động thể thao */}
+          {/* Card góc trên bên phải */}
           <View style={[styles.card, styles.cardTopRight]}>
             <Image
               source={{ uri: COLLAGE_IMAGES.topRight }}
@@ -119,7 +142,7 @@ export default function LoginScreen({ navigation }: any) {
             />
           </View>
 
-          {/* Card Center: Hero chính (Nụ cười ấm áp tuổi già) */}
+          {/* Card trung tâm nổi bật (Hero Card) */}
           <View style={[styles.card, styles.cardCenterHero]}>
             <Image
               source={{ uri: COLLAGE_IMAGES.center }}
@@ -128,7 +151,7 @@ export default function LoginScreen({ navigation }: any) {
             />
           </View>
 
-          {/* Card Middle Right: Chăm sóc & khám sức khỏe */}
+          {/* Card giữa bên phải */}
           <View style={[styles.card, styles.cardMidRight]}>
             <Image
               source={{ uri: COLLAGE_IMAGES.midRight }}
@@ -137,7 +160,7 @@ export default function LoginScreen({ navigation }: any) {
             />
           </View>
 
-          {/* Card Bottom Left: Đĩa bánh dâu dinh dưỡng */}
+          {/* Card góc dưới bên trái */}
           <View style={[styles.card, styles.cardBottomLeft]}>
             <Image
               source={{ uri: COLLAGE_IMAGES.bottomLeft }}
@@ -146,7 +169,7 @@ export default function LoginScreen({ navigation }: any) {
             />
           </View>
 
-          {/* Card Bottom Right: Đèn ngủ an lành */}
+          {/* Card góc dưới bên phải */}
           <View style={[styles.card, styles.cardBottomRight]}>
             <Image
               source={{ uri: COLLAGE_IMAGES.bottomRight }}
@@ -160,14 +183,14 @@ export default function LoginScreen({ navigation }: any) {
         {/* PHẦN 2: LOGO BADGE, TIÊU ĐỀ & NÚT HÀNH ĐỘNG                       */}
         {/* ================================================================= */}
         <View style={styles.bottomSection}>
-          {/* Logo Badge hình tròn màu cam thương hiệu */}
+          {/* Huy hiệu Logo thương hiệu hình trái tim */}
           <View style={styles.logoBadgeContainer}>
             <View style={styles.logoBadge}>
               <Ionicons name="heart" size={26} color="#FFFFFF" />
             </View>
           </View>
 
-          {/* Tiêu đề & Slogan */}
+          {/* Tiêu đề & Thông điệp sứ mệnh */}
           <Text style={styles.heroTitle}>
             Tạo dựng cuộc sống{'\n'}bạn yêu thích
           </Text>
@@ -175,9 +198,9 @@ export default function LoginScreen({ navigation }: any) {
             Hệ sinh thái AI bảo vệ sức khỏe & an toàn người cao tuổi 24/7
           </Text>
 
-          {/* Bộ 2 nút hành động Pill Button */}
+          {/* Bộ 2 nút hành động chính (Pill Buttons) */}
           <View style={styles.actionButtonsContainer}>
-            {/* Nút 1: Đăng ký (Orange Primary Pill) */}
+            {/* Nút 1: Mở màn hình Đăng ký */}
             <TouchableOpacity
               style={styles.btnRegister}
               activeOpacity={0.88}
@@ -186,7 +209,7 @@ export default function LoginScreen({ navigation }: any) {
               <Text style={styles.btnRegisterText}>Đăng ký</Text>
             </TouchableOpacity>
 
-            {/* Nút 2: Đăng nhập (Light Gray Secondary Pill) */}
+            {/* Nút 2: Mở Modal Bottom Sheet Đăng nhập */}
             <TouchableOpacity
               style={styles.btnLogin}
               activeOpacity={0.88}
@@ -196,7 +219,7 @@ export default function LoginScreen({ navigation }: any) {
             </TouchableOpacity>
           </View>
 
-          {/* Điều khoản pháp lý ở chân trang */}
+          {/* Điều khoản pháp lý & chính sách bảo mật */}
           <Text style={styles.termsNoticeText}>
             Bằng cách tiếp tục, bạn đồng ý với{' '}
             <Text
@@ -238,10 +261,10 @@ export default function LoginScreen({ navigation }: any) {
           style={styles.modalOverlay}
         >
           <View style={styles.modalSheet}>
-            {/* Thanh gạt trên đỉnh Sheet */}
+            {/* Thanh kéo gạt chỉ dẫn đỉnh Bottom Sheet */}
             <View style={styles.sheetHandle} />
 
-            {/* Header Sheet */}
+            {/* Tiêu đề Modal & Nút đóng */}
             <View style={styles.sheetHeader}>
               <View>
                 <Text style={styles.sheetTitle}>Đăng nhập</Text>
@@ -255,7 +278,7 @@ export default function LoginScreen({ navigation }: any) {
               </TouchableOpacity>
             </View>
 
-            {/* Input 1: Số điện thoại */}
+            {/* Trường nhập số điện thoại kèm tiền tố +84 */}
             <View style={styles.inputWrap}>
               <View style={styles.inputPrefix}>
                 <Ionicons name="call-outline" size={18} color="#64748B" />
@@ -272,7 +295,7 @@ export default function LoginScreen({ navigation }: any) {
               />
             </View>
 
-            {/* Input 2: Mật khẩu */}
+            {/* Trường nhập mật khẩu kèm nút bật/tắt ẩn hiện */}
             <View style={styles.inputWrap}>
               <View style={styles.inputPrefix}>
                 <Ionicons name="lock-closed-outline" size={18} color="#64748B" />
@@ -297,7 +320,7 @@ export default function LoginScreen({ navigation }: any) {
               </TouchableOpacity>
             </View>
 
-            {/* Quên mật khẩu */}
+            {/* Điều hướng Quên mật khẩu */}
             <TouchableOpacity
               style={styles.forgotBtn}
               onPress={() => {
@@ -308,7 +331,7 @@ export default function LoginScreen({ navigation }: any) {
               <Text style={styles.forgotText}>Quên mật khẩu?</Text>
             </TouchableOpacity>
 
-            {/* Nút Đăng nhập ngay (Orange Pill) */}
+            {/* Nút bấm Đăng nhập */}
             <TouchableOpacity
               style={[styles.btnSubmitLogin, isLoading && { opacity: 0.7 }]}
               activeOpacity={0.88}
@@ -322,29 +345,7 @@ export default function LoginScreen({ navigation }: any) {
               )}
             </TouchableOpacity>
 
-            {/* Tài khoản mẫu tiện lợi cho giảng viên / chấm điểm đồ án */}
-            <View style={styles.quickFillContainer}>
-              <Text style={styles.quickFillLabel}>Tài khoản mẫu thử nghiệm (chạm để điền):</Text>
-              <View style={styles.quickFillRow}>
-                <TouchableOpacity
-                  style={styles.quickFillChip}
-                  onPress={() => handleQuickFill('0905123456', '12345678')}
-                >
-                  <Ionicons name="person-circle-outline" size={14} color="#0284C7" />
-                  <Text style={styles.quickFillChipText}>Chủ nhà (Nghĩa)</Text>
-                </TouchableOpacity>
-
-                <TouchableOpacity
-                  style={styles.quickFillChip}
-                  onPress={() => handleQuickFill('0905888999', '12345678')}
-                >
-                  <Ionicons name="medkit-outline" size={14} color="#16A34A" />
-                  <Text style={styles.quickFillChipText}>Bác sĩ Minh (0905888999)</Text>
-                </TouchableOpacity>
-              </View>
-            </View>
-
-            {/* Chuyển sang Đăng ký */}
+            {/* Điều hướng chuyển sang Đăng ký tài khoản mới */}
             <View style={styles.switchAuthRow}>
               <Text style={styles.switchAuthText}>Chưa có tài khoản? </Text>
               <TouchableOpacity
@@ -364,6 +365,7 @@ export default function LoginScreen({ navigation }: any) {
 }
 
 const styles = StyleSheet.create({
+  // Vùng an toàn hiển thị toàn màn hình
   safeArea: {
     flex: 1,
     backgroundColor: '#FFFFFF',
@@ -376,7 +378,7 @@ const styles = StyleSheet.create({
   },
 
   // -------------------------------------------------------------------------
-  // PHOTO COLLAGE STYLES
+  // ĐỊNH DẠNG BỐ CỤC BỘ ẢNH COLLAGE
   // -------------------------------------------------------------------------
   collageContainer: {
     width: '100%',
@@ -396,7 +398,7 @@ const styles = StyleSheet.create({
     height: '100%',
   },
 
-  // Vị trí từng card theo đúng layout Pinterest
+  // Tọa độ định vị từng khung ảnh theo phong cách Pinterest
   cardTopLeft: {
     top: -15,
     left: -20,
@@ -447,7 +449,7 @@ const styles = StyleSheet.create({
   },
 
   // -------------------------------------------------------------------------
-  // BOTTOM SECTION & BUTTONS
+  // ĐỊNH DẠNG KHU VỰC THƯƠNG HIỆU & NÚT HÀNH ĐỘNG
   // -------------------------------------------------------------------------
   bottomSection: {
     paddingHorizontal: 28,
@@ -462,7 +464,7 @@ const styles = StyleSheet.create({
     width: 52,
     height: 52,
     borderRadius: 26,
-    backgroundColor: Colors.primary, // Cam thương hiệu đặc trưng
+    backgroundColor: Colors.primary, // Màu cam thương hiệu chủ đạo
     justifyContent: 'center',
     alignItems: 'center',
   },
@@ -489,7 +491,7 @@ const styles = StyleSheet.create({
     marginBottom: 20,
   },
   btnRegister: {
-    backgroundColor: Colors.primary, // Cam đặc trưng thương hiệu
+    backgroundColor: Colors.primary,
     height: 52,
     borderRadius: 26,
     justifyContent: 'center',
@@ -502,7 +504,7 @@ const styles = StyleSheet.create({
     fontWeight: '700',
   },
   btnLogin: {
-    backgroundColor: '#EFEFEF', // Xám sáng phong cách Pinterest
+    backgroundColor: '#EFEFEF', // Màu xám nhẹ thanh lịch
     height: 52,
     borderRadius: 26,
     justifyContent: 'center',
@@ -528,7 +530,7 @@ const styles = StyleSheet.create({
   },
 
   // -------------------------------------------------------------------------
-  // MODAL BOTTOM SHEET STYLES
+  // ĐỊNH DẠNG MODAL BOTTOM SHEET ĐĂNG NHẬP
   // -------------------------------------------------------------------------
   modalOverlay: {
     flex: 1,
@@ -629,38 +631,6 @@ const styles = StyleSheet.create({
     color: '#FFFFFF',
     fontSize: 16,
     fontWeight: '700',
-  },
-  quickFillContainer: {
-    backgroundColor: '#F1F5F9',
-    borderRadius: 14,
-    padding: 12,
-    marginBottom: 16,
-  },
-  quickFillLabel: {
-    fontSize: 11,
-    fontWeight: '600',
-    color: '#475569',
-    marginBottom: 8,
-  },
-  quickFillRow: {
-    flexDirection: 'row',
-    gap: 8,
-  },
-  quickFillChip: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    backgroundColor: '#FFFFFF',
-    paddingVertical: 6,
-    paddingHorizontal: 10,
-    borderRadius: 12,
-    borderWidth: 1,
-    borderColor: '#E2E8F0',
-    gap: 5,
-  },
-  quickFillChipText: {
-    fontSize: 12,
-    fontWeight: '600',
-    color: '#0F172A',
   },
   switchAuthRow: {
     flexDirection: 'row',
