@@ -1,14 +1,17 @@
 """
 main.py
-Entry point – Khởi chạy toàn bộ Edge Gateway trên Orange Pi 5.
+Entry point tối giản – Khởi chạy Edge Gateway trên Orange Pi 5.
 
-Pipeline:
-1. Load config
-2. Khởi tạo tất cả drivers (Camera, BLE, Thermal)
-3. Khởi tạo AI models (PoseDetector, SoundClassifier)
-4. Kết nối MQTT
-5. Chạy vòng lặp inference song song (asyncio + threads)
-6. Phát alert qua MQTT & loa khi Decision Matrix xác nhận
+Trách nhiệm DUY NHẤT của file này:
+  1. Thiết lập sys.path và logging
+  2. Load config từ YAML + environment variables
+  3. Khởi tạo EdgeApp và chạy
+
+Toàn bộ business logic đã được chuyển sang:
+  - src/app.py          : EdgeApp orchestrator
+  - src/services/alert_dispatcher.py : Alert fan-out
+  - src/drivers/base.py : BaseDriver interface
+  - src/ai/base.py      : BaseAIModel interface
 """
 
 import asyncio
@@ -16,7 +19,6 @@ import logging
 import os
 import signal
 import sys
-import time
 from pathlib import Path
 
 # Thêm thư mục gốc của edge vào sys.path để hỗ trợ chạy trực tiếp trên mọi OS
@@ -24,17 +26,7 @@ sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
 
 import yaml
 
-# ---- Edge Modules ----
-from src.ai.audio.sound_classifier import AudioAlertEvent, SoundClassifier
-from src.ai.vision.pose_detector import PoseDetector
-from src.drivers.ble_band import BLEBandDriver, VitalReading
-from src.drivers.camera import CameraDriver
-from src.drivers.thermal_amg8833 import ThermalAMG8833Driver
-from src.fusion.decision_matrix import DecisionMatrix, SensorSignals
-from src.fusion.ring_buffer import VideoRingBuffer
-from src.services.local_speaker import LocalSpeaker
-from src.services.local_stream import RTSPStreamer
-from src.services.mqtt_client import MQTTClient
+from src.app import EdgeApp
 
 # ---------------------------------------------------------------------------
 # Logging
@@ -53,13 +45,12 @@ logger = logging.getLogger("EdgeGateway")
 # ---------------------------------------------------------------------------
 
 def load_config(path: str = "config/config.yaml") -> dict:
-    """Load YAML config. Override with environment variables nếu có."""
+    """Load YAML config và override bằng environment variables nhạy cảm."""
     config_path = Path(__file__).parent.parent / path
     with open(config_path, "r", encoding="utf-8") as f:
         loaded = yaml.safe_load(f)
     cfg: dict = loaded if isinstance(loaded, dict) else {}
 
-    # Override nhạy cảm từ environment
     mqtt_cfg = cfg.setdefault("mqtt", {})
     if isinstance(mqtt_cfg, dict):
         mqtt_cfg["password"] = os.environ.get("MQTT_PASSWORD", mqtt_cfg.get("password", ""))
@@ -69,271 +60,25 @@ def load_config(path: str = "config/config.yaml") -> dict:
 
 
 # ---------------------------------------------------------------------------
-# EdgeGateway Application
-# ---------------------------------------------------------------------------
-
-class EdgeGateway:
-    """Orchestrator chính của Edge Hub."""
-
-    def __init__(self, config: dict):
-        self.config = config
-        self._shutdown_event = asyncio.Event()
-
-        # Shared sensor state
-        self._signals = SensorSignals()
-        self._last_motion_time: float = time.time()
-
-        # ---- Drivers ----
-        self.camera    = CameraDriver(config["camera"])
-        self.thermal   = ThermalAMG8833Driver(config["thermal"])
-        self.ble_band  = BLEBandDriver(config["ble"])
-
-        # ---- AI ----
-        self.pose_detector    = PoseDetector(config["ai"]["vision"])
-        self.sound_classifier = SoundClassifier(config["ai"]["audio"])
-
-        # ---- Fusion ----
-        # Merge thresholds vào config cho DecisionMatrix
-        fusion_cfg = {**config["fusion"], "thresholds": config["thresholds"]}
-        self.decision_matrix = DecisionMatrix(fusion_cfg)
-
-        # ---- Ring Buffer ----
-        fps = config["camera"]["fps"]
-        self.ring_buffer = VideoRingBuffer(
-            duration_sec=config["fusion"]["ring_buffer_duration_sec"],
-            fps=fps,
-        )
-
-        # ---- Services ----
-        self.mqtt_client = MQTTClient(config["mqtt"])
-        self.speaker     = LocalSpeaker(config["speaker"])
-        self.rtsp_stream = RTSPStreamer({
-            **config["streaming"],
-            "fps": fps,
-        })
-
-    # ------------------------------------------------------------------
-    # Start / Stop
-    # ------------------------------------------------------------------
-
-    async def start(self) -> None:
-        """Khởi động toàn bộ Edge Gateway."""
-        logger.info("=== Edge Gateway đang khởi động ===")
-
-        # Khởi tạo phần cứng
-        self.camera.start()
-        self.thermal.initialize()
-        self.pose_detector.load_model()
-        self.sound_classifier.load_model()
-        self.mqtt_client.connect()
-
-        # Khởi động RTSP stream
-        if self.config["streaming"]["enabled"]:
-            self.rtsp_stream.start(
-                self.config["camera"]["resolution"]["width"],
-                self.config["camera"]["resolution"]["height"],
-            )
-
-        # Chạy các task song song
-        await asyncio.gather(
-            self._vision_loop(),
-            self._thermal_loop(),
-            self._ble_loop(),
-            self._heartbeat_loop(),
-            self.speaker.run_scheduled_reminders(
-                self.config["speaker"].get("reminder_schedule", [])
-            ),
-        )
-
-    async def stop(self) -> None:
-        """Tắt toàn bộ Edge Gateway một cách sạch sẽ."""
-        logger.info("=== Edge Gateway đang dừng ===")
-        self._shutdown_event.set()
-        self.camera.stop()
-        self.mqtt_client.disconnect()
-        self.rtsp_stream.stop()
-        self.pose_detector.release()
-        await self.ble_band.disconnect()
-        self.thermal.close()
-        logger.info("=== Edge Gateway đã dừng ===")
-
-    # ------------------------------------------------------------------
-    # Main Loops
-    # ------------------------------------------------------------------
-
-    async def _vision_loop(self) -> None:
-        """Vòng lặp chính: Đọc frame → Inference → Decision."""
-        logger.info("[Vision] Loop bắt đầu.")
-        fps = self.config["camera"]["fps"]
-        interval = 1.0 / fps
-
-        while not self._shutdown_event.is_set():
-            frame = self.camera.get_latest_frame()
-            if frame is None:
-                await asyncio.sleep(interval)
-                continue
-
-            # Lưu vào ring buffer
-            self.ring_buffer.push(frame)
-
-            # Chạy pose detection và tracking trong thread pool
-            result = await asyncio.get_event_loop().run_in_executor(
-                None, self.pose_detector.detect, frame
-            )
-
-            # Đẩy lên RTSP stream (sử dụng frame đã làm mờ mặt nếu bật quyền riêng tư)
-            if self.config["streaming"]["enabled"]:
-                stream_frame = result.anonymized_frame if result.anonymized_frame is not None else frame
-                self.rtsp_stream.push_frame(stream_frame)
-
-            # Cập nhật signals đa cảm biến
-            self._signals.fall_detected_camera       = result.is_fall_detected
-            self._signals.immobility_detected_camera = result.is_immobile_detected
-            self._signals.fall_confidence            = result.confidence
-            self._signals.person_count               = result.person_count
-
-            if result.person_count > 0:
-                self._last_motion_time = time.time()
-                self._signals.last_motion_time = self._last_motion_time
-
-            # Publish telemetry MQTT kèm thông tin tracking & sinh hoạt thường nhật (ADL)
-            telemetry_data = {
-                "person_count": result.person_count,
-                "fall_detected": result.is_fall_detected,
-                "immobile_detected": result.is_immobile_detected,
-                "confidence": round(result.confidence, 2),
-            }
-            if result.tracks:
-                primary = result.tracks[0]
-                telemetry_data["primary_activity"] = getattr(
-                    primary.posture_state, "value", str(primary.posture_state)
-                )
-                telemetry_data["adl_stats"] = {
-                    "activity": getattr(primary.posture_state, "value", str(primary.posture_state)),
-                    "sitting_duration_sec": round(primary.adl_stats.sitting_duration_sec, 1),
-                    "standing_duration_sec": round(primary.adl_stats.standing_duration_sec, 1),
-                    "lying_duration_sec": round(primary.adl_stats.lying_duration_sec, 1),
-                    "drinking_count": primary.adl_stats.drinking_count,
-                    "sedentary_warning": primary.adl_stats.sedentary_warning,
-                }
-                telemetry_data["tracks"] = [
-                    {
-                        "track_id": t.track_id,
-                        "state": getattr(t.posture_state, "value", str(t.posture_state)),
-                        "activity_duration_sec": round(time.time() - t.state_enter_time, 1),
-                        "sedentary_warning": t.adl_stats.sedentary_warning,
-                    }
-                    for t in result.tracks
-                ]
-            self.mqtt_client.publish_telemetry(telemetry_data)
-
-            # Đánh giá Decision Matrix
-            await self._evaluate_and_alert()
-
-            await asyncio.sleep(interval)
-
-
-    async def _thermal_loop(self) -> None:
-        """Vòng lặp đọc cảm biến nhiệt AMG8833."""
-        interval = self.config["thermal"]["poll_interval_sec"]
-        while not self._shutdown_event.is_set():
-            grid, max_temp = self.thermal.read_thermal_grid()
-            if max_temp is not None:
-                self._signals.max_skin_temp = max_temp
-                self.mqtt_client.publish_telemetry({"skin_temp_max": max_temp})
-            await asyncio.sleep(interval)
-
-    async def _ble_loop(self) -> None:
-        """Vòng lặp kết nối BLE và đọc HR / SpO2."""
-        if not self.config["ble"]["enabled"]:
-            return
-
-        def on_vital(reading: VitalReading):
-            self._signals.heart_rate = reading.heart_rate
-            self._signals.spo2       = reading.spo2
-            self.mqtt_client.publish_telemetry({
-                "heart_rate": reading.heart_rate,
-                "spo2":       reading.spo2,
-            })
-
-        while not self._shutdown_event.is_set():
-            connected = await self.ble_band.connect()
-            if connected:
-                await self.ble_band.start_notifications(on_vital)
-            else:
-                await asyncio.sleep(
-                    self.config["ble"]["reconnect_interval_sec"]
-                )
-
-    async def _heartbeat_loop(self) -> None:
-        """Gửi heartbeat lên cloud mỗi 60 giây."""
-        while not self._shutdown_event.is_set():
-            self.mqtt_client.publish_heartbeat()
-            await asyncio.sleep(60)
-
-    # ------------------------------------------------------------------
-    # Alert Handler
-    # ------------------------------------------------------------------
-
-    async def _evaluate_and_alert(self) -> None:
-        """Gọi DecisionMatrix, nếu có alert thì xử lý."""
-        decision = self.decision_matrix.evaluate(self._signals)
-        if decision is None:
-            return
-
-        logger.warning(
-            "[ALERT] %s [%s] – %s",
-            decision.alert_type.value,
-            decision.alert_level.value,
-            decision.message_vi,
-        )
-
-        # Lưu video clip bằng chứng (5s) và 3 ảnh snapshot (-3s, -1.5s, 0s)
-        incident_id = int(time.time())
-        clip_path = f"/tmp/incident_{incident_id}.mp4"
-        self.ring_buffer.save_clip(clip_path, pre_event_sec=5.0)
-        snapshot_paths = self.ring_buffer.save_incident_snapshots(f"/tmp/incident_{incident_id}")
-
-        # Gửi alert MQTT kèm bằng chứng
-        self.mqtt_client.publish_alert({
-            "alert_type":  decision.alert_type.value,
-            "alert_level": decision.alert_level.value,
-            "message":     decision.message_vi,
-            "confidence":  decision.confidence,
-            "sources":     decision.sources,
-            "incident_id": incident_id,
-            "snapshots":   snapshot_paths,
-            "clip_path":   clip_path,
-        })
-
-        # Phát cảnh báo qua loa
-
-        asyncio.ensure_future(self.speaker.speak(decision.message_vi))
-        if decision.alert_level.value in ("HIGH", "CRITICAL"):
-            asyncio.ensure_future(self.speaker.play_alert_sound())
-
-
-# ---------------------------------------------------------------------------
 # Entry Point
 # ---------------------------------------------------------------------------
 
-async def main():
+async def main() -> None:
     config = load_config()
+    app = EdgeApp(config)
 
-    gateway = EdgeGateway(config)
-
-    # Graceful shutdown (Unix only, Windows fallback to KeyboardInterrupt)
+    # Graceful shutdown (Unix: SIGINT/SIGTERM | Windows: KeyboardInterrupt)
     loop = asyncio.get_event_loop()
     for sig in (signal.SIGINT, signal.SIGTERM):
         try:
-            loop.add_signal_handler(sig, lambda: asyncio.ensure_future(gateway.stop()))
+            loop.add_signal_handler(sig, lambda: asyncio.ensure_future(app.stop()))
         except (NotImplementedError, AttributeError):
             pass
 
     try:
-        await gateway.start()
+        await app.start()
     except KeyboardInterrupt:
-        await gateway.stop()
+        await app.stop()
 
 
 if __name__ == "__main__":

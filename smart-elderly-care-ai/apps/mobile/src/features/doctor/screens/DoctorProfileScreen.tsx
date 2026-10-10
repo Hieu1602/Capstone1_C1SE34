@@ -2,7 +2,21 @@
 // Hồ sơ Bác sĩ gia đình, thông tin chuyên môn, đổi ảnh đại diện & đổi mật khẩu
 
 import React, { useState } from 'react';
-import { View, StyleSheet, ScrollView, TouchableOpacity, StatusBar, Switch, Modal, Image, KeyboardAvoidingView, Platform } from 'react-native';
+import {
+  View,
+  Text,
+  StyleSheet,
+  ScrollView,
+  TouchableOpacity,
+  Alert,
+  StatusBar,
+  Switch,
+  Modal,
+  TextInput,
+  Image,
+  KeyboardAvoidingView,
+  Platform,
+} from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
 import * as ImagePicker from 'expo-image-picker';
@@ -10,22 +24,21 @@ import * as ImagePicker from 'expo-image-picker';
 import { Colors } from '../../../theme/colors';
 import { useTheme } from '../../../store/useThemeStore';
 import { useAuthStore } from '../../../store/useAuthStore';
-import { LocalizedAlert, LocalizedText, LocalizedTextInput } from '../../../i18n/LocalizedComponents';
+import AsyncStorage from '@react-native-async-storage/async-storage';
 
-
-export default function DoctorProfileScreen() {
+export default function DoctorProfileScreen({ navigation }: any) {
   const insets = useSafeAreaInsets();
   const { isDarkMode, colors, toggleTheme } = useTheme();
   const { userName, userPhone, logout, toggleViewRole } = useAuthStore();
 
   // Thông tin chuyên môn bác sĩ
   const [docInfo, setDocInfo] = useState({
-    name: userName || 'BS. Trần Văn Minh',
+    name: userName || 'BSCKII. Nguyễn Văn Minh',
     degree: 'Thạc sĩ, Bác sĩ Chuyên khoa II',
     specialty: 'Tim mạch Can thiệp & Lão khoa',
-    hospital: 'Bệnh viện Đa khoa Đà Nẵng',
+    hospital: 'Bệnh viện Lão khoa TW / BV Đà Nẵng',
     department: 'Khoa Hồi sức Tim mạch & Lão khoa',
-    phone: userPhone || '0905 111 222',
+    phone: userPhone || '0905888999',
   });
 
   // Ảnh đại diện bác sĩ
@@ -57,7 +70,7 @@ export default function DoctorProfileScreen() {
     try {
       const permission = await ImagePicker.requestMediaLibraryPermissionsAsync();
       if (!permission.granted) {
-        LocalizedAlert.alert('Quyền bị từ chối', 'Ứng dụng cần quyền truy cập thư viện để chọn ảnh đại diện.');
+        Alert.alert('Quyền bị từ chối', 'Ứng dụng cần quyền truy cập thư viện để chọn ảnh đại diện.');
         return;
       }
       const result = await ImagePicker.launchImageLibraryAsync({
@@ -72,14 +85,14 @@ export default function DoctorProfileScreen() {
         setAvatarUri(selectedUri);
       }
     } catch {
-      LocalizedAlert.alert('Lỗi', 'Không thể chọn ảnh từ thư viện.');
+      Alert.alert('Lỗi', 'Không thể chọn ảnh từ thư viện.');
     }
   };
 
   // Lưu sửa thông tin
   const handleSaveProfile = () => {
     if (!editName.trim()) {
-      LocalizedAlert.alert('Lỗi', 'Vui lòng nhập họ tên bác sĩ.');
+      Alert.alert('Lỗi', 'Vui lòng nhập họ tên bác sĩ.');
       return;
     }
     setDocInfo({
@@ -94,28 +107,28 @@ export default function DoctorProfileScreen() {
       setAvatarUri(editAvatarUri);
     }
     setEditModalVisible(false);
-    LocalizedAlert.alert('Thành công', 'Đã cập nhật hồ sơ chuyên môn Bác sĩ thành công.');
+    Alert.alert('Thành công', 'Đã cập nhật hồ sơ chuyên môn Bác sĩ thành công.');
   };
 
   // Lưu đổi mật khẩu
   const handleSavePassword = () => {
     if (!oldPassword || !newPassword) {
-      LocalizedAlert.alert('Lỗi', 'Vui lòng nhập đầy đủ mật khẩu cũ và mới.');
+      Alert.alert('Lỗi', 'Vui lòng nhập đầy đủ mật khẩu cũ và mới.');
       return;
     }
     if (newPassword.length < 6) {
-      LocalizedAlert.alert('Lỗi', 'Mật khẩu mới phải từ 6 ký tự trở lên.');
+      Alert.alert('Lỗi', 'Mật khẩu mới phải từ 6 ký tự trở lên.');
       return;
     }
     if (newPassword !== confirmPassword) {
-      LocalizedAlert.alert('Lỗi', 'Mật khẩu xác nhận không trùng khớp.');
+      Alert.alert('Lỗi', 'Mật khẩu xác nhận không trùng khớp.');
       return;
     }
     setPasswordModalVisible(false);
     setOldPassword('');
     setNewPassword('');
     setConfirmPassword('');
-    LocalizedAlert.alert('Thành công', 'Đã thay đổi mật khẩu tài khoản Bác sĩ an toàn.');
+    Alert.alert('Thành công', 'Đã thay đổi mật khẩu tài khoản Bác sĩ an toàn.');
   };
 
   const handleLogout = () => {
@@ -123,12 +136,32 @@ export default function DoctorProfileScreen() {
   };
 
   const performLogout = async () => {
-    setLogoutModalVisible(false);
-    logout();
     try {
+      setLogoutModalVisible(false);
+      logout();
       await useAuthStore.persist?.clearStorage?.();
+      await AsyncStorage.multiRemove([
+        'auth-storage',
+        'auth_token',
+        'token',
+        'user_role',
+        'user_info',
+      ]);
     } catch (e) {
-      console.error('Error clearing auth storage:', e);
+      console.warn('Lỗi khi đăng xuất tài khoản Bác sĩ:', e);
+    }
+
+    try {
+      if (navigation?.getParent()) {
+        navigation.getParent()?.reset({
+          index: 0,
+          routes: [{ name: 'Login' }],
+        });
+      } else if (navigation?.navigate) {
+        navigation.navigate('Login');
+      }
+    } catch (err) {
+      console.warn('Lỗi điều hướng sau đăng xuất:', err);
     }
   };
 
@@ -148,7 +181,7 @@ export default function DoctorProfileScreen() {
         ]}
       >
         <View style={styles.headerRow}>
-          <LocalizedText style={[styles.headerTitle, { color: colors.textPrimary }]}>Hồ Sơ Bác Sĩ</LocalizedText>
+          <Text style={[styles.headerTitle, { color: colors.textPrimary }]}>Hồ Sơ Bác Sĩ</Text>
           <TouchableOpacity
             style={[styles.editHeaderBtn, { backgroundColor: isDarkMode ? '#334155' : '#E0F2FE' }]}
             onPress={() => {
@@ -163,7 +196,7 @@ export default function DoctorProfileScreen() {
             }}
           >
             <Ionicons name="pencil" size={15} color="#0284C7" style={{ marginRight: 4 }} />
-            <LocalizedText style={styles.editHeaderBtnText}>Chỉnh sửa</LocalizedText>
+            <Text style={styles.editHeaderBtnText}>Chỉnh sửa</Text>
           </TouchableOpacity>
         </View>
       </View>
@@ -194,26 +227,26 @@ export default function DoctorProfileScreen() {
             </View>
           </TouchableOpacity>
 
-          <LocalizedText style={[styles.docName, { color: colors.textPrimary }]}>{docInfo.name}</LocalizedText>
-          <LocalizedText style={styles.docDegree}>{docInfo.degree}</LocalizedText>
-          <LocalizedText style={styles.docSpecialty}>Khoa: {docInfo.specialty}</LocalizedText>
+          <Text style={[styles.docName, { color: colors.textPrimary }]}>{docInfo.name}</Text>
+          <Text style={styles.docDegree}>{docInfo.degree}</Text>
+          <Text style={styles.docSpecialty}>Khoa: {docInfo.specialty}</Text>
 
           <View style={[styles.hospitalBadge, { backgroundColor: isDarkMode ? '#334155' : '#F1F5F9' }]}>
             <Ionicons name="business" size={13} color="#0284C7" style={{ marginRight: 5 }} />
-            <LocalizedText style={[styles.hospitalBadgeText, { color: isDarkMode ? '#CBD5E1' : '#475569' }]} numberOfLines={1}>
+            <Text style={[styles.hospitalBadgeText, { color: isDarkMode ? '#CBD5E1' : '#475569' }]} numberOfLines={1}>
               {docInfo.hospital}
-            </LocalizedText>
+            </Text>
           </View>
 
           {/* 2 HỘP CHỈ SỐ HOẠT ĐỘNG Y KHOA (ĐÃ BỎ 18 ĐÃ XỬ TRÍ VÀ 98.5% TUÂN THỦ) */}
           <View style={styles.statsGrid}>
             <View style={[styles.statBox, { backgroundColor: isDarkMode ? '#0F172A' : '#F8FAFC' }]}>
-              <LocalizedText style={[styles.statNum, { color: '#0284C7' }]}>5</LocalizedText>
-              <LocalizedText style={styles.statLabel}>Bệnh nhân</LocalizedText>
+              <Text style={[styles.statNum, { color: '#0284C7' }]}>5</Text>
+              <Text style={styles.statLabel}>Bệnh nhân</Text>
             </View>
             <View style={[styles.statBox, { backgroundColor: isDarkMode ? '#0F172A' : '#F8FAFC' }]}>
-              <LocalizedText style={[styles.statNum, { color: '#8B5CF6' }]}>3</LocalizedText>
-              <LocalizedText style={styles.statLabel}>Lịch khám</LocalizedText>
+              <Text style={[styles.statNum, { color: '#8B5CF6' }]}>3</Text>
+              <Text style={styles.statLabel}>Lịch khám</Text>
             </View>
           </View>
         </View>
@@ -225,18 +258,18 @@ export default function DoctorProfileScreen() {
             { backgroundColor: isDarkMode ? '#1E293B' : '#FFFFFF', borderColor: colors.border },
           ]}
         >
-          <LocalizedText style={[styles.groupTitle, { color: isDarkMode ? '#94A3B8' : '#64748B' }]}>
+          <Text style={[styles.groupTitle, { color: isDarkMode ? '#94A3B8' : '#64748B' }]}>
             TIỆN ÍCH LÂM SÀNG & HỆ THỐNG
-          </LocalizedText>
+          </Text>
 
           {/* Chế độ Sáng / Tối */}
           <View style={styles.menuItem}>
             <View style={[styles.menuIconBox, { backgroundColor: '#F3E8FF' }]}>
               <Ionicons name={isDarkMode ? 'moon' : 'sunny'} size={17} color="#7C3AED" />
             </View>
-            <LocalizedText style={[styles.menuItemText, { color: colors.textPrimary }]}>
+            <Text style={[styles.menuItemText, { color: colors.textPrimary }]}>
               Chế độ {isDarkMode ? 'Giao diện Tối' : 'Giao diện Sáng'}
-            </LocalizedText>
+            </Text>
             <Switch
               value={isDarkMode}
               onValueChange={toggleTheme}
@@ -254,9 +287,9 @@ export default function DoctorProfileScreen() {
             <View style={[styles.menuIconBox, { backgroundColor: '#FEF3C7' }]}>
               <Ionicons name="key" size={17} color="#D97706" />
             </View>
-            <LocalizedText style={[styles.menuItemText, { color: colors.textPrimary }]}>
+            <Text style={[styles.menuItemText, { color: colors.textPrimary }]}>
               Đổi mật khẩu tài khoản Bác sĩ
-            </LocalizedText>
+            </Text>
             <Ionicons name="chevron-forward" size={16} color="#94A3B8" />
           </TouchableOpacity>
 
@@ -269,27 +302,27 @@ export default function DoctorProfileScreen() {
             <View style={[styles.menuIconBox, { backgroundColor: '#E0F2FE' }]}>
               <Ionicons name="swap-horizontal" size={17} color="#0284C7" />
             </View>
-            <LocalizedText style={[styles.menuItemText, { color: colors.textPrimary }]}>
+            <Text style={[styles.menuItemText, { color: colors.textPrimary }]}>
               Chuyển sang Giao diện Người thân
-            </LocalizedText>
+            </Text>
             <Ionicons name="chevron-forward" size={16} color="#94A3B8" />
           </TouchableOpacity>
         </View>
 
         {/* THÔNG TIN PHIÊN BẢN */}
         <View style={styles.versionBox}>
-          <LocalizedText style={[styles.versionText, { color: isDarkMode ? '#64748B' : '#94A3B8' }]}>
+          <Text style={[styles.versionText, { color: isDarkMode ? '#64748B' : '#94A3B8' }]}>
             Smart Elderly Care AI Hub • Phiên bản Bác sĩ 2.4.0
-          </LocalizedText>
-          <LocalizedText style={[styles.versionSub, { color: isDarkMode ? '#475569' : '#CBD5E1' }]}>
+          </Text>
+          <Text style={[styles.versionSub, { color: isDarkMode ? '#475569' : '#CBD5E1' }]}>
             Hệ thống Giám sát & Chăm sóc Y tế Người cao tuổi
-          </LocalizedText>
+          </Text>
         </View>
 
         {/* Nút Đăng xuất */}
         <TouchableOpacity style={styles.logoutBtn} onPress={handleLogout} activeOpacity={0.85}>
           <Ionicons name="log-out-outline" size={18} color="#DC2626" style={{ marginRight: 6 }} />
-          <LocalizedText style={styles.logoutBtnText}>Đăng xuất khỏi tài khoản Bác sĩ</LocalizedText>
+          <Text style={styles.logoutBtnText}>Đăng xuất khỏi tài khoản Bác sĩ</Text>
         </TouchableOpacity>
       </ScrollView>
 
@@ -305,9 +338,9 @@ export default function DoctorProfileScreen() {
             <View style={styles.modalHeader}>
               <View style={{ flexDirection: 'row', alignItems: 'center' }}>
                 <Ionicons name="person-circle" size={22} color={Colors.primary} style={{ marginRight: 6 }} />
-                <LocalizedText style={[styles.modalTitle, { color: colors.textPrimary }]}>
+                <Text style={[styles.modalTitle, { color: colors.textPrimary }]}>
                   Sửa Hồ Sơ Bác Sĩ
-                </LocalizedText>
+                </Text>
               </View>
               <TouchableOpacity onPress={() => setEditModalVisible(false)}>
                 <Ionicons name="close" size={24} color="#94A3B8" />
@@ -328,12 +361,12 @@ export default function DoctorProfileScreen() {
                 </View>
                 <TouchableOpacity style={styles.btnPickImage} onPress={pickImage} activeOpacity={0.8}>
                   <Ionicons name="camera-outline" size={16} color="#0284C7" style={{ marginRight: 6 }} />
-                  <LocalizedText style={styles.btnPickImageText}>Chọn / Đổi ảnh đại diện</LocalizedText>
+                  <Text style={styles.btnPickImageText}>Chọn / Đổi ảnh đại diện</Text>
                 </TouchableOpacity>
               </View>
 
-              <LocalizedText style={styles.fieldLabel}>Họ và tên Bác sĩ (*)</LocalizedText>
-              <LocalizedTextInput
+              <Text style={styles.fieldLabel}>Họ và tên Bác sĩ (*)</Text>
+              <TextInput
                 style={[styles.inputField, { color: colors.textPrimary, borderColor: colors.border }]}
                 value={editName}
                 onChangeText={setEditName}
@@ -341,8 +374,8 @@ export default function DoctorProfileScreen() {
                 placeholderTextColor="#94A3B8"
               />
 
-              <LocalizedText style={styles.fieldLabel}>Học hàm, học vị (*)</LocalizedText>
-              <LocalizedTextInput
+              <Text style={styles.fieldLabel}>Học hàm, học vị (*)</Text>
+              <TextInput
                 style={[styles.inputField, { color: colors.textPrimary, borderColor: colors.border }]}
                 value={editDegree}
                 onChangeText={setEditDegree}
@@ -350,8 +383,8 @@ export default function DoctorProfileScreen() {
                 placeholderTextColor="#94A3B8"
               />
 
-              <LocalizedText style={styles.fieldLabel}>Chuyên khoa</LocalizedText>
-              <LocalizedTextInput
+              <Text style={styles.fieldLabel}>Chuyên khoa</Text>
+              <TextInput
                 style={[styles.inputField, { color: colors.textPrimary, borderColor: colors.border }]}
                 value={editSpecialty}
                 onChangeText={setEditSpecialty}
@@ -359,8 +392,8 @@ export default function DoctorProfileScreen() {
                 placeholderTextColor="#94A3B8"
               />
 
-              <LocalizedText style={styles.fieldLabel}>Bệnh viện / Cơ sở y tế</LocalizedText>
-              <LocalizedTextInput
+              <Text style={styles.fieldLabel}>Bệnh viện / Cơ sở y tế</Text>
+              <TextInput
                 style={[styles.inputField, { color: colors.textPrimary, borderColor: colors.border }]}
                 value={editHospital}
                 onChangeText={setEditHospital}
@@ -368,8 +401,8 @@ export default function DoctorProfileScreen() {
                 placeholderTextColor="#94A3B8"
               />
 
-              <LocalizedText style={styles.fieldLabel}>Khoa / Phòng công tác</LocalizedText>
-              <LocalizedTextInput
+              <Text style={styles.fieldLabel}>Khoa / Phòng công tác</Text>
+              <TextInput
                 style={[styles.inputField, { color: colors.textPrimary, borderColor: colors.border }]}
                 value={editDepartment}
                 onChangeText={setEditDepartment}
@@ -377,8 +410,8 @@ export default function DoctorProfileScreen() {
                 placeholderTextColor="#94A3B8"
               />
 
-              <LocalizedText style={styles.fieldLabel}>Số điện thoại liên hệ (*)</LocalizedText>
-              <LocalizedTextInput
+              <Text style={styles.fieldLabel}>Số điện thoại liên hệ (*)</Text>
+              <TextInput
                 style={[styles.inputField, { color: colors.textPrimary, borderColor: colors.border }]}
                 value={editPhone}
                 onChangeText={setEditPhone}
@@ -393,13 +426,13 @@ export default function DoctorProfileScreen() {
                 style={[styles.modalCancelBtn, { borderColor: colors.border }]}
                 onPress={() => setEditModalVisible(false)}
               >
-                <LocalizedText style={{ fontSize: 13, fontWeight: '700', color: isDarkMode ? '#CBD5E1' : '#64748B' }}>Hủy</LocalizedText>
+                <Text style={{ fontSize: 13, fontWeight: '700', color: isDarkMode ? '#CBD5E1' : '#64748B' }}>Hủy</Text>
               </TouchableOpacity>
               <TouchableOpacity
                 style={[styles.modalSaveBtn, { backgroundColor: Colors.primary }]}
                 onPress={handleSaveProfile}
               >
-                <LocalizedText style={{ color: '#FFFFFF', fontSize: 13, fontWeight: '700' }}>Lưu Hồ Sơ</LocalizedText>
+                <Text style={{ color: '#FFFFFF', fontSize: 13, fontWeight: '700' }}>Lưu Hồ Sơ</Text>
               </TouchableOpacity>
             </View>
           </View>
@@ -418,9 +451,9 @@ export default function DoctorProfileScreen() {
             <View style={styles.modalHeader}>
               <View style={{ flexDirection: 'row', alignItems: 'center' }}>
                 <Ionicons name="key" size={20} color="#D97706" style={{ marginRight: 6 }} />
-                <LocalizedText style={[styles.modalTitle, { color: colors.textPrimary }]}>
+                <Text style={[styles.modalTitle, { color: colors.textPrimary }]}>
                   Đổi Mật Khẩu Bác Sĩ
-                </LocalizedText>
+                </Text>
               </View>
               <TouchableOpacity onPress={() => setPasswordModalVisible(false)}>
                 <Ionicons name="close" size={24} color="#94A3B8" />
@@ -428,8 +461,8 @@ export default function DoctorProfileScreen() {
             </View>
 
             <View style={{ marginVertical: 10 }}>
-              <LocalizedText style={styles.fieldLabel}>Mật khẩu hiện tại (*)</LocalizedText>
-              <LocalizedTextInput
+              <Text style={styles.fieldLabel}>Mật khẩu hiện tại (*)</Text>
+              <TextInput
                 style={[styles.inputField, { color: colors.textPrimary, borderColor: colors.border }]}
                 secureTextEntry
                 value={oldPassword}
@@ -438,8 +471,8 @@ export default function DoctorProfileScreen() {
                 placeholderTextColor="#94A3B8"
               />
 
-              <LocalizedText style={styles.fieldLabel}>Mật khẩu mới (*)</LocalizedText>
-              <LocalizedTextInput
+              <Text style={styles.fieldLabel}>Mật khẩu mới (*)</Text>
+              <TextInput
                 style={[styles.inputField, { color: colors.textPrimary, borderColor: colors.border }]}
                 secureTextEntry
                 value={newPassword}
@@ -448,8 +481,8 @@ export default function DoctorProfileScreen() {
                 placeholderTextColor="#94A3B8"
               />
 
-              <LocalizedText style={styles.fieldLabel}>Xác nhận mật khẩu mới (*)</LocalizedText>
-              <LocalizedTextInput
+              <Text style={styles.fieldLabel}>Xác nhận mật khẩu mới (*)</Text>
+              <TextInput
                 style={[styles.inputField, { color: colors.textPrimary, borderColor: colors.border }]}
                 secureTextEntry
                 value={confirmPassword}
@@ -464,13 +497,13 @@ export default function DoctorProfileScreen() {
                 style={[styles.modalCancelBtn, { borderColor: colors.border }]}
                 onPress={() => setPasswordModalVisible(false)}
               >
-                <LocalizedText style={{ fontSize: 13, fontWeight: '700', color: isDarkMode ? '#CBD5E1' : '#64748B' }}>Hủy</LocalizedText>
+                <Text style={{ fontSize: 13, fontWeight: '700', color: isDarkMode ? '#CBD5E1' : '#64748B' }}>Hủy</Text>
               </TouchableOpacity>
               <TouchableOpacity
                 style={[styles.modalSaveBtn, { backgroundColor: '#D97706' }]}
                 onPress={handleSavePassword}
               >
-                <LocalizedText style={{ color: '#FFFFFF', fontSize: 13, fontWeight: '700' }}>Cập Nhật Mật Khẩu</LocalizedText>
+                <Text style={{ color: '#FFFFFF', fontSize: 13, fontWeight: '700' }}>Cập Nhật Mật Khẩu</Text>
               </TouchableOpacity>
             </View>
           </View>
@@ -480,54 +513,33 @@ export default function DoctorProfileScreen() {
       {/* =================================================================== */}
       {/* MODAL 3: XÁC NHẬN ĐĂNG XUẤT TÀI KHOẢN BÁC SĨ                       */}
       {/* =================================================================== */}
-      <Modal
-        visible={logoutModalVisible}
-        animationType="fade"
-        transparent
-        onRequestClose={() => setLogoutModalVisible(false)}
-      >
-        <View style={styles.modalOverlay}>
-          <View
-            style={[
-              styles.logoutModalBox,
-              {
-                backgroundColor: isDarkMode ? '#1E293B' : '#FFFFFF',
-                borderColor: isDarkMode ? '#334155' : '#E2E8F0',
-              },
-            ]}
-          >
-            <View style={{ flexDirection: 'row', alignItems: 'center', marginBottom: 12 }}>
-              <View style={styles.logoutIconBox}>
-                <Ionicons name="log-out" size={22} color="#DC2626" />
-              </View>
-              <LocalizedText style={[styles.modalTitle, { color: colors.textPrimary, marginLeft: 10, fontSize: 17 }]}>
-                Xác nhận Đăng xuất
-              </LocalizedText>
+      <Modal visible={logoutModalVisible} animationType="fade" transparent onRequestClose={() => setLogoutModalVisible(false)}>
+        <View style={styles.logoutModalOverlay}>
+          <View style={[styles.logoutModalBox, { backgroundColor: isDarkMode ? '#1E293B' : '#FFFFFF' }]}>
+            <View style={styles.logoutModalIconBox}>
+              <Ionicons name="log-out-outline" size={32} color="#DC2626" />
             </View>
-
-            <LocalizedText style={[styles.logoutModalDesc, { color: isDarkMode ? '#94A3B8' : '#64748B' }]}>
-              Bạn có chắc chắn muốn đăng xuất khỏi tài khoản Bác sĩ? Phiên làm việc hiện tại sẽ kết thúc và quay về màn hình đăng nhập.
-            </LocalizedText>
-
-            <View style={styles.modalBtnRow}>
+            <Text style={[styles.logoutModalTitle, { color: colors.textPrimary }]}>
+              Đăng xuất tài khoản Bác sĩ
+            </Text>
+            <Text style={[styles.logoutModalSub, { color: isDarkMode ? '#94A3B8' : '#64748B' }]}>
+              Bạn có chắc chắn muốn đăng xuất khỏi hệ thống? Mọi phiên làm việc và bảo mật hồ sơ bệnh án sẽ được kết thúc.
+            </Text>
+            <View style={styles.logoutModalActions}>
               <TouchableOpacity
-                style={[styles.modalCancelBtn, { borderColor: isDarkMode ? '#475569' : '#CBD5E1' }]}
+                style={[styles.logoutCancelBtn, { borderColor: isDarkMode ? '#334155' : '#E2E8F0' }]}
                 onPress={() => setLogoutModalVisible(false)}
-                activeOpacity={0.7}
-              >
-                <LocalizedText style={{ fontSize: 13, fontWeight: '700', color: isDarkMode ? '#CBD5E1' : '#64748B' }}>
-                  Hủy
-                </LocalizedText>
-              </TouchableOpacity>
-              <TouchableOpacity
-                style={[styles.modalSaveBtn, { backgroundColor: '#DC2626' }]}
-                onPress={performLogout}
                 activeOpacity={0.8}
               >
-                <Ionicons name="log-out-outline" size={16} color="#FFFFFF" style={{ marginRight: 6 }} />
-                <LocalizedText style={{ color: '#FFFFFF', fontSize: 13, fontWeight: '700' }}>
-                  Đăng xuất
-                </LocalizedText>
+                <Text style={[styles.logoutCancelText, { color: isDarkMode ? '#CBD5E1' : '#64748B' }]}>Hủy bỏ</Text>
+              </TouchableOpacity>
+              <TouchableOpacity
+                style={styles.logoutConfirmBtn}
+                onPress={performLogout}
+                activeOpacity={0.85}
+              >
+                <Ionicons name="log-out" size={16} color="#FFFFFF" style={{ marginRight: 6 }} />
+                <Text style={styles.logoutConfirmText}>Đăng xuất ngay</Text>
               </TouchableOpacity>
             </View>
           </View>
@@ -674,33 +686,6 @@ const styles = StyleSheet.create({
   },
   logoutBtnText: { color: '#DC2626', fontSize: 13.5, fontWeight: '700' },
 
-  logoutModalBox: {
-    borderRadius: 16,
-    padding: 20,
-    width: '100%',
-    maxWidth: 380,
-    alignSelf: 'center',
-    borderWidth: 1,
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 4 },
-    shadowOpacity: 0.15,
-    shadowRadius: 12,
-    elevation: 8,
-  },
-  logoutIconBox: {
-    width: 42,
-    height: 42,
-    borderRadius: 21,
-    backgroundColor: '#FEE2E2',
-    justifyContent: 'center',
-    alignItems: 'center',
-  },
-  logoutModalDesc: {
-    fontSize: 14,
-    lineHeight: 20,
-    marginBottom: 16,
-  },
-
   // Modal styles
   modalOverlay: {
     flex: 1,
@@ -800,5 +785,78 @@ const styles = StyleSheet.create({
     paddingVertical: 8,
     paddingHorizontal: 16,
     borderRadius: 8,
+  },
+
+  // ── Logout Modal Styles ──
+  logoutModalOverlay: {
+    flex: 1,
+    backgroundColor: 'rgba(0,0,0,0.6)',
+    justifyContent: 'center',
+    alignItems: 'center',
+    padding: 24,
+  },
+  logoutModalBox: {
+    width: '100%',
+    maxWidth: 420,
+    borderRadius: 20,
+    padding: 24,
+    alignItems: 'center',
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 8 },
+    shadowOpacity: 0.15,
+    shadowRadius: 20,
+    elevation: 10,
+  },
+  logoutModalIconBox: {
+    width: 60,
+    height: 60,
+    borderRadius: 30,
+    backgroundColor: 'rgba(220, 38, 38, 0.12)',
+    alignItems: 'center',
+    justifyContent: 'center',
+    marginBottom: 16,
+  },
+  logoutModalTitle: {
+    fontSize: 18,
+    fontWeight: '700',
+    marginBottom: 8,
+    textAlign: 'center',
+  },
+  logoutModalSub: {
+    fontSize: 13,
+    lineHeight: 20,
+    textAlign: 'center',
+    marginBottom: 20,
+  },
+  logoutModalActions: {
+    flexDirection: 'row',
+    gap: 12,
+    width: '100%',
+  },
+  logoutCancelBtn: {
+    flex: 1,
+    paddingVertical: 12,
+    borderRadius: 12,
+    borderWidth: 1,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  logoutCancelText: {
+    fontSize: 14,
+    fontWeight: '600',
+  },
+  logoutConfirmBtn: {
+    flex: 1,
+    flexDirection: 'row',
+    paddingVertical: 12,
+    borderRadius: 12,
+    backgroundColor: '#DC2626',
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  logoutConfirmText: {
+    color: '#FFFFFF',
+    fontSize: 14,
+    fontWeight: '700',
   },
 });

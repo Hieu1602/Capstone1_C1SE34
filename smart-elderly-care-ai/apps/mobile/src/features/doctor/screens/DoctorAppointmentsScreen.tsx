@@ -174,7 +174,7 @@ export default function DoctorAppointmentsScreen() {
           ...payload,
           id: `apt-${Date.now()}`,
           status: 'UPCOMING',
-          doctor_name: 'BS. Trần Văn Minh',
+          doctor_name: 'BSCKII. Nguyễn Văn Minh',
           created_at: 'Hôm nay',
         };
         setAppointments([newApt, ...appointments]);
