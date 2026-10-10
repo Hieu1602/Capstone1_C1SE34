@@ -1,17 +1,28 @@
-# 🗄️ Thiết Kế Cơ Sở Dữ Liệu - Smart Elderly Care AI
+# 🗄️ Thiết Kế Cơ Sở Dữ Liệu – Smart Elderly Care AI (SECA)
 
-> **Hệ quản trị CSDL:** PostgreSQL 16 + TimescaleDB  
-> **Nhóm thực hiện:** C1SE.34  
-> **File script thực thi:** [`database_schema.sql`](database_schema.sql) hoặc [`backend/database/schema.sql`](../../smart-elderly-care-ai/backend/database/schema.sql)
+> **Dự án tốt nghiệp Capstone 1 – Nhóm C1SE.34**  
+> **Hệ quản trị CSDL:** PostgreSQL 16 + TimescaleDB Extension (Docker)  
+> **Kiến trúc:** Hybrid Relational & Time-Series IoT Data  
+> **Cập nhật:** 2026-09-28  
 
 ---
 
-## 📌 1. Tổng Quan Kiến Trúc CSDL
+## 📌 1. Tổng Quan Kiến Trúc CSDL & Luồng Nghiệp Vụ
 
-Cơ sở dữ liệu của hệ thống **Smart Elderly Care AI** được thiết kế theo mô hình lai (Hybrid Relational & Time-Series):
-1. **Dữ liệu quan hệ (Relational Data):** Quản lý thông tin tài khoản, người cao tuổi, thiết lập ngưỡng y tế, người liên hệ khẩn cấp và phân quyền.
-2. **Dữ liệu chuỗi thời gian (Time-Series Data - TimescaleDB Hypertable):** Quản lý dữ liệu sinh hiệu (`VitalsData`: SpO2, nhịp tim, nhiệt độ) với tần suất cao từ vòng đeo tay BLE. Phân vùng tự động theo ngày (`chunk_time_interval => '1 day'`) giúp tăng tốc độ truy vấn biểu đồ thời gian thực.
-3. **Dữ liệu bán cấu trúc (JSONB):** Lưu trữ kết quả AI Sensor Fusion (`SensorFusionDetails` trong bảng `Incidents`) kết hợp giữa camera YOLOv8, âm thanh YAMNet và cảm biến nhiệt.
+Cơ sở dữ liệu của hệ thống **Smart Elderly Care AI** được thiết kế chuẩn mực theo mô hình quản lý **Nhà thông minh & Chia sẻ gia đình (Smart Home & Family Care Sharing)**:
+
+1. **Người nhà chính (Caregiver - Chủ nhà):**
+   - Đăng ký tài khoản hệ thống bằng **Số điện thoại** cá nhân (ví dụ: `0905123456`).
+   - Khởi tạo căn nhà giám sát (`houses`), tự động đóng vai trò là **Chủ nhà (`OWNER`)** với toàn quyền quản trị (`ADMIN`).
+   - Tạo hồ sơ người cao tuổi (`elderly_profiles`), thiết lập các phòng (`device_groups`), và gán các thiết bị IoT (`devices`: Camera AI, Vòng đeo tay BLE).
+
+2. **Cơ chế Chia Sẻ Căn Nhà (`house_members` - Quan hệ N-N):**
+   - Người nhà chính có thể chia sẻ quyền truy cập căn nhà cho nhiều tài khoản khác:
+     - **Thành viên gia đình (`MEMBER` / `EDIT`):** Con cái, anh chị em cùng theo dõi và nhận thông báo khẩn cấp khi cụ gặp sự cố.
+     - **Bác sĩ y tế gia đình (`DOCTOR` / `VIEW`):** Bác sĩ được cấp quyền xem dữ liệu chuỗi thời gian sinh hiệu (nhịp tim, SpO2) và nhật ký sự cố để chẩn đoán.
+
+3. **Dữ liệu Chuỗi Thời Gian (TimescaleDB Hypertable):**
+   - Bảng `vital_signs` được chuyển đổi thành **Hypertable**, tự động phân vùng theo ngày để ghi nhận liên tục dữ liệu từ vòng đeo tay BLE (nhịp tim, nồng độ oxy trong máu SpO2, nhiệt độ da) với tốc độ cao.
 
 ---
 
@@ -19,172 +30,73 @@ Cơ sở dữ liệu của hệ thống **Smart Elderly Care AI** được thi�
 
 ```mermaid
 erDiagram
-    Users ||--o{ CaregiverElderly : "chăm sóc / theo dõi"
-    ElderlyProfiles ||--o{ CaregiverElderly : "được chăm sóc bởi"
-    ElderlyProfiles ||--|| DeviceSettings : "cấu hình ngưỡng"
-    ElderlyProfiles ||--o{ VitalsData : "đo sinh hiệu (Hypertable)"
-    ElderlyProfiles ||--o{ Incidents : "phát hiện sự cố"
-    Incidents ||--o{ IncidentMedia : "hình ảnh/video 5s"
-    ElderlyProfiles ||--o{ VoiceReminders : "nhắc nhở giọng nói"
-    ElderlyProfiles ||--o{ EmergencyContacts : "danh bạ khẩn cấp"
-
-    Users {
-        int UserID PK
-        string Email UK
-        string PasswordHash
-        string FullName
-        string Phone
-        string Role "Caregiver, Doctor, Admin"
-        timestamptz CreatedAt
-    }
-
-    ElderlyProfiles {
-        int ElderlyID PK
-        string FullName
-        date DateOfBirth
-        string Gender
-        string ResidentialAddress
-        string HubDeviceID UK
-        string MedicalNotes
-        timestamptz CreatedAt
-    }
-
-    CaregiverElderly {
-        int MappingID PK
-        int UserID FK
-        int ElderlyID FK
-        string Relationship
-        boolean IsPrimaryContact
-    }
-
-    DeviceSettings {
-        int SettingID PK
-        int ElderlyID FK,UK
-        smallint HeartRateMin
-        smallint HeartRateMax
-        decimal SpO2Min
-        decimal TempMax
-        int ImmobilityThresholdSec
-        timestamptz UpdatedAt
-    }
-
-    VitalsData {
-        timestamptz RecordedAt PK
-        int ElderlyID PK,FK
-        smallint HeartRate
-        decimal SpO2
-        decimal BodyTemperature
-        boolean IsWearingBand
-    }
-
-    Incidents {
-        int IncidentID PK
-        int ElderlyID FK
-        string IncidentType "Fall, Immobility, SOS..."
-        string SeverityLevel "RedAlert, YellowWarning"
-        timestamptz IncidentTime
-        jsonb SensorFusionDetails
-        boolean IsSOSDialed
-        string Status "Triggered, Acknowledged..."
-    }
-
-    IncidentMedia {
-        int MediaID PK
-        int IncidentID FK
-        string MediaType "VideoClip5s, SnapshotImage"
-        string MediaURL
-        timestamptz CreatedAt
-    }
-
-    VoiceReminders {
-        int ReminderID PK
-        int ElderlyID FK
-        timestamptz ReminderTime
-        string TriggerReason
-        boolean WasAcknowledged
-    }
-
-    EmergencyContacts {
-        int ContactID PK
-        int ElderlyID FK
-        string ContactName
-        string PhoneNumber
-        int PriorityOrder
-    }
+    users ||--o{ houses : "1. Sở hữu căn nhà (owner_id) [1 - N]"
+    users ||--o{ house_members : "2. Thành viên (user_id) [N - N]"
+    houses ||--o{ house_members : "2. Chia sẻ quản trị căn nhà [N - N]"
+    houses ||--o{ elderly_profiles : "3. Người cao tuổi trong nhà [1 - N]"
+    houses ||--o{ device_groups : "4. Phân vùng / Phòng [1 - N]"
+    houses ||--o{ devices : "5. Lắp đặt thiết bị IoT [1 - N]"
+    device_groups ||--o{ devices : "6. Vị trí phòng lắp đặt [1 - N]"
+    elderly_profiles ||--o{ devices : "7. Thiết bị đeo cá nhân (Smartband) [1 - N]"
+    users ||--o{ devices : "8. Quyền quản lý thiết bị [1 - N]"
+    devices ||--|| device_configs : "9. Cấu hình ngưỡng AI & Y tế [1 - 1]"
+    devices ||--o{ vital_signs : "10. Đo sinh hiệu chuỗi thời gian (TimescaleDB) [1 - N]"
+    devices ||--o{ incidents : "11. Phát hiện sự cố khẩn cấp [1 - N]"
+    users ||--o{ incidents : "12. Xác nhận xử lý sự cố (acknowledged_by) [1 - N]"
 ```
 
 ---
 
-## 📑 3. Danh Sách 9 Bảng Chi Tiết
+## 📑 3. Danh Sách 9 Bảng Cốt Lõi
 
-| STT | Tên Bảng | Loại Bảng | Mục Đích |
+| STT | Tên Bảng | Kiểu Bảng | Mục Đích Sử Dụng |
 | :---: | :--- | :---: | :--- |
-| **1** | `Users` | Relational | Tài khoản người dùng (Người chăm sóc, Bác sĩ, Quản trị viên). |
-| **2** | `ElderlyProfiles` | Relational | Hồ sơ người cao tuổi, gắn liền với mã trạm `HubDeviceID`. |
-| **3** | `CaregiverElderly` | Quan hệ N-N | Phân quyền một người chăm sóc nhiều cụ hoặc một cụ có nhiều người thân theo dõi. |
-| **4** | `DeviceSettings` | Quan hệ 1-1 | Ngưỡng sinh hiệu cá nhân hóa (nhịp tim, SpO2, nhiệt độ, thời gian bất động). |
-| **5** | `VitalsData` | **TimescaleDB Hypertable** | Sinh hiệu đo liên tục từ vòng đeo tay BLE (SpO2, HeartRate, Temp). |
-| **6** | `Incidents` | Relational + JSONB | Lịch sử cảnh báo khẩn cấp (Té ngã, Bất động, Sốt cao, Khó thở, SOS) & trạng thái xử lý. |
-| **7** | `IncidentMedia` | Relational | Đường dẫn hình ảnh chụp tức thì & video clip 5 giây lưu trên MinIO S3. |
-| **8** | `VoiceReminders` | Relational | Lịch sử phát loa nhắc nhở tự động từ Edge Hub (uống thuốc, uống nước, vận động). |
-| **9** | `EmergencyContacts`| Relational | Danh sách số điện thoại gọi khẩn cấp theo thứ tự ưu tiên khi có RedAlert. |
+| **1** | `users` | Relational | Tài khoản người dùng hệ thống. Đăng nhập duy nhất bằng SĐT + Mật khẩu. Mặc định là `user`. |
+| **2** | `houses` | Relational | Căn nhà thông minh / không gian giám sát (Chế độ: HOME, AWAY, NIGHT). |
+| **3** | `house_members` | **Quan hệ N-N** | Bảng trung gian chia sẻ quyền quản trị căn nhà cho nhiều người thân & bác sĩ (`OWNER`, `CAREGIVER`, `DOCTOR`). |
+| **4** | `elderly_profiles`| Relational | Hồ sơ người cao tuổi cần chăm sóc (tiền sử bệnh lý, số điện thoại người thân SOS). |
+| **5** | `device_groups` | Relational | Các khu vực / phòng trong nhà (Phòng khách, Phòng ngủ, Phòng tắm...). |
+| **6** | `devices` | Relational | Danh mục thiết bị IoT (Camera AI `SECA_001`, Vòng tay BLE `BLE_BAND_001`...). |
+| **7** | `device_configs` | **Quan hệ 1-1** | Cấu hình ngưỡng cảnh báo y tế riêng biệt (SpO2 min, HR min/max, gia tốc té ngã). |
+| **8** | `vital_signs` | **Hypertable** | Chuỗi thời gian sinh hiệu đo liên tục (HeartRate, SpO2, SkinTemp, FallFlag). |
+| **9** | `incidents` | Relational + JSONB | Nhật ký sự cố khẩn cấp (Té ngã, Bất động, SOS) kèm clip video 5s và trạng thái xử lý. |
 
 ---
 
-## 🚀 4. Hướng Dẫn Chạy & Kiểm Thử Script Trên Docker
+## 🔍 4. Báo Cáo Chuẩn Hóa CSDL (Đạt Chuẩn BCNF / 3NF)
 
-### Cách 1: Nạp script trực tiếp vào container TimescaleDB
-Khi đang ở thư mục gốc của project:
+CSDL đạt chuẩn **3NF (Third Normal Form)** và các bảng cốt lõi đạt **BCNF (Boyce-Codd Normal Form)**:
+
+1. **Chuẩn 1NF (Tính nguyên tử):** Tất cả các cột đều chứa giá trị nguyên tử (Atomic values). Trường `extra_settings` sử dụng định dạng `JSONB` chuẩn SQL:2016 để lưu cấu hình mở rộng không cấu trúc của các cảm biến IoT đặc thù.
+2. **Chuẩn 2NF (Không phụ thuộc một phần):** Tất cả các thuộc tính không khóa đều phụ thuộc hoàn toàn vào toàn bộ khóa chính. Các bảng khóa đơn (`users`, `houses`, `devices`...) mặc nhiên thỏa 2NF. Bảng khóa kết hợp `house_members(house_id, user_id)` và `vital_signs(id, time)` không có thuộc tính nào phụ thuộc vào một phần của khóa.
+3. **Chuẩn 3NF / BCNF (Không phụ thuộc bắc cầu):** Mọi phụ thuộc hàm $X \rightarrow Y$ đều có $X$ là một **Siêu khóa (Superkey / Candidate Key)**.
+   - Bảng `users`: $CK_1 = \{\text{id}\}$, $CK_2 = \{\text{phone}\}$ $\rightarrow$ Đạt 100% BCNF. Tài khoản độc lập, không gán cứng vai trò gia đình tại bảng `users`.
+   - Bảng `house_members`: $CK_1 = \{\text{id}\}$, $CK_2 = \{\text{house\_id, user\_id}\}$ $\rightarrow$ Đạt 100% BCNF. Mọi vai trò (`role_in_house`) và quyền hạn (`permissions`) đều gắn liền với từng căn nhà cụ thể.
+
+---
+
+## 🚀 5. Hướng Dẫn Thực Thi CSDL Trên Docker
+
+### Nạp Schema và Dữ liệu mẫu vào Docker:
 ```bash
-# Di chuyển vào thư mục chứa docker-compose
-cd smart-elderly-care-ai
+# 1. Chạy container TimescaleDB (nếu chưa chạy)
+docker compose up -d timescaledb
 
-# Chạy container TimescaleDB (nếu chưa chạy)
-docker-compose up -d timescaledb
+# 2. Khởi tạo cấu trúc 9 bảng (schema):
+docker exec -i elderly_care_timescaledb psql -U postgres -d elderly_care < docs/database/database_schema.sql
 
-# Chạy script SQL vào database 'elderly_care'
-docker exec -i elderly_care_timescaledb psql -U postgres -d elderly_care < ../docs/database/database_schema.sql
+# 3. Nạp dữ liệu mẫu khởi tạo (seed data):
+docker exec -i elderly_care_timescaledb psql -U postgres -d elderly_care < docs/database/seed_sample_data.sql
 ```
 
-### Cách 2: Chạy qua công cụ quản lý GUI (DBeaver / DataGrip / pgAdmin)
-- **Host:** `localhost`
-- **Port:** `5433` (như cấu hình trong `docker-compose.yml`)
-- **Database:** `elderly_care`
-- **Username:** `postgres`
-- **Password:** `<POSTGRES_PASSWORD trong file .env>`
-- Mở file [`database_schema.sql`](database_schema.sql) và nhấn **Execute Script**.
-
 ---
 
-## 💡 5. Các Điểm Đề Xuất Cải Tiến Để Nhóm Thảo Luận
+## 🔑 6. Dữ Liệu Tài Khoản Mẫu Đăng Nhập
 
-Các thành viên nhóm xem qua và cùng đóng góp ý kiến để hoàn thiện CSDL tốt nhất:
+Tất cả các tài khoản mẫu sử dụng mật khẩu chung: **`12345678`**
 
-1. **Chuẩn hóa Tên Bảng & Cột (Naming Convention):**
-   - Hiện tại đang dùng `PascalCase` (`Users`, `UserID`, `FullName`). Trong PostgreSQL mặc định không phân biệt hoa thường trừ khi đặt trong ngoặc kép `""`.
-   - *Gợi ý thảo luận:* Có nên chuyển toàn bộ sang chuẩn `snake_case` (`users`, `user_id`, `full_name`) để tương thích tối đa với SQLAlchemy / Alembic migration của FastAPI không?
-
-2. **Chính Sách Nén & Lưu Trữ Dữ Liệu Lâu Dài (TimescaleDB Data Retention & Compression):**
-   - Bảng `VitalsData` có lượng bản ghi rất lớn theo thời gian.
-   - *Gợi ý cải tiến:* Bổ sung chính sách tự động nén dữ liệu cũ hơn 7 ngày và xóa/lưu trữ dữ liệu cũ hơn 90 ngày:
-     ```sql
-     -- Bật nén cho Hypertable
-     ALTER TABLE VitalsData SET (
-         timescaledb.compress,
-         timescaledb.compress_segmentby = 'ElderlyID'
-     );
-     SELECT add_compression_policy('VitalsData', INTERVAL '7 days');
-
-     -- Tự động dọn dẹp dữ liệu quá hạn
-     SELECT add_retention_policy('VitalsData', INTERVAL '90 days');
-     ```
-
-3. **Bổ Sung Ràng Buộc (Constraints & Validation):**
-   - Bảng `CaregiverElderly`: Cần thêm ràng buộc `UNIQUE (UserID, ElderlyID)` để tránh 1 người bị thêm 2 lần cho cùng 1 người cao tuổi. *(Đã được thêm vào script)*.
-   - Bảng `EmergencyContacts`: Nên thêm ràng buộc `UNIQUE (ElderlyID, PriorityOrder)` để không bị trùng số thứ tự ưu tiên cuộc gọi.
-
-4. **Trường Audit & Soft Delete:**
-   - Các bảng như `Users`, `ElderlyProfiles`, `Incidents` có nên bổ sung `UpdatedAt TIMESTAMPTZ` và `IsActive BOOLEAN DEFAULT TRUE` (hoặc `DeletedAt`) để hỗ trợ xóa mềm (soft delete), tránh mất dữ liệu y tế quan trọng không?
-
-5. **Dữ liệu mẫu (Seed Data):**
-   - Cần thêm 1 script `seed_data.sql` tạo sẵn tài khoản Admin, Caregiver mẫu và 2 hồ sơ người cao tuổi kèm dữ liệu sinh hiệu để nhóm dev frontend/backend có thể test ngay mà không cần nhập tay.
+| Số điện thoại | Họ và Tên | Vai trò tài khoản (`users`) | Vai trò căn nhà (`house_members`) | Quyền hạn (`permissions`) |
+| :--- | :--- | :---: | :---: | :---: |
+| **`0905123456`** | **Nguyễn Hữu Nghĩa** | `user` | **`OWNER`** (Chủ sở hữu / Người tạo nhà) | **`ADMIN`** (Toàn quyền quản trị) |
+| **`0905999888`** | **Nguyễn Thị Lan** | `user` | **`CAREGIVER`** (Người thân được chia sẻ) | **`EDIT`** (Cùng cấu hình & điều khiển) |
+| **`0905111222`** | **BS. Trần Văn Minh** | `user` | **`DOCTOR`** (Bác sĩ gia đình) | **`VIEW`** (Xem camera & sinh hiệu) |

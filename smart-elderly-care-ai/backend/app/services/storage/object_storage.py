@@ -79,7 +79,7 @@ class ObjectStorageService:
             self._client.fput_object(
                 self.bucket,
                 obj_name,
-                str(file_path),
+                file_path,
                 content_type=content_type,
             )
             url = f"{'https' if self.secure else 'http'}://{self.endpoint}/{self.bucket}/{obj_name}"

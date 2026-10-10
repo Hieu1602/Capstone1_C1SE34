@@ -273,6 +273,7 @@ export default function CameraDetailScreen({ navigation, route }: any) {
     toggleCameraAIProtect,
   } = useVitalStore();
 
+  const { isDarkMode, colors } = useTheme();
   const cameraDisplayName = routeParams.cameraName || camera.name;
 
   const [isPaused, setIsPaused] = useState(false);

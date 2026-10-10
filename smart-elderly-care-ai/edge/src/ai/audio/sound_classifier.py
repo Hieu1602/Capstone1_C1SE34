@@ -11,6 +11,7 @@ Responsibilities:
 """
 
 import asyncio
+import inspect
 import logging
 import time
 from dataclasses import dataclass
@@ -207,9 +208,10 @@ class SoundClassifier:
                         "[SoundClassifier] ALERT: %s (%.2f)", class_name, score
                     )
                     if self._on_alert:
-                        await asyncio.coroutine(self._on_alert)(event) \
-                            if asyncio.iscoroutinefunction(self._on_alert) \
-                            else self._on_alert(event)
+                        if inspect.iscoroutinefunction(self._on_alert):
+                            await self._on_alert(event)
+                        else:
+                            self._on_alert(event)
                     break  # Chỉ emit một alert mỗi chunk
         except Exception as exc:  # noqa: BLE001
             logger.error("[SoundClassifier] Error processing chunk: %s", exc)

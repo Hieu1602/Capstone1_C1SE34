@@ -59,6 +59,7 @@ export default function HomeScreen({ navigation }: any) {
     fetchSystemMode,
     fetchReminders,
     fetchNotifications,
+    syncAllWithBackend,
   } = useVitalStore();
 
   const [isMicSpeaking, setIsMicSpeaking] = useState(false);

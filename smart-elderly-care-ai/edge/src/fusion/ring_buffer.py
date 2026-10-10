@@ -123,7 +123,7 @@ class VideoRingBuffer:
             return False
 
         h, w = frames[0].shape[:2]
-        fourcc = cv2.VideoWriter_fourcc(*"mp4v")
+        fourcc = cv2.VideoWriter.fourcc(*"mp4v")
         writer = cv2.VideoWriter(output_path, fourcc, self.fps, (w, h))
 
         for f in frames:

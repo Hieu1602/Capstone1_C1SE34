@@ -9,9 +9,12 @@ import {
   KeyboardAvoidingView,
   Platform,
   ScrollView,
+  SafeAreaView,
 } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
+import { Colors } from '../../../theme/colors';
 import { authApi } from '../../../services/api';
+
 
 export default function RegisterScreen({ navigation }: any) {
   const [phone, setPhone] = useState('');
@@ -257,7 +260,10 @@ const styles = StyleSheet.create({
     justifyContent: 'space-between',
     paddingHorizontal: 24,
     paddingTop: 14,
-    paddingBottom: 16,
+    paddingBottom: 24,
+  },
+  headerSection: {
+    marginBottom: 20,
   },
   backButton: {
     height: 38,
@@ -265,73 +271,61 @@ const styles = StyleSheet.create({
     alignItems: 'flex-start',
     marginBottom: 16,
   },
-  heading: {
-    alignItems: 'center',
-    marginBottom: 22,
-  },
-  title: {
-    color: '#2F2F2F',
+  welcomeTitle: {
+    color: '#0F172A',
     fontSize: 28,
     fontWeight: '800',
-    textAlign: 'center',
     marginBottom: 8,
-    width: '100%',
   },
   subtitle: {
-    color: '#333333',
-    fontSize: 15,
-    lineHeight: 21,
-    textAlign: 'center',
-    maxWidth: 330,
+    color: '#64748B',
+    fontSize: 14,
+    lineHeight: 20,
   },
-  form: { gap: 12 },
+  formContainer: {
+    gap: 12,
+    marginBottom: 20,
+  },
+  countryPickerBtn: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    borderWidth: 1,
+    borderColor: '#E2E8F0',
+    borderRadius: 12,
+    paddingHorizontal: 14,
+    paddingVertical: 12,
+    backgroundColor: '#F8FAFC',
+    marginBottom: 4,
+  },
+  countryText: {
+    fontSize: 15,
+    fontWeight: '500',
+    color: '#0F172A',
+  },
   inputContainer: {
     minHeight: 52,
     flexDirection: 'row',
     alignItems: 'center',
     borderWidth: 1,
-    borderColor: '#E5E5E5',
+    borderColor: '#E2E8F0',
     borderRadius: 12,
     paddingHorizontal: 14,
+    backgroundColor: '#FFFFFF',
   },
-  icon: { marginRight: 12 },
+  inputIcon: {
+    marginRight: 10,
+  },
+  prefixText: {
+    fontSize: 16,
+    fontWeight: '600',
+    color: '#0F172A',
+    marginRight: 4,
+  },
   input: {
     flex: 1,
-    color: '#2F2F2F',
+    color: '#0F172A',
     fontSize: 16,
-    padding: 0,
-  },
-  requirements: {
-    backgroundColor: '#FFFFFF',
-    borderRadius: 12,
-    paddingHorizontal: 14,
-    paddingVertical: 12,
-    shadowColor: '#000',
-    shadowOpacity: 0.08,
-    shadowRadius: 12,
-    elevation: 2,
-  },
-  requirementTitle: {
-    color: '#666666',
-    fontSize: 15,
-    marginBottom: 8,
-  },
-  requirement: {
-    color: '#666666',
-    fontSize: 13,
-    lineHeight: 20,
-  },
-  otpRow: { flexDirection: 'row', justifyContent: 'space-between' },
-  otpInput: {
-    width: 44,
-    height: 58,
-    borderWidth: 1,
-    borderColor: '#E5E5E5',
-    borderRadius: 12,
-    color: '#2F2F2F',
-    fontSize: 22,
-    textAlign: 'center',
-    textAlignVertical: 'center',
     padding: 0,
   },
   otpRow: {
@@ -340,19 +334,21 @@ const styles = StyleSheet.create({
     marginTop: 8,
   },
   otpInput: {
-    width: 42,
-    height: 52,
+    width: 44,
+    height: 54,
     borderWidth: 1,
-    borderColor: '#E2E8F0',
+    borderColor: '#CBD5E1',
     borderRadius: 12,
-    fontSize: 18,
+    fontSize: 20,
     fontWeight: '700',
     color: '#0F172A',
     backgroundColor: '#F8FAFC',
+    textAlign: 'center',
   },
   otpInputActive: {
     borderColor: '#2563EB',
     borderWidth: 2,
+    backgroundColor: '#FFFFFF',
   },
   resendButton: {
     alignItems: 'center',
@@ -364,7 +360,7 @@ const styles = StyleSheet.create({
     fontWeight: '600',
   },
   resendDisabled: {
-    color: '#9CA3AF',
+    color: '#94A3B8',
   },
   loginButton: {
     backgroundColor: '#2563EB',
@@ -375,11 +371,10 @@ const styles = StyleSheet.create({
     alignSelf: 'center',
     width: '100%',
   },
-  disabled: { opacity: 0.55 },
-  primaryText: {
+  loginButtonText: {
     color: '#FFFFFF',
     fontSize: 16,
-    fontWeight: '600',
+    fontWeight: '700',
     textAlign: 'center',
   },
   loginLink: {
@@ -390,12 +385,13 @@ const styles = StyleSheet.create({
     width: '100%',
   },
   loginText: {
-    color: '#333333',
-    fontSize: 15,
+    color: '#64748B',
+    fontSize: 14,
     textAlign: 'center',
   },
   link: {
-    color: '#638EF1',
+    color: '#2563EB',
     fontWeight: '600',
   },
 });
+

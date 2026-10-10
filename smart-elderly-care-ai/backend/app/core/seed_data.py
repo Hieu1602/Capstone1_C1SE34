@@ -33,23 +33,22 @@ async def seed_master_data() -> None:
             logger.info("[SEED] Bắt đầu nạp dữ liệu Master...")
 
             # 1. Tìm hoặc tạo User mặc định
-            user_res = await db.execute(select(User).where(User.email == "admin@seca.vn"))
+            user_res = await db.execute(select(User).where(User.phone == "+84905123456"))
             user = user_res.scalar_one_or_none()
             if not user:
                 user = User(
-                    email="admin@seca.vn",
-                    full_name="Nguyễn Văn Quản Trị",
-                    phone="0905123456",
+                    phone="+84905123456",
+                    full_name="Nguyễn Hữu Nghĩa",
                     hashed_password=hash_password("12345678"),
-                    role=UserRole.ADMIN,
+                    role=UserRole.USER,
                     is_active=True,
                 )
                 db.add(user)
                 await db.flush()
                 await db.refresh(user)
-                logger.info(f"[SEED] Đã tạo User mặc định: admin@seca.vn (ID: {user.id})")
+                logger.info(f"[SEED] Đã tạo User mặc định: {user.phone} (ID: {user.id})")
             else:
-                logger.info(f"[SEED] User đã tồn tại: {user.email}")
+                logger.info(f"[SEED] User đã tồn tại: {user.phone}")
 
             # 2. Tìm hoặc tạo House mặc định
             house_res = await db.execute(select(House).where(House.owner_id == user.id))
@@ -169,6 +168,28 @@ async def seed_master_data() -> None:
                 logger.info("[SEED] Đã tạo Thiết bị Vòng đeo tay BLE Smartband và cấu hình")
             else:
                 logger.info("[SEED] Vòng đeo tay BLE Smartband đã tồn tại")
+
+            # 6. Tạo Hồ sơ Người cao tuổi mặc định: Cụ Nguyễn Văn An
+            from app.models.elderly_profile import ElderlyProfile
+            eld_res = await db.execute(select(ElderlyProfile).where(ElderlyProfile.house_id == house.id))
+            elderly = eld_res.scalar_one_or_none()
+            if not elderly:
+                elderly = ElderlyProfile(
+                    house_id=house.id,
+                    full_name="Nguyễn Văn An",
+                    birth_year=1948,
+                    gender="MALE",
+                    medical_history="Cao huyết áp (Độ 2), Đái tháo đường Type 2, Thoái hóa khớp gối",
+                    emergency_contact_phone="+84905123456",
+                )
+                db.add(elderly)
+                await db.flush()
+                await db.refresh(elderly)
+                logger.info("[SEED] Đã tạo Hồ sơ Người cao tuổi: Nguyễn Văn An")
+
+            if band and not band.elderly_id and elderly:
+                band.elderly_id = elderly.id
+                logger.info("[SEED] Đã gán Vòng đeo tay BLE_BAND_001 cho Cụ Nguyễn Văn An")
 
             await db.commit()
             logger.info("[SEED] Hoàn tất nạp dữ liệu Master thành công 100%!")

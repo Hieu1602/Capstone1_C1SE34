@@ -61,6 +61,8 @@ class VitalsConnectionManager:
             await self.broadcast_to_device(device_id, data)
 
 
+from app.services.redis import redis_service
+
 manager = VitalsConnectionManager()
 
 
@@ -70,26 +72,41 @@ async def vitals_websocket(websocket: WebSocket, device_id: str):
     WebSocket endpoint cho real-time vital signs.
 
     Client kết nối: ws://host/ws/vitals/{device_id}
-    Server sẽ đẩy JSON mỗi khi có telemetry mới từ Edge Hub.
-
-    Payload format:
-    {
-        "type": "telemetry",
-        "device_id": "hub-001",
-        "timestamp": 1700000000.0,
-        "heart_rate": 72,
-        "spo2": 98,
-        "skin_temp_max": 36.2,
-        "person_count": 1,
-        "fall_detected": false
-    }
+    Server sẽ:
+    1. Chấp nhận kết nối và đăng ký vào ConnectionManager.
+    2. [REDIS TỐI ƯU]: Lấy ngay chỉ số sinh hiệu mới nhất từ Redis Cache gửi cho client
+       ngay trong 1ms đầu tiên, giúp giao diện không bị trắng/loading.
+    3. Lắng nghe các bản tin đẩy tiếp theo từ MQTT Subscriber.
     """
     await manager.connect(device_id, websocket)
+
+    # --------------------------------------------------------------------------
+    # BƯỚC 1: LẤY DỮ LIỆU TỨC THÌ TỪ REDIS CACHE (KHÔNG ĐỢI MQTT)
+    # --------------------------------------------------------------------------
+    try:
+        cached_vitals = await redis_service.get_latest_vitals(device_id)
+        if cached_vitals:
+            initial_payload = {
+                "type": "initial_telemetry",
+                "source": "redis_cache",
+                "device_id": device_id,
+                "data": cached_vitals,
+            }
+            await websocket.send_text(json.dumps(initial_payload, ensure_ascii=False))
+            logger.info("[WS-Redis] Đã gửi bản tin sinh hiệu tức thời từ Redis cho client: %s", device_id)
+    except Exception as exc:
+        logger.warning("[WS-Redis] Không thể đọc cache sinh hiệu từ Redis: %s", exc)
+
+    # --------------------------------------------------------------------------
+    # BƯỚC 2: DUY TRÌ KẾT NỐI & XỬ LÝ HEARTBEAT PING/PONG
+    # --------------------------------------------------------------------------
     try:
         while True:
-            # Giữ kết nối – client có thể gửi ping
+            # Client có thể gửi 'ping' để giữ kết nối không bị timeout
             data = await websocket.receive_text()
             if data == "ping":
                 await websocket.send_text("pong")
     except WebSocketDisconnect:
+        # Ngắt kết nối an toàn khi client đóng app hoặc tắt tab web
         manager.disconnect(device_id, websocket)
+

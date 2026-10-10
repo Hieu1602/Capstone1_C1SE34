@@ -12,7 +12,7 @@ Responsibilities:
 import logging
 import time
 from dataclasses import dataclass, field
-from typing import List, Optional, Tuple
+from typing import Any, List, Optional, Tuple
 
 import numpy as np
 
@@ -57,7 +57,7 @@ class PoseDetector:
 
     def __init__(self, config: dict):
         self.config = config
-        self.model = None
+        self.model: Any = None
         self.backend = None  # 'rknn' | 'onnx'
         self.input_shape = (640, 640)
         self.conf_threshold: float = config.get("confidence_threshold", 0.60)
@@ -155,10 +155,14 @@ class PoseDetector:
         return np.expand_dims(normalized, axis=0)  # (1, H, W, 3)
 
     def _infer_rknn(self, inputs: np.ndarray) -> List:
+        if self.model is None:
+            raise RuntimeError("Model RKNN chưa được load.")
         outputs = self.model.inference(inputs=[inputs])
         return outputs
 
     def _infer_onnx(self, inputs: np.ndarray) -> List:
+        if self.model is None:
+            raise RuntimeError("Model ONNX chưa được load.")
         input_name = self.model.get_inputs()[0].name
         # ONNX expects (1, 3, H, W)
         inputs_t = np.transpose(inputs, (0, 3, 1, 2))

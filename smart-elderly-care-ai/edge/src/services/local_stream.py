@@ -72,9 +72,10 @@ class RTSPStreamer:
 
     def push_frame(self, frame: np.ndarray) -> None:
         """Đẩy một frame vào pipe FFmpeg."""
-        if self._ffmpeg_proc and self._ffmpeg_proc.stdin:
+        proc = self._ffmpeg_proc
+        if proc and proc.stdin:
             try:
-                self._ffmpeg_proc.stdin.write(frame.tobytes())
+                proc.stdin.write(frame.tobytes())
             except BrokenPipeError:
                 logger.warning("[RTSPStreamer] FFmpeg pipe broken. Đang restart...")
                 self._restart()
@@ -82,10 +83,20 @@ class RTSPStreamer:
     def stop(self) -> None:
         """Dừng FFmpeg process."""
         self._running = False
-        if self._ffmpeg_proc:
-            self._ffmpeg_proc.stdin.close()
-            self._ffmpeg_proc.terminate()
-            self._ffmpeg_proc.wait(timeout=5)
+        proc = self._ffmpeg_proc
+        if proc:
+            stdin = proc.stdin
+            if stdin:
+                try:
+                    stdin.close()
+                except Exception:
+                    pass
+            proc.terminate()
+            try:
+                proc.wait(timeout=5)
+            except Exception:
+                proc.kill()
+            self._ffmpeg_proc = None
         logger.info("[RTSPStreamer] Stopped.")
 
     def _restart(self) -> None:

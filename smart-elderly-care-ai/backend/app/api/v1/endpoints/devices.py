@@ -82,12 +82,12 @@ async def register_device(
 
 @router.get("/{device_id}", response_model=DeviceOut)
 async def get_device(
-    device_id: UUID,
+    device_id: str,
     current_user: User = Depends(get_current_user),
     db: AsyncSession = Depends(get_db),
 ):
-    """Lấy chi tiết một thiết bị kèm cấu hình chuyên sâu (DeviceConfig)."""
-    device = await crud_device.get_by_id(db, id=device_id)
+    """Lấy chi tiết một thiết bị kèm cấu hình chuyên sâu (DeviceConfig). Hỗ trợ cả UUID hoặc mã chuỗi."""
+    device = await crud_device.get_by_id_or_device_id(db, id_or_device_id=device_id)
     if not device:
         raise HTTPException(
             status_code=status.HTTP_404_NOT_FOUND,
@@ -97,14 +97,15 @@ async def get_device(
 
 
 @router.patch("/{device_id}", response_model=DeviceOut)
+@router.put("/{device_id}", response_model=DeviceOut)
 async def update_device(
-    device_id: UUID,
+    device_id: str,
     obj_in: DeviceUpdate,
     current_user: User = Depends(get_current_user),
     db: AsyncSession = Depends(get_db),
 ):
     """Cập nhật thông tin cơ bản của thiết bị (tên, phân vùng nhóm phòng, trạng thái)."""
-    device = await crud_device.get_by_id(db, id=device_id)
+    device = await crud_device.get_by_id_or_device_id(db, id_or_device_id=device_id)
     if not device:
         raise HTTPException(
             status_code=status.HTTP_404_NOT_FOUND,
@@ -114,8 +115,9 @@ async def update_device(
 
 
 @router.patch("/{device_id}/config", response_model=DeviceConfigOut)
+@router.put("/{device_id}/config", response_model=DeviceConfigOut)
 async def update_device_config(
-    device_id: UUID,
+    device_id: str,
     config_in: DeviceConfigUpdate,
     current_user: User = Depends(get_current_user),
     db: AsyncSession = Depends(get_db),
@@ -125,7 +127,7 @@ async def update_device_config(
     - Camera: luồng RTSP stream_url, resolution (2K/FHD/SD), is_sleep, is_ai_protect.
     - Smartband: hr_threshold_high, hr_threshold_low, spo2_threshold_low, fall_impact_threshold.
     """
-    device = await crud_device.get_by_id(db, id=device_id)
+    device = await crud_device.get_by_id_or_device_id(db, id_or_device_id=device_id)
     if not device:
         raise HTTPException(
             status_code=status.HTTP_404_NOT_FOUND,
@@ -136,12 +138,12 @@ async def update_device_config(
 
 @router.get("/{device_id}/status", response_model=DeviceStatus)
 async def get_device_status(
-    device_id: UUID,
+    device_id: str,
     current_user: User = Depends(get_current_user),
     db: AsyncSession = Depends(get_db),
 ):
     """Kiểm tra trạng thái online/offline, pin và heartbeat của thiết bị."""
-    device = await crud_device.get_by_id(db, id=device_id)
+    device = await crud_device.get_by_id_or_device_id(db, id_or_device_id=device_id)
     if not device:
         raise HTTPException(
             status_code=status.HTTP_404_NOT_FOUND,
@@ -173,14 +175,14 @@ async def post_device_heartbeat(
     return {"status": "ok", "message": f"Heartbeat recorded for device '{device_id}'"}
 
 
-@router.delete("/{device_id}", status_code=status.HTTP_204_NO_CONTENT)
+@router.delete("/{device_id}", status_code=status.HTTP_200_OK)
 async def delete_device(
-    device_id: UUID,
+    device_id: str,
     current_user: User = Depends(get_current_user),
     db: AsyncSession = Depends(get_db),
 ):
     """Gỡ bỏ thiết bị khỏi hệ thống."""
-    device = await crud_device.get_by_id(db, id=device_id)
+    device = await crud_device.get_by_id_or_device_id(db, id_or_device_id=device_id)
     if not device:
         raise HTTPException(
             status_code=status.HTTP_404_NOT_FOUND,
@@ -192,3 +194,4 @@ async def delete_device(
             detail="Bạn không có quyền xóa thiết bị này.",
         )
     await crud_device.delete(db, db_obj=device)
+    return {"message": f"Đã xóa thiết bị '{device.name}' thành công"}

@@ -80,7 +80,25 @@ pip install -r requirements.txt
 
 ## 🚀 Hướng dẫn khởi chạy nhanh
 
-### 1. Khởi động hạ tầng Docker
+### ⚡ Cách 1: Khởi động 1-Click tự động (Khuyên dùng trên Windows)
+
+Chỉ cần **nhấp đúp chuột (Double click) vào file [`start.bat`](start.bat)** ở thư mục gốc (hoặc chạy lệnh `.\start.bat all` trong Terminal):
+- 🚀 **Tự động toàn bộ**: Bật Docker (TimescaleDB, Redis, EMQX) + Backend FastAPI + Mobile App Web.
+- 📋 **Menu quản trị trực quan**: Cho phép chọn bật/tắt từng dịch vụ, kiểm tra trạng thái sức khỏe (Health Check), mở nhanh Swagger và Mobile Web trên trình duyệt.
+
+```bash
+# Chạy menu tương tác:
+.\start.bat
+
+# Hoặc khởi động nhanh toàn bộ chỉ trong 1 lệnh:
+.\start.bat all
+```
+
+---
+
+### 🛠️ Cách 2: Khởi động thủ công từng phần
+
+#### 1. Khởi động hạ tầng Docker
 ```bash
 cd smart-elderly-care-ai
 docker-compose up -d

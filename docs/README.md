@@ -11,3 +11,8 @@ Thư mục này chứa toàn bộ tài liệu hồ sơ, thuyết minh, đăng k�
 ## 📦 Danh sách thư viện và cài đặt:
 - Xem chi tiết tại: **[THU_VIEN_VA_TAI_LIEU.md](THU_VIEN_VA_TAI_LIEU.md)**
 
+## 🗄️ Thiết kế Cơ sở dữ liệu (PostgreSQL 16 + TimescaleDB):
+- **[Tài liệu & Sơ đồ ERD](database/README.md)**
+- **[Script khởi tạo CSDL (database_schema.sql)](database/database_schema.sql)**
+
+
