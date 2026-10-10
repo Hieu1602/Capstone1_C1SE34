@@ -78,8 +78,8 @@ const createAuthStore: StateCreator<AuthStoreState, [], [['zustand/persist', Aut
   ) => {
     let resolvedName = name || refreshOrName || '';
     let resolvedPhone = phone || (typeof userId === 'string' && userId.startsWith('0') ? userId : '');
-    let resolvedUserId = userId !== undefined ? String(userId) : '1';
-    let rawRole = role || '';
+    const resolvedUserId = userId !== undefined ? String(userId) : '1';
+    const rawRole = role || '';
 
     const isDoctor =
       resolvedPhone.includes('888') ||

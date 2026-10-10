@@ -41,8 +41,6 @@ export default function DoctorProfileScreen({ navigation }: any) {
     phone: userPhone || '0905888999',
   });
 
-  const [logoutModalVisible, setLogoutModalVisible] = useState(false);
-
   // Ảnh đại diện bác sĩ
   const [avatarUri, setAvatarUri] = useState<string | null>(
     'https://images.unsplash.com/photo-1622253692010-333f2da6031d?w=300&auto=format&fit=crop&q=80'
@@ -687,33 +685,6 @@ const styles = StyleSheet.create({
     marginTop: 4,
   },
   logoutBtnText: { color: '#DC2626', fontSize: 13.5, fontWeight: '700' },
-
-  logoutModalBox: {
-    borderRadius: 16,
-    padding: 20,
-    width: '100%',
-    maxWidth: 380,
-    alignSelf: 'center',
-    borderWidth: 1,
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 4 },
-    shadowOpacity: 0.15,
-    shadowRadius: 12,
-    elevation: 8,
-  },
-  logoutIconBox: {
-    width: 42,
-    height: 42,
-    borderRadius: 21,
-    backgroundColor: '#FEE2E2',
-    justifyContent: 'center',
-    alignItems: 'center',
-  },
-  logoutModalDesc: {
-    fontSize: 14,
-    lineHeight: 20,
-    marginBottom: 16,
-  },
 
   // Modal styles
   modalOverlay: {

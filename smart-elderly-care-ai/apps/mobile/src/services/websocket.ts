@@ -22,6 +22,16 @@ const getWsBaseUrl = (): string => {
 
 const WS_BASE_URL: string = getWsBaseUrl();
 
+export type VitalPayload = {
+  heart_rate?: number | null;
+  spo2?: number | null;
+  skin_temp_max?: number | null;
+  person_count?: number | null;
+  fall_detected?: boolean;
+  timestamp?: number | null;
+  [key: string]: any;
+};
+
 export type WebSocketAlertEvent = {
   type: 'ALERT_NEW' | 'INCIDENT_RESOLVED' | 'VITALS_UPDATE' | 'SYSTEM_MODE_UPDATE' | 'telemetry' | string;
   alert_type?: string;
@@ -30,7 +40,7 @@ export type WebSocketAlertEvent = {
   timestamp?: string | number;
 };
 
-type AlertHandler = (event: WebSocketAlertEvent) => void;
+type AlertHandler = (event: any) => void;
 
 class AlertsWebSocket {
   private socket: WebSocket | null = null;
@@ -40,7 +50,7 @@ class AlertsWebSocket {
   private pingInterval: ReturnType<typeof setInterval> | null = null;
   private isConnecting = false;
 
-  connect(): void {
+  connect(_deviceId?: string): void {
     if (this.socket && (this.socket.readyState === WebSocket.OPEN || this.socket.readyState === WebSocket.CONNECTING)) {
       return;
     }

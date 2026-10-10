@@ -380,7 +380,7 @@ export default function HealthDetailScreen({ navigation, route }: any) {
             '• Chỉ số huyết áp và nhịp tim trong tháng duy trì tốt theo phác đồ điều trị.\n• Đề nghị gia đình đưa cụ tái khám đúng lịch hẹn vào ngày 15/10/2026 tại Bệnh viện Lão khoa.',
         };
       case 'DAY':
-      default:
+      default: {
         const hasData = dayVitals && dayVitals.length > 0;
         const hrVal = closestVital ? String(closestVital.heart_rate) : (hasData ? String(dayVitals[0].heart_rate) : '--');
         const spo2Val = closestVital ? String(closestVital.spo2) : (hasData ? String(dayVitals[0].spo2) : '--');
@@ -458,6 +458,7 @@ export default function HealthDetailScreen({ navigation, route }: any) {
             ? '• Nhịp tim và nồng độ SpO₂ của cụ duy trì rất đều đặn trong ngày.\n• Nhiệt độ cơ thể đang ở mức lý tưởng (36.8°C).\n• Nhắc cụ uống thêm 1 cốc nước ấm vào buổi chiều và vận động nhẹ nhàng quanh phòng khách.'
             : `• Ngày ${formatDisplayDateVN(selectedDate)} chưa có dữ liệu đo được đồng bộ.\n• Hãy kiểm tra vòng đeo tay BLE Band và kết nối Hub AI để tiếp tục thu thập dữ liệu sinh tồn.`,
         };
+      }
     }
   };
 
@@ -1111,7 +1112,7 @@ export default function HealthDetailScreen({ navigation, route }: any) {
         visible={isCalendarModalVisible}
         transparent
         animationType="fade"
-        onRequestClose={() => setIsCalendarModalVisible(false)}
+        onRequestClose={() => setCalendarModalVisible(false)}
       >
         <View style={styles.modalOverlay}>
           <View style={[styles.modalCard, isDarkMode && { backgroundColor: colors.card, borderColor: colors.border }]}>
@@ -1127,7 +1128,7 @@ export default function HealthDetailScreen({ navigation, route }: any) {
                   Chọn ngày để tra cứu chỉ số sinh tồn & nhật ký
                 </Text>
               </View>
-              <TouchableOpacity onPress={() => setIsCalendarModalVisible(false)} hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}>
+              <TouchableOpacity onPress={() => setCalendarModalVisible(false)} hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}>
                 <Ionicons name="close" size={22} color={colors.textSecondary} />
               </TouchableOpacity>
             </View>
@@ -1182,7 +1183,7 @@ export default function HealthDetailScreen({ navigation, route }: any) {
             <View style={styles.modalActions}>
               <TouchableOpacity
                 style={[styles.modalCancelBtn, isDarkMode && { borderColor: colors.border }]}
-                onPress={() => setIsCalendarModalVisible(false)}
+                onPress={() => setCalendarModalVisible(false)}
               >
                 <Text style={[styles.modalCancelBtnText, isDarkMode && { color: colors.textSecondary }]}>Hủy</Text>
               </TouchableOpacity>
@@ -1192,8 +1193,8 @@ export default function HealthDetailScreen({ navigation, route }: any) {
                 onPress={() => {
                   const trimmed = calendarInputDraft.trim();
                   if (/^\d{4}-\d{2}-\d{2}$/.test(trimmed)) {
-                    handleSelectDate(trimmed);
-                    setIsCalendarModalVisible(false);
+                    setSelectedDate(trimmed);
+                    setCalendarModalVisible(false);
                   } else {
                     Alert.alert('Định dạng chưa đúng', 'Vui lòng nhập ngày theo định dạng YYYY-MM-DD (Ví dụ: 2026-09-28)');
                   }
@@ -1900,7 +1901,7 @@ const styles = StyleSheet.create({
     padding: 20,
     borderWidth: 1,
     borderColor: '#E2E8F0',
-    ...Shadows.medium,
+    ...Shadows.card,
   },
   modalHeaderRow: {
     flexDirection: 'row',

@@ -2,8 +2,6 @@
 // Zustand store – State Management cho toàn bộ app
 
 import { create, StateCreator } from 'zustand';
-import { persist, createJSONStorage, PersistOptions } from 'zustand/middleware';
-import AsyncStorage from '@react-native-async-storage/async-storage';
 import { useThemeStore } from './useThemeStore';
 import {
   vitalsApi,
