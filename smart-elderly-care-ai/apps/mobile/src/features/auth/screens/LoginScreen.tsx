@@ -2,26 +2,13 @@
 // Màn hình Chào mừng & Đăng nhập theo phong cách Pinterest Collage hiện đại
 
 import React, { useState } from 'react';
-import {
-  View,
-  Text,
-  StyleSheet,
-  TextInput,
-  TouchableOpacity,
-  SafeAreaView,
-  Image,
-  Alert,
-  ScrollView,
-  KeyboardAvoidingView,
-  Platform,
-  Modal,
-  ActivityIndicator,
-  Dimensions,
-} from 'react-native';
+import { View, StyleSheet, TouchableOpacity, SafeAreaView, Image, ScrollView, KeyboardAvoidingView, Platform, Modal, ActivityIndicator, Dimensions } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { Colors } from '../../../theme/colors';
 import { useAuthStore } from '../../../store/useVitalStore';
 import { authApi } from '../../../services/api';
+import { LocalizedAlert, LocalizedText, LocalizedTextInput } from '../../../i18n/LocalizedComponents';
+
 
 const { width: SCREEN_WIDTH } = Dimensions.get('window');
 
@@ -38,16 +25,24 @@ const COLLAGE_IMAGES = {
 export default function LoginScreen({ navigation }: any) {
   const { login } = useAuthStore();
 
+  const [authMode, setAuthMode] = useState<'login' | 'register'>('login');
   const [isLoginModalVisible, setIsLoginModalVisible] = useState(false);
   const [account, setAccount] = useState('');
   const [password, setPassword] = useState('');
+  const [registerPhone, setRegisterPhone] = useState('');
+  const [registerPassword, setRegisterPassword] = useState('');
+  const [registerConfirmPassword, setRegisterConfirmPassword] = useState('');
   const [showPassword, setShowPassword] = useState(false);
+  const [showRegisterPassword, setShowRegisterPassword] = useState(false);
+  const [showRegisterConfirmPassword, setShowRegisterConfirmPassword] = useState(false);
   const [isLoading, setIsLoading] = useState(false);
+  const [loginError, setLoginError] = useState('');
 
   // Đăng nhập vào hệ thống
   const handleLoginAction = async () => {
+    setLoginError('');
     if (!account.trim() || !password.trim()) {
-      Alert.alert('Thiếu thông tin', 'Vui lòng nhập số điện thoại và mật khẩu.');
+      setLoginError('Vui lòng nhập số điện thoại và mật khẩu.');
       return;
     }
 
@@ -77,12 +72,17 @@ export default function LoginScreen({ navigation }: any) {
       login(access_token, refresh_token, resolvedName, normalizedAccount, normalizedAccount, resolvedRole);
       setIsLoginModalVisible(false);
     } catch (error: any) {
-      console.error('[Login] Error:', error);
-      const detail =
-        error?.response?.data?.detail ||
-        error?.message ||
-        'Số điện thoại hoặc mật khẩu không chính xác.';
-      Alert.alert('Đăng nhập thất bại', String(detail));
+      const status = error?.response?.status;
+      const detail = error?.response?.data?.detail;
+      if (!error?.response) {
+        setLoginError('Không kết nối được máy chủ. Vui lòng kiểm tra kết nối và thử lại.');
+      } else if (status === 401) {
+        setLoginError('Số điện thoại hoặc mật khẩu không đúng. Vui lòng kiểm tra lại.');
+      } else if (status === 403) {
+        setLoginError('Tài khoản hiện đã bị vô hiệu hóa. Vui lòng liên hệ quản trị viên.');
+      } else {
+        setLoginError(typeof detail === 'string' ? detail : 'Đăng nhập chưa thành công. Vui lòng thử lại.');
+      }
     } finally {
       setIsLoading(false);
     }
@@ -92,6 +92,31 @@ export default function LoginScreen({ navigation }: any) {
   const handleQuickFill = (phone: string, pass: string) => {
     setAccount(phone);
     setPassword(pass);
+    setLoginError('');
+  };
+
+  const openAuthModal = (mode: 'login' | 'register') => {
+    setAuthMode(mode);
+    setIsLoginModalVisible(true);
+  };
+
+  const handleRegisterInModal = () => {
+    if (!registerPhone.trim() || !registerPassword.trim() || !registerConfirmPassword.trim()) {
+      LocalizedAlert.alert('Thiếu thông tin', 'Vui lòng nhập đầy đủ số điện thoại và mật khẩu.');
+      return;
+    }
+
+    if (registerPassword !== registerConfirmPassword) {
+      LocalizedAlert.alert('Hai mật khẩu chưa khớp', 'Hãy nhập cùng một mật khẩu ở cả hai ô.');
+      return;
+    }
+
+    setIsLoginModalVisible(false);
+    navigation.navigate('Register', {
+      phone: registerPhone.trim(),
+      password: registerPassword,
+      confirmPassword: registerConfirmPassword,
+    });
   };
 
   return (
@@ -172,59 +197,57 @@ export default function LoginScreen({ navigation }: any) {
           </View>
 
           {/* Tiêu đề & Slogan */}
-          <Text style={styles.heroTitle}>
+          <LocalizedText style={styles.heroTitle}>
             Tạo dựng cuộc sống{'\n'}bạn yêu thích
-          </Text>
-          <Text style={styles.heroSubtitle}>
+          </LocalizedText>
+          <LocalizedText style={styles.heroSubtitle}>
             Hệ sinh thái AI bảo vệ sức khỏe & an toàn người cao tuổi 24/7
-          </Text>
+          </LocalizedText>
 
-          {/* Bộ 2 nút hành động Pill Button */}
+          {/* Bộ 2 nút hành động theo mockup full-screen */}
           <View style={styles.actionButtonsContainer}>
-            {/* Nút 1: Đăng ký (Orange Primary Pill) */}
             <TouchableOpacity
               style={styles.btnRegister}
               activeOpacity={0.88}
               onPress={() => navigation.navigate('Register')}
             >
-              <Text style={styles.btnRegisterText}>Đăng ký</Text>
+              <LocalizedText style={styles.btnRegisterText}>Đăng ký</LocalizedText>
             </TouchableOpacity>
 
-            {/* Nút 2: Đăng nhập (Light Gray Secondary Pill) */}
             <TouchableOpacity
               style={styles.btnLogin}
               activeOpacity={0.88}
               onPress={() => setIsLoginModalVisible(true)}
             >
-              <Text style={styles.btnLoginText}>Đăng nhập</Text>
+              <LocalizedText style={styles.btnLoginText}>Đăng nhập</LocalizedText>
             </TouchableOpacity>
           </View>
 
           {/* Điều khoản pháp lý ở chân trang */}
-          <Text style={styles.termsNoticeText}>
+          <LocalizedText style={styles.termsNoticeText}>
             Bằng cách tiếp tục, bạn đồng ý với{' '}
-            <Text
+            <LocalizedText
               style={styles.termsLink}
-              onPress={() => Alert.alert('Điều khoản dịch vụ', 'Hệ thống Smart Elderly Care AI tuân thủ chuẩn an ninh y tế.')}
+              onPress={() => LocalizedAlert.alert('Điều khoản dịch vụ', 'Hệ thống Smart Elderly Care AI tuân thủ chuẩn an ninh y tế.')}
             >
               Điều khoản dịch vụ
-            </Text>{' '}
+            </LocalizedText>{' '}
             của SECA và xác nhận rằng bạn đã đọc{' '}
-            <Text
+            <LocalizedText
               style={styles.termsLink}
-              onPress={() => Alert.alert('Chính sách bảo mật', 'Bảo mật thông tin sinh hiệu chuẩn mã hóa AES-256.')}
+              onPress={() => LocalizedAlert.alert('Chính sách bảo mật', 'Bảo mật thông tin sinh hiệu chuẩn mã hóa AES-256.')}
             >
               Chính sách quyền riêng tư
-            </Text>{' '}
+            </LocalizedText>{' '}
             của chúng tôi.{' '}
-            <Text
+            <LocalizedText
               style={styles.termsLink}
-              onPress={() => Alert.alert('Thông báo thu thập', 'Dữ liệu được thu thập từ Camera AI và Vòng tay BLE.')}
+              onPress={() => LocalizedAlert.alert('Thông báo thu thập', 'Dữ liệu được thu thập từ Camera AI và Vòng tay BLE.')}
             >
               Thông báo khi thu thập
-            </Text>
+            </LocalizedText>
             .
-          </Text>
+          </LocalizedText>
         </View>
       </ScrollView>
 
@@ -233,8 +256,8 @@ export default function LoginScreen({ navigation }: any) {
       {/* ================================================================= */}
       <Modal
         visible={isLoginModalVisible}
-        animationType="slide"
-        transparent={true}
+        animationType="fade"
+        transparent={false}
         onRequestClose={() => setIsLoginModalVisible(false)}
       >
         <KeyboardAvoidingView
@@ -242,124 +265,223 @@ export default function LoginScreen({ navigation }: any) {
           style={styles.modalOverlay}
         >
           <View style={styles.modalSheet}>
-            {/* Thanh gạt trên đỉnh Sheet */}
-            <View style={styles.sheetHandle} />
-
-            {/* Header Sheet */}
-            <View style={styles.sheetHeader}>
-              <View>
-                <Text style={styles.sheetTitle}>Đăng nhập</Text>
-                <Text style={styles.sheetSubtitle}>Nhập thông tin tài khoản người nhà hoặc bác sĩ</Text>
-              </View>
-              <TouchableOpacity
-                style={styles.sheetCloseBtn}
-                onPress={() => setIsLoginModalVisible(false)}
-              >
-                <Ionicons name="close" size={20} color="#64748B" />
-              </TouchableOpacity>
-            </View>
-
-            {/* Input 1: Số điện thoại */}
-            <View style={styles.inputWrap}>
-              <View style={styles.inputPrefix}>
-                <Ionicons name="call-outline" size={18} color="#64748B" />
-                <Text style={styles.prefixText}>+84</Text>
-              </View>
-              <TextInput
-                style={styles.textInput}
-                placeholder="Nhập số điện thoại (VD: 0905123456)"
-                placeholderTextColor="#94A3B8"
-                keyboardType="phone-pad"
-                value={account}
-                onChangeText={setAccount}
-                autoCapitalize="none"
-              />
-            </View>
-
-            {/* Input 2: Mật khẩu */}
-            <View style={styles.inputWrap}>
-              <View style={styles.inputPrefix}>
-                <Ionicons name="lock-closed-outline" size={18} color="#64748B" />
-              </View>
-              <TextInput
-                style={[styles.textInput, { flex: 1 }]}
-                placeholder="Mật khẩu"
-                placeholderTextColor="#94A3B8"
-                secureTextEntry={!showPassword}
-                value={password}
-                onChangeText={setPassword}
-              />
-              <TouchableOpacity
-                style={styles.eyeBtn}
-                onPress={() => setShowPassword(!showPassword)}
-              >
-                <Ionicons
-                  name={showPassword ? 'eye-outline' : 'eye-off-outline'}
-                  size={20}
-                  color="#64748B"
-                />
-              </TouchableOpacity>
-            </View>
-
-            {/* Quên mật khẩu */}
-            <TouchableOpacity
-              style={styles.forgotBtn}
-              onPress={() => {
-                setIsLoginModalVisible(false);
-                navigation.navigate('ForgotPassword');
-              }}
+            <ScrollView
+              contentContainerStyle={styles.modalScrollContainer}
+              showsVerticalScrollIndicator={false}
+              bounces={false}
             >
-              <Text style={styles.forgotText}>Quên mật khẩu?</Text>
-            </TouchableOpacity>
-
-            {/* Nút Đăng nhập ngay (Orange Pill) */}
-            <TouchableOpacity
-              style={[styles.btnSubmitLogin, isLoading && { opacity: 0.7 }]}
-              activeOpacity={0.88}
-              onPress={handleLoginAction}
-              disabled={isLoading}
-            >
-              {isLoading ? (
-                <ActivityIndicator color="#FFFFFF" size="small" />
-              ) : (
-                <Text style={styles.btnSubmitLoginText}>Đăng nhập</Text>
-              )}
-            </TouchableOpacity>
-
-            {/* Tài khoản mẫu tiện lợi cho giảng viên / chấm điểm đồ án */}
-            <View style={styles.quickFillContainer}>
-              <Text style={styles.quickFillLabel}>Tài khoản mẫu thử nghiệm (chạm để điền):</Text>
-              <View style={styles.quickFillRow}>
+              <View style={styles.collageContainer}>
                 <TouchableOpacity
-                  style={styles.quickFillChip}
-                  onPress={() => handleQuickFill('0905123456', '12345678')}
+                  style={styles.backToWelcomeButton}
+                  accessibilityRole="button"
+                  accessibilityLabel="Quay lại màn hình đầu tiên"
+                  onPress={() => {
+                    setIsLoginModalVisible(false);
+                    setAuthMode('login');
+                  }}
                 >
-                  <Ionicons name="person-circle-outline" size={14} color="#0284C7" />
-                  <Text style={styles.quickFillChipText}>Chủ nhà (Nghĩa)</Text>
+                  <Ionicons name="arrow-back" size={20} color="#0F172A" />
+                  <LocalizedText style={styles.backToWelcomeText}>Quay lại</LocalizedText>
                 </TouchableOpacity>
-
-                <TouchableOpacity
-                  style={styles.quickFillChip}
-                  onPress={() => handleQuickFill('0905111222', '12345678')}
-                >
-                  <Ionicons name="medkit-outline" size={14} color="#16A34A" />
-                  <Text style={styles.quickFillChipText}>Bác sĩ Minh</Text>
-                </TouchableOpacity>
+                <View style={[styles.card, styles.cardTopLeft]}>
+                  <Image source={{ uri: COLLAGE_IMAGES.topLeft }} style={styles.cardImage} resizeMode="cover" />
+                </View>
+                <View style={[styles.card, styles.cardTopRight]}>
+                  <Image source={{ uri: COLLAGE_IMAGES.topRight }} style={styles.cardImage} resizeMode="cover" />
+                </View>
+                <View style={[styles.card, styles.cardCenterHero]}>
+                  <Image source={{ uri: COLLAGE_IMAGES.center }} style={styles.cardImage} resizeMode="cover" />
+                </View>
+                <View style={[styles.card, styles.cardMidRight]}>
+                  <Image source={{ uri: COLLAGE_IMAGES.midRight }} style={styles.cardImage} resizeMode="cover" />
+                </View>
+                <View style={[styles.card, styles.cardBottomLeft]}>
+                  <Image source={{ uri: COLLAGE_IMAGES.bottomLeft }} style={styles.cardImage} resizeMode="cover" />
+                </View>
+                <View style={[styles.card, styles.cardBottomRight]}>
+                  <Image source={{ uri: COLLAGE_IMAGES.bottomRight }} style={styles.cardImage} resizeMode="cover" />
+                </View>
               </View>
-            </View>
 
-            {/* Chuyển sang Đăng ký */}
-            <View style={styles.switchAuthRow}>
-              <Text style={styles.switchAuthText}>Chưa có tài khoản? </Text>
-              <TouchableOpacity
-                onPress={() => {
-                  setIsLoginModalVisible(false);
-                  navigation.navigate('Register');
-                }}
-              >
-                <Text style={styles.switchAuthLink}>Đăng ký ngay</Text>
-              </TouchableOpacity>
-            </View>
+              <View style={styles.bottomSection}>
+                <View style={styles.logoBadgeContainer}>
+                  <View style={styles.logoBadge}>
+                    <Ionicons name="heart" size={26} color="#FFFFFF" />
+                  </View>
+                </View>
+
+                <LocalizedText style={styles.heroTitle}>
+                  {authMode === 'login' ? 'Chào mừng bạn trở lại' : 'Tạo tài khoản mới'}
+                </LocalizedText>
+
+                <LocalizedText style={styles.heroSubtitle}>
+                  {authMode === 'login'
+                    ? 'Nhập thông tin tài khoản người nhà hoặc bác sĩ để tiếp tục.'
+                    : 'Tạo tài khoản để trải nghiệm đầy đủ dịch vụ chăm sóc người cao tuổi.'}
+                </LocalizedText>
+
+                <View style={styles.formCard}>
+                  {authMode === 'login' ? (
+                    <>
+                      <View style={styles.inputWrap}>
+                        <View style={styles.inputPrefix}>
+                          <Ionicons name="call-outline" size={18} color="#64748B" />
+                          <LocalizedText style={styles.prefixText}>+84</LocalizedText>
+                        </View>
+                        <LocalizedTextInput
+                          style={styles.textInput}
+                          placeholder="Nhập số điện thoại"
+                          placeholderTextColor="#94A3B8"
+                          keyboardType="phone-pad"
+                          value={account}
+                          onChangeText={(value) => {
+                            setAccount(value);
+                            setLoginError('');
+                          }}
+                          autoCapitalize="none"
+                        />
+                      </View>
+
+                      <View style={styles.inputWrap}>
+                        <View style={styles.inputPrefix}>
+                          <Ionicons name="lock-closed-outline" size={18} color="#64748B" />
+                        </View>
+                        <LocalizedTextInput
+                          style={[styles.textInput, { flex: 1 }]}
+                          placeholder="Mật khẩu"
+                          placeholderTextColor="#94A3B8"
+                          secureTextEntry={!showPassword}
+                          value={password}
+                          onChangeText={(value) => {
+                            setPassword(value);
+                            setLoginError('');
+                          }}
+                        />
+                        <TouchableOpacity style={styles.eyeBtn} onPress={() => setShowPassword(!showPassword)}>
+                          <Ionicons name={showPassword ? 'eye-outline' : 'eye-off-outline'} size={20} color="#64748B" />
+                        </TouchableOpacity>
+                      </View>
+
+                      {loginError ? (
+                        <View style={styles.loginErrorBox} accessibilityRole="alert">
+                          <Ionicons name="alert-circle-outline" size={18} color="#B42318" />
+                          <LocalizedText style={styles.loginErrorText}>{loginError}</LocalizedText>
+                        </View>
+                      ) : null}
+
+                      <TouchableOpacity
+                        style={styles.forgotBtn}
+                        onPress={() => {
+                          setIsLoginModalVisible(false);
+                          navigation.navigate('ForgotPassword');
+                        }}
+                      >
+                        <LocalizedText style={styles.forgotText}>Quên mật khẩu?</LocalizedText>
+                      </TouchableOpacity>
+
+                      <View style={styles.quickFillContainer}>
+                        <LocalizedText style={styles.quickFillLabel}>Tài khoản mẫu thử nghiệm</LocalizedText>
+                        <View style={styles.quickFillRow}>
+                          <TouchableOpacity style={styles.quickFillChip} onPress={() => handleQuickFill('0905123456', '12345678')}>
+                            <Ionicons name="person-circle-outline" size={14} color="#0284C7" />
+                            <LocalizedText style={styles.quickFillChipText}>Chủ nhà</LocalizedText>
+                          </TouchableOpacity>
+
+                          <TouchableOpacity style={styles.quickFillChip} onPress={() => handleQuickFill('0905111222', '12345678')}>
+                            <Ionicons name="medkit-outline" size={14} color="#16A34A" />
+                            <LocalizedText style={styles.quickFillChipText}>Bác sĩ</LocalizedText>
+                          </TouchableOpacity>
+                        </View>
+                      </View>
+                    </>
+                  ) : (
+                    <>
+                      <View style={styles.inputWrap}>
+                        <View style={styles.inputPrefix}>
+                          <Ionicons name="call-outline" size={18} color="#64748B" />
+                          <LocalizedText style={styles.prefixText}>+84</LocalizedText>
+                        </View>
+                        <LocalizedTextInput
+                          style={styles.textInput}
+                          placeholder="Nhập số điện thoại"
+                          placeholderTextColor="#94A3B8"
+                          keyboardType="phone-pad"
+                          value={registerPhone}
+                          onChangeText={setRegisterPhone}
+                          autoCapitalize="none"
+                        />
+                      </View>
+
+                      <View style={styles.inputWrap}>
+                        <View style={styles.inputPrefix}>
+                          <Ionicons name="lock-closed-outline" size={18} color="#64748B" />
+                        </View>
+                        <LocalizedTextInput
+                          style={[styles.textInput, { flex: 1 }]}
+                          placeholder="Mật khẩu"
+                          placeholderTextColor="#94A3B8"
+                          secureTextEntry={!showRegisterPassword}
+                          value={registerPassword}
+                          onChangeText={setRegisterPassword}
+                        />
+                        <TouchableOpacity style={styles.eyeBtn} onPress={() => setShowRegisterPassword(!showRegisterPassword)}>
+                          <Ionicons name={showRegisterPassword ? 'eye-outline' : 'eye-off-outline'} size={20} color="#64748B" />
+                        </TouchableOpacity>
+                      </View>
+
+                      <View style={styles.inputWrap}>
+                        <View style={styles.inputPrefix}>
+                          <Ionicons name="shield-checkmark-outline" size={18} color="#64748B" />
+                        </View>
+                        <LocalizedTextInput
+                          style={[styles.textInput, { flex: 1 }]}
+                          placeholder="Xác nhận mật khẩu"
+                          placeholderTextColor="#94A3B8"
+                          secureTextEntry={!showRegisterConfirmPassword}
+                          value={registerConfirmPassword}
+                          onChangeText={setRegisterConfirmPassword}
+                        />
+                        <TouchableOpacity style={styles.eyeBtn} onPress={() => setShowRegisterConfirmPassword(!showRegisterConfirmPassword)}>
+                          <Ionicons name={showRegisterConfirmPassword ? 'eye-outline' : 'eye-off-outline'} size={20} color="#64748B" />
+                        </TouchableOpacity>
+                      </View>
+                    </>
+                  )}
+                </View>
+
+                <View style={styles.actionButtonsContainer}>
+                  <TouchableOpacity
+                    style={[styles.btnSubmitLogin, isLoading && { opacity: 0.7 }]}
+                    activeOpacity={0.88}
+                    onPress={authMode === 'login' ? handleLoginAction : handleRegisterInModal}
+                    disabled={isLoading}
+                  >
+                    {isLoading ? (
+                      <ActivityIndicator color="#FFFFFF" size="small" />
+                    ) : (
+                      <LocalizedText style={styles.btnSubmitLoginText}>{authMode === 'login' ? 'Đăng nhập' : 'Đăng ký'}</LocalizedText>
+                    )}
+                  </TouchableOpacity>
+                </View>
+
+                <View style={styles.switchAuthRow}>
+                  <LocalizedText style={styles.switchAuthText}>
+                    {authMode === 'login' ? 'Chưa có tài khoản? ' : 'Đã có tài khoản? '}
+                  </LocalizedText>
+                  <TouchableOpacity onPress={() => setAuthMode(authMode === 'login' ? 'register' : 'login')}>
+                    <LocalizedText style={styles.switchAuthLink}>{authMode === 'login' ? 'Đăng ký ngay' : 'Đăng nhập'}</LocalizedText>
+                  </TouchableOpacity>
+                </View>
+
+                <LocalizedText style={styles.termsNoticeText}>
+                  Bằng cách tiếp tục, bạn đồng ý với{' '}
+                  <LocalizedText style={styles.termsLink}>Điều khoản dịch vụ</LocalizedText>{' '}
+                  của SECA và xác nhận rằng bạn đã đọc{' '}
+                  <LocalizedText style={styles.termsLink}>Chính sách quyền riêng tư</LocalizedText>{' '}
+                  của chúng tôi.
+                </LocalizedText>
+              </View>
+            </ScrollView>
           </View>
         </KeyboardAvoidingView>
       </Modal>
@@ -388,6 +510,24 @@ const styles = StyleSheet.create({
     position: 'relative',
     overflow: 'hidden',
     backgroundColor: '#F8FAFC',
+  },
+  backToWelcomeButton: {
+    position: 'absolute',
+    top: 14,
+    left: 16,
+    zIndex: 20,
+    height: 40,
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 6,
+    paddingHorizontal: 14,
+    borderRadius: 20,
+    backgroundColor: '#FFFFFF',
+  },
+  backToWelcomeText: {
+    color: '#0F172A',
+    fontSize: 14,
+    fontWeight: '600',
   },
   card: {
     position: 'absolute',
@@ -489,16 +629,17 @@ const styles = StyleSheet.create({
   },
   actionButtonsContainer: {
     width: '100%',
+    flexDirection: 'column',
     gap: 12,
     marginBottom: 20,
   },
   btnRegister: {
-    backgroundColor: Colors.primary, // Cam đặc trưng thương hiệu
+    backgroundColor: Colors.primary,
+    width: '100%',
     height: 52,
     borderRadius: 26,
     justifyContent: 'center',
     alignItems: 'center',
-    width: '100%',
   },
   btnRegisterText: {
     color: '#FFFFFF',
@@ -506,12 +647,12 @@ const styles = StyleSheet.create({
     fontWeight: '700',
   },
   btnLogin: {
-    backgroundColor: '#EFEFEF', // Xám sáng phong cách Pinterest
+    backgroundColor: '#EFEFEF',
+    width: '100%',
     height: 52,
     borderRadius: 26,
     justifyContent: 'center',
     alignItems: 'center',
-    width: '100%',
   },
   btnLoginText: {
     color: '#111111',
@@ -536,31 +677,60 @@ const styles = StyleSheet.create({
   // -------------------------------------------------------------------------
   modalOverlay: {
     flex: 1,
-    backgroundColor: 'rgba(15, 23, 42, 0.55)',
-    justifyContent: 'flex-end',
+    backgroundColor: '#FFFFFF',
+    justifyContent: 'center',
+    alignItems: 'center',
   },
   modalSheet: {
+    flex: 1,
     backgroundColor: '#FFFFFF',
-    borderTopLeftRadius: 28,
-    borderTopRightRadius: 28,
-    paddingHorizontal: 24,
-    paddingTop: 12,
-    paddingBottom: Platform.OS === 'ios' ? 36 : 24,
     width: '100%',
+    paddingTop: 0,
+    paddingBottom: 0,
   },
-  sheetHandle: {
-    width: 44,
-    height: 5,
-    borderRadius: 3,
-    backgroundColor: '#E2E8F0',
-    alignSelf: 'center',
-    marginBottom: 16,
+  modalScrollContainer: {
+    flexGrow: 1,
+    backgroundColor: '#FFFFFF',
+    paddingBottom: 24,
   },
   sheetHeader: {
     flexDirection: 'row',
     justifyContent: 'space-between',
     alignItems: 'flex-start',
     marginBottom: 20,
+  },
+  sheetHeaderContent: {
+    flex: 1,
+    marginRight: 12,
+  },
+  sheetTabRow: {
+    flexDirection: 'row',
+    backgroundColor: '#F1F5F9',
+    borderRadius: 12,
+    padding: 4,
+    marginBottom: 10,
+  },
+  sheetTab: {
+    flex: 1,
+    height: 36,
+    borderRadius: 10,
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+  sheetTabActive: {
+    backgroundColor: '#FFFFFF',
+    shadowColor: '#000',
+    shadowOpacity: 0.06,
+    shadowRadius: 8,
+    elevation: 2,
+  },
+  sheetTabText: {
+    fontSize: 13,
+    fontWeight: '700',
+    color: '#64748B',
+  },
+  sheetTabTextActive: {
+    color: '#0F172A',
   },
   sheetTitle: {
     fontSize: 22,
@@ -615,6 +785,23 @@ const styles = StyleSheet.create({
     marginBottom: 16,
     marginTop: -4,
   },
+  loginErrorBox: {
+    flexDirection: 'row',
+    alignItems: 'flex-start',
+    gap: 8,
+    backgroundColor: '#FEF3F2',
+    borderColor: '#FDA29B',
+    borderWidth: 1,
+    borderRadius: 12,
+    padding: 10,
+    marginBottom: 12,
+  },
+  loginErrorText: {
+    flex: 1,
+    color: '#B42318',
+    fontSize: 13,
+    lineHeight: 18,
+  },
   forgotText: {
     fontSize: 13,
     fontWeight: '600',
@@ -627,7 +814,7 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
     alignItems: 'center',
     width: '100%',
-    marginBottom: 16,
+    marginBottom: 12,
   },
   btnSubmitLoginText: {
     color: '#FFFFFF',
@@ -638,7 +825,7 @@ const styles = StyleSheet.create({
     backgroundColor: '#F1F5F9',
     borderRadius: 14,
     padding: 12,
-    marginBottom: 16,
+    marginBottom: 12,
   },
   quickFillLabel: {
     fontSize: 11,
@@ -670,6 +857,7 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     justifyContent: 'center',
     alignItems: 'center',
+    marginBottom: 18,
   },
   switchAuthText: {
     fontSize: 14,
@@ -679,5 +867,14 @@ const styles = StyleSheet.create({
     fontSize: 14,
     fontWeight: '700',
     color: Colors.primary,
+  },
+  formCard: {
+    width: '100%',
+    backgroundColor: '#F8FAFC',
+    borderRadius: 18,
+    padding: 14,
+    marginBottom: 18,
+    borderWidth: 1,
+    borderColor: '#E2E8F0',
   },
 });

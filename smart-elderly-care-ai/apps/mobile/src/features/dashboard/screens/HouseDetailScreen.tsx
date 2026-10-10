@@ -2,21 +2,14 @@
 // Màn hình Quản lý Nhà & Phân quyền khớp chính xác Hình 3 (House Detail & Member Management)
 
 import React, { useState } from 'react';
-import {
-  View,
-  Text,
-  StyleSheet,
-  TouchableOpacity, 
-  ScrollView,
-  Alert,
-  TextInput,
-  Modal,
-} from 'react-native';
+import { View, StyleSheet, TouchableOpacity, ScrollView, Modal } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
 import { Colors, Shadows } from '../../../theme/colors';
 import { useVitalStore } from '../../../store/useVitalStore';
 import { useTheme } from '../../../store/useThemeStore';
+import { LocalizedAlert, LocalizedText, LocalizedTextInput } from '../../../i18n/LocalizedComponents';
+
 
 export default function HouseDetailScreen({ navigation }: any) {
   const { house } = useVitalStore();
@@ -28,12 +21,12 @@ export default function HouseDetailScreen({ navigation }: any) {
 
   const handleAddMember = () => {
     if (!newMemberPhone.trim()) {
-      Alert.alert('Lỗi', 'Vui lòng nhập số điện thoại người thân hoặc bác sĩ.');
+      LocalizedAlert.alert('Lỗi', 'Vui lòng nhập số điện thoại người thân hoặc bác sĩ.');
       return;
     }
     setAddMemberModalVisible(false);
     setNewMemberPhone('');
-    Alert.alert(
+    LocalizedAlert.alert(
       'Đã gửi lời mời',
       `Đã gửi liên kết tham gia giám sát đến số điện thoại ${newMemberPhone} với vai trò ${
         newMemberRole === 'DOCTOR' ? 'Bác sĩ gia đình' : 'Người chăm sóc'
@@ -53,7 +46,7 @@ export default function HouseDetailScreen({ navigation }: any) {
           <Ionicons name="chevron-back" size={24} color={isDarkMode ? '#F8FAFC' : Colors.textPrimary} />
         </TouchableOpacity>
 
-        <Text style={[styles.headerTitleText, isDarkMode && { color: '#F8FAFC' }]}>Nhà của tôi</Text>
+        <LocalizedText style={[styles.headerTitleText, isDarkMode && { color: '#F8FAFC' }]}>Nhà của tôi</LocalizedText>
       </View>
 
       <ScrollView
@@ -61,19 +54,19 @@ export default function HouseDetailScreen({ navigation }: any) {
         contentContainerStyle={styles.scrollContent}
       >
         {/* 2. Section: Thành viên */}
-        <Text style={[styles.sectionLabel, isDarkMode && { color: '#94A3B8' }]}>Thành viên</Text>
+        <LocalizedText style={[styles.sectionLabel, isDarkMode && { color: '#94A3B8' }]}>Thành viên</LocalizedText>
         <View style={[styles.cardContainer, isDarkMode && { backgroundColor: '#1E293B', borderColor: '#334155' }]}>
           {/* Member Row: 1057(Me) - Người sở hữu */}
           <TouchableOpacity
             style={styles.memberRow}
-            onPress={() => Alert.alert('Thông tin thành viên', 'Tài khoản: 1057(Me)\nVai trò: Người sở hữu (Primary Caregiver)\nQuyền hạn: Toàn quyền cấu hình AI và còi báo động.')}
+            onPress={() => LocalizedAlert.alert('Thông tin thành viên', 'Tài khoản: 1057(Me)\nVai trò: Người sở hữu (Primary Caregiver)\nQuyền hạn: Toàn quyền cấu hình AI và còi báo động.')}
             activeOpacity={0.7}
           >
             <View style={[styles.memberAvatarCircle, isDarkMode && { backgroundColor: '#0F172A' }]}>
               <Ionicons name="person" size={24} color={isDarkMode ? '#64748B' : '#CBD5E1'} />
             </View>
-            <Text style={[styles.memberNameText, isDarkMode && { color: '#F8FAFC' }]}>1057(Me)</Text>
-            <Text style={styles.ownerBadgeText}>Người sở hữu</Text>
+            <LocalizedText style={[styles.memberNameText, isDarkMode && { color: '#F8FAFC' }]}>1057(Me)</LocalizedText>
+            <LocalizedText style={styles.ownerBadgeText}>Người sở hữu</LocalizedText>
             <Ionicons name="chevron-forward" size={18} color={isDarkMode ? '#64748B' : '#CBD5E1'} />
           </TouchableOpacity>
 
@@ -88,20 +81,20 @@ export default function HouseDetailScreen({ navigation }: any) {
             <View style={[styles.orangePlusCircle, isDarkMode && { backgroundColor: '#4A2810', borderColor: '#7C2D12' }]}>
               <Ionicons name="add" size={16} color={Colors.primary} />
             </View>
-            <Text style={styles.addMemberText}>Thêm người</Text>
+            <LocalizedText style={styles.addMemberText}>Thêm người</LocalizedText>
           </TouchableOpacity>
         </View>
 
         {/* 3. Section: Quản lý Nhà */}
-        <Text style={[styles.sectionLabel, isDarkMode && { color: '#94A3B8' }]}>Quản lý Nhà</Text>
+        <LocalizedText style={[styles.sectionLabel, isDarkMode && { color: '#94A3B8' }]}>Quản lý Nhà</LocalizedText>
         <View style={[styles.cardContainer, isDarkMode && { backgroundColor: '#1E293B', borderColor: '#334155' }]}>
           {/* Quản lý nhóm (Rooms) */}
           <TouchableOpacity
             style={styles.actionRow}
-            onPress={() => Alert.alert('Quản lý nhóm phòng', 'Hiện có 3 khu vực giám sát:\n- Phòng khách (Camera Ranger 2C + Cảm biến nhiệt)\n- Phòng ngủ (Cảm biến nhiệt AMG8833)\n- Nhà vệ sinh (Cảm biến âm thanh YAMNet & Còi hú)')}
+            onPress={() => LocalizedAlert.alert('Quản lý nhóm phòng', 'Hiện có 3 khu vực giám sát:\n- Phòng khách (Camera Ranger 2C + Cảm biến nhiệt)\n- Phòng ngủ (Cảm biến nhiệt AMG8833)\n- Nhà vệ sinh (Cảm biến âm thanh YAMNet & Còi hú)')}
             activeOpacity={0.7}
           >
-            <Text style={[styles.rowTitleText, isDarkMode && { color: '#F8FAFC' }]}>Quản lý nhóm</Text>
+            <LocalizedText style={[styles.rowTitleText, isDarkMode && { color: '#F8FAFC' }]}>Quản lý nhóm</LocalizedText>
             <Ionicons name="chevron-forward" size={18} color={isDarkMode ? '#64748B' : '#CBD5E1'} />
           </TouchableOpacity>
         </View>
@@ -111,11 +104,11 @@ export default function HouseDetailScreen({ navigation }: any) {
       <Modal visible={addMemberModalVisible} transparent animationType="slide">
         <View style={[styles.modalOverlay, isDarkMode && { backgroundColor: 'rgba(0, 0, 0, 0.7)' }]}>
           <View style={[styles.modalCard, isDarkMode && { backgroundColor: '#1E293B', borderColor: '#334155' }]}>
-            <Text style={[styles.modalTitle, isDarkMode && { color: '#F8FAFC' }]}>Thêm người chăm sóc / Bác sĩ</Text>
-            <Text style={[styles.modalSub, isDarkMode && { color: '#94A3B8' }]}>
+            <LocalizedText style={[styles.modalTitle, isDarkMode && { color: '#F8FAFC' }]}>Thêm người chăm sóc / Bác sĩ</LocalizedText>
+            <LocalizedText style={[styles.modalSub, isDarkMode && { color: '#94A3B8' }]}>
               Mời người thân hoặc bác sĩ gia đình cùng theo dõi sức khoẻ và nhận thông báo khẩn cấp bằng số điện thoại (FR01).
-            </Text>
-              <TextInput
+            </LocalizedText>
+              <LocalizedTextInput
               style={[styles.addressInput, isDarkMode && { backgroundColor: '#0F172A', borderColor: '#334155', color: '#F8FAFC' }]}
                 value={newMemberPhone}
                 onChangeText={setNewMemberPhone}
@@ -132,9 +125,9 @@ export default function HouseDetailScreen({ navigation }: any) {
                 ]}
                 onPress={() => setNewMemberRole('CAREGIVER')}
               >
-                <Text style={[styles.roleOptionText, isDarkMode && { color: '#CBD5E1' }, newMemberRole === 'CAREGIVER' && styles.roleOptionTextActive]}>
+                <LocalizedText style={[styles.roleOptionText, isDarkMode && { color: '#CBD5E1' }, newMemberRole === 'CAREGIVER' && styles.roleOptionTextActive]}>
                   Người chăm sóc
-                </Text>
+                </LocalizedText>
               </TouchableOpacity>
               <TouchableOpacity
                 style={[
@@ -144,9 +137,9 @@ export default function HouseDetailScreen({ navigation }: any) {
                 ]}
                 onPress={() => setNewMemberRole('DOCTOR')}
               >
-                <Text style={[styles.roleOptionText, isDarkMode && { color: '#CBD5E1' }, newMemberRole === 'DOCTOR' && styles.roleOptionTextActive]}>
+                <LocalizedText style={[styles.roleOptionText, isDarkMode && { color: '#CBD5E1' }, newMemberRole === 'DOCTOR' && styles.roleOptionTextActive]}>
                   Bác sĩ gia đình
-                </Text>
+                </LocalizedText>
               </TouchableOpacity>
             </View>
             <View style={styles.modalActionButtons}>
@@ -154,13 +147,13 @@ export default function HouseDetailScreen({ navigation }: any) {
                 style={[styles.cancelBtn, isDarkMode && { backgroundColor: '#0F172A', borderColor: '#334155', borderWidth: 1 }]}
                 onPress={() => setAddMemberModalVisible(false)}
               >
-                <Text style={[styles.cancelBtnText, isDarkMode && { color: '#94A3B8' }]}>Hủy</Text>
+                <LocalizedText style={[styles.cancelBtnText, isDarkMode && { color: '#94A3B8' }]}>Hủy</LocalizedText>
               </TouchableOpacity>
               <TouchableOpacity
                 style={styles.saveBtn}
                 onPress={handleAddMember}
               >
-                <Text style={styles.saveBtnText}>Gửi lời mời</Text>
+                <LocalizedText style={styles.saveBtnText}>Gửi lời mời</LocalizedText>
               </TouchableOpacity>
             </View>
           </View>

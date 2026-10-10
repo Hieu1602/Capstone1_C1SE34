@@ -3,20 +3,14 @@
 // Hệ thống Smart Elderly Care AI – Tích hợp YOLOv8-Pose, YAMNet & BLE Band
 
 import React, { useState } from 'react';
-import {
-  View,
-  Text,
-  StyleSheet,
-  TouchableOpacity,
-  ScrollView,
-  Dimensions,
-  Alert,
-} from 'react-native';
+import { View, StyleSheet, TouchableOpacity, ScrollView, Dimensions } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
 import { Colors, Shadows } from '../../../theme/colors';
 import { useVitalStore } from '../../../store/useVitalStore';
 import { useTheme } from '../../../store/useThemeStore';
+import { LocalizedAlert, LocalizedText } from '../../../i18n/LocalizedComponents';
+
 
 const { width: SCREEN_WIDTH } = Dimensions.get('window');
 
@@ -67,7 +61,7 @@ export default function HealthDetailScreen({ navigation, route }: any) {
     setIsRefreshing(true);
     setTimeout(() => {
       setIsRefreshing(false);
-      Alert.alert('Đồng bộ thành công', 'Dữ liệu sức khoẻ từ Hub Orange Pi 5 và vòng đeo tay đã được làm mới.');
+      LocalizedAlert.alert('Đồng bộ thành công', 'Dữ liệu sức khoẻ từ Hub Orange Pi 5 và vòng đeo tay đã được làm mới.');
     }, 600);
   };
 
@@ -354,7 +348,7 @@ export default function HealthDetailScreen({ navigation, route }: any) {
           <Ionicons name="chevron-back" size={22} color={isDarkMode ? '#FFFFFF' : '#0F172A'} />
         </TouchableOpacity>
 
-        <Text style={[styles.headerTitle, { color: colors.textPrimary }]}>Tình trạng sức khoẻ</Text>
+        <LocalizedText style={[styles.headerTitle, { color: colors.textPrimary }]}>Tình trạng sức khoẻ</LocalizedText>
 
         <View style={{ flexDirection: 'row', alignItems: 'center' }}>
           <TouchableOpacity
@@ -397,17 +391,17 @@ export default function HealthDetailScreen({ navigation, route }: any) {
             />
           </View>
           <View style={{ flex: 1 }}>
-            <Text
+            <LocalizedText
               style={[
                 styles.overallTitle,
                 { color: currentTabConfig.bannerAlert ? Colors.danger : Colors.success },
               ]}
             >
               {currentTabConfig.bannerTitle}
-            </Text>
-            <Text style={[styles.overallSubtitle, isDarkMode && { color: colors.textSecondary }]}>
+            </LocalizedText>
+            <LocalizedText style={[styles.overallSubtitle, isDarkMode && { color: colors.textSecondary }]}>
               {currentTabConfig.bannerSubtitle}
-            </Text>
+            </LocalizedText>
           </View>
         </View>
 
@@ -430,7 +424,7 @@ export default function HealthDetailScreen({ navigation, route }: any) {
                 onPress={() => setSelectedRange(range)}
                 activeOpacity={0.8}
               >
-                <Text
+                <LocalizedText
                   style={[
                     styles.rangePillText,
                     isActive
@@ -439,7 +433,7 @@ export default function HealthDetailScreen({ navigation, route }: any) {
                   ]}
                 >
                   {labels[range]}
-                </Text>
+                </LocalizedText>
               </TouchableOpacity>
             );
           })}
@@ -471,26 +465,26 @@ export default function HealthDetailScreen({ navigation, route }: any) {
                   { backgroundColor: currentTabConfig.card1.statusBg },
                 ]}
               >
-                <Text
+                <LocalizedText
                   style={[
                     styles.vitalStatusText,
                     { color: currentTabConfig.card1.statusColor },
                   ]}
                 >
                   {currentTabConfig.card1.status}
-                </Text>
+                </LocalizedText>
               </View>
             </View>
-            <Text style={[styles.vitalBoxLabel, isDarkMode && { color: colors.textSecondary }]}>{currentTabConfig.card1.label}</Text>
+            <LocalizedText style={[styles.vitalBoxLabel, isDarkMode && { color: colors.textSecondary }]}>{currentTabConfig.card1.label}</LocalizedText>
             <View style={styles.vitalValRow}>
-              <Text style={[styles.vitalValNumber, isDarkMode && { color: colors.textPrimary }, currentTabConfig.card1.value.length > 4 && { fontSize: 20 }]}>
+              <LocalizedText style={[styles.vitalValNumber, isDarkMode && { color: colors.textPrimary }, currentTabConfig.card1.value.length > 4 && { fontSize: 20 }]}>
                 {currentTabConfig.card1.value}
-              </Text>
+              </LocalizedText>
               {Boolean(currentTabConfig.card1.unit) && (
-                <Text style={[styles.vitalValUnit, isDarkMode && { color: colors.textSecondary }]}>{currentTabConfig.card1.unit}</Text>
+                <LocalizedText style={[styles.vitalValUnit, isDarkMode && { color: colors.textSecondary }]}>{currentTabConfig.card1.unit}</LocalizedText>
               )}
             </View>
-            <Text style={styles.vitalNormalRange}>{currentTabConfig.card1.range}</Text>
+            <LocalizedText style={styles.vitalNormalRange}>{currentTabConfig.card1.range}</LocalizedText>
           </TouchableOpacity>
 
           {/* Thẻ 2: SpO2 */}
@@ -517,24 +511,24 @@ export default function HealthDetailScreen({ navigation, route }: any) {
                   { backgroundColor: currentTabConfig.card2.statusBg },
                 ]}
               >
-                <Text
+                <LocalizedText
                   style={[
                     styles.vitalStatusText,
                     { color: currentTabConfig.card2.statusColor },
                   ]}
                 >
                   {currentTabConfig.card2.status}
-                </Text>
+                </LocalizedText>
               </View>
             </View>
-            <Text style={[styles.vitalBoxLabel, isDarkMode && { color: colors.textSecondary }]}>{currentTabConfig.card2.label}</Text>
+            <LocalizedText style={[styles.vitalBoxLabel, isDarkMode && { color: colors.textSecondary }]}>{currentTabConfig.card2.label}</LocalizedText>
             <View style={styles.vitalValRow}>
-              <Text style={[styles.vitalValNumber, isDarkMode && { color: colors.textPrimary }]}>{currentTabConfig.card2.value}</Text>
+              <LocalizedText style={[styles.vitalValNumber, isDarkMode && { color: colors.textPrimary }]}>{currentTabConfig.card2.value}</LocalizedText>
               {Boolean(currentTabConfig.card2.unit) && (
-                <Text style={[styles.vitalValUnit, isDarkMode && { color: colors.textSecondary }]}>{currentTabConfig.card2.unit}</Text>
+                <LocalizedText style={[styles.vitalValUnit, isDarkMode && { color: colors.textSecondary }]}>{currentTabConfig.card2.unit}</LocalizedText>
               )}
             </View>
-            <Text style={styles.vitalNormalRange}>{currentTabConfig.card2.range}</Text>
+            <LocalizedText style={styles.vitalNormalRange}>{currentTabConfig.card2.range}</LocalizedText>
           </TouchableOpacity>
 
           {/* Thẻ 3: Nhiệt độ cơ thể */}
@@ -561,24 +555,24 @@ export default function HealthDetailScreen({ navigation, route }: any) {
                   { backgroundColor: currentTabConfig.card3.statusBg },
                 ]}
               >
-                <Text
+                <LocalizedText
                   style={[
                     styles.vitalStatusText,
                     { color: currentTabConfig.card3.statusColor },
                   ]}
                 >
                   {currentTabConfig.card3.status}
-                </Text>
+                </LocalizedText>
               </View>
             </View>
-            <Text style={[styles.vitalBoxLabel, isDarkMode && { color: colors.textSecondary }]}>{currentTabConfig.card3.label}</Text>
+            <LocalizedText style={[styles.vitalBoxLabel, isDarkMode && { color: colors.textSecondary }]}>{currentTabConfig.card3.label}</LocalizedText>
             <View style={styles.vitalValRow}>
-              <Text style={[styles.vitalValNumber, isDarkMode && { color: colors.textPrimary }]}>{currentTabConfig.card3.value}</Text>
+              <LocalizedText style={[styles.vitalValNumber, isDarkMode && { color: colors.textPrimary }]}>{currentTabConfig.card3.value}</LocalizedText>
               {Boolean(currentTabConfig.card3.unit) && (
-                <Text style={[styles.vitalValUnit, isDarkMode && { color: colors.textSecondary }]}>{currentTabConfig.card3.unit}</Text>
+                <LocalizedText style={[styles.vitalValUnit, isDarkMode && { color: colors.textSecondary }]}>{currentTabConfig.card3.unit}</LocalizedText>
               )}
             </View>
-            <Text style={styles.vitalNormalRange}>{currentTabConfig.card3.range}</Text>
+            <LocalizedText style={styles.vitalNormalRange}>{currentTabConfig.card3.range}</LocalizedText>
           </TouchableOpacity>
 
           {/* Thẻ 4: Trạng thái vận động */}
@@ -605,19 +599,19 @@ export default function HealthDetailScreen({ navigation, route }: any) {
                   { backgroundColor: currentTabConfig.card4.statusBg },
                 ]}
               >
-                <Text
+                <LocalizedText
                   style={[
                     styles.vitalStatusText,
                     { color: currentTabConfig.card4.statusColor },
                   ]}
                 >
                   {currentTabConfig.card4.status}
-                </Text>
+                </LocalizedText>
               </View>
             </View>
-            <Text style={[styles.vitalBoxLabel, isDarkMode && { color: colors.textSecondary }]}>{currentTabConfig.card4.label}</Text>
+            <LocalizedText style={[styles.vitalBoxLabel, isDarkMode && { color: colors.textSecondary }]}>{currentTabConfig.card4.label}</LocalizedText>
             <View style={styles.vitalValRow}>
-              <Text
+              <LocalizedText
                 style={[
                   styles.vitalValNumber,
                   isDarkMode && { color: colors.textPrimary },
@@ -625,12 +619,12 @@ export default function HealthDetailScreen({ navigation, route }: any) {
                 ]}
               >
                 {currentTabConfig.card4.value}
-              </Text>
+              </LocalizedText>
               {Boolean(currentTabConfig.card4.unit) && (
-                <Text style={[styles.vitalValUnit, isDarkMode && { color: colors.textSecondary }]}>{currentTabConfig.card4.unit}</Text>
+                <LocalizedText style={[styles.vitalValUnit, isDarkMode && { color: colors.textSecondary }]}>{currentTabConfig.card4.unit}</LocalizedText>
               )}
             </View>
-            <Text style={styles.vitalNormalRange}>{currentTabConfig.card4.range}</Text>
+            <LocalizedText style={styles.vitalNormalRange}>{currentTabConfig.card4.range}</LocalizedText>
           </TouchableOpacity>
         </View>
 
@@ -647,18 +641,18 @@ export default function HealthDetailScreen({ navigation, route }: any) {
                 <Ionicons name={fallReport.iconName} size={22} color={fallReport.iconColor} />
               </View>
               <View style={{ flex: 1 }}>
-                <Text style={[styles.fallCardTitle, isDarkMode && { color: colors.textPrimary }]}>
+                <LocalizedText style={[styles.fallCardTitle, isDarkMode && { color: colors.textPrimary }]}>
                   {fallReport.title}
-                </Text>
+                </LocalizedText>
                 <View style={styles.aiTagRow}>
                   <View style={styles.aiTagBadge}>
                     <Ionicons name="sparkles" size={10} color="#0EA5E9" />
-                    <Text style={styles.aiTagText}>YOLOv8-Pose AI</Text>
+                    <LocalizedText style={styles.aiTagText}>YOLOv8-Pose AI</LocalizedText>
                   </View>
                   <View style={[styles.aiStatusBadge, { backgroundColor: fallReport.statusBg }]}>
-                    <Text style={[styles.aiStatusText, { color: fallReport.statusColor }]}>
+                    <LocalizedText style={[styles.aiStatusText, { color: fallReport.statusColor }]}>
                       {fallReport.statusBadge}
-                    </Text>
+                    </LocalizedText>
                   </View>
                 </View>
               </View>
@@ -666,26 +660,26 @@ export default function HealthDetailScreen({ navigation, route }: any) {
           </View>
 
           <View style={[styles.fallResultBox, isDarkMode && { backgroundColor: '#0B0F19', borderColor: '#334155' }]}>
-            <Text style={[styles.fallStatMainText, isDarkMode && { color: '#F8FAFC' }]}>
+            <LocalizedText style={[styles.fallStatMainText, isDarkMode && { color: '#F8FAFC' }]}>
               {fallReport.statText}
-            </Text>
-            <Text style={[styles.fallStatSubText, isDarkMode && { color: '#94A3B8' }]}>
+            </LocalizedText>
+            <LocalizedText style={[styles.fallStatSubText, isDarkMode && { color: '#94A3B8' }]}>
               {fallReport.subText}
-            </Text>
+            </LocalizedText>
           </View>
 
           <View style={styles.fallFooterRow}>
             <View style={styles.fallFooterItem}>
               <Ionicons name="shield-checkmark-outline" size={14} color="#10B981" />
-              <Text style={[styles.fallFooterText, isDarkMode && { color: colors.textSecondary }]}>
+              <LocalizedText style={[styles.fallFooterText, isDarkMode && { color: colors.textSecondary }]}>
                 Cảm biến kép Hub & Vòng đeo tay
-              </Text>
+              </LocalizedText>
             </View>
             <View style={styles.fallFooterItem}>
               <Ionicons name="flash-outline" size={14} color="#F59E0B" />
-              <Text style={[styles.fallFooterText, isDarkMode && { color: colors.textSecondary }]}>
+              <LocalizedText style={[styles.fallFooterText, isDarkMode && { color: colors.textSecondary }]}>
                 Độ trễ &lt; 0.5s
-              </Text>
+              </LocalizedText>
             </View>
           </View>
         </View>
@@ -694,11 +688,11 @@ export default function HealthDetailScreen({ navigation, route }: any) {
         <View style={[styles.chartCard, isDarkMode && { backgroundColor: colors.card, borderWidth: 1, borderColor: colors.border }]}>
           <View style={styles.chartCardHeader}>
             <View style={{ flex: 1, marginRight: 8 }}>
-              <Text style={[styles.chartCardTitle, isDarkMode && { color: colors.textPrimary }]}>{currentTabConfig.chartTitle}</Text>
-              <Text style={[styles.chartCardSubtitle, isDarkMode && { color: colors.textSecondary }]}>{currentTabConfig.chartSubtitle}</Text>
+              <LocalizedText style={[styles.chartCardTitle, isDarkMode && { color: colors.textPrimary }]}>{currentTabConfig.chartTitle}</LocalizedText>
+              <LocalizedText style={[styles.chartCardSubtitle, isDarkMode && { color: colors.textSecondary }]}>{currentTabConfig.chartSubtitle}</LocalizedText>
             </View>
             <View style={styles.chartAvgBadge}>
-              <Text style={styles.chartAvgText}>{currentTabConfig.chartAvg}</Text>
+              <LocalizedText style={styles.chartAvgText}>{currentTabConfig.chartAvg}</LocalizedText>
             </View>
           </View>
 
@@ -709,7 +703,7 @@ export default function HealthDetailScreen({ navigation, route }: any) {
               const isCurrent = idx === currentTabConfig.chartData.length - 1;
               return (
                 <View key={point.label} style={styles.barCol}>
-                  <Text style={[styles.barValText, isDarkMode && { color: colors.textSecondary }]}>{point.hr}</Text>
+                  <LocalizedText style={[styles.barValText, isDarkMode && { color: colors.textSecondary }]}>{point.hr}</LocalizedText>
                   <View style={[styles.barTrack, isDarkMode && { backgroundColor: colors.surfaceSubtle }]}>
                     <View
                       style={[
@@ -721,7 +715,7 @@ export default function HealthDetailScreen({ navigation, route }: any) {
                       ]}
                     />
                   </View>
-                  <Text
+                  <LocalizedText
                     style={[
                       styles.barTimeText,
                       isDarkMode && { color: colors.textSecondary },
@@ -730,7 +724,7 @@ export default function HealthDetailScreen({ navigation, route }: any) {
                     numberOfLines={1}
                   >
                     {point.label}
-                  </Text>
+                  </LocalizedText>
                 </View>
               );
             })}
@@ -739,19 +733,19 @@ export default function HealthDetailScreen({ navigation, route }: any) {
 
         {/* 6. Trạng thái phần cứng & Âm thanh môi trường */}
         <View style={[styles.statusSectionCard, isDarkMode && { backgroundColor: colors.card, borderWidth: 1, borderColor: colors.border }]}>
-          <Text style={[styles.sectionHeading, isDarkMode && { color: colors.textPrimary }]}>Trạng thái cảm biến & Môi trường</Text>
+          <LocalizedText style={[styles.sectionHeading, isDarkMode && { color: colors.textPrimary }]}>Trạng thái cảm biến & Môi trường</LocalizedText>
 
           <View style={styles.statusRowItem}>
             <View style={[styles.statusIconBox, isDarkMode && { backgroundColor: 'rgba(255, 122, 0, 0.15)' }]}>
               <Ionicons name="watch-outline" size={20} color={Colors.primary} />
             </View>
             <View style={{ flex: 1 }}>
-              <Text style={[styles.statusItemTitle, isDarkMode && { color: colors.textPrimary }]}>Vòng tay thông minh BLE</Text>
-              <Text style={[styles.statusItemSub, isDarkMode && { color: colors.textSecondary }]}>Pin: {battery}% • Kết nối liên tục</Text>
+              <LocalizedText style={[styles.statusItemTitle, isDarkMode && { color: colors.textPrimary }]}>Vòng tay thông minh BLE</LocalizedText>
+              <LocalizedText style={[styles.statusItemSub, isDarkMode && { color: colors.textSecondary }]}>Pin: {battery}% • Kết nối liên tục</LocalizedText>
             </View>
             <View style={styles.onlineBadge}>
               <View style={styles.onlineDot} />
-              <Text style={styles.onlineText}>Đang đo</Text>
+              <LocalizedText style={styles.onlineText}>Đang đo</LocalizedText>
             </View>
           </View>
 
@@ -762,12 +756,12 @@ export default function HealthDetailScreen({ navigation, route }: any) {
               <Ionicons name="mic-outline" size={20} color="#2563EB" />
             </View>
             <View style={{ flex: 1 }}>
-              <Text style={[styles.statusItemTitle, isDarkMode && { color: colors.textPrimary }]}>Nhận diện âm thanh YAMNet</Text>
-              <Text style={[styles.statusItemSub, isDarkMode && { color: colors.textSecondary }]}>Môi trường: {acousticStatus}</Text>
+              <LocalizedText style={[styles.statusItemTitle, isDarkMode && { color: colors.textPrimary }]}>Nhận diện âm thanh YAMNet</LocalizedText>
+              <LocalizedText style={[styles.statusItemSub, isDarkMode && { color: colors.textSecondary }]}>Môi trường: {acousticStatus}</LocalizedText>
             </View>
             <View style={styles.safeBadge}>
               <Ionicons name="checkmark-circle" size={14} color={Colors.success} />
-              <Text style={styles.safeText}>An toàn</Text>
+              <LocalizedText style={styles.safeText}>An toàn</LocalizedText>
             </View>
           </View>
         </View>
@@ -776,11 +770,11 @@ export default function HealthDetailScreen({ navigation, route }: any) {
         <View style={[styles.aiAdviceCard, isDarkMode && { backgroundColor: '#1E293B', borderColor: '#334155' }]}>
           <View style={styles.aiAdviceHeader}>
             <Ionicons name="sparkles" size={18} color="#D97706" />
-            <Text style={styles.aiAdviceTitle}>Lời khuyên Bác sĩ AI</Text>
+            <LocalizedText style={styles.aiAdviceTitle}>Lời khuyên Bác sĩ AI</LocalizedText>
           </View>
-          <Text style={[styles.aiAdviceBody, isDarkMode && { color: '#CBD5E1' }]}>
+          <LocalizedText style={[styles.aiAdviceBody, isDarkMode && { color: '#CBD5E1' }]}>
             {currentTabConfig.aiAdvice}
-          </Text>
+          </LocalizedText>
         </View>
       </ScrollView>
     </SafeAreaView>

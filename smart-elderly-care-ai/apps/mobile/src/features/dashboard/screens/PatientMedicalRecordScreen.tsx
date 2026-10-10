@@ -2,28 +2,14 @@
 // Màn hình Hồ sơ bệnh án người cao tuổi (Bảo mật y tế chuẩn AES-256)
 
 import React, { useState, useEffect } from 'react';
-import {
-  View,
-  Text,
-  StyleSheet,
-  TouchableOpacity,
-  ScrollView,
-  TextInput,
-  Modal,
-  Pressable,
-  Alert,
-  Linking,
-  Platform,
-  Image,
-  ActivityIndicator,
-} from 'react-native';
+import { View, StyleSheet, TouchableOpacity, ScrollView, Modal, Pressable, Linking, Platform } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
-import * as ImagePicker from 'expo-image-picker';
 import { useTheme } from '../../../store/useThemeStore';
 import { Colors } from '../../../theme/colors';
 import { useVitalStore } from '../../../store/useVitalStore';
-import { BASE_URL } from '../../../services/api';
+import { LocalizedAlert, LocalizedText, LocalizedTextInput } from '../../../i18n/LocalizedComponents';
+
 
 interface MedicalCondition {
   id: string;
@@ -34,16 +20,12 @@ interface MedicalCondition {
 
 export default function PatientMedicalRecordScreen({ navigation }: any) {
   const { isDarkMode, colors } = useTheme();
-  const { fetchPatientRecord, patientRecord, isLoadingPatient, enrollPatientFace } = useVitalStore();
+  const { fetchPatientRecord, patientRecord, isLoadingPatient } = useVitalStore();
 
   // Patient Info State
   const [patientName, setPatientName] = useState('Nguyễn Văn An');
   const [birthYear, setBirthYear] = useState('1948');
   const [age, setAge] = useState(78);
-  const [avatarUrl, setAvatarUrl] = useState<string | null>(null);
-  const [hasFaceEnrolled, setHasFaceEnrolled] = useState(false);
-  const [isUploadingFace, setIsUploadingFace] = useState(false);
-  const [isFaceModalVisible, setFaceModalVisible] = useState(false);
 
   // Tự động gọi API lấy dữ liệu hồ sơ bệnh án người cao tuổi từ Backend FastAPI
   useEffect(() => {
@@ -68,31 +50,54 @@ export default function PatientMedicalRecordScreen({ navigation }: any) {
         if (data.doctor_specialty) setDoctorSpecialty(data.doctor_specialty);
         if (data.hospital) setHospital(data.hospital);
         if (data.next_appointment) setNextAppointment(data.next_appointment);
-        if (data.avatar_url) setAvatarUrl(data.avatar_url);
-        if (data.has_face_enrolled !== undefined) setHasFaceEnrolled(Boolean(data.has_face_enrolled));
       }
     };
     loadRecord();
   }, []);
   const [gender, setGender] = useState('Nam');
-  const [bloodType, setBloodType] = useState('');
-  const [height, setHeight] = useState('');
-  const [weight, setWeight] = useState('');
+  const [bloodType, setBloodType] = useState('O+');
+  const [height, setHeight] = useState('165');
+  const [weight, setWeight] = useState('62');
 
   // Medical conditions list
-  const [conditions, setConditions] = useState<MedicalCondition[]>([]);
+  const [conditions, setConditions] = useState<MedicalCondition[]>([
+    {
+      id: 'c1',
+      name: 'Cao huyết áp (Độ 2)',
+      severity: 'danger',
+      note: 'Huyết áp nền 145/90 mmHg, uống Amlodipine 5mg hàng ngày',
+    },
+    {
+      id: 'c2',
+      name: 'Tim mạch (Thiếu máu cơ tim nhẹ)',
+      severity: 'warning',
+      note: 'Tái khám định kỳ, tránh gắng sức thể lực quá mức',
+    },
+    {
+      id: 'c3',
+      name: 'Đái tháo đường Type 2',
+      severity: 'warning',
+      note: 'Duy trì HbA1c < 7.0%, kiểm tra đường huyết đói mỗi sáng',
+    },
+    {
+      id: 'c4',
+      name: 'Thoái hóa khớp gối hai bên',
+      severity: 'info',
+      note: 'Nguy cơ té ngã khi đứng lên ngồi xuống, cần gậy hỗ trợ',
+    },
+  ]);
 
   // Allergies
-  const [drugAllergies, setDrugAllergies] = useState('');
-  const [foodAllergies, setFoodAllergies] = useState('');
-  const [dietaryNotes, setDietaryNotes] = useState('');
+  const [drugAllergies, setDrugAllergies] = useState('Penicillin, Aspirin liều cao');
+  const [foodAllergies, setFoodAllergies] = useState('Tôm, cua biển (Hải sản có vỏ)');
+  const [dietaryNotes, setDietaryNotes] = useState('Ăn nhạt, giảm muối (<5g/ngày), uống đủ 1.5 - 2L nước ấm');
 
   // Doctor & Hospital
-  const [doctorName, setDoctorName] = useState('');
-  const [doctorPhone, setDoctorPhone] = useState('');
-  const [doctorSpecialty, setDoctorSpecialty] = useState('');
-  const [hospital, setHospital] = useState('');
-  const [nextAppointment, setNextAppointment] = useState('');
+  const [doctorName, setDoctorName] = useState('BSCKII. Trần Minh Đức');
+  const [doctorPhone, setDoctorPhone] = useState('0988 123 456');
+  const [doctorSpecialty, setDoctorSpecialty] = useState('Lão khoa & Tim mạch');
+  const [hospital, setHospital] = useState('Bệnh viện Lão khoa TW / BV Chợ Rẫy');
+  const [nextAppointment, setNextAppointment] = useState('15/10/2026');
 
   // Add/Edit modal states
   const [isAddConditionModalVisible, setAddConditionModalVisible] = useState(false);
@@ -115,16 +120,16 @@ export default function PatientMedicalRecordScreen({ navigation }: any) {
       if (supported) {
         await Linking.openURL(url);
       } else {
-        Alert.alert('Thông báo', `Gọi số bác sĩ phụ trách: ${doctorPhone}`);
+        LocalizedAlert.alert('Thông báo', `Gọi số bác sĩ phụ trách: ${doctorPhone}`);
       }
     } catch {
-      Alert.alert('Thông báo', `Gọi số bác sĩ: ${doctorPhone}`);
+      LocalizedAlert.alert('Thông báo', `Gọi số bác sĩ: ${doctorPhone}`);
     }
   };
 
   const handleAddCondition = () => {
     if (!newConditionName.trim()) {
-      Alert.alert('Lỗi', 'Vui lòng nhập tên bệnh lý hoặc tiền sử bệnh.');
+      LocalizedAlert.alert('Lỗi', 'Vui lòng nhập tên bệnh lý hoặc tiền sử bệnh.');
       return;
     }
     const newCond: MedicalCondition = {
@@ -137,11 +142,11 @@ export default function PatientMedicalRecordScreen({ navigation }: any) {
     setNewConditionName('');
     setNewConditionNote('');
     setAddConditionModalVisible(false);
-    Alert.alert('Thành công', 'Đã thêm tiền sử bệnh lý vào hồ sơ.');
+    LocalizedAlert.alert('Thành công', 'Đã thêm tiền sử bệnh lý vào hồ sơ.');
   };
 
   const handleDeleteCondition = (id: string, name: string) => {
-    Alert.alert(
+    LocalizedAlert.alert(
       'Xóa bệnh lý',
       `Bạn có chắc muốn xóa "${name}" khỏi hồ sơ bệnh án?`,
       [
@@ -163,76 +168,7 @@ export default function PatientMedicalRecordScreen({ navigation }: any) {
     setWeight(editWeightDraft.trim() || weight);
     setHeight(editHeightDraft.trim() || height);
     setEditPatientVisible(false);
-    Alert.alert('Đã cập nhật', 'Thông tin bệnh nhân đã được lưu an toàn.');
-  };
-
-  const handlePickFaceImage = async (useCamera: boolean) => {
-    try {
-      if (Platform.OS !== 'web') {
-        if (useCamera) {
-          const { status } = await ImagePicker.requestCameraPermissionsAsync();
-          if (status !== 'granted') {
-            Alert.alert('Quyền truy cập', 'Cần cấp quyền truy cập Camera để chụp ảnh khuôn mặt.');
-            return;
-          }
-        } else {
-          const { status } = await ImagePicker.requestMediaLibraryPermissionsAsync();
-          if (status !== 'granted') {
-            Alert.alert('Quyền truy cập', 'Cần cấp quyền truy cập Thư viện ảnh để chọn ảnh.');
-            return;
-          }
-        }
-      }
-
-      const options: ImagePicker.ImagePickerOptions = {
-        mediaTypes: ImagePicker.MediaTypeOptions.Images,
-        allowsEditing: true,
-        aspect: [1, 1],
-        quality: 0.85,
-      };
-
-      const result = useCamera
-        ? await ImagePicker.launchCameraAsync(options)
-        : await ImagePicker.launchImageLibraryAsync(options);
-
-      if (result.canceled || !result.assets || result.assets.length === 0) {
-        return;
-      }
-
-      const asset = result.assets[0];
-      setFaceModalVisible(false);
-      setIsUploadingFace(true);
-
-      const formData = new FormData();
-      if (Platform.OS === 'web') {
-        const fetchRes = await fetch(asset.uri);
-        const blob = await fetchRes.blob();
-        formData.append('file', blob, 'elderly_face.jpg');
-      } else {
-        formData.append('file', {
-          uri: asset.uri,
-          name: 'elderly_face.jpg',
-          type: 'image/jpeg',
-        } as any);
-      }
-
-      const res = await enrollPatientFace(1, formData);
-      if (res && res.success) {
-        setAvatarUrl(res.avatar_url);
-        setHasFaceEnrolled(true);
-        Alert.alert(
-          'Đăng ký khuôn mặt thành công 🎉',
-          `Hệ thống AI Edge Hub (Orange Pi 5) đã trích xuất vector đặc trưng và kích hoạt nhận diện khuôn mặt cho ${patientName}.`
-        );
-      } else {
-        Alert.alert('Thông báo', res?.message || 'Không thể đăng ký khuôn mặt.');
-      }
-    } catch (err: any) {
-      console.warn('handlePickFaceImage error:', err);
-      Alert.alert('Lỗi', 'Không thể tải ảnh khuôn mặt lên server. Vui lòng thử lại.');
-    } finally {
-      setIsUploadingFace(false);
-    }
+    LocalizedAlert.alert('Đã cập nhật', 'Thông tin bệnh nhân đã được lưu an toàn.');
   };
 
   const bmi = (
@@ -276,22 +212,22 @@ export default function PatientMedicalRecordScreen({ navigation }: any) {
         </TouchableOpacity>
 
         <View style={styles.headerTitleCenter}>
-          <Text
+          <LocalizedText
             style={[
               styles.headerTitle,
               { color: isDarkMode ? '#F8FAFC' : '#0F172A' },
             ]}
           >
             Hồ sơ bệnh án người cao tuổi
-          </Text>
-          <Text
+          </LocalizedText>
+          <LocalizedText
             style={[
               styles.headerSubtitle,
               { color: isDarkMode ? '#94A3B8' : '#64748B' },
             ]}
           >
             Thông tin y tế, bệnh nền &amp; đơn thuốc
-          </Text>
+          </LocalizedText>
         </View>
 
         <TouchableOpacity
@@ -334,20 +270,20 @@ export default function PatientMedicalRecordScreen({ navigation }: any) {
           </View>
           <View style={{ flex: 1 }}>
             <View style={styles.securityBadgeRow}>
-              <Text
+              <LocalizedText
                 style={[
                   styles.securityTitle,
                   { color: isDarkMode ? '#38BDF8' : '#0369A1' },
                 ]}
               >
                 Dữ liệu được mã hóa chuẩn y tế AES-256
-              </Text>
+              </LocalizedText>
               <View style={styles.aesTag}>
                 <Ionicons name="lock-closed" size={10} color="#0EA5E9" />
-                <Text style={styles.aesTagText}>AES-256 GCM</Text>
+                <LocalizedText style={styles.aesTagText}>AES-256 GCM</LocalizedText>
               </View>
             </View>
-            <Text
+            <LocalizedText
               style={[
                 styles.securityDesc,
                 { color: isDarkMode ? '#94A3B8' : '#0C4A6E' },
@@ -355,7 +291,7 @@ export default function PatientMedicalRecordScreen({ navigation }: any) {
             >
               Hồ sơ bệnh án điện tử tuân thủ tiêu chuẩn an toàn HL7/FHIR, bảo mật
               đa lớp và chỉ chia sẻ với bác sĩ chỉ định.
-            </Text>
+            </LocalizedText>
           </View>
         </View>
 
@@ -379,14 +315,14 @@ export default function PatientMedicalRecordScreen({ navigation }: any) {
               >
                 <Ionicons name="person-outline" size={20} color="#2563EB" />
               </View>
-              <Text
+              <LocalizedText
                 style={[
                   styles.cardTitle,
                   { color: isDarkMode ? '#F8FAFC' : '#0F172A' },
                 ]}
               >
                 Thông tin người cao tuổi
-              </Text>
+              </LocalizedText>
             </View>
             <TouchableOpacity
               onPress={() => {
@@ -397,62 +333,44 @@ export default function PatientMedicalRecordScreen({ navigation }: any) {
                 setEditPatientVisible(true);
               }}
             >
-              <Text style={styles.editLink}>Chỉnh sửa</Text>
+              <LocalizedText style={styles.editLink}>Chỉnh sửa</LocalizedText>
             </TouchableOpacity>
           </View>
 
           <View style={styles.patientHeroRow}>
-            <TouchableOpacity
+            <View
               style={[
-                styles.patientAvatarContainer,
+                styles.patientAvatar,
                 { backgroundColor: isDarkMode ? '#0F172A' : '#F1F5F9' },
               ]}
-              onPress={() => setFaceModalVisible(true)}
-              activeOpacity={0.8}
             >
-              {avatarUrl ? (
-                <Image
-                  source={{
-                    uri: avatarUrl.startsWith('http')
-                      ? avatarUrl
-                      : `${BASE_URL.replace('/api/v1', '')}${avatarUrl}?t=${Date.now()}`,
-                  }}
-                  style={styles.patientAvatarImg}
-                />
-              ) : (
-                <Ionicons
-                  name="person"
-                  size={40}
-                  color={isDarkMode ? '#64748B' : '#94A3B8'}
-                />
-              )}
-              <View style={styles.avatarCameraBadge}>
-                <Ionicons name="camera" size={11} color="#FFF" />
-              </View>
-            </TouchableOpacity>
-
+              <Ionicons
+                name="person"
+                size={40}
+                color={isDarkMode ? '#64748B' : '#94A3B8'}
+              />
+            </View>
             <View style={{ flex: 1, marginLeft: 14 }}>
-              <Text
+              <LocalizedText
                 style={[
                   styles.patientHeroName,
                   { color: isDarkMode ? '#F8FAFC' : '#0F172A' },
                 ]}
               >
                 {patientName}
-              </Text>
-              <Text
+              </LocalizedText>
+              <LocalizedText
                 style={[
                   styles.patientHeroSub,
                   { color: isDarkMode ? '#94A3B8' : '#64748B' },
                 ]}
               >
                 Sinh năm: {birthYear} ({age} tuổi) • Giới tính: {gender}
-              </Text>
-
+              </LocalizedText>
               <View style={styles.bloodBadgeRow}>
                 <View style={styles.bloodBadge}>
                   <Ionicons name="water" size={13} color="#EF4444" />
-                  <Text style={styles.bloodBadgeText}>Nhóm máu: {bloodType}</Text>
+                  <LocalizedText style={styles.bloodBadgeText}>Nhóm máu: {bloodType}</LocalizedText>
                 </View>
                 <View
                   style={[
@@ -460,34 +378,9 @@ export default function PatientMedicalRecordScreen({ navigation }: any) {
                     { backgroundColor: isDarkMode ? '#064E3B' : '#DCFCE7' },
                   ]}
                 >
-                  <Text style={styles.bmiBadgeText}>BMI: {bmi} (Bình thường)</Text>
+                  <LocalizedText style={styles.bmiBadgeText}>BMI: {bmi} (Bình thường)</LocalizedText>
                 </View>
               </View>
-
-              <TouchableOpacity
-                style={[
-                  styles.faceEnrollPill,
-                  hasFaceEnrolled
-                    ? { backgroundColor: isDarkMode ? '#064E3B' : '#DCFCE7', borderColor: '#10B981' }
-                    : { backgroundColor: isDarkMode ? '#451A03' : '#FEF3C7', borderColor: '#F59E0B' },
-                ]}
-                onPress={() => setFaceModalVisible(true)}
-                activeOpacity={0.7}
-              >
-                <Ionicons
-                  name={hasFaceEnrolled ? 'scan-circle' : 'scan-outline'}
-                  size={14}
-                  color={hasFaceEnrolled ? '#10B981' : '#F59E0B'}
-                />
-                <Text
-                  style={[
-                    styles.faceEnrollPillText,
-                    { color: hasFaceEnrolled ? '#047857' : '#B45309' },
-                  ]}
-                >
-                  {hasFaceEnrolled ? 'AI Face ID: Đã kích hoạt' : 'Khuôn mặt: Chưa đăng ký'}
-                </Text>
-              </TouchableOpacity>
             </View>
           </View>
 
@@ -498,22 +391,22 @@ export default function PatientMedicalRecordScreen({ navigation }: any) {
             ]}
           >
             <View style={styles.metricItem}>
-              <Text
+              <LocalizedText
                 style={[
                   styles.metricLabel,
                   { color: isDarkMode ? '#94A3B8' : '#64748B' },
                 ]}
               >
                 Chiều cao
-              </Text>
-              <Text
+              </LocalizedText>
+              <LocalizedText
                 style={[
                   styles.metricVal,
                   { color: isDarkMode ? '#F8FAFC' : '#0F172A' },
                 ]}
               >
-                {height} <Text style={styles.metricUnit}>cm</Text>
-              </Text>
+                {height} <LocalizedText style={styles.metricUnit}>cm</LocalizedText>
+              </LocalizedText>
             </View>
             <View
               style={[
@@ -522,22 +415,22 @@ export default function PatientMedicalRecordScreen({ navigation }: any) {
               ]}
             />
             <View style={styles.metricItem}>
-              <Text
+              <LocalizedText
                 style={[
                   styles.metricLabel,
                   { color: isDarkMode ? '#94A3B8' : '#64748B' },
                 ]}
               >
                 Cân nặng
-              </Text>
-              <Text
+              </LocalizedText>
+              <LocalizedText
                 style={[
                   styles.metricVal,
                   { color: isDarkMode ? '#F8FAFC' : '#0F172A' },
                 ]}
               >
-                {weight} <Text style={styles.metricUnit}>kg</Text>
-              </Text>
+                {weight} <LocalizedText style={styles.metricUnit}>kg</LocalizedText>
+              </LocalizedText>
             </View>
             <View
               style={[
@@ -546,154 +439,18 @@ export default function PatientMedicalRecordScreen({ navigation }: any) {
               ]}
             />
             <View style={styles.metricItem}>
-              <Text
+              <LocalizedText
                 style={[
                   styles.metricLabel,
                   { color: isDarkMode ? '#94A3B8' : '#64748B' },
                 ]}
               >
                 Nhóm máu
-              </Text>
-              <Text style={[styles.metricVal, { color: '#EF4444' }]}>
+              </LocalizedText>
+              <LocalizedText style={[styles.metricVal, { color: '#EF4444' }]}>
                 {bloodType}
-              </Text>
+              </LocalizedText>
             </View>
-          </View>
-        </View>
-
-        {/* Khối Nhận diện khuôn mặt AI (Edge Hub Vision) */}
-        <View
-          style={[
-            styles.cardBlock,
-            {
-              backgroundColor: isDarkMode ? '#1E293B' : '#FFFFFF',
-              borderColor: hasFaceEnrolled
-                ? isDarkMode
-                  ? '#059669'
-                  : '#A7F3D0'
-                : isDarkMode
-                ? '#334155'
-                : '#E2E8F0',
-            },
-          ]}
-        >
-          <View style={styles.cardHeader}>
-            <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8 }}>
-              <View
-                style={[
-                  styles.cardIconBox,
-                  { backgroundColor: hasFaceEnrolled ? (isDarkMode ? '#064E3B' : '#DCFCE7') : (isDarkMode ? '#3B1D54' : '#F3E8FF') },
-                ]}
-              >
-                <Ionicons
-                  name="scan"
-                  size={20}
-                  color={hasFaceEnrolled ? '#10B981' : '#A855F7'}
-                />
-              </View>
-              <View>
-                <Text
-                  style={[
-                    styles.cardTitle,
-                    { color: isDarkMode ? '#F8FAFC' : '#0F172A' },
-                  ]}
-                >
-                  Nhận diện khuôn mặt AI (Hub Camera)
-                </Text>
-                <Text
-                  style={[
-                    styles.cardSubtitle,
-                    { color: isDarkMode ? '#94A3B8' : '#64748B' },
-                  ]}
-                >
-                  YOLO-Pose Head ROI &amp; 128-D Re-ID Edge Hub
-                </Text>
-              </View>
-            </View>
-
-            <View
-              style={[
-                styles.faceStatusTag,
-                {
-                  backgroundColor: hasFaceEnrolled
-                    ? isDarkMode
-                      ? '#064E3B'
-                      : '#DCFCE7'
-                    : isDarkMode
-                    ? '#451A03'
-                    : '#FEF3C7',
-                },
-              ]}
-            >
-              <Ionicons
-                name={hasFaceEnrolled ? 'checkmark-circle' : 'alert-circle'}
-                size={12}
-                color={hasFaceEnrolled ? '#10B981' : '#F59E0B'}
-              />
-              <Text
-                style={[
-                  styles.faceStatusTagText,
-                  { color: hasFaceEnrolled ? '#047857' : '#B45309' },
-                ]}
-              >
-                {hasFaceEnrolled ? 'Đã kích hoạt' : 'Chưa có mẫu'}
-              </Text>
-            </View>
-          </View>
-
-          <Text
-            style={[
-              styles.faceCardDesc,
-              { color: isDarkMode ? '#94A3B8' : '#475569' },
-            ]}
-          >
-            Camera AI tại Edge Hub (Orange Pi 5) tự động nhận diện khuôn mặt người cao tuổi để phân biệt với khách đến thăm và điều dưỡng, gắn nhãn tên chính xác trên luồng camera thời gian thực.
-          </Text>
-
-          <View style={styles.faceActionRow}>
-            <TouchableOpacity
-              style={[styles.faceBtn, styles.faceBtnPrimary]}
-              onPress={() => handlePickFaceImage(true)}
-              disabled={isUploadingFace}
-              activeOpacity={0.8}
-            >
-              {isUploadingFace ? (
-                <ActivityIndicator size="small" color="#FFF" />
-              ) : (
-                <>
-                  <Ionicons name="camera" size={17} color="#FFF" />
-                  <Text style={styles.faceBtnTextPrimary}>Chụp ảnh mới</Text>
-                </>
-              )}
-            </TouchableOpacity>
-
-            <TouchableOpacity
-              style={[
-                styles.faceBtn,
-                styles.faceBtnSecondary,
-                {
-                  backgroundColor: isDarkMode ? '#334155' : '#F1F5F9',
-                  borderColor: isDarkMode ? '#475569' : '#CBD5E1',
-                },
-              ]}
-              onPress={() => handlePickFaceImage(false)}
-              disabled={isUploadingFace}
-              activeOpacity={0.8}
-            >
-              <Ionicons
-                name="images-outline"
-                size={17}
-                color={isDarkMode ? '#F8FAFC' : '#1E293B'}
-              />
-              <Text
-                style={[
-                  styles.faceBtnTextSecondary,
-                  { color: isDarkMode ? '#F8FAFC' : '#1E293B' },
-                ]}
-              >
-                Chọn từ thư viện
-              </Text>
-            </TouchableOpacity>
           </View>
         </View>
 
@@ -718,22 +475,22 @@ export default function PatientMedicalRecordScreen({ navigation }: any) {
                 <Ionicons name="pulse-outline" size={20} color="#EF4444" />
               </View>
               <View>
-                <Text
+                <LocalizedText
                   style={[
                     styles.cardTitle,
                     { color: isDarkMode ? '#F8FAFC' : '#0F172A' },
                   ]}
                 >
                   Tiền sử bệnh nền ({conditions.length})
-                </Text>
-                <Text
+                </LocalizedText>
+                <LocalizedText
                   style={[
                     styles.cardSubtitle,
                     { color: isDarkMode ? '#94A3B8' : '#64748B' },
                   ]}
                 >
                   Được đồng bộ cảnh báo với mô hình YOLO-Pose &amp; Hub AI
-                </Text>
+                </LocalizedText>
               </View>
             </View>
             <TouchableOpacity
@@ -742,7 +499,7 @@ export default function PatientMedicalRecordScreen({ navigation }: any) {
               activeOpacity={0.7}
             >
               <Ionicons name="add" size={16} color="#FFF" />
-              <Text style={styles.addBtnSmallText}>Thêm</Text>
+              <LocalizedText style={styles.addBtnSmallText}>Thêm</LocalizedText>
             </TouchableOpacity>
           </View>
 
@@ -773,14 +530,14 @@ export default function PatientMedicalRecordScreen({ navigation }: any) {
                         },
                       ]}
                     />
-                    <Text
+                    <LocalizedText
                       style={[
                         styles.conditionName,
                         { color: isDarkMode ? '#F8FAFC' : '#0F172A' },
                       ]}
                     >
                       {item.name}
-                    </Text>
+                    </LocalizedText>
                   </View>
                   <TouchableOpacity
                     onPress={() => handleDeleteCondition(item.id, item.name)}
@@ -793,14 +550,14 @@ export default function PatientMedicalRecordScreen({ navigation }: any) {
                     />
                   </TouchableOpacity>
                 </View>
-                <Text
+                <LocalizedText
                   style={[
                     styles.conditionNote,
                     { color: isDarkMode ? '#94A3B8' : '#64748B' },
                   ]}
                 >
                   {item.note}
-                </Text>
+                </LocalizedText>
               </View>
             ))}
           </View>
@@ -826,14 +583,14 @@ export default function PatientMedicalRecordScreen({ navigation }: any) {
               >
                 <Ionicons name="warning-outline" size={20} color="#D97706" />
               </View>
-              <Text
+              <LocalizedText
                 style={[
                   styles.cardTitle,
                   { color: isDarkMode ? '#F8FAFC' : '#0F172A' },
                 ]}
               >
                 Dị ứng &amp; Lưu ý dinh dưỡng
-              </Text>
+              </LocalizedText>
             </View>
           </View>
 
@@ -841,31 +598,31 @@ export default function PatientMedicalRecordScreen({ navigation }: any) {
             <View style={styles.allergyRow}>
               <View style={styles.allergyTagDanger}>
                 <Ionicons name="bandage-outline" size={15} color="#EF4444" />
-                <Text style={styles.allergyTagDangerText}>Dị ứng thuốc:</Text>
+                <LocalizedText style={styles.allergyTagDangerText}>Dị ứng thuốc:</LocalizedText>
               </View>
-              <Text
+              <LocalizedText
                 style={[
                   styles.allergyValueText,
                   { color: isDarkMode ? '#F8FAFC' : '#0F172A' },
                 ]}
               >
                 {drugAllergies}
-              </Text>
+              </LocalizedText>
             </View>
 
             <View style={styles.allergyRow}>
               <View style={styles.allergyTagWarning}>
                 <Ionicons name="restaurant-outline" size={15} color="#D97706" />
-                <Text style={styles.allergyTagWarningText}>Dị ứng thức ăn:</Text>
+                <LocalizedText style={styles.allergyTagWarningText}>Dị ứng thức ăn:</LocalizedText>
               </View>
-              <Text
+              <LocalizedText
                 style={[
                   styles.allergyValueText,
                   { color: isDarkMode ? '#F8FAFC' : '#0F172A' },
                 ]}
               >
                 {foodAllergies}
-              </Text>
+              </LocalizedText>
             </View>
 
             <View
@@ -876,16 +633,16 @@ export default function PatientMedicalRecordScreen({ navigation }: any) {
             >
               <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6, marginBottom: 4 }}>
                 <Ionicons name="nutrition-outline" size={16} color="#10B981" />
-                <Text style={styles.dietaryNoteTitle}>Chế độ ăn khuyến nghị</Text>
+                <LocalizedText style={styles.dietaryNoteTitle}>Chế độ ăn khuyến nghị</LocalizedText>
               </View>
-              <Text
+              <LocalizedText
                 style={[
                   styles.dietaryNoteBody,
                   { color: isDarkMode ? '#94A3B8' : '#64748B' },
                 ]}
               >
                 {dietaryNotes}
-              </Text>
+              </LocalizedText>
             </View>
           </View>
         </View>
@@ -910,14 +667,14 @@ export default function PatientMedicalRecordScreen({ navigation }: any) {
               >
                 <Ionicons name="medkit-outline" size={20} color="#0F766E" />
               </View>
-              <Text
+              <LocalizedText
                 style={[
                   styles.cardTitle,
                   { color: isDarkMode ? '#F8FAFC' : '#0F172A' },
                 ]}
               >
                 Bác sĩ &amp; Bệnh viện phụ trách
-              </Text>
+              </LocalizedText>
             </View>
           </View>
 
@@ -935,46 +692,46 @@ export default function PatientMedicalRecordScreen({ navigation }: any) {
                 <Ionicons name="medical" size={26} color="#0EA5E9" />
               </View>
               <View style={{ flex: 1, marginLeft: 12 }}>
-                <Text
+                <LocalizedText
                   style={[
                     styles.doctorName,
                     { color: isDarkMode ? '#F8FAFC' : '#0F172A' },
                   ]}
                 >
                   {doctorName}
-                </Text>
-                <Text
+                </LocalizedText>
+                <LocalizedText
                   style={[
                     styles.doctorSpecialty,
                     { color: isDarkMode ? '#94A3B8' : '#64748B' },
                   ]}
                 >
                   Chuyên khoa: {doctorSpecialty}
-                </Text>
-                <Text
+                </LocalizedText>
+                <LocalizedText
                   style={[
                     styles.hospitalName,
                     { color: isDarkMode ? '#94A3B8' : '#475569' },
                   ]}
                 >
                   {hospital}
-                </Text>
+                </LocalizedText>
               </View>
             </View>
 
             <View style={styles.appointmentRow}>
               <Ionicons name="calendar-outline" size={16} color="#0EA5E9" />
-              <Text
+              <LocalizedText
                 style={[
                   styles.appointmentText,
                   { color: isDarkMode ? '#94A3B8' : '#475569' },
                 ]}
               >
                 Lịch tái khám tiếp theo:{' '}
-                <Text style={{ fontWeight: '700', color: Colors.primary }}>
+                <LocalizedText style={{ fontWeight: '700', color: Colors.primary }}>
                   {nextAppointment}
-                </Text>
-              </Text>
+                </LocalizedText>
+              </LocalizedText>
             </View>
 
             <TouchableOpacity
@@ -983,9 +740,9 @@ export default function PatientMedicalRecordScreen({ navigation }: any) {
               activeOpacity={0.8}
             >
               <Ionicons name="call" size={18} color="#FFF" />
-              <Text style={styles.callDoctorBtnText}>
+              <LocalizedText style={styles.callDoctorBtnText}>
                 Gọi bác sĩ phụ trách ({doctorPhone})
-              </Text>
+              </LocalizedText>
             </TouchableOpacity>
           </View>
         </View>
@@ -1010,14 +767,14 @@ export default function PatientMedicalRecordScreen({ navigation }: any) {
               >
                 <Ionicons name="receipt-outline" size={20} color="#A855F7" />
               </View>
-              <Text
+              <LocalizedText
                 style={[
                   styles.cardTitle,
                   { color: isDarkMode ? '#F8FAFC' : '#0F172A' },
                 ]}
               >
                 Đơn thuốc đang điều trị
-              </Text>
+              </LocalizedText>
             </View>
           </View>
 
@@ -1053,23 +810,23 @@ export default function PatientMedicalRecordScreen({ navigation }: any) {
                   <Ionicons name="bandage" size={18} color="#A855F7" />
                 </View>
                 <View style={{ flex: 1 }}>
-                  <Text
+                  <LocalizedText
                     style={[
                       styles.rxName,
                       { color: isDarkMode ? '#F8FAFC' : '#0F172A' },
                     ]}
                   >
                     {rx.name}
-                  </Text>
-                  <Text style={styles.rxDosage}>{rx.dosage}</Text>
-                  <Text
+                  </LocalizedText>
+                  <LocalizedText style={styles.rxDosage}>{rx.dosage}</LocalizedText>
+                  <LocalizedText
                     style={[
                       styles.rxPurpose,
                       { color: isDarkMode ? '#94A3B8' : '#64748B' },
                     ]}
                   >
                     Chỉ định: {rx.purpose}
-                  </Text>
+                  </LocalizedText>
                 </View>
               </View>
             ))}
@@ -1098,24 +855,24 @@ export default function PatientMedicalRecordScreen({ navigation }: any) {
             ]}
             onPress={() => {}}
           >
-            <Text
+            <LocalizedText
               style={[
                 styles.modalTitle,
                 { color: isDarkMode ? '#F8FAFC' : '#0F172A' },
               ]}
             >
               Thêm bệnh nền / Tiền sử bệnh
-            </Text>
+            </LocalizedText>
 
-            <Text
+            <LocalizedText
               style={[
                 styles.inputLabel,
                 { color: isDarkMode ? '#94A3B8' : '#64748B' },
               ]}
             >
               Tên bệnh lý / Chẩn đoán:
-            </Text>
-            <TextInput
+            </LocalizedText>
+            <LocalizedTextInput
               style={[
                 styles.textInput,
                 {
@@ -1130,15 +887,15 @@ export default function PatientMedicalRecordScreen({ navigation }: any) {
               onChangeText={setNewConditionName}
             />
 
-            <Text
+            <LocalizedText
               style={[
                 styles.inputLabel,
                 { color: isDarkMode ? '#94A3B8' : '#64748B' },
               ]}
             >
               Ghi chú điều trị / Lưu ý:
-            </Text>
-            <TextInput
+            </LocalizedText>
+            <LocalizedTextInput
               style={[
                 styles.textInput,
                 styles.textArea,
@@ -1167,20 +924,20 @@ export default function PatientMedicalRecordScreen({ navigation }: any) {
                 ]}
                 onPress={() => setAddConditionModalVisible(false)}
               >
-                <Text
+                <LocalizedText
                   style={[
                     styles.modalCancelText,
                     { color: isDarkMode ? '#94A3B8' : '#64748B' },
                   ]}
                 >
                   Hủy
-                </Text>
+                </LocalizedText>
               </TouchableOpacity>
               <TouchableOpacity
                 style={styles.modalSaveBtn}
                 onPress={handleAddCondition}
               >
-                <Text style={styles.modalSaveText}>Lưu bệnh lý</Text>
+                <LocalizedText style={styles.modalSaveText}>Lưu bệnh lý</LocalizedText>
               </TouchableOpacity>
             </View>
           </Pressable>
@@ -1208,24 +965,24 @@ export default function PatientMedicalRecordScreen({ navigation }: any) {
             ]}
             onPress={() => {}}
           >
-            <Text
+            <LocalizedText
               style={[
                 styles.modalTitle,
                 { color: isDarkMode ? '#F8FAFC' : '#0F172A' },
               ]}
             >
               Chỉnh sửa thông tin bệnh nhân
-            </Text>
+            </LocalizedText>
 
-            <Text
+            <LocalizedText
               style={[
                 styles.inputLabel,
                 { color: isDarkMode ? '#94A3B8' : '#64748B' },
               ]}
             >
               Họ tên cụ:
-            </Text>
-            <TextInput
+            </LocalizedText>
+            <LocalizedTextInput
               style={[
                 styles.textInput,
                 {
@@ -1240,15 +997,15 @@ export default function PatientMedicalRecordScreen({ navigation }: any) {
 
             <View style={{ flexDirection: 'row', gap: 10 }}>
               <View style={{ flex: 1 }}>
-                <Text
+                <LocalizedText
                   style={[
                     styles.inputLabel,
                     { color: isDarkMode ? '#94A3B8' : '#64748B' },
                   ]}
                 >
                   Chiều cao (cm):
-                </Text>
-                <TextInput
+                </LocalizedText>
+                <LocalizedTextInput
                   style={[
                     styles.textInput,
                     {
@@ -1263,15 +1020,15 @@ export default function PatientMedicalRecordScreen({ navigation }: any) {
                 />
               </View>
               <View style={{ flex: 1 }}>
-                <Text
+                <LocalizedText
                   style={[
                     styles.inputLabel,
                     { color: isDarkMode ? '#94A3B8' : '#64748B' },
                   ]}
                 >
                   Cân nặng (kg):
-                </Text>
-                <TextInput
+                </LocalizedText>
+                <LocalizedTextInput
                   style={[
                     styles.textInput,
                     {
@@ -1287,15 +1044,15 @@ export default function PatientMedicalRecordScreen({ navigation }: any) {
               </View>
             </View>
 
-            <Text
+            <LocalizedText
               style={[
                 styles.inputLabel,
                 { color: isDarkMode ? '#94A3B8' : '#64748B' },
               ]}
             >
               Nhóm máu:
-            </Text>
-            <TextInput
+            </LocalizedText>
+            <LocalizedTextInput
               style={[
                 styles.textInput,
                 {
@@ -1319,131 +1076,22 @@ export default function PatientMedicalRecordScreen({ navigation }: any) {
                 ]}
                 onPress={() => setEditPatientVisible(false)}
               >
-                <Text
+                <LocalizedText
                   style={[
                     styles.modalCancelText,
                     { color: isDarkMode ? '#94A3B8' : '#64748B' },
                   ]}
                 >
                   Hủy
-                </Text>
+                </LocalizedText>
               </TouchableOpacity>
               <TouchableOpacity
                 style={styles.modalSaveBtn}
                 onPress={handleSavePatientInfo}
               >
-                <Text style={styles.modalSaveText}>Lưu thay đổi</Text>
+                <LocalizedText style={styles.modalSaveText}>Lưu thay đổi</LocalizedText>
               </TouchableOpacity>
             </View>
-          </Pressable>
-        </Pressable>
-      </Modal>
-
-      {/* Modal Đăng ký / Chụp ảnh khuôn mặt */}
-      <Modal
-        visible={isFaceModalVisible}
-        transparent
-        animationType="fade"
-        onRequestClose={() => setFaceModalVisible(false)}
-      >
-        <Pressable
-          style={styles.modalOverlay}
-          onPress={() => setFaceModalVisible(false)}
-        >
-          <Pressable
-            style={[
-              styles.modalCard,
-              {
-                backgroundColor: isDarkMode ? '#1E293B' : '#FFFFFF',
-                borderColor: isDarkMode ? '#334155' : '#E2E8F0',
-              },
-            ]}
-          >
-            <View style={{ alignItems: 'center', marginBottom: 16 }}>
-              <View
-                style={[
-                  styles.modalIconCircle,
-                  { backgroundColor: isDarkMode ? '#064E3B' : '#DCFCE7' },
-                ]}
-              >
-                <Ionicons name="scan" size={32} color="#10B981" />
-              </View>
-              <Text
-                style={[
-                  styles.modalTitle,
-                  { color: isDarkMode ? '#F8FAFC' : '#0F172A', marginTop: 12 },
-                ]}
-              >
-                Đăng ký khuôn mặt AI
-              </Text>
-              <Text
-                style={[
-                  styles.modalSubDesc,
-                  { color: isDarkMode ? '#94A3B8' : '#64748B' },
-                ]}
-              >
-                Chụp ảnh rõ nét chính diện khuôn mặt của {patientName} để camera Hub tự động nhận diện và gán tên.
-              </Text>
-            </View>
-
-            <TouchableOpacity
-              style={styles.modalActionRowBtn}
-              onPress={() => handlePickFaceImage(true)}
-              activeOpacity={0.8}
-            >
-              <View style={[styles.modalActionIconBox, { backgroundColor: '#EFF6FF' }]}>
-                <Ionicons name="camera" size={22} color="#2563EB" />
-              </View>
-              <View style={{ flex: 1, marginLeft: 12 }}>
-                <Text style={[styles.modalActionTitle, { color: isDarkMode ? '#F8FAFC' : '#0F172A' }]}>
-                  Mở máy ảnh chụp trực tiếp
-                </Text>
-                <Text style={[styles.modalActionSub, { color: isDarkMode ? '#94A3B8' : '#64748B' }]}>
-                  Chụp khuôn mặt người cao tuổi ngay bây giờ
-                </Text>
-              </View>
-              <Ionicons name="chevron-forward" size={18} color="#94A3B8" />
-            </TouchableOpacity>
-
-            <TouchableOpacity
-              style={[styles.modalActionRowBtn, { marginTop: 10 }]}
-              onPress={() => handlePickFaceImage(false)}
-              activeOpacity={0.8}
-            >
-              <View style={[styles.modalActionIconBox, { backgroundColor: '#F0FDF4' }]}>
-                <Ionicons name="images" size={22} color="#16A34A" />
-              </View>
-              <View style={{ flex: 1, marginLeft: 12 }}>
-                <Text style={[styles.modalActionTitle, { color: isDarkMode ? '#F8FAFC' : '#0F172A' }]}>
-                  Chọn ảnh từ album
-                </Text>
-                <Text style={[styles.modalActionSub, { color: isDarkMode ? '#94A3B8' : '#64748B' }]}>
-                  Tải lên ảnh chân dung có sẵn trong thư viện
-                </Text>
-              </View>
-              <Ionicons name="chevron-forward" size={18} color="#94A3B8" />
-            </TouchableOpacity>
-
-            <TouchableOpacity
-              style={[
-                styles.modalCloseBtn,
-                {
-                  backgroundColor: isDarkMode ? '#334155' : '#F1F5F9',
-                  borderColor: isDarkMode ? '#475569' : '#E2E8F0',
-                  marginTop: 16,
-                },
-              ]}
-              onPress={() => setFaceModalVisible(false)}
-            >
-              <Text
-                style={[
-                  styles.modalCloseBtnText,
-                  { color: isDarkMode ? '#F8FAFC' : '#475569' },
-                ]}
-              >
-                Hủy bỏ
-              </Text>
-            </TouchableOpacity>
           </Pressable>
         </Pressable>
       </Modal>
@@ -1581,32 +1229,6 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     alignItems: 'center',
     marginBottom: 14,
-  },
-  patientAvatarContainer: {
-    width: 72,
-    height: 72,
-    borderRadius: 36,
-    alignItems: 'center',
-    justifyContent: 'center',
-    position: 'relative',
-    borderWidth: 2,
-    borderColor: Colors.primary,
-    overflow: 'hidden',
-  },
-  patientAvatarImg: {
-    width: 68,
-    height: 68,
-    borderRadius: 34,
-  },
-  avatarCameraBadge: {
-    position: 'absolute',
-    bottom: 0,
-    right: 0,
-    left: 0,
-    height: 20,
-    backgroundColor: 'rgba(0,0,0,0.6)',
-    alignItems: 'center',
-    justifyContent: 'center',
   },
   patientAvatar: {
     width: 64,
@@ -1930,112 +1552,5 @@ const styles = StyleSheet.create({
     fontSize: 14,
     fontWeight: '700',
     color: '#FFF',
-  },
-  faceEnrollPill: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 5,
-    borderWidth: 1,
-    paddingHorizontal: 8,
-    paddingVertical: 4,
-    borderRadius: 8,
-    marginTop: 8,
-    alignSelf: 'flex-start',
-  },
-  faceEnrollPillText: {
-    fontSize: 11,
-    fontWeight: '700',
-  },
-  faceStatusTag: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 4,
-    paddingHorizontal: 8,
-    paddingVertical: 4,
-    borderRadius: 6,
-  },
-  faceStatusTagText: {
-    fontSize: 11,
-    fontWeight: '700',
-  },
-  faceCardDesc: {
-    fontSize: 12,
-    lineHeight: 18,
-    marginBottom: 14,
-  },
-  faceActionRow: {
-    flexDirection: 'row',
-    gap: 10,
-  },
-  faceBtn: {
-    flex: 1,
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'center',
-    gap: 6,
-    paddingVertical: 10,
-    borderRadius: 10,
-  },
-  faceBtnPrimary: {
-    backgroundColor: Colors.primary,
-  },
-  faceBtnSecondary: {
-    borderWidth: 1,
-  },
-  faceBtnTextPrimary: {
-    fontSize: 13,
-    fontWeight: '700',
-    color: '#FFF',
-  },
-  faceBtnTextSecondary: {
-    fontSize: 13,
-    fontWeight: '700',
-  },
-  modalIconCircle: {
-    width: 60,
-    height: 60,
-    borderRadius: 30,
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
-  modalSubDesc: {
-    fontSize: 12,
-    lineHeight: 18,
-    textAlign: 'center',
-    marginTop: 4,
-    paddingHorizontal: 12,
-  },
-  modalActionRowBtn: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    padding: 12,
-    borderRadius: 12,
-    borderWidth: 1,
-    borderColor: '#E2E8F0',
-  },
-  modalActionIconBox: {
-    width: 44,
-    height: 44,
-    borderRadius: 12,
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
-  modalActionTitle: {
-    fontSize: 14,
-    fontWeight: '700',
-  },
-  modalActionSub: {
-    fontSize: 11,
-    marginTop: 2,
-  },
-  modalCloseBtn: {
-    borderWidth: 1,
-    borderRadius: 10,
-    paddingVertical: 11,
-    alignItems: 'center',
-  },
-  modalCloseBtnText: {
-    fontSize: 13,
-    fontWeight: '600',
   },
 });

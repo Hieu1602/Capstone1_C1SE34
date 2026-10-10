@@ -2,12 +2,12 @@
 // Xem live stream camera từ Edge Hub và gọi SOS 115
 
 import React, { useState } from 'react';
-import {
-  View, Text, StyleSheet, TouchableOpacity, Linking, Alert,
-} from 'react-native';
+import { View, StyleSheet, TouchableOpacity, Linking } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
 import { Platform } from 'react-native';
+import { LocalizedAlert, LocalizedText } from '../../../i18n/LocalizedComponents';
+
 let WebView: any = null;
 if (Platform.OS !== 'web') {
   try {
@@ -21,7 +21,7 @@ export default function LiveStreamScreen() {
   const [isLive, setIsLive] = useState(false);
 
   const handleSOS = () => {
-    Alert.alert(
+    LocalizedAlert.alert(
       '🚨 Gọi cấp cứu 115?',
       'Hành động này sẽ quay số 115 ngay lập tức.',
       [
@@ -39,9 +39,9 @@ export default function LiveStreamScreen() {
     <SafeAreaView style={styles.container}>
       {/* Header */}
       <View style={styles.header}>
-        <Text style={styles.title}>Camera trực tiếp</Text>
+        <LocalizedText style={styles.title}>Camera trực tiếp</LocalizedText>
         <View style={[styles.liveDot, { backgroundColor: isLive ? '#EF4444' : '#64748B' }]} />
-        <Text style={styles.liveText}>{isLive ? 'LIVE' : 'Offline'}</Text>
+        <LocalizedText style={styles.liveText}>{isLive ? 'LIVE' : 'Offline'}</LocalizedText>
       </View>
 
       {/* Stream View */}
@@ -64,9 +64,9 @@ export default function LiveStreamScreen() {
         ) : (
           <View style={styles.offlinePlaceholder}>
             <Ionicons name="videocam-off" size={48} color="#475569" />
-            <Text style={styles.offlineText}>Camera không kết nối</Text>
+            <LocalizedText style={styles.offlineText}>Camera không kết nối</LocalizedText>
             <TouchableOpacity style={styles.connectBtn} onPress={() => setIsLive(true)}>
-              <Text style={styles.connectBtnText}>Kết nối camera</Text>
+              <LocalizedText style={styles.connectBtnText}>Kết nối camera</LocalizedText>
             </TouchableOpacity>
           </View>
         )}
@@ -75,7 +75,7 @@ export default function LiveStreamScreen() {
       {/* SOS Button */}
       <TouchableOpacity style={styles.sosButton} onPress={handleSOS} activeOpacity={0.8}>
         <Ionicons name="call" size={28} color="#FFF" />
-        <Text style={styles.sosText}>GỌI CẤP CỨU 115</Text>
+        <LocalizedText style={styles.sosText}>GỌI CẤP CỨU 115</LocalizedText>
       </TouchableOpacity>
     </SafeAreaView>
   );

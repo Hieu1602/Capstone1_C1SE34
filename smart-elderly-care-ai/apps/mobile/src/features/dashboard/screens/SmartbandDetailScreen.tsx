@@ -3,21 +3,13 @@
 // Thiết kế chuẩn y khoa cho hệ thống Smart Elderly Care AI theo Proposal Capstone 1
 
 import React, { useState, useRef } from 'react';
-import {
-  View,
-  Text,
-  StyleSheet,
-  TouchableOpacity,
-  ScrollView,
-  Animated,
-  Alert,
-  Dimensions,
-  ActivityIndicator,
-} from 'react-native';
+import { View, StyleSheet, TouchableOpacity, ScrollView, Animated, Dimensions, ActivityIndicator } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
 import { Colors, Shadows } from '../../../theme/colors';
 import { useVitalStore } from '../../../store/useVitalStore';
+import { LocalizedAlert, LocalizedText } from '../../../i18n/LocalizedComponents';
+
 
 const { width: SCREEN_WIDTH } = Dimensions.get('window');
 
@@ -62,7 +54,7 @@ export default function SmartbandDetailScreen({ navigation, route }: any) {
         timestamp: Date.now(),
       });
       setIsSyncing(false);
-      Alert.alert(
+      LocalizedAlert.alert(
         'Đồng Bộ Thành Công',
         `Đã nhận gói tin GATT mới nhất từ vòng đeo tay:\n• Nhịp tim: ${newHR} bpm\n• SpO₂: ${newSpO2}%\n• Thân nhiệt da: 36.7°C\n• Trọng lực: 1.01G (Bình thường)`
       );
@@ -74,7 +66,7 @@ export default function SmartbandDetailScreen({ navigation, route }: any) {
     setIsFinding(true);
     setTimeout(() => {
       setIsFinding(false);
-      Alert.alert(
+      LocalizedAlert.alert(
         'Đã Gửi Tín Hiệu Rung 📳',
         'Đã gửi lệnh GATT (Vibration Motor Alert) đến vòng đeo tay tại Phòng ngủ. Vòng tay đang rung 3 hồi chu kỳ.'
       );
@@ -108,12 +100,12 @@ export default function SmartbandDetailScreen({ navigation, route }: any) {
         </TouchableOpacity>
 
         <View style={styles.headerTitleBox}>
-          <Text style={styles.headerTitle}>
+          <LocalizedText style={styles.headerTitle}>
             {deviceParam?.name || 'Vòng đeo tay BLE Smartband'}
-          </Text>
+          </LocalizedText>
           <View style={styles.headerSubtitleRow}>
             <View style={styles.onlineDot} />
-            <Text style={styles.headerSubtitle}>GATT BLE 5.0 • Đang kết nối trực tuyến</Text>
+            <LocalizedText style={styles.headerSubtitle}>GATT BLE 5.0 • Đang kết nối trực tuyến</LocalizedText>
           </View>
         </View>
 
@@ -151,28 +143,28 @@ export default function SmartbandDetailScreen({ navigation, route }: any) {
             {/* Thông tin thiết bị */}
             <View style={styles.heroInfoColumn}>
               <View style={styles.modelBadgeRow}>
-                <Text style={styles.modelNameText}>BLE Smartband FR01</Text>
+                <LocalizedText style={styles.modelNameText}>BLE Smartband FR01</LocalizedText>
                 <View style={styles.medicalBadge}>
-                  <Text style={styles.medicalBadgeText}>Y TẾ</Text>
+                  <LocalizedText style={styles.medicalBadgeText}>Y TẾ</LocalizedText>
                 </View>
               </View>
 
-              <Text style={styles.wearerInfoText}>
+              <LocalizedText style={styles.wearerInfoText}>
                 <Ionicons name="person" size={14} color="#64748B" /> Người đeo:{' '}
-                <Text style={{ fontWeight: '700', color: '#0F172A' }}>Cụ Ông (78 tuổi)</Text>
-              </Text>
+                <LocalizedText style={{ fontWeight: '700', color: '#0F172A' }}>Cụ Ông (78 tuổi)</LocalizedText>
+              </LocalizedText>
 
-              <Text style={styles.locationInfoText}>
+              <LocalizedText style={styles.locationInfoText}>
                 <Ionicons name="location" size={14} color="#64748B" /> Vị trí:{' '}
-                <Text style={{ fontWeight: '600', color: '#334155' }}>
+                <LocalizedText style={{ fontWeight: '600', color: '#334155' }}>
                   {deviceParam?.location || 'Phòng ngủ'}
-                </Text>
-              </Text>
+                </LocalizedText>
+              </LocalizedText>
 
               {/* Trạng thái tiếp xúc da */}
               <View style={styles.skinContactBadge}>
                 <Ionicons name="checkmark-circle" size={15} color="#059669" />
-                <Text style={styles.skinContactText}>Đang đeo trên cổ tay (Tiếp xúc da tốt)</Text>
+                <LocalizedText style={styles.skinContactText}>Đang đeo trên cổ tay (Tiếp xúc da tốt)</LocalizedText>
               </View>
             </View>
           </View>
@@ -185,32 +177,32 @@ export default function SmartbandDetailScreen({ navigation, route }: any) {
               <View style={styles.specQuickIconBox}>
                 <Ionicons name="battery-charging" size={18} color="#10B981" />
               </View>
-              <Text style={styles.specQuickVal}>84%</Text>
-              <Text style={styles.specQuickLabel}>Pin (~5 ngày)</Text>
+              <LocalizedText style={styles.specQuickVal}>84%</LocalizedText>
+              <LocalizedText style={styles.specQuickLabel}>Pin (~5 ngày)</LocalizedText>
             </View>
 
             <View style={styles.specQuickItem}>
               <View style={styles.specQuickIconBox}>
                 <Ionicons name="bluetooth" size={18} color="#0284C7" />
               </View>
-              <Text style={styles.specQuickVal}>BLE 5.0</Text>
-              <Text style={styles.specQuickLabel}>GATT Active</Text>
+              <LocalizedText style={styles.specQuickVal}>BLE 5.0</LocalizedText>
+              <LocalizedText style={styles.specQuickLabel}>GATT Active</LocalizedText>
             </View>
 
             <View style={styles.specQuickItem}>
               <View style={styles.specQuickIconBox}>
                 <Ionicons name="wifi" size={18} color="#8B5CF6" />
               </View>
-              <Text style={styles.specQuickVal}>-58 dBm</Text>
-              <Text style={styles.specQuickLabel}>Sóng rất tốt</Text>
+              <LocalizedText style={styles.specQuickVal}>-58 dBm</LocalizedText>
+              <LocalizedText style={styles.specQuickLabel}>Sóng rất tốt</LocalizedText>
             </View>
 
             <View style={styles.specQuickItem}>
               <View style={styles.specQuickIconBox}>
                 <Ionicons name="finger-print" size={18} color="#F59E0B" />
               </View>
-              <Text style={styles.specQuickVal}>88:2A:9C</Text>
-              <Text style={styles.specQuickLabel}>MAC ID</Text>
+              <LocalizedText style={styles.specQuickVal}>88:2A:9C</LocalizedText>
+              <LocalizedText style={styles.specQuickLabel}>MAC ID</LocalizedText>
             </View>
           </View>
 
@@ -227,9 +219,9 @@ export default function SmartbandDetailScreen({ navigation, route }: any) {
               ) : (
                 <Ionicons name="sync" size={18} color="#FFF" style={{ marginRight: 6 }} />
               )}
-              <Text style={styles.heroActionBtnPrimaryText}>
+              <LocalizedText style={styles.heroActionBtnPrimaryText}>
                 {isSyncing ? 'Đang đồng bộ...' : 'Đo ngay (PPG Live)'}
-              </Text>
+              </LocalizedText>
             </TouchableOpacity>
 
             <TouchableOpacity
@@ -244,9 +236,9 @@ export default function SmartbandDetailScreen({ navigation, route }: any) {
                 color="#0284C7"
                 style={{ marginRight: 6 }}
               />
-              <Text style={styles.heroActionBtnSecondaryText}>
+              <LocalizedText style={styles.heroActionBtnSecondaryText}>
                 {isFinding ? 'Đang gửi...' : 'Tìm vòng tay (Rung)'}
-              </Text>
+              </LocalizedText>
             </TouchableOpacity>
           </View>
         </View>
@@ -255,10 +247,10 @@ export default function SmartbandDetailScreen({ navigation, route }: any) {
         {/* 3. CÁC THÔNG TIN SỨC KHỎE ĐỒNG HỒ THU THẬP                     */}
         {/* ============================================================== */}
         <View style={styles.sectionHeaderRow}>
-          <Text style={styles.sectionTitle}>Chỉ Số Sức Khỏe Thu Thập</Text>
+          <LocalizedText style={styles.sectionTitle}>Chỉ Số Sức Khỏe Thu Thập</LocalizedText>
           <View style={styles.liveBadge}>
             <View style={styles.liveBadgePulse} />
-            <Text style={styles.liveBadgeText}>TRỰC TIẾP</Text>
+            <LocalizedText style={styles.liveBadgeText}>TRỰC TIẾP</LocalizedText>
           </View>
         </View>
 
@@ -270,32 +262,32 @@ export default function SmartbandDetailScreen({ navigation, route }: any) {
                 <Ionicons name="heart" size={22} color="#EF4444" />
               </View>
               <View style={{ marginLeft: 12 }}>
-                <Text style={styles.metricTitle}>Nhịp Tim (Heart Rate - PPG)</Text>
-                <Text style={styles.metricSub}>Cảm biến quang học Maxim MAX30102 (1 Hz)</Text>
+                <LocalizedText style={styles.metricTitle}>Nhịp Tim (Heart Rate - PPG)</LocalizedText>
+                <LocalizedText style={styles.metricSub}>Cảm biến quang học Maxim MAX30102 (1 Hz)</LocalizedText>
               </View>
             </View>
 
             <View style={styles.statusPillGreen}>
-              <Text style={styles.statusPillGreenText}>Ổn định</Text>
+              <LocalizedText style={styles.statusPillGreenText}>Ổn định</LocalizedText>
             </View>
           </View>
 
           <View style={styles.metricMainRow}>
             <View style={styles.metricValueWrapper}>
-              <Text style={[styles.metricMainValue, { color: '#EF4444' }]}>{hrValue}</Text>
-              <Text style={styles.metricMainUnit}>bpm</Text>
+              <LocalizedText style={[styles.metricMainValue, { color: '#EF4444' }]}>{hrValue}</LocalizedText>
+              <LocalizedText style={styles.metricMainUnit}>bpm</LocalizedText>
             </View>
 
             <View style={styles.metricMiniStatsColumn}>
-              <Text style={styles.metricMiniStatItem}>
-                Thấp nhất: <Text style={{ fontWeight: '700', color: '#0F172A' }}>62 bpm</Text>
-              </Text>
-              <Text style={styles.metricMiniStatItem}>
-                Trung bình: <Text style={{ fontWeight: '700', color: '#0F172A' }}>73 bpm</Text>
-              </Text>
-              <Text style={styles.metricMiniStatItem}>
-                Cao nhất: <Text style={{ fontWeight: '700', color: '#0F172A' }}>98 bpm</Text>
-              </Text>
+              <LocalizedText style={styles.metricMiniStatItem}>
+                Thấp nhất: <LocalizedText style={{ fontWeight: '700', color: '#0F172A' }}>62 bpm</LocalizedText>
+              </LocalizedText>
+              <LocalizedText style={styles.metricMiniStatItem}>
+                Trung bình: <LocalizedText style={{ fontWeight: '700', color: '#0F172A' }}>73 bpm</LocalizedText>
+              </LocalizedText>
+              <LocalizedText style={styles.metricMiniStatItem}>
+                Cao nhất: <LocalizedText style={{ fontWeight: '700', color: '#0F172A' }}>98 bpm</LocalizedText>
+              </LocalizedText>
             </View>
           </View>
 
@@ -313,11 +305,11 @@ export default function SmartbandDetailScreen({ navigation, route }: any) {
               />
             </View>
             <View style={styles.rangeLabelsRow}>
-              <Text style={styles.rangeLabelText}>50 (Ngủ)</Text>
-              <Text style={[styles.rangeLabelText, { color: '#059669', fontWeight: '700' }]}>
+              <LocalizedText style={styles.rangeLabelText}>50 (Ngủ)</LocalizedText>
+              <LocalizedText style={[styles.rangeLabelText, { color: '#059669', fontWeight: '700' }]}>
                 Khoảng an toàn: 60 - 100 bpm
-              </Text>
-              <Text style={styles.rangeLabelText}>120 (Cảnh báo)</Text>
+              </LocalizedText>
+              <LocalizedText style={styles.rangeLabelText}>120 (Cảnh báo)</LocalizedText>
             </View>
           </View>
 
@@ -331,17 +323,17 @@ export default function SmartbandDetailScreen({ navigation, route }: any) {
                     { height: Math.max((item.hr - 50) * 1.5, 16) },
                   ]}
                 />
-                <Text style={styles.timelineHrText}>{item.hr}</Text>
-                <Text style={styles.timelineTimeText}>{item.time}</Text>
+                <LocalizedText style={styles.timelineHrText}>{item.hr}</LocalizedText>
+                <LocalizedText style={styles.timelineTimeText}>{item.time}</LocalizedText>
               </View>
             ))}
           </View>
 
           <View style={styles.aiInsightBox}>
             <Ionicons name="sparkles" size={15} color="#0284C7" />
-            <Text style={styles.aiInsightText}>
+            <LocalizedText style={styles.aiInsightText}>
               Đánh giá AI: Nhịp xoang đều đặn, không có hiện tượng loạn nhịp (Arrhythmia) hay nhịp tim nhanh bất thường trong ngày.
-            </Text>
+            </LocalizedText>
           </View>
         </View>
 
@@ -353,33 +345,33 @@ export default function SmartbandDetailScreen({ navigation, route }: any) {
                 <Ionicons name="water" size={22} color="#0284C7" />
               </View>
               <View style={{ marginLeft: 12 }}>
-                <Text style={styles.metricTitle}>Nồng Độ Oxy Trong Máu (SpO₂)</Text>
-                <Text style={styles.metricSub}>Bão hòa oxy mao mạch ngoại vi (Pulse Oximetry)</Text>
+                <LocalizedText style={styles.metricTitle}>Nồng Độ Oxy Trong Máu (SpO₂)</LocalizedText>
+                <LocalizedText style={styles.metricSub}>Bão hòa oxy mao mạch ngoại vi (Pulse Oximetry)</LocalizedText>
               </View>
             </View>
 
             <View style={styles.statusPillGreen}>
-              <Text style={styles.statusPillGreenText}>Tối ưu</Text>
+              <LocalizedText style={styles.statusPillGreenText}>Tối ưu</LocalizedText>
             </View>
           </View>
 
           <View style={styles.metricMainRow}>
             <View style={styles.metricValueWrapper}>
-              <Text style={[styles.metricMainValue, { color: '#0284C7' }]}>{spo2Value}</Text>
-              <Text style={styles.metricMainUnit}>%</Text>
+              <LocalizedText style={[styles.metricMainValue, { color: '#0284C7' }]}>{spo2Value}</LocalizedText>
+              <LocalizedText style={styles.metricMainUnit}>%</LocalizedText>
             </View>
 
             <View style={styles.metricMiniStatsColumn}>
-              <Text style={styles.metricMiniStatItem}>
-                Ngưỡng an toàn: <Text style={{ fontWeight: '700', color: '#059669' }}>≥ 95%</Text>
-              </Text>
-              <Text style={styles.metricMiniStatItem}>
+              <LocalizedText style={styles.metricMiniStatItem}>
+                Ngưỡng an toàn: <LocalizedText style={{ fontWeight: '700', color: '#059669' }}>≥ 95%</LocalizedText>
+              </LocalizedText>
+              <LocalizedText style={styles.metricMiniStatItem}>
                 Cảnh báo nguy hiểm:{' '}
-                <Text style={{ fontWeight: '700', color: '#EF4444' }}>&lt; 90%</Text>
-              </Text>
-              <Text style={styles.metricMiniStatItem}>
-                Phương thức đo: <Text style={{ fontWeight: '600' }}>LED Đỏ 660nm &amp; IR 880nm</Text>
-              </Text>
+                <LocalizedText style={{ fontWeight: '700', color: '#EF4444' }}>&lt; 90%</LocalizedText>
+              </LocalizedText>
+              <LocalizedText style={styles.metricMiniStatItem}>
+                Phương thức đo: <LocalizedText style={{ fontWeight: '600' }}>LED Đỏ 660nm &amp; IR 880nm</LocalizedText>
+              </LocalizedText>
             </View>
           </View>
 
@@ -398,16 +390,16 @@ export default function SmartbandDetailScreen({ navigation, route }: any) {
             </View>
           </View>
           <View style={styles.rangeLabelsRow}>
-            <Text style={[styles.rangeLabelText, { color: '#EF4444' }]}>Nguy hiểm (&lt;90%)</Text>
-            <Text style={[styles.rangeLabelText, { color: '#F59E0B' }]}>Cần theo dõi (90-94%)</Text>
-            <Text style={[styles.rangeLabelText, { color: '#059669' }]}>Lý tưởng (95-100%)</Text>
+            <LocalizedText style={[styles.rangeLabelText, { color: '#EF4444' }]}>Nguy hiểm (&lt;90%)</LocalizedText>
+            <LocalizedText style={[styles.rangeLabelText, { color: '#F59E0B' }]}>Cần theo dõi (90-94%)</LocalizedText>
+            <LocalizedText style={[styles.rangeLabelText, { color: '#059669' }]}>Lý tưởng (95-100%)</LocalizedText>
           </View>
 
           <View style={styles.aiInsightBox}>
             <Ionicons name="sparkles" size={15} color="#0284C7" />
-            <Text style={styles.aiInsightText}>
+            <LocalizedText style={styles.aiInsightText}>
               Đánh giá AI: Độ bão hòa oxy mô ngoại vi đạt mức lý tưởng 98%, lưu thông phế nang phổi hoạt động thông suốt.
-            </Text>
+            </LocalizedText>
           </View>
         </View>
 
@@ -419,20 +411,20 @@ export default function SmartbandDetailScreen({ navigation, route }: any) {
               <View style={[styles.metricIconCircleSmall, { backgroundColor: '#ECFDF5' }]}>
                 <Ionicons name="body" size={18} color="#10B981" />
               </View>
-              <Text style={styles.smallMetricTitle}>Gia Tốc Kế 3 Trục</Text>
+              <LocalizedText style={styles.smallMetricTitle}>Gia Tốc Kế 3 Trục</LocalizedText>
             </View>
-            <Text style={styles.smallMetricSub}>MPU6050 (100 Hz)</Text>
+            <LocalizedText style={styles.smallMetricSub}>MPU6050 (100 Hz)</LocalizedText>
 
             <View style={styles.smallMetricValueRow}>
-              <Text style={styles.smallMetricValue}>1.01</Text>
-              <Text style={styles.smallMetricUnit}>G</Text>
+              <LocalizedText style={styles.smallMetricValue}>1.01</LocalizedText>
+              <LocalizedText style={styles.smallMetricUnit}>G</LocalizedText>
             </View>
-            <Text style={styles.impactSafeStatus}>🟢 Không có va chạm ngã</Text>
+            <LocalizedText style={styles.impactSafeStatus}>🟢 Không có va chạm ngã</LocalizedText>
 
             <View style={styles.xyzAxisBox}>
-              <Text style={styles.xyzAxisText}>X: 0.02G | Y: 0.14G | Z: 0.99G</Text>
+              <LocalizedText style={styles.xyzAxisText}>X: 0.02G | Y: 0.14G | Z: 0.99G</LocalizedText>
             </View>
-            <Text style={styles.sensorNoteText}>Ngưỡng té ngã: &gt; 3.0G</Text>
+            <LocalizedText style={styles.sensorNoteText}>Ngưỡng té ngã: &gt; 3.0G</LocalizedText>
           </View>
 
           {/* Card Nhiệt độ da */}
@@ -441,20 +433,20 @@ export default function SmartbandDetailScreen({ navigation, route }: any) {
               <View style={[styles.metricIconCircleSmall, { backgroundColor: '#FEF3C7' }]}>
                 <Ionicons name="thermometer" size={18} color="#F59E0B" />
               </View>
-              <Text style={styles.smallMetricTitle}>Thân Nhiệt Cổ Tay</Text>
+              <LocalizedText style={styles.smallMetricTitle}>Thân Nhiệt Cổ Tay</LocalizedText>
             </View>
-            <Text style={styles.smallMetricSub}>NTC Sensor (±0.1°C)</Text>
+            <LocalizedText style={styles.smallMetricSub}>NTC Sensor (±0.1°C)</LocalizedText>
 
             <View style={styles.smallMetricValueRow}>
-              <Text style={[styles.smallMetricValue, { color: '#D97706' }]}>{tempValue}</Text>
-              <Text style={styles.smallMetricUnit}>°C</Text>
+              <LocalizedText style={[styles.smallMetricValue, { color: '#D97706' }]}>{tempValue}</LocalizedText>
+              <LocalizedText style={styles.smallMetricUnit}>°C</LocalizedText>
             </View>
-            <Text style={styles.impactSafeStatus}>🟢 Thân nhiệt ổn định</Text>
+            <LocalizedText style={styles.impactSafeStatus}>🟢 Thân nhiệt ổn định</LocalizedText>
 
             <View style={styles.xyzAxisBox}>
-              <Text style={styles.xyzAxisText}>Chuẩn da: 36.5°C - 37.2°C</Text>
+              <LocalizedText style={styles.xyzAxisText}>Chuẩn da: 36.5°C - 37.2°C</LocalizedText>
             </View>
-            <Text style={styles.sensorNoteText}>Kết hợp AMG8833 Hub</Text>
+            <LocalizedText style={styles.sensorNoteText}>Kết hợp AMG8833 Hub</LocalizedText>
           </View>
         </View>
 
@@ -466,30 +458,30 @@ export default function SmartbandDetailScreen({ navigation, route }: any) {
                 <Ionicons name="walk" size={22} color="#8B5CF6" />
               </View>
               <View style={{ marginLeft: 12 }}>
-                <Text style={styles.metricTitle}>Vận Động &amp; Đếm Bước Chân</Text>
-                <Text style={styles.metricSub}>Theo dõi mức độ tích cực của người cao tuổi</Text>
+                <LocalizedText style={styles.metricTitle}>Vận Động &amp; Đếm Bước Chân</LocalizedText>
+                <LocalizedText style={styles.metricSub}>Theo dõi mức độ tích cực của người cao tuổi</LocalizedText>
               </View>
             </View>
 
             <View style={styles.stepCountGoalBadge}>
-              <Text style={styles.stepCountGoalText}>Mục tiêu: 5,000</Text>
+              <LocalizedText style={styles.stepCountGoalText}>Mục tiêu: 5,000</LocalizedText>
             </View>
           </View>
 
           <View style={styles.stepStatsRow}>
             <View style={styles.stepStatBox}>
-              <Text style={styles.stepStatBigNumber}>3,420</Text>
-              <Text style={styles.stepStatLabel}>Bước chân (68%)</Text>
+              <LocalizedText style={styles.stepStatBigNumber}>3,420</LocalizedText>
+              <LocalizedText style={styles.stepStatLabel}>Bước chân (68%)</LocalizedText>
             </View>
             <View style={styles.stepDivider} />
             <View style={styles.stepStatBox}>
-              <Text style={styles.stepStatBigNumber}>2.2</Text>
-              <Text style={styles.stepStatLabel}>Quãng đường (km)</Text>
+              <LocalizedText style={styles.stepStatBigNumber}>2.2</LocalizedText>
+              <LocalizedText style={styles.stepStatLabel}>Quãng đường (km)</LocalizedText>
             </View>
             <View style={styles.stepDivider} />
             <View style={styles.stepStatBox}>
-              <Text style={styles.stepStatBigNumber}>145</Text>
-              <Text style={styles.stepStatLabel}>Tiêu hao (kcal)</Text>
+              <LocalizedText style={styles.stepStatBigNumber}>145</LocalizedText>
+              <LocalizedText style={styles.stepStatLabel}>Tiêu hao (kcal)</LocalizedText>
             </View>
           </View>
 
@@ -507,19 +499,19 @@ export default function SmartbandDetailScreen({ navigation, route }: any) {
                 <Ionicons name="moon" size={22} color="#6D28D9" />
               </View>
               <View style={{ marginLeft: 12 }}>
-                <Text style={styles.metricTitle}>Giám Sát Giấc Ngủ Ban Đêm</Text>
-                <Text style={styles.metricSub}>Đêm qua (22:15 - 05:30)</Text>
+                <LocalizedText style={styles.metricTitle}>Giám Sát Giấc Ngủ Ban Đêm</LocalizedText>
+                <LocalizedText style={styles.metricSub}>Đêm qua (22:15 - 05:30)</LocalizedText>
               </View>
             </View>
 
             <View style={styles.sleepScoreBadge}>
-              <Text style={styles.sleepScoreBadgeText}>86 / 100 • Ngon giấc</Text>
+              <LocalizedText style={styles.sleepScoreBadgeText}>86 / 100 • Ngon giấc</LocalizedText>
             </View>
           </View>
 
           <View style={styles.sleepTotalRow}>
-            <Text style={styles.sleepTotalTime}>7 giờ 15 phút</Text>
-            <Text style={styles.sleepTotalSub}>Thời gian ngủ thực tế</Text>
+            <LocalizedText style={styles.sleepTotalTime}>7 giờ 15 phút</LocalizedText>
+            <LocalizedText style={styles.sleepTotalSub}>Thời gian ngủ thực tế</LocalizedText>
           </View>
 
           {/* Biểu đồ phân kỳ ngủ */}
@@ -532,15 +524,15 @@ export default function SmartbandDetailScreen({ navigation, route }: any) {
           <View style={styles.sleepLegendRow}>
             <View style={styles.sleepLegendItem}>
               <View style={[styles.sleepLegendDot, { backgroundColor: '#312E81' }]} />
-              <Text style={styles.sleepLegendText}>Ngủ sâu: 2h 10m (30%)</Text>
+              <LocalizedText style={styles.sleepLegendText}>Ngủ sâu: 2h 10m (30%)</LocalizedText>
             </View>
             <View style={styles.sleepLegendItem}>
               <View style={[styles.sleepLegendDot, { backgroundColor: '#6366F1' }]} />
-              <Text style={styles.sleepLegendText}>Ngủ nông: 4h 30m (62%)</Text>
+              <LocalizedText style={styles.sleepLegendText}>Ngủ nông: 4h 30m (62%)</LocalizedText>
             </View>
             <View style={styles.sleepLegendItem}>
               <View style={[styles.sleepLegendDot, { backgroundColor: '#FCD34D' }]} />
-              <Text style={styles.sleepLegendText}>Thức: 35m (8%)</Text>
+              <LocalizedText style={styles.sleepLegendText}>Thức: 35m (8%)</LocalizedText>
             </View>
           </View>
         </View>
@@ -549,42 +541,42 @@ export default function SmartbandDetailScreen({ navigation, route }: any) {
         {/* 4. THÔNG SỐ KỸ THUẬT PHẦN CỨNG (HARDWARE SPECIFICATIONS)       */}
         {/* ============================================================== */}
         <View style={styles.specsCard}>
-          <Text style={styles.specsCardTitle}>Thông Số Kỹ Thuật Phần Cứng</Text>
-          <Text style={styles.specsCardDesc}>
+          <LocalizedText style={styles.specsCardTitle}>Thông Số Kỹ Thuật Phần Cứng</LocalizedText>
+          <LocalizedText style={styles.specsCardDesc}>
             Cấu hình phần cứng IoT y tế thu thập tín hiệu sinh học kết nối Orange Pi 5 Hub:
-          </Text>
+          </LocalizedText>
 
           <View style={styles.specTableRow}>
-            <Text style={styles.specTableKey}>Chip vi điều khiển (MCU)</Text>
-            <Text style={styles.specTableVal}>Nordic nRF52840 (ARM Cortex-M4F 64MHz)</Text>
+            <LocalizedText style={styles.specTableKey}>Chip vi điều khiển (MCU)</LocalizedText>
+            <LocalizedText style={styles.specTableVal}>Nordic nRF52840 (ARM Cortex-M4F 64MHz)</LocalizedText>
           </View>
           <View style={styles.specTableRow}>
-            <Text style={styles.specTableKey}>Cảm biến sinh trắc PPG</Text>
-            <Text style={styles.specTableVal}>Maxim MAX30102 (Đo Nhịp tim &amp; SpO₂ quang học)</Text>
+            <LocalizedText style={styles.specTableKey}>Cảm biến sinh trắc PPG</LocalizedText>
+            <LocalizedText style={styles.specTableVal}>Maxim MAX30102 (Đo Nhịp tim &amp; SpO₂ quang học)</LocalizedText>
           </View>
           <View style={styles.specTableRow}>
-            <Text style={styles.specTableKey}>Cảm biến chuyển động IMU</Text>
-            <Text style={styles.specTableVal}>MPU6050 6-DoF (Gia tốc 3 trục + Con quay 3 trục)</Text>
+            <LocalizedText style={styles.specTableKey}>Cảm biến chuyển động IMU</LocalizedText>
+            <LocalizedText style={styles.specTableVal}>MPU6050 6-DoF (Gia tốc 3 trục + Con quay 3 trục)</LocalizedText>
           </View>
           <View style={styles.specTableRow}>
-            <Text style={styles.specTableKey}>Cảm biến nhiệt độ bề mặt</Text>
-            <Text style={styles.specTableVal}>NTC Skin Contact Thermistor (Sai số ±0.1°C)</Text>
+            <LocalizedText style={styles.specTableKey}>Cảm biến nhiệt độ bề mặt</LocalizedText>
+            <LocalizedText style={styles.specTableVal}>NTC Skin Contact Thermistor (Sai số ±0.1°C)</LocalizedText>
           </View>
           <View style={styles.specTableRow}>
-            <Text style={styles.specTableKey}>Giao thức kết nối không dây</Text>
-            <Text style={styles.specTableVal}>Bluetooth Low Energy 5.0 (GATT Client Bleak)</Text>
+            <LocalizedText style={styles.specTableKey}>Giao thức kết nối không dây</LocalizedText>
+            <LocalizedText style={styles.specTableVal}>Bluetooth Low Energy 5.0 (GATT Client Bleak)</LocalizedText>
           </View>
           <View style={styles.specTableRow}>
-            <Text style={styles.specTableKey}>Dung lượng Pin &amp; Nguồn sạc</Text>
-            <Text style={styles.specTableVal}>Li-Po 110mAh • Sạc từ tính 5V/1A (Dùng 5-7 ngày)</Text>
+            <LocalizedText style={styles.specTableKey}>Dung lượng Pin &amp; Nguồn sạc</LocalizedText>
+            <LocalizedText style={styles.specTableVal}>Li-Po 110mAh • Sạc từ tính 5V/1A (Dùng 5-7 ngày)</LocalizedText>
           </View>
           <View style={styles.specTableRow}>
-            <Text style={styles.specTableKey}>Chuẩn kháng nước &amp; bụi</Text>
-            <Text style={styles.specTableVal}>IP67 (Chống nước sinh hoạt, rửa tay, đi mưa nhẹ)</Text>
+            <LocalizedText style={styles.specTableKey}>Chuẩn kháng nước &amp; bụi</LocalizedText>
+            <LocalizedText style={styles.specTableVal}>IP67 (Chống nước sinh hoạt, rửa tay, đi mưa nhẹ)</LocalizedText>
           </View>
           <View style={[styles.specTableRow, { borderBottomWidth: 0 }]}>
-            <Text style={styles.specTableKey}>Phiên bản Firmware OTA</Text>
-            <Text style={styles.specTableVal}>v2.4.1-seca (Bản mới nhất, cập nhật 05/09/2026)</Text>
+            <LocalizedText style={styles.specTableKey}>Phiên bản Firmware OTA</LocalizedText>
+            <LocalizedText style={styles.specTableVal}>v2.4.1-seca (Bản mới nhất, cập nhật 05/09/2026)</LocalizedText>
           </View>
         </View>
 
@@ -599,10 +591,10 @@ export default function SmartbandDetailScreen({ navigation, route }: any) {
               <Ionicons name="shield-checkmark" size={24} color="#0284C7" />
             </View>
             <View style={{ marginLeft: 14 }}>
-              <Text style={styles.algoShortcutTitle}>Cài Đặt Ngưỡng Cảnh Báo AI</Text>
-              <Text style={styles.algoShortcutSub}>
+              <LocalizedText style={styles.algoShortcutTitle}>Cài Đặt Ngưỡng Cảnh Báo AI</LocalizedText>
+              <LocalizedText style={styles.algoShortcutSub}>
                 Ngưỡng nhịp tim ({algoSettings.minHeartRate}-{algoSettings.maxHeartRate} bpm) • SpO₂ (&lt;{algoSettings.minSpO2}%)
-              </Text>
+              </LocalizedText>
             </View>
           </View>
           <Ionicons name="chevron-forward" size={20} color="#94A3B8" />

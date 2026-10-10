@@ -3,30 +3,16 @@
 // Thiết kế chuẩn chỉnh giao diện y tế cao cấp, không bể layout, hỗ trợ chỉnh sửa toàn diện mọi mục
 
 import React, { useState, useEffect, useCallback } from 'react';
-import {
-  View,
-  Text,
-  StyleSheet,
-  ScrollView,
-  TouchableOpacity,
-  TextInput,
-  Modal,
-  Alert,
-  Switch,
-  ActivityIndicator,
-  StatusBar,
-  RefreshControl,
-  KeyboardAvoidingView,
-  Platform,
-  Image,
-} from 'react-native';
+import { View, StyleSheet, ScrollView, TouchableOpacity, Modal, Switch, ActivityIndicator, StatusBar, RefreshControl, KeyboardAvoidingView, Platform } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
 import { useNavigation, useRoute } from '@react-navigation/native';
 
 import { Colors } from '../../../theme/colors';
 import { useTheme } from '../../../store/useThemeStore';
-import { doctorApi, BASE_URL } from '../../../services/api';
+import { doctorApi } from '../../../services/api';
+import { LocalizedAlert, LocalizedText, LocalizedTextInput } from '../../../i18n/LocalizedComponents';
+
 
 interface ConditionItem {
   id: string;
@@ -172,9 +158,9 @@ export default function DoctorPatientDetailScreen() {
         }));
       }
       setModalNotesVisible(false);
-      Alert.alert('Thành công', 'Đã cập nhật ghi chú y khoa và lịch hẹn tái khám.');
+      LocalizedAlert.alert('Thành công', 'Đã cập nhật ghi chú y khoa và lịch hẹn tái khám.');
     } catch {
-      Alert.alert('Lỗi', 'Không thể kết nối lưu ghi chú.');
+      LocalizedAlert.alert('Lỗi', 'Không thể kết nối lưu ghi chú.');
     } finally {
       setIsSavingNotes(false);
     }
@@ -201,7 +187,7 @@ export default function DoctorPatientDetailScreen() {
 
   const handleSaveCondition = async () => {
     if (!condName.trim()) {
-      Alert.alert('Thiếu thông tin', 'Vui lòng nhập tên bệnh lý hoặc chẩn đoán.');
+      LocalizedAlert.alert('Thiếu thông tin', 'Vui lòng nhập tên bệnh lý hoặc chẩn đoán.');
       return;
     }
 
@@ -240,12 +226,12 @@ export default function DoctorPatientDetailScreen() {
       }
 
       setModalConditionVisible(false);
-      Alert.alert(
+      LocalizedAlert.alert(
         'Thành công',
         editingConditionId ? 'Đã cập nhật chẩn đoán bệnh lý.' : 'Đã thêm bệnh lý nền mới vào hồ sơ.'
       );
     } catch {
-      Alert.alert('Lỗi', 'Không thể lưu danh mục bệnh lý.');
+      LocalizedAlert.alert('Lỗi', 'Không thể lưu danh mục bệnh lý.');
     } finally {
       setIsSavingCondition(false);
     }
@@ -266,7 +252,7 @@ export default function DoctorPatientDetailScreen() {
         if (Platform.OS === 'web') {
           window.alert('Không thể xóa chẩn đoán.');
         } else {
-          Alert.alert('Lỗi', 'Không thể xóa chẩn đoán.');
+          LocalizedAlert.alert('Lỗi', 'Không thể xóa chẩn đoán.');
         }
       }
     };
@@ -278,7 +264,7 @@ export default function DoctorPatientDetailScreen() {
       return;
     }
 
-    Alert.alert('Xác nhận xóa', `Bác sĩ có chắc chắn muốn xóa chẩn đoán "${name}" khỏi danh mục bệnh nền?`, [
+    LocalizedAlert.alert('Xác nhận xóa', `Bác sĩ có chắc chắn muốn xóa chẩn đoán "${name}" khỏi danh mục bệnh nền?`, [
       { text: 'Hủy', style: 'cancel' },
       {
         text: 'Xóa',
@@ -317,9 +303,9 @@ export default function DoctorPatientDetailScreen() {
         }));
       }
       setModalAllergiesDietVisible(false);
-      Alert.alert('Thành công', 'Đã cập nhật thông tin dị ứng và chế độ dinh dưỡng khuyến nghị.');
+      LocalizedAlert.alert('Thành công', 'Đã cập nhật thông tin dị ứng và chế độ dinh dưỡng khuyến nghị.');
     } catch {
-      Alert.alert('Lỗi', 'Không thể kết nối lưu dị ứng & dinh dưỡng.');
+      LocalizedAlert.alert('Lỗi', 'Không thể kết nối lưu dị ứng & dinh dưỡng.');
     } finally {
       setIsSavingAllergies(false);
     }
@@ -352,7 +338,7 @@ export default function DoctorPatientDetailScreen() {
 
   const handleSavePrescription = async () => {
     if (!medName.trim() || !dosage.trim()) {
-      Alert.alert('Thiếu thông tin', 'Vui lòng nhập tên thuốc và liều lượng.');
+      LocalizedAlert.alert('Thiếu thông tin', 'Vui lòng nhập tên thuốc và liều lượng.');
       return;
     }
 
@@ -380,20 +366,20 @@ export default function DoctorPatientDetailScreen() {
           );
         }
         setModalPrescribeVisible(false);
-        Alert.alert('Thành công', `Đã cập nhật đơn thuốc "${payload.medication_name}".`);
+        LocalizedAlert.alert('Thành công', `Đã cập nhật đơn thuốc "${payload.medication_name}".`);
       } else {
         const res = await doctorApi.createPrescription(patientId, payload);
         if (res.data) {
           setPrescriptions([res.data, ...prescriptions]);
         }
         setModalPrescribeVisible(false);
-        Alert.alert(
+        LocalizedAlert.alert(
           'Kê đơn thành công',
           `Đã lưu đơn thuốc "${payload.medication_name}". Lịch nhắc uống thuốc đã được đồng bộ xuống loa thông minh Edge Hub Orange Pi 5!`
         );
       }
     } catch {
-      Alert.alert('Lỗi', 'Không thể lưu đơn thuốc.');
+      LocalizedAlert.alert('Lỗi', 'Không thể lưu đơn thuốc.');
     } finally {
       setIsSubmittingRx(false);
     }
@@ -407,13 +393,13 @@ export default function DoctorPatientDetailScreen() {
         if (Platform.OS === 'web') {
           window.alert(`Đã loại bỏ "${name}" khỏi phác đồ điều trị.`);
         } else {
-          Alert.alert('Đã ngừng thuốc', `Đã loại bỏ "${name}" khỏi phác đồ điều trị.`);
+          LocalizedAlert.alert('Đã ngừng thuốc', `Đã loại bỏ "${name}" khỏi phác đồ điều trị.`);
         }
       } catch {
         if (Platform.OS === 'web') {
           window.alert('Không thể ngừng thuốc.');
         } else {
-          Alert.alert('Lỗi', 'Không thể ngừng thuốc.');
+          LocalizedAlert.alert('Lỗi', 'Không thể ngừng thuốc.');
         }
       }
     };
@@ -425,7 +411,7 @@ export default function DoctorPatientDetailScreen() {
       return;
     }
 
-    Alert.alert('Ngừng dùng thuốc', `Bác sĩ có chắc chắn muốn ngừng kê đơn thuốc "${name}"?`, [
+    LocalizedAlert.alert('Ngừng dùng thuốc', `Bác sĩ có chắc chắn muốn ngừng kê đơn thuốc "${name}"?`, [
       { text: 'Hủy', style: 'cancel' },
       {
         text: 'Ngừng thuốc',
@@ -461,9 +447,9 @@ export default function DoctorPatientDetailScreen() {
         spo2_threshold_low: parseInt(spo2Low, 10),
       });
       setModalThresholdVisible(false);
-      Alert.alert('Cập nhật thành công', 'Đã lưu ngưỡng an toàn y tế và đồng bộ xuống Hub AI.');
+      LocalizedAlert.alert('Cập nhật thành công', 'Đã lưu ngưỡng an toàn y tế và đồng bộ xuống Hub AI.');
     } catch {
-      Alert.alert('Lỗi', 'Không thể cập nhật ngưỡng.');
+      LocalizedAlert.alert('Lỗi', 'Không thể cập nhật ngưỡng.');
     }
   };
 
@@ -490,7 +476,7 @@ export default function DoctorPatientDetailScreen() {
         <TouchableOpacity style={styles.backBtn} onPress={() => navigation.goBack()}>
           <Ionicons name="arrow-back" size={24} color={colors.textPrimary} />
         </TouchableOpacity>
-        <Text style={[styles.topTitle, { color: colors.textPrimary }]}>Hồ sơ Bệnh nhân Y tế</Text>
+        <LocalizedText style={[styles.topTitle, { color: colors.textPrimary }]}>Hồ sơ Bệnh nhân Y tế</LocalizedText>
         <TouchableOpacity
           style={styles.moreBtn}
           onPress={() => setModalThresholdVisible(true)}
@@ -516,83 +502,46 @@ export default function DoctorPatientDetailScreen() {
         >
           <View style={styles.heroRow}>
             <View style={styles.avatarBig}>
-              {detail?.avatar_url ? (
-                <Image
-                  source={{
-                    uri: detail.avatar_url.startsWith('http')
-                      ? detail.avatar_url
-                      : `${BASE_URL.replace('/api/v1', '')}${detail.avatar_url}`,
-                  }}
-                  style={styles.avatarBigImg}
-                />
-              ) : (
-                <Text style={styles.avatarBigText}>{initialLetter}</Text>
-              )}
+              <LocalizedText style={styles.avatarBigText}>{initialLetter}</LocalizedText>
             </View>
             <View style={{ flex: 1, marginLeft: 12 }}>
               <View style={styles.heroNameRow}>
-                <Text style={[styles.heroName, { color: colors.textPrimary }]} numberOfLines={1}>
+                <LocalizedText style={[styles.heroName, { color: colors.textPrimary }]} numberOfLines={1}>
                   {patientName}
-                </Text>
+                </LocalizedText>
                 <View style={styles.badgeAge}>
-                  <Text style={styles.badgeAgeText}>{detail?.age || 78} tuổi</Text>
+                  <LocalizedText style={styles.badgeAgeText}>{detail?.age || 78} tuổi</LocalizedText>
                 </View>
               </View>
-              <Text style={[styles.heroSub, { color: isDarkMode ? '#94A3B8' : '#64748B' }]} numberOfLines={1}>
+              <LocalizedText style={[styles.heroSub, { color: isDarkMode ? '#94A3B8' : '#64748B' }]} numberOfLines={1}>
                 Giới tính: {detail?.gender || 'Nam'} • Nhóm máu: {detail?.blood_type || 'O+'} • BMI: {detail?.bmi || 22.8}
-              </Text>
-              <Text style={[styles.heroAddress, { color: isDarkMode ? '#CBD5E1' : '#475569' }]} numberOfLines={1}>
+              </LocalizedText>
+              <LocalizedText style={[styles.heroAddress, { color: isDarkMode ? '#CBD5E1' : '#475569' }]} numberOfLines={1}>
                 📍 {detail?.house_name || 'Nhà của tôi'} • {detail?.house_address || '123 Hải Phòng, Đà Nẵng'}
-              </Text>
-
-              {/* Huy hiệu AI Face ID cho Bác sĩ */}
-              <View style={styles.faceIdPillRow}>
-                <View
-                  style={[
-                    styles.faceIdPill,
-                    detail?.has_face_enrolled
-                      ? { backgroundColor: isDarkMode ? '#064E3B' : '#DCFCE7', borderColor: '#10B981' }
-                      : { backgroundColor: isDarkMode ? '#451A03' : '#FEF3C7', borderColor: '#F59E0B' },
-                  ]}
-                >
-                  <Ionicons
-                    name={detail?.has_face_enrolled ? 'scan-circle' : 'scan-outline'}
-                    size={12}
-                    color={detail?.has_face_enrolled ? '#10B981' : '#F59E0B'}
-                  />
-                  <Text
-                    style={[
-                      styles.faceIdPillText,
-                      { color: detail?.has_face_enrolled ? '#047857' : '#B45309' },
-                    ]}
-                  >
-                    {detail?.has_face_enrolled ? 'AI Face ID: Đã kích hoạt' : 'Khuôn mặt: Chưa đăng ký'}
-                  </Text>
-                </View>
-              </View>
+              </LocalizedText>
             </View>
           </View>
 
           {/* DẢI 4 SINH HIỆU TỨC THỜI */}
           <View style={styles.metricsBar}>
             <View style={styles.metricItem}>
-              <Text style={[styles.metricVal, { color: '#EF4444' }]}>{detail?.heart_rate || 76} <Text style={styles.metricUnit}>bpm</Text></Text>
-              <Text style={styles.metricLabel}>Nhịp tim</Text>
+              <LocalizedText style={[styles.metricVal, { color: '#EF4444' }]}>{detail?.heart_rate || 76} <LocalizedText style={styles.metricUnit}>bpm</LocalizedText></LocalizedText>
+              <LocalizedText style={styles.metricLabel}>Nhịp tim</LocalizedText>
             </View>
             <View style={styles.metricDivider} />
             <View style={styles.metricItem}>
-              <Text style={[styles.metricVal, { color: '#0284C7' }]}>{detail?.spo2 || 98}<Text style={styles.metricUnit}>%</Text></Text>
-              <Text style={styles.metricLabel}>SpO₂</Text>
+              <LocalizedText style={[styles.metricVal, { color: '#0284C7' }]}>{detail?.spo2 || 98}<LocalizedText style={styles.metricUnit}>%</LocalizedText></LocalizedText>
+              <LocalizedText style={styles.metricLabel}>SpO₂</LocalizedText>
             </View>
             <View style={styles.metricDivider} />
             <View style={styles.metricItem}>
-              <Text style={[styles.metricVal, { color: '#10B981' }]}>120/80</Text>
-              <Text style={styles.metricLabel}>Huyết áp</Text>
+              <LocalizedText style={[styles.metricVal, { color: '#10B981' }]}>120/80</LocalizedText>
+              <LocalizedText style={styles.metricLabel}>Huyết áp</LocalizedText>
             </View>
             <View style={styles.metricDivider} />
             <View style={styles.metricItem}>
-              <Text style={[styles.metricVal, { color: '#F59E0B' }]}>{detail?.skin_temp_max || 36.6}<Text style={styles.metricUnit}>°C</Text></Text>
-              <Text style={styles.metricLabel}>Nhiệt độ</Text>
+              <LocalizedText style={[styles.metricVal, { color: '#F59E0B' }]}>{detail?.skin_temp_max || 36.6}<LocalizedText style={styles.metricUnit}>°C</LocalizedText></LocalizedText>
+              <LocalizedText style={styles.metricLabel}>Nhiệt độ</LocalizedText>
             </View>
           </View>
 
@@ -603,7 +552,7 @@ export default function DoctorPatientDetailScreen() {
             onPress={() => navigation.navigate('DoctorAnalytics', { patientId })}
           >
             <Ionicons name="bar-chart" size={15} color="#0284C7" style={{ marginRight: 6 }} />
-            <Text style={styles.heroReportBtnText}>Xem Báo Cáo & Phân Tích Sinh Hiệu</Text>
+            <LocalizedText style={styles.heroReportBtnText}>Xem Báo Cáo & Phân Tích Sinh Hiệu</LocalizedText>
             <Ionicons name="chevron-forward" size={14} color="#0284C7" />
           </TouchableOpacity>
         </View>
@@ -615,7 +564,7 @@ export default function DoctorPatientDetailScreen() {
             onPress={() => setActiveTab('RECORD')}
             activeOpacity={0.8}
           >
-            <Text
+            <LocalizedText
               style={[
                 styles.segmentText,
                 activeTab === 'RECORD'
@@ -625,7 +574,7 @@ export default function DoctorPatientDetailScreen() {
               numberOfLines={1}
             >
               Bệnh án
-            </Text>
+            </LocalizedText>
           </TouchableOpacity>
 
           <TouchableOpacity
@@ -633,7 +582,7 @@ export default function DoctorPatientDetailScreen() {
             onPress={() => setActiveTab('PRESCRIPTIONS')}
             activeOpacity={0.8}
           >
-            <Text
+            <LocalizedText
               style={[
                 styles.segmentText,
                 activeTab === 'PRESCRIPTIONS'
@@ -643,7 +592,7 @@ export default function DoctorPatientDetailScreen() {
               numberOfLines={1}
             >
               Đơn thuốc ({prescriptions.length})
-            </Text>
+            </LocalizedText>
           </TouchableOpacity>
 
           <TouchableOpacity
@@ -651,7 +600,7 @@ export default function DoctorPatientDetailScreen() {
             onPress={() => setActiveTab('VITALS')}
             activeOpacity={0.8}
           >
-            <Text
+            <LocalizedText
               style={[
                 styles.segmentText,
                 activeTab === 'VITALS'
@@ -661,7 +610,7 @@ export default function DoctorPatientDetailScreen() {
               numberOfLines={1}
             >
               Sinh hiệu & Ngưỡng
-            </Text>
+            </LocalizedText>
           </TouchableOpacity>
         </View>
 
@@ -680,28 +629,28 @@ export default function DoctorPatientDetailScreen() {
               <View style={styles.sectionHeaderRow}>
                 <View style={{ flexDirection: 'row', alignItems: 'center' }}>
                   <Ionicons name="chatbox-ellipses" size={18} color={Colors.primary} style={{ marginRight: 6 }} />
-                  <Text style={[styles.sectionTitle, { color: colors.textPrimary }]}>Ghi chú & Dặn dò Bác sĩ</Text>
+                  <LocalizedText style={[styles.sectionTitle, { color: colors.textPrimary }]}>Ghi chú & Dặn dò Bác sĩ</LocalizedText>
                 </View>
                 <TouchableOpacity
                   style={styles.btnActionSmall}
                   onPress={handleOpenNotesModal}
                 >
                   <Ionicons name="create-outline" size={14} color={Colors.primary} style={{ marginRight: 3 }} />
-                  <Text style={styles.btnActionSmallText}>Chỉnh sửa</Text>
+                  <LocalizedText style={styles.btnActionSmallText}>Chỉnh sửa</LocalizedText>
                 </TouchableOpacity>
               </View>
 
               <View style={[styles.notesQuoteBox, { borderLeftColor: Colors.primary }]}>
-                <Text style={[styles.notesBody, { color: isDarkMode ? '#CBD5E1' : '#334155' }]}>
+                <LocalizedText style={[styles.notesBody, { color: isDarkMode ? '#CBD5E1' : '#334155' }]}>
                   "{detail?.doctor_notes || 'Bệnh nhân ổn định, đáp ứng tốt với thuốc huyết áp. Cần duy trì uống thuốc đúng giờ.'}"
-                </Text>
+                </LocalizedText>
               </View>
 
               <View style={styles.appointmentBadge}>
                 <Ionicons name="calendar-outline" size={15} color="#0284C7" />
-                <Text style={styles.appointmentText}>
+                <LocalizedText style={styles.appointmentText}>
                   Tái khám định kỳ: {detail?.next_appointment || '15/10/2026 - 08:30'}
-                </Text>
+                </LocalizedText>
               </View>
             </View>
 
@@ -715,23 +664,23 @@ export default function DoctorPatientDetailScreen() {
               <View style={styles.sectionHeaderRow}>
                 <View style={{ flexDirection: 'row', alignItems: 'center', flex: 1 }}>
                   <Ionicons name="fitness" size={18} color="#EF4444" style={{ marginRight: 6 }} />
-                  <Text style={[styles.sectionTitle, { color: colors.textPrimary }]}>
+                  <LocalizedText style={[styles.sectionTitle, { color: colors.textPrimary }]}>
                     Danh mục Bệnh lý nền (Chẩn đoán)
-                  </Text>
+                  </LocalizedText>
                 </View>
                 <TouchableOpacity
                   style={[styles.btnActionSmall, { backgroundColor: '#EFF6FF', borderColor: '#3B82F6' }]}
                   onPress={handleOpenAddCondition}
                 >
                   <Ionicons name="add" size={14} color="#2563EB" style={{ marginRight: 2 }} />
-                  <Text style={[styles.btnActionSmallText, { color: '#2563EB' }]}>Thêm bệnh</Text>
+                  <LocalizedText style={[styles.btnActionSmallText, { color: '#2563EB' }]}>Thêm bệnh</LocalizedText>
                 </TouchableOpacity>
               </View>
 
               {(!detail?.conditions || detail.conditions.length === 0) ? (
-                <Text style={[styles.emptyHintText, { color: isDarkMode ? '#94A3B8' : '#64748B' }]}>
+                <LocalizedText style={[styles.emptyHintText, { color: isDarkMode ? '#94A3B8' : '#64748B' }]}>
                   Chưa có danh mục bệnh nền. Chạm "Thêm bệnh" để bổ sung.
-                </Text>
+                </LocalizedText>
               ) : (
                 detail.conditions.map((c: ConditionItem) => {
                   const isDanger = c.severity === 'danger';
@@ -755,7 +704,7 @@ export default function DoctorPatientDetailScreen() {
                       {/* Dòng trên: Huy hiệu mức độ & Nút Sửa / Xóa */}
                       <View style={styles.conditionCardTop}>
                         <View style={[styles.severityPill, { backgroundColor: badgeBg }]}>
-                          <Text style={[styles.severityPillText, { color: badgeTextColor }]}>{badgeLabel}</Text>
+                          <LocalizedText style={[styles.severityPillText, { color: badgeTextColor }]}>{badgeLabel}</LocalizedText>
                         </View>
                         <View style={styles.conditionActionRow}>
                           <TouchableOpacity
@@ -774,13 +723,13 @@ export default function DoctorPatientDetailScreen() {
                       </View>
 
                       {/* Tiêu đề chẩn đoán */}
-                      <Text style={[styles.conditionName, { color: colors.textPrimary }]}>{c.name}</Text>
+                      <LocalizedText style={[styles.conditionName, { color: colors.textPrimary }]}>{c.name}</LocalizedText>
 
                       {/* Lời dặn / Ghi chú lâm sàng */}
                       {c.note ? (
-                        <Text style={[styles.conditionNote, { color: isDarkMode ? '#94A3B8' : '#64748B' }]}>
+                        <LocalizedText style={[styles.conditionNote, { color: isDarkMode ? '#94A3B8' : '#64748B' }]}>
                           {c.note}
-                        </Text>
+                        </LocalizedText>
                       ) : null}
                     </View>
                   );
@@ -798,16 +747,16 @@ export default function DoctorPatientDetailScreen() {
               <View style={styles.sectionHeaderRow}>
                 <View style={{ flexDirection: 'row', alignItems: 'center' }}>
                   <Ionicons name="nutrition" size={18} color="#16A34A" style={{ marginRight: 6 }} />
-                  <Text style={[styles.sectionTitle, { color: colors.textPrimary }]}>
+                  <LocalizedText style={[styles.sectionTitle, { color: colors.textPrimary }]}>
                     Dị ứng & Dinh dưỡng khuyến nghị
-                  </Text>
+                  </LocalizedText>
                 </View>
                 <TouchableOpacity
                   style={styles.btnActionSmall}
                   onPress={handleOpenAllergiesDietModal}
                 >
                   <Ionicons name="create-outline" size={14} color={Colors.primary} style={{ marginRight: 3 }} />
-                  <Text style={styles.btnActionSmallText}>Chỉnh sửa</Text>
+                  <LocalizedText style={styles.btnActionSmallText}>Chỉnh sửa</LocalizedText>
                 </TouchableOpacity>
               </View>
 
@@ -815,33 +764,33 @@ export default function DoctorPatientDetailScreen() {
               <View style={[styles.dietSubCard, { backgroundColor: isDarkMode ? '#450A0A33' : '#FEF2F2', borderColor: '#FCA5A5' }]}>
                 <View style={styles.dietSubHeader}>
                   <Ionicons name="warning" size={16} color="#DC2626" style={{ marginRight: 6 }} />
-                  <Text style={[styles.dietSubTitle, { color: '#DC2626' }]}>Dị ứng thuốc y tế</Text>
+                  <LocalizedText style={[styles.dietSubTitle, { color: '#DC2626' }]}>Dị ứng thuốc y tế</LocalizedText>
                 </View>
-                <Text style={[styles.dietSubContent, { color: isDarkMode ? '#FCA5A5' : '#991B1B' }]}>
+                <LocalizedText style={[styles.dietSubContent, { color: isDarkMode ? '#FCA5A5' : '#991B1B' }]}>
                   {detail?.drug_allergies || 'Không có dị ứng thuốc đã ghi nhận.'}
-                </Text>
+                </LocalizedText>
               </View>
 
               {/* Thẻ Dị ứng đồ ăn */}
               <View style={[styles.dietSubCard, { backgroundColor: isDarkMode ? '#451A0333' : '#FFFBEB', borderColor: '#FCD34D', marginTop: 10 }]}>
                 <View style={styles.dietSubHeader}>
                   <Ionicons name="restaurant" size={16} color="#D97706" style={{ marginRight: 6 }} />
-                  <Text style={[styles.dietSubTitle, { color: '#D97706' }]}>Dị ứng thực phẩm / đồ ăn</Text>
+                  <LocalizedText style={[styles.dietSubTitle, { color: '#D97706' }]}>Dị ứng thực phẩm / đồ ăn</LocalizedText>
                 </View>
-                <Text style={[styles.dietSubContent, { color: isDarkMode ? '#FDE68A' : '#92400E' }]}>
+                <LocalizedText style={[styles.dietSubContent, { color: isDarkMode ? '#FDE68A' : '#92400E' }]}>
                   {detail?.food_allergies || 'Không có dị ứng thực phẩm ghi nhận.'}
-                </Text>
+                </LocalizedText>
               </View>
 
               {/* Thẻ Chế độ ăn uống */}
               <View style={[styles.dietSubCard, { backgroundColor: isDarkMode ? '#064E3B33' : '#ECFDF5', borderColor: '#6EE7B7', marginTop: 10 }]}>
                 <View style={styles.dietSubHeader}>
                   <Ionicons name="leaf" size={16} color="#059669" style={{ marginRight: 6 }} />
-                  <Text style={[styles.dietSubTitle, { color: '#059669' }]}>Chế độ ăn khuyến nghị</Text>
+                  <LocalizedText style={[styles.dietSubTitle, { color: '#059669' }]}>Chế độ ăn khuyến nghị</LocalizedText>
                 </View>
-                <Text style={[styles.dietSubContent, { color: isDarkMode ? '#A7F3D0' : '#065F46' }]}>
+                <LocalizedText style={[styles.dietSubContent, { color: isDarkMode ? '#A7F3D0' : '#065F46' }]}>
                   {detail?.dietary_notes || 'Ăn uống bình thường, đảm bảo dinh dưỡng đầy đủ.'}
-                </Text>
+                </LocalizedText>
               </View>
             </View>
           </View>
@@ -858,15 +807,15 @@ export default function DoctorPatientDetailScreen() {
               onPress={handleOpenCreatePrescription}
             >
               <Ionicons name="add-circle" size={20} color="#FFFFFF" style={{ marginRight: 6 }} />
-              <Text style={styles.btnPrescribeNewText}>Kê đơn thuốc mới cho Bệnh nhân</Text>
+              <LocalizedText style={styles.btnPrescribeNewText}>Kê đơn thuốc mới cho Bệnh nhân</LocalizedText>
             </TouchableOpacity>
 
             {prescriptions.length === 0 ? (
               <View style={styles.emptyBox}>
                 <Ionicons name="medkit-outline" size={48} color="#94A3B8" />
-                <Text style={[styles.emptyHintText, { color: isDarkMode ? '#94A3B8' : '#64748B' }]}>
+                <LocalizedText style={[styles.emptyHintText, { color: isDarkMode ? '#94A3B8' : '#64748B' }]}>
                   Chưa có đơn thuốc nào. Chạm nút phía trên để kê đơn mới.
-                </Text>
+                </LocalizedText>
               </View>
             ) : (
               prescriptions.map((rx) => (
@@ -879,12 +828,12 @@ export default function DoctorPatientDetailScreen() {
                 >
                   <View style={styles.rxHeader}>
                     <View style={{ flex: 1, marginRight: 8 }}>
-                      <Text style={[styles.rxMedName, { color: colors.textPrimary }]}>
+                      <LocalizedText style={[styles.rxMedName, { color: colors.textPrimary }]}>
                         💊 {rx.medication_name}
-                      </Text>
-                      <Text style={[styles.rxDosage, { color: isDarkMode ? '#94A3B8' : '#64748B' }]}>
+                      </LocalizedText>
+                      <LocalizedText style={[styles.rxDosage, { color: isDarkMode ? '#94A3B8' : '#64748B' }]}>
                         {rx.dosage} • {rx.frequency}
-                      </Text>
+                      </LocalizedText>
                     </View>
 
                     {/* Nút bật/tắt phát loa Orange Pi 5 trực tiếp */}
@@ -903,47 +852,47 @@ export default function DoctorPatientDetailScreen() {
                         color={rx.enable_speaker_reminder ? '#059669' : '#94A3B8'}
                         style={{ marginRight: 4 }}
                       />
-                      <Text
+                      <LocalizedText
                         style={[
                           styles.speakerToggleBtnText,
                           { color: rx.enable_speaker_reminder ? '#059669' : '#64748B' },
                         ]}
                       >
                         {rx.enable_speaker_reminder ? 'Loa: BẬT' : 'Loa: TẮT'}
-                      </Text>
+                      </LocalizedText>
                     </TouchableOpacity>
                   </View>
 
                   {/* Giờ uống thuốc */}
                   <View style={styles.rxScheduleRow}>
-                    <Text style={[styles.rxScheduleLabel, { color: isDarkMode ? '#94A3B8' : '#64748B' }]}>
+                    <LocalizedText style={[styles.rxScheduleLabel, { color: isDarkMode ? '#94A3B8' : '#64748B' }]}>
                       Giờ uống:
-                    </Text>
+                    </LocalizedText>
                     {(rx.schedule_times || ['08:00']).map((t: string, idx: number) => (
                       <View key={idx} style={styles.timeTag}>
                         <Ionicons name="time-outline" size={11} color="#0284C7" style={{ marginRight: 3 }} />
-                        <Text style={styles.timeTagText}>{t}</Text>
+                        <LocalizedText style={styles.timeTagText}>{t}</LocalizedText>
                       </View>
                     ))}
                   </View>
 
                   {/* Lời dặn uống thuốc */}
-                  <Text style={[styles.rxInstructions, { color: isDarkMode ? '#CBD5E1' : '#334155' }]}>
+                  <LocalizedText style={[styles.rxInstructions, { color: isDarkMode ? '#CBD5E1' : '#334155' }]}>
                     📝 {rx.instructions}
-                  </Text>
+                  </LocalizedText>
 
                   {/* Hàng nút hành động: Chỉnh sửa & Xóa */}
                   <View style={styles.rxActionRow}>
-                    <Text style={[styles.rxDoctorCredit, { color: isDarkMode ? '#64748B' : '#94A3B8' }]}>
+                    <LocalizedText style={[styles.rxDoctorCredit, { color: isDarkMode ? '#64748B' : '#94A3B8' }]}>
                       BS: {rx.doctor_name || 'BS. Trần Văn Minh'}
-                    </Text>
+                    </LocalizedText>
                     <View style={{ flexDirection: 'row', gap: 8 }}>
                       <TouchableOpacity
                         style={styles.rxEditBtn}
                         onPress={() => handleOpenEditPrescription(rx)}
                       >
                         <Ionicons name="pencil" size={13} color="#0284C7" style={{ marginRight: 4 }} />
-                        <Text style={styles.rxEditBtnText}>Sửa</Text>
+                        <LocalizedText style={styles.rxEditBtnText}>Sửa</LocalizedText>
                       </TouchableOpacity>
 
                       <TouchableOpacity
@@ -951,7 +900,7 @@ export default function DoctorPatientDetailScreen() {
                         onPress={() => handleDeletePrescription(rx.id, rx.medication_name)}
                       >
                         <Ionicons name="trash-outline" size={13} color="#EF4444" style={{ marginRight: 4 }} />
-                        <Text style={styles.rxDeleteBtnText}>Ngừng thuốc</Text>
+                        <LocalizedText style={styles.rxDeleteBtnText}>Ngừng thuốc</LocalizedText>
                       </TouchableOpacity>
                     </View>
                   </View>
@@ -973,31 +922,31 @@ export default function DoctorPatientDetailScreen() {
               ]}
             >
               <View style={styles.sectionHeaderRow}>
-                <Text style={[styles.sectionTitle, { color: colors.textPrimary }]}>Ngưỡng An Toàn Lâm Sàng</Text>
+                <LocalizedText style={[styles.sectionTitle, { color: colors.textPrimary }]}>Ngưỡng An Toàn Lâm Sàng</LocalizedText>
                 <TouchableOpacity
                   style={styles.btnActionSmall}
                   onPress={() => setModalThresholdVisible(true)}
                 >
                   <Ionicons name="settings-outline" size={14} color={Colors.primary} style={{ marginRight: 3 }} />
-                  <Text style={styles.btnActionSmallText}>Cấu hình lại</Text>
+                  <LocalizedText style={styles.btnActionSmallText}>Cấu hình lại</LocalizedText>
                 </TouchableOpacity>
               </View>
 
               <View style={styles.thresholdRow}>
-                <Text style={styles.thresholdLabel}>Nhịp tim tối đa cảnh báo:</Text>
-                <Text style={[styles.thresholdVal, { color: '#EF4444' }]}>{hrHigh} bpm</Text>
+                <LocalizedText style={styles.thresholdLabel}>Nhịp tim tối đa cảnh báo:</LocalizedText>
+                <LocalizedText style={[styles.thresholdVal, { color: '#EF4444' }]}>{hrHigh} bpm</LocalizedText>
               </View>
               <View style={styles.thresholdRow}>
-                <Text style={styles.thresholdLabel}>Nhịp tim tối thiểu cảnh báo:</Text>
-                <Text style={[styles.thresholdVal, { color: '#EF4444' }]}>{hrLow} bpm</Text>
+                <LocalizedText style={styles.thresholdLabel}>Nhịp tim tối thiểu cảnh báo:</LocalizedText>
+                <LocalizedText style={[styles.thresholdVal, { color: '#EF4444' }]}>{hrLow} bpm</LocalizedText>
               </View>
               <View style={styles.thresholdRow}>
-                <Text style={styles.thresholdLabel}>Ngưỡng SpO₂ nguy hiểm:</Text>
-                <Text style={[styles.thresholdVal, { color: '#0284C7' }]}>&lt; {spo2Low}%</Text>
+                <LocalizedText style={styles.thresholdLabel}>Ngưỡng SpO₂ nguy hiểm:</LocalizedText>
+                <LocalizedText style={[styles.thresholdVal, { color: '#0284C7' }]}>&lt; {spo2Low}%</LocalizedText>
               </View>
               <View style={styles.thresholdRow}>
-                <Text style={styles.thresholdLabel}>Cảnh báo bất động / té ngã:</Text>
-                <Text style={[styles.thresholdVal, { color: '#F59E0B' }]}>&gt; 60 giây</Text>
+                <LocalizedText style={styles.thresholdLabel}>Cảnh báo bất động / té ngã:</LocalizedText>
+                <LocalizedText style={[styles.thresholdVal, { color: '#F59E0B' }]}>&gt; 60 giây</LocalizedText>
               </View>
             </View>
 
@@ -1007,7 +956,7 @@ export default function DoctorPatientDetailScreen() {
               onPress={() => navigation.navigate('DoctorAnalytics', { patientId })}
             >
               <Ionicons name="bar-chart" size={18} color="#FFFFFF" style={{ marginRight: 6 }} />
-              <Text style={styles.btnOpenAnalyticsText}>Xem Phân tích Đồ thị 7-30 ngày & Xuất Báo cáo</Text>
+              <LocalizedText style={styles.btnOpenAnalyticsText}>Xem Phân tích Đồ thị 7-30 ngày & Xuất Báo cáo</LocalizedText>
             </TouchableOpacity>
           </View>
         )}
@@ -1023,14 +972,14 @@ export default function DoctorPatientDetailScreen() {
         >
           <View style={[styles.modalBox, { backgroundColor: isDarkMode ? '#1E293B' : '#FFFFFF' }]}>
             <View style={styles.modalHeader}>
-              <Text style={[styles.modalTitle, { color: colors.textPrimary }]}>Ghi Chú & Lịch Tái Khám</Text>
+              <LocalizedText style={[styles.modalTitle, { color: colors.textPrimary }]}>Ghi Chú & Lịch Tái Khám</LocalizedText>
               <TouchableOpacity onPress={() => setModalNotesVisible(false)}>
                 <Ionicons name="close" size={24} color="#94A3B8" />
               </TouchableOpacity>
             </View>
 
-            <Text style={styles.fieldLabel}>Lời dặn dò y khoa / tiến triển bệnh (*)</Text>
-            <TextInput
+            <LocalizedText style={styles.fieldLabel}>Lời dặn dò y khoa / tiến triển bệnh (*)</LocalizedText>
+            <LocalizedTextInput
               style={[
                 styles.inputField,
                 { height: 90, textAlignVertical: 'top', color: colors.textPrimary, borderColor: colors.border },
@@ -1042,8 +991,8 @@ export default function DoctorPatientDetailScreen() {
               onChangeText={setEditNotes}
             />
 
-            <Text style={styles.fieldLabel}>Lịch hẹn tái khám tiếp theo</Text>
-            <TextInput
+            <LocalizedText style={styles.fieldLabel}>Lịch hẹn tái khám tiếp theo</LocalizedText>
+            <LocalizedTextInput
               style={[styles.inputField, { color: colors.textPrimary, borderColor: colors.border }]}
               placeholder="VD: 15/10/2026 - 08:30"
               placeholderTextColor="#94A3B8"
@@ -1059,7 +1008,7 @@ export default function DoctorPatientDetailScreen() {
               {isSavingNotes ? (
                 <ActivityIndicator color="#FFFFFF" size="small" />
               ) : (
-                <Text style={styles.modalSubmitBtnText}>Lưu Thay Đổi</Text>
+                <LocalizedText style={styles.modalSubmitBtnText}>Lưu Thay Đổi</LocalizedText>
               )}
             </TouchableOpacity>
           </View>
@@ -1076,16 +1025,16 @@ export default function DoctorPatientDetailScreen() {
         >
           <View style={[styles.modalBox, { backgroundColor: isDarkMode ? '#1E293B' : '#FFFFFF' }]}>
             <View style={styles.modalHeader}>
-              <Text style={[styles.modalTitle, { color: colors.textPrimary }]}>
+              <LocalizedText style={[styles.modalTitle, { color: colors.textPrimary }]}>
                 {editingConditionId ? 'Sửa Chẩn Đoán Bệnh Lý' : 'Thêm Bệnh Lý Nền Mới'}
-              </Text>
+              </LocalizedText>
               <TouchableOpacity onPress={() => setModalConditionVisible(false)}>
                 <Ionicons name="close" size={24} color="#94A3B8" />
               </TouchableOpacity>
             </View>
 
-            <Text style={styles.fieldLabel}>Tên bệnh lý / chẩn đoán (*)</Text>
-            <TextInput
+            <LocalizedText style={styles.fieldLabel}>Tên bệnh lý / chẩn đoán (*)</LocalizedText>
+            <LocalizedTextInput
               style={[styles.inputField, { color: colors.textPrimary, borderColor: colors.border }]}
               placeholder="VD: Tăng huyết áp (Độ 2), Loãng xương..."
               placeholderTextColor="#94A3B8"
@@ -1093,7 +1042,7 @@ export default function DoctorPatientDetailScreen() {
               onChangeText={setCondName}
             />
 
-            <Text style={styles.fieldLabel}>Mức độ nghiêm trọng</Text>
+            <LocalizedText style={styles.fieldLabel}>Mức độ nghiêm trọng</LocalizedText>
             <View style={styles.severityPickerRow}>
               {[
                 { key: 'danger', label: 'Nguy cơ cao', color: '#EF4444', bg: '#FEE2E2' },
@@ -1111,21 +1060,21 @@ export default function DoctorPatientDetailScreen() {
                     onPress={() => setCondSeverity(s.key as any)}
                   >
                     <View style={[styles.conditionDot, { backgroundColor: s.color }]} />
-                    <Text
+                    <LocalizedText
                       style={[
                         styles.severityOptionText,
                         { color: isSelected ? s.color : isDarkMode ? '#CBD5E1' : '#64748B' },
                       ]}
                     >
                       {s.label}
-                    </Text>
+                    </LocalizedText>
                   </TouchableOpacity>
                 );
               })}
             </View>
 
-            <Text style={styles.fieldLabel}>Ghi chú lâm sàng / Dặn dò cụ thể</Text>
-            <TextInput
+            <LocalizedText style={styles.fieldLabel}>Ghi chú lâm sàng / Dặn dò cụ thể</LocalizedText>
+            <LocalizedTextInput
               style={[
                 styles.inputField,
                 { height: 75, textAlignVertical: 'top', color: colors.textPrimary, borderColor: colors.border },
@@ -1145,9 +1094,9 @@ export default function DoctorPatientDetailScreen() {
               {isSavingCondition ? (
                 <ActivityIndicator color="#FFFFFF" size="small" />
               ) : (
-                <Text style={styles.modalSubmitBtnText}>
+                <LocalizedText style={styles.modalSubmitBtnText}>
                   {editingConditionId ? 'Cập Nhật Bệnh Lý' : 'Lưu Vào Hồ Sơ Bệnh Án'}
-                </Text>
+                </LocalizedText>
               )}
             </TouchableOpacity>
           </View>
@@ -1164,14 +1113,14 @@ export default function DoctorPatientDetailScreen() {
         >
           <View style={[styles.modalBox, { backgroundColor: isDarkMode ? '#1E293B' : '#FFFFFF' }]}>
             <View style={styles.modalHeader}>
-              <Text style={[styles.modalTitle, { color: colors.textPrimary }]}>Dị Ứng & Dinh Dưỡng</Text>
+              <LocalizedText style={[styles.modalTitle, { color: colors.textPrimary }]}>Dị Ứng & Dinh Dưỡng</LocalizedText>
               <TouchableOpacity onPress={() => setModalAllergiesDietVisible(false)}>
                 <Ionicons name="close" size={24} color="#94A3B8" />
               </TouchableOpacity>
             </View>
 
-            <Text style={styles.fieldLabel}>Dị ứng thuốc y tế</Text>
-            <TextInput
+            <LocalizedText style={styles.fieldLabel}>Dị ứng thuốc y tế</LocalizedText>
+            <LocalizedTextInput
               style={[styles.inputField, { color: colors.textPrimary, borderColor: colors.border }]}
               placeholder="VD: Penicillin, Aspirin, NSAIDs..."
               placeholderTextColor="#94A3B8"
@@ -1179,8 +1128,8 @@ export default function DoctorPatientDetailScreen() {
               onChangeText={setEditDrugAllergies}
             />
 
-            <Text style={styles.fieldLabel}>Dị ứng thực phẩm / đồ ăn</Text>
-            <TextInput
+            <LocalizedText style={styles.fieldLabel}>Dị ứng thực phẩm / đồ ăn</LocalizedText>
+            <LocalizedTextInput
               style={[styles.inputField, { color: colors.textPrimary, borderColor: colors.border }]}
               placeholder="VD: Hải sản có vỏ (tôm, cua), đậu phộng..."
               placeholderTextColor="#94A3B8"
@@ -1188,8 +1137,8 @@ export default function DoctorPatientDetailScreen() {
               onChangeText={setEditFoodAllergies}
             />
 
-            <Text style={styles.fieldLabel}>Chế độ ăn uống khuyến nghị</Text>
-            <TextInput
+            <LocalizedText style={styles.fieldLabel}>Chế độ ăn uống khuyến nghị</LocalizedText>
+            <LocalizedTextInput
               style={[
                 styles.inputField,
                 { height: 80, textAlignVertical: 'top', color: colors.textPrimary, borderColor: colors.border },
@@ -1209,7 +1158,7 @@ export default function DoctorPatientDetailScreen() {
               {isSavingAllergies ? (
                 <ActivityIndicator color="#FFFFFF" size="small" />
               ) : (
-                <Text style={styles.modalSubmitBtnText}>Lưu Thông Tin Dinh Dưỡng</Text>
+                <LocalizedText style={styles.modalSubmitBtnText}>Lưu Thông Tin Dinh Dưỡng</LocalizedText>
               )}
             </TouchableOpacity>
           </View>
@@ -1226,16 +1175,16 @@ export default function DoctorPatientDetailScreen() {
         >
           <View style={[styles.modalBox, { backgroundColor: isDarkMode ? '#1E293B' : '#FFFFFF' }]}>
             <View style={styles.modalHeader}>
-              <Text style={[styles.modalTitle, { color: colors.textPrimary }]}>
+              <LocalizedText style={[styles.modalTitle, { color: colors.textPrimary }]}>
                 {editingRxId ? 'Sửa Đơn Thuốc Y Khoa' : 'Kê Đơn Thuốc Mới'}
-              </Text>
+              </LocalizedText>
               <TouchableOpacity onPress={() => setModalPrescribeVisible(false)}>
                 <Ionicons name="close" size={24} color="#94A3B8" />
               </TouchableOpacity>
             </View>
 
-            <Text style={styles.fieldLabel}>Tên biệt dược / hoạt chất (*)</Text>
-            <TextInput
+            <LocalizedText style={styles.fieldLabel}>Tên biệt dược / hoạt chất (*)</LocalizedText>
+            <LocalizedTextInput
               style={[styles.inputField, { color: colors.textPrimary, borderColor: colors.border }]}
               placeholder="VD: Amlodipine 5mg, Vastarel 20mg..."
               placeholderTextColor="#94A3B8"
@@ -1245,8 +1194,8 @@ export default function DoctorPatientDetailScreen() {
 
             <View style={{ flexDirection: 'row', gap: 10 }}>
               <View style={{ flex: 1 }}>
-                <Text style={styles.fieldLabel}>Liều dùng (*)</Text>
-                <TextInput
+                <LocalizedText style={styles.fieldLabel}>Liều dùng (*)</LocalizedText>
+                <LocalizedTextInput
                   style={[styles.inputField, { color: colors.textPrimary, borderColor: colors.border }]}
                   placeholder="VD: 1 viên"
                   placeholderTextColor="#94A3B8"
@@ -1255,8 +1204,8 @@ export default function DoctorPatientDetailScreen() {
                 />
               </View>
               <View style={{ flex: 1.3 }}>
-                <Text style={styles.fieldLabel}>Tần suất</Text>
-                <TextInput
+                <LocalizedText style={styles.fieldLabel}>Tần suất</LocalizedText>
+                <LocalizedTextInput
                   style={[styles.inputField, { color: colors.textPrimary, borderColor: colors.border }]}
                   placeholder="VD: Hàng ngày"
                   placeholderTextColor="#94A3B8"
@@ -1266,8 +1215,8 @@ export default function DoctorPatientDetailScreen() {
               </View>
             </View>
 
-            <Text style={styles.fieldLabel}>Giờ uống thuốc (ngăn cách bởi dấu phẩy)</Text>
-            <TextInput
+            <LocalizedText style={styles.fieldLabel}>Giờ uống thuốc (ngăn cách bởi dấu phẩy)</LocalizedText>
+            <LocalizedTextInput
               style={[styles.inputField, { color: colors.textPrimary, borderColor: colors.border }]}
               placeholder="VD: 08:00, 19:30"
               placeholderTextColor="#94A3B8"
@@ -1275,8 +1224,8 @@ export default function DoctorPatientDetailScreen() {
               onChangeText={setScheduleTimes}
             />
 
-            <Text style={styles.fieldLabel}>Dặn dò cách uống</Text>
-            <TextInput
+            <LocalizedText style={styles.fieldLabel}>Dặn dò cách uống</LocalizedText>
+            <LocalizedTextInput
               style={[styles.inputField, { color: colors.textPrimary, borderColor: colors.border }]}
               placeholder="VD: Uống sau ăn 15 phút với nước ấm..."
               placeholderTextColor="#94A3B8"
@@ -1286,10 +1235,10 @@ export default function DoctorPatientDetailScreen() {
 
             <View style={styles.switchRow}>
               <View style={{ flex: 1, marginRight: 8 }}>
-                <Text style={[styles.switchTitle, { color: colors.textPrimary }]}>
+                <LocalizedText style={[styles.switchTitle, { color: colors.textPrimary }]}>
                   Phát loa tiếng Việt trên Hub Orange Pi 5
-                </Text>
-                <Text style={styles.switchSub}>Tự động phát lời nhắc bằng giọng nói tiếng Việt đến cụ</Text>
+                </LocalizedText>
+                <LocalizedText style={styles.switchSub}>Tự động phát lời nhắc bằng giọng nói tiếng Việt đến cụ</LocalizedText>
               </View>
               <Switch
                 value={enableSpeaker}
@@ -1306,9 +1255,9 @@ export default function DoctorPatientDetailScreen() {
               {isSubmittingRx ? (
                 <ActivityIndicator color="#FFFFFF" size="small" />
               ) : (
-                <Text style={styles.modalSubmitBtnText}>
+                <LocalizedText style={styles.modalSubmitBtnText}>
                   {editingRxId ? 'Cập Nhật Đơn Thuốc' : 'Lưu Đơn Thuốc & Đồng Bộ Hub'}
-                </Text>
+                </LocalizedText>
               )}
             </TouchableOpacity>
           </View>
@@ -1325,30 +1274,30 @@ export default function DoctorPatientDetailScreen() {
         >
           <View style={[styles.modalBox, { backgroundColor: isDarkMode ? '#1E293B' : '#FFFFFF' }]}>
             <View style={styles.modalHeader}>
-              <Text style={[styles.modalTitle, { color: colors.textPrimary }]}>Cấu Hình Ngưỡng Y Tế</Text>
+              <LocalizedText style={[styles.modalTitle, { color: colors.textPrimary }]}>Cấu Hình Ngưỡng Y Tế</LocalizedText>
               <TouchableOpacity onPress={() => setModalThresholdVisible(false)}>
                 <Ionicons name="close" size={24} color="#94A3B8" />
               </TouchableOpacity>
             </View>
 
-            <Text style={styles.fieldLabel}>Ngưỡng Nhịp tim tối đa (bpm)</Text>
-            <TextInput
+            <LocalizedText style={styles.fieldLabel}>Ngưỡng Nhịp tim tối đa (bpm)</LocalizedText>
+            <LocalizedTextInput
               style={[styles.inputField, { color: colors.textPrimary, borderColor: colors.border }]}
               keyboardType="numeric"
               value={hrHigh}
               onChangeText={setHrHigh}
             />
 
-            <Text style={styles.fieldLabel}>Ngưỡng Nhịp tim tối thiểu (bpm)</Text>
-            <TextInput
+            <LocalizedText style={styles.fieldLabel}>Ngưỡng Nhịp tim tối thiểu (bpm)</LocalizedText>
+            <LocalizedTextInput
               style={[styles.inputField, { color: colors.textPrimary, borderColor: colors.border }]}
               keyboardType="numeric"
               value={hrLow}
               onChangeText={setHrLow}
             />
 
-            <Text style={styles.fieldLabel}>Ngưỡng SpO₂ nguy hiểm (%)</Text>
-            <TextInput
+            <LocalizedText style={styles.fieldLabel}>Ngưỡng SpO₂ nguy hiểm (%)</LocalizedText>
+            <LocalizedTextInput
               style={[styles.inputField, { color: colors.textPrimary, borderColor: colors.border }]}
               keyboardType="numeric"
               value={spo2Low}
@@ -1356,7 +1305,7 @@ export default function DoctorPatientDetailScreen() {
             />
 
             <TouchableOpacity style={styles.modalSubmitBtn} onPress={handleSaveThresholds}>
-              <Text style={styles.modalSubmitBtnText}>Lưu Cấu Hình Ngưỡng</Text>
+              <LocalizedText style={styles.modalSubmitBtnText}>Lưu Cấu Hình Ngưỡng</LocalizedText>
             </TouchableOpacity>
           </View>
         </KeyboardAvoidingView>
@@ -1399,31 +1348,8 @@ const styles = StyleSheet.create({
     backgroundColor: '#0284C7',
     justifyContent: 'center',
     alignItems: 'center',
-    overflow: 'hidden',
-  },
-  avatarBigImg: {
-    width: 52,
-    height: 52,
-    borderRadius: 26,
   },
   avatarBigText: { color: '#FFFFFF', fontSize: 22, fontWeight: '800' },
-  faceIdPillRow: {
-    flexDirection: 'row',
-    marginTop: 6,
-  },
-  faceIdPill: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 4,
-    borderWidth: 1,
-    paddingHorizontal: 8,
-    paddingVertical: 3,
-    borderRadius: 6,
-  },
-  faceIdPillText: {
-    fontSize: 10,
-    fontWeight: '700',
-  },
   heroNameRow: { flexDirection: 'row', alignItems: 'center', flexWrap: 'wrap' },
   heroName: { fontSize: 17, fontWeight: '800', marginRight: 8 },
   badgeAge: {

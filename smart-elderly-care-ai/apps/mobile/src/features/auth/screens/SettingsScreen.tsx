@@ -2,17 +2,12 @@
 // Màn hình Cài Đặt (Settings) - Hỗ trợ chuẩn Dark Mode / Light Mode
 
 import React, { useState } from 'react';
-import {
-  View,
-  Text,
-  StyleSheet,
-  TouchableOpacity,
-  ScrollView,
-  Platform,
-} from 'react-native';
+import { View, StyleSheet, TouchableOpacity, ScrollView, Switch } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
 import { useTheme } from '../../../store/useThemeStore';
+import { LocalizedText } from '../../../i18n/LocalizedComponents';
+
 
 export default function SettingsScreen({ navigation }: any) {
   const { isDarkMode, colors } = useTheme();
@@ -22,7 +17,7 @@ export default function SettingsScreen({ navigation }: any) {
     <SafeAreaView
       style={[
         styles.container,
-        { backgroundColor: isDarkMode ? '#0B0F19' : '#F8FAFC' },
+        { backgroundColor: colors.background },
       ]}
       edges={['top']}
     >
@@ -31,8 +26,8 @@ export default function SettingsScreen({ navigation }: any) {
         style={[
           styles.headerRow,
           {
-            backgroundColor: isDarkMode ? '#0B0F19' : '#F8FAFC',
-            borderBottomColor: isDarkMode ? '#1E293B' : '#E2E8F0',
+            backgroundColor: colors.background,
+            borderBottomColor: colors.border,
           },
         ]}
       >
@@ -40,8 +35,8 @@ export default function SettingsScreen({ navigation }: any) {
           style={[
             styles.backButton,
             {
-              backgroundColor: isDarkMode ? '#1E293B' : '#FFFFFF',
-              borderColor: isDarkMode ? '#334155' : '#E2E8F0',
+              backgroundColor: colors.card,
+              borderColor: colors.border,
             },
           ]}
           onPress={() => navigation?.goBack?.()}
@@ -50,17 +45,17 @@ export default function SettingsScreen({ navigation }: any) {
           <Ionicons
             name="chevron-back-outline"
             size={24}
-            color={isDarkMode ? '#F8FAFC' : '#0F172A'}
+            color={colors.textPrimary}
           />
         </TouchableOpacity>
-        <Text
+        <LocalizedText
           style={[
             styles.headerTitle,
-            { color: isDarkMode ? '#F8FAFC' : '#0F172A' },
+            { color: colors.textPrimary },
           ]}
         >
           Cài đặt
-        </Text>
+        </LocalizedText>
         <View style={styles.headerRightSpacer} />
       </View>
 
@@ -69,12 +64,16 @@ export default function SettingsScreen({ navigation }: any) {
         contentContainerStyle={styles.scrollContent}
       >
         {/* Khối 1: Hồ sơ người giám sát & Hồ sơ bệnh án người cao tuổi */}
+        <View style={styles.sectionHeading}>
+          <LocalizedText style={[styles.sectionLabel, { color: colors.textMuted }]}>TÀI KHOẢN & CHĂM SÓC</LocalizedText>
+          <LocalizedText style={[styles.sectionCount, { color: colors.textMuted }]}>02</LocalizedText>
+        </View>
         <View
           style={[
             styles.cardGroup,
             {
-              backgroundColor: isDarkMode ? '#1E293B' : '#FFFFFF',
-              borderColor: isDarkMode ? '#334155' : '#F1F5F9',
+              backgroundColor: colors.card,
+              borderColor: colors.border,
             },
           ]}
         >
@@ -98,22 +97,22 @@ export default function SettingsScreen({ navigation }: any) {
                 />
               </View>
               <View>
-                <Text
+                <LocalizedText
                   style={[
                     styles.itemTitle,
                     { color: isDarkMode ? '#F8FAFC' : '#0F172A' },
                   ]}
                 >
                   Hồ sơ người giám sát
-                </Text>
-                <Text
+                </LocalizedText>
+                <LocalizedText
                   style={[
                     styles.itemSubtitle,
                     { color: isDarkMode ? '#94A3B8' : '#64748B' },
                   ]}
                 >
                   Tài khoản người thân theo dõi, SĐT liên hệ khẩn cấp
-                </Text>
+                </LocalizedText>
               </View>
             </View>
             <Ionicons name="chevron-forward" size={18} color="#94A3B8" />
@@ -147,26 +146,26 @@ export default function SettingsScreen({ navigation }: any) {
               </View>
               <View style={{ flex: 1 }}>
                 <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6 }}>
-                  <Text
+                  <LocalizedText
                     style={[
                       styles.itemTitle,
                       { color: isDarkMode ? '#F8FAFC' : '#0F172A' },
                     ]}
                   >
                     Hồ sơ bệnh án người cao tuổi
-                  </Text>
-                  <View style={styles.aesBadge}>
-                    <Text style={styles.aesBadgeText}>Bảo mật AES-256</Text>
+                  </LocalizedText>
+                  <View style={[styles.aesBadge, { backgroundColor: isDarkMode ? '#082F49' : '#E0F2FE' }]}>
+                    <LocalizedText style={styles.aesBadgeText}>Bảo mật AES-256</LocalizedText>
                   </View>
                 </View>
-                <Text
+                <LocalizedText
                   style={[
                     styles.itemSubtitle,
                     { color: isDarkMode ? '#94A3B8' : '#64748B' },
                   ]}
                 >
                   Thông tin cụ, bệnh nền, nhóm máu &amp; đơn thuốc
-                </Text>
+                </LocalizedText>
               </View>
             </View>
             <Ionicons name="chevron-forward" size={18} color="#94A3B8" />
@@ -174,12 +173,16 @@ export default function SettingsScreen({ navigation }: any) {
         </View>
 
         {/* Khối 2: Nhóm 3 mục (Cài đặt chung, Khả năng tiếp cận, Thông tin) */}
+        <View style={styles.sectionHeading}>
+          <LocalizedText style={[styles.sectionLabel, { color: colors.textMuted }]}>ỨNG DỤNG</LocalizedText>
+          <LocalizedText style={[styles.sectionCount, { color: colors.textMuted }]}>03</LocalizedText>
+        </View>
         <View
           style={[
             styles.cardGroup,
             {
-              backgroundColor: isDarkMode ? '#1E293B' : '#FFFFFF',
-              borderColor: isDarkMode ? '#334155' : '#F1F5F9',
+              backgroundColor: colors.card,
+              borderColor: colors.border,
             },
           ]}
         >
@@ -202,14 +205,14 @@ export default function SettingsScreen({ navigation }: any) {
                   color={isDarkMode ? '#94A3B8' : '#475569'}
                 />
               </View>
-              <Text
+              <LocalizedText
                 style={[
                   styles.itemTitle,
                   { color: isDarkMode ? '#F8FAFC' : '#0F172A' },
                 ]}
               >
                 Cài đặt chung
-              </Text>
+              </LocalizedText>
             </View>
             <Ionicons name="chevron-forward" size={18} color="#94A3B8" />
           </TouchableOpacity>
@@ -241,14 +244,14 @@ export default function SettingsScreen({ navigation }: any) {
                   color={isDarkMode ? '#94A3B8' : '#475569'}
                 />
               </View>
-              <Text
+              <LocalizedText
                 style={[
                   styles.itemTitle,
                   { color: isDarkMode ? '#F8FAFC' : '#0F172A' },
                 ]}
               >
                 Khả năng tiếp cận
-              </Text>
+              </LocalizedText>
             </View>
             <Ionicons name="chevron-forward" size={18} color="#94A3B8" />
           </TouchableOpacity>
@@ -280,26 +283,30 @@ export default function SettingsScreen({ navigation }: any) {
                   color={isDarkMode ? '#94A3B8' : '#475569'}
                 />
               </View>
-              <Text
+              <LocalizedText
                 style={[
                   styles.itemTitle,
                   { color: isDarkMode ? '#F8FAFC' : '#0F172A' },
                 ]}
               >
                 Thông tin
-              </Text>
+              </LocalizedText>
             </View>
             <Ionicons name="chevron-forward" size={18} color="#94A3B8" />
           </TouchableOpacity>
         </View>
 
         {/* Khối 3: Nhóm 2 mục (Thiết lập thông báo, Rung) */}
+        <View style={styles.sectionHeading}>
+          <LocalizedText style={[styles.sectionLabel, { color: colors.textMuted }]}>CẢNH BÁO & PHẢN HỒI</LocalizedText>
+          <LocalizedText style={[styles.sectionCount, { color: colors.textMuted }]}>02</LocalizedText>
+        </View>
         <View
           style={[
             styles.cardGroup,
             {
-              backgroundColor: isDarkMode ? '#1E293B' : '#FFFFFF',
-              borderColor: isDarkMode ? '#334155' : '#F1F5F9',
+              backgroundColor: colors.card,
+              borderColor: colors.border,
             },
           ]}
         >
@@ -322,14 +329,14 @@ export default function SettingsScreen({ navigation }: any) {
                   color={isDarkMode ? '#94A3B8' : '#475569'}
                 />
               </View>
-              <Text
+              <LocalizedText
                 style={[
                   styles.itemTitle,
                   { color: isDarkMode ? '#F8FAFC' : '#0F172A' },
                 ]}
               >
                 Thiết lập thông báo
-              </Text>
+              </LocalizedText>
             </View>
             <Ionicons name="chevron-forward" size={18} color="#94A3B8" />
           </TouchableOpacity>
@@ -343,11 +350,7 @@ export default function SettingsScreen({ navigation }: any) {
           />
 
           {/* Mục 2: Rung */}
-          <TouchableOpacity
-            style={styles.menuItem}
-            activeOpacity={0.7}
-            onPress={() => setVibrationEnabled(!vibrationEnabled)}
-          >
+          <View style={styles.menuItem}>
             <View style={styles.itemLeft}>
               <View
                 style={[
@@ -361,27 +364,23 @@ export default function SettingsScreen({ navigation }: any) {
                   color={isDarkMode ? '#94A3B8' : '#475569'}
                 />
               </View>
-              <Text
+              <LocalizedText
                 style={[
                   styles.itemTitle,
                   { color: isDarkMode ? '#F8FAFC' : '#0F172A' },
                 ]}
               >
                 Rung
-              </Text>
+              </LocalizedText>
             </View>
-            <View style={styles.itemRight}>
-              <Text
-                style={[
-                  styles.subText,
-                  { color: isDarkMode ? '#94A3B8' : '#64748B' },
-                ]}
-              >
-                {vibrationEnabled ? 'Mở' : 'Tắt'}
-              </Text>
-              <Ionicons name="chevron-forward" size={18} color="#94A3B8" />
-            </View>
-          </TouchableOpacity>
+            <Switch
+              value={vibrationEnabled}
+              onValueChange={setVibrationEnabled}
+              trackColor={{ false: isDarkMode ? '#475569' : '#CBD5E1', true: colors.primary }}
+              thumbColor="#FFFFFF"
+              accessibilityLabel="Bật hoặc tắt rung"
+            />
+          </View>
         </View>
       </ScrollView>
     </SafeAreaView>
@@ -397,13 +396,13 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     justifyContent: 'space-between',
     paddingHorizontal: 16,
-    paddingVertical: 12,
+    paddingVertical: 14,
     borderBottomWidth: StyleSheet.hairlineWidth,
   },
   backButton: {
-    width: 38,
-    height: 38,
-    borderRadius: 19,
+    width: 42,
+    height: 42,
+    borderRadius: 21,
     borderWidth: 1,
     alignItems: 'center',
     justifyContent: 'center',
@@ -417,27 +416,43 @@ const styles = StyleSheet.create({
   },
   scrollContent: {
     paddingHorizontal: 16,
-    paddingTop: 16,
+    paddingTop: 20,
     paddingBottom: 40,
-    gap: 14,
+    gap: 10,
+  },
+  sectionHeading: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    paddingHorizontal: 4,
+    marginTop: 4,
+    marginBottom: -4,
+  },
+  sectionLabel: {
+    fontSize: 11,
+    fontWeight: '700',
+  },
+  sectionCount: {
+    fontSize: 11,
+    fontWeight: '600',
   },
   cardGroup: {
-    borderRadius: 16,
+    borderRadius: 18,
     borderWidth: 1,
     overflow: 'hidden',
-    shadowColor: '#64748B',
-    shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.04,
-    shadowRadius: 8,
+    shadowColor: '#0F172A',
+    shadowOffset: { width: 0, height: 4 },
+    shadowOpacity: 0.05,
+    shadowRadius: 12,
     elevation: 2,
   },
   menuItem: {
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'space-between',
-    minHeight: 58,
-    paddingHorizontal: 16,
-    paddingVertical: 14,
+    minHeight: 64,
+    paddingHorizontal: 14,
+    paddingVertical: 12,
   },
   itemLeft: {
     flexDirection: 'row',
@@ -445,9 +460,9 @@ const styles = StyleSheet.create({
     flex: 1,
   },
   iconWrap: {
-    width: 34,
-    height: 34,
-    borderRadius: 10,
+    width: 38,
+    height: 38,
+    borderRadius: 12,
     alignItems: 'center',
     justifyContent: 'center',
     marginRight: 12,
@@ -467,14 +482,13 @@ const styles = StyleSheet.create({
   },
   divider: {
     height: 1,
-    marginLeft: 62,
+    marginLeft: 66,
   },
   itemSubtitle: {
     fontSize: 11,
     marginTop: 2,
   },
   aesBadge: {
-    backgroundColor: '#E0F2FE',
     paddingHorizontal: 6,
     paddingVertical: 2,
     borderRadius: 4,

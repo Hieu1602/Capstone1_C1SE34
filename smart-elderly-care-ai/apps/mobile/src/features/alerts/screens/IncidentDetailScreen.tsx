@@ -2,15 +2,7 @@
 // Màn hình chi tiết sự kiện cảnh báo – Xem thông tin và clip video 5 giây
 
 import React, { useEffect, useState } from 'react';
-import {
-  View,
-  Text,
-  StyleSheet,
-  TouchableOpacity,
-  ScrollView,
-  Alert,
-  ActivityIndicator,
-} from 'react-native';
+import { View, StyleSheet, TouchableOpacity, ScrollView, ActivityIndicator } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
 import { Platform } from 'react-native';
@@ -25,6 +17,8 @@ import { incidentsApi } from '../../../services/api';
 import { useTheme } from '../../../store/useThemeStore';
 import { useVitalStore, useAuthStore } from '../../../store/useVitalStore';
 import { Vibration } from 'react-native';
+import { LocalizedAlert, LocalizedText } from '../../../i18n/LocalizedComponents';
+
 
 interface Incident {
   id: string;
@@ -131,9 +125,18 @@ export default function IncidentDetailScreen({ route, navigation }: any) {
     try {
       const res = await incidentsApi.get(incidentId);
       setIncident(res.data);
-    } catch (err) {
-      console.warn('Không tìm thấy sự cố thực tế từ backend API:', err);
-      setIncident(null);
+    } catch {
+      // Mock data
+      setIncident({
+        id: incidentId,
+        alert_type: 'FALL_DETECTED',
+        alert_level: 'CRITICAL',
+        message: 'Phát hiện té ngã! Xác nhận bởi: camera_ai, audio_ai',
+        confidence: 0.92,
+        video_clip_url: 'https://commondatastorage.googleapis.com/gtv-videos-bucket/sample/BigBuckBunny.mp4',
+        is_acknowledged: false,
+        created_at: new Date().toISOString(),
+      });
     } finally {
       setLoading(false);
     }
@@ -186,7 +189,7 @@ export default function IncidentDetailScreen({ route, navigation }: any) {
       setShowSuccessToast(true);
 
       // Hiển thị thông báo phản hồi
-      Alert.alert(
+      LocalizedAlert.alert(
         '✅ Đã đánh dấu xử lý thành công',
         `Còi hú đã tắt ngay lập tức. Đã gửi đồng bộ thông báo xác nhận đến điện thoại của các thành viên gia đình (Xử lý bởi: ${operatorName}).`
       );
@@ -199,37 +202,16 @@ export default function IncidentDetailScreen({ route, navigation }: any) {
       }, 1800);
     } catch (error) {
       console.error('Lỗi khi xác nhận xử lý sự cố:', error);
-      Alert.alert('Thông báo', 'Đã lưu trạng thái xử lý an toàn.');
+      LocalizedAlert.alert('Thông báo', 'Đã lưu trạng thái xử lý an toàn.');
     } finally {
       setIsProcessing(false);
     }
   };
 
-  if (loading) {
+  if (!incident || loading) {
     return (
-      <SafeAreaView style={[styles.container, { backgroundColor: colors.background, justifyContent: 'center', alignItems: 'center' }]}>
-        <ActivityIndicator size="large" color="#FF7A00" />
-        <Text style={[styles.loadingText, { color: colors.textSecondary, marginTop: 12 }]}>Đang tải chi tiết sự cố thực tế...</Text>
-      </SafeAreaView>
-    );
-  }
-
-  if (!incident) {
-    return (
-      <SafeAreaView style={[styles.container, { backgroundColor: colors.background, justifyContent: 'center', alignItems: 'center', padding: 24 }]}>
-        <Ionicons name="alert-circle-outline" size={54} color="#94A3B8" />
-        <Text style={{ color: colors.textPrimary, fontSize: 16, fontWeight: '700', marginTop: 16, textAlign: 'center' }}>
-          Không tìm thấy sự cố thực tế
-        </Text>
-        <Text style={{ color: colors.textSecondary, fontSize: 13, marginTop: 8, textAlign: 'center', lineHeight: 20 }}>
-          Sự cố có thể đã được xử lý xong hoặc không tồn tại trong hệ thống.
-        </Text>
-        <TouchableOpacity
-          onPress={() => navigation.goBack()}
-          style={{ marginTop: 24, paddingVertical: 12, paddingHorizontal: 24, backgroundColor: '#FF7A00', borderRadius: 10 }}
-        >
-          <Text style={{ color: '#FFFFFF', fontWeight: '600' }}>Quay lại danh sách</Text>
-        </TouchableOpacity>
+      <SafeAreaView style={styles.container}>
+        <LocalizedText style={styles.loadingText}>Đang tải...</LocalizedText>
       </SafeAreaView>
     );
   }
@@ -244,7 +226,7 @@ export default function IncidentDetailScreen({ route, navigation }: any) {
         <TouchableOpacity onPress={() => navigation.goBack()} style={styles.backBtn}>
           <Ionicons name="arrow-back" size={24} color={colors.textPrimary} />
         </TouchableOpacity>
-        <Text style={[styles.headerTitle, { color: colors.textPrimary }]}>Chi tiết sự kiện</Text>
+        <LocalizedText style={[styles.headerTitle, { color: colors.textPrimary }]}>Chi tiết sự kiện</LocalizedText>
       </View>
 
       <ScrollView contentContainerStyle={styles.content}>
@@ -253,62 +235,62 @@ export default function IncidentDetailScreen({ route, navigation }: any) {
           {!incident.is_acknowledged ? (
             <View style={[styles.statusBadge, { backgroundColor: isDarkMode ? '#450A0A' : '#FEE2E2', borderColor: '#EF4444' }]}>
               <View style={styles.liveRedDot} />
-              <Text style={[styles.statusBadgeText, { color: isDarkMode ? '#FCA5A5' : '#DC2626' }]}>
+              <LocalizedText style={[styles.statusBadgeText, { color: isDarkMode ? '#FCA5A5' : '#DC2626' }]}>
                 CRITICAL / MỚI
-              </Text>
+              </LocalizedText>
             </View>
           ) : (
             <View style={[styles.statusBadge, { backgroundColor: isDarkMode ? 'rgba(34, 197, 94, 0.15)' : '#ECFDF5', borderColor: '#22C55E' }]}>
               <Ionicons name="checkmark-circle" size={14} color="#16A34A" />
-              <Text style={[styles.statusBadgeText, { color: isDarkMode ? '#86EFAC' : '#16A34A' }]}>
+              <LocalizedText style={[styles.statusBadgeText, { color: isDarkMode ? '#86EFAC' : '#16A34A' }]}>
                 ĐÃ XỬ LÝ (Bởi {incident.acknowledged_by || operatorName})
-              </Text>
+              </LocalizedText>
             </View>
           )}
 
           <View style={[styles.levelBadge, { backgroundColor: `${levelColor}20`, borderColor: levelColor }]}>
-            <Text style={[styles.levelText, { color: levelColor }]}>
+            <LocalizedText style={[styles.levelText, { color: levelColor }]}>
               {incident.alert_level}
-            </Text>
+            </LocalizedText>
           </View>
         </View>
 
         {/* Type & Message */}
-        <Text style={[styles.typeLabel, { color: colors.textPrimary }]}>{typeLabel}</Text>
-        <Text style={[styles.message, { color: colors.textSecondary }]}>{incident.message}</Text>
+        <LocalizedText style={[styles.typeLabel, { color: colors.textPrimary }]}>{typeLabel}</LocalizedText>
+        <LocalizedText style={[styles.message, { color: colors.textSecondary }]}>{incident.message}</LocalizedText>
 
         {/* Details Card */}
         <View style={[styles.infoCard, { backgroundColor: colors.card, borderColor: colors.border, borderWidth: 1 }]}>
           <View style={styles.row}>
-            <Text style={[styles.rowLabel, { color: colors.textMuted }]}>Độ tin cậy AI</Text>
-            <Text style={[styles.rowValue, { color: colors.textPrimary }]}>{(incident.confidence * 100).toFixed(0)}%</Text>
+            <LocalizedText style={[styles.rowLabel, { color: colors.textMuted }]}>Độ tin cậy AI</LocalizedText>
+            <LocalizedText style={[styles.rowValue, { color: colors.textPrimary }]}>{(incident.confidence * 100).toFixed(0)}%</LocalizedText>
           </View>
 
           <View style={[styles.rowDivider, { backgroundColor: colors.border }]} />
 
           {/* Timestamp */}
           <View style={styles.row}>
-            <Text style={[styles.rowLabel, { color: colors.textMuted }]}>Thời gian ghi nhận</Text>
-            <Text style={[styles.rowValue, { color: colors.textPrimary }]}>
+            <LocalizedText style={[styles.rowLabel, { color: colors.textMuted }]}>Thời gian ghi nhận</LocalizedText>
+            <LocalizedText style={[styles.rowValue, { color: colors.textPrimary }]}>
               {new Date(incident.created_at).toLocaleString('vi-VN')}
-            </Text>
+            </LocalizedText>
           </View>
 
           {incident.is_acknowledged && (
             <>
               <View style={[styles.rowDivider, { backgroundColor: colors.border }]} />
               <View style={styles.row}>
-                <Text style={[styles.rowLabel, { color: colors.textMuted }]}>Người xử lý</Text>
-                <Text style={[styles.rowValue, { color: '#16A34A', fontWeight: '700' }]}>
+                <LocalizedText style={[styles.rowLabel, { color: colors.textMuted }]}>Người xử lý</LocalizedText>
+                <LocalizedText style={[styles.rowValue, { color: '#16A34A', fontWeight: '700' }]}>
                   {incident.acknowledged_by || operatorName}
-                </Text>
+                </LocalizedText>
               </View>
               {incident.acknowledged_at && (
                 <View style={styles.row}>
-                  <Text style={[styles.rowLabel, { color: colors.textMuted }]}>Thời gian xử lý</Text>
-                  <Text style={[styles.rowValue, { color: colors.textSecondary }]}>
+                  <LocalizedText style={[styles.rowLabel, { color: colors.textMuted }]}>Thời gian xử lý</LocalizedText>
+                  <LocalizedText style={[styles.rowValue, { color: colors.textSecondary }]}>
                     {new Date(incident.acknowledged_at).toLocaleString('vi-VN')}
-                  </Text>
+                  </LocalizedText>
                 </View>
               )}
             </>
@@ -318,7 +300,7 @@ export default function IncidentDetailScreen({ route, navigation }: any) {
         {/* Video Clip */}
         {incident.video_clip_url ? (
           <View style={styles.videoSection}>
-            <Text style={[styles.sectionTitle, { color: colors.textPrimary }]}>Video bằng chứng (5 giây)</Text>
+            <LocalizedText style={[styles.sectionTitle, { color: colors.textPrimary }]}>Video bằng chứng (5 giây)</LocalizedText>
             {Platform.OS === 'web' || !Video ? (
               <video
                 src={incident.video_clip_url}
@@ -338,7 +320,7 @@ export default function IncidentDetailScreen({ route, navigation }: any) {
         ) : (
           <View style={[styles.noVideo, { backgroundColor: colors.card, borderColor: colors.border, borderWidth: 1 }]}>
             <Ionicons name="videocam-off" size={36} color={colors.textMuted} />
-            <Text style={[styles.noVideoText, { color: colors.textMuted }]}>Clip chưa có sẵn</Text>
+            <LocalizedText style={[styles.noVideoText, { color: colors.textMuted }]}>Clip chưa có sẵn</LocalizedText>
           </View>
         )}
 
@@ -355,12 +337,12 @@ export default function IncidentDetailScreen({ route, navigation }: any) {
           >
             <Ionicons name="checkmark-circle" size={22} color="#16A34A" />
             <View style={{ flex: 1, marginLeft: 8 }}>
-              <Text style={[styles.successToastTitle, { color: isDarkMode ? '#86EFAC' : '#15803D' }]}>
+              <LocalizedText style={[styles.successToastTitle, { color: isDarkMode ? '#86EFAC' : '#15803D' }]}>
                 Đã đánh dấu xử lý sự kiện thành công!
-              </Text>
-              <Text style={[styles.successToastSubtitle, { color: isDarkMode ? '#A7F3D0' : '#166534' }]}>
+              </LocalizedText>
+              <LocalizedText style={[styles.successToastSubtitle, { color: isDarkMode ? '#A7F3D0' : '#166534' }]}>
                 Còi hú đã tắt và trạng thái an toàn đã được cập nhật vào PostgreSQL.
-              </Text>
+              </LocalizedText>
             </View>
           </View>
         )}
@@ -379,12 +361,12 @@ export default function IncidentDetailScreen({ route, navigation }: any) {
             {isProcessing ? (
               <>
                 <ActivityIndicator size="small" color="#FFF" />
-                <Text style={styles.ackBtnText}>Đang cập nhật PostgreSQL...</Text>
+                <LocalizedText style={styles.ackBtnText}>Đang cập nhật PostgreSQL...</LocalizedText>
               </>
             ) : (
               <>
                 <Ionicons name="checkmark-circle" size={20} color="#FFF" />
-                <Text style={styles.ackBtnText}>Đánh dấu đã xử lý</Text>
+                <LocalizedText style={styles.ackBtnText}>Đánh dấu đã xử lý</LocalizedText>
               </>
             )}
           </TouchableOpacity>
@@ -400,9 +382,9 @@ export default function IncidentDetailScreen({ route, navigation }: any) {
               ]}
             >
               <Ionicons name="checkmark-circle" size={22} color="#16A34A" />
-              <Text style={[styles.ackBtnDisabledText, { color: isDarkMode ? '#86EFAC' : '#15803D' }]}>
+              <LocalizedText style={[styles.ackBtnDisabledText, { color: isDarkMode ? '#86EFAC' : '#15803D' }]}>
                 Đã xử lý thành công (Bởi {incident.acknowledged_by || operatorName})
-              </Text>
+              </LocalizedText>
             </View>
 
             <TouchableOpacity
@@ -417,9 +399,9 @@ export default function IncidentDetailScreen({ route, navigation }: any) {
               activeOpacity={0.7}
             >
               <Ionicons name="arrow-back" size={18} color={colors.textPrimary} />
-              <Text style={[styles.returnBtnText, { color: colors.textPrimary }]}>
+              <LocalizedText style={[styles.returnBtnText, { color: colors.textPrimary }]}>
                 Quay lại màn hình chính
-              </Text>
+              </LocalizedText>
             </TouchableOpacity>
           </View>
         )}

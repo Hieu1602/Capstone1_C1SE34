@@ -5,24 +5,13 @@
 // Nhánh Bluetooth: BLE_PowerCheck -> BLE_Permission -> RequestPerm -> BLE_Scan -> BLE_Pairing -> SetupSuccess / DialogBLE
 
 import React, { useState, useEffect, useRef } from 'react';
-import {
-  View,
-  Text,
-  StyleSheet,
-  TouchableOpacity,
-  ScrollView,
-  TextInput,
-  Switch,
-  ActivityIndicator,
-  Modal,
-  Animated,
-  Linking,
-  Platform,
-} from 'react-native';
+import { View, StyleSheet, TouchableOpacity, ScrollView, Switch, ActivityIndicator, Modal, Animated, Linking, Platform } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
 import { Colors } from '../../../theme/colors';
 import { useVitalStore, IoTDeviceItem } from '../../../store/useVitalStore';
+import { LocalizedText, LocalizedTextInput } from '../../../i18n/LocalizedComponents';
+
 
 // Các trạng thái của toàn bộ luồng theo Mermaid flowchart
 type FlowStep =
@@ -566,9 +555,9 @@ export default function AddDeviceScreen({ navigation }: any) {
         </View>
 
         {/* Tiêu đề tìm kiếm trung tâm */}
-        <Text style={styles.searchingTitle}>
+        <LocalizedText style={styles.searchingTitle}>
           SECA đang tìm kiếm thiết bị của bạn...
-        </Text>
+        </LocalizedText>
 
         {/* Khu vực đồ họa trung tâm: Sóng Radar tỏa ra + Camera + Điện thoại */}
         <View style={styles.searchingCenter}>
@@ -623,7 +612,7 @@ export default function AddDeviceScreen({ navigation }: any) {
 
           {/* Dấu cộng và các điểm nhấn chuyển động */}
           <View style={styles.searchingPlusBadge}>
-            <Text style={styles.searchingPlusText}>+</Text>
+            <LocalizedText style={styles.searchingPlusText}>+</LocalizedText>
           </View>
           <View style={styles.searchingStreakLine1} />
           <View style={styles.searchingStreakLine2} />
@@ -643,10 +632,10 @@ export default function AddDeviceScreen({ navigation }: any) {
 
         {/* Dòng hướng dẫn bên dưới */}
         <View style={styles.searchingFooter}>
-          <Text style={styles.searchingFooterText}>
+          <LocalizedText style={styles.searchingFooterText}>
             Đảm bảo rằng bạn đã kết nối với Wi-Fi của thiết bị SECA của mình:{' '}
-            <Text style={{ fontWeight: 'bold' }}>SECA_001</Text>.
-          </Text>
+            <LocalizedText style={{ fontWeight: 'bold' }}>SECA_001</LocalizedText>.
+          </LocalizedText>
         </View>
       </SafeAreaView>
     );
@@ -664,8 +653,8 @@ export default function AddDeviceScreen({ navigation }: any) {
           <Ionicons name="chevron-back" size={26} color="#1E293B" />
         </TouchableOpacity>
         <View style={styles.headerTitleContainer}>
-          <Text style={styles.headerTitle}>Thêm Thiết Bị Mới</Text>
-          <Text style={styles.headerSubtitle}>
+          <LocalizedText style={styles.headerTitle}>Thêm Thiết Bị Mới</LocalizedText>
+          <LocalizedText style={styles.headerSubtitle}>
             {currentStep === 'CATEGORY_SELECT' && 'Bước 1: Chọn phân loại thiết bị'}
             {currentStep === 'CAMERA_LIST' && 'Bước 2: Chọn model Camera'}
             {currentStep === 'WIFI_POWER_CHECK' && 'Bước 3A: Cắm nguồn & Kiểm tra LED'}
@@ -677,7 +666,7 @@ export default function AddDeviceScreen({ navigation }: any) {
             {currentStep === 'BLE_PAIRING' && 'Bước 6B: Ghép nối Bluetooth GATT'}
             {currentStep === 'OTHER_LIST' && 'Cảm biến IoT qua Edge Hub'}
             {currentStep === 'SETUP_SUCCESS' && 'Hoàn tất cấu hình'}
-          </Text>
+          </LocalizedText>
         </View>
         <TouchableOpacity
           style={styles.closeButton}
@@ -720,10 +709,10 @@ export default function AddDeviceScreen({ navigation }: any) {
         {/* ============================================================== */}
         {currentStep === 'CATEGORY_SELECT' && (
           <View>
-            <Text style={styles.stepHeaderTitle}>Chọn Loại Thiết Bị Cần Thêm</Text>
-            <Text style={styles.stepHeaderDesc}>
+            <LocalizedText style={styles.stepHeaderTitle}>Chọn Loại Thiết Bị Cần Thêm</LocalizedText>
+            <LocalizedText style={styles.stepHeaderDesc}>
               Hệ thống sẽ tự động kích hoạt luồng kiểm tra giao thức tương ứng (Wi-Fi AP hoặc Bluetooth BLE).
-            </Text>
+            </LocalizedText>
 
             {/* Option 1: Camera */}
             <TouchableOpacity
@@ -736,14 +725,14 @@ export default function AddDeviceScreen({ navigation }: any) {
               </View>
               <View style={styles.categoryInfo}>
                 <View style={styles.categoryBadgeRow}>
-                  <Text style={styles.categoryName}>Thiết bị Camera</Text>
+                  <LocalizedText style={styles.categoryName}>Thiết bị Camera</LocalizedText>
                   <View style={[styles.protoBadge, { backgroundColor: '#FFEDD5' }]}>
-                    <Text style={[styles.protoBadgeText, { color: '#C2410C' }]}>WIFI_AP</Text>
+                    <LocalizedText style={[styles.protoBadgeText, { color: '#C2410C' }]}>WIFI_AP</LocalizedText>
                   </View>
                 </View>
-                <Text style={styles.categoryDesc}>
+                <LocalizedText style={styles.categoryDesc}>
                   Camera an ninh AI giám sát, tích hợp YOLOv8-Pose nhận diện té ngã và luồng RTSP 1080p.
-                </Text>
+                </LocalizedText>
               </View>
               <Ionicons name="chevron-forward" size={20} color="#94A3B8" />
             </TouchableOpacity>
@@ -759,14 +748,14 @@ export default function AddDeviceScreen({ navigation }: any) {
               </View>
               <View style={styles.categoryInfo}>
                 <View style={styles.categoryBadgeRow}>
-                  <Text style={styles.categoryName}>Đồng hồ thông minh</Text>
+                  <LocalizedText style={styles.categoryName}>Đồng hồ thông minh</LocalizedText>
                   <View style={[styles.protoBadge, { backgroundColor: '#D1FAE5' }]}>
-                    <Text style={[styles.protoBadgeText, { color: '#047857' }]}>BLUETOOTH</Text>
+                    <LocalizedText style={[styles.protoBadgeText, { color: '#047857' }]}>BLUETOOTH</LocalizedText>
                   </View>
                 </View>
-                <Text style={styles.categoryDesc}>
+                <LocalizedText style={styles.categoryDesc}>
                   Vòng đeo tay y tế, cảm biến quang PPG đo nhịp tim, SpO₂ và gia tốc kế cảnh báo va đập.
-                </Text>
+                </LocalizedText>
               </View>
               <Ionicons name="chevron-forward" size={20} color="#94A3B8" />
             </TouchableOpacity>
@@ -778,10 +767,10 @@ export default function AddDeviceScreen({ navigation }: any) {
         {/* ============================================================== */}
         {currentStep === 'CAMERA_LIST' && (
           <View>
-            <Text style={styles.stepHeaderTitle}>Chọn Model Camera</Text>
-            <Text style={styles.stepHeaderDesc}>
+            <LocalizedText style={styles.stepHeaderTitle}>Chọn Model Camera</LocalizedText>
+            <LocalizedText style={styles.stepHeaderDesc}>
               Danh sách camera được hỗ trợ bởi hệ sinh thái Smart Elderly Care AI:
-            </Text>
+            </LocalizedText>
 
             {/* Thiết bị Camera duy nhất: SECA_001 */}
             <TouchableOpacity
@@ -794,14 +783,14 @@ export default function AddDeviceScreen({ navigation }: any) {
               </View>
               <View style={{ flex: 1 }}>
                 <View style={styles.modelHeaderRow}>
-                  <Text style={styles.modelTitle}>SECA_001</Text>
+                  <LocalizedText style={styles.modelTitle}>SECA_001</LocalizedText>
                   <View style={styles.activeTag}>
-                    <Text style={styles.activeTagText}>Hiện có</Text>
+                    <LocalizedText style={styles.activeTagText}>Hiện có</LocalizedText>
                   </View>
                 </View>
-                <Text style={styles.modelDesc}>
+                <LocalizedText style={styles.modelDesc}>
                   Giao thức: WIFI_AP • Camera an ninh AI • Nhận diện té ngã YOLOv8-Pose 32 FPS
-                </Text>
+                </LocalizedText>
               </View>
               <Ionicons name="chevron-forward" size={20} color="#EA580C" />
             </TouchableOpacity>
@@ -809,10 +798,10 @@ export default function AddDeviceScreen({ navigation }: any) {
             {/* CheckProtocol Box */}
             <View style={styles.protocolCheckBanner}>
               <Ionicons name="flash" size={18} color="#0284C7" />
-              <Text style={styles.protocolCheckText}>
+              <LocalizedText style={styles.protocolCheckText}>
                 CheckProtocol: Hệ thống tự động nhận diện giao thức{' '}
-                <Text style={{ fontWeight: 'bold' }}>WIFI_AP</Text> cho Camera.
-              </Text>
+                <LocalizedText style={{ fontWeight: 'bold' }}>WIFI_AP</LocalizedText> cho Camera.
+              </LocalizedText>
             </View>
           </View>
         )}
@@ -827,45 +816,45 @@ export default function AddDeviceScreen({ navigation }: any) {
               <View style={styles.ledIndicatorRow}>
                 <View style={[styles.ledDot, styles.ledRed]} />
                 <View style={[styles.ledDot, styles.ledGreen]} />
-                <Text style={styles.ledText}>Đèn LED chớp Đỏ & Xanh</Text>
+                <LocalizedText style={styles.ledText}>Đèn LED chớp Đỏ & Xanh</LocalizedText>
               </View>
             </View>
 
-            <Text style={styles.guideMainTitle}>Cắm Nguồn & Kiểm Tra Đèn LED</Text>
-            <Text style={styles.guideSubtitle}>
+            <LocalizedText style={styles.guideMainTitle}>Cắm Nguồn & Kiểm Tra Đèn LED</LocalizedText>
+            <LocalizedText style={styles.guideSubtitle}>
               Thực hiện theo các bước kiểm tra nguồn ban đầu:
-            </Text>
+            </LocalizedText>
 
             <View style={styles.instructionsList}>
               <View style={styles.instItem}>
                 <View style={styles.instNumber}>
-                  <Text style={styles.instNumberText}>1</Text>
+                  <LocalizedText style={styles.instNumberText}>1</LocalizedText>
                 </View>
-                <Text style={styles.instText}>
+                <LocalizedText style={styles.instText}>
                   Cắm dây nguồn vào cổng nguồn Camera và kết nối ổ điện gia đình.
-                </Text>
+                </LocalizedText>
               </View>
 
               <View style={styles.instItem}>
                 <View style={styles.instNumber}>
-                  <Text style={styles.instNumberText}>2</Text>
+                  <LocalizedText style={styles.instNumberText}>2</LocalizedText>
                 </View>
-                <Text style={styles.instText}>
+                <LocalizedText style={styles.instText}>
                   Đợi khoảng 30 giây cho Camera hoàn tất tiến trình tự kiểm tra ban đầu.
-                </Text>
+                </LocalizedText>
               </View>
 
               <View style={styles.instItem}>
                 <View style={styles.instNumber}>
-                  <Text style={styles.instNumberText}>3</Text>
+                  <LocalizedText style={styles.instNumberText}>3</LocalizedText>
                 </View>
-                <Text style={styles.instText}>
+                <LocalizedText style={styles.instText}>
                   Quan sát đèn LED ở mặt trước: Đèn phải{' '}
-                  <Text style={{ fontWeight: 'bold', color: '#EA580C' }}>
+                  <LocalizedText style={{ fontWeight: 'bold', color: '#EA580C' }}>
                     nhấp nháy luân phiên Đỏ và Xanh
-                  </Text>{' '}
+                  </LocalizedText>{' '}
                   (Báo hiệu Camera đang ở chế độ SoftAP chờ kết nối).
-                </Text>
+                </LocalizedText>
               </View>
             </View>
 
@@ -879,12 +868,12 @@ export default function AddDeviceScreen({ navigation }: any) {
                 <Ionicons name="help" size={18} color="#0284C7" />
               </View>
               <View style={{ flex: 1, marginLeft: 10 }}>
-                <Text style={styles.ledHelpQuestionTitle}>
+                <LocalizedText style={styles.ledHelpQuestionTitle}>
                   Đèn LED không nhấp nháy Đỏ / Xanh?
-                </Text>
-                <Text style={styles.ledHelpQuestionSubtitle}>
+                </LocalizedText>
+                <LocalizedText style={styles.ledHelpQuestionSubtitle}>
                   Bấm vào đây để xem hướng dẫn reset thủ công Camera SECA_001
-                </Text>
+                </LocalizedText>
               </View>
               <Ionicons name="chevron-forward" size={18} color="#0284C7" />
             </TouchableOpacity>
@@ -896,7 +885,7 @@ export default function AddDeviceScreen({ navigation }: any) {
                 onPress={() => setCurrentStep('WIFI_GUIDE')}
                 activeOpacity={0.85}
               >
-                <Text style={styles.primaryActionButtonText}>Tiếp Tục</Text>
+                <LocalizedText style={styles.primaryActionButtonText}>Tiếp Tục</LocalizedText>
                 <Ionicons name="arrow-forward" size={20} color="#FFF" />
               </TouchableOpacity>
             </View>
@@ -908,16 +897,16 @@ export default function AddDeviceScreen({ navigation }: any) {
         {/* ============================================================== */}
         {currentStep === 'WIFI_GUIDE' && (
           <View style={styles.softApGuideContainer}>
-            <Text style={styles.softApGuideTitle}>Kết nối đến thiết bị SECA của bạn</Text>
+            <LocalizedText style={styles.softApGuideTitle}>Kết nối đến thiết bị SECA của bạn</LocalizedText>
 
-            <Text style={styles.softApGuideSubtitle}>
+            <LocalizedText style={styles.softApGuideSubtitle}>
               Đi tới cài đặt Wi-Fi của điện thoại hoặc máy tính bảng và tham gia mạng thiết bị SECA của bạn:{' '}
-              <Text style={{ fontWeight: 'bold', color: '#0F172A' }}>SECA_001</Text>. Sau đó quay lại ứng dụng này.
-            </Text>
+              <LocalizedText style={{ fontWeight: 'bold', color: '#0F172A' }}>SECA_001</LocalizedText>. Sau đó quay lại ứng dụng này.
+            </LocalizedText>
 
-            <Text style={styles.guideDetailText}>
+            <LocalizedText style={styles.guideDetailText}>
               001 là ba chữ số cuối cùng của địa chỉ MAC duy nhất của thiết bị SECA. Bạn có thể tìm thấy nó dưới đế thiết bị SECA của mình.
-            </Text>
+            </LocalizedText>
 
             {/* Đồ họa minh họa đế Camera & Phóng to mã vạch MAC */}
             <View style={styles.barcodeGraphicWrapper}>
@@ -936,8 +925,8 @@ export default function AddDeviceScreen({ navigation }: any) {
                     />
                   ))}
                 </View>
-                <Text style={styles.barcodeMacText}>MAC: AC-67-B2-3F-00-01</Text>
-                <Text style={styles.barcodeSsidBadge}>SSID: SECA_001</Text>
+                <LocalizedText style={styles.barcodeMacText}>MAC: AC-67-B2-3F-00-01</LocalizedText>
+                <LocalizedText style={styles.barcodeSsidBadge}>SSID: SECA_001</LocalizedText>
               </View>
 
               {/* Vệt sáng chiếu phóng to (Cyan Projection Beam) */}
@@ -970,7 +959,7 @@ export default function AddDeviceScreen({ navigation }: any) {
                       />
                     ))}
                   </View>
-                  <Text style={styles.miniBarcodeText}>MAC:••-••-••-00-01</Text>
+                  <LocalizedText style={styles.miniBarcodeText}>MAC:••-••-••-00-01</LocalizedText>
                 </View>
               </View>
             </View>
@@ -982,7 +971,7 @@ export default function AddDeviceScreen({ navigation }: any) {
                 onPress={handlePressAlreadyConnected}
                 activeOpacity={0.85}
               >
-                <Text style={styles.primaryPillBtnText}>Tôi đã kết nối</Text>
+                <LocalizedText style={styles.primaryPillBtnText}>Tôi đã kết nối</LocalizedText>
               </TouchableOpacity>
             </View>
           </View>
@@ -993,10 +982,10 @@ export default function AddDeviceScreen({ navigation }: any) {
         {/* ============================================================== */}
         {currentStep === 'WATCH_LIST' && (
           <View>
-            <Text style={styles.stepHeaderTitle}>Chọn Model Đồng Hồ / Vòng Đeo Tay</Text>
-            <Text style={styles.stepHeaderDesc}>
+            <LocalizedText style={styles.stepHeaderTitle}>Chọn Model Đồng Hồ / Vòng Đeo Tay</LocalizedText>
+            <LocalizedText style={styles.stepHeaderDesc}>
               Danh sách thiết bị đeo tay theo dõi sức khỏe người cao tuổi qua Bluetooth BLE:
-            </Text>
+            </LocalizedText>
 
             {/* Model 1: BLE Smartband FR01 */}
             <TouchableOpacity
@@ -1009,14 +998,14 @@ export default function AddDeviceScreen({ navigation }: any) {
               </View>
               <View style={{ flex: 1 }}>
                 <View style={styles.modelHeaderRow}>
-                  <Text style={styles.modelTitle}>BLE Smartband FR01 (Y tế)</Text>
+                  <LocalizedText style={styles.modelTitle}>BLE Smartband FR01 (Y tế)</LocalizedText>
                   <View style={[styles.activeTag, { backgroundColor: '#DCFCE7' }]}>
-                    <Text style={[styles.activeTagText, { color: '#15803D' }]}>Hiện có</Text>
+                    <LocalizedText style={[styles.activeTagText, { color: '#15803D' }]}>Hiện có</LocalizedText>
                   </View>
                 </View>
-                <Text style={styles.modelDesc}>
+                <LocalizedText style={styles.modelDesc}>
                   Giao thức: BLUETOOTH • Đo PPG Nhịp tim (0x180D) • SpO₂ (0x1822) • Gia tốc ngã MPU6050
-                </Text>
+                </LocalizedText>
               </View>
               <Ionicons name="chevron-forward" size={20} color="#059669" />
             </TouchableOpacity>
@@ -1032,14 +1021,14 @@ export default function AddDeviceScreen({ navigation }: any) {
               </View>
               <View style={{ flex: 1 }}>
                 <View style={styles.modelHeaderRow}>
-                  <Text style={styles.modelTitle}>Xiaomi Mi Band 8 / Active</Text>
+                  <LocalizedText style={styles.modelTitle}>Xiaomi Mi Band 8 / Active</LocalizedText>
                   <View style={[styles.activeTag, { backgroundColor: '#E2E8F0' }]}>
-                    <Text style={[styles.activeTagText, { color: '#475569' }]}>Hỗ trợ</Text>
+                    <LocalizedText style={[styles.activeTagText, { color: '#475569' }]}>Hỗ trợ</LocalizedText>
                   </View>
                 </View>
-                <Text style={styles.modelDesc}>
+                <LocalizedText style={styles.modelDesc}>
                   Giao thức: BLUETOOTH • Nhịp tim 24/7 • Pin 14 ngày • Chuẩn BLE 5.1
-                </Text>
+                </LocalizedText>
               </View>
               <Ionicons name="chevron-forward" size={20} color="#94A3B8" />
             </TouchableOpacity>
@@ -1055,14 +1044,14 @@ export default function AddDeviceScreen({ navigation }: any) {
               </View>
               <View style={{ flex: 1 }}>
                 <View style={styles.modelHeaderRow}>
-                  <Text style={styles.modelTitle}>Apple Watch Series 8 / SE</Text>
+                  <LocalizedText style={styles.modelTitle}>Apple Watch Series 8 / SE</LocalizedText>
                   <View style={[styles.activeTag, { backgroundColor: '#E2E8F0' }]}>
-                    <Text style={[styles.activeTagText, { color: '#475569' }]}>Sắp hỗ trợ</Text>
+                    <LocalizedText style={[styles.activeTagText, { color: '#475569' }]}>Sắp hỗ trợ</LocalizedText>
                   </View>
                 </View>
-                <Text style={styles.modelDesc}>
+                <LocalizedText style={styles.modelDesc}>
                   Giao thức: BLUETOOTH • HealthKit Gateway • Cảnh báo ngã Crash Detection
-                </Text>
+                </LocalizedText>
               </View>
               <Ionicons name="chevron-forward" size={20} color="#94A3B8" />
             </TouchableOpacity>
@@ -1070,10 +1059,10 @@ export default function AddDeviceScreen({ navigation }: any) {
             {/* CheckProtocol Box */}
             <View style={[styles.protocolCheckBanner, { backgroundColor: '#ECFDF5', borderColor: '#A7F3D0' }]}>
               <Ionicons name="bluetooth" size={18} color="#059669" />
-              <Text style={[styles.protocolCheckText, { color: '#065F46' }]}>
+              <LocalizedText style={[styles.protocolCheckText, { color: '#065F46' }]}>
                 CheckProtocol: Hệ thống tự động kích hoạt giao thức{' '}
-                <Text style={{ fontWeight: 'bold' }}>BLUETOOTH</Text> cho Smartwatch.
-              </Text>
+                <LocalizedText style={{ fontWeight: 'bold' }}>BLUETOOTH</LocalizedText> cho Smartwatch.
+              </LocalizedText>
             </View>
           </View>
         )}
@@ -1087,41 +1076,41 @@ export default function AddDeviceScreen({ navigation }: any) {
               <Ionicons name="bluetooth" size={54} color="#059669" />
               <View style={styles.ledIndicatorRow}>
                 <Ionicons name="battery-charging" size={18} color="#059669" />
-                <Text style={[styles.ledText, { color: '#059669' }]}>Đồng hồ đã bật nguồn</Text>
+                <LocalizedText style={[styles.ledText, { color: '#059669' }]}>Đồng hồ đã bật nguồn</LocalizedText>
               </View>
             </View>
 
-            <Text style={styles.guideMainTitle}>Mở Nguồn & Bật Bluetooth Đồng Hồ</Text>
-            <Text style={styles.guideSubtitle}>
+            <LocalizedText style={styles.guideMainTitle}>Mở Nguồn & Bật Bluetooth Đồng Hồ</LocalizedText>
+            <LocalizedText style={styles.guideSubtitle}>
               Chuẩn bị thiết bị trước khi tiến hành quét sóng BLE:
-            </Text>
+            </LocalizedText>
 
             <View style={styles.instructionsList}>
               <View style={styles.instItem}>
                 <View style={[styles.instNumber, { backgroundColor: '#10B981' }]}>
-                  <Text style={styles.instNumberText}>1</Text>
+                  <LocalizedText style={styles.instNumberText}>1</LocalizedText>
                 </View>
-                <Text style={styles.instText}>
+                <LocalizedText style={styles.instText}>
                   Nhấn giữ nút nguồn cạnh bên đồng hồ để màn hình sáng lên.
-                </Text>
+                </LocalizedText>
               </View>
 
               <View style={styles.instItem}>
                 <View style={[styles.instNumber, { backgroundColor: '#10B981' }]}>
-                  <Text style={styles.instNumberText}>2</Text>
+                  <LocalizedText style={styles.instNumberText}>2</LocalizedText>
                 </View>
-                <Text style={styles.instText}>
+                <LocalizedText style={styles.instText}>
                   Đảm bảo pin đồng hồ còn trên 20% và biểu tượng Bluetooth đang sẵn sàng kết nối.
-                </Text>
+                </LocalizedText>
               </View>
 
               <View style={styles.instItem}>
                 <View style={[styles.instNumber, { backgroundColor: '#10B981' }]}>
-                  <Text style={styles.instNumberText}>3</Text>
+                  <LocalizedText style={styles.instNumberText}>3</LocalizedText>
                 </View>
-                <Text style={styles.instText}>
+                <LocalizedText style={styles.instText}>
                   Đặt đồng hồ ngay cạnh điện thoại trong khoảng cách dưới 1 mét để tín hiệu ổn định nhất.
-                </Text>
+                </LocalizedText>
               </View>
             </View>
 
@@ -1137,9 +1126,9 @@ export default function AddDeviceScreen({ navigation }: any) {
               }}
               activeOpacity={0.85}
             >
-              <Text style={styles.primaryActionButtonText}>
+              <LocalizedText style={styles.primaryActionButtonText}>
                 Đồng Hồ Đã Mở Nguồn & Sẵn Sàng → Tiếp Tục
-              </Text>
+              </LocalizedText>
               <Ionicons name="arrow-forward" size={20} color="#FFF" />
             </TouchableOpacity>
           </View>
@@ -1150,10 +1139,10 @@ export default function AddDeviceScreen({ navigation }: any) {
         {/* ============================================================== */}
         {currentStep === 'BLE_PERMISSION' && (
           <View>
-            <Text style={styles.stepHeaderTitle}>Kiểm Tra Quyền Hệ Điều Hành (OS)</Text>
-            <Text style={styles.stepHeaderDesc}>
+            <LocalizedText style={styles.stepHeaderTitle}>Kiểm Tra Quyền Hệ Điều Hành (OS)</LocalizedText>
+            <LocalizedText style={styles.stepHeaderDesc}>
               Theo quy định của Android và iOS, để quét tìm thiết bị Bluetooth xung quanh, ứng dụng cần được cấp quyền:
-            </Text>
+            </LocalizedText>
 
             <View style={styles.permissionCard}>
               {/* Perm 1 */}
@@ -1162,8 +1151,8 @@ export default function AddDeviceScreen({ navigation }: any) {
                   <Ionicons name="bluetooth" size={22} color="#059669" />
                 </View>
                 <View style={{ flex: 1 }}>
-                  <Text style={styles.permTitle}>Quyền Bluetooth Scan & Connect</Text>
-                  <Text style={styles.permDesc}>Cho phép app quét tìm và kết nối kênh GATT với đồng hồ</Text>
+                  <LocalizedText style={styles.permTitle}>Quyền Bluetooth Scan & Connect</LocalizedText>
+                  <LocalizedText style={styles.permDesc}>Cho phép app quét tìm và kết nối kênh GATT với đồng hồ</LocalizedText>
                 </View>
                 <Ionicons
                   name={hasBlePermission ? 'checkmark-circle' : 'alert-circle'}
@@ -1178,8 +1167,8 @@ export default function AddDeviceScreen({ navigation }: any) {
                   <Ionicons name="location" size={22} color="#2563EB" />
                 </View>
                 <View style={{ flex: 1 }}>
-                  <Text style={styles.permTitle}>Quyền Vị trí (Location OS)</Text>
-                  <Text style={styles.permDesc}>Bắt buộc trên Android để quét Beacon & BLE lân cận</Text>
+                  <LocalizedText style={styles.permTitle}>Quyền Vị trí (Location OS)</LocalizedText>
+                  <LocalizedText style={styles.permDesc}>Bắt buộc trên Android để quét Beacon & BLE lân cận</LocalizedText>
                 </View>
                 <Ionicons
                   name={hasBlePermission ? 'checkmark-circle' : 'alert-circle'}
@@ -1193,16 +1182,16 @@ export default function AddDeviceScreen({ navigation }: any) {
             {!hasBlePermission ? (
               <View style={styles.unauthorizedBox}>
                 <Ionicons name="lock-closed" size={20} color="#DC2626" />
-                <Text style={styles.unauthorizedText}>
-                  Trạng thái: <Text style={{ fontWeight: 'bold' }}>Chưa cấp quyền</Text>. Nhấn nút bên dưới để mở popup yêu cầu quyền hệ điều hành.
-                </Text>
+                <LocalizedText style={styles.unauthorizedText}>
+                  Trạng thái: <LocalizedText style={{ fontWeight: 'bold' }}>Chưa cấp quyền</LocalizedText>. Nhấn nút bên dưới để mở popup yêu cầu quyền hệ điều hành.
+                </LocalizedText>
               </View>
             ) : (
               <View style={styles.authorizedBox}>
                 <Ionicons name="checkmark-circle" size={20} color="#059669" />
-                <Text style={styles.authorizedText}>
-                  Trạng thái: <Text style={{ fontWeight: 'bold' }}>Đã cấp quyền thành công</Text>! Bạn có thể chuyển sang quét Radar.
-                </Text>
+                <LocalizedText style={styles.authorizedText}>
+                  Trạng thái: <LocalizedText style={{ fontWeight: 'bold' }}>Đã cấp quyền thành công</LocalizedText>! Bạn có thể chuyển sang quét Radar.
+                </LocalizedText>
               </View>
             )}
 
@@ -1212,9 +1201,9 @@ export default function AddDeviceScreen({ navigation }: any) {
                 onPress={() => setShowPermRequestModal(true)}
                 activeOpacity={0.85}
               >
-                <Text style={styles.primaryActionButtonText}>
+                <LocalizedText style={styles.primaryActionButtonText}>
                   Hiển Thị Popup Xin Quyền (RequestPerm)
-                </Text>
+                </LocalizedText>
                 <Ionicons name="key" size={20} color="#FFF" />
               </TouchableOpacity>
             ) : (
@@ -1223,9 +1212,9 @@ export default function AddDeviceScreen({ navigation }: any) {
                 onPress={() => setCurrentStep('BLE_SCAN')}
                 activeOpacity={0.85}
               >
-                <Text style={styles.primaryActionButtonText}>
+                <LocalizedText style={styles.primaryActionButtonText}>
                   Đã Cấp Quyền → Bắt Đầu Quét Radar BLE
-                </Text>
+                </LocalizedText>
                 <Ionicons name="radio" size={20} color="#FFF" />
               </TouchableOpacity>
             )}
@@ -1237,10 +1226,10 @@ export default function AddDeviceScreen({ navigation }: any) {
         {/* ============================================================== */}
         {currentStep === 'BLE_SCAN' && (
           <View>
-            <Text style={styles.stepHeaderTitle}>Màn Hình Radar Quét Thiết Bị</Text>
-            <Text style={styles.stepHeaderDesc}>
+            <LocalizedText style={styles.stepHeaderTitle}>Màn Hình Radar Quét Thiết Bị</LocalizedText>
+            <LocalizedText style={styles.stepHeaderDesc}>
               Đang dò quét các sóng BLE lân cận (trong bán kính 5 mét):
-            </Text>
+            </LocalizedText>
 
             {/* Radar Animation Box */}
             <View style={styles.radarContainer}>
@@ -1256,16 +1245,16 @@ export default function AddDeviceScreen({ navigation }: any) {
               <View style={styles.radarCenter}>
                 <Ionicons name="bluetooth" size={28} color="#FFF" />
               </View>
-              <Text style={styles.radarStatusText}>
+              <LocalizedText style={styles.radarStatusText}>
                 {isBleScanning ? 'Đang phát xung radar quét BLE...' : 'Đã tìm thấy thiết bị lân cận'}
-              </Text>
+              </LocalizedText>
             </View>
 
             {/* Simulation switch: Mô phỏng lỗi để test DialogBLE */}
             <View style={styles.testSimBox}>
               <View style={{ flex: 1 }}>
-                <Text style={styles.testSimTitle}>Mô phỏng lỗi ghép nối (DialogBLE)</Text>
-                <Text style={styles.testSimDesc}>Bật tùy chọn này để kiểm tra nhánh thất bại trong sơ đồ</Text>
+                <LocalizedText style={styles.testSimTitle}>Mô phỏng lỗi ghép nối (DialogBLE)</LocalizedText>
+                <LocalizedText style={styles.testSimDesc}>Bật tùy chọn này để kiểm tra nhánh thất bại trong sơ đồ</LocalizedText>
               </View>
               <Switch
                 value={simulateBleError}
@@ -1276,7 +1265,7 @@ export default function AddDeviceScreen({ navigation }: any) {
             </View>
 
             {/* Discovered BLE Devices List */}
-            <Text style={styles.sectionHeader}>Thiết bị tìm thấy ({discoveredBleList.length}):</Text>
+            <LocalizedText style={styles.sectionHeader}>Thiết bị tìm thấy ({discoveredBleList.length}):</LocalizedText>
             {discoveredBleList.map((item) => (
               <TouchableOpacity
                 key={item.id}
@@ -1288,12 +1277,12 @@ export default function AddDeviceScreen({ navigation }: any) {
                   <Ionicons name="watch" size={24} color="#059669" />
                 </View>
                 <View style={{ flex: 1, marginLeft: 12 }}>
-                  <Text style={styles.bleDeviceName}>{item.name}</Text>
-                  <Text style={styles.bleDeviceSub}>MAC: {item.mac} • Pin: {item.battery}%</Text>
-                  <Text style={styles.bleServicesText}>{item.services}</Text>
+                  <LocalizedText style={styles.bleDeviceName}>{item.name}</LocalizedText>
+                  <LocalizedText style={styles.bleDeviceSub}>MAC: {item.mac} • Pin: {item.battery}%</LocalizedText>
+                  <LocalizedText style={styles.bleServicesText}>{item.services}</LocalizedText>
                 </View>
                 <View style={styles.bleRssiBox}>
-                  <Text style={styles.bleRssiText}>{item.rssi.split(' ')[0]}</Text>
+                  <LocalizedText style={styles.bleRssiText}>{item.rssi.split(' ')[0]}</LocalizedText>
                   <Ionicons name="wifi" size={14} color="#059669" />
                 </View>
               </TouchableOpacity>
@@ -1312,19 +1301,19 @@ export default function AddDeviceScreen({ navigation }: any) {
               ) : (
                 <Ionicons name="checkmark-circle" size={54} color="#059669" />
               )}
-              <Text style={[styles.ledText, { marginTop: 12, color: '#059669', fontSize: 16 }]}>
+              <LocalizedText style={[styles.ledText, { marginTop: 12, color: '#059669', fontSize: 16 }]}>
                 {isBlePairing ? 'Đang bắt tay GATT với đồng hồ...' : 'Kết nối GATT thành công!'}
-              </Text>
+              </LocalizedText>
             </View>
 
-            <Text style={styles.guideMainTitle}>
+            <LocalizedText style={styles.guideMainTitle}>
               {isBlePairing ? 'Đang Ghép Nối Thiết Bị...' : 'Xác Nhận Người Sử Dụng'}
-            </Text>
-            <Text style={styles.guideSubtitle}>
+            </LocalizedText>
+            <LocalizedText style={styles.guideSubtitle}>
               {isBlePairing
                 ? 'Đang đồng bộ Service 0x180D (Heart Rate) và 0x1822 (SpO2)...'
                 : 'Chọn thành viên trong gia đình sử dụng đồng hồ này:'}
-            </Text>
+            </LocalizedText>
 
             {!isBlePairing && (
               <View style={styles.wearerSelectBox}>
@@ -1342,14 +1331,14 @@ export default function AddDeviceScreen({ navigation }: any) {
                       size={16}
                       color={wearerName === w ? '#FFF' : '#64748B'}
                     />
-                    <Text
+                    <LocalizedText
                       style={[
                         styles.wearerChipText,
                         wearerName === w && styles.wearerChipTextActive,
                       ]}
                     >
                       {w}
-                    </Text>
+                    </LocalizedText>
                   </TouchableOpacity>
                 ))}
               </View>
@@ -1365,9 +1354,9 @@ export default function AddDeviceScreen({ navigation }: any) {
                 }}
                 activeOpacity={0.85}
               >
-                <Text style={styles.primaryActionButtonText}>
+                <LocalizedText style={styles.primaryActionButtonText}>
                   Hoàn Tất Ghép Nối → Xem Kết Quả
-                </Text>
+                </LocalizedText>
                 <Ionicons name="arrow-forward" size={20} color="#FFF" />
               </TouchableOpacity>
             )}
@@ -1379,10 +1368,10 @@ export default function AddDeviceScreen({ navigation }: any) {
         {/* ============================================================== */}
         {currentStep === 'OTHER_LIST' && (
           <View>
-            <Text style={styles.stepHeaderTitle}>Cảm Biến IoT & Edge Hub</Text>
-            <Text style={styles.stepHeaderDesc}>
+            <LocalizedText style={styles.stepHeaderTitle}>Cảm Biến IoT & Edge Hub</LocalizedText>
+            <LocalizedText style={styles.stepHeaderDesc}>
               Kết nối cảm biến chuyên sâu qua Edge Hub Orange Pi 5 (EMQX Broker port 1883):
-            </Text>
+            </LocalizedText>
 
             {/* 5 Sensors options */}
             {[
@@ -1435,8 +1424,8 @@ export default function AddDeviceScreen({ navigation }: any) {
                   <Ionicons name={s.icon as any} size={22} color={s.color} />
                 </View>
                 <View style={{ flex: 1, marginLeft: 10 }}>
-                  <Text style={styles.sensorCardTitle}>{s.name}</Text>
-                  <Text style={styles.sensorCardSub}>{s.sub}</Text>
+                  <LocalizedText style={styles.sensorCardTitle}>{s.name}</LocalizedText>
+                  <LocalizedText style={styles.sensorCardSub}>{s.sub}</LocalizedText>
                 </View>
                 <Ionicons
                   name={selectedOtherSensor === s.id ? 'radio-button-on' : 'radio-button-off'}
@@ -1447,8 +1436,8 @@ export default function AddDeviceScreen({ navigation }: any) {
             ))}
 
             <View style={styles.inputGroup}>
-              <Text style={styles.inputLabel}>Vị trí lắp đặt:</Text>
-              <TextInput
+              <LocalizedText style={styles.inputLabel}>Vị trí lắp đặt:</LocalizedText>
+              <LocalizedTextInput
                 style={styles.textInput}
                 value={otherSensorLocation}
                 onChangeText={setOtherSensorLocation}
@@ -1461,9 +1450,9 @@ export default function AddDeviceScreen({ navigation }: any) {
               onPress={handleAddOtherSensor}
               activeOpacity={0.85}
             >
-              <Text style={styles.primaryActionButtonText}>
+              <LocalizedText style={styles.primaryActionButtonText}>
                 Thêm Cảm Biến Vào Hệ Thống
-              </Text>
+              </LocalizedText>
               <Ionicons name="add-circle" size={20} color="#FFF" />
             </TouchableOpacity>
           </View>
@@ -1480,10 +1469,10 @@ export default function AddDeviceScreen({ navigation }: any) {
               </View>
             </View>
 
-            <Text style={styles.successTitle}>Cấu Hình Thành Công!</Text>
-            <Text style={styles.successSubtitle}>
+            <LocalizedText style={styles.successTitle}>Cấu Hình Thành Công!</LocalizedText>
+            <LocalizedText style={styles.successSubtitle}>
               Thiết bị đã được kết nối và tích hợp vào hệ sinh thái giám sát an sinh người cao tuổi.
-            </Text>
+            </LocalizedText>
 
             {/* Thông tin thiết bị */}
             <View style={styles.successDetailCard}>
@@ -1492,35 +1481,35 @@ export default function AddDeviceScreen({ navigation }: any) {
                   <Ionicons name={successInfo.icon as any} size={24} color={successInfo.color} />
                 </View>
                 <View style={{ flex: 1, marginLeft: 12 }}>
-                  <Text style={styles.successDeviceName}>{successInfo.name}</Text>
-                  <Text style={styles.successDeviceType}>{successInfo.type}</Text>
+                  <LocalizedText style={styles.successDeviceName}>{successInfo.name}</LocalizedText>
+                  <LocalizedText style={styles.successDeviceType}>{successInfo.type}</LocalizedText>
                 </View>
               </View>
 
               <View style={styles.divider} />
 
               <View style={styles.successRow}>
-                <Text style={styles.successLabel}>Giao thức:</Text>
-                <Text style={styles.successValue}>{successInfo.protocol}</Text>
+                <LocalizedText style={styles.successLabel}>Giao thức:</LocalizedText>
+                <LocalizedText style={styles.successValue}>{successInfo.protocol}</LocalizedText>
               </View>
 
               <View style={styles.successRow}>
-                <Text style={styles.successLabel}>Thông số:</Text>
-                <Text style={styles.successValue}>{successInfo.details}</Text>
+                <LocalizedText style={styles.successLabel}>Thông số:</LocalizedText>
+                <LocalizedText style={styles.successValue}>{successInfo.details}</LocalizedText>
               </View>
 
               <View style={styles.successRow}>
-                <Text style={styles.successLabel}>Vị trí / Người đeo:</Text>
-                <Text style={[styles.successValue, { color: '#059669', fontWeight: 'bold' }]}>
+                <LocalizedText style={styles.successLabel}>Vị trí / Người đeo:</LocalizedText>
+                <LocalizedText style={[styles.successValue, { color: '#059669', fontWeight: 'bold' }]}>
                   {successInfo.location}
-                </Text>
+                </LocalizedText>
               </View>
 
               <View style={styles.successRow}>
-                <Text style={styles.successLabel}>Trạng thái:</Text>
-                <Text style={[styles.successValue, { color: '#10B981', fontWeight: 'bold' }]}>
+                <LocalizedText style={styles.successLabel}>Trạng thái:</LocalizedText>
+                <LocalizedText style={[styles.successValue, { color: '#10B981', fontWeight: 'bold' }]}>
                   ● Trực tuyến & Hoạt động tốt
-                </Text>
+                </LocalizedText>
               </View>
             </View>
 
@@ -1531,9 +1520,9 @@ export default function AddDeviceScreen({ navigation }: any) {
               activeOpacity={0.85}
             >
               <Ionicons name="list" size={20} color="#FFF" />
-              <Text style={styles.primaryActionButtonText}>
+              <LocalizedText style={styles.primaryActionButtonText}>
                 Xem Danh Sách Thiết Bị
-              </Text>
+              </LocalizedText>
             </TouchableOpacity>
 
             <TouchableOpacity
@@ -1542,9 +1531,9 @@ export default function AddDeviceScreen({ navigation }: any) {
               activeOpacity={0.85}
             >
               <Ionicons name="home" size={20} color="#1E293B" />
-              <Text style={[styles.primaryActionButtonText, { color: '#1E293B' }]}>
+              <LocalizedText style={[styles.primaryActionButtonText, { color: '#1E293B' }]}>
                 Về Màn Hình Chính (Home)
-              </Text>
+              </LocalizedText>
             </TouchableOpacity>
           </View>
         )}
@@ -1564,24 +1553,24 @@ export default function AddDeviceScreen({ navigation }: any) {
             <View style={styles.modalIconBox}>
               <Ionicons name="shield-checkmark" size={36} color="#2563EB" />
             </View>
-            <Text style={styles.modalTitle}>Cấp Quyền Hệ Thống</Text>
-            <Text style={styles.modalMessage}>
+            <LocalizedText style={styles.modalTitle}>Cấp Quyền Hệ Thống</LocalizedText>
+            <LocalizedText style={styles.modalMessage}>
               Để phát hiện và đồng bộ dữ liệu nhịp tim, SpO₂ từ đồng hồ thông minh, hệ thống cần quyền{' '}
-              <Text style={{ fontWeight: 'bold' }}>Bluetooth & Vị trí</Text> theo tiêu chuẩn OS.
-            </Text>
+              <LocalizedText style={{ fontWeight: 'bold' }}>Bluetooth & Vị trí</LocalizedText> theo tiêu chuẩn OS.
+            </LocalizedText>
 
             <View style={styles.modalButtonRow}>
               <TouchableOpacity
                 style={styles.modalCancelBtn}
                 onPress={() => setShowPermRequestModal(false)}
               >
-                <Text style={styles.modalCancelText}>Từ chối</Text>
+                <LocalizedText style={styles.modalCancelText}>Từ chối</LocalizedText>
               </TouchableOpacity>
               <TouchableOpacity
                 style={styles.modalConfirmBtn}
                 onPress={handleGrantBlePermission}
               >
-                <Text style={styles.modalConfirmText}>Cho phép</Text>
+                <LocalizedText style={styles.modalConfirmText}>Cho phép</LocalizedText>
               </TouchableOpacity>
             </View>
           </View>
@@ -1599,9 +1588,9 @@ export default function AddDeviceScreen({ navigation }: any) {
       >
         <View style={styles.warningModalOverlay}>
           <View style={styles.warningDialogCard}>
-            <Text style={styles.warningDialogText}>
+            <LocalizedText style={styles.warningDialogText}>
               Có vẻ bạn đang không kết nối đến SECA_001. Tiếp tục?
-            </Text>
+            </LocalizedText>
 
             <View style={styles.warningActionColumn}>
               <TouchableOpacity
@@ -1612,7 +1601,7 @@ export default function AddDeviceScreen({ navigation }: any) {
                 }}
                 activeOpacity={0.7}
               >
-                <Text style={styles.warningActionPrimaryText}>Đến Cài đặt</Text>
+                <LocalizedText style={styles.warningActionPrimaryText}>Đến Cài đặt</LocalizedText>
               </TouchableOpacity>
 
               <TouchableOpacity
@@ -1623,7 +1612,7 @@ export default function AddDeviceScreen({ navigation }: any) {
                 }}
                 activeOpacity={0.7}
               >
-                <Text style={styles.warningActionPrimaryText}>Tiếp tục</Text>
+                <LocalizedText style={styles.warningActionPrimaryText}>Tiếp tục</LocalizedText>
               </TouchableOpacity>
 
               <TouchableOpacity
@@ -1631,7 +1620,7 @@ export default function AddDeviceScreen({ navigation }: any) {
                 onPress={() => setShowWifiWarningDialog(false)}
                 activeOpacity={0.7}
               >
-                <Text style={styles.warningActionCancelText}>Hủy</Text>
+                <LocalizedText style={styles.warningActionCancelText}>Hủy</LocalizedText>
               </TouchableOpacity>
             </View>
           </View>
@@ -1659,7 +1648,7 @@ export default function AddDeviceScreen({ navigation }: any) {
                 >
                   <Ionicons name="arrow-back" size={24} color="#1E293B" />
                 </TouchableOpacity>
-                <Text style={styles.phoneSettingsTitle}>Wi-Fi</Text>
+                <LocalizedText style={styles.phoneSettingsTitle}>Wi-Fi</LocalizedText>
                 <TouchableOpacity style={styles.phoneSettingsScanBtn} activeOpacity={0.7}>
                   <Ionicons name="scan-outline" size={22} color="#1E293B" />
                 </TouchableOpacity>
@@ -1667,7 +1656,7 @@ export default function AddDeviceScreen({ navigation }: any) {
 
               {/* Wi-Fi Main Toggle */}
               <View style={styles.phoneWifiToggleRow}>
-                <Text style={styles.phoneWifiToggleLabel}>Wi-Fi</Text>
+                <LocalizedText style={styles.phoneWifiToggleLabel}>Wi-Fi</LocalizedText>
                 <Switch
                   value={true}
                   trackColor={{ false: '#CBD5E1', true: '#93C5FD' }}
@@ -1682,18 +1671,18 @@ export default function AddDeviceScreen({ navigation }: any) {
                 </View>
                 <View style={{ flex: 1, marginLeft: 12 }}>
                   <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6 }}>
-                    <Text style={styles.phoneConnectedSsid}>
+                    <LocalizedText style={styles.phoneConnectedSsid}>
                       {connectedPhoneWifi || '5 chang trai'}
-                    </Text>
+                    </LocalizedText>
                     <View style={styles.phoneBandTag}>
-                      <Text style={styles.phoneBandTagText}>2.4G/5G</Text>
+                      <LocalizedText style={styles.phoneBandTagText}>2.4G/5G</LocalizedText>
                     </View>
                   </View>
-                  <Text style={styles.phoneConnectedSub}>
+                  <LocalizedText style={styles.phoneConnectedSub}>
                     {connectedPhoneWifi === 'SECA_001'
                       ? 'Đã kết nối trực tiếp đến Camera'
                       : 'Chạm để chia sẻ mật khẩu'}
-                  </Text>
+                  </LocalizedText>
                 </View>
                 <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8 }}>
                   <Ionicons name="lock-closed" size={16} color="rgba(255,255,255,0.85)" />
@@ -1705,7 +1694,7 @@ export default function AddDeviceScreen({ navigation }: any) {
 
               {/* Tiêu đề danh sách Mạng có sẵn */}
               <View style={styles.phoneAvailableSectionHeader}>
-                <Text style={styles.phoneAvailableSectionTitle}>Mạng có sẵn</Text>
+                <LocalizedText style={styles.phoneAvailableSectionTitle}>Mạng có sẵn</LocalizedText>
                 <TouchableOpacity activeOpacity={0.7}>
                   <Ionicons name="sync-outline" size={18} color="#475569" />
                 </TouchableOpacity>
@@ -1739,14 +1728,14 @@ export default function AddDeviceScreen({ navigation }: any) {
                         />
                         <View style={{ flex: 1, marginLeft: 12 }}>
                           <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6 }}>
-                            <Text
+                            <LocalizedText
                               style={[
                                 styles.networkItemSsid,
                                 isCameraTarget && { color: '#0284C7', fontWeight: '800' },
                               ]}
                             >
                               {net.ssid}
-                            </Text>
+                            </LocalizedText>
                             {net.tag && (
                               <View
                                 style={[
@@ -1754,18 +1743,18 @@ export default function AddDeviceScreen({ navigation }: any) {
                                   isCameraTarget && { backgroundColor: '#E0F2FE' },
                                 ]}
                               >
-                                <Text
+                                <LocalizedText
                                   style={[
                                     styles.phoneNetworkTagText,
                                     isCameraTarget && { color: '#0284C7' },
                                   ]}
                                 >
                                   {net.tag}
-                                </Text>
+                                </LocalizedText>
                               </View>
                             )}
                           </View>
-                          <Text style={styles.networkItemDesc}>{net.desc}</Text>
+                          <LocalizedText style={styles.networkItemDesc}>{net.desc}</LocalizedText>
                         </View>
                       </View>
 
@@ -1791,9 +1780,9 @@ export default function AddDeviceScreen({ navigation }: any) {
               {isConnectingPhoneWifi && (
                 <View style={styles.connectingToast}>
                   <ActivityIndicator size="small" color="#FFF" />
-                  <Text style={styles.connectingToastText}>
+                  <LocalizedText style={styles.connectingToastText}>
                     Đang kết nối vào mạng "{selectedPhoneWifi}"...
-                  </Text>
+                  </LocalizedText>
                 </View>
               )}
             </View>
@@ -1818,8 +1807,8 @@ export default function AddDeviceScreen({ navigation }: any) {
                 <Ionicons name="refresh" size={24} color="#EA580C" />
               </View>
               <View style={{ flex: 1, marginLeft: 12 }}>
-                <Text style={styles.resetModalTitle}>Hướng Dẫn Reset Camera</Text>
-                <Text style={styles.resetModalSub}>Camera an ninh AI SECA_001</Text>
+                <LocalizedText style={styles.resetModalTitle}>Hướng Dẫn Reset Camera</LocalizedText>
+                <LocalizedText style={styles.resetModalSub}>Camera an ninh AI SECA_001</LocalizedText>
               </View>
               <TouchableOpacity
                 onPress={() => setShowResetGuideModal(false)}
@@ -1834,7 +1823,7 @@ export default function AddDeviceScreen({ navigation }: any) {
               <Ionicons name="videocam" size={44} color="#EA580C" />
               <View style={styles.resetButtonPointerBadge}>
                 <Ionicons name="finger-print" size={14} color="#FFF" />
-                <Text style={styles.resetButtonPointerText}>Vị trí nút RESET ở đáy Camera</Text>
+                <LocalizedText style={styles.resetButtonPointerText}>Vị trí nút RESET ở đáy Camera</LocalizedText>
               </View>
             </View>
 
@@ -1842,38 +1831,38 @@ export default function AddDeviceScreen({ navigation }: any) {
             <View style={styles.resetStepsList}>
               <View style={styles.resetStepItem}>
                 <View style={styles.resetStepNum}>
-                  <Text style={styles.resetStepNumText}>1</Text>
+                  <LocalizedText style={styles.resetStepNumText}>1</LocalizedText>
                 </View>
-                <Text style={styles.resetStepText}>
+                <LocalizedText style={styles.resetStepText}>
                   Cắm nguồn điện và đảm bảo Camera đang được cấp điện liên tục.
-                </Text>
+                </LocalizedText>
               </View>
 
               <View style={styles.resetStepItem}>
                 <View style={styles.resetStepNum}>
-                  <Text style={styles.resetStepNumText}>2</Text>
+                  <LocalizedText style={styles.resetStepNumText}>2</LocalizedText>
                 </View>
-                <Text style={styles.resetStepText}>
-                  Tìm nút bấm <Text style={{ fontWeight: 'bold' }}>RESET</Text> ở mặt đáy Camera (hoặc lật nhẹ mắt camera lên trên để thấy nút reset bên dưới).
-                </Text>
+                <LocalizedText style={styles.resetStepText}>
+                  Tìm nút bấm <LocalizedText style={{ fontWeight: 'bold' }}>RESET</LocalizedText> ở mặt đáy Camera (hoặc lật nhẹ mắt camera lên trên để thấy nút reset bên dưới).
+                </LocalizedText>
               </View>
 
               <View style={styles.resetStepItem}>
                 <View style={styles.resetStepNum}>
-                  <Text style={styles.resetStepNumText}>3</Text>
+                  <LocalizedText style={styles.resetStepNumText}>3</LocalizedText>
                 </View>
-                <Text style={styles.resetStepText}>
-                  Dùng que chọc hoặc ngón tay <Text style={{ fontWeight: 'bold', color: '#EA580C' }}>nhấn giữ nút RESET trong 5 đến 10 giây</Text> cho đến khi nghe tiếng "Bíp" hoặc giọng nói thông báo.
-                </Text>
+                <LocalizedText style={styles.resetStepText}>
+                  Dùng que chọc hoặc ngón tay <LocalizedText style={{ fontWeight: 'bold', color: '#EA580C' }}>nhấn giữ nút RESET trong 5 đến 10 giây</LocalizedText> cho đến khi nghe tiếng "Bíp" hoặc giọng nói thông báo.
+                </LocalizedText>
               </View>
 
               <View style={styles.resetStepItem}>
                 <View style={styles.resetStepNum}>
-                  <Text style={styles.resetStepNumText}>4</Text>
+                  <LocalizedText style={styles.resetStepNumText}>4</LocalizedText>
                 </View>
-                <Text style={styles.resetStepText}>
-                  Đợi camera xoay tự khởi động lại (~30s). Đèn LED sẽ chuyển sang <Text style={{ fontWeight: 'bold', color: '#059669' }}>nhấp nháy luân phiên Đỏ và Xanh</Text>.
-                </Text>
+                <LocalizedText style={styles.resetStepText}>
+                  Đợi camera xoay tự khởi động lại (~30s). Đèn LED sẽ chuyển sang <LocalizedText style={{ fontWeight: 'bold', color: '#059669' }}>nhấp nháy luân phiên Đỏ và Xanh</LocalizedText>.
+                </LocalizedText>
               </View>
             </View>
 
@@ -1887,14 +1876,14 @@ export default function AddDeviceScreen({ navigation }: any) {
               activeOpacity={0.85}
             >
               <Ionicons name="checkmark-circle" size={18} color="#FFF" />
-              <Text style={styles.modalConfirmText}>Tôi Đã Reset Xong • Đèn Đã Nhấp Nháy</Text>
+              <LocalizedText style={styles.modalConfirmText}>Tôi Đã Reset Xong • Đèn Đã Nhấp Nháy</LocalizedText>
             </TouchableOpacity>
 
             <TouchableOpacity
               style={[styles.modalCancelBtn, { width: '100%' }]}
               onPress={() => setShowResetGuideModal(false)}
             >
-              <Text style={styles.modalCancelText}>Đóng</Text>
+              <LocalizedText style={styles.modalCancelText}>Đóng</LocalizedText>
             </TouchableOpacity>
           </View>
         </View>
@@ -1914,10 +1903,10 @@ export default function AddDeviceScreen({ navigation }: any) {
             <View style={[styles.modalIconBox, { backgroundColor: '#FEE2E2' }]}>
               <Ionicons name="close-circle" size={36} color="#DC2626" />
             </View>
-            <Text style={[styles.modalTitle, { color: '#B91C1C' }]}>Lỗi Ghép Nối Bluetooth!</Text>
-            <Text style={styles.modalMessage}>
+            <LocalizedText style={[styles.modalTitle, { color: '#B91C1C' }]}>Lỗi Ghép Nối Bluetooth!</LocalizedText>
+            <LocalizedText style={styles.modalMessage}>
               Không thể kết nối GATT với thiết bị BLE. Vui lòng đảm bảo đồng hồ ở khoảng cách dưới 1 mét, pin còn đủ và thử lại.
-            </Text>
+            </LocalizedText>
 
             <TouchableOpacity
               style={[styles.modalConfirmBtn, { backgroundColor: '#DC2626', width: '100%' }]}
@@ -1926,7 +1915,7 @@ export default function AddDeviceScreen({ navigation }: any) {
                 setCurrentStep('BLE_SCAN');
               }}
             >
-              <Text style={styles.modalConfirmText}>Quay Lại Màn Hình Radar Quét</Text>
+              <LocalizedText style={styles.modalConfirmText}>Quay Lại Màn Hình Radar Quét</LocalizedText>
             </TouchableOpacity>
           </View>
         </View>

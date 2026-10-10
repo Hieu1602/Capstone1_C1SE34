@@ -3,25 +3,14 @@
 // Tích hợp One-Touch SOS 115, Camera WebRTC & Playback 24/48h, Sinh hiệu & Âm thanh YAMNet, Sự cố gần đây
 
 import React, { useState, useEffect } from 'react';
-import {
-  View,
-  Text,
-  StyleSheet,
-  TouchableOpacity,
-  ScrollView,
-  Image,
-  Alert,
-  Linking,
-  Platform,
-  Clipboard,
-  Modal,
-  Switch,
-} from 'react-native';
+import { View, StyleSheet, TouchableOpacity, ScrollView, Image, Linking, Platform, Clipboard, Modal, Switch } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { Ionicons, MaterialCommunityIcons } from '@expo/vector-icons';
 import { Colors, Shadows } from '../../../theme/colors';
 import { useVitalStore } from '../../../store/useVitalStore';
 import { useTheme } from '../../../store/useThemeStore';
+import { LocalizedAlert, LocalizedText } from '../../../i18n/LocalizedComponents';
+
 
 // Hàm sao chép clipboard an toàn hỗ trợ cả native và web
 const copyAddressToClipboard = (text: string) => {
@@ -146,7 +135,7 @@ export default function HomeScreen({ navigation }: any) {
       syncAll: syncAllFamily,
     });
     setSnoozeModalVisible(false);
-    Alert.alert(
+    LocalizedAlert.alert(
       '🔕 Đã tạm dừng chuông báo động',
       `Đã thiết lập tạm dừng chuông báo động ${
         selectedDuration > 0 ? `trong ${selectedDuration} phút` : 'cho đến khi bật lại'
@@ -157,7 +146,7 @@ export default function HomeScreen({ navigation }: any) {
   const handleCancelSnooze = () => {
     cancelAlarmSnooze();
     setSnoozeModalVisible(false);
-    Alert.alert(
+    LocalizedAlert.alert(
       '🔔 Đã bật lại chuông báo động',
       'Chuông báo động và còi hú Loa Hub đã được kích hoạt lại ở mức bình thường.'
     );
@@ -179,7 +168,7 @@ export default function HomeScreen({ navigation }: any) {
     });
 
     // Thông báo Toast/Alert kèm địa chỉ đã sao chép
-    Alert.alert(
+    LocalizedAlert.alert(
       '🚨 ĐÃ KÍCH HOẠT ONE-TOUCH SOS 115',
       `Đã sao chép địa chỉ nhà và mở cuộc gọi cấp cứu 115.\n\n📍 Địa chỉ đã sao chép:\n"${house.address}"\n\nBạn có thể dán hoặc đọc trực tiếp địa chỉ này cho tổng đài viên cấp cứu.`,
       [
@@ -195,7 +184,7 @@ export default function HomeScreen({ navigation }: any) {
 
   const handleMicPress = () => {
     setIsMicSpeaking(!isMicSpeaking);
-    Alert.alert(
+    LocalizedAlert.alert(
       isMicSpeaking ? 'Đã tắt đàm thoại' : 'Đang bật đàm thoại 2 chiều 🎙️',
       isMicSpeaking
         ? 'Loa tại nhà đã đóng.'
@@ -214,17 +203,17 @@ export default function HomeScreen({ navigation }: any) {
     setHouseMode(mode);
 
     if (mode === 'AWAY') {
-      Alert.alert(
+      LocalizedAlert.alert(
         '🚶 Chế độ Xa (Away) đã kích hoạt',
         'Đã kích hoạt chế độ an ninh cao nhất: Tối đa độ nhạy cảm biến, phát hiện té ngã và chuông báo động 24/7. Camera tiếp tục phát trực tiếp bình thường.'
       );
     } else if (mode === 'HOME') {
-      Alert.alert(
+      LocalizedAlert.alert(
         '🏠 Chế độ Ở nhà (Home) đã kích hoạt',
         'Đã giảm mức báo động xâm nhập khi gia đình sinh hoạt, nhưng vẫn duy trì theo dõi té ngã và chỉ số sức khoẻ trực tiếp 24/7.'
       );
     } else if (mode === 'DISARM') {
-      Alert.alert(
+      LocalizedAlert.alert(
         '🛡️ Chế độ Tắt báo động (Disarm) đã kích hoạt',
         'Đã tắt hoàn toàn còi hú và các thông báo báo động. Camera vẫn mở và hiển thị luồng trực tiếp bình thường.'
       );
@@ -233,7 +222,7 @@ export default function HomeScreen({ navigation }: any) {
 
   const handleTogglePrivacyMode = () => {
     toggleCameraSleep();
-    Alert.alert(
+    LocalizedAlert.alert(
       camera.isSleep ? 'Đã mở lại ống kính camera' : 'Đã bật Chế độ riêng tư (Che camera)',
       camera.isSleep
         ? `Ống kính ${cameraDisplayName} đã mở lại và tiếp tục phát trực tiếp bình thường.`
@@ -243,7 +232,7 @@ export default function HomeScreen({ navigation }: any) {
 
   const handleToggleAIProtect = () => {
     toggleCameraAIProtect();
-    Alert.alert(
+    LocalizedAlert.alert(
       camera.isAIProtect
         ? '⏸️ Đã tạm dừng tính năng AI'
         : '🛡️ Đã bật giám sát AI thông minh',
@@ -273,7 +262,7 @@ export default function HomeScreen({ navigation }: any) {
 
   // Cữ thuốc kế tiếp từ Backend FastAPI
   const nextMedication =
-    todayReminders?.medications?.find((m) => !m.taken) ||
+    todayReminders?.medications?.find((m: any) => !m.taken) ||
     todayReminders?.medications?.[3] || {
       name: 'Uống thuốc huyết áp (Amlodipine 5mg)',
       time: '18:30',
@@ -290,7 +279,7 @@ export default function HomeScreen({ navigation }: any) {
           onPress={() => navigation.navigate('HouseDetail')}
           activeOpacity={0.7}
         >
-          <Text style={[styles.houseTitleText, { color: colors.textPrimary }]}>{house.name}</Text>
+          <LocalizedText style={[styles.houseTitleText, { color: colors.textPrimary }]}>{house.name}</LocalizedText>
           <Ionicons name="chevron-down" size={16} color={colors.textPrimary} style={{ marginLeft: 4 }} />
         </TouchableOpacity>
 
@@ -356,7 +345,7 @@ export default function HomeScreen({ navigation }: any) {
                 color={house.currentMode === 'AWAY' ? '#FFF' : (isDarkMode ? colors.textMuted : '#94A3B8')}
               />
             </View>
-            <Text
+            <LocalizedText
               style={[
                 styles.modePillText,
                 { color: house.currentMode === 'AWAY' ? '#047857' : (isDarkMode ? colors.textMuted : '#94A3B8') },
@@ -364,7 +353,7 @@ export default function HomeScreen({ navigation }: any) {
               numberOfLines={1}
             >
               Xa
-            </Text>
+            </LocalizedText>
           </TouchableOpacity>
 
           {/* Nút 2: Ở nhà (Home) */}
@@ -389,7 +378,7 @@ export default function HomeScreen({ navigation }: any) {
                 color={house.currentMode === 'HOME' ? '#FFF' : (isDarkMode ? colors.textMuted : '#94A3B8')}
               />
             </View>
-            <Text
+            <LocalizedText
               style={[
                 styles.modePillText,
                 { color: house.currentMode === 'HOME' ? '#1D4ED8' : (isDarkMode ? colors.textMuted : '#94A3B8') },
@@ -397,7 +386,7 @@ export default function HomeScreen({ navigation }: any) {
               numberOfLines={1}
             >
               Ở nhà
-            </Text>
+            </LocalizedText>
           </TouchableOpacity>
 
           {/* Nút 3: Tắt báo động / Tạm dừng chuông báo động (Snooze) */}
@@ -442,7 +431,7 @@ export default function HomeScreen({ navigation }: any) {
                 color={isSnoozeActive || house.currentMode === 'DISARM' ? '#FFF' : isDarkMode ? colors.textMuted : '#94A3B8'}
               />
             </View>
-            <Text
+            <LocalizedText
               style={[
                 styles.modePillText,
                 {
@@ -459,7 +448,7 @@ export default function HomeScreen({ navigation }: any) {
               numberOfLines={1}
             >
               {snoozeButtonLabel}
-            </Text>
+            </LocalizedText>
           </TouchableOpacity>
         </View>
 
@@ -484,13 +473,13 @@ export default function HomeScreen({ navigation }: any) {
                 <Ionicons name="warning" size={20} color="#FFF" />
               </View>
               <View style={{ flex: 1, marginLeft: 10 }}>
-                <Text style={styles.emergencyBannerTitle}>🚨 CẢNH BÁO KHẨN CẤP ĐANG KÍCH HOẠT</Text>
-                <Text style={styles.emergencyBannerMessage} numberOfLines={2}>
+                <LocalizedText style={styles.emergencyBannerTitle}>🚨 CẢNH BÁO KHẨN CẤP ĐANG KÍCH HOẠT</LocalizedText>
+                <LocalizedText style={styles.emergencyBannerMessage} numberOfLines={2}>
                   {activeEmergency?.message || 'Phát hiện sự cố té ngã (YOLO-Pose AI). Cần kiểm tra video và xác nhận xử lý ngay!'}
-                </Text>
+                </LocalizedText>
               </View>
               <View style={styles.emergencyActionBtn}>
-                <Text style={styles.emergencyActionBtnText}>Xem & Xử lý</Text>
+                <LocalizedText style={styles.emergencyActionBtnText}>Xem & Xử lý</LocalizedText>
                 <Ionicons name="chevron-forward" size={14} color="#DC2626" />
               </View>
             </View>
@@ -507,9 +496,9 @@ export default function HomeScreen({ navigation }: any) {
           >
             <View style={styles.stablePulseDot} />
             <Ionicons name="shield-checkmark" size={18} color="#16A34A" />
-            <Text style={[styles.stableHealthText, { color: isDarkMode ? '#86EFAC' : '#15803D' }]}>
+            <LocalizedText style={[styles.stableHealthText, { color: isDarkMode ? '#86EFAC' : '#15803D' }]}>
               Sức khoẻ ổn định • Hệ thống giám sát AI đang bảo vệ 24/7
-            </Text>
+            </LocalizedText>
           </View>
         )}
 
@@ -525,14 +514,14 @@ export default function HomeScreen({ navigation }: any) {
             </View>
             <View style={styles.sosTextContainer}>
               <View style={styles.sosTitleRow}>
-                <Text style={styles.sosTitleText}>ONE-TOUCH SOS 115</Text>
+                <LocalizedText style={styles.sosTitleText}>ONE-TOUCH SOS 115</LocalizedText>
                 <View style={styles.sosTag}>
-                  <Text style={styles.sosTagText}>KHẨN CẤP</Text>
+                  <LocalizedText style={styles.sosTagText}>KHẨN CẤP</LocalizedText>
                 </View>
               </View>
-              <Text style={styles.sosSubtitleText} numberOfLines={1}>
+              <LocalizedText style={styles.sosSubtitleText} numberOfLines={1}>
                 Quay số 115 &amp; tự động sao chép địa chỉ nhà
-              </Text>
+              </LocalizedText>
             </View>
           </View>
 
@@ -547,7 +536,7 @@ export default function HomeScreen({ navigation }: any) {
           onPress={handleMultiView}
           activeOpacity={0.9}
         >
-          <Text style={[styles.multiViewText, isDarkMode && { color: colors.textPrimary }]}>Nhiều chế độ xem</Text>
+          <LocalizedText style={[styles.multiViewText, isDarkMode && { color: colors.textPrimary }]}>Nhiều chế độ xem</LocalizedText>
           <View style={styles.playCircleBtn}>
             <Ionicons name="play" size={14} color={Colors.primary} style={{ marginLeft: 2 }} />
           </View>
@@ -573,41 +562,41 @@ export default function HomeScreen({ navigation }: any) {
             {/* Live Stream Overlay Header: Tên thiết bị thân thiện & Badge WebRTC / Edge Hub */}
             <View style={styles.cameraOverlayTop}>
               <View style={styles.cameraTitleWithBadge}>
-                <Text style={styles.cameraNameOverlay} numberOfLines={1}>
+                <LocalizedText style={styles.cameraNameOverlay} numberOfLines={1}>
                   {cameraDisplayName}
-                </Text>
+                </LocalizedText>
                 {/* Badge trạng thái kết nối WebRTC / Live */}
                 {camera.isSleep ? (
                   <View style={styles.privacyLiveBadge}>
                     <Ionicons name="eye-off" size={10} color="#F59E0B" style={{ marginRight: 4 }} />
-                    <Text style={styles.privacyLiveBadgeText}>Ống kính riêng tư • Đã che</Text>
+                    <LocalizedText style={styles.privacyLiveBadgeText}>Ống kính riêng tư • Đã che</LocalizedText>
                   </View>
                 ) : !camera.isAIProtect ? (
                   <View style={styles.normalModeBadge}>
                     <View style={styles.normalGrayDot} />
-                    <Text style={styles.normalModeBadgeText}>Chế độ thường • AI Tắt</Text>
+                    <LocalizedText style={styles.normalModeBadgeText}>Chế độ thường • AI Tắt</LocalizedText>
                   </View>
                 ) : house.currentMode === 'AWAY' ? (
                   <View style={styles.awayLiveBadge}>
                     <View style={styles.liveGreenDot} />
-                    <Text style={styles.awayLiveBadgeText}>Vắng nhà • AI Giám sát 24/7</Text>
+                    <LocalizedText style={styles.awayLiveBadgeText}>Vắng nhà • AI Giám sát 24/7</LocalizedText>
                   </View>
                 ) : house.currentMode === 'DISARM' ? (
                   <View style={styles.disarmLiveBadge}>
                     <MaterialCommunityIcons name="shield-off-outline" size={11} color="#E2E8F0" style={{ marginRight: 4 }} />
-                    <Text style={styles.disarmLiveBadgeText}>Tắt báo động • AI Trực tiếp</Text>
+                    <LocalizedText style={styles.disarmLiveBadgeText}>Tắt báo động • AI Trực tiếp</LocalizedText>
                   </View>
                 ) : (
                   <View style={styles.liveWebRTCBadge}>
                     <View style={styles.liveGreenDot} />
-                    <Text style={styles.liveWebRTCText}>Ở nhà • AI WebRTC</Text>
+                    <LocalizedText style={styles.liveWebRTCText}>Ở nhà • AI WebRTC</LocalizedText>
                   </View>
                 )}
               </View>
 
               <View style={styles.cameraStatusIcons}>
                 <View style={styles.hubStatusPill}>
-                  <Text style={styles.hubStatusPillText}>Hub #01 Online</Text>
+                  <LocalizedText style={styles.hubStatusPillText}>Hub #01 Online</LocalizedText>
                 </View>
                 <Ionicons name="wifi" size={14} color="#10B981" style={{ marginLeft: 6 }} />
                 <TouchableOpacity
@@ -621,7 +610,7 @@ export default function HomeScreen({ navigation }: any) {
 
             {/* SmartCare Watermark góc dưới phải */}
             <View style={styles.watermarkTag}>
-              <Text style={styles.watermarkText}>SmartCare AI</Text>
+              <LocalizedText style={styles.watermarkText}>SmartCare AI</LocalizedText>
             </View>
 
             {/* Privacy Mode Overlay: Màn hình đen che camera vật lý khi camera.isSleep = true */}
@@ -630,17 +619,17 @@ export default function HomeScreen({ navigation }: any) {
                 <View style={styles.privacyIconCircle}>
                   <Ionicons name="eye-off" size={32} color="#F59E0B" />
                 </View>
-                <Text style={styles.privacyOverlayTitle}>Ống kính đang ở chế độ riêng tư</Text>
-                <Text style={styles.privacyOverlaySub}>
+                <LocalizedText style={styles.privacyOverlayTitle}>Ống kính đang ở chế độ riêng tư</LocalizedText>
+                <LocalizedText style={styles.privacyOverlaySub}>
                   Ống kính camera đã cụp lại và che khung hình. Luồng trực tiếp tạm thời tắt.
-                </Text>
+                </LocalizedText>
                 <TouchableOpacity
                   style={styles.privacyDisableBtn}
                   onPress={handleTogglePrivacyMode}
                   activeOpacity={0.8}
                 >
                   <Ionicons name="eye" size={14} color="#FFF" style={{ marginRight: 4 }} />
-                  <Text style={styles.privacyDisableText}>Bật lại camera</Text>
+                  <LocalizedText style={styles.privacyDisableText}>Bật lại camera</LocalizedText>
                 </TouchableOpacity>
               </View>
             ) : null}
@@ -657,12 +646,12 @@ export default function HomeScreen({ navigation }: any) {
                 <Ionicons name="play-back" size={16} color={Colors.primary} />
               </View>
               <View>
-                <Text style={[styles.playbackTitle, isDarkMode && { color: colors.textPrimary }]}>Xem lại 24/48h (Interactive Timeline Playback)</Text>
-                <Text style={[styles.playbackSub, isDarkMode && { color: colors.textSecondary }]}>Bộ đệm RAM Edge Hub &amp; lưu trữ MinIO Cloud</Text>
+                <LocalizedText style={[styles.playbackTitle, isDarkMode && { color: colors.textPrimary }]}>Xem lại 24/48h (Interactive Timeline Playback)</LocalizedText>
+                <LocalizedText style={[styles.playbackSub, isDarkMode && { color: colors.textSecondary }]}>Bộ đệm RAM Edge Hub &amp; lưu trữ MinIO Cloud</LocalizedText>
               </View>
             </View>
             <View style={styles.playbackRightAction}>
-              <Text style={styles.playbackBadgeText}>24h - 48h</Text>
+              <LocalizedText style={styles.playbackBadgeText}>24h - 48h</LocalizedText>
               <Ionicons name="chevron-forward" size={16} color={Colors.primary} />
             </View>
           </TouchableOpacity>
@@ -681,14 +670,14 @@ export default function HomeScreen({ navigation }: any) {
                   size={20}
                   color={camera.isSleep ? '#F59E0B' : (isDarkMode ? colors.textPrimary : Colors.textPrimary)}
                 />
-                <Text
+                <LocalizedText
                   style={[
                     styles.cameraPrivacyText,
                     { color: camera.isSleep ? '#D97706' : (isDarkMode ? colors.textPrimary : Colors.textPrimary) },
                   ]}
                 >
                   Riêng tư
-                </Text>
+                </LocalizedText>
               </View>
             </TouchableOpacity>
 
@@ -729,7 +718,7 @@ export default function HomeScreen({ navigation }: any) {
                     color="#94A3B8"
                   />
                 )}
-                <Text
+                <LocalizedText
                   style={[
                     styles.aiShieldText,
                     { color: camera.isAIProtect ? '#2563EB' : '#94A3B8' },
@@ -737,7 +726,7 @@ export default function HomeScreen({ navigation }: any) {
                   numberOfLines={1}
                 >
                   {camera.isAIProtect ? 'AI Bảo vệ: Bật' : 'AI: Tắt'}
-                </Text>
+                </LocalizedText>
               </View>
             </TouchableOpacity>
           </View>
@@ -760,14 +749,14 @@ export default function HomeScreen({ navigation }: any) {
                 <View style={[styles.reminderIconCircle, { backgroundColor: isDarkMode ? '#432005' : '#FFF7ED' }]}>
                   <Ionicons name="medical" size={15} color={Colors.primary} />
                 </View>
-                <Text style={[styles.reminderWidgetTitle, isDarkMode && { color: colors.textPrimary }]}>
+                <LocalizedText style={[styles.reminderWidgetTitle, isDarkMode && { color: colors.textPrimary }]}>
                   Lịch nhắc nhở tiếp theo
-                </Text>
+                </LocalizedText>
               </View>
               <View style={styles.reminderRightHeader}>
                 <View style={styles.reminderLiveVoiceBadge}>
                   <Ionicons name="volume-medium" size={11} color="#0EA5E9" />
-                  <Text style={styles.reminderLiveVoiceText}>Loa Hub</Text>
+                  <LocalizedText style={styles.reminderLiveVoiceText}>Loa Hub</LocalizedText>
                 </View>
                 <Ionicons name="chevron-forward" size={14} color={isDarkMode ? colors.textSecondary : '#94A3B8'} />
               </View>
@@ -776,9 +765,9 @@ export default function HomeScreen({ navigation }: any) {
             <View style={styles.reminderContentRow}>
               <View style={styles.reminderClockBox}>
                 <Ionicons name="time" size={13} color="#0EA5E9" />
-                <Text style={styles.reminderClockText}>{nextMedication.time}</Text>
+                <LocalizedText style={styles.reminderClockText}>{nextMedication.time}</LocalizedText>
               </View>
-              <Text
+              <LocalizedText
                 style={[
                   styles.reminderMedText,
                   isDarkMode && { color: colors.textPrimary },
@@ -787,7 +776,7 @@ export default function HomeScreen({ navigation }: any) {
                 numberOfLines={1}
               >
                 {nextMedication.name}
-              </Text>
+              </LocalizedText>
             </View>
           </TouchableOpacity>
 
@@ -801,7 +790,7 @@ export default function HomeScreen({ navigation }: any) {
               const next = !isMedDone;
               setNextMedTaken(next);
               if (next) {
-                Alert.alert('Đã hoàn thành', `Đã ghi nhận: ${nextMedication.name}.`);
+                LocalizedAlert.alert('Đã hoàn thành', `Đã ghi nhận: ${nextMedication.name}.`);
               }
             }}
             activeOpacity={0.7}
@@ -811,14 +800,14 @@ export default function HomeScreen({ navigation }: any) {
               size={15}
               color={isMedDone ? '#10B981' : (isDarkMode ? '#94A3B8' : '#64748B')}
             />
-            <Text
+            <LocalizedText
               style={[
                 styles.reminderTickText,
                 { color: isMedDone ? '#10B981' : (isDarkMode ? '#94A3B8' : '#64748B') },
               ]}
             >
               {isMedDone ? 'Đã uống' : 'Uống'}
-            </Text>
+            </LocalizedText>
           </TouchableOpacity>
         </View>
 
@@ -828,14 +817,14 @@ export default function HomeScreen({ navigation }: any) {
           <View style={styles.vitalsSummaryHeader}>
             <View style={{ flexDirection: 'row', alignItems: 'center' }}>
               <View style={styles.livePulseDot} />
-              <Text style={[styles.vitalsSummaryTitle, isDarkMode && { color: colors.textPrimary }]}>Tình trạng sức khoẻ</Text>
+              <LocalizedText style={[styles.vitalsSummaryTitle, isDarkMode && { color: colors.textPrimary }]}>Tình trạng sức khoẻ</LocalizedText>
             </View>
             <TouchableOpacity
               style={[styles.vitalsDetailChip, isDarkMode && { backgroundColor: 'rgba(255, 122, 0, 0.15)', borderColor: 'rgba(255, 122, 0, 0.3)' }]}
               onPress={() => navigation.navigate('HealthDetail')}
               activeOpacity={0.7}
             >
-              <Text style={styles.vitalsDetailChipText}>Chi tiết</Text>
+              <LocalizedText style={styles.vitalsDetailChipText}>Chi tiết</LocalizedText>
               <Ionicons name="chevron-forward" size={14} color={Colors.primary} />
             </TouchableOpacity>
           </View>
@@ -848,29 +837,29 @@ export default function HomeScreen({ navigation }: any) {
                 size={14}
                 color={isEdgeHubOnline ? Colors.success : Colors.danger}
               />
-              <Text style={[styles.deviceStatusText, isDarkMode && { color: colors.textSecondary }]}>
+              <LocalizedText style={[styles.deviceStatusText, isDarkMode && { color: colors.textSecondary }]}>
                 Edge Hub:{' '}
-                <Text
+                <LocalizedText
                   style={{
                     color: isEdgeHubOnline ? Colors.success : Colors.danger,
                     fontWeight: '700',
                   }}
                 >
                   {isEdgeHubOnline ? 'Online' : 'Offline'}
-                </Text>
-              </Text>
+                </LocalizedText>
+              </LocalizedText>
             </View>
 
             <View style={[styles.deviceStatusDivider, isDarkMode && { backgroundColor: colors.border }]} />
 
             <View style={styles.deviceStatusItem}>
               <Ionicons name="battery-charging" size={15} color={Colors.aiBlue} />
-              <Text style={[styles.deviceStatusText, isDarkMode && { color: colors.textSecondary }]}>
+              <LocalizedText style={[styles.deviceStatusText, isDarkMode && { color: colors.textSecondary }]}>
                 Vòng BLE:{' '}
-                <Text style={{ color: isDarkMode ? colors.textPrimary : Colors.textPrimary, fontWeight: '700' }}>
+                <LocalizedText style={{ color: isDarkMode ? colors.textPrimary : Colors.textPrimary, fontWeight: '700' }}>
                   {braceletBattery}% Pin
-                </Text>
-              </Text>
+                </LocalizedText>
+              </LocalizedText>
             </View>
           </View>
 
@@ -879,33 +868,33 @@ export default function HomeScreen({ navigation }: any) {
             {/* Nhịp tim */}
             <View style={styles.vitalItem}>
               <Ionicons name="heart" size={17} color="#EF4444" />
-              <Text style={[styles.vitalValText, isDarkMode && { color: colors.textPrimary }]} numberOfLines={1}>
+              <LocalizedText style={[styles.vitalValText, isDarkMode && { color: colors.textPrimary }]} numberOfLines={1}>
                 {currentVitals.heart_rate ?? 74}{' '}
-                <Text style={styles.vitalUnit}>bpm</Text>
-              </Text>
-              <Text style={[styles.vitalLblText, isDarkMode && { color: colors.textSecondary }]}>Nhịp tim</Text>
+                <LocalizedText style={styles.vitalUnit}>bpm</LocalizedText>
+              </LocalizedText>
+              <LocalizedText style={[styles.vitalLblText, isDarkMode && { color: colors.textSecondary }]}>Nhịp tim</LocalizedText>
             </View>
             <View style={[styles.vitalDivider, isDarkMode && { backgroundColor: colors.border }]} />
 
             {/* SpO2 */}
             <View style={styles.vitalItem}>
               <Ionicons name="water" size={17} color="#3B82F6" />
-              <Text style={[styles.vitalValText, isDarkMode && { color: colors.textPrimary }]} numberOfLines={1}>
+              <LocalizedText style={[styles.vitalValText, isDarkMode && { color: colors.textPrimary }]} numberOfLines={1}>
                 {currentVitals.spo2 ?? 98}{' '}
-                <Text style={styles.vitalUnit}>%</Text>
-              </Text>
-              <Text style={[styles.vitalLblText, isDarkMode && { color: colors.textSecondary }]}>SpO₂</Text>
+                <LocalizedText style={styles.vitalUnit}>%</LocalizedText>
+              </LocalizedText>
+              <LocalizedText style={[styles.vitalLblText, isDarkMode && { color: colors.textSecondary }]}>SpO₂</LocalizedText>
             </View>
             <View style={[styles.vitalDivider, isDarkMode && { backgroundColor: colors.border }]} />
 
             {/* Thân nhiệt */}
             <View style={styles.vitalItem}>
               <Ionicons name="thermometer" size={17} color="#F59E0B" />
-              <Text style={[styles.vitalValText, isDarkMode && { color: colors.textPrimary }]} numberOfLines={1}>
+              <LocalizedText style={[styles.vitalValText, isDarkMode && { color: colors.textPrimary }]} numberOfLines={1}>
                 {currentVitals.skin_temp_max ?? 36.8}{' '}
-                <Text style={styles.vitalUnit}>°C</Text>
-              </Text>
-              <Text style={[styles.vitalLblText, isDarkMode && { color: colors.textSecondary }]}>Thân nhiệt</Text>
+                <LocalizedText style={styles.vitalUnit}>°C</LocalizedText>
+              </LocalizedText>
+              <LocalizedText style={[styles.vitalLblText, isDarkMode && { color: colors.textSecondary }]}>Thân nhiệt</LocalizedText>
             </View>
             <View style={[styles.vitalDivider, isDarkMode && { backgroundColor: colors.border }]} />
 
@@ -916,7 +905,7 @@ export default function HomeScreen({ navigation }: any) {
                 size={17}
                 color={currentVitals.fall_detected ? Colors.danger : Colors.success}
               />
-              <Text
+              <LocalizedText
                 style={[
                   styles.vitalValText,
                   {
@@ -927,8 +916,8 @@ export default function HomeScreen({ navigation }: any) {
                 numberOfLines={1}
               >
                 {currentVitals.fall_detected ? 'Ngã!' : 'Sinh hoạt'}
-              </Text>
-              <Text style={[styles.vitalLblText, isDarkMode && { color: colors.textSecondary }]}>Vận động</Text>
+              </LocalizedText>
+              <LocalizedText style={[styles.vitalLblText, isDarkMode && { color: colors.textSecondary }]}>Vận động</LocalizedText>
             </View>
             <View style={[styles.vitalDivider, isDarkMode && { backgroundColor: colors.border }]} />
 
@@ -939,7 +928,7 @@ export default function HomeScreen({ navigation }: any) {
                 size={17}
                 color={isAcousticAlarm ? Colors.danger : '#8B5CF6'}
               />
-              <Text
+              <LocalizedText
                 style={[
                   styles.vitalValText,
                   {
@@ -950,8 +939,8 @@ export default function HomeScreen({ navigation }: any) {
                 numberOfLines={1}
               >
                 {isAcousticAlarm ? 'La hét!' : 'Bình thường'}
-              </Text>
-              <Text style={[styles.vitalLblText, isDarkMode && { color: colors.textSecondary }]}>Âm thanh</Text>
+              </LocalizedText>
+              <LocalizedText style={[styles.vitalLblText, isDarkMode && { color: colors.textSecondary }]}>Âm thanh</LocalizedText>
             </View>
           </View>
         </View>
@@ -961,11 +950,11 @@ export default function HomeScreen({ navigation }: any) {
           <View style={styles.trendSectionHeader}>
             <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6 }}>
               <Ionicons name="stats-chart" size={17} color={Colors.primary} />
-              <Text style={[styles.trendSectionTitle, isDarkMode && { color: colors.textPrimary }]}>Xu hướng sức khoẻ hôm nay</Text>
+              <LocalizedText style={[styles.trendSectionTitle, isDarkMode && { color: colors.textPrimary }]}>Xu hướng sức khoẻ hôm nay</LocalizedText>
             </View>
             <View style={styles.trendStandardBadge}>
               <Ionicons name="checkmark-circle" size={13} color="#15803D" />
-              <Text style={styles.trendStandardBadgeText}>Đạt chuẩn</Text>
+              <LocalizedText style={styles.trendStandardBadgeText}>Đạt chuẩn</LocalizedText>
             </View>
           </View>
 
@@ -978,9 +967,9 @@ export default function HomeScreen({ navigation }: any) {
               onPress={() => navigation.navigate('HealthDetail', { metric: 'heartRate' })}
             >
               <View style={styles.miniCardTop}>
-                <Text style={[styles.miniCardTitle, isDarkMode && { color: colors.textPrimary }]}>Nhịp tim 12h qua</Text>
+                <LocalizedText style={[styles.miniCardTitle, isDarkMode && { color: colors.textPrimary }]}>Nhịp tim 12h qua</LocalizedText>
                 <View style={styles.miniCardBadge}>
-                  <Text style={styles.miniCardBadgeText}>TB 74</Text>
+                  <LocalizedText style={styles.miniCardBadgeText}>TB 74</LocalizedText>
                 </View>
               </View>
 
@@ -988,7 +977,7 @@ export default function HomeScreen({ navigation }: any) {
               <View style={styles.miniBarChartArea}>
                 <View style={styles.miniDashedRefLine}>
                   <View style={styles.miniDashedDash} />
-                  <Text style={[styles.miniRefLabel, isDarkMode && { color: colors.textSecondary }]}>74 bpm</Text>
+                  <LocalizedText style={[styles.miniRefLabel, isDarkMode && { color: colors.textSecondary }]}>74 bpm</LocalizedText>
                 </View>
 
                 <View style={styles.miniBarsRow}>
@@ -1004,7 +993,7 @@ export default function HomeScreen({ navigation }: any) {
                     const isHigh = col.val >= 80;
                     return (
                       <View key={col.time} style={styles.miniBarCol}>
-                        <Text style={[styles.miniBarValText, isDarkMode && { color: colors.textSecondary }]}>{col.val}</Text>
+                        <LocalizedText style={[styles.miniBarValText, isDarkMode && { color: colors.textSecondary }]}>{col.val}</LocalizedText>
                         <View style={[styles.miniBarTrack, isDarkMode && { backgroundColor: colors.surfaceSubtle }]}>
                           <View
                             style={[
@@ -1016,7 +1005,7 @@ export default function HomeScreen({ navigation }: any) {
                             ]}
                           />
                         </View>
-                        <Text style={[styles.miniBarTimeText, isDarkMode && { color: colors.textSecondary }]}>{col.time}</Text>
+                        <LocalizedText style={[styles.miniBarTimeText, isDarkMode && { color: colors.textSecondary }]}>{col.time}</LocalizedText>
                       </View>
                     );
                   })}
@@ -1025,7 +1014,7 @@ export default function HomeScreen({ navigation }: any) {
 
               <View style={[styles.miniCardFooter, isDarkMode && { borderTopColor: colors.border }]}>
                 <View style={styles.miniStatusDotGreen} />
-                <Text style={[styles.miniStatusNote, isDarkMode && { color: colors.textSecondary }]}>Chuẩn 60-100 bpm</Text>
+                <LocalizedText style={[styles.miniStatusNote, isDarkMode && { color: colors.textSecondary }]}>Chuẩn 60-100 bpm</LocalizedText>
               </View>
             </TouchableOpacity>
 
@@ -1036,7 +1025,7 @@ export default function HomeScreen({ navigation }: any) {
               onPress={() => navigation.navigate('HealthDetail', { metric: 'activity' })}
             >
               <View style={styles.miniCardTop}>
-                <Text style={[styles.miniCardTitle, isDarkMode && { color: colors.textPrimary }]}>Vận động & Sinh hoạt</Text>
+                <LocalizedText style={[styles.miniCardTitle, isDarkMode && { color: colors.textPrimary }]}>Vận động & Sinh hoạt</LocalizedText>
                 <Ionicons name="body" size={15} color="#0284C7" />
               </View>
 
@@ -1051,22 +1040,22 @@ export default function HomeScreen({ navigation }: any) {
               <View style={styles.stackedLegendGrid}>
                 <View style={styles.legendItem}>
                   <View style={[styles.legendDot, { backgroundColor: '#10B981' }]} />
-                  <Text style={[styles.legendText, isDarkMode && { color: colors.textSecondary }]}>Đi lại 25%</Text>
+                  <LocalizedText style={[styles.legendText, isDarkMode && { color: colors.textSecondary }]}>Đi lại 25%</LocalizedText>
                 </View>
                 <View style={styles.legendItem}>
                   <View style={[styles.legendDot, { backgroundColor: '#0284C7' }]} />
-                  <Text style={[styles.legendText, isDarkMode && { color: colors.textSecondary }]}>Ngồi 45%</Text>
+                  <LocalizedText style={[styles.legendText, isDarkMode && { color: colors.textSecondary }]}>Ngồi 45%</LocalizedText>
                 </View>
                 <View style={styles.legendItem}>
                   <View style={[styles.legendDot, { backgroundColor: '#8B5CF6' }]} />
-                  <Text style={[styles.legendText, isDarkMode && { color: colors.textSecondary }]}>Nghỉ 30%</Text>
+                  <LocalizedText style={[styles.legendText, isDarkMode && { color: colors.textSecondary }]}>Nghỉ 30%</LocalizedText>
                 </View>
               </View>
 
               <View style={[styles.activitySummaryCard, isDarkMode && { backgroundColor: colors.surfaceSubtle }]}>
-                <Text style={[styles.activitySummaryText, isDarkMode && { color: colors.textSecondary }]}>
-                  Vận động: <Text style={styles.boldGreen}>2.5h</Text> | Nghỉ: <Text style={styles.boldBlue}>6h</Text>
-                </Text>
+                <LocalizedText style={[styles.activitySummaryText, isDarkMode && { color: colors.textSecondary }]}>
+                  Vận động: <LocalizedText style={styles.boldGreen}>2.5h</LocalizedText> | Nghỉ: <LocalizedText style={styles.boldBlue}>6h</LocalizedText>
+                </LocalizedText>
               </View>
             </TouchableOpacity>
           </View>
@@ -1082,11 +1071,11 @@ export default function HomeScreen({ navigation }: any) {
                 <View style={styles.spo2IconCircle}>
                   <Ionicons name="water" size={16} color="#0284C7" />
                 </View>
-                <Text style={[styles.spo2CardTitle, isDarkMode && { color: colors.textPrimary }]}>Chỉ số Oxy máu SpO₂</Text>
+                <LocalizedText style={[styles.spo2CardTitle, isDarkMode && { color: colors.textPrimary }]}>Chỉ số Oxy máu SpO₂</LocalizedText>
               </View>
               <View style={styles.spo2BadgeGreen}>
                 <Ionicons name="checkmark-circle" size={13} color="#15803D" />
-                <Text style={styles.spo2BadgeGreenText}>98% - Rất tốt</Text>
+                <LocalizedText style={styles.spo2BadgeGreenText}>98% - Rất tốt</LocalizedText>
               </View>
             </View>
 
@@ -1106,19 +1095,19 @@ export default function HomeScreen({ navigation }: any) {
 
               {/* Các mốc số trên thước đo */}
               <View style={styles.rulerTicksRow}>
-                <Text style={[styles.rulerTickText, isDarkMode && { color: colors.textSecondary }]}>90%</Text>
-                <Text style={[styles.rulerTickText, isDarkMode && { color: colors.textSecondary }]}>92%</Text>
-                <Text style={[styles.rulerTickText, { fontWeight: '700', color: Colors.primary }]}>95% (Chuẩn)</Text>
-                <Text style={[styles.rulerTickText, { fontWeight: '800', color: '#15803D' }]}>98%</Text>
-                <Text style={[styles.rulerTickText, isDarkMode && { color: colors.textSecondary }]}>100%</Text>
+                <LocalizedText style={[styles.rulerTickText, isDarkMode && { color: colors.textSecondary }]}>90%</LocalizedText>
+                <LocalizedText style={[styles.rulerTickText, isDarkMode && { color: colors.textSecondary }]}>92%</LocalizedText>
+                <LocalizedText style={[styles.rulerTickText, { fontWeight: '700', color: Colors.primary }]}>95% (Chuẩn)</LocalizedText>
+                <LocalizedText style={[styles.rulerTickText, { fontWeight: '800', color: '#15803D' }]}>98%</LocalizedText>
+                <LocalizedText style={[styles.rulerTickText, isDarkMode && { color: colors.textSecondary }]}>100%</LocalizedText>
               </View>
             </View>
 
             <View style={styles.spo2FooterRow}>
               <Ionicons name="shield-checkmark-outline" size={14} color="#15803D" />
-              <Text style={[styles.spo2FooterNote, isDarkMode && { color: colors.textSecondary }]}>
+              <LocalizedText style={[styles.spo2FooterNote, isDarkMode && { color: colors.textSecondary }]}>
                 Ngưỡng an toàn ≥ 95% • Nồng độ oxy bão hoà duy trì tối ưu
-              </Text>
+              </LocalizedText>
             </View>
           </TouchableOpacity>
         </View>
@@ -1145,10 +1134,10 @@ export default function HomeScreen({ navigation }: any) {
             {/* Header */}
             <View style={styles.sheetHeader}>
               <View style={{ flex: 1 }}>
-                <Text style={[styles.sheetTitle, { color: colors.textPrimary }]}>Tạm dừng chuông báo động</Text>
-                <Text style={[styles.sheetSubtitle, { color: colors.textSecondary }]}>
+                <LocalizedText style={[styles.sheetTitle, { color: colors.textPrimary }]}>Tạm dừng chuông báo động</LocalizedText>
+                <LocalizedText style={[styles.sheetSubtitle, { color: colors.textSecondary }]}>
                   Tạm tắt âm thanh còi hú mà vẫn duy trì giám sát AI & ghi hình 24/7
-                </Text>
+                </LocalizedText>
               </View>
               <TouchableOpacity
                 style={[styles.sheetCloseBtn, { backgroundColor: isDarkMode ? colors.surfaceSubtle : '#F1F5F9' }]}
@@ -1171,22 +1160,22 @@ export default function HomeScreen({ navigation }: any) {
               >
                 <Ionicons name="time" size={20} color="#D97706" />
                 <View style={{ flex: 1, marginLeft: 10 }}>
-                  <Text style={[styles.activeSnoozeBannerTitle, { color: isDarkMode ? '#FBBF24' : '#B45309' }]}>
+                  <LocalizedText style={[styles.activeSnoozeBannerTitle, { color: isDarkMode ? '#FBBF24' : '#B45309' }]}>
                     Chuông báo động đang tạm tắt
-                  </Text>
-                  <Text style={[styles.activeSnoozeBannerSub, { color: isDarkMode ? '#FDE68A' : '#92400E' }]}>
+                  </LocalizedText>
+                  <LocalizedText style={[styles.activeSnoozeBannerSub, { color: isDarkMode ? '#FDE68A' : '#92400E' }]}>
                     {alarmSnooze.until
                       ? `Thời gian còn lại: ${remainingMinutes} phút`
                       : 'Chế độ: Đến khi bật lại'} • {alarmSnooze.mode === 'VIBRATE' ? 'Chỉ rung' : 'Tắt hoàn toàn âm thanh'}
-                  </Text>
+                  </LocalizedText>
                 </View>
               </View>
             )}
 
             {/* 1. Tùy chọn thời gian */}
-            <Text style={[styles.sheetSectionTitle, { color: colors.textPrimary }]}>
+            <LocalizedText style={[styles.sheetSectionTitle, { color: colors.textPrimary }]}>
               1. Tùy chọn thời gian tạm tắt:
-            </Text>
+            </LocalizedText>
             <View style={styles.durationOptionsGrid}>
               {[
                 { label: 'Tắt 15 phút', value: 15 },
@@ -1215,7 +1204,7 @@ export default function HomeScreen({ navigation }: any) {
                       size={18}
                       color={isSelected ? '#0284C7' : colors.textMuted}
                     />
-                    <Text
+                    <LocalizedText
                       style={[
                         styles.durationOptionText,
                         {
@@ -1225,16 +1214,16 @@ export default function HomeScreen({ navigation }: any) {
                       ]}
                     >
                       {item.label}
-                    </Text>
+                    </LocalizedText>
                   </TouchableOpacity>
                 );
               })}
             </View>
 
             {/* 2. Tùy chọn kiểu báo */}
-            <Text style={[styles.sheetSectionTitle, { color: colors.textPrimary }]}>
+            <LocalizedText style={[styles.sheetSectionTitle, { color: colors.textPrimary }]}>
               2. Tùy chọn kiểu báo khi có sự cố:
-            </Text>
+            </LocalizedText>
             <View style={styles.modeOptionList}>
               {[
                 {
@@ -1283,7 +1272,7 @@ export default function HomeScreen({ navigation }: any) {
                       />
                     </View>
                     <View style={{ flex: 1, marginLeft: 12 }}>
-                      <Text
+                      <LocalizedText
                         style={[
                           styles.modeOptionCardTitle,
                           {
@@ -1295,10 +1284,10 @@ export default function HomeScreen({ navigation }: any) {
                         ]}
                       >
                         {item.title}
-                      </Text>
-                      <Text style={[styles.modeOptionCardDesc, { color: colors.textSecondary }]}>
+                      </LocalizedText>
+                      <LocalizedText style={[styles.modeOptionCardDesc, { color: colors.textSecondary }]}>
                         {item.desc}
-                      </Text>
+                      </LocalizedText>
                     </View>
                     <Ionicons
                       name={isSelected ? 'checkmark-circle' : 'ellipse-outline'}
@@ -1321,12 +1310,12 @@ export default function HomeScreen({ navigation }: any) {
               ]}
             >
               <View style={{ flex: 1, marginRight: 12 }}>
-                <Text style={[styles.syncTitle, { color: colors.textPrimary }]}>
+                <LocalizedText style={[styles.syncTitle, { color: colors.textPrimary }]}>
                   Đồng bộ tất cả tài khoản
-                </Text>
-                <Text style={[styles.syncSubtitle, { color: colors.textSecondary }]}>
+                </LocalizedText>
+                <LocalizedText style={[styles.syncSubtitle, { color: colors.textSecondary }]}>
                   Áp dụng cho tất cả tài khoản người nhà đang theo dõi
-                </Text>
+                </LocalizedText>
               </View>
               <Switch
                 value={syncAllFamily}
@@ -1345,7 +1334,7 @@ export default function HomeScreen({ navigation }: any) {
                   activeOpacity={0.8}
                 >
                   <Ionicons name="notifications" size={18} color="#EF4444" />
-                  <Text style={styles.cancelSnoozeBtnText}>Bật lại chuông</Text>
+                  <LocalizedText style={styles.cancelSnoozeBtnText}>Bật lại chuông</LocalizedText>
                 </TouchableOpacity>
               )}
 
@@ -1355,9 +1344,9 @@ export default function HomeScreen({ navigation }: any) {
                 activeOpacity={0.8}
               >
                 <Ionicons name="checkmark-sharp" size={20} color="#FFF" />
-                <Text style={styles.confirmSnoozeBtnText}>
+                <LocalizedText style={styles.confirmSnoozeBtnText}>
                   {isSnoozeActive ? 'Cập nhật tạm dừng' : 'Xác nhận tạm dừng'}
-                </Text>
+                </LocalizedText>
               </TouchableOpacity>
             </View>
           </View>

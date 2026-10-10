@@ -3,23 +3,7 @@
 
 import React from 'react';
 import * as Location from 'expo-location';
-import {
-  View,
-  Text,
-  StyleSheet,
-  TouchableOpacity,
-  ScrollView,
-  Alert,
-  Platform,
-  Modal,
-  Pressable,
-  Switch,
-  TextInput,
-  Image,
-  Vibration,
-  PanResponder,
-  Linking,
-} from 'react-native';
+import { ActivityIndicator, View, StyleSheet, TouchableOpacity, ScrollView, Platform, Modal, Pressable, Switch, Image, Vibration, PanResponder, Linking } from 'react-native';
 import * as ImagePicker from 'expo-image-picker';
 import { WebView } from 'react-native-webview';
 import { SafeAreaView } from 'react-native-safe-area-context';
@@ -27,12 +11,15 @@ import { Ionicons } from '@expo/vector-icons';
 import { Colors, Shadows } from '../../../theme/colors';
 import { useAuthStore, useVitalStore } from '../../../store/useVitalStore';
 import { useTheme } from '../../../store/useThemeStore';
-import api from '../../../services/api';
+import api, { authApi } from '../../../services/api';
+import i18n from '../../../i18n/config';
+import { LocalizedAlert, LocalizedText, LocalizedTextInput } from '../../../i18n/LocalizedComponents';
+
 
 export default function ProfileScreen({ navigation }: any) {
   const { userId, userName, userPhone, logout, updateUserName, toggleViewRole } = useAuthStore();
   const { house } = useVitalStore();
-  const { isDarkMode, colors, setDarkMode } = useTheme();
+  const { isDarkMode, colors, setDarkMode, setFontScale } = useTheme();
   const [profileName, setProfileName] = React.useState(userName || 'Nguyễn Hữu Nghĩa');
   const [profilePhone, setProfilePhone] = React.useState(userPhone || '0905 123 456');
   const [showMoreGrid, setShowMoreGrid] = React.useState(false);
@@ -66,10 +53,110 @@ export default function ProfileScreen({ navigation }: any) {
     setAppearanceMode(isDarkMode ? 'dark' : 'light');
   }, [isDarkMode]);
 
+  const getScaledFontSize = React.useCallback((baseSize: number) => {
+    if (fontSizeMode === 'system') {
+      return baseSize;
+    }
+    return baseSize * (1 + customFontScale * 0.14);
+  }, [customFontScale, fontSizeMode]);
+
+  const hydrateLocationFromUser = React.useCallback((data: any) => {
+    if (typeof data?.location_latitude === 'number' && typeof data?.location_longitude === 'number') {
+      setLocationCoords({
+        latitude: data.location_latitude,
+        longitude: data.location_longitude,
+      });
+    }
+
+    if (typeof data?.location_address === 'string' && data.location_address.trim()) {
+      setLocationAddress(data.location_address);
+    }
+  }, []);
+
+  React.useEffect(() => {
+    let isActive = true;
+    api.get('/users/me')
+      .then(({ data }) => {
+        if (isActive && (data.preferred_language === 'vi' || data.preferred_language === 'en')) {
+          setLanguageMode(data.preferred_language);
+          void i18n.changeLanguage(data.preferred_language);
+        }
+
+        if (isActive && typeof data.vibration_enabled === 'boolean') {
+          setVibrationEnabled(data.vibration_enabled);
+        }
+
+        if (isActive && typeof data.location_enabled === 'boolean') {
+          if (!data.location_enabled) {
+            setLocationAddress('');
+            setLocationCoords(null);
+          }
+        }
+
+        if (isActive) {
+          hydrateLocationFromUser(data);
+        }
+
+        if (isActive && data.font_size_mode) {
+          const nextMode = data.font_size_mode === 'custom' ? 'custom' : 'system';
+          setFontSizeMode(nextMode);
+          const normalizedScale = typeof data.custom_font_scale === 'number' ? Math.min(Math.max(data.custom_font_scale, 0), 4) : 2;
+          setCustomFontScale(normalizedScale);
+          setFontScale(nextMode === 'system' ? 1 : 1 + normalizedScale * 0.12);
+        }
+
+        if (isActive && typeof data.custom_font_scale === 'number' && !data.font_size_mode) {
+          const normalizedScale = Math.min(Math.max(data.custom_font_scale, 0), 4);
+          setCustomFontScale(normalizedScale);
+          setFontScale(1 + normalizedScale * 0.12);
+        }
+      })
+      .catch(() => {});
+
+    return () => {
+      isActive = false;
+    };
+  }, [hydrateLocationFromUser]);
+
+  const saveLanguagePreference = async (nextLanguage: 'vi' | 'en') => {
+    const previousLanguage = languageMode;
+    setLanguageMode(nextLanguage);
+    void i18n.changeLanguage(nextLanguage);
+    try {
+      await api.patch('/users/me', { preferred_language: nextLanguage });
+      setLanguageVisible(false);
+    } catch {
+      setLanguageMode(previousLanguage);
+      void i18n.changeLanguage(previousLanguage);
+      LocalizedAlert.alert(
+        'Không thể lưu ngôn ngữ',
+        'Vui lòng kiểm tra kết nối rồi thử lại.',
+      );
+    }
+  };
+
+  const saveFontPreference = React.useCallback(async (nextMode: 'system' | 'custom', nextScale: number) => {
+    const fontScaleValue = nextMode === 'system' ? 1 : 1 + nextScale * 0.12;
+    setFontScale(fontScaleValue);
+
+    try {
+      await api.patch('/users/me', {
+        font_size_mode: nextMode,
+        custom_font_scale: nextScale,
+      });
+    } catch {
+      LocalizedAlert.alert(
+        'Không thể lưu cài đặt chữ',
+        'Vui lòng kiểm tra kết nối mạng và thử lại.',
+      );
+    }
+  }, []);
+
   const [highContrastEnabled, setHighContrastEnabled] = React.useState(false);
   const [sliderWidth, setSliderWidth] = React.useState(0);
   const sliderTrackPosition = React.useRef(0);
   const [isChangePasswordVisible, setChangePasswordVisible] = React.useState(false);
+  const [isPasswordSaving, setPasswordSaving] = React.useState(false);
   const [isLogoutConfirmVisible, setLogoutConfirmVisible] = React.useState(false);
   const [currentPassword, setCurrentPassword] = React.useState('');
   const [newPassword, setNewPassword] = React.useState('');
@@ -105,8 +192,18 @@ export default function ProfileScreen({ navigation }: any) {
   };
 
 
-  const handleVibrationToggle = (value: boolean) => {
+  const handleVibrationToggle = async (value: boolean) => {
     setVibrationEnabled(value);
+
+    try {
+      await api.patch('/users/me', { vibration_enabled: value });
+    } catch {
+      setVibrationEnabled(!value);
+      LocalizedAlert.alert(
+        'Không thể lưu cài đặt rung',
+        'Vui lòng kiểm tra kết nối mạng và thử lại.',
+      );
+    }
 
     if (value) {
       Vibration.vibrate(80);
@@ -124,7 +221,7 @@ export default function ProfileScreen({ navigation }: any) {
     try {
       await Linking.openURL('tel:115');
     } catch {
-      Alert.alert('Không thể gọi', 'Thiết bị không hỗ trợ thực hiện cuộc gọi trực tiếp.');
+      LocalizedAlert.alert('Không thể gọi', 'Thiết bị không hỗ trợ thực hiện cuộc gọi trực tiếp.');
     }
   };
 
@@ -134,7 +231,8 @@ export default function ProfileScreen({ navigation }: any) {
     const rawRatio = Math.min(Math.max(positionX / sliderWidth, 0), 1);
     const nextScale = Math.round(rawRatio * 4);
     setCustomFontScale(nextScale);
-  }, [sliderWidth]);
+    void saveFontPreference('custom', nextScale);
+  }, [sliderWidth, saveFontPreference]);
 
   const fontSliderResponder = React.useMemo(
     () =>
@@ -220,7 +318,7 @@ export default function ProfileScreen({ navigation }: any) {
 
     const trimmed = draftValue.trim();
     if (!trimmed) {
-      Alert.alert('Lỗi', 'Tên không được để trống.');
+      LocalizedAlert.alert('Lỗi', 'Tên không được để trống.');
       return;
     }
 
@@ -229,25 +327,41 @@ export default function ProfileScreen({ navigation }: any) {
     closeFieldEditor();
   };
 
-  const handleChangePassword = () => {
+  const handleChangePassword = async () => {
+    if (isPasswordSaving) return;
     if (!currentPassword || !newPassword || !confirmPassword) {
-      Alert.alert('Lỗi', 'Vui lòng nhập đầy đủ thông tin mật khẩu.');
+      LocalizedAlert.alert('Lỗi', 'Vui lòng nhập đầy đủ thông tin mật khẩu.');
       return;
     }
-    if (newPassword.length < 6) {
-      Alert.alert('Mật khẩu chưa hợp lệ', 'Mật khẩu mới phải có ít nhất 6 ký tự.');
+    if (newPassword.length < 8 || newPassword.length > 128) {
+      LocalizedAlert.alert('Mật khẩu chưa hợp lệ', 'Mật khẩu mới cần có từ 8 đến 128 ký tự.');
       return;
     }
     if (newPassword !== confirmPassword) {
-      Alert.alert('Mật khẩu không khớp', 'Vui lòng kiểm tra lại mật khẩu mới.');
+      LocalizedAlert.alert('Mật khẩu không khớp', 'Vui lòng kiểm tra lại mật khẩu mới.');
       return;
     }
 
-    Alert.alert('Thành công', 'Đổi mật khẩu thành công!');
-    setCurrentPassword('');
-    setNewPassword('');
-    setConfirmPassword('');
-    closeChangePassword();
+    setPasswordSaving(true);
+    try {
+      await authApi.changePassword({
+        current_password: currentPassword,
+        new_password: newPassword,
+      });
+      LocalizedAlert.alert('Đổi mật khẩu thành công', 'Mật khẩu mới đã được lưu vào tài khoản.');
+      setCurrentPassword('');
+      setNewPassword('');
+      setConfirmPassword('');
+      closeChangePassword();
+    } catch (error: any) {
+      const detail = error?.response?.data?.detail;
+      LocalizedAlert.alert(
+        'Không thể đổi mật khẩu',
+        typeof detail === 'string' ? detail : 'Vui lòng kiểm tra kết nối và thử lại.',
+      );
+    } finally {
+      setPasswordSaving(false);
+    }
   };
 
   const handleAvatarPress = async () => {
@@ -259,7 +373,7 @@ export default function ProfileScreen({ navigation }: any) {
 
     const permission = await ImagePicker.requestCameraPermissionsAsync();
     if (!permission.granted) {
-      Alert.alert('Quyền bị từ chối', 'Bạn cần cho phép truy cập máy ảnh để chụp ảnh.');
+      LocalizedAlert.alert('Quyền bị từ chối', 'Bạn cần cho phép truy cập máy ảnh để chụp ảnh.');
       return;
     }
 
@@ -278,7 +392,7 @@ export default function ProfileScreen({ navigation }: any) {
 
     const permission = await ImagePicker.requestMediaLibraryPermissionsAsync();
     if (!permission.granted) {
-      Alert.alert('Quyền bị từ chối', 'Bạn cần cho phép truy cập thư viện ảnh để chọn ảnh.');
+      LocalizedAlert.alert('Quyền bị từ chối', 'Bạn cần cho phép truy cập thư viện ảnh để chọn ảnh.');
       return;
     }
 
@@ -298,7 +412,7 @@ export default function ProfileScreen({ navigation }: any) {
     const permission = await Location.requestForegroundPermissionsAsync();
     if (!permission.granted) {
       setLocationLoading(false);
-      Alert.alert('Quyền bị từ chối', 'Bạn cần cho phép truy cập vị trí để sử dụng định vị địa lý.');
+      LocalizedAlert.alert('Quyền bị từ chối', 'Bạn cần cho phép truy cập vị trí để sử dụng định vị địa lý.');
       return;
     }
 
@@ -319,11 +433,17 @@ export default function ProfileScreen({ navigation }: any) {
         place?.country,
       ].filter(Boolean).join(', ');
 
-      setLocationAddress(
-        address || `Vĩ độ: ${latitude.toFixed(6)}, Kinh độ: ${longitude.toFixed(6)}`
-      );
+      const finalAddress = address || `Vĩ độ: ${latitude.toFixed(6)}, Kinh độ: ${longitude.toFixed(6)}`;
+      setLocationAddress(finalAddress);
+
+      await api.patch('/users/me', {
+        location_enabled: true,
+        location_latitude: latitude,
+        location_longitude: longitude,
+        location_address: finalAddress,
+      });
     } catch {
-      Alert.alert('Không lấy được vị trí', 'Vui lòng bật GPS và thử lại.');
+      LocalizedAlert.alert('Không lấy được vị trí', 'Vui lòng bật GPS và thử lại.');
     } finally {
       setLocationLoading(false);
     }
@@ -335,8 +455,26 @@ export default function ProfileScreen({ navigation }: any) {
     }
   }, [isLocationVisible, locationCoords]);
 
+  React.useEffect(() => {
+    if (!isLocationVisible) return;
+
+    const syncSavedLocation = async () => {
+      try {
+        const { data } = await api.get('/users/me');
+        hydrateLocationFromUser(data);
+      } catch {
+        // ignore and rely on live GPS fallback
+      }
+    };
+
+    void syncSavedLocation();
+  }, [isLocationVisible, hydrateLocationFromUser]);
+
   const locationMapHtml = locationCoords
     ? `<!doctype html><html><head><meta name="viewport" content="width=device-width, initial-scale=1.0"><style>html,body,#map{height:100%;margin:0}body{overflow:hidden}</style><link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" /></head><body><div id="map"></div><script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script><script>const point=[${locationCoords.latitude},${locationCoords.longitude}];const map=L.map('map',{zoomControl:false}).setView(point,16);L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png',{attribution:'© OpenStreetMap'}).addTo(map);L.marker(point).addTo(map).bindPopup('Vị trí hiện tại').openPopup();</script></body></html>`
+    : '';
+  const locationMapEmbedUrl = locationCoords
+    ? `https://maps.google.com/maps?q=${locationCoords.latitude},${locationCoords.longitude}&z=16&output=embed`
     : '';
 
   return (
@@ -356,24 +494,24 @@ export default function ProfileScreen({ navigation }: any) {
             <View style={styles.confirmModalIconCircle}>
               <Ionicons name="log-out-outline" size={32} color="#EF4444" />
             </View>
-            <Text style={[styles.confirmModalTitle, isDarkMode && { color: '#F8FAFC' }]}>Đăng xuất tài khoản</Text>
-            <Text style={[styles.confirmModalMessage, isDarkMode && { color: '#94A3B8' }]}>
+            <LocalizedText style={[styles.confirmModalTitle, isDarkMode && { color: '#F8FAFC' }]}>Đăng xuất tài khoản</LocalizedText>
+            <LocalizedText style={[styles.confirmModalMessage, isDarkMode && { color: '#94A3B8' }]}>
               Bạn có chắc chắn muốn đăng xuất khỏi hệ thống giám sát Smart Elderly Care?
-            </Text>
+            </LocalizedText>
             <View style={styles.confirmModalButtonRow}>
               <TouchableOpacity
                 style={[styles.confirmModalCancelBtn, isDarkMode && { backgroundColor: '#0F172A', borderColor: '#334155', borderWidth: 1 }]}
                 onPress={() => setLogoutConfirmVisible(false)}
                 activeOpacity={0.7}
               >
-                <Text style={[styles.confirmModalCancelText, isDarkMode && { color: '#94A3B8' }]}>Hủy</Text>
+                <LocalizedText style={[styles.confirmModalCancelText, isDarkMode && { color: '#94A3B8' }]}>Hủy</LocalizedText>
               </TouchableOpacity>
               <TouchableOpacity
                 style={styles.confirmModalLogoutBtn}
                 onPress={performLogout}
                 activeOpacity={0.8}
               >
-                <Text style={styles.confirmModalLogoutText}>Đăng xuất</Text>
+                <LocalizedText style={styles.confirmModalLogoutText}>Đăng xuất</LocalizedText>
               </TouchableOpacity>
             </View>
           </Pressable>
@@ -416,17 +554,17 @@ export default function ProfileScreen({ navigation }: any) {
                 )}
               </TouchableOpacity>
 
-              <Text style={[styles.profileNameText, isDarkMode && { color: '#F8FAFC' }]}>{profileName || 'ngolevinh233'}</Text>
+              <LocalizedText style={[styles.profileNameText, isDarkMode && { color: '#F8FAFC' }]}>{profileName || 'ngolevinh233'}</LocalizedText>
             </View>
 
             <View style={[styles.profileInfoListCard, isDarkMode && { backgroundColor: '#1E293B', borderColor: '#334155' }]}>
               <TouchableOpacity style={[styles.infoRow, isDarkMode && { borderBottomColor: '#334155' }]} activeOpacity={0.8} onPress={() => openFieldEditor('name')}>
                 <View style={styles.infoLeftWrap}>
                   <Ionicons name="person-outline" size={22} color={isDarkMode ? '#94A3B8' : '#1F2937'} />
-                  <Text style={[styles.infoLabel, isDarkMode && { color: '#F8FAFC' }]}>Tên</Text>
+                  <LocalizedText style={[styles.infoLabel, isDarkMode && { color: '#F8FAFC' }]}>Tên</LocalizedText>
                 </View>
                 <View style={styles.infoRightWrap}>
-                  <Text style={[styles.infoValue, isDarkMode && { color: '#94A3B8' }]}>{profileName || 'ngolevinh233'}</Text>
+                  <LocalizedText style={[styles.infoValue, isDarkMode && { color: '#94A3B8' }]}>{profileName || 'ngolevinh233'}</LocalizedText>
                   <Ionicons name="chevron-forward" size={18} color="#94A3B8" />
                 </View>
               </TouchableOpacity>
@@ -434,10 +572,10 @@ export default function ProfileScreen({ navigation }: any) {
               <TouchableOpacity style={[styles.infoRow, isDarkMode && { borderBottomColor: '#334155' }]} activeOpacity={0.8}>
                 <View style={styles.infoLeftWrap}>
                   <Ionicons name="call-outline" size={22} color={isDarkMode ? '#94A3B8' : '#1F2937'} />
-                  <Text style={[styles.infoLabel, isDarkMode && { color: '#F8FAFC' }]}>Số điện thoại</Text>
+                  <LocalizedText style={[styles.infoLabel, isDarkMode && { color: '#F8FAFC' }]}>Số điện thoại</LocalizedText>
                 </View>
                 <View style={styles.infoRightWrap}>
-                  <Text style={[styles.infoValue, isDarkMode && { color: '#94A3B8' }]}>{profilePhone}</Text>
+                  <LocalizedText style={[styles.infoValue, isDarkMode && { color: '#94A3B8' }]}>{profilePhone}</LocalizedText>
                   <Ionicons name="chevron-forward" size={18} color="#94A3B8" />
                 </View>
               </TouchableOpacity>
@@ -452,7 +590,7 @@ export default function ProfileScreen({ navigation }: any) {
               >
                 <View style={styles.infoLeftWrap}>
                   <Ionicons name="lock-closed-outline" size={22} color={isDarkMode ? '#94A3B8' : '#1F2937'} />
-                  <Text style={[styles.infoLabel, isDarkMode && { color: '#F8FAFC' }]}>Thay đổi mật mã</Text>
+                  <LocalizedText style={[styles.infoLabel, isDarkMode && { color: '#F8FAFC' }]}>Thay đổi mật mã</LocalizedText>
                 </View>
                 <Ionicons name="chevron-forward" size={18} color="#94A3B8" />
               </TouchableOpacity>
@@ -461,7 +599,7 @@ export default function ProfileScreen({ navigation }: any) {
             </View>
 
             <TouchableOpacity style={styles.logoutButton} activeOpacity={0.9} onPress={handleLogout}>
-              <Text style={styles.logoutButtonText}>Đăng xuất</Text>
+              <LocalizedText style={styles.logoutButtonText}>Đăng xuất</LocalizedText>
             </TouchableOpacity>
 
             <Modal
@@ -480,10 +618,10 @@ export default function ProfileScreen({ navigation }: any) {
                     >
                       <Ionicons name="chevron-back-outline" size={26} color={isDarkMode ? '#F8FAFC' : '#111827'} />
                     </TouchableOpacity>
-                    <Text style={[styles.editorTitle, isDarkMode && { color: '#F8FAFC' }]}>Chỉnh sửa tên</Text>
+                    <LocalizedText style={[styles.editorTitle, isDarkMode && { color: '#F8FAFC' }]}>Chỉnh sửa tên</LocalizedText>
                   </View>
 
-                  <TextInput
+                  <LocalizedTextInput
                     value={draftValue}
                     onChangeText={setDraftValue}
                     style={[styles.editorInput, isDarkMode && { backgroundColor: '#0F172A', borderColor: '#334155', color: '#F8FAFC' }]}
@@ -496,10 +634,10 @@ export default function ProfileScreen({ navigation }: any) {
 
                   <View style={styles.editorActions}>
                     <TouchableOpacity style={[styles.editorCancel, isDarkMode && { backgroundColor: '#0F172A', borderColor: '#334155', borderWidth: 1 }]} onPress={closeFieldEditor}>
-                      <Text style={[styles.editorCancelText, isDarkMode && { color: '#94A3B8' }]}>Hủy</Text>
+                      <LocalizedText style={[styles.editorCancelText, isDarkMode && { color: '#94A3B8' }]}>Hủy</LocalizedText>
                     </TouchableOpacity>
                     <TouchableOpacity style={styles.editorSave} onPress={saveEditedField}>
-                      <Text style={styles.editorSaveText}>Lưu</Text>
+                      <LocalizedText style={styles.editorSaveText}>Lưu</LocalizedText>
                     </TouchableOpacity>
                   </View>
                 </Pressable>
@@ -509,16 +647,16 @@ export default function ProfileScreen({ navigation }: any) {
             {isLogoutConfirmVisible && (
               <View style={styles.logoutInlineOverlay}>
                 <View style={[styles.logoutDialog, isDarkMode && { backgroundColor: '#1E293B', borderColor: '#334155', borderWidth: 1 }]}>
-                  <Text style={[styles.logoutTitle, isDarkMode && { color: '#F8FAFC' }]}>Đăng xuất</Text>
-                  <Text style={[styles.logoutMessage, isDarkMode && { color: '#94A3B8' }]}>
+                  <LocalizedText style={[styles.logoutTitle, isDarkMode && { color: '#F8FAFC' }]}>Đăng xuất</LocalizedText>
+                  <LocalizedText style={[styles.logoutMessage, isDarkMode && { color: '#94A3B8' }]}>
                     Bạn có chắc chắn muốn đăng xuất khỏi hệ thống giám sát?
-                  </Text>
+                  </LocalizedText>
                   <View style={styles.logoutActions}>
                     <TouchableOpacity
                       style={[styles.logoutCancelButton, isDarkMode && { backgroundColor: '#0F172A', borderColor: '#334155', borderWidth: 1 }]}
                       onPress={() => setLogoutConfirmVisible(false)}
                     >
-                      <Text style={[styles.logoutCancelText, isDarkMode && { color: '#94A3B8' }]}>Hủy</Text>
+                      <LocalizedText style={[styles.logoutCancelText, isDarkMode && { color: '#94A3B8' }]}>Hủy</LocalizedText>
                     </TouchableOpacity>
                     <TouchableOpacity
                       style={styles.logoutConfirmButton}
@@ -527,7 +665,7 @@ export default function ProfileScreen({ navigation }: any) {
                         void performLogout();
                       }}
                     >
-                      <Text style={styles.logoutConfirmText}>Đăng xuất</Text>
+                      <LocalizedText style={styles.logoutConfirmText}>Đăng xuất</LocalizedText>
                     </TouchableOpacity>
                   </View>
                 </View>
@@ -559,13 +697,13 @@ export default function ProfileScreen({ navigation }: any) {
               <Ionicons name="chevron-back-outline" size={28} color="#0F172A" />
             </TouchableOpacity>
             {securityDetail !== 'question' && (
-              <Text style={styles.securityDetailTitle}>
+              <LocalizedText style={styles.securityDetailTitle}>
                 {securityDetail === 'twoFactor'
                   ? 'Xác minh hai bước'
                   : securityDetail === 'devices'
                     ? 'Quản lý đầu cuối'
                     : 'Đăng nhập tài khoản'}
-              </Text>
+              </LocalizedText>
             )}
           </View>
 
@@ -573,7 +711,7 @@ export default function ProfileScreen({ navigation }: any) {
             {securityDetail === 'twoFactor' && (
               <View style={styles.securityDetailCard}>
                 <View style={styles.securityDetailRowHeader}>
-                  <Text style={styles.securityDetailCardTitle}>Xác minh hai bước</Text>
+                  <LocalizedText style={styles.securityDetailCardTitle}>Xác minh hai bước</LocalizedText>
                   <Switch
                     value={twoFactorEnabled}
                     onValueChange={setTwoFactorEnabled}
@@ -581,47 +719,47 @@ export default function ProfileScreen({ navigation }: any) {
                     thumbColor={twoFactorEnabled ? '#0284C7' : '#FFFFFF'}
                   />
                 </View>
-                <Text style={styles.securityDetailDescription}>
+                <LocalizedText style={styles.securityDetailDescription}>
                   Để giữ bảo mật tài khoản, bạn sẽ được yêu cầu xác minh qua tin nhắn SMS khi đăng nhập trên thiết bị mới.
-                </Text>
+                </LocalizedText>
                 <View style={styles.securityInfoBanner}>
                   <Ionicons name="information-circle-outline" size={21} color="#2563EB" />
-                  <Text style={styles.securityInfoText}>
+                  <LocalizedText style={styles.securityInfoText}>
                     {twoFactorEnabled ? 'Tính năng đang bật cho tài khoản của bạn.' : 'Bật tính năng để tăng bảo vệ tài khoản.'}
-                  </Text>
+                  </LocalizedText>
                 </View>
               </View>
             )}
 
             {securityDetail === 'devices' && (
               <View style={styles.securityDetailCard}>
-                <Text style={styles.securityDetailCardTitle}>Các thiết bị hiện tại: 1</Text>
+                <LocalizedText style={styles.securityDetailCardTitle}>Các thiết bị hiện tại: 1</LocalizedText>
                 <View style={styles.securityDeviceItem}>
                   <View style={styles.securityDeviceIcon}>
                     <Ionicons name="phone-portrait" size={22} color="#2563EB" />
                   </View>
                   <View style={styles.securityDeviceCopy}>
-                    <Text style={styles.securityDeviceName}>Thiết bị hiện tại</Text>
-                    <Text style={styles.securityDeviceMeta}>Android · Đang hoạt động</Text>
-                    <Text style={styles.securityDeviceMeta}>Đăng nhập lúc 20:41 hôm nay</Text>
+                    <LocalizedText style={styles.securityDeviceName}>Thiết bị hiện tại</LocalizedText>
+                    <LocalizedText style={styles.securityDeviceMeta}>Android · Đang hoạt động</LocalizedText>
+                    <LocalizedText style={styles.securityDeviceMeta}>Đăng nhập lúc 20:41 hôm nay</LocalizedText>
                   </View>
-                  <Text style={styles.securityCurrentLabel}>Hiện tại</Text>
+                  <LocalizedText style={styles.securityCurrentLabel}>Hiện tại</LocalizedText>
                 </View>
-                <Text style={styles.securityDetailDescription}>Thiết bị không hoạt động trong 3 tháng sẽ được đề xuất loại bỏ tự động.</Text>
+                <LocalizedText style={styles.securityDetailDescription}>Thiết bị không hoạt động trong 3 tháng sẽ được đề xuất loại bỏ tự động.</LocalizedText>
               </View>
             )}
 
             {securityDetail === 'logins' && (
               <View style={styles.securityDetailCard}>
-                <Text style={styles.securityDetailCardTitle}>Lịch sử đăng nhập</Text>
+                <LocalizedText style={styles.securityDetailCardTitle}>Lịch sử đăng nhập</LocalizedText>
                 {['Hôm nay · 20:41', '09-14 · 21:20', '09-14 · 21:08', '09-12 · 00:07'].map((loginItem) => (
                   <View key={loginItem} style={styles.securityLoginItem}>
                     <View style={styles.securityTimelineDot} />
                     <View style={styles.securityDeviceCopy}>
-                      <Text style={styles.securityLoginName}>Đăng nhập tài khoản</Text>
-                      <Text style={styles.securityDeviceMeta}>SM-A127F · Thiết bị hiện tại</Text>
+                      <LocalizedText style={styles.securityLoginName}>Đăng nhập tài khoản</LocalizedText>
+                      <LocalizedText style={styles.securityDeviceMeta}>SM-A127F · Thiết bị hiện tại</LocalizedText>
                     </View>
-                    <Text style={styles.securityLoginTime}>{loginItem}</Text>
+                    <LocalizedText style={styles.securityLoginTime}>{loginItem}</LocalizedText>
                   </View>
                 ))}
               </View>
@@ -629,8 +767,8 @@ export default function ProfileScreen({ navigation }: any) {
 
             {securityDetail === 'question' && (
               <View style={styles.securityQuestionDetail}>
-                <Text style={styles.securityQuestionDetailTitle}>{selectedSecurityQuestion}</Text>
-                <Text style={styles.securityQuestionDetailDescription}>
+                <LocalizedText style={styles.securityQuestionDetailTitle}>{selectedSecurityQuestion}</LocalizedText>
+                <LocalizedText style={styles.securityQuestionDetailDescription}>
                   {selectedSecurityQuestion === 'Mật khẩu mã hóa thiết bị là gì?'
                     ? 'Mật khẩu mã hóa thiết bị là một mật khẩu đối xứng được sử dụng để mã hóa luồng video và hình ảnh của thiết bị, với giá trị mặc định giống với mã xác minh thiết bị. Đề nghị thay đổi mật khẩu mặc định thành một mật khẩu an toàn sau khi liên kết thiết bị lần đầu tiên. Mật khẩu mã hóa thiết bị là chìa khóa cho cơ chế "Bảo mật Hợp tác" được cung cấp bởi EZVIZ. EZVIZ không ghi lại hoặc lưu trữ mật khẩu mã hóa thiết bị. Những mật khẩu này chỉ được lưu trữ trên các thiết bị tương ứng và điện thoại di động của người dùng. Việc thiết lập, cập nhật, sử dụng và hủy bỏ mật khẩu mã hóa đều được quản lý bởi người dùng. EZVIZ kỹ thuật không có khả năng lấy lại, đặt lại hoặc khôi phục mật khẩu mã hóa thiết bị.'
                     : selectedSecurityQuestion === 'Có ràng buộc một thiết bị an toàn không?'
@@ -638,7 +776,7 @@ export default function ProfileScreen({ navigation }: any) {
                       : selectedSecurityQuestion === 'Việc sử dụng mã xác minh qua tin nhắn SMS'
                         ? 'Mã xác minh SMS là một lớp bảo mật bổ sung được cung cấp bởi EZVIZ vượt ra ngoài cơ sở tên người dùng-mật khẩu. Khi người dùng thực hiện các hoạt động nhạy cảm (như đăng nhập vào một khách hàng mới, tắt mã hóa thiết bị hoặc lấy mật khẩu tạm thời cho khóa, v.v.), EZVIZ yêu cầu sử dụng mã xác minh SMS cho xác thực cấp độ hai để tăng cường bảo mật và giảm thiểu rủi ro mất mát hoặc đánh cắp tài khoản người dùng. Do đó, rất quan trọng đối với người dùng để đảm bảo tính bảo mật của mã xác minh SMS và không tiết lộ cho người khác.'
                       : 'Hệ thống sử dụng các lớp bảo vệ tài khoản, xác minh thiết bị và mã xác thực để hạn chế truy cập trái phép. Bạn nên bật xác minh hai bước và thường xuyên kiểm tra lịch sử đăng nhập.'}
-                </Text>
+                </LocalizedText>
               </View>
             )}
           </ScrollView>
@@ -654,17 +792,17 @@ export default function ProfileScreen({ navigation }: any) {
         <Pressable style={styles.customerSupportOverlay} onPress={() => setCustomerSupportVisible(false)}>
           <Pressable style={[styles.customerSupportDialog, isDarkMode && { backgroundColor: '#1E293B', borderColor: '#334155', borderWidth: 1 }]} onPress={() => {}}>
             <Ionicons name="call" size={28} color="#DC2626" />
-            <Text style={[styles.customerSupportTitle, isDarkMode && { color: '#F8FAFC' }]}>Hỗ trợ khẩn cấp</Text>
-            <Text style={[styles.customerSupportMessage, isDarkMode && { color: '#94A3B8' }]}>
+            <LocalizedText style={[styles.customerSupportTitle, isDarkMode && { color: '#F8FAFC' }]}>Hỗ trợ khẩn cấp</LocalizedText>
+            <LocalizedText style={[styles.customerSupportMessage, isDarkMode && { color: '#94A3B8' }]}>
               Bạn muốn gọi tổng đài cấp cứu 115 ngay bây giờ?
-            </Text>
+            </LocalizedText>
             <View style={styles.customerSupportActions}>
               <TouchableOpacity
                 style={[styles.customerSupportCancelButton, isDarkMode && { backgroundColor: '#0F172A', borderColor: '#334155', borderWidth: 1 }]}
                 onPress={() => setCustomerSupportVisible(false)}
                 activeOpacity={0.8}
               >
-                <Text style={[styles.customerSupportCancelText, isDarkMode && { color: '#94A3B8' }]}>Hủy</Text>
+                <LocalizedText style={[styles.customerSupportCancelText, isDarkMode && { color: '#94A3B8' }]}>Hủy</LocalizedText>
               </TouchableOpacity>
               <TouchableOpacity
                 style={styles.customerSupportCallButton}
@@ -675,7 +813,7 @@ export default function ProfileScreen({ navigation }: any) {
                 activeOpacity={0.8}
               >
                 <Ionicons name="call" size={17} color="#FFFFFF" />
-                <Text style={styles.customerSupportCallText}>Gọi 115</Text>
+                <LocalizedText style={styles.customerSupportCallText}>Gọi 115</LocalizedText>
               </TouchableOpacity>
             </View>
           </Pressable>
@@ -700,17 +838,17 @@ export default function ProfileScreen({ navigation }: any) {
               <View style={styles.securityHeroShield}>
                 <Ionicons name="shield-checkmark" size={108} color="rgba(255,255,255,0.88)" />
               </View>
-              <Text style={[styles.securityHeroStatus, isDarkMode && { color: '#F8FAFC' }]}>Tốt</Text>
-              <Text style={[styles.securityHeroDescription, isDarkMode && { color: '#E2E8F0' }]}>Có thể cải thiện 2 mục</Text>
+              <LocalizedText style={[styles.securityHeroStatus, isDarkMode && { color: '#F8FAFC' }]}>Tốt</LocalizedText>
+              <LocalizedText style={[styles.securityHeroDescription, isDarkMode && { color: '#E2E8F0' }]}>Có thể cải thiện 2 mục</LocalizedText>
               <TouchableOpacity style={styles.securityImproveButton} activeOpacity={0.8}>
-                <Text style={[styles.securityImproveText, isDarkMode && { color: '#F8FAFC' }]}>Cải thiện ngay bây giờ</Text>
+                <LocalizedText style={[styles.securityImproveText, isDarkMode && { color: '#F8FAFC' }]}>Cải thiện ngay bây giờ</LocalizedText>
                 <Ionicons name="chevron-forward" size={23} color={isDarkMode ? '#F8FAFC' : '#0F172A'} />
               </TouchableOpacity>
             </View>
 
             <View style={[styles.securitySectionCard, isDarkMode && { backgroundColor: '#1E293B', borderColor: '#334155', borderWidth: 1 }]}>
               <View style={styles.securitySectionHeader}>
-                <Text style={[styles.securitySectionTitle, isDarkMode && { color: '#F8FAFC' }]}>Bảo mật tài khoản</Text>
+                <LocalizedText style={[styles.securitySectionTitle, isDarkMode && { color: '#F8FAFC' }]}>Bảo mật tài khoản</LocalizedText>
                 <Ionicons name="ellipsis-vertical" size={22} color={isDarkMode ? '#F8FAFC' : '#0F172A'} />
               </View>
               <View style={styles.securityTileGrid}>
@@ -723,7 +861,7 @@ export default function ProfileScreen({ navigation }: any) {
                 }}
                 activeOpacity={0.8}
               >
-                <Text style={[styles.securityTileTitle, isDarkMode && { color: '#F8FAFC' }]}>Đổi mật khẩu</Text>
+                <LocalizedText style={[styles.securityTileTitle, isDarkMode && { color: '#F8FAFC' }]}>Đổi mật khẩu</LocalizedText>
                 <Ionicons name="lock-closed" size={34} color="#38BDF8" style={styles.securityTileIcon} />
               </TouchableOpacity>
               <TouchableOpacity
@@ -731,7 +869,7 @@ export default function ProfileScreen({ navigation }: any) {
                 onPress={() => openSecurityDetail('twoFactor')}
                 activeOpacity={0.8}
               >
-                <Text style={[styles.securityTileTitle, isDarkMode && { color: '#F8FAFC' }]}>Xác minh hai bước</Text>
+                <LocalizedText style={[styles.securityTileTitle, isDarkMode && { color: '#F8FAFC' }]}>Xác minh hai bước</LocalizedText>
                 <Ionicons name="shield-checkmark" size={34} color="#38BDF8" style={styles.securityTileIcon} />
                 <Switch
                   value={twoFactorEnabled}
@@ -746,7 +884,7 @@ export default function ProfileScreen({ navigation }: any) {
                 onPress={() => openSecurityDetail('devices')}
                 activeOpacity={0.8}
               >
-                <Text style={[styles.securityTileTitle, isDarkMode && { color: '#F8FAFC' }]}>Quản lý đầu cuối</Text>
+                <LocalizedText style={[styles.securityTileTitle, isDarkMode && { color: '#F8FAFC' }]}>Quản lý đầu cuối</LocalizedText>
                 <Ionicons name="phone-portrait" size={34} color="#38BDF8" style={styles.securityTileIcon} />
               </TouchableOpacity>
               <TouchableOpacity
@@ -754,7 +892,7 @@ export default function ProfileScreen({ navigation }: any) {
                 onPress={() => openSecurityDetail('logins')}
                 activeOpacity={0.8}
               >
-                <Text style={[styles.securityTileTitle, isDarkMode && { color: '#F8FAFC' }]}>Đăng nhập tài khoản</Text>
+                <LocalizedText style={[styles.securityTileTitle, isDarkMode && { color: '#F8FAFC' }]}>Đăng nhập tài khoản</LocalizedText>
                 <Ionicons name="card-outline" size={34} color="#38BDF8" style={styles.securityTileIcon} />
               </TouchableOpacity>
               </View>
@@ -762,7 +900,7 @@ export default function ProfileScreen({ navigation }: any) {
 
             <View style={[styles.securitySectionCard, isDarkMode && { backgroundColor: '#1E293B', borderColor: '#334155', borderWidth: 1 }]}>
               <View style={styles.securitySectionHeader}>
-                <Text style={[styles.securitySectionTitle, isDarkMode && { color: '#F8FAFC' }]}>Bạn cũng có thể hỏi</Text>
+                <LocalizedText style={[styles.securitySectionTitle, isDarkMode && { color: '#F8FAFC' }]}>Bạn cũng có thể hỏi</LocalizedText>
                 <Ionicons name="ellipsis-vertical" size={22} color={isDarkMode ? '#F8FAFC' : '#0F172A'} />
               </View>
               {['Mật khẩu mã hóa thiết bị là gì?', 'Có ràng buộc một thiết bị an toàn không?', 'Bảo vệ quyền riêng tư của người dùng', 'Việc sử dụng mã xác minh qua tin nhắn SMS'].map((question) => (
@@ -775,7 +913,7 @@ export default function ProfileScreen({ navigation }: any) {
                     openSecurityDetail('question');
                   }}
                 >
-                  <Text style={[styles.securityQuestionText, isDarkMode && { color: '#F8FAFC' }]}>{question}</Text>
+                  <LocalizedText style={[styles.securityQuestionText, isDarkMode && { color: '#F8FAFC' }]}>{question}</LocalizedText>
                   <Ionicons name="chevron-forward" size={20} color={isDarkMode ? '#94A3B8' : '#64748B'} />
                 </TouchableOpacity>
               ))}
@@ -797,8 +935,8 @@ export default function ProfileScreen({ navigation }: any) {
                 <Ionicons name="navigate" size={22} color="#2563EB" />
               </View>
               <View style={styles.locationHeaderCopy}>
-                <Text style={[styles.locationTitle, isDarkMode && { color: '#F8FAFC' }]}>Định vị địa lý</Text>
-                <Text style={[styles.locationDescription, isDarkMode && { color: '#94A3B8' }]}>Xác định vị trí hiện tại của thiết bị</Text>
+                <LocalizedText style={[styles.locationTitle, isDarkMode && { color: '#F8FAFC' }]}>Định vị địa lý</LocalizedText>
+                <LocalizedText style={[styles.locationDescription, isDarkMode && { color: '#94A3B8' }]}>Xác định vị trí hiện tại của thiết bị</LocalizedText>
               </View>
               <TouchableOpacity
                 style={styles.locationCloseIcon}
@@ -812,15 +950,13 @@ export default function ProfileScreen({ navigation }: any) {
             <View style={[styles.locationMapFrame, isDarkMode && { borderColor: '#334155', backgroundColor: '#0F172A' }]}>
               {locationCoords ? (
                 Platform.OS === 'web' ? (
-                  <View style={[styles.locationMap, { backgroundColor: isDarkMode ? '#0F172A' : '#F1F5F9', alignItems: 'center', justifyContent: 'center' }]}>
-                    <Ionicons name="map" size={48} color="#2563EB" />
-                    <Text style={{ marginTop: 8, fontWeight: '700', color: isDarkMode ? '#F8FAFC' : '#0F172A', fontSize: 13 }}>
-                      Bản đồ OpenStreetMap
-                    </Text>
-                    <Text style={{ color: isDarkMode ? '#94A3B8' : '#64748B', fontSize: 11, marginTop: 4 }}>
-                      Tọa độ: {locationCoords.latitude.toFixed(4)}, {locationCoords.longitude.toFixed(4)}
-                    </Text>
-                  </View>
+                  React.createElement('iframe', {
+                    title: 'Google Maps vị trí hiện tại',
+                    src: locationMapEmbedUrl,
+                    style: { width: '100%', height: '100%', border: 0 },
+                    loading: 'lazy',
+                    referrerPolicy: 'no-referrer-when-downgrade',
+                  })
                 ) : (
                   <WebView
                     originWhitelist={['*']}
@@ -833,14 +969,14 @@ export default function ProfileScreen({ navigation }: any) {
               ) : (
                 <View style={styles.locationMapLoading}>
                   <Ionicons name="navigate-outline" size={30} color="#2563EB" />
-                  <Text style={[styles.locationMapLoadingText, isDarkMode && { color: '#94A3B8' }]}>
+                  <LocalizedText style={[styles.locationMapLoadingText, isDarkMode && { color: '#94A3B8' }]}>
                     {isLocationLoading ? 'Đang lấy vị trí hiện tại...' : 'Chưa có dữ liệu bản đồ'}
-                  </Text>
+                  </LocalizedText>
                 </View>
               )}
               <View style={[styles.locationMapBadge, isDarkMode && { backgroundColor: 'rgba(15, 23, 42, 0.9)' }]}>
                 <View style={styles.locationMapBadgeDot} />
-                <Text style={[styles.locationMapBadgeText, isDarkMode && { color: '#F8FAFC' }]}>Vị trí của bạn</Text>
+                <LocalizedText style={[styles.locationMapBadgeText, isDarkMode && { color: '#F8FAFC' }]}>Vị trí của bạn</LocalizedText>
               </View>
             </View>
 
@@ -850,17 +986,17 @@ export default function ProfileScreen({ navigation }: any) {
               </View>
               <View style={styles.locationResultCopy}>
                 <View style={styles.locationStatusRow}>
-                  <Text style={[styles.locationResultLabel, isDarkMode && { color: '#94A3B8' }]}>Vị trí hiện tại</Text>
+                  <LocalizedText style={[styles.locationResultLabel, isDarkMode && { color: '#94A3B8' }]}>Vị trí hiện tại</LocalizedText>
                   <View style={[styles.locationStatusBadge, locationAddress ? styles.locationStatusBadgeActive : null]}>
                     <View style={[styles.locationStatusDot, locationAddress ? styles.locationStatusDotActive : null]} />
-                    <Text style={[styles.locationStatusText, locationAddress ? styles.locationStatusTextActive : null]}>
+                    <LocalizedText style={[styles.locationStatusText, locationAddress ? styles.locationStatusTextActive : null]}>
                       {locationAddress ? 'Đã cập nhật' : 'Chưa cập nhật'}
-                    </Text>
+                    </LocalizedText>
                   </View>
                 </View>
-                <Text style={[styles.locationResultText, isDarkMode && { color: '#F8FAFC' }]}>
+                <LocalizedText style={[styles.locationResultText, isDarkMode && { color: '#F8FAFC' }]}>
                   {locationAddress || 'Nhấn nút bên dưới để lấy địa chỉ hiện tại'}
-                </Text>
+                </LocalizedText>
               </View>
             </View>
 
@@ -870,7 +1006,7 @@ export default function ProfileScreen({ navigation }: any) {
               activeOpacity={0.85}
             >
               <Ionicons name={isLocationLoading ? 'sync-outline' : 'locate-outline'} size={20} color="#FFFFFF" />
-              <Text style={styles.locationButtonText}>{isLocationLoading ? 'Đang định vị...' : 'Cập nhật vị trí'}</Text>
+              <LocalizedText style={styles.locationButtonText}>{isLocationLoading ? 'Đang định vị...' : 'Cập nhật vị trí'}</LocalizedText>
             </TouchableOpacity>
 
             <TouchableOpacity
@@ -878,7 +1014,7 @@ export default function ProfileScreen({ navigation }: any) {
               onPress={() => setLocationVisible(false)}
               activeOpacity={0.8}
             >
-              <Text style={[styles.locationCloseText, isDarkMode && { color: '#94A3B8' }]}>Để sau</Text>
+              <LocalizedText style={[styles.locationCloseText, isDarkMode && { color: '#94A3B8' }]}>Để sau</LocalizedText>
             </TouchableOpacity>
           </Pressable>
         </Pressable>
@@ -895,12 +1031,12 @@ export default function ProfileScreen({ navigation }: any) {
             <View style={styles.avatarPickerOptions}>
               <TouchableOpacity style={[styles.avatarPickerRow, isDarkMode && { borderBottomColor: '#334155' }]} activeOpacity={0.8} onPress={pickAvatarFromCamera}>
                 <Ionicons name="camera-outline" size={24} color={isDarkMode ? '#F8FAFC' : '#111827'} />
-                <Text style={[styles.avatarPickerText, isDarkMode && { color: '#F8FAFC' }]}>Chụp ảnh</Text>
+                <LocalizedText style={[styles.avatarPickerText, isDarkMode && { color: '#F8FAFC' }]}>Chụp ảnh</LocalizedText>
               </TouchableOpacity>
 
               <TouchableOpacity style={[styles.avatarPickerRow, styles.avatarPickerLastRow]} activeOpacity={0.8} onPress={pickAvatarFromLibrary}>
                 <Ionicons name="images-outline" size={24} color={isDarkMode ? '#F8FAFC' : '#111827'} />
-                <Text style={[styles.avatarPickerText, isDarkMode && { color: '#F8FAFC' }]}>Chọn từ Hình ảnh</Text>
+                <LocalizedText style={[styles.avatarPickerText, isDarkMode && { color: '#F8FAFC' }]}>Chọn từ Hình ảnh</LocalizedText>
               </TouchableOpacity>
             </View>
           </Pressable>
@@ -913,7 +1049,7 @@ export default function ProfileScreen({ navigation }: any) {
         onRequestClose={closeChangePassword}
       >
         <SafeAreaView style={[styles.changePasswordScreen, isDarkMode && { backgroundColor: '#0B0F19' }]} edges={['top']}>
-          <View style={styles.changePasswordHeader}>
+          <View style={[styles.changePasswordHeader, isDarkMode && { borderBottomColor: colors.border }]}>
             <TouchableOpacity
               style={[styles.changePasswordBackButton, isDarkMode && { backgroundColor: '#1E293B', borderColor: '#334155', borderWidth: 1 }]}
               onPress={closeChangePassword}
@@ -922,22 +1058,27 @@ export default function ProfileScreen({ navigation }: any) {
               <Ionicons name="chevron-back-outline" size={24} color={isDarkMode ? '#F8FAFC' : Colors.textPrimary} />
             </TouchableOpacity>
 
-            <Text style={[styles.changePasswordTitle, isDarkMode && { color: '#F8FAFC' }]}>Đổi mật khẩu</Text>
+            <LocalizedText style={[styles.changePasswordTitle, isDarkMode && { color: '#F8FAFC' }]}>Đổi mật khẩu</LocalizedText>
 
             <View style={styles.changePasswordHeaderRight} />
           </View>
 
           <ScrollView
-            contentContainerStyle={styles.changePasswordContent}
+            contentContainerStyle={[styles.changePasswordContent, isDarkMode && { backgroundColor: colors.background }]}
             keyboardShouldPersistTaps="handled"
           >
-            <Text style={[styles.changePasswordIntro, isDarkMode && { color: '#94A3B8' }]}>
-              Tạo mật khẩu mới để bảo vệ tài khoản của bạn.
-            </Text>
+            <View style={[styles.changePasswordIntroCard, isDarkMode && { backgroundColor: colors.card, borderColor: colors.border }]}>
+              <View style={[styles.changePasswordIntroIcon, isDarkMode && { backgroundColor: '#0F172A' }]}>
+                <Ionicons name="lock-closed-outline" size={21} color="#2563EB" />
+              </View>
+              <LocalizedText style={[styles.changePasswordIntro, isDarkMode && { color: '#CBD5E1' }]}>
+                Tạo mật khẩu mới để bảo vệ tài khoản của bạn.
+              </LocalizedText>
+            </View>
 
-            <Text style={[styles.passwordLabel, isDarkMode && { color: '#F8FAFC' }]}>Mật khẩu hiện tại</Text>
+            <LocalizedText style={[styles.passwordLabel, isDarkMode && { color: '#F8FAFC' }]}>Mật khẩu hiện tại</LocalizedText>
             <View style={[styles.passwordInputWrap, isDarkMode && { backgroundColor: '#1E293B', borderColor: '#334155' }]}>
-              <TextInput
+              <LocalizedTextInput
                 style={[styles.passwordInput, isDarkMode && { color: '#F8FAFC' }]}
                 value={currentPassword}
                 onChangeText={setCurrentPassword}
@@ -945,14 +1086,19 @@ export default function ProfileScreen({ navigation }: any) {
                 placeholderTextColor="#94A3B8"
                 secureTextEntry={!showCurrentPassword}
               />
-              <TouchableOpacity onPress={() => setShowCurrentPassword(!showCurrentPassword)}>
-                <Ionicons name={showCurrentPassword ? 'eye-off-outline' : 'eye-outline'} size={21} color="#64748B" />
+              <TouchableOpacity
+                style={styles.passwordVisibilityButton}
+                onPress={() => setShowCurrentPassword(!showCurrentPassword)}
+                accessibilityRole="button"
+                accessibilityLabel={showCurrentPassword ? 'Ẩn mật khẩu hiện tại' : 'Hiện mật khẩu hiện tại'}
+              >
+                <Ionicons name={showCurrentPassword ? 'eye-off-outline' : 'eye-outline'} size={21} color={isDarkMode ? '#CBD5E1' : '#475569'} />
               </TouchableOpacity>
             </View>
 
-            <Text style={[styles.passwordLabel, isDarkMode && { color: '#F8FAFC' }]}>Mật khẩu mới</Text>
+            <LocalizedText style={[styles.passwordLabel, isDarkMode && { color: '#F8FAFC' }]}>Mật khẩu mới</LocalizedText>
             <View style={[styles.passwordInputWrap, isDarkMode && { backgroundColor: '#1E293B', borderColor: '#334155' }]}>
-              <TextInput
+              <LocalizedTextInput
                 style={[styles.passwordInput, isDarkMode && { color: '#F8FAFC' }]}
                 value={newPassword}
                 onChangeText={setNewPassword}
@@ -960,22 +1106,31 @@ export default function ProfileScreen({ navigation }: any) {
                 placeholderTextColor="#94A3B8"
                 secureTextEntry={!showNewPassword}
               />
-              <TouchableOpacity onPress={() => setShowNewPassword(!showNewPassword)}>
-                <Ionicons name={showNewPassword ? 'eye-off-outline' : 'eye-outline'} size={21} color="#64748B" />
+              <TouchableOpacity
+                style={styles.passwordVisibilityButton}
+                onPress={() => setShowNewPassword(!showNewPassword)}
+                accessibilityRole="button"
+                accessibilityLabel={showNewPassword ? 'Ẩn mật khẩu mới' : 'Hiện mật khẩu mới'}
+              >
+                <Ionicons name={showNewPassword ? 'eye-off-outline' : 'eye-outline'} size={21} color={isDarkMode ? '#CBD5E1' : '#475569'} />
               </TouchableOpacity>
             </View>
 
-            <View style={[styles.passwordRequirements, isDarkMode && { backgroundColor: '#1E293B', borderColor: '#334155', borderWidth: 1 }]}>
-              <Text style={[styles.passwordRequirementsTitle, isDarkMode && { color: '#F8FAFC' }]}>Các yêu cầu về mật khẩu:</Text>
-              <Text style={[styles.passwordRequirement, isDarkMode && { color: '#94A3B8' }]}>◯  Dài 8-16 ký tự</Text>
-              <Text style={[styles.passwordRequirement, isDarkMode && { color: '#94A3B8' }]}>
-                ◯  Bao gồm chữ hoa, chữ thường, số và ký hiệu đặc biệt.
-              </Text>
+            <View style={[styles.passwordRequirements, isDarkMode && { backgroundColor: colors.card, borderColor: colors.border }]}>
+              <LocalizedText style={[styles.passwordRequirementsTitle, isDarkMode && { color: '#F8FAFC' }]}>Các yêu cầu về mật khẩu:</LocalizedText>
+              <View style={styles.passwordRequirementRow}>
+                <Ionicons name="ellipse-outline" size={15} color={isDarkMode ? '#94A3B8' : '#64748B'} />
+                <LocalizedText style={[styles.passwordRequirement, isDarkMode && { color: '#CBD5E1' }]}>Dài 8-16 ký tự</LocalizedText>
+              </View>
+              <View style={styles.passwordRequirementRow}>
+                <Ionicons name="ellipse-outline" size={15} color={isDarkMode ? '#94A3B8' : '#64748B'} />
+                <LocalizedText style={[styles.passwordRequirement, isDarkMode && { color: '#CBD5E1' }]}>Bao gồm chữ hoa, chữ thường, số và ký hiệu đặc biệt.</LocalizedText>
+              </View>
             </View>
 
-            <Text style={[styles.passwordLabel, isDarkMode && { color: '#F8FAFC' }]}>Nhập lại mật khẩu mới</Text>
+            <LocalizedText style={[styles.passwordLabel, isDarkMode && { color: '#F8FAFC' }]}>Nhập lại mật khẩu mới</LocalizedText>
             <View style={[styles.passwordInputWrap, isDarkMode && { backgroundColor: '#1E293B', borderColor: '#334155' }]}>
-              <TextInput
+              <LocalizedTextInput
                 style={[styles.passwordInput, isDarkMode && { color: '#F8FAFC' }]}
                 value={confirmPassword}
                 onChangeText={setConfirmPassword}
@@ -983,17 +1138,27 @@ export default function ProfileScreen({ navigation }: any) {
                 placeholderTextColor="#94A3B8"
                 secureTextEntry={!showConfirmPassword}
               />
-              <TouchableOpacity onPress={() => setShowConfirmPassword(!showConfirmPassword)}>
-                <Ionicons name={showConfirmPassword ? 'eye-off-outline' : 'eye-outline'} size={21} color="#64748B" />
+              <TouchableOpacity
+                style={styles.passwordVisibilityButton}
+                onPress={() => setShowConfirmPassword(!showConfirmPassword)}
+                accessibilityRole="button"
+                accessibilityLabel={showConfirmPassword ? 'Ẩn mật khẩu xác nhận' : 'Hiện mật khẩu xác nhận'}
+              >
+                <Ionicons name={showConfirmPassword ? 'eye-off-outline' : 'eye-outline'} size={21} color={isDarkMode ? '#CBD5E1' : '#475569'} />
               </TouchableOpacity>
             </View>
 
             <TouchableOpacity
               style={styles.changePasswordButton}
-              onPress={handleChangePassword}
+              onPress={() => void handleChangePassword()}
               activeOpacity={0.85}
+              disabled={isPasswordSaving}
             >
-              <Text style={styles.changePasswordButtonText}>Cập nhật mật khẩu</Text>
+              {isPasswordSaving ? (
+                <ActivityIndicator color="#FFFFFF" />
+              ) : (
+                <LocalizedText style={styles.changePasswordButtonText}>Cập nhật mật khẩu</LocalizedText>
+              )}
             </TouchableOpacity>
           </ScrollView>
         </SafeAreaView>
@@ -1015,7 +1180,7 @@ export default function ProfileScreen({ navigation }: any) {
               >
                 <Ionicons name="chevron-back-outline" size={24} color={isDarkMode ? '#F8FAFC' : Colors.textPrimary} />
               </TouchableOpacity>
-              <Text style={[styles.settingsTitle, isDarkMode && { color: '#F8FAFC' }]}>Cài đặt</Text>
+              <LocalizedText style={[styles.settingsTitle, isDarkMode && { color: '#F8FAFC' }]}>Cài đặt</LocalizedText>
             </View>
 
             <View style={styles.settingsCard}>
@@ -1037,8 +1202,8 @@ export default function ProfileScreen({ navigation }: any) {
                         <Ionicons name="person-circle-outline" size={20} color="#6366F1" />
                       </View>
                       <View style={{ flex: 1 }}>
-                        <Text style={[styles.settingsLabel, isDarkMode ? { color: '#F8FAFC' } : { color: '#0F172A' }]}>Hồ sơ người giám sát</Text>
-                        <Text style={[styles.settingsItemSub, { color: isDarkMode ? '#94A3B8' : '#64748B' }]}>Tài khoản người thân theo dõi, SĐT liên hệ khẩn cấp</Text>
+                        <LocalizedText style={[styles.settingsLabel, isDarkMode ? { color: '#F8FAFC' } : { color: '#0F172A' }]}>Hồ sơ người giám sát</LocalizedText>
+                        <LocalizedText style={[styles.settingsItemSub, { color: isDarkMode ? '#94A3B8' : '#64748B' }]}>Tài khoản người thân theo dõi, SĐT liên hệ khẩn cấp</LocalizedText>
                       </View>
                     </View>
                     <Ionicons name="chevron-forward" size={18} color="#94A3B8" />
@@ -1059,12 +1224,12 @@ export default function ProfileScreen({ navigation }: any) {
                       </View>
                       <View style={{ flex: 1 }}>
                         <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6 }}>
-                          <Text style={[styles.settingsLabel, isDarkMode ? { color: '#F8FAFC' } : { color: '#0F172A' }]}>Hồ sơ bệnh án người cao tuổi</Text>
+                          <LocalizedText style={[styles.settingsLabel, isDarkMode ? { color: '#F8FAFC' } : { color: '#0F172A' }]}>Hồ sơ bệnh án người cao tuổi</LocalizedText>
                           <View style={styles.profileAesBadge}>
-                            <Text style={styles.profileAesBadgeText}>Bảo mật AES-256</Text>
+                            <LocalizedText style={styles.profileAesBadgeText}>Bảo mật AES-256</LocalizedText>
                           </View>
                         </View>
-                        <Text style={[styles.settingsItemSub, { color: isDarkMode ? '#94A3B8' : '#64748B' }]}>Thông tin cụ, bệnh nền, nhóm máu &amp; đơn thuốc</Text>
+                        <LocalizedText style={[styles.settingsItemSub, { color: isDarkMode ? '#94A3B8' : '#64748B' }]}>Thông tin cụ, bệnh nền, nhóm máu &amp; đơn thuốc</LocalizedText>
                       </View>
                     </View>
                     <Ionicons name="chevron-forward" size={18} color="#94A3B8" />
@@ -1085,7 +1250,7 @@ export default function ProfileScreen({ navigation }: any) {
                       <View style={[styles.settingsIconWrap, isDarkMode && { backgroundColor: '#0F172A' }]}>
                         <Ionicons name="settings-outline" size={20} color={isDarkMode ? '#94A3B8' : '#475569'} />
                       </View>
-                      <Text style={[styles.settingsLabel, isDarkMode ? { color: '#F8FAFC' } : { color: '#0F172A' }]}>Cài đặt chung</Text>
+                      <LocalizedText style={[styles.settingsLabel, isDarkMode ? { color: '#F8FAFC' } : { color: '#0F172A' }]}>Cài đặt chung</LocalizedText>
                     </View>
                     <Ionicons name="chevron-forward" size={18} color="#94A3B8" />
                   </TouchableOpacity>
@@ -1102,7 +1267,7 @@ export default function ProfileScreen({ navigation }: any) {
                       <View style={[styles.settingsIconWrap, isDarkMode && { backgroundColor: '#0F172A' }]}>
                         <Ionicons name="accessibility-outline" size={20} color={isDarkMode ? '#94A3B8' : '#475569'} />
                       </View>
-                      <Text style={[styles.settingsLabel, isDarkMode ? { color: '#F8FAFC' } : { color: '#0F172A' }]}>Khả năng tiếp cận</Text>
+                      <LocalizedText style={[styles.settingsLabel, isDarkMode ? { color: '#F8FAFC' } : { color: '#0F172A' }]}>Khả năng tiếp cận</LocalizedText>
                     </View>
                     <Ionicons name="chevron-forward" size={18} color="#94A3B8" />
                   </TouchableOpacity>
@@ -1119,7 +1284,7 @@ export default function ProfileScreen({ navigation }: any) {
                       <View style={[styles.settingsIconWrap, isDarkMode && { backgroundColor: '#0F172A' }]}>
                         <Ionicons name="information-circle-outline" size={20} color={isDarkMode ? '#94A3B8' : '#475569'} />
                       </View>
-                      <Text style={[styles.settingsLabel, isDarkMode ? { color: '#F8FAFC' } : { color: '#0F172A' }]}>Thông tin</Text>
+                      <LocalizedText style={[styles.settingsLabel, isDarkMode ? { color: '#F8FAFC' } : { color: '#0F172A' }]}>Thông tin</LocalizedText>
                     </View>
                     <Ionicons name="chevron-forward" size={18} color="#94A3B8" />
                   </TouchableOpacity>
@@ -1139,7 +1304,7 @@ export default function ProfileScreen({ navigation }: any) {
                       <View style={[styles.settingsIconWrap, isDarkMode && { backgroundColor: '#0F172A' }]}>
                         <Ionicons name="notifications-outline" size={20} color={isDarkMode ? '#94A3B8' : '#475569'} />
                       </View>
-                      <Text style={[styles.settingsLabel, isDarkMode ? { color: '#F8FAFC' } : { color: '#0F172A' }]}>Thiết lập thông báo</Text>
+                      <LocalizedText style={[styles.settingsLabel, isDarkMode ? { color: '#F8FAFC' } : { color: '#0F172A' }]}>Thiết lập thông báo</LocalizedText>
                     </View>
                     <View style={styles.settingsRightStatus}>
                       <Ionicons name="chevron-forward" size={18} color="#94A3B8" />
@@ -1158,10 +1323,10 @@ export default function ProfileScreen({ navigation }: any) {
                       <View style={[styles.settingsIconWrap, isDarkMode && { backgroundColor: '#0F172A' }]}>
                         <Ionicons name="phone-portrait-outline" size={20} color={isDarkMode ? '#94A3B8' : '#475569'} />
                       </View>
-                      <Text style={[styles.settingsLabel, isDarkMode ? { color: '#F8FAFC' } : { color: '#0F172A' }]}>Rung</Text>
+                      <LocalizedText style={[styles.settingsLabel, isDarkMode ? { color: '#F8FAFC' } : { color: '#0F172A' }]}>Rung</LocalizedText>
                     </View>
                     <View style={styles.settingsRightStatus}>
-                      <Text style={[styles.settingsValueText, isDarkMode ? { color: '#94A3B8' } : { color: '#64748B' }]}>{vibrationEnabled ? 'Mở' : 'Tắt'}</Text>
+                      <LocalizedText style={[styles.settingsValueText, isDarkMode ? { color: '#94A3B8' } : { color: '#64748B' }]}>{vibrationEnabled ? 'Mở' : 'Tắt'}</LocalizedText>
                       <Ionicons name="chevron-forward" size={18} color="#94A3B8" />
                     </View>
                   </TouchableOpacity>
@@ -1197,7 +1362,7 @@ export default function ProfileScreen({ navigation }: any) {
               >
                 <Ionicons name="chevron-back-outline" size={24} color={isDarkMode ? '#F8FAFC' : Colors.textPrimary} />
               </TouchableOpacity>
-              <Text style={[styles.settingsTitle, isDarkMode && { color: '#F8FAFC' }]}>Khả năng tiếp cận</Text>
+              <LocalizedText style={[styles.settingsTitle, { fontSize: getScaledFontSize(18) }, isDarkMode && { color: '#F8FAFC' }]}>Khả năng tiếp cận</LocalizedText>
             </View>
 
             <View style={[styles.accessibilityList, isDarkMode && { backgroundColor: '#1E293B', borderColor: '#334155' }]}>
@@ -1209,15 +1374,15 @@ export default function ProfileScreen({ navigation }: any) {
                   setFontSizeVisible(true);
                 }}
               >
-                <Text style={[styles.accessibilityLabel, isDarkMode && { color: '#F8FAFC' }]}>Kích thước phông chữ</Text>
+                <LocalizedText style={[styles.accessibilityLabel, { fontSize: getScaledFontSize(15) }, isDarkMode && { color: '#F8FAFC' }]}>Kích thước phông chữ</LocalizedText>
                 <View style={styles.accessibilityValueWrap}>
-                  <Text style={[styles.accessibilityValue, isDarkMode && { color: '#94A3B8' }]}>{fontSizeMode === 'system' ? 'Theo hệ thống' : 'Tùy chỉnh'}</Text>
+                  <LocalizedText style={[styles.accessibilityValue, { fontSize: getScaledFontSize(16) }, isDarkMode && { color: '#94A3B8' }]}>{fontSizeMode === 'system' ? 'Theo hệ thống' : 'Tùy chỉnh'}</LocalizedText>
                   <Ionicons name="chevron-forward" size={18} color="#94A3B8" />
                 </View>
               </TouchableOpacity>
 
               <View style={[styles.accessibilityRow, styles.accessibilityRowLast]}>
-                <Text style={[styles.accessibilityLabel, isDarkMode && { color: '#F8FAFC' }]}>Tăng độ tương phản</Text>
+                <LocalizedText style={[styles.accessibilityLabel, isDarkMode && { color: '#F8FAFC' }]}>Tăng độ tương phản</LocalizedText>
                 <Switch
                   value={highContrastEnabled}
                   onValueChange={setHighContrastEnabled}
@@ -1255,7 +1420,7 @@ export default function ProfileScreen({ navigation }: any) {
               >
                 <Ionicons name="chevron-back-outline" size={24} color={isDarkMode ? '#F8FAFC' : Colors.textPrimary} />
               </TouchableOpacity>
-              <Text style={[styles.settingsTitle, isDarkMode && { color: '#F8FAFC' }]}>Kích thước phông chữ</Text>
+              <LocalizedText style={[styles.settingsTitle, { fontSize: getScaledFontSize(18) }, isDarkMode && { color: '#F8FAFC' }]}>Kích thước phông chữ</LocalizedText>
             </View>
 
             <View style={styles.fontSizeList}>
@@ -1264,9 +1429,10 @@ export default function ProfileScreen({ navigation }: any) {
                 activeOpacity={0.8}
                 onPress={() => {
                   setFontSizeMode('system');
+                  void saveFontPreference('system', customFontScale);
                 }}
               >
-                <Text style={[styles.fontSizeOptionText, isDarkMode && { color: '#F8FAFC' }]}>Theo hệ thống</Text>
+                <LocalizedText style={[styles.fontSizeOptionText, { fontSize: getScaledFontSize(16) }, isDarkMode && { color: '#F8FAFC' }]}>Theo hệ thống</LocalizedText>
                 {fontSizeMode === 'system' && (
                   <Ionicons name="checkmark" size={22} color="#1D9BF0" />
                 )}
@@ -1275,9 +1441,12 @@ export default function ProfileScreen({ navigation }: any) {
               <TouchableOpacity
                 style={[styles.fontSizeOption, isDarkMode && { backgroundColor: '#1E293B', borderColor: '#334155' }]}
                 activeOpacity={0.8}
-                onPress={() => setFontSizeMode('custom')}
+                onPress={() => {
+                  setFontSizeMode('custom');
+                  void saveFontPreference('custom', customFontScale);
+                }}
               >
-                <Text style={[styles.fontSizeOptionText, isDarkMode && { color: '#F8FAFC' }]}>Tùy chỉnh</Text>
+                <LocalizedText style={[styles.fontSizeOptionText, { fontSize: getScaledFontSize(16) }, isDarkMode && { color: '#F8FAFC' }]}>Tùy chỉnh</LocalizedText>
                 {fontSizeMode === 'custom' && (
                   <Ionicons name="checkmark" size={22} color="#1D9BF0" />
                 )}
@@ -1285,10 +1454,10 @@ export default function ProfileScreen({ navigation }: any) {
 
               {fontSizeMode === 'custom' && (
                 <View style={[styles.customFontSliderPanel, isDarkMode && { backgroundColor: '#1E293B', borderColor: '#334155', borderWidth: 1, borderRadius: 18, padding: 16 }]}>
-                  <Text style={[styles.customFontSliderTitle, isDarkMode && { color: '#F8FAFC' }]}>Mặc định</Text>
+                  <LocalizedText style={[styles.customFontSliderTitle, { fontSize: getScaledFontSize(18) }, isDarkMode && { color: '#F8FAFC' }]}>Mặc định</LocalizedText>
 
                   <View style={styles.customFontSliderRow}>
-                    <Text style={[styles.customFontSmall, isDarkMode && { color: '#94A3B8' }]}>Aa</Text>
+                    <LocalizedText style={[styles.customFontSmall, { fontSize: getScaledFontSize(18) }, isDarkMode && { color: '#94A3B8' }]}>Aa</LocalizedText>
 
                     <View
                       style={styles.customFontTrackWrap}
@@ -1319,16 +1488,16 @@ export default function ProfileScreen({ navigation }: any) {
                       </View>
                     </View>
 
-                    <Text style={[styles.customFontLarge, isDarkMode && { color: '#F8FAFC' }]}>Aa</Text>
+                    <LocalizedText style={[styles.customFontLarge, { fontSize: getScaledFontSize(30) }, isDarkMode && { color: '#F8FAFC' }]}>Aa</LocalizedText>
                   </View>
                 </View>
               )}
 
-              <Text style={[styles.fontSizeNote, isDarkMode && { color: '#94A3B8' }]}>
+              <LocalizedText style={[styles.fontSizeNote, { fontSize: getScaledFontSize(14) }, isDarkMode && { color: '#94A3B8' }]}>
                 Nếu một số văn bản hoặc nội dung không được phóng to, hãy nhấn và giữ màn hình để kích hoạt tính năng Zoom.
-              </Text>
+              </LocalizedText>
 
-              <Text style={styles.fontSizeLink}>Cách sử dụng tính năng Zoom</Text>
+              <LocalizedText style={[styles.fontSizeLink, { fontSize: getScaledFontSize(18) }]}>Cách sử dụng tính năng Zoom</LocalizedText>
             </View>
           </Pressable>
         </Pressable>
@@ -1363,9 +1532,9 @@ export default function ProfileScreen({ navigation }: any) {
               >
                 <Ionicons name="chevron-back-outline" size={24} color={isDarkMode ? '#F8FAFC' : Colors.textPrimary} />
               </TouchableOpacity>
-              <Text style={[styles.infoTitle, isDarkMode && { color: '#F8FAFC' }]}>
+              <LocalizedText style={[styles.infoTitle, isDarkMode && { color: '#F8FAFC' }]}>
                 {infoDetail === 'terms' ? 'Điều khoản sử dụng' : infoDetail === 'app' ? 'Thông tin ứng dụng' : 'Thông tin'}
-              </Text>
+              </LocalizedText>
             </View>
 
             {infoDetail === null ? (
@@ -1375,7 +1544,7 @@ export default function ProfileScreen({ navigation }: any) {
                   activeOpacity={0.8}
                   onPress={() => setInfoDetail('terms')}
                 >
-                  <Text style={[styles.infoRowText, isDarkMode && { color: '#F8FAFC' }]}>Điều khoản sử dụng</Text>
+                  <LocalizedText style={[styles.infoRowText, isDarkMode && { color: '#F8FAFC' }]}>Điều khoản sử dụng</LocalizedText>
                   <Ionicons name="chevron-forward" size={18} color="#9CA3AF" />
                 </TouchableOpacity>
 
@@ -1384,7 +1553,7 @@ export default function ProfileScreen({ navigation }: any) {
                   activeOpacity={0.8}
                   onPress={() => setInfoDetail('app')}
                 >
-                  <Text style={[styles.infoRowText, isDarkMode && { color: '#F8FAFC' }]}>Thông tin ứng dụng</Text>
+                  <LocalizedText style={[styles.infoRowText, isDarkMode && { color: '#F8FAFC' }]}>Thông tin ứng dụng</LocalizedText>
                   <Ionicons name="chevron-forward" size={18} color="#9CA3AF" />
                 </TouchableOpacity>
               </View>
@@ -1395,28 +1564,28 @@ export default function ProfileScreen({ navigation }: any) {
               >
                 {infoDetail === 'terms' ? (
                   <>
-                    <Text style={[styles.infoDetailHeading, isDarkMode && { color: '#F8FAFC' }]}>Điều khoản sử dụng</Text>
-                    <Text style={[styles.infoDetailText, isDarkMode && { color: '#94A3B8' }]}>
+                    <LocalizedText style={[styles.infoDetailHeading, isDarkMode && { color: '#F8FAFC' }]}>Điều khoản sử dụng</LocalizedText>
+                    <LocalizedText style={[styles.infoDetailText, isDarkMode && { color: '#94A3B8' }]}>
                       Ứng dụng Smart Elderly Care AI hỗ trợ theo dõi sức khoẻ, thiết bị và cảnh báo an toàn cho người cao tuổi. Người dùng cần cung cấp thông tin chính xác và sử dụng ứng dụng đúng mục đích.
-                    </Text>
-                    <Text style={[styles.infoDetailText, isDarkMode && { color: '#94A3B8' }]}>
+                    </LocalizedText>
+                    <LocalizedText style={[styles.infoDetailText, isDarkMode && { color: '#94A3B8' }]}>
                       Người dùng chịu trách nhiệm bảo mật tài khoản, mã xác thực và các thiết bị đã liên kết. Không chia sẻ thông tin đăng nhập cho người khác.
-                    </Text>
-                    <Text style={[styles.infoDetailText, isDarkMode && { color: '#94A3B8' }]}>
+                    </LocalizedText>
+                    <LocalizedText style={[styles.infoDetailText, isDarkMode && { color: '#94A3B8' }]}>
                       Các cảnh báo trong ứng dụng chỉ có tính chất hỗ trợ theo dõi, không thay thế cho chẩn đoán hoặc điều trị y tế chuyên môn.
-                    </Text>
+                    </LocalizedText>
                   </>
                 ) : (
                   <View style={styles.appInfoPanel}>
                     <View style={styles.appInfoIcon}>
                       <Ionicons name="shield-checkmark" size={38} color="#FFFFFF" />
                     </View>
-                    <Text style={[styles.infoDetailHeading, isDarkMode && { color: '#F8FAFC' }]}>Smart Elderly Care AI</Text>
-                    <Text style={[styles.appInfoVersion, isDarkMode && { color: '#94A3B8' }]}>Phiên bản 1.0.0</Text>
-                    <Text style={[styles.infoDetailText, isDarkMode && { color: '#94A3B8' }]}>
+                    <LocalizedText style={[styles.infoDetailHeading, isDarkMode && { color: '#F8FAFC' }]}>Smart Elderly Care AI</LocalizedText>
+                    <LocalizedText style={[styles.appInfoVersion, isDarkMode && { color: '#94A3B8' }]}>Phiên bản 1.0.0</LocalizedText>
+                    <LocalizedText style={[styles.infoDetailText, isDarkMode && { color: '#94A3B8' }]}>
                       Hệ thống giám sát thông minh giúp gia đình theo dõi sức khỏe, thiết bị và nhận cảnh báo kịp thời.
-                    </Text>
-                    <Text style={[styles.appInfoCopyright, isDarkMode && { color: '#64748B' }]}>© 2026 Smart Elderly Care AI</Text>
+                    </LocalizedText>
+                    <LocalizedText style={[styles.appInfoCopyright, isDarkMode && { color: '#64748B' }]}>© 2026 Smart Elderly Care AI</LocalizedText>
                   </View>
                 )}
               </ScrollView>
@@ -1450,17 +1619,17 @@ export default function ProfileScreen({ navigation }: any) {
               >
                 <Ionicons name="chevron-back-outline" size={24} color={isDarkMode ? '#F8FAFC' : Colors.textPrimary} />
               </TouchableOpacity>
-              <Text style={[styles.settingsTitle, isDarkMode && { color: '#F8FAFC' }]}>Rung</Text>
+              <LocalizedText style={[styles.settingsTitle, isDarkMode && { color: '#F8FAFC' }]}>Rung</LocalizedText>
             </View>
 
             <View style={[styles.vibrationDetailRow, isDarkMode && { backgroundColor: '#1E293B', borderColor: '#334155' }]}>
-              <Text style={[styles.vibrationDetailLabel, isDarkMode && { color: '#F8FAFC' }]}>Rung</Text>
+              <LocalizedText style={[styles.vibrationDetailLabel, isDarkMode && { color: '#F8FAFC' }]}>Rung</LocalizedText>
               <Switch value={vibrationEnabled} onValueChange={handleVibrationToggle} />
             </View>
 
-            <Text style={[styles.vibrationDetailDescription, isDarkMode && { color: '#94A3B8' }]}>
+            <LocalizedText style={[styles.vibrationDetailDescription, isDarkMode && { color: '#94A3B8' }]}>
               Khi được bật, điện thoại / máy tính bảng của bạn sẽ rung khi bật nhấn / 
-            </Text>
+            </LocalizedText>
           </Pressable>
         </Pressable>
       </Modal>
@@ -1490,19 +1659,19 @@ export default function ProfileScreen({ navigation }: any) {
               >
                 <Ionicons name="chevron-back-outline" size={24} color={isDarkMode ? '#F8FAFC' : Colors.textPrimary} />
               </TouchableOpacity>
-              <Text style={[styles.settingsTitle, isDarkMode && { color: '#F8FAFC' }]}>Thiết lập thông báo</Text>
+              <LocalizedText style={[styles.settingsTitle, isDarkMode && { color: '#F8FAFC' }]}>Thiết lập thông báo</LocalizedText>
             </View>
 
             <View style={styles.notificationSettingsContent}>
-              <Text style={[styles.notificationSettingsIntro, isDarkMode && { color: '#94A3B8' }]}>
+              <LocalizedText style={[styles.notificationSettingsIntro, isDarkMode && { color: '#94A3B8' }]}>
                 Chọn cách bạn muốn nhận cảnh báo từ hệ thống.
-              </Text>
+              </LocalizedText>
 
               <View style={[styles.notificationSettingsCard, isDarkMode && { backgroundColor: '#1E293B', borderColor: '#334155' }]}>
                 <View style={styles.notificationSettingRow}>
                   <View style={styles.notificationSettingText}>
-                    <Text style={[styles.notificationSettingTitle, isDarkMode && { color: '#F8FAFC' }]}>Thông báo cảnh báo</Text>
-                    <Text style={[styles.notificationSettingDescription, isDarkMode && { color: '#94A3B8' }]}>Nhận cảnh báo sức khỏe mới</Text>
+                    <LocalizedText style={[styles.notificationSettingTitle, isDarkMode && { color: '#F8FAFC' }]}>Thông báo cảnh báo</LocalizedText>
+                    <LocalizedText style={[styles.notificationSettingDescription, isDarkMode && { color: '#94A3B8' }]}>Nhận cảnh báo sức khỏe mới</LocalizedText>
                   </View>
                   <Switch value={notificationsEnabled} onValueChange={setNotificationsEnabled} />
                 </View>
@@ -1510,8 +1679,8 @@ export default function ProfileScreen({ navigation }: any) {
 
                 <View style={styles.notificationSettingRow}>
                   <View style={styles.notificationSettingText}>
-                    <Text style={[styles.notificationSettingTitle, isDarkMode && { color: '#F8FAFC' }]}>Âm thanh cảnh báo</Text>
-                    <Text style={[styles.notificationSettingDescription, isDarkMode && { color: '#94A3B8' }]}>Phát âm thanh khi có cảnh báo</Text>
+                    <LocalizedText style={[styles.notificationSettingTitle, isDarkMode && { color: '#F8FAFC' }]}>Âm thanh cảnh báo</LocalizedText>
+                    <LocalizedText style={[styles.notificationSettingDescription, isDarkMode && { color: '#94A3B8' }]}>Phát âm thanh khi có cảnh báo</LocalizedText>
                   </View>
                   <Switch value={alertSoundEnabled} onValueChange={setAlertSoundEnabled} />
                 </View>
@@ -1519,8 +1688,8 @@ export default function ProfileScreen({ navigation }: any) {
 
                 <View style={styles.notificationSettingRow}>
                   <View style={styles.notificationSettingText}>
-                    <Text style={[styles.notificationSettingTitle, isDarkMode && { color: '#F8FAFC' }]}>Cảnh báo khẩn cấp</Text>
-                    <Text style={[styles.notificationSettingDescription, isDarkMode && { color: '#94A3B8' }]}>Luôn ưu tiên cảnh báo nguy hiểm</Text>
+                    <LocalizedText style={[styles.notificationSettingTitle, isDarkMode && { color: '#F8FAFC' }]}>Cảnh báo khẩn cấp</LocalizedText>
+                    <LocalizedText style={[styles.notificationSettingDescription, isDarkMode && { color: '#94A3B8' }]}>Luôn ưu tiên cảnh báo nguy hiểm</LocalizedText>
                   </View>
                   <Switch value={criticalAlertEnabled} onValueChange={setCriticalAlertEnabled} />
                 </View>
@@ -1549,35 +1718,31 @@ export default function ProfileScreen({ navigation }: any) {
               >
                 <Ionicons name="chevron-back-outline" size={24} color={isDarkMode ? '#F8FAFC' : Colors.textPrimary} />
               </TouchableOpacity>
-              <Text style={[styles.settingsTitle, isDarkMode && { color: '#F8FAFC' }]}>Cài đặt chung</Text>
+              <LocalizedText style={[styles.settingsTitle, isDarkMode && { color: '#F8FAFC' }]}>
+                {languageMode === 'en' ? 'General settings' : 'Cài đặt chung'}
+              </LocalizedText>
             </View>
 
             <View style={[styles.generalSettingsList, isDarkMode && { backgroundColor: '#1E293B', borderColor: '#334155', borderWidth: 1, borderRadius: 18, overflow: 'hidden' }]}>
               <View style={[styles.generalRow, isDarkMode && { borderBottomColor: '#334155' }]}>
-                <Text style={[styles.generalRowLabel, isDarkMode && { color: '#F8FAFC' }]}>Vùng</Text>
-                <Text style={[styles.generalRowValue, isDarkMode && { color: '#94A3B8' }]}>Vietnam</Text>
+                <LocalizedText style={[styles.generalRowLabel, isDarkMode && { color: '#F8FAFC' }]}>
+                  {languageMode === 'en' ? 'Region' : 'Vùng'}
+                </LocalizedText>
+                <LocalizedText style={[styles.generalRowValue, isDarkMode && { color: '#94A3B8' }]}>Vietnam</LocalizedText>
               </View>
-
-              <TouchableOpacity
-                style={[styles.generalRow, isDarkMode && { borderBottomColor: '#334155' }]}
-                activeOpacity={0.8}
-                onPress={() => setLanguageVisible(true)}
-              >
-                <Text style={[styles.generalRowLabel, isDarkMode && { color: '#F8FAFC' }]}>Ngôn ngữ</Text>
-                <View style={styles.generalValueWrap}>
-                  <Text style={[styles.generalRowValue, isDarkMode && { color: '#94A3B8' }]}>{languageMode === 'vi' ? 'Việt Nam' : 'English'}</Text>
-                  <Ionicons name="chevron-forward" size={18} color="#94A3B8" />
-                </View>
-              </TouchableOpacity>
 
               <TouchableOpacity
                 style={[styles.generalRow, { borderBottomWidth: 0 }]}
                 activeOpacity={0.8}
-                onPress={() => setAppearanceVisible(true)}
+                onPress={() => setLanguageVisible(true)}
               >
-                <Text style={[styles.generalRowLabel, isDarkMode && { color: '#F8FAFC' }]}>Chế độ tối</Text>
+                <LocalizedText style={[styles.generalRowLabel, isDarkMode && { color: '#F8FAFC' }]}>
+                  {languageMode === 'en' ? 'Language' : 'Ngôn ngữ'}
+                </LocalizedText>
                 <View style={styles.generalValueWrap}>
-                  <Text style={[styles.generalRowValue, isDarkMode && { color: '#94A3B8' }]}>{appearanceMode === 'light' ? 'Màu sáng' : 'Tối'}</Text>
+                  <LocalizedText style={[styles.generalRowValue, isDarkMode && { color: '#94A3B8' }]}>
+                    {languageMode === 'vi' ? 'Tiếng Việt' : 'English'}
+                  </LocalizedText>
                   <Ionicons name="chevron-forward" size={18} color="#94A3B8" />
                 </View>
               </TouchableOpacity>
@@ -1603,7 +1768,9 @@ export default function ProfileScreen({ navigation }: any) {
                 <Ionicons name="chevron-back-outline" size={28} color={isDarkMode ? '#F8FAFC' : '#111827'} />
               </TouchableOpacity>
 
-              <Text style={[styles.appearanceTitle, isDarkMode && { color: '#F8FAFC' }]}>Ngôn ngữ</Text>
+              <LocalizedText style={[styles.appearanceTitle, isDarkMode && { color: '#F8FAFC' }]}>
+                {languageMode === 'en' ? 'Language' : 'Ngôn ngữ'}
+              </LocalizedText>
               <View style={styles.appearanceHeaderSpacer} />
             </View>
 
@@ -1614,12 +1781,11 @@ export default function ProfileScreen({ navigation }: any) {
                   languageMode === 'vi' && (isDarkMode ? { backgroundColor: '#0F172A' } : styles.appearanceOptionRowSelected),
                 ]}
                 activeOpacity={0.8}
-                onPress={() => {
-                  setLanguageMode('vi');
-                  setLanguageVisible(false);
-                }}
+                onPress={() => void saveLanguagePreference('vi')}
               >
-                <Text style={[styles.appearanceOptionLabel, isDarkMode && { color: '#F8FAFC' }]}>Việt Nam</Text>
+                <LocalizedText style={[styles.appearanceOptionLabel, isDarkMode && { color: '#F8FAFC' }]}>
+                  {languageMode === 'en' ? 'Vietnamese' : 'Tiếng Việt'}
+                </LocalizedText>
                 {languageMode === 'vi' && (
                   <Ionicons name="checkmark" size={22} color="#1D9BF0" />
                 )}
@@ -1631,12 +1797,9 @@ export default function ProfileScreen({ navigation }: any) {
                   languageMode === 'en' && (isDarkMode ? { backgroundColor: '#0F172A' } : styles.appearanceOptionRowSelected),
                 ]}
                 activeOpacity={0.8}
-                onPress={() => {
-                  setLanguageMode('en');
-                  setLanguageVisible(false);
-                }}
+                onPress={() => void saveLanguagePreference('en')}
               >
-                <Text style={[styles.appearanceOptionLabel, isDarkMode && { color: '#F8FAFC' }]}>English</Text>
+                <LocalizedText style={[styles.appearanceOptionLabel, isDarkMode && { color: '#F8FAFC' }]}>English</LocalizedText>
                 {languageMode === 'en' && (
                   <Ionicons name="checkmark" size={22} color="#1D9BF0" />
                 )}
@@ -1653,7 +1816,10 @@ export default function ProfileScreen({ navigation }: any) {
         animationType="slide"
         onRequestClose={() => setAppearanceVisible(false)}
       >
-        <Pressable style={styles.appearanceOverlay} onPress={() => setAppearanceVisible(false)}>
+        <Pressable
+          style={[styles.appearanceOverlay, isDarkMode && { backgroundColor: colors.background }]}
+          onPress={() => setAppearanceVisible(false)}
+        >
           <Pressable style={[styles.appearanceSheet, isDarkMode && { backgroundColor: colors.background }]} onPress={() => {}}>
             <View style={styles.appearanceHeader}>
               <TouchableOpacity
@@ -1664,7 +1830,7 @@ export default function ProfileScreen({ navigation }: any) {
                 <Ionicons name="chevron-back-outline" size={28} color={isDarkMode ? colors.textPrimary : '#111827'} />
               </TouchableOpacity>
 
-              <Text style={[styles.appearanceTitle, isDarkMode && { color: colors.textPrimary }]}>Về bề ngoài</Text>
+              <LocalizedText style={[styles.appearanceTitle, isDarkMode && { color: colors.textPrimary }]}>Về bề ngoài</LocalizedText>
               <View style={styles.appearanceHeaderSpacer} />
             </View>
 
@@ -1672,7 +1838,10 @@ export default function ProfileScreen({ navigation }: any) {
               <TouchableOpacity
                 style={[
                   styles.appearanceOptionRow,
-                  appearanceMode === 'light' && styles.appearanceOptionRowSelected,
+                  isDarkMode && { backgroundColor: colors.card, borderBottomColor: colors.border },
+                  appearanceMode === 'light' && (isDarkMode
+                    ? { backgroundColor: colors.surfaceSubtle }
+                    : styles.appearanceOptionRowSelected),
                 ]}
                 activeOpacity={0.8}
                 onPress={() => {
@@ -1681,7 +1850,7 @@ export default function ProfileScreen({ navigation }: any) {
                   setAppearanceVisible(false);
                 }}
               >
-                <Text style={[styles.appearanceOptionLabel, isDarkMode && { color: colors.textPrimary }]}>Màu sáng</Text>
+                <LocalizedText style={[styles.appearanceOptionLabel, { color: colors.textPrimary }]}>Màu sáng</LocalizedText>
                 {appearanceMode === 'light' && (
                   <Ionicons name="checkmark" size={22} color="#1D9BF0" />
                 )}
@@ -1690,7 +1859,10 @@ export default function ProfileScreen({ navigation }: any) {
               <TouchableOpacity
                 style={[
                   styles.appearanceOptionRow,
-                  appearanceMode === 'dark' && styles.appearanceOptionRowSelected,
+                  isDarkMode && { backgroundColor: colors.card, borderBottomColor: colors.border },
+                  appearanceMode === 'dark' && (isDarkMode
+                    ? { backgroundColor: colors.surfaceSubtle }
+                    : styles.appearanceOptionRowSelected),
                 ]}
                 activeOpacity={0.8}
                 onPress={() => {
@@ -1699,7 +1871,7 @@ export default function ProfileScreen({ navigation }: any) {
                   setAppearanceVisible(false);
                 }}
               >
-                <Text style={[styles.appearanceOptionLabel, isDarkMode && { color: colors.textPrimary }]}>Tối</Text>
+                <LocalizedText style={[styles.appearanceOptionLabel, { color: colors.textPrimary }]}>Tối</LocalizedText>
                 {appearanceMode === 'dark' && (
                   <Ionicons name="checkmark" size={22} color="#1D9BF0" />
                 )}
@@ -1717,7 +1889,7 @@ export default function ProfileScreen({ navigation }: any) {
         {/* HEADER: TITLE "Menu" & QUICK ACTIONS (SEARCH, SETTINGS)           */}
         {/* ================================================================= */}
         <View style={styles.fbHeaderRow}>
-          <Text style={[styles.fbHeaderTitle, isDarkMode && { color: colors.textPrimary }]}>Menu</Text>
+          <LocalizedText style={[styles.fbHeaderTitle, isDarkMode && { color: colors.textPrimary }]}>Menu</LocalizedText>
           <View style={styles.fbHeaderActionIcons}>
             <TouchableOpacity
               style={[styles.fbHeaderCircleBtn, isDarkMode && { backgroundColor: colors.card }]}
@@ -1757,18 +1929,18 @@ export default function ProfileScreen({ navigation }: any) {
               )}
             </View>
             <View style={{ flex: 1, marginLeft: 12 }}>
-              <Text style={[styles.fbProfileName, isDarkMode && { color: colors.textPrimary }]}>
+              <LocalizedText style={[styles.fbProfileName, isDarkMode && { color: colors.textPrimary }]}>
                 {profileName || userName || 'Nguyễn Hữu Nghĩa'}
-              </Text>
-              <Text style={[styles.fbProfileRole, isDarkMode && { color: colors.textSecondary }]}>
+              </LocalizedText>
+              <LocalizedText style={[styles.fbProfileRole, isDarkMode && { color: colors.textSecondary }]}>
                 {profilePhone || '0905 123 456'} • Chủ nhà (Giám sát)
-              </Text>
+              </LocalizedText>
             </View>
             {/* Badge thông báo & icon switch */}
             <View style={styles.fbProfileRightBadge}>
               <Ionicons name="chevron-down-circle" size={24} color="#64748B" />
               <View style={styles.fbNotiCountBadge}>
-                <Text style={styles.fbNotiCountText}>2</Text>
+                <LocalizedText style={styles.fbNotiCountText}>2</LocalizedText>
               </View>
             </View>
           </TouchableOpacity>
@@ -1784,9 +1956,9 @@ export default function ProfileScreen({ navigation }: any) {
             <View style={styles.fbPlusCircleBtn}>
               <Ionicons name="add" size={20} color="#FFFFFF" />
             </View>
-            <Text style={[styles.fbSubActionText, isDarkMode && { color: colors.textPrimary }]}>
+            <LocalizedText style={[styles.fbSubActionText, isDarkMode && { color: colors.textPrimary }]}>
               Thêm thành viên gia đình & Cụ cần chăm sóc
-            </Text>
+            </LocalizedText>
           </TouchableOpacity>
         </View>
 
@@ -1794,9 +1966,9 @@ export default function ProfileScreen({ navigation }: any) {
         {/* LỐI TẮT CỦA BẠN (YOUR SHORTCUTS - CAROUSEL NGANG PHONG CÁCH FB)   */}
         {/* ================================================================= */}
         <View style={styles.fbShortcutsSection}>
-          <Text style={[styles.fbSectionTitle, isDarkMode && { color: colors.textPrimary }]}>
+          <LocalizedText style={[styles.fbSectionTitle, isDarkMode && { color: colors.textPrimary }]}>
             Lối tắt của bạn
-          </Text>
+          </LocalizedText>
           <ScrollView
             horizontal
             showsHorizontalScrollIndicator={false}
@@ -1817,9 +1989,9 @@ export default function ProfileScreen({ navigation }: any) {
                   <Ionicons name="heart" size={10} color="#FFFFFF" />
                 </View>
               </View>
-              <Text numberOfLines={1} style={[styles.fbShortcutLabel, isDarkMode && { color: colors.textSecondary }]}>
+              <LocalizedText numberOfLines={1} style={[styles.fbShortcutLabel, isDarkMode && { color: colors.textSecondary }]}>
                 Cụ Nguyễn...
-              </Text>
+              </LocalizedText>
             </TouchableOpacity>
 
             {/* Lối tắt 2: Camera AI Phòng Khách */}
@@ -1837,9 +2009,9 @@ export default function ProfileScreen({ navigation }: any) {
                   <Ionicons name="videocam" size={10} color="#FFFFFF" />
                 </View>
               </View>
-              <Text numberOfLines={1} style={[styles.fbShortcutLabel, isDarkMode && { color: colors.textSecondary }]}>
+              <LocalizedText numberOfLines={1} style={[styles.fbShortcutLabel, isDarkMode && { color: colors.textSecondary }]}>
                 Camera PK
-              </Text>
+              </LocalizedText>
             </TouchableOpacity>
 
             {/* Lối tắt 3: Vòng đeo tay BLE */}
@@ -1857,9 +2029,9 @@ export default function ProfileScreen({ navigation }: any) {
                   <Ionicons name="pulse" size={10} color="#FFFFFF" />
                 </View>
               </View>
-              <Text numberOfLines={1} style={[styles.fbShortcutLabel, isDarkMode && { color: colors.textSecondary }]}>
+              <LocalizedText numberOfLines={1} style={[styles.fbShortcutLabel, isDarkMode && { color: colors.textSecondary }]}>
                 Vòng tay BLE
-              </Text>
+              </LocalizedText>
             </TouchableOpacity>
 
             {/* Lối tắt 4: Lịch nhắc thuốc */}
@@ -1877,9 +2049,9 @@ export default function ProfileScreen({ navigation }: any) {
                   <Ionicons name="medkit" size={10} color="#FFFFFF" />
                 </View>
               </View>
-              <Text numberOfLines={1} style={[styles.fbShortcutLabel, isDarkMode && { color: colors.textSecondary }]}>
+              <LocalizedText numberOfLines={1} style={[styles.fbShortcutLabel, isDarkMode && { color: colors.textSecondary }]}>
                 Nhắc thuốc
-              </Text>
+              </LocalizedText>
             </TouchableOpacity>
 
             {/* Lối tắt 5: Báo cáo y tế */}
@@ -1897,9 +2069,9 @@ export default function ProfileScreen({ navigation }: any) {
                   <Ionicons name="document-text" size={10} color="#FFFFFF" />
                 </View>
               </View>
-              <Text numberOfLines={1} style={[styles.fbShortcutLabel, isDarkMode && { color: colors.textSecondary }]}>
+              <LocalizedText numberOfLines={1} style={[styles.fbShortcutLabel, isDarkMode && { color: colors.textSecondary }]}>
                 Báo cáo y tế
-              </Text>
+              </LocalizedText>
             </TouchableOpacity>
 
             {/* Lối tắt 6: Nhà của tôi */}
@@ -1917,9 +2089,9 @@ export default function ProfileScreen({ navigation }: any) {
                   <Ionicons name="home" size={10} color="#FFFFFF" />
                 </View>
               </View>
-              <Text numberOfLines={1} style={[styles.fbShortcutLabel, isDarkMode && { color: colors.textSecondary }]}>
+              <LocalizedText numberOfLines={1} style={[styles.fbShortcutLabel, isDarkMode && { color: colors.textSecondary }]}>
                 Nhà của tôi
-              </Text>
+              </LocalizedText>
             </TouchableOpacity>
           </ScrollView>
         </View>
@@ -1941,12 +2113,12 @@ export default function ProfileScreen({ navigation }: any) {
             <View style={[styles.fbGridIconBox, { backgroundColor: isDarkMode ? '#1E1B4B' : '#EEF2FF' }]}>
               <Ionicons name="person-circle-outline" size={24} color="#6366F1" />
             </View>
-            <Text style={[styles.fbGridCardTitle, isDarkMode && { color: colors.textPrimary }]}>
+            <LocalizedText style={[styles.fbGridCardTitle, isDarkMode && { color: colors.textPrimary }]}>
               Hồ sơ giám sát
-            </Text>
-            <Text style={[styles.fbGridCardSub, isDarkMode && { color: colors.textSecondary }]}>
+            </LocalizedText>
+            <LocalizedText style={[styles.fbGridCardSub, isDarkMode && { color: colors.textSecondary }]}>
               Tài khoản người thân & SĐT khẩn cấp
-            </Text>
+            </LocalizedText>
           </TouchableOpacity>
 
           {/* Ô 2: Hồ sơ bệnh án người cao tuổi */}
@@ -1960,15 +2132,15 @@ export default function ProfileScreen({ navigation }: any) {
                 <Ionicons name="medkit-outline" size={24} color="#0EA5E9" />
               </View>
               <View style={styles.fbAesBadge}>
-                <Text style={styles.fbAesBadgeText}>AES-256</Text>
+                <LocalizedText style={styles.fbAesBadgeText}>AES-256</LocalizedText>
               </View>
             </View>
-            <Text style={[styles.fbGridCardTitle, isDarkMode && { color: colors.textPrimary }]}>
+            <LocalizedText style={[styles.fbGridCardTitle, isDarkMode && { color: colors.textPrimary }]}>
               Hồ sơ bệnh án
-            </Text>
-            <Text style={[styles.fbGridCardSub, isDarkMode && { color: colors.textSecondary }]}>
+            </LocalizedText>
+            <LocalizedText style={[styles.fbGridCardSub, isDarkMode && { color: colors.textSecondary }]}>
               Cụ An, bệnh nền, nhóm máu & đơn thuốc
-            </Text>
+            </LocalizedText>
           </TouchableOpacity>
 
           {/* Ô 3: Nhà của tôi */}
@@ -1980,12 +2152,12 @@ export default function ProfileScreen({ navigation }: any) {
             <View style={[styles.fbGridIconBox, { backgroundColor: isDarkMode ? '#064E3B' : '#ECFDF5' }]}>
               <Ionicons name="home-outline" size={24} color="#10B981" />
             </View>
-            <Text style={[styles.fbGridCardTitle, isDarkMode && { color: colors.textPrimary }]}>
+            <LocalizedText style={[styles.fbGridCardTitle, isDarkMode && { color: colors.textPrimary }]}>
               {house.name || 'Nhà của tôi'}
-            </Text>
-            <Text style={[styles.fbGridCardSub, isDarkMode && { color: colors.textSecondary }]}>
+            </LocalizedText>
+            <LocalizedText style={[styles.fbGridCardSub, isDarkMode && { color: colors.textSecondary }]}>
               Thành viên: {house.membersCount || 1} • Phòng khách
-            </Text>
+            </LocalizedText>
           </TouchableOpacity>
 
           {/* Ô 4: Thiết bị kết nối (Sửa từ "Hoạt động với") */}
@@ -1997,12 +2169,12 @@ export default function ProfileScreen({ navigation }: any) {
             <View style={[styles.fbGridIconBox, { backgroundColor: isDarkMode ? '#451A03' : '#FFF7ED' }]}>
               <Ionicons name="hardware-chip-outline" size={24} color="#FF7A00" />
             </View>
-            <Text style={[styles.fbGridCardTitle, isDarkMode && { color: colors.textPrimary }]}>
+            <LocalizedText style={[styles.fbGridCardTitle, isDarkMode && { color: colors.textPrimary }]}>
               Thiết bị kết nối
-            </Text>
-            <Text style={[styles.fbGridCardSub, isDarkMode && { color: colors.textSecondary }]}>
+            </LocalizedText>
+            <LocalizedText style={[styles.fbGridCardSub, isDarkMode && { color: colors.textSecondary }]}>
               Camera AI, Vòng BLE & Cảm biến
-            </Text>
+            </LocalizedText>
           </TouchableOpacity>
 
           {/* Ô 5: Cấu hình AI & Cảnh báo (Sửa từ "Chơi Algo") */}
@@ -2014,12 +2186,12 @@ export default function ProfileScreen({ navigation }: any) {
             <View style={[styles.fbGridIconBox, { backgroundColor: isDarkMode ? '#3B1D54' : '#F5F3FF' }]}>
               <Ionicons name="color-wand-outline" size={24} color="#8B5CF6" />
             </View>
-            <Text style={[styles.fbGridCardTitle, isDarkMode && { color: colors.textPrimary }]}>
+            <LocalizedText style={[styles.fbGridCardTitle, isDarkMode && { color: colors.textPrimary }]}>
               Cấu hình AI & Ngưỡng
-            </Text>
-            <Text style={[styles.fbGridCardSub, isDarkMode && { color: colors.textSecondary }]}>
+            </LocalizedText>
+            <LocalizedText style={[styles.fbGridCardSub, isDarkMode && { color: colors.textSecondary }]}>
               Độ nhạy té ngã, ngưỡng nhịp tim & SpO2
-            </Text>
+            </LocalizedText>
           </TouchableOpacity>
 
           {/* Ô 6: Báo cáo sức khỏe (Sửa từ "Báo cáo y tế & Xuất file (FR13)") */}
@@ -2031,12 +2203,12 @@ export default function ProfileScreen({ navigation }: any) {
             <View style={[styles.fbGridIconBox, { backgroundColor: isDarkMode ? '#1E293B' : '#EFF6FF' }]}>
               <Ionicons name="document-text-outline" size={24} color="#2563EB" />
             </View>
-            <Text style={[styles.fbGridCardTitle, isDarkMode && { color: colors.textPrimary }]}>
+            <LocalizedText style={[styles.fbGridCardTitle, isDarkMode && { color: colors.textPrimary }]}>
               Báo cáo sức khỏe
-            </Text>
-            <Text style={[styles.fbGridCardSub, isDarkMode && { color: colors.textSecondary }]}>
+            </LocalizedText>
+            <LocalizedText style={[styles.fbGridCardSub, isDarkMode && { color: colors.textSecondary }]}>
               Xuất file PDF & Excel gửi bác sĩ
-            </Text>
+            </LocalizedText>
           </TouchableOpacity>
 
           {/* Ô 7: Định vị & Bản đồ (Sửa từ "Định vị địa lý") */}
@@ -2048,12 +2220,12 @@ export default function ProfileScreen({ navigation }: any) {
             <View style={[styles.fbGridIconBox, { backgroundColor: isDarkMode ? '#4C0519' : '#FFF1F2' }]}>
               <Ionicons name="location-outline" size={24} color="#F43F5E" />
             </View>
-            <Text style={[styles.fbGridCardTitle, isDarkMode && { color: colors.textPrimary }]}>
+            <LocalizedText style={[styles.fbGridCardTitle, isDarkMode && { color: colors.textPrimary }]}>
               Định vị & Vùng an toàn
-            </Text>
-            <Text style={[styles.fbGridCardSub, isDarkMode && { color: colors.textSecondary }]}>
+            </LocalizedText>
+            <LocalizedText style={[styles.fbGridCardSub, isDarkMode && { color: colors.textSecondary }]}>
               GPS định vị & Geofencing nhà an toàn
-            </Text>
+            </LocalizedText>
           </TouchableOpacity>
 
           {/* Ô 8: Trung tâm bảo mật */}
@@ -2065,12 +2237,12 @@ export default function ProfileScreen({ navigation }: any) {
             <View style={[styles.fbGridIconBox, { backgroundColor: isDarkMode ? '#133E3B' : '#F0FDFA' }]}>
               <Ionicons name="shield-checkmark-outline" size={24} color="#0D9488" />
             </View>
-            <Text style={[styles.fbGridCardTitle, isDarkMode && { color: colors.textPrimary }]}>
+            <LocalizedText style={[styles.fbGridCardTitle, isDarkMode && { color: colors.textPrimary }]}>
               Trung tâm bảo mật
-            </Text>
-            <Text style={[styles.fbGridCardSub, isDarkMode && { color: colors.textSecondary }]}>
+            </LocalizedText>
+            <LocalizedText style={[styles.fbGridCardSub, isDarkMode && { color: colors.textSecondary }]}>
               Xác thực 2FA & Quản lý phiên đăng nhập
-            </Text>
+            </LocalizedText>
           </TouchableOpacity>
 
           {/* HIỂN THỊ THÊM KHI BẤM "XEM THÊM" (GIỐNG HÌNH 1) */}
@@ -2085,12 +2257,12 @@ export default function ProfileScreen({ navigation }: any) {
                 <View style={[styles.fbGridIconBox, { backgroundColor: isDarkMode ? '#451A03' : '#FEF3C7' }]}>
                   <Ionicons name="calendar-outline" size={24} color="#D97706" />
                 </View>
-                <Text style={[styles.fbGridCardTitle, isDarkMode && { color: colors.textPrimary }]}>
+                <LocalizedText style={[styles.fbGridCardTitle, isDarkMode && { color: colors.textPrimary }]}>
                   Lịch nhắc thuốc
-                </Text>
-                <Text style={[styles.fbGridCardSub, isDarkMode && { color: colors.textSecondary }]}>
+                </LocalizedText>
+                <LocalizedText style={[styles.fbGridCardSub, isDarkMode && { color: colors.textSecondary }]}>
                   Đơn thuốc & Lịch tái khám bác sĩ
-                </Text>
+                </LocalizedText>
               </TouchableOpacity>
 
               {/* Ô 10: Nhật ký cảnh báo SOS */}
@@ -2102,12 +2274,12 @@ export default function ProfileScreen({ navigation }: any) {
                 <View style={[styles.fbGridIconBox, { backgroundColor: isDarkMode ? '#450A0A' : '#FEE2E2' }]}>
                   <Ionicons name="notifications-outline" size={24} color="#EF4444" />
                 </View>
-                <Text style={[styles.fbGridCardTitle, isDarkMode && { color: colors.textPrimary }]}>
+                <LocalizedText style={[styles.fbGridCardTitle, isDarkMode && { color: colors.textPrimary }]}>
                   Nhật ký cảnh báo
-                </Text>
-                <Text style={[styles.fbGridCardSub, isDarkMode && { color: colors.textSecondary }]}>
+                </LocalizedText>
+                <LocalizedText style={[styles.fbGridCardSub, isDarkMode && { color: colors.textSecondary }]}>
                   Sự kiện té ngã & Sinh hiệu bất thường
-                </Text>
+                </LocalizedText>
               </TouchableOpacity>
 
               {/* Ô 11: Trợ lý Bác sĩ AI */}
@@ -2119,12 +2291,12 @@ export default function ProfileScreen({ navigation }: any) {
                 <View style={[styles.fbGridIconBox, { backgroundColor: isDarkMode ? '#164E63' : '#ECFEFF' }]}>
                   <Ionicons name="chatbubble-ellipses-outline" size={24} color="#06B6D4" />
                 </View>
-                <Text style={[styles.fbGridCardTitle, isDarkMode && { color: colors.textPrimary }]}>
+                <LocalizedText style={[styles.fbGridCardTitle, isDarkMode && { color: colors.textPrimary }]}>
                   Trợ lý Bác sĩ AI
-                </Text>
-                <Text style={[styles.fbGridCardSub, isDarkMode && { color: colors.textSecondary }]}>
+                </LocalizedText>
+                <LocalizedText style={[styles.fbGridCardSub, isDarkMode && { color: colors.textSecondary }]}>
                   Tư vấn dinh dưỡng & Vận động 24/7
-                </Text>
+                </LocalizedText>
               </TouchableOpacity>
 
               {/* Ô 12: Giám sát đa màn hình */}
@@ -2136,12 +2308,12 @@ export default function ProfileScreen({ navigation }: any) {
                 <View style={[styles.fbGridIconBox, { backgroundColor: isDarkMode ? '#2E1065' : '#F3E8FF' }]}>
                   <Ionicons name="grid-outline" size={24} color="#7C3AED" />
                 </View>
-                <Text style={[styles.fbGridCardTitle, isDarkMode && { color: colors.textPrimary }]}>
+                <LocalizedText style={[styles.fbGridCardTitle, isDarkMode && { color: colors.textPrimary }]}>
                   Multi-View Camera
-                </Text>
-                <Text style={[styles.fbGridCardSub, isDarkMode && { color: colors.textSecondary }]}>
+                </LocalizedText>
+                <LocalizedText style={[styles.fbGridCardSub, isDarkMode && { color: colors.textSecondary }]}>
                   Xem nhiều góc quay camera cùng lúc
-                </Text>
+                </LocalizedText>
               </TouchableOpacity>
 
               {/* Ô 13: Chế độ Bác sĩ Gia đình */}
@@ -2149,7 +2321,7 @@ export default function ProfileScreen({ navigation }: any) {
                 style={[styles.fbGridCard, isDarkMode && { backgroundColor: colors.card, borderColor: '#0284C7' }]}
                 activeOpacity={0.8}
                 onPress={() => {
-                  Alert.alert(
+                  LocalizedAlert.alert(
                     'Chuyển sang Chế độ Bác sĩ',
                     'Bạn muốn chuyển sang giao diện chuyên môn của Bác sĩ gia đình (Danh sách bệnh nhân, Kê đơn thuốc, Báo cáo y tế)?',
                     [
@@ -2162,12 +2334,12 @@ export default function ProfileScreen({ navigation }: any) {
                 <View style={[styles.fbGridIconBox, { backgroundColor: isDarkMode ? '#082F49' : '#E0F2FE' }]}>
                   <Ionicons name="medical-outline" size={24} color="#0284C7" />
                 </View>
-                <Text style={[styles.fbGridCardTitle, isDarkMode && { color: colors.textPrimary }]}>
+                <LocalizedText style={[styles.fbGridCardTitle, isDarkMode && { color: colors.textPrimary }]}>
                   Chế độ Bác sĩ
-                </Text>
-                <Text style={[styles.fbGridCardSub, isDarkMode && { color: colors.textSecondary }]}>
+                </LocalizedText>
+                <LocalizedText style={[styles.fbGridCardSub, isDarkMode && { color: colors.textSecondary }]}>
                   Bệnh án, Kê đơn & Báo cáo y tế
-                </Text>
+                </LocalizedText>
               </TouchableOpacity>
             </>
           )}
@@ -2179,9 +2351,9 @@ export default function ProfileScreen({ navigation }: any) {
           activeOpacity={0.8}
           onPress={() => setShowMoreGrid(!showMoreGrid)}
         >
-          <Text style={[styles.fbViewMoreText, isDarkMode && { color: colors.textPrimary }]}>
+          <LocalizedText style={[styles.fbViewMoreText, isDarkMode && { color: colors.textPrimary }]}>
             {showMoreGrid ? 'Ẩn bớt' : 'Xem thêm'}
-          </Text>
+          </LocalizedText>
           <Ionicons
             name={showMoreGrid ? 'chevron-up' : 'chevron-down'}
             size={18}
@@ -2200,9 +2372,9 @@ export default function ProfileScreen({ navigation }: any) {
           >
             <View style={styles.fbAccordionHeaderLeft}>
               <Ionicons name="help-circle-outline" size={24} color={isDarkMode ? colors.textPrimary : '#0F172A'} />
-              <Text style={[styles.fbAccordionTitle, isDarkMode && { color: colors.textPrimary }]}>
+              <LocalizedText style={[styles.fbAccordionTitle, isDarkMode && { color: colors.textPrimary }]}>
                 Trợ giúp và hỗ trợ
-              </Text>
+              </LocalizedText>
             </View>
             <Ionicons
               name={isHelpExpanded ? 'chevron-up' : 'chevron-down'}
@@ -2223,10 +2395,10 @@ export default function ProfileScreen({ navigation }: any) {
                   <Ionicons name="call" size={18} color="#EF4444" />
                 </View>
                 <View style={{ flex: 1 }}>
-                  <Text style={[styles.fbSubRowTitle, { color: '#EF4444', fontWeight: '800' }]}>
+                  <LocalizedText style={[styles.fbSubRowTitle, { color: '#EF4444', fontWeight: '800' }]}>
                     Gọi cấp cứu y tế khẩn cấp 115
-                  </Text>
-                  <Text style={styles.fbSubRowSub}>Kết nối trực tiếp đường dây nóng y tế</Text>
+                  </LocalizedText>
+                  <LocalizedText style={styles.fbSubRowSub}>Kết nối trực tiếp đường dây nóng y tế</LocalizedText>
                 </View>
                 <Ionicons name="chevron-forward" size={16} color="#CBD5E1" />
               </TouchableOpacity>
@@ -2243,10 +2415,10 @@ export default function ProfileScreen({ navigation }: any) {
                   <Ionicons name="headset" size={18} color="#2563EB" />
                 </View>
                 <View style={{ flex: 1 }}>
-                  <Text style={[styles.fbSubRowTitle, isDarkMode && { color: colors.textPrimary }]}>
+                  <LocalizedText style={[styles.fbSubRowTitle, isDarkMode && { color: colors.textPrimary }]}>
                     Tổng đài hỗ trợ kỹ thuật CSKH 24/7
-                  </Text>
-                  <Text style={styles.fbSubRowSub}>Hỗ trợ kết nối camera, vòng tay, hub AI</Text>
+                  </LocalizedText>
+                  <LocalizedText style={styles.fbSubRowSub}>Hỗ trợ kết nối camera, vòng tay, hub AI</LocalizedText>
                 </View>
                 <Ionicons name="chevron-forward" size={16} color="#CBD5E1" />
               </TouchableOpacity>
@@ -2266,10 +2438,10 @@ export default function ProfileScreen({ navigation }: any) {
                   <Ionicons name="book-outline" size={18} color="#8B5CF6" />
                 </View>
                 <View style={{ flex: 1 }}>
-                  <Text style={[styles.fbSubRowTitle, isDarkMode && { color: colors.textPrimary }]}>
+                  <LocalizedText style={[styles.fbSubRowTitle, isDarkMode && { color: colors.textPrimary }]}>
                     Hướng dẫn sử dụng & Giới thiệu đồ án
-                  </Text>
-                  <Text style={styles.fbSubRowSub}>Tài liệu kỹ thuật Smart Elderly Care AI</Text>
+                  </LocalizedText>
+                  <LocalizedText style={styles.fbSubRowSub}>Tài liệu kỹ thuật Smart Elderly Care AI</LocalizedText>
                 </View>
                 <Ionicons name="chevron-forward" size={16} color="#CBD5E1" />
               </TouchableOpacity>
@@ -2288,9 +2460,9 @@ export default function ProfileScreen({ navigation }: any) {
           >
             <View style={styles.fbAccordionHeaderLeft}>
               <Ionicons name="settings-outline" size={24} color={isDarkMode ? colors.textPrimary : '#0F172A'} />
-              <Text style={[styles.fbAccordionTitle, isDarkMode && { color: colors.textPrimary }]}>
+              <LocalizedText style={[styles.fbAccordionTitle, isDarkMode && { color: colors.textPrimary }]}>
                 Cài đặt và quyền riêng tư
-              </Text>
+              </LocalizedText>
             </View>
             <Ionicons
               name={isSettingsExpanded ? 'chevron-up' : 'chevron-down'}
@@ -2311,10 +2483,10 @@ export default function ProfileScreen({ navigation }: any) {
                   <Ionicons name="notifications-outline" size={18} color="#D97706" />
                 </View>
                 <View style={{ flex: 1 }}>
-                  <Text style={[styles.fbSubRowTitle, isDarkMode && { color: colors.textPrimary }]}>
+                  <LocalizedText style={[styles.fbSubRowTitle, isDarkMode && { color: colors.textPrimary }]}>
                     Cài đặt thông báo & Âm thanh báo động
-                  </Text>
-                  <Text style={styles.fbSubRowSub}>Chuông còi hú, rung, thông báo đẩy</Text>
+                  </LocalizedText>
+                  <LocalizedText style={styles.fbSubRowSub}>Chuông còi hú, rung, thông báo đẩy</LocalizedText>
                 </View>
                 <Ionicons name="chevron-forward" size={16} color="#CBD5E1" />
               </TouchableOpacity>
@@ -2331,10 +2503,10 @@ export default function ProfileScreen({ navigation }: any) {
                   <Ionicons name="text-outline" size={18} color="#10B981" />
                 </View>
                 <View style={{ flex: 1 }}>
-                  <Text style={[styles.fbSubRowTitle, isDarkMode && { color: colors.textPrimary }]}>
+                  <LocalizedText style={[styles.fbSubRowTitle, isDarkMode && { color: colors.textPrimary }]}>
                     Cỡ chữ lớn (Dành cho người cao tuổi)
-                  </Text>
-                  <Text style={styles.fbSubRowSub}>Điều chỉnh độ phóng to chữ đọc dễ dàng</Text>
+                  </LocalizedText>
+                  <LocalizedText style={styles.fbSubRowSub}>Điều chỉnh độ phóng to chữ đọc dễ dàng</LocalizedText>
                 </View>
                 <Ionicons name="chevron-forward" size={16} color="#CBD5E1" />
               </TouchableOpacity>
@@ -2351,12 +2523,12 @@ export default function ProfileScreen({ navigation }: any) {
                   <Ionicons name="contrast-outline" size={18} color="#475569" />
                 </View>
                 <View style={{ flex: 1 }}>
-                  <Text style={[styles.fbSubRowTitle, isDarkMode && { color: colors.textPrimary }]}>
+                  <LocalizedText style={[styles.fbSubRowTitle, isDarkMode && { color: colors.textPrimary }]}>
                     Chế độ giao diện Sáng / Tối
-                  </Text>
-                  <Text style={styles.fbSubRowSub}>
+                  </LocalizedText>
+                  <LocalizedText style={styles.fbSubRowSub}>
                     {isDarkMode ? 'Đang dùng Giao diện Tối' : 'Đang dùng Giao diện Sáng'}
-                  </Text>
+                  </LocalizedText>
                 </View>
                 <Ionicons name="chevron-forward" size={16} color="#CBD5E1" />
               </TouchableOpacity>
@@ -2373,10 +2545,10 @@ export default function ProfileScreen({ navigation }: any) {
                   <Ionicons name="lock-closed-outline" size={18} color="#EF4444" />
                 </View>
                 <View style={{ flex: 1 }}>
-                  <Text style={[styles.fbSubRowTitle, isDarkMode && { color: colors.textPrimary }]}>
+                  <LocalizedText style={[styles.fbSubRowTitle, isDarkMode && { color: colors.textPrimary }]}>
                     Đổi mật khẩu tài khoản
-                  </Text>
-                  <Text style={styles.fbSubRowSub}>Cập nhật mã bảo mật đăng nhập</Text>
+                  </LocalizedText>
+                  <LocalizedText style={styles.fbSubRowSub}>Cập nhật mã bảo mật đăng nhập</LocalizedText>
                 </View>
                 <Ionicons name="chevron-forward" size={16} color="#CBD5E1" />
               </TouchableOpacity>
@@ -2393,7 +2565,7 @@ export default function ProfileScreen({ navigation }: any) {
           onPress={handleLogout}
         >
           <Ionicons name="log-out-outline" size={20} color="#EF4444" />
-          <Text style={styles.fbLogoutBtnText}>Đăng xuất</Text>
+          <LocalizedText style={styles.fbLogoutBtnText}>Đăng xuất</LocalizedText>
         </TouchableOpacity>
       </ScrollView>
     </SafeAreaView>
@@ -3227,18 +3399,19 @@ const styles = StyleSheet.create({
   },
   settingsOverlay: {
     flex: 1,
-    backgroundColor: '#F3F4F6',
+    backgroundColor: '#F0F0F1',
     justifyContent: 'flex-start',
-    marginTop: 0,
     paddingTop: 0,
     paddingHorizontal: 0,
   },
   settingsSheet: {
     flex: 1,
     width: '100%',
-    backgroundColor: '#F3F4F6',
-    paddingHorizontal: 18,
-    paddingTop: 18,
+    backgroundColor: '#F0F0F1',
+    borderWidth: 1,
+    borderColor: '#DCDDE1',
+    paddingHorizontal: 14,
+    paddingTop: 14,
     paddingBottom: 20,
     marginTop: 0,
   },
@@ -3247,16 +3420,14 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'center',
-    marginTop: 6,
-    marginBottom: 10,
-    paddingTop: 6,
-    paddingBottom: 6,
-    minHeight: 44,
+    marginTop: 0,
+    marginBottom: 14,
+    minHeight: 40,
   },
   settingsTitle: {
-    fontSize: 18,
+    fontSize: 20,
     fontWeight: '700',
-    color: Colors.textPrimary,
+    color: '#111827',
     position: 'absolute',
     left: 0,
     right: 0,
@@ -3425,25 +3596,25 @@ const styles = StyleSheet.create({
     color: '#64748B',
   },
   fontSizeList: {
-    marginTop: 8,
+    marginTop: 0,
   },
   fontSizeOption: {
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'space-between',
-    minHeight: 62,
+    minHeight: 54,
     paddingHorizontal: 18,
-    paddingVertical: 16,
-    backgroundColor: '#FFFFFF',
+    paddingVertical: 14,
+    backgroundColor: '#F7F7F7',
     borderWidth: 1,
-    borderColor: '#E5E7EB',
-    borderRadius: 18,
-    marginBottom: 12,
+    borderColor: '#DADDE2',
+    borderRadius: 12,
+    marginBottom: 10,
   },
   fontSizeOptionText: {
-    fontSize: 15,
-    fontWeight: '600',
-    color: '#111827',
+    fontSize: 16,
+    fontWeight: '500',
+    color: '#1F2937',
   },
   customFontSliderPanel: {
     marginTop: 18,
@@ -3520,11 +3691,11 @@ const styles = StyleSheet.create({
     transform: [{ translateX: -10 }],
   },
   fontSizeNote: {
-    fontSize: 15,
-    lineHeight: 24,
-    color: '#64748B',
-    marginTop: 8,
-    marginBottom: 10,
+    fontSize: 14,
+    lineHeight: 22,
+    color: '#5B6470',
+    marginTop: 14,
+    marginBottom: 8,
   },
   fontSizeLink: {
     fontSize: 18,
@@ -3684,18 +3855,37 @@ const styles = StyleSheet.create({
     color: Colors.textPrimary,
   },
   changePasswordContent: {
-    paddingHorizontal: 14,
-    paddingTop: 12,
-    paddingBottom: 20,
+    paddingHorizontal: 18,
+    paddingTop: 16,
+    paddingBottom: 28,
+  },
+  changePasswordIntroCard: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 12,
+    marginBottom: 22,
+    padding: 14,
+    borderWidth: 1,
+    borderColor: '#DBEAFE',
+    borderRadius: 14,
+    backgroundColor: '#EFF6FF',
+  },
+  changePasswordIntroIcon: {
+    width: 40,
+    height: 40,
+    alignItems: 'center',
+    justifyContent: 'center',
+    borderRadius: 12,
+    backgroundColor: '#DBEAFE',
   },
   changePasswordIntro: {
-    marginBottom: 20,
+    flex: 1,
     fontSize: 14,
-    lineHeight: 20,
-    color: '#64748B',
+    lineHeight: 21,
+    color: '#334155',
   },
   passwordLabel: {
-    marginBottom: 7,
+    marginBottom: 9,
     fontSize: 15,
     fontWeight: '700',
     color: '#111827',
@@ -3703,12 +3893,12 @@ const styles = StyleSheet.create({
   passwordInputWrap: {
     flexDirection: 'row',
     alignItems: 'center',
-    minHeight: 50,
-    marginBottom: 17,
-    paddingHorizontal: 12,
+    minHeight: 54,
+    marginBottom: 20,
+    paddingHorizontal: 14,
     borderWidth: 1,
     borderColor: '#D9E2EC',
-    borderRadius: 11,
+    borderRadius: 13,
     backgroundColor: '#FFFFFF',
   },
   passwordInput: {
@@ -3718,11 +3908,21 @@ const styles = StyleSheet.create({
     fontSize: 14,
     color: '#0F172A',
   },
+  passwordVisibilityButton: {
+    width: 40,
+    height: 40,
+    alignItems: 'center',
+    justifyContent: 'center',
+    marginRight: -6,
+    borderRadius: 10,
+  },
   passwordRequirements: {
-    marginBottom: 17,
-    paddingHorizontal: 14,
-    paddingVertical: 12,
-    borderRadius: 12,
+    marginBottom: 20,
+    paddingHorizontal: 16,
+    paddingVertical: 14,
+    borderWidth: 1,
+    borderColor: '#E2E8F0',
+    borderRadius: 14,
     backgroundColor: '#FFFFFF',
     shadowColor: '#64748B',
     shadowOffset: { width: 0, height: 3 },
@@ -3736,16 +3936,23 @@ const styles = StyleSheet.create({
     color: '#64748B',
   },
   passwordRequirement: {
+    flex: 1,
     fontSize: 13,
-    lineHeight: 20,
-    color: '#64748B',
+    lineHeight: 21,
+    color: '#475569',
+  },
+  passwordRequirementRow: {
+    flexDirection: 'row',
+    alignItems: 'flex-start',
+    gap: 9,
+    marginTop: 5,
   },
   changePasswordButton: {
     alignItems: 'center',
     justifyContent: 'center',
-    minHeight: 49,
-    marginTop: 13,
-    borderRadius: 11,
+    minHeight: 54,
+    marginTop: 6,
+    borderRadius: 13,
     backgroundColor: '#2563EB',
     width: '100%',
   },

@@ -3,22 +3,13 @@
 // Hỗ trợ Phát thông báo qua Loa thông minh Hub (Voice Reminder FR12)
 
 import React, { useState } from 'react';
-import {
-  View,
-  Text,
-  StyleSheet,
-  TouchableOpacity,
-  ScrollView,
-  Switch,
-  Alert,
-  Modal,
-  TextInput,
-  Pressable,
-} from 'react-native';
+import { View, StyleSheet, TouchableOpacity, ScrollView, Switch, Modal, Pressable } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
 import { useTheme } from '../../../store/useThemeStore';
 import { Colors } from '../../../theme/colors';
+import { LocalizedAlert, LocalizedText, LocalizedTextInput } from '../../../i18n/LocalizedComponents';
+
 
 interface MedicationItem {
   id: string;
@@ -118,7 +109,7 @@ export default function MedicationReminderScreen({ navigation }: any) {
         if (item.id === id) {
           const nextState = !item.taken;
           if (nextState) {
-            Alert.alert('Đã xác nhận', `Đã đánh dấu uống thuốc "${item.name}".`);
+            LocalizedAlert.alert('Đã xác nhận', `Đã đánh dấu uống thuốc "${item.name}".`);
           }
           return { ...item, taken: nextState };
         }
@@ -135,14 +126,14 @@ export default function MedicationReminderScreen({ navigation }: any) {
 
   const handleTestVoiceSpeaker = () => {
     if (!hubVoiceReminderEnabled) {
-      Alert.alert('Loa đang tắt', 'Vui lòng gạt bật tính năng phát qua Loa thông minh Hub trước.');
+      LocalizedAlert.alert('Loa đang tắt', 'Vui lòng gạt bật tính năng phát qua Loa thông minh Hub trước.');
       return;
     }
 
     setIsPlayingTestVoice(true);
     setTimeout(() => {
       setIsPlayingTestVoice(false);
-      Alert.alert(
+      LocalizedAlert.alert(
         'Loa Hub đã phát',
         '📢 "Đã đến 18:30, mời cụ uống thuốc huyết áp Amlodipine 5mg và 1 cốc nước ấm."'
       );
@@ -151,7 +142,7 @@ export default function MedicationReminderScreen({ navigation }: any) {
 
   const handleAddNewMed = () => {
     if (!newMedName.trim()) {
-      Alert.alert('Lỗi', 'Vui lòng nhập tên thuốc.');
+      LocalizedAlert.alert('Lỗi', 'Vui lòng nhập tên thuốc.');
       return;
     }
 
@@ -169,7 +160,7 @@ export default function MedicationReminderScreen({ navigation }: any) {
     setNewMedName('');
     setNewMedDose('');
     setAddMedModalVisible(false);
-    Alert.alert('Thành công', 'Đã thêm lịch uống thuốc mới.');
+    LocalizedAlert.alert('Thành công', 'Đã thêm lịch uống thuốc mới.');
   };
 
   const filteredMeds = medications.filter((m) => {
@@ -221,22 +212,22 @@ export default function MedicationReminderScreen({ navigation }: any) {
         </TouchableOpacity>
 
         <View style={styles.headerTitleCol}>
-          <Text
+          <LocalizedText
             style={[
               styles.headerTitle,
               { color: isDarkMode ? '#F8FAFC' : '#0F172A' },
             ]}
           >
             Lịch uống thuốc &amp; Ăn uống
-          </Text>
-          <Text
+          </LocalizedText>
+          <LocalizedText
             style={[
               styles.headerSubtitle,
               { color: isDarkMode ? '#94A3B8' : '#64748B' },
             ]}
           >
             Đồng bộ giọng nói Loa thông minh Hub FR12
-          </Text>
+          </LocalizedText>
         </View>
 
         <TouchableOpacity
@@ -274,23 +265,23 @@ export default function MedicationReminderScreen({ navigation }: any) {
             </View>
             <View style={{ flex: 1, marginHorizontal: 12 }}>
               <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6 }}>
-                <Text
+                <LocalizedText
                   style={[
                     styles.speakerTitle,
                     { color: isDarkMode ? '#F8FAFC' : '#0F172A' },
                   ]}
                 >
                   Loa thông minh Hub (Voice Reminder FR12)
-                </Text>
+                </LocalizedText>
               </View>
-              <Text
+              <LocalizedText
                 style={[
                   styles.speakerSubtitle,
                   { color: isDarkMode ? '#94A3B8' : '#64748B' },
                 ]}
               >
                 Tự động phát giọng nói tiếng Việt nhắc nhở người cao tuổi khi đến giờ
-              </Text>
+              </LocalizedText>
             </View>
             <Switch
               value={hubVoiceReminderEnabled}
@@ -305,7 +296,7 @@ export default function MedicationReminderScreen({ navigation }: any) {
           <View style={styles.speakerBottomRow}>
             <View style={styles.speakerStatusPill}>
               <View style={styles.greenLiveDot} />
-              <Text style={styles.speakerStatusText}>Hub #01 Online (Âm lượng 80%)</Text>
+              <LocalizedText style={styles.speakerStatusText}>Hub #01 Online (Âm lượng 80%)</LocalizedText>
             </View>
             <TouchableOpacity
               style={[
@@ -321,9 +312,9 @@ export default function MedicationReminderScreen({ navigation }: any) {
                 size={14}
                 color="#FFF"
               />
-              <Text style={styles.testVoiceBtnText}>
+              <LocalizedText style={styles.testVoiceBtnText}>
                 {isPlayingTestVoice ? 'Đang phát...' : 'Thử giọng nói'}
-              </Text>
+              </LocalizedText>
             </TouchableOpacity>
           </View>
         </View>
@@ -348,17 +339,17 @@ export default function MedicationReminderScreen({ navigation }: any) {
               >
                 <Ionicons name="medical" size={20} color="#2563EB" />
               </View>
-              <Text
+              <LocalizedText
                 style={[
                   styles.sectionTitle,
                   { color: isDarkMode ? '#F8FAFC' : '#0F172A' },
                 ]}
               >
                 Danh mục cữ thuốc hôm nay
-              </Text>
+              </LocalizedText>
             </View>
             <TouchableOpacity onPress={() => setAddMedModalVisible(true)}>
-              <Text style={styles.addMedLink}>+ Thêm cữ</Text>
+              <LocalizedText style={styles.addMedLink}>+ Thêm cữ</LocalizedText>
             </TouchableOpacity>
           </View>
 
@@ -381,7 +372,7 @@ export default function MedicationReminderScreen({ navigation }: any) {
                   ]}
                   onPress={() => setSelectedFilter(tab.key as any)}
                 >
-                  <Text
+                  <LocalizedText
                     style={[
                       styles.sessionTabText,
                       active && styles.sessionTabTextActive,
@@ -389,7 +380,7 @@ export default function MedicationReminderScreen({ navigation }: any) {
                     ]}
                   >
                     {tab.label}
-                  </Text>
+                  </LocalizedText>
                 </TouchableOpacity>
               );
             })}
@@ -410,11 +401,11 @@ export default function MedicationReminderScreen({ navigation }: any) {
               >
                 <View style={styles.medTimeBadge}>
                   <Ionicons name="time-outline" size={12} color="#0EA5E9" />
-                  <Text style={styles.medTimeText}>{med.time}</Text>
+                  <LocalizedText style={styles.medTimeText}>{med.time}</LocalizedText>
                 </View>
 
                 <View style={{ flex: 1, marginHorizontal: 10 }}>
-                  <Text
+                  <LocalizedText
                     style={[
                       styles.medItemName,
                       { color: isDarkMode ? '#F8FAFC' : '#0F172A' },
@@ -422,16 +413,16 @@ export default function MedicationReminderScreen({ navigation }: any) {
                     ]}
                   >
                     {med.name}
-                  </Text>
-                  <Text style={styles.medItemDose}>{med.dose}</Text>
-                  <Text
+                  </LocalizedText>
+                  <LocalizedText style={styles.medItemDose}>{med.dose}</LocalizedText>
+                  <LocalizedText
                     style={[
                       styles.medItemPurpose,
                       { color: isDarkMode ? '#94A3B8' : '#64748B' },
                     ]}
                   >
                     Mục đích: {med.purpose}
-                  </Text>
+                  </LocalizedText>
                 </View>
 
                 <TouchableOpacity
@@ -447,14 +438,14 @@ export default function MedicationReminderScreen({ navigation }: any) {
                     size={22}
                     color={med.taken ? '#10B981' : '#94A3B8'}
                   />
-                  <Text
+                  <LocalizedText
                     style={[
                       styles.medCheckBtnText,
                       { color: med.taken ? '#10B981' : '#64748B' },
                     ]}
                   >
                     {med.taken ? 'Đã uống' : 'Chưa'}
-                  </Text>
+                  </LocalizedText>
                 </TouchableOpacity>
               </View>
             ))}
@@ -481,14 +472,14 @@ export default function MedicationReminderScreen({ navigation }: any) {
               >
                 <Ionicons name="restaurant-outline" size={20} color="#D97706" />
               </View>
-              <Text
+              <LocalizedText
                 style={[
                   styles.sectionTitle,
                   { color: isDarkMode ? '#F8FAFC' : '#0F172A' },
                 ]}
               >
                 Khung giờ sinh hoạt ăn uống
-              </Text>
+              </LocalizedText>
             </View>
           </View>
 
@@ -534,14 +525,14 @@ export default function MedicationReminderScreen({ navigation }: any) {
                 </View>
                 <View style={{ flex: 1, marginLeft: 12 }}>
                   <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' }}>
-                    <Text
+                    <LocalizedText
                       style={[
                         styles.mealName,
                         { color: isDarkMode ? '#F8FAFC' : '#0F172A' },
                       ]}
                     >
                       {m.meal} ({m.time})
-                    </Text>
+                    </LocalizedText>
                     <View
                       style={[
                         styles.mealStatusBadge,
@@ -557,7 +548,7 @@ export default function MedicationReminderScreen({ navigation }: any) {
                         },
                       ]}
                     >
-                      <Text
+                      <LocalizedText
                         style={[
                           styles.mealStatusText,
                           {
@@ -568,17 +559,17 @@ export default function MedicationReminderScreen({ navigation }: any) {
                         ]}
                       >
                         {m.status}
-                      </Text>
+                      </LocalizedText>
                     </View>
                   </View>
-                  <Text
+                  <LocalizedText
                     style={[
                       styles.mealMenuText,
                       { color: isDarkMode ? '#94A3B8' : '#64748B' },
                     ]}
                   >
                     {m.menu}
-                  </Text>
+                  </LocalizedText>
                 </View>
               </View>
             ))}
@@ -606,22 +597,22 @@ export default function MedicationReminderScreen({ navigation }: any) {
                 <Ionicons name="water-outline" size={20} color="#0284C7" />
               </View>
               <View>
-                <Text
+                <LocalizedText
                   style={[
                     styles.sectionTitle,
                     { color: isDarkMode ? '#F8FAFC' : '#0F172A' },
                   ]}
                 >
                   Bổ sung nước định kỳ
-                </Text>
-                <Text
+                </LocalizedText>
+                <LocalizedText
                   style={[
                     styles.sectionSubtitle,
                     { color: isDarkMode ? '#94A3B8' : '#64748B' },
                   ]}
                 >
                   Khuyến nghị người cao tuổi: 1.5 - 2L nước mỗi ngày
-                </Text>
+                </LocalizedText>
               </View>
             </View>
           </View>
@@ -641,22 +632,22 @@ export default function MedicationReminderScreen({ navigation }: any) {
                 activeOpacity={0.8}
               >
                 <View style={styles.hydrationCardTop}>
-                  <Text style={styles.hydrationTimeText}>{h.time}</Text>
+                  <LocalizedText style={styles.hydrationTimeText}>{h.time}</LocalizedText>
                   <Ionicons
                     name={h.done ? 'checkmark-circle' : 'ellipse-outline'}
                     size={18}
                     color={h.done ? '#0284C7' : '#94A3B8'}
                   />
                 </View>
-                <Text
+                <LocalizedText
                   style={[
                     styles.hydrationAmountText,
                     { color: isDarkMode ? '#F8FAFC' : '#0F172A' },
                   ]}
                 >
                   {h.amount}
-                </Text>
-                <Text
+                </LocalizedText>
+                <LocalizedText
                   style={[
                     styles.hydrationNoteText,
                     { color: isDarkMode ? '#94A3B8' : '#64748B' },
@@ -664,7 +655,7 @@ export default function MedicationReminderScreen({ navigation }: any) {
                   numberOfLines={2}
                 >
                   {h.note}
-                </Text>
+                </LocalizedText>
               </TouchableOpacity>
             ))}
           </View>
@@ -692,24 +683,24 @@ export default function MedicationReminderScreen({ navigation }: any) {
             ]}
             onPress={() => {}}
           >
-            <Text
+            <LocalizedText
               style={[
                 styles.modalTitle,
                 { color: isDarkMode ? '#F8FAFC' : '#0F172A' },
               ]}
             >
               Thêm cữ thuốc mới
-            </Text>
+            </LocalizedText>
 
-            <Text
+            <LocalizedText
               style={[
                 styles.inputLabel,
                 { color: isDarkMode ? '#94A3B8' : '#64748B' },
               ]}
             >
               Tên thuốc &amp; hàm lượng:
-            </Text>
-            <TextInput
+            </LocalizedText>
+            <LocalizedTextInput
               style={[
                 styles.textInput,
                 {
@@ -726,15 +717,15 @@ export default function MedicationReminderScreen({ navigation }: any) {
 
             <View style={{ flexDirection: 'row', gap: 10 }}>
               <View style={{ flex: 1 }}>
-                <Text
+                <LocalizedText
                   style={[
                     styles.inputLabel,
                     { color: isDarkMode ? '#94A3B8' : '#64748B' },
                   ]}
                 >
                   Giờ uống (HH:mm):
-                </Text>
-                <TextInput
+                </LocalizedText>
+                <LocalizedTextInput
                   style={[
                     styles.textInput,
                     {
@@ -749,14 +740,14 @@ export default function MedicationReminderScreen({ navigation }: any) {
               </View>
 
               <View style={{ flex: 1 }}>
-                <Text
+                <LocalizedText
                   style={[
                     styles.inputLabel,
                     { color: isDarkMode ? '#94A3B8' : '#64748B' },
                   ]}
                 >
                   Cữ buổi:
-                </Text>
+                </LocalizedText>
                 <View style={{ flexDirection: 'row', gap: 4, marginTop: 4 }}>
                   {(['MORNING', 'NOON', 'EVENING'] as const).map((s) => (
                     <TouchableOpacity
@@ -767,29 +758,29 @@ export default function MedicationReminderScreen({ navigation }: any) {
                       ]}
                       onPress={() => setNewMedSession(s)}
                     >
-                      <Text
+                      <LocalizedText
                         style={[
                           styles.sessionPickText,
                           newMedSession === s && styles.sessionPickTextActive,
                         ]}
                       >
                         {s === 'MORNING' ? 'Sáng' : s === 'NOON' ? 'Trưa' : 'Tối'}
-                      </Text>
+                      </LocalizedText>
                     </TouchableOpacity>
                   ))}
                 </View>
               </View>
             </View>
 
-            <Text
+            <LocalizedText
               style={[
                 styles.inputLabel,
                 { color: isDarkMode ? '#94A3B8' : '#64748B' },
               ]}
             >
               Liều lượng &amp; Hướng dẫn:
-            </Text>
-            <TextInput
+            </LocalizedText>
+            <LocalizedTextInput
               style={[
                 styles.textInput,
                 {
@@ -815,20 +806,20 @@ export default function MedicationReminderScreen({ navigation }: any) {
                 ]}
                 onPress={() => setAddMedModalVisible(false)}
               >
-                <Text
+                <LocalizedText
                   style={[
                     styles.modalCancelText,
                     { color: isDarkMode ? '#94A3B8' : '#64748B' },
                   ]}
                 >
                   Hủy
-                </Text>
+                </LocalizedText>
               </TouchableOpacity>
               <TouchableOpacity
                 style={styles.modalSaveBtn}
                 onPress={handleAddNewMed}
               >
-                <Text style={styles.modalSaveText}>Lưu cữ thuốc</Text>
+                <LocalizedText style={styles.modalSaveText}>Lưu cữ thuốc</LocalizedText>
               </TouchableOpacity>
             </View>
           </Pressable>

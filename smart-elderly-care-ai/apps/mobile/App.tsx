@@ -8,8 +8,12 @@ import { registerRootComponent } from 'expo';
 import { GestureHandlerRootView } from 'react-native-gesture-handler';
 import { SafeAreaProvider } from 'react-native-safe-area-context';
 
+import './src/i18n/config';
 import AppNavigator from './src/navigation/AppNavigator';
 import { fcmService } from './src/services/fcm';
+import api from './src/services/api';
+import { useAuthStore } from './src/store/useAuthStore';
+import i18n from './src/i18n/config';
 
 // Bỏ qua các cảnh báo tương thích style không nghiêm trọng trên nền tảng Web
 LogBox.ignoreLogs([
@@ -45,6 +49,8 @@ if (Platform.OS === 'web') {
 }
 
 export default function App() {
+  const accessToken = useAuthStore((state: any) => state.accessToken);
+
   useEffect(() => {
     // Khởi tạo FCM push notifications khi app khởi động
     fcmService.initialize();
@@ -53,6 +59,25 @@ export default function App() {
       fcmService.cleanup();
     };
   }, []);
+
+  useEffect(() => {
+    if (!accessToken) {
+      void i18n.changeLanguage('vi');
+      return undefined;
+    }
+
+    let isActive = true;
+    api.get('/users/me')
+      .then(({ data }) => {
+        const language = data.preferred_language === 'en' ? 'en' : 'vi';
+        if (isActive) void i18n.changeLanguage(language);
+      })
+      .catch(() => {});
+
+    return () => {
+      isActive = false;
+    };
+  }, [accessToken]);
 
   return (
     <GestureHandlerRootView style={{ flex: 1 }}>

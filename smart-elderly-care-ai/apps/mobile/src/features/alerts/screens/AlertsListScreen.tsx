@@ -2,21 +2,14 @@
 // Bám sát phong cách Light Theme Smart Home và yêu cầu Proposal (FR07, FR08, FR10)
 
 import React, { useState } from 'react';
-import {
-  View,
-  Text,
-  StyleSheet,
-  FlatList,
-  TouchableOpacity,
-  RefreshControl,
-  Image,
-  Alert,
-} from 'react-native';
+import { View, StyleSheet, FlatList, TouchableOpacity, RefreshControl, Image } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
 import { Colors, Shadows } from '../../../theme/colors';
 import { useVitalStore } from '../../../store/useVitalStore';
 import { useTheme } from '../../../store/useThemeStore';
+import { LocalizedAlert, LocalizedText } from '../../../i18n/LocalizedComponents';
+
 
 interface AlertConfig {
   title: string;
@@ -151,11 +144,11 @@ export default function AlertsListScreen({ navigation }: any) {
 
   const handleMarkAllAsRead = () => {
     if (unreadCount === 0) {
-      Alert.alert('Thông báo', 'Tất cả sự kiện đều đã được đánh dấu đọc.');
+      LocalizedAlert.alert('Thông báo', 'Tất cả sự kiện đều đã được đánh dấu đọc.');
       return;
     }
     setIncidents(incidents.map((i) => ({ ...i, is_acknowledged: true })));
-    Alert.alert('Thành công', 'Đã đánh dấu đã đọc tất cả thông báo.');
+    LocalizedAlert.alert('Thành công', 'Đã đánh dấu đã đọc tất cả thông báo.');
   };
 
   const handlePressCard = (item: any) => {
@@ -234,10 +227,10 @@ export default function AlertsListScreen({ navigation }: any) {
       {/* 1. Header */}
       <View style={[styles.topHeader, isDarkMode && { backgroundColor: colors.background, borderBottomColor: colors.border }]}>
         <View style={styles.headerTitleCol}>
-          <Text style={[styles.headerTitle, isDarkMode && { color: colors.textPrimary }]}>Thông Báo &amp; Sự Kiện</Text>
-          <Text style={[styles.headerSubtitle, isDarkMode && { color: colors.textSecondary }]}>
+          <LocalizedText style={[styles.headerTitle, isDarkMode && { color: colors.textPrimary }]}>Thông Báo &amp; Sự Kiện</LocalizedText>
+          <LocalizedText style={[styles.headerSubtitle, isDarkMode && { color: colors.textSecondary }]}>
             {unreadCount > 0 ? `${unreadCount} thông báo mới chưa đọc` : 'Tất cả đã được xử lý'}
-          </Text>
+          </LocalizedText>
         </View>
 
         <View style={styles.headerRightActions}>
@@ -251,14 +244,14 @@ export default function AlertsListScreen({ navigation }: any) {
               size={15}
               color={unreadCount > 0 ? '#EA580C' : '#94A3B8'}
             />
-            <Text
+            <LocalizedText
               style={[
                 styles.markAllReadText,
                 unreadCount === 0 && { color: '#94A3B8' },
               ]}
             >
               Đã đọc tất cả
-            </Text>
+            </LocalizedText>
           </TouchableOpacity>
 
           <TouchableOpacity
@@ -267,7 +260,7 @@ export default function AlertsListScreen({ navigation }: any) {
             activeOpacity={0.7}
           >
             <Ionicons name="videocam" size={15} color="#FFF" />
-            <Text style={styles.cameraQuickText}>Camera</Text>
+            <LocalizedText style={styles.cameraQuickText}>Camera</LocalizedText>
           </TouchableOpacity>
         </View>
       </View>
@@ -284,9 +277,9 @@ export default function AlertsListScreen({ navigation }: any) {
           onPress={() => setFilterType('ALL')}
           activeOpacity={0.8}
         >
-          <Text style={[styles.filterText, isDarkMode && filterType !== 'ALL' && { color: colors.textSecondary }, filterType === 'ALL' && styles.filterTextActive]}>
+          <LocalizedText style={[styles.filterText, isDarkMode && filterType !== 'ALL' && { color: colors.textSecondary }, filterType === 'ALL' && styles.filterTextActive]}>
             Tất cả ({incidents.length})
-          </Text>
+          </LocalizedText>
         </TouchableOpacity>
 
         <TouchableOpacity
@@ -299,9 +292,9 @@ export default function AlertsListScreen({ navigation }: any) {
           onPress={() => setFilterType('CRITICAL')}
           activeOpacity={0.8}
         >
-          <Text style={[styles.filterText, isDarkMode && filterType !== 'CRITICAL' && { color: colors.textSecondary }, filterType === 'CRITICAL' && styles.filterTextActive]}>
+          <LocalizedText style={[styles.filterText, isDarkMode && filterType !== 'CRITICAL' && { color: colors.textSecondary }, filterType === 'CRITICAL' && styles.filterTextActive]}>
             🚨 Nguy kịch (Red Alert)
-          </Text>
+          </LocalizedText>
         </TouchableOpacity>
 
         <TouchableOpacity
@@ -314,9 +307,9 @@ export default function AlertsListScreen({ navigation }: any) {
           onPress={() => setFilterType('VITAL')}
           activeOpacity={0.8}
         >
-          <Text style={[styles.filterText, isDarkMode && filterType !== 'VITAL' && { color: colors.textSecondary }, filterType === 'VITAL' && styles.filterTextActive]}>
+          <LocalizedText style={[styles.filterText, isDarkMode && filterType !== 'VITAL' && { color: colors.textSecondary }, filterType === 'VITAL' && styles.filterTextActive]}>
             Sức khoẻ
-          </Text>
+          </LocalizedText>
         </TouchableOpacity>
       </View>
 
@@ -357,19 +350,19 @@ export default function AlertsListScreen({ navigation }: any) {
                 {/* Hàng badge & trạng thái */}
                 <View style={styles.cardMetaRow}>
                   <View style={[styles.typeBadge, { backgroundColor: isDarkMode && config.badgeBg === '#FFF7ED' ? 'rgba(234, 88, 12, 0.2)' : config.badgeBg }]}>
-                    <Text style={[styles.typeBadgeText, { color: config.badgeColor }]}>
+                    <LocalizedText style={[styles.typeBadgeText, { color: config.badgeColor }]}>
                       {config.badgeText}
-                    </Text>
+                    </LocalizedText>
                   </View>
                   {!item.is_acknowledged && (
                     <View style={styles.newBadge}>
-                      <Text style={styles.newBadgeText}>MỚI</Text>
+                      <LocalizedText style={styles.newBadgeText}>MỚI</LocalizedText>
                     </View>
                   )}
                 </View>
 
                 {/* Tiêu đề sự kiện chuẩn hóa tiếng Việt */}
-                <Text
+                <LocalizedText
                   style={[
                     styles.cardTitle,
                     isDarkMode && { color: colors.textPrimary },
@@ -378,19 +371,19 @@ export default function AlertsListScreen({ navigation }: any) {
                   numberOfLines={2}
                 >
                   {config.title}
-                </Text>
+                </LocalizedText>
 
                 {/* Chi tiết nội dung */}
-                <Text style={[styles.cardMsg, isDarkMode && { color: colors.textSecondary }]} numberOfLines={2}>
+                <LocalizedText style={[styles.cardMsg, isDarkMode && { color: colors.textSecondary }]} numberOfLines={2}>
                   {item.message}
-                </Text>
+                </LocalizedText>
 
                 {/* Thời gian thân thiện */}
                 <View style={styles.timeRow}>
                   <Ionicons name="time-outline" size={12} color={isDarkMode ? '#64748B' : '#94A3B8'} />
-                  <Text style={[styles.cardTime, isDarkMode && { color: colors.textSecondary }]}>{friendlyTime}</Text>
-                  <Text style={[styles.dotSeparator, isDarkMode && { color: colors.border }]}>•</Text>
-                  <Text style={[styles.deviceLocationText, isDarkMode && { color: colors.textSecondary }]}>Hub #01 (Phòng khách)</Text>
+                  <LocalizedText style={[styles.cardTime, isDarkMode && { color: colors.textSecondary }]}>{friendlyTime}</LocalizedText>
+                  <LocalizedText style={[styles.dotSeparator, isDarkMode && { color: colors.border }]}>•</LocalizedText>
+                  <LocalizedText style={[styles.deviceLocationText, isDarkMode && { color: colors.textSecondary }]}>Hub #01 (Phòng khách)</LocalizedText>
                 </View>
               </View>
 
@@ -406,7 +399,7 @@ export default function AlertsListScreen({ navigation }: any) {
                     )}
                     {item.video_clip_url && (
                       <View style={styles.playTag}>
-                        <Text style={styles.playTagText}>5s Clip</Text>
+                        <LocalizedText style={styles.playTagText}>5s Clip</LocalizedText>
                       </View>
                     )}
                   </View>
@@ -421,10 +414,10 @@ export default function AlertsListScreen({ navigation }: any) {
             <View style={styles.emptyIconCircle}>
               <Ionicons name="shield-checkmark-outline" size={36} color="#10B981" />
             </View>
-            <Text style={[styles.emptyTitle, isDarkMode && { color: colors.textPrimary }]}>Không có cảnh báo bất thường nào</Text>
-            <Text style={[styles.emptySub, isDarkMode && { color: colors.textSecondary }]}>
+            <LocalizedText style={[styles.emptyTitle, isDarkMode && { color: colors.textPrimary }]}>Không có cảnh báo bất thường nào</LocalizedText>
+            <LocalizedText style={[styles.emptySub, isDarkMode && { color: colors.textSecondary }]}>
               Hệ thống AI đang giám sát an toàn 24/7 và mọi chỉ số sức khoẻ đều trong ngưỡng chuẩn.
-            </Text>
+            </LocalizedText>
           </View>
         }
       />
