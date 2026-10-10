@@ -10,6 +10,7 @@ from datetime import datetime
 
 if TYPE_CHECKING:
     from app.models.device import Device
+    from app.models.house import House, HouseMember
 
 from sqlalchemy import Boolean, DateTime, Float, Integer, String
 from sqlalchemy.dialects.postgresql import UUID
@@ -34,6 +35,7 @@ class User(Base):
     full_name: Mapped[str] = mapped_column(String(255), nullable=False)
     hashed_password: Mapped[str] = mapped_column(String(255), nullable=False)
     phone: Mapped[str | None] = mapped_column(String(20), nullable=True)
+    avatar_url: Mapped[str | None] = mapped_column(String(500), nullable=True)
     role: Mapped[str] = mapped_column(
         String(20), nullable=False, default="caregiver"
     )
@@ -67,4 +69,10 @@ class User(Base):
     # Relationships
     devices: Mapped[list["Device"]] = relationship(  # noqa: F821
         "Device", back_populates="owner", lazy="selectin"
+    )
+    owned_houses: Mapped[list["House"]] = relationship(  # noqa: F821
+        "House", back_populates="owner", lazy="selectin"
+    )
+    house_memberships: Mapped[list["HouseMember"]] = relationship(  # noqa: F821
+        "HouseMember", back_populates="user", lazy="selectin"
     )

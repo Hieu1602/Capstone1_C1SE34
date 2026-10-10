@@ -42,6 +42,8 @@ class VitalSign(Base):
     # ---- Vital Signs ----
     heart_rate: Mapped[int | None] = mapped_column(Integer, nullable=True)      # bpm
     spo2: Mapped[int | None] = mapped_column(Integer, nullable=True)            # %
+    bp_systolic: Mapped[int | None] = mapped_column(Integer, nullable=True)     # Huyết áp tâm thu (mmHg)
+    bp_diastolic: Mapped[int | None] = mapped_column(Integer, nullable=True)    # Huyết áp tâm trương (mmHg)
     skin_temp_max: Mapped[float | None] = mapped_column(Float, nullable=True)   # °C
     person_count: Mapped[int | None] = mapped_column(Integer, nullable=True)
     fall_detected: Mapped[bool | None] = mapped_column(nullable=True)

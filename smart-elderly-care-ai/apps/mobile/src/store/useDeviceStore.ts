@@ -20,7 +20,7 @@ export interface HouseInfo {
   name: string;
   address: string;
   membersCount: number;
-  currentMode: 'AWAY' | 'HOME' | 'DISARM' | 'ALARM' | 'PRIVACY';
+  currentMode: 'AWAY' | 'HOME' | 'NIGHT' | 'DISARM' | 'ALARM' | 'PRIVACY';
 }
 
 export interface CameraDevice {

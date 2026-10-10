@@ -18,7 +18,6 @@ import {
   TouchableOpacity,
   ScrollView,
   TextInput,
-  Modal,
   Alert,
   Platform,
   Animated,
@@ -90,9 +89,8 @@ export default function AIAssistantScreen({ navigation }: any) {
     });
   };
 
-  // 2. Tên mô hình AI mới nhất (Hiển thị gọn gàng: SmartCare Flash 1)
-  const [selectedModel, setSelectedModel] = useState('SmartCare Flash 1');
-  const [isModelPickerOpen, setIsModelPickerOpen] = useState(false);
+  // 2. Tên mô hình AI cố định của hệ thống: SmartCare Flash 1
+  const MODEL_NAME = 'SmartCare Flash 1';
 
   // 3. Danh sách các tin nhắn trao đổi
   const [messages, setMessages] = useState<ChatMessage[]>([]);
@@ -240,17 +238,13 @@ export default function AIAssistantScreen({ navigation }: any) {
           <Ionicons name="menu-outline" size={26} color={isDarkMode ? colors.textPrimary : '#0F172A'} />
         </TouchableOpacity>
 
-        {/* Nút chọn mô hình AI (Chỉ ghi tên 1 loại AI mới nhất: SmartCare Flash 1) */}
-        <TouchableOpacity
-          style={[styles.modelPicker, isDarkMode && { backgroundColor: colors.card, borderColor: colors.border }]}
-          onPress={() => setIsModelPickerOpen(true)}
-          activeOpacity={0.8}
-        >
+        {/* Nhãn hiển thị mô hình AI duy nhất: SmartCare Flash 1 */}
+        <View style={[styles.modelBadge, isDarkMode && { backgroundColor: colors.card, borderColor: colors.border }]}>
+          <View style={styles.modelDot} />
           <Text style={[styles.modelText, isDarkMode && { color: colors.textPrimary }]} numberOfLines={1}>
-            {selectedModel}
+            {MODEL_NAME}
           </Text>
-          <Ionicons name="chevron-down" size={14} color={isDarkMode ? colors.textSecondary : '#64748B'} style={{ marginLeft: 4 }} />
-        </TouchableOpacity>
+        </View>
 
         {/* Nút Profile bên ngoài: Đồng bộ với Avatar Hình 1 (chỉ đổi hình nút tròn, không ghi chữ) */}
         <TouchableOpacity
@@ -599,57 +593,7 @@ export default function AIAssistantScreen({ navigation }: any) {
         </View>
       )}
 
-      {/* ========================================================================= */}
-      {/* 6. MODAL CHỌN MÔ HÌNH AI (DROPDOWN GỌN GÀNG)                              */}
-      {/* ========================================================================= */}
-      <Modal visible={isModelPickerOpen} transparent animationType="fade">
-        <View style={styles.pickerOverlay}>
-          <View style={[styles.pickerCard, isDarkMode && { backgroundColor: colors.card, borderColor: colors.border }]}>
-            <Text style={[styles.pickerTitle, isDarkMode && { color: colors.textPrimary }]}>Chọn Mô Hình AI</Text>
 
-            <TouchableOpacity
-              style={[
-                styles.pickerOption,
-                isDarkMode && { backgroundColor: colors.background, borderColor: colors.border },
-                selectedModel === 'SmartCare Flash 1' && styles.pickerOptionActive,
-              ]}
-              onPress={() => {
-                setSelectedModel('SmartCare Flash 1');
-                setIsModelPickerOpen(false);
-              }}
-            >
-              <Text style={[styles.pickerOptionTitle, isDarkMode && { color: colors.textPrimary }]}>SmartCare Flash 1 (Mới nhất)</Text>
-              <Text style={[styles.pickerOptionSub, isDarkMode && { color: colors.textSecondary }]}>
-                Mô hình AI đa phương thức mới nhất kết hợp YOLO-Pose, YAMNet và AMG8833.
-              </Text>
-            </TouchableOpacity>
-
-            <TouchableOpacity
-              style={[
-                styles.pickerOption,
-                isDarkMode && { backgroundColor: colors.background, borderColor: colors.border },
-                selectedModel === 'SmartCare Pro 1' && styles.pickerOptionActive,
-              ]}
-              onPress={() => {
-                setSelectedModel('SmartCare Pro 1');
-                setIsModelPickerOpen(false);
-              }}
-            >
-              <Text style={[styles.pickerOptionTitle, isDarkMode && { color: colors.textPrimary }]}>SmartCare Pro 1</Text>
-              <Text style={[styles.pickerOptionSub, isDarkMode && { color: colors.textSecondary }]}>
-                Mô hình phân tích y khoa chuyên sâu và chẩn đoán nguy cơ té ngã dài hạn.
-              </Text>
-            </TouchableOpacity>
-
-            <TouchableOpacity
-              style={[styles.pickerCloseBtn, isDarkMode && { backgroundColor: colors.background }]}
-              onPress={() => setIsModelPickerOpen(false)}
-            >
-              <Text style={[styles.pickerCloseBtnText, isDarkMode && { color: colors.textPrimary }]}>Đóng</Text>
-            </TouchableOpacity>
-          </View>
-        </View>
-      </Modal>
     </SafeAreaView>
   );
 }
@@ -682,7 +626,7 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     justifyContent: 'center',
   },
-  modelPicker: {
+  modelBadge: {
     flexDirection: 'row',
     alignItems: 'center',
     backgroundColor: '#F1F5F9',
@@ -690,11 +634,18 @@ const styles = StyleSheet.create({
     paddingHorizontal: 14,
     borderRadius: 20,
     borderWidth: 1,
-    borderColor: '#0F172A',
+    borderColor: '#E2E8F0',
+  },
+  modelDot: {
+    width: 7,
+    height: 7,
+    borderRadius: 3.5,
+    backgroundColor: '#10B981',
+    marginRight: 7,
   },
   modelText: {
-    fontSize: 14,
-    fontWeight: '800',
+    fontSize: 13,
+    fontWeight: '700',
     color: '#0F172A',
   },
   // Nút Profile tròn góc trên bên phải đồng bộ với avatar Hình 1 (chỉ đổi hình nút tròn, không ghi chữ)
@@ -1059,60 +1010,5 @@ const styles = StyleSheet.create({
     color: '#0F172A',
   },
 
-  // 7. Modal Chọn Model AI
-  pickerOverlay: {
-    flex: 1,
-    backgroundColor: 'rgba(0, 0, 0, 0.5)',
-    justifyContent: 'center',
-    padding: 24,
-  },
-  pickerCard: {
-    backgroundColor: '#FFFFFF',
-    borderRadius: 20,
-    padding: 20,
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 6 },
-    shadowOpacity: 0.15,
-    shadowRadius: 16,
-    elevation: 8,
-  },
-  pickerTitle: {
-    fontSize: 17,
-    fontWeight: '800',
-    color: '#0F172A',
-    marginBottom: 16,
-  },
-  pickerOption: {
-    padding: 14,
-    borderRadius: 12,
-    backgroundColor: '#F8FAFC',
-    borderWidth: 1,
-    borderColor: '#E2E8F0',
-    marginBottom: 10,
-  },
-  pickerOptionActive: {
-    backgroundColor: '#E0F2FE',
-    borderColor: '#0284C7',
-  },
-  pickerOptionTitle: {
-    fontSize: 14,
-    fontWeight: '800',
-    color: '#0F172A',
-  },
-  pickerOptionSub: {
-    fontSize: 12,
-    color: '#64748B',
-    marginTop: 4,
-    lineHeight: 16,
-  },
-  pickerCloseBtn: {
-    alignItems: 'center',
-    paddingVertical: 12,
-    marginTop: 8,
-  },
-  pickerCloseBtnText: {
-    fontSize: 14,
-    fontWeight: '700',
-    color: '#64748B',
-  },
 });
+

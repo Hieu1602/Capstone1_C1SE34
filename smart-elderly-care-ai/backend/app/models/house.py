@@ -91,8 +91,8 @@ class HouseMember(Base):
 
     # Vai trò trong gia đình: OWNER, CAREGIVER, DOCTOR, RELATIVE
     role_in_house: Mapped[str] = mapped_column(String(50), default="CAREGIVER", nullable=False)
-    # Quyền hạn thao tác: ADMIN, OPERATOR, VIEWER
-    permissions: Mapped[str] = mapped_column(String(50), default="OPERATOR", nullable=False)
+    # Quyền hạn thao tác: ADMIN, EDIT, VIEW, OPERATOR
+    permissions: Mapped[str] = mapped_column(String(50), default="VIEW", nullable=False)
 
     joined_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True), server_default=func.now()

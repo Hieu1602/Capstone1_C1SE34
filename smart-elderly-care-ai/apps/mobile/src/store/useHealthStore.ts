@@ -9,6 +9,8 @@ import { vitalsApi, systemApi } from '../services/api';
 export interface VitalData {
   heart_rate: number | null;
   spo2: number | null;
+  bp_systolic?: number | null;
+  bp_diastolic?: number | null;
   skin_temp_max: number | null;
   person_count: number | null;
   fall_detected: boolean;
@@ -23,6 +25,10 @@ export interface AlgoSettings {
   maxHeartRate: number;
   minHeartRate: number;
   minSpO2: number;
+  maxBpSystolic?: number;
+  minBpSystolic?: number;
+  maxBpDiastolic?: number;
+  minBpDiastolic?: number;
   maxTemp: number;
   fallAngle: number;
   immobilitySec: number;
@@ -49,6 +55,8 @@ export const useHealthStore = create<HealthState>()((set, get) => ({
   currentVitals: {
     heart_rate: null,
     spo2: null,
+    bp_systolic: null,
+    bp_diastolic: null,
     skin_temp_max: null,
     person_count: null,
     fall_detected: false,
@@ -64,6 +72,10 @@ export const useHealthStore = create<HealthState>()((set, get) => ({
     maxHeartRate: 120,
     minHeartRate: 50,
     minSpO2: 90,
+    maxBpSystolic: 140,
+    minBpSystolic: 90,
+    maxBpDiastolic: 90,
+    minBpDiastolic: 60,
     maxTemp: 37.8,
     fallAngle: 60,
     immobilitySec: 30,
@@ -80,6 +92,8 @@ export const useHealthStore = create<HealthState>()((set, get) => ({
         const updatedVitals: VitalData = {
           heart_rate: d.heart_rate ?? null,
           spo2: d.spo2 ?? null,
+          bp_systolic: d.bp_systolic ?? null,
+          bp_diastolic: d.bp_diastolic ?? null,
           skin_temp_max: d.skin_temp_max ?? d.body_temp ?? null,
           person_count: d.person_count ?? 0,
           fall_detected: Boolean(d.fall_detected),

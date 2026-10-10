@@ -12,6 +12,7 @@ class UserBase(BaseModel):
     full_name: str
     phone: str
     role: str = "user"
+    avatar_url: Optional[str] = None
 
     @model_validator(mode="after")
     def validate_identifier(self):
@@ -29,6 +30,7 @@ class UserCreate(UserBase):
 class UserUpdate(BaseModel):
     full_name: Optional[str] = None
     phone: Optional[str] = None
+    avatar_url: Optional[str] = None
     fcm_token: Optional[str] = None
     preferred_language: Optional[Literal["vi", "en"]] = None
     language: Optional[Literal["vi", "en"]] = None

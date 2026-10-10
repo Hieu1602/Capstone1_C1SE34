@@ -19,8 +19,15 @@ export interface DeviceConfigBackend {
   hr_threshold_high?: number;
   hr_threshold_low?: number;
   spo2_threshold_low?: number;
+  bp_systolic_high?: number;
+  bp_systolic_low?: number;
+  bp_diastolic_high?: number;
+  bp_diastolic_low?: number;
   fall_impact_threshold?: number;
   immobility_seconds?: number;
+  is_custom_thresholds?: boolean;
+  configured_by_user_id?: string | null;
+  configured_by_role?: string | null;
   mqtt_topic?: string | null;
   extra_settings?: Record<string, any>;
   updated_at?: string;
@@ -31,7 +38,7 @@ export interface DeviceBackend {
   device_id: string;
   name: string;
   sub_title?: string | null;
-  device_type: 'CAMERA' | 'SMARTBAND';
+  device_type: 'CAMERA' | 'SMARTBAND' | 'SENSOR' | 'EDGE_HUB';
   location?: string | null;
   is_online: boolean;
   status_text?: string | null;
@@ -65,7 +72,7 @@ export interface HouseBackend {
   owner_id: string;
   name: string;
   address?: string | null;
-  current_mode: 'HOME' | 'AWAY' | 'DISARM' | 'ALARM' | 'PRIVACY';
+  current_mode: 'HOME' | 'AWAY' | 'NIGHT' | 'DISARM' | 'ALARM' | 'PRIVACY';
   created_at: string;
   updated_at: string;
 }
@@ -80,7 +87,7 @@ export const houseApi = {
   updateHouse: (data: { name?: string; address?: string }) =>
     api.patch<HouseBackend>('/houses/current', data),
 
-  updateHouseMode: (mode: 'HOME' | 'AWAY' | 'DISARM' | 'ALARM' | 'PRIVACY') =>
+  updateHouseMode: (mode: 'HOME' | 'AWAY' | 'NIGHT' | 'DISARM' | 'ALARM' | 'PRIVACY') =>
     api.patch<HouseBackend>('/houses/current/mode', { mode }),
 };
 
