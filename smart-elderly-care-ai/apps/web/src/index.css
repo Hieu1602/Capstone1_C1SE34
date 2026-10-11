@@ -1,0 +1,222 @@
+/* ─── Smart Elderly Care AI: Sky Blue & White Theme (Xanh Da Trời & Trắng) ───
+   Chế độ Sáng (Light): Nền #f0f7ff (xanh dịu nhạt), Thẻ trắng tinh khôi #ffffff, Viền xanh nhạt, Điểm nhấn Sky Blue #0284c7.
+   Chế độ Tối (Dark):   Nền #0b132b (navy thẫm), Thẻ xanh navy #111c38, Viền phát quang #38bdf8.
+────────────────────────────────────────────────────────────────────────────── */
+
+@import url('https://fonts.googleapis.com/css2?family=Fira+Code:wght@400;500;600;700&family=Fira+Sans:wght@300;400;500;600;700&display=swap');
+
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+:root {
+  color-scheme: light;
+  --bg-page:        #f0f7ff;
+  --text-main:      #0f172a;
+  --text-muted:     #64748b;
+  --card-bg:        #ffffff;
+  --card-border:    #e0f2fe;
+  --card-shadow:    0 2px 12px -2px rgba(14, 165, 233, 0.08), 0 1px 3px rgba(0, 0, 0, 0.04);
+  --panel-bg:       rgba(255, 255, 255, 0.95);
+  --panel-border:   #e2e8f0;
+  --brand-primary:  #0284c7;
+  --brand-gradient: linear-gradient(135deg, #0ea5e9, #0284c7);
+}
+
+.dark {
+  color-scheme: dark;
+  --bg-page:        #0b132b;
+  --text-main:      #f8fafc;
+  --text-muted:     #94a3b8;
+  --card-bg:        #111c38;
+  --card-border:    rgba(56, 189, 248, 0.16);
+  --card-shadow:    0 4px 20px rgba(0, 0, 0, 0.4), inset 0 1px 0 rgba(255, 255, 255, 0.04);
+  --panel-bg:       rgba(11, 19, 43, 0.92);
+  --panel-border:   rgba(56, 189, 248, 0.15);
+  --brand-primary:  #38bdf8;
+  --brand-gradient: linear-gradient(135deg, #38bdf8, #0ea5e9);
+}
+
+@layer base {
+  body {
+    @apply antialiased font-sans transition-colors duration-200;
+    background-color: var(--bg-page);
+    color: var(--text-main);
+  }
+  h1, h2, h3, h4, h5, h6 {
+    font-family: 'Fira Code', monospace;
+    letter-spacing: -0.01em;
+  }
+}
+
+/* Custom scrollbar */
+::-webkit-scrollbar { width: 6px; height: 6px; }
+::-webkit-scrollbar-track { background: transparent; }
+::-webkit-scrollbar-thumb {
+  background: rgba(14, 165, 233, 0.3);
+  border-radius: 999px;
+}
+::-webkit-scrollbar-thumb:hover { background: rgba(14, 165, 233, 0.5); }
+
+@layer components {
+  /* Surface Cards */
+  .glass-card {
+    background: var(--card-bg);
+    border: 1px solid var(--card-border);
+    box-shadow: var(--card-shadow);
+    border-radius: 16px;
+    transition: all 0.2s ease;
+  }
+  .glass-card:hover {
+    border-color: rgba(14, 165, 233, 0.35);
+  }
+
+  /* Layout Panels (Sidebar, Navbar) */
+  .glass-panel {
+    background: var(--panel-bg);
+    border-color: var(--panel-border);
+    backdrop-filter: blur(12px);
+    -webkit-backdrop-filter: blur(12px);
+  }
+
+  /* Buttons */
+  .btn-primary {
+    @apply inline-flex items-center justify-center gap-2 px-4 py-2 rounded-xl font-bold text-xs text-white;
+    background: var(--brand-gradient);
+    box-shadow: 0 4px 14px rgba(14, 165, 233, 0.3);
+    transition: all 0.2s ease;
+    cursor: pointer;
+  }
+  .btn-primary:hover {
+    box-shadow: 0 6px 20px rgba(14, 165, 233, 0.45);
+    transform: translateY(-1px);
+  }
+  .btn-primary:active { transform: translateY(0); }
+  .btn-primary:disabled { opacity: 0.5; cursor: not-allowed; transform: none; }
+
+  .btn-ghost {
+    @apply inline-flex items-center justify-center gap-2 px-3 py-2 rounded-xl font-semibold text-xs transition-colors cursor-pointer;
+    background: rgba(2, 132, 199, 0.06);
+    border: 1px solid rgba(2, 132, 199, 0.18);
+    color: var(--brand-primary);
+  }
+  .btn-ghost:hover {
+    background: rgba(2, 132, 199, 0.12);
+  }
+  .dark .btn-ghost {
+    background: rgba(255, 255, 255, 0.05);
+    border-color: rgba(255, 255, 255, 0.1);
+    color: #e2e8f0;
+  }
+  .dark .btn-ghost:hover {
+    background: rgba(255, 255, 255, 0.1);
+  }
+
+  .btn-danger {
+    @apply inline-flex items-center justify-center gap-2 px-3 py-2 rounded-xl font-semibold text-xs transition-colors cursor-pointer;
+    background: rgba(239, 68, 68, 0.1);
+    border: 1px solid rgba(239, 68, 68, 0.25);
+    color: #ef4444;
+  }
+  .btn-danger:hover {
+    background: rgba(239, 68, 68, 0.18);
+  }
+
+  /* Form Inputs */
+  .input-glass {
+    @apply w-full px-3.5 py-2 rounded-xl text-xs outline-none transition-all;
+    background: #ffffff;
+    border: 1px solid #cbd5e1;
+    color: #0f172a;
+  }
+  .input-glass:focus {
+    border-color: #0284c7;
+    box-shadow: 0 0 0 3px rgba(14, 165, 233, 0.15);
+  }
+  .dark .input-glass {
+    background: #0b132b;
+    border-color: rgba(56, 189, 248, 0.2);
+    color: #f8fafc;
+  }
+  .dark .input-glass:focus {
+    border-color: #38bdf8;
+    box-shadow: 0 0 0 3px rgba(56, 189, 248, 0.2);
+  }
+
+  /* Status Badges */
+  .badge-live {
+    @apply inline-flex items-center gap-1.5 px-2.5 py-0.5 rounded-full text-[10px] font-mono font-bold uppercase tracking-wider;
+    background: #ecfdf5;
+    border: 1px solid #a7f3d0;
+    color: #047857;
+  }
+  .dark .badge-live {
+    background: rgba(34, 197, 94, 0.15);
+    border-color: rgba(34, 197, 94, 0.35);
+    color: #4ade80;
+  }
+
+  .badge-sky {
+    @apply inline-flex items-center gap-1.5 px-2.5 py-0.5 rounded-full text-[10px] font-mono font-bold uppercase tracking-wider;
+    background: #e0f2fe;
+    border: 1px solid #7dd3fc;
+    color: #0369a1;
+  }
+  .dark .badge-sky {
+    background: rgba(14, 165, 233, 0.18);
+    border-color: rgba(14, 165, 233, 0.35);
+    color: #38bdf8;
+  }
+
+  .badge-warn {
+    @apply inline-flex items-center gap-1.5 px-2.5 py-0.5 rounded-full text-[10px] font-mono font-bold uppercase tracking-wider;
+    background: #fef3c7;
+    border: 1px solid #fde68a;
+    color: #b45309;
+  }
+  .dark .badge-warn {
+    background: rgba(245, 158, 11, 0.18);
+    border-color: rgba(245, 158, 11, 0.35);
+    color: #fbbf24;
+  }
+
+  .badge-danger {
+    @apply inline-flex items-center gap-1.5 px-2.5 py-0.5 rounded-full text-[10px] font-mono font-bold uppercase tracking-wider;
+    background: #fee2e2;
+    border: 1px solid #fca5a5;
+    color: #b91c1c;
+  }
+  .dark .badge-danger {
+    background: rgba(239, 68, 68, 0.18);
+    border-color: rgba(239, 68, 68, 0.35);
+    color: #f87171;
+  }
+
+  .badge-info {
+    @apply inline-flex items-center gap-1.5 px-2.5 py-0.5 rounded-full text-[10px] font-mono font-bold uppercase tracking-wider;
+    background: #e0f2fe;
+    border: 1px solid #7dd3fc;
+    color: #0369a1;
+  }
+  .dark .badge-info {
+    background: rgba(14, 165, 233, 0.18);
+    border-color: rgba(14, 165, 233, 0.35);
+    color: #38bdf8;
+  }
+
+  /* Tables */
+  .table-row-glass {
+    @apply border-b border-slate-100 dark:border-white/5 transition-colors duration-100;
+  }
+  .table-row-glass:hover {
+    background: rgba(14, 165, 233, 0.04);
+  }
+  .dark .table-row-glass:hover {
+    background: rgba(255, 255, 255, 0.03);
+  }
+
+  .section-title {
+    font-family: 'Fira Code', monospace;
+    @apply text-xs font-bold uppercase tracking-wider text-slate-800 dark:text-slate-200;
+  }
+}
