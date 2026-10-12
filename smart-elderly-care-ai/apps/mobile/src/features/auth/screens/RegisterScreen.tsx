@@ -199,23 +199,19 @@ export default function RegisterScreen({ navigation }: any) {
           <View style={styles.headerSection}>
             <TouchableOpacity
               style={styles.backButton}
-<<<<<<< HEAD
               accessibilityRole="button"
-              accessibilityLabel={registrationComplete ? 'Đi tới đăng nhập' : step === 'verify' ? 'Quay lại form đăng ký' : 'Quay lại màn hình đầu tiên'}
+              accessibilityLabel={step === 'verify' ? 'Quay lại form đăng ký' : 'Quay lại'}
               onPress={() => {
-                if (registrationComplete) {
-                  navigation.navigate('Login');
-                  return;
-                }
                 if (step === 'verify') {
                   setStep('form');
                   return;
                 }
-                navigation.navigate('Welcome');
+                if (navigation.canGoBack()) {
+                  navigation.goBack();
+                } else {
+                  navigation.navigate('Login');
+                }
               }}
-=======
-              onPress={() => (step === 'verify' ? setStep('form') : navigation.goBack())}
->>>>>>> 9d5b079eea3f102040b49dec11f28d68482d3f8e
             >
               <Ionicons name="arrow-back" size={24} color={Colors.textPrimary || '#0F172A'} />
             </TouchableOpacity>
@@ -398,104 +394,7 @@ const styles = StyleSheet.create({
     marginBottom: 20,
   },
   backButton: {
-<<<<<<< HEAD
-    position: 'absolute',
-    top: 14,
-    left: 16,
-    zIndex: 20,
-    height: 40,
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 6,
-    paddingHorizontal: 14,
-    borderRadius: 20,
-    backgroundColor: '#FFFFFF',
-    shadowColor: '#000000',
-    shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.12,
-    shadowRadius: 4,
-    elevation: 4,
-  },
-  backButtonText: {
-    color: '#0F172A',
-    fontSize: 14,
-    fontWeight: '600',
-  },
-  card: {
-    position: 'absolute',
-    borderRadius: 22,
-    overflow: 'hidden',
-    backgroundColor: '#E2E8F0',
-  },
-  cardImage: {
-    width: '100%',
-    height: '100%',
-  },
-  cardTopLeft: {
-    top: -15,
-    left: -20,
-    width: SCREEN_WIDTH * 0.38,
-    height: 220,
-    borderRadius: 24,
-  },
-  cardTopRight: {
-    top: -25,
-    right: -25,
-    width: SCREEN_WIDTH * 0.52,
-    height: 145,
-    borderRadius: 24,
-  },
-  cardCenterHero: {
-    top: 50,
-    left: SCREEN_WIDTH * 0.22,
-    width: SCREEN_WIDTH * 0.56,
-    height: 275,
-    borderRadius: 26,
-    zIndex: 10,
-    borderWidth: 3,
-    borderColor: '#FFFFFF',
-  },
-  cardMidRight: {
-    top: 130,
-    right: -30,
-    width: SCREEN_WIDTH * 0.35,
-    height: 120,
-    borderRadius: 22,
-    zIndex: 5,
-  },
-  cardBottomLeft: {
-    bottom: -20,
-    left: -15,
-    width: SCREEN_WIDTH * 0.44,
-    height: 170,
-    borderRadius: 24,
-    zIndex: 5,
-  },
-  cardBottomRight: {
-    bottom: -15,
-    right: -20,
-    width: SCREEN_WIDTH * 0.42,
-    height: 155,
-    borderRadius: 24,
-    zIndex: 4,
-  },
-  bottomSection: {
-    paddingHorizontal: 28,
-    paddingTop: 16,
-    alignItems: 'center',
-    backgroundColor: '#FFFFFF',
-  },
-  logoBadgeContainer: {
-    marginBottom: 14,
-  },
-  logoBadge: {
-    width: 52,
-    height: 52,
-    borderRadius: 26,
-    backgroundColor: Colors.primary,
-=======
     height: 38,
->>>>>>> 9d5b079eea3f102040b49dec11f28d68482d3f8e
     justifyContent: 'center',
     alignItems: 'flex-start',
     marginBottom: 16,
