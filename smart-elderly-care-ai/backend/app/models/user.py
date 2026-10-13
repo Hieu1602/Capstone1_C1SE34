@@ -21,6 +21,7 @@ from app.core.database import Base
 
 
 class UserRole(str):
+    USER      = "user"
     CAREGIVER = "caregiver"
     DOCTOR    = "doctor"
     ADMIN     = "admin"
@@ -37,7 +38,7 @@ class User(Base):
     phone: Mapped[str | None] = mapped_column(String(20), nullable=True)
     avatar_url: Mapped[str | None] = mapped_column(String(500), nullable=True)
     role: Mapped[str] = mapped_column(
-        String(20), nullable=False, default="caregiver"
+        String(20), nullable=False, default="user"
     )
     preferred_language: Mapped[str] = mapped_column(
         String(5), nullable=False, default="vi", server_default="vi"

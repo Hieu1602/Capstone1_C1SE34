@@ -1,7 +1,7 @@
 // DoctorProfileScreen.tsx
 // Hồ sơ Bác sĩ gia đình, thông tin chuyên môn, đổi ảnh đại diện & đổi mật khẩu
 
-import React, { useState } from 'react';
+import React, { useState, useEffect, useCallback } from 'react';
 import {
   View,
   Text,
@@ -19,32 +19,90 @@ import {
 } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
+import { useFocusEffect } from '@react-navigation/native';
 import * as ImagePicker from 'expo-image-picker';
 
 import { Colors } from '../../../theme/colors';
 import { useTheme } from '../../../store/useThemeStore';
 import { useAuthStore } from '../../../store/useAuthStore';
+import { doctorApi } from '../../../services/api';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 
 export default function DoctorProfileScreen({ navigation }: any) {
   const insets = useSafeAreaInsets();
   const { isDarkMode, colors, toggleTheme } = useTheme();
-  const { userName, userPhone, logout, toggleViewRole } = useAuthStore();
+  const { userName, userPhone, logout } = useAuthStore();
 
   // Thông tin chuyên môn bác sĩ
   const [docInfo, setDocInfo] = useState({
-    name: userName || 'BSCKII. Nguyễn Văn Minh',
-    degree: 'Thạc sĩ, Bác sĩ Chuyên khoa II',
-    specialty: 'Tim mạch Can thiệp & Lão khoa',
-    hospital: 'Bệnh viện Lão khoa TW / BV Đà Nẵng',
-    department: 'Khoa Hồi sức Tim mạch & Lão khoa',
-    phone: userPhone || '0905888999',
+    name: userName || 'Bác sĩ',
+    degree: '',
+    specialty: '',
+    hospital: '',
+    department: '',
+    phone: userPhone || '',
   });
 
-  // Ảnh đại diện bác sĩ
-  const [avatarUri, setAvatarUri] = useState<string | null>(
-    'https://images.unsplash.com/photo-1622253692010-333f2da6031d?w=300&auto=format&fit=crop&q=80'
+  // Số lượng bệnh nhân & lịch khám thực tế từ CSDL
+  const [patientCount, setPatientCount] = useState<number>(0);
+  const [appointmentCount, setAppointmentCount] = useState<number>(0);
+  const [statsLoading, setStatsLoading] = useState<boolean>(false);
+
+  // Ảnh đại diện bác sĩ (mặc định null, người dùng tự tải lên)
+  const [avatarUri, setAvatarUri] = useState<string | null>(null);
+
+  const fetchDoctorStats = useCallback(async () => {
+    try {
+      setStatsLoading(true);
+      const [patientsRes, appointmentsRes] = await Promise.allSettled([
+        doctorApi.getPatients(),
+        doctorApi.getAppointments(),
+      ]);
+
+      if (patientsRes.status === 'fulfilled' && Array.isArray(patientsRes.value.data)) {
+        setPatientCount(patientsRes.value.data.length);
+      }
+
+      if (appointmentsRes.status === 'fulfilled' && Array.isArray(appointmentsRes.value.data)) {
+        setAppointmentCount(appointmentsRes.value.data.length);
+      }
+    } catch {
+      // Giữ số liệu hiện tại
+    } finally {
+      setStatsLoading(false);
+    }
+  }, []);
+
+  useEffect(() => {
+    fetchDoctorStats();
+  }, [fetchDoctorStats]);
+
+  useFocusEffect(
+    useCallback(() => {
+      fetchDoctorStats();
+    }, [fetchDoctorStats])
   );
+
+  useEffect(() => {
+    const loadSavedProfile = async () => {
+      try {
+        const raw = await AsyncStorage.getItem('doctor_profile_custom');
+        if (raw) {
+          const parsed = JSON.parse(raw);
+          setDocInfo((prev) => ({
+            ...prev,
+            ...parsed,
+            name: parsed.name || userName || 'Bác sĩ',
+            phone: parsed.phone || userPhone || '',
+          }));
+          if (parsed.avatarUri) {
+            setAvatarUri(parsed.avatarUri);
+          }
+        }
+      } catch {}
+    };
+    loadSavedProfile();
+  }, [userName, userPhone]);
 
   // Modal 1: Sửa thông tin bác sĩ
   const [editModalVisible, setEditModalVisible] = useState(false);
@@ -90,22 +148,27 @@ export default function DoctorProfileScreen({ navigation }: any) {
   };
 
   // Lưu sửa thông tin
-  const handleSaveProfile = () => {
+  const handleSaveProfile = async () => {
     if (!editName.trim()) {
       Alert.alert('Lỗi', 'Vui lòng nhập họ tên bác sĩ.');
       return;
     }
-    setDocInfo({
+    const updated = {
       name: editName.trim(),
       degree: editDegree.trim(),
       specialty: editSpecialty.trim(),
       hospital: editHospital.trim(),
       department: editDepartment.trim(),
       phone: editPhone.trim(),
-    });
+      avatarUri: editAvatarUri,
+    };
+    setDocInfo(updated);
     if (editAvatarUri) {
       setAvatarUri(editAvatarUri);
     }
+    try {
+      await AsyncStorage.setItem('doctor_profile_custom', JSON.stringify(updated));
+    } catch {}
     setEditModalVisible(false);
     Alert.alert('Thành công', 'Đã cập nhật hồ sơ chuyên môn Bác sĩ thành công.');
   };
@@ -228,30 +291,32 @@ export default function DoctorProfileScreen({ navigation }: any) {
           </TouchableOpacity>
 
           <Text style={[styles.docName, { color: colors.textPrimary }]}>{docInfo.name}</Text>
-          <Text style={styles.docDegree}>{docInfo.degree}</Text>
-          <Text style={styles.docSpecialty}>Khoa: {docInfo.specialty}</Text>
+          {docInfo.degree ? <Text style={styles.docDegree}>{docInfo.degree}</Text> : null}
+          {docInfo.specialty ? <Text style={styles.docSpecialty}>Chuyên khoa: {docInfo.specialty}</Text> : null}
 
-          <View style={[styles.hospitalBadge, { backgroundColor: isDarkMode ? '#334155' : '#F1F5F9' }]}>
-            <Ionicons name="business" size={13} color="#0284C7" style={{ marginRight: 5 }} />
-            <Text style={[styles.hospitalBadgeText, { color: isDarkMode ? '#CBD5E1' : '#475569' }]} numberOfLines={1}>
-              {docInfo.hospital}
-            </Text>
-          </View>
+          {docInfo.hospital ? (
+            <View style={[styles.hospitalBadge, { backgroundColor: isDarkMode ? '#334155' : '#F1F5F9' }]}>
+              <Ionicons name="business" size={13} color="#0284C7" style={{ marginRight: 5 }} />
+              <Text style={[styles.hospitalBadgeText, { color: isDarkMode ? '#CBD5E1' : '#475569' }]} numberOfLines={1}>
+                {docInfo.hospital}
+              </Text>
+            </View>
+          ) : null}
 
-          {/* 2 HỘP CHỈ SỐ HOẠT ĐỘNG Y KHOA (ĐÃ BỎ 18 ĐÃ XỬ TRÍ VÀ 98.5% TUÂN THỦ) */}
+          {/* 2 HỘP CHỈ SỐ HOẠT ĐỘNG Y KHOA THỰC TẾ TỪ CSDL */}
           <View style={styles.statsGrid}>
             <View style={[styles.statBox, { backgroundColor: isDarkMode ? '#0F172A' : '#F8FAFC' }]}>
-              <Text style={[styles.statNum, { color: '#0284C7' }]}>5</Text>
+              <Text style={[styles.statNum, { color: '#0284C7' }]}>{patientCount}</Text>
               <Text style={styles.statLabel}>Bệnh nhân</Text>
             </View>
             <View style={[styles.statBox, { backgroundColor: isDarkMode ? '#0F172A' : '#F8FAFC' }]}>
-              <Text style={[styles.statNum, { color: '#8B5CF6' }]}>3</Text>
+              <Text style={[styles.statNum, { color: '#8B5CF6' }]}>{appointmentCount}</Text>
               <Text style={styles.statLabel}>Lịch khám</Text>
             </View>
           </View>
         </View>
 
-        {/* TIỆN ÍCH LÂM SÀNG & HỆ THỐNG (ĐÃ BỎ PROTOCOL 115) */}
+        {/* TIỆN ÍCH LÂM SÀNG & HỆ THỐNG */}
         <View
           style={[
             styles.sectionCard,
@@ -289,21 +354,6 @@ export default function DoctorProfileScreen({ navigation }: any) {
             </View>
             <Text style={[styles.menuItemText, { color: colors.textPrimary }]}>
               Đổi mật khẩu tài khoản Bác sĩ
-            </Text>
-            <Ionicons name="chevron-forward" size={16} color="#94A3B8" />
-          </TouchableOpacity>
-
-          {/* Chuyển sang Giao diện Người thân */}
-          <TouchableOpacity
-            style={styles.menuItem}
-            onPress={toggleViewRole}
-            activeOpacity={0.7}
-          >
-            <View style={[styles.menuIconBox, { backgroundColor: '#E0F2FE' }]}>
-              <Ionicons name="swap-horizontal" size={17} color="#0284C7" />
-            </View>
-            <Text style={[styles.menuItemText, { color: colors.textPrimary }]}>
-              Chuyển sang Giao diện Người thân
             </Text>
             <Ionicons name="chevron-forward" size={16} color="#94A3B8" />
           </TouchableOpacity>

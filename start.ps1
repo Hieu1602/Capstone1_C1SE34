@@ -184,12 +184,13 @@ function Start-MobileService {
         return
     }
 
-    $subCmd = if ($Platform -eq "expo") { "npx expo start" } else { "npm run web" }
+    $subCmd = "npx expo start -c"
     $psCommand = "[Console]::OutputEncoding = [System.Text.Encoding]::UTF8; `$host.UI.RawUI.WindowTitle = '[Elderly Care] Mobile App (Port 8081)'; Set-Location '$MobileDir'; $subCmd"
     Start-Process powershell.exe -ArgumentList "-NoExit", "-ExecutionPolicy", "Bypass", "-Command", $psCommand
 
-    Write-Success "Da mo tien trinh Mobile App."
-    Write-Host "     - Giao dien Web (Chrome/Edge) : http://localhost:8081" -ForegroundColor Yellow
+    Write-Success "Da mo tien trinh Mobile App (Expo Metro Bundler)."
+    Write-Host "     - Quet ma QR tren dien thoai bang ung dung Expo Go" -ForegroundColor Yellow
+    Write-Host "     - Hoac mo tren trinh duyet Web: http://localhost:8081" -ForegroundColor Yellow
     Write-Host ""
 }
 

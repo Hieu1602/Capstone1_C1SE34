@@ -3,11 +3,15 @@
 // Nhận sự kiện cảnh báo té ngã tức thì (Feature 1) & chỉ số sinh hiệu mô phỏng 5s/lần (Feature 3)
 
 import { Platform } from 'react-native';
+import Constants from 'expo-constants';
 import { useVitalStore, Incident } from '../store/useVitalStore';
 import { notificationService } from './notificationService';
 
 
 const getWsBaseUrl = (): string => {
+  if (typeof process !== 'undefined' && process.env.EXPO_PUBLIC_WS_URL) {
+    return process.env.EXPO_PUBLIC_WS_URL;
+  }
   if (typeof window !== 'undefined' && window.location?.hostname) {
     const host = window.location.hostname;
     if (host !== 'localhost' && host !== '127.0.0.1') {
@@ -17,7 +21,14 @@ const getWsBaseUrl = (): string => {
   if (Platform.OS === 'android') {
     return 'ws://10.0.2.2:8000/ws';
   }
-  return (typeof process !== 'undefined' && process.env.EXPO_PUBLIC_WS_URL) || 'ws://localhost:8000/ws';
+  const debuggerHost = Constants.expoConfig?.hostUri || (Constants as any).manifest2?.extra?.expoClient?.hostUri || (Constants as any).manifest?.debuggerHost;
+  if (debuggerHost) {
+    const hostIp = debuggerHost.split(':')[0];
+    if (hostIp && !hostIp.includes('exp.direct')) {
+      return `ws://${hostIp}:8000/ws`;
+    }
+  }
+  return 'ws://192.168.1.4:8000/ws';
 };
 
 const WS_BASE_URL: string = getWsBaseUrl();

@@ -122,11 +122,11 @@ export default function PatientMedicalRecordScreen({ navigation }: any) {
   const [dietaryNotes, setDietaryNotes] = useState('');
 
   // Doctor & Hospital
-  const [doctorName, setDoctorName] = useState('BSCKII. Nguyễn Văn Minh');
-  const [doctorPhone, setDoctorPhone] = useState('0905888999');
+  const [doctorName, setDoctorName] = useState('BS. Trần Văn Minh');
+  const [doctorPhone, setDoctorPhone] = useState('0905111222');
   const [doctorSpecialty, setDoctorSpecialty] = useState('Lão khoa & Tim mạch');
   const [hospital, setHospital] = useState('Bệnh viện Lão khoa TW / BV Đà Nẵng');
-  const [nextAppointment, setNextAppointment] = useState('15/10/2026');
+  const [nextAppointment, setNextAppointment] = useState('');
 
   // Add/Edit modal states
   const [isAddConditionModalVisible, setAddConditionModalVisible] = useState(false);

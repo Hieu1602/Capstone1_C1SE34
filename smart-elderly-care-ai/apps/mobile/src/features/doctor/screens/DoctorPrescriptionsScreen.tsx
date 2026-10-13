@@ -45,34 +45,44 @@ export default function DoctorPrescriptionsScreen() {
   const [loading, setLoading] = useState(false);
   const [refreshing, setRefreshing] = useState(false);
   const [prescriptions, setPrescriptions] = useState<PrescriptionItem[]>([]);
+  const [patients, setPatients] = useState<any[]>([]);
+  const [selectedPatient, setSelectedPatient] = useState<any>(null);
 
   // Modal Kê đơn / Sửa đơn
   const [modalVisible, setModalVisible] = useState(false);
   const [editingRxId, setEditingRxId] = useState<string | null>(null);
   const [medName, setMedName] = useState('');
   const [dosage, setDosage] = useState('');
-  const [frequency, setFrequency] = useState('Hàng ngày');
-  const [scheduleTimes, setScheduleTimes] = useState('08:00, 19:30');
+  const [frequency, setFrequency] = useState('');
+  const [scheduleTimes, setScheduleTimes] = useState('');
   const [instructions, setInstructions] = useState('');
   const [enableSpeaker, setEnableSpeaker] = useState(true);
   const [isSubmitting, setIsSubmitting] = useState(false);
 
-  const patientId = 'e0000000-b4e1-4b08-b2d3-d949a0eb075c';
-
   const fetchRx = useCallback(async () => {
     try {
       setLoading(true);
-      const res = await doctorApi.getPrescriptions(patientId);
-      if (res.data && Array.isArray(res.data)) {
-        setPrescriptions(res.data);
+      const patRes = await doctorApi.getPatients();
+      if (patRes.data && Array.isArray(patRes.data)) {
+        setPatients(patRes.data);
+        const curPat = selectedPatient || patRes.data[0];
+        if (curPat) {
+          setSelectedPatient(curPat);
+          const rxRes = await doctorApi.getPrescriptions(curPat.id);
+          if (rxRes.data && Array.isArray(rxRes.data)) {
+            setPrescriptions(rxRes.data);
+          } else {
+            setPrescriptions([]);
+          }
+        }
       }
     } catch {
-      // Fallback
+      // Giữ dữ liệu hiện tại
     } finally {
       setLoading(false);
       setRefreshing(false);
     }
-  }, [patientId]);
+  }, [selectedPatient]);
 
   useEffect(() => {
     fetchRx();
@@ -83,13 +93,30 @@ export default function DoctorPrescriptionsScreen() {
     fetchRx();
   };
 
+  const handleSelectPatient = async (pat: any) => {
+    setSelectedPatient(pat);
+    try {
+      setLoading(true);
+      const res = await doctorApi.getPrescriptions(pat.id);
+      if (res.data && Array.isArray(res.data)) {
+        setPrescriptions(res.data);
+      } else {
+        setPrescriptions([]);
+      }
+    } catch {
+      setPrescriptions([]);
+    } finally {
+      setLoading(false);
+    }
+  };
+
   const handleOpenCreateModal = () => {
     setEditingRxId(null);
     setMedName('');
     setDosage('');
-    setFrequency('Hàng ngày vào buổi sáng');
-    setScheduleTimes('08:00');
-    setInstructions('Uống sau khi ăn sáng 15 phút với nước ấm.');
+    setFrequency('');
+    setScheduleTimes('');
+    setInstructions('');
     setEnableSpeaker(true);
     setModalVisible(true);
   };
@@ -99,7 +126,7 @@ export default function DoctorPrescriptionsScreen() {
     setMedName(rx.medication_name);
     setDosage(rx.dosage);
     setFrequency(rx.frequency);
-    setScheduleTimes((rx.schedule_times || ['08:00']).join(', '));
+    setScheduleTimes((rx.schedule_times || []).join(', '));
     setInstructions(rx.instructions);
     setEnableSpeaker(rx.enable_speaker_reminder);
     setModalVisible(true);
@@ -108,6 +135,12 @@ export default function DoctorPrescriptionsScreen() {
   const handleSaveRx = async () => {
     if (!medName.trim() || !dosage.trim()) {
       Alert.alert('Thiếu thông tin', 'Vui lòng nhập tên thuốc và liều lượng.');
+      return;
+    }
+
+    const curPatId = selectedPatient?.id || patients[0]?.id;
+    if (!curPatId) {
+      Alert.alert('Thiếu thông tin', 'Chưa có thông tin bệnh nhân để kê đơn.');
       return;
     }
 
@@ -123,12 +156,12 @@ export default function DoctorPrescriptionsScreen() {
         dosage: dosage.trim(),
         frequency: frequency.trim() || 'Hàng ngày',
         schedule_times: parsedTimes.length > 0 ? parsedTimes : ['08:00'],
-        instructions: instructions.trim() || 'Uống sau ăn với nước ấm.',
+        instructions: instructions.trim() || '',
         enable_speaker_reminder: enableSpeaker,
       };
 
       if (editingRxId) {
-        const res = await doctorApi.updatePrescription(patientId, editingRxId, payload);
+        const res = await doctorApi.updatePrescription(curPatId, editingRxId, payload);
         if (res.data) {
           setPrescriptions((prev) =>
             prev.map((r) => (r.id === editingRxId ? res.data : r))
@@ -137,7 +170,7 @@ export default function DoctorPrescriptionsScreen() {
         setModalVisible(false);
         Alert.alert('Thành công', `Đã cập nhật đơn thuốc "${payload.medication_name}".`);
       } else {
-        const res = await doctorApi.createPrescription(patientId, payload);
+        const res = await doctorApi.createPrescription(curPatId, payload);
         if (res.data) {
           setPrescriptions([res.data, ...prescriptions]);
         }
@@ -155,9 +188,12 @@ export default function DoctorPrescriptionsScreen() {
   };
 
   const handleDeleteRx = (rxId: string, name: string) => {
+    const curPatId = selectedPatient?.id || patients[0]?.id;
+    if (!curPatId) return;
+
     const doDelete = async () => {
       try {
-        await doctorApi.deletePrescription(patientId, rxId);
+        await doctorApi.deletePrescription(curPatId, rxId);
         setPrescriptions((prev) => prev.filter((r) => r.id !== rxId));
         if (Platform.OS === 'web') {
           window.alert(`Đã loại bỏ "${name}" khỏi phác đồ.`);
@@ -191,8 +227,11 @@ export default function DoctorPrescriptionsScreen() {
   };
 
   const handleToggleSpeaker = async (rxId: string) => {
+    const curPatId = selectedPatient?.id || patients[0]?.id;
+    if (!curPatId) return;
+
     try {
-      const res = await doctorApi.togglePrescriptionReminder(patientId, rxId);
+      const res = await doctorApi.togglePrescriptionReminder(curPatId, rxId);
       if (res.data) {
         setPrescriptions((prev) =>
           prev.map((r) => (r.id === rxId ? { ...r, enable_speaker_reminder: res.data.enable_speaker_reminder } : r))
@@ -245,10 +284,36 @@ export default function DoctorPrescriptionsScreen() {
             <Text style={styles.statLabel} numberOfLines={1}>Phát loa Hub</Text>
           </View>
           <View style={[styles.statBox, { backgroundColor: isDarkMode ? '#334155' : '#FFFBEB' }]}>
-            <Text style={[styles.statNumber, { color: '#D97706' }]}>1</Text>
+            <Text style={[styles.statNumber, { color: '#D97706' }]}>{patients.length}</Text>
             <Text style={styles.statLabel} numberOfLines={1}>Bệnh nhân</Text>
           </View>
         </View>
+
+        {/* THANH CHỌN BỆNH NHÂN ĐỂ XEM ĐƠN THUỐC */}
+        {patients.length > 0 && (
+          <ScrollView horizontal showsHorizontalScrollIndicator={false} style={{ marginTop: 10 }}>
+            {patients.map((p) => {
+              const active = selectedPatient?.id === p.id;
+              return (
+                <TouchableOpacity
+                  key={p.id}
+                  onPress={() => handleSelectPatient(p)}
+                  style={[
+                    styles.patientPill,
+                    active
+                      ? { backgroundColor: '#0284C7', borderColor: '#0284C7' }
+                      : { backgroundColor: isDarkMode ? '#334155' : '#F1F5F9', borderColor: colors.border },
+                  ]}
+                  activeOpacity={0.8}
+                >
+                  <Text style={[styles.patientPillName, active ? { color: '#FFFFFF', fontWeight: '700' } : { color: colors.textPrimary }]}>
+                    {p.name}
+                  </Text>
+                </TouchableOpacity>
+              );
+            })}
+          </ScrollView>
+        )}
       </View>
 
       <ScrollView
@@ -263,7 +328,7 @@ export default function DoctorPrescriptionsScreen() {
           <View style={styles.emptyBox}>
             <Ionicons name="medkit-outline" size={48} color="#94A3B8" />
             <Text style={[styles.emptyText, { color: isDarkMode ? '#94A3B8' : '#64748B' }]}>
-              Chưa có đơn thuốc nào được kê.
+              Chưa có đơn thuốc nào được kê cho bệnh nhân này.
             </Text>
           </View>
         ) : (
@@ -317,7 +382,7 @@ export default function DoctorPrescriptionsScreen() {
                 <Text style={[styles.scheduleLabel, { color: isDarkMode ? '#94A3B8' : '#64748B' }]}>
                   Giờ nhắc uống:
                 </Text>
-                {(rx.schedule_times || ['08:00']).map((t: string, idx: number) => (
+                {(rx.schedule_times || []).map((t: string, idx: number) => (
                   <View key={idx} style={styles.timeBadge}>
                     <Ionicons name="time-outline" size={12} color="#0284C7" style={{ marginRight: 2 }} />
                     <Text style={styles.timeBadgeText}>{t}</Text>
@@ -326,19 +391,23 @@ export default function DoctorPrescriptionsScreen() {
               </View>
 
               {/* HƯỚNG DẪN BÁC SĨ */}
-              <Text style={[styles.instructionsText, { color: isDarkMode ? '#CBD5E1' : '#334155' }]}>
-                📝 Dặn dò: {rx.instructions}
-              </Text>
+              {rx.instructions ? (
+                <Text style={[styles.instructionsText, { color: isDarkMode ? '#CBD5E1' : '#334155' }]}>
+                  📝 Dặn dò: {rx.instructions}
+                </Text>
+              ) : null}
 
               {/* FOOTER & NÚT SỬA / XÓA */}
               <View style={styles.rxFooter}>
                 <View style={{ flex: 1, marginRight: 8 }}>
                   <Text style={[styles.footerText, { color: isDarkMode ? '#64748B' : '#94A3B8' }]} numberOfLines={1}>
-                    Cụ Nguyễn Văn An (Nhà của tôi)
+                    {selectedPatient?.name ? `${selectedPatient.name}${selectedPatient.house_name ? ` (${selectedPatient.house_name})` : ''}` : ''}
                   </Text>
-                  <Text style={[styles.footerDoctor, { color: isDarkMode ? '#64748B' : '#94A3B8' }]} numberOfLines={1}>
-                    BS: {rx.doctor_name || 'BSCKII. Nguyễn Văn Minh'}
-                  </Text>
+                  {rx.doctor_name ? (
+                    <Text style={[styles.footerDoctor, { color: isDarkMode ? '#64748B' : '#94A3B8' }]} numberOfLines={1}>
+                      BS: {rx.doctor_name}
+                    </Text>
+                  ) : null}
                 </View>
 
                 <View style={{ flexDirection: 'row', gap: 8 }}>
@@ -638,4 +707,15 @@ const styles = StyleSheet.create({
     marginTop: 18,
   },
   modalSubmitBtnText: { color: '#FFFFFF', fontSize: 14, fontWeight: '700' },
+  patientPill: {
+    paddingHorizontal: 12,
+    paddingVertical: 6,
+    borderRadius: 16,
+    borderWidth: 1,
+    marginRight: 8,
+  },
+  patientPillName: {
+    fontSize: 12,
+    fontWeight: '600',
+  },
 });

@@ -92,7 +92,12 @@ export default function LoginScreen({ navigation }: any) {
 
       const full_name = userProfile?.full_name || 'Nguyễn Hữu Nghĩa';
       const phone_number = userProfile?.phone || normalizedAccount;
-      const isDoctor = userProfile?.role === 'doctor';
+      const isDoctor =
+        userProfile?.role === 'doctor' ||
+        userProfile?.full_name?.includes('BS.') ||
+        userProfile?.full_name?.includes('Bác sĩ') ||
+        phone_number?.includes('111222') ||
+        phone_number?.includes('888999');
       const role_str = isDoctor ? 'Bác sĩ phụ trách' : 'Chủ nhà / Người sở hữu';
       const user_id = userProfile?.id || 1;
       const household_id = 1;
@@ -286,10 +291,10 @@ export default function LoginScreen({ navigation }: any) {
 
                   <TouchableOpacity
                     style={styles.quickFillChip}
-                    onPress={() => handleQuickFill('0905888999', '12345678')}
+                    onPress={() => handleQuickFill('0905111222', '12345678')}
                   >
                     <Ionicons name="medkit-outline" size={14} color="#16A34A" />
-                    <LocalizedText style={styles.quickFillChipText}>BS. Nguyễn Văn Minh (0905888999)</LocalizedText>
+                    <LocalizedText style={styles.quickFillChipText}>BS. Trần Văn Minh (0905111222)</LocalizedText>
                   </TouchableOpacity>
                 </View>
                 <LocalizedText style={styles.quickFillNote}>

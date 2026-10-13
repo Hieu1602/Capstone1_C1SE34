@@ -3,26 +3,35 @@
 
 import axios, { AxiosInstance, AxiosError } from 'axios';
 import { Platform } from 'react-native';
+import Constants from 'expo-constants';
 import { useAuthStore } from '../store/useAuthStore';
 
 // Cấu hình BASE_URL tự động:
 // - Nếu có biến EXPO_PUBLIC_API_URL thì dùng nó
-// - Nếu chạy trên Web và truy cập qua LAN IP (ví dụ từ điện thoại): tự động kết nối API qua IP đó
-// - Nếu chạy trên Web hoặc iOS simulator cục bộ: dùng http://localhost:8000/api/v1
-// - Nếu chạy trên Android emulator: dùng http://10.0.2.2:8000/api/v1
+// - Nếu chạy trên Web và truy cập qua LAN IP: tự động kết nối API qua IP đó
+// - Tự động trích xuất IP từ host của Metro Bundler (Expo Constants)
+// - Fallback về IP máy tính hiện tại: 192.168.1.4
 const getBaseUrl = (): string => {
+  if (typeof process !== 'undefined' && process.env.EXPO_PUBLIC_API_URL) {
+    return process.env.EXPO_PUBLIC_API_URL;
+  }
   // Khi chạy trên Web: Luôn dùng hostname hiện tại của trình duyệt (localhost hoặc LAN IP)
   if (Platform.OS === 'web' && typeof window !== 'undefined' && window.location?.hostname) {
     const host = window.location.hostname;
     return `http://${host}:8000/api/v1`;
   }
-  if (typeof process !== 'undefined' && process.env.EXPO_PUBLIC_API_URL) {
-    return process.env.EXPO_PUBLIC_API_URL;
-  }
   if (Platform.OS === 'android') {
     return 'http://10.0.2.2:8000/api/v1';
   }
-  return 'http://192.168.1.8:8000/api/v1';
+  // Tự động nhận diện IP máy tính từ Expo Metro host
+  const debuggerHost = Constants.expoConfig?.hostUri || (Constants as any).manifest2?.extra?.expoClient?.hostUri || (Constants as any).manifest?.debuggerHost;
+  if (debuggerHost) {
+    const hostIp = debuggerHost.split(':')[0];
+    if (hostIp && !hostIp.includes('exp.direct')) {
+      return `http://${hostIp}:8000/api/v1`;
+    }
+  }
+  return 'http://192.168.1.4:8000/api/v1';
 };
 
 export const BASE_URL: string = getBaseUrl();
