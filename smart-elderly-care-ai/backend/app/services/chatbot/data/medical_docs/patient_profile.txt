@@ -1,0 +1,22 @@
+# HỒ SƠ QUẢN LÝ BỆNH NHÂN VÀ NGƯỜI GIÁM HỘ (DATABASE EXPORT)
+Ngày cập nhật: 2026-09-12 06:39:42
+
+## 1. THÔNG TIN NGƯỜI DÙNG / NGƯỜI GIÁM HỘ (CURRENT USER / CAREGIVER)
+- Họ và tên người dùng: Nguyễn Hữu Nghĩa
+- Vai trò: Người bảo hộ chính
+- Mối quan hệ với cụ: Con trai trưởng
+- Số điện thoại liên hệ khẩn cấp: 0908.123.456
+- Email: nghia.nguyen@email.com
+- Quyền hạn hệ thống: Theo dõi cảm biến thời gian thực, nhận cảnh báo té ngã / sốt / tim mạch, đàm thoại cùng AI.
+
+## 2. HỒ SƠ NGƯỜI CAO TUỔI ĐƯỢC GIÁM SÁT (PATIENT PROFILE)
+- Họ và tên: Cụ Nguyễn Văn An
+- Mã bệnh nhân: #ELD-8402
+- Tuổi: 82 tuổi
+- Giới tính: Nam
+- Vị trí cư trú: Phòng 102 - Tầng 1
+- Nhóm máu: O+
+- Tiền sử bệnh án: Tăng huyết áp vô căn độ 2, Tiểu đường Type 2, Thoái hóa khớp gối, Tiền sử từng té ngã năm 2024
+- Dị ứng thuốc: Dị ứng kháng sinh Penicillin (Tuyệt đối không dùng)
+- Bác sĩ điều trị phụ trách: BS. CKI Trần Minh Tuấn (Bệnh viện Lão khoa) (SĐT: 0912.345.678)
+- Lưu ý an toàn khẩn cấp: Cụ dễ chóng mặt khi thay đổi tư thế đột ngột từ nằm sang đứng. Cần hỗ trợ khi di chuyển ban đêm.

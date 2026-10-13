@@ -42,7 +42,8 @@ yarn-debug.log*
 yarn-error.log*
 
 # Database / Storage local
-data/
+data/raw/
+**/data/raw/
 *.sqlite3
 minio_data/
 
@@ -55,3 +56,11 @@ smart-elderly-care-ai/edge/test_snapshot.jpg
 *.doc
 *.docx
 *.pdf
+
+# AI Model weights & checkpoints
+*.onnx
+*.rknn
+*.pt
+*.pth
+*.tflite
+*.pkl

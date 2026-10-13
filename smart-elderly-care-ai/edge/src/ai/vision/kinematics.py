@@ -10,12 +10,18 @@ Calculates:
 - Motion energy / Keypoint displacement over time (for prolonged immobility / stroke warning)
 """
 
+import logging
 import math
+from pathlib import Path
 import time
 from collections import deque
 from dataclasses import dataclass, field
 from enum import Enum
 from typing import Dict, List, Optional, Tuple
+
+import numpy as np
+
+logger = logging.getLogger(__name__)
 
 
 class PostureState(str, Enum):
@@ -74,6 +80,34 @@ class KinematicFallEngine:
         self.immobility_alert_sec: float = cfg.get("immobility_alert_sec", 15.0)
         # Ngưỡng dịch chuyển keypoint trung bình để xác định có cử động (pixel)
         self.motion_energy_threshold: float = cfg.get("motion_energy_threshold", 8.0)
+
+        # Mô hình Machine Learning (Random Forest) nếu có
+        self.classifier_model_path: Optional[str] = cfg.get(
+            "classifier_model", "src/ai/vision/models/fall_classifier.pkl"
+        )
+        self.ml_classifier = None
+        self._load_ml_model()
+
+    def _load_ml_model(self) -> None:
+        if not self.classifier_model_path:
+            return
+        p = Path(self.classifier_model_path)
+        if not p.is_file():
+            edge_root = Path(__file__).resolve().parents[2]
+            edge_p = edge_root / self.classifier_model_path
+            if edge_p.is_file():
+                p = edge_p
+            else:
+                alt_p = Path(__file__).resolve().parent / "models" / Path(self.classifier_model_path).name
+                if alt_p.is_file():
+                    p = alt_p
+        if p.is_file():
+            try:
+                import joblib
+                self.ml_classifier = joblib.load(p)
+                logger.info("[KinematicFallEngine] Đã tải mô hình ML phân loại té ngã: %s", p)
+            except Exception as e:
+                logger.warning("[KinematicFallEngine] Không thể nạp mô hình ML: %s", e)
 
     @staticmethod
     def calculate_spine_angle(kps: List[Tuple[float, float, float]]) -> float:
@@ -252,19 +286,70 @@ class KinematicFallEngine:
 
         is_immobile = recent_movement < self.motion_energy_threshold
 
+        # 3.5. Đánh giá bằng mô hình Machine Learning (Random Forest) nếu có
+        ml_fall_prob: Optional[float] = None
+        if self.ml_classifier is not None and len(history) >= 2 and len(curr_snap.keypoints) >= 15:
+            try:
+                prev_snap = history[-2]
+                dt = max(curr_snap.timestamp - prev_snap.timestamp, 1e-3)
+                dy_hip = (curr_snap.hip_center_y - prev_snap.hip_center_y) / (h + 1e-5)
+                hip_vel = dy_hip / dt
+
+                kps = curr_snap.keypoints
+                l_sh, r_sh = kps[5], kps[6]
+                l_hip, r_hip = kps[11], kps[12]
+                l_knee, r_knee = kps[13], kps[14]
+
+                sh_x = (l_sh[0] + r_sh[0]) / 2.0
+                sh_y = (l_sh[1] + r_sh[1]) / 2.0
+                hip_x = (l_hip[0] + r_hip[0]) / 2.0
+                hip_y = (l_hip[1] + r_hip[1]) / 2.0
+                dx = abs(sh_x - hip_x)
+                dy = abs(sh_y - hip_y)
+                torso_len = math.sqrt(dx**2 + dy**2) / (h + 1e-5)
+
+                norm_hip_y = (curr_snap.hip_center_y - curr_snap.bbox[1]) / (h + 1e-5)
+                nose_y = kps[0][1] if len(kps) > 0 else curr_snap.bbox[1]
+                head_hip_dist = (curr_snap.hip_center_y - nose_y) / (h + 1e-5)
+
+                knee_y = (l_knee[1] + r_knee[1]) / 2.0
+                hip_knee_dist = (knee_y - curr_snap.hip_center_y) / (h + 1e-5)
+
+                sh_w = abs(l_sh[0] - r_sh[0]) + 1e-5
+                knee_w = abs(l_knee[0] - r_knee[0])
+                leg_spread_ratio = knee_w / sh_w
+
+                feats = np.array([[
+                    curr_snap.aspect_ratio,
+                    norm_hip_y,
+                    curr_snap.spine_angle_deg,
+                    torso_len,
+                    hip_vel,
+                    head_hip_dist,
+                    hip_knee_dist,
+                    leg_spread_ratio,
+                ]], dtype=np.float32)
+
+                probs = self.ml_classifier.predict_proba(feats)[0]
+                # Index 1 là nhãn Fall
+                ml_fall_prob = float(probs[1]) if len(probs) > 1 else float(probs[0])
+            except Exception as e:
+                logger.debug("Lỗi trích xuất đặc trưng ML: %s", e)
+
         # 4. Máy trạng thái phân loại ADL & Fall Detection
         new_state = current_state
         is_fall_event = False
         is_stroke_alert = False
 
         if current_state in (PostureState.STANDING, PostureState.SITTING, PostureState.DRINKING):
-            # A. Kiểm tra nguy cơ té ngã
-            if drop_velocity >= self.drop_velocity_threshold and is_low_posture:
+            # A. Kiểm tra nguy cơ té ngã (kết hợp Động học và Machine Learning)
+            is_ml_fall = ml_fall_prob is not None and ml_fall_prob >= 0.65
+            if (drop_velocity >= self.drop_velocity_threshold and is_low_posture) or (is_ml_fall and is_low_posture):
                 new_state = PostureState.FALLING
             elif is_low_posture and aspect_ratio > 1.4 and drop_velocity > 0.6:
                 # Trượt ngã có gia tốc rơi đáng kể
                 new_state = PostureState.FALLING
-            elif is_low_posture and drop_velocity < 0.6:
+            elif is_low_posture and drop_velocity < 0.6 and not is_ml_fall:
                 # Nằm xuống giường/sofa từ từ nghỉ ngơi hoặc ngủ (không phải ngã)
                 new_state = PostureState.LYING
             else:
@@ -319,5 +404,7 @@ class KinematicFallEngine:
 
         # Độ tin cậy tính toán dựa trên độ rõ ràng của góc và tỷ lệ khung hình
         confidence = min(1.0, max(0.0, (curr_snap.spine_angle_deg / 90.0) * 0.5 + min(aspect_ratio, 2.0) * 0.25))
+        if ml_fall_prob is not None:
+            confidence = 0.5 * confidence + 0.5 * ml_fall_prob
 
         return new_state, confidence, is_fall_event, is_stroke_alert

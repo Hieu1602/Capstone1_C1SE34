@@ -1,0 +1,127 @@
+# GIÁO TRÌNH BỆNH HỌC NGOẠI KHOA - ĐẠI HỌC Y HÀ NỘI (Y4 & Y6)
+# TỔNG HỢP CÁC BỆNH LÝ NGOẠI KHOA, CHẤN THƯƠNG VÀ CẤP CỨU LÃO KHOA
+# NGUỒN: BỆNH HỌC NGOẠI KHOA Y4 YHN 2020 & BỆNH HỌC NGOẠI KHOA Y6 YHN
+
+================================================================================
+# PHẦN 1: CHẤN THƯƠNG CHỈNH HÌNH VÀ GÃY XƯƠNG DO TÉ NGÃ Ở NGƯỜI CAO TUỔI
+================================================================================
+
+## 1.1. GÃY CỔ XƯƠNG ĐÙI Ở NGƯỜI CAO TUỔI (FEMORAL NECK FRACTURES)
+- Dịch tễ học & Cơ chế:
+  + Là tai nạn thương tích phổ biến và nghiêm trọng hàng đầu ở người cao tuổi (đặc biệt là phụ nữ mãn kinh bị loãng xương nặng - Osteoporosis).
+  + Cơ chế chấn thương thường là chấn thương năng lượng thấp (Low-energy trauma): ngã trượt chân trong nhà tắm, ngã từ trên giường xuống sàn, hoặc vấp ngã đập trực tiếp vùng mấu chuyển lớn xương đùi xuống nền cứng.
+- Triệu chứng lâm sàng điển hình:
+  1. Đau chói vùng háng hoặc mặt trước đùi, đau tăng dữ dội khi cố gắng cử động chân hoặc ấn vào tam giác Scarpa.
+  2. Mất cơ năng hoàn toàn chân bị gãy: không thể nhấc gót chân lên khỏi mặt giường, không thể tự đứng dậy hay đi lại.
+  3. Biến dạng chi đặc hiệu:
+     - Bàn chân và cẳng chân xoay ngoài hoàn toàn (mặt ngoài ngón chân út chạm sát mặt giường).
+     - Chi gãy bị ngắn hơn chi lành từ 2 - 3 cm (do cơ co kéo kéo đoạn xương đùi lên trên).
+     - Mấu chuyển lớn bị đẩy lên cao hơn đường viền sinh lý Nelaton - Roser.
+- Phân loại gãy cổ xương đùi theo Garden (dựa trên hướng các bè xương trên X-quang):
+  + Garden I: Gãy cài nhau không hoàn toàn, góc bè xương bị bẻ gập.
+  + Garden II: Gãy hoàn toàn nhưng không di lệch.
+  + Garden III: Gãy hoàn toàn có di lệch một phần (các bè xương đầu xương bị xoay lệch).
+  + Garden IV: Gãy hoàn toàn di lệch toàn bộ (chỏm xương đùi và thân xương đùi tách rời nhau hoàn toàn).
+- Biến chứng đe dọa tính mạng người cao tuổi do nằm bất động lâu:
+  + Viêm phổi ứ đọng và tắc nghẽn đờm dãi (nguyên nhân tử vong hàng đầu).
+  + Loét tỳ đè điểm tỳ (vùng cùng cụt, gót chân, mấu chuyển lớn) tiến triển nhanh dẫn đến nhiễm trùng huyết.
+  + Huyết khối tĩnh mạch sâu chi dưới (DVT) và tắc mạch phổi (Pulmonary Embolism) gây tử vong đột ngột.
+  + Nhiễm trùng đường tiết niệu do ứ đọng nước tiểu và đặt sonde tiểu kéo dài.
+  + Hoại tử vô mạch chỏm xương đùi (Avascular Necrosis - AVN) do tổn thương nhánh động mạch mũ nuôi chỏm.
+- Hướng xử trí và phẫu thuật:
+  + Sơ cứu khẩn cấp: Bất động chi gãy bằng nẹp Cramer hoặc nẹp Thomas, cố định hai chân vào nhau, giảm đau, đưa đến bệnh viện ngoại khoa.
+  + Người cao tuổi (trên 65-70 tuổi) gãy Garden III, IV có chỉ định phẫu thuật thay khớp háng (bán phần Bipolar hoặc toàn phần) càng sớm càng tốt (trong 24-48 giờ đầu) để bệnh nhân có thể ngồi dậy và tập đi sớm, tránh biến chứng nằm liệt giường.
+
+## 1.2. GÃY ĐẦU DƯỚI XƯƠNG QUAY (GÃY POUTEAU - COLLES)
+- Cơ chế chấn thương: Người già ngã chống bàn tay xuống đất trong tư thế cổ tay duỗi tối đa và cẳng tay sấp. Lực truyền từ lòng bàn tay dồn ép lên đầu dưới xương quay bị xốp mủn do loãng xương.
+- Triệu chứng lâm sàng:
+  + Biến dạng cổ tay kinh điển:
+    - Nhìn nghiêng: Cổ tay gồ ra sau giống hình "lưng dĩa" (hoặc hình thìa ăn súp).
+    - Nhìn thẳng: Bàn tay bị lệch vẹo về phía xương quay giống hình "lưỡi lê".
+  + Đầu mỏm trâm quay bị kéo lên cao ngang bằng hoặc cao hơn mỏm trâm trụ (bình thường mỏm trâm quay thấp hơn mỏm trâm trụ 1 - 1,5 cm).
+  + Đau chói và mất cơ năng bàn ngón tay, sưng nề bầm tím nhanh chóng.
+- Xử trí: Nắn chỉnh kín về vị trí giải phẫu dưới gây tê ổ gãy và bó bột cẳng bàn tay rạch dọc ôm ôm cổ tay ở tư thế gấp nhẹ và nghiêng trụ trong 4 - 6 tuần. Nếu gãy nát nhiều mảnh nội khớp thì chỉ định kết hợp xương bằng nẹp vít khóa.
+
+## 1.3. GÃY XƯƠNG CHẬU VÀ TRẬT KHỚP HÁNG
+- Gãy xương chậu ở người già: Thường do ngã đập vùng hông hoặc tai nạn giao thông. Là tổn thương nặng có nguy cơ sốc mất máu kín (mất từ 1.000 - 2.500 ml máu vào khoang sau phúc mạc mà không thấy chảy máu ra ngoài).
+  + Dấu hiệu cảnh báo: Ấn đau chói cánh chậu, ép giãn khung chậu đau dữ dội, tụ máu bầm tím vùng bẹn bìu hoặc tầng sinh môn.
+  + Biến chứng phối hợp: Đứt niệu đạo sau (chảy máu miệng sáo, bí tiểu, cầu bàng quang), vỡ bàng quang ngoài hoặc trong phúc mạc.
+
+
+================================================================================
+# PHẦN 2: CHẤN THƯƠNG SỌ NÃO VÀ HỆ THẦN KINH Ở NGƯỜI CAO TUỔI
+================================================================================
+
+## 2.1. TỤ MÁU DƯỚI MÀNG CỨNG MẠN TÍNH (CHRONIC SUBDURAL HEMATOMA - CSDH)
+- Đặc điểm giải phẫu bệnh học đặc thù ở người già:
+  + Ở người cao tuổi, não bộ bị teo sinh lý (Brain Atrophy), làm tăng khoảng trống giữa bề mặt vỏ não và màng cứng.
+  + Các tĩnh mạch cầu nối (Bridging Veins) nối từ vỏ não đổ vào xoang tĩnh mạch dọc trên bị kéo căng và trở nên giòn, rất dễ rách dù chỉ bị va chạm đầu rất nhẹ (như va đầu vào cánh tủ, trượt ngã ngồi đập đầu nhẹ vào tường).
+- Tiến triển lâm sàng âm thầm ("Kẻ giết người thầm lặng"):
+  + Sau chấn thương, người bệnh thường tỉnh táo bình thường và quên mất việc mình từng bị cộc đầu.
+  + Máu rỉ chậm rãi tích tụ trong khoang dưới màng cứng suốt 2 - 6 tuần. Bao xơ hình thành xung quanh khối máu tụ, dịch thấm thẩm thấu làm khối máu tụ ngày càng phình to, bắt đầu chèn ép nhu mô não.
+- Triệu chứng báo động lâm sàng sau vài tuần té ngã:
+  1. Đau đầu âm ỉ, liên tục, tăng dần về cường độ, uống thuốc giảm đau thông thường không đỡ.
+  2. Rối loạn tâm thần và nhận thức: Chậm chạp, đãng trí đột ngột, lú lẫn, hay quên tên con cháu, thay đổi tính nết (dễ bị chẩn đoán nhầm là sa sút trí tuệ Alzheimer hoặc trầm cảm).
+  3. Dấu hiệu thần kinh khu trú: Yếu nhẹ một bên tay chân, đi lại xiêu vẹo mất thăng bằng, méo miệng nhẹ, nói khó.
+  4. Triệu chứng muộn: Hôn mê, giãn đồng tử một bên do tụt kẹt não thùy thái dương qua lều tiểu não.
+- Chẩn đoán & Điều trị:
+  + Chụp Cắt lớp vi tính sọ não (CT Scanner): Hình ảnh khối thấu kính hình liềm giảm đậm độ hoặc đồng đậm độ nằm dưới bản sọ, đè đẩy đường giữa.
+  + Điều trị ngoại khoa: Phẫu thuật khoan 1 - 2 lỗ sọ (Burr-hole Craniostomy) dẫn lưu sạch máu tụ và bơm rửa bằng nước muối sinh lý. Đây là phẫu thuật nhẹ nhàng, hồi phục ngoạn mục nếu phát hiện kịp thời.
+
+## 2.2. CHẤN THƯƠNG CỘT SỐNG VÀ TỦY SỐNG
+- Gãy lún đốt sống do loãng xương (Vertebral Compression Fracture): Người cao tuổi chỉ cần ngã ngồi đập mông xuống sàn là đốt sống ngực D11, D12 hoặc thắt lưng L1, L2 có thể bị xẹp lún.
+  + Triệu chứng: Đau nhói cột sống thắt lưng, gõ dọc gai sau đau buốt, đau tăng khi đứng hoặc đi lại, không cúi gập người được.
+  + Xử trí: Nằm bất động đệm cứng, nẹp lưng Corset, phẫu thuật bơm xi măng sinh học tạo hình thân đốt sống qua da (Vertebroplasty/Kyphoplasty) giúp giảm đau tức thì.
+
+
+================================================================================
+# PHẦN 3: CẤP CỨU BỤNG NGOẠI KHOA Ở NGƯỜI CAO TUỔI
+================================================================================
+
+## 3.1. ĐẶC ĐIỂM BỆNH CẢNH BỤNG NGOẠI KHOA Ở NGƯỜI GIÀ
+- Nghèo nàn triệu chứng: Thành bụng nhão, lớp mỡ dưới da teo, ngưỡng cảm thụ đau tăng cao khiến người già ít than đau đớn dữ dội; phản ứng co cứng thành bụng (Defense musculaire) thường rất yếu hoặc không rõ rệt.
+- Đáp ứng viêm kém: Bạch cầu máu có thể không tăng cao, thân nhiệt không sốt cao dù ổ bụng đã viêm phúc mạc nhiễm độc nặng. Dễ dẫn đến chẩn đoán muộn và thủng tạng rỗng.
+
+## 3.2. VIÊM RUỘT THỪA CẤP (ACUTE APPENDICITIS)
+- Ở người cao tuổi, lòng ruột thừa xơ teo, mạch máu nuôi dưỡng kém xơ vữa khiến ruột thừa rất dễ bị hoại tử thủng sớm (chỉ sau 12 - 24 giờ).
+- Lâm sàng: Đau âm ỉ hố chậu phải hoặc quanh rốn, sốt nhẹ 37.5 - 38°C, bụng trướng nhẹ, điểm Mac-Burney ấn tức. Dễ nhầm với tắc ruột hoặc u đại tràng. Cần chỉ định nội soi ổ bụng cắt ruột thừa cấp cứu.
+
+## 3.3. THỦNG Ổ LOÉT DẠ DÀY - TÁ TRÀNG
+- Thường gặp ở người già có tiền sử uống thuốc giảm đau chống viêm khớp (NSAID, Corticoid, Aspirin chống đông).
+- Tam chứng lâm sàng kinh điển:
+  1. Đau bụng đột ngột, dữ dội như dao đâm ở vùng thượng vị, lan khắp ổ bụng.
+  2. Bụng co cứng như gỗ (ở người già có thể chỉ là đề kháng rõ vùng trên rốn).
+  3. X-quang bụng đứng không chuẩn bị thấy liềm hơi dưới vòm hoành (Pneumoperitoneum).
+
+## 3.4. TẮC RUỘT CƠ HỌC (MECHANICAL INTESTINAL OBSTRUCTION)
+- Nguyên nhân hàng đầu ở người già: Ung thư đại trực tràng, xoắn đại tràng sigma, dính ruột sau mổ cũ, hoặc thoát vị bẹn nghẹt.
+- 4 triệu chứng cơ năng chính:
+  1. Đau bụng từng cơn quặn thắt dữ dội.
+  2. Nôn mửa: Nôn sớm ra thức ăn, nôn muộn ra dịch mật hoặc dịch phân hôi.
+  3. Bí trung đại tiện hoàn toàn (dấu hiệu quyết định của tắc ruột).
+  4. Bụng trướng căng: Quai ruột nổi gồ lên thành bụng, dấu hiệu rắn bò (Borborygmi).
+  5. X-quang bụng đứng: Xuất hiện các quai ruột giãn rộng và hình ảnh mức nước - mức hơi (Air-fluid levels) dạng bậc thang.
+
+
+================================================================================
+# PHẦN 4: BỆNH LÝ MẠCH MÁU VÀ TIẾT NIỆU NGOẠI KHOA
+================================================================================
+
+## 4.1. PHÌ ĐẠI LÀNH TÍNH TUYẾN TIỀN LIỆT (BPH) VÀ BÍ TIỂU CẤP
+- Tuyến tiền liệt tăng sinh đè ép vào niệu đạo đoạn tiền liệt tuyến gây tắc nghẽn dòng chảy nước tiểu bàng quang.
+- Triệu chứng:
+  + Hội chứng tắc nghẽn: Tiểu khó, phải rặn, tia nước tiểu yếu, tiểu ngắt quãng, nhỏ giọt cuối bãi, cảm giác tiểu không hết bãi.
+  + Hội chứng kích thích: Tiểu đêm nhiều lần (3 - 5 lần/đêm), tiểu gấp không nhịn được, tiểu són.
+  + Biến chứng bí tiểu cấp (Acute Urinary Retention): Bệnh nhân đau tức vùng hạ vị dữ dội, muốn tiểu nhưng không thể rặn ra một giọt nước tiểu nào. Khám thấy Cầu bàng quang căng tròn nổi gồ trên xương mu, ấn rất tức.
+- Xử trí cấp cứu bí tiểu: Đặt ống thông tiểu (sonde Foley) vô khuẩn xả bớt nước tiểu từ từ (xả không quá 500ml một lần để tránh biến chứng chảy máu bàng quang do giảm áp lực đột ngột).
+
+## 4.2. PHÌNH ĐỘNG MẠCH CHỦ BỤNG (ABDOMINAL AORTIC ANEURYSM - AAA)
+- Đoạn động mạch chủ bụng dưới thận bị xơ vữa giãn nở thành túi phình đường kính > 3 cm (nguy cơ vỡ cao khi > 5 cm).
+- Lâm sàng: Thường không có triệu chứng cho đến khi vỡ. Khám thấy khối u đập theo nhịp đập của tim nằm ở vùng quanh rốn.
+- Biến chứng vỡ phình: Đau bụng và đau lưng dữ dội đột ngột, tụt huyết áp trụy mạch sốc mất máu, khối u đập lan rộng. Tỷ lệ tử vong lên tới 80 - 90% nếu không được phẫu thuật đặt Stent-Graft can thiệp mạch cấp cứu.
+
+## 4.3. BỆNH THIẾU MÁU MẠN TÍNH VÀ TẮC MẠCH CẤP CHI DƯỚI
+- Xơ vữa làm hẹp tắc động mạch đùi, khoeo và cẳng chân:
+  + Giai đoạn sớm: Đau cách hồi (Claudication intermittente) - đi được một đoạn (100 - 200m) thì bắp chân đau thắt buộc phải dừng lại nghỉ, nghỉ thì hết đau.
+  + Giai đoạn muộn: Đau liên tục khi nằm nghỉ, da bàn chân lạnh ngắt, nhợt nhạt, teo cơ, mất mạch mu chân và mạch chày sau.
+  + Biến chứng hoại tử khô đầu ngón chân, loét lâu liền dẫn đến nguy cơ phải cắt cụt chi nếu không được nong mạch đặt stent kịp thời.

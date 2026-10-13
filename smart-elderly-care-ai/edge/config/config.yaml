@@ -27,6 +27,7 @@ ai:
     face_blurring: true  # Làm mờ mặt thời gian thực bảo vệ quyền riêng tư người già
     fall_detection:
       enabled: true
+      classifier_model: "src/ai/vision/models/fall_classifier.pkl"
       # Tỷ lệ chiều cao/rộng bounding box khi ngã (nằm ngang)
       horizontal_ratio_threshold: 0.5
       aspect_ratio_threshold: 1.1

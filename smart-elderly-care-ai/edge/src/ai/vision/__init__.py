@@ -6,13 +6,14 @@ Bao gồm: pose detection, fall detection, multi-person tracking,
 """
 
 from src.ai.vision.pose_detector import PoseDetector
-from src.ai.vision.face_reid import FaceReIDEngine
-from src.ai.vision.tracker import MultiPersonTracker
-from src.ai.vision.kinematics import KinematicsAnalyzer
+from src.ai.vision.face_reid import FaceReIDManager
+from src.ai.vision.tracker import PersonTracker
+from src.ai.vision.kinematics import KinematicFallEngine, PostureState
 
 __all__ = [
     "PoseDetector",
-    "FaceReIDEngine",
-    "MultiPersonTracker",
-    "KinematicsAnalyzer",
+    "FaceReIDManager",
+    "PersonTracker",
+    "KinematicFallEngine",
+    "PostureState",
 ]

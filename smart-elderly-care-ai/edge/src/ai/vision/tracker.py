@@ -64,6 +64,7 @@ class PersonTracker:
         stitching_distance_threshold: float = 120.0,  # pixels
         sedentary_threshold_sec: float = 3600.0,  # Ngồi liên tục > 60 phút cảnh báo lười vận động
         face_cache_file: Optional[str] = None,
+        kinematic_config: Optional[dict] = None,
     ):
         self.iou_threshold = iou_threshold
         self.max_missed_frames = max_missed_frames
@@ -72,7 +73,7 @@ class PersonTracker:
         self.next_track_id: int = 1
         self.tracks: Dict[int, TrackedPerson] = {}
         self.recently_lost_tracks: List[TrackedPerson] = []
-        self.kinematic_engine = KinematicFallEngine()
+        self.kinematic_engine = KinematicFallEngine(config=kinematic_config)
         self.face_manager = FaceReIDManager(cache_file=face_cache_file)
 
     @staticmethod

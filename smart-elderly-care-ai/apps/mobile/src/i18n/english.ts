@@ -70,6 +70,7 @@ const english: Record<string, string> = {
   'Cụp ống kính, tắt luồng video': 'Cover the lens and turn off video streaming',
   'Cữ buổi:': 'Dose time:',
   'Danh mục Bệnh lý nền (Chẩn đoán)': 'Medical conditions (diagnoses)',
+  'Danh mục Bệnh lý nền': 'Medical conditions',
   'Danh mục cữ thuốc hôm nay': 'Today’s medication schedule',
   'Danh sách': 'List',
   'Danh sách các nhóm khu vực đã thiết lập trong nhà': 'Configured room groups in this home',

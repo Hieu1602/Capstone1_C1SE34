@@ -58,9 +58,14 @@ def blur_faces(
         for i in range(min(5, len(kps))):
             kp = kps[i]
             # Keypoint object hoặc tuple (x, y, conf)
-            conf = getattr(kp, "confidence", kp[2] if len(kp) > 2 else 0.0)
-            x = getattr(kp, "x", kp[0])
-            y = getattr(kp, "y", kp[1])
+            if hasattr(kp, "confidence"):
+                conf = float(kp.confidence)
+                x = float(kp.x)
+                y = float(kp.y)
+            else:
+                conf = float(kp[2]) if len(kp) > 2 else 0.0
+                x = float(kp[0])
+                y = float(kp[1])
             if conf > 0.25:
                 head_pts.append((x, y))
 
@@ -168,9 +173,14 @@ def draw_pose(
             kps = keypoints[i]
             # Draw keypoints
             for kp in kps:
-                conf = getattr(kp, "confidence", kp[2] if len(kp) > 2 else 0.0)
-                kx = getattr(kp, "x", kp[0])
-                ky = getattr(kp, "y", kp[1])
+                if hasattr(kp, "confidence"):
+                    conf = float(kp.confidence)
+                    kx = float(kp.x)
+                    ky = float(kp.y)
+                else:
+                    conf = float(kp[2]) if len(kp) > 2 else 0.0
+                    kx = float(kp[0])
+                    ky = float(kp[1])
                 if conf > 0.3:
                     cv2.circle(output, (int(kx), int(ky)), 3, color_kp, -1)
 
@@ -178,11 +188,15 @@ def draw_pose(
             for (a, b) in SKELETON_CONNECTIONS:
                 if a < len(kps) and b < len(kps):
                     ka, kb = kps[a], kps[b]
-                    ca = getattr(ka, "confidence", ka[2] if len(ka) > 2 else 0.0)
-                    cb = getattr(kb, "confidence", kb[2] if len(kb) > 2 else 0.0)
+                    ca = float(ka.confidence) if hasattr(ka, "confidence") else (float(ka[2]) if len(ka) > 2 else 0.0)
+                    cb = float(kb.confidence) if hasattr(kb, "confidence") else (float(kb[2]) if len(kb) > 2 else 0.0)
                     if ca > 0.3 and cb > 0.3:
-                        pt_a = (int(getattr(ka, "x", ka[0])), int(getattr(ka, "y", ka[1])))
-                        pt_b = (int(getattr(kb, "x", kb[0])), int(getattr(kb, "y", kb[1])))
+                        ax = float(ka.x) if hasattr(ka, "x") else float(ka[0])
+                        ay = float(ka.y) if hasattr(ka, "y") else float(ka[1])
+                        bx = float(kb.x) if hasattr(kb, "x") else float(kb[0])
+                        by = float(kb.y) if hasattr(kb, "y") else float(kb[1])
+                        pt_a = (int(ax), int(ay))
+                        pt_b = (int(bx), int(by))
                         cv2.line(output, pt_a, pt_b, color, 2)
 
     return output
