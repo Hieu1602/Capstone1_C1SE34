@@ -225,33 +225,9 @@ export default function HomeScreen({ navigation }: any) {
     syncAllWithBackend?.();
   }, []);
 
-  // Xử lý One-Touch SOS 115
+  // Xử lý One-Touch SOS 115: Điều hướng trực tiếp đến màn hình "Gửi vị trí cấp cứu" chuẩn giao diện mẫu
   const handleSOS115 = () => {
-    // Tự động sao chép địa chỉ nhà vào Clipboard
-    copyAddressToClipboard(house.address);
-
-    // Gửi SOS cho người thân trước; lỗi mạng không ngăn app mở cuộc gọi 115.
-    void launchEmergencyCall({ address: house.address }).catch(() => {
-      console.log('Thiết bị không hỗ trợ cuộc gọi viễn thông trực tiếp');
-    });
-
-    // Thông báo Toast/Alert kèm địa chỉ đã sao chép
-    Alert.alert(
-      '🚨 ĐÃ KÍCH HOẠT ONE-TOUCH SOS 115',
-      `Đã sao chép địa chỉ nhà và mở cuộc gọi cấp cứu 115.\n\n📍 Địa chỉ đã sao chép:\n"${house.address}"\n\nBạn có thể dán hoặc đọc trực tiếp địa chỉ này cho tổng đài viên cấp cứu.`,
-      [
-        { text: 'Đóng', style: 'cancel' },
-        {
-          text: 'Quay số 115 lại',
-          style: 'destructive',
-          onPress: () => {
-            void launchEmergencyCall({ address: house.address }).catch(() => {
-              console.log('Thiết bị không hỗ trợ cuộc gọi viễn thông trực tiếp');
-            });
-          },
-        },
-      ]
-    );
+    navigation.navigate('SendEmergencyLocation');
   };
 
   const handleMicPress = () => {

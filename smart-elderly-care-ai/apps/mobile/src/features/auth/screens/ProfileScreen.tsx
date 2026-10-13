@@ -283,11 +283,7 @@ export default function ProfileScreen({ navigation }: any) {
   };
 
   const callEmergencyService = async () => {
-    try {
-      await launchEmergencyCall();
-    } catch {
-      Alert.alert('Không thể gọi', 'Thiết bị không hỗ trợ thực hiện cuộc gọi trực tiếp.');
-    }
+    navigation.navigate('SendEmergencyLocation');
   };
 
   const updateFontScaleFromPosition = React.useCallback((positionX: number) => {

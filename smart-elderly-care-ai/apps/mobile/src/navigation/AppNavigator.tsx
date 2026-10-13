@@ -44,6 +44,7 @@ import DoctorTabNavigator from './DoctorTabNavigator';
 import DoctorPatientDetailScreen from '../features/doctor/screens/DoctorPatientDetailScreen';
 import DoctorPrescriptionsScreen from '../features/doctor/screens/DoctorPrescriptionsScreen';
 import DoctorAnalyticsReportScreen from '../features/doctor/screens/DoctorAnalyticsReportScreen';
+import SendEmergencyLocationScreen from '../features/alerts/screens/SendEmergencyLocationScreen';
 import { useTheme } from '../store/useThemeStore';
 
 const Stack = createNativeStackNavigator();
@@ -167,6 +168,7 @@ export default function AppNavigator() {
             <Stack.Screen name="SmartbandDetail" component={SmartbandDetailScreen} />
             <Stack.Screen name="HealthDetail" component={HealthDetailScreen} />
             <Stack.Screen name="Settings" component={SettingsScreen} />
+            <Stack.Screen name="SendEmergencyLocation" component={SendEmergencyLocationScreen} />
             <Stack.Screen
               name="IncidentDetail"
               component={IncidentDetailScreen}

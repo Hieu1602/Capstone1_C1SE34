@@ -702,12 +702,18 @@ export default function CameraDetailScreen({ navigation, route }: any) {
 
   const handleSOS115 = () => {
     LocalizedAlert.alert(
-      '🚨 GỌI CẤP CỨU 115?',
-      `Hành động này sẽ quay số 115 ngay lập tức.\nĐịa chỉ: "${house.address}"`,
+      '🚨 KHẨN CẤP / CẤP CỨU 115',
+      `Địa chỉ: "${house.address}"\nBạn muốn mở màn hình gửi vị trí kèm hình ảnh cấp cứu hay gọi trực tiếp 115?`,
       [
         { text: 'Hủy', style: 'cancel' },
         {
-          text: 'Gọi 115 Ngay',
+          text: '📍 Gửi vị trí & ảnh',
+          onPress: () => {
+            navigation.navigate('SendEmergencyLocation');
+          },
+        },
+        {
+          text: '📞 Gọi 115 ngay',
           style: 'destructive',
           onPress: () => {
             void launchEmergencyCall({ address: house.address }).catch((error) => {
