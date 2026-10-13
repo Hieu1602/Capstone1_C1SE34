@@ -18,6 +18,7 @@ from app.api.v1.endpoints.system        import router as system_router
 from app.api.v1.endpoints.users         import router as users_router
 from app.api.v1.endpoints.vitals        import router as vitals_router
 from app.api.v1.endpoints.chatbot       import router as chatbot_router
+from app.api.v1.endpoints.emergency     import router as emergency_router
 
 api_router = APIRouter()
 
@@ -35,3 +36,4 @@ api_router.include_router(doctor_router,        prefix="/doctor",        tags=["
 api_router.include_router(reports_router,       prefix="/reports",       tags=["Reports"])
 api_router.include_router(system_router,        prefix="/system",        tags=["System & Redis Cache"])
 api_router.include_router(chatbot_router,       prefix="/chatbot",       tags=["Chatbot AI (RAG)"])
+api_router.include_router(emergency_router,    prefix="/emergency",     tags=["Emergency SOS"])

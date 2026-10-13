@@ -462,6 +462,8 @@ const styles = StyleSheet.create({
     color: '#0F172A',
     fontSize: 16,
     padding: 0,
+    borderWidth: 0,
+    outlineWidth: 0,
   },
   otpRow: {
     flexDirection: 'row',
@@ -479,6 +481,7 @@ const styles = StyleSheet.create({
     color: '#0F172A',
     backgroundColor: '#F8FAFC',
     textAlign: 'center',
+    outlineWidth: 0,
   },
   otpInputActive: {
     borderColor: Colors.primary,

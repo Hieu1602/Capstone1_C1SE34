@@ -24,8 +24,11 @@ import {
 import { Ionicons } from '@expo/vector-icons';
 import { Colors } from '../../../theme/colors';
 import { useAuthStore } from '../../../store/useAuthStore';
+import { useThemeStore } from '../../../store/useThemeStore';
 import { authApi, usersApi } from '../../../services/api';
 import { LocalizedText, LocalizedTextInput } from '../../../i18n/LocalizedComponents';
+
+const FONT_SCALE_LEVELS = [0.8, 1, 1.2, 1.5, 1.8] as const;
 
 // Lấy kích thước chiều rộng màn hình để tính toán tỉ lệ cho bố cục Collage
 const { width: SCREEN_WIDTH } = Dimensions.get('window');
@@ -73,6 +76,9 @@ export default function LoginScreen({ navigation }: any) {
 
     setLoading(true);
     setNotice(null);
+    // Mỗi phiên đăng nhập bắt đầu ở cỡ chữ hệ thống; người dùng có thể bật tùy chỉnh sau.
+    useThemeStore.getState().setFontSizeMode('system');
+    useThemeStore.getState().setFontScale(1);
     try {
       // 1. Gửi request OAuth2 Password Grant lên Backend FastAPI
       const response = await authApi.login(normalizedAccount, password);
@@ -88,6 +94,20 @@ export default function LoginScreen({ navigation }: any) {
         userProfile = meRes.data;
       } catch (err) {
         console.warn('[Login] Lỗi truy vấn /users/me:', err);
+      }
+
+      const savedScale = userProfile?.custom_font_scale;
+      if (userProfile?.font_size_mode === 'custom') {
+        // Clear a previously saved custom mode so each new login starts with system sizing.
+        try {
+          const savedScaleIndex =
+            Number.isInteger(savedScale) && savedScale >= 0 && savedScale < FONT_SCALE_LEVELS.length
+              ? savedScale
+              : 2;
+          await usersApi.updateFontPreferences('system', savedScaleIndex);
+        } catch (error) {
+          console.warn('[Login] Could not reset font-size mode to system:', error);
+        }
       }
 
       const full_name = userProfile?.full_name || 'Nguyễn Hữu Nghĩa';
@@ -541,6 +561,8 @@ const styles = StyleSheet.create({
     flex: 1,
     fontSize: 15,
     color: '#0F172A',
+    borderWidth: 0,
+    outlineWidth: 0,
   },
   eyeBtn: {
     padding: 6,

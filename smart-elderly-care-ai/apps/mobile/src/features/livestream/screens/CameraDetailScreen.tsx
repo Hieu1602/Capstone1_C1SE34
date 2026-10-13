@@ -2,15 +2,16 @@
 // Màn hình Camera Chi Tiết – UI chuẩn Imou Life / SmartCare AI
 // Tham khảo giao diện thực tế Imou Ranger 2C
 
-import React, { useState, useRef, useEffect } from 'react';
-import { View, StyleSheet, TouchableOpacity, ScrollView, Image, Modal, Linking, Animated, useWindowDimensions, Platform, ActivityIndicator } from 'react-native';
+import React, { useState, useRef, useEffect, useMemo } from 'react';
+import { View, StyleSheet, TouchableOpacity, ScrollView, Image, Modal, Animated, useWindowDimensions, Platform, ActivityIndicator } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { Ionicons, MaterialCommunityIcons } from '@expo/vector-icons';
 import Svg, { Path, Circle, Ellipse, Polygon } from 'react-native-svg';
 import { Colors, Shadows } from '../../../theme/colors';
 import { useVitalStore } from '../../../store/useVitalStore';
-import { useTheme } from '../../../store/useThemeStore';
+import { createThemeStyles, useTheme } from '../../../store/useThemeStore';
 import { LocalizedAlert, LocalizedText } from '../../../i18n/LocalizedComponents';
+import { launchEmergencyCall } from '../../../services/emergency';
 
 
 // Safe dynamic require for video modules
@@ -121,6 +122,7 @@ interface UniversalVideoPlayerProps {
   style?: any;
   showControls?: boolean;
   fallbackPoster?: string;
+  playerStyles?: typeof baseStyles;
 }
 
 function UniversalVideoPlayer({
@@ -132,12 +134,13 @@ function UniversalVideoPlayer({
   style,
   showControls = false,
   fallbackPoster = FALLBACK_POSTER,
+  playerStyles = baseStyles,
 }: UniversalVideoPlayerProps) {
   const [isLoading, setIsLoading] = useState(true);
 
   if (Platform.OS === 'web') {
     return (
-      <View style={[styles.playerInner, style]}>
+      <View style={[playerStyles.playerInner, style]}>
         <video
           src={uri}
           autoPlay={!paused}
@@ -156,9 +159,9 @@ function UniversalVideoPlayer({
           }}
         />
         {isLoading && (
-          <View style={styles.playerLoadingOverlay}>
+          <View style={playerStyles.playerLoadingOverlay}>
             <ActivityIndicator size="small" color="#38BDF8" />
-            <LocalizedText style={styles.playerLoadingText}>Đang nạp luồng camera...</LocalizedText>
+            <LocalizedText style={playerStyles.playerLoadingText}>Đang nạp luồng camera...</LocalizedText>
           </View>
         )}
       </View>
@@ -168,7 +171,7 @@ function UniversalVideoPlayer({
   // Native: Try react-native-video if available
   if (NativeVideo) {
     return (
-      <View style={[styles.playerInner, style]}>
+      <View style={[playerStyles.playerInner, style]}>
         <NativeVideo
           source={{ uri }}
           style={StyleSheet.absoluteFill}
@@ -180,9 +183,9 @@ function UniversalVideoPlayer({
           onLoad={() => setIsLoading(false)}
         />
         {isLoading && (
-          <View style={styles.playerLoadingOverlay}>
+          <View style={playerStyles.playerLoadingOverlay}>
             <ActivityIndicator size="small" color="#38BDF8" />
-            <LocalizedText style={styles.playerLoadingText}>Đang nạp luồng camera...</LocalizedText>
+            <LocalizedText style={playerStyles.playerLoadingText}>Đang nạp luồng camera...</LocalizedText>
           </View>
         )}
       </View>
@@ -216,7 +219,7 @@ function UniversalVideoPlayer({
     `;
 
     return (
-      <View style={[styles.playerInner, style]}>
+      <View style={[playerStyles.playerInner, style]}>
         <NativeWebView
           source={{ html: htmlContent }}
           style={StyleSheet.absoluteFill}
@@ -226,9 +229,9 @@ function UniversalVideoPlayer({
           onLoadEnd={() => setIsLoading(false)}
         />
         {isLoading && (
-          <View style={styles.playerLoadingOverlay}>
+          <View style={playerStyles.playerLoadingOverlay}>
             <ActivityIndicator size="small" color="#38BDF8" />
-            <LocalizedText style={styles.playerLoadingText}>Đang nạp luồng camera...</LocalizedText>
+            <LocalizedText style={playerStyles.playerLoadingText}>Đang nạp luồng camera...</LocalizedText>
           </View>
         )}
       </View>
@@ -237,7 +240,7 @@ function UniversalVideoPlayer({
 
   // Fallback to Image
   return (
-    <View style={[styles.playerInner, style]}>
+    <View style={[playerStyles.playerInner, style]}>
       <Image
         source={{ uri: fallbackPoster }}
         style={StyleSheet.absoluteFill}
@@ -249,6 +252,10 @@ function UniversalVideoPlayer({
 
 export default function CameraDetailScreen({ navigation, route }: any) {
   const { isDarkMode, colors } = useTheme();
+  const styles = useMemo(
+    () => createThemeStyles(baseStyles, isDarkMode, colors),
+    [isDarkMode, colors],
+  );
   const routeParams = route?.params ?? {};
   const { width: winW, height: winH } = useWindowDimensions();
   const isPortrait = winH > winW;
@@ -699,7 +706,15 @@ export default function CameraDetailScreen({ navigation, route }: any) {
       `Hành động này sẽ quay số 115 ngay lập tức.\nĐịa chỉ: "${house.address}"`,
       [
         { text: 'Hủy', style: 'cancel' },
-        { text: 'Gọi 115 Ngay', style: 'destructive', onPress: () => Linking.openURL('tel:115') },
+        {
+          text: 'Gọi 115 Ngay',
+          style: 'destructive',
+          onPress: () => {
+            void launchEmergencyCall({ address: house.address }).catch((error) => {
+              console.warn('[CameraDetailScreen] Could not open emergency dialer:', error);
+            });
+          },
+        },
       ]
     );
   };
@@ -785,6 +800,7 @@ export default function CameraDetailScreen({ navigation, route }: any) {
           <>
             <UniversalVideoPlayer
               uri={activeStreamUrl}
+              playerStyles={styles}
               paused={isPaused}
               muted={isMuted}
               repeat={true}
@@ -1564,6 +1580,7 @@ export default function CameraDetailScreen({ navigation, route }: any) {
           >
             <UniversalVideoPlayer
               uri={activeStreamUrl}
+              playerStyles={styles}
               paused={isPaused}
               muted={isMuted}
               repeat={true}
@@ -1643,6 +1660,7 @@ export default function CameraDetailScreen({ navigation, route }: any) {
             <View style={styles.modalPlayer}>
               <UniversalVideoPlayer
                 uri={selectedIncidentForReplay?.video_clip_url || DEFAULT_MOCK_STREAM}
+                playerStyles={styles}
                 style={{ width: '100%', height: 220 }}
                 repeat={true}
                 showControls={true}
@@ -1972,7 +1990,7 @@ export default function CameraDetailScreen({ navigation, route }: any) {
             <View style={styles.sirenDeviceRow}>
               <Ionicons name="videocam" size={16} color={Colors.primary} />
               <LocalizedText style={styles.sirenDeviceText}>
-                Thiết bị: <LocalizedText style={{ fontWeight: '800', color: '#0F172A' }}>{cameraDisplayName}</LocalizedText>
+                Thiết bị: <LocalizedText style={{ fontWeight: '800', color: colors.textPrimary }}>{cameraDisplayName}</LocalizedText>
               </LocalizedText>
               <View style={styles.sirenDeviceOnline}>
                 <View style={{ width: 6, height: 6, borderRadius: 3, backgroundColor: '#10B981' }} />
@@ -2301,7 +2319,7 @@ export default function CameraDetailScreen({ navigation, route }: any) {
 // ═══════════════════════════════════════════
 // STYLES
 // ═══════════════════════════════════════════
-const styles = StyleSheet.create({
+const baseStyles = StyleSheet.create({
   safeArea: {
     flex: 1,
     backgroundColor: '#F6F8FA',

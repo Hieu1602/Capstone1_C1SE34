@@ -5,24 +5,24 @@
 import React, { useState, useEffect } from 'react';
 import {
   View,
-  Text,
   StyleSheet,
   TouchableOpacity,
   ScrollView,
   Image,
-  Alert,
-  Linking,
   Platform,
   Clipboard,
   Modal,
   Switch,
 } from 'react-native';
+// Ánh xạ Text và Alert sang wrapper i18n để mọi nhãn trên Trang chủ theo ngôn ngữ đã chọn.
+import { LocalizedAlert as Alert, LocalizedText as Text } from '../../../i18n/LocalizedComponents';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { Ionicons, MaterialCommunityIcons } from '@expo/vector-icons';
 import { Colors, Shadows } from '../../../theme/colors';
 import { useVitalStore } from '../../../store/useVitalStore';
 import { useTheme } from '../../../store/useThemeStore';
 import { systemApi } from '../../../services/api';
+import { launchEmergencyCall } from '../../../services/emergency';
 import { alertsWS } from '../../../services/websocket';
 
 
@@ -230,8 +230,8 @@ export default function HomeScreen({ navigation }: any) {
     // Tự động sao chép địa chỉ nhà vào Clipboard
     copyAddressToClipboard(house.address);
 
-    // Kích hoạt quay số nhanh đến 115
-    Linking.openURL('tel:115').catch(() => {
+    // Gửi SOS cho người thân trước; lỗi mạng không ngăn app mở cuộc gọi 115.
+    void launchEmergencyCall({ address: house.address }).catch(() => {
       console.log('Thiết bị không hỗ trợ cuộc gọi viễn thông trực tiếp');
     });
 
@@ -244,7 +244,11 @@ export default function HomeScreen({ navigation }: any) {
         {
           text: 'Quay số 115 lại',
           style: 'destructive',
-          onPress: () => Linking.openURL('tel:115'),
+          onPress: () => {
+            void launchEmergencyCall({ address: house.address }).catch(() => {
+              console.log('Thiết bị không hỗ trợ cuộc gọi viễn thông trực tiếp');
+            });
+          },
         },
       ]
     );

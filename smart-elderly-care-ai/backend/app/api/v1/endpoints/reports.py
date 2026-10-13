@@ -6,11 +6,12 @@ import io
 from uuid import UUID
 
 from typing import Optional
-from fastapi import APIRouter, Depends, Query
+from fastapi import APIRouter, Depends, Query, Request
 from fastapi.responses import StreamingResponse
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core.database import get_db
+from app.core.i18n import get_request_language
 from app.crud.crud_incident import crud_incident
 from app.crud.crud_vital import crud_vital
 from app.services.reports.report_service import report_service
@@ -20,6 +21,7 @@ router = APIRouter()
 
 @router.get("/pdf")
 async def export_default_pdf(
+    request: Request,
     days: int = Query(default=7, le=90),
     patient_id: Optional[str] = Query(None),
     db: AsyncSession = Depends(get_db),
@@ -29,7 +31,12 @@ async def export_default_pdf(
     uuid_val = await crud_vital.resolve_device_uuid(db, device_id)
     vitals = await crud_vital.get_history(db, device_id=device_id, limit=days * 24 * 6)
     incidents = await crud_incident.list(db, device_id=uuid_val, limit=100)
-    pdf_bytes = report_service.generate_pdf(uuid_val or device_id, vitals=vitals, incidents=incidents)
+    pdf_bytes = report_service.generate_pdf(
+        uuid_val or device_id,
+        vitals=vitals,
+        incidents=incidents,
+        language=get_request_language(request),
+    )
     return StreamingResponse(
         io.BytesIO(pdf_bytes),
         media_type="application/pdf",
@@ -39,6 +46,7 @@ async def export_default_pdf(
 
 @router.get("/excel")
 async def export_default_excel(
+    request: Request,
     days: int = Query(default=30, le=365),
     patient_id: Optional[str] = Query(None),
     db: AsyncSession = Depends(get_db),
@@ -48,7 +56,12 @@ async def export_default_excel(
     uuid_val = await crud_vital.resolve_device_uuid(db, device_id)
     vitals = await crud_vital.get_history(db, device_id=device_id, limit=days * 24 * 6)
     incidents = await crud_incident.list(db, device_id=uuid_val, limit=500)
-    excel_bytes = report_service.generate_excel(uuid_val or device_id, vitals=vitals, incidents=incidents)
+    excel_bytes = report_service.generate_excel(
+        uuid_val or device_id,
+        vitals=vitals,
+        incidents=incidents,
+        language=get_request_language(request),
+    )
     return StreamingResponse(
         io.BytesIO(excel_bytes),
         media_type="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
@@ -59,6 +72,7 @@ async def export_default_excel(
 @router.get("/{device_id}/pdf")
 async def export_pdf_report(
     device_id: str,
+    request: Request,
     days: int = Query(default=7, le=90),
     db: AsyncSession = Depends(get_db),
 ):
@@ -70,7 +84,12 @@ async def export_pdf_report(
     vitals = await crud_vital.get_history(db, device_id=device_id, limit=days * 24 * 6)
     incidents = await crud_incident.list(db, device_id=uuid_val, limit=100)
 
-    pdf_bytes = report_service.generate_pdf(uuid_val or device_id, vitals=vitals, incidents=incidents)
+    pdf_bytes = report_service.generate_pdf(
+        uuid_val or device_id,
+        vitals=vitals,
+        incidents=incidents,
+        language=get_request_language(request),
+    )
     return StreamingResponse(
         io.BytesIO(pdf_bytes),
         media_type="application/pdf",
@@ -81,6 +100,7 @@ async def export_pdf_report(
 @router.get("/{device_id}/excel")
 async def export_excel_report(
     device_id: str,
+    request: Request,
     days: int = Query(default=30, le=365),
     db: AsyncSession = Depends(get_db),
 ):
@@ -91,7 +111,12 @@ async def export_excel_report(
     vitals = await crud_vital.get_history(db, device_id=device_id, limit=days * 24 * 6)
     incidents = await crud_incident.list(db, device_id=uuid_val, limit=500)
 
-    excel_bytes = report_service.generate_excel(uuid_val or device_id, vitals=vitals, incidents=incidents)
+    excel_bytes = report_service.generate_excel(
+        uuid_val or device_id,
+        vitals=vitals,
+        incidents=incidents,
+        language=get_request_language(request),
+    )
     return StreamingResponse(
         io.BytesIO(excel_bytes),
         media_type="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",

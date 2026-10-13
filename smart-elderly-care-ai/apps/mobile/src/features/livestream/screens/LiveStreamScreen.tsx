@@ -2,11 +2,12 @@
 // Xem live stream camera từ Edge Hub và gọi SOS 115
 
 import React, { useState } from 'react';
-import { View, StyleSheet, TouchableOpacity, Linking } from 'react-native';
+import { View, StyleSheet, TouchableOpacity } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
 import { Platform } from 'react-native';
 import { LocalizedAlert, LocalizedText } from '../../../i18n/LocalizedComponents';
+import { launchEmergencyCall } from '../../../services/emergency';
 
 let WebView: any = null;
 if (Platform.OS !== 'web') {
@@ -29,7 +30,11 @@ export default function LiveStreamScreen() {
         {
           text: 'Gọi 115',
           style: 'destructive',
-          onPress: () => Linking.openURL('tel:115'),
+          onPress: () => {
+            void launchEmergencyCall().catch((error) => {
+              console.warn('[LiveStreamScreen] Could not open emergency dialer:', error);
+            });
+          },
         },
       ],
     );

@@ -61,6 +61,35 @@ export default function App() {
   }, []);
 
   useEffect(() => {
+    if (Platform.OS !== 'web' || typeof document === 'undefined') return undefined;
+
+    const styleId = 'smartcare-remove-web-input-focus-outline';
+    if (document.getElementById(styleId)) return undefined;
+
+    const style = document.createElement('style');
+    style.id = styleId;
+    style.textContent = `
+      input:focus,
+      input:focus-visible,
+      textarea:focus,
+      textarea:focus-visible {
+        outline: none !important;
+        box-shadow: none !important;
+      }
+
+      input[type="password"]::-ms-reveal,
+      input[type="password"]::-ms-clear {
+        display: none;
+      }
+    `;
+    document.head.appendChild(style);
+
+    return () => {
+      style.remove();
+    };
+  }, []);
+
+  useEffect(() => {
     if (!accessToken) {
       void i18n.changeLanguage('vi');
       return undefined;

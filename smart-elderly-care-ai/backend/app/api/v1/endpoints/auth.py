@@ -7,7 +7,7 @@ from typing import Literal
 from fastapi import APIRouter, Depends, HTTPException, status
 from fastapi.concurrency import run_in_threadpool
 from fastapi.security import OAuth2PasswordRequestForm
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, Field, field_validator
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.exc import IntegrityError
 
@@ -31,7 +31,24 @@ class OTPVerifyRequest(OTPRequest):
 class PasswordResetRequest(BaseModel):
     phone: str = Field(min_length=9, max_length=16)
     otp_code: str = Field(min_length=6, max_length=6, pattern=r"^\d{6}$")
-    new_password: str = Field(min_length=8, max_length=128)
+    new_password: str = Field(
+        min_length=8,
+        max_length=16,
+    )
+
+    @field_validator("new_password")
+    @classmethod
+    def validate_new_password_strength(cls, value: str) -> str:
+        if not (
+            any(character.islower() for character in value)
+            and any(character.isupper() for character in value)
+            and any(character.isdigit() for character in value)
+            and any(not character.isalnum() for character in value)
+        ):
+            raise ValueError(
+                "Mật khẩu mới cần có chữ hoa, chữ thường, số và ký tự đặc biệt."
+            )
+        return value
 
 
 class UserRegistration(UserCreate):
@@ -238,4 +255,3 @@ async def get_current_auth_user(
 ):
     """Lấy thông tin người dùng đang đăng nhập."""
     return current_user
-
