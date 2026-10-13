@@ -10,6 +10,7 @@ import { Colors, Shadows } from '../../../theme/colors';
 import { useVitalStore } from '../../../store/useVitalStore';
 import { useTheme } from '../../../store/useThemeStore';
 import { LocalizedAlert, LocalizedText } from '../../../i18n/LocalizedComponents';
+import { launchEmergencyCall } from '../../../services/emergency';
 
 
 const { width: SCREEN_WIDTH } = Dimensions.get('window');
@@ -344,7 +345,15 @@ export default function MultiViewScreen({ navigation }: any) {
                 {
                   text: 'Gọi 115',
                   style: 'destructive',
-                  onPress: () => LocalizedAlert.alert('Đã kết nối', 'Đang thực hiện cuộc gọi khẩn cấp 115.'),
+                  onPress: () => {
+                    void launchEmergencyCall({ address: house.address })
+                      .then(() => {
+                        LocalizedAlert.alert('Đã kích hoạt', 'Đang mở trình gọi khẩn cấp 115.');
+                      })
+                      .catch((error) => {
+                        console.warn('[MultiViewScreen] Could not open emergency dialer:', error);
+                      });
+                  },
                 },
               ]
             );
@@ -715,4 +724,3 @@ const styles = StyleSheet.create({
     fontWeight: '900',
   },
 });
-

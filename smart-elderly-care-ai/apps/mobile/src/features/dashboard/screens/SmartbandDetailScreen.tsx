@@ -2,13 +2,14 @@
 // Màn hình Chi tiết Vòng Đeo Tay Thông Minh (BLE Smartband) & Các chỉ số sức khỏe thu thập
 // Thiết kế chuẩn y khoa cho hệ thống Smart Elderly Care AI theo Proposal Capstone 1
 
-import React, { useState, useRef } from 'react';
+import React, { useState, useRef, useMemo } from 'react';
 import { View, StyleSheet, TouchableOpacity, ScrollView, Animated, Dimensions, ActivityIndicator } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
 import { Colors, Shadows } from '../../../theme/colors';
 import { useVitalStore } from '../../../store/useVitalStore';
 import { LocalizedAlert, LocalizedText } from '../../../i18n/LocalizedComponents';
+import { createThemeStyles, useTheme } from '../../../store/useThemeStore';
 
 
 const { width: SCREEN_WIDTH } = Dimensions.get('window');
@@ -16,6 +17,11 @@ const { width: SCREEN_WIDTH } = Dimensions.get('window');
 export default function SmartbandDetailScreen({ navigation, route }: any) {
   const deviceParam = route?.params?.device;
   const { currentVitals, setVitals, algoSettings } = useVitalStore();
+  const { isDarkMode, colors } = useTheme();
+  const styles = useMemo(
+    () => createThemeStyles(baseStyles, isDarkMode, colors),
+    [isDarkMode, colors],
+  );
 
   const [isSyncing, setIsSyncing] = useState(false);
   const [isFinding, setIsFinding] = useState(false);
@@ -88,15 +94,15 @@ export default function SmartbandDetailScreen({ navigation, route }: any) {
   ];
 
   return (
-    <SafeAreaView style={styles.safeArea} edges={['top', 'bottom']}>
+    <SafeAreaView style={[styles.safeArea, isDarkMode && { backgroundColor: colors.background }]} edges={['top', 'bottom']}>
       {/* 1. Header Điều Hướng */}
-      <View style={styles.header}>
+      <View style={[styles.header, isDarkMode && { backgroundColor: colors.card, borderBottomColor: colors.border }]}>
         <TouchableOpacity
-          style={styles.backButton}
+          style={[styles.backButton, isDarkMode && { backgroundColor: colors.surfaceSubtle }]}
           onPress={() => navigation.goBack()}
           activeOpacity={0.7}
         >
-          <Ionicons name="chevron-back" size={26} color="#0F172A" />
+          <Ionicons name="chevron-back" size={26} color={colors.textPrimary} />
         </TouchableOpacity>
 
         <View style={styles.headerTitleBox}>
@@ -110,17 +116,17 @@ export default function SmartbandDetailScreen({ navigation, route }: any) {
         </View>
 
         <TouchableOpacity
-          style={styles.settingsButton}
+          style={[styles.settingsButton, isDarkMode && { backgroundColor: colors.surfaceSubtle }]}
           onPress={() => navigation.navigate('AlgoConfig')}
           activeOpacity={0.7}
         >
-          <Ionicons name="options-outline" size={22} color="#0F172A" />
+          <Ionicons name="options-outline" size={22} color={colors.textPrimary} />
         </TouchableOpacity>
       </View>
 
       <ScrollView
         showsVerticalScrollIndicator={false}
-        contentContainerStyle={styles.scrollContent}
+        contentContainerStyle={[styles.scrollContent, isDarkMode && { backgroundColor: colors.background }]}
       >
         {/* ============================================================== */}
         {/* 2. HERO CARD: THÔNG TIN CHI TIẾT ĐỒNG HỒ / VÒNG ĐEO TAY        */}
@@ -151,12 +157,12 @@ export default function SmartbandDetailScreen({ navigation, route }: any) {
 
               <LocalizedText style={styles.wearerInfoText}>
                 <Ionicons name="person" size={14} color="#64748B" /> Người đeo:{' '}
-                <LocalizedText style={{ fontWeight: '700', color: '#0F172A' }}>Cụ Ông (78 tuổi)</LocalizedText>
+                <LocalizedText style={{ fontWeight: '700', color: colors.textPrimary }}>Cụ Ông (78 tuổi)</LocalizedText>
               </LocalizedText>
 
               <LocalizedText style={styles.locationInfoText}>
                 <Ionicons name="location" size={14} color="#64748B" /> Vị trí:{' '}
-                <LocalizedText style={{ fontWeight: '600', color: '#334155' }}>
+                <LocalizedText style={{ fontWeight: '600', color: colors.textSecondary }}>
                   {deviceParam?.location || 'Phòng ngủ'}
                 </LocalizedText>
               </LocalizedText>
@@ -280,13 +286,13 @@ export default function SmartbandDetailScreen({ navigation, route }: any) {
 
             <View style={styles.metricMiniStatsColumn}>
               <LocalizedText style={styles.metricMiniStatItem}>
-                Thấp nhất: <LocalizedText style={{ fontWeight: '700', color: '#0F172A' }}>62 bpm</LocalizedText>
+                Thấp nhất: <LocalizedText style={{ fontWeight: '700', color: colors.textPrimary }}>62 bpm</LocalizedText>
               </LocalizedText>
               <LocalizedText style={styles.metricMiniStatItem}>
-                Trung bình: <LocalizedText style={{ fontWeight: '700', color: '#0F172A' }}>73 bpm</LocalizedText>
+                Trung bình: <LocalizedText style={{ fontWeight: '700', color: colors.textPrimary }}>73 bpm</LocalizedText>
               </LocalizedText>
               <LocalizedText style={styles.metricMiniStatItem}>
-                Cao nhất: <LocalizedText style={{ fontWeight: '700', color: '#0F172A' }}>98 bpm</LocalizedText>
+                Cao nhất: <LocalizedText style={{ fontWeight: '700', color: colors.textPrimary }}>98 bpm</LocalizedText>
               </LocalizedText>
             </View>
           </View>
@@ -604,7 +610,7 @@ export default function SmartbandDetailScreen({ navigation, route }: any) {
   );
 }
 
-const styles = StyleSheet.create({
+const baseStyles = StyleSheet.create({
   safeArea: {
     flex: 1,
     backgroundColor: '#F8FAFC',
@@ -1334,4 +1340,3 @@ const styles = StyleSheet.create({
     marginTop: 2,
   },
 });
-

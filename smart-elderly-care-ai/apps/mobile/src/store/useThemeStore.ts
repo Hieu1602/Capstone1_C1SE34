@@ -59,14 +59,58 @@ export const darkTheme: ThemeColors = {
   inputBg: '#1E293B',
 };
 
+export function createThemeStyles<T extends object>(
+  baseStyles: T,
+  isDarkMode: boolean,
+  colors: ThemeColors,
+): T {
+  if (!isDarkMode) return baseStyles;
+
+  return Object.fromEntries(
+    Object.entries(baseStyles).map(([styleName, style]) => {
+      if (!style || typeof style !== 'object') return [styleName, style];
+
+      const darkStyle = { ...(style as Record<string, unknown>) };
+      for (const [key, value] of Object.entries(darkStyle)) {
+        if (key === 'backgroundColor' && typeof value === 'string') {
+          if (['#FFF', '#FFFFFF', '#FFFBF7'].includes(value)) {
+            darkStyle[key] = colors.card;
+          } else if (value === '#F8FAFC') {
+            darkStyle[key] = colors.background;
+          } else if (value === '#F1F5F9') {
+            darkStyle[key] = colors.surfaceSubtle;
+          } else if (['#FFF7ED', '#FFF4EC', '#FFEDD5', '#FEF2F2', '#ECFDF5', '#E0F2FE', '#FAF5FF', '#DCFCE7'].includes(value)) {
+            darkStyle[key] = colors.surfaceSubtle;
+          }
+        } else if (key === 'color' && typeof value === 'string') {
+          if (['#0F172A', '#1E293B'].includes(value)) {
+            darkStyle[key] = colors.textPrimary;
+          } else if (['#334155', '#475569', '#64748B'].includes(value)) {
+            darkStyle[key] = colors.textSecondary;
+          }
+        } else if (
+          ['borderColor', 'borderBottomColor', 'borderTopColor'].includes(key) &&
+          ['#E2E8F0', '#F1F5F9'].includes(String(value))
+        ) {
+          darkStyle[key] = colors.border;
+        }
+      }
+
+      return [styleName, darkStyle];
+    }),
+  ) as T;
+}
+
 interface ThemeState {
   isDarkMode: boolean;
   colors: ThemeColors;
   fontScale: number;
+  fontSizeMode: 'system' | 'custom';
   toggleTheme: () => void;
   toggleDarkMode: () => void;
   setDarkMode: (isDark: boolean) => void;
   setFontScale: (scale: number) => void;
+  setFontSizeMode: (mode: 'system' | 'custom') => void;
 }
 
 export const useThemeStore = create<ThemeState>()(
@@ -75,6 +119,7 @@ export const useThemeStore = create<ThemeState>()(
       isDarkMode: false,
       colors: lightTheme,
       fontScale: 1,
+      fontSizeMode: 'system',
       toggleTheme: () =>
         set((state) => {
           const next = !state.isDarkMode;
@@ -100,6 +145,7 @@ export const useThemeStore = create<ThemeState>()(
         set({
           fontScale: Math.min(Math.max(scale, 0.8), 1.8),
         }),
+      setFontSizeMode: (fontSizeMode: 'system' | 'custom') => set({ fontSizeMode }),
     }),
     {
       name: 'smartcare-theme-storage',
@@ -111,6 +157,8 @@ export const useThemeStore = create<ThemeState>()(
       onRehydrateStorage: () => (state) => {
         if (state) {
           state.colors = state.isDarkMode ? darkTheme : lightTheme;
+          state.setFontScale(1);
+          state.setFontSizeMode('system');
         }
       },
     }
@@ -121,9 +169,21 @@ export const useTheme = () => {
   const isDarkMode = useThemeStore((s) => s.isDarkMode);
   const colors = useThemeStore((s) => s.colors);
   const fontScale = useThemeStore((s) => s.fontScale);
+  const fontSizeMode = useThemeStore((s) => s.fontSizeMode);
   const toggleTheme = useThemeStore((s) => s.toggleTheme);
   const toggleDarkMode = useThemeStore((s) => s.toggleDarkMode);
   const setDarkMode = useThemeStore((s) => s.setDarkMode);
   const setFontScale = useThemeStore((s) => s.setFontScale);
-  return { isDarkMode, colors, fontScale, toggleTheme, toggleDarkMode, setDarkMode, setFontScale };
+  const setFontSizeMode = useThemeStore((s) => s.setFontSizeMode);
+  return {
+    isDarkMode,
+    colors,
+    fontScale,
+    fontSizeMode,
+    toggleTheme,
+    toggleDarkMode,
+    setDarkMode,
+    setFontScale,
+    setFontSizeMode,
+  };
 };

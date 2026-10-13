@@ -13,14 +13,15 @@
 import React, { useState } from 'react';
 import {
   View,
-  Text,
   StyleSheet,
   FlatList,
   TouchableOpacity,
   RefreshControl,
   Image,
-  Alert,
 } from 'react-native';
+// Lấy t() để dịch chuỗi động; dùng Text/Alert đã bọc i18n cho nội dung tĩnh và hộp thoại.
+import { useTranslation } from 'react-i18next';
+import { LocalizedAlert as Alert, LocalizedText as Text } from '../../../i18n/LocalizedComponents';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
 import { Colors, Shadows } from '../../../theme/colors';
@@ -110,19 +111,20 @@ function getAlertConfig(alertType: string): AlertConfig {
  * formatFriendlyTime: Định dạng mốc thời gian ISO thành định dạng thân thiện với người dùng
  * (Vừa xong, X phút trước, Hôm qua, hoặc giờ:phút ngày/tháng).
  */
-function formatFriendlyTime(dateStr: string) {
+function formatFriendlyTime(dateStr: string, translate: (key: string, count?: number) => string) {
   try {
     const date = new Date(dateStr);
     const now = new Date();
     const diffMs = now.getTime() - date.getTime();
-    if (diffMs <= 60 * 1000) return 'Vừa xong';
+    if (diffMs <= 60 * 1000) return translate('Vừa xong');
     const diffMin = Math.floor(diffMs / (60 * 1000));
-    if (diffMin < 60) return `${diffMin} phút trước`;
+    // Truyền số lượng riêng để i18next thay {{count}} bằng đúng số phút/giờ/ngày.
+    if (diffMin < 60) return translate('{{count}} phút trước', diffMin);
     const diffHour = Math.floor(diffMin / 60);
-    if (diffHour < 24) return `${diffHour} giờ trước`;
+    if (diffHour < 24) return translate('{{count}} giờ trước', diffHour);
     const diffDay = Math.floor(diffHour / 24);
-    if (diffDay === 1) return 'Hôm qua';
-    if (diffDay < 7) return `${diffDay} ngày trước`;
+    if (diffDay === 1) return translate('Hôm qua');
+    if (diffDay < 7) return translate('{{count}} ngày trước', diffDay);
 
     const hours = String(date.getHours()).padStart(2, '0');
     const minutes = String(date.getMinutes()).padStart(2, '0');
@@ -138,6 +140,7 @@ function formatFriendlyTime(dateStr: string) {
 // 2. Component chính: AlertsListScreen
 // ------------------------------------------------------------------------------
 export default function AlertsListScreen({ navigation }: any) {
+  const { t } = useTranslation();
   // Lấy trạng thái giao diện Sáng / Tối từ ThemeStore
   const { isDarkMode, colors } = useTheme();
 
@@ -276,7 +279,9 @@ export default function AlertsListScreen({ navigation }: any) {
         <View style={styles.headerTitleCol}>
           <Text style={[styles.headerTitle, isDarkMode && { color: colors.textPrimary }]}>Thông Báo &amp; Sự Kiện</Text>
           <Text style={[styles.headerSubtitle, isDarkMode && { color: colors.textSecondary }]}>
-            {unreadCount > 0 ? `${unreadCount} thông báo mới chưa đọc` : 'Tất cả đã được xử lý'}
+            {unreadCount > 0
+              ? t('{{count}} thông báo mới chưa đọc', { count: unreadCount })
+              : 'Tất cả đã được xử lý'}
           </Text>
         </View>
 
@@ -330,7 +335,7 @@ export default function AlertsListScreen({ navigation }: any) {
           activeOpacity={0.8}
         >
           <Text style={[styles.filterText, isDarkMode && filterType !== 'ALL' && { color: colors.textSecondary }, filterType === 'ALL' && styles.filterTextActive]}>
-            Tất cả ({incidents.length})
+            {t('Tất cả ({{count}})', { count: incidents.length })}
           </Text>
         </TouchableOpacity>
 
@@ -383,7 +388,10 @@ export default function AlertsListScreen({ navigation }: any) {
         renderItem={({ item }) => {
           // Lấy cấu hình màu sắc, icon và tiêu đề theo alert_type
           const config = getAlertConfig(item.alert_type);
-          const friendlyTime = formatFriendlyTime(item.created_at);
+          // Dịch nhãn thời gian lúc render để ngôn ngữ luôn khớp với lựa chọn hiện tại.
+          const friendlyTime = formatFriendlyTime(item.created_at, (key, count) =>
+            count === undefined ? t(key) : t(key, { count }),
+          );
 
           return (
             <TouchableOpacity
@@ -441,7 +449,12 @@ export default function AlertsListScreen({ navigation }: any) {
                   <Text style={[styles.cardTime, isDarkMode && { color: colors.textSecondary }]}>{friendlyTime}</Text>
                   <Text style={[styles.dotSeparator, isDarkMode && { color: colors.border }]}>•</Text>
                   <Text style={[styles.deviceLocationText, isDarkMode && { color: colors.textSecondary }]}>
-                    {item.device_id ? `Thiết bị: ${item.device_id}` : 'Hệ thống AI'}
+                    {item.device_id ? (
+                      <>
+                        <Text>Thiết bị: </Text>
+                        {item.device_id}
+                      </>
+                    ) : 'Hệ thống AI'}
                   </Text>
                 </View>
               </View>

@@ -27,6 +27,14 @@
       "favicon": "./assets/favicon.png",
       "bundler": "metro"
     },
+    "plugins": [
+      [
+        "expo-location",
+        {
+          "locationWhenInUsePermission": "Allow Smart Elderly Care to access your location and show it on the map."
+        }
+      ]
+    ],
     "platforms": ["ios", "android", "web"]
   }
 }

@@ -15,13 +15,14 @@ from datetime import datetime, timezone
 from typing import Any, Dict, List, Optional
 from uuid import UUID
 
-from fastapi import APIRouter, Depends, HTTPException, status
+from fastapi import APIRouter, Depends, HTTPException, Request, status
 from pydantic import BaseModel, Field
 from sqlalchemy import delete, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.api.deps import get_current_user, get_current_user_optional
 from app.core.database import get_db
+from app.core.i18n import get_request_language
 from app.models.chat import ChatMessage, ChatSession
 from app.models.user import User
 from app.services.chatbot.rag_service import get_chatbot_rag_service
@@ -145,6 +146,7 @@ async def chatbot_health():
 
 @router.post("/chat", response_model=ChatResponse)
 async def chat(
+    http_request: Request,
     request: ChatRequest,
     current_user: Optional[User] = Depends(get_current_user_optional),
     db: AsyncSession = Depends(get_db),
@@ -158,11 +160,16 @@ async def chat(
     try:
         service = get_chatbot_rag_service()
         user_id = current_user.id if current_user else None
+        language = get_request_language(
+            http_request,
+            current_user.preferred_language if current_user else None,
+        )
 
         res = await service.ask(
             db=db,
             user_id=user_id,
             question=request.message,
+            language=language,
         )
 
         # Lưu lịch sử nếu user đã đăng nhập
@@ -211,7 +218,12 @@ async def chat(
     except HTTPException:
         raise
     except Exception as e:
-        raise HTTPException(status_code=500, detail=f"Lỗi xử lý câu hỏi: {str(e)}")
+        detail = (
+            f"Failed to process the question: {e}"
+            if http_request.state.language == "en"
+            else f"Lỗi xử lý câu hỏi: {e}"
+        )
+        raise HTTPException(status_code=500, detail=detail) from e
 
 
 @router.get("/sessions", response_model=List[SessionOut])

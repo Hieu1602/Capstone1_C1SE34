@@ -4,6 +4,7 @@
 import axios, { AxiosInstance, AxiosError } from 'axios';
 import { Platform } from 'react-native';
 import Constants from 'expo-constants';
+import AsyncStorage from '@react-native-async-storage/async-storage';
 import { useAuthStore } from '../store/useAuthStore';
 
 // Cấu hình BASE_URL tự động:
@@ -47,10 +48,18 @@ const api: AxiosInstance = axios.create({
 
 // ---- Request Interceptor: Attach JWT token ----
 api.interceptors.request.use(
-  (config: import('axios').InternalAxiosRequestConfig) => {
+  async (config: import('axios').InternalAxiosRequestConfig) => {
     const token = useAuthStore.getState().accessToken;
     if (token) {
       config.headers.Authorization = `Bearer ${token}`;
+    }
+    try {
+      const language = await AsyncStorage.getItem('smartcare-user-language');
+      if (language === 'en' || language === 'vi') {
+        config.headers['Accept-Language'] = language;
+      }
+    } catch (error) {
+      console.warn('[API] Could not load saved language preference:', error);
     }
     return config;
   },
@@ -71,6 +80,10 @@ api.interceptors.response.use(
         if (!refreshToken) throw new Error('No refresh token');
         const { data } = await axios.post(`${BASE_URL}/auth/refresh`, {
           refresh_token: refreshToken,
+        }, {
+          headers: {
+            'Accept-Language': original.headers?.['Accept-Language'] || 'vi',
+          },
         });
         useAuthStore.getState().setTokens(data.access_token, data.refresh_token);
         original.headers.Authorization = `Bearer ${data.access_token}`;
@@ -111,6 +124,13 @@ export const authApi = {
     otp_code: string;
     new_password: string;
   }) => api.post('/auth/reset-password', data),
+  requestPasswordResetOtp: (phone: string) =>
+    api.post('/auth/password/request-otp', { phone }),
+  completePasswordReset: (data: {
+    phone: string;
+    otp_code: string;
+    new_password: string;
+  }) => api.post('/auth/password/reset', data),
 };
 
 // 0. Users API
@@ -119,6 +139,26 @@ export const usersApi = {
   updateMe: (data: any) => api.patch('/users/me', data),
   updateLanguage: (language: 'vi' | 'en') =>
     api.patch('/users/me/language', { preferred_language: language, language }),
+  updateFontPreferences: (fontSizeMode: 'system' | 'custom', customFontScale: number) =>
+    api.patch('/users/me/font-preferences', {
+      font_size_mode: fontSizeMode,
+      custom_font_scale: customFontScale,
+    }),
+  changePassword: (data: {
+    current_password: string;
+    new_password: string;
+    confirm_new_password: string;
+  }) => api.patch('/users/me/password', data),
+};
+
+// API SOS báo cho các thành viên trong cùng hộ; app sẽ tự mở trình gọi 115.
+export const emergencyApi = {
+  triggerSOS: (data: {
+    address?: string;
+    latitude?: number;
+    longitude?: number;
+    message?: string;
+  } = {}) => api.post('/emergency/sos', data),
 };
 
 // 1. System Mode API
@@ -250,5 +290,3 @@ export const householdApi = {
   removeMember: (householdId: number | string = 1, memberId: number | string) =>
     api.delete(`/households/${householdId}/members/${memberId}`),
 };
-
-

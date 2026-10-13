@@ -10,7 +10,13 @@ from app.core.database import get_db
 from app.core.security import hash_password, verify_password
 from app.crud.crud_user import crud_user
 from app.models.user import User
-from app.schemas.user import PasswordChange, UserOut, UserUpdate
+from app.schemas.user import (
+    FontSizePreferenceUpdate,
+    LanguagePreferenceUpdate,
+    PasswordChange,
+    UserOut,
+    UserUpdate,
+)
 
 router = APIRouter()
 
@@ -37,18 +43,35 @@ async def update_profile(
 @router.patch("/me/language", response_model=UserOut)
 @router.put("/me/language", response_model=UserOut)
 async def update_language(
-    payload: dict = Body(...),
+    payload: LanguagePreferenceUpdate,
     current_user: User = Depends(get_current_user),
     db: AsyncSession = Depends(get_db),
 ):
     """Cập nhật ngôn ngữ giao diện của người dùng (vi hoặc en)."""
-    lang = (payload.get("preferred_language") or payload.get("language") or "").strip().lower()
-    if lang not in ["vi", "en"]:
-        raise HTTPException(
-            status_code=status.HTTP_400_BAD_REQUEST,
-            detail="Ngôn ngữ không hợp lệ. Chỉ chấp nhận 'vi' hoặc 'en'.",
-        )
-    return await crud_user.update(db, db_obj=current_user, obj_in={"preferred_language": lang})
+    return await crud_user.update(
+        db,
+        db_obj=current_user,
+        obj_in={"preferred_language": payload.preferred_language},
+    )
+
+
+@router.patch("/me/font-preferences", response_model=UserOut)
+@router.put("/me/font-preferences", response_model=UserOut)
+async def update_font_preferences(
+    payload: FontSizePreferenceUpdate,
+    current_user: User = Depends(get_current_user),
+    db: AsyncSession = Depends(get_db),
+):
+    """Lưu tùy chọn cỡ chữ để app khôi phục sau khi đăng nhập lại.
+
+    FontSizePreferenceUpdate kiểm tra chế độ và mức cỡ chữ trước khi cập nhật
+    hồ sơ người dùng; PATCH và PUT cùng được hỗ trợ để tương thích với client.
+    """
+    return await crud_user.update(
+        db,
+        db_obj=current_user,
+        obj_in=payload.model_dump(),
+    )
 
 
 @router.patch("/me/password")
