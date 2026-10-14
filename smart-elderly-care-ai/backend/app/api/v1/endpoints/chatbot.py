@@ -11,11 +11,14 @@ Endpoints:
   DELETE /chatbot/sessions/{id}    – Xoá phiên chat
 """
 
+import io
 from datetime import datetime, timezone
 from typing import Any, Dict, List, Optional
 from uuid import UUID
 
-from fastapi import APIRouter, Depends, HTTPException, Request, status
+import speech_recognition as sr
+from fastapi import APIRouter, Depends, File, HTTPException, Request, UploadFile, status
+from pydub import AudioSegment
 from pydantic import BaseModel, Field
 from sqlalchemy import delete, select
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -306,3 +309,69 @@ async def delete_session(
         )
     await db.delete(session)
     await db.commit()
+
+
+@router.post("/transcribe-audio")
+async def transcribe_audio(
+    file: UploadFile = File(...),
+):
+    """
+    Nhận file ghi âm âm thanh (WAV/M4A/WebM) từ Mobile/Web,
+    nhận diện và chuyển đổi thành văn bản tiếng Việt.
+    """
+    try:
+        content = await file.read()
+        if not content:
+            raise HTTPException(status_code=400, detail="Tập tin âm thanh rỗng.")
+
+        r: Any = sr.Recognizer()
+        audio_buf = io.BytesIO(content)
+        audio_data = None
+
+        # Thử 1: Đọc trực tiếp định dạng WAV
+        try:
+            with sr.AudioFile(audio_buf) as source:
+                audio_data = r.record(source)
+        except Exception:
+            # Thử 2: Chuyển đổi bằng pydub nếu client gửi định dạng m4a/aac/webm
+            try:
+                audio_buf.seek(0)
+                seg: Any = AudioSegment.from_file(audio_buf)
+                wav_io = io.BytesIO()
+                seg.export(wav_io, format="wav")
+                wav_io.seek(0)
+                with sr.AudioFile(wav_io) as source:
+                    audio_data = r.record(source)
+            except Exception as conv_err:
+                raise HTTPException(
+                    status_code=400,
+                    detail=f"Không thể đọc file âm thanh ({conv_err}). Vui lòng đảm bảo ghi âm chuẩn WAV."
+                )
+
+        if not audio_data:
+            raise HTTPException(status_code=400, detail="Không đọc được dữ liệu âm thanh.")
+
+        # Nhận diện giọng nói tiếng Việt bằng Google Web Speech API
+        text = str(r.recognize_google(audio_data, language="vi-VN"))
+        return {
+            "status": "success",
+            "text": text,
+        }
+    except sr.UnknownValueError:
+        return {
+            "status": "error",
+            "message": "Không nhận diện được giọng nói. Bạn hãy thử nói to và rõ hơn nhé.",
+        }
+    except sr.RequestError as e:
+        return {
+            "status": "error",
+            "message": f"Dịch vụ nhận diện giọng nói tạm thời gián đoạn: {str(e)}",
+        }
+    except HTTPException:
+        raise
+    except Exception as e:
+        return {
+            "status": "error",
+            "message": f"Lỗi xử lý file giọng nói: {str(e)}",
+        }
+

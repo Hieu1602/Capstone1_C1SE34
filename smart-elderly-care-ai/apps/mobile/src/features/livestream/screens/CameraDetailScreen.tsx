@@ -346,7 +346,7 @@ export default function CameraDetailScreen({ navigation, route }: any) {
   };
 
   // Chế độ luồng camera thời gian thực từ Edge Hub
-  const [useMockStream, setUseMockStream] = useState(false);
+  const [useMockStream] = useState(false);
   const activeStreamUrl = useMockStream ? DEFAULT_MOCK_STREAM : (camera.streamUrl || 'http://127.0.0.1:8080/stream');
 
   // Playback & Interactive Timeline states

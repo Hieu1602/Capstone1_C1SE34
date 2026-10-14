@@ -2,7 +2,7 @@
 // React Navigation – 5 Tabs chuẩn phong cách Imou / SmartCare AI & Stack Screens
 
 import React from 'react';
-import { View, StyleSheet } from 'react-native';
+import { View, StyleSheet, Platform } from 'react-native';
 import { NavigationContainer } from '@react-navigation/native';
 import { createNativeStackNavigator } from '@react-navigation/native-stack';
 import { createBottomTabNavigator } from '@react-navigation/bottom-tabs';
@@ -189,9 +189,9 @@ const styles = StyleSheet.create({
     backgroundColor: '#FFFFFF',
     borderTopColor: '#E2E8F0',
     borderTopWidth: 1,
-    height: 62,
+    height: Platform.OS === 'ios' ? 84 : 72,
     paddingTop: 8,
-    paddingBottom: 8,
+    paddingBottom: Platform.OS === 'ios' ? 26 : 14,
     elevation: 8,
     shadowColor: '#000',
     shadowOffset: { width: 0, height: -2 },

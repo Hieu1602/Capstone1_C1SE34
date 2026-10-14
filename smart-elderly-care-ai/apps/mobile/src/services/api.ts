@@ -13,34 +13,40 @@ import { useAuthStore } from '../store/useAuthStore';
 // - Tự động trích xuất IP từ host của Metro Bundler (Expo Constants)
 // - Fallback về IP máy tính hiện tại: 192.168.1.4
 const getBaseUrl = (): string => {
-  if (typeof process !== 'undefined' && process.env.EXPO_PUBLIC_API_URL) {
-    return process.env.EXPO_PUBLIC_API_URL;
-  }
-  // Khi chạy trên Web: Luôn dùng hostname hiện tại của trình duyệt (localhost hoặc LAN IP)
+  // 1. Khi chạy trên Web trình duyệt
   if (Platform.OS === 'web' && typeof window !== 'undefined' && window.location?.hostname) {
     const host = window.location.hostname;
     return `http://${host}:8000/api/v1`;
   }
-  if (Platform.OS === 'android') {
-    return 'http://10.0.2.2:8000/api/v1';
-  }
-  // Tự động nhận diện IP máy tính từ Expo Metro host
-  const debuggerHost = Constants.expoConfig?.hostUri || (Constants as any).manifest2?.extra?.expoClient?.hostUri || (Constants as any).manifest?.debuggerHost;
+
+  // 2. Tự động nhận diện IP máy tính từ Expo Metro host (kết nối trực tiếp điện thoại thật qua LAN Wi-Fi)
+  const debuggerHost =
+    Constants.expoConfig?.hostUri ||
+    (Constants as any).manifest2?.extra?.expoClient?.hostUri ||
+    (Constants as any).manifest?.debuggerHost;
+
   if (debuggerHost) {
     const hostIp = debuggerHost.split(':')[0];
-    if (hostIp && !hostIp.includes('exp.direct')) {
+    if (hostIp && !hostIp.includes('exp.direct') && hostIp !== 'localhost' && hostIp !== '127.0.0.1') {
       return `http://${hostIp}:8000/api/v1`;
     }
   }
+
+  // 3. Biến môi trường EXPO_PUBLIC_API_URL (nếu được chỉ định rõ và không trỏ vào localhost trên thiết bị thật)
+  const envUrl = process.env.EXPO_PUBLIC_API_URL;
+  if (envUrl && !envUrl.includes('localhost') && !envUrl.includes('127.0.0.1')) {
+    return envUrl;
+  }
+
+  // 4. Fallback về IP máy tính phát triển trong mạng nội bộ
   return 'http://192.168.1.4:8000/api/v1';
 };
 
 export const BASE_URL: string = getBaseUrl();
 
-
 const api: AxiosInstance = axios.create({
   baseURL: BASE_URL,
-  timeout: 15000,
+  timeout: 20000,
   headers: {
     'Content-Type': 'application/json',
   },
@@ -290,3 +296,20 @@ export const householdApi = {
   removeMember: (householdId: number | string = 1, memberId: number | string) =>
     api.delete(`/households/${householdId}/members/${memberId}`),
 };
+
+// 8. Chatbot AI API
+export const chatbotApi = {
+  chat: (data: { message: string; session_id?: string; context_window?: number; house_id?: string }) =>
+    api.post('/chatbot/chat', data),
+  getHealth: () => api.get('/chatbot/health'),
+  getSessions: () => api.get('/chatbot/sessions'),
+  getSessionDetail: (sessionId: string) => api.get(`/chatbot/sessions/${sessionId}`),
+  deleteSession: (sessionId: string) => api.delete(`/chatbot/sessions/${sessionId}`),
+  transcribeAudio: (formData: any) =>
+    api.post('/chatbot/transcribe-audio', formData, {
+      headers: {
+        'Content-Type': 'multipart/form-data',
+      },
+    }),
+};
+
