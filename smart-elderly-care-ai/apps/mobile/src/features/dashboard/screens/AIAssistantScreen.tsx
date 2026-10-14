@@ -87,9 +87,7 @@ export default function AIAssistantScreen({ navigation }: any) {
   const backdropAnim = React.useRef(new Animated.Value(0)).current;
   const scrollViewRef = useRef<ScrollView>(null);
 
-  // 2. Quản lý giọng nói (TTS - Text to Speech & STT - Speech to Text)
-  const [isSpeakingId, setIsSpeakingId] = useState<string | null>(null);
-  const [isAutoSpeak, setIsAutoSpeak] = useState(false);
+  // 2. Quản lý ghi âm giọng nói (STT - Speech to Text)
   const [isRecording, setIsRecording] = useState(false);
   const [recordingDuration, setRecordingDuration] = useState(0);
   const [recordingInstance, setRecordingInstance] = useState<any>(null);
@@ -112,45 +110,7 @@ export default function AIAssistantScreen({ navigation }: any) {
     };
   }, []);
 
-  // Hàm phát âm thanh câu trả lời (Text-to-Speech)
-  const handleSpeakMessage = (msgId: string, text: string) => {
-    if (!SafeSpeech || typeof SafeSpeech.speak !== 'function') {
-      Alert.alert('Giọng nói', 'Mô-đun đọc giọng nói chưa sẵn sàng trong môi trường này.');
-      return;
-    }
 
-    if (isSpeakingId === msgId) {
-      try {
-        SafeSpeech.stop();
-      } catch (_) {}
-      setIsSpeakingId(null);
-      return;
-    }
-
-    try {
-      SafeSpeech.stop();
-    } catch (_) {}
-    setIsSpeakingId(msgId);
-
-    // Làm sạch ký tự Markdown trước khi đọc
-    const cleanText = text
-      .replace(/[*#_`~>]/g, '')
-      .replace(/🚨|⚠️|🩺|👉|💡|📖|•|✅/g, '')
-      .trim();
-
-    try {
-      SafeSpeech.speak(cleanText, {
-        language: 'vi-VN',
-        pitch: 1.0,
-        rate: 0.95,
-        onDone: () => setIsSpeakingId(null),
-        onError: () => setIsSpeakingId(null),
-      });
-    } catch (e) {
-      console.warn('Lỗi gọi SafeSpeech:', e);
-      setIsSpeakingId(null);
-    }
-  };
 
   // Hàm bắt đầu ghi âm giọng nói (Speech-to-Text)
   const startVoiceRecording = async () => {
@@ -453,10 +413,7 @@ export default function AIAssistantScreen({ navigation }: any) {
       };
       setMessages((prev) => [...prev, aiMsg]);
 
-      // Tự động phát âm thanh trả lời nếu bật chế độ Đọc tự động
-      if (isAutoSpeak) {
-        handleSpeakMessage(aiMsg.id, reply);
-      }
+
 
     } catch (error: any) {
       // Fallback nếu chatbot service chưa chạy
@@ -501,10 +458,7 @@ export default function AIAssistantScreen({ navigation }: any) {
     closeSidebar();
   };
 
-  // Nút Profile: Chuyển hướng sang màn hình Profile / Quản trị hệ thống (Hình 2) theo yêu cầu
-  const handleOpenProfileModule = () => {
-    navigation.navigate('Profile');
-  };
+
 
   return (
     <SafeAreaView style={[styles.container, { backgroundColor: isDarkMode ? colors.background : '#FFFFFF' }]} edges={['top']}>
