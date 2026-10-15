@@ -267,3 +267,60 @@ async def get_recent_alerts(limit: int = Query(default=10, ge=1, le=50)) -> List
     """Lấy danh sách cảnh báo từ hàng đợi RAM buffer."""
     return await redis_service.get_recent_alerts(limit=limit)
 
+
+# ------------------------------------------------------------------------------
+# Chế độ hệ thống & Chuông báo động (Mobile App System Mode & Alarm Snooze)
+# ------------------------------------------------------------------------------
+from pydantic import BaseModel
+from app.crud.crud_house import crud_house
+
+
+class SystemModePayload(BaseModel):
+    mode: Optional[str] = None
+    is_mute_alarm: Optional[bool] = None
+    is_camera_privacy: Optional[bool] = None
+    mute_mode: Optional[str] = None
+    duration_minutes: Optional[int] = None
+
+
+@router.get("/mode", summary="Lấy chế độ an ninh và trạng thái báo động của hệ thống")
+async def get_system_mode(
+    current_user: User = Depends(get_current_user),
+    db: AsyncSession = Depends(get_db),
+) -> Dict[str, Any]:
+    """Trả về chế độ bảo vệ hiện tại và trạng thái tắt chuông."""
+    house = await crud_house.get_or_create_default_house(db, owner_id=current_user.id)
+    return {
+        "mode": house.current_mode,
+        "is_mute_alarm": False,
+        "is_camera_privacy": house.current_mode == "PRIVACY",
+        "mute_mode": "STANDARD",
+        "duration_minutes": 0,
+    }
+
+
+@router.put("/mode", summary="Cập nhật chế độ an ninh / tạm hoãn chuông báo động")
+async def update_system_mode(
+    payload: SystemModePayload,
+    current_user: User = Depends(get_current_user),
+    db: AsyncSession = Depends(get_db),
+) -> Dict[str, Any]:
+    """Cập nhật chế độ an ninh ngôi nhà hoặc cấu hình tạm dừng chuông."""
+    house = await crud_house.get_or_create_default_house(db, owner_id=current_user.id)
+    if payload.is_camera_privacy:
+        house = await crud_house.update_mode(db, house=house, mode="PRIVACY")
+    elif payload.mode:
+        valid_modes = {"HOME", "AWAY", "DISARM", "ALARM", "PRIVACY"}
+        normalized = payload.mode.upper().strip()
+        if normalized in valid_modes:
+            house = await crud_house.update_mode(db, house=house, mode=normalized)
+    return {
+        "status": "success",
+        "mode": house.current_mode,
+        "is_mute_alarm": bool(payload.is_mute_alarm),
+        "is_camera_privacy": house.current_mode == "PRIVACY",
+        "mute_mode": payload.mute_mode or "STANDARD",
+        "duration_minutes": payload.duration_minutes or 0,
+    }
+
+
