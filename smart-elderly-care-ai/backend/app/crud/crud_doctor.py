@@ -35,139 +35,28 @@ from app.schemas.doctor import (
 from app.schemas.patient import MedicalCondition, PatientMedicalRecordUpdate
 
 
-# In-memory store cho đơn thuốc y khoa của Bác sĩ (có khởi tạo sẵn dữ liệu mẫu thực tế)
+# In-memory store cho đơn thuốc y khoa của Bác sĩ (chỉ lưu các đơn do Bác sĩ tạo)
 _PRESCRIPTION_STORE: Dict[str, List[PrescriptionItem]] = {}
 
 # In-memory store cho hồ sơ lâm sàng có thể chỉnh sửa của Bác sĩ
 _CLINICAL_STORE: Dict[str, Dict[str, Any]] = {}
 
-# In-memory store cho lịch hẹn & tái khám y tế
-_APPOINTMENT_STORE: List[AppointmentItem] = [
-    AppointmentItem(
-        id="apt-001",
-        patient_id="e0000000-b4e1-4b08-b2d3-d949a0eb075c",
-        patient_name="Cụ Nguyễn Văn An",
-        scheduled_at="15/10/2026 - 08:30",
-        exam_type="Tái khám tim mạch & huyết áp",
-        location="Tại nhà (Khám tại gia)",
-        status="UPCOMING",
-        instructions="Đo huyết áp liên tục 3 ngày trước khám. Nhịn ăn sáng để lấy máu xét nghiệm đường huyết & chức năng thận.",
-        doctor_name="BS. Trần Văn Minh",
-        enable_speaker_reminder=True,
-        created_at=datetime.now().strftime("%d/%m/%Y"),
-    ),
-    AppointmentItem(
-        id="apt-002",
-        patient_id="e0000000-b4e1-4b08-b2d3-d949a0eb075c",
-        patient_name="Cụ Nguyễn Văn An",
-        scheduled_at="28/10/2026 - 14:00",
-        exam_type="Đo điện tâm đồ (ECG) & Đo loãng xương",
-        location="Bệnh viện Đa khoa Đà Nẵng",
-        status="UPCOMING",
-        instructions="Mang theo thẻ BHYT và các phim chụp X-quang khớp gối cũ. Đi cùng người nhà.",
-        doctor_name="BS. Trần Văn Minh",
-        enable_speaker_reminder=True,
-        created_at=datetime.now().strftime("%d/%m/%Y"),
-    ),
-    AppointmentItem(
-        id="apt-003",
-        patient_id="e0000000-b4e1-4b08-b2d3-d949a0eb075c",
-        patient_name="Cụ Nguyễn Văn An",
-        scheduled_at="15/09/2026 - 09:00",
-        exam_type="Khám sức khỏe tổng quát định kỳ",
-        location="Tại nhà (Khám tại gia)",
-        status="COMPLETED",
-        instructions="Đã đo sinh hiệu ổn định: HA 135/85 mmHg, SpO2 97%. Bác sĩ đã điều chỉnh liều Amlodipine.",
-        doctor_name="BS. Trần Văn Minh",
-        enable_speaker_reminder=False,
-        created_at=datetime.now().strftime("%d/%m/%Y"),
-    ),
-]
-
-
-def _init_default_conditions() -> List[MedicalCondition]:
-    """Khởi tạo danh mục bệnh lý nền y khoa chuẩn theo tiền sử bệnh án cụ Nguyễn Văn An."""
-    return [
-        MedicalCondition(
-            id="c-001",
-            name="Tăng huyết áp (Độ 2)",
-            severity="danger",
-            note="Huyết áp nền 145/90 mmHg, uống Amlodipine 5mg buổi sáng, mục tiêu < 140/90 mmHg",
-        ),
-        MedicalCondition(
-            id="c-002",
-            name="Thiếu máu cơ tim cục bộ",
-            severity="warning",
-            note="Dùng Vastarel 20mg, theo dõi đau tức ngực, tránh làm việc nặng gắng sức",
-        ),
-        MedicalCondition(
-            id="c-003",
-            name="Loãng xương tuổi già",
-            severity="warning",
-            note="Nguy cơ té ngã gãy xương, cần dùng gậy hỗ trợ di chuyển và bổ sung Canxi + D3",
-        ),
-        MedicalCondition(
-            id="c-004",
-            name="Rối loạn tiền đình",
-            severity="info",
-            note="Uống Tanakan 40mg, cẩn trọng hoa mắt chóng mặt khi đổi tư thế đột ngột từ nằm sang đứng",
-        ),
-    ]
+# In-memory store cho lịch hẹn & tái khám y tế (chỉ lưu các lịch do Bác sĩ tạo)
+_APPOINTMENT_STORE: List[AppointmentItem] = []
 
 
 def _init_clinical_data(patient_id: str) -> Dict[str, Any]:
     return {
-        "conditions": _init_default_conditions(),
-        "drug_allergies": "Penicillin (dị ứng nổi mề đay, khó thở nhẹ)",
-        "food_allergies": "Hải sản có vỏ (tôm, cua, sò)",
-        "dietary_notes": "Ăn nhạt, giảm muối < 3g/ngày, bổ sung canxi & vitamin D3, uống đủ 1.5L nước ấm, ăn lỏng dễ tiêu",
-        "doctor_notes": "Bệnh nhân ổn định, đáp ứng tốt với thuốc huyết áp. Nhắc người nhà đo SpO2 mỗi sáng.",
-        "next_appointment": "15/10/2026 - 08:30",
-        "blood_type": "O+",
-        "height_cm": 165,
-        "weight_kg": 62,
+        "conditions": [],
+        "drug_allergies": None,
+        "food_allergies": None,
+        "dietary_notes": None,
+        "doctor_notes": None,
+        "next_appointment": None,
+        "blood_type": None,
+        "height_cm": None,
+        "weight_kg": None,
     }
-
-
-def _init_default_prescriptions(patient_id: str) -> List[PrescriptionItem]:
-    return [
-        PrescriptionItem(
-            id="rx-001",
-            patient_id=patient_id,
-            medication_name="Amlodipine 5mg",
-            dosage="1 viên",
-            frequency="Hàng ngày vào buổi sáng",
-            schedule_times=["08:00"],
-            instructions="Uống sau khi ăn sáng 15 phút với nước ấm. Kiểm tra huyết áp trước khi uống.",
-            doctor_name="BS. Trần Văn Minh",
-            enable_speaker_reminder=True,
-            created_at=(datetime.now() - timedelta(days=14)).strftime("%Y-%m-%d %H:%M:%S"),
-        ),
-        PrescriptionItem(
-            id="rx-002",
-            patient_id=patient_id,
-            medication_name="Trimetazidine 20mg (Vastarel)",
-            dosage="1 viên",
-            frequency="Ngày 2 lần (Sáng / Tối)",
-            schedule_times=["08:00", "19:30"],
-            instructions="Bổ trợ tim mạch, uống cùng bữa ăn chính.",
-            doctor_name="BS. Trần Văn Minh",
-            enable_speaker_reminder=True,
-            created_at=(datetime.now() - timedelta(days=14)).strftime("%Y-%m-%d %H:%M:%S"),
-        ),
-        PrescriptionItem(
-            id="rx-003",
-            patient_id=patient_id,
-            medication_name="Tanakan 40mg (Ginkgo Biloba)",
-            dosage="1 viên",
-            frequency="Hàng ngày vào buổi trưa",
-            schedule_times=["11:30"],
-            instructions="Hỗ trợ tuần hoàn máu não và giảm triệu chứng rối loạn tiền đình.",
-            doctor_name="BS. Trần Văn Minh",
-            enable_speaker_reminder=True,
-            created_at=(datetime.now() - timedelta(days=7)).strftime("%Y-%m-%d %H:%M:%S"),
-        ),
-    ]
 
 
 class CRUDDoctor:
@@ -220,10 +109,12 @@ class CRUDDoctor:
                     band_device = h.devices[0]
 
                 # Lấy sinh hiệu mới nhất từ TimescaleDB nếu có thiết bị
-                hr = 76
-                spo2 = 98
-                temp = 36.6
+                hr = None
+                spo2 = None
+                temp = None
+                bp_str = None
                 health_status = "NORMAL"
+                last_updated_str = None
 
                 if band_device:
                     vs_res = await db.execute(
@@ -234,14 +125,18 @@ class CRUDDoctor:
                     )
                     latest_vs = vs_res.scalar_one_or_none()
                     if latest_vs:
-                        hr = latest_vs.heart_rate or 76
-                        spo2 = latest_vs.spo2 or 98
-                        temp = latest_vs.skin_temp_max or 36.6
+                        hr = latest_vs.heart_rate
+                        spo2 = latest_vs.spo2
+                        temp = latest_vs.skin_temp_max
+                        if latest_vs.bp_systolic is not None and latest_vs.bp_diastolic is not None:
+                            bp_str = f"{latest_vs.bp_systolic}/{latest_vs.bp_diastolic} mmHg"
+                        if latest_vs.time:
+                            last_updated_str = latest_vs.time.strftime("%d/%m/%Y %H:%M")
 
                 # Đánh giá sơ bộ trạng thái y tế
-                if spo2 < 90 or hr > 120 or hr < 50:
+                if (spo2 is not None and spo2 < 90) or (hr is not None and (hr > 120 or hr < 50)):
                     health_status = "DANGER"
-                elif spo2 < 95 or hr > 100 or hr < 55:
+                elif (spo2 is not None and spo2 < 95) or (hr is not None and (hr > 100 or hr < 55)):
                     health_status = "WARNING"
 
                 cards.append(
@@ -253,50 +148,22 @@ class CRUDDoctor:
                         gender="Nam" if (ep.gender or "").upper() == "MALE" else "Nữ",
                         house_id=str(h.id),
                         house_name=h.name,
-                        house_address=h.address or "Đà Nẵng",
-                        medical_history=ep.medical_history,
-                        emergency_contact_phone=ep.emergency_contact_phone or "+84905123456",
+                        house_address=h.address or "",
+                        medical_history=ep.medical_history or "",
+                        emergency_contact_phone=ep.emergency_contact_phone or "",
                         avatar_url=ep.avatar_url,
                         has_face_enrolled=bool(ep.face_embedding),
-                        device_id=band_device.device_id if band_device else "BLE_BAND_001",
-                        is_online=band_device.is_online if band_device else True,
-                        battery_level=band_device.battery_level if band_device else 85,
+                        device_id=band_device.device_id if band_device else "",
+                        is_online=band_device.is_online if band_device else False,
+                        battery_level=band_device.battery_level if band_device else None,
                         heart_rate=hr,
                         spo2=spo2,
                         skin_temp_max=temp,
-                        blood_pressure="120/80 mmHg",
+                        blood_pressure=bp_str,
                         health_status=health_status,
-                        last_updated="Vừa xong",
+                        last_updated=last_updated_str or "Chưa có dữ liệu",
                     )
                 )
-
-        # Fallback an toàn nếu chưa có hồ sơ nào trong DB:
-        if not cards:
-            cards.append(
-                DoctorPatientCard(
-                    id="e0000000-b4e1-4b08-b2d3-d949a0eb075c",
-                    name="Cụ Nguyễn Văn An",
-                    birth_year=1948,
-                    age=78,
-                    gender="Nam",
-                    house_id="c3333333-b4e1-4b08-b2d3-d949a0eb075c",
-                    house_name="Nhà của tôi",
-                    house_address="123 Hải Phòng, P. Thạch Thang, Q. Hải Châu, TP. Đà Nẵng",
-                    medical_history="Tăng huyết áp độ 2, thiếu máu cơ tim nhẹ, rối loạn tiền đình",
-                    emergency_contact_phone="+84905123456",
-                    avatar_url="/static/faces/elderly_001.jpg",
-                    has_face_enrolled=True,
-                    device_id="BLE_BAND_001",
-                    is_online=True,
-                    battery_level=84,
-                    heart_rate=76,
-                    spo2=98,
-                    skin_temp_max=36.6,
-                    blood_pressure="120/80 mmHg",
-                    health_status="NORMAL",
-                    last_updated="Vừa xong",
-                )
-            )
 
         return cards
 
@@ -325,13 +192,54 @@ class CRUDDoctor:
         except (ValueError, TypeError):
             pass
 
-        house_id = str(elderly.house_id) if elderly else "c3333333-b4e1-4b08-b2d3-d949a0eb075c"
-        house_name = elderly.house.name if elderly and elderly.house else "Nhà của tôi"
-        house_address = elderly.house.address if elderly and elderly.house else "123 Hải Phòng, Đà Nẵng"
+        house_id = str(elderly.house_id) if elderly and elderly.house_id else ""
+        house_name = elderly.house.name if elderly and elderly.house else ""
+        house_address = elderly.house.address if elderly and elderly.house else ""
 
-        height = clinical.get("height_cm", 165)
-        weight = clinical.get("weight_kg", 62)
-        bmi = round(weight / ((height / 100) ** 2), 1)
+        # Lấy thiết bị và sinh hiệu mới nhất nếu có
+        band_device = None
+        if elderly and elderly.devices:
+            for d in elderly.devices:
+                if d.device_type == "SMARTBAND":
+                    band_device = d
+                    break
+            if not band_device and elderly.devices:
+                band_device = elderly.devices[0]
+
+        hr = None
+        spo2 = None
+        temp = None
+        bp_str = None
+        health_status = "NORMAL"
+        last_updated_str = None
+
+        if band_device:
+            vs_res = await db.execute(
+                select(VitalSign)
+                .where(VitalSign.device_id == band_device.id)
+                .order_by(desc(VitalSign.time))
+                .limit(1)
+            )
+            latest_vs = vs_res.scalar_one_or_none()
+            if latest_vs:
+                hr = latest_vs.heart_rate
+                spo2 = latest_vs.spo2
+                temp = latest_vs.skin_temp_max
+                if latest_vs.bp_systolic is not None and latest_vs.bp_diastolic is not None:
+                    bp_str = f"{latest_vs.bp_systolic}/{latest_vs.bp_diastolic} mmHg"
+                if latest_vs.time:
+                    last_updated_str = latest_vs.time.strftime("%d/%m/%Y %H:%M")
+
+        if (spo2 is not None and spo2 < 90) or (hr is not None and (hr > 120 or hr < 50)):
+            health_status = "DANGER"
+        elif (spo2 is not None and spo2 < 95) or (hr is not None and (hr > 100 or hr < 55)):
+            health_status = "WARNING"
+
+        height = clinical.get("height_cm")
+        weight = clinical.get("weight_kg")
+        bmi = None
+        if height and weight and height > 0:
+            bmi = round(weight / ((height / 100) ** 2), 1)
 
         return DoctorPatientDetail(
             id=med_record.id,
@@ -342,53 +250,51 @@ class CRUDDoctor:
             house_id=house_id,
             house_name=house_name,
             house_address=house_address,
-            medical_history=elderly.medical_history if elderly else "Tăng huyết áp độ 2, thiếu máu cơ tim",
-            emergency_contact_phone=elderly.emergency_contact_phone if elderly else "+84905123456",
-            avatar_url=med_record.avatar_url or (elderly.avatar_url if elderly else "/static/faces/elderly_001.jpg"),
+            medical_history=(elderly.medical_history or "") if elderly else "",
+            emergency_contact_phone=(elderly.emergency_contact_phone or "") if elderly else "",
+            avatar_url=med_record.avatar_url or (elderly.avatar_url if elderly else None),
             has_face_enrolled=bool(elderly.face_embedding if elderly else med_record.has_face_enrolled),
-            device_id="BLE_BAND_001",
-            is_online=True,
-            battery_level=84,
-            heart_rate=76,
-            spo2=98,
-            skin_temp_max=36.6,
-            blood_pressure="120/80 mmHg",
-            health_status="NORMAL",
-            last_updated="Vừa xong",
-            conditions=clinical.get("conditions", _init_default_conditions()),
-            drug_allergies=clinical.get("drug_allergies", "Penicillin (dị ứng nổi mề đay, khó thở nhẹ)"),
-            food_allergies=clinical.get("food_allergies", "Hải sản có vỏ (tôm, cua, sò)"),
-            dietary_notes=clinical.get("dietary_notes", "Ăn nhạt, giảm muối < 3g/ngày, bổ sung Canxi + D3"),
-            doctor_notes=clinical.get("doctor_notes", "Bệnh nhân ổn định, đáp ứng tốt với thuốc huyết áp. Nhắc người nhà đo SpO2 mỗi sáng."),
-            blood_type=clinical.get("blood_type", "O+"),
+            device_id=band_device.device_id if band_device else "",
+            is_online=band_device.is_online if band_device else False,
+            battery_level=band_device.battery_level if band_device else None,
+            heart_rate=hr,
+            spo2=spo2,
+            skin_temp_max=temp,
+            blood_pressure=bp_str,
+            health_status=health_status,
+            last_updated=last_updated_str or "Chưa có dữ liệu",
+            conditions=clinical.get("conditions", []),
+            drug_allergies=clinical.get("drug_allergies"),
+            food_allergies=clinical.get("food_allergies"),
+            dietary_notes=clinical.get("dietary_notes"),
+            doctor_notes=clinical.get("doctor_notes"),
+            blood_type=clinical.get("blood_type"),
             height_cm=height,
             weight_kg=weight,
             bmi=bmi,
-            next_appointment=clinical.get("next_appointment", "15/10/2026 - 08:30"),
+            next_appointment=clinical.get("next_appointment"),
             prescriptions_count=len(prescriptions),
         )
 
     def get_prescriptions(self, elderly_id: str) -> List[PrescriptionItem]:
         """Lấy danh sách thuốc đang kê đơn."""
-        if elderly_id not in _PRESCRIPTION_STORE:
-            _PRESCRIPTION_STORE[elderly_id] = _init_default_prescriptions(elderly_id)
-        return _PRESCRIPTION_STORE[elderly_id]
+        return _PRESCRIPTION_STORE.get(elderly_id, [])
 
     def add_prescription(
-        self, elderly_id: str, obj_in: PrescriptionCreate, doctor_name: str = "BS. Trần Văn Minh"
+        self, elderly_id: str, obj_in: PrescriptionCreate, doctor_name: Optional[str] = None
     ) -> PrescriptionItem:
         """Bác sĩ kê đơn thuốc mới."""
         if elderly_id not in _PRESCRIPTION_STORE:
-            _PRESCRIPTION_STORE[elderly_id] = _init_default_prescriptions(elderly_id)
+            _PRESCRIPTION_STORE[elderly_id] = []
 
         new_item = PrescriptionItem(
             id=f"rx-{uuid.uuid4().hex[:6]}",
             patient_id=elderly_id,
             medication_name=obj_in.medication_name,
             dosage=obj_in.dosage,
-            frequency=obj_in.frequency or "Hàng ngày",
-            schedule_times=obj_in.schedule_times or ["08:00"],
-            instructions=obj_in.instructions or "Uống sau ăn với nước ấm",
+            frequency=obj_in.frequency or "",
+            schedule_times=obj_in.schedule_times or [],
+            instructions=obj_in.instructions or "",
             doctor_name=doctor_name,
             enable_speaker_reminder=obj_in.enable_speaker_reminder,
             created_at=datetime.now().strftime("%Y-%m-%d %H:%M:%S"),
@@ -469,38 +375,109 @@ class CRUDDoctor:
     async def get_vitals_analytics(
         self, db: AsyncSession, elderly_id: str, days: int = 7
     ) -> DoctorVitalsAnalytics:
-        """Phân tích thống kê sinh hiệu dài hạn từ TimescaleDB."""
-        # Tạo dữ liệu xu hướng theo số ngày thực tế
-        daily_trends = []
-        base_date = datetime.now()
-
-        for i in range(days - 1, -1, -1):
-            d = base_date - timedelta(days=i)
-            daily_trends.append(
-                {
-                    "date": d.strftime("%d/%m"),
-                    "avg_heart_rate": 74 + (i % 4),
-                    "min_heart_rate": 60 + (i % 3),
-                    "max_heart_rate": 96 + (i % 5),
-                    "avg_spo2": 97.5 + ((i % 3) * 0.2),
-                    "min_spo2": 94 if i != 2 else 92,
-                    "avg_skin_temp": 36.5 + ((i % 2) * 0.1),
-                    "steps": 2800 - (i * 120),
-                }
+        """Phân tích thống kê sinh hiệu dài hạn từ TimescaleDB thực tế."""
+        elderly = None
+        patient_name = "Bệnh nhân"
+        try:
+            val_uuid = UUID(elderly_id)
+            res = await db.execute(
+                select(ElderlyProfile)
+                .options(selectinload(ElderlyProfile.devices))
+                .where(ElderlyProfile.id == val_uuid)
             )
+            elderly = res.scalar_one_or_none()
+            if elderly:
+                patient_name = elderly.full_name
+        except (ValueError, TypeError):
+            pass
+
+        band_device = None
+        if elderly and elderly.devices:
+            for d in elderly.devices:
+                if d.device_type == "SMARTBAND":
+                    band_device = d
+                    break
+            if not band_device and elderly.devices:
+                band_device = elderly.devices[0]
+
+        daily_trends = []
+        avg_hr = None
+        min_hr = None
+        max_hr = None
+        avg_spo2 = None
+        min_spo2 = None
+        avg_temp = None
+        hr_stability_score = None
+        spo2_drops = 0
+
+        if band_device:
+            since_time = datetime.now() - timedelta(days=days)
+            vs_query = await db.execute(
+                select(VitalSign)
+                .where(VitalSign.device_id == band_device.id, VitalSign.time >= since_time)
+                .order_by(VitalSign.time.asc())
+            )
+            records = list(vs_query.scalars().all())
+
+            if records:
+                hrs = [r.heart_rate for r in records if r.heart_rate is not None]
+                spo2s = [r.spo2 for r in records if r.spo2 is not None]
+                temps = [r.skin_temp_max for r in records if r.skin_temp_max is not None]
+
+                if hrs:
+                    avg_hr = round(sum(hrs) / len(hrs), 1)
+                    min_hr = min(hrs)
+                    max_hr = max(hrs)
+                    hr_stability_score = max(50, min(100, 100 - (max_hr - min_hr)))
+                if spo2s:
+                    avg_spo2 = round(sum(spo2s) / len(spo2s), 1)
+                    min_spo2 = min(spo2s)
+                    spo2_drops = sum(1 for s in spo2s if s < 95)
+                if temps:
+                    avg_temp = round(sum(temps) / len(temps), 1)
+
+                by_date: Dict[str, List[VitalSign]] = {}
+                for r in records:
+                    date_key = r.time.strftime("%d/%m")
+                    if date_key not in by_date:
+                        by_date[date_key] = []
+                    by_date[date_key].append(r)
+
+                for d_str, day_recs in by_date.items():
+                    d_hrs = [r.heart_rate for r in day_recs if r.heart_rate is not None]
+                    d_spo2s = [r.spo2 for r in day_recs if r.spo2 is not None]
+                    d_temps = [r.skin_temp_max for r in day_recs if r.skin_temp_max is not None]
+
+                    bp_val = None
+                    for r in reversed(day_recs):
+                        if r.bp_systolic and r.bp_diastolic:
+                            bp_val = f"{r.bp_systolic}/{r.bp_diastolic}"
+                            break
+
+                    daily_trends.append({
+                        "date": d_str,
+                        "avg_heart_rate": round(sum(d_hrs) / len(d_hrs)) if d_hrs else None,
+                        "min_heart_rate": min(d_hrs) if d_hrs else None,
+                        "max_heart_rate": max(d_hrs) if d_hrs else None,
+                        "avg_spo2": round(sum(d_spo2s) / len(d_spo2s), 1) if d_spo2s else None,
+                        "min_spo2": min(d_spo2s) if d_spo2s else None,
+                        "avg_skin_temp": round(sum(d_temps) / len(d_temps), 1) if d_temps else None,
+                        "bp": bp_val,
+                        "steps": 0,
+                    })
 
         return DoctorVitalsAnalytics(
             patient_id=elderly_id,
-            patient_name="Cụ Nguyễn Văn An",
+            patient_name=patient_name,
             days=days,
-            avg_heart_rate=75.6,
-            min_heart_rate=60,
-            max_heart_rate=102,
-            avg_spo2=97.8,
-            min_spo2=92,
-            avg_skin_temp=36.6,
-            hr_stability_score=94,
-            spo2_drops_count=1,
+            avg_heart_rate=avg_hr,
+            min_heart_rate=min_hr,
+            max_heart_rate=max_hr,
+            avg_spo2=avg_spo2,
+            min_spo2=min_spo2,
+            avg_skin_temp=avg_temp,
+            hr_stability_score=hr_stability_score,
+            spo2_drops_count=spo2_drops,
             daily_trends=daily_trends,
         )
 
@@ -508,7 +485,6 @@ class CRUDDoctor:
         self, db: AsyncSession, elderly_id: str, thresholds_in: ThresholdsUpdate
     ) -> Dict[str, Any]:
         """Cập nhật cấu hình ngưỡng y tế khuyến nghị cho thiết bị của bệnh nhân."""
-        # Tìm device config liên quan
         return {
             "success": True,
             "message": "Đã cập nhật ngưỡng an toàn y tế thành công và đồng bộ xuống Hub.",
@@ -522,7 +498,7 @@ class CRUDDoctor:
         return _APPOINTMENT_STORE
 
     def create_appointment(
-        self, obj_in: AppointmentCreate, doctor_name: str = "BS. Trần Văn Minh"
+        self, obj_in: AppointmentCreate, doctor_name: Optional[str] = None
     ) -> AppointmentItem:
         """Tạo lịch tái khám mới và đồng bộ xuống Hub để nhắc nhở người nhà."""
         new_apt = AppointmentItem(

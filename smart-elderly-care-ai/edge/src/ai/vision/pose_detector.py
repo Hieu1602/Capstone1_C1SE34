@@ -10,6 +10,7 @@ Responsibilities:
 """
 
 import logging
+from pathlib import Path
 import time
 from dataclasses import dataclass, field
 from typing import Any, List, Optional, Tuple
@@ -88,6 +89,7 @@ class PoseDetector:
             max_missed_frames=fall_cfg.get("max_missed_frames", 15),
             stitching_distance_threshold=fall_cfg.get("stitching_distance_threshold", 120.0),
             sedentary_threshold_sec=sedentary_alert_sec,
+            kinematic_config=fall_cfg,
         )
 
 
@@ -95,10 +97,28 @@ class PoseDetector:
     # Model Loading
     # ------------------------------------------------------------------
 
+    @staticmethod
+    def _resolve_path(path_str: str) -> str:
+        if not path_str:
+            return path_str
+        p = Path(path_str)
+        if p.is_file():
+            return str(p)
+        # Thử tìm tương đối so với thư mục edge root
+        edge_root = Path(__file__).resolve().parents[2]
+        edge_p = edge_root / path_str
+        if edge_p.is_file():
+            return str(edge_p)
+        # Thử tìm trong thư mục models cùng cấp
+        model_p = Path(__file__).resolve().parent / "models" / Path(path_str).name
+        if model_p.is_file():
+            return str(model_p)
+        return path_str
+
     def load_model(self) -> None:
         """Load RKNN model nếu có NPU, fallback sang ONNX Runtime."""
-        rknn_path: str = self.config.get("model_path", "")
-        onnx_path: str = self.config.get("fallback_model", "")
+        rknn_path: str = self._resolve_path(self.config.get("model_path", ""))
+        onnx_path: str = self._resolve_path(self.config.get("fallback_model", ""))
 
         if self._try_load_rknn(rknn_path):
             logger.info("[PoseDetector] RKNN model loaded: %s", rknn_path)
@@ -241,45 +261,62 @@ class PoseDetector:
         original_shape: Tuple,
     ) -> Tuple[List, List]:
         """
-        Parse YOLOv8-Pose output thành danh sách bounding boxes và keypoints.
-        Đây là skeleton — cần tuỳ chỉnh theo định dạng output thực tế của model.
+        Parse YOLOv8-Pose output thành danh sách bounding boxes và keypoints chuẩn xác.
         """
+        import cv2  # type: ignore
+
         bboxes: List[Tuple[float, float, float, float]] = []
         keypoints_list: List[List[Keypoint]] = []
 
         if raw_output is None or len(raw_output) == 0:
             return bboxes, keypoints_list
 
-        # Placeholder parsing logic — replace with actual YOLOv8 postprocess
-        output = raw_output[0]  # shape: (1, num_detections, 56) for COCO 17 kp
-        if output is None:
+        output = raw_output[0]  # shape: (1, 56, 8400)
+        if output is None or len(output) == 0:
             return bboxes, keypoints_list
 
         h_orig, w_orig = original_shape[:2]
         h_in, w_in = self.input_shape
 
-        for detection in output[0]:
-            conf = float(detection[4])
-            if conf < self.conf_threshold:
-                continue
+        # Transpose từ (56, 8400) sang (8400, 56)
+        preds = np.transpose(output[0])
+        scores = preds[:, 4]
+        mask = scores >= self.conf_threshold
+        filtered_preds = preds[mask]
 
-            x1 = float(detection[0]) * w_orig / w_in
-            y1 = float(detection[1]) * h_orig / h_in
-            x2 = float(detection[2]) * w_orig / w_in
-            y2 = float(detection[3]) * h_orig / h_in
+        if len(filtered_preds) == 0:
+            return bboxes, keypoints_list
+
+        raw_boxes = []
+        confidences = []
+        for row in filtered_preds:
+            cx, cy, w, h = row[:4]
+            raw_boxes.append([int(cx - w / 2), int(cy - h / 2), int(w), int(h)])
+            confidences.append(float(row[4]))
+
+        nms_indices = cv2.dnn.NMSBoxes(raw_boxes, confidences, self.conf_threshold, 0.45)
+        if len(nms_indices) == 0:
+            return bboxes, keypoints_list
+
+        for i in nms_indices:
+            row = filtered_preds[i]
+            cx, cy, w, h = row[:4]
+
+            # Scale box về kích thước ảnh gốc
+            x1 = max(0.0, float(cx - w / 2) * w_orig / w_in)
+            y1 = max(0.0, float(cy - h / 2) * h_orig / h_in)
+            x2 = min(float(w_orig), float(cx + w / 2) * w_orig / w_in)
+            y2 = min(float(h_orig), float(cy + h / 2) * h_orig / h_in)
             bboxes.append((x1, y1, x2, y2))
 
-            # Keypoints: 17 joints × 3 values (x, y, conf)
+            # 17 keypoints (x, y, conf)
             kps: List[Keypoint] = []
-            kp_data = detection[5:]
-            for i in range(0, len(kp_data), 3):
-                kps.append(
-                    Keypoint(
-                        x=float(kp_data[i]) * w_orig / w_in,
-                        y=float(kp_data[i + 1]) * h_orig / h_in,
-                        confidence=float(kp_data[i + 2]),
-                    )
-                )
+            kp_data = row[5:]
+            for k in range(0, 17 * 3, 3):
+                kp_x = float(kp_data[k]) * w_orig / w_in
+                kp_y = float(kp_data[k + 1]) * h_orig / h_in
+                kp_conf = float(kp_data[k + 2])
+                kps.append(Keypoint(x=kp_x, y=kp_y, confidence=kp_conf))
             keypoints_list.append(kps)
 
         return bboxes, keypoints_list

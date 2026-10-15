@@ -6,10 +6,16 @@ JWT Authentication & Password hashing utilities.
 from datetime import datetime, timedelta, timezone
 from typing import Any, Optional
 
-from jose import JWTError, jwt
 import bcrypt
+if not hasattr(bcrypt, "__about__"):
+    bcrypt.__about__ = type("about", (), {"__version__": getattr(bcrypt, "__version__", "4.0.1")})
+
+from jose import JWTError, jwt
+from passlib.context import CryptContext
 
 from app.core.config import settings
+
+pwd_context = CryptContext(schemes=["bcrypt"], deprecated="auto")
 
 
 # ---------------------------------------------------------------------------
@@ -18,19 +24,27 @@ from app.core.config import settings
 
 def hash_password(plain_password: str) -> str:
     """Hash mật khẩu với bcrypt."""
-    pwd_bytes = plain_password.encode("utf-8")[:72]
-    salt = bcrypt.gensalt()
-    return bcrypt.hashpw(pwd_bytes, salt).decode("utf-8")
+    try:
+        return pwd_context.hash(plain_password)
+    except Exception:
+        import bcrypt
+        pwd_bytes = plain_password.encode("utf-8")
+        salt = bcrypt.gensalt()
+        return bcrypt.hashpw(pwd_bytes, salt).decode("utf-8")
 
 
 def verify_password(plain_password: str, hashed_password: str) -> bool:
     """Xác minh mật khẩu so với hash đã lưu."""
     try:
-        pwd_bytes = plain_password.encode("utf-8")[:72]
-        hash_bytes = hashed_password.encode("utf-8")
-        return bcrypt.checkpw(pwd_bytes, hash_bytes)
+        return pwd_context.verify(plain_password, hashed_password)
     except Exception:
-        return False
+        try:
+            import bcrypt
+            pwd_bytes = plain_password.encode("utf-8")
+            hash_bytes = hashed_password.encode("utf-8")
+            return bcrypt.checkpw(pwd_bytes, hash_bytes)
+        except Exception:
+            return False
 
 
 # ---------------------------------------------------------------------------

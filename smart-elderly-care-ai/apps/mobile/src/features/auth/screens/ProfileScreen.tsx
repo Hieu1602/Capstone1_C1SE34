@@ -5,20 +5,17 @@ import React from 'react';
 import * as Location from 'expo-location';
 import {
   View,
-  Text,
   StyleSheet,
   TouchableOpacity,
   ScrollView,
-  Alert,
+  ActivityIndicator,
   Platform,
   Modal,
   Pressable,
   Switch,
-  TextInput,
   Image,
   Vibration,
   PanResponder,
-  Linking,
 } from 'react-native';
 import * as ImagePicker from 'expo-image-picker';
 import { WebView } from 'react-native-webview';
@@ -27,14 +24,113 @@ import { Ionicons } from '@expo/vector-icons';
 import { Colors, Shadows } from '../../../theme/colors';
 import { useAuthStore, useVitalStore } from '../../../store/useVitalStore';
 import { useTheme } from '../../../store/useThemeStore';
-import api from '../../../services/api';
+import AsyncStorage from '@react-native-async-storage/async-storage';
+import i18n from '../../../i18n/config';
+// Dùng các component có i18n làm Text/TextInput mặc định để màn hình cập nhật ngay khi đổi ngôn ngữ.
+import {
+  LocalizedAlert as Alert,
+  LocalizedText,
+  LocalizedText as Text,
+  LocalizedTextInput as TextInput,
+} from '../../../i18n/LocalizedComponents';
+import api, { usersApi } from '../../../services/api';
+import { launchEmergencyCall } from '../../../services/emergency';
+
+const FONT_SCALE_LEVELS = [0.8, 1, 1.2, 1.5, 1.8] as const;
+
+type ReverseGeocodeResponse = {
+  address?: {
+    house_number?: string;
+    road?: string;
+    pedestrian?: string;
+    quarter?: string;
+    neighbourhood?: string;
+    hamlet?: string;
+    isolated_dwelling?: string;
+    residential?: string;
+    suburb?: string;
+    city_district?: string;
+    district?: string;
+    city?: string;
+    town?: string;
+    village?: string;
+    municipality?: string;
+    county?: string;
+    state_district?: string;
+    state?: string;
+    country?: string;
+  };
+};
+
+function formatAddress(parts: Array<string | null | undefined>) {
+  const seen = new Set<string>();
+  return parts
+    .filter((part): part is string => Boolean(part?.trim()))
+    .filter((part) => {
+      const key = part.trim().toLocaleLowerCase();
+      if (seen.has(key)) return false;
+      seen.add(key);
+      return true;
+    })
+    .join(', ');
+}
+
+async function reverseGeocodeWithOpenStreetMap(latitude: number, longitude: number) {
+  const controller = new AbortController();
+  const timeout = setTimeout(() => controller.abort(), 8000);
+  try {
+    const params = new URLSearchParams({
+      format: 'jsonv2',
+      addressdetails: '1',
+      'accept-language': i18n.language === 'en' ? 'en' : 'vi',
+      lat: String(latitude),
+      lon: String(longitude),
+    });
+    const response = await fetch(
+      `https://nominatim.openstreetmap.org/reverse?${params.toString()}`,
+      { signal: controller.signal }
+    );
+    if (!response.ok) {
+      throw new Error(`OpenStreetMap reverse geocoding failed: ${response.status}`);
+    }
+
+    const result: ReverseGeocodeResponse = await response.json();
+    const address = result.address;
+    if (!address) return '';
+
+    const street = address.road || address.pedestrian;
+    const streetAddress = street
+      ? [street, address.house_number].filter(Boolean).join(' ')
+      : undefined;
+    return formatAddress([
+      streetAddress,
+      // Include available neighborhood-level address details in the result.
+      address.quarter,
+      address.neighbourhood,
+      address.hamlet,
+      address.isolated_dwelling,
+      address.residential,
+      address.suburb,
+      address.city_district,
+      address.district,
+      address.city || address.town || address.village || address.municipality,
+      address.state_district,
+      address.county,
+      address.state,
+      address.country,
+    ]);
+  } finally {
+    clearTimeout(timeout);
+  }
+}
 
 export default function ProfileScreen({ navigation }: any) {
-  const { userId, userName, userPhone, logout, updateUserName, toggleViewRole } = useAuthStore();
+  const { userId, user_id, userName, full_name, userPhone, phone_number, role, logout, updateUserName, toggleViewRole, setProfile } = useAuthStore();
   const { house } = useVitalStore();
-  const { isDarkMode, colors, setDarkMode } = useTheme();
-  const [profileName, setProfileName] = React.useState(userName || 'Nguyễn Hữu Nghĩa');
-  const [profilePhone, setProfilePhone] = React.useState(userPhone || '0905 123 456');
+  const { isDarkMode, colors, setDarkMode, setFontScale, fontSizeMode, setFontSizeMode } = useTheme();
+  const [profileName, setProfileName] = React.useState(full_name || userName || 'Nguyễn Hữu Nghĩa');
+  const [profilePhone, setProfilePhone] = React.useState(phone_number || userPhone || '0905123456');
+  const [profileRole, setProfileRole] = React.useState(role || 'Chủ nhà / Người sở hữu');
   const [showMoreGrid, setShowMoreGrid] = React.useState(false);
   const [isHelpExpanded, setIsHelpExpanded] = React.useState(false);
   const [isSettingsExpanded, setIsSettingsExpanded] = React.useState(false);
@@ -54,11 +150,54 @@ export default function ProfileScreen({ navigation }: any) {
   const [infoDetail, setInfoDetail] = React.useState<'terms' | 'app' | null>(null);
   const [isGeneralSettingsVisible, setGeneralSettingsVisible] = React.useState(false);
   const [isLanguageVisible, setLanguageVisible] = React.useState(false);
-  const [languageMode, setLanguageMode] = React.useState<'vi' | 'en'>('vi');
+  const [languageMode, setLanguageMode] = React.useState<'vi' | 'en'>(
+    (i18n.language === 'en' ? 'en' : 'vi') as 'vi' | 'en'
+  );
+  const [customFontScale, setCustomFontScale] = React.useState(2);
+
+  React.useEffect(() => {
+    if (i18n.language === 'en' || i18n.language === 'vi') {
+      setLanguageMode(i18n.language as 'vi' | 'en');
+    }
+    usersApi
+      .getMe()
+      .then((res: any) => {
+        const backendLang = res?.data?.preferred_language || res?.data?.language;
+        if (backendLang && (backendLang === 'vi' || backendLang === 'en')) {
+          setLanguageMode(backendLang);
+          if (i18n.language !== backendLang) {
+            void i18n.changeLanguage(backendLang);
+            void AsyncStorage.setItem('smartcare-user-language', backendLang);
+          }
+        }
+        // Giữ mức tùy chỉnh đã chọn để dùng khi người dùng bật lại chế độ tùy chỉnh.
+        const backendFontScale = res?.data?.custom_font_scale;
+        if (Number.isInteger(backendFontScale) && backendFontScale >= 0 && backendFontScale <= 4) {
+          setCustomFontScale(backendFontScale);
+        }
+      })
+      .catch(() => {});
+  }, []);
+
+  const handleLanguageChange = async (lang: 'vi' | 'en') => {
+    try {
+      setLanguageMode(lang);
+      await i18n.changeLanguage(lang);
+      await AsyncStorage.setItem('smartcare-user-language', lang);
+      setLanguageVisible(false);
+
+      try {
+        await usersApi.updateLanguage(lang);
+      } catch (apiErr) {
+        await usersApi.updateMe({ preferred_language: lang, language: lang });
+      }
+    } catch (err) {
+      console.warn('[ProfileScreen] Error changing language:', err);
+      setLanguageVisible(false);
+    }
+  };
   const [isAccessibilityVisible, setAccessibilityVisible] = React.useState(false);
   const [isFontSizeVisible, setFontSizeVisible] = React.useState(false);
-  const [fontSizeMode, setFontSizeMode] = React.useState<'system' | 'custom'>('system');
-  const [customFontScale, setCustomFontScale] = React.useState(2);
   const [isAppearanceVisible, setAppearanceVisible] = React.useState(false);
   const [appearanceMode, setAppearanceMode] = React.useState<'light' | 'dark'>(isDarkMode ? 'dark' : 'light');
 
@@ -69,7 +208,30 @@ export default function ProfileScreen({ navigation }: any) {
   const [highContrastEnabled, setHighContrastEnabled] = React.useState(false);
   const [sliderWidth, setSliderWidth] = React.useState(0);
   const sliderTrackPosition = React.useRef(0);
+  const saveFontPreferences = React.useCallback(async (
+    mode: 'system' | 'custom',
+    scale: number,
+  ) => {
+    try {
+      await usersApi.updateFontPreferences(mode, scale);
+    } catch (err) {
+      console.warn('[ProfileScreen] Could not save font-size preferences:', err);
+    }
+  }, []);
+  const applyFontScaleMode = (mode: 'system' | 'custom') => {
+    setFontSizeMode(mode);
+    setFontScale(mode === 'custom' ? FONT_SCALE_LEVELS[customFontScale] : 1);
+    void saveFontPreferences(mode, customFontScale);
+  };
   const [isChangePasswordVisible, setChangePasswordVisible] = React.useState(false);
+  const [isChangingPassword, setIsChangingPassword] = React.useState(false);
+  const [passwordChangeFeedback, setPasswordChangeFeedback] = React.useState<{
+    type: 'success' | 'error';
+    message: string;
+  } | null>(null);
+  React.useEffect(() => {
+    if (isChangePasswordVisible) setPasswordChangeFeedback(null);
+  }, [isChangePasswordVisible]);
   const [isLogoutConfirmVisible, setLogoutConfirmVisible] = React.useState(false);
   const [currentPassword, setCurrentPassword] = React.useState('');
   const [newPassword, setNewPassword] = React.useState('');
@@ -121,11 +283,7 @@ export default function ProfileScreen({ navigation }: any) {
   };
 
   const callEmergencyService = async () => {
-    try {
-      await Linking.openURL('tel:115');
-    } catch {
-      Alert.alert('Không thể gọi', 'Thiết bị không hỗ trợ thực hiện cuộc gọi trực tiếp.');
-    }
+    navigation.navigate('SendEmergencyLocation');
   };
 
   const updateFontScaleFromPosition = React.useCallback((positionX: number) => {
@@ -134,6 +292,7 @@ export default function ProfileScreen({ navigation }: any) {
     const rawRatio = Math.min(Math.max(positionX / sliderWidth, 0), 1);
     const nextScale = Math.round(rawRatio * 4);
     setCustomFontScale(nextScale);
+    setFontScale(FONT_SCALE_LEVELS[nextScale]);
   }, [sliderWidth]);
 
   const fontSliderResponder = React.useMemo(
@@ -147,8 +306,19 @@ export default function ProfileScreen({ navigation }: any) {
         onPanResponderMove: (_, gestureState) => {
           updateFontScaleFromPosition(gestureState.moveX - sliderTrackPosition.current);
         },
+        onPanResponderRelease: (_, gestureState) => {
+          if (sliderWidth <= 0) return;
+          const rawRatio = Math.min(
+            Math.max((gestureState.moveX - sliderTrackPosition.current) / sliderWidth, 0),
+            1,
+          );
+          const nextScale = Math.round(rawRatio * 4);
+          setCustomFontScale(nextScale);
+          setFontScale(FONT_SCALE_LEVELS[nextScale]);
+          void saveFontPreferences('custom', nextScale);
+        },
       }),
-    [updateFontScaleFromPosition]
+    [saveFontPreferences, setFontScale, sliderWidth, updateFontScaleFromPosition]
   );
 
   const closeUserMenu = React.useCallback(() => {
@@ -176,29 +346,45 @@ export default function ProfileScreen({ navigation }: any) {
   };
 
   React.useEffect(() => {
-    if (userName) {
-      setProfileName(userName);
+    if (full_name || userName) {
+      setProfileName(full_name || userName || 'Nguyễn Hữu Nghĩa');
     }
-    if (userPhone) {
-      setProfilePhone(userPhone);
+    if (phone_number || userPhone) {
+      setProfilePhone(phone_number || userPhone || '0905123456');
+    }
+    if (role) {
+      setProfileRole(role);
     }
 
     // Đồng bộ thông tin profile mới nhất từ Database qua backend API /users/me
     const fetchUserProfile = async () => {
       try {
-        const res = await api.get('/users/me');
-        if (res.data?.full_name) {
-          setProfileName(res.data.full_name);
-        }
-        if (res.data?.phone) {
-          setProfilePhone(res.data.phone);
+        const activePhone = phone_number || userPhone || '0905123456';
+        const res = await api.get('/users/me', { params: { phone: activePhone } });
+        if (res.data) {
+          if (res.data.full_name) {
+            setProfileName(res.data.full_name);
+          }
+          if (res.data.phone_number || res.data.phone) {
+            setProfilePhone(res.data.phone_number || res.data.phone);
+          }
+          if (res.data.role) {
+            setProfileRole(res.data.role);
+          }
+          setProfile?.({
+            user_id: res.data.user_id || res.data.id,
+            full_name: res.data.full_name,
+            phone_number: res.data.phone_number || res.data.phone,
+            role: res.data.role,
+            household_id: res.data.household_id,
+          });
         }
       } catch {
         // Fallback to store
       }
     };
     fetchUserProfile();
-  }, [userName, userPhone]);
+  }, [userName, full_name, userPhone, phone_number, role]);
 
   const handleLogout = () => {
     setLogoutConfirmVisible(true);
@@ -229,25 +415,54 @@ export default function ProfileScreen({ navigation }: any) {
     closeFieldEditor();
   };
 
-  const handleChangePassword = () => {
+  const handleChangePassword = async () => {
     if (!currentPassword || !newPassword || !confirmPassword) {
-      Alert.alert('Lỗi', 'Vui lòng nhập đầy đủ thông tin mật khẩu.');
+      setPasswordChangeFeedback({ type: 'error', message: 'Vui lòng nhập đầy đủ thông tin mật khẩu.' });
       return;
     }
-    if (newPassword.length < 6) {
-      Alert.alert('Mật khẩu chưa hợp lệ', 'Mật khẩu mới phải có ít nhất 6 ký tự.');
+    if (newPassword.length < 8 || newPassword.length > 16) {
+      setPasswordChangeFeedback({ type: 'error', message: 'Mật khẩu mới phải dài từ 8 đến 16 ký tự.' });
+      return;
+    }
+    if (!/^(?=.*[a-z])(?=.*[A-Z])(?=.*\d)(?=.*[^A-Za-z0-9]).{8,16}$/.test(newPassword)) {
+      setPasswordChangeFeedback({
+        type: 'error',
+        message: 'Mật khẩu cần có chữ hoa, chữ thường, số và ký tự đặc biệt.',
+      });
       return;
     }
     if (newPassword !== confirmPassword) {
-      Alert.alert('Mật khẩu không khớp', 'Vui lòng kiểm tra lại mật khẩu mới.');
+      setPasswordChangeFeedback({ type: 'error', message: 'Vui lòng kiểm tra lại mật khẩu mới; hai mật khẩu chưa khớp.' });
       return;
     }
 
-    Alert.alert('Thành công', 'Đổi mật khẩu thành công!');
-    setCurrentPassword('');
-    setNewPassword('');
-    setConfirmPassword('');
-    closeChangePassword();
+    setPasswordChangeFeedback(null);
+    setIsChangingPassword(true);
+    try {
+      await usersApi.changePassword({
+        current_password: currentPassword,
+        new_password: newPassword,
+        confirm_new_password: confirmPassword,
+      });
+      setCurrentPassword('');
+      setNewPassword('');
+      setConfirmPassword('');
+      setPasswordChangeFeedback({
+        type: 'success',
+        message: 'Đổi mật khẩu thành công. Mật khẩu mới đã được lưu vào tài khoản.',
+      });
+    } catch (error: any) {
+      const detail = error?.response?.data?.detail;
+      const message = Array.isArray(detail)
+        ? detail.map((item: { msg?: string }) => item.msg).filter(Boolean).join('\n')
+        : detail;
+      setPasswordChangeFeedback({
+        type: 'error',
+        message: message || 'Không thể đổi mật khẩu. Vui lòng kiểm tra mật khẩu hiện tại và thử lại.',
+      });
+    } finally {
+      setIsChangingPassword(false);
+    }
   };
 
   const handleAvatarPress = async () => {
@@ -295,32 +510,42 @@ export default function ProfileScreen({ navigation }: any) {
 
   const handleGetCurrentLocation = async () => {
     setLocationLoading(true);
-    const permission = await Location.requestForegroundPermissionsAsync();
-    if (!permission.granted) {
-      setLocationLoading(false);
-      Alert.alert('Quyền bị từ chối', 'Bạn cần cho phép truy cập vị trí để sử dụng định vị địa lý.');
-      return;
-    }
-
     try {
+      const permission = await Location.requestForegroundPermissionsAsync();
+      if (!permission.granted) {
+        Alert.alert('Quyền bị từ chối', 'Bạn cần cho phép truy cập vị trí để sử dụng định vị địa lý.');
+        return;
+      }
+
       const position = await Location.getCurrentPositionAsync({
         accuracy: Location.Accuracy.Balanced,
       });
       const { latitude, longitude } = position.coords;
       setLocationCoords({ latitude, longitude });
-      const places = await Location.reverseGeocodeAsync({ latitude, longitude });
-      const place = places[0];
-      const address = [
-        place?.name,
-        place?.street,
-        place?.district,
-        place?.city,
-        place?.region,
-        place?.country,
-      ].filter(Boolean).join(', ');
+      let address = '';
+      try {
+        const places = await Location.reverseGeocodeAsync({ latitude, longitude });
+        const place = places[0];
+        address = formatAddress([
+          place?.street,
+          place?.district,
+          place?.subregion,
+          place?.city,
+          place?.region,
+          place?.country,
+        ]);
+      } catch (error) {
+        console.warn('[ProfileScreen] Device reverse geocoding failed:', error);
+      }
+
+      try {
+        address = await reverseGeocodeWithOpenStreetMap(latitude, longitude) || address;
+      } catch (error) {
+        console.warn('[ProfileScreen] OpenStreetMap address lookup failed:', error);
+      }
 
       setLocationAddress(
-        address || `Vĩ độ: ${latitude.toFixed(6)}, Kinh độ: ${longitude.toFixed(6)}`
+        address
       );
     } catch {
       Alert.alert('Không lấy được vị trí', 'Vui lòng bật GPS và thử lại.');
@@ -335,8 +560,8 @@ export default function ProfileScreen({ navigation }: any) {
     }
   }, [isLocationVisible, locationCoords]);
 
-  const locationMapHtml = locationCoords
-    ? `<!doctype html><html><head><meta name="viewport" content="width=device-width, initial-scale=1.0"><style>html,body,#map{height:100%;margin:0}body{overflow:hidden}</style><link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" /></head><body><div id="map"></div><script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script><script>const point=[${locationCoords.latitude},${locationCoords.longitude}];const map=L.map('map',{zoomControl:false}).setView(point,16);L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png',{attribution:'© OpenStreetMap'}).addTo(map);L.marker(point).addTo(map).bindPopup('Vị trí hiện tại').openPopup();</script></body></html>`
+  const locationMapUrl = locationCoords
+    ? `https://www.openstreetmap.org/export/embed.html?bbox=${locationCoords.longitude - 0.01}%2C${locationCoords.latitude - 0.01}%2C${locationCoords.longitude + 0.01}%2C${locationCoords.latitude + 0.01}&layer=mapnik&marker=${locationCoords.latitude}%2C${locationCoords.longitude}`
     : '';
 
   return (
@@ -797,8 +1022,8 @@ export default function ProfileScreen({ navigation }: any) {
                 <Ionicons name="navigate" size={22} color="#2563EB" />
               </View>
               <View style={styles.locationHeaderCopy}>
-                <Text style={[styles.locationTitle, isDarkMode && { color: '#F8FAFC' }]}>Định vị địa lý</Text>
-                <Text style={[styles.locationDescription, isDarkMode && { color: '#94A3B8' }]}>Xác định vị trí hiện tại của thiết bị</Text>
+                <LocalizedText style={[styles.locationTitle, isDarkMode && { color: '#F8FAFC' }]}>Định vị địa lý</LocalizedText>
+                <LocalizedText style={[styles.locationDescription, isDarkMode && { color: '#94A3B8' }]}>Xác định vị trí hiện tại của thiết bị</LocalizedText>
               </View>
               <TouchableOpacity
                 style={styles.locationCloseIcon}
@@ -812,35 +1037,30 @@ export default function ProfileScreen({ navigation }: any) {
             <View style={[styles.locationMapFrame, isDarkMode && { borderColor: '#334155', backgroundColor: '#0F172A' }]}>
               {locationCoords ? (
                 Platform.OS === 'web' ? (
-                  <View style={[styles.locationMap, { backgroundColor: isDarkMode ? '#0F172A' : '#F1F5F9', alignItems: 'center', justifyContent: 'center' }]}>
-                    <Ionicons name="map" size={48} color="#2563EB" />
-                    <Text style={{ marginTop: 8, fontWeight: '700', color: isDarkMode ? '#F8FAFC' : '#0F172A', fontSize: 13 }}>
-                      Bản đồ OpenStreetMap
-                    </Text>
-                    <Text style={{ color: isDarkMode ? '#94A3B8' : '#64748B', fontSize: 11, marginTop: 4 }}>
-                      Tọa độ: {locationCoords.latitude.toFixed(4)}, {locationCoords.longitude.toFixed(4)}
-                    </Text>
-                  </View>
+                  React.createElement('iframe', {
+                    title: 'Bản đồ vị trí hiện tại',
+                    src: locationMapUrl,
+                    loading: 'lazy',
+                    style: { width: '100%', height: '100%', border: 0 },
+                  })
                 ) : (
                   <WebView
-                    originWhitelist={['*']}
-                    source={{ html: locationMapHtml }}
+                    source={{ uri: locationMapUrl }}
                     style={styles.locationMap}
-                    javaScriptEnabled
                     scrollEnabled={false}
                   />
                 )
               ) : (
                 <View style={styles.locationMapLoading}>
                   <Ionicons name="navigate-outline" size={30} color="#2563EB" />
-                  <Text style={[styles.locationMapLoadingText, isDarkMode && { color: '#94A3B8' }]}>
+                  <LocalizedText style={[styles.locationMapLoadingText, isDarkMode && { color: '#94A3B8' }]}>
                     {isLocationLoading ? 'Đang lấy vị trí hiện tại...' : 'Chưa có dữ liệu bản đồ'}
-                  </Text>
+                  </LocalizedText>
                 </View>
               )}
               <View style={[styles.locationMapBadge, isDarkMode && { backgroundColor: 'rgba(15, 23, 42, 0.9)' }]}>
                 <View style={styles.locationMapBadgeDot} />
-                <Text style={[styles.locationMapBadgeText, isDarkMode && { color: '#F8FAFC' }]}>Vị trí của bạn</Text>
+                <LocalizedText style={[styles.locationMapBadgeText, isDarkMode && { color: '#F8FAFC' }]}>Vị trí của bạn</LocalizedText>
               </View>
             </View>
 
@@ -850,17 +1070,22 @@ export default function ProfileScreen({ navigation }: any) {
               </View>
               <View style={styles.locationResultCopy}>
                 <View style={styles.locationStatusRow}>
-                  <Text style={[styles.locationResultLabel, isDarkMode && { color: '#94A3B8' }]}>Vị trí hiện tại</Text>
+                  <LocalizedText style={[styles.locationResultLabel, isDarkMode && { color: '#94A3B8' }]}>Vị trí hiện tại</LocalizedText>
                   <View style={[styles.locationStatusBadge, locationAddress ? styles.locationStatusBadgeActive : null]}>
                     <View style={[styles.locationStatusDot, locationAddress ? styles.locationStatusDotActive : null]} />
-                    <Text style={[styles.locationStatusText, locationAddress ? styles.locationStatusTextActive : null]}>
-                      {locationAddress ? 'Đã cập nhật' : 'Chưa cập nhật'}
-                    </Text>
+                    <LocalizedText style={[styles.locationStatusText, locationCoords ? styles.locationStatusTextActive : null]}>
+                      {locationCoords ? 'Đã cập nhật' : 'Chưa cập nhật'}
+                    </LocalizedText>
                   </View>
                 </View>
-                <Text style={[styles.locationResultText, isDarkMode && { color: '#F8FAFC' }]}>
+                <LocalizedText style={[styles.locationResultText, isDarkMode && { color: '#F8FAFC' }]}>
                   {locationAddress || 'Nhấn nút bên dưới để lấy địa chỉ hiện tại'}
-                </Text>
+                </LocalizedText>
+                {locationCoords && (
+                  <LocalizedText style={[styles.locationCoordinatesText, isDarkMode && { color: '#94A3B8' }]}>
+                    Tọa độ: {locationCoords.latitude.toFixed(6)}, {locationCoords.longitude.toFixed(6)}
+                  </LocalizedText>
+                )}
               </View>
             </View>
 
@@ -870,7 +1095,7 @@ export default function ProfileScreen({ navigation }: any) {
               activeOpacity={0.85}
             >
               <Ionicons name={isLocationLoading ? 'sync-outline' : 'locate-outline'} size={20} color="#FFFFFF" />
-              <Text style={styles.locationButtonText}>{isLocationLoading ? 'Đang định vị...' : 'Cập nhật vị trí'}</Text>
+              <LocalizedText style={styles.locationButtonText}>{isLocationLoading ? 'Đang định vị...' : 'Cập nhật vị trí'}</LocalizedText>
             </TouchableOpacity>
 
             <TouchableOpacity
@@ -878,7 +1103,7 @@ export default function ProfileScreen({ navigation }: any) {
               onPress={() => setLocationVisible(false)}
               activeOpacity={0.8}
             >
-              <Text style={[styles.locationCloseText, isDarkMode && { color: '#94A3B8' }]}>Để sau</Text>
+              <LocalizedText style={[styles.locationCloseText, isDarkMode && { color: '#94A3B8' }]}>Để sau</LocalizedText>
             </TouchableOpacity>
           </Pressable>
         </Pressable>
@@ -935,6 +1160,39 @@ export default function ProfileScreen({ navigation }: any) {
               Tạo mật khẩu mới để bảo vệ tài khoản của bạn.
             </Text>
 
+            {passwordChangeFeedback && (
+              <View
+                accessibilityRole="alert"
+                style={{
+                  flexDirection: 'row',
+                  alignItems: 'flex-start',
+                  gap: 8,
+                  padding: 12,
+                  marginBottom: 16,
+                  borderRadius: 10,
+                  backgroundColor: passwordChangeFeedback.type === 'success'
+                    ? (isDarkMode ? '#064E3B' : '#DCFCE7')
+                    : (isDarkMode ? '#7F1D1D' : '#FEE2E2'),
+                }}
+              >
+                <Ionicons
+                  name={passwordChangeFeedback.type === 'success' ? 'checkmark-circle' : 'alert-circle'}
+                  size={20}
+                  color={passwordChangeFeedback.type === 'success' ? '#16A34A' : '#DC2626'}
+                />
+                <Text
+                  style={{
+                    flex: 1,
+                    color: passwordChangeFeedback.type === 'success'
+                      ? (isDarkMode ? '#BBF7D0' : '#166534')
+                      : (isDarkMode ? '#FECACA' : '#991B1B'),
+                  }}
+                >
+                  {passwordChangeFeedback.message}
+                </Text>
+              </View>
+            )}
+
             <Text style={[styles.passwordLabel, isDarkMode && { color: '#F8FAFC' }]}>Mật khẩu hiện tại</Text>
             <View style={[styles.passwordInputWrap, isDarkMode && { backgroundColor: '#1E293B', borderColor: '#334155' }]}>
               <TextInput
@@ -989,11 +1247,16 @@ export default function ProfileScreen({ navigation }: any) {
             </View>
 
             <TouchableOpacity
-              style={styles.changePasswordButton}
+              style={[styles.changePasswordButton, isChangingPassword && { opacity: 0.7 }]}
               onPress={handleChangePassword}
               activeOpacity={0.85}
+              disabled={isChangingPassword}
             >
-              <Text style={styles.changePasswordButtonText}>Cập nhật mật khẩu</Text>
+              {isChangingPassword ? (
+                <ActivityIndicator color="#FFFFFF" />
+              ) : (
+                <Text style={styles.changePasswordButtonText}>Cập nhật mật khẩu</Text>
+              )}
             </TouchableOpacity>
           </ScrollView>
         </SafeAreaView>
@@ -1263,7 +1526,7 @@ export default function ProfileScreen({ navigation }: any) {
                 style={[styles.fontSizeOption, isDarkMode && { backgroundColor: '#1E293B', borderColor: '#334155' }]}
                 activeOpacity={0.8}
                 onPress={() => {
-                  setFontSizeMode('system');
+                  applyFontScaleMode('system');
                 }}
               >
                 <Text style={[styles.fontSizeOptionText, isDarkMode && { color: '#F8FAFC' }]}>Theo hệ thống</Text>
@@ -1275,7 +1538,7 @@ export default function ProfileScreen({ navigation }: any) {
               <TouchableOpacity
                 style={[styles.fontSizeOption, isDarkMode && { backgroundColor: '#1E293B', borderColor: '#334155' }]}
                 activeOpacity={0.8}
-                onPress={() => setFontSizeMode('custom')}
+                onPress={() => applyFontScaleMode('custom')}
               >
                 <Text style={[styles.fontSizeOptionText, isDarkMode && { color: '#F8FAFC' }]}>Tùy chỉnh</Text>
                 {fontSizeMode === 'custom' && (
@@ -1285,7 +1548,20 @@ export default function ProfileScreen({ navigation }: any) {
 
               {fontSizeMode === 'custom' && (
                 <View style={[styles.customFontSliderPanel, isDarkMode && { backgroundColor: '#1E293B', borderColor: '#334155', borderWidth: 1, borderRadius: 18, padding: 16 }]}>
-                  <Text style={[styles.customFontSliderTitle, isDarkMode && { color: '#F8FAFC' }]}>Mặc định</Text>
+                  <Text style={[styles.customFontSliderTitle, isDarkMode && { color: '#F8FAFC' }]}>Xem trước cỡ chữ</Text>
+                  <Text
+                    style={[
+                      styles.customFontSliderTitle,
+                      {
+                        fontSize: 18 * FONT_SCALE_LEVELS[customFontScale],
+                        lineHeight: 24 * FONT_SCALE_LEVELS[customFontScale],
+                        marginBottom: 12,
+                      },
+                      isDarkMode && { color: '#F8FAFC' },
+                    ]}
+                  >
+                    Aa - Văn bản mẫu
+                  </Text>
 
                   <View style={styles.customFontSliderRow}>
                     <Text style={[styles.customFontSmall, isDarkMode && { color: '#94A3B8' }]}>Aa</Text>
@@ -1596,11 +1872,11 @@ export default function ProfileScreen({ navigation }: any) {
           <Pressable style={[styles.appearanceSheet, isDarkMode && { backgroundColor: '#0B0F19' }]} onPress={() => {}}>
             <View style={styles.appearanceHeader}>
               <TouchableOpacity
-                style={[styles.appearanceCloseButton, isDarkMode && { backgroundColor: '#1E293B', borderColor: '#334155', borderWidth: 1 }]}
+                style={[styles.appearanceCloseButton, isDarkMode && { backgroundColor: '#1E293B', borderColor: '#334155', borderWidth: 1, borderRadius: 18 }]}
                 onPress={() => setLanguageVisible(false)}
                 activeOpacity={0.7}
               >
-                <Ionicons name="chevron-back-outline" size={28} color={isDarkMode ? '#F8FAFC' : '#111827'} />
+                <Ionicons name="chevron-back-outline" size={24} color={isDarkMode ? '#F8FAFC' : '#111827'} />
               </TouchableOpacity>
 
               <Text style={[styles.appearanceTitle, isDarkMode && { color: '#F8FAFC' }]}>Ngôn ngữ</Text>
@@ -1611,13 +1887,11 @@ export default function ProfileScreen({ navigation }: any) {
               <TouchableOpacity
                 style={[
                   styles.appearanceOptionRow,
+                  isDarkMode ? { backgroundColor: '#1E293B', borderBottomColor: '#334155' } : { backgroundColor: '#FFFFFF', borderBottomColor: '#E5E7EB' },
                   languageMode === 'vi' && (isDarkMode ? { backgroundColor: '#0F172A' } : styles.appearanceOptionRowSelected),
                 ]}
                 activeOpacity={0.8}
-                onPress={() => {
-                  setLanguageMode('vi');
-                  setLanguageVisible(false);
-                }}
+                onPress={() => handleLanguageChange('vi')}
               >
                 <Text style={[styles.appearanceOptionLabel, isDarkMode && { color: '#F8FAFC' }]}>Việt Nam</Text>
                 {languageMode === 'vi' && (
@@ -1628,20 +1902,17 @@ export default function ProfileScreen({ navigation }: any) {
               <TouchableOpacity
                 style={[
                   styles.appearanceOptionRow,
+                  isDarkMode ? { backgroundColor: '#1E293B', borderBottomColor: '#334155', borderBottomWidth: 0 } : { backgroundColor: '#FFFFFF', borderBottomColor: '#E5E7EB', borderBottomWidth: 0 },
                   languageMode === 'en' && (isDarkMode ? { backgroundColor: '#0F172A' } : styles.appearanceOptionRowSelected),
                 ]}
                 activeOpacity={0.8}
-                onPress={() => {
-                  setLanguageMode('en');
-                  setLanguageVisible(false);
-                }}
+                onPress={() => handleLanguageChange('en')}
               >
                 <Text style={[styles.appearanceOptionLabel, isDarkMode && { color: '#F8FAFC' }]}>English</Text>
                 {languageMode === 'en' && (
                   <Ionicons name="checkmark" size={22} color="#1D9BF0" />
                 )}
               </TouchableOpacity>
-              
             </View>
           </Pressable>
         </Pressable>
@@ -1653,26 +1924,27 @@ export default function ProfileScreen({ navigation }: any) {
         animationType="slide"
         onRequestClose={() => setAppearanceVisible(false)}
       >
-        <Pressable style={styles.appearanceOverlay} onPress={() => setAppearanceVisible(false)}>
-          <Pressable style={[styles.appearanceSheet, isDarkMode && { backgroundColor: colors.background }]} onPress={() => {}}>
+        <Pressable style={[styles.appearanceOverlay, isDarkMode && { backgroundColor: '#0B0F19' }]} onPress={() => setAppearanceVisible(false)}>
+          <Pressable style={[styles.appearanceSheet, isDarkMode && { backgroundColor: '#0B0F19' }]} onPress={() => {}}>
             <View style={styles.appearanceHeader}>
               <TouchableOpacity
-                style={styles.appearanceCloseButton}
+                style={[styles.appearanceCloseButton, isDarkMode && { backgroundColor: '#1E293B', borderColor: '#334155', borderWidth: 1, borderRadius: 18 }]}
                 onPress={() => setAppearanceVisible(false)}
                 activeOpacity={0.7}
               >
-                <Ionicons name="chevron-back-outline" size={28} color={isDarkMode ? colors.textPrimary : '#111827'} />
+                <Ionicons name="chevron-back-outline" size={24} color={isDarkMode ? '#F8FAFC' : '#111827'} />
               </TouchableOpacity>
 
-              <Text style={[styles.appearanceTitle, isDarkMode && { color: colors.textPrimary }]}>Về bề ngoài</Text>
+              <Text style={[styles.appearanceTitle, isDarkMode && { color: '#F8FAFC' }]}>Vẻ bề ngoài</Text>
               <View style={styles.appearanceHeaderSpacer} />
             </View>
 
-            <View style={[styles.appearanceCard, isDarkMode && { backgroundColor: colors.card, borderColor: colors.border }]}>
+            <View style={[styles.appearanceCard, isDarkMode && { backgroundColor: '#1E293B', borderColor: '#334155' }]}>
               <TouchableOpacity
                 style={[
                   styles.appearanceOptionRow,
-                  appearanceMode === 'light' && styles.appearanceOptionRowSelected,
+                  isDarkMode ? { backgroundColor: '#1E293B', borderBottomColor: '#334155' } : { backgroundColor: '#FFFFFF', borderBottomColor: '#E5E7EB' },
+                  appearanceMode === 'light' && (isDarkMode ? { backgroundColor: '#0F172A' } : styles.appearanceOptionRowSelected),
                 ]}
                 activeOpacity={0.8}
                 onPress={() => {
@@ -1681,7 +1953,7 @@ export default function ProfileScreen({ navigation }: any) {
                   setAppearanceVisible(false);
                 }}
               >
-                <Text style={[styles.appearanceOptionLabel, isDarkMode && { color: colors.textPrimary }]}>Màu sáng</Text>
+                <Text style={[styles.appearanceOptionLabel, isDarkMode && { color: '#F8FAFC' }]}>Màu sáng</Text>
                 {appearanceMode === 'light' && (
                   <Ionicons name="checkmark" size={22} color="#1D9BF0" />
                 )}
@@ -1690,7 +1962,8 @@ export default function ProfileScreen({ navigation }: any) {
               <TouchableOpacity
                 style={[
                   styles.appearanceOptionRow,
-                  appearanceMode === 'dark' && styles.appearanceOptionRowSelected,
+                  isDarkMode ? { backgroundColor: '#1E293B', borderBottomColor: '#334155', borderBottomWidth: 0 } : { backgroundColor: '#FFFFFF', borderBottomColor: '#E5E7EB', borderBottomWidth: 0 },
+                  appearanceMode === 'dark' && (isDarkMode ? { backgroundColor: '#0F172A' } : styles.appearanceOptionRowSelected),
                 ]}
                 activeOpacity={0.8}
                 onPress={() => {
@@ -1699,7 +1972,7 @@ export default function ProfileScreen({ navigation }: any) {
                   setAppearanceVisible(false);
                 }}
               >
-                <Text style={[styles.appearanceOptionLabel, isDarkMode && { color: colors.textPrimary }]}>Tối</Text>
+                <Text style={[styles.appearanceOptionLabel, isDarkMode && { color: '#F8FAFC' }]}>Tối</Text>
                 {appearanceMode === 'dark' && (
                   <Ionicons name="checkmark" size={22} color="#1D9BF0" />
                 )}
@@ -1758,10 +2031,10 @@ export default function ProfileScreen({ navigation }: any) {
             </View>
             <View style={{ flex: 1, marginLeft: 12 }}>
               <Text style={[styles.fbProfileName, isDarkMode && { color: colors.textPrimary }]}>
-                {profileName || userName || 'Nguyễn Hữu Nghĩa'}
+                {profileName || full_name || userName || 'Nguyễn Hữu Nghĩa'}
               </Text>
               <Text style={[styles.fbProfileRole, isDarkMode && { color: colors.textSecondary }]}>
-                {profilePhone || '0905 123 456'} • Chủ nhà (Giám sát)
+                {profilePhone || phone_number || userPhone || '0905123456'} • {profileRole || role || 'Chủ nhà / Người sở hữu'}
               </Text>
             </View>
             {/* Badge thông báo & icon switch */}
@@ -2039,7 +2312,7 @@ export default function ProfileScreen({ navigation }: any) {
             </Text>
           </TouchableOpacity>
 
-          {/* Ô 7: Định vị & Bản đồ (Sửa từ "Định vị địa lý") */}
+          {/* Geolocation and safe-zone map */}
           <TouchableOpacity
             style={[styles.fbGridCard, isDarkMode && { backgroundColor: colors.card, borderColor: colors.border }]}
             activeOpacity={0.8}
@@ -3128,6 +3401,13 @@ const styles = StyleSheet.create({
     lineHeight: 19,
     color: '#315A9A',
   },
+  locationCoordinatesText: {
+    marginTop: 4,
+    fontSize: 11,
+    lineHeight: 16,
+    color: '#64748B',
+    fontVariant: ['tabular-nums'],
+  },
   locationButton: {
     flexDirection: 'row',
     alignItems: 'center',
@@ -3618,7 +3898,7 @@ const styles = StyleSheet.create({
     borderBottomColor: '#E5E7EB',
   },
   appearanceOptionRowSelected: {
-    backgroundColor: '#FFFFFF',
+    backgroundColor: '#F8FAFC',
   },
   appearanceOptionLabel: {
     fontSize: 15,
@@ -3717,6 +3997,8 @@ const styles = StyleSheet.create({
     paddingRight: 8,
     fontSize: 14,
     color: '#0F172A',
+    borderWidth: 0,
+    outlineWidth: 0,
   },
   passwordRequirements: {
     marginBottom: 17,

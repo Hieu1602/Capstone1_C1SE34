@@ -7,9 +7,10 @@ from uuid import UUID
 
 from fastapi import APIRouter, Body, Depends, HTTPException, Query, status
 from sqlalchemy.ext.asyncio import AsyncSession
-
+from app.api.deps import get_current_user_optional
 from app.core.database import get_db
 from app.crud.crud_incident import crud_incident
+from app.models.user import User
 from app.schemas.incident import IncidentAck, IncidentOut
 
 router = APIRouter()
@@ -64,10 +65,14 @@ async def acknowledge_incident(
     ack: IncidentAck | None = Body(default=None),
     note: str | None = Query(default=None),
     db: AsyncSession = Depends(get_db),
+    current_user: User | None = Depends(get_current_user_optional),
 ):
     """Xác nhận đã xử lý sự kiện (caregiver/bác sĩ mark as handled)."""
     resolved_note = ack.notes if (ack and ack.notes) else note
-    incident = await crud_incident.acknowledge(db, incident_id, notes=resolved_note)
+    ack_by = current_user.id if current_user else None
+    incident = await crud_incident.acknowledge(
+        db, incident_id, notes=resolved_note, acknowledged_by=ack_by
+    )
     if not incident:
         raise HTTPException(
             status_code=status.HTTP_404_NOT_FOUND,

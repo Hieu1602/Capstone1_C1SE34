@@ -3,16 +3,12 @@
 // Hiện thực hóa FR03 (YOLO-Pose), FR04 (AMG8833 Thermal), FR05 (YAMNet Audio), FR06 (Sensor Fusion)
 
 import React from 'react';
-import {
-  View,
-  Text,
-  StyleSheet,
-  TouchableOpacity,
-  ScrollView,
-} from 'react-native';
+import { View, StyleSheet, TouchableOpacity, ScrollView } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
 import { Colors, Shadows } from '../../../theme/colors';
+import { LocalizedAlert, LocalizedText } from '../../../i18n/LocalizedComponents';
+
 
 export default function AIModelDetailScreen({ navigation }: any) {
   return (
@@ -24,16 +20,16 @@ export default function AIModelDetailScreen({ navigation }: any) {
         >
           <Ionicons name="chevron-back" size={26} color={Colors.textPrimary} />
         </TouchableOpacity>
-        <Text style={styles.headerTitle}>Mô Hình AI Tại Biên (Edge AI)</Text>
+        <LocalizedText style={styles.headerTitle}>Mô Hình AI Tại Biên (Edge AI)</LocalizedText>
       </View>
 
       <ScrollView
         showsVerticalScrollIndicator={false}
         contentContainerStyle={styles.scrollContent}
       >
-        <Text style={styles.introText}>
-          Tất cả mô hình AI suy luận trực tiếp trên Hub Orange Pi 5 (NPU 6 TOPS), bảo vệ quyền riêng tư tuyệt đối (NFR02) và độ trễ {'<'} 500ms (NFR01).
-        </Text>
+        <LocalizedText style={styles.introText}>
+          Tất cả mô hình AI suy luận trực tiếp trên Hub Orange Pi 5 (NPU 6 TOPS), bảo vệ quyền riêng tư tuyệt đối (NFR02) và độ trễ &lt; 500ms (NFR01).
+        </LocalizedText>
 
         {/* 1. YOLO-Pose 17 Keypoints (FR03) */}
         <View style={styles.modelCard}>
@@ -42,13 +38,13 @@ export default function AIModelDetailScreen({ navigation }: any) {
               <Ionicons name="body" size={24} color="#0284C7" />
             </View>
             <View style={{ flex: 1, marginLeft: 12 }}>
-              <Text style={styles.modelTitle}>YOLO-Pose 17 Khớp Xương (FR03)</Text>
-              <Text style={styles.modelStatusText}>Trạng thái: 32 FPS (Rockchip RK3588S NPU)</Text>
+              <LocalizedText style={styles.modelTitle}>YOLO-Pose 17 Khớp Xương (FR03)</LocalizedText>
+              <LocalizedText style={styles.modelStatusText}>Trạng thái: 32 FPS (Rockchip RK3588S NPU)</LocalizedText>
             </View>
           </View>
-          <Text style={styles.modelDesc}>
-            Theo dõi góc nghiêng cột sống và thời gian nằm bất động trên sàn. Tự động kích hoạt Red Alert khi góc nghiêng {'>'} 60° và không có chuyển động {'>'} 30 giây.
-          </Text>
+          <LocalizedText style={styles.modelDesc}>
+            Theo dõi góc nghiêng cột sống và thời gian nằm bất động trên sàn. Tự động kích hoạt Red Alert khi góc nghiêng &gt; 60° và không có chuyển động &gt; 30 giây.
+          </LocalizedText>
         </View>
 
         {/* 2. Contactless Thermal Mapping AMG8833 (FR04) */}
@@ -58,13 +54,13 @@ export default function AIModelDetailScreen({ navigation }: any) {
               <Ionicons name="thermometer" size={24} color="#D97706" />
             </View>
             <View style={{ flex: 1, marginLeft: 12 }}>
-              <Text style={styles.modelTitle}>Ma Trận Nhiệt AMG8833 (FR04)</Text>
-              <Text style={styles.modelStatusText}>Độ phân giải: 8x8 IR Grid • Tần số: 10 Hz</Text>
+              <LocalizedText style={styles.modelTitle}>Ma Trận Nhiệt AMG8833 (FR04)</LocalizedText>
+              <LocalizedText style={styles.modelStatusText}>Độ phân giải: 8x8 IR Grid • Tần số: 10 Hz</LocalizedText>
             </View>
           </View>
-          <Text style={styles.modelDesc}>
+          <LocalizedText style={styles.modelDesc}>
             Định vị vùng trán kết hợp từ YOLO-Pose và ánh xạ nhiệt độ hồng ngoại để phát hiện sớm các cơn sốt cao bất thường không cần tiếp xúc.
-          </Text>
+          </LocalizedText>
         </View>
 
         {/* 3. YAMNet Acoustic Distress Analysis (FR05) */}
@@ -74,13 +70,13 @@ export default function AIModelDetailScreen({ navigation }: any) {
               <Ionicons name="mic" size={24} color="#9333EA" />
             </View>
             <View style={{ flex: 1, marginLeft: 12 }}>
-              <Text style={styles.modelTitle}>Phân Tích Âm Thanh YAMNet (FR05)</Text>
-              <Text style={styles.modelStatusText}>Lớp phân loại: Tiếng ngã đập mạnh, Kêu cứu, La hét</Text>
+              <LocalizedText style={styles.modelTitle}>Phân Tích Âm Thanh YAMNet (FR05)</LocalizedText>
+              <LocalizedText style={styles.modelStatusText}>Lớp phân loại: Tiếng ngã đập mạnh, Kêu cứu, La hét</LocalizedText>
             </View>
           </View>
-          <Text style={styles.modelDesc}>
+          <LocalizedText style={styles.modelDesc}>
             Liên tục phân tích âm thanh môi trường trong phòng. Phát hiện các mẫu âm thanh khẩn cấp như tiếng va đập sàn nhà hoặc tiếng kêu cứu "Cứu tôi với!".
-          </Text>
+          </LocalizedText>
         </View>
 
         {/* 4. Multimodal Sensor Fusion Decision Matrix (FR06) */}
@@ -90,13 +86,13 @@ export default function AIModelDetailScreen({ navigation }: any) {
               <Ionicons name="git-merge" size={24} color="#16A34A" />
             </View>
             <View style={{ flex: 1, marginLeft: 12 }}>
-              <Text style={[styles.modelTitle, { color: '#15803D' }]}>Hợp Nhất Đa Cảm Biến (FR06)</Text>
-              <Text style={styles.modelStatusText}>Độ chính xác: TPR ≥ 95% • Báo giả: FPR {'<'} 2%</Text>
+              <LocalizedText style={[styles.modelTitle, { color: '#15803D' }]}>Hợp Nhất Đa Cảm Biến (FR06)</LocalizedText>
+              <LocalizedText style={styles.modelStatusText}>Độ chính xác: TPR ≥ 95% • Báo giả: FPR &lt; 2%</LocalizedText>
             </View>
           </View>
-          <Text style={styles.modelDesc}>
+          <LocalizedText style={styles.modelDesc}>
             Bộ não trung tâm kết hợp ma trận quyết định giữa Hình ảnh + Thân nhiệt + Âm thanh + Vòng tay BLE nhằm loại bỏ hoàn toàn báo động giả (như nằm ngủ hoặc cúi nhặt đồ).
-          </Text>
+          </LocalizedText>
         </View>
       </ScrollView>
     </SafeAreaView>

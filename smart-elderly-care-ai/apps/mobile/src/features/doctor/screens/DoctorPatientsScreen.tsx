@@ -2,26 +2,17 @@
 // Danh sách bệnh nhân người cao tuổi phụ trách dành cho Bác sĩ gia đình
 
 import React, { useState, useEffect, useCallback } from 'react';
-import {
-  View,
-  Text,
-  StyleSheet,
-  ScrollView,
-  TouchableOpacity,
-  TextInput,
-  RefreshControl,
-  StatusBar,
-  ActivityIndicator,
-  Image,
-} from 'react-native';
+import { View, StyleSheet, ScrollView, TouchableOpacity, RefreshControl, StatusBar, ActivityIndicator } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
-import { useNavigation } from '@react-navigation/native';
+import { useNavigation, useFocusEffect } from '@react-navigation/native';
 
 import { Colors } from '../../../theme/colors';
 import { useTheme } from '../../../store/useThemeStore';
 import { useAuthStore } from '../../../store/useAuthStore';
-import { doctorApi, BASE_URL } from '../../../services/api';
+import { doctorApi } from '../../../services/api';
+import { LocalizedText, LocalizedTextInput } from '../../../i18n/LocalizedComponents';
+
 
 export interface PatientCardData {
   id: string;
@@ -34,8 +25,6 @@ export interface PatientCardData {
   house_address?: string;
   medical_history?: string;
   emergency_contact_phone?: string;
-  avatar_url?: string | null;
-  has_face_enrolled?: boolean;
   device_id: string;
   is_online: boolean;
   battery_level?: number;
@@ -67,9 +56,8 @@ export default function DoctorPatientsScreen() {
       if (res.data && Array.isArray(res.data)) {
         setPatients(res.data);
       }
-    } catch (e) {
-      console.warn('Lỗi tải danh sách bệnh nhân thực tế:', e);
-      setPatients([]);
+    } catch {
+      // Giữ dữ liệu hiện tại khi mất kết nối mạng
     } finally {
       setLoading(false);
       setRefreshing(false);
@@ -80,18 +68,29 @@ export default function DoctorPatientsScreen() {
     fetchPatients();
   }, [fetchPatients]);
 
+  useFocusEffect(
+    useCallback(() => {
+      fetchPatients();
+    }, [fetchPatients])
+  );
+
   const onRefresh = () => {
     setRefreshing(true);
     fetchPatients();
   };
 
   const filteredPatients = patients.filter((p) => {
-    const matchesSearch =
-      p.name.toLowerCase().includes(searchQuery.toLowerCase()) ||
-      (p.medical_history || '').toLowerCase().includes(searchQuery.toLowerCase()) ||
-      p.house_name.toLowerCase().includes(searchQuery.toLowerCase());
+    const q = searchQuery.trim().toLowerCase();
+    if (q.length > 0) {
+      const cleanQ = q.replace(/[^0-9]/g, '');
+      const cleanPhone = (p.emergency_contact_phone || '').replace(/[^0-9]/g, '');
 
-    if (!matchesSearch) return false;
+      const matchesName = p.name.toLowerCase().includes(q);
+      const matchesPhone = cleanQ.length > 0 && cleanPhone.includes(cleanQ);
+
+      if (!matchesName && !matchesPhone) return false;
+    }
+
     if (filterTab === 'WARNING') return p.health_status === 'WARNING' || p.health_status === 'DANGER';
     if (filterTab === 'NORMAL') return p.health_status === 'NORMAL';
     return true;
@@ -123,12 +122,12 @@ export default function DoctorPatientsScreen() {
               <Ionicons name="medkit" size={20} color="#FFFFFF" />
             </View>
             <View>
-              <Text style={[styles.greetingSub, { color: isDarkMode ? '#94A3B8' : '#64748B' }]}>
+              <LocalizedText style={[styles.greetingSub, { color: isDarkMode ? '#94A3B8' : '#64748B' }]}>
                 Bác sĩ phụ trách y tế
-              </Text>
-              <Text style={[styles.doctorTitle, { color: colors.textPrimary }]}>
+              </LocalizedText>
+              <LocalizedText style={[styles.doctorTitle, { color: colors.textPrimary }]}>
                 {userName || 'BS. Trần Văn Minh'}
-              </Text>
+              </LocalizedText>
             </View>
           </View>
 
@@ -151,10 +150,10 @@ export default function DoctorPatientsScreen() {
             <View style={[styles.statIconBox, { backgroundColor: '#EFF6FF' }]}>
               <Ionicons name="people" size={16} color="#2563EB" />
             </View>
-            <Text style={[styles.statNumber, { color: colors.textPrimary }]}>{totalPatients}</Text>
-            <Text style={[styles.statLabel, { color: isDarkMode ? '#94A3B8' : '#64748B' }]} numberOfLines={1}>
+            <LocalizedText style={[styles.statNumber, { color: colors.textPrimary }]}>{totalPatients}</LocalizedText>
+            <LocalizedText style={[styles.statLabel, { color: isDarkMode ? '#94A3B8' : '#64748B' }]} numberOfLines={1}>
               Tổng số
-            </Text>
+            </LocalizedText>
           </View>
 
           <View
@@ -166,12 +165,12 @@ export default function DoctorPatientsScreen() {
             <View style={[styles.statIconBox, { backgroundColor: '#ECFDF5' }]}>
               <Ionicons name="shield-checkmark" size={16} color="#059669" />
             </View>
-            <Text style={[styles.statNumber, { color: '#059669' }]}>
+            <LocalizedText style={[styles.statNumber, { color: '#059669' }]}>
               {totalPatients - warningCount}
-            </Text>
-            <Text style={[styles.statLabel, { color: isDarkMode ? '#94A3B8' : '#64748B' }]} numberOfLines={1}>
+            </LocalizedText>
+            <LocalizedText style={[styles.statLabel, { color: isDarkMode ? '#94A3B8' : '#64748B' }]} numberOfLines={1}>
               Ổn định
-            </Text>
+            </LocalizedText>
           </View>
 
           <View
@@ -183,12 +182,12 @@ export default function DoctorPatientsScreen() {
             <View style={[styles.statIconBox, { backgroundColor: '#FFFBEB' }]}>
               <Ionicons name="pulse" size={16} color="#D97706" />
             </View>
-            <Text style={[styles.statNumber, { color: warningCount > 0 ? '#DC2626' : '#D97706' }]}>
+            <LocalizedText style={[styles.statNumber, { color: warningCount > 0 ? '#DC2626' : '#D97706' }]}>
               {warningCount}
-            </Text>
-            <Text style={[styles.statLabel, { color: isDarkMode ? '#94A3B8' : '#64748B' }]} numberOfLines={1}>
+            </LocalizedText>
+            <LocalizedText style={[styles.statLabel, { color: isDarkMode ? '#94A3B8' : '#64748B' }]} numberOfLines={1}>
               Cần lưu ý
-            </Text>
+            </LocalizedText>
           </View>
         </View>
 
@@ -203,9 +202,9 @@ export default function DoctorPatientsScreen() {
           ]}
         >
           <Ionicons name="search" size={18} color="#94A3B8" />
-          <TextInput
+          <LocalizedTextInput
             style={[styles.searchInput, { color: colors.textPrimary }]}
-            placeholder="Tìm theo tên cụ, bệnh nền hoặc địa chỉ..."
+            placeholder="Tìm theo tên hoặc số điện thoại..."
             placeholderTextColor="#94A3B8"
             value={searchQuery}
             onChangeText={setSearchQuery}
@@ -236,14 +235,14 @@ export default function DoctorPatientsScreen() {
                     : { backgroundColor: isDarkMode ? '#334155' : '#EEF2F6' },
                 ]}
               >
-                <Text
+                <LocalizedText
                   style={[
                     styles.filterChipText,
                     active ? { color: '#FFFFFF', fontWeight: '700' } : { color: isDarkMode ? '#CBD5E1' : '#64748B' },
                   ]}
                 >
                   {tab.label}
-                </Text>
+                </LocalizedText>
               </TouchableOpacity>
             );
           })}
@@ -262,9 +261,9 @@ export default function DoctorPatientsScreen() {
         {filteredPatients.length === 0 ? (
           <View style={styles.emptyBox}>
             <Ionicons name="people-outline" size={48} color="#94A3B8" />
-            <Text style={[styles.emptyText, { color: isDarkMode ? '#94A3B8' : '#64748B' }]}>
+            <LocalizedText style={[styles.emptyText, { color: isDarkMode ? '#94A3B8' : '#64748B' }]}>
               Không tìm thấy hồ sơ người cao tuổi nào.
-            </Text>
+            </LocalizedText>
           </View>
         ) : (
           filteredPatients.map((patient) => {
@@ -287,34 +286,15 @@ export default function DoctorPatientsScreen() {
                 {/* Header card */}
                 <View style={styles.cardHeader}>
                   <View style={styles.patientAvatar}>
-                    {patient.avatar_url ? (
-                      <Image
-                        source={{
-                          uri: patient.avatar_url.startsWith('http')
-                            ? patient.avatar_url
-                            : `${BASE_URL.replace('/api/v1', '')}${patient.avatar_url}`,
-                        }}
-                        style={styles.patientAvatarImg}
-                      />
-                    ) : (
-                      <Text style={styles.patientAvatarText}>
-                        {patient.name.trim().split(/\s+/).slice(-1)[0][0]?.toUpperCase() || 'A'}
-                      </Text>
-                    )}
+                    <LocalizedText style={styles.patientAvatarText}>
+                      {patient.name.trim().split(/\s+/).slice(-1)[0][0]?.toUpperCase() || 'A'}
+                    </LocalizedText>
                   </View>
                   <View style={styles.cardHeaderInfo}>
                     <View style={styles.nameBadgeRow}>
-                      <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6, flex: 1 }}>
-                        <Text style={[styles.patientName, { color: colors.textPrimary }]} numberOfLines={1}>
-                          {patient.name}
-                        </Text>
-                        {patient.has_face_enrolled && (
-                          <View style={styles.aiFaceTag}>
-                            <Ionicons name="scan-circle" size={12} color="#10B981" />
-                            <Text style={styles.aiFaceTagText}>Face ID</Text>
-                          </View>
-                        )}
-                      </View>
+                      <LocalizedText style={[styles.patientName, { color: colors.textPrimary }]} numberOfLines={1}>
+                        {patient.name}
+                      </LocalizedText>
                       <View
                         style={[
                           styles.statusBadge,
@@ -325,7 +305,7 @@ export default function DoctorPatientsScreen() {
                             : { backgroundColor: '#D1FAE5' },
                         ]}
                       >
-                        <Text
+                        <LocalizedText
                           style={[
                             styles.statusBadgeText,
                             isDanger
@@ -336,15 +316,20 @@ export default function DoctorPatientsScreen() {
                           ]}
                         >
                           {isDanger ? 'NGUY CƠ' : isWarn ? 'CHÚ Ý' : 'ỔN ĐỊNH'}
-                        </Text>
+                        </LocalizedText>
                       </View>
                     </View>
-                    <Text style={[styles.patientMeta, { color: isDarkMode ? '#94A3B8' : '#64748B' }]} numberOfLines={1}>
+                    <LocalizedText style={[styles.patientMeta, { color: isDarkMode ? '#94A3B8' : '#64748B' }]} numberOfLines={1}>
                       {patient.age} tuổi • {patient.gender} • Nhóm máu {patient.blood_type || 'O+'}
-                    </Text>
-                    <Text style={[styles.patientAddress, { color: isDarkMode ? '#94A3B8' : '#64748B' }]} numberOfLines={1}>
+                    </LocalizedText>
+                    <LocalizedText style={[styles.patientAddress, { color: isDarkMode ? '#94A3B8' : '#64748B' }]} numberOfLines={1}>
                       🏠 {patient.house_name} • {patient.house_address}
-                    </Text>
+                    </LocalizedText>
+                    {patient.emergency_contact_phone ? (
+                      <LocalizedText style={[styles.patientPhone, { color: isDarkMode ? '#38BDF8' : '#0284C7' }]} numberOfLines={1}>
+                        📞 {patient.emergency_contact_phone}
+                      </LocalizedText>
+                    ) : null}
                   </View>
                 </View>
 
@@ -352,9 +337,9 @@ export default function DoctorPatientsScreen() {
                 {patient.medical_history ? (
                   <View style={[styles.historyRow, { backgroundColor: isDarkMode ? '#33415544' : '#F1F5F9' }]}>
                     <Ionicons name="medical" size={13} color="#EF4444" style={{ marginRight: 5 }} />
-                    <Text style={[styles.historyText, { color: isDarkMode ? '#CBD5E1' : '#475569' }]} numberOfLines={1}>
+                    <LocalizedText style={[styles.historyText, { color: isDarkMode ? '#CBD5E1' : '#475569' }]} numberOfLines={1}>
                       Bệnh nền: {patient.medical_history}
-                    </Text>
+                    </LocalizedText>
                   </View>
                 ) : null}
 
@@ -363,45 +348,45 @@ export default function DoctorPatientsScreen() {
                   {/* Nhịp tim */}
                   <View style={[styles.vitalChip, { backgroundColor: isDarkMode ? '#0F172A' : '#F8FAFC' }]}>
                     <Ionicons name="heart" size={14} color="#EF4444" />
-                    <Text style={[styles.vitalValue, { color: colors.textPrimary }]}>
-                      {patient.heart_rate ?? 76} <Text style={styles.vitalUnit}>bpm</Text>
-                    </Text>
-                    <Text style={styles.vitalLabel}>Nhịp tim</Text>
+                    <LocalizedText style={[styles.vitalValue, { color: colors.textPrimary }]}>
+                      {patient.heart_rate ?? 76} <LocalizedText style={styles.vitalUnit}>bpm</LocalizedText>
+                    </LocalizedText>
+                    <LocalizedText style={styles.vitalLabel}>Nhịp tim</LocalizedText>
                   </View>
 
                   {/* SpO2 */}
                   <View style={[styles.vitalChip, { backgroundColor: isDarkMode ? '#0F172A' : '#F8FAFC' }]}>
                     <Ionicons name="water" size={14} color="#0284C7" />
-                    <Text
+                    <LocalizedText
                       style={[
                         styles.vitalValue,
                         { color: (patient.spo2 ?? 98) < 95 ? '#EA580C' : colors.textPrimary },
                       ]}
                     >
                       {patient.spo2 ?? 98}
-                      <Text style={styles.vitalUnit}>%</Text>
-                    </Text>
-                    <Text style={styles.vitalLabel}>SpO₂</Text>
+                      <LocalizedText style={styles.vitalUnit}>%</LocalizedText>
+                    </LocalizedText>
+                    <LocalizedText style={styles.vitalLabel}>SpO₂</LocalizedText>
                   </View>
 
                   {/* Nhiệt độ */}
                   <View style={[styles.vitalChip, { backgroundColor: isDarkMode ? '#0F172A' : '#F8FAFC' }]}>
                     <Ionicons name="thermometer" size={14} color="#F59E0B" />
-                    <Text style={[styles.vitalValue, { color: colors.textPrimary }]}>
+                    <LocalizedText style={[styles.vitalValue, { color: colors.textPrimary }]}>
                       {patient.skin_temp_max ?? 36.6}
-                      <Text style={styles.vitalUnit}>°C</Text>
-                    </Text>
-                    <Text style={styles.vitalLabel}>Nhiệt độ</Text>
+                      <LocalizedText style={styles.vitalUnit}>°C</LocalizedText>
+                    </LocalizedText>
+                    <LocalizedText style={styles.vitalLabel}>Nhiệt độ</LocalizedText>
                   </View>
 
                   {/* Vòng đeo / Pin */}
                   <View style={[styles.vitalChip, { backgroundColor: isDarkMode ? '#0F172A' : '#F8FAFC' }]}>
                     <Ionicons name="watch" size={14} color="#10B981" />
-                    <Text style={[styles.vitalValue, { color: '#10B981' }]}>
+                    <LocalizedText style={[styles.vitalValue, { color: '#10B981' }]}>
                       {patient.battery_level ?? 84}
-                      <Text style={styles.vitalUnit}>%</Text>
-                    </Text>
-                    <Text style={styles.vitalLabel}>Pin vòng</Text>
+                      <LocalizedText style={styles.vitalUnit}>%</LocalizedText>
+                    </LocalizedText>
+                    <LocalizedText style={styles.vitalLabel}>Pin vòng</LocalizedText>
                   </View>
                 </View>
 
@@ -409,12 +394,12 @@ export default function DoctorPatientsScreen() {
                 <View style={styles.cardFooter}>
                   <View style={styles.syncWrap}>
                     <Ionicons name="bluetooth" size={12} color="#0284C7" style={{ marginRight: 4 }} />
-                    <Text
+                    <LocalizedText
                       style={[styles.updatedText, { color: isDarkMode ? '#94A3B8' : '#64748B' }]}
                       numberOfLines={1}
                     >
                       BLE Hub • {patient.last_updated}
-                    </Text>
+                    </LocalizedText>
                   </View>
                   <View style={styles.footerActionGroup}>
                     <TouchableOpacity
@@ -425,10 +410,10 @@ export default function DoctorPatientsScreen() {
                       }}
                     >
                       <Ionicons name="bar-chart-outline" size={13} color="#0284C7" style={{ marginRight: 4 }} />
-                      <Text style={styles.btnMiniReportText}>Báo cáo</Text>
+                      <LocalizedText style={styles.btnMiniReportText}>Báo cáo</LocalizedText>
                     </TouchableOpacity>
                     <View style={styles.viewDetailBtn}>
-                      <Text style={styles.viewDetailText}>Bệnh án</Text>
+                      <LocalizedText style={styles.viewDetailText}>Bệnh án</LocalizedText>
                       <Ionicons name="chevron-forward" size={14} color={Colors.primary} />
                     </View>
                   </View>
@@ -537,12 +522,6 @@ const styles = StyleSheet.create({
     backgroundColor: '#0284C7',
     justifyContent: 'center',
     alignItems: 'center',
-    overflow: 'hidden',
-  },
-  patientAvatarImg: {
-    width: 44,
-    height: 44,
-    borderRadius: 22,
   },
   patientAvatarText: { color: '#FFFFFF', fontSize: 18, fontWeight: '800' },
   cardHeaderInfo: { flex: 1, marginLeft: 12 },
@@ -552,23 +531,10 @@ const styles = StyleSheet.create({
     justifyContent: 'space-between',
     marginBottom: 2,
   },
-  patientName: { fontSize: 16, fontWeight: '800' },
-  aiFaceTag: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 3,
-    backgroundColor: '#DCFCE7',
-    paddingHorizontal: 5,
-    paddingVertical: 1,
-    borderRadius: 4,
-  },
-  aiFaceTagText: {
-    fontSize: 9,
-    fontWeight: '700',
-    color: '#047857',
-  },
+  patientName: { fontSize: 16, fontWeight: '800', flex: 1, marginRight: 8 },
   patientMeta: { fontSize: 12, marginTop: 1 },
   patientAddress: { fontSize: 11.5, marginTop: 3 },
+  patientPhone: { fontSize: 11.5, fontWeight: '600', marginTop: 2 },
   statusBadge: {
     paddingHorizontal: 7,
     paddingVertical: 3,

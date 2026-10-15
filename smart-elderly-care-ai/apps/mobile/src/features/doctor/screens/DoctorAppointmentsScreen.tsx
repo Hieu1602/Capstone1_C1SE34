@@ -2,29 +2,16 @@
 // Quản lý toàn bộ lịch hẹn khám, tái khám định kỳ & đồng bộ lịch phát loa nhắc nhở cho Bác sĩ gia đình
 
 import React, { useState, useEffect, useCallback } from 'react';
-import {
-  View,
-  Text,
-  StyleSheet,
-  ScrollView,
-  TouchableOpacity,
-  TextInput,
-  Modal,
-  Alert,
-  Switch,
-  ActivityIndicator,
-  StatusBar,
-  RefreshControl,
-  KeyboardAvoidingView,
-  Platform,
-} from 'react-native';
+import { View, StyleSheet, ScrollView, TouchableOpacity, Modal, Switch, ActivityIndicator, StatusBar, RefreshControl, KeyboardAvoidingView, Platform } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
-import { useNavigation } from '@react-navigation/native';
+import { useNavigation, useFocusEffect } from '@react-navigation/native';
 
 import { Colors } from '../../../theme/colors';
 import { useTheme } from '../../../store/useThemeStore';
 import { doctorApi } from '../../../services/api';
+import { LocalizedAlert, LocalizedText, LocalizedTextInput } from '../../../i18n/LocalizedComponents';
+
 
 export interface AppointmentItem {
   id: string;
@@ -50,14 +37,17 @@ export default function DoctorAppointmentsScreen() {
   const [appointments, setAppointments] = useState<AppointmentItem[]>([]);
   const [filterTab, setFilterTab] = useState<'ALL' | 'UPCOMING' | 'COMPLETED'>('ALL');
 
+  // Danh sách bệnh nhân để chọn khi tạo lịch
+  const [patients, setPatients] = useState<any[]>([]);
+
   // Modal State
   const [modalVisible, setModalVisible] = useState(false);
   const [editingAptId, setEditingAptId] = useState<string | null>(null);
-  const [patientId] = useState('e0000000-b4e1-4b08-b2d3-d949a0eb075c');
-  const [patientName, setPatientName] = useState('Cụ Nguyễn Văn An');
-  const [scheduledAt, setScheduledAt] = useState('15/10/2026 - 08:30');
-  const [examType, setExamType] = useState('Tái khám tim mạch & huyết áp');
-  const [location, setLocation] = useState('Tại nhà (Khám tại gia)');
+  const [patientId, setPatientId] = useState('');
+  const [patientName, setPatientName] = useState('');
+  const [scheduledAt, setScheduledAt] = useState('');
+  const [examType, setExamType] = useState('');
+  const [location, setLocation] = useState('');
   const [instructions, setInstructions] = useState('');
   const [enableSpeaker, setEnableSpeaker] = useState(true);
   const [isSubmitting, setIsSubmitting] = useState(false);
@@ -65,13 +55,18 @@ export default function DoctorAppointmentsScreen() {
   const fetchAppointments = useCallback(async () => {
     try {
       setLoading(true);
-      const res = await doctorApi.getAppointments();
-      if (res.data && Array.isArray(res.data)) {
-        setAppointments(res.data);
+      const [aptRes, patRes] = await Promise.allSettled([
+        doctorApi.getAppointments(),
+        doctorApi.getPatients(),
+      ]);
+      if (aptRes.status === 'fulfilled' && aptRes.value.data && Array.isArray(aptRes.value.data)) {
+        setAppointments(aptRes.value.data);
       }
-    } catch (e) {
-      console.warn('Lỗi tải lịch khám thực tế:', e);
-      setAppointments([]);
+      if (patRes.status === 'fulfilled' && patRes.value.data && Array.isArray(patRes.value.data)) {
+        setPatients(patRes.value.data);
+      }
+    } catch {
+      // Giữ dữ liệu hiện tại khi mất mạng
     } finally {
       setLoading(false);
       setRefreshing(false);
@@ -82,6 +77,12 @@ export default function DoctorAppointmentsScreen() {
     fetchAppointments();
   }, [fetchAppointments]);
 
+  useFocusEffect(
+    useCallback(() => {
+      fetchAppointments();
+    }, [fetchAppointments])
+  );
+
   const onRefresh = () => {
     setRefreshing(true);
     fetchAppointments();
@@ -89,17 +90,20 @@ export default function DoctorAppointmentsScreen() {
 
   const handleOpenCreateModal = () => {
     setEditingAptId(null);
-    setPatientName('Cụ Nguyễn Văn An');
-    setScheduledAt('15/10/2026 - 08:30');
-    setExamType('Tái khám tim mạch & huyết áp');
-    setLocation('Tại nhà (Khám tại gia)');
-    setInstructions('Đo huyết áp và nhịn ăn sáng trước khi lấy mẫu máu xét nghiệm.');
+    const defaultPat = patients[0];
+    setPatientId(defaultPat?.id || '');
+    setPatientName(defaultPat?.name || '');
+    setScheduledAt('');
+    setExamType('');
+    setLocation(defaultPat?.house_address || '');
+    setInstructions('');
     setEnableSpeaker(true);
     setModalVisible(true);
   };
 
   const handleOpenEditModal = (apt: AppointmentItem) => {
     setEditingAptId(apt.id);
+    setPatientId(apt.patient_id);
     setPatientName(apt.patient_name);
     setScheduledAt(apt.scheduled_at);
     setExamType(apt.exam_type);
@@ -111,15 +115,15 @@ export default function DoctorAppointmentsScreen() {
 
   const handleSaveAppointment = async () => {
     if (!scheduledAt.trim() || !examType.trim()) {
-      Alert.alert('Thiếu thông tin', 'Vui lòng nhập ngày giờ và chuyên khoa khám.');
+      LocalizedAlert.alert('Thiếu thông tin', 'Vui lòng nhập ngày giờ và chuyên khoa khám.');
       return;
     }
 
     try {
       setIsSubmitting(true);
       const payload = {
-        patient_id: patientId,
-        patient_name: patientName,
+        patient_id: patientId || patients[0]?.id || '',
+        patient_name: patientName.trim() || patients[0]?.name || '',
         scheduled_at: scheduledAt.trim(),
         exam_type: examType.trim(),
         location: location.trim(),
@@ -133,31 +137,22 @@ export default function DoctorAppointmentsScreen() {
           setAppointments((prev) =>
             prev.map((a) => (a.id === editingAptId ? res.data : a))
           );
-        } else {
-          setAppointments((prev) =>
-            prev.map((a) => (a.id === editingAptId ? { ...a, ...payload } : a))
-          );
         }
         setModalVisible(false);
-        Alert.alert('Thành công', 'Đã cập nhật lịch hẹn tái khám.');
+        LocalizedAlert.alert('Thành công', 'Đã cập nhật lịch hẹn tái khám.');
       } else {
         const res = await doctorApi.createAppointment(payload);
-        const newApt = res.data || {
-          ...payload,
-          id: `apt-${Date.now()}`,
-          status: 'UPCOMING',
-          doctor_name: 'BS. Trần Văn Minh',
-          created_at: 'Hôm nay',
-        };
-        setAppointments([newApt, ...appointments]);
+        if (res.data) {
+          setAppointments([res.data, ...appointments]);
+        }
         setModalVisible(false);
-        Alert.alert(
+        LocalizedAlert.alert(
           'Đã đặt lịch khám',
           `Đã tạo lịch khám "${payload.exam_type}" vào ${payload.scheduled_at}. Hub Orange Pi 5 sẽ tự động phát loa tiếng Việt nhắc người nhà trước buổi khám!`
         );
       }
     } catch {
-      Alert.alert('Lỗi', 'Không thể kết nối lưu lịch hẹn.');
+      LocalizedAlert.alert('Lỗi', 'Không thể kết nối lưu lịch hẹn.');
     } finally {
       setIsSubmitting(false);
     }
@@ -169,7 +164,7 @@ export default function DoctorAppointmentsScreen() {
       setAppointments((prev) =>
         prev.map((a) => (a.id === aptId ? { ...a, status: 'COMPLETED' } : a))
       );
-      Alert.alert('Đã khám xong', 'Đã ghi nhận hoàn tất buổi khám.');
+      LocalizedAlert.alert('Đã khám xong', 'Đã ghi nhận hoàn tất buổi khám.');
     } catch {
       setAppointments((prev) =>
         prev.map((a) => (a.id === aptId ? { ...a, status: 'COMPLETED' } : a))
@@ -178,7 +173,7 @@ export default function DoctorAppointmentsScreen() {
   };
 
   const handleDeleteAppointment = (aptId: string, title: string) => {
-    Alert.alert('Hủy lịch hẹn', `Bác sĩ có chắc chắn muốn hủy lịch khám "${title}"?`, [
+    LocalizedAlert.alert('Hủy lịch hẹn', `Bác sĩ có chắc chắn muốn hủy lịch khám "${title}"?`, [
       { text: 'Quay lại', style: 'cancel' },
       {
         text: 'Hủy lịch',
@@ -187,7 +182,7 @@ export default function DoctorAppointmentsScreen() {
           try {
             await doctorApi.deleteAppointment(aptId);
             setAppointments((prev) => prev.filter((a) => a.id !== aptId));
-            Alert.alert('Đã hủy', 'Đã xóa lịch hẹn thành công.');
+            LocalizedAlert.alert('Đã hủy', 'Đã xóa lịch hẹn thành công.');
           } catch {
             setAppointments((prev) => prev.filter((a) => a.id !== aptId));
           }
@@ -223,14 +218,14 @@ export default function DoctorAppointmentsScreen() {
       >
         <View style={styles.headerRow}>
           <View style={{ flex: 1 }}>
-            <Text style={[styles.headerTitle, { color: colors.textPrimary }]}>Lịch Khám & Tái Khám</Text>
-            <Text style={[styles.headerSub, { color: isDarkMode ? '#94A3B8' : '#64748B' }]} numberOfLines={1}>
+            <LocalizedText style={[styles.headerTitle, { color: colors.textPrimary }]}>Lịch Khám & Tái Khám</LocalizedText>
+            <LocalizedText style={[styles.headerSub, { color: isDarkMode ? '#94A3B8' : '#64748B' }]} numberOfLines={1}>
               Theo dõi lịch định kỳ & Tự động phát loa nhắc qua Hub AI
-            </Text>
+            </LocalizedText>
           </View>
           <TouchableOpacity style={styles.btnAddHeader} onPress={handleOpenCreateModal}>
             <Ionicons name="add" size={20} color="#FFFFFF" style={{ marginRight: 2 }} />
-            <Text style={styles.btnAddHeaderText}>Đặt lịch</Text>
+            <LocalizedText style={styles.btnAddHeaderText}>Đặt lịch</LocalizedText>
           </TouchableOpacity>
         </View>
 
@@ -245,10 +240,10 @@ export default function DoctorAppointmentsScreen() {
             <View style={[styles.statIconBox, { backgroundColor: '#EFF6FF' }]}>
               <Ionicons name="calendar" size={16} color="#2563EB" />
             </View>
-            <Text style={[styles.statNumber, { color: colors.textPrimary }]}>{totalCount}</Text>
-            <Text style={[styles.statLabel, { color: isDarkMode ? '#94A3B8' : '#64748B' }]} numberOfLines={1}>
+            <LocalizedText style={[styles.statNumber, { color: colors.textPrimary }]}>{totalCount}</LocalizedText>
+            <LocalizedText style={[styles.statLabel, { color: isDarkMode ? '#94A3B8' : '#64748B' }]} numberOfLines={1}>
               Tổng lịch
-            </Text>
+            </LocalizedText>
           </View>
 
           <View
@@ -260,10 +255,10 @@ export default function DoctorAppointmentsScreen() {
             <View style={[styles.statIconBox, { backgroundColor: '#FFFBEB' }]}>
               <Ionicons name="time" size={16} color="#D97706" />
             </View>
-            <Text style={[styles.statNumber, { color: '#D97706' }]}>{upcomingCount}</Text>
-            <Text style={[styles.statLabel, { color: isDarkMode ? '#94A3B8' : '#64748B' }]} numberOfLines={1}>
+            <LocalizedText style={[styles.statNumber, { color: '#D97706' }]}>{upcomingCount}</LocalizedText>
+            <LocalizedText style={[styles.statLabel, { color: isDarkMode ? '#94A3B8' : '#64748B' }]} numberOfLines={1}>
               Sắp tới
-            </Text>
+            </LocalizedText>
           </View>
 
           <View
@@ -275,10 +270,10 @@ export default function DoctorAppointmentsScreen() {
             <View style={[styles.statIconBox, { backgroundColor: '#ECFDF5' }]}>
               <Ionicons name="checkmark-done" size={16} color="#059669" />
             </View>
-            <Text style={[styles.statNumber, { color: '#059669' }]}>{completedCount}</Text>
-            <Text style={[styles.statLabel, { color: isDarkMode ? '#94A3B8' : '#64748B' }]} numberOfLines={1}>
+            <LocalizedText style={[styles.statNumber, { color: '#059669' }]}>{completedCount}</LocalizedText>
+            <LocalizedText style={[styles.statLabel, { color: isDarkMode ? '#94A3B8' : '#64748B' }]} numberOfLines={1}>
               Đã khám
-            </Text>
+            </LocalizedText>
           </View>
         </View>
 
@@ -301,14 +296,14 @@ export default function DoctorAppointmentsScreen() {
                     : { backgroundColor: isDarkMode ? '#334155' : '#EEF2F6' },
                 ]}
               >
-                <Text
+                <LocalizedText
                   style={[
                     styles.filterChipText,
                     active ? { color: '#FFFFFF', fontWeight: '700' } : { color: isDarkMode ? '#CBD5E1' : '#64748B' },
                   ]}
                 >
                   {tab.label}
-                </Text>
+                </LocalizedText>
               </TouchableOpacity>
             );
           })}
@@ -327,9 +322,9 @@ export default function DoctorAppointmentsScreen() {
         {filteredAppointments.length === 0 ? (
           <View style={styles.emptyBox}>
             <Ionicons name="calendar-outline" size={48} color="#94A3B8" />
-            <Text style={[styles.emptyText, { color: isDarkMode ? '#94A3B8' : '#64748B' }]}>
+            <LocalizedText style={[styles.emptyText, { color: isDarkMode ? '#94A3B8' : '#64748B' }]}>
               Không có lịch khám nào trong danh mục này.
-            </Text>
+            </LocalizedText>
           </View>
         ) : (
           filteredAppointments.map((apt) => {
@@ -351,7 +346,7 @@ export default function DoctorAppointmentsScreen() {
                 <View style={styles.cardTopRow}>
                   <View style={styles.dateTagBox}>
                     <Ionicons name="calendar" size={13} color="#0284C7" style={{ marginRight: 4 }} />
-                    <Text style={styles.dateTagText}>{apt.scheduled_at}</Text>
+                    <LocalizedText style={styles.dateTagText}>{apt.scheduled_at}</LocalizedText>
                   </View>
 
                   <View
@@ -364,7 +359,7 @@ export default function DoctorAppointmentsScreen() {
                         : { backgroundColor: '#F1F5F9' },
                     ]}
                   >
-                    <Text
+                    <LocalizedText
                       style={[
                         styles.statusPillText,
                         isUpcoming
@@ -375,31 +370,31 @@ export default function DoctorAppointmentsScreen() {
                       ]}
                     >
                       {isUpcoming ? 'SẮP TỚI' : isCompleted ? 'ĐÃ KHÁM XONG' : 'ĐÃ HỦY'}
-                    </Text>
+                    </LocalizedText>
                   </View>
                 </View>
 
                 {/* THÔNG TIN BỆNH NHÂN */}
                 <View style={styles.patientRow}>
                   <View style={styles.patientAvatar}>
-                    <Text style={styles.patientAvatarText}>
+                    <LocalizedText style={styles.patientAvatarText}>
                       {apt.patient_name.trim().split(/\s+/).slice(-1)[0][0]?.toUpperCase() || 'A'}
-                    </Text>
+                    </LocalizedText>
                   </View>
                   <View style={{ flex: 1, marginLeft: 10 }}>
-                    <Text style={[styles.patientName, { color: colors.textPrimary }]} numberOfLines={1}>
+                    <LocalizedText style={[styles.patientName, { color: colors.textPrimary }]} numberOfLines={1}>
                       {apt.patient_name} (78 tuổi)
-                    </Text>
-                    <Text style={[styles.aptMetaText, { color: isDarkMode ? '#94A3B8' : '#64748B' }]} numberOfLines={1}>
+                    </LocalizedText>
+                    <LocalizedText style={[styles.aptMetaText, { color: isDarkMode ? '#94A3B8' : '#64748B' }]} numberOfLines={1}>
                       {apt.location}
-                    </Text>
+                    </LocalizedText>
                   </View>
                 </View>
 
                 {/* HẠNG MỤC KHÁM */}
                 <View style={styles.examTypeBox}>
                   <Ionicons name="medkit" size={15} color="#0284C7" style={{ marginRight: 6 }} />
-                  <Text style={[styles.examTypeText, { color: colors.textPrimary }]}>{apt.exam_type}</Text>
+                  <LocalizedText style={[styles.examTypeText, { color: colors.textPrimary }]}>{apt.exam_type}</LocalizedText>
                 </View>
 
                 {/* DẶN DÒ Y KHOA CHO NGƯỜI NHÀ */}
@@ -410,9 +405,9 @@ export default function DoctorAppointmentsScreen() {
                       { backgroundColor: isDarkMode ? '#0F172A88' : '#F8FAFC' },
                     ]}
                   >
-                    <Text style={[styles.instructionsText, { color: isDarkMode ? '#CBD5E1' : '#475569' }]}>
-                      📝 <Text style={{ fontWeight: '700' }}>Dặn dò:</Text> {apt.instructions}
-                    </Text>
+                    <LocalizedText style={[styles.instructionsText, { color: isDarkMode ? '#CBD5E1' : '#475569' }]}>
+                      📝 <LocalizedText style={{ fontWeight: '700' }}>Dặn dò:</LocalizedText> {apt.instructions}
+                    </LocalizedText>
                   </View>
                 ) : null}
 
@@ -432,14 +427,14 @@ export default function DoctorAppointmentsScreen() {
                       color={apt.enable_speaker_reminder ? '#059669' : '#94A3B8'}
                       style={{ marginRight: 4 }}
                     />
-                    <Text
+                    <LocalizedText
                       style={[
                         styles.speakerBadgeText,
                         { color: apt.enable_speaker_reminder ? '#059669' : '#64748B' },
                       ]}
                     >
                       {apt.enable_speaker_reminder ? 'Loa Hub nhắc trước 24h: BẬT' : 'Loa Hub: TẮT'}
-                    </Text>
+                    </LocalizedText>
                   </View>
                 </View>
 
@@ -450,7 +445,7 @@ export default function DoctorAppointmentsScreen() {
                     onPress={() => navigation.navigate('DoctorPatientDetail', { patientId: apt.patient_id })}
                   >
                     <Ionicons name="document-text-outline" size={14} color="#0284C7" style={{ marginRight: 4 }} />
-                    <Text style={styles.btnViewPatientText}>Hồ sơ bệnh án</Text>
+                    <LocalizedText style={styles.btnViewPatientText}>Hồ sơ bệnh án</LocalizedText>
                   </TouchableOpacity>
 
                   <View style={{ flexDirection: 'row', gap: 6 }}>
@@ -460,7 +455,7 @@ export default function DoctorAppointmentsScreen() {
                         onPress={() => handleMarkCompleted(apt.id)}
                       >
                         <Ionicons name="checkmark" size={14} color="#FFFFFF" style={{ marginRight: 3 }} />
-                        <Text style={styles.btnCompleteText}>Đã khám</Text>
+                        <LocalizedText style={styles.btnCompleteText}>Đã khám</LocalizedText>
                       </TouchableOpacity>
                     )}
 
@@ -495,17 +490,17 @@ export default function DoctorAppointmentsScreen() {
         >
           <View style={[styles.modalBox, { backgroundColor: isDarkMode ? '#1E293B' : '#FFFFFF' }]}>
             <View style={styles.modalHeader}>
-              <Text style={[styles.modalTitle, { color: colors.textPrimary }]}>
+              <LocalizedText style={[styles.modalTitle, { color: colors.textPrimary }]}>
                 {editingAptId ? 'Chỉnh Sửa Lịch Khám' : 'Đặt Lịch Tái Khám Mới'}
-              </Text>
+              </LocalizedText>
               <TouchableOpacity onPress={() => setModalVisible(false)}>
                 <Ionicons name="close" size={24} color="#94A3B8" />
               </TouchableOpacity>
             </View>
 
             <ScrollView showsVerticalScrollIndicator={false}>
-              <Text style={styles.fieldLabel}>Bệnh nhân (*)</Text>
-              <TextInput
+              <LocalizedText style={styles.fieldLabel}>Bệnh nhân (*)</LocalizedText>
+              <LocalizedTextInput
                 style={[styles.inputField, { color: colors.textPrimary, borderColor: colors.border }]}
                 value={patientName}
                 onChangeText={setPatientName}
@@ -513,8 +508,8 @@ export default function DoctorAppointmentsScreen() {
                 placeholderTextColor="#94A3B8"
               />
 
-              <Text style={styles.fieldLabel}>Ngày & Giờ tái khám (*)</Text>
-              <TextInput
+              <LocalizedText style={styles.fieldLabel}>Ngày & Giờ tái khám (*)</LocalizedText>
+              <LocalizedTextInput
                 style={[styles.inputField, { color: colors.textPrimary, borderColor: colors.border }]}
                 value={scheduledAt}
                 onChangeText={setScheduledAt}
@@ -522,8 +517,8 @@ export default function DoctorAppointmentsScreen() {
                 placeholderTextColor="#94A3B8"
               />
 
-              <Text style={styles.fieldLabel}>Chuyên khoa / Mục đích khám (*)</Text>
-              <TextInput
+              <LocalizedText style={styles.fieldLabel}>Chuyên khoa / Mục đích khám (*)</LocalizedText>
+              <LocalizedTextInput
                 style={[styles.inputField, { color: colors.textPrimary, borderColor: colors.border }]}
                 value={examType}
                 onChangeText={setExamType}
@@ -544,13 +539,13 @@ export default function DoctorAppointmentsScreen() {
                     style={styles.quickTypePill}
                     onPress={() => setExamType(item)}
                   >
-                    <Text style={styles.quickTypePillText}>{item}</Text>
+                    <LocalizedText style={styles.quickTypePillText}>{item}</LocalizedText>
                   </TouchableOpacity>
                 ))}
               </View>
 
-              <Text style={styles.fieldLabel}>Địa điểm khám</Text>
-              <TextInput
+              <LocalizedText style={styles.fieldLabel}>Địa điểm khám</LocalizedText>
+              <LocalizedTextInput
                 style={[styles.inputField, { color: colors.textPrimary, borderColor: colors.border }]}
                 value={location}
                 onChangeText={setLocation}
@@ -558,8 +553,8 @@ export default function DoctorAppointmentsScreen() {
                 placeholderTextColor="#94A3B8"
               />
 
-              <Text style={styles.fieldLabel}>Dặn dò người nhà & bệnh nhân chuẩn bị</Text>
-              <TextInput
+              <LocalizedText style={styles.fieldLabel}>Dặn dò người nhà & bệnh nhân chuẩn bị</LocalizedText>
+              <LocalizedTextInput
                 style={[
                   styles.inputField,
                   { height: 75, textAlignVertical: 'top', color: colors.textPrimary, borderColor: colors.border },
@@ -574,12 +569,12 @@ export default function DoctorAppointmentsScreen() {
               {/* Bật / Tắt thông báo qua Loa Hub Orange Pi */}
               <View style={styles.switchRow}>
                 <View style={{ flex: 1, marginRight: 8 }}>
-                  <Text style={[styles.switchTitle, { color: colors.textPrimary }]}>
+                  <LocalizedText style={[styles.switchTitle, { color: colors.textPrimary }]}>
                     Phát loa nhắc nhở trên Hub Orange Pi 5
-                  </Text>
-                  <Text style={[styles.switchSub, { color: isDarkMode ? '#94A3B8' : '#64748B' }]}>
+                  </LocalizedText>
+                  <LocalizedText style={[styles.switchSub, { color: isDarkMode ? '#94A3B8' : '#64748B' }]}>
                     Tự động phát giọng nói tiếng Việt nhắc cụ và người nhà trước ngày khám
-                  </Text>
+                  </LocalizedText>
                 </View>
                 <Switch
                   value={enableSpeaker}
@@ -595,7 +590,7 @@ export default function DoctorAppointmentsScreen() {
                   style={[styles.btnCancel, { borderColor: colors.border }]}
                   onPress={() => setModalVisible(false)}
                 >
-                  <Text style={[styles.btnCancelText, { color: isDarkMode ? '#CBD5E1' : '#64748B' }]}>Hủy</Text>
+                  <LocalizedText style={[styles.btnCancelText, { color: isDarkMode ? '#CBD5E1' : '#64748B' }]}>Hủy</LocalizedText>
                 </TouchableOpacity>
 
                 <TouchableOpacity
@@ -606,7 +601,7 @@ export default function DoctorAppointmentsScreen() {
                   {isSubmitting ? (
                     <ActivityIndicator size="small" color="#FFFFFF" />
                   ) : (
-                    <Text style={styles.btnSaveText}>Lưu lịch hẹn</Text>
+                    <LocalizedText style={styles.btnSaveText}>Lưu lịch hẹn</LocalizedText>
                   )}
                 </TouchableOpacity>
               </View>

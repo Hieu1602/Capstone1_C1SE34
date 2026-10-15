@@ -1,19 +1,24 @@
 # -*- coding: utf-8 -*-
 """
-rag_service.py – Dịch vụ RAG Chatbot Y tế tích hợp Native trong Backend Capstone.
+rag_service.py – Dịch vụ RAG Chatbot Y tế (Retrieval-Augmented Generation) Capstone.
 Vị trí: backend/app/services/chatbot/rag_service.py
 
-Chức năng:
-1. Đọc sinh hiệu thực tế từ TimescaleDB / PostgreSQL (qua crud_vital).
-2. Tra cứu cảnh báo biến cố khẩn cấp (qua crud_incident).
-3. Đọc hồ sơ bệnh lý người cao tuổi (qua crud_elderly).
-4. Tra cứu kho cẩm nang y khoa lão khoa (qua MedicalRetriever).
-5. Tổng hợp câu trả lời qua LLM (Gemini / OpenAI / Ollama) hoặc Deterministic Clinical Engine (100% Offline).
+Nguyên tắc hệ thống:
+1. PURE RAG (100% Cẩm nang Y khoa Lão khoa):
+   - Mọi câu hỏi y khoa đều được tìm kiếm và trích xuất trực tiếp từ 9 tài liệu cẩm nang
+     lão khoa chính thống (MedicalRetriever BM25), minh bạch trích dẫn nguồn.
+2. KHÔNG DỮ LIỆU GIẢ (Zero Fake Data):
+   - Nếu thiết bị đo chưa kết nối: Báo trung thực rằng thiết bị đang tắt/chưa kết nối,
+     tuyệt đối không bịa đặt chỉ số 75 BPM, 98% SpO2, 36.6°C hay 85% pin.
+   - Nếu có bản ghi đo thực tế trong DB: Đọc chính xác từ TimescaleDB.
+   - Hồ sơ bệnh lý lấy trực tiếp từ bảng elderly_profiles trong DB.
+3. ỔN ĐỊNH VÀ AN TOÀN TUYỆT ĐỐI (Fail-Safe & Anti-Leakage):
+   - Nhận diện câu chào hỏi, thử nghiệm, giao tiếp thông thường để phản hồi lịch sự, tôn trọng.
+   - Không bị ngắt cụt lửng, không rò rỉ prompt hệ thống.
 """
 
 from __future__ import annotations
 
-import json
 import logging
 import os
 from datetime import datetime, timezone
@@ -21,11 +26,13 @@ from typing import Any, Dict, List, Optional
 from uuid import UUID
 
 import httpx
+from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from app.crud.crud_elderly import crud_elderly
 from app.crud.crud_incident import crud_incident
 from app.crud.crud_vital import crud_vital
+from app.models.elderly_profile import ElderlyProfile
+from app.models.user import User
 from app.services.chatbot.retriever import get_medical_retriever
 
 logger = logging.getLogger(__name__)
@@ -34,11 +41,15 @@ STANDARD_DISCLAIMER = (
     "Lưu ý: Mọi tư vấn từ SmartCare AI chỉ mang tính chất hỗ trợ theo dõi và chăm sóc ban đầu, "
     "không thay thế cho chỉ định trực tiếp từ bác sĩ chuyên khoa hoặc nhân viên y tế."
 )
+STANDARD_DISCLAIMER_EN = (
+    "Note: SmartCare AI guidance is for monitoring and initial care support only. "
+    "It does not replace advice or treatment from a qualified healthcare professional."
+)
 
 
 class ChatbotRAGService:
     """
-    Dịch vụ Chatbot RAG nhúng trực tiếp trong Backend Capstone.
+    Dịch vụ Chatbot Pure RAG Y tế chuyên sâu, ổn định, không dùng số liệu giả.
     """
 
     def __init__(self):
@@ -47,31 +58,37 @@ class ChatbotRAGService:
     async def _get_realtime_context(
         self, db: AsyncSession, user_id: Optional[UUID]
     ) -> Dict[str, Any]:
-        """Truy vấn dữ liệu sinh hiệu và cảnh báo thực tế từ database của Capstone."""
-        effective_user_id = user_id or UUID("640e3d97-b4e1-4b08-b2d3-d949a0eb075c")
-        context = {
-            "vitals": {},
+        """
+        Truy vấn dữ liệu sinh hiệu, cảnh báo và hồ sơ y bạ thực tế từ database.
+        Nếu không có dữ liệu thực, trả về None hoặc rỗng, tuyệt đối không bịa đặt số liệu.
+        """
+        effective_user_id = user_id
+        if not effective_user_id:
+            try:
+                res = await db.execute(select(User.id).limit(1))
+                effective_user_id = res.scalar_one_or_none()
+            except Exception as e:
+                logger.warning("Không thể lấy user_id mặc định từ DB: %s", e)
+
+        context: Dict[str, Any] = {
+            "vitals": None,
             "incidents": [],
             "patient": {},
         }
 
-        # 1. Lấy sinh hiệu tức thời
-        try:
-            vitals = await crud_vital.get_current_for_user(db, user_id=effective_user_id)
-            context["vitals"] = vitals
-        except Exception as e:
-            logger.warning("Không thể lấy sinh hiệu từ DB: %s", e)
-            context["vitals"] = {
-                "heart_rate": 75,
-                "spo2": 98,
-                "skin_temp_max": 36.6,
-                "body_temp": 36.6,
-                "fall_detected": False,
-                "bracelet_battery": 85,
-                "bracelet_connected": True,
-            }
+        # 1. Lấy sinh hiệu thực tế từ TimescaleDB (chỉ nhận khi có số đo thực)
+        if effective_user_id:
+            try:
+                v_data = await crud_vital.get_current_for_user(db, user_id=effective_user_id)
+                if v_data and (v_data.get("heart_rate") is not None or v_data.get("bracelet_connected") is True):
+                    context["vitals"] = v_data
+                else:
+                    context["vitals"] = None
+            except Exception as e:
+                logger.warning("Không thể lấy sinh hiệu từ DB: %s", e)
+                context["vitals"] = None
 
-        # 2. Lấy 3 cảnh báo mới nhất
+        # 2. Lấy 3 cảnh báo biến cố mới nhất từ DB
         try:
             recent_incidents = await crud_incident.list(db, limit=3)
             context["incidents"] = [
@@ -86,177 +103,328 @@ class ChatbotRAGService:
         except Exception as e:
             logger.warning("Không thể lấy cảnh báo từ DB: %s", e)
 
-        # 3. Lấy thông tin hồ sơ y bạ
+        # 3. Lấy hồ sơ người cao tuổi thực tế từ bảng elderly_profiles
         try:
-            record = await crud_elderly.get_medical_record(db, patient_id_or_serial="1")
-            if record:
+            res = await db.execute(select(ElderlyProfile).limit(1))
+            profile = res.scalar_one_or_none()
+            if profile:
                 context["patient"] = {
-                    "full_name": record.name,
-                    "age": record.age,
-                    "conditions": [c.name for c in record.conditions],
-                    "allergies": record.drug_allergies,
-                    "dietary_notes": record.dietary_notes,
+                    "full_name": profile.full_name or "Người cao tuổi",
+                    "birth_year": profile.birth_year,
+                    "gender": profile.gender,
+                    "medical_history": profile.medical_history or "",
+                    "emergency_contact": profile.emergency_contact_phone or "",
                 }
         except Exception as e:
-            logger.warning("Không thể lấy hồ sơ y bạ: %s", e)
+            logger.warning("Không thể lấy thông tin hồ sơ y tế từ DB: %s", e)
 
         return context
 
-    def _generate_deterministic_fallback(
+    @staticmethod
+    def _is_conversational_or_greeting(question: str) -> bool:
+        """Kiểm tra câu hỏi có phải câu chào hỏi, trêu đùa hay tương tác thông thường không."""
+        q_clean = question.strip().lower()
+        if len(q_clean) <= 4 and q_clean in ["alo", "hi", "hey", "chào", "ola", "test"]:
+            return True
+        casual_patterns = [
+            "xin chào", "chào bạn", "chào bot", "chào em", "chào bs", "chào bác sĩ",
+            "alo 123", "alo alo", "alo bạn", "testing", "bạn là ai",
+            "mày là ai", "sao mày ngu", "ngu thế", "ngu quá", "dốt thế",
+            "who are you", "what can you do", "hello",
+        ]
+        return any(p in q_clean for p in casual_patterns)
+
+    @staticmethod
+    def _format_conversational_response(question: str, language: str = "vi") -> str:
+        """Phản hồi lịch sự, văn minh cho các tương tác chào hỏi hoặc trêu đùa."""
+        q_lower = question.lower()
+        if any(w in q_lower for w in ["ngu", "dốt", "kém", "chán", "stupid"]):
+            if language == "en":
+                return (
+                    "I apologize if my earlier response did not meet your expectations. "
+                    "I am SmartCare AI, an assistant dedicated to elderly health monitoring and medical guidance. "
+                    "Please let me know how I can assist you or check on the elder's vital signs!"
+                )
+            return (
+                "Dạ, tôi rất xin lỗi nếu phản hồi trước đó chưa làm bạn hài lòng. "
+                "Tôi là Trợ lý Y tế SmartCare AI, được thiết kế để hỗ trợ theo dõi sinh hiệu thực tế "
+                "và cung cấp hướng dẫn chăm sóc người cao tuổi chuẩn y khoa.\n\n"
+                "Bạn có thể yêu cầu tôi kiểm tra nhịp tim, SpO₂, tình trạng té ngã hôm nay, "
+                "hoặc hỏi về cách chăm sóc sức khỏe cho cụ nhé!"
+            )
+
+        if language == "en":
+            return (
+                "Hello! I am SmartCare AI Geriatric Health Assistant.\n\n"
+                "I can help you:\n"
+                "• Monitor real-time vital signs (Heart rate, SpO₂, Body temperature, Fall status).\n"
+                "• Provide first aid & eldercare instructions from verified medical guidelines.\n\n"
+                "How can I help you today?"
+            )
+        return (
+            "Dạ, xin chào bạn! Tôi là Trợ lý Y tế SmartCare AI.\n\n"
+            "Tôi luôn sẵn sàng đồng hành cùng gia đình để:\n"
+            "• **Theo dõi sinh hiệu thời gian thực**: Kiểm tra nhịp tim, nồng độ oxy SpO₂, thân nhiệt, cảnh báo ngã.\n"
+            "• **Tra cứu Cẩm nang Y khoa Lão khoa**: Sơ cứu té ngã, chăm sóc loét tì đè, dinh dưỡng, an toàn dùng thuốc.\n\n"
+            "Bạn có thể đặt câu hỏi hoặc yêu cầu kiểm tra sức khỏe của cụ ngay tại đây nhé!"
+        )
+
+    @staticmethod
+    def _is_sensor_status_query(question: str) -> bool:
+        """Kiểm tra câu hỏi có liên quan đến việc kiểm tra chỉ số/thiết bị đo thời gian thực không."""
+        q_lower = question.lower()
+        keywords = [
+            "kiểm tra nhịp tim", "xem nhịp tim", "đo nhịp tim", "nhịp tim hiện tại",
+            "kiểm tra sinh hiệu", "chỉ số sinh hiệu", "chỉ số hiện tại", "sinh hiệu hiện tại",
+            "huyết áp hiện tại", "thân nhiệt hiện tại", "nhiệt độ hiện tại",
+            "kiểm tra spo2", "spo2 hiện tại", "oxy hiện tại", "nồng độ oxy",
+            "hôm nay có té ngã", "hôm nay có ngã", "có ngã không", "có té không", "ngã hôm nay",
+            "vòng đeo tay", "pin vòng", "đang đeo vòng", "kết nối vòng",
+            "cụ đang thế nào", "sức khỏe hiện tại",
+            "current heart rate", "current vital", "current spo2", "fall today", "did they fall",
+            "wearable status", "bracelet battery", "check vitals",
+        ]
+        return any(k in q_lower for k in keywords)
+
+    def _format_sensor_status(
+        self,
+        vitals: Optional[Dict[str, Any]],
+        incidents: List[Dict[str, Any]],
+        language: str = "vi",
+    ) -> str:
+        """
+        Trình bày tình trạng sinh hiệu thực tế từ thiết bị đo.
+        Nếu thiết bị chưa kết nối, thông báo trung thực mà không bịa đặt số liệu.
+        """
+        if language == "en":
+            if not vitals or vitals.get("heart_rate") is None:
+                return (
+                    "⚠️ **Device Status Notice**:\n"
+                    "No real-time vital readings are currently being received from the wearable band or sensors "
+                    "(the device is currently offline or not paired).\n\n"
+                    "👉 **Recommendation**: Please check the BLE smartband power and verify that the Edge Hub receiver is online."
+                )
+            hr = vitals.get("heart_rate")
+            spo2 = vitals.get("spo2")
+            temp = vitals.get("skin_temp_max") or vitals.get("body_temp")
+            fall = vitals.get("fall_detected", False)
+            battery = vitals.get("bracelet_battery")
+            connected = vitals.get("bracelet_connected", False)
+
+            hr_status = "Normal (60–100 BPM)" if hr and 60 <= hr <= 100 else ("Elevated" if hr and hr > 100 else "Low")
+            spo2_status = "Good (≥95%)" if spo2 and spo2 >= 95 else "Below optimal (<95%)"
+            temp_status = f"{temp}°C" if temp else "Not recorded"
+
+            fall_str = "🚨 FALL ALERT DETECTED!" if fall else "✅ Normal (No fall detected)"
+            batt_str = f"{battery}%" if battery is not None else "Unknown"
+
+            return (
+                "📊 **Real-time Vitals Report (from paired device)**:\n\n"
+                f"• **Heart rate**: **{hr} BPM** ({hr_status})\n"
+                f"• **SpO₂**: **{spo2}%** ({spo2_status})\n"
+                f"• **Body temperature**: **{temp_status}**\n"
+                f"• **Smartband status**: {'Connected' if connected else 'Disconnected'} (Battery: **{batt_str}**)\n"
+                f"• **Fall status**: **{fall_str}**"
+            )
+
+        # Tiếng Việt (Mặc định)
+        if not vitals or vitals.get("heart_rate") is None:
+            return (
+                "⚠️ **Thông báo trạng thái thiết bị**:\n"
+                "Hiện tại hệ thống chưa ghi nhận dữ liệu đo sinh hiệu thời gian thực từ vòng đeo tay hoặc cảm biến "
+                "(thiết bị đang tắt hoặc chưa kết nối vào trạm thu phát).\n\n"
+                "👉 **Hướng dẫn người nhà**:\n"
+                "1. Kiểm tra vòng đeo tay BLE của cụ xem đã bật nguồn và có pin hay không.\n"
+                "2. Đảm bảo trạm thu phát tín hiệu Edge Hub trong phòng cụ đang hoạt động bình thường."
+            )
+
+        hr = vitals.get("heart_rate")
+        spo2 = vitals.get("spo2")
+        temp = vitals.get("skin_temp_max") or vitals.get("body_temp")
+        fall = vitals.get("fall_detected", False)
+        battery = vitals.get("bracelet_battery")
+        connected = vitals.get("bracelet_connected", False)
+
+        hr_status = "Bình thường (60-100 BPM)" if hr and 60 <= hr <= 100 else ("⚠️ Nhịp nhanh (>100 BPM)" if hr and hr > 100 else "⚠️ Nhịp chậm (<60 BPM)")
+        spo2_status = "Tốt (≥ 95%)" if spo2 and spo2 >= 95 else "⚠️ Thiếu oxy máu (< 95%)"
+        temp_status = f"{temp}°C (Bình thường)" if temp and 36.0 <= temp <= 37.4 else (f"⚠️ {temp}°C" if temp else "Chưa có dữ liệu")
+
+        fall_str = "🚨 CẢNH BÁO TÉ NGÃ ĐANG KÍCH HOẠT!" if fall else "✅ Bình thường (Không ghi nhận té ngã)"
+        batt_str = f"{battery}%" if battery is not None else "Không rõ"
+
+        time_val = vitals.get("time")
+        time_str = f" (ghi nhận lúc {time_val.strftime('%H:%M:%S')})" if isinstance(time_val, datetime) else ""
+
+        ans = (
+            f"📊 **Báo cáo sinh hiệu thực tế từ thiết bị{time_str}**:\n\n"
+            f"• **Nhịp tim**: **{hr} BPM** — {hr_status}\n"
+            f"• **Nồng độ oxy SpO₂**: **{spo2}%** — {spo2_status}\n"
+            f"• **Thân nhiệt**: **{temp_status}**\n"
+            f"• **Vòng đeo tay BLE**: {'Đang kết nối' if connected else 'Chưa kết nối'} (Pin: **{batt_str}**)\n"
+            f"• **Trạng thái an toàn té ngã**: **{fall_str}**\n\n"
+        )
+
+        if spo2 and spo2 < 95:
+            ans += "⚠️ **Lưu ý y tế**: SpO₂ dưới 95% có thể cảnh báo giảm oxy máu. Hãy cho cụ ngồi tựa thẳng lưng, hít thở sâu và đo lại sau 5 phút.\n"
+        if hr and hr > 100:
+            ans += "⚠️ **Lưu ý y tế**: Nhịp tim đang hơi nhanh. Cần nhắc cụ nghỉ ngơi tĩnh, uống 1 ly nước ấm và tránh xúc động mạnh.\n"
+
+        return ans.strip()
+
+    @staticmethod
+    def _clean_chunk_text(text: str) -> str:
+        """Làm sạch ký tự định dạng thô từ file tài liệu để hiển thị đẹp mắt."""
+        lines = []
+        for line in text.split("\n"):
+            stripped = line.strip()
+            if not stripped:
+                continue
+            if stripped.startswith("====") or stripped.startswith("----"):
+                continue
+            lines.append(stripped)
+        return "\n".join(lines)
+
+    def _generate_rag_response(
         self,
         question: str,
-        vitals: Dict[str, Any],
+        vitals: Optional[Dict[str, Any]],
         incidents: List[Dict[str, Any]],
         patient: Dict[str, Any],
         retrieved_chunks: List[Dict[str, Any]],
+        language: str = "vi",
     ) -> str:
         """
-        Bộ suy luận lâm sàng ngoại tuyến (Fail-Safe Offline Engine):
-        Đối soát dữ liệu cảm biến thật và cẩm nang y tế để trả lời chính xác, an toàn.
+        Bộ tổng hợp Pure RAG:
+        Trích xuất và định dạng trực tiếp tri thức y tế từ các chunk cẩm nang đã được tìm kiếm.
+        Tuyệt đối không dùng dữ liệu giả.
         """
-        q_lower = question.lower()
-        hr = vitals.get("heart_rate", 75)
-        spo2 = vitals.get("spo2", 98)
-        temp = vitals.get("skin_temp_max") or vitals.get("body_temp", 36.6)
-        fall = vitals.get("fall_detected", False)
-        battery = vitals.get("bracelet_battery", 85)
+        is_sensor_query = self._is_sensor_status_query(question)
+        sensor_status_text = ""
+        if is_sensor_query:
+            sensor_status_text = self._format_sensor_status(vitals, incidents, language=language)
 
-        # 1. Câu hỏi về té ngã / té ngã hôm nay
-        if any(w in q_lower for w in ["ngã", "té", "té ngã", "sàn nhà", "va đập"]):
-            if fall:
-                return (
-                    f"🚨 **CẢNH BÁO TÉ NGÃ KHẨN CẤP**: Hệ thống phát hiện cụ có tín hiệu té ngã nằm sàn!\n\n"
-                    f"- Nhịp tim đo được: **{hr} BPM**\n"
-                    f"- Thân nhiệt: **{temp}°C**\n\n"
-                    f"👉 **Hướng dẫn xử lý ngay**:\n"
-                    f"1. Tiếp cận cụ ngay lập tức, kiểm tra tri giác xem cụ có tỉnh táo hay không.\n"
-                    f"2. **TUYỆT ĐỐI KHÔNG** vội vàng kéo hoặc đỡ cụ đứng dậy đột ngột (tránh chấn thương cột sống hoặc gãy xương).\n"
-                    f"3. Nếu cụ bất tỉnh, đau dữ dội vùng hông/đầu: Giữ nguyên tư thế và gọi ngay cấp cứu **115**."
-                )
-            else:
-                has_recent_fall = any(inc.get("alert_type") == "FALL_DETECTED" for inc in incidents)
-                if has_recent_fall:
-                    recent = next(inc for inc in incidents if inc.get("alert_type") == "FALL_DETECTED")
-                    return (
-                        f"⚠️ Ghi nhận có cảnh báo ngã trước đó vào lúc **{recent.get('time')}**: {recent.get('message')}.\n\n"
-                        f"Hiện tại cảm biến báo trạng thái bình thường (Nhịp tim: **{hr} BPM**, SpO₂: **{spo2}%**). "
-                        f"Người thân nên quan sát xem cụ có bị đau nhức hay bầm tím không."
-                    )
-                return (
-                    f"✅ **Tình trạng an toàn**: Không ghi nhận sự cố té ngã nào của cụ trong hôm nay.\n\n"
-                    f"- Trạng thái người: Bình thường\n"
-                    f"- Vòng đeo tay BLE: Kết nối tốt (Pin: **{battery}%**)\n"
-                    f"- Nhịp tim hiện tại: **{hr} BPM** | SpO₂: **{spo2}%**\n\n"
-                    f"Hệ thống camera AI YOLO-Pose và vòng tay vẫn đang giám sát liên tục 24/7."
-                )
-
-        # 2. Câu hỏi về nhịp tim, SpO2, sinh hiệu, huyết áp
-        if any(w in q_lower for w in ["nhịp tim", "spo2", "oxy", "sinh hiệu", "thân nhiệt", "nhiệt độ", "sốt", "chỉ số"]):
-            hr_status = "Bình thường (60-100 BPM)" if 60 <= hr <= 100 else ("⚠️ Tăng cao" if hr > 100 else "⚠️ Chậm")
-            spo2_status = "Tốt (>= 95%)" if spo2 >= 95 else "⚠️ Thiếu oxy máu (< 95%)"
-            temp_status = "Bình thường" if 36.2 <= temp <= 37.4 else ("⚠️ Sốt nhẹ/cao" if temp > 37.5 else "Hạ thân nhiệt")
-
-            ans = (
-                f"📊 **Báo cáo sinh hiệu người thân mới nhất**:\n\n"
-                f"• **Nhịp tim**: **{hr} BPM** — {hr_status}\n"
-                f"• **Nồng độ oxy SpO₂**: **{spo2}%** — {spo2_status}\n"
-                f"• **Thân nhiệt**: **{temp}°C** — {temp_status}\n"
-                f"• **Trạng thái vòng BLE**: Pin còn **{battery}%** (Đang kết nối)\n\n"
-            )
-            if spo2 < 95:
-                ans += "⚠️ **Lưu ý y tế**: SpO₂ dưới 95% có thể cảnh báo suy hô hấp nhẹ. Hãy nhắc cụ ngồi thẳng, hít thở sâu và đo lại sau 5 phút.\n"
-            elif hr > 100:
-                ans += "⚠️ **Lưu ý y tế**: Nhịp tim đang hơi nhanh. Cần nhắc cụ nghỉ ngơi, uống 1 ly nước ấm và tránh xúc động.\n"
-            else:
-                ans += "✨ Mọi chỉ số sinh hiệu của cụ hiện tại đều nằm trong ngưỡng an toàn."
-            return ans
-
-        # 3. Câu hỏi về thuốc, uống thuốc, lịch uống thuốc
-        if any(w in q_lower for w in ["thuốc", "uống thuốc", "đơn thuốc", "phát loa", "nhắc nhở"]):
-            conditions_str = ", ".join(patient.get("conditions", [])) or "Cao huyết áp, Đái tháo đường Type 2"
-            return (
-                f"💊 **Nhắc nhở y tế & Dùng thuốc**:\n\n"
-                f"- Người được chăm sóc: **{patient.get('full_name', 'Cụ')}**\n"
-                f"- Tiền sử bệnh lý nền: **{conditions_str}**\n\n"
-                f"👉 **Khuyến cáo**: Đã kích hoạt lệnh gửi lời nhắc uống thuốc đúng giờ đến loa thông minh tại phòng cụ. "
-                f"Hãy đảm bảo cụ uống thuốc sau ăn và uống đủ nước ấm."
-            )
-
-        # 4. Câu hỏi về vết bầm, tụ máu, sưng đau va đập
-        if any(w in q_lower for w in ["bầm", "bầm tím", "tụ máu", "sưng", "thâm tím", "bầm dập"]):
-            return (
-                f"🩹 **Hướng dẫn xử lý vết bầm tím & sưng đau ở người cao tuổi**:\n\n"
-                f"Ở người già, mạch máu giòn và lớp mỡ dưới da mỏng nên rất dễ bầm tím khi va chạm nhẹ hoặc sau té ngã.\n\n"
-                f"👉 **Các bước xử lý ngay tại nhà**:\n"
-                f"1. **Chườm lạnh (Trong 24-48 giờ đầu)**: Bọc đá vào khăn sạch, chườm nhẹ 10-15 phút để làm co mạch máu, giảm sưng và tụ máu. (Chườm 2-3 lần/ngày).\n"
-                f"2. ⚠️ **TUYỆT ĐỐI KHÔNG**: Không xoa bóp dầu nóng, cồn thuốc hay rượu gừng lên vết bầm vì sẽ làm giãn mạch, khiến máu tụ lan rộng hơn.\n"
-                f"3. **Kiểm tra vận động**: Thử bảo cụ cử động nhẹ khớp gần vết bầm (cổ tay, cổ chân, vai...). Nếu cụ đau chói, mất lực hoặc khớp biến dạng, có thể đã bị nứt/gãy xương kín, cần đưa đi chụp X-quang ngay.\n"
-                f"4. **Kê cao vị trí tổn thương**: Nếu bị bầm ở tay/chân, hãy kê cao hơn tim khi cụ nằm nghỉ để giúp máu lưu thông tốt hơn.\n\n"
-                f"🚨 **Cần đến bệnh viện ngay nếu**: Vết bầm sưng to nhanh, ấn đau dữ dội, cụ đang uống thuốc chống đông máu, hoặc vết bầm xuất hiện ở vùng đầu/ngực."
-            )
-
-        # 5. Câu hỏi về chóng mặt, đau đầu, choáng váng
-        if any(w in q_lower for w in ["chóng mặt", "đau đầu", "choáng", "hoa mắt", "xây xẩm"]):
-            return (
-                f"🩺 **Hướng dẫn chăm sóc khi cụ bị chóng mặt, choáng váng**:\n\n"
-                f"• Nhịp tim hiện tại: **{hr} BPM** | SpO₂: **{spo2}%**\n\n"
-                f"👉 **Xử lý an toàn ngay**:\n"
-                f"1. Giúp cụ ngồi xuống hoặc nằm nghỉ ngay tại chỗ, tránh để cụ đi lại một mình vì nguy cơ té ngã rất cao.\n"
-                f"2. Cho cụ uống 1 cốc nước ấm từng ngụm nhỏ.\n"
-                f"3. Tiến hành đo lại **Huyết áp** (người già chóng mặt thường do hạ huyết áp tư thế hoặc huyết áp tăng cao đột ngột).\n"
-                f"4. Nhắc cụ không thay đổi tư thế đột ngột (từ nằm sang đứng cần ngồi lại mép giường 1-2 phút trước khi đứng dậy)."
-            )
-
-        # 6. Câu hỏi về khó thở, tức ngực
-        if any(w in q_lower for w in ["khó thở", "tức ngực", "ngột ngạt", "hụt hơi"]):
-            spo2_alert = "⚠️ **SpO₂ THẤP NGUY HIỂM!**" if spo2 < 95 else "SpO₂ hiện tại: " + str(spo2) + "%"
-            return (
-                f"🚨 **HƯỚNG DẪN KHẨN CẤP: KHÓ THỞ / TỨC NGỰC**\n\n"
-                f"- Chỉ số SpO₂ đo được: **{spo2}%** ({spo2_alert})\n"
-                f"- Nhịp tim: **{hr} BPM**\n\n"
-                f"👉 **Hành động ngay**:\n"
-                f"1. Cho cụ ngồi tư thế Fowler (ngồi tựa lưng góc 45-60 độ), nới lỏng cổ áo và mở cửa thoáng khí.\n"
-                f"2. Hướng dẫn cụ thở chậm, hít sâu bằng mũi và thở ra từ từ bằng miệng.\n"
-                f"3. **Nếu có đau ngực lan ra vai/hàm trái, hoặc SpO₂ < 92%**: Đây là dấu hiệu nhồi máu cơ tim hoặc suy hô hấp cấp, hãy gọi ngay cấp cứu **115**!"
-            )
-
-        # 7. Trích xuất từ cẩm nang y tế (làm sạch và định dạng thân thiện)
+        # Trường hợp 1: Có tài liệu y khoa tìm thấy từ RAG
         if retrieved_chunks:
-            top = retrieved_chunks[0]
-            raw_text = top["text"].strip()
-            # Dọn dẹp tiêu đề thô ##
-            lines = [l.strip() for l in raw_text.split("\n") if l.strip()]
-            cleaned_text = "\n".join(lines[:6])
-            if len(cleaned_text) > 400:
-                cleaned_text = cleaned_text[:400] + "..."
+            sections = []
 
+            # Thêm báo cáo sinh hiệu nếu người dùng hỏi về sinh hiệu
+            if sensor_status_text:
+                sections.append(sensor_status_text)
+                sections.append("---")
+
+            # Tiêu đề tri thức cẩm nang
+            if language == "en":
+                sections.append("📖 **Clinical Care Guidance (Retrieved from Medical Knowledge Base)**:")
+            else:
+                sections.append("📖 **Hướng dẫn chăm sóc y tế từ Cẩm nang Lão khoa**:")
+
+            # Trích xuất và định dạng nội dung từ các chunk RAG phù hợp nhất
+            total_chars = 0
+            sources_cited = set()
+
+            for idx, chunk in enumerate(retrieved_chunks, 1):
+                clean_text = self._clean_chunk_text(chunk["text"])
+                if not clean_text:
+                    continue
+
+                sources_cited.add(chunk["source"])
+
+                # Giới hạn dung lượng hiển thị cho từng chunk để câu trả lời súc tích
+                chunk_snippet = clean_text[:650]
+                if len(clean_text) > 650:
+                    chunk_snippet += "..."
+
+                sections.append(f"{chunk_snippet}")
+                total_chars += len(chunk_snippet)
+                if total_chars > 1300:
+                    break
+
+            # Bổ sung trích dẫn nguồn tài liệu cẩm nang
+            sources_str = ", ".join(sorted(sources_cited))
+            if language == "en":
+                sections.append(f"\n📚 **Medical Sources**: `{sources_str}`")
+            else:
+                sections.append(f"\n📚 **Nguồn cẩm nang tham khảo**: `{sources_str}`")
+
+            # Bổ sung ghi chú hồ sơ bệnh lý thực tế của người cao tuổi nếu có trong DB
+            med_history = patient.get("medical_history")
+            if med_history:
+                patient_name = patient.get("full_name", "Cụ")
+                if language == "en":
+                    sections.append(f"ℹ️ *Note based on {patient_name}'s medical profile: {med_history}*")
+                else:
+                    sections.append(f"ℹ️ *Lưu ý theo hồ sơ bệnh lý của {patient_name}: {med_history}*")
+
+            return "\n\n".join(sections)
+
+        # Trường hợp 2: Không có chunk RAG nhưng là câu hỏi tra cứu sinh hiệu
+        if is_sensor_query:
+            return sensor_status_text
+
+        # Trường hợp 3: Không tìm thấy tài liệu phù hợp trong kho kiến thức
+        if language == "en":
             return (
-                f"📖 **Thông tin y tế từ cẩm nang chăm sóc ({top['source']})**:\n\n"
-                f"{cleaned_text}\n\n"
-                f"💡 *Để trợ lý có thể trò chuyện và phân tích linh hoạt hơn bằng trí tuệ nhân tạo, "
-                f"bạn có thể cấu hình thêm Google Gemini API Key trong hệ thống.*"
+                "I could not find a directly matching clinical guideline in the current medical repository for this question.\n\n"
+                "You can ask me about specialized topics covered in our medical knowledge base:\n"
+                "• **Fall emergencies & First aid**: Response steps, FAST stroke recognition, wound care, choking...\n"
+                "• **Pressure ulcer care**: 2-hour repositioning schedule, staging, skin hygiene, dressings...\n"
+                "• **Elderly nutrition & Chronic diseases**: Diet for hypertension, diabetes, dysphagia...\n"
+                "• **Safe medication practices**: Administering prescriptions, preventing drug interactions...\n"
+                "• **Sleep & Mental wellness**: Non-pharmacological insomnia management, cognitive care.\n\n"
+                "Or you can ask me to check the actual vital signs and smartband connection status."
             )
 
-        # 8. Phản hồi chung
         return (
-            f"Dạ, tôi là Trợ lý Y tế SmartCare AI. Hiện tại tôi đang giám sát tình trạng sức khỏe của cụ:\n\n"
-            f"• Nhịp tim: **{hr} BPM** | SpO₂: **{spo2}%** | Nhiệt độ: **{temp}°C**\n"
-            f"• Trạng thái té ngã: **An toàn (Không có ngã)**\n\n"
-            f"Bạn có thể hỏi tôi về: kiểm tra nhịp tim, tình trạng té ngã hôm nay, cách xử lý vết bầm/ngã, "
-            f"hoặc nhắc cụ uống thuốc."
+            "Dạ, tôi chưa tìm thấy tài liệu y tế phù hợp trực tiếp với câu hỏi này trong cẩm nang hiện tại.\n\n"
+            "Bạn có thể hỏi tôi về các chủ đề chuyên sâu đã được tích hợp trong cẩm nang y khoa:\n"
+            "• **Xử lý sự cố & Sơ cấp cứu**: Phòng ngừa té ngã, xử lý khi ngã nằm sàn, nhận diện đột quỵ (FAST), hóc nghẹn sặc, xử lý vết bầm...\n"
+            "• **Chăm sóc loét tì đè**: Quy trình xoay trở chống loét 2 giờ/lần, vệ sinh da, chăm sóc người nằm lâu...\n"
+            "• **Dinh dưỡng & Bệnh mãn tính**: Chế độ ăn cho người cao tuổi, cao huyết áp, đái tháo đường, tim mạch...\n"
+            "• **An toàn dùng thuốc**: Hướng dẫn uống thuốc đúng giờ, tránh tương tác thuốc bất lợi...\n"
+            "• **Tâm lý & Giấc ngủ**: Cải thiện mất ngủ không dùng thuốc, sa sút trí tuệ...\n\n"
+            "Hoặc bạn có thể hỏi để kiểm tra chỉ số sinh hiệu thực tế từ vòng đeo tay của cụ."
         )
+
+    def _is_valid_llm_response(self, content: str) -> bool:
+        """Kiểm tra phản hồi LLM có bị cụt lửng hoặc rò rỉ prompt hay không."""
+        if not content or len(content.strip()) < 30:
+            return False
+
+        leakage_markers = [
+            "guideline", "Guideline", "CUNG CẤP", "TUYỆT ĐỐI KHÔNG", "RAG chunks",
+            "bám sát thông tin từ TÀI LIỆU", "system prompt", "NGUYÊN TẮC BẮT BUỘC",
+        ]
+        if any(marker in content for marker in leakage_markers):
+            logger.warning("Phát hiện LLM rò rỉ prompt: %s", content[:120])
+            return False
+
+        # Kiểm tra câu bị cắt dở dang
+        last_word = content.strip().split()[-1].lower() if content.strip().split() else ""
+        if last_word in ["các chỉ", "và", "nhưng", "là", "của", "được", "trong", "thì"]:
+            logger.warning("Phát hiện LLM bị ngắt cụt lửng: %s", content)
+            return False
+
+        return True
 
     async def _call_llm_if_available(
         self,
         question: str,
-        vitals: Dict[str, Any],
+        vitals: Optional[Dict[str, Any]],
         incidents: List[Dict[str, Any]],
         patient: Dict[str, Any],
         retrieved_chunks: List[Dict[str, Any]],
+        language: str = "vi",
     ) -> Optional[str]:
         """
-        Gọi LLM API ngoài (Gemini / OpenAI / DeepSeek) nếu có khai báo LLM_API_KEY trong .env.
+        Gọi LLM API ngoài nếu có khai báo LLM_API_KEY trong .env và cho phép sử dụng.
+        Nếu LLM lỗi, quota limit hoặc sinh câu trả lời bị cụt/rò rỉ prompt, tự động trả về None
+        để hệ thống chuyển sang Pure RAG cục bộ ổn định.
         """
+        # Cho phép ưu tiên Pure RAG để hoàn toàn không bị lỗi LLM ngoài
+        use_external_llm = os.getenv("ENABLE_EXTERNAL_LLM", "false").lower() == "true"
+        if not use_external_llm:
+            return None
+
         api_key = os.getenv("LLM_API_KEY", "").strip()
         base_url = os.getenv("LLM_BASE_URL", "https://api.openai.com/v1").rstrip("/")
         model = os.getenv("LLM_MODEL", "gemini-2.0-flash").strip()
@@ -264,35 +432,39 @@ class ChatbotRAGService:
         if not api_key or api_key == "sk-your_api_key_here":
             return None
 
-        # Xây dựng ngữ cảnh y tế chính xác
         context_parts = []
-        context_parts.append(f"THÔNG TIN SINH HIỆU THỜI GIAN THỰC:")
-        context_parts.append(
-            f"- Nhịp tim: {vitals.get('heart_rate', 75)} BPM (chuẩn 60-100)\n"
-            f"- SpO2: {vitals.get('spo2', 98)}% (chuẩn >= 95%)\n"
-            f"- Thân nhiệt: {vitals.get('skin_temp_max') or vitals.get('body_temp', 36.6)}°C\n"
-            f"- Phát hiện té ngã: {'CÓ TÉ NGÃ!' if vitals.get('fall_detected') else 'Không (Bình thường)'}\n"
-            f"- Pin vòng đeo tay: {vitals.get('bracelet_battery', 85)}%"
-        )
-
-        if patient:
+        if vitals and vitals.get("heart_rate") is not None:
             context_parts.append(
-                f"HỒ SƠ BỆNH LÝ:\n- Họ tên: {patient.get('full_name')}\n"
-                f"- Bệnh lý nền: {', '.join(patient.get('conditions', []))}"
+                f"THÔNG TIN SINH HIỆU THỜI GIAN THỰC TỪ THIẾT BỊ ĐO:\n"
+                f"- Nhịp tim: {vitals.get('heart_rate')} BPM (ngưỡng bình thường 60-100)\n"
+                f"- SpO2: {vitals.get('spo2')}% (chuẩn >= 95%)\n"
+                f"- Thân nhiệt: {vitals.get('skin_temp_max') or vitals.get('body_temp')}°C\n"
+                f"- Phát hiện té ngã: {'CÓ TÉ NGÃ!' if vitals.get('fall_detected') else 'Bình thường (Không té ngã)'}\n"
+                f"- Pin vòng đeo tay BLE: {vitals.get('bracelet_battery')}%\n"
+                f"- Trạng thái kết nối: {'Đang kết nối' if vitals.get('bracelet_connected') else 'Chưa kết nối'}"
+            )
+        else:
+            context_parts.append(
+                "THÔNG TIN SINH HIỆU THỜI GIAN THỰC:\n"
+                "Hiện tại CHƯA CÓ thiết bị đo sinh hiệu nào được kết nối (hoặc chưa bật vòng tay). "
+                "Nếu người dùng hỏi về chỉ số hiện tại, hãy thông báo thiết bị chưa kết nối."
+            )
+
+        if patient and patient.get("medical_history"):
+            context_parts.append(
+                f"HỒ SƠ BỆNH LÝ CỦA CỤ:\n- Họ tên: {patient.get('full_name')}\n"
+                f"- Tiền sử bệnh lý: {patient.get('medical_history')}"
             )
 
         if retrieved_chunks:
-            context_parts.append("TÀI LIỆU Y KHOA THAM KHẢO:")
+            context_parts.append("TÀI LIỆU Y KHOA THAM KHẢO (RAG CHUNKS):")
             for idx, c in enumerate(retrieved_chunks, 1):
-                context_parts.append(f"[{idx}] ({c['source']}): {c['text'][:300]}")
+                clean_chunk = self._clean_chunk_text(c["text"])[:400]
+                context_parts.append(f"[{idx}] (Nguồn: {c['source']}):\n{clean_chunk}")
 
         system_prompt = (
-            "Bạn là Trợ lý AI Bác sĩ Lão khoa của Hệ thống Chăm sóc Người cao tuổi Smart Elderly Care AI.\n"
-            "Nhiệm vụ của bạn là tư vấn chăm sóc sức khỏe, giải thích chỉ số sinh hiệu và hướng dẫn người nhà xử lý tình huống.\n\n"
-            "NGUYÊN TẮC BẮT BUỘC:\n"
-            "1. Tuyệt đối bám sát thông tin sinh hiệu thực tế được cung cấp bên dưới, không bịa đặt số liệu.\n"
-            "2. Khi có té ngã, hướng dẫn bình tĩnh, không nâng đỡ người già đứng dậy đột ngột, kiểm tra tri giác và hướng dẫn gọi 115 nếu cần.\n"
-            "3. Giọng văn ân cần, ngắn gọn, dễ hiểu cho người nhà, dùng tiếng Việt chuẩn mực.\n\n"
+            "Bạn là Trợ lý AI Bác sĩ Lão khoa SmartCare AI. "
+            "Hãy tư vấn ân cần, ngắn gọn, dễ hiểu và trích dẫn nguồn tài liệu cẩm nang ở cuối câu trả lời.\n\n"
             + "\n\n".join(context_parts)
         )
 
@@ -307,19 +479,23 @@ class ChatbotRAGService:
                 {"role": "user", "content": question},
             ],
             "temperature": 0.25,
-            "max_tokens": 600,
+            "max_tokens": 700,
         }
 
         try:
-            async with httpx.AsyncClient(timeout=25.0) as client:
+            async with httpx.AsyncClient(timeout=6.0) as client:
                 resp = await client.post(f"{base_url}/chat/completions", headers=headers, json=payload)
                 if resp.status_code == 200:
                     data = resp.json()
                     content = data.get("choices", [{}])[0].get("message", {}).get("content", "").strip()
-                    if content:
+                    if self._is_valid_llm_response(content):
                         return content
+                    else:
+                        logger.warning("LLM response không hợp lệ, chuyển sang Pure RAG Synthesizer.")
+                else:
+                    logger.warning("LLM API returned %d: %s. Chuyển sang Pure RAG Synthesizer.", resp.status_code, resp.text[:150])
         except Exception as e:
-            logger.warning("Không thể gọi LLM ngoài (%s), chuyển sang bộ suy luận cục bộ: %s", model, e)
+            logger.warning("Không thể gọi LLM ngoài (%s), chuyển sang Pure RAG: %s", model, e)
 
         return None
 
@@ -328,30 +504,60 @@ class ChatbotRAGService:
         db: AsyncSession,
         user_id: Optional[UUID],
         question: str,
+        language: str = "vi",
     ) -> Dict[str, Any]:
         """
-        Quy trình xử lý câu hỏi người dùng:
-        1. Lấy dữ liệu cảm biến & y bạ thật từ DB.
-        2. Tìm kiếm cẩm nang y tế liên quan.
-        3. Sinh câu trả lời qua LLM (nếu có key) hoặc Rule-based Fail-Safe Engine.
+        Quy trình xử lý câu hỏi:
+        1. Kiểm tra câu chào hỏi / trêu đùa / giao tiếp xã giao -> Phản hồi lịch sự ngay.
+        2. Nếu là câu hỏi kiểm tra sinh hiệu -> Trả về báo cáo sinh hiệu thực tế 100% đầy đủ.
+        3. Nếu là câu hỏi y khoa -> Tìm kiếm qua MedicalRetriever (BM25) và tổng hợp bằng Pure RAG.
         """
-        # 1. Lấy dữ liệu thực tế
+        # 1. Xử lý câu chào hỏi hoặc giao tiếp xã giao
+        if self._is_conversational_or_greeting(question):
+            return {
+                "status": "success",
+                "question": question,
+                "answer": self._format_conversational_response(question, language=language),
+                "sources": [],
+                "engine": "SmartCare Conversational Assistant",
+                "timestamp": datetime.now(timezone.utc).strftime("%Y-%m-%d %H:%M:%S"),
+                "vitals_snapshot": None,
+                "disclaimer": STANDARD_DISCLAIMER_EN if language == "en" else STANDARD_DISCLAIMER,
+            }
+
+        # 2. Lấy dữ liệu thực tế từ DB
         context = await self._get_realtime_context(db, user_id)
         vitals = context["vitals"]
         incidents = context["incidents"]
         patient = context["patient"]
 
-        # 2. Tìm kiếm cẩm nang y tế
-        chunks = self.retriever.search(question, top_k=2)
+        # 3. Tìm kiếm cẩm nang y tế bằng RAG Retriever
+        chunks = self.retriever.search(question, top_k=3, threshold=0.1)
 
-        # 3. Thử gọi LLM
-        answer = await self._call_llm_if_available(question, vitals, incidents, patient, chunks)
-        engine_used = "SmartCare Cloud LLM (Gemini/OpenAI)"
+        # 4. Thử gọi LLM nếu được bật và phản hồi hợp lệ
+        answer = await self._call_llm_if_available(
+            question, vitals, incidents, patient, chunks, language=language
+        )
+        engine_used = "SmartCare Cloud LLM (Gemini/OpenAI) + RAG"
 
-        # 4. Fallback sang Deterministic Engine nếu không có LLM
+        # 5. Nếu không dùng LLM hoặc LLM lỗi/bị tắt -> Sử dụng Pure RAG Synthesizer
         if not answer:
-            answer = self._generate_deterministic_fallback(question, vitals, incidents, patient, chunks)
-            engine_used = "SmartCare Native Clinical Engine (Offline Fail-Safe)"
+            answer = self._generate_rag_response(
+                question, vitals, incidents, patient, chunks, language=language
+            )
+            engine_used = "SmartCare Pure RAG Engine (Medical Documents)"
+
+        # Tạo snapshot sinh hiệu trung thực (None nếu không có thiết bị)
+        vitals_snapshot = None
+        if vitals and vitals.get("heart_rate") is not None:
+            vitals_snapshot = {
+                "heart_rate": vitals.get("heart_rate"),
+                "spo2": vitals.get("spo2"),
+                "body_temp": vitals.get("body_temp") or vitals.get("skin_temp_max"),
+                "fall_detected": vitals.get("fall_detected"),
+                "bracelet_battery": vitals.get("bracelet_battery"),
+                "device_id": vitals.get("device_id"),
+            }
 
         return {
             "status": "success",
@@ -360,15 +566,8 @@ class ChatbotRAGService:
             "sources": [c["source"] for c in chunks],
             "engine": engine_used,
             "timestamp": datetime.now(timezone.utc).strftime("%Y-%m-%d %H:%M:%S"),
-            "vitals_snapshot": {
-                "heart_rate": vitals.get("heart_rate"),
-                "spo2": vitals.get("spo2"),
-                "body_temp": vitals.get("body_temp") or vitals.get("skin_temp_max"),
-                "fall_detected": vitals.get("fall_detected"),
-                "bracelet_battery": vitals.get("bracelet_battery"),
-                "device_id": vitals.get("device_id"),
-            },
-            "disclaimer": STANDARD_DISCLAIMER,
+            "vitals_snapshot": vitals_snapshot,
+            "disclaimer": STANDARD_DISCLAIMER_EN if language == "en" else STANDARD_DISCLAIMER,
         }
 
 

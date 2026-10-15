@@ -48,12 +48,17 @@ class CRUDIncident:
         db: AsyncSession,
         incident_id: UUID,
         notes: Optional[str] = None,
+        acknowledged_by: Optional[UUID] = None,
     ) -> Optional[Incident]:
         incident = await self.get(db, incident_id)
         if not incident:
             return None
+        from datetime import datetime, timezone
         incident.is_acknowledged = True
         incident.notes = notes
+        incident.acknowledged_at = datetime.now(timezone.utc)
+        if acknowledged_by:
+            incident.acknowledged_by = acknowledged_by
         await db.flush()
         return incident
 

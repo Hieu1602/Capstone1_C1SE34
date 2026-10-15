@@ -8,6 +8,8 @@ Sử dụng firebase-admin SDK với service account credentials.
 import logging
 from typing import List, Optional
 
+from app.core.i18n import normalize_language, translate_text
+
 logger = logging.getLogger(__name__)
 
 
@@ -49,6 +51,7 @@ class FCMService:
         body: str,
         data: Optional[dict] = None,
         priority: str = "high",
+        language: str = "vi",
     ) -> dict:
         """
         Gửi push notification đến danh sách FCM tokens.
@@ -63,6 +66,10 @@ class FCMService:
         Returns:
             Dict với success_count và failure_count
         """
+        language = normalize_language(language)
+        title = translate_text(title, language)
+        body = translate_text(body, language)
+
         if not self._initialized:
             logger.warning("[FCM] Chưa initialized. Bỏ qua push notification.")
             return {"success_count": 0, "failure_count": len(fcm_tokens)}

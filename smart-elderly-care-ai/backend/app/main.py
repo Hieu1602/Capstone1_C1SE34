@@ -10,9 +10,11 @@ Microservices Architecture:
 """
 
 import logging
+import json
 from contextlib import asynccontextmanager
 
-from fastapi import FastAPI
+from fastapi import FastAPI, Request
+from fastapi.responses import Response
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.middleware.trustedhost import TrustedHostMiddleware
 
@@ -20,6 +22,7 @@ from app.api.v1.api import api_router
 from app.api.websockets.vitals_ws import ws_router
 from app.core.config import settings
 from app.core.database import close_db, init_db
+from app.core.i18n import normalize_language, translate_payload
 from app.services.mqtt.mqtt_subscriber import MQTTSubscriber
 
 logger = logging.getLogger(__name__)
@@ -110,6 +113,49 @@ app = FastAPI(
     openapi_url="/openapi.json",
     lifespan=lifespan,
 )
+
+
+@app.middleware("http")
+async def localize_api_messages(request: Request, call_next):
+    """Choose a request language and translate known API message fields."""
+    request.state.language = normalize_language(request.headers.get("accept-language"))
+    response = await call_next(request)
+    content_type = response.headers.get("content-type", "")
+    if "application/json" not in content_type or response.headers.get("content-encoding"):
+        return response
+
+    response_body = b"".join([chunk async for chunk in response.body_iterator])
+    if not response_body:
+        return response
+    try:
+        payload = json.loads(response_body)
+    except (UnicodeDecodeError, json.JSONDecodeError):
+        return Response(
+            content=response_body,
+            status_code=response.status_code,
+            headers=dict(response.headers),
+            media_type=content_type,
+            background=response.background,
+        )
+
+    localized_body = json.dumps(
+        translate_payload(payload, request.state.language),
+        ensure_ascii=False,
+        separators=(",", ":"),
+    ).encode("utf-8")
+    headers = {
+        key: value
+        for key, value in response.headers.items()
+        if key.lower() not in {"content-length", "content-encoding"}
+    }
+    return Response(
+        content=localized_body,
+        status_code=response.status_code,
+        headers=headers,
+        media_type=content_type,
+        background=response.background,
+    )
+
 
 # ---- Middleware ----
 app.add_middleware(

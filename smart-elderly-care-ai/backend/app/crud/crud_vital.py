@@ -220,39 +220,39 @@ class CRUDVital:
 
         if not device:
             return {
-                "heart_rate": 76,
-                "spo2": 98,
-                "skin_temp_max": 36.6,
-                "body_temp": 36.6,
-                "person_count": 1,
+                "heart_rate": None,
+                "spo2": None,
+                "skin_temp_max": None,
+                "body_temp": None,
+                "person_count": 0,
                 "fall_detected": False,
                 "timestamp": now_ms,
-                "sound": "Bình thường",
-                "bracelet_battery": 84,
-                "bracelet_connected": True,
-                "edge_hub_connected": True,
-                "device_id": "BLE_BAND_001",
-                "time": datetime.now(timezone.utc),
+                "sound": "Chưa kết nối thiết bị",
+                "bracelet_battery": None,
+                "bracelet_connected": False,
+                "edge_hub_connected": False,
+                "device_id": None,
+                "time": None,
             }
 
         # 2. Lấy chỉ số sinh hiệu mới nhất của thiết bị
         latest_vital = await self.get_latest(db, device.id)
-        hr = latest_vital.heart_rate if latest_vital and latest_vital.heart_rate else 76
-        sp = latest_vital.spo2 if latest_vital and latest_vital.spo2 else 98
-        temp = latest_vital.skin_temp_max if latest_vital and latest_vital.skin_temp_max else 36.6
+        hr = latest_vital.heart_rate if latest_vital else None
+        sp = latest_vital.spo2 if latest_vital else None
+        temp = latest_vital.skin_temp_max if latest_vital else None
         fall = bool(latest_vital.fall_detected) if latest_vital else False
-        v_time = latest_vital.time if latest_vital else datetime.now(timezone.utc)
+        v_time = latest_vital.time if latest_vital else None
 
         return {
             "heart_rate": hr,
             "spo2": sp,
             "skin_temp_max": temp,
             "body_temp": temp,
-            "person_count": 1,
+            "person_count": 1 if device.is_online else 0,
             "fall_detected": fall,
-            "timestamp": int(v_time.timestamp() * 1000),
+            "timestamp": int(v_time.timestamp() * 1000) if v_time else None,
             "sound": "Bình thường",
-            "bracelet_battery": device.battery_level or 84,
+            "bracelet_battery": device.battery_level,
             "bracelet_connected": device.is_online,
             "edge_hub_connected": True,
             "device_id": device.device_id,

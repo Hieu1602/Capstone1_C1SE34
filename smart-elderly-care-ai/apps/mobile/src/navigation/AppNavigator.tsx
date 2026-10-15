@@ -2,7 +2,7 @@
 // React Navigation – 5 Tabs chuẩn phong cách Imou / SmartCare AI & Stack Screens
 
 import React from 'react';
-import { View, StyleSheet } from 'react-native';
+import { View, StyleSheet, Platform } from 'react-native';
 import { NavigationContainer } from '@react-navigation/native';
 import { createNativeStackNavigator } from '@react-navigation/native-stack';
 import { createBottomTabNavigator } from '@react-navigation/bottom-tabs';
@@ -13,6 +13,7 @@ import AIBotIcon from '../components/AIBotIcon';
 import { useAuthStore, useVitalStore } from '../store/useVitalStore';
 
 // Auth screens
+import WelcomeScreen from '../features/auth/screens/WelcomeScreen';
 import LoginScreen from '../features/auth/screens/LoginScreen';
 import RegisterScreen from '../features/auth/screens/RegisterScreen';
 import ForgotPasswordScreen from '../features/auth/screens/ForgotPasswordScreen';
@@ -31,23 +32,20 @@ import HouseDetailScreen from '../features/dashboard/screens/HouseDetailScreen';
 import AIModelDetailScreen from '../features/dashboard/screens/AIModelDetailScreen';
 import AlgoConfigScreen from '../features/dashboard/screens/AlgoConfigScreen';
 import MedicalReportScreen from '../features/history/MedicalReportScreen';
-import HistoryScreen from '../features/history/HistoryScreen';
 import IncidentDetailScreen from '../features/alerts/screens/IncidentDetailScreen';
 import AddDeviceScreen from '../features/dashboard/screens/AddDeviceScreen';
 import CreateGroupScreen from '../features/dashboard/screens/CreateGroupScreen';
 import SmartbandDetailScreen from '../features/dashboard/screens/SmartbandDetailScreen';
 import HealthDetailScreen from '../features/dashboard/screens/HealthDetailScreen';
-import PatientMedicalRecordScreen from '../features/dashboard/screens/PatientMedicalRecordScreen';
-import MedicationReminderScreen from '../features/dashboard/screens/MedicationReminderScreen';
 import SettingsScreen from '../features/auth/screens/SettingsScreen';
-import { useTheme } from '../store/useThemeStore';
-
-// Doctor Subsystem screens
+import MedicationReminderScreen from '../features/dashboard/screens/MedicationReminderScreen';
+import PatientMedicalRecordScreen from '../features/dashboard/screens/PatientMedicalRecordScreen';
 import DoctorTabNavigator from './DoctorTabNavigator';
 import DoctorPatientDetailScreen from '../features/doctor/screens/DoctorPatientDetailScreen';
-import DoctorAnalyticsReportScreen from '../features/doctor/screens/DoctorAnalyticsReportScreen';
 import DoctorPrescriptionsScreen from '../features/doctor/screens/DoctorPrescriptionsScreen';
-import DoctorAppointmentsScreen from '../features/doctor/screens/DoctorAppointmentsScreen';
+import DoctorAnalyticsReportScreen from '../features/doctor/screens/DoctorAnalyticsReportScreen';
+import SendEmergencyLocationScreen from '../features/alerts/screens/SendEmergencyLocationScreen';
+import { useTheme } from '../store/useThemeStore';
 
 const Stack = createNativeStackNavigator();
 const Tab = createBottomTabNavigator();
@@ -139,6 +137,7 @@ export default function AppNavigator() {
         {!isAuthenticated ? (
           // Auth Stack
           <>
+            <Stack.Screen name="Welcome" component={WelcomeScreen} />
             <Stack.Screen name="Login" component={LoginScreen} />
             <Stack.Screen name="Register" component={RegisterScreen} />
             <Stack.Screen name="ForgotPassword" component={ForgotPasswordScreen} />
@@ -151,10 +150,12 @@ export default function AppNavigator() {
             ) : (
               <Stack.Screen name="Main" component={MainTabNavigator} />
             )}
+            <Stack.Screen name="DoctorTabNavigator" component={DoctorTabNavigator} />
             <Stack.Screen name="DoctorPatientDetail" component={DoctorPatientDetailScreen} />
-            <Stack.Screen name="DoctorAnalytics" component={DoctorAnalyticsReportScreen} />
-            <Stack.Screen name="DoctorAppointments" component={DoctorAppointmentsScreen} />
             <Stack.Screen name="DoctorPrescriptions" component={DoctorPrescriptionsScreen} />
+            <Stack.Screen name="DoctorAnalytics" component={DoctorAnalyticsReportScreen} />
+            <Stack.Screen name="MedicationReminder" component={MedicationReminderScreen} />
+            <Stack.Screen name="PatientMedicalRecord" component={PatientMedicalRecordScreen} />
             <Stack.Screen name="Devices" component={DevicesScreen} />
             <Stack.Screen name="CameraDetail" component={CameraDetailScreen} />
             <Stack.Screen name="MultiView" component={MultiViewScreen} />
@@ -162,24 +163,14 @@ export default function AppNavigator() {
             <Stack.Screen name="AIModelDetail" component={AIModelDetailScreen} />
             <Stack.Screen name="AlgoConfig" component={AlgoConfigScreen} />
             <Stack.Screen name="MedicalReport" component={MedicalReportScreen} />
-            <Stack.Screen name="History" component={HistoryScreen} />
             <Stack.Screen name="AddDevice" component={AddDeviceScreen} />
             <Stack.Screen name="CreateGroup" component={CreateGroupScreen} />
             <Stack.Screen name="SmartbandDetail" component={SmartbandDetailScreen} />
             <Stack.Screen name="HealthDetail" component={HealthDetailScreen} />
-            <Stack.Screen name="PatientMedicalRecord" component={PatientMedicalRecordScreen} />
-            <Stack.Screen name="MedicationReminder" component={MedicationReminderScreen} />
             <Stack.Screen name="Settings" component={SettingsScreen} />
+            <Stack.Screen name="SendEmergencyLocation" component={SendEmergencyLocationScreen} />
             <Stack.Screen
               name="IncidentDetail"
-              component={IncidentDetailScreen}
-              options={{
-                presentation: 'modal',
-                headerShown: false,
-              }}
-            />
-            <Stack.Screen
-              name="EventDetail"
               component={IncidentDetailScreen}
               options={{
                 presentation: 'modal',
@@ -198,9 +189,9 @@ const styles = StyleSheet.create({
     backgroundColor: '#FFFFFF',
     borderTopColor: '#E2E8F0',
     borderTopWidth: 1,
-    height: 62,
+    height: Platform.OS === 'ios' ? 84 : 72,
     paddingTop: 8,
-    paddingBottom: 8,
+    paddingBottom: Platform.OS === 'ios' ? 26 : 14,
     elevation: 8,
     shadowColor: '#000',
     shadowOffset: { width: 0, height: -2 },

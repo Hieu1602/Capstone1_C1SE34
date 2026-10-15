@@ -2,28 +2,17 @@
 // Màn hình Camera Chi Tiết – UI chuẩn Imou Life / SmartCare AI
 // Tham khảo giao diện thực tế Imou Ranger 2C
 
-import React, { useState, useRef, useEffect } from 'react';
-import {
-  View,
-  Text,
-  StyleSheet,
-  TouchableOpacity,
-  ScrollView,
-  Image,
-  Alert,
-  Modal,
-  Linking,
-  Animated,
-  useWindowDimensions,
-  Platform,
-  ActivityIndicator,
-} from 'react-native';
+import React, { useState, useRef, useEffect, useMemo } from 'react';
+import { View, StyleSheet, TouchableOpacity, ScrollView, Image, Modal, Animated, useWindowDimensions, Platform, ActivityIndicator } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { Ionicons, MaterialCommunityIcons } from '@expo/vector-icons';
 import Svg, { Path, Circle, Ellipse, Polygon } from 'react-native-svg';
 import { Colors, Shadows } from '../../../theme/colors';
 import { useVitalStore } from '../../../store/useVitalStore';
-import { useTheme } from '../../../store/useThemeStore';
+import { createThemeStyles, useTheme } from '../../../store/useThemeStore';
+import { LocalizedAlert, LocalizedText } from '../../../i18n/LocalizedComponents';
+import { launchEmergencyCall } from '../../../services/emergency';
+
 
 // Safe dynamic require for video modules
 let NativeVideo: any = null;
@@ -133,6 +122,7 @@ interface UniversalVideoPlayerProps {
   style?: any;
   showControls?: boolean;
   fallbackPoster?: string;
+  playerStyles?: typeof baseStyles;
 }
 
 function UniversalVideoPlayer({
@@ -144,12 +134,13 @@ function UniversalVideoPlayer({
   style,
   showControls = false,
   fallbackPoster = FALLBACK_POSTER,
+  playerStyles = baseStyles,
 }: UniversalVideoPlayerProps) {
   const [isLoading, setIsLoading] = useState(true);
 
   if (Platform.OS === 'web') {
     return (
-      <View style={[styles.playerInner, style]}>
+      <View style={[playerStyles.playerInner, style]}>
         <video
           src={uri}
           autoPlay={!paused}
@@ -168,9 +159,9 @@ function UniversalVideoPlayer({
           }}
         />
         {isLoading && (
-          <View style={styles.playerLoadingOverlay}>
+          <View style={playerStyles.playerLoadingOverlay}>
             <ActivityIndicator size="small" color="#38BDF8" />
-            <Text style={styles.playerLoadingText}>Đang nạp luồng camera...</Text>
+            <LocalizedText style={playerStyles.playerLoadingText}>Đang nạp luồng camera...</LocalizedText>
           </View>
         )}
       </View>
@@ -180,7 +171,7 @@ function UniversalVideoPlayer({
   // Native: Try react-native-video if available
   if (NativeVideo) {
     return (
-      <View style={[styles.playerInner, style]}>
+      <View style={[playerStyles.playerInner, style]}>
         <NativeVideo
           source={{ uri }}
           style={StyleSheet.absoluteFill}
@@ -192,9 +183,9 @@ function UniversalVideoPlayer({
           onLoad={() => setIsLoading(false)}
         />
         {isLoading && (
-          <View style={styles.playerLoadingOverlay}>
+          <View style={playerStyles.playerLoadingOverlay}>
             <ActivityIndicator size="small" color="#38BDF8" />
-            <Text style={styles.playerLoadingText}>Đang nạp luồng camera...</Text>
+            <LocalizedText style={playerStyles.playerLoadingText}>Đang nạp luồng camera...</LocalizedText>
           </View>
         )}
       </View>
@@ -228,7 +219,7 @@ function UniversalVideoPlayer({
     `;
 
     return (
-      <View style={[styles.playerInner, style]}>
+      <View style={[playerStyles.playerInner, style]}>
         <NativeWebView
           source={{ html: htmlContent }}
           style={StyleSheet.absoluteFill}
@@ -238,9 +229,9 @@ function UniversalVideoPlayer({
           onLoadEnd={() => setIsLoading(false)}
         />
         {isLoading && (
-          <View style={styles.playerLoadingOverlay}>
+          <View style={playerStyles.playerLoadingOverlay}>
             <ActivityIndicator size="small" color="#38BDF8" />
-            <Text style={styles.playerLoadingText}>Đang nạp luồng camera...</Text>
+            <LocalizedText style={playerStyles.playerLoadingText}>Đang nạp luồng camera...</LocalizedText>
           </View>
         )}
       </View>
@@ -249,7 +240,7 @@ function UniversalVideoPlayer({
 
   // Fallback to Image
   return (
-    <View style={[styles.playerInner, style]}>
+    <View style={[playerStyles.playerInner, style]}>
       <Image
         source={{ uri: fallbackPoster }}
         style={StyleSheet.absoluteFill}
@@ -260,6 +251,11 @@ function UniversalVideoPlayer({
 }
 
 export default function CameraDetailScreen({ navigation, route }: any) {
+  const { isDarkMode, colors } = useTheme();
+  const styles = useMemo(
+    () => createThemeStyles(baseStyles, isDarkMode, colors),
+    [isDarkMode, colors],
+  );
   const routeParams = route?.params ?? {};
   const { width: winW, height: winH } = useWindowDimensions();
   const isPortrait = winH > winW;
@@ -273,7 +269,6 @@ export default function CameraDetailScreen({ navigation, route }: any) {
     toggleCameraAIProtect,
   } = useVitalStore();
 
-  const { isDarkMode, colors } = useTheme();
   const cameraDisplayName = routeParams.cameraName || camera.name;
 
   const [isPaused, setIsPaused] = useState(false);
@@ -351,7 +346,7 @@ export default function CameraDetailScreen({ navigation, route }: any) {
   };
 
   // Chế độ luồng camera thời gian thực từ Edge Hub
-  const [useMockStream, setUseMockStream] = useState(false);
+  const [useMockStream] = useState(false);
   const activeStreamUrl = useMockStream ? DEFAULT_MOCK_STREAM : (camera.streamUrl || 'http://127.0.0.1:8080/stream');
 
   // Playback & Interactive Timeline states
@@ -386,7 +381,7 @@ export default function CameraDetailScreen({ navigation, route }: any) {
   };
 
   const handleDownloadClip = () => {
-    Alert.alert(
+    LocalizedAlert.alert(
       '📥 Tải Đoạn Clip',
       `Đang trích xuất đoạn video phát lại lúc ${formatSecondsToHMS(playbackTimeSec)} ngày ${selectedPlaybackDate} và lưu vào thư viện thiết bị.`
     );
@@ -520,7 +515,7 @@ export default function CameraDetailScreen({ navigation, route }: any) {
       Animated.timing(snapScale, { toValue: 0.7, duration: 80, useNativeDriver: true }),
       Animated.spring(snapScale, { toValue: 1, friction: 3, useNativeDriver: true }),
     ]).start();
-    Alert.alert('📸 Đã chụp ảnh!', 'Ảnh khoảnh khắc đã được lưu vào thư viện thiết bị.');
+    LocalizedAlert.alert('📸 Đã chụp ảnh!', 'Ảnh khoảnh khắc đã được lưu vào thư viện thiết bị.');
   };
 
   const [recordDuration, setRecordDuration] = useState(0);
@@ -706,12 +701,26 @@ export default function CameraDetailScreen({ navigation, route }: any) {
   };
 
   const handleSOS115 = () => {
-    Alert.alert(
-      '🚨 GỌI CẤP CỨU 115?',
-      `Hành động này sẽ quay số 115 ngay lập tức.\nĐịa chỉ: "${house.address}"`,
+    LocalizedAlert.alert(
+      '🚨 KHẨN CẤP / CẤP CỨU 115',
+      `Địa chỉ: "${house.address}"\nBạn muốn mở màn hình gửi vị trí kèm hình ảnh cấp cứu hay gọi trực tiếp 115?`,
       [
         { text: 'Hủy', style: 'cancel' },
-        { text: 'Gọi 115 Ngay', style: 'destructive', onPress: () => Linking.openURL('tel:115') },
+        {
+          text: '📍 Gửi vị trí & ảnh',
+          onPress: () => {
+            navigation.navigate('SendEmergencyLocation');
+          },
+        },
+        {
+          text: '📞 Gọi 115 ngay',
+          style: 'destructive',
+          onPress: () => {
+            void launchEmergencyCall({ address: house.address }).catch((error) => {
+              console.warn('[CameraDetailScreen] Could not open emergency dialer:', error);
+            });
+          },
+        },
       ]
     );
   };
@@ -728,14 +737,14 @@ export default function CameraDetailScreen({ navigation, route }: any) {
           <Ionicons name="chevron-back" size={26} color={isDarkMode ? colors.textPrimary : '#0F172A'} />
         </TouchableOpacity>
 
-        <Text style={styles.headerTitle} numberOfLines={1}>
+        <LocalizedText style={styles.headerTitle} numberOfLines={1}>
           {cameraDisplayName.toUpperCase()}
-        </Text>
+        </LocalizedText>
 
         <View style={styles.headerRight}>
           <TouchableOpacity
             style={styles.headerIconBtn}
-            onPress={() => Alert.alert('Thêm Camera', 'Thêm thiết bị hoặc chia sẻ luồng camera.')}
+            onPress={() => LocalizedAlert.alert('Thêm Camera', 'Thêm thiết bị hoặc chia sẻ luồng camera.')}
           >
             <MaterialCommunityIcons name="video-plus-outline" size={24} color="#0F172A" />
           </TouchableOpacity>
@@ -755,11 +764,11 @@ export default function CameraDetailScreen({ navigation, route }: any) {
             <View style={styles.privacyIconCircle}>
               <Ionicons name="eye-off" size={32} color="#F59E0B" />
             </View>
-            <Text style={styles.privacyTitle}>Chế độ riêng tư</Text>
-            <Text style={styles.privacySub}>Ống kính đã được che. Luồng trực tiếp tạm tắt.</Text>
+            <LocalizedText style={styles.privacyTitle}>Chế độ riêng tư</LocalizedText>
+            <LocalizedText style={styles.privacySub}>Ống kính đã được che. Luồng trực tiếp tạm tắt.</LocalizedText>
             <TouchableOpacity style={styles.privacyBtn} onPress={toggleCameraSleep} activeOpacity={0.8}>
               <Ionicons name="eye" size={14} color="#FFF" style={{ marginRight: 4 }} />
-              <Text style={styles.privacyBtnText}>Mở lại ống kính</Text>
+              <LocalizedText style={styles.privacyBtnText}>Mở lại ống kính</LocalizedText>
             </TouchableOpacity>
           </View>
         ) : isMultiViewGrid && !isPlaybackMode ? (
@@ -782,11 +791,11 @@ export default function CameraDetailScreen({ navigation, route }: any) {
                   {feed.id === 'cam-1' && (
                     <View style={styles.liveKbBadge}>
                       <View style={styles.liveGreenDot} />
-                      <Text style={styles.liveKbText}>Live    {feed.bitrate}</Text>
+                      <LocalizedText style={styles.liveKbText}>Live    {feed.bitrate}</LocalizedText>
                     </View>
                   )}
                   <View style={styles.gridCellBadge}>
-                    <Text style={styles.gridCellBadgeText}>{feed.name}</Text>
+                    <LocalizedText style={styles.gridCellBadgeText}>{feed.name}</LocalizedText>
                   </View>
                 </TouchableOpacity>
               );
@@ -797,6 +806,7 @@ export default function CameraDetailScreen({ navigation, route }: any) {
           <>
             <UniversalVideoPlayer
               uri={activeStreamUrl}
+              playerStyles={styles}
               paused={isPaused}
               muted={isMuted}
               repeat={true}
@@ -808,20 +818,20 @@ export default function CameraDetailScreen({ navigation, route }: any) {
             {/* OSD Watermark Top-Left */}
             {isPlaybackMode ? (
               <View style={styles.playbackOsdOverlay}>
-                <Text style={styles.playbackOsdText}>
+                <LocalizedText style={styles.playbackOsdText}>
                   {currentTime.substring(0, 14)}  {formatSecondsToHMS(playbackTimeSec)}
-                </Text>
+                </LocalizedText>
               </View>
             ) : (
               <View style={styles.liveBadgeTopLeft}>
                 <View style={styles.liveGreenDot} />
-                <Text style={styles.liveBadgeText}>Live    22.25 KB/s</Text>
+                <LocalizedText style={styles.liveBadgeText}>Live    22.25 KB/s</LocalizedText>
               </View>
             )}
 
             {/* Camera Name Bottom-Right */}
             <View style={styles.cameraNameOverlay}>
-              <Text style={styles.cameraNameWatermark}>{cameraDisplayName.toUpperCase()}</Text>
+              <LocalizedText style={styles.cameraNameWatermark}>{cameraDisplayName.toUpperCase()}</LocalizedText>
             </View>
 
             {/* Siren Alert Pulsing Overlay if active */}
@@ -830,7 +840,7 @@ export default function CameraDetailScreen({ navigation, route }: any) {
                 <View style={styles.sirenBanner}>
                   <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6 }}>
                     <MaterialCommunityIcons name="bullhorn" size={18} color="#FFF" />
-                    <Text style={styles.sirenBannerText}>🚨 CÒI HÚ ĐANG PHÁT (90dB)</Text>
+                    <LocalizedText style={styles.sirenBannerText}>🚨 CÒI HÚ ĐANG PHÁT (90dB)</LocalizedText>
                   </View>
                   <TouchableOpacity
                     style={styles.sirenDismissBtn}
@@ -838,7 +848,7 @@ export default function CameraDetailScreen({ navigation, route }: any) {
                     activeOpacity={0.8}
                   >
                     <Ionicons name="stop-circle" size={14} color="#DC2626" style={{ marginRight: 3 }} />
-                    <Text style={styles.sirenDismissBtnText}>DỪNG CÒI</Text>
+                    <LocalizedText style={styles.sirenDismissBtnText}>DỪNG CÒI</LocalizedText>
                   </TouchableOpacity>
                 </View>
               </Animated.View>
@@ -850,9 +860,9 @@ export default function CameraDetailScreen({ navigation, route }: any) {
               {isRecording && (
                 <View style={styles.recordingBadge}>
                   <Animated.View style={[styles.recordingDot, { opacity: recDotAnim }]} />
-                  <Text style={styles.recordingText}>
+                  <LocalizedText style={styles.recordingText}>
                     REC {Math.floor(recordDuration / 60).toString().padStart(2, '0')}:{(recordDuration % 60).toString().padStart(2, '0')}
-                  </Text>
+                  </LocalizedText>
                 </View>
               )}
 
@@ -860,7 +870,7 @@ export default function CameraDetailScreen({ navigation, route }: any) {
               {!isPlaybackMode && camera.isAIProtect && showAIHud && (
                 <View style={styles.aiHudBadge}>
                   <View style={[styles.aiHudDot, { backgroundColor: '#10B981' }]} />
-                  <Text style={styles.aiHudText}>AI Protect: ON</Text>
+                  <LocalizedText style={styles.aiHudText}>AI Protect: ON</LocalizedText>
                 </View>
               )}
 
@@ -868,7 +878,7 @@ export default function CameraDetailScreen({ navigation, route }: any) {
               {isSpotlightOn && (
                 <View style={[styles.aiHudBadge, { backgroundColor: 'rgba(234, 179, 8, 0.92)' }]}>
                   <Ionicons name="flashlight" size={10} color="#FFF" style={{ marginRight: 3 }} />
-                  <Text style={styles.aiHudText}>ĐÈN: BẬT</Text>
+                  <LocalizedText style={styles.aiHudText}>ĐÈN: BẬT</LocalizedText>
                 </View>
               )}
             </View>
@@ -878,9 +888,9 @@ export default function CameraDetailScreen({ navigation, route }: any) {
               <View style={styles.aiHudBottomLeft}>
                 <View style={[styles.aiHudBadge, { backgroundColor: 'rgba(245,158,11,0.88)' }]}>
                   <Ionicons name="thermometer" size={10} color="#FFF" style={{ marginRight: 3 }} />
-                  <Text style={styles.aiHudText}>
+                  <LocalizedText style={styles.aiHudText}>
                     AMG8833: {currentVitals?.skin_temp_max ? `${currentVitals.skin_temp_max.toFixed(1)}°C` : '36.8°C'}
-                  </Text>
+                  </LocalizedText>
                 </View>
                 <View
                   style={[
@@ -893,9 +903,9 @@ export default function CameraDetailScreen({ navigation, route }: any) {
                   ]}
                 >
                   <Ionicons name="walk" size={10} color="#FFF" style={{ marginRight: 3 }} />
-                  <Text style={styles.aiHudText}>
+                  <LocalizedText style={styles.aiHudText}>
                     Người: {currentVitals?.person_count ?? 1} • {currentVitals?.fall_detected ? 'TÉ NGÃ ⚠️' : 'An toàn'}
-                  </Text>
+                  </LocalizedText>
                 </View>
               </View>
             )}
@@ -959,9 +969,9 @@ export default function CameraDetailScreen({ navigation, route }: any) {
             activeOpacity={0.7}
           >
             <View style={styles.basicBadge}>
-              <Text style={styles.basicBadgeText}>
+              <LocalizedText style={styles.basicBadgeText}>
                 {camera.resolution === 'HD' ? 'HD' : 'BASIC'}
-              </Text>
+              </LocalizedText>
             </View>
           </TouchableOpacity>
         )}
@@ -1017,9 +1027,9 @@ export default function CameraDetailScreen({ navigation, route }: any) {
             ) : (
               <MaterialCommunityIcons name="history" size={20} color="#EF4444" />
             )}
-            <Text style={styles.actionPillText}>
+            <LocalizedText style={styles.actionPillText}>
               {isPlaybackMode ? 'Live View' : 'Playback'}
-            </Text>
+            </LocalizedText>
           </TouchableOpacity>
 
           {/* 2. Snapshot */}
@@ -1056,7 +1066,7 @@ export default function CameraDetailScreen({ navigation, route }: any) {
               onPress={handleCycleSpeed}
               activeOpacity={0.75}
             >
-              <Text style={styles.actionSpeedBtnText}>{playbackSpeed}</Text>
+              <LocalizedText style={styles.actionSpeedBtnText}>{playbackSpeed}</LocalizedText>
             </TouchableOpacity>
           ) : (
             <TouchableOpacity
@@ -1122,9 +1132,9 @@ export default function CameraDetailScreen({ navigation, route }: any) {
                     color={isSirenActive ? '#FFF' : '#334155'}
                   />
                 </View>
-                <Text style={styles.extendedLabel} numberOfLines={1}>
+                <LocalizedText style={styles.extendedLabel} numberOfLines={1}>
                   {isSirenActive ? 'Tắt Còi' : 'Còi Hú'}
-                </Text>
+                </LocalizedText>
               </TouchableOpacity>
 
               {/* 2. Chế Độ Riêng Tư (Cụp Ống Kính) */}
@@ -1148,9 +1158,9 @@ export default function CameraDetailScreen({ navigation, route }: any) {
                     color={camera.isSleep ? '#FFF' : '#334155'}
                   />
                 </View>
-                <Text style={styles.extendedLabel} numberOfLines={1}>
+                <LocalizedText style={styles.extendedLabel} numberOfLines={1}>
                   {camera.isSleep ? 'Đang Che' : 'Riêng Tư'}
-                </Text>
+                </LocalizedText>
               </TouchableOpacity>
 
               {/* 3. Tự Động Bám Người (Smart Tracking) */}
@@ -1175,9 +1185,9 @@ export default function CameraDetailScreen({ navigation, route }: any) {
                     color={smartTracking ? '#FFF' : '#334155'}
                   />
                 </View>
-                <Text style={styles.extendedLabel} numberOfLines={1}>
+                <LocalizedText style={styles.extendedLabel} numberOfLines={1}>
                   Bám Người
-                </Text>
+                </LocalizedText>
               </TouchableOpacity>
 
               {/* 4. Lớp Phủ Cảm Biến HUD (AMG8833 & Vitals) */}
@@ -1202,9 +1212,9 @@ export default function CameraDetailScreen({ navigation, route }: any) {
                     color={showAIHud ? '#FFF' : '#334155'}
                   />
                 </View>
-                <Text style={styles.extendedLabel} numberOfLines={1}>
+                <LocalizedText style={styles.extendedLabel} numberOfLines={1}>
                   Cảm Biến
-                </Text>
+                </LocalizedText>
               </TouchableOpacity>
 
               {/* 5. Đèn Trợ Sáng Ban Đêm (Spotlight LED) */}
@@ -1229,16 +1239,16 @@ export default function CameraDetailScreen({ navigation, route }: any) {
                     color={isSpotlightOn ? '#FFF' : '#334155'}
                   />
                 </View>
-                <Text style={styles.extendedLabel} numberOfLines={1}>
+                <LocalizedText style={styles.extendedLabel} numberOfLines={1}>
                   Đèn Đêm
-                </Text>
+                </LocalizedText>
               </TouchableOpacity>
 
               {/* 6. Thư Viện Lưu Trữ Cục Bộ (Local Album) */}
               <TouchableOpacity
                 style={styles.extendedItem}
                 onPress={() => {
-                  Alert.alert(
+                  LocalizedAlert.alert(
                     '📁 Thư Viện Cục Bộ',
                     'Đã lưu 12 ảnh khoảnh khắc và 3 video giám sát trong bộ nhớ thiết bị.'
                   );
@@ -1248,16 +1258,16 @@ export default function CameraDetailScreen({ navigation, route }: any) {
                 <View style={styles.extendedIconCircle}>
                   <Ionicons name="images-outline" size={22} color="#334155" />
                 </View>
-                <Text style={styles.extendedLabel} numberOfLines={1}>
+                <LocalizedText style={styles.extendedLabel} numberOfLines={1}>
                   Thư Viện
-                </Text>
+                </LocalizedText>
               </TouchableOpacity>
 
               {/* 7. Chia Sẻ Camera Cho Người Thân */}
               <TouchableOpacity
                 style={styles.extendedItem}
                 onPress={() => {
-                  Alert.alert(
+                  LocalizedAlert.alert(
                     '👨‍👩‍👧 Chia Sẻ Camera',
                     'Chia sẻ quyền xem luồng camera an toàn cho thành viên gia đình qua mã QR hoặc số điện thoại.'
                   );
@@ -1267,9 +1277,9 @@ export default function CameraDetailScreen({ navigation, route }: any) {
                 <View style={styles.extendedIconCircle}>
                   <Ionicons name="share-social-outline" size={22} color="#334155" />
                 </View>
-                <Text style={styles.extendedLabel} numberOfLines={1}>
+                <LocalizedText style={styles.extendedLabel} numberOfLines={1}>
                   Chia Sẻ
-                </Text>
+                </LocalizedText>
               </TouchableOpacity>
             </View>
           </View>
@@ -1305,7 +1315,7 @@ export default function CameraDetailScreen({ navigation, route }: any) {
               >
                 <Ionicons name="chevron-back" size={16} color="#64748B" />
               </TouchableOpacity>
-              <Text style={styles.datePillText}>{selectedPlaybackDate}</Text>
+              <LocalizedText style={styles.datePillText}>{selectedPlaybackDate}</LocalizedText>
               <TouchableOpacity
                 onPress={() => {
                   setSelectedPlaybackDate((prev) => (prev === 'Yesterday' ? 'Today' : 'Yesterday'));
@@ -1352,9 +1362,9 @@ export default function CameraDetailScreen({ navigation, route }: any) {
                 {Array.from({ length: 25 }, (_, i) => i).map((hour) => (
                   <View key={hour} style={[styles.hourColumn, { left: hour * HOUR_WIDTH }]}>
                     <View style={styles.majorTick} />
-                    <Text style={styles.hourText}>
+                    <LocalizedText style={styles.hourText}>
                       {String(hour).padStart(2, '0')}:00
-                    </Text>
+                    </LocalizedText>
                   </View>
                 ))}
 
@@ -1403,7 +1413,7 @@ export default function CameraDetailScreen({ navigation, route }: any) {
             </TouchableOpacity>
 
             <View style={styles.timeDisplayPill}>
-              <Text style={styles.timeDisplayText}>{formatSecondsToHMS(playbackTimeSec)}</Text>
+              <LocalizedText style={styles.timeDisplayText}>{formatSecondsToHMS(playbackTimeSec)}</LocalizedText>
             </View>
 
             <TouchableOpacity
@@ -1417,7 +1427,7 @@ export default function CameraDetailScreen({ navigation, route }: any) {
 
           {/* Event Quick List under Timeline */}
           <ScrollView style={styles.playbackEventSubList} showsVerticalScrollIndicator={false}>
-            <Text style={styles.playbackEventSubTitle}>SỰ KIỆN GHI NHẬN TRONG NGÀY:</Text>
+            <LocalizedText style={styles.playbackEventSubTitle}>SỰ KIỆN GHI NHẬN TRONG NGÀY:</LocalizedText>
             {PLAYBACK_EVENTS.map((ev) => (
               <TouchableOpacity
                 key={ev.id}
@@ -1429,8 +1439,8 @@ export default function CameraDetailScreen({ navigation, route }: any) {
                 activeOpacity={0.75}
               >
                 <View style={[styles.eventDot, { backgroundColor: ev.color }]} />
-                <Text style={styles.playbackEventChipTime}>{ev.timeStr}</Text>
-                <Text style={styles.playbackEventChipLabel} numberOfLines={1}>{ev.label}</Text>
+                <LocalizedText style={styles.playbackEventChipTime}>{ev.timeStr}</LocalizedText>
+                <LocalizedText style={styles.playbackEventChipLabel} numberOfLines={1}>{ev.label}</LocalizedText>
                 <Ionicons name="play-circle" size={16} color={ev.color} />
               </TouchableOpacity>
             ))}
@@ -1439,7 +1449,7 @@ export default function CameraDetailScreen({ navigation, route }: any) {
       ) : (
         /* LIVE SECTION: EVENT MESSAGES (Ảnh 2) */
         <View style={styles.eventSection}>
-          <Text style={styles.eventSectionTitle}>Event Messages</Text>
+          <LocalizedText style={styles.eventSectionTitle}>Event Messages</LocalizedText>
 
           <ScrollView
             style={styles.eventListScroll}
@@ -1485,9 +1495,9 @@ export default function CameraDetailScreen({ navigation, route }: any) {
                   {/* Box Flap Front */}
                   <Polygon points="73,105 143,105 145,114 71,114" fill="#DDD6FE" />
                 </Svg>
-                <Text style={styles.emptyMessagesText}>
+                <LocalizedText style={styles.emptyMessagesText}>
                   No messages. Event messages can only be kept for 7 days.
-                </Text>
+                </LocalizedText>
               </View>
             ) : (
               incidents.map((item) => {
@@ -1503,7 +1513,7 @@ export default function CameraDetailScreen({ navigation, route }: any) {
                       if (item.video_clip_url) {
                         setSelectedIncidentForReplay(item);
                       } else {
-                        Alert.alert('Chi tiết', `${item.message}\nThời gian: ${timeStr}`);
+                        LocalizedAlert.alert('Chi tiết', `${item.message}\nThời gian: ${timeStr}`);
                       }
                     }}
                     activeOpacity={0.75}
@@ -1525,10 +1535,10 @@ export default function CameraDetailScreen({ navigation, route }: any) {
                       />
                     </View>
                     <View style={styles.eventContent}>
-                      <Text style={[styles.eventTitle, isFall && { color: '#DC2626' }]} numberOfLines={1}>
+                      <LocalizedText style={[styles.eventTitle, isFall && { color: '#DC2626' }]} numberOfLines={1}>
                         {item.message}
-                      </Text>
-                      <Text style={styles.eventTime}>{timeStr}</Text>
+                      </LocalizedText>
+                      <LocalizedText style={styles.eventTime}>{timeStr}</LocalizedText>
                     </View>
                     {item.thumbnail_url ? (
                       <View style={styles.eventThumb}>
@@ -1551,7 +1561,7 @@ export default function CameraDetailScreen({ navigation, route }: any) {
       {/* ═══ FLOATING SOS 115 ═══ */}
       <TouchableOpacity style={styles.floatingSOS} onPress={handleSOS115} activeOpacity={0.85}>
         <Ionicons name="call" size={18} color="#FFF" />
-        <Text style={styles.floatingSOSText}>SOS 115</Text>
+        <LocalizedText style={styles.floatingSOSText}>SOS 115</LocalizedText>
       </TouchableOpacity>
 
       {/* ═══ MODAL: FULLSCREEN LANDSCAPE (XOAY NGANG) ═══ */}
@@ -1576,6 +1586,7 @@ export default function CameraDetailScreen({ navigation, route }: any) {
           >
             <UniversalVideoPlayer
               uri={activeStreamUrl}
+              playerStyles={styles}
               paused={isPaused}
               muted={isMuted}
               repeat={true}
@@ -1593,15 +1604,15 @@ export default function CameraDetailScreen({ navigation, route }: any) {
               >
                 <Ionicons name="chevron-back" size={26} color="#FFF" />
               </TouchableOpacity>
-              <Text style={styles.landscapeTitle} numberOfLines={1}>
+              <LocalizedText style={styles.landscapeTitle} numberOfLines={1}>
                 {cameraDisplayName} • {currentTime} • {camera.resolution}
-              </Text>
+              </LocalizedText>
               {isRecording && (
                 <View style={styles.recordingBadge}>
                   <Animated.View style={[styles.recordingDot, { opacity: recDotAnim }]} />
-                  <Text style={styles.recordingText}>
+                  <LocalizedText style={styles.recordingText}>
                     REC {Math.floor(recordDuration / 60).toString().padStart(2, '0')}:{(recordDuration % 60).toString().padStart(2, '0')}
-                  </Text>
+                  </LocalizedText>
                 </View>
               )}
             </View>
@@ -1624,7 +1635,7 @@ export default function CameraDetailScreen({ navigation, route }: any) {
                 <Ionicons name="mic-outline" size={22} color="#FFF" />
               </TouchableOpacity>
               <TouchableOpacity style={styles.landscapeIconBtn} onPress={handleResolutionSwitch}>
-                <Text style={styles.landscapeHdText}>{camera.resolution}</Text>
+                <LocalizedText style={styles.landscapeHdText}>{camera.resolution}</LocalizedText>
               </TouchableOpacity>
               <TouchableOpacity
                 style={styles.landscapeIconBtn}
@@ -1646,7 +1657,7 @@ export default function CameraDetailScreen({ navigation, route }: any) {
                 <View style={[styles.eventIconCircle, { width: 30, height: 30, backgroundColor: '#EF4444' }]}>
                   <Ionicons name="warning" size={16} color="#FFF" />
                 </View>
-                <Text style={styles.modalTitle}>Clip Sự Kiện 5 Giây</Text>
+                <LocalizedText style={styles.modalTitle}>Clip Sự Kiện 5 Giây</LocalizedText>
               </View>
               <TouchableOpacity onPress={() => setSelectedIncidentForReplay(null)}>
                 <Ionicons name="close" size={24} color="#FFF" />
@@ -1655,6 +1666,7 @@ export default function CameraDetailScreen({ navigation, route }: any) {
             <View style={styles.modalPlayer}>
               <UniversalVideoPlayer
                 uri={selectedIncidentForReplay?.video_clip_url || DEFAULT_MOCK_STREAM}
+                playerStyles={styles}
                 style={{ width: '100%', height: 220 }}
                 repeat={true}
                 showControls={true}
@@ -1663,17 +1675,17 @@ export default function CameraDetailScreen({ navigation, route }: any) {
               />
               <View style={styles.modalClipBadge}>
                 <View style={styles.modalClipDot} />
-                <Text style={styles.modalClipBadgeText}>5s BUFFER REPLAY</Text>
+                <LocalizedText style={styles.modalClipBadgeText}>5s BUFFER REPLAY</LocalizedText>
               </View>
             </View>
             <View style={{ padding: 16 }}>
-              <Text style={styles.modalMsg}>{selectedIncidentForReplay?.message}</Text>
-              <Text style={styles.modalSub}>
+              <LocalizedText style={styles.modalMsg}>{selectedIncidentForReplay?.message}</LocalizedText>
+              <LocalizedText style={styles.modalSub}>
                 Trích xuất tự động từ bộ đệm RAM Hub Orange Pi 5 → MinIO Cloud (FR08).
-              </Text>
+              </LocalizedText>
               <TouchableOpacity style={styles.modalSOSBtn} onPress={handleSOS115}>
                 <Ionicons name="call" size={18} color="#FFF" />
-                <Text style={styles.modalSOSText}>GỌI CẤP CỨU 115 NGAY</Text>
+                <LocalizedText style={styles.modalSOSText}>GỌI CẤP CỨU 115 NGAY</LocalizedText>
               </TouchableOpacity>
             </View>
           </View>
@@ -1687,8 +1699,8 @@ export default function CameraDetailScreen({ navigation, route }: any) {
             {/* Header */}
             <View style={styles.ptzHeader}>
               <View>
-                <Text style={styles.ptzTitle}>Điều Khiển Xoay Camera 360°</Text>
-                <Text style={styles.ptzSub}>Imou Ranger 2C • Pan 355° / Tilt -5° ~ 80°</Text>
+                <LocalizedText style={styles.ptzTitle}>Điều Khiển Xoay Camera 360°</LocalizedText>
+                <LocalizedText style={styles.ptzSub}>Imou Ranger 2C • Pan 355° / Tilt -5° ~ 80°</LocalizedText>
               </View>
               <TouchableOpacity onPress={() => setShowPTZModal(false)} activeOpacity={0.7}>
                 <Ionicons name="close-circle" size={28} color="#94A3B8" />
@@ -1699,22 +1711,22 @@ export default function CameraDetailScreen({ navigation, route }: any) {
             <View style={styles.ptzGaugesRow}>
               <View style={styles.ptzGaugeBadge}>
                 <Ionicons name="swap-horizontal" size={14} color="#0284C7" />
-                <Text style={styles.ptzGaugeLabel}>Pan (Ngang):</Text>
-                <Text style={styles.ptzGaugeValue}>{panAngle}° / 355°</Text>
+                <LocalizedText style={styles.ptzGaugeLabel}>Pan (Ngang):</LocalizedText>
+                <LocalizedText style={styles.ptzGaugeValue}>{panAngle}° / 355°</LocalizedText>
               </View>
               <View style={styles.ptzGaugeBadge}>
                 <Ionicons name="swap-vertical" size={14} color="#0284C7" />
-                <Text style={styles.ptzGaugeLabel}>Tilt (Dọc):</Text>
-                <Text style={styles.ptzGaugeValue}>{tiltAngle}° / 80°</Text>
+                <LocalizedText style={styles.ptzGaugeLabel}>Tilt (Dọc):</LocalizedText>
+                <LocalizedText style={styles.ptzGaugeValue}>{tiltAngle}° / 80°</LocalizedText>
               </View>
             </View>
 
             {/* MQTT Command Banner */}
             <View style={styles.ptzMqttBanner}>
               <View style={styles.ptzMqttDot} />
-              <Text style={styles.ptzMqttText} numberOfLines={1}>
+              <LocalizedText style={styles.ptzMqttText} numberOfLines={1}>
                 {ptzActionToast || `MQTT: camera/${camera.id}/ptz → {"pan": ${panAngle}, "tilt": ${tiltAngle}}`}
-              </Text>
+              </LocalizedText>
             </View>
 
             {/* Virtual D-Pad Controller */}
@@ -1745,7 +1757,7 @@ export default function CameraDetailScreen({ navigation, route }: any) {
                   activeOpacity={0.7}
                 >
                   <Ionicons name="home" size={22} color="#0284C7" />
-                  <Text style={styles.dpadCenterText}>HOME</Text>
+                  <LocalizedText style={styles.dpadCenterText}>HOME</LocalizedText>
                 </TouchableOpacity>
 
                 {/* RIGHT */}
@@ -1769,7 +1781,7 @@ export default function CameraDetailScreen({ navigation, route }: any) {
             </View>
 
             {/* Presets Quick-Jump */}
-            <Text style={styles.ptzSectionTitle}>Điểm Quan Sát Quan Trọng (Presets)</Text>
+            <LocalizedText style={styles.ptzSectionTitle}>Điểm Quan Sát Quan Trọng (Presets)</LocalizedText>
             <View style={styles.presetsRow}>
               {PRESETS.map((p) => {
                 const isSelected = panAngle === p.pan && tiltAngle === p.tilt;
@@ -1785,9 +1797,9 @@ export default function CameraDetailScreen({ navigation, route }: any) {
                       size={18}
                       color={isSelected ? Colors.primary : '#475569'}
                     />
-                    <Text style={[styles.presetChipText, isSelected && styles.presetChipTextActive]}>
+                    <LocalizedText style={[styles.presetChipText, isSelected && styles.presetChipTextActive]}>
                       {p.name}
-                    </Text>
+                    </LocalizedText>
                   </TouchableOpacity>
                 );
               })}
@@ -1802,8 +1814,8 @@ export default function CameraDetailScreen({ navigation, route }: any) {
               <View style={styles.ptzTrackingLeft}>
                 <Ionicons name="scan-outline" size={20} color="#0F172A" />
                 <View style={{ marginLeft: 10 }}>
-                  <Text style={styles.ptzTrackingTitle}>Tự động bám người (Smart Tracking)</Text>
-                  <Text style={styles.ptzTrackingSub}>Tự xoay camera theo chuyển động người già</Text>
+                  <LocalizedText style={styles.ptzTrackingTitle}>Tự động bám người (Smart Tracking)</LocalizedText>
+                  <LocalizedText style={styles.ptzTrackingSub}>Tự xoay camera theo chuyển động người già</LocalizedText>
                 </View>
               </View>
               <View style={[styles.toggle, smartTracking && styles.toggleOn]}>
@@ -1819,7 +1831,7 @@ export default function CameraDetailScreen({ navigation, route }: any) {
         <View style={styles.settingsOverlay}>
           <View style={[styles.settingsCard, isDarkMode && { backgroundColor: colors.card, borderColor: colors.border, borderWidth: 1 }]}>
             <View style={styles.settingsHeader}>
-              <Text style={[styles.settingsTitle, isDarkMode && { color: colors.textPrimary }]}>Cài Đặt Camera</Text>
+              <LocalizedText style={[styles.settingsTitle, isDarkMode && { color: colors.textPrimary }]}>Cài Đặt Camera</LocalizedText>
               <TouchableOpacity onPress={() => setShowSettingsModal(false)}>
                 <Ionicons name="close-circle" size={28} color={isDarkMode ? colors.textMuted : '#94A3B8'} />
               </TouchableOpacity>
@@ -1830,14 +1842,14 @@ export default function CameraDetailScreen({ navigation, route }: any) {
                 <Ionicons name="camera-outline" size={22} color={isDarkMode ? colors.textPrimary : '#1E293B'} />
               </View>
               <View style={{ flex: 1, marginLeft: 12 }}>
-                <Text style={[styles.settingsCamName, isDarkMode && { color: colors.textPrimary }]}>{camera.name}</Text>
-                <Text style={[styles.settingsCamRoom, isDarkMode && { color: colors.textSecondary }]}>{camera.room} • Imou Ranger 2C</Text>
+                <LocalizedText style={[styles.settingsCamName, isDarkMode && { color: colors.textPrimary }]}>{camera.name}</LocalizedText>
+                <LocalizedText style={[styles.settingsCamRoom, isDarkMode && { color: colors.textSecondary }]}>{camera.room} • Imou Ranger 2C</LocalizedText>
               </View>
               <View style={[styles.onlinePill, !camera.isOnline && { backgroundColor: '#FEE2E2' }]}>
                 <View style={[styles.onlineDot, !camera.isOnline && { backgroundColor: '#EF4444' }]} />
-                <Text style={[styles.onlineText, !camera.isOnline && { color: '#EF4444' }]}>
+                <LocalizedText style={[styles.onlineText, !camera.isOnline && { color: '#EF4444' }]}>
                   {camera.isOnline ? 'Online' : 'Offline'}
-                </Text>
+                </LocalizedText>
               </View>
             </View>
 
@@ -1850,8 +1862,8 @@ export default function CameraDetailScreen({ navigation, route }: any) {
                   <Ionicons name="eye-off-outline" size={20} color={isDarkMode ? colors.textPrimary : '#1E293B'} />
                 </View>
                 <View style={{ marginLeft: 12 }}>
-                  <Text style={[styles.settingsRowTitle, isDarkMode && { color: colors.textPrimary }]}>Chế Độ Riêng Tư</Text>
-                  <Text style={[styles.settingsRowSub, isDarkMode && { color: colors.textSecondary }]}>Cụp ống kính, tắt luồng video</Text>
+                  <LocalizedText style={[styles.settingsRowTitle, isDarkMode && { color: colors.textPrimary }]}>Chế Độ Riêng Tư</LocalizedText>
+                  <LocalizedText style={[styles.settingsRowSub, isDarkMode && { color: colors.textSecondary }]}>Cụp ống kính, tắt luồng video</LocalizedText>
                 </View>
               </View>
               <View style={[styles.toggle, camera.isSleep && styles.toggleOn]}>
@@ -1866,8 +1878,8 @@ export default function CameraDetailScreen({ navigation, route }: any) {
                   <Ionicons name="shield-checkmark-outline" size={20} color={isDarkMode ? colors.textPrimary : '#1E293B'} />
                 </View>
                 <View style={{ marginLeft: 12 }}>
-                  <Text style={[styles.settingsRowTitle, isDarkMode && { color: colors.textPrimary }]}>AI Protect (YOLO-Pose)</Text>
-                  <Text style={[styles.settingsRowSub, isDarkMode && { color: colors.textSecondary }]}>Nhận dạng tư thế & phát hiện té ngã</Text>
+                  <LocalizedText style={[styles.settingsRowTitle, isDarkMode && { color: colors.textPrimary }]}>AI Protect (YOLO-Pose)</LocalizedText>
+                  <LocalizedText style={[styles.settingsRowSub, isDarkMode && { color: colors.textSecondary }]}>Nhận dạng tư thế & phát hiện té ngã</LocalizedText>
                 </View>
               </View>
               <View style={[styles.toggle, camera.isAIProtect && styles.toggleOn]}>
@@ -1882,8 +1894,8 @@ export default function CameraDetailScreen({ navigation, route }: any) {
                   <Ionicons name="person-outline" size={20} color={isDarkMode ? colors.textPrimary : '#1E293B'} />
                 </View>
                 <View style={{ marginLeft: 12 }}>
-                  <Text style={[styles.settingsRowTitle, isDarkMode && { color: colors.textPrimary }]}>Smart Tracking (Theo Dõi Đối Tượng)</Text>
-                  <Text style={[styles.settingsRowSub, isDarkMode && { color: colors.textSecondary }]}>Tự động xoay PTZ 355° bám sát người</Text>
+                  <LocalizedText style={[styles.settingsRowTitle, isDarkMode && { color: colors.textPrimary }]}>Smart Tracking (Theo Dõi Đối Tượng)</LocalizedText>
+                  <LocalizedText style={[styles.settingsRowSub, isDarkMode && { color: colors.textSecondary }]}>Tự động xoay PTZ 355° bám sát người</LocalizedText>
                 </View>
               </View>
               <View style={[styles.toggle, smartTracking && styles.toggleOn]}>
@@ -1905,8 +1917,8 @@ export default function CameraDetailScreen({ navigation, route }: any) {
                   <MaterialCommunityIcons name="radio-handheld" size={20} color="#1E293B" />
                 </View>
                 <View style={{ marginLeft: 12 }}>
-                  <Text style={styles.settingsRowTitle}>Microphone & Đàm Thoại 2 Chiều</Text>
-                  <Text style={styles.settingsRowSub}>Mở bảng Walkie-Talkie đàm thoại với phòng</Text>
+                  <LocalizedText style={styles.settingsRowTitle}>Microphone & Đàm Thoại 2 Chiều</LocalizedText>
+                  <LocalizedText style={styles.settingsRowSub}>Mở bảng Walkie-Talkie đàm thoại với phòng</LocalizedText>
                 </View>
               </View>
               <Ionicons name="chevron-forward" size={18} color="#94A3B8" />
@@ -1915,7 +1927,7 @@ export default function CameraDetailScreen({ navigation, route }: any) {
             <View style={[styles.settingsDivider, isDarkMode && { backgroundColor: colors.border }]} />
 
             {/* Resolution */}
-            <Text style={[styles.settingsLabel, isDarkMode && { color: colors.textPrimary }]}>Độ Phân Giải</Text>
+            <LocalizedText style={[styles.settingsLabel, isDarkMode && { color: colors.textPrimary }]}>Độ Phân Giải</LocalizedText>
             <View style={styles.resRow}>
               {(['HD', 'BASIC'] as const).map((res) => {
                 const active = camera.resolution === res;
@@ -1928,7 +1940,7 @@ export default function CameraDetailScreen({ navigation, route }: any) {
                       showPtzFeedback(`Đã chuyển độ phân giải sang ${res}`);
                     }}
                   >
-                    <Text style={[styles.resChipText, isDarkMode && { color: colors.textSecondary }, active && styles.resChipTextActive]}>{res}</Text>
+                    <LocalizedText style={[styles.resChipText, isDarkMode && { color: colors.textSecondary }, active && styles.resChipTextActive]}>{res}</LocalizedText>
                   </TouchableOpacity>
                 );
               })}
@@ -1937,16 +1949,16 @@ export default function CameraDetailScreen({ navigation, route }: any) {
             {/* Hardware */}
             <View style={[styles.hwBox, isDarkMode && { backgroundColor: colors.background, borderColor: colors.border, borderWidth: 1 }]}>
               <View style={[styles.hwRow, isDarkMode && { borderBottomColor: colors.border }]}>
-                <Text style={[styles.hwKey, isDarkMode && { color: colors.textSecondary }]}>Bộ đệm RAM</Text>
-                <Text style={[styles.hwVal, isDarkMode && { color: colors.textPrimary }]}>5 giây (FR08)</Text>
+                <LocalizedText style={[styles.hwKey, isDarkMode && { color: colors.textSecondary }]}>Bộ đệm RAM</LocalizedText>
+                <LocalizedText style={[styles.hwVal, isDarkMode && { color: colors.textPrimary }]}>5 giây (FR08)</LocalizedText>
               </View>
               <View style={[styles.hwRow, isDarkMode && { borderBottomColor: colors.border }]}>
-                <Text style={[styles.hwKey, isDarkMode && { color: colors.textSecondary }]}>Mã thiết bị</Text>
-                <Text style={[styles.hwVal, isDarkMode && { color: colors.textPrimary }]}>{camera.id}</Text>
+                <LocalizedText style={[styles.hwKey, isDarkMode && { color: colors.textSecondary }]}>Mã thiết bị</LocalizedText>
+                <LocalizedText style={[styles.hwVal, isDarkMode && { color: colors.textPrimary }]}>{camera.id}</LocalizedText>
               </View>
               <View style={[styles.hwRow, { borderBottomWidth: 0 }]}>
-                <Text style={[styles.hwKey, isDarkMode && { color: colors.textSecondary }]}>Stream URL</Text>
-                <Text style={[styles.hwVal, { color: '#0284C7' }]}>{camera.streamUrl}</Text>
+                <LocalizedText style={[styles.hwKey, isDarkMode && { color: colors.textSecondary }]}>Stream URL</LocalizedText>
+                <LocalizedText style={[styles.hwVal, { color: '#0284C7' }]}>{camera.streamUrl}</LocalizedText>
               </View>
             </View>
           </View>
@@ -1965,10 +1977,10 @@ export default function CameraDetailScreen({ navigation, route }: any) {
                 <MaterialCommunityIcons name="shield-alert" size={26} color="#DC2626" />
               </View>
               <View style={{ flex: 1 }}>
-                <Text style={styles.sirenDialogTitle}>Kích Hoạt Còi Báo Động</Text>
+                <LocalizedText style={styles.sirenDialogTitle}>Kích Hoạt Còi Báo Động</LocalizedText>
                 <View style={styles.sirenSeverityBadge}>
                   <View style={styles.sirenSeverityDot} />
-                  <Text style={styles.sirenSeverityText}>MỨC ĐỘ: KHẨN CẤP • 90dB</Text>
+                  <LocalizedText style={styles.sirenSeverityText}>MỨC ĐỘ: KHẨN CẤP • 90dB</LocalizedText>
                 </View>
               </View>
               <TouchableOpacity
@@ -1983,21 +1995,21 @@ export default function CameraDetailScreen({ navigation, route }: any) {
             {/* Device info */}
             <View style={styles.sirenDeviceRow}>
               <Ionicons name="videocam" size={16} color={Colors.primary} />
-              <Text style={styles.sirenDeviceText}>
-                Thiết bị: <Text style={{ fontWeight: '800', color: '#0F172A' }}>{cameraDisplayName}</Text>
-              </Text>
+              <LocalizedText style={styles.sirenDeviceText}>
+                Thiết bị: <LocalizedText style={{ fontWeight: '800', color: colors.textPrimary }}>{cameraDisplayName}</LocalizedText>
+              </LocalizedText>
               <View style={styles.sirenDeviceOnline}>
                 <View style={{ width: 6, height: 6, borderRadius: 3, backgroundColor: '#10B981' }} />
-                <Text style={{ fontSize: 10, fontWeight: '700', color: '#10B981' }}>Online</Text>
+                <LocalizedText style={{ fontSize: 10, fontWeight: '700', color: '#10B981' }}>Online</LocalizedText>
               </View>
             </View>
 
             {/* Warning box */}
             <View style={styles.sirenWarningBox}>
               <Ionicons name="volume-high" size={18} color="#DC2626" style={{ marginTop: 1 }} />
-              <Text style={styles.sirenWarningText}>
-                Loa camera sẽ phát âm thanh còi hú tần số cao với cường độ lên tới <Text style={{ fontWeight: '900', color: '#991B1B' }}>90dB</Text>. Đảm bảo người thân đã được thông báo trước.
-              </Text>
+              <LocalizedText style={styles.sirenWarningText}>
+                Loa camera sẽ phát âm thanh còi hú tần số cao với cường độ lên tới <LocalizedText style={{ fontWeight: '900', color: '#991B1B' }}>90dB</LocalizedText>. Đảm bảo người thân đã được thông báo trước.
+              </LocalizedText>
             </View>
 
             {/* Purpose bullets */}
@@ -2011,7 +2023,7 @@ export default function CameraDetailScreen({ navigation, route }: any) {
                   <View style={[styles.sirenBulletIcon, { backgroundColor: `${item.color}12` }]}>
                     <Ionicons name={item.icon as any} size={14} color={item.color} />
                   </View>
-                  <Text style={styles.sirenBulletText}>{item.text}</Text>
+                  <LocalizedText style={styles.sirenBulletText}>{item.text}</LocalizedText>
                 </View>
               ))}
             </View>
@@ -2023,7 +2035,7 @@ export default function CameraDetailScreen({ navigation, route }: any) {
                 onPress={() => setShowSirenConfirmModal(false)}
                 activeOpacity={0.7}
               >
-                <Text style={styles.sirenDialogCancelText}>Hủy Bỏ</Text>
+                <LocalizedText style={styles.sirenDialogCancelText}>Hủy Bỏ</LocalizedText>
               </TouchableOpacity>
 
               <TouchableOpacity
@@ -2032,7 +2044,7 @@ export default function CameraDetailScreen({ navigation, route }: any) {
                 activeOpacity={0.8}
               >
                 <MaterialCommunityIcons name="bullhorn" size={18} color="#FFF" />
-                <Text style={styles.sirenDialogActivateText}>BẬT CÒI NGAY</Text>
+                <LocalizedText style={styles.sirenDialogActivateText}>BẬT CÒI NGAY</LocalizedText>
               </TouchableOpacity>
             </View>
           </View>
@@ -2050,10 +2062,10 @@ export default function CameraDetailScreen({ navigation, route }: any) {
                   <MaterialCommunityIcons name="radio-handheld" size={24} color={Colors.primary} />
                 </View>
                 <View>
-                  <Text style={styles.intercomTitle}>Đàm Thoại 2 Chiều Walkie-Talkie</Text>
-                  <Text style={styles.intercomSub}>
+                  <LocalizedText style={styles.intercomTitle}>Đàm Thoại 2 Chiều Walkie-Talkie</LocalizedText>
+                  <LocalizedText style={styles.intercomSub}>
                     Loa Imou Ranger 2C • Âm lượng {speakerVolume}%
-                  </Text>
+                  </LocalizedText>
                 </View>
               </View>
               <TouchableOpacity
@@ -2091,14 +2103,14 @@ export default function CameraDetailScreen({ navigation, route }: any) {
                   size={16}
                   color={intercomMode === 'PTT' ? Colors.primary : '#64748B'}
                 />
-                <Text
+                <LocalizedText
                   style={[
                     styles.intercomModeTabText,
                     intercomMode === 'PTT' && styles.intercomModeTabTextActive,
                   ]}
                 >
                   Nhấn & Giữ Nói (PTT)
-                </Text>
+                </LocalizedText>
               </TouchableOpacity>
 
               <TouchableOpacity
@@ -2120,14 +2132,14 @@ export default function CameraDetailScreen({ navigation, route }: any) {
                   size={16}
                   color={intercomMode === 'HANDS_FREE' ? '#059669' : '#64748B'}
                 />
-                <Text
+                <LocalizedText
                   style={[
                     styles.intercomModeTabText,
                     intercomMode === 'HANDS_FREE' && { color: '#059669', fontWeight: '800' },
                   ]}
                 >
                   Rảnh Tay (Gọi Liên Tục)
-                </Text>
+                </LocalizedText>
               </TouchableOpacity>
             </View>
 
@@ -2152,7 +2164,7 @@ export default function CameraDetailScreen({ navigation, route }: any) {
                 ))}
               </View>
 
-              <Text style={styles.intercomStatusText}>
+              <LocalizedText style={styles.intercomStatusText}>
                 {isTransmitting
                   ? intercomMode === 'PTT'
                     ? '🟢 ĐANG TRUYỀN GIỌNG NÓI TỚI LOA CAMERA...'
@@ -2160,7 +2172,7 @@ export default function CameraDetailScreen({ navigation, route }: any) {
                   : intercomMode === 'PTT'
                     ? 'Chạm và GIỮ nút micro bên dưới để nói'
                     : 'Chạm nút bên dưới để bắt đầu đàm thoại 2 chiều'}
-              </Text>
+              </LocalizedText>
             </View>
 
             {/* Main Central Microphone Button */}
@@ -2181,14 +2193,14 @@ export default function CameraDetailScreen({ navigation, route }: any) {
                       size={44}
                       color={isTransmitting ? '#FFF' : Colors.primary}
                     />
-                    <Text
+                    <LocalizedText
                       style={[
                         styles.pttBtnLabel,
                         isTransmitting && { color: '#FFF', fontWeight: '900' },
                       ]}
                     >
                       {isTransmitting ? 'ĐANG NÓI' : 'GIỮ ĐỂ NÓI'}
-                    </Text>
+                    </LocalizedText>
                   </View>
                 </TouchableOpacity>
               ) : (
@@ -2211,9 +2223,9 @@ export default function CameraDetailScreen({ navigation, route }: any) {
                       size={40}
                       color="#FFF"
                     />
-                    <Text style={styles.handsFreeBtnLabel}>
+                    <LocalizedText style={styles.handsFreeBtnLabel}>
                       {isTransmitting ? 'KẾT THÚC' : 'BẬT GỌI'}
-                    </Text>
+                    </LocalizedText>
                   </View>
                 </TouchableOpacity>
               )}
@@ -2223,7 +2235,7 @@ export default function CameraDetailScreen({ navigation, route }: any) {
             <View style={styles.intercomControlCard}>
               <View style={styles.intercomCardHeader}>
                 <Ionicons name="volume-medium" size={16} color="#0F172A" />
-                <Text style={styles.intercomCardTitle}>Âm Lượng Loa Camera: {speakerVolume}%</Text>
+                <LocalizedText style={styles.intercomCardTitle}>Âm Lượng Loa Camera: {speakerVolume}%</LocalizedText>
               </View>
               <View style={styles.intercomVolumeChipsRow}>
                 {[50, 75, 100].map((vol) => (
@@ -2238,14 +2250,14 @@ export default function CameraDetailScreen({ navigation, route }: any) {
                       showPtzFeedback(`Âm lượng loa camera: ${vol}%`);
                     }}
                   >
-                    <Text
+                    <LocalizedText
                       style={[
                         styles.volChipText,
                         speakerVolume === vol && styles.volChipTextActive,
                       ]}
                     >
                       {vol === 100 ? '100% (Cực đại)' : `${vol}%`}
-                    </Text>
+                    </LocalizedText>
                   </TouchableOpacity>
                 ))}
               </View>
@@ -2258,7 +2270,7 @@ export default function CameraDetailScreen({ navigation, route }: any) {
               >
                 <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8 }}>
                   <Ionicons name="shield-checkmark" size={18} color={aiNoiseFilter ? '#0284C7' : '#94A3B8'} />
-                  <Text style={styles.intercomNoiseLabel}>Lọc ồn AI 2 chiều (AEC / Noise Suppression)</Text>
+                  <LocalizedText style={styles.intercomNoiseLabel}>Lọc ồn AI 2 chiều (AEC / Noise Suppression)</LocalizedText>
                 </View>
                 <View style={[styles.toggle, aiNoiseFilter && styles.toggleOn]}>
                   <View style={[styles.toggleThumb, aiNoiseFilter && styles.toggleThumbOn]} />
@@ -2268,7 +2280,7 @@ export default function CameraDetailScreen({ navigation, route }: any) {
 
             {/* Quick Voice Messages for Elderly */}
             <View style={styles.quickVoiceSection}>
-              <Text style={styles.quickVoiceTitle}>TIN NHẮN GIỌNG NÓI NHANH (PHÁT QUA LOA):</Text>
+              <LocalizedText style={styles.quickVoiceTitle}>TIN NHẮN GIỌNG NÓI NHANH (PHÁT QUA LOA):</LocalizedText>
               <ScrollView
                 horizontal
                 showsHorizontalScrollIndicator={false}
@@ -2290,7 +2302,7 @@ export default function CameraDetailScreen({ navigation, route }: any) {
                       color={quickMsgSent === msg.text ? Colors.primary : '#475569'}
                       style={{ marginRight: 6 }}
                     />
-                    <Text
+                    <LocalizedText
                       style={[
                         styles.quickVoiceChipText,
                         quickMsgSent === msg.text && styles.quickVoiceChipTextActive,
@@ -2298,7 +2310,7 @@ export default function CameraDetailScreen({ navigation, route }: any) {
                       numberOfLines={1}
                     >
                       {msg.text}
-                    </Text>
+                    </LocalizedText>
                   </TouchableOpacity>
                 ))}
               </ScrollView>
@@ -2313,7 +2325,7 @@ export default function CameraDetailScreen({ navigation, route }: any) {
 // ═══════════════════════════════════════════
 // STYLES
 // ═══════════════════════════════════════════
-const styles = StyleSheet.create({
+const baseStyles = StyleSheet.create({
   safeArea: {
     flex: 1,
     backgroundColor: '#F6F8FA',

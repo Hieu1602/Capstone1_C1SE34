@@ -1,0 +1,261 @@
+# CẨM NANG PHÁC ĐỒ ĐIỀU TRỊ & XỬ TRÍ CẤP CỨU Y TẾ CHUYÊN SÂU CHO NGƯỜI CAO TUỔI
+Dự án: Hệ thống Giám sát & Chatbot Y tế AuraCare AI
+Đối tượng áp dụng: Cụ Nguyễn Văn An (82 tuổi, Mã BN: #ELD-8402, Phòng 102 - Tầng 1)
+Bệnh nền: Tăng huyết áp độ 2, Tiểu đường Type 2, Thoái hóa khớp gối, Tiền sử té ngã 2024
+Dị ứng tuyệt đối: Kháng sinh nhóm Penicillin (Beta-lactam)
+Bác sĩ phụ trách: BS. CKI Trần Minh Tuấn (0912.345.678)
+Người bảo hộ liên hệ: Nguyễn Hữu Nghĩa (Con trai trưởng - 0908.123.456)
+
+================================================================================
+PHẦN 1: PHÁC ĐỒ CẤP CỨU ĐỘT QUỴ NÃO (QUY TẮC F.A.S.T)
+================================================================================
+1. Dấu hiệu nhận diện nhanh F.A.S.T:
+   - F (Face - Mặt): Miệng méo, rãnh mũi má mờ, nụ cười lệch, chảy nước dãi một bên.
+   - A (Arms - Tay chân): Yếu hoặc liệt một bên tay/chân. Yêu cầu giơ 2 tay lên, 1 tay rơi xuống hoặc không nâng lên được.
+   - S (Speech - Lời nói): Nói ngọng, phát âm khó, nói đớ, câu từ lộn xộn hoặc không hiểu người khác nói gì.
+   - T (Time - Thời gian): "GIỜ VÀNG" là dưới 3 đến 4.5 giờ để dùng thuốc tiêu sợi huyết (rTPA) hoặc can thiệp lấy huyết khối cơ học.
+
+2. Hành động cấp cứu ngay:
+   - GỌI 115 NGAY LẬP TỨC. Báo rõ nghi ngờ đột quỵ và thời điểm khởi phát chính xác.
+   - Đặt cụ nằm đầu cao 30 độ (nếu tỉnh), nới lỏng cổ áo và thắt lưng.
+   - Nằm nghiêng an toàn (tư thế hồi sức) nếu cụ có nôn ói hoặc hôn mê để tránh sặc vào phổi.
+   - TUYỆT ĐỐI KHÔNG: Không cạo gió, không cắt lể đầu ngón tay/dái tai, không cho uống nước chanh, không cho uống thuốc hạ áp hay aspirin khi chưa có chỉ định chụp CT sọ não.
+
+================================================================================
+PHẦN 2: XỬ TRÍ CẤN HẠ ĐƯỜNG HUYẾT CẤP TÍNH (HYPOGLYCEMIA)
+================================================================================
+1. Nguy cơ đặc thù: Cụ An bị Tiểu đường Type 2, dùng thuốc hạ đường huyết, rất dễ hạ đường huyết nếu ăn ít hoặc uống thuốc sai giờ.
+2. Triệu chứng báo động:
+   - Run rẩy tay chân, vã mồ hôi lạnh toàn thân.
+   - Đói cồn cào, hoa mắt, chóng mặt, tim đập nhanh hồi hộp.
+   - Thay đổi tính tình: cáu gắt, lơ mơ, nói nhảm, co giật hoặc ngất xỉu.
+3. Quy tắc xử trí 15 - 15 chuẩn y khoa:
+   - Bước 1: Cho cụ uống ngay 15g carbohydrate tác dụng nhanh:
+     * 1/2 cốc nước ép trái cây (cam/táo ~120ml), HOẶC
+     * 3 thìa cà phê đường/mật ong pha 100ml nước ấm, HOẶC
+     * 4-5 viên kẹo ngọt.
+   - Bước 2: Cho cụ nằm nghỉ yên tĩnh 15 phút.
+   - Bước 3: Đo lại đường huyết mao mạch hoặc kiểm tra lại triệu chứng. Nếu vẫn < 70 mg/dL (3.9 mmol/L), lặp lại thêm 15g đường.
+   - Khi cụ tỉnh táo: Cho ăn ngay bữa nhẹ (bát cháo hoặc mẩu bánh mì) để duy trì đường huyết.
+   - LƯU Ý: Nếu cụ hôn mê hoặc co giật, KHÔNG NHỒI thức ăn/nước vào miệng vì dễ gây ngạt thở! Gọi 115 ngay.
+
+================================================================================
+PHẦN 3: XỬ TRÍ SẶC NGHẸN & HÓC DỊ VẬT ĐƯỜNG THỞ (THỦ THUẬT HEIMLICH)
+================================================================================
+1. Dấu hiệu: Đang ăn hoặc uống thuốc bỗng ho sặc sụa, hai tay ôm chặt cổ họng, tím tái môi đầu chi, không nói thành tiếng, thở rít.
+2. Xử trí khi cụ còn tỉnh (Thủ thuật Heimlich cho người cao tuổi):
+   - Đứng sau lưng cụ, vòng hai tay ôm quanh eo cụ.
+   - Một bàn tay nắm thành nắm đấm, đặt ngón cái ngay phía trên rốn và dưới mũi ức.
+   - Bàn tay kia ôm lấy nắm đấm, giật mạnh theo hướng VÀO TRONG VÀ LÊN TRÊN (hình chữ J).
+   - Thực hiện liên tục 5 lần dứt khoát cho đến khi dị vật bật ra ngoài.
+   - Nếu cụ yếu ngồi xe lăn: Người sơ cứu đứng phía sau lưng ghế, tựa ngực vào lưng ghế và thực hiện động tác tương tự.
+3. Nếu cụ bất tỉnh: Đặt cụ nằm ngửa trên sàn cứng, gọi 115 ngay và tiến hành ép tim hồi sinh tim phổi (CPR), kiểm tra miệng lấy dị vật nếu nhìn thấy rõ.
+
+================================================================================
+PHẦN 4: CẢNH BÁO AN TOÀN THUỐC & DỊ ỨNG PENICILLIN
+================================================================================
+1. ĐẶC BIỆT NGUY HIỂM: Cụ An dị ứng nặng với Penicillin.
+   - CẤM TUYỆT ĐỐI các thuốc chứa: Penicillin V, Penicillin G, Amoxicillin (Clamoxyl, Augmentin), Ampicillin, Cloxacillin, Sultamicillin.
+   - Thận trọng chéo với nhóm Cephalosporin thế hệ 1 (Cephalexin, Cefadroxil).
+   - Khi đi khám bệnh hoặc mua thuốc bất kỳ, người nhà PHẢI thông báo: "Cụ dị ứng Penicillin".
+2. Thuốc hạ huyết áp & tiểu đường:
+   - Uống thuốc đúng giờ chỉ định của BS Trần Minh Tuấn.
+   - Không tự ý tăng liều khi thấy huyết áp tăng nhẹ tức thời.
+   - Tránh thay đổi tư thế đột ngột từ nằm sang đứng để ngừa tụt huyết áp tư thế đứng.
+
+================================================================================
+PHẦN 5: SA SÚT TRÍ TUỆ & HỘI CHỨNG HOÀNG HÔN (SUNDOWNING)
+================================================================================
+1. Biểu hiện: Khi trời chập tối (khoảng 17h - 20h), người già trở nên bồn chồn, lo lắng, hoang tưởng, đòi đi ra ngoài, không nhận ra người thân.
+2. Kỹ năng can thiệp:
+   - Giữ ánh sáng phòng ngủ và phòng khách đầy đủ, bật đèn trước khi trời tối để giảm bóng mờ gây ảo giác.
+   - Giữ môi trường yên tĩnh, mở nhạc êm dịu, không tranh cãi hay giải thích lý lẽ phức tạp.
+   - Nói giọng trầm ấm, vỗ nhẹ vai, dẫn dắt sang chủ đề vui vẻ: xem lại ảnh gia đình, uống trà hoa cúc ấm.
+   - Khóa then chốt cửa sổ và cửa chính có chuông cảnh báo để tránh cụ đi lạc trong đêm.
+
+================================================================================
+PHẦN 6: CƠN TĂNG HUYẾT ÁP KỊCH PHÁT (HYPERTENSIVE CRISIS)
+================================================================================
+1. Ngưỡng báo động nguy hiểm: Huyết áp tâm thu >= 180 mmHg hoặc huyết áp tâm trương >= 120 mmHg.
+2. Dấu hiệu tổn thương cơ quan đích:
+   - Đau đầu dữ dội vùng chẩm hoặc sau gáy, chóng mặt quay cuồng.
+   - Nhìn mờ, hoa mắt, chảy máu cam khó cầm.
+   - Đau thắt ngực, khó thở dữ dội, buồn nôn, lú lẫn (dấu hiệu tiền đột quỵ / nhồi máu cơ tim).
+3. Phác đồ xử trí tại chỗ:
+   - Đặt cụ ngồi nghỉ ngơi yên tĩnh tựa lưng 45 độ, thả lỏng chân tay, nới lỏng cúc áo cổ và ngực.
+   - Tuyệt đối không để cụ vận động mạnh hay đi lại.
+   - Không được vội vã ngậm hoặc uống liều cao thuốc hạ áp nhanh (như nhỏ giọt Adalat dưới lưỡi) vì có thể làm tụt áp quá nhanh gây thiếu máu não cục bộ.
+   - Kiểm tra lại huyết áp sau 10-15 phút. Nếu vẫn >= 180/120 mmHg hoặc kèm đau ngực/mờ mắt, gọi 115 ngay lập tức.
+
+================================================================================
+PHẦN 7: DỰ PHÒNG SAY NẮNG, MẤT NƯỚC & RỐI LOẠN ĐIỆN GIẢI Ở NGƯỜI GIÀ
+================================================================================
+1. Đặc điểm sinh lý người cao tuổi:
+   - Trung tâm thụ cảm khát ở vùng dưới đồi suy giảm chức năng, khiến người già thường không cảm thấy khát dù cơ thể đang thiếu nước trầm trọng.
+   - Chức năng cô đặc nước tiểu của thận suy giảm, dễ dẫn đến cô đặc máu, tăng nguy cơ huyết khối mạch máu não.
+2. Biểu hiện thiếu nước / sốc nhiệt:
+   - Da khô ráp, véo da lâu đàn hồi, môi khô nứt nẻ, lưỡi trắng bẩn.
+   - Nước tiểu ít và có màu vàng sẫm hoặc hổ phách đậm.
+   - Tụt huyết áp tư thế đứng, chóng mặt khi đứng lên, lú lẫn, ngủ gà, sốt do mất nước.
+3. Phác đồ chăm sóc & bù dịch:
+   - Chia nhỏ lượng nước uống trong ngày: Khuyến nghị 1.5 - 2.0 lít/ngày, uống từng ngụm nhỏ cách mỗi 1-2 giờ, không đợi khát mới uống.
+   - Sử dụng dung dịch Oresol pha đúng tỷ lệ, nước canh rau, nước dừa tươi hoặc nước đỗ đen.
+   - Tránh uống nhiều trà đặc, cà phê hoặc nước ngọt đóng chai vì gây lợi tiểu mất nước.
+
+================================================================================
+PHẦN 8: PHÒNG NGỪA VÀ CHĂM SÓC LOÉT TÌ ĐÈ (PRESSURE ULCERS) CHO NGƯỜI NẰM LÂU
+================================================================================
+1. Vị trí nguy cơ cao: Vùng xương cùng cụt, gót chân, hai bên mắt cá, ụ ngồi mông, khuỷu tay và bả vai.
+2. Nguyên tắc phòng ngừa vàng:
+   - Thay đổi tư thế nằm (ngửa, nghiêng trái 30°, nghiêng phải 30°) ĐỀU ĐẶN MỖI 2 GIỜ.
+   - Sử dụng đệm hơi chống loét có van đảo chiều luân phiên áp lực hoặc đệm nước y tế.
+   - Kê gối mềm dưới bắp chân để gót chân lơ lửng không tì trực tiếp xuống mặt giường.
+   - Giữ da luôn khô ráo và sạch sẽ, lau mồ hôi bằng khăn mềm ấm, thay tã lót ngay khi ướt.
+3. Xử lý khi có dấu hiệu loét giai đoạn 1 (vùng da đỏ ửng, ấn không biến mất):
+   - Tuyệt đối KHÔNG xoa bóp, đấm bóp trực tiếp lên vùng da đỏ tổn thương vì làm dập nát mao mạch dưới da.
+   - Giải phóng áp lực hoàn toàn khỏi vùng da đó. Xịt dung dịch bảo vệ da y tế hoặc dùng miếng dán Hydrocolloid.
+   - Tăng cường dinh dưỡng giàu chất đạm (thịt nạc, cá, trứng, sữa dinh dưỡng y học) và Vitamin C, Kẽm để tái tạo mô da.
+
+================================================================================
+PHẦN 9: QUẢN LÝ ĐA THUỐC, PHÒNG TRÁNH QUÊN LIỀU & TƯƠNG TÁC THUỐC
+================================================================================
+1. Nguy cơ đa thuốc (Polypharmacy):
+   - Người cao tuổi mắc cùng lúc tăng huyết áp, tiểu đường, thoái hóa khớp dễ uống nhầm hoặc quên liều, dẫn đến biến chứng nguy kịch.
+2. Giải pháp tổ chức dùng thuốc an toàn:
+   - Sử dụng hộp chia thuốc 7 ngày với 4 ngăn rõ ràng (Sáng - Trưa - Chiều - Tối) có nhãn chữ to.
+   - Đặt lịch hẹn tự động hoặc chuông nhắc trên trợ lý AuraCare AI trước mỗi bữa ăn.
+3. Xử trí khi phát hiện quên liều:
+   - Nếu vừa quên trong vòng 2-3 giờ: Cho cụ uống ngay khi nhớ ra.
+   - Nếu gần đến giờ uống liều kế tiếp: BỎ QUA LIỀU ĐÃ QUÊN và uống liều kế tiếp theo lịch.
+   - TUYỆT ĐỐI KHÔNG UỐNG GẤP ĐÔI LIỀU vì nguy cơ gây hạ huyết áp quá mức hoặc tụt đường huyết đột ngột đe dọa tính mạng!
+
+================================================================================
+PHẦN 10: PHÁC ĐỒ HỒI SINH TIM PHỔI (CPR) CƠ BẢN CHO NGƯỜI CAO TUỔI
+================================================================================
+1. Chỉ định thực hiện: Khi cụ bất tỉnh đột ngột, không có phản xạ khi gọi to vỗ vai, không thở hoặc thở ngáp cá.
+2. Các bước cấp cứu khẩn cấp:
+   - BƯỚC 1: GỌI 115 NGAY LẬP TỨC và bật loa ngoài để nhân viên y tế hướng dẫn đồng thời.
+   - BƯỚC 2: Đặt cụ nằm ngửa trên mặt phẳng cứng (sàn nhà hoặc đệm phản gỗ cứng, không ép trên đệm mút lún mềm).
+   - BƯỚC 3: Đặt gốc hai bàn tay lồng vào nhau ở chính giữa nửa dưới xương ức (ngang đường nối hai núm vú).
+   - BƯỚC 4: Giữ hai cánh tay thẳng đứng, dùng lực thân trên ép xuống với tần số 100 - 120 lần/phút, độ sâu 5 cm (lưu ý xương sườn người già giòn nên ép đều tay, tránh giật cục, để ngực nở lại hoàn toàn sau mỗi lần ép).
+   - BƯỚC 5: Tỷ lệ 30 lần ép tim : 2 lần thổi ngạt (nếu người sơ cứu được huấn luyện thổi ngạt; nếu không thì duy trì ép tim liên tục không gián đoạn Hands-Only CPR cho đến khi xe 115 đến).
+
+================================================================================
+PHẦN 11: MÊ SẢNG CẤP TÍNH (DELIRIUM) & PHÂN BIỆT VỚI SA SÚT TRÍ TUỆ
+================================================================================
+1. Khái niệm & Mức độ nguy hiểm:
+   - Mê sảng là tình trạng suy giảm nhận thức cấp tính xuất hiện đột ngột (trong vài giờ đến vài ngày), có tính chất dao động trong ngày.
+   - Đây là một CẤP CỨU Y KHOA vì phản ánh một bệnh lý tiềm ẩn cấp tính: nhiễm trùng nặng, thiếu oxy, hạ đường huyết, mất nước hoặc ngộ độc thuốc.
+2. Dấu hiệu phân biệt:
+   - Delirium (Mê sảng): Khởi phát ĐỘT NGỘT, mất tập trung chú ý nghiêm trọng, hay nói lảm nhảm, ảo thị nhìn thấy ma quỷ/côn trùng, giấc ngủ đảo lộn.
+   - Dementia (Sa sút trí tuệ): Tiến triển TỪ TỪ nhiều tháng/năm, sự tập trung tương đối ổn định ở giai đoạn đầu.
+3. Hành động xử trí:
+   - Kiểm tra ngay: Đường huyết mao mạch, SpO2, thân nhiệt, và các thuốc mới uống.
+   - Đưa cụ đến bệnh viện cấp cứu ngay để tìm ổ nhiễm trùng hoặc tổn thương não.
+
+================================================================================
+PHẦN 12: ĐÁNH GIÁ THANG ĐIỂM ĐAU (VAS) & NGUYÊN TẮC DÙNG THUỐC GIẢM ĐAU AN TOÀN
+================================================================================
+1. Đánh giá thang điểm đau (Visual Analog Scale - VAS 0-10):
+   - 0 điểm: Không đau.
+   - 1-3 điểm: Đau nhẹ (thoái hóa khớp gối khi cử động nhẹ).
+   - 4-6 điểm: Đau vừa (ảnh hưởng giấc ngủ, nhăn mặt, rên rỉ).
+   - 7-10 điểm: Đau dữ dội (nghi ngờ gãy xương, nhồi máu cơ tim, tắc mạch cấp).
+2. Nguyên tắc an toàn thuốc giảm đau cho cụ Nguyễn Văn An:
+   - Paracetamol: Thuốc giảm đau đầu tay an toàn nhất. Liều tối đa KHÔNG QUÁ 3000 mg/ngày (tối đa 6 viên 500mg/ngày) để tránh hoại tử tế bào gan. Khoảng cách giữa 2 lần uống tối thiểu 4-6 giờ.
+   - CẢNH BÁO NSAID: Tuyệt đối thận trọng với thuốc kháng viêm không steroid (Ibuprofen, Diclofenac, Meloxicam, Celecoxib) vì gây viêm loét dạ dày xuất huyết tiêu hóa và suy thận cấp ở người già tăng huyết áp.
+
+================================================================================
+PHẦN 13: BỆNH PARKINSON, RUN TAY & KỸ THUẬT PHÒNG NGỪA ĐÔNG CỨNG DÁNG ĐI
+================================================================================
+1. Đặc điểm triệu chứng:
+   - Run khi nghỉ (Resting tremor): Run rõ ở bàn tay kiểu "vê thuốc lào" khi thả lỏng, giảm khi vận động chủ động (khác với run do hạ đường huyết là run toàn thân kèm vã mồ hôi).
+   - Cứng đờ cơ bắp, cử động chậm chạp (Bradykinesia), mất phản xạ thăng bằng.
+   - Hiện tượng "Đông cứng dáng đi" (Freezing of Gait): Bỗng nhiên hai bàn chân dính chặt xuống sàn nhà như bị đóng băng, rất dễ ngã chúi đầu về phía trước.
+2. Kỹ thuật hỗ trợ vượt qua đông cứng dáng đi an toàn:
+   - Tuyệt đối không kéo giật tay cụ khi cụ bị đông cứng vì làm mất thăng bằng ngã ngay lập tức.
+   - Hướng dẫn cụ dừng lại, hít thở sâu, đứng thẳng người.
+   - Sử dụng ám hiệu thị giác: "Hãy bước qua một vạch kẻ tưởng tượng" hoặc đếm nhịp "Một - Hai - Bước".
+   - Sử dụng gậy 4 chân hoặc khung tập đi có bánh xe hãm an toàn.
+
+================================================================================
+PHẦN 14: NHIỄM TRÙNG TIẾT NIỆU KÍN ĐÁO (UTI) Ở NGƯỜI CAO TUỔI
+================================================================================
+1. Đặc điểm báo động kín đáo:
+   - Ở người già, phản xạ miễn dịch yếu nên nhiễm trùng tiểu THƯỜNG KHÔNG CÓ SỐT CAO hoặc không có tiểu buốt rõ ràng như người trẻ.
+   - Dấu hiệu đầu tiên và nổi bật nhất là: ĐỘT NHIÊN LÚ LẪN, kích động, tiểu không tự chủ, ngủ lịm hoặc té ngã không rõ nguyên nhân.
+   - Nước tiểu đục, có mùi khai nồng bất thường hoặc có cặn lắng.
+2. Hướng xử trí:
+   - Lấy mẫu nước tiểu xét nghiệm tổng phân tích nước tiểu và cấy vi khuẩn.
+   - Bù nước ấm đầy đủ, vệ sinh sạch sẽ vùng sinh dục ngoài.
+   - Dùng kháng sinh THEO KHÁNG SINH ĐỒ chỉ định của bác sĩ (LƯU Ý: KHÔNG DÙNG Penicillin/Amoxicillin do cụ An dị ứng).
+
+================================================================================
+PHẦN 15: CHỨNG KHÓ NUỐT (DYSPHAGIA) & PHÒNG NGỪA VIÊM PHỔI HÍT
+================================================================================
+1. Nguy cơ viêm phổi hít:
+   - Cơ hầu họng ở người 82 tuổi thoái hóa, phản xạ nuốt chậm chạp, thức ăn hoặc thuốc dễ lạc vào đường thở gây viêm phổi hít tử vong.
+2. Dấu hiệu khó nuốt:
+   - Chảy nước miếng, thức ăn đọng trong má, nuốt nghẹn, ho sặc sụa sau khi nuốt, giọng nói biến đổi ướt đục ("gurgly voice").
+3. Quy tắc chăm sóc bữa ăn an toàn:
+   - Tư thế ngồi: Cụ phải ngồi thẳng lưng 90 độ khi ăn và DUY TRÌ TƯ THẾ NGỒI ÍT NHẤT 30 PHÚT SAU KHI ĂN (tuyệt đối không nằm ngay).
+   - Chế biến: Thức ăn mềm, xay nhuyễn, dạng súp sánh sệt hoặc dùng bột làm đặc (chất lỏng loãng như nước lọc dễ gây sặc hơn nước sệt).
+   - Đút từng thìa nhỏ, chờ cụ nuốt hết hoàn toàn mới đút thìa tiếp theo. Khi uống thuốc dạng viên, uống cùng sữa chua hoặc thạch mềm nếu được bác sĩ đồng ý.
+
+================================================================================
+PHẦN 16: CHẾ ĐỘ DINH DƯỠNG & TIẾT CHẾ ĂN UỐNG CHO NGƯỜI GIÀ (TIỂU ĐƯỜNG & CAO HUYẾT ÁP)
+================================================================================
+1. Nguyên tắc dinh dưỡng người bệnh cao huyết áp & tiểu đường:
+   - Tiết chế muối: Tổng lượng muối ăn không vượt quá 5g/ngày (~1 thìa cà phê gạt ngang). Hạn chế tối đa các món dưa cà muối, mắm tôm, cá khô, đồ hộp chế biến sẵn giàu natri.
+   - Kiểm soát đường huyết: Không ăn bánh kẹo ngọt, nước ngọt có ga, bánh ngọt đóng gói; hạn chế hoa quả quá ngọt (sầu riêng, xoài chín, nhãn, mít). Thay vào đó ăn cam bưởi, thanh long, táo xanh.
+   - Bổ sung chất xơ & đạm lành mạnh: Rau củ luộc mềm (bí xanh, mồng tơi, súp lơ), đạm dễ tiêu từ cá nạc, ức gà, đậu phụ, sữa đậu nành không đường hoặc sữa chuyên biệt cho người tiểu đường.
+   - Chia nhỏ bữa ăn: Ăn 4 - 5 bữa nhỏ trong ngày thay vì 3 bữa lớn để tránh tăng đường huyết vọt sau ăn và tránh hạ đường huyết xa bữa ăn.
+
+================================================================================
+PHẦN 17: AN TOÀN TẮM RỬA, VỆ SINH CÁ NHÂN & PHÒNG NGỪA ĐỘT QUỴ PHÒNG TẮM
+================================================================================
+1. Khung giờ tắm rửa an toàn:
+   - Thời gian lý tưởng: Buổi sáng ấm áp (9h30 - 11h) hoặc buổi chiều mát (15h - 17h).
+   - CẤM TUYỆT ĐỐI TẮM ĐÊM (sau 19h): Ban đêm nhiệt độ giảm sâu, người cao tuổi có thành mạch xơ vữa tắm đêm rất dễ co thắt mạch máu đột ngột gây tai biến đột quỵ não hoặc nhồi máu cơ tim cấp.
+2. Quy trình tắm khoa học:
+   - Nhiệt độ nước: Nước ấm vừa phải từ 37°C đến 38°C (thử nước bằng khuỷu tay trước).
+   - Thứ tự dội nước: Dội nước ấm từ bàn chân, cẳng chân, tay rồi mới đến thân mình để cơ thể thích ứng dần; TUYỆT ĐỐI KHÔNG xối nước ấm hoặc nước lạnh đột ngột lên đầu.
+   - Thời gian tắm: Tối đa 10 - 15 phút, không ngâm nước quá lâu.
+3. Trang bị an toàn nhà tắm phòng chống trượt ngã:
+   - Bắt buộc lót thảm cao su chống trượt trên toàn bộ sàn nhà tắm.
+   - Lắp đặt thanh vịn Inox chắc chắn cạnh bồn cầu và vòi hoa sen.
+   - Sử dụng ghế tắm chuyên dụng có tựa lưng để cụ ngồi tắm, không để cụ đứng tắm lâu dễ hoa mắt chóng mặt.
+
+================================================================================
+PHẦN 18: TÂM LÝ TUỔI GIÀ, RỐI LOẠN GIẤC NGỦ & KỸ NĂNG DỖ DÀNH KHI CỤ CÁU GẮT
+================================================================================
+1. Rối loạn giấc ngủ ở người cao tuổi:
+   - Người già thường giảm thời gian ngủ sâu, hay thức giấc nửa đêm và dậy rất sớm.
+   - CẢNH BÁO: Tuyệt đối không tự ý cho cụ uống thuốc ngủ hoặc an thần (Diazepam, Seduxen...) khi chưa có chỉ định của bác sĩ lão khoa vì thuốc làm tăng nguy cơ lú lẫn, yếu cơ và té ngã gãy xương vào ban đêm.
+   - Biện pháp tự nhiên: Ngâm chân nước ấm với gừng muối trước khi ngủ 30 phút, phòng ngủ thoáng mát, tắt đèn trắng dùng đèn vàng dịu, không uống trà đặc/cà phê sau 15h.
+2. Kỹ năng giao tiếp khi cụ cáu gắt, đòi đi lang thang hoặc từ chối uống thuốc:
+   - Nguyên tắc: "Không tranh cãi - Không phủ định - Chuyển hướng chú ý" (Validation & Distraction).
+   - Khi cụ từ chối uống thuốc: Hãy đồng cảm trước: "Con biết bố đang mệt và ngán thuốc lắm. Bố con mình cùng uống ngụm nước ấm rồi ăn nửa chiếc bánh này cho khỏe nhé".
+   - Khi cụ đòi về nhà cũ: Đi dạo cùng cụ một đoạn ngắn quanh phòng khách, trò chuyện ôn hòa về kỷ niệm xưa để cụ an lòng, sau đó hướng dẫn cụ quay lại giường nghỉ ngơi.
+
+================================================================================
+PHẦN 19: VẬN ĐỘNG, DƯỠNG SINH & PHỤC HỒI CHỨC NĂNG NHẸ NHÀNG
+================================================================================
+1. Lợi ích của vận động ở tuổi 80+:
+   - Giúp lưu thông khí huyết, duy trì sức mạnh cơ bắp, chống teo cơ, chống táo bón và ngừa huyết khối tĩnh mạch.
+2. Chế độ luyện tập khuyến cáo:
+   - Đi bộ nhẹ nhàng: 15 - 30 phút mỗi ngày trên mặt phẳng êm (sân nhà hoặc hành lang có tay vịn), mang giày vừa chân có đế chống trượt ôm gót.
+   - Bài tập tại chỗ: Xoay tròn khớp cổ tay, cổ chân vào buổi sáng trước khi bước xuống giường; bài tập vẩy tay Dịch Cân Kinh nhẹ nhàng; tập hít sâu thở chậm bằng cơ hoành.
+   - Lưu ý: Ngừng tập ngay nếu cụ thấy chóng mặt, hụt hơi, tức ngực hoặc vã mồ hôi.
+
+================================================================================
+PHẦN 20: HƯỚNG DẪN SỬ DỤNG THIẾT BỊ GIÁM SÁT AURACARE & NÚT BẤM SOS
+================================================================================
+1. Nút bấm khẩn cấp SOS:
+   - Thiết bị đeo tay hoặc nút bấm không dây gắn ở đầu giường ngủ và cạnh bồn cầu.
+   - Khi xảy ra sự cố (đau thắt ngực, ngã, khó thở): Nhấn giữ nút SOS trong 2 giây, hệ thống sẽ tự động phát còi báo động tại trạm biên và gửi tin nhắn cảnh báo ưu tiên tới điện thoại người bảo hộ Nguyễn Hữu Nghĩa (0908.123.456).
+2. Chế độ hoạt động ngoại tuyến 100% (Offline Edge AI):
+   - Ngay cả khi mất kết nối Internet hoặc mất mạng Wi-Fi, toàn bộ thuật toán phát hiện té ngã, cảnh báo sốt, nhận diện giọng nói và hướng dẫn sơ cấp cứu của AuraCare AI vẫn hoạt động ổn định và chính xác trên thiết bị cục bộ.
+3. Thông tin bác sĩ điều trị phụ trách:
+   - Bác sĩ CKI Trần Minh Tuấn (Bệnh viện Lão khoa Trung ương) - Hotline: 0912.345.678.
+   - Cấp cứu y tế khẩn cấp toàn quốc: 115.

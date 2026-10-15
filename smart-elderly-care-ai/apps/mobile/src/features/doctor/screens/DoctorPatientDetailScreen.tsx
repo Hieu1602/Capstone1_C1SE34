@@ -713,10 +713,10 @@ export default function DoctorPatientDetailScreen() {
               ]}
             >
               <View style={styles.sectionHeaderRow}>
-                <View style={{ flexDirection: 'row', alignItems: 'center', flex: 1 }}>
+                <View style={{ flexDirection: 'row', alignItems: 'center', flex: 1, marginRight: 8 }}>
                   <Ionicons name="fitness" size={18} color="#EF4444" style={{ marginRight: 6 }} />
-                  <Text style={[styles.sectionTitle, { color: colors.textPrimary }]}>
-                    Danh mục Bệnh lý nền (Chẩn đoán)
+                  <Text style={[styles.sectionTitle, { color: colors.textPrimary, flexShrink: 1 }]} numberOfLines={1}>
+                    Danh mục Bệnh lý nền
                   </Text>
                 </View>
                 <TouchableOpacity
@@ -935,7 +935,7 @@ export default function DoctorPatientDetailScreen() {
                   {/* Hàng nút hành động: Chỉnh sửa & Xóa */}
                   <View style={styles.rxActionRow}>
                     <Text style={[styles.rxDoctorCredit, { color: isDarkMode ? '#64748B' : '#94A3B8' }]}>
-                      BS: {rx.doctor_name || 'BS. Trần Văn Minh'}
+                      BS: {rx.doctor_name || 'BSCKII. Nguyễn Văn Minh'}
                     </Text>
                     <View style={{ flexDirection: 'row', gap: 8 }}>
                       <TouchableOpacity
@@ -1537,7 +1537,7 @@ const styles = StyleSheet.create({
   },
   appointmentText: { fontSize: 12, color: '#0369A1', fontWeight: '700' },
 
-  emptyHintText: { fontSize: 13, fontStyle: 'italic', marginVertical: 8 },
+  emptyHintText: { fontSize: 13, fontStyle: 'italic', marginTop: 4, marginBottom: 8, lineHeight: 20 },
 
   conditionCardItem: {
     borderRadius: 12,

@@ -1,0 +1,174 @@
+# GIÁO TRÌNH SINH LÝ HỌC Y KHOA - BỘ Y TẾ
+# TÀI LIỆU CHUẨN ĐÀO TẠO BÁC SĨ ĐA KHOA (CHỦ BIÊN: GS.TS PHẠM THỊ MINH ĐỨC)
+# ỨNG DỤNG LÂM SÀNG TRONG THEO DÕI SINH TỒN, CẤP CỨU VÀ CHĂM SÓC NGƯỜI CAO TUỔI
+
+================================================================================
+# CHƯƠNG 1: SINH LÝ HỆ TIM MẠCH VÀ TUẦN HOÀN (CARDIOVASCULAR PHYSIOLOGY)
+================================================================================
+
+## 1.1. HOẠT ĐỘNG CƠ HỌC VÀ CHU KỲ HOẠT ĐỘNG CỦA TIM
+- Khái niệm: Tim hoạt động như một cái bơm kép hút và đẩy máu tự động, nhịp nhàng theo chu kỳ nhờ hệ thống nút tự động (Nút xoang - Keith-Flack, Nút nhĩ thất - Aschoff-Tawara, Bó His và Mạng Purkinje).
+- Chu kỳ tim (Cardiac Cycle): Ở người trưởng thành có nhịp tim trung bình 75 chu kỳ/phút, một chu kỳ tim kéo dài khoảng 0,8 giây, gồm 3 giai đoạn:
+  1. Giai đoạn tâm nhĩ thu (0,1 giây): Hai tâm nhĩ co bóp, tống nốt 25-30% lượng máu còn lại xuống hai tâm thất (70-75% máu đã xuống thất thụ động trong thời kỳ tâm trương toàn bộ trước đó).
+  2. Giai đoạn tâm thất thu (0,3 giây): Gồm thời kỳ tăng áp (0,05 giây - van nhĩ thất đóng tạo tiếng tim thứ nhất T1) và thời kỳ tống máu (0,25 giây - van tổ chim mở, áp suất thất trái vọt lên 120 mmHg, thất phải 25 mmHg, tống máu vào động mạch chủ và động mạch phổi).
+  3. Giai đoạn tâm trương toàn bộ (0,4 giây): Cơ tim giãn hoàn toàn, van tổ chim đóng lại (tạo tiếng tim thứ hai T2), hút máu từ tĩnh mạch về nhĩ và đổ xuống thất.
+- Thể tích tâm thu (Stroke Volume - SV): Lượng máu một tâm thất bơm vào động mạch trong một nhát bóp, bình thường khoảng 60 - 80 ml (trung bình 70 ml).
+- Cung lượng tim (Cardiac Output - CO): Lượng máu tim bơm vào động mạch trong 1 phút: CO = SV x Tần số tim (HR). Người bình thường khi nghỉ ngơi: CO = 70 ml x 75 bpm = 4,5 - 5,5 lít/phút.
+
+## 1.2. HUYẾT ÁP ĐỘNG MẠCH VÀ CÁC YẾU TỐ QUYẾT ĐỊNH
+- Khái niệm: Huyết áp là áp lực của dòng máu tác động lên một đơn vị diện tích thành mạch động mạch.
+- Các chỉ số huyết áp:
+  1. Huyết áp tâm thu (Huyết áp tối đa): Phản ánh sức co bóp của cơ tim và thể tích tâm thu, giá trị bình thường từ 90 - 139 mmHg (tối ưu < 120 mmHg).
+  2. Huyết áp tâm trương (Huyết áp tối thiểu): Phản ánh sức cản ngoại vi của các tiểu động mạch và độ đàn hồi của thành mạch, giá trị bình thường từ 60 - 89 mmHg (tối ưu < 80 mmHg).
+  3. Huyết áp hiệu số (Áp lực mạch): Là hiệu số giữa HA tâm thu và HA tâm trương (HA hiệu số = HA tâm thu - HA tâm trương), bình thường từ 30 - 50 mmHg. Nếu hiệu số < 20 mmHg gọi là kẹt huyết áp (gặp trong tràn dịch màng ngoài tim, suy tim nặng, sốc mất máu).
+  4. Huyết áp trung bình: Là áp lực trung bình tạo ra trong suốt chu kỳ tim để đảm bảo lưu lượng máu nuôi mô liên tục: HA trung bình ≈ HA tâm trương + 1/3 (HA tâm thu - HA tâm trương).
+- 4 yếu tố quyết định huyết áp động mạch:
+  1. Thể tích máu trong lòng mạch: Mất máu, mất nước làm giảm thể tích tuần hoàn -> tụt huyết áp. Truyền thừa dịch, ứ muối nước -> tăng huyết áp.
+  2. Lực co bóp của tim: Tim co bóp mạnh -> tăng huyết áp tâm thu; suy tim, nhồi máu cơ tim -> giảm huyết áp tâm thu.
+  3. Sức cản ngoại vi (chủ yếu do bán kính lòng tiểu động mạch): Co mạch làm tăng sức cản -> tăng huyết áp tâm trương; giãn mạch làm giảm sức cản -> tụt huyết áp.
+  4. Độ đàn hồi của thành động mạch lớn: Động mạch chun giãn tốt giúp giảm bớt đỉnh áp lực trong thì tâm thu và duy trì dòng chảy liên tục trong thì tâm trương.
+
+## 1.3. CƠ CHẾ ĐIỀU HÒA HOẠT ĐỘNG TIM VÀ HUYẾT ÁP
+- Điều hòa thần kinh nhanh (Phản xạ áp thụ quan - Baroreceptors):
+  + Khi huyết áp tăng cao: Áp thụ quan tại xoang động mạch cảnh (dây thần kinh Hering - IX) và quai động mạch chủ (dây Cyon-Ludwig - X) bị căng giãn mạnh -> truyền xung động về trung tâm ức chế tim và giãn mạch ở hành não -> kích thích dây X (phó giao cảm), ức chế giao cảm -> làm tim đập chậm, giảm lực co bóp, giãn mạch -> huyết áp hạ về mức bình thường.
+  + Khi huyết áp tụt đột ngột (như người già đứng dậy quá nhanh - hạ huyết áp tư thế): Giảm kích thích áp thụ quan -> giảm ức chế giao cảm -> kích hoạt hệ giao cảm -> tăng nhịp tim, co mạch -> nâng huyết áp.
+- Điều hòa thể dịch dài hạn (Hệ thống RAA - Renin-Angiotensin-Aldosterone):
+  + Khi lưu lượng máu qua thận giảm hoặc huyết áp giảm: Tế bào cạnh cầu thận tiết enzyme Renin vào máu.
+  + Renin biến đổi Angiotensinogen (từ gan) thành Angiotensin I.
+  + Enzyme ACE (Angiotensin Converting Enzyme - chủ yếu ở phổi) biến Angiotensin I thành Angiotensin II.
+  + Angiotensin II là chất co mạch cực mạnh, đồng thời kích thích vỏ thượng thận bài tiết Aldosterone (gây tái hấp thu Na+ và nước tại ống lượn xa và ống góp), kích thích thùy sau tuyến yên tiết ADH (Vasopressin giữ nước) -> phục hồi thể tích tuần hoàn và nâng huyết áp.
+
+## 1.4. ĐẶC ĐIỂM SINH LÝ TIM MẠCH VÀ BỆNH LÝ Ở NGƯỜI CAO TUỔI
+- Xơ cứng động mạch (Arteriosclerosis): Sự thoái hóa sợi chun, tăng sinh mô liên kết xơ và lắng đọng canxi làm giảm tính đàn hồi thành mạch. Hậu quả là tăng huyết áp tâm thu đơn độc (Isolated Systolic Hypertension), áp lực mạch tăng rộng (> 60 mmHg).
+- Suy giảm độ nhạy của phản xạ áp thụ quan: Người cao tuổi dễ bị hạ huyết áp tư thế đứng (Orthostatic Hypotension) - khi thay đổi từ tư thế nằm/ngồi sang đứng, huyết áp tâm thu tụt > 20 mmHg hoặc tâm trương tụt > 10 mmHg gây thiếu máu não thoáng qua, hoa mắt, choáng váng và té ngã.
+- Giảm khối lượng cơ tim và xơ hóa hệ dẫn truyền: Tăng nguy cơ rung nhĩ (Atrial Fibrillation), bloc nhĩ thất, nhịp chậm xoang hoặc ngoại tâm thu.
+
+
+================================================================================
+# CHƯƠNG 2: SINH LÝ HỆ HÔ HẤP VÀ TRAO ĐỔI KHÍ (RESPIRATORY PHYSIOLOGY)
+================================================================================
+
+## 2.1. ĐỘNG HỌC HÔ HẤP VÀ THÔNG KHÍ PHỔI
+- Các động tác hô hấp:
+  + Hít vào thông thường là động tác chủ động nhờ cơ hoành (đóng góp 75% thông khí) và các cơ liên sườn ngoài co lại, làm tăng thể tích lồng ngực cả 3 chiều, tạo áp suất âm trong khoang màng phổi (-2,5 đến -6 mmHg) hút không khí từ khí quyển vào phế nang.
+  + Thở ra thông thường là động tác thụ động do các cơ hít vào giãn ra, tính đàn hồi của mô phổi và thành ngực kéo lồng ngực thu nhỏ lại, đẩy khí ra ngoài.
+- Các thể tích và dung tích hô hấp:
+  1. Thể tích khí lưu thông (TV - Tidal Volume): Thể tích khí hít vào hoặc thở ra trong một nhịp thở bình thường, khoảng 400 - 500 ml.
+  2. Thể tích khí dự trữ hít vào (IRV): Lượng khí có thể hít thêm hết sức sau khi hít vào bình thường, khoảng 1500 - 2000 ml.
+  3. Thể tích khí dự trữ thở ra (ERV): Lượng khí có thể thở ra hết sức sau khi thở ra bình thường, khoảng 1000 - 1500 ml.
+  4. Thể tích khí cặn (RV - Residual Volume): Lượng khí còn lại trong phổi sau khi đã thở ra hết sức, khoảng 1000 - 1200 ml. Thể tích cặn giúp phế nang không bị xẹp hoàn toàn giữa các nhịp thở.
+  5. Dung tích sống (VC - Vital Capacity): Lượng khí tối đa thở ra được sau khi hít vào hết sức: VC = TV + IRV + ERV (bình thường từ 3,5 - 4,5 lít ở nam, 2,5 - 3,5 lít ở nữ).
+  6. Dung tích toàn phổi (TLC - Total Lung Capacity): Toàn bộ lượng khí chứa trong phổi sau khi hít vào hết sức: TLC = VC + RV (khoảng 5 - 6 lít).
+
+## 2.2. TRAO ĐỔI KHÍ TẠI MÀNG PHẾ NANG - MAO MẠCH
+- Màng hô hấp (Màng phế nang - mao mạch) cực mỏng (khoảng 0,5 micromet), gồm 6 lớp: lớp dịch lót phế nang có chất Surfactant, biểu mô phế nang, màng đáy biểu mô, khoảng kẽ, màng đáy mao mạch, và nội mô mao mạch.
+- Cơ chế khuếch tán: Hoàn toàn tuân theo định luật Fick, dựa vào chênh lệch phân áp khí:
+  + Phân áp O2 trong phế nang (PAO2 = 100 mmHg) cao hơn máu tĩnh mạch đến phổi (PvO2 = 40 mmHg) -> O2 khuếch tán nhanh từ phế nang vào máu mao mạch.
+  + Phân áp CO2 trong máu tĩnh mạch đến phổi (PvCO2 = 46 mmHg) cao hơn phế nang (PACO2 = 40 mmHg) -> CO2 khuếch tán từ máu vào phế nang để thải ra ngoài. CO2 khuếch tán nhanh gấp 20 lần O2 nhờ độ hòa tan cao trong dịch.
+- Vai trò của chất hoạt diện Surfactant (do tế bào phế nang type II tiết ra): Giảm sức căng bề mặt của lớp dịch lót phế nang, ngăn ngừa phế nang nhỏ xẹp vào phế nang lớn, giữ màng phế nang khô ráo tránh phù phổi.
+
+## 2.3. VẬN CHUYỂN KHÍ TRONG MÁU
+- Vận chuyển Oxy (O2):
+  + 98,5% Oxy gắn thuận nghịch với nhân Hem của Hemoglobin (Hb) trong hồng cầu tạo thành Oxyhemoglobin (HbO2). Mỗi phân tử Hb có 4 nhân Fe2+ gắn tối đa 4 phân tử O2.
+  + 1,5% Oxy hòa tan vật lý trong huyết tương (tạo ra phân áp PaO2 trong máu động mạch, bình thường 85 - 100 mmHg).
+  + Độ bão hòa oxy trong máu động mạch ngoại vi (SpO2): Tỷ lệ % phân tử Hb gắn oxy, bình thường ở người khỏe mạnh là 95 - 99%. Nếu SpO2 < 92% cảnh báo suy hô hấp cấp; SpO2 < 90% là tình trạng thiếu oxy mô nặng cần thở oxy khẩn cấp.
+- Vận chuyển Carbonic (CO2): 70% dưới dạng ion Bicarbonate (HCO3-) hòa tan trong huyết tương nhờ enzyme Carbonic Anhydrase (CA) trong hồng cầu; 23% gắn với nhóm amin của globin (HbCO2); 7% hòa tan tự do.
+
+## 2.4. ĐIỀU HÒA HÔ HẤP VÀ SUY HÔ HẤP Ở NGƯỜI CAO TUỔI
+- Trung tâm hô hấp nằm ở hành não và cầu não, nhận tín hiệu điều hòa từ:
+  + Nồng độ CO2 máu (PaCO2) và ion H+ (pH máu): Tác động lên vùng cảm ứng hóa học trung ương ở mặt bụng hành não. Đây là kích thích hóa học mạnh nhất đối với nhịp thở. Tăng PaCO2 làm tăng thông khí phổi mạnh mẽ.
+  + Phân áp Oxy máu (PaO2): Chỉ khi PaO2 giảm xuống dưới 60 mmHg mới kích thích mạnh lên các thể xoang cảnh và thể quai động mạch chủ (hóa thụ quan ngoại vi) để tăng nhịp thở.
+- Biến đổi hô hấp ở người cao tuổi:
+  + Lồng ngực bị biến dạng, thoái hóa khớp sụn sườn làm giảm độ giãn nở lồng ngực.
+  + Giảm diện tích màng phế nang mao mạch, xơ hóa thành phế nang làm tăng thể tích khí cặn (RV), giảm dung tích sống (VC).
+  + Phản xạ ho khạc và hoạt động của biểu mô lông chuyển suy giảm, làm tăng nguy cơ ứ đọng đờm dãi, viêm phổi hít và tắc nghẽn đường thở.
+
+
+================================================================================
+# CHƯƠNG 3: SINH LÝ THÂN NHIỆT VÀ ĐIỀU NHIỆT (BODY TEMPERATURE & REGULATION)
+================================================================================
+
+## 3.1. THÂN NHIỆT TRUNG TÂM VÀ THÂN NHIỆT NGOẠI VI
+- Thân nhiệt trung tâm (Core Temperature): Nhiệt độ các tạng sâu trong cơ thể (não, tim, phổi, tạng bụng), luôn được giữ ổn định ở mức 36,5°C - 37,2°C để đảm bảo tốc độ phản ứng enzyme tối ưu. Đo chính xác nhất ở trực tràng (36,5 - 37,5°C), màng nhĩ, miệng (thấp hơn trực tràng 0,3 - 0,5°C), nách (thấp hơn trực tràng 0,5 - 0,7°C).
+- Thân nhiệt ngoại vi (Shell Temperature): Nhiệt độ ở da và mô dưới da, biến thiên linh hoạt theo nhiệt độ môi trường xung quanh (tay, chân có thể từ 30°C - 35°C).
+
+## 3.2. CƠ CHẾ SINH NHIỆT VÀ CƠ CHẾ THẢI NHIỆT
+- Cơ chế sinh nhiệt (Heat Production):
+  1. Chuyển hóa cơ sở (Basal Metabolic Rate): Sinh nhiệt liên tục do hoạt động của tất cả các tế bào, đặc biệt là gan và não.
+  2. Hoạt động cơ: Co cơ run rẩy (Shivering) khi gặp lạnh có thể làm tăng sinh nhiệt lên gấp 4 - 5 lần so với lúc nghỉ. Vận động thể lực làm tăng sinh nhiệt mạnh.
+  3. Tác dụng của hormone: Thyroxin (tuyến giáp) và Catecholamine (Adrenalin, Noradrenalin từ tủy thượng thận) làm tăng chuyển hóa tế bào và tăng sinh nhiệt nhanh chóng.
+- Cơ chế thải nhiệt (Heat Loss):
+  1. Bức xạ nhiệt (Radiation): Truyền nhiệt qua sóng điện từ giữa cơ thể và các vật xung quanh (chiếm 60% lượng nhiệt thải khi nhiệt độ môi trường thấp hơn nhiệt độ cơ thể).
+  2. Dẫn truyền nhiệt (Conduction): Truyền nhiệt trực tiếp khi da tiếp xúc với vật thể khác (chiếm 3 - 5%). Dẫn truyền đối lưu qua không khí/nước tăng khi có gió thổi.
+  3. Bay hơi nước (Evaporation): Thải nhiệt qua bay hơi mồ hôi và qua đường hô hấp. Mỗi lít nước bốc hơi mang đi 580 kcal nhiệt lượng. Khi nhiệt độ môi trường cao hơn thân nhiệt (> 37°C), bài tiết mồ hôi là cơ chế thải nhiệt duy nhất của cơ thể.
+
+## 3.3. TRUNG TÂM ĐIỀU HÒA THÂN NHIỆT VÀ CƠ CHẾ SỐT
+- Trung tâm điều nhiệt nằm ở vùng dưới đồi (Hypothalamus):
+  + Phần trước vùng dưới đồi (Preoptic Anterior Hypothalamus): Là trung tâm chống nóng, kích hoạt giãn mạch ngoại vi, bài tiết mồ hôi, ức chế sinh nhiệt.
+  + Phần sau vùng dưới đồi: Là trung tâm chống lạnh, kích hoạt co mạch da, co cơ run rẩy (rùng mình), dựng lông (nổi da gà), tăng tiết Adrenalin và Thyroxin.
+- Cơ chế sinh bệnh học của sốt (Pathophysiology of Fever):
+  + Tác nhân gây sốt ngoại sinh (Vi khuẩn, virus, nấm, nội độc tố Lipopolysaccharide - LPS, phức hợp miễn dịch) xâm nhập cơ thể.
+  + Kích thích đại thực bào và bạch cầu đơn nhân tiết ra các Cytokine gây sốt nội sinh: Interleukin-1 (IL-1), Yếu tố hoại tử u (TNF-alpha), Interleukin-6 (IL-6), Interferon.
+  + Các Cytokine này theo máu lên vùng dưới đồi, kích thích tế bào nội mô mạch máu não tổng hợp Enzyme Cyclooxygenase (COX-2) chuyển acid arachidonic thành Prostaglandin E2 (PGE2).
+  + PGE2 làm nâng điểm đặt nhiệt (Set-Point) của vùng dưới đồi lên cao hơn bình thường (ví dụ từ 37°C lên 39°C).
+  + Cơ thể nhận định nhiệt độ hiện tại là "quá lạnh" so với điểm đặt mới -> lập tức khởi động cơ chế chống lạnh: co mạch ngoại vi (tay chân lạnh, da tái), rét run rẩy, đắp chăn -> thân nhiệt tăng vọt cho đến khi đạt điểm đặt nhiệt mới.
+
+## 3.4. NGUY CƠ RỐI LOẠN ĐIỀU NHIỆT Ở NGƯỜI CAO TUỔI
+- Nguy cơ hạ thân nhiệt (Hypothermia < 35°C): Người già bị teo lớp mỡ dưới da, giảm chuyển hóa cơ sở, giảm phản xạ run rẩy và co mạch kém nhạy bén. Khi tiếp xúc với phòng lạnh hoặc quạt gió thổi trực tiếp, thân nhiệt có thể tụt nhanh chóng, gây rối loạn nhịp tim, lú lẫn và tử vong thầm lặng.
+- Phản ứng sốt không điển hình: Khi bị nhiễm trùng nặng (viêm phổi, nhiễm trùng tiết niệu, nhiễm trùng huyết), người cao tuổi thường không sốt cao rầm rộ như người trẻ do suy giảm đáp ứng miễn dịch và cytokin. Thay vào đó, bệnh biểu hiện qua dấu hiệu lú lẫn, ngủ gà, mê sảng, bỏ ăn, tụt huyết áp hoặc thở nhanh.
+
+
+================================================================================
+# CHƯƠNG 4: SINH LÝ HỆ THẦN KINH, VẬN ĐỘNG VÀ THĂNG BẰNG
+================================================================================
+
+## 4.1. ĐIỀU HÒA TRƯƠNG LỰC CƠ VÀ THĂNG BẰNG TƯ THẾ
+- Trương lực cơ là trạng thái co nhẹ liên tục của cơ khi nghỉ ngơi, giúp duy trì tư thế cơ thể chống lại trọng lực của Trái Đất.
+- Các trung tâm thần kinh dưới vỏ tham gia kiểm soát trương lực và thăng bằng:
+  1. Nhân đỏ (Red Nucleus) ở cuống não: Phát ra bó nhân đỏ - tủy (Rubrospinal tract), có tác dụng làm tăng trương lực cơ gấp, ức chế cơ duỗi.
+  2. Nhân tiền đình (Vestibular Nuclei) ở cầu não: Phát ra bó tiền đình - tủy (Vestibulospinal tract), có tác dụng làm tăng mạnh trương lực cơ duỗi (các cơ chống trọng lực: cơ lưng, cơ tứ đầu đùi, cơ bắp chân).
+  3. Cấu tạo lưới (Reticular Formation) ở thân não: Phần ức chế ở hành não làm giảm trương lực cơ; phần hoạt hóa ở cầu não làm tăng trương lực cơ.
+  4. Tiểu não (Cerebellum): Giữ vai trò then chốt trong việc điều hòa thăng bằng, phối hợp động tác phức tạp và chỉnh sửa sai số vận động theo thời gian thực.
+  5. Cơ quan tiền đình ở tai trong (Mê đạo xương và màng): Các ống bán khuyên tiếp nhận gia tốc góc khi quay đầu; xoang nang và cầu nang tiếp nhận gia tốc thẳng và trọng lực, gửi tín hiệu qua dây thần kinh số VIII về nhân tiền đình.
+
+## 4.2. HỆ THẦN KINH TỰ CHỦ (AUTONOMIC NERVOUS SYSTEM - ANS)
+- Hệ giao cảm (Sympathetic Nervous System - Fight or Flight):
+  + Trung tâm nằm ở sừng bên chất xám tủy sống từ đoạn ngực D1 đến thắt lưng L2-L3.
+  + Chất dẫn truyền thần kinh tiền hạch là Acetylcholine; hậu hạch là Noradrenalin.
+  + Tác dụng: Tăng nhịp tim, tăng lực co bóp cơ tim, co mạch da và tạng, giãn mạch vành và cơ vân, giãn phế quản, giãn đồng tử, ức chế nhu động tiêu hóa.
+- Hệ phó giao cảm (Parasympathetic Nervous System - Rest and Digest):
+  + Trung tâm nằm ở thân não (dây thần kinh sọ III, VII, IX, X) và tủy cùng S2 - S4. Dây X (Vagus nerve) chi phối 75% hoạt động phó giao cảm toàn thân.
+  + Chất dẫn truyền thần kinh là Acetylcholine tác động lên thụ thể Muscarinic (M) và Nicotinic (N).
+  + Tác dụng: Giảm nhịp tim, giảm lực co bóp tâm nhĩ, co thắt phế quản, tăng tiết dịch tiêu hóa, co đồng tử, kích thích tiểu tiện và đại tiện.
+
+## 4.3. CƠ CHẾ SINH LÝ TÉ NGÃ Ở NGƯỜI CAO TUỔI (FALL MECHANISM)
+- Té ngã ở người già là biến cố nghiêm trọng bắt nguồn từ sự suy thoái đồng thời của nhiều hệ thống sinh lý:
+  1. Suy thoái hệ cảm giác và tiền đình: Giảm độ nhạy của các tế bào lông tiền đình ở tai trong, thoái hóa tế bào thần kinh thị giác và giảm cảm giác bản thể (Proprioception) ở các thụ thể khớp bàn chân.
+  2. Teo cơ sinh lý do tuổi tác (Sarcopenia): Giảm số lượng và thể tích sợi cơ type II (sợi cơ co nhanh), làm giảm sức mạnh cơ tứ đầu đùi và phản xạ co cơ thích ứng khi vấp ngã.
+  3. Kéo dài thời gian dẫn truyền synap thần kinh: Thời gian từ khi thụ cảm thể phát hiện mất thăng bằng đến khi cơ co để trụ chân bị kéo dài hơn gấp đôi so với người trẻ.
+  4. Tụt huyết áp tư thế: Làm thiếu máu cục bộ hồi hải mã và tiểu não tạm thời khi thay đổi tư thế, gây choáng váng dẫn đến ngã quỵ.
+
+
+================================================================================
+# CHƯƠNG 5: SINH LÝ DỊCH CƠ THỂ, THẬN VÀ THĂNG BẰNG NỘI MÔI
+================================================================================
+
+## 5.1. CÁC NGĂN NƯỚC VÀ ĐIỆN GIẢI TRONG CƠ THỂ
+- Nước chiếm 60% trọng lượng cơ thể người trưởng thành (ở người cao tuổi chỉ còn khoảng 50% do giảm khối lượng cơ bắp và tăng mô mỡ).
+- Phân bố dịch:
+  + Dịch nội bào (Intracellular Fluid - ICF): Chiếm 40% trọng lượng cơ thể (2/3 tổng lượng nước). Cation chính là Kali (K+), Magie (Mg2+); Anion chính là Phosphate và Protein.
+  + Dịch ngoại bào (Extracellular Fluid - ECF): Chiếm 20% trọng lượng cơ thể (1/3 tổng lượng nước), gồm dịch kẽ (15%) và huyết tương (5%). Cation chính là Natri (Na+); Anion chính là Clo (Cl-) và Bicarbonate (HCO3-).
+- Áp suất thẩm thấu huyết tương: Bình thường từ 280 - 295 mOsm/kg H2O, quyết định chủ yếu bởi nồng độ Na+, Glucose và Urê máu.
+
+## 5.2. CHỨC NĂNG LỌC VÀ ĐIỀU HÒA NỘI MÔI CỦA THẬN
+- Mức lọc cầu thận (GFR - Glomerular Filtration Rate): Lượng dịch lọc qua tất cả các cầu thận của cả hai thận trong 1 phút, bình thường khoảng 120 - 125 ml/phút (tương đương 180 lít dịch lọc/ngày).
+- Tái hấp thu tại ống thận: 99% lượng nước và các chất điện giải cần thiết được tái hấp thu trở lại máu, chỉ bài tiết khoảng 1 - 1,5 lít nước tiểu/ngày.
+- Hormone điều hòa chức năng thận:
+  + ADH (Vasopressin từ vùng dưới đồi/thùy sau tuyến yên): Tăng tính thấm của ống lượn xa và ống góp với nước thông qua các kênh Aquaporin-2, giúp tái hấp thu nước tối đa khi cơ thể mất nước.
+  + Aldosterone (từ vỏ thượng thận): Tăng tái hấp thu Na+ và bài tiết K+, H+ ở ống lượn xa.
+  + ANP (Atrial Natriuretic Peptide từ tâm nhĩ): Tiết ra khi áp lực tâm nhĩ tăng do thừa thể tích dịch, có tác dụng tăng thải Na+ và nước qua thận, hạ huyết áp.
+
+## 5.3. NGUY CƠ MẤT NƯỚC VÀ RỐI LOẠN ĐIỆN GIẢI Ở NGƯỜI CAO TUỔI
+- Mất cảm giác khát (Hypodipsia): Trung tâm khát ở vùng dưới đồi của người già bị trơ hóa, không phát tín hiệu khát ngay cả khi nồng độ thẩm thấu máu đã tăng cao. Do đó người già rất dễ rơi vào tình trạng mất nước ưu trương thầm lặng.
+- Giảm mức lọc cầu thận sinh lý: Sau tuổi 40, GFR giảm sinh lý khoảng 1 ml/phút mỗi năm. Ở người 75-80 tuổi, GFR có thể chỉ còn 50-60 ml/phút mà nồng độ Creatinin huyết thanh vẫn không tăng cao (do giảm khối lượng cơ bắp).
+- Dễ ngộ độc thuốc và suy thận cấp khi dùng thuốc kháng viêm NSAID, kháng sinh nhóm Aminoside hoặc thuốc ức chế men chuyển khi thiếu dịch.

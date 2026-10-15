@@ -45,35 +45,69 @@ export default function PatientMedicalRecordScreen({ navigation }: any) {
   const [isUploadingFace, setIsUploadingFace] = useState(false);
   const [isFaceModalVisible, setFaceModalVisible] = useState(false);
 
+  const [selectedDate, setSelectedDate] = useState(() => {
+    const d = new Date();
+    const y = d.getFullYear();
+    const m = String(d.getMonth() + 1).padStart(2, '0');
+    const day = String(d.getDate()).padStart(2, '0');
+    return `${y}-${m}-${day}`;
+  });
+
+  const [isCalendarModalVisible, setIsCalendarModalVisible] = useState(false);
+  const [calendarInputDraft, setCalendarInputDraft] = useState('');
+
+  const formatDisplayDateVN = (ymd: string) => {
+    if (!ymd || !ymd.includes('-')) return ymd;
+    const parts = ymd.split('-');
+    if (parts.length === 3) return `${parts[2]}/${parts[1]}/${parts[0]}`;
+    return ymd;
+  };
+
+  const getTodayStr = () => {
+    const d = new Date();
+    return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
+  };
+  const getYesterdayStr = () => {
+    const d = new Date();
+    d.setDate(d.getDate() - 1);
+    return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
+  };
+  const getDaysAgoStr = (days: number) => {
+    const d = new Date();
+    d.setDate(d.getDate() - days);
+    return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
+  };
+
   // Tự động gọi API lấy dữ liệu hồ sơ bệnh án người cao tuổi từ Backend FastAPI
-  useEffect(() => {
-    const loadRecord = async () => {
-      const data = await fetchPatientRecord(1);
-      if (data) {
-        setPatientName(data.name);
-        setBirthYear(data.birth_year);
-        setAge(data.age);
-        setGender(data.gender);
-        setBloodType(data.blood_type);
-        setHeight(String(data.height_cm));
-        setWeight(String(data.weight_kg));
-        if (data.conditions && data.conditions.length > 0) {
-          setConditions(data.conditions);
-        }
-        if (data.drug_allergies) setDrugAllergies(data.drug_allergies);
-        if (data.food_allergies) setFoodAllergies(data.food_allergies);
-        if (data.dietary_notes) setDietaryNotes(data.dietary_notes);
-        if (data.doctor_name) setDoctorName(data.doctor_name);
-        if (data.doctor_phone) setDoctorPhone(data.doctor_phone);
-        if (data.doctor_specialty) setDoctorSpecialty(data.doctor_specialty);
-        if (data.hospital) setHospital(data.hospital);
-        if (data.next_appointment) setNextAppointment(data.next_appointment);
-        if (data.avatar_url) setAvatarUrl(data.avatar_url);
-        if (data.has_face_enrolled !== undefined) setHasFaceEnrolled(Boolean(data.has_face_enrolled));
+  const loadRecord = async (targetDate?: string) => {
+    const data = await fetchPatientRecord(1, targetDate || selectedDate);
+    if (data) {
+      setPatientName(data.name);
+      setBirthYear(data.birth_year);
+      setAge(data.age);
+      setGender(data.gender);
+      setBloodType(data.blood_type);
+      setHeight(String(data.height_cm));
+      setWeight(String(data.weight_kg));
+      if (data.conditions && data.conditions.length > 0) {
+        setConditions(data.conditions);
       }
-    };
-    loadRecord();
-  }, []);
+      if (data.drug_allergies) setDrugAllergies(data.drug_allergies);
+      if (data.food_allergies) setFoodAllergies(data.food_allergies);
+      if (data.dietary_notes) setDietaryNotes(data.dietary_notes);
+      if (data.doctor_name) setDoctorName(data.doctor_name);
+      if (data.doctor_phone) setDoctorPhone(data.doctor_phone);
+      if (data.doctor_specialty) setDoctorSpecialty(data.doctor_specialty);
+      if (data.hospital) setHospital(data.hospital);
+      if (data.next_appointment) setNextAppointment(data.next_appointment);
+      if ((data as any).avatar_url) setAvatarUrl((data as any).avatar_url);
+      if ((data as any).has_face_enrolled !== undefined) setHasFaceEnrolled(Boolean((data as any).has_face_enrolled));
+    }
+  };
+
+  useEffect(() => {
+    loadRecord(selectedDate);
+  }, [selectedDate]);
   const [gender, setGender] = useState('Nam');
   const [bloodType, setBloodType] = useState('');
   const [height, setHeight] = useState('');
@@ -88,10 +122,10 @@ export default function PatientMedicalRecordScreen({ navigation }: any) {
   const [dietaryNotes, setDietaryNotes] = useState('');
 
   // Doctor & Hospital
-  const [doctorName, setDoctorName] = useState('');
-  const [doctorPhone, setDoctorPhone] = useState('');
-  const [doctorSpecialty, setDoctorSpecialty] = useState('');
-  const [hospital, setHospital] = useState('');
+  const [doctorName, setDoctorName] = useState('BS. Trần Văn Minh');
+  const [doctorPhone, setDoctorPhone] = useState('0905111222');
+  const [doctorSpecialty, setDoctorSpecialty] = useState('Lão khoa & Tim mạch');
+  const [hospital, setHospital] = useState('Bệnh viện Lão khoa TW / BV Đà Nẵng');
   const [nextAppointment, setNextAppointment] = useState('');
 
   // Add/Edit modal states
@@ -108,17 +142,18 @@ export default function PatientMedicalRecordScreen({ navigation }: any) {
   const [editHeightDraft, setEditHeightDraft] = useState(height);
 
   const handleCallDoctor = async () => {
-    const cleanPhone = doctorPhone.replace(/\s+/g, '');
+    const activePhone = patientRecord?.doctor_phone || doctorPhone || '0905888999';
+    const cleanPhone = activePhone.replace(/\s+/g, '');
     const url = `tel:${cleanPhone}`;
     try {
       const supported = await Linking.canOpenURL(url);
       if (supported) {
         await Linking.openURL(url);
       } else {
-        Alert.alert('Thông báo', `Gọi số bác sĩ phụ trách: ${doctorPhone}`);
+        Alert.alert('Thông báo', `Gọi số bác sĩ phụ trách: ${activePhone}`);
       }
     } catch {
-      Alert.alert('Thông báo', `Gọi số bác sĩ: ${doctorPhone}`);
+      Alert.alert('Thông báo', `Gọi số bác sĩ: ${activePhone}`);
     }
   };
 
@@ -697,6 +732,218 @@ export default function PatientMedicalRecordScreen({ navigation }: any) {
           </View>
         </View>
 
+        {/* Khối 1.5: Lọc Dữ Liệu Sinh Tồn & Nhật Ký Theo Ngày */}
+        <View
+          style={[
+            styles.cardBlock,
+            {
+              backgroundColor: isDarkMode ? '#1E293B' : '#FFFFFF',
+              borderColor: isDarkMode ? '#334155' : '#E2E8F0',
+            },
+          ]}
+        >
+          <View style={styles.cardHeader}>
+            <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8 }}>
+              <View
+                style={[
+                  styles.cardIconBox,
+                  { backgroundColor: isDarkMode ? 'rgba(37, 99, 235, 0.15)' : '#EFF6FF' },
+                ]}
+              >
+                <Ionicons name="calendar-outline" size={20} color="#2563EB" />
+              </View>
+              <View>
+                <Text
+                  style={[
+                    styles.cardTitle,
+                    { color: isDarkMode ? '#F8FAFC' : '#0F172A' },
+                  ]}
+                >
+                  Nhật ký sinh tồn & Sự kiện theo ngày
+                </Text>
+                <Text
+                  style={[
+                    styles.cardSubtitle,
+                    { color: isDarkMode ? '#94A3B8' : '#64748B' },
+                  ]}
+                >
+                  Đồng bộ từ vòng đeo tay BLE và Hub AI (PostgreSQL)
+                </Text>
+              </View>
+            </View>
+          </View>
+
+          {/* Dải chọn ngày kiểm tra */}
+          <ScrollView horizontal showsHorizontalScrollIndicator={false} style={{ marginVertical: 12 }}>
+            {/* Nút Mở Lịch Date Picker */}
+            {Platform.OS === 'web' ? (
+              <label
+                style={{
+                  position: 'relative',
+                  display: 'inline-flex',
+                  alignItems: 'center',
+                  backgroundColor: '#EFF6FF',
+                  border: '1.5px solid #93C5FD',
+                  borderRadius: 10,
+                  padding: '7px 12px',
+                  marginRight: 8,
+                  cursor: 'pointer',
+                  userSelect: 'none',
+                }}
+              >
+                <input
+                  type="date"
+                  value={selectedDate}
+                  onChange={(e: any) => {
+                    if (e.target.value) {
+                      setSelectedDate(e.target.value);
+                    }
+                  }}
+                  style={{
+                    position: 'absolute',
+                    top: 0,
+                    left: 0,
+                    width: '100%',
+                    height: '100%',
+                    opacity: 0,
+                    cursor: 'pointer',
+                  }}
+                />
+                <Ionicons name="calendar" size={16} color="#2563EB" style={{ marginRight: 6 }} />
+                <span style={{ fontSize: 12, fontWeight: 700, color: '#2563EB' }}>
+                  📅 Ngày: {formatDisplayDateVN(selectedDate)}
+                </span>
+                <Ionicons name="chevron-down" size={12} color="#2563EB" style={{ marginLeft: 6 }} />
+              </label>
+            ) : (
+              <TouchableOpacity
+                style={{
+                  flexDirection: 'row',
+                  alignItems: 'center',
+                  paddingHorizontal: 12,
+                  paddingVertical: 8,
+                  borderRadius: 10,
+                  marginRight: 8,
+                  backgroundColor: '#EFF6FF',
+                  borderWidth: 1.5,
+                  borderColor: '#93C5FD',
+                }}
+                onPress={() => {
+                  setCalendarInputDraft(selectedDate);
+                  setIsCalendarModalVisible(true);
+                }}
+                activeOpacity={0.8}
+              >
+                <Ionicons name="calendar" size={16} color="#2563EB" style={{ marginRight: 6 }} />
+                <Text style={{ fontSize: 12, fontWeight: '700', color: '#2563EB' }}>
+                  📅 Ngày: {formatDisplayDateVN(selectedDate)}
+                </Text>
+                <Ionicons name="chevron-down" size={12} color="#2563EB" style={{ marginLeft: 6 }} />
+              </TouchableOpacity>
+            )}
+
+            {[
+              { label: 'Hôm nay', value: getTodayStr() },
+              { label: 'Hôm qua', value: getYesterdayStr() },
+              { label: '2 ngày trước', value: getDaysAgoStr(2) },
+              { label: '3 ngày trước', value: getDaysAgoStr(3) },
+            ].map((opt) => {
+              const isSelected = selectedDate === opt.value;
+              return (
+                <TouchableOpacity
+                  key={opt.value}
+                  style={{
+                    paddingHorizontal: 14,
+                    paddingVertical: 8,
+                    borderRadius: 10,
+                    marginRight: 8,
+                    backgroundColor: isSelected ? '#2563EB' : (isDarkMode ? '#0F172A' : '#F1F5F9'),
+                    borderWidth: 1,
+                    borderColor: isSelected ? '#2563EB' : (isDarkMode ? '#334155' : '#E2E8F0'),
+                  }}
+                  onPress={() => setSelectedDate(opt.value)}
+                  activeOpacity={0.8}
+                >
+                  <Text
+                    style={{
+                      fontSize: 12,
+                      fontWeight: '700',
+                      color: isSelected ? '#FFF' : (isDarkMode ? '#F8FAFC' : '#0F172A'),
+                    }}
+                  >
+                    {opt.label} ({opt.value.slice(5)})
+                  </Text>
+                </TouchableOpacity>
+              );
+            })}
+          </ScrollView>
+
+          {/* Thông báo nhẹ khi ngày chưa có dữ liệu đo trong PostgreSQL */}
+          {!isLoadingPatient && (!patientRecord?.daily_vitals || patientRecord?.daily_vitals?.length === 0) && (
+            <View
+              style={{
+                flexDirection: 'row',
+                alignItems: 'center',
+                backgroundColor: isDarkMode ? '#1E293B' : '#FFFBEB',
+                borderWidth: 1,
+                borderColor: isDarkMode ? '#334155' : '#FDE68A',
+                borderRadius: 10,
+                paddingHorizontal: 12,
+                paddingVertical: 8,
+                marginBottom: 10,
+              }}
+            >
+              <Ionicons name="information-circle" size={18} color="#D97706" style={{ marginRight: 8 }} />
+              <Text style={{ fontSize: 12, fontWeight: '600', color: isDarkMode ? '#FDE68A' : '#92400E', flex: 1 }}>
+                Chưa có dữ liệu đo cho ngày này ({formatDisplayDateVN(selectedDate)}).
+              </Text>
+            </View>
+          )}
+
+          {/* Tóm tắt dữ liệu đo trong ngày */}
+          <View
+            style={{
+              backgroundColor: isDarkMode ? '#0F172A' : '#F8FAFC',
+              borderRadius: 12,
+              padding: 12,
+              borderWidth: 1,
+              borderColor: isDarkMode ? '#334155' : '#E2E8F0',
+              marginBottom: 10,
+            }}
+          >
+            <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 8 }}>
+              <Text style={{ fontSize: 13, fontWeight: '700', color: isDarkMode ? '#93C5FD' : '#1D4ED8' }}>
+                Tổng kết ngày {formatDisplayDateVN(selectedDate)}
+              </Text>
+              <Text style={{ fontSize: 11, color: isDarkMode ? '#94A3B8' : '#64748B' }}>
+                {patientRecord?.daily_vitals?.length || 0} mốc đo ghi nhận
+              </Text>
+            </View>
+
+            <TouchableOpacity
+              style={{
+                flexDirection: 'row',
+                alignItems: 'center',
+                justifyContent: 'center',
+                backgroundColor: '#2563EB',
+                borderRadius: 10,
+                paddingVertical: 10,
+                paddingHorizontal: 12,
+                gap: 6,
+                marginTop: 4,
+              }}
+              onPress={() => navigation.navigate('HealthDetail')}
+              activeOpacity={0.8}
+            >
+              <Ionicons name="stats-chart" size={16} color="#FFF" />
+              <Text style={{ color: '#FFF', fontSize: 13, fontWeight: '700' }}>
+                Mở Biểu Đồ & Tua Dòng Thời Gian Chi Tiết
+              </Text>
+              <Ionicons name="arrow-forward" size={14} color="#FFF" />
+            </TouchableOpacity>
+          </View>
+        </View>
+
         {/* Khối 2: Tiền sử bệnh nền */}
         <View
           style={[
@@ -941,7 +1188,7 @@ export default function PatientMedicalRecordScreen({ navigation }: any) {
                     { color: isDarkMode ? '#F8FAFC' : '#0F172A' },
                   ]}
                 >
-                  {doctorName}
+                  {patientRecord?.doctor_name || doctorName}
                 </Text>
                 <Text
                   style={[
@@ -949,7 +1196,7 @@ export default function PatientMedicalRecordScreen({ navigation }: any) {
                     { color: isDarkMode ? '#94A3B8' : '#64748B' },
                   ]}
                 >
-                  Chuyên khoa: {doctorSpecialty}
+                  Chuyên khoa: {patientRecord?.doctor_specialty || doctorSpecialty}
                 </Text>
                 <Text
                   style={[
@@ -957,7 +1204,7 @@ export default function PatientMedicalRecordScreen({ navigation }: any) {
                     { color: isDarkMode ? '#94A3B8' : '#475569' },
                   ]}
                 >
-                  {hospital}
+                  {patientRecord?.hospital || hospital}
                 </Text>
               </View>
             </View>
@@ -972,7 +1219,7 @@ export default function PatientMedicalRecordScreen({ navigation }: any) {
               >
                 Lịch tái khám tiếp theo:{' '}
                 <Text style={{ fontWeight: '700', color: Colors.primary }}>
-                  {nextAppointment}
+                  {patientRecord?.next_appointment || nextAppointment}
                 </Text>
               </Text>
             </View>
@@ -984,7 +1231,7 @@ export default function PatientMedicalRecordScreen({ navigation }: any) {
             >
               <Ionicons name="call" size={18} color="#FFF" />
               <Text style={styles.callDoctorBtnText}>
-                Gọi bác sĩ phụ trách ({doctorPhone})
+                Gọi bác sĩ phụ trách ({patientRecord?.doctor_phone || doctorPhone})
               </Text>
             </TouchableOpacity>
           </View>
@@ -1333,6 +1580,132 @@ export default function PatientMedicalRecordScreen({ navigation }: any) {
                 onPress={handleSavePatientInfo}
               >
                 <Text style={styles.modalSaveText}>Lưu thay đổi</Text>
+              </TouchableOpacity>
+            </View>
+          </Pressable>
+        </Pressable>
+      </Modal>
+
+      {/* Modal Chọn Ngày Kiểm Tra */}
+      <Modal
+        transparent
+        visible={isCalendarModalVisible}
+        animationType="fade"
+        onRequestClose={() => setIsCalendarModalVisible(false)}
+      >
+        <Pressable
+          style={styles.modalOverlay}
+          onPress={() => setIsCalendarModalVisible(false)}
+        >
+          <Pressable
+            style={[
+              styles.modalCard,
+              {
+                backgroundColor: isDarkMode ? '#1E293B' : '#FFFFFF',
+                borderColor: isDarkMode ? '#334155' : '#E2E8F0',
+              },
+            ]}
+            onPress={() => {}}
+          >
+            <View style={{ flexDirection: 'row', alignItems: 'center', gap: 10, marginBottom: 12 }}>
+              <Ionicons name="calendar" size={22} color="#2563EB" />
+              <Text
+                style={[
+                  styles.modalTitle,
+                  { color: isDarkMode ? '#F8FAFC' : '#0F172A', marginBottom: 0 },
+                ]}
+              >
+                Chọn ngày kiểm tra
+              </Text>
+            </View>
+
+            <Text
+              style={[
+                styles.inputLabel,
+                { color: isDarkMode ? '#94A3B8' : '#64748B' },
+              ]}
+            >
+              Nhập ngày theo định dạng YYYY-MM-DD:
+            </Text>
+            <TextInput
+              style={[
+                styles.textInput,
+                {
+                  backgroundColor: isDarkMode ? '#0F172A' : '#F8FAFC',
+                  color: isDarkMode ? '#F8FAFC' : '#0F172A',
+                  borderColor: isDarkMode ? '#334155' : '#E2E8F0',
+                },
+              ]}
+              value={calendarInputDraft}
+              onChangeText={setCalendarInputDraft}
+              placeholder="YYYY-MM-DD (Ví dụ: 2026-09-28)"
+              placeholderTextColor={isDarkMode ? '#64748B' : '#94A3B8'}
+            />
+
+            <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: 8, marginVertical: 12 }}>
+              {[
+                { label: 'Hôm nay', val: getTodayStr() },
+                { label: 'Hôm qua', val: getYesterdayStr() },
+                { label: '2 ngày trước', val: getDaysAgoStr(2) },
+              ].map((item) => (
+                <TouchableOpacity
+                  key={item.val}
+                  style={{
+                    paddingHorizontal: 10,
+                    paddingVertical: 6,
+                    borderRadius: 8,
+                    borderWidth: 1,
+                    borderColor: calendarInputDraft === item.val ? '#2563EB' : (isDarkMode ? '#334155' : '#E2E8F0'),
+                    backgroundColor: calendarInputDraft === item.val ? '#EFF6FF' : (isDarkMode ? '#0F172A' : '#F8FAFC'),
+                  }}
+                  onPress={() => setCalendarInputDraft(item.val)}
+                >
+                  <Text
+                    style={{
+                      fontSize: 11,
+                      fontWeight: '600',
+                      color: calendarInputDraft === item.val ? '#2563EB' : (isDarkMode ? '#94A3B8' : '#64748B'),
+                    }}
+                  >
+                    {item.label}
+                  </Text>
+                </TouchableOpacity>
+              ))}
+            </View>
+
+            <View style={styles.modalBtnRow}>
+              <TouchableOpacity
+                style={[
+                  styles.modalCancelBtn,
+                  {
+                    backgroundColor: isDarkMode ? '#0F172A' : '#F1F5F9',
+                    borderColor: isDarkMode ? '#334155' : '#E2E8F0',
+                  },
+                ]}
+                onPress={() => setIsCalendarModalVisible(false)}
+              >
+                <Text
+                  style={[
+                    styles.modalCancelText,
+                    { color: isDarkMode ? '#94A3B8' : '#64748B' },
+                  ]}
+                >
+                  Hủy
+                </Text>
+              </TouchableOpacity>
+              <TouchableOpacity
+                style={styles.modalSaveBtn}
+                onPress={() => {
+                  const trimmed = calendarInputDraft.trim();
+                  if (/^\d{4}-\d{2}-\d{2}$/.test(trimmed)) {
+                    setSelectedDate(trimmed);
+                    setIsCalendarModalVisible(false);
+                  } else {
+                    Alert.alert('Định dạng chưa đúng', 'Vui lòng nhập định dạng YYYY-MM-DD');
+                  }
+                }}
+              >
+                <Text style={styles.modalSaveText}>Xem dữ liệu</Text>
               </TouchableOpacity>
             </View>
           </Pressable>

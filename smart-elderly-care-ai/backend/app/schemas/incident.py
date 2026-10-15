@@ -20,6 +20,9 @@ class IncidentOut(BaseModel):
     video_clip_url: Optional[str] = None
     thumbnail_url: Optional[str] = None
     is_acknowledged: bool
+    acknowledged_by: Optional[uuid.UUID] = None
+    acknowledged_at: Optional[datetime] = None
+    notes: Optional[str] = None
     created_at: datetime
 
     model_config = {"from_attributes": True}

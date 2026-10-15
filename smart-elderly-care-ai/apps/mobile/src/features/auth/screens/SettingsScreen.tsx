@@ -1,5 +1,13 @@
-// SettingsScreen.tsx
-// Màn hình Cài Đặt (Settings) - Hỗ trợ chuẩn Dark Mode / Light Mode
+// ============================================================================
+// MÀN HÌNH CÀI ĐẶT HỆ THỐNG (SETTINGS SCREEN)
+// Hệ thống: Smart Elderly Care AI (SECA)
+// Giao diện: Hỗ trợ linh hoạt Dark Mode / Light Mode theo chuẩn thiết kế cấp cao
+// Chức năng:
+//   - Quản trị hồ sơ người giám sát & Hồ sơ bệnh án người cao tuổi (Bảo mật AES-256)
+//   - Tùy chỉnh chế độ giao diện Sáng / Tối toàn cục qua useTheme
+//   - Cấu hình phản hồi rung thiết bị khi có cảnh báo SOS hoặc té ngã khẩn cấp
+//   - Cấu hình thông báo đẩy (Push Notifications) & Thông tin phiên bản hệ thống
+// ============================================================================
 
 import React, { useState } from 'react';
 import {
@@ -9,14 +17,63 @@ import {
   TouchableOpacity,
   ScrollView,
   Platform,
+  Alert,
+  Switch,
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
 import { useTheme } from '../../../store/useThemeStore';
 
 export default function SettingsScreen({ navigation }: any) {
-  const { isDarkMode, colors } = useTheme();
+  // Hook trạng thái giao diện Sáng / Tối toàn cục của ứng dụng
+  const { isDarkMode, colors, toggleTheme } = useTheme();
+
+  // Trạng thái bật / tắt rung khi có thông báo & cảnh báo
   const [vibrationEnabled, setVibrationEnabled] = useState(true);
+
+  // Trạng thái bật / tắt nhận thông báo đẩy thời gian thực
+  const [notificationEnabled, setNotificationEnabled] = useState(true);
+
+  /**
+   * Hiển thị hộp thoại thông tin phiên bản và hệ thống
+   */
+  const handleShowAppInfo = () => {
+    Alert.alert(
+      'Hệ thống SECA AI',
+      'Phiên bản: 1.0.0 (Bản phát hành chính thức)\n' +
+      'Đồ án Capstone: Hệ thống AI giám sát và chăm sóc sức khỏe người cao tuổi.\n' +
+      'Bảo vệ sức khỏe & An toàn 24/7.',
+      [{ text: 'Đóng', style: 'cancel' }]
+    );
+  };
+
+  /**
+   * Hiển thị hộp thoại hướng dẫn cấu hình thông báo
+   */
+  const handleNotificationConfig = () => {
+    Alert.alert(
+      'Thiết lập thông báo',
+      'Hệ thống tự động kích hoạt thông báo đẩy (Push Notification) thời gian thực cho các sự kiện khẩn cấp (Té ngã, Nhịp tim bất thường, SOS).',
+      [
+        {
+          text: notificationEnabled ? 'Tắt thông báo' : 'Bật thông báo',
+          onPress: () => setNotificationEnabled(!notificationEnabled),
+        },
+        { text: 'Đóng', style: 'cancel' },
+      ]
+    );
+  };
+
+  /**
+   * Hiển thị thông báo trợ năng
+   */
+  const handleAccessibilityInfo = () => {
+    Alert.alert(
+      'Khả năng tiếp cận (Accessibility)',
+      'Giao diện ứng dụng được tối ưu với cỡ chữ lớn, độ tương phản cao và phím bấm rộng nhằm hỗ trợ người lớn tuổi và người có thị lực kém dễ dàng thao tác.',
+      [{ text: 'Đã hiểu', style: 'default' }]
+    );
+  };
 
   return (
     <SafeAreaView
@@ -26,7 +83,9 @@ export default function SettingsScreen({ navigation }: any) {
       ]}
       edges={['top']}
     >
-      {/* Top Header */}
+      {/* ================================================================= */}
+      {/* PHẦN 1: HEADER TRÊN CÙNG (NÚT QUAY LẠI & TIÊU ĐỀ)                 */}
+      {/* ================================================================= */}
       <View
         style={[
           styles.headerRow,
@@ -68,7 +127,9 @@ export default function SettingsScreen({ navigation }: any) {
         showsVerticalScrollIndicator={false}
         contentContainerStyle={styles.scrollContent}
       >
-        {/* Khối 1: Hồ sơ người giám sát & Hồ sơ bệnh án người cao tuổi */}
+        {/* ================================================================= */}
+        {/* KHỐI 1: QUẢN LÝ HỒ SƠ & BỆNH ÁN NGƯỜI CAO TUỔI                   */}
+        {/* ================================================================= */}
         <View
           style={[
             styles.cardGroup,
@@ -78,7 +139,7 @@ export default function SettingsScreen({ navigation }: any) {
             },
           ]}
         >
-          {/* Mục 1: Hồ sơ người giám sát */}
+          {/* Mục 1.1: Hồ sơ người giám sát (Tài khoản người nhà / Bác sĩ) */}
           <TouchableOpacity
             style={styles.menuItem}
             activeOpacity={0.7}
@@ -126,7 +187,7 @@ export default function SettingsScreen({ navigation }: any) {
             ]}
           />
 
-          {/* Mục 2: Hồ sơ bệnh án người cao tuổi */}
+          {/* Mục 1.2: Hồ sơ bệnh án người cao tuổi (Bảo mật chuẩn y tế AES-256) */}
           <TouchableOpacity
             style={styles.menuItem}
             activeOpacity={0.7}
@@ -165,7 +226,7 @@ export default function SettingsScreen({ navigation }: any) {
                     { color: isDarkMode ? '#94A3B8' : '#64748B' },
                   ]}
                 >
-                  Thông tin cụ, bệnh nền, nhóm máu &amp; đơn thuốc
+                  Thông tin cụ, bệnh nền, nhóm máu & đơn thuốc
                 </Text>
               </View>
             </View>
@@ -173,7 +234,9 @@ export default function SettingsScreen({ navigation }: any) {
           </TouchableOpacity>
         </View>
 
-        {/* Khối 2: Nhóm 3 mục (Cài đặt chung, Khả năng tiếp cận, Thông tin) */}
+        {/* ================================================================= */}
+        {/* KHỐI 2: GIAO DIỆN & TRỢ NĂNG (THEME & ACCESSIBILITY)              */}
+        {/* ================================================================= */}
         <View
           style={[
             styles.cardGroup,
@@ -183,23 +246,23 @@ export default function SettingsScreen({ navigation }: any) {
             },
           ]}
         >
-          {/* Mục 1: Cài đặt chung */}
+          {/* Mục 2.1: Chuyển đổi Dark Mode / Chế độ ban đêm */}
           <TouchableOpacity
             style={styles.menuItem}
             activeOpacity={0.7}
-            onPress={() => {}}
+            onPress={toggleTheme}
           >
             <View style={styles.itemLeft}>
               <View
                 style={[
                   styles.iconWrap,
-                  { backgroundColor: isDarkMode ? '#0F172A' : '#F1F5F9' },
+                  { backgroundColor: isDarkMode ? '#312E81' : '#F3E8FF' },
                 ]}
               >
                 <Ionicons
-                  name="settings-outline"
+                  name={isDarkMode ? 'moon' : 'sunny-outline'}
                   size={20}
-                  color={isDarkMode ? '#94A3B8' : '#475569'}
+                  color={isDarkMode ? '#A855F7' : '#9333EA'}
                 />
               </View>
               <Text
@@ -208,10 +271,17 @@ export default function SettingsScreen({ navigation }: any) {
                   { color: isDarkMode ? '#F8FAFC' : '#0F172A' },
                 ]}
               >
-                Cài đặt chung
+                Chế độ tối (Dark Mode)
               </Text>
             </View>
-            <Ionicons name="chevron-forward" size={18} color="#94A3B8" />
+            <View style={styles.itemRight}>
+              <Switch
+                value={isDarkMode}
+                onValueChange={toggleTheme}
+                trackColor={{ false: '#CBD5E1', true: '#FF7A00' }}
+                thumbColor="#FFFFFF"
+              />
+            </View>
           </TouchableOpacity>
 
           {/* Đường gạch phân cách */}
@@ -222,11 +292,11 @@ export default function SettingsScreen({ navigation }: any) {
             ]}
           />
 
-          {/* Mục 2: Khả năng tiếp cận */}
+          {/* Mục 2.2: Khả năng tiếp cận & Trợ năng */}
           <TouchableOpacity
             style={styles.menuItem}
             activeOpacity={0.7}
-            onPress={() => {}}
+            onPress={handleAccessibilityInfo}
           >
             <View style={styles.itemLeft}>
               <View
@@ -261,11 +331,11 @@ export default function SettingsScreen({ navigation }: any) {
             ]}
           />
 
-          {/* Mục 3: Thông tin */}
+          {/* Mục 2.3: Thông tin ứng dụng */}
           <TouchableOpacity
             style={styles.menuItem}
             activeOpacity={0.7}
-            onPress={() => {}}
+            onPress={handleShowAppInfo}
           >
             <View style={styles.itemLeft}>
               <View
@@ -286,14 +356,26 @@ export default function SettingsScreen({ navigation }: any) {
                   { color: isDarkMode ? '#F8FAFC' : '#0F172A' },
                 ]}
               >
-                Thông tin
+                Thông tin ứng dụng
               </Text>
             </View>
-            <Ionicons name="chevron-forward" size={18} color="#94A3B8" />
+            <View style={styles.itemRight}>
+              <Text
+                style={[
+                  styles.subText,
+                  { color: isDarkMode ? '#94A3B8' : '#64748B' },
+                ]}
+              >
+                v1.0.0
+              </Text>
+              <Ionicons name="chevron-forward" size={18} color="#94A3B8" />
+            </View>
           </TouchableOpacity>
         </View>
 
-        {/* Khối 3: Nhóm 2 mục (Thiết lập thông báo, Rung) */}
+        {/* ================================================================= */}
+        {/* KHỐI 3: THIẾT LẬP THÔNG BÁO & PHẢN HỒI RUNG                      */}
+        {/* ================================================================= */}
         <View
           style={[
             styles.cardGroup,
@@ -303,11 +385,11 @@ export default function SettingsScreen({ navigation }: any) {
             },
           ]}
         >
-          {/* Mục 1: Thiết lập thông báo */}
+          {/* Mục 3.1: Thiết lập thông báo đẩy */}
           <TouchableOpacity
             style={styles.menuItem}
             activeOpacity={0.7}
-            onPress={() => {}}
+            onPress={handleNotificationConfig}
           >
             <View style={styles.itemLeft}>
               <View
@@ -331,7 +413,17 @@ export default function SettingsScreen({ navigation }: any) {
                 Thiết lập thông báo
               </Text>
             </View>
-            <Ionicons name="chevron-forward" size={18} color="#94A3B8" />
+            <View style={styles.itemRight}>
+              <Text
+                style={[
+                  styles.subText,
+                  { color: isDarkMode ? '#94A3B8' : '#64748B' },
+                ]}
+              >
+                {notificationEnabled ? 'Đang bật' : 'Đã tắt'}
+              </Text>
+              <Ionicons name="chevron-forward" size={18} color="#94A3B8" />
+            </View>
           </TouchableOpacity>
 
           {/* Đường gạch phân cách */}
@@ -342,7 +434,7 @@ export default function SettingsScreen({ navigation }: any) {
             ]}
           />
 
-          {/* Mục 2: Rung */}
+          {/* Mục 3.2: Phản hồi Rung khi có báo động */}
           <TouchableOpacity
             style={styles.menuItem}
             activeOpacity={0.7}
@@ -367,7 +459,7 @@ export default function SettingsScreen({ navigation }: any) {
                   { color: isDarkMode ? '#F8FAFC' : '#0F172A' },
                 ]}
               >
-                Rung
+                Rung khi có cảnh báo
               </Text>
             </View>
             <View style={styles.itemRight}>
@@ -485,4 +577,3 @@ const styles = StyleSheet.create({
     color: '#0284C7',
   },
 });
-

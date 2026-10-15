@@ -8,6 +8,7 @@ from functools import lru_cache
 from pathlib import Path
 from typing import List
 
+from pydantic import field_validator
 from dotenv import load_dotenv
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
@@ -36,10 +37,20 @@ class Settings(BaseSettings):
     # ---- App ----
     APP_NAME: str = "Smart Elderly Care AI"
     DEBUG: bool = False
+
+    @field_validator("DEBUG", mode="before")
+    @classmethod
+    def parse_debug(cls, v):
+        if isinstance(v, str):
+            return v.lower() in ("true", "1", "yes", "debug", "dev")
+        return bool(v)
+
     SECRET_KEY: str = "CHANGE_ME_IN_PRODUCTION_USE_RANDOM_256BIT"
     ALGORITHM: str = "HS256"
     ACCESS_TOKEN_EXPIRE_MINUTES: int = 60 * 24  # 24 hours
     REFRESH_TOKEN_EXPIRE_DAYS: int = 30
+    OTP_MODE: str = "twilio"
+    OTP_DEV_CODE: str = "123456"
 
     # ---- Database ----
     DATABASE_URL: str = "postgresql+asyncpg://postgres:postgres@localhost:5432/elderly_care"

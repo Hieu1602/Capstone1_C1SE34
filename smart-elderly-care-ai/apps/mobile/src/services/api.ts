@@ -3,34 +3,50 @@
 
 import axios, { AxiosInstance, AxiosError } from 'axios';
 import { Platform } from 'react-native';
+import Constants from 'expo-constants';
+import AsyncStorage from '@react-native-async-storage/async-storage';
 import { useAuthStore } from '../store/useAuthStore';
 
 // Cấu hình BASE_URL tự động:
 // - Nếu có biến EXPO_PUBLIC_API_URL thì dùng nó
-// - Nếu chạy trên Web và truy cập qua LAN IP (ví dụ từ điện thoại): tự động kết nối API qua IP đó
-// - Nếu chạy trên Web hoặc iOS simulator cục bộ: dùng http://localhost:8000/api/v1
-// - Nếu chạy trên Android emulator: dùng http://10.0.2.2:8000/api/v1
+// - Nếu chạy trên Web và truy cập qua LAN IP: tự động kết nối API qua IP đó
+// - Tự động trích xuất IP từ host của Metro Bundler (Expo Constants)
+// - Fallback về IP máy tính hiện tại: 192.168.1.4
 const getBaseUrl = (): string => {
-  // Khi chạy trên Web: Luôn dùng hostname hiện tại của trình duyệt (localhost hoặc LAN IP)
+  // 1. Khi chạy trên Web trình duyệt
   if (Platform.OS === 'web' && typeof window !== 'undefined' && window.location?.hostname) {
     const host = window.location.hostname;
     return `http://${host}:8000/api/v1`;
   }
-  if (typeof process !== 'undefined' && process.env.EXPO_PUBLIC_API_URL) {
-    return process.env.EXPO_PUBLIC_API_URL;
+
+  // 2. Tự động nhận diện IP máy tính từ Expo Metro host (kết nối trực tiếp điện thoại thật qua LAN Wi-Fi)
+  const debuggerHost =
+    Constants.expoConfig?.hostUri ||
+    (Constants as any).manifest2?.extra?.expoClient?.hostUri ||
+    (Constants as any).manifest?.debuggerHost;
+
+  if (debuggerHost) {
+    const hostIp = debuggerHost.split(':')[0];
+    if (hostIp && !hostIp.includes('exp.direct') && hostIp !== 'localhost' && hostIp !== '127.0.0.1') {
+      return `http://${hostIp}:8000/api/v1`;
+    }
   }
-  if (Platform.OS === 'android') {
-    return 'http://10.0.2.2:8000/api/v1';
+
+  // 3. Biến môi trường EXPO_PUBLIC_API_URL (nếu được chỉ định rõ và không trỏ vào localhost trên thiết bị thật)
+  const envUrl = process.env.EXPO_PUBLIC_API_URL;
+  if (envUrl && !envUrl.includes('localhost') && !envUrl.includes('127.0.0.1')) {
+    return envUrl;
   }
-  return 'http://192.168.1.8:8000/api/v1';
+
+  // 4. Fallback về IP máy tính phát triển trong mạng nội bộ
+  return 'http://192.168.1.4:8000/api/v1';
 };
 
 export const BASE_URL: string = getBaseUrl();
 
-
 const api: AxiosInstance = axios.create({
   baseURL: BASE_URL,
-  timeout: 15000,
+  timeout: 20000,
   headers: {
     'Content-Type': 'application/json',
   },
@@ -38,10 +54,18 @@ const api: AxiosInstance = axios.create({
 
 // ---- Request Interceptor: Attach JWT token ----
 api.interceptors.request.use(
-  (config: import('axios').InternalAxiosRequestConfig) => {
+  async (config: import('axios').InternalAxiosRequestConfig) => {
     const token = useAuthStore.getState().accessToken;
     if (token) {
       config.headers.Authorization = `Bearer ${token}`;
+    }
+    try {
+      const language = await AsyncStorage.getItem('smartcare-user-language');
+      if (language === 'en' || language === 'vi') {
+        config.headers['Accept-Language'] = language;
+      }
+    } catch (error) {
+      console.warn('[API] Could not load saved language preference:', error);
     }
     return config;
   },
@@ -53,12 +77,19 @@ api.interceptors.response.use(
   (response: import('axios').AxiosResponse) => response,
   async (error: AxiosError) => {
     const original = error.config as any;
-    if (error.response?.status === 401 && !original._retry) {
+    const isAuthRoute =
+      original?.url?.includes('/auth/login') || original?.url?.includes('/auth/refresh');
+    if (error.response?.status === 401 && !original._retry && !isAuthRoute) {
       original._retry = true;
       try {
         const refreshToken = useAuthStore.getState().refreshToken;
+        if (!refreshToken) throw new Error('No refresh token');
         const { data } = await axios.post(`${BASE_URL}/auth/refresh`, {
           refresh_token: refreshToken,
+        }, {
+          headers: {
+            'Accept-Language': original.headers?.['Accept-Language'] || 'vi',
+          },
         });
         useAuthStore.getState().setTokens(data.access_token, data.refresh_token);
         original.headers.Authorization = `Bearer ${data.access_token}`;
@@ -92,7 +123,48 @@ export const authApi = {
     full_name: string;
     password: string;
     role: string;
+    otp_code?: string;
   }) => api.post('/auth/register', data),
+  resetPassword: (data: {
+    phone: string;
+    otp_code: string;
+    new_password: string;
+  }) => api.post('/auth/reset-password', data),
+  requestPasswordResetOtp: (phone: string) =>
+    api.post('/auth/password/request-otp', { phone }),
+  completePasswordReset: (data: {
+    phone: string;
+    otp_code: string;
+    new_password: string;
+  }) => api.post('/auth/password/reset', data),
+};
+
+// 0. Users API
+export const usersApi = {
+  getMe: () => api.get('/users/me'),
+  updateMe: (data: any) => api.patch('/users/me', data),
+  updateLanguage: (language: 'vi' | 'en') =>
+    api.patch('/users/me/language', { preferred_language: language, language }),
+  updateFontPreferences: (fontSizeMode: 'system' | 'custom', customFontScale: number) =>
+    api.patch('/users/me/font-preferences', {
+      font_size_mode: fontSizeMode,
+      custom_font_scale: customFontScale,
+    }),
+  changePassword: (data: {
+    current_password: string;
+    new_password: string;
+    confirm_new_password: string;
+  }) => api.patch('/users/me/password', data),
+};
+
+// API SOS báo cho các thành viên trong cùng hộ; app sẽ tự mở trình gọi 115.
+export const emergencyApi = {
+  triggerSOS: (data: {
+    address?: string;
+    latitude?: number;
+    longitude?: number;
+    message?: string;
+  } = {}) => api.post('/emergency/sos', data),
 };
 
 // 1. System Mode API
@@ -111,8 +183,8 @@ export const systemApi = {
 export const vitalsApi = {
   getCurrent: () => api.get('/vitals/current'),
   getLatest: (deviceId: string) => api.get(`/vitals/${deviceId}/latest`),
-  getHistory: (deviceId: string, limit = 100) =>
-    api.get(`/vitals/${deviceId}/history`, { params: { limit } }),
+  getHistory: (deviceId: string = 'hub-01', limit = 100, target_date?: string) =>
+    api.get('/vitals/history', { params: { device_id: deviceId, limit, target_date } }),
   getStats: (deviceId: string, hours = 24) =>
     api.get(`/vitals/${deviceId}/stats`, { params: { hours } }),
 };
@@ -124,8 +196,10 @@ export const remindersApi = {
 
 // 4. Patients & Medical Record API
 export const patientApi = {
-  getMedicalRecord: (patientId: number = 1) =>
-    api.get(`/patients/${patientId}/medical-record`),
+  getMedicalRecord: (patientId: number = 1, target_date?: string) =>
+    api.get(`/patients/${patientId}/medical-record`, { params: { target_date } }),
+  getVitals: (patientId: number = 1, target_date?: string) =>
+    api.get(`/patients/${patientId}/vitals`, { params: { target_date } }),
   enrollFace: (patientId: number, formData: FormData) =>
     api.post(`/patients/${patientId}/face-enroll`, formData, {
       headers: { 'Content-Type': 'multipart/form-data' },
@@ -207,4 +281,35 @@ export const doctorApi = {
     api.delete(`/doctor/appointments/${appointmentId}`),
 };
 
+// 7. User & Household Profile API
+export const userApi = {
+  getMe: (params?: { phone?: string; user_id?: number }) => api.get('/users/me', { params }),
+  updateProfile: (data: { full_name?: string; phone_number?: string }) => api.put('/users/me', data),
+};
+
+export const householdApi = {
+  getMembers: (householdId: number | string = 1) => api.get(`/households/${householdId}/members`),
+  addMember: (
+    householdId: number | string = 1,
+    data: { phone_number: string; role_in_house?: string; role?: string; full_name?: string }
+  ) => api.post(`/households/${householdId}/members`, data),
+  removeMember: (householdId: number | string = 1, memberId: number | string) =>
+    api.delete(`/households/${householdId}/members/${memberId}`),
+};
+
+// 8. Chatbot AI API
+export const chatbotApi = {
+  chat: (data: { message: string; session_id?: string; context_window?: number; house_id?: string }) =>
+    api.post('/chatbot/chat', data),
+  getHealth: () => api.get('/chatbot/health'),
+  getSessions: () => api.get('/chatbot/sessions'),
+  getSessionDetail: (sessionId: string) => api.get(`/chatbot/sessions/${sessionId}`),
+  deleteSession: (sessionId: string) => api.delete(`/chatbot/sessions/${sessionId}`),
+  transcribeAudio: (formData: any) =>
+    api.post('/chatbot/transcribe-audio', formData, {
+      headers: {
+        'Content-Type': 'multipart/form-data',
+      },
+    }),
+};
 

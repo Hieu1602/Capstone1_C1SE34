@@ -23,8 +23,15 @@ class DeviceConfigBase(BaseModel):
     hr_threshold_high: int = Field(default=120, description="Ngưỡng nhịp tim cao (bpm)")
     hr_threshold_low: int = Field(default=50, description="Ngưỡng nhịp tim thấp (bpm)")
     spo2_threshold_low: int = Field(default=90, description="Ngưỡng SpO2 thấp (%)")
+    bp_systolic_high: int = Field(default=140, description="Ngưỡng huyết áp tâm thu cao (mmHg)")
+    bp_systolic_low: int = Field(default=90, description="Ngưỡng huyết áp tâm thu thấp (mmHg)")
+    bp_diastolic_high: int = Field(default=90, description="Ngưỡng huyết áp tâm trương cao (mmHg)")
+    bp_diastolic_low: int = Field(default=60, description="Ngưỡng huyết áp tâm trương thấp (mmHg)")
     fall_impact_threshold: float = Field(default=2.5, description="Ngưỡng gia tốc rơi (g)")
     immobility_seconds: int = Field(default=30, description="Thời gian bất động nghi ngã (s)")
+    is_custom_thresholds: bool = Field(default=False, description="Tùy chỉnh riêng bởi chủ nhà/bác sĩ")
+    configured_by_user_id: Optional[UUID] = None
+    configured_by_role: Optional[str] = "SYSTEM"
     mqtt_topic: Optional[str] = None
     extra_settings: Optional[Dict[str, Any]] = None
 
@@ -38,8 +45,15 @@ class DeviceConfigUpdate(BaseModel):
     hr_threshold_high: Optional[int] = None
     hr_threshold_low: Optional[int] = None
     spo2_threshold_low: Optional[int] = None
+    bp_systolic_high: Optional[int] = None
+    bp_systolic_low: Optional[int] = None
+    bp_diastolic_high: Optional[int] = None
+    bp_diastolic_low: Optional[int] = None
     fall_impact_threshold: Optional[float] = None
     immobility_seconds: Optional[int] = None
+    is_custom_thresholds: Optional[bool] = None
+    configured_by_user_id: Optional[UUID] = None
+    configured_by_role: Optional[str] = None
     extra_settings: Optional[Dict[str, Any]] = None
 
 
