@@ -515,9 +515,8 @@ export default function HealthDetailScreen({ navigation, route }: any) {
         <View
           style={[
             styles.overallCard,
-            currentTabConfig.bannerAlert
-              ? styles.overallCardAlert
-              : [styles.overallCardNormal, isDarkMode && { backgroundColor: colors.card }],
+            currentTabConfig.bannerAlert ? styles.overallCardAlert : styles.overallCardNormal,
+            !currentTabConfig.bannerAlert && isDarkMode && { backgroundColor: colors.card },
           ]}
         >
           <View
@@ -561,7 +560,8 @@ export default function HealthDetailScreen({ navigation, route }: any) {
                 key={range}
                 style={[
                   styles.rangePill,
-                  isActive && [styles.rangePillActive, isDarkMode && { backgroundColor: colors.card }],
+                  isActive && styles.rangePillActive,
+                  isActive && isDarkMode && { backgroundColor: colors.card },
                 ]}
                 onPress={() => setSelectedRange(range)}
                 activeOpacity={0.8}
@@ -569,9 +569,9 @@ export default function HealthDetailScreen({ navigation, route }: any) {
                 <Text
                   style={[
                     styles.rangePillText,
-                    isActive
-                      ? [styles.rangePillTextActive, { color: colors.textPrimary }]
-                      : [isDarkMode && { color: colors.textSecondary }],
+                    isActive && styles.rangePillTextActive,
+                    isActive && { color: colors.textPrimary },
+                    !isActive && isDarkMode && { color: colors.textSecondary },
                   ]}
                 >
                   {labels[range]}
@@ -703,7 +703,8 @@ export default function HealthDetailScreen({ navigation, route }: any) {
                     key={opt.value}
                     style={[
                       styles.datePill,
-                      isSelected ? styles.datePillActive : [styles.datePillInactive, isDarkMode && { backgroundColor: colors.card, borderColor: colors.border }],
+                      isSelected ? styles.datePillActive : styles.datePillInactive,
+                      !isSelected && isDarkMode && { backgroundColor: colors.card, borderColor: colors.border },
                     ]}
                     onPress={() => setSelectedDate(opt.value)}
                     activeOpacity={0.75}
