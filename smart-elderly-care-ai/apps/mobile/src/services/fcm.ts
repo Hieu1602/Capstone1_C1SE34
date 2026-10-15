@@ -3,13 +3,17 @@
 // Còi hú ghi đè chế độ im lặng trên Android / iOS
 
 import { Platform, Vibration } from 'react-native';
+import Constants, { ExecutionEnvironment } from 'expo-constants';
 import { LocalizedAlert } from '../i18n/LocalizedComponents';
-
 
 type AlertLevel = 'LOW' | 'MEDIUM' | 'HIGH' | 'CRITICAL';
 
+const isExpoGo =
+  Constants.executionEnvironment === ExecutionEnvironment.StoreClient ||
+  Constants.appOwnership === 'expo';
+
 let messaging: any = null;
-if (Platform.OS !== 'web') {
+if (Platform.OS !== 'web' && !isExpoGo) {
   try {
     messaging = require('@react-native-firebase/messaging').default;
   } catch (e) {
@@ -25,8 +29,8 @@ class FCMService {
   // ------------------------------------------------------------------
 
   async initialize(): Promise<void> {
-    if (Platform.OS === 'web' || !messaging) {
-      console.log('[FCM] Running on web or without native Firebase module. Skipping FCM initialization.');
+    if (Platform.OS === 'web' || !messaging || isExpoGo) {
+      console.log('[FCM] Running in Expo Go, on web, or without native Firebase module. Skipping FCM initialization.');
       return;
     }
     await this._requestPermission();
