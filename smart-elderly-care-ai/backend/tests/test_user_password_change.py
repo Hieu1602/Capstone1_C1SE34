@@ -1,12 +1,15 @@
 import asyncio
 from types import SimpleNamespace
+from typing import cast
 from unittest.mock import AsyncMock
 
 import pytest
 from fastapi import HTTPException
 from pydantic import ValidationError
+from sqlalchemy.ext.asyncio import AsyncSession
 
-from app.api.v1.endpoints import users
+from app.api.v1.endpoints.web_admin import users
+from app.models.user import User
 from app.schemas.user import PasswordChange
 
 
@@ -45,8 +48,8 @@ def test_password_change_hashes_and_persists_password(monkeypatch):
     result = asyncio.run(
         users.change_current_user_password(
             make_payload(),
-            current_user=fake_user,
-            db=fake_db,
+            current_user=cast(User, fake_user),
+            db=cast(AsyncSession, fake_db),
         )
     )
 
@@ -68,8 +71,8 @@ def test_password_change_rejects_wrong_current_password_without_writing(monkeypa
         asyncio.run(
             users.change_current_user_password(
                 make_payload(),
-                current_user=fake_user,
-                db=object(),
+                current_user=cast(User, fake_user),
+                db=cast(AsyncSession, object()),
             )
         )
 
@@ -95,8 +98,8 @@ def test_password_change_rejects_reusing_current_password_without_writing(monkey
         asyncio.run(
             users.change_current_user_password(
                 payload,
-                current_user=fake_user,
-                db=object(),
+                current_user=cast(User, fake_user),
+                db=cast(AsyncSession, object()),
             )
         )
 

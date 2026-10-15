@@ -7,6 +7,7 @@ import {
   Users,
   Cpu,
   Server,
+  Activity,
   BrainCircuit,
   AlertTriangle,
   TrendingUp,
@@ -161,7 +162,7 @@ export const DashboardPage: React.FC = () => {
       <div>
         <div className="flex items-center justify-between mb-3 px-1">
           <h2 className="section-title">Các phân hệ quản trị lõi</h2>
-          <span className="text-[10px] font-mono text-slate-400 dark:text-slate-500">SECA C1SE.34 ARCHITECTURE</span>
+          <span className="text-[10px] font-mono text-slate-400 dark:text-slate-500">SECA ARCHITECTURE</span>
         </div>
         <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
           <Link
@@ -175,28 +176,46 @@ export const DashboardPage: React.FC = () => {
               <ArrowUpRight className="w-4 h-4 text-slate-400 group-hover:text-sky-600 group-hover:translate-x-0.5 group-hover:-translate-y-0.5 transition-transform" />
             </div>
             <h3 className="mt-3 font-heading font-bold text-sm text-slate-900 dark:text-white">
-              1. Quản lý người dùng
+              Quản lý người dùng
             </h3>
             <p className="mt-1 text-xs text-slate-500 dark:text-slate-400 line-clamp-2">
-              Phân quyền Role ADMIN, DOCTOR, CAREGIVER và quản lý thành viên căn nhà.
+              Quản trị tài khoản, phân bổ vai trò Bác sĩ, Người thân và quyền kiểm soát căn nhà.
             </p>
           </Link>
 
           <Link
-            to="/devices"
+            to="/security"
             className="glass-card p-4 hover:border-sky-300 dark:hover:border-sky-700 group transition-all duration-200"
           >
             <div className="flex items-center justify-between">
               <div className="p-2.5 rounded-xl bg-sky-50 dark:bg-sky-950/60 text-sky-600 dark:text-sky-400 border border-sky-100 dark:border-sky-800 group-hover:bg-sky-500 group-hover:text-white transition-colors">
-                <Cpu className="w-5 h-5" />
+                <ShieldCheck className="w-5 h-5" />
               </div>
               <ArrowUpRight className="w-4 h-4 text-slate-400 group-hover:text-sky-600 group-hover:translate-x-0.5 group-hover:-translate-y-0.5 transition-transform" />
             </div>
             <h3 className="mt-3 font-heading font-bold text-sm text-slate-900 dark:text-white">
-              2. Giám sát thiết bị IoT
+              Quản lý bảo mật hệ thống
             </h3>
             <p className="mt-1 text-xs text-slate-500 dark:text-slate-400 line-clamp-2">
-              Theo dõi Camera IP, Vòng đeo tay BLE Smartband, pin và điều chỉnh ngưỡng sinh hiệu.
+              Chính sách bảo mật, quản lý phiên làm việc JWT, nhật ký kiểm toán và ma trận RBAC.
+            </p>
+          </Link>
+
+          <Link
+            to="/monitoring"
+            className="glass-card p-4 hover:border-sky-300 dark:hover:border-sky-700 group transition-all duration-200"
+          >
+            <div className="flex items-center justify-between">
+              <div className="p-2.5 rounded-xl bg-sky-50 dark:bg-sky-950/60 text-sky-600 dark:text-sky-400 border border-sky-100 dark:border-sky-800 group-hover:bg-sky-500 group-hover:text-white transition-colors">
+                <Activity className="w-5 h-5" />
+              </div>
+              <ArrowUpRight className="w-4 h-4 text-slate-400 group-hover:text-sky-600 group-hover:translate-x-0.5 group-hover:-translate-y-0.5 transition-transform" />
+            </div>
+            <h3 className="mt-3 font-heading font-bold text-sm text-slate-900 dark:text-white">
+              Giám sát hoạt động hệ thống
+            </h3>
+            <p className="mt-1 text-xs text-slate-500 dark:text-slate-400 line-clamp-2">
+              Theo dõi luồng camera AI, vòng đeo tay BLE, cảm biến té ngã và luồng cảnh báo real-time.
             </p>
           </Link>
 
@@ -205,34 +224,16 @@ export const DashboardPage: React.FC = () => {
             className="glass-card p-4 hover:border-sky-300 dark:hover:border-sky-700 group transition-all duration-200"
           >
             <div className="flex items-center justify-between">
-              <div className="p-2.5 rounded-xl bg-indigo-50 dark:bg-indigo-950/60 text-indigo-600 dark:text-indigo-400 border border-indigo-100 dark:border-indigo-800 group-hover:bg-indigo-600 group-hover:text-white transition-colors">
+              <div className="p-2.5 rounded-xl bg-sky-50 dark:bg-sky-950/60 text-sky-600 dark:text-sky-400 border border-sky-100 dark:border-sky-800 group-hover:bg-sky-500 group-hover:text-white transition-colors">
                 <Server className="w-5 h-5" />
               </div>
-              <ArrowUpRight className="w-4 h-4 text-slate-400 group-hover:text-indigo-600 group-hover:translate-x-0.5 group-hover:-translate-y-0.5 transition-transform" />
+              <ArrowUpRight className="w-4 h-4 text-slate-400 group-hover:text-sky-600 group-hover:translate-x-0.5 group-hover:-translate-y-0.5 transition-transform" />
             </div>
             <h3 className="mt-3 font-heading font-bold text-sm text-slate-900 dark:text-white">
-              3. Vận hành hạ tầng & Log
+              Quản lý hạ tầng
             </h3>
             <p className="mt-1 text-xs text-slate-500 dark:text-slate-400 line-clamp-2">
-              Trạng thái TimescaleDB, Redis RAM cache, EMQX Broker và Audit logs thời gian thực.
-            </p>
-          </Link>
-
-          <Link
-            to="/ai-maintenance"
-            className="glass-card p-4 hover:border-sky-300 dark:hover:border-sky-700 group transition-all duration-200"
-          >
-            <div className="flex items-center justify-between">
-              <div className="p-2.5 rounded-xl bg-amber-50 dark:bg-amber-950/60 text-amber-600 dark:text-amber-400 border border-amber-100 dark:border-amber-800 group-hover:bg-amber-500 group-hover:text-white transition-colors">
-                <BrainCircuit className="w-5 h-5" />
-              </div>
-              <ArrowUpRight className="w-4 h-4 text-slate-400 group-hover:text-amber-600 group-hover:translate-x-0.5 group-hover:-translate-y-0.5 transition-transform" />
-            </div>
-            <h3 className="mt-3 font-heading font-bold text-sm text-slate-900 dark:text-white">
-              4. Bảo trì AI
-            </h3>
-            <p className="mt-1 text-xs text-slate-500 dark:text-slate-400 line-clamp-2">
-              Giám sát YOLOv8-Pose, YAMNet, Face Recognition và cập nhật ngưỡng độ tin cậy.
+              Trạng thái PostgreSQL, TimescaleDB, bộ nhớ tạm Redis, EMQX MQTT Broker và System Logs.
             </p>
           </Link>
         </div>

@@ -1,11 +1,14 @@
 import asyncio
 from types import SimpleNamespace
+from typing import cast
 from unittest.mock import AsyncMock
 
 import pytest
 from pydantic import ValidationError
+from sqlalchemy.ext.asyncio import AsyncSession
 
-from app.api.v1.endpoints import users
+from app.api.v1.endpoints.web_admin import users
+from app.models.user import User
 from app.schemas.user import FontSizePreferenceUpdate, UserUpdate
 
 
@@ -51,7 +54,11 @@ def test_update_font_preferences_persists_user_settings(monkeypatch):
     payload = FontSizePreferenceUpdate(font_size_mode="custom", custom_font_scale=4)
 
     result = asyncio.run(
-        users.update_font_preferences(payload, current_user=fake_user, db=fake_db)
+        users.update_font_preferences(
+            payload,
+            current_user=cast(User, fake_user),
+            db=cast(AsyncSession, fake_db),
+        )
     )
 
     assert result is fake_user

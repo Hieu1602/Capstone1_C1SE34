@@ -169,6 +169,7 @@ export const DeviceMonitoringPage: React.FC = () => {
       cameras: devices.filter((d) => d.device_type === 'CAMERA').length,
       smartbands: devices.filter((d) => d.device_type === 'SMARTBAND').length,
       edgehubs: devices.filter((d) => d.device_type === 'EDGE_HUB').length,
+      sensors: devices.filter((d) => d.device_type === 'SENSOR').length,
     };
   }, [devices]);
 
@@ -195,16 +196,11 @@ export const DeviceMonitoringPage: React.FC = () => {
       {/* Header */}
       <div className="flex flex-col md:flex-row md:items-center justify-between gap-4">
         <div>
-          <div className="flex items-center space-x-2">
-            <span className="badge-sky font-mono">
-              Phân hệ 2
-            </span>
-            <h1 className="font-heading text-xl font-bold tracking-tight text-slate-900 dark:text-white">
-              Giám sát thiết bị IoT & Cấu hình ngưỡng sinh hiệu
-            </h1>
-          </div>
+          <h1 className="font-heading text-xl font-bold tracking-tight text-slate-900 dark:text-white">
+            Giám sát hoạt động hệ thống
+          </h1>
           <p className="text-xs text-slate-500 dark:text-slate-400 mt-1 font-sans">
-            Theo dõi trạng thái nhịp tim, SpO2, gia tốc té ngã và điều chỉnh ngưỡng cảnh báo thông minh qua MQTT
+            Theo dõi trạng thái thiết bị IoT, cảm biến sinh hiệu, cảnh báo té ngã thời gian thực & điều chỉnh ngưỡng an toàn
           </p>
         </div>
 
@@ -249,7 +245,9 @@ export const DeviceMonitoringPage: React.FC = () => {
           <div>
             <p className="text-[11px] font-mono font-semibold uppercase text-rose-600 dark:text-rose-400">Vòng đeo BLE</p>
             <p className="font-mono text-2xl font-bold text-slate-900 dark:text-white mt-1">{stats.smartbands}</p>
-            <p className="text-[11px] font-mono text-sky-600 dark:text-sky-400">Pin 84% • Cụ An</p>
+            <p className="text-[11px] font-mono text-sky-600 dark:text-sky-400">
+              {stats.smartbands > 0 ? 'Nhịp tim & SpO2' : '0 thiết bị'}
+            </p>
           </div>
           <div className="w-10 h-10 rounded-xl bg-rose-50 dark:bg-rose-950/60 border border-rose-100 dark:border-rose-800 flex items-center justify-center text-rose-600 dark:text-rose-400">
             <Heart className="w-5 h-5" />
@@ -312,6 +310,16 @@ export const DeviceMonitoringPage: React.FC = () => {
           >
             Edge Hub AI ({stats.edgehubs})
           </button>
+          <button
+            onClick={() => setFilterType('SENSOR')}
+            className={`px-3 py-1.5 rounded-xl text-xs font-semibold font-mono whitespace-nowrap transition-all ${
+              filterType === 'SENSOR'
+                ? 'bg-teal-600 text-white shadow-sm font-bold'
+                : 'btn-ghost py-1.5 px-3 text-xs'
+            }`}
+          >
+            Cảm biến ({stats.sensors})
+          </button>
         </div>
 
         {/* Status Filter */}
@@ -330,34 +338,60 @@ export const DeviceMonitoringPage: React.FC = () => {
       </div>
 
       {/* Device Cards Grid */}
-      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-5">
-        {filteredDevices.map((device) => {
-          const isCam = device.device_type === 'CAMERA';
-          const isBand = device.device_type === 'SMARTBAND';
-          const isHub = device.device_type === 'EDGE_HUB';
+      {filteredDevices.length === 0 ? (
+        <div className="glass-card p-12 text-center flex flex-col items-center justify-center space-y-3">
+          <div className="w-12 h-12 rounded-2xl bg-sky-50 dark:bg-sky-950/40 text-sky-500 flex items-center justify-center">
+            <Cpu className="w-6 h-6" />
+          </div>
+          <h3 className="font-heading font-semibold text-slate-800 dark:text-slate-200 text-sm">
+            Không có thiết bị nào
+          </h3>
+          <p className="text-xs text-slate-500 dark:text-slate-400 max-w-sm">
+            {loading
+              ? 'Đang tải dữ liệu thiết bị từ cơ sở dữ liệu...'
+              : 'Chưa có thiết bị nào trong cơ sở dữ liệu phù hợp với bộ lọc hiện tại.'}
+          </p>
+          <button
+            onClick={fetchDevices}
+            className="btn-ghost text-xs py-1.5 px-3 mt-2"
+          >
+            <RefreshCw className="w-3.5 h-3.5" />
+            <span>Tải lại</span>
+          </button>
+        </div>
+      ) : (
+        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-5">
+          {filteredDevices.map((device) => {
+            const isCam = device.device_type === 'CAMERA';
+            const isBand = device.device_type === 'SMARTBAND';
+            const isHub = device.device_type === 'EDGE_HUB';
+            const isSensor = device.device_type === 'SENSOR';
 
-          return (
-            <div
-              key={device.id}
-              className="glass-card overflow-hidden flex flex-col justify-between hover:border-sky-400 dark:hover:border-sky-500/50 transition-all duration-200"
-            >
-              {/* Card Header */}
-              <div className="p-5 pb-4 border-b border-slate-100 dark:border-white/5">
-                <div className="flex items-start justify-between">
-                  <div className="flex items-center space-x-3">
-                    <div
-                      className={`w-10 h-10 rounded-xl flex items-center justify-center shrink-0 border ${
-                        isCam
-                          ? 'bg-indigo-50 dark:bg-indigo-950/60 text-indigo-600 dark:text-indigo-400 border-indigo-100 dark:border-indigo-800'
-                          : isBand
-                          ? 'bg-rose-50 dark:bg-rose-950/60 text-rose-600 dark:text-rose-400 border-rose-100 dark:border-rose-800'
-                          : 'bg-amber-50 dark:bg-amber-950/60 text-amber-600 dark:text-amber-400 border-amber-100 dark:border-amber-800'
-                      }`}
-                    >
-                      {isCam && <Video className="w-5 h-5" />}
-                      {isBand && <Activity className="w-5 h-5" />}
-                      {isHub && <Cpu className="w-5 h-5" />}
-                    </div>
+            return (
+              <div
+                key={device.id}
+                className="glass-card overflow-hidden flex flex-col justify-between hover:border-sky-400 dark:hover:border-sky-500/50 transition-all duration-200"
+              >
+                {/* Card Header */}
+                <div className="p-5 pb-4 border-b border-slate-100 dark:border-white/5">
+                  <div className="flex items-start justify-between">
+                    <div className="flex items-center space-x-3">
+                      <div
+                        className={`w-10 h-10 rounded-xl flex items-center justify-center shrink-0 border ${
+                          isCam
+                            ? 'bg-indigo-50 dark:bg-indigo-950/60 text-indigo-600 dark:text-indigo-400 border-indigo-100 dark:border-indigo-800'
+                            : isBand
+                            ? 'bg-rose-50 dark:bg-rose-950/60 text-rose-600 dark:text-rose-400 border-rose-100 dark:border-rose-800'
+                            : isHub
+                            ? 'bg-amber-50 dark:bg-amber-950/60 text-amber-600 dark:text-amber-400 border-amber-100 dark:border-amber-800'
+                            : 'bg-teal-50 dark:bg-teal-950/60 text-teal-600 dark:text-teal-400 border-teal-100 dark:border-teal-800'
+                        }`}
+                      >
+                        {isCam && <Video className="w-5 h-5" />}
+                        {isBand && <Activity className="w-5 h-5" />}
+                        {isHub && <Cpu className="w-5 h-5" />}
+                        {isSensor && <Zap className="w-5 h-5" />}
+                      </div>
 
                     <div>
                       <span className="font-heading font-bold text-sm text-slate-900 dark:text-white">
@@ -528,6 +562,7 @@ export const DeviceMonitoringPage: React.FC = () => {
           );
         })}
       </div>
+      )}
 
       {/* Configuration & Thresholds Modal */}
       {configModalOpen && selectedDevice && (

@@ -8,7 +8,14 @@
 
 -- PHẦN 1: KÍCH HOẠT EXTENSIONS
 CREATE EXTENSION IF NOT EXISTS "uuid-ossp";
-CREATE EXTENSION IF NOT EXISTS "timescaledb" CASCADE;
+CREATE EXTENSION IF NOT EXISTS "pgcrypto";
+-- Kích hoạt TimescaleDB (nếu server có cài đặt TimescaleDB, nếu không có sẽ bỏ qua an toàn):
+DO $$
+BEGIN
+    CREATE EXTENSION IF NOT EXISTS "timescaledb" CASCADE;
+EXCEPTION WHEN OTHERS THEN
+    RAISE NOTICE 'TimescaleDB extension khong co san tren may chu PostgreSQL nay, he thong se dung bang chuan PostgreSQL.';
+END $$;
 
 -- PHẦN 2: XÓA BẢNG CŨ THEO THỨ TỰ RÀNG BUỘC KHÓA NGOẠI (NẾU CẦN RESET)
 DROP TABLE IF EXISTS vital_signs CASCADE;
@@ -36,7 +43,7 @@ CREATE TABLE users (
     phone VARCHAR(20) NOT NULL,                        -- SỐ ĐIỆN THOẠI ĐĂNG NHẬP CHÍNH
     full_name VARCHAR(255) NOT NULL,
     hashed_password VARCHAR(255) NOT NULL,
-    role VARCHAR(20) NOT NULL DEFAULT 'user' CHECK (role IN ('user', 'admin')),  -- 'user' (mặc định), 'admin' (quản trị hệ thống)
+    role VARCHAR(20) NOT NULL DEFAULT 'user' CHECK (role IN ('user', 'caregiver', 'doctor', 'admin')),  -- 'user', 'caregiver', 'doctor', 'admin'
     preferred_language VARCHAR(5) NOT NULL DEFAULT 'vi', -- Ngôn ngữ hiển thị ('vi', 'en')
     font_size_mode VARCHAR(20) NOT NULL DEFAULT 'system', -- Cỡ chữ ('system', 'custom')
     custom_font_scale INT NOT NULL DEFAULT 2,          -- Tỷ lệ phóng to chữ
@@ -273,10 +280,17 @@ CREATE TABLE vital_signs (
         REFERENCES devices(id) ON DELETE CASCADE
 );
 
--- Kích hoạt TimescaleDB Hypertable phân vùng theo thời gian
-SELECT create_hypertable('vital_signs', 'time', if_not_exists => TRUE);
-CREATE INDEX ix_vital_signs_device_id ON vital_signs(device_id);
-CREATE INDEX ix_vital_signs_time ON vital_signs("time" DESC);
+-- Kích hoạt TimescaleDB Hypertable phân vùng theo thời gian (nếu máy chủ có cài đặt TimescaleDB)
+DO $$
+BEGIN
+    IF EXISTS (SELECT 1 FROM pg_extension WHERE extname = 'timescaledb') THEN
+        PERFORM create_hypertable('vital_signs', 'time', if_not_exists => TRUE);
+    ELSE
+        RAISE NOTICE 'Bỏ qua tạo hypertable vì TimescaleDB chưa được kích hoạt trên database này.';
+    END IF;
+END $$;
+CREATE INDEX IF NOT EXISTS ix_vital_signs_device_id ON vital_signs(device_id);
+CREATE INDEX IF NOT EXISTS ix_vital_signs_time ON vital_signs("time" DESC);
 
 -- -----------------------------------------------------------------
 -- 9. Bảng incidents: Nhật ký sự cố & cảnh báo khẩn cấp (SOS, Té ngã...)
@@ -417,29 +431,33 @@ VALUES (
 INSERT INTO device_groups (id, house_id, name, description, icon, color, sort_order)
 VALUES
     ('a0000001-b4e1-4b08-b2d3-d949a0eb075c', 'c3333333-b4e1-4b08-b2d3-d949a0eb075c', 'Phòng khách', 'Khu vực sinh hoạt chung & giám sát té ngã AI', 'folder', '#7C3AED', 1),
-    ('a0000002-b4e1-4b08-b2d3-d949a0eb075c', 'c3333333-b4e1-4b08-b2d3-d949a0eb075c', 'Phòng ngủ', 'Khu vực nghỉ ngơi & theo dõi sinh hiệu ban đêm', 'folder', '#7C3AED', 2)
+    ('a0000002-b4e1-4b08-b2d3-d949a0eb075c', 'c3333333-b4e1-4b08-b2d3-d949a0eb075c', 'Phòng ngủ', 'Khu vực nghỉ ngơi & theo dõi sinh hiệu ban đêm', 'folder', '#7C3AED', 2),
+    ('a0000003-b4e1-4b08-b2d3-d949a0eb075c', 'c3333333-b4e1-4b08-b2d3-d949a0eb075c', 'Phòng bếp', 'Khu vực ăn uống & lối đi', 'folder', '#7C3AED', 3),
+    ('a0000004-b4e1-4b08-b2d3-d949a0eb075c', 'c3333333-b4e1-4b08-b2d3-d949a0eb075c', 'Nhà vệ sinh', 'Khu vực nguy cơ té ngã trơn trượt - Cảm biến Radar mmWave riêng tư', 'folder', '#7C3AED', 4)
 ON CONFLICT (house_id, name) DO NOTHING;
 
 -- 6. Danh mục thiết bị IoT (devices)
-INSERT INTO devices (id, device_id, name, sub_title, device_type, location, is_online, status_text, battery_level, owner_id, house_id, group_id, elderly_id)
+INSERT INTO devices (id, device_id, name, sub_title, device_type, location, is_online, status_text, battery_level, mac_address, ip_address, owner_id, house_id, group_id, elderly_id)
 VALUES
-    -- Thiết bị 1: Camera AI an ninh (Phòng khách)
+    -- Thiết bị 1: Camera AI an ninh góc rộng (Phòng khách)
     (
         'd0000001-b4e1-4b08-b2d3-d949a0eb075c',
         'SECA_001',
-        'SECA_001',
+        'Camera AI An Ninh SECA_001',
         'Camera góc rộng • 2K Super HD • Đàm thoại 2 chiều',
         'CAMERA',
         'Phòng khách',
         TRUE,
-        'Đang ghi hình',
+        'Đang ghi hình & Giám sát AI',
         NULL,
+        'AA:BB:CC:DD:EE:01',
+        '192.168.1.100',
         '640e3d97-b4e1-4b08-b2d3-d949a0eb075c',
         'c3333333-b4e1-4b08-b2d3-d949a0eb075c',
         'a0000001-b4e1-4b08-b2d3-d949a0eb075c',
         NULL
     ),
-    -- Thiết bị 2: Vòng đeo tay BLE Smartband (Gán trực tiếp cho cụ Nguyễn Văn An)
+    -- Thiết bị 2: Vòng đeo tay BLE Smartband (Phòng ngủ - Gán trực tiếp cho cụ Nguyễn Văn An)
     (
         'd0000002-b4e1-4b08-b2d3-d949a0eb075c',
         'BLE_BAND_001',
@@ -448,12 +466,68 @@ VALUES
         'SMARTBAND',
         'Phòng ngủ',
         TRUE,
-        'Pin 84% • Đang đeo',
+        'Pin 84% • Đang đeo trên tay cụ An',
         84,
+        'AA:BB:CC:DD:EE:02',
+        NULL,
         '640e3d97-b4e1-4b08-b2d3-d949a0eb075c',
         'c3333333-b4e1-4b08-b2d3-d949a0eb075c',
         'a0000002-b4e1-4b08-b2d3-d949a0eb075c',
         'e0000000-b4e1-4b08-b2d3-d949a0eb075c'
+    ),
+    -- Thiết bị 3: Edge Hub AI - Orange Pi 5 (Phòng khách)
+    (
+        'd0000003-b4e1-4b08-b2d3-d949a0eb075c',
+        'HUB_OPI5_001',
+        'Edge Hub AI (Orange Pi 5)',
+        'Bộ xử lý biên AI tại chỗ (RK3588 • NPU 6 TOPS)',
+        'EDGE_HUB',
+        'Phòng khách',
+        TRUE,
+        'NPU 38% • Nhiệt độ 48°C • FPS 30',
+        NULL,
+        'AA:BB:CC:DD:EE:03',
+        '192.168.1.10',
+        '640e3d97-b4e1-4b08-b2d3-d949a0eb075c',
+        'c3333333-b4e1-4b08-b2d3-d949a0eb075c',
+        'a0000001-b4e1-4b08-b2d3-d949a0eb075c',
+        NULL
+    ),
+    -- Thiết bị 4: Camera AI Bếp & Lối Đi (Phòng bếp)
+    (
+        'd0000004-b4e1-4b08-b2d3-d949a0eb075c',
+        'SECA_002',
+        'Camera AI Bếp & Lối Đi SECA_002',
+        'Camera góc rộng 2K • Phát hiện té ngã & ngã bất động',
+        'CAMERA',
+        'Phòng bếp',
+        TRUE,
+        'Đang ghi hình & Giám sát AI',
+        NULL,
+        'AA:BB:CC:DD:EE:04',
+        '192.168.1.102',
+        '640e3d97-b4e1-4b08-b2d3-d949a0eb075c',
+        'c3333333-b4e1-4b08-b2d3-d949a0eb075c',
+        'a0000003-b4e1-4b08-b2d3-d949a0eb075c',
+        NULL
+    ),
+    -- Thiết bị 5: Cảm biến Radar mmWave / Nhiệt (Nhà vệ sinh)
+    (
+        'd0000005-b4e1-4b08-b2d3-d949a0eb075c',
+        'SENSOR_RADAR_001',
+        'Cảm biến Radar mmWave WC',
+        'Radar 60GHz bảo vệ riêng tư tuyệt đối (Không dùng Camera)',
+        'SENSOR',
+        'Nhà vệ sinh',
+        TRUE,
+        'Bình thường • An toàn',
+        95,
+        'AA:BB:CC:DD:EE:05',
+        '192.168.1.105',
+        '640e3d97-b4e1-4b08-b2d3-d949a0eb075c',
+        'c3333333-b4e1-4b08-b2d3-d949a0eb075c',
+        'a0000004-b4e1-4b08-b2d3-d949a0eb075c',
+        NULL
     )
 ON CONFLICT (device_id) DO NOTHING;
 
@@ -466,10 +540,16 @@ INSERT INTO device_configs (
     is_custom_thresholds, configured_by_user_id, configured_by_role
 )
 VALUES
-    -- Cấu hình Camera AI SECA_001 (Chủ nhà thiết lập mặc định hệ thống)
+    -- Cấu hình Camera AI SECA_001
     ('d0000001-b4e1-4b08-b2d3-d949a0eb075c', 'http://10.0.2.2:8080', '2K', FALSE, TRUE, TRUE, 120, 50, 90, 140, 90, 90, 60, 2.5, 60, FALSE, '640e3d97-b4e1-4b08-b2d3-d949a0eb075c', 'OWNER'),
-    -- Cấu hình Vòng tay BLE_BAND_001 (Bác sĩ Trần Văn Minh thiết lập chuyên sâu cho cụ An có tiền sử cao huyết áp)
-    ('d0000002-b4e1-4b08-b2d3-d949a0eb075c', NULL, '1080p', FALSE, TRUE, FALSE, 115, 55, 92, 135, 95, 85, 60, 2.5, 45, TRUE, 'b2222222-b4e1-4b08-b2d3-d949a0eb075c', 'DOCTOR')
+    -- Cấu hình Vòng tay BLE_BAND_001 (Bác sĩ Trần Văn Minh thiết lập chuyên sâu cho cụ An)
+    ('d0000002-b4e1-4b08-b2d3-d949a0eb075c', NULL, '1080p', FALSE, TRUE, FALSE, 115, 55, 92, 135, 95, 85, 60, 2.5, 45, TRUE, 'b2222222-b4e1-4b08-b2d3-d949a0eb075c', 'DOCTOR'),
+    -- Cấu hình Edge Hub AI HUB_OPI5_001
+    ('d0000003-b4e1-4b08-b2d3-d949a0eb075c', NULL, '1080p', FALSE, TRUE, FALSE, 120, 50, 90, 140, 90, 90, 60, 2.5, 30, FALSE, '640e3d97-b4e1-4b08-b2d3-d949a0eb075c', 'SYSTEM'),
+    -- Cấu hình Camera AI SECA_002 (Bếp)
+    ('d0000004-b4e1-4b08-b2d3-d949a0eb075c', 'http://10.0.2.2:8081', '2K', FALSE, TRUE, TRUE, 120, 50, 90, 140, 90, 90, 60, 2.5, 60, FALSE, '640e3d97-b4e1-4b08-b2d3-d949a0eb075c', 'OWNER'),
+    -- Cấu hình Cảm biến Radar mmWave SENSOR_RADAR_001 (Nhà vệ sinh)
+    ('d0000005-b4e1-4b08-b2d3-d949a0eb075c', NULL, '1080p', FALSE, TRUE, FALSE, 120, 50, 90, 140, 90, 90, 60, 2.0, 30, FALSE, '640e3d97-b4e1-4b08-b2d3-d949a0eb075c', 'SYSTEM')
 ON CONFLICT (device_id) DO NOTHING;
 
 -- 8. Dữ liệu chuỗi thời gian sinh hiệu (vital_signs - Hypertable)
@@ -496,3 +576,108 @@ VALUES (
     NOW(),
     'Người nhà đã kiểm tra qua Camera, cụ đã được hỗ trợ đứng dậy an toàn.'
 );
+
+-- -----------------------------------------------------------------
+-- 10. Bảng security_policies: Quản lý chính sách bảo mật hệ thống
+-- -----------------------------------------------------------------
+CREATE TABLE IF NOT EXISTS security_policies (
+    id VARCHAR(50) NOT NULL,
+    name VARCHAR(255) NOT NULL,
+    description TEXT,
+    category VARCHAR(50) NOT NULL,
+    enabled BOOLEAN NOT NULL DEFAULT TRUE,
+    value VARCHAR(100),
+    updated_at TIMESTAMPTZ NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    CONSTRAINT pk_security_policies PRIMARY KEY (id)
+);
+
+INSERT INTO security_policies (id, name, description, category, enabled, value)
+VALUES
+    ('pol-1', 'Xác thực đa yếu tố (2FA / OTP)', 'Bắt buộc xác thực OTP số điện thoại khi đăng nhập tài khoản Bác sĩ và Quản trị viên.', 'authentication', TRUE, NULL),
+    ('pol-2', 'Mật khẩu độ phức tạp cao', 'Yêu cầu mật khẩu tối thiểu 8 ký tự, có chữ hoa, chữ thường, số và ký tự đặc biệt.', 'authentication', TRUE, NULL),
+    ('pol-3', 'Thời gian hết hạn phiên làm việc (JWT Access Token)', 'Tự động thu hồi phiên làm việc sau thời gian không hoạt động để bảo vệ dữ liệu y tế.', 'session', TRUE, '24 giờ'),
+    ('pol-4', 'Khóa tài khoản sau 5 lần đăng nhập sai', 'Tự động tạm khóa tài khoản trong 15 phút nếu phát hiện tấn công Brute-force.', 'access_control', TRUE, '5 lần'),
+    ('pol-5', 'Mã hóa dữ liệu nhạy cảm (At-Rest & In-Transit)', 'Toàn bộ sinh hiệu, hình ảnh khuôn mặt được mã hóa bằng AES-256 và TLS 1.3.', 'data_protection', TRUE, NULL),
+    ('pol-6', 'Giới hạn IP Whitelist cho cổng Admin', 'Chỉ cho phép truy cập trang quản trị từ các dải IP nội bộ hoặc VPN y tế đã xác thực.', 'access_control', FALSE, '192.168.1.0/24')
+ON CONFLICT (id) DO UPDATE
+SET name = EXCLUDED.name,
+    description = EXCLUDED.description,
+    category = EXCLUDED.category,
+    enabled = EXCLUDED.enabled,
+    value = EXCLUDED.value;
+
+-- -----------------------------------------------------------------
+-- 11. Bảng audit_logs: Nhật ký kiểm toán bảo mật & vận hành hệ thống
+-- -----------------------------------------------------------------
+CREATE TABLE IF NOT EXISTS audit_logs (
+    id UUID NOT NULL DEFAULT gen_random_uuid(),
+    timestamp TIMESTAMPTZ NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    event VARCHAR(150) NOT NULL,
+    user_name VARCHAR(255) NOT NULL,
+    ip_address VARCHAR(50) NOT NULL,
+    severity VARCHAR(20) NOT NULL DEFAULT 'low' CHECK (severity IN ('low', 'medium', 'high', 'critical')),
+    details TEXT NOT NULL,
+    CONSTRAINT pk_audit_logs PRIMARY KEY (id)
+);
+CREATE INDEX IF NOT EXISTS ix_audit_logs_timestamp ON audit_logs(timestamp DESC);
+
+INSERT INTO audit_logs (event, user_name, ip_address, severity, details)
+VALUES
+    ('ĐĂNG NHẬP THÀNH CÔNG', 'Admin123 (Root Admin)', '127.0.0.1', 'low', 'Đăng nhập trang quản trị thành công qua JWT Bearer token.'),
+    ('THAY ĐỔI CẤU HÌNH THIẾT BỊ', 'BS. Trần Văn Minh', '192.168.1.15', 'medium', 'Cập nhật ngưỡng cảnh báo SpO2 < 90% cho cụ Nguyễn Văn An.'),
+    ('CẢNH BÁO ĐĂNG NHẬP THẤT BẠI', '+84905999888', '115.79.138.90', 'high', 'Nhập sai mật khẩu lần thứ 3. Hệ thống gửi cảnh báo SMS OTP.'),
+    ('TỰ ĐỘNG THU HỒI TOKEN HẾT HẠN', 'System Cron', 'localhost:8000', 'low', 'Dọn sạch 14 refresh token đã hết hạn trong Redis cache.'),
+    ('PHÁT HIỆN TRUY CẬP TRÁI PHÉP', 'Anonymous', '45.154.255.88', 'critical', 'Quét cổng bất thường vào endpoint /api/v1/auth/login. Đã chặn IP tự động.');
+
+-- -----------------------------------------------------------------
+-- 12. Bảng system_incidents: Giám sát sự cố vận hành hệ thống & ứng dụng
+-- -----------------------------------------------------------------
+CREATE TABLE IF NOT EXISTS system_incidents (
+    id UUID NOT NULL DEFAULT gen_random_uuid(),
+    timestamp TIMESTAMPTZ NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    service VARCHAR(100) NOT NULL,
+    incident_type VARCHAR(20) NOT NULL DEFAULT 'WARNING' CHECK (incident_type IN ('WARNING', 'ERROR', 'CRITICAL')),
+    message TEXT NOT NULL,
+    resolved BOOLEAN NOT NULL DEFAULT FALSE,
+    resolved_at TIMESTAMPTZ,
+    CONSTRAINT pk_system_incidents PRIMARY KEY (id)
+);
+CREATE INDEX IF NOT EXISTS ix_system_incidents_timestamp ON system_incidents(timestamp DESC);
+
+INSERT INTO system_incidents (service, incident_type, message, resolved)
+VALUES
+    ('EMQX Broker', 'WARNING', 'Thiết bị SENSOR_RADAR_001 gửi bản tin heartbeat trễ 45s so với chu kỳ.', TRUE),
+    ('FastAPI Core', 'ERROR', 'Truy vấn bảng users trả về mã 404 cho user_id tạm thời. Đã tự phục hồi.', TRUE),
+    ('PostgreSQL DB', 'CRITICAL', 'Khóa kết nối trên cổng 5433 được phát hiện và đã chuyển mạch an toàn sang cổng 5432.', TRUE);
+
+-- -----------------------------------------------------------------
+-- 13. Bảng system_notifications: Quản lý thông báo toàn hệ thống (Web Admin)
+-- -----------------------------------------------------------------
+CREATE TABLE IF NOT EXISTS system_notifications (
+    id UUID NOT NULL DEFAULT gen_random_uuid(),
+    title VARCHAR(255) NOT NULL,
+    body TEXT NOT NULL,
+    type VARCHAR(50) NOT NULL DEFAULT 'info' CHECK (type IN ('info', 'system_maintenance', 'emergency', 'health_tip', 'feature_update')),
+    target_audience VARCHAR(50) NOT NULL DEFAULT 'all' CHECK (target_audience IN ('all', 'caregivers', 'doctors', 'elderly')),
+    status VARCHAR(50) NOT NULL DEFAULT 'draft' CHECK (status IN ('draft', 'scheduled', 'published', 'revoked')),
+    scheduled_at TIMESTAMPTZ,
+    published_at TIMESTAMPTZ,
+    revoked_at TIMESTAMPTZ,
+    revoke_reason TEXT,
+    delivered_count INTEGER NOT NULL DEFAULT 0,
+    read_count INTEGER NOT NULL DEFAULT 0,
+    created_by UUID REFERENCES users(id) ON DELETE SET NULL,
+    created_at TIMESTAMPTZ NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    updated_at TIMESTAMPTZ NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    CONSTRAINT pk_system_notifications PRIMARY KEY (id)
+);
+CREATE INDEX IF NOT EXISTS ix_system_notifications_status ON system_notifications(status);
+CREATE INDEX IF NOT EXISTS ix_system_notifications_created_at ON system_notifications(created_at DESC);
+
+INSERT INTO system_notifications (title, body, type, target_audience, status, published_at, delivered_count, read_count)
+VALUES
+    ('Bảo trì nâng cấp hệ thống định kỳ', 'Hệ thống Smart Elderly Care AI sẽ tiến hành tối ưu hóa kết nối IoT và sao lưu cơ sở dữ liệu từ 01:00 đến 03:00 ngày 18/10/2026. Trong thời gian này, các tính năng báo cáo có thể bị chậm nhẹ.', 'system_maintenance', 'all', 'published', CURRENT_TIMESTAMP - INTERVAL '1 day', 152, 128),
+    ('Khuyến cáo sức khỏe mùa giao mùa', 'Nhiệt độ thay đổi đột ngột có thể ảnh hưởng đến huyết áp của người cao tuổi. Gia đình vui lòng kiểm tra thiết bị đo sinh hiệu phòng ngủ và duy trì nhiệt độ phòng 26-28 độ C.', 'health_tip', 'caregivers', 'published', CURRENT_TIMESTAMP - INTERVAL '5 hours', 89, 74),
+    ('Cập nhật tính năng trợ lý AI Y khoa', 'Phiên bản mới của Chatbot y khoa đã được tích hợp mô hình phân tích triệu chứng chuyên sâu dành cho bác sĩ gia đình và người chăm sóc.', 'feature_update', 'all', 'scheduled', NULL, 0, 0);
+
+

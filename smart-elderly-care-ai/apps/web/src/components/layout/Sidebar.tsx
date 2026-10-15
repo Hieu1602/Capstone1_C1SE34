@@ -6,12 +6,12 @@ import { NavLink } from 'react-router-dom';
 import {
   LayoutDashboard,
   Users,
-  Cpu,
-  Server,
-  BrainCircuit,
-  LogOut,
+  Shield,
   Activity,
+  Server,
+  LogOut,
   Wifi,
+  Bell,
 } from 'lucide-react';
 import { useAuthStore } from '../../store/useAuthStore';
 
@@ -28,35 +28,37 @@ const NAV_ITEMS: NavItem[] = [
     name: 'Tổng quan hệ thống',
     path: '/',
     icon: LayoutDashboard,
-    description: 'Dashboard chỉ số tổng thể',
+    description: 'Bảng điều khiển & KPI tổng quan',
   },
   {
     name: 'Quản lý người dùng',
     path: '/users',
     icon: Users,
-    badge: 'PH1',
-    description: 'Tài khoản · Phân quyền · Role',
+    description: 'Tài khoản · Phân quyền · Vai trò',
   },
   {
-    name: 'Giám sát thiết bị IoT',
-    path: '/devices',
-    icon: Cpu,
-    badge: 'PH2',
-    description: 'Camera AI · BLE Band · Ngưỡng',
+    name: 'Quản lý bảo mật hệ thống',
+    path: '/security',
+    icon: Shield,
+    description: 'Chính sách · JWT Session · Audit Log',
   },
   {
-    name: 'Vận hành hạ tầng',
+    name: 'Quản lý thông báo',
+    path: '/notifications',
+    icon: Bell,
+    description: 'Tạo · Lên lịch · Phát hành · Thu hồi',
+  },
+  {
+    name: 'Giám sát hoạt động hệ thống',
+    path: '/monitoring',
+    icon: Activity,
+    description: 'Máy chủ · Hiệu năng · IoT & Sự cố',
+  },
+  {
+    name: 'Quản lý hạ tầng',
     path: '/infrastructure',
     icon: Server,
-    badge: 'PH3',
-    description: 'Timescale · Redis · EMQX',
-  },
-  {
-    name: 'Bảo trì AI',
-    path: '/ai-maintenance',
-    icon: BrainCircuit,
-    badge: 'PH4',
-    description: 'YOLOv8 · YAMNet · NPU',
+    description: 'PostgreSQL · Redis · EMQX · Log',
   },
 ];
 

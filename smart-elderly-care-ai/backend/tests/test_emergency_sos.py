@@ -1,11 +1,14 @@
 import asyncio
 from types import SimpleNamespace
+from typing import cast
 from unittest.mock import AsyncMock
 
 import pytest
 from pydantic import ValidationError
+from sqlalchemy.ext.asyncio import AsyncSession
 
-from app.api.v1.endpoints import emergency
+from app.api.v1.endpoints.mobile import emergency
+from app.models.user import User
 from app.schemas.emergency import EmergencySOSRequest
 
 
@@ -30,10 +33,11 @@ def test_trigger_emergency_sos_notifies_household_and_returns_dial_target(monkey
     )
     fake_db = object()
     recipient = SimpleNamespace(fcm_token="family-device-token")
+    mock_get_recipients = AsyncMock(return_value=[recipient])
     monkeypatch.setattr(
         emergency,
         "_get_household_recipients",
-        AsyncMock(return_value=[recipient]),
+        mock_get_recipients,
     )
     send_notifications = AsyncMock(
         return_value={"success_count": 1, "failure_count": 0}
@@ -46,14 +50,18 @@ def test_trigger_emergency_sos_notifies_household_and_returns_dial_target(monkey
     payload = EmergencySOSRequest(address="Current address", latitude=10.0, longitude=106.0)
 
     response = asyncio.run(
-        emergency.trigger_emergency_sos(payload, current_user=fake_user, db=fake_db)
+        emergency.trigger_emergency_sos(
+            payload,
+            current_user=cast(User, fake_user),
+            db=cast(AsyncSession, fake_db),
+        )
     )
 
     assert response.dial_number == "115"
     assert response.dial_uri == "tel:115"
     assert response.notification_sent == 1
     assert response.notification_failed == 0
-    emergency._get_household_recipients.assert_awaited_once_with(
+    mock_get_recipients.assert_awaited_once_with(
         fake_db, fake_user.id
     )
     send_notifications.assert_awaited_once()
@@ -73,7 +81,9 @@ def test_trigger_emergency_sos_still_returns_dial_target_without_recipients(monk
 
     response = asyncio.run(
         emergency.trigger_emergency_sos(
-            EmergencySOSRequest(), current_user=fake_user, db=object()
+            EmergencySOSRequest(),
+            current_user=cast(User, fake_user),
+            db=cast(AsyncSession, object()),
         )
     )
 

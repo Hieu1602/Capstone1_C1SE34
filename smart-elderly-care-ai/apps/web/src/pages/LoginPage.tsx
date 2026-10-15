@@ -233,54 +233,12 @@ export const LoginPage: React.FC = () => {
             ) : (
               <>
                 <Shield className="w-4 h-4" aria-hidden="true" />
-                Đăng nhập Quản Trị Viên
+                Đăng nhập 
                 <ArrowRight className="w-4 h-4 ml-auto" aria-hidden="true" />
               </>
             )}
           </button>
         </form>
-
-        {/* ── Quick Fill ── */}
-        <div className="mt-5 pt-5" style={{ borderTop: '1px solid rgba(255,255,255,0.06)' }}>
-          <p className="text-[10px] text-slate-600 uppercase tracking-wider font-mono mb-2.5">
-            Tài khoản hợp lệ
-          </p>
-          <button
-            type="button"
-            onClick={handleFillAdmin}
-            className="w-full text-left px-3 py-2.5 rounded-xl transition-all cursor-pointer group"
-            style={{
-              background:  'rgba(34,197,94,0.05)',
-              border:      '1px solid rgba(34,197,94,0.2)',
-            }}
-            onMouseEnter={(e) => {
-              (e.currentTarget as HTMLButtonElement).style.borderColor = 'rgba(34,197,94,0.4)';
-              (e.currentTarget as HTMLButtonElement).style.background  = 'rgba(34,197,94,0.1)';
-            }}
-            onMouseLeave={(e) => {
-              (e.currentTarget as HTMLButtonElement).style.borderColor = 'rgba(34,197,94,0.2)';
-              (e.currentTarget as HTMLButtonElement).style.background  = 'rgba(34,197,94,0.05)';
-            }}
-          >
-            <div className="flex items-center justify-between">
-              <div className="flex items-center gap-2.5">
-                <div className="w-7 h-7 rounded-lg flex items-center justify-center"
-                  style={{ background: 'rgba(34,197,94,0.15)', color: '#22c55e' }}
-                >
-                  <Shield className="w-3.5 h-3.5" aria-hidden="true" />
-                </div>
-                <div>
-                  <p className="text-[11px] font-bold text-white">Quản Trị Viên (Root Admin)</p>
-                  <p className="text-[10px] font-mono" style={{ color: '#94a3b8' }}>
-                    User: <span style={{ color: '#4ade80' }}>Admin123</span>
-                    {' '}· Pass: <span style={{ color: '#4ade80' }}>123456</span>
-                  </p>
-                </div>
-              </div>
-              <CheckCircle className="w-3.5 h-3.5" style={{ color: '#22c55e' }} aria-hidden="true" />
-            </div>
-          </button>
-        </div>
       </div>
 
       {/* ── Footer ── */}

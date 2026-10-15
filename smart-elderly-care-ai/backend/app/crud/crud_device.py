@@ -7,12 +7,13 @@ from datetime import datetime, timezone
 from typing import List, Optional
 from uuid import UUID
 
-from sqlalchemy import select
+from sqlalchemy import or_, select
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import selectinload
 
 from app.models.device import Device
 from app.models.device_config import DeviceConfig
+from app.models.house import HouseMember
 from app.schemas.device import DeviceConfigUpdate, DeviceCreate, DeviceUpdate
 
 
@@ -83,6 +84,88 @@ class CRUDDevice:
             .where(Device.owner_id == owner_id)
         )
 
+        if house_id is not None:
+            query = query.where(Device.house_id == house_id)
+        if device_type is not None:
+            query = query.where(Device.device_type == device_type.upper())
+        if group_id is not None:
+            query = query.where(Device.group_id == group_id)
+        if is_online is not None:
+            query = query.where(Device.is_online == is_online)
+
+        query = query.order_by(Device.created_at.asc())
+        result = await db.execute(query)
+        return list(result.scalars().all())
+
+    async def get_all(
+        self,
+        db: AsyncSession,
+        house_id: Optional[UUID] = None,
+        device_type: Optional[str] = None,
+        group_id: Optional[UUID] = None,
+        is_online: Optional[bool] = None,
+    ) -> List[Device]:
+        """Lấy toàn bộ thiết bị trong toàn hệ thống (dành cho Admin)."""
+        query = (
+            select(Device)
+            .options(
+                selectinload(Device.config),
+                selectinload(Device.group),
+                selectinload(Device.house),
+            )
+        )
+        if house_id is not None:
+            query = query.where(Device.house_id == house_id)
+        if device_type is not None:
+            query = query.where(Device.device_type == device_type.upper())
+        if group_id is not None:
+            query = query.where(Device.group_id == group_id)
+        if is_online is not None:
+            query = query.where(Device.is_online == is_online)
+
+        query = query.order_by(Device.created_at.asc())
+        result = await db.execute(query)
+        return list(result.scalars().all())
+
+    async def get_by_user(
+        self,
+        db: AsyncSession,
+        user_id: UUID,
+        is_admin: bool = False,
+        house_id: Optional[UUID] = None,
+        device_type: Optional[str] = None,
+        group_id: Optional[UUID] = None,
+        is_online: Optional[bool] = None,
+    ) -> List[Device]:
+        """
+        Lấy danh sách thiết bị:
+        - Admin: lấy toàn bộ thiết bị trong hệ thống.
+        - User / Caregiver / Doctor: lấy các thiết bị do user sở hữu HOẶC thuộc các căn nhà user là thành viên.
+        """
+        if is_admin:
+            return await self.get_all(
+                db,
+                house_id=house_id,
+                device_type=device_type,
+                group_id=group_id,
+                is_online=is_online,
+            )
+
+        member_houses_subq = select(HouseMember.house_id).where(HouseMember.user_id == user_id)
+        query = (
+            select(Device)
+            .options(
+                selectinload(Device.config),
+                selectinload(Device.group),
+                selectinload(Device.house),
+            )
+            .where(
+                or_(
+                    Device.owner_id == user_id,
+                    Device.house_id.in_(member_houses_subq),
+                )
+            )
+        )
         if house_id is not None:
             query = query.where(Device.house_id == house_id)
         if device_type is not None:
