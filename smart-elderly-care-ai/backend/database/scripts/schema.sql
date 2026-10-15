@@ -562,20 +562,20 @@ ON CONFLICT (device_id) DO NOTHING;
 --     (gen_random_uuid(), NOW(),                        'd0000002-b4e1-4b08-b2d3-d949a0eb075c', 80, 98, 128, 83, 36.6, 1, FALSE);
 
 -- 9. Nhật ký sự cố khẩn cấp (incidents)
-INSERT INTO incidents (id, device_id, alert_type, alert_level, message, confidence, sources, is_acknowledged, acknowledged_by, acknowledged_at, notes)
-VALUES (
-    gen_random_uuid(),
-    'd0000001-b4e1-4b08-b2d3-d949a0eb075c',
-    'FALL_DETECTED',
-    'HIGH',
-    'Phát hiện người cao tuổi té ngã tại khu vực Phòng khách. Hệ thống đã tự động cảnh báo.',
-    0.94,
-    'FUSION',
-    TRUE,
-    '640e3d97-b4e1-4b08-b2d3-d949a0eb075c',
-    NOW(),
-    'Người nhà đã kiểm tra qua Camera, cụ đã được hỗ trợ đứng dậy an toàn.'
-);
+-- INSERT INTO incidents (id, device_id, alert_type, alert_level, message, confidence, sources, is_acknowledged, acknowledged_by, acknowledged_at, notes)
+-- VALUES (
+--     gen_random_uuid(),
+--     'd0000001-b4e1-4b08-b2d3-d949a0eb075c',
+--     'FALL_DETECTED',
+--     'HIGH',
+--     'Phát hiện người cao tuổi té ngã tại khu vực Phòng khách. Hệ thống đã tự động cảnh báo.',
+--     0.94,
+--     'FUSION',
+--     TRUE,
+--     '640e3d97-b4e1-4b08-b2d3-d949a0eb075c',
+--     NOW(),
+--     'Người nhà đã kiểm tra qua Camera, cụ đã được hỗ trợ đứng dậy an toàn.'
+-- );
 
 -- -----------------------------------------------------------------
 -- 10. Bảng security_policies: Quản lý chính sách bảo mật hệ thống
