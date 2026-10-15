@@ -1,10 +1,10 @@
 """
 reset_vitals.py – Script xóa sạch toàn bộ dữ liệu mẫu trong bảng vital_signs (TimescaleDB)
-và làm sạch cache sinh hiệu trong Redis.
+và bảng incidents (Nhật ký cảnh báo & sự cố), đồng thời làm sạch cache sinh hiệu trong Redis.
 
 Cách chạy:
-    cd backend
-    ./.venv/bin/python database/scripts/reset_vitals.py
+    cd smart-elderly-care-ai/backend
+    PYTHONPATH=. ./.venv/bin/python database/scripts/reset_vitals.py
 """
 
 import asyncio
@@ -18,17 +18,22 @@ logger = logging.getLogger("reset_vitals")
 
 
 async def main():
-    logger.info("Bắt đầu dọn sạch bảng dữ liệu đo sinh hiệu (vital_signs)...")
+    logger.info("Bắt đầu dọn sạch bảng dữ liệu đo sinh hiệu (vital_signs) và sự cố (incidents)...")
     
-    # 1. Xóa dữ liệu trong bảng vital_signs của PostgreSQL / TimescaleDB
+    # 1. Xóa dữ liệu trong bảng vital_signs và incidents của PostgreSQL
     async with AsyncSessionFactory() as db:
         try:
             # Xóa toàn bộ bản ghi trong bảng vital_signs
-            res = await db.execute(text("DELETE FROM vital_signs;"))
-            await db.commit()
+            await db.execute(text("DELETE FROM vital_signs;"))
             logger.info("✅ Đã xóa toàn bộ bản ghi đo sinh tồn trong bảng 'vital_signs'.")
+            
+            # Xóa toàn bộ bản ghi sự cố trong bảng incidents
+            await db.execute(text("DELETE FROM incidents;"))
+            logger.info("✅ Đã xóa toàn bộ bản ghi cảnh báo trong bảng 'incidents'.")
+            
+            await db.commit()
         except Exception as e:
-            logger.error("❌ Lỗi khi xóa bảng vital_signs: %s", e)
+            logger.error("❌ Lỗi khi xóa bảng vital_signs / incidents: %s", e)
             await db.rollback()
 
     # 2. Xóa cache Redis nếu có
@@ -43,9 +48,8 @@ async def main():
     except Exception as e:
         logger.warning("⚠️ Không thể kết nối Redis để xóa cache: %s", e)
 
-    logger.info("🎉 Hoàn tất dọn dẹp dữ liệu sinh tồn mẫu! Ứng dụng hiện đang ở trạng thái trống hoàn toàn (Empty state).")
+    logger.info("🎉 Hoàn tất dọn dẹp dữ liệu mẫu! Toàn bộ màn hình Sinh hiệu và Thông báo & Sự kiện hiện đang ở trạng thái trống hoàn toàn (Empty state).")
 
 
 if __name__ == "__main__":
     asyncio.run(main())
-
