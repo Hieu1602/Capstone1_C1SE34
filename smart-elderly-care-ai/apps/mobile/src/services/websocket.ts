@@ -2,32 +2,40 @@
 // WebSocket client – Kết nối real-time với Backend FastAPI (/ws/alerts & /ws/vitals)
 // Nhận sự kiện cảnh báo té ngã tức thì (Feature 1) & chỉ số sinh hiệu mô phỏng 5s/lần (Feature 3)
 
-import { Platform } from 'react-native';
 import Constants from 'expo-constants';
 import { useVitalStore, Incident } from '../store/useVitalStore';
 import { notificationService } from './notificationService';
 
 
 const getWsBaseUrl = (): string => {
-  if (typeof process !== 'undefined' && process.env.EXPO_PUBLIC_WS_URL) {
-    return process.env.EXPO_PUBLIC_WS_URL;
-  }
+  // 1. Khi chạy trên Web trình duyệt
   if (typeof window !== 'undefined' && window.location?.hostname) {
     const host = window.location.hostname;
     if (host !== 'localhost' && host !== '127.0.0.1') {
       return `ws://${host}:8000/ws`;
     }
   }
-  if (Platform.OS === 'android') {
-    return 'ws://10.0.2.2:8000/ws';
-  }
-  const debuggerHost = Constants.expoConfig?.hostUri || (Constants as any).manifest2?.extra?.expoClient?.hostUri || (Constants as any).manifest?.debuggerHost;
+
+  // 2. Tự động nhận diện IP máy tính từ Expo Metro host (kết nối trực tiếp điện thoại thật qua LAN Wi-Fi)
+  const debuggerHost =
+    Constants.expoConfig?.hostUri ||
+    (Constants as any).manifest2?.extra?.expoClient?.hostUri ||
+    (Constants as any).manifest?.debuggerHost;
+
   if (debuggerHost) {
     const hostIp = debuggerHost.split(':')[0];
-    if (hostIp && !hostIp.includes('exp.direct')) {
+    if (hostIp && !hostIp.includes('exp.direct') && hostIp !== 'localhost' && hostIp !== '127.0.0.1') {
       return `ws://${hostIp}:8000/ws`;
     }
   }
+
+  // 3. Biến môi trường EXPO_PUBLIC_WS_URL (nếu được chỉ định rõ và không trỏ vào localhost trên thiết bị thật)
+  const envWsUrl = process.env.EXPO_PUBLIC_WS_URL;
+  if (envWsUrl && !envWsUrl.includes('localhost') && !envWsUrl.includes('127.0.0.1')) {
+    return envWsUrl;
+  }
+
+  // 4. Fallback về IP máy tính phát triển trong mạng nội bộ
   return 'ws://192.168.1.4:8000/ws';
 };
 

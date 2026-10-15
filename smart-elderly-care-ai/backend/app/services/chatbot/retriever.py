@@ -24,8 +24,12 @@ DOCS_DIR = Path(__file__).resolve().parent / "data" / "medical_docs"
 
 
 def _tokenize(text: str) -> List[str]:
-    """Tách từ tiếng Việt / tiếng Anh đơn giản thành các token thường."""
-    return re.findall(r"\w+", text.lower())
+    """Tách từ tiếng Việt và tạo unigram + bigram để tăng độ chính xác tìm kiếm RAG."""
+    words = re.findall(r"\w+", text.lower())
+    tokens = list(words)
+    for i in range(len(words) - 1):
+        tokens.append(f"{words[i]}_{words[i+1]}")
+    return tokens
 
 
 class MedicalRetriever:
@@ -44,7 +48,7 @@ class MedicalRetriever:
         self._is_indexed = False
         self._build_index()
 
-    def _split_into_chunks(self, text: str, source_name: str, max_chunk_len: int = 500) -> List[Dict[str, Any]]:
+    def _split_into_chunks(self, text: str, source_name: str, max_chunk_len: int = 700) -> List[Dict[str, Any]]:
         """Chia nhỏ tài liệu thành các đoạn văn mạch lạc theo dấu ngắt đoạn."""
         raw_paragraphs = [p.strip() for p in text.split("\n\n") if p.strip()]
         chunks = []
@@ -133,7 +137,7 @@ class MedicalRetriever:
             len(doc_files),
         )
 
-    def search(self, query: str, top_k: int = 3, threshold: float = 0.5) -> List[Dict[str, Any]]:
+    def search(self, query: str, top_k: int = 3, threshold: float = 0.1) -> List[Dict[str, Any]]:
         """
         Tìm kiếm các đoạn tri thức y khoa liên quan nhất đến câu hỏi bằng BM25 / TF-IDF.
         Trả về danh sách dict gồm: text, source, score.

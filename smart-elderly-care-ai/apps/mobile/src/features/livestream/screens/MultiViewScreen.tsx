@@ -343,6 +343,12 @@ export default function MultiViewScreen({ navigation }: any) {
               [
                 { text: 'Hủy', style: 'cancel' },
                 {
+                  text: '📍 Gửi vị trí & ảnh',
+                  onPress: () => {
+                    navigation.navigate('SendEmergencyLocation');
+                  },
+                },
+                {
                   text: 'Gọi 115',
                   style: 'destructive',
                   onPress: () => {

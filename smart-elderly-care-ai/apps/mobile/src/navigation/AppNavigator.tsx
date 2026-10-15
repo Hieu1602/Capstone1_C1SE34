@@ -2,7 +2,7 @@
 // React Navigation – 5 Tabs chuẩn phong cách Imou / SmartCare AI & Stack Screens
 
 import React from 'react';
-import { View, StyleSheet } from 'react-native';
+import { View, StyleSheet, Platform } from 'react-native';
 import { NavigationContainer } from '@react-navigation/native';
 import { createNativeStackNavigator } from '@react-navigation/native-stack';
 import { createBottomTabNavigator } from '@react-navigation/bottom-tabs';
@@ -44,6 +44,7 @@ import DoctorTabNavigator from './DoctorTabNavigator';
 import DoctorPatientDetailScreen from '../features/doctor/screens/DoctorPatientDetailScreen';
 import DoctorPrescriptionsScreen from '../features/doctor/screens/DoctorPrescriptionsScreen';
 import DoctorAnalyticsReportScreen from '../features/doctor/screens/DoctorAnalyticsReportScreen';
+import SendEmergencyLocationScreen from '../features/alerts/screens/SendEmergencyLocationScreen';
 import { useTheme } from '../store/useThemeStore';
 
 const Stack = createNativeStackNavigator();
@@ -167,6 +168,7 @@ export default function AppNavigator() {
             <Stack.Screen name="SmartbandDetail" component={SmartbandDetailScreen} />
             <Stack.Screen name="HealthDetail" component={HealthDetailScreen} />
             <Stack.Screen name="Settings" component={SettingsScreen} />
+            <Stack.Screen name="SendEmergencyLocation" component={SendEmergencyLocationScreen} />
             <Stack.Screen
               name="IncidentDetail"
               component={IncidentDetailScreen}
@@ -187,9 +189,9 @@ const styles = StyleSheet.create({
     backgroundColor: '#FFFFFF',
     borderTopColor: '#E2E8F0',
     borderTopWidth: 1,
-    height: 62,
+    height: Platform.OS === 'ios' ? 84 : 72,
     paddingTop: 8,
-    paddingBottom: 8,
+    paddingBottom: Platform.OS === 'ios' ? 26 : 14,
     elevation: 8,
     shadowColor: '#000',
     shadowOffset: { width: 0, height: -2 },
