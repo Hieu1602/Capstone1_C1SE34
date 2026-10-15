@@ -105,9 +105,12 @@ export default function HealthDetailScreen({ navigation, route }: any) {
       if (res.data && Array.isArray(res.data) && res.data.length > 0) {
         setDayVitals(res.data);
         const first = res.data[0];
-        if (first && first.recorded_at) {
-          const d = new Date(first.recorded_at);
-          setScrubberMinutes(d.getHours() * 60 + d.getMinutes());
+        const rawDate = first?.recorded_at || first?.time || first?.created_at;
+        if (rawDate) {
+          const d = new Date(rawDate);
+          if (!isNaN(d.getTime())) {
+            setScrubberMinutes(d.getHours() * 60 + d.getMinutes());
+          }
         }
       } else {
         setDayVitals([]);
@@ -115,7 +118,7 @@ export default function HealthDetailScreen({ navigation, route }: any) {
     } catch (e) {
       console.warn('Lỗi tải dữ liệu sinh hiệu qua patientApi, thử fallback vitalsApi:', e);
       try {
-        const fallbackRes = await vitalsApi.getHistory('hub-01', 100, dateStr);
+        const fallbackRes = await vitalsApi.getHistory('BLE_BAND_001', 100, dateStr);
         if (fallbackRes.data && Array.isArray(fallbackRes.data)) {
           setDayVitals(fallbackRes.data);
         } else {
@@ -133,7 +136,7 @@ export default function HealthDetailScreen({ navigation, route }: any) {
   const loadRangeVitals = async (limit: number) => {
     setIsLoadingVitals(true);
     try {
-      const res = await vitalsApi.getHistory('hub-01', limit);
+      const res = await vitalsApi.getHistory('BLE_BAND_001', limit);
       if (res.data && Array.isArray(res.data)) {
         setRangeVitals(res.data);
       } else {
@@ -201,7 +204,9 @@ export default function HealthDetailScreen({ navigation, route }: any) {
     let best = dayVitals[0];
     let minDiff = 999999;
     for (const v of dayVitals) {
-      const d = new Date(v.recorded_at);
+      const rawDate = v.recorded_at || v.time || v.created_at;
+      const d = rawDate ? new Date(rawDate) : null;
+      if (!d || isNaN(d.getTime())) continue;
       const vMinutes = d.getHours() * 60 + d.getMinutes();
       const diff = Math.abs(vMinutes - scrubberMinutes);
       if (diff < minDiff) {
@@ -216,8 +221,10 @@ export default function HealthDetailScreen({ navigation, route }: any) {
   const chartDataForDay = useMemo(() => {
     if (!dayVitals || dayVitals.length === 0) return [];
     return dayVitals.map((v) => {
-      const d = new Date(v.recorded_at);
-      const label = `${String(d.getHours()).padStart(2, '0')}:${String(d.getMinutes()).padStart(2, '0')}`;
+      const rawDate = v.recorded_at || v.time || v.created_at;
+      const d = rawDate ? new Date(rawDate) : null;
+      const isValid = d && !isNaN(d.getTime());
+      const label = isValid ? `${String(d.getHours()).padStart(2, '0')}:${String(d.getMinutes()).padStart(2, '0')}` : '--:--';
       return {
         id: v.id,
         label,
@@ -225,7 +232,7 @@ export default function HealthDetailScreen({ navigation, route }: any) {
         spo2: v.spo2,
         temp: v.body_temp ?? v.skin_temp_max,
         activity: v.activity || v.activity_state || 'Sinh hoạt',
-        minute: d.getHours() * 60 + d.getMinutes(),
+        minute: isValid ? d.getHours() * 60 + d.getMinutes() : 0,
       };
     });
   }, [dayVitals]);
@@ -239,9 +246,9 @@ export default function HealthDetailScreen({ navigation, route }: any) {
     return `${Math.round(sum / valid.length)} bpm`;
   }, [dayVitals]);
 
-  // Dữ liệu biểu đồ và tính toán trung bình thực tế cho Tuần
+  // Dữ liệu biểu đồ và tính toán trung bình thực tế cho Tuần / Tháng (không dùng fallback mock data)
   const weekData = useMemo(() => {
-    const list = rangeVitals && rangeVitals.length > 0 ? rangeVitals : (currentVitals.heart_rate ? [currentVitals] : []);
+    const list = rangeVitals && Array.isArray(rangeVitals) && rangeVitals.length > 0 ? rangeVitals : [];
     const validHR = list.filter((v) => typeof v.heart_rate === 'number');
     const validSpO2 = list.filter((v) => typeof v.spo2 === 'number');
     const validTemp = list.filter((v) => typeof (v.body_temp ?? v.skin_temp_max) === 'number');
@@ -250,8 +257,9 @@ export default function HealthDetailScreen({ navigation, route }: any) {
     const avgSpO2 = validSpO2.length > 0 ? Math.round(validSpO2.reduce((a, b) => a + b.spo2, 0) / validSpO2.length).toString() : '--';
     const avgTemp = validTemp.length > 0 ? (validTemp.reduce((a, b) => a + (b.body_temp ?? b.skin_temp_max), 0) / validTemp.length).toFixed(1) : '--';
 
-    const chart = list.slice(0, 7).reverse().map((v, i) => {
-      const d = v.recorded_at ? new Date(v.recorded_at) : new Date();
+    const chart = list.length === 0 ? [] : list.slice(0, 7).reverse().map((v) => {
+      const rawDate = v.recorded_at || v.time || v.created_at;
+      const d = rawDate ? new Date(rawDate) : new Date();
       return {
         label: `${d.getDate()}/${d.getMonth() + 1}`,
         hr: v.heart_rate ?? 0,
@@ -259,7 +267,7 @@ export default function HealthDetailScreen({ navigation, route }: any) {
     });
 
     return { avgHR, avgSpO2, avgTemp, chart };
-  }, [rangeVitals, currentVitals]);
+  }, [rangeVitals]);
 
   // Cấu hình dữ liệu thẻ chỉ số theo dải thời gian được chọn
   const getTabConfig = () => {
@@ -377,12 +385,12 @@ export default function HealthDetailScreen({ navigation, route }: any) {
           },
           card4: {
             label: 'Chỉ số an toàn té ngã',
-            value: isFallDetected ? 'Có cảnh báo' : 'An toàn',
+            value: isFallDetected ? 'Có cảnh báo' : hasRangeData ? 'An toàn' : 'Chưa có dữ liệu',
             unit: '',
-            status: isFallDetected ? 'Cảnh báo' : 'Tối ưu',
-            statusColor: isFallDetected ? Colors.danger : '#15803D',
-            statusBg: isFallDetected ? '#FEE2E2' : '#DCFCE7',
-            range: isFallDetected ? 'Đã ghi nhận sự cố' : 'Không có sự cố ngã',
+            status: isFallDetected ? 'Cảnh báo' : hasRangeData ? 'Tối ưu' : 'Chưa có dữ liệu',
+            statusColor: isFallDetected ? Colors.danger : hasRangeData ? '#15803D' : '#64748B',
+            statusBg: isFallDetected ? '#FEE2E2' : hasRangeData ? '#DCFCE7' : '#F1F5F9',
+            range: isFallDetected ? 'Đã ghi nhận sự cố' : hasRangeData ? 'Không có sự cố ngã' : 'Chưa ghi nhận',
             icon: 'shield-checkmark' as keyof typeof Ionicons.glyphMap,
             iconColor: '#9333EA',
             iconBg: '#F3E8FF',

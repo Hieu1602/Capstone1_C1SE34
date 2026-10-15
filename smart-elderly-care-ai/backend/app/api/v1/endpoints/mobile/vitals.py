@@ -51,16 +51,31 @@ async def get_latest_vitals(
     return vital
 
 
+@router.get("/history", response_model=List[VitalOut])
+async def get_vital_history_query(
+    device_id: Optional[str] = Query(default=None, description="Mã phần cứng (VD: BLE_BAND_001) hoặc UUID"),
+    limit: int = Query(default=100, le=1000),
+    offset: int = Query(default=0),
+    target_date: Optional[str] = Query(default=None, description="Ngày cần lấy (YYYY-MM-DD)"),
+    db: AsyncSession = Depends(get_db),
+):
+    """Lấy lịch sử chỉ số sinh hiệu qua Query parameter (tương thích trực tiếp với mobile client)."""
+    return await crud_vital.get_history(
+        db, device_id=device_id, limit=limit, offset=offset, target_date=target_date
+    )
+
+
 @router.get("/{device_identifier}/history", response_model=List[VitalOut])
 async def get_vital_history(
     device_identifier: str = Path(..., description="Mã phần cứng (VD: BLE_BAND_001) hoặc UUID thiết bị"),
     limit: int = Query(default=100, le=1000),
     offset: int = Query(default=0),
+    target_date: Optional[str] = Query(default=None, description="Ngày cần lấy (YYYY-MM-DD)"),
     db: AsyncSession = Depends(get_db),
 ):
     """Lấy lịch sử chỉ số sinh hiệu theo chuỗi thời gian (phân trang)."""
     return await crud_vital.get_history(
-        db, device_id=device_identifier, limit=limit, offset=offset
+        db, device_id=device_identifier, limit=limit, offset=offset, target_date=target_date
     )
 
 

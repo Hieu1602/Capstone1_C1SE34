@@ -5,18 +5,20 @@ Vị trí: backend/app/api/v1/endpoints/patients.py
 """
 
 from typing import Any, Dict, List, Optional
-from fastapi import APIRouter, Depends, HTTPException, status, UploadFile, File
+from fastapi import APIRouter, Depends, HTTPException, Query, status, UploadFile, File
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.api.deps import get_current_user_optional
 from app.core.database import get_db
 from app.crud.crud_elderly import crud_elderly
 from app.crud.crud_house import crud_house
+from app.crud.crud_vital import crud_vital
 from app.models.user import User
 from app.schemas.patient import (
     PatientMedicalRecordOut,
     PatientMedicalRecordUpdate,
 )
+from app.schemas.vital import VitalOut
 
 router = APIRouter()
 
@@ -125,3 +127,20 @@ async def get_enrolled_faces(
         }
         for p in profiles
     ]
+
+
+@router.get("/{patient_id}/vitals", response_model=List[VitalOut])
+async def get_patient_vitals(
+    patient_id: str,
+    target_date: Optional[str] = Query(default=None, description="Ngày lọc sinh hiệu (YYYY-MM-DD)"),
+    limit: int = Query(default=100, le=1000),
+    offset: int = Query(default=0),
+    db: AsyncSession = Depends(get_db),
+):
+    """
+    Lấy danh sách các mốc đo sinh hiệu của người cao tuổi theo ngày được chọn (hoặc mốc gần nhất).
+    Tương thích trực tiếp với loadDateVitals trên HealthDetailScreen.
+    """
+    return await crud_vital.get_history(
+        db, device_id=None, limit=limit, offset=offset, target_date=target_date
+    )

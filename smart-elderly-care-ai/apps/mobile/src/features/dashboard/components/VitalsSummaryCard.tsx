@@ -16,7 +16,7 @@ interface VitalsSummaryCardProps {
     [key: string]: any;
   };
   isEdgeHubOnline: boolean;
-  braceletBattery: number;
+  braceletBattery?: number | null;
   isAcousticAlarm: boolean;
   isDarkMode: boolean;
   colors: any;
@@ -32,6 +32,10 @@ export const VitalsSummaryCard: React.FC<VitalsSummaryCardProps> = ({
   colors,
   navigation,
 }) => {
+  const hasHR = currentVitals.heart_rate !== null && currentVitals.heart_rate !== undefined;
+  const hasSpO2 = currentVitals.spo2 !== null && currentVitals.spo2 !== undefined;
+  const hasTemp = currentVitals.skin_temp_max !== null && currentVitals.skin_temp_max !== undefined;
+
   return (
     <View style={[styles.vitalsSummaryCard, isDarkMode && { backgroundColor: colors.card, borderColor: colors.border }]}>
       {/* Header Card */}
@@ -78,7 +82,7 @@ export const VitalsSummaryCard: React.FC<VitalsSummaryCardProps> = ({
           <Text style={[styles.deviceStatusText, isDarkMode && { color: colors.textSecondary }]}>
             Vòng BLE:{' '}
             <Text style={{ color: isDarkMode ? colors.textPrimary : Colors.textPrimary, fontWeight: '700' }}>
-              {braceletBattery}% Pin
+              {braceletBattery !== null && braceletBattery !== undefined ? `${braceletBattery}% Pin` : 'Chưa kết nối'}
             </Text>
           </Text>
         </View>
@@ -90,8 +94,14 @@ export const VitalsSummaryCard: React.FC<VitalsSummaryCardProps> = ({
         <View style={styles.vitalItem}>
           <Ionicons name="heart" size={17} color="#EF4444" />
           <Text style={[styles.vitalValText, isDarkMode && { color: colors.textPrimary }]} numberOfLines={1}>
-            {currentVitals.heart_rate ?? 74}{' '}
-            <Text style={styles.vitalUnit}>bpm</Text>
+            {hasHR ? (
+              <>
+                {currentVitals.heart_rate}{' '}
+                <Text style={styles.vitalUnit}>bpm</Text>
+              </>
+            ) : (
+              '--'
+            )}
           </Text>
           <Text style={[styles.vitalLblText, isDarkMode && { color: colors.textSecondary }]}>Nhịp tim</Text>
         </View>
@@ -101,8 +111,14 @@ export const VitalsSummaryCard: React.FC<VitalsSummaryCardProps> = ({
         <View style={styles.vitalItem}>
           <Ionicons name="water" size={17} color="#3B82F6" />
           <Text style={[styles.vitalValText, isDarkMode && { color: colors.textPrimary }]} numberOfLines={1}>
-            {currentVitals.spo2 ?? 98}{' '}
-            <Text style={styles.vitalUnit}>%</Text>
+            {hasSpO2 ? (
+              <>
+                {currentVitals.spo2}{' '}
+                <Text style={styles.vitalUnit}>%</Text>
+              </>
+            ) : (
+              '--'
+            )}
           </Text>
           <Text style={[styles.vitalLblText, isDarkMode && { color: colors.textSecondary }]}>SpO₂</Text>
         </View>
@@ -112,8 +128,14 @@ export const VitalsSummaryCard: React.FC<VitalsSummaryCardProps> = ({
         <View style={styles.vitalItem}>
           <Ionicons name="thermometer" size={17} color="#F59E0B" />
           <Text style={[styles.vitalValText, isDarkMode && { color: colors.textPrimary }]} numberOfLines={1}>
-            {currentVitals.skin_temp_max ?? 36.8}{' '}
-            <Text style={styles.vitalUnit}>°C</Text>
+            {hasTemp ? (
+              <>
+                {currentVitals.skin_temp_max}{' '}
+                <Text style={styles.vitalUnit}>°C</Text>
+              </>
+            ) : (
+              '--'
+            )}
           </Text>
           <Text style={[styles.vitalLblText, isDarkMode && { color: colors.textSecondary }]}>Thân nhiệt</Text>
         </View>
@@ -131,12 +153,12 @@ export const VitalsSummaryCard: React.FC<VitalsSummaryCardProps> = ({
               styles.vitalValText,
               {
                 fontSize: 12,
-                color: currentVitals.fall_detected ? Colors.danger : Colors.success,
+                color: currentVitals.fall_detected ? Colors.danger : (hasHR ? Colors.success : colors.textSecondary),
               },
             ]}
             numberOfLines={1}
           >
-            {currentVitals.fall_detected ? 'Ngã!' : 'Sinh hoạt'}
+            {currentVitals.fall_detected ? 'Ngã!' : (hasHR ? 'Sinh hoạt' : '--')}
           </Text>
           <Text style={[styles.vitalLblText, isDarkMode && { color: colors.textSecondary }]}>Vận động</Text>
         </View>
@@ -159,7 +181,7 @@ export const VitalsSummaryCard: React.FC<VitalsSummaryCardProps> = ({
             ]}
             numberOfLines={1}
           >
-            {isAcousticAlarm ? 'La hét!' : 'Bình thường'}
+            {isAcousticAlarm ? 'La hét!' : (currentVitals.acoustic_status ?? 'Bình thường')}
           </Text>
           <Text style={[styles.vitalLblText, isDarkMode && { color: colors.textSecondary }]}>Âm thanh</Text>
         </View>
