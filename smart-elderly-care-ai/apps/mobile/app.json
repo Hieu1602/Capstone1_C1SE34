@@ -33,8 +33,7 @@
         {
           "locationWhenInUsePermission": "Allow Smart Elderly Care to access your location and show it on the map."
         }
-      ],
-      "expo-audio"
+      ]
     ],
     "platforms": [
       "ios",

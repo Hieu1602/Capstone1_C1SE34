@@ -22,7 +22,6 @@
     "@shopify/react-native-skia": "2.6.2",
     "axios": "^1.7.2",
     "expo": "^57.0.22",
-    "expo-audio": "~57.0.5",
     "expo-image-picker": "~57.0.17",
     "expo-location": "~57.0.17",
     "expo-speech": "~57.0.3",
