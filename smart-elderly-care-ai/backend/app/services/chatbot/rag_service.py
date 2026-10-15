@@ -272,6 +272,122 @@ class ChatbotRAGService:
         return ans.strip()
 
     @staticmethod
+    def _generate_english_fallback(
+        question: str,
+        heart_rate: Any,
+        spo2: Any,
+        temperature: Any,
+        fall_detected: bool,
+        battery: Any,
+        incidents: List[Dict[str, Any]],
+        patient: Dict[str, Any],
+    ) -> str:
+        """Provide safe English answers when no external language model is configured."""
+        question_lower = question.lower()
+        if any(term in question_lower for term in ("fall", "fell", "fallen", "hit the floor", "ngã", "té")):
+            if fall_detected:
+                return (
+                    "🚨 **POSSIBLE FALL DETECTED**\n\n"
+                    f"- Heart rate: **{heart_rate} BPM**\n- Temperature: **{temperature}°C**\n\n"
+                    "1. Check whether the person is responsive and assess for injuries.\n"
+                    "2. Do not move them suddenly if a head, neck, back, or hip injury is possible.\n"
+                    "3. If they are unconscious, seriously injured, or in severe pain, call your local emergency number."
+                )
+            recent = next(
+                (incident for incident in incidents if incident.get("alert_type") == "FALL_DETECTED"),
+                None,
+            )
+            if recent:
+                return (
+                    f"⚠️ A previous fall alert was recorded at **{recent.get('time')}**: "
+                    f"{recent.get('message', '')}\n\n"
+                    f"Current readings: heart rate **{heart_rate} BPM**, SpO₂ **{spo2}%**. "
+                    "Please check for pain, bruising, or changes in alertness."
+                )
+            return (
+                "✅ **No fall has been detected today.**\n\n"
+                f"- Current heart rate: **{heart_rate} BPM** | SpO₂: **{spo2}%**\n"
+                f"- Wearable battery: **{battery}%**\n\n"
+                "The monitoring system continues to operate. This does not rule out an unreported fall."
+            )
+
+        if any(term in question_lower for term in (
+            "heart rate", "spo2", "oxygen", "vital", "temperature", "fever",
+            "nhịp tim", "oxy", "sinh hiệu", "thân nhiệt", "nhiệt độ", "sốt", "chỉ số",
+        )):
+            heart_status = "Normal (60–100 BPM)" if 60 <= heart_rate <= 100 else ("High" if heart_rate > 100 else "Low")
+            oxygen_status = "Within expected range (≥95%)" if spo2 >= 95 else "Below expected range (<95%)"
+            temperature_status = "Within expected range" if 36.2 <= temperature <= 37.4 else (
+                "Elevated" if temperature > 37.4 else "Below expected range"
+            )
+            note = (
+                "SpO₂ is below 95%. Seek medical advice, especially if there are symptoms such as shortness of breath."
+                if spo2 < 95
+                else "The readings are within the configured safe ranges."
+            )
+            return (
+                "📊 **Latest vital signs**\n\n"
+                f"- Heart rate: **{heart_rate} BPM** — {heart_status}\n"
+                f"- SpO₂: **{spo2}%** — {oxygen_status}\n"
+                f"- Temperature: **{temperature}°C** — {temperature_status}\n"
+                f"- Wearable battery: **{battery}%**\n\n{note}"
+            )
+
+        if any(term in question_lower for term in (
+            "medicine", "medication", "prescription", "pill", "thuốc", "uống thuốc", "đơn thuốc",
+        )):
+            conditions = ", ".join(patient.get("conditions", [])) or "No conditions recorded"
+            return (
+                "💊 **Medication information**\n\n"
+                f"- Person: **{patient.get('full_name', 'Patient')}**\n"
+                f"- Recorded conditions: **{conditions}**\n\n"
+                "Follow the prescription and confirm the medication schedule with the care team. "
+                "Do not change a dose based on this message."
+            )
+
+        if any(term in question_lower for term in (
+            "bruise", "bruising", "swelling", "bump", "bầm", "tụ máu", "sưng",
+        )):
+            return (
+                "🩹 **Bruising or swelling — initial care**\n\n"
+                "Apply a wrapped cold pack for 10–15 minutes at a time during the first 24–48 hours. "
+                "Do not massage the area or apply heat initially. Seek urgent medical care for severe or "
+                "rapidly increasing swelling, severe pain, a head injury, or if the person takes blood thinners."
+            )
+
+        if any(term in question_lower for term in (
+            "dizzy", "dizziness", "lightheaded", "headache", "chóng mặt", "đau đầu", "choáng",
+        )):
+            return (
+                "🩺 **If the person feels dizzy**\n\n"
+                "Help them sit or lie down safely and stay with them. Avoid sudden changes in posture. "
+                "Offer water only if they are fully alert and can swallow safely. Check blood pressure if available. "
+                "Seek medical help for fainting, chest pain, weakness, confusion, or severe symptoms."
+            )
+
+        if any(term in question_lower for term in (
+            "shortness of breath", "breathing", "chest pain", "breathless",
+            "khó thở", "tức ngực", "hụt hơi",
+        )):
+            warning = (
+                "SpO₂ is below 95%. " if spo2 < 95 else ""
+            )
+            return (
+                "🚨 **Breathing difficulty or chest pain**\n\n"
+                f"{warning}Help the person sit upright, loosen tight clothing, and stay with them. "
+                "Call your local emergency number immediately for severe breathing difficulty, chest pain, "
+                "blue lips, fainting, or worsening symptoms."
+            )
+
+        return (
+            "I’m the SmartCare AI health assistant. Here are the latest available readings:\n\n"
+            f"- Heart rate: **{heart_rate} BPM** | SpO₂: **{spo2}%** | Temperature: **{temperature}°C**\n"
+            f"- Fall alert: **{'Detected' if fall_detected else 'Not detected'}**\n\n"
+            "I can help explain vital signs, fall alerts, medication reminders, or basic safety steps. "
+            "For urgent symptoms, contact local emergency services."
+        )
+
+    @staticmethod
     def _clean_chunk_text(text: str) -> str:
         """Làm sạch ký tự định dạng thô từ file tài liệu để hiển thị đẹp mắt."""
         lines = []
