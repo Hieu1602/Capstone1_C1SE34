@@ -57,6 +57,7 @@ CREATE TABLE users (
     fcm_token VARCHAR(500),
     created_at TIMESTAMPTZ NOT NULL DEFAULT CURRENT_TIMESTAMP,
     updated_at TIMESTAMPTZ NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    last_login_at TIMESTAMPTZ,
 
     CONSTRAINT pk_users PRIMARY KEY (id),
     CONSTRAINT uq_users_phone UNIQUE (phone)

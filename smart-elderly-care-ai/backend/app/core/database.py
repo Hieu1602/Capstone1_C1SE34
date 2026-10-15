@@ -47,8 +47,16 @@ async def init_db() -> None:
         import app.models  # noqa: F401
         async with engine.begin() as conn:
             await conn.run_sync(Base.metadata.create_all)
-            # Idempotent schema upgrades for Web Admin Portal modules
+            # Idempotent schema upgrades for Web Admin Portal & User Preferences
             await conn.execute(text("ALTER TABLE users ADD COLUMN IF NOT EXISTS last_login_at TIMESTAMPTZ;"))
+            await conn.execute(text("ALTER TABLE users ADD COLUMN IF NOT EXISTS preferred_language VARCHAR(10) DEFAULT 'vi';"))
+            await conn.execute(text("ALTER TABLE users ADD COLUMN IF NOT EXISTS font_size_mode VARCHAR(20) DEFAULT 'system';"))
+            await conn.execute(text("ALTER TABLE users ADD COLUMN IF NOT EXISTS custom_font_scale INTEGER DEFAULT 2;"))
+            await conn.execute(text("ALTER TABLE users ADD COLUMN IF NOT EXISTS vibration_enabled BOOLEAN DEFAULT TRUE;"))
+            await conn.execute(text("ALTER TABLE users ADD COLUMN IF NOT EXISTS location_enabled BOOLEAN DEFAULT TRUE;"))
+            await conn.execute(text("ALTER TABLE users ADD COLUMN IF NOT EXISTS location_latitude DOUBLE PRECISION;"))
+            await conn.execute(text("ALTER TABLE users ADD COLUMN IF NOT EXISTS location_longitude DOUBLE PRECISION;"))
+            await conn.execute(text("ALTER TABLE users ADD COLUMN IF NOT EXISTS location_address VARCHAR(500);"))
             await conn.execute(text("""
                 CREATE TABLE IF NOT EXISTS security_policies (
                     id VARCHAR(50) NOT NULL PRIMARY KEY,
