@@ -1,11 +1,14 @@
 import asyncio
 from types import SimpleNamespace
+from typing import cast
 from unittest.mock import AsyncMock
 
 import pytest
 from pydantic import ValidationError
+from sqlalchemy.ext.asyncio import AsyncSession
 
-from app.api.v1.endpoints import users
+from app.api.v1.endpoints.web_admin import users
+from app.models.user import User
 from app.schemas.user import LanguagePreferenceUpdate
 
 
@@ -38,8 +41,8 @@ def test_update_language_persists_preference(monkeypatch):
     result = asyncio.run(
         users.update_language(
             LanguagePreferenceUpdate(preferred_language="en"),
-            current_user=fake_user,
-            db=fake_db,
+            current_user=cast(User, fake_user),
+            db=cast(AsyncSession, fake_db),
         )
     )
 

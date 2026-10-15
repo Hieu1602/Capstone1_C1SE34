@@ -98,6 +98,8 @@ class PasswordChange(BaseModel):
         return self
 
 
+from datetime import datetime
+
 class UserOut(UserBase):
     id: uuid.UUID
     is_active: bool
@@ -110,6 +112,11 @@ class UserOut(UserBase):
     location_latitude: Optional[float] = None
     location_longitude: Optional[float] = None
     location_address: Optional[str] = None
+    created_at: Optional[datetime] = None
+    updated_at: Optional[datetime] = None
+    last_login_at: Optional[datetime] = None
+    assigned_house: Optional[str] = None
+    role_title: Optional[str] = None
 
     @model_validator(mode="after")
     def set_language_alias(self) -> "UserOut":

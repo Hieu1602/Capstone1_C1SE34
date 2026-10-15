@@ -4,9 +4,11 @@ import { BrowserRouter, Routes, Route, Navigate } from 'react-router-dom';
 import { MainLayout } from './components/layout/MainLayout';
 import { DashboardPage } from './pages/DashboardPage';
 import { UserManagementPage } from './pages/UserManagementPage';
+import { SecurityManagementPage } from './pages/SecurityManagementPage';
+import { SystemMonitoringPage } from './pages/SystemMonitoringPage';
 import { DeviceMonitoringPage } from './pages/DeviceMonitoringPage';
 import { InfrastructurePage } from './pages/InfrastructurePage';
-import { AIMaintenancePage } from './pages/AIMaintenancePage';
+import { NotificationManagementPage } from './pages/NotificationManagementPage';
 import { LoginPage } from './pages/LoginPage';
 import { useAuthStore } from './store/useAuthStore';
 import { useThemeStore } from './store/useThemeStore';
@@ -48,9 +50,12 @@ export const App: React.FC = () => {
         >
           <Route index element={<DashboardPage />} />
           <Route path="users" element={<UserManagementPage />} />
-          <Route path="devices" element={<DeviceMonitoringPage />} />
+          <Route path="security" element={<SecurityManagementPage />} />
+          <Route path="monitoring" element={<SystemMonitoringPage />} />
+          <Route path="notifications" element={<NotificationManagementPage />} />
+          <Route path="devices" element={<SystemMonitoringPage />} />
+          <Route path="iot-devices" element={<DeviceMonitoringPage />} />
           <Route path="infrastructure" element={<InfrastructurePage />} />
-          <Route path="ai-maintenance" element={<AIMaintenancePage />} />
         </Route>
 
         {/* Catch-all Fallback */}

@@ -23,7 +23,7 @@ export default function DevicesScreen({ navigation }: any) {
     removeDeviceGroup,
     syncAllWithBackend,
   } = useVitalStore();
-  const groups = deviceGroups || ['Phòng khách', 'Phòng ngủ'];
+  const groups = deviceGroups || [];
 
   // Đồng bộ danh sách thiết bị và nhóm từ Backend khi mở màn hình
   useEffect(() => {

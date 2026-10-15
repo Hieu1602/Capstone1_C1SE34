@@ -361,6 +361,77 @@ class RedisService:
             logger.error("[Redis] Lỗi khi seed_sample_data: %s", exc)
             return {"success": False, "detail": str(exc)}
 
+    # ==========================================================================
+    # 5. QUẢN LÝ PHIÊN HOẠT ĐỘNG (ACTIVE SESSIONS & REVOCATION)
+    # ==========================================================================
+
+    async def record_session(self, session_id: str, session_data: Dict[str, Any]) -> bool:
+        """Lưu phiên làm việc người dùng vào Redis (TTL 24 giờ)."""
+        try:
+            r = await self._client()
+            key = f"session:{session_id}"
+            await r.set(key, json.dumps(session_data, ensure_ascii=False), ex=86400)
+            await r.sadd("sessions:active_set", session_id)
+            return True
+        except Exception as exc:
+            logger.error("[Redis] Lỗi khi record_session: %s", exc)
+            return False
+
+    async def get_active_sessions(self) -> List[Dict[str, Any]]:
+        """Lấy danh sách các phiên làm việc đang hoạt động."""
+        try:
+            r = await self._client()
+            session_ids = await r.smembers("sessions:active_set")
+            results = []
+            for s_id in session_ids:
+                key = f"session:{s_id}"
+                raw = await r.get(key)
+                if raw:
+                    try:
+                        results.append(json.loads(raw))
+                    except Exception:
+                        pass
+                else:
+                    await r.srem("sessions:active_set", s_id)
+            return results
+        except Exception as exc:
+            logger.error("[Redis] Lỗi khi get_active_sessions: %s", exc)
+            return []
+
+    async def revoke_session(self, session_id: str) -> bool:
+        """Thu hồi / Đăng xuất cưỡng bức phiên làm việc."""
+        try:
+            r = await self._client()
+            key = f"session:{session_id}"
+            await r.delete(key)
+            await r.srem("sessions:active_set", session_id)
+            await r.set(f"session:revoked:{session_id}", "revoked", ex=86400)
+            return True
+        except Exception as exc:
+            logger.error("[Redis] Lỗi khi revoke_session: %s", exc)
+            return False
+
+    async def is_session_revoked(self, session_id: str) -> bool:
+        """Kiểm tra xem phiên làm việc có bị thu hồi hay không."""
+        try:
+            r = await self._client()
+            val = await r.get(f"session:revoked:{session_id}")
+            return val is not None
+        except Exception:
+            return False
+
+    async def flush_all_cache(self) -> bool:
+        """Xóa toàn bộ cache tạm Redis phục vụ bảo trì."""
+        try:
+            r = await self._client()
+            await r.flushdb()
+            logger.info("[Redis] Đã flushdb thành công!")
+            return True
+        except Exception as exc:
+            logger.error("[Redis] Lỗi khi flushdb: %s", exc)
+            return False
+
 
 # Khởi tạo singleton instance sử dụng xuyên suốt ứng dụng
 redis_service = RedisService()
+

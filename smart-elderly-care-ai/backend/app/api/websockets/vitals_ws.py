@@ -110,3 +110,28 @@ async def vitals_websocket(websocket: WebSocket, device_id: str):
         # Ngắt kết nối an toàn khi client đóng app hoặc tắt tab web
         manager.disconnect(device_id, websocket)
 
+
+alert_clients: list[WebSocket] = []
+
+
+@ws_router.websocket("/alerts")
+async def alerts_websocket(websocket: WebSocket):
+    """
+    WebSocket endpoint cho real-time cảnh báo sự cố (Alerts & Incidents).
+    Admin Web Portal kết nối: ws://host/ws/alerts
+    """
+    await websocket.accept()
+    alert_clients.append(websocket)
+    logger.info("[WS-Alerts] Admin client kết nối. Tổng số client: %d", len(alert_clients))
+
+    try:
+        while True:
+            data = await websocket.receive_text()
+            if data == "ping":
+                await websocket.send_text("pong")
+    except WebSocketDisconnect:
+        if websocket in alert_clients:
+            alert_clients.remove(websocket)
+        logger.info("[WS-Alerts] Admin client ngắt kết nối. Còn lại: %d", len(alert_clients))
+
+

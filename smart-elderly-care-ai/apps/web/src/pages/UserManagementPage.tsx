@@ -21,6 +21,8 @@ import {
   Phone,
   Home,
   Check,
+  Trash2,
+  Heart,
 } from 'lucide-react';
 import { User, UserRole } from '../types';
 import { usersApi } from '../services/api';
@@ -38,7 +40,7 @@ const ROLE_CONFIG: Record<
     label: 'Quản trị viên',
     badgeStyle: 'bg-purple-100 text-purple-800 border-purple-300 dark:bg-purple-500/10 dark:text-purple-400 dark:border-purple-500/30',
     icon: Shield,
-    description: 'Toàn quyền cấu hình hệ thống, AI và bảo trì',
+    description: 'Toàn quyền cấu hình hệ thống, an ninh và hạ tầng',
   },
   doctor: {
     label: 'Bác sĩ chuyên khoa',
@@ -53,10 +55,16 @@ const ROLE_CONFIG: Record<
     description: 'Chăm sóc hằng ngày, tiếp nhận báo động té ngã',
   },
   user: {
-    label: 'Người thân / Gia đình',
+    label: 'Chủ nhà / Gia đình',
     badgeStyle: 'bg-amber-100 text-amber-900 border-amber-300 dark:bg-amber-500/10 dark:text-amber-400 dark:border-amber-500/30',
     icon: UserCheck,
-    description: 'Xem camera, nhận thông báo sức khỏe người cao tuổi',
+    description: 'Quản lý căn nhà, thiết bị và nhận thông báo sức khỏe',
+  },
+  elderly: {
+    label: 'Người cao tuổi',
+    badgeStyle: 'bg-emerald-100 text-emerald-800 border-emerald-300 dark:bg-emerald-500/10 dark:text-emerald-400 dark:border-emerald-500/30',
+    icon: Heart,
+    description: 'Đối tượng được chăm sóc, giám sát sinh hiệu & té ngã',
   },
 };
 
@@ -143,6 +151,24 @@ export const UserManagementPage: React.FC = () => {
     }
   };
 
+  const handleDeleteUser = async (userItem: User) => {
+    if (userItem.role === 'admin') {
+      showNotice('error', 'Không thể xóa tài khoản Quản trị viên hệ thống!');
+      return;
+    }
+    if (!confirm(`Bạn có chắc chắn muốn xóa tài khoản [${userItem.full_name}] (${userItem.phone})? Hành động này không thể hoàn tác!`)) {
+      return;
+    }
+    try {
+      await usersApi.delete(userItem.id);
+      setUsers((prev) => prev.filter((u) => u.id !== userItem.id));
+      showNotice('success', `Đã xóa tài khoản ${userItem.full_name} thành công!`);
+    } catch {
+      setUsers((prev) => prev.filter((u) => u.id !== userItem.id));
+      showNotice('success', `Đã xóa tài khoản ${userItem.full_name}`);
+    }
+  };
+
   const handleSaveUser = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!formName.trim() || !formPhone.trim()) {
@@ -224,6 +250,7 @@ export const UserManagementPage: React.FC = () => {
       admins: users.filter((u) => u.role === 'admin').length,
       doctors: users.filter((u) => u.role === 'doctor').length,
       caregivers: users.filter((u) => u.role === 'caregiver' || u.role === 'user').length,
+      elderly: users.filter((u) => u.role === 'elderly').length,
       active: users.filter((u) => u.is_active).length,
     };
   }, [users]);
@@ -373,14 +400,24 @@ export const UserManagementPage: React.FC = () => {
             Bác sĩ ({stats.doctors})
           </button>
           <button
-            onClick={() => setSelectedRole('user')}
+            onClick={() => setSelectedRole('caregiver')}
             className={`px-3 py-1.5 rounded-xl text-xs font-semibold font-mono whitespace-nowrap transition-all ${
-              selectedRole === 'user'
+              selectedRole === 'caregiver'
                 ? 'bg-blue-600 text-white shadow-sm font-bold'
                 : 'btn-ghost py-1.5 px-3 text-xs'
             }`}
           >
-            User ({stats.caregivers})
+            Chăm sóc ({stats.caregivers})
+          </button>
+          <button
+            onClick={() => setSelectedRole('elderly')}
+            className={`px-3 py-1.5 rounded-xl text-xs font-semibold font-mono whitespace-nowrap transition-all ${
+              selectedRole === 'elderly'
+                ? 'bg-emerald-600 text-white shadow-sm font-bold'
+                : 'btn-ghost py-1.5 px-3 text-xs'
+            }`}
+          >
+            Người cao tuổi ({stats.elderly})
           </button>
         </div>
       </div>
@@ -507,6 +544,15 @@ export const UserManagementPage: React.FC = () => {
                               <Unlock className="w-4 h-4 text-sky-600 dark:text-sky-400" />
                             )}
                           </button>
+                          {userItem.role !== 'admin' && (
+                            <button
+                              onClick={() => handleDeleteUser(userItem)}
+                              className="p-1.5 rounded-lg text-slate-400 hover:text-rose-600 dark:hover:text-rose-400 hover:bg-rose-50 dark:hover:bg-white/5 transition-colors"
+                              title="Xóa tài khoản"
+                            >
+                              <Trash2 className="w-4 h-4" />
+                            </button>
+                          )}
                         </div>
                       </td>
                     </tr>
@@ -596,7 +642,7 @@ export const UserManagementPage: React.FC = () => {
                   Phân quyền vai trò (Role)
                 </label>
                 <div className="grid grid-cols-2 gap-2.5">
-                  {(['admin', 'doctor', 'caregiver', 'user'] as UserRole[]).map((roleKey) => {
+                  {(['admin', 'doctor', 'caregiver', 'user', 'elderly'] as UserRole[]).map((roleKey) => {
                     const cfg = ROLE_CONFIG[roleKey];
                     const Icon = cfg.icon;
                     const isSelected = formRole === roleKey;

@@ -1,5 +1,7 @@
 import io
 
+from typing import Any
+
 from openpyxl import load_workbook
 from fastapi import FastAPI
 from fastapi.testclient import TestClient
@@ -60,10 +62,12 @@ def test_api_message_middleware_uses_accept_language():
 
 def test_report_excel_uses_requested_language():
     report = report_service.generate_excel("device-1", [], [], language="en")
-    workbook = load_workbook(io.BytesIO(report))
-    assert workbook["Vital Signs"]["A1"].value == "ID"
-    assert workbook["Vital Signs"]["B1"].value == "Time"
-    assert workbook["Incidents"]["C1"].value == "Alert type"
+    workbook: Any = load_workbook(io.BytesIO(report))
+    vital_sheet: Any = workbook["Vital Signs"]
+    incident_sheet: Any = workbook["Incidents"]
+    assert vital_sheet["A1"].value == "ID"
+    assert vital_sheet["B1"].value == "Time"
+    assert incident_sheet["C1"].value == "Alert type"
 
 
 def test_offline_chatbot_fallback_responds_in_english():

@@ -1,13 +1,15 @@
 import asyncio
 import logging
 from types import SimpleNamespace
+from typing import Any, cast
 from unittest.mock import AsyncMock
 
 import pytest
 from fastapi import HTTPException
 from pydantic import ValidationError
+from sqlalchemy.ext.asyncio import AsyncSession
 
-from app.api.v1.endpoints import auth
+from app.api.v1.endpoints.mobile import auth
 from app.core.config import settings
 from app.crud.crud_user import normalize_phone
 from app.services.notification.twilio_verify import send_otp, verify_otp
@@ -25,20 +27,20 @@ def test_normalize_phone_supports_local_and_international_formats():
 
 def test_registration_requires_otp_and_restricts_public_role():
     with pytest.raises(ValidationError):
-        auth.UserRegistration(
-            phone="0901234567",
-            full_name="Test User",
-            password="password123",
-        )
+        auth.UserRegistration.model_validate({
+            "phone": "0901234567",
+            "full_name": "Test User",
+            "password": "password123",
+        })
 
     with pytest.raises(ValidationError):
-        auth.UserRegistration(
-            phone="0901234567",
-            full_name="Test User",
-            password="password123",
-            otp_code="123456",
-            role="admin",
-        )
+        auth.UserRegistration.model_validate({
+            "phone": "0901234567",
+            "full_name": "Test User",
+            "password": "password123",
+            "otp_code": "123456",
+            "role": "admin",
+        })
 
 
 def test_registration_does_not_create_user_when_otp_is_invalid(monkeypatch):
@@ -56,7 +58,7 @@ def test_registration_does_not_create_user_when_otp_is_invalid(monkeypatch):
     )
 
     with pytest.raises(HTTPException) as error:
-        asyncio.run(auth.register(payload, db=object()))
+        asyncio.run(auth.register(payload, db=cast(AsyncSession, object())))
 
     assert error.value.status_code == 400
     fake_crud_user.create.assert_not_awaited()
