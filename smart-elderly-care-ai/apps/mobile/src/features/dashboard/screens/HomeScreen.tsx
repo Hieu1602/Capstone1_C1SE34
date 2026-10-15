@@ -291,7 +291,7 @@ export default function HomeScreen({ navigation }: any) {
 
   const cameraDisplayName = camera.name || 'Camera Phòng Ngủ - Hub #01';
   const isEdgeHubOnline = activeDevice?.is_online ?? true;
-  const braceletBattery = currentVitals.bracelet_battery ?? 88;
+  const braceletBattery = currentVitals.bracelet_battery ?? null;
   const acousticStatus = currentVitals.acoustic_status ?? 'Bình thường';
   const isAcousticAlarm = acousticStatus.includes('la hét') || acousticStatus.includes('va đập');
 
@@ -624,6 +624,7 @@ export default function HomeScreen({ navigation }: any) {
 
         {/* 8. Khối "Xu hướng sức khoẻ hôm nay" */}
         <HealthTrendsCard
+          currentVitals={currentVitals}
           isDarkMode={isDarkMode}
           colors={colors}
           navigation={navigation}

@@ -473,11 +473,13 @@ VALUES
 ON CONFLICT (device_id) DO NOTHING;
 
 -- 8. Dữ liệu chuỗi thời gian sinh hiệu (vital_signs - Hypertable)
-INSERT INTO vital_signs (id, "time", device_id, heart_rate, spo2, bp_systolic, bp_diastolic, skin_temp_max, person_count, fall_detected)
-VALUES
-    (gen_random_uuid(), NOW() - INTERVAL '10 minutes', 'd0000002-b4e1-4b08-b2d3-d949a0eb075c', 76, 98, 122, 80, 36.5, 1, FALSE),
-    (gen_random_uuid(), NOW() - INTERVAL '5 minutes',  'd0000002-b4e1-4b08-b2d3-d949a0eb075c', 78, 97, 125, 82, 36.6, 1, FALSE),
-    (gen_random_uuid(), NOW(),                        'd0000002-b4e1-4b08-b2d3-d949a0eb075c', 80, 98, 128, 83, 36.6, 1, FALSE);
+-- Dữ liệu sinh hiệu thực tế sẽ được đẩy liên tục từ Vòng đeo tay BLE & IoT Edge Hub qua API POST /vitals hoặc MQTT.
+-- (Đã xóa bỏ mock data mẫu 76/78/80 bpm để hệ thống phản ánh trung thực dữ liệu đo thời gian thực).
+-- INSERT INTO vital_signs (id, "time", device_id, heart_rate, spo2, bp_systolic, bp_diastolic, skin_temp_max, person_count, fall_detected)
+-- VALUES
+--     (gen_random_uuid(), NOW() - INTERVAL '10 minutes', 'd0000002-b4e1-4b08-b2d3-d949a0eb075c', 76, 98, 122, 80, 36.5, 1, FALSE),
+--     (gen_random_uuid(), NOW() - INTERVAL '5 minutes',  'd0000002-b4e1-4b08-b2d3-d949a0eb075c', 78, 97, 125, 82, 36.6, 1, FALSE),
+--     (gen_random_uuid(), NOW(),                        'd0000002-b4e1-4b08-b2d3-d949a0eb075c', 80, 98, 128, 83, 36.6, 1, FALSE);
 
 -- 9. Nhật ký sự cố khẩn cấp (incidents)
 INSERT INTO incidents (id, device_id, alert_type, alert_level, message, confidence, sources, is_acknowledged, acknowledged_by, acknowledged_at, notes)

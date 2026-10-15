@@ -137,7 +137,12 @@ export const HealthTimelineScrubber: React.FC<HealthTimelineScrubberProps> = ({
             <View style={{ flexDirection: 'row', alignItems: 'center' }}>
               <Ionicons name="location" size={15} color="#2563EB" style={{ marginRight: 4 }} />
               <Text style={[styles.highlightTitle, { color: isDarkMode ? '#93C5FD' : '#1E40AF' }]}>
-                Mốc đo thực tế: {new Date(closestVital.recorded_at).toLocaleTimeString('vi-VN', { hour: '2-digit', minute: '2-digit' })}
+                Mốc đo thực tế: {(() => {
+                  const vitalTime = closestVital.recorded_at || closestVital.time || closestVital.created_at;
+                  if (!vitalTime) return '--:--';
+                  const d = new Date(vitalTime);
+                  return !isNaN(d.getTime()) ? d.toLocaleTimeString('vi-VN', { hour: '2-digit', minute: '2-digit' }) : '--:--';
+                })()}
               </Text>
             </View>
             <View style={styles.highlightBadge}>

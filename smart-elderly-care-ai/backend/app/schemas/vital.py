@@ -21,6 +21,10 @@ class VitalOut(BaseModel):
     person_count: Optional[int] = None
     fall_detected: Optional[bool] = None
 
+    @property
+    def recorded_at(self) -> datetime:
+        return self.time
+
     model_config = {"from_attributes": True}
 
 
@@ -37,19 +41,19 @@ class VitalCreate(BaseModel):
 
 
 class VitalCurrentOut(BaseModel):
-    heart_rate: Optional[int] = 76
-    spo2: Optional[int] = 98
-    bp_systolic: Optional[int] = 120
-    bp_diastolic: Optional[int] = 80
-    skin_temp_max: Optional[float] = 36.6
-    body_temp: Optional[float] = 36.6
-    person_count: Optional[int] = 1
+    heart_rate: Optional[int] = None
+    spo2: Optional[int] = None
+    bp_systolic: Optional[int] = None
+    bp_diastolic: Optional[int] = None
+    skin_temp_max: Optional[float] = None
+    body_temp: Optional[float] = None
+    person_count: Optional[int] = 0
     fall_detected: bool = False
     timestamp: Optional[int] = None
     sound: Optional[str] = "Bình thường"
-    bracelet_battery: Optional[int] = 84
-    bracelet_connected: bool = True
-    edge_hub_connected: bool = True
+    bracelet_battery: Optional[int] = None
+    bracelet_connected: bool = False
+    edge_hub_connected: bool = False
     device_id: Optional[str] = None
     time: Optional[datetime] = None
 

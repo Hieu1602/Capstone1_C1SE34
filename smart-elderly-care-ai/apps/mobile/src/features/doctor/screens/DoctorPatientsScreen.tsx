@@ -349,7 +349,10 @@ export default function DoctorPatientsScreen() {
                   <View style={[styles.vitalChip, { backgroundColor: isDarkMode ? '#0F172A' : '#F8FAFC' }]}>
                     <Ionicons name="heart" size={14} color="#EF4444" />
                     <LocalizedText style={[styles.vitalValue, { color: colors.textPrimary }]}>
-                      {patient.heart_rate ?? 76} <LocalizedText style={styles.vitalUnit}>bpm</LocalizedText>
+                      {patient.heart_rate !== null && patient.heart_rate !== undefined ? `${patient.heart_rate} ` : '-- '}
+                      {patient.heart_rate !== null && patient.heart_rate !== undefined && (
+                        <LocalizedText style={styles.vitalUnit}>bpm</LocalizedText>
+                      )}
                     </LocalizedText>
                     <LocalizedText style={styles.vitalLabel}>Nhịp tim</LocalizedText>
                   </View>
@@ -360,11 +363,13 @@ export default function DoctorPatientsScreen() {
                     <LocalizedText
                       style={[
                         styles.vitalValue,
-                        { color: (patient.spo2 ?? 98) < 95 ? '#EA580C' : colors.textPrimary },
+                        { color: (patient.spo2 && patient.spo2 < 95) ? '#EA580C' : colors.textPrimary },
                       ]}
                     >
-                      {patient.spo2 ?? 98}
-                      <LocalizedText style={styles.vitalUnit}>%</LocalizedText>
+                      {patient.spo2 !== null && patient.spo2 !== undefined ? `${patient.spo2}` : '--'}
+                      {patient.spo2 !== null && patient.spo2 !== undefined && (
+                        <LocalizedText style={styles.vitalUnit}>%</LocalizedText>
+                      )}
                     </LocalizedText>
                     <LocalizedText style={styles.vitalLabel}>SpO₂</LocalizedText>
                   </View>
@@ -373,8 +378,10 @@ export default function DoctorPatientsScreen() {
                   <View style={[styles.vitalChip, { backgroundColor: isDarkMode ? '#0F172A' : '#F8FAFC' }]}>
                     <Ionicons name="thermometer" size={14} color="#F59E0B" />
                     <LocalizedText style={[styles.vitalValue, { color: colors.textPrimary }]}>
-                      {patient.skin_temp_max ?? 36.6}
-                      <LocalizedText style={styles.vitalUnit}>°C</LocalizedText>
+                      {patient.skin_temp_max !== null && patient.skin_temp_max !== undefined ? `${patient.skin_temp_max}` : '--'}
+                      {patient.skin_temp_max !== null && patient.skin_temp_max !== undefined && (
+                        <LocalizedText style={styles.vitalUnit}>°C</LocalizedText>
+                      )}
                     </LocalizedText>
                     <LocalizedText style={styles.vitalLabel}>Nhiệt độ</LocalizedText>
                   </View>
