@@ -118,16 +118,17 @@ async def init_db() -> None:
                     updated_at TIMESTAMPTZ NOT NULL DEFAULT CURRENT_TIMESTAMP
                 );
             """))
+            await conn.execute(text("ALTER TABLE system_notifications ALTER COLUMN id SET DEFAULT gen_random_uuid();"))
             await conn.execute(text("CREATE INDEX IF NOT EXISTS ix_system_notifications_status ON system_notifications(status);"))
             await conn.execute(text("CREATE INDEX IF NOT EXISTS ix_system_notifications_created_at ON system_notifications(created_at DESC);"))
 
             notif_count = await conn.execute(text("SELECT COUNT(*) FROM system_notifications;"))
             if notif_count.scalar() == 0:
                 await conn.execute(text("""
-                    INSERT INTO system_notifications (title, body, type, target_audience, status, published_at, delivered_count, read_count) VALUES
-                    ('Bảo trì nâng cấp hệ thống định kỳ', 'Hệ thống Smart Elderly Care AI sẽ tiến hành tối ưu hóa kết nối IoT và sao lưu cơ sở dữ liệu từ 01:00 đến 03:00 ngày 18/10/2026. Trong thời gian này, các tính năng báo cáo có thể bị chậm nhẹ.', 'system_maintenance', 'all', 'published', CURRENT_TIMESTAMP - INTERVAL '1 day', 152, 128),
-                    ('Khuyến cáo sức khỏe mùa giao mùa', 'Nhiệt độ thay đổi đột ngột có thể ảnh hưởng đến huyết áp của người cao tuổi. Gia đình vui lòng kiểm tra thiết bị đo sinh hiệu phòng ngủ và duy trì nhiệt độ phòng 26-28 độ C.', 'health_tip', 'caregivers', 'published', CURRENT_TIMESTAMP - INTERVAL '5 hours', 89, 74),
-                    ('Cập nhật tính năng trợ lý AI Y khoa', 'Phiên bản mới của Chatbot y khoa đã được tích hợp mô hình phân tích triệu chứng chuyên sâu dành cho bác sĩ gia đình và người chăm sóc.', 'feature_update', 'all', 'scheduled', NULL, 0, 0);
+                    INSERT INTO system_notifications (id, title, body, type, target_audience, status, published_at, delivered_count, read_count) VALUES
+                    (gen_random_uuid(), 'Bảo trì nâng cấp hệ thống định kỳ', 'Hệ thống Smart Elderly Care AI sẽ tiến hành tối ưu hóa kết nối IoT và sao lưu cơ sở dữ liệu từ 01:00 đến 03:00 ngày 18/10/2026. Trong thời gian này, các tính năng báo cáo có thể bị chậm nhẹ.', 'system_maintenance', 'all', 'published', CURRENT_TIMESTAMP - INTERVAL '1 day', 152, 128),
+                    (gen_random_uuid(), 'Khuyến cáo sức khỏe mùa giao mùa', 'Nhiệt độ thay đổi đột ngột có thể ảnh hưởng đến huyết áp của người cao tuổi. Gia đình vui lòng kiểm tra thiết bị đo sinh hiệu phòng ngủ và duy trì nhiệt độ phòng 26-28 độ C.', 'health_tip', 'caregivers', 'published', CURRENT_TIMESTAMP - INTERVAL '5 hours', 89, 74),
+                    (gen_random_uuid(), 'Cập nhật tính năng trợ lý AI Y khoa', 'Phiên bản mới của Chatbot y khoa đã được tích hợp mô hình phân tích triệu chứng chuyên sâu dành cho bác sĩ gia đình và người chăm sóc.', 'feature_update', 'all', 'scheduled', NULL, 0, 0);
                 """))
         logger.info("[DB] Database initialized and Web Admin schema tables verified.")
     except Exception as e:
