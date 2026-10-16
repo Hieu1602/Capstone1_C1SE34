@@ -36,7 +36,7 @@ const getWsBaseUrl = (): string => {
   }
 
   // 4. Fallback về IP máy tính phát triển trong mạng nội bộ
-  return 'ws://192.168.1.4:8000/ws';
+  return 'ws://192.168.1.160:8000/ws';
 };
 
 const WS_BASE_URL: string = getWsBaseUrl();
