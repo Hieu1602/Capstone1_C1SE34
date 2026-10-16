@@ -29,6 +29,10 @@ DROP TABLE IF EXISTS elderly_profiles CASCADE;
 DROP TABLE IF EXISTS house_members CASCADE;
 DROP TABLE IF EXISTS houses CASCADE;
 DROP TABLE IF EXISTS users CASCADE;
+DROP TABLE IF EXISTS audit_logs CASCADE;
+DROP TABLE IF EXISTS system_incidents CASCADE;
+DROP TABLE IF EXISTS system_notifications CASCADE;
+DROP TABLE IF EXISTS security_policies CASCADE;
 
 -- =================================================================
 -- PHẦN 3: ĐỊNH NGHĨA CÁC BẢNG & MỐI QUAN HỆ RÀNG BUỘC (FOREIGN KEYS)
@@ -383,13 +387,13 @@ CREATE INDEX ix_chat_messages_created_at ON chat_messages(created_at ASC);
 INSERT INTO users (id, phone, full_name, hashed_password, role, is_active)
 VALUES
     -- [1] Người nhà chính (Chủ sở hữu hệ thống):
-    ('640e3d97-b4e1-4b08-b2d3-d949a0eb075c', '+84905123456', 'Nguyễn Hữu Nghĩa', '$2b$12$gzojPtKekxkEyY5oiuJBtOAzf1rUGOi5WPHIRO.lR5hnMuoqp5age', 'user', TRUE),
+    ('640e3d97-b4e1-4b08-b2d3-d949a0eb075c', '+84905123456', 'Nguyễn Hữu Nghĩa', '$2b$12$1bF.zEJ8SB2Q5ZuWhA.Be.UYmqcaKR3EnUbQI/O42r10T0tDhL9EO', 'user', TRUE),
     -- [2] Người thân trong gia đình được uỷ quyền (Secondary Caregiver):
-    ('a1111111-b4e1-4b08-b2d3-d949a0eb075c', '+84905999888', 'Nguyễn Thị Lan', '$2b$12$gzojPtKekxkEyY5oiuJBtOAzf1rUGOi5WPHIRO.lR5hnMuoqp5age', 'user', TRUE),
+    ('a1111111-b4e1-4b08-b2d3-d949a0eb075c', '+84905999888', 'Nguyễn Thị Lan', '$2b$12$1bF.zEJ8SB2Q5ZuWhA.Be.UYmqcaKR3EnUbQI/O42r10T0tDhL9EO', 'user', TRUE),
     -- [3] Bác sĩ gia đình (Family Physician):
-    ('b2222222-b4e1-4b08-b2d3-d949a0eb075c', '+84905111222', 'BS. Trần Văn Minh', '$2b$12$gzojPtKekxkEyY5oiuJBtOAzf1rUGOi5WPHIRO.lR5hnMuoqp5age', 'user', TRUE),
+    ('b2222222-b4e1-4b08-b2d3-d949a0eb075c', '+84905111222', 'BS. Trần Văn Minh', '$2b$12$1bF.zEJ8SB2Q5ZuWhA.Be.UYmqcaKR3EnUbQI/O42r10T0tDhL9EO', 'user', TRUE),
     -- [4] Quản trị hệ thống (System Administrator):
-    ('c9999999-b4e1-4b08-b2d3-d949a0eb075c', '+84900000000', 'System Admin', '$2b$12$gzojPtKekxkEyY5oiuJBtOAzf1rUGOi5WPHIRO.lR5hnMuoqp5age', 'admin', TRUE)
+    ('c9999999-b4e1-4b08-b2d3-d949a0eb075c', '+84900000000', 'System Admin', '$2b$12$1bF.zEJ8SB2Q5ZuWhA.Be.UYmqcaKR3EnUbQI/O42r10T0tDhL9EO', 'admin', TRUE)
 ON CONFLICT (phone) DO UPDATE 
 SET full_name = EXCLUDED.full_name,
     role = EXCLUDED.role,

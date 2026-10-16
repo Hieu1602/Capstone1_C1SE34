@@ -63,12 +63,34 @@ export default function App() {
   useEffect(() => {
     if (Platform.OS !== 'web' || typeof document === 'undefined') return undefined;
 
-    const styleId = 'smartcare-remove-web-input-focus-outline';
+    // Load Google Fonts (Inter, Be Vietnam Pro & Plus Jakarta Sans) for full Vietnamese diacritics support
+    const fontLinkId = 'smartcare-vietnamese-google-fonts';
+    if (!document.getElementById(fontLinkId)) {
+      const link = document.createElement('link');
+      link.id = fontLinkId;
+      link.rel = 'stylesheet';
+      link.href =
+        'https://fonts.googleapis.com/css2?family=Be+Vietnam+Pro:wght@400;500;600;700;800;900&family=Inter:wght@400;500;600;700;800;900&family=Plus+Jakarta+Sans:wght@500;600;700;800;900&display=swap';
+      document.head.appendChild(link);
+    }
+
+    const styleId = 'smartcare-web-typography-fix';
     if (document.getElementById(styleId)) return undefined;
 
     const style = document.createElement('style');
     style.id = styleId;
     style.textContent = `
+      * {
+        font-family: 'Inter', 'Be Vietnam Pro', 'Plus Jakarta Sans', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Helvetica, Arial, sans-serif !important;
+        -webkit-font-smoothing: antialiased;
+        -moz-osx-font-smoothing: grayscale;
+        text-rendering: optimizeLegibility;
+      }
+
+      input, textarea, select, button {
+        font-family: 'Inter', 'Be Vietnam Pro', 'Plus Jakarta Sans', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Helvetica, Arial, sans-serif !important;
+      }
+
       input:focus,
       input:focus-visible,
       textarea:focus,

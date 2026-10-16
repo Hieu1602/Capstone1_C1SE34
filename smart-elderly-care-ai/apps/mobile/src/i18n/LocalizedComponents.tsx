@@ -4,6 +4,7 @@ import {
   Text as NativeText,
   TextInput as NativeTextInput,
   StyleSheet,
+  Platform,
 } from 'react-native';
 import type { TextInputProps, TextProps } from 'react-native';
 import { useTranslation } from 'react-i18next';
@@ -11,18 +12,34 @@ import i18n from './config';
 import { useThemeStore } from '../store/useThemeStore';
 
 function scaleTextStyle(style: TextProps['style'], fontScale: number) {
-  if (!style) return style;
+  if (!style) {
+    if (Platform.OS === 'web') {
+      return { fontFamily: "'Inter', 'Be Vietnam Pro', 'Plus Jakarta Sans', -apple-system, sans-serif" };
+    }
+    return style;
+  }
 
   const flattened = StyleSheet.flatten(style);
   if (!flattened || typeof flattened !== 'object') return style;
 
   const nextItem = { ...flattened } as Record<string, any>;
 
-  if (typeof nextItem.fontSize === 'number' && fontScale !== 1) {
-    nextItem.fontSize = nextItem.fontSize * fontScale;
+  if (typeof nextItem.fontSize === 'number') {
+    if (fontScale !== 1) {
+      nextItem.fontSize = Math.round(nextItem.fontSize * fontScale);
+    }
+    if (typeof nextItem.lineHeight === 'number') {
+      if (fontScale !== 1) {
+        nextItem.lineHeight = Math.round(nextItem.lineHeight * fontScale);
+      }
+      if (nextItem.lineHeight < nextItem.fontSize * 1.3) {
+        nextItem.lineHeight = Math.round(nextItem.fontSize * 1.35);
+      }
+    }
   }
-  if (typeof nextItem.lineHeight === 'number' && fontScale !== 1) {
-    nextItem.lineHeight = nextItem.lineHeight * fontScale;
+
+  if (Platform.OS === 'web' && !nextItem.fontFamily) {
+    nextItem.fontFamily = "'Inter', 'Be Vietnam Pro', 'Plus Jakarta Sans', -apple-system, sans-serif";
   }
 
   return nextItem;

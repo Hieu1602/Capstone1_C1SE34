@@ -3,7 +3,7 @@
    Chế độ Tối (Dark):   Nền #0b132b (navy thẫm), Thẻ xanh navy #111c38, Viền phát quang #38bdf8.
 ────────────────────────────────────────────────────────────────────────────── */
 
-@import url('https://fonts.googleapis.com/css2?family=Fira+Code:wght@400;500;600;700&family=Fira+Sans:wght@300;400;500;600;700&display=swap');
+@import url('https://fonts.googleapis.com/css2?family=Be+Vietnam+Pro:wght@300;400;500;600;700;800;900&family=Inter:wght@300;400;500;600;700;800;900&family=JetBrains+Mono:wght@400;500;600;700&family=Plus+Jakarta+Sans:wght@400;500;600;700;800;900&display=swap');
 
 @tailwind base;
 @tailwind components;
@@ -42,10 +42,12 @@
     @apply antialiased font-sans transition-colors duration-200;
     background-color: var(--bg-page);
     color: var(--text-main);
+    text-rendering: optimizeLegibility;
+    -webkit-font-smoothing: antialiased;
   }
   h1, h2, h3, h4, h5, h6 {
-    font-family: 'Fira Code', monospace;
-    letter-spacing: -0.01em;
+    font-family: 'Plus Jakarta Sans', 'Be Vietnam Pro', 'Inter', sans-serif;
+    letter-spacing: -0.015em;
   }
 }
 
