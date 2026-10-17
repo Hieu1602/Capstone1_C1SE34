@@ -153,7 +153,7 @@ function Start-BackendService {
 }
 
 function Start-WebService {
-    Write-Host "  [+] Khởi động web (Web Admin Portal: http://localhost:3000)..." -ForegroundColor Yellow
+    Write-Host "  [+] Khoi dong Web Admin Portal (http://localhost:3000)..." -ForegroundColor Yellow
     Write-Info "Dang khoi dong Web Admin Portal (Vite React)..."
 
     $nodeCmd = Get-Command npm -ErrorAction SilentlyContinue
@@ -166,7 +166,7 @@ function Start-WebService {
     Start-Process powershell.exe -ArgumentList "-NoExit", "-ExecutionPolicy", "Bypass", "-Command", $psCommand
 
     Write-Success "Da mo tien trinh Web Admin Portal tren port 3000."
-    Write-Host "     - Cổng Quản Trị Web Admin     : http://localhost:3000" -ForegroundColor Yellow
+    Write-Host "     - Cong Quan Tri Web Admin     : http://localhost:3000" -ForegroundColor Yellow
     Write-Host ""
 }
 

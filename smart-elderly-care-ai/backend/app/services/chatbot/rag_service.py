@@ -21,10 +21,12 @@ from __future__ import annotations
 
 import logging
 import os
+import re
 from datetime import datetime, timezone
 from typing import Any, Dict, List, Optional
 from uuid import UUID
 
+from dotenv import load_dotenv
 import httpx
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -122,17 +124,49 @@ class ChatbotRAGService:
 
     @staticmethod
     def _is_conversational_or_greeting(question: str) -> bool:
-        """Kiểm tra câu hỏi có phải câu chào hỏi, trêu đùa hay tương tác thông thường không."""
+        """
+        Kiểm tra câu hỏi có thuần túy là câu chào hỏi, trêu đùa hay tương tác xã giao không.
+        Nếu câu hỏi bắt đầu bằng 'Hello', 'Chào bạn' nhưng CÓ CHỨA NỘI DUNG HỎI THẬT SỰ
+        (VD: 'Hello Cho tôi hỏi thông tin người nhà của tôi') thì KHÔNG được chặn làm lời chào!
+        """
         q_clean = question.strip().lower()
-        if len(q_clean) <= 4 and q_clean in ["alo", "hi", "hey", "chào", "ola", "test"]:
+        if not q_clean:
             return True
-        casual_patterns = [
-            "xin chào", "chào bạn", "chào bot", "chào em", "chào bs", "chào bác sĩ",
-            "alo 123", "alo alo", "alo bạn", "testing", "bạn là ai",
-            "mày là ai", "sao mày ngu", "ngu thế", "ngu quá", "dốt thế",
-            "who are you", "what can you do", "hello",
+
+        # Trêu đùa hoặc chỉ trích bot
+        insult_patterns = ["mày là ai", "sao mày ngu", "ngu thế", "ngu quá", "dốt thế", "who are you", "what can you do"]
+        if any(p in q_clean for p in insult_patterns):
+            return True
+
+        # Các từ ngữ/cụm từ chào hỏi phổ biến
+        greetings = [
+            "xin chào", "chào bạn", "chào bot", "chào em", "chào bs", "chào bác sĩ", "chào cụ", "chào",
+            "hello", "hi", "hey", "alo 123", "alo alo", "alo bạn", "alo", "ola", "testing", "test", "bạn là ai"
         ]
-        return any(p in q_clean for p in casual_patterns)
+
+        has_greeting = any(g in q_clean for g in greetings)
+        if not has_greeting:
+            return False
+
+        # Tách bỏ các từ chào hỏi để xem người dùng có hỏi thêm nội dung gì không
+        temp = q_clean
+        for g in sorted(greetings, key=len, reverse=True):
+            temp = temp.replace(g, " ")
+
+        # Bỏ tiếp các từ đệm/xưng hô thông dụng trong câu chào
+        fillers = ["ạ", "ơi", "nha", "nhé", "bạn", "nhỉ", "ad", "admin", "bot", "bác sĩ", "bs", "em"]
+        for f in fillers:
+            temp = re.sub(r'\b' + re.escape(f) + r'\b', ' ', temp)
+
+        # Loại bỏ các ký tự dấu câu, khoảng trắng
+        content_remaining = re.sub(r'[\s\.,\!\?\:\;\-\_\(\)]+', '', temp).strip()
+
+        # Nếu sau khi bỏ lời chào mà vẫn còn nội dung (VD: "chotôihỏithôngtinngườinhàcủatôi")
+        # thì đây là câu hỏi thực sự, KHÔNG được coi là chào hỏi thuần túy!
+        if len(content_remaining) > 0:
+            return False
+
+        return True
 
     @staticmethod
     def _format_conversational_response(question: str, language: str = "vi") -> str:
@@ -167,6 +201,56 @@ class ChatbotRAGService:
             "• **Theo dõi sinh hiệu thời gian thực**: Kiểm tra nhịp tim, nồng độ oxy SpO₂, thân nhiệt, cảnh báo ngã.\n"
             "• **Tra cứu Cẩm nang Y khoa Lão khoa**: Sơ cứu té ngã, chăm sóc loét tì đè, dinh dưỡng, an toàn dùng thuốc.\n\n"
             "Bạn có thể đặt câu hỏi hoặc yêu cầu kiểm tra sức khỏe của cụ ngay tại đây nhé!"
+        )
+
+    @staticmethod
+    def _is_patient_info_query(question: str) -> bool:
+        """Kiểm tra câu hỏi có liên quan đến việc hỏi thông tin người nhà, hồ sơ bệnh nhân, cụ An không."""
+        q_lower = question.lower()
+        keywords = [
+            "thông tin người nhà", "thông tin người thân", "người nhà của tôi", "người thân của tôi",
+            "thông tin của cụ", "hồ sơ người nhà", "hồ sơ của cụ", "thông tin bệnh nhân", "hồ sơ bệnh nhân",
+            "cụ an là ai", "hồ sơ bệnh án", "tiền sử bệnh", "ai là người nhà", "bệnh nhân tên gì",
+            "cụ tên gì", "thông tin cụ", "thông tin cá nhân", "người đang theo dõi",
+            "patient info", "family member info", "profile info"
+        ]
+        return any(k in q_lower for k in keywords)
+
+    def _format_patient_profile(self, patient: Dict[str, Any], language: str = "vi") -> str:
+        """Trình bày thông tin hồ sơ người thân / người cao tuổi đang theo dõi."""
+        if not patient or not patient.get("full_name"):
+            if language == "en":
+                return "No elderly profile has been registered in the system yet."
+            return "Hiện tại hệ thống chưa ghi nhận hồ sơ người cao tuổi nào trong cơ sở dữ liệu."
+
+        full_name = patient.get("full_name", "Cụ")
+        birth_year = patient.get("birth_year")
+        current_year = datetime.now().year
+        age_str = f" ({current_year - birth_year} tuổi)" if birth_year else ""
+        gender = str(patient.get("gender", "")).upper()
+        gender_str = "Nam" if gender in ["MALE", "NAM"] else ("Nữ" if gender in ["FEMALE", "NU"] else "Chưa rõ")
+        history = patient.get("medical_history") or "Chưa ghi nhận bệnh nền"
+        contact = patient.get("emergency_contact") or "Chưa cập nhật"
+
+        if language == "en":
+            return (
+                f"📋 **Monitored Family Member Profile**:\n\n"
+                f"• **Full name**: **{full_name}**\n"
+                f"• **Year of birth**: **{birth_year}**{age_str}\n"
+                f"• **Gender**: **{gender_str}**\n"
+                f"• **Medical history**: {history}\n"
+                f"• **Emergency contact**: **{contact}**\n\n"
+                f"💡 *You can ask me to check real-time vitals or provide medical care instructions at any time!*"
+            )
+
+        return (
+            f"📋 **Thông tin người thân đang được theo dõi trên hệ thống**:\n\n"
+            f"• **Họ và tên**: **{full_name}**\n"
+            f"• **Năm sinh**: **{birth_year}**{age_str}\n"
+            f"• **Giới tính**: **{gender_str}**\n"
+            f"• **Tiền sử bệnh lý**: {history}\n"
+            f"• **Số điện thoại khẩn cấp**: **{contact}**\n\n"
+            f"💡 *Bạn có thể yêu cầu tôi kiểm tra sinh hiệu hiện tại hoặc hỏi về cách chăm sóc sức khỏe cho cụ bất cứ lúc nào!*"
         )
 
     @staticmethod
@@ -536,14 +620,14 @@ class ChatbotRAGService:
         Nếu LLM lỗi, quota limit hoặc sinh câu trả lời bị cụt/rò rỉ prompt, tự động trả về None
         để hệ thống chuyển sang Pure RAG cục bộ ổn định.
         """
-        # Cho phép ưu tiên Pure RAG để hoàn toàn không bị lỗi LLM ngoài
-        use_external_llm = os.getenv("ENABLE_EXTERNAL_LLM", "false").lower() == "true"
-        if not use_external_llm:
+        from app.core.config import settings
+
+        if not settings.ENABLE_EXTERNAL_LLM:
             return None
 
-        api_key = os.getenv("LLM_API_KEY", "").strip()
-        base_url = os.getenv("LLM_BASE_URL", "https://api.openai.com/v1").rstrip("/")
-        model = os.getenv("LLM_MODEL", "gemini-2.0-flash").strip()
+        api_key = settings.LLM_API_KEY.strip()
+        base_url = settings.LLM_BASE_URL.rstrip("/")
+        model = settings.LLM_MODEL.strip()
 
         if not api_key or api_key == "sk-your_api_key_here":
             return None
@@ -566,10 +650,18 @@ class ChatbotRAGService:
                 "Nếu người dùng hỏi về chỉ số hiện tại, hãy thông báo thiết bị chưa kết nối."
             )
 
-        if patient and patient.get("medical_history"):
+        if patient:
+            gender_raw = str(patient.get("gender", "")).upper()
+            gender_str = "Nam" if gender_raw in ["MALE", "NAM"] else ("Nữ" if gender_raw in ["FEMALE", "NU"] else "Chưa rõ")
+            birth_year = patient.get("birth_year")
+            age_str = f" ({datetime.now().year - birth_year} tuổi)" if birth_year else ""
             context_parts.append(
-                f"HỒ SƠ BỆNH LÝ CỦA CỤ:\n- Họ tên: {patient.get('full_name')}\n"
-                f"- Tiền sử bệnh lý: {patient.get('medical_history')}"
+                f"HỒ SƠ NGƯỜI CAO TUỔI / NGƯỜI NHÀ ĐANG ĐƯỢC GIÁM SÁT:\n"
+                f"- Họ và tên: {patient.get('full_name', 'Cụ')}\n"
+                f"- Năm sinh: {birth_year}{age_str}\n"
+                f"- Giới tính: {gender_str}\n"
+                f"- Tiền sử bệnh lý: {patient.get('medical_history') or 'Chưa ghi nhận bệnh nền'}\n"
+                f"- Số liên hệ người thân khẩn cấp: {patient.get('emergency_contact') or 'Chưa cập nhật'}"
             )
 
         if retrieved_chunks:
@@ -599,7 +691,7 @@ class ChatbotRAGService:
         }
 
         try:
-            async with httpx.AsyncClient(timeout=6.0) as client:
+            async with httpx.AsyncClient(timeout=12.0) as client:
                 resp = await client.post(f"{base_url}/chat/completions", headers=headers, json=payload)
                 if resp.status_code == 200:
                     data = resp.json()
@@ -647,16 +739,35 @@ class ChatbotRAGService:
         incidents = context["incidents"]
         patient = context["patient"]
 
-        # 3. Tìm kiếm cẩm nang y tế bằng RAG Retriever
+        # 3. Nếu là câu hỏi chuyên về thông tin hồ sơ người thân / người nhà
+        if self._is_patient_info_query(question) and not self._is_sensor_status_query(question):
+            chunks = self.retriever.search(question, top_k=2, threshold=0.1)
+            llm_ans = await self._call_llm_if_available(
+                question, vitals, incidents, patient, chunks, language=language
+            )
+            answer = llm_ans or self._format_patient_profile(patient, language=language)
+            engine_used = "SmartCare Cloud LLM (Gemini/OpenAI) + RAG" if llm_ans else "SmartCare Patient Profile Engine"
+            return {
+                "status": "success",
+                "question": question,
+                "answer": answer,
+                "sources": [c["source"] for c in chunks] if llm_ans else [],
+                "engine": engine_used,
+                "timestamp": datetime.now(timezone.utc).strftime("%Y-%m-%d %H:%M:%S"),
+                "vitals_snapshot": None,
+                "disclaimer": STANDARD_DISCLAIMER_EN if language == "en" else STANDARD_DISCLAIMER,
+            }
+
+        # 4. Tìm kiếm cẩm nang y tế bằng RAG Retriever
         chunks = self.retriever.search(question, top_k=3, threshold=0.1)
 
-        # 4. Thử gọi LLM nếu được bật và phản hồi hợp lệ
+        # 5. Thử gọi LLM nếu được bật và phản hồi hợp lệ
         answer = await self._call_llm_if_available(
             question, vitals, incidents, patient, chunks, language=language
         )
         engine_used = "SmartCare Cloud LLM (Gemini/OpenAI) + RAG"
 
-        # 5. Nếu không dùng LLM hoặc LLM lỗi/bị tắt -> Sử dụng Pure RAG Synthesizer
+        # 6. Nếu không dùng LLM hoặc LLM lỗi/bị tắt -> Sử dụng Pure RAG Synthesizer
         if not answer:
             answer = self._generate_rag_response(
                 question, vitals, incidents, patient, chunks, language=language

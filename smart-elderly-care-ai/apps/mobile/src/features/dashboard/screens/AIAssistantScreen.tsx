@@ -23,10 +23,12 @@ import {
   Animated,
   ActivityIndicator,
   KeyboardAvoidingView,
+  Keyboard,
   Modal,
   StatusBar,
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
+import { useBottomTabBarHeight } from '@react-navigation/bottom-tabs';
 import { Ionicons } from '@expo/vector-icons';
 
 // Helper an toàn cho Speech & Audio: Ngăn ngừa lỗi native module làm sập app trên Expo Go
@@ -110,8 +112,79 @@ export default function AIAssistantScreen({ navigation }: any) {
     };
   }, []);
 
+  // Tính toán chiều cao Bottom Tab Bar để bù trừ chính xác cho KeyboardAvoidingView trên iPhone
+  let tabBarHeight = 84;
+  try {
+    tabBarHeight = useBottomTabBarHeight();
+  } catch (_) {
+    tabBarHeight = Platform.OS === 'ios' ? 84 : 0;
+  }
 
+  // Tự động cuộn xuống tin nhắn mới nhất khi bàn phím mở trên iPhone / Android
+  useEffect(() => {
+    const showEvent = Platform.OS === 'ios' ? 'keyboardWillShow' : 'keyboardDidShow';
+    const sub = Keyboard.addListener(showEvent, () => {
+      setTimeout(() => {
+        scrollViewRef.current?.scrollToEnd({ animated: true });
+      }, 50);
+    });
+    return () => sub.remove();
+  }, []);
 
+  // Hàm hiển thị định dạng nội dung phản hồi từ AI (in đậm **bold**, in nghiêng *italic*, ngắt dòng mượt mà)
+  const renderFormattedAIMessage = (content: string) => {
+    const lines = content.split('\n');
+    return (
+      <View style={{ gap: 4 }}>
+        {lines.map((line, lIdx) => {
+          if (!line.trim()) {
+            return <View key={lIdx} style={{ height: 6 }} />;
+          }
+          const parts = line.split(/(\*\*[^*]+\*\*|\*[^*]+\*)/g);
+          return (
+            <Text
+              key={lIdx}
+              style={[
+                styles.msgText,
+                styles.aiMsgText,
+                isDarkMode && { color: colors.textPrimary },
+              ]}
+            >
+              {parts.map((part, pIdx) => {
+                if (part.startsWith('**') && part.endsWith('**') && part.length >= 4) {
+                  return (
+                    <Text
+                      key={pIdx}
+                      style={{
+                        fontWeight: '700',
+                        color: isDarkMode ? '#38BDF8' : '#0284C7',
+                      }}
+                    >
+                      {part.slice(2, -2)}
+                    </Text>
+                  );
+                }
+                if (part.startsWith('*') && part.endsWith('*') && part.length >= 3) {
+                  return (
+                    <Text
+                      key={pIdx}
+                      style={{
+                        fontStyle: 'italic',
+                        color: isDarkMode ? '#94A3B8' : '#64748B',
+                      }}
+                    >
+                      {part.slice(1, -1)}
+                    </Text>
+                  );
+                }
+                return part;
+              })}
+            </Text>
+          );
+        })}
+      </View>
+    );
+  };
   // Hàm bắt đầu ghi âm giọng nói (Speech-to-Text)
   const startVoiceRecording = async () => {
     // 1. Nếu chạy trên Web: Sử dụng Web Speech API
@@ -543,7 +616,7 @@ export default function AIAssistantScreen({ navigation }: any) {
       <KeyboardAvoidingView
         style={{ flex: 1 }}
         behavior={Platform.OS === 'ios' ? 'padding' : undefined}
-        keyboardVerticalOffset={Platform.OS === 'ios' ? 10 : 0}
+        keyboardVerticalOffset={Platform.OS === 'ios' ? tabBarHeight : 0}
       >
         <ScrollView
           ref={scrollViewRef}
@@ -632,16 +705,13 @@ export default function AIAssistantScreen({ navigation }: any) {
                       m.isError && styles.errorBubble,
                     ]}
                   >
-                    <Text
-                      style={[
-                        styles.msgText,
-                        m.sender === 'user'
-                          ? styles.userMsgText
-                          : [styles.aiMsgText, isDarkMode && { color: colors.textPrimary }],
-                      ]}
-                    >
-                      {m.text}
-                    </Text>
+                    {m.sender === 'user' ? (
+                      <Text style={[styles.msgText, styles.userMsgText]}>
+                        {m.text}
+                      </Text>
+                    ) : (
+                      renderFormattedAIMessage(m.text)
+                    )}
 
                     {/* Footer tin nhắn: Thời gian */}
                     <View style={styles.bubbleFooter}>

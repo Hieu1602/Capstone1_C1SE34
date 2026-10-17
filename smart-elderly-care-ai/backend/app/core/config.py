@@ -85,9 +85,10 @@ class Settings(BaseSettings):
     TWILIO_VERIFY_SERVICE_SID: str = ""
 
     # ---- Chatbot AI / LLM ----
+    ENABLE_EXTERNAL_LLM: bool = True
     LLM_API_KEY: str = ""
     LLM_BASE_URL: str = "https://generativelanguage.googleapis.com/v1beta/openai"
-    LLM_MODEL: str = "gemini-2.0-flash"
+    LLM_MODEL: str = "gemini-3.1-flash-lite"
 
     # ---- TimescaleDB ----
     TIMESCALE_CHUNK_INTERVAL: str = "1 day"

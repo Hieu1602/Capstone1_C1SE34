@@ -38,13 +38,19 @@ async def main():
 
     # 2. Xóa cache Redis nếu có
     try:
-        if redis_service.redis_client:
-            keys = await redis_service.redis_client.keys("vitals:*")
+        from app.core.database import get_redis
+        r = await get_redis()
+        patterns = ["vitals:*", "device:*:vitals", "alerts:recent"]
+        total_deleted = 0
+        for pattern in patterns:
+            keys = await r.keys(pattern)
             if keys:
-                await redis_service.redis_client.delete(*keys)
-                logger.info("✅ Đã xóa sạch %d khóa cache sinh hiệu trong Redis.", len(keys))
-            else:
-                logger.info("ℹ️ Không có khóa cache vitals:* nào trong Redis.")
+                await r.delete(*keys)
+                total_deleted += len(keys)
+        if total_deleted > 0:
+            logger.info("✅ Đã xóa sạch %d khóa cache sinh hiệu/cảnh báo trong Redis.", total_deleted)
+        else:
+            logger.info("ℹ️ Không có khóa cache vitals/alerts nào trong Redis.")
     except Exception as e:
         logger.warning("⚠️ Không thể kết nối Redis để xóa cache: %s", e)
 
