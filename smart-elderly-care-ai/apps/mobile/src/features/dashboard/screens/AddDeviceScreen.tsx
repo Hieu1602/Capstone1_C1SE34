@@ -40,7 +40,7 @@ interface DiscoveredBleItem {
   services: string;
 }
 
-export default function AddDeviceScreen({ navigation, route }: any) {
+export default function AddDeviceScreen({ navigation }: any) {
   const { addIoTDevice } = useVitalStore();
   const { isDarkMode, colors } = useTheme();
   const styles = useMemo(
@@ -52,18 +52,6 @@ export default function AddDeviceScreen({ navigation, route }: any) {
   const [currentStep, setCurrentStep] = useState<FlowStep>('CATEGORY_SELECT');
   const [protocol, setProtocol] = useState<ProtocolType>('WIFI_AP');
   const [selectedDeviceModel, setSelectedDeviceModel] = useState<string>('');
-
-  // Tự động phân luồng theo danh mục được chọn từ màn hình Thiết bị
-  useEffect(() => {
-    const category = route?.params?.category;
-    if (category === 'watch') {
-      setProtocol('BLUETOOTH');
-      setCurrentStep('WATCH_LIST');
-    } else if (category === 'camera') {
-      setProtocol('WIFI_AP');
-      setCurrentStep('CAMERA_LIST');
-    }
-  }, [route?.params?.category]);
 
   // ---- 2. State Nhánh Wi-Fi AP (Camera) - Chuẩn Onboarding SECA ----
   const [isLedBlinking, setIsLedBlinking] = useState<boolean>(true);
@@ -92,7 +80,6 @@ export default function AddDeviceScreen({ navigation, route }: any) {
   const [isBleScanning, setIsBleScanning] = useState<boolean>(true);
   const [simulateBleError, setSimulateBleError] = useState<boolean>(false);
   const [showBleErrorDialog, setShowBleErrorDialog] = useState<boolean>(false);
-  const [showWatchHelpModal, setShowWatchHelpModal] = useState<boolean>(false);
   const [isBlePairing, setIsBlePairing] = useState<boolean>(false);
   const [selectedBleDevice, setSelectedBleDevice] = useState<DiscoveredBleItem | null>(null);
   const [wearerName, setWearerName] = useState<string>('Cụ Ông (78 tuổi)');
@@ -436,48 +423,41 @@ export default function AddDeviceScreen({ navigation, route }: any) {
     setCurrentStep('BLE_PAIRING');
     setIsBlePairing(true);
 
-    // Bắt đầu quy trình bắt tay GATT (1.2 giây)
+    // Bắt đầu quy trình ghép nối GATT
     setTimeout(() => {
       setIsBlePairing(false);
-      // Giữ tại màn hình BLE_PAIRING để người dùng xác nhận thông tin thiết bị và chọn người đeo
-    }, 1200);
-  };
+      if (simulateBleError) {
+        // Thất bại -> DialogBLE: Báo lỗi ghép nối
+        setShowBleErrorDialog(true);
+      } else {
+        // Thành công -> SetupSuccess
+        const newDevice: IoTDeviceItem = {
+          id: 'ble-smartband-' + Date.now(),
+          name: `${item.name} (${wearerName})`,
+          sub: 'BLE 5.2 • Nhịp tim PPG • SpO₂ • MPU6050 ngã',
+          type: 'band',
+          status: `Đang đeo • Pin ${item.battery}%`,
+          isOnline: true,
+          icon: 'watch',
+          color: '#10B981',
+          location: wearerName,
+          macAddress: item.mac,
+        };
+        addIoTDevice(newDevice);
 
-  const handleConfirmBlePairing = () => {
-    if (!selectedBleDevice) return;
+        setSuccessInfo({
+          name: newDevice.name,
+          type: 'Đồng hồ y tế thông minh',
+          protocol: 'Giao thức: BLUETOOTH (BLE 5.2 GATT)',
+          details: `MAC: ${item.mac} • Pin ${item.battery}% • RSSI ${item.rssi}`,
+          location: `Người đeo: ${wearerName}`,
+          icon: 'watch',
+          color: '#10B981',
+        });
 
-    if (simulateBleError) {
-      // Thất bại -> DialogBLE: Báo lỗi ghép nối
-      setShowBleErrorDialog(true);
-      return;
-    }
-
-    // Thành công -> Lưu thiết bị và chuyển sang SetupSuccess
-    const newDevice: IoTDeviceItem = {
-      id: 'ble-smartband-' + Date.now(),
-      name: `${selectedBleDevice.name} (${wearerName})`,
-      sub: 'BLE 5.2 • Nhịp tim PPG • SpO₂ • MPU6050 ngã',
-      type: 'band',
-      status: `Đang đeo • Pin ${selectedBleDevice.battery}%`,
-      isOnline: true,
-      icon: 'watch',
-      color: '#10B981',
-      location: wearerName,
-      macAddress: selectedBleDevice.mac,
-    };
-    addIoTDevice(newDevice);
-
-    setSuccessInfo({
-      name: newDevice.name,
-      type: 'Đồng hồ y tế thông minh',
-      protocol: 'Giao thức: BLUETOOTH (BLE 5.2 GATT)',
-      details: `MAC: ${selectedBleDevice.mac} • Pin ${selectedBleDevice.battery}% • RSSI ${selectedBleDevice.rssi}`,
-      location: `Người đeo: ${wearerName}`,
-      icon: 'watch',
-      color: '#10B981',
-    });
-
-    setCurrentStep('SETUP_SUCCESS');
+        setCurrentStep('SETUP_SUCCESS');
+      }
+    }, 1500);
   };
 
   // -------------------------------------------------------------
@@ -1140,26 +1120,6 @@ export default function AddDeviceScreen({ navigation, route }: any) {
               </View>
             </View>
 
-            {/* Prompt xem hướng dẫn bật Bluetooth / Reset đồng hồ */}
-            <TouchableOpacity
-              style={[styles.watchHelpPromptCard, isDarkMode && { backgroundColor: colors.card, borderColor: colors.border }]}
-              onPress={() => setShowWatchHelpModal(true)}
-              activeOpacity={0.8}
-            >
-              <View style={[styles.watchHelpIconBox, { backgroundColor: isDarkMode ? colors.surfaceSubtle : '#ECFDF5' }]}>
-                <Ionicons name="help-circle" size={22} color="#059669" />
-              </View>
-              <View style={{ flex: 1, marginLeft: 10 }}>
-                <LocalizedText style={[styles.watchHelpPromptTitle, isDarkMode && { color: colors.textPrimary }]}>
-                  Chưa thấy đồng hồ phát Bluetooth?
-                </LocalizedText>
-                <LocalizedText style={[styles.watchHelpPromptDesc, isDarkMode && { color: colors.textSecondary }]}>
-                  Bấm xem hướng dẫn bật ghép đôi (Pairing Mode) hoặc đặt lại vòng tay.
-                </LocalizedText>
-              </View>
-              <Ionicons name="chevron-forward" size={16} color="#059669" />
-            </TouchableOpacity>
-
             <TouchableOpacity
               style={[styles.primaryActionButton, { backgroundColor: '#059669' }]}
               onPress={() => {
@@ -1333,18 +1293,6 @@ export default function AddDeviceScreen({ navigation, route }: any) {
                 </View>
               </TouchableOpacity>
             ))}
-
-            {/* Hướng dẫn trợ giúp khi không quét được */}
-            <TouchableOpacity
-              style={styles.watchHelpScanBtn}
-              onPress={() => setShowWatchHelpModal(true)}
-              activeOpacity={0.7}
-            >
-              <Ionicons name="information-circle-outline" size={18} color="#059669" />
-              <LocalizedText style={styles.watchHelpScanBtnText}>
-                Không tìm thấy đồng hồ của bạn? Xem hướng dẫn khắc phục
-              </LocalizedText>
-            </TouchableOpacity>
           </View>
         )}
 
@@ -1370,46 +1318,8 @@ export default function AddDeviceScreen({ navigation, route }: any) {
             <LocalizedText style={styles.guideSubtitle}>
               {isBlePairing
                 ? 'Đang đồng bộ Service 0x180D (Heart Rate) và 0x1822 (SpO2)...'
-                : 'Đã nhận diện thiết bị BLE. Vui lòng chọn thành viên trong gia đình sử dụng đồng hồ này:'}
+                : 'Chọn thành viên trong gia đình sử dụng đồng hồ này:'}
             </LocalizedText>
-
-            {/* Card thông tin thiết bị đã kết nối */}
-            {!isBlePairing && selectedBleDevice && (
-              <View style={[styles.blePairingSummaryCard, isDarkMode && { backgroundColor: colors.card, borderColor: colors.border }]}>
-                <View style={styles.blePairingSummaryHeader}>
-                  <View style={[styles.bleIconBox, { backgroundColor: '#ECFDF5' }]}>
-                    <Ionicons name="watch" size={26} color="#059669" />
-                  </View>
-                  <View style={{ flex: 1, marginLeft: 12 }}>
-                    <LocalizedText style={[styles.bleDeviceName, isDarkMode && { color: colors.textPrimary }]}>
-                      {selectedBleDevice.name}
-                    </LocalizedText>
-                    <LocalizedText style={[styles.bleDeviceSub, isDarkMode && { color: colors.textSecondary }]}>
-                      MAC: {selectedBleDevice.mac} • Pin: {selectedBleDevice.battery}%
-                    </LocalizedText>
-                  </View>
-                  <View style={styles.bleConnectedBadge}>
-                    <Ionicons name="bluetooth" size={14} color="#059669" />
-                    <LocalizedText style={styles.bleConnectedText}>Đã kết nối</LocalizedText>
-                  </View>
-                </View>
-                <View style={[styles.divider, isDarkMode && { backgroundColor: colors.border }]} />
-                <View style={styles.bleServicesList}>
-                  <View style={styles.bleServiceTag}>
-                    <Ionicons name="heart" size={13} color="#EF4444" />
-                    <LocalizedText style={styles.bleServiceTagText}>PPG 0x180D (Nhịp tim)</LocalizedText>
-                  </View>
-                  <View style={styles.bleServiceTag}>
-                    <Ionicons name="water" size={13} color="#0284C7" />
-                    <LocalizedText style={styles.bleServiceTagText}>SpO₂ 0x1822</LocalizedText>
-                  </View>
-                  <View style={styles.bleServiceTag}>
-                    <Ionicons name="warning" size={13} color="#F59E0B" />
-                    <LocalizedText style={styles.bleServiceTagText}>MPU6050 (Ngã)</LocalizedText>
-                  </View>
-                </View>
-              </View>
-            )}
 
             {!isBlePairing && (
               <View style={styles.wearerSelectBox}>
@@ -1443,11 +1353,15 @@ export default function AddDeviceScreen({ navigation, route }: any) {
             {!isBlePairing && (
               <TouchableOpacity
                 style={[styles.primaryActionButton, { backgroundColor: '#059669' }]}
-                onPress={handleConfirmBlePairing}
+                onPress={() => {
+                  if (selectedBleDevice) {
+                    handleSelectBleDevice(selectedBleDevice);
+                  }
+                }}
                 activeOpacity={0.85}
               >
                 <LocalizedText style={styles.primaryActionButtonText}>
-                  Hoàn Tất Ghép Đôi → Kích Hoạt Thiết Bị
+                  Hoàn Tất Ghép Nối → Xem Kết Quả
                 </LocalizedText>
                 <Ionicons name="arrow-forward" size={20} color="#FFF" />
               </TouchableOpacity>
@@ -1976,119 +1890,6 @@ export default function AddDeviceScreen({ navigation, route }: any) {
               onPress={() => setShowResetGuideModal(false)}
             >
               <LocalizedText style={styles.modalCancelText}>Đóng</LocalizedText>
-            </TouchableOpacity>
-          </View>
-        </View>
-      </Modal>
-
-      {/* ============================================================== */}
-      {/* MODAL: Hướng Dẫn Kết Nối & Đặt Lại Đồng Hồ Bluetooth BLE     */}
-      {/* ============================================================== */}
-      <Modal
-        visible={showWatchHelpModal}
-        transparent
-        animationType="fade"
-        onRequestClose={() => setShowWatchHelpModal(false)}
-      >
-        <View style={styles.modalOverlay}>
-          <View style={[styles.resetGuideModalCard, isDarkMode && { backgroundColor: colors.card }]}>
-            {/* Header */}
-            <View style={styles.resetModalHeader}>
-              <View style={[styles.resetModalIconBox, { backgroundColor: '#ECFDF5' }]}>
-                <Ionicons name="watch" size={24} color="#059669" />
-              </View>
-              <View style={{ flex: 1, marginLeft: 12 }}>
-                <LocalizedText style={[styles.resetModalTitle, isDarkMode && { color: colors.textPrimary }]}>
-                  Hướng Dẫn Ghép Đôi Đồng Hồ
-                </LocalizedText>
-                <LocalizedText style={[styles.resetModalSub, isDarkMode && { color: colors.textSecondary }]}>
-                  Vòng đeo tay y tế & Smartband BLE
-                </LocalizedText>
-              </View>
-              <TouchableOpacity
-                onPress={() => setShowWatchHelpModal(false)}
-                style={{ padding: 4 }}
-              >
-                <Ionicons name="close" size={22} color={isDarkMode ? colors.textSecondary : '#94A3B8'} />
-              </TouchableOpacity>
-            </View>
-
-            {/* Graphic Illustration */}
-            <View style={[styles.watchResetGraphicCard, isDarkMode && { backgroundColor: colors.surfaceSubtle, borderColor: colors.border }]}>
-              <View style={styles.watchResetIconRow}>
-                <Ionicons name="phone-portrait-outline" size={32} color="#059669" />
-                <Ionicons name="swap-horizontal" size={24} color="#10B981" />
-                <Ionicons name="watch" size={36} color="#059669" />
-              </View>
-              <View style={[styles.resetButtonPointerBadge, { backgroundColor: '#059669' }]}>
-                <Ionicons name="bluetooth" size={14} color="#FFF" />
-                <LocalizedText style={styles.resetButtonPointerText}>Khoảng cách khuyến nghị: Dưới 50cm</LocalizedText>
-              </View>
-            </View>
-
-            {/* 4 Steps List */}
-            <View style={styles.resetStepsList}>
-              <View style={styles.resetStepItem}>
-                <View style={[styles.resetStepNum, { backgroundColor: '#D1FAE5' }]}>
-                  <LocalizedText style={[styles.resetStepNumText, { color: '#047857' }]}>1</LocalizedText>
-                </View>
-                <LocalizedText style={[styles.resetStepText, isDarkMode && { color: colors.textPrimary }]}>
-                  <LocalizedText style={{ fontWeight: 'bold' }}>Bật nguồn:</LocalizedText> Cắm đế sạc nam châm hoặc nhấn giữ nút nguồn 3-5 giây để bật màn hình đồng hồ.
-                </LocalizedText>
-              </View>
-
-              <View style={styles.resetStepItem}>
-                <View style={[styles.resetStepNum, { backgroundColor: '#D1FAE5' }]}>
-                  <LocalizedText style={[styles.resetStepNumText, { color: '#047857' }]}>2</LocalizedText>
-                </View>
-                <LocalizedText style={[styles.resetStepText, isDarkMode && { color: colors.textPrimary }]}>
-                  <LocalizedText style={{ fontWeight: 'bold' }}>Bật Bluetooth trên điện thoại:</LocalizedText> Đảm bảo Bluetooth và Dịch vụ định vị (GPS) của điện thoại đang được BẬT.
-                </LocalizedText>
-              </View>
-
-              <View style={styles.resetStepItem}>
-                <View style={[styles.resetStepNum, { backgroundColor: '#D1FAE5' }]}>
-                  <LocalizedText style={[styles.resetStepNumText, { color: '#047857' }]}>3</LocalizedText>
-                </View>
-                <LocalizedText style={[styles.resetStepText, isDarkMode && { color: colors.textPrimary }]}>
-                  <LocalizedText style={{ fontWeight: 'bold' }}>Bật chế độ ghép đôi (Pairing):</LocalizedText> Vào menu <LocalizedText style={{ fontStyle: 'italic' }}>Cài đặt → Kết nối / Đặt lại Bluetooth</LocalizedText> trên đồng hồ để phát sóng BLE.
-                </LocalizedText>
-              </View>
-
-              <View style={styles.resetStepItem}>
-                <View style={[styles.resetStepNum, { backgroundColor: '#D1FAE5' }]}>
-                  <LocalizedText style={[styles.resetStepNumText, { color: '#047857' }]}>4</LocalizedText>
-                </View>
-                <LocalizedText style={[styles.resetStepText, isDarkMode && { color: colors.textPrimary }]}>
-                  <LocalizedText style={{ fontWeight: 'bold' }}>Quét sóng Radar:</LocalizedText> Đặt đồng hồ sát cạnh điện thoại và bấm <LocalizedText style={{ fontWeight: 'bold', color: '#059669' }}>"Bắt đầu quét"</LocalizedText>.
-                </LocalizedText>
-              </View>
-            </View>
-
-            {/* Action Buttons */}
-            <TouchableOpacity
-              style={[styles.modalConfirmBtn, { backgroundColor: '#059669', width: '100%', marginBottom: 10 }]}
-              onPress={() => {
-                setShowWatchHelpModal(false);
-                if (currentStep === 'BLE_POWER_CHECK') {
-                  if (!hasBlePermission) {
-                    setCurrentStep('BLE_PERMISSION');
-                  } else {
-                    setCurrentStep('BLE_SCAN');
-                  }
-                }
-              }}
-              activeOpacity={0.85}
-            >
-              <Ionicons name="checkmark-circle" size={18} color="#FFF" />
-              <LocalizedText style={styles.modalConfirmText}>Tôi Đã Chuẩn Bị Xong • Bắt Đầu Quét</LocalizedText>
-            </TouchableOpacity>
-
-            <TouchableOpacity
-              style={[styles.modalCancelBtn, { width: '100%' }]}
-              onPress={() => setShowWatchHelpModal(false)}
-            >
-              <LocalizedText style={[styles.modalCancelText, isDarkMode && { color: colors.textSecondary }]}>Đóng</LocalizedText>
             </TouchableOpacity>
           </View>
         </View>
@@ -2703,126 +2504,6 @@ const baseStyles = StyleSheet.create({
     fontSize: 11,
     fontWeight: '700',
     color: '#059669',
-  },
-
-  // Watch Help Prompt Card in BLE_POWER_CHECK
-  watchHelpPromptCard: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    backgroundColor: '#F0FDF4',
-    borderWidth: 1,
-    borderColor: '#BBF7D0',
-    borderRadius: 14,
-    padding: 12,
-    marginBottom: 16,
-  },
-  watchHelpIconBox: {
-    width: 38,
-    height: 38,
-    borderRadius: 12,
-    backgroundColor: '#DCFCE7',
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
-  watchHelpPromptTitle: {
-    fontSize: 13,
-    fontWeight: '700',
-    color: '#065F46',
-  },
-  watchHelpPromptDesc: {
-    fontSize: 11,
-    color: '#047857',
-    marginTop: 2,
-    lineHeight: 16,
-  },
-
-  // Watch Help Button in BLE_SCAN
-  watchHelpScanBtn: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'center',
-    paddingVertical: 12,
-    paddingHorizontal: 16,
-    borderRadius: 12,
-    borderWidth: 1,
-    borderColor: '#A7F3D0',
-    backgroundColor: '#ECFDF5',
-    marginTop: 14,
-    gap: 8,
-  },
-  watchHelpScanBtnText: {
-    fontSize: 13,
-    fontWeight: '600',
-    color: '#047857',
-  },
-
-  // Watch Graphic in Help Modal
-  watchResetGraphicCard: {
-    backgroundColor: '#ECFDF5',
-    borderRadius: 14,
-    borderWidth: 1,
-    borderColor: '#A7F3D0',
-    alignItems: 'center',
-    justifyContent: 'center',
-    paddingVertical: 18,
-    marginBottom: 14,
-    gap: 10,
-  },
-  watchResetIconRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 16,
-  },
-
-  // BLE Pairing Summary Card
-  blePairingSummaryCard: {
-    backgroundColor: '#FFF',
-    borderRadius: 14,
-    padding: 14,
-    borderWidth: 1,
-    borderColor: '#E2E8F0',
-    marginBottom: 16,
-    width: '100%',
-  },
-  blePairingSummaryHeader: {
-    flexDirection: 'row',
-    alignItems: 'center',
-  },
-  bleConnectedBadge: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    backgroundColor: '#DCFCE7',
-    paddingHorizontal: 8,
-    paddingVertical: 4,
-    borderRadius: 8,
-    gap: 4,
-  },
-  bleConnectedText: {
-    fontSize: 11,
-    fontWeight: '700',
-    color: '#047857',
-  },
-  bleServicesList: {
-    flexDirection: 'row',
-    flexWrap: 'wrap',
-    gap: 6,
-    marginTop: 8,
-  },
-  bleServiceTag: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    backgroundColor: '#F8FAFC',
-    borderWidth: 1,
-    borderColor: '#E2E8F0',
-    paddingHorizontal: 8,
-    paddingVertical: 4,
-    borderRadius: 6,
-    gap: 4,
-  },
-  bleServiceTagText: {
-    fontSize: 10,
-    fontWeight: '600',
-    color: '#334155',
   },
 
   // Wearer selector

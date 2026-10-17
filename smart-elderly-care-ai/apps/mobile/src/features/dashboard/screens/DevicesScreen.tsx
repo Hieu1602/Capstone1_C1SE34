@@ -592,65 +592,11 @@ export default function DevicesScreen({ navigation }: any) {
 
             {filteredDevices.length === 0 && (
               <View style={styles.emptyGroupContainer}>
-                {activeTab === 'Đồng hồ' ? (
-                  <>
-                    <View style={[styles.emptyIconCircle, { backgroundColor: '#ECFDF5' }]}>
-                      <Ionicons name="watch-outline" size={40} color="#059669" />
-                    </View>
-                    <LocalizedText style={[styles.emptyGroupTitle, isDarkMode && { color: colors.textPrimary }]}>
-                      Chưa kết nối đồng hồ thông minh
-                    </LocalizedText>
-                    <LocalizedText style={[styles.emptyGroupDesc, isDarkMode && { color: colors.textSecondary }]}>
-                      Kết nối vòng đeo tay hoặc đồng hồ y tế qua Bluetooth BLE để tự động theo dõi nhịp tim, SpO₂ và nhận cảnh báo té ngã.
-                    </LocalizedText>
-                    <TouchableOpacity
-                      style={[styles.emptyActionBtn, { backgroundColor: '#059669' }]}
-                      onPress={() => navigation.navigate('AddDevice', { category: 'watch' })}
-                      activeOpacity={0.85}
-                    >
-                      <Ionicons name="bluetooth" size={18} color="#FFF" style={{ marginRight: 6 }} />
-                      <LocalizedText style={styles.emptyActionBtnText}>Kết Nối Đồng Hồ Qua Bluetooth</LocalizedText>
-                    </TouchableOpacity>
-                  </>
-                ) : activeTab === 'Camera' ? (
-                  <>
-                    <View style={[styles.emptyIconCircle, { backgroundColor: '#FFF7ED' }]}>
-                      <Ionicons name="videocam-outline" size={40} color="#EA580C" />
-                    </View>
-                    <LocalizedText style={[styles.emptyGroupTitle, isDarkMode && { color: colors.textPrimary }]}>
-                      Chưa kết nối camera an ninh AI
-                    </LocalizedText>
-                    <LocalizedText style={[styles.emptyGroupDesc, isDarkMode && { color: colors.textSecondary }]}>
-                      Thêm camera SECA để giám sát an sinh, phát hiện té ngã bằng YOLOv8-Pose và truyền hình ảnh Full HD.
-                    </LocalizedText>
-                    <TouchableOpacity
-                      style={[styles.emptyActionBtn, { backgroundColor: '#EA580C' }]}
-                      onPress={() => navigation.navigate('AddDevice', { category: 'camera' })}
-                      activeOpacity={0.85}
-                    >
-                      <Ionicons name="videocam" size={18} color="#FFF" style={{ marginRight: 6 }} />
-                      <LocalizedText style={styles.emptyActionBtnText}>Thêm Camera An Ninh AI</LocalizedText>
-                    </TouchableOpacity>
-                  </>
-                ) : (
-                  <>
-                    <Ionicons name="layers-outline" size={44} color={isDarkMode ? '#475569' : '#CBD5E1'} />
-                    <LocalizedText style={[styles.emptyGroupTitle, isDarkMode && { color: colors.textPrimary }]}>
-                      Không có thiết bị trong nhóm này
-                    </LocalizedText>
-                    <LocalizedText style={[styles.emptyGroupDesc, isDarkMode && { color: colors.textSecondary }]}>
-                      Bấm nút (+) ở góc trên hoặc chọn tùy chọn bên dưới để thêm thiết bị mới vào danh mục "{activeTab}".
-                    </LocalizedText>
-                    <TouchableOpacity
-                      style={[styles.emptyActionBtn, { backgroundColor: '#0284C7' }]}
-                      onPress={() => setShowAddMenu(true)}
-                      activeOpacity={0.85}
-                    >
-                      <Ionicons name="add" size={18} color="#FFF" style={{ marginRight: 6 }} />
-                      <LocalizedText style={styles.emptyActionBtnText}>Thêm Thiết Bị Mới</LocalizedText>
-                    </TouchableOpacity>
-                  </>
-                )}
+                <Ionicons name="layers-outline" size={44} color={isDarkMode ? '#475569' : '#CBD5E1'} />
+                <LocalizedText style={[styles.emptyGroupTitle, isDarkMode && { color: colors.textPrimary }]}>Không có thiết bị trong nhóm này</LocalizedText>
+                <LocalizedText style={[styles.emptyGroupDesc, isDarkMode && { color: colors.textSecondary }]}>
+                  Bấm nút (+) ở góc trên để thêm thiết bị mới vào danh mục "{activeTab}".
+                </LocalizedText>
               </View>
             )}
           </>
@@ -658,8 +604,8 @@ export default function DevicesScreen({ navigation }: any) {
       </ScrollView>
 
       {/* ============================================================== */}
-      {/* Ô NHỎ THẢ XUỐNG KHI BẤM DẤU CỘNG (+) GỒM CÁC TÙY CHỌN         */}
-      {/* 1. Camera Wi-Fi, 2. Đồng hồ BLE, 3. Quét mã QR, 4. Nhóm       */}
+      {/* Ô NHỎ THẢ XUỐNG KHI BẤM DẤU CỘNG (+) GỒM 3 LỰA CHỌN           */}
+      {/* 1. Thêm thủ công, 2. Quét mã QR, 3. Nhóm                      */}
       {/* ============================================================== */}
       {showAddMenu && (
         <TouchableWithoutFeedback onPress={() => setShowAddMenu(false)}>
@@ -670,49 +616,28 @@ export default function DevicesScreen({ navigation }: any) {
                   <LocalizedText style={[styles.menuHeaderLabel, isDarkMode && { color: colors.textSecondary }]}>Tùy chọn thiết bị</LocalizedText>
                 </View>
 
-                {/* 1. Thêm Camera an ninh AI */}
+                {/* 1. Thêm thủ công */}
                 <TouchableOpacity
                   style={styles.menuItem}
                   onPress={() => {
                     setShowAddMenu(false);
-                    navigation.navigate('AddDevice', { category: 'camera' });
+                    navigation.navigate('AddDevice');
                   }}
                   activeOpacity={0.7}
                 >
                   <View style={[styles.menuItemIconBox, { backgroundColor: '#FFF7ED' }]}>
-                    <Ionicons name="videocam-outline" size={20} color="#EA580C" />
+                    <Ionicons name="construct-outline" size={20} color="#EA580C" />
                   </View>
                   <View style={styles.menuItemContent}>
-                    <LocalizedText style={[styles.menuItemTitle, isDarkMode && { color: colors.textPrimary }]}>Thêm Camera an ninh AI</LocalizedText>
-                    <LocalizedText style={[styles.menuItemDesc, isDarkMode && { color: colors.textSecondary }]}>Wi-Fi SoftAP • YOLOv8-Pose • 1080p</LocalizedText>
+                    <LocalizedText style={[styles.menuItemTitle, isDarkMode && { color: colors.textPrimary }]}>Thêm thủ công</LocalizedText>
+                    <LocalizedText style={[styles.menuItemDesc, isDarkMode && { color: colors.textSecondary }]}>Camera Wi-Fi, Đồng hồ BLE, IoT Hub</LocalizedText>
                   </View>
                   <Ionicons name="chevron-forward" size={16} color={isDarkMode ? '#64748B' : '#CBD5E1'} />
                 </TouchableOpacity>
 
                 <View style={[styles.menuDivider, isDarkMode && { backgroundColor: colors.border }]} />
 
-                {/* 2. Kết nối Đồng hồ thông minh */}
-                <TouchableOpacity
-                  style={styles.menuItem}
-                  onPress={() => {
-                    setShowAddMenu(false);
-                    navigation.navigate('AddDevice', { category: 'watch' });
-                  }}
-                  activeOpacity={0.7}
-                >
-                  <View style={[styles.menuItemIconBox, { backgroundColor: '#ECFDF5' }]}>
-                    <Ionicons name="watch-outline" size={20} color="#059669" />
-                  </View>
-                  <View style={styles.menuItemContent}>
-                    <LocalizedText style={[styles.menuItemTitle, isDarkMode && { color: colors.textPrimary }]}>Kết nối Đồng hồ thông minh</LocalizedText>
-                    <LocalizedText style={[styles.menuItemDesc, isDarkMode && { color: colors.textSecondary }]}>Bluetooth BLE • Nhịp tim & SpO₂ • Đeo tay</LocalizedText>
-                  </View>
-                  <Ionicons name="chevron-forward" size={16} color={isDarkMode ? '#64748B' : '#CBD5E1'} />
-                </TouchableOpacity>
-
-                <View style={[styles.menuDivider, isDarkMode && { backgroundColor: colors.border }]} />
-
-                {/* 3. Quét mã QR */}
+                {/* 2. Quét mã QR */}
                 <TouchableOpacity
                   style={styles.menuItem}
                   onPress={() => {
@@ -733,7 +658,7 @@ export default function DevicesScreen({ navigation }: any) {
 
                 <View style={[styles.menuDivider, isDarkMode && { backgroundColor: colors.border }]} />
 
-                {/* 4. Nhóm */}
+                {/* 3. Nhóm */}
                 <TouchableOpacity
                   style={styles.menuItem}
                   onPress={() => {
@@ -1382,47 +1307,18 @@ const styles = StyleSheet.create({
     paddingVertical: 40,
     paddingHorizontal: 20,
   },
-  emptyIconCircle: {
-    width: 72,
-    height: 72,
-    borderRadius: 36,
-    alignItems: 'center',
-    justifyContent: 'center',
-    marginBottom: 8,
-  },
   emptyGroupTitle: {
-    fontSize: 16,
-    fontWeight: '800',
-    color: '#0F172A',
-    marginTop: 8,
-    textAlign: 'center',
+    fontSize: 15,
+    fontWeight: '700',
+    color: '#475569',
+    marginTop: 12,
   },
   emptyGroupDesc: {
-    fontSize: 13,
-    color: '#64748B',
+    fontSize: 12,
+    color: '#94A3B8',
     textAlign: 'center',
-    marginTop: 6,
-    lineHeight: 19,
-    maxWidth: 320,
-  },
-  emptyActionBtn: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'center',
-    paddingHorizontal: 20,
-    paddingVertical: 12,
-    borderRadius: 14,
-    marginTop: 18,
-    elevation: 3,
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 3 },
-    shadowOpacity: 0.12,
-    shadowRadius: 6,
-  },
-  emptyActionBtnText: {
-    color: '#FFF',
-    fontSize: 14,
-    fontWeight: '700',
+    marginTop: 4,
+    lineHeight: 18,
   },
 
   // =========================================================
