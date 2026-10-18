@@ -1,5 +1,5 @@
 // DoctorPrescriptionsScreen.tsx
-// Quản lý toàn bộ đơn thuốc, danh mục điều trị và đồng bộ lịch phát loa thông minh Edge Hub
+// Quản lý toàn bộ đơn thuốc, danh mục điều trị và đồng bộ lịch phát loa thông minh Hub AI
 
 import React, { useState, useEffect, useCallback } from 'react';
 import {
@@ -69,11 +69,7 @@ export default function DoctorPrescriptionsScreen() {
         if (curPat) {
           setSelectedPatient(curPat);
           const rxRes = await doctorApi.getPrescriptions(curPat.id);
-          if (rxRes.data && Array.isArray(rxRes.data)) {
-            setPrescriptions(rxRes.data);
-          } else {
-            setPrescriptions([]);
-          }
+          setPrescriptions(rxRes.data && Array.isArray(rxRes.data) ? rxRes.data : []);
         }
       }
     } catch {
@@ -98,11 +94,7 @@ export default function DoctorPrescriptionsScreen() {
     try {
       setLoading(true);
       const res = await doctorApi.getPrescriptions(pat.id);
-      if (res.data && Array.isArray(res.data)) {
-        setPrescriptions(res.data);
-      } else {
-        setPrescriptions([]);
-      }
+      setPrescriptions(res.data && Array.isArray(res.data) ? res.data : []);
     } catch {
       setPrescriptions([]);
     } finally {
@@ -177,7 +169,7 @@ export default function DoctorPrescriptionsScreen() {
         setModalVisible(false);
         Alert.alert(
           'Đã lưu đơn thuốc',
-          `Đã kê đơn "${payload.medication_name}". Hub Orange Pi 5 sẽ tự động phát loa tiếng Việt nhắc bệnh nhân uống đúng giờ!`
+          `Đã kê đơn "${payload.medication_name}". Hub AI sẽ tự động phát loa nhắc bệnh nhân uống đúng giờ.`
         );
       }
     } catch {
@@ -218,11 +210,7 @@ export default function DoctorPrescriptionsScreen() {
 
     Alert.alert('Ngừng dùng thuốc', `Bác sĩ có chắc chắn muốn ngừng kê đơn thuốc "${name}"?`, [
       { text: 'Hủy', style: 'cancel' },
-      {
-        text: 'Ngừng thuốc',
-        style: 'destructive',
-        onPress: doDelete,
-      },
+      { text: 'Ngừng thuốc', style: 'destructive', onPress: doDelete },
     ]);
   };
 
@@ -238,9 +226,7 @@ export default function DoctorPrescriptionsScreen() {
         );
       }
     } catch {
-      setPrescriptions((prev) =>
-        prev.map((r) => (r.id === rxId ? { ...r, enable_speaker_reminder: !r.enable_speaker_reminder } : r))
-      );
+      Alert.alert('Lỗi', 'Không thể cập nhật trạng thái nhắc loa.');
     }
   };
 
@@ -248,7 +234,7 @@ export default function DoctorPrescriptionsScreen() {
     <View style={[styles.container, { backgroundColor: isDarkMode ? '#0F172A' : '#F8FAFC' }]}>
       <StatusBar barStyle={isDarkMode ? 'light-content' : 'dark-content'} />
 
-      {/* TOP HEADER */}
+      {/* HEADER */}
       <View
         style={[
           styles.header,
@@ -260,7 +246,7 @@ export default function DoctorPrescriptionsScreen() {
         ]}
       >
         <View style={styles.headerRow}>
-          <View>
+          <View style={{ flex: 1 }}>
             <Text style={[styles.headerTitle, { color: colors.textPrimary }]}>Quản Lý Đơn Thuốc</Text>
             <Text style={[styles.headerSub, { color: isDarkMode ? '#94A3B8' : '#64748B' }]}>
               Phác đồ điều trị & Lịch nhắc nhở y tế tự động qua Loa Hub
@@ -289,7 +275,7 @@ export default function DoctorPrescriptionsScreen() {
           </View>
         </View>
 
-        {/* THANH CHỌN BỆNH NHÂN ĐỂ XEM ĐƠN THUỐC */}
+        {/* THANH CHỌN BỆNH NHÂN */}
         {patients.length > 0 && (
           <ScrollView horizontal showsHorizontalScrollIndicator={false} style={{ marginTop: 10 }}>
             {patients.map((p) => {
@@ -341,7 +327,7 @@ export default function DoctorPrescriptionsScreen() {
               ]}
             >
               <View style={styles.rxHeader}>
-                <View style={{ flex: 1 }}>
+                <View style={{ flex: 1, marginRight: 8 }}>
                   <Text style={[styles.rxMedName, { color: colors.textPrimary }]}>
                     💊 {rx.medication_name}
                   </Text>
@@ -350,7 +336,6 @@ export default function DoctorPrescriptionsScreen() {
                   </Text>
                 </View>
 
-                {/* BẬT / TẮT NHANH LOA THÔNG MINH */}
                 <TouchableOpacity
                   style={[
                     styles.speakerToggleBtn,
@@ -390,7 +375,7 @@ export default function DoctorPrescriptionsScreen() {
                 ))}
               </View>
 
-              {/* HƯỚNG DẪN BÁC SĨ */}
+              {/* HƯỚNG DẪN */}
               {rx.instructions ? (
                 <Text style={[styles.instructionsText, { color: isDarkMode ? '#CBD5E1' : '#334155' }]}>
                   📝 Dặn dò: {rx.instructions}
@@ -433,9 +418,7 @@ export default function DoctorPrescriptionsScreen() {
         )}
       </ScrollView>
 
-      {/* ================================================================= */}
-      {/* MODAL KÊ ĐƠN MỚI / CHỈNH SỬA ĐƠN THUỐC                            */}
-      {/* ================================================================= */}
+      {/* MODAL KÊ ĐƠN / SỬA ĐƠN */}
       <Modal visible={modalVisible} animationType="slide" transparent>
         <KeyboardAvoidingView
           behavior={Platform.OS === 'ios' ? 'padding' : undefined}
@@ -454,7 +437,7 @@ export default function DoctorPrescriptionsScreen() {
             <Text style={styles.fieldLabel}>Bệnh nhân tiếp nhận</Text>
             <View style={[styles.patientSelector, { backgroundColor: isDarkMode ? '#334155' : '#EEF2F6' }]}>
               <Text style={[styles.patientSelectorText, { color: colors.textPrimary }]}>
-                👤 Cụ Nguyễn Văn An (78 tuổi - 123 Hải Phòng, Đà Nẵng)
+                👤 {selectedPatient ? `${selectedPatient.name}${selectedPatient.age ? ` (${selectedPatient.age} tuổi)` : ''}` : 'Chưa chọn bệnh nhân'}
               </Text>
             </View>
 
@@ -511,9 +494,9 @@ export default function DoctorPrescriptionsScreen() {
             <View style={styles.switchRow}>
               <View style={{ flex: 1 }}>
                 <Text style={[styles.switchTitle, { color: colors.textPrimary }]}>
-                  Phát loa tiếng Việt trên Hub Orange Pi 5
+                  Nhắc nhở qua Loa Hub AI
                 </Text>
-                <Text style={styles.switchSub}>Tự động phát lời nhắc bằng giọng nói tiếng Việt đến cụ</Text>
+                <Text style={styles.switchSub}>Tự động phát lời nhắc bằng giọng nói đến người cao tuổi</Text>
               </View>
               <Switch
                 value={enableSpeaker}
@@ -563,12 +546,8 @@ const styles = StyleSheet.create({
     backgroundColor: Colors.primary,
     justifyContent: 'center',
     alignItems: 'center',
-    shadowColor: Colors.primary,
-    shadowOpacity: 0.3,
-    shadowRadius: 6,
     elevation: 3,
   },
-
   statsRow: {
     flexDirection: 'row',
     gap: 8,
@@ -583,25 +562,19 @@ const styles = StyleSheet.create({
   },
   statNumber: { fontSize: 18, fontWeight: '800' },
   statLabel: { fontSize: 10, color: '#64748B', marginTop: 2, textAlign: 'center' },
-
   scrollContent: { padding: 16, paddingBottom: 95 },
   emptyBox: { alignItems: 'center', paddingVertical: 60 },
   emptyText: { fontSize: 14, marginTop: 10 },
-
   rxCard: {
     borderRadius: 14,
     padding: 16,
     borderWidth: 1,
     marginBottom: 12,
-    shadowColor: '#000',
-    shadowOpacity: 0.04,
-    shadowRadius: 6,
     elevation: 1,
   },
   rxHeader: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'flex-start' },
   rxMedName: { fontSize: 16, fontWeight: '800' },
   rxDosage: { fontSize: 13, marginTop: 2 },
-
   speakerToggleBtn: {
     flexDirection: 'row',
     alignItems: 'center',
@@ -611,7 +584,6 @@ const styles = StyleSheet.create({
     borderWidth: 1,
   },
   speakerToggleBtnText: { fontSize: 10, fontWeight: '700' },
-
   scheduleRow: { flexDirection: 'row', alignItems: 'center', marginTop: 10, flexWrap: 'wrap', gap: 6 },
   scheduleLabel: { fontSize: 12 },
   timeBadge: {
@@ -623,9 +595,7 @@ const styles = StyleSheet.create({
     borderRadius: 6,
   },
   timeBadgeText: { fontSize: 11, color: '#2563EB', fontWeight: '700' },
-
   instructionsText: { fontSize: 13, marginTop: 8, fontStyle: 'italic', lineHeight: 18 },
-
   rxFooter: {
     flexDirection: 'row',
     justifyContent: 'space-between',
@@ -637,7 +607,6 @@ const styles = StyleSheet.create({
   },
   footerText: { fontSize: 11, fontWeight: '600' },
   footerDoctor: { fontSize: 10, marginTop: 2 },
-
   rxEditBtn: {
     flexDirection: 'row',
     alignItems: 'center',
@@ -656,7 +625,6 @@ const styles = StyleSheet.create({
     backgroundColor: '#FEE2E2',
   },
   rxDeleteBtnText: { fontSize: 11, color: '#EF4444', fontWeight: '700' },
-
   modalOverlay: {
     flex: 1,
     backgroundColor: 'rgba(0,0,0,0.5)',
@@ -685,7 +653,6 @@ const styles = StyleSheet.create({
   },
   patientSelector: { padding: 10, borderRadius: 8, marginBottom: 4 },
   patientSelectorText: { fontSize: 13, fontWeight: '600' },
-
   switchRow: {
     flexDirection: 'row',
     alignItems: 'center',
@@ -698,7 +665,6 @@ const styles = StyleSheet.create({
   },
   switchTitle: { fontSize: 13, fontWeight: '700' },
   switchSub: { fontSize: 11, color: '#94A3B8', marginTop: 2 },
-
   modalSubmitBtn: {
     backgroundColor: Colors.primary,
     paddingVertical: 13,
