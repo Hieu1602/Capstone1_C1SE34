@@ -21,11 +21,11 @@ export interface AuthStoreState {
 
   login: (
     access: string,
-    refreshOrName?: string,
-    name?: string,
-    userId?: string | number,
-    phone?: string,
-    role?: string,
+    refresh: string,
+    name: string,
+    userId: string | number,
+    phone: string,
+    role: string,
     householdId?: number | string
   ) => void;
   setTokens: (access: string, refresh: string) => void;
@@ -54,66 +54,45 @@ type AuthSet = (
 const createAuthStore: StateCreator<AuthStoreState, [], [['zustand/persist', AuthStoreState]]> = (
   set: AuthSet
 ) => ({
-  accessToken: 'fake-jwt-token-demo-smartcare',
-  refreshToken: 'fake-jwt-refresh-token-demo',
-  userId: '1',
-  user_id: 1,
-  userPhone: '0905123456',
-  phone_number: '0905123456',
-  userName: 'Nguyễn Hữu Nghĩa',
-  full_name: 'Nguyễn Hữu Nghĩa',
-  userRole: 'user',
-  role: 'Chủ nhà / Người sở hữu',
-  household_id: 1,
+  accessToken: null,
+  refreshToken: null,
+  userId: null,
+  user_id: null,
+  userPhone: null,
+  phone_number: null,
+  userName: null,
+  full_name: null,
+  userRole: null,
+  role: null,
+  household_id: null,
   viewRole: 'CAREGIVER',
 
   login: (
     access: string,
-    refreshOrName?: string,
-    name?: string,
-    userId?: string | number,
-    phone?: string,
-    role?: string,
+    refresh: string,
+    name: string,
+    userId: string | number,
+    phone: string,
+    role: string,
     householdId?: number | string
   ) => {
-    let resolvedName = name || refreshOrName || '';
-    let resolvedPhone = phone || (typeof userId === 'string' && userId.startsWith('0') ? userId : '');
-    const resolvedUserId = userId !== undefined ? String(userId) : '1';
-    const rawRole = role || '';
-
-    const isDoctor =
-      resolvedPhone.includes('888') ||
-      resolvedPhone.includes('999') ||
-      resolvedPhone.includes('111222') ||
-      resolvedName.includes('Bác sĩ') ||
-      resolvedName.includes('BS.') ||
-      rawRole.toLowerCase().includes('doctor') ||
-      rawRole.toLowerCase().includes('bác sĩ');
-
-    const resolvedUserRole: 'user' | 'doctor' | 'admin' = isDoctor ? 'doctor' : 'user';
-    const resolvedRoleTitle = isDoctor ? 'Bác sĩ phụ trách' : (role || 'Chủ nhà / Người sở hữu');
-    const defaultView = isDoctor ? 'DOCTOR' : 'CAREGIVER';
-
-    if (!resolvedName) {
-      resolvedName = isDoctor ? 'BS. Nguyễn Văn Minh' : 'Nguyễn Hữu Nghĩa';
-    }
-    if (!resolvedPhone) {
-      resolvedPhone = isDoctor ? '0905888999' : '0905123456';
-    }
+    const normalizedRole = role.toLowerCase();
+    const isDoctor = normalizedRole === 'doctor' || normalizedRole.includes('bác sĩ');
+    const isAdmin = normalizedRole === 'admin' || normalizedRole.includes('quản trị');
 
     set({
       accessToken: access,
-      refreshToken: refreshOrName && refreshOrName.startsWith('fake-') ? refreshOrName : access,
-      userId: resolvedUserId,
-      user_id: isNaN(Number(resolvedUserId)) ? resolvedUserId : Number(resolvedUserId),
-      userName: resolvedName,
-      full_name: resolvedName,
-      userPhone: resolvedPhone,
-      phone_number: resolvedPhone,
-      userRole: resolvedUserRole,
-      role: resolvedRoleTitle,
-      household_id: householdId !== undefined ? householdId : 1,
-      viewRole: defaultView,
+      refreshToken: refresh,
+      userId: String(userId),
+      user_id: Number.isNaN(Number(userId)) ? userId : Number(userId),
+      userName: name,
+      full_name: name,
+      userPhone: phone,
+      phone_number: phone,
+      userRole: isDoctor ? 'doctor' : isAdmin ? 'admin' : 'user',
+      role,
+      household_id: householdId ?? null,
+      viewRole: isDoctor ? 'DOCTOR' : 'CAREGIVER',
     });
   },
 
@@ -122,8 +101,10 @@ const createAuthStore: StateCreator<AuthStoreState, [], [['zustand/persist', Aut
 
   setUser: (id: string | number, phone?: string, name?: string, role?: string, householdId?: number | string) =>
     set((state) => {
-      const uRole = (role as any) || state.userRole || 'user';
-      const isDoctor = uRole === 'doctor' || String(role).includes('Bác sĩ');
+      const resolvedRole = role ?? state.role;
+      const normalizedRole = resolvedRole?.toLowerCase() ?? '';
+      const isDoctor = normalizedRole === 'doctor' || normalizedRole.includes('bác sĩ');
+      const isAdmin = normalizedRole === 'admin' || normalizedRole.includes('quản trị');
       return {
         userId: String(id),
         user_id: isNaN(Number(id)) ? id : Number(id),
@@ -131,10 +112,10 @@ const createAuthStore: StateCreator<AuthStoreState, [], [['zustand/persist', Aut
         phone_number: phone ?? state.phone_number ?? null,
         userName: name ?? state.userName ?? null,
         full_name: name ?? state.full_name ?? null,
-        userRole: isDoctor ? 'doctor' : 'user',
-        role: role ?? state.role ?? (isDoctor ? 'Bác sĩ phụ trách' : 'Chủ nhà / Người sở hữu'),
-        household_id: householdId ?? state.household_id ?? 1,
-        viewRole: isDoctor ? 'DOCTOR' : state.viewRole,
+        userRole: isDoctor ? 'doctor' : isAdmin ? 'admin' : resolvedRole ? 'user' : state.userRole,
+        role: resolvedRole ?? null,
+        household_id: householdId ?? state.household_id ?? null,
+        viewRole: isDoctor ? 'DOCTOR' : isAdmin || resolvedRole ? 'CAREGIVER' : state.viewRole,
       };
     }),
 
@@ -147,9 +128,19 @@ const createAuthStore: StateCreator<AuthStoreState, [], [['zustand/persist', Aut
       phone_number: profile.phone_number || state.phone_number,
       userPhone: profile.phone_number || state.userPhone,
       role: profile.role || state.role,
-      userRole: profile.role?.includes('Bác sĩ') ? 'doctor' : 'user',
+      userRole: profile.role?.toLowerCase() === 'doctor' || profile.role?.includes('Bác sĩ')
+        ? 'doctor'
+        : profile.role?.toLowerCase() === 'admin'
+          ? 'admin'
+          : profile.role
+            ? 'user'
+            : state.userRole,
       household_id: profile.household_id !== undefined ? profile.household_id : state.household_id,
-      viewRole: profile.role?.includes('Bác sĩ') ? 'DOCTOR' : state.viewRole,
+      viewRole: profile.role?.toLowerCase() === 'doctor' || profile.role?.includes('Bác sĩ')
+        ? 'DOCTOR'
+        : profile.role
+          ? 'CAREGIVER'
+          : state.viewRole,
     })),
 
   updateUserName: (nameOrId: string, name?: string) => {
@@ -187,6 +178,28 @@ const createAuthStore: StateCreator<AuthStoreState, [], [['zustand/persist', Aut
 const persistOptions: PersistOptions<AuthStoreState> = {
   name: 'auth-storage',
   storage: createJSONStorage(() => AsyncStorage),
+  version: 1,
+  migrate: (persistedState) => {
+    const state = persistedState as AuthStoreState;
+    if (!state.accessToken?.startsWith('fake-')) {
+      return state;
+    }
+    return {
+      ...state,
+      accessToken: null,
+      refreshToken: null,
+      userId: null,
+      user_id: null,
+      userPhone: null,
+      phone_number: null,
+      userName: null,
+      full_name: null,
+      userRole: null,
+      role: null,
+      household_id: null,
+      viewRole: 'CAREGIVER',
+    };
+  },
 };
 
 export const useAuthStore = create<AuthStoreState>()(

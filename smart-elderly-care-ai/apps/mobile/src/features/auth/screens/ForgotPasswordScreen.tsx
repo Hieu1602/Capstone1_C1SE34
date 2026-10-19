@@ -325,13 +325,17 @@ export default function ForgotPasswordScreen({ navigation }: any) {
             {/* Nút gửi lại mã OTP (ở bước xác thực) */}
             {step === 'verify' && (
               <TouchableOpacity style={styles.resend} onPress={handleResendCode} disabled={isLoading}>
-                <Text style={styles.link}>Gửi lại mã xác minh</Text>
+                <Text style={[styles.link, { color: colors.primary }]}>Gửi lại mã xác minh</Text>
               </TouchableOpacity>
             )}
 
             {/* Nút chính (Gửi OTP / Xác nhận / Lưu mật khẩu) */}
             <TouchableOpacity
-              style={[styles.primaryButton, isLoading && { opacity: 0.7 }]}
+              style={[
+                styles.primaryButton,
+                { backgroundColor: colors.primary },
+                isLoading && { opacity: 0.7 },
+              ]}
               onPress={feedback?.type === 'complete' ? () => navigation.navigate('Login') : primaryAction}
               activeOpacity={0.8}
               disabled={isLoading}
@@ -353,7 +357,7 @@ export default function ForgotPasswordScreen({ navigation }: any) {
 
             {/* Liên kết quay lại đăng nhập */}
             <TouchableOpacity style={styles.loginLink} onPress={() => navigation.navigate('Login')}>
-              <Text style={styles.link}>
+              <Text style={[styles.link, { color: colors.primary }]}>
                 {feedback?.type === 'complete' ? 'Đăng nhập bằng mật khẩu mới' : 'Quay lại màn hình đăng nhập'}
               </Text>
             </TouchableOpacity>
@@ -425,7 +429,7 @@ const styles = StyleSheet.create({
     padding: 0,
     outlineWidth: 0,
   },
-  otpInputActive: { borderColor: '#638EF1', borderWidth: 2 },
+  otpInputActive: { borderWidth: 2 },
   passwordGroup: { gap: 14 },
   requirements: {
     backgroundColor: '#F8FAFC',
@@ -440,11 +444,10 @@ const styles = StyleSheet.create({
   primaryButton: {
     minHeight: 54,
     borderRadius: 14,
-    backgroundColor: '#638EF1',
     alignItems: 'center',
     justifyContent: 'center',
   },
   primaryText: { color: '#FFFFFF', fontSize: 17, fontWeight: '600' },
   loginLink: { alignItems: 'center', marginTop: 18 },
-  link: { color: '#638EF1', fontSize: 16, fontWeight: '500' },
+  link: { fontSize: 16, fontWeight: '500' },
 });

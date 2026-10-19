@@ -37,10 +37,6 @@ class UserUpdate(BaseModel):
     font_size_mode: Optional[Literal["system", "custom"]] = None
     custom_font_scale: Optional[int] = Field(default=None, ge=0, le=4)
     vibration_enabled: Optional[bool] = None
-    location_enabled: Optional[bool] = None
-    location_latitude: Optional[float] = None
-    location_longitude: Optional[float] = None
-    location_address: Optional[str] = None
 
     @model_validator(mode="before")
     @classmethod
@@ -48,6 +44,13 @@ class UserUpdate(BaseModel):
         if isinstance(data, dict):
             if "language" in data and "preferred_language" not in data:
                 data["preferred_language"] = data["language"]
+            if "phone_number" in data and "phone" not in data:
+                data["phone"] = data["phone_number"]
+            if "full_name" in data and data["full_name"] is not None:
+                cleaned_name = str(data["full_name"]).strip()
+                if not cleaned_name:
+                    raise ValueError("Tên không được để trống.")
+                data["full_name"] = cleaned_name
         return data
 
 
@@ -108,10 +111,6 @@ class UserOut(UserBase):
     font_size_mode: Literal["system", "custom"] = "system"
     custom_font_scale: int = Field(default=2, ge=0, le=4)
     vibration_enabled: bool = True
-    location_enabled: bool = True
-    location_latitude: Optional[float] = None
-    location_longitude: Optional[float] = None
-    location_address: Optional[str] = None
     created_at: Optional[datetime] = None
     updated_at: Optional[datetime] = None
     last_login_at: Optional[datetime] = None

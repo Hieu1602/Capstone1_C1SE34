@@ -45,7 +45,6 @@ TRANSLATIONS: dict[str, str] = {
     "Mật khẩu mới và xác nhận mật khẩu mới không khớp.": "The new password and confirmation do not match.",
     "Đã cập nhật ngưỡng an toàn y tế thành công và đồng bộ xuống Hub.": "Medical safety thresholds updated and synced to the hub.",
     "Đã cập nhật thành công": "Updated successfully.",
-    "Vui lòng bật GPS và thử lại.": "Please enable GPS and try again.",
     "Không lấy được vị trí": "Could not get location.",
     "Quyền bị từ chối": "Permission denied.",
     "Bạn cần cho phép truy cập vị trí để sử dụng định vị địa lý.": "Allow location access to use geolocation.",

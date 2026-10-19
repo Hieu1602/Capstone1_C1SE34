@@ -217,9 +217,9 @@ export default function HomeScreen({ navigation }: any) {
     syncAllWithBackend?.();
   }, []);
 
-  // Xử lý One-Touch SOS 115: Điều hướng trực tiếp đến màn hình "Gửi vị trí cấp cứu" chuẩn giao diện mẫu
+  // Mở màn hình SOS trước khi người dùng xác nhận gọi cấp cứu.
   const handleSOS115 = () => {
-    navigation.navigate('SendEmergencyLocation');
+    navigation.navigate('EmergencySOS');
   };
 
   const handleMicPress = () => {
@@ -575,7 +575,7 @@ export default function HomeScreen({ navigation }: any) {
                 </View>
               </View>
               <Text style={styles.sosSubtitleText} numberOfLines={1}>
-                Quay số 115 &amp; tự động sao chép địa chỉ nhà
+                Báo người thân &amp; gọi cấp cứu 115
               </Text>
             </View>
           </View>

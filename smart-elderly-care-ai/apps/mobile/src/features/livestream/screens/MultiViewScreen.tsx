@@ -261,15 +261,14 @@ export default function MultiViewScreen({ navigation }: any) {
           onPress={() => {
             LocalizedAlert.alert(
               '🚨 KÍCH HOẠT SOS 115',
-              `Gọi cấp cứu 115 và sao chép vị trí:\n"${house?.address || 'Chưa cập nhật'}"`,
+              'Thông báo người thân và gọi cấp cứu 115 ngay bây giờ?',
               [
                 { text: 'Hủy', style: 'cancel' },
-                { text: '📍 Gửi vị trí & ảnh', onPress: () => navigation.navigate('SendEmergencyLocation') },
                 {
                   text: 'Gọi 115',
                   style: 'destructive',
                   onPress: () => {
-                    void launchEmergencyCall({ address: house?.address })
+                    void launchEmergencyCall()
                       .then(() => LocalizedAlert.alert('Đã kích hoạt', 'Đang mở trình gọi khẩn cấp 115.'))
                       .catch((err) => console.warn('[MultiViewScreen] Emergency call error:', err));
                   },

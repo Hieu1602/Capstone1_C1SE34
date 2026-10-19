@@ -23,6 +23,7 @@ import HomeScreen from '../features/dashboard/screens/HomeScreen';
 import DevicesScreen from '../features/dashboard/screens/DevicesScreen';
 import AIAssistantScreen from '../features/dashboard/screens/AIAssistantScreen';
 import AlertsListScreen from '../features/alerts/screens/AlertsListScreen';
+import EmergencySOSScreen from '../features/alerts/screens/EmergencySOSScreen';
 import ProfileScreen from '../features/auth/screens/ProfileScreen';
 
 // Sub / Detail screens
@@ -44,7 +45,6 @@ import DoctorTabNavigator from './DoctorTabNavigator';
 import DoctorPatientDetailScreen from '../features/doctor/screens/DoctorPatientDetailScreen';
 import DoctorPrescriptionsScreen from '../features/doctor/screens/DoctorPrescriptionsScreen';
 import DoctorAnalyticsReportScreen from '../features/doctor/screens/DoctorAnalyticsReportScreen';
-import SendEmergencyLocationScreen from '../features/alerts/screens/SendEmergencyLocationScreen';
 import { useTheme } from '../store/useThemeStore';
 
 const Stack = createNativeStackNavigator();
@@ -169,7 +169,11 @@ export default function AppNavigator() {
             <Stack.Screen name="SmartbandDetail" component={SmartbandDetailScreen} />
             <Stack.Screen name="HealthDetail" component={HealthDetailScreen} />
             <Stack.Screen name="Settings" component={SettingsScreen} />
-            <Stack.Screen name="SendEmergencyLocation" component={SendEmergencyLocationScreen} />
+            <Stack.Screen
+              name="EmergencySOS"
+              component={EmergencySOSScreen}
+              options={{ headerShown: false }}
+            />
             <Stack.Screen
               name="IncidentDetail"
               component={IncidentDetailScreen}

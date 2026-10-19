@@ -3,7 +3,7 @@ emergency.py - API tiếp nhận yêu cầu SOS khẩn cấp.
 
 Luồng xử lý:
 1. Tìm các thành viên đang hoạt động cùng hộ với người gửi SOS.
-2. Gửi thông báo FCM kèm địa chỉ và tọa độ nếu tài khoản nhận có FCM token.
+2. Gửi thông báo SOS kèm địa chỉ/tọa độ chỉ khi người gửi chủ động cung cấp.
 3. Trả số 115 cho ứng dụng mở trình gọi trên điện thoại.
 """
 
@@ -112,29 +112,27 @@ async def trigger_emergency_sos(
     )
 
     if tokens:
-        # Ưu tiên địa chỉ người dùng gửi lên; nếu thiếu thì dùng địa chỉ đã lưu.
-        place = payload.address or current_user.location_address or "Chưa có địa chỉ"
         message = payload.message or "Cần hỗ trợ khẩn cấp"
-        location_data = {
-            "address": place,
-            "latitude": payload.latitude,
-            "longitude": payload.longitude,
+        place = payload.address
+        body = f"{current_user.full_name}: {message}"
+        if place:
+            body = f"{body}. Vị trí: {place}"
+        notification_data = {
+            "type": "EMERGENCY_SOS",
+            "user_id": str(current_user.id),
         }
-        body = f"{current_user.full_name}: {message}. Vị trí: {place}"
+        if place:
+            notification_data["address"] = place
+        if payload.latitude is not None:
+            notification_data["latitude"] = str(payload.latitude)
+        if payload.longitude is not None:
+            notification_data["longitude"] = str(payload.longitude)
         notification_result = await asyncio.to_thread(
             _send_sos_notifications,
             tokens,
             "Cảnh báo SOS khẩn cấp",
             body,
-            {
-                "type": "EMERGENCY_SOS",
-                "user_id": str(current_user.id),
-                **{
-                    key: str(value)
-                    for key, value in location_data.items()
-                    if value is not None
-                },
-            },
+            notification_data,
         )
     else:
         # Không có người nhận vẫn phải phản hồi số 115 để app tiếp tục gọi cấp cứu.

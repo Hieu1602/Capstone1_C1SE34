@@ -1,6 +1,6 @@
 """Remove profile location tracking fields.
 
-Revision ID: 007_remove_user_location_tracking
+Revision ID: 007_remove_user_location
 Revises: 006_user_location_tracking
 """
 
@@ -8,17 +8,17 @@ from alembic import op
 import sqlalchemy as sa
 
 
-revision = "007_remove_user_location_tracking"
+revision = "007_remove_user_location"
 down_revision = "006_user_location_tracking"
 branch_labels = None
 depends_on = None
 
 
 def upgrade() -> None:
-    op.drop_column("users", "location_address")
-    op.drop_column("users", "location_longitude")
-    op.drop_column("users", "location_latitude")
-    op.drop_column("users", "location_enabled")
+    op.execute("ALTER TABLE users DROP COLUMN IF EXISTS location_address")
+    op.execute("ALTER TABLE users DROP COLUMN IF EXISTS location_longitude")
+    op.execute("ALTER TABLE users DROP COLUMN IF EXISTS location_latitude")
+    op.execute("ALTER TABLE users DROP COLUMN IF EXISTS location_enabled")
 
 
 def downgrade() -> None:

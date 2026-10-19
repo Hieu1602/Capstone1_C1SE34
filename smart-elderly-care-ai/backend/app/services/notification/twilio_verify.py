@@ -2,6 +2,7 @@
 
 import hmac
 import logging
+import time
 
 from twilio.base.exceptions import TwilioRestException
 from twilio.rest import Client
@@ -10,18 +11,37 @@ from app.core.config import settings
 
 logger = logging.getLogger(__name__)
 
+# Lưu tạm các mã OTP vừa xác thực thành công (phone -> (code, timestamp))
+# để hỗ trợ quy trình gọi /verify-otp trước rồi gọi /register sau đó.
+_RECENTLY_VERIFIED: dict[str, tuple[str, float]] = {}
+_VERIFIED_TTL_SECONDS = 300.0
+
+
+def _is_sid(value: str, prefix: str) -> bool:
+    return bool(value) and len(value) == 34 and value.startswith(prefix)
+
+
+def _has_twilio_credentials() -> bool:
+    return (
+        _is_sid(settings.TWILIO_ACCOUNT_SID, "AC")
+        and bool(settings.TWILIO_AUTH_TOKEN)
+        and settings.TWILIO_AUTH_TOKEN.isascii()
+        and _is_sid(settings.TWILIO_VERIFY_SERVICE_SID, "VA")
+    )
+
 
 def _mock_otp_enabled() -> bool:
     mode = settings.OTP_MODE.strip().lower()
     if mode not in {"twilio", "mock"}:
         raise RuntimeError("OTP_MODE chỉ nhận 'twilio' hoặc 'mock'.")
-    if mode == "mock" and not settings.DEBUG:
-        raise RuntimeError("Mock OTP chỉ được phép khi DEBUG=True.")
-    return mode == "mock"
-
-
-def _is_sid(value: str, prefix: str) -> bool:
-    return len(value) == 34 and value.startswith(prefix)
+    if mode == "mock":
+        if not settings.DEBUG:
+            raise RuntimeError("Mock OTP chỉ được phép khi DEBUG=True.")
+        return True
+    # Tự động sử dụng Mock OTP trong môi trường DEBUG khi chưa cấu hình Twilio
+    if settings.DEBUG and not _has_twilio_credentials():
+        return True
+    return False
 
 
 def _client() -> Client:
@@ -69,6 +89,11 @@ def verify_otp(phone: str, code: str) -> bool:
             and hmac.compare_digest(code, expected_code)
         )
 
+    cached = _RECENTLY_VERIFIED.get(phone)
+    now = time.time()
+    if cached and hmac.compare_digest(cached[0], code) and (now - cached[1]) <= _VERIFIED_TTL_SECONDS:
+        return True
+
     try:
         check = (
             _client()
@@ -78,4 +103,7 @@ def verify_otp(phone: str, code: str) -> bool:
     except TwilioRestException:
         return False
 
-    return check.status == "approved"
+    if check.status == "approved":
+        _RECENTLY_VERIFIED[phone] = (code, now)
+        return True
+    return False

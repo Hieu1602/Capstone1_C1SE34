@@ -268,7 +268,6 @@ export default function CameraDetailScreen({ navigation, route }: any) {
   const isPortrait = winH > winW;
   const {
     camera,
-    house,
     incidents,
     currentVitals,
     setCameraResolution,
@@ -710,20 +709,14 @@ export default function CameraDetailScreen({ navigation, route }: any) {
   const handleSOS115 = () => {
     LocalizedAlert.alert(
       '🚨 KHẨN CẤP / CẤP CỨU 115',
-      `Địa chỉ: "${house.address}"\nBạn muốn mở màn hình gửi vị trí kèm hình ảnh cấp cứu hay gọi trực tiếp 115?`,
+      'Bạn muốn thông báo người thân và gọi cấp cứu 115 ngay bây giờ?',
       [
         { text: 'Hủy', style: 'cancel' },
-        {
-          text: '📍 Gửi vị trí & ảnh',
-          onPress: () => {
-            navigation.navigate('SendEmergencyLocation');
-          },
-        },
         {
           text: '📞 Gọi 115 ngay',
           style: 'destructive',
           onPress: () => {
-            void launchEmergencyCall({ address: house.address }).catch((error) => {
+            void launchEmergencyCall().catch((error) => {
               console.warn('[CameraDetailScreen] Could not open emergency dialer:', error);
             });
           },

@@ -16,11 +16,12 @@ from app.schemas.emergency import EmergencySOSRequest
     "payload",
     [
         {"latitude": 91, "longitude": 0},
-        {"latitude": 0, "longitude": -181},
+        {"longitude": -181},
         {"address": "x" * 501},
+        {"message": "x" * 501},
     ],
 )
-def test_emergency_sos_rejects_invalid_location_or_address(payload):
+def test_emergency_sos_rejects_invalid_location_or_oversized_message(payload):
     with pytest.raises(ValidationError):
         EmergencySOSRequest.model_validate(payload)
 
@@ -29,7 +30,6 @@ def test_trigger_emergency_sos_notifies_household_and_returns_dial_target(monkey
     fake_user = SimpleNamespace(
         id="caller-id",
         full_name="Test Caller",
-        location_address="Saved home address",
     )
     fake_db = object()
     recipient = SimpleNamespace(fcm_token="family-device-token")
@@ -47,7 +47,12 @@ def test_trigger_emergency_sos_notifies_household_and_returns_dial_target(monkey
         return await send_notifications(*args, **kwargs)
 
     monkeypatch.setattr(emergency.asyncio, "to_thread", send_in_thread)
-    payload = EmergencySOSRequest(address="Current address", latitude=10.0, longitude=106.0)
+    payload = EmergencySOSRequest(
+        address="Địa chỉ khẩn cấp",
+        latitude=10,
+        longitude=106,
+        message="Cần hỗ trợ khẩn cấp",
+    )
 
     response = asyncio.run(
         emergency.trigger_emergency_sos(
@@ -65,13 +70,21 @@ def test_trigger_emergency_sos_notifies_household_and_returns_dial_target(monkey
         fake_db, fake_user.id
     )
     send_notifications.assert_awaited_once()
+    notification_args = send_notifications.await_args.args
+    assert notification_args[3] == "Test Caller: Cần hỗ trợ khẩn cấp. Vị trí: Địa chỉ khẩn cấp"
+    assert notification_args[4] == {
+        "type": "EMERGENCY_SOS",
+        "user_id": "caller-id",
+        "address": "Địa chỉ khẩn cấp",
+        "latitude": "10.0",
+        "longitude": "106.0",
+    }
 
 
 def test_trigger_emergency_sos_still_returns_dial_target_without_recipients(monkeypatch):
     fake_user = SimpleNamespace(
         id="caller-id",
         full_name="Test Caller",
-        location_address=None,
     )
     monkeypatch.setattr(
         emergency,
