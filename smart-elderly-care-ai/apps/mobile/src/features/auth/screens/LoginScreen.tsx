@@ -5,7 +5,6 @@
 // - Phần trên: Photo collage phong cách Pinterest chất lượng cao
 // - Phần dưới: Form đăng nhập trực tiếp (Số điện thoại, Mật khẩu, Quên mật khẩu)
 // - Thông báo lỗi inline chuyên nghiệp (noticeBox)
-// - Hỗ trợ tài khoản mẫu tiện lợi cho demo/chấm điểm
 // ==============================================================================
 
 import React, { useState } from 'react';
@@ -37,66 +36,88 @@ const { width: SCREEN_WIDTH } = Dimensions.get('window');
 const normalizePhoneNumber = (rawPhone: string): string => {
   const digits = rawPhone.replace(/\D/g, '');
   if (!digits) return '';
-  if (digits.startsWith('84')) {
-    const national = digits.slice(2);
-    return '+84' + (national.startsWith('0') ? national.slice(1) : national);
-  }
-  if (digits.startsWith('0')) {
-    return '+84' + digits.slice(1);
-  }
-  return '+84' + digits;
+  const national = digits.startsWith('84') ? digits.slice(2) : digits;
+  return `+84${national.replace(/^0/, '')}`;
 };
 
-// Danh sách hình ảnh collage chất lượng cao (phong cách sống, chăm sóc gia đình, y tế)
-const COLLAGE_IMAGES = {
-  center: 'https://images.unsplash.com/photo-1576765608535-5f04d1e3f289?auto=format&fit=crop&w=600&q=80',
-  topLeft: 'https://images.unsplash.com/photo-1513694203232-719a280e022f?auto=format&fit=crop&w=500&q=80',
-  topRight: 'https://images.unsplash.com/photo-1595950653106-6c9ebd614d3a?auto=format&fit=crop&w=500&q=80',
-  midRight: 'https://images.unsplash.com/photo-1581579438747-1dc8d17bbce4?auto=format&fit=crop&w=500&q=80',
-  bottomLeft: 'https://images.unsplash.com/photo-1525351484163-7529414344d8?auto=format&fit=crop&w=500&q=80',
-  bottomRight: 'https://images.unsplash.com/photo-1507473885765-e6ed057f782c?auto=format&fit=crop&w=500&q=80',
-};
+// Danh sách hình ảnh collage chất lượng cao 
+const COLLAGE_ITEMS = [
+  {
+    key: 'topLeft',
+    uri: 'https://images.unsplash.com/photo-1513694203232-719a280e022f?auto=format&fit=crop&w=500&q=80',
+    style: { top: -15, left: -20, width: SCREEN_WIDTH * 0.38, height: 220, borderRadius: 24 },
+  },
+  {
+    key: 'topRight',
+    uri: 'https://images.unsplash.com/photo-1595950653106-6c9ebd614d3a?auto=format&fit=crop&w=500&q=80',
+    style: { top: -25, right: -25, width: SCREEN_WIDTH * 0.52, height: 145, borderRadius: 24 },
+  },
+  {
+    key: 'center',
+    uri: 'https://images.unsplash.com/photo-1576765608535-5f04d1e3f289?auto=format&fit=crop&w=600&q=80',
+    style: {
+      top: 50,
+      left: SCREEN_WIDTH * 0.22,
+      width: SCREEN_WIDTH * 0.56,
+      height: 275,
+      borderRadius: 26,
+      zIndex: 10,
+      borderWidth: 3,
+      borderColor: '#FFFFFF',
+    },
+  },
+  {
+    key: 'midRight',
+    uri: 'https://images.unsplash.com/photo-1581579438747-1dc8d17bbce4?auto=format&fit=crop&w=500&q=80',
+    style: { top: 130, right: -30, width: SCREEN_WIDTH * 0.35, height: 120, borderRadius: 22, zIndex: 5 },
+  },
+  {
+    key: 'bottomLeft',
+    uri: 'https://images.unsplash.com/photo-1525351484163-7529414344d8?auto=format&fit=crop&w=500&q=80',
+    style: { bottom: -20, left: -15, width: SCREEN_WIDTH * 0.44, height: 170, borderRadius: 24, zIndex: 5 },
+  },
+  {
+    key: 'bottomRight',
+    uri: 'https://images.unsplash.com/photo-1507473885765-e6ed057f782c?auto=format&fit=crop&w=500&q=80',
+    style: { bottom: -15, right: -20, width: SCREEN_WIDTH * 0.42, height: 155, borderRadius: 24, zIndex: 4 },
+  },
+] as const;
 
 // Component màn hình đăng nhập; navigation dùng để chuyển sang các màn hình liên quan.
 export default function LoginScreen({ navigation }: any) {
-  const { login, setViewRole } = useAuthStore();
+  const { login, setViewRole, setTokens, logout } = useAuthStore();
+  const { setFontSizeMode, setFontScale } = useThemeStore();
 
   const [phone, setPhone] = useState('');
   const [password, setPassword] = useState('');
   const [showPassword, setShowPassword] = useState(false);
   const [loading, setLoading] = useState(false);
-  const [notice, setNotice] = useState<{ type: 'error' | 'success'; message: string } | null>(null);
+  const [errorMessage, setErrorMessage] = useState<string | null>(null);
 
   // Xử lý đăng nhập kết nối trực tiếp với Database qua Backend FastAPI
   const handleLogin = async () => {
     const normalizedAccount = normalizePhoneNumber(phone);
     if (!normalizedAccount || !password.trim()) {
-      setNotice({ type: 'error', message: 'Vui lòng nhập số điện thoại và mật khẩu.' });
+      setErrorMessage('Vui lòng nhập số điện thoại và mật khẩu.');
       return;
     }
 
     setLoading(true);
-    setNotice(null);
+    setErrorMessage(null);
     // Mỗi phiên đăng nhập bắt đầu ở cỡ chữ hệ thống; người dùng có thể bật tùy chỉnh sau.
-    useThemeStore.getState().setFontSizeMode('system');
-    useThemeStore.getState().setFontScale(1);
+    setFontSizeMode('system');
+    setFontScale(1);
+    let tokensApplied = false;
     try {
       // 1. Gửi request OAuth2 Password Grant lên Backend FastAPI
-      const response = await authApi.login(normalizedAccount, password);
-      const { access_token, refresh_token } = response.data;
+      const { access_token, refresh_token } = (await authApi.login(normalizedAccount, password)).data;
 
       // 2. Thiết lập token tạm vào Zustand store
-      useAuthStore.getState().setTokens(access_token, refresh_token);
+      setTokens(access_token, refresh_token);
+      tokensApplied = true;
 
       // 3. Lấy thông tin tài khoản thực tế từ PostgreSQL Database (/api/v1/users/me)
-      let userProfile: any = null;
-      try {
-        const meRes = await usersApi.getMe();
-        userProfile = meRes.data;
-      } catch (err) {
-        console.warn('[Login] Lỗi truy vấn /users/me:', err);
-      }
-
+      const userProfile = (await usersApi.getMe()).data;
       const savedScale = userProfile?.custom_font_scale;
       if (userProfile?.font_size_mode === 'custom') {
         // Clear a previously saved custom mode so each new login starts with system sizing.
@@ -111,41 +132,29 @@ export default function LoginScreen({ navigation }: any) {
         }
       }
 
-      const full_name = userProfile?.full_name || 'Nguyễn Hữu Nghĩa';
-      const phone_number = userProfile?.phone || normalizedAccount;
-      const isDoctor =
-        userProfile?.role === 'doctor' ||
-        userProfile?.full_name?.includes('BS.') ||
-        userProfile?.full_name?.includes('Bác sĩ') ||
-        phone_number?.includes('111222') ||
-        phone_number?.includes('888999');
-      const role_str = isDoctor ? 'Bác sĩ phụ trách' : 'Chủ nhà / Người sở hữu';
-      const user_id = userProfile?.id || 1;
-      const household_id = 1;
-
       // 4. Lưu thông tin đăng nhập vào Store
-      login(access_token, refresh_token, full_name, user_id, phone_number, role_str, household_id);
-      setViewRole(isDoctor ? 'DOCTOR' : 'CAREGIVER');
+      login(
+        access_token,
+        refresh_token,
+        userProfile.full_name,
+        userProfile.id,
+        userProfile.phone,
+        userProfile.role
+      );
+      setViewRole(userProfile.role === 'doctor' ? 'DOCTOR' : 'CAREGIVER');
     } catch (error: any) {
+      if (tokensApplied) logout();
       console.error('[Login] Error:', error);
       const detail =
         error?.response?.data?.detail ||
         error?.message ||
         'Thông tin đăng nhập hoặc mật khẩu không đúng.';
-      setNotice({
-        type: 'error',
-        message: typeof detail === 'string' ? detail : 'Đăng nhập không thành công. Vui lòng kiểm tra lại.',
-      });
+      setErrorMessage(
+        typeof detail === 'string' ? detail : 'Đăng nhập không thành công. Vui lòng kiểm tra lại.'
+      );
     } finally {
       setLoading(false);
     }
-  };
-
-  // Điền nhanh tài khoản mẫu thử nghiệm
-  const handleQuickFill = (fillPhone: string, fillPass: string) => {
-    setPhone(fillPhone);
-    setPassword(fillPass);
-    setNotice(null);
   };
 
   return (
@@ -153,7 +162,7 @@ export default function LoginScreen({ navigation }: any) {
     <SafeAreaView style={styles.safeArea}>
       <KeyboardAvoidingView
         behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
-        style={{ flex: 1 }}
+        style={styles.safeArea}
       >
         <ScrollView
           contentContainerStyle={styles.scrollContainer}
@@ -169,36 +178,17 @@ export default function LoginScreen({ navigation }: any) {
               style={styles.backButton}
               accessibilityRole="button"
               accessibilityLabel="Quay lại"
-              onPress={() => {
-                if (navigation.canGoBack()) {
-                  navigation.goBack();
-                } else {
-                  navigation.navigate('Welcome');
-                }
-              }}
+              onPress={() => (navigation.canGoBack() ? navigation.goBack() : navigation.navigate('Welcome'))}
             >
               <Ionicons name="arrow-back" size={20} color="#0F172A" />
               <LocalizedText style={styles.backButtonText}>Quay lại</LocalizedText>
             </TouchableOpacity>
 
-            <View style={[styles.card, styles.cardTopLeft]}>
-              <Image source={{ uri: COLLAGE_IMAGES.topLeft }} style={styles.cardImage} resizeMode="cover" />
-            </View>
-            <View style={[styles.card, styles.cardTopRight]}>
-              <Image source={{ uri: COLLAGE_IMAGES.topRight }} style={styles.cardImage} resizeMode="cover" />
-            </View>
-            <View style={[styles.card, styles.cardCenterHero]}>
-              <Image source={{ uri: COLLAGE_IMAGES.center }} style={styles.cardImage} resizeMode="cover" />
-            </View>
-            <View style={[styles.card, styles.cardMidRight]}>
-              <Image source={{ uri: COLLAGE_IMAGES.midRight }} style={styles.cardImage} resizeMode="cover" />
-            </View>
-            <View style={[styles.card, styles.cardBottomLeft]}>
-              <Image source={{ uri: COLLAGE_IMAGES.bottomLeft }} style={styles.cardImage} resizeMode="cover" />
-            </View>
-            <View style={[styles.card, styles.cardBottomRight]}>
-              <Image source={{ uri: COLLAGE_IMAGES.bottomRight }} style={styles.cardImage} resizeMode="cover" />
-            </View>
+            {COLLAGE_ITEMS.map((item) => (
+              <View key={item.key} style={[styles.card, item.style]}>
+                <Image source={{ uri: item.uri }} style={styles.cardImage} resizeMode="cover" />
+              </View>
+            ))}
           </View>
 
           {/* ================================================================= */}
@@ -208,13 +198,13 @@ export default function LoginScreen({ navigation }: any) {
             <View style={styles.logoBadgeContainer}>
               <Image
                 source={require('../../../../assets/logo.png')}
-                style={{ width: 96, height: 64 }}
+                style={styles.logoImage}
                 resizeMode="contain"
               />
             </View>
 
             <LocalizedText style={styles.heroTitle}>
-              {'Chào mừng bạn trở lại\n' + 'Đăng nhập ngay'}
+              {'Chào mừng bạn trở lại\nĐăng nhập ngay'}
             </LocalizedText>
 
             <LocalizedText style={styles.heroSubtitle}>
@@ -222,24 +212,10 @@ export default function LoginScreen({ navigation }: any) {
             </LocalizedText>
 
             {/* Thông báo lỗi / trạng thái */}
-            {notice ? (
-              <View
-                style={[styles.noticeBox, notice.type === 'success' ? styles.noticeSuccess : styles.noticeError]}
-                accessibilityRole="alert"
-              >
-                <Ionicons
-                  name={notice.type === 'success' ? 'checkmark-circle-outline' : 'alert-circle-outline'}
-                  size={18}
-                  color={notice.type === 'success' ? '#067647' : '#B42318'}
-                />
-                <LocalizedText
-                  style={[
-                    styles.noticeText,
-                    notice.type === 'success' ? styles.noticeSuccessText : styles.noticeErrorText,
-                  ]}
-                >
-                  {notice.message}
-                </LocalizedText>
+            {errorMessage ? (
+              <View style={styles.noticeBox} accessibilityRole="alert">
+                <Ionicons name="alert-circle-outline" size={18} color="#B42318" />
+                <LocalizedText style={styles.noticeText}>{errorMessage}</LocalizedText>
               </View>
             ) : null}
 
@@ -259,7 +235,7 @@ export default function LoginScreen({ navigation }: any) {
                   value={phone}
                   onChangeText={(value) => {
                     setPhone(value);
-                    setNotice(null);
+                    setErrorMessage(null);
                   }}
                   autoCapitalize="none"
                 />
@@ -271,19 +247,19 @@ export default function LoginScreen({ navigation }: any) {
                   <Ionicons name="lock-closed-outline" size={18} color="#64748B" />
                 </View>
                 <LocalizedTextInput
-                  style={[styles.textInput, { flex: 1 }]}
+                  style={styles.textInput}
                   placeholder="Mật khẩu"
                   placeholderTextColor="#94A3B8"
                   secureTextEntry={!showPassword}
                   value={password}
                   onChangeText={(value) => {
                     setPassword(value);
-                    setNotice(null);
+                    setErrorMessage(null);
                   }}
                 />
                 <TouchableOpacity
                   style={styles.eyeBtn}
-                  onPress={() => setShowPassword(!showPassword)}
+                  onPress={() => setShowPassword((prev) => !prev)}
                 >
                   <Ionicons
                     name={showPassword ? 'eye-outline' : 'eye-off-outline'}
@@ -300,37 +276,12 @@ export default function LoginScreen({ navigation }: any) {
               >
                 <LocalizedText style={styles.forgotText}>Quên mật khẩu?</LocalizedText>
               </TouchableOpacity>
-
-              {/* Tài khoản mẫu từ Database */}
-              <View style={styles.quickFillContainer}>
-                <LocalizedText style={styles.quickFillLabel}>Tài khoản mẫu từ Database (chạm để điền):</LocalizedText>
-                <View style={styles.quickFillRow}>
-                  <TouchableOpacity
-                    style={styles.quickFillChip}
-                    onPress={() => handleQuickFill('0905123456', '12345678')}
-                  >
-                    <Ionicons name="home-outline" size={14} color="#0284C7" />
-                    <LocalizedText style={styles.quickFillChipText}>Nguyễn Hữu Nghĩa (0905123456)</LocalizedText>
-                  </TouchableOpacity>
-
-                  <TouchableOpacity
-                    style={styles.quickFillChip}
-                    onPress={() => handleQuickFill('0905111222', '12345678')}
-                  >
-                    <Ionicons name="medkit-outline" size={14} color="#16A34A" />
-                    <LocalizedText style={styles.quickFillChipText}>BS. Trần Văn Minh (0905111222)</LocalizedText>
-                  </TouchableOpacity>
-                </View>
-                <LocalizedText style={styles.quickFillNote}>
-                  Mật khẩu tài khoản trong Database: 12345678
-                </LocalizedText>
-              </View>
             </View>
 
             {/* Nút hành động Đăng nhập chính */}
             <View style={styles.actionButtonsContainer}>
               <TouchableOpacity
-                style={[styles.btnLogin, loading && { opacity: 0.7 }]}
+                style={[styles.btnLogin, loading && styles.btnDisabled]}
                 activeOpacity={0.88}
                 onPress={handleLogin}
                 disabled={loading}
@@ -416,61 +367,12 @@ const styles = StyleSheet.create({
   },
   card: {
     position: 'absolute',
-    borderRadius: 22,
     overflow: 'hidden',
     backgroundColor: '#E2E8F0',
   },
   cardImage: {
     width: '100%',
     height: '100%',
-  },
-  cardTopLeft: {
-    top: -15,
-    left: -20,
-    width: SCREEN_WIDTH * 0.38,
-    height: 220,
-    borderRadius: 24,
-  },
-  cardTopRight: {
-    top: -25,
-    right: -25,
-    width: SCREEN_WIDTH * 0.52,
-    height: 145,
-    borderRadius: 24,
-  },
-  cardCenterHero: {
-    top: 50,
-    left: SCREEN_WIDTH * 0.22,
-    width: SCREEN_WIDTH * 0.56,
-    height: 275,
-    borderRadius: 26,
-    zIndex: 10,
-    borderWidth: 3,
-    borderColor: '#FFFFFF',
-  },
-  cardMidRight: {
-    top: 130,
-    right: -30,
-    width: SCREEN_WIDTH * 0.35,
-    height: 120,
-    borderRadius: 22,
-    zIndex: 5,
-  },
-  cardBottomLeft: {
-    bottom: -20,
-    left: -15,
-    width: SCREEN_WIDTH * 0.44,
-    height: 170,
-    borderRadius: 24,
-    zIndex: 5,
-  },
-  cardBottomRight: {
-    bottom: -15,
-    right: -20,
-    width: SCREEN_WIDTH * 0.42,
-    height: 155,
-    borderRadius: 24,
-    zIndex: 4,
   },
 
   // -------------------------------------------------------------------------
@@ -485,13 +387,9 @@ const styles = StyleSheet.create({
   logoBadgeContainer: {
     marginBottom: 14,
   },
-  logoBadge: {
-    width: 52,
-    height: 52,
-    borderRadius: 26,
-    backgroundColor: Colors.primary,
-    justifyContent: 'center',
-    alignItems: 'center',
+  logoImage: {
+    width: 96,
+    height: 64,
   },
   heroTitle: {
     fontSize: 27,
@@ -520,13 +418,6 @@ const styles = StyleSheet.create({
     borderRadius: 14,
     marginBottom: 16,
     gap: 8,
-  },
-  noticeSuccess: {
-    backgroundColor: '#ECFDF3',
-    borderWidth: 1,
-    borderColor: '#A6F4C5',
-  },
-  noticeError: {
     backgroundColor: '#FEF3F2',
     borderWidth: 1,
     borderColor: '#FECDCA',
@@ -535,12 +426,6 @@ const styles = StyleSheet.create({
     flex: 1,
     fontSize: 13,
     lineHeight: 18,
-  },
-  noticeSuccessText: {
-    color: '#067647',
-    fontWeight: '600',
-  },
-  noticeErrorText: {
     color: '#B42318',
     fontWeight: '600',
   },
@@ -595,47 +480,6 @@ const styles = StyleSheet.create({
     fontWeight: '600',
     color: Colors.primary,
   },
-  quickFillContainer: {
-    backgroundColor: '#F1F5F9',
-    borderRadius: 14,
-    padding: 12,
-    marginBottom: 14,
-    width: '100%',
-  },
-  quickFillLabel: {
-    fontSize: 11,
-    fontWeight: '600',
-    color: '#475569',
-    marginBottom: 8,
-  },
-  quickFillRow: {
-    flexDirection: 'row',
-    flexWrap: 'wrap',
-    gap: 8,
-    marginBottom: 6,
-  },
-  quickFillNote: {
-    fontSize: 11,
-    color: '#64748B',
-    fontStyle: 'italic',
-    marginTop: 4,
-  },
-  quickFillChip: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    backgroundColor: '#FFFFFF',
-    paddingVertical: 6,
-    paddingHorizontal: 10,
-    borderRadius: 12,
-    borderWidth: 1,
-    borderColor: '#E2E8F0',
-    gap: 5,
-  },
-  quickFillChipText: {
-    fontSize: 12,
-    fontWeight: '600',
-    color: '#0F172A',
-  },
   actionButtonsContainer: {
     width: '100%',
     gap: 12,
@@ -649,6 +493,9 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
     alignItems: 'center',
     width: '100%',
+  },
+  btnDisabled: {
+    opacity: 0.7,
   },
   btnLoginText: {
     color: '#FFFFFF',

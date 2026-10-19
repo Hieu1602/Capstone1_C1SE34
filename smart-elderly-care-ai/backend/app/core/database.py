@@ -68,16 +68,16 @@ async def init_db() -> None:
             await conn.execute(text("ALTER TABLE device_configs ADD COLUMN IF NOT EXISTS configured_by_role VARCHAR(20) DEFAULT 'SYSTEM';"))
             await conn.execute(text("ALTER TABLE vital_signs ADD COLUMN IF NOT EXISTS bp_systolic INTEGER;"))
             await conn.execute(text("ALTER TABLE vital_signs ADD COLUMN IF NOT EXISTS bp_diastolic INTEGER;"))
-            await conn.execute(text("ALTER TABLE users ADD COLUMN IF NOT EXISTS location_enabled BOOLEAN DEFAULT TRUE;"))
-            await conn.execute(text("ALTER TABLE users ADD COLUMN IF NOT EXISTS location_latitude DOUBLE PRECISION;"))
-            await conn.execute(text("ALTER TABLE users ADD COLUMN IF NOT EXISTS location_longitude DOUBLE PRECISION;"))
-            await conn.execute(text("ALTER TABLE users ADD COLUMN IF NOT EXISTS location_address VARCHAR(500);"))
+            await conn.execute(text("ALTER TABLE users DROP COLUMN IF EXISTS location_address;"))
+            await conn.execute(text("ALTER TABLE users DROP COLUMN IF EXISTS location_longitude;"))
+            await conn.execute(text("ALTER TABLE users DROP COLUMN IF EXISTS location_latitude;"))
+            await conn.execute(text("ALTER TABLE users DROP COLUMN IF EXISTS location_enabled;"))
             # Ensure Doctor +84905111222 exists and has same password
             await conn.execute(text("""
                 INSERT INTO users (
                     id, phone, full_name, hashed_password, role, 
                     preferred_language, font_size_mode, custom_font_scale,
-                    vibration_enabled, location_enabled, is_active
+                    vibration_enabled, is_active
                 ) VALUES (
                     'b3333333-b4e1-4b08-b2d3-d949a0eb075c',
                     '+84905111222',
@@ -85,7 +85,7 @@ async def init_db() -> None:
                     (SELECT hashed_password FROM users WHERE phone = '+84905123456' LIMIT 1),
                     'doctor',
                     'vi', 'system', 2,
-                    TRUE, TRUE, TRUE
+                    TRUE, TRUE
                 ) ON CONFLICT (phone) DO UPDATE 
                 SET role = 'doctor',
                     hashed_password = (SELECT hashed_password FROM users WHERE phone = '+84905123456' LIMIT 1);
