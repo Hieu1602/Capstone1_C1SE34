@@ -68,6 +68,14 @@ class FontSizePreferenceUpdate(BaseModel):
     font_size_mode: Literal["system", "custom"]
     custom_font_scale: int = Field(ge=0, le=4)
 
+    @model_validator(mode="before")
+    @classmethod
+    def normalize_language_fields(cls, data):
+        if isinstance(data, dict):
+            if "language" in data and "preferred_language" not in data:
+                data["preferred_language"] = data["language"]
+        return data
+
 
 class PasswordChange(BaseModel):
     current_password: str = Field(min_length=1, max_length=128)
