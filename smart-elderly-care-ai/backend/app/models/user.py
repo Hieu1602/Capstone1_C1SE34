@@ -75,8 +75,8 @@ class User(Base):
         "Device", back_populates="owner", lazy="selectin"
     )
     owned_houses: Mapped[list["House"]] = relationship(  # noqa: F821
-        "House", back_populates="owner", lazy="selectin"
+        "House", back_populates="owner", cascade="all, delete-orphan", lazy="selectin"
     )
     house_memberships: Mapped[list["HouseMember"]] = relationship(  # noqa: F821
-        "HouseMember", back_populates="user", lazy="selectin"
+        "HouseMember", back_populates="user", cascade="all, delete-orphan", lazy="selectin"
     )

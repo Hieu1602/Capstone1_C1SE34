@@ -57,6 +57,8 @@ const COLLAGE_IMAGES = {
   bottomRight: 'https://images.unsplash.com/photo-1507473885765-e6ed057f782c?auto=format&fit=crop&w=500&q=80',
 };
 
+
+// Component màn hình đăng nhập; navigation dùng để chuyển sang các màn hình liên quan.
 export default function LoginScreen({ navigation }: any) {
   const { login, setViewRole } = useAuthStore();
 
@@ -148,6 +150,7 @@ export default function LoginScreen({ navigation }: any) {
   };
 
   return (
+    // SafeAreaView tránh hiển thị nội dung dưới tai thỏ/status bar.
     <SafeAreaView style={styles.safeArea}>
       <KeyboardAvoidingView
         behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
@@ -364,12 +367,14 @@ export default function LoginScreen({ navigation }: any) {
   );
 }
 
+// Các kiểu dáng dùng chung cho các thành phần giao diện ở trên.
 const styles = StyleSheet.create({
   // Vùng an toàn hiển thị toàn màn hình
   safeArea: {
     flex: 1,
     backgroundColor: '#FFFFFF',
   },
+  // Nội dung cuộn chiếm chiều cao có thể, dàn khoảng trống và chừa lề dưới.
   scrollContainer: {
     flexGrow: 1,
     justifyContent: 'space-between',
@@ -498,6 +503,7 @@ const styles = StyleSheet.create({
     letterSpacing: -0.5,
     marginBottom: 8,
   },
+  // Mô tả phụ bên dưới tiêu đề.
   heroSubtitle: {
     fontSize: 13,
     color: '#64748B',
@@ -542,6 +548,7 @@ const styles = StyleSheet.create({
   formCard: {
     width: '100%',
   },
+  // Khung nhập liệu chung, gồm biểu tượng và nội dung trên một hàng.
   inputWrap: {
     flexDirection: 'row',
     alignItems: 'center',
@@ -553,17 +560,20 @@ const styles = StyleSheet.create({
     height: 52,
     marginBottom: 14,
   },
+  // Nhóm tiền tố/biểu tượng nằm bên trái ô nhập.
   inputPrefix: {
     flexDirection: 'row',
     alignItems: 'center',
     marginRight: 10,
     gap: 4,
   },
+  // Kiểu chữ cho mã quốc gia +84.
   prefixText: {
     fontSize: 14,
     fontWeight: '700',
     color: '#334155',
   },
+  // Ô nhập chiếm phần chiều rộng còn lại trong khung.
   textInput: {
     flex: 1,
     fontSize: 15,
@@ -571,9 +581,11 @@ const styles = StyleSheet.create({
     borderWidth: 0,
     outlineWidth: 0,
   },
+  // Kích thước vùng bấm biểu tượng hiện/ẩn mật khẩu.
   eyeBtn: {
     padding: 6,
   },
+  // Đặt liên kết quên mật khẩu về phía phải.
   forgotBtn: {
     alignSelf: 'flex-end',
     marginBottom: 14,
@@ -650,10 +662,12 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     marginBottom: 18,
   },
+  // Chữ mô tả trước liên kết đăng ký.
   switchAuthText: {
     fontSize: 14,
     color: '#64748B',
   },
+  // Liên kết đăng ký dùng màu nhận diện và chữ đậm.
   switchAuthLink: {
     fontSize: 14,
     fontWeight: '700',

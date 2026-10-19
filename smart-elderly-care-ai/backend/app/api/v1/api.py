@@ -75,3 +75,4 @@ api_router.include_router(mobile_doctor_router,        prefix="/doctor",        
 api_router.include_router(mobile_reports_router,       prefix="/reports",       tags=["[MOBILE APP] Báo cáo sức khỏe tổng hợp"])
 api_router.include_router(mobile_chatbot_router,       prefix="/chatbot",       tags=["[MOBILE APP] Trợ lý AI Y khoa (RAG)"])
 api_router.include_router(mobile_emergency_router,     prefix="/emergency",     tags=["[MOBILE APP] Phát tín hiệu SOS khẩn cấp"])
+api_router.include_router(mobile_emergency_router,     prefix="/mobile/emergency", tags=["[MOBILE APP] Phát tín hiệu SOS khẩn cấp (Alias)"])

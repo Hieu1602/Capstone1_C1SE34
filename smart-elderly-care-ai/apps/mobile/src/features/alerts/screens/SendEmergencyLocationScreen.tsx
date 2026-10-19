@@ -20,13 +20,14 @@ import { Ionicons } from '@expo/vector-icons';
 import * as ImagePicker from 'expo-image-picker';
 import * as Location from 'expo-location';
 
+import { Colors } from '../../../theme/colors';
 import { useTheme } from '../../../store/useThemeStore';
 import { useAuthStore } from '../../../store/useAuthStore';
 import { useVitalStore } from '../../../store/useVitalStore';
 import { emergencyApi } from '../../../services/api';
 
 export default function SendEmergencyLocationScreen({ navigation }: any) {
-  const { isDarkMode, colors } = useTheme();
+  const { colors } = useTheme();
   const { userName, full_name, userPhone, phone_number } = useAuthStore();
   const { house } = useVitalStore();
 
@@ -254,32 +255,31 @@ export default function SendEmergencyLocationScreen({ navigation }: any) {
   };
 
   return (
-    <SafeAreaView style={[styles.safeArea, { backgroundColor: '#1976D2' }]} edges={['top']}>
-      {/* 1. Header màu xanh dương chuẩn theo ảnh mẫu */}
-      <View style={styles.headerBar}>
+    <SafeAreaView style={[styles.safeArea, { backgroundColor: colors.background }]} edges={['top']}>
+      <View style={[styles.headerBar, { backgroundColor: colors.card, borderBottomColor: colors.border }]}>
         <TouchableOpacity
-          style={styles.backButton}
+          style={[styles.backButton, { backgroundColor: colors.primaryLight, borderColor: colors.border }]}
           onPress={() => navigation.goBack()}
           activeOpacity={0.7}
         >
-          <Ionicons name="arrow-back" size={22} color="#1976D2" />
+          <Ionicons name="arrow-back" size={22} color={colors.primary} />
         </TouchableOpacity>
-        <Text style={styles.headerTitle}>Gửi vị trí cấp cứu</Text>
+        <Text style={[styles.headerTitle, { color: colors.textPrimary }]}>Gửi vị trí cấp cứu</Text>
         <View style={{ width: 36 }} />
       </View>
 
       <ScrollView
-        style={[styles.container, { backgroundColor: isDarkMode ? colors.background : '#FFFFFF' }]}
+        style={[styles.container, { backgroundColor: colors.background }]}
         contentContainerStyle={styles.contentContainer}
         keyboardShouldPersistTaps="handled"
         showsVerticalScrollIndicator={false}
       >
         {/* 2. Ô nhập địa điểm cần cấp cứu */}
-        <View style={[styles.inputBox, isDarkMode && { backgroundColor: colors.card, borderColor: colors.border }]}>
+        <View style={[styles.inputBox, { backgroundColor: colors.card, borderColor: colors.border }]}>
           <TextInput
-            style={[styles.addressInput, { color: isDarkMode ? colors.textPrimary : '#0F172A' }]}
+            style={[styles.addressInput, { color: colors.textPrimary }]}
             placeholder="Nhập địa điểm cần cấp cứu"
-            placeholderTextColor="#94A3B8"
+            placeholderTextColor={colors.textMuted}
             value={locationAddress}
             onChangeText={setLocationAddress}
           />
@@ -292,12 +292,12 @@ export default function SendEmergencyLocationScreen({ navigation }: any) {
               <Text style={styles.w3wLogoText}>///</Text>
             </View>
             <Text style={styles.w3wBadgeText}>{what3Words}</Text>
-            <Text style={styles.w3wSubText}>(Chuẩn cấp cứu 3m)</Text>
+            <Text style={[styles.w3wSubText, { color: colors.textSecondary }]}>(Chuẩn cấp cứu 3m)</Text>
           </View>
         ) : null}
 
         {/* 3. Khối 2 lựa chọn: Vị trí hiện tại & Chọn vị trí trên bản đồ */}
-        <View style={[styles.locationOptionsBox, isDarkMode && { backgroundColor: colors.card, borderColor: colors.border }]}>
+        <View style={[styles.locationOptionsBox, { backgroundColor: colors.card, borderColor: colors.border }]}>
           {/* Lựa chọn 1: Vị trí hiện tại */}
           <TouchableOpacity
             style={styles.locationOptionRow}
@@ -307,17 +307,17 @@ export default function SendEmergencyLocationScreen({ navigation }: any) {
           >
             <View style={styles.optionIconContainer}>
               {isLoadingLocation ? (
-                <ActivityIndicator size="small" color="#1976D2" />
+                <ActivityIndicator size="small" color={colors.primary} />
               ) : (
-                <Ionicons name="location" size={22} color="#64748B" />
+                <Ionicons name="location" size={22} color={colors.textSecondary} />
               )}
             </View>
-            <Text style={[styles.locationOptionText, isDarkMode && { color: colors.textPrimary }]}>
+            <Text style={[styles.locationOptionText, { color: colors.textPrimary }]}>
               {isLoadingLocation ? 'Đang lấy tọa độ GPS...' : 'Vị trí hiện tại'}
             </Text>
           </TouchableOpacity>
 
-          <View style={[styles.optionDivider, isDarkMode && { backgroundColor: colors.border }]} />
+          <View style={[styles.optionDivider, { backgroundColor: colors.border }]} />
 
           {/* Lựa chọn 2: Chọn vị trí trên bản đồ */}
           <TouchableOpacity
@@ -326,21 +326,21 @@ export default function SendEmergencyLocationScreen({ navigation }: any) {
             activeOpacity={0.7}
           >
             <View style={styles.optionIconContainer}>
-              <Ionicons name="map" size={20} color="#64748B" />
+              <Ionicons name="map" size={20} color={colors.textSecondary} />
             </View>
-            <Text style={[styles.locationOptionText, isDarkMode && { color: colors.textPrimary }]}>
+            <Text style={[styles.locationOptionText, { color: colors.textPrimary }]}>
               Chọn vị trí trên bản đồ
             </Text>
           </TouchableOpacity>
         </View>
 
         {/* 4. Mục: Hình ảnh đăng tải */}
-        <Text style={[styles.sectionTitle, isDarkMode && { color: colors.textPrimary }]}>
+        <Text style={[styles.sectionTitle, { color: colors.textPrimary }]}>
           Hình ảnh đăng tải
         </Text>
 
         <TouchableOpacity
-          style={[styles.uploadBox, isDarkMode && { backgroundColor: colors.card, borderColor: colors.border }]}
+          style={[styles.uploadBox, { backgroundColor: colors.inputBg, borderColor: colors.border }]}
           onPress={handlePickImage}
           activeOpacity={0.8}
         >
@@ -348,7 +348,7 @@ export default function SendEmergencyLocationScreen({ navigation }: any) {
             <View style={styles.imagePreviewWrapper}>
               <Image source={{ uri: selectedImage }} style={styles.previewImage} resizeMode="cover" />
               <TouchableOpacity
-                style={styles.removeImageBtn}
+                style={[styles.removeImageBtn, { backgroundColor: colors.card }]}
                 onPress={() => setSelectedImage(null)}
               >
                 <Ionicons name="close-circle" size={26} color="#EF4444" />
@@ -358,8 +358,8 @@ export default function SendEmergencyLocationScreen({ navigation }: any) {
             <View style={styles.placeholderContainer}>
               {/* Icon ảnh có dấu cộng xanh lá chuẩn theo mẫu hình 2 */}
               <View style={styles.photoIconWrapper}>
-                <Ionicons name="image" size={54} color="#94A3B8" />
-                <View style={styles.greenPlusBadge}>
+                <Ionicons name="image" size={54} color={colors.textMuted} />
+                <View style={[styles.greenPlusBadge, { borderColor: colors.inputBg }]}>
                   <Ionicons name="add" size={16} color="#FFFFFF" />
                 </View>
               </View>
@@ -368,33 +368,37 @@ export default function SendEmergencyLocationScreen({ navigation }: any) {
         </TouchableOpacity>
 
         {/* 5. Trường Họ và tên */}
-        <View style={[styles.contactInputRow, isDarkMode && { backgroundColor: colors.card, borderColor: colors.border }]}>
-          <Ionicons name="person" size={20} color="#64748B" style={styles.contactIcon} />
+        <View style={[styles.contactInputRow, { backgroundColor: colors.card, borderColor: colors.border }]}>
+          <Ionicons name="person" size={20} color={colors.textSecondary} style={styles.contactIcon} />
           <TextInput
-            style={[styles.contactTextInput, { color: isDarkMode ? colors.textPrimary : '#0F172A' }]}
+            style={[styles.contactTextInput, { color: colors.textPrimary }]}
             placeholder="Họ và tên người cần cấp cứu"
-            placeholderTextColor="#94A3B8"
+            placeholderTextColor={colors.textMuted}
             value={senderName}
             onChangeText={setSenderName}
           />
         </View>
 
         {/* 6. Trường Số điện thoại */}
-        <View style={[styles.contactInputRow, isDarkMode && { backgroundColor: colors.card, borderColor: colors.border }]}>
-          <Ionicons name="call" size={20} color="#64748B" style={styles.contactIcon} />
+        <View style={[styles.contactInputRow, { backgroundColor: colors.card, borderColor: colors.border }]}>
+          <Ionicons name="call" size={20} color={colors.textSecondary} style={styles.contactIcon} />
           <TextInput
-            style={[styles.contactTextInput, { color: isDarkMode ? colors.textPrimary : '#0F172A' }]}
+            style={[styles.contactTextInput, { color: colors.textPrimary }]}
             placeholder="Số điện thoại liên hệ"
-            placeholderTextColor="#94A3B8"
+            placeholderTextColor={colors.textMuted}
             keyboardType="phone-pad"
             value={senderPhone}
             onChangeText={setSenderPhone}
           />
         </View>
 
-        {/* 7. Nút Gửi màu xanh dương nổi bật */}
+        {/* 7. Gửi thông tin cấp cứu */}
         <TouchableOpacity
-          style={[styles.submitButton, isSubmitting && { opacity: 0.7 }]}
+            style={[
+              styles.submitButton,
+              { backgroundColor: colors.primary },
+              isSubmitting && { opacity: 0.7 },
+            ]}
           onPress={handleSubmit}
           activeOpacity={0.85}
           disabled={isSubmitting}
@@ -413,56 +417,46 @@ export default function SendEmergencyLocationScreen({ navigation }: any) {
 const styles = StyleSheet.create({
   safeArea: {
     flex: 1,
-    backgroundColor: '#1976D2',
   },
   headerBar: {
     height: 56,
-    backgroundColor: '#1976D2',
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'space-between',
     paddingHorizontal: 16,
+    borderBottomWidth: StyleSheet.hairlineWidth,
   },
   backButton: {
-    width: 34,
-    height: 34,
-    borderRadius: 17,
-    backgroundColor: '#FFFFFF',
+    width: 38,
+    height: 38,
+    borderRadius: 12,
     alignItems: 'center',
     justifyContent: 'center',
-    elevation: 2,
-    shadowColor: '#000',
-    shadowOpacity: 0.1,
-    shadowRadius: 3,
-    shadowOffset: { width: 0, height: 1 },
+    borderWidth: 1,
   },
   headerTitle: {
     fontSize: 18,
     fontWeight: '700',
-    color: '#FFFFFF',
   },
   container: {
     flex: 1,
-    backgroundColor: '#FFFFFF',
   },
   contentContainer: {
     paddingHorizontal: 16,
-    paddingTop: 20,
+    paddingTop: 16,
     paddingBottom: 40,
   },
   inputBox: {
     height: 48,
     borderWidth: 1,
-    borderColor: '#E2E8F0',
-    borderRadius: 6,
+    borderRadius: 14,
     paddingHorizontal: 12,
     justifyContent: 'center',
-    backgroundColor: '#FFFFFF',
     marginBottom: 8,
   },
   addressInput: {
     fontSize: 14,
-    color: '#0F172A',
+    minHeight: 46,
   },
   w3wBadgeRow: {
     flexDirection: 'row',
@@ -491,13 +485,10 @@ const styles = StyleSheet.create({
   },
   w3wSubText: {
     fontSize: 12,
-    color: '#64748B',
   },
   locationOptionsBox: {
-    backgroundColor: '#F8FAFC',
     borderWidth: 1,
-    borderColor: '#E2E8F0',
-    borderRadius: 6,
+    borderRadius: 14,
     marginBottom: 20,
   },
   locationOptionRow: {
@@ -513,26 +504,21 @@ const styles = StyleSheet.create({
   },
   locationOptionText: {
     fontSize: 14,
-    color: '#1E293B',
     fontWeight: '500',
   },
   optionDivider: {
     height: 1,
-    backgroundColor: '#E2E8F0',
     marginHorizontal: 12,
   },
   sectionTitle: {
     fontSize: 15,
     fontWeight: '700',
-    color: '#0F172A',
     marginBottom: 10,
   },
   uploadBox: {
     height: 190,
-    backgroundColor: '#F8FAFC',
     borderWidth: 1,
-    borderColor: '#E2E8F0',
-    borderRadius: 6,
+    borderRadius: 14,
     alignItems: 'center',
     justifyContent: 'center',
     marginBottom: 20,
@@ -558,7 +544,6 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     justifyContent: 'center',
     borderWidth: 2,
-    borderColor: '#FFFFFF',
   },
   imagePreviewWrapper: {
     width: '100%',
@@ -573,18 +558,15 @@ const styles = StyleSheet.create({
     position: 'absolute',
     top: 8,
     right: 8,
-    backgroundColor: '#FFFFFF',
     borderRadius: 14,
   },
   contactInputRow: {
     height: 48,
     borderWidth: 1,
-    borderColor: '#E2E8F0',
-    borderRadius: 6,
+    borderRadius: 14,
     flexDirection: 'row',
     alignItems: 'center',
     paddingHorizontal: 12,
-    backgroundColor: '#FFFFFF',
     marginBottom: 14,
   },
   contactIcon: {
@@ -593,17 +575,15 @@ const styles = StyleSheet.create({
   contactTextInput: {
     flex: 1,
     fontSize: 14,
-    color: '#0F172A',
   },
   submitButton: {
     height: 48,
-    backgroundColor: '#0084FF',
-    borderRadius: 6,
+    borderRadius: 14,
     alignItems: 'center',
     justifyContent: 'center',
     marginTop: 8,
     elevation: 2,
-    shadowColor: '#0084FF',
+    shadowColor: Colors.primary,
     shadowOpacity: 0.25,
     shadowRadius: 4,
     shadowOffset: { width: 0, height: 2 },
