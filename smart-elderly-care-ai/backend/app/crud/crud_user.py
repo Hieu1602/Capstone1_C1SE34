@@ -66,6 +66,9 @@ class CRUDUser:
         return await self.get_by_id(db, user_id)
 
     async def update(self, db: AsyncSession, db_obj: User, obj_in: dict) -> User:
+        if isinstance(obj_in, dict):
+            if "language" in obj_in and "preferred_language" not in obj_in:
+                obj_in["preferred_language"] = obj_in["language"]
         for field, value in obj_in.items():
             if value is not None and hasattr(db_obj, field):
                 setattr(db_obj, field, value)

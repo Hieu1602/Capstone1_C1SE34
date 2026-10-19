@@ -45,8 +45,44 @@ async def lifespan(app: FastAPI):
 
     # MQTT Subscriber (background thread)
     mqtt_subscriber = MQTTSubscriber()
+
+    import asyncio
+    loop = asyncio.get_running_loop()
+
+    def handle_telemetry(payload: dict):
+        async def _save():
+            try:
+                from app.core.database import AsyncSessionFactory
+                from app.crud.crud_vital import crud_vital
+                async with AsyncSessionFactory() as session:
+                    await crud_vital.create(session, payload)
+                    await session.commit()
+            except Exception as e:
+                logger.error("[Lifespan] Error saving MQTT telemetry: %s", e)
+        asyncio.run_coroutine_threadsafe(_save(), loop)
+
+    def handle_alert(payload: dict):
+        async def _save_alert():
+            try:
+                from app.core.database import AsyncSessionFactory
+                from app.crud.crud_incident import crud_incident
+                from app.crud.crud_vital import crud_vital
+                async with AsyncSessionFactory() as session:
+                    raw_dev = payload.get("device_id")
+                    if raw_dev:
+                        dev_uuid = await crud_vital.resolve_device_uuid(session, raw_dev)
+                        if dev_uuid:
+                            payload["device_id"] = dev_uuid
+                    await crud_incident.create(session, payload)
+                    await session.commit()
+            except Exception as e:
+                logger.error("[Lifespan] Error saving MQTT alert: %s", e)
+        asyncio.run_coroutine_threadsafe(_save_alert(), loop)
+
+    mqtt_subscriber.on_telemetry(handle_telemetry)
+    mqtt_subscriber.on_alert(handle_alert)
     mqtt_subscriber.start()
-    logger.info("✅ MQTT Subscriber started.")
+    logger.info("✅ MQTT Subscriber started and handlers registered.")
 
     yield
 
@@ -69,9 +105,9 @@ app = FastAPI(
         "Nhận telemetry từ Edge Hub, xử lý cảnh báo, cung cấp API cho Mobile & Web."
     ),
     version="1.0.0",
-    docs_url="/api/docs",
-    redoc_url="/api/redoc",
-    openapi_url="/api/openapi.json",
+    docs_url="/docs",
+    redoc_url="/redoc",
+    openapi_url="/openapi.json",
     lifespan=lifespan,
 )
 
@@ -79,6 +115,7 @@ app = FastAPI(
 app.add_middleware(
     CORSMiddleware,
     allow_origins=settings.ALLOWED_ORIGINS,
+    allow_origin_regex=r"^https?://(localhost|127\.0\.0\.1|192\.168\.\d+\.\d+|10\.\d+\.\d+\.\d+|172\.\d+\.\d+\.\d+)(:\d+)?$",
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],
@@ -93,13 +130,31 @@ app.add_middleware(
 app.include_router(api_router, prefix="/api/v1")
 app.include_router(ws_router, prefix="/ws")
 
+# ---- Static Files (Ảnh hồ sơ khuôn mặt người cao tuổi) ----
+import os
+from fastapi.staticfiles import StaticFiles
+os.makedirs("static/faces", exist_ok=True)
+app.mount("/static", StaticFiles(directory="static"), name="static")
 
-# ---- Health & Root ----
+
+# ---- Health, Docs & Root ----
 @app.get("/", include_in_schema=False)
 async def root():
     """Chuyển hướng trang chủ về tài liệu Swagger API."""
     from fastapi.responses import RedirectResponse
-    return RedirectResponse(url="/api/docs")
+    return RedirectResponse(url="/docs")
+
+
+@app.get("/api/docs", include_in_schema=False)
+async def api_docs_redirect():
+    from fastapi.responses import RedirectResponse
+    return RedirectResponse(url="/docs")
+
+
+@app.get("/api/redoc", include_in_schema=False)
+async def api_redoc_redirect():
+    from fastapi.responses import RedirectResponse
+    return RedirectResponse(url="/redoc")
 
 
 @app.get("/health", tags=["System"])

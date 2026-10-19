@@ -10,6 +10,7 @@ from datetime import datetime
 
 if TYPE_CHECKING:
     from app.models.device import Device
+    from app.models.house import House, HouseMember
 
 from sqlalchemy import Boolean, DateTime, Float, Integer, String
 from sqlalchemy.dialects.postgresql import UUID
@@ -67,4 +68,10 @@ class User(Base):
     # Relationships
     devices: Mapped[list["Device"]] = relationship(  # noqa: F821
         "Device", back_populates="owner", lazy="selectin"
+    )
+    owned_houses: Mapped[list["House"]] = relationship(
+        "House", back_populates="owner", cascade="all, delete-orphan", lazy="selectin"
+    )
+    house_memberships: Mapped[list["HouseMember"]] = relationship(
+        "HouseMember", back_populates="user", cascade="all, delete-orphan", lazy="selectin"
     )

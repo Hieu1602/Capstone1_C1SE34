@@ -3,15 +3,29 @@ config.py
 Pydantic Settings – Đọc cấu hình từ environment variables / .env file.
 """
 
+import os
 from functools import lru_cache
+from pathlib import Path
 from typing import List
 
+from pydantic import field_validator
+from dotenv import load_dotenv
 from pydantic_settings import BaseSettings, SettingsConfigDict
+
+# Tự động nạp file .env duy nhất tại thư mục gốc smart-elderly-care-ai/.env
+_THIS_FILE = Path(__file__).resolve()
+_SEARCH_PATHS = [
+    p / ".env" for p in _THIS_FILE.parents
+] + [Path("../.env"), Path(".env")]
+for _p in _SEARCH_PATHS:
+    if _p.is_file():
+        load_dotenv(dotenv_path=_p, override=False)
+        break
 
 
 class Settings(BaseSettings):
     model_config = SettingsConfigDict(
-        env_file=".env",
+        env_file=(".env", "../.env", "../../.env"),
         env_file_encoding="utf-8",
         case_sensitive=False,
         extra="ignore",
@@ -20,6 +34,14 @@ class Settings(BaseSettings):
     # ---- App ----
     APP_NAME: str = "Smart Elderly Care AI"
     DEBUG: bool = False
+
+    @field_validator("DEBUG", mode="before")
+    @classmethod
+    def parse_debug(cls, v):
+        if isinstance(v, str):
+            return v.lower() in ("true", "1", "yes", "debug", "dev")
+        return bool(v)
+
     SECRET_KEY: str = "CHANGE_ME_IN_PRODUCTION_USE_RANDOM_256BIT"
     ALGORITHM: str = "HS256"
     ACCESS_TOKEN_EXPIRE_MINUTES: int = 60 * 24  # 24 hours
@@ -58,6 +80,11 @@ class Settings(BaseSettings):
     TWILIO_ACCOUNT_SID: str = ""
     TWILIO_AUTH_TOKEN: str = ""
     TWILIO_VERIFY_SERVICE_SID: str = ""
+
+    # ---- Chatbot AI / LLM ----
+    LLM_API_KEY: str = ""
+    LLM_BASE_URL: str = "https://generativelanguage.googleapis.com/v1beta/openai"
+    LLM_MODEL: str = "gemini-2.0-flash"
 
     # ---- TimescaleDB ----
     TIMESCALE_CHUNK_INTERVAL: str = "1 day"

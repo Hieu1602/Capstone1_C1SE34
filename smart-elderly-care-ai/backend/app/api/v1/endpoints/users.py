@@ -29,8 +29,62 @@ async def update_profile(
     current_user: User = Depends(get_current_user),
     db: AsyncSession = Depends(get_db),
 ):
-    """Cập nhật thông tin profile (tên, số điện thoại, FCM token)."""
+    """Cập nhật thông tin profile (tên, số điện thoại, FCM token, ngôn ngữ)."""
     update_data = update_in.model_dump(exclude_unset=True)
+    return await crud_user.update(db, db_obj=current_user, obj_in=update_data)
+
+
+@router.patch("/me/language", response_model=UserOut)
+@router.put("/me/language", response_model=UserOut)
+async def update_language(
+    payload: dict = Body(...),
+    current_user: User = Depends(get_current_user),
+    db: AsyncSession = Depends(get_db),
+):
+    """Cập nhật ngôn ngữ giao diện của người dùng (vi hoặc en)."""
+    lang = (payload.get("preferred_language") or payload.get("language") or "").strip().lower()
+    if lang not in ["vi", "en"]:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="Ngôn ngữ không hợp lệ. Chỉ chấp nhận 'vi' hoặc 'en'.",
+        )
+    return await crud_user.update(db, db_obj=current_user, obj_in={"preferred_language": lang})
+
+
+@router.patch("/me/font-size", response_model=UserOut)
+@router.put("/me/font-size", response_model=UserOut)
+async def update_font_size(
+    payload: dict = Body(...),
+    current_user: User = Depends(get_current_user),
+    db: AsyncSession = Depends(get_db),
+):
+    """Cập nhật cấu hình cỡ chữ người dùng (font_size_mode: system/custom, custom_font_scale: 0-4)."""
+    mode = payload.get("font_size_mode")
+    scale = payload.get("custom_font_scale")
+    update_data = {}
+    if mode is not None:
+        if mode not in ["system", "custom"]:
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail="font_size_mode không hợp lệ. Chỉ chấp nhận 'system' hoặc 'custom'.",
+            )
+        update_data["font_size_mode"] = mode
+    if scale is not None:
+        try:
+            scale_int = int(scale)
+            if not (0 <= scale_int <= 4):
+                raise ValueError()
+            update_data["custom_font_scale"] = scale_int
+        except (ValueError, TypeError):
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail="custom_font_scale phải là số nguyên từ 0 đến 4.",
+            )
+    if not update_data:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="Cần cung cấp ít nhất một trường: font_size_mode hoặc custom_font_scale.",
+        )
     return await crud_user.update(db, db_obj=current_user, obj_in=update_data)
 
 
