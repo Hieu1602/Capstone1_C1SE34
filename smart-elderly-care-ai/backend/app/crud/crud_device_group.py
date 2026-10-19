@@ -1,10 +1,8 @@
 """
 crud_device_group.py – CRUD / Repository cho DeviceGroup (Phân vùng nhóm khu vực phòng).
-Hỗ trợ:
-- Kiểm tra tính duy nhất của tên nhóm trong cùng căn nhà.
-- Gán/hủy gán thiết bị thuộc nhóm.
-- Khi xóa nhóm: tự động chuyển thiết bị về 'Chưa nhóm' (group_id = NULL).
-Vị trí: backend/app/crud/crud_device_group.py
+Người làm: DuongVanHieu
+Nghiệp vụ: Quản lý nhóm phòng, liên kết thiết bị theo vị trí địa lý trong nhà,
+và tự động rollback thiết bị về 'Chưa nhóm' khi giải tán nhóm.
 """
 
 from typing import List, Optional
@@ -17,6 +15,24 @@ from sqlalchemy.orm import selectinload
 from app.models.device import Device
 from app.models.device_group import DeviceGroup
 from app.schemas.device_group import DeviceGroupCreate, DeviceGroupOut, DeviceGroupUpdate
+
+
+def _map_to_group_out(g: DeviceGroup) -> DeviceGroupOut:
+    """Chuyển đổi ORM Model DeviceGroup sang Schema hiển thị kèm thống kê thiết bị (DRY)."""
+    devs = g.devices or []
+    return DeviceGroupOut(
+        id=g.id,
+        house_id=g.house_id,
+        name=g.name,
+        description=g.description,
+        icon=g.icon,
+        color=g.color,
+        sort_order=g.sort_order,
+        device_count=len(devs),
+        online_count=sum(1 for d in devs if d.is_online),
+        created_at=g.created_at,
+        updated_at=g.updated_at,
+    )
 
 
 class CRUDDeviceGroup:
@@ -53,30 +69,7 @@ class CRUDDeviceGroup:
             .where(DeviceGroup.house_id == house_id)
             .order_by(DeviceGroup.sort_order.asc(), DeviceGroup.created_at.asc())
         )
-        groups = result.scalars().all()
-
-        output: List[DeviceGroupOut] = []
-        for g in groups:
-            devs = g.devices or []
-            device_count = len(devs)
-            online_count = sum(1 for d in devs if d.is_online)
-
-            item = DeviceGroupOut(
-                id=g.id,
-                house_id=g.house_id,
-                name=g.name,
-                description=g.description,
-                icon=g.icon,
-                color=g.color,
-                sort_order=g.sort_order,
-                device_count=device_count,
-                online_count=online_count,
-                created_at=g.created_at,
-                updated_at=g.updated_at,
-            )
-            output.append(item)
-
-        return output
+        return [_map_to_group_out(g) for g in result.scalars().all()]
 
     async def create(
         self, db: AsyncSession, house_id: UUID, obj_in: DeviceGroupCreate

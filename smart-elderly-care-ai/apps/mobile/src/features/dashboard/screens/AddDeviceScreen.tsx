@@ -1,8 +1,10 @@
-// AddDeviceScreen.tsx
-// Màn hình Thêm thiết bị mới - Triển khai chính xác 100% theo Sơ đồ trạng thái Mermaid:
-// Home -> CategorySelect -> CameraList / WatchList -> CheckProtocol (WIFI_AP / BLUETOOTH)
-// Nhánh Wi-Fi AP: Wifi_PowerCheck -> Wifi_Guide -> Wifi_Check {Khớp SSID?} -> SetupSuccess / DialogWifi
-// Nhánh Bluetooth: BLE_PowerCheck -> BLE_Permission -> RequestPerm -> BLE_Scan -> BLE_Pairing -> SetupSuccess / DialogBLE
+/**
+ * AddDeviceScreen.tsx
+ * Màn hình Thêm thiết bị mới (Onboarding Wizard đa giao thức)
+ * Người làm: DuongVanHieu
+ * Nghiệp vụ: Điều khiển máy trạng thái hữu hạn (FSM) hỗ trợ cài đặt thiết bị qua Wi-Fi AP (Camera AI SECA_001),
+ * ghép nối BLE (Smartband nhịp tim/SpO2/MPU6050) và Gateway MQTT (Orange Pi 5).
+ */
 
 import React, { useState, useEffect, useRef, useMemo } from 'react';
 import { View, StyleSheet, TouchableOpacity, ScrollView, Switch, ActivityIndicator, Modal, Animated, Linking, Platform } from 'react-native';
@@ -12,7 +14,6 @@ import { Colors } from '../../../theme/colors';
 import { useVitalStore, IoTDeviceItem } from '../../../store/useVitalStore';
 import { LocalizedText, LocalizedTextInput } from '../../../i18n/LocalizedComponents';
 import { createThemeStyles, useTheme } from '../../../store/useThemeStore';
-
 
 // Các trạng thái của toàn bộ luồng theo Mermaid flowchart
 type FlowStep =
@@ -30,6 +31,20 @@ type FlowStep =
   | 'SETUP_SUCCESS';
 
 type ProtocolType = 'WIFI_AP' | 'BLUETOOTH' | 'GATEWAY_MQTT';
+
+/** Ánh xạ bước quay lại trong Onboarding Flow (Tra cứu thay vì rẽ nhánh switch-case) */
+const PREVIOUS_STEP_MAP: Partial<Record<FlowStep, FlowStep>> = {
+  CAMERA_LIST: 'CATEGORY_SELECT',
+  WATCH_LIST: 'CATEGORY_SELECT',
+  OTHER_LIST: 'CATEGORY_SELECT',
+  WIFI_POWER_CHECK: 'CAMERA_LIST',
+  WIFI_GUIDE: 'WIFI_POWER_CHECK',
+  WIFI_SEARCHING: 'WIFI_GUIDE',
+  BLE_POWER_CHECK: 'WATCH_LIST',
+  BLE_PERMISSION: 'BLE_POWER_CHECK',
+  BLE_SCAN: 'BLE_PERMISSION',
+  BLE_PAIRING: 'BLE_SCAN',
+};
 
 interface DiscoveredBleItem {
   id: string;
@@ -205,44 +220,17 @@ export default function AddDeviceScreen({ navigation }: any) {
     }
   }, [currentStep]);
 
-  // Handle Back Button navigation
+  // Handle Back Button navigation (Sử dụng Map tra cứu & Guard clause thay vì switch-case)
   const handleBack = () => {
-    switch (currentStep) {
-      case 'CATEGORY_SELECT':
-        navigation.goBack();
-        break;
-      case 'CAMERA_LIST':
-      case 'WATCH_LIST':
-      case 'OTHER_LIST':
-        setCurrentStep('CATEGORY_SELECT');
-        break;
-      case 'WIFI_POWER_CHECK':
-        setCurrentStep('CAMERA_LIST');
-        break;
-      case 'WIFI_GUIDE':
-        setCurrentStep('WIFI_POWER_CHECK');
-        break;
-      case 'WIFI_SEARCHING':
-        setCurrentStep('WIFI_GUIDE');
-        break;
-      case 'BLE_POWER_CHECK':
-        setCurrentStep('WATCH_LIST');
-        break;
-      case 'BLE_PERMISSION':
-        setCurrentStep('BLE_POWER_CHECK');
-        break;
-      case 'BLE_SCAN':
-        setCurrentStep('BLE_PERMISSION');
-        break;
-      case 'BLE_PAIRING':
-        setCurrentStep('BLE_SCAN');
-        break;
-      case 'SETUP_SUCCESS':
-        navigation.navigate('Devices');
-        break;
-      default:
-        setCurrentStep('CATEGORY_SELECT');
+    if (currentStep === 'CATEGORY_SELECT') {
+      navigation.goBack();
+      return;
     }
+    if (currentStep === 'SETUP_SUCCESS') {
+      navigation.navigate('Devices');
+      return;
+    }
+    setCurrentStep(PREVIOUS_STEP_MAP[currentStep] || 'CATEGORY_SELECT');
   };
 
   const handleExit = () => {

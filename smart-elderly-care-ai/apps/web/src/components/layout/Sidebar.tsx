@@ -66,23 +66,29 @@ export const Sidebar: React.FC = () => {
   const { user, logout } = useAuthStore();
 
   return (
-    <aside className="w-64 flex flex-col h-screen sticky top-0 select-none z-30 bg-white dark:bg-[#0e1730] border-r border-sky-100 dark:border-sky-950 transition-colors duration-200">
+    <aside className="w-64 flex flex-col h-screen sticky top-0 select-none z-30 bg-[#13382F] text-slate-100 border-r border-[#1E4B3E] shadow-xl relative overflow-hidden transition-colors duration-200">
+      
+
 
       {/* ── Brand Header ── */}
-      <div className="px-5 py-4 border-b border-sky-100 dark:border-sky-950/80">
+      <div className="px-5 py-4 border-b border-[#1E4B3E]/80 relative z-10">
         <div className="flex items-center gap-3">
-          {/* Logo mark - Sky Blue */}
-          <div className="w-9 h-9 rounded-xl bg-gradient-to-br from-sky-500 via-sky-600 to-blue-700 flex items-center justify-center shadow-md shadow-sky-500/25 shrink-0">
-            <Activity className="w-5 h-5 text-white stroke-[2.2]" aria-hidden="true" />
+          {/* Logo mark - Official Unified SECA Logo */}
+          <div className="w-10 h-10 rounded-xl bg-white/10 p-1 flex items-center justify-center shadow-md border border-[#DFB15B]/30 shrink-0">
+            <img 
+              src="/assets/logo.png" 
+              alt="SECA Logo" 
+              className="w-full h-full object-contain filter drop-shadow"
+            />
           </div>
           <div className="min-w-0">
-            <div className="font-heading text-sm font-bold text-slate-900 dark:text-white tracking-tight">
-              SECA <span className="text-sky-600 dark:text-sky-400">Admin</span>
-              <span className="ml-1.5 text-[9px] font-bold uppercase tracking-wider px-1 py-0.5 rounded bg-sky-100 text-sky-700 dark:bg-sky-500/20 dark:text-sky-300 border border-sky-200 dark:border-sky-500/30">
+            <div className="font-heading text-sm font-bold text-white tracking-tight flex items-center">
+              SECA <span className="text-[#DFB15B] ml-1">Admin</span>
+              <span className="ml-1.5 text-[9px] font-bold uppercase tracking-wider px-1.5 py-0.5 rounded bg-[#DFB15B]/20 text-[#F5DEB3] border border-[#DFB15B]/40">
                 PRO
               </span>
             </div>
-            <p className="text-[10px] text-slate-500 dark:text-slate-400 truncate font-sans">
+            <p className="text-[10px] text-[#A6C0B5] truncate font-sans">
               Smart Elderly Care AI
             </p>
           </div>
@@ -90,22 +96,22 @@ export const Sidebar: React.FC = () => {
       </div>
 
       {/* ── System Status Pill ── */}
-      <div className="mx-3 mt-3">
-        <div className="flex items-center justify-between px-3 py-2 rounded-xl bg-sky-50 dark:bg-sky-950/40 border border-sky-100 dark:border-sky-900/60">
+      <div className="mx-3 mt-3 relative z-10">
+        <div className="flex items-center justify-between px-3 py-2 rounded-xl bg-[#1A4439] border border-[#265A4C]">
           <div className="flex items-center gap-2">
             <span className="relative flex h-2 w-2" aria-hidden="true">
-              <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-sky-400 opacity-75" />
-              <span className="relative inline-flex rounded-full h-2 w-2 bg-sky-500" />
+              <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-emerald-400 opacity-75" />
+              <span className="relative inline-flex rounded-full h-2 w-2 bg-emerald-400" />
             </span>
-            <span className="text-[11px] font-semibold text-sky-700 dark:text-sky-300">Hạ tầng trực tuyến</span>
+            <span className="text-[11px] font-semibold text-[#E2F0EA]">Hạ tầng trực tuyến</span>
           </div>
-          <Wifi className="w-3.5 h-3.5 text-sky-600 dark:text-sky-400" aria-hidden="true" />
+          <Wifi className="w-3.5 h-3.5 text-[#DFB15B]" aria-hidden="true" />
         </div>
       </div>
 
       {/* ── Navigation ── */}
-      <nav className="flex-1 px-3 py-3 space-y-1 overflow-y-auto" aria-label="Admin navigation">
-        <div className="px-3 py-1.5 text-[10px] font-bold uppercase tracking-[0.15em] text-slate-400 dark:text-slate-500">
+      <nav className="flex-1 px-3 py-3 space-y-1 overflow-y-auto relative z-10 flex flex-col" aria-label="Admin navigation">
+        <div className="px-3 py-1.5 text-[10px] font-bold uppercase tracking-[0.15em] text-[#8EAFA2]">
           Cổng Quản Trị
         </div>
 
@@ -119,8 +125,8 @@ export const Sidebar: React.FC = () => {
               className={({ isActive }) =>
                 `group flex items-center justify-between px-3 py-2.5 rounded-xl text-xs font-medium transition-all duration-150 ${
                   isActive
-                    ? 'bg-sky-500 text-white font-semibold shadow-md shadow-sky-500/20'
-                    : 'text-slate-600 dark:text-slate-400 hover:text-sky-600 dark:hover:text-white hover:bg-sky-50 dark:hover:bg-white/5'
+                    ? 'bg-[#1C5142] text-white font-semibold shadow-md border border-[#DFB15B]/40'
+                    : 'text-[#C2D7CE] hover:text-white hover:bg-[#184236]'
                 }`
               }
             >
@@ -130,19 +136,21 @@ export const Sidebar: React.FC = () => {
                     <div
                       className={`p-1.5 rounded-lg transition-all duration-150 ${
                         isActive
-                          ? 'bg-white/20 text-white'
-                          : 'bg-slate-100 dark:bg-slate-800 text-slate-500 dark:text-slate-400 group-hover:bg-sky-100 group-hover:text-sky-600 dark:group-hover:bg-sky-950/60 dark:group-hover:text-sky-400'
+                          ? 'bg-[#DFB15B] text-[#13382F]'
+                          : 'bg-[#184236] text-[#DFB15B] group-hover:bg-[#1E5446] group-hover:text-white'
                       }`}
                     >
                       <Icon className="w-4 h-4" aria-hidden="true" />
                     </div>
                     <div className="truncate text-left">
-                      <div className="truncate leading-tight text-[12px]">{item.name}</div>
+                      <div className={`truncate leading-tight text-[12px] ${isActive ? 'text-[#FFF8EE]' : 'text-[#E1ECE7]'}`}>
+                        {item.name}
+                      </div>
                       <div
                         className={`text-[10px] truncate leading-tight mt-0.5 ${
                           isActive
-                            ? 'text-white/80'
-                            : 'text-slate-400 dark:text-slate-500'
+                            ? 'text-[#DFB15B]'
+                            : 'text-[#8EAFA2]'
                         }`}
                       >
                         {item.description}
@@ -154,8 +162,8 @@ export const Sidebar: React.FC = () => {
                     <span
                       className={`text-[9px] font-bold px-1.5 py-0.5 rounded-md shrink-0 font-mono ${
                         isActive
-                          ? 'bg-white/20 text-white'
-                          : 'bg-slate-100 dark:bg-slate-800 text-slate-500 dark:text-slate-400 border border-slate-200/60 dark:border-slate-700/60'
+                          ? 'bg-[#DFB15B] text-[#13382F]'
+                          : 'bg-[#184236] text-[#DFB15B] border border-[#265A4C]'
                       }`}
                     >
                       {item.badge}
@@ -168,21 +176,30 @@ export const Sidebar: React.FC = () => {
         })}
       </nav>
 
+      {/* Imperial Citadel Palace Artwork resting flush on top of footer line */}
+      <div className="px-3 pt-1 pb-0 relative z-10 pointer-events-none select-none flex justify-center -mb-px leading-none">
+        <img
+          src="/assets/heritage/png/imperial-palace.png"
+          alt="Hoàng Thành Huế"
+          className="w-full max-w-[226px] h-auto block object-contain filter drop-shadow-[0_4px_16px_rgba(0,0,0,0.45)]"
+        />
+      </div>
+
       {/* ── User Footer ── */}
-      <div className="p-3 border-t border-sky-100 dark:border-sky-950/80 bg-slate-50/60 dark:bg-slate-900/40">
-        <div className="flex items-center justify-between px-2.5 py-2 rounded-xl bg-white dark:bg-slate-800/80 border border-sky-100 dark:border-sky-900/60 shadow-sm">
+      <div className="p-3 border-t border-[#1E4B3E]/80 bg-[#0F2F27] relative z-10">
+        <div className="flex items-center justify-between px-2.5 py-2 rounded-xl bg-[#174338] border border-[#265A4C] shadow-sm">
           <div className="flex items-center gap-2.5 truncate">
             <div
-              className="w-8 h-8 rounded-lg bg-gradient-to-br from-sky-500 to-blue-600 text-white font-bold text-xs flex items-center justify-center shrink-0 font-mono shadow-sm"
+              className="w-8 h-8 rounded-lg bg-gradient-to-br from-[#D96C3B] to-[#B08D57] text-white font-bold text-xs flex items-center justify-center shrink-0 font-mono shadow-sm"
               aria-hidden="true"
             >
               QT
             </div>
             <div className="truncate">
-              <p className="text-[11px] font-semibold text-slate-800 dark:text-slate-200 truncate leading-tight">
+              <p className="text-[11px] font-semibold text-white truncate leading-tight">
                 {user?.full_name || 'Quản Trị Viên'}
               </p>
-              <p className="text-[10px] text-slate-400 dark:text-slate-500 truncate font-mono">
+              <p className="text-[10px] text-[#A6C0B5] truncate font-mono">
                 {user?.phone || 'admin@seca.vn'}
               </p>
             </div>
@@ -192,7 +209,7 @@ export const Sidebar: React.FC = () => {
             onClick={logout}
             title="Đăng xuất"
             aria-label="Đăng xuất khỏi hệ thống"
-            className="p-1.5 rounded-lg text-slate-400 hover:text-rose-500 hover:bg-rose-50 dark:hover:bg-rose-950/30 transition-colors cursor-pointer"
+            className="p-1.5 rounded-lg text-[#A6C0B5] hover:text-rose-400 hover:bg-rose-500/20 transition-colors cursor-pointer"
           >
             <LogOut className="w-4 h-4" aria-hidden="true" />
           </button>

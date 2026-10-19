@@ -225,10 +225,12 @@ async def login(
 
     # Ghi nhận phiên làm việc hoạt động (Active Session) và Audit Log
     try:
+        # Author: DuongVanHieu - Lưu user_id vào session để phân hệ bảo mật nhận diện chính xác và tránh tạo bản sao trùng lặp
         from app.services.redis.redis_service import redis_service
         session_id = f"sess-{str(user.id)[:8]}"
         session_data = {
             "id": session_id,
+            "user_id": str(user.id),
             "user_name": f"{user.full_name} ({user.phone})",
             "role": "Quản trị viên" if user.role == "admin" else ("Bác sĩ chuyên khoa" if user.role == "doctor" else "Người thân / Gia đình"),
             "ip_address": client_ip,

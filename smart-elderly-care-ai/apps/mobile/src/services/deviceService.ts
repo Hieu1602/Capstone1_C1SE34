@@ -1,7 +1,9 @@
 /**
  * deviceService.ts
  * Dịch vụ REST API gọi Backend cho Thiết bị (Devices), Nhóm (Device Groups), và Căn nhà (Houses).
- * Vị trí: apps/mobile/src/services/deviceService.ts
+ * Người làm: DuongVanHieu
+ * Nghiệp vụ: Cung cấp API client giao tiếp với Backend FastAPI để quản lý phần cứng IoT,
+ * điều khiển chế độ căn nhà, định tuyến nhóm thiết bị và cấu hình tham số telemetry y tế.
  */
 
 import api from './api';
@@ -77,6 +79,16 @@ export interface HouseBackend {
   updated_at: string;
 }
 
+export type HouseMode = HouseBackend['current_mode'];
+
+export interface DeviceGroupPayload {
+  name: string;
+  icon?: string;
+  color?: string;
+  sort_order?: number;
+  device_ids?: string[];
+}
+
 // ==========================================
 // House APIs
 // ==========================================
@@ -87,7 +99,7 @@ export const houseApi = {
   updateHouse: (data: { name?: string; address?: string }) =>
     api.patch<HouseBackend>('/houses/current', data),
 
-  updateHouseMode: (mode: 'HOME' | 'AWAY' | 'NIGHT' | 'DISARM' | 'ALARM' | 'PRIVACY') =>
+  updateHouseMode: (mode: HouseMode) =>
     api.patch<HouseBackend>('/houses/current/mode', { mode }),
 };
 
@@ -98,27 +110,14 @@ export const houseApi = {
 export const deviceGroupApi = {
   listGroups: () => api.get<DeviceGroupBackend[]>('/device-groups'),
 
-  createGroup: (data: {
-    name: string;
-    icon?: string;
-    color?: string;
-    sort_order?: number;
-    device_ids?: string[];
-  }) => api.post<DeviceGroupBackend>('/device-groups', data),
+  createGroup: (data: DeviceGroupPayload) =>
+    api.post<DeviceGroupBackend>('/device-groups', data),
 
   getGroup: (groupId: string) =>
     api.get<DeviceGroupBackend>(`/device-groups/${groupId}`),
 
-  updateGroup: (
-    groupId: string,
-    data: {
-      name?: string;
-      icon?: string;
-      color?: string;
-      sort_order?: number;
-      device_ids?: string[];
-    }
-  ) => api.put<DeviceGroupBackend>(`/device-groups/${groupId}`, data),
+  updateGroup: (groupId: string, data: Partial<DeviceGroupPayload>) =>
+    api.put<DeviceGroupBackend>(`/device-groups/${groupId}`, data),
 
   deleteGroup: (groupId: string) =>
     api.delete<{ message: string }>(`/device-groups/${groupId}`),

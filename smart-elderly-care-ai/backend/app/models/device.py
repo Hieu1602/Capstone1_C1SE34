@@ -1,10 +1,8 @@
 """
 device.py – SQLAlchemy ORM Model Master cho Thiết bị IoT (Device).
-Quản lý các loại thiết bị:
-- CAMERA: Camera AI an ninh (SECA_001, SECA_002, Ranger 2C...)
-- SMARTBAND: Vòng đeo tay y tế BLE đo nhịp tim, SpO2, gia tốc kế ngã
-- EDGE_HUB: Trung tâm xử lý AI NPU Edge Hub (Orange Pi 5)
-Vị trí: backend/app/models/device.py
+Người làm: DuongVanHieu
+Nghiệp vụ: Quản lý thực thể phần cứng (Camera AI, Vòng đeo tay BLE, Edge Hub RK3588),
+lưu vết trạng thái trực tuyến (heartbeat), phần trăm pin và liên kết căn nhà/nhóm khu vực.
 """
 
 from __future__ import annotations
