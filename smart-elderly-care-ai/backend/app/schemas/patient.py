@@ -17,22 +17,22 @@ class MedicalCondition(BaseModel):
 
 class PatientMedicalRecordOut(BaseModel):
     id: str
-    name: str
-    birth_year: str
-    age: int
-    gender: str = "Nam"
-    blood_type: str = "O+"
-    height_cm: int = 165
-    weight_kg: int = 62
+    name: str = ""
+    birth_year: str = ""
+    age: int = 0
+    gender: str = ""
+    blood_type: str = ""
+    height_cm: int = 0
+    weight_kg: int = 0
     conditions: List[MedicalCondition] = Field(default_factory=list)
-    drug_allergies: str = "Penicillin (dị ứng nổi mề đay)"
-    food_allergies: str = "Hải sản có vỏ (tôm, cua)"
-    dietary_notes: str = "Ăn nhạt, giảm muối < 3g/ngày, hạn chế đường và tinh bột"
-    doctor_name: str = "BS. CKII. Trần Tuấn Minh"
-    doctor_phone: str = "0912 345 678"
-    doctor_specialty: str = "Chuyên khoa Tim mạch & Lão khoa"
-    hospital: str = "Bệnh viện Đa khoa Đà Nẵng"
-    next_appointment: str = "15/10/2026 - 08:30"
+    drug_allergies: str = ""
+    food_allergies: str = ""
+    dietary_notes: str = ""
+    doctor_name: str = ""
+    doctor_phone: str = ""
+    doctor_specialty: str = ""
+    hospital: str = ""
+    next_appointment: str = ""
     avatar_url: Optional[str] = None
     has_face_enrolled: bool = False
 

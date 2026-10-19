@@ -6,8 +6,8 @@
 //   1. Quản lý thông tin hành chính & thể trạng của người cao tuổi (Họ tên, Năm sinh,
 //      Nhóm máu, Chiều cao, Cân nặng, Chỉ số BMI).
 //   2. Đăng ký khuôn mặt AI (ArcFace Face Enrollment) phục vụ nhận diện định danh trên Camera.
-//   3. Lưu trữ bệnh lý nền, tiền sử dị ứng thuốc/thực phẩm và thông tin Bác sĩ điều trị.
-//   4. Đồng bộ hai chiều với cơ sở dữ liệu PostgreSQL qua RESTful API.
+//   3. Lưu trữ bệnh lý nền, chỉnh sửa trực tiếp (Inline Edit) Dị ứng & Lưu ý dinh dưỡng.
+//   4. Đồng bộ hai chiều với cơ sở dữ liệu PostgreSQL qua RESTful API (không dùng dữ liệu mẫu).
 // ==============================================================================
 
 import React, { useState, useEffect } from 'react';
@@ -24,166 +24,115 @@ import {
   Linking,
   Platform,
   Image,
-  ActivityIndicator,
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
 import * as ImagePicker from 'expo-image-picker';
 import { useTheme } from '../../../store/useThemeStore';
 import { Colors } from '../../../theme/colors';
-import { useVitalStore } from '../../../store/useVitalStore';
+import { useVitalStore, MedicalConditionItem } from '../../../store/useVitalStore';
 import { BASE_URL } from '../../../services/api';
 
-// Cấu trúc dữ liệu một bệnh lý nền trong hồ sơ bệnh án
-interface MedicalCondition {
-  id: string;
-  name: string;
-  severity: 'warning' | 'danger' | 'info';
-  note: string;
-}
+const getDaysAgoStr = (days = 0) => {
+  const d = new Date();
+  d.setDate(d.getDate() - days);
+  return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
+};
+
+const formatDisplayDateVN = (ymd: string) => {
+  const parts = ymd?.split('-');
+  return parts?.length === 3 ? `${parts[2]}/${parts[1]}/${parts[0]}` : ymd;
+};
 
 export default function PatientMedicalRecordScreen({ navigation }: any) {
   const { isDarkMode } = useTheme();
-  const { fetchPatientRecord, updatePatientRecord, patientRecord, isLoadingPatient, enrollPatientFace } = useVitalStore();
+  const { fetchPatientRecord, updatePatientRecord, patientRecord, enrollPatientFace } = useVitalStore();
 
-  // State lưu trữ thông tin hành chính & chỉ số cơ thể của người cao tuổi
-  const [patientName, setPatientName] = useState('');
-  const [birthYear, setBirthYear] = useState('');
-  const [age, setAge] = useState<number | string>('--');
-  const [gender, setGender] = useState('--');
-  const [bloodType, setBloodType] = useState('--');
-  const [height, setHeight] = useState('--');
-  const [weight, setWeight] = useState('--');
-  const [avatarUrl, setAvatarUrl] = useState<string | null>(null);
-  const [hasFaceEnrolled, setHasFaceEnrolled] = useState(false);
-  const [isUploadingFace, setIsUploadingFace] = useState(false);
+  // Trích xuất dữ liệu thực tế từ Store (hiển thị trạng thái rỗng nếu chưa có dữ liệu)
+  const patientName = patientRecord?.name || '--';
+  const birthYear = patientRecord?.birth_year ? String(patientRecord.birth_year) : '--';
+  const age = patientRecord?.age || '--';
+  const gender = patientRecord?.gender || '--';
+  const bloodType = patientRecord?.blood_type || '--';
+  const height = patientRecord?.height_cm ? String(patientRecord.height_cm) : '--';
+  const weight = patientRecord?.weight_kg ? String(patientRecord.weight_kg) : '--';
+  const avatarUrl = patientRecord?.avatar_url || null;
+  const hasFaceEnrolled = Boolean(patientRecord?.has_face_enrolled);
+  const conditions: MedicalConditionItem[] = patientRecord?.conditions || [];
+  const drugAllergies = patientRecord?.drug_allergies || 'Chưa ghi nhận';
+  const foodAllergies = patientRecord?.food_allergies || 'Chưa ghi nhận';
+  const dietaryNotes = patientRecord?.dietary_notes || 'Chưa ghi nhận';
+  const doctorName = patientRecord?.doctor_name || 'Chưa chỉ định';
+  const doctorPhone = patientRecord?.doctor_phone || '';
+  const doctorSpecialty = patientRecord?.doctor_specialty || '--';
+  const hospital = patientRecord?.hospital || '--';
+  const nextAppointment = patientRecord?.next_appointment || 'Chưa có lịch hẹn';
+
+  // State bộ lọc ngày và các hộp thoại chỉnh sửa
+  const [selectedDate, setSelectedDate] = useState(() => getDaysAgoStr(0));
   const [isFaceModalVisible, setFaceModalVisible] = useState(false);
 
-  // Conditions & Allergies
-  const [conditions, setConditions] = useState<MedicalCondition[]>([]);
-  const [drugAllergies, setDrugAllergies] = useState('');
-  const [foodAllergies, setFoodAllergies] = useState('');
-  const [dietaryNotes, setDietaryNotes] = useState('');
-
-  // State phục vụ chỉnh sửa trực tiếp (Inline Edit) phần Dị ứng & Lưu ý dinh dưỡng
-  const [isEditingAllergies, setIsEditingAllergies] = useState(false);
-  const [drugAllergiesDraft, setDrugAllergiesDraft] = useState('');
-  const [foodAllergiesDraft, setFoodAllergiesDraft] = useState('');
-  const [dietaryNotesDraft, setDietaryNotesDraft] = useState('');
-
-  // Doctor & Hospital
-  const [doctorName, setDoctorName] = useState('');
-  const [doctorPhone, setDoctorPhone] = useState('');
-  const [doctorSpecialty, setDoctorSpecialty] = useState('');
-  const [hospital, setHospital] = useState('');
-  const [nextAppointment, setNextAppointment] = useState('');
-
-  // Date selection
-  const [selectedDate, setSelectedDate] = useState(() => {
-    const d = new Date();
-    return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
-  });
-  const [isCalendarModalVisible, setIsCalendarModalVisible] = useState(false);
-  const [calendarInputDraft, setCalendarInputDraft] = useState('');
-
-  // Modals
+  // State Modal thêm tiền sử bệnh nền
   const [isAddConditionModalVisible, setAddConditionModalVisible] = useState(false);
-  const [newConditionName, setNewConditionName] = useState('');
-  const [newConditionNote, setNewConditionNote] = useState('');
-  const [newConditionSeverity, setNewConditionSeverity] = useState<'warning' | 'danger' | 'info'>('warning');
+  const [condDraft, setCondDraft] = useState({ name: '', note: '' });
 
+  // State Modal chỉnh sửa thông tin hành chính / thể trạng
   const [isEditPatientVisible, setEditPatientVisible] = useState(false);
-  const [editNameDraft, setEditNameDraft] = useState('');
-  const [editBloodDraft, setEditBloodDraft] = useState('');
-  const [editWeightDraft, setEditWeightDraft] = useState('');
-  const [editHeightDraft, setEditHeightDraft] = useState('');
+  const [patientDraft, setPatientDraft] = useState({ name: '', blood: '', weight: '', height: '' });
 
-  const formatDisplayDateVN = (ymd: string) => {
-    if (!ymd || !ymd.includes('-')) return ymd;
-    const parts = ymd.split('-');
-    return parts.length === 3 ? `${parts[2]}/${parts[1]}/${parts[0]}` : ymd;
-  };
-
-  const getTodayStr = () => {
-    const d = new Date();
-    return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
-  };
-  const getDaysAgoStr = (days: number) => {
-    const d = new Date();
-    d.setDate(d.getDate() - days);
-    return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
-  };
-
-  const loadRecord = async (targetDate?: string) => {
-    const data = await fetchPatientRecord(1, targetDate || selectedDate);
-    if (data) {
-      setPatientName(data.name || 'Người cao tuổi');
-      setBirthYear(data.birth_year ? String(data.birth_year) : '--');
-      setAge(data.age || '--');
-      setGender(data.gender || '--');
-      setBloodType(data.blood_type || '--');
-      setHeight(data.height_cm ? String(data.height_cm) : '--');
-      setWeight(data.weight_kg ? String(data.weight_kg) : '--');
-      setConditions(data.conditions || []);
-      setDrugAllergies(data.drug_allergies || 'Không ghi nhận');
-      setFoodAllergies(data.food_allergies || 'Không ghi nhận');
-      setDietaryNotes(data.dietary_notes || 'Ăn uống đủ chất, hạn chế dầu mỡ và đồ mặn');
-      setDoctorName(data.doctor_name || 'Chưa chỉ định');
-      setDoctorPhone(data.doctor_phone || '');
-      setDoctorSpecialty(data.doctor_specialty || '--');
-      setHospital(data.hospital || '--');
-      setNextAppointment(data.next_appointment || 'Chưa có lịch hẹn');
-      if ((data as any).avatar_url) setAvatarUrl((data as any).avatar_url);
-      if ((data as any).has_face_enrolled !== undefined) {
-        setHasFaceEnrolled(Boolean((data as any).has_face_enrolled));
-      }
-    }
-  };
+  // State chỉnh sửa trực tiếp (Inline Edit) phần Dị ứng & Lưu ý dinh dưỡng
+  const [isEditingAllergies, setIsEditingAllergies] = useState(false);
+  const [allergyDraft, setAllergyDraft] = useState({ drug: '', food: '', diet: '' });
 
   useEffect(() => {
-    loadRecord(selectedDate);
+    fetchPatientRecord(1, selectedDate);
   }, [selectedDate]);
 
-  const handleCallDoctor = async () => {
-    const activePhone = patientRecord?.doctor_phone || doctorPhone;
-    if (!activePhone) {
-      Alert.alert('Thông báo', 'Chưa có số điện thoại của bác sĩ phụ trách.');
-      return;
-    }
-    const cleanPhone = activePhone.replace(/\s+/g, '');
-    const url = `tel:${cleanPhone}`;
-    try {
-      const supported = await Linking.canOpenURL(url);
-      if (supported) {
-        await Linking.openURL(url);
-      } else {
-        Alert.alert('Thông báo', `Gọi số bác sĩ phụ trách: ${activePhone}`);
-      }
-    } catch {
-      Alert.alert('Thông báo', `Gọi số bác sĩ: ${activePhone}`);
-    }
+  // Mở hộp thoại chỉnh sửa thông tin người cao tuổi
+  const openEditPatientModal = () => {
+    setPatientDraft({
+      name: patientRecord?.name || '',
+      blood: patientRecord?.blood_type || '',
+      weight: patientRecord?.weight_kg ? String(patientRecord.weight_kg) : '',
+      height: patientRecord?.height_cm ? String(patientRecord.height_cm) : '',
+    });
+    setEditPatientVisible(true);
   };
 
+  // Lưu thông tin hành chính & chỉ số cơ thể xuống DB
+  const handleSavePatientInfo = async () => {
+    setEditPatientVisible(false);
+    await updatePatientRecord(1, {
+      name: patientDraft.name.trim(),
+      blood_type: patientDraft.blood.trim(),
+      weight_kg: parseInt(patientDraft.weight, 10) || 0,
+      height_cm: parseInt(patientDraft.height, 10) || 0,
+    });
+    Alert.alert('Đã cập nhật', 'Thông tin bệnh nhân đã được lưu an toàn.');
+  };
+
+  // Thêm bệnh lý nền mới vào hồ sơ
   const handleAddCondition = async () => {
-    if (!newConditionName.trim()) {
+    if (!condDraft.name.trim()) {
       Alert.alert('Lỗi', 'Vui lòng nhập tên bệnh lý hoặc tiền sử bệnh.');
       return;
     }
-    const newCond: MedicalCondition = {
-      id: `c_${Date.now()}`,
-      name: newConditionName.trim(),
-      severity: newConditionSeverity,
-      note: newConditionNote.trim() || 'Đang theo dõi sức khoẻ định kỳ',
-    };
-    const nextConditions = [...conditions, newCond];
-    setConditions(nextConditions);
-    setNewConditionName('');
-    setNewConditionNote('');
+    const nextConditions: MedicalConditionItem[] = [
+      ...conditions,
+      {
+        id: `c_${Date.now()}`,
+        name: condDraft.name.trim(),
+        severity: 'warning',
+        note: condDraft.note.trim(),
+      },
+    ];
+    setCondDraft({ name: '', note: '' });
     setAddConditionModalVisible(false);
     await updatePatientRecord(1, { conditions: nextConditions });
     Alert.alert('Thành công', 'Đã thêm tiền sử bệnh lý vào hồ sơ.');
   };
 
+  // Xóa bệnh lý nền khỏi hồ sơ
   const handleDeleteCondition = (id: string, name: string) => {
     Alert.alert('Xóa bệnh lý', `Bạn có chắc muốn xóa "${name}" khỏi hồ sơ bệnh án?`, [
       { text: 'Hủy', style: 'cancel' },
@@ -191,66 +140,49 @@ export default function PatientMedicalRecordScreen({ navigation }: any) {
         text: 'Xóa',
         style: 'destructive',
         onPress: async () => {
-          const nextConditions = conditions.filter((c) => c.id !== id);
-          setConditions(nextConditions);
-          await updatePatientRecord(1, { conditions: nextConditions });
+          await updatePatientRecord(1, { conditions: conditions.filter((c) => c.id !== id) });
         },
       },
     ]);
   };
 
-  const handleSavePatientInfo = async () => {
-    const nextName = editNameDraft.trim() || patientName;
-    const nextBlood = editBloodDraft.trim() || bloodType;
-    const nextWeight = editWeightDraft.trim() || weight;
-    const nextHeight = editHeightDraft.trim() || height;
-
-    setPatientName(nextName);
-    setBloodType(nextBlood);
-    setWeight(nextWeight);
-    setHeight(nextHeight);
-    setEditPatientVisible(false);
-
-    await updatePatientRecord(1, {
-      name: nextName,
-      blood_type: nextBlood,
-      weight_kg: parseInt(nextWeight, 10) || undefined,
-      height_cm: parseInt(nextHeight, 10) || undefined,
-    });
-    Alert.alert('Đã cập nhật', 'Thông tin bệnh nhân đã được lưu an toàn.');
-  };
-
-  // Mở chế độ chỉnh sửa trực tiếp (Inline Edit) cho Dị ứng & Lưu ý dinh dưỡng
+  // Chuyển sang chế độ chỉnh sửa trực tiếp (Inline Edit) cho Dị ứng & Lưu ý dinh dưỡng
   const handleStartEditAllergies = () => {
-    setDrugAllergiesDraft(drugAllergies);
-    setFoodAllergiesDraft(foodAllergies);
-    setDietaryNotesDraft(dietaryNotes);
+    setAllergyDraft({
+      drug: patientRecord?.drug_allergies || '',
+      food: patientRecord?.food_allergies || '',
+      diet: patientRecord?.dietary_notes || '',
+    });
     setIsEditingAllergies(true);
-  };
-
-  // Hủy chỉnh sửa trực tiếp và quay lại chế độ hiển thị
-  const handleCancelEditAllergies = () => {
-    setIsEditingAllergies(false);
   };
 
   // Lưu thay đổi Dị ứng & Lưu ý dinh dưỡng vào state và cơ sở dữ liệu
   const handleSaveAllergies = async () => {
-    const nextDrug = drugAllergiesDraft.trim() || 'Không ghi nhận';
-    const nextFood = foodAllergiesDraft.trim() || 'Không ghi nhận';
-    const nextDiet = dietaryNotesDraft.trim() || 'Ăn uống đủ chất, hạn chế dầu mỡ và đồ mặn';
-
-    setDrugAllergies(nextDrug);
-    setFoodAllergies(nextFood);
-    setDietaryNotes(nextDiet);
     setIsEditingAllergies(false);
-
     await updatePatientRecord(1, {
-      drug_allergies: nextDrug,
-      food_allergies: nextFood,
-      dietary_notes: nextDiet,
+      drug_allergies: allergyDraft.drug.trim(),
+      food_allergies: allergyDraft.food.trim(),
+      dietary_notes: allergyDraft.diet.trim(),
     });
   };
 
+  // Gọi điện trực tiếp cho bác sĩ phụ trách
+  const handleCallDoctor = async () => {
+    if (!doctorPhone) {
+      Alert.alert('Thông báo', 'Chưa có số điện thoại của bác sĩ phụ trách.');
+      return;
+    }
+    const url = `tel:${doctorPhone.replace(/\s+/g, '')}`;
+    try {
+      const supported = await Linking.canOpenURL(url);
+      if (supported) await Linking.openURL(url);
+      else Alert.alert('Thông báo', `Gọi số bác sĩ phụ trách: ${doctorPhone}`);
+    } catch {
+      Alert.alert('Thông báo', `Gọi số bác sĩ: ${doctorPhone}`);
+    }
+  };
+
+  // Chụp hoặc tải ảnh chân dung để đăng ký khuôn mặt AI
   const handlePickFaceImage = async (useCamera: boolean) => {
     try {
       if (Platform.OS !== 'web') {
@@ -269,64 +201,51 @@ export default function PatientMedicalRecordScreen({ navigation }: any) {
         aspect: [1, 1],
         quality: 0.85,
       };
-
       const result = useCamera
         ? await ImagePicker.launchCameraAsync(options)
         : await ImagePicker.launchImageLibraryAsync(options);
 
       if (result.canceled || !result.assets?.length) return;
-
       const asset = result.assets[0];
       setFaceModalVisible(false);
-      setIsUploadingFace(true);
 
       const formData = new FormData();
       if (Platform.OS === 'web') {
-        const fetchRes = await fetch(asset.uri);
-        const blob = await fetchRes.blob();
+        const blob = await (await fetch(asset.uri)).blob();
         formData.append('file', blob, 'elderly_face.jpg');
       } else {
-        formData.append('file', {
-          uri: asset.uri,
-          name: 'elderly_face.jpg',
-          type: 'image/jpeg',
-        } as any);
+        formData.append('file', { uri: asset.uri, name: 'elderly_face.jpg', type: 'image/jpeg' } as any);
       }
 
       const res = await enrollPatientFace(1, formData);
       if (res?.success) {
-        setAvatarUrl(res.avatar_url);
-        setHasFaceEnrolled(true);
         Alert.alert('Đăng ký khuôn mặt thành công 🎉', 'Đã trích xuất vector đặc trưng nhận diện khuôn mặt.');
       } else {
         Alert.alert('Thông báo', res?.message || 'Không thể đăng ký khuôn mặt.');
       }
-    } catch (err) {
-      console.warn('handlePickFaceImage error:', err);
+    } catch {
       Alert.alert('Lỗi', 'Không thể tải ảnh khuôn mặt lên server.');
-    } finally {
-      setIsUploadingFace(false);
     }
   };
 
   const numH = parseFloat(height);
   const numW = parseFloat(weight);
-  const bmi = !isNaN(numH) && !isNaN(numW) && numH > 0
-    ? (numW / Math.pow(numH / 100, 2)).toFixed(1)
-    : '--';
+  const bmi = !isNaN(numH) && !isNaN(numW) && numH > 0 ? (numW / Math.pow(numH / 100, 2)).toFixed(1) : '--';
 
   const bgScreen = isDarkMode ? '#0B0F19' : '#F8FAFC';
   const bgCard = isDarkMode ? '#1E293B' : '#FFFFFF';
+  const bgSubtle = isDarkMode ? '#0F172A' : '#F8FAFC';
   const borderCol = isDarkMode ? '#334155' : '#E2E8F0';
   const textTitle = isDarkMode ? '#F8FAFC' : '#0F172A';
   const textSub = isDarkMode ? '#94A3B8' : '#64748B';
+  const inputThemeStyle = { backgroundColor: bgSubtle, color: textTitle, borderColor: borderCol };
 
   return (
     <SafeAreaView style={[styles.safeArea, { backgroundColor: bgScreen }]} edges={['top']}>
-      {/* Header */}
+      {/* Thanh tiêu đề (Header) */}
       <View style={[styles.headerRow, { backgroundColor: isDarkMode ? '#0B0F19' : '#FFFFFF', borderBottomColor: borderCol }]}>
         <TouchableOpacity
-          style={[styles.backBtn, { backgroundColor: isDarkMode ? '#1E293B' : '#F1F5F9', borderColor: borderCol }]}
+          style={[styles.iconCircleBtn, { backgroundColor: isDarkMode ? '#1E293B' : '#F1F5F9', borderColor: borderCol }]}
           onPress={() => navigation.goBack()}
           activeOpacity={0.7}
         >
@@ -339,14 +258,8 @@ export default function PatientMedicalRecordScreen({ navigation }: any) {
         </View>
 
         <TouchableOpacity
-          style={[styles.headerActionBtn, { backgroundColor: isDarkMode ? '#1E293B' : '#F1F5F9', borderColor: borderCol }]}
-          onPress={() => {
-            setEditNameDraft(patientName);
-            setEditBloodDraft(bloodType);
-            setEditWeightDraft(weight);
-            setEditHeightDraft(height);
-            setEditPatientVisible(true);
-          }}
+          style={[styles.iconCircleBtn, { backgroundColor: isDarkMode ? '#1E293B' : '#F1F5F9', borderColor: borderCol }]}
+          onPress={openEditPatientModal}
           activeOpacity={0.7}
         >
           <Ionicons name="create-outline" size={20} color={Colors.primary} />
@@ -354,7 +267,7 @@ export default function PatientMedicalRecordScreen({ navigation }: any) {
       </View>
 
       <ScrollView showsVerticalScrollIndicator={false} contentContainerStyle={styles.scrollContent}>
-        {/* Security Badge AES-256 */}
+        {/* Nhãn bảo mật y tế AES-256 */}
         <View style={[styles.securityCard, { backgroundColor: isDarkMode ? '#0F2942' : '#F0F9FF', borderColor: isDarkMode ? '#0369A1' : '#BAE6FD' }]}>
           <View style={styles.securityIconCircle}>
             <Ionicons name="shield-checkmark" size={24} color="#0EA5E9" />
@@ -378,21 +291,13 @@ export default function PatientMedicalRecordScreen({ navigation }: any) {
         {/* Khối 1: Thông tin người cao tuổi */}
         <View style={[styles.cardBlock, { backgroundColor: bgCard, borderColor: borderCol }]}>
           <View style={styles.cardHeader}>
-            <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8 }}>
+            <View style={styles.rowCenterGap8}>
               <View style={[styles.cardIconBox, { backgroundColor: isDarkMode ? '#1E3A8A' : '#EFF6FF' }]}>
                 <Ionicons name="person-outline" size={20} color="#2563EB" />
               </View>
               <Text style={[styles.cardTitle, { color: textTitle }]}>Thông tin người cao tuổi</Text>
             </View>
-            <TouchableOpacity
-              onPress={() => {
-                setEditNameDraft(patientName);
-                setEditBloodDraft(bloodType);
-                setEditWeightDraft(weight);
-                setEditHeightDraft(height);
-                setEditPatientVisible(true);
-              }}
-            >
+            <TouchableOpacity onPress={openEditPatientModal}>
               <Text style={styles.editLink}>Chỉnh sửa</Text>
             </TouchableOpacity>
           </View>
@@ -421,7 +326,9 @@ export default function PatientMedicalRecordScreen({ navigation }: any) {
             </TouchableOpacity>
 
             <View style={{ flex: 1, marginLeft: 14 }}>
-              <Text style={[styles.patientHeroName, { color: textTitle }]}>{patientName || 'Chưa cập nhật tên'}</Text>
+              <Text style={[styles.patientHeroName, { color: textTitle }]}>
+                {patientName !== '--' ? patientName : 'Chưa cập nhật tên'}
+              </Text>
               <Text style={[styles.patientHeroSub, { color: textSub }]}>
                 Năm sinh: {birthYear} ({age} tuổi) • Giới tính: {gender}
               </Text>
@@ -458,7 +365,7 @@ export default function PatientMedicalRecordScreen({ navigation }: any) {
             </View>
           </View>
 
-          <View style={[styles.metricsGrid, { backgroundColor: isDarkMode ? '#0F172A' : '#F8FAFC' }]}>
+          <View style={[styles.metricsGrid, { backgroundColor: bgSubtle }]}>
             <View style={styles.metricItem}>
               <Text style={[styles.metricLabel, { color: textSub }]}>Chiều cao</Text>
               <Text style={[styles.metricVal, { color: textTitle }]}>
@@ -483,7 +390,7 @@ export default function PatientMedicalRecordScreen({ navigation }: any) {
         {/* Khối Lọc Dữ Liệu Sinh Tồn Theo Ngày */}
         <View style={[styles.cardBlock, { backgroundColor: bgCard, borderColor: borderCol }]}>
           <View style={styles.cardHeader}>
-            <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8 }}>
+            <View style={styles.rowCenterGap8}>
               <View style={[styles.cardIconBox, { backgroundColor: isDarkMode ? 'rgba(37, 99, 235, 0.15)' : '#EFF6FF' }]}>
                 <Ionicons name="calendar-outline" size={20} color="#2563EB" />
               </View>
@@ -496,7 +403,7 @@ export default function PatientMedicalRecordScreen({ navigation }: any) {
 
           <ScrollView horizontal showsHorizontalScrollIndicator={false} style={{ marginVertical: 10 }}>
             {[
-              { label: 'Hôm nay', value: getTodayStr() },
+              { label: 'Hôm nay', value: getDaysAgoStr(0) },
               { label: 'Hôm qua', value: getDaysAgoStr(1) },
               { label: '2 ngày trước', value: getDaysAgoStr(2) },
               { label: '3 ngày trước', value: getDaysAgoStr(3) },
@@ -523,8 +430,8 @@ export default function PatientMedicalRecordScreen({ navigation }: any) {
             })}
           </ScrollView>
 
-          <View style={[styles.daySummaryBox, { backgroundColor: isDarkMode ? '#0F172A' : '#F8FAFC', borderColor: borderCol }]}>
-            <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 8 }}>
+          <View style={[styles.daySummaryBox, { backgroundColor: bgSubtle, borderColor: borderCol }]}>
+            <View style={styles.summaryTopRow}>
               <Text style={{ fontSize: 13, fontWeight: '700', color: isDarkMode ? '#93C5FD' : '#1D4ED8' }}>
                 Tổng kết ngày {formatDisplayDateVN(selectedDate)}
               </Text>
@@ -548,7 +455,7 @@ export default function PatientMedicalRecordScreen({ navigation }: any) {
         {/* Khối 2: Tiền sử bệnh nền */}
         <View style={[styles.cardBlock, { backgroundColor: bgCard, borderColor: borderCol }]}>
           <View style={styles.cardHeader}>
-            <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8 }}>
+            <View style={styles.rowCenterGap8}>
               <View style={[styles.cardIconBox, { backgroundColor: isDarkMode ? '#4C1D1D' : '#FEE2E2' }]}>
                 <Ionicons name="pulse-outline" size={20} color="#EF4444" />
               </View>
@@ -567,12 +474,9 @@ export default function PatientMedicalRecordScreen({ navigation }: any) {
           ) : (
             <View style={{ gap: 8 }}>
               {conditions.map((item) => (
-                <View
-                  key={item.id}
-                  style={[styles.conditionCard, { backgroundColor: isDarkMode ? '#0F172A' : '#F8FAFC', borderColor: borderCol }]}
-                >
+                <View key={item.id} style={[styles.conditionCard, { backgroundColor: bgSubtle, borderColor: borderCol }]}>
                   <View style={styles.conditionCardTop}>
-                    <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8, flex: 1 }}>
+                    <View style={[styles.rowCenterGap8, { flex: 1 }]}>
                       <View
                         style={[
                           styles.severityDot,
@@ -588,17 +492,17 @@ export default function PatientMedicalRecordScreen({ navigation }: any) {
                       <Ionicons name="trash-outline" size={17} color={isDarkMode ? '#94A3B8' : '#CBD5E1'} />
                     </TouchableOpacity>
                   </View>
-                  <Text style={[styles.conditionNote, { color: textSub }]}>{item.note}</Text>
+                  {item.note ? <Text style={[styles.conditionNote, { color: textSub }]}>{item.note}</Text> : null}
                 </View>
               ))}
             </View>
           )}
         </View>
 
-        {/* Khối 3: Dị ứng & Lưu ý dinh dưỡng */}
+        {/* Khối 3: Dị ứng & Lưu ý dinh dưỡng (Hỗ trợ Inline Edit) */}
         <View style={[styles.cardBlock, { backgroundColor: bgCard, borderColor: borderCol }]}>
           <View style={styles.cardHeader}>
-            <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8 }}>
+            <View style={styles.rowCenterGap8}>
               <View style={[styles.cardIconBox, { backgroundColor: isDarkMode ? '#452F10' : '#FEF3C7' }]}>
                 <Ionicons name="warning-outline" size={20} color="#D97706" />
               </View>
@@ -631,18 +535,11 @@ export default function PatientMedicalRecordScreen({ navigation }: any) {
                   <Text style={styles.allergyTagDangerText}>Dị ứng thuốc</Text>
                 </View>
                 <TextInput
-                  style={[
-                    styles.textInput,
-                    {
-                      backgroundColor: isDarkMode ? '#0F172A' : '#F8FAFC',
-                      color: textTitle,
-                      borderColor: borderCol,
-                    },
-                  ]}
+                  style={[styles.textInput, inputThemeStyle]}
                   placeholder="Nhập thông tin dị ứng thuốc..."
                   placeholderTextColor="#94A3B8"
-                  value={drugAllergiesDraft}
-                  onChangeText={setDrugAllergiesDraft}
+                  value={allergyDraft.drug}
+                  onChangeText={(drug) => setAllergyDraft((prev) => ({ ...prev, drug }))}
                 />
               </View>
 
@@ -653,68 +550,42 @@ export default function PatientMedicalRecordScreen({ navigation }: any) {
                   <Text style={styles.allergyTagWarningText}>Dị ứng thức ăn</Text>
                 </View>
                 <TextInput
-                  style={[
-                    styles.textInput,
-                    {
-                      backgroundColor: isDarkMode ? '#0F172A' : '#F8FAFC',
-                      color: textTitle,
-                      borderColor: borderCol,
-                    },
-                  ]}
+                  style={[styles.textInput, inputThemeStyle]}
                   placeholder="Nhập thông tin dị ứng thức ăn..."
                   placeholderTextColor="#94A3B8"
-                  value={foodAllergiesDraft}
-                  onChangeText={setFoodAllergiesDraft}
+                  value={allergyDraft.food}
+                  onChangeText={(food) => setAllergyDraft((prev) => ({ ...prev, food }))}
                 />
               </View>
 
               {/* Trường 3: Chế độ ăn khuyến nghị */}
               <View>
-                <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6, marginBottom: 6 }}>
+                <View style={[styles.rowCenterGap8, { marginBottom: 6 }]}>
                   <Ionicons name="nutrition-outline" size={16} color="#10B981" />
                   <Text style={styles.dietaryNoteTitle}>Chế độ ăn khuyến nghị</Text>
                 </View>
                 <TextInput
-                  style={[
-                    styles.textInput,
-                    styles.textArea,
-                    {
-                      backgroundColor: isDarkMode ? '#0F172A' : '#F8FAFC',
-                      color: textTitle,
-                      borderColor: borderCol,
-                    },
-                  ]}
+                  style={[styles.textInput, styles.textArea, inputThemeStyle]}
                   placeholder="Nhập chế độ ăn khuyến nghị..."
                   placeholderTextColor="#94A3B8"
                   multiline
                   numberOfLines={3}
-                  value={dietaryNotesDraft}
-                  onChangeText={setDietaryNotesDraft}
+                  value={allergyDraft.diet}
+                  onChangeText={(diet) => setAllergyDraft((prev) => ({ ...prev, diet }))}
                 />
               </View>
 
-              {/* Nút Hủy và Lưu thay đổi ở góc dưới bên phải */}
+              {/* Hành động Hủy và Lưu thay đổi ở góc dưới bên phải */}
               <View style={styles.inlineEditActionRow}>
                 <TouchableOpacity
-                  style={[
-                    styles.inlineCancelBtn,
-                    {
-                      backgroundColor: isDarkMode ? '#334155' : '#E2E8F0',
-                    },
-                  ]}
-                  onPress={handleCancelEditAllergies}
+                  style={[styles.inlineCancelBtn, { backgroundColor: isDarkMode ? '#334155' : '#E2E8F0' }]}
+                  onPress={() => setIsEditingAllergies(false)}
                   activeOpacity={0.7}
                 >
-                  <Text style={[styles.inlineCancelBtnText, { color: isDarkMode ? '#E2E8F0' : '#475569' }]}>
-                    Hủy
-                  </Text>
+                  <Text style={[styles.inlineCancelBtnText, { color: isDarkMode ? '#E2E8F0' : '#475569' }]}>Hủy</Text>
                 </TouchableOpacity>
 
-                <TouchableOpacity
-                  style={styles.inlineSaveBtn}
-                  onPress={handleSaveAllergies}
-                  activeOpacity={0.8}
-                >
+                <TouchableOpacity style={styles.inlineSaveBtn} onPress={handleSaveAllergies} activeOpacity={0.8}>
                   <Text style={styles.inlineSaveBtnText}>Lưu thay đổi</Text>
                 </TouchableOpacity>
               </View>
@@ -737,8 +608,8 @@ export default function PatientMedicalRecordScreen({ navigation }: any) {
                 <Text style={[styles.allergyValueText, { color: textTitle }]}>{foodAllergies}</Text>
               </View>
 
-              <View style={[styles.dietaryNoteCard, { backgroundColor: isDarkMode ? '#0F172A' : '#F8FAFC' }]}>
-                <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6, marginBottom: 4 }}>
+              <View style={[styles.dietaryNoteCard, { backgroundColor: bgSubtle }]}>
+                <View style={[styles.rowCenterGap8, { marginBottom: 4 }]}>
                   <Ionicons name="nutrition-outline" size={16} color="#10B981" />
                   <Text style={styles.dietaryNoteTitle}>Chế độ ăn khuyến nghị</Text>
                 </View>
@@ -751,7 +622,7 @@ export default function PatientMedicalRecordScreen({ navigation }: any) {
         {/* Khối 4: Bác sĩ điều trị & Bệnh viện */}
         <View style={[styles.cardBlock, { backgroundColor: bgCard, borderColor: borderCol }]}>
           <View style={styles.cardHeader}>
-            <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8 }}>
+            <View style={styles.rowCenterGap8}>
               <View style={[styles.cardIconBox, { backgroundColor: isDarkMode ? '#133E3B' : '#CCFBF1' }]}>
                 <Ionicons name="medkit-outline" size={20} color="#0F766E" />
               </View>
@@ -759,7 +630,7 @@ export default function PatientMedicalRecordScreen({ navigation }: any) {
             </View>
           </View>
 
-          <View style={[styles.doctorCard, { backgroundColor: isDarkMode ? '#0F172A' : '#F8FAFC', borderColor: borderCol }]}>
+          <View style={[styles.doctorCard, { backgroundColor: bgSubtle, borderColor: borderCol }]}>
             <View style={styles.doctorHeader}>
               <View style={styles.doctorAvatarBox}>
                 <Ionicons name="medical" size={24} color="#0EA5E9" />
@@ -795,24 +666,27 @@ export default function PatientMedicalRecordScreen({ navigation }: any) {
             <Text style={[styles.modalTitle, { color: textTitle }]}>Thêm tiền sử bệnh nền</Text>
             <Text style={[styles.inputLabel, { color: textSub }]}>Tên bệnh lý / Chẩn đoán:</Text>
             <TextInput
-              style={[styles.textInput, { backgroundColor: isDarkMode ? '#0F172A' : '#F8FAFC', color: textTitle, borderColor: borderCol }]}
+              style={[styles.textInput, inputThemeStyle]}
               placeholder="VD: Thoái hoá đốt sống, Viêm xoang..."
               placeholderTextColor="#94A3B8"
-              value={newConditionName}
-              onChangeText={setNewConditionName}
+              value={condDraft.name}
+              onChangeText={(name) => setCondDraft((prev) => ({ ...prev, name }))}
             />
             <Text style={[styles.inputLabel, { color: textSub, marginTop: 10 }]}>Ghi chú:</Text>
             <TextInput
-              style={[styles.textInput, styles.textArea, { backgroundColor: isDarkMode ? '#0F172A' : '#F8FAFC', color: textTitle, borderColor: borderCol }]}
+              style={[styles.textInput, styles.textArea, inputThemeStyle]}
               placeholder="Ghi chú điều trị hoặc lưu ý..."
               placeholderTextColor="#94A3B8"
               multiline
               numberOfLines={3}
-              value={newConditionNote}
-              onChangeText={setNewConditionNote}
+              value={condDraft.note}
+              onChangeText={(note) => setCondDraft((prev) => ({ ...prev, note }))}
             />
             <View style={styles.modalBtnRow}>
-              <TouchableOpacity style={[styles.modalCancelBtn, { backgroundColor: isDarkMode ? '#0F172A' : '#F1F5F9', borderColor: borderCol }]} onPress={() => setAddConditionModalVisible(false)}>
+              <TouchableOpacity
+                style={[styles.modalCancelBtn, { backgroundColor: isDarkMode ? '#0F172A' : '#F1F5F9', borderColor: borderCol }]}
+                onPress={() => setAddConditionModalVisible(false)}
+              >
                 <Text style={[styles.modalCancelText, { color: textSub }]}>Hủy</Text>
               </TouchableOpacity>
               <TouchableOpacity style={styles.modalSaveBtn} onPress={handleAddCondition}>
@@ -823,45 +697,48 @@ export default function PatientMedicalRecordScreen({ navigation }: any) {
         </Pressable>
       </Modal>
 
-      {/* Modal Chỉnh Sửa Thông Tin Cụ */}
+      {/* Modal Chỉnh Sửa Thông Tin Bệnh Nhân */}
       <Modal transparent visible={isEditPatientVisible} animationType="fade" onRequestClose={() => setEditPatientVisible(false)}>
         <Pressable style={styles.modalOverlay} onPress={() => setEditPatientVisible(false)}>
           <Pressable style={[styles.modalCard, { backgroundColor: bgCard, borderColor: borderCol }]} onPress={() => {}}>
             <Text style={[styles.modalTitle, { color: textTitle }]}>Chỉnh sửa thông tin bệnh nhân</Text>
             <Text style={[styles.inputLabel, { color: textSub }]}>Họ tên người cao tuổi:</Text>
             <TextInput
-              style={[styles.textInput, { backgroundColor: isDarkMode ? '#0F172A' : '#F8FAFC', color: textTitle, borderColor: borderCol }]}
-              value={editNameDraft}
-              onChangeText={setEditNameDraft}
+              style={[styles.textInput, inputThemeStyle]}
+              value={patientDraft.name}
+              onChangeText={(name) => setPatientDraft((prev) => ({ ...prev, name }))}
             />
             <View style={{ flexDirection: 'row', gap: 10, marginTop: 10 }}>
               <View style={{ flex: 1 }}>
                 <Text style={[styles.inputLabel, { color: textSub }]}>Chiều cao (cm):</Text>
                 <TextInput
-                  style={[styles.textInput, { backgroundColor: isDarkMode ? '#0F172A' : '#F8FAFC', color: textTitle, borderColor: borderCol }]}
+                  style={[styles.textInput, inputThemeStyle]}
                   keyboardType="numeric"
-                  value={editHeightDraft}
-                  onChangeText={setEditHeightDraft}
+                  value={patientDraft.height}
+                  onChangeText={(heightVal) => setPatientDraft((prev) => ({ ...prev, height: heightVal }))}
                 />
               </View>
               <View style={{ flex: 1 }}>
                 <Text style={[styles.inputLabel, { color: textSub }]}>Cân nặng (kg):</Text>
                 <TextInput
-                  style={[styles.textInput, { backgroundColor: isDarkMode ? '#0F172A' : '#F8FAFC', color: textTitle, borderColor: borderCol }]}
+                  style={[styles.textInput, inputThemeStyle]}
                   keyboardType="numeric"
-                  value={editWeightDraft}
-                  onChangeText={setEditWeightDraft}
+                  value={patientDraft.weight}
+                  onChangeText={(weightVal) => setPatientDraft((prev) => ({ ...prev, weight: weightVal }))}
                 />
               </View>
             </View>
             <Text style={[styles.inputLabel, { color: textSub, marginTop: 10 }]}>Nhóm máu:</Text>
             <TextInput
-              style={[styles.textInput, { backgroundColor: isDarkMode ? '#0F172A' : '#F8FAFC', color: textTitle, borderColor: borderCol }]}
-              value={editBloodDraft}
-              onChangeText={setEditBloodDraft}
+              style={[styles.textInput, inputThemeStyle]}
+              value={patientDraft.blood}
+              onChangeText={(blood) => setPatientDraft((prev) => ({ ...prev, blood }))}
             />
             <View style={styles.modalBtnRow}>
-              <TouchableOpacity style={[styles.modalCancelBtn, { backgroundColor: isDarkMode ? '#0F172A' : '#F1F5F9', borderColor: borderCol }]} onPress={() => setEditPatientVisible(false)}>
+              <TouchableOpacity
+                style={[styles.modalCancelBtn, { backgroundColor: isDarkMode ? '#0F172A' : '#F1F5F9', borderColor: borderCol }]}
+                onPress={() => setEditPatientVisible(false)}
+              >
                 <Text style={[styles.modalCancelText, { color: textSub }]}>Hủy</Text>
               </TouchableOpacity>
               <TouchableOpacity style={styles.modalSaveBtn} onPress={handleSavePatientInfo}>
@@ -872,7 +749,7 @@ export default function PatientMedicalRecordScreen({ navigation }: any) {
         </Pressable>
       </Modal>
 
-      {/* Modal Chụp / Đăng ký khuôn mặt */}
+      {/* Modal Chụp / Đăng Ký Khuôn Mặt AI */}
       <Modal visible={isFaceModalVisible} transparent animationType="fade" onRequestClose={() => setFaceModalVisible(false)}>
         <Pressable style={styles.modalOverlay} onPress={() => setFaceModalVisible(false)}>
           <Pressable style={[styles.modalCard, { backgroundColor: bgCard, borderColor: borderCol }]}>
@@ -925,12 +802,12 @@ const styles = StyleSheet.create({
     paddingVertical: 12,
     borderBottomWidth: StyleSheet.hairlineWidth,
   },
-  backBtn: { width: 38, height: 38, borderRadius: 19, borderWidth: 1, alignItems: 'center', justifyContent: 'center' },
+  iconCircleBtn: { width: 38, height: 38, borderRadius: 19, borderWidth: 1, alignItems: 'center', justifyContent: 'center' },
   headerTitleCenter: { flex: 1, marginHorizontal: 12 },
   headerTitle: { fontSize: 16, fontWeight: '700' },
   headerSubtitle: { fontSize: 11, marginTop: 2 },
-  headerActionBtn: { width: 38, height: 38, borderRadius: 19, borderWidth: 1, alignItems: 'center', justifyContent: 'center' },
   scrollContent: { padding: 16, paddingBottom: 40, gap: 14 },
+  rowCenterGap8: { flexDirection: 'row', alignItems: 'center', gap: 8 },
 
   securityCard: { flexDirection: 'row', alignItems: 'center', borderRadius: 16, padding: 14, borderWidth: 1, gap: 12 },
   securityIconCircle: { width: 42, height: 42, borderRadius: 21, backgroundColor: '#E0F2FE', alignItems: 'center', justifyContent: 'center' },
@@ -971,6 +848,7 @@ const styles = StyleSheet.create({
   dateChip: { paddingHorizontal: 12, paddingVertical: 6, borderRadius: 10, marginRight: 8, borderWidth: 1 },
   dateChipText: { fontSize: 11.5, fontWeight: '700' },
   daySummaryBox: { borderRadius: 12, padding: 12, borderWidth: 1, marginTop: 6 },
+  summaryTopRow: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 8 },
   openDetailChartBtn: { flexDirection: 'row', alignItems: 'center', justifyContent: 'center', backgroundColor: Colors.primary, borderRadius: 10, paddingVertical: 10, gap: 6 },
   openDetailChartBtnText: { color: '#FFF', fontSize: 12.5, fontWeight: '700' },
 
