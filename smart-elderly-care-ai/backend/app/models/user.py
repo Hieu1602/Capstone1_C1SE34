@@ -12,7 +12,7 @@ if TYPE_CHECKING:
     from app.models.device import Device
     from app.models.house import House, HouseMember
 
-from sqlalchemy import Boolean, DateTime, Float, Integer, String
+from sqlalchemy import Boolean, DateTime, Integer, String
 from sqlalchemy.dialects.postgresql import UUID
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 from sqlalchemy.sql import func
@@ -50,12 +50,6 @@ class User(Base):
     vibration_enabled: Mapped[bool] = mapped_column(
         Boolean, nullable=False, default=True, server_default="true"
     )
-    location_enabled: Mapped[bool] = mapped_column(
-        Boolean, nullable=False, default=True, server_default="true"
-    )
-    location_latitude: Mapped[float | None] = mapped_column(Float, nullable=True)
-    location_longitude: Mapped[float | None] = mapped_column(Float, nullable=True)
-    location_address: Mapped[str | None] = mapped_column(String(500), nullable=True)
     is_active: Mapped[bool] = mapped_column(Boolean, default=True)
     fcm_token: Mapped[str | None] = mapped_column(String(500), nullable=True)
     created_at: Mapped[datetime] = mapped_column(

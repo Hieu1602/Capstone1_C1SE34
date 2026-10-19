@@ -12,16 +12,36 @@ from pydantic import field_validator
 from dotenv import load_dotenv
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
+<<<<<<< HEAD
 # Tự động nạp file .env duy nhất tại thư mục gốc smart-elderly-care-ai/.env
 _THIS_FILE = Path(__file__).resolve()
 _SEARCH_PATHS = [
     p / ".env" for p in _THIS_FILE.parents
 ] + [Path("../.env"), Path(".env")]
+=======
+<<<<<<< Updated upstream
+=======
+# Tự động nạp file .env duy nhất tại thư mục gốc smart-elderly-care-ai/.env
+_THIS_FILE = Path(__file__).resolve()
+_SEARCH_PATHS = [
+    *(
+        _THIS_FILE.parents[index] / ".env"
+        for index in (3, 4)
+        if index < len(_THIS_FILE.parents)
+    ),
+    Path("../.env"),
+    Path(".env"),
+]
+>>>>>>> 28419c2df1b71ce178bd28d253115480ceb9e957
 for _p in _SEARCH_PATHS:
     if _p.is_file():
         load_dotenv(dotenv_path=_p, override=False)
         break
 
+<<<<<<< HEAD
+=======
+>>>>>>> Stashed changes
+>>>>>>> 28419c2df1b71ce178bd28d253115480ceb9e957
 
 class Settings(BaseSettings):
     model_config = SettingsConfigDict(

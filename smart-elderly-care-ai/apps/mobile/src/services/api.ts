@@ -105,6 +105,15 @@ export const incidentsApi = {
     api.patch(`/incidents/${id}/acknowledge`, { notes }),
 };
 
+export const emergencyApi = {
+  triggerSOS: (payload: {
+    address?: string;
+    latitude?: number;
+    longitude?: number;
+    message?: string;
+  }) => api.post('/mobile/emergency/sos', payload),
+};
+
 export const doctorApi = {
   getPatients: () => api.get('/doctor/patients'),
   getAnalytics: (patientId: any, days = 7) =>
@@ -130,4 +139,3 @@ export const doctorApi = {
   updateThresholds: (patientId: any, payload: any) =>
     api.patch(`/doctor/patients/${patientId}/thresholds`, payload),
 };
-
