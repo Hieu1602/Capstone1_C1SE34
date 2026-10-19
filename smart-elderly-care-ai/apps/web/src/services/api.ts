@@ -75,9 +75,9 @@ export const usersApi = {
       // Mock / fallback data if backend /users endpoint is not yet paginated
       return [
         {
-          id: '154b7921-7e8c-4019-bd05-34260f3358cf',
-          phone: 'Admin123',
-          full_name: 'Quản Trị Viên Hệ Thống (Root Admin)',
+          id: 'c9999999-b4e1-4b08-b2d3-d949a0eb075c',
+          phone: '+84900000000',
+          full_name: 'System Admin (Root Admin)',
           role: 'admin',
           is_active: true,
           created_at: '2026-09-01T08:00:00Z',
