@@ -250,13 +250,18 @@ export const SystemMonitoringPage: React.FC = () => {
 
       {/* Header */}
       <div className="flex flex-col md:flex-row md:items-center justify-between gap-4">
-        <div>
-          <h1 className="font-heading text-xl font-bold tracking-tight text-slate-900 dark:text-white">
-            Giám sát hoạt động hệ thống
-          </h1>
-          <p className="text-xs text-slate-500 dark:text-slate-400 mt-1 font-sans">
-            Theo dõi tình trạng máy chủ backend, hiệu năng CPU/RAM, cơ sở dữ liệu và thiết bị IoT thời gian thực
-          </p>
+        <div className="flex items-center gap-3">
+          <div className="p-2.5 rounded-xl bg-gradient-to-br from-[#D96C3B] to-[#B84B1E] text-white shadow-md shadow-[#D96C3B]/25 shrink-0">
+            <Activity className="w-5 h-5 stroke-[2.2]" />
+          </div>
+          <div>
+            <h1 className="font-heading text-xl font-bold tracking-tight text-slate-900 dark:text-white">
+              Giám sát hoạt động hệ thống
+            </h1>
+            <p className="text-xs text-slate-500 dark:text-slate-400 mt-0.5 font-sans">
+              Theo dõi tình trạng máy chủ backend, hiệu năng CPU/RAM, cơ sở dữ liệu và thiết bị IoT thời gian thực
+            </p>
+          </div>
         </div>
 
         <div className="flex items-center space-x-3">
@@ -272,97 +277,109 @@ export const SystemMonitoringPage: React.FC = () => {
 
       {/* KPI Overview Grid */}
       <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
-        <div className="glass-card p-4">
-          <div className="flex items-center justify-between">
-            <span className="text-[11px] font-mono font-semibold uppercase tracking-wider text-slate-500 dark:text-slate-400">
+        {/* Card 1: Dịch vụ Backend */}
+        <div className="glass-card p-5 relative group">
+          <div className="flex items-center justify-between relative z-10 px-1">
+            <span className="text-[11px] font-mono font-bold uppercase tracking-wider text-slate-600 dark:text-slate-300">
               Dịch vụ Backend (Active)
             </span>
-            <div className="p-2 rounded-xl bg-sky-50 dark:bg-sky-950/50 text-sky-600 dark:text-sky-400 border border-sky-100 dark:border-sky-800">
+            <div className="p-2 rounded-xl bg-emerald-50 dark:bg-emerald-950/50 text-emerald-700 dark:text-emerald-300 border border-emerald-200 dark:border-emerald-800 shadow-sm">
               <Server className="w-4 h-4" />
             </div>
           </div>
-          <div className="mt-2 flex items-baseline space-x-2">
-            <span className="font-mono text-2xl font-extrabold text-slate-900 dark:text-white">
+          <div className="mt-3 flex items-baseline space-x-2 px-1 relative z-10">
+            <span className="font-mono text-2xl font-black text-slate-900 dark:text-white">
               4 / 4
             </span>
-            <span className="text-[10px] font-semibold text-emerald-600 dark:text-emerald-400 bg-emerald-50 dark:bg-emerald-950/40 px-1.5 py-0.5 rounded">
+            <span className="text-[10px] font-bold text-emerald-700 dark:text-emerald-300 bg-emerald-50 dark:bg-emerald-950/40 px-2 py-0.5 rounded-full border border-emerald-200 dark:border-emerald-800">
               100% Sẵn sàng
             </span>
           </div>
-          <p className="mt-1 text-[11px] text-slate-500 dark:text-slate-400">
-            FastAPI, PG-5432, Redis, EMQX
-          </p>
+          <div className="mt-3 pt-2.5 border-t border-[#C8AD8A]/40 dark:border-white/5 px-1 relative z-10">
+            <p className="text-[11px] text-slate-600 dark:text-slate-400 truncate">
+              FastAPI, PG-5432, Redis, EMQX
+            </p>
+          </div>
         </div>
 
-        <div className="glass-card p-4">
-          <div className="flex items-center justify-between">
-            <span className="text-[11px] font-mono font-semibold uppercase tracking-wider text-slate-500 dark:text-slate-400">
+        {/* Card 2: Tải CPU */}
+        <div className="glass-card p-5 relative group">
+          <div className="flex items-center justify-between relative z-10 px-1">
+            <span className="text-[11px] font-mono font-bold uppercase tracking-wider text-slate-600 dark:text-slate-300">
               Tải CPU Trung bình
             </span>
-            <div className="p-2 rounded-xl bg-sky-50 dark:bg-sky-950/50 text-sky-600 dark:text-sky-400 border border-sky-100 dark:border-sky-800">
+            <div className="p-2 rounded-xl bg-[#FFF8EE] dark:bg-[#1A3830] text-[#D96C3B] dark:text-[#DFB15B] border border-[#C8AD8A] dark:border-[#2F5A4D] shadow-sm">
               <Cpu className="w-4 h-4" />
             </div>
           </div>
-          <div className="mt-2 flex items-baseline space-x-2">
-            <span className="font-mono text-2xl font-extrabold text-sky-600 dark:text-sky-400">
+          <div className="mt-3 flex items-baseline space-x-2 px-1 relative z-10">
+            <span className="font-mono text-2xl font-black text-[#D96C3B] dark:text-[#E67A47]">
               {metrics.avgCpu}%
             </span>
-            <span className="text-[10px] font-semibold text-slate-500 dark:text-slate-400 font-mono">
+            <span className="text-[10px] font-bold text-slate-700 dark:text-slate-300 bg-slate-100 dark:bg-slate-800 px-2 py-0.5 rounded-full font-mono">
               RAM: {metrics.totalMem} MB
             </span>
           </div>
-          <p className="mt-1 text-[11px] text-slate-500 dark:text-slate-400">
-            Hiệu năng vận hành ổn định
-          </p>
+          <div className="mt-3 pt-2.5 border-t border-[#C8AD8A]/40 dark:border-white/5 px-1 relative z-10">
+            <p className="text-[11px] text-slate-600 dark:text-slate-400 truncate">
+              Hiệu năng vận hành ổn định
+            </p>
+          </div>
         </div>
 
-        <div className="glass-card p-4">
-          <div className="flex items-center justify-between">
-            <span className="text-[11px] font-mono font-semibold uppercase tracking-wider text-slate-500 dark:text-slate-400">
+        {/* Card 3: Thiết bị IoT */}
+        <div className="glass-card p-5 relative group">
+          <div className="flex items-center justify-between relative z-10 px-1">
+            <span className="text-[11px] font-mono font-bold uppercase tracking-wider text-slate-600 dark:text-slate-300">
               Thiết bị IoT kết nối
             </span>
-            <div className="p-2 rounded-xl bg-sky-50 dark:bg-sky-950/50 text-sky-600 dark:text-sky-400 border border-sky-100 dark:border-sky-800">
+            <div className="p-2 rounded-xl bg-[#FFF8EE] dark:bg-[#1A3830] text-[#B08D57] dark:text-[#DFB15B] border border-[#C8AD8A] dark:border-[#2F5A4D] shadow-sm">
               <Radio className="w-4 h-4" />
             </div>
           </div>
-          <div className="mt-2 flex items-baseline space-x-2">
-            <span className="font-mono text-2xl font-extrabold text-slate-900 dark:text-white">
+          <div className="mt-3 flex items-baseline space-x-2 px-1 relative z-10">
+            <span className="font-mono text-2xl font-black text-slate-900 dark:text-white">
               {metrics.onlineDevs} / {devices.length}
             </span>
-            <span className="text-[10px] font-semibold text-emerald-600 dark:text-emerald-400 bg-emerald-50 dark:bg-emerald-950/40 px-1.5 py-0.5 rounded">
+            <span className="text-[10px] font-bold text-emerald-700 dark:text-emerald-300 bg-emerald-50 dark:bg-emerald-950/40 px-2 py-0.5 rounded-full border border-emerald-200 dark:border-emerald-800">
               Online
             </span>
           </div>
-          <p className="mt-1 text-[11px] text-slate-500 dark:text-slate-400">
-            Camera AI, BLE Band, Radar
-          </p>
+          <div className="mt-3 pt-2.5 border-t border-[#C8AD8A]/40 dark:border-white/5 px-1 relative z-10">
+            <p className="text-[11px] text-slate-600 dark:text-slate-400 truncate">
+              Camera AI, BLE Band, Radar
+            </p>
+          </div>
         </div>
 
-        <div className="glass-card p-4">
-          <div className="flex items-center justify-between">
-            <span className="text-[11px] font-mono font-semibold uppercase tracking-wider text-slate-500 dark:text-slate-400">
+        {/* Card 4: Sự cố */}
+        <div className="glass-card p-5 relative group">
+          <div className="flex items-center justify-between relative z-10 px-1">
+            <span className="text-[11px] font-mono font-bold uppercase tracking-wider text-slate-600 dark:text-slate-300">
               Sự cố / Lỗi vận hành
             </span>
-            <div className="p-2 rounded-xl bg-amber-50 dark:bg-amber-950/50 text-amber-600 dark:text-amber-400 border border-amber-100 dark:border-amber-800">
+            <div className="p-2 rounded-xl bg-amber-50 dark:bg-amber-950/50 text-amber-700 dark:text-amber-300 border border-amber-200 dark:border-amber-800 shadow-sm">
               <AlertTriangle className="w-4 h-4" />
             </div>
           </div>
-          <div className="mt-2 flex items-baseline space-x-2">
-            <span className="font-mono text-2xl font-extrabold text-slate-900 dark:text-white">
+          <div className="mt-3 flex items-baseline space-x-2 px-1 relative z-10">
+            <span className="font-mono text-2xl font-black text-slate-900 dark:text-white">
               {metrics.unresolvedInc}
             </span>
-            <span className="text-[10px] font-semibold text-emerald-600 dark:text-emerald-400 bg-emerald-50 dark:bg-emerald-950/40 px-1.5 py-0.5 rounded">
+            <span className="text-[10px] font-bold text-emerald-700 dark:text-emerald-300 bg-emerald-50 dark:bg-emerald-950/40 px-2 py-0.5 rounded-full border border-emerald-200 dark:border-emerald-800">
               0 Chưa xử lý
             </span>
           </div>
-          <p className="mt-1 text-[11px] text-slate-500 dark:text-slate-400">
-            Hệ thống vận hành an toàn
-          </p>
+          <div className="mt-3 pt-2.5 border-t border-[#C8AD8A]/40 dark:border-white/5 px-1 relative z-10">
+            <p className="text-[11px] text-slate-600 dark:text-slate-400 truncate">
+              Hệ thống vận hành an toàn
+            </p>
+          </div>
         </div>
       </div>
 
       {/* Navigation Tabs */}
-      <div className="flex border-b border-sky-100 dark:border-sky-950/80 gap-2 pb-px">
+      <div className="flex border-b border-[#C8AD8A]/50 dark:border-white/10 gap-2 pb-px">
         <button
           onClick={() => setActiveTab('servers')}
           className={`flex items-center gap-2 px-4 py-2.5 text-xs font-semibold rounded-t-xl transition-colors border-b-2 ${

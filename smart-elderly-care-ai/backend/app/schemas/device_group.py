@@ -1,7 +1,7 @@
 """
 device_group.py – Pydantic v2 Schemas cho Phân vùng Nhóm thiết bị (DeviceGroup).
-Hỗ trợ tạo nhóm với thiết bị kèm theo, chỉnh sửa tên và danh sách thiết bị thuộc nhóm.
-Vị trí: backend/app/schemas/device_group.py
+Người làm: DuongVanHieu
+Nghiệp vụ: DTO xác thực tạo/cập nhật nhóm phòng và gán danh sách thiết bị.
 """
 
 from datetime import datetime

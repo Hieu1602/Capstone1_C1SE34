@@ -6,7 +6,8 @@ import React, { useState, useEffect, useMemo } from 'react';
 import {
   Server,
   Zap,
-  Terminal,
+  Sliders,
+  FileText,
   Search,
   Download,
   Trash2,
@@ -193,13 +194,18 @@ export const InfrastructurePage: React.FC = () => {
 
       {/* Header */}
       <div className="flex flex-col md:flex-row md:items-center justify-between gap-4">
-        <div>
-          <h1 className="font-heading text-xl font-bold tracking-tight text-slate-900 dark:text-white">
-            Quản lý hạ tầng
-          </h1>
-          <p className="text-xs text-slate-500 dark:text-slate-400 mt-1 font-sans">
-            Chẩn đoán trạng thái các dịch vụ cốt lõi, bộ nhớ tạm Redis và nhật ký kiểm toán hệ thống
-          </p>
+        <div className="flex items-center gap-3">
+          <div className="p-2.5 rounded-xl bg-gradient-to-br from-[#D96C3B] to-[#B84B1E] text-white shadow-md shadow-[#D96C3B]/25 shrink-0">
+            <Server className="w-5 h-5 stroke-[2.2]" />
+          </div>
+          <div>
+            <h1 className="font-heading text-xl font-bold tracking-tight text-slate-900 dark:text-white">
+              Quản lý hạ tầng
+            </h1>
+            <p className="text-xs text-slate-500 dark:text-slate-400 mt-0.5 font-sans">
+              Chẩn đoán trạng thái các dịch vụ cốt lõi, bộ nhớ tạm Redis và nhật ký kiểm toán hệ thống
+            </p>
+          </div>
         </div>
 
         <div className="flex items-center space-x-3">
@@ -230,15 +236,15 @@ export const InfrastructurePage: React.FC = () => {
           {SERVICES_LIST.map((srv) => (
             <div
               key={srv.name}
-              className="glass-card p-4 flex flex-col justify-between hover:border-sky-400 dark:hover:border-sky-500/50 transition-all duration-200"
+              className="glass-card p-5 relative group flex flex-col justify-between hover:border-[#D96C3B] transition-all duration-200"
             >
-              <div>
+              <div className="relative z-10 px-1">
                 <div className="flex items-start justify-between">
                   <div>
                     <h3 className="font-heading font-bold text-sm text-slate-900 dark:text-white">
                       {srv.name}
                     </h3>
-                    <p className="text-xs text-sky-600 dark:text-sky-400 font-mono mt-0.5">
+                    <p className="text-xs text-[#C25828] dark:text-[#DFB15B] font-mono mt-0.5">
                       {srv.category}
                     </p>
                   </div>
@@ -252,9 +258,9 @@ export const InfrastructurePage: React.FC = () => {
                 </p>
               </div>
 
-              <div className="mt-4 pt-3 border-t border-slate-100 dark:border-white/5 flex items-center justify-between text-xs font-mono">
+              <div className="mt-4 pt-3 border-t border-[#C8AD8A]/40 dark:border-white/5 flex items-center justify-between text-xs font-mono px-1 relative z-10">
                 <span className="text-slate-500">Cổng: :{srv.port}</span>
-                <span className="font-semibold text-sky-600 dark:text-sky-400">
+                <span className="font-bold text-[#D96C3B] dark:text-[#E67A47]">
                   {srv.latency}
                 </span>
               </div>
@@ -313,7 +319,7 @@ export const InfrastructurePage: React.FC = () => {
             <div className="flex items-center justify-between">
               <div className="flex items-center space-x-2.5">
                 <div className="w-9 h-9 rounded-xl bg-sky-50 dark:bg-sky-950/60 text-sky-600 dark:text-sky-400 border border-sky-100 dark:border-sky-800 flex items-center justify-center">
-                  <Terminal className="w-4 h-4" />
+                  <Sliders className="w-4 h-4" />
                 </div>
                 <div>
                   <h3 className="font-heading font-bold text-sm text-slate-900 dark:text-white">
@@ -427,7 +433,7 @@ export const InfrastructurePage: React.FC = () => {
       <div className="space-y-4">
         <div className="flex flex-col md:flex-row md:items-center justify-between gap-4">
           <div className="flex items-center space-x-2">
-            <Terminal className="w-4 h-4 text-sky-600 dark:text-sky-400" />
+            <FileText className="w-4 h-4 text-sky-600 dark:text-sky-400" />
             <h2 className="font-heading text-sm font-bold text-slate-900 dark:text-white">
               Nhật ký kiểm toán hệ thống (System Audit Logs)
             </h2>

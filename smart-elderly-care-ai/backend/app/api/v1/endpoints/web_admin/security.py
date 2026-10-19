@@ -171,10 +171,16 @@ async def get_active_sessions(
         )
         users = res.scalars().all()
 
-        existing_user_ids = {s.get("user_id") for s in sessions}
+        # Author: DuongVanHieu - Khử trùng lặp session ID và user ID để đảm bảo tính duy nhất của phiên hoạt động
+        existing_user_ids = {s.get("user_id") for s in sessions if s.get("user_id")}
+        existing_session_ids = {s.get("id") for s in sessions if s.get("id")}
 
         for idx, u in enumerate(users):
-            if str(u.id) not in existing_user_ids:
+            user_id_str = str(u.id)
+            sess_id = f"sess-{user_id_str[:8]}"
+            if user_id_str not in existing_user_ids and sess_id not in existing_session_ids:
+                existing_user_ids.add(user_id_str)
+                existing_session_ids.add(sess_id)
                 role_label = (
                     "Quản trị viên"
                     if u.role == "admin"
@@ -186,8 +192,8 @@ async def get_active_sessions(
                     else u.updated_at.strftime("%Y-%m-%d %H:%M:%S")
                 )
                 sessions.append({
-                    "id": f"sess-{str(u.id)[:8]}",
-                    "user_id": str(u.id),
+                    "id": sess_id,
+                    "user_id": user_id_str,
                     "user_name": f"{u.full_name} ({u.phone})",
                     "role": role_label,
                     "ip_address": "127.0.0.1 (Localhost)" if idx == 0 else f"192.168.1.{10 + idx}",
@@ -199,7 +205,16 @@ async def get_active_sessions(
     except Exception:
         pass
 
-    return sessions
+    # Author: DuongVanHieu - Chuẩn hóa danh sách phiên duy nhất theo id tránh lỗi trùng key ở frontend
+    unique_sessions: List[Dict[str, Any]] = []
+    seen_ids = set()
+    for s in sessions:
+        sid = s.get("id")
+        if sid and sid not in seen_ids:
+            seen_ids.add(sid)
+            unique_sessions.append(s)
+
+    return unique_sessions
 
 
 @router.delete("/sessions/{session_id}", summary="Thu hồi cưỡng bức một phiên làm việc")

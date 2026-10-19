@@ -14,6 +14,7 @@ import { fcmService } from './src/services/fcm';
 import api from './src/services/api';
 import { useAuthStore } from './src/store/useAuthStore';
 import i18n from './src/i18n/config';
+import { Ionicons } from '@expo/vector-icons';
 
 // Bỏ qua các cảnh báo tương thích style không nghiêm trọng trên nền tảng Web
 LogBox.ignoreLogs([
@@ -60,6 +61,11 @@ export default function App() {
     };
   }, []);
 
+  // Author: DuongVanHieu - Tải trước font Ionicons để đảm bảo hiển thị đúng icon thay vì hình chữ nhật
+  useEffect(() => {
+    Ionicons.loadFont?.().catch(() => {});
+  }, []);
+
   useEffect(() => {
     if (Platform.OS !== 'web' || typeof document === 'undefined') return undefined;
 
@@ -79,16 +85,48 @@ export default function App() {
 
     const style = document.createElement('style');
     style.id = styleId;
+    // Author: DuongVanHieu - Đăng ký @font-face cho vector icon fonts và loại bỏ !important trên selector * để không đè font icon thành hình chữ nhật
     style.textContent = `
-      * {
-        font-family: 'Inter', 'Be Vietnam Pro', 'Plus Jakarta Sans', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Helvetica, Arial, sans-serif !important;
+      @font-face {
+        font-family: 'ionicons';
+        src: url('https://cdn.jsdelivr.net/npm/@expo/vector-icons@15.0.2/build/vendor/react-native-vector-icons/Fonts/Ionicons.ttf') format('truetype');
+        font-display: swap;
+      }
+      @font-face {
+        font-family: 'Ionicons';
+        src: url('https://cdn.jsdelivr.net/npm/@expo/vector-icons@15.0.2/build/vendor/react-native-vector-icons/Fonts/Ionicons.ttf') format('truetype');
+        font-display: swap;
+      }
+      @font-face {
+        font-family: 'MaterialCommunityIcons';
+        src: url('https://cdn.jsdelivr.net/npm/@expo/vector-icons@15.0.2/build/vendor/react-native-vector-icons/Fonts/MaterialCommunityIcons.ttf') format('truetype');
+        font-display: swap;
+      }
+      @font-face {
+        font-family: 'MaterialIcons';
+        src: url('https://cdn.jsdelivr.net/npm/@expo/vector-icons@15.0.2/build/vendor/react-native-vector-icons/Fonts/MaterialIcons.ttf') format('truetype');
+        font-display: swap;
+      }
+      @font-face {
+        font-family: 'Feather';
+        src: url('https://cdn.jsdelivr.net/npm/@expo/vector-icons@15.0.2/build/vendor/react-native-vector-icons/Fonts/Feather.ttf') format('truetype');
+        font-display: swap;
+      }
+      @font-face {
+        font-family: 'FontAwesome';
+        src: url('https://cdn.jsdelivr.net/npm/@expo/vector-icons@15.0.2/build/vendor/react-native-vector-icons/Fonts/FontAwesome.ttf') format('truetype');
+        font-display: swap;
+      }
+
+      html, body, #root, [data-testid="root"] {
+        font-family: 'Inter', 'Be Vietnam Pro', 'Plus Jakarta Sans', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Helvetica, Arial, sans-serif;
         -webkit-font-smoothing: antialiased;
         -moz-osx-font-smoothing: grayscale;
         text-rendering: optimizeLegibility;
       }
 
       input, textarea, select, button {
-        font-family: 'Inter', 'Be Vietnam Pro', 'Plus Jakarta Sans', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Helvetica, Arial, sans-serif !important;
+        font-family: 'Inter', 'Be Vietnam Pro', 'Plus Jakarta Sans', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Helvetica, Arial, sans-serif;
       }
 
       input:focus,

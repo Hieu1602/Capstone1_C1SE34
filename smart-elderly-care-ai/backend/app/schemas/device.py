@@ -1,6 +1,7 @@
 """
 device.py – Pydantic v2 Schemas cho Device và DeviceConfig endpoints.
-Vị trí: backend/app/schemas/device.py
+Người làm: DuongVanHieu
+Nghiệp vụ: Data transfer objects (DTO) xác thực dữ liệu đầu vào/ra cho thiết bị IoT và ngưỡng y tế.
 """
 
 from datetime import datetime
