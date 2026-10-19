@@ -11,13 +11,23 @@ interface HealthTrendsCardProps {
   navigation: any;
   isDarkMode: boolean;
   colors: any;
+  currentVitals?: any;
 }
 
 export function HealthTrendsCard({
   navigation,
   isDarkMode,
   colors,
+  currentVitals,
 }: HealthTrendsCardProps) {
+  const hasHR = currentVitals?.heart_rate !== null && currentVitals?.heart_rate !== undefined;
+  const hasSpO2 = currentVitals?.spo2 !== null && currentVitals?.spo2 !== undefined;
+  const hasAnyData = hasHR || hasSpO2;
+
+  const hrValue = hasHR ? currentVitals.heart_rate : null;
+  const spo2Value = hasSpO2 ? currentVitals.spo2 : null;
+  const spo2PinPercent = spo2Value !== null ? Math.min(100, Math.max(0, (spo2Value - 90) * 10)) : 0;
+
   return (
     <View style={styles.trendSectionContainer}>
       <View style={styles.trendSectionHeader}>
@@ -27,9 +37,25 @@ export function HealthTrendsCard({
             Xu hướng sức khoẻ hôm nay
           </Text>
         </View>
-        <View style={styles.trendStandardBadge}>
-          <Ionicons name="checkmark-circle" size={13} color="#15803D" />
-          <Text style={styles.trendStandardBadgeText}>Đạt chuẩn</Text>
+        <View
+          style={[
+            styles.trendStandardBadge,
+            !hasAnyData && { backgroundColor: isDarkMode ? '#1E293B' : '#F1F5F9' },
+          ]}
+        >
+          <Ionicons
+            name={hasAnyData ? 'checkmark-circle' : 'information-circle'}
+            size={13}
+            color={hasAnyData ? '#15803D' : '#64748B'}
+          />
+          <Text
+            style={[
+              styles.trendStandardBadgeText,
+              !hasAnyData && { color: isDarkMode ? '#94A3B8' : '#64748B' },
+            ]}
+          >
+            {hasAnyData ? 'Đạt chuẩn' : 'Chưa có dữ liệu'}
+          </Text>
         </View>
       </View>
 
@@ -45,53 +71,69 @@ export function HealthTrendsCard({
             <Text style={[styles.miniCardTitle, isDarkMode && { color: colors.textPrimary }]}>
               Nhịp tim 12h qua
             </Text>
-            <View style={styles.miniCardBadge}>
-              <Text style={styles.miniCardBadgeText}>TB 74</Text>
+            <View
+              style={[
+                styles.miniCardBadge,
+                !hasHR && { backgroundColor: isDarkMode ? '#1E293B' : '#F1F5F9' },
+              ]}
+            >
+              <Text
+                style={[
+                  styles.miniCardBadgeText,
+                  !hasHR && { color: isDarkMode ? '#94A3B8' : '#64748B' },
+                ]}
+              >
+                {hasHR ? `TB ${hrValue}` : 'TB --'}
+              </Text>
             </View>
           </View>
 
           {/* Mini bar chart */}
-          <View style={styles.miniBarChartArea}>
-            <View style={styles.miniDashedRefLine}>
-              <View style={styles.miniDashedDash} />
-              <Text style={[styles.miniRefLabel, isDarkMode && { color: colors.textSecondary }]}>74 bpm</Text>
-            </View>
+          {hasHR ? (
+            <View style={styles.miniBarChartArea}>
+              <View style={styles.miniDashedRefLine}>
+                <View style={styles.miniDashedDash} />
+                <Text style={[styles.miniRefLabel, isDarkMode && { color: colors.textSecondary }]}>{hrValue} bpm</Text>
+              </View>
 
-            <View style={styles.miniBarsRow}>
-              {[
-                { time: '06h', val: 70 },
-                { time: '08h', val: 74 },
-                { time: '10h', val: 82 },
-                { time: '12h', val: 72 },
-                { time: '14h', val: 76 },
-                { time: '16h', val: 74 },
-              ].map((col) => {
-                const height = Math.max(14, ((col.val - 50) / 45) * 44);
-                const isHigh = col.val >= 80;
-                return (
-                  <View key={col.time} style={styles.miniBarCol}>
-                    <Text style={[styles.miniBarValText, isDarkMode && { color: colors.textSecondary }]}>{col.val}</Text>
-                    <View style={[styles.miniBarTrack, isDarkMode && { backgroundColor: colors.surfaceSubtle }]}>
-                      <View
-                        style={[
-                          styles.miniBarFill,
-                          {
-                            height,
-                            backgroundColor: isHigh ? '#F59E0B' : '#10B981',
-                          },
-                        ]}
-                      />
+              <View style={styles.miniBarsRow}>
+                {[
+                  { time: 'Hiện tại', val: hrValue },
+                ].map((col) => {
+                  const height = Math.max(14, ((col.val - 50) / 45) * 44);
+                  const isHigh = col.val >= 100;
+                  return (
+                    <View key={col.time} style={styles.miniBarCol}>
+                      <Text style={[styles.miniBarValText, isDarkMode && { color: colors.textSecondary }]}>{col.val}</Text>
+                      <View style={[styles.miniBarTrack, isDarkMode && { backgroundColor: colors.surfaceSubtle }]}>
+                        <View
+                          style={[
+                            styles.miniBarFill,
+                            {
+                              height,
+                              backgroundColor: isHigh ? '#F59E0B' : '#10B981',
+                            },
+                          ]}
+                        />
+                      </View>
+                      <Text style={[styles.miniBarTimeText, isDarkMode && { color: colors.textSecondary }]}>{col.time}</Text>
                     </View>
-                    <Text style={[styles.miniBarTimeText, isDarkMode && { color: colors.textSecondary }]}>{col.time}</Text>
-                  </View>
-                );
-              })}
+                  );
+                })}
+              </View>
             </View>
-          </View>
+          ) : (
+            <View style={styles.miniEmptyBox}>
+              <Ionicons name="bar-chart-outline" size={24} color={isDarkMode ? '#64748B' : '#94A3B8'} style={{ marginBottom: 4 }} />
+              <Text style={[styles.miniEmptyText, { color: colors.textSecondary }]}>Chưa có dữ liệu 12h qua</Text>
+            </View>
+          )}
 
           <View style={[styles.miniCardFooter, isDarkMode && { borderTopColor: colors.border }]}>
-            <View style={styles.miniStatusDotGreen} />
-            <Text style={[styles.miniStatusNote, isDarkMode && { color: colors.textSecondary }]}>Chuẩn 60-100 bpm</Text>
+            <View style={hasHR ? styles.miniStatusDotGreen : [styles.miniStatusDotGreen, { backgroundColor: '#94A3B8' }]} />
+            <Text style={[styles.miniStatusNote, isDarkMode && { color: colors.textSecondary }]}>
+              {hasHR ? 'Chuẩn 60-100 bpm' : 'Chưa ghi nhận nhịp tim'}
+            </Text>
           </View>
         </TouchableOpacity>
 
@@ -108,32 +150,50 @@ export function HealthTrendsCard({
             <Ionicons name="body" size={15} color="#0284C7" />
           </View>
 
-          {/* Stacked progress bar (25% Xanh lá, 45% Xanh dương, 30% Tím) */}
+          {/* Stacked progress bar */}
           <View style={[styles.stackedBarTrack, isDarkMode && { backgroundColor: colors.surfaceSubtle }]}>
-            <View style={[styles.stackedSegment, { flex: 25, backgroundColor: '#10B981' }]} />
-            <View style={[styles.stackedSegment, { flex: 45, backgroundColor: '#0284C7' }]} />
-            <View style={[styles.stackedSegment, { flex: 30, backgroundColor: '#8B5CF6' }]} />
+            {hasAnyData ? (
+              <>
+                <View style={[styles.stackedSegment, { flex: 25, backgroundColor: '#10B981' }]} />
+                <View style={[styles.stackedSegment, { flex: 45, backgroundColor: '#0284C7' }]} />
+                <View style={[styles.stackedSegment, { flex: 30, backgroundColor: '#8B5CF6' }]} />
+              </>
+            ) : (
+              <View style={[styles.stackedSegment, { flex: 100, backgroundColor: isDarkMode ? '#334155' : '#E2E8F0' }]} />
+            )}
           </View>
 
           {/* Chú thích stacked bar */}
           <View style={styles.stackedLegendGrid}>
             <View style={styles.legendItem}>
-              <View style={[styles.legendDot, { backgroundColor: '#10B981' }]} />
-              <Text style={[styles.legendText, isDarkMode && { color: colors.textSecondary }]}>Đi lại 25%</Text>
+              <View style={[styles.legendDot, { backgroundColor: hasAnyData ? '#10B981' : '#94A3B8' }]} />
+              <Text style={[styles.legendText, isDarkMode && { color: colors.textSecondary }]}>
+                {hasAnyData ? 'Đi lại 25%' : 'Đi lại --'}
+              </Text>
             </View>
             <View style={styles.legendItem}>
-              <View style={[styles.legendDot, { backgroundColor: '#0284C7' }]} />
-              <Text style={[styles.legendText, isDarkMode && { color: colors.textSecondary }]}>Ngồi 45%</Text>
+              <View style={[styles.legendDot, { backgroundColor: hasAnyData ? '#0284C7' : '#94A3B8' }]} />
+              <Text style={[styles.legendText, isDarkMode && { color: colors.textSecondary }]}>
+                {hasAnyData ? 'Ngồi 45%' : 'Ngồi --'}
+              </Text>
             </View>
             <View style={styles.legendItem}>
-              <View style={[styles.legendDot, { backgroundColor: '#8B5CF6' }]} />
-              <Text style={[styles.legendText, isDarkMode && { color: colors.textSecondary }]}>Nghỉ 30%</Text>
+              <View style={[styles.legendDot, { backgroundColor: hasAnyData ? '#8B5CF6' : '#94A3B8' }]} />
+              <Text style={[styles.legendText, isDarkMode && { color: colors.textSecondary }]}>
+                {hasAnyData ? 'Nghỉ 30%' : 'Nghỉ --'}
+              </Text>
             </View>
           </View>
 
           <View style={[styles.activitySummaryCard, isDarkMode && { backgroundColor: colors.surfaceSubtle }]}>
             <Text style={[styles.activitySummaryText, isDarkMode && { color: colors.textSecondary }]}>
-              Vận động: <Text style={styles.boldGreen}>2.5h</Text> | Nghỉ: <Text style={styles.boldBlue}>6h</Text>
+              {hasAnyData ? (
+                <>
+                  Vận động: <Text style={styles.boldGreen}>2.5h</Text> | Nghỉ: <Text style={styles.boldBlue}>6h</Text>
+                </>
+              ) : (
+                'Chưa ghi nhận vận động'
+              )}
             </Text>
           </View>
         </TouchableOpacity>
@@ -152,9 +212,25 @@ export function HealthTrendsCard({
             </View>
             <Text style={[styles.spo2CardTitle, isDarkMode && { color: colors.textPrimary }]}>Chỉ số Oxy máu SpO₂</Text>
           </View>
-          <View style={styles.spo2BadgeGreen}>
-            <Ionicons name="checkmark-circle" size={13} color="#15803D" />
-            <Text style={styles.spo2BadgeGreenText}>98% - Rất tốt</Text>
+          <View
+            style={[
+              styles.spo2BadgeGreen,
+              !hasSpO2 && { backgroundColor: isDarkMode ? '#1E293B' : '#F1F5F9' },
+            ]}
+          >
+            <Ionicons
+              name={hasSpO2 ? 'checkmark-circle' : 'information-circle'}
+              size={13}
+              color={hasSpO2 ? '#15803D' : '#64748B'}
+            />
+            <Text
+              style={[
+                styles.spo2BadgeGreenText,
+                !hasSpO2 && { color: isDarkMode ? '#94A3B8' : '#64748B' },
+              ]}
+            >
+              {hasSpO2 ? `${spo2Value}% - ${spo2Value >= 95 ? 'Rất tốt' : 'Cần theo dõi'}` : 'Chưa có dữ liệu'}
+            </Text>
           </View>
         </View>
 
@@ -163,10 +239,12 @@ export function HealthTrendsCard({
           <View style={styles.rulerTrackBg}>
             <View style={styles.rulerZoneWarning} />
             <View style={styles.rulerZoneSafe} />
-            <View style={[styles.rulerMarkerPin, { left: '80%' }]}>
-              <View style={styles.rulerPointerArrow} />
-              <View style={styles.rulerPointerDot} />
-            </View>
+            {hasSpO2 && (
+              <View style={[styles.rulerMarkerPin, { left: `${spo2PinPercent}%` }]}>
+                <View style={styles.rulerPointerArrow} />
+                <View style={styles.rulerPointerDot} />
+              </View>
+            )}
           </View>
 
           {/* Các mốc số trên thước đo */}
@@ -174,15 +252,28 @@ export function HealthTrendsCard({
             <Text style={[styles.rulerTickText, isDarkMode && { color: colors.textSecondary }]}>90%</Text>
             <Text style={[styles.rulerTickText, isDarkMode && { color: colors.textSecondary }]}>92%</Text>
             <Text style={[styles.rulerTickText, { fontWeight: '700', color: Colors.primary }]}>95% (Chuẩn)</Text>
-            <Text style={[styles.rulerTickText, { fontWeight: '800', color: '#15803D' }]}>98%</Text>
+            <Text
+              style={[
+                styles.rulerTickText,
+                { fontWeight: '800', color: hasSpO2 ? '#15803D' : (isDarkMode ? colors.textSecondary : '#64748B') },
+              ]}
+            >
+              {hasSpO2 ? `${spo2Value}%` : '98%'}
+            </Text>
             <Text style={[styles.rulerTickText, isDarkMode && { color: colors.textSecondary }]}>100%</Text>
           </View>
         </View>
 
         <View style={styles.spo2FooterRow}>
-          <Ionicons name="shield-checkmark-outline" size={14} color="#15803D" />
+          <Ionicons
+            name={hasSpO2 ? 'shield-checkmark-outline' : 'information-circle-outline'}
+            size={14}
+            color={hasSpO2 ? '#15803D' : '#64748B'}
+          />
           <Text style={[styles.spo2FooterNote, isDarkMode && { color: colors.textSecondary }]}>
-            Ngưỡng an toàn ≥ 95% • Nồng độ oxy bão hoà duy trì tối ưu
+            {hasSpO2
+              ? 'Ngưỡng an toàn ≥ 95% • Nồng độ oxy bão hoà duy trì tối ưu'
+              : 'Chưa ghi nhận dữ liệu đo SpO₂ từ vòng đeo tay'}
           </Text>
         </View>
       </TouchableOpacity>
@@ -261,6 +352,17 @@ const styles = StyleSheet.create({
     justifyContent: 'flex-end',
     position: 'relative',
     marginVertical: 4,
+  },
+  miniEmptyBox: {
+    height: 78,
+    justifyContent: 'center',
+    alignItems: 'center',
+    marginVertical: 4,
+  },
+  miniEmptyText: {
+    fontSize: 10,
+    fontWeight: '500',
+    color: '#94A3B8',
   },
   miniDashedRefLine: {
     position: 'absolute',

@@ -10,7 +10,6 @@ import { useTheme } from '../../../store/useThemeStore';
 import { Colors } from '../../../theme/colors';
 import { LocalizedAlert, LocalizedText, LocalizedTextInput } from '../../../i18n/LocalizedComponents';
 
-
 interface MedicationItem {
   id: string;
   name: string;
@@ -29,7 +28,7 @@ interface HydrationSchedule {
 }
 
 export default function MedicationReminderScreen({ navigation }: any) {
-  const { isDarkMode, colors } = useTheme();
+  const { isDarkMode } = useTheme();
 
   // FR12: Voice Reminder through Hub Smart Speaker
   const [hubVoiceReminderEnabled, setHubVoiceReminderEnabled] = useState(true);
@@ -38,63 +37,11 @@ export default function MedicationReminderScreen({ navigation }: any) {
   // Filter session
   const [selectedFilter, setSelectedFilter] = useState<'ALL' | 'MORNING' | 'NOON' | 'EVENING'>('ALL');
 
-  // Medication list
-  const [medications, setMedications] = useState<MedicationItem[]>([
-    {
-      id: 'm1',
-      name: 'Glucosamine Sulfate 1500mg',
-      time: '07:30',
-      session: 'MORNING',
-      dose: '1 gói sau khi ăn sáng',
-      purpose: 'Bôi trơn khớp gối, ngừa thoái hóa',
-      taken: true,
-    },
-    {
-      id: 'm2',
-      name: 'Vitamin B-Complex tổng hợp',
-      time: '07:30',
-      session: 'MORNING',
-      dose: '1 viên sau bữa sáng',
-      purpose: 'Tăng cường tuần hoàn máu não',
-      taken: true,
-    },
-    {
-      id: 'm3',
-      name: 'Canxi Nano + D3 MK7',
-      time: '12:00',
-      session: 'NOON',
-      dose: '1 viên sủi sau ăn trưa',
-      purpose: 'Ngừa loãng xương & chắc khỏe xương',
-      taken: true,
-    },
-    {
-      id: 'm4',
-      name: 'Amlodipine 5mg (Thuốc huyết áp)',
-      time: '18:30',
-      session: 'EVENING',
-      dose: '1 viên sau bữa tối',
-      purpose: 'Kiểm soát huyết áp nền < 130/80',
-      taken: false,
-    },
-    {
-      id: 'm5',
-      name: 'Metformin 500mg',
-      time: '18:30',
-      session: 'EVENING',
-      dose: '1 viên sau bữa tối',
-      purpose: 'Ổn định đường huyết đái tháo đường',
-      taken: false,
-    },
-  ]);
+  // Danh sách cữ thuốc (bắt đầu từ dữ liệu thực, không mock)
+  const [medications, setMedications] = useState<MedicationItem[]>([]);
 
-  // Hydration schedule
-  const [hydrationList, setHydrationList] = useState<HydrationSchedule[]>([
-    { time: '08:30', amount: '200ml', note: 'Nước ấm sau thức dậy & ăn sáng', done: true },
-    { time: '10:00', amount: '150ml', note: 'Nước lọc tinh khiết buổi sáng', done: true },
-    { time: '14:30', amount: '200ml', note: 'Trà thảo mộc / Atiso ấm', done: true },
-    { time: '16:30', amount: '150ml', note: 'Nước lọc bổ sung buổi chiều', done: false },
-    { time: '20:00', amount: '150ml', note: 'Nước ấm 1 giờ trước khi ngủ', done: false },
-  ]);
+  // Lịch uống nước (bắt đầu rỗng)
+  const [hydrationList, setHydrationList] = useState<HydrationSchedule[]>([]);
 
   // Add new med modal
   const [isAddMedModalVisible, setAddMedModalVisible] = useState(false);
@@ -133,10 +80,11 @@ export default function MedicationReminderScreen({ navigation }: any) {
     setIsPlayingTestVoice(true);
     setTimeout(() => {
       setIsPlayingTestVoice(false);
-      LocalizedAlert.alert(
-        'Loa Hub đã phát',
-        '📢 "Đã đến 18:30, mời cụ uống thuốc huyết áp Amlodipine 5mg và 1 cốc nước ấm."'
-      );
+      const firstMed = medications.find((m) => !m.taken);
+      const textNotice = firstMed
+        ? `Đã đến giờ uống thuốc ${firstMed.name} (${firstMed.dose}).`
+        : 'Hiện không có lịch uống thuốc sắp tới.';
+      LocalizedAlert.alert('Loa Hub đã phát', `📢 "${textNotice}"`);
     }, 1200);
   };
 
@@ -152,7 +100,7 @@ export default function MedicationReminderScreen({ navigation }: any) {
       time: newMedTime.trim() || '18:30',
       session: newMedSession,
       dose: newMedDose.trim() || '1 viên sau khi ăn',
-      purpose: 'Thuốc theo chỉ định bác sĩ',
+      purpose: 'Theo chỉ định bác sĩ',
       taken: false,
     };
 
@@ -175,69 +123,31 @@ export default function MedicationReminderScreen({ navigation }: any) {
   const eveningCount = medications.filter((m) => m.session === 'EVENING').length;
   const eveningDone = medications.filter((m) => m.session === 'EVENING' && m.taken).length;
 
+  const bgScreen = isDarkMode ? '#0B0F19' : '#F8FAFC';
+  const bgCard = isDarkMode ? '#1E293B' : '#FFFFFF';
+  const borderCol = isDarkMode ? '#334155' : '#E2E8F0';
+  const textTitle = isDarkMode ? '#F8FAFC' : '#0F172A';
+  const textSub = isDarkMode ? '#94A3B8' : '#64748B';
+
   return (
-    <SafeAreaView
-      style={[
-        styles.safeArea,
-        { backgroundColor: isDarkMode ? '#0B0F19' : '#F8FAFC' },
-      ]}
-      edges={['top']}
-    >
+    <SafeAreaView style={[styles.safeArea, { backgroundColor: bgScreen }]} edges={['top']}>
       {/* Header */}
-      <View
-        style={[
-          styles.headerRow,
-          {
-            backgroundColor: isDarkMode ? '#0B0F19' : '#FFFFFF',
-            borderBottomColor: isDarkMode ? '#1E293B' : '#E2E8F0',
-          },
-        ]}
-      >
+      <View style={[styles.headerRow, { backgroundColor: isDarkMode ? '#0B0F19' : '#FFFFFF', borderBottomColor: borderCol }]}>
         <TouchableOpacity
-          style={[
-            styles.backBtn,
-            {
-              backgroundColor: isDarkMode ? '#1E293B' : '#F1F5F9',
-              borderColor: isDarkMode ? '#334155' : '#E2E8F0',
-            },
-          ]}
+          style={[styles.backBtn, { backgroundColor: isDarkMode ? '#1E293B' : '#F1F5F9', borderColor: borderCol }]}
           onPress={() => navigation.goBack()}
           activeOpacity={0.7}
         >
-          <Ionicons
-            name="chevron-back"
-            size={22}
-            color={isDarkMode ? '#F8FAFC' : '#0F172A'}
-          />
+          <Ionicons name="chevron-back" size={22} color={textTitle} />
         </TouchableOpacity>
 
         <View style={styles.headerTitleCol}>
-          <LocalizedText
-            style={[
-              styles.headerTitle,
-              { color: isDarkMode ? '#F8FAFC' : '#0F172A' },
-            ]}
-          >
-            Lịch uống thuốc &amp; Ăn uống
-          </LocalizedText>
-          <LocalizedText
-            style={[
-              styles.headerSubtitle,
-              { color: isDarkMode ? '#94A3B8' : '#64748B' },
-            ]}
-          >
-            Đồng bộ giọng nói Loa thông minh Hub FR12
-          </LocalizedText>
+          <LocalizedText style={[styles.headerTitle, { color: textTitle }]}>Lịch uống thuốc & Ăn uống</LocalizedText>
+          <LocalizedText style={[styles.headerSubtitle, { color: textSub }]}>Đồng bộ giọng nói Loa thông minh Hub FR12</LocalizedText>
         </View>
 
         <TouchableOpacity
-          style={[
-            styles.addHeaderBtn,
-            {
-              backgroundColor: isDarkMode ? '#1E293B' : '#F1F5F9',
-              borderColor: isDarkMode ? '#334155' : '#E2E8F0',
-            },
-          ]}
+          style={[styles.addHeaderBtn, { backgroundColor: isDarkMode ? '#1E293B' : '#F1F5F9', borderColor: borderCol }]}
           onPress={() => setAddMedModalVisible(true)}
           activeOpacity={0.7}
         >
@@ -245,41 +155,16 @@ export default function MedicationReminderScreen({ navigation }: any) {
         </TouchableOpacity>
       </View>
 
-      <ScrollView
-        showsVerticalScrollIndicator={false}
-        contentContainerStyle={styles.scrollContent}
-      >
-        {/* TÙY CHỌN: Phát thông báo qua Loa thông minh Hub (Voice Reminder FR12) */}
-        <View
-          style={[
-            styles.speakerCard,
-            {
-              backgroundColor: isDarkMode ? '#1E293B' : '#FFFFFF',
-              borderColor: hubVoiceReminderEnabled ? Colors.primary : isDarkMode ? '#334155' : '#E2E8F0',
-            },
-          ]}
-        >
+      <ScrollView showsVerticalScrollIndicator={false} contentContainerStyle={styles.scrollContent}>
+        {/* Loa thông minh Hub */}
+        <View style={[styles.speakerCard, { backgroundColor: bgCard, borderColor: hubVoiceReminderEnabled ? Colors.primary : borderCol }]}>
           <View style={styles.speakerTopRow}>
             <View style={[styles.speakerIconCircle, { backgroundColor: isDarkMode ? '#432005' : '#FFF7ED' }]}>
               <Ionicons name="volume-high" size={24} color={Colors.primary} />
             </View>
             <View style={{ flex: 1, marginHorizontal: 12 }}>
-              <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6 }}>
-                <LocalizedText
-                  style={[
-                    styles.speakerTitle,
-                    { color: isDarkMode ? '#F8FAFC' : '#0F172A' },
-                  ]}
-                >
-                  Loa thông minh Hub (Voice Reminder FR12)
-                </LocalizedText>
-              </View>
-              <LocalizedText
-                style={[
-                  styles.speakerSubtitle,
-                  { color: isDarkMode ? '#94A3B8' : '#64748B' },
-                ]}
-              >
+              <LocalizedText style={[styles.speakerTitle, { color: textTitle }]}>Loa thông minh Hub (Voice Reminder)</LocalizedText>
+              <LocalizedText style={[styles.speakerSubtitle, { color: textSub }]}>
                 Tự động phát giọng nói tiếng Việt nhắc nhở người cao tuổi khi đến giờ
               </LocalizedText>
             </View>
@@ -291,7 +176,7 @@ export default function MedicationReminderScreen({ navigation }: any) {
             />
           </View>
 
-          <View style={[styles.speakerDivider, { backgroundColor: isDarkMode ? '#334155' : '#F1F5F9' }]} />
+          <View style={[styles.speakerDivider, { backgroundColor: borderCol }]} />
 
           <View style={styles.speakerBottomRow}>
             <View style={styles.speakerStatusPill}>
@@ -299,19 +184,12 @@ export default function MedicationReminderScreen({ navigation }: any) {
               <LocalizedText style={styles.speakerStatusText}>Hub #01 Online (Âm lượng 80%)</LocalizedText>
             </View>
             <TouchableOpacity
-              style={[
-                styles.testVoiceBtn,
-                isPlayingTestVoice && { opacity: 0.6 },
-              ]}
+              style={[styles.testVoiceBtn, isPlayingTestVoice && { opacity: 0.6 }]}
               onPress={handleTestVoiceSpeaker}
               activeOpacity={0.8}
               disabled={isPlayingTestVoice}
             >
-              <Ionicons
-                name={isPlayingTestVoice ? 'radio' : 'play'}
-                size={14}
-                color="#FFF"
-              />
+              <Ionicons name={isPlayingTestVoice ? 'radio' : 'play'} size={14} color="#FFF" />
               <LocalizedText style={styles.testVoiceBtnText}>
                 {isPlayingTestVoice ? 'Đang phát...' : 'Thử giọng nói'}
               </LocalizedText>
@@ -319,34 +197,14 @@ export default function MedicationReminderScreen({ navigation }: any) {
           </View>
         </View>
 
-        {/* Khối Cữ thuốc theo buổi (Sáng - Trưa - Tối) */}
-        <View
-          style={[
-            styles.sectionCard,
-            {
-              backgroundColor: isDarkMode ? '#1E293B' : '#FFFFFF',
-              borderColor: isDarkMode ? '#334155' : '#E2E8F0',
-            },
-          ]}
-        >
+        {/* Danh mục cữ thuốc hôm nay */}
+        <View style={[styles.sectionCard, { backgroundColor: bgCard, borderColor: borderCol }]}>
           <View style={styles.sectionHeader}>
             <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8 }}>
-              <View
-                style={[
-                  styles.sectionIconBox,
-                  { backgroundColor: isDarkMode ? '#1E3A8A' : '#EFF6FF' },
-                ]}
-              >
+              <View style={[styles.sectionIconBox, { backgroundColor: isDarkMode ? '#1E3A8A' : '#EFF6FF' }]}>
                 <Ionicons name="medical" size={20} color="#2563EB" />
               </View>
-              <LocalizedText
-                style={[
-                  styles.sectionTitle,
-                  { color: isDarkMode ? '#F8FAFC' : '#0F172A' },
-                ]}
-              >
-                Danh mục cữ thuốc hôm nay
-              </LocalizedText>
+              <LocalizedText style={[styles.sectionTitle, { color: textTitle }]}>Danh mục cữ thuốc hôm nay</LocalizedText>
             </View>
             <TouchableOpacity onPress={() => setAddMedModalVisible(true)}>
               <LocalizedText style={styles.addMedLink}>+ Thêm cữ</LocalizedText>
@@ -365,20 +223,10 @@ export default function MedicationReminderScreen({ navigation }: any) {
               return (
                 <TouchableOpacity
                   key={tab.key}
-                  style={[
-                    styles.sessionTabBtn,
-                    active && styles.sessionTabBtnActive,
-                    isDarkMode && !active && { backgroundColor: '#0F172A' },
-                  ]}
+                  style={[styles.sessionTabBtn, active && styles.sessionTabBtnActive, isDarkMode && !active && { backgroundColor: '#0F172A' }]}
                   onPress={() => setSelectedFilter(tab.key as any)}
                 >
-                  <LocalizedText
-                    style={[
-                      styles.sessionTabText,
-                      active && styles.sessionTabTextActive,
-                      isDarkMode && !active && { color: '#94A3B8' },
-                    ]}
-                  >
+                  <LocalizedText style={[styles.sessionTabText, active && styles.sessionTabTextActive, isDarkMode && !active && { color: '#94A3B8' }]}>
                     {tab.label}
                   </LocalizedText>
                 </TouchableOpacity>
@@ -386,384 +234,144 @@ export default function MedicationReminderScreen({ navigation }: any) {
             })}
           </View>
 
-          {/* Danh sách các loại thuốc */}
+          {/* Danh sách cữ thuốc */}
           <View style={styles.medListContainer}>
-            {filteredMeds.map((med) => (
-              <View
-                key={med.id}
-                style={[
-                  styles.medItemRow,
-                  {
-                    backgroundColor: isDarkMode ? '#0F172A' : '#F8FAFC',
-                    borderColor: med.taken ? '#10B981' : isDarkMode ? '#334155' : '#E2E8F0',
-                  },
-                ]}
-              >
-                <View style={styles.medTimeBadge}>
-                  <Ionicons name="time-outline" size={12} color="#0EA5E9" />
-                  <LocalizedText style={styles.medTimeText}>{med.time}</LocalizedText>
-                </View>
-
-                <View style={{ flex: 1, marginHorizontal: 10 }}>
-                  <LocalizedText
-                    style={[
-                      styles.medItemName,
-                      { color: isDarkMode ? '#F8FAFC' : '#0F172A' },
-                      med.taken && styles.medItemNameDone,
-                    ]}
-                  >
-                    {med.name}
-                  </LocalizedText>
-                  <LocalizedText style={styles.medItemDose}>{med.dose}</LocalizedText>
-                  <LocalizedText
-                    style={[
-                      styles.medItemPurpose,
-                      { color: isDarkMode ? '#94A3B8' : '#64748B' },
-                    ]}
-                  >
-                    Mục đích: {med.purpose}
-                  </LocalizedText>
-                </View>
-
-                <TouchableOpacity
+            {filteredMeds.length === 0 ? (
+              <View style={styles.emptyBox}>
+                <Ionicons name="medical-outline" size={36} color={isDarkMode ? '#64748B' : '#94A3B8'} />
+                <LocalizedText style={[styles.emptyBoxTitle, { color: textTitle }]}>Chưa có lịch uống thuốc</LocalizedText>
+                <LocalizedText style={[styles.emptyBoxSub, { color: textSub }]}>
+                  Bấm "+ Thêm cữ" ở góc trên để tạo lịch nhắc nhở uống thuốc cho người cao tuổi.
+                </LocalizedText>
+              </View>
+            ) : (
+              filteredMeds.map((med) => (
+                <View
+                  key={med.id}
                   style={[
-                    styles.medCheckBtn,
-                    med.taken ? styles.medCheckBtnDone : styles.medCheckBtnPending,
+                    styles.medItemRow,
+                    {
+                      backgroundColor: isDarkMode ? '#0F172A' : '#F8FAFC',
+                      borderColor: med.taken ? '#10B981' : borderCol,
+                    },
                   ]}
-                  onPress={() => toggleMedicationTaken(med.id)}
-                  activeOpacity={0.8}
                 >
-                  <Ionicons
-                    name={med.taken ? 'checkmark-circle' : 'ellipse-outline'}
-                    size={22}
-                    color={med.taken ? '#10B981' : '#94A3B8'}
-                  />
-                  <LocalizedText
-                    style={[
-                      styles.medCheckBtnText,
-                      { color: med.taken ? '#10B981' : '#64748B' },
-                    ]}
-                  >
-                    {med.taken ? 'Đã uống' : 'Chưa'}
-                  </LocalizedText>
-                </TouchableOpacity>
-              </View>
-            ))}
-          </View>
-        </View>
+                  <View style={styles.medTimeBadge}>
+                    <Ionicons name="time-outline" size={12} color="#0EA5E9" />
+                    <LocalizedText style={styles.medTimeText}>{med.time}</LocalizedText>
+                  </View>
 
-        {/* Khối Khung giờ sinh hoạt ăn uống */}
-        <View
-          style={[
-            styles.sectionCard,
-            {
-              backgroundColor: isDarkMode ? '#1E293B' : '#FFFFFF',
-              borderColor: isDarkMode ? '#334155' : '#E2E8F0',
-            },
-          ]}
-        >
-          <View style={styles.sectionHeader}>
-            <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8 }}>
-              <View
-                style={[
-                  styles.sectionIconBox,
-                  { backgroundColor: isDarkMode ? '#452F10' : '#FEF3C7' },
-                ]}
-              >
-                <Ionicons name="restaurant-outline" size={20} color="#D97706" />
-              </View>
-              <LocalizedText
-                style={[
-                  styles.sectionTitle,
-                  { color: isDarkMode ? '#F8FAFC' : '#0F172A' },
-                ]}
-              >
-                Khung giờ sinh hoạt ăn uống
-              </LocalizedText>
-            </View>
-          </View>
-
-          <View style={styles.mealList}>
-            {[
-              {
-                time: '07:00',
-                meal: 'Bữa sáng',
-                menu: 'Cháo yến mạch dinh dưỡng hoặc phở gà mềm xé sợi',
-                icon: 'sunny-outline',
-                color: '#F59E0B',
-                status: 'Đã hoàn thành',
-              },
-              {
-                time: '11:30',
-                meal: 'Bữa trưa',
-                menu: 'Cơm gạo mềm, cá hấp gừng hành, canh rau mồng tơi',
-                icon: 'partly-sunny-outline',
-                color: '#0EA5E9',
-                status: 'Đã hoàn thành',
-              },
-              {
-                time: '18:00',
-                meal: 'Bữa tối',
-                menu: 'Súp hạt sen bí đỏ, ức gà hầm mềm, dễ tiêu hóa',
-                icon: 'moon-outline',
-                color: '#6366F1',
-                status: 'Sắp tới (18:00)',
-              },
-            ].map((m, idx) => (
-              <View
-                key={idx}
-                style={[
-                  styles.mealItem,
-                  {
-                    backgroundColor: isDarkMode ? '#0F172A' : '#F8FAFC',
-                    borderColor: isDarkMode ? '#334155' : '#F1F5F9',
-                  },
-                ]}
-              >
-                <View style={[styles.mealIconBox, { backgroundColor: `${m.color}20` }]}>
-                  <Ionicons name={m.icon as any} size={20} color={m.color} />
-                </View>
-                <View style={{ flex: 1, marginLeft: 12 }}>
-                  <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' }}>
+                  <View style={{ flex: 1, marginHorizontal: 10 }}>
                     <LocalizedText
                       style={[
-                        styles.mealName,
-                        { color: isDarkMode ? '#F8FAFC' : '#0F172A' },
+                        styles.medItemName,
+                        { color: textTitle },
+                        med.taken && styles.medItemNameDone,
                       ]}
                     >
-                      {m.meal} ({m.time})
+                      {med.name}
                     </LocalizedText>
-                    <View
-                      style={[
-                        styles.mealStatusBadge,
-                        {
-                          backgroundColor:
-                            m.status.includes('hoàn thành')
-                              ? isDarkMode
-                                ? '#064E3B'
-                                : '#DCFCE7'
-                              : isDarkMode
-                              ? '#432005'
-                              : '#FEF3C7',
-                        },
-                      ]}
-                    >
-                      <LocalizedText
-                        style={[
-                          styles.mealStatusText,
-                          {
-                            color: m.status.includes('hoàn thành')
-                              ? '#15803D'
-                              : '#B45309',
-                          },
-                        ]}
-                      >
-                        {m.status}
-                      </LocalizedText>
-                    </View>
+                    <LocalizedText style={styles.medItemDose}>{med.dose}</LocalizedText>
+                    <LocalizedText style={[styles.medItemPurpose, { color: textSub }]}>Mục đích: {med.purpose}</LocalizedText>
                   </View>
-                  <LocalizedText
-                    style={[
-                      styles.mealMenuText,
-                      { color: isDarkMode ? '#94A3B8' : '#64748B' },
-                    ]}
+
+                  <TouchableOpacity
+                    style={[styles.medCheckBtn, med.taken ? styles.medCheckBtnDone : styles.medCheckBtnPending]}
+                    onPress={() => toggleMedicationTaken(med.id)}
+                    activeOpacity={0.8}
                   >
-                    {m.menu}
-                  </LocalizedText>
+                    <Ionicons name={med.taken ? 'checkmark-circle' : 'ellipse-outline'} size={22} color={med.taken ? '#10B981' : '#94A3B8'} />
+                    <LocalizedText style={[styles.medCheckBtnText, { color: med.taken ? '#10B981' : '#64748B' }]}>
+                      {med.taken ? 'Đã uống' : 'Chưa'}
+                    </LocalizedText>
+                  </TouchableOpacity>
                 </View>
-              </View>
-            ))}
+              ))
+            )}
           </View>
         </View>
 
-        {/* Khối Bổ sung nước định kỳ */}
-        <View
-          style={[
-            styles.sectionCard,
-            {
-              backgroundColor: isDarkMode ? '#1E293B' : '#FFFFFF',
-              borderColor: isDarkMode ? '#334155' : '#E2E8F0',
-            },
-          ]}
-        >
+        {/* Bổ sung nước định kỳ */}
+        <View style={[styles.sectionCard, { backgroundColor: bgCard, borderColor: borderCol }]}>
           <View style={styles.sectionHeader}>
             <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8 }}>
-              <View
-                style={[
-                  styles.sectionIconBox,
-                  { backgroundColor: isDarkMode ? '#082F49' : '#E0F2FE' },
-                ]}
-              >
+              <View style={[styles.sectionIconBox, { backgroundColor: isDarkMode ? '#082F49' : '#E0F2FE' }]}>
                 <Ionicons name="water-outline" size={20} color="#0284C7" />
               </View>
               <View>
-                <LocalizedText
-                  style={[
-                    styles.sectionTitle,
-                    { color: isDarkMode ? '#F8FAFC' : '#0F172A' },
-                  ]}
-                >
-                  Bổ sung nước định kỳ
-                </LocalizedText>
-                <LocalizedText
-                  style={[
-                    styles.sectionSubtitle,
-                    { color: isDarkMode ? '#94A3B8' : '#64748B' },
-                  ]}
-                >
-                  Khuyến nghị người cao tuổi: 1.5 - 2L nước mỗi ngày
-                </LocalizedText>
+                <LocalizedText style={[styles.sectionTitle, { color: textTitle }]}>Bổ sung nước định kỳ</LocalizedText>
+                <LocalizedText style={[styles.sectionSubtitle, { color: textSub }]}>Khuyến nghị: 1.5 - 2L nước mỗi ngày</LocalizedText>
               </View>
             </View>
           </View>
 
-          <View style={styles.hydrationGrid}>
-            {hydrationList.map((h, idx) => (
-              <TouchableOpacity
-                key={idx}
-                style={[
-                  styles.hydrationCard,
-                  {
-                    backgroundColor: isDarkMode ? '#0F172A' : '#F8FAFC',
-                    borderColor: h.done ? '#0284C7' : isDarkMode ? '#334155' : '#E2E8F0',
-                  },
-                ]}
-                onPress={() => toggleHydrationDone(idx)}
-                activeOpacity={0.8}
-              >
-                <View style={styles.hydrationCardTop}>
-                  <LocalizedText style={styles.hydrationTimeText}>{h.time}</LocalizedText>
-                  <Ionicons
-                    name={h.done ? 'checkmark-circle' : 'ellipse-outline'}
-                    size={18}
-                    color={h.done ? '#0284C7' : '#94A3B8'}
-                  />
-                </View>
-                <LocalizedText
-                  style={[
-                    styles.hydrationAmountText,
-                    { color: isDarkMode ? '#F8FAFC' : '#0F172A' },
-                  ]}
+          {hydrationList.length === 0 ? (
+            <View style={styles.emptyBox}>
+              <Ionicons name="water-outline" size={36} color={isDarkMode ? '#64748B' : '#94A3B8'} />
+              <LocalizedText style={[styles.emptyBoxTitle, { color: textTitle }]}>Chưa có mốc nhắc nhở uống nước</LocalizedText>
+              <LocalizedText style={[styles.emptyBoxSub, { color: textSub }]}>
+                Hệ thống sẽ đồng bộ lịch uống nước theo khuyến nghị y tế của bác sĩ điều trị.
+              </LocalizedText>
+            </View>
+          ) : (
+            <View style={styles.hydrationGrid}>
+              {hydrationList.map((h, idx) => (
+                <TouchableOpacity
+                  key={idx}
+                  style={[styles.hydrationCard, { backgroundColor: isDarkMode ? '#0F172A' : '#F8FAFC', borderColor: h.done ? '#0284C7' : borderCol }]}
+                  onPress={() => toggleHydrationDone(idx)}
+                  activeOpacity={0.8}
                 >
-                  {h.amount}
-                </LocalizedText>
-                <LocalizedText
-                  style={[
-                    styles.hydrationNoteText,
-                    { color: isDarkMode ? '#94A3B8' : '#64748B' },
-                  ]}
-                  numberOfLines={2}
-                >
-                  {h.note}
-                </LocalizedText>
-              </TouchableOpacity>
-            ))}
-          </View>
+                  <View style={styles.hydrationCardTop}>
+                    <LocalizedText style={styles.hydrationTimeText}>{h.time}</LocalizedText>
+                    <Ionicons name={h.done ? 'checkmark-circle' : 'ellipse-outline'} size={18} color={h.done ? '#0284C7' : '#94A3B8'} />
+                  </View>
+                  <LocalizedText style={[styles.hydrationAmountText, { color: textTitle }]}>{h.amount}</LocalizedText>
+                  <LocalizedText style={[styles.hydrationNoteText, { color: textSub }]} numberOfLines={2}>
+                    {h.note}
+                  </LocalizedText>
+                </TouchableOpacity>
+              ))}
+            </View>
+          )}
         </View>
       </ScrollView>
 
       {/* Modal Thêm cữ thuốc */}
-      <Modal
-        transparent
-        visible={isAddMedModalVisible}
-        animationType="fade"
-        onRequestClose={() => setAddMedModalVisible(false)}
-      >
-        <Pressable
-          style={styles.modalOverlay}
-          onPress={() => setAddMedModalVisible(false)}
-        >
-          <Pressable
-            style={[
-              styles.modalCard,
-              {
-                backgroundColor: isDarkMode ? '#1E293B' : '#FFFFFF',
-                borderColor: isDarkMode ? '#334155' : '#E2E8F0',
-              },
-            ]}
-            onPress={() => {}}
-          >
-            <LocalizedText
-              style={[
-                styles.modalTitle,
-                { color: isDarkMode ? '#F8FAFC' : '#0F172A' },
-              ]}
-            >
-              Thêm cữ thuốc mới
-            </LocalizedText>
+      <Modal transparent visible={isAddMedModalVisible} animationType="fade" onRequestClose={() => setAddMedModalVisible(false)}>
+        <Pressable style={styles.modalOverlay} onPress={() => setAddMedModalVisible(false)}>
+          <Pressable style={[styles.modalCard, { backgroundColor: bgCard, borderColor: borderCol }]} onPress={() => {}}>
+            <LocalizedText style={[styles.modalTitle, { color: textTitle }]}>Thêm cữ thuốc mới</LocalizedText>
 
-            <LocalizedText
-              style={[
-                styles.inputLabel,
-                { color: isDarkMode ? '#94A3B8' : '#64748B' },
-              ]}
-            >
-              Tên thuốc &amp; hàm lượng:
-            </LocalizedText>
+            <LocalizedText style={[styles.inputLabel, { color: textSub }]}>Tên thuốc & hàm lượng:</LocalizedText>
             <LocalizedTextInput
-              style={[
-                styles.textInput,
-                {
-                  backgroundColor: isDarkMode ? '#0F172A' : '#F8FAFC',
-                  color: isDarkMode ? '#F8FAFC' : '#0F172A',
-                  borderColor: isDarkMode ? '#334155' : '#E2E8F0',
-                },
-              ]}
+              style={[styles.textInput, { backgroundColor: isDarkMode ? '#0F172A' : '#F8FAFC', color: textTitle, borderColor: borderCol }]}
               placeholder="VD: Losartan 50mg"
-              placeholderTextColor={isDarkMode ? '#64748B' : '#94A3B8'}
+              placeholderTextColor="#94A3B8"
               value={newMedName}
               onChangeText={setNewMedName}
             />
 
-            <View style={{ flexDirection: 'row', gap: 10 }}>
+            <View style={{ flexDirection: 'row', gap: 10, marginTop: 10 }}>
               <View style={{ flex: 1 }}>
-                <LocalizedText
-                  style={[
-                    styles.inputLabel,
-                    { color: isDarkMode ? '#94A3B8' : '#64748B' },
-                  ]}
-                >
-                  Giờ uống (HH:mm):
-                </LocalizedText>
+                <LocalizedText style={[styles.inputLabel, { color: textSub }]}>Giờ uống (HH:mm):</LocalizedText>
                 <LocalizedTextInput
-                  style={[
-                    styles.textInput,
-                    {
-                      backgroundColor: isDarkMode ? '#0F172A' : '#F8FAFC',
-                      color: isDarkMode ? '#F8FAFC' : '#0F172A',
-                      borderColor: isDarkMode ? '#334155' : '#E2E8F0',
-                    },
-                  ]}
+                  style={[styles.textInput, { backgroundColor: isDarkMode ? '#0F172A' : '#F8FAFC', color: textTitle, borderColor: borderCol }]}
                   value={newMedTime}
                   onChangeText={setNewMedTime}
                 />
               </View>
 
               <View style={{ flex: 1 }}>
-                <LocalizedText
-                  style={[
-                    styles.inputLabel,
-                    { color: isDarkMode ? '#94A3B8' : '#64748B' },
-                  ]}
-                >
-                  Cữ buổi:
-                </LocalizedText>
+                <LocalizedText style={[styles.inputLabel, { color: textSub }]}>Cữ buổi:</LocalizedText>
                 <View style={{ flexDirection: 'row', gap: 4, marginTop: 4 }}>
                   {(['MORNING', 'NOON', 'EVENING'] as const).map((s) => (
                     <TouchableOpacity
                       key={s}
-                      style={[
-                        styles.sessionPickBtn,
-                        newMedSession === s && styles.sessionPickBtnActive,
-                      ]}
+                      style={[styles.sessionPickBtn, newMedSession === s && styles.sessionPickBtnActive]}
                       onPress={() => setNewMedSession(s)}
                     >
-                      <LocalizedText
-                        style={[
-                          styles.sessionPickText,
-                          newMedSession === s && styles.sessionPickTextActive,
-                        ]}
-                      >
+                      <LocalizedText style={[styles.sessionPickText, newMedSession === s && styles.sessionPickTextActive]}>
                         {s === 'MORNING' ? 'Sáng' : s === 'NOON' ? 'Trưa' : 'Tối'}
                       </LocalizedText>
                     </TouchableOpacity>
@@ -772,53 +380,23 @@ export default function MedicationReminderScreen({ navigation }: any) {
               </View>
             </View>
 
-            <LocalizedText
-              style={[
-                styles.inputLabel,
-                { color: isDarkMode ? '#94A3B8' : '#64748B' },
-              ]}
-            >
-              Liều lượng &amp; Hướng dẫn:
-            </LocalizedText>
+            <LocalizedText style={[styles.inputLabel, { color: textSub, marginTop: 10 }]}>Liều lượng & Hướng dẫn:</LocalizedText>
             <LocalizedTextInput
-              style={[
-                styles.textInput,
-                {
-                  backgroundColor: isDarkMode ? '#0F172A' : '#F8FAFC',
-                  color: isDarkMode ? '#F8FAFC' : '#0F172A',
-                  borderColor: isDarkMode ? '#334155' : '#E2E8F0',
-                },
-              ]}
+              style={[styles.textInput, { backgroundColor: isDarkMode ? '#0F172A' : '#F8FAFC', color: textTitle, borderColor: borderCol }]}
               placeholder="VD: 1 viên sau khi ăn no"
-              placeholderTextColor={isDarkMode ? '#64748B' : '#94A3B8'}
+              placeholderTextColor="#94A3B8"
               value={newMedDose}
               onChangeText={setNewMedDose}
             />
 
             <View style={styles.modalBtnRow}>
               <TouchableOpacity
-                style={[
-                  styles.modalCancelBtn,
-                  {
-                    backgroundColor: isDarkMode ? '#0F172A' : '#F1F5F9',
-                    borderColor: isDarkMode ? '#334155' : '#E2E8F0',
-                  },
-                ]}
+                style={[styles.modalCancelBtn, { backgroundColor: isDarkMode ? '#0F172A' : '#F1F5F9', borderColor: borderCol }]}
                 onPress={() => setAddMedModalVisible(false)}
               >
-                <LocalizedText
-                  style={[
-                    styles.modalCancelText,
-                    { color: isDarkMode ? '#94A3B8' : '#64748B' },
-                  ]}
-                >
-                  Hủy
-                </LocalizedText>
+                <LocalizedText style={[styles.modalCancelText, { color: textSub }]}>Hủy</LocalizedText>
               </TouchableOpacity>
-              <TouchableOpacity
-                style={styles.modalSaveBtn}
-                onPress={handleAddNewMed}
-              >
+              <TouchableOpacity style={styles.modalSaveBtn} onPress={handleAddNewMed}>
                 <LocalizedText style={styles.modalSaveText}>Lưu cữ thuốc</LocalizedText>
               </TouchableOpacity>
             </View>
@@ -830,9 +408,7 @@ export default function MedicationReminderScreen({ navigation }: any) {
 }
 
 const styles = StyleSheet.create({
-  safeArea: {
-    flex: 1,
-  },
+  safeArea: { flex: 1 },
   headerRow: {
     flexDirection: 'row',
     alignItems: 'center',
@@ -840,368 +416,75 @@ const styles = StyleSheet.create({
     paddingVertical: 12,
     borderBottomWidth: StyleSheet.hairlineWidth,
   },
-  backBtn: {
-    width: 38,
-    height: 38,
-    borderRadius: 19,
-    borderWidth: 1,
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
-  headerTitleCol: {
-    flex: 1,
-    marginHorizontal: 12,
-  },
-  headerTitle: {
-    fontSize: 16,
-    fontWeight: '700',
-  },
-  headerSubtitle: {
-    fontSize: 11,
-    marginTop: 2,
-  },
-  addHeaderBtn: {
-    width: 38,
-    height: 38,
-    borderRadius: 19,
-    borderWidth: 1,
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
-  scrollContent: {
-    padding: 16,
-    paddingBottom: 40,
-    gap: 14,
-  },
-  speakerCard: {
-    borderRadius: 18,
-    padding: 16,
-    borderWidth: 1.5,
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.05,
-    shadowRadius: 8,
-    elevation: 3,
-  },
-  speakerTopRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
-  },
-  speakerIconCircle: {
-    width: 44,
-    height: 44,
-    borderRadius: 22,
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
-  speakerTitle: {
-    fontSize: 14,
-    fontWeight: '800',
-  },
-  speakerSubtitle: {
-    fontSize: 11,
-    marginTop: 3,
-    lineHeight: 16,
-  },
-  speakerDivider: {
-    height: 1,
-    marginVertical: 12,
-  },
-  speakerBottomRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'space-between',
-  },
-  speakerStatusPill: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 6,
-  },
-  greenLiveDot: {
-    width: 7,
-    height: 7,
-    borderRadius: 3.5,
-    backgroundColor: '#10B981',
-  },
-  speakerStatusText: {
-    fontSize: 11,
-    fontWeight: '600',
-    color: '#10B981',
-  },
-  testVoiceBtn: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 5,
-    backgroundColor: Colors.primary,
-    paddingHorizontal: 12,
-    paddingVertical: 6,
-    borderRadius: 8,
-  },
-  testVoiceBtnText: {
-    fontSize: 12,
-    fontWeight: '700',
-    color: '#FFF',
-  },
-  sectionCard: {
-    borderRadius: 18,
-    padding: 16,
-    borderWidth: 1,
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.04,
-    shadowRadius: 6,
-    elevation: 2,
-  },
-  sectionHeader: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'space-between',
-    marginBottom: 14,
-  },
-  sectionIconBox: {
-    width: 36,
-    height: 36,
-    borderRadius: 10,
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
-  sectionTitle: {
-    fontSize: 15,
-    fontWeight: '700',
-  },
-  sectionSubtitle: {
-    fontSize: 11,
-    marginTop: 2,
-  },
-  addMedLink: {
-    fontSize: 13,
-    fontWeight: '700',
-    color: Colors.primary,
-  },
-  sessionTabRow: {
-    flexDirection: 'row',
-    gap: 6,
-    marginBottom: 14,
-  },
-  sessionTabBtn: {
-    flex: 1,
-    paddingVertical: 8,
-    borderRadius: 10,
-    backgroundColor: '#F1F5F9',
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
-  sessionTabBtnActive: {
-    backgroundColor: Colors.primary,
-  },
-  sessionTabText: {
-    fontSize: 11,
-    fontWeight: '600',
-    color: '#64748B',
-  },
-  sessionTabTextActive: {
-    color: '#FFFFFF',
-    fontWeight: '700',
-  },
-  medListContainer: {
-    gap: 10,
-  },
-  medItemRow: {
-    borderRadius: 14,
-    padding: 12,
-    borderWidth: 1,
-    flexDirection: 'row',
-    alignItems: 'center',
-  },
-  medTimeBadge: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 3,
-    backgroundColor: '#E0F2FE',
-    paddingHorizontal: 8,
-    paddingVertical: 4,
-    borderRadius: 8,
-  },
-  medTimeText: {
-    fontSize: 11,
-    fontWeight: '700',
-    color: '#0284C7',
-  },
-  medItemName: {
-    fontSize: 14,
-    fontWeight: '700',
-  },
-  medItemNameDone: {
-    textDecorationLine: 'line-through',
-    opacity: 0.7,
-  },
-  medItemDose: {
-    fontSize: 12,
-    color: Colors.primary,
-    fontWeight: '600',
-    marginTop: 2,
-  },
-  medItemPurpose: {
-    fontSize: 11,
-    marginTop: 2,
-  },
-  medCheckBtn: {
-    flexDirection: 'column',
-    alignItems: 'center',
-    gap: 2,
-    paddingHorizontal: 8,
-    paddingVertical: 4,
-  },
-  medCheckBtnDone: {},
-  medCheckBtnPending: {},
-  medCheckBtnText: {
-    fontSize: 10,
-    fontWeight: '700',
-  },
-  mealList: {
-    gap: 10,
-  },
-  mealItem: {
-    borderRadius: 14,
-    padding: 12,
-    borderWidth: 1,
-    flexDirection: 'row',
-    alignItems: 'center',
-  },
-  mealIconBox: {
-    width: 42,
-    height: 42,
-    borderRadius: 12,
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
-  mealName: {
-    fontSize: 14,
-    fontWeight: '700',
-  },
-  mealStatusBadge: {
-    paddingHorizontal: 7,
-    paddingVertical: 2,
-    borderRadius: 6,
-  },
-  mealStatusText: {
-    fontSize: 10,
-    fontWeight: '700',
-  },
-  mealMenuText: {
-    fontSize: 12,
-    marginTop: 4,
-    lineHeight: 17,
-  },
-  hydrationGrid: {
-    flexDirection: 'row',
-    flexWrap: 'wrap',
-    gap: 8,
-  },
-  hydrationCard: {
-    width: '48%',
-    borderRadius: 12,
-    padding: 10,
-    borderWidth: 1,
-  },
-  hydrationCardTop: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    alignItems: 'center',
-    marginBottom: 4,
-  },
-  hydrationTimeText: {
-    fontSize: 11,
-    fontWeight: '700',
-    color: '#0284C7',
-  },
-  hydrationAmountText: {
-    fontSize: 15,
-    fontWeight: '800',
-    marginBottom: 2,
-  },
-  hydrationNoteText: {
-    fontSize: 10,
-    lineHeight: 14,
-  },
-  modalOverlay: {
-    flex: 1,
-    backgroundColor: 'rgba(15, 23, 42, 0.6)',
-    alignItems: 'center',
-    justifyContent: 'center',
-    padding: 20,
-  },
-  modalCard: {
-    width: '100%',
-    maxWidth: 420,
-    borderRadius: 18,
-    padding: 20,
-    borderWidth: 1,
-  },
-  modalTitle: {
-    fontSize: 17,
-    fontWeight: '800',
-    marginBottom: 16,
-    textAlign: 'center',
-  },
-  inputLabel: {
-    fontSize: 12,
-    fontWeight: '600',
-    marginBottom: 6,
-    marginTop: 10,
-  },
-  textInput: {
-    borderWidth: 1,
-    borderRadius: 10,
-    paddingHorizontal: 12,
-    paddingVertical: 10,
-    fontSize: 14,
-  },
-  sessionPickBtn: {
-    flex: 1,
-    paddingVertical: 8,
-    borderRadius: 8,
-    backgroundColor: '#E2E8F0',
-    alignItems: 'center',
-  },
-  sessionPickBtnActive: {
-    backgroundColor: Colors.primary,
-  },
-  sessionPickText: {
-    fontSize: 12,
-    fontWeight: '600',
-    color: '#475569',
-  },
-  sessionPickTextActive: {
-    color: '#FFF',
-    fontWeight: '700',
-  },
-  modalBtnRow: {
-    flexDirection: 'row',
-    gap: 10,
-    marginTop: 20,
-  },
-  modalCancelBtn: {
-    flex: 1,
-    borderWidth: 1,
-    borderRadius: 10,
-    paddingVertical: 12,
-    alignItems: 'center',
-  },
-  modalCancelText: {
-    fontSize: 14,
-    fontWeight: '600',
-  },
-  modalSaveBtn: {
-    flex: 1,
-    backgroundColor: Colors.primary,
-    borderRadius: 10,
-    paddingVertical: 12,
-    alignItems: 'center',
-  },
-  modalSaveText: {
-    fontSize: 14,
-    fontWeight: '700',
-    color: '#FFF',
-  },
+  backBtn: { width: 38, height: 38, borderRadius: 19, borderWidth: 1, alignItems: 'center', justifyContent: 'center' },
+  headerTitleCol: { flex: 1, marginHorizontal: 12 },
+  headerTitle: { fontSize: 16, fontWeight: '700' },
+  headerSubtitle: { fontSize: 11, marginTop: 2 },
+  addHeaderBtn: { width: 38, height: 38, borderRadius: 19, borderWidth: 1, alignItems: 'center', justifyContent: 'center' },
+  scrollContent: { padding: 16, paddingBottom: 40, gap: 14 },
+
+  speakerCard: { borderRadius: 16, padding: 14, borderWidth: 1.5 },
+  speakerTopRow: { flexDirection: 'row', alignItems: 'center' },
+  speakerIconCircle: { width: 44, height: 44, borderRadius: 22, alignItems: 'center', justifyContent: 'center' },
+  speakerTitle: { fontSize: 14, fontWeight: '700' },
+  speakerSubtitle: { fontSize: 11, marginTop: 2, lineHeight: 15 },
+  speakerDivider: { height: 1, marginVertical: 10 },
+  speakerBottomRow: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' },
+  speakerStatusPill: { flexDirection: 'row', alignItems: 'center', gap: 6 },
+  greenLiveDot: { width: 7, height: 7, borderRadius: 3.5, backgroundColor: '#10B981' },
+  speakerStatusText: { fontSize: 11, color: '#10B981', fontWeight: '600' },
+  testVoiceBtn: { flexDirection: 'row', alignItems: 'center', gap: 6, backgroundColor: Colors.primary, paddingHorizontal: 12, paddingVertical: 6, borderRadius: 8 },
+  testVoiceBtnText: { color: '#FFF', fontSize: 12, fontWeight: '700' },
+
+  sectionCard: { borderRadius: 18, padding: 16, borderWidth: 1 },
+  sectionHeader: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', marginBottom: 14 },
+  sectionIconBox: { width: 36, height: 36, borderRadius: 10, alignItems: 'center', justifyContent: 'center' },
+  sectionTitle: { fontSize: 15, fontWeight: '700' },
+  sectionSubtitle: { fontSize: 11, marginTop: 2 },
+  addMedLink: { fontSize: 13, fontWeight: '700', color: Colors.primary },
+
+  sessionTabRow: { flexDirection: 'row', gap: 8, marginBottom: 12 },
+  sessionTabBtn: { flex: 1, paddingVertical: 8, borderRadius: 10, backgroundColor: '#F1F5F9', alignItems: 'center' },
+  sessionTabBtnActive: { backgroundColor: Colors.primary },
+  sessionTabText: { fontSize: 11, fontWeight: '700', color: '#64748B' },
+  sessionTabTextActive: { color: '#FFF' },
+
+  medListContainer: { gap: 10 },
+  medItemRow: { flexDirection: 'row', alignItems: 'center', padding: 12, borderRadius: 12, borderWidth: 1 },
+  medTimeBadge: { flexDirection: 'row', alignItems: 'center', gap: 4, backgroundColor: '#E0F2FE', paddingHorizontal: 8, paddingVertical: 4, borderRadius: 6 },
+  medTimeText: { fontSize: 11, fontWeight: '700', color: '#0284C7' },
+  medItemName: { fontSize: 14, fontWeight: '700' },
+  medItemNameDone: { textDecorationLine: 'line-through', opacity: 0.6 },
+  medItemDose: { fontSize: 12, color: '#0284C7', marginTop: 2, fontWeight: '600' },
+  medItemPurpose: { fontSize: 11, marginTop: 2 },
+  medCheckBtn: { alignItems: 'center', justifyContent: 'center', paddingHorizontal: 8, paddingVertical: 4, borderRadius: 8 },
+  medCheckBtnPending: { backgroundColor: '#F1F5F9' },
+  medCheckBtnDone: { backgroundColor: '#DCFCE7' },
+  medCheckBtnText: { fontSize: 10, fontWeight: '700', marginTop: 2 },
+
+  emptyBox: { alignItems: 'center', justifyContent: 'center', paddingVertical: 24, paddingHorizontal: 16 },
+  emptyBoxTitle: { fontSize: 14, fontWeight: '700', marginTop: 10 },
+  emptyBoxSub: { fontSize: 12, textAlign: 'center', marginTop: 4, lineHeight: 17 },
+
+  hydrationGrid: { flexDirection: 'row', flexWrap: 'wrap', gap: 8 },
+  hydrationCard: { width: '48.5%', padding: 10, borderRadius: 10, borderWidth: 1 },
+  hydrationCardTop: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' },
+  hydrationTimeText: { fontSize: 11, fontWeight: '700', color: '#0284C7' },
+  hydrationAmountText: { fontSize: 14, fontWeight: '800', marginTop: 4 },
+  hydrationNoteText: { fontSize: 11, marginTop: 2 },
+
+  modalOverlay: { flex: 1, backgroundColor: 'rgba(15,23,42,0.6)', alignItems: 'center', justifyContent: 'center', padding: 20 },
+  modalCard: { width: '100%', maxWidth: 420, borderRadius: 18, padding: 20, borderWidth: 1 },
+  modalTitle: { fontSize: 17, fontWeight: '800', marginBottom: 14, textAlign: 'center' },
+  inputLabel: { fontSize: 12, fontWeight: '600', marginBottom: 4 },
+  textInput: { borderWidth: 1, borderRadius: 10, paddingHorizontal: 12, paddingVertical: 10, fontSize: 14 },
+  sessionPickBtn: { flex: 1, paddingVertical: 8, borderRadius: 8, backgroundColor: '#E2E8F0', alignItems: 'center' },
+  sessionPickBtnActive: { backgroundColor: Colors.primary },
+  sessionPickText: { fontSize: 11, fontWeight: '700', color: '#475569' },
+  sessionPickTextActive: { color: '#FFF' },
+  modalBtnRow: { flexDirection: 'row', gap: 10, marginTop: 18 },
+  modalCancelBtn: { flex: 1, borderWidth: 1, borderRadius: 10, paddingVertical: 11, alignItems: 'center' },
+  modalCancelText: { fontSize: 13, fontWeight: '600' },
+  modalSaveBtn: { flex: 1, backgroundColor: Colors.primary, borderRadius: 10, paddingVertical: 11, alignItems: 'center' },
+  modalSaveText: { fontSize: 13, fontWeight: '700', color: '#FFF' },
 });

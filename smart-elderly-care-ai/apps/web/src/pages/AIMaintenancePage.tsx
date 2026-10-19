@@ -156,18 +156,18 @@ export const AIMaintenancePage: React.FC = () => {
 
       {/* Header */}
       <div className="flex flex-col md:flex-row md:items-center justify-between gap-4">
-        <div>
-          <div className="flex items-center space-x-2">
-            <span className="badge-sky font-mono">
-              Phân hệ 4
-            </span>
+        <div className="flex items-center gap-3">
+          <div className="p-2.5 rounded-xl bg-gradient-to-br from-[#D96C3B] to-[#B84B1E] text-white shadow-md shadow-[#D96C3B]/25 shrink-0">
+            <BrainCircuit className="w-5 h-5 stroke-[2.2]" />
+          </div>
+          <div>
             <h1 className="font-heading text-xl font-bold tracking-tight text-slate-900 dark:text-white">
               Bảo trì & Hiệu chuẩn mô hình AI
             </h1>
+            <p className="text-xs text-slate-500 dark:text-slate-400 mt-0.5 font-sans">
+              Giám sát độ trễ suy luận NPU, độ chính xác nhận diện té ngã YOLOv8, YAMNet & trợ lý Gemini RAG
+            </p>
           </div>
-          <p className="text-xs text-slate-500 dark:text-slate-400 mt-1 font-sans">
-            Giám sát độ trễ suy luận NPU, độ chính xác nhận diện té ngã YOLOv8, YAMNet & trợ lý Gemini RAG
-          </p>
         </div>
 
         <div className="flex items-center space-x-3">

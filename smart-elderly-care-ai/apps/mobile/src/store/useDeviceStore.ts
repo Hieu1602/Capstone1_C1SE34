@@ -1,11 +1,59 @@
-// useDeviceStore.ts
-// Domain Store: IoT Devices, Camera, House, Device Groups
-// Tách từ useVitalStore.ts (Single Responsibility Principle)
+/**
+ * useDeviceStore.ts
+ * Domain Store: IoT Devices, Camera AI, House & Device Groups
+ * Người làm: DuongVanHieu
+ * Nghiệp vụ: Quản lý tập trung trạng thái thiết bị ngoại vi, đồng bộ hai chiều (Client Cache + Backend FastAPI)
+ * và tự động chuyển đổi thông số phần cứng thành model giao diện.
+ */
 
 import { create } from 'zustand';
 import { persist, createJSONStorage } from 'zustand/middleware';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { houseApi, deviceGroupApi, devicesApi } from '../services/deviceService';
+
+/** Ánh xạ giá trị mặc định cho từng dòng phần cứng ngoại vi (DRY & O(1) Lookup) */
+const DEVICE_TYPE_DEFAULTS: Record<
+  string,
+  { sub: string; type: string; icon: string; color: string }
+> = {
+  CAMERA: {
+    sub: 'Camera góc rộng • 2K Super HD • Đàm thoại 2 chiều',
+    type: 'camera',
+    icon: 'videocam',
+    color: '#FF7A00',
+  },
+  SMARTBAND: {
+    sub: 'Nhịp tim • SpO₂ • Gia tốc kế phát hiện va đập',
+    type: 'watch',
+    icon: 'watch',
+    color: '#10B981',
+  },
+  EDGE_HUB: {
+    sub: 'Bộ xử lý biên AI tại chỗ',
+    type: 'hub',
+    icon: 'server',
+    color: '#F59E0B',
+  },
+  SENSOR: {
+    sub: 'Cảm biến an toàn',
+    type: 'sensor',
+    icon: 'hardware-chip',
+    color: '#0EA5E9',
+  },
+};
+
+/** Tra cứu ID của nhóm theo tên từ backend (Tách logic lặp lại từ lần 3 - Rule DRY) */
+const getGroupIdByName = async (name: string): Promise<string | null> => {
+  try {
+    const res = await deviceGroupApi.listGroups();
+    const target = name.trim().toLowerCase();
+    const found = res.data?.find((g) => g.name.trim().toLowerCase() === target);
+    return found?.id ?? null;
+  } catch (err) {
+    console.log('[DeviceStore] Không thể tra cứu nhóm backend:', err);
+    return null;
+  }
+};
 
 // ---- Types ----
 export interface Device {
@@ -80,13 +128,7 @@ interface DeviceState {
 export const useDeviceStore = create<DeviceState>()(
   persist(
     (set, get) => ({
-      activeDevice: {
-        id: 'hub-001',
-        device_id: 'hub-001',
-        name: 'Orange Pi 5 Edge Hub',
-        location: 'Phòng khách',
-        is_online: true,
-      },
+      activeDevice: null,
       house: {
         name: 'Nhà của tôi',
         address: '123 Hải Phòng, P. Thạch Thang, Q. Hải Châu, TP. Đà Nẵng',
@@ -95,41 +137,18 @@ export const useDeviceStore = create<DeviceState>()(
       },
       camera: {
         id: 'SECA_001',
-        name: 'Camera Góc Rộng AI - SECA_001',
+        name: 'Camera AI An Ninh',
         room: 'Phòng khách',
         isOnline: true,
         isSleep: false,
         isAIProtect: true,
-        resolution: 'HD',
+        resolution: '2K',
         sdCardStatus: 'OK',
         wifiStrength: 3,
         streamUrl: 'http://10.0.2.2:8080',
       },
-      iotDevices: [
-        {
-          id: 'SECA_001',
-          name: 'SECA_001',
-          sub: 'Camera góc rộng • 2K Super HD • Đàm thoại 2 chiều',
-          type: 'camera',
-          status: 'Đang ghi hình',
-          isOnline: true,
-          icon: 'videocam',
-          color: '#FF7A00',
-          location: 'Phòng khách',
-        },
-        {
-          id: 'BLE_BAND_001',
-          name: 'Vòng đeo tay BLE Smartband',
-          sub: 'Nhịp tim • SpO₂ • Gia tốc kế phát hiện va đập',
-          type: 'watch',
-          status: 'Pin 84% • Đang đeo',
-          isOnline: true,
-          icon: 'watch',
-          color: '#10B981',
-          location: 'Phòng ngủ',
-        },
-      ],
-      deviceGroups: ['Phòng khách', 'Phòng ngủ'],
+      iotDevices: [],
+      deviceGroups: [],
       isLoadingDevices: false,
 
       setActiveDevice: (device) => set({ activeDevice: device }),
@@ -207,6 +226,8 @@ export const useDeviceStore = create<DeviceState>()(
       updateDeviceGroup: (oldName, newName, deviceIds?) => {
         const trimmedNew = newName.trim();
         const trimmedOld = oldName.trim();
+        if (!trimmedNew || !trimmedOld) return;
+
         const updatedGroups = get().deviceGroups.map((g) =>
           g.trim().toLowerCase() === trimmedOld.toLowerCase() ? trimmedNew : g
         );
@@ -226,60 +247,54 @@ export const useDeviceStore = create<DeviceState>()(
           );
         }
         set({ deviceGroups: updatedGroups, iotDevices: updatedDevices });
+
         (async () => {
-          try {
-            const groupsRes = await deviceGroupApi.listGroups();
-            const found = groupsRes.data.find(
-              (g: any) => g.name.toLowerCase() === trimmedOld.toLowerCase()
-            );
-            if (found) await deviceGroupApi.updateGroup(found.id, { name: trimmedNew });
-          } catch (err) {
-            console.log('[DeviceStore] Cập nhật nhóm backend failed:', err);
+          const groupId = await getGroupIdByName(trimmedOld);
+          if (groupId) {
+            await deviceGroupApi.updateGroup(groupId, { name: trimmedNew });
           }
-        })();
+        })().catch((err) => console.log('[DeviceStore] Cập nhật nhóm backend failed:', err));
       },
 
       removeDeviceGroup: (groupName) => {
+        const target = groupName.trim();
+        if (!target) return;
+
         set((state) => ({
           deviceGroups: state.deviceGroups.filter(
-            (g) => g.trim().toLowerCase() !== groupName.trim().toLowerCase()
+            (g) => g.trim().toLowerCase() !== target.toLowerCase()
           ),
           iotDevices: state.iotDevices.map((dev) =>
-            dev.location?.trim().toLowerCase() === groupName.trim().toLowerCase()
+            dev.location?.trim().toLowerCase() === target.toLowerCase()
               ? { ...dev, location: 'Chưa nhóm' }
               : dev
           ),
         }));
+
         (async () => {
-          try {
-            const groupsRes = await deviceGroupApi.listGroups();
-            const found = groupsRes.data.find(
-              (g: any) => g.name.toLowerCase() === groupName.trim().toLowerCase()
-            );
-            if (found) await deviceGroupApi.deleteGroup(found.id);
-          } catch (err) {
-            console.log('[DeviceStore] Xóa nhóm backend failed:', err);
+          const groupId = await getGroupIdByName(target);
+          if (groupId) {
+            await deviceGroupApi.deleteGroup(groupId);
           }
-        })();
+        })().catch((err) => console.log('[DeviceStore] Xóa nhóm backend failed:', err));
       },
 
       assignDevicesToGroup: (deviceIds, groupName) => {
+        const target = groupName.trim();
+        if (!target) return;
+
         set((state) => ({
           iotDevices: state.iotDevices.map((dev) =>
-            deviceIds.includes(dev.id) ? { ...dev, location: groupName } : dev
+            deviceIds.includes(dev.id) ? { ...dev, location: target } : dev
           ),
         }));
+
         (async () => {
-          try {
-            const groupsRes = await deviceGroupApi.listGroups();
-            const found = groupsRes.data.find(
-              (g: any) => g.name.toLowerCase() === groupName.trim().toLowerCase()
-            );
-            if (found) await deviceGroupApi.assignDevices(deviceIds, found.id);
-          } catch (err) {
-            console.log('[DeviceStore] Gán thiết bị vào nhóm backend failed:', err);
+          const groupId = await getGroupIdByName(target);
+          if (groupId) {
+            await deviceGroupApi.assignDevices(deviceIds, groupId);
           }
-        })();
+        })().catch((err) => console.log('[DeviceStore] Gán thiết bị vào nhóm backend failed:', err));
       },
 
       fetchHouseFromBackend: async () => {
@@ -295,7 +310,7 @@ export const useDeviceStore = create<DeviceState>()(
               },
             }));
           }
-        } catch (e) {
+        } catch {
           console.log('[DeviceStore] fetchHouseFromBackend fallback to cache');
         }
       },
@@ -303,10 +318,10 @@ export const useDeviceStore = create<DeviceState>()(
       fetchGroupsFromBackend: async () => {
         try {
           const res = await deviceGroupApi.listGroups();
-          if (res.data && Array.isArray(res.data) && res.data.length > 0) {
+          if (res.data && Array.isArray(res.data)) {
             set({ deviceGroups: res.data.map((g: any) => g.name) });
           }
-        } catch (e) {
+        } catch {
           console.log('[DeviceStore] fetchGroupsFromBackend fallback to cache');
         }
       },
@@ -314,20 +329,18 @@ export const useDeviceStore = create<DeviceState>()(
       fetchDevicesFromBackend: async () => {
         try {
           const res = await devicesApi.listDevices();
-          if (res.data && Array.isArray(res.data) && res.data.length > 0) {
+          if (res.data && Array.isArray(res.data)) {
             const mapped: IoTDeviceItem[] = res.data.map((dev: any) => {
-              const isCam = dev.device_type === 'CAMERA';
+              const def = DEVICE_TYPE_DEFAULTS[dev.device_type] || DEVICE_TYPE_DEFAULTS.SENSOR;
               return {
                 id: dev.device_id || dev.id,
                 name: dev.name,
-                sub: dev.sub_title || (isCam
-                  ? 'Camera góc rộng • 2K Super HD • Đàm thoại 2 chiều'
-                  : 'Nhịp tim • SpO₂ • Gia tốc kế phát hiện va đập'),
-                type: isCam ? 'camera' : 'watch',
+                sub: dev.sub_title || def.sub,
+                type: def.type,
                 status: dev.status_text || (dev.is_online ? 'Trực tuyến' : 'Ngoại tuyến'),
-                isOnline: dev.is_online,
-                icon: isCam ? 'videocam' : 'watch',
-                color: isCam ? '#FF7A00' : '#10B981',
+                isOnline: Boolean(dev.is_online),
+                icon: def.icon,
+                color: def.color,
                 location: dev.location || 'Chưa nhóm',
                 streamUrl: dev.config?.stream_url || undefined,
                 macAddress: dev.mac_address || undefined,
@@ -335,8 +348,21 @@ export const useDeviceStore = create<DeviceState>()(
             });
             set({ iotDevices: mapped });
 
+            if (mapped.length > 0 && !get().activeDevice) {
+              const firstOnline = res.data.find((d: any) => d.is_online) || res.data[0];
+              set({
+                activeDevice: {
+                  id: firstOnline.id,
+                  device_id: firstOnline.device_id,
+                  name: firstOnline.name,
+                  location: firstOnline.location || 'Phòng khách',
+                  is_online: firstOnline.is_online,
+                },
+              });
+            }
+
             const firstCam = res.data.find((d: any) => d.device_type === 'CAMERA');
-            if (firstCam?.config) {
+            if (firstCam) {
               set((state) => ({
                 camera: {
                   ...state.camera,
@@ -345,7 +371,7 @@ export const useDeviceStore = create<DeviceState>()(
                   room: firstCam.location || 'Phòng khách',
                   isOnline: firstCam.is_online,
                   isSleep: Boolean(firstCam.config?.is_sleep),
-                  isAIProtect: Boolean(firstCam.config?.is_ai_protect),
+                  isAIProtect: Boolean(firstCam.config?.is_ai_protect ?? true),
                   resolution: (firstCam.config?.resolution as CameraDevice['resolution']) || '2K',
                   streamUrl: firstCam.config?.stream_url || state.camera.streamUrl,
                 },

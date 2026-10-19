@@ -76,22 +76,47 @@ class CRUDVital:
     async def get_history(
         self,
         db: AsyncSession,
-        device_id: Union[str, UUID],
+        device_id: Optional[Union[str, UUID]] = None,
         limit: int = 100,
         offset: int = 0,
+        target_date: Optional[str] = None,
     ) -> List[VitalSign]:
-        """Lấy lịch sử chuỗi thời gian sinh hiệu của thiết bị (phân trang)."""
-        uuid_val = await self.resolve_device_uuid(db, device_id)
-        if not uuid_val:
-            return []
+        """Lấy lịch sử chuỗi thời gian sinh hiệu của thiết bị (phân trang và lọc ngày)."""
+        uuid_val = None
+        if device_id:
+            uuid_val = await self.resolve_device_uuid(db, device_id)
 
-        result = await db.execute(
-            select(VitalSign)
-            .where(VitalSign.device_id == uuid_val)
-            .order_by(VitalSign.time.desc())
-            .offset(offset)
-            .limit(limit)
-        )
+        # Nếu không tìm thấy UUID của device_id truyền vào (vd: 'hub-01' là Hub chứ không phải band),
+        # tự động tìm thiết bị Smartband trong hệ thống
+        if not uuid_val:
+            res_band = await db.execute(
+                select(Device.id)
+                .where(Device.device_type == DeviceType.SMARTBAND)
+                .order_by(Device.created_at.desc())
+                .limit(1)
+            )
+            uuid_val = res_band.scalar_one_or_none()
+
+        query = select(VitalSign)
+        if uuid_val:
+            query = query.where(VitalSign.device_id == uuid_val)
+
+        if target_date:
+            try:
+                from datetime import time as dt_time
+                dt = datetime.strptime(target_date.strip(), "%Y-%m-%d").date()
+                start_of_day = datetime.combine(dt, dt_time.min, tzinfo=timezone.utc)
+                end_of_day = datetime.combine(dt, dt_time.max, tzinfo=timezone.utc)
+                query = query.where(VitalSign.time >= start_of_day, VitalSign.time <= end_of_day)
+                query = query.order_by(VitalSign.time.asc())
+            except Exception as e:
+                logger.warning(f"Lỗi phân tích target_date '{target_date}': {e}")
+                query = query.order_by(VitalSign.time.desc())
+        else:
+            query = query.order_by(VitalSign.time.desc())
+
+        query = query.offset(offset).limit(limit)
+        result = await db.execute(query)
         return list(result.scalars().all())
 
     async def create(self, db: AsyncSession, data: dict) -> VitalSign:

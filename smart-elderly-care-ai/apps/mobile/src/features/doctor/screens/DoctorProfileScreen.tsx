@@ -1,5 +1,5 @@
 // DoctorProfileScreen.tsx
-// Hồ sơ Bác sĩ gia đình, thông tin chuyên môn, đổi ảnh đại diện & đổi mật khẩu
+// Hồ sơ Bác sĩ chuyên môn, đổi ảnh đại diện, giao diện & tài khoản
 
 import React, { useState, useEffect, useCallback } from 'react';
 import {
@@ -21,19 +21,18 @@ import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
 import { useFocusEffect } from '@react-navigation/native';
 import * as ImagePicker from 'expo-image-picker';
+import AsyncStorage from '@react-native-async-storage/async-storage';
 
 import { Colors } from '../../../theme/colors';
 import { useTheme } from '../../../store/useThemeStore';
 import { useAuthStore } from '../../../store/useAuthStore';
 import { doctorApi } from '../../../services/api';
-import AsyncStorage from '@react-native-async-storage/async-storage';
 
 export default function DoctorProfileScreen({ navigation }: any) {
   const insets = useSafeAreaInsets();
   const { isDarkMode, colors, toggleTheme } = useTheme();
   const { userName, userPhone, logout } = useAuthStore();
 
-  // Thông tin chuyên môn bác sĩ
   const [docInfo, setDocInfo] = useState({
     name: userName || 'Bác sĩ',
     degree: '',
@@ -43,33 +42,41 @@ export default function DoctorProfileScreen({ navigation }: any) {
     phone: userPhone || '',
   });
 
-  // Số lượng bệnh nhân & lịch khám thực tế từ CSDL
   const [patientCount, setPatientCount] = useState<number>(0);
   const [appointmentCount, setAppointmentCount] = useState<number>(0);
-  const [statsLoading, setStatsLoading] = useState<boolean>(false);
-
-  // Ảnh đại diện bác sĩ (mặc định null, người dùng tự tải lên)
   const [avatarUri, setAvatarUri] = useState<string | null>(null);
+
+  // Modals state
+  const [editModalVisible, setEditModalVisible] = useState(false);
+  const [editName, setEditName] = useState(docInfo.name);
+  const [editDegree, setEditDegree] = useState(docInfo.degree);
+  const [editSpecialty, setEditSpecialty] = useState(docInfo.specialty);
+  const [editHospital, setEditHospital] = useState(docInfo.hospital);
+  const [editDepartment, setEditDepartment] = useState(docInfo.department);
+  const [editPhone, setEditPhone] = useState(docInfo.phone);
+  const [editAvatarUri, setEditAvatarUri] = useState<string | null>(avatarUri);
+
+  const [passwordModalVisible, setPasswordModalVisible] = useState(false);
+  const [oldPassword, setOldPassword] = useState('');
+  const [newPassword, setNewPassword] = useState('');
+  const [confirmPassword, setConfirmPassword] = useState('');
+
+  const [logoutModalVisible, setLogoutModalVisible] = useState(false);
 
   const fetchDoctorStats = useCallback(async () => {
     try {
-      setStatsLoading(true);
       const [patientsRes, appointmentsRes] = await Promise.allSettled([
         doctorApi.getPatients(),
         doctorApi.getAppointments(),
       ]);
-
       if (patientsRes.status === 'fulfilled' && Array.isArray(patientsRes.value.data)) {
         setPatientCount(patientsRes.value.data.length);
       }
-
       if (appointmentsRes.status === 'fulfilled' && Array.isArray(appointmentsRes.value.data)) {
         setAppointmentCount(appointmentsRes.value.data.length);
       }
     } catch {
       // Giữ số liệu hiện tại
-    } finally {
-      setStatsLoading(false);
     }
   }, []);
 
@@ -104,26 +111,6 @@ export default function DoctorProfileScreen({ navigation }: any) {
     loadSavedProfile();
   }, [userName, userPhone]);
 
-  // Modal 1: Sửa thông tin bác sĩ
-  const [editModalVisible, setEditModalVisible] = useState(false);
-  const [editName, setEditName] = useState(docInfo.name);
-  const [editDegree, setEditDegree] = useState(docInfo.degree);
-  const [editSpecialty, setEditSpecialty] = useState(docInfo.specialty);
-  const [editHospital, setEditHospital] = useState(docInfo.hospital);
-  const [editDepartment, setEditDepartment] = useState(docInfo.department);
-  const [editPhone, setEditPhone] = useState(docInfo.phone);
-  const [editAvatarUri, setEditAvatarUri] = useState<string | null>(avatarUri);
-
-  // Modal 2: Đổi mật khẩu
-  const [passwordModalVisible, setPasswordModalVisible] = useState(false);
-  const [oldPassword, setOldPassword] = useState('');
-  const [newPassword, setNewPassword] = useState('');
-  const [confirmPassword, setConfirmPassword] = useState('');
-
-  // Modal 3: Xác nhận đăng xuất
-  const [logoutModalVisible, setLogoutModalVisible] = useState(false);
-
-  // Hàm chọn ảnh từ thư viện thiết bị
   const pickImage = async () => {
     try {
       const permission = await ImagePicker.requestMediaLibraryPermissionsAsync();
@@ -147,7 +134,6 @@ export default function DoctorProfileScreen({ navigation }: any) {
     }
   };
 
-  // Lưu sửa thông tin
   const handleSaveProfile = async () => {
     if (!editName.trim()) {
       Alert.alert('Lỗi', 'Vui lòng nhập họ tên bác sĩ.');
@@ -163,9 +149,7 @@ export default function DoctorProfileScreen({ navigation }: any) {
       avatarUri: editAvatarUri,
     };
     setDocInfo(updated);
-    if (editAvatarUri) {
-      setAvatarUri(editAvatarUri);
-    }
+    if (editAvatarUri) setAvatarUri(editAvatarUri);
     try {
       await AsyncStorage.setItem('doctor_profile_custom', JSON.stringify(updated));
     } catch {}
@@ -173,7 +157,6 @@ export default function DoctorProfileScreen({ navigation }: any) {
     Alert.alert('Thành công', 'Đã cập nhật hồ sơ chuyên môn Bác sĩ thành công.');
   };
 
-  // Lưu đổi mật khẩu
   const handleSavePassword = () => {
     if (!oldPassword || !newPassword) {
       Alert.alert('Lỗi', 'Vui lòng nhập đầy đủ mật khẩu cũ và mới.');
@@ -192,10 +175,6 @@ export default function DoctorProfileScreen({ navigation }: any) {
     setNewPassword('');
     setConfirmPassword('');
     Alert.alert('Thành công', 'Đã thay đổi mật khẩu tài khoản Bác sĩ an toàn.');
-  };
-
-  const handleLogout = () => {
-    setLogoutModalVisible(true);
   };
 
   const performLogout = async () => {
@@ -232,7 +211,7 @@ export default function DoctorProfileScreen({ navigation }: any) {
     <View style={[styles.container, { backgroundColor: isDarkMode ? '#0F172A' : '#F8FAFC' }]}>
       <StatusBar barStyle={isDarkMode ? 'light-content' : 'dark-content'} />
 
-      {/* Top Header */}
+      {/* Header */}
       <View
         style={[
           styles.header,
@@ -265,14 +244,13 @@ export default function DoctorProfileScreen({ navigation }: any) {
       </View>
 
       <ScrollView contentContainerStyle={styles.scrollContent} showsVerticalScrollIndicator={false}>
-        {/* DOCTOR HERO CARD */}
+        {/* PROFILE CARD */}
         <View
           style={[
             styles.profileCard,
             { backgroundColor: isDarkMode ? '#1E293B' : '#FFFFFF', borderColor: colors.border },
           ]}
         >
-          {/* Avatar Bác sĩ có thể chạm để đổi ảnh */}
           <TouchableOpacity
             style={styles.avatarContainer}
             activeOpacity={0.85}
@@ -303,7 +281,6 @@ export default function DoctorProfileScreen({ navigation }: any) {
             </View>
           ) : null}
 
-          {/* 2 HỘP CHỈ SỐ HOẠT ĐỘNG Y KHOA THỰC TẾ TỪ CSDL */}
           <View style={styles.statsGrid}>
             <View style={[styles.statBox, { backgroundColor: isDarkMode ? '#0F172A' : '#F8FAFC' }]}>
               <Text style={[styles.statNum, { color: '#0284C7' }]}>{patientCount}</Text>
@@ -327,7 +304,6 @@ export default function DoctorProfileScreen({ navigation }: any) {
             TIỆN ÍCH LÂM SÀNG & HỆ THỐNG
           </Text>
 
-          {/* Chế độ Sáng / Tối */}
           <View style={styles.menuItem}>
             <View style={[styles.menuIconBox, { backgroundColor: '#F3E8FF' }]}>
               <Ionicons name={isDarkMode ? 'moon' : 'sunny'} size={17} color="#7C3AED" />
@@ -343,9 +319,8 @@ export default function DoctorProfileScreen({ navigation }: any) {
             />
           </View>
 
-          {/* Đổi mật khẩu */}
           <TouchableOpacity
-            style={styles.menuItem}
+            style={[styles.menuItem, { borderBottomWidth: 0 }]}
             onPress={() => setPasswordModalVisible(true)}
             activeOpacity={0.7}
           >
@@ -369,28 +344,20 @@ export default function DoctorProfileScreen({ navigation }: any) {
           </Text>
         </View>
 
-        {/* Nút Đăng xuất */}
-        <TouchableOpacity style={styles.logoutBtn} onPress={handleLogout} activeOpacity={0.85}>
+        <TouchableOpacity style={styles.logoutBtn} onPress={() => setLogoutModalVisible(true)} activeOpacity={0.85}>
           <Ionicons name="log-out-outline" size={18} color="#DC2626" style={{ marginRight: 6 }} />
           <Text style={styles.logoutBtnText}>Đăng xuất khỏi tài khoản Bác sĩ</Text>
         </TouchableOpacity>
       </ScrollView>
 
-      {/* =================================================================== */}
-      {/* MODAL 1: CHỈNH SỬA THÔNG TIN BÁC SĨ (CÓ ĐỔI ẢNH, ĐÃ BỎ EMAIL)      */}
-      {/* =================================================================== */}
+      {/* MODAL 1: CHỈNH SỬA THÔNG TIN */}
       <Modal visible={editModalVisible} animationType="slide" transparent>
-        <KeyboardAvoidingView
-          behavior={Platform.OS === 'ios' ? 'padding' : undefined}
-          style={styles.modalOverlay}
-        >
+        <KeyboardAvoidingView behavior={Platform.OS === 'ios' ? 'padding' : undefined} style={styles.modalOverlay}>
           <View style={[styles.modalBox, { backgroundColor: isDarkMode ? '#1E293B' : '#FFFFFF' }]}>
             <View style={styles.modalHeader}>
               <View style={{ flexDirection: 'row', alignItems: 'center' }}>
                 <Ionicons name="person-circle" size={22} color={Colors.primary} style={{ marginRight: 6 }} />
-                <Text style={[styles.modalTitle, { color: colors.textPrimary }]}>
-                  Sửa Hồ Sơ Bác Sĩ
-                </Text>
+                <Text style={[styles.modalTitle, { color: colors.textPrimary }]}>Sửa Hồ Sơ Bác Sĩ</Text>
               </View>
               <TouchableOpacity onPress={() => setEditModalVisible(false)}>
                 <Ionicons name="close" size={24} color="#94A3B8" />
@@ -398,15 +365,12 @@ export default function DoctorProfileScreen({ navigation }: any) {
             </View>
 
             <ScrollView showsVerticalScrollIndicator={false} style={{ marginVertical: 10 }}>
-              {/* KHU VỰC ĐỔI ẢNH ĐẠI DIỆN TRONG MODAL */}
               <View style={styles.modalAvatarRow}>
                 <View style={styles.modalAvatarWrap}>
                   {editAvatarUri ? (
-                    <Image source={{ uri: editAvatarUri }} style={styles.modalAvatarImage} />
+                    <Image source={{ uri: editAvatarUri }} style={styles.avatarImage} />
                   ) : (
-                    <View style={styles.modalAvatarPlaceholder}>
-                      <Ionicons name="person" size={28} color="#FFFFFF" />
-                    </View>
+                    <Ionicons name="person" size={28} color="#FFFFFF" />
                   )}
                 </View>
                 <TouchableOpacity style={styles.btnPickImage} onPress={pickImage} activeOpacity={0.8}>
@@ -420,16 +384,16 @@ export default function DoctorProfileScreen({ navigation }: any) {
                 style={[styles.inputField, { color: colors.textPrimary, borderColor: colors.border }]}
                 value={editName}
                 onChangeText={setEditName}
-                placeholder="VD: BS. Trần Văn Minh"
+                placeholder="VD: BS. Nguyễn Văn An"
                 placeholderTextColor="#94A3B8"
               />
 
-              <Text style={styles.fieldLabel}>Học hàm, học vị (*)</Text>
+              <Text style={styles.fieldLabel}>Học hàm, học vị</Text>
               <TextInput
                 style={[styles.inputField, { color: colors.textPrimary, borderColor: colors.border }]}
                 value={editDegree}
                 onChangeText={setEditDegree}
-                placeholder="VD: Thạc sĩ, Bác sĩ CKI..."
+                placeholder="VD: Bác sĩ CKI, Thạc sĩ Y khoa..."
                 placeholderTextColor="#94A3B8"
               />
 
@@ -438,7 +402,7 @@ export default function DoctorProfileScreen({ navigation }: any) {
                 style={[styles.inputField, { color: colors.textPrimary, borderColor: colors.border }]}
                 value={editSpecialty}
                 onChangeText={setEditSpecialty}
-                placeholder="VD: Tim mạch Can thiệp & Lão khoa"
+                placeholder="VD: Lão khoa, Tim mạch..."
                 placeholderTextColor="#94A3B8"
               />
 
@@ -456,7 +420,7 @@ export default function DoctorProfileScreen({ navigation }: any) {
                 style={[styles.inputField, { color: colors.textPrimary, borderColor: colors.border }]}
                 value={editDepartment}
                 onChangeText={setEditDepartment}
-                placeholder="VD: Khoa Hồi sức Tim mạch"
+                placeholder="VD: Khoa Khám bệnh"
                 placeholderTextColor="#94A3B8"
               />
 
@@ -466,7 +430,7 @@ export default function DoctorProfileScreen({ navigation }: any) {
                 value={editPhone}
                 onChangeText={setEditPhone}
                 keyboardType="phone-pad"
-                placeholder="VD: 0905 111 222"
+                placeholder="VD: 0905123456"
                 placeholderTextColor="#94A3B8"
               />
             </ScrollView>
@@ -489,21 +453,14 @@ export default function DoctorProfileScreen({ navigation }: any) {
         </KeyboardAvoidingView>
       </Modal>
 
-      {/* =================================================================== */}
-      {/* MODAL 2: ĐỔI MẬT KHẨU TÀI KHOẢN BÁC SĨ                             */}
-      {/* =================================================================== */}
+      {/* MODAL 2: ĐỔI MẬT KHẨU */}
       <Modal visible={passwordModalVisible} animationType="slide" transparent>
-        <KeyboardAvoidingView
-          behavior={Platform.OS === 'ios' ? 'padding' : undefined}
-          style={styles.modalOverlay}
-        >
+        <KeyboardAvoidingView behavior={Platform.OS === 'ios' ? 'padding' : undefined} style={styles.modalOverlay}>
           <View style={[styles.modalBox, { backgroundColor: isDarkMode ? '#1E293B' : '#FFFFFF' }]}>
             <View style={styles.modalHeader}>
               <View style={{ flexDirection: 'row', alignItems: 'center' }}>
                 <Ionicons name="key" size={20} color="#D97706" style={{ marginRight: 6 }} />
-                <Text style={[styles.modalTitle, { color: colors.textPrimary }]}>
-                  Đổi Mật Khẩu Bác Sĩ
-                </Text>
+                <Text style={[styles.modalTitle, { color: colors.textPrimary }]}>Đổi Mật Khẩu Bác Sĩ</Text>
               </View>
               <TouchableOpacity onPress={() => setPasswordModalVisible(false)}>
                 <Ionicons name="close" size={24} color="#94A3B8" />
@@ -560,18 +517,14 @@ export default function DoctorProfileScreen({ navigation }: any) {
         </KeyboardAvoidingView>
       </Modal>
 
-      {/* =================================================================== */}
-      {/* MODAL 3: XÁC NHẬN ĐĂNG XUẤT TÀI KHOẢN BÁC SĨ                       */}
-      {/* =================================================================== */}
+      {/* MODAL 3: XÁC NHẬN ĐĂNG XUẤT */}
       <Modal visible={logoutModalVisible} animationType="fade" transparent onRequestClose={() => setLogoutModalVisible(false)}>
         <View style={styles.logoutModalOverlay}>
           <View style={[styles.logoutModalBox, { backgroundColor: isDarkMode ? '#1E293B' : '#FFFFFF' }]}>
             <View style={styles.logoutModalIconBox}>
               <Ionicons name="log-out-outline" size={32} color="#DC2626" />
             </View>
-            <Text style={[styles.logoutModalTitle, { color: colors.textPrimary }]}>
-              Đăng xuất tài khoản Bác sĩ
-            </Text>
+            <Text style={[styles.logoutModalTitle, { color: colors.textPrimary }]}>Đăng xuất tài khoản Bác sĩ</Text>
             <Text style={[styles.logoutModalSub, { color: isDarkMode ? '#94A3B8' : '#64748B' }]}>
               Bạn có chắc chắn muốn đăng xuất khỏi hệ thống? Mọi phiên làm việc và bảo mật hồ sơ bệnh án sẽ được kết thúc.
             </Text>
@@ -583,11 +536,7 @@ export default function DoctorProfileScreen({ navigation }: any) {
               >
                 <Text style={[styles.logoutCancelText, { color: isDarkMode ? '#CBD5E1' : '#64748B' }]}>Hủy bỏ</Text>
               </TouchableOpacity>
-              <TouchableOpacity
-                style={styles.logoutConfirmBtn}
-                onPress={performLogout}
-                activeOpacity={0.85}
-              >
+              <TouchableOpacity style={styles.logoutConfirmBtn} onPress={performLogout} activeOpacity={0.85}>
                 <Ionicons name="log-out" size={16} color="#FFFFFF" style={{ marginRight: 6 }} />
                 <Text style={styles.logoutConfirmText}>Đăng xuất ngay</Text>
               </TouchableOpacity>
@@ -624,18 +573,13 @@ const styles = StyleSheet.create({
     fontWeight: '700',
     color: '#0284C7',
   },
-
   scrollContent: { padding: 16, paddingBottom: 95 },
-
   profileCard: {
     borderRadius: 16,
     padding: 20,
     borderWidth: 1,
     alignItems: 'center',
     marginBottom: 14,
-    shadowColor: '#000',
-    shadowOpacity: 0.04,
-    shadowRadius: 6,
     elevation: 2,
   },
   avatarContainer: { position: 'relative', marginBottom: 10 },
@@ -648,11 +592,7 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     overflow: 'hidden',
   },
-  avatarImage: {
-    width: '100%',
-    height: '100%',
-    borderRadius: 42,
-  },
+  avatarImage: { width: '100%', height: '100%' },
   cameraIconBadge: {
     position: 'absolute',
     bottom: -2,
@@ -678,7 +618,6 @@ const styles = StyleSheet.create({
     marginTop: 8,
   },
   hospitalBadgeText: { fontSize: 11.5, fontWeight: '600' },
-
   statsGrid: {
     flexDirection: 'row',
     gap: 12,
@@ -693,7 +632,6 @@ const styles = StyleSheet.create({
   },
   statNum: { fontSize: 20, fontWeight: '800' },
   statLabel: { fontSize: 11, color: '#94A3B8', marginTop: 2, fontWeight: '600' },
-
   sectionCard: {
     borderRadius: 14,
     padding: 14,
@@ -717,14 +655,9 @@ const styles = StyleSheet.create({
     marginRight: 10,
   },
   menuItemText: { flex: 1, fontSize: 12.5, fontWeight: '600' },
-
-  versionBox: {
-    alignItems: 'center',
-    marginVertical: 12,
-  },
+  versionBox: { alignItems: 'center', marginVertical: 12 },
   versionText: { fontSize: 11, fontWeight: '600' },
   versionSub: { fontSize: 10, marginTop: 2 },
-
   logoutBtn: {
     flexDirection: 'row',
     alignItems: 'center',
@@ -735,8 +668,6 @@ const styles = StyleSheet.create({
     marginTop: 4,
   },
   logoutBtnText: { color: '#DC2626', fontSize: 13.5, fontWeight: '700' },
-
-  // Modal styles
   modalOverlay: {
     flex: 1,
     backgroundColor: 'rgba(0,0,0,0.6)',
@@ -757,7 +688,6 @@ const styles = StyleSheet.create({
     paddingBottom: 10,
   },
   modalTitle: { fontSize: 16, fontWeight: '800' },
-
   modalAvatarRow: {
     flexDirection: 'row',
     alignItems: 'center',
@@ -776,14 +706,6 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     marginRight: 12,
   },
-  modalAvatarImage: {
-    width: '100%',
-    height: '100%',
-  },
-  modalAvatarPlaceholder: {
-    justifyContent: 'center',
-    alignItems: 'center',
-  },
   btnPickImage: {
     flexDirection: 'row',
     alignItems: 'center',
@@ -794,19 +716,8 @@ const styles = StyleSheet.create({
     borderWidth: 1,
     borderColor: '#7DD3FC',
   },
-  btnPickImageText: {
-    fontSize: 12.5,
-    fontWeight: '700',
-    color: '#0284C7',
-  },
-
-  fieldLabel: {
-    fontSize: 12,
-    fontWeight: '600',
-    color: '#64748B',
-    marginTop: 8,
-    marginBottom: 4,
-  },
+  btnPickImageText: { fontSize: 12.5, fontWeight: '700', color: '#0284C7' },
+  fieldLabel: { fontSize: 12, fontWeight: '600', color: '#64748B', marginTop: 8, marginBottom: 4 },
   inputField: {
     borderWidth: 1,
     borderRadius: 8,
@@ -823,21 +734,8 @@ const styles = StyleSheet.create({
     borderTopColor: '#CBD5E1',
     paddingTop: 10,
   },
-  modalCancelBtn: {
-    paddingVertical: 8,
-    paddingHorizontal: 16,
-    borderRadius: 8,
-    borderWidth: 1,
-  },
-  modalSaveBtn: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    paddingVertical: 8,
-    paddingHorizontal: 16,
-    borderRadius: 8,
-  },
-
-  // ── Logout Modal Styles ──
+  modalCancelBtn: { paddingVertical: 8, paddingHorizontal: 16, borderRadius: 8, borderWidth: 1 },
+  modalSaveBtn: { paddingVertical: 8, paddingHorizontal: 16, borderRadius: 8 },
   logoutModalOverlay: {
     flex: 1,
     backgroundColor: 'rgba(0,0,0,0.6)',
@@ -851,10 +749,6 @@ const styles = StyleSheet.create({
     borderRadius: 20,
     padding: 24,
     alignItems: 'center',
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 8 },
-    shadowOpacity: 0.15,
-    shadowRadius: 20,
     elevation: 10,
   },
   logoutModalIconBox: {
@@ -866,23 +760,9 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
     marginBottom: 16,
   },
-  logoutModalTitle: {
-    fontSize: 18,
-    fontWeight: '700',
-    marginBottom: 8,
-    textAlign: 'center',
-  },
-  logoutModalSub: {
-    fontSize: 13,
-    lineHeight: 20,
-    textAlign: 'center',
-    marginBottom: 20,
-  },
-  logoutModalActions: {
-    flexDirection: 'row',
-    gap: 12,
-    width: '100%',
-  },
+  logoutModalTitle: { fontSize: 18, fontWeight: '700', marginBottom: 8, textAlign: 'center' },
+  logoutModalSub: { fontSize: 13, lineHeight: 20, textAlign: 'center', marginBottom: 20 },
+  logoutModalActions: { flexDirection: 'row', gap: 12, width: '100%' },
   logoutCancelBtn: {
     flex: 1,
     paddingVertical: 12,
@@ -891,10 +771,7 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     justifyContent: 'center',
   },
-  logoutCancelText: {
-    fontSize: 14,
-    fontWeight: '600',
-  },
+  logoutCancelText: { fontSize: 14, fontWeight: '600' },
   logoutConfirmBtn: {
     flex: 1,
     flexDirection: 'row',
@@ -904,9 +781,5 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     justifyContent: 'center',
   },
-  logoutConfirmText: {
-    color: '#FFFFFF',
-    fontSize: 14,
-    fontWeight: '700',
-  },
+  logoutConfirmText: { color: '#FFFFFF', fontSize: 14, fontWeight: '700' },
 });

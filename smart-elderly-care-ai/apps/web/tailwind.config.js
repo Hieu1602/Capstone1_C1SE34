@@ -48,9 +48,9 @@ export default {
         },
       },
       fontFamily: {
-        heading: ['Fira Code', 'JetBrains Mono', 'monospace'],
-        sans:    ['Fira Sans', 'Inter', 'sans-serif'],
-        mono:    ['Fira Code', 'monospace'],
+        heading: ['Plus Jakarta Sans', 'Be Vietnam Pro', 'Inter', 'sans-serif'],
+        sans:    ['Plus Jakarta Sans', 'Inter', 'Be Vietnam Pro', 'system-ui', '-apple-system', 'sans-serif'],
+        mono:    ['JetBrains Mono', 'Plus Jakarta Sans', 'Consolas', 'monospace'],
       },
       borderRadius: {
         'xl': '12px',

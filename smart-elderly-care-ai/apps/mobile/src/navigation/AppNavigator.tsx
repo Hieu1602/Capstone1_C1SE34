@@ -60,6 +60,7 @@ function MainTabNavigator() {
       screenOptions={({ route }) => ({
         headerShown: false,
         tabBarShowLabel: false, // Thiết kế hiện đại tinh gọn như ảnh mẫu
+        tabBarHideOnKeyboard: true,
         tabBarStyle: [
           styles.tabBar,
           {

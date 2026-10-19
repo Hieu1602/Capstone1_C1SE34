@@ -12,6 +12,7 @@ from app.models.device_config import DeviceConfig
 from app.models.vital_sign import VitalSign
 from app.models.incident import Incident
 from app.models.chat import ChatSession, ChatMessage
+from app.models.system_notification import SystemNotification
 
 __all__ = [
     "User",
@@ -27,5 +28,6 @@ __all__ = [
     "Incident",
     "ChatSession",
     "ChatMessage",
+    "SystemNotification",
 ]
 

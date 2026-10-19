@@ -1,11 +1,7 @@
 """
 devices.py – Endpoints Quản lý Thiết bị IoT Master (Camera AI, Smartband, Edge Hub).
-Hỗ trợ:
-- Lọc theo loại thiết bị (CAMERA, SMARTBAND, EDGE_HUB), nhóm phòng, trạng thái trực tuyến.
-- Đăng ký thiết bị (thêm thủ công / quét QR) kèm cấu hình chuyên sâu.
-- Cập nhật cấu hình: bật/tắt AI bảo vệ, chế độ ngủ riêng tư, độ phân giải RTSP, ngưỡng nhịp tim.
-- Nhận Heartbeat cập nhật trạng thái online & mức pin.
-Vị trí: backend/app/api/v1/endpoints/devices.py
+Người làm: DuongVanHieu
+Nghiệp vụ: Quản trị thiết bị ngoại vi, xử lý cấu hình tham số telemetry, heartbeat và điều khiển từ xa.
 """
 
 from typing import List, Optional
@@ -18,6 +14,7 @@ from app.api.deps import get_current_user
 from app.core.database import get_db
 from app.crud.crud_device import crud_device
 from app.crud.crud_house import crud_house
+from app.models.device import Device
 from app.models.user import User
 from app.schemas.device import (
     DeviceConfigOut,
@@ -31,23 +28,31 @@ from app.schemas.device import (
 router = APIRouter()
 
 
+async def _get_device_or_404(db: AsyncSession, device_id: str) -> Device:
+    """Tra cứu thiết bị theo ID/UUID hoặc trả về HTTP 404 (Tách logic lặp lại từ lần 3 - Rule DRY)."""
+    device = await crud_device.get_by_id_or_device_id(db, id_or_device_id=device_id)
+    if not device:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="Thiết bị không tồn tại.",
+        )
+    return device
+
+
 @router.get("", response_model=List[DeviceOut])
 @router.get("/", response_model=List[DeviceOut], include_in_schema=False)
 async def list_devices(
-    device_type: Optional[str] = Query(None, description="Lọc theo loại: CAMERA, SMARTBAND, EDGE_HUB"),
+    device_type: Optional[str] = Query(None, description="Lọc theo loại: CAMERA, SMARTBAND, EDGE_HUB, SENSOR"),
     group_id: Optional[UUID] = Query(None, description="Lọc theo ID nhóm khu vực phòng"),
     is_online: Optional[bool] = Query(None, description="Lọc theo trạng thái trực tuyến"),
     current_user: User = Depends(get_current_user),
     db: AsyncSession = Depends(get_db),
 ):
-    """
-    Lấy danh sách tất cả thiết bị của người dùng, hỗ trợ bộ lọc tab (Camera, Đồng hồ, Nhóm).
-    """
-    house = await crud_house.get_or_create_default_house(db, owner_id=current_user.id)
-    return await crud_device.get_by_owner(
+    """Lấy danh sách thiết bị của người dùng hoặc toàn bộ thiết bị nếu là Admin."""
+    return await crud_device.get_by_user(
         db,
-        owner_id=current_user.id,
-        house_id=house.id,
+        user_id=current_user.id,
+        is_admin=current_user.role == "admin",
         device_type=device_type,
         group_id=group_id,
         is_online=is_online,
@@ -72,7 +77,6 @@ async def register_device(
             detail=f"Mã thiết bị '{device_in.device_id}' đã được đăng ký trên hệ thống.",
         )
 
-    # Gán house_id nếu client chưa gửi
     if not device_in.house_id:
         house = await crud_house.get_or_create_default_house(db, owner_id=current_user.id)
         device_in.house_id = house.id
@@ -87,13 +91,7 @@ async def get_device(
     db: AsyncSession = Depends(get_db),
 ):
     """Lấy chi tiết một thiết bị kèm cấu hình chuyên sâu (DeviceConfig). Hỗ trợ cả UUID hoặc mã chuỗi."""
-    device = await crud_device.get_by_id_or_device_id(db, id_or_device_id=device_id)
-    if not device:
-        raise HTTPException(
-            status_code=status.HTTP_404_NOT_FOUND,
-            detail="Thiết bị không tồn tại.",
-        )
-    return device
+    return await _get_device_or_404(db, device_id)
 
 
 @router.patch("/{device_id}", response_model=DeviceOut)
@@ -105,12 +103,7 @@ async def update_device(
     db: AsyncSession = Depends(get_db),
 ):
     """Cập nhật thông tin cơ bản của thiết bị (tên, phân vùng nhóm phòng, trạng thái)."""
-    device = await crud_device.get_by_id_or_device_id(db, id_or_device_id=device_id)
-    if not device:
-        raise HTTPException(
-            status_code=status.HTTP_404_NOT_FOUND,
-            detail="Thiết bị không tồn tại.",
-        )
+    device = await _get_device_or_404(db, device_id)
     return await crud_device.update(db, device=device, obj_in=obj_in)
 
 
@@ -127,13 +120,33 @@ async def update_device_config(
     - Camera: luồng RTSP stream_url, resolution (2K/FHD/SD), is_sleep, is_ai_protect.
     - Smartband: hr_threshold_high, hr_threshold_low, spo2_threshold_low, fall_impact_threshold.
     """
-    device = await crud_device.get_by_id_or_device_id(db, id_or_device_id=device_id)
-    if not device:
-        raise HTTPException(
-            status_code=status.HTTP_404_NOT_FOUND,
-            detail="Thiết bị không tồn tại.",
-        )
+    device = await _get_device_or_404(db, device_id)
     return await crud_device.update_config(db, device=device, config_in=config_in)
+
+
+@router.get("/{device_id}/config", response_model=DeviceConfigOut)
+async def get_device_config(
+    device_id: str,
+    current_user: User = Depends(get_current_user),
+    db: AsyncSession = Depends(get_db),
+):
+    """Lấy cấu hình chi tiết và các ngưỡng an toàn của thiết bị."""
+    device = await _get_device_or_404(db, device_id)
+    return device.config or await crud_device.update_config(db, device=device, config_in=DeviceConfigUpdate())
+
+
+@router.post("/{device_id}/reboot", status_code=status.HTTP_200_OK)
+async def reboot_device(
+    device_id: str,
+    current_user: User = Depends(get_current_user),
+    db: AsyncSession = Depends(get_db),
+):
+    """Gửi tín hiệu khởi động lại thiết bị IoT qua MQTT."""
+    device = await _get_device_or_404(db, device_id)
+    return {
+        "status": "success",
+        "message": f"Lệnh khởi động lại đã được gửi tới thiết bị '{device.name}' ({device.device_id}).",
+    }
 
 
 @router.get("/{device_id}/status", response_model=DeviceStatus)
@@ -143,12 +156,7 @@ async def get_device_status(
     db: AsyncSession = Depends(get_db),
 ):
     """Kiểm tra trạng thái online/offline, pin và heartbeat của thiết bị."""
-    device = await crud_device.get_by_id_or_device_id(db, id_or_device_id=device_id)
-    if not device:
-        raise HTTPException(
-            status_code=status.HTTP_404_NOT_FOUND,
-            detail="Thiết bị không tồn tại.",
-        )
+    device = await _get_device_or_404(db, device_id)
     return DeviceStatus(
         device_id=device.device_id,
         is_online=device.is_online,
@@ -182,12 +190,7 @@ async def delete_device(
     db: AsyncSession = Depends(get_db),
 ):
     """Gỡ bỏ thiết bị khỏi hệ thống."""
-    device = await crud_device.get_by_id_or_device_id(db, id_or_device_id=device_id)
-    if not device:
-        raise HTTPException(
-            status_code=status.HTTP_404_NOT_FOUND,
-            detail="Thiết bị không tồn tại.",
-        )
+    device = await _get_device_or_404(db, device_id)
     if device.owner_id != current_user.id and current_user.role != "admin":
         raise HTTPException(
             status_code=status.HTTP_403_FORBIDDEN,

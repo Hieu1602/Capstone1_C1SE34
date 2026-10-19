@@ -11,7 +11,7 @@ import { useAuthStore } from '../store/useAuthStore';
 // - Nếu có biến EXPO_PUBLIC_API_URL thì dùng nó
 // - Nếu chạy trên Web và truy cập qua LAN IP: tự động kết nối API qua IP đó
 // - Tự động trích xuất IP từ host của Metro Bundler (Expo Constants)
-// - Fallback về IP máy tính hiện tại: 192.168.1.4
+// - Fallback về IP máy tính hiện tại: 192.168.1.160
 const getBaseUrl = (): string => {
   // 1. Khi chạy trên Web trình duyệt
   if (Platform.OS === 'web' && typeof window !== 'undefined' && window.location?.hostname) {
@@ -39,7 +39,7 @@ const getBaseUrl = (): string => {
   }
 
   // 4. Fallback về IP máy tính phát triển trong mạng nội bộ
-  return 'http://192.168.1.4:8000/api/v1';
+  return 'http://192.168.1.160:8000/api/v1';
 };
 
 export const BASE_URL: string = getBaseUrl();
@@ -183,7 +183,7 @@ export const systemApi = {
 export const vitalsApi = {
   getCurrent: () => api.get('/vitals/current'),
   getLatest: (deviceId: string) => api.get(`/vitals/${deviceId}/latest`),
-  getHistory: (deviceId: string = 'hub-01', limit = 100, target_date?: string) =>
+  getHistory: (deviceId: string = 'BLE_BAND_001', limit = 100, target_date?: string) =>
     api.get('/vitals/history', { params: { device_id: deviceId, limit, target_date } }),
   getStats: (deviceId: string, hours = 24) =>
     api.get(`/vitals/${deviceId}/stats`, { params: { hours } }),

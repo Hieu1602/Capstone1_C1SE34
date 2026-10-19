@@ -16,9 +16,17 @@ from datetime import datetime, timezone
 from typing import Any, Dict, List, Optional
 from uuid import UUID
 
-import speech_recognition as sr
+try:
+    import speech_recognition as sr
+except ImportError:
+    sr = None
+
+try:
+    from pydub import AudioSegment
+except ImportError:
+    AudioSegment = None
+
 from fastapi import APIRouter, Depends, File, HTTPException, Request, UploadFile, status
-from pydub import AudioSegment
 from pydantic import BaseModel, Field
 from sqlalchemy import delete, select
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -319,6 +327,11 @@ async def transcribe_audio(
     Nhận file ghi âm âm thanh (WAV/M4A/WebM) từ Mobile/Web,
     nhận diện và chuyển đổi thành văn bản tiếng Việt.
     """
+    if sr is None:
+        raise HTTPException(
+            status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
+            detail="Tính năng nhận diện giọng nói chưa sẵn sàng (thiếu thư viện speech_recognition).",
+        )
     try:
         content = await file.read()
         if not content:
@@ -334,9 +347,15 @@ async def transcribe_audio(
                 audio_data = r.record(source)
         except Exception:
             # Thử 2: Chuyển đổi bằng pydub nếu client gửi định dạng m4a/aac/webm
+            if AudioSegment is None:
+                raise HTTPException(
+                    status_code=400,
+                    detail="Không thể đọc định dạng âm thanh này (thiếu thư viện pydub). Vui lòng đảm bảo ghi âm chuẩn WAV.",
+                )
             try:
                 audio_buf.seek(0)
-                seg: Any = AudioSegment.from_file(audio_buf)
+                audio_segment_cls: Any = AudioSegment
+                seg = audio_segment_cls.from_file(audio_buf)
                 wav_io = io.BytesIO()
                 seg.export(wav_io, format="wav")
                 wav_io.seek(0)

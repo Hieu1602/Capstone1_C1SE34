@@ -1,6 +1,6 @@
 // MultiViewScreen.tsx
 // Màn hình xem đồng thời nhiều luồng Camera (Multi-View / 2x2 Grid)
-// Hỗ trợ hiển thị 4 kênh giám sát theo thời gian thực (WebRTC / RTSP)
+// Hỗ trợ hiển thị các kênh giám sát thời gian thực từ hệ thống thiết bị IoT
 
 import React, { useState } from 'react';
 import { View, StyleSheet, TouchableOpacity, ScrollView, Image, Dimensions } from 'react-native';
@@ -12,14 +12,11 @@ import { useTheme } from '../../../store/useThemeStore';
 import { LocalizedAlert, LocalizedText } from '../../../i18n/LocalizedComponents';
 import { launchEmergencyCall } from '../../../services/emergency';
 
-
-const { width: SCREEN_WIDTH } = Dimensions.get('window');
-
 interface CameraFeed {
   id: string;
   name: string;
   room: string;
-  uri: string;
+  uri?: string;
   fps: number;
   bitrate: string;
   isAIActive: boolean;
@@ -28,62 +25,31 @@ interface CameraFeed {
 }
 
 export default function MultiViewScreen({ navigation }: any) {
-  const { isDarkMode, colors } = useTheme();
-  const { house } = useVitalStore();
+  const { isDarkMode } = useTheme();
+  const { house, iotDevices } = useVitalStore();
   const [layoutMode, setLayoutMode] = useState<'GRID' | 'LIST'>('GRID');
-  const [mutedFeeds, setMutedFeeds] = useState<{ [key: string]: boolean }>({
-    'cam-1': false,
-    'cam-2': true,
-    'cam-3': true,
-    'cam-4': true,
-  });
+  const [mutedFeeds, setMutedFeeds] = useState<Record<string, boolean>>({});
 
-  const cameraFeeds: CameraFeed[] = [
-    {
-      id: 'cam-1',
-      name: 'Camera Phòng Ngủ - Hub #01',
-      room: 'Phòng ngủ',
-      uri: 'https://images.unsplash.com/photo-1540518614846-7ede433c4550?w=600&q=80',
-      fps: 30,
-      bitrate: '142 kbps',
-      isAIActive: true,
-      aiTag: 'YOLO-Pose • 36.8°C',
-      isOnline: true,
-    },
-    {
-      id: 'cam-2',
-      name: 'Camera Phòng Khách - Hub #02',
-      room: 'Phòng khách',
-      uri: 'https://images.unsplash.com/photo-1586023492125-27b2c045efd7?w=600&q=80',
-      fps: 30,
-      bitrate: '138 kbps',
-      isAIActive: true,
-      aiTag: 'Phát hiện người',
-      isOnline: true,
-    },
-    {
-      id: 'cam-3',
-      name: 'Camera Khu Bếp & Bàn Ăn',
-      room: 'Bếp',
-      uri: 'https://images.unsplash.com/photo-1556911220-e15b29be8c8f?w=600&q=80',
-      fps: 25,
-      bitrate: '110 kbps',
-      isAIActive: false,
-      aiTag: 'YAMNet • An toàn',
-      isOnline: true,
-    },
-    {
-      id: 'cam-4',
-      name: 'Camera Ban Công & Cửa Chính',
-      room: 'Cửa ra vào',
-      uri: 'https://images.unsplash.com/photo-1513694203232-719a280e022f?w=600&q=80',
-      fps: 25,
-      bitrate: '115 kbps',
-      isAIActive: true,
-      aiTag: 'Rào ảo an toàn',
-      isOnline: true,
-    },
-  ];
+  // Lấy danh sách camera thực tế từ store
+  const configuredCameras = (iotDevices || []).filter(
+    (d) =>
+      d.type === 'camera' ||
+      d.name.toLowerCase().includes('camera') ||
+      d.name.includes('SECA') ||
+      d.name.includes('Ranger')
+  );
+
+  const cameraFeeds: CameraFeed[] = configuredCameras.map((dev, idx) => ({
+    id: dev.id,
+    name: dev.name,
+    room: dev.location || 'Phòng giám sát',
+    uri: dev.streamUrl,
+    fps: dev.isOnline ? 30 : 0,
+    bitrate: dev.isOnline ? '135 kbps' : '0 kbps',
+    isAIActive: dev.isOnline,
+    aiTag: dev.isOnline ? 'AI Giám sát an toàn' : 'Ngoại tuyến',
+    isOnline: dev.isOnline,
+  }));
 
   const toggleMute = (camId: string) => {
     setMutedFeeds((prev) => ({
@@ -96,242 +62,189 @@ export default function MultiViewScreen({ navigation }: any) {
     navigation.navigate('CameraDetail', {
       cameraId: feed.id,
       cameraName: feed.name,
+      room: feed.room,
     });
   };
 
+  const isGrid = layoutMode === 'GRID';
+  const bgMain = isDarkMode ? '#0F172A' : '#F1F5F9';
+  const bgCard = isDarkMode ? '#1E293B' : '#FFFFFF';
+  const borderCol = isDarkMode ? '#334155' : '#E2E8F0';
+  const textTitle = isDarkMode ? '#FFF' : '#0F172A';
+  const textSub = isDarkMode ? '#94A3B8' : '#64748B';
+
   return (
-    <SafeAreaView style={[styles.safeArea, { backgroundColor: isDarkMode ? '#0F172A' : '#F1F5F9' }]} edges={['top', 'bottom']}>
-      {/* 1. Header with Back button, Title, Theme Switcher and Layout Toggle */}
-      <View style={[styles.headerRow, { backgroundColor: isDarkMode ? '#111827' : '#FFFFFF', borderBottomColor: isDarkMode ? '#1F2937' : '#E2E8F0' }]}>
+    <SafeAreaView style={[styles.safeArea, { backgroundColor: bgMain }]} edges={['top', 'bottom']}>
+      {/* 1. Header */}
+      <View style={[styles.headerRow, { backgroundColor: isDarkMode ? '#111827' : '#FFFFFF', borderBottomColor: borderCol }]}>
         <View style={styles.headerLeftGroup}>
           <TouchableOpacity
             style={[styles.backBtn, { backgroundColor: isDarkMode ? '#1F2937' : '#F1F5F9' }]}
-            onPress={() => {
-              if (navigation.canGoBack()) {
-                navigation.goBack();
-              } else {
-                navigation.navigate('Main', { screen: 'Home' });
-              }
-            }}
+            onPress={() => (navigation.canGoBack() ? navigation.goBack() : navigation.navigate('Main', { screen: 'Home' }))}
             activeOpacity={0.7}
             hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}
           >
-            <Ionicons name="chevron-back" size={24} color={isDarkMode ? '#FFF' : '#0F172A'} />
+            <Ionicons name="chevron-back" size={24} color={textTitle} />
           </TouchableOpacity>
 
           <View style={{ marginLeft: 8 }}>
-            <LocalizedText style={[styles.headerTitle, { color: isDarkMode ? '#FFF' : '#0F172A' }]}>Nhiều Chế Độ Xem</LocalizedText>
-            <LocalizedText style={[styles.headerSub, { color: isDarkMode ? '#94A3B8' : '#64748B' }]}>{house.name} • 4 Kênh WebRTC</LocalizedText>
+            <LocalizedText style={[styles.headerTitle, { color: textTitle }]}>Nhiều Chế Độ Xem</LocalizedText>
+            <LocalizedText style={[styles.headerSub, { color: textSub }]}>
+              {house?.name || 'Nhà của tôi'} • {cameraFeeds.length} Kênh Camera
+            </LocalizedText>
           </View>
         </View>
 
         <View style={styles.headerRightActions}>
           <TouchableOpacity
-            style={[
-              styles.headerActionBtn,
-              layoutMode === 'GRID'
-                ? styles.headerActionBtnActiveGrid
-                : { backgroundColor: isDarkMode ? '#1F2937' : '#F1F5F9', borderColor: isDarkMode ? '#374151' : '#E2E8F0' },
-            ]}
+            style={[styles.headerActionBtn, isGrid ? styles.btnActiveGrid : { backgroundColor: isDarkMode ? '#1F2937' : '#F1F5F9', borderColor: borderCol }]}
             onPress={() => setLayoutMode('GRID')}
             activeOpacity={0.8}
             accessibilityLabel="Lưới 2x2"
           >
-            <Ionicons
-              name="grid"
-              size={18}
-              color={layoutMode === 'GRID' ? '#FFF' : (isDarkMode ? '#94A3B8' : '#64748B')}
-            />
+            <Ionicons name="grid" size={18} color={isGrid ? '#FFF' : textSub} />
           </TouchableOpacity>
 
           <TouchableOpacity
-            style={[
-              styles.headerActionBtn,
-              { marginLeft: 8 },
-              layoutMode === 'LIST'
-                ? styles.headerActionBtnActiveList
-                : { backgroundColor: isDarkMode ? '#1F2937' : '#F1F5F9', borderColor: isDarkMode ? '#374151' : '#E2E8F0' },
-            ]}
+            style={[styles.headerActionBtn, { marginLeft: 8 }, !isGrid ? styles.btnActiveList : { backgroundColor: isDarkMode ? '#1F2937' : '#F1F5F9', borderColor: borderCol }]}
             onPress={() => setLayoutMode('LIST')}
             activeOpacity={0.8}
             accessibilityLabel="Danh sách"
           >
-            <Ionicons
-              name="list"
-              size={20}
-              color={layoutMode === 'LIST' ? '#FFF' : (isDarkMode ? '#94A3B8' : '#64748B')}
-            />
+            <Ionicons name="list" size={20} color={!isGrid ? '#FFF' : textSub} />
           </TouchableOpacity>
         </View>
       </View>
 
-      {/* 2. Camera Feeds Container */}
+      {/* 2. Container */}
       <ScrollView
         showsVerticalScrollIndicator={false}
-        contentContainerStyle={
-          layoutMode === 'GRID' ? styles.gridContainer : styles.listContainer
-        }
+        contentContainerStyle={isGrid ? styles.gridContainer : styles.listContainer}
       >
-        {cameraFeeds.map((feed) => {
-          const isMuted = mutedFeeds[feed.id] ?? true;
-          const isGrid = layoutMode === 'GRID';
-
-          return (
+        {cameraFeeds.length === 0 ? (
+          <View style={[styles.emptyContainer, { backgroundColor: bgCard, borderColor: borderCol }]}>
+            <View style={styles.emptyIconCircle}>
+              <Ionicons name="videocam-outline" size={40} color={isDarkMode ? '#64748B' : '#94A3B8'} />
+            </View>
+            <LocalizedText style={[styles.emptyTitle, { color: textTitle }]}>
+              Chưa có Camera nào được kết nối
+            </LocalizedText>
+            <LocalizedText style={[styles.emptyDesc, { color: textSub }]}>
+              Hệ thống chưa ghi nhận luồng camera giám sát trong căn nhà này. Bạn có thể thêm thiết bị mới tại tab Thiết bị.
+            </LocalizedText>
             <TouchableOpacity
-              key={feed.id}
-              style={
-                isGrid
-                  ? [
-                      styles.gridCard,
-                      !isDarkMode && {
-                        backgroundColor: '#FFFFFF',
-                        borderColor: '#FFFFFF',
-                        borderWidth: 2,
-                      },
-                    ]
-                  : [
-                      styles.listCard,
-                      !isDarkMode && {
-                        backgroundColor: '#FFFFFF',
-                        borderColor: '#E2E8F0',
-                      },
-                    ]
-              }
-              activeOpacity={0.9}
-              onPress={() => handleOpenDetail(feed)}
+              style={styles.addDeviceBtn}
+              onPress={() => navigation.navigate('Main', { screen: 'Devices' })}
+              activeOpacity={0.8}
             >
-              <View style={isGrid ? styles.gridVideoBox : styles.listVideoBox}>
-                <Image
-                  source={{ uri: feed.uri }}
-                  style={styles.feedImage}
-                  resizeMode="cover"
-                />
-
-                {/* Top Badge: Room & Live WebRTC */}
-                <View style={isGrid ? styles.feedTopRowGrid : styles.feedTopRow}>
-                  <View style={isGrid ? styles.roomBadgeGrid : styles.roomBadge}>
-                    <View style={isGrid ? styles.greenDotGrid : styles.greenDot} />
-                    <LocalizedText
-                      style={isGrid ? styles.roomBadgeTextGrid : styles.roomBadgeText}
-                      numberOfLines={1}
-                    >
-                      {feed.room}
-                    </LocalizedText>
-                  </View>
-
-                  <View style={isGrid ? styles.fpsBadgeGrid : styles.fpsBadge}>
-                    <LocalizedText style={isGrid ? styles.fpsBadgeTextGrid : styles.fpsBadgeText}>
-                      {feed.fps} FPS
-                    </LocalizedText>
-                  </View>
-                </View>
-
-                {/* Bottom Overlay Info: AI Tag & Controls */}
-                <View style={isGrid ? styles.feedBottomOverlayGrid : styles.feedBottomOverlay}>
-                  <View style={isGrid ? styles.aiTagPillGrid : styles.aiTagPill}>
-                    <Ionicons
-                      name="sparkles"
-                      size={isGrid ? 8 : 10}
-                      color="#38BDF8"
-                      style={{ marginRight: 3 }}
-                    />
-                    <LocalizedText
-                      style={isGrid ? styles.aiTagTextGrid : styles.aiTagText}
-                      numberOfLines={1}
-                    >
-                      {feed.aiTag}
-                    </LocalizedText>
-                  </View>
-
-                  <View style={styles.feedControlButtons}>
-                    <TouchableOpacity
-                      style={isGrid ? styles.smallIconCircleGrid : styles.smallIconCircle}
-                      onPress={() => toggleMute(feed.id)}
-                    >
-                      <Ionicons
-                        name={isMuted ? 'volume-mute' : 'volume-high'}
-                        size={isGrid ? 11 : 14}
-                        color="#FFF"
-                      />
-                    </TouchableOpacity>
-
-                    <TouchableOpacity
-                      style={[
-                        isGrid ? styles.smallIconCircleGrid : styles.smallIconCircle,
-                        { marginLeft: isGrid ? 4 : 6 },
-                      ]}
-                      onPress={() => handleOpenDetail(feed)}
-                    >
-                      <Ionicons name="expand" size={isGrid ? 10 : 13} color="#FFF" />
-                    </TouchableOpacity>
-                  </View>
-                </View>
-              </View>
-
-              {/* Feed Title under Card (for List Mode) */}
-              {!isGrid && (
-                <View style={[styles.listCardFooter, !isDarkMode && { backgroundColor: '#FFFFFF' }]}>
-                  <LocalizedText style={[styles.listCardTitle, !isDarkMode && { color: '#0F172A' }]}>{feed.name}</LocalizedText>
-                  <LocalizedText style={[styles.listCardSub, !isDarkMode && { color: '#64748B' }]}>
-                    Băng thông: {feed.bitrate} • Suy luận NPU Hub RK3588S
-                  </LocalizedText>
-                </View>
-              )}
+              <Ionicons name="add" size={18} color="#FFF" />
+              <LocalizedText style={styles.addDeviceBtnText}>Thêm Camera Giám Sát</LocalizedText>
             </TouchableOpacity>
-          );
-        })}
+          </View>
+        ) : (
+          cameraFeeds.map((feed) => {
+            const isMuted = mutedFeeds[feed.id] ?? true;
 
-        {/* Info Banner at bottom */}
-        <View
-          style={[
-            layoutMode === 'GRID' ? styles.multiViewNoticeBoxGrid : styles.multiViewNoticeBox,
-            !isDarkMode && {
-              backgroundColor: '#E0F2FE',
-              borderColor: '#BAE6FD',
-            },
-          ]}
-        >
-          <Ionicons
-            name="information-circle-outline"
-            size={layoutMode === 'GRID' ? 15 : 20}
-            color={!isDarkMode ? '#0284C7' : '#38BDF8'}
-          />
-          <LocalizedText
-            style={[
-              layoutMode === 'GRID' ? styles.multiViewNoticeTextGrid : styles.multiViewNoticeText,
-              !isDarkMode && { color: '#0369A1' },
-            ]}
-            numberOfLines={layoutMode === 'GRID' ? 1 : 2}
-          >
-            {layoutMode === 'GRID'
-              ? 'Chạm vào ô camera bất kỳ để phóng to & xem chi tiết.'
-              : 'Chạm vào bất kỳ ô camera nào để mở màn hình chi tiết, xem dòng thời gian 24/48h và kích hoạt đàm thoại 2 chiều.'}
-          </LocalizedText>
-        </View>
+            return (
+              <TouchableOpacity
+                key={feed.id}
+                style={[
+                  isGrid ? styles.gridCard : styles.listCard,
+                  { backgroundColor: bgCard, borderColor: borderCol },
+                ]}
+                activeOpacity={0.9}
+                onPress={() => handleOpenDetail(feed)}
+              >
+                <View style={[styles.videoBox, isGrid ? styles.videoBoxGrid : styles.videoBoxList]}>
+                  {feed.uri ? (
+                    <Image source={{ uri: feed.uri }} style={styles.feedImage} resizeMode="cover" />
+                  ) : (
+                    <View style={styles.placeholderBox}>
+                      <Ionicons
+                        name={feed.isOnline ? 'videocam' : 'videocam-off'}
+                        size={isGrid ? 32 : 44}
+                        color={feed.isOnline ? '#38BDF8' : '#64748B'}
+                      />
+                      <LocalizedText style={[styles.placeholderText, { color: textSub }]}>
+                        {feed.isOnline ? 'Đang kết nối luồng RTSP / WebRTC...' : 'Camera đang ngoại tuyến'}
+                      </LocalizedText>
+                    </View>
+                  )}
+
+                  {/* Top Overlay */}
+                  <View style={[styles.feedTopOverlay, { padding: isGrid ? 5 : 8 }]}>
+                    <View style={styles.roomBadge}>
+                      <View style={[styles.statusDot, { backgroundColor: feed.isOnline ? '#10B981' : '#EF4444' }]} />
+                      <LocalizedText style={[styles.badgeText, { fontSize: isGrid ? 10 : 11 }]} numberOfLines={1}>
+                        {feed.room}
+                      </LocalizedText>
+                    </View>
+
+                    <View style={styles.fpsBadge}>
+                      <LocalizedText style={[styles.fpsText, { fontSize: isGrid ? 9 : 10 }]}>
+                        {feed.fps} FPS
+                      </LocalizedText>
+                    </View>
+                  </View>
+
+                  {/* Bottom Overlay */}
+                  <View style={[styles.feedBottomOverlay, { padding: isGrid ? 5 : 8 }]}>
+                    <View style={styles.aiTagPill}>
+                      <Ionicons name="sparkles" size={isGrid ? 9 : 11} color="#38BDF8" style={{ marginRight: 3 }} />
+                      <LocalizedText style={[styles.aiTagText, { fontSize: isGrid ? 8.5 : 9.5 }]} numberOfLines={1}>
+                        {feed.aiTag}
+                      </LocalizedText>
+                    </View>
+
+                    <View style={styles.feedControls}>
+                      <TouchableOpacity style={[styles.iconCircle, isGrid && styles.iconCircleGrid]} onPress={() => toggleMute(feed.id)}>
+                        <Ionicons name={isMuted ? 'volume-mute' : 'volume-high'} size={isGrid ? 11 : 14} color="#FFF" />
+                      </TouchableOpacity>
+
+                      <TouchableOpacity
+                        style={[styles.iconCircle, isGrid && styles.iconCircleGrid, { marginLeft: isGrid ? 4 : 6 }]}
+                        onPress={() => handleOpenDetail(feed)}
+                      >
+                        <Ionicons name="expand" size={isGrid ? 10 : 13} color="#FFF" />
+                      </TouchableOpacity>
+                    </View>
+                  </View>
+                </View>
+
+                {/* Footer for List Mode */}
+                {!isGrid && (
+                  <View style={[styles.listCardFooter, { backgroundColor: isDarkMode ? '#1E293B' : '#F8FAFC' }]}>
+                    <LocalizedText style={[styles.listCardTitle, { color: textTitle }]}>{feed.name}</LocalizedText>
+                    <LocalizedText style={[styles.listCardSub, { color: textSub }]}>
+                      Băng thông: {feed.bitrate} • Suy luận NPU Hub RK3588S
+                    </LocalizedText>
+                  </View>
+                )}
+              </TouchableOpacity>
+            );
+          })
+        )}
+
+        {/* Info Banner */}
+        {cameraFeeds.length > 0 && (
+          <View style={[styles.noticeBox, { backgroundColor: isDarkMode ? 'rgba(2,132,199,0.12)' : '#E0F2FE', borderColor: isDarkMode ? 'rgba(2,132,199,0.25)' : '#BAE6FD' }]}>
+            <Ionicons name="information-circle-outline" size={18} color={isDarkMode ? '#38BDF8' : '#0284C7'} />
+            <LocalizedText style={[styles.noticeText, { color: isDarkMode ? '#BAE6FD' : '#0369A1' }]}>
+              {isGrid ? 'Chạm vào ô camera bất kỳ để phóng to & xem chi tiết.' : 'Chạm vào bất kỳ ô camera nào để mở màn hình chi tiết, xem dòng thời gian và đàm thoại 2 chiều.'}
+            </LocalizedText>
+          </View>
+        )}
       </ScrollView>
 
-      {/* 3. Bottom Action Bar: Quay lại Home & Gọi SOS 115 */}
-      <View
-        style={[
-          styles.bottomBar,
-          !isDarkMode && {
-            backgroundColor: '#FFFFFF',
-            borderTopColor: '#E2E8F0',
-          },
-        ]}
-      >
+      {/* 3. Bottom Bar */}
+      <View style={[styles.bottomBar, { backgroundColor: isDarkMode ? '#111827' : '#FFFFFF', borderTopColor: borderCol }]}>
         <TouchableOpacity
-          style={[
-            styles.backHomeBtn,
-            !isDarkMode && {
-              backgroundColor: '#F1F5F9',
-            },
-          ]}
+          style={[styles.backHomeBtn, { backgroundColor: isDarkMode ? '#374151' : '#F1F5F9' }]}
           onPress={() => navigation.navigate('Main', { screen: 'Home' })}
           activeOpacity={0.8}
         >
-          <Ionicons name="home-outline" size={20} color={!isDarkMode ? '#0F172A' : '#FFF'} />
-          <LocalizedText style={[styles.backHomeBtnText, !isDarkMode && { color: '#0F172A' }]}>Quay Về Trang Chủ</LocalizedText>
+          <Ionicons name="home-outline" size={19} color={textTitle} />
+          <LocalizedText style={[styles.backHomeBtnText, { color: textTitle }]}>Quay Về Trang Chủ</LocalizedText>
         </TouchableOpacity>
 
         <TouchableOpacity
@@ -339,26 +252,17 @@ export default function MultiViewScreen({ navigation }: any) {
           onPress={() => {
             LocalizedAlert.alert(
               '🚨 KÍCH HOẠT SOS 115',
-              `Gọi cấp cứu 115 và sao chép vị trí:\n"${house.address}"`,
+              `Gọi cấp cứu 115 và sao chép vị trí:\n"${house?.address || 'Chưa cập nhật'}"`,
               [
                 { text: 'Hủy', style: 'cancel' },
-                {
-                  text: '📍 Gửi vị trí & ảnh',
-                  onPress: () => {
-                    navigation.navigate('SendEmergencyLocation');
-                  },
-                },
+                { text: '📍 Gửi vị trí & ảnh', onPress: () => navigation.navigate('SendEmergencyLocation') },
                 {
                   text: 'Gọi 115',
                   style: 'destructive',
                   onPress: () => {
-                    void launchEmergencyCall({ address: house.address })
-                      .then(() => {
-                        LocalizedAlert.alert('Đã kích hoạt', 'Đang mở trình gọi khẩn cấp 115.');
-                      })
-                      .catch((error) => {
-                        console.warn('[MultiViewScreen] Could not open emergency dialer:', error);
-                      });
+                    void launchEmergencyCall({ address: house?.address })
+                      .then(() => LocalizedAlert.alert('Đã kích hoạt', 'Đang mở trình gọi khẩn cấp 115.'))
+                      .catch((err) => console.warn('[MultiViewScreen] Emergency call error:', err));
                   },
                 },
               ]
@@ -375,358 +279,69 @@ export default function MultiViewScreen({ navigation }: any) {
 }
 
 const styles = StyleSheet.create({
-  safeArea: {
-    flex: 1,
-    backgroundColor: '#0B0F19',
-  },
+  safeArea: { flex: 1 },
   headerRow: {
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'space-between',
     paddingHorizontal: 16,
     paddingVertical: 12,
-    backgroundColor: '#111827',
     borderBottomWidth: 1,
-    borderBottomColor: '#1F2937',
   },
-  headerLeftGroup: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    flex: 1,
-  },
-  backBtn: {
-    width: 38,
-    height: 38,
-    borderRadius: 19,
-    backgroundColor: '#1F2937',
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
-  headerTitle: {
-    fontSize: 17,
-    fontWeight: '800',
-    color: '#FFF',
-  },
-  headerSub: {
-    fontSize: 11,
-    color: '#94A3B8',
-    marginTop: 2,
-  },
-  headerRightActions: {
-    flexDirection: 'row',
-    alignItems: 'center',
-  },
-  headerActionBtn: {
-    width: 36,
-    height: 36,
-    borderRadius: 10,
-    alignItems: 'center',
-    justifyContent: 'center',
-    borderWidth: 1,
-  },
-  headerActionBtnInactive: {
-    backgroundColor: '#1F2937',
-    borderColor: '#374151',
-  },
-  headerActionBtnActiveGrid: {
-    backgroundColor: '#F97316',
-    borderColor: '#FB923C',
-    ...Shadows.soft,
-  },
-  headerActionBtnActiveList: {
-    backgroundColor: Colors.primary,
-    borderColor: '#3B82F6',
-    ...Shadows.soft,
-  },
-  // Grid layout (Lưới 2 hàng x 2 cột = 4 ô)
-  gridContainer: {
-    flexDirection: 'row',
-    flexWrap: 'wrap',
-    justifyContent: 'space-between',
-    paddingHorizontal: 10,
-    paddingTop: 8,
-    paddingBottom: 4,
-  },
-  gridCard: {
-    width: '48.8%',
-    backgroundColor: '#1F2937',
-    borderRadius: 12,
-    overflow: 'hidden',
-    marginBottom: 10,
-    borderWidth: 1,
-    borderColor: '#374151',
-    ...Shadows.card,
-  },
-  gridVideoBox: {
-    width: '100%',
-    aspectRatio: 4 / 3,
-    position: 'relative',
-    backgroundColor: '#0F172A',
-  },
-  feedTopRowGrid: {
-    position: 'absolute',
-    top: 5,
-    left: 5,
-    right: 5,
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'space-between',
-    zIndex: 2,
-  },
-  roomBadgeGrid: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    backgroundColor: 'rgba(15, 23, 42, 0.88)',
-    paddingHorizontal: 5,
-    paddingVertical: 2,
-    borderRadius: 5,
-    maxWidth: '65%',
-  },
-  greenDotGrid: {
-    width: 5,
-    height: 5,
-    borderRadius: 2.5,
-    backgroundColor: '#10B981',
-    marginRight: 4,
-  },
-  roomBadgeTextGrid: {
-    fontSize: 10,
-    fontWeight: '700',
-    color: '#FFF',
-  },
-  fpsBadgeGrid: {
-    backgroundColor: 'rgba(15, 23, 42, 0.88)',
-    paddingHorizontal: 4,
-    paddingVertical: 2,
-    borderRadius: 4,
-  },
-  fpsBadgeTextGrid: {
-    fontSize: 8.5,
-    fontWeight: '700',
-    color: '#38BDF8',
-  },
-  feedBottomOverlayGrid: {
-    position: 'absolute',
-    bottom: 5,
-    left: 5,
-    right: 5,
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'space-between',
-    zIndex: 2,
-  },
-  aiTagPillGrid: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    backgroundColor: 'rgba(2, 132, 199, 0.88)',
-    paddingHorizontal: 5,
-    paddingVertical: 2,
-    borderRadius: 4,
-    maxWidth: '60%',
-  },
-  aiTagTextGrid: {
-    fontSize: 8,
-    fontWeight: '700',
-    color: '#FFF',
-  },
-  smallIconCircleGrid: {
-    width: 22,
-    height: 22,
-    borderRadius: 11,
-    backgroundColor: 'rgba(15, 23, 42, 0.85)',
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
-  multiViewNoticeBoxGrid: {
-    width: '100%',
-    flexDirection: 'row',
-    alignItems: 'center',
-    backgroundColor: 'rgba(2, 132, 199, 0.12)',
-    borderRadius: 10,
-    paddingHorizontal: 10,
-    paddingVertical: 6,
-    marginTop: 2,
-    marginBottom: 8,
-    borderWidth: 1,
-    borderColor: 'rgba(2, 132, 199, 0.22)',
-  },
-  multiViewNoticeTextGrid: {
-    flex: 1,
-    marginLeft: 6,
-    fontSize: 11,
-    color: '#BAE6FD',
-    lineHeight: 15,
-  },
-  // List layout (1 cột cuộn dọc)
-  listContainer: {
-    padding: 14,
-  },
-  listCard: {
-    width: '100%',
-    backgroundColor: '#1F2937',
-    borderRadius: 18,
-    overflow: 'hidden',
-    marginBottom: 16,
-    borderWidth: 1,
-    borderColor: '#374151',
-  },
-  listVideoBox: {
-    width: '100%',
-    height: 190,
-    position: 'relative',
-    backgroundColor: '#0F172A',
-  },
-  feedImage: {
-    width: '100%',
-    height: '100%',
-  },
-  feedTopRow: {
-    position: 'absolute',
-    top: 8,
-    left: 8,
-    right: 8,
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'space-between',
-  },
-  roomBadge: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    backgroundColor: 'rgba(15, 23, 42, 0.85)',
-    paddingHorizontal: 8,
-    paddingVertical: 4,
-    borderRadius: 8,
-  },
-  greenDot: {
-    width: 6,
-    height: 6,
-    borderRadius: 3,
-    backgroundColor: '#10B981',
-    marginRight: 6,
-  },
-  roomBadgeText: {
-    fontSize: 11,
-    fontWeight: '700',
-    color: '#FFF',
-  },
-  fpsBadge: {
-    backgroundColor: 'rgba(15, 23, 42, 0.85)',
-    paddingHorizontal: 6,
-    paddingVertical: 3,
-    borderRadius: 6,
-  },
-  fpsBadgeText: {
-    fontSize: 10,
-    fontWeight: '600',
-    color: '#38BDF8',
-  },
-  feedBottomOverlay: {
-    position: 'absolute',
-    bottom: 8,
-    left: 8,
-    right: 8,
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'space-between',
-  },
-  aiTagPill: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    backgroundColor: 'rgba(2, 132, 199, 0.85)',
-    paddingHorizontal: 7,
-    paddingVertical: 3,
-    borderRadius: 6,
-    maxWidth: '65%',
-  },
-  aiTagText: {
-    fontSize: 9,
-    fontWeight: '700',
-    color: '#FFF',
-  },
-  feedControlButtons: {
-    flexDirection: 'row',
-    alignItems: 'center',
-  },
-  smallIconCircle: {
-    width: 26,
-    height: 26,
-    borderRadius: 13,
-    backgroundColor: 'rgba(15, 23, 42, 0.8)',
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
-  listCardFooter: {
-    padding: 12,
-    backgroundColor: '#1E293B',
-  },
-  listCardTitle: {
-    fontSize: 15,
-    fontWeight: '800',
-    color: '#FFF',
-  },
-  listCardSub: {
-    fontSize: 11,
-    color: '#94A3B8',
-    marginTop: 2,
-  },
-  multiViewNoticeBox: {
-    width: '100%',
-    flexDirection: 'row',
-    alignItems: 'center',
-    backgroundColor: 'rgba(2, 132, 199, 0.12)',
-    borderRadius: 14,
-    padding: 12,
-    marginTop: 8,
-    marginBottom: 20,
-    borderWidth: 1,
-    borderColor: 'rgba(2, 132, 199, 0.25)',
-  },
-  multiViewNoticeText: {
-    flex: 1,
-    marginLeft: 8,
-    fontSize: 12,
-    color: '#BAE6FD',
-    lineHeight: 17,
-  },
-  bottomBar: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    paddingHorizontal: 16,
-    paddingVertical: 10,
-    backgroundColor: '#111827',
-    borderTopWidth: 1,
-    borderTopColor: '#1F2937',
-    gap: 12,
-  },
-  backHomeBtn: {
-    flex: 1,
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'center',
-    height: 46,
-    backgroundColor: '#374151',
-    borderRadius: 14,
-    gap: 8,
-  },
-  backHomeBtnText: {
-    color: '#FFF',
-    fontSize: 14,
-    fontWeight: '700',
-  },
-  sosActionBtn: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'center',
-    height: 46,
-    paddingHorizontal: 20,
-    backgroundColor: Colors.danger,
-    borderRadius: 14,
-    gap: 6,
-    ...Shadows.card,
-  },
-  sosActionBtnText: {
-    color: '#FFF',
-    fontSize: 14,
-    fontWeight: '900',
-  },
+  headerLeftGroup: { flexDirection: 'row', alignItems: 'center', flex: 1 },
+  backBtn: { width: 38, height: 38, borderRadius: 19, alignItems: 'center', justifyContent: 'center' },
+  headerTitle: { fontSize: 17, fontWeight: '800' },
+  headerSub: { fontSize: 11, marginTop: 2 },
+  headerRightActions: { flexDirection: 'row', alignItems: 'center' },
+  headerActionBtn: { width: 36, height: 36, borderRadius: 10, alignItems: 'center', justifyContent: 'center', borderWidth: 1 },
+  btnActiveGrid: { backgroundColor: '#F97316', borderColor: '#FB923C', ...Shadows.soft },
+  btnActiveList: { backgroundColor: Colors.primary, borderColor: '#3B82F6', ...Shadows.soft },
+
+  gridContainer: { flexDirection: 'row', flexWrap: 'wrap', justifyContent: 'space-between', paddingHorizontal: 10, paddingTop: 8, paddingBottom: 10 },
+  listContainer: { padding: 14, paddingBottom: 10 },
+
+  gridCard: { width: '48.8%', borderRadius: 12, overflow: 'hidden', marginBottom: 10, borderWidth: 1, ...Shadows.card },
+  listCard: { width: '100%', borderRadius: 18, overflow: 'hidden', marginBottom: 16, borderWidth: 1, ...Shadows.card },
+
+  videoBox: { width: '100%', position: 'relative', backgroundColor: '#0B0F19' },
+  videoBoxGrid: { aspectRatio: 4 / 3 },
+  videoBoxList: { height: 190 },
+  feedImage: { width: '100%', height: '100%' },
+
+  placeholderBox: { width: '100%', height: '100%', alignItems: 'center', justifyContent: 'center', padding: 10 },
+  placeholderText: { fontSize: 10, textAlign: 'center', marginTop: 6, fontWeight: '600' },
+
+  feedTopOverlay: { position: 'absolute', top: 0, left: 0, right: 0, flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', zIndex: 2 },
+  roomBadge: { flexDirection: 'row', alignItems: 'center', backgroundColor: 'rgba(15,23,42,0.85)', paddingHorizontal: 6, paddingVertical: 3, borderRadius: 6, maxWidth: '65%' },
+  statusDot: { width: 5, height: 5, borderRadius: 2.5, marginRight: 4 },
+  badgeText: { fontWeight: '700', color: '#FFF' },
+  fpsBadge: { backgroundColor: 'rgba(15,23,42,0.85)', paddingHorizontal: 5, paddingVertical: 3, borderRadius: 6 },
+  fpsText: { fontWeight: '700', color: '#38BDF8' },
+
+  feedBottomOverlay: { position: 'absolute', bottom: 0, left: 0, right: 0, flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', zIndex: 2 },
+  aiTagPill: { flexDirection: 'row', alignItems: 'center', backgroundColor: 'rgba(2,132,199,0.88)', paddingHorizontal: 6, paddingVertical: 3, borderRadius: 5, maxWidth: '65%' },
+  aiTagText: { fontWeight: '700', color: '#FFF' },
+  feedControls: { flexDirection: 'row', alignItems: 'center' },
+  iconCircle: { width: 26, height: 26, borderRadius: 13, backgroundColor: 'rgba(15,23,42,0.85)', alignItems: 'center', justifyContent: 'center' },
+  iconCircleGrid: { width: 22, height: 22, borderRadius: 11 },
+
+  listCardFooter: { padding: 12 },
+  listCardTitle: { fontSize: 15, fontWeight: '800' },
+  listCardSub: { fontSize: 11, marginTop: 2 },
+
+  noticeBox: { width: '100%', flexDirection: 'row', alignItems: 'center', borderRadius: 12, padding: 10, marginVertical: 8, borderWidth: 1 },
+  noticeText: { flex: 1, marginLeft: 8, fontSize: 11.5, lineHeight: 16 },
+
+  emptyContainer: { width: '100%', alignItems: 'center', justifyContent: 'center', padding: 28, borderRadius: 18, borderWidth: 1, marginVertical: 20 },
+  emptyIconCircle: { width: 70, height: 70, borderRadius: 35, backgroundColor: 'rgba(148,163,184,0.15)', alignItems: 'center', justifyContent: 'center', marginBottom: 14 },
+  emptyTitle: { fontSize: 16, fontWeight: '800', marginBottom: 6, textAlign: 'center' },
+  emptyDesc: { fontSize: 12, textAlign: 'center', lineHeight: 18, marginBottom: 16, paddingHorizontal: 12 },
+  addDeviceBtn: { flexDirection: 'row', alignItems: 'center', backgroundColor: Colors.primary, paddingHorizontal: 16, paddingVertical: 10, borderRadius: 10, gap: 6 },
+  addDeviceBtnText: { color: '#FFF', fontSize: 13, fontWeight: '700' },
+
+  bottomBar: { flexDirection: 'row', alignItems: 'center', paddingHorizontal: 16, paddingVertical: 10, borderTopWidth: 1, gap: 12 },
+  backHomeBtn: { flex: 1, flexDirection: 'row', alignItems: 'center', justifyContent: 'center', height: 46, borderRadius: 14, gap: 8 },
+  backHomeBtnText: { fontSize: 14, fontWeight: '700' },
+  sosActionBtn: { flexDirection: 'row', alignItems: 'center', justifyContent: 'center', height: 46, paddingHorizontal: 20, backgroundColor: Colors.danger, borderRadius: 14, gap: 6, ...Shadows.card },
+  sosActionBtnText: { color: '#FFF', fontSize: 14, fontWeight: '900' },
 });

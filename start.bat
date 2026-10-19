@@ -1,4 +1,5 @@
 @echo off
+chcp 65001 >nul
 setlocal
 cd /d "%~dp0"
 title Smart Elderly Care AI - Khoi Dong He Thong (C1SE.34)

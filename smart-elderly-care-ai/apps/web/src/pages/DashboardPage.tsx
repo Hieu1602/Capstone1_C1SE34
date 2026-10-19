@@ -4,9 +4,11 @@
 import React, { useEffect, useState } from 'react';
 import { Link } from 'react-router-dom';
 import {
+  LayoutDashboard,
   Users,
   Cpu,
   Server,
+  Activity,
   BrainCircuit,
   AlertTriangle,
   TrendingUp,
@@ -62,178 +64,263 @@ export const DashboardPage: React.FC = () => {
 
   return (
     <div className="space-y-6">
+      {/* ── Page Header ── */}
+      <div className="flex flex-col md:flex-row md:items-center justify-between gap-4">
+        <div className="flex items-center gap-3">
+          <div className="p-2.5 rounded-xl bg-gradient-to-br from-[#D96C3B] to-[#B84B1E] text-white shadow-md shadow-[#D96C3B]/25 shrink-0">
+            <LayoutDashboard className="w-5 h-5 stroke-[2.2]" />
+          </div>
+          <div>
+            <h1 className="font-heading text-xl font-bold tracking-tight text-slate-900 dark:text-white">
+              Tổng quan hệ thống
+            </h1>
+            <p className="text-xs text-slate-500 dark:text-slate-400 mt-0.5 font-sans">
+              Trung tâm giám sát y tế người cao tuổi · IoT · Cảnh báo té ngã thời gian thực 24/7
+            </p>
+          </div>
+        </div>
+      </div>
+
       {/* 4 Summary Stat Cards */}
       <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
         {/* Card 1: Users */}
-        <div className="glass-card p-5 relative overflow-hidden group">
-          <div className="flex items-center justify-between">
-            <span className="text-[11px] font-mono font-semibold uppercase tracking-wider text-slate-500 dark:text-slate-400">
-              Tổng người dùng
-            </span>
-            <div className="p-2.5 rounded-xl bg-sky-50 dark:bg-sky-950/60 text-sky-600 dark:text-sky-400 border border-sky-100 dark:border-sky-800 group-hover:scale-105 transition-transform">
-              <Users className="w-5 h-5" />
+        <div className="glass-card p-5 relative group">
+          <div className="flex items-center gap-3.5 relative z-10">
+            {/* Circle icon on left as in Master Mock */}
+            <div className="w-12 h-12 rounded-full bg-[#FFF8EE] dark:bg-[#1A3830] text-[#D96C3B] dark:text-[#DFB15B] border border-[#C8AD8A] dark:border-[#2F5A4D] flex items-center justify-center shrink-0 shadow-sm group-hover:scale-105 transition-transform">
+              <Users className="w-6 h-6 stroke-[2.2]" />
+            </div>
+
+            <div className="min-w-0 flex-1">
+              <span className="text-[11px] font-mono font-semibold uppercase tracking-wider text-slate-500 dark:text-slate-400 block truncate">
+                Tổng người dùng
+              </span>
+              <div className="mt-1 flex items-baseline space-x-2">
+                <span className="font-mono text-2xl font-extrabold text-slate-900 dark:text-white tracking-tight">
+                  {users.length}
+                </span>
+                <span className="badge-sky font-mono text-[10px]">
+                  <TrendingUp className="w-3 h-3" /> +2 Bác sĩ
+                </span>
+              </div>
             </div>
           </div>
-          <div className="mt-3 flex items-baseline space-x-2">
-            <span className="font-mono text-3xl font-extrabold text-slate-900 dark:text-white tracking-tight">
-              {users.length}
-            </span>
-            <span className="badge-sky font-mono">
-              <TrendingUp className="w-3 h-3" /> +2 Bác sĩ
-            </span>
-          </div>
-          <p className="mt-2 text-[11px] text-slate-500 dark:text-slate-400">
+          <p className="mt-3 text-[11px] text-slate-500 dark:text-slate-400 truncate relative z-10 border-t border-[#C8AD8A]/50 dark:border-white/5 pt-2">
             Chủ nhà, Caregiver & Bác sĩ gia đình
           </p>
         </div>
 
         {/* Card 2: IoT Devices */}
-        <div className="glass-card p-5 relative overflow-hidden group">
-          <div className="flex items-center justify-between">
-            <span className="text-[11px] font-mono font-semibold uppercase tracking-wider text-slate-500 dark:text-slate-400">
-              Thiết bị IoT Trực Tuyến
-            </span>
-            <div className="p-2.5 rounded-xl bg-sky-50 dark:bg-sky-950/60 text-sky-600 dark:text-sky-400 border border-sky-100 dark:border-sky-800 group-hover:scale-105 transition-transform">
-              <Cpu className="w-5 h-5" />
+        <div className="glass-card p-5 relative group">
+          <div className="flex items-center gap-3.5 relative z-10">
+            <div className="w-12 h-12 rounded-full bg-emerald-50 dark:bg-emerald-950/40 text-emerald-600 dark:text-emerald-400 border border-emerald-200 dark:border-emerald-800/60 flex items-center justify-center shrink-0 shadow-sm group-hover:scale-105 transition-transform">
+              <Cpu className="w-6 h-6 stroke-[2.2]" />
+            </div>
+
+            <div className="min-w-0 flex-1">
+              <span className="text-[11px] font-mono font-semibold uppercase tracking-wider text-slate-500 dark:text-slate-400 block truncate">
+                Thiết bị IoT Trực Tuyến
+              </span>
+              <div className="mt-1 flex items-baseline space-x-2">
+                <span className="font-mono text-2xl font-extrabold text-slate-900 dark:text-white tracking-tight">
+                  {onlineDevicesCount} / {devices.length}
+                </span>
+                <span className="badge-live font-mono text-[10px]">
+                  <ShieldCheck className="w-3 h-3" /> 100% Online
+                </span>
+              </div>
             </div>
           </div>
-          <div className="mt-3 flex items-baseline space-x-2">
-            <span className="font-mono text-3xl font-extrabold text-slate-900 dark:text-white tracking-tight">
-              {onlineDevicesCount} / {devices.length}
-            </span>
-            <span className="badge-live font-mono">
-              <ShieldCheck className="w-3 h-3" /> 100% Online
-            </span>
-          </div>
-          <p className="mt-2 text-[11px] text-slate-500 dark:text-slate-400">
+          <p className="mt-3 text-[11px] text-slate-500 dark:text-slate-400 truncate relative z-10 border-t border-[#C8AD8A]/50 dark:border-white/5 pt-2">
             Camera SECA_001, BLE Band, Orange Pi 5
           </p>
         </div>
 
         {/* Card 3: Incidents */}
-        <div className="glass-card p-5 relative overflow-hidden group">
-          <div className="flex items-center justify-between">
-            <span className="text-[11px] font-mono font-semibold uppercase tracking-wider text-slate-500 dark:text-slate-400">
-              Sự cố phát hiện hôm nay
-            </span>
-            <div className="p-2.5 rounded-xl bg-amber-50 dark:bg-amber-950/40 text-amber-600 dark:text-amber-400 border border-amber-200 dark:border-amber-800/60 group-hover:scale-105 transition-transform">
-              <AlertTriangle className="w-5 h-5" />
+        <div className="glass-card p-5 relative group">
+          <div className="flex items-center gap-3.5 relative z-10">
+            <div className="w-12 h-12 rounded-full bg-amber-50 dark:bg-amber-950/40 text-amber-600 dark:text-amber-400 border border-amber-200 dark:border-amber-800/60 flex items-center justify-center shrink-0 shadow-sm group-hover:scale-105 transition-transform">
+              <AlertTriangle className="w-6 h-6 stroke-[2.2]" />
+            </div>
+
+            <div className="min-w-0 flex-1">
+              <span className="text-[11px] font-mono font-semibold uppercase tracking-wider text-slate-500 dark:text-slate-400 block truncate">
+                Sự cố phát hiện hôm nay
+              </span>
+              <div className="mt-1 flex items-baseline space-x-2">
+                <span className="font-mono text-2xl font-extrabold text-slate-900 dark:text-white tracking-tight">
+                  2
+                </span>
+                <span className="badge-warn font-mono text-[10px]">
+                  Đã xử lý
+                </span>
+              </div>
             </div>
           </div>
-          <div className="mt-3 flex items-baseline space-x-2">
-            <span className="font-mono text-3xl font-extrabold text-slate-900 dark:text-white tracking-tight">
-              2
-            </span>
-            <span className="badge-warn font-mono">
-              Đã xử lý
-            </span>
-          </div>
-          <p className="mt-2 text-[11px] text-slate-500 dark:text-slate-400">
+          <p className="mt-3 text-[11px] text-slate-500 dark:text-slate-400 truncate relative z-10 border-t border-[#C8AD8A]/50 dark:border-white/5 pt-2">
             1 cảnh báo nhịp tim cao, 1 rung chấn BLE
           </p>
         </div>
 
         {/* Card 4: AI & NPU Latency */}
-        <div className="glass-card p-5 relative overflow-hidden group">
-          <div className="flex items-center justify-between">
-            <span className="text-[11px] font-mono font-semibold uppercase tracking-wider text-slate-500 dark:text-slate-400">
-              Độ trễ suy luận AI
-            </span>
-            <div className="p-2.5 rounded-xl bg-indigo-50 dark:bg-indigo-950/40 text-indigo-600 dark:text-indigo-400 border border-indigo-200 dark:border-indigo-800/60 group-hover:scale-105 transition-transform">
-              <BrainCircuit className="w-5 h-5" />
+        <div className="glass-card p-5 relative group">
+          <div className="flex items-center gap-3.5 relative z-10">
+            <div className="w-12 h-12 rounded-full bg-[#FFF8EE] dark:bg-[#1E4B3E] text-[#B08D57] dark:text-[#DFB15B] border border-[#DFB15B]/40 flex items-center justify-center shrink-0 shadow-sm group-hover:scale-105 transition-transform">
+              <BrainCircuit className="w-6 h-6 stroke-[2.2]" />
+            </div>
+
+            <div className="min-w-0 flex-1">
+              <span className="text-[11px] font-mono font-semibold uppercase tracking-wider text-slate-500 dark:text-slate-400 block truncate">
+                Độ trễ suy luận AI
+              </span>
+              <div className="mt-1 flex items-baseline space-x-2">
+                <span className="font-mono text-2xl font-extrabold text-slate-900 dark:text-white tracking-tight">
+                  34 ms
+                </span>
+                <span className="badge-sky font-mono text-[10px]">
+                  <Zap className="w-3 h-3" /> NPU 6 TOPS
+                </span>
+              </div>
             </div>
           </div>
-          <div className="mt-3 flex items-baseline space-x-2">
-            <span className="font-mono text-3xl font-extrabold text-slate-900 dark:text-white tracking-tight">
-              34 ms
-            </span>
-            <span className="badge-sky font-mono">
-              <Zap className="w-3 h-3" /> NPU 6 TOPS
-            </span>
-          </div>
-          <p className="mt-2 text-[11px] text-slate-500 dark:text-slate-400">
+          <p className="mt-3 text-[11px] text-slate-500 dark:text-slate-400 truncate relative z-10 border-t border-[#C8AD8A]/50 dark:border-white/5 pt-2">
             YOLOv8-Pose 30 FPS tại Edge Hub
           </p>
         </div>
       </div>
 
-      {/* 4 Core Modules Quick Navigation */}
+      {/* Core Modules Quick Navigation */}
       <div>
-        <div className="flex items-center justify-between mb-3 px-1">
+        <div className="flex items-center justify-between mb-3.5 px-1">
           <h2 className="section-title">Các phân hệ quản trị lõi</h2>
-          <span className="text-[10px] font-mono text-slate-400 dark:text-slate-500">SECA C1SE.34 ARCHITECTURE</span>
+          <span className="text-[10px] font-mono font-bold text-[#96661E] dark:text-[#DFB15B] tracking-wider">SECA ARCHITECTURE</span>
         </div>
-        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
+        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
+          {/* Module 1: Quản lý người dùng */}
           <Link
             to="/users"
-            className="glass-card p-4 hover:border-sky-300 dark:hover:border-sky-700 group transition-all duration-200"
+            className="glass-card p-5 relative group hover:border-[#D96C3B] hover:-translate-y-1 transition-all duration-200 flex flex-col justify-between"
           >
-            <div className="flex items-center justify-between">
-              <div className="p-2.5 rounded-xl bg-sky-50 dark:bg-sky-950/60 text-sky-600 dark:text-sky-400 border border-sky-100 dark:border-sky-800 group-hover:bg-sky-500 group-hover:text-white transition-colors">
-                <Users className="w-5 h-5" />
+            <div>
+              {/* Top Row: Icon + Arrow with safe clearance from corner fretworks */}
+              <div className="flex items-center justify-between relative z-10 px-1">
+                <div className="w-10 h-10 rounded-xl bg-[#FFF8EE] dark:bg-[#1A3830] text-[#D96C3B] dark:text-[#DFB15B] border border-[#C8AD8A] dark:border-[#2F5A4D] group-hover:bg-[#D96C3B] group-hover:text-white transition-all shadow-sm flex items-center justify-center">
+                  <Users className="w-5 h-5 stroke-[2.2]" />
+                </div>
+                <div className="w-7 h-7 rounded-lg bg-[#FAF5EE] dark:bg-[#18342D] border border-[#C8AD8A]/40 text-slate-500 group-hover:text-[#D96C3B] group-hover:border-[#D96C3B] flex items-center justify-center transition-all">
+                  <ArrowUpRight className="w-3.5 h-3.5 group-hover:translate-x-0.5 group-hover:-translate-y-0.5 transition-transform" />
+                </div>
               </div>
-              <ArrowUpRight className="w-4 h-4 text-slate-400 group-hover:text-sky-600 group-hover:translate-x-0.5 group-hover:-translate-y-0.5 transition-transform" />
+
+              {/* Title & Description */}
+              <div className="mt-3 relative z-10 px-1">
+                <h3 className="font-heading font-bold text-sm text-slate-900 dark:text-white group-hover:text-[#D96C3B] transition-colors">
+                  Quản lý người dùng
+                </h3>
+                <p className="mt-1.5 text-xs text-slate-600 dark:text-slate-400 line-clamp-2 leading-relaxed">
+                  Quản trị tài khoản, phân bổ vai trò Bác sĩ, Người thân và quyền kiểm soát căn nhà.
+                </p>
+              </div>
             </div>
-            <h3 className="mt-3 font-heading font-bold text-sm text-slate-900 dark:text-white">
-              1. Quản lý người dùng
-            </h3>
-            <p className="mt-1 text-xs text-slate-500 dark:text-slate-400 line-clamp-2">
-              Phân quyền Role ADMIN, DOCTOR, CAREGIVER và quản lý thành viên căn nhà.
-            </p>
+
+            {/* Bottom Shelf - keeps text safely separated from bottom fretworks */}
+            <div className="mt-3.5 pt-2.5 border-t border-[#C8AD8A]/40 dark:border-white/5 flex items-center justify-between text-[10px] font-mono font-bold tracking-wider text-[#96661E] dark:text-[#DFB15B] px-1 relative z-10">
+              <span className="text-slate-500 dark:text-slate-400 font-sans font-medium text-[11px]">Truy cập ngay</span>
+              <span>PHÂN HỆ 01</span>
+            </div>
           </Link>
 
+          {/* Module 2: Quản lý bảo mật */}
           <Link
-            to="/devices"
-            className="glass-card p-4 hover:border-sky-300 dark:hover:border-sky-700 group transition-all duration-200"
+            to="/security"
+            className="glass-card p-5 relative group hover:border-[#D96C3B] hover:-translate-y-1 transition-all duration-200 flex flex-col justify-between"
           >
-            <div className="flex items-center justify-between">
-              <div className="p-2.5 rounded-xl bg-sky-50 dark:bg-sky-950/60 text-sky-600 dark:text-sky-400 border border-sky-100 dark:border-sky-800 group-hover:bg-sky-500 group-hover:text-white transition-colors">
-                <Cpu className="w-5 h-5" />
+            <div>
+              <div className="flex items-center justify-between relative z-10 px-1">
+                <div className="w-10 h-10 rounded-xl bg-[#FFF8EE] dark:bg-[#1A3830] text-[#D96C3B] dark:text-[#DFB15B] border border-[#C8AD8A] dark:border-[#2F5A4D] group-hover:bg-[#D96C3B] group-hover:text-white transition-all shadow-sm flex items-center justify-center">
+                  <ShieldCheck className="w-5 h-5 stroke-[2.2]" />
+                </div>
+                <div className="w-7 h-7 rounded-lg bg-[#FAF5EE] dark:bg-[#18342D] border border-[#C8AD8A]/40 text-slate-500 group-hover:text-[#D96C3B] group-hover:border-[#D96C3B] flex items-center justify-center transition-all">
+                  <ArrowUpRight className="w-3.5 h-3.5 group-hover:translate-x-0.5 group-hover:-translate-y-0.5 transition-transform" />
+                </div>
               </div>
-              <ArrowUpRight className="w-4 h-4 text-slate-400 group-hover:text-sky-600 group-hover:translate-x-0.5 group-hover:-translate-y-0.5 transition-transform" />
+
+              <div className="mt-3 relative z-10 px-1">
+                <h3 className="font-heading font-bold text-sm text-slate-900 dark:text-white group-hover:text-[#D96C3B] transition-colors">
+                  Quản lý bảo mật hệ thống
+                </h3>
+                <p className="mt-1.5 text-xs text-slate-600 dark:text-slate-400 line-clamp-2 leading-relaxed">
+                  Chính sách bảo mật, quản lý phiên làm việc JWT, nhật ký kiểm toán và ma trận RBAC.
+                </p>
+              </div>
             </div>
-            <h3 className="mt-3 font-heading font-bold text-sm text-slate-900 dark:text-white">
-              2. Giám sát thiết bị IoT
-            </h3>
-            <p className="mt-1 text-xs text-slate-500 dark:text-slate-400 line-clamp-2">
-              Theo dõi Camera IP, Vòng đeo tay BLE Smartband, pin và điều chỉnh ngưỡng sinh hiệu.
-            </p>
+
+            <div className="mt-3.5 pt-2.5 border-t border-[#C8AD8A]/40 dark:border-white/5 flex items-center justify-between text-[10px] font-mono font-bold tracking-wider text-[#96661E] dark:text-[#DFB15B] px-1 relative z-10">
+              <span className="text-slate-500 dark:text-slate-400 font-sans font-medium text-[11px]">Truy cập ngay</span>
+              <span>PHÂN HỆ 02</span>
+            </div>
           </Link>
 
+          {/* Module 3: Giám sát hoạt động */}
+          <Link
+            to="/monitoring"
+            className="glass-card p-5 relative group hover:border-[#D96C3B] hover:-translate-y-1 transition-all duration-200 flex flex-col justify-between"
+          >
+            <div>
+              <div className="flex items-center justify-between relative z-10 px-1">
+                <div className="w-10 h-10 rounded-xl bg-[#FFF8EE] dark:bg-[#1A3830] text-[#D96C3B] dark:text-[#DFB15B] border border-[#C8AD8A] dark:border-[#2F5A4D] group-hover:bg-[#D96C3B] group-hover:text-white transition-all shadow-sm flex items-center justify-center">
+                  <Activity className="w-5 h-5 stroke-[2.2]" />
+                </div>
+                <div className="w-7 h-7 rounded-lg bg-[#FAF5EE] dark:bg-[#18342D] border border-[#C8AD8A]/40 text-slate-500 group-hover:text-[#D96C3B] group-hover:border-[#D96C3B] flex items-center justify-center transition-all">
+                  <ArrowUpRight className="w-3.5 h-3.5 group-hover:translate-x-0.5 group-hover:-translate-y-0.5 transition-transform" />
+                </div>
+              </div>
+
+              <div className="mt-3 relative z-10 px-1">
+                <h3 className="font-heading font-bold text-sm text-slate-900 dark:text-white group-hover:text-[#D96C3B] transition-colors">
+                  Giám sát hoạt động hệ thống
+                </h3>
+                <p className="mt-1.5 text-xs text-slate-600 dark:text-slate-400 line-clamp-2 leading-relaxed">
+                  Theo dõi luồng camera AI, vòng đeo tay BLE, cảm biến té ngã và luồng cảnh báo real-time.
+                </p>
+              </div>
+            </div>
+
+            <div className="mt-3.5 pt-2.5 border-t border-[#C8AD8A]/40 dark:border-white/5 flex items-center justify-between text-[10px] font-mono font-bold tracking-wider text-[#96661E] dark:text-[#DFB15B] px-1 relative z-10">
+              <span className="text-slate-500 dark:text-slate-400 font-sans font-medium text-[11px]">Truy cập ngay</span>
+              <span>PHÂN HỆ 03</span>
+            </div>
+          </Link>
+
+          {/* Module 4: Quản lý hạ tầng */}
           <Link
             to="/infrastructure"
-            className="glass-card p-4 hover:border-sky-300 dark:hover:border-sky-700 group transition-all duration-200"
+            className="glass-card p-5 relative group hover:border-[#D96C3B] hover:-translate-y-1 transition-all duration-200 flex flex-col justify-between"
           >
-            <div className="flex items-center justify-between">
-              <div className="p-2.5 rounded-xl bg-indigo-50 dark:bg-indigo-950/60 text-indigo-600 dark:text-indigo-400 border border-indigo-100 dark:border-indigo-800 group-hover:bg-indigo-600 group-hover:text-white transition-colors">
-                <Server className="w-5 h-5" />
+            <div>
+              <div className="flex items-center justify-between relative z-10 px-1">
+                <div className="w-10 h-10 rounded-xl bg-[#FFF8EE] dark:bg-[#1A3830] text-[#D96C3B] dark:text-[#DFB15B] border border-[#C8AD8A] dark:border-[#2F5A4D] group-hover:bg-[#D96C3B] group-hover:text-white transition-all shadow-sm flex items-center justify-center">
+                  <Server className="w-5 h-5 stroke-[2.2]" />
+                </div>
+                <div className="w-7 h-7 rounded-lg bg-[#FAF5EE] dark:bg-[#18342D] border border-[#C8AD8A]/40 text-slate-500 group-hover:text-[#D96C3B] group-hover:border-[#D96C3B] flex items-center justify-center transition-all">
+                  <ArrowUpRight className="w-3.5 h-3.5 group-hover:translate-x-0.5 group-hover:-translate-y-0.5 transition-transform" />
+                </div>
               </div>
-              <ArrowUpRight className="w-4 h-4 text-slate-400 group-hover:text-indigo-600 group-hover:translate-x-0.5 group-hover:-translate-y-0.5 transition-transform" />
-            </div>
-            <h3 className="mt-3 font-heading font-bold text-sm text-slate-900 dark:text-white">
-              3. Vận hành hạ tầng & Log
-            </h3>
-            <p className="mt-1 text-xs text-slate-500 dark:text-slate-400 line-clamp-2">
-              Trạng thái TimescaleDB, Redis RAM cache, EMQX Broker và Audit logs thời gian thực.
-            </p>
-          </Link>
 
-          <Link
-            to="/ai-maintenance"
-            className="glass-card p-4 hover:border-sky-300 dark:hover:border-sky-700 group transition-all duration-200"
-          >
-            <div className="flex items-center justify-between">
-              <div className="p-2.5 rounded-xl bg-amber-50 dark:bg-amber-950/60 text-amber-600 dark:text-amber-400 border border-amber-100 dark:border-amber-800 group-hover:bg-amber-500 group-hover:text-white transition-colors">
-                <BrainCircuit className="w-5 h-5" />
+              <div className="mt-3 relative z-10 px-1">
+                <h3 className="font-heading font-bold text-sm text-slate-900 dark:text-white group-hover:text-[#D96C3B] transition-colors">
+                  Quản lý hạ tầng
+                </h3>
+                <p className="mt-1.5 text-xs text-slate-600 dark:text-slate-400 line-clamp-2 leading-relaxed">
+                  Trạng thái PostgreSQL, TimescaleDB, bộ nhớ tạm Redis, EMQX MQTT Broker và System Logs.
+                </p>
               </div>
-              <ArrowUpRight className="w-4 h-4 text-slate-400 group-hover:text-amber-600 group-hover:translate-x-0.5 group-hover:-translate-y-0.5 transition-transform" />
             </div>
-            <h3 className="mt-3 font-heading font-bold text-sm text-slate-900 dark:text-white">
-              4. Bảo trì AI
-            </h3>
-            <p className="mt-1 text-xs text-slate-500 dark:text-slate-400 line-clamp-2">
-              Giám sát YOLOv8-Pose, YAMNet, Face Recognition và cập nhật ngưỡng độ tin cậy.
-            </p>
+
+            <div className="mt-3.5 pt-2.5 border-t border-[#C8AD8A]/40 dark:border-white/5 flex items-center justify-between text-[10px] font-mono font-bold tracking-wider text-[#96661E] dark:text-[#DFB15B] px-1 relative z-10">
+              <span className="text-slate-500 dark:text-slate-400 font-sans font-medium text-[11px]">Truy cập ngay</span>
+              <span>PHÂN HỆ 04</span>
+            </div>
           </Link>
         </div>
       </div>
@@ -241,7 +328,7 @@ export const DashboardPage: React.FC = () => {
       {/* Main Charts & Activity Row */}
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
         {/* Real-time Telemetry Trend Chart */}
-        <div className="lg:col-span-2 glass-card p-5">
+        <div className="lg:col-span-2 glass-card p-5 relative overflow-hidden">
           <div className="flex items-center justify-between mb-4">
             <div>
               <h3 className="font-heading font-bold text-slate-900 dark:text-white text-sm">
@@ -252,12 +339,12 @@ export const DashboardPage: React.FC = () => {
               </p>
             </div>
             <div className="flex items-center space-x-3 text-xs font-semibold font-mono">
-              <span className="flex items-center text-sky-600 dark:text-sky-400">
-                <span className="w-2 h-2 rounded-full bg-sky-500 mr-1.5 shadow-glow-sky" />
+              <span className="flex items-center text-[#D96C3B] dark:text-[#E67A47]">
+                <span className="w-2 h-2 rounded-full bg-[#D96C3B] mr-1.5 shadow-sm" />
                 Nhịp tim (bpm)
               </span>
-              <span className="flex items-center text-amber-600 dark:text-amber-400">
-                <span className="w-2 h-2 rounded-full bg-amber-500 mr-1.5 shadow-glow-amber" />
+              <span className="flex items-center text-[#B08D57] dark:text-[#DFB15B]">
+                <span className="w-2 h-2 rounded-full bg-[#DFB15B] mr-1.5 shadow-sm" />
                 Nguy cơ ngã (%)
               </span>
             </div>
@@ -268,32 +355,32 @@ export const DashboardPage: React.FC = () => {
               <AreaChart data={ACTIVITY_DATA}>
                 <defs>
                   <linearGradient id="colorHr" x1="0" y1="0" x2="0" y2="1">
-                    <stop offset="5%" stopColor="#0ea5e9" stopOpacity={0.4} />
-                    <stop offset="95%" stopColor="#0ea5e9" stopOpacity={0.0} />
+                    <stop offset="5%" stopColor="#D96C3B" stopOpacity={0.4} />
+                    <stop offset="95%" stopColor="#D96C3B" stopOpacity={0.0} />
                   </linearGradient>
                   <linearGradient id="colorFall" x1="0" y1="0" x2="0" y2="1">
-                    <stop offset="5%" stopColor="#f59e0b" stopOpacity={0.3} />
-                    <stop offset="95%" stopColor="#f59e0b" stopOpacity={0.0} />
+                    <stop offset="5%" stopColor="#DFB15B" stopOpacity={0.4} />
+                    <stop offset="95%" stopColor="#DFB15B" stopOpacity={0.0} />
                   </linearGradient>
                 </defs>
-                <CartesianGrid strokeDasharray="3 3" stroke={isDark ? '#1e293b' : '#e2e8f0'} opacity={0.6} />
-                <XAxis dataKey="time" stroke={isDark ? '#64748b' : '#94a3b8'} fontSize={11} tickLine={false} />
-                <YAxis stroke={isDark ? '#64748b' : '#94a3b8'} fontSize={11} domain={[0, 120]} tickLine={false} />
+                <CartesianGrid strokeDasharray="3 3" stroke={isDark ? '#23483E' : '#C8AD8A'} opacity={0.6} />
+                <XAxis dataKey="time" stroke={isDark ? '#8EAFA2' : '#9CA3AF'} fontSize={11} tickLine={false} />
+                <YAxis stroke={isDark ? '#8EAFA2' : '#9CA3AF'} fontSize={11} domain={[0, 120]} tickLine={false} />
                 <Tooltip
                   contentStyle={{
-                    backgroundColor: isDark ? '#111c38' : '#ffffff',
-                    borderColor: isDark ? 'rgba(56,189,248,0.2)' : '#e2e8f0',
+                    backgroundColor: isDark ? '#142823' : '#ffffff',
+                    borderColor: isDark ? 'rgba(223,177,91,0.3)' : '#C8AD8A',
                     borderRadius: '12px',
-                    color: isDark ? '#fff' : '#0f172a',
+                    color: isDark ? '#fff' : '#1F2937',
                     fontSize: '12px',
-                    boxShadow: '0 8px 24px rgba(0,0,0,0.15)',
+                    boxShadow: '0 8px 24px rgba(0,0,0,0.12)',
                   }}
                 />
                 <Area
                   type="monotone"
                   dataKey="heartRate"
                   name="Nhịp tim"
-                  stroke="#0ea5e9"
+                  stroke="#D96C3B"
                   strokeWidth={2}
                   fillOpacity={1}
                   fill="url(#colorHr)"
@@ -302,7 +389,7 @@ export const DashboardPage: React.FC = () => {
                   type="monotone"
                   dataKey="fallRisk"
                   name="Nguy cơ ngã"
-                  stroke="#f59e0b"
+                  stroke="#DFB15B"
                   strokeWidth={2}
                   fillOpacity={1}
                   fill="url(#colorFall)"
@@ -329,12 +416,12 @@ export const DashboardPage: React.FC = () => {
               {devices.map((dev) => (
                 <div
                   key={dev.id}
-                  className="p-3 rounded-xl bg-slate-50 dark:bg-slate-900/60 border border-slate-200/80 dark:border-white/5 flex items-center justify-between hover:border-sky-300 dark:hover:border-sky-700 transition-colors"
+                  className="p-3 rounded-xl bg-[#FAF5EE] dark:bg-[#18342D] border border-[#C8AD8A] dark:border-[#23483E] flex items-center justify-between hover:border-[#D96C3B]/50 transition-colors"
                 >
                   <div className="flex items-center space-x-3">
                     <div
                       className={`w-2.5 h-2.5 rounded-full ${
-                        dev.is_online ? 'bg-sky-500 shadow-glow-sky' : 'bg-slate-400'
+                        dev.is_online ? 'bg-emerald-500 shadow-sm' : 'bg-slate-400'
                       }`}
                     />
                     <div>
@@ -347,11 +434,11 @@ export const DashboardPage: React.FC = () => {
                     </div>
                   </div>
                   {dev.battery_level !== null && dev.battery_level !== undefined ? (
-                    <span className="text-[11px] font-mono font-semibold text-sky-700 dark:text-sky-300 bg-sky-100 dark:bg-sky-950/60 px-2 py-0.5 rounded-md border border-sky-200 dark:border-sky-800">
+                    <span className="text-[11px] font-mono font-semibold text-[#C25828] dark:text-[#DFB15B] bg-[#FFF8EE] dark:bg-[#1A3830] px-2 py-0.5 rounded-md border border-[#C8AD8A] dark:border-[#2F5A4D]">
                       Pin {dev.battery_level}%
                     </span>
                   ) : (
-                    <span className="text-[11px] font-mono font-semibold text-indigo-700 dark:text-indigo-300 bg-indigo-50 dark:bg-indigo-950/60 px-2 py-0.5 rounded-md border border-indigo-200 dark:border-indigo-800">
+                    <span className="text-[11px] font-mono font-semibold text-[#B08D57] dark:text-[#DFB15B] bg-[#FAF5EE] dark:bg-[#1E4B3E] px-2 py-0.5 rounded-md border border-[#DFB15B]/30">
                       2K NPU
                     </span>
                   )}
@@ -360,11 +447,11 @@ export const DashboardPage: React.FC = () => {
             </div>
           </div>
 
-          <div className="mt-4 pt-3 border-t border-slate-100 dark:border-white/5 flex items-center justify-between text-xs text-slate-500 dark:text-slate-400 font-mono">
+          <div className="mt-4 pt-3 border-t border-[#C8AD8A] dark:border-white/5 flex items-center justify-between text-xs text-slate-500 dark:text-slate-400 font-mono">
             <span>Uptime: 7d 14h</span>
             <Link
               to="/devices"
-              className="text-sky-600 dark:text-sky-400 hover:text-sky-700 font-semibold inline-flex items-center gap-1 group"
+              className="text-[#D96C3B] dark:text-[#DFB15B] hover:text-[#C25828] font-semibold inline-flex items-center gap-1 group"
             >
               Chi tiết <ArrowUpRight className="w-3.5 h-3.5 group-hover:translate-x-0.5 group-hover:-translate-y-0.5 transition-transform" />
             </Link>

@@ -1,10 +1,8 @@
 """
 device_config.py – SQLAlchemy ORM Model cho Cấu hình Chi tiết Thiết bị (DeviceConfig).
-Tách biệt cấu hình chuyên sâu của từng loại thiết bị:
-- Camera AI: stream_url (RTSP/WebRTC), resolution (2K/FHD/SD), is_sleep, is_ai_protect, two_way_audio.
-- Vòng đeo tay y tế: hr_threshold_high, hr_threshold_low, spo2_threshold_low, fall_impact_threshold.
-- Edge AI Hub: immobility_seconds, mqtt_topic, ai_model_version.
-Vị trí: backend/app/models/device_config.py
+Người làm: DuongVanHieu
+Nghiệp vụ: Lưu trữ các tham số hiệu chuẩn y tế chuyên sâu (ngưỡng nhịp tim, SpO2, gia tốc ngã),
+và thông số vận hành Camera (luồng RTSP, chế độ ngủ riêng tư, bảo vệ AI).
 """
 
 from __future__ import annotations
