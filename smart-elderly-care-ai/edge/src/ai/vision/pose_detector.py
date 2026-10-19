@@ -10,11 +10,16 @@ Responsibilities:
 """
 
 import logging
+from pathlib import Path
 import time
 from dataclasses import dataclass, field
-from typing import List, Optional, Tuple
+from typing import Any, List, Optional, Tuple
 
 import numpy as np
+
+from .kinematics import PostureState
+from .tracker import PersonTracker, TrackedPerson
+from .utils import blur_faces
 
 logger = logging.getLogger(__name__)
 
@@ -39,6 +44,10 @@ class PoseResult:
     keypoints: List[List[Keypoint]] = field(default_factory=list)
     confidence: float = 0.0
     raw_frame: Optional[np.ndarray] = None
+    # Mở rộng từ Repo 1 & 2: Tracking, Cảnh báo đột quỵ/bất động, Làm mờ mặt bảo vệ quyền riêng tư
+    is_immobile_detected: bool = False
+    tracks: List[TrackedPerson] = field(default_factory=list)
+    anonymized_frame: Optional[np.ndarray] = None
 
 
 # ---------------------------------------------------------------------------
@@ -47,7 +56,7 @@ class PoseResult:
 
 class PoseDetector:
     """
-    YOLOv8-Pose based human pose estimator and fall detector.
+    YOLOv8-Pose based human pose estimator, multi-person tracker and fall detector.
 
     Usage:
         detector = PoseDetector(config)
@@ -57,26 +66,59 @@ class PoseDetector:
 
     def __init__(self, config: dict):
         self.config = config
-        self.model = None
+        self.model: Any = None
         self.backend = None  # 'rknn' | 'onnx'
         self.input_shape = (640, 640)
         self.conf_threshold: float = config.get("confidence_threshold", 0.60)
-        self.horizontal_ratio_threshold: float = config.get(
-            "fall_detection", {}
-        ).get("horizontal_ratio_threshold", 0.5)
-        self.consecutive_frames: int = config.get(
-            "fall_detection", {}
-        ).get("consecutive_frames", 5)
+        fall_cfg = config.get("fall_detection", {})
+        self.horizontal_ratio_threshold: float = fall_cfg.get(
+            "horizontal_ratio_threshold", 0.5
+        )
+        self.consecutive_frames: int = fall_cfg.get(
+            "consecutive_frames", 5
+        )
+        self.enable_face_blur: bool = config.get("face_blurring", True)
         self._fall_frame_counter: int = 0
+
+        adl_cfg = config.get("adl_monitoring", {})
+        sedentary_alert_sec = adl_cfg.get("sedentary_alert_sec", 3600.0)
+
+        # Bộ theo dõi đa người, động học té ngã / đột quỵ và sinh hoạt thường nhật (ADL)
+        self.tracker = PersonTracker(
+            iou_threshold=fall_cfg.get("tracker_iou_threshold", 0.30),
+            max_missed_frames=fall_cfg.get("max_missed_frames", 15),
+            stitching_distance_threshold=fall_cfg.get("stitching_distance_threshold", 120.0),
+            sedentary_threshold_sec=sedentary_alert_sec,
+            kinematic_config=fall_cfg,
+        )
+
 
     # ------------------------------------------------------------------
     # Model Loading
     # ------------------------------------------------------------------
 
+    @staticmethod
+    def _resolve_path(path_str: str) -> str:
+        if not path_str:
+            return path_str
+        p = Path(path_str)
+        if p.is_file():
+            return str(p)
+        # Thử tìm tương đối so với thư mục edge root
+        edge_root = Path(__file__).resolve().parents[2]
+        edge_p = edge_root / path_str
+        if edge_p.is_file():
+            return str(edge_p)
+        # Thử tìm trong thư mục models cùng cấp
+        model_p = Path(__file__).resolve().parent / "models" / Path(path_str).name
+        if model_p.is_file():
+            return str(model_p)
+        return path_str
+
     def load_model(self) -> None:
         """Load RKNN model nếu có NPU, fallback sang ONNX Runtime."""
-        rknn_path: str = self.config.get("model_path", "")
-        onnx_path: str = self.config.get("fallback_model", "")
+        rknn_path: str = self._resolve_path(self.config.get("model_path", ""))
+        onnx_path: str = self._resolve_path(self.config.get("fallback_model", ""))
 
         if self._try_load_rknn(rknn_path):
             logger.info("[PoseDetector] RKNN model loaded: %s", rknn_path)
@@ -134,17 +176,61 @@ class PoseDetector:
             raw_output = self._infer_onnx(preprocessed)
 
         bboxes, keypoints_list = self._postprocess(raw_output, frame.shape)
-        is_fall = self._analyze_fall(bboxes, keypoints_list)
+        now = time.time()
+
+        # Cập nhật bộ theo dõi Multi-Person Tracker với Causal Track Stitching
+        kps_tuples = [
+            [(kp.x, kp.y, kp.confidence) for kp in kps]
+            for kps in keypoints_list
+        ]
+        active_tracks = self.tracker.update(bboxes, kps_tuples, now=now, raw_frame=frame)
+
+        # Đánh giá sự kiện ngã & bất động kéo dài từ các track
+        is_fall_detected = False
+        is_immobile_detected = False
+        track_confidences = []
+
+        for track in active_tracks:
+            track_confidences.append(track.confidence)
+            if track.is_fall_alerted:
+                is_fall_detected = True
+                track.is_fall_alerted = False  # Reset cờ kích hoạt sau khi đọc
+            elif track.posture_state in (PostureState.FALLEN, PostureState.FALLING):
+                is_fall_detected = True
+
+            if track.is_stroke_alerted or track.posture_state == PostureState.IMMOBILE:
+                is_immobile_detected = True
+                track.is_stroke_alerted = False
+
+        # Fallback kiểm tra tĩnh nếu chưa đủ số frame theo dõi
+        if not active_tracks and bboxes:
+            is_fall_detected = self._analyze_fall(bboxes, keypoints_list)
+
+        # Làm mờ khuôn mặt thời gian thực (bảo vệ quyền riêng tư người cao tuổi)
+        anonymized = None
+        if self.enable_face_blur:
+            anonymized = blur_faces(frame, keypoints_list)
+
+        max_conf = max(
+            track_confidences
+            if track_confidences
+            else [kp.confidence for kps in keypoints_list for kp in kps],
+            default=0.0,
+        )
 
         return PoseResult(
-            timestamp=time.time(),
-            person_count=len(bboxes),
-            is_fall_detected=is_fall,
+            timestamp=now,
+            person_count=len(active_tracks) if active_tracks else len(bboxes),
+            is_fall_detected=is_fall_detected,
             bounding_boxes=bboxes,
             keypoints=keypoints_list,
-            confidence=max((kp.confidence for kps in keypoints_list for kp in kps), default=0.0),
+            confidence=float(max_conf),
             raw_frame=frame,
+            is_immobile_detected=is_immobile_detected,
+            tracks=active_tracks,
+            anonymized_frame=anonymized,
         )
+
 
     def _preprocess(self, frame: np.ndarray) -> np.ndarray:
         """Resize + normalize frame về input model."""
@@ -155,10 +241,14 @@ class PoseDetector:
         return np.expand_dims(normalized, axis=0)  # (1, H, W, 3)
 
     def _infer_rknn(self, inputs: np.ndarray) -> List:
+        if self.model is None:
+            raise RuntimeError("Model RKNN chưa được load.")
         outputs = self.model.inference(inputs=[inputs])
         return outputs
 
     def _infer_onnx(self, inputs: np.ndarray) -> List:
+        if self.model is None:
+            raise RuntimeError("Model ONNX chưa được load.")
         input_name = self.model.get_inputs()[0].name
         # ONNX expects (1, 3, H, W)
         inputs_t = np.transpose(inputs, (0, 3, 1, 2))
@@ -171,45 +261,62 @@ class PoseDetector:
         original_shape: Tuple,
     ) -> Tuple[List, List]:
         """
-        Parse YOLOv8-Pose output thành danh sách bounding boxes và keypoints.
-        Đây là skeleton — cần tuỳ chỉnh theo định dạng output thực tế của model.
+        Parse YOLOv8-Pose output thành danh sách bounding boxes và keypoints chuẩn xác.
         """
+        import cv2  # type: ignore
+
         bboxes: List[Tuple[float, float, float, float]] = []
         keypoints_list: List[List[Keypoint]] = []
 
         if raw_output is None or len(raw_output) == 0:
             return bboxes, keypoints_list
 
-        # Placeholder parsing logic — replace with actual YOLOv8 postprocess
-        output = raw_output[0]  # shape: (1, num_detections, 56) for COCO 17 kp
-        if output is None:
+        output = raw_output[0]  # shape: (1, 56, 8400)
+        if output is None or len(output) == 0:
             return bboxes, keypoints_list
 
         h_orig, w_orig = original_shape[:2]
         h_in, w_in = self.input_shape
 
-        for detection in output[0]:
-            conf = float(detection[4])
-            if conf < self.conf_threshold:
-                continue
+        # Transpose từ (56, 8400) sang (8400, 56)
+        preds = np.transpose(output[0])
+        scores = preds[:, 4]
+        mask = scores >= self.conf_threshold
+        filtered_preds = preds[mask]
 
-            x1 = float(detection[0]) * w_orig / w_in
-            y1 = float(detection[1]) * h_orig / h_in
-            x2 = float(detection[2]) * w_orig / w_in
-            y2 = float(detection[3]) * h_orig / h_in
+        if len(filtered_preds) == 0:
+            return bboxes, keypoints_list
+
+        raw_boxes = []
+        confidences = []
+        for row in filtered_preds:
+            cx, cy, w, h = row[:4]
+            raw_boxes.append([int(cx - w / 2), int(cy - h / 2), int(w), int(h)])
+            confidences.append(float(row[4]))
+
+        nms_indices = cv2.dnn.NMSBoxes(raw_boxes, confidences, self.conf_threshold, 0.45)
+        if len(nms_indices) == 0:
+            return bboxes, keypoints_list
+
+        for i in nms_indices:
+            row = filtered_preds[i]
+            cx, cy, w, h = row[:4]
+
+            # Scale box về kích thước ảnh gốc
+            x1 = max(0.0, float(cx - w / 2) * w_orig / w_in)
+            y1 = max(0.0, float(cy - h / 2) * h_orig / h_in)
+            x2 = min(float(w_orig), float(cx + w / 2) * w_orig / w_in)
+            y2 = min(float(h_orig), float(cy + h / 2) * h_orig / h_in)
             bboxes.append((x1, y1, x2, y2))
 
-            # Keypoints: 17 joints × 3 values (x, y, conf)
+            # 17 keypoints (x, y, conf)
             kps: List[Keypoint] = []
-            kp_data = detection[5:]
-            for i in range(0, len(kp_data), 3):
-                kps.append(
-                    Keypoint(
-                        x=float(kp_data[i]) * w_orig / w_in,
-                        y=float(kp_data[i + 1]) * h_orig / h_in,
-                        confidence=float(kp_data[i + 2]),
-                    )
-                )
+            kp_data = row[5:]
+            for k in range(0, 17 * 3, 3):
+                kp_x = float(kp_data[k]) * w_orig / w_in
+                kp_y = float(kp_data[k + 1]) * h_orig / h_in
+                kp_conf = float(kp_data[k + 2])
+                kps.append(Keypoint(x=kp_x, y=kp_y, confidence=kp_conf))
             keypoints_list.append(kps)
 
         return bboxes, keypoints_list

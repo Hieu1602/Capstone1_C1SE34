@@ -1,0 +1,87 @@
+# ==============================================================================
+# TÀI LIỆU CHĂM SÓC SINH HOẠT THƯỜNG NHẬT & TÂM LÝ NGƯỜI CAO TUỔI (DAILY ELDERLY CARE)
+# Áp dụng cho: Hệ thống Trợ lý AI Giám sát & Bầu bạn AuraCare AI
+# Bệnh nhân theo dõi: Cụ Nguyễn Văn An (82 tuổi, Phòng 102 - Tầng 1)
+# Bệnh nền: Tăng huyết áp độ 2, Đái tháo đường Type 2, Thoái hóa khớp gối hai bên
+# Tiền sử dị ứng: DỊ ỨNG NẶNG TUYỆT ĐỐI VỚI PENICILLIN (Beta-lactam)
+# ==============================================================================
+
+--- MỤC 1: LỊCH TRÌNH SINH HOẠT BIỂU CHUẨN TRONG NGÀY (DAILY ROUTINE SCHEDULE) ---
+1.1. Buổi Sáng (06:00 - 08:30):
+- 06:00: Thức giấc tự nhiên. Nằm trên giường xoa bóp làm ấm lòng bàn tay, quanh khớp gối và xoay nhẹ cổ chân 5 - 10 phút.
+- 06:10: Ngồi dậy theo 3 bước: Nằm nghiêng -> Chống tay ngồi thõng chân mép giường 2 phút -> Đứng lên từ từ để tránh hạ huyết áp tư thế đứng.
+- 06:15: Uống ngay 1 ly nước ấm (150 - 200ml) giúp thanh lọc đường tiêu hóa và giảm độ nhớt của máu sau đêm dài.
+- 06:30 - 07:00: Vận động dưỡng sinh nhẹ: Bài tập vẩy tay Dịch Cân Kinh hoặc đi bộ chậm quanh sân/phòng có thanh vịn.
+- 07:00: Ăn sáng thức ăn mềm, dễ nuốt (cháo yến mạch ức gà, súp nấm, bánh cuốn mềm, phở xắt nhỏ ít nước béo).
+- 07:30: Uống thuốc huyết áp và tiểu đường buổi sáng theo đúng đơn của BS. Trần Minh Tuấn.
+- 07:45 - 08:15: Ra sân phơi nắng sớm 15 - 20 phút (hấp thụ Vitamin D tự nhiên cho xương khớp).
+
+1.2. Buổi Trưa (11:00 - 13:30):
+- 11:00: Nghỉ ngơi nghe đài, đọc báo hoặc trò chuyện cùng người nhà/trợ lý AI.
+- 11:30: Ăn trưa: Đảm bảo nguyên tắc giảm muối (<5g muối/ngày), nhiều chất xơ rau củ mềm luộc, đạm nạc (cá, đậu phụ).
+- 12:00: Vệ sinh răng miệng, súc miệng nước muối ấm hoặc ngâm rửa răng giả.
+- 12:30 - 13:15: Ngủ trưa ngắn (tối đa 30 - 45 phút). Tuyệt đối không ngủ trưa quá 1 tiếng để tránh mất ngủ ban đêm.
+
+1.3. Buổi Chiều (15:00 - 18:30):
+- 15:00: Uống 1 cốc nước ấm hoặc bữa phụ nhẹ (nửa quả táo thái mỏng, sữa hạt không đường hoặc sữa chua không đường).
+- 16:00 - 16:45: Tắm rửa và vệ sinh cá nhân trước 17h chiều (tuyệt đối không tắm sau 18h hoặc tắm đêm).
+- 17:30: Ăn tối nhẹ nhàng, dễ tiêu hóa, giảm tinh bột nhanh.
+
+1.4. Buổi Tối & Giấc Ngủ (19:30 - 22:00):
+- 19:30: Giải trí nhẹ: Nghe nhạc cổ điển, ngâm chân nước ấm thảo dược (gừng, sả hoặc muối biển loãng) 15 phút.
+- 20:30: Hạn chế uống nhiều nước sau 20h để giảm số lần thức giấc đi tiểu đêm.
+- 21:00: Chuẩn bị phòng ngủ: Bật đèn ngủ màu vàng ấm dịu nhẹ dẫn lối từ giường ra nhà vệ sinh, nhiệt độ phòng 26 - 27°C.
+- 21:30: Đi ngủ đúng giờ.
+
+--- MỤC 2: CHĂM SÓC GIẤC NGỦ & KHẮC PHỤC MẤT NGỦ KHÔNG DÙNG THUỐC ---
+2.1. Đặc điểm giấc ngủ người già:
+- Người cao tuổi giảm tiết hormone melatonin sinh học, thời lượng ngủ sâu ít đi, dễ tỉnh giấc giữa đêm.
+- CẢNH BÁO NGUY HIỂM: Tuyệt đối KHÔNG tự ý mua thuốc ngủ an thần (như Diazepam, Seduxen, Stilnox, Lexomil) vì gây lơ mơ, mất thăng bằng sáng hôm sau, là nguyên nhân số 1 gây TÉ NGÃ GÃY XƯƠNG HÔNG!
+
+2.2. Biện pháp cải thiện tự nhiên:
+- Ngâm chân nước ấm (40°C) với gừng và muối 15 phút trước khi ngủ giúp giãn mạch chi dưới, kéo máu từ não xuống, kích hoạt cơn buồn ngủ tự nhiên.
+- Dùng một chén nhỏ trà tâm sen hoặc trà hoa cúc ấm pha loãng lúc 19h30.
+- Giữ phòng ngủ yên tĩnh, thoáng khí, không để gió quạt hoặc luồng gió điều hòa chiếu thẳng vào đầu/ngực cụ.
+- Nếu cụ thức giấc lúc 2 - 3h sáng: Khuyên cụ cứ nằm thả lỏng, hít sâu thở chậm, không nhìn đồng hồ hay bật đèn sáng chói vì sẽ kích thích não thức tỉnh hoàn toàn.
+
+--- MỤC 3: AN TOÀN TẮM RỬA, VỆ SINH CÁ NHÂN & CHĂM SÓC RĂNG GIẢ ---
+3.1. An toàn phòng tắm chống đột quỵ & té ngã:
+- KHUNG GIỜ VÀNG: Tắm vào ban ngày (tốt nhất từ 10h sáng đến 16h chiều). CẤM TẮM ĐÊM SAU 19H.
+- NHIỆT ĐỘ NƯỚC: Luôn dùng nước ấm 37 - 38°C (kiểm tra bằng khuỷu tay trước khi dội).
+- TRÌNH TỰ TẮM: Làm ướt từ bàn chân -> cẳng chân -> đùi -> hai tay -> thân mình -> sau cùng mới gội đầu. Tránh xối nước đột ngột từ đỉnh đầu gây co mạch não đột ngột (sốc nhiệt, đột quỵ).
+- TRANG BỊ PHÒNG TẮM: Bắt buộc có ghế tắm chuyên dụng bằng nhựa có tựa lưng và chân cao su chống trượt; lắp thanh vịn Inox cao 70 - 80cm; trải thảm cao su chống trượt trên toàn bộ sàn gạch.
+- KHI CỤ LƯỜI TẮM HOẶC SỢ LẠNH: Không quát mắng hay ép buộc gay gắt. Bật đèn sưởi nhà tắm trước 10 phút, dỗ cụ: "Hôm nay con đã bật nước ấm thơm lá sả rồi, con lau người nhanh cho cụ 5 phút cho khoan khoái dễ ngủ nhé". Những ngày trời quá rét hoặc cụ mệt, chỉ cần dùng khăn ấm lau người và thay đồ sạch trong phòng kín gió.
+
+3.2. Chăm sóc răng miệng và hàm răng giả:
+- Răng người già thường yếu, mòn men và tụt nướu. Nên dùng bàn chải lông siêu mềm và kem đánh răng chứa flouride ngừa sâu chân răng.
+- Hàm giả tháo lắp: Tháo ra rửa sạch bằng bàn chải mềm sau mỗi bữa ăn. Ban đêm khi đi ngủ, THÁO HÀM GIẢ ngâm trong cốc nước sạch hoặc dung dịch sát khuẩn chuyên dụng, tuyệt đối không đeo răng giả đi ngủ để tránh nguy cơ nuốt phải hoặc nghẹn đường thở lúc ngủ.
+
+--- MỤC 4: THÓI QUEN UỐNG NƯỚC, TRÀ & CÀ PHÊ HÀNG NGÀY ---
+4.1. Uống nước đủ và đúng cách:
+- Người cao tuổi bị teo trung tâm khát ở vùng dưới đồi não, dẫn đến tình trạng "khát mà không biết", rất dễ rơi vào mất nước, máu cô đặc gây huyết khối tắc mạch.
+- Lượng nước khuyến nghị: 1.5 - 2.0 lít/ngày.
+- Cách uống: Uống rải rác từng ngụm nhỏ 50 - 100ml mỗi 1 - 2 giờ, dùng nước ấm, không uống nước đá lạnh buốt.
+
+4.2. Sở thích uống trà và cà phê của người già:
+- UỐNG TRÀ: Người già thường thích trà mạn, trà xanh đặc. Tuy nhiên, chất caffeine và tanin nồng độ cao trong trà đặc làm tim đập nhanh, co mạch gây tăng vọt huyết áp, đồng thời kết tủa sắt gây thiếu máu và làm mất ngủ triền miên.
+  * Hướng dẫn: Khuyên cụ pha trà loãng (nhạt màu), chỉ thưởng trà vào buổi sáng sau khi đã ăn điểm tâm (không uống trà lúc đói gây say trà, cồn cào ruột). Tuyệt đối không uống trà sau 15h chiều.
+- CÀ PHÊ: Cụ An có bệnh nền tăng huyết áp độ 2, nên hạn chế tối đa cà phê đặc hoặc cà phê sữa nhiều đường. Nếu thích hương vị, chỉ nên dùng 1 lượng rất nhỏ cà phê đã tách caffeine (decaf) hoặc thay thế bằng sữa hạt ngũ cốc thơm lừng.
+
+--- MỤC 5: TÂM LÝ NGƯỜI CAO TUỔI & KỸ THUẬT GIAO TIẾP THẤU CẢM ---
+5.1. Các trạng thái tâm lý thường gặp:
+- Cảm giác cô đơn, tủi thân, lo sợ mình là gánh nặng cho con cháu.
+- Tính tình trở nên nhạy cảm, dễ tủi thân, hay hờn dỗi hoặc cáu kỉnh vô cớ do đau nhức xương khớp mạn tính.
+- Hiện tượng đãng trí, hay quên: Quên chỗ để kính lão, quên chìa khóa phòng, quên đã ăn cơm hay chưa, hỏi lặp đi lặp lại một câu hỏi.
+
+5.2. Kỹ thuật giao tiếp chuẩn mực (Validation Therapy - Thấu cảm và Chấp nhận):
+- NGUYÊN TẮC 1: Luôn giữ giọng nói trầm ấm, rõ ràng, tốc độ vừa phải, nhìn thẳng vào mắt cụ với thái độ kính trọng, lễ phép.
+- NGUYÊN TẮC 2: KHÔNG BAO GIỜ tranh cãi, sửa sai gay gắt hay nói "Con đã nói bao nhiêu lần rồi mà cụ không nhớ". Thay vào đó, kiên nhẫn nhắc lại với nụ cười: "Dạ thưa cụ, kính lão của cụ con để ngay trên bàn đầu giường đây ạ".
+- NGUYÊN TẮC 3: Kỹ thuật Chuyển hướng chú ý (Distraction): Khi cụ cáu gắt hoặc đòi đi lang thang, hãy đồng cảm trước: "Dạ con hiểu cụ đang nhớ quê/sốt ruột", sau đó khéo léo mời: "Cụ ra ghế sofa con rót chén trà hoa cúc ấm cụ uống rồi kể cho con nghe ngày xưa cụ công tác ở đâu nhé".
+- NGUYÊN TẮC 4: Thường xuyên khen ngợi và tạo cho cụ cảm giác có ích (nhờ cụ nhặt vài cọng rau, gấp cái khăn nhỏ, tưới chậu cây cảnh ngoài ban công).
+
+--- MỤC 6: BẦU BẠN THƯỜNG NHẬT CÙNG TRỢ LÝ AI AURACARE ---
+Trợ lý AI khi trò chuyện với cụ An và người nhà luôn tuân thủ phong cách:
+1. Lễ phép, ân cần, xưng hô phù hợp ("Dạ thưa cụ An", "Dạ chào anh Nghĩa").
+2. Chủ động nhắc nhở thời tiết (ví dụ: "Hôm nay trời trở gió lạnh, cụ nhớ mặc thêm áo len mỏng và quàng khăn ấm khi đi dạo nhé").
+3. Nhắc nhở uống nước ấm và vận động nhẹ nhàng sau mỗi 2 tiếng ngồi một chỗ.
+4. Luôn tích hợp yếu tố an toàn y tế và số hotline khẩn cấp BS. Tuấn (0912.345.678) khi có dấu hiệu bất thường.

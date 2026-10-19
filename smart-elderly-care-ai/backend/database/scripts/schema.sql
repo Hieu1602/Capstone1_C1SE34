@@ -52,6 +52,10 @@ CREATE TABLE users (
     font_size_mode VARCHAR(20) NOT NULL DEFAULT 'system', -- Cỡ chữ ('system', 'custom')
     custom_font_scale INT NOT NULL DEFAULT 2,          -- Tỷ lệ phóng to chữ
     vibration_enabled BOOLEAN NOT NULL DEFAULT TRUE,   -- Rung thông báo SOS
+    location_enabled BOOLEAN NOT NULL DEFAULT TRUE,    -- Định vị GPS
+    location_latitude DOUBLE PRECISION,                -- Vĩ độ GPS
+    location_longitude DOUBLE PRECISION,               -- Kinh độ GPS
+    location_address VARCHAR(500),                     -- Địa chỉ GPS
     avatar_url VARCHAR(500),                           -- Ảnh đại diện người dùng
     is_active BOOLEAN NOT NULL DEFAULT TRUE,
     fcm_token VARCHAR(500),
@@ -680,4 +684,3 @@ VALUES
     ('Bảo trì nâng cấp hệ thống định kỳ', 'Hệ thống Smart Elderly Care AI sẽ tiến hành tối ưu hóa kết nối IoT và sao lưu cơ sở dữ liệu từ 01:00 đến 03:00 ngày 18/10/2026. Trong thời gian này, các tính năng báo cáo có thể bị chậm nhẹ.', 'system_maintenance', 'all', 'published', CURRENT_TIMESTAMP - INTERVAL '1 day', 152, 128),
     ('Khuyến cáo sức khỏe mùa giao mùa', 'Nhiệt độ thay đổi đột ngột có thể ảnh hưởng đến huyết áp của người cao tuổi. Gia đình vui lòng kiểm tra thiết bị đo sinh hiệu phòng ngủ và duy trì nhiệt độ phòng 26-28 độ C.', 'health_tip', 'caregivers', 'published', CURRENT_TIMESTAMP - INTERVAL '5 hours', 89, 74),
     ('Cập nhật tính năng trợ lý AI Y khoa', 'Phiên bản mới của Chatbot y khoa đã được tích hợp mô hình phân tích triệu chứng chuyên sâu dành cho bác sĩ gia đình và người chăm sóc.', 'feature_update', 'all', 'scheduled', NULL, 0, 0);
-

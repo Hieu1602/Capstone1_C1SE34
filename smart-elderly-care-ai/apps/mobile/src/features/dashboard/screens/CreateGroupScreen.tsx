@@ -2,13 +2,14 @@
 // Màn hình Quản lý & Tạo Nhóm Thiết Bị dạng nhiều trang (Full Screen Multi-Step Flow)
 // Tương tự AddDeviceScreen (Thêm thủ công): SELECT -> REVIEW -> CONFIRM -> SUCCESS
 
-import React, { useState } from 'react';
+import React, { useMemo, useState } from 'react';
 import { View, StyleSheet, TouchableOpacity, ScrollView } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
 import { Colors, Shadows } from '../../../theme/colors';
 import { useVitalStore, IoTDeviceItem } from '../../../store/useVitalStore';
 import { LocalizedAlert, LocalizedText, LocalizedTextInput } from '../../../i18n/LocalizedComponents';
+import { createThemeStyles, useTheme } from '../../../store/useThemeStore';
 
 
 type GroupStep = 'SELECT' | 'REVIEW' | 'CONFIRM' | 'SUCCESS';
@@ -16,6 +17,11 @@ type GroupDeviceFilter = 'Tất cả' | 'Camera' | 'Đồng hồ';
 
 export default function CreateGroupScreen({ navigation }: any) {
   const { iotDevices, deviceGroups, addDeviceGroup, assignDevicesToGroup } = useVitalStore();
+  const { isDarkMode, colors } = useTheme();
+  const styles = useMemo(
+    () => createThemeStyles(baseStyles, isDarkMode, colors),
+    [isDarkMode, colors],
+  );
 
   const [currentStep, setCurrentStep] = useState<GroupStep>('SELECT');
   const [groupName, setGroupName] = useState<string>('');
@@ -195,15 +201,15 @@ export default function CreateGroupScreen({ navigation }: any) {
   };
 
   return (
-    <SafeAreaView style={styles.safeArea} edges={['top']}>
+    <SafeAreaView style={[styles.safeArea, isDarkMode && { backgroundColor: colors.background }]} edges={['top']}>
       {/* Header Điều Hướng */}
-      <View style={styles.header}>
+      <View style={[styles.header, isDarkMode && { backgroundColor: colors.card, borderBottomColor: colors.border }]}>
         <TouchableOpacity
-          style={styles.backButton}
+          style={[styles.backButton, isDarkMode && { backgroundColor: colors.surfaceSubtle }]}
           onPress={handleBack}
           activeOpacity={0.7}
         >
-          <Ionicons name="chevron-back" size={26} color="#1E293B" />
+          <Ionicons name="chevron-back" size={26} color={colors.textPrimary} />
         </TouchableOpacity>
         <View style={styles.headerTitleContainer}>
           <LocalizedText style={styles.headerTitle}>Tạo Nhóm Thiết Bị</LocalizedText>
@@ -215,11 +221,11 @@ export default function CreateGroupScreen({ navigation }: any) {
           </LocalizedText>
         </View>
         <TouchableOpacity
-          style={styles.closeButton}
+          style={[styles.closeButton, isDarkMode && { backgroundColor: colors.surfaceSubtle }]}
           onPress={() => navigation.goBack()}
           activeOpacity={0.7}
         >
-          <Ionicons name="close" size={24} color="#1E293B" />
+          <Ionicons name="close" size={24} color={colors.textPrimary} />
         </TouchableOpacity>
       </View>
 
@@ -229,7 +235,7 @@ export default function CreateGroupScreen({ navigation }: any) {
       {currentStep === 'SELECT' && (
         <View style={{ flex: 1 }}>
           <ScrollView
-            style={styles.scrollContent}
+            style={[styles.scrollContent, isDarkMode && { backgroundColor: colors.background }]}
             contentContainerStyle={styles.scrollInner}
             showsVerticalScrollIndicator={false}
           >
@@ -797,7 +803,7 @@ export default function CreateGroupScreen({ navigation }: any) {
   );
 }
 
-const styles = StyleSheet.create({
+const baseStyles = StyleSheet.create({
   safeArea: {
     flex: 1,
     backgroundColor: '#F8FAFC',

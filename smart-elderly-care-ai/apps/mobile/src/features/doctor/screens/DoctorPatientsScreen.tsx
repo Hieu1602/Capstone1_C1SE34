@@ -5,7 +5,7 @@ import React, { useState, useEffect, useCallback } from 'react';
 import { View, StyleSheet, ScrollView, TouchableOpacity, RefreshControl, StatusBar, ActivityIndicator } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
-import { useNavigation } from '@react-navigation/native';
+import { useNavigation, useFocusEffect } from '@react-navigation/native';
 
 import { Colors } from '../../../theme/colors';
 import { useTheme } from '../../../store/useThemeStore';
@@ -37,58 +37,13 @@ export interface PatientCardData {
   last_updated?: string;
 }
 
-const FALLBACK_PATIENTS: PatientCardData[] = [
-  {
-    id: 'e0000000-b4e1-4b08-b2d3-d949a0eb075c',
-    name: 'Cụ Nguyễn Văn An',
-    birth_year: 1948,
-    age: 78,
-    gender: 'Nam',
-    house_id: 'c3333333-b4e1-4b08-b2d3-d949a0eb075c',
-    house_name: 'Nhà của tôi',
-    house_address: '123 Hải Phòng, P. Thạch Thang, Đà Nẵng',
-    medical_history: 'Tăng huyết áp độ 2, Thiếu máu cơ tim nhẹ, Tiền đình',
-    emergency_contact_phone: '+84905123456',
-    device_id: 'BLE_BAND_001',
-    is_online: true,
-    battery_level: 84,
-    heart_rate: 76,
-    spo2: 98,
-    skin_temp_max: 36.6,
-    blood_pressure: '120/80 mmHg',
-    health_status: 'NORMAL',
-    last_updated: 'Vừa xong',
-  },
-  {
-    id: 'e1111111-b4e1-4b08-b2d3-d949a0eb075c',
-    name: 'Cụ Trần Thị Mai',
-    birth_year: 1951,
-    age: 75,
-    gender: 'Nữ',
-    house_id: 'c4444444-b4e1-4b08-b2d3-d949a0eb075c',
-    house_name: 'Gia đình Chị Lan',
-    house_address: '45 Lê Duẩn, Q. Hải Châu, Đà Nẵng',
-    medical_history: 'Đái tháo đường Type 2, Thoái hóa khớp gối',
-    emergency_contact_phone: '+84905999888',
-    device_id: 'BLE_BAND_002',
-    is_online: true,
-    battery_level: 68,
-    heart_rate: 88,
-    spo2: 94,
-    skin_temp_max: 36.8,
-    blood_pressure: '135/85 mmHg',
-    health_status: 'WARNING',
-    last_updated: '3 phút trước',
-  },
-];
-
 export default function DoctorPatientsScreen() {
   const insets = useSafeAreaInsets();
   const navigation = useNavigation<any>();
   const { isDarkMode, colors } = useTheme();
   const { userName } = useAuthStore();
 
-  const [patients, setPatients] = useState<PatientCardData[]>(FALLBACK_PATIENTS);
+  const [patients, setPatients] = useState<PatientCardData[]>([]);
   const [loading, setLoading] = useState(false);
   const [refreshing, setRefreshing] = useState(false);
   const [searchQuery, setSearchQuery] = useState('');
@@ -98,11 +53,11 @@ export default function DoctorPatientsScreen() {
     try {
       setLoading(true);
       const res = await doctorApi.getPatients();
-      if (res.data && Array.isArray(res.data) && res.data.length > 0) {
+      if (res.data && Array.isArray(res.data)) {
         setPatients(res.data);
       }
     } catch {
-      // Fallback
+      // Giữ dữ liệu hiện tại khi mất kết nối mạng
     } finally {
       setLoading(false);
       setRefreshing(false);
@@ -113,18 +68,29 @@ export default function DoctorPatientsScreen() {
     fetchPatients();
   }, [fetchPatients]);
 
+  useFocusEffect(
+    useCallback(() => {
+      fetchPatients();
+    }, [fetchPatients])
+  );
+
   const onRefresh = () => {
     setRefreshing(true);
     fetchPatients();
   };
 
   const filteredPatients = patients.filter((p) => {
-    const matchesSearch =
-      p.name.toLowerCase().includes(searchQuery.toLowerCase()) ||
-      (p.medical_history || '').toLowerCase().includes(searchQuery.toLowerCase()) ||
-      p.house_name.toLowerCase().includes(searchQuery.toLowerCase());
+    const q = searchQuery.trim().toLowerCase();
+    if (q.length > 0) {
+      const cleanQ = q.replace(/[^0-9]/g, '');
+      const cleanPhone = (p.emergency_contact_phone || '').replace(/[^0-9]/g, '');
 
-    if (!matchesSearch) return false;
+      const matchesName = p.name.toLowerCase().includes(q);
+      const matchesPhone = cleanQ.length > 0 && cleanPhone.includes(cleanQ);
+
+      if (!matchesName && !matchesPhone) return false;
+    }
+
     if (filterTab === 'WARNING') return p.health_status === 'WARNING' || p.health_status === 'DANGER';
     if (filterTab === 'NORMAL') return p.health_status === 'NORMAL';
     return true;
@@ -238,7 +204,7 @@ export default function DoctorPatientsScreen() {
           <Ionicons name="search" size={18} color="#94A3B8" />
           <LocalizedTextInput
             style={[styles.searchInput, { color: colors.textPrimary }]}
-            placeholder="Tìm theo tên cụ, bệnh nền hoặc địa chỉ..."
+            placeholder="Tìm theo tên hoặc số điện thoại..."
             placeholderTextColor="#94A3B8"
             value={searchQuery}
             onChangeText={setSearchQuery}
@@ -359,6 +325,11 @@ export default function DoctorPatientsScreen() {
                     <LocalizedText style={[styles.patientAddress, { color: isDarkMode ? '#94A3B8' : '#64748B' }]} numberOfLines={1}>
                       🏠 {patient.house_name} • {patient.house_address}
                     </LocalizedText>
+                    {patient.emergency_contact_phone ? (
+                      <LocalizedText style={[styles.patientPhone, { color: isDarkMode ? '#38BDF8' : '#0284C7' }]} numberOfLines={1}>
+                        📞 {patient.emergency_contact_phone}
+                      </LocalizedText>
+                    ) : null}
                   </View>
                 </View>
 
@@ -378,7 +349,10 @@ export default function DoctorPatientsScreen() {
                   <View style={[styles.vitalChip, { backgroundColor: isDarkMode ? '#0F172A' : '#F8FAFC' }]}>
                     <Ionicons name="heart" size={14} color="#EF4444" />
                     <LocalizedText style={[styles.vitalValue, { color: colors.textPrimary }]}>
-                      {patient.heart_rate ?? 76} <LocalizedText style={styles.vitalUnit}>bpm</LocalizedText>
+                      {patient.heart_rate !== null && patient.heart_rate !== undefined ? `${patient.heart_rate} ` : '-- '}
+                      {patient.heart_rate !== null && patient.heart_rate !== undefined && (
+                        <LocalizedText style={styles.vitalUnit}>bpm</LocalizedText>
+                      )}
                     </LocalizedText>
                     <LocalizedText style={styles.vitalLabel}>Nhịp tim</LocalizedText>
                   </View>
@@ -389,11 +363,13 @@ export default function DoctorPatientsScreen() {
                     <LocalizedText
                       style={[
                         styles.vitalValue,
-                        { color: (patient.spo2 ?? 98) < 95 ? '#EA580C' : colors.textPrimary },
+                        { color: (patient.spo2 && patient.spo2 < 95) ? '#EA580C' : colors.textPrimary },
                       ]}
                     >
-                      {patient.spo2 ?? 98}
-                      <LocalizedText style={styles.vitalUnit}>%</LocalizedText>
+                      {patient.spo2 !== null && patient.spo2 !== undefined ? `${patient.spo2}` : '--'}
+                      {patient.spo2 !== null && patient.spo2 !== undefined && (
+                        <LocalizedText style={styles.vitalUnit}>%</LocalizedText>
+                      )}
                     </LocalizedText>
                     <LocalizedText style={styles.vitalLabel}>SpO₂</LocalizedText>
                   </View>
@@ -402,8 +378,10 @@ export default function DoctorPatientsScreen() {
                   <View style={[styles.vitalChip, { backgroundColor: isDarkMode ? '#0F172A' : '#F8FAFC' }]}>
                     <Ionicons name="thermometer" size={14} color="#F59E0B" />
                     <LocalizedText style={[styles.vitalValue, { color: colors.textPrimary }]}>
-                      {patient.skin_temp_max ?? 36.6}
-                      <LocalizedText style={styles.vitalUnit}>°C</LocalizedText>
+                      {patient.skin_temp_max !== null && patient.skin_temp_max !== undefined ? `${patient.skin_temp_max}` : '--'}
+                      {patient.skin_temp_max !== null && patient.skin_temp_max !== undefined && (
+                        <LocalizedText style={styles.vitalUnit}>°C</LocalizedText>
+                      )}
                     </LocalizedText>
                     <LocalizedText style={styles.vitalLabel}>Nhiệt độ</LocalizedText>
                   </View>
@@ -563,6 +541,7 @@ const styles = StyleSheet.create({
   patientName: { fontSize: 16, fontWeight: '800', flex: 1, marginRight: 8 },
   patientMeta: { fontSize: 12, marginTop: 1 },
   patientAddress: { fontSize: 11.5, marginTop: 3 },
+  patientPhone: { fontSize: 11.5, fontWeight: '600', marginTop: 2 },
   statusBadge: {
     paddingHorizontal: 7,
     paddingVertical: 3,

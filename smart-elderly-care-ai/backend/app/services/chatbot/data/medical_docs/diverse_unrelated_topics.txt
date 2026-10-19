@@ -1,0 +1,101 @@
+# CẨM NANG TRI THỨC ĐA LĨNH VỰC & CÂU HỎI ĐỜI SỐNG CHO NGƯỜI CAO TUỔI (DIVERSE UNRELATED TOPICS)
+Dự án: Hệ thống Trợ lý AI Giám sát Người cao tuổi AuraCare AI
+Tác giả: Hội đồng Chuyên môn Y tế & Kỹ sư Edge AI
+
+================================================================================
+CHỦ ĐỀ 1: CHÍNH SÁCH BẢO HIỂM Y TẾ (BHYT) & THỦ TỤC HÀNH CHÍNH NGƯỜI CAO TUỔI
+================================================================================
+1. Quyền lợi BHYT cho người cao tuổi từ đủ 80 tuổi trở lên:
+- Theo Luật Bảo hiểm Y tế và chính sách trợ giúp xã hội tại Việt Nam: Người từ đủ 80 tuổi trở lên không có lương hưu hoặc trợ cấp BHXH hàng tháng được Nhà nước cấp thẻ BHYT miễn phí 100% (mã đối tượng BT - Bảo trợ xã hội).
+- Mức thanh toán: Khi đi khám chữa bệnh đúng tuyến, người cao tuổi thuộc diện bảo trợ xã hội được quỹ BHYT chi trả 100% chi phí khám chữa bệnh trong phạm vi quyền lợi được hưởng.
+- Trường hợp khám trái tuyến/vượt tuyến: Nếu khám tại bệnh viện tuyến tỉnh hoặc tuyến trung ương không có giấy chuyển viện (ngoại trừ cấp cứu), mức hưởng điều trị nội trú là 100% chi phí theo tỷ lệ tuyến tỉnh, hoặc 40% chi phí nội trú tuyến trung ương. Khám ngoại trú trái tuyến trung ương không được thanh toán.
+
+2. Thủ tục nhận thuốc BHYT định kỳ thay cho người cao tuổi:
+- Người nhà (con cái, người bảo hộ hợp pháp) có thể đi khám và lĩnh thuốc mạn tính (tăng huyết áp, tiểu đường) thay cho người cao tuổi nếu cụ đi lại khó khăn, đau yếu hoặc có dịch bệnh.
+- Hồ sơ cần mang theo:
+  + Thẻ BHYT của cụ (bản gốc hoặc hình ảnh căn cước công dân gắn chip/VNeID tích hợp BHYT).
+  + Căn cước công dân của người đi nhận thay.
+  + Giấy ủy quyền nhận thuốc (theo mẫu của bệnh viện hoặc có xác nhận của UBND phường/xã) hoặc Sổ khám bệnh mạn tính định kỳ đã đăng ký thông tin người nhận hộ.
+  + Đơn thuốc và sổ y bạ của tháng trước liền kề.
+
+3. Thủ tục chuyển tuyến khám chữa bệnh cho người già:
+- Giấy chuyển tuyến BHYT có giá trị sử dụng trong năm dương lịch đối với các bệnh mạn tính (như suy tim, đái tháo đường, tăng huyết áp nặng).
+- Người nhà cần xin giấy chuyển viện từ Trạm y tế xã/phường hoặc Trung tâm y tế huyện lên bệnh viện chuyên khoa lão khoa tuyến trên (như Bệnh viện Lão khoa Trung ương) trước ngày 31/12 hàng năm để được cấp giấy cho năm mới.
+
+================================================================================
+CHỦ ĐỀ 2: SƠ CỨU TAI NẠN SINH HOẠT THÔNG THƯỜNG TRONG GIA ĐÌNH
+================================================================================
+1. Sơ cứu Bỏng nước sôi / Dầu mỡ nóng khi nấu ăn:
+- Nguyên tắc vàng: Làm mát vết bỏng NGAY LẬP TỨC dưới vòi nước sạch chảy nhẹ trong 15 đến 20 phút (nước mát nhiệt độ 15-20°C, TUYỆT ĐỐI KHÔNG DÙNG NƯỚC ĐÁ LẠNH vì gây sốc nhiệt và hoại tử mô co mạch).
+- Tuyệt đối CẤM: Bôi kem đánh răng, mỡ trăn, nước mắm, lòng trắng trứng, lá cây lên vết bỏng vì nguy cơ nhiễm trùng máu cực cao.
+- Che phủ: Dùng gạc vô trùng hoặc khăn sạch ẩm đắp nhẹ lên vết bỏng. Nếu phồng rộp mụn nước, KHÔNG ĐƯỢC chọc vỡ.
+- Đưa đến cơ sở y tế nếu: Vết bỏng diện tích lớn hơn bàn tay, bỏng ở mặt, khớp cử động, bộ phận sinh dục hoặc người già có bệnh tiểu đường (nguy cơ loét hoại tử khó lành).
+
+2. Sơ cứu Vết đứt tay, rách da chảy máu do dao kéo/thủy tinh:
+- Bước 1: Rửa sạch vết thương dưới vòi nước sạch hoặc nước muối sinh lý 0.9% để trôi dị vật, bụi bẩn.
+- Bước 2: Băng ép cầm máu bằng gạc vô trùng hoặc khăn sạch, ấn trực tiếp lên miệng vết thương liên tục 5-10 phút. Nâng cao vùng bị thương cao hơn mức tim.
+- Bước 3: Sát khuẩn xung quanh bằng cồn đỏ Povidine (Betadine) 10%, băng lại bằng băng cá nhân hoặc băng cuộn gạc sạch.
+- Cảnh báo: Nếu vết thương sâu nhìn thấy mỡ/gân, mép rách toạc >1cm, hoặc chảy máu thành tia không cầm sau 10 phút, đưa ngay đến trạm y tế để khâu vết thương và tiêm phòng uốn ván (SAT).
+
+3. Xử trí Côn trùng đốt (Ong vò vẽ, Kiến ba khoang, Muỗi sốt xuất huyết):
+- Bị ong đốt: Dùng cạnh thẻ nhựa/móng tay gạt nhẹ ngòi ong ra (không dùng nhíp bóp nặn túi nọc). Rửa xà phòng, chườm lạnh 10 phút để giảm đau buốt. Theo dõi sát dấu hiệu khó thở, nổi mề đay toàn thân, tụt huyết áp (sốc phản vệ) để gọi cấp cứu 115 ngay.
+- Dính độc tố kiến ba khoang: TUYỆT ĐỐI KHÔNG miết nát kiến trên da. Rửa ngay bằng nước muối sinh lý hoặc cồn nhẹ, bôi hồ nước hoặc kem dưỡng dịu da, không cào gãi làm loét dịch độc lan rộng.
+
+================================================================================
+CHỦ ĐỀ 3: KHOA HỌC MÔI TRƯỜNG, THIẾT BỊ ĐIỆN TỬ & SỨC KHỎE ĐỜI SỐNG
+================================================================================
+1. Sóng Wi-Fi, sóng 5G, điện thoại di động và máy tạo nhịp tim:
+- Bản chất vật lý: Sóng Wi-Fi và mạng di động là bức xạ điện từ không ion hóa (Non-ionizing radiation), mức năng lượng rất thấp, hoàn toàn không gây đột biến gen hay ung thư.
+- Lưu ý đặc biệt với người cao tuổi có cấy Máy tạo nhịp tim (Pacemaker) hoặc Máy khử rung tim (ICD):
+  + Điện thoại di động: Nên để cách xa vị trí máy tạo nhịp ít nhất 15cm (không bỏ điện thoại vào túi áo ngực cùng bên mang máy). Khi gọi điện, áp tai phía đối diện với bên cấy máy.
+  + Bộ phát Wi-Fi gia đình: Giữ khoảng cách tối thiểu 1 mét so với giường ngủ. Điều này chủ yếu giúp giảm nhiễu từ trường và tránh ánh sáng đèn nhấp nháy làm mất ngủ.
+
+2. Sử dụng Máy điều hòa nhiệt độ an toàn cho người già:
+- Nhiệt độ chuẩn: Cài đặt từ 26°C đến 28°C (kèm theo quạt gió thoang thoảng hoặc máy phun sương bù ẩm). Chênh lệch nhiệt độ trong phòng và ngoài trời không được vượt quá 7°C.
+- Tránh co mạch đột quỵ: Tuyệt đối không để luồng gió lạnh thổi thẳng vào đầu, gáy hoặc ngực người cao tuổi. Khi từ phòng điều hòa ra ngoài trời nắng, cần tắt điều hòa và mở cửa trước 5-10 phút để cơ thể thích nghi với nhiệt độ môi trường.
+
+3. Tác hại của Ánh sáng xanh (Màn hình Tivi, Điện thoại) trước khi ngủ:
+- Ánh sáng xanh (bước sóng 450-480nm) ức chế tuyến tùng tiết ra Melatonin - hormone chỉ huy giấc ngủ tự nhiên.
+- Khuyến nghị: Người cao tuổi nên tắt tivi và ngừng dùng điện thoại ít nhất 60 phút trước giờ ngủ (sau 20h30). Bật đèn ngủ ánh sáng vàng dịu với độ rọi thấp (<30 lux) để vừa đủ nhìn rõ đường đi tiểu đêm mà không gây chói mắt.
+
+================================================================================
+CHỦ ĐỀ 4: RÈN LUYỆN TRÍ NÃO, BÀI TẬP TƯ DUY & PHÒNG NGỪA ALZHEIMER
+================================================================================
+1. Chơi Cờ tướng, Cờ vua & Thể dục trí tuệ (Brain Gym):
+- Lợi ích thần kinh: Các ván cờ đòi hỏi sự tính toán nước đi, phán đoán thế trận và ghi nhớ quy luật, giúp kích hoạt cả bán cầu não trái (logic) và não phải (hình thái không gian), tạo ra các liên kết synap thần kinh mới (Neuroplasticity).
+- Khuyến nghị: Khuyến khích cụ chơi cờ cùng bạn già, con cháu 30-45 phút mỗi ngày vào buổi chiều mát. Vừa rèn luyện tư duy vừa tăng cường giao tiếp xã hội, giảm cảm giác cô đơn.
+
+2. Trò chơi Đố chữ, Ô số Sudoku, Xếp hình:
+- Trò chơi số học nhẹ nhàng và giải ô chữ trên báo chí giúp vùng hồi hải mã (Hippocampus - trung tâm trí nhớ) hoạt động liên tục, làm chậm quá trình teo não sinh lý ở người già.
+- Nên chọn mức độ dễ đến trung bình để tạo cảm giác hưng phấn, chinh phục niềm vui, tránh các bài toán quá khó gây căng thẳng đầu óc.
+
+3. Đọc sách báo và Kể lại kỷ niệm xưa (Reminiscence Therapy):
+- Thói quen đọc báo buổi sáng hoặc kể lại những câu chuyện thời trẻ cho con cháu nghe là liệu pháp tâm lý hồi tưởng tuyệt vời, củng cố trí nhớ dài hạn và giúp tâm trạng người già vui vẻ, phấn chấn.
+
+================================================================================
+CHỦ ĐỀ 5: ĐỜI SỐNG TINH THẦN, VĂN HÓA NGHỆ THUẬT & TRÒ CHUYỆN THƯ GIÃN
+================================================================================
+1. Liệu pháp Thơ ca & Âm nhạc thư giãn cho người cao tuổi:
+- Âm nhạc: Nghe nhạc trữ tình quê hương, nhạc thiền, nhạc cổ điển Baroque với âm lượng vừa phải (40-50 dB) giúp kích hoạt sóng não Alpha, hạ huyết áp tâm thu từ 3-5 mmHg và giảm tiết cortisol (hormone căng thẳng).
+- Thơ ca: Đọc những vần thơ thanh thản về tuổi già giúp tâm hồn thư thái, an yên:
+  "Tuổi già như bóng xế chiều / Tâm an trí sáng sống nhiều niềm vui / Bỏ qua phiền muộn ngậm ngùi / Cháu con sum họp ngọt bùi yêu thương."
+
+2. Thú vui Điền viên: Trồng cây cảnh, nuôi chim, chăm cá cảnh:
+- Vận động nhẹ nhàng khi tưới cây, tỉa cành cây cảnh, cho chim ăn ngoài ban công vào sáng sớm giúp tiếp xúc ánh nắng tạo vitamin D, đồng thời tạo cảm giác cuộc sống có ý nghĩa và có trách nhiệm gắn bó với thiên nhiên.
+
+3. Kỹ năng giao tiếp trong gia đình sum vầy:
+- Con cháu nên chủ động lắng nghe, gật đầu tán thưởng khi ông bà kể chuyện, không dùng điện thoại khi ngồi bên người già, tạo cơ hội cho ông bà ban lời khuyên dạy bảo để các cụ cảm nhận được giá trị và sự tôn kính của gia đình.
+
+================================================================================
+CHỦ ĐỀ 6: NHẬN DIỆN & PHẢN HỒI CÂU HỎI NGOÀI PHẠM VI CHUYÊN MÔN (OUT-OF-SCOPE)
+================================================================================
+1. Định vị vai trò và ranh giới chuyên môn của AuraCare AI:
+- AuraCare AI là Hệ thống Trợ lý AI Bác sĩ Lão khoa & Giám sát Chăm sóc Người cao tuổi.
+- Mục tiêu cốt lõi: Bảo vệ an toàn tính mạng, cảnh báo sự cố sinh tồn (té ngã, nhịp tim, sốt, đột quỵ), tư vấn chăm sóc sức khỏe, dinh dưỡng, tâm lý và sơ cứu người cao tuổi.
+
+2. Quy tắc ứng xử khi nhận câu hỏi ngoài phạm vi y tế / đời sống lão khoa:
+- Đối với câu hỏi kinh tế, giá vàng, thị trường tài chính, mã code lập trình, kỹ thuật xe cộ:
+  + AI vẫn trả lời ngắn gọn, thông minh, đúng trọng tâm kiến thức tổng quát cơ bản (không từ chối thô lỗ).
+  + Luôn khéo léo kết nối và nhắc nhở người dùng quay lại trọng tâm chính là chăm sóc sức khỏe cho cụ An và gia đình.
+  + Ví dụ phản hồi: "Dạ, về giá vàng hay thị trường thì biến động từng ngày theo sàn giao dịch, và tôi cũng có thể hỗ trợ các thông tin cơ bản; tuy nhiên sứ mệnh ưu tiên số một của tôi là luôn túc trực giám sát an toàn sức khỏe cho cụ An. Bạn hãy yên tâm chăm sóc cụ nhé!"
+- Tuyệt đối không đưa ra các lời khuyên đầu tư tài chính, xúi giục cờ bạc, hoặc những nội dung trái pháp luật và đạo đức.

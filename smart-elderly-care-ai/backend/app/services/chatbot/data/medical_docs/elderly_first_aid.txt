@@ -1,0 +1,27 @@
+# TÀI LIỆU HƯỚNG DẪN Y TẾ VÀ SƠ CỨU CHO NGƯỜI CAO TUỔI (ELDERLY CARE PROTOCOLS)
+
+## 1. XỬ TRÍ KHI NGƯỜI CAO TUỔI BỊ TÉ NGÃ (FALL INCIDENT)
+- Nguy cơ: Người cao tuổi rất dễ bị gãy xương (đặc biệt là gãy cổ xương đùi), chấn thương sọ não hoặc tụ máu dưới màng cứng.
+- Quy trình ứng phó khẩn cấp:
+  1. Giữ bình tĩnh, không vội vàng đỡ người bệnh đứng dậy ngay lập tức.
+  2. Kiểm tra tri giác: Hỏi tên, kiểm tra người bệnh có tỉnh táo hay bất tỉnh, có đáp ứng bằng lời nói không.
+  3. Kiểm tra chấn thương ngoại khoa: Quan sát dấu hiệu chảy máu, biến dạng khớp, chân bị xoay ngoài hoặc đau nhói ở vùng háng/lưng.
+  4. Nếu nghi ngờ gãy xương hoặc chấn thương cột sống: Giữ nguyên tư thế, gọi ngay cấp cứu 115 hoặc người thân gần nhất. Giữ ấm cơ thể.
+  5. Nếu người bệnh tỉnh táo, không đau đớn dữ dội: Hướng dẫn người bệnh từ từ lật nghiêng người, chống tay quỳ gối rồi bám vào ghế chắc chắn để đứng dậy từ từ.
+
+## 2. XỬ TRÍ KHI SỐT CAO Ở NGƯỜI CAO TUỔI (FEVER & INFECTION)
+- Nguy cơ: Thân nhiệt trên 38.0°C ở người già thường là dấu hiệu nhiễm trùng nghiêm trọng (nhiễm trùng đường tiết niệu, viêm phổi, nhiễm trùng huyết) vì phản ứng sốt của người già kém nhạy hơn người trẻ.
+- Quy trình ứng phó:
+  1. Đo lại thân nhiệt chính xác bằng nhiệt kế kẹp nách hoặc nhiệt kế điện tử.
+  2. Uống đủ nước: Bổ sung nước lọc ấm, nước oresol từng ngụm nhỏ để tránh mất nước và rối loạn điện giải.
+  3. Lau mát cơ thể: Dùng khăn ấm (30-32°C) lau vùng trán, nách, bẹn. Tuyệt đối không dùng nước lạnh hoặc cồn.
+  4. Trang phục: Mặc quần áo thoáng mát, không đắp chăn quá dày.
+  5. Nếu sốt kèm lú lẫn, thở nhanh (>24 nhịp/phút), huyết áp tụt: Cần đưa đến cơ sở y tế ngay.
+
+## 3. XỬ TRÍ RỐI LOẠN NHỊP TIM VÀ CƠN HOẢNG LOẠN (CARDIAC ALERT & TACHYCARDIA)
+- Nguy cơ: Nhịp tim khi nghỉ ngơi vượt quá 100-110 BPM (hoặc trên 120 BPM) có thể cảnh báo rung nhĩ, thiếu máu cơ tim cấp hoặc suy hô hấp.
+- Quy trình ứng phó:
+  1. Đặt người bệnh ngồi nghỉ ngơi ở tư thế nửa nằm nửa ngồi (Fowler 45 độ), nới lỏng cổ áo và thắt lưng.
+  2. Hướng dẫn hít thở sâu, chậm và đều để điều hòa hệ thần kinh thực vật.
+  3. Kiểm tra các dấu hiệu cảnh báo đau ngực: Cảm giác đè nặng sau xương ức lan lên cằm hoặc cánh tay trái, khó thở, vã mồ hôi lạnh.
+  4. Nếu có dấu hiệu đau thắt ngực kéo dài trên 10 phút, lập tức gọi cấp cứu 115.

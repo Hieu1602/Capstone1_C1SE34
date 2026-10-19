@@ -29,6 +29,7 @@ def test_trigger_emergency_sos_notifies_household_and_returns_dial_target(monkey
     fake_user = SimpleNamespace(
         id="caller-id",
         full_name="Test Caller",
+        location_address="Saved home address",
     )
     fake_db = object()
     recipient = SimpleNamespace(fcm_token="family-device-token")
@@ -70,6 +71,7 @@ def test_trigger_emergency_sos_still_returns_dial_target_without_recipients(monk
     fake_user = SimpleNamespace(
         id="caller-id",
         full_name="Test Caller",
+        location_address=None,
     )
     monkeypatch.setattr(
         emergency,

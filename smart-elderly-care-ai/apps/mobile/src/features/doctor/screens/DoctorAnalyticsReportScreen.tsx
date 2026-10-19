@@ -6,13 +6,12 @@ import React, { useState, useEffect, useCallback, useMemo } from 'react';
 import { View, StyleSheet, ScrollView, TouchableOpacity, ActivityIndicator, StatusBar } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
-import { useRoute } from '@react-navigation/native';
+import { useRoute, useFocusEffect } from '@react-navigation/native';
 
 import { Colors } from '../../../theme/colors';
 import { useTheme } from '../../../store/useThemeStore';
 import { doctorApi } from '../../../services/api';
 import { LocalizedText, LocalizedTextInput } from '../../../i18n/LocalizedComponents';
-
 
 export interface PatientOption {
   id: string;
@@ -29,162 +28,83 @@ export interface PatientOption {
   lastUpdated?: string;
 }
 
-const DEFAULT_PATIENTS: PatientOption[] = [
-  {
-    id: 'e0000000-b4e1-4b08-b2d3-d949a0eb075c',
-    name: 'Cụ Nguyễn Văn An',
-    age: 78,
-    gender: 'Nam',
-    condition: 'Tăng huyết áp Đ2 • Thiếu máu cơ tim cục bộ • Tiền đình',
-    deviceId: 'BLE_BAND_001',
-    houseName: 'Nhà của tôi • 123 Hải Phòng, P. Thạch Thang, Đà Nẵng',
-    bloodPressure: '120/80 mmHg',
-    heartRate: 76,
-    spo2: 98,
-    healthStatus: 'NORMAL',
-    lastUpdated: 'Vừa xong',
-  },
-  {
-    id: 'e1111111-b4e1-4b08-b2d3-d949a0eb075c',
-    name: 'Cụ Trần Thị Mai',
-    age: 75,
-    gender: 'Nữ',
-    condition: 'Đái tháo đường T2 • Rối loạn tiền đình • Thoái hóa khớp',
-    deviceId: 'BLE_BAND_002',
-    houseName: 'Gia đình Chị Lan • 45 Lê Duẩn, Q. Hải Châu, Đà Nẵng',
-    bloodPressure: '135/85 mmHg',
-    heartRate: 88,
-    spo2: 94,
-    healthStatus: 'WARNING',
-    lastUpdated: '3 phút trước',
-  },
-  {
-    id: 'e2222222-b4e1-4b08-b2d3-d949a0eb075c',
-    name: 'Cụ Lê Văn Thành',
-    age: 82,
-    gender: 'Nam',
-    condition: 'Bệnh phổi tắc nghẽn (COPD) • Suy tim độ 1 • Loãng xương',
-    deviceId: 'BLE_BAND_003',
-    houseName: 'Phòng 204 • Trung tâm Y tế Dưỡng lão Hòa Vang',
-    bloodPressure: '142/90 mmHg',
-    heartRate: 84,
-    spo2: 91,
-    healthStatus: 'DANGER',
-    lastUpdated: '5 phút trước',
-  },
-  {
-    id: 'e3333333-b4e1-4b08-b2d3-d949a0eb075c',
-    name: 'Cụ Phạm Thị Cúc',
-    age: 71,
-    gender: 'Nữ',
-    condition: 'Loãng xương tuổi già • Nguy cơ té ngã nhẹ',
-    deviceId: 'BLE_BAND_004',
-    houseName: 'Căn hộ 802 • Tòa Indochina Riverside, Đà Nẵng',
-    bloodPressure: '118/76 mmHg',
-    heartRate: 72,
-    spo2: 99,
-    healthStatus: 'NORMAL',
-    lastUpdated: '10 phút trước',
-  },
-  {
-    id: 'e4444444-b4e1-4b08-b2d3-d949a0eb075c',
-    name: 'Cụ Hoàng Trọng Nghĩa',
-    age: 79,
-    gender: 'Nam',
-    condition: 'Di chứng tai biến nhẹ • Xơ vữa mạch máu não',
-    deviceId: 'BLE_BAND_005',
-    houseName: 'Nhà A3 • Khu dân cư Nam Cầu Tuyên Sơn, Đà Nẵng',
-    bloodPressure: '128/82 mmHg',
-    heartRate: 75,
-    spo2: 96,
-    healthStatus: 'NORMAL',
-    lastUpdated: '15 phút trước',
-  },
-];
-
 export default function DoctorAnalyticsReportScreen() {
   const insets = useSafeAreaInsets();
   const route = useRoute<any>();
   const { isDarkMode, colors } = useTheme();
 
-  // Danh sách bệnh nhân & bệnh nhân đang chọn
-  const [patients, setPatients] = useState<PatientOption[]>(DEFAULT_PATIENTS);
+  const [patients, setPatients] = useState<PatientOption[]>([]);
   const [selectedPatient, setSelectedPatient] = useState<PatientOption | null>(null);
-
-  // Bộ lọc tìm kiếm cho màn hình chọn bệnh nhân
   const [searchQuery, setSearchQuery] = useState('');
   const [filterStatus, setFilterStatus] = useState<'ALL' | 'WARNING' | 'NORMAL'>('ALL');
 
-  // Cấu hình phân tích báo cáo
   const [days, setDays] = useState<number>(7);
   const [chartMode, setChartMode] = useState<'HR' | 'SPO2' | 'STEPS'>('HR');
   const [loading, setLoading] = useState(false);
   const [analytics, setAnalytics] = useState<any>(null);
 
-  // 1. Tải danh sách bệnh nhân từ backend
+  // 1. Tải danh sách bệnh nhân
   const loadPatients = useCallback(async () => {
     try {
       const res = await doctorApi.getPatients();
-      if (res.data && Array.isArray(res.data) && res.data.length > 0) {
+      if (res.data && Array.isArray(res.data)) {
         const mapped: PatientOption[] = res.data.map((item: any) => ({
-          id: item.id,
-          name: item.name,
-          age: item.age || 75,
-          gender: item.gender || 'Nam',
-          condition: item.medical_history || 'Tăng huyết áp • Theo dõi',
-          deviceId: item.device_id || 'BLE_BAND_001',
-          houseName: item.house_name ? `${item.house_name} • ${item.house_address || ''}` : undefined,
-          bloodPressure: item.blood_pressure || '120/80 mmHg',
-          heartRate: item.heart_rate || 76,
-          spo2: item.spo2 || 98,
+          id: String(item.id),
+          name: item.name || 'Bệnh nhân',
+          age: item.age ?? 0,
+          gender: item.gender ?? '',
+          condition: item.medical_history ?? '',
+          deviceId: item.device_id ?? '',
+          houseName: item.house_name ? `${item.house_name}${item.house_address ? ` • ${item.house_address}` : ''}` : undefined,
+          bloodPressure: item.blood_pressure,
+          heartRate: item.heart_rate,
+          spo2: item.spo2,
           healthStatus: item.health_status || 'NORMAL',
-          lastUpdated: item.last_updated || 'Vừa xong',
+          lastUpdated: item.last_updated,
         }));
         setPatients(mapped);
       }
-    } catch {
-      // Giữ DEFAULT_PATIENTS
-    }
+    } catch {}
   }, []);
 
   useEffect(() => {
     loadPatients();
   }, [loadPatients]);
 
-  // 2. Tự động chọn bệnh nhân nếu được truyền patientId từ màn hình khác
+  useFocusEffect(
+    useCallback(() => {
+      loadPatients();
+    }, [loadPatients])
+  );
+
+  // 2. Tự động chọn bệnh nhân nếu có param truyền vào
   useEffect(() => {
     const paramId = route.params?.patientId;
-    if (paramId) {
-      const found = patients.find((p) => p.id === paramId);
-      if (found) {
-        setSelectedPatient(found);
-      }
+    if (paramId && patients.length > 0) {
+      const found = patients.find((p) => p.id === String(paramId));
+      if (found) setSelectedPatient(found);
     }
   }, [route.params?.patientId, patients]);
 
-  // 3. Tải dữ liệu phân tích sinh hiệu khi đã chọn bệnh nhân
+  // 3. Tải phân tích khi chọn bệnh nhân
   const fetchAnalytics = useCallback(async () => {
     if (!selectedPatient) return;
     try {
       setLoading(true);
       const res = await doctorApi.getAnalytics(selectedPatient.id, days);
-      if (res.data) {
-        setAnalytics(res.data);
-      }
+      if (res.data) setAnalytics(res.data);
     } catch {
-      // Fallback
+      setAnalytics(null);
     } finally {
       setLoading(false);
     }
   }, [selectedPatient, days]);
 
   useEffect(() => {
-    if (selectedPatient) {
-      fetchAnalytics();
-    }
+    if (selectedPatient) fetchAnalytics();
   }, [selectedPatient, fetchAnalytics]);
 
-  // Lọc danh sách bệnh nhân theo từ khóa và trạng thái
+  // Lọc bệnh nhân
   const filteredPatients = useMemo(() => {
     return patients.filter((p) => {
       const matchesSearch =
@@ -202,39 +122,19 @@ export default function DoctorAnalyticsReportScreen() {
   const warningCount = patients.filter((p) => p.healthStatus === 'WARNING' || p.healthStatus === 'DANGER').length;
   const normalCount = patients.filter((p) => p.healthStatus === 'NORMAL').length;
 
-  // Dữ liệu đồ thị
-  const trends = analytics?.daily_trends || [
-    { date: '23/09', avg_heart_rate: 76, min_heart_rate: 62, avg_spo2: 98, min_spo2: 95, bp: '120/80', steps: 2800 },
-    { date: '24/09', avg_heart_rate: 74, min_heart_rate: 60, avg_spo2: 97, min_spo2: 94, bp: '122/82', steps: 3100 },
-    { date: '25/09', avg_heart_rate: 78, min_heart_rate: 65, avg_spo2: 98, min_spo2: 96, bp: '124/84', steps: 2600 },
-    { date: '26/09', avg_heart_rate: 75, min_heart_rate: 61, avg_spo2: 98, min_spo2: 95, bp: '118/78', steps: 2900 },
-    { date: '27/09', avg_heart_rate: 82, min_heart_rate: 68, avg_spo2: 93, min_spo2: 92, bp: '135/88', steps: 1800 },
-    { date: '28/09', avg_heart_rate: 77, min_heart_rate: 63, avg_spo2: 97, min_spo2: 95, bp: '120/80', steps: 2750 },
-    { date: '29/09', avg_heart_rate: 76, min_heart_rate: 62, avg_spo2: 98, min_spo2: 96, bp: '122/80', steps: 2840 },
-  ];
-
-  const hrScore = analytics?.hr_stability_score || 94;
-  const isSafe = hrScore >= 85;
+  const trends = analytics?.daily_trends || [];
+  const hrScore = analytics?.hr_stability_score;
+  const isSafe = hrScore ? hrScore >= 85 : true;
 
   // =========================================================================
-  // GIAO DIỆN 1: MÀN HÌNH CHỌN BỆNH NHÂN (Khi chưa nhấn chọn bệnh nhân nào)
+  // GIAO DIỆN 1: DANH SÁCH CHỌN BỆNH NHÂN
   // =========================================================================
   if (!selectedPatient) {
     return (
       <View style={[styles.container, { backgroundColor: isDarkMode ? '#0F172A' : '#F8FAFC' }]}>
         <StatusBar barStyle={isDarkMode ? 'light-content' : 'dark-content'} />
 
-        {/* Header chọn bệnh nhân */}
-        <View
-          style={[
-            styles.header,
-            {
-              paddingTop: insets.top + 8,
-              backgroundColor: isDarkMode ? '#1E293B' : '#FFFFFF',
-              borderBottomColor: colors.border,
-            },
-          ]}
-        >
+        <View style={[styles.header, { paddingTop: insets.top + 8, backgroundColor: isDarkMode ? '#1E293B' : '#FFFFFF', borderBottomColor: colors.border }]}>
           <View style={styles.headerTopRow}>
             <View style={{ flex: 1 }}>
               <LocalizedText style={[styles.headerSubtitle, { color: isDarkMode ? '#94A3B8' : '#64748B' }]}>
@@ -244,24 +144,21 @@ export default function DoctorAnalyticsReportScreen() {
                 Báo Cáo & Phân Tích Sinh Hiệu
               </LocalizedText>
             </View>
-            <TouchableOpacity
-              style={[styles.reloadBtn, { backgroundColor: isDarkMode ? '#334155' : '#EEF2F6' }]}
-              onPress={loadPatients}
-            >
+            <TouchableOpacity style={[styles.reloadBtn, { backgroundColor: isDarkMode ? '#334155' : '#EEF2F6' }]} onPress={loadPatients}>
               <Ionicons name="sync-outline" size={18} color={Colors.primary} />
             </TouchableOpacity>
           </View>
 
-          <LocalizedText style={[styles.selectionGuideText, { color: isDarkMode ? '#CBD5E1' : '#475569' }]}>
-            👨‍⚕️ Nhấn vào bệnh nhân bên dưới để xem đồ thị phân tích sinh hiệu:
+          <LocalizedText style={[styles.guideText, { color: isDarkMode ? '#CBD5E1' : '#475569' }]}>
+            👨‍⚕️ Nhấn vào bệnh nhân để xem chi tiết biểu đồ sinh hiệu:
           </LocalizedText>
 
-          {/* Ô tìm kiếm bệnh nhân */}
+          {/* Ô tìm kiếm */}
           <View style={[styles.searchBox, { backgroundColor: isDarkMode ? '#334155' : '#F1F5F9', borderColor: colors.border }]}>
             <Ionicons name="search" size={17} color="#94A3B8" style={{ marginRight: 8 }} />
             <LocalizedTextInput
               style={[styles.searchInput, { color: colors.textPrimary }]}
-              placeholder="Tìm kiếm theo tên bệnh nhân, bệnh nền..."
+              placeholder="Tìm theo tên bệnh nhân, bệnh nền..."
               placeholderTextColor="#94A3B8"
               value={searchQuery}
               onChangeText={setSearchQuery}
@@ -273,39 +170,31 @@ export default function DoctorAnalyticsReportScreen() {
             )}
           </View>
 
-          {/* Tab lọc trạng thái sức khỏe */}
-          <View style={styles.statusFilterRow}>
-            <TouchableOpacity
-              style={[styles.statusFilterTab, filterStatus === 'ALL' && styles.statusFilterTabActive]}
-              onPress={() => setFilterStatus('ALL')}
-            >
-              <LocalizedText style={[styles.statusFilterText, filterStatus === 'ALL' && styles.statusFilterTextActive]}>
-                Tất cả ({patients.length})
-              </LocalizedText>
-            </TouchableOpacity>
-
-            <TouchableOpacity
-              style={[styles.statusFilterTab, filterStatus === 'WARNING' && styles.statusFilterTabActive]}
-              onPress={() => setFilterStatus('WARNING')}
-            >
-              <LocalizedText style={[styles.statusFilterText, filterStatus === 'WARNING' && styles.statusFilterTextActive]}>
-                Cần lưu ý ({warningCount})
-              </LocalizedText>
-            </TouchableOpacity>
-
-            <TouchableOpacity
-              style={[styles.statusFilterTab, filterStatus === 'NORMAL' && styles.statusFilterTabActive]}
-              onPress={() => setFilterStatus('NORMAL')}
-            >
-              <LocalizedText style={[styles.statusFilterText, filterStatus === 'NORMAL' && styles.statusFilterTextActive]}>
-                Ổn định ({normalCount})
-              </LocalizedText>
-            </TouchableOpacity>
+          {/* Bộ lọc trạng thái */}
+          <View style={styles.filterRow}>
+            {[
+              { key: 'ALL', label: `Tất cả (${patients.length})` },
+              { key: 'WARNING', label: `Cần lưu ý (${warningCount})` },
+              { key: 'NORMAL', label: `Ổn định (${normalCount})` },
+            ].map((tab) => {
+              const active = filterStatus === tab.key;
+              return (
+                <TouchableOpacity
+                  key={tab.key}
+                  style={[styles.filterChip, active && styles.filterChipActive]}
+                  onPress={() => setFilterStatus(tab.key as any)}
+                >
+                  <LocalizedText style={[styles.filterChipText, active && styles.filterChipTextActive]}>
+                    {tab.label}
+                  </LocalizedText>
+                </TouchableOpacity>
+              );
+            })}
           </View>
         </View>
 
         {/* Danh sách thẻ bệnh nhân */}
-        <ScrollView contentContainerStyle={styles.patientListContainer}>
+        <ScrollView contentContainerStyle={styles.listContainer}>
           {filteredPatients.length === 0 ? (
             <View style={styles.emptyBox}>
               <Ionicons name="search-outline" size={44} color="#94A3B8" />
@@ -321,14 +210,13 @@ export default function DoctorAnalyticsReportScreen() {
               const statusBg = isDanger ? '#FEE2E2' : isWarn ? '#FEF3C7' : '#D1FAE5';
               const statusText = isDanger ? '#DC2626' : isWarn ? '#D97706' : '#059669';
               const statusLabel = isDanger ? 'NGUY CƠ' : isWarn ? 'CHÚ Ý' : 'ỔN ĐỊNH';
-
-              const initialLetter = p.name.trim().split(/\s+/).slice(-1)[0][0]?.toUpperCase() || 'A';
+              const initial = p.name.trim().split(/\s+/).slice(-1)[0][0]?.toUpperCase() || 'A';
 
               return (
                 <TouchableOpacity
                   key={p.id}
                   style={[
-                    styles.patientRosterCard,
+                    styles.rosterCard,
                     {
                       backgroundColor: isDarkMode ? '#1E293B' : '#FFFFFF',
                       borderColor: isDanger ? '#EF4444' : isWarn ? '#F59E0B' : colors.border,
@@ -339,7 +227,7 @@ export default function DoctorAnalyticsReportScreen() {
                 >
                   <View style={styles.cardHeaderRow}>
                     <View style={[styles.avatarCircle, { backgroundColor: isDarkMode ? '#334155' : '#EFF6FF', borderColor: statusColor }]}>
-                      <LocalizedText style={[styles.avatarInitial, { color: Colors.primary }]}>{initialLetter}</LocalizedText>
+                      <LocalizedText style={[styles.avatarInitial, { color: Colors.primary }]}>{initial}</LocalizedText>
                     </View>
 
                     <View style={{ flex: 1, marginLeft: 12 }}>
@@ -347,15 +235,15 @@ export default function DoctorAnalyticsReportScreen() {
                         <LocalizedText style={[styles.cardPatientName, { color: colors.textPrimary }]} numberOfLines={1}>
                           {p.name}
                         </LocalizedText>
-                        <View style={[styles.rosterStatusBadge, { backgroundColor: statusBg }]}>
-                          <LocalizedText style={[styles.rosterStatusBadgeText, { color: statusText }]}>
+                        <View style={[styles.statusBadge, { backgroundColor: statusBg }]}>
+                          <LocalizedText style={[styles.statusBadgeText, { color: statusText }]}>
                             {statusLabel}
                           </LocalizedText>
                         </View>
                       </View>
 
-                      <LocalizedText style={[styles.cardPatientMeta, { color: isDarkMode ? '#94A3B8' : '#64748B' }]}>
-                        {p.age} tuổi • {p.gender} • Thiết bị: {p.deviceId}
+                      <LocalizedText style={[styles.cardMeta, { color: isDarkMode ? '#94A3B8' : '#64748B' }]}>
+                        {p.age ? `${p.age} tuổi` : ''}{p.age && p.gender ? ' • ' : ''}{p.gender}{p.deviceId ? ` • Thiết bị: ${p.deviceId}` : ''}
                       </LocalizedText>
                       {p.houseName ? (
                         <LocalizedText style={[styles.cardAddress, { color: isDarkMode ? '#CBD5E1' : '#475569' }]} numberOfLines={1}>
@@ -365,45 +253,43 @@ export default function DoctorAnalyticsReportScreen() {
                     </View>
                   </View>
 
-                  {/* Bệnh nền tóm tắt */}
-                  <View style={[styles.cardConditionRow, { backgroundColor: isDarkMode ? '#0F172A' : '#F8FAFC' }]}>
-                    <Ionicons name="medical" size={13} color="#EF4444" style={{ marginRight: 5 }} />
-                    <LocalizedText style={[styles.cardConditionText, { color: isDarkMode ? '#CBD5E1' : '#334155' }]} numberOfLines={1}>
-                      {p.condition}
-                    </LocalizedText>
-                  </View>
+                  {p.condition ? (
+                    <View style={[styles.cardConditionRow, { backgroundColor: isDarkMode ? '#0F172A' : '#F8FAFC' }]}>
+                      <Ionicons name="medical" size={13} color="#EF4444" style={{ marginRight: 5 }} />
+                      <LocalizedText style={[styles.cardConditionText, { color: isDarkMode ? '#CBD5E1' : '#334155' }]} numberOfLines={1}>
+                        {p.condition}
+                      </LocalizedText>
+                    </View>
+                  ) : null}
 
-                  {/* 3 Chỉ số sinh hiệu tức thời */}
-                  <View style={styles.miniVitalsRow}>
-                    <View style={[styles.miniVitalItem, { backgroundColor: isDarkMode ? '#0F172A' : '#F1F5F9' }]}>
+                  {/* 3 Chỉ số sinh hiệu thực tế */}
+                  <View style={styles.vitalsRow}>
+                    <View style={[styles.vitalItem, { backgroundColor: isDarkMode ? '#0F172A' : '#F1F5F9' }]}>
                       <Ionicons name="heart" size={13} color="#EF4444" style={{ marginRight: 4 }} />
-                      <LocalizedText style={[styles.miniVitalValue, { color: colors.textPrimary }]}>
-                        {p.heartRate || 76} <LocalizedText style={styles.miniVitalUnit}>bpm</LocalizedText>
+                      <LocalizedText style={[styles.vitalVal, { color: colors.textPrimary }]}>
+                        {p.heartRate ? `${p.heartRate} bpm` : '--'}
                       </LocalizedText>
                     </View>
 
-                    <View style={[styles.miniVitalItem, { backgroundColor: isDarkMode ? '#0F172A' : '#F1F5F9' }]}>
+                    <View style={[styles.vitalItem, { backgroundColor: isDarkMode ? '#0F172A' : '#F1F5F9' }]}>
                       <Ionicons name="water" size={13} color="#0284C7" style={{ marginRight: 4 }} />
-                      <LocalizedText style={[styles.miniVitalValue, { color: colors.textPrimary }]}>
-                        {p.spo2 || 98}% <LocalizedText style={styles.miniVitalUnit}>SpO₂</LocalizedText>
+                      <LocalizedText style={[styles.vitalVal, { color: colors.textPrimary }]}>
+                        {p.spo2 ? `${p.spo2}% SpO₂` : '--'}
                       </LocalizedText>
                     </View>
 
-                    <View style={[styles.miniVitalItem, { backgroundColor: isDarkMode ? '#0F172A' : '#F1F5F9' }]}>
+                    <View style={[styles.vitalItem, { backgroundColor: isDarkMode ? '#0F172A' : '#F1F5F9' }]}>
                       <Ionicons name="pulse" size={13} color="#10B981" style={{ marginRight: 4 }} />
-                      <LocalizedText style={[styles.miniVitalValue, { color: colors.textPrimary }]}>
-                        {p.bloodPressure || '120/80'}
+                      <LocalizedText style={[styles.vitalVal, { color: colors.textPrimary }]}>
+                        {p.bloodPressure || '--'}
                       </LocalizedText>
                     </View>
                   </View>
 
-                  {/* Nút hành động mở báo cáo */}
-                  <View style={styles.cardActionFooter}>
-                    <View style={styles.actionPromptBtn}>
-                      <Ionicons name="bar-chart-outline" size={15} color="#0284C7" style={{ marginRight: 6 }} />
-                      <LocalizedText style={styles.actionPromptBtnText}>Nhấn để xem phân tích diễn tiến sinh hiệu</LocalizedText>
-                      <Ionicons name="arrow-forward" size={14} color="#0284C7" style={{ marginLeft: 4 }} />
-                    </View>
+                  <View style={styles.cardFooter}>
+                    <Ionicons name="bar-chart-outline" size={14} color="#0284C7" style={{ marginRight: 4 }} />
+                    <LocalizedText style={styles.cardActionText}>Xem phân tích sinh hiệu</LocalizedText>
+                    <Ionicons name="arrow-forward" size={13} color="#0284C7" style={{ marginLeft: 4 }} />
                   </View>
                 </TouchableOpacity>
               );
@@ -415,103 +301,55 @@ export default function DoctorAnalyticsReportScreen() {
   }
 
   // =========================================================================
-  // GIAO DIỆN 2: CHI TIẾT BÁO CÁO CỦA BỆNH NHÂN ĐÃ ĐƯỢC CHỌN
+  // GIAO DIỆN 2: CHI TIẾT BÁO CÁO BỆNH NHÂN ĐƯỢC CHỌN
   // =========================================================================
   return (
     <View style={[styles.container, { backgroundColor: isDarkMode ? '#0F172A' : '#F8FAFC' }]}>
       <StatusBar barStyle={isDarkMode ? 'light-content' : 'dark-content'} />
 
-      {/* TOP HEADER CHI TIẾT BÁO CÁO */}
-      <View
-        style={[
-          styles.header,
-          {
-            paddingTop: insets.top + 8,
-            backgroundColor: isDarkMode ? '#1E293B' : '#FFFFFF',
-            borderBottomColor: colors.border,
-          },
-        ]}
-      >
+      <View style={[styles.header, { paddingTop: insets.top + 8, backgroundColor: isDarkMode ? '#1E293B' : '#FFFFFF', borderBottomColor: colors.border }]}>
         <View style={styles.detailHeaderTopRow}>
-          {/* Nút quay lại danh sách chọn bệnh nhân */}
           <TouchableOpacity
-            style={[styles.backToPatientsBtn, { backgroundColor: isDarkMode ? '#334155' : '#EEF2F6' }]}
+            style={[styles.backBtn, { backgroundColor: isDarkMode ? '#334155' : '#EEF2F6' }]}
             onPress={() => setSelectedPatient(null)}
           >
             <Ionicons name="arrow-back" size={18} color="#0284C7" style={{ marginRight: 4 }} />
-            <LocalizedText style={styles.backToPatientsText}>Đổi bệnh nhân</LocalizedText>
+            <LocalizedText style={styles.backBtnText}>Đổi bệnh nhân</LocalizedText>
           </TouchableOpacity>
 
-          <TouchableOpacity
-            style={[styles.reloadBtn, { backgroundColor: isDarkMode ? '#334155' : '#EEF2F6' }]}
-            onPress={fetchAnalytics}
-          >
+          <TouchableOpacity style={[styles.reloadBtn, { backgroundColor: isDarkMode ? '#334155' : '#EEF2F6' }]} onPress={fetchAnalytics}>
             <Ionicons name="sync-outline" size={18} color={Colors.primary} />
           </TouchableOpacity>
         </View>
 
-        {/* Card thông tin bệnh nhân đang xem */}
-        <View style={[styles.activePatientBanner, { backgroundColor: isDarkMode ? '#0F172A' : '#F1F5F9', borderColor: colors.border }]}>
-          <View style={styles.activePatientAvatar}>
-            <LocalizedText style={styles.activePatientAvatarText}>
+        {/* Thông tin bệnh nhân đang xem */}
+        <View style={[styles.activePatientCard, { backgroundColor: isDarkMode ? '#0F172A' : '#F1F5F9', borderColor: colors.border }]}>
+          <View style={styles.activeAvatar}>
+            <LocalizedText style={styles.activeAvatarText}>
               {selectedPatient.name.trim().split(/\s+/).slice(-1)[0][0]?.toUpperCase() || 'A'}
             </LocalizedText>
           </View>
           <View style={{ flex: 1, marginLeft: 10 }}>
-            <LocalizedText style={[styles.activePatientName, { color: colors.textPrimary }]} numberOfLines={1}>
+            <LocalizedText style={[styles.activeName, { color: colors.textPrimary }]} numberOfLines={1}>
               {selectedPatient.name}
             </LocalizedText>
-            <LocalizedText style={[styles.activePatientSub, { color: isDarkMode ? '#94A3B8' : '#64748B' }]} numberOfLines={1}>
-              {selectedPatient.age} tuổi • {selectedPatient.gender} • {selectedPatient.condition}
+            <LocalizedText style={[styles.activeSub, { color: isDarkMode ? '#94A3B8' : '#64748B' }]} numberOfLines={1}>
+              {selectedPatient.age ? `${selectedPatient.age} tuổi` : ''}{selectedPatient.gender ? ` • ${selectedPatient.gender}` : ''}{selectedPatient.condition ? ` • ${selectedPatient.condition}` : ''}
             </LocalizedText>
           </View>
         </View>
 
-        {/* Thanh chọn nhanh bệnh nhân khác (Horizontal Switcher) */}
-        <ScrollView horizontal showsHorizontalScrollIndicator={false} style={styles.patientSelectorRow}>
-          {patients.map((p) => {
-            const active = selectedPatient.id === p.id;
-            return (
-              <TouchableOpacity
-                key={p.id}
-                onPress={() => setSelectedPatient(p)}
-                style={[
-                  styles.patientPill,
-                  active
-                    ? { backgroundColor: '#0284C7', borderColor: '#0284C7' }
-                    : { backgroundColor: isDarkMode ? '#334155' : '#F1F5F9', borderColor: colors.border },
-                ]}
-                activeOpacity={0.8}
-              >
-                <LocalizedText style={[styles.patientPillName, active ? { color: '#FFFFFF' } : { color: colors.textPrimary }]}>
-                  {p.name.split(' ').slice(-1)[0]}
-                </LocalizedText>
-              </TouchableOpacity>
-            );
-          })}
-        </ScrollView>
-
-        {/* BỘ LỌC CHU KỲ NGÀY */}
-        <View style={styles.daysFilterRow}>
+        {/* Lựa chọn ngày chu kỳ */}
+        <View style={styles.daysRow}>
           {[7, 14, 30].map((d) => {
             const active = days === d;
             return (
               <TouchableOpacity
                 key={d}
                 onPress={() => setDays(d)}
-                style={[
-                  styles.dayChip,
-                  active
-                    ? { backgroundColor: Colors.primary }
-                    : { backgroundColor: isDarkMode ? '#334155' : '#EEF2F6' },
-                ]}
+                style={[styles.dayChip, active ? { backgroundColor: Colors.primary } : { backgroundColor: isDarkMode ? '#334155' : '#EEF2F6' }]}
               >
-                <LocalizedText
-                  style={[
-                    styles.dayChipText,
-                    active ? { color: '#FFFFFF', fontWeight: '700' } : { color: isDarkMode ? '#CBD5E1' : '#64748B' },
-                  ]}
-                >
+                <LocalizedText style={[styles.dayChipText, active ? { color: '#FFFFFF', fontWeight: '700' } : { color: isDarkMode ? '#CBD5E1' : '#64748B' }]}>
                   {d} ngày qua
                 </LocalizedText>
               </TouchableOpacity>
@@ -520,113 +358,78 @@ export default function DoctorAnalyticsReportScreen() {
         </View>
       </View>
 
-      <ScrollView contentContainerStyle={styles.scrollContent}>
-        {loading && (
-          <ActivityIndicator size="small" color={Colors.primary} style={{ marginVertical: 10 }} />
-        )}
+      <ScrollView contentContainerStyle={styles.detailScrollContent}>
+        {loading && <ActivityIndicator size="small" color={Colors.primary} style={{ marginVertical: 10 }} />}
 
-        {/* THẺ ĐÁNH GIÁ TỔNG QUAN & ĐIỂM SỨC KHỎE LÂM SÀNG */}
-        <View
-          style={[
-            styles.assessmentCard,
-            { backgroundColor: isDarkMode ? '#1E293B' : '#FFFFFF', borderColor: isSafe ? '#10B98144' : '#F59E0B44' },
-          ]}
-        >
+        {/* Thẻ đánh giá lâm sàng */}
+        <View style={[styles.assessmentCard, { backgroundColor: isDarkMode ? '#1E293B' : '#FFFFFF', borderColor: isSafe ? '#10B98144' : '#F59E0B44' }]}>
           <View style={styles.scoreRow}>
             <View style={[styles.scoreCircle, { backgroundColor: isSafe ? '#ECFDF5' : '#FFFBEB', borderColor: isSafe ? '#10B981' : '#F59E0B' }]}>
-              <LocalizedText style={[styles.scoreNumber, { color: isSafe ? '#059669' : '#D97706' }]}>{hrScore}</LocalizedText>
+              <LocalizedText style={[styles.scoreNumber, { color: isSafe ? '#059669' : '#D97706' }]}>{hrScore ?? '--'}</LocalizedText>
               <LocalizedText style={styles.scoreMax}>/100</LocalizedText>
             </View>
             <View style={{ flex: 1, marginLeft: 14 }}>
               <View style={[styles.statusTag, { backgroundColor: isSafe ? '#D1FAE5' : '#FEF3C7' }]}>
                 <LocalizedText style={[styles.statusTagText, { color: isSafe ? '#059669' : '#D97706' }]}>
-                  {isSafe ? 'SINH HIỆU ỔN ĐỊNH CAO' : 'CẦN LƯU Ý THEO DÕI'}
+                  {hrScore ? (isSafe ? 'SINH HIỆU ỔN ĐỊNH' : 'CẦN LƯU Ý THEO DÕI') : 'ĐANG THEO DÕI'}
                 </LocalizedText>
               </View>
-              <LocalizedText style={[styles.assessmentTitle, { color: colors.textPrimary }]}>
-                Nhận định Bác sĩ & AI Hub
-              </LocalizedText>
+              <LocalizedText style={[styles.assessmentTitle, { color: colors.textPrimary }]}>Nhận định Y Khoa & AI</LocalizedText>
               <LocalizedText style={[styles.assessmentDesc, { color: isDarkMode ? '#94A3B8' : '#64748B' }]}>
-                Bệnh nhân {selectedPatient.name} đáp ứng thuốc tốt. Không ghi nhận cơn rung nhĩ hay té ngã trong {days} ngày qua.
+                {analytics?.ai_summary || `Đang theo dõi dữ liệu sinh hiệu thực tế của bệnh nhân ${selectedPatient.name}.`}
               </LocalizedText>
             </View>
           </View>
         </View>
 
-        {/* BỘ 4 THẺ CHỈ SỐ THỐNG KÊ LÂM SÀNG */}
+        {/* 4 Chỉ số thống kê */}
         <View style={styles.metricsGrid}>
-          {/* Nhịp tim */}
           <View style={[styles.statCard, { backgroundColor: isDarkMode ? '#1E293B' : '#FFFFFF', borderColor: '#EF444433' }]}>
-            <View style={styles.statCardTop}>
-              <Ionicons name="heart" size={18} color="#EF4444" />
-              <LocalizedText style={styles.statUnit}>bpm</LocalizedText>
-            </View>
-            <LocalizedText style={[styles.statVal, { color: colors.textPrimary }]}>
-              {analytics?.avg_heart_rate || selectedPatient.heartRate || 75.6}
-            </LocalizedText>
+            <View style={styles.statTop}><Ionicons name="heart" size={16} color="#EF4444" /><LocalizedText style={styles.statUnit}>bpm</LocalizedText></View>
+            <LocalizedText style={[styles.statVal, { color: colors.textPrimary }]}>{analytics?.avg_heart_rate ?? selectedPatient.heartRate ?? '--'}</LocalizedText>
             <LocalizedText style={styles.statLbl}>Nhịp tim TB</LocalizedText>
-            <LocalizedText style={styles.statSubRange}>Dao động: {analytics?.min_heart_rate || 60} - {analytics?.max_heart_rate || 98}</LocalizedText>
+            <LocalizedText style={styles.statSubRange}>Dao động: {analytics?.min_heart_rate ?? '--'} - {analytics?.max_heart_rate ?? '--'}</LocalizedText>
           </View>
 
-          {/* SpO2 */}
           <View style={[styles.statCard, { backgroundColor: isDarkMode ? '#1E293B' : '#FFFFFF', borderColor: '#0284C733' }]}>
-            <View style={styles.statCardTop}>
-              <Ionicons name="water" size={18} color="#0284C7" />
-              <LocalizedText style={styles.statUnit}>%</LocalizedText>
-            </View>
-            <LocalizedText style={[styles.statVal, { color: colors.textPrimary }]}>
-              {analytics?.avg_spo2 || selectedPatient.spo2 || 97.8}
-            </LocalizedText>
+            <View style={styles.statTop}><Ionicons name="water" size={16} color="#0284C7" /><LocalizedText style={styles.statUnit}>%</LocalizedText></View>
+            <LocalizedText style={[styles.statVal, { color: colors.textPrimary }]}>{analytics?.avg_spo2 ?? selectedPatient.spo2 ?? '--'}</LocalizedText>
             <LocalizedText style={styles.statLbl}>SpO₂ TB</LocalizedText>
-            <LocalizedText style={[styles.statSubRange, { color: '#059669' }]}>Thấp nhất: {analytics?.min_spo2 || 92}%</LocalizedText>
+            <LocalizedText style={[styles.statSubRange, { color: '#059669' }]}>Thấp nhất: {analytics?.min_spo2 ? `${analytics.min_spo2}%` : '--'}</LocalizedText>
           </View>
         </View>
 
         <View style={styles.metricsGrid}>
-          {/* Huyết áp */}
           <View style={[styles.statCard, { backgroundColor: isDarkMode ? '#1E293B' : '#FFFFFF', borderColor: '#10B98133' }]}>
-            <View style={styles.statCardTop}>
-              <Ionicons name="pulse" size={18} color="#10B981" />
-              <LocalizedText style={styles.statUnit}>mmHg</LocalizedText>
-            </View>
-            <LocalizedText style={[styles.statVal, { color: '#10B981' }]}>{selectedPatient.bloodPressure || '120/80'}</LocalizedText>
-            <LocalizedText style={styles.statLbl}>Huyết áp TB</LocalizedText>
-            <LocalizedText style={styles.statSubRange}>Cao nhất: 135/88</LocalizedText>
+            <View style={styles.statTop}><Ionicons name="pulse" size={16} color="#10B981" /><LocalizedText style={styles.statUnit}>mmHg</LocalizedText></View>
+            <LocalizedText style={[styles.statVal, { color: '#10B981' }]}>{selectedPatient.bloodPressure || '--'}</LocalizedText>
+            <LocalizedText style={styles.statLbl}>Huyết áp</LocalizedText>
+            <LocalizedText style={styles.statSubRange}>{selectedPatient.bloodPressure ? `Lần đo gần nhất` : 'Chưa có ghi nhận'}</LocalizedText>
           </View>
 
-          {/* Nhiệt độ */}
           <View style={[styles.statCard, { backgroundColor: isDarkMode ? '#1E293B' : '#FFFFFF', borderColor: '#F59E0B33' }]}>
-            <View style={styles.statCardTop}>
-              <Ionicons name="thermometer" size={18} color="#F59E0B" />
-              <LocalizedText style={styles.statUnit}>°C</LocalizedText>
-            </View>
-            <LocalizedText style={[styles.statVal, { color: '#D97706' }]}>
-              {analytics?.avg_skin_temp || 36.6}
-            </LocalizedText>
+            <View style={styles.statTop}><Ionicons name="thermometer" size={16} color="#F59E0B" /><LocalizedText style={styles.statUnit}>°C</LocalizedText></View>
+            <LocalizedText style={[styles.statVal, { color: '#D97706' }]}>{analytics?.avg_skin_temp ? `${analytics.avg_skin_temp}°C` : '--'}</LocalizedText>
             <LocalizedText style={styles.statLbl}>Nhiệt độ da</LocalizedText>
-            <LocalizedText style={styles.statSubRange}>Tụt SpO₂: {analytics?.spo2_drops_count || 1} lần</LocalizedText>
+            <LocalizedText style={styles.statSubRange}>Tụt SpO₂: {analytics?.spo2_drops_count ?? 0} lần</LocalizedText>
           </View>
         </View>
 
-        {/* BIỂU ĐỒ DIỄN TIẾN TRỰC QUAN THEO NGÀY */}
+        {/* Biểu đồ diễn tiến */}
         <View style={[styles.chartCard, { backgroundColor: isDarkMode ? '#1E293B' : '#FFFFFF', borderColor: colors.border }]}>
           <View style={styles.chartHeader}>
-            <View>
-              <LocalizedText style={[styles.chartTitle, { color: colors.textPrimary }]}>
-                Diễn Tiến Lâm Sàng Từng Ngày
-              </LocalizedText>
-              <LocalizedText style={[styles.chartSub, { color: isDarkMode ? '#94A3B8' : '#64748B' }]}>
-                Đo liên tục 24/7 từ Smartband ({selectedPatient.deviceId}) qua Edge Hub
-              </LocalizedText>
-            </View>
+            <LocalizedText style={[styles.chartTitle, { color: colors.textPrimary }]}>Diễn Tiến Lâm Sàng Từng Ngày</LocalizedText>
+            <LocalizedText style={[styles.chartSub, { color: isDarkMode ? '#94A3B8' : '#64748B' }]}>
+              {selectedPatient.deviceId ? `Đo tự động qua Smartband (${selectedPatient.deviceId})` : 'Đo tự động qua thiết bị giám sát'}
+            </LocalizedText>
           </View>
 
-          {/* Chuyển đổi tab đồ thị */}
+          {/* Tab chọn loại chỉ số biểu đồ */}
           <View style={styles.chartTabRow}>
             {[
               { key: 'HR', label: 'Nhịp tim (bpm)' },
-              { key: 'SPO2', label: 'Oxy máu SpO₂ (%)' },
-              { key: 'STEPS', label: 'Vận động (bước)' },
+              { key: 'SPO2', label: 'SpO₂ (%)' },
+              { key: 'STEPS', label: 'Vận động' },
             ].map((tab) => {
               const active = chartMode === tab.key;
               return (
@@ -643,51 +446,55 @@ export default function DoctorAnalyticsReportScreen() {
             })}
           </View>
 
-          {/* Hàng biểu đồ thanh */}
           <View style={styles.barsContainer}>
-            {trends.map((item: any, idx: number) => {
-              let barPercent = 50;
-              let barColor = '#0284C7';
-              let displayVal = `${item.avg_heart_rate} bpm`;
-              let isAlert = false;
+            {trends.length === 0 ? (
+              <View style={styles.noDataBox}>
+                <Ionicons name="stats-chart-outline" size={28} color="#94A3B8" />
+                <LocalizedText style={styles.noDataText}>Chưa có dữ liệu sinh hiệu chuỗi thời gian</LocalizedText>
+              </View>
+            ) : (
+              trends.map((item: any, idx: number) => {
+                let barPercent = 50;
+                let barColor = '#0284C7';
+                let displayVal = `${item.avg_heart_rate} bpm`;
+                let isAlert = false;
 
-              if (chartMode === 'HR') {
-                barPercent = Math.min(Math.max(((item.avg_heart_rate - 50) / 60) * 100, 15), 100);
-                barColor = item.avg_heart_rate > 80 ? '#F59E0B' : '#0284C7';
-                displayVal = `${item.avg_heart_rate} bpm`;
-                isAlert = item.avg_heart_rate > 80;
-              } else if (chartMode === 'SPO2') {
-                barPercent = Math.min(Math.max(((item.avg_spo2 - 85) / 15) * 100, 15), 100);
-                barColor = item.min_spo2 < 94 ? '#EF4444' : '#10B981';
-                displayVal = `${item.avg_spo2}%`;
-                isAlert = item.min_spo2 < 94;
-              } else {
-                barPercent = Math.min(Math.max((item.steps / 3500) * 100, 15), 100);
-                barColor = '#8B5CF6';
-                displayVal = `${item.steps}`;
-              }
+                if (chartMode === 'HR') {
+                  barPercent = Math.min(Math.max(((item.avg_heart_rate - 50) / 60) * 100, 15), 100);
+                  barColor = item.avg_heart_rate > 80 ? '#F59E0B' : '#0284C7';
+                  displayVal = `${item.avg_heart_rate} bpm`;
+                  isAlert = item.avg_heart_rate > 80;
+                } else if (chartMode === 'SPO2') {
+                  barPercent = Math.min(Math.max(((item.avg_spo2 - 85) / 15) * 100, 15), 100);
+                  barColor = item.min_spo2 < 94 ? '#EF4444' : '#10B981';
+                  displayVal = `${item.avg_spo2}%`;
+                  isAlert = item.min_spo2 < 94;
+                } else {
+                  barPercent = Math.min(Math.max((item.steps / 3500) * 100, 15), 100);
+                  barColor = '#8B5CF6';
+                  displayVal = `${item.steps}`;
+                }
 
-              return (
-                <View key={idx} style={styles.trendRow}>
-                  <LocalizedText style={[styles.trendDate, { color: isDarkMode ? '#CBD5E1' : '#475569' }]}>
-                    {item.date}
-                  </LocalizedText>
-                  <View style={styles.barTrack}>
-                    <View style={[styles.barFill, { width: `${barPercent}%`, backgroundColor: barColor }]} />
+                return (
+                  <View key={idx} style={styles.trendRow}>
+                    <LocalizedText style={[styles.trendDate, { color: isDarkMode ? '#CBD5E1' : '#475569' }]}>{item.date}</LocalizedText>
+                    <View style={styles.barTrack}>
+                      <View style={[styles.barFill, { width: `${barPercent}%`, backgroundColor: barColor }]} />
+                    </View>
+                    <LocalizedText style={[styles.barValueText, { color: colors.textPrimary }]}>{displayVal}</LocalizedText>
+                    <View style={[styles.statusTagMini, { backgroundColor: isAlert ? '#FEE2E2' : '#ECFDF5' }]}>
+                      <LocalizedText style={[styles.statusTagMiniText, { color: isAlert ? '#DC2626' : '#059669' }]}>
+                        {isAlert ? 'Lưu ý' : 'Chuẩn'}
+                      </LocalizedText>
+                    </View>
                   </View>
-                  <LocalizedText style={[styles.barValueText, { color: colors.textPrimary }]}>{displayVal}</LocalizedText>
-                  <View style={[styles.statusTagMini, isAlert ? { backgroundColor: '#FEE2E2' } : { backgroundColor: '#ECFDF5' }]}>
-                    <LocalizedText style={[styles.statusTagMiniText, isAlert ? { color: '#DC2626' } : { color: '#059669' }]}>
-                      {isAlert ? 'Lưu ý' : 'Chuẩn'}
-                    </LocalizedText>
-                  </View>
-                </View>
-              );
-            })}
+                );
+              })
+            )}
           </View>
         </View>
 
-        {/* BẢNG TỔNG HỢP CHI TIẾT */}
+        {/* Bảng nhật ký sinh hiệu */}
         <View style={[styles.tableCard, { backgroundColor: isDarkMode ? '#1E293B' : '#FFFFFF', borderColor: colors.border }]}>
           <LocalizedText style={[styles.tableTitle, { color: colors.textPrimary }]}>Nhật Ký Chỉ Số Sinh Hiệu</LocalizedText>
           <View style={styles.tableHeaderRow}>
@@ -696,14 +503,20 @@ export default function DoctorAnalyticsReportScreen() {
             <LocalizedText style={[styles.tableColHeader, { flex: 1.2 }]}>SpO₂</LocalizedText>
             <LocalizedText style={[styles.tableColHeader, { flex: 1.5 }]}>Huyết áp</LocalizedText>
           </View>
-          {trends.slice(0, 5).map((row: any, i: number) => (
-            <View key={i} style={[styles.tableRow, i % 2 === 1 && { backgroundColor: isDarkMode ? '#0F172A44' : '#F8FAFC' }]}>
-              <LocalizedText style={[styles.tableCell, { flex: 1.2, fontWeight: '700', color: colors.textPrimary }]}>{row.date}</LocalizedText>
-              <LocalizedText style={[styles.tableCell, { flex: 1.2, color: '#EF4444' }]}>{row.avg_heart_rate} bpm</LocalizedText>
-              <LocalizedText style={[styles.tableCell, { flex: 1.2, color: row.min_spo2 < 94 ? '#DC2626' : '#0284C7' }]}>{row.avg_spo2}%</LocalizedText>
-              <LocalizedText style={[styles.tableCell, { flex: 1.5, color: '#10B981' }]}>{row.bp || '120/80'}</LocalizedText>
+          {trends.length === 0 ? (
+            <View style={{ paddingVertical: 14, alignItems: 'center' }}>
+              <LocalizedText style={{ fontSize: 13, color: '#94A3B8' }}>Chưa có dữ liệu nhật ký đo</LocalizedText>
             </View>
-          ))}
+          ) : (
+            trends.slice(0, 5).map((row: any, i: number) => (
+              <View key={i} style={[styles.tableRow, i % 2 === 1 && { backgroundColor: isDarkMode ? '#0F172A44' : '#F8FAFC' }]}>
+                <LocalizedText style={[styles.tableCell, { flex: 1.2, fontWeight: '700', color: colors.textPrimary }]}>{row.date}</LocalizedText>
+                <LocalizedText style={[styles.tableCell, { flex: 1.2, color: '#EF4444' }]}>{row.avg_heart_rate ? `${row.avg_heart_rate} bpm` : '--'}</LocalizedText>
+                <LocalizedText style={[styles.tableCell, { flex: 1.2, color: row.min_spo2 && row.min_spo2 < 94 ? '#DC2626' : '#0284C7' }]}>{row.avg_spo2 ? `${row.avg_spo2}%` : '--'}</LocalizedText>
+                <LocalizedText style={[styles.tableCell, { flex: 1.5, color: '#10B981' }]}>{row.bp || '--'}</LocalizedText>
+              </View>
+            ))
+          )}
         </View>
       </ScrollView>
     </View>
@@ -732,13 +545,7 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
     alignItems: 'center',
   },
-  selectionGuideText: {
-    fontSize: 12.5,
-    marginBottom: 10,
-    fontWeight: '500',
-  },
-
-  // Search box
+  guideText: { fontSize: 12.5, marginBottom: 10, fontWeight: '500' },
   searchBox: {
     flexDirection: 'row',
     alignItems: 'center',
@@ -748,66 +555,23 @@ const styles = StyleSheet.create({
     borderWidth: 1,
     marginBottom: 10,
   },
-  searchInput: {
-    flex: 1,
-    fontSize: 13,
-    paddingVertical: 0,
-  },
-
-  // Status Filter Row
-  statusFilterRow: {
-    flexDirection: 'row',
-    gap: 8,
-  },
-  statusFilterTab: {
-    paddingHorizontal: 12,
-    paddingVertical: 6,
-    borderRadius: 18,
-    backgroundColor: '#F1F5F9',
-  },
-  statusFilterTabActive: {
-    backgroundColor: '#0284C7',
-  },
-  statusFilterText: {
-    fontSize: 12,
-    fontWeight: '600',
-    color: '#64748B',
-  },
-  statusFilterTextActive: {
-    color: '#FFFFFF',
-    fontWeight: '700',
-  },
-
-  // Patient Roster List
-  patientListContainer: {
-    padding: 16,
-    paddingBottom: 95,
-  },
-  emptyBox: {
-    alignItems: 'center',
-    justifyContent: 'center',
-    paddingVertical: 60,
-  },
-  emptyText: {
-    fontSize: 14,
-    marginTop: 10,
-    textAlign: 'center',
-  },
-  patientRosterCard: {
+  searchInput: { flex: 1, fontSize: 13, paddingVertical: 0 },
+  filterRow: { flexDirection: 'row', gap: 8 },
+  filterChip: { paddingHorizontal: 12, paddingVertical: 6, borderRadius: 18, backgroundColor: '#F1F5F9' },
+  filterChipActive: { backgroundColor: '#0284C7' },
+  filterChipText: { fontSize: 12, fontWeight: '600', color: '#64748B' },
+  filterChipTextActive: { color: '#FFFFFF', fontWeight: '700' },
+  listContainer: { padding: 16, paddingBottom: 95 },
+  emptyBox: { alignItems: 'center', justifyContent: 'center', paddingVertical: 60 },
+  emptyText: { fontSize: 14, marginTop: 10, textAlign: 'center' },
+  rosterCard: {
     borderRadius: 14,
     padding: 14,
     borderWidth: 1,
     marginBottom: 12,
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 1 },
-    shadowOpacity: 0.05,
-    shadowRadius: 3,
     elevation: 2,
   },
-  cardHeaderRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
-  },
+  cardHeaderRow: { flexDirection: 'row', alignItems: 'center' },
   avatarCircle: {
     width: 44,
     height: 44,
@@ -816,39 +580,18 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
     alignItems: 'center',
   },
-  avatarInitial: {
-    fontSize: 18,
-    fontWeight: '800',
-  },
+  avatarInitial: { fontSize: 18, fontWeight: '800' },
   nameRow: {
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'space-between',
     marginBottom: 2,
   },
-  cardPatientName: {
-    fontSize: 15.5,
-    fontWeight: '800',
-    flex: 1,
-    marginRight: 6,
-  },
-  rosterStatusBadge: {
-    paddingHorizontal: 8,
-    paddingVertical: 3,
-    borderRadius: 6,
-  },
-  rosterStatusBadgeText: {
-    fontSize: 10,
-    fontWeight: '800',
-    letterSpacing: 0.3,
-  },
-  cardPatientMeta: {
-    fontSize: 12,
-    marginBottom: 2,
-  },
-  cardAddress: {
-    fontSize: 11,
-  },
+  cardPatientName: { fontSize: 15.5, fontWeight: '800', flex: 1, marginRight: 6 },
+  statusBadge: { paddingHorizontal: 8, paddingVertical: 3, borderRadius: 6 },
+  statusBadgeText: { fontSize: 10, fontWeight: '800', letterSpacing: 0.3 },
+  cardMeta: { fontSize: 12, marginBottom: 2 },
+  cardAddress: { fontSize: 11 },
   cardConditionRow: {
     flexDirection: 'row',
     alignItems: 'center',
@@ -858,17 +601,9 @@ const styles = StyleSheet.create({
     marginTop: 10,
     marginBottom: 8,
   },
-  cardConditionText: {
-    fontSize: 12,
-    fontWeight: '500',
-    flex: 1,
-  },
-  miniVitalsRow: {
-    flexDirection: 'row',
-    gap: 8,
-    marginBottom: 10,
-  },
-  miniVitalItem: {
+  cardConditionText: { fontSize: 12, fontWeight: '500', flex: 1 },
+  vitalsRow: { flexDirection: 'row', gap: 8, marginBottom: 10 },
+  vitalItem: {
     flex: 1,
     flexDirection: 'row',
     alignItems: 'center',
@@ -876,53 +611,33 @@ const styles = StyleSheet.create({
     paddingVertical: 6,
     borderRadius: 8,
   },
-  miniVitalValue: {
-    fontSize: 12,
-    fontWeight: '700',
-  },
-  miniVitalUnit: {
-    fontSize: 10,
-    fontWeight: '400',
-    color: '#64748B',
-  },
-  cardActionFooter: {
+  vitalVal: { fontSize: 12, fontWeight: '700' },
+  cardFooter: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'flex-end',
     borderTopWidth: StyleSheet.hairlineWidth,
     borderTopColor: '#E2E8F0',
     paddingTop: 8,
-    alignItems: 'flex-end',
   },
-  actionPromptBtn: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    paddingVertical: 4,
-    paddingHorizontal: 8,
-  },
-  actionPromptBtnText: {
-    fontSize: 12.5,
-    fontWeight: '700',
-    color: '#0284C7',
-  },
+  cardActionText: { fontSize: 12.5, fontWeight: '700', color: '#0284C7' },
 
-  // Detail View Header
+  // Detail View
   detailHeaderTopRow: {
     flexDirection: 'row',
     justifyContent: 'space-between',
     alignItems: 'center',
     marginBottom: 10,
   },
-  backToPatientsBtn: {
+  backBtn: {
     flexDirection: 'row',
     alignItems: 'center',
     paddingHorizontal: 10,
     paddingVertical: 6,
     borderRadius: 8,
   },
-  backToPatientsText: {
-    fontSize: 13,
-    fontWeight: '700',
-    color: '#0284C7',
-  },
-  activePatientBanner: {
+  backBtnText: { fontSize: 13, fontWeight: '700', color: '#0284C7' },
+  activePatientCard: {
     flexDirection: 'row',
     alignItems: 'center',
     padding: 10,
@@ -930,7 +645,7 @@ const styles = StyleSheet.create({
     borderWidth: 1,
     marginBottom: 8,
   },
-  activePatientAvatar: {
+  activeAvatar: {
     width: 36,
     height: 36,
     borderRadius: 18,
@@ -938,133 +653,60 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
     alignItems: 'center',
   },
-  activePatientAvatarText: {
-    color: '#FFFFFF',
-    fontSize: 15,
-    fontWeight: '800',
-  },
-  activePatientName: {
-    fontSize: 15,
-    fontWeight: '800',
-  },
-  activePatientSub: {
-    fontSize: 11.5,
-  },
-
-  patientSelectorRow: {
-    flexDirection: 'row',
-    marginVertical: 4,
-  },
-  patientPill: {
-    paddingHorizontal: 12,
-    paddingVertical: 5,
-    borderRadius: 8,
-    borderWidth: 1,
-    marginRight: 6,
-  },
-  patientPillName: { fontSize: 12, fontWeight: '700' },
-
-  daysFilterRow: { flexDirection: 'row', gap: 8, marginTop: 6 },
+  activeAvatarText: { color: '#FFFFFF', fontSize: 15, fontWeight: '800' },
+  activeName: { fontSize: 15, fontWeight: '800' },
+  activeSub: { fontSize: 11.5 },
+  daysRow: { flexDirection: 'row', gap: 8, marginTop: 4 },
   dayChip: { paddingHorizontal: 14, paddingVertical: 5, borderRadius: 20 },
   dayChipText: { fontSize: 11.5 },
-
-  scrollContent: { padding: 16, paddingBottom: 95 },
-
-  assessmentCard: {
-    borderRadius: 14,
-    padding: 14,
-    borderWidth: 1,
-    marginBottom: 14,
-  },
+  detailScrollContent: { padding: 16, paddingBottom: 95 },
+  assessmentCard: { borderRadius: 14, padding: 14, borderWidth: 1, marginBottom: 14 },
   scoreRow: { flexDirection: 'row', alignItems: 'center' },
   scoreCircle: {
-    width: 64,
-    height: 64,
-    borderRadius: 32,
+    width: 60,
+    height: 60,
+    borderRadius: 30,
     borderWidth: 3,
     justifyContent: 'center',
     alignItems: 'center',
   },
-  scoreNumber: { fontSize: 20, fontWeight: '900' },
+  scoreNumber: { fontSize: 19, fontWeight: '900' },
   scoreMax: { fontSize: 9.5, color: '#94A3B8', fontWeight: '600', marginTop: -2 },
-  statusTag: {
-    alignSelf: 'flex-start',
-    paddingHorizontal: 8,
-    paddingVertical: 3,
-    borderRadius: 6,
-    marginBottom: 4,
-  },
-  statusTagText: { fontSize: 10.5, fontWeight: '800', letterSpacing: 0.3 },
-  assessmentTitle: { fontSize: 14.5, fontWeight: '700', marginBottom: 2 },
+  statusTag: { alignSelf: 'flex-start', paddingHorizontal: 8, paddingVertical: 3, borderRadius: 6, marginBottom: 4 },
+  statusTagText: { fontSize: 10, fontWeight: '800', letterSpacing: 0.3 },
+  assessmentTitle: { fontSize: 14, fontWeight: '700', marginBottom: 2 },
   assessmentDesc: { fontSize: 12, lineHeight: 17 },
 
   metricsGrid: { flexDirection: 'row', gap: 10, marginBottom: 10 },
-  statCard: {
-    flex: 1,
-    borderRadius: 12,
-    padding: 12,
-    borderWidth: 1,
-  },
-  statCardTop: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    alignItems: 'center',
-    marginBottom: 4,
-  },
+  statCard: { flex: 1, borderRadius: 12, padding: 12, borderWidth: 1 },
+  statTop: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 4 },
   statUnit: { fontSize: 11, color: '#94A3B8', fontWeight: '600' },
-  statVal: { fontSize: 21, fontWeight: '800' },
+  statVal: { fontSize: 20, fontWeight: '800' },
   statLbl: { fontSize: 11, color: '#64748B', fontWeight: '600', marginTop: 1 },
   statSubRange: { fontSize: 9.5, color: '#94A3B8', marginTop: 4 },
 
-  chartCard: {
-    borderRadius: 14,
-    padding: 14,
-    borderWidth: 1,
-    marginBottom: 14,
-  },
+  chartCard: { borderRadius: 14, padding: 14, borderWidth: 1, marginBottom: 14 },
   chartHeader: { marginBottom: 10 },
   chartTitle: { fontSize: 15, fontWeight: '800' },
   chartSub: { fontSize: 11, marginTop: 2 },
-
-  chartTabRow: {
-    flexDirection: 'row',
-    backgroundColor: '#F1F5F9',
-    borderRadius: 8,
-    padding: 3,
-    marginBottom: 14,
-  },
+  chartTabRow: { flexDirection: 'row', backgroundColor: '#F1F5F9', borderRadius: 8, padding: 3, marginBottom: 14 },
   chartModeBtn: { flex: 1, paddingVertical: 6, alignItems: 'center', borderRadius: 6 },
   chartModeBtnActive: { backgroundColor: '#FFFFFF', elevation: 1 },
   chartModeText: { fontSize: 11, fontWeight: '600' },
-
   barsContainer: { gap: 8 },
+  noDataBox: { paddingVertical: 20, alignItems: 'center' },
+  noDataText: { fontSize: 12, color: '#94A3B8', marginTop: 4 },
   trendRow: { flexDirection: 'row', alignItems: 'center', gap: 6 },
   trendDate: { width: 40, fontSize: 11.5, fontWeight: '600' },
-  barTrack: {
-    flex: 1,
-    height: 12,
-    backgroundColor: '#F1F5F9',
-    borderRadius: 6,
-    overflow: 'hidden',
-  },
+  barTrack: { flex: 1, height: 12, backgroundColor: '#F1F5F9', borderRadius: 6, overflow: 'hidden' },
   barFill: { height: '100%', borderRadius: 6 },
   barValueText: { width: 56, fontSize: 11, fontWeight: '700', textAlign: 'right' },
   statusTagMini: { paddingHorizontal: 5, paddingVertical: 2, borderRadius: 4 },
   statusTagMiniText: { fontSize: 9.5, fontWeight: '700' },
 
-  tableCard: {
-    borderRadius: 14,
-    padding: 14,
-    borderWidth: 1,
-    marginBottom: 14,
-  },
+  tableCard: { borderRadius: 14, padding: 14, borderWidth: 1, marginBottom: 14 },
   tableTitle: { fontSize: 14, fontWeight: '700', marginBottom: 10 },
-  tableHeaderRow: {
-    flexDirection: 'row',
-    paddingBottom: 6,
-    borderBottomWidth: StyleSheet.hairlineWidth,
-    borderBottomColor: '#CBD5E1',
-  },
+  tableHeaderRow: { flexDirection: 'row', paddingBottom: 6, borderBottomWidth: StyleSheet.hairlineWidth, borderBottomColor: '#CBD5E1' },
   tableColHeader: { fontSize: 11, fontWeight: '700', color: '#64748B' },
   tableRow: { flexDirection: 'row', paddingVertical: 8, alignItems: 'center' },
   tableCell: { fontSize: 11.5 },

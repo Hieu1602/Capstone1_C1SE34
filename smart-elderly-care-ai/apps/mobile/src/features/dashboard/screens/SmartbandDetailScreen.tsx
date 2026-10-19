@@ -2,13 +2,14 @@
 // Màn hình Chi tiết Vòng Đeo Tay Thông Minh (BLE Smartband) & Các chỉ số sức khỏe thu thập
 // Thiết kế chuẩn y khoa cho hệ thống Smart Elderly Care AI theo Proposal Capstone 1
 
-import React, { useState, useRef } from 'react';
+import React, { useState, useRef, useMemo } from 'react';
 import { View, StyleSheet, TouchableOpacity, ScrollView, Animated, Dimensions, ActivityIndicator } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
 import { Colors, Shadows } from '../../../theme/colors';
 import { useVitalStore } from '../../../store/useVitalStore';
 import { LocalizedAlert, LocalizedText } from '../../../i18n/LocalizedComponents';
+import { createThemeStyles, useTheme } from '../../../store/useThemeStore';
 
 
 const { width: SCREEN_WIDTH } = Dimensions.get('window');
@@ -16,6 +17,11 @@ const { width: SCREEN_WIDTH } = Dimensions.get('window');
 export default function SmartbandDetailScreen({ navigation, route }: any) {
   const deviceParam = route?.params?.device;
   const { currentVitals, setVitals, algoSettings } = useVitalStore();
+  const { isDarkMode, colors } = useTheme();
+  const styles = useMemo(
+    () => createThemeStyles(baseStyles, isDarkMode, colors),
+    [isDarkMode, colors],
+  );
 
   const [isSyncing, setIsSyncing] = useState(false);
   const [isFinding, setIsFinding] = useState(false);
@@ -73,30 +79,27 @@ export default function SmartbandDetailScreen({ navigation, route }: any) {
     }, 800);
   };
 
-  const hrValue = currentVitals.heart_rate ?? 74;
-  const spo2Value = currentVitals.spo2 ?? 98;
-  const tempValue = currentVitals.skin_temp_max ?? 36.6;
+  const hasHR = typeof currentVitals.heart_rate === 'number';
+  const hasSpO2 = typeof currentVitals.spo2 === 'number';
+  const hasTemp = typeof currentVitals.skin_temp_max === 'number';
 
-  // Dữ liệu mô phỏng nhịp tim trong ngày (6 mốc)
-  const hrTimeline = [
-    { time: '06:00', hr: 68, note: 'Thức dậy' },
-    { time: '09:00', hr: 76, note: 'Ăn sáng / Đi dạo' },
-    { time: '12:00', hr: 72, note: 'Nghỉ trưa' },
-    { time: '15:00', hr: 82, note: 'Vận động nhẹ' },
-    { time: '18:00', hr: 74, note: 'Ăn tối' },
-    { time: '21:00', hr: 66, note: 'Chuẩn bị ngủ' },
-  ];
+  const hrValue = hasHR ? currentVitals.heart_rate : '--';
+  const spo2Value = hasSpO2 ? currentVitals.spo2 : '--';
+  const tempValue = hasTemp ? currentVitals.skin_temp_max : '--';
+
+  // Dữ liệu nhịp tim trong ngày (rỗng nếu chưa đo)
+  const hrTimeline: { time: string; hr: number; note: string }[] = [];
 
   return (
-    <SafeAreaView style={styles.safeArea} edges={['top', 'bottom']}>
+    <SafeAreaView style={[styles.safeArea, isDarkMode && { backgroundColor: colors.background }]} edges={['top', 'bottom']}>
       {/* 1. Header Điều Hướng */}
-      <View style={styles.header}>
+      <View style={[styles.header, isDarkMode && { backgroundColor: colors.card, borderBottomColor: colors.border }]}>
         <TouchableOpacity
-          style={styles.backButton}
+          style={[styles.backButton, isDarkMode && { backgroundColor: colors.surfaceSubtle }]}
           onPress={() => navigation.goBack()}
           activeOpacity={0.7}
         >
-          <Ionicons name="chevron-back" size={26} color="#0F172A" />
+          <Ionicons name="chevron-back" size={26} color={colors.textPrimary} />
         </TouchableOpacity>
 
         <View style={styles.headerTitleBox}>
@@ -110,17 +113,17 @@ export default function SmartbandDetailScreen({ navigation, route }: any) {
         </View>
 
         <TouchableOpacity
-          style={styles.settingsButton}
+          style={[styles.settingsButton, isDarkMode && { backgroundColor: colors.surfaceSubtle }]}
           onPress={() => navigation.navigate('AlgoConfig')}
           activeOpacity={0.7}
         >
-          <Ionicons name="options-outline" size={22} color="#0F172A" />
+          <Ionicons name="options-outline" size={22} color={colors.textPrimary} />
         </TouchableOpacity>
       </View>
 
       <ScrollView
         showsVerticalScrollIndicator={false}
-        contentContainerStyle={styles.scrollContent}
+        contentContainerStyle={[styles.scrollContent, isDarkMode && { backgroundColor: colors.background }]}
       >
         {/* ============================================================== */}
         {/* 2. HERO CARD: THÔNG TIN CHI TIẾT ĐỒNG HỒ / VÒNG ĐEO TAY        */}
@@ -151,12 +154,12 @@ export default function SmartbandDetailScreen({ navigation, route }: any) {
 
               <LocalizedText style={styles.wearerInfoText}>
                 <Ionicons name="person" size={14} color="#64748B" /> Người đeo:{' '}
-                <LocalizedText style={{ fontWeight: '700', color: '#0F172A' }}>Cụ Ông (78 tuổi)</LocalizedText>
+                <LocalizedText style={{ fontWeight: '700', color: colors.textPrimary }}>Cụ Ông (78 tuổi)</LocalizedText>
               </LocalizedText>
 
               <LocalizedText style={styles.locationInfoText}>
                 <Ionicons name="location" size={14} color="#64748B" /> Vị trí:{' '}
-                <LocalizedText style={{ fontWeight: '600', color: '#334155' }}>
+                <LocalizedText style={{ fontWeight: '600', color: colors.textSecondary }}>
                   {deviceParam?.location || 'Phòng ngủ'}
                 </LocalizedText>
               </LocalizedText>
@@ -280,13 +283,13 @@ export default function SmartbandDetailScreen({ navigation, route }: any) {
 
             <View style={styles.metricMiniStatsColumn}>
               <LocalizedText style={styles.metricMiniStatItem}>
-                Thấp nhất: <LocalizedText style={{ fontWeight: '700', color: '#0F172A' }}>62 bpm</LocalizedText>
+                Thấp nhất: <LocalizedText style={{ fontWeight: '700', color: colors.textPrimary }}>{hasHR ? `${hrValue} bpm` : '--'}</LocalizedText>
               </LocalizedText>
               <LocalizedText style={styles.metricMiniStatItem}>
-                Trung bình: <LocalizedText style={{ fontWeight: '700', color: '#0F172A' }}>73 bpm</LocalizedText>
+                Trung bình: <LocalizedText style={{ fontWeight: '700', color: colors.textPrimary }}>{hasHR ? `${hrValue} bpm` : '--'}</LocalizedText>
               </LocalizedText>
               <LocalizedText style={styles.metricMiniStatItem}>
-                Cao nhất: <LocalizedText style={{ fontWeight: '700', color: '#0F172A' }}>98 bpm</LocalizedText>
+                Cao nhất: <LocalizedText style={{ fontWeight: '700', color: colors.textPrimary }}>{hasHR ? `${hrValue} bpm` : '--'}</LocalizedText>
               </LocalizedText>
             </View>
           </View>
@@ -294,15 +297,17 @@ export default function SmartbandDetailScreen({ navigation, route }: any) {
           {/* Dải tiến độ an toàn: 50 - 120 bpm */}
           <View style={styles.rangeBarContainer}>
             <View style={styles.rangeBarTrack}>
-              <View
-                style={[
-                  styles.rangeBarIndicator,
-                  {
-                    left: `${Math.min(Math.max(((hrValue - 40) / 100) * 100, 5), 95)}%`,
-                    backgroundColor: '#EF4444',
-                  },
-                ]}
-              />
+              {hasHR && (
+                <View
+                  style={[
+                    styles.rangeBarIndicator,
+                    {
+                      left: `${Math.min(Math.max(((Number(hrValue) - 40) / 100) * 100, 5), 95)}%`,
+                      backgroundColor: '#EF4444',
+                    },
+                  ]}
+                />
+              )}
             </View>
             <View style={styles.rangeLabelsRow}>
               <LocalizedText style={styles.rangeLabelText}>50 (Ngủ)</LocalizedText>
@@ -313,26 +318,34 @@ export default function SmartbandDetailScreen({ navigation, route }: any) {
             </View>
           </View>
 
-          {/* Timeline mô phỏng trong ngày */}
-          <View style={styles.timelineRow}>
-            {hrTimeline.map((item, idx) => (
-              <View key={idx} style={styles.timelineCol}>
-                <View
-                  style={[
-                    styles.timelineBar,
-                    { height: Math.max((item.hr - 50) * 1.5, 16) },
-                  ]}
-                />
-                <LocalizedText style={styles.timelineHrText}>{item.hr}</LocalizedText>
-                <LocalizedText style={styles.timelineTimeText}>{item.time}</LocalizedText>
-              </View>
-            ))}
-          </View>
+          {/* Timeline nhịp tim trong ngày */}
+          {hrTimeline.length > 0 ? (
+            <View style={styles.timelineRow}>
+              {hrTimeline.map((item, idx) => (
+                <View key={idx} style={styles.timelineCol}>
+                  <View
+                    style={[
+                      styles.timelineBar,
+                      { height: Math.max((item.hr - 50) * 1.5, 16) },
+                    ]}
+                  />
+                  <LocalizedText style={styles.timelineHrText}>{item.hr}</LocalizedText>
+                  <LocalizedText style={styles.timelineTimeText}>{item.time}</LocalizedText>
+                </View>
+              ))}
+            </View>
+          ) : (
+            <View style={{ paddingVertical: 14, alignItems: 'center' }}>
+              <LocalizedText style={{ fontSize: 13, color: colors.textSecondary }}>Chưa có dữ liệu đo nhịp tim trong ngày</LocalizedText>
+            </View>
+          )}
 
           <View style={styles.aiInsightBox}>
             <Ionicons name="sparkles" size={15} color="#0284C7" />
             <LocalizedText style={styles.aiInsightText}>
-              Đánh giá AI: Nhịp xoang đều đặn, không có hiện tượng loạn nhịp (Arrhythmia) hay nhịp tim nhanh bất thường trong ngày.
+              {hasHR
+                ? 'Đánh giá AI: Nhịp xoang đều đặn, không có hiện tượng loạn nhịp (Arrhythmia) hay nhịp tim nhanh bất thường trong ngày.'
+                : 'Đánh giá AI: Chưa ghi nhận dữ liệu nhịp tim từ vòng đeo tay.'}
             </LocalizedText>
           </View>
         </View>
@@ -380,14 +393,16 @@ export default function SmartbandDetailScreen({ navigation, route }: any) {
             <View style={styles.spo2BarSegmentDanger} />
             <View style={styles.spo2BarSegmentWarning} />
             <View style={styles.spo2BarSegmentSafe} />
-            <View
-              style={[
-                styles.spo2IndicatorPin,
-                { left: `${Math.min(Math.max((spo2Value - 85) * 6.6, 5), 96)}%` },
-              ]}
-            >
-              <View style={styles.spo2PinDot} />
-            </View>
+            {hasSpO2 && (
+              <View
+                style={[
+                  styles.spo2IndicatorPin,
+                  { left: `${Math.min(Math.max(((Number(spo2Value) - 85) * 6.6), 5), 96)}%` },
+                ]}
+              >
+                <View style={styles.spo2PinDot} />
+              </View>
+            )}
           </View>
           <View style={styles.rangeLabelsRow}>
             <LocalizedText style={[styles.rangeLabelText, { color: '#EF4444' }]}>Nguy hiểm (&lt;90%)</LocalizedText>
@@ -398,7 +413,9 @@ export default function SmartbandDetailScreen({ navigation, route }: any) {
           <View style={styles.aiInsightBox}>
             <Ionicons name="sparkles" size={15} color="#0284C7" />
             <LocalizedText style={styles.aiInsightText}>
-              Đánh giá AI: Độ bão hòa oxy mô ngoại vi đạt mức lý tưởng 98%, lưu thông phế nang phổi hoạt động thông suốt.
+              {hasSpO2
+                ? `Đánh giá AI: Độ bão hòa oxy mô ngoại vi đạt mức lý tưởng ${spo2Value}%, lưu thông phế nang phổi hoạt động thông suốt.`
+                : 'Đánh giá AI: Chưa ghi nhận dữ liệu SpO₂ từ vòng đeo tay.'}
             </LocalizedText>
           </View>
         </View>
@@ -604,7 +621,7 @@ export default function SmartbandDetailScreen({ navigation, route }: any) {
   );
 }
 
-const styles = StyleSheet.create({
+const baseStyles = StyleSheet.create({
   safeArea: {
     flex: 1,
     backgroundColor: '#F8FAFC',
@@ -1334,4 +1351,3 @@ const styles = StyleSheet.create({
     marginTop: 2,
   },
 });
-

@@ -4,7 +4,7 @@ report_service.py – Dịch vụ tạo báo cáo y tế (PDF / Excel) từ dữ
 
 import io
 from datetime import datetime
-from typing import List
+from typing import List, Union
 from uuid import UUID
 
 from openpyxl import Workbook
@@ -21,44 +21,108 @@ from app.models.vital_sign import VitalSign
 class ReportService:
 
     @staticmethod
+    def _labels(language: str) -> dict[str, str]:
+        if language == "en":
+            return {
+                "title": "ELDERLY HEALTH MONITORING REPORT",
+                "hub_id": "Hub Device ID",
+                "exported": "Exported",
+                "vital_records": "Total vital-sign records",
+                "alert_events": "Alert events",
+                "recent_vitals": "Recent vital signs",
+                "time": "Time",
+                "heart_rate": "Heart rate (bpm)",
+                "spo2": "SpO2 (%)",
+                "temperature": "Temperature (°C)",
+                "fall": "Fall detected",
+                "yes": "Yes",
+                "no": "No",
+                "incident_history": "Alert history",
+                "alert_type": "Alert type",
+                "level": "Severity",
+                "message": "Message",
+                "acknowledged": "Acknowledged",
+                "pending": "Pending",
+                "vital_sheet": "Vital Signs",
+                "incident_sheet": "Incidents",
+                "id": "ID",
+                "device_id": "Device ID",
+                "people": "People count",
+                "confidence": "Confidence",
+                "video_url": "Video URL",
+                "handled": "Handled",
+            }
+        return {
+            "title": "BÁO CÁO THEO DÕI SỨC KHỎE NGƯỜI CAO TUỔI",
+            "hub_id": "Thiết bị Hub ID",
+            "exported": "Ngày xuất",
+            "vital_records": "Tổng số bản ghi sinh hiệu",
+            "alert_events": "Số sự kiện cảnh báo",
+            "recent_vitals": "Dữ liệu sinh hiệu gần nhất",
+            "time": "Thời gian",
+            "heart_rate": "Nhịp tim (bpm)",
+            "spo2": "SpO2 (%)",
+            "temperature": "Nhiệt độ (°C)",
+            "fall": "Té ngã",
+            "yes": "Có",
+            "no": "Không",
+            "incident_history": "Lịch sử sự kiện cảnh báo",
+            "alert_type": "Loại cảnh báo",
+            "level": "Mức độ",
+            "message": "Thông điệp",
+            "acknowledged": "Đã duyệt",
+            "pending": "Chưa",
+            "vital_sheet": "Sinh hiệu",
+            "incident_sheet": "Sự kiện",
+            "id": "ID",
+            "device_id": "Device ID",
+            "people": "Số người",
+            "confidence": "Độ tin cậy",
+            "video_url": "Video URL",
+            "handled": "Đã xử lý",
+        }
+
+    @staticmethod
     def generate_pdf(
-        device_id: UUID,
+        device_id: Union[UUID, str],
         vitals: List[VitalSign],
         incidents: List[Incident],
+        language: str = "vi",
     ) -> bytes:
         """Tạo PDF report tóm tắt các chỉ số sinh hiệu và sự kiện cảnh báo."""
+        labels = ReportService._labels(language)
         buffer = io.BytesIO()
         doc = SimpleDocTemplate(buffer, pagesize=letter)
         styles = getSampleStyleSheet()
         elements = []
 
         # Tiêu đề
-        title = Paragraph(f"<b>BÁO CÁO THEO DÕI SỨC KHỎE NGƯỜI CAO TUỔI</b>", styles["Title"])
+        title = Paragraph(f"<b>{labels['title']}</b>", styles["Title"])
         subtitle = Paragraph(
-            f"Thiết bị Hub ID: {device_id} | Ngày xuất: {datetime.now().strftime('%d/%m/%Y %H:%M')}",
+            f"{labels['hub_id']}: {device_id} | {labels['exported']}: {datetime.now().strftime('%d/%m/%Y %H:%M')}",
             styles["Normal"],
         )
         elements.extend([title, subtitle, Spacer(1, 14)])
 
         # Thống kê tổng quan
         summary_text = Paragraph(
-            f"<b>Tổng số bản ghi sinh hiệu:</b> {len(vitals)} &nbsp;&nbsp;|&nbsp;&nbsp; "
-            f"<b>Số sự kiện cảnh báo:</b> {len(incidents)}",
+            f"<b>{labels['vital_records']}:</b> {len(vitals)} &nbsp;&nbsp;|&nbsp;&nbsp; "
+            f"<b>{labels['alert_events']}:</b> {len(incidents)}",
             styles["Heading3"],
         )
         elements.extend([summary_text, Spacer(1, 10)])
 
         # Bảng tóm tắt sinh hiệu gần nhất
         if vitals:
-            elements.append(Paragraph("<b>Dữ liệu sinh hiệu gần nhất</b>", styles["Heading2"]))
-            table_data = [["Thời gian", "Nhịp tim (bpm)", "SpO2 (%)", "Nhiệt độ (°C)", "Té ngã"]]
+            elements.append(Paragraph(f"<b>{labels['recent_vitals']}</b>", styles["Heading2"]))
+            table_data = [[labels["time"], labels["heart_rate"], labels["spo2"], labels["temperature"], labels["fall"]]]
             for v in vitals[:15]:
                 table_data.append([
                     v.time.strftime("%d/%m %H:%M") if v.time else "-",
                     str(v.heart_rate or "-"),
                     str(v.spo2 or "-"),
                     f"{v.skin_temp_max:.1f}" if v.skin_temp_max else "-",
-                    "Có" if v.fall_detected else "Không",
+                    labels["yes"] if v.fall_detected else labels["no"],
                 ])
             t = Table(table_data)
             t.setStyle(TableStyle([
@@ -73,15 +137,15 @@ class ReportService:
 
         # Bảng sự kiện cảnh báo
         if incidents:
-            elements.append(Paragraph("<b>Lịch sử sự kiện cảnh báo</b>", styles["Heading2"]))
-            inc_data = [["Thời gian", "Loại cảnh báo", "Mức độ", "Thông điệp", "Đã xử lý"]]
+            elements.append(Paragraph(f"<b>{labels['incident_history']}</b>", styles["Heading2"]))
+            inc_data = [[labels["time"], labels["alert_type"], labels["level"], labels["message"], labels["handled"]]]
             for inc in incidents[:15]:
                 inc_data.append([
                     inc.created_at.strftime("%d/%m %H:%M") if inc.created_at else "-",
                     inc.alert_type,
                     inc.alert_level,
                     inc.message[:30] + ("..." if len(inc.message) > 30 else ""),
-                    "Đã duyệt" if inc.is_acknowledged else "Chưa",
+                    labels["acknowledged"] if inc.is_acknowledged else labels["pending"],
                 ])
             it = Table(inc_data)
             it.setStyle(TableStyle([
@@ -100,26 +164,32 @@ class ReportService:
 
     @staticmethod
     def generate_excel(
-        device_id: UUID,
+        device_id: Union[UUID, str],
         vitals: List[VitalSign],
         incidents: List[Incident],
+        language: str = "vi",
     ) -> bytes:
         """Tạo bảng tính Excel chứa toàn bộ raw data sinh hiệu và incidents."""
+        labels = ReportService._labels(language)
         wb = Workbook()
 
         # Sheet 1: Vital Signs
         ws_vitals = wb.active
         if ws_vitals is None:
-            ws_vitals = wb.create_sheet(title="Vital Signs")
+            ws_vitals = wb.create_sheet(title=labels["vital_sheet"])
         else:
-            ws_vitals.title = "Vital Signs"
+            ws_vitals.title = labels["vital_sheet"]
 
-        ws_vitals.append(["ID", "Thời gian", "Device ID", "Nhịp tim (bpm)", "SpO2 (%)", "Nhiệt độ (°C)", "Số người", "Té ngã"])
+        ws_vitals.append([
+            labels["id"], labels["time"], labels["device_id"], labels["heart_rate"],
+            labels["spo2"], labels["temperature"], labels["people"], labels["fall"],
+        ])
         header_fill = PatternFill(start_color="1F4E79", end_color="1F4E79", fill_type="solid")
         header_font = Font(color="FFFFFF", bold=True)
-        for cell in ws_vitals[1]:
-            cell.fill = header_fill
-            cell.font = header_font
+        for col_idx in range(1, 9):
+            v_cell = ws_vitals.cell(row=1, column=col_idx)
+            v_cell.fill = header_fill
+            v_cell.font = header_font
 
         for v in vitals:
             ws_vitals.append([
@@ -134,11 +204,18 @@ class ReportService:
             ])
 
         # Sheet 2: Incidents
-        ws_inc = wb.create_sheet(title="Incidents")
-        ws_inc.append(["ID", "Device ID", "Loại cảnh báo", "Mức độ", "Thông điệp", "Độ tin cậy", "Video URL", "Đã xử lý", "Thời gian"])
-        for cell in ws_inc[1]:
-            cell.fill = PatternFill(start_color="C00000", end_color="C00000", fill_type="solid")
-            cell.font = header_font
+        ws_inc = wb.create_sheet(title=labels["incident_sheet"])
+        ws_inc.append([
+            labels["id"], labels["device_id"], labels["alert_type"], labels["level"],
+            labels["message"], labels["confidence"], labels["video_url"],
+            labels["handled"], labels["time"],
+        ])
+        inc_fill = PatternFill(start_color="C00000", end_color="C00000", fill_type="solid")
+        for col_idx in range(1, 10):
+            inc_cell = ws_inc.cell(row=1, column=col_idx)
+            inc_cell.fill = inc_fill
+            inc_cell.font = header_font
+
 
         for inc in incidents:
             ws_inc.append([

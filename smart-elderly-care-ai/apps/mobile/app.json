@@ -1,10 +1,44 @@
 {
   "expo": {
-    "name": "smart-elderly-care-mobile",
+    "name": "Smart Elderly Care",
     "slug": "smart-elderly-care-mobile",
     "owner": "nghia127",
     "version": "1.0.0",
     "orientation": "portrait",
-    "platforms": ["ios", "android", "web"]
+    "icon": "./assets/icon.png",
+    "userInterfaceStyle": "light",
+    "splash": {
+      "image": "./assets/splash.png",
+      "resizeMode": "contain",
+      "backgroundColor": "#ffffff"
+    },
+    "ios": {
+      "supportsTablet": true,
+      "bundleIdentifier": "com.c1se34.smartelderlycare"
+    },
+    "android": {
+      "package": "com.c1se34.smartelderlycare",
+      "adaptiveIcon": {
+        "foregroundImage": "./assets/adaptive-icon.png",
+        "backgroundColor": "#ffffff"
+      }
+    },
+    "web": {
+      "favicon": "./assets/favicon.png",
+      "bundler": "metro"
+    },
+    "plugins": [
+      [
+        "expo-location",
+        {
+          "locationWhenInUsePermission": "Allow Smart Elderly Care to access your location and show it on the map."
+        }
+      ]
+    ],
+    "platforms": [
+      "ios",
+      "android",
+      "web"
+    ]
   }
 }

@@ -4,13 +4,14 @@
 // Nhánh Wi-Fi AP: Wifi_PowerCheck -> Wifi_Guide -> Wifi_Check {Khớp SSID?} -> SetupSuccess / DialogWifi
 // Nhánh Bluetooth: BLE_PowerCheck -> BLE_Permission -> RequestPerm -> BLE_Scan -> BLE_Pairing -> SetupSuccess / DialogBLE
 
-import React, { useState, useEffect, useRef } from 'react';
+import React, { useState, useEffect, useRef, useMemo } from 'react';
 import { View, StyleSheet, TouchableOpacity, ScrollView, Switch, ActivityIndicator, Modal, Animated, Linking, Platform } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
 import { Colors } from '../../../theme/colors';
 import { useVitalStore, IoTDeviceItem } from '../../../store/useVitalStore';
 import { LocalizedText, LocalizedTextInput } from '../../../i18n/LocalizedComponents';
+import { createThemeStyles, useTheme } from '../../../store/useThemeStore';
 
 
 // Các trạng thái của toàn bộ luồng theo Mermaid flowchart
@@ -41,6 +42,11 @@ interface DiscoveredBleItem {
 
 export default function AddDeviceScreen({ navigation }: any) {
   const { addIoTDevice } = useVitalStore();
+  const { isDarkMode, colors } = useTheme();
+  const styles = useMemo(
+    () => createThemeStyles(baseStyles, isDarkMode, colors),
+    [isDarkMode, colors],
+  );
 
   // ---- 1. State Quản lý Luồng & Giao thức ----
   const [currentStep, setCurrentStep] = useState<FlowStep>('CATEGORY_SELECT');
@@ -642,15 +648,15 @@ export default function AddDeviceScreen({ navigation }: any) {
   }
 
   return (
-    <SafeAreaView style={styles.safeArea} edges={['top']}>
+    <SafeAreaView style={[styles.safeArea, isDarkMode && { backgroundColor: colors.background }]} edges={['top']}>
       {/* Header Điều hướng */}
-      <View style={styles.header}>
+      <View style={[styles.header, isDarkMode && { backgroundColor: colors.card, borderBottomColor: colors.border }]}>
         <TouchableOpacity
-          style={styles.backButton}
+          style={[styles.backButton, isDarkMode && { backgroundColor: colors.surfaceSubtle }]}
           onPress={handleBack}
           activeOpacity={0.7}
         >
-          <Ionicons name="chevron-back" size={26} color="#1E293B" />
+          <Ionicons name="chevron-back" size={26} color={colors.textPrimary} />
         </TouchableOpacity>
         <View style={styles.headerTitleContainer}>
           <LocalizedText style={styles.headerTitle}>Thêm Thiết Bị Mới</LocalizedText>
@@ -669,16 +675,16 @@ export default function AddDeviceScreen({ navigation }: any) {
           </LocalizedText>
         </View>
         <TouchableOpacity
-          style={styles.closeButton}
+          style={[styles.closeButton, isDarkMode && { backgroundColor: colors.surfaceSubtle }]}
           onPress={handleExit}
           activeOpacity={0.7}
         >
-          <Ionicons name="close" size={24} color="#1E293B" />
+          <Ionicons name="close" size={24} color={colors.textPrimary} />
         </TouchableOpacity>
       </View>
 
       {/* Tiến trình trực quan (Step Tracker Bar) */}
-      <View style={styles.progressBarWrapper}>
+      <View style={[styles.progressBarWrapper, isDarkMode && { backgroundColor: colors.border }]}>
         <View
           style={[
             styles.progressBarFill,
@@ -702,35 +708,35 @@ export default function AddDeviceScreen({ navigation }: any) {
 
       <ScrollView
         showsVerticalScrollIndicator={false}
-        contentContainerStyle={styles.scrollContent}
+        contentContainerStyle={[styles.scrollContent, isDarkMode && { backgroundColor: colors.background }]}
       >
         {/* ============================================================== */}
         {/* 1. STATE: CATEGORY_SELECT                                      */}
         {/* ============================================================== */}
         {currentStep === 'CATEGORY_SELECT' && (
           <View>
-            <LocalizedText style={styles.stepHeaderTitle}>Chọn Loại Thiết Bị Cần Thêm</LocalizedText>
-            <LocalizedText style={styles.stepHeaderDesc}>
+            <LocalizedText style={[styles.stepHeaderTitle, isDarkMode && { color: colors.textPrimary }]}>Chọn Loại Thiết Bị Cần Thêm</LocalizedText>
+            <LocalizedText style={[styles.stepHeaderDesc, isDarkMode && { color: colors.textSecondary }]}>
               Hệ thống sẽ tự động kích hoạt luồng kiểm tra giao thức tương ứng (Wi-Fi AP hoặc Bluetooth BLE).
             </LocalizedText>
 
             {/* Option 1: Camera */}
             <TouchableOpacity
-              style={styles.categoryCard}
+              style={[styles.categoryCard, isDarkMode && { backgroundColor: colors.card, borderColor: colors.border }]}
               onPress={() => setCurrentStep('CAMERA_LIST')}
               activeOpacity={0.8}
             >
-              <View style={[styles.categoryIconBox, { backgroundColor: '#FFF7ED' }]}>
+              <View style={[styles.categoryIconBox, { backgroundColor: isDarkMode ? colors.surfaceSubtle : '#FFF7ED' }]}>
                 <Ionicons name="videocam" size={30} color="#EA580C" />
               </View>
               <View style={styles.categoryInfo}>
                 <View style={styles.categoryBadgeRow}>
-                  <LocalizedText style={styles.categoryName}>Thiết bị Camera</LocalizedText>
+                  <LocalizedText style={[styles.categoryName, isDarkMode && { color: colors.textPrimary }]}>Thiết bị Camera</LocalizedText>
                   <View style={[styles.protoBadge, { backgroundColor: '#FFEDD5' }]}>
                     <LocalizedText style={[styles.protoBadgeText, { color: '#C2410C' }]}>WIFI_AP</LocalizedText>
                   </View>
                 </View>
-                <LocalizedText style={styles.categoryDesc}>
+                <LocalizedText style={[styles.categoryDesc, isDarkMode && { color: colors.textSecondary }]}>
                   Camera an ninh AI giám sát, tích hợp YOLOv8-Pose nhận diện té ngã và luồng RTSP 1080p.
                 </LocalizedText>
               </View>
@@ -739,21 +745,21 @@ export default function AddDeviceScreen({ navigation }: any) {
 
             {/* Option 2: Đồng hồ thông minh */}
             <TouchableOpacity
-              style={styles.categoryCard}
+              style={[styles.categoryCard, isDarkMode && { backgroundColor: colors.card, borderColor: colors.border }]}
               onPress={() => setCurrentStep('WATCH_LIST')}
               activeOpacity={0.8}
             >
-              <View style={[styles.categoryIconBox, { backgroundColor: '#ECFDF5' }]}>
+              <View style={[styles.categoryIconBox, { backgroundColor: isDarkMode ? colors.surfaceSubtle : '#ECFDF5' }]}>
                 <Ionicons name="watch" size={30} color="#059669" />
               </View>
               <View style={styles.categoryInfo}>
                 <View style={styles.categoryBadgeRow}>
-                  <LocalizedText style={styles.categoryName}>Đồng hồ thông minh</LocalizedText>
+                  <LocalizedText style={[styles.categoryName, isDarkMode && { color: colors.textPrimary }]}>Đồng hồ thông minh</LocalizedText>
                   <View style={[styles.protoBadge, { backgroundColor: '#D1FAE5' }]}>
                     <LocalizedText style={[styles.protoBadgeText, { color: '#047857' }]}>BLUETOOTH</LocalizedText>
                   </View>
                 </View>
-                <LocalizedText style={styles.categoryDesc}>
+                <LocalizedText style={[styles.categoryDesc, isDarkMode && { color: colors.textSecondary }]}>
                   Vòng đeo tay y tế, cảm biến quang PPG đo nhịp tim, SpO₂ và gia tốc kế cảnh báo va đập.
                 </LocalizedText>
               </View>
@@ -1927,7 +1933,7 @@ export default function AddDeviceScreen({ navigation }: any) {
 // -------------------------------------------------------------
 // STYLESHEET
 // -------------------------------------------------------------
-const styles = StyleSheet.create({
+const baseStyles = StyleSheet.create({
   safeArea: {
     flex: 1,
     backgroundColor: '#F8FAFC',

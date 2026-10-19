@@ -112,7 +112,8 @@ async def trigger_emergency_sos(
     )
 
     if tokens:
-        place = payload.address or "Chưa có địa chỉ"
+        # Ưu tiên địa chỉ người dùng gửi lên; nếu thiếu thì dùng địa chỉ đã lưu.
+        place = payload.address or current_user.location_address or "Chưa có địa chỉ"
         message = payload.message or "Cần hỗ trợ khẩn cấp"
         location_data = {
             "address": place,

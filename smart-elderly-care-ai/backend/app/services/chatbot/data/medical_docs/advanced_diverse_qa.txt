@@ -1,0 +1,79 @@
+# CẨM NANG TRI THỨC Y HỌC & ĐỜI SỐNG LÃO KHOA MỞ RỘNG (ADVANCED DIVERSE TOPICS)
+Dự án: Hệ thống Trợ lý AI Giám sát Người cao tuổi AuraCare AI
+Tác giả: Ban Cố vấn Y khoa Lão khoa & Kỹ sư Edge AI
+
+================================================================================
+CHỦ ĐỀ 7: TƯƠNG TÁC THUỐC ĐÔNG Y, THẢO DƯỢC & THUỐC TÂY ĐIỀU TRỊ
+================================================================================
+1. Nhân sâm, Tam thất, Đông trùng hạ thảo với bệnh nhân Tăng huyết áp & Tiểu đường:
+- Nhân sâm (Panax Ginseng): Có tính hưng phấn thần kinh và co mạch nhẹ ở giai đoạn đầu. Với người tăng huyết áp độ 2 (như cụ An), tự ý dùng nhân sâm liều cao có thể gây vọt huyết áp kịch phát, đau đầu, chóng mặt và tăng nguy cơ đột quỵ não. Cần có chỉ định của bác sĩ y học cổ truyền.
+- Tam thất: Có tác dụng hoạt huyết tiêu ứ mạnh. Nếu người bệnh đang dùng thuốc chống đông hoặc chống kết tập tiểu cầu (như Aspirin, Clopidogrel), dùng chung tam thất có thể làm tăng nguy cơ xuất huyết tiêu hóa hoặc chảy máu dưới da kéo dài.
+- Đông trùng hạ thảo: Tương đối an toàn trong bồi bổ miễn phí, nhưng nếu tự ngâm rượu nồng độ cồn cao thì cấm dùng vì cồn làm tăng huyết áp và tương tác bất lợi với thuốc hạ đường huyết.
+- Khuyến nghị an toàn: Luôn thông báo cho BS. CKI Trần Minh Tuấn trước khi cho người cao tuổi dùng bất kỳ loại cao sâm hay thảo dược bổ trợ nào.
+
+2. Trà lá vối, Trà Atiso, Giảo cổ lam:
+- Lá vối và Atiso: Giúp lợi tiểu nhẹ và hỗ trợ tiêu hóa. Tuy nhiên, nếu uống quá đặc hoặc uống thay hoàn toàn nước lọc cả ngày có thể làm mất chất điện giải qua nước tiểu, hạ huyết áp quá mức và gây mệt mỏi ở người già.
+- Nguyên tắc dùng: Uống trà loãng, uống vào ban ngày, không uống sau 19h để tránh đi tiểu đêm làm gián đoạn giấc ngủ.
+
+================================================================================
+CHỦ ĐỀ 8: CHĂM SÓC VẾT LOÉT TÌ ĐÈ & NGƯỜI CAO TUỔI NẰM LÂU
+================================================================================
+1. Cơ chế và Vị trí dễ bị loét tì đè (Pressure Ulcers):
+- Cơ chế: Do tì đè liên tục tại các vùng da sát xương làm mao mạch bị chèn ép, thiếu máu nuôi dưỡng mô kéo dài trên 2 giờ dẫn đến hoại tử mô tế bào.
+- Vị trí phổ biến: Vùng xương cùng cụt (mông), hai gót chân, mắt cá ngoài, bả vai và chẩm sau gáy.
+
+2. Quy trình phòng ngừa và chăm sóc chuẩn điều dưỡng:
+- Thay đổi tư thế (Lật trở người): Thực hiện tối thiểu mỗi 2 giờ một lần (nằm ngửa, nghiêng trái 30 độ, nghiêng phải 30 độ). Dùng gối mềm chèn kê dưới lưng và giữa hai đầu gối.
+- Sử dụng đệm hơi chống loét (Alternating pressure air mattress): Đệm hơi tự động bơm xả luân phiên các múi khí giúp phân tán áp lực tì đè liên tục.
+- Vệ sinh và chăm sóc da: Giữ da luôn khô thoáng sạch sẽ. Lau rửa bằng nước ấm, lau khô nhẹ nhàng, không chà xát mạnh làm rách da. Bôi kem dưỡng ẩm bảo vệ da (chứa kẽm oxyd). Nếu đã xuất hiện vết loét có dịch mủ, cần rửa bằng nước muối sinh lý 0.9%, cắt lọc mô hoại tử và dùng băng gạc hydrocolloid/bọt xốp chuyên dụng, tuyệt đối không rắc bột kháng sinh nghiền lên vết loét.
+
+================================================================================
+CHỦ ĐỀ 9: THỊ LỰC, THÍNH LỰC & THIẾT BỊ HỖ TRỢ TUỔI GIÀ
+================================================================================
+1. Đục thủy tinh thể (Cườm khô) ở người cao tuổi:
+- Triệu chứng: Nhìn mờ từ từ như nhìn qua màn sương mù hoặc kính bẩn, nhìn một vật thành hai hình, giảm độ tương phản màu sắc, hay bị lóa mắt khi gặp ánh sáng đèn xe ban đêm.
+- Điều trị: Phẫu thuật Phaco thay thủy tinh thể nhân tạo là phương pháp an toàn và hiệu quả nhất hiện nay. Nên đưa cụ đi khám mắt định kỳ 6 tháng/lần.
+- An toàn sinh hoạt: Tăng cường độ chiếu sáng trong nhà (đặc biệt là cầu thang và nhà vệ sinh), dán băng phản quang mép bậc tam cấp để phòng ngừa té ngã khi thị lực suy giảm.
+
+2. Lãng tai, nghễnh ngãng & Máy trợ thính:
+- Người cao tuổi bị giảm thính lực tiếp nhận do lão hóa thần kinh ốc tai (Presbycusis).
+- Chăm sóc máy trợ thính: Tháo máy và tắt nguồn ban đêm để tiết kiệm pin; dùng khăn mềm khô lau sạch ráy tai dính ở đầu núm tai nghe; bảo quản trong hộp hút ẩm chuyên dụng; không để máy trợ thính bị dính nước khi tắm rửa.
+- Giao tiếp: Khi nói chuyện với người nghễnh ngãng, hãy đứng đối diện ngang tầm mắt, nói chậm rãi, rõ ràng từng từ với âm sắc trầm ấm, không hét lớn vào tai gây chói tai và bực bội.
+
+================================================================================
+CHỦ ĐỀ 10: XƯƠNG KHỚP KHI THỜI TIẾT LẠNH & PHÒNG NGỪA ĐỘT QUỴ MÙA ĐÔNG
+================================================================================
+1. Tại sao trời trở lạnh, ẩm ướt lại đau buốt xương khớp?
+- Cơ chế sinh lý: Khi nhiệt độ môi trường giảm và áp suất khí quyển thay đổi, dịch khớp quánh đặc hơn, các mạch máu ngoại vi co lại làm giảm lượng máu nuôi khớp, dây chằng và cơ quanh khớp co rút gây cảm giác đau nhức ê buốt, cứng khớp buổi sáng.
+- Xử trí: Chườm ấm vùng khớp gối 15-20 phút, xoa bóp nhẹ nhàng bằng dầu xoa bóp trước khi bước xuống giường. Mặc quần áo dài ấm, đi tất chân bằng len mềm giữ ấm cổ chân suốt đêm.
+
+2. Phòng ngừa Co mạch đột quỵ mùa đông cho người già:
+- Tuyệt đối không bật dậy và bước chân trần xuống nền nhà lạnh vào ban đêm: Luôn ngồi lại trên mép giường 1-2 phút, xỏ dép có quai chống trượt, mặc áo khoác ấm trước khi đi tiểu đêm.
+- Nhiệt độ nước sinh hoạt mùa đông: Rửa mặt, đánh răng bằng nước ấm, cấm dùng nước lạnh buốt gây co giật mạch máu vùng mặt và thái dương.
+
+================================================================================
+CHỦ ĐỀ 11: DINH DƯỠNG CHO NGƯỜI RĂNG YẾU & CHĂM SÓC RĂNG GIẢ
+================================================================================
+1. Chế biến bữa ăn đủ chất cho người cao tuổi răng yếu, rụng răng:
+- Thách thức: Răng yếu khiến người già lười nhai thịt cá, dẫn đến thiếu hụt protein (teo cơ sarcopenia) và thiếu chất xơ (táo bón mạn tính).
+- Giải pháp chế biến:
+  + Đạm (Protein): Băm nhuyễn thịt nạc nấu cháo dinh dưỡng; hầm nhừ cá béo lọc sạch xương; dùng đậu phụ mềm, trứng gà hấp chín mềm, sữa giàu đạm chua không đường.
+  + Rau củ: Hấp chín mềm hoặc xay nhỏ bí đỏ, cà rốt, khoai lang, rau ngót nấu canh thịt băm.
+  + Nước uống: Uống đủ nước giữa các bữa ăn để bôi trơn niêm mạc miệng.
+
+2. Quy trình bảo quản và vệ sinh răng giả tháo lắp:
+- Sau mỗi bữa ăn: Tháo hàm giả súc miệng và chải sạch hàm bằng bàn chải mềm dưới vòi nước chảy (không dùng kem đánh răng có hạt mài mòn làm trầy xước hàm).
+- Ban đêm khi đi ngủ: BẮT BUỘC THÁO HÀM GIẢ để niêm mạc nướu được nghỉ ngơi, phòng ngừa nguy cơ sặc hoặc nuốt hàm răng giả vào đường thở khi ngủ say gây tử vong. Ngâm hàm giả vào cốc nước sạch hoặc dung dịch sát khuẩn ngâm hàm chuyên dụng.
+
+================================================================================
+CHỦ ĐỀ 12: KỸ NĂNG TƯƠNG TÁC GIA ĐÌNH & ĐỐ VUI DÂN GIAN TRÍ TUỆ
+================================================================================
+1. Xử lý tình huống người già tự ý đòi đi xe đạp/xe máy khi sức khỏe yếu:
+- Không tranh cãi gay gắt hay tịch thu chìa khóa thô bạo khiến cụ tự ái và cảm thấy bị tước đoạt quyền tự chủ.
+- Dùng kỹ thuật chuyển hướng (Distraction) và viện lý do an toàn: "Dạ bố ơi, hôm nay xe đang bị non hơi con chưa kịp bơm, để chiều con chở bố đi dạo hóng gió nhé" hoặc nhờ cụ việc khác trong nhà để chuyển sự chú ý.
+
+2. Đố vui dân gian kích thích trí não và tiếng cười cho gia đình:
+- Câu đố 1: "Cái gì bằng quả cau, chẳng cắn chẳng nhai, mà làm cả làng vui vẻ?" -> Đáp án: Quả pháo (gợi nhớ không khí Tết xưa ấm áp).
+- Câu đố 2: "Cây gì không lá không cành, mà làm bóng mát cho đàn con thơ?" -> Đáp án: Tình mẹ / Mái nhà gia đình.
+- Câu đố 3: "Bốn chân đạp đất, hai sừng nhọn hoắt, kéo cày giúp bác nông dân?" -> Đáp án: Con trâu đồng.
+- Lợi ích: Khơi dậy ký ức tuổi thơ đồng quê, giúp cụ hoạt bát cười vui, tăng tiết hormone endorphin và dopamine chống trầm cảm tuổi già.

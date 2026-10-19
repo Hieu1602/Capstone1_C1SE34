@@ -42,13 +42,11 @@ class Base(DeclarativeBase):
 
 async def init_db() -> None:
     """Tạo tất cả tables nếu chưa tồn tại (dev only, prod dùng Alembic)."""
+    from sqlalchemy import text
     try:
         import app.models  # noqa: F401
         async with engine.begin() as conn:
             await conn.run_sync(Base.metadata.create_all)
-<<<<<<< Updated upstream
-        logger.info("[DB] Database initialized.")
-=======
             # Idempotent schema upgrades for Web Admin Portal & User Preferences
             await conn.execute(text("ALTER TABLE users ADD COLUMN IF NOT EXISTS last_login_at TIMESTAMPTZ;"))
             await conn.execute(text("ALTER TABLE users ADD COLUMN IF NOT EXISTS preferred_language VARCHAR(10) DEFAULT 'vi';"))
@@ -70,6 +68,10 @@ async def init_db() -> None:
             await conn.execute(text("ALTER TABLE device_configs ADD COLUMN IF NOT EXISTS configured_by_role VARCHAR(20) DEFAULT 'SYSTEM';"))
             await conn.execute(text("ALTER TABLE vital_signs ADD COLUMN IF NOT EXISTS bp_systolic INTEGER;"))
             await conn.execute(text("ALTER TABLE vital_signs ADD COLUMN IF NOT EXISTS bp_diastolic INTEGER;"))
+            await conn.execute(text("ALTER TABLE users ADD COLUMN IF NOT EXISTS location_enabled BOOLEAN DEFAULT TRUE;"))
+            await conn.execute(text("ALTER TABLE users ADD COLUMN IF NOT EXISTS location_latitude DOUBLE PRECISION;"))
+            await conn.execute(text("ALTER TABLE users ADD COLUMN IF NOT EXISTS location_longitude DOUBLE PRECISION;"))
+            await conn.execute(text("ALTER TABLE users ADD COLUMN IF NOT EXISTS location_address VARCHAR(500);"))
             await conn.execute(text("""
                 CREATE TABLE IF NOT EXISTS security_policies (
                     id VARCHAR(50) NOT NULL PRIMARY KEY,
@@ -151,8 +153,7 @@ async def init_db() -> None:
                     (gen_random_uuid(), 'Khuyến cáo sức khỏe mùa giao mùa', 'Nhiệt độ thay đổi đột ngột có thể ảnh hưởng đến huyết áp của người cao tuổi. Gia đình vui lòng kiểm tra thiết bị đo sinh hiệu phòng ngủ và duy trì nhiệt độ phòng 26-28 độ C.', 'health_tip', 'caregivers', 'published', CURRENT_TIMESTAMP - INTERVAL '5 hours', 89, 74),
                     (gen_random_uuid(), 'Cập nhật tính năng trợ lý AI Y khoa', 'Phiên bản mới của Chatbot y khoa đã được tích hợp mô hình phân tích triệu chứng chuyên sâu dành cho bác sĩ gia đình và người chăm sóc.', 'feature_update', 'all', 'scheduled', NULL, 0, 0);
                 """))
-        logger.info("[DB] Database initialized and Web Admin schema tables verified.")
->>>>>>> Stashed changes
+        logger.info("[DB] Database initialized and schema tables verified.")
     except Exception as e:
         logger.warning(f"[DB] Could not connect to database immediately: {e}")
 

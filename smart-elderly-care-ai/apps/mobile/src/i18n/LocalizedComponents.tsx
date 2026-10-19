@@ -3,6 +3,8 @@ import {
   Alert as NativeAlert,
   Text as NativeText,
   TextInput as NativeTextInput,
+  StyleSheet,
+  Platform,
 } from 'react-native';
 import type { TextInputProps, TextProps } from 'react-native';
 import { useTranslation } from 'react-i18next';
@@ -10,23 +12,37 @@ import i18n from './config';
 import { useThemeStore } from '../store/useThemeStore';
 
 function scaleTextStyle(style: TextProps['style'], fontScale: number) {
-  if (!style) return style;
+  if (!style) {
+    if (Platform.OS === 'web') {
+      return { fontFamily: "'Inter', 'Be Vietnam Pro', 'Plus Jakarta Sans', -apple-system, sans-serif" };
+    }
+    return style;
+  }
 
-  const styleList = Array.isArray(style) ? style : [style];
+  const flattened = StyleSheet.flatten(style);
+  if (!flattened || typeof flattened !== 'object') return style;
 
-  return styleList.map((item) => {
-    if (!item || typeof item !== 'object') return item;
-    const nextItem = { ...item } as Record<string, any>;
+  const nextItem = { ...flattened } as Record<string, any>;
 
-    if (typeof nextItem.fontSize === 'number') {
-      nextItem.fontSize = nextItem.fontSize * fontScale;
+  if (typeof nextItem.fontSize === 'number') {
+    if (fontScale !== 1) {
+      nextItem.fontSize = Math.round(nextItem.fontSize * fontScale);
     }
     if (typeof nextItem.lineHeight === 'number') {
-      nextItem.lineHeight = nextItem.lineHeight * fontScale;
+      if (fontScale !== 1) {
+        nextItem.lineHeight = Math.round(nextItem.lineHeight * fontScale);
+      }
+      if (nextItem.lineHeight < nextItem.fontSize * 1.3) {
+        nextItem.lineHeight = Math.round(nextItem.fontSize * 1.35);
+      }
     }
+  }
 
-    return nextItem;
-  });
+  if (Platform.OS === 'web' && !nextItem.fontFamily) {
+    nextItem.fontFamily = "'Inter', 'Be Vietnam Pro', 'Plus Jakarta Sans', -apple-system, sans-serif";
+  }
+
+  return nextItem;
 }
 
 function localizeString(value: string, translate: (key: string, options?: any) => string): string {
