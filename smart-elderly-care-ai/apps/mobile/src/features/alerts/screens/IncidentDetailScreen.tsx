@@ -1,15 +1,14 @@
 // ==============================================================================
-// IncidentDetailScreen.tsx – Màn hình Chi tiết Sự cố & Bằng chứng Video Clip
-// ------------------------------------------------------------------------------
-// Hệ thống giám sát người cao tuổi Smart Elderly Care AI (C1SE.34)
-//
-// Trách nhiệm của màn hình:
-// 1. Hiển thị chi tiết toàn diện về sự cố (Loại sự cố, Độ tin cậy AI, Mốc thời gian).
-// 2. Trình chiếu video clip bằng chứng 5 giây trích xuất từ camera Edge (hoặc MinIO).
-// 3. Cung cấp nút bấm "Đánh dấu đã xử lý":
-//    - Tắt còi hú và rung SOS trên điện thoại người nhà.
-//    - Đồng bộ API lên PostgreSQL Cloud Backend.
-//    - Cập nhật trạng thái acknowledged cho toàn bộ ứng dụng (Zustand store).
+// TỆP: IncidentDetailScreen.tsx
+// PHÂN HỆ: Màn hình Chi tiết Sự cố Khẩn cấp & Bằng chứng Video Clip 5 giây
+// TÁC GIẢ: Phan Nguyễn Giáng My
+// MÔ TẢ CHỨC NĂNG:
+//   1. Hiển thị chi tiết toàn diện về sự cố (Loại sự cố, Độ tin cậy AI, Mốc thời gian).
+//   2. Trình chiếu video clip bằng chứng 5 giây trích xuất từ camera Edge (hoặc MinIO).
+//   3. Cung cấp nút bấm "Đánh dấu đã xử lý":
+//      - Tắt còi hú và rung SOS trên điện thoại người nhà.
+//      - Đồng bộ API lên PostgreSQL Cloud Backend.
+//      - Cập nhật trạng thái acknowledged cho toàn bộ ứng dụng (Zustand store).
 // ==============================================================================
 
 import React, { useEffect, useState } from 'react';

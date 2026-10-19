@@ -1,5 +1,14 @@
-// VitalsSummaryCard.tsx
-// Component hiển thị thẻ tóm tắt các chỉ số sinh hiệu (Nhịp tim, SpO2, Thân nhiệt, Vận động, Âm thanh & Hub status)
+// ==============================================================================
+// TỆP: VitalsSummaryCard.tsx
+// PHÂN HỆ: Thẻ Tóm tắt Chỉ số Sinh tồn & Trạng thái Thiết bị (HomeScreen)
+// TÁC GIẢ: Phan Nguyễn Giáng My
+// MÔ TẢ CHỨC NĂNG:
+//   - Hiển thị trạng thái kết nối thực tế của Bộ xử lý trung tâm Edge Hub (Online/Offline)
+//     và dung lượng Pin của vòng đeo tay thông minh BLE.
+//   - Hiển thị lưới 5 chỉ số giám sát: Nhịp tim (BPM), Oxy máu (SpO2), Thân nhiệt (AMG8833),
+//     Tư thế vận động (YOLO-Pose) và Âm thanh môi trường (YAMNet).
+//   - Khi chưa có dữ liệu đo từ Database, tự động hiển thị ký hiệu '--' chuẩn Empty State.
+// ==============================================================================
 
 import React from 'react';
 import { View, StyleSheet, TouchableOpacity } from 'react-native';
@@ -32,6 +41,7 @@ export const VitalsSummaryCard: React.FC<VitalsSummaryCardProps> = ({
   colors,
   navigation,
 }) => {
+  // Kiểm tra các chỉ số sinh hiệu có dữ liệu thực từ cảm biến hay đang rỗng (null)
   const hasHR = currentVitals.heart_rate !== null && currentVitals.heart_rate !== undefined;
   const hasSpO2 = currentVitals.spo2 !== null && currentVitals.spo2 !== undefined;
   const hasTemp = currentVitals.skin_temp_max !== null && currentVitals.skin_temp_max !== undefined;

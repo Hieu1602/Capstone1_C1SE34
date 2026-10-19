@@ -1,14 +1,8 @@
 import { Linking } from 'react-native';
 import { emergencyApi } from './api';
 
-type EmergencyLocation = {
-  address?: string;
-  latitude?: number;
-  longitude?: number;
-};
-
-export async function launchEmergencyCall(location: EmergencyLocation = {}) {
-  const notificationRequest = emergencyApi.triggerSOS(location).then(
+export async function launchEmergencyCall() {
+  const notificationRequest = emergencyApi.triggerSOS().then(
     ({ data }) => {
       if (data?.notification_sent === 0 || data?.notification_failed > 0) {
         console.warn('[EmergencySOS] Household notification delivery was incomplete:', data);

@@ -52,10 +52,6 @@ CREATE TABLE users (
     font_size_mode VARCHAR(20) NOT NULL DEFAULT 'system', -- Cỡ chữ ('system', 'custom')
     custom_font_scale INT NOT NULL DEFAULT 2,          -- Tỷ lệ phóng to chữ
     vibration_enabled BOOLEAN NOT NULL DEFAULT TRUE,   -- Rung thông báo SOS
-    location_enabled BOOLEAN NOT NULL DEFAULT TRUE,    -- Định vị GPS
-    location_latitude DOUBLE PRECISION,                -- Vĩ độ GPS
-    location_longitude DOUBLE PRECISION,               -- Kinh độ GPS
-    location_address VARCHAR(500),                     -- Địa chỉ GPS
     avatar_url VARCHAR(500),                           -- Ảnh đại diện người dùng
     is_active BOOLEAN NOT NULL DEFAULT TRUE,
     fcm_token VARCHAR(500),

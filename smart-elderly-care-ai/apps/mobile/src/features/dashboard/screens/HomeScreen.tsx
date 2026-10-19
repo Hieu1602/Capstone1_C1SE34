@@ -1,6 +1,14 @@
-// HomeScreen.tsx
-// Màn hình Trang chủ Smart Home / Elderly Care AI
-// Tích hợp One-Touch SOS 115, Camera WebRTC & Playback 24/48h, Sinh hiệu & Âm thanh YAMNet, Sự cố gần đây
+// ==============================================================================
+// TỆP: HomeScreen.tsx
+// PHÂN HỆ: Màn hình Trang chủ (Dashboard / Nhà của tôi) - Smart Elderly Care AI
+// TÁC GIẢ: Phan Nguyễn Giáng My
+// MÔ TẢ CHỨC NĂNG:
+//   1. Hiển thị tổng quan ngôi nhà thông minh & chế độ an ninh (Xa, Ở nhà, Tắt báo động).
+//   2. Kết nối WebSocket thời gian thực nhận cảnh báo té ngã (YOLO-Pose) & âm thanh (YAMNet).
+//   3. Hiển thị thẻ Camera trực tiếp (HomeCameraCard), Tóm tắt sinh hiệu (VitalsSummaryCard),
+//      Xu hướng sức khỏe 12h (HealthTrendsCard) và Nhắc lịch uống thuốc (MedicationReminderWidget).
+//   4. Quản lý tính năng Tạm dừng chuông báo động (AlarmSnoozeModal) & Nút gọi khẩn cấp SOS 115.
+// ==============================================================================
 
 import React, { useState, useEffect } from 'react';
 import {
@@ -19,7 +27,7 @@ import { useTheme } from '../../../store/useThemeStore';
 import { systemApi } from '../../../services/api';
 import { alertsWS } from '../../../services/websocket';
 
-// Subcomponents đã được tách module hoá
+// Các component con đã được tách module hóa giúp code gọn gàng, dễ bảo trì
 import { HomeCameraCard } from '../components/HomeCameraCard';
 import { MedicationReminderWidget } from '../components/MedicationReminderWidget';
 import { VitalsSummaryCard } from '../components/VitalsSummaryCard';
@@ -27,7 +35,9 @@ import { HealthTrendsCard } from '../components/HealthTrendsCard';
 import { AlarmSnoozeModal } from '../components/AlarmSnoozeModal';
 
 export default function HomeScreen({ navigation }: any) {
+  // Quản lý trạng thái giao diện Sáng / Tối (Dark Mode)
   const { isDarkMode, colors, toggleTheme } = useTheme();
+  // Truy xuất dữ liệu trung tâm từ Zustand Store (useVitalStore)
   const {
     house,
     setHouseMode,
@@ -207,9 +217,9 @@ export default function HomeScreen({ navigation }: any) {
     syncAllWithBackend?.();
   }, []);
 
-  // Xử lý One-Touch SOS 115: Điều hướng trực tiếp đến màn hình "Gửi vị trí cấp cứu" chuẩn giao diện mẫu
+  // Mở màn hình SOS trước khi người dùng xác nhận gọi cấp cứu.
   const handleSOS115 = () => {
-    navigation.navigate('SendEmergencyLocation');
+    navigation.navigate('EmergencySOS');
   };
 
   const handleMicPress = () => {
@@ -565,7 +575,7 @@ export default function HomeScreen({ navigation }: any) {
                 </View>
               </View>
               <Text style={styles.sosSubtitleText} numberOfLines={1}>
-                Quay số 115 &amp; tự động sao chép địa chỉ nhà
+                Báo người thân &amp; gọi cấp cứu 115
               </Text>
             </View>
           </View>

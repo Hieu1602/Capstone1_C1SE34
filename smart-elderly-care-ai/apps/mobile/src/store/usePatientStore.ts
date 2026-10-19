@@ -1,11 +1,18 @@
-// usePatientStore.ts
-// Domain Store: Patient medical record, reminders, face enrollment
-// Tách từ useVitalStore.ts (Single Responsibility Principle)
+/**
+ * ============================================================================
+ * TỆP: usePatientStore.ts
+ * TÁC GIẢ: Phan Nguyễn Giáng My
+ * MÔ TẢ:
+ *   Domain Store quản lý hồ sơ bệnh án điện tử (Patient Medical Record),
+ *   lịch nhắc uống thuốc & dinh dưỡng (Reminders) và đăng ký khuôn mặt AI
+ *   (Face Enrollment) cho người cao tuổi.
+ * ============================================================================
+ */
 
 import { create } from 'zustand';
 import { remindersApi, patientApi } from '../services/api';
 
-// ---- Types ----
+// ---- Định nghĩa kiểu dữ liệu (Types) ----
 export interface MedicalConditionItem {
   id: string;
   name: string;
@@ -67,7 +74,8 @@ interface PatientState {
 
   // Actions
   fetchReminders: () => Promise<RemindersData | null>;
-  fetchPatientRecord: (patientId?: number, target_date?: string) => Promise<PatientMedicalRecord | null>;
+  fetchPatientRecord: (patientId?: number | string, target_date?: string) => Promise<PatientMedicalRecord | null>;
+  updatePatientRecord: (patientId: number | string, data: Partial<PatientMedicalRecord>) => Promise<PatientMedicalRecord | null>;
   enrollPatientFace: (patientId: number, formData: FormData) => Promise<any>;
 }
 
@@ -92,7 +100,7 @@ export const usePatientStore = create<PatientState>()((set) => ({
     return null;
   },
 
-  fetchPatientRecord: async (patientId: number = 1, target_date?: string) => {
+  fetchPatientRecord: async (patientId: number | string = 1, target_date?: string) => {
     set({ isLoadingPatient: true });
     try {
       const res = await patientApi.getMedicalRecord(patientId, target_date);
@@ -104,6 +112,25 @@ export const usePatientStore = create<PatientState>()((set) => ({
       console.warn('fetchPatientRecord API fallback:', e);
     }
     set({ isLoadingPatient: false });
+    return null;
+  },
+
+  updatePatientRecord: async (patientId: number | string = 1, data: Partial<PatientMedicalRecord>) => {
+    // Cập nhật ngay vào state để giao diện phản hồi tức thì
+    set((state) => ({
+      patientRecord: state.patientRecord ? { ...state.patientRecord, ...data } : (data as PatientMedicalRecord),
+    }));
+    try {
+      const res = await patientApi.updateMedicalRecord(patientId, data);
+      if (res.data) {
+        set((state) => ({
+          patientRecord: state.patientRecord ? { ...state.patientRecord, ...res.data } : res.data,
+        }));
+        return res.data;
+      }
+    } catch (e) {
+      console.warn('updatePatientRecord API fallback:', e);
+    }
     return null;
   },
 

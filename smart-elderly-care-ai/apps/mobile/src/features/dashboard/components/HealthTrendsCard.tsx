@@ -1,5 +1,13 @@
-// HealthTrendsCard.tsx
-// Khối "Xu hướng sức khoẻ hôm nay" (Health Trends Overview) – Mini bar chart, Stacked activity bar, SpO2 gauge ruler
+// ==============================================================================
+// TỆP: HealthTrendsCard.tsx
+// PHÂN HỆ: Thẻ "Xu hướng sức khỏe hôm nay" trên Trang chủ (HomeScreen)
+// TÁC GIẢ: Phan Nguyễn Giáng My
+// MÔ TẢ CHỨC NĂNG:
+//   - Hiển thị 2 biểu đồ mini trực quan: Nhịp tim 12h qua (Mini Bar Chart) &
+//     Độ bão hòa oxy trong máu SpO2 (Thước đo phân vùng 90% - 100%).
+//   - Tự động kiểm tra dữ liệu thực tế từ cảm biến: nếu chưa có bản ghi từ Database
+//     sẽ hiển thị trạng thái rỗng ("Chưa có dữ liệu" / "--"), không dùng dữ liệu giả.
+// ==============================================================================
 
 import React from 'react';
 import { View, StyleSheet, TouchableOpacity } from 'react-native';
@@ -20,10 +28,12 @@ export function HealthTrendsCard({
   colors,
   currentVitals,
 }: HealthTrendsCardProps) {
+  // Kiểm tra sự tồn tại của dữ liệu nhịp tim và SpO2 thực tế từ vòng đeo tay BLE
   const hasHR = currentVitals?.heart_rate !== null && currentVitals?.heart_rate !== undefined;
   const hasSpO2 = currentVitals?.spo2 !== null && currentVitals?.spo2 !== undefined;
   const hasAnyData = hasHR || hasSpO2;
 
+  // Giá trị hiển thị thực tế và tính toán vị trí kim chỉ báo SpO2 trên thang đo 90-100%
   const hrValue = hasHR ? currentVitals.heart_rate : null;
   const spo2Value = hasSpO2 ? currentVitals.spo2 : null;
   const spo2PinPercent = spo2Value !== null ? Math.min(100, Math.max(0, (spo2Value - 90) * 10)) : 0;

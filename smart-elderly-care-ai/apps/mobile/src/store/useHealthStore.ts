@@ -1,11 +1,19 @@
-// useHealthStore.ts
-// Domain Store: Vitals streaming, sensor data, algo settings
-// Tách từ useVitalStore.ts (Single Responsibility Principle)
+// ==============================================================================
+// TỆP: useHealthStore.ts
+// PHÂN HỆ: Domain Store quản lý Chỉ số Sinh tồn Thời gian thực & Ngưỡng Cảnh báo AI
+// TÁC GIẢ: Phan Nguyễn Giáng My
+// MÔ TẢ CHỨC NĂNG:
+//   1. Lưu trữ trạng thái chỉ số sinh hiệu tức thời (Nhịp tim, SpO2, Nhiệt độ da,
+//      Trạng thái té ngã, Âm thanh môi trường, Dung lượng pin vòng đeo tay BLE).
+//   2. Khởi tạo mặc định ở trạng thái rỗng (null) để tránh hiển thị dữ liệu mẫu giả lập
+//      khi thiết bị hoặc cơ sở dữ liệu chưa có bản ghi đo thực tế.
+//   3. Cung cấp các hàm bất đồng bộ fetchVitals() và fetchSystemMode() đồng bộ với FastAPI.
+// ==============================================================================
 
 import { create } from 'zustand';
 import { vitalsApi, systemApi } from '../services/api';
 
-// ---- Types ----
+// Cấu trúc dữ liệu sinh hiệu thời gian thực nhận từ Vòng tay BLE & Camera AI
 export interface VitalData {
   heart_rate: number | null;
   spo2: number | null;
@@ -21,6 +29,7 @@ export interface VitalData {
   edge_hub_connected?: boolean;
 }
 
+// Cấu hình ngưỡng an toàn sinh lý dùng để kích hoạt cảnh báo sớm
 export interface AlgoSettings {
   maxHeartRate: number;
   minHeartRate: number;

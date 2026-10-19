@@ -41,7 +41,16 @@ class ElderlyProfile(Base):
     
     # Tiền sử bệnh lý (tăng huyết áp, tim mạch, tai biến, loãng xương, rối loạn tiền đình...)
     medical_history: Mapped[str | None] = mapped_column(Text, nullable=True)
-    
+    conditions_json: Mapped[str | None] = mapped_column(Text, nullable=True)
+
+    # Thông tin thể trạng & dị ứng / chế độ dinh dưỡng
+    blood_type: Mapped[str | None] = mapped_column(String(10), nullable=True)
+    height_cm: Mapped[int | None] = mapped_column(Integer, nullable=True)
+    weight_kg: Mapped[int | None] = mapped_column(Integer, nullable=True)
+    drug_allergies: Mapped[str | None] = mapped_column(Text, nullable=True)
+    food_allergies: Mapped[str | None] = mapped_column(Text, nullable=True)
+    dietary_notes: Mapped[str | None] = mapped_column(Text, nullable=True)
+
     # Số điện thoại liên lạc người thân khẩn cấp
     emergency_contact_phone: Mapped[str | None] = mapped_column(String(20), nullable=True)
     avatar_url: Mapped[str | None] = mapped_column(String(500), nullable=True)

@@ -1,6 +1,13 @@
-// CameraDetailScreen.tsx
-// Màn hình Camera Chi Tiết – UI chuẩn Imou Life / SmartCare AI
-// Tham khảo giao diện thực tế Imou Ranger 2C
+// ==============================================================================
+// TỆP: CameraDetailScreen.tsx
+// PHÂN HỆ: Màn hình Điều khiển & Xem Trực tiếp Camera AI Chi tiết
+// TÁC GIẢ: Phan Nguyễn Giáng My
+// MÔ TẢ CHỨC NĂNG:
+//   1. Phát luồng trực tiếp (Live Stream WebRTC / RTSP) kèm lớp phủ khung xương AI (YOLO-Pose).
+//   2. Điều khiển quay quét PTZ 360 độ (Pan-Tilt-Zoom), Đàm thoại 2 chiều, Chụp ảnh, Ghi hình.
+//   3. Tích hợp còi báo động khẩn cấp (Web Audio Siren), Chế độ riêng tư (Privacy Mode)
+//      và Xem lại lịch sử sự kiện ghi hình 24/48h (Playback Timeline).
+// ==============================================================================
 
 import React, { useState, useRef, useEffect, useMemo } from 'react';
 import { View, StyleSheet, TouchableOpacity, ScrollView, Image, Modal, Animated, useWindowDimensions, Platform, ActivityIndicator } from 'react-native';
@@ -261,7 +268,6 @@ export default function CameraDetailScreen({ navigation, route }: any) {
   const isPortrait = winH > winW;
   const {
     camera,
-    house,
     incidents,
     currentVitals,
     setCameraResolution,
@@ -703,20 +709,14 @@ export default function CameraDetailScreen({ navigation, route }: any) {
   const handleSOS115 = () => {
     LocalizedAlert.alert(
       '🚨 KHẨN CẤP / CẤP CỨU 115',
-      `Địa chỉ: "${house.address}"\nBạn muốn mở màn hình gửi vị trí kèm hình ảnh cấp cứu hay gọi trực tiếp 115?`,
+      'Bạn muốn thông báo người thân và gọi cấp cứu 115 ngay bây giờ?',
       [
         { text: 'Hủy', style: 'cancel' },
-        {
-          text: '📍 Gửi vị trí & ảnh',
-          onPress: () => {
-            navigation.navigate('SendEmergencyLocation');
-          },
-        },
         {
           text: '📞 Gọi 115 ngay',
           style: 'destructive',
           onPress: () => {
-            void launchEmergencyCall({ address: house.address }).catch((error) => {
+            void launchEmergencyCall().catch((error) => {
               console.warn('[CameraDetailScreen] Could not open emergency dialer:', error);
             });
           },

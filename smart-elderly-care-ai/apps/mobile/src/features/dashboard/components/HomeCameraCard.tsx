@@ -1,5 +1,14 @@
-// HomeCameraCard.tsx
-// Component hiển thị thẻ camera chính (Live view WebRTC, trạng thái Hub, Privacy mode, Playback 24/48h & Toolbar điều khiển)
+// ==============================================================================
+// TỆP: HomeCameraCard.tsx
+// PHÂN HỆ: Thẻ Camera AI Giám sát Trực tiếp trên Trang chủ (HomeScreen)
+// TÁC GIẢ: Phan Nguyễn Giáng My
+// MÔ TẢ CHỨC NĂNG:
+//   - Hiển thị luồng hình ảnh trực tiếp (WebRTC Live View) của phòng người cao tuổi.
+//   - Đồng bộ nhãn trạng thái bảo vệ theo chế độ ngôi nhà (Ở nhà, Vắng nhà, Tắt báo động)
+//     và chế độ Ống kính riêng tư (Privacy Shutter).
+//   - Cung cấp thanh công cụ điều khiển nhanh: Xem lại 24/48h, Đàm thoại 2 chiều,
+//     Bật/Tắt AI phát hiện té ngã, Chế độ đa khung hình 2x2 (MultiView).
+// ==============================================================================
 
 import React from 'react';
 import { View, StyleSheet, TouchableOpacity, Image } from 'react-native';
@@ -7,6 +16,7 @@ import { Ionicons, MaterialCommunityIcons } from '@expo/vector-icons';
 import { LocalizedText as Text } from '../../../i18n/LocalizedComponents';
 import { Colors, Shadows } from '../../../theme/colors';
 
+// Định nghĩa Props điều khiển trạng thái Camera và điều hướng màn hình
 interface HomeCameraCardProps {
   cameraDisplayName: string;
   camera: {

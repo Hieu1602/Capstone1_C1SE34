@@ -1,5 +1,13 @@
-// MedicationReminderWidget.tsx
-// Component widget nhắc nhở lịch uống thuốc / sinh hoạt tiếp theo kèm nút hoàn thành nhanh
+// ==============================================================================
+// TỆP: MedicationReminderWidget.tsx
+// PHÂN HỆ: Widget Nhắc lịch Uống thuốc & Sinh hoạt tiếp theo trên Trang chủ
+// TÁC GIẢ: Phan Nguyễn Giáng My
+// MÔ TẢ CHỨC NĂNG:
+//   - Hiển thị cữ thuốc hoặc lịch sinh hoạt gần nhất trong ngày của người cao tuổi.
+//   - Kết nối phát thông báo giọng nói tự động qua Loa Edge Hub.
+//   - Hỗ trợ nút đánh dấu "Hoàn thành" nhanh ngay tại Trang chủ hoặc bấm vào để mở
+//     màn hình Quản lý lịch uống thuốc chi tiết (MedicationReminderScreen).
+// ==============================================================================
 
 import React from 'react';
 import { View, StyleSheet, TouchableOpacity } from 'react-native';

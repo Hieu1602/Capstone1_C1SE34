@@ -1,5 +1,12 @@
-// HealthVitalsGrid.tsx
-// Lưới 4 thẻ hiển thị chỉ số sinh hiệu (Nhịp tim, SpO2, Thân nhiệt, Vận động)
+// ==============================================================================
+// TỆP: HealthVitalsGrid.tsx
+// PHÂN HỆ: Lưới 4 Thẻ Chỉ số Sinh tồn Chính (HealthDetailScreen)
+// TÁC GIẢ: Phan Nguyễn Giáng My
+// MÔ TẢ CHỨC NĂNG:
+//   - Hiển thị 4 thẻ chỉ số dạng Grid 2x2: Nhịp tim (BPM), Nồng độ Oxy máu (SpO2),
+//     Nhiệt độ da (AMG8833) và Mức độ vận động / Tư thế (YOLO-Pose).
+//   - Hỗ trợ chạm vào từng thẻ để làm nổi bật (Highlight) chỉ số đang quan tâm.
+// ==============================================================================
 
 import React from 'react';
 import { View, StyleSheet, TouchableOpacity, Dimensions } from 'react-native';
@@ -9,6 +16,7 @@ import { Colors, Shadows } from '../../../theme/colors';
 
 const { width: SCREEN_WIDTH } = Dimensions.get('window');
 
+// Cấu trúc dữ liệu cấu hình cho mỗi thẻ chỉ số sinh hiệu
 export interface VitalCardConfig {
   label: string;
   value: string;

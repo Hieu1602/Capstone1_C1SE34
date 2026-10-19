@@ -655,7 +655,7 @@ export default function AddDeviceScreen({ navigation }: any) {
             {currentStep === 'WIFI_GUIDE' && 'Bước 4A: Kết nối thiết bị SECA'}
             {currentStep === 'WATCH_LIST' && 'Bước 2: Chọn model Đồng hồ'}
             {currentStep === 'BLE_POWER_CHECK' && 'Bước 3B: Mở nguồn & Bật Bluetooth'}
-            {currentStep === 'BLE_PERMISSION' && 'Bước 4B: Cấp quyền Bluetooth & Vị trí'}
+            {currentStep === 'BLE_PERMISSION' && 'Bước 4B: Cấp quyền Bluetooth'}
             {currentStep === 'BLE_SCAN' && 'Bước 5B: Radar quét BLE xung quanh'}
             {currentStep === 'BLE_PAIRING' && 'Bước 6B: Ghép nối Bluetooth GATT'}
             {currentStep === 'OTHER_LIST' && 'Cảm biến IoT qua Edge Hub'}
@@ -1135,7 +1135,7 @@ export default function AddDeviceScreen({ navigation }: any) {
           <View>
             <LocalizedText style={styles.stepHeaderTitle}>Kiểm Tra Quyền Hệ Điều Hành (OS)</LocalizedText>
             <LocalizedText style={styles.stepHeaderDesc}>
-              Theo quy định của Android và iOS, để quét tìm thiết bị Bluetooth xung quanh, ứng dụng cần được cấp quyền:
+              Để quét tìm và kết nối đồng hồ, ứng dụng cần được cấp quyền Bluetooth:
             </LocalizedText>
 
             <View style={styles.permissionCard}>
@@ -1155,21 +1155,6 @@ export default function AddDeviceScreen({ navigation }: any) {
                 />
               </View>
 
-              {/* Perm 2 */}
-              <View style={styles.permRow}>
-                <View style={[styles.permIconBox, { backgroundColor: '#EFF6FF' }]}>
-                  <Ionicons name="location" size={22} color="#2563EB" />
-                </View>
-                <View style={{ flex: 1 }}>
-                  <LocalizedText style={styles.permTitle}>Quyền Vị trí (Location OS)</LocalizedText>
-                  <LocalizedText style={styles.permDesc}>Bắt buộc trên Android để quét Beacon & BLE lân cận</LocalizedText>
-                </View>
-                <Ionicons
-                  name={hasBlePermission ? 'checkmark-circle' : 'alert-circle'}
-                  size={24}
-                  color={hasBlePermission ? '#10B981' : '#F59E0B'}
-                />
-              </View>
             </View>
 
             {/* Trạng thái quyền */}
@@ -1550,7 +1535,7 @@ export default function AddDeviceScreen({ navigation }: any) {
             <LocalizedText style={styles.modalTitle}>Cấp Quyền Hệ Thống</LocalizedText>
             <LocalizedText style={styles.modalMessage}>
               Để phát hiện và đồng bộ dữ liệu nhịp tim, SpO₂ từ đồng hồ thông minh, hệ thống cần quyền{' '}
-              <LocalizedText style={{ fontWeight: 'bold' }}>Bluetooth & Vị trí</LocalizedText> theo tiêu chuẩn OS.
+              <LocalizedText style={{ fontWeight: 'bold' }}>Bluetooth</LocalizedText>.
             </LocalizedText>
 
             <View style={styles.modalButtonRow}>

@@ -1,13 +1,12 @@
 // ==============================================================================
-// AlertsListScreen.tsx – Màn hình Danh sách Cảnh báo & Thông báo Sự kiện Khẩn cấp
-// ------------------------------------------------------------------------------
-// Hệ thống giám sát người cao tuổi Smart Elderly Care AI (C1SE.34)
-//
-// Trách nhiệm của màn hình:
-// 1. Hiển thị danh sách sự cố/cảnh báo được đồng bộ từ Cloud Backend theo thời gian thực.
-// 2. Phân loại mức độ nguy hiểm: Cực kỳ nguy hiểm (Té ngã, Tiếng kêu cứu) & Cảnh báo sinh hiệu (Nhịp tim, SpO2).
-// 3. Cung cấp bộ lọc (Filter Chips) để người nhà/bác sĩ dễ dàng tra cứu nhanh sự kiện.
-// 4. Cho phép đánh dấu đã đọc tập trung hoặc xem chi tiết clip bằng chứng 5 giây.
+// TỆP: AlertsListScreen.tsx
+// PHÂN HỆ: Màn hình Danh sách Cảnh báo & Thông báo Sự kiện Khẩn cấp
+// TÁC GIẢ: Phan Nguyễn Giáng My
+// MÔ TẢ CHỨC NĂNG:
+//   1. Hiển thị danh sách sự cố/cảnh báo được đồng bộ từ Cloud Backend theo thời gian thực.
+//   2. Phân loại mức độ nguy hiểm: Cực kỳ nguy hiểm (Té ngã, Tiếng kêu cứu) & Cảnh báo sinh hiệu (Nhịp tim, SpO2).
+//   3. Cung cấp bộ lọc (Filter Chips) để người nhà/bác sĩ dễ dàng tra cứu nhanh sự kiện.
+//   4. Cho phép đánh dấu đã đọc tập trung hoặc xem chi tiết clip bằng chứng 5 giây.
 // ==============================================================================
 
 import React, { useState } from 'react';

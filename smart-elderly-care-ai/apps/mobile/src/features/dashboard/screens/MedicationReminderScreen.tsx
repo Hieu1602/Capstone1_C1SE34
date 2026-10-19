@@ -1,6 +1,13 @@
-// MedicationReminderScreen.tsx
-// Màn hình chi tiết "Lịch uống thuốc & Ăn uống sinh hoạt"
-// Hỗ trợ Phát thông báo qua Loa thông minh Hub (Voice Reminder FR12)
+// ==============================================================================
+// TỆP: MedicationReminderScreen.tsx
+// PHÂN HỆ: Màn hình Quản lý Lịch Uống thuốc & Chế độ Sinh hoạt Hàng ngày
+// TÁC GIẢ: Phan Nguyễn Giáng My
+// MÔ TẢ CHỨC NĂNG:
+//   1. Quản lý danh sách các cữ thuốc theo buổi (Sáng, Trưa, Tối) và Lịch uống nước.
+//   2. Tích hợp tính năng Phát lời nhắc giọng nói tự động qua Loa thông minh Edge Hub (FR12).
+//   3. Cho phép thêm cữ thuốc mới, lọc theo buổi và đánh dấu hoàn thành từng cữ thuốc.
+//   4. Hiển thị trạng thái trống (Empty State) chuẩn xác khi chưa tạo lịch nhắc nhở.
+// ==============================================================================
 
 import React, { useState } from 'react';
 import { View, StyleSheet, TouchableOpacity, ScrollView, Switch, Modal, Pressable } from 'react-native';
@@ -10,6 +17,7 @@ import { useTheme } from '../../../store/useThemeStore';
 import { Colors } from '../../../theme/colors';
 import { LocalizedAlert, LocalizedText, LocalizedTextInput } from '../../../i18n/LocalizedComponents';
 
+// Cấu trúc dữ liệu một cữ thuốc nhắc nhở
 interface MedicationItem {
   id: string;
   name: string;
@@ -20,6 +28,7 @@ interface MedicationItem {
   taken: boolean;
 }
 
+// Cấu trúc dữ liệu một mốc nhắc uống nước / sinh hoạt
 interface HydrationSchedule {
   time: string;
   amount: string;
@@ -30,25 +39,27 @@ interface HydrationSchedule {
 export default function MedicationReminderScreen({ navigation }: any) {
   const { isDarkMode } = useTheme();
 
-  // FR12: Voice Reminder through Hub Smart Speaker
+  // Trạng thái bật/tắt phát giọng nói nhắc nhở qua Loa thông minh Edge Hub (FR12)
   const [hubVoiceReminderEnabled, setHubVoiceReminderEnabled] = useState(true);
   const [isPlayingTestVoice, setIsPlayingTestVoice] = useState(false);
 
-  // Filter session
+  // Bộ lọc hiển thị theo buổi: Tất cả | Buổi sáng | Buổi trưa | Buổi tối
   const [selectedFilter, setSelectedFilter] = useState<'ALL' | 'MORNING' | 'NOON' | 'EVENING'>('ALL');
 
-  // Danh sách cữ thuốc (bắt đầu từ dữ liệu thực, không mock)
+  // Danh sách cữ thuốc thực tế của người cao tuổi (khởi tạo rỗng, không dùng mock data)
   const [medications, setMedications] = useState<MedicationItem[]>([]);
 
-  // Lịch uống nước (bắt đầu rỗng)
+  // Danh sách lịch uống nước trong ngày (khởi tạo rỗng)
   const [hydrationList, setHydrationList] = useState<HydrationSchedule[]>([]);
 
-  // Add new med modal
+  // State quản lý Modal thêm cữ thuốc mới
   const [isAddMedModalVisible, setAddMedModalVisible] = useState(false);
   const [newMedName, setNewMedName] = useState('');
   const [newMedTime, setNewMedTime] = useState('18:30');
   const [newMedSession, setNewMedSession] = useState<'MORNING' | 'NOON' | 'EVENING'>('EVENING');
   const [newMedDose, setNewMedDose] = useState('');
+
+  // Đánh dấu hoàn thành hoặc hoàn tác một cữ thuốc
 
   const toggleMedicationTaken = (id: string) => {
     setMedications((prev) =>

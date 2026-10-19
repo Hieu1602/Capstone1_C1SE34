@@ -102,7 +102,6 @@ async def list_users(
                     font_size_mode="system",
                     custom_font_scale=2,
                     vibration_enabled=True,
-                    location_enabled=True,
                     created_at=eld.created_at,
                     updated_at=eld.updated_at,
                     last_login_at=eld.updated_at,
@@ -162,7 +161,6 @@ async def create_user_by_admin(
             font_size_mode="system",
             custom_font_scale=2,
             vibration_enabled=True,
-            location_enabled=True,
             created_at=eld.created_at,
             updated_at=eld.updated_at,
             assigned_house=f"{default_house.name} ({default_house.address})",
@@ -191,97 +189,6 @@ async def create_user_by_admin(
     return user_out
 
 
-@router.patch("/{user_id}", response_model=UserOut)
-async def update_user_by_admin(
-    user_id: str,
-    update_data: dict = Body(...),
-    db: AsyncSession = Depends(get_db),
-    current_user: User = Depends(get_current_user),
-):
-    """Admin cập nhật thông tin, vai trò hoặc trạng thái khóa/mở tài khoản."""
-    from uuid import UUID
-    try:
-        uid = UUID(user_id)
-    except ValueError:
-        raise HTTPException(status_code=400, detail="User ID không hợp lệ")
-
-    # Kiểm tra trong bảng users
-    user = await crud_user.get_by_id(db, uid)
-    if user:
-        if "password" in update_data and update_data["password"]:
-            update_data["hashed_password"] = hash_password(update_data.pop("password"))
-
-        updated_user = await crud_user.update(db, db_obj=user, obj_in=update_data)
-        await db.commit()
-        await db.refresh(updated_user)
-        user_out = UserOut.model_validate(updated_user)
-        user_out.assigned_house = update_data.get("assigned_house") or "Nhà của tôi"
-        return user_out
-
-    # Kiểm tra trong bảng elderly_profiles
-    eld_res = await db.execute(select(ElderlyProfile).where(ElderlyProfile.id == uid))
-    eld = eld_res.scalar_one_or_none()
-    if eld:
-        if "full_name" in update_data and update_data["full_name"]:
-            eld.full_name = update_data["full_name"]
-        if "phone" in update_data and update_data["phone"]:
-            eld.emergency_contact_phone = update_data["phone"]
-        await db.commit()
-        await db.refresh(eld)
-        return UserOut(
-            id=eld.id,
-            phone=eld.emergency_contact_phone or "+84905123456",
-            full_name=eld.full_name,
-            role="elderly",
-            role_title="Người cao tuổi",
-            is_active=True,
-            preferred_language="vi",
-            language="vi",
-            font_size_mode="system",
-            custom_font_scale=2,
-            vibration_enabled=True,
-            location_enabled=True,
-            created_at=eld.created_at,
-            updated_at=eld.updated_at,
-            assigned_house=update_data.get("assigned_house") or "Nhà của tôi",
-        )
-
-    raise HTTPException(status_code=404, detail="Không tìm thấy người dùng")
-
-
-@router.delete("/{user_id}")
-async def delete_user_by_admin(
-    user_id: str,
-    db: AsyncSession = Depends(get_db),
-    current_user: User = Depends(get_current_user),
-):
-    """Admin xóa tài khoản người dùng hoặc hồ sơ người cao tuổi khỏi hệ thống."""
-    from uuid import UUID
-    try:
-        uid = UUID(user_id)
-    except ValueError:
-        raise HTTPException(status_code=400, detail="User ID không hợp lệ")
-
-    # Kiểm tra người dùng
-    user = await crud_user.get_by_id(db, uid)
-    if user:
-        if user.role == "admin":
-            raise HTTPException(status_code=400, detail="Không thể xóa tài khoản Quản trị viên hệ thống!")
-        await crud_user.delete(db, uid)
-        await db.commit()
-        return {"message": "Đã xóa tài khoản thành công", "user_id": user_id}
-
-    # Kiểm tra người cao tuổi
-    eld_res = await db.execute(select(ElderlyProfile).where(ElderlyProfile.id == uid))
-    eld = eld_res.scalar_one_or_none()
-    if eld:
-        await db.delete(eld)
-        await db.commit()
-        return {"message": "Đã xóa hồ sơ người cao tuổi thành công", "user_id": user_id}
-
-    raise HTTPException(status_code=404, detail="Không tìm thấy đối tượng để xóa")
-
-
 @router.get("/me", response_model=UserOut)
 async def get_current_user_profile(
     current_user: User = Depends(get_current_user),
@@ -291,6 +198,7 @@ async def get_current_user_profile(
 
 
 @router.patch("/me", response_model=UserOut)
+@router.put("/me", response_model=UserOut)
 async def update_profile(
     update_in: UserUpdate,
     current_user: User = Depends(get_current_user),
@@ -298,7 +206,10 @@ async def update_profile(
 ):
     """Cập nhật thông tin profile (tên, số điện thoại, FCM token, ngôn ngữ)."""
     update_data = update_in.model_dump(exclude_unset=True)
-    return await crud_user.update(db, db_obj=current_user, obj_in=update_data)
+    updated_user = await crud_user.update(db, db_obj=current_user, obj_in=update_data)
+    await db.commit()
+    await db.refresh(updated_user)
+    return updated_user
 
 
 @router.patch("/me/language", response_model=UserOut)
@@ -358,7 +269,6 @@ async def change_current_user_password(
     return {"message": "Mật khẩu đã được cập nhật."}
 
 
-
 @router.patch("/me/fcm-token", response_model=UserOut)
 async def update_fcm_token(
     fcm_token: str = Body(..., embed=True),
@@ -367,3 +277,93 @@ async def update_fcm_token(
 ):
     """Cập nhật FCM Push token khi app mobile khởi động."""
     return await crud_user.update(db, db_obj=current_user, obj_in={"fcm_token": fcm_token})
+
+
+@router.patch("/{user_id}", response_model=UserOut)
+async def update_user_by_admin(
+    user_id: str,
+    update_data: dict = Body(...),
+    db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+):
+    """Admin cập nhật thông tin, vai trò hoặc trạng thái khóa/mở tài khoản."""
+    from uuid import UUID
+    try:
+        uid = UUID(user_id)
+    except ValueError:
+        raise HTTPException(status_code=400, detail="User ID không hợp lệ")
+
+    # Kiểm tra trong bảng users
+    user = await crud_user.get_by_id(db, uid)
+    if user:
+        if "password" in update_data and update_data["password"]:
+            update_data["hashed_password"] = hash_password(update_data.pop("password"))
+
+        updated_user = await crud_user.update(db, db_obj=user, obj_in=update_data)
+        await db.commit()
+        await db.refresh(updated_user)
+        user_out = UserOut.model_validate(updated_user)
+        user_out.assigned_house = update_data.get("assigned_house") or "Nhà của tôi"
+        return user_out
+
+    # Kiểm tra trong bảng elderly_profiles
+    eld_res = await db.execute(select(ElderlyProfile).where(ElderlyProfile.id == uid))
+    eld = eld_res.scalar_one_or_none()
+    if eld:
+        if "full_name" in update_data and update_data["full_name"]:
+            eld.full_name = update_data["full_name"]
+        if "phone" in update_data and update_data["phone"]:
+            eld.emergency_contact_phone = update_data["phone"]
+        await db.commit()
+        await db.refresh(eld)
+        return UserOut(
+            id=eld.id,
+            phone=eld.emergency_contact_phone or "+84905123456",
+            full_name=eld.full_name,
+            role="elderly",
+            role_title="Người cao tuổi",
+            is_active=True,
+            preferred_language="vi",
+            language="vi",
+            font_size_mode="system",
+            custom_font_scale=2,
+            vibration_enabled=True,
+            created_at=eld.created_at,
+            updated_at=eld.updated_at,
+            assigned_house=update_data.get("assigned_house") or "Nhà của tôi",
+        )
+
+    raise HTTPException(status_code=404, detail="Không tìm thấy người dùng")
+
+
+@router.delete("/{user_id}")
+async def delete_user_by_admin(
+    user_id: str,
+    db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+):
+    """Admin xóa tài khoản người dùng hoặc hồ sơ người cao tuổi khỏi hệ thống."""
+    from uuid import UUID
+    try:
+        uid = UUID(user_id)
+    except ValueError:
+        raise HTTPException(status_code=400, detail="User ID không hợp lệ")
+
+    # Kiểm tra người dùng
+    user = await crud_user.get_by_id(db, uid)
+    if user:
+        if user.role == "admin":
+            raise HTTPException(status_code=400, detail="Không thể xóa tài khoản Quản trị viên hệ thống!")
+        await crud_user.delete(db, uid)
+        await db.commit()
+        return {"message": "Đã xóa tài khoản thành công", "user_id": user_id}
+
+    # Kiểm tra người cao tuổi
+    eld_res = await db.execute(select(ElderlyProfile).where(ElderlyProfile.id == uid))
+    eld = eld_res.scalar_one_or_none()
+    if eld:
+        await db.delete(eld)
+        await db.commit()
+        return {"message": "Đã xóa hồ sơ người cao tuổi thành công", "user_id": user_id}
+
+    raise HTTPException(status_code=404, detail="Không tìm thấy đối tượng để xóa")

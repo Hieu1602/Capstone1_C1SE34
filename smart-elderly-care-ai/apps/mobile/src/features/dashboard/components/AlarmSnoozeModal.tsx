@@ -1,5 +1,12 @@
-// AlarmSnoozeModal.tsx
-// BottomSheet Modal tạm dừng chuông báo động (Snooze Alarm ActionSheet)
+// ==============================================================================
+// TỆP: AlarmSnoozeModal.tsx
+// PHÂN HỆ: Modal Tạm dừng chuông báo động (Snooze Alarm BottomSheet)
+// TÁC GIẢ: Phan Nguyễn Giáng My
+// MÔ TẢ CHỨC NĂNG:
+//   - Cho phép người chăm sóc tạm tắt còi hú báo động tại Loa Hub (15p, 30p, 1h, hoặc vô hạn).
+//   - Tùy chọn chế độ thông báo: Chỉ rung (VIBRATE) hoặc Im lặng hoàn toàn (SILENT).
+//   - Đồng bộ trạng thái tắt chuông cho toàn bộ thành viên trong gia đình qua Backend API.
+// ==============================================================================
 
 import React from 'react';
 import {
@@ -13,6 +20,7 @@ import {
 import { Ionicons } from '@expo/vector-icons';
 import { LocalizedText as Text } from '../../../i18n/LocalizedComponents';
 
+// Định nghĩa các thuộc tính đầu vào (Props) cho Modal tạm dừng báo động
 interface AlarmSnoozeModalProps {
   visible: boolean;
   onClose: () => void;

@@ -1,11 +1,18 @@
-// useAlertStore.ts
-// Domain Store: Incidents, alarms, siren state
-// Tách từ useVitalStore.ts (Single Responsibility Principle)
+/**
+ * ============================================================================
+ * TỆP: useAlertStore.ts
+ * TÁC GIẢ: Phan Nguyễn Giáng My
+ * MÔ TẢ:
+ *   Domain Store quản lý danh sách sự cố cảnh báo (Incidents), trạng thái còi
+ *   hú khẩn cấp (Siren) và chế độ tạm tắt chuông báo động (Alarm Snooze).
+ *   Tách biệt theo nguyên lý Single Responsibility Principle (SRP).
+ * ============================================================================
+ */
 
 import { create } from 'zustand';
 import { incidentsApi } from '../services/api';
 
-// ---- Types ----
+// ---- Định nghĩa kiểu dữ liệu (Types) ----
 export interface Incident {
   id: string;
   device_id?: string;

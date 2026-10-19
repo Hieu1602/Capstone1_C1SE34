@@ -2,7 +2,7 @@
 
 from typing import Literal
 
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, ConfigDict, Field
 
 
 class EmergencySOSRequest(BaseModel):
@@ -10,6 +10,8 @@ class EmergencySOSRequest(BaseModel):
     latitude: float | None = Field(default=None, ge=-90, le=90)
     longitude: float | None = Field(default=None, ge=-180, le=180)
     message: str | None = Field(default=None, max_length=500)
+
+    model_config = ConfigDict(extra="forbid")
 
 
 class EmergencySOSResponse(BaseModel):

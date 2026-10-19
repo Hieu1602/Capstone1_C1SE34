@@ -175,12 +175,12 @@ export const SecurityManagementPage: React.FC = () => {
       if (policiesData && policiesData.length > 0) setPolicies(policiesData);
       if (sessionsData && sessionsData.length > 0) {
         // Author: DuongVanHieu - Khử trùng lặp sessions theo id phòng ngừa lỗi duplicate React keys
-        const uniqueSessions = Array.from(new Map(sessionsData.map((s) => [s.id, s])).values());
+        const uniqueSessions = Array.from(new Map<string, ActiveSession>(sessionsData.map((s) => [s.id, s])).values());
         setSessions(uniqueSessions);
       }
       if (logsData && logsData.length > 0) {
         // Author: DuongVanHieu - Khử trùng lặp audit logs theo id
-        const uniqueLogs = Array.from(new Map(logsData.map((l) => [l.id, l])).values());
+        const uniqueLogs = Array.from(new Map<string, SecurityAuditLog>(logsData.map((l) => [l.id, l])).values());
         setAuditLogs(uniqueLogs);
       }
     } finally {

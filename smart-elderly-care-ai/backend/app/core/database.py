@@ -53,16 +53,39 @@ async def init_db() -> None:
             await conn.execute(text("ALTER TABLE users ADD COLUMN IF NOT EXISTS font_size_mode VARCHAR(20) DEFAULT 'system';"))
             await conn.execute(text("ALTER TABLE users ADD COLUMN IF NOT EXISTS custom_font_scale INTEGER DEFAULT 2;"))
             await conn.execute(text("ALTER TABLE users ADD COLUMN IF NOT EXISTS vibration_enabled BOOLEAN DEFAULT TRUE;"))
-            await conn.execute(text("ALTER TABLE users ADD COLUMN IF NOT EXISTS location_enabled BOOLEAN DEFAULT TRUE;"))
-            await conn.execute(text("ALTER TABLE users ADD COLUMN IF NOT EXISTS location_latitude DOUBLE PRECISION;"))
-            await conn.execute(text("ALTER TABLE users ADD COLUMN IF NOT EXISTS location_longitude DOUBLE PRECISION;"))
-            await conn.execute(text("ALTER TABLE users ADD COLUMN IF NOT EXISTS location_address VARCHAR(500);"))
+            # Idempotent schema upgrades for ElderlyProfile medical record fields
+            await conn.execute(text("ALTER TABLE elderly_profiles ADD COLUMN IF NOT EXISTS conditions_json TEXT;"))
+            await conn.execute(text("ALTER TABLE elderly_profiles ADD COLUMN IF NOT EXISTS blood_type VARCHAR(10);"))
+            await conn.execute(text("ALTER TABLE elderly_profiles ADD COLUMN IF NOT EXISTS height_cm INTEGER;"))
+            await conn.execute(text("ALTER TABLE elderly_profiles ADD COLUMN IF NOT EXISTS weight_kg INTEGER;"))
+            await conn.execute(text("ALTER TABLE elderly_profiles ADD COLUMN IF NOT EXISTS drug_allergies TEXT;"))
+            await conn.execute(text("ALTER TABLE elderly_profiles ADD COLUMN IF NOT EXISTS food_allergies TEXT;"))
+            await conn.execute(text("ALTER TABLE elderly_profiles ADD COLUMN IF NOT EXISTS dietary_notes TEXT;"))
+            await conn.execute(text("ALTER TABLE users ADD COLUMN IF NOT EXISTS avatar_url VARCHAR(500);"))
+            await conn.execute(text("ALTER TABLE elderly_profiles ADD COLUMN IF NOT EXISTS face_embedding TEXT;"))
+            await conn.execute(text("ALTER TABLE device_configs ADD COLUMN IF NOT EXISTS bp_systolic_high INTEGER NOT NULL DEFAULT 140;"))
+            await conn.execute(text("ALTER TABLE device_configs ADD COLUMN IF NOT EXISTS bp_systolic_low INTEGER NOT NULL DEFAULT 90;"))
+            await conn.execute(text("ALTER TABLE device_configs ADD COLUMN IF NOT EXISTS bp_diastolic_high INTEGER NOT NULL DEFAULT 90;"))
+            await conn.execute(text("ALTER TABLE device_configs ADD COLUMN IF NOT EXISTS bp_diastolic_low INTEGER NOT NULL DEFAULT 60;"))
+            await conn.execute(text("ALTER TABLE device_configs ADD COLUMN IF NOT EXISTS is_custom_thresholds BOOLEAN NOT NULL DEFAULT FALSE;"))
+            await conn.execute(text("""
+                ALTER TABLE device_configs
+                ADD COLUMN IF NOT EXISTS configured_by_user_id UUID
+                REFERENCES users(id) ON DELETE SET NULL;
+            """))
+            await conn.execute(text("ALTER TABLE device_configs ADD COLUMN IF NOT EXISTS configured_by_role VARCHAR(20) DEFAULT 'SYSTEM';"))
+            await conn.execute(text("ALTER TABLE vital_signs ADD COLUMN IF NOT EXISTS bp_systolic INTEGER;"))
+            await conn.execute(text("ALTER TABLE vital_signs ADD COLUMN IF NOT EXISTS bp_diastolic INTEGER;"))
+            await conn.execute(text("ALTER TABLE users DROP COLUMN IF EXISTS location_address;"))
+            await conn.execute(text("ALTER TABLE users DROP COLUMN IF EXISTS location_longitude;"))
+            await conn.execute(text("ALTER TABLE users DROP COLUMN IF EXISTS location_latitude;"))
+            await conn.execute(text("ALTER TABLE users DROP COLUMN IF EXISTS location_enabled;"))
             # Ensure Doctor +84905111222 exists and has same password
             await conn.execute(text("""
                 INSERT INTO users (
                     id, phone, full_name, hashed_password, role, 
                     preferred_language, font_size_mode, custom_font_scale,
-                    vibration_enabled, location_enabled, is_active
+                    vibration_enabled, is_active
                 ) VALUES (
                     'b3333333-b4e1-4b08-b2d3-d949a0eb075c',
                     '+84905111222',
@@ -70,7 +93,7 @@ async def init_db() -> None:
                     (SELECT hashed_password FROM users WHERE phone = '+84905123456' LIMIT 1),
                     'doctor',
                     'vi', 'system', 2,
-                    TRUE, TRUE, TRUE
+                    TRUE, TRUE
                 ) ON CONFLICT (phone) DO UPDATE 
                 SET role = 'doctor',
                     hashed_password = (SELECT hashed_password FROM users WHERE phone = '+84905123456' LIMIT 1);
