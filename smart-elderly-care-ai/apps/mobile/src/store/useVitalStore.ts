@@ -562,15 +562,26 @@ interface AuthStoreState {
   accessToken: string | null;
   refreshToken: string | null;
   userId: string | null;
+  user_id: number | string | null;
   userName: string | null;
+  full_name: string | null;
   userEmail: string | null;
   userPhone: string | null;
+  phone_number: string | null;
   role: string;
+  household_id: number | string | null;
   viewRole: 'family' | 'doctor';
 
   login: (access: string, refresh: string, name: string, userId: string, emailOrPhone?: string, role?: string) => void;
   setTokens: (access: string, refresh: string) => void;
   setUser: (id: string, email?: string, name?: string, phone?: string) => void;
+  setProfile: (profile: {
+    user_id?: number | string;
+    full_name?: string;
+    phone_number?: string;
+    role?: string;
+    household_id?: number | string;
+  }) => void;
   updateUserName: (arg1: string, arg2?: string) => void;
   toggleViewRole: () => void;
   logout: () => void;
@@ -590,10 +601,14 @@ const createAuthStore: StateCreator<AuthStoreState, [], [['zustand/persist', Aut
   accessToken: null,
   refreshToken: null,
   userId: null,
+  user_id: null,
   userName: null,
+  full_name: null,
   userEmail: null,
   userPhone: null,
+  phone_number: null,
   role: 'family',
+  household_id: null,
   viewRole: 'family',
 
   login: (access: string, refresh: string, name: string, userId: string, emailOrPhone?: string, role?: string) => {
@@ -602,9 +617,12 @@ const createAuthStore: StateCreator<AuthStoreState, [], [['zustand/persist', Aut
       accessToken: access,
       refreshToken: refresh,
       userId,
+      user_id: userId,
       userName: name,
+      full_name: name,
       userEmail: isEmail ? emailOrPhone : null,
       userPhone: !isEmail ? (emailOrPhone || null) : null,
+      phone_number: !isEmail ? (emailOrPhone || null) : null,
       role: role || 'family',
       viewRole: role === 'doctor' ? 'doctor' : 'family',
     });
@@ -616,16 +634,32 @@ const createAuthStore: StateCreator<AuthStoreState, [], [['zustand/persist', Aut
   setUser: (id: string, email?: string, name?: string, phone?: string) =>
     set((state) => ({
       userId: id,
+      user_id: id,
       userEmail: email ?? state.userEmail ?? null,
       userName: name ?? state.userName ?? null,
+      full_name: name ?? state.full_name ?? null,
       userPhone: phone ?? state.userPhone ?? null,
+      phone_number: phone ?? state.phone_number ?? null,
+    })),
+
+  setProfile: (profile) =>
+    set((state) => ({
+      userId: profile.user_id !== undefined ? String(profile.user_id) : state.userId,
+      user_id: profile.user_id !== undefined ? profile.user_id : state.user_id,
+      userName: profile.full_name || state.userName,
+      full_name: profile.full_name || state.full_name,
+      userPhone: profile.phone_number || state.userPhone,
+      phone_number: profile.phone_number || state.phone_number,
+      role: profile.role || state.role,
+      household_id: profile.household_id !== undefined ? profile.household_id : state.household_id,
+      viewRole: profile.role === 'doctor' ? 'doctor' : state.viewRole,
     })),
 
   updateUserName: (arg1: string, arg2?: string) => {
     if (arg2 !== undefined) {
-      set({ userId: arg1, userName: arg2 });
+      set({ userId: arg1, user_id: arg1, userName: arg2, full_name: arg2 });
     } else {
-      set({ userName: arg1 });
+      set({ userName: arg1, full_name: arg1 });
     }
   },
 
@@ -639,10 +673,14 @@ const createAuthStore: StateCreator<AuthStoreState, [], [['zustand/persist', Aut
       accessToken: null,
       refreshToken: null,
       userId: null,
+      user_id: null,
       userName: null,
+      full_name: null,
       userEmail: null,
       userPhone: null,
+      phone_number: null,
       role: 'family',
+      household_id: null,
       viewRole: 'family',
     }),
 });

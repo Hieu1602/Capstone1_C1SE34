@@ -22,6 +22,26 @@ const COLLAGE_IMAGES = {
   bottomRight: 'https://images.unsplash.com/photo-1507473885765-e6ed057f782c?auto=format&fit=crop&w=500&q=80', // Đèn ngủ đầu giường bình yên
 };
 
+// Chuẩn hóa số điện thoại người dùng nhập thành định dạng quốc tế +84.
+const normalizePhoneNumber = (rawPhone: string): string => {
+  // Loại bỏ dấu cách, dấu cộng và mọi ký tự không phải chữ số.
+  const digits = rawPhone.replace(/\D/g, '');
+  // Trả về rỗng để hàm đăng nhập báo người dùng nhập số hợp lệ.
+  if (!digits) return '';
+  // Nếu đã có mã quốc gia 84, chỉ bỏ số 0 quốc nội nếu còn.
+  if (digits.startsWith('84')) {
+    const national = digits.slice(2);
+    return '+84' + (national.startsWith('0') ? national.slice(1) : national);
+  }
+  // Nếu nhập số nội địa bắt đầu bằng 0, thay số 0 bằng mã +84.
+  if (digits.startsWith('0')) {
+    return '+84' + digits.slice(1);
+  }
+  // Với số chỉ có phần thuê bao, thêm mã quốc gia +84.
+  return '+84' + digits;
+};
+
+// Component màn hình đăng nhập; navigation dùng để chuyển sang các màn hình liên quan.
 export default function LoginScreen({ navigation }: any) {
   const { login } = useAuthStore();
 
@@ -120,6 +140,7 @@ export default function LoginScreen({ navigation }: any) {
   };
 
   return (
+    // SafeAreaView tránh hiển thị nội dung dưới tai thỏ/status bar.
     <SafeAreaView style={styles.safeArea}>
       <ScrollView
         contentContainerStyle={styles.scrollContainer}
@@ -489,11 +510,13 @@ export default function LoginScreen({ navigation }: any) {
   );
 }
 
+// Các kiểu dáng dùng chung cho các thành phần giao diện ở trên.
 const styles = StyleSheet.create({
   safeArea: {
     flex: 1,
     backgroundColor: '#FFFFFF',
   },
+  // Nội dung cuộn chiếm chiều cao có thể, dàn khoảng trống và chừa lề dưới.
   scrollContainer: {
     flexGrow: 1,
     justifyContent: 'space-between',
@@ -619,6 +642,7 @@ const styles = StyleSheet.create({
     letterSpacing: -0.5,
     marginBottom: 8,
   },
+  // Mô tả phụ bên dưới tiêu đề.
   heroSubtitle: {
     fontSize: 13,
     color: '#64748B',
@@ -750,6 +774,7 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
     alignItems: 'center',
   },
+  // Khung nhập liệu chung, gồm biểu tượng và nội dung trên một hàng.
   inputWrap: {
     flexDirection: 'row',
     alignItems: 'center',
@@ -761,25 +786,30 @@ const styles = StyleSheet.create({
     height: 52,
     marginBottom: 14,
   },
+  // Nhóm tiền tố/biểu tượng nằm bên trái ô nhập.
   inputPrefix: {
     flexDirection: 'row',
     alignItems: 'center',
     marginRight: 10,
     gap: 4,
   },
+  // Kiểu chữ cho mã quốc gia +84.
   prefixText: {
     fontSize: 14,
     fontWeight: '700',
     color: '#334155',
   },
+  // Ô nhập chiếm phần chiều rộng còn lại trong khung.
   textInput: {
     flex: 1,
     fontSize: 15,
     color: '#0F172A',
   },
+  // Kích thước vùng bấm biểu tượng hiện/ẩn mật khẩu.
   eyeBtn: {
     padding: 6,
   },
+  // Đặt liên kết quên mật khẩu về phía phải.
   forgotBtn: {
     alignSelf: 'flex-end',
     marginBottom: 16,
@@ -859,10 +889,12 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     marginBottom: 18,
   },
+  // Chữ mô tả trước liên kết đăng ký.
   switchAuthText: {
     fontSize: 14,
     color: '#64748B',
   },
+  // Liên kết đăng ký dùng màu nhận diện và chữ đậm.
   switchAuthLink: {
     fontSize: 14,
     fontWeight: '700',

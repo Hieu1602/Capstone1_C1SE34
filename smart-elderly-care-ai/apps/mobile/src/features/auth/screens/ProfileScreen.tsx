@@ -3,9 +3,23 @@
 
 import React from 'react';
 import * as Location from 'expo-location';
-import { ActivityIndicator, View, StyleSheet, TouchableOpacity, ScrollView, Platform, Modal, Pressable, Switch, Image, Vibration, PanResponder, Linking } from 'react-native';
-import * as ImagePicker from 'expo-image-picker';
+import {
+  View,
+  StyleSheet,
+  TouchableOpacity,
+  ScrollView,
+  ActivityIndicator,
+  Platform,
+  Modal,
+  Pressable,
+  Switch,
+  Image,
+  Vibration,
+  PanResponder,
+  Linking,
+} from 'react-native';
 import { WebView } from 'react-native-webview';
+import * as ImagePicker from 'expo-image-picker';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
 import { Colors, Shadows } from '../../../theme/colors';
@@ -13,15 +27,33 @@ import { useAuthStore, useVitalStore } from '../../../store/useVitalStore';
 import { useTheme } from '../../../store/useThemeStore';
 import api, { authApi } from '../../../services/api';
 import i18n from '../../../i18n/config';
-import { LocalizedAlert, LocalizedText, LocalizedTextInput } from '../../../i18n/LocalizedComponents';
-
+import {
+  LocalizedAlert,
+  LocalizedText as Text,
+  LocalizedText,
+  LocalizedTextInput,
+} from '../../../i18n/LocalizedComponents';
 
 export default function ProfileScreen({ navigation }: any) {
-  const { userId, userName, userPhone, logout, updateUserName, toggleViewRole } = useAuthStore();
+  const {
+    userId,
+    userName,
+    full_name,
+    userPhone,
+    phone_number,
+    logout,
+    updateUserName,
+    toggleViewRole,
+    setProfile,
+  } = useAuthStore();
   const { house } = useVitalStore();
   const { isDarkMode, colors, setDarkMode, setFontScale } = useTheme();
-  const [profileName, setProfileName] = React.useState(userName || 'Nguyễn Hữu Nghĩa');
-  const [profilePhone, setProfilePhone] = React.useState(userPhone || '0905 123 456');
+  const [profileName, setProfileName] = React.useState(full_name || userName || '');
+  const [profilePhone, setProfilePhone] = React.useState(phone_number || userPhone || '');
+  const [isLocationVisible, setLocationVisible] = React.useState(false);
+  const [isLocationLoading, setLocationLoading] = React.useState(false);
+  const [locationCoords, setLocationCoords] = React.useState<{ latitude: number; longitude: number } | null>(null);
+  const [locationAddress, setLocationAddress] = React.useState('');
   const [showMoreGrid, setShowMoreGrid] = React.useState(false);
   const [isHelpExpanded, setIsHelpExpanded] = React.useState(false);
   const [isSettingsExpanded, setIsSettingsExpanded] = React.useState(false);
@@ -29,10 +61,6 @@ export default function ProfileScreen({ navigation }: any) {
   const [draftValue, setDraftValue] = React.useState('');
   const [isUserMenuVisible, setUserMenuVisible] = React.useState(false);
   const [isAvatarPickerVisible, setAvatarPickerVisible] = React.useState(false);
-  const [isLocationVisible, setLocationVisible] = React.useState(false);
-  const [locationAddress, setLocationAddress] = React.useState('');
-  const [locationCoords, setLocationCoords] = React.useState<{ latitude: number; longitude: number } | null>(null);
-  const [isLocationLoading, setLocationLoading] = React.useState(false);
   const [isSettingsVisible, setSettingsVisible] = React.useState(false);
   const [accountEntrySource, setAccountEntrySource] = React.useState<'main' | 'settings'>('main');
   const [isNotificationSettingsVisible, setNotificationSettingsVisible] = React.useState(false);
@@ -274,29 +302,38 @@ export default function ProfileScreen({ navigation }: any) {
   };
 
   React.useEffect(() => {
-    if (userName) {
-      setProfileName(userName);
+    if (full_name || userName) {
+      setProfileName(full_name || userName || '');
     }
-    if (userPhone) {
-      setProfilePhone(userPhone);
+    if (phone_number || userPhone) {
+      setProfilePhone(phone_number || userPhone || '');
     }
 
-    // Đồng bộ thông tin profile mới nhất từ Database qua backend API /users/me
     const fetchUserProfile = async () => {
       try {
         const res = await api.get('/users/me');
-        if (res.data?.full_name) {
-          setProfileName(res.data.full_name);
+        if (res.data) {
+          if (typeof res.data.full_name === 'string') {
+            setProfileName(res.data.full_name);
+          }
+          const phone = res.data.phone_number || res.data.phone;
+          if (typeof phone === 'string') {
+            setProfilePhone(phone);
+          }
+          setProfile({
+            user_id: res.data.user_id || res.data.id,
+            full_name: res.data.full_name,
+            phone_number: phone,
+            role: res.data.role,
+            household_id: res.data.household_id,
+          });
         }
-        if (res.data?.phone) {
-          setProfilePhone(res.data.phone);
-        }
-      } catch {
-        // Fallback to store
+      } catch (error) {
+        console.warn('[Profile] Không thể tải hồ sơ từ database:', error);
       }
     };
     fetchUserProfile();
-  }, [userName, userPhone]);
+  }, [userName, full_name, userPhone, phone_number]);
 
   const handleLogout = () => {
     setLogoutConfirmVisible(true);
@@ -1930,10 +1967,10 @@ export default function ProfileScreen({ navigation }: any) {
             </View>
             <View style={{ flex: 1, marginLeft: 12 }}>
               <LocalizedText style={[styles.fbProfileName, isDarkMode && { color: colors.textPrimary }]}>
-                {profileName || userName || 'Nguyễn Hữu Nghĩa'}
+                {profileName || full_name || userName || 'Nguyễn Hữu Nghĩa'}
               </LocalizedText>
               <LocalizedText style={[styles.fbProfileRole, isDarkMode && { color: colors.textSecondary }]}>
-                {profilePhone || '0905 123 456'} • Chủ nhà (Giám sát)
+                {profilePhone || phone_number || userPhone || '0905 123 456'} • Chủ nhà (Giám sát)
               </LocalizedText>
             </View>
             {/* Badge thông báo & icon switch */}
@@ -2245,26 +2282,26 @@ export default function ProfileScreen({ navigation }: any) {
             </LocalizedText>
           </TouchableOpacity>
 
+          {/* Ô 9: Lịch nhắc thuốc */}
+          <TouchableOpacity
+            style={[styles.fbGridCard, isDarkMode && { backgroundColor: colors.card, borderColor: colors.border }]}
+            activeOpacity={0.8}
+            onPress={() => navigation.navigate('MedicationReminder')}
+          >
+            <View style={[styles.fbGridIconBox, { backgroundColor: isDarkMode ? '#451A03' : '#FEF3C7' }]}>
+              <Ionicons name="calendar-outline" size={24} color="#D97706" />
+            </View>
+            <Text style={[styles.fbGridCardTitle, isDarkMode && { color: colors.textPrimary }]}>
+              Lịch nhắc thuốc
+            </Text>
+            <Text style={[styles.fbGridCardSub, isDarkMode && { color: colors.textSecondary }]}>
+              Đơn thuốc & Lịch tái khám bác sĩ
+            </Text>
+          </TouchableOpacity>
+
           {/* HIỂN THỊ THÊM KHI BẤM "XEM THÊM" (GIỐNG HÌNH 1) */}
           {showMoreGrid && (
             <>
-              {/* Ô 9: Lịch nhắc thuốc */}
-              <TouchableOpacity
-                style={[styles.fbGridCard, isDarkMode && { backgroundColor: colors.card, borderColor: colors.border }]}
-                activeOpacity={0.8}
-                onPress={() => navigation.navigate('MedicationReminder')}
-              >
-                <View style={[styles.fbGridIconBox, { backgroundColor: isDarkMode ? '#451A03' : '#FEF3C7' }]}>
-                  <Ionicons name="calendar-outline" size={24} color="#D97706" />
-                </View>
-                <LocalizedText style={[styles.fbGridCardTitle, isDarkMode && { color: colors.textPrimary }]}>
-                  Lịch nhắc thuốc
-                </LocalizedText>
-                <LocalizedText style={[styles.fbGridCardSub, isDarkMode && { color: colors.textSecondary }]}>
-                  Đơn thuốc & Lịch tái khám bác sĩ
-                </LocalizedText>
-              </TouchableOpacity>
-
               {/* Ô 10: Nhật ký cảnh báo SOS */}
               <TouchableOpacity
                 style={[styles.fbGridCard, isDarkMode && { backgroundColor: colors.card, borderColor: colors.border }]}
@@ -3558,6 +3595,11 @@ const styles = StyleSheet.create({
   },
   generalSettingsList: {
     marginTop: 8,
+    backgroundColor: '#FFFFFF',
+    borderRadius: 18,
+    borderWidth: 1,
+    borderColor: '#E5E7EB',
+    overflow: 'hidden',
   },
   accessibilityList: {
     marginTop: 8,

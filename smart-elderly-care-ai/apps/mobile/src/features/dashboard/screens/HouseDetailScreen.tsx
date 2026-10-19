@@ -5,14 +5,12 @@ import React, { useState } from 'react';
 import { View, StyleSheet, TouchableOpacity, ScrollView, Modal } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
-import { Colors, Shadows } from '../../../theme/colors';
-import { useVitalStore } from '../../../store/useVitalStore';
+import { Colors } from '../../../theme/colors';
 import { useTheme } from '../../../store/useThemeStore';
 import { LocalizedAlert, LocalizedText, LocalizedTextInput } from '../../../i18n/LocalizedComponents';
 
 
 export default function HouseDetailScreen({ navigation }: any) {
-  const { house } = useVitalStore();
   const { isDarkMode } = useTheme();
   const [addMemberModalVisible, setAddMemberModalVisible] = useState(false);
   const [newMemberPhone, setNewMemberPhone] = useState('');

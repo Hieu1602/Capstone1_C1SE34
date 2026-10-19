@@ -34,10 +34,6 @@ class UserUpdate(BaseModel):
     font_size_mode: Optional[Literal["system", "custom"]] = None
     custom_font_scale: Optional[int] = None
     vibration_enabled: Optional[bool] = None
-    location_enabled: Optional[bool] = None
-    location_latitude: Optional[float] = None
-    location_longitude: Optional[float] = None
-    location_address: Optional[str] = None
 
 
 class PasswordChange(BaseModel):
@@ -59,10 +55,23 @@ class UserOut(UserBase):
     font_size_mode: Literal["system", "custom"] = "system"
     custom_font_scale: int = 2
     vibration_enabled: bool = True
+<<<<<<< Updated upstream
     location_enabled: bool = True
     location_latitude: Optional[float] = None
     location_longitude: Optional[float] = None
     location_address: Optional[str] = None
+=======
+    created_at: Optional[datetime] = None
+    updated_at: Optional[datetime] = None
+    last_login_at: Optional[datetime] = None
+    assigned_house: Optional[str] = None
+    role_title: Optional[str] = None
+
+    @model_validator(mode="after")
+    def set_language_alias(self) -> "UserOut":
+        self.language = self.preferred_language
+        return self
+>>>>>>> Stashed changes
 
     model_config = {"from_attributes": True}
 

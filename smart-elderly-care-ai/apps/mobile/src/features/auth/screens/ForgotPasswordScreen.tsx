@@ -3,11 +3,13 @@ import { ActivityIndicator, KeyboardAvoidingView, Platform, SafeAreaView, Scroll
 import { Ionicons } from '@expo/vector-icons';
 import { authApi } from '../../../services/api';
 import { LocalizedAlert, LocalizedText, LocalizedTextInput } from '../../../i18n/LocalizedComponents';
+import { useTheme } from '../../../store/useThemeStore';
 
 
 type Step = 'request' | 'verify' | 'newPassword';
 
 export default function ForgotPasswordScreen({ navigation }: any) {
+  const { colors } = useTheme();
   const [step, setStep] = useState<Step>('request');
   const [phone, setPhone] = useState('');
   const [otp, setOtp] = useState('');
@@ -85,9 +87,13 @@ export default function ForgotPasswordScreen({ navigation }: any) {
       : 'Nhập mật khẩu mới để hoàn tất việc khôi phục tài khoản.';
 
   return (
-    <SafeAreaView style={styles.safeArea}>
+    <SafeAreaView style={[styles.safeArea, { backgroundColor: colors.background }]}>
       <KeyboardAvoidingView style={styles.flex} behavior={Platform.OS === 'ios' ? 'padding' : 'height'}>
-        <ScrollView contentContainerStyle={styles.container} keyboardShouldPersistTaps="handled">
+        <ScrollView
+          contentContainerStyle={styles.container}
+          keyboardShouldPersistTaps="handled"
+          showsVerticalScrollIndicator={false}
+        >
           <View>
             <TouchableOpacity style={styles.backButton} onPress={() => navigation.goBack()}>
               <Ionicons name="arrow-back" size={28} color="#2F2F2F" />
@@ -109,7 +115,11 @@ export default function ForgotPasswordScreen({ navigation }: any) {
                 {[0, 1, 2, 3, 4, 5].map((index) => (
                   <LocalizedTextInput
                     key={index}
-                    style={[styles.otpInput, otp.length === index && styles.otpInputActive]}
+                    style={[
+                      styles.otpInput,
+                      { backgroundColor: colors.card, borderColor: colors.border, color: colors.textPrimary },
+                      otp.length === index && { borderColor: colors.primary, borderWidth: 2 },
+                    ]}
                     value={otp[index] || ''}
                     onChangeText={(value) => setOtp(`${otp.slice(0, index)}${value.replace(/[^0-9]/g, '').slice(-1)}${otp.slice(index + 1)}`.slice(0, 6))}
                     keyboardType="number-pad"
@@ -166,7 +176,7 @@ export default function ForgotPasswordScreen({ navigation }: any) {
 }
 
 const styles = StyleSheet.create({
-  safeArea: { flex: 1, backgroundColor: '#FFFFFF' },
+  safeArea: { flex: 1 },
   flex: { flex: 1 },
   container: { flexGrow: 1, justifyContent: 'space-between', paddingHorizontal: 26, paddingTop: 18, paddingBottom: 18 },
   backButton: { height: 42, justifyContent: 'center', alignItems: 'flex-start', marginBottom: 20 },

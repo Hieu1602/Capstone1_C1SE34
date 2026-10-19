@@ -87,20 +87,20 @@ export default function SettingsScreen({ navigation }: any) {
               <View
                 style={[
                   styles.iconWrap,
-                  { backgroundColor: isDarkMode ? '#1E1B4B' : '#EEF2FF' },
+                  { backgroundColor: isDarkMode ? 'rgba(255, 122, 0, 0.16)' : '#FFF7ED' },
                 ]}
               >
                 <Ionicons
                   name="person-circle-outline"
                   size={20}
-                  color="#6366F1"
+                  color={colors.primary}
                 />
               </View>
               <View>
                 <LocalizedText
                   style={[
                     styles.itemTitle,
-                    { color: isDarkMode ? '#F8FAFC' : '#0F172A' },
+                    { color: colors.textPrimary },
                   ]}
                 >
                   Hồ sơ người giám sát
@@ -108,20 +108,20 @@ export default function SettingsScreen({ navigation }: any) {
                 <LocalizedText
                   style={[
                     styles.itemSubtitle,
-                    { color: isDarkMode ? '#94A3B8' : '#64748B' },
+                    { color: colors.textSecondary },
                   ]}
                 >
                   Tài khoản người thân theo dõi, SĐT liên hệ khẩn cấp
                 </LocalizedText>
               </View>
             </View>
-            <Ionicons name="chevron-forward" size={18} color="#94A3B8" />
+            <Ionicons name="chevron-forward" size={18} color={colors.textMuted} />
           </TouchableOpacity>
 
           <View
             style={[
               styles.divider,
-              { backgroundColor: isDarkMode ? '#334155' : '#F1F5F9' },
+              { backgroundColor: colors.border },
             ]}
           />
 
@@ -149,7 +149,7 @@ export default function SettingsScreen({ navigation }: any) {
                   <LocalizedText
                     style={[
                       styles.itemTitle,
-                      { color: isDarkMode ? '#F8FAFC' : '#0F172A' },
+                      { color: colors.textPrimary },
                     ]}
                   >
                     Hồ sơ bệnh án người cao tuổi
@@ -161,14 +161,14 @@ export default function SettingsScreen({ navigation }: any) {
                 <LocalizedText
                   style={[
                     styles.itemSubtitle,
-                    { color: isDarkMode ? '#94A3B8' : '#64748B' },
+                    { color: colors.textSecondary },
                   ]}
                 >
                   Thông tin cụ, bệnh nền, nhóm máu &amp; đơn thuốc
                 </LocalizedText>
               </View>
             </View>
-            <Ionicons name="chevron-forward" size={18} color="#94A3B8" />
+            <Ionicons name="chevron-forward" size={18} color={colors.textMuted} />
           </TouchableOpacity>
         </View>
 
@@ -208,7 +208,7 @@ export default function SettingsScreen({ navigation }: any) {
               <LocalizedText
                 style={[
                   styles.itemTitle,
-                  { color: isDarkMode ? '#F8FAFC' : '#0F172A' },
+                  { color: colors.textPrimary },
                 ]}
               >
                 Cài đặt chung
@@ -221,7 +221,7 @@ export default function SettingsScreen({ navigation }: any) {
           <View
             style={[
               styles.divider,
-              { backgroundColor: isDarkMode ? '#334155' : '#F1F5F9' },
+              { backgroundColor: colors.border },
             ]}
           />
 
@@ -235,32 +235,32 @@ export default function SettingsScreen({ navigation }: any) {
               <View
                 style={[
                   styles.iconWrap,
-                  { backgroundColor: isDarkMode ? '#0F172A' : '#F1F5F9' },
+                  { backgroundColor: colors.iconBg },
                 ]}
               >
                 <Ionicons
                   name="accessibility-outline"
                   size={20}
-                  color={isDarkMode ? '#94A3B8' : '#475569'}
+                  color={colors.textSecondary}
                 />
               </View>
               <LocalizedText
                 style={[
                   styles.itemTitle,
-                  { color: isDarkMode ? '#F8FAFC' : '#0F172A' },
+                  { color: colors.textPrimary },
                 ]}
               >
                 Khả năng tiếp cận
               </LocalizedText>
             </View>
-            <Ionicons name="chevron-forward" size={18} color="#94A3B8" />
+            <Ionicons name="chevron-forward" size={18} color={colors.textMuted} />
           </TouchableOpacity>
 
           {/* Đường gạch phân cách */}
           <View
             style={[
               styles.divider,
-              { backgroundColor: isDarkMode ? '#334155' : '#F1F5F9' },
+              { backgroundColor: colors.border },
             ]}
           />
 
@@ -274,19 +274,19 @@ export default function SettingsScreen({ navigation }: any) {
               <View
                 style={[
                   styles.iconWrap,
-                  { backgroundColor: isDarkMode ? '#0F172A' : '#F1F5F9' },
+                  { backgroundColor: colors.iconBg },
                 ]}
               >
                 <Ionicons
                   name="information-circle-outline"
                   size={20}
-                  color={isDarkMode ? '#94A3B8' : '#475569'}
+                  color={colors.textSecondary}
                 />
               </View>
               <LocalizedText
                 style={[
                   styles.itemTitle,
-                  { color: isDarkMode ? '#F8FAFC' : '#0F172A' },
+                  { color: colors.textPrimary },
                 ]}
               >
                 Thông tin
@@ -320,19 +320,19 @@ export default function SettingsScreen({ navigation }: any) {
               <View
                 style={[
                   styles.iconWrap,
-                  { backgroundColor: isDarkMode ? '#0F172A' : '#F1F5F9' },
+                  { backgroundColor: colors.iconBg },
                 ]}
               >
                 <Ionicons
                   name="notifications-outline"
                   size={20}
-                  color={isDarkMode ? '#94A3B8' : '#475569'}
+                  color={colors.textSecondary}
                 />
               </View>
               <LocalizedText
                 style={[
                   styles.itemTitle,
-                  { color: isDarkMode ? '#F8FAFC' : '#0F172A' },
+                  { color: colors.textPrimary },
                 ]}
               >
                 Thiết lập thông báo
@@ -345,7 +345,7 @@ export default function SettingsScreen({ navigation }: any) {
           <View
             style={[
               styles.divider,
-              { backgroundColor: isDarkMode ? '#334155' : '#F1F5F9' },
+              { backgroundColor: colors.border },
             ]}
           />
 
@@ -355,19 +355,19 @@ export default function SettingsScreen({ navigation }: any) {
               <View
                 style={[
                   styles.iconWrap,
-                  { backgroundColor: isDarkMode ? '#0F172A' : '#F1F5F9' },
+                  { backgroundColor: colors.iconBg },
                 ]}
               >
                 <Ionicons
                   name="phone-portrait-outline"
                   size={20}
-                  color={isDarkMode ? '#94A3B8' : '#475569'}
+                  color={colors.textSecondary}
                 />
               </View>
               <LocalizedText
                 style={[
                   styles.itemTitle,
-                  { color: isDarkMode ? '#F8FAFC' : '#0F172A' },
+                  { color: colors.textPrimary },
                 ]}
               >
                 Rung
@@ -408,11 +408,12 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
   },
   headerTitle: {
-    fontSize: 18,
-    fontWeight: '700',
+    fontSize: 19,
+    fontWeight: '800',
+    letterSpacing: 0.2,
   },
   headerRightSpacer: {
-    width: 38,
+    width: 42,
   },
   scrollContent: {
     paddingHorizontal: 16,
@@ -458,6 +459,7 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     alignItems: 'center',
     flex: 1,
+    minWidth: 0,
   },
   iconWrap: {
     width: 38,
@@ -465,20 +467,22 @@ const styles = StyleSheet.create({
     borderRadius: 12,
     alignItems: 'center',
     justifyContent: 'center',
-    marginRight: 12,
+    marginRight: 14,
   },
   itemTitle: {
-    fontSize: 15,
-    fontWeight: '600',
+    fontSize: 14,
+    fontWeight: '700',
+    letterSpacing: 0.1,
   },
   itemRight: {
     flexDirection: 'row',
     alignItems: 'center',
-    gap: 8,
+    gap: 6,
+    marginLeft: 8,
   },
   subText: {
-    fontSize: 14,
-    fontWeight: '500',
+    fontSize: 12,
+    fontWeight: '600',
   },
   divider: {
     height: 1,
@@ -486,7 +490,9 @@ const styles = StyleSheet.create({
   },
   itemSubtitle: {
     fontSize: 11,
-    marginTop: 2,
+    lineHeight: 16,
+    marginTop: 3,
+    flexShrink: 1,
   },
   aesBadge: {
     paddingHorizontal: 6,

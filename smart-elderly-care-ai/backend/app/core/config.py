@@ -8,6 +8,25 @@ from typing import List
 
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
+<<<<<<< Updated upstream
+=======
+# Tự động nạp file .env duy nhất tại thư mục gốc smart-elderly-care-ai/.env
+_THIS_FILE = Path(__file__).resolve()
+_SEARCH_PATHS = [
+    *(
+        _THIS_FILE.parents[index] / ".env"
+        for index in (3, 4)
+        if index < len(_THIS_FILE.parents)
+    ),
+    Path("../.env"),
+    Path(".env"),
+]
+for _p in _SEARCH_PATHS:
+    if _p.is_file():
+        load_dotenv(dotenv_path=_p, override=False)
+        break
+
+>>>>>>> Stashed changes
 
 class Settings(BaseSettings):
     model_config = SettingsConfigDict(
