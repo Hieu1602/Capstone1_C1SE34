@@ -68,3 +68,4 @@ smart-elderly-care-ai/edge/test_snapshot.jpg
 # Firebase credentials
 *firebase-service-account*.json
 *google-services*.json
+.firebase/

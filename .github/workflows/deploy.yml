@@ -1,0 +1,78 @@
+name: CI/CD Pipeline - Deploy to Firebase & AWS EC2
+
+on:
+  push:
+    branches:
+      - main
+  workflow_dispatch: # Cho phép kích hoạt thủ công từ tab Actions trên GitHub
+
+jobs:
+  # =========================================================================
+  # 1. TRIỂN KHAI WEB ADMIN PORTAL LÊN FIREBASE HOSTING
+  # =========================================================================
+  deploy-firebase-web:
+    name: 🌐 Deploy Web to Firebase Hosting
+    runs-on: ubuntu-latest
+    steps:
+      - name: 📥 Checkout repository
+        uses: actions/checkout@v4
+
+      - name: 🟢 Cài đặt môi trường Node.js (v20)
+        uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: 'npm'
+          cache-dependency-path: smart-elderly-care-ai/apps/web/package-lock.json
+
+      - name: 📦 Cài đặt thư viện dependencies
+        working-directory: smart-elderly-care-ai/apps/web
+        run: npm ci
+
+      - name: 🏗️ Biên dịch mã nguồn Web (Vite Build)
+        working-directory: smart-elderly-care-ai/apps/web
+        run: npm run build
+        env:
+          VITE_API_URL: http://16.178.128.42:8000/api/v1
+
+      - name: 🚀 Đẩy bản build lên Firebase Hosting
+        uses: FirebaseExtended/action-hosting-deploy@v0
+        with:
+          repoToken: '${{ secrets.GITHUB_TOKEN }}'
+          firebaseServiceAccount: '${{ secrets.FIREBASE_SERVICE_ACCOUNT }}'
+          channelId: live
+          projectId: smart-elderly-care-ai-cap1
+          entryPoint: smart-elderly-care-ai/apps/web
+
+  # =========================================================================
+  # 2. TRIỂN KHAI BACKEND LÊN MÁY CHỦ AWS EC2
+  # =========================================================================
+  deploy-aws-backend:
+    name: ☁️ Deploy Backend to AWS EC2
+    runs-on: ubuntu-latest
+    steps:
+      - name: 🔑 SSH vào AWS EC2 & Cập nhật Docker Backend
+        uses: appleboy/ssh-action@v1.0.3
+        with:
+          host: 16.178.128.42
+          username: ubuntu
+          key: ${{ secrets.EC2_SSH_KEY }}
+          script_stop: true
+          script: |
+            echo "========================================================="
+            echo "🚀 [CI/CD] Bắt đầu đồng bộ code nhánh MAIN vào AWS EC2..."
+            echo "========================================================="
+            cd /home/ubuntu/Capstone1_C1SE34
+            
+            # Cập nhật code mới nhất từ nhánh main
+            git fetch origin main
+            git checkout main
+            git reset --hard origin/main
+            
+            # Build và khởi động lại Backend service
+            cd smart-elderly-care-ai
+            echo "🐳 [CI/CD] Đang cập nhật và khởi động lại FastAPI Backend..."
+            docker compose up -d --build backend
+            
+            echo "========================================================="
+            echo "✅ [CI/CD] Triển khai Backend AWS EC2 thành công!"
+            echo "========================================================="
