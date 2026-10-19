@@ -57,6 +57,14 @@ async def init_db() -> None:
             await conn.execute(text("ALTER TABLE users ADD COLUMN IF NOT EXISTS location_latitude DOUBLE PRECISION;"))
             await conn.execute(text("ALTER TABLE users ADD COLUMN IF NOT EXISTS location_longitude DOUBLE PRECISION;"))
             await conn.execute(text("ALTER TABLE users ADD COLUMN IF NOT EXISTS location_address VARCHAR(500);"))
+            # Idempotent schema upgrades for ElderlyProfile medical record fields
+            await conn.execute(text("ALTER TABLE elderly_profiles ADD COLUMN IF NOT EXISTS conditions_json TEXT;"))
+            await conn.execute(text("ALTER TABLE elderly_profiles ADD COLUMN IF NOT EXISTS blood_type VARCHAR(10);"))
+            await conn.execute(text("ALTER TABLE elderly_profiles ADD COLUMN IF NOT EXISTS height_cm INTEGER;"))
+            await conn.execute(text("ALTER TABLE elderly_profiles ADD COLUMN IF NOT EXISTS weight_kg INTEGER;"))
+            await conn.execute(text("ALTER TABLE elderly_profiles ADD COLUMN IF NOT EXISTS drug_allergies TEXT;"))
+            await conn.execute(text("ALTER TABLE elderly_profiles ADD COLUMN IF NOT EXISTS food_allergies TEXT;"))
+            await conn.execute(text("ALTER TABLE elderly_profiles ADD COLUMN IF NOT EXISTS dietary_notes TEXT;"))
             # Ensure Doctor +84905111222 exists and has same password
             await conn.execute(text("""
                 INSERT INTO users (

@@ -196,9 +196,11 @@ export const remindersApi = {
 
 // 4. Patients & Medical Record API
 export const patientApi = {
-  getMedicalRecord: (patientId: number = 1, target_date?: string) =>
+  getMedicalRecord: (patientId: number | string = 1, target_date?: string) =>
     api.get(`/patients/${patientId}/medical-record`, { params: { target_date } }),
-  getVitals: (patientId: number = 1, target_date?: string) =>
+  updateMedicalRecord: (patientId: number | string = 1, data: any) =>
+    api.put(`/patients/${patientId}/medical-record`, data),
+  getVitals: (patientId: number | string = 1, target_date?: string) =>
     api.get(`/patients/${patientId}/vitals`, { params: { target_date } }),
   enrollFace: (patientId: number, formData: FormData) =>
     api.post(`/patients/${patientId}/face-enroll`, formData, {

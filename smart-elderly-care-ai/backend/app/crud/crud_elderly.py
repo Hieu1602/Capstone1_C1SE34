@@ -115,19 +115,29 @@ class CRUDElderly:
         birth_year = profile.birth_year or 1948
         age = current_year - birth_year
 
+        import json
+        parsed_conditions = DEFAULT_CONDITIONS
+        if profile.conditions_json:
+            try:
+                raw_conds = json.loads(profile.conditions_json)
+                if isinstance(raw_conds, list):
+                    parsed_conditions = [MedicalCondition(**c) for c in raw_conds]
+            except Exception:
+                pass
+
         return PatientMedicalRecordOut(
             id=str(profile.id),
             name=profile.full_name,
             birth_year=str(birth_year),
             age=age,
             gender="Nam" if (profile.gender or "").upper() == "MALE" else "Nữ",
-            blood_type="O+",
-            height_cm=165,
-            weight_kg=62,
-            conditions=DEFAULT_CONDITIONS,
-            drug_allergies="Penicillin (dị ứng nổi mề đay)",
-            food_allergies="Hải sản có vỏ (tôm, cua)",
-            dietary_notes="Ăn nhạt, giảm muối < 3g/ngày, hạn chế đường và tinh bột",
+            blood_type=profile.blood_type or "O+",
+            height_cm=profile.height_cm or 165,
+            weight_kg=profile.weight_kg or 62,
+            conditions=parsed_conditions,
+            drug_allergies=profile.drug_allergies if profile.drug_allergies is not None else "Penicillin (dị ứng nổi mề đay)",
+            food_allergies=profile.food_allergies if profile.food_allergies is not None else "Hải sản có vỏ (tôm, cua)",
+            dietary_notes=profile.dietary_notes if profile.dietary_notes is not None else "Ăn nhạt, giảm muối < 3g/ngày, hạn chế đường và tinh bột",
             doctor_name="BS. CKII. Trần Tuấn Minh",
             doctor_phone="0912 345 678",
             doctor_specialty="Chuyên khoa Tim mạch & Lão khoa",
@@ -145,6 +155,7 @@ class CRUDElderly:
         house_id: Optional[UUID] = None,
     ) -> PatientMedicalRecordOut:
         """Cập nhật thông tin hồ sơ y tế."""
+        import json
         profile: Optional[ElderlyProfile] = None
         try:
             val_uuid = UUID(patient_id_or_serial)
@@ -171,7 +182,22 @@ class CRUDElderly:
                     pass
             if update_in.gender is not None:
                 profile.gender = "MALE" if update_in.gender in ["Nam", "MALE"] else "FEMALE"
-            await db.flush()
+            if update_in.blood_type is not None:
+                profile.blood_type = update_in.blood_type
+            if update_in.height_cm is not None:
+                profile.height_cm = update_in.height_cm
+            if update_in.weight_kg is not None:
+                profile.weight_kg = update_in.weight_kg
+            if update_in.drug_allergies is not None:
+                profile.drug_allergies = update_in.drug_allergies
+            if update_in.food_allergies is not None:
+                profile.food_allergies = update_in.food_allergies
+            if update_in.dietary_notes is not None:
+                profile.dietary_notes = update_in.dietary_notes
+            if update_in.conditions is not None:
+                profile.conditions_json = json.dumps([c.model_dump() for c in update_in.conditions], ensure_ascii=False)
+                profile.medical_history = ", ".join(c.name for c in update_in.conditions)
+            await db.commit()
             await db.refresh(profile)
 
         return await self.get_medical_record(db, patient_id_or_serial, house_id=house_id)

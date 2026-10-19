@@ -87,13 +87,14 @@ function getVitalState() {
     syncAllWithBackend:     devices.syncAllWithBackend,
 
     // --- từ usePatientStore ---
-    patientRecord:      patient.patientRecord,
-    todayReminders:     patient.todayReminders,
-    isLoadingReminders: patient.isLoadingReminders,
-    isLoadingPatient:   patient.isLoadingPatient,
-    fetchReminders:     patient.fetchReminders,
-    fetchPatientRecord: patient.fetchPatientRecord,
-    enrollPatientFace:  patient.enrollPatientFace,
+    patientRecord:       patient.patientRecord,
+    todayReminders:      patient.todayReminders,
+    isLoadingReminders:  patient.isLoadingReminders,
+    isLoadingPatient:    patient.isLoadingPatient,
+    fetchReminders:      patient.fetchReminders,
+    fetchPatientRecord:  patient.fetchPatientRecord,
+    updatePatientRecord: patient.updatePatientRecord,
+    enrollPatientFace:   patient.enrollPatientFace,
 
     // --- từ useThemeStore (bridge) ---
     isDarkMode:     theme.isDarkMode,
@@ -165,13 +166,14 @@ export function useVitalStore() {
     syncAllWithBackend:     devices.syncAllWithBackend,
 
     // --- từ usePatientStore ---
-    patientRecord:      patient.patientRecord,
-    todayReminders:     patient.todayReminders,
-    isLoadingReminders: patient.isLoadingReminders,
-    isLoadingPatient:   patient.isLoadingPatient,
-    fetchReminders:     patient.fetchReminders,
-    fetchPatientRecord: patient.fetchPatientRecord,
-    enrollPatientFace:  patient.enrollPatientFace,
+    patientRecord:       patient.patientRecord,
+    todayReminders:      patient.todayReminders,
+    isLoadingReminders:  patient.isLoadingReminders,
+    isLoadingPatient:    patient.isLoadingPatient,
+    fetchReminders:      patient.fetchReminders,
+    fetchPatientRecord:  patient.fetchPatientRecord,
+    updatePatientRecord: patient.updatePatientRecord,
+    enrollPatientFace:   patient.enrollPatientFace,
 
     // --- từ useThemeStore (bridge) ---
     isDarkMode:     theme.isDarkMode,

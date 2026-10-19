@@ -44,7 +44,7 @@ interface MedicalCondition {
 
 export default function PatientMedicalRecordScreen({ navigation }: any) {
   const { isDarkMode } = useTheme();
-  const { fetchPatientRecord, patientRecord, isLoadingPatient, enrollPatientFace } = useVitalStore();
+  const { fetchPatientRecord, updatePatientRecord, patientRecord, isLoadingPatient, enrollPatientFace } = useVitalStore();
 
   // State lưu trữ thông tin hành chính & chỉ số cơ thể của người cao tuổi
   const [patientName, setPatientName] = useState('');
@@ -64,6 +64,12 @@ export default function PatientMedicalRecordScreen({ navigation }: any) {
   const [drugAllergies, setDrugAllergies] = useState('');
   const [foodAllergies, setFoodAllergies] = useState('');
   const [dietaryNotes, setDietaryNotes] = useState('');
+
+  // State phục vụ chỉnh sửa trực tiếp (Inline Edit) phần Dị ứng & Lưu ý dinh dưỡng
+  const [isEditingAllergies, setIsEditingAllergies] = useState(false);
+  const [drugAllergiesDraft, setDrugAllergiesDraft] = useState('');
+  const [foodAllergiesDraft, setFoodAllergiesDraft] = useState('');
+  const [dietaryNotesDraft, setDietaryNotesDraft] = useState('');
 
   // Doctor & Hospital
   const [doctorName, setDoctorName] = useState('');
@@ -158,7 +164,7 @@ export default function PatientMedicalRecordScreen({ navigation }: any) {
     }
   };
 
-  const handleAddCondition = () => {
+  const handleAddCondition = async () => {
     if (!newConditionName.trim()) {
       Alert.alert('Lỗi', 'Vui lòng nhập tên bệnh lý hoặc tiền sử bệnh.');
       return;
@@ -169,10 +175,12 @@ export default function PatientMedicalRecordScreen({ navigation }: any) {
       severity: newConditionSeverity,
       note: newConditionNote.trim() || 'Đang theo dõi sức khoẻ định kỳ',
     };
-    setConditions([...conditions, newCond]);
+    const nextConditions = [...conditions, newCond];
+    setConditions(nextConditions);
     setNewConditionName('');
     setNewConditionNote('');
     setAddConditionModalVisible(false);
+    await updatePatientRecord(1, { conditions: nextConditions });
     Alert.alert('Thành công', 'Đã thêm tiền sử bệnh lý vào hồ sơ.');
   };
 
@@ -182,18 +190,65 @@ export default function PatientMedicalRecordScreen({ navigation }: any) {
       {
         text: 'Xóa',
         style: 'destructive',
-        onPress: () => setConditions(conditions.filter((c) => c.id !== id)),
+        onPress: async () => {
+          const nextConditions = conditions.filter((c) => c.id !== id);
+          setConditions(nextConditions);
+          await updatePatientRecord(1, { conditions: nextConditions });
+        },
       },
     ]);
   };
 
-  const handleSavePatientInfo = () => {
-    setPatientName(editNameDraft.trim() || patientName);
-    setBloodType(editBloodDraft.trim() || bloodType);
-    setWeight(editWeightDraft.trim() || weight);
-    setHeight(editHeightDraft.trim() || height);
+  const handleSavePatientInfo = async () => {
+    const nextName = editNameDraft.trim() || patientName;
+    const nextBlood = editBloodDraft.trim() || bloodType;
+    const nextWeight = editWeightDraft.trim() || weight;
+    const nextHeight = editHeightDraft.trim() || height;
+
+    setPatientName(nextName);
+    setBloodType(nextBlood);
+    setWeight(nextWeight);
+    setHeight(nextHeight);
     setEditPatientVisible(false);
+
+    await updatePatientRecord(1, {
+      name: nextName,
+      blood_type: nextBlood,
+      weight_kg: parseInt(nextWeight, 10) || undefined,
+      height_cm: parseInt(nextHeight, 10) || undefined,
+    });
     Alert.alert('Đã cập nhật', 'Thông tin bệnh nhân đã được lưu an toàn.');
+  };
+
+  // Mở chế độ chỉnh sửa trực tiếp (Inline Edit) cho Dị ứng & Lưu ý dinh dưỡng
+  const handleStartEditAllergies = () => {
+    setDrugAllergiesDraft(drugAllergies);
+    setFoodAllergiesDraft(foodAllergies);
+    setDietaryNotesDraft(dietaryNotes);
+    setIsEditingAllergies(true);
+  };
+
+  // Hủy chỉnh sửa trực tiếp và quay lại chế độ hiển thị
+  const handleCancelEditAllergies = () => {
+    setIsEditingAllergies(false);
+  };
+
+  // Lưu thay đổi Dị ứng & Lưu ý dinh dưỡng vào state và cơ sở dữ liệu
+  const handleSaveAllergies = async () => {
+    const nextDrug = drugAllergiesDraft.trim() || 'Không ghi nhận';
+    const nextFood = foodAllergiesDraft.trim() || 'Không ghi nhận';
+    const nextDiet = dietaryNotesDraft.trim() || 'Ăn uống đủ chất, hạn chế dầu mỡ và đồ mặn';
+
+    setDrugAllergies(nextDrug);
+    setFoodAllergies(nextFood);
+    setDietaryNotes(nextDiet);
+    setIsEditingAllergies(false);
+
+    await updatePatientRecord(1, {
+      drug_allergies: nextDrug,
+      food_allergies: nextFood,
+      dietary_notes: nextDiet,
+    });
   };
 
   const handlePickFaceImage = async (useCamera: boolean) => {
@@ -549,33 +604,148 @@ export default function PatientMedicalRecordScreen({ navigation }: any) {
               </View>
               <Text style={[styles.cardTitle, { color: textTitle }]}>Dị ứng & Lưu ý dinh dưỡng</Text>
             </View>
+            {!isEditingAllergies && (
+              <TouchableOpacity
+                style={[
+                  styles.editBtnSmall,
+                  {
+                    backgroundColor: isDarkMode ? 'rgba(255, 107, 0, 0.15)' : '#FFF7ED',
+                    borderColor: isDarkMode ? '#EA580C' : '#FDBA74',
+                  },
+                ]}
+                onPress={handleStartEditAllergies}
+                activeOpacity={0.7}
+              >
+                <Ionicons name="pencil" size={13} color="#FF6B00" />
+                <Text style={styles.editBtnSmallText}>Chỉnh sửa</Text>
+              </TouchableOpacity>
+            )}
           </View>
 
-          <View style={{ gap: 8 }}>
-            <View style={styles.allergyRow}>
-              <View style={styles.allergyTagDanger}>
-                <Ionicons name="bandage-outline" size={14} color="#EF4444" />
-                <Text style={styles.allergyTagDangerText}>Dị ứng thuốc:</Text>
+          {isEditingAllergies ? (
+            <View style={{ gap: 12 }}>
+              {/* Trường 1: Dị ứng thuốc */}
+              <View>
+                <View style={[styles.allergyTagDanger, { alignSelf: 'flex-start', marginBottom: 6 }]}>
+                  <Ionicons name="bandage-outline" size={14} color="#EF4444" />
+                  <Text style={styles.allergyTagDangerText}>Dị ứng thuốc</Text>
+                </View>
+                <TextInput
+                  style={[
+                    styles.textInput,
+                    {
+                      backgroundColor: isDarkMode ? '#0F172A' : '#F8FAFC',
+                      color: textTitle,
+                      borderColor: borderCol,
+                    },
+                  ]}
+                  placeholder="Nhập thông tin dị ứng thuốc..."
+                  placeholderTextColor="#94A3B8"
+                  value={drugAllergiesDraft}
+                  onChangeText={setDrugAllergiesDraft}
+                />
               </View>
-              <Text style={[styles.allergyValueText, { color: textTitle }]}>{drugAllergies}</Text>
-            </View>
 
-            <View style={styles.allergyRow}>
-              <View style={styles.allergyTagWarning}>
-                <Ionicons name="restaurant-outline" size={14} color="#D97706" />
-                <Text style={styles.allergyTagWarningText}>Dị ứng thức ăn:</Text>
+              {/* Trường 2: Dị ứng thức ăn */}
+              <View>
+                <View style={[styles.allergyTagWarning, { alignSelf: 'flex-start', marginBottom: 6 }]}>
+                  <Ionicons name="restaurant-outline" size={14} color="#D97706" />
+                  <Text style={styles.allergyTagWarningText}>Dị ứng thức ăn</Text>
+                </View>
+                <TextInput
+                  style={[
+                    styles.textInput,
+                    {
+                      backgroundColor: isDarkMode ? '#0F172A' : '#F8FAFC',
+                      color: textTitle,
+                      borderColor: borderCol,
+                    },
+                  ]}
+                  placeholder="Nhập thông tin dị ứng thức ăn..."
+                  placeholderTextColor="#94A3B8"
+                  value={foodAllergiesDraft}
+                  onChangeText={setFoodAllergiesDraft}
+                />
               </View>
-              <Text style={[styles.allergyValueText, { color: textTitle }]}>{foodAllergies}</Text>
-            </View>
 
-            <View style={[styles.dietaryNoteCard, { backgroundColor: isDarkMode ? '#0F172A' : '#F8FAFC' }]}>
-              <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6, marginBottom: 4 }}>
-                <Ionicons name="nutrition-outline" size={16} color="#10B981" />
-                <Text style={styles.dietaryNoteTitle}>Chế độ ăn khuyến nghị</Text>
+              {/* Trường 3: Chế độ ăn khuyến nghị */}
+              <View>
+                <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6, marginBottom: 6 }}>
+                  <Ionicons name="nutrition-outline" size={16} color="#10B981" />
+                  <Text style={styles.dietaryNoteTitle}>Chế độ ăn khuyến nghị</Text>
+                </View>
+                <TextInput
+                  style={[
+                    styles.textInput,
+                    styles.textArea,
+                    {
+                      backgroundColor: isDarkMode ? '#0F172A' : '#F8FAFC',
+                      color: textTitle,
+                      borderColor: borderCol,
+                    },
+                  ]}
+                  placeholder="Nhập chế độ ăn khuyến nghị..."
+                  placeholderTextColor="#94A3B8"
+                  multiline
+                  numberOfLines={3}
+                  value={dietaryNotesDraft}
+                  onChangeText={setDietaryNotesDraft}
+                />
               </View>
-              <Text style={[styles.dietaryNoteBody, { color: textSub }]}>{dietaryNotes}</Text>
+
+              {/* Nút Hủy và Lưu thay đổi ở góc dưới bên phải */}
+              <View style={styles.inlineEditActionRow}>
+                <TouchableOpacity
+                  style={[
+                    styles.inlineCancelBtn,
+                    {
+                      backgroundColor: isDarkMode ? '#334155' : '#E2E8F0',
+                    },
+                  ]}
+                  onPress={handleCancelEditAllergies}
+                  activeOpacity={0.7}
+                >
+                  <Text style={[styles.inlineCancelBtnText, { color: isDarkMode ? '#E2E8F0' : '#475569' }]}>
+                    Hủy
+                  </Text>
+                </TouchableOpacity>
+
+                <TouchableOpacity
+                  style={styles.inlineSaveBtn}
+                  onPress={handleSaveAllergies}
+                  activeOpacity={0.8}
+                >
+                  <Text style={styles.inlineSaveBtnText}>Lưu thay đổi</Text>
+                </TouchableOpacity>
+              </View>
             </View>
-          </View>
+          ) : (
+            <View style={{ gap: 8 }}>
+              <View style={styles.allergyRow}>
+                <View style={styles.allergyTagDanger}>
+                  <Ionicons name="bandage-outline" size={14} color="#EF4444" />
+                  <Text style={styles.allergyTagDangerText}>Dị ứng thuốc:</Text>
+                </View>
+                <Text style={[styles.allergyValueText, { color: textTitle }]}>{drugAllergies}</Text>
+              </View>
+
+              <View style={styles.allergyRow}>
+                <View style={styles.allergyTagWarning}>
+                  <Ionicons name="restaurant-outline" size={14} color="#D97706" />
+                  <Text style={styles.allergyTagWarningText}>Dị ứng thức ăn:</Text>
+                </View>
+                <Text style={[styles.allergyValueText, { color: textTitle }]}>{foodAllergies}</Text>
+              </View>
+
+              <View style={[styles.dietaryNoteCard, { backgroundColor: isDarkMode ? '#0F172A' : '#F8FAFC' }]}>
+                <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6, marginBottom: 4 }}>
+                  <Ionicons name="nutrition-outline" size={16} color="#10B981" />
+                  <Text style={styles.dietaryNoteTitle}>Chế độ ăn khuyến nghị</Text>
+                </View>
+                <Text style={[styles.dietaryNoteBody, { color: textSub }]}>{dietaryNotes}</Text>
+              </View>
+            </View>
+          )}
         </View>
 
         {/* Khối 4: Bác sĩ điều trị & Bệnh viện */}
@@ -804,8 +974,15 @@ const styles = StyleSheet.create({
   openDetailChartBtn: { flexDirection: 'row', alignItems: 'center', justifyContent: 'center', backgroundColor: Colors.primary, borderRadius: 10, paddingVertical: 10, gap: 6 },
   openDetailChartBtnText: { color: '#FFF', fontSize: 12.5, fontWeight: '700' },
 
-  addBtnSmall: { flexDirection: 'row', alignItems: 'center', gap: 4, backgroundColor: Colors.primary, paddingHorizontal: 10, paddingVertical: 5, borderRadius: 8 },
+  addBtnSmall: { flexDirection: 'row', alignItems: 'center', gap: 4, backgroundColor: '#FF6B00', paddingHorizontal: 10, paddingVertical: 5, borderRadius: 8 },
   addBtnSmallText: { fontSize: 12, fontWeight: '700', color: '#FFF' },
+  editBtnSmall: { flexDirection: 'row', alignItems: 'center', gap: 5, borderWidth: 1, paddingHorizontal: 10, paddingVertical: 5, borderRadius: 8 },
+  editBtnSmallText: { fontSize: 12, fontWeight: '700', color: '#FF6B00' },
+  inlineEditActionRow: { flexDirection: 'row', justifyContent: 'flex-end', alignItems: 'center', gap: 10, marginTop: 4 },
+  inlineCancelBtn: { paddingHorizontal: 14, paddingVertical: 8, borderRadius: 8, alignItems: 'center', justifyContent: 'center' },
+  inlineCancelBtnText: { fontSize: 12.5, fontWeight: '600' },
+  inlineSaveBtn: { backgroundColor: '#FF6B00', paddingHorizontal: 14, paddingVertical: 8, borderRadius: 8, alignItems: 'center', justifyContent: 'center' },
+  inlineSaveBtnText: { fontSize: 12.5, fontWeight: '700', color: '#FFF' },
   emptyInlineBox: { paddingVertical: 12, alignItems: 'center' },
   emptyInlineText: { fontSize: 12 },
 

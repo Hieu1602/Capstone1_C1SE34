@@ -74,7 +74,8 @@ interface PatientState {
 
   // Actions
   fetchReminders: () => Promise<RemindersData | null>;
-  fetchPatientRecord: (patientId?: number, target_date?: string) => Promise<PatientMedicalRecord | null>;
+  fetchPatientRecord: (patientId?: number | string, target_date?: string) => Promise<PatientMedicalRecord | null>;
+  updatePatientRecord: (patientId: number | string, data: Partial<PatientMedicalRecord>) => Promise<PatientMedicalRecord | null>;
   enrollPatientFace: (patientId: number, formData: FormData) => Promise<any>;
 }
 
@@ -99,7 +100,7 @@ export const usePatientStore = create<PatientState>()((set) => ({
     return null;
   },
 
-  fetchPatientRecord: async (patientId: number = 1, target_date?: string) => {
+  fetchPatientRecord: async (patientId: number | string = 1, target_date?: string) => {
     set({ isLoadingPatient: true });
     try {
       const res = await patientApi.getMedicalRecord(patientId, target_date);
@@ -111,6 +112,25 @@ export const usePatientStore = create<PatientState>()((set) => ({
       console.warn('fetchPatientRecord API fallback:', e);
     }
     set({ isLoadingPatient: false });
+    return null;
+  },
+
+  updatePatientRecord: async (patientId: number | string = 1, data: Partial<PatientMedicalRecord>) => {
+    // Cập nhật ngay vào state để giao diện phản hồi tức thì
+    set((state) => ({
+      patientRecord: state.patientRecord ? { ...state.patientRecord, ...data } : (data as PatientMedicalRecord),
+    }));
+    try {
+      const res = await patientApi.updateMedicalRecord(patientId, data);
+      if (res.data) {
+        set((state) => ({
+          patientRecord: state.patientRecord ? { ...state.patientRecord, ...res.data } : res.data,
+        }));
+        return res.data;
+      }
+    } catch (e) {
+      console.warn('updatePatientRecord API fallback:', e);
+    }
     return null;
   },
 
