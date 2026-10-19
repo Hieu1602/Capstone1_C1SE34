@@ -1,10 +1,8 @@
 """
 device_group.py – SQLAlchemy ORM Model cho Phân vùng Nhóm / Khu vực phòng (DeviceGroup).
-Đáp ứng quy tắc nghiệp vụ:
-- Tên nhóm là duy nhất trong cùng một nhà (Unique Constraint per house).
-- Không được để trống tên nhóm.
-- Chứa các thiết bị thuộc khu vực (Phòng khách, Phòng ngủ, Nhà tắm & Cửa...).
-Vị trí: backend/app/models/device_group.py
+Người làm: DuongVanHieu
+Nghiệp vụ: Quản lý nhóm phòng, ràng buộc duy nhất tên nhóm trong căn nhà,
+và điều phối thiết bị theo phòng.
 """
 
 from __future__ import annotations

@@ -34,7 +34,8 @@ export const App: React.FC = () => {
   }, [isDark]);
 
   return (
-    <BrowserRouter>
+    // Author: DuongVanHieu - Kích hoạt cờ tương thích React Router v7 để chuẩn hóa chuyển cảnh trạng thái và splat route
+    <BrowserRouter future={{ v7_startTransition: true, v7_relativeSplatPath: true }}>
       <Routes>
         {/* Public Login Route */}
         <Route path="/login" element={<LoginPage />} />

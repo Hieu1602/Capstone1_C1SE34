@@ -1,7 +1,10 @@
-// DevicesScreen.tsx
-// Màn hình Quản lý phần cứng và Thiết bị IoT (Tab 2 - Thiết bị)
-// Thể hiện toàn bộ danh mục phần cứng trong Proposal Capstone 1 (Orange Pi 5, AMG8833, BLE Band, Camera)
-// Hỗ trợ Menu 3 lựa chọn khi nhấn nút (+): Thêm thủ công, Quét mã QR, Nhóm thiết bị
+/**
+ * DevicesScreen.tsx
+ * Màn hình Quản lý phần cứng và Thiết bị IoT (Tab 2 - Thiết bị)
+ * Người làm: DuongVanHieu
+ * Nghiệp vụ: Quản lý danh mục thiết bị ngoại vi (Camera AI, Vòng đeo tay BLE, Edge Hub),
+ * hỗ trợ phân vùng phòng, ghép nối nhanh qua QR Code và điều phối nhóm giám sát an toàn.
+ */
 
 import React, { useState, useRef, useEffect } from 'react';
 import { View, StyleSheet, TouchableOpacity, ScrollView, Modal, Animated, TouchableWithoutFeedback } from 'react-native';
@@ -11,7 +14,6 @@ import { Colors, Shadows } from '../../../theme/colors';
 import { useVitalStore, IoTDeviceItem } from '../../../store/useVitalStore';
 import { useTheme } from '../../../store/useThemeStore';
 import { LocalizedAlert, LocalizedText, LocalizedTextInput } from '../../../i18n/LocalizedComponents';
-
 
 export default function DevicesScreen({ navigation }: any) {
   const { isDarkMode, colors } = useTheme();
@@ -81,7 +83,7 @@ export default function DevicesScreen({ navigation }: any) {
     }
   }, [showQrModal]);
 
-  // Helper phân loại thiết bị
+  // Helper phân loại thiết bị ngoại vi (Single Responsibility)
   const checkIsCamera = (dev: IoTDeviceItem) =>
     dev.type === 'camera' ||
     dev.name.toLowerCase().includes('camera') ||
@@ -134,40 +136,30 @@ export default function DevicesScreen({ navigation }: any) {
     }
   };
 
-  // Lọc danh sách thiết bị theo 4 tab: Tất cả, Camera, Đồng hồ, Nhóm
+  // Lọc danh sách thiết bị theo tab: Tất cả, Camera, Đồng hồ, Nhóm (Guard clauses)
   const filteredDevices = iotDevices.filter((dev) => {
-    if (activeTab === 'Tất cả') return true;
     if (activeTab === 'Camera') return checkIsCamera(dev);
     if (activeTab === 'Đồng hồ') return checkIsWatch(dev);
-    // Tab 'Nhóm': Hiển thị tất cả nhưng có phân vùng nhóm
     return true;
   });
 
-  // Xử lý khi nhấn vào thẻ thiết bị (Camera -> CameraDetail, Đồng hồ -> SmartbandDetail)
+  // Xử lý điều hướng khi nhấn vào thiết bị (Guard clauses & DRY check)
   const handleDevicePress = (dev: IoTDeviceItem) => {
-    const isCamera =
-      dev.type === 'camera' ||
-      dev.name.toLowerCase().includes('camera') ||
-      dev.name.includes('SECA') ||
-      dev.name.includes('Ranger');
-
-    const isWatch =
-      dev.type === 'band' ||
-      dev.type === 'watch' ||
-      dev.name.toLowerCase().includes('smartband') ||
-      dev.name.toLowerCase().includes('đồng hồ');
-
-    if (isCamera) {
+    if (checkIsCamera(dev)) {
       navigation.navigate('CameraDetail', {
         cameraId: dev.id,
         cameraName: dev.name,
         room: dev.location || dev.sub,
       });
-    } else if (isWatch) {
-      navigation.navigate('SmartbandDetail', { device: dev });
-    } else {
-      LocalizedAlert.alert(dev.name, `${dev.sub}\nTrạng thái: ${dev.status}`);
+      return;
     }
+
+    if (checkIsWatch(dev)) {
+      navigation.navigate('SmartbandDetail', { device: dev });
+      return;
+    }
+
+    LocalizedAlert.alert(dev.name, `${dev.sub}\nTrạng thái: ${dev.status}`);
   };
 
   // Lọc thiết bị cho modal chỉnh sửa

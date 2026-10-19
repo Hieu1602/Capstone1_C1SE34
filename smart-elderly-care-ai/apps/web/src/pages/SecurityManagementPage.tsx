@@ -173,8 +173,16 @@ export const SecurityManagementPage: React.FC = () => {
         securityApi.getAuditLogs().catch(() => null),
       ]);
       if (policiesData && policiesData.length > 0) setPolicies(policiesData);
-      if (sessionsData && sessionsData.length > 0) setSessions(sessionsData);
-      if (logsData && logsData.length > 0) setAuditLogs(logsData);
+      if (sessionsData && sessionsData.length > 0) {
+        // Author: DuongVanHieu - Khử trùng lặp sessions theo id phòng ngừa lỗi duplicate React keys
+        const uniqueSessions = Array.from(new Map(sessionsData.map((s) => [s.id, s])).values());
+        setSessions(uniqueSessions);
+      }
+      if (logsData && logsData.length > 0) {
+        // Author: DuongVanHieu - Khử trùng lặp audit logs theo id
+        const uniqueLogs = Array.from(new Map(logsData.map((l) => [l.id, l])).values());
+        setAuditLogs(uniqueLogs);
+      }
     } finally {
       setLoading(false);
     }
@@ -256,13 +264,18 @@ export const SecurityManagementPage: React.FC = () => {
 
       {/* Header */}
       <div className="flex flex-col md:flex-row md:items-center justify-between gap-4">
-        <div>
-          <h1 className="font-heading text-xl font-bold tracking-tight text-slate-900 dark:text-white">
-            Quản lý bảo mật hệ thống
-          </h1>
-          <p className="text-xs text-slate-500 dark:text-slate-400 mt-1 font-sans">
-            Thiết lập chính sách an ninh, giám sát phiên làm việc JWT, kiểm toán Audit Logs & ma trận phân quyền
-          </p>
+        <div className="flex items-center gap-3">
+          <div className="p-2.5 rounded-xl bg-gradient-to-br from-[#D96C3B] to-[#B84B1E] text-white shadow-md shadow-[#D96C3B]/25 shrink-0">
+            <Shield className="w-5 h-5 stroke-[2.2]" />
+          </div>
+          <div>
+            <h1 className="font-heading text-xl font-bold tracking-tight text-slate-900 dark:text-white">
+              Quản lý bảo mật hệ thống
+            </h1>
+            <p className="text-xs text-slate-500 dark:text-slate-400 mt-0.5 font-sans">
+              Thiết lập chính sách an ninh, giám sát phiên làm việc JWT, kiểm toán Audit Logs & ma trận phân quyền
+            </p>
+          </div>
         </div>
 
         <div className="flex items-center space-x-2">
@@ -275,99 +288,111 @@ export const SecurityManagementPage: React.FC = () => {
 
       {/* Security Overview KPI Cards */}
       <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
-        <div className="glass-card p-4">
-          <div className="flex items-center justify-between">
-            <span className="text-[11px] font-mono font-semibold uppercase tracking-wider text-slate-500 dark:text-slate-400">
+        {/* Card 1: Trạng thái an ninh */}
+        <div className="glass-card p-5 relative group">
+          <div className="flex items-center justify-between relative z-10 px-1">
+            <span className="text-[11px] font-mono font-bold uppercase tracking-wider text-slate-600 dark:text-slate-300">
               Trạng thái an ninh
             </span>
-            <div className="p-2 rounded-xl bg-sky-50 dark:bg-sky-950/50 text-sky-600 dark:text-sky-400 border border-sky-100 dark:border-sky-800">
+            <div className="p-2 rounded-xl bg-emerald-50 dark:bg-emerald-950/50 text-emerald-700 dark:text-emerald-300 border border-emerald-200 dark:border-emerald-800 shadow-sm">
               <Shield className="w-4 h-4" />
             </div>
           </div>
-          <div className="mt-2 flex items-baseline space-x-2">
-            <span className="font-mono text-2xl font-extrabold text-sky-600 dark:text-sky-400">
+          <div className="mt-3 flex items-baseline space-x-2 px-1 relative z-10">
+            <span className="font-mono text-2xl font-black text-emerald-700 dark:text-emerald-400">
               Tối ưu (A+)
             </span>
           </div>
-          <p className="mt-1 text-[11px] text-slate-500 dark:text-slate-400">
-            5/6 chính sách bảo vệ kích hoạt
-          </p>
+          <div className="mt-3 pt-2.5 border-t border-[#C8AD8A]/40 dark:border-white/5 px-1 relative z-10">
+            <p className="text-[11px] text-slate-600 dark:text-slate-400 truncate">
+              5/6 chính sách bảo vệ kích hoạt
+            </p>
+          </div>
         </div>
 
-        <div className="glass-card p-4">
-          <div className="flex items-center justify-between">
-            <span className="text-[11px] font-mono font-semibold uppercase tracking-wider text-slate-500 dark:text-slate-400">
+        {/* Card 2: Phiên hoạt động */}
+        <div className="glass-card p-5 relative group">
+          <div className="flex items-center justify-between relative z-10 px-1">
+            <span className="text-[11px] font-mono font-bold uppercase tracking-wider text-slate-600 dark:text-slate-300">
               Phiên hoạt động (JWT)
             </span>
-            <div className="p-2 rounded-xl bg-sky-50 dark:bg-sky-950/50 text-sky-600 dark:text-sky-400 border border-sky-100 dark:border-sky-800">
+            <div className="p-2 rounded-xl bg-[#FFF8EE] dark:bg-[#1A3830] text-[#D96C3B] dark:text-[#DFB15B] border border-[#C8AD8A] dark:border-[#2F5A4D] shadow-sm">
               <KeyRound className="w-4 h-4" />
             </div>
           </div>
-          <div className="mt-2 flex items-baseline space-x-2">
-            <span className="font-mono text-2xl font-extrabold text-slate-900 dark:text-white">
+          <div className="mt-3 flex items-baseline space-x-2 px-1 relative z-10">
+            <span className="font-mono text-2xl font-black text-slate-900 dark:text-white">
               {sessions.length}
             </span>
-            <span className="text-[10px] font-semibold text-emerald-600 dark:text-emerald-400 bg-emerald-50 dark:bg-emerald-950/40 px-1.5 py-0.5 rounded">
+            <span className="text-[10px] font-bold text-emerald-700 dark:text-emerald-300 bg-emerald-50 dark:bg-emerald-950/40 px-2 py-0.5 rounded-full border border-emerald-200 dark:border-emerald-800">
               Hợp lệ
             </span>
           </div>
-          <p className="mt-1 text-[11px] text-slate-500 dark:text-slate-400">
-            Quản trị, Bác sĩ & Chủ nhà
-          </p>
+          <div className="mt-3 pt-2.5 border-t border-[#C8AD8A]/40 dark:border-white/5 px-1 relative z-10">
+            <p className="text-[11px] text-slate-600 dark:text-slate-400 truncate">
+              Quản trị, Bác sĩ & Chủ nhà
+            </p>
+          </div>
         </div>
 
-        <div className="glass-card p-4">
-          <div className="flex items-center justify-between">
-            <span className="text-[11px] font-mono font-semibold uppercase tracking-wider text-slate-500 dark:text-slate-400">
+        {/* Card 3: Sự kiện kiểm toán */}
+        <div className="glass-card p-5 relative group">
+          <div className="flex items-center justify-between relative z-10 px-1">
+            <span className="text-[11px] font-mono font-bold uppercase tracking-wider text-slate-600 dark:text-slate-300">
               Sự kiện kiểm toán (24h)
             </span>
-            <div className="p-2 rounded-xl bg-sky-50 dark:bg-sky-950/50 text-sky-600 dark:text-sky-400 border border-sky-100 dark:border-sky-800">
+            <div className="p-2 rounded-xl bg-[#FFF8EE] dark:bg-[#1A3830] text-[#B08D57] dark:text-[#DFB15B] border border-[#C8AD8A] dark:border-[#2F5A4D] shadow-sm">
               <FileText className="w-4 h-4" />
             </div>
           </div>
-          <div className="mt-2 flex items-baseline space-x-2">
-            <span className="font-mono text-2xl font-extrabold text-slate-900 dark:text-white">
+          <div className="mt-3 flex items-baseline space-x-2 px-1 relative z-10">
+            <span className="font-mono text-2xl font-black text-slate-900 dark:text-white">
               {auditLogs.length}
             </span>
-            <span className="text-[10px] font-semibold text-sky-700 dark:text-sky-300 bg-sky-50 dark:bg-sky-950/40 px-1.5 py-0.5 rounded">
+            <span className="text-[10px] font-bold text-[#C25828] dark:text-[#DFB15B] bg-[#FFF8EE] dark:bg-[#1A3830] px-2 py-0.5 rounded-full border border-[#C8AD8A] dark:border-[#2F5A4D]">
               Audit Logs
             </span>
           </div>
-          <p className="mt-1 text-[11px] text-slate-500 dark:text-slate-400">
-            Đầy đủ bản ghi định danh
-          </p>
+          <div className="mt-3 pt-2.5 border-t border-[#C8AD8A]/40 dark:border-white/5 px-1 relative z-10">
+            <p className="text-[11px] text-slate-600 dark:text-slate-400 truncate">
+              Đầy đủ bản ghi định danh
+            </p>
+          </div>
         </div>
 
-        <div className="glass-card p-4">
-          <div className="flex items-center justify-between">
-            <span className="text-[11px] font-mono font-semibold uppercase tracking-wider text-slate-500 dark:text-slate-400">
+        {/* Card 4: Cảnh báo bảo mật */}
+        <div className="glass-card p-5 relative group">
+          <div className="flex items-center justify-between relative z-10 px-1">
+            <span className="text-[11px] font-mono font-bold uppercase tracking-wider text-slate-600 dark:text-slate-300">
               Cảnh báo bảo mật
             </span>
-            <div className="p-2 rounded-xl bg-amber-50 dark:bg-amber-950/50 text-amber-600 dark:text-amber-400 border border-amber-100 dark:border-amber-800">
+            <div className="p-2 rounded-xl bg-amber-50 dark:bg-amber-950/50 text-amber-700 dark:text-amber-300 border border-amber-200 dark:border-amber-800 shadow-sm">
               <AlertTriangle className="w-4 h-4" />
             </div>
           </div>
-          <div className="mt-2 flex items-baseline space-x-2">
-            <span className="font-mono text-2xl font-extrabold text-amber-600 dark:text-amber-400">
+          <div className="mt-3 flex items-baseline space-x-2 px-1 relative z-10">
+            <span className="font-mono text-2xl font-black text-amber-700 dark:text-amber-400">
               1
             </span>
-            <span className="text-[10px] font-semibold text-rose-600 dark:text-rose-400 bg-rose-50 dark:bg-rose-950/40 px-1.5 py-0.5 rounded">
+            <span className="text-[10px] font-bold text-rose-700 dark:text-rose-300 bg-rose-50 dark:bg-rose-950/40 px-2 py-0.5 rounded-full border border-rose-200 dark:border-rose-900">
               Đã chặn IP
             </span>
           </div>
-          <p className="mt-1 text-[11px] text-slate-500 dark:text-slate-400">
-            1 phiên quá 10h cần rà soát
-          </p>
+          <div className="mt-3 pt-2.5 border-t border-[#C8AD8A]/40 dark:border-white/5 px-1 relative z-10">
+            <p className="text-[11px] text-slate-600 dark:text-slate-400 truncate">
+              1 phiên quá 10h cần rà soát
+            </p>
+          </div>
         </div>
       </div>
 
       {/* Navigation Tabs */}
-      <div className="flex border-b border-sky-100 dark:border-sky-950/80 gap-2 pb-px">
+      <div className="flex border-b border-[#C8AD8A]/50 dark:border-white/10 gap-2 pb-px">
         <button
           onClick={() => setActiveTab('policies')}
-          className={`flex items-center gap-2 px-4 py-2.5 text-xs font-semibold rounded-t-xl transition-colors border-b-2 ${
+          className={`flex items-center gap-2 px-4 py-2.5 text-xs font-bold rounded-t-xl transition-colors border-b-2 cursor-pointer ${
             activeTab === 'policies'
-              ? 'border-sky-500 text-sky-600 dark:text-sky-400 bg-sky-50/50 dark:bg-sky-950/30'
+              ? 'border-[#D96C3B] text-[#D96C3B] dark:text-[#E67A47] bg-[#D96C3B]/10 dark:bg-[#D96C3B]/20'
               : 'border-transparent text-slate-600 dark:text-slate-400 hover:text-slate-900 dark:hover:text-white'
           }`}
         >
@@ -377,24 +402,24 @@ export const SecurityManagementPage: React.FC = () => {
 
         <button
           onClick={() => setActiveTab('sessions')}
-          className={`flex items-center gap-2 px-4 py-2.5 text-xs font-semibold rounded-t-xl transition-colors border-b-2 ${
+          className={`flex items-center gap-2 px-4 py-2.5 text-xs font-bold rounded-t-xl transition-colors border-b-2 cursor-pointer ${
             activeTab === 'sessions'
-              ? 'border-sky-500 text-sky-600 dark:text-sky-400 bg-sky-50/50 dark:bg-sky-950/30'
+              ? 'border-[#D96C3B] text-[#D96C3B] dark:text-[#E67A47] bg-[#D96C3B]/10 dark:bg-[#D96C3B]/20'
               : 'border-transparent text-slate-600 dark:text-slate-400 hover:text-slate-900 dark:hover:text-white'
           }`}
         >
           <Fingerprint className="w-4 h-4" />
           <span>Phiên làm việc & JWT</span>
-          <span className="px-1.5 py-0.2 rounded-full text-[10px] bg-sky-100 text-sky-700 dark:bg-sky-900 dark:text-sky-300">
+          <span className="px-2 py-0.5 rounded-full text-[10px] font-mono bg-[#FFF8EE] text-[#C25828] dark:bg-[#1A3830] dark:text-[#DFB15B] border border-[#C8AD8A] dark:border-[#2F5A4D]">
             {sessions.length}
           </span>
         </button>
 
         <button
           onClick={() => setActiveTab('audit')}
-          className={`flex items-center gap-2 px-4 py-2.5 text-xs font-semibold rounded-t-xl transition-colors border-b-2 ${
+          className={`flex items-center gap-2 px-4 py-2.5 text-xs font-bold rounded-t-xl transition-colors border-b-2 cursor-pointer ${
             activeTab === 'audit'
-              ? 'border-sky-500 text-sky-600 dark:text-sky-400 bg-sky-50/50 dark:bg-sky-950/30'
+              ? 'border-[#D96C3B] text-[#D96C3B] dark:text-[#E67A47] bg-[#D96C3B]/10 dark:bg-[#D96C3B]/20'
               : 'border-transparent text-slate-600 dark:text-slate-400 hover:text-slate-900 dark:hover:text-white'
           }`}
         >
@@ -404,9 +429,9 @@ export const SecurityManagementPage: React.FC = () => {
 
         <button
           onClick={() => setActiveTab('rbac')}
-          className={`flex items-center gap-2 px-4 py-2.5 text-xs font-semibold rounded-t-xl transition-colors border-b-2 ${
+          className={`flex items-center gap-2 px-4 py-2.5 text-xs font-bold rounded-t-xl transition-colors border-b-2 cursor-pointer ${
             activeTab === 'rbac'
-              ? 'border-sky-500 text-sky-600 dark:text-sky-400 bg-sky-50/50 dark:bg-sky-950/30'
+              ? 'border-[#D96C3B] text-[#D96C3B] dark:text-[#E67A47] bg-[#D96C3B]/10 dark:bg-[#D96C3B]/20'
               : 'border-transparent text-slate-600 dark:text-slate-400 hover:text-slate-900 dark:hover:text-white'
           }`}
         >
@@ -486,8 +511,8 @@ export const SecurityManagementPage: React.FC = () => {
                 </tr>
               </thead>
               <tbody className="divide-y divide-sky-100 dark:divide-sky-950/60 text-xs">
-                {sessions.map((s) => (
-                  <tr key={s.id} className="hover:bg-sky-50/40 dark:hover:bg-white/5 transition-colors">
+                {sessions.map((s, idx) => (
+                  <tr key={`${s.id}-${idx}`} className="hover:bg-sky-50/40 dark:hover:bg-white/5 transition-colors">
                     <td className="py-3 px-4">
                       <div className="font-semibold text-slate-900 dark:text-white">{s.user_name}</div>
                       <span className="inline-block mt-0.5 text-[10px] font-medium px-2 py-0.5 rounded bg-sky-100 dark:bg-sky-900/50 text-sky-700 dark:text-sky-300">
@@ -564,8 +589,8 @@ export const SecurityManagementPage: React.FC = () => {
           </div>
 
           <div className="glass-card divide-y divide-sky-100 dark:divide-sky-950/60">
-            {filteredLogs.map((log) => (
-              <div key={log.id} className="p-4 hover:bg-sky-50/40 dark:hover:bg-white/5 transition-colors">
+            {filteredLogs.map((log, idx) => (
+              <div key={`${log.id}-${idx}`} className="p-4 hover:bg-sky-50/40 dark:hover:bg-white/5 transition-colors">
                 <div className="flex items-center justify-between">
                   <div className="flex items-center gap-2">
                     <span

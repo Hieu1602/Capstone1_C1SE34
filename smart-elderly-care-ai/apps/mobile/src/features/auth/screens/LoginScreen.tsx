@@ -206,9 +206,11 @@ export default function LoginScreen({ navigation }: any) {
           {/* ================================================================= */}
           <View style={styles.bottomSection}>
             <View style={styles.logoBadgeContainer}>
-              <View style={styles.logoBadge}>
-                <Ionicons name="heart" size={26} color="#FFFFFF" />
-              </View>
+              <Image
+                source={require('../../../../assets/logo.png')}
+                style={{ width: 96, height: 64 }}
+                resizeMode="contain"
+              />
             </View>
 
             <LocalizedText style={styles.heroTitle}>
