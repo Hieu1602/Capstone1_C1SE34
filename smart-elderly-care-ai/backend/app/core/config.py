@@ -12,14 +12,9 @@ from pydantic import field_validator
 from dotenv import load_dotenv
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
-# Tự động nạp file .env duy nhất tại thư mục gốc smart-elderly-care-ai/.env
+# Tự động nạp file .env từ các thư mục cha hoặc thư mục hiện tại
 _THIS_FILE = Path(__file__).resolve()
-_SEARCH_PATHS = [
-    _THIS_FILE.parents[3] / ".env",  # smart-elderly-care-ai/.env
-    _THIS_FILE.parents[4] / ".env",  # repo root .env
-    Path("../.env"),
-    Path(".env"),
-]
+_SEARCH_PATHS = [p / ".env" for p in _THIS_FILE.parents] + [Path("../.env"), Path(".env")]
 for _p in _SEARCH_PATHS:
     if _p.is_file():
         load_dotenv(dotenv_path=_p, override=False)
