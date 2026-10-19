@@ -347,9 +347,15 @@ async def transcribe_audio(
                 audio_data = r.record(source)
         except Exception:
             # Thử 2: Chuyển đổi bằng pydub nếu client gửi định dạng m4a/aac/webm
+            if AudioSegment is None:
+                raise HTTPException(
+                    status_code=400,
+                    detail="Không thể đọc định dạng âm thanh này (thiếu thư viện pydub). Vui lòng đảm bảo ghi âm chuẩn WAV.",
+                )
             try:
                 audio_buf.seek(0)
-                seg: Any = AudioSegment.from_file(audio_buf)
+                audio_segment_cls: Any = AudioSegment
+                seg = audio_segment_cls.from_file(audio_buf)
                 wav_io = io.BytesIO()
                 seg.export(wav_io, format="wav")
                 wav_io.seek(0)
