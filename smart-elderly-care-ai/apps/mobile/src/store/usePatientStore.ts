@@ -1,11 +1,18 @@
-// usePatientStore.ts
-// Domain Store: Patient medical record, reminders, face enrollment
-// Tách từ useVitalStore.ts (Single Responsibility Principle)
+/**
+ * ============================================================================
+ * TỆP: usePatientStore.ts
+ * TÁC GIẢ: Phan Nguyễn Giáng My
+ * MÔ TẢ:
+ *   Domain Store quản lý hồ sơ bệnh án điện tử (Patient Medical Record),
+ *   lịch nhắc uống thuốc & dinh dưỡng (Reminders) và đăng ký khuôn mặt AI
+ *   (Face Enrollment) cho người cao tuổi.
+ * ============================================================================
+ */
 
 import { create } from 'zustand';
 import { remindersApi, patientApi } from '../services/api';
 
-// ---- Types ----
+// ---- Định nghĩa kiểu dữ liệu (Types) ----
 export interface MedicalConditionItem {
   id: string;
   name: string;

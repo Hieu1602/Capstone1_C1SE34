@@ -1,5 +1,12 @@
-// HealthDatePickerModal.tsx
-// Modal chọn ngày kiểm tra trên lịch hoặc phím tắt cho ứng dụng mobile
+// ==============================================================================
+// TỆP: HealthDatePickerModal.tsx
+// PHÂN HỆ: Hộp thoại Chọn ngày Tra cứu Lịch sử Sinh hiệu (HealthDetailScreen)
+// TÁC GIẢ: Phan Nguyễn Giáng My
+// MÔ TẢ CHỨC NĂNG:
+//   - Cho phép người dùng nhập ngày bất kỳ (định dạng chuẩn YYYY-MM-DD) hoặc chọn nhanh
+//     các mốc: Hôm nay, Hôm qua, 2 ngày trước, 3 ngày trước.
+//   - Kiểm tra tính hợp lệ (Validation) của chuỗi ngày trước khi truy vấn API Backend.
+// ==============================================================================
 
 import React from 'react';
 import { View, StyleSheet, TouchableOpacity, Modal, TextInput } from 'react-native';

@@ -1,20 +1,15 @@
-// useVitalStore.ts
-// ⚠️  DEPRECATED – File này giữ lại để backward compatibility.
-//
-// Toàn bộ state đã được tách thành 4 domain stores:
-//   - useHealthStore  → vitals, connection, algoSettings
-//   - useAlertStore   → incidents, alarmSnooze, siren
-//   - useDeviceStore  → IoT devices, camera, house, groups
-//   - usePatientStore → patientRecord, reminders, face enrollment
-//
-// Hãy chuyển dần import sang các store chuyên biệt:
-//   import { useHealthStore } from './useHealthStore';
-//   import { useAlertStore }  from './useAlertStore';
-//   import { useDeviceStore } from './useDeviceStore';
-//   import { usePatientStore } from './usePatientStore';
-//
-// Shim này tổng hợp lại trạng thái từ các store mới để không làm vỡ
-// code cũ trong khi quá trình migration từng screen diễn ra dần dần.
+// ==============================================================================
+// TỆP: useVitalStore.ts
+// PHÂN HỆ: Zustand Store Tổng hợp (Facade Store) quản lý Sinh hiệu, Cảnh báo & Nhà
+// TÁC GIẢ: Phan Nguyễn Giáng My
+// MÔ TẢ KIẾN TRÚC:
+//   Toàn bộ state của ứng dụng đã được chia thành 4 Domain Stores chuyên biệt (Single Responsibility):
+//     - useHealthStore  → Dữ liệu sinh hiệu (Nhịp tim, SpO2, Thân nhiệt), ngưỡng cảnh báo AI.
+//     - useAlertStore   → Danh sách sự cố khẩn cấp (Incidents), Tạm tắt chuông (Snooze), Còi hú (Siren).
+//     - useDeviceStore  → Thiết bị IoT, Trạng thái Camera AI, Chế độ an ninh ngôi nhà (House Mode).
+//     - usePatientStore → Hồ sơ bệnh án điện tử, Lịch nhắc uống thuốc, Đăng ký khuôn mặt ArcFace.
+//   File này đóng vai trò Facade/Aggregator kết nối cả 4 store để các màn hình truy xuất đồng bộ.
+// ==============================================================================
 
 import { useHealthStore } from './useHealthStore';
 import { useAlertStore } from './useAlertStore';

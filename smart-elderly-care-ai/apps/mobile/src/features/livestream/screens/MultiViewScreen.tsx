@@ -1,6 +1,13 @@
-// MultiViewScreen.tsx
-// Màn hình xem đồng thời nhiều luồng Camera (Multi-View / 2x2 Grid)
-// Hỗ trợ hiển thị các kênh giám sát thời gian thực từ hệ thống thiết bị IoT
+// ==============================================================================
+// TỆP: MultiViewScreen.tsx
+// PHÂN HỆ: Màn hình Giám sát Đa luồng Camera (Multi-View 2x2 Grid & List View)
+// TÁC GIẢ: Phan Nguyễn Giáng My
+// MÔ TẢ CHỨC NĂNG:
+//   1. Hiển thị đồng thời các luồng Camera AI đang được kết nối thực tế trong ngôi nhà.
+//   2. Cho phép chuyển đổi linh hoạt giữa bố cục Lưới 2x2 (GRID) và Danh sách dọc (LIST).
+//   3. Hiển thị thông số kỹ thuật thời gian thực (FPS, Bitrate, trạng thái AI bảo vệ)
+//      và điều hướng sang màn hình xem chi tiết từng Camera (CameraDetailScreen).
+// ==============================================================================
 
 import React, { useState } from 'react';
 import { View, StyleSheet, TouchableOpacity, ScrollView, Image, Dimensions } from 'react-native';
@@ -12,6 +19,7 @@ import { useTheme } from '../../../store/useThemeStore';
 import { LocalizedAlert, LocalizedText } from '../../../i18n/LocalizedComponents';
 import { launchEmergencyCall } from '../../../services/emergency';
 
+// Cấu trúc dữ liệu cho một kênh truyền phát Camera trong chế độ Multi-View
 interface CameraFeed {
   id: string;
   name: string;
@@ -27,10 +35,11 @@ interface CameraFeed {
 export default function MultiViewScreen({ navigation }: any) {
   const { isDarkMode } = useTheme();
   const { house, iotDevices } = useVitalStore();
+  // Chế độ hiển thị bố cục: Lưới 2x2 (GRID) hoặc Danh sách (LIST)
   const [layoutMode, setLayoutMode] = useState<'GRID' | 'LIST'>('GRID');
   const [mutedFeeds, setMutedFeeds] = useState<Record<string, boolean>>({});
 
-  // Lấy danh sách camera thực tế từ store
+  // Lọc danh sách các thiết bị thuộc nhóm Camera từ danh sách thiết bị IoT thực tế
   const configuredCameras = (iotDevices || []).filter(
     (d) =>
       d.type === 'camera' ||

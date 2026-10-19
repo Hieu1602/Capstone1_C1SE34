@@ -1,6 +1,15 @@
-// HealthDetailScreen.tsx
-// Màn hình Chi tiết Tình trạng Sức khoẻ & Chỉ số Sinh hiệu người cao tuổi
-// Hệ thống Smart Elderly Care AI – Tích hợp Lọc dữ liệu theo ngày & Tua dòng thời gian (Interactive Timeline)
+// ==============================================================================
+// TỆP: HealthDetailScreen.tsx
+// PHÂN HỆ: Màn hình Chi tiết Chỉ số Sinh tồn & Phân tích Sức khỏe
+// TÁC GIẢ: Phan Nguyễn Giáng My
+// MÔ TẢ CHỨC NĂNG:
+//   1. Hỗ trợ 3 chế độ xem thống kê: Theo ngày (DAY), 7 ngày qua (WEEK), 30 ngày (MONTH).
+//   2. Tích hợp bộ lọc lịch ngày (Date Filter) và Thanh tua dòng thời gian (Interactive Timeline Scrubber)
+//      giúp tra cứu chính xác nhịp tim, SpO2, nhiệt độ da tại từng khung giờ trong ngày.
+//   3. Tính toán trung bình động (Moving Average) từ dữ liệu thực tế trong PostgreSQL.
+//      Khi bảng dữ liệu trống, tự động hiển thị Empty State ('--' / 'Chưa có dữ liệu').
+//   4. Lối tắt điều hướng sang Hồ sơ bệnh án điện tử (AES-256) và Lịch nhắc uống thuốc.
+// ==============================================================================
 
 import React, { useState, useEffect, useMemo, useRef } from 'react';
 import {
@@ -19,14 +28,16 @@ import { useVitalStore } from '../../../store/useVitalStore';
 import { useTheme } from '../../../store/useThemeStore';
 import { vitalsApi, patientApi } from '../../../services/api';
 
-// Subcomponents đã được tách module hoá
+// Các component con đã được tách module hóa
 import { HealthTimelineScrubber } from '../components/HealthTimelineScrubber';
 import { HealthVitalsGrid, VitalCardConfig } from '../components/HealthVitalsGrid';
 import { HealthChartSection } from '../components/HealthChartSection';
 import { HealthDatePickerModal } from '../components/HealthDatePickerModal';
 
+// Kiểu khoảng thời gian thống kê: Theo ngày | 7 ngày | 30 ngày
 type TimeRange = 'DAY' | 'WEEK' | 'MONTH';
 
+// Hàm chuyển đổi đối tượng Date sang chuỗi chuẩn YYYY-MM-DD để gửi lên API Backend
 const formatDateYMD = (d: Date) => {
   const y = d.getFullYear();
   const m = String(d.getMonth() + 1).padStart(2, '0');
@@ -34,6 +45,7 @@ const formatDateYMD = (d: Date) => {
   return `${y}-${m}-${day}`;
 };
 
+// Hàm định dạng chuỗi YYYY-MM-DD sang định dạng hiển thị tiếng Việt DD/MM/YYYY
 const formatDisplayDateVN = (ymd: string) => {
   if (!ymd) return '';
   const parts = ymd.split('-');
@@ -43,10 +55,12 @@ const formatDisplayDateVN = (ymd: string) => {
   return ymd;
 };
 
+// Các hàm tiện ích lấy chuỗi ngày Hôm nay, Hôm qua và N ngày trước
 const getTodayStr = () => formatDateYMD(new Date());
 const getYesterdayStr = () => formatDateYMD(new Date(Date.now() - 86400000));
 const getDaysAgoStr = (days: number) => formatDateYMD(new Date(Date.now() - 86400000 * days));
 
+// Hàm quy đổi tổng số phút trong ngày (0 -> 1439) sang định dạng giờ:phút (HH:MM)
 const formatTimeHM = (minutes: number) => {
   const h = Math.floor(minutes / 60).toString().padStart(2, '0');
   const m = (minutes % 60).toString().padStart(2, '0');

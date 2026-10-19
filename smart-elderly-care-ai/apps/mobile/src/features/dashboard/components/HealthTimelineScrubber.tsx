@@ -1,5 +1,13 @@
-// HealthTimelineScrubber.tsx
-// Thanh tua dòng thời gian (Interactive Timeline Scrubber) cho màn hình chi tiết sức khoẻ
+// ==============================================================================
+// TỆP: HealthTimelineScrubber.tsx
+// PHÂN HỆ: Thanh Tua Dòng Thời Gian Tương Tác (Interactive Timeline Scrubber)
+// TÁC GIẢ: Phan Nguyễn Giáng My
+// MÔ TẢ CHỨC NĂNG:
+//   - Cho phép người dùng kéo thanh trượt hoặc bấm chọn nhanh 6 mốc giờ trong ngày
+//     (00:00, 06:00, 09:00, 12:00, 18:00, 22:00).
+//   - Hiển thị chi tiết bản ghi sinh hiệu gần nhất với thời điểm đang chọn (Nhịp tim,
+//     SpO2, Nhiệt độ da, Trạng thái té ngã).
+// ==============================================================================
 
 import React from 'react';
 import { View, StyleSheet, TouchableOpacity, Platform } from 'react-native';
@@ -7,12 +15,14 @@ import { Ionicons } from '@expo/vector-icons';
 import { LocalizedText as Text } from '../../../i18n/LocalizedComponents';
 import { Shadows } from '../../../theme/colors';
 
+// Chuyển đổi số phút trong ngày sang chuỗi giờ:phút (HH:MM)
 const formatTimeHM = (minutes: number) => {
   const h = Math.floor(minutes / 60).toString().padStart(2, '0');
   const m = (minutes % 60).toString().padStart(2, '0');
   return `${h}:${m}`;
 };
 
+// Chuyển đổi chuỗi YYYY-MM-DD sang định dạng ngày Việt Nam DD/MM/YYYY
 const formatDisplayDateVN = (ymd: string) => {
   if (!ymd) return '';
   const parts = ymd.split('-');

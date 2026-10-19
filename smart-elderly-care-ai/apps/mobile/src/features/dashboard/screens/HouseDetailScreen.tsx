@@ -1,3 +1,15 @@
+// ==============================================================================
+// TỆP: HouseDetailScreen.tsx
+// PHÂN HỆ: Màn hình Quản lý Không gian Nhà & Phân quyền Thành viên Gia đình
+// TÁC GIẢ: Phan Nguyễn Giáng My
+// MÔ TẢ CHỨC NĂNG:
+//   1. Hiển thị thông tin căn nhà thông minh hiện tại (Tên nhà, Địa chỉ, Chế độ an ninh).
+//   2. Liệt kê danh sách các thành viên được ủy quyền truy cập hệ thống (Chủ nhà,
+//      Người chăm sóc / Caregiver, Bác sĩ gia đình / Doctor).
+//   3. Cho phép Chủ nhà (Owner) mời thêm Người thân hoặc Bác sĩ bằng Số điện thoại
+//      và phân quyền RBAC trực tiếp vào bảng house_members trong PostgreSQL.
+// ==============================================================================
+
 import React, { useState, useEffect, useCallback } from 'react';
 import {
   View,
@@ -21,12 +33,15 @@ export default function HouseDetailScreen({ navigation }: any) {
   const { house } = useVitalStore();
   const { full_name, userName, phone_number, userPhone, household_id } = useAuthStore();
   const { isDarkMode } = useTheme();
+
+  // State điều khiển Modal thêm thành viên mới vào nhà
   const [addMemberModalVisible, setAddMemberModalVisible] = useState(false);
   const [newMemberPhone, setNewMemberPhone] = useState('');
   const [newMemberRole, setNewMemberRole] = useState<'CAREGIVER' | 'DOCTOR'>('CAREGIVER');
   const [members, setMembers] = useState<any[]>([]);
   const [isLoadingMembers, setIsLoadingMembers] = useState(false);
 
+  // Khởi tạo thông tin Chủ nhà mặc định từ tài khoản đang đăng nhập nếu API chưa trả về danh sách
   const getFallbackOwner = useCallback(() => [
     {
       id: 1,
@@ -40,6 +55,7 @@ export default function HouseDetailScreen({ navigation }: any) {
     },
   ], [full_name, userName, phone_number, userPhone]);
 
+  // Gọi API Backend lấy danh sách thành viên thực tế của ngôi nhà
   const loadMembers = useCallback(async () => {
     try {
       setIsLoadingMembers(true);
@@ -60,6 +76,8 @@ export default function HouseDetailScreen({ navigation }: any) {
   useEffect(() => {
     loadMembers();
   }, [loadMembers]);
+
+  // Xử lý thêm thành viên mới (Người thân hoặc Bác sĩ phụ trách) vào căn nhà
 
   const handleAddMember = async () => {
     const phoneToSubmit = newMemberPhone.trim();

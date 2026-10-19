@@ -1,5 +1,13 @@
-// HealthChartSection.tsx
-// Biểu đồ cột trực quan hiển thị dao động nhịp tim theo thời gian
+// ==============================================================================
+// TỆP: HealthChartSection.tsx
+// PHÂN HỆ: Biểu đồ Cột Dao động Nhịp tim theo Thời gian (HealthDetailScreen)
+// TÁC GIẢ: Phan Nguyễn Giáng My
+// MÔ TẢ CHỨC NĂNG:
+//   - Vẽ biểu đồ cột (Bar Chart) trực quan hóa biến thiên nhịp tim theo giờ/ngày.
+//   - Tự động đánh dấu nổi bật (Highlight Pin 📍) cột dữ liệu gần nhất với mốc thời gian
+//     mà người dùng đang kéo trên Thanh tua dòng thời gian (Timeline Scrubber).
+//   - Hiển thị màn hình Empty State khi ngày/tuần/tháng được chọn chưa có dữ liệu đo.
+// ==============================================================================
 
 import React from 'react';
 import { View, StyleSheet, ScrollView } from 'react-native';
@@ -7,6 +15,7 @@ import { Ionicons } from '@expo/vector-icons';
 import { LocalizedText as Text } from '../../../i18n/LocalizedComponents';
 import { Shadows } from '../../../theme/colors';
 
+// Cấu trúc một điểm dữ liệu trên biểu đồ nhịp tim
 interface ChartPoint {
   label: string;
   hr: number;

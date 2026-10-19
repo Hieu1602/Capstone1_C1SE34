@@ -1,5 +1,14 @@
-// PatientMedicalRecordScreen.tsx
-// Màn hình Hồ sơ bệnh án người cao tuổi (Bảo mật y tế chuẩn AES-256)
+// ==============================================================================
+// TỆP: PatientMedicalRecordScreen.tsx
+// PHÂN HỆ: Màn hình Hồ sơ Bệnh án Điện tử Người cao tuổi (Bảo mật chuẩn AES-256)
+// TÁC GIẢ: Phan Nguyễn Giáng My
+// MÔ TẢ CHỨC NĂNG:
+//   1. Quản lý thông tin hành chính & thể trạng của người cao tuổi (Họ tên, Năm sinh,
+//      Nhóm máu, Chiều cao, Cân nặng, Chỉ số BMI).
+//   2. Đăng ký khuôn mặt AI (ArcFace Face Enrollment) phục vụ nhận diện định danh trên Camera.
+//   3. Lưu trữ bệnh lý nền, tiền sử dị ứng thuốc/thực phẩm và thông tin Bác sĩ điều trị.
+//   4. Đồng bộ hai chiều với cơ sở dữ liệu PostgreSQL qua RESTful API.
+// ==============================================================================
 
 import React, { useState, useEffect } from 'react';
 import {
@@ -25,6 +34,7 @@ import { Colors } from '../../../theme/colors';
 import { useVitalStore } from '../../../store/useVitalStore';
 import { BASE_URL } from '../../../services/api';
 
+// Cấu trúc dữ liệu một bệnh lý nền trong hồ sơ bệnh án
 interface MedicalCondition {
   id: string;
   name: string;
@@ -36,7 +46,7 @@ export default function PatientMedicalRecordScreen({ navigation }: any) {
   const { isDarkMode } = useTheme();
   const { fetchPatientRecord, patientRecord, isLoadingPatient, enrollPatientFace } = useVitalStore();
 
-  // Patient Info State
+  // State lưu trữ thông tin hành chính & chỉ số cơ thể của người cao tuổi
   const [patientName, setPatientName] = useState('');
   const [birthYear, setBirthYear] = useState('');
   const [age, setAge] = useState<number | string>('--');
