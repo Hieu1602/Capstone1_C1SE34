@@ -1,6 +1,6 @@
 // src/pages/LoginPage.tsx
 // ui-ux-pro-max: Glassmorphism Dark OLED login · Admin-only access
-// Credentials: Admin123 / 123456 · Blocks doctor & user roles
+// Credentials: +84900000000 / 12345678 (AWS TimescaleDB) · Blocks doctor & user roles
 
 import React, { useState } from 'react';
 import { useNavigate } from 'react-router-dom';
@@ -20,8 +20,8 @@ export const LoginPage: React.FC = () => {
   const navigate = useNavigate();
   const { login } = useAuthStore();
 
-  const [username, setUsername] = useState('Admin123');
-  const [password, setPassword] = useState('123456');
+  const [username, setUsername] = useState('+84900000000');
+  const [password, setPassword] = useState('12345678');
   const [loading,  setLoading]  = useState(false);
   const [errorMsg, setErrorMsg] = useState<string | null>(null);
 
@@ -60,33 +60,29 @@ export const LoginPage: React.FC = () => {
       localStorage.removeItem('seca_admin_token');
       localStorage.removeItem('seca_admin_user');
 
-      // Demo fallback — Admin123 / 123456
-      if (username.trim() === 'Admin123' && password === '123456') {
-        login('demo-admin-token', {
-          id:        '154b7921-7e8c-4019-bd05-34260f3358cf',
-          phone:     'Admin123',
-          full_name: 'Quản Trị Viên Hệ Thống',
-          role:      'admin',
-          is_active:  true,
-        });
-        navigate('/');
-        return;
-      }
-
       const axiosErr = err as { response?: { data?: { detail?: string } }; message?: string };
-      setErrorMsg(
-        axiosErr.response?.data?.detail ||
-        axiosErr.message ||
-        'Tên đăng nhập hoặc mật khẩu không chính xác.'
-      );
+      const detail = axiosErr.response?.data?.detail;
+      const msg = axiosErr.message || '';
+
+      if (msg.includes('Network Error')) {
+        setErrorMsg(
+          'Không thể kết nối đến máy chủ AWS EC2 (Network Error / Mixed Content). Nếu đang mở trên trình duyệt HTTPS, hãy cấp quyền: Bấm biểu tượng ổ khóa/cài đặt cạnh URL -> Cài đặt trang web (Site settings) -> Nội dung không an toàn (Insecure content) -> Cho phép (Allow).'
+        );
+      } else {
+        setErrorMsg(
+          detail ||
+          msg ||
+          'Tên đăng nhập hoặc mật khẩu không chính xác.'
+        );
+      }
     } finally {
       setLoading(false);
     }
   };
 
   const handleFillAdmin = () => {
-    setUsername('Admin123');
-    setPassword('123456');
+    setUsername('+84900000000');
+    setPassword('12345678');
     setErrorMsg(null);
   };
 
@@ -204,7 +200,7 @@ export const LoginPage: React.FC = () => {
                 htmlFor="login-username"
                 className="block text-[11px] font-bold uppercase tracking-[0.1em] text-[#DFB15B] mb-1.5 font-mono"
               >
-                Tên đăng nhập (Admin)
+                Số điện thoại Admin (AWS)
               </label>
               <div className="relative">
                 <UserIcon
@@ -218,7 +214,7 @@ export const LoginPage: React.FC = () => {
                   autoComplete="username"
                   value={username}
                   onChange={(e) => setUsername(e.target.value)}
-                  placeholder="Admin123"
+                  placeholder="+84900000000 hoặc 0900000000"
                   className="w-full pl-10 pr-4 py-2.5 rounded-xl bg-[#0F2F27]/90 border border-[#265A4C] text-white placeholder-slate-500 focus:outline-none focus:border-[#DFB15B] focus:ring-2 focus:ring-[#DFB15B]/20 text-xs font-mono transition-all shadow-inner"
                 />
               </div>
@@ -229,7 +225,7 @@ export const LoginPage: React.FC = () => {
                 htmlFor="login-password"
                 className="block text-[11px] font-bold uppercase tracking-[0.1em] text-[#DFB15B] mb-1.5 font-mono"
               >
-                Mật khẩu
+                Mật khẩu (AWS Database)
               </label>
               <div className="relative">
                 <Lock
@@ -243,7 +239,7 @@ export const LoginPage: React.FC = () => {
                   autoComplete="current-password"
                   value={password}
                   onChange={(e) => setPassword(e.target.value)}
-                  placeholder="••••••"
+                  placeholder="••••••••"
                   className="w-full pl-10 pr-4 py-2.5 rounded-xl bg-[#0F2F27]/90 border border-[#265A4C] text-white placeholder-slate-500 focus:outline-none focus:border-[#DFB15B] focus:ring-2 focus:ring-[#DFB15B]/20 text-xs font-mono transition-all shadow-inner"
                 />
               </div>
@@ -269,15 +265,15 @@ export const LoginPage: React.FC = () => {
             </button>
           </form>
 
-          {/* Quick Fill Demo Helper */}
+          {/* Quick Fill AWS Admin Helper */}
           <div className="mt-5 pt-4 border-t border-[#265A4C]/60 flex items-center justify-between text-[11px] text-[#A6C0B5] relative z-10">
-            <span>Tài khoản kiểm thử:</span>
+            <span>Tài khoản Quản trị AWS:</span>
             <button
               type="button"
               onClick={handleFillAdmin}
               className="text-[#DFB15B] hover:text-white font-mono underline decoration-dotted transition-colors cursor-pointer"
             >
-              Admin123 / 123456
+              +84900000000 / 12345678
             </button>
           </div>
         </div>
