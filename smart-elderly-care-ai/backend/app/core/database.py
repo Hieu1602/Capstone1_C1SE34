@@ -57,6 +57,30 @@ async def init_db() -> None:
             await conn.execute(text("ALTER TABLE users ADD COLUMN IF NOT EXISTS location_latitude DOUBLE PRECISION;"))
             await conn.execute(text("ALTER TABLE users ADD COLUMN IF NOT EXISTS location_longitude DOUBLE PRECISION;"))
             await conn.execute(text("ALTER TABLE users ADD COLUMN IF NOT EXISTS location_address VARCHAR(500);"))
+            # Ensure Doctor +84905111222 exists and has same password
+            await conn.execute(text("""
+                INSERT INTO users (
+                    id, phone, full_name, hashed_password, role, 
+                    preferred_language, font_size_mode, custom_font_scale,
+                    vibration_enabled, location_enabled, is_active
+                ) VALUES (
+                    'b3333333-b4e1-4b08-b2d3-d949a0eb075c',
+                    '+84905111222',
+                    'BS. Trần Văn Minh',
+                    (SELECT hashed_password FROM users WHERE phone = '+84905123456' LIMIT 1),
+                    'doctor',
+                    'vi', 'system', 2,
+                    TRUE, TRUE, TRUE
+                ) ON CONFLICT (phone) DO UPDATE 
+                SET role = 'doctor',
+                    hashed_password = (SELECT hashed_password FROM users WHERE phone = '+84905123456' LIMIT 1);
+            """))
+            await conn.execute(text("""
+                INSERT INTO house_members (id, house_id, user_id, role_in_house, permissions)
+                SELECT gen_random_uuid(), 'c3333333-b4e1-4b08-b2d3-d949a0eb075c', 'b3333333-b4e1-4b08-b2d3-d949a0eb075c', 'DOCTOR', 'VIEW'
+                WHERE EXISTS (SELECT 1 FROM houses WHERE id = 'c3333333-b4e1-4b08-b2d3-d949a0eb075c')
+                ON CONFLICT (house_id, user_id) DO NOTHING;
+            """))
             await conn.execute(text("""
                 CREATE TABLE IF NOT EXISTS security_policies (
                     id VARCHAR(50) NOT NULL PRIMARY KEY,
