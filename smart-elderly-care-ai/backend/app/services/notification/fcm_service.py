@@ -27,18 +27,43 @@ class FCMService:
         self._initialized = False
         self._app = None
 
-    def initialize(self, service_account_path: str) -> None:
+    def initialize(self, service_account_path: Optional[str] = None) -> None:
         """Khởi tạo Firebase Admin SDK."""
+        if self._initialized:
+            return
+        if not service_account_path:
+            from app.core.config import settings
+            service_account_path = settings.FCM_SERVICE_ACCOUNT_PATH
+
+        from pathlib import Path
+        p = Path(service_account_path)
+        if not p.is_file():
+            candidates = [
+                Path("/app") / service_account_path,
+                Path(__file__).resolve().parents[3] / service_account_path,
+                Path.cwd() / service_account_path,
+            ]
+            for c in candidates:
+                if c.is_file():
+                    p = c
+                    break
+
+        if not p.is_file():
+            logger.warning("[FCM] Credentials file không tồn tại: %s. FCM push disabled.", service_account_path)
+            return
+
         try:
             import firebase_admin  # type: ignore
             from firebase_admin import credentials
 
             if not firebase_admin._apps:
-                cred = credentials.Certificate(service_account_path)
+                cred = credentials.Certificate(str(p))
                 self._app = firebase_admin.initialize_app(cred)
+            else:
+                self._app = firebase_admin.get_app()
 
             self._initialized = True
-            logger.info("[FCM] Firebase Admin SDK initialized.")
+            logger.info("[FCM] Firebase Admin SDK initialized từ: %s", p)
         except ImportError:
             logger.warning("[FCM] firebase-admin chưa cài. FCM disabled.")
         except Exception as exc:  # noqa: BLE001
@@ -69,6 +94,9 @@ class FCMService:
         language = normalize_language(language)
         title = translate_text(title, language)
         body = translate_text(body, language)
+
+        if not self._initialized:
+            self.initialize()
 
         if not self._initialized:
             logger.warning("[FCM] Chưa initialized. Bỏ qua push notification.")
