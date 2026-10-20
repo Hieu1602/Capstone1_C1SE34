@@ -157,7 +157,7 @@ export const usersApi = {
   }) => api.patch('/users/me/password', data),
 };
 
-// API SOS báo cho các thành viên trong cùng hộ; app sẽ tự mở trình gọi 115.
+// API SOS báo cho các thành viên trong cùng hộ; app sẽ tự mở trình gọi 115 hoặc tổng đài hỗ trợ 0898230852.
 export const emergencyApi = {
   triggerSOS: (data: {
     address?: string;
@@ -165,6 +165,11 @@ export const emergencyApi = {
     longitude?: number;
     message?: string;
   } = {}) => api.post('/emergency/sos', data),
+  requestSupportCall: (data: {
+    topic?: string;
+    note?: string;
+  } = {}) => api.post('/emergency/support-call', data),
+  getSupportHotline: () => api.get('/emergency/support-hotline'),
 };
 
 // 1. System Mode API

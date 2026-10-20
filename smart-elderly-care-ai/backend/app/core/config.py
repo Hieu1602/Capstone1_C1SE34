@@ -15,8 +15,7 @@ from pydantic_settings import BaseSettings, SettingsConfigDict
 # Tự động nạp file .env duy nhất tại thư mục gốc smart-elderly-care-ai/.env
 _THIS_FILE = Path(__file__).resolve()
 _SEARCH_PATHS = [
-    _THIS_FILE.parents[3] / ".env",  # smart-elderly-care-ai/.env
-    _THIS_FILE.parents[4] / ".env",  # repo root .env
+    *(_parent / ".env" for _parent in _THIS_FILE.parents),
     Path("../.env"),
     Path(".env"),
 ]

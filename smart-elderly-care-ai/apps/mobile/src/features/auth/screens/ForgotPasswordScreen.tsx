@@ -24,6 +24,7 @@ import {
 } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { authApi } from '../../../services/api';
+import { useTheme } from '../../../store/useThemeStore';
 
 /**
  * Ba giai đoạn trong quy trình khôi phục mật khẩu:
@@ -35,6 +36,7 @@ type Step = 'request' | 'verify' | 'newPassword';
 type Feedback = { type: 'success' | 'error' | 'info' | 'complete'; message: string };
 
 export default function ForgotPasswordScreen({ navigation }: any) {
+  const { colors } = useTheme();
   // ----------------------------------------------------------------------------
   // State quản lý luồng dữ liệu và giao diện
   // ----------------------------------------------------------------------------
@@ -258,7 +260,10 @@ export default function ForgotPasswordScreen({ navigation }: any) {
                 {[0, 1, 2, 3, 4, 5].map((index) => (
                   <TextInput
                     key={index}
-                    style={[styles.otpInput, otp.length === index && styles.otpInputActive]}
+                    style={[
+                      styles.otpInput,
+                      otp.length === index && [styles.otpInputActive, { borderColor: colors.primary }],
+                    ]}
                     value={otp[index] || ''}
                     onChangeText={(value) =>
                       setOtp(
