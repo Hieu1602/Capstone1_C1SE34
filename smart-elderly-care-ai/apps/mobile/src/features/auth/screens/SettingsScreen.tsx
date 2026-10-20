@@ -22,6 +22,7 @@ import {
   Vibration,
   PanResponder,
   Linking,
+  Image,
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
@@ -792,8 +793,12 @@ export default function SettingsScreen({ navigation, route }: any) {
                   </>
                 ) : (
                   <View style={styles.appInfoPanel}>
-                    <View style={[styles.appInfoIcon, { backgroundColor: Colors.primary }]}>
-                      <Ionicons name="shield-checkmark" size={38} color="#FFFFFF" />
+                    <View style={[styles.appInfoIcon, isDarkMode && { backgroundColor: '#1E293B', borderColor: '#334155' }]}>
+                      <Image
+                        source={require('../../../../assets/logo.png')}
+                        style={styles.appInfoLogo}
+                        resizeMode="contain"
+                      />
                     </View>
                     <Text style={[styles.infoDetailHeading, isDarkMode && { color: '#F8FAFC' }]}>
                       {docData?.project_name || 'Smart Elderly Care AI'}
@@ -1484,13 +1489,25 @@ const styles = StyleSheet.create({
     paddingTop: 20,
   },
   appInfoIcon: {
-    width: 78,
-    height: 78,
+    width: 88,
+    height: 88,
     alignItems: 'center',
     justifyContent: 'center',
-    marginBottom: 18,
-    borderRadius: 20,
-    backgroundColor: '#2563EB',
+    marginBottom: 16,
+    borderRadius: 22,
+    backgroundColor: '#FFFFFF',
+    borderWidth: 1,
+    borderColor: '#E2E8F0',
+    shadowColor: '#0F172A',
+    shadowOffset: { width: 0, height: 4 },
+    shadowOpacity: 0.08,
+    shadowRadius: 10,
+    elevation: 3,
+    padding: 8,
+  },
+  appInfoLogo: {
+    width: '100%',
+    height: '100%',
   },
   appInfoVersion: {
     marginBottom: 24,
