@@ -1,5 +1,5 @@
 // ProfileScreen.tsx
-// Màn hình Cá nhân / xtrị hệ thống khớp chính xác Hình 2 (Phong cách Imou Protect & Elderly Care AI)
+// Màn hình Cá nhân / Quản trị hệ thống (Phong cách Elderly Care AI)
 
 import React from 'react';
 import {
@@ -11,9 +11,8 @@ import {
   Platform,
   Modal,
   Pressable,
-  Switch,
   Image,
-  Vibration,
+  Switch,
   PanResponder,
 } from 'react-native';
 import * as ImagePicker from 'expo-image-picker';
@@ -23,202 +22,168 @@ import { Colors, Shadows } from '../../../theme/colors';
 import { useAuthStore } from '../../../store/useAuthStore';
 import { useVitalStore } from '../../../store/useVitalStore';
 import { useTheme } from '../../../store/useThemeStore';
-import AsyncStorage from '@react-native-async-storage/async-storage';
-import i18n from '../../../i18n/config';
 import {
   LocalizedAlert as Alert,
   LocalizedText as Text,
-  LocalizedText,
   LocalizedTextInput as TextInput,
 } from '../../../i18n/LocalizedComponents';
-import api, { usersApi } from '../../../services/api';
-import { launchEmergencyCall } from '../../../services/emergency';
+import api, { usersApi, BASE_URL } from '../../../services/api';
+import {
+  launchEmergencyCall,
+  launchSupportCall,
+  SUPPORT_HOTLINE_NUMBER,
+} from '../../../services/emergency';
 
-const FONT_SCALE_LEVELS = [0.8, 1, 1.2, 1.5, 1.8] as const;
+const resolveAvatarUrl = (url: string | null | undefined): string | null => {
+  if (!url) return null;
+  if (
+    url.startsWith('http://') ||
+    url.startsWith('https://') ||
+    url.startsWith('data:') ||
+    url.startsWith('file:') ||
+    url.startsWith('blob:')
+  ) {
+    return url;
+  }
+  const hostOrigin = BASE_URL.replace(/\/api\/v1\/?$/, '');
+  return `${hostOrigin}${url.startsWith('/') ? '' : '/'}${url}`;
+};
 
-export default function ProfileScreen({ navigation }: any) {
+export default function ProfileScreen({ navigation, route }: any) {
   const {
     userId,
     userName,
     full_name,
     userPhone,
     phone_number,
+    avatarUrl,
+    avatar_url,
+    setAvatar,
     logout,
     updateUserName,
     toggleViewRole,
     setProfile,
   } = useAuthStore();
   const { house } = useVitalStore();
-  const { isDarkMode, colors, setDarkMode, setFontScale } = useTheme();
+  const {
+    isDarkMode,
+    colors,
+    setDarkMode,
+    fontScale,
+    fontSizeMode: storeFontSizeMode,
+    setFontScale,
+    setFontSizeMode: setStoreFontSizeMode,
+  } = useTheme();
+
   const [profileName, setProfileName] = React.useState(full_name || userName || '');
   const [profilePhone, setProfilePhone] = React.useState(phone_number || userPhone || '');
   const [showMoreGrid, setShowMoreGrid] = React.useState(false);
   const [isHelpExpanded, setIsHelpExpanded] = React.useState(false);
   const [isSettingsExpanded, setIsSettingsExpanded] = React.useState(false);
+
   const [editingField, setEditingField] = React.useState<'name' | null>(null);
   const [draftValue, setDraftValue] = React.useState('');
   const [isSavingName, setIsSavingName] = React.useState(false);
   const [nameEditorError, setNameEditorError] = React.useState<string | null>(null);
+
   const [isUserMenuVisible, setUserMenuVisible] = React.useState(false);
   const [isAvatarPickerVisible, setAvatarPickerVisible] = React.useState(false);
-  const [isSettingsVisible, setSettingsVisible] = React.useState(false);
   const [accountEntrySource, setAccountEntrySource] = React.useState<'main' | 'settings'>('main');
-  const [isNotificationSettingsVisible, setNotificationSettingsVisible] = React.useState(false);
-  const [isVibrationDetailVisible, setVibrationDetailVisible] = React.useState(false);
-  const [isAboutInfoVisible, setAboutInfoVisible] = React.useState(false);
-  const [infoDetail, setInfoDetail] = React.useState<'terms' | 'app' | null>(null);
-  const [isGeneralSettingsVisible, setGeneralSettingsVisible] = React.useState(false);
-  const [isLanguageVisible, setLanguageVisible] = React.useState(false);
-  const [languageMode, setLanguageMode] = React.useState<'vi' | 'en'>(
-    (i18n.language === 'en' ? 'en' : 'vi') as 'vi' | 'en'
-  );
-  const [fontSizeMode, setFontSizeMode] = React.useState<'system' | 'custom'>('system');
-  const [customFontScale, setCustomFontScale] = React.useState(2);
 
-  React.useEffect(() => {
-    if (i18n.language === 'en' || i18n.language === 'vi') {
-      setLanguageMode(i18n.language as 'vi' | 'en');
-    }
-    usersApi
-      .getMe()
-      .then((res: any) => {
-        const backendLang = res?.data?.preferred_language || res?.data?.language;
-        if (backendLang && (backendLang === 'vi' || backendLang === 'en')) {
-          setLanguageMode(backendLang);
-          if (i18n.language !== backendLang) {
-            void i18n.changeLanguage(backendLang);
-            void AsyncStorage.setItem('smartcare-user-language', backendLang);
-          }
-        }
-        // Giữ mức tùy chỉnh đã chọn để dùng khi người dùng bật lại chế độ tùy chỉnh.
-        const backendFontScale = res?.data?.custom_font_scale;
-        if (Number.isInteger(backendFontScale) && backendFontScale >= 0 && backendFontScale <= 4) {
-          setCustomFontScale(backendFontScale);
-        }
-      })
-      .catch(() => {});
-  }, []);
-
-  const handleLanguageChange = async (lang: 'vi' | 'en') => {
-    try {
-      setLanguageMode(lang);
-      await i18n.changeLanguage(lang);
-      await AsyncStorage.setItem('smartcare-user-language', lang);
-      setLanguageVisible(false);
-
-      try {
-        await usersApi.updateLanguage(lang);
-      } catch (apiErr) {
-        await usersApi.updateMe({ preferred_language: lang, language: lang });
-      }
-    } catch (err) {
-      console.warn('[ProfileScreen] Error changing language:', err);
-      setLanguageVisible(false);
-    }
-  };
-  const [isAccessibilityVisible, setAccessibilityVisible] = React.useState(false);
-  const [isFontSizeVisible, setFontSizeVisible] = React.useState(false);
-  const [isAppearanceVisible, setAppearanceVisible] = React.useState(false);
-  const [appearanceMode, setAppearanceMode] = React.useState<'light' | 'dark'>(isDarkMode ? 'dark' : 'light');
-
-  React.useEffect(() => {
-    setAppearanceMode(isDarkMode ? 'dark' : 'light');
-  }, [isDarkMode]);
-
-  const [highContrastEnabled, setHighContrastEnabled] = React.useState(false);
-  const [sliderWidth, setSliderWidth] = React.useState(0);
-  const sliderTrackPosition = React.useRef(0);
-  const saveFontPreferences = React.useCallback(async (
-    mode: 'system' | 'custom',
-    scale: number,
-  ) => {
-    try {
-      await usersApi.updateFontPreferences(mode, scale);
-    } catch (err) {
-      console.warn('[ProfileScreen] Could not save font-size preferences:', err);
-    }
-  }, []);
-  const applyFontScaleMode = (mode: 'system' | 'custom') => {
-    setFontSizeMode(mode);
-    setFontScale(mode === 'custom' ? FONT_SCALE_LEVELS[customFontScale] : 1);
-    void saveFontPreferences(mode, customFontScale);
-  };
   const [isChangePasswordVisible, setChangePasswordVisible] = React.useState(false);
   const [isChangingPassword, setIsChangingPassword] = React.useState(false);
   const [passwordChangeFeedback, setPasswordChangeFeedback] = React.useState<{
     type: 'success' | 'error';
     message: string;
   } | null>(null);
-  React.useEffect(() => {
-    if (isChangePasswordVisible) setPasswordChangeFeedback(null);
-  }, [isChangePasswordVisible]);
+
   const [isLogoutConfirmVisible, setLogoutConfirmVisible] = React.useState(false);
   const [currentPassword, setCurrentPassword] = React.useState('');
   const [newPassword, setNewPassword] = React.useState('');
   const [confirmPassword, setConfirmPassword] = React.useState('');
-  const [avatarUri, setAvatarUri] = React.useState<string | null>(null);
+  const [avatarUri, setAvatarUri] = React.useState<string | null>(() => {
+    const raw = avatarUrl || avatar_url;
+    if (raw && !raw.startsWith('blob:')) {
+      return resolveAvatarUrl(raw);
+    }
+    return null;
+  });
   const [showCurrentPassword, setShowCurrentPassword] = React.useState(false);
   const [showNewPassword, setShowNewPassword] = React.useState(false);
   const [showConfirmPassword, setShowConfirmPassword] = React.useState(false);
-  const [marketingOptIn, setMarketingOptIn] = React.useState(false);
-  const [notificationsEnabled, setNotificationsEnabled] = React.useState(true);
-  const [alertSoundEnabled, setAlertSoundEnabled] = React.useState(true);
-  const [vibrationEnabled, setVibrationEnabled] = React.useState(true);
-  const [criticalAlertEnabled, setCriticalAlertEnabled] = React.useState(true);
+
   const [isCustomerSupportVisible, setCustomerSupportVisible] = React.useState(false);
   const [isSecurityCenterVisible, setSecurityCenterVisible] = React.useState(false);
   const [twoFactorEnabled, setTwoFactorEnabled] = React.useState(false);
-  const [securityDetail, setSecurityDetail] = React.useState<'twoFactor' | 'devices' | 'logins' | 'question' | null>(null);
+  const [securityDetail, setSecurityDetail] = React.useState<
+    'twoFactor' | 'devices' | 'logins' | 'question' | null
+  >(null);
   const [selectedSecurityQuestion, setSelectedSecurityQuestion] = React.useState('');
+  const [returnToSecurityAfterPassword, setReturnToSecurityAfterPassword] = React.useState(false);
 
   const openSecurityDetail = (detail: 'twoFactor' | 'devices' | 'logins' | 'question') => {
     setSecurityCenterVisible(false);
     setTimeout(() => setSecurityDetail(detail), 220);
   };
-  const [returnToSecurityAfterPassword, setReturnToSecurityAfterPassword] = React.useState(false);
 
-  const closeChangePassword = () => {
-    setChangePasswordVisible(false);
+  const FONT_SCALE_LEVELS = [0.8, 1, 1.2, 1.5, 1.8] as const;
 
-    if (returnToSecurityAfterPassword) {
-      setReturnToSecurityAfterPassword(false);
-      setSecurityCenterVisible(true);
-    }
-  };
+  const [isNotificationSettingsVisible, setNotificationSettingsVisible] = React.useState(false);
+  const [isFontSizeVisible, setFontSizeVisible] = React.useState(false);
+  const [isAppearanceVisible, setAppearanceVisible] = React.useState(false);
 
+  const [notificationsEnabled, setNotificationsEnabled] = React.useState(true);
+  const [alertSoundEnabled, setAlertSoundEnabled] = React.useState(true);
+  const [criticalAlertEnabled, setCriticalAlertEnabled] = React.useState(true);
 
-  const handleVibrationToggle = (value: boolean) => {
-    setVibrationEnabled(value);
+  const [fontSizeMode, setFontSizeMode] = React.useState<'system' | 'custom'>(storeFontSizeMode || 'system');
+  const [customFontScale, setCustomFontScale] = React.useState(1);
+  const [sliderWidth, setSliderWidth] = React.useState(0);
+  const sliderTrackPosition = React.useRef(0);
 
-    if (value) {
-      Vibration.vibrate(80);
-      return;
-    }
-
-    Vibration.cancel();
-  };
-
-  const handleCustomerSupportPress = () => {
-    setCustomerSupportVisible(true);
-  };
-
-  const callEmergencyService = async () => {
+  const saveFontPreferences = React.useCallback(async (mode: 'system' | 'custom', scale: number) => {
     try {
-      await launchEmergencyCall();
-    } catch (error) {
-      console.warn('[ProfileScreen] Could not open emergency dialer:', error);
-      Alert.alert('Không thể mở cuộc gọi', 'Vui lòng gọi cấp cứu 115 trực tiếp.');
+      await usersApi.updateFontPreferences(mode, scale);
+    } catch (err) {
+      console.warn('[ProfileScreen] Could not save font-size preferences:', err);
     }
+  }, []);
+
+  const handleToggleNotification = React.useCallback(
+    async (
+      key: 'notifications_enabled' | 'alert_sound_enabled' | 'critical_alert_enabled',
+      value: boolean
+    ) => {
+      if (key === 'notifications_enabled') setNotificationsEnabled(value);
+      if (key === 'alert_sound_enabled') setAlertSoundEnabled(value);
+      if (key === 'critical_alert_enabled') setCriticalAlertEnabled(value);
+
+      try {
+        await usersApi.updateNotificationPreferences({ [key]: value });
+      } catch (err) {
+        console.warn('[ProfileScreen] Không thể lưu cài đặt thông báo:', err);
+      }
+    },
+    []
+  );
+
+  const applyFontScaleMode = (mode: 'system' | 'custom') => {
+    setFontSizeMode(mode);
+    setStoreFontSizeMode(mode);
+    setFontScale(mode === 'custom' ? FONT_SCALE_LEVELS[customFontScale] : 1);
+    void saveFontPreferences(mode, customFontScale);
   };
 
-  const updateFontScaleFromPosition = React.useCallback((positionX: number) => {
-    if (!sliderWidth) return;
-
-    const rawRatio = Math.min(Math.max(positionX / sliderWidth, 0), 1);
-    const nextScale = Math.round(rawRatio * 4);
-    setCustomFontScale(nextScale);
-    setFontScale(FONT_SCALE_LEVELS[nextScale]);
-  }, [sliderWidth]);
+  const updateFontScaleFromPosition = React.useCallback(
+    (positionX: number) => {
+      if (!sliderWidth) return;
+      const rawRatio = Math.min(Math.max(positionX / sliderWidth, 0), 1);
+      const nextScale = Math.round(rawRatio * 4);
+      setCustomFontScale(nextScale);
+      setFontScale(FONT_SCALE_LEVELS[nextScale]);
+    },
+    [sliderWidth, setFontScale]
+  );
 
   const fontSliderResponder = React.useMemo(
     () =>
@@ -235,7 +200,7 @@ export default function ProfileScreen({ navigation }: any) {
           if (sliderWidth <= 0) return;
           const rawRatio = Math.min(
             Math.max((gestureState.moveX - sliderTrackPosition.current) / sliderWidth, 0),
-            1,
+            1
           );
           const nextScale = Math.round(rawRatio * 4);
           setCustomFontScale(nextScale);
@@ -246,29 +211,17 @@ export default function ProfileScreen({ navigation }: any) {
     [saveFontPreferences, setFontScale, sliderWidth, updateFontScaleFromPosition]
   );
 
-  const closeUserMenu = React.useCallback(() => {
-    setUserMenuVisible(false);
+  React.useEffect(() => {
+    if (isChangePasswordVisible) setPasswordChangeFeedback(null);
+  }, [isChangePasswordVisible]);
 
-    if (accountEntrySource === 'settings') {
-      setSettingsVisible(true);
-      return;
+  React.useEffect(() => {
+    if (route?.params?.openUserMenu) {
+      setAccountEntrySource('settings');
+      setUserMenuVisible(true);
+      navigation?.setParams?.({ openUserMenu: undefined });
     }
-
-    setSettingsVisible(false);
-  }, [accountEntrySource]);
-
-  const performLogout = async () => {
-    logout();
-    await useAuthStore.persist.clearStorage();
-    setUserMenuVisible(false);
-
-    if (Platform.OS !== 'web') {
-      navigation.getParent()?.reset({
-        index: 0,
-        routes: [{ name: 'Login' }],
-      });
-    }
-  };
+  }, [route?.params?.openUserMenu, navigation]);
 
   React.useEffect(() => {
     if (full_name || userName) {
@@ -278,6 +231,13 @@ export default function ProfileScreen({ navigation }: any) {
       setProfilePhone(phone_number || userPhone || '');
     }
   }, [userName, full_name, userPhone, phone_number]);
+
+  React.useEffect(() => {
+    const raw = avatarUrl || avatar_url;
+    if (raw && !raw.startsWith('blob:')) {
+      setAvatarUri(resolveAvatarUrl(raw));
+    }
+  }, [avatarUrl, avatar_url]);
 
   React.useEffect(() => {
     const fetchUserProfile = async () => {
@@ -291,12 +251,32 @@ export default function ProfileScreen({ navigation }: any) {
           if (typeof phone === 'string') {
             setProfilePhone(phone);
           }
+          if (res.data.avatar_url) {
+            const resolved = resolveAvatarUrl(res.data.avatar_url);
+            if (resolved) {
+              setAvatarUri(resolved);
+              setAvatar(resolved);
+            }
+          }
+          if (typeof res.data.notifications_enabled === 'boolean') {
+            setNotificationsEnabled(res.data.notifications_enabled);
+          }
+          if (typeof res.data.alert_sound_enabled === 'boolean') {
+            setAlertSoundEnabled(res.data.alert_sound_enabled);
+          }
+          if (typeof res.data.critical_alert_enabled === 'boolean') {
+            setCriticalAlertEnabled(res.data.critical_alert_enabled);
+          }
+          if (Number.isInteger(res.data.custom_font_scale) && res.data.custom_font_scale >= 0 && res.data.custom_font_scale <= 4) {
+            setCustomFontScale(res.data.custom_font_scale);
+          }
           setProfile({
             user_id: res.data.user_id || res.data.id,
             full_name: res.data.full_name,
             phone_number: phone,
             role: res.data.role,
             household_id: res.data.household_id,
+            avatar_url: res.data.avatar_url,
           });
         }
       } catch (error) {
@@ -304,7 +284,28 @@ export default function ProfileScreen({ navigation }: any) {
       }
     };
     void fetchUserProfile();
-  }, [setProfile]);
+  }, [setProfile, setAvatar]);
+
+  const closeUserMenu = React.useCallback(() => {
+    setUserMenuVisible(false);
+
+    if (accountEntrySource === 'settings') {
+      navigation.navigate('Settings');
+    }
+  }, [accountEntrySource, navigation]);
+
+  const performLogout = async () => {
+    logout();
+    await useAuthStore.persist.clearStorage();
+    setUserMenuVisible(false);
+
+    if (Platform.OS !== 'web') {
+      navigation.getParent()?.reset({
+        index: 0,
+        routes: [{ name: 'Login' }],
+      });
+    }
+  };
 
   const handleLogout = () => {
     setLogoutConfirmVisible(true);
@@ -367,6 +368,14 @@ export default function ProfileScreen({ navigation }: any) {
     }
   };
 
+  const closeChangePassword = () => {
+    setChangePasswordVisible(false);
+    if (returnToSecurityAfterPassword) {
+      setReturnToSecurityAfterPassword(false);
+      setSecurityCenterVisible(true);
+    }
+  };
+
   const handleChangePassword = async () => {
     if (!currentPassword || !newPassword || !confirmPassword) {
       setPasswordChangeFeedback({ type: 'error', message: 'Vui lòng nhập đầy đủ thông tin mật khẩu.' });
@@ -421,6 +430,70 @@ export default function ProfileScreen({ navigation }: any) {
     setAvatarPickerVisible(true);
   };
 
+  const convertAssetToDataUri = async (asset: ImagePicker.ImagePickerAsset): Promise<string> => {
+    if (asset.base64) {
+      return asset.base64.startsWith('data:')
+        ? asset.base64
+        : `data:image/jpeg;base64,${asset.base64}`;
+    }
+    try {
+      const resp = await fetch(asset.uri);
+      const blob = await resp.blob();
+      return await new Promise<string>((resolve) => {
+        const reader = new FileReader();
+        reader.onloadend = () => {
+          if (typeof reader.result === 'string') {
+            resolve(reader.result);
+          } else {
+            resolve(asset.uri);
+          }
+        };
+        reader.onerror = () => resolve(asset.uri);
+        reader.readAsDataURL(blob);
+      });
+    } catch {
+      return asset.uri;
+    }
+  };
+
+  const handleSaveAvatar = async (asset: ImagePicker.ImagePickerAsset) => {
+    try {
+      // 1. Chuyển đổi sang Base64 Data URI ngay lập tức (không lưu blob: để F5 trên Web không bao giờ bị mất)
+      const dataUri = await convertAssetToDataUri(asset);
+
+      // 2. Cập nhật state hiển thị ngay và lưu vào Zustand storage
+      setAvatarUri(dataUri);
+      setAvatar(dataUri);
+
+      // 3. Upload lên backend FastAPI để lưu vào cơ sở dữ liệu PostgreSQL (users.avatar_url)
+      let uploadRes;
+      try {
+        uploadRes = await usersApi.uploadAvatarBase64(dataUri);
+      } catch (uploadErr) {
+        console.warn('[ProfileScreen] uploadAvatarBase64 error, attempting updateMe fallback:', uploadErr);
+        try {
+          uploadRes = await usersApi.updateMe({ avatar_url: dataUri });
+        } catch (updateErr) {
+          console.warn('[ProfileScreen] updateMe fallback failed:', updateErr);
+        }
+      }
+
+      const returnedAvatarUrl = uploadRes?.data?.avatar_url;
+      if (returnedAvatarUrl) {
+        const resolvedServerUrl = resolveAvatarUrl(returnedAvatarUrl);
+        if (resolvedServerUrl) {
+          setAvatarUri(resolvedServerUrl);
+          setAvatar(resolvedServerUrl);
+        }
+        setProfile({ avatar_url: returnedAvatarUrl });
+      } else {
+        setProfile({ avatar_url: dataUri });
+      }
+    } catch (error) {
+      console.warn('[ProfileScreen] Không thể lưu avatar:', error);
+    }
+  };
+
   const pickAvatarFromCamera = async () => {
     setAvatarPickerVisible(false);
 
@@ -432,11 +505,13 @@ export default function ProfileScreen({ navigation }: any) {
 
     const result = await ImagePicker.launchCameraAsync({
       allowsEditing: true,
-      quality: 0.8,
+      aspect: [1, 1],
+      quality: 0.7,
+      base64: true,
     });
 
-    if (!result.canceled && result.assets?.[0]?.uri) {
-      setAvatarUri(result.assets[0].uri);
+    if (!result.canceled && result.assets?.[0]) {
+      void handleSaveAvatar(result.assets[0]);
     }
   };
 
@@ -452,13 +527,50 @@ export default function ProfileScreen({ navigation }: any) {
     const result = await ImagePicker.launchImageLibraryAsync({
       mediaTypes: ['images'],
       allowsEditing: true,
-      quality: 0.8,
+      aspect: [1, 1],
+      quality: 0.7,
+      base64: true,
     });
 
-    if (!result.canceled && result.assets?.[0]?.uri) {
-      setAvatarUri(result.assets[0].uri);
+    if (!result.canceled && result.assets?.[0]) {
+      void handleSaveAvatar(result.assets[0]);
     }
   };
+
+  const handleDeleteAvatar = async () => {
+    setAvatarPickerVisible(false);
+    setAvatarUri(null);
+    setAvatar(null);
+    try {
+      await usersApi.deleteAvatar();
+    } catch (err) {
+      console.warn('[ProfileScreen] Lỗi khi xóa avatar:', err);
+    }
+  };
+
+  const handleCustomerSupportPress = () => {
+    setCustomerSupportVisible(true);
+  };
+
+  const callEmergencyService = async () => {
+    try {
+      await launchEmergencyCall();
+    } catch (error) {
+      console.warn('[ProfileScreen] Could not open emergency dialer:', error);
+      Alert.alert('Không thể mở cuộc gọi', 'Vui lòng gọi cấp cứu 115 trực tiếp.');
+    }
+  };
+
+  const callCustomerSupportService = async () => {
+    try {
+      await launchSupportCall('Hỗ trợ kết nối camera, vòng tay, hub AI');
+    } catch (error) {
+      console.warn('[ProfileScreen] Could not open customer support dialer:', error);
+      Alert.alert('Không thể mở cuộc gọi', `Vui lòng gọi tổng đài hỗ trợ ${SUPPORT_HOTLINE_NUMBER} trực tiếp.`);
+    }
+  };
+
+  const resolvedDisplayName = profileName || full_name || userName || 'Người giám sát';
 
   return (
     <SafeAreaView style={[styles.safeArea, isDarkMode && { backgroundColor: colors.background }]} edges={['top']}>
@@ -501,6 +613,7 @@ export default function ProfileScreen({ navigation }: any) {
         </Pressable>
       </Modal>
 
+      {/* Modal Hồ sơ cá nhân người giám sát */}
       <Modal
         transparent
         visible={isUserMenuVisible}
@@ -537,17 +650,17 @@ export default function ProfileScreen({ navigation }: any) {
                 )}
               </TouchableOpacity>
 
-              <Text style={[styles.profileNameText, isDarkMode && { color: '#F8FAFC' }]}>{profileName || 'ngolevinh233'}</Text>
+              <Text style={[styles.profileNameText, isDarkMode && { color: '#F8FAFC' }]}>{resolvedDisplayName}</Text>
             </View>
 
             <View style={[styles.profileInfoListCard, isDarkMode && { backgroundColor: '#1E293B', borderColor: '#334155' }]}>
               <TouchableOpacity style={[styles.infoRow, isDarkMode && { borderBottomColor: '#334155' }]} activeOpacity={0.8} onPress={() => openFieldEditor('name')}>
                 <View style={styles.infoLeftWrap}>
                   <Ionicons name="person-outline" size={22} color={isDarkMode ? '#94A3B8' : '#1F2937'} />
-                  <Text style={[styles.infoLabel, isDarkMode && { color: '#F8FAFC' }]}>Tên</Text>
+                  <Text style={[styles.infoLabel, isDarkMode && { color: '#F8FAFC' }]}>Họ và tên</Text>
                 </View>
                 <View style={styles.infoRightWrap}>
-                  <Text style={[styles.infoValue, isDarkMode && { color: '#94A3B8' }]}>{profileName || 'ngolevinh233'}</Text>
+                  <Text style={[styles.infoValue, isDarkMode && { color: '#94A3B8' }]}>{resolvedDisplayName}</Text>
                   <Ionicons name="chevron-forward" size={18} color="#94A3B8" />
                 </View>
               </TouchableOpacity>
@@ -558,7 +671,7 @@ export default function ProfileScreen({ navigation }: any) {
                   <Text style={[styles.infoLabel, isDarkMode && { color: '#F8FAFC' }]}>Số điện thoại</Text>
                 </View>
                 <View style={styles.infoRightWrap}>
-                  <Text style={[styles.infoValue, isDarkMode && { color: '#94A3B8' }]}>{profilePhone}</Text>
+                  <Text style={[styles.infoValue, isDarkMode && { color: '#94A3B8' }]}>{profilePhone || 'Chưa cập nhật'}</Text>
                   <Ionicons name="chevron-forward" size={18} color="#94A3B8" />
                 </View>
               </TouchableOpacity>
@@ -566,25 +679,21 @@ export default function ProfileScreen({ navigation }: any) {
               <TouchableOpacity
                 style={[styles.infoRow, { borderBottomWidth: 0 }]}
                 activeOpacity={0.8}
-                onPress={() => {
-                  setReturnToSecurityAfterPassword(false);
-                  setChangePasswordVisible(true);
-                }}
+                onPress={() => setChangePasswordVisible(true)}
               >
                 <View style={styles.infoLeftWrap}>
                   <Ionicons name="lock-closed-outline" size={22} color={isDarkMode ? '#94A3B8' : '#1F2937'} />
-                  <Text style={[styles.infoLabel, isDarkMode && { color: '#F8FAFC' }]}>Thay đổi mật mã</Text>
+                  <Text style={[styles.infoLabel, isDarkMode && { color: '#F8FAFC' }]}>Thay đổi mật khẩu</Text>
                 </View>
                 <Ionicons name="chevron-forward" size={18} color="#94A3B8" />
               </TouchableOpacity>
-
-             
             </View>
 
             <TouchableOpacity style={styles.logoutButton} activeOpacity={0.9} onPress={handleLogout}>
               <Text style={styles.logoutButtonText}>Đăng xuất</Text>
             </TouchableOpacity>
 
+            {/* Modal chỉnh sửa họ tên */}
             <Modal
               transparent
               visible={editingField !== null}
@@ -639,7 +748,6 @@ export default function ProfileScreen({ navigation }: any) {
                         <Text style={[styles.editorFieldLabel, isDarkMode && { color: '#F8FAFC' }]}>
                           Họ và tên
                         </Text>
-                      
                       </View>
                     </View>
 
@@ -732,146 +840,11 @@ export default function ProfileScreen({ navigation }: any) {
                 </Pressable>
               </Pressable>
             </Modal>
-
-            {isLogoutConfirmVisible && (
-              <View style={styles.logoutInlineOverlay}>
-                <View style={[styles.logoutDialog, isDarkMode && { backgroundColor: '#1E293B', borderColor: '#334155', borderWidth: 1 }]}>
-                  <Text style={[styles.logoutTitle, isDarkMode && { color: '#F8FAFC' }]}>Đăng xuất</Text>
-                  <Text style={[styles.logoutMessage, isDarkMode && { color: '#94A3B8' }]}>
-                    Bạn có chắc chắn muốn đăng xuất khỏi hệ thống giám sát?
-                  </Text>
-                  <View style={styles.logoutActions}>
-                    <TouchableOpacity
-                      style={[styles.logoutCancelButton, isDarkMode && { backgroundColor: '#0F172A', borderColor: '#334155', borderWidth: 1 }]}
-                      onPress={() => setLogoutConfirmVisible(false)}
-                    >
-                      <Text style={[styles.logoutCancelText, isDarkMode && { color: '#94A3B8' }]}>Hủy</Text>
-                    </TouchableOpacity>
-                    <TouchableOpacity
-                      style={styles.logoutConfirmButton}
-                      onPress={() => {
-                        setLogoutConfirmVisible(false);
-                        void performLogout();
-                      }}
-                    >
-                      <Text style={styles.logoutConfirmText}>Đăng xuất</Text>
-                    </TouchableOpacity>
-                  </View>
-                </View>
-              </View>
-            )}
-          
           </Pressable>
         </Pressable>
       </Modal>
 
-      <Modal
-        visible={securityDetail !== null}
-        animationType="slide"
-              onRequestClose={() => {
-                setSecurityDetail(null);
-                setSecurityCenterVisible(true);
-              }}
-      >
-        <SafeAreaView style={styles.securityDetailScreen} edges={['top']}>
-          <View style={styles.securityDetailHeader}>
-            <TouchableOpacity
-              style={styles.changePasswordBackButton}
-              onPress={() => {
-                setSecurityDetail(null);
-                setSecurityCenterVisible(true);
-              }}
-              activeOpacity={0.8}
-            >
-              <Ionicons name="chevron-back-outline" size={28} color="#0F172A" />
-            </TouchableOpacity>
-            {securityDetail !== 'question' && (
-              <Text style={styles.securityDetailTitle}>
-                {securityDetail === 'twoFactor'
-                  ? 'Xác minh hai bước'
-                  : securityDetail === 'devices'
-                    ? 'Quản lý đầu cuối'
-                    : 'Đăng nhập tài khoản'}
-              </Text>
-            )}
-          </View>
-
-          <ScrollView contentContainerStyle={styles.securityDetailContent}>
-            {securityDetail === 'twoFactor' && (
-              <View style={styles.securityDetailCard}>
-                <View style={styles.securityDetailRowHeader}>
-                  <Text style={styles.securityDetailCardTitle}>Xác minh hai bước</Text>
-                  <Switch
-                    value={twoFactorEnabled}
-                    onValueChange={setTwoFactorEnabled}
-                    trackColor={{ false: '#CBD5E1', true: '#7DD3FC' }}
-                    thumbColor={twoFactorEnabled ? '#0284C7' : '#FFFFFF'}
-                  />
-                </View>
-                <Text style={styles.securityDetailDescription}>
-                  Để giữ bảo mật tài khoản, bạn sẽ được yêu cầu xác minh qua tin nhắn SMS khi đăng nhập trên thiết bị mới.
-                </Text>
-                <View style={styles.securityInfoBanner}>
-                  <Ionicons name="information-circle-outline" size={21} color="#2563EB" />
-                  <Text style={styles.securityInfoText}>
-                    {twoFactorEnabled ? 'Tính năng đang bật cho tài khoản của bạn.' : 'Bật tính năng để tăng bảo vệ tài khoản.'}
-                  </Text>
-                </View>
-              </View>
-            )}
-
-            {securityDetail === 'devices' && (
-              <View style={styles.securityDetailCard}>
-                <Text style={styles.securityDetailCardTitle}>Các thiết bị hiện tại: 1</Text>
-                <View style={styles.securityDeviceItem}>
-                  <View style={styles.securityDeviceIcon}>
-                    <Ionicons name="phone-portrait" size={22} color="#2563EB" />
-                  </View>
-                  <View style={styles.securityDeviceCopy}>
-                    <Text style={styles.securityDeviceName}>Thiết bị hiện tại</Text>
-                    <Text style={styles.securityDeviceMeta}>Android · Đang hoạt động</Text>
-                    <Text style={styles.securityDeviceMeta}>Đăng nhập lúc 20:41 hôm nay</Text>
-                  </View>
-                  <Text style={styles.securityCurrentLabel}>Hiện tại</Text>
-                </View>
-                <Text style={styles.securityDetailDescription}>Thiết bị không hoạt động trong 3 tháng sẽ được đề xuất loại bỏ tự động.</Text>
-              </View>
-            )}
-
-            {securityDetail === 'logins' && (
-              <View style={styles.securityDetailCard}>
-                <Text style={styles.securityDetailCardTitle}>Lịch sử đăng nhập</Text>
-                {['Hôm nay · 20:41', '09-14 · 21:20', '09-14 · 21:08', '09-12 · 00:07'].map((loginItem) => (
-                  <View key={loginItem} style={styles.securityLoginItem}>
-                    <View style={styles.securityTimelineDot} />
-                    <View style={styles.securityDeviceCopy}>
-                      <Text style={styles.securityLoginName}>Đăng nhập tài khoản</Text>
-                      <Text style={styles.securityDeviceMeta}>SM-A127F · Thiết bị hiện tại</Text>
-                    </View>
-                    <Text style={styles.securityLoginTime}>{loginItem}</Text>
-                  </View>
-                ))}
-              </View>
-            )}
-
-            {securityDetail === 'question' && (
-              <View style={styles.securityQuestionDetail}>
-                <Text style={styles.securityQuestionDetailTitle}>{selectedSecurityQuestion}</Text>
-                <Text style={styles.securityQuestionDetailDescription}>
-                  {selectedSecurityQuestion === 'Mật khẩu mã hóa thiết bị là gì?'
-                    ? 'Mật khẩu mã hóa thiết bị là một mật khẩu đối xứng được sử dụng để mã hóa luồng video và hình ảnh của thiết bị, với giá trị mặc định giống với mã xác minh thiết bị. Đề nghị thay đổi mật khẩu mặc định thành một mật khẩu an toàn sau khi liên kết thiết bị lần đầu tiên. Mật khẩu mã hóa thiết bị là chìa khóa cho cơ chế "Bảo mật Hợp tác" được cung cấp bởi EZVIZ. EZVIZ không ghi lại hoặc lưu trữ mật khẩu mã hóa thiết bị. Những mật khẩu này chỉ được lưu trữ trên các thiết bị tương ứng và điện thoại di động của người dùng. Việc thiết lập, cập nhật, sử dụng và hủy bỏ mật khẩu mã hóa đều được quản lý bởi người dùng. EZVIZ kỹ thuật không có khả năng lấy lại, đặt lại hoặc khôi phục mật khẩu mã hóa thiết bị.'
-                    : selectedSecurityQuestion === 'Có ràng buộc một thiết bị an toàn không?'
-                      ? 'Để kết nối một thiết bị EZVIZ, ba điều kiện sau phải được đáp ứng đồng thời:\n\n1. Biết số serial của thiết bị và mã xác thực tương ứng của thiết bị;\n\n2. Thiết bị đang trực tuyến;\n\n3. Thiết bị không được ràng buộc;\n\nViệc lấy số serial và mã xác thực là điều kiện tiên quyết quan trọng, nhưng không đảm bảo việc kết nối thiết bị. Nếu một thiết bị đã được kết nối bởi chủ sở hữu, người khác không thể kết nối thiết bị đó ngay cả khi họ có số serial và mã xác thực của nó. Chỉ có tài khoản đã kết nối thiết bị đó mới có thể hủy kết nối. EZVIZ khuyến khích người dùng kết nối thiết bị của mình ngay sau khi kết nối với mạng.'
-                      : selectedSecurityQuestion === 'Việc sử dụng mã xác minh qua tin nhắn SMS'
-                        ? 'Mã xác minh SMS là một lớp bảo mật bổ sung được cung cấp bởi EZVIZ vượt ra ngoài cơ sở tên người dùng-mật khẩu. Khi người dùng thực hiện các hoạt động nhạy cảm (như đăng nhập vào một khách hàng mới, tắt mã hóa thiết bị hoặc lấy mật khẩu tạm thời cho khóa, v.v.), EZVIZ yêu cầu sử dụng mã xác minh SMS cho xác thực cấp độ hai để tăng cường bảo mật và giảm thiểu rủi ro mất mát hoặc đánh cắp tài khoản người dùng. Do đó, rất quan trọng đối với người dùng để đảm bảo tính bảo mật của mã xác minh SMS và không tiết lộ cho người khác.'
-                      : 'Hệ thống sử dụng các lớp bảo vệ tài khoản, xác minh thiết bị và mã xác thực để hạn chế truy cập trái phép. Bạn nên bật xác minh hai bước và thường xuyên kiểm tra lịch sử đăng nhập.'}
-                </Text>
-              </View>
-            )}
-          </ScrollView>
-        </SafeAreaView>
-      </Modal>
-
+      {/* Modal CSKH Hotline 24/7 */}
       <Modal
         transparent
         visible={isCustomerSupportVisible}
@@ -880,10 +853,12 @@ export default function ProfileScreen({ navigation }: any) {
       >
         <Pressable style={styles.customerSupportOverlay} onPress={() => setCustomerSupportVisible(false)}>
           <Pressable style={[styles.customerSupportDialog, isDarkMode && { backgroundColor: '#1E293B', borderColor: '#334155', borderWidth: 1 }]} onPress={() => {}}>
-            <Ionicons name="call" size={28} color="#DC2626" />
-            <Text style={[styles.customerSupportTitle, isDarkMode && { color: '#F8FAFC' }]}>Hỗ trợ khẩn cấp</Text>
+            <Ionicons name="headset" size={28} color="#2563EB" />
+            <Text style={[styles.customerSupportTitle, isDarkMode && { color: '#F8FAFC' }]}>
+              Tổng đài hỗ trợ kỹ thuật CSKH 24/7
+            </Text>
             <Text style={[styles.customerSupportMessage, isDarkMode && { color: '#94A3B8' }]}>
-              Bạn muốn gọi tổng đài cấp cứu 115 ngay bây giờ?
+              {`Kết nối trực tiếp tổng đài hỗ trợ kết nối camera, vòng tay, hub AI qua số ${SUPPORT_HOTLINE_NUMBER}?`}
             </Text>
             <View style={styles.customerSupportActions}>
               <TouchableOpacity
@@ -894,123 +869,22 @@ export default function ProfileScreen({ navigation }: any) {
                 <Text style={[styles.customerSupportCancelText, isDarkMode && { color: '#94A3B8' }]}>Hủy</Text>
               </TouchableOpacity>
               <TouchableOpacity
-                style={styles.customerSupportCallButton}
+                style={[styles.customerSupportCallButton, { backgroundColor: Colors.primary }]}
                 onPress={() => {
                   setCustomerSupportVisible(false);
-                  void callEmergencyService();
+                  void callCustomerSupportService();
                 }}
                 activeOpacity={0.8}
               >
                 <Ionicons name="call" size={17} color="#FFFFFF" />
-                <Text style={styles.customerSupportCallText}>Gọi 115</Text>
+                <Text style={styles.customerSupportCallText}>{`Gọi ${SUPPORT_HOTLINE_NUMBER}`}</Text>
               </TouchableOpacity>
             </View>
           </Pressable>
         </Pressable>
       </Modal>
 
-      <Modal
-        visible={isSecurityCenterVisible}
-        animationType="slide"
-        onRequestClose={() => setSecurityCenterVisible(false)}
-      >
-        <SafeAreaView style={[styles.securityScreen, isDarkMode && { backgroundColor: '#0B0F19' }]} edges={['top']}>
-          <ScrollView showsVerticalScrollIndicator={false} contentContainerStyle={styles.securityScrollContent}>
-            <View style={[styles.securityHero, isDarkMode && { backgroundColor: '#0F766E' }]}>
-              <TouchableOpacity
-                style={styles.securityHeroBackButton}
-                onPress={() => setSecurityCenterVisible(false)}
-                activeOpacity={0.8}
-              >
-                <Ionicons name="chevron-back-outline" size={28} color={isDarkMode ? '#F8FAFC' : '#0F172A'} />
-              </TouchableOpacity>
-              <View style={styles.securityHeroShield}>
-                <Ionicons name="shield-checkmark" size={108} color="rgba(255,255,255,0.88)" />
-              </View>
-              <Text style={[styles.securityHeroStatus, isDarkMode && { color: '#F8FAFC' }]}>Tốt</Text>
-              <Text style={[styles.securityHeroDescription, isDarkMode && { color: '#E2E8F0' }]}>Có thể cải thiện 2 mục</Text>
-              <TouchableOpacity style={styles.securityImproveButton} activeOpacity={0.8}>
-                <Text style={[styles.securityImproveText, isDarkMode && { color: '#F8FAFC' }]}>Cải thiện ngay bây giờ</Text>
-                <Ionicons name="chevron-forward" size={23} color={isDarkMode ? '#F8FAFC' : '#0F172A'} />
-              </TouchableOpacity>
-            </View>
-
-            <View style={[styles.securitySectionCard, isDarkMode && { backgroundColor: '#1E293B', borderColor: '#334155', borderWidth: 1 }]}>
-              <View style={styles.securitySectionHeader}>
-                <Text style={[styles.securitySectionTitle, isDarkMode && { color: '#F8FAFC' }]}>Bảo mật tài khoản</Text>
-                <Ionicons name="ellipsis-vertical" size={22} color={isDarkMode ? '#F8FAFC' : '#0F172A'} />
-              </View>
-              <View style={styles.securityTileGrid}>
-              <TouchableOpacity
-                style={[styles.securityTile, isDarkMode && { backgroundColor: '#0F172A', borderColor: '#334155', borderWidth: 1 }]}
-                onPress={() => {
-                  setReturnToSecurityAfterPassword(true);
-                  setSecurityCenterVisible(false);
-                  setChangePasswordVisible(true);
-                }}
-                activeOpacity={0.8}
-              >
-                <Text style={[styles.securityTileTitle, isDarkMode && { color: '#F8FAFC' }]}>Đổi mật khẩu</Text>
-                <Ionicons name="lock-closed" size={34} color="#38BDF8" style={styles.securityTileIcon} />
-              </TouchableOpacity>
-              <TouchableOpacity
-                style={[styles.securityTile, isDarkMode && { backgroundColor: '#0F172A', borderColor: '#334155', borderWidth: 1 }]}
-                onPress={() => openSecurityDetail('twoFactor')}
-                activeOpacity={0.8}
-              >
-                <Text style={[styles.securityTileTitle, isDarkMode && { color: '#F8FAFC' }]}>Xác minh hai bước</Text>
-                <Ionicons name="shield-checkmark" size={34} color="#38BDF8" style={styles.securityTileIcon} />
-                <Switch
-                  value={twoFactorEnabled}
-                  onValueChange={setTwoFactorEnabled}
-                  style={styles.securityTileSwitch}
-                  trackColor={{ false: '#CBD5E1', true: '#7DD3FC' }}
-                  thumbColor={twoFactorEnabled ? '#0284C7' : '#FFFFFF'}
-                />
-              </TouchableOpacity>
-              <TouchableOpacity
-                style={[styles.securityTile, isDarkMode && { backgroundColor: '#0F172A', borderColor: '#334155', borderWidth: 1 }]}
-                onPress={() => openSecurityDetail('devices')}
-                activeOpacity={0.8}
-              >
-                <Text style={[styles.securityTileTitle, isDarkMode && { color: '#F8FAFC' }]}>Quản lý đầu cuối</Text>
-                <Ionicons name="phone-portrait" size={34} color="#38BDF8" style={styles.securityTileIcon} />
-              </TouchableOpacity>
-              <TouchableOpacity
-                style={[styles.securityTile, isDarkMode && { backgroundColor: '#0F172A', borderColor: '#334155', borderWidth: 1 }]}
-                onPress={() => openSecurityDetail('logins')}
-                activeOpacity={0.8}
-              >
-                <Text style={[styles.securityTileTitle, isDarkMode && { color: '#F8FAFC' }]}>Đăng nhập tài khoản</Text>
-                <Ionicons name="card-outline" size={34} color="#38BDF8" style={styles.securityTileIcon} />
-              </TouchableOpacity>
-              </View>
-            </View>
-
-            <View style={[styles.securitySectionCard, isDarkMode && { backgroundColor: '#1E293B', borderColor: '#334155', borderWidth: 1 }]}>
-              <View style={styles.securitySectionHeader}>
-                <Text style={[styles.securitySectionTitle, isDarkMode && { color: '#F8FAFC' }]}>Bạn cũng có thể hỏi</Text>
-                <Ionicons name="ellipsis-vertical" size={22} color={isDarkMode ? '#F8FAFC' : '#0F172A'} />
-              </View>
-              {['Mật khẩu mã hóa thiết bị là gì?', 'Có ràng buộc một thiết bị an toàn không?', 'Bảo vệ quyền riêng tư của người dùng', 'Việc sử dụng mã xác minh qua tin nhắn SMS'].map((question) => (
-                <TouchableOpacity
-                  key={question}
-                  style={[styles.securityQuestionRow, isDarkMode && { borderTopColor: '#334155' }]}
-                  activeOpacity={0.8}
-                  onPress={() => {
-                    setSelectedSecurityQuestion(question);
-                    openSecurityDetail('question');
-                  }}
-                >
-                  <Text style={[styles.securityQuestionText, isDarkMode && { color: '#F8FAFC' }]}>{question}</Text>
-                  <Ionicons name="chevron-forward" size={20} color={isDarkMode ? '#94A3B8' : '#64748B'} />
-                </TouchableOpacity>
-              ))}
-            </View>
-          </ScrollView>
-        </SafeAreaView>
-      </Modal>
-
+      {/* Modal Chọn ảnh đại diện */}
       <Modal
         transparent
         visible={isAvatarPickerVisible}
@@ -1027,13 +901,14 @@ export default function ProfileScreen({ navigation }: any) {
 
               <TouchableOpacity style={[styles.avatarPickerRow, styles.avatarPickerLastRow]} activeOpacity={0.8} onPress={pickAvatarFromLibrary}>
                 <Ionicons name="images-outline" size={24} color={isDarkMode ? '#F8FAFC' : '#111827'} />
-                <Text style={[styles.avatarPickerText, isDarkMode && { color: '#F8FAFC' }]}>Chọn từ Hình ảnh</Text>
+                <Text style={[styles.avatarPickerText, isDarkMode && { color: '#F8FAFC' }]}>Chọn từ Thư viện</Text>
               </TouchableOpacity>
             </View>
           </Pressable>
         </Pressable>
       </Modal>
 
+      {/* Modal Đổi mật khẩu */}
       <Modal
         visible={isChangePasswordVisible}
         animationType="slide"
@@ -1053,7 +928,6 @@ export default function ProfileScreen({ navigation }: any) {
             </TouchableOpacity>
 
             <Text style={[styles.changePasswordTitle, isDarkMode && { color: '#F8FAFC' }]}>Đổi mật khẩu</Text>
-
             <View style={styles.changePasswordHeaderRight} />
           </View>
 
@@ -1119,7 +993,7 @@ export default function ProfileScreen({ navigation }: any) {
                             : '#065F46'
                           : isDarkMode
                             ? '#FCA5A5'
-                            : '#991B1B',
+                            : '#B91C1C',
                     }}
                   >
                     {passwordChangeFeedback.message}
@@ -1201,8 +1075,8 @@ export default function ProfileScreen({ navigation }: any) {
                   isDarkMode && { backgroundColor: '#0F172A', borderColor: '#334155' },
                 ]}
               >
-                <Text style={[styles.passwordRequirementsTitle, isDarkMode && { color: '#E2E8F0' }]}>
-                  Các yêu cầu về mật khẩu:
+                <Text style={[styles.passwordRequirementsTitle, isDarkMode && { color: '#F8FAFC' }]}>
+                  Yêu cầu mật khẩu:
                 </Text>
                 <View style={styles.passwordRequirementRow}>
                   <Ionicons
@@ -1312,278 +1186,7 @@ export default function ProfileScreen({ navigation }: any) {
         </SafeAreaView>
       </Modal>
 
-      <Modal
-        transparent
-        visible={isSettingsVisible}
-        animationType="slide"
-        onRequestClose={() => setSettingsVisible(false)}
-      >
-        <Pressable style={[styles.settingsOverlay, isDarkMode && { backgroundColor: '#0B0F19' }]} onPress={() => setSettingsVisible(false)}>
-          <Pressable style={[styles.settingsSheet, isDarkMode && { backgroundColor: '#0B0F19' }]} onPress={() => {}}>
-            <View style={styles.settingsHeaderRow}>
-              <TouchableOpacity
-                style={[styles.backButton, styles.settingsBackButton, isDarkMode && { backgroundColor: '#1E293B', borderColor: '#334155' }]}
-                onPress={() => setSettingsVisible(false)}
-                activeOpacity={0.7}
-              >
-                <Ionicons name="chevron-back-outline" size={24} color={isDarkMode ? '#F8FAFC' : Colors.textPrimary} />
-              </TouchableOpacity>
-              <Text style={[styles.settingsTitle, isDarkMode && { color: '#F8FAFC' }]}>Cài đặt</Text>
-            </View>
-
-            <ScrollView showsVerticalScrollIndicator={false} contentContainerStyle={{ paddingBottom: 24 }}>
-              <View style={styles.settingsCard}>
-                <View style={styles.settingsList}>
-                  {/* Khối 1: Hồ sơ người giám sát & Hồ sơ bệnh án người cao tuổi */}
-                  <View style={[styles.settingsGroupCard, isDarkMode && { backgroundColor: '#1E293B', borderColor: '#334155' }]}>
-                    {/* Mục 1: Hồ sơ người giám sát */}
-                    <TouchableOpacity
-                      style={[styles.settingsItem, isDarkMode && { borderBottomColor: '#334155' }]}
-                      activeOpacity={0.8}
-                      onPress={() => {
-                        setAccountEntrySource('settings');
-                        setSettingsVisible(false);
-                        setUserMenuVisible(true);
-                      }}
-                    >
-                      <View style={styles.settingsLeft}>
-                        <View style={[styles.settingsIconWrap, { backgroundColor: isDarkMode ? 'rgba(255, 122, 0, 0.16)' : Colors.primaryLight }]}>
-                          <Ionicons name="person-circle-outline" size={22} color={Colors.primary} />
-                        </View>
-                        <View style={{ flex: 1 }}>
-                          <Text style={[styles.settingsLabel, isDarkMode ? { color: '#F8FAFC' } : { color: '#0F172A' }]}>Hồ sơ người giám sát</Text>
-                          <Text style={[styles.settingsItemSub, { color: isDarkMode ? '#94A3B8' : '#64748B' }]}>Tài khoản người thân theo dõi, SĐT liên hệ khẩn cấp</Text>
-                        </View>
-                      </View>
-                      <Ionicons name="chevron-forward" size={18} color={Colors.primary} />
-                    </TouchableOpacity>
-
-                    {/* Mục 2: Hồ sơ bệnh án người cao tuổi */}
-                    <TouchableOpacity
-                      style={[styles.settingsItem, styles.settingsItemLast, isDarkMode && { borderBottomColor: '#334155' }]}
-                      activeOpacity={0.8}
-                      onPress={() => {
-                        setSettingsVisible(false);
-                        navigation.navigate('PatientMedicalRecord');
-                      }}
-                    >
-                      <View style={styles.settingsLeft}>
-                        <View style={[styles.settingsIconWrap, { backgroundColor: isDarkMode ? '#082F49' : '#E0F2FE' }]}>
-                          <Ionicons name="medkit-outline" size={21} color="#0284C7" />
-                        </View>
-                        <View style={{ flex: 1 }}>
-                          <View style={{ flexDirection: 'row', alignItems: 'center', flexWrap: 'wrap', gap: 6 }}>
-                            <Text style={[styles.settingsLabel, isDarkMode ? { color: '#F8FAFC' } : { color: '#0F172A' }]}>Hồ sơ bệnh án người cao tuổi</Text>
-                            <View style={[styles.profileAesBadge, isDarkMode && { backgroundColor: 'rgba(255, 122, 0, 0.16)' }]}>
-                              <Text style={[styles.profileAesBadgeText, isDarkMode && { color: Colors.primary }]}>Bảo mật AES-256</Text>
-                            </View>
-                          </View>
-                          <Text style={[styles.settingsItemSub, { color: isDarkMode ? '#94A3B8' : '#64748B' }]}>Thông tin cụ, bệnh nền, nhóm máu &amp; đơn thuốc</Text>
-                        </View>
-                      </View>
-                      <Ionicons name="chevron-forward" size={18} color={Colors.primary} />
-                    </TouchableOpacity>
-                  </View>
-
-                  {/* Khối 2: Nhóm 3 mục */}
-                  <View style={[styles.settingsGroupCard, isDarkMode && { backgroundColor: '#1E293B', borderColor: '#334155' }]}>
-                    <TouchableOpacity
-                      style={[styles.settingsItem, isDarkMode && { borderBottomColor: '#334155' }]}
-                      activeOpacity={0.8}
-                      onPress={() => {
-                        setSettingsVisible(false);
-                        setGeneralSettingsVisible(true);
-                      }}
-                    >
-                      <View style={styles.settingsLeft}>
-                        <View style={[styles.settingsIconWrap, { backgroundColor: isDarkMode ? 'rgba(255, 122, 0, 0.16)' : Colors.primaryLight }]}>
-                          <Ionicons name="settings-outline" size={21} color={Colors.primary} />
-                        </View>
-                        <View style={{ flex: 1 }}>
-                          <Text style={[styles.settingsLabel, isDarkMode ? { color: '#F8FAFC' } : { color: '#0F172A' }]}>Cài đặt chung</Text>
-                          <Text style={[styles.settingsItemSub, { color: isDarkMode ? '#94A3B8' : '#64748B' }]}>Vùng, ngôn ngữ giao diện &amp; chế độ Sáng / Tối</Text>
-                        </View>
-                      </View>
-                      <Ionicons name="chevron-forward" size={18} color={Colors.primary} />
-                    </TouchableOpacity>
-
-                    <TouchableOpacity
-                      style={[styles.settingsItem, isDarkMode && { borderBottomColor: '#334155' }]}
-                      activeOpacity={0.8}
-                      onPress={() => {
-                        setSettingsVisible(false);
-                        setAccessibilityVisible(true);
-                      }}
-                    >
-                      <View style={styles.settingsLeft}>
-                        <View style={[styles.settingsIconWrap, { backgroundColor: isDarkMode ? '#064E3B' : '#ECFDF5' }]}>
-                          <Ionicons name="accessibility-outline" size={21} color="#10B981" />
-                        </View>
-                        <View style={{ flex: 1 }}>
-                          <Text style={[styles.settingsLabel, isDarkMode ? { color: '#F8FAFC' } : { color: '#0F172A' }]}>Khả năng tiếp cận</Text>
-                          <Text style={[styles.settingsItemSub, { color: isDarkMode ? '#94A3B8' : '#64748B' }]}>Kích thước phông chữ &amp; độ tương phản hiển thị</Text>
-                        </View>
-                      </View>
-                      <Ionicons name="chevron-forward" size={18} color={Colors.primary} />
-                    </TouchableOpacity>
-
-                    <TouchableOpacity
-                      style={[styles.settingsItem, styles.settingsItemLast]}
-                      activeOpacity={0.8}
-                      onPress={() => {
-                        setSettingsVisible(false);
-                        setAboutInfoVisible(true);
-                      }}
-                    >
-                      <View style={styles.settingsLeft}>
-                        <View style={[styles.settingsIconWrap, { backgroundColor: isDarkMode ? '#1E1B4B' : '#EEF2FF' }]}>
-                          <Ionicons name="information-circle-outline" size={21} color="#6366F1" />
-                        </View>
-                        <View style={{ flex: 1 }}>
-                          <Text style={[styles.settingsLabel, isDarkMode ? { color: '#F8FAFC' } : { color: '#0F172A' }]}>Thông tin</Text>
-                          <Text style={[styles.settingsItemSub, { color: isDarkMode ? '#94A3B8' : '#64748B' }]}>Điều khoản sử dụng &amp; phiên bản ứng dụng</Text>
-                        </View>
-                      </View>
-                      <Ionicons name="chevron-forward" size={18} color={Colors.primary} />
-                    </TouchableOpacity>
-                  </View>
-
-                  {/* Khối 3: Nhóm 2 mục */}
-                  <View style={[styles.settingsGroupCard, isDarkMode && { backgroundColor: '#1E293B', borderColor: '#334155' }]}>
-                    <TouchableOpacity
-                      style={[styles.settingsItem, isDarkMode && { borderBottomColor: '#334155' }]}
-                      activeOpacity={0.8}
-                      onPress={() => {
-                        setSettingsVisible(false);
-                        setNotificationSettingsVisible(true);
-                      }}
-                    >
-                      <View style={styles.settingsLeft}>
-                        <View style={[styles.settingsIconWrap, { backgroundColor: isDarkMode ? '#451A03' : '#FEF3C7' }]}>
-                          <Ionicons name="notifications-outline" size={21} color="#F59E0B" />
-                        </View>
-                        <View style={{ flex: 1 }}>
-                          <Text style={[styles.settingsLabel, isDarkMode ? { color: '#F8FAFC' } : { color: '#0F172A' }]}>Thiết lập thông báo</Text>
-                          <Text style={[styles.settingsItemSub, { color: isDarkMode ? '#94A3B8' : '#64748B' }]}>Cảnh báo sức khỏe, âm thanh &amp; trường hợp khẩn cấp</Text>
-                        </View>
-                      </View>
-                      <View style={styles.settingsRightStatus}>
-                        <Ionicons name="chevron-forward" size={18} color={Colors.primary} />
-                      </View>
-                    </TouchableOpacity>
-
-                    <TouchableOpacity
-                      style={[styles.settingsItem, styles.settingsItemLast]}
-                      activeOpacity={0.8}
-                      onPress={() => {
-                        setSettingsVisible(false);
-                        setVibrationDetailVisible(true);
-                      }}
-                    >
-                      <View style={styles.settingsLeft}>
-                        <View style={[styles.settingsIconWrap, { backgroundColor: isDarkMode ? 'rgba(255, 122, 0, 0.16)' : Colors.primaryLight }]}>
-                          <Ionicons name="phone-portrait-outline" size={21} color={Colors.primary} />
-                        </View>
-                        <View style={{ flex: 1 }}>
-                          <Text style={[styles.settingsLabel, isDarkMode ? { color: '#F8FAFC' } : { color: '#0F172A' }]}>Rung</Text>
-                          <Text style={[styles.settingsItemSub, { color: isDarkMode ? '#94A3B8' : '#64748B' }]}>Phản hồi rung khi có cảnh báo hệ thống</Text>
-                        </View>
-                      </View>
-                      <View style={styles.settingsRightStatus}>
-                        <View
-                          style={[
-                            styles.settingsStatusPill,
-                            vibrationEnabled
-                              ? isDarkMode
-                                ? { backgroundColor: 'rgba(255, 122, 0, 0.18)' }
-                                : { backgroundColor: Colors.primaryLight }
-                              : isDarkMode
-                                ? { backgroundColor: '#0F172A' }
-                                : { backgroundColor: '#F1F5F9' },
-                          ]}
-                        >
-                          <Text
-                            style={[
-                              styles.settingsValueText,
-                              vibrationEnabled
-                                ? { color: Colors.primary, fontWeight: '700' }
-                                : isDarkMode
-                                  ? { color: '#94A3B8' }
-                                  : { color: '#64748B' },
-                            ]}
-                          >
-                            {vibrationEnabled ? 'Mở' : 'Tắt'}
-                          </Text>
-                        </View>
-                        <Ionicons name="chevron-forward" size={18} color={Colors.primary} />
-                      </View>
-                    </TouchableOpacity>
-                  </View>
-                </View>
-              </View>
-            </ScrollView>
-          </Pressable>
-        </Pressable>
-      </Modal>
-
-      <Modal
-        transparent
-        visible={isAccessibilityVisible}
-        animationType="slide"
-        onRequestClose={() => setAccessibilityVisible(false)}
-      >
-        <Pressable
-          style={[styles.settingsOverlay, isDarkMode && { backgroundColor: '#0B0F19' }]}
-          onPress={() => {
-            setAccessibilityVisible(false);
-            setSettingsVisible(true);
-          }}
-        >
-          <Pressable style={[styles.settingsSheet, isDarkMode && { backgroundColor: '#0B0F19' }]} onPress={() => {}}>
-            <View style={styles.settingsHeaderRow}>
-              <TouchableOpacity
-                style={[styles.backButton, styles.settingsBackButton, isDarkMode && { backgroundColor: '#1E293B', borderColor: '#334155' }]}
-                onPress={() => {
-                  setAccessibilityVisible(false);
-                  setSettingsVisible(true);
-                }}
-                activeOpacity={0.7}
-              >
-                <Ionicons name="chevron-back-outline" size={24} color={isDarkMode ? '#F8FAFC' : Colors.textPrimary} />
-              </TouchableOpacity>
-              <Text style={[styles.settingsTitle, isDarkMode && { color: '#F8FAFC' }]}>Khả năng tiếp cận</Text>
-            </View>
-
-            <View style={[styles.accessibilityList, isDarkMode && { backgroundColor: '#1E293B', borderColor: '#334155' }]}>
-              <TouchableOpacity
-                style={[styles.accessibilityRow, isDarkMode && { borderBottomColor: '#334155' }]}
-                activeOpacity={0.8}
-                onPress={() => {
-                  setAccessibilityVisible(false);
-                  setFontSizeVisible(true);
-                }}
-              >
-                <Text style={[styles.accessibilityLabel, isDarkMode && { color: '#F8FAFC' }]}>Kích thước phông chữ</Text>
-                <View style={styles.accessibilityValueWrap}>
-                  <Text style={[styles.accessibilityValue, { color: Colors.primary, fontWeight: '600', fontSize: 15 }]}>{fontSizeMode === 'system' ? 'Theo hệ thống' : 'Tùy chỉnh'}</Text>
-                  <Ionicons name="chevron-forward" size={18} color={Colors.primary} />
-                </View>
-              </TouchableOpacity>
-
-              <View style={[styles.accessibilityRow, styles.accessibilityRowLast]}>
-                <Text style={[styles.accessibilityLabel, isDarkMode && { color: '#F8FAFC' }]}>Tăng độ tương phản</Text>
-                <Switch
-                  value={highContrastEnabled}
-                  onValueChange={setHighContrastEnabled}
-                  trackColor={{ false: isDarkMode ? '#334155' : '#CBD5E1', true: '#FDBA74' }}
-                  thumbColor={highContrastEnabled ? Colors.primary : '#FFFFFF'}
-                />
-              </View>
-            </View>
-          </Pressable>
-        </Pressable>
-      </Modal>
-
+      {/* Modal Kích thước phông chữ */}
       <Modal
         transparent
         visible={isFontSizeVisible}
@@ -1592,19 +1195,17 @@ export default function ProfileScreen({ navigation }: any) {
       >
         <Pressable
           style={[styles.settingsOverlay, isDarkMode && { backgroundColor: '#0B0F19' }]}
-          onPress={() => {
-            setFontSizeVisible(false);
-            setAccessibilityVisible(true);
-          }}
+          onPress={() => setFontSizeVisible(false)}
         >
           <Pressable style={[styles.settingsSheet, isDarkMode && { backgroundColor: '#0B0F19' }]} onPress={() => {}}>
             <View style={styles.settingsHeaderRow}>
               <TouchableOpacity
-                style={[styles.backButton, styles.settingsBackButton, isDarkMode && { backgroundColor: '#1E293B', borderColor: '#334155' }]}
-                onPress={() => {
-                  setFontSizeVisible(false);
-                  setAccessibilityVisible(true);
-                }}
+                style={[
+                  styles.backButton,
+                  styles.settingsBackButton,
+                  isDarkMode && { backgroundColor: '#1E293B', borderColor: '#334155' },
+                ]}
+                onPress={() => setFontSizeVisible(false)}
                 activeOpacity={0.7}
               >
                 <Ionicons name="chevron-back-outline" size={24} color={isDarkMode ? '#F8FAFC' : Colors.textPrimary} />
@@ -1620,9 +1221,7 @@ export default function ProfileScreen({ navigation }: any) {
                   fontSizeMode === 'system' && { borderColor: Colors.primary, borderWidth: 1.5 },
                 ]}
                 activeOpacity={0.8}
-                onPress={() => {
-                  applyFontScaleMode('system');
-                }}
+                onPress={() => applyFontScaleMode('system')}
               >
                 <Text style={[styles.fontSizeOptionText, isDarkMode && { color: '#F8FAFC' }]}>Theo hệ thống</Text>
                 {fontSizeMode === 'system' && (
@@ -1646,8 +1245,21 @@ export default function ProfileScreen({ navigation }: any) {
               </TouchableOpacity>
 
               {fontSizeMode === 'custom' && (
-                <View style={[styles.customFontSliderPanel, isDarkMode && { backgroundColor: '#1E293B', borderColor: '#334155', borderWidth: 1, borderRadius: 18, padding: 16 }]}>
-                  <Text style={[styles.customFontSliderTitle, isDarkMode && { color: '#F8FAFC' }]}>Xem trước cỡ chữ</Text>
+                <View
+                  style={[
+                    styles.customFontSliderPanel,
+                    isDarkMode && {
+                      backgroundColor: '#1E293B',
+                      borderColor: '#334155',
+                      borderWidth: 1,
+                      borderRadius: 18,
+                      padding: 16,
+                    },
+                  ]}
+                >
+                  <Text style={[styles.customFontSliderTitle, isDarkMode && { color: '#F8FAFC' }]}>
+                    Xem trước cỡ chữ
+                  </Text>
                   <Text
                     style={[
                       styles.customFontSliderTitle,
@@ -1702,149 +1314,12 @@ export default function ProfileScreen({ navigation }: any) {
               <Text style={[styles.fontSizeNote, isDarkMode && { color: '#94A3B8' }]}>
                 Nếu một số văn bản hoặc nội dung không được phóng to, hãy nhấn và giữ màn hình để kích hoạt tính năng Zoom.
               </Text>
-
-              <Text style={[styles.fontSizeLink, { color: Colors.primary }]}>Cách sử dụng tính năng Zoom</Text>
             </View>
           </Pressable>
         </Pressable>
       </Modal>
 
-      <Modal
-        transparent
-        visible={isAboutInfoVisible}
-        animationType="slide"
-        onRequestClose={() => setAboutInfoVisible(false)}
-      >
-        <Pressable
-          style={[styles.infoOverlay, isDarkMode && { backgroundColor: '#0B0F19' }]}
-          onPress={() => {
-            setAboutInfoVisible(false);
-            setSettingsVisible(true);
-          }}
-        >
-          <Pressable style={[styles.infoScreen, isDarkMode && { backgroundColor: '#0B0F19' }]} onPress={() => {}}>
-            <View style={styles.infoHeaderRow}>
-              <TouchableOpacity
-                style={[styles.backButton, styles.infoBackButton, isDarkMode && { backgroundColor: '#1E293B', borderColor: '#334155' }]}
-                onPress={() => {
-                  if (infoDetail) {
-                    setInfoDetail(null);
-                  } else {
-                    setAboutInfoVisible(false);
-                    setSettingsVisible(true);
-                  }
-                }}
-                activeOpacity={0.7}
-              >
-                <Ionicons name="chevron-back-outline" size={24} color={isDarkMode ? '#F8FAFC' : Colors.textPrimary} />
-              </TouchableOpacity>
-              <Text style={[styles.infoTitle, isDarkMode && { color: '#F8FAFC' }]}>
-                {infoDetail === 'terms' ? 'Điều khoản sử dụng' : infoDetail === 'app' ? 'Thông tin ứng dụng' : 'Thông tin'}
-              </Text>
-            </View>
-
-            {infoDetail === null ? (
-              <View style={[styles.infoListCard, isDarkMode && { backgroundColor: '#1E293B', borderColor: '#334155' }]}>
-                <TouchableOpacity
-                  style={[styles.infoListRow, isDarkMode && { borderBottomColor: '#334155' }]}
-                  activeOpacity={0.8}
-                  onPress={() => setInfoDetail('terms')}
-                >
-                  <Text style={[styles.infoRowText, isDarkMode && { color: '#F8FAFC' }]}>Điều khoản sử dụng</Text>
-                  <Ionicons name="chevron-forward" size={18} color={Colors.primary} />
-                </TouchableOpacity>
-
-                <TouchableOpacity
-                  style={[styles.infoListRow, { borderBottomWidth: 0 }]}
-                  activeOpacity={0.8}
-                  onPress={() => setInfoDetail('app')}
-                >
-                  <Text style={[styles.infoRowText, isDarkMode && { color: '#F8FAFC' }]}>Thông tin ứng dụng</Text>
-                  <Ionicons name="chevron-forward" size={18} color={Colors.primary} />
-                </TouchableOpacity>
-              </View>
-            ) : (
-              <ScrollView
-                showsVerticalScrollIndicator={false}
-                contentContainerStyle={styles.infoDetailContent}
-              >
-                {infoDetail === 'terms' ? (
-                  <>
-                    <Text style={[styles.infoDetailHeading, isDarkMode && { color: '#F8FAFC' }]}>Điều khoản sử dụng</Text>
-                    <Text style={[styles.infoDetailText, isDarkMode && { color: '#94A3B8' }]}>
-                      Ứng dụng Smart Elderly Care AI hỗ trợ theo dõi sức khoẻ, thiết bị và cảnh báo an toàn cho người cao tuổi. Người dùng cần cung cấp thông tin chính xác và sử dụng ứng dụng đúng mục đích.
-                    </Text>
-                    <Text style={[styles.infoDetailText, isDarkMode && { color: '#94A3B8' }]}>
-                      Người dùng chịu trách nhiệm bảo mật tài khoản, mã xác thực và các thiết bị đã liên kết. Không chia sẻ thông tin đăng nhập cho người khác.
-                    </Text>
-                    <Text style={[styles.infoDetailText, isDarkMode && { color: '#94A3B8' }]}>
-                      Các cảnh báo trong ứng dụng chỉ có tính chất hỗ trợ theo dõi, không thay thế cho chẩn đoán hoặc điều trị y tế chuyên môn.
-                    </Text>
-                  </>
-                ) : (
-                  <View style={styles.appInfoPanel}>
-                    <View style={[styles.appInfoIcon, { backgroundColor: Colors.primary }]}>
-                      <Ionicons name="shield-checkmark" size={38} color="#FFFFFF" />
-                    </View>
-                    <Text style={[styles.infoDetailHeading, isDarkMode && { color: '#F8FAFC' }]}>Smart Elderly Care AI</Text>
-                    <Text style={[styles.appInfoVersion, isDarkMode && { color: '#94A3B8' }]}>Phiên bản 1.0.0</Text>
-                    <Text style={[styles.infoDetailText, isDarkMode && { color: '#94A3B8' }]}>
-                      Hệ thống giám sát thông minh giúp gia đình theo dõi sức khỏe, thiết bị và nhận cảnh báo kịp thời.
-                    </Text>
-                    <Text style={[styles.appInfoCopyright, isDarkMode && { color: '#64748B' }]}>© 2026 Smart Elderly Care AI</Text>
-                  </View>
-                )}
-              </ScrollView>
-            )}
-          </Pressable>
-        </Pressable>
-      </Modal>
-
-      <Modal
-        transparent
-        visible={isVibrationDetailVisible}
-        animationType="slide"
-        onRequestClose={() => setVibrationDetailVisible(false)}
-      >
-        <Pressable
-          style={[styles.settingsOverlay, isDarkMode && { backgroundColor: '#0B0F19' }]}
-          onPress={() => {
-            setVibrationDetailVisible(false);
-            setSettingsVisible(true);
-          }}
-        >
-          <Pressable style={[styles.vibrationDetailSheet, isDarkMode && { backgroundColor: '#0B0F19' }]} onPress={() => {}}>
-            <View style={styles.settingsHeaderRow}>
-              <TouchableOpacity
-                style={[styles.backButton, styles.settingsBackButton, isDarkMode && { backgroundColor: '#1E293B', borderColor: '#334155' }]}
-                onPress={() => {
-                  setVibrationDetailVisible(false);
-                  setSettingsVisible(true);
-                }}
-                activeOpacity={0.7}
-              >
-                <Ionicons name="chevron-back-outline" size={24} color={isDarkMode ? '#F8FAFC' : Colors.textPrimary} />
-              </TouchableOpacity>
-              <Text style={[styles.settingsTitle, isDarkMode && { color: '#F8FAFC' }]}>Rung</Text>
-            </View>
-
-            <View style={[styles.vibrationDetailRow, isDarkMode && { backgroundColor: '#1E293B', borderColor: '#334155' }]}>
-              <Text style={[styles.vibrationDetailLabel, isDarkMode && { color: '#F8FAFC' }]}>Rung</Text>
-              <Switch
-                value={vibrationEnabled}
-                onValueChange={handleVibrationToggle}
-                trackColor={{ false: isDarkMode ? '#334155' : '#CBD5E1', true: '#FDBA74' }}
-                thumbColor={vibrationEnabled ? Colors.primary : '#FFFFFF'}
-              />
-            </View>
-
-            <Text style={[styles.vibrationDetailDescription, isDarkMode && { color: '#94A3B8' }]}>
-              Khi được bật, điện thoại / máy tính bảng của bạn sẽ rung khi có cảnh báo hoặc thông báo mới từ hệ thống.
-            </Text>
-          </Pressable>
-        </Pressable>
-      </Modal>
-
+      {/* Modal Thiết lập thông báo */}
       <Modal
         transparent
         visible={isNotificationSettingsVisible}
@@ -1853,19 +1328,17 @@ export default function ProfileScreen({ navigation }: any) {
       >
         <Pressable
           style={[styles.settingsOverlay, isDarkMode && { backgroundColor: '#0B0F19' }]}
-          onPress={() => {
-            setNotificationSettingsVisible(false);
-            setSettingsVisible(true);
-          }}
+          onPress={() => setNotificationSettingsVisible(false)}
         >
           <Pressable style={[styles.settingsSheet, isDarkMode && { backgroundColor: '#0B0F19' }]} onPress={() => {}}>
             <View style={styles.settingsHeaderRow}>
               <TouchableOpacity
-                style={[styles.backButton, styles.settingsBackButton, isDarkMode && { backgroundColor: '#1E293B', borderColor: '#334155' }]}
-                onPress={() => {
-                  setNotificationSettingsVisible(false);
-                  setSettingsVisible(true);
-                }}
+                style={[
+                  styles.backButton,
+                  styles.settingsBackButton,
+                  isDarkMode && { backgroundColor: '#1E293B', borderColor: '#334155' },
+                ]}
+                onPress={() => setNotificationSettingsVisible(false)}
                 activeOpacity={0.7}
               >
                 <Ionicons name="chevron-back-outline" size={24} color={isDarkMode ? '#F8FAFC' : Colors.textPrimary} />
@@ -1878,15 +1351,24 @@ export default function ProfileScreen({ navigation }: any) {
                 Chọn cách bạn muốn nhận cảnh báo từ hệ thống.
               </Text>
 
-              <View style={[styles.notificationSettingsCard, isDarkMode && { backgroundColor: '#1E293B', borderColor: '#334155' }]}>
+              <View
+                style={[
+                  styles.notificationSettingsCard,
+                  isDarkMode && { backgroundColor: '#1E293B', borderColor: '#334155' },
+                ]}
+              >
                 <View style={styles.notificationSettingRow}>
                   <View style={styles.notificationSettingText}>
-                    <Text style={[styles.notificationSettingTitle, isDarkMode && { color: '#F8FAFC' }]}>Thông báo cảnh báo</Text>
-                    <Text style={[styles.notificationSettingDescription, isDarkMode && { color: '#94A3B8' }]}>Nhận cảnh báo sức khỏe mới</Text>
+                    <Text style={[styles.notificationSettingTitle, isDarkMode && { color: '#F8FAFC' }]}>
+                      Thông báo cảnh báo
+                    </Text>
+                    <Text style={[styles.notificationSettingDescription, isDarkMode && { color: '#94A3B8' }]}>
+                      Nhận cảnh báo sức khỏe mới
+                    </Text>
                   </View>
                   <Switch
                     value={notificationsEnabled}
-                    onValueChange={setNotificationsEnabled}
+                    onValueChange={(val) => void handleToggleNotification('notifications_enabled', val)}
                     trackColor={{ false: isDarkMode ? '#334155' : '#CBD5E1', true: '#FDBA74' }}
                     thumbColor={notificationsEnabled ? Colors.primary : '#FFFFFF'}
                   />
@@ -1895,12 +1377,16 @@ export default function ProfileScreen({ navigation }: any) {
 
                 <View style={styles.notificationSettingRow}>
                   <View style={styles.notificationSettingText}>
-                    <Text style={[styles.notificationSettingTitle, isDarkMode && { color: '#F8FAFC' }]}>Âm thanh cảnh báo</Text>
-                    <Text style={[styles.notificationSettingDescription, isDarkMode && { color: '#94A3B8' }]}>Phát âm thanh khi có cảnh báo</Text>
+                    <Text style={[styles.notificationSettingTitle, isDarkMode && { color: '#F8FAFC' }]}>
+                      Âm thanh cảnh báo
+                    </Text>
+                    <Text style={[styles.notificationSettingDescription, isDarkMode && { color: '#94A3B8' }]}>
+                      Phát âm thanh khi có cảnh báo
+                    </Text>
                   </View>
                   <Switch
                     value={alertSoundEnabled}
-                    onValueChange={setAlertSoundEnabled}
+                    onValueChange={(val) => void handleToggleNotification('alert_sound_enabled', val)}
                     trackColor={{ false: isDarkMode ? '#334155' : '#CBD5E1', true: '#FDBA74' }}
                     thumbColor={alertSoundEnabled ? Colors.primary : '#FFFFFF'}
                   />
@@ -1909,12 +1395,16 @@ export default function ProfileScreen({ navigation }: any) {
 
                 <View style={styles.notificationSettingRow}>
                   <View style={styles.notificationSettingText}>
-                    <Text style={[styles.notificationSettingTitle, isDarkMode && { color: '#F8FAFC' }]}>Cảnh báo khẩn cấp</Text>
-                    <Text style={[styles.notificationSettingDescription, isDarkMode && { color: '#94A3B8' }]}>Luôn ưu tiên cảnh báo nguy hiểm</Text>
+                    <Text style={[styles.notificationSettingTitle, isDarkMode && { color: '#F8FAFC' }]}>
+                      Cảnh báo khẩn cấp
+                    </Text>
+                    <Text style={[styles.notificationSettingDescription, isDarkMode && { color: '#94A3B8' }]}>
+                      Luôn ưu tiên cảnh báo nguy hiểm
+                    </Text>
                   </View>
                   <Switch
                     value={criticalAlertEnabled}
-                    onValueChange={setCriticalAlertEnabled}
+                    onValueChange={(val) => void handleToggleNotification('critical_alert_enabled', val)}
                     trackColor={{ false: isDarkMode ? '#334155' : '#CBD5E1', true: '#FDBA74' }}
                     thumbColor={criticalAlertEnabled ? Colors.primary : '#FFFFFF'}
                   />
@@ -1925,129 +1415,24 @@ export default function ProfileScreen({ navigation }: any) {
         </Pressable>
       </Modal>
 
-      <Modal
-        transparent
-        visible={isGeneralSettingsVisible}
-        animationType="slide"
-        onRequestClose={() => setGeneralSettingsVisible(false)}
-      >
-        <Pressable style={[styles.settingsOverlay, isDarkMode && { backgroundColor: '#0B0F19' }]} onPress={() => setGeneralSettingsVisible(false)}>
-          <Pressable style={[styles.settingsSheet, isDarkMode && { backgroundColor: '#0B0F19' }]} onPress={() => {}}>
-            <View style={styles.settingsHeaderRow}>
-              <TouchableOpacity
-                style={[styles.backButton, styles.settingsBackButton, isDarkMode && { backgroundColor: '#1E293B', borderColor: '#334155' }]}
-                onPress={() => {
-                  setGeneralSettingsVisible(false);
-                  setSettingsVisible(true);
-                }}
-                activeOpacity={0.7}
-              >
-                <Ionicons name="chevron-back-outline" size={24} color={isDarkMode ? '#F8FAFC' : Colors.textPrimary} />
-              </TouchableOpacity>
-              <Text style={[styles.settingsTitle, isDarkMode && { color: '#F8FAFC' }]}>Cài đặt chung</Text>
-            </View>
-
-            <View style={[styles.generalSettingsList, isDarkMode && { backgroundColor: '#1E293B', borderColor: '#334155', borderWidth: 1, borderRadius: 18, overflow: 'hidden' }]}>
-              <View style={[styles.generalRow, isDarkMode && { borderBottomColor: '#334155' }]}>
-                <Text style={[styles.generalRowLabel, isDarkMode && { color: '#F8FAFC' }]}>Vùng</Text>
-                <Text style={[styles.generalRowValue, isDarkMode && { color: '#94A3B8' }]}>Vietnam</Text>
-              </View>
-
-              <TouchableOpacity
-                style={[styles.generalRow, isDarkMode && { borderBottomColor: '#334155' }]}
-                activeOpacity={0.8}
-                onPress={() => setLanguageVisible(true)}
-              >
-                <Text style={[styles.generalRowLabel, isDarkMode && { color: '#F8FAFC' }]}>Ngôn ngữ</Text>
-                <View style={styles.generalValueWrap}>
-                  <Text style={[styles.generalRowValue, { color: Colors.primary, fontWeight: '600' }]}>{languageMode === 'vi' ? 'Việt Nam' : 'English'}</Text>
-                  <Ionicons name="chevron-forward" size={18} color={Colors.primary} />
-                </View>
-              </TouchableOpacity>
-
-              <TouchableOpacity
-                style={[styles.generalRow, { borderBottomWidth: 0 }]}
-                activeOpacity={0.8}
-                onPress={() => setAppearanceVisible(true)}
-              >
-                <Text style={[styles.generalRowLabel, isDarkMode && { color: '#F8FAFC' }]}>Chế độ tối</Text>
-                <View style={styles.generalValueWrap}>
-                  <Text style={[styles.generalRowValue, { color: Colors.primary, fontWeight: '600' }]}>{appearanceMode === 'light' ? 'Màu sáng' : 'Tối'}</Text>
-                  <Ionicons name="chevron-forward" size={18} color={Colors.primary} />
-                </View>
-              </TouchableOpacity>
-            </View>
-          </Pressable>
-        </Pressable>
-      </Modal>
-
-      <Modal
-        transparent
-        visible={isLanguageVisible}
-        animationType="slide"
-        onRequestClose={() => setLanguageVisible(false)}
-      >
-        <Pressable style={[styles.appearanceOverlay, isDarkMode && { backgroundColor: '#0B0F19' }]} onPress={() => setLanguageVisible(false)}>
-          <Pressable style={[styles.appearanceSheet, isDarkMode && { backgroundColor: '#0B0F19' }]} onPress={() => {}}>
-            <View style={styles.appearanceHeader}>
-              <TouchableOpacity
-                style={[styles.appearanceCloseButton, isDarkMode && { backgroundColor: '#1E293B', borderColor: '#334155' }]}
-                onPress={() => setLanguageVisible(false)}
-                activeOpacity={0.7}
-              >
-                <Ionicons name="chevron-back-outline" size={24} color={isDarkMode ? '#F8FAFC' : '#111827'} />
-              </TouchableOpacity>
-
-              <Text style={[styles.appearanceTitle, isDarkMode && { color: '#F8FAFC' }]}>Ngôn ngữ</Text>
-              <View style={styles.appearanceHeaderSpacer} />
-            </View>
-
-            <View style={[styles.appearanceCard, isDarkMode && { backgroundColor: '#1E293B', borderColor: '#334155' }]}>
-              <TouchableOpacity
-                style={[
-                  styles.appearanceOptionRow,
-                  isDarkMode ? { backgroundColor: '#1E293B', borderBottomColor: '#334155' } : { backgroundColor: '#FFFFFF', borderBottomColor: '#E5E7EB' },
-                  languageMode === 'vi' && (isDarkMode ? { backgroundColor: '#0F172A' } : styles.appearanceOptionRowSelected),
-                ]}
-                activeOpacity={0.8}
-                onPress={() => handleLanguageChange('vi')}
-              >
-                <Text style={[styles.appearanceOptionLabel, isDarkMode && { color: '#F8FAFC' }]}>Việt Nam</Text>
-                {languageMode === 'vi' && (
-                  <Ionicons name="checkmark-circle" size={22} color={Colors.primary} />
-                )}
-              </TouchableOpacity>
-
-              <TouchableOpacity
-                style={[
-                  styles.appearanceOptionRow,
-                  isDarkMode ? { backgroundColor: '#1E293B', borderBottomColor: '#334155', borderBottomWidth: 0 } : { backgroundColor: '#FFFFFF', borderBottomColor: '#E5E7EB', borderBottomWidth: 0 },
-                  languageMode === 'en' && (isDarkMode ? { backgroundColor: '#0F172A' } : styles.appearanceOptionRowSelected),
-                ]}
-                activeOpacity={0.8}
-                onPress={() => handleLanguageChange('en')}
-              >
-                <Text style={[styles.appearanceOptionLabel, isDarkMode && { color: '#F8FAFC' }]}>English</Text>
-                {languageMode === 'en' && (
-                  <Ionicons name="checkmark-circle" size={22} color={Colors.primary} />
-                )}
-              </TouchableOpacity>
-            </View>
-          </Pressable>
-        </Pressable>
-      </Modal>
-
+      {/* Modal Vẻ bề ngoài / Chế độ tối */}
       <Modal
         transparent
         visible={isAppearanceVisible}
         animationType="slide"
         onRequestClose={() => setAppearanceVisible(false)}
       >
-        <Pressable style={[styles.appearanceOverlay, isDarkMode && { backgroundColor: '#0B0F19' }]} onPress={() => setAppearanceVisible(false)}>
+        <Pressable
+          style={[styles.appearanceOverlay, isDarkMode && { backgroundColor: '#0B0F19' }]}
+          onPress={() => setAppearanceVisible(false)}
+        >
           <Pressable style={[styles.appearanceSheet, isDarkMode && { backgroundColor: '#0B0F19' }]} onPress={() => {}}>
             <View style={styles.appearanceHeader}>
               <TouchableOpacity
-                style={[styles.appearanceCloseButton, isDarkMode && { backgroundColor: '#1E293B', borderColor: '#334155' }]}
+                style={[
+                  styles.appearanceCloseButton,
+                  isDarkMode && { backgroundColor: '#1E293B', borderColor: '#334155' },
+                ]}
                 onPress={() => setAppearanceVisible(false)}
                 activeOpacity={0.7}
               >
@@ -2062,18 +1447,19 @@ export default function ProfileScreen({ navigation }: any) {
               <TouchableOpacity
                 style={[
                   styles.appearanceOptionRow,
-                  isDarkMode ? { backgroundColor: '#1E293B', borderBottomColor: '#334155' } : { backgroundColor: '#FFFFFF', borderBottomColor: '#E5E7EB' },
-                  appearanceMode === 'light' && (isDarkMode ? { backgroundColor: '#0F172A' } : styles.appearanceOptionRowSelected),
+                  isDarkMode
+                    ? { backgroundColor: '#1E293B', borderBottomColor: '#334155' }
+                    : { backgroundColor: '#FFFFFF', borderBottomColor: '#E5E7EB' },
+                  !isDarkMode && styles.appearanceOptionRowSelected,
                 ]}
                 activeOpacity={0.8}
                 onPress={() => {
-                  setAppearanceMode('light');
                   setDarkMode(false);
                   setAppearanceVisible(false);
                 }}
               >
                 <Text style={[styles.appearanceOptionLabel, isDarkMode && { color: '#F8FAFC' }]}>Màu sáng</Text>
-                {appearanceMode === 'light' && (
+                {!isDarkMode && (
                   <Ionicons name="checkmark-circle" size={22} color={Colors.primary} />
                 )}
               </TouchableOpacity>
@@ -2081,18 +1467,19 @@ export default function ProfileScreen({ navigation }: any) {
               <TouchableOpacity
                 style={[
                   styles.appearanceOptionRow,
-                  isDarkMode ? { backgroundColor: '#1E293B', borderBottomColor: '#334155', borderBottomWidth: 0 } : { backgroundColor: '#FFFFFF', borderBottomColor: '#E5E7EB', borderBottomWidth: 0 },
-                  appearanceMode === 'dark' && (isDarkMode ? { backgroundColor: '#0F172A' } : styles.appearanceOptionRowSelected),
+                  isDarkMode
+                    ? { backgroundColor: '#1E293B', borderBottomColor: '#334155', borderBottomWidth: 0 }
+                    : { backgroundColor: '#FFFFFF', borderBottomColor: '#E5E7EB', borderBottomWidth: 0 },
+                  isDarkMode && (isDarkMode ? { backgroundColor: '#0F172A' } : styles.appearanceOptionRowSelected),
                 ]}
                 activeOpacity={0.8}
                 onPress={() => {
-                  setAppearanceMode('dark');
                   setDarkMode(true);
                   setAppearanceVisible(false);
                 }}
               >
                 <Text style={[styles.appearanceOptionLabel, isDarkMode && { color: '#F8FAFC' }]}>Tối</Text>
-                {appearanceMode === 'dark' && (
+                {isDarkMode && (
                   <Ionicons name="checkmark-circle" size={22} color={Colors.primary} />
                 )}
               </TouchableOpacity>
@@ -2101,26 +1488,438 @@ export default function ProfileScreen({ navigation }: any) {
         </Pressable>
       </Modal>
 
+      <Modal
+        visible={securityDetail !== null}
+        animationType="slide"
+        onRequestClose={() => {
+          setSecurityDetail(null);
+          setSecurityCenterVisible(true);
+        }}
+      >
+        <SafeAreaView style={[styles.securityDetailScreen, isDarkMode && { backgroundColor: '#0B0F19' }]} edges={['top']}>
+          <View style={[styles.securityDetailHeader, isDarkMode && { backgroundColor: '#0F172A', borderBottomColor: '#1E293B' }]}>
+            <TouchableOpacity
+              style={[styles.securityNavBackButton, isDarkMode && { backgroundColor: '#1E293B' }]}
+              onPress={() => {
+                setSecurityDetail(null);
+                setSecurityCenterVisible(true);
+              }}
+              activeOpacity={0.7}
+            >
+              <Ionicons name="chevron-back" size={22} color={isDarkMode ? '#F8FAFC' : '#0F172A'} />
+            </TouchableOpacity>
+            <Text style={[styles.securityDetailTitle, isDarkMode && { color: '#F8FAFC' }]} numberOfLines={1}>
+              {securityDetail === 'twoFactor'
+                ? 'Xác minh hai bước'
+                : securityDetail === 'devices'
+                  ? 'Quản lý đầu cuối'
+                  : securityDetail === 'logins'
+                    ? 'Nhật ký đăng nhập'
+                    : 'Hướng dẫn bảo mật'}
+            </Text>
+            <View style={{ width: 40 }} />
+          </View>
+
+          <ScrollView contentContainerStyle={styles.securityDetailContent} showsVerticalScrollIndicator={false}>
+            {securityDetail === 'twoFactor' && (
+              <View style={[styles.securityDetailCard, isDarkMode && { backgroundColor: '#1E293B', borderColor: '#334155' }]}>
+                <View style={styles.securityDetailHeroBadge}>
+                  <View style={[styles.securityTileIconSquircle, { backgroundColor: '#ECFDF5', width: 56, height: 56, borderRadius: 18 }]}>
+                    <Ionicons name="shield-checkmark" size={32} color="#059669" />
+                  </View>
+                </View>
+                <View style={styles.securityDetailRowHeader}>
+                  <View style={{ flex: 1, marginRight: 12 }}>
+                    <Text style={[styles.securityDetailCardTitle, isDarkMode && { color: '#F8FAFC' }]}>
+                      Xác thực qua mã SMS
+                    </Text>
+                    <Text style={[styles.securityDetailSubText, isDarkMode && { color: '#94A3B8' }]}>
+                      {twoFactorEnabled ? 'Trạng thái: Đang bảo vệ' : 'Trạng thái: Chưa kích hoạt'}
+                    </Text>
+                  </View>
+                  <Switch
+                    value={twoFactorEnabled}
+                    onValueChange={setTwoFactorEnabled}
+                    trackColor={{ false: '#CBD5E1', true: '#7DD3FC' }}
+                    thumbColor={twoFactorEnabled ? '#0284C7' : '#FFFFFF'}
+                  />
+                </View>
+                <Text style={[styles.securityDetailDescription, isDarkMode && { color: '#94A3B8' }]}>
+                  Để giữ an toàn tuyệt đối cho tài khoản giám sát người cao tuổi, hệ thống sẽ yêu cầu nhập mã OTP gửi về tin nhắn SMS khi bạn đăng nhập trên thiết bị mới hoặc thực hiện thao tác nhạy cảm.
+                </Text>
+                <View style={[styles.securityInfoBanner, isDarkMode && { backgroundColor: 'rgba(2,132,199,0.12)', borderColor: 'rgba(2,132,199,0.3)' }]}>
+                  <Ionicons name="information-circle" size={22} color="#0284C7" />
+                  <Text style={[styles.securityInfoText, isDarkMode && { color: '#38BDF8' }]}>
+                    {twoFactorEnabled
+                      ? 'Tính năng xác thực 2 lớp đang kích hoạt trên số điện thoại đăng ký của bạn.'
+                      : 'Khuyến khích bật xác thực 2 bước để phòng ngừa truy cập trái phép.'}
+                  </Text>
+                </View>
+              </View>
+            )}
+
+            {securityDetail === 'devices' && (
+              <View style={[styles.securityDetailCard, isDarkMode && { backgroundColor: '#1E293B', borderColor: '#334155' }]}>
+                <Text style={[styles.securityDetailCardTitle, isDarkMode && { color: '#F8FAFC' }]}>
+                  Thiết bị đáng tin cậy: 1
+                </Text>
+                <View style={[styles.securityDeviceItem, isDarkMode && { backgroundColor: '#0F172A', borderColor: '#334155' }]}>
+                  <View style={styles.securityDeviceIcon}>
+                    <Ionicons name="phone-portrait" size={22} color="#0284C7" />
+                  </View>
+                  <View style={styles.securityDeviceCopy}>
+                    <Text style={[styles.securityDeviceName, isDarkMode && { color: '#F8FAFC' }]}>Thiết bị này</Text>
+                    <Text style={[styles.securityDeviceMeta, isDarkMode && { color: '#94A3B8' }]}>Android App · Đang hoạt động</Text>
+                    <Text style={[styles.securityDeviceMeta, isDarkMode && { color: '#94A3B8' }]}>Đăng nhập gần nhất: Hôm nay 20:41</Text>
+                  </View>
+                  <View style={styles.securityActiveBadge}>
+                    <Text style={styles.securityActiveBadgeText}>Hiện tại</Text>
+                  </View>
+                </View>
+                <Text style={[styles.securityDetailDescription, isDarkMode && { color: '#94A3B8' }]}>
+                  Nếu bạn thấy bất kỳ thiết bị lạ nào đăng nhập vào hệ thống, hãy đổi mật khẩu ngay lập tức. Các thiết bị không hoạt động trong 3 tháng sẽ tự động bị ngắt kết nối.
+                </Text>
+              </View>
+            )}
+
+            {securityDetail === 'logins' && (
+              <View style={[styles.securityDetailCard, isDarkMode && { backgroundColor: '#1E293B', borderColor: '#334155' }]}>
+                <Text style={[styles.securityDetailCardTitle, isDarkMode && { color: '#F8FAFC' }]}>
+                  Lịch sử đăng nhập gần đây
+                </Text>
+                {['Hôm nay · 20:41', '09-14 · 21:20', '09-14 · 21:08', '09-12 · 00:07'].map((loginItem, idx) => (
+                  <View
+                    key={loginItem}
+                    style={[
+                      styles.securityLoginItem,
+                      isDarkMode && { borderBottomColor: '#334155' },
+                      idx === 3 && { borderBottomWidth: 0 },
+                    ]}
+                  >
+                    <View style={styles.securityTimelineDot} />
+                    <View style={styles.securityDeviceCopy}>
+                      <Text style={[styles.securityLoginName, isDarkMode && { color: '#F8FAFC' }]}>Đăng nhập ứng dụng</Text>
+                      <Text style={[styles.securityDeviceMeta, isDarkMode && { color: '#94A3B8' }]}>Thiết bị chính · Thành công</Text>
+                    </View>
+                    <Text style={[styles.securityLoginTime, isDarkMode && { color: '#94A3B8' }]}>{loginItem}</Text>
+                  </View>
+                ))}
+              </View>
+            )}
+
+            {securityDetail === 'question' && (
+              <View style={[styles.securityDetailCard, isDarkMode && { backgroundColor: '#1E293B', borderColor: '#334155' }]}>
+                <View style={[styles.securityTileIconSquircle, { backgroundColor: '#EFF6FF', marginBottom: 16 }]}>
+                  <Ionicons name="help-circle" size={24} color="#0284C7" />
+                </View>
+                <Text style={[styles.securityQuestionDetailTitle, isDarkMode && { color: '#F8FAFC' }]}>
+                  {selectedSecurityQuestion}
+                </Text>
+                <View style={[styles.securityFaqDivider, { marginVertical: 14, marginLeft: 0 }, isDarkMode && { backgroundColor: '#334155' }]} />
+                <Text style={[styles.securityQuestionDetailDescription, isDarkMode && { color: '#CBD5E1' }]}>
+                  {selectedSecurityQuestion === 'Mật khẩu mã hóa thiết bị là gì?'
+                    ? 'Mật khẩu mã hóa thiết bị là một mật khẩu đối xứng được sử dụng để mã hóa luồng video camera và dữ liệu cảm biến của thiết bị, với giá trị mặc định theo mã xác thực thiết bị. Bạn nên thay đổi mật khẩu mặc định thành một mật khẩu an toàn sau khi liên kết thiết bị lần đầu tiên. Mật khẩu mã hóa là chìa khóa bảo mật được cung cấp bởi Smart Elderly Care AI. Hệ thống hoàn toàn không ghi lại hoặc lưu trữ mật khẩu mã hóa trên máy chủ trung tâm. Mật khẩu chỉ được mã hóa lưu trữ trực tiếp trên thiết bị giám sát và ứng dụng di động của bạn. Đội ngũ kỹ thuật Smart Elderly Care AI không có khả năng lấy lại, đặt lại hoặc khôi phục mật khẩu mã hóa nhằm đảm bảo quyền riêng tư tuyệt đối cho gia đình bạn.'
+                    : selectedSecurityQuestion === 'Có ràng buộc một thiết bị an toàn không?'
+                      ? 'Để kết nối một thiết bị vào hệ thống Smart Elderly Care AI, ba điều kiện sau phải được đáp ứng đồng thời:\n\n1. Biết mã định danh (Serial) và mã xác thực an toàn của thiết bị;\n\n2. Thiết bị giám sát đang trực tuyến;\n\n3. Thiết bị chưa bị ràng buộc bởi một tài khoản quản trị khác;\n\nNếu một thiết bị đã được kết nối bởi chủ hộ gia đình, người khác tuyệt đối không thể kết nối hoặc xem trộm ngay cả khi biết mã serial. Chỉ có tài khoản chủ hộ đã liên kết thiết bị mới có quyền chia sẻ hoặc hủy liên kết. Smart Elderly Care AI khuyến nghị bạn cấu hình bảo mật thiết bị ngay sau khi hoàn tất kết nối mạng.'
+                      : selectedSecurityQuestion === 'Việc sử dụng mã xác minh qua tin nhắn SMS'
+                        ? 'Mã xác minh SMS (OTP) là lớp bảo mật hai bước nâng cao được cung cấp bởi Smart Elderly Care AI, vượt trội hơn so với việc chỉ dùng mật khẩu thông thường. Khi người dùng thực hiện các thao tác nhạy cảm (như đăng nhập trên thiết bị mới, thay đổi cấu hình cảnh báo SOS khẩn cấp, chia sẻ quyền giám sát, v.v.), hệ thống sẽ gửi mã SMS OTP để xác thực danh tính chính chủ. Điều này giúp ngăn chặn tối đa nguy cơ tài khoản bị xâm nhập trái phép. Hãy lưu ý không bao giờ tiết lộ mã OTP cho bất kỳ ai.'
+                        : 'Hệ thống Smart Elderly Care AI sử dụng nhiều lớp bảo vệ tài khoản, xác minh thiết bị và mã xác thực để hạn chế truy cập trái phép. Bạn nên bật xác minh hai bước và thường xuyên kiểm tra lịch sử đăng nhập.'}
+                </Text>
+              </View>
+            )}
+          </ScrollView>
+        </SafeAreaView>
+      </Modal>
+
+      <Modal
+        visible={isSecurityCenterVisible}
+        animationType="slide"
+        onRequestClose={() => setSecurityCenterVisible(false)}
+      >
+        <SafeAreaView style={[styles.securityScreen, isDarkMode && { backgroundColor: '#0B0F19' }]} edges={['top']}>
+          {/* Header Bar */}
+          <View style={[styles.securityTopNav, isDarkMode && { backgroundColor: '#0F172A', borderBottomColor: '#1E293B' }]}>
+            <TouchableOpacity
+              style={[styles.securityNavBackButton, isDarkMode && { backgroundColor: '#1E293B' }]}
+              onPress={() => setSecurityCenterVisible(false)}
+              activeOpacity={0.7}
+            >
+              <Ionicons name="chevron-back" size={22} color={isDarkMode ? '#F8FAFC' : '#0F172A'} />
+            </TouchableOpacity>
+            <View style={styles.securityNavTitleBox}>
+              <Text style={[styles.securityNavTitle, isDarkMode && { color: '#F8FAFC' }]}>Trung tâm bảo mật</Text>
+              <Text style={styles.securityNavSubTitle}>Smart Elderly Care AI</Text>
+            </View>
+            <View style={styles.securityStatusPill}>
+              <View style={styles.securityStatusDot} />
+              <Text style={styles.securityStatusPillText}>An toàn</Text>
+            </View>
+          </View>
+
+          <ScrollView showsVerticalScrollIndicator={false} contentContainerStyle={styles.securityScrollContent}>
+            {/* HERO SCORE CARD */}
+            <View style={[styles.securityHeroModern, isDarkMode && { backgroundColor: '#1E293B', borderColor: '#334155' }]}>
+              <View style={styles.securityHeroLeft}>
+                <View style={styles.securityBadge}>
+                  <Ionicons name="shield-checkmark" size={13} color="#0284C7" />
+                  <Text style={styles.securityBadgeText}>MỨC ĐỘ BẢO VỆ: TỐT</Text>
+                </View>
+                <Text style={[styles.securityHeroScoreTitle, isDarkMode && { color: '#F8FAFC' }]}>
+                  96<Text style={styles.securityHeroScoreSub}>/100</Text>
+                </Text>
+                <Text style={[styles.securityHeroDesc, isDarkMode && { color: '#94A3B8' }]}>
+                  Hệ thống bảo vệ tài khoản và thiết bị giám sát người cao tuổi đang hoạt động an toàn.
+                </Text>
+                <TouchableOpacity
+                  style={styles.securityActionPill}
+                  activeOpacity={0.8}
+                  onPress={() => openSecurityDetail('twoFactor')}
+                >
+                  <Ionicons name="sparkles" size={15} color="#FFFFFF" />
+                  <Text style={styles.securityActionPillText}>Cải thiện ngay (2 mục)</Text>
+                  <Ionicons name="chevron-forward" size={15} color="#FFFFFF" />
+                </TouchableOpacity>
+              </View>
+
+              <View style={styles.securityHeroRight}>
+                <View style={styles.securityShieldOuter}>
+                  <View style={styles.securityShieldInner}>
+                    <Ionicons name="shield-checkmark" size={50} color="#0284C7" />
+                  </View>
+                </View>
+              </View>
+            </View>
+
+            {/* QUICK STATS ROW */}
+            <View style={[styles.securityStatsRow, isDarkMode && { backgroundColor: '#1E293B', borderColor: '#334155' }]}>
+              <View style={styles.securityStatItem}>
+                <View style={[styles.securityStatIconBadge, { backgroundColor: '#EFF6FF' }]}>
+                  <Ionicons name="key-outline" size={18} color="#2563EB" />
+                </View>
+                <Text style={[styles.securityStatLabel, isDarkMode && { color: '#94A3B8' }]}>Mật khẩu</Text>
+                <Text style={styles.securityStatValueSuccess}>Độ mạnh cao</Text>
+              </View>
+              <View style={[styles.securityStatDivider, isDarkMode && { backgroundColor: '#334155' }]} />
+              <View style={styles.securityStatItem}>
+                <View style={[styles.securityStatIconBadge, { backgroundColor: twoFactorEnabled ? '#ECFDF5' : '#FFFBEB' }]}>
+                  <Ionicons
+                    name="shield-checkmark-outline"
+                    size={18}
+                    color={twoFactorEnabled ? '#059669' : '#D97706'}
+                  />
+                </View>
+                <Text style={[styles.securityStatLabel, isDarkMode && { color: '#94A3B8' }]}>Xác thực 2FA</Text>
+                <Text style={twoFactorEnabled ? styles.securityStatValueSuccess : styles.securityStatValueWarning}>
+                  {twoFactorEnabled ? 'Đã bật' : 'Chưa bật'}
+                </Text>
+              </View>
+              <View style={[styles.securityStatDivider, isDarkMode && { backgroundColor: '#334155' }]} />
+              <View style={styles.securityStatItem}>
+                <View style={[styles.securityStatIconBadge, { backgroundColor: '#F5F3FF' }]}>
+                  <Ionicons name="phone-portrait-outline" size={18} color="#7C3AED" />
+                </View>
+                <Text style={[styles.securityStatLabel, isDarkMode && { color: '#94A3B8' }]}>Thiết bị</Text>
+                <Text style={styles.securityStatValueSuccess}>1 tin cậy</Text>
+              </View>
+            </View>
+
+            {/* 4 ACCOUNT SECURITY TILES */}
+            <View style={styles.securitySectionHeaderBox}>
+              <Text style={[styles.securitySectionHeaderTitle, isDarkMode && { color: '#F8FAFC' }]}>
+                Bảo mật tài khoản
+              </Text>
+              <Text style={styles.securitySectionHeaderBadge}>4 thiết lập</Text>
+            </View>
+
+            <View style={styles.securityGridModern}>
+              {/* Tile 1: Đổi mật khẩu */}
+              <TouchableOpacity
+                style={[styles.securityCardTile, isDarkMode && { backgroundColor: '#1E293B', borderColor: '#334155' }]}
+                onPress={() => {
+                  setReturnToSecurityAfterPassword(true);
+                  setSecurityCenterVisible(false);
+                  setChangePasswordVisible(true);
+                }}
+                activeOpacity={0.75}
+              >
+                <View style={styles.securityTileHeader}>
+                  <View style={[styles.securityTileIconSquircle, { backgroundColor: '#EFF6FF' }]}>
+                    <Ionicons name="key" size={22} color="#2563EB" />
+                  </View>
+                  <Ionicons name="chevron-forward" size={18} color={isDarkMode ? '#64748B' : '#94A3B8'} />
+                </View>
+                <Text style={[styles.securityTileModernTitle, isDarkMode && { color: '#F8FAFC' }]}>
+                  Đổi mật khẩu
+                </Text>
+                <Text style={[styles.securityTileModernSub, isDarkMode && { color: '#94A3B8' }]}>
+                  Cập nhật định kỳ
+                </Text>
+                <View style={styles.securityTileTag}>
+                  <View style={styles.securityDotGreen} />
+                  <Text style={styles.securityTagTextGreen}>Bảo vệ tốt</Text>
+                </View>
+              </TouchableOpacity>
+
+              {/* Tile 2: Xác minh 2 bước */}
+              <TouchableOpacity
+                style={[styles.securityCardTile, isDarkMode && { backgroundColor: '#1E293B', borderColor: '#334155' }]}
+                onPress={() => openSecurityDetail('twoFactor')}
+                activeOpacity={0.75}
+              >
+                <View style={styles.securityTileHeader}>
+                  <View style={[styles.securityTileIconSquircle, { backgroundColor: '#ECFDF5' }]}>
+                    <Ionicons name="shield-checkmark" size={22} color="#059669" />
+                  </View>
+                  <Switch
+                    value={twoFactorEnabled}
+                    onValueChange={setTwoFactorEnabled}
+                    trackColor={{ false: '#CBD5E1', true: '#7DD3FC' }}
+                    thumbColor={twoFactorEnabled ? '#0284C7' : '#FFFFFF'}
+                    style={{ transform: [{ scale: 0.8 }] }}
+                  />
+                </View>
+                <Text style={[styles.securityTileModernTitle, isDarkMode && { color: '#F8FAFC' }]}>
+                  Xác minh 2 bước
+                </Text>
+                <Text style={[styles.securityTileModernSub, isDarkMode && { color: '#94A3B8' }]}>
+                  {twoFactorEnabled ? 'Đang bật qua SMS' : 'Chưa kích hoạt'}
+                </Text>
+                <View style={styles.securityTileTag}>
+                  <View style={twoFactorEnabled ? styles.securityDotGreen : styles.securityDotOrange} />
+                  <Text style={twoFactorEnabled ? styles.securityTagTextGreen : styles.securityTagTextOrange}>
+                    {twoFactorEnabled ? 'Đã bật SMS' : 'Khuyên dùng'}
+                  </Text>
+                </View>
+              </TouchableOpacity>
+
+              {/* Tile 3: Quản lý thiết bị */}
+              <TouchableOpacity
+                style={[styles.securityCardTile, isDarkMode && { backgroundColor: '#1E293B', borderColor: '#334155' }]}
+                onPress={() => openSecurityDetail('devices')}
+                activeOpacity={0.75}
+              >
+                <View style={styles.securityTileHeader}>
+                  <View style={[styles.securityTileIconSquircle, { backgroundColor: '#F5F3FF' }]}>
+                    <Ionicons name="phone-portrait" size={22} color="#7C3AED" />
+                  </View>
+                  <Ionicons name="chevron-forward" size={18} color={isDarkMode ? '#64748B' : '#94A3B8'} />
+                </View>
+                <Text style={[styles.securityTileModernTitle, isDarkMode && { color: '#F8FAFC' }]}>
+                  Quản lý đầu cuối
+                </Text>
+                <Text style={[styles.securityTileModernSub, isDarkMode && { color: '#94A3B8' }]}>
+                  1 thiết bị tin cậy
+                </Text>
+                <View style={styles.securityTileTag}>
+                  <View style={styles.securityDotGreen} />
+                  <Text style={styles.securityTagTextGreen}>Android · Hiện tại</Text>
+                </View>
+              </TouchableOpacity>
+
+              {/* Tile 4: Lịch sử đăng nhập */}
+              <TouchableOpacity
+                style={[styles.securityCardTile, isDarkMode && { backgroundColor: '#1E293B', borderColor: '#334155' }]}
+                onPress={() => openSecurityDetail('logins')}
+                activeOpacity={0.75}
+              >
+                <View style={styles.securityTileHeader}>
+                  <View style={[styles.securityTileIconSquircle, { backgroundColor: '#FFFBEB' }]}>
+                    <Ionicons name="time" size={22} color="#D97706" />
+                  </View>
+                  <Ionicons name="chevron-forward" size={18} color={isDarkMode ? '#64748B' : '#94A3B8'} />
+                </View>
+                <Text style={[styles.securityTileModernTitle, isDarkMode && { color: '#F8FAFC' }]}>
+                  Nhật ký đăng nhập
+                </Text>
+                <Text style={[styles.securityTileModernSub, isDarkMode && { color: '#94A3B8' }]}>
+                  Xem các phiên truy cập
+                </Text>
+                <View style={styles.securityTileTag}>
+                  <View style={styles.securityDotBlue} />
+                  <Text style={styles.securityTagTextBlue}>4 phiên gần đây</Text>
+                </View>
+              </TouchableOpacity>
+            </View>
+
+            {/* AI CARE ADVISORY CARD */}
+            <View style={[styles.securityAdvisoryCard, isDarkMode && { backgroundColor: '#1E293B', borderColor: '#334155' }]}>
+              <View style={styles.securityAdvisoryIconBox}>
+                <Ionicons name="bulb-outline" size={24} color="#0284C7" />
+              </View>
+              <View style={{ flex: 1 }}>
+                <Text style={[styles.securityAdvisoryTitle, isDarkMode && { color: '#F8FAFC' }]}>
+                  Mẹo an toàn từ Trợ lý Care AI
+                </Text>
+                <Text style={[styles.securityAdvisoryText, isDarkMode && { color: '#94A3B8' }]}>
+                  Không chia sẻ mật khẩu hay mã OTP SMS cho người khác. Hãy luôn bật xác thực hai bước để bảo vệ hình ảnh camera và dữ liệu sức khỏe của gia đình.
+                </Text>
+              </View>
+            </View>
+
+            {/* FAQ SECTION */}
+            <View style={[styles.securityFaqCard, isDarkMode && { backgroundColor: '#1E293B', borderColor: '#334155' }]}>
+              <View style={styles.securityFaqHeader}>
+                <View style={styles.securityFaqHeaderLeft}>
+                  <Ionicons name="help-circle-outline" size={22} color={Colors.primary} />
+                  <Text style={[styles.securityFaqHeaderTitle, isDarkMode && { color: '#F8FAFC' }]}>
+                    Bạn cũng có thể hỏi
+                  </Text>
+                </View>
+                <Text style={styles.securityFaqCount}>4 câu hỏi</Text>
+              </View>
+
+              {[
+                { q: 'Mật khẩu mã hóa thiết bị là gì?', icon: 'lock-closed-outline' },
+                { q: 'Có ràng buộc một thiết bị an toàn không?', icon: 'link-outline' },
+                { q: 'Bảo vệ quyền riêng tư của người dùng', icon: 'shield-outline' },
+                { q: 'Việc sử dụng mã xác minh qua tin nhắn SMS', icon: 'chatbox-ellipses-outline' },
+              ].map((item, index) => (
+                <React.Fragment key={item.q}>
+                  {index > 0 && (
+                    <View style={[styles.securityFaqDivider, isDarkMode && { backgroundColor: '#334155' }]} />
+                  )}
+                  <TouchableOpacity
+                    style={styles.securityFaqRow}
+                    activeOpacity={0.7}
+                    onPress={() => {
+                      setSelectedSecurityQuestion(item.q);
+                      openSecurityDetail('question');
+                    }}
+                  >
+                    <View style={[styles.securityFaqIconBox, isDarkMode && { backgroundColor: '#0F172A' }]}>
+                      <Ionicons name={item.icon as any} size={18} color="#0284C7" />
+                    </View>
+                    <Text style={[styles.securityFaqQuestionText, isDarkMode && { color: '#E2E8F0' }]}>
+                      {item.q}
+                    </Text>
+                    <Ionicons name="chevron-forward" size={18} color={isDarkMode ? '#64748B' : '#94A3B8'} />
+                  </TouchableOpacity>
+                </React.Fragment>
+              ))}
+            </View>
+          </ScrollView>
+        </SafeAreaView>
+      </Modal>
+
+      {/* Màn hình chính Menu / Cá nhân */}
       <ScrollView
         showsVerticalScrollIndicator={false}
         contentContainerStyle={[styles.scrollContent, isDarkMode && { backgroundColor: colors.background }]}
       >
-        {/* ================================================================= */}
-        {/* HEADER: TITLE "Menu" & QUICK ACTIONS (SEARCH, SETTINGS)           */}
-        {/* ================================================================= */}
+        {/* HEADER: TITLE "Menu" & CÀI ĐẶT NHANH */}
         <View style={styles.fbHeaderRow}>
           <Text style={[styles.fbHeaderTitle, isDarkMode && { color: colors.textPrimary }]}>Menu</Text>
           <View style={styles.fbHeaderActionIcons}>
             <TouchableOpacity
               style={[styles.fbHeaderCircleBtn, isDarkMode && { backgroundColor: colors.card }]}
-              onPress={() => setSettingsVisible(true)}
+              onPress={() => navigation.navigate('Settings')}
               activeOpacity={0.7}
             >
               <Ionicons name="search" size={20} color={isDarkMode ? colors.textPrimary : '#1E293B'} />
             </TouchableOpacity>
             <TouchableOpacity
               style={[styles.fbHeaderCircleBtn, isDarkMode && { backgroundColor: colors.card }]}
-              onPress={() => setSettingsVisible(true)}
+              onPress={() => navigation.navigate('Settings')}
               activeOpacity={0.7}
             >
               <Ionicons name="settings-sharp" size={20} color={isDarkMode ? colors.textPrimary : '#1E293B'} />
@@ -2128,11 +1927,8 @@ export default function ProfileScreen({ navigation }: any) {
           </View>
         </View>
 
-        {/* ================================================================= */}
-        {/* USER PROFILE CARD (CARD THÔNG TIN NGƯỜI DÙNG PHONG CÁCH FB)      */}
-        {/* ================================================================= */}
+        {/* THẺ THÔNG TIN TÀI KHOẢN NGƯỜI GIÁM SÁT */}
         <View style={[styles.fbProfileCard, isDarkMode && { backgroundColor: colors.card, borderColor: colors.border }]}>
-          {/* Hàng 1: Avatar, Tên người dùng thật, SĐT, Badge vai trò & Dropdown */}
           <TouchableOpacity
             style={styles.fbProfileInfoRow}
             activeOpacity={0.8}
@@ -2148,23 +1944,18 @@ export default function ProfileScreen({ navigation }: any) {
                 <Ionicons name="person" size={26} color="#FFFFFF" />
               )}
             </View>
-            <View style={{ flex: 1, marginLeft: 12 }}>
-              <LocalizedText style={[styles.fbProfileName, isDarkMode && { color: colors.textPrimary }]}>
-                {profileName || full_name || userName || 'Nguyễn Hữu Nghĩa'}
-              </LocalizedText>
+            <View style={{ flex: 1, marginLeft: 12, justifyContent: 'center' }}>
+              <Text style={[styles.fbProfileName, isDarkMode && { color: colors.textPrimary }]}>
+                {resolvedDisplayName}
+              </Text>
             </View>
-            {/* Badge thông báo & icon switch */}
             <View style={styles.fbProfileRightBadge}>
-              <Ionicons name="chevron-down-circle" size={24} color="#64748B" />
-              <View style={styles.fbNotiCountBadge}>
-                <Text style={styles.fbNotiCountText}>2</Text>
-              </View>
+              <Ionicons name="chevron-forward" size={20} color="#64748B" />
             </View>
           </TouchableOpacity>
 
           <View style={[styles.fbCardDivider, isDarkMode && { backgroundColor: colors.border }]} />
 
-          {/* Hàng 2: Quick action "+ Thêm thành viên hoặc người cần chăm sóc" */}
           <TouchableOpacity
             style={styles.fbSubActionRow}
             activeOpacity={0.7}
@@ -2179,144 +1970,7 @@ export default function ProfileScreen({ navigation }: any) {
           </TouchableOpacity>
         </View>
 
-        {/* ================================================================= */}
-        {/* LỐI TẮT CỦA BẠN (YOUR SHORTCUTS - CAROUSEL NGANG PHONG CÁCH FB)   */}
-        {/* ================================================================= */}
-        <View style={styles.fbShortcutsSection}>
-          <Text style={[styles.fbSectionTitle, isDarkMode && { color: colors.textPrimary }]}>
-            Lối tắt của bạn
-          </Text>
-          <ScrollView
-            horizontal
-            showsHorizontalScrollIndicator={false}
-            contentContainerStyle={styles.fbShortcutsScroll}
-          >
-            {/* Lối tắt 1: Cụ Nguyễn Văn An (Bệnh án) */}
-            <TouchableOpacity
-              style={styles.fbShortcutItem}
-              activeOpacity={0.8}
-              onPress={() => navigation.navigate('PatientMedicalRecord')}
-            >
-              <View style={styles.fbShortcutThumbWrap}>
-                <Image
-                  source={{ uri: 'https://images.unsplash.com/photo-1576765608535-5f04d1e3f289?auto=format&fit=crop&w=200&q=80' }}
-                  style={styles.fbShortcutThumb}
-                />
-                <View style={[styles.fbShortcutBadge, { backgroundColor: '#EF4444' }]}>
-                  <Ionicons name="heart" size={10} color="#FFFFFF" />
-                </View>
-              </View>
-              <Text numberOfLines={1} style={[styles.fbShortcutLabel, isDarkMode && { color: colors.textSecondary }]}>
-                Cụ Nguyễn...
-              </Text>
-            </TouchableOpacity>
-
-            {/* Lối tắt 2: Camera AI Phòng Khách */}
-            <TouchableOpacity
-              style={styles.fbShortcutItem}
-              activeOpacity={0.8}
-              onPress={() => navigation.navigate('CameraDetail', { deviceId: 'SECA_001', name: 'Camera AI Phòng Khách' })}
-            >
-              <View style={styles.fbShortcutThumbWrap}>
-                <Image
-                  source={{ uri: 'https://images.unsplash.com/photo-1513694203232-719a280e022f?auto=format&fit=crop&w=200&q=80' }}
-                  style={styles.fbShortcutThumb}
-                />
-                <View style={[styles.fbShortcutBadge, { backgroundColor: '#0284C7' }]}>
-                  <Ionicons name="videocam" size={10} color="#FFFFFF" />
-                </View>
-              </View>
-              <Text numberOfLines={1} style={[styles.fbShortcutLabel, isDarkMode && { color: colors.textSecondary }]}>
-                Camera PK
-              </Text>
-            </TouchableOpacity>
-
-            {/* Lối tắt 3: Vòng đeo tay BLE */}
-            <TouchableOpacity
-              style={styles.fbShortcutItem}
-              activeOpacity={0.8}
-              onPress={() => navigation.navigate('SmartbandDetail')}
-            >
-              <View style={styles.fbShortcutThumbWrap}>
-                <Image
-                  source={{ uri: 'https://images.unsplash.com/photo-1575311373937-040b8e1fd5b6?auto=format&fit=crop&w=200&q=80' }}
-                  style={styles.fbShortcutThumb}
-                />
-                <View style={[styles.fbShortcutBadge, { backgroundColor: '#FF7A00' }]}>
-                  <Ionicons name="pulse" size={10} color="#FFFFFF" />
-                </View>
-              </View>
-              <Text numberOfLines={1} style={[styles.fbShortcutLabel, isDarkMode && { color: colors.textSecondary }]}>
-                Vòng tay BLE
-              </Text>
-            </TouchableOpacity>
-
-            {/* Lối tắt 4: Lịch nhắc thuốc */}
-            <TouchableOpacity
-              style={styles.fbShortcutItem}
-              activeOpacity={0.8}
-              onPress={() => navigation.navigate('MedicationReminder')}
-            >
-              <View style={styles.fbShortcutThumbWrap}>
-                <Image
-                  source={{ uri: 'https://images.unsplash.com/photo-1584308666744-24d5c474f2ae?auto=format&fit=crop&w=200&q=80' }}
-                  style={styles.fbShortcutThumb}
-                />
-                <View style={[styles.fbShortcutBadge, { backgroundColor: '#10B981' }]}>
-                  <Ionicons name="medkit" size={10} color="#FFFFFF" />
-                </View>
-              </View>
-              <Text numberOfLines={1} style={[styles.fbShortcutLabel, isDarkMode && { color: colors.textSecondary }]}>
-                Nhắc thuốc
-              </Text>
-            </TouchableOpacity>
-
-            {/* Lối tắt 5: Báo cáo y tế */}
-            <TouchableOpacity
-              style={styles.fbShortcutItem}
-              activeOpacity={0.8}
-              onPress={() => navigation.navigate('MedicalReport')}
-            >
-              <View style={styles.fbShortcutThumbWrap}>
-                <Image
-                  source={{ uri: 'https://images.unsplash.com/photo-1576091160399-112ba8d25d1d?auto=format&fit=crop&w=200&q=80' }}
-                  style={styles.fbShortcutThumb}
-                />
-                <View style={[styles.fbShortcutBadge, { backgroundColor: '#8B5CF6' }]}>
-                  <Ionicons name="document-text" size={10} color="#FFFFFF" />
-                </View>
-              </View>
-              <Text numberOfLines={1} style={[styles.fbShortcutLabel, isDarkMode && { color: colors.textSecondary }]}>
-                Báo cáo y tế
-              </Text>
-            </TouchableOpacity>
-
-            {/* Lối tắt 6: Nhà của tôi */}
-            <TouchableOpacity
-              style={styles.fbShortcutItem}
-              activeOpacity={0.8}
-              onPress={() => navigation.navigate('HouseDetail')}
-            >
-              <View style={styles.fbShortcutThumbWrap}>
-                <Image
-                  source={{ uri: 'https://images.unsplash.com/photo-1600585154340-be6161a56a0c?auto=format&fit=crop&w=200&q=80' }}
-                  style={styles.fbShortcutThumb}
-                />
-                <View style={[styles.fbShortcutBadge, { backgroundColor: '#0EA5E9' }]}>
-                  <Ionicons name="home" size={10} color="#FFFFFF" />
-                </View>
-              </View>
-              <Text numberOfLines={1} style={[styles.fbShortcutLabel, isDarkMode && { color: colors.textSecondary }]}>
-                Nhà của tôi
-              </Text>
-            </TouchableOpacity>
-          </ScrollView>
-        </View>
-
-        {/* ================================================================= */}
-        {/* LƯỚI TÍNH NĂNG 2 CỘT (2-COLUMN FUNCTIONAL GRID - PHONG CÁCH FB)   */}
-        {/* Sửa lại toàn bộ tên đúng chuẩn, không dùng tên kỳ quặc           */}
-        {/* ================================================================= */}
+        {/* LƯỚI TÍNH NĂNG CHÍNH CỦA HỆ THỐNG */}
         <View style={styles.fbGridContainer}>
           {/* Ô 1: Hồ sơ giám sát */}
           <TouchableOpacity
@@ -2356,7 +2010,7 @@ export default function ProfileScreen({ navigation }: any) {
               Hồ sơ bệnh án
             </Text>
             <Text style={[styles.fbGridCardSub, isDarkMode && { color: colors.textSecondary }]}>
-              Cụ An, bệnh nền, nhóm máu & đơn thuốc
+              Bệnh nền, nhóm máu & đơn thuốc
             </Text>
           </TouchableOpacity>
 
@@ -2373,11 +2027,11 @@ export default function ProfileScreen({ navigation }: any) {
               {house.name || 'Nhà của tôi'}
             </Text>
             <Text style={[styles.fbGridCardSub, isDarkMode && { color: colors.textSecondary }]}>
-              Thành viên: {house.membersCount || 1} • Phòng khách
+              Thành viên: {house.membersCount || 1} • Quản lý phòng
             </Text>
           </TouchableOpacity>
 
-          {/* Ô 4: Thiết bị kết nối (Sửa từ "Hoạt động với") */}
+          {/* Ô 4: Thiết bị kết nối */}
           <TouchableOpacity
             style={[styles.fbGridCard, isDarkMode && { backgroundColor: colors.card, borderColor: colors.border }]}
             activeOpacity={0.8}
@@ -2394,7 +2048,7 @@ export default function ProfileScreen({ navigation }: any) {
             </Text>
           </TouchableOpacity>
 
-          {/* Ô 5: Cấu hình AI & Cảnh báo (Sửa từ "Chơi Algo") */}
+          {/* Ô 5: Cấu hình AI & Ngưỡng cảnh báo */}
           <TouchableOpacity
             style={[styles.fbGridCard, isDarkMode && { backgroundColor: colors.card, borderColor: colors.border }]}
             activeOpacity={0.8}
@@ -2404,14 +2058,14 @@ export default function ProfileScreen({ navigation }: any) {
               <Ionicons name="color-wand-outline" size={24} color="#8B5CF6" />
             </View>
             <Text style={[styles.fbGridCardTitle, isDarkMode && { color: colors.textPrimary }]}>
-              Cấu hình 
+              Cấu hình AI
             </Text>
             <Text style={[styles.fbGridCardSub, isDarkMode && { color: colors.textSecondary }]}>
               Độ nhạy té ngã, ngưỡng nhịp tim & SpO2
             </Text>
           </TouchableOpacity>
 
-          {/* Ô 6: Báo cáo sức khỏe (Sửa từ "Báo cáo y tế & Xuất file (FR13)") */}
+          {/* Ô 6: Báo cáo sức khỏe */}
           <TouchableOpacity
             style={[styles.fbGridCard, isDarkMode && { backgroundColor: colors.card, borderColor: colors.border }]}
             activeOpacity={0.8}
@@ -2428,24 +2082,7 @@ export default function ProfileScreen({ navigation }: any) {
             </Text>
           </TouchableOpacity>
 
-          {/* Ô 8: Trung tâm bảo mật */}
-          <TouchableOpacity
-            style={[styles.fbGridCard, isDarkMode && { backgroundColor: colors.card, borderColor: colors.border }]}
-            activeOpacity={0.8}
-            onPress={() => setSecurityCenterVisible(true)}
-          >
-            <View style={[styles.fbGridIconBox, { backgroundColor: isDarkMode ? '#133E3B' : '#F0FDFA' }]}>
-              <Ionicons name="shield-checkmark-outline" size={24} color="#0D9488" />
-            </View>
-            <Text style={[styles.fbGridCardTitle, isDarkMode && { color: colors.textPrimary }]}>
-              Trung tâm bảo mật
-            </Text>
-            <Text style={[styles.fbGridCardSub, isDarkMode && { color: colors.textSecondary }]}>
-              Xác thực 2FA & Quản lý phiên đăng nhập
-            </Text>
-          </TouchableOpacity>
-
-          {/* Ô 9: Lịch nhắc thuốc */}
+          {/* Ô 7: Lịch nhắc thuốc */}
           <TouchableOpacity
             style={[styles.fbGridCard, isDarkMode && { backgroundColor: colors.card, borderColor: colors.border }]}
             activeOpacity={0.8}
@@ -2462,27 +2099,27 @@ export default function ProfileScreen({ navigation }: any) {
             </Text>
           </TouchableOpacity>
 
-          {/* HIỂN THỊ THÊM KHI BẤM "XEM THÊM" (GIỐNG HÌNH 1) */}
+          {/* Ô 8: Nhật ký cảnh báo */}
+          <TouchableOpacity
+            style={[styles.fbGridCard, isDarkMode && { backgroundColor: colors.card, borderColor: colors.border }]}
+            activeOpacity={0.8}
+            onPress={() => navigation.navigate('Alerts')}
+          >
+            <View style={[styles.fbGridIconBox, { backgroundColor: isDarkMode ? '#450A0A' : '#FEE2E2' }]}>
+              <Ionicons name="notifications-outline" size={24} color="#EF4444" />
+            </View>
+            <Text style={[styles.fbGridCardTitle, isDarkMode && { color: colors.textPrimary }]}>
+              Nhật ký cảnh báo
+            </Text>
+            <Text style={[styles.fbGridCardSub, isDarkMode && { color: colors.textSecondary }]}>
+              Sự kiện té ngã & Sinh hiệu bất thường
+            </Text>
+          </TouchableOpacity>
+
+          {/* HIỂN THỊ THÊM */}
           {showMoreGrid && (
             <>
-              {/* Ô 10: Nhật ký cảnh báo SOS */}
-              <TouchableOpacity
-                style={[styles.fbGridCard, isDarkMode && { backgroundColor: colors.card, borderColor: colors.border }]}
-                activeOpacity={0.8}
-                onPress={() => navigation.navigate('Alerts')}
-              >
-                <View style={[styles.fbGridIconBox, { backgroundColor: isDarkMode ? '#450A0A' : '#FEE2E2' }]}>
-                  <Ionicons name="notifications-outline" size={24} color="#EF4444" />
-                </View>
-                <Text style={[styles.fbGridCardTitle, isDarkMode && { color: colors.textPrimary }]}>
-                  Nhật ký cảnh báo
-                </Text>
-                <Text style={[styles.fbGridCardSub, isDarkMode && { color: colors.textSecondary }]}>
-                  Sự kiện té ngã & Sinh hiệu bất thường
-                </Text>
-              </TouchableOpacity>
-
-              {/* Ô 11: Trợ lý Bác sĩ AI */}
+              {/* Ô 9: Trợ lý Bác sĩ AI */}
               <TouchableOpacity
                 style={[styles.fbGridCard, isDarkMode && { backgroundColor: colors.card, borderColor: colors.border }]}
                 activeOpacity={0.8}
@@ -2499,7 +2136,7 @@ export default function ProfileScreen({ navigation }: any) {
                 </Text>
               </TouchableOpacity>
 
-              {/* Ô 12: Giám sát đa màn hình */}
+              {/* Ô 10: Multi-View Camera */}
               <TouchableOpacity
                 style={[styles.fbGridCard, isDarkMode && { backgroundColor: colors.card, borderColor: colors.border }]}
                 activeOpacity={0.8}
@@ -2516,7 +2153,7 @@ export default function ProfileScreen({ navigation }: any) {
                 </Text>
               </TouchableOpacity>
 
-              {/* Ô 13: Chế độ Bác sĩ Gia đình */}
+              {/* Ô 11: Chuyển vai trò Bác sĩ */}
               <TouchableOpacity
                 style={[styles.fbGridCard, isDarkMode && { backgroundColor: colors.card, borderColor: '#0284C7' }]}
                 activeOpacity={0.8}
@@ -2545,7 +2182,7 @@ export default function ProfileScreen({ navigation }: any) {
           )}
         </View>
 
-        {/* NÚT "XEM THÊM" / "ẨN BỚT" (GIỐNG HỆT HÌNH 1) */}
+        {/* NÚT XEM THÊM / THU GỌN */}
         <TouchableOpacity
           style={[styles.fbViewMoreBtn, isDarkMode && { backgroundColor: colors.card, borderColor: colors.border }]}
           activeOpacity={0.8}
@@ -2561,9 +2198,7 @@ export default function ProfileScreen({ navigation }: any) {
           />
         </TouchableOpacity>
 
-        {/* ================================================================= */}
-        {/* ACCORDION 1: TRỢ GIÚP VÀ HỖ TRỢ (GIỐNG HÌNH 1)                    */}
-        {/* ================================================================= */}
+        {/* ACCORDION 1: TRỢ GIÚP VÀ HỖ TRỢ */}
         <View style={[styles.fbAccordionCard, isDarkMode && { backgroundColor: colors.card, borderColor: colors.border }]}>
           <TouchableOpacity
             style={styles.fbAccordionHeader}
@@ -2605,7 +2240,7 @@ export default function ProfileScreen({ navigation }: any) {
 
               <View style={[styles.fbSubDivider, isDarkMode && { backgroundColor: colors.border }]} />
 
-              {/* Dịch vụ CSKH */}
+              {/* Dịch vụ CSKH 24/7 */}
               <TouchableOpacity
                 style={styles.fbAccordionSubRow}
                 activeOpacity={0.7}
@@ -2625,14 +2260,11 @@ export default function ProfileScreen({ navigation }: any) {
 
               <View style={[styles.fbSubDivider, isDarkMode && { backgroundColor: colors.border }]} />
 
-              {/* Hướng dẫn sử dụng */}
+              {/* Hướng dẫn sử dụng & Giới thiệu đồ án */}
               <TouchableOpacity
                 style={styles.fbAccordionSubRow}
                 activeOpacity={0.7}
-                onPress={() => {
-                  setInfoDetail('app');
-                  setAboutInfoVisible(true);
-                }}
+                onPress={() => navigation.navigate('Settings', { initialModal: 'appInfo' })}
               >
                 <View style={[styles.fbSubIconBox, { backgroundColor: '#F3E8FF' }]}>
                   <Ionicons name="book-outline" size={18} color="#8B5CF6" />
@@ -2649,9 +2281,7 @@ export default function ProfileScreen({ navigation }: any) {
           )}
         </View>
 
-        {/* ================================================================= */}
-        {/* ACCORDION 2: CÀI ĐẶT VÀ QUYỀN RIÊNG TƯ (GIỐNG HÌNH 1)             */}
-        {/* ================================================================= */}
+        {/* ACCORDION 2: CÀI ĐẶT VÀ QUYỀN RIÊNG TƯ */}
         <View style={[styles.fbAccordionCard, isDarkMode && { backgroundColor: colors.card, borderColor: colors.border }]}>
           <TouchableOpacity
             style={styles.fbAccordionHeader}
@@ -2735,6 +2365,26 @@ export default function ProfileScreen({ navigation }: any) {
 
               <View style={[styles.fbSubDivider, isDarkMode && { backgroundColor: colors.border }]} />
 
+              {/* Trung tâm bảo mật */}
+              <TouchableOpacity
+                style={styles.fbAccordionSubRow}
+                activeOpacity={0.7}
+                onPress={() => setSecurityCenterVisible(true)}
+              >
+                <View style={[styles.fbSubIconBox, { backgroundColor: '#F0FDF4' }]}>
+                  <Ionicons name="shield-checkmark-outline" size={18} color="#16A34A" />
+                </View>
+                <View style={{ flex: 1 }}>
+                  <Text style={[styles.fbSubRowTitle, isDarkMode && { color: colors.textPrimary }]}>
+                    Trung tâm bảo mật
+                  </Text>
+                  <Text style={styles.fbSubRowSub}>Xác thực 2 bước, quản lý thiết bị & đăng nhập</Text>
+                </View>
+                <Ionicons name="chevron-forward" size={16} color="#CBD5E1" />
+              </TouchableOpacity>
+
+              <View style={[styles.fbSubDivider, isDarkMode && { backgroundColor: colors.border }]} />
+
               {/* Đổi mật khẩu */}
               <TouchableOpacity
                 style={styles.fbAccordionSubRow}
@@ -2756,9 +2406,7 @@ export default function ProfileScreen({ navigation }: any) {
           )}
         </View>
 
-        {/* ================================================================= */}
-        {/* NÚT ĐĂNG XUẤT (NẰM DƯỚI CÙNG PHONG CÁCH THANH LỊCH)              */}
-        {/* ================================================================= */}
+        {/* NÚT ĐĂNG XUẤT */}
         <TouchableOpacity
           style={[styles.fbLogoutBtn, isDarkMode && { backgroundColor: 'rgba(239, 68, 68, 0.15)', borderColor: '#EF4444' }]}
           activeOpacity={0.8}
@@ -2786,482 +2434,262 @@ const styles = StyleSheet.create({
     flex: 1,
     backgroundColor: '#F8FAFC',
   },
-  customerSupportOverlay: {
-    flex: 1,
+  backButton: {
+    width: 38,
+    height: 38,
+    borderRadius: 19,
+    backgroundColor: Colors.surface,
+    borderWidth: 1,
+    borderColor: Colors.border,
     alignItems: 'center',
     justifyContent: 'center',
-    paddingHorizontal: 24,
-    backgroundColor: 'rgba(15, 23, 42, 0.45)',
+    zIndex: 2,
+    ...Shadows.soft,
   },
-  customerSupportDialog: {
-    width: '100%',
-    maxWidth: 380,
+  userMenuBackButton: {
+    marginLeft: -20,
+  },
+  userMenuSheet: {
+    position: 'relative',
+    flex: 1,
+    backgroundColor: '#F8FAFC',
+    paddingHorizontal: 26,
+    paddingTop: 10,
+    paddingBottom: 28,
+  },
+  avatarContainerLarge: {
     alignItems: 'center',
-    paddingHorizontal: 22,
-    paddingVertical: 24,
-    borderRadius: 18,
-    backgroundColor: '#FFFFFF',
+    justifyContent: 'center',
+    marginBottom: 22,
+    marginTop: 10,
   },
-  customerSupportTitle: {
-    marginTop: 12,
+  avatarCircleLarge: {
+    width: 86,
+    height: 86,
+    borderRadius: 43,
+    backgroundColor: '#D5D7DB',
+    alignItems: 'center',
+    justifyContent: 'center',
+    position: 'relative',
+    overflow: 'hidden',
+  },
+  avatarImageLarge: {
+    width: '100%',
+    height: '100%',
+  },
+  profileNameText: {
+    marginTop: 16,
     fontSize: 20,
+    fontWeight: '700',
+    color: '#111827',
+    textAlign: 'center',
+  },
+  profileInfoListCard: {
+    backgroundColor: '#F3F4F6',
+    borderRadius: 18,
+    overflow: 'hidden',
+    borderWidth: 1,
+    borderColor: '#E5E7EB',
+    marginTop: 8,
+  },
+  infoRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    paddingVertical: 18,
+    paddingHorizontal: 18,
+    borderBottomWidth: 1,
+    borderBottomColor: '#E5E7EB',
+  },
+  infoLeftWrap: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 12,
+  },
+  infoLabel: {
+    fontSize: 16,
+    fontWeight: '600',
+    color: '#111827',
+  },
+  infoRightWrap: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 8,
+  },
+  infoValue: {
+    fontSize: 15,
+    color: '#475569',
+    fontWeight: '500',
+  },
+  logoutButton: {
+    width: '100%',
+    marginTop: 'auto',
+    marginBottom: 25,
+    borderRadius: 26,
+    borderWidth: 1.8,
+    borderColor: '#F87171',
+    backgroundColor: '#FFFFFF',
+    paddingVertical: 12,
+    alignItems: 'center',
+    justifyContent: 'center',
+    minHeight: 54,
+  },
+  logoutButtonText: {
+    fontSize: 17,
+    fontWeight: '700',
+    color: '#EF4444',
+    letterSpacing: 0.12,
+  },
+
+  // Name Editor
+  editorOverlay: {
+    flex: 1,
+    backgroundColor: Colors.background,
+    justifyContent: 'flex-start',
+  },
+  editorSheet: {
+    flex: 1,
+    backgroundColor: Colors.background,
+    paddingHorizontal: 20,
+    paddingTop: 18,
+    paddingBottom: 28,
+    justifyContent: 'flex-start',
+  },
+  editorHeader: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    minHeight: 44,
+    marginBottom: 18,
+    gap: 10,
+  },
+  editorBackButton: {
+    width: 38,
+    height: 38,
+    borderRadius: 19,
+    backgroundColor: Colors.surface,
+    borderWidth: 1,
+    borderColor: Colors.border,
+    justifyContent: 'center',
+    alignItems: 'center',
+    ...Shadows.soft,
+  },
+  editorTitle: {
+    flex: 1,
+    fontSize: 22,
     fontWeight: '800',
     color: Colors.textPrimary,
   },
-  customerSupportMessage: {
-    marginTop: 8,
-    fontSize: 15,
-    lineHeight: 22,
-    textAlign: 'center',
-    color: '#64748B',
-  },
-  customerSupportActions: {
-    flexDirection: 'row',
-    width: '100%',
-    gap: 10,
-    marginTop: 22,
-  },
-  customerSupportCancelButton: {
-    flex: 1,
-    alignItems: 'center',
-    paddingVertical: 13,
-    borderRadius: 11,
-    backgroundColor: '#E2E8F0',
-  },
-  customerSupportCancelText: {
-    fontSize: 15,
-    fontWeight: '700',
-    color: '#475569',
-  },
-  customerSupportCallButton: {
-    flex: 1,
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'center',
-    gap: 7,
-    paddingVertical: 13,
-    borderRadius: 11,
-    backgroundColor: '#DC2626',
-  },
-  customerSupportCallText: {
-    fontSize: 15,
-    fontWeight: '800',
-    color: '#FFFFFF',
-  },
-  securityScreen: {
-    flex: 1,
-    backgroundColor: '#F6F8F8',
-  },
-  securityScrollContent: {
-    paddingBottom: 28,
-  },
-  securityHero: {
-    position: 'relative',
-    minHeight: 324,
-    paddingHorizontal: 22,
-    paddingTop: 8,
-    backgroundColor: '#5ADCE5',
-    overflow: 'hidden',
-  },
-  securityBackButton: {
-    width: 36,
-    height: 36,
-    alignItems: 'center',
-    justifyContent: 'center',
-    marginLeft: -8,
-    marginTop: 1,
-  },
-  securityHeroBackButton: {
-    position: 'absolute',
-    left: 0,
-    top: 10,
-    width: 36,
-    height: 36,
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
-  securityHeroShield: {
-    position: 'absolute',
-    right: 18,
-    top: 90,
-    opacity: 0.9,
-  },
-  securityHeroStatus: {
-    marginTop: 56,
-    fontSize: 34,
-    fontWeight: '800',
-    color: '#0F172A',
-  },
-  securityHeroDescription: {
-    marginTop: 14,
-    fontSize: 17,
-    fontWeight: '600',
-    color: '#0F172A',
-  },
-  securityImproveButton: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    alignSelf: 'flex-start',
-    marginTop: 30,
-  },
-  securityImproveText: {
-    fontSize: 20,
-    fontWeight: '700',
-    color: '#0F172A',
-  },
-  securitySectionCard: {
-    marginHorizontal: 14,
-    marginTop: 10,
-    padding: 14,
-    borderRadius: 20,
-    backgroundColor: '#FFFFFF',
-  },
-  securitySectionHeader: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'space-between',
-    marginBottom: 14,
-  },
-  securitySectionTitle: {
-    fontSize: 19,
-    fontWeight: '800',
-    color: '#2F3338',
-  },
-  securityTileGrid: {
-    flexDirection: 'row',
-    flexWrap: 'wrap',
-    justifyContent: 'space-between',
-    columnGap: 10,
-    rowGap: 14,
-  },
-  securityTile: {
-    width: '48.2%',
-    minHeight: 124,
-    justifyContent: 'space-between',
-    paddingHorizontal: 15,
-    paddingVertical: 17,
-    borderRadius: 17,
-    backgroundColor: '#EAF1FC',
-    position: 'relative',
-    overflow: 'hidden',
-  },
-  securityTileTitle: {
-    maxWidth: '92%',
-    fontSize: 16,
-    lineHeight: 22,
-    fontWeight: '700',
-    color: '#30343A',
-    textAlign: 'left',
-  },
-  securityTileIcon: {
-    alignSelf: 'flex-end',
-    marginTop: 6,
-  },
-  securityTileSwitch: {
-    position: 'absolute',
-    right: 9,
-    bottom: 9,
-    transform: [{ scale: 0.8 }],
-  },
-  securityQuestionRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    minHeight: 62,
-    borderTopWidth: 1,
-    borderTopColor: '#F1F3F5',
-  },
-  securityQuestionText: {
-    flex: 1,
-    paddingRight: 12,
-    fontSize: 15,
-    lineHeight: 21,
-    color: '#3C4045',
-  },
-  securityDetailScreen: {
-    flex: 1,
-    backgroundColor: '#F6F8F8',
-  },
-  securityDetailHeader: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    minHeight: 54,
-    paddingHorizontal: 18,
-    paddingTop: 10,
-    paddingBottom: 8,
-    backgroundColor: '#F6F8F8',
-  },
-  securityDetailTitle: {
-    flex: 1,
-    marginRight: 36,
-    fontSize: 20,
-    fontWeight: '800',
-    textAlign: 'center',
-    color: '#0F172A',
-  },
-  securityDetailContent: {
-    paddingHorizontal: 26,
-    paddingTop: 24,
-    paddingBottom: 32,
-  },
-  securityQuestionDetail: {
-    backgroundColor: 'transparent',
-  },
-  securityQuestionDetailTitle: {
-    marginBottom: 32,
-    fontSize: 25,
-    lineHeight: 34,
-    fontWeight: '400',
-    color: '#303236',
-  },
-  securityQuestionDetailDescription: {
-    fontSize: 16,
-    lineHeight: 27,
-    fontWeight: '400',
-    color: '#4B4D50',
-  },
-  securityDetailCard: {
-    paddingHorizontal: 16,
-    paddingTop: 16,
-    paddingBottom: 10,
+  editorCard: {
+    backgroundColor: Colors.surface,
     borderRadius: 18,
-    backgroundColor: '#FFFFFF',
+    padding: 18,
     borderWidth: 1,
-    borderColor: '#EEF2F7',
-    shadowColor: '#0F172A',
-    shadowOffset: { width: 0, height: 4 },
-    shadowOpacity: 0.06,
-    shadowRadius: 10,
-    elevation: 2,
+    borderColor: Colors.border,
+    ...Shadows.card,
   },
-  securityDetailRowHeader: {
+  editorFieldHeader: {
     flexDirection: 'row',
     alignItems: 'center',
-    justifyContent: 'space-between',
-  },
-  securityDetailCardTitle: {
-    flex: 1,
-    marginBottom: 12,
-    fontSize: 18,
-    fontWeight: '800',
-    color: '#1F2937',
-  },
-  securityDetailDescription: {
-    marginTop: 18,
-    fontSize: 15,
-    lineHeight: 24,
-    color: '#475569',
-  },
-  securityInfoBanner: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    marginTop: 18,
-    paddingHorizontal: 12,
-    paddingVertical: 11,
-    borderRadius: 12,
-    backgroundColor: '#EFF6FF',
-    borderWidth: 1,
-    borderColor: '#DBEAFE',
-  },
-  securityInfoText: {
-    flex: 1,
-    marginLeft: 8,
-    fontSize: 13,
-    lineHeight: 19,
-    color: '#1D4ED8',
-    fontWeight: '600',
-  },
-  securityDeviceItem: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    marginTop: 18,
-    paddingHorizontal: 12,
-    paddingVertical: 12,
-    borderRadius: 16,
-    backgroundColor: '#F8FBFF',
-    borderWidth: 1,
-    borderColor: '#EAF0F8',
-  },
-  securityDeviceIcon: {
-    width: 42,
-    height: 42,
-    alignItems: 'center',
-    justifyContent: 'center',
-    borderRadius: 12,
-    backgroundColor: '#DBEAFE',
-  },
-  securityDeviceCopy: {
-    flex: 1,
-    marginHorizontal: 10,
-    minWidth: 0,
-  },
-  securityDeviceName: {
-    fontSize: 15,
-    lineHeight: 22,
-    fontWeight: '700',
-    color: '#111827',
-  },
-  securityLoginName: {
-    fontSize: 15,
-    lineHeight: 22,
-    fontWeight: '500',
-    color: '#111827',
-  },
-  securityDeviceMeta: {
-    marginTop: 2,
-    fontSize: 11,
-    color: '#64748B',
-    fontWeight: '500',
-  },
-  securityCurrentLabel: {
-    fontSize: 11,
-    fontWeight: '800',
-    color: '#2563EB',
-  },
-  securityLoginItem: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    paddingVertical: 12,
-    borderBottomWidth: 1,
-    borderBottomColor: '#EEF2F7',
-  },
-  securityTimelineDot: {
-    width: 9,
-    height: 9,
-    borderRadius: 4.5,
-    backgroundColor: '#5B8DEF',
-    marginRight: 12,
-    marginTop: 2,
-  },
-  securityLoginTime: {
-    marginLeft: 8,
-    fontSize: 11,
-    fontWeight: '600',
-    color: '#64748B',
-    textAlign: 'right',
-  },
-  securityOverlay: {
-    flex: 1,
-    justifyContent: 'flex-end',
-    backgroundColor: 'rgba(15, 23, 42, 0.42)',
-  },
-  securitySheet: {
-    paddingHorizontal: 18,
-    paddingTop: 18,
-    paddingBottom: 28,
-    borderTopLeftRadius: 24,
-    borderTopRightRadius: 24,
-    backgroundColor: '#F8FAFC',
-  },
-  securityHeader: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    marginBottom: 18,
-  },
-  securityHeaderIcon: {
-    width: 46,
-    height: 46,
-    alignItems: 'center',
-    justifyContent: 'center',
-    marginRight: 12,
-    borderRadius: 15,
-    backgroundColor: '#CCFBF1',
-  },
-  securityHeaderCopy: {
-    flex: 1,
-  },
-  securityTitle: {
-    fontSize: 20,
-    fontWeight: '800',
-    color: '#0F172A',
-  },
-  securitySubtitle: {
-    marginTop: 3,
-    fontSize: 12,
-    color: '#64748B',
-  },
-  securityCloseButton: {
-    width: 34,
-    height: 34,
-    alignItems: 'center',
-    justifyContent: 'center',
-    borderRadius: 17,
-    backgroundColor: '#E2E8F0',
-  },
-  securityScoreCard: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    padding: 14,
+    gap: 12,
     marginBottom: 14,
-    borderWidth: 1,
-    borderColor: '#A7F3D0',
-    borderRadius: 16,
-    backgroundColor: '#ECFDF5',
   },
-  securityScoreIcon: {
+  editorFieldIconBadge: {
     width: 40,
     height: 40,
+    borderRadius: 12,
+    backgroundColor: Colors.primaryLight,
     alignItems: 'center',
     justifyContent: 'center',
-    borderRadius: 20,
-    backgroundColor: '#BBF7D0',
   },
-  securityScoreCopy: {
-    flex: 1,
-    marginLeft: 10,
+  editorFieldLabel: {
+    fontSize: 15,
+    fontWeight: '700',
+    color: Colors.textPrimary,
   },
-  securityScoreLabel: {
-    fontSize: 12,
-    color: '#166534',
-  },
-  securityScoreValue: {
-    marginTop: 2,
-    fontSize: 17,
-    fontWeight: '800',
-    color: '#15803D',
-  },
-  securityScorePercent: {
-    fontSize: 20,
-    fontWeight: '900',
-    color: '#15803D',
-  },
-  securityList: {
-    paddingHorizontal: 14,
-    borderRadius: 16,
-    backgroundColor: '#FFFFFF',
-  },
-  securityRow: {
+  editorInputWrap: {
     flexDirection: 'row',
     alignItems: 'center',
-    minHeight: 68,
+    borderWidth: 1.5,
+    borderColor: Colors.primary,
+    borderRadius: 14,
+    height: 52,
+    paddingHorizontal: 14,
+    backgroundColor: '#FFFBF7',
+    marginBottom: 16,
   },
-  securityRowIcon: {
-    width: 36,
-    height: 36,
+  editorInput: {
+    flex: 1,
+    fontSize: 16,
+    fontWeight: '600',
+    color: Colors.textPrimary,
+    paddingVertical: 8,
+    borderWidth: 0,
+    outlineWidth: 0,
+  },
+  editorErrorBox: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 8,
+    paddingHorizontal: 12,
+    paddingVertical: 10,
+    borderRadius: 10,
+    backgroundColor: '#FEF2F2',
+    borderWidth: 1,
+    borderColor: '#FECACA',
+    marginBottom: 14,
+  },
+  editorErrorText: {
+    flex: 1,
+    fontSize: 13,
+    fontWeight: '600',
+    color: '#B91C1C',
+  },
+  editorActions: {
+    flexDirection: 'row',
+    justifyContent: 'flex-end',
+    alignItems: 'center',
+    gap: 12,
+    marginTop: 4,
+  },
+  editorCancel: {
+    minWidth: 92,
+    height: 44,
+    paddingHorizontal: 18,
+    borderRadius: 12,
+    backgroundColor: Colors.surfaceSubtle,
+    borderWidth: 1,
+    borderColor: Colors.border,
     alignItems: 'center',
     justifyContent: 'center',
-    borderRadius: 11,
   },
-  securityRowCopy: {
-    flex: 1,
-    marginHorizontal: 10,
-  },
-  securityRowTitle: {
-    fontSize: 14,
+  editorCancelText: {
+    fontSize: 15,
     fontWeight: '700',
-    color: '#0F172A',
+    color: Colors.textSecondary,
   },
-  securityRowDescription: {
-    marginTop: 3,
-    fontSize: 11,
-    color: '#64748B',
+  editorSave: {
+    minWidth: 108,
+    height: 44,
+    paddingHorizontal: 20,
+    borderRadius: 12,
+    backgroundColor: Colors.primary,
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: 6,
+    shadowColor: Colors.primary,
+    shadowOffset: { width: 0, height: 4 },
+    shadowOpacity: 0.3,
+    shadowRadius: 8,
+    elevation: 4,
   },
-  securityDivider: {
-    height: 1,
-    backgroundColor: '#EEF2F7',
+  editorSaveText: {
+    fontSize: 15,
+    fontWeight: '700',
+    color: '#FFFFFF',
   },
-  securityMenuCopy: {
-    flex: 1,
-  },
+
+  // Avatar Picker
   avatarPickerOverlay: {
     flex: 1,
     backgroundColor: 'rgba(148, 163, 184, 0.55)',
@@ -3282,38 +2710,6 @@ const styles = StyleSheet.create({
     shadowRadius: 20,
     elevation: 10,
   },
-  avatarPickerClose: {
-    width: 40,
-    height: 40,
-    justifyContent: 'center',
-    alignItems: 'center',
-    marginLeft: -8,
-  },
-  avatarPickerHeader: {
-    alignItems: 'center',
-    paddingTop: 10,
-    paddingBottom: 18,
-  },
-  avatarPickerAvatarWrap: {
-    width: 120,
-    height: 120,
-    borderRadius: 60,
-    backgroundColor: '#D1D5DB',
-    overflow: 'hidden',
-    alignItems: 'center',
-    justifyContent: 'center',
-    marginBottom: 12,
-  },
-  avatarPickerAvatar: {
-    width: '100%',
-    height: '100%',
-  },
-  avatarPickerName: {
-    fontSize: 24,
-    fontWeight: '700',
-    color: '#111827',
-    marginBottom: 4,
-  },
   avatarPickerOptions: {
     backgroundColor: '#FFFFFF',
   },
@@ -3331,518 +2727,12 @@ const styles = StyleSheet.create({
     borderBottomWidth: 0,
   },
   avatarPickerText: {
-    fontSize: 20,
-    fontWeight: '500',
-    color: '#111827',
-  },
-  logoutInlineOverlay: {
-    position: 'absolute',
-    top: 0,
-    right: 0,
-    bottom: 0,
-    left: 0,
-    zIndex: 20,
-    backgroundColor: 'rgba(15, 23, 42, 0.42)',
-    alignItems: 'center',
-    justifyContent: 'center',
-    paddingHorizontal: 24,
-  },
-  logoutDialog: {
-    width: '100%',
-    maxWidth: 360,
-    borderRadius: 18,
-    backgroundColor: '#FFFFFF',
-    padding: 22,
-  },
-  logoutTitle: {
-    fontSize: 20,
-    fontWeight: '700',
-    color: '#0F172A',
-    marginBottom: 8,
-  },
-  logoutMessage: {
-    fontSize: 15,
-    lineHeight: 22,
-    color: '#64748B',
-    marginBottom: 20,
-  },
-  logoutActions: {
-    flexDirection: 'row',
-    justifyContent: 'flex-end',
-    gap: 10,
-  },
-  logoutCancelButton: {
-    minWidth: 78,
-    borderRadius: 10,
-    backgroundColor: '#F1F5F9',
-    paddingVertical: 11,
-    alignItems: 'center',
-  },
-  logoutCancelText: {
-    fontSize: 14,
-    fontWeight: '600',
-    color: '#475569',
-  },
-  logoutConfirmButton: {
-    minWidth: 100,
-    borderRadius: 10,
-    backgroundColor: '#EF4444',
-    paddingVertical: 11,
-    alignItems: 'center',
-  },
-  logoutConfirmText: {
-    fontSize: 14,
-    fontWeight: '700',
-    color: '#FFFFFF',
-  },
-  userMenuSheet: {
-    position: 'relative',
-    flex: 1,
-    backgroundColor: '#F8FAFC',
-    paddingHorizontal: 26,
-    paddingTop: 10,
-    paddingBottom: 28,
-  },
-  settingsOverlay: {
-    flex: 1,
-    backgroundColor: '#F3F4F6',
-    justifyContent: 'flex-start',
-    marginTop: 0,
-    paddingTop: 0,
-    paddingHorizontal: 0,
-  },
-  settingsSheet: {
-    flex: 1,
-    width: '100%',
-    backgroundColor: '#F3F4F6',
-    paddingHorizontal: 18,
-    paddingTop: 18,
-    paddingBottom: 20,
-    marginTop: 0,
-  },
-  settingsHeaderRow: {
-    position: 'relative',
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'center',
-    marginTop: 6,
-    marginBottom: 10,
-    paddingTop: 6,
-    paddingBottom: 6,
-    minHeight: 44,
-  },
-  settingsTitle: {
-    fontSize: 18,
-    fontWeight: '700',
-    color: Colors.textPrimary,
-    position: 'absolute',
-    left: 0,
-    right: 0,
-    textAlign: 'center',
-  },
-  settingsSubtitle: {
-    fontSize: 13,
-    fontWeight: '500',
-    color: '#64748B',
-    marginBottom: 14,
-    paddingLeft: 4,
-  },
-  infoOverlay: {
-    flex: 1,
-    backgroundColor: '#F3F4F6',
-  },
-  infoScreen: {
-    flex: 1,
-    backgroundColor: '#F3F4F6',
-    paddingHorizontal: 18,
-    paddingTop: 18,
-    paddingBottom: 24,
-  },
-  infoHeaderRow: {
-    position: 'relative',
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'center',
-    marginBottom: 10,
-    minHeight: 40,
-  },
-  infoTitle: {
-    fontSize: 18,
-    fontWeight: '700',
-    color: '#111827',
-    textAlign: 'center',
-  },
-  infoBrandWrapper: {
-    alignItems: 'center',
-    marginTop: 8,
-    marginBottom: 28,
-  },
-  infoBrandIconWrap: {
-    width: 92,
-    height: 92,
-    justifyContent: 'center',
-    alignItems: 'center',
-    borderRadius: 20,
-    backgroundColor: '#1E90FF',
-    shadowColor: '#1E90FF',
-    shadowOffset: { width: 0, height: 8 },
-    shadowOpacity: 0.18,
-    shadowRadius: 12,
-    elevation: 4,
-  },
-  infoBrandName: {
-    marginTop: 20,
-    fontSize: 28,
-    fontWeight: '700',
-    color: '#111827',
-  },
-  infoVersionText: {
-    marginTop: 10,
-    fontSize: 17,
-    color: '#374151',
-    fontWeight: '500',
-  },
-  infoListCard: {
-    backgroundColor: '#FFFFFF',
-    borderRadius: 18,
-    borderWidth: 1,
-    borderColor: '#E5E7EB',
-    overflow: 'hidden',
-  },
-  infoListRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'space-between',
-    minHeight: 58,
-    paddingHorizontal: 18,
-    paddingVertical: 16,
-    borderBottomWidth: 1,
-    borderBottomColor: '#E5E7EB',
-  },
-  infoRowText: {
-    fontSize: 15,
-    fontWeight: '600',
-    color: '#111827',
-  },
-  infoDetailContent: {
-    paddingTop: 8,
-    paddingBottom: 32,
-  },
-  infoDetailHeading: {
-    marginBottom: 18,
-    fontSize: 22,
-    fontWeight: '800',
-    color: '#111827',
-  },
-  infoDetailText: {
-    marginBottom: 18,
-    fontSize: 15,
-    lineHeight: 24,
-    color: '#475569',
-  },
-  appInfoPanel: {
-    alignItems: 'center',
-    paddingTop: 20,
-  },
-  appInfoIcon: {
-    width: 78,
-    height: 78,
-    alignItems: 'center',
-    justifyContent: 'center',
-    marginBottom: 18,
-    borderRadius: 20,
-    backgroundColor: '#2563EB',
-  },
-  appInfoVersion: {
-    marginBottom: 24,
-    fontSize: 14,
-    color: '#64748B',
-  },
-  appInfoCopyright: {
-    marginTop: 6,
-    fontSize: 13,
-    color: '#94A3B8',
-  },
-  generalSettingsList: {
-    marginTop: 8,
-    backgroundColor: '#FFFFFF',
-    borderRadius: 18,
-    borderWidth: 1,
-    borderColor: '#E5E7EB',
-    overflow: 'hidden',
-  },
-  accessibilityList: {
-    marginTop: 8,
-    backgroundColor: '#FFFFFF',
-    borderRadius: 18,
-    borderWidth: 1,
-    borderColor: '#E5E7EB',
-    overflow: 'hidden',
-  },
-  accessibilityRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'space-between',
-    minHeight: 62,
-    paddingHorizontal: 18,
-    paddingVertical: 16,
-    borderBottomWidth: 1,
-    borderBottomColor: '#E5E7EB',
-  },
-  accessibilityRowLast: {
-    borderBottomWidth: 0,
-  },
-  accessibilityLabel: {
-    fontSize: 15,
-    fontWeight: '600',
-    color: '#111827',
-  },
-  accessibilityValueWrap: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 4,
-  },
-  accessibilityValue: {
     fontSize: 18,
     fontWeight: '500',
-    color: '#64748B',
-  },
-  fontSizeList: {
-    marginTop: 8,
-  },
-  fontSizeOption: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'space-between',
-    minHeight: 62,
-    paddingHorizontal: 18,
-    paddingVertical: 16,
-    backgroundColor: '#FFFFFF',
-    borderWidth: 1,
-    borderColor: '#E5E7EB',
-    borderRadius: 18,
-    marginBottom: 12,
-  },
-  fontSizeOptionText: {
-    fontSize: 15,
-    fontWeight: '600',
     color: '#111827',
   },
-  customFontSliderPanel: {
-    marginTop: 18,
-    marginBottom: 10,
-    paddingTop: 6,
-  },
-  customFontSliderTitle: {
-    fontSize: 18,
-    fontWeight: '600',
-    color: '#1F2937',
-    marginBottom: 14,
-    marginLeft: 6,
-  },
-  customFontSliderRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 12,
-    justifyContent: 'space-between',
-  },
-  customFontSmall: {
-    fontSize: 18,
-    fontWeight: '500',
-    color: '#3F3F46',
-    marginRight: 4,
-  },
-  customFontLarge: {
-    fontSize: 30,
-    fontWeight: '500',
-    color: '#3F3F46',
-    marginLeft: 4,
-  },
-  customFontTrackWrap: {
-    flex: 1,
-    height: 36,
-    justifyContent: 'center',
-    marginHorizontal: 4,
-  },
-  customFontTrack: {
-    position: 'relative',
-    height: 8,
-    borderRadius: 999,
-    backgroundColor: '#E5E7EB',
-    justifyContent: 'space-between',
-    alignItems: 'center',
-    flexDirection: 'row',
-    paddingHorizontal: 10,
-  },
-  customFontTick: {
-    width: 10,
-    height: 10,
-    borderRadius: 999,
-    backgroundColor: '#F8FAFC',
-    borderWidth: 1,
-    borderColor: '#D1D5DB',
-  },
-  customFontTickSelected: {
-    backgroundColor: Colors.primary,
-    borderColor: Colors.primary,
-  },
-  customFontThumb: {
-    position: 'absolute',
-    top: -6,
-    width: 20,
-    height: 20,
-    borderRadius: 10,
-    backgroundColor: Colors.primary,
-    borderWidth: 3,
-    borderColor: '#FFFFFF',
-    shadowColor: Colors.primary,
-    shadowOffset: { width: 0, height: 4 },
-    shadowOpacity: 0.35,
-    shadowRadius: 8,
-    elevation: 6,
-    transform: [{ translateX: -10 }],
-  },
-  fontSizeNote: {
-    fontSize: 15,
-    lineHeight: 24,
-    color: '#64748B',
-    marginTop: 8,
-    marginBottom: 10,
-  },
-  fontSizeLink: {
-    fontSize: 16,
-    fontWeight: '600',
-    color: Colors.primary,
-    textDecorationLine: 'underline',
-  },
-  generalRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'space-between',
-    minHeight: 58,
-    paddingVertical: 16,
-    paddingHorizontal: 18,
-    borderBottomWidth: 1,
-    borderBottomColor: '#E2E8F0',
-  },
-  generalRowLabel: {
-    fontSize: 15,
-    fontWeight: '600',
-    color: Colors.textPrimary,
-  },
-  generalRowValue: {
-    fontSize: 15,
-    color: '#64748B',
-    fontWeight: '500',
-  },
-  generalValueWrap: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 4,
-  },
-  appearanceOverlay: {
-    flex: 1,
-    backgroundColor: Colors.background,
-    justifyContent: 'flex-start',
-  },
-  appearanceSheet: {
-    width: '100%',
-    flex: 1,
-    backgroundColor: Colors.background,
-    borderRadius: 0,
-    overflow: 'hidden',
-    paddingTop: 12,
-    paddingHorizontal: 0,
-    paddingBottom: 18,
-  },
-  appearanceHeader: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'space-between',
-    minHeight: 52,
-    paddingHorizontal: 18,
-    marginBottom: 8,
-  },
-  appearanceHeaderSpacer: {
-    width: 38,
-    height: 38,
-  },
-  appearanceCloseButton: {
-    width: 38,
-    height: 38,
-    borderRadius: 19,
-    backgroundColor: Colors.surface,
-    borderWidth: 1,
-    borderColor: Colors.border,
-    alignItems: 'center',
-    justifyContent: 'center',
-    ...Shadows.soft,
-  },
-  appearanceTitle: {
-    flex: 1,
-    fontSize: 20,
-    fontWeight: '800',
-    color: Colors.textPrimary,
-    textAlign: 'center',
-  },
-  appearanceCard: {
-    marginTop: 8,
-    marginHorizontal: 18,
-    backgroundColor: '#FFFFFF',
-    borderWidth: 1,
-    borderColor: Colors.border,
-    borderRadius: 18,
-    overflow: 'hidden',
-    ...Shadows.card,
-  },
-  appearanceOptionRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'space-between',
-    minHeight: 62,
-    paddingHorizontal: 18,
-    paddingVertical: 14,
-    backgroundColor: '#FFFFFF',
-    borderBottomWidth: 1,
-    borderBottomColor: Colors.border,
-  },
-  appearanceOptionRowSelected: {
-    backgroundColor: Colors.primaryLight,
-  },
-  appearanceOptionLabel: {
-    fontSize: 15,
-    fontWeight: '700',
-    color: Colors.textPrimary,
-  },
-  backButton: {
-    width: 38,
-    height: 38,
-    borderRadius: 19,
-    backgroundColor: Colors.surface,
-    borderWidth: 1,
-    borderColor: Colors.border,
-    alignItems: 'center',
-    justifyContent: 'center',
-    marginTop: 0,
-    marginBottom: 0,
-    marginLeft: 0,
-    paddingTop: 0,
-    zIndex: 2,
-    ...Shadows.soft,
-  },
-  settingsBackButton: {
-    position: 'absolute',
-    left: 0,
-    top: 0,
-  },
-  infoBackButton: {
-    position: 'absolute',
-    left: 0,
-    top: 0,
-  },
-  userMenuBackButton: {
-    marginLeft: -20,
-  },
+
+  // Change Password
   changePasswordScreen: {
     flex: 1,
     backgroundColor: Colors.background,
@@ -4003,676 +2893,72 @@ const styles = StyleSheet.create({
     fontWeight: '800',
     color: '#FFFFFF',
   },
-  notificationSettingsContent: {
+
+  // Customer Support Dialog
+  customerSupportOverlay: {
     flex: 1,
-    paddingHorizontal: 10,
-    paddingTop: 18,
-    backgroundColor: 'transparent',
+    alignItems: 'center',
+    justifyContent: 'center',
+    paddingHorizontal: 24,
+    backgroundColor: 'rgba(15, 23, 42, 0.45)',
   },
-  notificationSettingsIntro: {
-    marginBottom: 16,
+  customerSupportDialog: {
+    width: '100%',
+    maxWidth: 380,
+    alignItems: 'center',
+    paddingHorizontal: 22,
+    paddingVertical: 24,
+    borderRadius: 18,
+    backgroundColor: '#FFFFFF',
+  },
+  customerSupportTitle: {
+    marginTop: 12,
+    fontSize: 20,
+    fontWeight: '800',
+    color: Colors.textPrimary,
+  },
+  customerSupportMessage: {
+    marginTop: 8,
     fontSize: 15,
     lineHeight: 22,
-    color: '#64748B',
-  },
-  notificationSettingsCard: {
-    borderWidth: 1,
-    borderColor: '#E5EAF1',
-    borderRadius: 18,
-    paddingHorizontal: 12,
-    backgroundColor: '#FFFFFF',
-    shadowColor: '#64748B',
-    shadowOffset: { width: 0, height: 3 },
-    shadowOpacity: 0.06,
-    shadowRadius: 10,
-    elevation: 2,
-  },
-  notificationSettingRow: {
-    minHeight: 66,
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'space-between',
-    gap: 12,
-    paddingVertical: 14,
-  },
-  notificationSettingText: {
-    flex: 1,
-  },
-  notificationSettingTitle: {
-    fontSize: 15,
-    fontWeight: '700',
-    color: Colors.textPrimary,
-  },
-  notificationSettingDescription: {
-    marginTop: 3,
-    fontSize: 12,
-    color: '#64748B',
-  },
-  notificationSettingDivider: {
-    height: 1,
-    backgroundColor: '#EDF1F5',
-  },
-  avatarContainerLarge: {
-    alignItems: 'center',
-    justifyContent: 'center',
-    marginBottom: 22,
-    marginTop: 10,
-  },
-  avatarCircleLarge: {
-    width: 86,
-    height: 86,
-    borderRadius: 43,
-    backgroundColor: '#D5D7DB',
-    alignItems: 'center',
-    justifyContent: 'center',
-    position: 'relative',
-    overflow: 'hidden',
-  },
-  avatarImageLarge: {
-    width: '100%',
-    height: '100%',
-  },
-  avatarAddBadge: {
-    position: 'absolute',
-    right: -2,
-    bottom: 2,
-    width: 26,
-    height: 26,
-    borderRadius: 13,
-    backgroundColor: '#2563EB',
-    borderWidth: 2,
-    borderColor: '#F8FAFC',
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
-  profileNameText: {
-    marginTop: 16,
-    fontSize: 20,
-    fontWeight: '700',
-    color: '#111827',
     textAlign: 'center',
-  },
-  profileInfoListCard: {
-    backgroundColor: '#F3F4F6',
-    borderRadius: 18,
-    overflow: 'hidden',
-    borderWidth: 1,
-    borderColor: '#E5E7EB',
-    marginTop: 8,
-  },
-  infoRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'space-between',
-    paddingVertical: 18,
-    paddingHorizontal: 18,
-    borderBottomWidth: 1,
-    borderBottomColor: '#E5E7EB',
-  },
-  infoLeftWrap: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 12,
-  },
-  infoLabel: {
-    fontSize: 18,
-    fontWeight: '500',
-    color: '#111827',
-  },
-  infoRightWrap: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 8,
-  },
-  infoValue: {
-    fontSize: 16,
-    color: '#475569',
-    fontWeight: '500',
-  },
-  userMenuRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'space-between',
-    paddingVertical: 14,
-    borderBottomWidth: 1,
-    borderBottomColor: '#E2E8F0',
-  },
-  userMenuLabel: {
-    fontSize: 16,
-    fontWeight: '700',
-    color: Colors.textPrimary,
-    flex: 1,
-  },
-  userMenuValue: {
-    fontSize: 13,
     color: '#64748B',
-    textAlign: 'right',
-    marginLeft: 12,
-    maxWidth: '60%',
   },
-  marketingRow: {
+  customerSupportActions: {
     flexDirection: 'row',
-    alignItems: 'flex-start',
-    paddingVertical: 18,
-    gap: 12,
-  },
-  checkbox: {
-    width: 22,
-    height: 22,
-    borderRadius: 12,
-    borderWidth: 2,
-    borderColor: '#94A3B8',
-    backgroundColor: 'transparent',
-    alignItems: 'center',
-    justifyContent: 'center',
-    marginTop: 2,
-  },
-  checkboxChecked: {
-    borderColor: '#3B82F6',
-    backgroundColor: '#EFF6FF',
-  },
-  checkboxInner: {
-    width: 10,
-    height: 10,
-    borderRadius: 5,
-    backgroundColor: '#3B82F6',
-  },
-  marketingText: {
-    flex: 1,
-    fontSize: 13,
-    lineHeight: 20,
-    color: Colors.textPrimary,
-  },
-  container: {
-  flex: 1,
-},
-
-logoutButton: {
-  width: '100%',
-  marginTop: 'auto',
-  marginBottom: 25,
-  borderRadius: 26,
-  borderWidth: 1.8,
-  borderColor: '#F87171',
-  backgroundColor: '#FFFFFF',
-  paddingVertical: 12,
-  alignItems: 'center',
-  justifyContent: 'center',
-  minHeight: 54,
-},
-  logoutButtonText: {
-    fontSize: 17,
-    fontWeight: '700',
-    color: '#EF4444',
-    letterSpacing: 0.12,
-  },
-  editorOverlay: {
-    flex: 1,
-    backgroundColor: Colors.background,
-    justifyContent: 'flex-start',
-  },
-  editorSheet: {
-    flex: 1,
-    backgroundColor: Colors.background,
-    paddingHorizontal: 20,
-    paddingTop: 18,
-    paddingBottom: 28,
-    justifyContent: 'flex-start',
-  },
-  editorHeader: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    minHeight: 44,
-    marginBottom: 18,
+    width: '100%',
     gap: 10,
+    marginTop: 22,
   },
-  editorBackButton: {
-    width: 38,
-    height: 38,
-    borderRadius: 19,
-    backgroundColor: Colors.surface,
-    borderWidth: 1,
-    borderColor: Colors.border,
-    justifyContent: 'center',
-    alignItems: 'center',
-    ...Shadows.soft,
-  },
-  editorTitle: {
+  customerSupportCancelButton: {
     flex: 1,
-    fontSize: 22,
+    alignItems: 'center',
+    paddingVertical: 13,
+    borderRadius: 11,
+    backgroundColor: '#E2E8F0',
+  },
+  customerSupportCancelText: {
+    fontSize: 15,
+    fontWeight: '700',
+    color: '#475569',
+  },
+  customerSupportCallButton: {
+    flex: 1,
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: 7,
+    paddingVertical: 13,
+    borderRadius: 11,
+    backgroundColor: '#DC2626',
+  },
+  customerSupportCallText: {
+    fontSize: 15,
     fontWeight: '800',
-    color: Colors.textPrimary,
-  },
-  editorCard: {
-    backgroundColor: Colors.surface,
-    borderRadius: 18,
-    padding: 18,
-    borderWidth: 1,
-    borderColor: Colors.border,
-    ...Shadows.card,
-  },
-  editorFieldHeader: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 12,
-    marginBottom: 14,
-  },
-  editorFieldIconBadge: {
-    width: 40,
-    height: 40,
-    borderRadius: 12,
-    backgroundColor: Colors.primaryLight,
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
-  editorFieldLabel: {
-    fontSize: 15,
-    fontWeight: '700',
-    color: Colors.textPrimary,
-  },
-  editorFieldHint: {
-    fontSize: 12,
-    color: Colors.textSecondary,
-    marginTop: 2,
-  },
-  editorInputWrap: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    borderWidth: 1.5,
-    borderColor: Colors.primary,
-    borderRadius: 14,
-    height: 52,
-    paddingHorizontal: 14,
-    backgroundColor: '#FFFBF7',
-    marginBottom: 16,
-  },
-  editorInput: {
-    flex: 1,
-    fontSize: 16,
-    fontWeight: '600',
-    color: Colors.textPrimary,
-    paddingVertical: 8,
-    borderWidth: 0,
-    outlineWidth: 0,
-  },
-  editorErrorBox: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 8,
-    paddingHorizontal: 12,
-    paddingVertical: 10,
-    borderRadius: 10,
-    backgroundColor: '#FEF2F2',
-    borderWidth: 1,
-    borderColor: '#FECACA',
-    marginBottom: 14,
-  },
-  editorErrorText: {
-    flex: 1,
-    fontSize: 13,
-    fontWeight: '600',
-    color: '#B91C1C',
-  },
-  editorActions: {
-    flexDirection: 'row',
-    justifyContent: 'flex-end',
-    alignItems: 'center',
-    gap: 12,
-    marginTop: 4,
-  },
-  editorCancel: {
-    minWidth: 92,
-    height: 44,
-    paddingHorizontal: 18,
-    borderRadius: 12,
-    backgroundColor: Colors.surfaceSubtle,
-    borderWidth: 1,
-    borderColor: Colors.border,
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
-  editorCancelText: {
-    fontSize: 15,
-    fontWeight: '700',
-    color: Colors.textSecondary,
-  },
-  editorSave: {
-    minWidth: 108,
-    height: 44,
-    paddingHorizontal: 20,
-    borderRadius: 12,
-    backgroundColor: Colors.primary,
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'center',
-    gap: 6,
-    shadowColor: Colors.primary,
-    shadowOffset: { width: 0, height: 4 },
-    shadowOpacity: 0.3,
-    shadowRadius: 8,
-    elevation: 4,
-  },
-  editorSaveText: {
-    fontSize: 15,
-    fontWeight: '700',
     color: '#FFFFFF',
   },
-  secondaryActionButton: {
-    marginTop: 12,
-    paddingVertical: 12,
-    alignItems: 'center',
-  },
-  secondaryActionText: {
-    fontSize: 16,
-    fontWeight: '700',
-    color: Colors.textPrimary,
-  },
-  // Top Profile
-  topProfileRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'space-between',
-    marginBottom: 20,
-    marginTop: 0,
-  },
-  avatarContainer: {
-    flexDirection: 'row',
-    alignItems: 'center',
-  },
-  avatarCircle: {
-    width: 64,
-    height: 64,
-    borderRadius: 32,
-    backgroundColor: '#E2E8F0',
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
-  userIdText: {
-    fontSize: 24,
-    fontWeight: '900',
-    color: Colors.textPrimary,
-  },
-  userRoleText: {
-    fontSize: 13,
-    color: Colors.textSecondary,
-    marginTop: 2,
-  },
-  accountBadgeWrap: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    marginTop: 6,
-    alignSelf: 'flex-start',
-  },
-  accountBadgeDot: {
-    width: 8,
-    height: 8,
-    borderRadius: 4,
-    backgroundColor: '#0EA5E9',
-    marginRight: 6,
-  },
-  accountBadgeText: {
-    fontSize: 12,
-    fontWeight: '600',
-    color: '#0284C7',
-  },
-  qrScanBtn: {
-    width: 44,
-    height: 44,
-    borderRadius: 22,
-    backgroundColor: Colors.surface,
-    alignItems: 'center',
-    justifyContent: 'center',
-    ...Shadows.soft,
-  },
-  // Banners
-  bannerContainer: {
-    gap: 12,
-    paddingBottom: 16,
-  },
-  protectBannerCard: {
-    width: 270,
-    backgroundColor: '#DDEEFE',
-    borderRadius: 18,
-    padding: 16,
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'space-between',
-  },
-  protectBannerTitle: {
-    fontSize: 18,
-    fontWeight: '800',
-    color: '#1E3A8A',
-    marginBottom: 4,
-  },
-  protectBannerSub: {
-    fontSize: 11,
-    color: '#3B82F6',
-    lineHeight: 16,
-  },
-  medalShieldWrapper: {
-    width: 50,
-    height: 50,
-    borderRadius: 25,
-    backgroundColor: 'rgba(255, 255, 255, 0.7)',
-    alignItems: 'center',
-    justifyContent: 'center',
-    borderWidth: 2,
-    borderColor: '#93C5FD',
-  },
-  eventSmartBannerCard: {
-    width: 220,
-    backgroundColor: '#F3E8FF',
-    borderRadius: 18,
-    padding: 16,
-  },
-  eventSmartTitle: {
-    fontSize: 18,
-    fontWeight: '800',
-    color: '#6B21A8',
-    marginBottom: 4,
-  },
-  eventSmartSub: {
-    fontSize: 11,
-    color: '#9333EA',
-    lineHeight: 16,
-  },
-  // House Card
-  houseCard: {
-    backgroundColor: Colors.surface,
-    borderRadius: 18,
-    paddingHorizontal: 18,
-    paddingVertical: 16,
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'space-between',
-    marginBottom: 16,
-    ...Shadows.card,
-  },
-  houseCardTitle: {
-    fontSize: 17,
-    fontWeight: '800',
-    color: Colors.textPrimary,
-  },
-  houseCardSub: {
-    fontSize: 13,
-    color: Colors.textSecondary,
-    marginTop: 4,
-  },
-  addMemberCircleBtn: {
-    width: 36,
-    height: 36,
-    borderRadius: 18,
-    backgroundColor: '#F1F5F9',
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
-  // Menu Groups
-  menuGroupCard: {
-    backgroundColor: Colors.surface,
-    borderRadius: 18,
-    paddingHorizontal: 16,
-    paddingVertical: 6,
-    marginBottom: 16,
-    ...Shadows.card,
-  },
-  menuRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    paddingVertical: 14,
-  },
-  menuIconBox: {
-    width: 36,
-    height: 36,
-    borderRadius: 10,
-    alignItems: 'center',
-    justifyContent: 'center',
-    marginRight: 14,
-  },
-  menuTitleText: {
-    flex: 1,
-    fontSize: 15,
-    fontWeight: '700',
-    color: Colors.textPrimary,
-  },
-  menuSubText: {
-    fontSize: 11,
-    color: Colors.textSecondary,
-    marginTop: 2,
-  },
-  menuDivider: {
-    height: 1,
-    backgroundColor: Colors.border,
-    marginLeft: 50,
-  },
-  settingsCard: {
-    backgroundColor: 'transparent',
-    marginTop: 0,
-  },
-  settingsList: {
-    gap: 14,
-    paddingBottom: 8,
-  },
-  settingsGroupCard: {
-    borderWidth: 1,
-    borderColor: Colors.border,
-    borderRadius: 18,
-    backgroundColor: Colors.surface,
-    overflow: 'hidden',
-    ...Shadows.card,
-  },
-  settingsItem: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'space-between',
-    minHeight: 68,
-    paddingVertical: 14,
-    paddingHorizontal: 16,
-    borderBottomWidth: 1,
-    borderBottomColor: Colors.border,
-    backgroundColor: 'transparent',
-  },
-  settingsItemLast: {
-    borderBottomWidth: 0,
-  },
-  settingsLeft: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    flex: 1,
-    paddingRight: 8,
-  },
-  settingsIconWrap: {
-    width: 40,
-    height: 40,
-    borderRadius: 12,
-    backgroundColor: Colors.primaryLight,
-    alignItems: 'center',
-    justifyContent: 'center',
-    marginRight: 14,
-  },
-  settingsLabel: {
-    fontSize: 15.5,
-    fontWeight: '700',
-    color: Colors.textPrimary,
-  },
-  settingsRightStatus: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'flex-end',
-    gap: 8,
-    minWidth: 32,
-  },
-  settingsStatusPill: {
-    paddingHorizontal: 10,
-    paddingVertical: 4,
-    borderRadius: 999,
-  },
-  settingsValueText: {
-    fontSize: 13,
-    color: '#64748B',
-    fontWeight: '600',
-  },
-  vibrationDetailSheet: {
-    flex: 1,
-    backgroundColor: '#F3F4F6',
-    paddingHorizontal: 18,
-    paddingTop: 14,
-    paddingBottom: 20,
-  },
-  vibrationDetailRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'space-between',
-    borderTopWidth: 1,
-    borderBottomWidth: 1,
-    borderColor: '#E2E8F0',
-    borderRadius: 15,
-    backgroundColor: '#FFFFFF',
-    paddingVertical: 18,
-    paddingHorizontal: 18,
-    marginTop: 8,
-  },
-  vibrationDetailLabel: {
-    fontSize: 18,
-    fontWeight: '600',
-    color: '#111827',
-  },
-  vibrationDetailDescription: {
-    marginTop: 16,
-    fontSize: 15,
-    lineHeight: 24,
-    color: '#64748B',
-    textAlign: 'left',
-  },
-  redBadge: {
-    width: 8,
-    height: 8,
-    borderRadius: 4,
-    backgroundColor: '#FF4D4F',
-    marginRight: 8,
-  },
-  redUpdateDot: {
-    width: 7,
-    height: 7,
-    borderRadius: 4,
-    backgroundColor: Colors.danger,
-    marginRight: 8,
-  },
-  logoutBtn: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'center',
-    backgroundColor: Colors.surface,
-    borderRadius: 14,
-    paddingVertical: 14,
-    marginTop: 8,
-    borderWidth: 1,
-    borderColor: '#FEE2E2',
-  },
-  logoutBtnText: {
-    color: '#EF4444',
-    fontWeight: '700',
-    fontSize: 15,
-  },
+
+  // Logout Confirm Modal
   confirmModalOverlay: {
     flex: 1,
     backgroundColor: 'rgba(15, 23, 42, 0.6)',
@@ -4743,26 +3029,8 @@ logoutButton: {
     fontWeight: '700',
     color: '#FFFFFF',
   },
-  settingsItemSub: {
-    fontSize: 11,
-    marginTop: 2,
-    lineHeight: 15,
-  },
-  profileAesBadge: {
-    backgroundColor: '#E0F2FE',
-    paddingHorizontal: 6,
-    paddingVertical: 2,
-    borderRadius: 4,
-  },
-  profileAesBadgeText: {
-    fontSize: 10,
-    fontWeight: '700',
-    color: '#0284C7',
-  },
 
-  // -------------------------------------------------------------------------
-  // FACEBOOK MENU STYLES (MATCHING SCREENSHOT 1)
-  // -------------------------------------------------------------------------
+  // Header
   fbHeaderRow: {
     flexDirection: 'row',
     alignItems: 'center',
@@ -4835,25 +3103,7 @@ logoutButton: {
     marginTop: 3,
   },
   fbProfileRightBadge: {
-    position: 'relative',
     padding: 4,
-  },
-  fbNotiCountBadge: {
-    position: 'absolute',
-    top: 0,
-    right: 0,
-    backgroundColor: '#E41E3F',
-    borderRadius: 9,
-    minWidth: 18,
-    height: 18,
-    alignItems: 'center',
-    justifyContent: 'center',
-    paddingHorizontal: 4,
-  },
-  fbNotiCountText: {
-    color: '#FFFFFF',
-    fontSize: 10,
-    fontWeight: '800',
   },
   fbCardDivider: {
     height: 1,
@@ -4878,59 +3128,6 @@ logoutButton: {
     fontSize: 14,
     fontWeight: '600',
     color: '#0F172A',
-  },
-
-  // Shortcuts Section
-  fbShortcutsSection: {
-    marginBottom: 20,
-  },
-  fbSectionTitle: {
-    fontSize: 16,
-    fontWeight: '700',
-    color: '#0F172A',
-    marginBottom: 12,
-    paddingHorizontal: 2,
-  },
-  fbShortcutsScroll: {
-    gap: 12,
-    paddingHorizontal: 2,
-    paddingBottom: 4,
-  },
-  fbShortcutItem: {
-    alignItems: 'center',
-    width: 76,
-  },
-  fbShortcutThumbWrap: {
-    width: 68,
-    height: 68,
-    borderRadius: 16,
-    backgroundColor: '#E2E8F0',
-    position: 'relative',
-    overflow: 'visible',
-    marginBottom: 6,
-  },
-  fbShortcutThumb: {
-    width: 68,
-    height: 68,
-    borderRadius: 16,
-  },
-  fbShortcutBadge: {
-    position: 'absolute',
-    bottom: -3,
-    right: -3,
-    width: 22,
-    height: 22,
-    borderRadius: 11,
-    alignItems: 'center',
-    justifyContent: 'center',
-    borderWidth: 2,
-    borderColor: '#FFFFFF',
-  },
-  fbShortcutLabel: {
-    fontSize: 12,
-    fontWeight: '600',
-    color: '#334155',
-    textAlign: 'center',
   },
 
   // 2-Column Grid
@@ -5091,5 +3288,821 @@ logoutButton: {
     fontSize: 15,
     fontWeight: '700',
     color: '#EF4444',
+  },
+
+  // Settings Sub-Modals (Thông báo, Cỡ chữ, Vẻ bề ngoài)
+  settingsOverlay: {
+    flex: 1,
+    backgroundColor: '#F3F4F6',
+    justifyContent: 'flex-start',
+  },
+  settingsSheet: {
+    flex: 1,
+    width: '100%',
+    backgroundColor: '#F3F4F6',
+    paddingHorizontal: 18,
+    paddingTop: 18,
+    paddingBottom: 20,
+  },
+  settingsHeaderRow: {
+    position: 'relative',
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    marginTop: 6,
+    marginBottom: 10,
+    paddingTop: 6,
+    paddingBottom: 6,
+    minHeight: 44,
+  },
+  settingsTitle: {
+    fontSize: 18,
+    fontWeight: '700',
+    color: Colors.textPrimary,
+    position: 'absolute',
+    left: 0,
+    right: 0,
+    textAlign: 'center',
+  },
+  settingsBackButton: {
+    position: 'absolute',
+    left: 0,
+    top: 0,
+  },
+  fontSizeList: {
+    marginTop: 8,
+  },
+  fontSizeOption: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    minHeight: 62,
+    paddingHorizontal: 18,
+    paddingVertical: 16,
+    backgroundColor: '#FFFFFF',
+    borderWidth: 1,
+    borderColor: '#E5E7EB',
+    borderRadius: 18,
+    marginBottom: 12,
+  },
+  fontSizeOptionText: {
+    fontSize: 15,
+    fontWeight: '600',
+    color: '#111827',
+  },
+  customFontSliderPanel: {
+    marginTop: 18,
+    marginBottom: 10,
+    paddingTop: 6,
+  },
+  customFontSliderTitle: {
+    fontSize: 18,
+    fontWeight: '600',
+    color: '#1F2937',
+    marginBottom: 14,
+    marginLeft: 6,
+  },
+  customFontSliderRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 12,
+    justifyContent: 'space-between',
+  },
+  customFontSmall: {
+    fontSize: 18,
+    fontWeight: '500',
+    color: '#3F3F46',
+    marginRight: 4,
+  },
+  customFontLarge: {
+    fontSize: 30,
+    fontWeight: '500',
+    color: '#3F3F46',
+    marginLeft: 4,
+  },
+  customFontTrackWrap: {
+    flex: 1,
+    height: 36,
+    justifyContent: 'center',
+    marginHorizontal: 4,
+  },
+  customFontTrack: {
+    position: 'relative',
+    height: 8,
+    borderRadius: 999,
+    backgroundColor: '#E5E7EB',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    flexDirection: 'row',
+    paddingHorizontal: 10,
+  },
+  customFontTick: {
+    width: 10,
+    height: 10,
+    borderRadius: 999,
+    backgroundColor: '#F8FAFC',
+    borderWidth: 1,
+    borderColor: '#D1D5DB',
+  },
+  customFontTickSelected: {
+    backgroundColor: Colors.primary,
+    borderColor: Colors.primary,
+  },
+  customFontThumb: {
+    position: 'absolute',
+    top: -6,
+    width: 20,
+    height: 20,
+    borderRadius: 10,
+    backgroundColor: Colors.primary,
+    borderWidth: 3,
+    borderColor: '#FFFFFF',
+    shadowColor: Colors.primary,
+    shadowOffset: { width: 0, height: 4 },
+    shadowOpacity: 0.35,
+    shadowRadius: 8,
+    elevation: 6,
+    transform: [{ translateX: -10 }],
+  },
+  fontSizeNote: {
+    fontSize: 15,
+    lineHeight: 24,
+    color: '#64748B',
+    marginTop: 8,
+    marginBottom: 10,
+  },
+  notificationSettingsContent: {
+    flex: 1,
+    paddingHorizontal: 10,
+    paddingTop: 18,
+    backgroundColor: 'transparent',
+  },
+  notificationSettingsIntro: {
+    marginBottom: 16,
+    fontSize: 15,
+    lineHeight: 22,
+    color: '#64748B',
+  },
+  notificationSettingsCard: {
+    borderWidth: 1,
+    borderColor: '#E5EAF1',
+    borderRadius: 18,
+    paddingHorizontal: 12,
+    backgroundColor: '#FFFFFF',
+    shadowColor: '#64748B',
+    shadowOffset: { width: 0, height: 3 },
+    shadowOpacity: 0.06,
+    shadowRadius: 10,
+    elevation: 2,
+  },
+  notificationSettingRow: {
+    minHeight: 66,
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    gap: 12,
+    paddingVertical: 14,
+  },
+  notificationSettingText: {
+    flex: 1,
+  },
+  notificationSettingTitle: {
+    fontSize: 15,
+    fontWeight: '700',
+    color: Colors.textPrimary,
+  },
+  notificationSettingDescription: {
+    marginTop: 3,
+    fontSize: 12,
+    color: '#64748B',
+  },
+  notificationSettingDivider: {
+    height: 1,
+    backgroundColor: '#EDF1F5',
+  },
+  appearanceOverlay: {
+    flex: 1,
+    backgroundColor: Colors.background,
+    justifyContent: 'flex-start',
+  },
+  appearanceSheet: {
+    width: '100%',
+    flex: 1,
+    backgroundColor: Colors.background,
+    paddingTop: 12,
+    paddingBottom: 18,
+  },
+  appearanceHeader: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    minHeight: 52,
+    paddingHorizontal: 18,
+    marginBottom: 8,
+  },
+  appearanceHeaderSpacer: {
+    width: 38,
+    height: 38,
+  },
+  appearanceCloseButton: {
+    width: 38,
+    height: 38,
+    borderRadius: 19,
+    backgroundColor: Colors.surface,
+    borderWidth: 1,
+    borderColor: Colors.border,
+    alignItems: 'center',
+    justifyContent: 'center',
+    ...Shadows.soft,
+  },
+  appearanceTitle: {
+    flex: 1,
+    fontSize: 20,
+    fontWeight: '800',
+    color: Colors.textPrimary,
+    textAlign: 'center',
+  },
+  appearanceCard: {
+    marginTop: 8,
+    marginHorizontal: 18,
+    backgroundColor: '#FFFFFF',
+    borderWidth: 1,
+    borderColor: Colors.border,
+    borderRadius: 18,
+    overflow: 'hidden',
+    ...Shadows.card,
+  },
+  appearanceOptionRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    minHeight: 62,
+    paddingHorizontal: 18,
+    paddingVertical: 14,
+    backgroundColor: '#FFFFFF',
+    borderBottomWidth: 1,
+    borderBottomColor: Colors.border,
+  },
+  appearanceOptionRowSelected: {
+    backgroundColor: Colors.primaryLight,
+  },
+  appearanceOptionLabel: {
+    fontSize: 15,
+    fontWeight: '700',
+    color: Colors.textPrimary,
+  },
+  // --- MODERN SECURITY CENTER STYLES ---
+  securityScreen: {
+    flex: 1,
+    backgroundColor: '#F8FAFC',
+  },
+  securityTopNav: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    paddingHorizontal: 16,
+    paddingVertical: 12,
+    backgroundColor: '#FFFFFF',
+    borderBottomWidth: 1,
+    borderBottomColor: '#F1F5F9',
+  },
+  securityNavBackButton: {
+    width: 38,
+    height: 38,
+    borderRadius: 19,
+    backgroundColor: '#F1F5F9',
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  securityNavTitleBox: {
+    flex: 1,
+    alignItems: 'center',
+    marginHorizontal: 10,
+  },
+  securityNavTitle: {
+    fontSize: 16.5,
+    fontWeight: '800',
+    color: '#0F172A',
+  },
+  securityNavSubTitle: {
+    fontSize: 11,
+    fontWeight: '600',
+    color: '#0284C7',
+    marginTop: 1,
+  },
+  securityStatusPill: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: '#ECFDF5',
+    paddingHorizontal: 9,
+    paddingVertical: 5,
+    borderRadius: 16,
+    borderWidth: 1,
+    borderColor: '#A7F3D0',
+  },
+  securityStatusDot: {
+    width: 6,
+    height: 6,
+    borderRadius: 3,
+    backgroundColor: '#10B981',
+    marginRight: 5,
+  },
+  securityStatusPillText: {
+    fontSize: 11.5,
+    fontWeight: '700',
+    color: '#059669',
+  },
+  securityScrollContent: {
+    paddingBottom: 40,
+  },
+  securityHeroModern: {
+    marginHorizontal: 16,
+    marginTop: 14,
+    borderRadius: 22,
+    backgroundColor: '#FFFFFF',
+    borderWidth: 1,
+    borderColor: '#E2E8F0',
+    padding: 18,
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    ...Shadows.card,
+  },
+  securityHeroLeft: {
+    flex: 1,
+    paddingRight: 12,
+  },
+  securityBadge: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    alignSelf: 'flex-start',
+    backgroundColor: '#EFF6FF',
+    paddingHorizontal: 9,
+    paddingVertical: 4,
+    borderRadius: 8,
+    marginBottom: 8,
+    gap: 5,
+  },
+  securityBadgeText: {
+    fontSize: 10.5,
+    fontWeight: '800',
+    color: '#0284C7',
+    letterSpacing: 0.5,
+  },
+  securityHeroScoreTitle: {
+    fontSize: 30,
+    fontWeight: '900',
+    color: '#0F172A',
+    lineHeight: 36,
+  },
+  securityHeroScoreSub: {
+    fontSize: 16,
+    fontWeight: '600',
+    color: '#64748B',
+  },
+  securityHeroDesc: {
+    fontSize: 12.5,
+    lineHeight: 18,
+    color: '#64748B',
+    marginTop: 6,
+    marginBottom: 12,
+  },
+  securityActionPill: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    alignSelf: 'flex-start',
+    backgroundColor: '#0284C7',
+    paddingHorizontal: 13,
+    paddingVertical: 8,
+    borderRadius: 20,
+    gap: 6,
+    ...Shadows.soft,
+  },
+  securityActionPillText: {
+    fontSize: 12.5,
+    fontWeight: '700',
+    color: '#FFFFFF',
+  },
+  securityHeroRight: {
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  securityShieldOuter: {
+    width: 86,
+    height: 86,
+    borderRadius: 43,
+    backgroundColor: '#EFF6FF',
+    alignItems: 'center',
+    justifyContent: 'center',
+    borderWidth: 2,
+    borderColor: '#BAE6FD',
+  },
+  securityShieldInner: {
+    width: 68,
+    height: 68,
+    borderRadius: 34,
+    backgroundColor: '#E0F2FE',
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  securityStatsRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    marginHorizontal: 16,
+    marginTop: 12,
+    backgroundColor: '#FFFFFF',
+    borderRadius: 18,
+    paddingVertical: 14,
+    paddingHorizontal: 12,
+    borderWidth: 1,
+    borderColor: '#E2E8F0',
+    ...Shadows.soft,
+  },
+  securityStatItem: {
+    flex: 1,
+    alignItems: 'center',
+  },
+  securityStatIconBadge: {
+    width: 36,
+    height: 36,
+    borderRadius: 18,
+    alignItems: 'center',
+    justifyContent: 'center',
+    marginBottom: 6,
+  },
+  securityStatLabel: {
+    fontSize: 11,
+    color: '#64748B',
+    fontWeight: '600',
+    marginBottom: 2,
+  },
+  securityStatValueSuccess: {
+    fontSize: 12,
+    fontWeight: '800',
+    color: '#10B981',
+  },
+  securityStatValueWarning: {
+    fontSize: 12,
+    fontWeight: '800',
+    color: '#D97706',
+  },
+  securityStatDivider: {
+    width: 1,
+    height: 34,
+    backgroundColor: '#F1F5F9',
+  },
+  securitySectionHeaderBox: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    marginHorizontal: 18,
+    marginTop: 20,
+    marginBottom: 12,
+  },
+  securitySectionHeaderTitle: {
+    fontSize: 17,
+    fontWeight: '800',
+    color: '#0F172A',
+  },
+  securitySectionHeaderBadge: {
+    fontSize: 11.5,
+    fontWeight: '700',
+    color: '#0284C7',
+    backgroundColor: '#EFF6FF',
+    paddingHorizontal: 9,
+    paddingVertical: 3,
+    borderRadius: 10,
+  },
+  securityGridModern: {
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+    justifyContent: 'space-between',
+    marginHorizontal: 16,
+    rowGap: 12,
+  },
+  securityCardTile: {
+    width: '48.2%',
+    backgroundColor: '#FFFFFF',
+    borderRadius: 18,
+    padding: 15,
+    borderWidth: 1,
+    borderColor: '#E2E8F0',
+    justifyContent: 'space-between',
+    minHeight: 140,
+    ...Shadows.card,
+  },
+  securityTileHeader: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    marginBottom: 12,
+  },
+  securityTileIconSquircle: {
+    width: 42,
+    height: 42,
+    borderRadius: 13,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  securityTileModernTitle: {
+    fontSize: 14.5,
+    fontWeight: '800',
+    color: '#0F172A',
+    marginBottom: 3,
+  },
+  securityTileModernSub: {
+    fontSize: 11.5,
+    color: '#64748B',
+    lineHeight: 15,
+    marginBottom: 10,
+  },
+  securityTileTag: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    alignSelf: 'flex-start',
+    gap: 5,
+  },
+  securityDotGreen: {
+    width: 6,
+    height: 6,
+    borderRadius: 3,
+    backgroundColor: '#10B981',
+  },
+  securityDotOrange: {
+    width: 6,
+    height: 6,
+    borderRadius: 3,
+    backgroundColor: '#F59E0B',
+  },
+  securityDotBlue: {
+    width: 6,
+    height: 6,
+    borderRadius: 3,
+    backgroundColor: '#0284C7',
+  },
+  securityTagTextGreen: {
+    fontSize: 11,
+    fontWeight: '700',
+    color: '#059669',
+  },
+  securityTagTextOrange: {
+    fontSize: 11,
+    fontWeight: '700',
+    color: '#D97706',
+  },
+  securityTagTextBlue: {
+    fontSize: 11,
+    fontWeight: '700',
+    color: '#0284C7',
+  },
+  securityAdvisoryCard: {
+    marginHorizontal: 16,
+    marginTop: 18,
+    borderRadius: 18,
+    backgroundColor: '#F0F9FF',
+    borderWidth: 1,
+    borderColor: '#BAE6FD',
+    padding: 15,
+    flexDirection: 'row',
+    alignItems: 'flex-start',
+    gap: 12,
+  },
+  securityAdvisoryIconBox: {
+    width: 38,
+    height: 38,
+    borderRadius: 12,
+    backgroundColor: '#E0F2FE',
+    alignItems: 'center',
+    justifyContent: 'center',
+    marginTop: 1,
+  },
+  securityAdvisoryTitle: {
+    fontSize: 13.5,
+    fontWeight: '800',
+    color: '#0369A1',
+    marginBottom: 3,
+  },
+  securityAdvisoryText: {
+    fontSize: 12,
+    lineHeight: 17,
+    color: '#475569',
+  },
+  securityFaqCard: {
+    marginHorizontal: 16,
+    marginTop: 16,
+    borderRadius: 20,
+    backgroundColor: '#FFFFFF',
+    borderWidth: 1,
+    borderColor: '#E2E8F0',
+    padding: 16,
+    ...Shadows.card,
+  },
+  securityFaqHeader: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    marginBottom: 12,
+  },
+  securityFaqHeaderLeft: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 8,
+  },
+  securityFaqHeaderTitle: {
+    fontSize: 15.5,
+    fontWeight: '800',
+    color: '#0F172A',
+  },
+  securityFaqCount: {
+    fontSize: 11.5,
+    fontWeight: '700',
+    color: '#64748B',
+  },
+  securityFaqRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    paddingVertical: 11,
+    gap: 12,
+  },
+  securityFaqIconBox: {
+    width: 34,
+    height: 34,
+    borderRadius: 10,
+    backgroundColor: '#EFF6FF',
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  securityFaqQuestionText: {
+    flex: 1,
+    fontSize: 13.5,
+    fontWeight: '600',
+    color: '#334155',
+    lineHeight: 19,
+  },
+  securityFaqDivider: {
+    height: 1,
+    backgroundColor: '#F1F5F9',
+    marginLeft: 46,
+  },
+  securityDetailScreen: {
+    flex: 1,
+    backgroundColor: '#F8FAFC',
+  },
+  securityDetailHeader: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    paddingHorizontal: 16,
+    paddingVertical: 12,
+    backgroundColor: '#FFFFFF',
+    borderBottomWidth: 1,
+    borderBottomColor: '#F1F5F9',
+  },
+  securityDetailTitle: {
+    flex: 1,
+    fontSize: 17,
+    fontWeight: '800',
+    textAlign: 'center',
+    color: '#0F172A',
+  },
+  securityDetailContent: {
+    paddingHorizontal: 16,
+    paddingTop: 18,
+    paddingBottom: 36,
+  },
+  securityDetailHeroBadge: {
+    alignItems: 'center',
+    justifyContent: 'center',
+    marginBottom: 16,
+  },
+  securityDetailCard: {
+    padding: 18,
+    borderRadius: 22,
+    backgroundColor: '#FFFFFF',
+    borderWidth: 1,
+    borderColor: '#E2E8F0',
+    ...Shadows.card,
+  },
+  securityDetailRowHeader: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    marginBottom: 10,
+  },
+  securityDetailCardTitle: {
+    fontSize: 17.5,
+    fontWeight: '800',
+    color: '#0F172A',
+  },
+  securityDetailSubText: {
+    fontSize: 12.5,
+    fontWeight: '600',
+    color: '#64748B',
+    marginTop: 2,
+  },
+  securityDetailDescription: {
+    fontSize: 13.5,
+    lineHeight: 22,
+    color: '#475569',
+    marginTop: 10,
+  },
+  securityInfoBanner: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    marginTop: 16,
+    padding: 12,
+    borderRadius: 14,
+    backgroundColor: '#EFF6FF',
+    borderWidth: 1,
+    borderColor: '#BAE6FD',
+    gap: 10,
+  },
+  securityInfoText: {
+    flex: 1,
+    fontSize: 13,
+    lineHeight: 18,
+    color: '#0369A1',
+    fontWeight: '600',
+  },
+  securityDeviceItem: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    marginTop: 14,
+    padding: 12,
+    borderRadius: 16,
+    backgroundColor: '#F8FAFC',
+    borderWidth: 1,
+    borderColor: '#E2E8F0',
+  },
+  securityDeviceIcon: {
+    width: 44,
+    height: 44,
+    alignItems: 'center',
+    justifyContent: 'center',
+    borderRadius: 12,
+    backgroundColor: '#EFF6FF',
+  },
+  securityDeviceCopy: {
+    flex: 1,
+    marginHorizontal: 12,
+  },
+  securityDeviceName: {
+    fontSize: 14.5,
+    fontWeight: '800',
+    color: '#0F172A',
+  },
+  securityDeviceMeta: {
+    marginTop: 2,
+    fontSize: 11.5,
+    color: '#64748B',
+    fontWeight: '500',
+  },
+  securityActiveBadge: {
+    backgroundColor: '#ECFDF5',
+    paddingHorizontal: 8,
+    paddingVertical: 4,
+    borderRadius: 8,
+  },
+  securityActiveBadgeText: {
+    fontSize: 11,
+    fontWeight: '800',
+    color: '#059669',
+  },
+  securityLoginItem: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    paddingVertical: 14,
+    borderBottomWidth: 1,
+    borderBottomColor: '#F1F5F9',
+  },
+  securityTimelineDot: {
+    width: 10,
+    height: 10,
+    borderRadius: 5,
+    backgroundColor: '#0284C7',
+    marginRight: 12,
+  },
+  securityLoginName: {
+    fontSize: 14,
+    fontWeight: '700',
+    color: '#0F172A',
+  },
+  securityLoginTime: {
+    fontSize: 11.5,
+    fontWeight: '600',
+    color: '#64748B',
+    textAlign: 'right',
+  },
+  securityQuestionDetailTitle: {
+    fontSize: 19,
+    lineHeight: 27,
+    fontWeight: '800',
+    color: '#0F172A',
+  },
+  securityQuestionDetailDescription: {
+    fontSize: 14,
+    lineHeight: 23,
+    color: '#334155',
   },
 });

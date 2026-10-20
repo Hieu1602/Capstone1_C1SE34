@@ -2,7 +2,7 @@
 api.py – Điểm kết nối trung tâm định tuyến API V1 của hệ thống Smart Elderly Care AI.
 Phân chia cấu trúc rõ ràng:
 1. [WEB ADMIN PORTAL]: 4 phân hệ quản trị hệ thống (Người dùng, Bảo mật, Giám sát, Hạ tầng).
-2. [MOBILE APP]: Ứng dụng di động (Xác thực, Nhà & Phòng, Thiết bị IoT, Sinh hiệu, Cảnh báo SOS, AI, Bác sĩ).
+2. [MOBILE APP]: Ứng dụng di động (Xác thực, Nhà & Phòng, Thiết bị IoT, Sinh hiệu, Cảnh báo SOS, AI, Bác sĩ, CSKH & Hướng dẫn).
 """
 
 from fastapi import APIRouter
@@ -33,6 +33,7 @@ from app.api.v1.endpoints.mobile.doctor        import router as mobile_doctor_ro
 from app.api.v1.endpoints.mobile.reports       import router as mobile_reports_router
 from app.api.v1.endpoints.mobile.chatbot       import router as mobile_chatbot_router
 from app.api.v1.endpoints.mobile.emergency     import router as mobile_emergency_router
+from app.api.v1.endpoints.mobile.support       import router as mobile_support_router
 
 api_router = APIRouter()
 
@@ -76,3 +77,4 @@ api_router.include_router(mobile_reports_router,       prefix="/reports",       
 api_router.include_router(mobile_chatbot_router,       prefix="/chatbot",       tags=["[MOBILE APP] Trợ lý AI Y khoa (RAG)"])
 api_router.include_router(mobile_emergency_router,     prefix="/emergency",     tags=["[MOBILE APP] Phát tín hiệu SOS khẩn cấp"])
 api_router.include_router(mobile_emergency_router,     prefix="/mobile/emergency", tags=["[MOBILE APP] Phát tín hiệu SOS khẩn cấp (Alias)"])
+api_router.include_router(mobile_support_router,       prefix="/support",       tags=["[MOBILE APP] CSKH 24/7 & Hướng dẫn sử dụng"])

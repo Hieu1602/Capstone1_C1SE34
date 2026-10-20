@@ -13,6 +13,8 @@ from app.models.vital_sign import VitalSign
 from app.models.incident import Incident
 from app.models.chat import ChatSession, ChatMessage
 from app.models.system_notification import SystemNotification
+from app.models.user_terminal import UserTerminal, UserLoginHistory
+from app.models.support_ticket import SupportTicket
 
 __all__ = [
     "User",
@@ -29,5 +31,7 @@ __all__ = [
     "ChatSession",
     "ChatMessage",
     "SystemNotification",
+    "UserTerminal",
+    "UserLoginHistory",
+    "SupportTicket",
 ]
-

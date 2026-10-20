@@ -14,7 +14,11 @@ from pydantic_settings import BaseSettings, SettingsConfigDict
 
 # Tự động nạp file .env từ các thư mục cha hoặc thư mục hiện tại
 _THIS_FILE = Path(__file__).resolve()
-_SEARCH_PATHS = [p / ".env" for p in _THIS_FILE.parents] + [Path("../.env"), Path(".env")]
+_SEARCH_PATHS = [
+    *(_parent / ".env" for _parent in _THIS_FILE.parents),
+    Path("../.env"),
+    Path(".env"),
+]
 for _p in _SEARCH_PATHS:
     if _p.is_file():
         load_dotenv(dotenv_path=_p, override=False)
@@ -44,7 +48,7 @@ class Settings(BaseSettings):
     ALGORITHM: str = "HS256"
     ACCESS_TOKEN_EXPIRE_MINUTES: int = 60 * 24  # 24 hours
     REFRESH_TOKEN_EXPIRE_DAYS: int = 30
-    OTP_MODE: str = "twilio"
+    OTP_MODE: str = "mock"
     OTP_DEV_CODE: str = "123456"
 
     # ---- Database ----

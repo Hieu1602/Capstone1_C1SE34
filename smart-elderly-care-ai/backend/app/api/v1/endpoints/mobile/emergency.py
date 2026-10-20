@@ -21,11 +21,19 @@ from app.core.config import settings
 from app.core.database import get_db
 from app.models.house import House, HouseMember
 from app.models.user import User
-from app.schemas.emergency import EmergencySOSRequest, EmergencySOSResponse
+from app.schemas.emergency import (
+    EmergencySOSRequest,
+    EmergencySOSResponse,
+    SupportCallRequest,
+    SupportCallResponse,
+)
 from app.services.notification.fcm_service import FCMService
 
 logger = logging.getLogger(__name__)
 router = APIRouter()
+
+SUPPORT_HOTLINE_NUMBER = "0898230852"
+SUPPORT_HOTLINE_NAME = "Tổng đài hỗ trợ kỹ thuật CSKH 24/7"
 
 
 # ------------------------------------------------------------------------------
@@ -150,3 +158,40 @@ async def trigger_emergency_sos(
         notification_sent=notification_result["success_count"],
         notification_failed=notification_result["failure_count"],
     )
+
+
+# ------------------------------------------------------------------------------
+# Endpoint Tổng đài hỗ trợ kỹ thuật CSKH 24/7 (0898230852)
+# ------------------------------------------------------------------------------
+@router.get("/support-hotline", response_model=SupportCallResponse)
+async def get_support_hotline() -> SupportCallResponse:
+    """Return the 24/7 technical customer support hotline number (0898230852)."""
+    return SupportCallResponse(
+        status="accepted",
+        hotline_name=SUPPORT_HOTLINE_NAME,
+        dial_number=SUPPORT_HOTLINE_NUMBER,
+        dial_uri=f"tel:{SUPPORT_HOTLINE_NUMBER}",
+    )
+
+
+@router.post("/support-call", response_model=SupportCallResponse)
+async def trigger_support_call(
+    payload: SupportCallRequest,
+    current_user: User = Depends(get_current_user),
+) -> SupportCallResponse:
+    """Record a 24/7 customer support call request and return dial URI for 0898230852."""
+    topic = payload.topic or "Hỗ trợ kết nối camera, vòng tay, hub AI"
+    logger.info(
+        "Support hotline (%s) requested by user %s (%s) - topic: %s",
+        SUPPORT_HOTLINE_NUMBER,
+        current_user.id,
+        current_user.phone,
+        topic,
+    )
+    return SupportCallResponse(
+        status="accepted",
+        hotline_name=SUPPORT_HOTLINE_NAME,
+        dial_number=SUPPORT_HOTLINE_NUMBER,
+        dial_uri=f"tel:{SUPPORT_HOTLINE_NUMBER}",
+    )
+

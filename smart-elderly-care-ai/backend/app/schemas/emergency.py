@@ -20,3 +20,18 @@ class EmergencySOSResponse(BaseModel):
     dial_uri: str
     notification_sent: int
     notification_failed: int
+
+
+class SupportCallRequest(BaseModel):
+    topic: str | None = Field(default="Hỗ trợ kết nối camera, vòng tay, hub AI", max_length=255)
+    note: str | None = Field(default=None, max_length=500)
+
+    model_config = ConfigDict(extra="forbid")
+
+
+class SupportCallResponse(BaseModel):
+    status: Literal["accepted"]
+    hotline_name: str
+    dial_number: str
+    dial_uri: str
+

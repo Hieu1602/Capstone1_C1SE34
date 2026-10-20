@@ -13,8 +13,8 @@ import logging
 import json
 from contextlib import asynccontextmanager
 
-from fastapi import FastAPI, Request
-from fastapi.responses import Response
+from fastapi import FastAPI, HTTPException, Request, status
+from fastapi.responses import JSONResponse, Response
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.middleware.trustedhost import TrustedHostMiddleware
 
@@ -117,51 +117,59 @@ app = FastAPI(
 
 @app.middleware("http")
 async def localize_api_messages(request: Request, call_next):
-    """Choose a request language and translate known API message fields."""
+    """Set request language."""
     request.state.language = normalize_language(request.headers.get("accept-language"))
-    response = await call_next(request)
-    content_type = response.headers.get("content-type", "")
-    if "application/json" not in content_type or response.headers.get("content-encoding"):
-        return response
+    return await call_next(request)
 
-    response_body = b"".join([chunk async for chunk in response.body_iterator])
-    if not response_body:
-        return response
+
+@app.exception_handler(HTTPException)
+async def http_exception_handler(request: Request, exc: HTTPException):
+    language = getattr(request.state, "language", "vi")
+    content = {"detail": exc.detail}
     try:
-        payload = json.loads(response_body)
-    except (UnicodeDecodeError, json.JSONDecodeError):
-        return Response(
-            content=response_body,
-            status_code=response.status_code,
-            headers=dict(response.headers),
-            media_type=content_type,
-            background=response.background,
-        )
-
-    localized_body = json.dumps(
-        translate_payload(payload, request.state.language),
-        ensure_ascii=False,
-        separators=(",", ":"),
-    ).encode("utf-8")
-    headers = {
-        key: value
-        for key, value in response.headers.items()
-        if key.lower() not in {"content-length", "content-encoding"}
-    }
-    return Response(
-        content=localized_body,
-        status_code=response.status_code,
+        content = translate_payload(content, language)
+    except Exception:
+        pass
+    origin = request.headers.get("origin") or "*"
+    headers = dict(exc.headers or {})
+    headers["Access-Control-Allow-Origin"] = origin
+    headers["Access-Control-Allow-Credentials"] = "true"
+    headers["Access-Control-Allow-Methods"] = "*"
+    headers["Access-Control-Allow-Headers"] = "*"
+    return JSONResponse(
+        status_code=exc.status_code,
+        content=content,
         headers=headers,
-        media_type=content_type,
-        background=response.background,
+    )
+
+
+@app.exception_handler(Exception)
+async def unhandled_exception_handler(request: Request, exc: Exception):
+    logger.exception("[App] Unhandled server error: %s", exc)
+    origin = request.headers.get("origin") or "*"
+    return JSONResponse(
+        status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+        content={"detail": f"Lỗi máy chủ nội bộ: {str(exc)}"},
+        headers={
+            "Access-Control-Allow-Origin": origin,
+            "Access-Control-Allow-Credentials": "true",
+            "Access-Control-Allow-Methods": "*",
+            "Access-Control-Allow-Headers": "*",
+        },
     )
 
 
 # ---- Middleware ----
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=settings.ALLOWED_ORIGINS,
-    allow_origin_regex=r"^https?://.*$",
+    allow_origins=[
+        "http://localhost:8081",
+        "http://127.0.0.1:8081",
+        "http://localhost:3000",
+        "http://127.0.0.1:3000",
+        *settings.ALLOWED_ORIGINS,
+    ],
+    allow_origin_regex=r"^https?://(localhost|127\.0\.0\.1|192\.168\.\d+\.\d+|10\.\d+\.\d+\.\d+|172\.\d+\.\d+\.\d+)(:\d+)?$",
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],
@@ -176,11 +184,16 @@ app.add_middleware(
 app.include_router(api_router, prefix="/api/v1")
 app.include_router(ws_router, prefix="/ws")
 
-# ---- Static Files (Ảnh hồ sơ khuôn mặt người cao tuổi) ----
-import os
+# ---- Static Files (Ảnh hồ sơ khuôn mặt người cao tuổi, avatar người dùng) ----
+from pathlib import Path
 from fastapi.staticfiles import StaticFiles
-os.makedirs("static/faces", exist_ok=True)
-app.mount("/static", StaticFiles(directory="static"), name="static")
+
+_BACKEND_DIR = Path(__file__).resolve().parent.parent
+_STATIC_DIR = _BACKEND_DIR / "static"
+_STATIC_DIR.mkdir(parents=True, exist_ok=True)
+(_STATIC_DIR / "faces").mkdir(parents=True, exist_ok=True)
+(_STATIC_DIR / "avatars").mkdir(parents=True, exist_ok=True)
+app.mount("/static", StaticFiles(directory=str(_STATIC_DIR)), name="static")
 
 
 # ---- Health, Docs & Root ----

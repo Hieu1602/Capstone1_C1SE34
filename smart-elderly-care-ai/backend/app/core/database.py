@@ -45,15 +45,19 @@ async def init_db() -> None:
     from sqlalchemy import text
     try:
         import app.models  # noqa: F401
+        
+        # 1. Tạo các bảng cơ sở và cập nhật cột mới (Idempotent schema upgrades)
         async with engine.begin() as conn:
             await conn.run_sync(Base.metadata.create_all)
-            # Idempotent schema upgrades for Web Admin Portal & User Preferences
             await conn.execute(text("ALTER TABLE users ADD COLUMN IF NOT EXISTS last_login_at TIMESTAMPTZ;"))
             await conn.execute(text("ALTER TABLE users ADD COLUMN IF NOT EXISTS preferred_language VARCHAR(10) DEFAULT 'vi';"))
             await conn.execute(text("ALTER TABLE users ADD COLUMN IF NOT EXISTS font_size_mode VARCHAR(20) DEFAULT 'system';"))
             await conn.execute(text("ALTER TABLE users ADD COLUMN IF NOT EXISTS custom_font_scale INTEGER DEFAULT 2;"))
             await conn.execute(text("ALTER TABLE users ADD COLUMN IF NOT EXISTS vibration_enabled BOOLEAN DEFAULT TRUE;"))
-            # Idempotent schema upgrades for ElderlyProfile medical record fields
+            await conn.execute(text("ALTER TABLE users ADD COLUMN IF NOT EXISTS notifications_enabled BOOLEAN DEFAULT TRUE;"))
+            await conn.execute(text("ALTER TABLE users ADD COLUMN IF NOT EXISTS alert_sound_enabled BOOLEAN DEFAULT TRUE;"))
+            await conn.execute(text("ALTER TABLE users ADD COLUMN IF NOT EXISTS critical_alert_enabled BOOLEAN DEFAULT TRUE;"))
+            await conn.execute(text("ALTER TABLE users ADD COLUMN IF NOT EXISTS avatar_url TEXT;"))
             await conn.execute(text("ALTER TABLE elderly_profiles ADD COLUMN IF NOT EXISTS conditions_json TEXT;"))
             await conn.execute(text("ALTER TABLE elderly_profiles ADD COLUMN IF NOT EXISTS blood_type VARCHAR(10);"))
             await conn.execute(text("ALTER TABLE elderly_profiles ADD COLUMN IF NOT EXISTS height_cm INTEGER;"))
@@ -61,48 +65,34 @@ async def init_db() -> None:
             await conn.execute(text("ALTER TABLE elderly_profiles ADD COLUMN IF NOT EXISTS drug_allergies TEXT;"))
             await conn.execute(text("ALTER TABLE elderly_profiles ADD COLUMN IF NOT EXISTS food_allergies TEXT;"))
             await conn.execute(text("ALTER TABLE elderly_profiles ADD COLUMN IF NOT EXISTS dietary_notes TEXT;"))
-            await conn.execute(text("ALTER TABLE users ADD COLUMN IF NOT EXISTS avatar_url VARCHAR(500);"))
             await conn.execute(text("ALTER TABLE elderly_profiles ADD COLUMN IF NOT EXISTS face_embedding TEXT;"))
             await conn.execute(text("ALTER TABLE device_configs ADD COLUMN IF NOT EXISTS bp_systolic_high INTEGER NOT NULL DEFAULT 140;"))
             await conn.execute(text("ALTER TABLE device_configs ADD COLUMN IF NOT EXISTS bp_systolic_low INTEGER NOT NULL DEFAULT 90;"))
             await conn.execute(text("ALTER TABLE device_configs ADD COLUMN IF NOT EXISTS bp_diastolic_high INTEGER NOT NULL DEFAULT 90;"))
             await conn.execute(text("ALTER TABLE device_configs ADD COLUMN IF NOT EXISTS bp_diastolic_low INTEGER NOT NULL DEFAULT 60;"))
             await conn.execute(text("ALTER TABLE device_configs ADD COLUMN IF NOT EXISTS is_custom_thresholds BOOLEAN NOT NULL DEFAULT FALSE;"))
-            await conn.execute(text("""
-                ALTER TABLE device_configs
-                ADD COLUMN IF NOT EXISTS configured_by_user_id UUID
-                REFERENCES users(id) ON DELETE SET NULL;
-            """))
-            await conn.execute(text("ALTER TABLE device_configs ADD COLUMN IF NOT EXISTS configured_by_role VARCHAR(20) DEFAULT 'SYSTEM';"))
             await conn.execute(text("ALTER TABLE vital_signs ADD COLUMN IF NOT EXISTS bp_systolic INTEGER;"))
             await conn.execute(text("ALTER TABLE vital_signs ADD COLUMN IF NOT EXISTS bp_diastolic INTEGER;"))
             await conn.execute(text("ALTER TABLE users DROP COLUMN IF EXISTS location_address;"))
             await conn.execute(text("ALTER TABLE users DROP COLUMN IF EXISTS location_longitude;"))
             await conn.execute(text("ALTER TABLE users DROP COLUMN IF EXISTS location_latitude;"))
             await conn.execute(text("ALTER TABLE users DROP COLUMN IF EXISTS location_enabled;"))
-            # Ensure Doctor +84905111222 exists and has same password
+
+        # 2. Tạo các bảng hỗ trợ và quản trị
+        async with engine.begin() as conn:
             await conn.execute(text("""
-                INSERT INTO users (
-                    id, phone, full_name, hashed_password, role, 
-                    preferred_language, font_size_mode, custom_font_scale,
-                    vibration_enabled, is_active
-                ) VALUES (
-                    'b3333333-b4e1-4b08-b2d3-d949a0eb075c',
-                    '+84905111222',
-                    'BS. Trần Văn Minh',
-                    (SELECT hashed_password FROM users WHERE phone = '+84905123456' LIMIT 1),
-                    'doctor',
-                    'vi', 'system', 2,
-                    TRUE, TRUE
-                ) ON CONFLICT (phone) DO UPDATE 
-                SET role = 'doctor',
-                    hashed_password = (SELECT hashed_password FROM users WHERE phone = '+84905123456' LIMIT 1);
-            """))
-            await conn.execute(text("""
-                INSERT INTO house_members (id, house_id, user_id, role_in_house, permissions)
-                SELECT gen_random_uuid(), 'c3333333-b4e1-4b08-b2d3-d949a0eb075c', 'b3333333-b4e1-4b08-b2d3-d949a0eb075c', 'DOCTOR', 'VIEW'
-                WHERE EXISTS (SELECT 1 FROM houses WHERE id = 'c3333333-b4e1-4b08-b2d3-d949a0eb075c')
-                ON CONFLICT (house_id, user_id) DO NOTHING;
+                CREATE TABLE IF NOT EXISTS support_tickets (
+                    id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+                    user_id UUID REFERENCES users(id) ON DELETE SET NULL,
+                    user_name VARCHAR(255) NOT NULL,
+                    phone VARCHAR(20) NOT NULL,
+                    topic VARCHAR(255) NOT NULL,
+                    device_type VARCHAR(50) DEFAULT 'other',
+                    note TEXT,
+                    status VARCHAR(50) DEFAULT 'pending',
+                    created_at TIMESTAMPTZ DEFAULT NOW(),
+                    updated_at TIMESTAMPTZ DEFAULT NOW()
+                );
             """))
             await conn.execute(text("""
                 CREATE TABLE IF NOT EXISTS security_policies (
@@ -139,21 +129,38 @@ async def init_db() -> None:
                 );
             """))
             await conn.execute(text("CREATE INDEX IF NOT EXISTS ix_system_incidents_timestamp ON system_incidents(timestamp DESC);"))
-
-            # Seed default policies if empty
-            pol_count = await conn.execute(text("SELECT COUNT(*) FROM security_policies;"))
-            if pol_count.scalar() == 0:
-                await conn.execute(text("""
-                    INSERT INTO security_policies (id, name, description, category, enabled, value) VALUES
-                    ('pol-1', 'Xác thực đa yếu tố (2FA / OTP)', 'Bắt buộc xác thực OTP số điện thoại khi đăng nhập tài khoản Bác sĩ và Quản trị viên.', 'authentication', TRUE, NULL),
-                    ('pol-2', 'Mật khẩu độ phức tạp cao', 'Yêu cầu mật khẩu tối thiểu 8 ký tự, có chữ hoa, chữ thường, số và ký tự đặc biệt.', 'authentication', TRUE, NULL),
-                    ('pol-3', 'Thời gian hết hạn phiên làm việc (JWT Access Token)', 'Tự động thu hồi phiên làm việc sau thời gian không hoạt động để bảo vệ dữ liệu y tế.', 'session', TRUE, '24 giờ'),
-                    ('pol-4', 'Khóa tài khoản sau 5 lần đăng nhập sai', 'Tự động tạm khóa tài khoản trong 15 phút nếu phát hiện tấn công Brute-force.', 'access_control', TRUE, '5 lần'),
-                    ('pol-5', 'Mã hóa dữ liệu nhạy cảm (At-Rest & In-Transit)', 'Toàn bộ sinh hiệu, hình ảnh khuôn mặt được mã hóa bằng AES-256 và TLS 1.3.', 'data_protection', TRUE, NULL),
-                    ('pol-6', 'Giới hạn IP Whitelist cho cổng Admin', 'Chỉ cho phép truy cập trang quản trị từ các dải IP nội bộ hoặc VPN y tế đã xác thực.', 'access_control', FALSE, '192.168.1.0/24');
-                """))
-
-            # Quản lý thông báo toàn hệ thống (Web Admin System Notifications)
+            await conn.execute(text("""
+                CREATE TABLE IF NOT EXISTS user_terminals (
+                    id UUID NOT NULL DEFAULT gen_random_uuid() PRIMARY KEY,
+                    user_id UUID NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+                    device_name VARCHAR(255) NOT NULL,
+                    device_type VARCHAR(50) NOT NULL DEFAULT 'mobile',
+                    os VARCHAR(100),
+                    browser VARCHAR(100),
+                    ip_address VARCHAR(50) NOT NULL DEFAULT '127.0.0.1',
+                    location VARCHAR(255) DEFAULT 'Đà Nẵng, Việt Nam',
+                    last_active_at TIMESTAMPTZ NOT NULL DEFAULT CURRENT_TIMESTAMP,
+                    is_active BOOLEAN NOT NULL DEFAULT TRUE,
+                    created_at TIMESTAMPTZ NOT NULL DEFAULT CURRENT_TIMESTAMP
+                );
+            """))
+            await conn.execute(text("CREATE INDEX IF NOT EXISTS ix_user_terminals_user_id ON user_terminals(user_id);"))
+            await conn.execute(text("CREATE INDEX IF NOT EXISTS ix_user_terminals_last_active ON user_terminals(last_active_at DESC);"))
+            await conn.execute(text("""
+                CREATE TABLE IF NOT EXISTS user_login_histories (
+                    id UUID NOT NULL DEFAULT gen_random_uuid() PRIMARY KEY,
+                    user_id UUID NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+                    device_name VARCHAR(255) NOT NULL,
+                    ip_address VARCHAR(50) NOT NULL,
+                    location VARCHAR(255) DEFAULT 'Đà Nẵng, Việt Nam',
+                    login_time TIMESTAMPTZ NOT NULL DEFAULT CURRENT_TIMESTAMP,
+                    login_method VARCHAR(50) NOT NULL DEFAULT 'Mật khẩu',
+                    status VARCHAR(20) NOT NULL DEFAULT 'success',
+                    user_agent VARCHAR(500)
+                );
+            """))
+            await conn.execute(text("CREATE INDEX IF NOT EXISTS ix_user_login_histories_user_id ON user_login_histories(user_id);"))
+            await conn.execute(text("CREATE INDEX IF NOT EXISTS ix_user_login_histories_login_time ON user_login_histories(login_time DESC);"))
             await conn.execute(text("""
                 CREATE TABLE IF NOT EXISTS system_notifications (
                     id UUID NOT NULL DEFAULT gen_random_uuid() PRIMARY KEY,
@@ -173,20 +180,32 @@ async def init_db() -> None:
                     updated_at TIMESTAMPTZ NOT NULL DEFAULT CURRENT_TIMESTAMP
                 );
             """))
-            await conn.execute(text("ALTER TABLE system_notifications ALTER COLUMN id SET DEFAULT gen_random_uuid();"))
-            await conn.execute(text("CREATE INDEX IF NOT EXISTS ix_system_notifications_status ON system_notifications(status);"))
-            await conn.execute(text("CREATE INDEX IF NOT EXISTS ix_system_notifications_created_at ON system_notifications(created_at DESC);"))
 
-            notif_count = await conn.execute(text("SELECT COUNT(*) FROM system_notifications;"))
-            if notif_count.scalar() == 0:
+        # 3. Dữ liệu khởi tạo (Seeding an toàn)
+        try:
+            async with engine.begin() as conn:
                 await conn.execute(text("""
-                    INSERT INTO system_notifications (id, title, body, type, target_audience, status, published_at, delivered_count, read_count) VALUES
-                    (gen_random_uuid(), 'Bảo trì nâng cấp hệ thống định kỳ', 'Hệ thống Smart Elderly Care AI sẽ tiến hành tối ưu hóa kết nối IoT và sao lưu cơ sở dữ liệu từ 01:00 đến 03:00 ngày 18/10/2026. Trong thời gian này, các tính năng báo cáo có thể bị chậm nhẹ.', 'system_maintenance', 'all', 'published', CURRENT_TIMESTAMP - INTERVAL '1 day', 152, 128),
-                    (gen_random_uuid(), 'Khuyến cáo sức khỏe mùa giao mùa', 'Nhiệt độ thay đổi đột ngột có thể ảnh hưởng đến huyết áp của người cao tuổi. Gia đình vui lòng kiểm tra thiết bị đo sinh hiệu phòng ngủ và duy trì nhiệt độ phòng 26-28 độ C.', 'health_tip', 'caregivers', 'published', CURRENT_TIMESTAMP - INTERVAL '5 hours', 89, 74),
-                    (gen_random_uuid(), 'Cập nhật tính năng trợ lý AI Y khoa', 'Phiên bản mới của Chatbot y khoa đã được tích hợp mô hình phân tích triệu chứng chuyên sâu dành cho bác sĩ gia đình và người chăm sóc.', 'feature_update', 'all', 'scheduled', NULL, 0, 0);
+                    INSERT INTO users (
+                        id, phone, full_name, hashed_password, role, 
+                        preferred_language, font_size_mode, custom_font_scale,
+                        vibration_enabled, is_active
+                    ) 
+                    SELECT 
+                        'b3333333-b4e1-4b08-b2d3-d949a0eb075c',
+                        '+84905111222',
+                        'BS. Trần Văn Minh',
+                        COALESCE((SELECT hashed_password FROM users WHERE hashed_password IS NOT NULL LIMIT 1), '$2b$12$e868N806V08VlP1G4W066eZ0/C19Y2b2e55j4Uu6dO9Yv8k9k2'),
+                        'doctor',
+                        'vi', 'system', 2,
+                        TRUE, TRUE
+                    WHERE NOT EXISTS (SELECT 1 FROM users WHERE phone = '+84905111222');
                 """))
+        except Exception as seed_err:
+            logger.debug("[DB] Doctor seed: %s", seed_err)
+
         logger.info("[DB] Database initialized and Web Admin schema tables verified.")
     except Exception as e:
+        logger.warning(f"[DB] Could not connect to database immediately: {e}")
         logger.warning(f"[DB] Could not connect to database immediately: {e}")
 
 
@@ -201,9 +220,15 @@ async def get_db() -> AsyncGenerator[AsyncSession, None]:
     async with AsyncSessionFactory() as session:
         try:
             yield session
-            await session.commit()
+            if session.is_active:
+                try:
+                    await session.commit()
+                except Exception as commit_err:
+                    logger.debug("[get_db] Auto-commit rolled back: %s", commit_err)
+                    await session.rollback()
         except Exception:
-            await session.rollback()
+            if session.is_active:
+                await session.rollback()
             raise
         finally:
             await session.close()

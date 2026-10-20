@@ -1,6 +1,7 @@
 """
 user.py – SQLAlchemy ORM Model cho User (Caregiver / Bác sĩ)
 """
+# pyright: reportMissingImports=false
 
 from __future__ import annotations
 
@@ -11,8 +12,9 @@ from datetime import datetime
 if TYPE_CHECKING:
     from app.models.device import Device
     from app.models.house import House, HouseMember
+    from app.models.user_terminal import UserTerminal, UserLoginHistory
 
-from sqlalchemy import Boolean, DateTime, Integer, String
+from sqlalchemy import Boolean, DateTime, Integer, String, Text
 from sqlalchemy.dialects.postgresql import UUID
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 from sqlalchemy.sql import func
@@ -36,7 +38,7 @@ class User(Base):
     full_name: Mapped[str] = mapped_column(String(255), nullable=False)
     hashed_password: Mapped[str] = mapped_column(String(255), nullable=False)
     phone: Mapped[str | None] = mapped_column(String(20), nullable=True)
-    avatar_url: Mapped[str | None] = mapped_column(String(500), nullable=True)
+    avatar_url: Mapped[str | None] = mapped_column(Text, nullable=True)
     role: Mapped[str] = mapped_column(
         String(20), nullable=False, default="user"
     )
@@ -52,6 +54,15 @@ class User(Base):
     vibration_enabled: Mapped[bool] = mapped_column(
         Boolean, nullable=False, default=True, server_default="true"
     )
+    notifications_enabled: Mapped[bool] = mapped_column(
+        Boolean, nullable=False, default=True, server_default="true"
+    )
+    alert_sound_enabled: Mapped[bool] = mapped_column(
+        Boolean, nullable=False, default=True, server_default="true"
+    )
+    critical_alert_enabled: Mapped[bool] = mapped_column(
+        Boolean, nullable=False, default=True, server_default="true"
+    )
     is_active: Mapped[bool] = mapped_column(Boolean, default=True)
     fcm_token: Mapped[str | None] = mapped_column(String(500), nullable=True)
     created_at: Mapped[datetime] = mapped_column(
@@ -64,13 +75,19 @@ class User(Base):
         DateTime(timezone=True), nullable=True
     )
 
-    # Relationships
+    # Relationships (dùng lazy="select" an toàn, tránh tự động trigger queries khi bảng chưa có)
     devices: Mapped[list["Device"]] = relationship(  # noqa: F821
-        "Device", back_populates="owner", lazy="selectin"
+        "Device", back_populates="owner", lazy="select"
     )
     owned_houses: Mapped[list["House"]] = relationship(  # noqa: F821
-        "House", back_populates="owner", cascade="all, delete-orphan", lazy="selectin"
+        "House", back_populates="owner", cascade="all, delete-orphan", lazy="select"
     )
     house_memberships: Mapped[list["HouseMember"]] = relationship(  # noqa: F821
-        "HouseMember", back_populates="user", cascade="all, delete-orphan", lazy="selectin"
+        "HouseMember", back_populates="user", cascade="all, delete-orphan", lazy="select"
+    )
+    terminals: Mapped[list["UserTerminal"]] = relationship(  # noqa: F821
+        "UserTerminal", back_populates="user", cascade="all, delete-orphan", lazy="select"
+    )
+    login_histories: Mapped[list["UserLoginHistory"]] = relationship(  # noqa: F821
+        "UserLoginHistory", back_populates="user", cascade="all, delete-orphan", lazy="select"
     )

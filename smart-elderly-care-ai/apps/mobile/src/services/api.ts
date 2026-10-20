@@ -155,9 +155,29 @@ export const usersApi = {
     new_password: string;
     confirm_new_password: string;
   }) => api.patch('/users/me/password', data),
+  getTerminals: () => api.get('/users/me/terminals'),
+  deleteTerminal: (terminalId: string) => api.delete(`/users/me/terminals/${terminalId}`),
+  getLoginHistory: (limit: number = 20) => api.get('/users/me/login-history', { params: { limit } }),
+  getDevices: () => api.get('/users/me/terminals'),
+  deleteDevice: (deviceId: string) => api.delete(`/users/me/terminals/${deviceId}`),
+  uploadAvatar: (formData: any) =>
+    api.post('/users/me/avatar', formData, {
+      headers: { 'Content-Type': 'multipart/form-data' },
+    }),
+  uploadAvatarBase64: (base64: string) =>
+    api.post('/users/me/avatar', { avatar_base64: base64 }),
+  deleteAvatar: () => api.delete('/users/me/avatar'),
+  getNotificationPreferences: () =>
+    api.get('/users/me/notification-preferences'),
+  updateNotificationPreferences: (preferences: {
+    notifications_enabled?: boolean;
+    alert_sound_enabled?: boolean;
+    critical_alert_enabled?: boolean;
+  }) =>
+    api.patch('/users/me/notification-preferences', preferences),
 };
 
-// API SOS báo cho các thành viên trong cùng hộ; app sẽ tự mở trình gọi 115.
+// API SOS báo cho các thành viên trong cùng hộ; app sẽ tự mở trình gọi 115 hoặc tổng đài hỗ trợ 0898230852.
 export const emergencyApi = {
   triggerSOS: (data: {
     address?: string;
@@ -165,6 +185,11 @@ export const emergencyApi = {
     longitude?: number;
     message?: string;
   } = {}) => api.post('/emergency/sos', data),
+  requestSupportCall: (data: {
+    topic?: string;
+    note?: string;
+  } = {}) => api.post('/emergency/support-call', data),
+  getSupportHotline: () => api.get('/emergency/support-hotline'),
 };
 
 // 1. System Mode API
@@ -314,4 +339,40 @@ export const chatbotApi = {
       },
     }),
 };
+
+// 9. Health Reports API (Báo cáo sức khỏe tổng hợp thực tế từ backend)
+export const reportsApi = {
+  getSummary: (period: 'WEEK' | 'MONTH' = 'WEEK', patientId?: string, deviceId?: string) =>
+    api.get('/reports/summary', { params: { period, patient_id: patientId, device_id: deviceId } }),
+  getPdfUrl: (period: 'WEEK' | 'MONTH' = 'WEEK', patientId?: string, deviceId?: string) => {
+    let url = `${BASE_URL}/reports/pdf?period=${period}`;
+    if (patientId) url += `&patient_id=${encodeURIComponent(patientId)}`;
+    if (deviceId) url += `&device_id=${encodeURIComponent(deviceId)}`;
+    return url;
+  },
+  getExcelUrl: (period: 'WEEK' | 'MONTH' = 'WEEK', patientId?: string, deviceId?: string) => {
+    let url = `${BASE_URL}/reports/excel?period=${period}`;
+    if (patientId) url += `&patient_id=${encodeURIComponent(patientId)}`;
+    if (deviceId) url += `&device_id=${encodeURIComponent(deviceId)}`;
+    return url;
+  },
+};
+
+// 10. Support & Documentation API (CSKH 24/7 & Hướng dẫn sử dụng)
+export const supportApi = {
+  getHotline: () => api.get('/support/hotline'),
+  getDocumentation: () => api.get('/support/documentation'),
+  getFaqs: () => api.get('/support/faq'),
+  createTicket: (data: {
+    topic: string;
+    device_type?: string;
+    phone?: string;
+    note?: string;
+  }) => api.post('/support/tickets', data),
+  getMyTickets: () => api.get('/support/tickets/me'),
+  requestCall: (data: { topic?: string; note?: string } = {}) =>
+    api.post('/support/call', data),
+};
+
+
 

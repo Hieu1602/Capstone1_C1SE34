@@ -16,6 +16,8 @@ export interface AuthStoreState {
   full_name: string | null;
   userRole: 'user' | 'doctor' | 'admin' | string | null;
   role: string | null;
+  avatarUrl: string | null;
+  avatar_url: string | null;
   household_id: number | string | null;
   viewRole: 'CAREGIVER' | 'DOCTOR';
 
@@ -26,7 +28,8 @@ export interface AuthStoreState {
     userId: string | number,
     phone: string,
     role: string,
-    householdId?: number | string
+    householdId?: number | string,
+    avatarUrl?: string | null
   ) => void;
   setTokens: (access: string, refresh: string) => void;
   setUser: (id: string | number, phone?: string, name?: string, role?: string, householdId?: number | string) => void;
@@ -36,7 +39,9 @@ export interface AuthStoreState {
     phone_number?: string;
     role?: string;
     household_id?: number | string;
+    avatar_url?: string | null;
   }) => void;
+  setAvatar: (url: string | null) => void;
   updateUserName: (nameOrId: string, name?: string) => void;
   setViewRole: (role: 'CAREGIVER' | 'DOCTOR') => void;
   toggleViewRole: () => void;
@@ -64,6 +69,8 @@ const createAuthStore: StateCreator<AuthStoreState, [], [['zustand/persist', Aut
   full_name: null,
   userRole: null,
   role: null,
+  avatarUrl: null,
+  avatar_url: null,
   household_id: null,
   viewRole: 'CAREGIVER',
 
@@ -74,7 +81,8 @@ const createAuthStore: StateCreator<AuthStoreState, [], [['zustand/persist', Aut
     userId: string | number,
     phone: string,
     role: string,
-    householdId?: number | string
+    householdId?: number | string,
+    avatarUrl?: string | null
   ) => {
     const normalizedRole = role.toLowerCase();
     const isDoctor = normalizedRole === 'doctor' || normalizedRole.includes('bác sĩ');
@@ -91,6 +99,8 @@ const createAuthStore: StateCreator<AuthStoreState, [], [['zustand/persist', Aut
       phone_number: phone,
       userRole: isDoctor ? 'doctor' : isAdmin ? 'admin' : 'user',
       role,
+      avatarUrl: avatarUrl ?? null,
+      avatar_url: avatarUrl ?? null,
       household_id: householdId ?? null,
       viewRole: isDoctor ? 'DOCTOR' : 'CAREGIVER',
     });
@@ -127,6 +137,8 @@ const createAuthStore: StateCreator<AuthStoreState, [], [['zustand/persist', Aut
       userName: profile.full_name || state.userName,
       phone_number: profile.phone_number || state.phone_number,
       userPhone: profile.phone_number || state.userPhone,
+      avatarUrl: profile.avatar_url !== undefined ? profile.avatar_url : state.avatarUrl,
+      avatar_url: profile.avatar_url !== undefined ? profile.avatar_url : state.avatar_url,
       role: profile.role || state.role,
       userRole: profile.role?.toLowerCase() === 'doctor' || profile.role?.includes('Bác sĩ')
         ? 'doctor'
@@ -142,6 +154,9 @@ const createAuthStore: StateCreator<AuthStoreState, [], [['zustand/persist', Aut
           ? 'CAREGIVER'
           : state.viewRole,
     })),
+
+  setAvatar: (url: string | null) =>
+    set({ avatarUrl: url, avatar_url: url }),
 
   updateUserName: (nameOrId: string, name?: string) => {
     if (name !== undefined) {
@@ -170,6 +185,8 @@ const createAuthStore: StateCreator<AuthStoreState, [], [['zustand/persist', Aut
       full_name: null,
       userRole: null,
       role: null,
+      avatarUrl: null,
+      avatar_url: null,
       household_id: null,
       viewRole: 'CAREGIVER',
     }),
@@ -196,6 +213,8 @@ const persistOptions: PersistOptions<AuthStoreState> = {
       full_name: null,
       userRole: null,
       role: null,
+      avatarUrl: null,
+      avatar_url: null,
       household_id: null,
       viewRole: 'CAREGIVER',
     };
