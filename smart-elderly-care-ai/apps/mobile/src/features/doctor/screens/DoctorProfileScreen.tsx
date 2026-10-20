@@ -123,9 +123,11 @@ export default function DoctorProfileScreen({ navigation }: any) {
         allowsEditing: true,
         aspect: [1, 1],
         quality: 0.8,
+        base64: true,
       });
       if (!result.canceled && result.assets?.[0]?.uri) {
-        const selectedUri = result.assets[0].uri;
+        const asset = result.assets[0];
+        const selectedUri = asset.base64 ? `data:image/jpeg;base64,${asset.base64}` : asset.uri;
         setEditAvatarUri(selectedUri);
         setAvatarUri(selectedUri);
       }

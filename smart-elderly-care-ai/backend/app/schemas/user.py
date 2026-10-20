@@ -33,10 +33,13 @@ class UserUpdate(BaseModel):
     avatar_url: Optional[str] = None
     fcm_token: Optional[str] = None
     preferred_language: Optional[Literal["vi", "en"]] = None
-    language: Optional[Literal["vi", "en"]] = None
+    language: Optional[str] = "vi"
     font_size_mode: Optional[Literal["system", "custom"]] = None
     custom_font_scale: Optional[int] = Field(default=None, ge=0, le=4)
     vibration_enabled: Optional[bool] = None
+    notifications_enabled: Optional[bool] = None
+    alert_sound_enabled: Optional[bool] = None
+    critical_alert_enabled: Optional[bool] = None
 
     @model_validator(mode="before")
     @classmethod
@@ -70,6 +73,12 @@ class LanguagePreferenceUpdate(BaseModel):
 class FontSizePreferenceUpdate(BaseModel):
     font_size_mode: Literal["system", "custom"]
     custom_font_scale: int = Field(ge=0, le=4)
+
+
+class NotificationPreferenceUpdate(BaseModel):
+    notifications_enabled: Optional[bool] = None
+    alert_sound_enabled: Optional[bool] = None
+    critical_alert_enabled: Optional[bool] = None
 
 
 class PasswordChange(BaseModel):
@@ -106,15 +115,19 @@ from datetime import datetime
 class UserOut(UserBase):
     id: uuid.UUID
     is_active: bool
-    preferred_language: Literal["vi", "en"] = "vi"
-    language: Optional[Literal["vi", "en"]] = None
-    font_size_mode: Literal["system", "custom"] = "system"
+    preferred_language: Optional[str] = "vi"
+    language: Optional[str] = "vi"
+    font_size_mode: Optional[str] = "system"
     custom_font_scale: int = Field(default=2, ge=0, le=4)
     vibration_enabled: bool = True
+    notifications_enabled: bool = True
+    alert_sound_enabled: bool = True
+    critical_alert_enabled: bool = True
     created_at: Optional[datetime] = None
     updated_at: Optional[datetime] = None
     last_login_at: Optional[datetime] = None
     assigned_house: Optional[str] = None
+    household_id: Optional[uuid.UUID] = None
     role_title: Optional[str] = None
 
     @model_validator(mode="after")
@@ -129,3 +142,33 @@ class Token(BaseModel):
     access_token: str
     refresh_token: str
     token_type: str = "bearer"
+
+
+class UserTerminalOut(BaseModel):
+    id: uuid.UUID
+    device_name: str
+    device_type: str = "mobile"
+    os: Optional[str] = None
+    browser: Optional[str] = None
+    ip_address: str
+    location: Optional[str] = "Đà Nẵng, Việt Nam"
+    last_active_at: Optional[datetime] = None
+    is_current: bool = False
+    is_active: bool = True
+    created_at: Optional[datetime] = None
+
+    model_config = {"from_attributes": True}
+
+
+class UserLoginHistoryOut(BaseModel):
+    id: uuid.UUID
+    device_name: str
+    ip_address: str
+    location: Optional[str] = "Đà Nẵng, Việt Nam"
+    login_time: datetime
+    login_method: str = "Mật khẩu"
+    status: str = "success"
+    user_agent: Optional[str] = None
+    is_current: bool = False
+
+    model_config = {"from_attributes": True}

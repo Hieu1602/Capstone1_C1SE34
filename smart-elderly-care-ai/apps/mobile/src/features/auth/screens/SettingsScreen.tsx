@@ -21,6 +21,7 @@ import {
   Switch,
   Vibration,
   PanResponder,
+  Linking,
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
@@ -29,7 +30,7 @@ import { Colors, Shadows } from '../../../theme/colors';
 import { useTheme } from '../../../store/useThemeStore';
 import i18n from '../../../i18n/config';
 import { LocalizedText as Text } from '../../../i18n/LocalizedComponents';
-import { usersApi } from '../../../services/api';
+import { usersApi, supportApi } from '../../../services/api';
 
 const FONT_SCALE_LEVELS = [0.8, 1, 1.2, 1.5, 1.8] as const;
 
@@ -99,8 +100,13 @@ export default function SettingsScreen({ navigation, route }: any) {
       .catch(() => {});
   }, []);
 
+  const isFromProfileRef = React.useRef(false);
+
   React.useEffect(() => {
     const initialModal = route?.params?.initialModal;
+    if (route?.params?.fromProfile || initialModal) {
+      isFromProfileRef.current = true;
+    }
     if (!initialModal) return;
 
     if (initialModal === 'appInfo') {
@@ -113,8 +119,32 @@ export default function SettingsScreen({ navigation, route }: any) {
     } else if (initialModal === 'appearance') {
       setAppearanceVisible(true);
     }
-    navigation?.setParams?.({ initialModal: undefined });
-  }, [route?.params?.initialModal, navigation]);
+    navigation?.setParams?.({ initialModal: undefined, fromProfile: undefined });
+  }, [route?.params?.initialModal, route?.params?.fromProfile, navigation]);
+
+  const closeWithProfileReturn = React.useCallback((closeFn?: () => void) => {
+    if (closeFn) closeFn();
+    if (isFromProfileRef.current) {
+      isFromProfileRef.current = false;
+      navigation?.goBack?.();
+    }
+  }, [navigation]);
+
+  const [docData, setDocData] = React.useState<any>(null);
+
+  React.useEffect(() => {
+    if (infoDetail === 'app' && !docData) {
+      supportApi.getDocumentation()
+        .then((res) => {
+          if (res?.data) {
+            setDocData(res.data);
+          }
+        })
+        .catch((err) => {
+          console.warn('[SettingsScreen] Không thể tải tài liệu hướng dẫn:', err);
+        });
+    }
+  }, [infoDetail, docData]);
 
   const handleLanguageChange = async (lang: 'vi' | 'en') => {
     try {
@@ -555,11 +585,11 @@ export default function SettingsScreen({ navigation, route }: any) {
         transparent
         visible={isFontSizeVisible}
         animationType="slide"
-        onRequestClose={() => setFontSizeVisible(false)}
+        onRequestClose={() => closeWithProfileReturn(() => setFontSizeVisible(false))}
       >
         <Pressable
           style={[styles.settingsOverlay, isDarkMode && { backgroundColor: '#0B0F19' }]}
-          onPress={() => setFontSizeVisible(false)}
+          onPress={() => closeWithProfileReturn(() => setFontSizeVisible(false))}
         >
           <Pressable style={[styles.settingsSheet, isDarkMode && { backgroundColor: '#0B0F19' }]} onPress={() => {}}>
             <View style={styles.settingsHeaderRow}>
@@ -569,7 +599,7 @@ export default function SettingsScreen({ navigation, route }: any) {
                   styles.settingsBackButton,
                   isDarkMode && { backgroundColor: '#1E293B', borderColor: '#334155' },
                 ]}
-                onPress={() => setFontSizeVisible(false)}
+                onPress={() => closeWithProfileReturn(() => setFontSizeVisible(false))}
                 activeOpacity={0.7}
               >
                 <Ionicons name="chevron-back-outline" size={24} color={isDarkMode ? '#F8FAFC' : Colors.textPrimary} />
@@ -690,11 +720,11 @@ export default function SettingsScreen({ navigation, route }: any) {
         transparent
         visible={isAboutInfoVisible}
         animationType="slide"
-        onRequestClose={() => setAboutInfoVisible(false)}
+        onRequestClose={() => closeWithProfileReturn(() => { setAboutInfoVisible(false); setInfoDetail(null); })}
       >
         <Pressable
           style={[styles.infoOverlay, isDarkMode && { backgroundColor: '#0B0F19' }]}
-          onPress={() => setAboutInfoVisible(false)}
+          onPress={() => closeWithProfileReturn(() => { setAboutInfoVisible(false); setInfoDetail(null); })}
         >
           <Pressable style={[styles.infoScreen, isDarkMode && { backgroundColor: '#0B0F19' }]} onPress={() => {}}>
             <View style={styles.infoHeaderRow}>
@@ -705,11 +735,10 @@ export default function SettingsScreen({ navigation, route }: any) {
                   isDarkMode && { backgroundColor: '#1E293B', borderColor: '#334155' },
                 ]}
                 onPress={() => {
-                  if (infoDetail) {
-                    setInfoDetail(null);
-                  } else {
+                  closeWithProfileReturn(() => {
                     setAboutInfoVisible(false);
-                  }
+                    setInfoDetail(null);
+                  });
                 }}
                 activeOpacity={0.7}
               >
@@ -767,14 +796,113 @@ export default function SettingsScreen({ navigation, route }: any) {
                       <Ionicons name="shield-checkmark" size={38} color="#FFFFFF" />
                     </View>
                     <Text style={[styles.infoDetailHeading, isDarkMode && { color: '#F8FAFC' }]}>
-                      Smart Elderly Care AI
+                      {docData?.project_name || 'Smart Elderly Care AI'}
                     </Text>
-                    <Text style={[styles.appInfoVersion, isDarkMode && { color: '#94A3B8' }]}>Phiên bản 1.0.0</Text>
+                    <Text style={[styles.appInfoVersion, isDarkMode && { color: '#94A3B8' }]}>
+                      {docData ? `${docData.project_code} • Phiên bản ${docData.version}` : 'C1SE.34 • Phiên bản 1.0.0'}
+                    </Text>
                     <Text style={[styles.infoDetailText, isDarkMode && { color: '#94A3B8' }]}>
-                      Hệ thống giám sát thông minh giúp gia đình theo dõi sức khỏe, thiết bị và nhận cảnh báo kịp thời.
+                      {docData?.description || 'Hệ thống giám sát thông minh giúp gia đình theo dõi sức khỏe, thiết bị và nhận cảnh báo kịp thời.'}
                     </Text>
+
+                    {/* Khối Tổng đài CSKH 24/7 */}
+                    <View style={[styles.docHotlineCard, isDarkMode && { backgroundColor: '#1E293B', borderColor: '#334155' }]}>
+                      <View style={[styles.docHotlineIconWrap, { backgroundColor: '#EFF6FF' }]}>
+                        <Ionicons name="headset" size={24} color="#2563EB" />
+                      </View>
+                      <View style={{ flex: 1, marginLeft: 12 }}>
+                        <Text style={[styles.docHotlineTitle, isDarkMode && { color: '#F8FAFC' }]}>
+                          Tổng đài hỗ trợ kỹ thuật CSKH 24/7
+                        </Text>
+                        <Text style={styles.docHotlineSub}>
+                          Hỗ trợ kết nối camera, vòng tay, hub AI
+                        </Text>
+                        <TouchableOpacity
+                          style={styles.docHotlineButton}
+                          activeOpacity={0.8}
+                          onPress={() => Linking.openURL('tel:0898230852')}
+                        >
+                          <Ionicons name="call" size={15} color="#FFFFFF" />
+                          <Text style={styles.docHotlineButtonText}>Gọi ngay: 0898230852</Text>
+                        </TouchableOpacity>
+                      </View>
+                    </View>
+
+                    {/* Danh mục Hướng dẫn sử dụng chi tiết từ Backend */}
+                    <Text style={[styles.docSectionTitle, isDarkMode && { color: '#F8FAFC' }]}>
+                      📖 Hướng dẫn sử dụng thiết bị
+                    </Text>
+
+                    {(docData?.user_guides || [
+                      {
+                        id: 'smartband',
+                        title: 'Kết nối Vòng đeo tay thông minh (BLE Band)',
+                        icon: 'watch-outline',
+                        badge: 'BLE 5.0',
+                        description: 'Đo nhịp tim, SpO2, bước chân và thân nhiệt liên tục theo thời gian thực.',
+                        steps: [
+                          'Bước 1: Bật Bluetooth trên điện thoại hoặc đặt vòng tay gần Edge Hub.',
+                          'Bước 2: Mở ứng dụng, chọn Thiết bị -> (+) Thêm thiết bị.',
+                          'Bước 3: Chọn vòng tay đo sinh hiệu và nhấn Ghép nối.',
+                        ],
+                      },
+                      {
+                        id: 'camera',
+                        title: 'Cài đặt Camera AI phát hiện té ngã',
+                        icon: 'videocam-outline',
+                        badge: 'YOLOv8 AI',
+                        description: 'Phát hiện sự cố ngã tức thời bằng mô hình nhận diện tư thế trên Edge Hub.',
+                        steps: [
+                          'Bước 1: Lắp camera ở độ cao 2m - 2.5m bao quát phòng khách / phòng ngủ.',
+                          'Bước 2: Kết nối camera vào cùng mạng WiFi với Edge Hub AI.',
+                          'Bước 3: Quét mã QR hoặc nhập luồng RTSP camera vào ứng dụng.',
+                        ],
+                      },
+                      {
+                        id: 'hub',
+                        title: 'Thiết lập bộ Hub AI trung tâm (Edge Hub)',
+                        icon: 'hardware-chip-outline',
+                        badge: 'Edge Hub',
+                        description: 'Xử lý hình ảnh AI cục bộ, còi báo động tại chỗ và kết nối đám mây.',
+                        steps: [
+                          'Bước 1: Cắm nguồn Type-C và kết nối dây mạng LAN hoặc WiFi cho Hub.',
+                          'Bước 2: Mở app và quét mã QR ở mặt đáy Edge Hub để gán vào nhà.',
+                        ],
+                      },
+                    ]).map((guide: any) => (
+                      <View
+                        key={guide.id}
+                        style={[
+                          styles.docGuideCard,
+                          isDarkMode && { backgroundColor: '#1E293B', borderColor: '#334155' },
+                        ]}
+                      >
+                        <View style={styles.docGuideHeader}>
+                          <View style={styles.docGuideIconBox}>
+                            <Ionicons name={guide.icon || 'book-outline'} size={18} color={Colors.primary} />
+                          </View>
+                          <Text style={[styles.docGuideTitle, isDarkMode && { color: '#F8FAFC' }]}>
+                            {guide.title}
+                          </Text>
+                          <View style={styles.docGuideBadge}>
+                            <Text style={styles.docGuideBadgeText}>{guide.badge}</Text>
+                          </View>
+                        </View>
+                        <Text style={[styles.docGuideDesc, isDarkMode && { color: '#94A3B8' }]}>
+                          {guide.description}
+                        </Text>
+                        <View style={styles.docGuideStepsWrap}>
+                          {guide.steps?.map((step: string, sIdx: number) => (
+                            <Text key={sIdx} style={[styles.docGuideStep, isDarkMode && { color: '#CBD5E1' }]}>
+                              {step}
+                            </Text>
+                          ))}
+                        </View>
+                      </View>
+                    ))}
+
                     <Text style={[styles.appInfoCopyright, isDarkMode && { color: '#64748B' }]}>
-                      © 2026 Smart Elderly Care AI
+                      © 2026 Smart Elderly Care AI • Đồ án tốt nghiệp C1SE.34
                     </Text>
                   </View>
                 )}
@@ -833,11 +961,11 @@ export default function SettingsScreen({ navigation, route }: any) {
         transparent
         visible={isNotificationSettingsVisible}
         animationType="slide"
-        onRequestClose={() => setNotificationSettingsVisible(false)}
+        onRequestClose={() => closeWithProfileReturn(() => setNotificationSettingsVisible(false))}
       >
         <Pressable
           style={[styles.settingsOverlay, isDarkMode && { backgroundColor: '#0B0F19' }]}
-          onPress={() => setNotificationSettingsVisible(false)}
+          onPress={() => closeWithProfileReturn(() => setNotificationSettingsVisible(false))}
         >
           <Pressable style={[styles.settingsSheet, isDarkMode && { backgroundColor: '#0B0F19' }]} onPress={() => {}}>
             <View style={styles.settingsHeaderRow}>
@@ -847,7 +975,7 @@ export default function SettingsScreen({ navigation, route }: any) {
                   styles.settingsBackButton,
                   isDarkMode && { backgroundColor: '#1E293B', borderColor: '#334155' },
                 ]}
-                onPress={() => setNotificationSettingsVisible(false)}
+                onPress={() => closeWithProfileReturn(() => setNotificationSettingsVisible(false))}
                 activeOpacity={0.7}
               >
                 <Ionicons name="chevron-back-outline" size={24} color={isDarkMode ? '#F8FAFC' : Colors.textPrimary} />
@@ -1074,11 +1202,11 @@ export default function SettingsScreen({ navigation, route }: any) {
         transparent
         visible={isAppearanceVisible}
         animationType="slide"
-        onRequestClose={() => setAppearanceVisible(false)}
+        onRequestClose={() => closeWithProfileReturn(() => setAppearanceVisible(false))}
       >
         <Pressable
           style={[styles.appearanceOverlay, isDarkMode && { backgroundColor: '#0B0F19' }]}
-          onPress={() => setAppearanceVisible(false)}
+          onPress={() => closeWithProfileReturn(() => setAppearanceVisible(false))}
         >
           <Pressable style={[styles.appearanceSheet, isDarkMode && { backgroundColor: '#0B0F19' }]} onPress={() => {}}>
             <View style={styles.appearanceHeader}>
@@ -1087,7 +1215,7 @@ export default function SettingsScreen({ navigation, route }: any) {
                   styles.appearanceCloseButton,
                   isDarkMode && { backgroundColor: '#1E293B', borderColor: '#334155' },
                 ]}
-                onPress={() => setAppearanceVisible(false)}
+                onPress={() => closeWithProfileReturn(() => setAppearanceVisible(false))}
                 activeOpacity={0.7}
               >
                 <Ionicons name="chevron-back-outline" size={24} color={isDarkMode ? '#F8FAFC' : '#111827'} />
@@ -1111,7 +1239,7 @@ export default function SettingsScreen({ navigation, route }: any) {
                 onPress={() => {
                   setAppearanceMode('light');
                   setDarkMode(false);
-                  setAppearanceVisible(false);
+                  closeWithProfileReturn(() => setAppearanceVisible(false));
                 }}
               >
                 <Text style={[styles.appearanceOptionLabel, isDarkMode && { color: '#F8FAFC' }]}>Màu sáng</Text>
@@ -1133,7 +1261,7 @@ export default function SettingsScreen({ navigation, route }: any) {
                 onPress={() => {
                   setAppearanceMode('dark');
                   setDarkMode(true);
-                  setAppearanceVisible(false);
+                  closeWithProfileReturn(() => setAppearanceVisible(false));
                 }}
               >
                 <Text style={[styles.appearanceOptionLabel, isDarkMode && { color: '#F8FAFC' }]}>Tối</Text>
@@ -1370,9 +1498,121 @@ const styles = StyleSheet.create({
     color: '#64748B',
   },
   appInfoCopyright: {
-    marginTop: 6,
+    marginTop: 18,
+    marginBottom: 24,
     fontSize: 13,
     color: '#94A3B8',
+    textAlign: 'center',
+  },
+  docHotlineCard: {
+    width: '100%',
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: '#F8FAFC',
+    borderRadius: 16,
+    padding: 14,
+    marginTop: 12,
+    marginBottom: 20,
+    borderWidth: 1,
+    borderColor: '#E2E8F0',
+  },
+  docHotlineIconWrap: {
+    width: 44,
+    height: 44,
+    borderRadius: 12,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  docHotlineTitle: {
+    fontSize: 15,
+    fontWeight: '700',
+    color: '#0F172A',
+  },
+  docHotlineSub: {
+    fontSize: 13,
+    color: '#64748B',
+    marginTop: 2,
+    marginBottom: 8,
+  },
+  docHotlineButton: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: '#2563EB',
+    paddingVertical: 6,
+    paddingHorizontal: 12,
+    borderRadius: 10,
+    alignSelf: 'flex-start',
+    gap: 6,
+  },
+  docHotlineButtonText: {
+    color: '#FFFFFF',
+    fontSize: 13,
+    fontWeight: '600',
+  },
+  docSectionTitle: {
+    fontSize: 17,
+    fontWeight: '700',
+    color: '#0F172A',
+    width: '100%',
+    textAlign: 'left',
+    marginBottom: 12,
+  },
+  docGuideCard: {
+    width: '100%',
+    backgroundColor: '#FFFFFF',
+    borderRadius: 16,
+    padding: 16,
+    marginBottom: 14,
+    borderWidth: 1,
+    borderColor: '#E2E8F0',
+  },
+  docGuideHeader: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    marginBottom: 8,
+    gap: 8,
+  },
+  docGuideIconBox: {
+    width: 32,
+    height: 32,
+    borderRadius: 8,
+    backgroundColor: 'rgba(255, 122, 0, 0.1)',
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  docGuideTitle: {
+    flex: 1,
+    fontSize: 15,
+    fontWeight: '700',
+    color: '#0F172A',
+  },
+  docGuideBadge: {
+    backgroundColor: 'rgba(37, 99, 235, 0.1)',
+    paddingVertical: 3,
+    paddingHorizontal: 8,
+    borderRadius: 8,
+  },
+  docGuideBadgeText: {
+    fontSize: 11,
+    fontWeight: '600',
+    color: '#2563EB',
+  },
+  docGuideDesc: {
+    fontSize: 13,
+    color: '#64748B',
+    lineHeight: 18,
+    marginBottom: 10,
+  },
+  docGuideStepsWrap: {
+    backgroundColor: 'rgba(241, 245, 249, 0.6)',
+    borderRadius: 10,
+    padding: 10,
+    gap: 6,
+  },
+  docGuideStep: {
+    fontSize: 13,
+    color: '#334155',
+    lineHeight: 18,
   },
   generalSettingsList: {
     marginTop: 8,
