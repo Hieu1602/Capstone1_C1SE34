@@ -11,7 +11,7 @@ import { useAuthStore } from '../store/useAuthStore';
 // - Nếu có biến EXPO_PUBLIC_API_URL thì dùng nó
 // - Nếu chạy trên Web và truy cập qua LAN IP: tự động kết nối API qua IP đó
 // - Tự động trích xuất IP từ host của Metro Bundler (Expo Constants)
-// - Fallback về IP máy tính hiện tại: 192.168.1.160
+// - Fallback về IP máy tính hiện tại: 192.168.1.4
 const getBaseUrl = (): string => {
   // 1. Khi chạy trên Web trình duyệt
   if (Platform.OS === 'web' && typeof window !== 'undefined' && window.location?.hostname) {
@@ -39,7 +39,7 @@ const getBaseUrl = (): string => {
   }
 
   // 4. Fallback về IP máy tính phát triển trong mạng nội bộ
-  return 'http://192.168.1.160:8000/api/v1';
+  return 'http://192.168.1.4:8000/api/v1';
 };
 
 export const BASE_URL: string = getBaseUrl();

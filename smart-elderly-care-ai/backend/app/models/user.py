@@ -14,7 +14,7 @@ if TYPE_CHECKING:
     from app.models.house import House, HouseMember
     from app.models.user_terminal import UserTerminal, UserLoginHistory
 
-from sqlalchemy import Boolean, DateTime, Float, Integer, String, Text
+from sqlalchemy import Boolean, DateTime, Integer, String, Text
 from sqlalchemy.dialects.postgresql import UUID
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 from sqlalchemy.sql import func
@@ -65,9 +65,6 @@ class User(Base):
     critical_alert_enabled: Mapped[bool] = mapped_column(
         Boolean, nullable=False, default=True, server_default="true"
     )
-    location_latitude: Mapped[float | None] = mapped_column(Float, nullable=True)
-    location_longitude: Mapped[float | None] = mapped_column(Float, nullable=True)
-    location_address: Mapped[str | None] = mapped_column(String(500), nullable=True)
     cchn_number: Mapped[str | None] = mapped_column(String(50), nullable=True)
     specialty: Mapped[str | None] = mapped_column(String(255), nullable=True)
     workplace: Mapped[str | None] = mapped_column(String(255), nullable=True)
