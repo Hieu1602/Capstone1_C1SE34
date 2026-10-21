@@ -6,7 +6,7 @@
 // - Phần dưới: Logo thương hiệu, slogan, nút "Đăng ký" và "Đăng nhập"
 // ==============================================================================
 
-import React from 'react';
+import React, { useState } from 'react';
 import {
   View,
   StyleSheet,
@@ -15,6 +15,7 @@ import {
   Image,
   ScrollView,
   Dimensions,
+  Alert,
 } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { Colors } from '../../../theme/colors';
@@ -33,6 +34,19 @@ const COLLAGE_IMAGES = {
 };
 
 export default function WelcomeScreen({ navigation }: any) {
+  const [isAgreed, setIsAgreed] = useState(false);
+
+  const handleNavigate = (screen: 'Register' | 'Login') => {
+    if (!isAgreed) {
+      Alert.alert(
+        'Thông báo',
+        'Vui lòng đọc và tích chọn đồng ý với Điều khoản dịch vụ và Chính sách quyền riêng tư để tiếp tục.'
+      );
+      return;
+    }
+    navigation.navigate(screen);
+  };
+
   return (
     <SafeAreaView style={styles.safeArea}>
       <ScrollView
@@ -88,31 +102,43 @@ export default function WelcomeScreen({ navigation }: any) {
           <View style={styles.actionButtonsContainer}>
             {/* Nút 1: Đăng ký */}
             <TouchableOpacity
-              style={styles.btnRegister}
-              activeOpacity={0.88}
-              onPress={() => navigation.navigate('Register')}
+              style={[styles.btnRegister, !isAgreed && styles.btnDisabled]}
+              activeOpacity={isAgreed ? 0.88 : 0.7}
+              onPress={() => handleNavigate('Register')}
             >
               <LocalizedText style={styles.btnRegisterText}>Đăng ký</LocalizedText>
             </TouchableOpacity>
 
             {/* Nút 2: Đăng nhập */}
             <TouchableOpacity
-              style={styles.btnLogin}
-              activeOpacity={0.88}
-              onPress={() => navigation.navigate('Login')}
+              style={[styles.btnLogin, !isAgreed && styles.btnLoginDisabled]}
+              activeOpacity={isAgreed ? 0.88 : 0.7}
+              onPress={() => handleNavigate('Login')}
             >
               <LocalizedText style={styles.btnLoginText}>Đăng nhập</LocalizedText>
             </TouchableOpacity>
           </View>
 
-          {/* Điều khoản pháp lý ở chân trang */}
-          <LocalizedText style={styles.termsNoticeText}>
-            Bằng cách tiếp tục, bạn đồng ý với{' '}
-            <LocalizedText style={styles.termsLink}>Điều khoản dịch vụ</LocalizedText>{' '}
-            của SECA và xác nhận rằng bạn đã đọc{' '}
-            <LocalizedText style={styles.termsLink}>Chính sách quyền riêng tư</LocalizedText>{' '}
-            của chúng tôi.
-          </LocalizedText>
+          {/* Điều khoản pháp lý ở chân trang với checkbox hình vuông */}
+          <TouchableOpacity
+            style={styles.termsContainer}
+            activeOpacity={0.7}
+            onPress={() => setIsAgreed(!isAgreed)}
+          >
+            <Ionicons
+              name={isAgreed ? 'checkbox' : 'square-outline'}
+              size={20}
+              color={isAgreed ? Colors.primary : '#94A3B8'}
+              style={styles.checkboxIcon}
+            />
+            <LocalizedText style={styles.termsNoticeText}>
+              Bằng cách tiếp tục, bạn đồng ý với{' '}
+              <LocalizedText style={styles.termsLink}>Điều khoản dịch vụ</LocalizedText>{' '}
+              của SECA và xác nhận rằng bạn đã đọc{' '}
+              <LocalizedText style={styles.termsLink}>Chính sách quyền riêng tư</LocalizedText>{' '}
+              của chúng tôi.
+            </LocalizedText>
+          </TouchableOpacity>
         </View>
       </ScrollView>
     </SafeAreaView>
@@ -242,6 +268,9 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     width: '100%',
   },
+  btnDisabled: {
+    opacity: 0.5,
+  },
   btnRegisterText: {
     color: '#FFFFFF',
     fontSize: 16,
@@ -255,17 +284,30 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     width: '100%',
   },
+  btnLoginDisabled: {
+    opacity: 0.5,
+  },
   btnLoginText: {
     color: '#111111',
     fontSize: 16,
     fontWeight: '700',
   },
+  termsContainer: {
+    flexDirection: 'row',
+    alignItems: 'flex-start',
+    paddingHorizontal: 8,
+    marginTop: 4,
+  },
+  checkboxIcon: {
+    marginRight: 8,
+    marginTop: -1,
+  },
   termsNoticeText: {
+    flex: 1,
     fontSize: 11,
     color: '#334155',
-    textAlign: 'center',
+    textAlign: 'left',
     lineHeight: 16,
-    paddingHorizontal: 6,
   },
   termsLink: {
     fontWeight: '700',
@@ -273,4 +315,3 @@ const styles = StyleSheet.create({
     textDecorationLine: 'underline',
   },
 });
-
