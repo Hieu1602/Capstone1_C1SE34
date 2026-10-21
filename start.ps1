@@ -28,6 +28,15 @@ $WebDir = "$AiDir\apps\web"
 $EdgeDir = "$AiDir\edge"
 $DockerComposeFile = "$AiDir\docker-compose.yml"
 $BackendVenvPy = "$BackendDir\.venv\Scripts\python.exe"
+if (-not (Test-Path $BackendVenvPy)) {
+    if (Test-Path "$ScriptDir\..\.venv\Scripts\python.exe") {
+        $BackendVenvPy = "$ScriptDir\..\.venv\Scripts\python.exe"
+    } elseif (Test-Path "$AiDir\..\.venv\Scripts\python.exe") {
+        $BackendVenvPy = "$AiDir\..\.venv\Scripts\python.exe"
+    } elseif (Test-Path "E:\cap3\.venv\Scripts\python.exe") {
+        $BackendVenvPy = "E:\cap3\.venv\Scripts\python.exe"
+    }
+}
 
 function Write-Header {
     Clear-Host

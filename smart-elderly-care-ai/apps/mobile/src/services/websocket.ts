@@ -11,9 +11,7 @@ const getWsBaseUrl = (): string => {
   // 1. Khi chạy trên Web trình duyệt
   if (typeof window !== 'undefined' && window.location?.hostname) {
     const host = window.location.hostname;
-    if (host !== 'localhost' && host !== '127.0.0.1') {
-      return `ws://${host}:8000/ws`;
-    }
+    return `ws://${host}:8000/ws`;
   }
 
   // 2. Tự động nhận diện IP máy tính từ Expo Metro host (kết nối trực tiếp điện thoại thật qua LAN Wi-Fi)
