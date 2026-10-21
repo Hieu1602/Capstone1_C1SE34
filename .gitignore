@@ -6,6 +6,8 @@ node_modules/
 dist/
 build/
 *.tsbuildinfo
+.vite/
+**/.vite/
 
 # Python
 __pycache__/
@@ -56,6 +58,8 @@ smart-elderly-care-ai/edge/test_snapshot.jpg
 *.doc
 *.docx
 *.pdf
+!smart-elderly-care-ai/backend/app/services/chatbot/data/medical_docs/*.docx
+!smart-elderly-care-ai/backend/app/services/chatbot/data/medical_docs/*.pdf
 
 # AI Model weights & checkpoints
 *.onnx

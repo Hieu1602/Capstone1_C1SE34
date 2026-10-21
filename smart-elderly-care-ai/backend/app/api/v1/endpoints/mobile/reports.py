@@ -26,7 +26,7 @@ router = APIRouter()
 @router.get("/summary", response_model=HealthReportSummaryOut)
 async def get_health_report_summary(
     request: Request,
-    period: str = Query(default="WEEK", regex="^(WEEK|MONTH)$", description="Chu kỳ báo cáo: WEEK (7 ngày) hoặc MONTH (30 ngày)"),
+    period: str = Query(default="WEEK", pattern="^(WEEK|MONTH)$", description="Chu kỳ báo cáo: WEEK (7 ngày) hoặc MONTH (30 ngày)"),
     patient_id: Optional[str] = Query(default=None, description="Mã người cao tuổi"),
     device_id: Optional[str] = Query(default=None, description="Mã phần cứng hoặc UUID thiết bị"),
     current_user: Optional[User] = Depends(get_current_user_optional),
@@ -53,7 +53,7 @@ async def get_health_report_summary(
 @router.get("/pdf")
 async def export_default_pdf(
     request: Request,
-    period: Optional[str] = Query(default=None, regex="^(WEEK|MONTH)$"),
+    period: Optional[str] = Query(default=None, pattern="^(WEEK|MONTH)$"),
     days: int = Query(default=7, le=90),
     patient_id: Optional[str] = Query(None),
     device_id: Optional[str] = Query(None),
@@ -68,11 +68,11 @@ async def export_default_pdf(
         db, user_id=user_id, patient_id=patient_id, device_id=device_id
     )
 
-    resolved_id = device.id if device else "BLE_BAND_001"
-    resolved_dev_str = device.device_id if device else "BLE_BAND_001"
+    resolved_id: Optional[UUID] = device.id if device else None
+    resolved_dev_str: str = device.device_id if device else "UNKNOWN_DEVICE"
 
-    vitals = await crud_vital.get_history(db, device_id=resolved_id, limit=calc_days * 24 * 6)
-    incidents = await crud_incident.list(db, device_id=resolved_id, limit=100)
+    vitals = await crud_vital.get_history(db, device_id=resolved_id, limit=calc_days * 24 * 6) if resolved_id else []
+    incidents = await crud_incident.list(db, device_id=resolved_id, limit=100) if resolved_id else []
 
     pdf_bytes = report_service.generate_pdf(
         device_id=resolved_dev_str,
@@ -90,7 +90,7 @@ async def export_default_pdf(
 @router.get("/excel")
 async def export_default_excel(
     request: Request,
-    period: Optional[str] = Query(default=None, regex="^(WEEK|MONTH)$"),
+    period: Optional[str] = Query(default=None, pattern="^(WEEK|MONTH)$"),
     days: int = Query(default=30, le=365),
     patient_id: Optional[str] = Query(None),
     device_id: Optional[str] = Query(None),
@@ -105,11 +105,11 @@ async def export_default_excel(
         db, user_id=user_id, patient_id=patient_id, device_id=device_id
     )
 
-    resolved_id = device.id if device else "BLE_BAND_001"
-    resolved_dev_str = device.device_id if device else "BLE_BAND_001"
+    resolved_id: Optional[UUID] = device.id if device else None
+    resolved_dev_str: str = device.device_id if device else "UNKNOWN_DEVICE"
 
-    vitals = await crud_vital.get_history(db, device_id=resolved_id, limit=calc_days * 24 * 6)
-    incidents = await crud_incident.list(db, device_id=resolved_id, limit=500)
+    vitals = await crud_vital.get_history(db, device_id=resolved_id, limit=calc_days * 24 * 6) if resolved_id else []
+    incidents = await crud_incident.list(db, device_id=resolved_id, limit=500) if resolved_id else []
 
     excel_bytes = report_service.generate_excel(
         device_id=resolved_dev_str,
