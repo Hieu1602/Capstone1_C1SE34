@@ -1,15 +1,15 @@
 // ============================================================================
-// MÀN HÌNH TRỢ LÝ SỨC KHỎE AI (AI ASSISTANT SCREEN)
+// MÀN HÌNH TRỢ LÝ SỨC KHỎE AI (AI ASSISTANT SCREEN) - REFACTORED & OPTIMIZED
 // Hệ thống: Smart Elderly Care AI (SECA)
-// Chức năng:
-//   - Trò chuyện, tư vấn hỏi đáp sức khỏe và tình trạng người cao tuổi qua Chatbot RAG API
-//   - Tích hợp nhận diện giọng nói (STT), thanh nhập liệu nổi (Floating Pill Bar)
-//   - Quản lý lịch sử hội thoại có thanh tìm kiếm nhanh trong Sidebar trượt
-//   - Tự động cuộn xuống cuối danh sách tin nhắn khi có phản hồi mới
-//   - Tương thích chế độ giao diện Sáng / Tối (Light & Dark Theme)
+// Tối ưu hóa:
+//   - Tải tức thì trên Expo Go: Loại bỏ top-level native modules & Modal window lag
+//   - Memoized Components: ChatMessageRow & Markdown Renderer không re-render khi gõ chữ
+//   - Zero-Modal Drawer: Sidebar trượt mượt mà 60fps qua Animated.View in-tree
+//   - Tích hợp giọng đọc AI tiếng Việt (TTS qua expo-speech)
+//   - Tuân thủ nghiêm ngặt React Hook Rules (không gọi hook trong try/catch)
 // ============================================================================
 
-import React, { useState, useRef, useEffect } from 'react';
+import React, { useState, useRef, useEffect, useCallback, useMemo, memo } from 'react';
 import {
   View,
   Text,
@@ -23,20 +23,12 @@ import {
   ActivityIndicator,
   KeyboardAvoidingView,
   Keyboard,
-  Modal,
   StatusBar,
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
-import { useBottomTabBarHeight } from '@react-navigation/bottom-tabs';
 import { Ionicons } from '@expo/vector-icons';
-
-// Helper an toàn cho Audio: Ngăn ngừa lỗi native module làm sập app trên Expo Go
-let SafeAudio: any = null;
-try {
-  SafeAudio = require('expo-audio');
-} catch (e) {
-  console.warn('expo-audio không khả dụng:', e);
-}
+import * as Speech from 'expo-speech';
+import { AudioModule, requestRecordingPermissionsAsync, setAudioModeAsync } from 'expo-audio';
 
 import AIBotIcon from '../../../components/AIBotIcon';
 import { useAuthStore } from '../../../store/useAuthStore';
@@ -44,7 +36,7 @@ import { useTheme } from '../../../store/useThemeStore';
 import { chatbotApi } from '../../../services/api';
 
 // Cấu trúc dữ liệu cho tin nhắn chat
-interface ChatMessage {
+export interface ChatMessage {
   id: string;
   sender: 'user' | 'ai';
   text: string;
@@ -64,23 +56,162 @@ const PROMPT_SUGGESTIONS = [
   { icon: 'heart-outline', text: 'Kiểm tra nhịp tim & SpO₂ hiện tại' },
   { icon: 'body-outline', text: 'Tình trạng té ngã hôm nay thế nào?' },
   { icon: 'medkit-outline', text: 'Hướng dẫn sơ cứu khi người già bị ngã' },
-  { icon: 'volume-high-outline', text: 'Phát loa nhắc cụ uống thuốc' },
 ] as const;
 
 const MODEL_NAME = 'SmartCare Flash 1';
 
+// ----------------------------------------------------------------------------
+// Memoized Markdown Renderer cho tin nhắn AI (tránh re-split regex khi gõ phím)
+// ----------------------------------------------------------------------------
+interface FormattedAIMarkdownProps {
+  content: string;
+  isDarkMode: boolean;
+  textPrimary: string;
+}
+
+const FormattedAIMarkdown = memo(({ content, isDarkMode, textPrimary }: FormattedAIMarkdownProps) => {
+  const renderedLines = useMemo(() => {
+    const lines = content.split('\n');
+    return lines.map((line, lIdx) => {
+      if (!line.trim()) return <View key={lIdx} style={{ height: 6 }} />;
+      const parts = line.split(/(\*\*[^*]+\*\*|\*[^*]+\*)/g);
+      return (
+        <Text
+          key={lIdx}
+          style={[
+            styles.msgText,
+            styles.aiMsgText,
+            isDarkMode && { color: textPrimary },
+          ]}
+        >
+          {parts.map((part, pIdx) => {
+            if (part.startsWith('**') && part.endsWith('**') && part.length >= 4) {
+              return (
+                <Text
+                  key={pIdx}
+                  style={{
+                    fontWeight: '700',
+                    color: isDarkMode ? '#38BDF8' : '#0284C7',
+                  }}
+                >
+                  {part.slice(2, -2)}
+                </Text>
+              );
+            }
+            if (part.startsWith('*') && part.endsWith('*') && part.length >= 3) {
+              return (
+                <Text
+                  key={pIdx}
+                  style={{
+                    fontStyle: 'italic',
+                    color: isDarkMode ? '#94A3B8' : '#64748B',
+                  }}
+                >
+                  {part.slice(1, -1)}
+                </Text>
+              );
+            }
+            return part;
+          })}
+        </Text>
+      );
+    });
+  }, [content, isDarkMode, textPrimary]);
+
+  return <View style={{ gap: 4 }}>{renderedLines}</View>;
+});
+
+// ----------------------------------------------------------------------------
+// Memoized Row cho từng tin nhắn (Tăng tốc cuộn và gõ phím)
+// ----------------------------------------------------------------------------
+interface ChatMessageRowProps {
+  message: ChatMessage;
+  isDarkMode: boolean;
+  colors: any;
+  onSpeak?: (msgId: string, text: string) => void;
+  isSpeaking?: boolean;
+}
+
+const ChatMessageRow = memo(
+  ({ message, isDarkMode, colors, onSpeak, isSpeaking }: ChatMessageRowProps) => {
+    const isUser = message.sender === 'user';
+
+    return (
+      <View style={[styles.msgRow, isUser ? styles.userRow : styles.aiRow]}>
+        {!isUser && (
+          <View style={styles.aiAvatarSmall}>
+            <AIBotIcon size={24} />
+          </View>
+        )}
+
+        <View
+          style={[
+            styles.bubble,
+            isUser
+              ? styles.userBubble
+              : [styles.aiBubble, isDarkMode && { backgroundColor: colors.card, borderColor: colors.border }],
+            message.isError && styles.errorBubble,
+          ]}
+        >
+          {isUser ? (
+            <Text style={[styles.msgText, styles.userMsgText]}>{message.text}</Text>
+          ) : (
+            <FormattedAIMarkdown
+              content={message.text}
+              isDarkMode={isDarkMode}
+              textPrimary={colors.textPrimary}
+            />
+          )}
+
+          <View style={styles.bubbleFooter}>
+            <Text
+              style={[
+                styles.timeText,
+                isUser
+                  ? styles.userTimeText
+                  : [styles.aiTimeText, isDarkMode && { color: colors.textMuted || '#94A3B8' }],
+              ]}
+            >
+              {message.timestamp}
+            </Text>
+
+            {!isUser && !message.isError && onSpeak && (
+              <TouchableOpacity
+                onPress={() => onSpeak(message.id, message.text)}
+                style={styles.speakBtn}
+                hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
+                activeOpacity={0.7}
+                accessibilityLabel="Đọc nội dung tư vấn AI"
+              >
+                <Ionicons
+                  name={isSpeaking ? 'volume-high' : 'volume-medium-outline'}
+                  size={16}
+                  color={isSpeaking ? '#0284C7' : isDarkMode ? '#94A3B8' : '#64748B'}
+                />
+              </TouchableOpacity>
+            )}
+          </View>
+        </View>
+      </View>
+    );
+  }
+);
+
+// ----------------------------------------------------------------------------
+// Component Chính: AIAssistantScreen
+// ----------------------------------------------------------------------------
 export default function AIAssistantScreen({ navigation }: any) {
   const { isDarkMode, colors } = useTheme();
   const { userName, full_name } = useAuthStore();
   const displayName = full_name || userName || 'Người dùng';
 
-  // State quản lý giao diện
+  // State điều khiển Drawer Sidebar (In-tree, Không dùng Modal nặng)
   const [isSidebarOpen, setIsSidebarOpen] = useState(false);
   const slideAnim = useRef(new Animated.Value(-340)).current;
   const backdropAnim = useRef(new Animated.Value(0)).current;
-  const scrollViewRef = useRef<ScrollView>(null);
 
-  // State tin nhắn & tìm kiếm
+  // Refs & Chat State
+  const scrollViewRef = useRef<ScrollView>(null);
   const [messages, setMessages] = useState<ChatMessage[]>([]);
   const [inputText, setInputText] = useState('');
   const [isLoading, setIsLoading] = useState(false);
@@ -88,101 +219,253 @@ export default function AIAssistantScreen({ navigation }: any) {
   const [isSearching, setIsSearching] = useState(false);
   const [searchQuery, setSearchQuery] = useState('');
 
-  // Quản lý ghi âm giọng nói (STT - Speech to Text)
+  // Giọng đọc AI (TTS)
+  const [speakingMessageId, setSpeakingMessageId] = useState<string | null>(null);
+
+  // Ghi âm giọng nói (STT - Speech to Text)
   const [isRecording, setIsRecording] = useState(false);
   const [recordingDuration, setRecordingDuration] = useState(0);
-  const [recordingInstance, setRecordingInstance] = useState<any>(null);
   const [isTranscribing, setIsTranscribing] = useState(false);
+  const recorderRef = useRef<any>(null);
   const recordingTimerRef = useRef<any>(null);
-  const pulseAnim = useRef(new Animated.Value(1)).current;
 
-  // Dọn dẹp timer & audio khi unmount
+  // Chiều cao bàn phím iOS an toàn (Không dùng try/catch hook)
+  const keyboardVerticalOffset = Platform.OS === 'ios' ? 88 : 0;
+
+  // Tự động dừng TTS & Audio Recorder khi unmount
   useEffect(() => {
     return () => {
+      Speech.stop().catch(() => {});
       if (recordingTimerRef.current) clearInterval(recordingTimerRef.current);
-      if (recordingInstance) {
+      if (recorderRef.current) {
         try {
-          recordingInstance.stop?.();
-        } catch (_) { }
+          recorderRef.current.stop();
+        } catch (_) {}
       }
     };
-  }, [recordingInstance]);
-
-  // Chiều cao Bottom Tab Bar để bù trừ KeyboardAvoidingView trên iOS
-  let tabBarHeight = 84;
-  try {
-    tabBarHeight = useBottomTabBarHeight();
-  } catch (_) {
-    tabBarHeight = Platform.OS === 'ios' ? 84 : 0;
-  }
+  }, []);
 
   // Cuộn xuống tin nhắn mới nhất khi mở bàn phím
   useEffect(() => {
     const showEvent = Platform.OS === 'ios' ? 'keyboardWillShow' : 'keyboardDidShow';
     const sub = Keyboard.addListener(showEvent, () => {
-      setTimeout(() => {
-        scrollViewRef.current?.scrollToEnd({ animated: true });
-      }, 50);
+      if (messages.length > 0) {
+        setTimeout(() => {
+          scrollViewRef.current?.scrollToEnd({ animated: true });
+        }, 60);
+      }
     });
     return () => sub.remove();
-  }, []);
+  }, [messages.length]);
 
-  // Format nội dung markdown từ AI (**bold**, *italic*, ngắt dòng)
-  const renderFormattedAIMessage = (content: string) => {
-    const lines = content.split('\n');
-    return (
-      <View style={{ gap: 4 }}>
-        {lines.map((line, lIdx) => {
-          if (!line.trim()) return <View key={lIdx} style={{ height: 6 }} />;
-          const parts = line.split(/(\*\*[^*]+\*\*|\*[^*]+\*)/g);
-          return (
-            <Text
-              key={lIdx}
-              style={[
-                styles.msgText,
-                styles.aiMsgText,
-                isDarkMode && { color: colors.textPrimary },
-              ]}
-            >
-              {parts.map((part, pIdx) => {
-                if (part.startsWith('**') && part.endsWith('**') && part.length >= 4) {
-                  return (
-                    <Text
-                      key={pIdx}
-                      style={{
-                        fontWeight: '700',
-                        color: isDarkMode ? '#38BDF8' : '#0284C7',
-                      }}
-                    >
-                      {part.slice(2, -2)}
-                    </Text>
-                  );
-                }
-                if (part.startsWith('*') && part.endsWith('*') && part.length >= 3) {
-                  return (
-                    <Text
-                      key={pIdx}
-                      style={{
-                        fontStyle: 'italic',
-                        color: isDarkMode ? '#94A3B8' : '#64748B',
-                      }}
-                    >
-                      {part.slice(1, -1)}
-                    </Text>
-                  );
-                }
-                return part;
-              })}
-            </Text>
+  // Điều khiển đọc giọng nói AI (TTS tiếng Việt)
+  const handleSpeak = useCallback(
+    async (msgId: string, text: string) => {
+      try {
+        const isSpeaking = await Speech.isSpeakingAsync();
+        if (isSpeaking && speakingMessageId === msgId) {
+          await Speech.stop();
+          setSpeakingMessageId(null);
+          return;
+        }
+
+        await Speech.stop();
+        setSpeakingMessageId(msgId);
+
+        // Làm sạch ký tự markdown trước khi đọc
+        const cleanText = text.replace(/[*_#`]/g, '').trim();
+
+        Speech.speak(cleanText, {
+          language: 'vi-VN',
+          pitch: 1.0,
+          rate: 0.95,
+          onDone: () => setSpeakingMessageId(null),
+          onError: () => setSpeakingMessageId(null),
+          onStopped: () => setSpeakingMessageId(null),
+        });
+      } catch (err) {
+        console.warn('[Speech] Lỗi phát âm:', err);
+        setSpeakingMessageId(null);
+      }
+    },
+    [speakingMessageId]
+  );
+
+  // Mở Sidebar mượt mà (60fps với Native Driver)
+  const openSidebar = useCallback(() => {
+    setIsSidebarOpen(true);
+    Animated.parallel([
+      Animated.timing(backdropAnim, {
+        toValue: 1,
+        duration: 220,
+        useNativeDriver: true,
+      }),
+      Animated.spring(slideAnim, {
+        toValue: 0,
+        bounciness: 0,
+        speed: 18,
+        useNativeDriver: true,
+      }),
+    ]).start();
+  }, [backdropAnim, slideAnim]);
+
+  // Đóng Sidebar
+  const closeSidebar = useCallback(() => {
+    Animated.parallel([
+      Animated.timing(backdropAnim, {
+        toValue: 0,
+        duration: 180,
+        useNativeDriver: true,
+      }),
+      Animated.timing(slideAnim, {
+        toValue: -340,
+        duration: 180,
+        useNativeDriver: true,
+      }),
+    ]).start(() => {
+      setIsSidebarOpen(false);
+    });
+  }, [backdropAnim, slideAnim]);
+
+  // Chọn cuộc trò chuyện từ lịch sử
+  const handleOpenHistoryChat = useCallback(
+    (chat: HistoryChat) => {
+      setMessages(chat.messages);
+      closeSidebar();
+    },
+    [closeSidebar]
+  );
+
+  // Bắt đầu cuộc trò chuyện mới
+  const handleNewChat = useCallback(() => {
+    if (messages.length > 0) {
+      const firstUserMsg = messages.find((m) => m.sender === 'user');
+      const title = firstUserMsg ? firstUserMsg.text.slice(0, 30) : 'Cuộc trò chuyện';
+      setHistoryChats((prev) => [
+        {
+          id: Date.now().toString(),
+          title: title + (firstUserMsg && firstUserMsg.text.length > 30 ? '...' : ''),
+          messages: [...messages],
+        },
+        ...prev,
+      ]);
+    }
+    setMessages([]);
+    setSearchQuery('');
+    setIsSearching(false);
+    closeSidebar();
+  }, [messages, closeSidebar]);
+
+  // Gửi tin nhắn đến Chatbot RAG API
+  const handleSend = useCallback(
+    async (customText?: string) => {
+      const textToSend = (customText || inputText).trim();
+      if (!textToSend || isLoading) return;
+
+      const userMsg: ChatMessage = {
+        id: Date.now().toString(),
+        sender: 'user',
+        text: textToSend,
+        timestamp: new Date().toLocaleTimeString('vi-VN', { hour: '2-digit', minute: '2-digit' }),
+      };
+      setMessages((prev) => [...prev, userMsg]);
+      if (!customText) setInputText('');
+
+      setIsLoading(true);
+      try {
+        const response = await chatbotApi.chat({
+          message: textToSend,
+          context_window: 8,
+        });
+
+        const reply = response.data?.answer || 'Tôi đã nhận được câu hỏi nhưng chưa có câu trả lời.';
+        const aiMsg: ChatMessage = {
+          id: (Date.now() + 1).toString(),
+          sender: 'ai',
+          text: reply,
+          timestamp: new Date().toLocaleTimeString('vi-VN', { hour: '2-digit', minute: '2-digit' }),
+        };
+        setMessages((prev) => [...prev, aiMsg]);
+      } catch (error: any) {
+        const isOffline =
+          error?.response?.status === 503 ||
+          error?.code === 'ECONNREFUSED' ||
+          error?.message?.includes('Network Error');
+
+        const errorMsg: ChatMessage = {
+          id: (Date.now() + 1).toString(),
+          sender: 'ai',
+          text: isOffline
+            ? '⚠️ Không thể kết nối đến máy chủ Backend. Vui lòng kiểm tra lại mạng hoặc thử lại sau.'
+            : `⚠️ Lỗi kết nối AI: ${error?.response?.data?.detail || error?.message}`,
+          timestamp: new Date().toLocaleTimeString('vi-VN', { hour: '2-digit', minute: '2-digit' }),
+          isError: true,
+        };
+        setMessages((prev) => [...prev, errorMsg]);
+      } finally {
+        setIsLoading(false);
+      }
+    },
+    [inputText, isLoading]
+  );
+
+  // Dừng ghi âm và gửi lên Backend STT xử lý
+  const stopAndSendVoiceRecording = useCallback(
+    async (cancel = false, customRecorder?: any) => {
+      if (recordingTimerRef.current) {
+        clearInterval(recordingTimerRef.current);
+        recordingTimerRef.current = null;
+      }
+      const rec = customRecorder || recorderRef.current;
+      recorderRef.current = null;
+      setIsRecording(false);
+      setRecordingDuration(0);
+
+      if (!rec) return;
+
+      try {
+        await rec.stop();
+        const uri = rec.uri;
+
+        if (cancel || !uri) return;
+
+        setIsTranscribing(true);
+        const formData = new FormData();
+        const filename = uri.split('/').pop() || 'voice_recording.wav';
+        const match = /\.(\w+)$/.exec(filename);
+        const type = match ? `audio/${match[1]}` : 'audio/wav';
+
+        formData.append('file', { uri, name: filename, type } as any);
+
+        const res = await chatbotApi.transcribeAudio(formData);
+
+        if (res.data?.status === 'success' && res.data?.text) {
+          const transcribedText = res.data.text.trim();
+          setInputText(transcribedText);
+          handleSend(transcribedText);
+        } else {
+          Alert.alert(
+            'Nhận diện giọng nói',
+            res.data?.message || 'Không thể nhận diện được câu hỏi. Bạn hãy thử nói to và rõ hơn nhé.'
           );
-        })}
-      </View>
-    );
-  };
+        }
+      } catch (err: any) {
+        console.warn('[Voice STT] Lỗi nhận diện giọng nói:', err);
+        Alert.alert(
+          'Lỗi giọng nói',
+          'Không thể nhận diện giọng nói: ' +
+            (err?.response?.data?.detail || err?.message || 'Lỗi kết nối đến máy chủ AI.')
+        );
+      } finally {
+        setIsTranscribing(false);
+      }
+    },
+    [handleSend]
+  );
 
-  // Khởi động ghi âm giọng nói
-  const startVoiceRecording = async () => {
-    // 1. Web: Sử dụng Web Speech API
+  // Xử lý Voice Input an toàn
+  const startVoiceRecording = useCallback(async () => {
+    // 1. Web: Hỗ trợ Web Speech API
     if (Platform.OS === 'web' && typeof window !== 'undefined') {
       const SpeechRecognition = (window as any).SpeechRecognition || (window as any).webkitSpeechRecognition;
       if (SpeechRecognition) {
@@ -207,37 +490,34 @@ export default function AIAssistantScreen({ navigation }: any) {
           return;
         } catch (e) {
           console.warn('Web Speech API failed:', e);
+          setIsRecording(false);
         }
       }
     }
 
-    // 2. Mobile: Sử dụng expo-audio
-    if (!SafeAudio) {
-      Alert.alert('Ghi âm giọng nói', 'Mô-đun ghi âm chưa sẵn sàng. Bạn hãy nhập câu hỏi bằng văn bản nhé.');
+    // Nếu đang ghi âm mà nhấn lại nút mic -> Dừng và gửi
+    if (isRecording) {
+      await stopAndSendVoiceRecording(false);
       return;
     }
 
+    // 2. Mobile App (Android / iOS): Sử dụng AudioRecorder của expo-audio
     try {
-      const AudioMod = SafeAudio.AudioModule || SafeAudio.default || SafeAudio;
-      const requestPerms = SafeAudio.requestRecordingPermissionsAsync || AudioMod?.requestRecordingPermissionsAsync;
-
-      if (typeof requestPerms === 'function') {
-        const perm = await requestPerms();
-        if (!perm?.granted) {
-          Alert.alert('Quyền Microphone', 'Vui lòng cho phép ứng dụng truy cập micro để hỏi đáp bằng giọng nói.');
-          return;
-        }
+      const perm = await requestRecordingPermissionsAsync();
+      if (!perm?.granted) {
+        Alert.alert(
+          'Quyền Microphone',
+          'Vui lòng cấp quyền truy cập micro trong Cài đặt để đặt câu hỏi bằng giọng nói cho Trợ lý AI.'
+        );
+        return;
       }
 
-      const setAudioMode = SafeAudio.setAudioModeAsync || AudioMod?.setAudioModeAsync;
-      if (typeof setAudioMode === 'function') {
-        await setAudioMode({ allowsRecording: true, playsInSilentMode: true });
-      }
+      await setAudioModeAsync({
+        allowsRecording: true,
+        playsInSilentMode: true,
+      });
 
-      const AudioRecorderClass = SafeAudio.AudioRecorder || AudioMod?.AudioRecorder;
-      if (!AudioRecorderClass) throw new Error('AudioRecorder không khả dụng');
-
-      const recording = new AudioRecorderClass({
+      const recorder = new AudioModule.AudioRecorder({
         extension: '.wav',
         sampleRate: 16000,
         numberOfChannels: 1,
@@ -251,192 +531,39 @@ export default function AIAssistantScreen({ navigation }: any) {
           linearPCMIsBigEndian: false,
           linearPCMIsFloat: false,
         },
-        web: { mimeType: 'audio/webm', bitsPerSecond: 128000 },
       });
 
-      await recording.prepareToRecordAsync();
-      recording.record();
-      setRecordingInstance(recording);
+      await recorder.prepareToRecordAsync();
+      recorder.record();
+      recorderRef.current = recorder;
       setIsRecording(true);
       setRecordingDuration(0);
-
-      // Hiệu ứng nhịp đập Pulse
-      Animated.loop(
-        Animated.sequence([
-          Animated.timing(pulseAnim, { toValue: 1.25, duration: 600, useNativeDriver: Platform.OS !== 'web' }),
-          Animated.timing(pulseAnim, { toValue: 1, duration: 600, useNativeDriver: Platform.OS !== 'web' }),
-        ])
-      ).start();
 
       if (recordingTimerRef.current) clearInterval(recordingTimerRef.current);
       recordingTimerRef.current = setInterval(() => {
         setRecordingDuration((prev) => {
           if (prev >= 25) {
-            stopAndSendVoiceRecording(false, recording);
+            stopAndSendVoiceRecording(false, recorder);
             return 25;
           }
           return prev + 1;
         });
       }, 1000);
     } catch (err: any) {
-      console.warn('Lỗi ghi âm:', err);
+      console.warn('Lỗi khởi động ghi âm:', err);
       Alert.alert('Lỗi micro', 'Không thể khởi động ghi âm: ' + (err.message || 'Vui lòng thử lại.'));
       setIsRecording(false);
     }
-  };
+  }, [isRecording, handleSend, stopAndSendVoiceRecording]);
 
-  // Dừng ghi âm và gửi xử lý STT
-  const stopAndSendVoiceRecording = async (cancel = false, customRecording?: any) => {
-    if (recordingTimerRef.current) clearInterval(recordingTimerRef.current);
-    pulseAnim.stopAnimation();
-    pulseAnim.setValue(1);
-
-    const rec = customRecording || recordingInstance;
-    if (!rec) {
-      setIsRecording(false);
-      return;
-    }
-
-    try {
-      await rec.stop();
-      const uri = rec.uri || rec.getURI?.();
-      setRecordingInstance(null);
-      setIsRecording(false);
-
-      if (cancel || !uri) return;
-
-      setIsTranscribing(true);
-      const formData = new FormData();
-      const filename = uri.split('/').pop() || 'recording.wav';
-      const match = /\.(\w+)$/.exec(filename);
-      const type = match ? `audio/${match[1]}` : 'audio/wav';
-
-      formData.append('file', { uri, name: filename, type } as any);
-
-      const res = await chatbotApi.transcribeAudio(formData);
-
-      if (res.data?.status === 'success' && res.data?.text) {
-        const transcribedText = res.data.text.trim();
-        setInputText(transcribedText);
-        handleSend(transcribedText);
-      } else {
-        Alert.alert(
-          'Nhận diện giọng nói',
-          res.data?.message || 'Không thể nhận diện được câu hỏi. Bạn hãy thử nói to và rõ hơn nhé.'
-        );
-      }
-    } catch (err: any) {
-      console.warn('Lỗi STT:', err);
-      Alert.alert(
-        'Lỗi giọng nói',
-        'Không thể nhận diện giọng nói: ' + (err?.response?.data?.detail || err?.message || 'Lỗi mạng')
-      );
-    } finally {
-      setIsTranscribing(false);
-    }
-  };
-
-  // Mở Sidebar
-  const openSidebar = () => {
-    setIsSidebarOpen(true);
-    Animated.parallel([
-      Animated.timing(backdropAnim, { toValue: 1, duration: 250, useNativeDriver: Platform.OS !== 'web' }),
-      Animated.spring(slideAnim, { toValue: 0, bounciness: 0, speed: 16, useNativeDriver: Platform.OS !== 'web' }),
-    ]).start();
-  };
-
-  // Đóng Sidebar
-  const closeSidebar = () => {
-    Animated.parallel([
-      Animated.timing(backdropAnim, { toValue: 0, duration: 200, useNativeDriver: Platform.OS !== 'web' }),
-      Animated.timing(slideAnim, { toValue: -340, duration: 200, useNativeDriver: Platform.OS !== 'web' }),
-    ]).start(() => {
-      setIsSidebarOpen(false);
-    });
-  };
-
-  // Mở lại cuộc trò chuyện từ lịch sử
-  const handleOpenHistoryChat = (chat: HistoryChat) => {
-    setMessages(chat.messages);
-    closeSidebar();
-  };
-
-  // Lọc lịch sử trò chuyện
-  const filteredChats = historyChats.filter((chat) => {
-    if (!searchQuery.trim()) return true;
+  // Lọc lịch sử trò chuyện (memoized)
+  const filteredChats = useMemo(() => {
+    if (!searchQuery.trim()) return historyChats;
     const q = searchQuery.toLowerCase();
-    return chat.title.toLowerCase().includes(q) || chat.messages.some((m) => m.text.toLowerCase().includes(q));
-  });
-
-  // Gửi tin nhắn đến Chatbot RAG API
-  const handleSend = async (customText?: string) => {
-    const textToSend = (customText || inputText).trim();
-    if (!textToSend || isLoading) return;
-
-    const userMsg: ChatMessage = {
-      id: Date.now().toString(),
-      sender: 'user',
-      text: textToSend,
-      timestamp: new Date().toLocaleTimeString('vi-VN', { hour: '2-digit', minute: '2-digit' }),
-    };
-    setMessages((prev) => [...prev, userMsg]);
-    if (!customText) setInputText('');
-
-    setIsLoading(true);
-    try {
-      const response = await chatbotApi.chat({
-        message: textToSend,
-        context_window: 8,
-      });
-
-      const reply = response.data?.answer || 'Tôi đã nhận được câu hỏi nhưng chưa có câu trả lời.';
-      const aiMsg: ChatMessage = {
-        id: (Date.now() + 1).toString(),
-        sender: 'ai',
-        text: reply,
-        timestamp: new Date().toLocaleTimeString('vi-VN', { hour: '2-digit', minute: '2-digit' }),
-      };
-      setMessages((prev) => [...prev, aiMsg]);
-    } catch (error: any) {
-      const isOffline =
-        error?.response?.status === 503 ||
-        error?.code === 'ECONNREFUSED' ||
-        error?.message?.includes('Network Error');
-
-      const errorMsg: ChatMessage = {
-        id: (Date.now() + 1).toString(),
-        sender: 'ai',
-        text: isOffline
-          ? '⚠️ Không thể kết nối đến máy chủ Backend. Vui lòng kiểm tra lại mạng hoặc thử lại sau.'
-          : `⚠️ Lỗi kết nối AI: ${error?.response?.data?.detail || error?.message}`,
-        timestamp: new Date().toLocaleTimeString('vi-VN', { hour: '2-digit', minute: '2-digit' }),
-        isError: true,
-      };
-      setMessages((prev) => [...prev, errorMsg]);
-    } finally {
-      setIsLoading(false);
-    }
-  };
-
-  // Bắt đầu cuộc trò chuyện mới
-  const handleNewChat = () => {
-    if (messages.length > 0) {
-      const firstUserMsg = messages.find((m) => m.sender === 'user');
-      const title = firstUserMsg ? firstUserMsg.text.slice(0, 30) : 'Cuộc trò chuyện';
-      setHistoryChats((prev) => [
-        {
-          id: Date.now().toString(),
-          title: title + (firstUserMsg && firstUserMsg.text.length > 30 ? '...' : ''),
-          messages: [...messages],
-        },
-        ...prev,
-      ]);
-    }
-    setMessages([]);
-    setSearchQuery('');
-    setIsSearching(false);
-    closeSidebar();
-  };
+    return historyChats.filter(
+      (chat) => chat.title.toLowerCase().includes(q) || chat.messages.some((m) => m.text.toLowerCase().includes(q))
+    );
+  }, [historyChats, searchQuery]);
 
   return (
     <SafeAreaView style={[styles.container, { backgroundColor: isDarkMode ? colors.background : '#FFFFFF' }]} edges={['top']}>
@@ -445,7 +572,7 @@ export default function AIAssistantScreen({ navigation }: any) {
         backgroundColor={isDarkMode ? colors.background : '#FFFFFF'}
       />
 
-      {/* 1. Header Bar */}
+      {/* 1. Top Navigation Bar */}
       <View style={[styles.topBar, isDarkMode && { backgroundColor: colors.background, borderBottomColor: colors.border }]}>
         <TouchableOpacity
           style={styles.iconBtn}
@@ -473,19 +600,23 @@ export default function AIAssistantScreen({ navigation }: any) {
         </TouchableOpacity>
       </View>
 
-      {/* 2. Main Content */}
+      {/* 2. Chat Main Area */}
       <View style={[styles.mainBody, isDarkMode && { backgroundColor: colors.background }]}>
         <KeyboardAvoidingView
           style={{ flex: 1 }}
           behavior={Platform.OS === 'ios' ? 'padding' : undefined}
-          keyboardVerticalOffset={Platform.OS === 'ios' ? tabBarHeight : 0}
+          keyboardVerticalOffset={keyboardVerticalOffset}
         >
           <ScrollView
             ref={scrollViewRef}
             showsVerticalScrollIndicator={false}
             contentContainerStyle={styles.mainScroll}
             keyboardShouldPersistTaps="handled"
-            onContentSizeChange={() => scrollViewRef.current?.scrollToEnd({ animated: true })}
+            onContentSizeChange={() => {
+              if (messages.length > 0) {
+                scrollViewRef.current?.scrollToEnd({ animated: true });
+              }
+            }}
           >
             {messages.length === 0 ? (
               /* Hero Box khi chưa có tin nhắn */
@@ -526,45 +657,14 @@ export default function AIAssistantScreen({ navigation }: any) {
               /* Danh sách tin nhắn chat */
               <View style={styles.chatList}>
                 {messages.map((m) => (
-                  <View
+                  <ChatMessageRow
                     key={m.id}
-                    style={[styles.msgRow, m.sender === 'user' ? styles.userRow : styles.aiRow]}
-                  >
-                    {m.sender === 'ai' && (
-                      <View style={styles.aiAvatarSmall}>
-                        <AIBotIcon size={24} />
-                      </View>
-                    )}
-
-                    <View
-                      style={[
-                        styles.bubble,
-                        m.sender === 'user'
-                          ? styles.userBubble
-                          : [styles.aiBubble, isDarkMode && { backgroundColor: colors.card, borderColor: colors.border }],
-                        m.isError && styles.errorBubble,
-                      ]}
-                    >
-                      {m.sender === 'user' ? (
-                        <Text style={[styles.msgText, styles.userMsgText]}>{m.text}</Text>
-                      ) : (
-                        renderFormattedAIMessage(m.text)
-                      )}
-
-                      <View style={styles.bubbleFooter}>
-                        <Text
-                          style={[
-                            styles.timeText,
-                            m.sender === 'user'
-                              ? styles.userTimeText
-                              : [styles.aiTimeText, isDarkMode && { color: colors.textMuted }],
-                          ]}
-                        >
-                          {m.timestamp}
-                        </Text>
-                      </View>
-                    </View>
-                  </View>
+                    message={m}
+                    isDarkMode={isDarkMode}
+                    colors={colors}
+                    onSpeak={handleSpeak}
+                    isSpeaking={speakingMessageId === m.id}
+                  />
                 ))}
 
                 {/* Typing indicator */}
@@ -594,22 +694,67 @@ export default function AIAssistantScreen({ navigation }: any) {
 
           {/* 3. Floating Pill Input Bar */}
           <View style={styles.bottomBarWrap}>
+            {/* Thanh thông báo trạng thái ghi âm */}
+            {isRecording && (
+              <View style={[styles.recordingBanner, isDarkMode && { backgroundColor: '#1E293B', borderColor: '#334155' }]}>
+                <View style={styles.recordingLeft}>
+                  <View style={styles.recordingDot} />
+                  <Text style={[styles.recordingText, isDarkMode && { color: '#F1F5F9' }]}>
+                    Đang ghi âm: 00:{recordingDuration < 10 ? `0${recordingDuration}` : recordingDuration} / 00:25
+                  </Text>
+                </View>
+                <View style={styles.recordingActions}>
+                  <TouchableOpacity
+                    style={styles.cancelRecBtn}
+                    onPress={() => stopAndSendVoiceRecording(true)}
+                    activeOpacity={0.7}
+                  >
+                    <Text style={styles.cancelRecText}>Hủy</Text>
+                  </TouchableOpacity>
+                  <TouchableOpacity
+                    style={styles.doneRecBtn}
+                    onPress={() => stopAndSendVoiceRecording(false)}
+                    activeOpacity={0.7}
+                  >
+                    <Ionicons name="checkmark" size={15} color="#FFF" style={{ marginRight: 4 }} />
+                    <Text style={styles.doneRecText}>Xong</Text>
+                  </TouchableOpacity>
+                </View>
+              </View>
+            )}
+
+            {/* Thanh thông báo nhận diện giọng nói */}
+            {isTranscribing && (
+              <View style={[styles.transcribingBanner, isDarkMode && { backgroundColor: '#1E293B', borderColor: '#334155' }]}>
+                <ActivityIndicator size="small" color="#0284C7" style={{ marginRight: 8 }} />
+                <Text style={[styles.transcribingText, isDarkMode && { color: '#F1F5F9' }]}>
+                  Đang nhận diện giọng nói tiếng Việt...
+                </Text>
+              </View>
+            )}
+
             <View style={[styles.pillInput, isDarkMode && { backgroundColor: colors.card, borderColor: colors.border }]}>
               <TextInput
                 style={[styles.textInput, { maxHeight: 80 }, isDarkMode && { color: colors.textPrimary }]}
-                placeholder={isTranscribing ? 'Đang nhận diện giọng nói...' : 'Hỏi SmartCare AI...'}
+                placeholder={
+                  isRecording
+                    ? 'Đang lắng nghe câu hỏi...'
+                    : isTranscribing
+                    ? 'Đang chuyển đổi giọng nói...'
+                    : 'Hỏi SmartCare AI...'
+                }
                 placeholderTextColor={isDarkMode ? '#64748B' : '#94A3B8'}
                 value={inputText}
                 onChangeText={setInputText}
                 multiline
-                editable={!isTranscribing}
+                editable={!isRecording && !isTranscribing}
               />
 
-              {inputText.trim() ? (
+              {inputText.trim() && !isRecording && !isTranscribing ? (
                 <TouchableOpacity
-                  style={[styles.sendBtn, (isLoading || isTranscribing) && { opacity: 0.6 }]}
+                  style={[styles.sendBtn, isLoading && { opacity: 0.6 }]}
                   onPress={() => handleSend()}
-                  disabled={isLoading || isTranscribing}
+                  disabled={isLoading}
                   activeOpacity={0.8}
                 >
                   {isLoading ? (
@@ -628,12 +773,13 @@ export default function AIAssistantScreen({ navigation }: any) {
                   onPress={startVoiceRecording}
                   disabled={isLoading || isTranscribing}
                   activeOpacity={0.7}
+                  accessibilityLabel={isRecording ? 'Dừng ghi âm và gửi' : 'Nói câu hỏi'}
                 >
                   {isTranscribing ? (
                     <ActivityIndicator size="small" color="#0284C7" />
                   ) : (
                     <Ionicons
-                      name={isRecording ? 'mic' : 'mic-outline'}
+                      name={isRecording ? 'stop' : 'mic-outline'}
                       size={20}
                       color={isRecording ? '#EF4444' : isDarkMode ? colors.textPrimary : '#0F172A'}
                     />
@@ -645,190 +791,143 @@ export default function AIAssistantScreen({ navigation }: any) {
         </KeyboardAvoidingView>
       </View>
 
-      {/* 4. Modal Ghi âm giọng nói */}
-      <Modal
-        visible={isRecording}
-        transparent
-        animationType="fade"
-        onRequestClose={() => stopAndSendVoiceRecording(true)}
+      {/* 4. Drawer Backdrop (Tối ưu hóa In-Tree, Không dùng Modal nặng) */}
+      <Animated.View
+        pointerEvents={isSidebarOpen ? 'auto' : 'none'}
+        style={[
+          styles.drawerBackdrop,
+          {
+            opacity: backdropAnim,
+          },
+        ]}
       >
-        <View style={styles.recordingOverlay}>
-          <View style={[styles.recordingCard, isDarkMode && { backgroundColor: colors.card, borderColor: colors.border }]}>
-            <Animated.View style={[styles.micPulseWrap, { transform: [{ scale: pulseAnim }] }]}>
-              <View style={styles.micPulseOuter}>
-                <View style={styles.micPulseInner}>
-                  <Ionicons name="mic" size={36} color="#FFFFFF" />
-                </View>
+        <TouchableOpacity style={StyleSheet.absoluteFill} activeOpacity={1} onPress={closeSidebar} />
+      </Animated.View>
+
+      {/* 5. In-Tree Sliding Sidebar (Trượt 60fps Native Driver) */}
+      <Animated.View
+        pointerEvents={isSidebarOpen ? 'auto' : 'none'}
+        style={[
+          styles.sidebarContainer,
+          isDarkMode && { backgroundColor: colors.background },
+          { transform: [{ translateX: slideAnim }] },
+        ]}
+      >
+        <SafeAreaView style={styles.sidebarSafeArea} edges={['top', 'bottom']}>
+          <View style={[styles.sidebarHeader, isDarkMode && { borderBottomColor: colors.border }]}>
+            <View style={{ flexDirection: 'row', alignItems: 'center' }}>
+              <AIBotIcon size={28} />
+              <Text style={[styles.sidebarBrandTitle, isDarkMode && { color: colors.textPrimary }]}>SmartCare AI</Text>
+            </View>
+            <TouchableOpacity onPress={closeSidebar} style={styles.iconBtn} hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}>
+              <Ionicons name="close" size={24} color={isDarkMode ? colors.textPrimary : '#0F172A'} />
+            </TouchableOpacity>
+          </View>
+
+          <ScrollView
+            showsVerticalScrollIndicator={false}
+            style={{ flex: 1 }}
+            contentContainerStyle={{ paddingBottom: 16 }}
+            keyboardShouldPersistTaps="handled"
+          >
+            <TouchableOpacity
+              style={[styles.newChatPill, isDarkMode && { backgroundColor: colors.card, borderColor: colors.border }]}
+              onPress={handleNewChat}
+              activeOpacity={0.8}
+            >
+              <Ionicons name="create-outline" size={20} color={isDarkMode ? colors.textPrimary : '#0F172A'} style={{ marginRight: 12 }} />
+              <Text style={[styles.newChatPillText, isDarkMode && { color: colors.textPrimary }]}>Cuộc trò chuyện mới</Text>
+            </TouchableOpacity>
+
+            {isSearching ? (
+              <View style={[styles.searchBarBox, isDarkMode && { backgroundColor: colors.card, borderColor: colors.border }]}>
+                <Ionicons name="search-outline" size={18} color="#64748B" style={{ marginRight: 8 }} />
+                <TextInput
+                  style={[styles.searchBarInput, isDarkMode && { color: colors.textPrimary }]}
+                  placeholder="Tìm kiếm cuộc trò chuyện..."
+                  placeholderTextColor={isDarkMode ? '#64748B' : '#94A3B8'}
+                  value={searchQuery}
+                  onChangeText={setSearchQuery}
+                  autoFocus
+                />
+                <TouchableOpacity
+                  onPress={() => {
+                    setSearchQuery('');
+                    setIsSearching(false);
+                  }}
+                  style={{ padding: 4 }}
+                >
+                  <Ionicons name="close-circle" size={18} color="#94A3B8" />
+                </TouchableOpacity>
               </View>
-            </Animated.View>
-
-            <Text style={[styles.recordingTitle, isDarkMode && { color: colors.textPrimary }]}>
-              Đang lắng nghe câu hỏi...
-            </Text>
-            <Text style={styles.recordingTimer}>
-              00:{recordingDuration < 10 ? `0${recordingDuration}` : recordingDuration}
-            </Text>
-            <Text style={[styles.recordingSub, isDarkMode && { color: colors.textMuted }]}>
-              Hãy nói rõ câu hỏi (ví dụ: "Nhịp tim hôm nay", "Cụ có bị ngã không?", "Nhắc uống thuốc")
-            </Text>
-
-            <View style={styles.recordingActions}>
+            ) : (
               <TouchableOpacity
-                style={styles.cancelRecordBtn}
-                onPress={() => stopAndSendVoiceRecording(true)}
+                style={[styles.searchRow, isDarkMode && { backgroundColor: colors.card }]}
+                onPress={() => setIsSearching(true)}
                 activeOpacity={0.7}
               >
-                <Ionicons name="close" size={18} color="#64748B" style={{ marginRight: 4 }} />
-                <Text style={styles.cancelRecordText}>Hủy bỏ</Text>
-              </TouchableOpacity>
-
-              <TouchableOpacity
-                style={styles.finishRecordBtn}
-                onPress={() => stopAndSendVoiceRecording(false)}
-                activeOpacity={0.8}
-              >
-                <Ionicons name="checkmark-circle" size={18} color="#FFFFFF" style={{ marginRight: 6 }} />
-                <Text style={styles.finishRecordText}>Hoàn tất &amp; Gửi</Text>
-              </TouchableOpacity>
-            </View>
-          </View>
-        </View>
-      </Modal>
-
-      {/* 5. Sidebar Menu Modal */}
-      <Modal
-        visible={isSidebarOpen}
-        transparent
-        animationType="none"
-        statusBarTranslucent
-        onRequestClose={closeSidebar}
-      >
-        <View style={styles.modalRoot}>
-          <Animated.View style={[styles.modalBackdrop, { opacity: backdropAnim }]}>
-            <TouchableOpacity style={StyleSheet.absoluteFill} activeOpacity={1} onPress={closeSidebar} />
-          </Animated.View>
-
-          <Animated.View
-            style={[
-              styles.sidebarContainer,
-              isDarkMode && { backgroundColor: colors.background },
-              { transform: [{ translateX: slideAnim }] },
-            ]}
-          >
-            <SafeAreaView style={styles.sidebarSafeArea} edges={['top', 'bottom']}>
-              <View style={[styles.sidebarHeader, isDarkMode && { borderBottomColor: colors.border }]}>
-                <View style={{ flexDirection: 'row', alignItems: 'center' }}>
-                  <AIBotIcon size={28} />
-                  <Text style={[styles.sidebarBrandTitle, isDarkMode && { color: colors.textPrimary }]}>SmartCare AI</Text>
-                </View>
-                <TouchableOpacity onPress={closeSidebar} style={styles.iconBtn} hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}>
-                  <Ionicons name="close" size={24} color={isDarkMode ? colors.textPrimary : '#0F172A'} />
-                </TouchableOpacity>
-              </View>
-
-              <ScrollView
-                showsVerticalScrollIndicator={false}
-                style={{ flex: 1 }}
-                contentContainerStyle={{ paddingBottom: 16 }}
-                keyboardShouldPersistTaps="handled"
-              >
-                <TouchableOpacity
-                  style={[styles.newChatPill, isDarkMode && { backgroundColor: colors.card, borderColor: colors.border }]}
-                  onPress={handleNewChat}
-                  activeOpacity={0.8}
-                >
-                  <Ionicons name="create-outline" size={20} color={isDarkMode ? colors.textPrimary : '#0F172A'} style={{ marginRight: 12 }} />
-                  <Text style={[styles.newChatPillText, isDarkMode && { color: colors.textPrimary }]}>Cuộc trò chuyện mới</Text>
-                </TouchableOpacity>
-
-                {isSearching ? (
-                  <View style={[styles.searchBarBox, isDarkMode && { backgroundColor: colors.card, borderColor: colors.border }]}>
-                    <Ionicons name="search-outline" size={18} color="#64748B" style={{ marginRight: 8 }} />
-                    <TextInput
-                      style={[styles.searchBarInput, isDarkMode && { color: colors.textPrimary }]}
-                      placeholder="Tìm kiếm cuộc trò chuyện..."
-                      placeholderTextColor={isDarkMode ? '#64748B' : '#94A3B8'}
-                      value={searchQuery}
-                      onChangeText={setSearchQuery}
-                      autoFocus
-                    />
-                    <TouchableOpacity
-                      onPress={() => {
-                        setSearchQuery('');
-                        setIsSearching(false);
-                      }}
-                      style={{ padding: 4 }}
-                    >
-                      <Ionicons name="close-circle" size={18} color="#94A3B8" />
-                    </TouchableOpacity>
-                  </View>
-                ) : (
-                  <TouchableOpacity
-                    style={[styles.searchRow, isDarkMode && { backgroundColor: colors.card }]}
-                    onPress={() => setIsSearching(true)}
-                    activeOpacity={0.7}
-                  >
-                    <Ionicons name="search-outline" size={20} color="#64748B" style={{ marginRight: 12 }} />
-                    <Text style={[styles.searchRowText, isDarkMode && { color: colors.textSecondary }]}>
-                      Tìm kiếm trong các cuộc trò chuyện
-                    </Text>
-                  </TouchableOpacity>
-                )}
-
-                <Text style={[styles.sidebarGroupTitle, isDarkMode && { color: colors.textSecondary }]}>
-                  {isSearching && searchQuery.trim() ? `Kết quả tìm kiếm (${filteredChats.length})` : 'Gần đây'}
+                <Ionicons name="search-outline" size={20} color="#64748B" style={{ marginRight: 12 }} />
+                <Text style={[styles.searchRowText, isDarkMode && { color: colors.textSecondary }]}>
+                  Tìm kiếm trong các cuộc trò chuyện
                 </Text>
+              </TouchableOpacity>
+            )}
 
-                {filteredChats.length === 0 ? (
-                  <View style={styles.emptySearchBox}>
-                    <Ionicons name="alert-circle-outline" size={18} color="#94A3B8" />
-                    <Text style={[styles.emptySearchText, isDarkMode && { color: colors.textSecondary }]}>
-                      Không tìm thấy cuộc trò chuyện nào
-                    </Text>
-                  </View>
-                ) : (
-                  filteredChats.map((chat) => (
-                    <TouchableOpacity
-                      key={chat.id}
-                      style={[styles.sidebarItemRow, isDarkMode && { backgroundColor: colors.card }]}
-                      onPress={() => handleOpenHistoryChat(chat)}
-                      activeOpacity={0.7}
-                    >
-                      <Ionicons name="chatbubble-ellipses-outline" size={16} color="#0284C7" style={{ marginRight: 10 }} />
-                      <Text style={[styles.sidebarItemText, isDarkMode && { color: colors.textPrimary }]} numberOfLines={1}>
-                        {chat.title}
-                      </Text>
-                    </TouchableOpacity>
-                  ))
-                )}
-              </ScrollView>
+            <Text style={[styles.sidebarGroupTitle, isDarkMode && { color: colors.textSecondary }]}>
+              {isSearching && searchQuery.trim() ? `Kết quả tìm kiếm (${filteredChats.length})` : 'Gần đây'}
+            </Text>
 
-              <View style={[styles.sidebarFooter, isDarkMode && { borderTopColor: colors.border }]}>
+            {filteredChats.length === 0 ? (
+              <View style={styles.emptySearchBox}>
+                <Ionicons name="alert-circle-outline" size={18} color="#94A3B8" />
+                <Text style={[styles.emptySearchText, isDarkMode && { color: colors.textSecondary }]}>
+                  Không tìm thấy cuộc trò chuyện nào
+                </Text>
+              </View>
+            ) : (
+              filteredChats.map((chat) => (
                 <TouchableOpacity
-                  style={styles.userProfileRow}
-                  onPress={() => {
-                    closeSidebar();
-                    navigation.navigate('Profile');
-                  }}
+                  key={chat.id}
+                  style={[styles.sidebarItemRow, isDarkMode && { backgroundColor: colors.card }]}
+                  onPress={() => handleOpenHistoryChat(chat)}
                   activeOpacity={0.7}
                 >
-                  <View style={styles.userAvatarCircle}>
-                    <Ionicons name="person" size={20} color="#0284C7" />
-                  </View>
-                  <View style={{ flex: 1, marginLeft: 10 }}>
-                    <Text style={[styles.userNameText, isDarkMode && { color: colors.textPrimary }]}>{displayName}</Text>
-                  </View>
-                  <Ionicons name="chevron-forward" size={18} color="#94A3B8" />
+                  <Ionicons name="chatbubble-ellipses-outline" size={16} color="#0284C7" style={{ marginRight: 10 }} />
+                  <Text style={[styles.sidebarItemText, isDarkMode && { color: colors.textPrimary }]} numberOfLines={1}>
+                    {chat.title}
+                  </Text>
                 </TouchableOpacity>
+              ))
+            )}
+          </ScrollView>
+
+          <View style={[styles.sidebarFooter, isDarkMode && { borderTopColor: colors.border }]}>
+            <TouchableOpacity
+              style={styles.userProfileRow}
+              onPress={() => {
+                closeSidebar();
+                navigation.navigate('Profile');
+              }}
+              activeOpacity={0.7}
+            >
+              <View style={styles.userAvatarCircle}>
+                <Ionicons name="person" size={20} color="#0284C7" />
               </View>
-            </SafeAreaView>
-          </Animated.View>
-        </View>
-      </Modal>
+              <View style={{ flex: 1, marginLeft: 10 }}>
+                <Text style={[styles.userNameText, isDarkMode && { color: colors.textPrimary }]}>{displayName}</Text>
+              </View>
+              <Ionicons name="chevron-forward" size={18} color="#94A3B8" />
+            </TouchableOpacity>
+          </View>
+        </SafeAreaView>
+      </Animated.View>
     </SafeAreaView>
   );
 }
 
+// ----------------------------------------------------------------------------
+// Stylesheet Tối Ưu Hóa
+// ----------------------------------------------------------------------------
 const styles = StyleSheet.create({
   container: {
     flex: 1,
@@ -989,8 +1088,6 @@ const styles = StyleSheet.create({
   },
   timeText: {
     fontSize: 10,
-    marginTop: 6,
-    alignSelf: 'flex-end',
   },
   userTimeText: {
     color: 'rgba(255, 255, 255, 0.7)',
@@ -1005,10 +1102,87 @@ const styles = StyleSheet.create({
     marginTop: 6,
     gap: 8,
   },
+  speakBtn: {
+    padding: 3,
+    borderRadius: 8,
+  },
   bottomBarWrap: {
     paddingHorizontal: 16,
     paddingBottom: Platform.OS === 'ios' ? 16 : 14,
     paddingTop: 8,
+  },
+  recordingBanner: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    backgroundColor: '#FEF2F2',
+    borderWidth: 1,
+    borderColor: '#FCA5A5',
+    borderRadius: 14,
+    paddingHorizontal: 14,
+    paddingVertical: 10,
+    marginBottom: 8,
+  },
+  recordingLeft: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 8,
+  },
+  recordingDot: {
+    width: 10,
+    height: 10,
+    borderRadius: 5,
+    backgroundColor: '#EF4444',
+  },
+  recordingText: {
+    fontSize: 13,
+    fontWeight: '600',
+    color: '#991B1B',
+  },
+  recordingActions: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 8,
+  },
+  cancelRecBtn: {
+    paddingVertical: 4,
+    paddingHorizontal: 10,
+    borderRadius: 8,
+    backgroundColor: '#E2E8F0',
+  },
+  cancelRecText: {
+    fontSize: 12,
+    fontWeight: '600',
+    color: '#475569',
+  },
+  doneRecBtn: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    paddingVertical: 4,
+    paddingHorizontal: 12,
+    borderRadius: 8,
+    backgroundColor: '#0284C7',
+  },
+  doneRecText: {
+    fontSize: 12,
+    fontWeight: '700',
+    color: '#FFFFFF',
+  },
+  transcribingBanner: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: '#F0F9FF',
+    borderWidth: 1,
+    borderColor: '#BAE6FD',
+    borderRadius: 14,
+    paddingHorizontal: 14,
+    paddingVertical: 10,
+    marginBottom: 8,
+  },
+  transcribingText: {
+    fontSize: 13,
+    fontWeight: '500',
+    color: '#0369A1',
   },
   pillInput: {
     flexDirection: 'row',
@@ -1054,113 +1228,14 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     justifyContent: 'center',
   },
-  recordingOverlay: {
-    flex: 1,
-    backgroundColor: 'rgba(15, 23, 42, 0.6)',
-    alignItems: 'center',
-    justifyContent: 'center',
-    padding: 24,
-  },
-  recordingCard: {
-    width: '100%',
-    maxWidth: 340,
-    backgroundColor: '#FFFFFF',
-    borderRadius: 24,
-    paddingVertical: 28,
-    paddingHorizontal: 20,
-    alignItems: 'center',
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 10 },
-    shadowOpacity: 0.15,
-    shadowRadius: 20,
-    elevation: 8,
-  },
-  micPulseWrap: {
-    alignItems: 'center',
-    justifyContent: 'center',
-    marginBottom: 16,
-  },
-  micPulseOuter: {
-    width: 90,
-    height: 90,
-    borderRadius: 45,
-    backgroundColor: 'rgba(239, 68, 68, 0.15)',
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
-  micPulseInner: {
-    width: 64,
-    height: 64,
-    borderRadius: 32,
-    backgroundColor: '#EF4444',
-    alignItems: 'center',
-    justifyContent: 'center',
-    shadowColor: '#EF4444',
-    shadowOffset: { width: 0, height: 4 },
-    shadowOpacity: 0.35,
-    shadowRadius: 8,
-    elevation: 5,
-  },
-  recordingTitle: {
-    fontSize: 16,
-    fontWeight: '700',
-    color: '#0F172A',
-    marginBottom: 6,
-  },
-  recordingTimer: {
-    fontSize: 24,
-    fontWeight: '800',
-    color: '#EF4444',
-    letterSpacing: 1,
-    marginBottom: 8,
-  },
-  recordingSub: {
-    fontSize: 12,
-    color: '#64748B',
-    textAlign: 'center',
-    lineHeight: 18,
-    marginBottom: 20,
-  },
-  recordingActions: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 12,
-    width: '100%',
-  },
-  cancelRecordBtn: {
-    flex: 1,
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'center',
-    backgroundColor: '#F1F5F9',
-    borderRadius: 14,
-    paddingVertical: 12,
-  },
-  cancelRecordText: {
-    fontSize: 13,
-    fontWeight: '600',
-    color: '#64748B',
-  },
-  finishRecordBtn: {
-    flex: 1.3,
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'center',
-    backgroundColor: '#0284C7',
-    borderRadius: 14,
-    paddingVertical: 12,
-  },
-  finishRecordText: {
-    fontSize: 13,
-    fontWeight: '700',
-    color: '#FFFFFF',
-  },
-  modalRoot: {
-    flex: 1,
-  },
-  modalBackdrop: {
-    ...StyleSheet.absoluteFill,
+  drawerBackdrop: {
+    position: 'absolute',
+    top: 0,
+    left: 0,
+    right: 0,
+    bottom: 0,
     backgroundColor: 'rgba(15, 23, 42, 0.45)',
+    zIndex: 90,
   },
   sidebarContainer: {
     position: 'absolute',
@@ -1175,7 +1250,7 @@ const styles = StyleSheet.create({
     shadowOpacity: 0.25,
     shadowRadius: 16,
     elevation: 20,
-    zIndex: 10,
+    zIndex: 100,
   },
   sidebarSafeArea: {
     flex: 1,

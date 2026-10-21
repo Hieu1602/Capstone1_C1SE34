@@ -10,8 +10,10 @@
 // 3. Hỗ trợ hiệu ứng phóng to nhẹ (scale animation) khi tab được chọn (focused).
 // ==============================================================================
 
-import React from 'react';
+import React, { memo } from 'react';
 import { View, Image, StyleSheet } from 'react-native';
+
+const BOT_IMAGE = require('../../assets/ai_operator_bot.png');
 
 /**
  * Props cho component AIBotIcon:
@@ -23,19 +25,22 @@ interface Props {
   focused?: boolean;
 }
 
-export default function AIBotIcon({ size = 48, focused = false }: Props) {
+function AIBotIconComponent({ size = 48, focused = false }: Props) {
   return (
     // Khung bao bọc icon: Cố định kích thước vuông và áp dụng hiệu ứng khi tab được focus
     <View style={[styles.wrapper, { width: size, height: size }, focused && styles.wrapperFocused]}>
       {/* Hình ảnh Robot AI lấy trực tiếp từ thư mục assets tập trung */}
       <Image
-        source={require('../../assets/ai_operator_bot.png')}
+        source={BOT_IMAGE}
         style={{ width: size, height: size }}
         resizeMode="contain"
+        fadeDuration={0}
       />
     </View>
   );
 }
+
+export default memo(AIBotIconComponent);
 
 // ------------------------------------------------------------------------------
 // Stylesheet
