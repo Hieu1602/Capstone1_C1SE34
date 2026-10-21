@@ -8,7 +8,7 @@ from typing import Any, Optional
 
 import bcrypt
 if not hasattr(bcrypt, "__about__"):
-    bcrypt.__about__ = type("about", (), {"__version__": getattr(bcrypt, "__version__", "4.0.1")})
+    setattr(bcrypt, "__about__", type("about", (), {"__version__": getattr(bcrypt, "__version__", "4.0.1")}))
 
 from jose import JWTError, jwt
 from passlib.context import CryptContext

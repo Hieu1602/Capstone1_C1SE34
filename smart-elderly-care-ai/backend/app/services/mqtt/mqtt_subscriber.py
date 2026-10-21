@@ -8,8 +8,10 @@ EMQX → (paho-mqtt) → MQTTSubscriber → [DB save + WS broadcast + FCM notify
 
 import json
 import logging
+import os
 import threading
 import time
+import uuid
 from typing import Callable
 
 logger = logging.getLogger(__name__)
@@ -31,7 +33,9 @@ class MQTTSubscriber:
         self.broker_port = settings.MQTT_BROKER_PORT
         self.username    = settings.MQTT_USERNAME
         self.password    = settings.MQTT_PASSWORD
-        self.client_id   = settings.MQTT_CLIENT_ID
+        base_client_id   = settings.MQTT_CLIENT_ID or "backend-fastapi"
+        # Bổ sung PID và hậu tố ngẫu nhiên để tránh xung đột Client ID khi chạy đa tiến trình hoặc auto-reload
+        self.client_id   = f"{base_client_id}-{os.getpid()}-{uuid.uuid4().hex[:4]}"
 
         self._client     = None
         self._thread     = None
@@ -58,8 +62,11 @@ class MQTTSubscriber:
         """Dừng subscriber."""
         self._running = False
         if self._client:
-            self._client.loop_stop()
-            self._client.disconnect()
+            try:
+                self._client.loop_stop()
+                self._client.disconnect()
+            except Exception:
+                pass
         logger.info("[MQTTSub] Subscriber stopped.")
 
     # ------------------------------------------------------------------
@@ -89,7 +96,7 @@ class MQTTSubscriber:
     def _connect_and_loop(self) -> None:
         import paho.mqtt.client as mqtt  # type: ignore
 
-        client = mqtt.Client(client_id=self.client_id)
+        client = mqtt.Client(client_id=self.client_id, clean_session=True)
         client.username_pw_set(self.username, self.password)
         client.on_connect    = self._on_connect
         client.on_message    = self._on_message
@@ -109,7 +116,10 @@ class MQTTSubscriber:
             logger.error("[MQTTSub] Kết nối thất bại rc=%d", rc)
 
     def _on_disconnect(self, client, userdata, rc):
-        logger.warning("[MQTTSub] Mất kết nối rc=%d", rc)
+        if rc != 0:
+            logger.warning("[MQTTSub] Mất kết nối rc=%d (sẽ tự động kết nối lại...)", rc)
+        else:
+            logger.info("[MQTTSub] Đã ngắt kết nối an toàn.")
 
     def _on_message(self, client, userdata, message):
         topic   = message.topic

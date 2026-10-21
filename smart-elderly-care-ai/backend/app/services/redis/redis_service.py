@@ -256,7 +256,7 @@ class RedisService:
             return 0
 
     # ==========================================================================
-    # 5. THỐNG KÊ HỆ THỐNG & NẠP DỮ LIỆU MẪU (METRICS & SEED DATA)
+    # 5. THỐNG KÊ HỆ THỐNG (METRICS & SYSTEM STATS)
     # ==========================================================================
 
     async def get_system_stats(self) -> Dict[str, Any]:
@@ -286,83 +286,8 @@ class RedisService:
             logger.error("[Redis] Lỗi khi get_system_stats: %s", exc)
             return {"status": "error", "detail": str(exc)}
 
-    async def seed_sample_data(self) -> Dict[str, Any]:
-        """
-        Nạp sẵn bộ dữ liệu mẫu sinh động vào Redis:
-        1. Thiết bị 'hub-livingroom-01' (Phòng khách - Chỉ số bình thường).
-        2. Thiết bị 'hub-bedroom-02' (Phòng ngủ - Cảnh báo nhịp tim cao).
-        3. 2 sự cố khẩn cấp mẫu trong danh sách 'alerts:recent'.
-        
-        => Giúp kiểm tra ngay trên tiện ích 'Redis for VS Code' và Mobile App!
-        """
-        try:
-            # 1. Dữ liệu thiết bị 1: Phòng khách (Bình thường)
-            dev1 = "hub-livingroom-01"
-            vitals1 = {
-                "device_id": dev1,
-                "location": "Phòng khách - Tầng 1",
-                "elderly_name": "Cụ Nguyễn Văn An (78 tuổi)",
-                "heart_rate": 74,
-                "spo2": 98,
-                "skin_temp_max": 36.5,
-                "person_count": 1,
-                "fall_detected": False,
-                "status_text": "Sinh hiệu ổn định",
-            }
-            await self.set_latest_vitals(dev1, vitals1)
-
-            # 2. Dữ liệu thiết bị 2: Phòng ngủ (Nhịp tim tăng nhẹ)
-            dev2 = "hub-bedroom-02"
-            vitals2 = {
-                "device_id": dev2,
-                "location": "Phòng ngủ - Tầng 2",
-                "elderly_name": "Cụ Trần Thị Mai (75 tuổi)",
-                "heart_rate": 96,
-                "spo2": 96,
-                "skin_temp_max": 37.1,
-                "person_count": 1,
-                "fall_detected": False,
-                "status_text": "Cần theo dõi nhịp tim",
-            }
-            await self.set_latest_vitals(dev2, vitals2)
-
-            # 3. Nạp cảnh báo mẫu
-            alert1 = {
-                "id": "alert-demo-001",
-                "device_id": dev1,
-                "location": "Phòng khách",
-                "alert_type": "FALL_DETECTED",
-                "alert_level": "CRITICAL",
-                "message": "Phát hiện té ngã tại khu vực ghế sofa!",
-                "confidence": 0.94,
-                "is_acknowledged": False,
-            }
-            await self.push_recent_alert(alert1)
-
-            alert2 = {
-                "id": "alert-demo-002",
-                "device_id": dev2,
-                "location": "Phòng ngủ",
-                "alert_type": "HIGH_HEART_RATE",
-                "alert_level": "WARNING",
-                "message": "Nhịp tim đo được 96 bpm (Vượt ngưỡng 90 bpm)",
-                "confidence": 0.98,
-                "is_acknowledged": True,
-            }
-            await self.push_recent_alert(alert2)
-
-            return {
-                "success": True,
-                "message": "Đã nạp thành công dữ liệu mẫu vào Redis!",
-                "devices_seeded": [dev1, dev2],
-                "alerts_seeded": 2,
-            }
-        except Exception as exc:
-            logger.error("[Redis] Lỗi khi seed_sample_data: %s", exc)
-            return {"success": False, "detail": str(exc)}
-
     # ==========================================================================
-    # 5. QUẢN LÝ PHIÊN HOẠT ĐỘNG (ACTIVE SESSIONS & REVOCATION)
+    # 6. QUẢN LÝ PHIÊN HOẠT ĐỘNG (ACTIVE SESSIONS & REVOCATION)
     # ==========================================================================
 
     async def record_session(self, session_id: str, session_data: Dict[str, Any]) -> bool:

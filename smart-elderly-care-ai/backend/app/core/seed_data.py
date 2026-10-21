@@ -1,38 +1,66 @@
+# -*- coding: utf-8 -*-
 """
-seed_data.py – Khởi tạo dữ liệu Master ban đầu đồng bộ hoàn toàn với Mobile App.
-Dữ liệu khởi tạo gồm:
-- 1 Tài khoản Quản trị / Người chăm sóc: admin@seca.vn / 12345678
-- 1 Căn nhà: "Nhà của tôi" (Địa chỉ: 123 Hải Phòng, Đà Nẵng, chế độ: HOME)
-- 2 Nhóm phân vùng: "Phòng khách", "Phòng ngủ"
-- 2 Thiết bị cốt lõi:
-    1. SECA_001: Camera AI an ninh (Phòng khách, 2K Super HD, AI Protect ON)
-    2. BLE_BAND_001: Vòng đeo tay BLE Smartband (Phòng ngủ, Đo nhịp tim, SpO2, Pin 84%)
+seed_data.py – Khởi tạo tài khoản Quản trị & Tiện ích dọn dẹp dữ liệu ảo (Zero Fake Data).
 Vị trí: backend/app/core/seed_data.py
+
+Chính sách dữ liệu:
+- Zero Fake Data: Tuyệt đối không tạo thiết bị ảo, không gán pin/online giả lập, không tạo hồ sơ bệnh án mẫu.
+- Chỉ khởi tạo tài khoản Quản trị tối thiểu (System Admin) và Căn nhà ban đầu nếu chưa tồn tại.
+- Hỗ trợ cờ dòng lệnh:
+    python -m app.core.seed_data --clean   : Xóa sạch toàn bộ thiết bị ảo và dữ liệu giả lập trong Database.
+    python -m app.core.seed_data          : Nạp tài khoản quản trị và căn nhà cơ bản sạch.
 """
 
+from __future__ import annotations
+
+import argparse
 import asyncio
 import logging
-from sqlalchemy import select
+from sqlalchemy import delete, select, text
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core.database import AsyncSessionFactory
 from app.core.security import hash_password
-from app.models.user import User, UserRole
-from app.models.house import House, HouseMember
-from app.models.device_group import DeviceGroup
-from app.models.device import Device, DeviceType
+from app.models.device import Device
 from app.models.device_config import DeviceConfig
+from app.models.device_group import DeviceGroup
+from app.models.elderly_profile import ElderlyProfile
+from app.models.house import House, HouseMember
+from app.models.incident import Incident
+from app.models.user import User, UserRole
 
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
 
 
 async def seed_master_data() -> None:
+    """
+    Khởi tạo tài khoản Quản trị hệ thống (System Admin) và Căn nhà cơ bản.
+    Tuân thủ nguyên tắc Zero Fake Data: Không tạo bất kỳ thiết bị ảo hay hồ sơ người cao tuổi mẫu nào.
+    """
     async with AsyncSessionFactory() as db:
         try:
-            logger.info("[SEED] Bắt đầu nạp dữ liệu Master...")
+            logger.info("[SEED] Khởi tạo tài khoản nền tảng (Zero Fake Data)...")
 
-            # 1. Tìm hoặc tạo User mặc định
+            # 1. Tìm hoặc tạo System Admin (+84900000000)
+            admin_res = await db.execute(select(User).where(User.phone == "+84900000000"))
+            admin = admin_res.scalar_one_or_none()
+            if not admin:
+                admin = User(
+                    phone="+84900000000",
+                    full_name="System Admin",
+                    hashed_password=hash_password("12345678"),
+                    role=UserRole.ADMIN,
+                    is_active=True,
+                )
+                db.add(admin)
+                await db.flush()
+                await db.refresh(admin)
+                logger.info(f"[SEED] Đã tạo System Admin: {admin.phone} (ID: {admin.id})")
+            else:
+                logger.info(f"[SEED] System Admin đã tồn tại: {admin.phone}")
+
+            # 2. Tìm hoặc tạo User mặc định ban đầu (+84905123456)
             user_res = await db.execute(select(User).where(User.phone == "+84905123456"))
             user = user_res.scalar_one_or_none()
             if not user:
@@ -50,7 +78,7 @@ async def seed_master_data() -> None:
             else:
                 logger.info(f"[SEED] User đã tồn tại: {user.phone}")
 
-            # 2. Tìm hoặc tạo House mặc định
+            # 3. Tìm hoặc tạo House cơ bản cho User (nếu chưa có)
             house_res = await db.execute(select(House).where(House.owner_id == user.id))
             house = house_res.scalar_one_or_none()
             if not house:
@@ -76,123 +104,8 @@ async def seed_master_data() -> None:
             else:
                 logger.info(f"[SEED] Căn nhà đã tồn tại: {house.name}")
 
-            # 3. Tạo 2 nhóm khu vực: 'Phòng khách' & 'Phòng ngủ'
-            groups_dict: dict[str, DeviceGroup] = {}
-            for name, icon, color, order in [
-                ("Phòng khách", "folder", "#7C3AED", 1),
-                ("Phòng ngủ", "folder", "#7C3AED", 2),
-            ]:
-                g_res = await db.execute(
-                    select(DeviceGroup).where(
-                        DeviceGroup.house_id == house.id,
-                        DeviceGroup.name == name,
-                    )
-                )
-                group = g_res.scalar_one_or_none()
-                if not group:
-                    group = DeviceGroup(
-                        house_id=house.id,
-                        name=name,
-                        icon=icon,
-                        color=color,
-                        sort_order=order,
-                    )
-                    db.add(group)
-                    await db.flush()
-                    await db.refresh(group)
-                    logger.info(f"[SEED] Đã tạo Nhóm: {name}")
-                groups_dict[name] = group
-
-            # 4. Tạo thiết bị 1: SECA_001 (Camera AI)
-            cam_res = await db.execute(select(Device).where(Device.device_id == "SECA_001"))
-            cam = cam_res.scalar_one_or_none()
-            if not cam:
-                cam = Device(
-                    device_id="SECA_001",
-                    name="SECA_001",
-                    sub_title="Camera góc rộng • 2K Super HD • Đàm thoại 2 chiều",
-                    device_type=DeviceType.CAMERA,
-                    location="Phòng khách",
-                    is_online=True,
-                    status_text="Đang ghi hình",
-                    owner_id=user.id,
-                    house_id=house.id,
-                    group_id=groups_dict["Phòng khách"].id,
-                )
-                db.add(cam)
-                await db.flush()
-                await db.refresh(cam)
-
-                cam_config = DeviceConfig(
-                    device_id=cam.id,
-                    stream_url="http://10.0.2.2:8080",
-                    resolution="2K",
-                    is_sleep=False,
-                    is_ai_protect=True,
-                    has_two_way_audio=True,
-                )
-                db.add(cam_config)
-                logger.info("[SEED] Đã tạo Thiết bị Camera SECA_001 và cấu hình")
-            else:
-                logger.info("[SEED] Camera SECA_001 đã tồn tại")
-
-            # 5. Tạo thiết bị 2: Vòng đeo tay BLE Smartband
-            band_res = await db.execute(select(Device).where(Device.device_id == "BLE_BAND_001"))
-            band = band_res.scalar_one_or_none()
-            if not band:
-                band = Device(
-                    device_id="BLE_BAND_001",
-                    name="Vòng đeo tay BLE Smartband",
-                    sub_title="Nhịp tim • SpO₂ • Gia tốc kế phát hiện va đập",
-                    device_type=DeviceType.SMARTBAND,
-                    location="Phòng ngủ",
-                    is_online=True,
-                    status_text="Pin 84% • Đang đeo",
-                    battery_level=84,
-                    owner_id=user.id,
-                    house_id=house.id,
-                    group_id=groups_dict["Phòng ngủ"].id,
-                )
-                db.add(band)
-                await db.flush()
-                await db.refresh(band)
-
-                band_config = DeviceConfig(
-                    device_id=band.id,
-                    hr_threshold_high=120,
-                    hr_threshold_low=50,
-                    spo2_threshold_low=90,
-                    fall_impact_threshold=2.5,
-                )
-                db.add(band_config)
-                logger.info("[SEED] Đã tạo Thiết bị Vòng đeo tay BLE Smartband và cấu hình")
-            else:
-                logger.info("[SEED] Vòng đeo tay BLE Smartband đã tồn tại")
-
-            # 6. Tạo Hồ sơ Người cao tuổi mặc định: Cụ Nguyễn Văn An
-            from app.models.elderly_profile import ElderlyProfile
-            eld_res = await db.execute(select(ElderlyProfile).where(ElderlyProfile.house_id == house.id))
-            elderly = eld_res.scalar_one_or_none()
-            if not elderly:
-                elderly = ElderlyProfile(
-                    house_id=house.id,
-                    full_name="Nguyễn Văn An",
-                    birth_year=1948,
-                    gender="MALE",
-                    medical_history="Cao huyết áp (Độ 2), Đái tháo đường Type 2, Thoái hóa khớp gối",
-                    emergency_contact_phone="+84905123456",
-                )
-                db.add(elderly)
-                await db.flush()
-                await db.refresh(elderly)
-                logger.info("[SEED] Đã tạo Hồ sơ Người cao tuổi: Nguyễn Văn An")
-
-            if band and not band.elderly_id and elderly:
-                band.elderly_id = elderly.id
-                logger.info("[SEED] Đã gán Vòng đeo tay BLE_BAND_001 cho Cụ Nguyễn Văn An")
-
             await db.commit()
-            logger.info("[SEED] Hoàn tất nạp dữ liệu Master thành công 100%!")
+            logger.info("[SEED] Hoàn tất nạp dữ liệu nền tảng sạch (Không có thiết bị/hồ sơ ảo)!")
 
         except Exception as e:
             await db.rollback()
@@ -200,6 +113,71 @@ async def seed_master_data() -> None:
             raise
 
 
-if __name__ == "__main__":
-    asyncio.run(seed_master_data())
+async def clean_mock_data() -> None:
+    """
+    Xóa sạch tất cả dữ liệu ảo (Mock Devices, Fake Elderly Profiles, Device Configs, Fake Incidents)
+    khỏi Database để đảm bảo 100% dữ liệu xuất phát từ thiết bị và người dùng thực tế.
+    """
+    async with AsyncSessionFactory() as db:
+        try:
+            logger.info("[CLEAN] Bắt đầu dọn dẹp toàn bộ dữ liệu ảo trong Database...")
 
+            # 1. Xóa TimescaleDB vital signs nếu có
+            try:
+                del_vitals = await db.execute(text("DELETE FROM vital_signs"))
+                count_vitals = getattr(del_vitals, "rowcount", 0)
+                logger.info(f"[CLEAN] Đã xóa {count_vitals} bản ghi sinh hiệu ảo (vital_signs).")
+            except Exception as e:
+                logger.warning(f"[CLEAN] Bỏ qua vital_signs: {e}")
+
+            # 2. Xóa toàn bộ DeviceConfig
+            del_configs = await db.execute(delete(DeviceConfig))
+            count_configs = getattr(del_configs, "rowcount", 0)
+            logger.info(f"[CLEAN] Đã xóa {count_configs} cấu hình thiết bị (device_configs).")
+
+            # 3. Xóa các incidents mẫu
+            del_incidents = await db.execute(delete(Incident))
+            count_incidents = getattr(del_incidents, "rowcount", 0)
+            logger.info(f"[CLEAN] Đã xóa {count_incidents} cảnh báo mẫu (incidents).")
+
+            # 4. Xóa các thiết bị mẫu (devices)
+            del_devices = await db.execute(delete(Device))
+            count_devices = getattr(del_devices, "rowcount", 0)
+            logger.info(f"[CLEAN] Đã xóa {count_devices} thiết bị mẫu (devices).")
+
+            # 5. Xóa hồ sơ người cao tuổi mẫu (elderly_profiles)
+            del_elderly = await db.execute(delete(ElderlyProfile))
+            count_elderly = getattr(del_elderly, "rowcount", 0)
+            logger.info(f"[CLEAN] Đã xóa {count_elderly} hồ sơ người cao tuổi mẫu (elderly_profiles).")
+
+            # 6. Xóa các nhóm thiết bị mẫu (device_groups)
+            del_groups = await db.execute(delete(DeviceGroup))
+            count_groups = getattr(del_groups, "rowcount", 0)
+            logger.info(f"[CLEAN] Đã xóa {count_groups} nhóm phân vùng mẫu (device_groups).")
+
+            await db.commit()
+            logger.info("[CLEAN] Đã xóa sạch toàn bộ dữ liệu ảo thành công 100%!")
+
+        except Exception as e:
+            await db.rollback()
+            logger.error(f"[CLEAN] Lỗi khi dọn dẹp dữ liệu: {e}")
+            raise
+
+
+def main() -> None:
+    parser = argparse.ArgumentParser(description="Quản lý dữ liệu Master / Dọn dẹp dữ liệu ảo SECA")
+    parser.add_argument(
+        "--clean",
+        action="store_true",
+        help="Xóa sạch toàn bộ dữ liệu ảo (Devices, Configs, Elderly Profiles, Incidents)",
+    )
+    args = parser.parse_args()
+
+    if args.clean:
+        asyncio.run(clean_mock_data())
+    else:
+        asyncio.run(seed_master_data())
+
+
+if __name__ == "__main__":
+    main()

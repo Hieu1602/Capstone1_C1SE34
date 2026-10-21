@@ -11,7 +11,7 @@ import { useAuthStore } from '../store/useAuthStore';
 // - Nếu có biến EXPO_PUBLIC_API_URL thì dùng nó
 // - Nếu chạy trên Web và truy cập qua LAN IP: tự động kết nối API qua IP đó
 // - Tự động trích xuất IP từ host của Metro Bundler (Expo Constants)
-// - Fallback về IP máy tính hiện tại: 192.168.1.160
+// - Fallback về IP máy tính hiện tại: 192.168.1.4
 const getBaseUrl = (): string => {
   // 1. Khi chạy trên Web trình duyệt
   if (Platform.OS === 'web' && typeof window !== 'undefined' && window.location?.hostname) {
@@ -39,7 +39,7 @@ const getBaseUrl = (): string => {
   }
 
   // 4. Fallback về IP máy tính phát triển trong mạng nội bộ
-  return 'http://192.168.1.160:8000/api/v1';
+  return 'http://192.168.1.4:8000/api/v1';
 };
 
 export const BASE_URL: string = getBaseUrl();
@@ -109,6 +109,8 @@ export default api;
 export const authApi = {
   requestOtp: (phone: string) => api.post('/auth/request-otp', { phone }),
   verifyOtp: (phone: string, code: string) => api.post('/auth/verify-otp', { phone, code }),
+  verifyCchn: (cchn_number: string, full_name: string) =>
+    api.post('/auth/verify-cchn', { cchn_number, full_name }),
   login: (phone: string, password: string) => {
     // Chuẩn OAuth2 Password Request quy định application/x-www-form-urlencoded
     const params = new URLSearchParams();
@@ -125,6 +127,16 @@ export const authApi = {
     role: string;
     otp_code?: string;
   }) => api.post('/auth/register', data),
+  registerDoctor: (data: {
+    phone: string;
+    full_name: string;
+    password: string;
+    role?: string;
+    otp_code: string;
+    cchn_number: string;
+    workplace?: string;
+    specialty?: string;
+  }) => api.post('/auth/register-doctor', data),
   resetPassword: (data: {
     phone: string;
     otp_code: string;

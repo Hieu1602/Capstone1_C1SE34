@@ -37,7 +37,9 @@ class User(Base):
     )
     full_name: Mapped[str] = mapped_column(String(255), nullable=False)
     hashed_password: Mapped[str] = mapped_column(String(255), nullable=False)
-    phone: Mapped[str | None] = mapped_column(String(20), nullable=True)
+    phone: Mapped[str | None] = mapped_column(
+        String(20), unique=True, index=True, nullable=True
+    )
     avatar_url: Mapped[str | None] = mapped_column(Text, nullable=True)
     role: Mapped[str] = mapped_column(
         String(20), nullable=False, default="user"
@@ -63,6 +65,9 @@ class User(Base):
     critical_alert_enabled: Mapped[bool] = mapped_column(
         Boolean, nullable=False, default=True, server_default="true"
     )
+    cchn_number: Mapped[str | None] = mapped_column(String(50), nullable=True)
+    specialty: Mapped[str | None] = mapped_column(String(255), nullable=True)
+    workplace: Mapped[str | None] = mapped_column(String(255), nullable=True)
     is_active: Mapped[bool] = mapped_column(Boolean, default=True)
     fcm_token: Mapped[str | None] = mapped_column(String(500), nullable=True)
     created_at: Mapped[datetime] = mapped_column(

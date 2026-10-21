@@ -101,11 +101,17 @@ class CRUDUser:
         return result.scalars().first()
 
     async def create(self, db: AsyncSession, obj_in: UserCreate) -> User:
+        extra_fields = {}
+        for f in ("cchn_number", "specialty", "workplace"):
+            if hasattr(obj_in, f) and getattr(obj_in, f) is not None:
+                extra_fields[f] = getattr(obj_in, f)
+
         db_obj = User(
             full_name=obj_in.full_name,
             phone=obj_in.phone,
             role=obj_in.role,
             hashed_password=hash_password(obj_in.password),
+            **extra_fields,
         )
         db.add(db_obj)
         await db.flush()

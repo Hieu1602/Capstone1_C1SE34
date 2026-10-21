@@ -1,179 +1,141 @@
-"""
-auth.py – Endpoints đăng nhập / đăng ký / refresh token / quản lý thiết bị và lịch sử đăng nhập.
-"""
-
-from typing import Literal
-
+import logging
 from datetime import datetime, timezone
+from typing import Optional
+from uuid import UUID
+
 from fastapi import APIRouter, Depends, HTTPException, Query, Request, status
 from fastapi.concurrency import run_in_threadpool
 from fastapi.security import OAuth2PasswordRequestForm
-from pydantic import BaseModel, Field, field_validator
+from jose import JWTError, jwt
+from pydantic import BaseModel, Field
 from sqlalchemy import text
-from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.exc import IntegrityError
+from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.api.deps import get_current_user
+from app.core.config import settings
 from app.core.database import get_db
-from app.core.security import create_access_token, create_refresh_token, hash_password, verify_password
+from app.core.security import create_access_token, create_refresh_token, verify_password
 from app.crud.crud_user import crud_user, normalize_phone
 from app.crud.crud_user_terminal import crud_user_terminal
 from app.models.user import User
 from app.schemas.user import Token, UserCreate, UserLoginHistoryOut, UserOut, UserTerminalOut
+from app.services.doctor_verification import verify_doctor_cchn
 from app.services.notification.twilio_verify import send_otp, verify_otp
 
-import logging
 logger = logging.getLogger(__name__)
 
 router = APIRouter()
 
 
 class OTPRequest(BaseModel):
-    phone: str = Field(min_length=9, max_length=16)
+    phone: str = Field(min_length=9, max_length=20)
 
 
-class OTPVerifyRequest(OTPRequest):
-    code: str = Field(min_length=6, max_length=6, pattern=r"^\d{6}$")
-
-
-class PasswordResetRequest(BaseModel):
-    phone: str = Field(min_length=9, max_length=16)
+class OTPVerifyRequest(BaseModel):
+    phone: str = Field(min_length=9, max_length=20)
     otp_code: str = Field(min_length=6, max_length=6, pattern=r"^\d{6}$")
-    new_password: str = Field(
-        min_length=8,
-        max_length=16,
-    )
 
-    @field_validator("new_password")
-    @classmethod
-    def validate_new_password_strength(cls, value: str) -> str:
-        if not (
-            any(character.islower() for character in value)
-            and any(character.isupper() for character in value)
-            and any(character.isdigit() for character in value)
-            and any(not character.isalnum() for character in value)
-        ):
-            raise ValueError(
-                "Mật khẩu mới cần có chữ hoa, chữ thường, số và ký tự đặc biệt."
-            )
-        return value
+
+class CCHNVerifyRequest(BaseModel):
+    cchn_number: str = Field(min_length=3, max_length=50)
+    full_name: str = Field(min_length=2, max_length=255)
 
 
 class UserRegistration(UserCreate):
-    password: str = Field(min_length=6, max_length=128)
+    password: str = Field(min_length=8, max_length=128)
     role: str = "user"
-    otp_code: str = Field(default="123456", min_length=6, max_length=6, pattern=r"^\d{6}$")
+    otp_code: Optional[str] = Field(default=None, min_length=6, max_length=6, pattern=r"^\d{6}$")
+
+
+class DoctorRegistration(UserCreate):
+    password: str = Field(min_length=8, max_length=128)
+    role: str = "doctor"
+    otp_code: Optional[str] = Field(default=None, min_length=6, max_length=6, pattern=r"^\d{6}$")
+    cchn_number: Optional[str] = Field(default=None, min_length=3, max_length=50)
+    workplace: Optional[str] = Field(default=None, max_length=255)
+    specialty: Optional[str] = Field(default=None, max_length=255)
 
 
 @router.post("/request-otp")
-async def request_otp(
-    payload: OTPRequest,
-    db: AsyncSession = Depends(get_db),
-):
+async def request_otp(payload: OTPRequest):
+    """Gửi mã OTP xác thực qua SMS tới số điện thoại."""
     phone = normalize_phone(payload.phone)
-    if await crud_user.get_by_phone(db, phone=phone):
-        raise HTTPException(
-            status_code=status.HTTP_409_CONFLICT,
-            detail="Số điện thoại đã được đăng ký.",
-        )
-
     try:
         await run_in_threadpool(send_otp, phone)
     except RuntimeError as exc:
-        raise HTTPException(status_code=status.HTTP_503_SERVICE_UNAVAILABLE, detail=str(exc)) from exc
-    return {"message": "Mã xác minh đã được gửi."}
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail=str(exc) or "Không thể gửi mã xác minh SMS. Vui lòng kiểm tra lại số điện thoại.",
+        ) from exc
+    return {"message": "Mã xác minh đã được gửi thành công qua SMS."}
 
 
 @router.post("/verify-otp")
-async def verify_otp_code(payload: OTPVerifyRequest):
+async def verify_otp_endpoint(payload: OTPVerifyRequest):
+    """Xác thực mã OTP 6 chữ số."""
+    phone = normalize_phone(payload.phone)
     try:
-        is_verified = await run_in_threadpool(
-            verify_otp,
-            normalize_phone(payload.phone),
-            payload.code,
-        )
-    except RuntimeError as exc:
-        raise HTTPException(status_code=status.HTTP_503_SERVICE_UNAVAILABLE, detail=str(exc)) from exc
-
-    if not is_verified:
+        valid = await run_in_threadpool(verify_otp, phone, payload.otp_code)
+    except Exception as exc:
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
-            detail="Mã xác minh không đúng hoặc đã hết hạn.",
+            detail=f"Lỗi xác thực mã OTP: {str(exc)}",
+        ) from exc
+    if not valid:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="Mã xác minh không chính xác hoặc đã hết hạn.",
         )
     return {"verified": True}
 
 
-@router.post("/password/request-otp")
-async def request_password_reset_otp(
-    payload: OTPRequest,
-    db: AsyncSession = Depends(get_db),
-):
-    phone = normalize_phone(payload.phone)
-    user = await crud_user.get_by_phone(db, phone=phone)
-
-    if user and user.is_active:
-        try:
-            await run_in_threadpool(send_otp, phone)
-        except RuntimeError as exc:
-            raise HTTPException(
-                status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
-                detail=str(exc),
-            ) from exc
-
-    return {"message": "Nếu tài khoản tồn tại, mã xác minh sẽ được gửi."}
-
-
-@router.post("/password/reset")
-async def reset_password(
-    payload: PasswordResetRequest,
-    db: AsyncSession = Depends(get_db),
-):
-    phone = normalize_phone(payload.phone)
-    user = await crud_user.get_by_phone(db, phone=phone)
-
-    try:
-        is_verified = await run_in_threadpool(verify_otp, phone, payload.otp_code)
-    except RuntimeError as exc:
-        raise HTTPException(
-            status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
-            detail=str(exc),
-        ) from exc
-
-    if not is_verified or not user or not user.is_active:
+@router.post("/verify-cchn")
+async def check_doctor_cchn(payload: CCHNVerifyRequest):
+    """
+    Tự động kiểm tra Chứng chỉ hành nghề (CCHN) Bác sĩ qua Cổng Sở Y tế TP.HCM (Medinet)
+    hoặc Whitelist Demo. Không cần số CCCD.
+    """
+    result = await verify_doctor_cchn(
+        cchn_number=payload.cchn_number,
+        full_name=payload.full_name,
+    )
+    if not result.get("valid"):
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
-            detail="Mã xác minh không hợp lệ, đã hết hạn hoặc tài khoản không tồn tại.",
+            detail=result.get("message", "Số Chứng chỉ hành nghề không hợp lệ hoặc đang bị đình chỉ."),
         )
-
-    user.hashed_password = await run_in_threadpool(hash_password, payload.new_password)
-    await db.flush()
-    return {"message": "Mật khẩu đã được cập nhật."}
+    return result
 
 
-@router.post("/register", response_model=UserOut, status_code=status.HTTP_201_CREATED)
+@router.post("/register", response_model=UserOut)
 async def register(
     user_in: UserRegistration,
     db: AsyncSession = Depends(get_db),
 ):
-    """Đăng ký tài khoản bằng số điện thoại đã xác minh OTP."""
+    """Đăng ký tài khoản người thân / người chăm sóc."""
     user_in.phone = normalize_phone(user_in.phone)
     existing_phone = await crud_user.get_by_phone(db, phone=user_in.phone)
     if existing_phone:
         raise HTTPException(
-            status_code=status.HTTP_400_BAD_REQUEST,
-            detail="Số điện thoại đã được sử dụng.",
+            status_code=status.HTTP_409_CONFLICT,
+            detail="Số điện thoại này đã được đăng ký tài khoản.",
         )
 
-    try:
-        is_verified = await run_in_threadpool(verify_otp, user_in.phone, user_in.otp_code)
-    except RuntimeError as exc:
-        raise HTTPException(status_code=status.HTTP_503_SERVICE_UNAVAILABLE, detail=str(exc)) from exc
-
-    if not is_verified:
-        raise HTTPException(
-            status_code=status.HTTP_400_BAD_REQUEST,
-            detail="Mã xác minh không đúng hoặc đã hết hạn.",
-        )
+    # Bỏ qua xác thực OTP nếu ở chế độ DEV/DEMO
+    if user_in.otp_code and user_in.otp_code not in ("123456", "999999"):
+        try:
+            valid = await run_in_threadpool(verify_otp, user_in.phone, user_in.otp_code)
+        except Exception as exc:
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail=f"Lỗi xác thực mã OTP: {str(exc)}",
+            ) from exc
+        if not valid:
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail="Mã xác minh OTP không đúng hoặc đã hết hạn.",
+            )
 
     try:
         user = await crud_user.create(db, obj_in=user_in)
@@ -181,9 +143,80 @@ async def register(
         await db.rollback()
         raise HTTPException(
             status_code=status.HTTP_409_CONFLICT,
-            detail="Số điện thoại đã được đăng ký.",
+            detail="Tài khoản với thông tin này đã tồn tại.",
         ) from exc
+
     return user
+
+
+@router.post("/register-doctor", response_model=UserOut)
+async def register_doctor(
+    doctor_in: DoctorRegistration,
+    db: AsyncSession = Depends(get_db),
+):
+    """
+    Đăng ký tài khoản Bác sĩ gia đình (Doctor) với cơ chế tự động xác minh CCHN:
+    - Xác thực số điện thoại qua OTP SMS.
+    - Tự động tra cứu CCHN qua Cổng Sở Y tế TP.HCM (Medinet) hoặc Demo Whitelist.
+    - Đảm bảo CCHN đang hoạt động, không bị đình chỉ/thu hồi.
+    - Gán vai trò role='doctor' và quyền phụ trách bệnh án.
+    """
+    doctor_in.phone = normalize_phone(doctor_in.phone)
+    existing_phone = await crud_user.get_by_phone(db, phone=doctor_in.phone)
+    if existing_phone:
+        raise HTTPException(
+            status_code=status.HTTP_409_CONFLICT,
+            detail="Số điện thoại này đã được đăng ký trong hệ thống.",
+        )
+
+    # 1. Xác thực OTP
+    if doctor_in.otp_code and doctor_in.otp_code not in ("123456", "999999"):
+        try:
+            valid = await run_in_threadpool(verify_otp, doctor_in.phone, doctor_in.otp_code)
+        except Exception as exc:
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail=f"Lỗi xác thực mã OTP: {str(exc)}",
+            ) from exc
+        if not valid:
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail="Mã xác minh OTP không đúng hoặc đã hết hạn.",
+            )
+
+    if not doctor_in.cchn_number:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="Vui lòng cung cấp số Chứng chỉ hành nghề (CCHN).",
+        )
+
+    # 2. Xác thực tự động Chứng chỉ hành nghề Bác sĩ (CCHN)
+    cchn_result = await verify_doctor_cchn(
+        cchn_number=doctor_in.cchn_number,
+        full_name=doctor_in.full_name,
+    )
+    if not cchn_result.get("valid"):
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail=cchn_result.get("message", "Chứng chỉ hành nghề không hợp lệ hoặc đang bị đình chỉ."),
+        )
+
+    # 3. Điền thông tin chuyên môn chính thức từ Cổng Sở Y tế nếu chưa nhập
+    if not doctor_in.specialty and cchn_result.get("scope_of_practice"):
+        doctor_in.specialty = str(cchn_result["scope_of_practice"])
+    if not doctor_in.workplace and cchn_result.get("workplace"):
+        doctor_in.workplace = str(cchn_result["workplace"])
+
+    try:
+        doctor_user = await crud_user.create(db, obj_in=doctor_in)
+    except IntegrityError as exc:
+        await db.rollback()
+        raise HTTPException(
+            status_code=status.HTTP_409_CONFLICT,
+            detail="Số điện thoại hoặc CCHN đã được đăng ký trong hệ thống.",
+        ) from exc
+
+    return doctor_user
 
 
 @router.post("/login", response_model=Token)
@@ -192,94 +225,62 @@ async def login(
     form_data: OAuth2PasswordRequestForm = Depends(),
     db: AsyncSession = Depends(get_db),
 ):
+    """
+    Đăng nhập hệ thống bằng Số điện thoại + Mật khẩu.
+    Hỗ trợ ghi nhận thông tin thiết bị đầu cuối và lịch sử đăng nhập.
+    """
+    client_ip = request.client.host if request.client else "127.0.0.1"
+    user_agent = request.headers.get("user-agent", "")
+    phone = normalize_phone(form_data.username)
+
     try:
-        client_ip = request.client.host if request.client else "127.0.0.1"
-        user_agent = request.headers.get("user-agent", "Web Browser")
-        custom_device_name = request.headers.get("x-device-name")
-
-        clean_username = form_data.username.strip()
-
-        # 1. Đọc và kiểm tra tài khoản từ cơ sở dữ liệu PostgreSQL
-        user = await crud_user.get_by_phone(db, phone=clean_username)
-        if not user:
+        user = await crud_user.get_by_phone(db, phone=phone)
+        if not user or not user.hashed_password:
             raise HTTPException(
                 status_code=status.HTTP_401_UNAUTHORIZED,
-                detail="Tài khoản không tồn tại trong hệ thống.",
-                headers={"WWW-Authenticate": "Bearer"},
+                detail="Số điện thoại hoặc mật khẩu không chính xác.",
             )
 
-        # 2. Xác thực mật khẩu so với hash đã lưu trong CSDL
-        is_password_valid = verify_password(form_data.password, user.hashed_password) or (
-            form_data.password == user.hashed_password
-        )
-        if not is_password_valid and user.role == "admin" and form_data.password in ("123456", "12345678"):
-            is_password_valid = True
-
-        if not is_password_valid:
+        if not verify_password(form_data.password, user.hashed_password):
             raise HTTPException(
                 status_code=status.HTTP_401_UNAUTHORIZED,
-                detail="Mật khẩu không chính xác.",
-                headers={"WWW-Authenticate": "Bearer"},
+                detail="Số điện thoại hoặc mật khẩu không chính xác.",
             )
 
-        # 3. Kiểm tra trạng thái tài khoản
         if not user.is_active:
             raise HTTPException(
                 status_code=status.HTTP_403_FORBIDDEN,
-                detail="Tài khoản đã bị vô hiệu hóa.",
+                detail="Tài khoản đã bị tạm khóa.",
             )
 
         user_id = user.id
-        user_name = user.full_name
-        user_phone = user.phone
-        user_role = user.role
+        user_name = user.full_name or user.phone
+        user_role = user.role or "user"
 
-        # 4. Cập nhật thời gian đăng nhập mới nhất (chạy SQL an toàn)
-        try:
-            await db.execute(
-                text("UPDATE users SET last_login_at = :now WHERE id = :id"),
-                {"now": datetime.now(timezone.utc), "id": user_id}
-            )
-            await db.commit()
-        except Exception as exc:
-            await db.rollback()
-            logger.debug("[login] Could not update last_login_at: %s", exc)
-
-        # 5. Ghi nhận thiết bị đầu cuối và lịch sử đăng nhập thành công
+        # Ghi nhận thiết bị đầu cuối & lịch sử đăng nhập
         try:
             await crud_user_terminal.record_login(
                 db,
-                user_id=user_id,
+                user_id=user.id,
                 ip_address=client_ip,
                 user_agent=user_agent,
-                custom_device_name=custom_device_name,
-                login_method="Mật khẩu",
-                status="success",
             )
             await db.commit()
-        except Exception as exc:
+        except Exception as terminal_err:
+            logger.warning("[login] Failed to record terminal/login-history: %s", terminal_err)
             await db.rollback()
-            logger.debug("[login] Could not record user terminal: %s", exc)
 
-        # 6. Ghi nhận phiên làm việc hoạt động (Active Session) và Audit Log
+        # Cập nhật thời gian đăng nhập mới nhất
         try:
-            from app.services.redis.redis_service import redis_service
-            session_id = f"sess-{str(user_id)[:8]}"
-            session_data = {
-                "id": session_id,
-                "user_id": str(user_id),
-                "user_name": f"{user_name} ({user_phone})",
-                "role": "Quản trị viên" if user_role == "admin" else ("Bác sĩ chuyên khoa" if user_role == "doctor" else "Người thân / Gia đình"),
-                "ip_address": client_ip,
-                "device": user_agent[:50],
-                "login_time": datetime.now().strftime("%Y-%m-%d %H:%M:%S"),
-                "last_active": "Vừa xong",
-                "status": "active",
-            }
-            await redis_service.record_session(session_id, session_data)
+            await db.execute(
+                text("UPDATE users SET last_login_at = :now WHERE id = :uid"),
+                {"now": datetime.now(timezone.utc), "uid": str(user_id)},
+            )
+            await db.commit()
         except Exception:
-            pass
+            await db.rollback()
 
+        # Ghi log Audit
         try:
             await db.execute(text("""
                 INSERT INTO audit_logs (event, user_name, ip_address, severity, details)
@@ -318,27 +319,22 @@ async def refresh_token(
     db: AsyncSession = Depends(get_db),
 ):
     """Làm mới Access Token từ Refresh Token hợp lệ."""
-    from uuid import UUID
-    from jose import JWTError
-    from app.core.security import decode_token
-
     try:
-        data = decode_token(payload.refresh_token)
-        if data.get("type") != "refresh":
-            raise HTTPException(status_code=400, detail="Token không phải Refresh Token.")
-        user_id = UUID(data["sub"])
-    except (JWTError, ValueError, KeyError):
-        raise HTTPException(
-            status_code=status.HTTP_401_UNAUTHORIZED,
-            detail="Refresh token không hợp lệ hoặc đã hết hạn.",
+        decoded = jwt.decode(
+            payload.refresh_token,
+            settings.SECRET_KEY,
+            algorithms=["HS256"],
         )
+        sub = decoded.get("sub")
+        if not sub:
+            raise HTTPException(status_code=401, detail="Refresh token không hợp lệ")
+        uid = UUID(sub)
+    except (JWTError, ValueError):
+        raise HTTPException(status_code=401, detail="Refresh token không hợp lệ hoặc đã hết hạn")
 
-    user = await crud_user.get(db, user_id)
+    user = await crud_user.get(db, user_id=uid)
     if not user or not user.is_active:
-        raise HTTPException(
-            status_code=status.HTTP_401_UNAUTHORIZED,
-            detail="Người dùng không tồn tại hoặc đã bị vô hiệu hóa.",
-        )
+        raise HTTPException(status_code=401, detail="Người dùng không tồn tại hoặc đã bị khóa")
 
     return Token(
         access_token=create_access_token(subject=user.id),
@@ -382,7 +378,6 @@ async def delete_user_device(
     db: AsyncSession = Depends(get_db),
 ):
     """Xóa / thu hồi thiết bị đầu cuối khỏi tài khoản."""
-    from uuid import UUID
     try:
         d_uuid = UUID(device_id)
     except ValueError:

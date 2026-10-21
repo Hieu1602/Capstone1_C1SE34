@@ -122,21 +122,21 @@ class ChatbotRAGService:
             # Không tìm thấy chunk và cũng không hỏi sinh hiệu
             if is_en:
                 sections.append(
-                    "I could not find a directly matching topic in the current clinical guidelines.\n\n"
-                    "You can ask me about:\n"
+                    "I could not find a directly matching topic in the current clinical guidelines (.pdf, .docx, .xlsx, .txt).\n\n"
+                    "💡 **Hybrid Mode Note**: When connected to Cloud AI, I can answer out-of-document medical queries using general geriatric knowledge.\n\n"
+                    "In local offline mode, you can ask about topics in your loaded documents:\n"
                     "• Fall response and stroke identification (FAST)\n"
-                    "• Pressure ulcer repositioning and skin care\n"
-                    "• Geriatric nutrition and chronic conditions\n"
-                    "• Medication schedules and vital sign monitoring"
+                    "• Daily elderly routine and geriatric nutrition\n"
+                    "• Real-time vital sign checks from wearables"
                 )
             else:
                 sections.append(
-                    "Dạ, tôi chưa tìm thấy tài liệu phù hợp trực tiếp với câu hỏi này trong cẩm nang hiện tại.\n\n"
-                    "Bạn có thể tham khảo hỏi tôi về các chủ đề chuyên sâu:\n"
-                    "• Xử lý và sơ cứu khi người cao tuổi té ngã, dấu hiệu đột quỵ (FAST)\n"
-                    "• Chăm sóc phòng ngừa loét tì đè cho người nằm lâu\n"
-                    "• Dinh dưỡng cho người già mắc bệnh tim mạch, đái tháo đường, tăng huyết áp\n"
-                    "• Kiểm tra các chỉ số sinh hiệu thực tế từ vòng đeo tay thông minh"
+                    "Dạ, tôi chưa tìm thấy nội dung phù hợp trực tiếp với câu hỏi này trong kho tài liệu cẩm nang hiện tại (.pdf, .docx, .xlsx, .txt).\n\n"
+                    "💡 **Lưu ý Chế độ Hybrid**: Khi có kết nối Cloud AI, tôi có thể giải đáp các câu hỏi y khoa ngoài cẩm nang bằng tri thức lão khoa tổng quát.\n\n"
+                    "Ở chế độ nội bộ, bạn có thể tham khảo các chủ đề sẵn có trong cẩm nang:\n"
+                    "• Lịch trình sinh hoạt và dinh dưỡng cho người cao tuổi có bệnh nền\n"
+                    "• Quy trình xử trí khẩn cấp và sơ cấp cứu khi bị té ngã\n"
+                    "• Kiểm tra chỉ số nhịp tim, SpO2 từ thiết bị đeo thông minh"
                 )
 
         # 3. Ghi chú cá nhân hóa theo hồ sơ bệnh án
@@ -214,8 +214,8 @@ class ChatbotRAGService:
         incidents = context.get("incidents", [])
         patient = context.get("patient", {})
 
-        # 3. Trích xuất cẩm nang y tế
-        chunks = self.retriever.search(question, top_k=3, threshold=0.1)
+        # 3. Trích xuất cẩm nang y tế (ngưỡng tương quan 5.0 để phân tách in-doc vs out-of-doc)
+        chunks = self.retriever.search(question, top_k=3, threshold=5.0)
 
         # 4. Thử sinh câu trả lời qua MultiModelLLMClient
         system_prompt = SYSTEM_PROMPT_EN if is_en else SYSTEM_PROMPT_VI
@@ -236,7 +236,19 @@ class ChatbotRAGService:
 
         if llm_result:
             answer_text, model_name = llm_result
-            engine_name = f"SmartCare AI ({model_name} + RAG)"
+            if chunks:
+                engine_name = f"SmartCare AI ({model_name} + RAG Documents)"
+                sources = list(dict.fromkeys([c.get("source", "") for c in chunks if c.get("source")]))
+            else:
+                engine_name = f"SmartCare AI ({model_name} - General Knowledge)"
+                sources = ["Tri thức y khoa tổng quát"] if not is_en else ["General Medical Knowledge"]
+                # Thêm ghi chú minh bạch cho câu hỏi ngoài tài liệu nếu LLM chưa có
+                note_vi = "\n\n*(Thông tin trên được tổng hợp từ kiến thức y khoa lão khoa tổng quát của Trợ lý AI SmartCare, ngoài phạm vi cẩm nang riêng của gia đình)*"
+                note_en = "\n\n*(This advice is based on general geriatric medical knowledge of SmartCare AI, outside internal family care documents)*"
+                if is_en and "general" not in answer_text.lower():
+                    answer_text += note_en
+                elif not is_en and "tổng quát" not in answer_text.lower():
+                    answer_text += note_vi
         else:
             # 5. Fallback sang Pure RAG cục bộ
             answer_text = self._generate_pure_rag_response(
@@ -248,6 +260,7 @@ class ChatbotRAGService:
                 language=language,
             )
             engine_name = "SmartCare Pure RAG Engine (Medical Documents)"
+            sources = list(dict.fromkeys([c.get("source", "") for c in chunks if c.get("source")]))
 
         # 6. Tạo snapshot sinh hiệu thực tế
         vitals_snapshot = None
@@ -265,7 +278,7 @@ class ChatbotRAGService:
             "status": "success",
             "question": question,
             "answer": answer_text,
-            "sources": [c.get("source", "") for c in chunks if c.get("source")],
+            "sources": sources,
             "engine": engine_name,
             "timestamp": now_str,
             "vitals_snapshot": vitals_snapshot,
