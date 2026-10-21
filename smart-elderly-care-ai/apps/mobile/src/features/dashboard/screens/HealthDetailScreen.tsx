@@ -1,6 +1,8 @@
-// HealthDetailScreen.tsx
-// Màn hình Chi tiết Tình trạng Sức khoẻ & Chỉ số Sinh hiệu người cao tuổi
-// Hệ thống Smart Elderly Care AI – Tích hợp Lọc dữ liệu theo ngày & Tua dòng thời gian (Interactive Timeline)
+/**
+ * HealthDetailScreen.tsx
+ * Màn hình Chi tiết Tình trạng Sức khỏe & Chỉ số Sinh hiệu người cao tuổi
+ * Hệ thống Smart Elderly Care AI – Tích hợp Lọc dữ liệu theo ngày & Tua dòng thời gian (Interactive Timeline)
+ */
 
 import React, { useState, useEffect, useMemo, useRef } from 'react';
 import {
@@ -8,50 +10,34 @@ import {
   StyleSheet,
   TouchableOpacity,
   ScrollView,
-  Platform,
-  ActivityIndicator,
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
 import { LocalizedAlert as Alert, LocalizedText as Text } from '../../../i18n/LocalizedComponents';
-import { Colors, Shadows } from '../../../theme/colors';
+import { Colors } from '../../../theme/colors';
 import { useVitalStore } from '../../../store/useVitalStore';
 import { useTheme } from '../../../store/useThemeStore';
 import { vitalsApi, patientApi } from '../../../services/api';
 
-// Subcomponents đã được tách module hoá
+// Subcomponents đã được module hoá
 import { HealthTimelineScrubber } from '../components/HealthTimelineScrubber';
-import { HealthVitalsGrid, VitalCardConfig } from '../components/HealthVitalsGrid';
+import { HealthVitalsGrid } from '../components/HealthVitalsGrid';
 import { HealthChartSection } from '../components/HealthChartSection';
 import { HealthDatePickerModal } from '../components/HealthDatePickerModal';
-
-type TimeRange = 'DAY' | 'WEEK' | 'MONTH';
-
-const formatDateYMD = (d: Date) => {
-  const y = d.getFullYear();
-  const m = String(d.getMonth() + 1).padStart(2, '0');
-  const day = String(d.getDate()).padStart(2, '0');
-  return `${y}-${m}-${day}`;
-};
-
-const formatDisplayDateVN = (ymd: string) => {
-  if (!ymd) return '';
-  const parts = ymd.split('-');
-  if (parts.length === 3) {
-    return `${parts[2]}/${parts[1]}/${parts[0]}`;
-  }
-  return ymd;
-};
-
-const getTodayStr = () => formatDateYMD(new Date());
-const getYesterdayStr = () => formatDateYMD(new Date(Date.now() - 86400000));
-const getDaysAgoStr = (days: number) => formatDateYMD(new Date(Date.now() - 86400000 * days));
-
-const formatTimeHM = (minutes: number) => {
-  const h = Math.floor(minutes / 60).toString().padStart(2, '0');
-  const m = (minutes % 60).toString().padStart(2, '0');
-  return `${h}:${m}`;
-};
+import { HealthOverallBanner } from '../components/health/HealthOverallBanner';
+import { HealthDateFilterBar } from '../components/health/HealthDateFilterBar';
+import { HealthSensorStatusCard } from '../components/health/HealthSensorStatusCard';
+import { HealthAiAdviceCard } from '../components/health/HealthAiAdviceCard';
+import { HealthMedicalRecordLink } from '../components/health/HealthMedicalRecordLink';
+import {
+  TimeRange,
+  formatDateYMD,
+  formatDisplayDateVN,
+  getTodayStr,
+  getYesterdayStr,
+  getDaysAgoStr,
+  computeHealthTabConfig,
+} from '../components/health/useHealthTabConfig';
 
 export default function HealthDetailScreen({ navigation, route }: any) {
   const { isDarkMode, colors } = useTheme();
@@ -65,7 +51,7 @@ export default function HealthDetailScreen({ navigation, route }: any) {
   const [highlightedMetric, setHighlightedMetric] = useState<string | null>(metric ?? null);
   const scrollRef = useRef<ScrollView>(null);
 
-  // ── 1. Quản lý Lọc dữ liệu theo ngày (Date Filter) ──
+  // 1. Quản lý Lọc dữ liệu theo ngày (Date Filter)
   const dateOptions = useMemo(() => {
     const today = new Date();
     const yesterday = new Date(Date.now() - 86400000);
@@ -91,13 +77,13 @@ export default function HealthDetailScreen({ navigation, route }: any) {
     return !dateOptions.some((opt) => opt.value === selectedDate);
   }, [dateOptions, selectedDate]);
 
-  // ── 2. Quản lý Tua dòng thời gian (Interactive Timeline Scrubber) ──
+  // 2. Quản lý Tua dòng thời gian (Interactive Timeline Scrubber)
   const [scrubberMinutes, setScrubberMinutes] = useState<number>(() => {
     const now = new Date();
     return now.getHours() * 60 + now.getMinutes();
   });
 
-  // Tải dữ liệu từ Backend khi chọn ngày (GET /api/v1/patients/1/vitals?target_date=YYYY-MM-DD)
+  // Tải dữ liệu từ Backend khi chọn ngày
   const loadDateVitals = async (dateStr: string) => {
     setIsLoadingVitals(true);
     try {
@@ -195,7 +181,7 @@ export default function HealthDetailScreen({ navigation, route }: any) {
     } else {
       await loadRangeVitals(selectedRange === 'WEEK' ? 50 : 100);
     }
-    Alert.alert('Đồng bộ thành công', 'Dữ liệu sức khoẻ từ Hub và vòng đeo tay đã được làm mới.');
+    Alert.alert('Đồng bộ thành công', 'Dữ liệu sức khỏe từ Hub và vòng đeo tay đã được làm mới.');
   };
 
   // Tìm mốc đo gần nhất với giờ tua
@@ -217,7 +203,7 @@ export default function HealthDetailScreen({ navigation, route }: any) {
     return best;
   }, [dayVitals, scrubberMinutes]);
 
-  // Dữ liệu biểu đồ động theo ngày được chọn (không trả về dữ liệu mẫu nếu rỗng)
+  // Dữ liệu biểu đồ động theo ngày được chọn
   const chartDataForDay = useMemo(() => {
     if (!dayVitals || dayVitals.length === 0) return [];
     return dayVitals.map((v) => {
@@ -237,7 +223,7 @@ export default function HealthDetailScreen({ navigation, route }: any) {
     });
   }, [dayVitals]);
 
-  // Nhịp tim trung bình trong ngày thực tế từ cơ sở dữ liệu
+  // Nhịp tim trung bình trong ngày thực tế
   const dailyAvgHR = useMemo(() => {
     if (!dayVitals || dayVitals.length === 0) return '--';
     const valid = dayVitals.filter((v) => typeof v.heart_rate === 'number');
@@ -246,7 +232,7 @@ export default function HealthDetailScreen({ navigation, route }: any) {
     return `${Math.round(sum / valid.length)} bpm`;
   }, [dayVitals]);
 
-  // Dữ liệu biểu đồ và tính toán trung bình thực tế cho Tuần / Tháng (không dùng fallback mock data)
+  // Dữ liệu biểu đồ và tính toán trung bình cho Tuần / Tháng
   const weekData = useMemo(() => {
     const list = rangeVitals && Array.isArray(rangeVitals) && rangeVitals.length > 0 ? rangeVitals : [];
     const validHR = list.filter((v) => typeof v.heart_rate === 'number');
@@ -269,225 +255,31 @@ export default function HealthDetailScreen({ navigation, route }: any) {
     return { avgHR, avgSpO2, avgTemp, chart };
   }, [rangeVitals]);
 
-  // Cấu hình dữ liệu thẻ chỉ số theo dải thời gian được chọn
-  const getTabConfig = () => {
-    switch (selectedRange) {
-      case 'WEEK': {
-        const hasRangeData = weekData.chart.length > 0;
-        return {
-          bannerTitle: hasRangeData ? 'Xu hướng tuần' : 'Chưa có đủ dữ liệu tuần',
-          bannerSubtitle: hasRangeData
-            ? 'Tổng hợp dữ liệu nhịp tim và oxy máu từ vòng đeo tay BLE qua các ngày trong tuần.'
-            : 'Chưa có bản ghi nào trong 7 ngày qua. Vui lòng đeo vòng tay để tiếp tục đồng bộ.',
-          bannerIcon: (hasRangeData ? 'checkmark-circle' : 'information-circle') as keyof typeof Ionicons.glyphMap,
-          bannerAlert: false,
-          card1: {
-            label: 'Nhịp tim TB tuần',
-            value: weekData.avgHR,
-            unit: weekData.avgHR !== '--' ? 'bpm' : '',
-            status: weekData.avgHR !== '--' ? 'Chuẩn' : 'Chưa có dữ liệu',
-            statusColor: weekData.avgHR !== '--' ? '#15803D' : '#64748B',
-            statusBg: weekData.avgHR !== '--' ? '#DCFCE7' : '#F1F5F9',
-            range: hasRangeData ? 'Ngưỡng theo dõi: 60 - 95 bpm' : 'Chưa ghi nhận',
-            icon: 'heart' as keyof typeof Ionicons.glyphMap,
-            iconColor: '#EF4444',
-            iconBg: '#FEE2E2',
-          },
-          card2: {
-            label: 'SpO₂ TB tuần',
-            value: weekData.avgSpO2,
-            unit: weekData.avgSpO2 !== '--' ? '%' : '',
-            status: weekData.avgSpO2 !== '--' ? 'Tốt' : 'Chưa có dữ liệu',
-            statusColor: weekData.avgSpO2 !== '--' ? '#15803D' : '#64748B',
-            statusBg: weekData.avgSpO2 !== '--' ? '#DCFCE7' : '#F1F5F9',
-            range: hasRangeData ? 'Ngưỡng an toàn: ≥ 95%' : 'Chưa ghi nhận',
-            icon: 'water' as keyof typeof Ionicons.glyphMap,
-            iconColor: '#0284C7',
-            iconBg: '#E0F2FE',
-          },
-          card3: {
-            label: 'Thân nhiệt TB tuần',
-            value: weekData.avgTemp,
-            unit: weekData.avgTemp !== '--' ? '°C' : '',
-            status: weekData.avgTemp !== '--' ? 'Bình thường' : 'Chưa có dữ liệu',
-            statusColor: weekData.avgTemp !== '--' ? '#15803D' : '#64748B',
-            statusBg: weekData.avgTemp !== '--' ? '#DCFCE7' : '#F1F5F9',
-            range: hasRangeData ? 'Chuẩn: 36.5 - 37.2°C' : 'Chưa ghi nhận',
-            icon: 'thermometer' as keyof typeof Ionicons.glyphMap,
-            iconColor: '#D97706',
-            iconBg: '#FEF3C7',
-          },
-          card4: {
-            label: 'Trạng thái vận động',
-            value: hasRangeData ? 'Sinh hoạt' : 'Chưa có dữ liệu',
-            unit: '',
-            status: hasRangeData ? 'Bình thường' : 'Chưa có dữ liệu',
-            statusColor: hasRangeData ? '#15803D' : '#64748B',
-            statusBg: hasRangeData ? '#DCFCE7' : '#F1F5F9',
-            range: hasRangeData ? 'Vận động đều đặn' : 'Chưa ghi nhận',
-            icon: 'walk' as keyof typeof Ionicons.glyphMap,
-            iconColor: '#9333EA',
-            iconBg: '#F3E8FF',
-          },
-          chartTitle: 'Nhịp tim các ngày gần nhất',
-          chartSubtitle: hasRangeData ? `Dữ liệu đo thực tế (${weekData.chart.length} mốc)` : 'Chưa có dữ liệu tuần',
-          chartAvg: weekData.avgHR !== '--' ? `Trung bình: ${weekData.avgHR} bpm` : 'N/A',
-          chartData: weekData.chart,
-          aiAdvice: hasRangeData
-            ? '• Chất lượng nhịp tim và giấc ngủ được ghi nhận duy trì ổn định.\n• Không phát hiện bất thường té ngã.\n• Khuyến khích người cao tuổi duy trì bài tập dưỡng sinh nhẹ nhàng 15-20 phút.'
-            : '• Chưa có đủ dữ liệu đo trong 7 ngày qua để phân tích chi tiết.\n• Hãy giữ kết nối vòng đeo tay và Hub AI để liên tục cập nhật.',
-        };
-      }
-      case 'MONTH': {
-        const hasRangeData = weekData.chart.length > 0;
-        return {
-          bannerTitle: hasRangeData ? 'Tổng hợp sức khoẻ 30 ngày' : 'Chưa có đủ dữ liệu tháng',
-          bannerSubtitle: hasRangeData
-            ? 'Dữ liệu đo từ vòng đeo tay BLE Band được lưu trữ và tổng hợp trên hệ thống.'
-            : 'Chưa có bản ghi nào trong tháng này.',
-          bannerIcon: (hasRangeData ? 'shield-checkmark' : 'information-circle') as keyof typeof Ionicons.glyphMap,
-          bannerAlert: false,
-          card1: {
-            label: 'Dao động nhịp tim',
-            value: weekData.avgHR,
-            unit: weekData.avgHR !== '--' ? 'bpm' : '',
-            status: weekData.avgHR !== '--' ? 'Ổn định' : 'Chưa có dữ liệu',
-            statusColor: weekData.avgHR !== '--' ? '#15803D' : '#64748B',
-            statusBg: weekData.avgHR !== '--' ? '#DCFCE7' : '#F1F5F9',
-            range: hasRangeData ? 'Ngưỡng theo dõi 60 - 95 bpm' : 'Chưa ghi nhận',
-            icon: 'heart' as keyof typeof Ionicons.glyphMap,
-            iconColor: '#EF4444',
-            iconBg: '#FEE2E2',
-          },
-          card2: {
-            label: 'SpO₂ Trung bình',
-            value: weekData.avgSpO2,
-            unit: weekData.avgSpO2 !== '--' ? '%' : '',
-            status: weekData.avgSpO2 !== '--' ? 'Chuẩn' : 'Chưa có dữ liệu',
-            statusColor: weekData.avgSpO2 !== '--' ? '#15803D' : '#64748B',
-            statusBg: weekData.avgSpO2 !== '--' ? '#DCFCE7' : '#F1F5F9',
-            range: hasRangeData ? 'Mục tiêu y tế: ≥ 95%' : 'Chưa ghi nhận',
-            icon: 'water' as keyof typeof Ionicons.glyphMap,
-            iconColor: '#0284C7',
-            iconBg: '#E0F2FE',
-          },
-          card3: {
-            label: 'Thân nhiệt trung bình',
-            value: weekData.avgTemp,
-            unit: weekData.avgTemp !== '--' ? '°C' : '',
-            status: weekData.avgTemp !== '--' ? 'Lý tưởng' : 'Chưa có dữ liệu',
-            statusColor: weekData.avgTemp !== '--' ? '#15803D' : '#64748B',
-            statusBg: weekData.avgTemp !== '--' ? '#DCFCE7' : '#F1F5F9',
-            range: hasRangeData ? 'Chuẩn y tế: 36.5 - 37.2°C' : 'Chưa ghi nhận',
-            icon: 'thermometer' as keyof typeof Ionicons.glyphMap,
-            iconColor: '#D97706',
-            iconBg: '#FEF3C7',
-          },
-          card4: {
-            label: 'Chỉ số an toàn té ngã',
-            value: isFallDetected ? 'Có cảnh báo' : hasRangeData ? 'An toàn' : 'Chưa có dữ liệu',
-            unit: '',
-            status: isFallDetected ? 'Cảnh báo' : hasRangeData ? 'Tối ưu' : 'Chưa có dữ liệu',
-            statusColor: isFallDetected ? Colors.danger : hasRangeData ? '#15803D' : '#64748B',
-            statusBg: isFallDetected ? '#FEE2E2' : hasRangeData ? '#DCFCE7' : '#F1F5F9',
-            range: isFallDetected ? 'Đã ghi nhận sự cố' : hasRangeData ? 'Không có sự cố ngã' : 'Chưa ghi nhận',
-            icon: 'shield-checkmark' as keyof typeof Ionicons.glyphMap,
-            iconColor: '#9333EA',
-            iconBg: '#F3E8FF',
-          },
-          chartTitle: 'Dao động nhịp tim theo các mốc đo',
-          chartSubtitle: hasRangeData ? 'Dữ liệu tổng hợp từ hệ thống' : 'Chưa có dữ liệu tháng',
-          chartAvg: weekData.avgHR !== '--' ? `Trung bình: ${weekData.avgHR} bpm` : 'N/A',
-          chartData: weekData.chart,
-          aiAdvice: hasRangeData
-            ? '• Các chỉ số huyết áp và nhịp tim đo được được lưu trữ an toàn trong hồ sơ.\n• Đề nghị gia đình theo dõi lịch uống thuốc và tái khám định kỳ.'
-            : '• Chưa có đủ dữ liệu đo trong 30 ngày qua.',
-        };
-      }
-      case 'DAY':
-      default: {
-        const hasData = dayVitals && dayVitals.length > 0;
-        const hrVal = closestVital ? String(closestVital.heart_rate ?? '--') : (hasData && dayVitals[0].heart_rate ? String(dayVitals[0].heart_rate) : '--');
-        const spo2Val = closestVital ? String(closestVital.spo2 ?? '--') : (hasData && dayVitals[0].spo2 ? String(dayVitals[0].spo2) : '--');
-        const tempVal = closestVital ? String(closestVital.body_temp ?? closestVital.skin_temp_max ?? '--') : (hasData && (dayVitals[0].body_temp ?? dayVitals[0].skin_temp_max) ? String(dayVitals[0].body_temp ?? dayVitals[0].skin_temp_max) : '--');
-        const actVal = closestVital ? (closestVital.activity_state || closestVital.activity || 'Sinh hoạt') : (hasData ? (dayVitals[0].activity_state || 'Sinh hoạt') : 'Chưa có dữ liệu');
+  // Cấu hình tab theo mốc thời gian được chọn
+  const currentTabConfig = useMemo(() => {
+    return computeHealthTabConfig({
+      selectedRange,
+      weekData,
+      isFallDetected,
+      dayVitals,
+      closestVital,
+      selectedDate,
+      scrubberMinutes,
+      dailyAvgHR,
+      chartDataForDay,
+    });
+  }, [
+    selectedRange,
+    weekData,
+    isFallDetected,
+    dayVitals,
+    closestVital,
+    selectedDate,
+    scrubberMinutes,
+    dailyAvgHR,
+    chartDataForDay,
+  ]);
 
-        return {
-          bannerTitle: isFallDetected
-            ? 'Cảnh báo: Phát hiện sự cố ngã!'
-            : hasData
-              ? 'Tình trạng sinh tồn bình thường'
-              : 'Chưa có dữ liệu đo cho ngày này',
-          bannerSubtitle: isFallDetected
-            ? 'Hệ thống AI vừa ghi nhận sự cố té ngã! Hãy kiểm tra clip và tới trợ giúp ngay.'
-            : hasData
-              ? `Đang xem ngày ${formatDisplayDateVN(selectedDate)} - Vòng BLE Band & Hub AI hoạt động ổn định.`
-              : `Ngày ${formatDisplayDateVN(selectedDate)} chưa ghi nhận mốc đo nào trong cơ sở dữ liệu.`,
-          bannerIcon: (isFallDetected ? 'warning' : hasData ? 'checkmark-circle' : 'information-circle') as keyof typeof Ionicons.glyphMap,
-          bannerAlert: isFallDetected,
-          card1: {
-            label: 'Nhịp tim',
-            value: hrVal,
-            unit: hrVal !== '--' ? 'bpm' : '',
-            status: !hasData || hrVal === '--' ? 'Chưa có dữ liệu' : Number(hrVal) > 100 ? 'Cao' : Number(hrVal) < 60 ? 'Thấp' : 'Bình thường',
-            statusColor: !hasData || hrVal === '--' ? '#64748B' : Number(hrVal) > 100 ? Colors.danger : '#15803D',
-            statusBg: !hasData || hrVal === '--' ? '#F1F5F9' : Number(hrVal) > 100 ? '#FEE2E2' : '#DCFCE7',
-            range: hasData ? 'Ngưỡng an toàn: 60 - 95 bpm' : 'Chưa ghi nhận',
-            icon: 'heart' as keyof typeof Ionicons.glyphMap,
-            iconColor: '#EF4444',
-            iconBg: '#FEE2E2',
-          },
-          card2: {
-            label: 'Nồng độ Oxy (SpO₂)',
-            value: spo2Val,
-            unit: spo2Val !== '--' ? '%' : '',
-            status: !hasData || spo2Val === '--' ? 'Chưa có dữ liệu' : Number(spo2Val) < 95 ? 'Cảnh báo' : 'Lý tưởng',
-            statusColor: !hasData || spo2Val === '--' ? '#64748B' : Number(spo2Val) < 95 ? Colors.danger : '#15803D',
-            statusBg: !hasData || spo2Val === '--' ? '#F1F5F9' : Number(spo2Val) < 95 ? '#FEE2E2' : '#DCFCE7',
-            range: hasData ? 'Ngưỡng an toàn: ≥ 95%' : 'Chưa ghi nhận',
-            icon: 'water' as keyof typeof Ionicons.glyphMap,
-            iconColor: '#0284C7',
-            iconBg: '#E0F2FE',
-          },
-          card3: {
-            label: 'Thân nhiệt cơ thể',
-            value: tempVal,
-            unit: tempVal !== '--' ? '°C' : '',
-            status: !hasData || tempVal === '--' ? 'Chưa có dữ liệu' : Number(tempVal) > 37.5 ? 'Sốt nhẹ' : 'Bình thường',
-            statusColor: !hasData || tempVal === '--' ? '#64748B' : Number(tempVal) > 37.5 ? Colors.danger : '#15803D',
-            statusBg: !hasData || tempVal === '--' ? '#F1F5F9' : Number(tempVal) > 37.5 ? '#FEE2E2' : '#DCFCE7',
-            range: hasData ? 'Chuẩn: 36.5 - 37.2°C' : 'Chưa ghi nhận',
-            icon: 'thermometer' as keyof typeof Ionicons.glyphMap,
-            iconColor: '#D97706',
-            iconBg: '#FEF3C7',
-          },
-          card4: {
-            label: 'Trạng thái vận động',
-            value: actVal,
-            unit: '',
-            status: !hasData ? 'Chưa có dữ liệu' : isFallDetected ? 'Cảnh báo' : 'An toàn',
-            statusColor: !hasData ? '#64748B' : isFallDetected ? Colors.danger : '#15803D',
-            statusBg: !hasData ? '#F1F5F9' : isFallDetected ? '#FEE2E2' : '#DCFCE7',
-            range: closestVital ? `Ghi nhận lúc ${formatTimeHM(scrubberMinutes)}` : (hasData ? 'Sinh hoạt & Đi lại' : 'Chưa ghi nhận'),
-            icon: 'body' as keyof typeof Ionicons.glyphMap,
-            iconColor: '#9333EA',
-            iconBg: '#F3E8FF',
-          },
-          chartTitle: `Dao động nhịp tim ngày ${formatDisplayDateVN(selectedDate)}`,
-          chartSubtitle: hasData
-            ? `Dữ liệu từ PostgreSQL (${chartDataForDay.length} mốc đo thực tế)`
-            : 'Chưa có dữ liệu đo cho ngày này',
-          chartAvg: hasData ? `Trung bình: ${dailyAvgHR}` : 'N/A',
-          chartData: chartDataForDay,
-          aiAdvice: hasData
-            ? '• Nhịp tim và nồng độ SpO₂ của cụ được ghi nhận đều đặn trong ngày.\n• Nhiệt độ cơ thể duy trì ổn định.\n• Nhắc cụ uống đủ nước và vận động nhẹ nhàng quanh phòng khách.'
-            : `• Ngày ${formatDisplayDateVN(selectedDate)} chưa có dữ liệu đo được đồng bộ.\n• Hãy kiểm tra vòng đeo tay BLE Band và kết nối Hub AI để tiếp tục thu thập dữ liệu sinh tồn.`,
-        };
-      }
-    }
-  };
-
-  const currentTabConfig = getTabConfig();
   const hasData = dayVitals && dayVitals.length > 0;
 
   return (
@@ -520,39 +312,14 @@ export default function HealthDetailScreen({ navigation, route }: any) {
         showsVerticalScrollIndicator={false}
       >
         {/* 2. Banner Tình trạng Tổng quan */}
-        <View
-          style={[
-            styles.overallCard,
-            currentTabConfig.bannerAlert ? styles.overallCardAlert : styles.overallCardNormal,
-            !currentTabConfig.bannerAlert && isDarkMode && { backgroundColor: colors.card },
-          ]}
-        >
-          <View
-            style={[
-              styles.overallIconCircle,
-              { backgroundColor: currentTabConfig.bannerAlert ? '#FEE2E2' : '#E8FDF3' },
-            ]}
-          >
-            <Ionicons
-              name={currentTabConfig.bannerIcon}
-              size={28}
-              color={currentTabConfig.bannerAlert ? Colors.danger : Colors.success}
-            />
-          </View>
-          <View style={{ flex: 1 }}>
-            <Text
-              style={[
-                styles.overallTitle,
-                { color: currentTabConfig.bannerAlert ? Colors.danger : Colors.success },
-              ]}
-            >
-              {currentTabConfig.bannerTitle}
-            </Text>
-            <Text style={[styles.overallSubtitle, isDarkMode && { color: colors.textSecondary }]}>
-              {currentTabConfig.bannerSubtitle}
-            </Text>
-          </View>
-        </View>
+        <HealthOverallBanner
+          bannerAlert={currentTabConfig.bannerAlert}
+          bannerIcon={currentTabConfig.bannerIcon}
+          bannerTitle={currentTabConfig.bannerTitle}
+          bannerSubtitle={currentTabConfig.bannerSubtitle}
+          isDarkMode={isDarkMode}
+          colors={colors}
+        />
 
         {/* 3. Bộ lọc dải thời gian (Theo ngày / 7 ngày qua / 30 ngày) */}
         <View style={[styles.rangeSelector, isDarkMode && { backgroundColor: colors.surfaceSubtle }]}>
@@ -589,158 +356,27 @@ export default function HealthDetailScreen({ navigation, route }: any) {
           })}
         </View>
 
-        {/* ── 4. BỘ CHỌN NGÀY (Date Filter Bar with DatePicker) ── */}
+        {/* 4. Bộ chọn ngày */}
         {selectedRange === 'DAY' && (
-          <View style={styles.dateFilterSection}>
-            <View style={styles.dateFilterHeader}>
-              <View style={{ flexDirection: 'row', alignItems: 'center' }}>
-                <Ionicons name="calendar" size={17} color={Colors.primary} style={{ marginRight: 6 }} />
-                <Text style={[styles.dateFilterTitle, { color: colors.textPrimary }]}>
-                  Chọn ngày kiểm tra:
-                </Text>
-              </View>
-              {isLoadingVitals && (
-                <View style={{ flexDirection: 'row', alignItems: 'center' }}>
-                  <ActivityIndicator size="small" color={Colors.primary} style={{ marginRight: 6 }} />
-                  <Text style={{ fontSize: 11, color: Colors.primary }}>Đang tải...</Text>
-                </View>
-              )}
-            </View>
-
-            <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.datePillsRow}>
-              {/* Nút "Chọn ngày trên lịch" kèm icon Calendar */}
-              {Platform.OS === 'web' ? (
-                <label
-                  style={{
-                    position: 'relative',
-                    display: 'inline-flex',
-                    flexDirection: 'row',
-                    alignItems: 'center',
-                    backgroundColor: isCustomDate ? '#2563EB' : (isDarkMode ? '#1E293B' : '#EFF6FF'),
-                    borderWidth: 1.5,
-                    borderColor: isCustomDate ? '#1D4ED8' : (isDarkMode ? '#334155' : '#BFDBFE'),
-                    borderRadius: 12,
-                    paddingHorizontal: 14,
-                    paddingVertical: 8,
-                    cursor: 'pointer',
-                    boxShadow: isCustomDate ? '0 4px 10px rgba(37, 99, 235, 0.3)' : 'none',
-                  } as any}
-                >
-                  <Ionicons
-                    name="calendar"
-                    size={16}
-                    color={isCustomDate ? '#FFFFFF' : '#2563EB'}
-                    style={{ marginRight: 6 }}
-                  />
-                  <Text
-                    style={{
-                      fontSize: 12,
-                      fontWeight: '800',
-                      color: isCustomDate ? '#FFFFFF' : '#1D4ED8',
-                    }}
-                  >
-                    📅 Ngày: {formatDisplayDateVN(selectedDate)}
-                  </Text>
-                  <Ionicons
-                    name="chevron-down"
-                    size={13}
-                    color={isCustomDate ? '#FFFFFF' : '#2563EB'}
-                    style={{ marginLeft: 6 }}
-                  />
-                  <input
-                    type="date"
-                    value={selectedDate}
-                    max={formatDateYMD(new Date())}
-                    onChange={(e: any) => {
-                      if (e.target.value) {
-                        setSelectedDate(e.target.value);
-                      }
-                    }}
-                    style={{
-                      position: 'absolute',
-                      left: 0,
-                      top: 0,
-                      width: '100%',
-                      height: '100%',
-                      opacity: 0,
-                      cursor: 'pointer',
-                    }}
-                  />
-                </label>
-              ) : (
-                <TouchableOpacity
-                  style={[
-                    styles.calendarPickerBtn,
-                    isCustomDate && styles.calendarPickerBtnActive,
-                    isDarkMode && !isCustomDate && { backgroundColor: '#1E293B', borderColor: '#334155' },
-                  ]}
-                  onPress={() => {
-                    setCalendarInputDraft(selectedDate);
-                    setCalendarModalVisible(true);
-                  }}
-                  activeOpacity={0.8}
-                >
-                  <Ionicons
-                    name="calendar"
-                    size={16}
-                    color={isCustomDate ? '#FFFFFF' : '#2563EB'}
-                    style={{ marginRight: 6 }}
-                  />
-                  <Text
-                    style={[
-                      styles.calendarPickerBtnText,
-                      isCustomDate && { color: '#FFFFFF' },
-                    ]}
-                  >
-                    📅 Ngày: {formatDisplayDateVN(selectedDate)}
-                  </Text>
-                  <Ionicons
-                    name="chevron-down"
-                    size={13}
-                    color={isCustomDate ? '#FFFFFF' : '#2563EB'}
-                    style={{ marginLeft: 6 }}
-                  />
-                </TouchableOpacity>
-              )}
-
-              {/* Các nút chọn nhanh (Hôm nay, Hôm qua, 2 ngày trước, 3 ngày trước) */}
-              {dateOptions.map((opt) => {
-                const isSelected = selectedDate === opt.value;
-                return (
-                  <TouchableOpacity
-                    key={opt.value}
-                    style={[
-                      styles.datePill,
-                      isSelected ? styles.datePillActive : styles.datePillInactive,
-                      !isSelected && isDarkMode && { backgroundColor: colors.card, borderColor: colors.border },
-                    ]}
-                    onPress={() => setSelectedDate(opt.value)}
-                    activeOpacity={0.75}
-                  >
-                    <Text style={[styles.datePillLabel, isSelected ? styles.datePillLabelActive : { color: colors.textPrimary }]}>
-                      {opt.label}
-                    </Text>
-                    <Text style={[styles.datePillSub, isSelected ? styles.datePillSubActive : { color: colors.textMuted }]}>
-                      {opt.sub}
-                    </Text>
-                  </TouchableOpacity>
-                );
-              })}
-            </ScrollView>
-
-            {/* Thông báo khi ngày chưa có dữ liệu đo trong PostgreSQL */}
-            {!isLoadingVitals && dayVitals.length === 0 && (
-              <View style={[styles.noDataNoticeBox, isDarkMode && { backgroundColor: '#1E293B', borderColor: '#334155' }]}>
-                <Ionicons name="information-circle" size={18} color="#D97706" style={{ marginRight: 8 }} />
-                <Text style={[styles.noDataNoticeText, { color: isDarkMode ? '#FDE68A' : '#92400E' }]}>
-                  Chưa có dữ liệu đo cho ngày này ({formatDisplayDateVN(selectedDate)}).
-                </Text>
-              </View>
-            )}
-          </View>
+          <HealthDateFilterBar
+            selectedDate={selectedDate}
+            setSelectedDate={setSelectedDate}
+            dateOptions={dateOptions}
+            isCustomDate={isCustomDate}
+            isLoadingVitals={isLoadingVitals}
+            hasDayVitals={hasData}
+            formatDisplayDateVN={formatDisplayDateVN}
+            formatDateYMD={formatDateYMD}
+            onOpenCalendarModal={() => {
+              setCalendarInputDraft(selectedDate);
+              setCalendarModalVisible(true);
+            }}
+            isDarkMode={isDarkMode}
+            colors={colors}
+          />
         )}
 
-        {/* ── 5. THANH TUA DÒNG THỜI GIAN (Timeline Scrubber) ── */}
+        {/* 5. Thanh tua dòng thời gian */}
         {selectedRange === 'DAY' && (
           <HealthTimelineScrubber
             scrubberMinutes={scrubberMinutes}
@@ -754,7 +390,7 @@ export default function HealthDetailScreen({ navigation, route }: any) {
           />
         )}
 
-        {/* ── 6. LƯỚI 4 THẺ CHỈ SỐ SINH HIỆU ── */}
+        {/* 6. Lưới 4 thẻ chỉ số sinh hiệu */}
         <HealthVitalsGrid
           card1={currentTabConfig.card1}
           card2={currentTabConfig.card2}
@@ -766,7 +402,7 @@ export default function HealthDetailScreen({ navigation, route }: any) {
           colors={colors}
         />
 
-        {/* ── 7. BIỂU ĐỒ DAO ĐỘNG NHỊP TIM ── */}
+        {/* 7. Biểu đồ dao động nhịp tim */}
         <HealthChartSection
           chartTitle={currentTabConfig.chartTitle}
           chartSubtitle={currentTabConfig.chartSubtitle}
@@ -778,76 +414,29 @@ export default function HealthDetailScreen({ navigation, route }: any) {
           colors={colors}
         />
 
-        {/* ── 8. LINK TỚI HỒ SƠ BỆNH ÁN NGƯỜI CAO TUỔI (AES-256) ── */}
-        <TouchableOpacity
-          style={[styles.recordLinkCard, isDarkMode && { backgroundColor: colors.card, borderColor: colors.border }]}
+        {/* 8. Link tới Hồ sơ Bệnh án Điện Tử */}
+        <HealthMedicalRecordLink
           onPress={() => navigation.navigate('PatientMedicalRecord')}
-          activeOpacity={0.8}
-        >
-          <View style={styles.recordLinkLeft}>
-            <View style={styles.recordLinkIconCircle}>
-              <Ionicons name="medical" size={20} color="#2563EB" />
-            </View>
-            <View style={{ flex: 1 }}>
-              <Text style={[styles.recordLinkTitle, { color: colors.textPrimary }]}>
-                Hồ Sơ Bệnh Án Điện Tử (Chuẩn AES-256)
-              </Text>
-              <Text style={[styles.recordLinkSub, { color: colors.textMuted }]}>
-                Xem tiền sử tim mạch, huyết áp, đơn thuốc và nhật ký bác sĩ điều trị
-              </Text>
-            </View>
-          </View>
-          <Ionicons name="chevron-forward" size={18} color="#2563EB" />
-        </TouchableOpacity>
+          isDarkMode={isDarkMode}
+          colors={colors}
+        />
 
-        {/* ── 9. TRẠNG THÁI CẢM BIẾN & MÔI TRƯỜNG ── */}
-        <View style={[styles.statusSectionCard, isDarkMode && { backgroundColor: colors.card, borderWidth: 1, borderColor: colors.border }]}>
-          <Text style={[styles.sectionHeading, isDarkMode && { color: colors.textPrimary }]}>Trạng thái cảm biến & Môi trường</Text>
+        {/* 9. Trạng thái Cảm biến & Môi trường */}
+        <HealthSensorStatusCard
+          batteryDisplay={batteryDisplay}
+          acousticStatus={acousticStatus}
+          isDarkMode={isDarkMode}
+          colors={colors}
+        />
 
-          <View style={styles.statusRowItem}>
-            <View style={[styles.statusIconBox, isDarkMode && { backgroundColor: 'rgba(255, 122, 0, 0.15)' }]}>
-              <Ionicons name="watch-outline" size={20} color={Colors.primary} />
-            </View>
-            <View style={{ flex: 1 }}>
-              <Text style={[styles.statusItemTitle, isDarkMode && { color: colors.textPrimary }]}>Vòng tay thông minh BLE</Text>
-              <Text style={[styles.statusItemSub, isDarkMode && { color: colors.textSecondary }]}>Pin: {batteryDisplay} • Kết nối liên tục</Text>
-            </View>
-            <View style={styles.onlineBadge}>
-              <View style={styles.onlineDot} />
-              <Text style={styles.onlineText}>Đang đo</Text>
-            </View>
-          </View>
-
-          <View style={[styles.divider, isDarkMode && { backgroundColor: colors.border }]} />
-
-          <View style={styles.statusRowItem}>
-            <View style={[styles.statusIconBox, { backgroundColor: isDarkMode ? 'rgba(37, 99, 235, 0.15)' : '#EFF6FF' }]}>
-              <Ionicons name="mic-outline" size={20} color="#2563EB" />
-            </View>
-            <View style={{ flex: 1 }}>
-              <Text style={[styles.statusItemTitle, isDarkMode && { color: colors.textPrimary }]}>Nhận diện âm thanh YAMNet</Text>
-              <Text style={[styles.statusItemSub, isDarkMode && { color: colors.textSecondary }]}>Môi trường: {acousticStatus}</Text>
-            </View>
-            <View style={styles.safeBadge}>
-              <Ionicons name="checkmark-circle" size={14} color={Colors.success} />
-              <Text style={styles.safeText}>An toàn</Text>
-            </View>
-          </View>
-        </View>
-
-        {/* ── 10. LỜI KHUYÊN BÁC SĨ AI ── */}
-        <View style={[styles.aiAdviceCard, isDarkMode && { backgroundColor: '#1E293B', borderColor: '#334155' }]}>
-          <View style={styles.aiAdviceHeader}>
-            <Ionicons name="sparkles" size={18} color="#D97706" />
-            <Text style={styles.aiAdviceTitle}>Lời khuyên Bác sĩ AI</Text>
-          </View>
-          <Text style={[styles.aiAdviceBody, isDarkMode && { color: '#CBD5E1' }]}>
-            {currentTabConfig.aiAdvice}
-          </Text>
-        </View>
+        {/* 10. Lời khuyên Bác sĩ AI */}
+        <HealthAiAdviceCard
+          aiAdvice={currentTabConfig.aiAdvice}
+          isDarkMode={isDarkMode}
+        />
       </ScrollView>
 
-      {/* ── MODAL CHỌN NGÀY TRÊN LỊCH ── */}
+      {/* Modal chọn ngày trên lịch */}
       <HealthDatePickerModal
         visible={isCalendarModalVisible}
         onClose={() => setCalendarModalVisible(false)}
@@ -909,294 +498,29 @@ const styles = StyleSheet.create({
     padding: 16,
     paddingBottom: 36,
   },
-  overallCard: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    padding: 16,
-    borderRadius: 16,
-    marginBottom: 14,
-    ...Shadows.soft,
-  },
-  overallCardNormal: {
-    backgroundColor: '#FFFFFF',
-    borderLeftWidth: 4,
-    borderLeftColor: Colors.success,
-  },
-  overallCardAlert: {
-    backgroundColor: '#FEF2F2',
-    borderLeftWidth: 4,
-    borderLeftColor: Colors.danger,
-  },
-  overallIconCircle: {
-    width: 48,
-    height: 48,
-    borderRadius: 24,
-    alignItems: 'center',
-    justifyContent: 'center',
-    marginRight: 12,
-  },
-  overallTitle: {
-    fontSize: 16,
-    fontWeight: '700',
-    marginBottom: 3,
-  },
-  overallSubtitle: {
-    fontSize: 12,
-    color: '#64748B',
-    lineHeight: 18,
-  },
   rangeSelector: {
     flexDirection: 'row',
     backgroundColor: '#E2E8F0',
     borderRadius: 12,
-    padding: 4,
+    padding: 3,
     marginBottom: 14,
   },
   rangePill: {
     flex: 1,
-    paddingVertical: 8,
+    paddingVertical: 7,
+    borderRadius: 10,
     alignItems: 'center',
-    justifyContent: 'center',
-    borderRadius: 9,
   },
   rangePillActive: {
     backgroundColor: '#FFFFFF',
-    ...Shadows.soft,
   },
   rangePillText: {
-    fontSize: 12,
+    fontSize: 11,
     fontWeight: '600',
     color: '#64748B',
   },
   rangePillTextActive: {
     fontWeight: '700',
-    color: Colors.primary,
-  },
-
-  // ── Date Filter Styles ──
-  dateFilterSection: {
-    marginBottom: 14,
-  },
-  dateFilterHeader: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    marginBottom: 8,
-  },
-  dateFilterTitle: {
-    fontSize: 13,
-    fontWeight: '700',
-  },
-  datePillsRow: {
-    flexDirection: 'row',
-    gap: 8,
-  },
-  datePill: {
-    paddingHorizontal: 14,
-    paddingVertical: 8,
-    borderRadius: 12,
-    borderWidth: 1,
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
-  datePillActive: {
-    backgroundColor: '#2563EB',
-    borderColor: '#2563EB',
-    ...Shadows.soft,
-  },
-  datePillInactive: {
-    backgroundColor: '#FFFFFF',
-    borderColor: '#E2E8F0',
-  },
-  datePillLabel: {
-    fontSize: 12,
-    fontWeight: '700',
-  },
-  datePillLabelActive: {
-    color: '#FFFFFF',
-  },
-  datePillSub: {
-    fontSize: 10,
-    marginTop: 2,
-  },
-  datePillSubActive: {
-    color: '#E0E7FF',
-  },
-  calendarPickerBtn: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    paddingHorizontal: 14,
-    paddingVertical: 9,
-    borderRadius: 12,
-    borderWidth: 1.5,
-    borderColor: '#93C5FD',
-    backgroundColor: '#EFF6FF',
-    marginRight: 8,
-  },
-  calendarPickerBtnActive: {
-    backgroundColor: '#2563EB',
-    borderColor: '#2563EB',
-  },
-  calendarPickerBtnText: {
-    fontSize: 12,
-    fontWeight: '700',
-    color: '#2563EB',
-  },
-  noDataNoticeBox: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    backgroundColor: '#FFFBEB',
-    borderWidth: 1,
-    borderColor: '#FDE68A',
-    borderRadius: 10,
-    paddingHorizontal: 12,
-    paddingVertical: 8,
-    marginTop: 8,
-  },
-  noDataNoticeText: {
-    fontSize: 12,
-    fontWeight: '600',
-    color: '#92400E',
-    flex: 1,
-  },
-
-  // ── Record Link Styles ──
-  recordLinkCard: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'space-between',
-    backgroundColor: '#FFFFFF',
-    borderRadius: 14,
-    padding: 14,
-    marginBottom: 14,
-    borderWidth: 1,
-    borderColor: '#E2E8F0',
-    ...Shadows.soft,
-  },
-  recordLinkLeft: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 12,
-    flex: 1,
-  },
-  recordLinkIconCircle: {
-    width: 40,
-    height: 40,
-    borderRadius: 20,
-    backgroundColor: '#EFF6FF',
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
-  recordLinkTitle: {
-    fontSize: 14,
-    fontWeight: '700',
-    marginBottom: 2,
-  },
-  recordLinkSub: {
-    fontSize: 11,
-    lineHeight: 16,
-  },
-
-  // ── Sensor Status Styles ──
-  statusSectionCard: {
-    backgroundColor: '#FFFFFF',
-    borderRadius: 16,
-    padding: 16,
-    marginBottom: 14,
-    borderWidth: 1,
-    borderColor: '#E2E8F0',
-    ...Shadows.soft,
-  },
-  sectionHeading: {
-    fontSize: 14,
-    fontWeight: '700',
     color: '#0F172A',
-    marginBottom: 12,
-  },
-  statusRowItem: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 12,
-  },
-  statusIconBox: {
-    width: 38,
-    height: 38,
-    borderRadius: 10,
-    backgroundColor: '#FFF7ED',
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
-  statusItemTitle: {
-    fontSize: 13,
-    fontWeight: '600',
-    color: '#0F172A',
-    marginBottom: 2,
-  },
-  statusItemSub: {
-    fontSize: 11,
-    color: '#64748B',
-  },
-  onlineBadge: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    backgroundColor: '#EFF6FF',
-    paddingHorizontal: 8,
-    paddingVertical: 4,
-    borderRadius: 6,
-    gap: 4,
-  },
-  onlineDot: {
-    width: 6,
-    height: 6,
-    borderRadius: 3,
-    backgroundColor: '#2563EB',
-  },
-  onlineText: {
-    fontSize: 11,
-    fontWeight: '600',
-    color: '#2563EB',
-  },
-  safeBadge: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    backgroundColor: '#E8FDF3',
-    paddingHorizontal: 8,
-    paddingVertical: 4,
-    borderRadius: 6,
-    gap: 4,
-  },
-  safeText: {
-    fontSize: 11,
-    fontWeight: '600',
-    color: Colors.success,
-  },
-  divider: {
-    height: 1,
-    backgroundColor: '#F1F5F9',
-    marginVertical: 10,
-  },
-
-  // ── AI Advice Styles ──
-  aiAdviceCard: {
-    backgroundColor: '#FFFBEB',
-    borderRadius: 16,
-    padding: 16,
-    borderWidth: 1,
-    borderColor: '#FDE68A',
-  },
-  aiAdviceHeader: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 6,
-    marginBottom: 8,
-  },
-  aiAdviceTitle: {
-    fontSize: 14,
-    fontWeight: '700',
-    color: '#B45309',
-  },
-  aiAdviceBody: {
-    fontSize: 12,
-    color: '#78350F',
-    lineHeight: 18,
   },
 });

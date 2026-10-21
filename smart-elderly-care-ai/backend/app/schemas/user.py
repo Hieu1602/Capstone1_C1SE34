@@ -3,6 +3,7 @@ user.py – Pydantic Schemas cho User endpoints.
 """
 
 import uuid
+from datetime import datetime
 from typing import Literal, Optional
 
 from pydantic import BaseModel, Field, field_validator, model_validator
@@ -13,6 +14,9 @@ class UserBase(BaseModel):
     phone: str
     role: str = "user"
     avatar_url: Optional[str] = None
+    cchn_number: Optional[str] = None
+    specialty: Optional[str] = None
+    workplace: Optional[str] = None
 
     @model_validator(mode="after")
     def validate_identifier(self):
@@ -31,6 +35,9 @@ class UserUpdate(BaseModel):
     full_name: Optional[str] = None
     phone: Optional[str] = None
     avatar_url: Optional[str] = None
+    cchn_number: Optional[str] = None
+    specialty: Optional[str] = None
+    workplace: Optional[str] = None
     fcm_token: Optional[str] = None
     preferred_language: Optional[Literal["vi", "en"]] = None
     language: Optional[Literal["vi", "en"]] = None
@@ -98,8 +105,6 @@ class PasswordChange(BaseModel):
         return self
 
 
-from datetime import datetime
-
 class UserOut(UserBase):
     id: uuid.UUID
     is_active: bool
@@ -112,6 +117,9 @@ class UserOut(UserBase):
     location_latitude: Optional[float] = None
     location_longitude: Optional[float] = None
     location_address: Optional[str] = None
+    cchn_number: Optional[str] = None
+    specialty: Optional[str] = None
+    workplace: Optional[str] = None
     created_at: Optional[datetime] = None
     updated_at: Optional[datetime] = None
     last_login_at: Optional[datetime] = None
