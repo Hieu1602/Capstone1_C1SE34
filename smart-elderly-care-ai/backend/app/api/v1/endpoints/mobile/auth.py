@@ -1,14 +1,19 @@
 import logging
 from datetime import datetime, timezone
-from typing import Literal, Optional
+from typing import Optional
+from uuid import UUID
 
 from fastapi import APIRouter, Depends, HTTPException, Query, Request, status
+from fastapi.concurrency import run_in_threadpool
 from fastapi.security import OAuth2PasswordRequestForm
+from jose import JWTError, jwt
 from pydantic import BaseModel, Field
 from sqlalchemy import text
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from app.api.deps import get_current_user
+from app.core.config import settings
 from app.core.database import get_db
 from app.core.security import create_access_token, create_refresh_token, verify_password
 from app.crud.crud_user import crud_user, normalize_phone
@@ -17,7 +22,6 @@ from app.models.user import User
 from app.schemas.user import Token, UserCreate, UserLoginHistoryOut, UserOut, UserTerminalOut
 from app.services.doctor_verification import verify_doctor_cchn
 from app.services.notification.twilio_verify import send_otp, verify_otp
-from app.api.deps import get_current_user
 
 logger = logging.getLogger(__name__)
 
@@ -38,11 +42,17 @@ class CCHNVerifyRequest(BaseModel):
     full_name: str = Field(min_length=2, max_length=255)
 
 
+class UserRegistration(UserCreate):
+    password: str = Field(min_length=8, max_length=128)
+    role: str = "user"
+    otp_code: Optional[str] = Field(default=None, min_length=6, max_length=6, pattern=r"^\d{6}$")
+
+
 class DoctorRegistration(UserCreate):
     password: str = Field(min_length=8, max_length=128)
-    role: Literal["doctor"] = "doctor"
-    otp_code: str = Field(min_length=6, max_length=6, pattern=r"^\d{6}$")
-    cchn_number: str = Field(min_length=3, max_length=50)
+    role: str = "doctor"
+    otp_code: Optional[str] = Field(default=None, min_length=6, max_length=6, pattern=r"^\d{6}$")
+    cchn_number: Optional[str] = Field(default=None, min_length=3, max_length=50)
     workplace: Optional[str] = Field(default=None, max_length=255)
     specialty: Optional[str] = Field(default=None, max_length=255)
 
@@ -51,12 +61,13 @@ class DoctorRegistration(UserCreate):
 async def request_otp(payload: OTPRequest):
     """Gửi mã OTP xác thực qua SMS tới số điện thoại."""
     phone = normalize_phone(payload.phone)
-    success = await send_otp(phone)
-    if not success:
+    try:
+        await run_in_threadpool(send_otp, phone)
+    except RuntimeError as exc:
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-            detail="Không thể gửi mã xác minh SMS. Vui lòng kiểm tra lại số điện thoại.",
-        )
+            detail=str(exc) or "Không thể gửi mã xác minh SMS. Vui lòng kiểm tra lại số điện thoại.",
+        ) from exc
     return {"message": "Mã xác minh đã được gửi thành công qua SMS."}
 
 
@@ -64,7 +75,13 @@ async def request_otp(payload: OTPRequest):
 async def verify_otp_endpoint(payload: OTPVerifyRequest):
     """Xác thực mã OTP 6 chữ số."""
     phone = normalize_phone(payload.phone)
-    valid = await verify_otp(phone, payload.otp_code)
+    try:
+        valid = await run_in_threadpool(verify_otp, phone, payload.otp_code)
+    except Exception as exc:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail=f"Lỗi xác thực mã OTP: {str(exc)}",
+        ) from exc
     if not valid:
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
@@ -93,7 +110,7 @@ async def check_doctor_cchn(payload: CCHNVerifyRequest):
 
 @router.post("/register", response_model=UserOut)
 async def register(
-    user_in: UserCreate,
+    user_in: UserRegistration,
     db: AsyncSession = Depends(get_db),
 ):
     """Đăng ký tài khoản người thân / người chăm sóc."""
@@ -107,7 +124,13 @@ async def register(
 
     # Bỏ qua xác thực OTP nếu ở chế độ DEV/DEMO
     if user_in.otp_code and user_in.otp_code not in ("123456", "999999"):
-        valid = await verify_otp(user_in.phone, user_in.otp_code)
+        try:
+            valid = await run_in_threadpool(verify_otp, user_in.phone, user_in.otp_code)
+        except Exception as exc:
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail=f"Lỗi xác thực mã OTP: {str(exc)}",
+            ) from exc
         if not valid:
             raise HTTPException(
                 status_code=status.HTTP_400_BAD_REQUEST,
@@ -148,12 +171,24 @@ async def register_doctor(
 
     # 1. Xác thực OTP
     if doctor_in.otp_code and doctor_in.otp_code not in ("123456", "999999"):
-        valid = await verify_otp(doctor_in.phone, doctor_in.otp_code)
+        try:
+            valid = await run_in_threadpool(verify_otp, doctor_in.phone, doctor_in.otp_code)
+        except Exception as exc:
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail=f"Lỗi xác thực mã OTP: {str(exc)}",
+            ) from exc
         if not valid:
             raise HTTPException(
                 status_code=status.HTTP_400_BAD_REQUEST,
                 detail="Mã xác minh OTP không đúng hoặc đã hết hạn.",
             )
+
+    if not doctor_in.cchn_number:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="Vui lòng cung cấp số Chứng chỉ hành nghề (CCHN).",
+        )
 
     # 2. Xác thực tự động Chứng chỉ hành nghề Bác sĩ (CCHN)
     cchn_result = await verify_doctor_cchn(
@@ -168,9 +203,9 @@ async def register_doctor(
 
     # 3. Điền thông tin chuyên môn chính thức từ Cổng Sở Y tế nếu chưa nhập
     if not doctor_in.specialty and cchn_result.get("scope_of_practice"):
-        doctor_in.specialty = cchn_result["scope_of_practice"]
+        doctor_in.specialty = str(cchn_result["scope_of_practice"])
     if not doctor_in.workplace and cchn_result.get("workplace"):
-        doctor_in.workplace = cchn_result["workplace"]
+        doctor_in.workplace = str(cchn_result["workplace"])
 
     try:
         doctor_user = await crud_user.create(db, obj_in=doctor_in)
@@ -226,7 +261,7 @@ async def login(
         try:
             await crud_user_terminal.record_login(
                 db,
-                user=user,
+                user_id=user.id,
                 ip_address=client_ip,
                 user_agent=user_agent,
             )
@@ -284,10 +319,6 @@ async def refresh_token(
     db: AsyncSession = Depends(get_db),
 ):
     """Làm mới Access Token từ Refresh Token hợp lệ."""
-    from uuid import UUID
-    from jose import JWTError, jwt
-    from app.core.config import settings
-
     try:
         decoded = jwt.decode(
             payload.refresh_token,
@@ -301,7 +332,7 @@ async def refresh_token(
     except (JWTError, ValueError):
         raise HTTPException(status_code=401, detail="Refresh token không hợp lệ hoặc đã hết hạn")
 
-    user = await crud_user.get(db, id=uid)
+    user = await crud_user.get(db, user_id=uid)
     if not user or not user.is_active:
         raise HTTPException(status_code=401, detail="Người dùng không tồn tại hoặc đã bị khóa")
 
@@ -347,7 +378,6 @@ async def delete_user_device(
     db: AsyncSession = Depends(get_db),
 ):
     """Xóa / thu hồi thiết bị đầu cuối khỏi tài khoản."""
-    from uuid import UUID
     try:
         d_uuid = UUID(device_id)
     except ValueError:

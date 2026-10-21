@@ -55,3 +55,4 @@ python-docx>=1.1.0
 xlrd>=2.0.1
 
 
+beautifulsoup4>=4.12.0

@@ -14,7 +14,7 @@ if TYPE_CHECKING:
     from app.models.house import House, HouseMember
     from app.models.user_terminal import UserTerminal, UserLoginHistory
 
-from sqlalchemy import Boolean, DateTime, Integer, String, Text
+from sqlalchemy import Boolean, DateTime, Float, Integer, String, Text
 from sqlalchemy.dialects.postgresql import UUID
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 from sqlalchemy.sql import func
