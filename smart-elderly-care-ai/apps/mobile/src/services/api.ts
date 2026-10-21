@@ -109,6 +109,8 @@ export default api;
 export const authApi = {
   requestOtp: (phone: string) => api.post('/auth/request-otp', { phone }),
   verifyOtp: (phone: string, code: string) => api.post('/auth/verify-otp', { phone, code }),
+  verifyCchn: (cchn_number: string, full_name: string) =>
+    api.post('/auth/verify-cchn', { cchn_number, full_name }),
   login: (phone: string, password: string) => {
     // Chuẩn OAuth2 Password Request quy định application/x-www-form-urlencoded
     const params = new URLSearchParams();
@@ -125,6 +127,16 @@ export const authApi = {
     role: string;
     otp_code?: string;
   }) => api.post('/auth/register', data),
+  registerDoctor: (data: {
+    phone: string;
+    full_name: string;
+    password: string;
+    role?: string;
+    otp_code: string;
+    cchn_number: string;
+    workplace?: string;
+    specialty?: string;
+  }) => api.post('/auth/register-doctor', data),
   resetPassword: (data: {
     phone: string;
     otp_code: string;

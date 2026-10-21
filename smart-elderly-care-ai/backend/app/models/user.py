@@ -65,6 +65,12 @@ class User(Base):
     critical_alert_enabled: Mapped[bool] = mapped_column(
         Boolean, nullable=False, default=True, server_default="true"
     )
+    location_latitude: Mapped[float | None] = mapped_column(Float, nullable=True)
+    location_longitude: Mapped[float | None] = mapped_column(Float, nullable=True)
+    location_address: Mapped[str | None] = mapped_column(String(500), nullable=True)
+    cchn_number: Mapped[str | None] = mapped_column(String(50), nullable=True)
+    specialty: Mapped[str | None] = mapped_column(String(255), nullable=True)
+    workplace: Mapped[str | None] = mapped_column(String(255), nullable=True)
     is_active: Mapped[bool] = mapped_column(Boolean, default=True)
     fcm_token: Mapped[str | None] = mapped_column(String(500), nullable=True)
     created_at: Mapped[datetime] = mapped_column(
