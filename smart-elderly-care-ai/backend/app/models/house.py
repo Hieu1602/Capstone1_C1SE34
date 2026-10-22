@@ -10,7 +10,7 @@ from typing import TYPE_CHECKING
 import uuid
 from datetime import datetime
 
-from sqlalchemy import DateTime, ForeignKey, String, UniqueConstraint
+from sqlalchemy import Boolean, DateTime, ForeignKey, String, UniqueConstraint
 from sqlalchemy.dialects.postgresql import UUID
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 from sqlalchemy.sql import func
@@ -90,9 +90,16 @@ class HouseMember(Base):
     )
 
     # Vai trò trong gia đình: OWNER, CAREGIVER, DOCTOR, RELATIVE
-    role_in_house: Mapped[str] = mapped_column(String(50), default="CAREGIVER", nullable=False)
+    role_in_house: Mapped[str] = mapped_column(String(50), default="MEMBER", nullable=False)
     # Quyền hạn thao tác: ADMIN, EDIT, VIEW, OPERATOR
     permissions: Mapped[str] = mapped_column(String(50), default="VIEW", nullable=False)
+
+    # Phân quyền chi tiết (RBAC) cho Thành viên:
+    can_view_health: Mapped[bool] = mapped_column(Boolean, default=True, server_default="true", nullable=False)
+    can_view_camera: Mapped[bool] = mapped_column(Boolean, default=True, server_default="true", nullable=False)
+    can_handle_emergency: Mapped[bool] = mapped_column(Boolean, default=True, server_default="true", nullable=False)
+    can_manage_devices: Mapped[bool] = mapped_column(Boolean, default=False, server_default="false", nullable=False)
+    can_manage_records: Mapped[bool] = mapped_column(Boolean, default=False, server_default="false", nullable=False)
 
     joined_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True), server_default=func.now()

@@ -121,6 +121,14 @@ async def update_device_config(
     - Smartband: hr_threshold_high, hr_threshold_low, spo2_threshold_low, fall_impact_threshold.
     """
     device = await _get_device_or_404(db, device_id)
+    if current_user.role != "admin" and device.owner_id != current_user.id:
+        if device.house_id:
+            member = await crud_house.get_member_by_user(db, device.house_id, current_user.id)
+            if not member or not member.can_manage_devices:
+                raise HTTPException(
+                    status_code=status.HTTP_403_FORBIDDEN,
+                    detail="Bạn không có quyền sửa đổi cấu hình thiết bị & ngưỡng an toàn. Quyền này thuộc về Người sở hữu.",
+                )
     return await crud_device.update_config(db, device=device, config_in=config_in)
 
 

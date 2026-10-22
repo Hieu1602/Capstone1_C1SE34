@@ -2264,7 +2264,7 @@ export default function ProfileScreen({ navigation, route }: any) {
               <TouchableOpacity
                 style={styles.fbAccordionSubRow}
                 activeOpacity={0.7}
-                onPress={() => navigation.navigate('Settings', { initialModal: 'appInfo' })}
+                onPress={() => navigation.navigate('AppInfo')}
               >
                 <View style={[styles.fbSubIconBox, { backgroundColor: '#F3E8FF' }]}>
                   <Ionicons name="book-outline" size={18} color="#8B5CF6" />

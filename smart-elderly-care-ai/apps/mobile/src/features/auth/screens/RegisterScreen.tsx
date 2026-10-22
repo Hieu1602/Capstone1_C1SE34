@@ -1,4 +1,4 @@
-﻿// ============================================================================
+// ============================================================================
 // MÀN HÌNH ĐĂNG KÝ TÀI KHOẢN (REGISTER SCREEN)
 // Dự án: Smart Elderly Care AI (SECA)
 // Thiết kế: Chuẩn UX/UI Healthtech hiện đại, bố cục cân đối, thuận mắt người dùng
@@ -292,10 +292,6 @@ export default function RegisterScreen({ route, navigation }: any) {
               <Ionicons name="arrow-back" size={24} color="#0F172A" />
             </TouchableOpacity>
 
-            <View style={styles.stepBadge}>
-              <View style={styles.stepBadgeDot} />
-              <Text style={styles.stepBadgeText}>BƯỚC 1 / 2 • CHỌN VAI TRÒ</Text>
-            </View>
           </View>
 
           <ScrollView
@@ -458,14 +454,6 @@ export default function RegisterScreen({ route, navigation }: any) {
             </TouchableOpacity>
 
             {/* Badge bước thực hiện */}
-            <View style={styles.stepBadge}>
-              <View style={styles.stepBadgeDot} />
-              <Text style={styles.stepBadgeText}>
-                {step === 'form'
-                  ? 'BƯỚC 2 / 2 • NHẬP THÔNG TIN'
-                  : 'XÁC THỰC BẢO MẬT OTP'}
-              </Text>
-            </View>
 
             <Text style={styles.welcomeTitle}>
               {step === 'verify'

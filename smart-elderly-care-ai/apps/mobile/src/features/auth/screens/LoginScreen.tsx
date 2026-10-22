@@ -1,10 +1,11 @@
 // ==============================================================================
 // LoginScreen.tsx – Màn hình Đăng nhập Smart Elderly Care AI
 // ------------------------------------------------------------------------------
-// Thiết kế đồng bộ hoàn toàn với giao diện Đăng ký (RegisterScreen)
+// Thiết kế đồng bộ hoàn toàn với giao diện Đăng ký (RegisterScreen) & WelcomeScreen
 // - Phần trên: Photo collage phong cách Pinterest chất lượng cao
 // - Phần dưới: Form đăng nhập trực tiếp (Số điện thoại, Mật khẩu, Quên mật khẩu)
 // - Thông báo lỗi inline chuyên nghiệp (noticeBox)
+// - Dấu tích (checkbox) Điều khoản & Chính sách đồng bộ từ WelcomeScreen
 // ==============================================================================
 
 import React, { useState } from 'react';
@@ -89,7 +90,7 @@ const COLLAGE_ITEMS = [
 
 
 // Component màn hình đăng nhập; navigation dùng để chuyển sang các màn hình liên quan.
-export default function LoginScreen({ navigation }: any) {
+export default function LoginScreen({ navigation, route }: any) {
   const { login, setViewRole, setTokens, logout } = useAuthStore();
   const { setFontSizeMode, setFontScale } = useThemeStore();
 
@@ -99,8 +100,16 @@ export default function LoginScreen({ navigation }: any) {
   const [loading, setLoading] = useState(false);
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
 
+  // Đồng bộ trạng thái đã tích từ màn hình ngoài (Welcome) hoặc mặc định đã tích khi vào màn hình
+  const [isAgreed, setIsAgreed] = useState<boolean>(route?.params?.isAgreed ?? true);
+
   // Xử lý đăng nhập kết nối trực tiếp với Database qua Backend FastAPI
   const handleLogin = async () => {
+    if (!isAgreed) {
+      setErrorMessage('Vui lòng tích chọn đồng ý với Điều khoản dịch vụ & Chính sách quyền riêng tư.');
+      return;
+    }
+
     const normalizedAccount = normalizePhoneNumber(phone);
     if (!normalizedAccount || !password.trim()) {
       setErrorMessage('Vui lòng nhập số điện thoại và mật khẩu.');
@@ -153,8 +162,6 @@ export default function LoginScreen({ navigation }: any) {
       if (tokensApplied) logout();
       console.error('[Login] Error:', error);
       const detail = error?.response?.data?.detail || error?.message || 'Thông tin đăng nhập hoặc mật khẩu không đúng.';
-
-
 
       setErrorMessage(
         typeof detail === 'string' ? detail : 'Đăng nhập không thành công. Vui lòng kiểm tra lại.'
@@ -210,6 +217,7 @@ export default function LoginScreen({ navigation }: any) {
               />
             </View>
 
+            {/* Hero */}
             <LocalizedText style={styles.heroTitle}>
               {'Chào mừng bạn trở lại\nĐăng nhập ngay'}
             </LocalizedText>
@@ -288,8 +296,8 @@ export default function LoginScreen({ navigation }: any) {
             {/* Nút hành động Đăng nhập chính */}
             <View style={styles.actionButtonsContainer}>
               <TouchableOpacity
-                style={[styles.btnLogin, loading && styles.btnDisabled]}
-                activeOpacity={0.88}
+                style={[styles.btnLogin, (loading || !isAgreed) && styles.btnDisabled]}
+                activeOpacity={isAgreed ? 0.88 : 0.7}
                 onPress={handleLogin}
                 disabled={loading}
               >
@@ -304,19 +312,31 @@ export default function LoginScreen({ navigation }: any) {
             {/* Hàng chuyển sang Đăng ký */}
             <View style={styles.switchAuthRow}>
               <LocalizedText style={styles.switchAuthText}>Chưa có tài khoản? </LocalizedText>
-              <TouchableOpacity onPress={() => navigation.navigate('Register')}>
+              <TouchableOpacity onPress={() => navigation.navigate('Register', { isAgreed })}>
                 <LocalizedText style={styles.switchAuthLink}>Đăng ký ngay</LocalizedText>
               </TouchableOpacity>
             </View>
 
-            {/* Điều khoản pháp lý ở chân trang */}
-            <LocalizedText style={styles.termsNoticeText}>
-              Bằng cách tiếp tục, bạn đồng ý với{' '}
-              <LocalizedText style={styles.termsLink}>Điều khoản dịch vụ</LocalizedText>{' '}
-              của SECA và xác nhận rằng bạn đã đọc{' '}
-              <LocalizedText style={styles.termsLink}>Chính sách quyền riêng tư</LocalizedText>{' '}
-              của chúng tôi.
-            </LocalizedText>
+            {/* Điều khoản pháp lý ở chân trang với checkbox hình vuông đồng bộ với WelcomeScreen */}
+            <TouchableOpacity
+              style={styles.termsContainer}
+              activeOpacity={0.7}
+              onPress={() => setIsAgreed(!isAgreed)}
+            >
+              <Ionicons
+                name={isAgreed ? 'checkbox' : 'square-outline'}
+                size={20}
+                color={isAgreed ? Colors.primary : '#94A3B8'}
+                style={styles.checkboxIcon}
+              />
+              <LocalizedText style={styles.termsNoticeText}>
+                Bằng cách tiếp tục, bạn đồng ý với{' '}
+                <LocalizedText style={styles.termsLink}>Điều khoản dịch vụ</LocalizedText>{' '}
+                của SECA và xác nhận rằng bạn đã đọc{' '}
+                <LocalizedText style={styles.termsLink}>Chính sách quyền riêng tư</LocalizedText>{' '}
+                của chúng tôi.
+              </LocalizedText>
+            </TouchableOpacity>
           </View>
         </ScrollView>
       </KeyboardAvoidingView>
@@ -526,12 +546,22 @@ const styles = StyleSheet.create({
     fontWeight: '700',
     color: Colors.primary,
   },
+  termsContainer: {
+    flexDirection: 'row',
+    alignItems: 'flex-start',
+    paddingHorizontal: 8,
+    marginTop: 4,
+  },
+  checkboxIcon: {
+    marginRight: 8,
+    marginTop: -1,
+  },
   termsNoticeText: {
+    flex: 1,
     fontSize: 11,
     color: '#334155',
-    textAlign: 'center',
+    textAlign: 'left',
     lineHeight: 16,
-    paddingHorizontal: 6,
   },
   termsLink: {
     fontWeight: '700',
