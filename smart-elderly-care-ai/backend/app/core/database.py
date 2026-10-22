@@ -8,6 +8,7 @@ from collections.abc import AsyncGenerator
 import logging
 
 from redis.asyncio import Redis, from_url  # type: ignore[import-untyped]
+from sqlalchemy.engine import make_url
 from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker, create_async_engine
 from sqlalchemy.orm import DeclarativeBase
 
@@ -19,8 +20,30 @@ logger = logging.getLogger(__name__)
 # SQLAlchemy – PostgreSQL / TimescaleDB
 # ---------------------------------------------------------------------------
 
+def _async_database_url(database_url: str):
+    url = make_url(database_url)
+    if url.drivername in {"postgres", "postgresql"}:
+        url = url.set(drivername="postgresql+asyncpg")
+
+    if url.drivername == "postgresql+asyncpg":
+        query = dict(url.query)
+        sslmode = query.pop("sslmode", None)
+        if sslmode and "ssl" not in query:
+            query["ssl"] = sslmode
+        if (
+            not query.get("ssl")
+            and url.host
+            and (url.host.endswith(".supabase.co") or url.host.endswith(".pooler.supabase.com"))
+        ):
+            query["ssl"] = "require"
+        if query != dict(url.query):
+            url = url.set(query=query)
+
+    return url
+
+
 engine = create_async_engine(
-    settings.DATABASE_URL,
+    _async_database_url(settings.DATABASE_URL),
     echo=settings.DEBUG,
     pool_size=10,
     max_overflow=20,
