@@ -38,7 +38,7 @@ jobs:
         uses: FirebaseExtended/action-hosting-deploy@v0
         with:
           repoToken: '${{ secrets.GITHUB_TOKEN }}'
-          firebaseServiceAccount: '${{ secrets.FIREBASE_SERVICE_ACCOUNT }}'
+          firebaseServiceAccount: '${{ secrets.FIREBASE_SERVICE_ACCOUNT_SMART_ELDERLY_CARE_AI_CAP1 }}'
           channelId: live
           projectId: smart-elderly-care-ai-cap1
           entryPoint: smart-elderly-care-ai/apps/web
