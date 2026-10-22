@@ -45,8 +45,8 @@ const getBaseUrl = (): string => {
     return 'http://10.0.2.2:8000/api/v1';
   }
 
-  // 5. Fallback về IP máy tính phát triển trong mạng nội bộ
-  return 'http://192.168.1.7:8000/api/v1';
+  // 4. Fallback về IP máy tính phát triển trong mạng nội bộ
+  return 'http://192.168.2.7:8000/api/v1';
 };
 
 export const BASE_URL: string = getBaseUrl();
@@ -334,13 +334,29 @@ export const userApi = {
 };
 
 export const householdApi = {
-  getMembers: (householdId: number | string = 1) => api.get(`/households/${householdId}/members`),
+  getMembers: (householdId: number | string = 'current') =>
+    api.get(`/houses/${householdId}/members`),
   addMember: (
     householdId: number | string = 1,
     data: { phone_number: string; role_in_house?: string; role?: string; full_name?: string }
-  ) => api.post(`/households/${householdId}/members`, data),
+  ) => api.post(`/houses/${householdId}/members`, data),
+  updateMemberPermissions: (
+    householdId: number | string = 'current',
+    memberId: number | string,
+    data: {
+      role_in_house?: string;
+      permissions?: string;
+      can_view_health?: boolean;
+      can_view_camera?: boolean;
+      can_handle_emergency?: boolean;
+      can_manage_devices?: boolean;
+      can_manage_records?: boolean;
+    }
+  ) => api.patch(`/houses/${householdId}/members/${memberId}/permissions`, data),
   removeMember: (householdId: number | string = 1, memberId: number | string) =>
-    api.delete(`/households/${householdId}/members/${memberId}`),
+    api.delete(`/houses/${householdId}/members/${memberId}`),
+  getMyPermissions: (householdId: number | string = 'current') =>
+    api.get(`/houses/${householdId}/my-permissions`),
 };
 
 // 8. Chatbot AI API
