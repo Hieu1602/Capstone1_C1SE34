@@ -1,4 +1,4 @@
-﻿// ============================================================================
+// ============================================================================
 // MÀN HÌNH ĐĂNG KÝ TÀI KHOẢN (REGISTER SCREEN)
 // Dự án: Smart Elderly Care AI (SECA)
 // Thiết kế: Chuẩn UX/UI Healthtech hiện đại, bố cục cân đối, thuận mắt người dùng
@@ -574,9 +574,42 @@ export default function RegisterScreen({ route, navigation }: any) {
                 behavior={Platform.OS === "ios" ? "padding" : "height"}
                 style={styles.flex}
             >
-                <ScrollView
-                    contentContainerStyle={styles.scrollContent}
-                    showsVerticalScrollIndicator={false}
+              <Ionicons name="arrow-back" size={24} color="#0F172A" />
+            </TouchableOpacity>
+
+          </View>
+
+          <ScrollView
+            showsVerticalScrollIndicator={false}
+            contentContainerStyle={styles.selectRoleScrollContent}
+            bounces={false}
+          >
+            {/* Header Tiêu đề */}
+            <View style={styles.selectRoleHeaderBox}>
+              <Text style={styles.selectRoleTitle}>
+                Bạn muốn đăng ký với vai trò nào?
+              </Text>
+              <Text style={styles.selectRoleSubtitle}>
+                Chọn vai trò phù hợp để hệ thống thiết lập giao diện và công cụ tối ưu cho bạn.
+              </Text>
+            </View>
+
+            {/* 2 Thẻ chọn vai trò */}
+            <View style={styles.selectRoleCardsList}>
+              {/* Thẻ 1: Người thân / Gia đình */}
+              <TouchableOpacity
+                style={[
+                  styles.modernRoleCard,
+                  accountType === 'user' && styles.modernRoleCardActive,
+                ]}
+                activeOpacity={0.88}
+                onPress={() => setAccountType('user')}
+              >
+                <View
+                  style={[
+                    styles.modernRoleIconBox,
+                    { backgroundColor: accountType === 'user' ? '#FFEDD5' : '#FFF7ED' },
+                  ]}
                 >
                     {/* Header & Nút Quay lại */}
                     <View style={styles.headerSection}>
@@ -1092,12 +1125,209 @@ export default function RegisterScreen({ route, navigation }: any) {
                         </View>
                     )}
 
-                    {/* Footer chuyển sang Đăng nhập */}
-                    <View style={styles.footerContainer}>
-                        <TouchableOpacity
-                            style={styles.loginLink}
-                            onPress={() => navigation.navigate("Login")}
-                            activeOpacity={0.7}
+                <View
+                  style={[
+                    styles.modernRadioCircle,
+                    accountType === 'doctor' && styles.modernRadioCircleActive,
+                  ]}
+                >
+                  {accountType === 'doctor' && (
+                    <Ionicons name="checkmark" size={15} color="#FFFFFF" />
+                  )}
+                </View>
+              </TouchableOpacity>
+            </View>
+
+            {/* Huy hiệu bảo mật y tế */}
+            <View style={styles.securityInfoBanner}>
+              <Ionicons name="shield-checkmark" size={18} color="#0D9488" />
+              <Text style={styles.securityInfoBannerText}>
+                Bảo mật dữ liệu y tế theo chuẩn Bộ Y tế & HIPAA
+              </Text>
+            </View>
+
+            {/* Khoảng trống đẩy nút xuống */}
+            <View style={{ flex: 1, minHeight: 48 }} />
+
+            {/* Nút Tiếp tục chuẩn phong cách SECA */}
+            <TouchableOpacity
+              style={styles.mobileContinueBtn}
+              activeOpacity={0.88}
+              onPress={() => handleChooseRole(accountType)}
+            >
+              <Text style={styles.mobileContinueBtnText}>Tiếp tục</Text>
+            </TouchableOpacity>
+
+            {/* Dòng liên kết sang Đăng nhập */}
+            <View style={styles.mobileLoginLinkRow}>
+              <Text style={styles.mobileLoginLinkText}>Đã có tài khoản? </Text>
+              <TouchableOpacity onPress={() => navigation.navigate('Login')}>
+                <Text style={styles.mobileLoginLinkHighlight}>Đăng nhập</Text>
+              </TouchableOpacity>
+            </View>
+          </ScrollView>
+        </View>
+      </SafeAreaView>
+    );
+  }
+  return (
+    <SafeAreaView style={styles.safeArea}>
+      <KeyboardAvoidingView
+        behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
+        style={styles.flex}
+      >
+        <ScrollView
+          contentContainerStyle={styles.scrollContent}
+          showsVerticalScrollIndicator={false}
+        >
+          {/* Header & Nút Quay lại */}
+          <View style={styles.headerSection}>
+            <TouchableOpacity
+              style={styles.backButton}
+              accessibilityRole="button"
+              accessibilityLabel="Quay lại"
+              onPress={handleBack}
+            >
+              <Ionicons name="arrow-back" size={24} color="#0F172A" />
+            </TouchableOpacity>
+
+            {/* Badge bước thực hiện */}
+
+            <Text style={styles.welcomeTitle}>
+              {step === 'verify'
+                ? 'Xác minh số điện thoại'
+                : accountType === 'doctor'
+                  ? 'Đăng ký Bác sĩ gia đình'
+                  : 'Đăng ký tài khoản'}
+            </Text>
+
+            <Text style={styles.subtitle}>
+              {step === 'verify'
+                ? `Vui lòng nhập mã OTP gồm 6 chữ số được gửi tới số ${phone}.`
+                : accountType === 'doctor'
+                  ? 'Dành cho Bác sĩ & Chuyên gia y tế đồng hành chăm sóc sức khỏe người cao tuổi.'
+                  : 'Hệ thống Smart Elderly Care AI kết nối người cao tuổi, gia đình và bác sĩ chăm sóc chuyên khoa.'}
+            </Text>
+          </View>
+
+
+          {/* ========================================================================= */}
+          {/* MÀN HÌNH 2: FORM ĐĂNG KÝ CỦA ROLE ĐÃ CHỌN                                */}
+          {/* ========================================================================= */}
+          {step === 'form' && (
+            <View style={styles.formContainer}>
+              {/* Thanh hiển thị vai trò hiện tại kèm nút đổi vai trò */}
+              <View style={styles.currentRoleBar}>
+                <View
+                  style={[
+                    styles.currentRoleBadge,
+                    { backgroundColor: accountType === 'doctor' ? '#059669' : '#FF7A00' },
+                  ]}
+                >
+                  <Ionicons
+                    name={accountType === 'doctor' ? 'medical' : 'people'}
+                    size={15}
+                    color="#FFFFFF"
+                  />
+                  <Text style={styles.currentRoleText}>
+                    {accountType === 'doctor' ? 'Bác sĩ gia đình' : 'Người thân / Gia đình'}
+                  </Text>
+                </View>
+                <TouchableOpacity
+                  style={styles.changeRoleBtn}
+                  onPress={() => setStep('select_role')}
+                  activeOpacity={0.7}
+                >
+                  <Text style={styles.changeRoleBtnText}>Đổi vai trò khác</Text>
+                  <Ionicons name="swap-horizontal" size={14} color="#EA580C" />
+                </TouchableOpacity>
+              </View>
+
+              {/* 1. Chọn Quốc gia / Mã vùng */}
+              <TouchableOpacity
+                style={styles.countryPickerBtn}
+                activeOpacity={0.7}
+                onPress={() => Alert.alert('Khu vực', 'Đã chọn mặc định: Việt Nam (+84)')}
+              >
+                <View style={styles.countryInfoRow}>
+                  <Ionicons name="location-outline" size={20} color="#0F172A" style={styles.countryIcon} />
+                  <Text style={styles.countryText}>Việt Nam (+84)</Text>
+                </View>
+                <Ionicons name="chevron-forward" size={18} color="#64748B" />
+              </TouchableOpacity>
+
+              {/* 2. Họ và tên */}
+              <View style={styles.inputContainer}>
+                <Ionicons name="person-outline" size={20} color="#94A3B8" style={styles.inputIcon} />
+                <TextInput
+                  style={styles.input}
+                  placeholder={accountType === 'doctor' ? 'Họ và tên Bác sĩ (trên CCHN)' : 'Họ và tên của bạn'}
+                  placeholderTextColor="#94A3B8"
+                  value={fullName}
+                  onChangeText={setFullName}
+                  autoCapitalize="words"
+                />
+              </View>
+
+              {/* CÁC TRƯỜNG DÀNH RIÊNG CHO ROLE: BÁC SĨ GIA ĐÌNH */}
+              {accountType === 'doctor' && (
+                <View style={styles.doctorCardSection}>
+                  <View style={styles.doctorHeaderRow}>
+                    <View style={{ flexDirection: 'row', alignItems: 'center' }}>
+                      <Ionicons name="ribbon-outline" size={18} color="#059669" style={{ marginRight: 6 }} />
+                      <Text style={styles.doctorSectionTitle}>Thông tin Chứng chỉ hành nghề y tế</Text>
+                    </View>
+                  </View>
+
+                  {/* Số CCHN & Nút Tra cứu */}
+                  <View style={styles.cchnInputRow}>
+                    <View style={[styles.inputContainer, { flex: 1, marginBottom: 0 }]}>
+                      <Ionicons name="document-text-outline" size={20} color="#059669" style={styles.inputIcon} />
+                      <TextInput
+                        style={styles.input}
+                        placeholder="Số CCHN (VD: 001234/HCM-CCHN)"
+                        placeholderTextColor="#94A3B8"
+                        value={cchnNumber}
+                        onChangeText={(val) => {
+                          setCchnNumber(val);
+                          setCchnVerifiedInfo(null);
+                        }}
+                        autoCapitalize="characters"
+                      />
+                    </View>
+                    <TouchableOpacity
+                      style={styles.verifyCchnBtn}
+                      onPress={handleCheckCchn}
+                      disabled={verifyingCchn}
+                      activeOpacity={0.8}
+                    >
+                      {verifyingCchn ? (
+                        <ActivityIndicator size="small" color="#FFFFFF" />
+                      ) : (
+                        <Text style={styles.verifyCchnBtnText}>Tra cứu</Text>
+                      )}
+                    </TouchableOpacity>
+                  </View>
+
+                  {/* Thẻ hiển thị kết quả xác minh CCHN */}
+                  {cchnVerifiedInfo && (
+                    <View
+                      style={[
+                        styles.cchnBadge,
+                        cchnVerifiedInfo.valid ? styles.cchnBadgeSuccess : styles.cchnBadgeError,
+                      ]}
+                    >
+                      <Ionicons
+                        name={cchnVerifiedInfo.valid ? 'checkmark-circle' : 'alert-circle'}
+                        size={20}
+                        color={cchnVerifiedInfo.valid ? '#059669' : '#DC2626'}
+                      />
+                      <View style={{ marginLeft: 8, flex: 1 }}>
+                        <Text
+                          style={[
+                            styles.cchnBadgeTitle,
+                            { color: cchnVerifiedInfo.valid ? '#065F46' : '#991B1B' },
+                          ]}
                         >
                             <Text style={styles.loginText}>
                                 Tôi đã có tài khoản.{" "}

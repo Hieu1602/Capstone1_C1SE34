@@ -61,7 +61,8 @@ async def _get_household_recipients(
 
     owner_ids = select(House.owner_id).where(House.id.in_(house_ids))
     member_ids = select(HouseMember.user_id).where(
-        HouseMember.house_id.in_(house_ids)
+        HouseMember.house_id.in_(house_ids),
+        HouseMember.can_handle_emergency.is_(True),
     )
     recipient_result = await db.execute(
         select(User)

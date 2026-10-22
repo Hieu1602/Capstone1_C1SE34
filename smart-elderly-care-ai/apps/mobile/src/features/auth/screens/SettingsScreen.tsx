@@ -111,8 +111,9 @@ export default function SettingsScreen({ navigation, route }: any) {
     if (!initialModal) return;
 
     if (initialModal === 'appInfo') {
-      setInfoDetail('app');
-      setAboutInfoVisible(true);
+      navigation?.replace?.('AppInfo');
+      return;
+
     } else if (initialModal === 'notifications') {
       setNotificationSettingsVisible(true);
     } else if (initialModal === 'fontSize') {
@@ -405,6 +406,7 @@ export default function SettingsScreen({ navigation, route }: any) {
                   onPress={() => {
                     setInfoDetail(null);
                     setAboutInfoVisible(true);
+              
                   }}
                 >
                   <View style={styles.settingsLeft}>
@@ -739,6 +741,7 @@ export default function SettingsScreen({ navigation, route }: any) {
                   closeWithProfileReturn(() => {
                     setAboutInfoVisible(false);
                     setInfoDetail(null);
+                    setAboutInfoVisible(true);
                   });
                 }}
                 activeOpacity={0.7}

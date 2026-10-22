@@ -9,7 +9,7 @@ from datetime import datetime, timezone
 from typing import List, Optional
 from uuid import UUID
 
-from sqlalchemy import or_, select
+from sqlalchemy import and_, or_, select
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import selectinload
 
@@ -132,6 +132,13 @@ class CRUDDevice:
                 is_online=is_online,
             )
 
+        from app.models.device import DeviceType
+
+        # Căn nhà có quyền xem camera & các căn nhà là thành viên chung
+        camera_allowed_houses = select(HouseMember.house_id).where(
+            HouseMember.user_id == user_id,
+            HouseMember.can_view_camera == True,
+        )
         member_houses_subq = select(HouseMember.house_id).where(HouseMember.user_id == user_id)
         query = (
             select(Device)
@@ -139,7 +146,14 @@ class CRUDDevice:
             .where(
                 or_(
                     Device.owner_id == user_id,
-                    Device.house_id.in_(member_houses_subq),
+                    and_(
+                        Device.device_type == DeviceType.CAMERA,
+                        Device.house_id.in_(camera_allowed_houses),
+                    ),
+                    and_(
+                        Device.device_type != DeviceType.CAMERA,
+                        Device.house_id.in_(member_houses_subq),
+                    ),
                 )
             )
         )

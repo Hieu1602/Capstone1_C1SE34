@@ -39,6 +39,7 @@ import CreateGroupScreen from '../features/dashboard/screens/CreateGroupScreen';
 import SmartbandDetailScreen from '../features/dashboard/screens/SmartbandDetailScreen';
 import HealthDetailScreen from '../features/dashboard/screens/HealthDetailScreen';
 import SettingsScreen from '../features/auth/screens/SettingsScreen';
+import AppInfoScreen from '../features/dashboard/screens/AppInfoScreen';
 import MedicationReminderScreen from '../features/dashboard/screens/MedicationReminderScreen';
 import PatientMedicalRecordScreen from '../features/dashboard/screens/PatientMedicalRecordScreen';
 import DoctorTabNavigator from './DoctorTabNavigator';
@@ -169,6 +170,7 @@ export default function AppNavigator() {
             <Stack.Screen name="SmartbandDetail" component={SmartbandDetailScreen} />
             <Stack.Screen name="HealthDetail" component={HealthDetailScreen} />
             <Stack.Screen name="Settings" component={SettingsScreen} />
+            <Stack.Screen name="AppInfo" component={AppInfoScreen} />
             <Stack.Screen
               name="EmergencySOS"
               component={EmergencySOSScreen}

@@ -37,6 +37,13 @@ async def get_patient_medical_record(
     if current_user:
         house = await crud_house.get_or_create_default_house(db, owner_id=current_user.id)
         house_id = house.id
+        if current_user.role not in ("admin", "doctor") and house.owner_id != current_user.id:
+            member = await crud_house.get_member_by_user(db, house.id, current_user.id)
+            if not member or not member.can_view_health:
+                raise HTTPException(
+                    status_code=status.HTTP_403_FORBIDDEN,
+                    detail="Bạn chưa được cấp quyền xem dữ liệu hồ sơ bệnh nhân.",
+                )
 
     return await crud_elderly.get_medical_record(
         db=db, patient_id_or_serial=patient_id, house_id=house_id
@@ -56,6 +63,13 @@ async def update_patient_medical_record(
     if current_user:
         house = await crud_house.get_or_create_default_house(db, owner_id=current_user.id)
         house_id = house.id
+        if current_user.role not in ("admin", "doctor") and house.owner_id != current_user.id:
+            member = await crud_house.get_member_by_user(db, house.id, current_user.id)
+            if not member or not member.can_manage_records:
+                raise HTTPException(
+                    status_code=status.HTTP_403_FORBIDDEN,
+                    detail="Chỉ Người sở hữu hoặc Bác sĩ phụ trách mới có quyền chỉnh sửa hồ sơ bệnh án.",
+                )
 
     return await crud_elderly.update_medical_record(
         db=db,
@@ -80,6 +94,13 @@ async def enroll_patient_face(
     if current_user:
         house = await crud_house.get_or_create_default_house(db, owner_id=current_user.id)
         house_id = house.id
+        if current_user.role not in ("admin", "doctor") and house.owner_id != current_user.id:
+            member = await crud_house.get_member_by_user(db, house.id, current_user.id)
+            if not member or not member.can_manage_records:
+                raise HTTPException(
+                    status_code=status.HTTP_403_FORBIDDEN,
+                    detail="Chỉ Người sở hữu hoặc Bác sĩ phụ trách mới có quyền cập nhật khuôn mặt người cao tuổi.",
+                )
 
     if not file:
         raise HTTPException(status_code=400, detail="Vui lòng cung cấp tệp ảnh chân dung khuôn mặt.")
@@ -127,20 +148,3 @@ async def get_enrolled_faces(
         }
         for p in profiles
     ]
-
-
-@router.get("/{patient_id}/vitals", response_model=List[VitalOut])
-async def get_patient_vitals(
-    patient_id: str,
-    target_date: Optional[str] = Query(default=None, description="Ngày lọc sinh hiệu (YYYY-MM-DD)"),
-    limit: int = Query(default=100, le=1000),
-    offset: int = Query(default=0),
-    db: AsyncSession = Depends(get_db),
-):
-    """
-    Lấy danh sách các mốc đo sinh hiệu của người cao tuổi theo ngày được chọn (hoặc mốc gần nhất).
-    Tương thích trực tiếp với loadDateVitals trên HealthDetailScreen.
-    """
-    return await crud_vital.get_history(
-        db, device_id=None, limit=limit, offset=offset, target_date=target_date
-    )

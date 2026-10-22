@@ -94,8 +94,13 @@ CREATE TABLE house_members (
     id UUID NOT NULL DEFAULT gen_random_uuid(),
     house_id UUID NOT NULL,
     user_id UUID NOT NULL,
-    role_in_house VARCHAR(50) NOT NULL DEFAULT 'OWNER' CHECK (role_in_house IN ('OWNER', 'CAREGIVER', 'DOCTOR', 'RELATIVE')), -- 'OWNER', 'CAREGIVER', 'DOCTOR', 'RELATIVE'
+    role_in_house VARCHAR(50) NOT NULL DEFAULT 'MEMBER', -- 'OWNER', 'CAREGIVER', 'DOCTOR', 'RELATIVE', 'MEMBER'
     permissions VARCHAR(50) NOT NULL DEFAULT 'VIEW' CHECK (permissions IN ('ADMIN', 'EDIT', 'VIEW', 'OPERATOR')),     -- 'ADMIN', 'EDIT', 'VIEW', 'OPERATOR'
+    can_view_health BOOLEAN NOT NULL DEFAULT TRUE,
+    can_view_camera BOOLEAN NOT NULL DEFAULT TRUE,
+    can_handle_emergency BOOLEAN NOT NULL DEFAULT TRUE,
+    can_manage_devices BOOLEAN NOT NULL DEFAULT FALSE,
+    can_manage_records BOOLEAN NOT NULL DEFAULT FALSE,
     joined_at TIMESTAMPTZ NOT NULL DEFAULT CURRENT_TIMESTAMP,
 
     CONSTRAINT pk_house_members PRIMARY KEY (id),

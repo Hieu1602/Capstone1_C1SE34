@@ -44,7 +44,7 @@ export default function WelcomeScreen({ navigation }: any) {
       );
       return;
     }
-    navigation.navigate(screen);
+    navigation.navigate(screen, { isAgreed });
   };
 
   return (
