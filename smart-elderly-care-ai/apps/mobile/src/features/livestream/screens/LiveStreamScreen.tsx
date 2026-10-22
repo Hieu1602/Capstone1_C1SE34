@@ -16,7 +16,13 @@ if (Platform.OS !== 'web') {
   } catch (e) {}
 }
 
-const RTSP_STREAM_URL = 'http://10.0.2.2:8080';  // WebRTC signaling
+const RTSP_STREAM_URL = Platform.select({
+  android: 'http://10.0.2.2:8080',
+  default:
+    typeof window !== 'undefined' && window.location
+      ? `http://${window.location.hostname || 'localhost'}:8080`
+      : 'http://localhost:8080',
+});
 
 export default function LiveStreamScreen() {
   const [isLive, setIsLive] = useState(false);
@@ -130,10 +136,17 @@ const styles = StyleSheet.create({
     padding: 20,
     gap: 12,
     elevation: 8,
-    shadowColor: '#EF4444',
-    shadowOffset: { width: 0, height: 4 },
-    shadowOpacity: 0.4,
-    shadowRadius: 8,
+    ...Platform.select({
+      web: {
+        boxShadow: '0px 4px 8px rgba(239, 68, 68, 0.4)',
+      },
+      default: {
+        shadowColor: '#EF4444',
+        shadowOffset: { width: 0, height: 4 },
+        shadowOpacity: 0.4,
+        shadowRadius: 8,
+      },
+    }),
   },
   sosText: { color: '#FFF', fontWeight: '900', fontSize: 20, letterSpacing: 1 },
 });
