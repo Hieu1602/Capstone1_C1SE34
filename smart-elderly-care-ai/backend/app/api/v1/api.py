@@ -65,6 +65,7 @@ api_router.include_router(admin_notifications_router,  prefix="/system-notificat
 # ------------------------------------------------------------------------------
 api_router.include_router(mobile_auth_router,          prefix="/auth",          tags=["[MOBILE APP] Xác thực & Tài khoản"])
 api_router.include_router(mobile_houses_router,        prefix="/houses",        tags=["[MOBILE APP] Không gian nhà & Gia đình"])
+api_router.include_router(mobile_houses_router,        prefix="/households",    tags=["[MOBILE APP] Không gian nhà & Gia đình (Household Alias)"])
 api_router.include_router(mobile_device_groups_router, prefix="/device-groups", tags=["[MOBILE APP] Phân vùng & Phòng"])
 api_router.include_router(mobile_devices_router,       prefix="/devices",       tags=["[MOBILE APP] Thiết bị IoT & Camera AI"])
 api_router.include_router(mobile_vitals_router,        prefix="/vitals",        tags=["[MOBILE APP] Sinh hiệu thời gian thực"])

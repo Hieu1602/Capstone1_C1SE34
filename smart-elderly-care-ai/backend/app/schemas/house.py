@@ -38,3 +38,25 @@ class HouseOut(HouseBase):
 
     model_config = {"from_attributes": True}
 
+
+class HouseMemberCreate(BaseModel):
+    phone_number: str = Field(..., description="Số điện thoại thành viên")
+    role_in_house: Optional[str] = Field(default="Người chăm sóc", description="Vai trò hiển thị trong nhà")
+    role: Optional[str] = Field(default="CAREGIVER", description="Mã vai trò hệ thống: OWNER, CAREGIVER, DOCTOR")
+    full_name: Optional[str] = Field(default=None, description="Họ và tên nếu chưa có tài khoản")
+    permissions: Optional[str] = Field(default="Theo dõi & Nhận cảnh báo", description="Quyền hạn")
+
+
+class HouseMemberOut(BaseModel):
+    id: UUID | str
+    user_id: Optional[UUID | str] = None
+    full_name: str
+    phone_number: Optional[str] = None
+    role: str
+    role_in_house: str
+    permissions: str
+    is_owner: bool = False
+    avatar_url: Optional[str] = None
+    joined_at: Optional[datetime] = None
+
+    model_config = {"from_attributes": True}
