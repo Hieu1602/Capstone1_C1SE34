@@ -7,9 +7,9 @@ import {
     StyleSheet,
     Modal,
     ScrollView,
-    SafeAreaView,
     ActivityIndicator,
 } from "react-native";
+import { SafeAreaView } from "react-native-safe-area-context";
 import { Ionicons } from "@expo/vector-icons";
 import { Colors } from "../../../../theme/colors";
 
@@ -735,3 +735,4 @@ const styles = StyleSheet.create({
         color: "#FFFFFF",
     },
 });
+

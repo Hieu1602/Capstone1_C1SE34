@@ -6,3 +6,4 @@ export * from "./AccessibilitySettingsModal";
 export * from "./VibrationSettingsModal";
 export * from "./GeneralSettingsModal";
 export * from "./AboutAppModal";
+
