@@ -7,7 +7,7 @@ from fastapi import APIRouter, Depends, HTTPException, Query, Request, status
 from fastapi.concurrency import run_in_threadpool
 from fastapi.security import OAuth2PasswordRequestForm
 from jose import JWTError, jwt
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, Field, field_validator, model_validator
 from sqlalchemy import text
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -21,7 +21,7 @@ from app.crud.crud_user_terminal import crud_user_terminal
 from app.models.user import User
 from app.schemas.user import Token, UserCreate, UserLoginHistoryOut, UserOut, UserTerminalOut
 from app.services.doctor_verification import verify_doctor_cchn
-from app.services.notification.twilio_verify import send_otp, verify_otp
+from app.services.notification.otp_service import is_recently_verified, send_otp, verify_otp
 
 logger = logging.getLogger(__name__)
 
@@ -34,7 +34,19 @@ class OTPRequest(BaseModel):
 
 class OTPVerifyRequest(BaseModel):
     phone: str = Field(min_length=9, max_length=20)
-    otp_code: str = Field(min_length=6, max_length=6, pattern=r"^\d{6}$")
+    otp_code: str = Field(min_length=6, max_length=6)
+
+    @model_validator(mode="before")
+    @classmethod
+    def normalize_fields(cls, data):
+        if isinstance(data, dict):
+            if "otp_code" not in data and "code" in data:
+                data["otp_code"] = data["code"]
+            if "otp_code" in data and isinstance(data["otp_code"], str):
+                data["otp_code"] = data["otp_code"].strip()
+            if "phone" in data and isinstance(data["phone"], str):
+                data["phone"] = data["phone"].strip()
+        return data
 
 
 class CCHNVerifyRequest(BaseModel):
@@ -43,30 +55,63 @@ class CCHNVerifyRequest(BaseModel):
 
 
 class UserRegistration(UserCreate):
-    password: str = Field(min_length=8, max_length=128)
+    password: str = Field(min_length=6, max_length=128)
     role: str = "user"
-    otp_code: Optional[str] = Field(default=None, min_length=6, max_length=6, pattern=r"^\d{6}$")
+    otp_code: Optional[str] = Field(default=None)
+
+    @model_validator(mode="before")
+    @classmethod
+    def normalize_fields(cls, data):
+        if isinstance(data, dict):
+            if "otp_code" not in data and "code" in data:
+                data["otp_code"] = data["code"]
+            if "otp_code" in data:
+                v = data["otp_code"]
+                data["otp_code"] = str(v).strip() if v is not None and str(v).strip() else None
+            if "phone" in data and isinstance(data["phone"], str):
+                data["phone"] = data["phone"].strip()
+        return data
 
 
 class DoctorRegistration(UserCreate):
-    password: str = Field(min_length=8, max_length=128)
+    password: str = Field(min_length=6, max_length=128)
     role: str = "doctor"
-    otp_code: Optional[str] = Field(default=None, min_length=6, max_length=6, pattern=r"^\d{6}$")
+    otp_code: Optional[str] = Field(default=None)
     cchn_number: Optional[str] = Field(default=None, min_length=3, max_length=50)
     workplace: Optional[str] = Field(default=None, max_length=255)
     specialty: Optional[str] = Field(default=None, max_length=255)
 
+    @model_validator(mode="before")
+    @classmethod
+    def normalize_fields(cls, data):
+        if isinstance(data, dict):
+            if "otp_code" not in data and "code" in data:
+                data["otp_code"] = data["code"]
+            if "otp_code" in data:
+                v = data["otp_code"]
+                data["otp_code"] = str(v).strip() if v is not None and str(v).strip() else None
+            if "phone" in data and isinstance(data["phone"], str):
+                data["phone"] = data["phone"].strip()
+        return data
+
 
 @router.post("/request-otp")
 async def request_otp(payload: OTPRequest):
-    """Gửi mã OTP xác thực qua SMS tới số điện thoại."""
+    """Gửi mã OTP xác thực qua SMS (eSMS / Twilio / Mock) tới số điện thoại."""
     phone = normalize_phone(payload.phone)
     try:
-        await run_in_threadpool(send_otp, phone)
+        await run_in_threadpool(send_otp, phone, "register")
     except RuntimeError as exc:
+        error_msg = str(exc)
+        # Phân biệt lỗi rate-limit vs lỗi hệ thống
+        if "chờ" in error_msg.lower() or "rate" in error_msg.lower():
+            raise HTTPException(
+                status_code=status.HTTP_429_TOO_MANY_REQUESTS,
+                detail=error_msg,
+            ) from exc
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-            detail=str(exc) or "Không thể gửi mã xác minh SMS. Vui lòng kiểm tra lại số điện thoại.",
+            detail=error_msg or "Không thể gửi mã xác minh SMS. Vui lòng kiểm tra lại số điện thoại.",
         ) from exc
     return {"message": "Mã xác minh đã được gửi thành công qua SMS."}
 
@@ -75,6 +120,95 @@ async def request_otp(payload: OTPRequest):
 async def verify_otp_endpoint(payload: OTPVerifyRequest):
     """Xác thực mã OTP 6 chữ số."""
     phone = normalize_phone(payload.phone)
+    try:
+        valid = await run_in_threadpool(verify_otp, phone, payload.otp_code)
+    except RuntimeError as exc:
+        # Xử lý lỗi khóa tạm do nhập sai quá nhiều lần
+        raise HTTPException(
+            status_code=status.HTTP_429_TOO_MANY_REQUESTS,
+            detail=str(exc),
+        ) from exc
+    except Exception as exc:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail=f"Lỗi xác thực mã OTP: {str(exc)}",
+        ) from exc
+    if not valid:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="Mã xác minh không chính xác hoặc đã hết hạn.",
+        )
+    return {"verified": True}
+
+
+# ==============================================================================
+# QUÊN MẬT KHẨU / ĐẶT LẠI MẬT KHẨU (Password Reset via OTP)
+# ==============================================================================
+
+class PasswordResetRequest(BaseModel):
+    phone: str = Field(min_length=9, max_length=20)
+    otp_code: str = Field(min_length=6, max_length=6)
+    new_password: str = Field(min_length=6, max_length=128)
+
+    @model_validator(mode="before")
+    @classmethod
+    def normalize_fields(cls, data):
+        if isinstance(data, dict):
+            if "otp_code" not in data and "code" in data:
+                data["otp_code"] = data["code"]
+            if "new_password" not in data and "password" in data:
+                data["new_password"] = data["password"]
+            if "otp_code" in data and isinstance(data["otp_code"], str):
+                data["otp_code"] = data["otp_code"].strip()
+            if "phone" in data and isinstance(data["phone"], str):
+                data["phone"] = data["phone"].strip()
+        return data
+
+
+@router.post("/password/request-otp")
+async def request_password_reset_otp(
+    payload: OTPRequest,
+    db: AsyncSession = Depends(get_db),
+):
+    """
+    Bước 1 – Quên mật khẩu: Gửi mã OTP xác thực tới số điện thoại đã đăng ký.
+    Yêu cầu số điện thoại phải tồn tại trong hệ thống.
+    """
+    phone = normalize_phone(payload.phone)
+    user = await crud_user.get_by_phone(db, phone=phone)
+    if not user:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="Số điện thoại chưa được đăng ký trong hệ thống.",
+        )
+    try:
+        await run_in_threadpool(send_otp, phone, "reset_password")
+    except RuntimeError as exc:
+        error_msg = str(exc)
+        if "chờ" in error_msg.lower() or "rate" in error_msg.lower():
+            raise HTTPException(
+                status_code=status.HTTP_429_TOO_MANY_REQUESTS,
+                detail=error_msg,
+            ) from exc
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail=error_msg or "Không thể gửi mã xác minh SMS.",
+        ) from exc
+    return {"message": "Mã xác minh đặt lại mật khẩu đã được gửi qua SMS."}
+
+
+@router.post("/password/reset")
+@router.post("/reset-password")
+async def complete_password_reset(
+    payload: PasswordResetRequest,
+    db: AsyncSession = Depends(get_db),
+):
+    """
+    Bước 2 – Quên mật khẩu: Xác thực OTP và cập nhật mật khẩu mới.
+    """
+    phone = normalize_phone(payload.phone)
+
+    # Xác thực mã OTP
     try:
         valid = await run_in_threadpool(verify_otp, phone, payload.otp_code)
     except Exception as exc:
@@ -87,7 +221,30 @@ async def verify_otp_endpoint(payload: OTPVerifyRequest):
             status_code=status.HTTP_400_BAD_REQUEST,
             detail="Mã xác minh không chính xác hoặc đã hết hạn.",
         )
-    return {"verified": True}
+
+    # Tìm user và cập nhật mật khẩu mới
+    user = await crud_user.get_by_phone(db, phone=phone)
+    if not user:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="Không tìm thấy tài khoản với số điện thoại này.",
+        )
+
+    from app.core.security import hash_password
+    user.hashed_password = hash_password(payload.new_password)
+    try:
+        await db.commit()
+        await db.refresh(user)
+    except Exception as exc:
+        await db.rollback()
+        logger.error("[password/reset] Lỗi cập nhật mật khẩu: %s", exc)
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail="Không thể cập nhật mật khẩu. Vui lòng thử lại.",
+        ) from exc
+
+    logger.info("[password/reset] Đặt lại mật khẩu thành công cho %s", phone)
+    return {"message": "Mật khẩu đã được đặt lại thành công. Vui lòng đăng nhập lại."}
 
 
 @router.post("/verify-cchn")
@@ -122,19 +279,26 @@ async def register(
             detail="Số điện thoại này đã được đăng ký tài khoản.",
         )
 
-    # Bỏ qua xác thực OTP nếu ở chế độ DEV/DEMO
-    if user_in.otp_code and user_in.otp_code not in ("123456", "999999"):
-        try:
-            valid = await run_in_threadpool(verify_otp, user_in.phone, user_in.otp_code)
-        except Exception as exc:
+    # Xác thực OTP qua otp_service (hỗ trợ eSMS / Twilio / Mock)
+    # Cho phép đăng ký nếu đã xác thực OTP gần đây (qua /auth/verify-otp) hoặc truyền otp_code hợp lệ
+    if not is_recently_verified(user_in.phone):
+        if user_in.otp_code:
+            try:
+                valid = await run_in_threadpool(verify_otp, user_in.phone, user_in.otp_code)
+            except Exception as exc:
+                raise HTTPException(
+                    status_code=status.HTTP_400_BAD_REQUEST,
+                    detail=f"Lỗi xác thực mã OTP: {str(exc)}",
+                ) from exc
+            if not valid:
+                raise HTTPException(
+                    status_code=status.HTTP_400_BAD_REQUEST,
+                    detail="Mã xác minh OTP không đúng hoặc đã hết hạn.",
+                )
+        else:
             raise HTTPException(
                 status_code=status.HTTP_400_BAD_REQUEST,
-                detail=f"Lỗi xác thực mã OTP: {str(exc)}",
-            ) from exc
-        if not valid:
-            raise HTTPException(
-                status_code=status.HTTP_400_BAD_REQUEST,
-                detail="Mã xác minh OTP không đúng hoặc đã hết hạn.",
+                detail="Số điện thoại chưa được xác minh mã OTP.",
             )
 
     try:
@@ -169,19 +333,25 @@ async def register_doctor(
             detail="Số điện thoại này đã được đăng ký trong hệ thống.",
         )
 
-    # 1. Xác thực OTP
-    if doctor_in.otp_code and doctor_in.otp_code not in ("123456", "999999"):
-        try:
-            valid = await run_in_threadpool(verify_otp, doctor_in.phone, doctor_in.otp_code)
-        except Exception as exc:
+    # 1. Xác thực OTP qua otp_service (hỗ trợ eSMS / Twilio / Mock)
+    if not is_recently_verified(doctor_in.phone):
+        if doctor_in.otp_code:
+            try:
+                valid = await run_in_threadpool(verify_otp, doctor_in.phone, doctor_in.otp_code)
+            except Exception as exc:
+                raise HTTPException(
+                    status_code=status.HTTP_400_BAD_REQUEST,
+                    detail=f"Lỗi xác thực mã OTP: {str(exc)}",
+                ) from exc
+            if not valid:
+                raise HTTPException(
+                    status_code=status.HTTP_400_BAD_REQUEST,
+                    detail="Mã xác minh OTP không đúng hoặc đã hết hạn.",
+                )
+        else:
             raise HTTPException(
                 status_code=status.HTTP_400_BAD_REQUEST,
-                detail=f"Lỗi xác thực mã OTP: {str(exc)}",
-            ) from exc
-        if not valid:
-            raise HTTPException(
-                status_code=status.HTTP_400_BAD_REQUEST,
-                detail="Mã xác minh OTP không đúng hoặc đã hết hạn.",
+                detail="Số điện thoại chưa được xác minh mã OTP.",
             )
 
     if not doctor_in.cchn_number:
