@@ -1,0 +1,34 @@
+# ==============================================================================
+# HƯỚNG DẪN PHÒNG NGỪA VÀ SƠ CẤP CỨU TÉ NGÃ CHO NGƯỜI CAO TUỔI (FALL FIRST AID)
+# Áp dụng cho: Hệ thống Trợ lý Y tế Thông minh SmartCare AI
+# ==============================================================================
+
+--- MỤC 1: QUY TRÌNH XỬ TRÍ KHẨN CẤP KHI PHÁT HIỆN NGƯỜI CAO TUỔI TÉ NGÃ ---
+1.1. BƯỚC 1: ĐÁNH GIÁ NHANH HIỆN TRƯỜNG & TÌNH TRẠNG Ý THỨC:
+- Người chăm sóc hoặc người thân phải giữ bình tĩnh. TUYỆT ĐỐI KHÔNG vội vàng bế xốc hoặc kéo giật người cao tuổi đứng dậy ngay lập tức.
+- Gọi to tên người cao tuổi, quan sát đáp ứng: Mở mắt, cử động, trả lời được hay bất tỉnh.
+- Kiểm tra đường thở và nhịp thở: Nếu người cao tuổi hôn mê, ngưng thở hoặc thở ngáp cá, gọi ngay cấp cứu 115 và tiến hành ép tim ngoài lồng ngực (CPR).
+
+1.2. BƯỚC 2: KIỂM TRA CHẤN THƯƠNG VÙNG ĐẦU, CỔ VÀ CỘT SỐNG:
+- Hỏi nhẹ nhàng: "Cụ/Bác đau ở đâu nhất?".
+- Kiểm tra vùng đầu và tai mũi họng: Xem có vết rách da đầu, bầm tím quanh mắt/tai, hoặc chảy máu/chảy dịch trong suốt từ tai, mũi không.
+- Nếu nghi ngờ chấn thương cột sống cổ (đau dữ dội vùng gáy, tê bì hai tay hoặc hai chân, mất cảm giác): GIỮ Y NGUYÊN TƯ THẾ, KHÔNG CỬ ĐỘNG CỔ, kê khăn mềm hai bên cố định đầu và gọi cấp cứu 115 ngay lập tức.
+
+1.3. BƯỚC 3: KIỂM TRA GÃY XƯƠNG CHI & GÃY CỔ XƯƠNG ĐÙI:
+- Dấu hiệu gãy cổ xương đùi điển hình ở người già: Đau chói vùng háng/khớp háng, chân bên gãy bị xoay ngoài và ngắn hơn chân lành, không thể nhấc gót chân lên khỏi mặt sàn.
+- Xử trí: Để người bệnh nằm yên trên sàn, đắp chăn mỏng giữ ấm, chườm lạnh nhẹ nhàng nơi sưng đau, chờ đội ngũ y tế hỗ trợ vận chuyển bằng cáng cứng.
+
+1.4. BƯỚC 4: QUY TRÌNH HỖ TRỢ ĐỨNG DẬY AN TOÀN (NẾU KHÔNG CÓ CHẤN THƯƠNG NẶNG):
+- Nếu người cao tuổi tỉnh táo hoàn toàn, không đau buốt, chỉ trượt ngã nhẹ:
+  + Hướng dẫn người cao tuổi nằm nghiêng người từ từ.
+  + Chống tay và quỳ 4 điểm (hai bàn tay và hai đầu gối chạm sàn).
+  + Bò chậm rãi đến một điểm tựa vững chắc (ghế sofa nặng, chân giường hoặc ghế bành có tay vịn).
+  + Đặt hai tay lên mặt ghế, đưa một chân khỏe lên phía trước đặt vuông góc mặt sàn.
+  + Dùng lực hai tay và chân đẩy người đứng dậy, rồi xoay người từ từ ngồi xuống ghế.
+  + Nghỉ ngơi ít nhất 15 - 30 phút, kiểm tra huyết áp và nhịp tim.
+
+--- MỤC 2: CÁC BIỆN PHÁP PHÒNG NGỪA TÉ NGÃ TRONG GIA ĐÌNH ---
+- Nhà vệ sinh: Lắp đặt thanh vịn chắc chắn cạnh bồn cầu và khu vực tắm; trải thảm chống trượt; lau khô sàn ngay sau khi tắm.
+- Chiếu sáng: Lắp đèn cảm ứng chuyển động ban đêm từ phòng ngủ dẫn ra nhà vệ sinh.
+- Vật dụng: Dọn dẹp gọn gàng dây điện, thảm lót sàn mỏng dễ trượt; dép đi trong nhà phải có đế ma sát bám dính tốt.
+- Tư thế: Tuân thủ quy tắc 3 bước khi thức dậy (Nằm xoa bóp -> Ngồi buông thõng chân mép giường 2 phút -> Đứng dậy từ từ).

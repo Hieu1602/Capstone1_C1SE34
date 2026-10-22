@@ -1,866 +1,1699 @@
-// ============================================================================
+﻿// ============================================================================
 // MÀN HÌNH ĐĂNG KÝ TÀI KHOẢN (REGISTER SCREEN)
-// Hệ thống: Smart Elderly Care AI (SECA)
-// Quy trình:
-//   - Bước 1 (form): Người dùng nhập Họ tên, Số điện thoại (+84), Mật khẩu và Xác nhận mật khẩu.
-//     Hệ thống gửi mã OTP xác thực qua SMS bằng authApi.requestOtp và chuyển sang màn hình OTP.
-//   - Bước 2 (verify): Người dùng nhập mã OTP 6 chữ số kèm bộ đếm ngược 60 giây gửi lại mã.
-//     Hệ thống gọi authApi.verifyOtp và authApi.register để kích hoạt tài khoản.
+// Dự án: Smart Elderly Care AI (SECA)
+// Thiết kế: Chuẩn UX/UI Healthtech hiện đại, bố cục cân đối, thuận mắt người dùng
 // ============================================================================
 
-import React, { useEffect, useRef, useState } from 'react';
+import React, { useEffect, useState } from "react";
 import {
-  View,
-  TextInput as RNTextInput,
-  TouchableOpacity,
-  StyleSheet,
-  KeyboardAvoidingView,
-  Platform,
-  ScrollView,
-  SafeAreaView,
-  ActivityIndicator,
-} from 'react-native';
-import { Ionicons } from '@expo/vector-icons';
-import { Colors } from '../../../theme/colors';
-import { authApi } from '../../../services/api';
-import {
-  LocalizedAlert as Alert,
-  LocalizedText as Text,
-  LocalizedTextInput as TextInput,
-} from '../../../i18n/LocalizedComponents';
+    View,
+    Text,
+    TextInput,
+    TouchableOpacity,
+    StyleSheet,
+    Alert,
+    KeyboardAvoidingView,
+    Platform,
+    ScrollView,
+    SafeAreaView,
+    ActivityIndicator,
+} from "react-native";
+import { Ionicons } from "@expo/vector-icons";
+import { authApi } from "../../../services/api";
+import { Colors } from "../../../theme/colors";
 
-type FeedbackNotice = {
-  type: 'error' | 'info' | 'success';
-  message: string;
-};
+export default function RegisterScreen({ route, navigation }: any) {
+    // Trạng thái màn hình:
+    // - 'select_role': Màn hình chọn vai trò trực quan (Người thân vs Bác sĩ)
+    // - 'form': Màn hình form điền thông tin tương ứng của vai trò đã chọn
+    // - 'verify': Màn hình xác thực OTP SMS
+    const initialRole: "user" | "doctor" =
+        route?.params?.role === "doctor" ? "doctor" : "user";
+    const [step, setStep] = useState<"select_role" | "form" | "verify">(
+        route?.params?.role ? "form" : "select_role",
+    );
+    const [accountType, setAccountType] = useState<"user" | "doctor">(
+        initialRole,
+    );
 
-// Chuẩn hóa số điện thoại Việt Nam về định dạng quốc tế E.164 (+84...)
-const formatVietnamPhone = (rawPhone: string): string => {
-  const cleaned = rawPhone.trim().replace(/[\s().-]/g, '');
-  if (!cleaned) return '';
+    // Form states
+    const [fullName, setFullName] = useState("");
+    const [phone, setPhone] = useState("");
+    const [password, setPassword] = useState("");
+    const [confirmPassword, setConfirmPassword] = useState("");
 
-  if (cleaned.startsWith('+84')) {
-    const rest = cleaned.slice(3).replace(/^0+/, '');
-    return `+84${rest}`;
-  }
-  if (cleaned.startsWith('84') && cleaned.length >= 11) {
-    const rest = cleaned.slice(2).replace(/^0+/, '');
-    return `+84${rest}`;
-  }
-  if (cleaned.startsWith('0')) {
-    return `+84${cleaned.slice(1)}`;
-  }
-  if (cleaned.startsWith('+')) {
-    return cleaned;
-  }
-  return `+84${cleaned}`;
-};
+    // Doctor-specific states
+    const [cchnNumber, setCchnNumber] = useState("");
+    const [workplace, setWorkplace] = useState("");
+    const [specialty, setSpecialty] = useState("");
+    const [verifyingCchn, setVerifyingCchn] = useState(false);
+    const [cchnVerifiedInfo, setCchnVerifiedInfo] = useState<{
+        valid: boolean;
+        official_name?: string;
+        scope_of_practice?: string;
+        status?: string;
+        source?: string;
+        message?: string;
+    } | null>(null);
 
-export default function RegisterScreen({ navigation }: any) {
-  // Trạng thái các trường thông tin đăng ký
-  const [fullName, setFullName] = useState('');
-  const [phone, setPhone] = useState('');
-  const [password, setPassword] = useState('');
-  const [confirmPassword, setConfirmPassword] = useState('');
+    // Password visibility
+    const [showPassword, setShowPassword] = useState(false);
+    const [showConfirmPassword, setShowConfirmPassword] = useState(false);
 
-  // Trạng thái hiển thị mật khẩu
-  const [showPassword, setShowPassword] = useState(false);
-  const [showConfirmPassword, setShowConfirmPassword] = useState(false);
+    // OTP & Loading states
+    const [otp, setOtp] = useState("");
+    const [loading, setLoading] = useState(false);
+    const [resendSeconds, setResendSeconds] = useState(0);
 
-  // Trạng thái bước thực hiện: 'form' (nhập thông tin) hoặc 'verify' (màn hình nhập mã OTP đăng ký)
-  const [step, setStep] = useState<'form' | 'verify'>('form');
+    useEffect(() => {
+        if (resendSeconds <= 0) return undefined;
+        const timer = setInterval(() => {
+            setResendSeconds((prev) => Math.max(prev - 1, 0));
+        }, 1000);
+        return () => clearInterval(timer);
+    }, [resendSeconds]);
 
-  // Trạng thái mã xác minh OTP 6 số
-  const [otp, setOtp] = useState('');
-  const [loading, setLoading] = useState(false);
-  const [feedback, setFeedback] = useState<FeedbackNotice | null>(null);
+    const startResendCountdown = () => setResendSeconds(60);
 
-  // Refs cho 6 ô nhập OTP để tự động chuyển ô khi nhập
-  const otpInputRefs = useRef<Array<RNTextInput | null>>([]);
+    const handleChooseRole = (role: "user" | "doctor") => {
+        setAccountType(role);
+        setStep("form");
+    };
 
-  // Bộ đếm thời gian cho tính năng gửi lại mã OTP (tính bằng giây)
-  const [resendSeconds, setResendSeconds] = useState(0);
+    const handleCheckCchn = async () => {
+        const cleanCchn = cchnNumber.trim();
+        const cleanName = fullName.trim();
 
-  // Hiệu ứng đếm ngược thời gian gửi lại mã OTP mỗi 1 giây
-  useEffect(() => {
-    if (resendSeconds <= 0) {
-      return undefined;
-    }
+        if (!cleanName) {
+            Alert.alert(
+                "Chưa nhập họ tên",
+                "Vui lòng nhập Họ và tên Bác sĩ trước để đối soát với thông tin CCHN.",
+            );
+            return;
+        }
+        if (!cleanCchn) {
+            Alert.alert(
+                "Chưa nhập CCHN",
+                "Vui lòng nhập Số Chứng chỉ hành nghề y tế (VD: 001234/HCM-CCHN).",
+            );
+            return;
+        }
 
-    const timer = setInterval(() => {
-      setResendSeconds((seconds) => Math.max(seconds - 1, 0));
-    }, 1000);
+        setVerifyingCchn(true);
+        setCchnVerifiedInfo(null);
+        try {
+            const response = await authApi.verifyCchn(cleanCchn, cleanName);
+            const data = response.data;
+            setCchnVerifiedInfo(data);
 
-    return () => clearInterval(timer);
-  }, [resendSeconds]);
+            if (data.scope_of_practice && !specialty) {
+                setSpecialty(data.scope_of_practice);
+            }
+            if (data.workplace && !workplace) {
+                setWorkplace(data.workplace);
+            }
 
-  // Tự động focus vào ô OTP đầu tiên khi chuyển sang màn hình xác minh OTP
-  useEffect(() => {
-    if (step === 'verify') {
-      const focusTimer = setTimeout(() => {
-        otpInputRefs.current[0]?.focus();
-      }, 150);
-      return () => clearTimeout(focusTimer);
-    }
-    return undefined;
-  }, [step]);
+            Alert.alert(
+                "Xác minh thành công",
+                `Bác sĩ: ${data.official_name || cleanName}\nPhạm vi: ${data.scope_of_practice || "Khám chữa bệnh"}\nTrạng thái: ${data.status || "Đang hoạt động"}`,
+            );
+        } catch (error: any) {
+            const errorMsg =
+                error.response?.data?.detail ||
+                "Không thể xác minh CCHN trên Cổng Sở Y tế.";
+            setCchnVerifiedInfo({ valid: false, message: errorMsg });
+            Alert.alert("Xác minh thất bại", errorMsg);
+        } finally {
+            setVerifyingCchn(false);
+        }
+    };
 
-  // Bắt đầu đếm ngược 60 giây cho lượt gửi lại mã tiếp theo
-  const startResendCountdown = () => setResendSeconds(60);
+    const handleRegister = async () => {
+        const normalizedPhone = phone.trim().replace(/\s+/g, "");
 
-  const getApiErrorMessage = (error: any, fallback: string): string => {
-    const detail = error?.response?.data?.detail;
-    if (Array.isArray(detail)) {
-      return detail.map((item: { msg?: string }) => item?.msg).filter(Boolean).join('\n') || fallback;
-    }
-    return typeof detail === 'string' && detail.trim() ? detail : fallback;
-  };
+        if (
+            !fullName.trim() ||
+            !normalizedPhone ||
+            !password ||
+            !confirmPassword
+        ) {
+            Alert.alert(
+                "Thiếu thông tin",
+                "Vui lòng điền đầy đủ họ tên, số điện thoại và mật khẩu.",
+            );
+            return;
+        }
 
-  /**
-   * Bước 1: Kiểm tra tính hợp lệ biểu mẫu & Yêu cầu gửi mã OTP để chuyển sang màn hình OTP
-   */
-  const handleRegister = async () => {
-    setFeedback(null);
-    const formattedPhone = formatVietnamPhone(phone);
+        if (accountType === "doctor" && !cchnNumber.trim()) {
+            Alert.alert(
+                "Thiếu CCHN",
+                "Vui lòng nhập Số Chứng chỉ hành nghề y khoa của Bác sĩ.",
+            );
+            return;
+        }
 
-    // Kiểm tra các trường bắt buộc
-    if (!phone.trim() || !password || !confirmPassword) {
-      const msg = 'Vui lòng điền đầy đủ số điện thoại và mật khẩu.';
-      setFeedback({ type: 'error', message: msg });
-      Alert.alert('Thiếu thông tin', msg);
-      return;
-    }
+        if (!/^\+?[0-9]{9,15}$/.test(normalizedPhone)) {
+            Alert.alert(
+                "Lỗi",
+                "Số điện thoại không hợp lệ. Vui lòng kiểm tra lại.",
+            );
+            return;
+        }
 
-    // Kiểm tra định dạng số điện thoại
-    if (!/^\+[0-9]{9,15}$/.test(formattedPhone)) {
-      const msg = 'Số điện thoại không hợp lệ. Vui lòng kiểm tra lại.';
-      setFeedback({ type: 'error', message: msg });
-      Alert.alert('Lỗi', msg);
-      return;
-    }
+        if (password.length < 6) {
+            Alert.alert(
+                "Mật khẩu quá ngắn",
+                "Mật khẩu cần có ít nhất 6 ký tự để đảm bảo an toàn.",
+            );
+            return;
+        }
 
-    // Kiểm tra mật khẩu tối thiểu 6 ký tự
-    if (password.length < 6) {
-      const msg = 'Mật khẩu cần có ít nhất 6 ký tự để đảm bảo an toàn.';
-      setFeedback({ type: 'error', message: msg });
-      Alert.alert('Mật khẩu quá ngắn', msg);
-      return;
-    }
+        if (password !== confirmPassword) {
+            Alert.alert(
+                "Mật khẩu không khớp",
+                "Mật khẩu và xác nhận lại mật khẩu không trùng khớp.",
+            );
+            return;
+        }
 
-    // Kiểm tra khớp mật khẩu xác nhận
-    if (password !== confirmPassword) {
-      const msg = 'Mật khẩu và xác nhận mật khẩu không trùng khớp.';
-      setFeedback({ type: 'error', message: msg });
-      Alert.alert('Mật khẩu không khớp', msg);
-      return;
-    }
+        const formattedPhone = normalizedPhone.startsWith("0")
+            ? `+84${normalizedPhone.slice(1)}`
+            : normalizedPhone.startsWith("+")
+              ? normalizedPhone
+              : `+84${normalizedPhone}`;
 
-    setLoading(true);
-    try {
-      // Gửi yêu cầu OTP đến máy chủ SMS backend
-      await authApi.requestOtp(formattedPhone);
-      setOtp('');
-      setStep('verify');
-      startResendCountdown();
-      setFeedback({
-        type: 'info',
-        message: `Mã xác minh gồm 6 chữ số đã được gửi tới số ${formattedPhone}.`,
-      });
-    } catch (error: any) {
-      const errMsg = getApiErrorMessage(error, 'Không thể kết nối đến máy chủ SMS.');
-      setFeedback({ type: 'error', message: errMsg });
-      Alert.alert('Không gửi được mã', errMsg);
-    } finally {
-      setLoading(false);
-    }
-  };
+        setLoading(true);
+        try {
+            if (accountType === "doctor" && !cchnVerifiedInfo?.valid) {
+                try {
+                    const verifyRes = await authApi.verifyCchn(
+                        cchnNumber.trim(),
+                        fullName.trim(),
+                    );
+                    setCchnVerifiedInfo(verifyRes.data);
+                } catch (_) {}
+            }
 
-  /**
-   * Yêu cầu gửi lại mã xác minh OTP nếu người dùng chưa nhận được
-   */
-  const resendOtp = async () => {
-    if (resendSeconds > 0 || loading) {
-      return;
-    }
+            await authApi.requestOtp(formattedPhone);
+            setStep("verify");
+            startResendCountdown();
+            Alert.alert(
+                "Đã gửi mã OTP",
+                `Mã xác minh đã được gửi tới số điện thoại ${formattedPhone}.`,
+            );
+        } catch (error: any) {
+            Alert.alert(
+                "Không thể tiếp tục",
+                error.response?.data?.detail ||
+                    "Không thể gửi mã xác minh. Vui lòng thử lại.",
+            );
+        } finally {
+            setLoading(false);
+        }
+    };
 
-    const formattedPhone = formatVietnamPhone(phone);
-    if (!formattedPhone) {
-      setStep('form');
-      return;
-    }
+    const resendOtp = async () => {
+        if (resendSeconds > 0) return;
 
-    setLoading(true);
-    setFeedback(null);
-    try {
-      await authApi.requestOtp(formattedPhone);
-      setOtp('');
-      startResendCountdown();
-      setFeedback({
-        type: 'info',
-        message: `Đã gửi lại mã xác minh mới tới số ${formattedPhone}.`,
-      });
-      otpInputRefs.current[0]?.focus();
-    } catch (error: any) {
-      const errMsg = getApiErrorMessage(error, 'Không thể gửi lại mã xác minh.');
-      setFeedback({ type: 'error', message: errMsg });
-      Alert.alert('Không gửi được mã', errMsg);
-    } finally {
-      setLoading(false);
-    }
-  };
+        const normalizedPhone = phone.trim().replace(/\s+/g, "");
+        if (!normalizedPhone) {
+            Alert.alert(
+                "Thiếu thông tin",
+                "Vui lòng nhập số điện thoại trước.",
+            );
+            return;
+        }
 
-  /**
-   * Xử lý nhập từng ký tự hoặc dán mã OTP 6 chữ số
-   */
-  const handleOtpChange = (index: number, rawValue: string) => {
-    const digitsOnly = rawValue.replace(/[^0-9]/g, '');
+        const formattedPhone = normalizedPhone.startsWith("0")
+            ? `+84${normalizedPhone.slice(1)}`
+            : normalizedPhone.startsWith("+")
+              ? normalizedPhone
+              : `+84${normalizedPhone}`;
 
-    // Trường hợp người dùng dán (paste) nhiều số cùng lúc
-    if (digitsOnly.length > 1) {
-      const pasted = digitsOnly.slice(0, 6);
-      setOtp(pasted);
-      const nextFocusIndex = Math.min(pasted.length, 5);
-      otpInputRefs.current[nextFocusIndex]?.focus();
-      return;
-    }
+        setLoading(true);
+        try {
+            await authApi.requestOtp(formattedPhone);
+            startResendCountdown();
+            Alert.alert(
+                "Đã gửi lại mã",
+                "Mã xác minh mới đã được gửi. Vui lòng kiểm tra tin nhắn.",
+            );
+        } catch (error: any) {
+            Alert.alert(
+                "Không gửi được mã",
+                error.response?.data?.detail ||
+                    "Không thể kết nối đến máy chủ SMS.",
+            );
+        } finally {
+            setLoading(false);
+        }
+    };
 
-    const chars = otp.split('');
-    while (chars.length < 6) {
-      chars.push('');
-    }
-    chars[index] = digitsOnly;
-    const nextOtp = chars.join('').slice(0, 6);
-    setOtp(nextOtp);
+    const completeRegistration = async () => {
+        const normalizedPhone = phone.trim().replace(/\s+/g, "");
 
-    // Tự động chuyển sang ô tiếp theo nếu vừa nhập 1 chữ số
-    if (digitsOnly && index < 5) {
-      otpInputRefs.current[index + 1]?.focus();
-    }
-  };
+        if (otp.length !== 6) {
+            Alert.alert(
+                "Mã không hợp lệ",
+                "Vui lòng nhập đủ 6 chữ số mã xác thực OTP.",
+            );
+            return;
+        }
 
-  /**
-   * Xử lý phím Backspace để lùi về ô trước đó
-   */
-  const handleOtpKeyPress = (index: number, key: string) => {
-    if (key === 'Backspace') {
-      if (!otp[index] && index > 0) {
-        const chars = otp.split('');
-        chars[index - 1] = '';
-        setOtp(chars.join(''));
-        otpInputRefs.current[index - 1]?.focus();
-      }
-    }
-  };
+        const formattedPhone = normalizedPhone.startsWith("0")
+            ? `+84${normalizedPhone.slice(1)}`
+            : normalizedPhone.startsWith("+")
+              ? normalizedPhone
+              : `+84${normalizedPhone}`;
 
-  /**
-   * Bước 2: Xác minh OTP & Đăng ký tài khoản người dùng chính thức
-   */
-  const completeRegistration = async () => {
-    setFeedback(null);
-    const cleanOtp = otp.replace(/[^0-9]/g, '');
+        setLoading(true);
+        try {
+            await authApi.verifyOtp(formattedPhone, otp);
 
-    // Kiểm tra độ dài mã OTP 6 chữ số
-    if (cleanOtp.length !== 6) {
-      const msg = 'Vui lòng nhập đủ 6 chữ số mã xác thực OTP.';
-      setFeedback({ type: 'error', message: msg });
-      Alert.alert('Mã xác minh không hợp lệ', msg);
-      return;
-    }
+            if (accountType === "doctor") {
+                await authApi.registerDoctor({
+                    phone: formattedPhone,
+                    full_name: fullName.trim(),
+                    password,
+                    role: "doctor",
+                    otp_code: otp,
+                    cchn_number: cchnNumber.trim(),
+                    workplace: workplace.trim() || undefined,
+                    specialty: specialty.trim() || undefined,
+                });
 
-    const formattedPhone = formatVietnamPhone(phone);
+                navigation.replace("Login");
+                Alert.alert(
+                    "Đăng ký Bác sĩ thành công!",
+                    "Tài khoản Bác sĩ gia đình đã được khởi tạo. Bạn có thể đăng nhập để bắt đầu kết nối bệnh nhân.",
+                );
+            } else {
+                await authApi.register({
+                    phone: formattedPhone,
+                    full_name: fullName.trim() || "Người dùng",
+                    password,
+                    role: "user",
+                    otp_code: otp,
+                });
 
-    setLoading(true);
-    try {
-      // 1. Xác thực mã OTP với Backend
-      await authApi.verifyOtp(formattedPhone, cleanOtp);
+                navigation.replace("Login");
+                Alert.alert(
+                    "Đăng ký thành công!",
+                    "Tài khoản của bạn đã được khởi tạo thành công. Vui lòng đăng nhập để bắt đầu.",
+                );
+            }
+        } catch (error: any) {
+            Alert.alert(
+                "Đăng ký thất bại",
+                error.response?.data?.detail ||
+                    "Không thể tạo tài khoản. Vui lòng kiểm tra lại thông tin.",
+            );
+        } finally {
+            setLoading(false);
+        }
+    };
 
-      // 2. Tạo tài khoản người dùng mới trên hệ thống (truyền kèm otp_code)
-      await authApi.register({
-        phone: formattedPhone,
-        full_name: fullName.trim() || 'Người dùng',
-        password,
-        role: 'user',
-        otp_code: cleanOtp,
-      });
+    const handleBack = () => {
+        if (step === "verify") {
+            setStep("form");
+            return;
+        }
+        if (step === "form") {
+            setStep("select_role");
+            return;
+        }
+        if (navigation.canGoBack()) {
+            navigation.goBack();
+        } else {
+            navigation.navigate("Login");
+        }
+    };
 
-      setFeedback({
-        type: 'success',
-        message: 'Đăng ký tài khoản thành công! Đang chuyển hướng sang màn hình Đăng nhập...',
-      });
+    // BƯỚC 1: MÀN HÌNH CHỌN VAI TRÒ (CHUẨN UX/UI MOBILE APP & DESIGN SYSTEM SECA)
+    // =========================================================================
+    if (step === "select_role") {
+        return (
+            <SafeAreaView style={styles.safeArea}>
+                <View style={styles.selectRoleScreen}>
+                    {/* Top Bar: Nút quay lại & Badge bước */}
+                    <View style={styles.selectRoleTopBar}>
+                        <TouchableOpacity
+                            style={styles.backButton}
+                            onPress={handleBack}
+                            activeOpacity={0.7}
+                            accessibilityRole="button"
+                            accessibilityLabel="Quay lại"
+                        >
+                            <Ionicons
+                                name="arrow-back"
+                                size={24}
+                                color="#0F172A"
+                            />
+                        </TouchableOpacity>
 
-      if (Platform.OS === 'web') {
-        setTimeout(() => {
-          navigation.navigate('Login');
-        }, 900);
-      } else {
-        Alert.alert(
-          'Đăng ký thành công',
-          'Tài khoản của bạn đã được khởi tạo thành công. Vui lòng đăng nhập.',
-          [{ text: 'Đăng nhập', onPress: () => navigation.navigate('Login') }]
-        );
-      }
-    } catch (error: any) {
-      const errMsg = getApiErrorMessage(
-        error,
-        'Mã xác minh không đúng hoặc không thể tạo tài khoản. Vui lòng thử lại.'
-      );
-      setFeedback({ type: 'error', message: errMsg });
-      Alert.alert('Đăng ký thất bại', errMsg);
-    } finally {
-      setLoading(false);
-    }
-  };
-
-  const formattedDisplayPhone = formatVietnamPhone(phone) || phone;
-
-  return (
-    <SafeAreaView style={styles.safeArea}>
-      <KeyboardAvoidingView
-        behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
-        style={styles.flex}
-      >
-        <ScrollView
-          contentContainerStyle={styles.container}
-          keyboardShouldPersistTaps="handled"
-          showsVerticalScrollIndicator={false}
-        >
-          <View>
-            {/* Header & Tiêu đề màn hình */}
-            <View style={styles.headerSection}>
-              <TouchableOpacity
-                style={styles.backButton}
-                accessibilityRole="button"
-                accessibilityLabel={step === 'verify' ? 'Quay lại form đăng ký' : 'Quay lại'}
-                onPress={() => {
-                  setFeedback(null);
-                  if (step === 'verify') {
-                    setStep('form');
-                    return;
-                  }
-                  if (navigation.canGoBack()) {
-                    navigation.goBack();
-                  } else {
-                    navigation.navigate('Welcome');
-                  }
-                }}
-              >
-                <Ionicons name="arrow-back" size={24} color={Colors.textPrimary || '#0F172A'} />
-              </TouchableOpacity>
-
-              <Text style={styles.welcomeTitle}>
-                {step === 'form' ? 'Đăng ký tài khoản' : 'Xác minh mã OTP'}
-              </Text>
-              <Text style={styles.subtitle}>
-                {step === 'form'
-                  ? 'Đăng ký tài khoản để kết nối và quản lý an toàn cho người thân. Chúng tôi sẽ gửi tin nhắn kèm mã xác minh đến số điện thoại này.'
-                  : `Vui lòng nhập mã OTP gồm 6 chữ số vừa được gửi tới số điện thoại ${formattedDisplayPhone}.`}
-              </Text>
-            </View>
-
-            {/* Thông báo trạng thái / lỗi trực tiếp trên màn hình */}
-            {feedback && (
-              <View
-                style={[
-                  styles.feedbackBanner,
-                  feedback.type === 'error'
-                    ? styles.feedbackError
-                    : feedback.type === 'success'
-                      ? styles.feedbackSuccess
-                      : styles.feedbackInfo,
-                ]}
-              >
-                <Ionicons
-                  name={
-                    feedback.type === 'error'
-                      ? 'alert-circle'
-                      : feedback.type === 'success'
-                        ? 'checkmark-circle'
-                        : 'information-circle'
-                  }
-                  size={20}
-                  color={
-                    feedback.type === 'error'
-                      ? '#DC2626'
-                      : feedback.type === 'success'
-                        ? '#16A34A'
-                        : '#2563EB'
-                  }
-                />
-                <Text
-                  style={[
-                    styles.feedbackText,
-                    feedback.type === 'error'
-                      ? { color: '#991B1B' }
-                      : feedback.type === 'success'
-                        ? { color: '#166534' }
-                        : { color: '#1E40AF' },
-                  ]}
-                >
-                  {feedback.message}
-                </Text>
-              </View>
-            )}
-
-            {/* Biểu mẫu nhập liệu */}
-            <View style={styles.formContainer}>
-              {step === 'form' ? (
-                <>
-                  {/* Lựa chọn quốc gia / Mã vùng */}
-                  <TouchableOpacity
-                    style={styles.countryPickerBtn}
-                    activeOpacity={0.7}
-                    onPress={() => Alert.alert('Khu vực', 'Đã chọn mặc định: Việt Nam (+84)')}
-                  >
-                    <View style={styles.countryInfoRow}>
-                      <Ionicons
-                        name="location-outline"
-                        size={20}
-                        color={Colors.textPrimary || '#0F172A'}
-                        style={styles.countryIcon}
-                      />
-                      <Text style={styles.countryText}>Việt Nam</Text>
+                        <View style={styles.stepBadge}>
+                            <View style={styles.stepBadgeDot} />
+                            <Text style={styles.stepBadgeText}>
+                                BƯỚC 1 / 2 • CHỌN VAI TRÒ
+                            </Text>
+                        </View>
                     </View>
-                    <Ionicons
-                      name="chevron-forward"
-                      size={18}
-                      color={Colors.textSecondary || '#64748B'}
-                    />
-                  </TouchableOpacity>
 
-                  {/* Trường 1: Họ và tên người dùng */}
-                  <View style={styles.inputContainer}>
-                    <Ionicons name="person-outline" size={20} color="#64748B" style={styles.inputIcon} />
-                    <TextInput
-                      style={styles.input}
-                      placeholder="Họ và tên của bạn"
-                      placeholderTextColor="#94A3B8"
-                      value={fullName}
-                      onChangeText={setFullName}
-                      autoCapitalize="words"
-                    />
-                  </View>
-
-                  {/* Trường 2: Số điện thoại kèm tiền tố +84 */}
-                  <View style={styles.inputContainer}>
-                    <Ionicons
-                      name="phone-portrait-outline"
-                      size={20}
-                      color="#64748B"
-                      style={styles.inputIcon}
-                    />
-                    <Text style={styles.prefixText}>+84 </Text>
-                    <TextInput
-                      style={styles.input}
-                      placeholder="Số điện thoại của bạn"
-                      placeholderTextColor="#94A3B8"
-                      value={phone}
-                      onChangeText={setPhone}
-                      keyboardType="phone-pad"
-                      autoCapitalize="none"
-                    />
-                  </View>
-
-                  {/* Trường 3: Mật khẩu */}
-                  <View style={styles.inputContainer}>
-                    <Ionicons
-                      name="lock-closed-outline"
-                      size={20}
-                      color="#64748B"
-                      style={styles.inputIcon}
-                    />
-                    <TextInput
-                      style={[styles.input, { flex: 1 }]}
-                      placeholder="Mật khẩu (tối thiểu 6 ký tự)"
-                      placeholderTextColor="#94A3B8"
-                      value={password}
-                      onChangeText={setPassword}
-                      secureTextEntry={!showPassword}
-                    />
-                    <TouchableOpacity onPress={() => setShowPassword(!showPassword)}>
-                      <Ionicons
-                        name={showPassword ? 'eye-outline' : 'eye-off-outline'}
-                        size={20}
-                        color="#64748B"
-                      />
-                    </TouchableOpacity>
-                  </View>
-
-                  {/* Trường 4: Xác nhận mật khẩu */}
-                  <View style={styles.inputContainer}>
-                    <Ionicons
-                      name="shield-checkmark-outline"
-                      size={20}
-                      color="#64748B"
-                      style={styles.inputIcon}
-                    />
-                    <TextInput
-                      style={[styles.input, { flex: 1 }]}
-                      placeholder="Xác nhận lại mật khẩu"
-                      placeholderTextColor="#94A3B8"
-                      value={confirmPassword}
-                      onChangeText={setConfirmPassword}
-                      secureTextEntry={!showConfirmPassword}
-                    />
-                    <TouchableOpacity onPress={() => setShowConfirmPassword(!showConfirmPassword)}>
-                      <Ionicons
-                        name={showConfirmPassword ? 'eye-outline' : 'eye-off-outline'}
-                        size={20}
-                        color="#64748B"
-                      />
-                    </TouchableOpacity>
-                  </View>
-                </>
-              ) : (
-                /* Bước 2: Màn hình nhập mã xác minh OTP 6 số */
-                <View style={styles.otpSection}>
-                  {/* Thông tin số điện thoại nhận OTP & nút đổi số */}
-                  <View style={styles.phoneSummaryCard}>
-                    <View style={styles.countryInfoRow}>
-                      <Ionicons
-                        name="chatbubble-ellipses-outline"
-                        size={20}
-                        color={Colors.primary}
-                        style={styles.countryIcon}
-                      />
-                      <View>
-                        <Text style={styles.phoneSummaryLabel}>Số điện thoại nhận mã</Text>
-                        <Text style={styles.phoneSummaryValue}>{formattedDisplayPhone}</Text>
-                      </View>
-                    </View>
-                    <TouchableOpacity
-                      onPress={() => {
-                        setFeedback(null);
-                        setStep('form');
-                      }}
+                    <ScrollView
+                        showsVerticalScrollIndicator={false}
+                        contentContainerStyle={styles.selectRoleScrollContent}
+                        bounces={false}
                     >
-                      <Text style={styles.changePhoneText}>Đổi số</Text>
-                    </TouchableOpacity>
-                  </View>
+                        {/* Header Tiêu đề */}
+                        <View style={styles.selectRoleHeaderBox}>
+                            <Text style={styles.selectRoleTitle}>
+                                Bạn muốn đăng ký với vai trò nào?
+                            </Text>
+                            <Text style={styles.selectRoleSubtitle}>
+                                Chọn vai trò phù hợp để hệ thống thiết lập giao
+                                diện và công cụ tối ưu cho bạn.
+                            </Text>
+                        </View>
 
-                  {/* 6 ô nhập mã OTP */}
-                  <View style={styles.otpRow}>
-                    {[0, 1, 2, 3, 4, 5].map((index) => {
-                      const digit = otp[index] || '';
-                      const isFocusedOrNext =
-                        otp.length === index || (otp.length === 6 && index === 5);
-                      return (
-                        <RNTextInput
-                          key={index}
-                          ref={(el) => {
-                            otpInputRefs.current[index] = el;
-                          }}
-                          style={[
-                            styles.otpInput,
-                            digit ? styles.otpInputFilled : null,
-                            isFocusedOrNext ? styles.otpInputActive : null,
-                          ]}
-                          value={digit}
-                          onChangeText={(value) => handleOtpChange(index, value)}
-                          onKeyPress={({ nativeEvent }) =>
-                            handleOtpKeyPress(index, nativeEvent.key)
-                          }
-                          keyboardType="number-pad"
-                          maxLength={6}
-                          textAlign="center"
-                          selectTextOnFocus
-                        />
-                      );
-                    })}
-                  </View>
+                        {/* 2 Thẻ chọn vai trò */}
+                        <View style={styles.selectRoleCardsList}>
+                            {/* Thẻ 1: Người thân / Gia đình */}
+                            <TouchableOpacity
+                                style={[
+                                    styles.modernRoleCard,
+                                    accountType === "user" &&
+                                        styles.modernRoleCardActive,
+                                ]}
+                                activeOpacity={0.88}
+                                onPress={() => setAccountType("user")}
+                            >
+                                <View
+                                    style={[
+                                        styles.modernRoleIconBox,
+                                        {
+                                            backgroundColor:
+                                                accountType === "user"
+                                                    ? "#FFEDD5"
+                                                    : "#FFF7ED",
+                                        },
+                                    ]}
+                                >
+                                    <Ionicons
+                                        name="people"
+                                        size={26}
+                                        color={Colors.primary}
+                                    />
+                                </View>
 
-                  {/* Nút gửi lại mã xác minh kèm đếm ngược */}
-                  <View style={styles.resendRow}>
-                    <Text style={styles.resendPrompt}>Bạn chưa nhận được mã? </Text>
-                    <TouchableOpacity
-                      onPress={resendOtp}
-                      disabled={resendSeconds > 0 || loading}
-                    >
-                      <Text
-                        style={[
-                          styles.resendText,
-                          resendSeconds > 0 && styles.resendDisabled,
-                        ]}
-                      >
-                        {resendSeconds > 0
-                          ? `Gửi lại sau ${resendSeconds}s`
-                          : 'Gửi lại mã OTP'}
-                      </Text>
-                    </TouchableOpacity>
-                  </View>
+                                <View style={styles.modernRoleTextBox}>
+                                    <View style={styles.modernRoleTitleRow}>
+                                        <Text style={styles.modernRoleTitle}>
+                                            Người thân / Gia đình
+                                        </Text>
+                                        {accountType === "user" && (
+                                            <View style={styles.activePillTag}>
+                                                <Text
+                                                    style={
+                                                        styles.activePillTagText
+                                                    }
+                                                >
+                                                    Đang chọn
+                                                </Text>
+                                            </View>
+                                        )}
+                                    </View>
+                                    <Text style={styles.modernRoleDesc}>
+                                        Theo dõi sức khỏe và nhận cảnh báo chăm
+                                        sóc người thân trong gia đình.
+                                    </Text>
+                                </View>
+
+                                <View
+                                    style={[
+                                        styles.modernRadioCircle,
+                                        accountType === "user" &&
+                                            styles.modernRadioCircleActive,
+                                    ]}
+                                >
+                                    {accountType === "user" && (
+                                        <Ionicons
+                                            name="checkmark"
+                                            size={15}
+                                            color="#FFFFFF"
+                                        />
+                                    )}
+                                </View>
+                            </TouchableOpacity>
+
+                            {/* Thẻ 2: Bác sĩ gia đình */}
+                            <TouchableOpacity
+                                style={[
+                                    styles.modernRoleCard,
+                                    accountType === "doctor" &&
+                                        styles.modernRoleCardActive,
+                                ]}
+                                activeOpacity={0.88}
+                                onPress={() => setAccountType("doctor")}
+                            >
+                                <View
+                                    style={[
+                                        styles.modernRoleIconBox,
+                                        {
+                                            backgroundColor:
+                                                accountType === "doctor"
+                                                    ? "#D1FAE5"
+                                                    : "#ECFDF5",
+                                        },
+                                    ]}
+                                >
+                                    <Ionicons
+                                        name="medical"
+                                        size={24}
+                                        color="#059669"
+                                    />
+                                </View>
+
+                                <View style={styles.modernRoleTextBox}>
+                                    <View style={styles.modernRoleTitleRow}>
+                                        <Text style={styles.modernRoleTitle}>
+                                            Bác sĩ gia đình
+                                        </Text>
+                                        {accountType === "doctor" && (
+                                            <View
+                                                style={[
+                                                    styles.activePillTag,
+                                                    {
+                                                        backgroundColor:
+                                                            "#ECFDF5",
+                                                        borderColor: "#A7F3D0",
+                                                    },
+                                                ]}
+                                            >
+                                                <Text
+                                                    style={[
+                                                        styles.activePillTagText,
+                                                        { color: "#059669" },
+                                                    ]}
+                                                >
+                                                    Đang chọn
+                                                </Text>
+                                            </View>
+                                        )}
+                                    </View>
+                                    <Text style={styles.modernRoleDesc}>
+                                        Theo dõi hồ sơ bệnh nhân, tư vấn và hỗ
+                                        trợ chăm sóc sức khỏe từ xa.
+                                    </Text>
+                                </View>
+
+                                <View
+                                    style={[
+                                        styles.modernRadioCircle,
+                                        accountType === "doctor" &&
+                                            styles.modernRadioCircleActive,
+                                    ]}
+                                >
+                                    {accountType === "doctor" && (
+                                        <Ionicons
+                                            name="checkmark"
+                                            size={15}
+                                            color="#FFFFFF"
+                                        />
+                                    )}
+                                </View>
+                            </TouchableOpacity>
+                        </View>
+
+                        {/* Huy hiệu bảo mật y tế */}
+                        <View style={styles.securityInfoBanner}>
+                            <Ionicons
+                                name="shield-checkmark"
+                                size={18}
+                                color="#0D9488"
+                            />
+                            <Text style={styles.securityInfoBannerText}>
+                                Bảo mật dữ liệu y tế theo chuẩn Bộ Y tế & HIPAA
+                            </Text>
+                        </View>
+
+                        {/* Khoảng trống đẩy nút xuống */}
+                        <View style={{ flex: 1, minHeight: 48 }} />
+
+                        {/* Nút Tiếp tục chuẩn phong cách SECA */}
+                        <TouchableOpacity
+                            style={styles.mobileContinueBtn}
+                            activeOpacity={0.88}
+                            onPress={() => handleChooseRole(accountType)}
+                        >
+                            <Text style={styles.mobileContinueBtnText}>
+                                Tiếp tục
+                            </Text>
+                        </TouchableOpacity>
+
+                        {/* Dòng liên kết sang Đăng nhập */}
+                        <View style={styles.mobileLoginLinkRow}>
+                            <Text style={styles.mobileLoginLinkText}>
+                                Đã có tài khoản?{" "}
+                            </Text>
+                            <TouchableOpacity
+                                onPress={() => navigation.navigate("Login")}
+                            >
+                                <Text style={styles.mobileLoginLinkHighlight}>
+                                    Đăng nhập
+                                </Text>
+                            </TouchableOpacity>
+                        </View>
+                    </ScrollView>
                 </View>
-              )}
-            </View>
-          </View>
-
-          {/* Nút hành động chính & Điều hướng */}
-          <View>
-            <TouchableOpacity
-              style={[styles.loginButton, loading && { opacity: 0.7 }]}
-              onPress={step === 'form' ? handleRegister : completeRegistration}
-              disabled={loading}
-              activeOpacity={0.88}
+            </SafeAreaView>
+        );
+    }
+    return (
+        <SafeAreaView style={styles.safeArea}>
+            <KeyboardAvoidingView
+                behavior={Platform.OS === "ios" ? "padding" : "height"}
+                style={styles.flex}
             >
-              {loading ? (
-                <ActivityIndicator color="#FFFFFF" size="small" />
-              ) : (
-                <Text style={styles.loginButtonText}>
-                  {step === 'form' ? 'Tiếp tục' : 'Xác nhận đăng ký'}
-                </Text>
-              )}
-            </TouchableOpacity>
+                <ScrollView
+                    contentContainerStyle={styles.scrollContent}
+                    showsVerticalScrollIndicator={false}
+                >
+                    {/* Header & Nút Quay lại */}
+                    <View style={styles.headerSection}>
+                        <TouchableOpacity
+                            style={styles.backButton}
+                            accessibilityRole="button"
+                            accessibilityLabel="Quay lại"
+                            onPress={handleBack}
+                        >
+                            <Ionicons
+                                name="arrow-back"
+                                size={24}
+                                color="#0F172A"
+                            />
+                        </TouchableOpacity>
 
-            <TouchableOpacity
-              style={styles.loginLink}
-              onPress={() => {
-                setFeedback(null);
-                if (step === 'verify') {
-                  setStep('form');
-                } else {
-                  navigation.navigate('Login');
-                }
-              }}
-            >
-              <Text style={styles.loginText}>
-                {step === 'verify' ? (
-                  'Quay lại chỉnh sửa thông tin'
-                ) : (
-                  <>
-                    Tôi đã có tài khoản.{' '}
-                    <Text style={styles.link}>Đăng nhập</Text>
-                  </>
-                )}
-              </Text>
-            </TouchableOpacity>
-          </View>
-        </ScrollView>
-      </KeyboardAvoidingView>
-    </SafeAreaView>
-  );
+                        {/* Badge bước thực hiện */}
+                        <View style={styles.stepBadge}>
+                            <View style={styles.stepBadgeDot} />
+                            <Text style={styles.stepBadgeText}>
+                                {step === "form"
+                                    ? "BƯỚC 2 / 2 • NHẬP THÔNG TIN"
+                                    : "XÁC THỰC BẢO MẬT OTP"}
+                            </Text>
+                        </View>
+
+                        <Text style={styles.welcomeTitle}>
+                            {step === "verify"
+                                ? "Xác minh số điện thoại"
+                                : accountType === "doctor"
+                                  ? "Đăng ký Bác sĩ gia đình"
+                                  : "Đăng ký tài khoản"}
+                        </Text>
+
+                        <Text style={styles.subtitle}>
+                            {step === "verify"
+                                ? `Vui lòng nhập mã OTP gồm 6 chữ số được gửi tới số ${phone}.`
+                                : accountType === "doctor"
+                                  ? "Dành cho Bác sĩ & Chuyên gia y tế đồng hành chăm sóc sức khỏe người cao tuổi."
+                                  : "Hệ thống Smart Elderly Care AI kết nối người cao tuổi, gia đình và bác sĩ chăm sóc chuyên khoa."}
+                        </Text>
+                    </View>
+
+                    {/* ========================================================================= */}
+                    {/* MÀN HÌNH 2: FORM ĐĂNG KÝ CỦA ROLE ĐÃ CHỌN                                */}
+                    {/* ========================================================================= */}
+                    {step === "form" && (
+                        <View style={styles.formContainer}>
+                            {/* Thanh hiển thị vai trò hiện tại kèm nút đổi vai trò */}
+                            <View style={styles.currentRoleBar}>
+                                <View
+                                    style={[
+                                        styles.currentRoleBadge,
+                                        {
+                                            backgroundColor:
+                                                accountType === "doctor"
+                                                    ? "#059669"
+                                                    : "#FF7A00",
+                                        },
+                                    ]}
+                                >
+                                    <Ionicons
+                                        name={
+                                            accountType === "doctor"
+                                                ? "medical"
+                                                : "people"
+                                        }
+                                        size={15}
+                                        color="#FFFFFF"
+                                    />
+                                    <Text style={styles.currentRoleText}>
+                                        {accountType === "doctor"
+                                            ? "Bác sĩ gia đình"
+                                            : "Người thân / Gia đình"}
+                                    </Text>
+                                </View>
+                                <TouchableOpacity
+                                    style={styles.changeRoleBtn}
+                                    onPress={() => setStep("select_role")}
+                                    activeOpacity={0.7}
+                                >
+                                    <Text style={styles.changeRoleBtnText}>
+                                        Đổi vai trò khác
+                                    </Text>
+                                    <Ionicons
+                                        name="swap-horizontal"
+                                        size={14}
+                                        color="#EA580C"
+                                    />
+                                </TouchableOpacity>
+                            </View>
+
+                            {/* 1. Chọn Quốc gia / Mã vùng */}
+                            <TouchableOpacity
+                                style={styles.countryPickerBtn}
+                                activeOpacity={0.7}
+                                onPress={() =>
+                                    Alert.alert(
+                                        "Khu vực",
+                                        "Đã chọn mặc định: Việt Nam (+84)",
+                                    )
+                                }
+                            >
+                                <View style={styles.countryInfoRow}>
+                                    <Ionicons
+                                        name="location-outline"
+                                        size={20}
+                                        color="#0F172A"
+                                        style={styles.countryIcon}
+                                    />
+                                    <Text style={styles.countryText}>
+                                        Việt Nam (+84)
+                                    </Text>
+                                </View>
+                                <Ionicons
+                                    name="chevron-forward"
+                                    size={18}
+                                    color="#64748B"
+                                />
+                            </TouchableOpacity>
+
+                            {/* 2. Họ và tên */}
+                            <View style={styles.inputContainer}>
+                                <Ionicons
+                                    name="person-outline"
+                                    size={20}
+                                    color="#94A3B8"
+                                    style={styles.inputIcon}
+                                />
+                                <TextInput
+                                    style={styles.input}
+                                    placeholder={
+                                        accountType === "doctor"
+                                            ? "Họ và tên Bác sĩ (trên CCHN)"
+                                            : "Họ và tên của bạn"
+                                    }
+                                    placeholderTextColor="#94A3B8"
+                                    value={fullName}
+                                    onChangeText={setFullName}
+                                    autoCapitalize="words"
+                                />
+                            </View>
+
+                            {/* CÁC TRƯỜNG DÀNH RIÊNG CHO ROLE: BÁC SĨ GIA ĐÌNH */}
+                            {accountType === "doctor" && (
+                                <View style={styles.doctorCardSection}>
+                                    <View style={styles.doctorHeaderRow}>
+                                        <View
+                                            style={{
+                                                flexDirection: "row",
+                                                alignItems: "center",
+                                            }}
+                                        >
+                                            <Ionicons
+                                                name="ribbon-outline"
+                                                size={18}
+                                                color="#059669"
+                                                style={{ marginRight: 6 }}
+                                            />
+                                            <Text
+                                                style={
+                                                    styles.doctorSectionTitle
+                                                }
+                                            >
+                                                Thông tin Chứng chỉ hành nghề y
+                                                tế
+                                            </Text>
+                                        </View>
+                                    </View>
+
+                                    {/* Số CCHN & Nút Tra cứu */}
+                                    <View style={styles.cchnInputRow}>
+                                        <View
+                                            style={[
+                                                styles.inputContainer,
+                                                { flex: 1, marginBottom: 0 },
+                                            ]}
+                                        >
+                                            <Ionicons
+                                                name="document-text-outline"
+                                                size={20}
+                                                color="#059669"
+                                                style={styles.inputIcon}
+                                            />
+                                            <TextInput
+                                                style={styles.input}
+                                                placeholder="Số CCHN (VD: 001234/HCM-CCHN)"
+                                                placeholderTextColor="#94A3B8"
+                                                value={cchnNumber}
+                                                onChangeText={(val) => {
+                                                    setCchnNumber(val);
+                                                    setCchnVerifiedInfo(null);
+                                                }}
+                                                autoCapitalize="characters"
+                                            />
+                                        </View>
+                                        <TouchableOpacity
+                                            style={styles.verifyCchnBtn}
+                                            onPress={handleCheckCchn}
+                                            disabled={verifyingCchn}
+                                            activeOpacity={0.8}
+                                        >
+                                            {verifyingCchn ? (
+                                                <ActivityIndicator
+                                                    size="small"
+                                                    color="#FFFFFF"
+                                                />
+                                            ) : (
+                                                <Text
+                                                    style={
+                                                        styles.verifyCchnBtnText
+                                                    }
+                                                >
+                                                    Tra cứu
+                                                </Text>
+                                            )}
+                                        </TouchableOpacity>
+                                    </View>
+
+                                    {/* Thẻ hiển thị kết quả xác minh CCHN */}
+                                    {cchnVerifiedInfo && (
+                                        <View
+                                            style={[
+                                                styles.cchnBadge,
+                                                cchnVerifiedInfo.valid
+                                                    ? styles.cchnBadgeSuccess
+                                                    : styles.cchnBadgeError,
+                                            ]}
+                                        >
+                                            <Ionicons
+                                                name={
+                                                    cchnVerifiedInfo.valid
+                                                        ? "checkmark-circle"
+                                                        : "alert-circle"
+                                                }
+                                                size={20}
+                                                color={
+                                                    cchnVerifiedInfo.valid
+                                                        ? "#059669"
+                                                        : "#DC2626"
+                                                }
+                                            />
+                                            <View
+                                                style={{
+                                                    marginLeft: 8,
+                                                    flex: 1,
+                                                }}
+                                            >
+                                                <Text
+                                                    style={[
+                                                        styles.cchnBadgeTitle,
+                                                        {
+                                                            color: cchnVerifiedInfo.valid
+                                                                ? "#065F46"
+                                                                : "#991B1B",
+                                                        },
+                                                    ]}
+                                                >
+                                                    {cchnVerifiedInfo.valid
+                                                        ? "CCHN Hợp lệ (Sở Y tế TP.HCM)"
+                                                        : "Không đủ điều kiện"}
+                                                </Text>
+                                                {cchnVerifiedInfo.valid ? (
+                                                    <>
+                                                        <Text
+                                                            style={
+                                                                styles.cchnBadgeDetail
+                                                            }
+                                                        >
+                                                            • Người sở hữu:{" "}
+                                                            {cchnVerifiedInfo.official_name ||
+                                                                fullName}
+                                                        </Text>
+                                                        <Text
+                                                            style={
+                                                                styles.cchnBadgeDetail
+                                                            }
+                                                        >
+                                                            • Phạm vi:{" "}
+                                                            {cchnVerifiedInfo.scope_of_practice ||
+                                                                "Khám chữa bệnh đa khoa"}
+                                                        </Text>
+                                                    </>
+                                                ) : (
+                                                    <Text
+                                                        style={
+                                                            styles.cchnBadgeDetail
+                                                        }
+                                                    >
+                                                        {
+                                                            cchnVerifiedInfo.message
+                                                        }
+                                                    </Text>
+                                                )}
+                                            </View>
+                                        </View>
+                                    )}
+
+                                    {/* Nơi công tác */}
+                                    <View style={styles.inputContainer}>
+                                        <Ionicons
+                                            name="business-outline"
+                                            size={20}
+                                            color="#94A3B8"
+                                            style={styles.inputIcon}
+                                        />
+                                        <TextInput
+                                            style={styles.input}
+                                            placeholder="Nơi công tác (Bệnh viện / Phòng khám)"
+                                            placeholderTextColor="#94A3B8"
+                                            value={workplace}
+                                            onChangeText={setWorkplace}
+                                        />
+                                    </View>
+
+                                    {/* Chuyên khoa */}
+                                    <View style={styles.inputContainer}>
+                                        <Ionicons
+                                            name="fitness-outline"
+                                            size={20}
+                                            color="#94A3B8"
+                                            style={styles.inputIcon}
+                                        />
+                                        <TextInput
+                                            style={styles.input}
+                                            placeholder="Chuyên khoa (Lão khoa, Tim mạch, Đa khoa...)"
+                                            placeholderTextColor="#94A3B8"
+                                            value={specialty}
+                                            onChangeText={setSpecialty}
+                                        />
+                                    </View>
+                                </View>
+                            )}
+
+                            {/* 3. Số điện thoại nhận OTP */}
+                            <View style={styles.inputContainer}>
+                                <Ionicons
+                                    name="phone-portrait-outline"
+                                    size={20}
+                                    color="#94A3B8"
+                                    style={styles.inputIcon}
+                                />
+                                <Text style={styles.prefixText}>+84 </Text>
+                                <TextInput
+                                    style={styles.input}
+                                    placeholder="Số điện thoại nhận OTP"
+                                    placeholderTextColor="#94A3B8"
+                                    value={phone}
+                                    onChangeText={setPhone}
+                                    keyboardType="phone-pad"
+                                    autoCapitalize="none"
+                                />
+                            </View>
+
+                            {/* 4. Mật khẩu */}
+                            <View style={styles.inputContainer}>
+                                <Ionicons
+                                    name="lock-closed-outline"
+                                    size={20}
+                                    color="#94A3B8"
+                                    style={styles.inputIcon}
+                                />
+                                <TextInput
+                                    style={[styles.input, { flex: 1 }]}
+                                    placeholder="Mật khẩu (tối thiểu 6 ký tự)"
+                                    placeholderTextColor="#94A3B8"
+                                    value={password}
+                                    onChangeText={setPassword}
+                                    secureTextEntry={!showPassword}
+                                />
+                                <TouchableOpacity
+                                    onPress={() =>
+                                        setShowPassword(!showPassword)
+                                    }
+                                >
+                                    <Ionicons
+                                        name={
+                                            showPassword
+                                                ? "eye-outline"
+                                                : "eye-off-outline"
+                                        }
+                                        size={20}
+                                        color="#94A3B8"
+                                    />
+                                </TouchableOpacity>
+                            </View>
+
+                            {/* 5. Xác nhận lại mật khẩu */}
+                            <View style={styles.inputContainer}>
+                                <Ionicons
+                                    name="shield-checkmark-outline"
+                                    size={20}
+                                    color="#94A3B8"
+                                    style={styles.inputIcon}
+                                />
+                                <TextInput
+                                    style={[styles.input, { flex: 1 }]}
+                                    placeholder="Xác nhận lại mật khẩu"
+                                    placeholderTextColor="#94A3B8"
+                                    value={confirmPassword}
+                                    onChangeText={setConfirmPassword}
+                                    secureTextEntry={!showConfirmPassword}
+                                />
+                                <TouchableOpacity
+                                    onPress={() =>
+                                        setShowConfirmPassword(
+                                            !showConfirmPassword,
+                                        )
+                                    }
+                                >
+                                    <Ionicons
+                                        name={
+                                            showConfirmPassword
+                                                ? "eye-outline"
+                                                : "eye-off-outline"
+                                        }
+                                        size={20}
+                                        color="#94A3B8"
+                                    />
+                                </TouchableOpacity>
+                            </View>
+
+                            {/* Nút bấm Tiếp tục (Màu cam) */}
+                            <TouchableOpacity
+                                style={styles.submitButton}
+                                onPress={handleRegister}
+                                disabled={loading}
+                                activeOpacity={0.88}
+                            >
+                                {loading ? (
+                                    <ActivityIndicator color="#FFFFFF" />
+                                ) : (
+                                    <Text style={styles.submitButtonText}>
+                                        Tiếp tục
+                                    </Text>
+                                )}
+                            </TouchableOpacity>
+                        </View>
+                    )}
+
+                    {/* ========================================================================= */}
+                    {/* MÀN HÌNH 3: XÁC MINH MÃ OTP                                               */}
+                    {/* ========================================================================= */}
+                    {step === "verify" && (
+                        <View style={styles.formContainer}>
+                            <View style={styles.verifyContainer}>
+                                <View style={styles.inputContainer}>
+                                    <Ionicons
+                                        name="key-outline"
+                                        size={20}
+                                        color="#FF7A00"
+                                        style={styles.inputIcon}
+                                    />
+                                    <TextInput
+                                        style={[
+                                            styles.input,
+                                            {
+                                                fontSize: 20,
+                                                letterSpacing: 8,
+                                                textAlign: "center",
+                                                fontWeight: "700",
+                                            },
+                                        ]}
+                                        placeholder="• • • • • •"
+                                        placeholderTextColor="#CBD5E1"
+                                        value={otp}
+                                        onChangeText={(val) =>
+                                            setOtp(
+                                                val
+                                                    .replace(/\D/g, "")
+                                                    .slice(0, 6),
+                                            )
+                                        }
+                                        keyboardType="number-pad"
+                                        maxLength={6}
+                                        autoFocus
+                                    />
+                                </View>
+
+                                <TouchableOpacity
+                                    style={styles.resendButton}
+                                    onPress={resendOtp}
+                                    disabled={resendSeconds > 0 || loading}
+                                >
+                                    <Text
+                                        style={[
+                                            styles.resendText,
+                                            resendSeconds > 0 &&
+                                                styles.resendDisabled,
+                                        ]}
+                                    >
+                                        {resendSeconds > 0
+                                            ? `Gửi lại mã sau ${resendSeconds}s`
+                                            : "Gửi lại mã xác minh OTP"}
+                                    </Text>
+                                </TouchableOpacity>
+                            </View>
+
+                            <TouchableOpacity
+                                style={styles.submitButton}
+                                onPress={completeRegistration}
+                                disabled={loading}
+                                activeOpacity={0.88}
+                            >
+                                {loading ? (
+                                    <ActivityIndicator color="#FFFFFF" />
+                                ) : (
+                                    <Text style={styles.submitButtonText}>
+                                        Xác nhận & Hoàn tất
+                                    </Text>
+                                )}
+                            </TouchableOpacity>
+                        </View>
+                    )}
+
+                    {/* Footer chuyển sang Đăng nhập */}
+                    <View style={styles.footerContainer}>
+                        <TouchableOpacity
+                            style={styles.loginLink}
+                            onPress={() => navigation.navigate("Login")}
+                            activeOpacity={0.7}
+                        >
+                            <Text style={styles.loginText}>
+                                Tôi đã có tài khoản.{" "}
+                                <Text style={styles.loginHighlight}>
+                                    Đăng nhập
+                                </Text>
+                            </Text>
+                        </TouchableOpacity>
+                    </View>
+                </ScrollView>
+            </KeyboardAvoidingView>
+        </SafeAreaView>
+    );
 }
 
 const styles = StyleSheet.create({
-  safeArea: {
-    flex: 1,
-    backgroundColor: '#FFFFFF',
-  },
-  flex: {
-    flex: 1,
-  },
-  container: {
-    flexGrow: 1,
-    justifyContent: 'space-between',
-    paddingHorizontal: 24,
-    paddingTop: 14,
-    paddingBottom: 24,
-  },
-  headerSection: {
-    marginBottom: 16,
-  },
-  backButton: {
-    height: 38,
-    justifyContent: 'center',
-    alignItems: 'flex-start',
-    marginBottom: 16,
-  },
-  welcomeTitle: {
-    color: '#0F172A',
-    fontSize: 28,
-    fontWeight: '800',
-    marginBottom: 8,
-  },
-  subtitle: {
-    color: '#64748B',
-    fontSize: 14,
-    lineHeight: 20,
-  },
-  feedbackBanner: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 8,
-    paddingHorizontal: 14,
-    paddingVertical: 12,
-    borderRadius: 12,
-    marginBottom: 16,
-    borderWidth: 1,
-  },
-  feedbackError: {
-    backgroundColor: '#FEF2F2',
-    borderColor: '#FECACA',
-  },
-  feedbackInfo: {
-    backgroundColor: '#EFF6FF',
-    borderColor: '#BFDBFE',
-  },
-  feedbackSuccess: {
-    backgroundColor: '#F0FDF4',
-    borderColor: '#BBF7D0',
-  },
-  feedbackText: {
-    flex: 1,
-    fontSize: 13,
-    lineHeight: 19,
-    fontWeight: '500',
-  },
-  formContainer: {
-    gap: 12,
-    marginBottom: 20,
-  },
-  countryPickerBtn: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'space-between',
-    borderWidth: 1,
-    borderColor: '#E2E8F0',
-    borderRadius: 12,
-    paddingHorizontal: 14,
-    paddingVertical: 12,
-    backgroundColor: '#F8FAFC',
-    marginBottom: 4,
-  },
-  countryInfoRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
-  },
-  countryIcon: {
-    marginRight: 10,
-  },
-  countryText: {
-    fontSize: 15,
-    fontWeight: '500',
-    color: '#0F172A',
-  },
-  inputContainer: {
-    minHeight: 52,
-    flexDirection: 'row',
-    alignItems: 'center',
-    borderWidth: 1,
-    borderColor: '#E2E8F0',
-    borderRadius: 12,
-    paddingHorizontal: 14,
-    backgroundColor: '#FFFFFF',
-  },
-  inputIcon: {
-    marginRight: 10,
-  },
-  prefixText: {
-    fontSize: 16,
-    fontWeight: '600',
-    color: '#0F172A',
-    marginRight: 4,
-  },
-  input: {
-    flex: 1,
-    color: '#0F172A',
-    fontSize: 16,
-    padding: 0,
-    borderWidth: 0,
-    outlineWidth: 0,
-  },
-  otpSection: {
-    marginTop: 4,
-    gap: 20,
-  },
-  phoneSummaryCard: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'space-between',
-    borderWidth: 1,
-    borderColor: '#E2E8F0',
-    borderRadius: 12,
-    paddingHorizontal: 14,
-    paddingVertical: 12,
-    backgroundColor: '#F8FAFC',
-  },
-  phoneSummaryLabel: {
-    fontSize: 12,
-    color: '#64748B',
-  },
-  phoneSummaryValue: {
-    fontSize: 15,
-    fontWeight: '700',
-    color: '#0F172A',
-    marginTop: 2,
-  },
-  changePhoneText: {
-    fontSize: 14,
-    fontWeight: '600',
-    color: Colors.primary,
-  },
-  otpRow: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    gap: 8,
-  },
-  otpInput: {
-    flex: 1,
-    maxWidth: 50,
-    height: 56,
-    borderWidth: 1,
-    borderColor: '#CBD5E1',
-    borderRadius: 12,
-    fontSize: 22,
-    fontWeight: '700',
-    color: '#0F172A',
-    backgroundColor: '#F8FAFC',
-    textAlign: 'center',
-    outlineWidth: 0,
-  },
-  otpInputFilled: {
-    borderColor: '#94A3B8',
-    backgroundColor: '#FFFFFF',
-  },
-  otpInputActive: {
-    borderColor: Colors.primary,
-    borderWidth: 2,
-    backgroundColor: '#FFFFFF',
-  },
-  resendRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'center',
-    marginTop: 4,
-  },
-  resendPrompt: {
-    color: '#64748B',
-    fontSize: 14,
-  },
-  resendText: {
-    color: Colors.primary,
-    fontSize: 14,
-    fontWeight: '700',
-  },
-  resendDisabled: {
-    color: '#94A3B8',
-  },
-  loginButton: {
-    backgroundColor: Colors.primary,
-    borderRadius: 30,
-    paddingVertical: 16,
-    alignItems: 'center',
-    justifyContent: 'center',
-    alignSelf: 'center',
-    width: '100%',
-  },
-  loginButtonText: {
-    color: '#FFFFFF',
-    fontSize: 16,
-    fontWeight: '700',
-    textAlign: 'center',
-  },
-  loginLink: {
-    alignItems: 'center',
-    justifyContent: 'center',
-    alignSelf: 'center',
-    marginTop: 14,
-    width: '100%',
-  },
-  loginText: {
-    color: '#64748B',
-    fontSize: 14,
-    textAlign: 'center',
-  },
-  link: {
-    color: Colors.primary,
-    fontWeight: '600',
-  },
+    safeArea: {
+        flex: 1,
+        backgroundColor: "#FAFAFC",
+    },
+    flex: {
+        flex: 1,
+    },
+    scrollContent: {
+        paddingHorizontal: 22,
+        paddingTop: Platform.OS === "android" ? 24 : 12,
+        paddingBottom: 36,
+    },
+    scrollContentSelectRole: {
+        minHeight: "100%",
+        justifyContent: "space-between",
+    },
+    headerSection: {
+        marginBottom: 20,
+    },
+    backButton: {
+        height: 40,
+        width: 40,
+        justifyContent: "center",
+        alignItems: "flex-start",
+        marginBottom: 8,
+    },
+    stepBadge: {
+        flexDirection: "row",
+        alignItems: "center",
+        alignSelf: "flex-start",
+        backgroundColor: "#FFF7ED",
+        borderWidth: 1,
+        borderColor: "#FED7AA",
+        borderRadius: 20,
+        paddingVertical: 4,
+        paddingHorizontal: 10,
+        marginBottom: 10,
+        gap: 6,
+    },
+    stepBadgeDot: {
+        width: 6,
+        height: 6,
+        borderRadius: 3,
+        backgroundColor: "#FF7A00",
+    },
+    stepBadgeText: {
+        fontSize: 11,
+        fontWeight: "800",
+        color: "#EA580C",
+        letterSpacing: 0.5,
+    },
+    welcomeTitle: {
+        color: "#0F172A",
+        fontSize: 25,
+        fontWeight: "800",
+        marginBottom: 8,
+        letterSpacing: -0.3,
+    },
+    subtitle: {
+        color: "#64748B",
+        fontSize: 13.5,
+        lineHeight: 20,
+    },
+
+    // ==========================================
+    // THIẾT KẾ CARD CHỌN VAI TRÒ (THUẬN MẮT & SANG TRỌNG)
+    // ==========================================
+    selectRoleWrapper: {
+        gap: 16,
+        marginBottom: 20,
+    },
+    roleCard: {
+        backgroundColor: "#FFFFFF",
+        borderRadius: 20,
+        padding: 18,
+        borderWidth: 1.5,
+        shadowColor: "#0F172A",
+        shadowOffset: { width: 0, height: 4 },
+        shadowOpacity: 0.05,
+        shadowRadius: 10,
+        elevation: 3,
+    },
+    roleCardUser: {
+        borderColor: "#FED7AA",
+    },
+    roleCardDoctor: {
+        borderColor: "#BBF7D0",
+    },
+    roleCardTopRow: {
+        flexDirection: "row",
+        justifyContent: "space-between",
+        alignItems: "center",
+        marginBottom: 12,
+    },
+    roleIconCircle: {
+        width: 52,
+        height: 52,
+        borderRadius: 26,
+        alignItems: "center",
+        justifyContent: "center",
+    },
+    roleTagUser: {
+        backgroundColor: "#FFF7ED",
+        paddingVertical: 4,
+        paddingHorizontal: 10,
+        borderRadius: 12,
+        borderWidth: 1,
+        borderColor: "#FFEDD5",
+    },
+    roleTagUserText: {
+        fontSize: 11.5,
+        fontWeight: "700",
+        color: "#EA580C",
+    },
+    roleTagDoctor: {
+        backgroundColor: "#F0FDF4",
+        paddingVertical: 4,
+        paddingHorizontal: 10,
+        borderRadius: 12,
+        borderWidth: 1,
+        borderColor: "#DCFCE7",
+    },
+    roleTagDoctorText: {
+        fontSize: 11.5,
+        fontWeight: "700",
+        color: "#059669",
+    },
+    roleCardBody: {
+        gap: 6,
+    },
+    roleCardTitleRow: {
+        flexDirection: "row",
+        justifyContent: "space-between",
+        alignItems: "center",
+    },
+    roleCardTitle: {
+        fontSize: 17,
+        fontWeight: "800",
+        color: "#0F172A",
+    },
+    arrowCircleUser: {
+        width: 32,
+        height: 32,
+        borderRadius: 16,
+        backgroundColor: "#FF7A00",
+        alignItems: "center",
+        justifyContent: "center",
+    },
+    arrowCircleDoctor: {
+        width: 32,
+        height: 32,
+        borderRadius: 16,
+        backgroundColor: "#059669",
+        alignItems: "center",
+        justifyContent: "center",
+    },
+    roleCardDesc: {
+        fontSize: 13,
+        color: "#64748B",
+        lineHeight: 18,
+        marginBottom: 8,
+    },
+    featuresList: {
+        gap: 6,
+        paddingTop: 8,
+        borderTopWidth: 1,
+        borderTopColor: "#F1F5F9",
+    },
+    featureItem: {
+        flexDirection: "row",
+        alignItems: "center",
+    },
+    featureCheckIcon: {
+        marginRight: 8,
+    },
+    featureText: {
+        fontSize: 12.5,
+        color: "#334155",
+        fontWeight: "500",
+        flex: 1,
+    },
+    securityBanner: {
+        flexDirection: "row",
+        alignItems: "center",
+        justifyContent: "center",
+        backgroundColor: "#F0FDFA",
+        borderWidth: 1,
+        borderColor: "#CCFBF1",
+        borderRadius: 14,
+        paddingVertical: 10,
+        paddingHorizontal: 14,
+        gap: 8,
+        marginTop: 6,
+    },
+    securityBannerText: {
+        fontSize: 12,
+        fontWeight: "600",
+        color: "#0F766E",
+    },
+
+    // ==========================================
+    // FORM ĐĂNG KÝ
+    // ==========================================
+    currentRoleBar: {
+        flexDirection: "row",
+        alignItems: "center",
+        justifyContent: "space-between",
+        backgroundColor: "#FFFFFF",
+        borderWidth: 1,
+        borderColor: "#E2E8F0",
+        borderRadius: 14,
+        paddingVertical: 8,
+        paddingHorizontal: 12,
+        marginBottom: 4,
+    },
+    currentRoleBadge: {
+        flexDirection: "row",
+        alignItems: "center",
+        paddingVertical: 5,
+        paddingHorizontal: 10,
+        borderRadius: 10,
+        gap: 6,
+    },
+    currentRoleText: {
+        color: "#FFFFFF",
+        fontSize: 12.5,
+        fontWeight: "700",
+    },
+    changeRoleBtn: {
+        flexDirection: "row",
+        alignItems: "center",
+        gap: 4,
+        paddingVertical: 4,
+        paddingHorizontal: 8,
+    },
+    changeRoleBtnText: {
+        color: "#EA580C",
+        fontSize: 12.5,
+        fontWeight: "600",
+    },
+
+    formContainer: {
+        gap: 12,
+        marginBottom: 20,
+    },
+    countryPickerBtn: {
+        flexDirection: "row",
+        alignItems: "center",
+        justifyContent: "space-between",
+        borderWidth: 1,
+        borderColor: "#E2E8F0",
+        borderRadius: 12,
+        paddingHorizontal: 14,
+        paddingVertical: 13,
+        backgroundColor: "#FFFFFF",
+    },
+    countryInfoRow: {
+        flexDirection: "row",
+        alignItems: "center",
+    },
+    countryIcon: {
+        marginRight: 10,
+    },
+    countryText: {
+        fontSize: 14.5,
+        fontWeight: "500",
+        color: "#0F172A",
+    },
+    inputContainer: {
+        minHeight: 52,
+        flexDirection: "row",
+        alignItems: "center",
+        borderWidth: 1,
+        borderColor: "#E2E8F0",
+        borderRadius: 12,
+        paddingHorizontal: 14,
+        backgroundColor: "#FFFFFF",
+    },
+    inputIcon: {
+        marginRight: 10,
+    },
+    prefixText: {
+        fontSize: 15,
+        fontWeight: "600",
+        color: "#0F172A",
+        marginRight: 4,
+    },
+    input: {
+        flex: 1,
+        color: "#0F172A",
+        fontSize: 14.5,
+        paddingVertical: 8,
+    },
+
+    doctorCardSection: {
+        backgroundColor: "#F0FDF4",
+        borderWidth: 1,
+        borderColor: "#DCFCE7",
+        borderRadius: 14,
+        padding: 12,
+        gap: 10,
+    },
+    doctorHeaderRow: {
+        flexDirection: "row",
+        justifyContent: "space-between",
+        alignItems: "center",
+    },
+    doctorSectionTitle: {
+        fontSize: 13,
+        fontWeight: "700",
+        color: "#059669",
+    },
+    cchnInputRow: {
+        flexDirection: "row",
+        gap: 8,
+    },
+    verifyCchnBtn: {
+        backgroundColor: "#059669",
+        borderRadius: 12,
+        paddingHorizontal: 14,
+        justifyContent: "center",
+        alignItems: "center",
+    },
+    verifyCchnBtnText: {
+        color: "#FFFFFF",
+        fontWeight: "700",
+        fontSize: 13,
+    },
+    cchnBadge: {
+        flexDirection: "row",
+        alignItems: "flex-start",
+        padding: 10,
+        borderRadius: 10,
+        borderWidth: 1,
+    },
+    cchnBadgeSuccess: {
+        backgroundColor: "#ECFDF5",
+        borderColor: "#A7F3D0",
+    },
+    cchnBadgeError: {
+        backgroundColor: "#FEF2F2",
+        borderColor: "#FECACA",
+    },
+    cchnBadgeTitle: {
+        fontSize: 12.5,
+        fontWeight: "700",
+        marginBottom: 2,
+    },
+    cchnBadgeDetail: {
+        fontSize: 12,
+        color: "#374151",
+        lineHeight: 16,
+    },
+
+    verifyContainer: {
+        gap: 14,
+        paddingVertical: 10,
+    },
+    resendButton: {
+        alignItems: "center",
+        marginTop: 8,
+    },
+    resendText: {
+        color: "#EA580C",
+        fontSize: 14,
+        fontWeight: "600",
+    },
+    resendDisabled: {
+        color: "#94A3B8",
+    },
+
+    submitButton: {
+        backgroundColor: "#FF7A00",
+        borderRadius: 26,
+        paddingVertical: 15,
+        alignItems: "center",
+        justifyContent: "center",
+        width: "100%",
+        shadowColor: "#EA580C",
+        shadowOffset: { width: 0, height: 4 },
+        shadowOpacity: 0.25,
+        shadowRadius: 6,
+        elevation: 3,
+        marginTop: 8,
+    },
+    submitButtonText: {
+        color: "#FFFFFF",
+        fontSize: 16,
+        fontWeight: "700",
+        letterSpacing: 0.2,
+    },
+
+    // FOOTER ĐĂNG NHẬP
+    footerContainer: {
+        marginTop: "auto",
+        paddingTop: 20,
+    },
+    loginLink: {
+        alignItems: "center",
+        justifyContent: "center",
+        paddingVertical: 6,
+    },
+    loginText: {
+        color: "#64748B",
+        fontSize: 14,
+    },
+    loginHighlight: {
+        color: "#FF7A00",
+        fontWeight: "700",
+    },
+
+    // ==========================================
+    // GIAO DIá»†N CHá»ŒN VAI TRÃ’ CHUáº¨N MOBILE APP
+    // ==========================================
+    selectRoleScreen: {
+        flex: 1,
+        backgroundColor: "#FFFFFF",
+    },
+    selectRoleTopBar: {
+        flexDirection: "row",
+        alignItems: "center",
+        justifyContent: "space-between",
+        paddingHorizontal: 20,
+        paddingTop: 8,
+        paddingBottom: 12,
+    },
+    selectRoleScrollContent: {
+        flexGrow: 1,
+        paddingHorizontal: 20,
+        paddingBottom: 28,
+    },
+    selectRoleHeaderBox: {
+        marginTop: 8,
+        marginBottom: 24,
+    },
+    selectRoleTitle: {
+        fontSize: 26,
+        fontWeight: "800",
+        color: "#0F172A",
+        lineHeight: 34,
+        letterSpacing: -0.4,
+        marginBottom: 8,
+    },
+    selectRoleSubtitle: {
+        fontSize: 14,
+        color: "#64748B",
+        lineHeight: 20,
+    },
+    selectRoleCardsList: {
+        gap: 16,
+        marginBottom: 20,
+    },
+    modernRoleCard: {
+        flexDirection: "row",
+        alignItems: "center",
+        backgroundColor: "#FFFFFF",
+        borderRadius: 18,
+        padding: 16,
+        borderWidth: 1.5,
+        borderColor: "#E2E8F0",
+        shadowColor: "#0F172A",
+        shadowOffset: { width: 0, height: 2 },
+        shadowOpacity: 0.05,
+        shadowRadius: 8,
+        elevation: 2,
+    },
+    modernRoleCardActive: {
+        borderColor: Colors.primary,
+        backgroundColor: "#FFFBF7",
+        shadowColor: Colors.primary,
+        shadowOpacity: 0.12,
+        shadowRadius: 10,
+        elevation: 3,
+    },
+    modernRoleIconBox: {
+        width: 50,
+        height: 50,
+        borderRadius: 25,
+        alignItems: "center",
+        justifyContent: "center",
+        marginRight: 14,
+    },
+    modernRoleTextBox: {
+        flex: 1,
+        marginRight: 10,
+    },
+    modernRoleTitleRow: {
+        flexDirection: "row",
+        alignItems: "center",
+        marginBottom: 4,
+        gap: 8,
+    },
+    modernRoleTitle: {
+        fontSize: 16,
+        fontWeight: "700",
+        color: "#0F172A",
+    },
+    activePillTag: {
+        backgroundColor: "#FFF7ED",
+        borderWidth: 1,
+        borderColor: "#FED7AA",
+        borderRadius: 10,
+        paddingHorizontal: 7,
+        paddingVertical: 2,
+    },
+    activePillTagText: {
+        fontSize: 10.5,
+        fontWeight: "700",
+        color: Colors.primary,
+    },
+    modernRoleDesc: {
+        fontSize: 12.5,
+        color: "#64748B",
+        lineHeight: 18,
+    },
+    modernRadioCircle: {
+        width: 24,
+        height: 24,
+        borderRadius: 12,
+        borderWidth: 1.5,
+        borderColor: "#CBD5E1",
+        backgroundColor: "transparent",
+        alignItems: "center",
+        justifyContent: "center",
+    },
+    modernRadioCircleActive: {
+        borderColor: Colors.primary,
+        backgroundColor: Colors.primary,
+    },
+    securityInfoBanner: {
+        flexDirection: "row",
+        alignItems: "center",
+        justifyContent: "center",
+        backgroundColor: "#F0FDFA",
+        borderWidth: 1,
+        borderColor: "#CCFBF1",
+        borderRadius: 14,
+        paddingVertical: 10,
+        paddingHorizontal: 14,
+        gap: 8,
+        marginTop: 4,
+    },
+    securityInfoBannerText: {
+        fontSize: 12,
+        fontWeight: "600",
+        color: "#0F766E",
+    },
+    mobileContinueBtn: {
+        backgroundColor: Colors.primary,
+        height: 52,
+        borderRadius: 26,
+        alignItems: "center",
+        justifyContent: "center",
+        width: "100%",
+        shadowColor: Colors.primary,
+        shadowOffset: { width: 0, height: 4 },
+        shadowOpacity: 0.25,
+        shadowRadius: 8,
+        elevation: 3,
+        marginBottom: 16,
+    },
+    mobileContinueBtnText: {
+        color: "#FFFFFF",
+        fontSize: 16,
+        fontWeight: "700",
+        letterSpacing: 0.2,
+    },
+    mobileLoginLinkRow: {
+        flexDirection: "row",
+        alignItems: "center",
+        justifyContent: "center",
+        paddingVertical: 6,
+    },
+    mobileLoginLinkText: {
+        fontSize: 14,
+        color: "#64748B",
+    },
+    mobileLoginLinkHighlight: {
+        fontSize: 14,
+        fontWeight: "700",
+        color: Colors.primary,
+    },
 });

@@ -682,3 +682,71 @@ VALUES
     ('Cập nhật tính năng trợ lý AI Y khoa', 'Phiên bản mới của Chatbot y khoa đã được tích hợp mô hình phân tích triệu chứng chuyên sâu dành cho bác sĩ gia đình và người chăm sóc.', 'feature_update', 'all', 'scheduled', NULL, 0, 0);
 
 
+
+
+-- -----------------------------------------------------------------
+-- 14. Bảng user_terminals: Quản lý đầu cuối thiết bị của người dùng
+-- -----------------------------------------------------------------
+CREATE TABLE IF NOT EXISTS user_terminals (
+    id UUID NOT NULL DEFAULT gen_random_uuid(),
+    user_id UUID NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+    device_name VARCHAR(255) NOT NULL,
+    device_type VARCHAR(50) NOT NULL DEFAULT 'mobile',
+    os VARCHAR(100),
+    browser VARCHAR(100),
+    ip_address VARCHAR(50) NOT NULL DEFAULT '127.0.0.1',
+    location VARCHAR(255) DEFAULT 'Đà Nẵng, Việt Nam',
+    last_active_at TIMESTAMPTZ NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    is_active BOOLEAN NOT NULL DEFAULT TRUE,
+    created_at TIMESTAMPTZ NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    CONSTRAINT pk_user_terminals PRIMARY KEY (id)
+);
+CREATE INDEX IF NOT EXISTS ix_user_terminals_user_id ON user_terminals(user_id);
+CREATE INDEX IF NOT EXISTS ix_user_terminals_last_active ON user_terminals(last_active_at DESC);
+
+-- -----------------------------------------------------------------
+-- 15. Bảng user_login_histories: Lịch sử đăng nhập tài khoản
+-- -----------------------------------------------------------------
+CREATE TABLE IF NOT EXISTS user_login_histories (
+    id UUID NOT NULL DEFAULT gen_random_uuid(),
+    user_id UUID NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+    device_name VARCHAR(255) NOT NULL,
+    ip_address VARCHAR(50) NOT NULL,
+    location VARCHAR(255) DEFAULT 'Đà Nẵng, Việt Nam',
+    login_time TIMESTAMPTZ NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    login_method VARCHAR(50) NOT NULL DEFAULT 'Mật khẩu',
+    status VARCHAR(20) NOT NULL DEFAULT 'success',
+    user_agent VARCHAR(500),
+    CONSTRAINT pk_user_login_histories PRIMARY KEY (id)
+);
+CREATE INDEX IF NOT EXISTS ix_user_login_histories_user_id ON user_login_histories(user_id);
+CREATE INDEX IF NOT EXISTS ix_user_login_histories_login_time ON user_login_histories(login_time DESC);
+
+-- Seed mẫu thiết bị và lịch sử cho tài khoản caregiver mặc định
+INSERT INTO user_terminals (id, user_id, device_name, device_type, os, browser, ip_address, location, last_active_at, is_active)
+SELECT 
+    'f1111111-b4e1-4b08-b2d3-d949a0eb075c',
+    id,
+    'Samsung Galaxy SM-A127F',
+    'mobile',
+    'Android 14',
+    'SECA Mobile App',
+    '127.0.0.1',
+    'Đà Nẵng, Việt Nam',
+    CURRENT_TIMESTAMP,
+    TRUE
+FROM users WHERE phone = '+84905123456'
+ON CONFLICT DO NOTHING;
+
+INSERT INTO user_login_histories (user_id, device_name, ip_address, location, login_time, login_method, status, user_agent)
+SELECT 
+    id,
+    'Samsung Galaxy SM-A127F',
+    '127.0.0.1',
+    'Đà Nẵng, Việt Nam',
+    CURRENT_TIMESTAMP,
+    'Mật khẩu',
+    'success',
+    'SECA Mobile App / Android 14'
+FROM users WHERE phone = '+84905123456'
+LIMIT 1;

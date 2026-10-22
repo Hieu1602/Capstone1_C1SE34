@@ -2,6 +2,7 @@
 // WebSocket client – Kết nối real-time với Backend FastAPI (/ws/alerts & /ws/vitals)
 // Nhận sự kiện cảnh báo té ngã tức thì (Feature 1) & chỉ số sinh hiệu mô phỏng 5s/lần (Feature 3)
 
+import { Platform } from 'react-native';
 import Constants from 'expo-constants';
 import { useVitalStore, Incident } from '../store/useVitalStore';
 import { notificationService } from './notificationService';
@@ -9,11 +10,10 @@ import { notificationService } from './notificationService';
 
 const getWsBaseUrl = (): string => {
   // 1. Khi chạy trên Web trình duyệt
-  if (typeof window !== 'undefined' && window.location?.hostname) {
-    const host = window.location.hostname;
-    if (host !== 'localhost' && host !== '127.0.0.1') {
-      return `ws://${host}:8000/ws`;
-    }
+  if (Platform.OS === 'web' || (typeof window !== 'undefined' && window.location?.hostname)) {
+    const host = (typeof window !== 'undefined' && window.location?.hostname) || 'localhost';
+    const protocol = (typeof window !== 'undefined' && window.location?.protocol === 'https:') ? 'wss' : 'ws';
+    return `${protocol}://${host}:8000/ws`;
   }
 
   // 2. Tự động nhận diện IP máy tính từ Expo Metro host (kết nối trực tiếp điện thoại thật qua LAN Wi-Fi)
@@ -36,7 +36,7 @@ const getWsBaseUrl = (): string => {
   }
 
   // 4. Fallback về IP máy tính phát triển trong mạng nội bộ
-  return 'ws://192.168.1.160:8000/ws';
+  return 'ws://192.168.1.4:8000/ws';
 };
 
 const WS_BASE_URL: string = getWsBaseUrl();

@@ -1,6 +1,8 @@
 // src/theme/colors.ts
 // Bảng màu chuẩn thiết kế Smart Home / Elderly Care AI (Light Theme phong cách Imou Protect)
 
+import { Platform } from 'react-native';
+
 export const Colors = {
   // Nền & Container
   background: '#F6F8FA',         // Nền xám nhạt cao cấp
@@ -44,25 +46,64 @@ export const Colors = {
 };
 
 export const Shadows = {
-  soft: {
-    shadowColor: '#64748B',
-    shadowOffset: { width: 0, height: 4 },
-    shadowOpacity: 0.08,
-    shadowRadius: 12,
-    elevation: 3,
-  },
-  card: {
-    shadowColor: '#0F172A',
-    shadowOffset: { width: 0, height: 6 },
-    shadowOpacity: 0.06,
-    shadowRadius: 16,
-    elevation: 4,
-  },
-  glow: {
-    shadowColor: '#38BDF8',
-    shadowOffset: { width: 0, height: 4 },
-    shadowOpacity: 0.35,
-    shadowRadius: 10,
-    elevation: 8,
-  },
+  soft: Platform.select({
+    web: { boxShadow: '0px 4px 12px rgba(100, 116, 139, 0.08)' },
+    default: {
+      shadowColor: '#64748B',
+      shadowOffset: { width: 0, height: 4 },
+      shadowOpacity: 0.08,
+      shadowRadius: 12,
+      elevation: 3,
+    },
+  }) as any,
+  card: Platform.select({
+    web: { boxShadow: '0px 6px 16px rgba(15, 23, 42, 0.06)' },
+    default: {
+      shadowColor: '#0F172A',
+      shadowOffset: { width: 0, height: 6 },
+      shadowOpacity: 0.06,
+      shadowRadius: 16,
+      elevation: 4,
+    },
+  }) as any,
+  glow: Platform.select({
+    web: { boxShadow: '0px 4px 10px rgba(56, 189, 248, 0.35)' },
+    default: {
+      shadowColor: '#38BDF8',
+      shadowOffset: { width: 0, height: 4 },
+      shadowOpacity: 0.35,
+      shadowRadius: 10,
+      elevation: 8,
+    },
+  }) as any,
+  sm: Platform.select({
+    web: { boxShadow: '0px 2px 6px rgba(100, 116, 139, 0.06)' },
+    default: {
+      shadowColor: '#64748B',
+      shadowOffset: { width: 0, height: 2 },
+      shadowOpacity: 0.06,
+      shadowRadius: 6,
+      elevation: 2,
+    },
+  }) as any,
+  md: Platform.select({
+    web: { boxShadow: '0px 4px 10px rgba(15, 23, 42, 0.08)' },
+    default: {
+      shadowColor: '#0F172A',
+      shadowOffset: { width: 0, height: 4 },
+      shadowOpacity: 0.08,
+      shadowRadius: 10,
+      elevation: 4,
+    },
+  }) as any,
+  lg: Platform.select({
+    web: { boxShadow: '0px 8px 20px rgba(15, 23, 42, 0.12)' },
+    default: {
+      shadowColor: '#0F172A',
+      shadowOffset: { width: 0, height: 8 },
+      shadowOpacity: 0.12,
+      shadowRadius: 20,
+      elevation: 8,
+    },
+  }) as any,
 };

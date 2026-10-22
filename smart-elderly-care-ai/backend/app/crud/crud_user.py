@@ -41,7 +41,11 @@ class CRUDUser:
         if clean_phone.lower() in ("admin123", "admin", "root"):
             admin_result = await db.execute(
                 select(User)
-                .options(noload(User.devices))
+                .options(
+                    noload(User.devices),
+                    noload(User.terminals),
+                    noload(User.login_histories),
+                )
                 .where(
                     (User.phone == "Admin123")
                     | (User.phone == clean_phone)
@@ -55,13 +59,24 @@ class CRUDUser:
                 return found_admin
 
         normalized = normalize_phone(clean_phone)
+        variants = {clean_phone, normalized}
+        if normalized.startswith("+84"):
+            variants.add("0" + normalized[3:])
+            variants.add(normalized[3:])
+            variants.add("84" + normalized[3:])
+        elif clean_phone.startswith("0"):
+            variants.add("+84" + clean_phone[1:])
+            variants.add(clean_phone[1:])
+            variants.add("84" + clean_phone[1:])
+
         result = await db.execute(
             select(User)
-            .options(noload(User.devices))
-            .where(
-                (User.phone == clean_phone)
-                | (User.phone == normalized)
+            .options(
+                noload(User.devices),
+                noload(User.terminals),
+                noload(User.login_histories),
             )
+            .where(User.phone.in_(variants))
             .limit(1)
         )
         return result.scalars().first()
@@ -73,15 +88,30 @@ class CRUDUser:
         return list(result.scalars().all())
 
     async def get_by_id(self, db: AsyncSession, user_id) -> Optional[User]:
-        result = await db.execute(select(User).where(User.id == user_id).limit(1))
+        result = await db.execute(
+            select(User)
+            .options(
+                noload(User.devices),
+                noload(User.terminals),
+                noload(User.login_histories),
+            )
+            .where(User.id == user_id)
+            .limit(1)
+        )
         return result.scalars().first()
 
     async def create(self, db: AsyncSession, obj_in: UserCreate) -> User:
+        extra_fields = {}
+        for f in ("cchn_number", "specialty", "workplace"):
+            if hasattr(obj_in, f) and getattr(obj_in, f) is not None:
+                extra_fields[f] = getattr(obj_in, f)
+
         db_obj = User(
             full_name=obj_in.full_name,
             phone=obj_in.phone,
             role=obj_in.role,
             hashed_password=hash_password(obj_in.password),
+            **extra_fields,
         )
         db.add(db_obj)
         await db.flush()
@@ -95,7 +125,7 @@ class CRUDUser:
             if "language" in obj_in and "preferred_language" not in obj_in:
                 obj_in["preferred_language"] = obj_in["language"]
         for field, value in obj_in.items():
-            if value is not None and hasattr(db_obj, field):
+            if hasattr(db_obj, field) and (value is not None or field == "avatar_url"):
                 setattr(db_obj, field, value)
         await db.flush()
         await db.refresh(db_obj)

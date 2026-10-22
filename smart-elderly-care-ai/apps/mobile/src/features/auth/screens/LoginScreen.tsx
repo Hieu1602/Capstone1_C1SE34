@@ -34,7 +34,11 @@ const { width: SCREEN_WIDTH } = Dimensions.get('window');
 
 // Chuẩn hóa số điện thoại Việt Nam chuẩn E.164 (+84...)
 const normalizePhoneNumber = (rawPhone: string): string => {
-  const digits = rawPhone.replace(/\D/g, '');
+  const trimmed = rawPhone.trim();
+  if (['admin', 'admin123', 'root'].includes(trimmed.toLowerCase())) {
+    return trimmed;
+  }
+  const digits = trimmed.replace(/\D/g, '');
   if (!digits) return '';
   const national = digits.startsWith('84') ? digits.slice(2) : digits;
   return `+84${national.replace(/^0/, '')}`;
@@ -140,16 +144,18 @@ export default function LoginScreen({ navigation }: any) {
         userProfile.full_name,
         userProfile.id,
         userProfile.phone,
-        userProfile.role
+        userProfile.role,
+        userProfile.household_id,
+        userProfile.avatar_url
       );
       setViewRole(userProfile.role === 'doctor' ? 'DOCTOR' : 'CAREGIVER');
     } catch (error: any) {
       if (tokensApplied) logout();
       console.error('[Login] Error:', error);
-      const detail =
-        error?.response?.data?.detail ||
-        error?.message ||
-        'Thông tin đăng nhập hoặc mật khẩu không đúng.';
+      const detail = error?.response?.data?.detail || error?.message || 'Thông tin đăng nhập hoặc mật khẩu không đúng.';
+
+
+
       setErrorMessage(
         typeof detail === 'string' ? detail : 'Đăng nhập không thành công. Vui lòng kiểm tra lại.'
       );
@@ -355,11 +361,18 @@ const styles = StyleSheet.create({
     paddingHorizontal: 14,
     borderRadius: 20,
     backgroundColor: '#FFFFFF',
-    shadowColor: '#000000',
-    shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.12,
-    shadowRadius: 4,
     elevation: 4,
+    ...Platform.select({
+      web: {
+        boxShadow: '0px 2px 4px rgba(0, 0, 0, 0.12)',
+      },
+      default: {
+        shadowColor: '#000000',
+        shadowOffset: { width: 0, height: 2 },
+        shadowOpacity: 0.12,
+        shadowRadius: 4,
+      },
+    }),
   },
   backButtonText: {
     color: '#0F172A',

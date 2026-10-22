@@ -1,0 +1,18 @@
+{
+  "pythonVersion": "3.11",
+  "pythonPlatform": "Windows",
+  "typeCheckingMode": "basic",
+  "reportMissingModuleSource": "none",
+  "reportMissingImports": "none",
+  "reportMissingTypeStubs": "none",
+  "extraPaths": [
+    "backend",
+    "backend/app"
+  ],
+  "exclude": [
+    "**/node_modules",
+    "**/__pycache__",
+    "**/.*"
+  ]
+}
+

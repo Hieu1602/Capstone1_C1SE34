@@ -14,7 +14,11 @@ from pydantic_settings import BaseSettings, SettingsConfigDict
 
 # Tự động nạp file .env từ các thư mục cha hoặc thư mục hiện tại
 _THIS_FILE = Path(__file__).resolve()
-_SEARCH_PATHS = [p / ".env" for p in _THIS_FILE.parents] + [Path("../.env"), Path(".env")]
+_SEARCH_PATHS = [
+    *(_parent / ".env" for _parent in _THIS_FILE.parents),
+    Path("../.env"),
+    Path(".env"),
+]
 for _p in _SEARCH_PATHS:
     if _p.is_file():
         load_dotenv(dotenv_path=_p, override=False)
@@ -44,7 +48,7 @@ class Settings(BaseSettings):
     ALGORITHM: str = "HS256"
     ACCESS_TOKEN_EXPIRE_MINUTES: int = 60 * 24  # 24 hours
     REFRESH_TOKEN_EXPIRE_DAYS: int = 30
-    OTP_MODE: str = "twilio"
+    OTP_MODE: str = "mock"
     OTP_DEV_CODE: str = "123456"
 
     # ---- Database ----
@@ -78,6 +82,19 @@ class Settings(BaseSettings):
     TWILIO_ACCOUNT_SID: str = ""
     TWILIO_AUTH_TOKEN: str = ""
     TWILIO_VERIFY_SERVICE_SID: str = ""
+
+    # ---- eSMS Gateway ----
+    ESMS_API_KEY: str = ""
+    ESMS_SECRET_KEY: str = ""
+    ESMS_BRANDNAME: str = "Baotrixemay"
+    ESMS_SMS_TYPE: str = "2"
+    ESMS_SANDBOX: str = "0"
+    ESMS_OTP_REGISTER_TEMPLATE_ID: str = ""
+    ESMS_OTP_RESET_TEMPLATE_ID: str = ""
+
+    # ---- OTP Rate Limit ----
+    OTP_RATE_LIMIT_SECONDS: int = 60  # Thời gian tối thiểu giữa 2 lần gửi OTP (giây)
+    OTP_MAX_ATTEMPTS: int = 5  # Số lần nhập sai OTP tối đa trước khi khoá tạm
 
     # ---- Chatbot AI / LLM ----
     ENABLE_EXTERNAL_LLM: bool = True

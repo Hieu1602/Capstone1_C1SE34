@@ -8,18 +8,26 @@ import AsyncStorage from '@react-native-async-storage/async-storage';
 import { useAuthStore } from '../store/useAuthStore';
 
 // Cấu hình BASE_URL tự động:
-// - Nếu có biến EXPO_PUBLIC_API_URL thì dùng nó
-// - Nếu chạy trên Web và truy cập qua LAN IP: tự động kết nối API qua IP đó
+// - Ưu tiên EXPO_PUBLIC_API_URL nếu được khai báo
+// - Nếu chạy trên Web: dùng 127.0.0.1 nếu là localhost để tránh xung đột IPv6 [::1] trên Windows
 // - Tự động trích xuất IP từ host của Metro Bundler (Expo Constants)
-// - Fallback về IP máy tính hiện tại: 192.168.1.160
+// - Hỗ trợ Android Emulator (10.0.2.2)
+// - Fallback về IP máy tính hiện tại: 192.168.1.7
 const getBaseUrl = (): string => {
-  // 1. Khi chạy trên Web trình duyệt
+  // 1. Khi chạy trên Web trình duyệt: Tự động dùng host trình duyệt đang truy cập (tránh chết IP LAN khi DHCP đổi IP)
   if (Platform.OS === 'web' && typeof window !== 'undefined' && window.location?.hostname) {
     const host = window.location.hostname;
-    return `http://${host}:8000/api/v1`;
+    const resolvedHost = (host === 'localhost' || host === '::1') ? '127.0.0.1' : host;
+    return `http://${resolvedHost}:8000/api/v1`;
   }
 
-  // 2. Tự động nhận diện IP máy tính từ Expo Metro host (kết nối trực tiếp điện thoại thật qua LAN Wi-Fi)
+  // 2. Biến môi trường EXPO_PUBLIC_API_URL cho Mobile (Expo Go / Device)
+  const envUrl = process.env.EXPO_PUBLIC_API_URL;
+  if (envUrl && envUrl.trim().length > 0) {
+    return envUrl.trim();
+  }
+
+  // 3. Tự động nhận diện IP máy tính từ Expo Metro host (kết nối trực tiếp điện thoại thật qua LAN Wi-Fi)
   const debuggerHost =
     Constants.expoConfig?.hostUri ||
     (Constants as any).manifest2?.extra?.expoClient?.hostUri ||
@@ -32,14 +40,13 @@ const getBaseUrl = (): string => {
     }
   }
 
-  // 3. Biến môi trường EXPO_PUBLIC_API_URL (nếu được chỉ định rõ và không trỏ vào localhost trên thiết bị thật)
-  const envUrl = process.env.EXPO_PUBLIC_API_URL;
-  if (envUrl && !envUrl.includes('localhost') && !envUrl.includes('127.0.0.1')) {
-    return envUrl;
+  // 4. Nếu chạy trên Android Emulator
+  if (Platform.OS === 'android') {
+    return 'http://10.0.2.2:8000/api/v1';
   }
 
-  // 4. Fallback về IP máy tính phát triển trong mạng nội bộ
-  return 'http://192.168.1.160:8000/api/v1';
+  // 5. Fallback về IP máy tính phát triển trong mạng nội bộ
+  return 'http://192.168.1.7:8000/api/v1';
 };
 
 export const BASE_URL: string = getBaseUrl();
@@ -108,7 +115,9 @@ export default api;
 
 export const authApi = {
   requestOtp: (phone: string) => api.post('/auth/request-otp', { phone }),
-  verifyOtp: (phone: string, code: string) => api.post('/auth/verify-otp', { phone, code }),
+  verifyOtp: (phone: string, otp_code: string) => api.post('/auth/verify-otp', { phone, otp_code }),
+  verifyCchn: (cchn_number: string, full_name: string) =>
+    api.post('/auth/verify-cchn', { cchn_number, full_name }),
   login: (phone: string, password: string) => {
     // Chuẩn OAuth2 Password Request quy định application/x-www-form-urlencoded
     const params = new URLSearchParams();
@@ -125,6 +134,16 @@ export const authApi = {
     role: string;
     otp_code?: string;
   }) => api.post('/auth/register', data),
+  registerDoctor: (data: {
+    phone: string;
+    full_name: string;
+    password: string;
+    role?: string;
+    otp_code: string;
+    cchn_number: string;
+    workplace?: string;
+    specialty?: string;
+  }) => api.post('/auth/register-doctor', data),
   resetPassword: (data: {
     phone: string;
     otp_code: string;
@@ -155,9 +174,29 @@ export const usersApi = {
     new_password: string;
     confirm_new_password: string;
   }) => api.patch('/users/me/password', data),
+  getTerminals: () => api.get('/users/me/terminals'),
+  deleteTerminal: (terminalId: string) => api.delete(`/users/me/terminals/${terminalId}`),
+  getLoginHistory: (limit: number = 20) => api.get('/users/me/login-history', { params: { limit } }),
+  getDevices: () => api.get('/users/me/terminals'),
+  deleteDevice: (deviceId: string) => api.delete(`/users/me/terminals/${deviceId}`),
+  uploadAvatar: (formData: any) =>
+    api.post('/users/me/avatar', formData, {
+      headers: { 'Content-Type': 'multipart/form-data' },
+    }),
+  uploadAvatarBase64: (base64: string) =>
+    api.post('/users/me/avatar', { avatar_base64: base64 }),
+  deleteAvatar: () => api.delete('/users/me/avatar'),
+  getNotificationPreferences: () =>
+    api.get('/users/me/notification-preferences'),
+  updateNotificationPreferences: (preferences: {
+    notifications_enabled?: boolean;
+    alert_sound_enabled?: boolean;
+    critical_alert_enabled?: boolean;
+  }) =>
+    api.patch('/users/me/notification-preferences', preferences),
 };
 
-// API SOS báo cho các thành viên trong cùng hộ; app sẽ tự mở trình gọi 115.
+// API SOS báo cho các thành viên trong cùng hộ; app sẽ tự mở trình gọi 115 hoặc tổng đài hỗ trợ 0898230852.
 export const emergencyApi = {
   triggerSOS: (data: {
     address?: string;
@@ -165,6 +204,11 @@ export const emergencyApi = {
     longitude?: number;
     message?: string;
   } = {}) => api.post('/emergency/sos', data),
+  requestSupportCall: (data: {
+    topic?: string;
+    note?: string;
+  } = {}) => api.post('/emergency/support-call', data),
+  getSupportHotline: () => api.get('/emergency/support-hotline'),
 };
 
 // 1. System Mode API
@@ -314,4 +358,40 @@ export const chatbotApi = {
       },
     }),
 };
+
+// 9. Health Reports API (Báo cáo sức khỏe tổng hợp thực tế từ backend)
+export const reportsApi = {
+  getSummary: (period: 'WEEK' | 'MONTH' = 'WEEK', patientId?: string, deviceId?: string) =>
+    api.get('/reports/summary', { params: { period, patient_id: patientId, device_id: deviceId } }),
+  getPdfUrl: (period: 'WEEK' | 'MONTH' = 'WEEK', patientId?: string, deviceId?: string) => {
+    let url = `${BASE_URL}/reports/pdf?period=${period}`;
+    if (patientId) url += `&patient_id=${encodeURIComponent(patientId)}`;
+    if (deviceId) url += `&device_id=${encodeURIComponent(deviceId)}`;
+    return url;
+  },
+  getExcelUrl: (period: 'WEEK' | 'MONTH' = 'WEEK', patientId?: string, deviceId?: string) => {
+    let url = `${BASE_URL}/reports/excel?period=${period}`;
+    if (patientId) url += `&patient_id=${encodeURIComponent(patientId)}`;
+    if (deviceId) url += `&device_id=${encodeURIComponent(deviceId)}`;
+    return url;
+  },
+};
+
+// 10. Support & Documentation API (CSKH 24/7 & Hướng dẫn sử dụng)
+export const supportApi = {
+  getHotline: () => api.get('/support/hotline'),
+  getDocumentation: () => api.get('/support/documentation'),
+  getFaqs: () => api.get('/support/faq'),
+  createTicket: (data: {
+    topic: string;
+    device_type?: string;
+    phone?: string;
+    note?: string;
+  }) => api.post('/support/tickets', data),
+  getMyTickets: () => api.get('/support/tickets/me'),
+  requestCall: (data: { topic?: string; note?: string } = {}) =>
+    api.post('/support/call', data),
+};
+
+
 
