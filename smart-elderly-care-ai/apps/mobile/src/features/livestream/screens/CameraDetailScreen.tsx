@@ -2455,9 +2455,16 @@ const baseStyles = StyleSheet.create({
     color: 'rgba(255,255,255,0.95)',
     fontSize: 12,
     fontWeight: '700',
-    textShadowColor: 'rgba(0,0,0,0.85)',
-    textShadowOffset: { width: 1, height: 1 },
-    textShadowRadius: 3,
+    ...Platform.select({
+      web: {
+        textShadow: '1px 1px 3px rgba(0,0,0,0.85)',
+      },
+      default: {
+        textShadowColor: 'rgba(0,0,0,0.85)',
+        textShadowOffset: { width: 1, height: 1 },
+        textShadowRadius: 3,
+      },
+    }),
     fontFamily: Platform.OS === 'ios' ? 'Menlo' : 'monospace',
     letterSpacing: 0.5,
   },
@@ -2573,9 +2580,16 @@ const baseStyles = StyleSheet.create({
     color: 'rgba(255,255,255,0.92)',
     fontSize: 11,
     fontWeight: '700',
-    textShadowColor: 'rgba(0,0,0,0.8)',
-    textShadowOffset: { width: 1, height: 1 },
-    textShadowRadius: 2,
+    ...Platform.select({
+      web: {
+        textShadow: '1px 1px 2px rgba(0,0,0,0.8)',
+      },
+      default: {
+        textShadowColor: 'rgba(0,0,0,0.8)',
+        textShadowOffset: { width: 1, height: 1 },
+        textShadowRadius: 2,
+      },
+    }),
   },
   cameraNameOverlay: {
     position: 'absolute',

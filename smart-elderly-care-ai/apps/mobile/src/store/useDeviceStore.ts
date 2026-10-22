@@ -6,10 +6,21 @@
  * và tự động chuyển đổi thông số phần cứng thành model giao diện.
  */
 
+import { Platform } from 'react-native';
 import { create } from 'zustand';
 import { persist, createJSONStorage } from 'zustand/middleware';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { houseApi, deviceGroupApi, devicesApi } from '../services/deviceService';
+
+const getDefaultStreamUrl = () => {
+  if (Platform.OS === 'android') {
+    return 'http://10.0.2.2:8080';
+  }
+  if (Platform.OS === 'web' && typeof window !== 'undefined' && window.location) {
+    return `http://${window.location.hostname || 'localhost'}:8080`;
+  }
+  return 'http://localhost:8080';
+};
 
 /** Ánh xạ giá trị mặc định cho từng dòng phần cứng ngoại vi (DRY & O(1) Lookup) */
 const DEVICE_TYPE_DEFAULTS: Record<
@@ -145,7 +156,7 @@ export const useDeviceStore = create<DeviceState>()(
         resolution: '2K',
         sdCardStatus: 'OK',
         wifiStrength: 3,
-        streamUrl: 'http://10.0.2.2:8080',
+        streamUrl: getDefaultStreamUrl(),
       },
       iotDevices: [],
       deviceGroups: [],
