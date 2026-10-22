@@ -14,7 +14,11 @@ import {
   UpdateNotificationPayload,
 } from '../types';
 
-const BASE_URL = import.meta.env.VITE_API_URL || 'http://16.178.128.42:8000/api/v1';
+const BASE_URL =
+  import.meta.env.VITE_API_URL ||
+  (typeof window !== 'undefined' && window.location.hostname
+    ? `http://${window.location.hostname}:8000/api/v1`
+    : 'http://localhost:8000/api/v1');
 
 export const api = axios.create({
   baseURL: BASE_URL,
@@ -68,60 +72,10 @@ export const authApi = {
 // 2. USERS & PERMISSIONS API
 export const usersApi = {
   list: async (): Promise<User[]> => {
-    try {
-      const res = await api.get<User[]>('/users');
-      return res.data;
-    } catch {
-      // Mock / fallback data if backend /users endpoint is not yet paginated
-      return [
-        {
-          id: 'c9999999-b4e1-4b08-b2d3-d949a0eb075c',
-          phone: '+84900000000',
-          full_name: 'System Admin (Root Admin)',
-          role: 'admin',
-          is_active: true,
-          created_at: '2026-09-01T08:00:00Z',
-          assigned_house: 'Toàn hệ thống (Root)',
-        },
-        {
-          id: '2',
-          phone: '+84905123456',
-          full_name: 'Nguyễn Hữu Nghĩa (Chủ nhà)',
-          role: 'user',
-          is_active: true,
-          created_at: '2026-09-15T09:30:00Z',
-          assigned_house: 'Nhà của tôi (123 Hải Phòng)',
-        },
-        {
-          id: 'b2222222-b4e1-4b08-b2d3-d949a0eb075c',
-          phone: '+84905888999',
-          full_name: 'BS. Nguyễn Văn Minh',
-          role: 'doctor',
-          is_active: true,
-          created_at: '2026-09-20T14:15:00Z',
-          assigned_house: 'Phụ trách y tế (Nhà của tôi)',
-        },
-        {
-          id: 'b3333333-b4e1-4b08-b2d3-d949a0eb075c',
-          phone: '+84905111222',
-          full_name: 'BS. Trần Văn Minh',
-          role: 'doctor',
-          is_active: true,
-          created_at: '2026-09-22T10:00:00Z',
-          assigned_house: 'Bác sĩ dự phòng (Nhà của tôi)',
-        },
-        {
-          id: 'a1111111-b4e1-4b08-b2d3-d949a0eb075c',
-          phone: '+84905999888',
-          full_name: 'Nguyễn Thị Lan (Người thân)',
-          role: 'user',
-          is_active: true,
-          created_at: '2026-09-25T11:45:00Z',
-          assigned_house: 'Nhà của tôi (123 Hải Phòng)',
-        },
-      ];
-    }
+    const res = await api.get<User[]>('/users');
+    return res.data;
   },
+
   create: (data: Partial<User> & { password?: string }) => api.post('/users', data),
   update: (id: string, data: Partial<User>) => api.patch(`/users/${id}`, data),
   toggleStatus: (id: string, active: boolean) => api.patch(`/users/${id}`, { is_active: active }),
@@ -177,115 +131,16 @@ export const securityApi = {
 // 5. INFRASTRUCTURE & SYSTEM MONITORING API (Phân hệ 3 & 4)
 export const systemApi = {
   getServicesHealth: async (): Promise<import('../types').ServiceHealth[]> => {
-    try {
-      const res = await api.get('/system/services-health');
-      return res.data;
-    } catch {
-      return [
-        {
-          id: 'srv-1',
-          name: 'FastAPI Core Backend (ASGI)',
-          category: 'REST & WebSocket Gateway',
-          port: 8000,
-          status: 'healthy',
-          uptime: '99.98%',
-          cpu_usage: 12.4,
-          memory_usage: 145,
-          latency_ms: 4.2,
-          connections: 18,
-          last_check: 'Vừa xong',
-        },
-        {
-          id: 'srv-2',
-          name: 'PostgreSQL 16 (TimescaleDB)',
-          category: 'Database Engine',
-          port: 5432,
-          status: 'healthy',
-          uptime: '100%',
-          cpu_usage: 8.1,
-          memory_usage: 320,
-          latency_ms: 6.5,
-          connections: 12,
-          last_check: 'Vừa xong',
-        },
-        {
-          id: 'srv-3',
-          name: 'Redis In-Memory Cache & PubSub',
-          category: 'Cache & Session Engine',
-          port: 6379,
-          status: 'healthy',
-          uptime: '99.99%',
-          cpu_usage: 3.2,
-          memory_usage: 48,
-          latency_ms: 1.5,
-          connections: 24,
-          last_check: 'Vừa xong',
-        },
-        {
-          id: 'srv-4',
-          name: 'EMQX MQTT Broker (v5.7)',
-          category: 'IoT Telemetry Broker',
-          port: 1883,
-          status: 'healthy',
-          uptime: '99.95%',
-          cpu_usage: 6.8,
-          memory_usage: 110,
-          latency_ms: 5.0,
-          connections: 5,
-          last_check: 'Vừa xong',
-        },
-        {
-          id: 'srv-5',
-          name: 'MinIO S3 Object Storage',
-          category: 'Biometric & Media Storage',
-          port: 9000,
-          status: 'healthy',
-          uptime: '99.90%',
-          cpu_usage: 4.5,
-          memory_usage: 95,
-          latency_ms: 15.0,
-          connections: 8,
-          last_check: 'Vừa xong',
-        },
-      ];
-    }
+    const res = await api.get('/system/services-health');
+    return res.data;
   },
   getDatabaseStatus: async (): Promise<import('../types').DatabaseStatus> => {
     const res = await api.get('/system/database-status');
     return res.data;
   },
   getIncidents: async (): Promise<import('../types').SystemIncident[]> => {
-    try {
-      const res = await api.get('/system/incidents');
-      return res.data;
-    } catch {
-      return [
-        {
-          id: 'inc-01',
-          timestamp: '2026-10-15 09:35:12',
-          service: 'EMQX Broker',
-          type: 'WARNING',
-          message: 'Thiết bị SENSOR_RADAR_001 gửi bản tin heartbeat trễ 45s so với chu kỳ.',
-          resolved: true,
-        },
-        {
-          id: 'inc-02',
-          timestamp: '2026-10-15 08:20:44',
-          service: 'FastAPI Core',
-          type: 'ERROR',
-          message: 'Truy vấn bảng users trả về mã 404 cho user_id tạm thời. Đã tự phục hồi.',
-          resolved: true,
-        },
-        {
-          id: 'inc-03',
-          timestamp: '2026-10-15 07:15:00',
-          service: 'PostgreSQL DB',
-          type: 'CRITICAL',
-          message: 'Khóa kết nối trên cổng 5433 được phát hiện và đã chuyển mạch an toàn sang cổng 5432.',
-          resolved: true,
-        },
-      ];
-    }
+    const res = await api.get('/system/incidents');
+    return res.data;
   },
   resolveIncident: (incidentId: string) => api.post(`/system/incidents/${incidentId}/resolve`),
   getBackups: async (): Promise<import('../types').BackupItem[]> => {
@@ -297,86 +152,39 @@ export const systemApi = {
   getTechnicalConfig: () => api.get('/system/technical-config'),
   flushRedis: () => api.post('/system/redis/flush'),
   getRedisStatus: async (): Promise<RedisDiagnostics> => {
-    try {
-      const res = await api.get('/system/redis-status');
-      return res.data;
-    } catch {
-      return {
-        connected: true,
-        total_keys: 142,
-        used_memory_human: '2.15M',
-        online_devices_count: 3,
-        uptime_in_days: 7,
-        redis_version: '7.2-alpine',
-        hit_rate: 98.7,
-      };
-    }
+    const res = await api.get('/system/redis-status');
+    return res.data;
   },
   getSystemMode: async (): Promise<SystemModeConfig> => {
-    try {
-      const res = await api.get('/system/mode');
-      return res.data;
-    } catch {
-      return {
-        mode: 'HOME',
-        is_mute_alarm: false,
-        is_camera_privacy: false,
-        mute_mode: 'SILENT',
-        duration_minutes: 60,
-      };
-    }
+    const res = await api.get('/system/mode');
+    return res.data;
   },
   updateSystemMode: (mode: string) => api.put('/system/mode', { mode }),
   getLogs: async (): Promise<SystemLog[]> => {
-    try {
-      const res = await api.get('/system/logs');
-      return res.data;
-    } catch {
-      return [
-        {
-          id: 'log-101',
-          timestamp: '14:52:12 - 15/10/2026',
-          level: 'INFO',
-          module: 'MQTT',
-          message: 'MQTT Broker EMQX: Client backend-fastapi-001 kết nối thành công qua cổng 1883',
-          source_ip: '127.0.0.1',
-        },
-        {
-          id: 'log-102',
-          timestamp: '14:48:30 - 15/10/2026',
-          level: 'INFO',
-          module: 'AUTH',
-          message: 'Quản trị viên Admin123 đăng nhập hệ thống thành công qua JWT Bearer',
-          source_ip: '127.0.0.1',
-        },
-        {
-          id: 'log-103',
-          timestamp: '14:45:00 - 15/10/2026',
-          level: 'WARN',
-          module: 'EDGE_AI',
-          message: 'BLE_BAND_001 phát hiện nhịp tim vượt ngưỡng: 124 bpm (Cụ Nguyễn Văn An)',
-          source_ip: 'Edge-Hub-01',
-        },
-        {
-          id: 'log-104',
-          timestamp: '14:20:18 - 15/10/2026',
-          level: 'INFO',
-          module: 'WEBSOCKET',
-          message: 'Kênh WebSocket /ws/alerts đã phân phối 1 sự kiện thời gian thực cho client',
-          source_ip: 'FastAPI Core',
-        },
-        {
-          id: 'log-105',
-          timestamp: '13:55:04 - 15/10/2026',
-          level: 'INFO',
-          module: 'DATABASE',
-          message: 'PostgreSQL 16 (TimescaleDB) lưu trữ bản ghi sinh hiệu (vital_signs) ổn định',
-          source_ip: 'localhost:5432',
-        },
-      ];
-    }
+    const res = await api.get('/system/logs');
+    return res.data;
   },
   getMetrics: () => api.get('/system/metrics'),
+};
+
+// 6. CLINICAL & VITALS TELEMETRY API
+export const vitalsApi = {
+  getHistory: async (limit = 24) => {
+    const res = await api.get(`/vitals/history?limit=${limit}`);
+    return res.data;
+  },
+  getCurrent: async () => {
+    const res = await api.get('/vitals/current');
+    return res.data;
+  },
+};
+
+// 7. INCIDENTS API
+export const incidentsApi = {
+  list: async (limit = 50) => {
+    const res = await api.get(`/incidents?limit=${limit}`);
+    return res.data;
+  },
 };
 
 // 5. AI MAINTENANCE API
@@ -459,65 +267,8 @@ export const notificationsApi = {
     target_audience?: string;
     search?: string;
   }): Promise<SystemNotification[]> => {
-    try {
-      const res = await api.get<SystemNotification[]>('/admin/notifications', { params });
-      return res.data;
-    } catch {
-      // Fallback mock data if server offline
-      return [
-        {
-          id: 'notif-1',
-          title: 'Bảo trì nâng cấp hệ thống định kỳ',
-          body: 'Hệ thống Smart Elderly Care AI sẽ tiến hành tối ưu hóa kết nối IoT và sao lưu cơ sở dữ liệu từ 01:00 đến 03:00 ngày 18/10/2026. Trong thời gian này, các tính năng báo cáo có thể bị chậm nhẹ.',
-          type: 'system_maintenance',
-          target_audience: 'all',
-          status: 'published',
-          published_at: '2026-10-14T10:00:00Z',
-          delivered_count: 152,
-          read_count: 128,
-          created_at: '2026-10-14T09:30:00Z',
-          updated_at: '2026-10-14T10:00:00Z',
-        },
-        {
-          id: 'notif-2',
-          title: 'Khuyến cáo sức khỏe mùa giao mùa',
-          body: 'Nhiệt độ thay đổi đột ngột có thể ảnh hưởng đến huyết áp của người cao tuổi. Gia đình vui lòng kiểm tra thiết bị đo sinh hiệu phòng ngủ và duy trì nhiệt độ phòng 26-28 độ C.',
-          type: 'health_tip',
-          target_audience: 'caregivers',
-          status: 'published',
-          published_at: '2026-10-15T07:15:00Z',
-          delivered_count: 89,
-          read_count: 74,
-          created_at: '2026-10-15T07:00:00Z',
-          updated_at: '2026-10-15T07:15:00Z',
-        },
-        {
-          id: 'notif-3',
-          title: 'Cập nhật tính năng trợ lý AI Y khoa',
-          body: 'Phiên bản mới của Chatbot y khoa đã được tích hợp mô hình phân tích triệu chứng chuyên sâu dành cho bác sĩ gia đình và người chăm sóc.',
-          type: 'feature_update',
-          target_audience: 'all',
-          status: 'scheduled',
-          scheduled_at: '2026-10-16T08:00:00Z',
-          delivered_count: 0,
-          read_count: 0,
-          created_at: '2026-10-15T10:00:00Z',
-          updated_at: '2026-10-15T10:00:00Z',
-        },
-        {
-          id: 'notif-4',
-          title: 'Bản thảo hướng dẫn kết nối vòng đeo tay SpO2 mới',
-          body: 'Hướng dẫn các bước ghép nối Bluetooth và cấu hình đo nhịp tim liên tục cho thiết bị thế hệ mới.',
-          type: 'info',
-          target_audience: 'all',
-          status: 'draft',
-          delivered_count: 0,
-          read_count: 0,
-          created_at: '2026-10-15T11:00:00Z',
-          updated_at: '2026-10-15T11:00:00Z',
-        },
-      ];
-    }
+    const res = await api.get<SystemNotification[]>('/admin/notifications', { params });
+    return res.data;
   },
   get: (id: string) => api.get<SystemNotification>(`/admin/notifications/${id}`).then((r) => r.data),
   create: (payload: CreateNotificationPayload) => api.post<SystemNotification>('/admin/notifications', payload).then((r) => r.data),

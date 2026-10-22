@@ -65,118 +65,44 @@ interface SystemIncident {
   resolved: boolean;
 }
 
-const INITIAL_SERVICES: ServiceHealth[] = [
-  {
-    id: 'srv-1',
-    name: 'FastAPI Core Backend (ASGI)',
-    category: 'REST & WebSocket Gateway',
-    port: 8000,
-    status: 'healthy',
-    uptime: '99.98%',
-    cpu_usage: 12.4,
-    memory_usage: 145,
-    latency_ms: 12,
-    connections: 18,
-    last_check: 'Vừa xong',
-  },
-  {
-    id: 'srv-2',
-    name: 'PostgreSQL 16 (TimescaleDB)',
-    category: 'Database Engine',
-    port: 5432,
-    status: 'healthy',
-    uptime: '100%',
-    cpu_usage: 8.1,
-    memory_usage: 320,
-    latency_ms: 6,
-    connections: 12,
-    last_check: 'Vừa xong',
-  },
-  {
-    id: 'srv-3',
-    name: 'Redis In-Memory Cache & PubSub',
-    category: 'Cache & Session Engine',
-    port: 6379,
-    status: 'healthy',
-    uptime: '99.99%',
-    cpu_usage: 3.2,
-    memory_usage: 48,
-    latency_ms: 1.5,
-    connections: 24,
-    last_check: 'Vừa xong',
-  },
-  {
-    id: 'srv-4',
-    name: 'EMQX MQTT Broker (v5.7)',
-    category: 'IoT Telemetry Broker',
-    port: 1883,
-    status: 'healthy',
-    uptime: '99.95%',
-    cpu_usage: 6.8,
-    memory_usage: 110,
-    latency_ms: 4,
-    connections: 5,
-    last_check: 'Vừa xong',
-  },
-];
-
-const INITIAL_INCIDENTS: SystemIncident[] = [
-  {
-    id: 'inc-01',
-    timestamp: '2026-10-15 09:35:12',
-    service: 'EMQX Broker',
-    type: 'WARNING',
-    message: 'Thiết bị SENSOR_RADAR_001 gửi bản tin heartbeat trễ 45s so với chu kỳ.',
-    resolved: true,
-  },
-  {
-    id: 'inc-02',
-    timestamp: '2026-10-15 08:20:44',
-    service: 'FastAPI Core',
-    type: 'ERROR',
-    message: 'Truy vấn bảng users trả về mã 404 cho user_id tạm thời. Đã tự phục hồi.',
-    resolved: true,
-  },
-  {
-    id: 'inc-03',
-    timestamp: '2026-10-15 07:15:00',
-    service: 'PostgreSQL DB',
-    type: 'CRITICAL',
-    message: 'Khóa kết nối trên cổng 5433 được phát hiện và đã chuyển mạch an toàn sang cổng 5432.',
-    resolved: true,
-  },
-];
-
-const PERFORMANCE_SERIES = [
-  { time: '06:00', cpu: 18, ram: 42, latency: 8, requests: 45 },
-  { time: '07:00', cpu: 28, ram: 46, latency: 12, requests: 120 },
-  { time: '08:00', cpu: 35, ram: 52, latency: 15, requests: 280 },
-  { time: '09:00', cpu: 30, ram: 49, latency: 10, requests: 240 },
-  { time: '10:00', cpu: 22, ram: 47, latency: 9, requests: 190 },
-  { time: '11:00', cpu: 25, ram: 48, latency: 11, requests: 210 },
-];
-
 export const SystemMonitoringPage: React.FC = () => {
   const { isDark } = useThemeStore();
   const [activeTab, setActiveTab] = useState<'servers' | 'devices' | 'incidents'>('servers');
-  const [services, setServices] = useState<ServiceHealth[]>(INITIAL_SERVICES);
-  const [incidents, setIncidents] = useState<SystemIncident[]>(INITIAL_INCIDENTS);
+  const [services, setServices] = useState<ServiceHealth[]>([]);
+  const [incidents, setIncidents] = useState<SystemIncident[]>([]);
   const [devices, setDevices] = useState<Device[]>([]);
+  const [hardwareMetrics, setHardwareMetrics] = useState<any>(null);
+  const [performanceHistory, setPerformanceHistory] = useState<Array<{ time: string; cpu: number; ram: number; latency: number; requests: number }>>([]);
   const [loading, setLoading] = useState<boolean>(true);
   const [notification, setNotification] = useState<{ type: 'success' | 'error'; message: string } | null>(null);
 
   const fetchMonitoringData = async () => {
     setLoading(true);
     try {
-      const [devs, srvs, incs, metrics] = await Promise.all([
+      const [devs, srvs, incs, mtr] = await Promise.all([
         devicesApi.list().catch(() => []),
-        systemApi.getServicesHealth().catch(() => null),
-        systemApi.getIncidents().catch(() => null),
+        systemApi.getServicesHealth().catch(() => []),
+        systemApi.getIncidents().catch(() => []),
         systemApi.getMetrics().catch(() => null),
       ]);
       setDevices(devs);
-      if (srvs && srvs.length > 0) setServices(srvs);
-      if (incs && incs.length > 0) setIncidents(incs);
+      if (srvs) setServices(srvs);
+      if (incs) setIncidents(incs);
+      if (mtr && mtr.data) {
+        setHardwareMetrics(mtr.data);
+        const nowStr = new Date().toLocaleTimeString('vi-VN', { hour: '2-digit', minute: '2-digit' });
+        setPerformanceHistory((prev) => {
+          const point = {
+            time: nowStr,
+            cpu: Math.round(mtr.data.cpu_percent ?? 15),
+            ram: Math.round(mtr.data.memory_percent ?? 45),
+            latency: srvs && srvs[0] ? Math.round(srvs[0].latency_ms) : 10,
+            requests: 100,
+          };
+          const next = [...prev, point];
+          return next.slice(-8);
+        });
+      }
     } catch {
       showNotice('error', 'Không thể kết nối đến máy chủ giám sát hệ thống');
     } finally {
@@ -451,7 +377,21 @@ export const SystemMonitoringPage: React.FC = () => {
 
             <div className="h-56 w-full">
               <ResponsiveContainer width="100%" height="100%">
-                <AreaChart data={PERFORMANCE_SERIES}>
+                <AreaChart
+                  data={
+                    performanceHistory.length > 0
+                      ? performanceHistory
+                      : [
+                          {
+                            time: 'Hiện tại',
+                            cpu: Math.round(hardwareMetrics?.cpu_percent ?? 15),
+                            ram: Math.round(hardwareMetrics?.memory_percent ?? 45),
+                            latency: services && services[0] ? Math.round(services[0].latency_ms) : 5,
+                            requests: 0,
+                          },
+                        ]
+                  }
+                >
                   <defs>
                     <linearGradient id="colorCpu" x1="0" y1="0" x2="0" y2="1">
                       <stop offset="5%" stopColor="#0ea5e9" stopOpacity={0.3} />

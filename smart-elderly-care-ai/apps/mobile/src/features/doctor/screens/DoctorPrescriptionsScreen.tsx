@@ -7,15 +7,10 @@ import {
   Text,
   StyleSheet,
   ScrollView,
-  TouchableOpacity,
-  TextInput,
-  Modal,
   Alert,
-  Switch,
   ActivityIndicator,
   StatusBar,
   RefreshControl,
-  KeyboardAvoidingView,
   Platform,
 } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
@@ -24,19 +19,14 @@ import { Ionicons } from '@expo/vector-icons';
 import { Colors } from '../../../theme/colors';
 import { useTheme } from '../../../store/useThemeStore';
 import { doctorApi } from '../../../services/api';
+import {
+  PrescriptionItem,
+  PrescriptionHeaderStats,
+  PrescriptionCardItem,
+  PrescriptionFormModal,
+} from '../components';
 
-interface PrescriptionItem {
-  id: string;
-  patient_id: string;
-  medication_name: string;
-  dosage: string;
-  frequency: string;
-  schedule_times: string[];
-  instructions: string;
-  doctor_name: string;
-  enable_speaker_reminder: boolean;
-  created_at?: string;
-}
+export type { PrescriptionItem };
 
 export default function DoctorPrescriptionsScreen() {
   const insets = useSafeAreaInsets();
@@ -230,77 +220,31 @@ export default function DoctorPrescriptionsScreen() {
     }
   };
 
+  const patientLabel = selectedPatient
+    ? `${selectedPatient.name}${selectedPatient.age ? ` (${selectedPatient.age} tuổi)` : ''}`
+    : 'Chưa chọn bệnh nhân';
+
+  const patientFooterText = selectedPatient?.name
+    ? `${selectedPatient.name}${selectedPatient.house_name ? ` (${selectedPatient.house_name})` : ''}`
+    : '';
+
   return (
     <View style={[styles.container, { backgroundColor: isDarkMode ? '#0F172A' : '#F8FAFC' }]}>
       <StatusBar barStyle={isDarkMode ? 'light-content' : 'dark-content'} />
 
-      {/* HEADER */}
-      <View
-        style={[
-          styles.header,
-          {
-            paddingTop: insets.top + 8,
-            backgroundColor: isDarkMode ? '#1E293B' : '#FFFFFF',
-            borderBottomColor: colors.border,
-          },
-        ]}
-      >
-        <View style={styles.headerRow}>
-          <View style={{ flex: 1 }}>
-            <Text style={[styles.headerTitle, { color: colors.textPrimary }]}>Quản Lý Đơn Thuốc</Text>
-            <Text style={[styles.headerSub, { color: isDarkMode ? '#94A3B8' : '#64748B' }]}>
-              Phác đồ điều trị & Lịch nhắc nhở y tế tự động qua Loa Hub
-            </Text>
-          </View>
-          <TouchableOpacity style={styles.btnAddHeader} onPress={handleOpenCreateModal}>
-            <Ionicons name="add" size={22} color="#FFFFFF" />
-          </TouchableOpacity>
-        </View>
-
-        {/* THẺ TỔNG HỢP NHANH */}
-        <View style={styles.statsRow}>
-          <View style={[styles.statBox, { backgroundColor: isDarkMode ? '#334155' : '#EFF6FF' }]}>
-            <Text style={[styles.statNumber, { color: '#2563EB' }]}>{prescriptions.length}</Text>
-            <Text style={styles.statLabel} numberOfLines={1}>Đang kê đơn</Text>
-          </View>
-          <View style={[styles.statBox, { backgroundColor: isDarkMode ? '#334155' : '#ECFDF5' }]}>
-            <Text style={[styles.statNumber, { color: '#059669' }]}>
-              {prescriptions.filter((r) => r.enable_speaker_reminder).length}
-            </Text>
-            <Text style={styles.statLabel} numberOfLines={1}>Phát loa Hub</Text>
-          </View>
-          <View style={[styles.statBox, { backgroundColor: isDarkMode ? '#334155' : '#FFFBEB' }]}>
-            <Text style={[styles.statNumber, { color: '#D97706' }]}>{patients.length}</Text>
-            <Text style={styles.statLabel} numberOfLines={1}>Bệnh nhân</Text>
-          </View>
-        </View>
-
-        {/* THANH CHỌN BỆNH NHÂN */}
-        {patients.length > 0 && (
-          <ScrollView horizontal showsHorizontalScrollIndicator={false} style={{ marginTop: 10 }}>
-            {patients.map((p) => {
-              const active = selectedPatient?.id === p.id;
-              return (
-                <TouchableOpacity
-                  key={p.id}
-                  onPress={() => handleSelectPatient(p)}
-                  style={[
-                    styles.patientPill,
-                    active
-                      ? { backgroundColor: '#0284C7', borderColor: '#0284C7' }
-                      : { backgroundColor: isDarkMode ? '#334155' : '#F1F5F9', borderColor: colors.border },
-                  ]}
-                  activeOpacity={0.8}
-                >
-                  <Text style={[styles.patientPillName, active ? { color: '#FFFFFF', fontWeight: '700' } : { color: colors.textPrimary }]}>
-                    {p.name}
-                  </Text>
-                </TouchableOpacity>
-              );
-            })}
-          </ScrollView>
-        )}
-      </View>
+      {/* HEADER & QUICK STATS */}
+      <PrescriptionHeaderStats
+        prescriptionsCount={prescriptions.length}
+        speakerCount={prescriptions.filter((r) => r.enable_speaker_reminder).length}
+        patientsCount={patients.length}
+        patients={patients}
+        selectedPatient={selectedPatient}
+        onSelectPatient={handleSelectPatient}
+        onAddPress={handleOpenCreateModal}
+        insetsTop={insets.top}
+        isDarkMode={isDarkMode}
+        colors={colors}
+      />
 
       <ScrollView
         contentContainerStyle={styles.scrollContent}
@@ -319,369 +263,52 @@ export default function DoctorPrescriptionsScreen() {
           </View>
         ) : (
           prescriptions.map((rx) => (
-            <View
+            <PrescriptionCardItem
               key={rx.id}
-              style={[
-                styles.rxCard,
-                { backgroundColor: isDarkMode ? '#1E293B' : '#FFFFFF', borderColor: colors.border },
-              ]}
-            >
-              <View style={styles.rxHeader}>
-                <View style={{ flex: 1, marginRight: 8 }}>
-                  <Text style={[styles.rxMedName, { color: colors.textPrimary }]}>
-                    💊 {rx.medication_name}
-                  </Text>
-                  <Text style={[styles.rxDosage, { color: isDarkMode ? '#94A3B8' : '#64748B' }]}>
-                    Liều lượng: {rx.dosage} • {rx.frequency}
-                  </Text>
-                </View>
-
-                <TouchableOpacity
-                  style={[
-                    styles.speakerToggleBtn,
-                    rx.enable_speaker_reminder
-                      ? { backgroundColor: '#ECFDF5', borderColor: '#10B981' }
-                      : { backgroundColor: isDarkMode ? '#334155' : '#F1F5F9', borderColor: '#94A3B8' },
-                  ]}
-                  onPress={() => handleToggleSpeaker(rx.id)}
-                >
-                  <Ionicons
-                    name={rx.enable_speaker_reminder ? 'volume-high' : 'volume-mute'}
-                    size={14}
-                    color={rx.enable_speaker_reminder ? '#059669' : '#94A3B8'}
-                    style={{ marginRight: 4 }}
-                  />
-                  <Text
-                    style={[
-                      styles.speakerToggleBtnText,
-                      { color: rx.enable_speaker_reminder ? '#059669' : '#64748B' },
-                    ]}
-                  >
-                    {rx.enable_speaker_reminder ? 'Loa Hub: BẬT' : 'Loa Hub: TẮT'}
-                  </Text>
-                </TouchableOpacity>
-              </View>
-
-              {/* LỊCH GIỜ UỐNG */}
-              <View style={styles.scheduleRow}>
-                <Text style={[styles.scheduleLabel, { color: isDarkMode ? '#94A3B8' : '#64748B' }]}>
-                  Giờ nhắc uống:
-                </Text>
-                {(rx.schedule_times || []).map((t: string, idx: number) => (
-                  <View key={idx} style={styles.timeBadge}>
-                    <Ionicons name="time-outline" size={12} color="#0284C7" style={{ marginRight: 2 }} />
-                    <Text style={styles.timeBadgeText}>{t}</Text>
-                  </View>
-                ))}
-              </View>
-
-              {/* HƯỚNG DẪN */}
-              {rx.instructions ? (
-                <Text style={[styles.instructionsText, { color: isDarkMode ? '#CBD5E1' : '#334155' }]}>
-                  📝 Dặn dò: {rx.instructions}
-                </Text>
-              ) : null}
-
-              {/* FOOTER & NÚT SỬA / XÓA */}
-              <View style={styles.rxFooter}>
-                <View style={{ flex: 1, marginRight: 8 }}>
-                  <Text style={[styles.footerText, { color: isDarkMode ? '#64748B' : '#94A3B8' }]} numberOfLines={1}>
-                    {selectedPatient?.name ? `${selectedPatient.name}${selectedPatient.house_name ? ` (${selectedPatient.house_name})` : ''}` : ''}
-                  </Text>
-                  {rx.doctor_name ? (
-                    <Text style={[styles.footerDoctor, { color: isDarkMode ? '#64748B' : '#94A3B8' }]} numberOfLines={1}>
-                      BS: {rx.doctor_name}
-                    </Text>
-                  ) : null}
-                </View>
-
-                <View style={{ flexDirection: 'row', gap: 8 }}>
-                  <TouchableOpacity
-                    style={styles.rxEditBtn}
-                    onPress={() => handleOpenEditModal(rx)}
-                  >
-                    <Ionicons name="pencil" size={13} color="#0284C7" style={{ marginRight: 4 }} />
-                    <Text style={styles.rxEditBtnText}>Sửa</Text>
-                  </TouchableOpacity>
-
-                  <TouchableOpacity
-                    style={styles.rxDeleteBtn}
-                    onPress={() => handleDeleteRx(rx.id, rx.medication_name)}
-                  >
-                    <Ionicons name="trash-outline" size={13} color="#EF4444" style={{ marginRight: 4 }} />
-                    <Text style={styles.rxDeleteBtnText}>Ngừng thuốc</Text>
-                  </TouchableOpacity>
-                </View>
-              </View>
-            </View>
+              prescription={rx}
+              patientName={patientFooterText}
+              onToggleSpeaker={handleToggleSpeaker}
+              onEdit={handleOpenEditModal}
+              onDelete={handleDeleteRx}
+              isDarkMode={isDarkMode}
+              colors={colors}
+            />
           ))
         )}
       </ScrollView>
 
       {/* MODAL KÊ ĐƠN / SỬA ĐƠN */}
-      <Modal visible={modalVisible} animationType="slide" transparent>
-        <KeyboardAvoidingView
-          behavior={Platform.OS === 'ios' ? 'padding' : undefined}
-          style={styles.modalOverlay}
-        >
-          <View style={[styles.modalBox, { backgroundColor: isDarkMode ? '#1E293B' : '#FFFFFF' }]}>
-            <View style={styles.modalHeader}>
-              <Text style={[styles.modalTitle, { color: colors.textPrimary }]}>
-                {editingRxId ? 'Chỉnh Sửa Đơn Thuốc' : 'Kê Đơn Thuốc Mới'}
-              </Text>
-              <TouchableOpacity onPress={() => setModalVisible(false)}>
-                <Ionicons name="close" size={24} color="#94A3B8" />
-              </TouchableOpacity>
-            </View>
-
-            <Text style={styles.fieldLabel}>Bệnh nhân tiếp nhận</Text>
-            <View style={[styles.patientSelector, { backgroundColor: isDarkMode ? '#334155' : '#EEF2F6' }]}>
-              <Text style={[styles.patientSelectorText, { color: colors.textPrimary }]}>
-                👤 {selectedPatient ? `${selectedPatient.name}${selectedPatient.age ? ` (${selectedPatient.age} tuổi)` : ''}` : 'Chưa chọn bệnh nhân'}
-              </Text>
-            </View>
-
-            <Text style={styles.fieldLabel}>Tên thuốc y khoa (*)</Text>
-            <TextInput
-              style={[styles.inputField, { color: colors.textPrimary, borderColor: colors.border }]}
-              placeholder="VD: Vastarel 20mg, Amlodipine 5mg..."
-              placeholderTextColor="#94A3B8"
-              value={medName}
-              onChangeText={setMedName}
-            />
-
-            <View style={{ flexDirection: 'row', gap: 10 }}>
-              <View style={{ flex: 1 }}>
-                <Text style={styles.fieldLabel}>Liều dùng (*)</Text>
-                <TextInput
-                  style={[styles.inputField, { color: colors.textPrimary, borderColor: colors.border }]}
-                  placeholder="VD: 1 viên"
-                  placeholderTextColor="#94A3B8"
-                  value={dosage}
-                  onChangeText={setDosage}
-                />
-              </View>
-              <View style={{ flex: 1.3 }}>
-                <Text style={styles.fieldLabel}>Tần suất</Text>
-                <TextInput
-                  style={[styles.inputField, { color: colors.textPrimary, borderColor: colors.border }]}
-                  placeholder="VD: Ngày 2 lần (Sáng / Tối)"
-                  placeholderTextColor="#94A3B8"
-                  value={frequency}
-                  onChangeText={setFrequency}
-                />
-              </View>
-            </View>
-
-            <Text style={styles.fieldLabel}>Giờ nhắc uống thuốc (cách nhau bởi dấu phẩy)</Text>
-            <TextInput
-              style={[styles.inputField, { color: colors.textPrimary, borderColor: colors.border }]}
-              placeholder="VD: 08:00, 19:30"
-              placeholderTextColor="#94A3B8"
-              value={scheduleTimes}
-              onChangeText={setScheduleTimes}
-            />
-
-            <Text style={styles.fieldLabel}>Hướng dẫn chi tiết của Bác sĩ</Text>
-            <TextInput
-              style={[styles.inputField, { color: colors.textPrimary, borderColor: colors.border }]}
-              placeholder="VD: Uống sau ăn no, uống nhiều nước ấm..."
-              placeholderTextColor="#94A3B8"
-              value={instructions}
-              onChangeText={setInstructions}
-            />
-
-            <View style={styles.switchRow}>
-              <View style={{ flex: 1 }}>
-                <Text style={[styles.switchTitle, { color: colors.textPrimary }]}>
-                  Nhắc nhở qua Loa Hub AI
-                </Text>
-                <Text style={styles.switchSub}>Tự động phát lời nhắc bằng giọng nói đến người cao tuổi</Text>
-              </View>
-              <Switch
-                value={enableSpeaker}
-                onValueChange={setEnableSpeaker}
-                trackColor={{ false: '#94A3B8', true: Colors.primary }}
-              />
-            </View>
-
-            <TouchableOpacity
-              style={[styles.modalSubmitBtn, isSubmitting && { opacity: 0.7 }]}
-              onPress={handleSaveRx}
-              disabled={isSubmitting}
-            >
-              {isSubmitting ? (
-                <ActivityIndicator color="#FFFFFF" size="small" />
-              ) : (
-                <Text style={styles.modalSubmitBtnText}>
-                  {editingRxId ? 'Cập Nhật Đơn Thuốc' : 'Lưu Đơn Thuốc & Đồng Bộ Hub'}
-                </Text>
-              )}
-            </TouchableOpacity>
-          </View>
-        </KeyboardAvoidingView>
-      </Modal>
+      <PrescriptionFormModal
+        visible={modalVisible}
+        isEditing={Boolean(editingRxId)}
+        medName={medName}
+        dosage={dosage}
+        frequency={frequency}
+        scheduleTimes={scheduleTimes}
+        instructions={instructions}
+        enableSpeaker={enableSpeaker}
+        onChangeMedName={setMedName}
+        onChangeDosage={setDosage}
+        onChangeFrequency={setFrequency}
+        onChangeScheduleTimes={setScheduleTimes}
+        onChangeInstructions={setInstructions}
+        onToggleEnableSpeaker={setEnableSpeaker}
+        isSubmitting={isSubmitting}
+        onSave={handleSaveRx}
+        onClose={() => setModalVisible(false)}
+        isDarkMode={isDarkMode}
+        colors={colors}
+        patientName={patientLabel}
+        customTitle={editingRxId ? 'Chỉnh Sửa Đơn Thuốc' : 'Kê Đơn Thuốc Mới'}
+        customSubmitText={editingRxId ? 'Cập Nhật Đơn Thuốc' : 'Lưu Đơn Thuốc & Đồng Bộ Hub'}
+      />
     </View>
   );
 }
 
 const styles = StyleSheet.create({
   container: { flex: 1 },
-  header: {
-    paddingHorizontal: 16,
-    paddingBottom: 16,
-    borderBottomWidth: StyleSheet.hairlineWidth,
-  },
-  headerRow: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    alignItems: 'center',
-  },
-  headerTitle: { fontSize: 20, fontWeight: '800' },
-  headerSub: { fontSize: 12, marginTop: 2 },
-  btnAddHeader: {
-    width: 40,
-    height: 40,
-    borderRadius: 20,
-    backgroundColor: Colors.primary,
-    justifyContent: 'center',
-    alignItems: 'center',
-    elevation: 3,
-  },
-  statsRow: {
-    flexDirection: 'row',
-    gap: 8,
-    marginTop: 14,
-  },
-  statBox: {
-    flex: 1,
-    paddingVertical: 10,
-    paddingHorizontal: 8,
-    borderRadius: 10,
-    alignItems: 'center',
-  },
-  statNumber: { fontSize: 18, fontWeight: '800' },
-  statLabel: { fontSize: 10, color: '#64748B', marginTop: 2, textAlign: 'center' },
   scrollContent: { padding: 16, paddingBottom: 95 },
   emptyBox: { alignItems: 'center', paddingVertical: 60 },
   emptyText: { fontSize: 14, marginTop: 10 },
-  rxCard: {
-    borderRadius: 14,
-    padding: 16,
-    borderWidth: 1,
-    marginBottom: 12,
-    elevation: 1,
-  },
-  rxHeader: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'flex-start' },
-  rxMedName: { fontSize: 16, fontWeight: '800' },
-  rxDosage: { fontSize: 13, marginTop: 2 },
-  speakerToggleBtn: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    paddingHorizontal: 8,
-    paddingVertical: 4,
-    borderRadius: 6,
-    borderWidth: 1,
-  },
-  speakerToggleBtnText: { fontSize: 10, fontWeight: '700' },
-  scheduleRow: { flexDirection: 'row', alignItems: 'center', marginTop: 10, flexWrap: 'wrap', gap: 6 },
-  scheduleLabel: { fontSize: 12 },
-  timeBadge: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    backgroundColor: '#EFF6FF',
-    paddingHorizontal: 8,
-    paddingVertical: 3,
-    borderRadius: 6,
-  },
-  timeBadgeText: { fontSize: 11, color: '#2563EB', fontWeight: '700' },
-  instructionsText: { fontSize: 13, marginTop: 8, fontStyle: 'italic', lineHeight: 18 },
-  rxFooter: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    alignItems: 'flex-end',
-    marginTop: 12,
-    paddingTop: 10,
-    borderTopWidth: StyleSheet.hairlineWidth,
-    borderTopColor: '#E2E8F0',
-  },
-  footerText: { fontSize: 11, fontWeight: '600' },
-  footerDoctor: { fontSize: 10, marginTop: 2 },
-  rxEditBtn: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    paddingHorizontal: 8,
-    paddingVertical: 4,
-    borderRadius: 6,
-    backgroundColor: '#EFF6FF',
-  },
-  rxEditBtnText: { fontSize: 11, color: '#0284C7', fontWeight: '700' },
-  rxDeleteBtn: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    paddingHorizontal: 8,
-    paddingVertical: 4,
-    borderRadius: 6,
-    backgroundColor: '#FEE2E2',
-  },
-  rxDeleteBtnText: { fontSize: 11, color: '#EF4444', fontWeight: '700' },
-  modalOverlay: {
-    flex: 1,
-    backgroundColor: 'rgba(0,0,0,0.5)',
-    justifyContent: 'center',
-    padding: 16,
-  },
-  modalBox: {
-    borderRadius: 18,
-    padding: 20,
-    maxHeight: '90%',
-  },
-  modalHeader: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    alignItems: 'center',
-    marginBottom: 14,
-  },
-  modalTitle: { fontSize: 17, fontWeight: '800' },
-  fieldLabel: { fontSize: 12, fontWeight: '700', color: '#64748B', marginTop: 10, marginBottom: 5 },
-  inputField: {
-    borderWidth: 1,
-    borderRadius: 10,
-    paddingHorizontal: 12,
-    paddingVertical: 9,
-    fontSize: 14,
-  },
-  patientSelector: { padding: 10, borderRadius: 8, marginBottom: 4 },
-  patientSelectorText: { fontSize: 13, fontWeight: '600' },
-  switchRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'space-between',
-    marginTop: 14,
-    marginBottom: 6,
-    paddingTop: 10,
-    borderTopWidth: StyleSheet.hairlineWidth,
-    borderTopColor: '#E2E8F0',
-  },
-  switchTitle: { fontSize: 13, fontWeight: '700' },
-  switchSub: { fontSize: 11, color: '#94A3B8', marginTop: 2 },
-  modalSubmitBtn: {
-    backgroundColor: Colors.primary,
-    paddingVertical: 13,
-    borderRadius: 12,
-    alignItems: 'center',
-    marginTop: 18,
-  },
-  modalSubmitBtnText: { color: '#FFFFFF', fontSize: 14, fontWeight: '700' },
-  patientPill: {
-    paddingHorizontal: 12,
-    paddingVertical: 6,
-    borderRadius: 16,
-    borderWidth: 1,
-    marginRight: 8,
-  },
-  patientPillName: {
-    fontSize: 12,
-    fontWeight: '600',
-  },
 });
