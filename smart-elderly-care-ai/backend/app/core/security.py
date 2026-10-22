@@ -33,6 +33,9 @@ def hash_password(plain_password: str) -> str:
         return bcrypt.hashpw(pwd_bytes, salt).decode("utf-8")
 
 
+get_password_hash = hash_password
+
+
 def verify_password(plain_password: str, hashed_password: str) -> bool:
     """Xác minh mật khẩu so với hash đã lưu."""
     try:
