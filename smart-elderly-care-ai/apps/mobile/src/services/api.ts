@@ -8,18 +8,26 @@ import AsyncStorage from '@react-native-async-storage/async-storage';
 import { useAuthStore } from '../store/useAuthStore';
 
 // Cấu hình BASE_URL tự động:
-// - Nếu có biến EXPO_PUBLIC_API_URL thì dùng nó
-// - Nếu chạy trên Web và truy cập qua LAN IP: tự động kết nối API qua IP đó
+// - Ưu tiên EXPO_PUBLIC_API_URL nếu được khai báo
+// - Nếu chạy trên Web: dùng 127.0.0.1 nếu là localhost để tránh xung đột IPv6 [::1] trên Windows
 // - Tự động trích xuất IP từ host của Metro Bundler (Expo Constants)
-// - Fallback về IP máy tính hiện tại: 192.168.1.4
+// - Hỗ trợ Android Emulator (10.0.2.2)
+// - Fallback về IP máy tính hiện tại: 192.168.1.7
 const getBaseUrl = (): string => {
-  // 1. Khi chạy trên Web trình duyệt
+  // 1. Khi chạy trên Web trình duyệt: Tự động dùng host trình duyệt đang truy cập (tránh chết IP LAN khi DHCP đổi IP)
   if (Platform.OS === 'web' && typeof window !== 'undefined' && window.location?.hostname) {
     const host = window.location.hostname;
-    return `http://${host}:8000/api/v1`;
+    const resolvedHost = (host === 'localhost' || host === '::1') ? '127.0.0.1' : host;
+    return `http://${resolvedHost}:8000/api/v1`;
   }
 
-  // 2. Tự động nhận diện IP máy tính từ Expo Metro host (kết nối trực tiếp điện thoại thật qua LAN Wi-Fi)
+  // 2. Biến môi trường EXPO_PUBLIC_API_URL cho Mobile (Expo Go / Device)
+  const envUrl = process.env.EXPO_PUBLIC_API_URL;
+  if (envUrl && envUrl.trim().length > 0) {
+    return envUrl.trim();
+  }
+
+  // 3. Tự động nhận diện IP máy tính từ Expo Metro host (kết nối trực tiếp điện thoại thật qua LAN Wi-Fi)
   const debuggerHost =
     Constants.expoConfig?.hostUri ||
     (Constants as any).manifest2?.extra?.expoClient?.hostUri ||
@@ -32,14 +40,13 @@ const getBaseUrl = (): string => {
     }
   }
 
-  // 3. Biến môi trường EXPO_PUBLIC_API_URL (nếu được chỉ định rõ và không trỏ vào localhost trên thiết bị thật)
-  const envUrl = process.env.EXPO_PUBLIC_API_URL;
-  if (envUrl && !envUrl.includes('localhost') && !envUrl.includes('127.0.0.1')) {
-    return envUrl;
+  // 4. Nếu chạy trên Android Emulator
+  if (Platform.OS === 'android') {
+    return 'http://10.0.2.2:8000/api/v1';
   }
 
-  // 4. Fallback về IP máy tính phát triển trong mạng nội bộ
-  return 'http://192.168.1.4:8000/api/v1';
+  // 5. Fallback về IP máy tính phát triển trong mạng nội bộ
+  return 'http://192.168.1.7:8000/api/v1';
 };
 
 export const BASE_URL: string = getBaseUrl();
@@ -108,7 +115,7 @@ export default api;
 
 export const authApi = {
   requestOtp: (phone: string) => api.post('/auth/request-otp', { phone }),
-  verifyOtp: (phone: string, code: string) => api.post('/auth/verify-otp', { phone, code }),
+  verifyOtp: (phone: string, otp_code: string) => api.post('/auth/verify-otp', { phone, otp_code }),
   verifyCchn: (cchn_number: string, full_name: string) =>
     api.post('/auth/verify-cchn', { cchn_number, full_name }),
   login: (phone: string, password: string) => {
