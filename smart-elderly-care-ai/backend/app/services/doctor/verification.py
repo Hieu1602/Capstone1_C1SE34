@@ -1,5 +1,5 @@
 """
-doctor_verification.py – Service tự động xác minh Chứng chỉ hành nghề (CCHN) Bác sĩ.
+verification.py – Service tự động xác minh Chứng chỉ hành nghề (CCHN) Bác sĩ.
 Nguồn tra cứu trực tiếp: Cổng thông tin công khai Sở Y tế TP.HCM (https://tracuu.medinet.org.vn)
 Hỗ trợ kiểm tra tự động:
   - Tra cứu sự tồn tại của Số CCHN trên cổng Sở Y tế.
@@ -133,46 +133,46 @@ async def verify_doctor_cchn(cchn_number: str, full_name: str) -> Dict[str, Any]
                 if result_table:
                     rows = result_table.find_all("tr")
                     for row in rows[1:]:  # Bỏ qua dòng tiêu đề
-                        cells = [cell.text.strip() for cell in row.find_all("td")]
-                        if len(cells) >= 3:
-                            # Cấu trúc: [STT, Họ và tên, Số CCHN, Phạm vi chuyên môn, Trạng thái]
-                            medinet_name = cells[1] if len(cells) > 1 else ""
-                            medinet_cchn = cells[2] if len(cells) > 2 else ""
-                            medinet_scope = cells[3] if len(cells) > 3 else "Khám chữa bệnh đa khoa"
-                            medinet_status = cells[4] if len(cells) > 4 else "Đang hoạt động"
+                    	cells = [cell.text.strip() for cell in row.find_all("td")]
+                    	if len(cells) >= 3:
+                    		# Cấu trúc: [STT, Họ và tên, Số CCHN, Phạm vi chuyên môn, Trạng thái]
+                    		medinet_name = cells[1] if len(cells) > 1 else ""
+                    		medinet_cchn = cells[2] if len(cells) > 2 else ""
+                    		medinet_scope = cells[3] if len(cells) > 3 else "Khám chữa bệnh đa khoa"
+                    		medinet_status = cells[4] if len(cells) > 4 else "Đang hoạt động"
 
-                            if clean_cchn.lower() in medinet_cchn.lower():
-                                # 1. Kiểm tra đối soát họ tên
-                                if not is_name_matched(clean_name, medinet_name):
-                                    return {
-                                        "valid": False,
-                                        "message": (
-                                            f"Họ tên đăng ký ({clean_name}) không khớp với người đứng tên "
-                                            f"trên CCHN ({medinet_name}) tại Cổng Sở Y tế TP.HCM."
-                                        ),
-                                    }
+                    		if clean_cchn.lower() in medinet_cchn.lower():
+                    			# 1. Kiểm tra đối soát họ tên
+                    			if not is_name_matched(clean_name, medinet_name):
+                    				return {
+                    					"valid": False,
+                    					"message": (
+                    						f"Họ tên đăng ký ({clean_name}) không khớp với người đứng tên "
+                    						f"trên CCHN ({medinet_name}) tại Cổng Sở Y tế TP.HCM."
+                    					),
+                    				}
 
-                                # 2. Kiểm tra trạng thái hoạt động / đình chỉ
-                                if not is_license_active(medinet_status):
-                                    return {
-                                        "valid": False,
-                                        "message": (
-                                            f"Chứng chỉ hành nghề đang trong trạng thái: {medinet_status} "
-                                            f"(Không đủ điều kiện hành nghề y tế)."
-                                        ),
-                                    }
+                    			# 2. Kiểm tra trạng thái hoạt động / đình chỉ
+                    			if not is_license_active(medinet_status):
+                    				return {
+                    					"valid": False,
+                    					"message": (
+                    						f"Chứng chỉ hành nghề đang trong trạng thái: {medinet_status} "
+                    						f"(Không đủ điều kiện hành nghề y tế)."
+                    					),
+                    				}
 
-                                # 3. Hợp lệ
-                                return {
-                                    "valid": True,
-                                    "cchn": medinet_cchn,
-                                    "official_name": medinet_name,
-                                    "scope_of_practice": medinet_scope,
-                                    "workplace": "Cơ sở y tế được cấp phép",
-                                    "status": medinet_status,
-                                    "message": "Chứng chỉ hành nghề đã được xác thực từ Cổng thông tin Sở Y tế TP.HCM.",
-                                    "source": "Sở Y tế TP.HCM (Medinet)",
-                                }
+                    			# 3. Hợp lệ
+                    			return {
+                    				"valid": True,
+                    				"cchn": medinet_cchn,
+                    				"official_name": medinet_name,
+                    				"scope_of_practice": medinet_scope,
+                    				"workplace": "Cơ sở y tế được cấp phép",
+                    				"status": medinet_status,
+                    				"message": "Chứng chỉ hành nghề đã được xác thực từ Cổng thông tin Sở Y tế TP.HCM.",
+                    				"source": "Sở Y tế TP.HCM (Medinet)",
+                    			}
 
     except Exception as exc:
         logger.warning("Lỗi kết nối tới cổng Medinet Sở Y tế: %s", exc)

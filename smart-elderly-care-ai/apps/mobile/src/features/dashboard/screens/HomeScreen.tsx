@@ -27,12 +27,13 @@ import { useTheme } from '../../../store/useThemeStore';
 import { systemApi } from '../../../services/api';
 import { alertsWS } from '../../../services/websocket';
 
-// Các component con đã được tách module hóa giúp code gọn gàng, dễ bảo trì
 import { HomeCameraCard } from '../components/HomeCameraCard';
 import { MedicationReminderWidget } from '../components/MedicationReminderWidget';
 import { VitalsSummaryCard } from '../components/VitalsSummaryCard';
 import { HealthTrendsCard } from '../components/HealthTrendsCard';
 import { AlarmSnoozeModal } from '../components/AlarmSnoozeModal';
+import { FamilyAppointmentsModal } from '../components/FamilyAppointmentsModal';
+import { usePatientStore } from '../../../store/usePatientStore';
 
 export default function HomeScreen({ navigation }: any) {
   // Quản lý trạng thái giao diện Sáng / Tối (Dark Mode)
@@ -134,6 +135,18 @@ export default function HomeScreen({ navigation }: any) {
   );
   const activeEmergency = criticalIncidents[0];
   const hasEmergency = Boolean(activeEmergency || currentVitals.fall_detected);
+
+  // Hồ sơ bệnh nhân & Lịch khám bác sĩ đang chờ xác nhận
+  const { patientRecord, fetchPatientRecord } = usePatientStore();
+  const [familyAppointmentsModalVisible, setFamilyAppointmentsModalVisible] = useState(false);
+
+  useEffect(() => {
+    fetchPatientRecord?.();
+  }, []);
+
+  const pendingAppointmentNotice = incidents.find(
+    (i) => !i.is_acknowledged && i.alert_type === 'APPOINTMENT_SCHEDULED'
+  );
 
   const handleConfirmSnooze = async () => {
     const until = selectedDuration > 0 ? Date.now() + selectedDuration * 60 * 1000 : null;
@@ -504,6 +517,44 @@ export default function HomeScreen({ navigation }: any) {
           </TouchableOpacity>
         </View>
 
+        {/* 2.4. Banner Lịch khám Bác sĩ mới chờ Gia đình xác nhận */}
+        {pendingAppointmentNotice && (
+          <TouchableOpacity
+            style={[
+              styles.appointmentBanner,
+              isDarkMode && { backgroundColor: 'rgba(217, 119, 6, 0.12)', borderColor: '#D97706' },
+            ]}
+            activeOpacity={0.88}
+            onPress={() => setFamilyAppointmentsModalVisible(true)}
+          >
+            <View style={styles.appointmentBannerLeft}>
+              <View style={[styles.appointmentIconCircle, isDarkMode && { backgroundColor: 'rgba(217, 119, 6, 0.25)' }]}>
+                <Ionicons name="calendar" size={20} color="#D97706" />
+              </View>
+              <View style={{ flex: 1, marginLeft: 10 }}>
+                <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6 }}>
+                  <Text style={[styles.appointmentBannerTitle, isDarkMode && { color: '#FBBF24' }]}>
+                    🗓️ LỊCH KHÁM MỚI TỪ BÁC SĨ
+                  </Text>
+                  <View style={styles.appointmentBadge}>
+                    <Text style={styles.appointmentBadgeText}>Chờ xác nhận</Text>
+                  </View>
+                </View>
+                <Text
+                  style={[styles.appointmentBannerSubtitle, isDarkMode && { color: colors.textSecondary }]}
+                  numberOfLines={2}
+                >
+                  {pendingAppointmentNotice.message}
+                </Text>
+              </View>
+            </View>
+            <View style={[styles.appointmentActionBtn, isDarkMode && { backgroundColor: 'rgba(217, 119, 6, 0.25)' }]}>
+              <Text style={[styles.appointmentActionBtnText, isDarkMode && { color: '#FBBF24' }]}>Xác nhận</Text>
+              <Ionicons name="chevron-forward" size={14} color="#D97706" />
+            </View>
+          </TouchableOpacity>
+        )}
+
         {/* 2.5. Banner Cảnh báo Khẩn cấp màu đỏ (hoặc Trạng thái Sức khoẻ ổn định) */}
         {hasEmergency ? (
           <TouchableOpacity
@@ -658,6 +709,21 @@ export default function HomeScreen({ navigation }: any) {
         onConfirm={handleConfirmSnooze}
         onCancel={handleCancelSnooze}
         isSnoozeActive={isSnoozeActive}
+      />
+
+      {/* Modal Lịch khám Bác sĩ & Xác nhận cho Người thân */}
+      <FamilyAppointmentsModal
+        visible={familyAppointmentsModalVisible}
+        patientId={
+          pendingAppointmentNotice?.device_id && !isNaN(Number(pendingAppointmentNotice.device_id))
+            ? pendingAppointmentNotice.device_id
+            : (patientRecord?.patient_id || 1)
+        }
+        patientName={patientRecord?.name}
+        onClose={() => {
+          setFamilyAppointmentsModalVisible(false);
+          fetchNotifications();
+        }}
       />
     </SafeAreaView>
   );
@@ -931,5 +997,69 @@ const styles = StyleSheet.create({
     backgroundColor: '#FFF7ED',
     alignItems: 'center',
     justifyContent: 'center',
+  },
+  // Appointment Notification Banner
+  appointmentBanner: {
+    backgroundColor: '#FFFBEB',
+    borderRadius: 16,
+    borderWidth: 1.5,
+    borderColor: '#FDE68A',
+    padding: 14,
+    marginBottom: 12,
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    ...Shadows.soft,
+  },
+  appointmentBannerLeft: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    flex: 1,
+    marginRight: 8,
+  },
+  appointmentIconCircle: {
+    width: 38,
+    height: 38,
+    borderRadius: 19,
+    backgroundColor: '#FEF3C7',
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  appointmentBannerTitle: {
+    fontSize: 12,
+    fontWeight: '800',
+    color: '#B45309',
+    letterSpacing: 0.3,
+  },
+  appointmentBadge: {
+    backgroundColor: '#F59E0B',
+    paddingHorizontal: 6,
+    paddingVertical: 2,
+    borderRadius: 8,
+  },
+  appointmentBadgeText: {
+    color: '#FFFFFF',
+    fontSize: 10,
+    fontWeight: '700',
+  },
+  appointmentBannerSubtitle: {
+    fontSize: 12,
+    color: '#475569',
+    marginTop: 2,
+    lineHeight: 16,
+  },
+  appointmentActionBtn: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: '#FEF3C7',
+    paddingHorizontal: 8,
+    paddingVertical: 6,
+    borderRadius: 10,
+    gap: 2,
+  },
+  appointmentActionBtnText: {
+    fontSize: 11,
+    fontWeight: '700',
+    color: '#B45309',
   },
 });

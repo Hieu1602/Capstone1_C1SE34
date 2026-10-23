@@ -88,10 +88,17 @@ async def lifespan(app: FastAPI):
     mqtt_subscriber.start()
     logger.info("✅ MQTT Subscriber started and handlers registered.")
 
+    # Appointment reminder background worker (UC.0)
+    from app.services.scheduler import appointment_scheduler_service
+    await appointment_scheduler_service.start()
+    logger.info("✅ AppointmentSchedulerService started.")
+
     yield
 
     # ---- Shutdown ----
     logger.info("🛑 Shutting down...")
+    from app.services.scheduler import appointment_scheduler_service
+    await appointment_scheduler_service.stop()
     if mqtt_subscriber:
         mqtt_subscriber.stop()
     await close_db()

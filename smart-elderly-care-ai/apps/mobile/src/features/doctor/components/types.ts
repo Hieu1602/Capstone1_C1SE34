@@ -85,16 +85,26 @@ export interface AnalyticsData {
 
 export interface AppointmentItem {
   id: string;
+  doctor_id?: string;
+  doctor_name?: string;
   patient_id: string;
   patient_name: string;
+  house_id?: string;
+  visit_type?: string;
   scheduled_at: string;
-  exam_type: string;
-  location: string;
+  duration_minutes?: number;
+  exam_type?: string;
+  location?: string;
   status: 'UPCOMING' | 'COMPLETED' | 'CANCELLED' | string;
+  clinical_notes?: string;
   instructions?: string;
-  doctor_name: string;
-  enable_speaker_reminder: boolean;
+  cancellation_reason?: string;
+  recurrence_pattern?: 'NONE' | 'WEEKLY' | 'MONTHLY' | 'QUARTERLY' | string;
+  recurrence_occurrences?: number;
+  parent_recurring_id?: string;
+  enable_speaker_reminder?: boolean;
   created_at?: string;
+  updated_at?: string;
 }
 
 export interface PatientCardData {

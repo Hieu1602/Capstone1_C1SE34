@@ -1,0 +1,349 @@
+openapi: 3.0.3
+info:
+  title: Smart Elderly Care AI - Appointments & Follow-up API
+  version: 1.0.0
+  description: API specifications for managing routine medical visits, follow-up schedules, and push reminder triggers.
+
+paths:
+  /api/v1/doctor/appointments:
+    get:
+      tags:
+        - Doctor Appointments
+      summary: Get doctor's scheduled appointments
+      description: Returns a list of appointments assigned to or created by the authenticated doctor, filterable by status and patient.
+      security:
+        - BearerAuth: []
+      parameters:
+        - name: status
+          in: query
+          required: false
+          schema:
+            type: string
+            enum: [UPCOMING, COMPLETED, CANCELLED]
+        - name: patient_id
+          in: query
+          required: false
+          schema:
+            type: string
+            format: uuid
+      responses:
+        '200':
+          description: List of appointments retrieved successfully
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: '#/components/schemas/AppointmentResponse'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+
+    post:
+      tags:
+        - Doctor Appointments
+      summary: Create new appointment (single or recurring series)
+      description: Schedules a new medical visit. Validates no time collision exists and creates 24h & 2h push notification reminders.
+      security:
+        - BearerAuth: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/AppointmentCreateRequest'
+      responses:
+        '201':
+          description: Appointment successfully created
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/AppointmentCreateResponse'
+        '400':
+          description: Invalid parameters (e.g. appointment date in the past)
+        '409':
+          description: Scheduling conflict with another appointment
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+
+  /api/v1/doctor/appointments/{id}:
+    get:
+      tags:
+        - Doctor Appointments
+      summary: Get appointment by ID
+      security:
+        - BearerAuth: []
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: string
+            format: uuid
+      responses:
+        '200':
+          description: Appointment details
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/AppointmentResponse'
+        '404':
+          description: Appointment not found
+
+    put:
+      tags:
+        - Doctor Appointments
+      summary: Reschedule or edit appointment details
+      description: Updates scheduled time, duration, or notes. Revalidates schedule conflicts and recalculates notification reminders.
+      security:
+        - BearerAuth: []
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: string
+            format: uuid
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/AppointmentUpdateRequest'
+      responses:
+        '200':
+          description: Appointment updated successfully
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/AppointmentResponse'
+        '400':
+          description: Cannot edit a completed or cancelled appointment
+        '409':
+          description: New time slot conflicts with an existing appointment
+
+  /api/v1/doctor/appointments/{id}/complete:
+    post:
+      tags:
+        - Doctor Appointments
+      summary: Mark appointment as completed
+      description: Doctor confirms the medical examination has concluded. Cancels any pending reminder jobs.
+      security:
+        - BearerAuth: []
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: string
+            format: uuid
+      responses:
+        '200':
+          description: Appointment marked as completed
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/AppointmentResponse'
+        '404':
+          description: Appointment not found
+
+  /api/v1/doctor/appointments/{id}/cancel:
+    post:
+      tags:
+        - Doctor Appointments
+      summary: Cancel appointment with mandatory justification
+      description: Cancels the scheduled visit and cancels remaining reminder triggers. Sends cancellation push notification to the family.
+      security:
+        - BearerAuth: []
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: string
+            format: uuid
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/AppointmentCancelRequest'
+      responses:
+        '200':
+          description: Appointment cancelled successfully
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/AppointmentResponse'
+        '400':
+          description: Missing cancellation reason
+
+  /api/v1/mobile/patients/{patient_id}/appointments:
+    get:
+      tags:
+        - Family Appointments
+      summary: Read-only appointment list for Family and Caregivers
+      description: Allows family members to view all scheduled, completed, and cancelled visits for a specific patient.
+      security:
+        - BearerAuth: []
+      parameters:
+        - name: patient_id
+          in: path
+          required: true
+          schema:
+            type: string
+            format: uuid
+        - name: status
+          in: query
+          required: false
+          schema:
+            type: string
+            enum: [UPCOMING, COMPLETED, CANCELLED]
+      responses:
+        '200':
+          description: List of appointments for patient
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: '#/components/schemas/AppointmentResponse'
+        '403':
+          description: User does not belong to the patient's house
+
+components:
+  securitySchemes:
+    BearerAuth:
+      type: http
+      scheme: bearer
+      bearerFormat: JWT
+
+  responses:
+    Unauthorized:
+      description: Authentication token is missing, expired, or invalid.
+    Forbidden:
+      description: User lacks sufficient role permissions.
+
+  schemas:
+    AppointmentCreateRequest:
+      type: object
+      required:
+        - patient_id
+        - scheduled_at
+        - location
+      properties:
+        patient_id:
+          type: string
+          format: uuid
+        scheduled_at:
+          type: string
+          format: date-time
+        duration_minutes:
+          type: integer
+          default: 30
+          minimum: 15
+          maximum: 240
+        visit_type:
+          type: string
+          enum: [CLINIC, HOME_VISIT, TELEHEALTH]
+          default: HOME_VISIT
+        location:
+          type: string
+        clinical_notes:
+          type: string
+        recurrence_pattern:
+          type: string
+          enum: [NONE, WEEKLY, MONTHLY, QUARTERLY]
+          default: NONE
+        recurrence_occurrences:
+          type: integer
+          minimum: 1
+          maximum: 12
+          default: 1
+
+    AppointmentUpdateRequest:
+      type: object
+      properties:
+        scheduled_at:
+          type: string
+          format: date-time
+        duration_minutes:
+          type: integer
+        visit_type:
+          type: string
+          enum: [CLINIC, HOME_VISIT, TELEHEALTH]
+        location:
+          type: string
+        clinical_notes:
+          type: string
+
+    AppointmentCancelRequest:
+      type: object
+      required:
+        - cancellation_reason
+      properties:
+        cancellation_reason:
+          type: string
+          minLength: 3
+          maxLength: 500
+
+    AppointmentResponse:
+      type: object
+      properties:
+        id:
+          type: string
+          format: uuid
+        doctor_id:
+          type: string
+          format: uuid
+        doctor_name:
+          type: string
+        patient_id:
+          type: string
+          format: uuid
+        patient_name:
+          type: string
+        house_id:
+          type: string
+          format: uuid
+        visit_type:
+          type: string
+        scheduled_at:
+          type: string
+          format: date-time
+        duration_minutes:
+          type: integer
+        location:
+          type: string
+        clinical_notes:
+          type: string
+        status:
+          type: string
+          enum: [UPCOMING, COMPLETED, CANCELLED]
+        cancellation_reason:
+          type: string
+        recurrence_pattern:
+          type: string
+        parent_recurring_id:
+          type: string
+          format: uuid
+        created_at:
+          type: string
+          format: date-time
+        updated_at:
+          type: string
+          format: date-time
+
+    AppointmentCreateResponse:
+      type: object
+      properties:
+        primary_appointment:
+          $ref: '#/components/schemas/AppointmentResponse'
+        created_count:
+          type: integer
+          description: Total number of appointment instances created (including recurrence)
+        scheduled_reminders_count:
+          type: integer

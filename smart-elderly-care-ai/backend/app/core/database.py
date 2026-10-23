@@ -211,6 +211,45 @@ async def init_db() -> None:
                     updated_at TIMESTAMPTZ NOT NULL DEFAULT CURRENT_TIMESTAMP
                 );
             """))
+            await conn.execute(text("""
+                CREATE TABLE IF NOT EXISTS appointments (
+                    id UUID NOT NULL DEFAULT gen_random_uuid() PRIMARY KEY,
+                    doctor_id UUID REFERENCES users(id) ON DELETE SET NULL,
+                    patient_id UUID NOT NULL,
+                    house_id UUID REFERENCES houses(id) ON DELETE CASCADE,
+                    created_by UUID REFERENCES users(id) ON DELETE SET NULL,
+                    visit_type VARCHAR(30) NOT NULL DEFAULT 'HOME_VISIT',
+                    scheduled_at TIMESTAMPTZ NOT NULL,
+                    duration_minutes INT NOT NULL DEFAULT 30,
+                    location VARCHAR(255) NOT NULL DEFAULT 'Tại nhà (Khám tại gia)',
+                    clinical_notes TEXT,
+                    status VARCHAR(20) NOT NULL DEFAULT 'UPCOMING',
+                    cancellation_reason TEXT,
+                    recurrence_pattern VARCHAR(20) NOT NULL DEFAULT 'NONE',
+                    recurrence_end_date TIMESTAMPTZ,
+                    parent_recurring_id UUID REFERENCES appointments(id) ON DELETE SET NULL,
+                    enable_speaker_reminder BOOLEAN NOT NULL DEFAULT TRUE,
+                    created_at TIMESTAMPTZ NOT NULL DEFAULT CURRENT_TIMESTAMP,
+                    updated_at TIMESTAMPTZ NOT NULL DEFAULT CURRENT_TIMESTAMP
+                );
+            """))
+            await conn.execute(text("CREATE INDEX IF NOT EXISTS ix_appointments_doctor_time ON appointments(doctor_id, scheduled_at);"))
+            await conn.execute(text("CREATE INDEX IF NOT EXISTS ix_appointments_patient_time ON appointments(patient_id, scheduled_at);"))
+            await conn.execute(text("CREATE INDEX IF NOT EXISTS ix_appointments_status ON appointments(status, scheduled_at);"))
+            await conn.execute(text("CREATE INDEX IF NOT EXISTS ix_appointments_house_id ON appointments(house_id);"))
+            await conn.execute(text("""
+                CREATE TABLE IF NOT EXISTS appointment_reminders (
+                    id UUID NOT NULL DEFAULT gen_random_uuid() PRIMARY KEY,
+                    appointment_id UUID NOT NULL REFERENCES appointments(id) ON DELETE CASCADE,
+                    reminder_type VARCHAR(20) NOT NULL,
+                    scheduled_time TIMESTAMPTZ NOT NULL,
+                    status VARCHAR(20) NOT NULL DEFAULT 'PENDING',
+                    sent_at TIMESTAMPTZ,
+                    created_at TIMESTAMPTZ NOT NULL DEFAULT CURRENT_TIMESTAMP
+                );
+            """))
+            await conn.execute(text("CREATE INDEX IF NOT EXISTS ix_reminders_status_time ON appointment_reminders(status, scheduled_time);"))
+            await conn.execute(text("CREATE INDEX IF NOT EXISTS ix_reminders_appointment_id ON appointment_reminders(appointment_id);"))
 
         # 3. Dữ liệu khởi tạo (Seeding an toàn)
         try:

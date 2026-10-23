@@ -73,3 +73,7 @@ smart-elderly-care-ai/edge/test_snapshot.jpg
 *firebase-service-account*.json
 *google-services*.json
 .firebase/
+
+# Agent configuration
+.agents/
+.specify/

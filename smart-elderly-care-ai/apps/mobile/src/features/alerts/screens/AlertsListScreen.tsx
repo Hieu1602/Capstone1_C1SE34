@@ -25,7 +25,9 @@ import { SafeAreaView } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
 import { Colors, Shadows } from '../../../theme/colors';
 import { useAlertStore } from '../../../store';
+import { usePatientStore } from '../../../store/usePatientStore';
 import { useTheme } from '../../../store/useThemeStore';
+import { FamilyAppointmentsModal } from '../../dashboard/components/FamilyAppointmentsModal';
 
 // ------------------------------------------------------------------------------
 // 1. Interface cấu hình giao diện hiển thị cho từng loại sự kiện
@@ -91,6 +93,39 @@ function getAlertConfig(alertType: string): AlertConfig {
         iconBg: '#DCFCE7',
         isCritical: false,
       };
+    case 'APPOINTMENT_SCHEDULED':
+      return {
+        title: 'Lịch khám mới từ Bác sĩ',
+        badgeText: 'Chờ gia đình xác nhận',
+        badgeBg: '#FEF3C7',
+        badgeColor: '#D97706',
+        iconName: 'calendar',
+        iconColor: '#D97706',
+        iconBg: '#FEF3C7',
+        isCritical: false,
+      };
+    case 'APPOINTMENT_CONFIRMED':
+      return {
+        title: 'Lịch khám đã được xác nhận',
+        badgeText: 'Đã xác nhận',
+        badgeBg: '#DCFCE7',
+        badgeColor: '#16A34A',
+        iconName: 'checkmark-circle',
+        iconColor: '#16A34A',
+        iconBg: '#DCFCE7',
+        isCritical: false,
+      };
+    case 'APPOINTMENT_CANCELLED':
+      return {
+        title: 'Lịch khám đã bị hủy',
+        badgeText: 'Đã hủy',
+        badgeBg: '#FEE2E2',
+        badgeColor: '#DC2626',
+        iconName: 'close-circle',
+        iconColor: '#DC2626',
+        iconBg: '#FEE2E2',
+        isCritical: false,
+      };
     default:
       // Các loại sự kiện mở rộng khác (Cảm biến nhiệt, ngắt kết nối...)
       return {
@@ -145,12 +180,17 @@ export default function AlertsListScreen({ navigation }: any) {
 
   // Kết nối trực tiếp vào Domain Store useAlertStore để lấy danh sách cảnh báo từ Backend
   const { incidents, setIncidents, fetchNotifications } = useAlertStore();
+  const { patientRecord } = usePatientStore();
 
   // State cục bộ quản lý hiệu ứng kéo để tải lại (Pull-to-refresh)
   const [refreshing, setRefreshing] = useState(false);
 
-  // State bộ lọc: 'ALL' (Tất cả), 'CRITICAL' (Nguy kịch), 'VITAL' (Sức khỏe)
-  const [filterType, setFilterType] = useState<'ALL' | 'CRITICAL' | 'VITAL'>('ALL');
+  // State quản lý mở modal xác nhận lịch khám bác sĩ
+  const [familyAppointmentsModalVisible, setFamilyAppointmentsModalVisible] = useState(false);
+  const [selectedAppointmentPatientId, setSelectedAppointmentPatientId] = useState<string | number | null>(null);
+
+  // State bộ lọc: 'ALL' (Tất cả), 'CRITICAL' (Nguy kịch), 'VITAL' (Sức khỏe), 'APPOINTMENT' (Lịch khám)
+  const [filterType, setFilterType] = useState<'ALL' | 'CRITICAL' | 'VITAL' | 'APPOINTMENT'>('ALL');
 
   // Khi màn hình được mở: Tự động kéo danh sách thông báo mới nhất từ API
   React.useEffect(() => {
@@ -183,6 +223,13 @@ export default function AlertsListScreen({ navigation }: any) {
         item.alert_type.includes('TEMP')
       );
     }
+    if (filterType === 'APPOINTMENT') {
+      return (
+        item.alert_type === 'APPOINTMENT_SCHEDULED' ||
+        item.alert_type === 'APPOINTMENT_CONFIRMED' ||
+        item.alert_type === 'APPOINTMENT_CANCELLED'
+      );
+    }
     return true;
   });
 
@@ -207,6 +254,18 @@ export default function AlertsListScreen({ navigation }: any) {
       setIncidents(
         incidents.map((i) => (i.id === item.id ? { ...i, is_acknowledged: true } : i))
       );
+    }
+
+    // Trường hợp 0: Lịch khám bác sĩ -> Mở Modal chi tiết lịch khám và bấm xác nhận / xem lý do hủy
+    if (
+      item.alert_type === 'APPOINTMENT_SCHEDULED' ||
+      item.alert_type === 'APPOINTMENT_CONFIRMED' ||
+      item.alert_type === 'APPOINTMENT_CANCELLED'
+    ) {
+      const pid = item.device_id && !isNaN(Number(item.device_id)) ? item.device_id : (patientRecord?.patient_id || 1);
+      setSelectedAppointmentPatientId(pid);
+      setFamilyAppointmentsModalVisible(true);
+      return;
     }
 
     // Trường hợp 1: Chuyển động người -> Mở Camera xem lại phát lại (Playback)
@@ -369,6 +428,22 @@ export default function AlertsListScreen({ navigation }: any) {
             Sức khoẻ
           </Text>
         </TouchableOpacity>
+
+        {/* Tab Lịch khám Bác sĩ */}
+        <TouchableOpacity
+          style={[
+            styles.filterPill,
+            isDarkMode && filterType !== 'APPOINTMENT' && { backgroundColor: colors.card, borderColor: colors.border },
+            filterType === 'APPOINTMENT' && styles.filterPillActive,
+            filterType === 'APPOINTMENT' && isDarkMode && { backgroundColor: 'rgba(217, 119, 6, 0.15)', borderColor: '#D97706' },
+          ]}
+          onPress={() => setFilterType('APPOINTMENT')}
+          activeOpacity={0.8}
+        >
+          <Text style={[styles.filterText, isDarkMode && filterType !== 'APPOINTMENT' && { color: colors.textSecondary }, filterType === 'APPOINTMENT' && { color: '#D97706', fontWeight: '700' }]}>
+            🗓️ Lịch khám
+          </Text>
+        </TouchableOpacity>
       </View>
 
       {/* ---------------------------------------------------------------------- */}
@@ -492,6 +567,17 @@ export default function AlertsListScreen({ navigation }: any) {
             </Text>
           </View>
         }
+      />
+
+      {/* Modal Lịch khám Bác sĩ & Xác nhận cho Người thân */}
+      <FamilyAppointmentsModal
+        visible={familyAppointmentsModalVisible}
+        patientId={selectedAppointmentPatientId || patientRecord?.patient_id || 1}
+        patientName={patientRecord?.name}
+        onClose={() => {
+          setFamilyAppointmentsModalVisible(false);
+          fetchNotifications();
+        }}
       />
     </SafeAreaView>
   );

@@ -20,7 +20,7 @@ from app.crud.crud_user import crud_user, normalize_phone
 from app.crud.crud_user_terminal import crud_user_terminal
 from app.models.user import User
 from app.schemas.user import Token, UserCreate, UserLoginHistoryOut, UserOut, UserTerminalOut
-from app.services.doctor_verification import verify_doctor_cchn
+from app.services.doctor import verify_doctor_cchn
 from app.services.notification.otp_service import is_recently_verified, send_otp, verify_otp
 
 logger = logging.getLogger(__name__)

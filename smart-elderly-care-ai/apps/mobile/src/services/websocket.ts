@@ -55,8 +55,12 @@ export type WebSocketAlertEvent = {
   type: 'ALERT_NEW' | 'INCIDENT_RESOLVED' | 'VITALS_UPDATE' | 'SYSTEM_MODE_UPDATE' | 'telemetry' | string;
   alert_type?: string;
   incident_id?: string;
+  house_id?: string;
+  patient_id?: string | number;
+  appointment_id?: string;
   data?: any;
   timestamp?: string | number;
+  [key: string]: any;
 };
 
 type AlertHandler = (event: any) => void;
@@ -133,8 +137,80 @@ class AlertsWebSocket {
   private _handleStoreUpdate(event: WebSocketAlertEvent) {
     const store = useVitalStore.getState();
 
+    // 0. Lịch khám mới từ Bác sĩ (Doctor Appointment Scheduled)
+    if (event.alert_type === 'APPOINTMENT_SCHEDULED' || event.type === 'APPOINTMENT_SCHEDULED') {
+      const incData = event.data || {};
+      const newIncident: Incident = {
+        id: incData.id || `inc-apt-${Date.now()}`,
+        device_id: incData.device_id || event.house_id || 'system',
+        alert_type: 'APPOINTMENT_SCHEDULED',
+        alert_level: 'LOW',
+        message: incData.message || '🗓️ Bác sĩ vừa lên lịch khám mới. Vui lòng kiểm tra và xác nhận.',
+        video_clip_url: null,
+        thumbnail_url: null,
+        is_acknowledged: false,
+        created_at: incData.created_at || new Date().toISOString(),
+        note: event.appointment_id || incData.appointment_id || null,
+      };
+
+      store.addIncident(newIncident);
+
+      // Bắn thông báo đẩy cục bộ nhẹ nhàng (không kích hoạt còi hú khẩn cấp)
+      notificationService.triggerEmergencyNotification({
+        title: incData.title || '🗓️ LỊCH KHÁM MỚI TỪ BÁC SĨ',
+        body: newIncident.message,
+        data: {
+          incident_id: newIncident.id,
+          alert_type: 'APPOINTMENT_SCHEDULED',
+          appointment_id: event.appointment_id,
+          patient_id: event.patient_id,
+        },
+      });
+      return;
+    }
+
+    // 0.1. Lịch khám đã được xác nhận (Doctor Appointment Confirmed)
+    if (event.alert_type === 'APPOINTMENT_CONFIRMED' || event.type === 'APPOINTMENT_CONFIRMED') {
+      const aptId = event.appointment_id || event.data?.appointment_id;
+      const targetInc = store.incidents.find(
+        (i) => (aptId && i.note === aptId) || i.id === event.incident_id || i.id === event.data?.id
+      );
+      if (targetInc) {
+        store.acknowledgeIncident(targetInc.id, 'Gia đình đã xác nhận lịch khám');
+      }
+      return;
+    }
+
+    // 0.2. Lịch khám đã bị Bác sĩ hủy (Doctor Appointment Cancelled)
+    if (event.alert_type === 'APPOINTMENT_CANCELLED' || event.type === 'APPOINTMENT_CANCELLED') {
+      const aptId = event.appointment_id || event.data?.appointment_id;
+      const reason = event.cancellation_reason || event.data?.cancellation_reason || 'Bác sĩ bận việc đột xuất';
+      const targetInc = store.incidents.find(
+        (i) =>
+          (aptId && i.note && (i.note === aptId || i.note.includes(aptId))) ||
+          i.id === event.incident_id ||
+          i.id === event.data?.id ||
+          (i.alert_type === 'APPOINTMENT_SCHEDULED' && (!aptId || (i.note && i.note.includes(aptId))))
+      );
+      if (targetInc) {
+        store.acknowledgeIncident(targetInc.id, `Lịch khám đã bị hủy: ${reason}`);
+      }
+
+      // Thông báo nhẹ nhàng cho người nhà/gia đình biết lịch đã hủy
+      notificationService.triggerEmergencyNotification({
+        title: '🗓️ LỊCH KHÁM ĐÃ BỊ HỦY',
+        body: event.data?.message || `Bác sĩ đã hủy lịch khám. Lý do: ${reason}`,
+        data: {
+          alert_type: 'APPOINTMENT_CANCELLED',
+          appointment_id: aptId,
+          cancellation_reason: reason,
+        },
+      });
+      return;
+    }
+
     // 1. Cảnh báo té ngã / sự cố khẩn cấp mới (Feature 1)
-    if (event.type === 'ALERT_NEW' || event.alert_type === 'FALL_DETECTED') {
+    if ((event.type === 'ALERT_NEW' && event.alert_type !== 'APPOINTMENT_SCHEDULED') || event.alert_type === 'FALL_DETECTED') {
       const incData = event.data || {};
       const newIncident: Incident = {
         id: incData.id || `inc-${Date.now()}`,

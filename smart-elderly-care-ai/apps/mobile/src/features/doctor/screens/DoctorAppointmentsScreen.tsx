@@ -24,6 +24,8 @@ import {
   AppointmentStatsSummary,
   AppointmentCard,
   AppointmentFormModal,
+  AppointmentCancelModal,
+  AppointmentCompleteModal,
 } from '../components';
 
 export type { AppointmentItem };
@@ -36,20 +38,33 @@ export default function DoctorAppointmentsScreen() {
   const [loading, setLoading] = useState(false);
   const [refreshing, setRefreshing] = useState(false);
   const [appointments, setAppointments] = useState<AppointmentItem[]>([]);
-  const [filterTab, setFilterTab] = useState<'ALL' | 'UPCOMING' | 'COMPLETED'>('ALL');
+  const [filterTab, setFilterTab] = useState<'ALL' | 'UPCOMING' | 'COMPLETED' | 'CANCELLED'>('ALL');
   const [patients, setPatients] = useState<any[]>([]);
 
-  // Modal State
+  // Create / Edit Modal State
   const [modalVisible, setModalVisible] = useState(false);
   const [editingAptId, setEditingAptId] = useState<string | null>(null);
   const [patientId, setPatientId] = useState('');
   const [patientName, setPatientName] = useState('');
   const [scheduledAt, setScheduledAt] = useState('');
   const [examType, setExamType] = useState('');
+  const [visitType, setVisitType] = useState<'HOME_VISIT' | 'CLINIC'>('HOME_VISIT');
   const [location, setLocation] = useState('');
   const [instructions, setInstructions] = useState('');
   const [enableSpeaker, setEnableSpeaker] = useState(true);
+  const [recurrencePattern, setRecurrencePattern] = useState<'NONE' | 'WEEKLY' | 'MONTHLY' | 'QUARTERLY'>('NONE');
+  const [recurrenceOccurrences, setRecurrenceOccurrences] = useState(1);
   const [isSubmitting, setIsSubmitting] = useState(false);
+
+  // Cancellation Modal State
+  const [cancelModalVisible, setCancelModalVisible] = useState(false);
+  const [targetCancelApt, setTargetCancelApt] = useState<AppointmentItem | null>(null);
+  const [isCancelling, setIsCancelling] = useState(false);
+
+  // Completion Confirmation Modal State
+  const [completeModalVisible, setCompleteModalVisible] = useState(false);
+  const [targetCompleteApt, setTargetCompleteApt] = useState<AppointmentItem | null>(null);
+  const [isCompleting, setIsCompleting] = useState(false);
 
   const fetchAppointments = useCallback(async () => {
     try {
@@ -85,16 +100,42 @@ export default function DoctorAppointmentsScreen() {
     fetchAppointments();
   };
 
+  const handleSelectPatient = (pat: any) => {
+    setPatientId(String(pat.id));
+    setPatientName(pat.name || '');
+    if (visitType === 'HOME_VISIT') {
+      if (pat.house_address) {
+        setLocation(`Tại nhà: ${pat.house_address}`);
+      } else {
+        setLocation('Tại nhà bệnh nhân (Khám tại gia)');
+      }
+    }
+  };
+
   const handleOpenCreateModal = () => {
     setEditingAptId(null);
     const defaultPat = patients[0];
-    setPatientId(defaultPat?.id ? String(defaultPat.id) : '');
+    const patId = defaultPat?.id ? String(defaultPat.id) : '';
+    setPatientId(patId);
     setPatientName(defaultPat?.name || '');
-    setScheduledAt('');
-    setExamType('');
-    setLocation(defaultPat?.house_address || '');
+    setVisitType('HOME_VISIT');
+
+    // Default to tomorrow 08:30
+    const tomorrow = new Date();
+    tomorrow.setDate(tomorrow.getDate() + 1);
+    tomorrow.setHours(8, 30, 0, 0);
+    setScheduledAt(tomorrow.toISOString());
+
+    setExamType('Tái khám tim mạch & HA');
+    setLocation(
+      defaultPat?.house_address
+        ? `Tại nhà: ${defaultPat.house_address}`
+        : 'Tại nhà bệnh nhân (Khám tại gia)'
+    );
     setInstructions('');
     setEnableSpeaker(true);
+    setRecurrencePattern('NONE');
+    setRecurrenceOccurrences(1);
     setModalVisible(true);
   };
 
@@ -103,29 +144,54 @@ export default function DoctorAppointmentsScreen() {
     setPatientId(apt.patient_id);
     setPatientName(apt.patient_name);
     setScheduledAt(apt.scheduled_at);
-    setExamType(apt.exam_type);
-    setLocation(apt.location);
+    setExamType(apt.exam_type || apt.clinical_notes || 'Khám tổng quát định kỳ');
+    setVisitType((apt.visit_type as any) || 'HOME_VISIT');
+    setLocation(apt.location || '');
     setInstructions(apt.instructions || '');
-    setEnableSpeaker(apt.enable_speaker_reminder);
+    setEnableSpeaker(apt.enable_speaker_reminder ?? true);
+    setRecurrencePattern((apt.recurrence_pattern as any) || 'NONE');
+    setRecurrenceOccurrences(apt.recurrence_occurrences || 1);
     setModalVisible(true);
   };
 
   const handleSaveAppointment = async () => {
-    if (!scheduledAt.trim() || !examType.trim()) {
-      LocalizedAlert.alert('Thiếu thông tin', 'Vui lòng nhập ngày giờ và chuyên khoa khám.');
+    if (!examType.trim()) {
+      LocalizedAlert.alert('Thiếu thông tin', 'Vui lòng nhập chuyên khoa hoặc mục đích khám.');
       return;
+    }
+
+    // Format ISO timestamp
+    let finalScheduledAt = scheduledAt.trim();
+    if (!finalScheduledAt) {
+      const tomorrow = new Date();
+      tomorrow.setDate(tomorrow.getDate() + 1);
+      tomorrow.setHours(8, 30, 0, 0);
+      finalScheduledAt = tomorrow.toISOString();
+    } else {
+      const parsed = new Date(finalScheduledAt);
+      if (!isNaN(parsed.getTime())) {
+        finalScheduledAt = parsed.toISOString();
+      }
     }
 
     try {
       setIsSubmitting(true);
-      const payload = {
-        patient_id: patientId || (patients[0]?.id ? String(patients[0].id) : ''),
-        patient_name: patientName.trim() || patients[0]?.name || 'Bệnh nhân',
-        scheduled_at: scheduledAt.trim(),
+      const chosenPatientId =
+        patientId || (patients[0]?.id ? String(patients[0].id) : '00000000-0000-0000-0000-000000000000');
+      const chosenPatientName = patientName.trim() || patients[0]?.name || 'Bệnh nhân người cao tuổi';
+
+      const payload: any = {
+        patient_id: chosenPatientId,
+        patient_name: chosenPatientName,
+        scheduled_at: finalScheduledAt,
+        visit_type: visitType,
         exam_type: examType.trim(),
-        location: location.trim(),
+        location: location.trim() || 'Tại nhà bệnh nhân',
+        clinical_notes: instructions.trim() ? `[${examType.trim()}] ${instructions.trim()}` : examType.trim(),
         instructions: instructions.trim(),
         enable_speaker_reminder: enableSpeaker,
+        recurrence_pattern: recurrencePattern,
+        recurrence_occurrences: recurrencePattern !== 'NONE' ? recurrenceOccurrences : 1,
       };
 
       if (editingAptId) {
@@ -138,44 +204,113 @@ export default function DoctorAppointmentsScreen() {
       } else {
         const res = await doctorApi.createAppointment(payload);
         if (res.data) {
-          setAppointments([res.data, ...appointments]);
+          if (Array.isArray(res.data)) {
+            setAppointments([...res.data, ...appointments]);
+          } else {
+            setAppointments([res.data, ...appointments]);
+          }
         }
         setModalVisible(false);
+        const displayTime = new Date(finalScheduledAt).toLocaleTimeString('vi-VN', {
+          hour: '2-digit',
+          minute: '2-digit',
+          day: '2-digit',
+          month: '2-digit',
+          year: 'numeric',
+        });
         LocalizedAlert.alert(
           'Đã đặt lịch khám',
-          `Đã tạo lịch khám "${payload.exam_type}" vào ${payload.scheduled_at}. Hệ thống sẽ phát loa nhắc nhở người nhà trước buổi khám!`
+          `Đã tạo lịch khám "${payload.exam_type}" cho ${chosenPatientName} vào ${displayTime}. Thông báo tức thì đã được gửi đến Người nhà để xác nhận đón tiếp, đồng thời kích hoạt nhắc nhở loa Hub!`
         );
       }
-    } catch {
-      LocalizedAlert.alert('Lỗi', 'Không thể kết nối lưu lịch hẹn.');
+    } catch (err: any) {
+      const status = err?.response?.status;
+      const detail = err?.response?.data?.detail;
+      if (status === 409 || (detail && typeof detail === 'string' && detail.includes('trùng'))) {
+        LocalizedAlert.alert(
+          'Trùng lịch khám',
+          detail || 'Khoảng thời gian này đã có một lịch khám khác. Vui lòng chọn thời gian khám khác.'
+        );
+      } else {
+        LocalizedAlert.alert('Lỗi', detail || 'Không thể kết nối lưu lịch hẹn.');
+      }
     } finally {
       setIsSubmitting(false);
     }
   };
 
-  const handleMarkCompleted = async (aptId: string) => {
+  const handleOpenCompleteModal = (aptId: string) => {
+    const target = appointments.find((a) => a.id === aptId);
+    if (target) {
+      setTargetCompleteApt(target);
+      setCompleteModalVisible(true);
+    }
+  };
+
+  const handleConfirmComplete = async () => {
+    if (!targetCompleteApt) return;
     try {
-      await doctorApi.updateAppointment(aptId, { status: 'COMPLETED' });
+      setIsCompleting(true);
+      await doctorApi.completeAppointment(targetCompleteApt.id);
       setAppointments((prev) =>
-        prev.map((a) => (a.id === aptId ? { ...a, status: 'COMPLETED' } : a))
+        prev.map((a) => (a.id === targetCompleteApt.id ? { ...a, status: 'COMPLETED' } : a))
       );
+      setCompleteModalVisible(false);
       LocalizedAlert.alert('Đã khám xong', 'Đã ghi nhận hoàn tất buổi khám.');
-    } catch {
-      LocalizedAlert.alert('Lỗi', 'Không thể cập nhật trạng thái lịch khám.');
+    } catch (err: any) {
+      LocalizedAlert.alert('Lỗi', err?.response?.data?.detail || 'Không thể cập nhật trạng thái lịch khám.');
+    } finally {
+      setIsCompleting(false);
+    }
+  };
+
+  const handleOpenCancelModal = (apt: AppointmentItem) => {
+    setTargetCancelApt(apt);
+    setCancelModalVisible(true);
+  };
+
+  const handleConfirmCancel = async (reason: string) => {
+    if (!targetCancelApt) return;
+    try {
+      setIsCancelling(true);
+      await doctorApi.cancelAppointment(targetCancelApt.id, { cancellation_reason: reason });
+      setAppointments((prev) =>
+        prev.map((a) =>
+          a.id === targetCancelApt.id ? { ...a, status: 'CANCELLED', cancellation_reason: reason } : a
+        )
+      );
+      setCancelModalVisible(false);
+      LocalizedAlert.alert(
+        'Đã hủy lịch khám',
+        'Đã hủy lịch hẹn thành công, hủy các mốc nhắc nhở qua loa Hub và đồng bộ thông báo tới Gia đình.'
+      );
+    } catch (err: any) {
+      const rawDetail = err?.response?.data?.detail;
+      let errorMsg = 'Không thể hủy lịch khám.';
+      if (typeof rawDetail === 'string') {
+        errorMsg = rawDetail;
+      } else if (Array.isArray(rawDetail)) {
+        errorMsg = rawDetail.map((d: any) => d.msg || JSON.stringify(d)).join('\n');
+      } else if (rawDetail && typeof rawDetail === 'object') {
+        errorMsg = rawDetail.message || JSON.stringify(rawDetail);
+      }
+      LocalizedAlert.alert('Lỗi', errorMsg);
+    } finally {
+      setIsCancelling(false);
     }
   };
 
   const handleDeleteAppointment = (aptId: string, title: string) => {
-    LocalizedAlert.alert('Hủy lịch hẹn', `Bác sĩ có chắc chắn muốn hủy lịch khám "${title}"?`, [
+    LocalizedAlert.alert('Xóa lịch khám', `Bác sĩ có chắc chắn muốn xóa bản ghi lịch khám "${title}"?`, [
       { text: 'Quay lại', style: 'cancel' },
       {
-        text: 'Hủy lịch',
+        text: 'Xóa',
         style: 'destructive',
         onPress: async () => {
           try {
             await doctorApi.deleteAppointment(aptId);
             setAppointments((prev) => prev.filter((a) => a.id !== aptId));
-            LocalizedAlert.alert('Đã hủy', 'Đã xóa lịch hẹn thành công.');
+            LocalizedAlert.alert('Đã xóa', 'Đã xóa bản ghi lịch hẹn thành công.');
           } catch {
             LocalizedAlert.alert('Lỗi', 'Không thể xóa lịch hẹn.');
           }
@@ -191,10 +326,12 @@ export default function DoctorAppointmentsScreen() {
   const totalCount = appointments.length;
   const upcomingCount = appointments.filter((a) => a.status === 'UPCOMING').length;
   const completedCount = appointments.filter((a) => a.status === 'COMPLETED').length;
+  const cancelledCount = appointments.filter((a) => a.status === 'CANCELLED').length;
 
   const filteredAppointments = appointments.filter((a) => {
     if (filterTab === 'UPCOMING') return a.status === 'UPCOMING';
     if (filterTab === 'COMPLETED') return a.status === 'COMPLETED';
+    if (filterTab === 'CANCELLED') return a.status === 'CANCELLED';
     return true;
   });
 
@@ -228,11 +365,12 @@ export default function DoctorAppointmentsScreen() {
           </TouchableOpacity>
         </View>
 
-        {/* 3 Thẻ thống kê & Bộ lọc */}
+        {/* 4 Thẻ thống kê & Bộ lọc */}
         <AppointmentStatsSummary
           totalCount={totalCount}
           upcomingCount={upcomingCount}
           completedCount={completedCount}
+          cancelledCount={cancelledCount}
           filterTab={filterTab}
           onFilterChange={setFilterTab}
           isDarkMode={isDarkMode}
@@ -262,8 +400,9 @@ export default function DoctorAppointmentsScreen() {
               key={apt.id}
               appointment={apt}
               onViewPatient={handleViewPatient}
-              onMarkCompleted={handleMarkCompleted}
+              onMarkCompleted={handleOpenCompleteModal}
               onEdit={handleOpenEditModal}
+              onCancel={handleOpenCancelModal}
               onDelete={handleDeleteAppointment}
               isDarkMode={isDarkMode}
               colors={colors}
@@ -276,21 +415,52 @@ export default function DoctorAppointmentsScreen() {
       <AppointmentFormModal
         visible={modalVisible}
         isEditing={!!editingAptId}
+        patients={patients}
+        patientId={patientId}
         patientName={patientName}
         scheduledAt={scheduledAt}
         examType={examType}
+        visitType={visitType}
         location={location}
         instructions={instructions}
         enableSpeaker={enableSpeaker}
+        recurrencePattern={recurrencePattern}
+        recurrenceOccurrences={recurrenceOccurrences}
         isSubmitting={isSubmitting}
+        onSelectPatient={handleSelectPatient}
         onChangePatientName={setPatientName}
         onChangeScheduledAt={setScheduledAt}
         onChangeExamType={setExamType}
+        onChangeVisitType={setVisitType}
         onChangeLocation={setLocation}
         onChangeInstructions={setInstructions}
         onToggleEnableSpeaker={setEnableSpeaker}
+        onChangeRecurrencePattern={setRecurrencePattern}
+        onChangeRecurrenceOccurrences={setRecurrenceOccurrences}
         onSave={handleSaveAppointment}
         onClose={() => setModalVisible(false)}
+        isDarkMode={isDarkMode}
+        colors={colors}
+      />
+
+      {/* Modal Xác nhận hoàn thành khám */}
+      <AppointmentCompleteModal
+        visible={completeModalVisible}
+        appointment={targetCompleteApt}
+        isSubmitting={isCompleting}
+        onConfirm={handleConfirmComplete}
+        onClose={() => setCompleteModalVisible(false)}
+        isDarkMode={isDarkMode}
+        colors={colors}
+      />
+
+      {/* Modal Hủy lịch hẹn (Bắt buộc lý do) */}
+      <AppointmentCancelModal
+        visible={cancelModalVisible}
+        appointment={targetCancelApt}
+        isSubmitting={isCancelling}
+        onConfirm={handleConfirmCancel}
+        onClose={() => setCancelModalVisible(false)}
         isDarkMode={isDarkMode}
         colors={colors}
       />
