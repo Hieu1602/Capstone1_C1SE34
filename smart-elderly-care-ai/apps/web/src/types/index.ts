@@ -1,6 +1,21 @@
 // types/index.ts - Core types for Admin Web Portal
 
-export type UserRole = 'admin' | 'doctor' | 'caregiver' | 'user' | 'elderly';
+export type UserRole = 'admin' | 'doctor' | 'caregiver' | 'user' | 'elderly' | 'owner' | 'member';
+
+export interface PermissionRule {
+  id: string;
+  name: string;
+  description: string;
+  target_role: UserRole | 'all';
+  module: 'camera' | 'vitals' | 'emergency' | 'devices' | 'members' | 'medical' | 'all';
+  permissions: string[];
+  is_active: boolean;
+  color?: string;
+  is_system?: boolean;
+  member_count?: number;
+  created_at?: string;
+  updated_at?: string;
+}
 
 export interface User {
   id: string;
@@ -201,6 +216,7 @@ export interface SystemNotification {
   status: NotificationStatus;
   scheduled_at?: string | null;
   published_at?: string | null;
+  expires_at?: string | null;
   revoked_at?: string | null;
   revoke_reason?: string | null;
   delivered_count: number;
@@ -217,6 +233,7 @@ export interface CreateNotificationPayload {
   target_audience: TargetAudience;
   status?: 'draft' | 'scheduled' | 'published';
   scheduled_at?: string | null;
+  expires_at?: string | null;
 }
 
 export interface UpdateNotificationPayload {
@@ -226,6 +243,7 @@ export interface UpdateNotificationPayload {
   target_audience?: TargetAudience;
   status?: NotificationStatus;
   scheduled_at?: string | null;
+  expires_at?: string | null;
 }
 
 

@@ -12,6 +12,7 @@ import { useTheme } from '../../../store/useThemeStore';
 import { useAuthStore } from '../../../store/useAuthStore';
 import { doctorApi } from '../../../services/api';
 import { LocalizedText } from '../../../i18n/LocalizedComponents';
+import AdminMarqueeBanner from '../../../components/AdminMarqueeBanner';
 
 import {
   PatientCardData,
@@ -111,6 +112,9 @@ export default function DoctorPatientsScreen() {
         isDarkMode={isDarkMode}
         colors={colors}
       />
+
+      {/* Thanh thông báo chạy chữ từ Admin (dành cho Bác sĩ) */}
+      <AdminMarqueeBanner targetAudience="doctors" />
 
       {/* Patient Cards List */}
       <ScrollView

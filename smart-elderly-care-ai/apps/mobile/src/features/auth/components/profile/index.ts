@@ -5,4 +5,7 @@ export * from "./ChangePasswordModal";
 export * from "./ProfileEditNameModal";
 export * from "./ProfileInfoModal";
 export * from "./SecurityCenterModal";
-
+export * from "./ProfileUserCard";
+export * from "./ProfileQuickGrid";
+export * from "./ProfileHelpAccordion";
+export * from "./ProfileSettingsAccordion";

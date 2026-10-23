@@ -18,6 +18,7 @@ import { useNavigation, useFocusEffect } from '@react-navigation/native';
 import { useTheme } from '../../../store/useThemeStore';
 import { doctorApi } from '../../../services/api';
 import { LocalizedAlert, LocalizedText } from '../../../i18n/LocalizedComponents';
+import AdminMarqueeBanner from '../../../components/AdminMarqueeBanner';
 
 import {
   AppointmentItem,
@@ -239,6 +240,9 @@ export default function DoctorAppointmentsScreen() {
           colors={colors}
         />
       </View>
+
+      {/* Thanh thông báo chạy chữ từ Admin (dành cho Bác sĩ) */}
+      <AdminMarqueeBanner targetAudience="doctors" />
 
       {/* Danh sách lịch hẹn */}
       <ScrollView
