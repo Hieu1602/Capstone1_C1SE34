@@ -11,7 +11,7 @@ device:
 
 # ---- Camera Configuration ----
 camera:
-  source: "rtsp://admin162:16161616@192.168.1.4:554/stream1"   # RTSP IP Cam
+  source: 0  # USB fallback; TAPO_HOST + Camera Account env override this
   fps: 15
   resolution:
     width: 1920

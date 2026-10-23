@@ -1,0 +1,12 @@
+FROM python:3.11-slim-bookworm
+RUN apt-get update && apt-get install -y --no-install-recommends ffmpeg libglib2.0-0 \
+    && rm -rf /var/lib/apt/lists/*
+WORKDIR /app
+COPY requirements.camera.txt .
+RUN pip install --no-cache-dir -r requirements.camera.txt
+COPY src ./src
+RUN useradd --create-home camera && mkdir /recordings && chown camera:camera /recordings
+USER camera
+ENV PYTHONUNBUFFERED=1 OPENCV_FFMPEG_CAPTURE_OPTIONS=rtsp_transport;tcp OPENCV_FFMPEG_LOGLEVEL=-8 OPENCV_LOG_LEVEL=SILENT
+EXPOSE 8090
+CMD ["python", "-m", "src.services.tapo_camera"]
