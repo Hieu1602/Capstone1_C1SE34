@@ -31,7 +31,7 @@ export const UserTable: React.FC<UserTableProps> = ({
     <div className="glass-card overflow-hidden">
       <div className="overflow-x-auto">
         <table className="w-full text-left text-xs">
-          <thead className="bg-[#FFF8EE] dark:bg-[#1A3830] text-[11px] font-mono uppercase tracking-wider text-slate-700 dark:text-slate-300 border-b border-[#C8AD8A] dark:border-white/10 font-bold">
+          <thead className="bg-[#F5F6F8] dark:bg-[#202329] text-[11px] font-mono uppercase tracking-wider text-[#737780] dark:text-[#A1A7B1] border-b border-[#E7E9ED] dark:border-[#454A53] font-bold">
             <tr>
               <th className="py-3 px-4">Tài khoản & Họ tên</th>
               <th className="py-3 px-4">Số điện thoại</th>
@@ -41,10 +41,10 @@ export const UserTable: React.FC<UserTableProps> = ({
               <th className="py-3 px-4 text-right">Thao tác & Phân quyền</th>
             </tr>
           </thead>
-          <tbody className="divide-y divide-[#C8AD8A]/30 dark:divide-white/5">
+          <tbody className="divide-y divide-[#E7E9ED] dark:divide-[#454A53]">
             {users.length === 0 ? (
               <tr>
-                <td colSpan={6} className="py-12 text-center text-slate-500">
+                <td colSpan={6} className="py-12 text-center text-[#737780]">
                   <Users className="w-10 h-10 mx-auto text-slate-400 mb-2 opacity-40" />
                   Không tìm thấy người dùng nào phù hợp với bộ lọc
                 </td>
@@ -59,14 +59,14 @@ export const UserTable: React.FC<UserTableProps> = ({
                     {/* Name & Avatar */}
                     <td className="py-3 px-4">
                       <div className="flex items-center space-x-3">
-                        <div className="w-8 h-8 rounded-lg bg-gradient-to-tr from-[#D96C3B] to-[#B84B1E] text-white font-bold text-xs flex items-center justify-center shrink-0 font-mono shadow-xs">
+                        <div className="w-8 h-8 rounded-lg bg-gradient-to-tr from-[#FF6B35] to-[#E95724] text-white font-bold text-xs flex items-center justify-center shrink-0 font-mono shadow-xs">
                           {userItem.full_name.slice(0, 2).toUpperCase()}
                         </div>
                         <div>
-                          <p className="font-semibold text-slate-900 dark:text-slate-100 leading-tight">
+                          <p className="font-semibold text-[#191B20] dark:text-[#F5F6F8] leading-tight">
                             {userItem.full_name}
                           </p>
-                          <p className="text-[10px] font-mono text-slate-500 mt-0.5">
+                          <p className="text-[10px] font-mono text-[#737780] mt-0.5">
                             {userItem.id.startsWith('b') || userItem.id.startsWith('a')
                               ? `ID: ${userItem.id.slice(0, 8)}...`
                               : `ID: ${userItem.id}`}
@@ -77,8 +77,8 @@ export const UserTable: React.FC<UserTableProps> = ({
 
                     {/* Phone */}
                     <td className="py-3 px-4">
-                      <div className="flex items-center space-x-1.5 text-slate-700 dark:text-slate-300 font-mono text-xs">
-                        <Phone className="w-3.5 h-3.5 text-slate-400 shrink-0" />
+                      <div className="flex items-center space-x-1.5 text-[#191B20] dark:text-[#F5F6F8] font-mono text-xs">
+                        <Phone className="w-3.5 h-3.5 text-[#737780] shrink-0" />
                         <span>{userItem.phone}</span>
                       </div>
                     </td>
@@ -96,8 +96,8 @@ export const UserTable: React.FC<UserTableProps> = ({
 
                     {/* House */}
                     <td className="py-3 px-4">
-                      <div className="flex items-center space-x-1.5 text-xs text-slate-600 dark:text-slate-400">
-                        <Home className="w-3.5 h-3.5 text-slate-400 shrink-0" />
+                      <div className="flex items-center space-x-1.5 text-xs text-[#737780] dark:text-[#A1A7B1]">
+                        <Home className="w-3.5 h-3.5 text-[#737780] shrink-0" />
                         <span className="truncate max-w-[180px]">{userItem.assigned_house || 'Chưa phân bổ'}</span>
                       </div>
                     </td>
@@ -130,16 +130,16 @@ export const UserTable: React.FC<UserTableProps> = ({
                         {/* Xem & kiểm tra quyền chi tiết */}
                         <button
                           onClick={() => onInspectPermissions(userItem)}
-                          className="p-1.5 rounded-lg text-slate-500 hover:text-[#D96C3B] hover:bg-[#D96C3B]/10 transition-colors cursor-pointer"
+                          className="p-1.5 rounded-lg text-[#737780] hover:text-[#FF6B35] hover:bg-[#FFF0E8] dark:hover:bg-[#FF6B35]/15 transition-colors cursor-pointer"
                           title="Xem & kiểm tra Rule phân quyền của tài khoản này"
                         >
-                          <ShieldCheck className="w-4 h-4 text-[#D96C3B]" />
+                          <ShieldCheck className="w-4 h-4 text-[#FF6B35]" />
                         </button>
 
                         {/* Chỉnh sửa tài khoản */}
                         <button
                           onClick={() => onEditUser(userItem)}
-                          className="p-1.5 rounded-lg text-slate-400 hover:text-sky-600 dark:hover:text-sky-400 hover:bg-sky-50 dark:hover:bg-white/5 transition-colors cursor-pointer"
+                          className="p-1.5 rounded-lg text-[#737780] hover:text-[#FF6B35] hover:bg-[#FFF0E8] dark:hover:bg-[#FF6B35]/15 transition-colors cursor-pointer"
                           title="Chỉnh sửa thông tin & Vai trò"
                         >
                           <KeyRound className="w-4 h-4" />
@@ -148,13 +148,13 @@ export const UserTable: React.FC<UserTableProps> = ({
                         {/* Khóa / Mở khóa */}
                         <button
                           onClick={() => onToggleStatus(userItem)}
-                          className="p-1.5 rounded-lg text-slate-400 hover:text-amber-600 dark:hover:text-amber-400 hover:bg-amber-50 dark:hover:bg-white/5 transition-colors cursor-pointer"
+                          className="p-1.5 rounded-lg text-[#737780] hover:text-[#E9A23B] hover:bg-amber-50 dark:hover:bg-white/5 transition-colors cursor-pointer"
                           title={userItem.is_active ? 'Khóa tài khoản' : 'Mở khóa tài khoản'}
                         >
                           {userItem.is_active ? (
                             <Lock className="w-4 h-4" />
                           ) : (
-                            <Unlock className="w-4 h-4 text-sky-600 dark:text-sky-400" />
+                            <Unlock className="w-4 h-4 text-[#FF6B35]" />
                           )}
                         </button>
 
@@ -162,7 +162,7 @@ export const UserTable: React.FC<UserTableProps> = ({
                         {userItem.role !== 'admin' && (
                           <button
                             onClick={() => onDeleteUser(userItem)}
-                            className="p-1.5 rounded-lg text-slate-400 hover:text-rose-600 dark:hover:text-rose-400 hover:bg-rose-50 dark:hover:bg-white/5 transition-colors cursor-pointer"
+                            className="p-1.5 rounded-lg text-[#737780] hover:text-[#E5484D] hover:bg-rose-50 dark:hover:bg-white/5 transition-colors cursor-pointer"
                             title="Xóa tài khoản"
                           >
                             <Trash2 className="w-4 h-4" />
@@ -180,4 +180,3 @@ export const UserTable: React.FC<UserTableProps> = ({
     </div>
   );
 };
-

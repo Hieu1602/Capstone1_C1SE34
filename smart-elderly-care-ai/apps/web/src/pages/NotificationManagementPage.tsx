@@ -246,7 +246,7 @@ export const NotificationManagementPage: React.FC = () => {
     <div className="space-y-6 animate-fade-in relative">
       {/* Toast popup */}
       {toastMessage && (
-        <div className="fixed top-20 right-6 z-50 flex items-center gap-2 px-4 py-3 rounded-xl bg-slate-900 text-white text-xs font-semibold shadow-2xl border border-slate-700 animate-slide-left">
+        <div className="fixed top-20 right-6 z-50 flex items-center gap-2 px-4 py-3 rounded-xl bg-slate-900 dark:bg-[#101216] text-white dark:text-[#F5F6F8] text-xs font-semibold shadow-2xl border border-slate-700 dark:border-[#454A53] animate-slide-left">
           <CheckCircle2 className="w-4 h-4 text-emerald-400 shrink-0" />
           <span>{toastMessage}</span>
         </div>
@@ -254,14 +254,18 @@ export const NotificationManagementPage: React.FC = () => {
 
       {/* ── Page Header ── */}
       <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4">
-        <div>
-          <h1 className="text-xl sm:text-2xl font-bold font-heading text-slate-900 dark:text-white flex items-center gap-2.5">
-            <Bell className="w-6 h-6 text-[#D96C3B]" />
-            <span>Quản lý thông báo hệ thống</span>
-          </h1>
-          <p className="text-xs text-slate-600 dark:text-slate-400 mt-1">
-            Điều phối và phát hành thông báo diện rộng tới Bác sĩ, Gia đình và Người cao tuổi trên thiết bị di động
-          </p>
+        <div className="flex items-center gap-3.5">
+          <div className="w-11 h-11 rounded-2xl bg-gradient-to-br from-[#FF723B] via-[#F05A24] to-[#C73C0A] text-white flex items-center justify-center shadow-[0_4px_16px_rgba(240,90,36,0.35),inset_0_1px_0_rgba(255,255,255,0.4)] border border-white/20 shrink-0">
+            <Bell className="w-5 h-5 stroke-[2.2]" />
+          </div>
+          <div>
+            <h1 className="text-xl sm:text-2xl font-bold font-heading text-[#191B20] dark:text-[#F5F6F8]">
+              Quản lý thông báo hệ thống
+            </h1>
+            <p className="text-xs text-[#737780] dark:text-[#A1A7B1] mt-0.5">
+              Điều phối và phát hành thông báo diện rộng tới Bác sĩ, Gia đình và Người cao tuổi trên thiết bị di động
+            </p>
+          </div>
         </div>
 
         <div className="flex items-center gap-2.5">

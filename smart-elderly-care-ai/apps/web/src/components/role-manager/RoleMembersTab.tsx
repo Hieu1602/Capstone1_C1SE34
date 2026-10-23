@@ -47,7 +47,7 @@ export const RoleMembersTab: React.FC<RoleMembersTabProps> = ({
     <div className="space-y-4 animate-fade-in">
       {/* Header thanh lọc & tìm kiếm thành viên */}
       <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
-        <span className="text-xs font-bold text-slate-700 dark:text-slate-300">
+        <span className="text-xs font-bold text-slate-700 dark:text-[#F5F6F8]">
           Danh sách tài khoản ({filteredMembers.length})
         </span>
 
@@ -60,7 +60,7 @@ export const RoleMembersTab: React.FC<RoleMembersTabProps> = ({
               value={memberSearchQuery}
               onChange={(e) => onSearchChange(e.target.value)}
               placeholder="Tìm tên, SĐT, nhà..."
-              className="w-full sm:w-48 pl-8 pr-3 py-1.5 text-xs rounded-xl bg-slate-100 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 text-slate-900 dark:text-slate-100 placeholder-slate-400 focus:outline-none focus:ring-1 focus:ring-sky-500 font-sans"
+              className="w-full sm:w-48 pl-8 pr-3 py-1.5 text-xs rounded-xl bg-slate-100 dark:bg-[#202329] border border-slate-200 dark:border-[#454A53] text-slate-900 dark:text-[#F5F6F8] placeholder-slate-400 dark:placeholder-[#727984] focus:outline-none focus:ring-1 focus:ring-[#FF6B35]/40 font-sans"
             />
           </div>
 
@@ -69,7 +69,7 @@ export const RoleMembersTab: React.FC<RoleMembersTabProps> = ({
             <select
               value={memberRoleFilter}
               onChange={(e) => onFilterChange(e.target.value)}
-              className="w-full sm:w-auto px-3 py-1.5 text-xs font-semibold rounded-xl bg-slate-100 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 text-slate-800 dark:text-slate-200 focus:outline-none focus:ring-1 focus:ring-sky-500 cursor-pointer font-sans"
+              className="w-full sm:w-auto px-3 py-1.5 text-xs font-semibold rounded-xl bg-slate-100 dark:bg-[#202329] border border-slate-200 dark:border-[#454A53] text-slate-800 dark:text-[#F5F6F8] focus:outline-none focus:ring-1 focus:ring-[#FF6B35]/40 cursor-pointer font-sans"
             >
               <option value="current">Chỉ vai trò này ({currentRole.name})</option>
               <option value="all">Tất cả tài khoản ({users.length})</option>
@@ -83,7 +83,7 @@ export const RoleMembersTab: React.FC<RoleMembersTabProps> = ({
         </div>
       </div>
 
-      <div className="divide-y divide-slate-100 dark:divide-slate-800 border border-slate-200 dark:border-slate-800 rounded-xl overflow-hidden bg-slate-50/50 dark:bg-slate-800/20 max-h-[420px] overflow-y-auto">
+      <div className="divide-y divide-slate-100 dark:divide-[#454A53] border border-slate-200 dark:border-[#454A53] rounded-xl overflow-hidden bg-slate-50/50 dark:bg-[#17191E] max-h-[420px] overflow-y-auto">
         {filteredMembers.length === 0 ? (
           <div className="p-8 text-center text-xs text-slate-500">
             Không tìm thấy tài khoản nào phù hợp với bộ lọc vai trò này
@@ -92,7 +92,7 @@ export const RoleMembersTab: React.FC<RoleMembersTabProps> = ({
           filteredMembers.map((userItem) => (
             <div
               key={userItem.id}
-              className="p-3 sm:px-4 flex items-center justify-between hover:bg-slate-100/70 dark:hover:bg-slate-800/60"
+              className="p-3 sm:px-4 flex items-center justify-between hover:bg-slate-100/70 dark:hover:bg-[#202329]"
             >
               <div className="flex items-center gap-3">
                 <div
@@ -102,7 +102,7 @@ export const RoleMembersTab: React.FC<RoleMembersTabProps> = ({
                   {userItem.full_name.charAt(0)}
                 </div>
                 <div>
-                  <span className="text-xs font-bold text-slate-900 dark:text-slate-100 block">
+                  <span className="text-xs font-bold text-slate-900 dark:text-[#F5F6F8] block">
                     {userItem.full_name}
                   </span>
                   <span className="text-[11px] text-slate-500 font-mono">
@@ -111,7 +111,7 @@ export const RoleMembersTab: React.FC<RoleMembersTabProps> = ({
                 </div>
               </div>
 
-              <span className="text-[10.5px] font-mono px-2 py-0.5 rounded bg-slate-200/80 dark:bg-slate-800 text-slate-700 dark:text-slate-300">
+              <span className="text-[10.5px] font-mono px-2 py-0.5 rounded bg-slate-200/80 dark:bg-[#202329] text-slate-700 dark:text-[#A1A7B1]">
                 {userItem.assigned_house || 'Chưa phân bổ'}
               </span>
             </div>

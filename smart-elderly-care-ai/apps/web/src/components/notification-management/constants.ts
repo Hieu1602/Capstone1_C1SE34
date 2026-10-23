@@ -67,7 +67,7 @@ export const AUDIENCE_CONFIG: Record<
   all: {
     label: 'Tất cả người dùng',
     icon: Users,
-    badgeStyle: 'bg-slate-100 text-slate-700 dark:bg-slate-800 dark:text-slate-300',
+    badgeStyle: 'bg-slate-100 text-slate-700 dark:bg-[#202329] dark:text-[#A1A7B1]',
   },
   caregivers: {
     label: 'Gia đình & Người chăm sóc',
@@ -107,7 +107,7 @@ export const STATUS_CONFIG: Record<
   draft: {
     label: 'Bản nháp',
     icon: FileEdit,
-    badgeStyle: 'bg-slate-100 text-slate-600 border-slate-200 dark:bg-slate-800 dark:text-slate-400 dark:border-slate-700',
+    badgeStyle: 'bg-slate-100 text-slate-600 border-slate-200 dark:bg-[#202329] dark:text-[#A1A7B1] dark:border-[#454A53]',
   },
   revoked: {
     label: 'Đã thu hồi',

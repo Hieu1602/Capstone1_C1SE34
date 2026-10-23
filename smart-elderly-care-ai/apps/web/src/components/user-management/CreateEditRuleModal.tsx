@@ -63,25 +63,25 @@ export const CreateEditRuleModal: React.FC<CreateEditRuleModalProps> = ({
 
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-900/60 dark:bg-black/75 backdrop-blur-xs animate-fade-in">
-      <div className="glass-card w-full max-w-2xl max-h-[90vh] overflow-hidden border border-[#C8AD8A] shadow-2xl animate-slide-up flex flex-col">
+      <div className="glass-card w-full max-w-2xl max-h-[90vh] overflow-hidden border border-[#E7E9ED] dark:border-[#454A53] shadow-2xl animate-slide-up flex flex-col">
         {/* Modal Header */}
-        <div className="p-5 border-b border-[#C8AD8A]/50 bg-[#FFF8EE] dark:bg-[#1A3830] flex items-center justify-between shrink-0">
+        <div className="p-5 border-b border-[#E7E9ED] dark:border-[#454A53] bg-[#F5F6F8] dark:bg-[#202329] flex items-center justify-between shrink-0">
           <div className="flex items-center space-x-2.5">
-            <div className="w-9 h-9 rounded-xl bg-[#FFF8EE] dark:bg-[#142823] text-[#D96C3B] border border-[#C8AD8A] flex items-center justify-center shadow-xs">
+            <div className="w-9 h-9 rounded-xl bg-[#FFF0E8] dark:bg-[#FF6B35]/15 text-[#FF6B35] border border-[#FF6B35]/20 flex items-center justify-center shadow-2xs">
               <ShieldCheck className="w-5 h-5" />
             </div>
             <div>
-              <h3 className="font-heading font-bold text-slate-900 dark:text-white text-sm">
+              <h3 className="font-heading font-bold text-[#191B20] dark:text-[#F5F6F8] text-sm">
                 {editingRule ? 'Chỉnh sửa quy tắc phân quyền (Rule)' : 'Tạo mới quy tắc phân quyền (Rule)'}
               </h3>
-              <p className="text-[11px] font-mono text-slate-500 dark:text-slate-400">
+              <p className="text-[11px] font-mono text-[#737780] dark:text-[#A1A7B1]">
                 Cấu hình quyền truy cập chi tiết cho Chủ nhà, Thành viên, Bác sĩ & IoT
               </p>
             </div>
           </div>
           <button
             onClick={onClose}
-            className="p-1.5 rounded-lg text-slate-400 hover:text-slate-700 dark:hover:text-slate-200 cursor-pointer"
+            className="p-1.5 rounded-lg text-[#737780] hover:text-[#191B20] dark:hover:text-white cursor-pointer"
           >
             <X className="w-5 h-5" />
           </button>
@@ -91,7 +91,7 @@ export const CreateEditRuleModal: React.FC<CreateEditRuleModalProps> = ({
         <form onSubmit={onSubmit} className="p-5 space-y-4 overflow-y-auto flex-1">
           {/* Tên Rule */}
           <div>
-            <label className="block text-xs font-bold text-slate-800 dark:text-slate-200 mb-1">
+            <label className="block text-xs font-bold text-[#191B20] dark:text-[#F5F6F8] mb-1">
               Tên quy tắc phân quyền (Rule Name) <span className="text-rose-500">*</span>
             </label>
             <input
@@ -99,126 +99,127 @@ export const CreateEditRuleModal: React.FC<CreateEditRuleModalProps> = ({
               required
               value={ruleName}
               onChange={(e) => setRuleName(e.target.value)}
-              placeholder="Ví dụ: Quyền kiểm soát Camera AI & Chế độ riêng tư"
+              placeholder="Ví dụ: Quyền xem Camera & Cảnh báo cho Thành viên phụ"
               className="input-glass"
             />
           </div>
 
-          {/* Vai trò áp dụng & Phân hệ */}
-          <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-            <div>
-              <label className="block text-xs font-bold text-slate-800 dark:text-slate-200 mb-1">
-                Áp dụng cho vai trò:
-              </label>
-              <select
-                value={ruleTargetRole}
-                onChange={(e) => setRuleTargetRole(e.target.value as any)}
-                className="input-glass text-xs"
-              >
-                <option value="user">Chủ nhà (Owner)</option>
-                <option value="caregiver">Thành viên (Member)</option>
-                <option value="doctor">Bác sĩ chuyên khoa</option>
-                <option value="admin">Quản trị viên (Admin)</option>
-                <option value="elderly">Người cao tuổi</option>
-                <option value="all">Tất cả vai trò</option>
-              </select>
-            </div>
-
-            <div>
-              <label className="block text-xs font-bold text-slate-800 dark:text-slate-200 mb-1">
-                Phân hệ chính:
-              </label>
-              <select
-                value={ruleModule}
-                onChange={(e) => setRuleModule(e.target.value)}
-                className="input-glass text-xs"
-              >
-                <option value="all">Toàn hệ thống (All Modules)</option>
-                <option value="camera">Camera AI & Hình ảnh</option>
-                <option value="vitals">Sinh hiệu & Sức khỏe</option>
-                <option value="emergency">Cảnh báo & SOS</option>
-                <option value="devices">Thiết bị IoT & Căn nhà</option>
-                <option value="members">Gia đình & Thành viên</option>
-                <option value="medical">Y tế & Đơn thuốc</option>
-              </select>
-            </div>
-          </div>
-
-          {/* Mô tả */}
+          {/* Mô tả Rule */}
           <div>
-            <label className="block text-xs font-bold text-slate-800 dark:text-slate-200 mb-1">
-              Mô tả mục đích của Rule:
+            <label className="block text-xs font-bold text-[#191B20] dark:text-[#F5F6F8] mb-1">
+              Mô tả mục đích
             </label>
             <textarea
               rows={2}
               value={ruleDescription}
               onChange={(e) => setRuleDescription(e.target.value)}
-              placeholder="Ghi chú rõ quyền hạn được cấp và phạm vi ảnh hưởng..."
-              className="input-glass text-xs"
+              placeholder="Mô tả phạm vi áp dụng, bảo mật và lưu ý khi cấp quyền này..."
+              className="input-glass"
             />
           </div>
 
-          {/* Danh sách các quyền hạn chi tiết theo nhóm */}
+          {/* Cấu hình Target Role & Module */}
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+            <div>
+              <label className="block text-xs font-bold text-[#191B20] dark:text-[#F5F6F8] mb-1">
+                Áp dụng cho đối tượng vai trò
+              </label>
+              <select
+                value={ruleTargetRole}
+                onChange={(e) => setRuleTargetRole(e.target.value as any)}
+                className="input-glass font-medium"
+              >
+                <option value="all">Tất cả vai trò</option>
+                <option value="admin">Quản trị viên (Admin)</option>
+                <option value="doctor">Bác sĩ chuyên khoa (Doctor)</option>
+                <option value="owner">Chủ nhà (Owner)</option>
+                <option value="member">Thành viên (Member)</option>
+                <option value="elderly">Người cao tuổi (Elderly)</option>
+                <option value="user">Người dùng cơ bản (User)</option>
+              </select>
+            </div>
+
+            <div>
+              <label className="block text-xs font-bold text-[#191B20] dark:text-[#F5F6F8] mb-1">
+                Phân hệ nghiệp vụ chính
+              </label>
+              <select
+                value={ruleModule}
+                onChange={(e) => setRuleModule(e.target.value)}
+                className="input-glass font-medium"
+              >
+                <option value="all">Tất cả phân hệ (Global Policy)</option>
+                <option value="camera">Camera AI & Phát hiện té ngã</option>
+                <option value="vitals">Sinh hiệu y tế & ECG/SpO2</option>
+                <option value="devices">Thiết bị IoT & Cảm biến</option>
+                <option value="emergency">Báo động khẩn cấp SOS</option>
+                <option value="house">Cài đặt căn nhà & Thành viên</option>
+              </select>
+            </div>
+          </div>
+
+          {/* Danh sách Ma trận quyền chi tiết */}
           <div>
             <div className="flex items-center justify-between mb-2">
-              <label className="block text-xs font-bold text-slate-800 dark:text-slate-200">
-                Danh mục quyền được kích hoạt ({rulePermissions.length} quyền đã chọn):
+              <label className="text-xs font-bold text-[#191B20] dark:text-[#F5F6F8]">
+                Danh sách quyền hạn cho phép ({rulePermissions.length} quyền được chọn)
               </label>
-              <span className="text-[11px] text-slate-500">
-                Tích chọn các quyền mong muốn cấp cho Rule này
+              <span className="text-[10px] text-[#737780] font-mono">
+                Click nhóm để chọn toàn bộ
               </span>
             </div>
 
-            <div className="space-y-3">
+            <div className="space-y-3 border border-[#E7E9ED] dark:border-[#454A53] rounded-xl p-3 bg-[#F5F6F8] dark:bg-[#17191E]">
               {PERMISSION_GROUPS.map((group) => {
-                const GroupIcon = group.icon;
-                const groupSelectedCount = group.items.filter((i) =>
-                  rulePermissions.includes(i.id)
-                ).length;
+                const groupItemIds = group.items.map((i) => i.id);
+                const isAllSelected = groupItemIds.every((id) => rulePermissions.includes(id));
+                const isSomeSelected =
+                  groupItemIds.some((id) => rulePermissions.includes(id)) && !isAllSelected;
 
                 return (
                   <div
-                    key={group.moduleKey}
-                    className="rounded-xl border border-slate-200 dark:border-slate-800 bg-slate-50/50 dark:bg-slate-900/40 p-3"
+                    key={group.groupName}
+                    className="p-2.5 rounded-xl bg-white dark:bg-[#202329] border border-[#E7E9ED] dark:border-[#454A53]"
                   >
-                    <div className="flex items-center justify-between mb-2">
-                      <div className="flex items-center gap-2">
-                        <GroupIcon className={`w-4 h-4 ${group.color}`} />
-                        <span className="text-xs font-bold text-slate-800 dark:text-slate-200">
-                          {group.title}
-                        </span>
-                        <span className="text-[10px] px-1.5 py-0.2 rounded bg-slate-200 dark:bg-slate-800 text-slate-700 dark:text-slate-300 font-mono">
-                          {groupSelectedCount}/{group.items.length}
-                        </span>
-                      </div>
+                    <div className="flex items-center justify-between pb-2 mb-2 border-b border-[#E7E9ED] dark:border-[#454A53]">
+                      <span className="font-bold text-xs text-[#191B20] dark:text-[#F5F6F8]">
+                        {group.groupName}
+                      </span>
                       <button
                         type="button"
                         onClick={() => handleSelectGroupAll(group.items)}
-                        className="text-[11px] text-[#D96C3B] hover:underline font-semibold cursor-pointer"
+                        className="text-[10px] font-bold font-mono text-[#FF6B35] hover:underline cursor-pointer"
                       >
-                        {groupSelectedCount === group.items.length ? 'Bỏ chọn' : 'Chọn tất cả'}
+                        {isAllSelected
+                          ? 'Bỏ chọn nhóm'
+                          : isSomeSelected
+                          ? 'Chọn tất cả nhóm'
+                          : 'Chọn nhóm'}
                       </button>
                     </div>
 
                     <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
                       {group.items.map((perm) => {
-                        const isChecked = rulePermissions.includes(perm.id);
+                        const checked = rulePermissions.includes(perm.id);
                         return (
                           <label
                             key={perm.id}
-                            className={`flex items-start gap-2 p-2 rounded-lg border text-xs cursor-pointer transition-all ${
-                              isChecked
-                                ? 'bg-[#FFF8EE] dark:bg-[#1A3830] border-[#D96C3B]/60 text-slate-900 dark:text-white font-medium'
-                                : 'border-slate-200 dark:border-slate-800/80 text-slate-600 dark:text-slate-400 hover:bg-slate-100'
+                            className={`flex items-start space-x-2 p-2 rounded-lg border text-left cursor-pointer transition-all ${
+                              checked
+                                ? 'border-[#FF6B35] bg-[#FFF0E8] dark:bg-[#FF6B35]/15 text-[#FF6B35] shadow-2xs'
+                                : 'border-[#E7E9ED] dark:border-[#454A53] hover:bg-slate-50 dark:hover:bg-white/5 text-[#737780]'
                             }`}
                           >
                             <input
                               type="checkbox"
-                              checked={isChecked}
+                              checked={checked}
                               onChange={() => handleTogglePermission(perm.id)}
-                              className="mt-0.5 rounded text-[#D96C3B] focus:ring-[#D96C3B]"
+                              className="mt-0.5 rounded text-[#FF6B35] focus:ring-[#FF6B35]"
                             />
-                            <span className="leading-tight">{perm.label}</span>
+                            <div className="min-w-0">
+                              <p className="text-xs font-semibold leading-tight">{perm.name}</p>
+                              <p className="text-[10px] font-mono opacity-70 mt-0.5">{perm.id}</p>
+                            </div>
                           </label>
                         );
                       })}
@@ -230,39 +231,38 @@ export const CreateEditRuleModal: React.FC<CreateEditRuleModalProps> = ({
           </div>
 
           {/* Trạng thái Kích hoạt */}
-          <div className="flex items-center justify-between p-3 rounded-xl bg-[#FAF5EE] dark:bg-[#142823] border border-[#C8AD8A]/50">
+          <div className="flex items-center justify-between p-3 rounded-xl bg-[#F5F6F8] dark:bg-[#202329] border border-[#E7E9ED] dark:border-[#454A53]">
             <div>
-              <span className="text-xs font-bold text-slate-800 dark:text-slate-200 block">
-                Trạng thái kích hoạt Rule:
-              </span>
-              <span className="text-[11px] text-slate-500">
-                Khi kích hoạt, Rule sẽ có hiệu lực ngay lập tức cho các tài khoản tương ứng
-              </span>
+              <p className="text-xs font-bold text-[#191B20] dark:text-[#F5F6F8]">Kích hoạt quy tắc này ngay lập tức</p>
+              <p className="text-[11px] text-[#737780]">
+                Khi tắt, quy tắc này sẽ tạm thời không có hiệu lực đối với người dùng
+              </p>
             </div>
-            <button
-              type="button"
-              onClick={() => setRuleIsActive(!ruleIsActive)}
-              className={`px-3 py-1 rounded-lg text-xs font-bold cursor-pointer transition-all ${
-                ruleIsActive
-                  ? 'bg-emerald-600 text-white shadow-xs'
-                  : 'bg-slate-300 dark:bg-slate-700 text-slate-700 dark:text-slate-300'
-              }`}
-            >
-              {ruleIsActive ? 'Đang kích hoạt' : 'Tạm dừng'}
-            </button>
+            <label className="relative inline-flex items-center cursor-pointer">
+              <input
+                type="checkbox"
+                checked={ruleIsActive}
+                onChange={(e) => setRuleIsActive(e.target.checked)}
+                className="sr-only peer"
+              />
+              <div className="w-11 h-6 bg-slate-300 peer-focus:outline-none rounded-full peer dark:bg-[#202329] dark:border dark:border-[#454A53] peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-slate-300 after:border after:rounded-full after:h-5 after:w-5 after:transition-all peer-checked:bg-[#FF6B35]"></div>
+            </label>
           </div>
 
           {/* Action Buttons */}
-          <div className="pt-3 border-t border-[#C8AD8A]/30 flex items-center justify-end space-x-3 shrink-0">
+          <div className="flex items-center justify-end space-x-2.5 pt-4 border-t border-[#E7E9ED] dark:border-[#454A53]">
             <button
               type="button"
               onClick={onClose}
-              className="btn-ghost text-xs py-2 px-4 cursor-pointer"
+              className="btn-ghost"
             >
               Hủy bỏ
             </button>
-            <button type="submit" className="btn-primary text-xs py-2 px-5 cursor-pointer">
-              {editingRule ? 'Lưu thay đổi Rule' : 'Xác nhận tạo Rule'}
+            <button
+              type="submit"
+              className="btn-primary"
+            >
+              {editingRule ? 'Lưu thay đổi Rule' : 'Tạo mới Rule'}
             </button>
           </div>
         </form>
@@ -270,4 +270,3 @@ export const CreateEditRuleModal: React.FC<CreateEditRuleModalProps> = ({
     </div>
   );
 };
-

@@ -60,7 +60,7 @@ export const RoleListView: React.FC<RoleListViewProps> = ({
   return (
     <div className="space-y-5 animate-fade-in">
       {/* Header Hành động & Tìm kiếm */}
-      <div className="glass-card p-4 sm:p-5 border border-slate-200 dark:border-slate-800 rounded-2xl bg-white/90 dark:bg-slate-900/90 shadow-sm">
+      <div className="glass-card p-4 sm:p-5 border border-slate-200 dark:border-[#454A53] rounded-2xl bg-white/90 dark:bg-[#17191E] shadow-sm">
         <div className="flex flex-col sm:flex-row items-stretch sm:items-center justify-between gap-3 sm:gap-4">
           {/* Input tìm kiếm vai trò */}
           <div className="relative flex-1 max-w-md">
@@ -70,14 +70,14 @@ export const RoleListView: React.FC<RoleListViewProps> = ({
               value={searchQuery}
               onChange={(e) => onSearchChange(e.target.value)}
               placeholder="Tìm kiếm vai trò"
-              className="w-full pl-10 pr-4 py-2 text-sm rounded-xl bg-slate-100 dark:bg-slate-800/80 border border-slate-200 dark:border-slate-700/80 text-slate-900 dark:text-slate-100 placeholder-slate-400 focus:outline-none focus:ring-2 focus:ring-sky-500/50 transition-all font-sans"
+              className="w-full pl-10 pr-4 py-2 text-sm rounded-xl bg-slate-100 dark:bg-[#202329] border border-slate-200 dark:border-[#454A53] text-slate-900 dark:text-[#F5F6F8] placeholder-slate-400 dark:placeholder-[#727984] focus:outline-none focus:ring-2 focus:ring-[#FF6B35]/40 transition-all font-sans"
             />
           </div>
 
           {/* Nút Tạo Vai Trò */}
           <button
             onClick={onCreateNewRole}
-            className="inline-flex items-center justify-center gap-2 px-4 py-2 rounded-xl text-xs font-bold text-white bg-indigo-600 hover:bg-indigo-500 active:bg-indigo-700 dark:bg-[#5865F2] dark:hover:bg-[#4752C4] shadow-md shadow-indigo-600/20 cursor-pointer transition-all shrink-0"
+            className="inline-flex items-center justify-center gap-2 px-4 py-2 rounded-xl text-xs font-bold text-white bg-indigo-600 hover:bg-indigo-500 active:bg-indigo-700 dark:bg-gradient-to-r dark:from-[#FF6B35] dark:to-[#E95724] dark:hover:from-[#FF8A50] dark:hover:to-[#FF6B35] dark:shadow-[0_0_16px_rgba(255,107,53,0.2)] shadow-md shadow-indigo-600/20 cursor-pointer transition-all shrink-0"
           >
             <Plus className="w-4 h-4 stroke-[2.5]" />
             <span>Tạo Vai Trò</span>
@@ -85,23 +85,23 @@ export const RoleListView: React.FC<RoleListViewProps> = ({
         </div>
 
         {/* Dòng ghi chú hỗ trợ */}
-        <div className="mt-3.5 pt-3 border-t border-slate-100 dark:border-slate-800/80 flex flex-wrap items-center justify-between gap-2 text-xs text-slate-500 dark:text-slate-400">
+        <div className="mt-3.5 pt-3 border-t border-slate-100 dark:border-[#454A53] flex flex-wrap items-center justify-between gap-2 text-xs text-slate-500 dark:text-[#A1A7B1]">
           <p>
             Các thành viên sử dụng màu của vai trò cao nhất trong danh sách. Kéo và sắp xếp thứ tự ưu tiên vai trò.{' '}
-            <span className="text-sky-600 dark:text-sky-400 hover:underline cursor-pointer">
+            <span className="text-sky-600 dark:text-[#FF8A50] hover:underline cursor-pointer">
               Cần hỗ trợ về quyền?
             </span>
           </p>
-          <span className="text-[11px] font-mono font-semibold text-slate-400 dark:text-slate-500">
+          <span className="text-[11px] font-mono font-semibold text-slate-400 dark:text-[#727984]">
             Tổng số: {roles.length} vai trò
           </span>
         </div>
       </div>
 
       {/* Bảng danh sách Vai trò - overflow-visible để không bị che menu 3 chấm */}
-      <div className="glass-card border border-slate-200 dark:border-slate-800 rounded-2xl bg-white/90 dark:bg-slate-900/90 overflow-visible relative shadow-sm">
+      <div className="glass-card border border-slate-200 dark:border-[#454A53] rounded-2xl bg-white/90 dark:bg-[#17191E] overflow-visible relative shadow-sm">
         {/* Header Bảng */}
-        <div className="flex items-center justify-between px-5 sm:px-6 py-3.5 border-b border-slate-200/80 dark:border-slate-800 text-[11px] font-bold uppercase tracking-wider text-slate-500 dark:text-slate-400 bg-slate-50/80 dark:bg-slate-800/40 rounded-t-2xl">
+        <div className="flex items-center justify-between px-5 sm:px-6 py-3.5 border-b border-slate-200/80 dark:border-[#454A53] text-[11px] font-bold uppercase tracking-wider text-slate-500 dark:text-[#A1A7B1] bg-slate-50/80 dark:bg-[#202329] rounded-t-2xl">
           <div className="flex items-center gap-2">
             <span>Vai trò — {filteredRoles.length}</span>
           </div>
@@ -112,7 +112,7 @@ export const RoleListView: React.FC<RoleListViewProps> = ({
         </div>
 
         {/* Danh sách các dòng vai trò */}
-        <div className="divide-y divide-slate-100 dark:divide-slate-800/80">
+        <div className="divide-y divide-slate-100 dark:divide-[#454A53]">
           {filteredRoles.map((role, idx) => {
             const memberCount = countMembers(role);
             const isMenuOpen = openMenuRoleId === role.id;
@@ -122,7 +122,7 @@ export const RoleListView: React.FC<RoleListViewProps> = ({
               <div
                 key={role.id}
                 onClick={() => onInspectRole(role)}
-                className="flex items-center justify-between px-5 sm:px-6 py-3.5 hover:bg-slate-100/60 dark:hover:bg-slate-800/50 cursor-pointer transition-colors group relative"
+                className="flex items-center justify-between px-5 sm:px-6 py-3.5 hover:bg-slate-100/60 dark:hover:bg-[#292D34] cursor-pointer transition-colors group relative"
               >
                 {/* Cột Tên vai trò & Icon khiên màu & Ổ khóa */}
                 <div className="flex items-center gap-3 min-w-0 pr-4">
@@ -133,14 +133,14 @@ export const RoleListView: React.FC<RoleListViewProps> = ({
                     <Shield className="w-2.5 h-2.5 text-white stroke-[2.5]" />
                   </div>
 
-                  <span className="text-sm font-semibold text-slate-800 dark:text-slate-100 truncate group-hover:text-sky-600 dark:group-hover:text-sky-400 transition-colors">
+                  <span className="text-sm font-semibold text-slate-800 dark:text-[#F5F6F8] truncate group-hover:text-sky-600 dark:group-hover:text-[#FF8A50] transition-colors">
                     {role.name}
                   </span>
 
                   {role.is_system && (
                     <span
                       title="Vai trò cốt lõi hệ thống — Được bảo vệ chống xóa"
-                      className="inline-flex items-center gap-1 px-1.5 py-0.5 rounded text-[10px] font-mono font-semibold bg-slate-200/80 dark:bg-slate-800 text-slate-600 dark:text-slate-400 shrink-0"
+                      className="inline-flex items-center gap-1 px-1.5 py-0.5 rounded text-[10px] font-mono font-semibold bg-slate-200/80 dark:bg-[#202329] text-slate-600 dark:text-[#A1A7B1] shrink-0"
                     >
                       <Lock className="w-2.5 h-2.5" />
                       <span>Hệ thống</span>
@@ -151,7 +151,7 @@ export const RoleListView: React.FC<RoleListViewProps> = ({
                 {/* Cột Số thành viên & Các nút thao tác */}
                 <div className="flex items-center gap-8 sm:gap-12 shrink-0 pr-4 sm:pr-6">
                   {/* Số thành viên với icon người */}
-                  <div className="flex items-center gap-1.5 text-xs font-mono font-semibold text-slate-600 dark:text-slate-300 w-12 justify-end">
+                  <div className="flex items-center gap-1.5 text-xs font-mono font-semibold text-slate-600 dark:text-[#F5F6F8] w-12 justify-end">
                     <span>{memberCount}</span>
                     <Users className="w-3.5 h-3.5 text-slate-400" />
                   </div>
@@ -163,7 +163,7 @@ export const RoleListView: React.FC<RoleListViewProps> = ({
                         e.stopPropagation();
                         onInspectRole(role);
                       }}
-                      className="p-1.5 rounded-lg text-slate-400 hover:text-sky-600 dark:hover:text-sky-400 hover:bg-slate-100 dark:hover:bg-slate-700/80 transition-colors cursor-pointer"
+                      className="p-1.5 rounded-lg text-slate-400 hover:text-sky-600 dark:hover:text-[#FF8A50] hover:bg-slate-100 dark:hover:bg-[#202329] transition-colors cursor-pointer"
                       title="Xem chi tiết vai trò"
                     >
                       <Eye className="w-4 h-4" />
@@ -174,7 +174,7 @@ export const RoleListView: React.FC<RoleListViewProps> = ({
                         e.stopPropagation();
                         onEditRole(role);
                       }}
-                      className="p-1.5 rounded-lg text-slate-400 hover:text-amber-600 dark:hover:text-amber-400 hover:bg-slate-100 dark:hover:bg-slate-700/80 transition-colors cursor-pointer"
+                      className="p-1.5 rounded-lg text-slate-400 hover:text-amber-600 dark:hover:text-[#FBBF24] hover:bg-slate-100 dark:hover:bg-[#202329] transition-colors cursor-pointer"
                       title="Chỉnh sửa vai trò"
                     >
                       <Edit2 className="w-3.5 h-3.5" />
@@ -182,7 +182,7 @@ export const RoleListView: React.FC<RoleListViewProps> = ({
 
                     <button
                       onClick={(e) => onToggleMenu(e, role.id)}
-                      className="p-1.5 rounded-lg text-slate-400 hover:text-slate-700 dark:hover:text-slate-200 hover:bg-slate-100 dark:hover:bg-slate-700/80 transition-colors cursor-pointer"
+                      className="p-1.5 rounded-lg text-slate-400 hover:text-slate-700 dark:hover:text-[#F5F6F8] hover:bg-slate-100 dark:hover:bg-[#202329] transition-colors cursor-pointer"
                       title="Tùy chọn khác"
                     >
                       <MoreVertical className="w-4 h-4" />
@@ -194,13 +194,13 @@ export const RoleListView: React.FC<RoleListViewProps> = ({
                         onClick={(e) => e.stopPropagation()}
                         className={`absolute right-0 ${
                           isNearBottom ? 'bottom-full mb-2 origin-bottom-right' : 'top-full mt-1.5 origin-top-right'
-                        } w-48 rounded-xl bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 shadow-2xl py-1.5 z-50 animate-scale-in text-xs font-sans`}
+                        } w-48 rounded-xl bg-white dark:bg-[#202329] border border-slate-200 dark:border-[#454A53] shadow-2xl py-1.5 z-50 animate-scale-in text-xs font-sans`}
                       >
                         <button
                           onClick={() => {
                             onInspectRole(role);
                           }}
-                          className="w-full px-3 py-2 text-left flex items-center gap-2.5 text-slate-700 dark:text-slate-200 hover:bg-slate-100 dark:hover:bg-slate-700/70 cursor-pointer"
+                          className="w-full px-3 py-2 text-left flex items-center gap-2.5 text-slate-700 dark:text-[#F5F6F8] hover:bg-slate-100 dark:hover:bg-[#292D34] cursor-pointer"
                         >
                           <Eye className="w-3.5 h-3.5 text-slate-400" />
                           <span>Xem chi tiết</span>
@@ -210,7 +210,7 @@ export const RoleListView: React.FC<RoleListViewProps> = ({
                           onClick={() => {
                             onEditRole(role);
                           }}
-                          className="w-full px-3 py-2 text-left flex items-center gap-2.5 text-slate-700 dark:text-slate-200 hover:bg-slate-100 dark:hover:bg-slate-700/70 cursor-pointer"
+                          className="w-full px-3 py-2 text-left flex items-center gap-2.5 text-slate-700 dark:text-[#F5F6F8] hover:bg-slate-100 dark:hover:bg-[#292D34] cursor-pointer"
                         >
                           <Edit2 className="w-3.5 h-3.5 text-amber-500" />
                           <span>Chỉnh sửa quyền</span>
@@ -220,7 +220,7 @@ export const RoleListView: React.FC<RoleListViewProps> = ({
                           onClick={() => {
                             onCloneRole(role);
                           }}
-                          className="w-full px-3 py-2 text-left flex items-center gap-2.5 text-slate-700 dark:text-slate-200 hover:bg-slate-100 dark:hover:bg-slate-700/70 cursor-pointer"
+                          className="w-full px-3 py-2 text-left flex items-center gap-2.5 text-slate-700 dark:text-[#F5F6F8] hover:bg-slate-100 dark:hover:bg-[#292D34] cursor-pointer"
                         >
                           <Copy className="w-3.5 h-3.5 text-sky-500" />
                           <span>Nhân bản vai trò</span>
@@ -228,7 +228,7 @@ export const RoleListView: React.FC<RoleListViewProps> = ({
 
                         {!role.is_system && (
                           <>
-                            <div className="my-1 border-t border-slate-100 dark:border-slate-700" />
+                            <div className="my-1 border-t border-slate-100 dark:border-[#454A53]" />
                             <button
                               onClick={() => {
                                 onDeleteRole(role.id);

@@ -20,13 +20,13 @@ export const RoleSidebar: React.FC<RoleSidebarProps> = ({
   onDeleteRole,
 }) => {
   return (
-    <div className="md:col-span-4 lg:col-span-3 border-r border-slate-200 dark:border-slate-800/80 bg-slate-50/60 dark:bg-slate-900/70 p-3 sm:p-4 flex flex-col justify-between">
+    <div className="md:col-span-4 lg:col-span-3 border-r border-slate-200 dark:border-[#454A53] bg-slate-50/60 dark:bg-[#101216] p-3 sm:p-4 flex flex-col justify-between">
       <div className="space-y-4">
         {/* Header Cột Trái: Nút Trở lại & Nút + */}
-        <div className="flex items-center justify-between pb-3 border-b border-slate-200/80 dark:border-slate-800">
+        <div className="flex items-center justify-between pb-3 border-b border-slate-200/80 dark:border-[#454A53]">
           <button
             onClick={onBackToList}
-            className="inline-flex items-center gap-1.5 text-xs font-bold text-slate-600 dark:text-slate-300 hover:text-sky-600 dark:hover:text-sky-400 cursor-pointer transition-colors"
+            className="inline-flex items-center gap-1.5 text-xs font-bold text-slate-600 dark:text-[#A1A7B1] hover:text-sky-600 dark:hover:text-[#FF8A50] cursor-pointer transition-colors"
           >
             <ArrowLeft className="w-4 h-4" />
             <span>Trở lại</span>
@@ -34,7 +34,7 @@ export const RoleSidebar: React.FC<RoleSidebarProps> = ({
 
           <button
             onClick={onCreateNewRole}
-            className="p-1.5 rounded-lg text-slate-500 hover:text-white hover:bg-sky-500 dark:hover:bg-sky-600 transition-colors cursor-pointer"
+            className="p-1.5 rounded-lg text-slate-500 hover:text-white hover:bg-sky-500 dark:hover:bg-[#FF6B35] transition-colors cursor-pointer"
             title="Tạo vai trò mới"
           >
             <Plus className="w-4 h-4 stroke-[2.5]" />
@@ -52,8 +52,8 @@ export const RoleSidebar: React.FC<RoleSidebarProps> = ({
                 onClick={() => onSelectRole(role)}
                 className={`w-full px-3 py-2.5 rounded-xl text-left text-xs font-semibold flex items-center justify-between transition-all cursor-pointer ${
                   isSelected
-                    ? 'bg-slate-200/90 dark:bg-slate-800 text-slate-900 dark:text-white shadow-xs font-bold'
-                    : 'text-slate-600 dark:text-slate-400 hover:bg-slate-200/50 dark:hover:bg-slate-800/50'
+                    ? 'bg-slate-200/90 dark:bg-[#202329] text-slate-900 dark:text-[#F5F6F8] dark:border dark:border-[#454A53] shadow-xs font-bold'
+                    : 'text-slate-600 dark:text-[#A1A7B1] hover:bg-slate-200/50 dark:hover:bg-[#202329]/60 dark:hover:text-[#F5F6F8]'
                 }`}
               >
                 <div className="flex items-center gap-2.5 truncate">
@@ -80,7 +80,7 @@ export const RoleSidebar: React.FC<RoleSidebarProps> = ({
         const selected = roles.find((r) => r.id === selectedRoleId);
         if (!selected || selected.is_system) return null;
         return (
-          <div className="pt-3 border-t border-slate-200 dark:border-slate-800">
+          <div className="pt-3 border-t border-slate-200 dark:border-[#454A53]">
             <button
               onClick={() => onDeleteRole(selected.id)}
               className="w-full py-2 px-3 rounded-xl text-xs font-semibold text-rose-600 hover:bg-rose-50 dark:hover:bg-rose-950/40 flex items-center justify-center gap-1.5 cursor-pointer transition-colors"

@@ -18,7 +18,7 @@ export const RoleDisplayTab: React.FC<RoleDisplayTabProps> = ({
     <div className="space-y-5 max-w-xl animate-fade-in">
       {/* Banner thông báo trạng thái Chỉ đọc nếu đang ở chế độ xem */}
       {!isEditMode && (
-        <div className="flex items-center gap-2.5 p-3 rounded-xl bg-slate-100 dark:bg-slate-800/80 border border-slate-200 dark:border-slate-700 text-xs text-slate-600 dark:text-slate-300">
+        <div className="flex items-center gap-2.5 p-3 rounded-xl bg-slate-100 dark:bg-[#202329] border border-slate-200 dark:border-[#454A53] text-xs text-slate-600 dark:text-[#A1A7B1]">
           <Info className="w-4 h-4 text-sky-500 shrink-0" />
           <span>
             Bạn đang ở <b>Chế độ xem (Chỉ đọc)</b>. Để sửa tên, màu sắc hoặc quyền hạn, vui lòng bấm nút <b>"Chỉnh sửa vai trò"</b> ở phía trên.
@@ -28,7 +28,7 @@ export const RoleDisplayTab: React.FC<RoleDisplayTabProps> = ({
 
       {/* Tên vai trò */}
       <div className="space-y-1.5">
-        <label className="text-xs font-bold uppercase tracking-wider text-slate-600 dark:text-slate-400">
+        <label className="text-xs font-bold uppercase tracking-wider text-slate-600 dark:text-[#A1A7B1]">
           Tên vai trò
         </label>
         <input
@@ -36,7 +36,7 @@ export const RoleDisplayTab: React.FC<RoleDisplayTabProps> = ({
           value={draftRole.name}
           disabled={!isEditMode || draftRole.is_system}
           onChange={(e) => onUpdateDraft({ name: e.target.value })}
-          className="w-full px-3.5 py-2.5 text-sm rounded-xl bg-slate-100 dark:bg-slate-800 border border-slate-300 dark:border-slate-700 text-slate-900 dark:text-white focus:outline-none focus:ring-2 focus:ring-sky-500 disabled:opacity-60 disabled:cursor-not-allowed font-sans"
+          className="w-full px-3.5 py-2.5 text-sm rounded-xl bg-slate-100 dark:bg-[#202329] border border-slate-300 dark:border-[#454A53] text-slate-900 dark:text-[#F5F6F8] focus:outline-none focus:ring-2 focus:ring-[#FF6B35]/40 disabled:opacity-60 disabled:cursor-not-allowed font-sans"
         />
         {draftRole.is_system && (
           <span className="text-[11px] text-slate-400">
@@ -47,7 +47,7 @@ export const RoleDisplayTab: React.FC<RoleDisplayTabProps> = ({
 
       {/* Bảng màu sắc vai trò */}
       <div className="space-y-2">
-        <label className="text-xs font-bold uppercase tracking-wider text-slate-600 dark:text-slate-400 flex items-center gap-1.5">
+        <label className="text-xs font-bold uppercase tracking-wider text-slate-600 dark:text-[#A1A7B1] flex items-center gap-1.5">
           <Palette className="w-3.5 h-3.5" />
           <span>Màu sắc vai trò</span>
         </label>
@@ -83,7 +83,7 @@ export const RoleDisplayTab: React.FC<RoleDisplayTabProps> = ({
 
           {/* Custom Hex Picker Input */}
           <div
-            className={`flex items-center gap-1.5 ml-2 border border-slate-300 dark:border-slate-700 rounded-lg px-2 py-1 bg-slate-100 dark:bg-slate-800 ${
+            className={`flex items-center gap-1.5 ml-2 border border-slate-300 dark:border-[#454A53] rounded-lg px-2 py-1 bg-slate-100 dark:bg-[#202329] ${
               !isEditMode ? 'opacity-60 cursor-not-allowed' : ''
             }`}
           >
@@ -93,7 +93,7 @@ export const RoleDisplayTab: React.FC<RoleDisplayTabProps> = ({
               disabled={!isEditMode}
               value={draftRole.color.replace('#', '')}
               onChange={(e) => onUpdateDraft({ color: `#${e.target.value}` })}
-              className="w-16 text-xs font-mono bg-transparent text-slate-800 dark:text-slate-200 outline-none uppercase disabled:cursor-not-allowed"
+              className="w-16 text-xs font-mono bg-transparent text-slate-800 dark:text-[#F5F6F8] outline-none uppercase disabled:cursor-not-allowed"
               maxLength={6}
             />
           </div>
@@ -102,7 +102,7 @@ export const RoleDisplayTab: React.FC<RoleDisplayTabProps> = ({
 
       {/* Mô tả vai trò */}
       <div className="space-y-1.5">
-        <label className="text-xs font-bold uppercase tracking-wider text-slate-600 dark:text-slate-400">
+        <label className="text-xs font-bold uppercase tracking-wider text-slate-600 dark:text-[#A1A7B1]">
           Mô tả vai trò
         </label>
         <textarea
@@ -110,17 +110,17 @@ export const RoleDisplayTab: React.FC<RoleDisplayTabProps> = ({
           disabled={!isEditMode}
           value={draftRole.description}
           onChange={(e) => onUpdateDraft({ description: e.target.value })}
-          className="w-full px-3.5 py-2 text-sm rounded-xl bg-slate-100 dark:bg-slate-800 border border-slate-300 dark:border-slate-700 text-slate-900 dark:text-white focus:outline-none focus:ring-2 focus:ring-sky-500 font-sans disabled:opacity-60 disabled:cursor-not-allowed"
+          className="w-full px-3.5 py-2 text-sm rounded-xl bg-slate-100 dark:bg-[#202329] border border-slate-300 dark:border-[#454A53] text-slate-900 dark:text-[#F5F6F8] focus:outline-none focus:ring-2 focus:ring-[#FF6B35]/40 font-sans disabled:opacity-60 disabled:cursor-not-allowed"
         />
       </div>
 
       {/* Hoist Toggle */}
-      <div className="pt-2 flex items-center justify-between border-t border-slate-200 dark:border-slate-800">
+      <div className="pt-2 flex items-center justify-between border-t border-slate-200 dark:border-[#454A53]">
         <div className="space-y-0.5">
-          <span className="text-xs font-bold text-slate-900 dark:text-slate-100">
+          <span className="text-xs font-bold text-slate-900 dark:text-[#F5F6F8]">
             Hiển thị riêng biệt trong danh sách thành viên
           </span>
-          <p className="text-[11px] text-slate-500 dark:text-slate-400">
+          <p className="text-[11px] text-slate-500 dark:text-[#A1A7B1]">
             Nhóm các thành viên có vai trò này ở một đề mục riêng biệt để dễ nhận biết.
           </p>
         </div>
@@ -137,7 +137,7 @@ export const RoleDisplayTab: React.FC<RoleDisplayTabProps> = ({
           className={`relative inline-flex h-6 w-11 shrink-0 rounded-full border-2 border-transparent transition-colors duration-200 ease-in-out ${
             isEditMode ? 'cursor-pointer' : 'cursor-not-allowed opacity-60'
           } ${
-            draftRole.hoist ? 'bg-sky-500' : 'bg-slate-300 dark:bg-slate-700'
+            draftRole.hoist ? 'bg-sky-500 dark:bg-[#FF6B35]' : 'bg-slate-300 dark:bg-[#202329] dark:border dark:border-[#454A53]'
           }`}
         >
           <span
