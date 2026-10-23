@@ -19,6 +19,10 @@ import { useVitalStore } from '../../../store/useVitalStore';
 import { createThemeStyles, useTheme } from '../../../store/useThemeStore';
 import { LocalizedAlert, LocalizedText } from '../../../i18n/LocalizedComponents';
 import { launchEmergencyCall } from '../../../services/emergency';
+import { cameraApi } from '../../../services/camera';
+import { useCameraConnection } from '../useCameraConnection';
+import { CameraLiveView } from '../CameraLiveView';
+import PanTiltControlSheet from '../PanTiltControlSheet';
 
 
 // Safe dynamic require for video modules
@@ -267,15 +271,19 @@ export default function CameraDetailScreen({ navigation, route }: any) {
   const { width: winW, height: winH } = useWindowDimensions();
   const isPortrait = winH > winW;
   const {
-    camera,
+    camera: storedCamera,
     incidents,
     currentVitals,
     setCameraResolution,
-    toggleCameraSleep,
+
     toggleCameraAIProtect,
   } = useVitalStore();
 
-  const cameraDisplayName = routeParams.cameraName || camera.name;
+  const connection = useCameraConnection(routeParams.cameraId);
+  const camera = { ...storedCamera, isOnline: connection.status?.connected ?? false,
+    isSleep: connection.privacy ?? false };
+  const toggleCameraSleep = () => { void connection.togglePrivacy(); };
+  const cameraDisplayName = routeParams.cameraName || connection.status?.name || camera.name;
 
   const [isPaused, setIsPaused] = useState(false);
   const [isMuted, setIsMuted] = useState(false);
@@ -291,8 +299,6 @@ export default function CameraDetailScreen({ navigation, route }: any) {
 
   // PTZ Virtual Controller states
   const [showPTZModal, setShowPTZModal] = useState(false);
-  const [panAngle, setPanAngle] = useState(180); // 0 - 355 độ
-  const [tiltAngle, setTiltAngle] = useState(30); // -5 - 80 độ
   const [ptzActionToast, setPtzActionToast] = useState<string | null>(null);
   const ptzToastTimer = useRef<any>(null);
 
@@ -304,56 +310,17 @@ export default function CameraDetailScreen({ navigation, route }: any) {
     }, 1800);
   };
 
-  const handlePTZMove = (direction: 'UP' | 'DOWN' | 'LEFT' | 'RIGHT') => {
-    if (direction === 'UP') {
-      setTiltAngle((prev) => {
-        const next = Math.min(80, prev + 10);
-        showPtzFeedback(`Nâng góc lên: Tilt ${next}°`);
-        return next;
-      });
-    } else if (direction === 'DOWN') {
-      setTiltAngle((prev) => {
-        const next = Math.max(-5, prev - 10);
-        showPtzFeedback(`Hạ góc xuống: Tilt ${next}°`);
-        return next;
-      });
-    } else if (direction === 'LEFT') {
-      setPanAngle((prev) => {
-        const next = (prev - 15 + 360) % 360;
-        showPtzFeedback(`Xoay trái: Pan ${next}°`);
-        return next;
-      });
-    } else if (direction === 'RIGHT') {
-      setPanAngle((prev) => {
-        const next = (prev + 15) % 360;
-        showPtzFeedback(`Xoay phải: Pan ${next}°`);
-        return next;
-      });
+  const handlePTZMove = async (direction: 'UP' | 'DOWN' | 'LEFT' | 'RIGHT') => {
+    const steps = { UP: [0, 10], DOWN: [0, -10], LEFT: [-10, 0], RIGHT: [10, 0] };
+    const [x, y] = steps[direction];
+    if (await connection.run(() => cameraApi.move(x, y), true)) {
+
+      showPtzFeedback('Đã gửi lệnh xoay tới camera');
     }
   };
 
-  const handlePTZReset = () => {
-    setPanAngle(180);
-    setTiltAngle(30);
-    showPtzFeedback('Đã về vị trí gốc (Home 180°)');
-  };
-
-  const PRESETS = [
-    { id: 'living', name: 'Sofa', icon: 'tv-outline', pan: 180, tilt: 30 },
-    { id: 'bed', name: 'Giường', icon: 'bed-outline', pan: 90, tilt: 25 },
-    { id: 'door', name: 'Cửa vào', icon: 'enter-outline', pan: 270, tilt: 15 },
-    { id: 'kitchen', name: 'Bếp ăn', icon: 'restaurant-outline', pan: 330, tilt: 20 },
-  ];
-
-  const handleSelectPreset = (p: typeof PRESETS[0]) => {
-    setPanAngle(p.pan);
-    setTiltAngle(p.tilt);
-    showPtzFeedback(`Chuyển góc: ${p.name} (${p.pan}°, ${p.tilt}°)`);
-  };
-
   // Chế độ luồng camera thời gian thực từ Edge Hub
-  const [useMockStream] = useState(false);
-  const activeStreamUrl = useMockStream ? DEFAULT_MOCK_STREAM : (camera.streamUrl || 'http://127.0.0.1:8080/stream');
+
 
   // Playback & Interactive Timeline states
   const [isPlaybackMode, setIsPlaybackMode] = useState(false);
@@ -387,10 +354,15 @@ export default function CameraDetailScreen({ navigation, route }: any) {
   };
 
   const handleDownloadClip = () => {
-    LocalizedAlert.alert(
-      '📥 Tải Đoạn Clip',
-      `Đang trích xuất đoạn video phát lại lúc ${formatSecondsToHMS(playbackTimeSec)} ngày ${selectedPlaybackDate} và lưu vào thư viện thiết bị.`
-    );
+    if (!connection.recordings.files.length) {
+      LocalizedAlert.alert('Bản ghi', 'Chưa có video hoàn tất trên server.'); return;
+    }
+    LocalizedAlert.alert('Bản ghi trên server', 'Chọn video để mở hoặc tải xuống', [
+      ...connection.recordings.files.slice(-8).map(name => ({
+        text: name.slice(0, 8) + '.mp4', onPress: () => { void connection.open('recordings/' + name); },
+      })),
+      { text: 'Đóng', style: 'cancel' },
+    ]);
   };
 
   useEffect(() => {
@@ -511,7 +483,8 @@ export default function CameraDetailScreen({ navigation, route }: any) {
   const flashAnim = useRef(new Animated.Value(0)).current;
   const snapScale = useRef(new Animated.Value(1)).current;
 
-  const handleSnapshot = () => {
+  const handleSnapshot = async () => {
+    if (!await connection.open('snapshot.jpg')) return;
     flashAnim.setValue(0);
     Animated.sequence([
       Animated.timing(flashAnim, { toValue: 1, duration: 60, useNativeDriver: true }),
@@ -521,7 +494,7 @@ export default function CameraDetailScreen({ navigation, route }: any) {
       Animated.timing(snapScale, { toValue: 0.7, duration: 80, useNativeDriver: true }),
       Animated.spring(snapScale, { toValue: 1, friction: 3, useNativeDriver: true }),
     ]).start();
-    LocalizedAlert.alert('📸 Đã chụp ảnh!', 'Ảnh khoảnh khắc đã được lưu vào thư viện thiết bị.');
+    showPtzFeedback('Ảnh đã mở trong trình duyệt để xem hoặc lưu');
   };
 
   const [recordDuration, setRecordDuration] = useState(0);
@@ -556,14 +529,15 @@ export default function CameraDetailScreen({ navigation, route }: any) {
     };
   }, [isRecording]);
 
-  const handleRecordToggle = () => {
-    const nextState = !isRecording;
-    setIsRecording(nextState);
-    showPtzFeedback(
-      nextState
-        ? '🔴 Đang ghi hình video cục bộ...'
-        : '💾 Đã lưu đoạn video quay được vào thư viện'
-    );
+  useEffect(() => { setIsRecording(!!connection.recordings.active); }, [connection.recordings.active]);
+  useEffect(() => {
+    if (connection.recordings.error) LocalizedAlert.alert('Ghi hình', connection.recordings.error);
+  }, [connection.recordings.error]);
+  const handleRecordToggle = async () => {
+    if (connection.recordings.active) {
+      LocalizedAlert.alert('Đang ghi', 'Bản ghi sẽ tự kết thúc sau 30 giây.'); return;
+    }
+    if (await connection.record()) showPtzFeedback('Đã bắt đầu ghi 30 giây trên server');
   };
 
   // ── Two-Way Walkie-Talkie Intercom states ──
@@ -804,16 +778,7 @@ export default function CameraDetailScreen({ navigation, route }: any) {
         ) : (
           /* Single Player */
           <>
-            <UniversalVideoPlayer
-              uri={activeStreamUrl}
-              playerStyles={styles}
-              paused={isPaused}
-              muted={isMuted}
-              repeat={true}
-              style={styles.playerStream}
-              resizeMode="cover"
-              fallbackPoster={FALLBACK_POSTER}
-            />
+            <CameraLiveView connection={connection} paused={isPaused || !connection.active || isLandscapeFullscreen} style={styles.playerStream} />
 
             {/* OSD Watermark Top-Left */}
             {isPlaybackMode ? (
@@ -1017,7 +982,7 @@ export default function CameraDetailScreen({ navigation, route }: any) {
           <TouchableOpacity
             style={styles.actionPillBtn}
             onPress={() => {
-              setIsPlaybackMode(!isPlaybackMode);
+              handleDownloadClip();
               if (isMultiViewGrid) setIsMultiViewGrid(false);
             }}
             activeOpacity={0.8}
@@ -1142,7 +1107,7 @@ export default function CameraDetailScreen({ navigation, route }: any) {
                 style={styles.extendedItem}
                 onPress={() => {
                   toggleCameraSleep();
-                  showPtzFeedback(camera.isSleep ? 'Đã bật lại camera' : 'Đã bật chế độ riêng tư');
+
                 }}
                 activeOpacity={0.75}
               >
@@ -1584,16 +1549,7 @@ export default function CameraDetailScreen({ navigation, route }: any) {
               },
             ]}
           >
-            <UniversalVideoPlayer
-              uri={activeStreamUrl}
-              playerStyles={styles}
-              paused={isPaused}
-              muted={isMuted}
-              repeat={true}
-              style={styles.landscapeStream}
-              resizeMode="cover"
-              fallbackPoster={FALLBACK_POSTER}
-            />
+            <CameraLiveView connection={connection} paused={isPaused || !connection.active} style={styles.playerStream} />
 
             {/* Top Bar: Back / Close & Title */}
             <View style={styles.landscapeTopBar}>
@@ -1693,138 +1649,14 @@ export default function CameraDetailScreen({ navigation, route }: any) {
       </Modal>
 
       {/* ═══ MODAL: PTZ VIRTUAL D-PAD CONTROLLER ═══ */}
-      <Modal visible={showPTZModal} transparent animationType="slide">
-        <View style={styles.ptzOverlay}>
-          <View style={styles.ptzCard}>
-            {/* Header */}
-            <View style={styles.ptzHeader}>
-              <View>
-                <LocalizedText style={styles.ptzTitle}>Điều Khiển Xoay Camera 360°</LocalizedText>
-                <LocalizedText style={styles.ptzSub}>Imou Ranger 2C • Pan 355° / Tilt -5° ~ 80°</LocalizedText>
-              </View>
-              <TouchableOpacity onPress={() => setShowPTZModal(false)} activeOpacity={0.7}>
-                <Ionicons name="close-circle" size={28} color="#94A3B8" />
-              </TouchableOpacity>
-            </View>
-
-            {/* Angle Indicators */}
-            <View style={styles.ptzGaugesRow}>
-              <View style={styles.ptzGaugeBadge}>
-                <Ionicons name="swap-horizontal" size={14} color="#0284C7" />
-                <LocalizedText style={styles.ptzGaugeLabel}>Pan (Ngang):</LocalizedText>
-                <LocalizedText style={styles.ptzGaugeValue}>{panAngle}° / 355°</LocalizedText>
-              </View>
-              <View style={styles.ptzGaugeBadge}>
-                <Ionicons name="swap-vertical" size={14} color="#0284C7" />
-                <LocalizedText style={styles.ptzGaugeLabel}>Tilt (Dọc):</LocalizedText>
-                <LocalizedText style={styles.ptzGaugeValue}>{tiltAngle}° / 80°</LocalizedText>
-              </View>
-            </View>
-
-            {/* MQTT Command Banner */}
-            <View style={styles.ptzMqttBanner}>
-              <View style={styles.ptzMqttDot} />
-              <LocalizedText style={styles.ptzMqttText} numberOfLines={1}>
-                {ptzActionToast || `MQTT: camera/${camera.id}/ptz → {"pan": ${panAngle}, "tilt": ${tiltAngle}}`}
-              </LocalizedText>
-            </View>
-
-            {/* Virtual D-Pad Controller */}
-            <View style={styles.dpadContainer}>
-              <View style={styles.dpadOuterCircle}>
-                {/* UP */}
-                <TouchableOpacity
-                  style={[styles.dpadBtn, styles.dpadBtnUp]}
-                  onPress={() => handlePTZMove('UP')}
-                  activeOpacity={0.6}
-                >
-                  <Ionicons name="chevron-up" size={32} color="#FFF" />
-                </TouchableOpacity>
-
-                {/* LEFT */}
-                <TouchableOpacity
-                  style={[styles.dpadBtn, styles.dpadBtnLeft]}
-                  onPress={() => handlePTZMove('LEFT')}
-                  activeOpacity={0.6}
-                >
-                  <Ionicons name="chevron-back" size={32} color="#FFF" />
-                </TouchableOpacity>
-
-                {/* CENTER (HOME) */}
-                <TouchableOpacity
-                  style={styles.dpadCenterBtn}
-                  onPress={handlePTZReset}
-                  activeOpacity={0.7}
-                >
-                  <Ionicons name="home" size={22} color="#0284C7" />
-                  <LocalizedText style={styles.dpadCenterText}>HOME</LocalizedText>
-                </TouchableOpacity>
-
-                {/* RIGHT */}
-                <TouchableOpacity
-                  style={[styles.dpadBtn, styles.dpadBtnRight]}
-                  onPress={() => handlePTZMove('RIGHT')}
-                  activeOpacity={0.6}
-                >
-                  <Ionicons name="chevron-forward" size={32} color="#FFF" />
-                </TouchableOpacity>
-
-                {/* DOWN */}
-                <TouchableOpacity
-                  style={[styles.dpadBtn, styles.dpadBtnDown]}
-                  onPress={() => handlePTZMove('DOWN')}
-                  activeOpacity={0.6}
-                >
-                  <Ionicons name="chevron-down" size={32} color="#FFF" />
-                </TouchableOpacity>
-              </View>
-            </View>
-
-            {/* Presets Quick-Jump */}
-            <LocalizedText style={styles.ptzSectionTitle}>Điểm Quan Sát Quan Trọng (Presets)</LocalizedText>
-            <View style={styles.presetsRow}>
-              {PRESETS.map((p) => {
-                const isSelected = panAngle === p.pan && tiltAngle === p.tilt;
-                return (
-                  <TouchableOpacity
-                    key={p.id}
-                    style={[styles.presetChip, isSelected && styles.presetChipActive]}
-                    onPress={() => handleSelectPreset(p)}
-                    activeOpacity={0.75}
-                  >
-                    <Ionicons
-                      name={p.icon as any}
-                      size={18}
-                      color={isSelected ? Colors.primary : '#475569'}
-                    />
-                    <LocalizedText style={[styles.presetChipText, isSelected && styles.presetChipTextActive]}>
-                      {p.name}
-                    </LocalizedText>
-                  </TouchableOpacity>
-                );
-              })}
-            </View>
-
-            {/* Smart Tracking Quick Toggle in Panel */}
-            <TouchableOpacity
-              style={styles.ptzTrackingRow}
-              onPress={() => setSmartTracking(!smartTracking)}
-              activeOpacity={0.7}
-            >
-              <View style={styles.ptzTrackingLeft}>
-                <Ionicons name="scan-outline" size={20} color="#0F172A" />
-                <View style={{ marginLeft: 10 }}>
-                  <LocalizedText style={styles.ptzTrackingTitle}>Tự động bám người (Smart Tracking)</LocalizedText>
-                  <LocalizedText style={styles.ptzTrackingSub}>Tự xoay camera theo chuyển động người già</LocalizedText>
-                </View>
-              </View>
-              <View style={[styles.toggle, smartTracking && styles.toggleOn]}>
-                <View style={[styles.toggleThumb, smartTracking && styles.toggleThumbOn]} />
-              </View>
-            </TouchableOpacity>
-          </View>
-        </View>
-      </Modal>
+      <PanTiltControlSheet
+        visible={showPTZModal}
+        feedback={ptzActionToast}
+        onClose={() => setShowPTZModal(false)}
+        onSettings={() => { setShowPTZModal(false); setShowSettingsModal(true); }}
+        onMove={handlePTZMove}
+        onAddPreset={() => showPtzFeedback('Chưa hỗ trợ lưu vị trí trên camera này')}
+      />
 
       {/* ═══ MODAL: SETTINGS ═══ */}
       <Modal visible={showSettingsModal} transparent animationType="slide">
@@ -1843,7 +1675,7 @@ export default function CameraDetailScreen({ navigation, route }: any) {
               </View>
               <View style={{ flex: 1, marginLeft: 12 }}>
                 <LocalizedText style={[styles.settingsCamName, isDarkMode && { color: colors.textPrimary }]}>{camera.name}</LocalizedText>
-                <LocalizedText style={[styles.settingsCamRoom, isDarkMode && { color: colors.textSecondary }]}>{camera.room} • Imou Ranger 2C</LocalizedText>
+                <LocalizedText style={[styles.settingsCamRoom, isDarkMode && { color: colors.textSecondary }]}>{camera.room} • Tapo C200C</LocalizedText>
               </View>
               <View style={[styles.onlinePill, !camera.isOnline && { backgroundColor: '#FEE2E2' }]}>
                 <View style={[styles.onlineDot, !camera.isOnline && { backgroundColor: '#EF4444' }]} />
@@ -2064,7 +1896,7 @@ export default function CameraDetailScreen({ navigation, route }: any) {
                 <View>
                   <LocalizedText style={styles.intercomTitle}>Đàm Thoại 2 Chiều Walkie-Talkie</LocalizedText>
                   <LocalizedText style={styles.intercomSub}>
-                    Loa Imou Ranger 2C • Âm lượng {speakerVolume}%
+                    Loa Tapo C200C • Âm lượng {speakerVolume}%
                   </LocalizedText>
                 </View>
               </View>
