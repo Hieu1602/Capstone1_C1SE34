@@ -63,17 +63,17 @@ export const CreateEditNotificationModal: React.FC<CreateEditNotificationModalPr
 
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-900/60 backdrop-blur-sm animate-fade-in">
-      <div className="w-full max-w-lg rounded-2xl glass-card border border-[#C8AD8A] shadow-2xl overflow-hidden">
-        <div className="flex items-center justify-between px-5 py-4 border-b border-[#C8AD8A]/50 bg-[#FFF8EE] dark:bg-[#1A3830]">
+      <div className="w-full max-w-lg rounded-2xl glass-card border border-[#E7E9ED] dark:border-[#454A53] shadow-2xl overflow-hidden">
+        <div className="flex items-center justify-between px-5 py-4 border-b border-[#E7E9ED] dark:border-[#454A53] bg-[#F5F6F8] dark:bg-[#202329]">
           <div className="flex items-center gap-2">
-            <Bell className="w-4 h-4 text-[#D96C3B]" />
-            <h3 className="text-sm font-bold font-heading text-slate-900 dark:text-white">
+            <Bell className="w-4 h-4 text-[#FF6B35]" />
+            <h3 className="text-sm font-bold font-heading text-[#191B20] dark:text-[#F5F6F8]">
               {editingNotification ? 'Chỉnh sửa thông báo' : 'Soạn thông báo toàn hệ thống mới'}
             </h3>
           </div>
           <button
             onClick={onClose}
-            className="p-1.5 rounded-lg text-slate-400 hover:text-slate-600 dark:hover:text-slate-200 hover:bg-[#D96C3B]/10 cursor-pointer"
+            className="p-1.5 rounded-lg text-[#737780] hover:text-[#191B20] dark:hover:text-white hover:bg-[#FFF0E8] dark:hover:bg-[#FF6B35]/15 cursor-pointer"
           >
             <X className="w-4 h-4" />
           </button>
@@ -82,7 +82,7 @@ export const CreateEditNotificationModal: React.FC<CreateEditNotificationModalPr
         <form onSubmit={onSubmit} className="p-5 space-y-4">
           {/* Tiêu đề */}
           <div>
-            <label className="block text-xs font-bold text-slate-800 dark:text-slate-200 mb-1">
+            <label className="block text-xs font-bold text-[#191B20] dark:text-[#F5F6F8] mb-1">
               Tiêu đề thông báo <span className="text-rose-500">*</span>
             </label>
             <input
@@ -98,7 +98,7 @@ export const CreateEditNotificationModal: React.FC<CreateEditNotificationModalPr
           {/* Phân loại & Đối tượng */}
           <div className="grid grid-cols-2 gap-3">
             <div>
-              <label className="block text-xs font-bold text-slate-800 dark:text-slate-200 mb-1">
+              <label className="block text-xs font-bold text-[#191B20] dark:text-[#F5F6F8] mb-1">
                 Phân loại thông báo
               </label>
               <select
@@ -115,7 +115,7 @@ export const CreateEditNotificationModal: React.FC<CreateEditNotificationModalPr
             </div>
 
             <div>
-              <label className="block text-xs font-bold text-slate-800 dark:text-slate-200 mb-1">
+              <label className="block text-xs font-bold text-[#191B20] dark:text-[#F5F6F8] mb-1">
                 Đối tượng nhận
               </label>
               <select
@@ -133,7 +133,7 @@ export const CreateEditNotificationModal: React.FC<CreateEditNotificationModalPr
 
           {/* Nội dung */}
           <div>
-            <label className="block text-xs font-bold text-slate-800 dark:text-slate-200 mb-1">
+            <label className="block text-xs font-bold text-[#191B20] dark:text-[#F5F6F8] mb-1">
               Nội dung chi tiết <span className="text-rose-500">*</span>
             </label>
             <textarea
@@ -149,7 +149,7 @@ export const CreateEditNotificationModal: React.FC<CreateEditNotificationModalPr
           {/* Lựa chọn hình thức phát hành */}
           {!editingNotification && (
             <div>
-              <label className="block text-xs font-bold text-slate-800 dark:text-slate-200 mb-2">
+              <label className="block text-xs font-bold text-[#191B20] dark:text-[#F5F6F8] mb-2">
                 Hình thức phát hành
               </label>
               <div className="grid grid-cols-3 gap-2">
@@ -158,11 +158,11 @@ export const CreateEditNotificationModal: React.FC<CreateEditNotificationModalPr
                   onClick={() => setFormActionType('publish')}
                   className={`p-2.5 rounded-xl border text-left transition-all cursor-pointer ${
                     formActionType === 'publish'
-                      ? 'border-[#D96C3B] bg-[#FFF8EE] dark:bg-[#1A3830] text-[#D96C3B] font-bold shadow-sm'
-                      : 'border-[#C8AD8A]/40 text-slate-600 dark:text-slate-400'
+                      ? 'border-[#FF6B35] bg-[#FFF0E8] dark:bg-[#FF6B35]/15 text-[#FF6B35] font-bold shadow-2xs'
+                      : 'border-[#E7E9ED] dark:border-[#454A53] text-[#737780]'
                   }`}
                 >
-                  <Send className="w-3.5 h-3.5 mb-1 text-[#D96C3B]" />
+                  <Send className="w-3.5 h-3.5 mb-1 text-[#FF6B35]" />
                   <div className="text-xs">Phát hành ngay</div>
                   <div className="text-[10px] opacity-75">Gửi Push FCM</div>
                 </button>
@@ -172,8 +172,8 @@ export const CreateEditNotificationModal: React.FC<CreateEditNotificationModalPr
                   onClick={() => setFormActionType('schedule')}
                   className={`p-2.5 rounded-xl border text-left transition-all cursor-pointer ${
                     formActionType === 'schedule'
-                      ? 'border-amber-500 bg-amber-50 dark:bg-amber-950/20 text-amber-700 dark:text-amber-300 font-bold shadow-sm'
-                      : 'border-[#C8AD8A]/40 text-slate-600 dark:text-slate-400'
+                      ? 'border-amber-500 bg-amber-50 dark:bg-amber-950/20 text-amber-700 dark:text-amber-300 font-bold shadow-2xs'
+                      : 'border-[#E7E9ED] dark:border-[#454A53] text-[#737780]'
                   }`}
                 >
                   <Calendar className="w-3.5 h-3.5 mb-1 text-amber-500" />
@@ -186,8 +186,8 @@ export const CreateEditNotificationModal: React.FC<CreateEditNotificationModalPr
                   onClick={() => setFormActionType('draft')}
                   className={`p-2.5 rounded-xl border text-left transition-all cursor-pointer ${
                     formActionType === 'draft'
-                      ? 'border-slate-500 bg-slate-100 dark:bg-slate-800 text-slate-900 dark:text-white font-bold shadow-sm'
-                      : 'border-[#C8AD8A]/40 text-slate-600 dark:text-slate-400'
+                      ? 'border-slate-500 bg-slate-100 dark:bg-[#202329] text-[#191B20] dark:text-[#F5F6F8] font-bold shadow-2xs'
+                      : 'border-[#E7E9ED] dark:border-[#454A53] text-[#737780]'
                   }`}
                 >
                   <FileEdit className="w-3.5 h-3.5 mb-1 text-slate-500" />
@@ -218,13 +218,13 @@ export const CreateEditNotificationModal: React.FC<CreateEditNotificationModalPr
           )}
 
           {/* Giới hạn thời gian thông báo tồn tại (Lifespan / Expiration) */}
-          <div className="p-3.5 rounded-xl bg-slate-50 dark:bg-slate-800/60 border border-[#C8AD8A]/40 space-y-2.5">
+          <div className="p-3.5 rounded-xl bg-[#F5F6F8] dark:bg-[#17191E] border border-[#E7E9ED] dark:border-[#454A53] space-y-2.5">
             <div className="flex items-center justify-between">
-              <label className="block text-xs font-bold text-slate-800 dark:text-slate-200 flex items-center gap-1.5">
-                <Clock className="w-3.5 h-3.5 text-[#D96C3B]" />
+              <label className="block text-xs font-bold text-[#191B20] dark:text-[#F5F6F8] flex items-center gap-1.5">
+                <Clock className="w-3.5 h-3.5 text-[#FF6B35]" />
                 <span>Giới hạn thời gian thông báo tồn tại</span>
               </label>
-              <span className="text-[10px] text-slate-500 dark:text-slate-400">
+              <span className="text-[10px] text-[#737780]">
                 (Tự động đóng khi hết hạn)
               </span>
             </div>
@@ -245,8 +245,8 @@ export const CreateEditNotificationModal: React.FC<CreateEditNotificationModalPr
                   onClick={() => onSelectExpiryPreset(preset.id as any)}
                   className={`p-2 rounded-lg border text-center transition-all cursor-pointer ${
                     formExpiryType === preset.id
-                      ? 'border-[#D96C3B] bg-[#FFF8EE] dark:bg-[#1A3830] text-[#D96C3B] font-bold shadow-xs'
-                      : 'border-slate-200 dark:border-slate-700 text-slate-600 dark:text-slate-400 hover:border-[#C8AD8A]/60'
+                      ? 'border-[#FF6B35] bg-[#FFF0E8] dark:bg-[#FF6B35]/15 text-[#FF6B35] font-bold shadow-2xs'
+                      : 'border-slate-200 dark:border-[#454A53] text-[#737780] hover:border-[#FF6B35]/40'
                   }`}
                 >
                   <div className="text-xs">{preset.label}</div>
@@ -258,7 +258,7 @@ export const CreateEditNotificationModal: React.FC<CreateEditNotificationModalPr
             {/* Ô chọn ngày giờ cụ thể */}
             {formExpiryType === 'custom' && (
               <div className="pt-1.5">
-                <label className="block text-[11px] font-semibold text-slate-700 dark:text-slate-300 mb-1">
+                <label className="block text-[11px] font-semibold text-[#191B20] dark:text-[#F5F6F8] mb-1">
                   Mốc thời gian hết hạn cụ thể:
                 </label>
                 <input
@@ -280,14 +280,14 @@ export const CreateEditNotificationModal: React.FC<CreateEditNotificationModalPr
               </p>
             )}
             {formExpiryType === 'never' && (
-              <p className="text-[10px] text-slate-500 dark:text-slate-400 flex items-center gap-1">
+              <p className="text-[10px] text-[#737780] flex items-center gap-1">
                 <span>Thông báo sẽ tồn tại liên tục cho đến khi Admin chủ động thu hồi.</span>
               </p>
             )}
           </div>
 
           {/* Action buttons */}
-          <div className="flex items-center justify-end gap-2 pt-2 border-t border-[#C8AD8A]/30">
+          <div className="flex items-center justify-end gap-2 pt-2 border-t border-[#E7E9ED] dark:border-[#454A53]">
             <button
               type="button"
               onClick={onClose}
@@ -307,4 +307,3 @@ export const CreateEditNotificationModal: React.FC<CreateEditNotificationModalPr
     </div>
   );
 };
-

@@ -35,7 +35,7 @@ export const RolePermissionsTab: React.FC<RolePermissionsTabProps> = ({
     <div className="space-y-6">
       {/* Banner thông báo trạng thái Chỉ đọc nếu đang ở chế độ xem */}
       {!isEditMode && (
-        <div className="flex items-center gap-2.5 p-3 rounded-xl bg-slate-100 dark:bg-slate-800/80 border border-slate-200 dark:border-slate-700 text-xs text-slate-600 dark:text-slate-300">
+        <div className="flex items-center gap-2.5 p-3 rounded-xl bg-slate-100 dark:bg-[#202329] border border-slate-200 dark:border-[#454A53] text-xs text-slate-600 dark:text-[#A1A7B1]">
           <Info className="w-4 h-4 text-sky-500 shrink-0" />
           <span>
             Bạn đang ở <b>Chế độ xem (Chỉ đọc)</b>. Để kích hoạt hoặc thu hồi các quyền bên dưới, vui lòng bấm nút <b>"Chỉnh sửa vai trò"</b> ở góc trên bên phải.
@@ -51,7 +51,7 @@ export const RolePermissionsTab: React.FC<RolePermissionsTabProps> = ({
           value={searchQuery}
           onChange={(e) => onSearchChange(e.target.value)}
           placeholder="Tìm kiếm quyền hạn"
-          className="w-full pl-9 pr-3 py-1.5 text-xs rounded-xl bg-slate-100 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 text-slate-900 dark:text-slate-100 placeholder-slate-400 focus:outline-none focus:ring-1 focus:ring-sky-500 font-sans"
+          className="w-full pl-9 pr-3 py-1.5 text-xs rounded-xl bg-slate-100 dark:bg-[#202329] border border-slate-200 dark:border-[#454A53] text-slate-900 dark:text-[#F5F6F8] placeholder-slate-400 dark:placeholder-[#727984] focus:outline-none focus:ring-1 focus:ring-[#FF6B35]/40 font-sans"
         />
       </div>
 
@@ -68,16 +68,16 @@ export const RolePermissionsTab: React.FC<RolePermissionsTabProps> = ({
           return (
             <div
               key={cat.id}
-              className="space-y-3 p-4 rounded-2xl bg-slate-50/70 dark:bg-slate-800/30 border border-slate-200/80 dark:border-slate-800"
+              className="space-y-3 p-4 rounded-2xl bg-slate-50/70 dark:bg-[#17191E] border border-slate-200/80 dark:border-[#454A53]"
             >
               {/* Tiêu đề nhóm quyền */}
-              <div className="flex items-center justify-between pb-2 border-b border-slate-200/60 dark:border-slate-800">
+              <div className="flex items-center justify-between pb-2 border-b border-slate-200/60 dark:border-[#454A53]">
                 <div className="flex items-center gap-2">
                   <CategoryIcon className={`w-4 h-4 ${cat.color}`} />
-                  <span className="text-xs font-bold uppercase tracking-wider text-slate-700 dark:text-slate-300 font-mono">
+                  <span className="text-xs font-bold uppercase tracking-wider text-slate-700 dark:text-[#F5F6F8] font-mono">
                     {cat.title}
                   </span>
-                  <span className="text-[10px] font-mono px-1.5 py-0.5 rounded bg-slate-200 dark:bg-slate-700 text-slate-600 dark:text-slate-300">
+                  <span className="text-[10px] font-mono px-1.5 py-0.5 rounded bg-slate-200 dark:bg-[#202329] text-slate-600 dark:text-[#A1A7B1]">
                     {activeCount}/{catPermIds.length}
                   </span>
                 </div>
@@ -86,7 +86,7 @@ export const RolePermissionsTab: React.FC<RolePermissionsTabProps> = ({
                   <button
                     type="button"
                     onClick={() => onToggleCategoryPermissions(cat, !isAllActive)}
-                    className="text-[11px] font-bold text-sky-600 dark:text-sky-400 hover:underline cursor-pointer"
+                    className="text-[11px] font-bold text-sky-600 dark:text-[#FF8A50] hover:underline cursor-pointer"
                   >
                     {isAllActive ? 'Tắt tất cả' : 'Bật tất cả'}
                   </button>
@@ -101,13 +101,13 @@ export const RolePermissionsTab: React.FC<RolePermissionsTabProps> = ({
                   return (
                     <div
                       key={perm.id}
-                      className="flex items-start justify-between gap-4 py-2 hover:bg-slate-100/50 dark:hover:bg-slate-800/50 rounded-xl px-2 transition-colors"
+                      className="flex items-start justify-between gap-4 py-2 hover:bg-slate-100/50 dark:hover:bg-[#202329] rounded-xl px-2 transition-colors"
                     >
                       <div className="space-y-0.5 flex-1">
-                        <span className="text-xs font-bold text-slate-800 dark:text-slate-200 block">
+                        <span className="text-xs font-bold text-slate-800 dark:text-[#F5F6F8] block">
                           {perm.name}
                         </span>
-                        <p className="text-[11px] text-slate-500 dark:text-slate-400 leading-relaxed font-sans">
+                        <p className="text-[11px] text-slate-500 dark:text-[#A1A7B1] leading-relaxed font-sans">
                           {perm.description}
                         </p>
                       </div>
@@ -123,12 +123,12 @@ export const RolePermissionsTab: React.FC<RolePermissionsTabProps> = ({
                         }}
                         className={`relative inline-flex h-6 w-11 shrink-0 rounded-full border-2 border-transparent transition-colors duration-200 ease-in-out focus:outline-none ${
                           isEditMode
-                            ? 'cursor-pointer focus:ring-2 focus:ring-sky-500/30'
+                            ? 'cursor-pointer focus:ring-2 focus:ring-[#FF6B35]/30'
                             : 'cursor-not-allowed opacity-60'
                         } ${
                           isChecked
-                            ? 'bg-sky-500 dark:bg-sky-500'
-                            : 'bg-slate-300 dark:bg-slate-700'
+                            ? 'bg-sky-500 dark:bg-[#FF6B35]'
+                            : 'bg-slate-300 dark:bg-[#202329] dark:border dark:border-[#454A53]'
                         }`}
                         title={
                           isEditMode

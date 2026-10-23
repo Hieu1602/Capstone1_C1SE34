@@ -1,5 +1,5 @@
 // src/components/layout/MainLayout.tsx
-// Theme: Sky Blue & White · Full Light & Dark Mode Dual Support
+// Dual Theme Support: Light Mode (Enterprise Source of Truth) · Dark Mode (Black Metallic + Orange)
 
 import React, { useEffect, useState } from 'react';
 import { Outlet } from 'react-router-dom';
@@ -29,34 +29,28 @@ export const MainLayout: React.FC = () => {
   }, []);
 
   return (
-    <div className="flex min-h-screen bg-[#F2EBE0] dark:bg-[#0B1714] text-slate-900 dark:text-slate-100 font-sans selection:bg-[#D96C3B]/20 selection:text-[#C25828] transition-colors duration-200">
+    <div className="flex min-h-screen bg-[#F5F6F8] dark:bg-[#12151C] text-[#191B20] dark:text-[#F1F3F7] font-sans selection:bg-[#F05A24]/20 selection:text-[#F05A24] transition-colors duration-200">
       {/* Sidebar Navigation */}
       <Sidebar />
 
       {/* Main Content Area */}
-      <div className="flex-1 flex flex-col min-w-0 bg-[#F2EBE0] dark:bg-[#0B1714] relative min-h-screen transition-colors duration-200 overflow-x-hidden">
-        
-        {/* Imperial Palace Panorama Hero Watermark (Top Right) */}
-        <div 
-          className="absolute top-14 right-0 w-80 md:w-[520px] h-36 opacity-30 dark:opacity-15 pointer-events-none select-none bg-contain bg-no-repeat bg-right-top z-0"
-          style={{ backgroundImage: `url('/assets/heritage/png/palace-panorama.png')` }}
-          aria-hidden="true"
-        />
-
+      <div className="flex-1 flex flex-col min-w-0 bg-[#F5F6F8] dark:bg-[#12151C] relative min-h-screen transition-colors duration-200 overflow-x-hidden">
         <Navbar />
 
         {/* Real-time Alert Toast Banner */}
         {latestAlert && (
-          <div className="mx-6 mt-4 p-3.5 rounded-2xl bg-amber-50/90 border border-amber-200 dark:bg-amber-950/40 dark:border-amber-700/50 text-amber-900 dark:text-amber-200 flex items-center justify-between shadow-lg shadow-amber-500/5 backdrop-blur-md animate-slide-up relative z-10">
+          <div className="mx-6 mt-4 p-3.5 rounded-2xl bg-amber-50 border border-amber-200/80 dark:bg-[#202329] dark:border-[#454A53] text-amber-900 dark:text-[#FBBF24] flex items-center justify-between shadow-sm dark:shadow-[inset_0_1px_0_rgba(119,127,139,0.2),0_4px_16px_rgba(0,0,0,0.4)] backdrop-blur-md animate-slide-up relative z-10">
             <div className="flex items-center space-x-3">
-              <div className="p-2 rounded-xl bg-[#D96C3B]/10 dark:bg-[#D96C3B]/20 text-[#D96C3B] dark:text-[#E67A47] border border-[#D96C3B]/20">
+              <div className="p-2 rounded-xl bg-gradient-to-br from-[#FFF0E8] to-[#FFE2D4] dark:from-[#2F2119] dark:to-[#1F1714] text-[#E04D16] dark:text-[#FF7037] border border-[#F05A24]/40 shadow-xs">
                 <AlertTriangle className="w-5 h-5 animate-pulse" />
               </div>
               <div>
-                <p className="text-[10px] uppercase font-mono font-bold tracking-wider text-[#D96C3B] dark:text-[#E67A47]">
+                <p className="text-[10px] uppercase font-mono font-bold tracking-wider text-[#F05A24]">
                   CẢNH BÁO THỜI GIAN THỰC ({latestAlert.time})
                 </p>
-                <p className="text-xs font-semibold text-slate-900 dark:text-white">{latestAlert.message}</p>
+                <p className="text-xs font-semibold text-[#191B20] dark:text-[#F5F6F8]">
+                  {latestAlert.message}
+                </p>
               </div>
             </div>
             <button
@@ -69,19 +63,9 @@ export const MainLayout: React.FC = () => {
           </div>
         )}
 
-        <main className="flex-1 overflow-y-auto relative z-10 flex flex-col justify-between">
-          <div className="p-6 flex-1">
-            <Outlet />
-          </div>
-          
-          {/* Imperial Lotus Wave Footer Banner - Full Detail & 100% Screen Width */}
-          <div className="relative w-full overflow-hidden pointer-events-none select-none mt-6 leading-none">
-            <img
-              src="/assets/heritage/png/lotus-wave-footer.png?v=3"
-              alt=""
-              className="w-full h-auto min-w-full block select-none pointer-events-none opacity-90 dark:opacity-60"
-            />
-          </div>
+        {/* Main Content Outlet */}
+        <main className="flex-1 overflow-y-auto p-6 relative z-10">
+          <Outlet />
         </main>
       </div>
     </div>

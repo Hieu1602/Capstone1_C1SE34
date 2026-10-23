@@ -303,14 +303,18 @@ export const UserManagementPage: React.FC = () => {
 
       {/* Header Phân hệ */}
       <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4">
-        <div>
-          <h1 className="text-xl sm:text-2xl font-bold font-heading text-slate-900 dark:text-white flex items-center gap-2.5">
-            <Users className="w-6 h-6 text-[#D96C3B]" />
-            <span>Quản lý Người Dùng & Phân Quyền</span>
-          </h1>
-          <p className="text-xs text-slate-600 dark:text-slate-400 mt-1">
-            Điều phối tài khoản, phân định vai trò Chủ nhà / Thành viên / Bác sĩ và thiết lập ma trận Rule quyền hạn
-          </p>
+        <div className="flex items-center gap-3.5">
+          <div className="w-11 h-11 rounded-2xl bg-gradient-to-br from-[#FF723B] via-[#F05A24] to-[#C73C0A] text-white flex items-center justify-center shadow-[0_4px_16px_rgba(240,90,36,0.35),inset_0_1px_0_rgba(255,255,255,0.4)] border border-white/20 shrink-0">
+            <Users className="w-5 h-5 stroke-[2.2]" />
+          </div>
+          <div>
+            <h1 className="text-xl sm:text-2xl font-bold font-heading text-[#191B20] dark:text-[#F5F6F8]">
+              Quản lý Người Dùng & Phân Quyền
+            </h1>
+            <p className="text-xs text-[#737780] dark:text-[#A1A7B1] mt-0.5">
+              Điều phối tài khoản, phân định vai trò Bác sĩ, Người thân và thiết lập ma trận Rule quyền hạn
+            </p>
+          </div>
         </div>
 
         <div className="flex items-center space-x-2.5">
@@ -345,13 +349,13 @@ export const UserManagementPage: React.FC = () => {
       </div>
 
       {/* Main Tabs Navigation */}
-      <div className="flex items-center space-x-2 border-b border-[#C8AD8A] dark:border-white/10 pb-1">
+      <div className="flex items-center space-x-2 border-b border-[#E7E9ED] dark:border-[#454A53] pb-1">
         <button
           onClick={() => setActiveMainTab('accounts')}
           className={`flex items-center space-x-2 px-4 py-2 rounded-xl text-xs font-bold font-mono transition-all cursor-pointer ${
             activeMainTab === 'accounts'
-              ? 'bg-[#FFF8EE] dark:bg-[#1A3830] text-[#D96C3B] dark:text-[#DFB15B] border border-[#C8AD8A] dark:border-[#2F5A4D] shadow-xs'
-              : 'text-slate-600 dark:text-slate-400 hover:text-slate-900 dark:hover:text-white'
+              ? 'bg-[#FFF0E8] dark:bg-[#FF6B35]/15 text-[#FF6B35] border border-[#FF6B35]/30 shadow-2xs'
+              : 'text-[#737780] dark:text-[#A1A7B1] hover:text-[#191B20] dark:hover:text-[#F5F6F8]'
           }`}
         >
           <Users className="w-4 h-4" />
@@ -362,8 +366,8 @@ export const UserManagementPage: React.FC = () => {
           onClick={() => setActiveMainTab('rules')}
           className={`flex items-center space-x-2 px-4 py-2 rounded-xl text-xs font-bold font-mono transition-all cursor-pointer ${
             activeMainTab === 'rules'
-              ? 'bg-[#FFF8EE] dark:bg-[#1A3830] text-[#D96C3B] dark:text-[#DFB15B] border border-[#C8AD8A] dark:border-[#2F5A4D] shadow-xs'
-              : 'text-slate-600 dark:text-slate-400 hover:text-slate-900 dark:hover:text-white'
+              ? 'bg-[#FFF0E8] dark:bg-[#FF6B35]/15 text-[#FF6B35] border border-[#FF6B35]/30 shadow-2xs'
+              : 'text-[#737780] dark:text-[#A1A7B1] hover:text-[#191B20] dark:hover:text-[#F5F6F8]'
           }`}
         >
           <Sliders className="w-4 h-4" />
