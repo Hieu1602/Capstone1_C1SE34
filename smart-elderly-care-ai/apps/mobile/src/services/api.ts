@@ -411,3 +411,23 @@ export const supportApi = {
 
 
 
+
+// 11. System Notifications / Admin Broadcasts API
+export interface SystemAnnouncement {
+  id: string;
+  title: string;
+  body: string;
+  type: 'info' | 'system_maintenance' | 'emergency' | 'health_tip' | 'feature_update' | string;
+  target_audience: 'all' | 'caregivers' | 'doctors' | 'elderly' | string;
+  status: 'draft' | 'scheduled' | 'published' | 'revoked' | string;
+  created_at?: string;
+  published_at?: string;
+  expires_at?: string;
+}
+
+export const adminBroadcastsApi = {
+  getActive: (targetAudience?: string) =>
+    api.get<SystemAnnouncement[]>('/system-notifications/broadcasts/active', {
+      params: targetAudience ? { target_audience: targetAudience } : {},
+    }),
+};

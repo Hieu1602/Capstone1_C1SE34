@@ -101,6 +101,7 @@ async def create_notification(
         status=target_status,
         scheduled_at=scheduled_at,
         published_at=published_at,
+        expires_at=payload.expires_at,
         delivered_count=delivered_count,
         read_count=0,
         created_by=current_user.id if current_user else None,
@@ -138,8 +139,14 @@ async def get_active_broadcasts(
     """Lấy danh sách các thông báo toàn hệ thống đang phát hành (cho App di động & người dùng)."""
     now = datetime.now(timezone.utc)
     query = select(SystemNotification).where(
-        (SystemNotification.status == "published")
-        | ((SystemNotification.status == "scheduled") & (SystemNotification.scheduled_at <= now))
+        (
+            (SystemNotification.status == "published")
+            | ((SystemNotification.status == "scheduled") & (SystemNotification.scheduled_at <= now))
+        ),
+        (
+            (SystemNotification.expires_at.is_(None))
+            | (SystemNotification.expires_at > now)
+        ),
     )
     if target_audience and target_audience != "all":
         query = query.where(SystemNotification.target_audience.in_(["all", target_audience]))
@@ -195,6 +202,8 @@ async def update_notification(
         notif.target_audience = payload.target_audience
     if payload.scheduled_at is not None:
         notif.scheduled_at = payload.scheduled_at
+    if "expires_at" in payload.model_fields_set:
+        notif.expires_at = payload.expires_at
     if payload.status is not None:
         notif.status = payload.status
 

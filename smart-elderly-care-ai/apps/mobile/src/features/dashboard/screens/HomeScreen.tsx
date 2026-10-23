@@ -33,6 +33,7 @@ import { MedicationReminderWidget } from '../components/MedicationReminderWidget
 import { VitalsSummaryCard } from '../components/VitalsSummaryCard';
 import { HealthTrendsCard } from '../components/HealthTrendsCard';
 import { AlarmSnoozeModal } from '../components/AlarmSnoozeModal';
+import AdminMarqueeBanner from '../../../components/AdminMarqueeBanner';
 
 export default function HomeScreen({ navigation }: any) {
   // Quản lý trạng thái giao diện Sáng / Tối (Dark Mode)
@@ -373,6 +374,9 @@ export default function HomeScreen({ navigation }: any) {
           </TouchableOpacity>
         </View>
       </View>
+
+      {/* Thanh thông báo chạy chữ từ Admin (dành cho Chủ hộ & Thành viên gia đình) */}
+      <AdminMarqueeBanner targetAudience="caregivers" />
 
       <ScrollView
         showsVerticalScrollIndicator={false}

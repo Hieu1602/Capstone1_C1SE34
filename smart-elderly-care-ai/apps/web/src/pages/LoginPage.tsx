@@ -214,7 +214,7 @@ export const LoginPage: React.FC = () => {
                   autoComplete="username"
                   value={username}
                   onChange={(e) => setUsername(e.target.value)}
-                  placeholder="+84900000000 hoặc 0900000000"
+                  placeholder="Tài Khoản"
                   className="w-full pl-10 pr-4 py-2.5 rounded-xl bg-[#0F2F27]/90 border border-[#265A4C] text-white placeholder-slate-500 focus:outline-none focus:border-[#DFB15B] focus:ring-2 focus:ring-[#DFB15B]/20 text-xs font-mono transition-all shadow-inner"
                 />
               </div>
