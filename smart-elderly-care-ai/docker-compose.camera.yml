@@ -1,5 +1,17 @@
 # Chạy độc lập, không cần database/MQTT/AI models.
 services:
+  tapo-audio:
+    image: alexxit/go2rtc:1.9.14
+    init: true
+    restart: unless-stopped
+    env_file: .env.camera
+    networks:
+      - elderly_care_net
+    ports:
+      - '8555:8555/tcp'
+      - '8555:8555/udp'
+    volumes:
+      - ./edge/go2rtc.yaml:/config/go2rtc.yaml:ro
   tapo-camera:
     build:
       context: ./edge

@@ -1,4 +1,4 @@
-﻿"""OpenCV driver dùng chung cho AI edge và dịch vụ Tapo Docker."""
+"""OpenCV driver dùng chung cho AI edge và dịch vụ Tapo Docker."""
 import logging
 import os
 import threading
@@ -11,6 +11,14 @@ logger = logging.getLogger(__name__)
 
 class CameraDriver:
     def __init__(self, config: dict):
+        """Chuẩn bị nguồn ảnh, cấu hình đọc và bộ nhớ dùng chung.
+
+        Args:
+            config: Nguồn ảnh, FPS, độ phân giải và khoảng chờ kết nối lại.
+
+        Returns:
+            Không có. Chưa mở camera hoặc tạo thread.
+        """
         self.source = config.get("source", 0)
         if os.getenv("TAPO_HOST"):
             from .tapo import rtsp_url
@@ -20,13 +28,21 @@ class CameraDriver:
         self.height = config.get("resolution", {}).get("height", 720)
         self.reconnect_interval = float(config.get("reconnect_interval_sec", 5))
         self._cap: Any = None
+        # Frame mới nhất và mốc monotonic để loại ảnh cũ khi mất kết nối.
         self._frame: Optional[np.ndarray] = None
         self._updated = 0.0
+        # Đồng bộ frame giữa worker và luồng phục vụ HTTP/AI.
         self._lock = threading.Lock()
+        # Event báo dừng và ngắt thời gian chờ kết nối lại.
         self._stop = threading.Event()
         self._thread: Optional[threading.Thread] = None
 
     def start(self) -> None:
+        """Khởi động một thread đọc camera nếu chưa chạy.
+
+        Returns:
+            Không có. Tác động: tạo worker nền.
+        """
         if self._thread and self._thread.is_alive():
             return
         self._stop.clear()
@@ -34,22 +50,42 @@ class CameraDriver:
         self._thread.start()
 
     def stop(self) -> None:
+        """Báo worker dừng và chờ tối đa 12 giây.
+
+        Returns:
+            Không có. Worker tự giải phóng VideoCapture để tránh đua với read().
+        """
         self._stop.set()
         if self._thread:
             self._thread.join(timeout=12)
         # Chỉ thread đọc sở hữu VideoCapture; không release giữa lúc read().
 
     def get_latest_frame(self) -> Optional[np.ndarray]:
+        """Lấy bản sao ảnh gần nhất dưới khóa đồng bộ.
+
+        Returns:
+            Ảnh NumPy hoặc None nếu chưa có ảnh/ảnh cũ quá 5 giây.
+        """
         with self._lock:
             if self._frame is None or time.monotonic() - self._updated > 5:
                 return None
             return self._frame.copy()
 
     def is_connected(self) -> bool:
+        """Đánh giá kết nối theo tuổi của frame gần nhất.
+
+        Returns:
+            True khi có frame trong vòng 5 giây.
+        """
         with self._lock:
             return self._frame is not None and time.monotonic() - self._updated <= 5
 
     def _capture_loop(self) -> None:
+        """Đọc ảnh liên tục và kết nối lại khi mất nguồn.
+
+        Returns:
+            Không có. Tác động: mở/đóng camera, cập nhật frame dưới khóa cho đến khi dừng.
+        """
         import cv2
         is_rtsp = isinstance(self.source, str) and self.source.startswith("rtsp://")
         # TCP tránh rơi gói qua Docker bridge. Không log URL chứa mật khẩu.
