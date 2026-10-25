@@ -5,6 +5,7 @@ import "react-native-gesture-handler";
 import React, { useEffect } from "react";
 import { StatusBar, LogBox, Platform } from "react-native";
 import { registerRootComponent } from "expo";
+import * as ScreenOrientation from "expo-screen-orientation";
 import { GestureHandlerRootView } from "react-native-gesture-handler";
 import { SafeAreaProvider } from "react-native-safe-area-context";
 
@@ -50,6 +51,15 @@ if (Platform.OS === "web") {
 
 export default function App() {
     const accessToken = useAuthStore((state: any) => state.accessToken);
+
+    useEffect(() => {
+        // Giữ giao diện dọc mặc định; trình xem camera tạm khóa ngang khi toàn màn hình.
+        if (Platform.OS !== "web") {
+            void ScreenOrientation.lockAsync(
+                ScreenOrientation.OrientationLock.PORTRAIT_UP,
+            ).catch(() => {});
+        }
+    }, []);
 
     useEffect(() => {
         // Khởi tạo FCM push notifications khi app khởi động

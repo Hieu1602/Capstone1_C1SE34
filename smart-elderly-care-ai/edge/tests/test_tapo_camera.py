@@ -36,6 +36,38 @@ class ConfigurationTests(unittest.TestCase):
 
 
 class APITests(unittest.IsolatedAsyncioTestCase):
+    async def test_day_night_mapping_and_validation(self):
+        for requested, tapo_value in (("day", "off"), ("night", "on"), ("auto", "auto")):
+            self.control.call.reset_mock()
+            self.control.call.side_effect = lambda method, *args, result=tapo_value: result if method == "getDayNightMode" else {"error_code": 0}
+            response = await self.client.post('/video-mode', json={'mode': requested}, auth=self.auth)
+            self.assertEqual(response.status, 200)
+            self.assertEqual(await response.json(), {'mode': requested})
+            self.assertEqual(self.control.call.call_args_list[0].args, ('setDayNightMode', tapo_value))
+        self.control.call.reset_mock()
+        self.assertEqual((await self.client.post('/video-mode', json={'mode': 'invalid'}, auth=self.auth)).status, 400)
+        self.control.call.assert_not_called()
+
+    async def test_quality_resizes_real_jpeg_without_upscaling(self):
+        self.camera.get_latest_frame.return_value = np.zeros((1080, 1920, 3), dtype=np.uint8)
+        for preset, expected_height in (("1080p", 1080), ("720p", 720), ("auto", 720)):
+            response = await self.client.get('/live.mjpg', params={'quality': preset}, auth=self.auth)
+            headers = await response.content.readuntil(b'\r\n\r\n')
+            length = int(headers.split(b'Content-Length: ')[1].split(b'\r\n')[0])
+            frame = await response.content.readexactly(length)
+            response.close()
+            import cv2
+            decoded = cv2.imdecode(np.frombuffer(frame, dtype=np.uint8), cv2.IMREAD_COLOR)
+            self.assertEqual(decoded.shape[:2], (expected_height, round(expected_height * 16 / 9)))
+        self.camera.get_latest_frame.return_value = np.zeros((32, 32, 3), dtype=np.uint8)
+        response = await self.client.get('/live.mjpg', params={'quality': '1080p'}, auth=self.auth)
+        headers = await response.content.readuntil(b'\r\n\r\n')
+        length = int(headers.split(b'Content-Length: ')[1].split(b'\r\n')[0])
+        decoded = cv2.imdecode(np.frombuffer(await response.content.readexactly(length), dtype=np.uint8), cv2.IMREAD_COLOR)
+        response.close()
+        self.assertEqual(decoded.shape[:2], (32, 32))
+        self.assertEqual((await self.client.get('/live.mjpg', params={'quality': 'invalid'}, auth=self.auth)).status, 400)
+
     async def asyncSetUp(self):
         self.temp = tempfile.TemporaryDirectory()
         self.camera = Mock()
