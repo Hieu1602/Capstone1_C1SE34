@@ -75,7 +75,7 @@ export const UserPermissionModal: React.FC<UserPermissionModalProps> = ({
                           key={p}
                           className="px-1.5 py-0.5 rounded text-[10px] bg-[#FFF0E8] dark:bg-[#FF6B35]/15 text-[#FF6B35] font-medium"
                         >
-                          ✓ {item?.name || p}
+                          ✓ {item?.label || p}
                         </span>
                       );
                     })}

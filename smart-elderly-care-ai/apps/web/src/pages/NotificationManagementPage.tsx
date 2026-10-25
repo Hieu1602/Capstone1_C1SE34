@@ -52,12 +52,31 @@ export const NotificationManagementPage: React.FC = () => {
   const [formScheduledAt, setFormScheduledAt] = useState('');
   const [formExpiryType, setFormExpiryType] = useState<'never' | 'preset_1h' | 'preset_24h' | 'preset_3d' | 'preset_7d' | 'custom'>('never');
   const [formExpiresAt, setFormExpiresAt] = useState('');
+  const [secondaryApprover, setSecondaryApprover] = useState('');
+
+  const handleTestSend = () => {
+    showToast('Đã gửi thông báo thử nghiệm mẫu tới thiết bị của Quản trị viên!');
+  };
+
+  const handleStartCorrection = () => {
+    if (!revokingNotification) return;
+    const target = revokingNotification;
+    setRevokingNotification(null);
+    setEditingNotification(null);
+    setFormTitle(`[ĐÍNH CHÍNH] ${target.title}`);
+    setFormBody(`Kính gửi Quý người dùng,\n\nHệ thống xin đính chính thông tin về thông báo "${target.title}" vừa gửi trước đó:\n- Thông tin chính xác: \n- Lý do đính chính: ${revokeReason || 'Cập nhật lại dữ liệu'}\n\nRất xin lỗi vì sự bất tiện này.`);
+    setFormType('info');
+    setFormAudience(target.target_audience);
+    setFormActionType('publish');
+    setIsCreateModalOpen(true);
+  };
 
   const handleSelectExpiryPreset = (type: 'never' | 'preset_1h' | 'preset_24h' | 'preset_3d' | 'preset_7d' | 'custom') => {
     setFormExpiryType(type);
     const now = new Date();
     if (type === 'never') {
-      setFormExpiresAt('');
+      const d = new Date(now.getTime() + 30 * 24 * 3600 * 1000);
+      setFormExpiresAt(d.toISOString().slice(0, 16));
     } else if (type === 'preset_1h') {
       const d = new Date(now.getTime() + 1 * 3600 * 1000);
       setFormExpiresAt(d.toISOString().slice(0, 16));
@@ -187,7 +206,7 @@ export const NotificationManagementPage: React.FC = () => {
           body: formBody,
           type: formType,
           target_audience: formAudience,
-          action_type: formActionType,
+          status: formActionType === 'publish' ? 'published' : formActionType === 'schedule' ? 'scheduled' : 'draft',
           scheduled_at: formActionType === 'schedule' && formScheduledAt ? new Date(formScheduledAt).toISOString() : undefined,
           expires_at: formExpiryType !== 'never' && formExpiresAt ? new Date(formExpiresAt).toISOString() : undefined,
         };

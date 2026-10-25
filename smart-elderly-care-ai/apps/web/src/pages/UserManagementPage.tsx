@@ -163,23 +163,33 @@ export const UserManagementPage: React.FC = () => {
 
   const handleSaveUser = async (e: React.FormEvent) => {
     e.preventDefault();
+    if (!editingUser && (!formPassword || formPassword.length < 8)) {
+      showNotice('error', 'Mật khẩu khởi tạo phải có tối thiểu 8 ký tự theo chính sách an ninh.');
+      return;
+    }
+    const cleanPhone = formPhone.trim();
+    if (!/^(0|\+84)[3|5|7|8|9][0-9]{8}$/.test(cleanPhone) && !/^\+?[0-9]{9,15}$/.test(cleanPhone)) {
+      showNotice('error', 'Định dạng số điện thoại không hợp lệ.');
+      return;
+    }
+
     try {
       if (editingUser) {
         const updated = await usersApi.update(editingUser.id, {
-          full_name: formName,
-          phone: formPhone,
+          full_name: formName.trim(),
+          phone: cleanPhone,
           role: formRole,
-          assigned_house: formHouse,
+          assigned_house: formHouse.trim(),
         });
         setUsers((prev) => prev.map((u) => (u.id === updated.id ? updated : u)));
         showNotice('success', `Đã cập nhật thông tin tài khoản [${formName}]`);
       } else {
         const created = await usersApi.create({
-          full_name: formName,
-          phone: formPhone,
-          password: formPassword || '12345678',
+          full_name: formName.trim(),
+          phone: cleanPhone,
+          password: formPassword,
           role: formRole,
-          assigned_house: formHouse,
+          assigned_house: formHouse.trim(),
         });
         setUsers((prev) => [created, ...prev]);
         showNotice('success', `Đã tạo tài khoản thành công cho [${formName}]`);

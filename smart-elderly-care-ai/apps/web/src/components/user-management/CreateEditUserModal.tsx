@@ -95,15 +95,20 @@ export const CreateEditUserModal: React.FC<CreateEditUserModalProps> = ({
           {!editingUser && (
             <div>
               <label className="block text-[11px] font-mono font-bold uppercase text-[#737780] dark:text-[#A1A7B1] mb-1">
-                Mật khẩu khởi tạo
+                Mật khẩu khởi tạo <span className="text-rose-500">*</span>
               </label>
               <input
                 type="password"
+                required
+                minLength={8}
                 value={formPassword}
                 onChange={(e) => setFormPassword(e.target.value)}
-                placeholder="Mặc định: 123456 (Nếu để trống)"
+                placeholder="Tối thiểu 8 ký tự (chữ hoa, thường, số)"
                 className="input-glass"
               />
+              <p className="text-[10px] text-[#737780] dark:text-[#A1A7B1] mt-1">
+                Yêu cầu tuân thủ chính sách mật khẩu an toàn cho tài khoản người dùng y tế.
+              </p>
             </div>
           )}
 

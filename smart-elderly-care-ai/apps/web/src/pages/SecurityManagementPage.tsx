@@ -28,10 +28,11 @@ import { securityApi } from '../services/api';
 const INITIAL_POLICIES: SecurityPolicy[] = [
   {
     id: 'pol-1',
-    name: 'Xác thực đa yếu tố (2FA / OTP)',
-    description: 'Bắt buộc xác thực OTP số điện thoại khi đăng nhập tài khoản Bác sĩ và Quản trị viên.',
+    name: 'Xác thực đa yếu tố (2FA / OTP & WebAuthn)',
+    description: 'Bắt buộc xác thực TOTP/WebAuthn khi đăng nhập tài khoản Bác sĩ và Quản trị viên.',
     category: 'authentication',
     enabled: true,
+    is_immutable: true,
   },
   {
     id: 'pol-2',
@@ -62,6 +63,7 @@ const INITIAL_POLICIES: SecurityPolicy[] = [
     description: 'Toàn bộ sinh hiệu, hình ảnh khuôn mặt được mã hóa bằng AES-256 và TLS 1.3.',
     category: 'data_protection',
     enabled: true,
+    is_immutable: true,
   },
   {
     id: 'pol-6',
@@ -81,7 +83,11 @@ export const SecurityManagementPage: React.FC = () => {
   const [loading, setLoading] = useState<boolean>(false);
   const [searchAudit, setSearchAudit] = useState('');
   const [severityFilter, setSeverityFilter] = useState('ALL');
+  const [sessionFilter, setSessionFilter] = useState<'ALL' | 'WARNING'>('ALL');
   const [notification, setNotification] = useState<{ type: 'success' | 'error'; message: string } | null>(null);
+
+  const warningSessionsCount = sessions.filter((s) => s.status === 'warning').length;
+  const displaySessions = sessionFilter === 'WARNING' ? sessions.filter((s) => s.status === 'warning') : sessions;
 
   const fetchSecurityData = async () => {
     setLoading(true);
@@ -119,6 +125,10 @@ export const SecurityManagementPage: React.FC = () => {
   const handleTogglePolicy = async (id: string) => {
     const target = policies.find((p) => p.id === id);
     if (!target) return;
+    if (target.is_immutable) {
+      showNotice('error', 'Chính sách bảo vệ an ninh nền tảng bắt buộc tuân thủ, không được phép vô hiệu hóa!');
+      return;
+    }
     const newState = !target.enabled;
 
     setPolicies((prev) =>
@@ -132,21 +142,28 @@ export const SecurityManagementPage: React.FC = () => {
         `Đã ${newState ? 'kích hoạt' : 'vô hiệu hóa'} chính sách: ${target.name}`
       );
     } catch {
+      // Rollback UI khi API thất bại
+      setPolicies((prev) =>
+        prev.map((p) => (p.id === id ? { ...p, enabled: !newState } : p))
+      );
       showNotice(
-        'success',
-        `Đã ${newState ? 'kích hoạt' : 'vô hiệu hóa'} chính sách: ${target.name}`
+        'error',
+        `Không thể cập nhật chính sách: ${target.name}. Vui lòng thử lại.`
       );
     }
   };
 
   const handleRevokeSession = async (id: string, userName: string) => {
     if (confirm(`Bạn có chắc chắn muốn thu hồi phiên làm việc của [${userName}]?`)) {
+      const prevSessions = [...sessions];
       setSessions((prev) => prev.filter((s) => s.id !== id));
       try {
         await securityApi.revokeSession(id);
         showNotice('success', `Đã thu hồi phiên làm việc của ${userName} thành công!`);
       } catch {
-        showNotice('success', `Đã hủy phiên làm việc của ${userName}`);
+        // Rollback UI khi gọi API thất bại
+        setSessions(prevSessions);
+        showNotice('error', `Lỗi khi thu hồi phiên làm việc của ${userName}.`);
       }
     }
   };
@@ -280,7 +297,16 @@ export const SecurityManagementPage: React.FC = () => {
         </div>
 
         {/* Card 4: Cảnh báo bảo mật */}
-        <div className="glass-card p-5 relative group">
+        <div
+          onClick={() => {
+            setActiveTab('sessions');
+            setSessionFilter('WARNING');
+          }}
+          className={`glass-card p-5 relative group cursor-pointer transition-all hover:border-[#F05A24] hover:shadow-md ${
+            warningSessionsCount > 0 ? 'border-amber-300 dark:border-amber-700/60' : ''
+          }`}
+          title="Nhấp để rà soát chi tiết các phiên cảnh báo quá 10 giờ"
+        >
           <div className="flex items-center justify-between relative z-10 px-1">
             <span className="text-[11px] font-mono font-bold uppercase tracking-wider text-slate-600 dark:text-[#A1A7B1]">
               Cảnh báo bảo mật
@@ -290,17 +316,30 @@ export const SecurityManagementPage: React.FC = () => {
             </div>
           </div>
           <div className="mt-3 flex items-baseline space-x-2 px-1 relative z-10">
-            <span className="font-mono text-2xl font-black text-amber-700 dark:text-amber-400">
-              1
+            <span className={`font-mono text-2xl font-black ${
+              warningSessionsCount > 0 ? 'text-amber-700 dark:text-amber-400' : 'text-emerald-700 dark:text-emerald-400'
+            }`}>
+              {warningSessionsCount}
             </span>
-            <span className="text-[10px] font-bold text-rose-700 dark:text-rose-300 bg-rose-50 dark:bg-rose-950/40 px-2 py-0.5 rounded-full border border-rose-200 dark:border-rose-900">
-              Đã chặn IP
-            </span>
+            {warningSessionsCount > 0 ? (
+              <span className="text-[10px] font-bold text-amber-700 dark:text-amber-300 bg-amber-50 dark:bg-amber-950/40 px-2 py-0.5 rounded-full border border-amber-200 dark:border-amber-900">
+                Phiên bất thường
+              </span>
+            ) : (
+              <span className="text-[10px] font-bold text-emerald-700 dark:text-emerald-300 bg-emerald-50 dark:bg-emerald-950/40 px-2 py-0.5 rounded-full border border-emerald-200 dark:border-emerald-800">
+                An toàn
+              </span>
+            )}
           </div>
-          <div className="mt-3 pt-2.5 border-t border-[#C8AD8A]/40 dark:border-[#454A53] px-1 relative z-10">
+          <div className="mt-3 pt-2.5 border-t border-[#C8AD8A]/40 dark:border-[#454A53] px-1 relative z-10 flex items-center justify-between">
             <p className="text-[11px] text-slate-600 dark:text-[#A1A7B1] truncate">
-              1 phiên quá 10h cần rà soát
+              {warningSessionsCount > 0
+                ? `${warningSessionsCount} phiên quá 10h cần rà soát`
+                : 'Tất cả phiên trong ngưỡng an toàn'}
             </p>
+            <span className="text-[10px] font-mono font-bold text-[#F05A24] group-hover:underline flex items-center gap-0.5 shrink-0 ml-1">
+              Rà soát ngay →
+            </span>
           </div>
         </div>
       </div>
@@ -372,18 +411,30 @@ export const SecurityManagementPage: React.FC = () => {
                   <span className="text-xs font-bold text-slate-900 dark:text-[#F5F6F8]">
                     {p.name}
                   </span>
-                  <button
-                    onClick={() => handleTogglePolicy(p.id)}
-                    className={`relative inline-flex h-5 w-10 shrink-0 cursor-pointer rounded-full border-2 border-transparent transition-colors duration-200 ease-in-out focus:outline-none ${
-                      p.enabled ? 'bg-sky-500 dark:bg-[#FF6B35]' : 'bg-slate-300 dark:bg-[#202329] dark:border dark:border-[#454A53]'
-                    }`}
-                  >
-                    <span
-                      className={`inline-block h-4 w-4 transform rounded-full bg-white shadow transition duration-200 ease-in-out ${
-                        p.enabled ? 'translate-x-5' : 'translate-x-0'
+                  <div className="flex items-center gap-2">
+                    {p.is_immutable && (
+                      <span className="text-[9px] font-mono font-bold px-1.5 py-0.5 rounded bg-emerald-100 text-emerald-800 dark:bg-emerald-950/60 dark:text-emerald-300">
+                        BẮT BUỘC HỆ THỐNG
+                      </span>
+                    )}
+                    <button
+                      disabled={p.is_immutable}
+                      onClick={() => handleTogglePolicy(p.id)}
+                      className={`relative inline-flex h-5 w-10 shrink-0 rounded-full border-2 border-transparent transition-colors duration-200 ease-in-out focus:outline-none ${
+                        p.is_immutable
+                          ? 'opacity-60 cursor-not-allowed bg-emerald-600'
+                          : p.enabled
+                          ? 'cursor-pointer bg-sky-500 dark:bg-[#FF6B35]'
+                          : 'cursor-pointer bg-slate-300 dark:bg-[#202329] dark:border dark:border-[#454A53]'
                       }`}
-                    />
-                  </button>
+                    >
+                      <span
+                        className={`inline-block h-4 w-4 transform rounded-full bg-white shadow transition duration-200 ease-in-out ${
+                          p.enabled ? 'translate-x-5' : 'translate-x-0'
+                        }`}
+                      />
+                    </button>
+                  </div>
                 </div>
                 <p className="mt-2 text-xs text-slate-500 dark:text-[#A1A7B1] leading-relaxed font-sans">
                   {p.description}
@@ -407,79 +458,137 @@ export const SecurityManagementPage: React.FC = () => {
 
       {/* TAB 2: ACTIVE SESSIONS */}
       {activeTab === 'sessions' && (
-        <div className="glass-card overflow-hidden">
-          <div className="p-4 border-b border-sky-100 dark:border-[#454A53] flex items-center justify-between">
-            <span className="text-xs font-bold text-slate-900 dark:text-[#F5F6F8]">
-              Danh sách phiên làm việc đang duy trì trên hệ thống
-            </span>
+        <div className="space-y-3">
+          {/* Header & Filter Bar */}
+          <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 p-3 rounded-xl bg-white dark:bg-[#1A1D24] border border-sky-100 dark:border-[#454A53]">
+            <div className="flex items-center gap-2">
+              <button
+                onClick={() => setSessionFilter('ALL')}
+                className={`px-3 py-1.5 rounded-lg text-xs font-bold transition-all ${
+                  sessionFilter === 'ALL'
+                    ? 'bg-sky-500 text-white shadow-xs'
+                    : 'bg-slate-100 dark:bg-[#202329] text-slate-600 dark:text-[#A1A7B1] hover:bg-slate-200'
+                }`}
+              >
+                Tất cả phiên ({sessions.length})
+              </button>
+
+              <button
+                onClick={() => setSessionFilter('WARNING')}
+                className={`px-3 py-1.5 rounded-lg text-xs font-bold transition-all flex items-center gap-1.5 ${
+                  sessionFilter === 'WARNING'
+                    ? 'bg-amber-500 text-white shadow-xs'
+                    : 'bg-amber-50 dark:bg-amber-950/40 text-amber-700 dark:text-amber-300 border border-amber-200 dark:border-amber-800'
+                }`}
+              >
+                <AlertTriangle className="w-3.5 h-3.5" />
+                <span>Phiên cảnh báo quá 10h ({warningSessionsCount})</span>
+              </button>
+            </div>
+
             <span className="text-xs text-slate-500 dark:text-[#A1A7B1]">
               Mỗi phiên được cấp mã ký JWT HS256 riêng biệt
             </span>
           </div>
 
-          <div className="overflow-x-auto">
-            <table className="w-full text-left border-collapse">
-              <thead>
-                <tr className="border-b border-sky-100 dark:border-[#454A53] bg-sky-50/50 dark:bg-[#202329] text-[11px] font-semibold text-slate-600 dark:text-[#A1A7B1]">
-                  <th className="py-3 px-4">Tài khoản & Vai trò</th>
-                  <th className="py-3 px-4">Địa chỉ IP</th>
-                  <th className="py-3 px-4">Thiết bị / Ứng dụng</th>
-                  <th className="py-3 px-4">Đăng nhập lúc</th>
-                  <th className="py-3 px-4">Hoạt động gần nhất</th>
-                  <th className="py-3 px-4 text-right">Thao tác</th>
-                </tr>
-              </thead>
-              <tbody className="divide-y divide-sky-100 dark:divide-[#454A53] text-xs">
-                {sessions.length > 0 ? (
-                  sessions.map((s, idx) => (
-                    <tr key={`${s.id}-${idx}`} className="hover:bg-sky-50/40 dark:hover:bg-[#202329] transition-colors">
-                      <td className="py-3 px-4">
-                        <div className="font-semibold text-slate-900 dark:text-[#F5F6F8]">{s.user_name}</div>
-                        <span className="inline-block mt-0.5 text-[10px] font-medium px-2 py-0.5 rounded bg-sky-100 dark:bg-[#FF6B35]/15 text-sky-700 dark:text-[#FF8A50]">
-                          {s.role}
-                        </span>
-                      </td>
-                      <td className="py-3 px-4 font-mono text-slate-700 dark:text-[#F5F6F8]">
-                        {s.ip_address}
-                      </td>
-                      <td className="py-3 px-4 text-slate-600 dark:text-[#A1A7B1]">
-                        {s.device}
-                      </td>
-                      <td className="py-3 px-4 font-mono text-slate-500 dark:text-[#727984]">
-                        {s.login_time}
-                      </td>
-                      <td className="py-3 px-4">
-                        <span
-                          className={`inline-flex items-center gap-1.5 px-2 py-0.5 rounded-full text-[11px] font-semibold ${
-                            s.status === 'active'
-                              ? 'bg-emerald-50 text-emerald-700 dark:bg-emerald-950/40 dark:text-emerald-300'
-                              : 'bg-amber-50 text-amber-700 dark:bg-amber-950/40 dark:text-amber-300'
+          {/* Banner hướng dẫn rà soát khi đang lọc cảnh báo */}
+          {sessionFilter === 'WARNING' && (
+            <div className="p-3.5 rounded-xl bg-amber-50/80 dark:bg-amber-950/40 border border-amber-200 dark:border-amber-800 text-xs text-amber-800 dark:text-amber-200 flex items-start gap-2.5 animate-slide-up">
+              <AlertTriangle className="w-4 h-4 shrink-0 mt-0.5 text-amber-600" />
+              <div>
+                <p className="font-bold">Quy trình rà soát phiên bất thường:</p>
+                <p className="mt-0.5 text-[11px] leading-relaxed">
+                  Kiểm tra kỹ <b>Địa chỉ IP</b>, <b>Thiết bị đăng nhập</b> và <b>Thời gian hoạt động gần nhất</b>. Nếu phát hiện IP lạ hoặc phiên không còn sử dụng, hãy bấm nút <b>[Hủy phiên]</b> ở cột bên phải để lập tức vô hiệu hóa mã truy cập JWT của tài khoản đó.
+                </p>
+              </div>
+            </div>
+          )}
+
+          <div className="glass-card overflow-hidden">
+            <div className="overflow-x-auto">
+              <table className="w-full text-left border-collapse">
+                <thead>
+                  <tr className="border-b border-sky-100 dark:border-[#454A53] bg-sky-50/50 dark:bg-[#202329] text-[11px] font-semibold text-slate-600 dark:text-[#A1A7B1]">
+                    <th className="py-3 px-4">Tài khoản & Vai trò</th>
+                    <th className="py-3 px-4">Địa chỉ IP</th>
+                    <th className="py-3 px-4">Thiết bị / Ứng dụng</th>
+                    <th className="py-3 px-4">Đăng nhập lúc</th>
+                    <th className="py-3 px-4">Hoạt động gần nhất</th>
+                    <th className="py-3 px-4 text-right">Thao tác</th>
+                  </tr>
+                </thead>
+                <tbody className="divide-y divide-sky-100 dark:divide-[#454A53] text-xs">
+                  {displaySessions.length > 0 ? (
+                    displaySessions.map((s, idx) => {
+                      const isWarning = s.status === 'warning';
+                      return (
+                        <tr
+                          key={`${s.id}-${idx}`}
+                          className={`transition-colors ${
+                            isWarning
+                              ? 'bg-amber-50/40 dark:bg-amber-950/20 hover:bg-amber-100/50 dark:hover:bg-amber-950/40'
+                              : 'hover:bg-sky-50/40 dark:hover:bg-[#202329]'
                           }`}
                         >
-                          <span className={`w-1.5 h-1.5 rounded-full ${s.status === 'active' ? 'bg-emerald-500' : 'bg-amber-500'}`} />
-                          {s.last_active}
-                        </span>
-                      </td>
-                      <td className="py-3 px-4 text-right">
-                        <button
-                          onClick={() => handleRevokeSession(s.id, s.user_name)}
-                          className="inline-flex items-center gap-1 px-2.5 py-1 rounded-lg text-rose-600 dark:text-rose-400 hover:bg-rose-50 dark:hover:bg-rose-950/40 border border-rose-200 dark:border-rose-900/50 text-xs font-semibold transition-colors"
-                        >
-                          <Ban className="w-3.5 h-3.5" />
-                          <span>Hủy phiên</span>
-                        </button>
+                          <td className="py-3 px-4">
+                            <div className="font-semibold text-slate-900 dark:text-[#F5F6F8] flex items-center gap-1.5">
+                              <span>{s.user_name}</span>
+                              {isWarning && (
+                                <span className="text-[9px] font-mono font-bold px-1.5 py-0.5 rounded bg-amber-100 dark:bg-amber-900/60 text-amber-800 dark:text-amber-200">
+                                  &gt;10 GIỜ
+                                </span>
+                              )}
+                            </div>
+                            <span className="inline-block mt-0.5 text-[10px] font-medium px-2 py-0.5 rounded bg-sky-100 dark:bg-[#FF6B35]/15 text-sky-700 dark:text-[#FF8A50]">
+                              {s.role}
+                            </span>
+                          </td>
+                          <td className="py-3 px-4 font-mono text-slate-700 dark:text-[#F5F6F8]">
+                            {s.ip_address}
+                          </td>
+                          <td className="py-3 px-4 text-slate-600 dark:text-[#A1A7B1]">
+                            {s.device}
+                          </td>
+                          <td className="py-3 px-4 font-mono text-slate-500 dark:text-[#727984]">
+                            {s.login_time}
+                          </td>
+                          <td className="py-3 px-4">
+                            <span
+                              className={`inline-flex items-center gap-1.5 px-2 py-0.5 rounded-full text-[11px] font-semibold ${
+                                s.status === 'active'
+                                  ? 'bg-emerald-50 text-emerald-700 dark:bg-emerald-950/40 dark:text-emerald-300'
+                                  : 'bg-amber-50 text-amber-700 dark:bg-amber-950/40 dark:text-amber-300'
+                              }`}
+                            >
+                              <span className={`w-1.5 h-1.5 rounded-full ${s.status === 'active' ? 'bg-emerald-500' : 'bg-amber-500'}`} />
+                              {s.last_active}
+                            </span>
+                          </td>
+                          <td className="py-3 px-4 text-right">
+                            <button
+                              onClick={() => handleRevokeSession(s.id, s.user_name)}
+                              className="inline-flex items-center gap-1 px-2.5 py-1 rounded-lg text-rose-600 dark:text-rose-400 hover:bg-rose-50 dark:hover:bg-rose-950/40 border border-rose-200 dark:border-rose-900/50 text-xs font-semibold transition-colors cursor-pointer"
+                              title="Thu hồi phiên đăng nhập ngay lập tức"
+                            >
+                              <Ban className="w-3.5 h-3.5" />
+                              <span>Hủy phiên</span>
+                            </button>
+                          </td>
+                        </tr>
+                      );
+                    })
+                  ) : (
+                    <tr>
+                      <td colSpan={6} className="py-8 text-center text-slate-500 dark:text-slate-400">
+                        {sessionFilter === 'WARNING'
+                          ? 'Tuyệt vời! Không có phiên làm việc nào quá 10 giờ hoặc có dấu hiệu bất thường.'
+                          : 'Chưa có phiên làm việc nào đang hoạt động trong CSDL / Redis.'}
                       </td>
                     </tr>
-                  ))
-                ) : (
-                  <tr>
-                    <td colSpan={6} className="py-8 text-center text-slate-500 dark:text-slate-400">
-                      Chưa có phiên làm việc nào đang hoạt động trong CSDL / Redis.
-                    </td>
-                  </tr>
-                )}
-              </tbody>
-            </table>
+                  )}
+                </tbody>
+              </table>
+            </div>
           </div>
         </div>
       )}

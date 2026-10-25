@@ -14,14 +14,18 @@ class AdminWebSocketClient {
     }
 
     const host = window.location.hostname || 'localhost';
-    const wsUrl = `ws://${host}:8000/ws/alerts`;
+    const protocol = window.location.protocol === 'https:' ? 'wss:' : 'ws:';
+    const token = typeof window !== 'undefined' ? localStorage.getItem('seca_admin_token') : null;
+    const wsUrl = `${protocol}//${host}:8000/ws/alerts${token ? `?token=${encodeURIComponent(token)}` : ''}`;
 
     this.isConnecting = true;
     try {
       this.ws = new WebSocket(wsUrl);
 
       this.ws.onopen = () => {
-        console.log('[Admin WS] Kết nối WebSocket Real-time Alerts thành công:', wsUrl);
+        if (import.meta.env.DEV) {
+          console.log('[Admin WS] Kết nối WebSocket Real-time Alerts thành công');
+        }
         this.isConnecting = false;
       };
 

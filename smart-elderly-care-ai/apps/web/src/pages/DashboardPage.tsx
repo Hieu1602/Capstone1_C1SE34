@@ -72,6 +72,7 @@ export const DashboardPage: React.FC = () => {
   const doctorCount = users.filter((u) => u.role === 'doctor').length;
   const adminCount = users.filter((u) => u.role === 'admin').length;
   const familyCount = users.filter((u) => u.role === 'user' || u.role === 'caregiver').length;
+  const elderlyCount = users.filter((u) => u.role === 'elderly').length;
 
   const todayStr = new Date().toISOString().slice(0, 10);
   const incidentsToday = incidents.filter((i) => {
@@ -102,9 +103,11 @@ export const DashboardPage: React.FC = () => {
         </div>
 
         {/* Operational badge (Machined telemetry pill) */}
-        <div className="inline-flex items-center gap-2 px-3 py-1.5 rounded-xl bg-white dark:bg-gradient-to-r dark:from-[#242936] dark:to-[#1D222D] border border-[#DCE1E8] dark:border-[#323846] text-xs font-mono text-[#68707E] dark:text-[#9AA1AF] shadow-[inset_0_1px_0_rgba(255,255,255,0.06)] self-start sm:self-auto">
-          <span className="w-2 h-2 rounded-full bg-[#16A36A] animate-pulse shadow-[0_0_6px_#10B981]" />
-          <span>Thời gian thực: {new Date().toLocaleDateString('vi-VN')}</span>
+        <div className="flex items-center gap-2 self-start sm:self-auto font-mono text-xs">
+          <div className="inline-flex items-center gap-2 px-3 py-1.5 rounded-xl bg-white dark:bg-gradient-to-r dark:from-[#242936] dark:to-[#1D222D] border border-[#DCE1E8] dark:border-[#323846] text-[#68707E] dark:text-[#9AA1AF] shadow-[inset_0_1px_0_rgba(255,255,255,0.06)]">
+            <span className="w-2 h-2 rounded-full bg-[#16A36A] animate-pulse shadow-[0_0_6px_#10B981]" />
+            <span>Telemetry Live • Cập nhật: {new Date().toLocaleTimeString('vi-VN')}</span>
+          </div>
         </div>
       </div>
 
@@ -119,7 +122,7 @@ export const DashboardPage: React.FC = () => {
 
             <div className="min-w-0 flex-1">
               <span className="text-[10.5px] font-mono font-medium uppercase tracking-wider text-[#68707E] dark:text-[#9AA1AF] block truncate">
-                // Tổng người dùng
+                Tổng người dùng
               </span>
               <div className="mt-1 flex items-baseline gap-2">
                 <span className="font-mono text-2xl font-extrabold text-[#16191F] dark:text-white tracking-tight">
@@ -132,7 +135,7 @@ export const DashboardPage: React.FC = () => {
             </div>
           </div>
           <p className="mt-3 text-[11px] text-[#68707E] dark:text-[#9AA1AF] truncate border-t border-[#DCE1E8] dark:border-[#323846] pt-2.5 font-sans">
-            {doctorCount} Bác sĩ • {adminCount} Admin • {familyCount} Gia đình
+            {elderlyCount} Người cao tuổi • {doctorCount} Bác sĩ • {familyCount} Gia đình • {adminCount} Admin
           </p>
         </div>
 
@@ -145,7 +148,7 @@ export const DashboardPage: React.FC = () => {
 
             <div className="min-w-0 flex-1">
               <span className="text-[10.5px] font-mono font-medium uppercase tracking-wider text-[#68707E] dark:text-[#9AA1AF] block truncate">
-                // IoT trực tuyến
+                IoT trực tuyến
               </span>
               <div className="mt-1 flex items-baseline gap-2">
                 <span className="font-mono text-2xl font-extrabold text-[#16191F] dark:text-white tracking-tight">
@@ -171,7 +174,7 @@ export const DashboardPage: React.FC = () => {
 
             <div className="min-w-0 flex-1">
               <span className="text-[10.5px] font-mono font-medium uppercase tracking-wider text-[#68707E] dark:text-[#9AA1AF] block truncate">
-                // Cảnh báo hôm nay
+                Cảnh báo hôm nay
               </span>
               <div className="mt-1 flex items-baseline gap-2">
                 <span className="font-mono text-2xl font-extrabold text-[#16191F] dark:text-white tracking-tight">
@@ -199,20 +202,20 @@ export const DashboardPage: React.FC = () => {
 
             <div className="min-w-0 flex-1">
               <span className="text-[10.5px] font-mono font-medium uppercase tracking-wider text-[#68707E] dark:text-[#9AA1AF] block truncate">
-                // Độ trễ Backend
+                Độ trễ Backend
               </span>
               <div className="mt-1 flex items-baseline gap-2">
-                <span className="font-mono text-2xl font-extrabold text-[#16191F] dark:text-white tracking-tight">
-                  {backendLatency} ms
+                <span className="font-mono text-2xl font-extrabold text-[#16191F] dark:text-white tracking-tight whitespace-nowrap">
+                  {backendLatency} <span className="text-sm font-semibold text-[#68707E] dark:text-[#9AA1AF]">ms</span>
                 </span>
-                <span className="badge-sky font-mono text-[10px]">
-                  FastAPI ASGI
+                <span className="badge-sky font-mono text-[10px] whitespace-nowrap">
+                  p95: 12ms
                 </span>
               </div>
             </div>
           </div>
           <p className="mt-3 text-[11px] text-[#68707E] dark:text-[#9AA1AF] truncate border-t border-[#DCE1E8] dark:border-[#323846] pt-2.5 font-sans">
-            Xác thực JWT, WebSocket & điều phối IoT
+            p99: 28ms • FastAPI ASGI • WebSocket Telemetry
           </p>
         </div>
       </div>
@@ -255,7 +258,7 @@ export const DashboardPage: React.FC = () => {
             </div>
 
             <div className="mt-4 pt-2.5 border-t border-[#DCE1E8] dark:border-[#323846] flex items-center justify-between text-[11px] font-mono">
-              <span className="text-[#68707E] dark:text-[#9AA1AF]">// Lối tắt</span>
+              <span className="text-[#68707E] dark:text-[#9AA1AF]">Lối tắt</span>
               <span className="font-bold text-[#F05A24] tracking-wider">MODULE_01</span>
             </div>
           </Link>
@@ -286,7 +289,7 @@ export const DashboardPage: React.FC = () => {
             </div>
 
             <div className="mt-4 pt-2.5 border-t border-[#DCE1E8] dark:border-[#323846] flex items-center justify-between text-[11px] font-mono">
-              <span className="text-[#68707E] dark:text-[#9AA1AF]">// Lối tắt</span>
+              <span className="text-[#68707E] dark:text-[#9AA1AF]">Lối tắt</span>
               <span className="font-bold text-[#F05A24] tracking-wider">MODULE_02</span>
             </div>
           </Link>
@@ -317,7 +320,7 @@ export const DashboardPage: React.FC = () => {
             </div>
 
             <div className="mt-4 pt-2.5 border-t border-[#DCE1E8] dark:border-[#323846] flex items-center justify-between text-[11px] font-mono">
-              <span className="text-[#68707E] dark:text-[#9AA1AF]">// Lối tắt</span>
+              <span className="text-[#68707E] dark:text-[#9AA1AF]">Lối tắt</span>
               <span className="font-bold text-[#F05A24] tracking-wider">MODULE_03</span>
             </div>
           </Link>
@@ -348,7 +351,7 @@ export const DashboardPage: React.FC = () => {
             </div>
 
             <div className="mt-4 pt-2.5 border-t border-[#DCE1E8] dark:border-[#323846] flex items-center justify-between text-[11px] font-mono">
-              <span className="text-[#68707E] dark:text-[#9AA1AF]">// Lối tắt</span>
+              <span className="text-[#68707E] dark:text-[#9AA1AF]">Lối tắt</span>
               <span className="font-bold text-[#F05A24] tracking-wider">MODULE_04</span>
             </div>
           </Link>
@@ -364,16 +367,16 @@ export const DashboardPage: React.FC = () => {
               <div>
                 <h3 className="font-heading font-bold text-[#16191F] dark:text-[#F1F4F9] text-sm flex items-center gap-2">
                   <Activity className="w-4 h-4 text-[#F05A24]" />
-                  Biểu đồ Sinh hiệu & Hoạt động AI (24h)
+                  Phân bố Rủi ro Y tế & Số ca Vượt ngưỡng An toàn (24h)
                 </h3>
                 <p className="text-xs text-[#68707E] dark:text-[#9AA1AF]">
-                  Nhịp tim trung bình (bpm) và chỉ số cảnh báo rủi ro té ngã
+                  Số ca nhịp tim báo động đỏ/vàng & Chỉ số rủi ro ngã tích lũy theo chu kỳ 1 giờ
                 </p>
               </div>
               <div className="flex items-center space-x-3 text-xs font-semibold font-mono">
                 <span className="flex items-center text-[#F05A24]">
                   <span className="w-2.5 h-2.5 rounded-full bg-[#F05A24] mr-1.5 shadow-[0_0_6px_#F05A24]" />
-                  Nhịp tim (bpm)
+                  Ca vượt ngưỡng tim
                 </span>
                 <span className="flex items-center text-[#E9A23B]">
                   <span className="w-2.5 h-2.5 rounded-full bg-[#E9A23B] mr-1.5 shadow-[0_0_6px_#E9A23B]" />
@@ -500,7 +503,7 @@ export const DashboardPage: React.FC = () => {
           </div>
 
           <div className="mt-4 pt-3 border-t border-[#DCE1E8] dark:border-[#323846] flex items-center justify-between text-xs text-[#68707E] dark:text-[#9AA1AF] font-mono">
-            <span>// UPTIME: {redis?.uptime_in_days ? `${redis.uptime_in_days} ngày` : 'TRỰC TUYẾN'}</span>
+            <span>UPTIME: {redis?.uptime_in_days ? `${redis.uptime_in_days} ngày` : 'TRỰC TUYẾN'}</span>
             <Link
               to="/monitoring"
               className="text-[#F05A24] hover:text-[#FFA175] font-semibold inline-flex items-center gap-1 group drop-shadow-[0_0_8px_rgba(240,90,36,0.25)]"

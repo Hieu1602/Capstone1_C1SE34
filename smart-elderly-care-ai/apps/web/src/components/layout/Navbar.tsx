@@ -17,6 +17,7 @@ const ROUTE_TITLES: Record<string, { title: string; subtitle: string }> = {
   '/security': { title: 'Quản lý bảo mật hệ thống', subtitle: 'Chính sách bảo mật & Audit log' },
   '/notifications': { title: 'Quản lý thông báo', subtitle: 'Thông báo & cảnh báo khẩn cấp' },
   '/monitoring': { title: 'Giám sát hoạt động hệ thống', subtitle: 'Hiệu năng máy chủ & luồng IoT' },
+  '/ai-maintenance': { title: 'Bảo trì mô hình AI', subtitle: 'Trạng thái NPU, Edge AI & độ trễ' },
   '/infrastructure': { title: 'Quản lý hạ tầng', subtitle: 'Cơ sở dữ liệu, Cache & MQTT Broker' },
 };
 

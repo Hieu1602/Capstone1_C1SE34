@@ -178,12 +178,12 @@ export const CreateEditRuleModal: React.FC<CreateEditRuleModalProps> = ({
 
                 return (
                   <div
-                    key={group.groupName}
+                    key={group.moduleKey}
                     className="p-2.5 rounded-xl bg-white dark:bg-[#202329] border border-[#E7E9ED] dark:border-[#454A53]"
                   >
                     <div className="flex items-center justify-between pb-2 mb-2 border-b border-[#E7E9ED] dark:border-[#454A53]">
                       <span className="font-bold text-xs text-[#191B20] dark:text-[#F5F6F8]">
-                        {group.groupName}
+                        {group.title}
                       </span>
                       <button
                         type="button"
@@ -217,7 +217,7 @@ export const CreateEditRuleModal: React.FC<CreateEditRuleModalProps> = ({
                               className="mt-0.5 rounded text-[#FF6B35] focus:ring-[#FF6B35]"
                             />
                             <div className="min-w-0">
-                              <p className="text-xs font-semibold leading-tight">{perm.name}</p>
+                              <p className="text-xs font-semibold leading-tight">{perm.label}</p>
                               <p className="text-[10px] font-mono opacity-70 mt-0.5">{perm.id}</p>
                             </div>
                           </label>
