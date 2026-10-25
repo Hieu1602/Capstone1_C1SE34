@@ -1,6 +1,6 @@
 // src/pages/LoginPage.tsx
 // Metallic Cyber-Tech Admin Login · Anodized Orange & Titanium Surface
-// Credentials: +84900000000 / 12345678 (AWS TimescaleDB) · Admin-only access
+// Admin-only access
 
 import React, { useState } from 'react';
 import { useNavigate } from 'react-router-dom';
@@ -11,7 +11,6 @@ import {
   ArrowRight,
   AlertCircle,
   CheckCircle2,
-  Cpu,
 } from 'lucide-react';
 import { authApi } from '../services/api';
 import { useAuthStore } from '../store/useAuthStore';
@@ -20,8 +19,8 @@ export const LoginPage: React.FC = () => {
   const navigate = useNavigate();
   const { login } = useAuthStore();
 
-  const [username, setUsername] = useState('+84900000000');
-  const [password, setPassword] = useState('12345678');
+  const [username, setUsername] = useState('');
+  const [password, setPassword] = useState('');
   const [loading,  setLoading]  = useState(false);
   const [errorMsg, setErrorMsg] = useState<string | null>(null);
 
@@ -78,12 +77,6 @@ export const LoginPage: React.FC = () => {
     } finally {
       setLoading(false);
     }
-  };
-
-  const handleFillAdmin = () => {
-    setUsername('+84900000000');
-    setPassword('12345678');
-    setErrorMsg(null);
   };
 
   return (
@@ -256,21 +249,6 @@ export const LoginPage: React.FC = () => {
               )}
             </button>
           </form>
-
-          {/* Quick Fill AWS Admin Helper */}
-          <div className="mt-5 pt-4 border-t border-[#323846] flex items-center justify-between text-[11px] text-[#737780] relative z-10">
-            <span className="flex items-center gap-1 font-mono">
-              <Cpu className="w-3 h-3 text-[#FF7037]" />
-              Admin AWS:
-            </span>
-            <button
-              type="button"
-              onClick={handleFillAdmin}
-              className="text-[#FF7037] hover:text-[#FFA070] font-mono underline decoration-dotted transition-colors cursor-pointer drop-shadow-[0_0_6px_rgba(240,90,36,0.3)]"
-            >
-              +84900000000 / 12345678
-            </button>
-          </div>
         </div>
 
         {/* Footer Note */}

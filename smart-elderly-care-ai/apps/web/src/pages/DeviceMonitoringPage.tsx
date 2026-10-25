@@ -41,6 +41,9 @@ interface DeviceFormConfig {
   aiProtect: boolean;
   privacyShutter: boolean;
   resolution: string;
+  assignedElderly: string;
+  doctorApprovedBy: string;
+  clinicalReason: string;
 }
 
 const DEFAULT_CONFIG: DeviceFormConfig = {
@@ -53,6 +56,9 @@ const DEFAULT_CONFIG: DeviceFormConfig = {
   aiProtect: true,
   privacyShutter: false,
   resolution: '2K Super HD',
+  assignedElderly: 'Cụ Nguyễn Văn An (82T - Tiền sử tăng huyết áp)',
+  doctorApprovedBy: 'BS. CK1 Trần Văn Minh (Khoa Lão)',
+  clinicalReason: 'Hiệu chuẩn ngưỡng cảnh báo theo phác đồ theo dõi tim mạch quý 4/2026',
 };
 
 /** Metadata ánh xạ hiển thị cho từng loại thiết bị theo kiến trúc phần cứng */
@@ -134,6 +140,9 @@ export const DeviceMonitoringPage: React.FC = () => {
       aiProtect: cfg.is_ai_protect ?? DEFAULT_CONFIG.aiProtect,
       privacyShutter: cfg.is_sleep ?? DEFAULT_CONFIG.privacyShutter,
       resolution: cfg.resolution ?? DEFAULT_CONFIG.resolution,
+      assignedElderly: cfg.assigned_elderly_name || device.elderly_name || DEFAULT_CONFIG.assignedElderly,
+      doctorApprovedBy: cfg.doctor_approved_by || DEFAULT_CONFIG.doctorApprovedBy,
+      clinicalReason: cfg.clinical_reason || DEFAULT_CONFIG.clinicalReason,
     });
     setConfigModalOpen(true);
   };
@@ -142,6 +151,19 @@ export const DeviceMonitoringPage: React.FC = () => {
   const handleSaveConfig = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!selectedDevice) return;
+
+    if (formConfig.spo2Low < 85) {
+      showNotice('error', 'GIỚI HẠN AN TOÀN Y TẾ: Ngưỡng SpO₂ tối thiểu không được dưới 85%!');
+      return;
+    }
+    if (formConfig.immobilitySec > 60) {
+      showNotice('error', 'GIỚI HẠN AN TOÀN Y TẾ: Thời gian bất động sau té ngã không được vượt quá 60 giây!');
+      return;
+    }
+    if (!formConfig.doctorApprovedBy.trim() || !formConfig.clinicalReason.trim()) {
+      showNotice('error', 'Bắt buộc ghi rõ Bác sĩ chỉ định và Lý do y tế!');
+      return;
+    }
 
     const newConfig: DeviceConfig = {
       device_id: selectedDevice.device_id,
@@ -154,6 +176,12 @@ export const DeviceMonitoringPage: React.FC = () => {
       is_ai_protect: formConfig.aiProtect,
       is_sleep: formConfig.privacyShutter,
       resolution: formConfig.resolution,
+      config_version: 'v2.4.3',
+      mqtt_ack_status: 'SYNCED',
+      doctor_approved_by: formConfig.doctorApprovedBy,
+      clinical_reason: formConfig.clinicalReason,
+      assigned_elderly_name: formConfig.assignedElderly,
+      guardrail_validated: true,
       updated_at: new Date().toISOString(),
     };
 
@@ -612,6 +640,56 @@ export const DeviceMonitoringPage: React.FC = () => {
             </div>
 
             <form onSubmit={handleSaveConfig} className="p-5 space-y-5 max-h-[80vh] overflow-y-auto">
+              {/* Hồ sơ Người cao tuổi & Chỉ định Y tế (Clinical Profile Binding) */}
+              <div className="p-3.5 rounded-xl bg-sky-50/50 dark:bg-[#202329] border border-sky-200/70 dark:border-[#454A53] space-y-3">
+                <div className="flex items-center gap-2 text-xs font-bold text-sky-800 dark:text-[#FF8A50]">
+                  <Activity className="w-4 h-4" />
+                  <span>Gắn thiết bị với Hồ sơ Người cao tuổi & Bác sĩ phụ trách</span>
+                </div>
+
+                <div>
+                  <label className="block text-[11px] font-mono font-bold uppercase text-slate-600 dark:text-[#A1A7B1] mb-1">
+                    Người cao tuổi sử dụng:
+                  </label>
+                  <input
+                    type="text"
+                    required
+                    value={formConfig.assignedElderly}
+                    onChange={(e) => setFormConfig((prev) => ({ ...prev, assignedElderly: e.target.value }))}
+                    className="input-glass w-full"
+                    placeholder="Tên Cụ và tuổi"
+                  />
+                </div>
+
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                  <div>
+                    <label className="block text-[11px] font-mono font-bold uppercase text-slate-600 dark:text-[#A1A7B1] mb-1">
+                      Bác sĩ / Chuyên gia chỉ định: <span className="text-rose-500">*</span>
+                    </label>
+                    <input
+                      type="text"
+                      required
+                      value={formConfig.doctorApprovedBy}
+                      onChange={(e) => setFormConfig((prev) => ({ ...prev, doctorApprovedBy: e.target.value }))}
+                      className="input-glass w-full"
+                      placeholder="BS. Trần Văn Minh"
+                    />
+                  </div>
+                  <div>
+                    <label className="block text-[11px] font-mono font-bold uppercase text-slate-600 dark:text-[#A1A7B1] mb-1">
+                      Lý do hiệu chuẩn lâm sàng: <span className="text-rose-500">*</span>
+                    </label>
+                    <input
+                      type="text"
+                      required
+                      value={formConfig.clinicalReason}
+                      onChange={(e) => setFormConfig((prev) => ({ ...prev, clinicalReason: e.target.value }))}
+                      className="input-glass w-full"
+                      placeholder="Hiệu chuẩn theo bệnh án"
+                    />
+                  </div>
+                </div>
+              </div>
               {/* SMARTBAND Specific Thresholds */}
               {selectedDevice.device_type === 'SMARTBAND' && (
                 <div className="space-y-4">

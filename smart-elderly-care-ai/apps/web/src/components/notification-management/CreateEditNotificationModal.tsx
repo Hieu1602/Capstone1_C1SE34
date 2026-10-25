@@ -34,6 +34,9 @@ interface CreateEditNotificationModalProps {
   onSelectExpiryPreset: (type: 'never' | 'preset_1h' | 'preset_24h' | 'preset_3d' | 'preset_7d' | 'custom') => void;
   formExpiresAt: string;
   setFormExpiresAt: (v: string) => void;
+  secondaryApprover?: string;
+  setSecondaryApprover?: (v: string) => void;
+  onTestSend?: () => void;
   onSubmit: (e: React.FormEvent) => void;
 }
 
@@ -57,14 +60,17 @@ export const CreateEditNotificationModal: React.FC<CreateEditNotificationModalPr
   onSelectExpiryPreset,
   formExpiresAt,
   setFormExpiresAt,
+  secondaryApprover = '',
+  setSecondaryApprover,
+  onTestSend,
   onSubmit,
 }) => {
   if (!isOpen) return null;
 
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-900/60 backdrop-blur-sm animate-fade-in">
-      <div className="w-full max-w-lg rounded-2xl glass-card border border-[#E7E9ED] dark:border-[#454A53] shadow-2xl overflow-hidden">
-        <div className="flex items-center justify-between px-5 py-4 border-b border-[#E7E9ED] dark:border-[#454A53] bg-[#F5F6F8] dark:bg-[#202329]">
+    <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-900/60 backdrop-blur-sm animate-fade-in overflow-y-auto">
+      <div className="w-full max-w-lg rounded-2xl glass-card border border-[#E7E9ED] dark:border-[#454A53] shadow-2xl overflow-hidden flex flex-col max-h-[90vh] my-auto">
+        <div className="flex items-center justify-between px-5 py-4 border-b border-[#E7E9ED] dark:border-[#454A53] bg-[#F5F6F8] dark:bg-[#202329] shrink-0">
           <div className="flex items-center gap-2">
             <Bell className="w-4 h-4 text-[#FF6B35]" />
             <h3 className="text-sm font-bold font-heading text-[#191B20] dark:text-[#F5F6F8]">
@@ -79,7 +85,7 @@ export const CreateEditNotificationModal: React.FC<CreateEditNotificationModalPr
           </button>
         </div>
 
-        <form onSubmit={onSubmit} className="p-5 space-y-4">
+        <form onSubmit={onSubmit} className="p-5 space-y-4 overflow-y-auto flex-1">
           {/* Tiêu đề */}
           <div>
             <label className="block text-xs font-bold text-[#191B20] dark:text-[#F5F6F8] mb-1">
@@ -130,6 +136,43 @@ export const CreateEditNotificationModal: React.FC<CreateEditNotificationModalPr
               </select>
             </div>
           </div>
+
+          {/* Mức độ Khẩn cấp: Bắt buộc 2 người duyệt & Cảnh báo kênh SOS */}
+          {formType === 'emergency' && (
+            <div className="p-3.5 rounded-xl bg-rose-50/80 dark:bg-rose-950/40 border border-rose-300 dark:border-rose-900/60 space-y-2 text-xs">
+              <div className="flex items-center gap-2 text-rose-800 dark:text-rose-300 font-bold">
+                <span>⚠️ MỨC ĐỘ KHẨN CẤP: YÊU CẦU DUYỆT 2 NGƯỜI (FOUR-EYES)</span>
+              </div>
+              <p className="text-[11px] text-rose-700 dark:text-rose-400 leading-relaxed">
+                Thông báo khẩn cấp hệ thống <b>tuyệt đối không được sử dụng để phát còi hú thay thế kênh SOS té ngã cục bộ</b> nhằm tránh gây trơ phản xạ báo động của người nhà và bác sĩ.
+              </p>
+              {setSecondaryApprover && (
+                <div>
+                  <label className="block text-[11px] font-bold text-rose-800 dark:text-rose-300 mb-1">
+                    Người duyệt thứ hai (Bác sĩ trực / Trưởng ca) <span className="text-rose-600">*</span>:
+                  </label>
+                  <input
+                    type="text"
+                    required
+                    value={secondaryApprover}
+                    onChange={(e) => setSecondaryApprover(e.target.value)}
+                    placeholder="Ví dụ: BS. Trần Văn Minh (Khoa Cấp cứu)"
+                    className="input-glass border-rose-300 dark:border-rose-800"
+                  />
+                </div>
+              )}
+            </div>
+          )}
+
+          {/* Quy tắc giờ yên tĩnh cho Người cao tuổi */}
+          {(formAudience === 'elderly' || formAudience === 'all') && (
+            <div className="p-2.5 rounded-xl bg-amber-50/60 dark:bg-amber-950/20 border border-amber-200/80 dark:border-amber-900/40 text-[11px] text-amber-800 dark:text-amber-300 flex items-center gap-2">
+              <span>🌙</span>
+              <span>
+                <b>Khung giờ yên tĩnh (22:00 - 06:00):</b> Thông báo gửi vào khung giờ này sẽ tự động tắt âm thanh qua Loa thông minh của người cao tuổi.
+              </span>
+            </div>
+          )}
 
           {/* Nội dung */}
           <div>
@@ -232,7 +275,7 @@ export const CreateEditNotificationModal: React.FC<CreateEditNotificationModalPr
             {/* Các nút chọn nhanh thời hạn */}
             <div className="grid grid-cols-3 sm:grid-cols-6 gap-1.5">
               {[
-                { id: 'never', label: 'Vĩnh viễn', desc: 'Không hết hạn' },
+                { id: 'never', label: 'Tối đa 30 ngày', desc: 'Trần an toàn' },
                 { id: 'preset_1h', label: '1 giờ', desc: '+1 tiếng' },
                 { id: 'preset_24h', label: '24 giờ', desc: '+1 ngày' },
                 { id: 'preset_3d', label: '3 ngày', desc: '+3 ngày' },
@@ -281,13 +324,13 @@ export const CreateEditNotificationModal: React.FC<CreateEditNotificationModalPr
             )}
             {formExpiryType === 'never' && (
               <p className="text-[10px] text-[#737780] flex items-center gap-1">
-                <span>Thông báo sẽ tồn tại liên tục cho đến khi Admin chủ động thu hồi.</span>
+                <span>Thời hạn tối đa 30 ngày để chống quá tải thông tin, cần gia hạn định kỳ nếu muốn hiển thị tiếp.</span>
               </p>
             )}
           </div>
 
           {/* Action buttons */}
-          <div className="flex items-center justify-end gap-2 pt-2 border-t border-[#E7E9ED] dark:border-[#454A53]">
+          <div className="sticky bottom-0 bg-white/95 dark:bg-[#1A1D23]/95 backdrop-blur-sm pt-3 pb-1 border-t border-[#E7E9ED] dark:border-[#454A53] flex items-center justify-end gap-2 -mx-5 px-5 mt-4 z-10">
             <button
               type="button"
               onClick={onClose}

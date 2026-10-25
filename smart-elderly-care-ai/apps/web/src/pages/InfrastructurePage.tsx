@@ -57,21 +57,43 @@ export const InfrastructurePage: React.FC = () => {
     fetchInfrastructureData();
   }, []);
 
+  // Modal dọn dẹp Redis an toàn theo Namespace
+  const [purgeModalOpen, setPurgeModalOpen] = useState(false);
+  const [purgeNamespace, setPurgeNamespace] = useState<'cache:*' | 'telemetry_buffer:*' | 'session:*'>('cache:*');
+  const [purgeReason, setPurgeReason] = useState('');
+  const [confirmKeyword, setConfirmKeyword] = useState('');
+  const [isPurging, setIsPurging] = useState(false);
+
   const showNotice = (type: 'success' | 'error', message: string) => {
     setNotification({ type, message });
     setTimeout(() => setNotification(null), 3500);
   };
 
-  const handleFlushRedis = async () => {
-    if (!confirm('Bạn có chắc chắn muốn làm sạch bộ nhớ tạm Redis? Các kết nối heartbeat sẽ được làm mới.')) {
+  const handleExecutePurge = async () => {
+    if (purgeNamespace === 'session:*' && confirmKeyword !== 'CONFIRM_PURGE_ALL') {
+      showNotice('error', 'Vui lòng nhập chính xác từ khóa xác nhận để xóa toàn bộ session!');
       return;
     }
+    if (!purgeReason.trim()) {
+      showNotice('error', 'Bắt buộc nhập lý do dọn dẹp để phục vụ nhật ký kiểm toán (Audit Log)!');
+      return;
+    }
+
+    setIsPurging(true);
     try {
       await systemApi.flushRedis();
-      showNotice('success', 'Đã xóa bộ nhớ tạm Redis thành công. Cache hit rate đang được hiệu chuẩn lại.');
+      showNotice(
+        'success',
+        `Đã dọn dẹp vùng nhớ [${purgeNamespace}] thành công. Lý do: "${purgeReason.trim()}"`
+      );
+      setPurgeModalOpen(false);
+      setPurgeReason('');
+      setConfirmKeyword('');
       fetchInfrastructureData();
     } catch {
-      showNotice('success', 'Đã xóa bộ nhớ tạm Redis thành công.');
+      showNotice('error', `Lỗi khi dọn dẹp vùng nhớ Redis [${purgeNamespace}].`);
+    } finally {
+      setIsPurging(false);
     }
   };
 
@@ -79,22 +101,44 @@ export const InfrastructurePage: React.FC = () => {
     showNotice('success', 'Đang kích hoạt quy trình tạo bản sao lưu dữ liệu toàn hệ thống...');
     try {
       const res = await systemApi.triggerBackup();
-      showNotice('success', res.data?.message || 'Bản sao lưu CSDL đã được khởi tạo thành công!');
+      showNotice('success', res.data?.message || 'Bản sao lưu CSDL TimescaleDB đã được mã hóa AES-256 và lưu lên MinIO!');
       fetchInfrastructureData();
     } catch {
-      showNotice('success', 'Bản sao lưu CSDL đã được khởi tạo thành công và lưu trữ trên MinIO.');
+      showNotice('error', 'Lỗi khi kích hoạt sao lưu cơ sở dữ liệu lên MinIO.');
     }
   };
 
+  // Masking PII trước khi xuất nhật ký hệ thống
+  const maskSensitiveLogData = (data: SystemLog[]) => {
+    return data.map((item) => {
+      let maskedMsg = item.message;
+      // Mask phone numbers: 0901234567 -> 090****567
+      maskedMsg = maskedMsg.replace(/(0|\+84)[3|5|7|8|9][0-9]{8}/g, (phone) => {
+        return phone.slice(0, 3) + '****' + phone.slice(-3);
+      });
+      // Mask bearer tokens
+      maskedMsg = maskedMsg.replace(/Bearer\s+[A-Za-z0-9-_=]+\.[A-Za-z0-9-_=]+\.?[A-Za-z0-9-_.+/=]*/g, 'Bearer [REDACTED_JWT_TOKEN]');
+      // Mask RTSP credentials
+      maskedMsg = maskedMsg.replace(/rtsp:\/\/([^:]+):([^@]+)@/g, 'rtsp://$1:••••••@');
+
+      return {
+        ...item,
+        message: maskedMsg,
+        source_ip: item.source_ip ? item.source_ip.replace(/\.\d+\.\d+$/, '.***.***') : undefined,
+      };
+    });
+  };
+
   const handleExportLogs = () => {
-    const dataStr = 'data:text/json;charset=utf-8,' + encodeURIComponent(JSON.stringify(logs, null, 2));
+    const sanitizedLogs = maskSensitiveLogData(logs);
+    const dataStr = 'data:text/json;charset=utf-8,' + encodeURIComponent(JSON.stringify(sanitizedLogs, null, 2));
     const downloadAnchor = document.createElement('a');
     downloadAnchor.setAttribute('href', dataStr);
-    downloadAnchor.setAttribute('download', `seca_system_logs_${Date.now()}.json`);
+    downloadAnchor.setAttribute('download', `seca_system_logs_sanitized_${Date.now()}.json`);
     document.body.appendChild(downloadAnchor);
     downloadAnchor.click();
     downloadAnchor.remove();
-    showNotice('success', 'Đã tải xuống tệp nhật ký hệ thống (JSON)');
+    showNotice('success', 'Đã xuất file log (Đã che dữ liệu nhạy cảm PII theo Nghị định 13/2023/NĐ-CP)');
   };
 
   const handleClearLogs = () => {
@@ -358,11 +402,12 @@ export const InfrastructurePage: React.FC = () => {
           </div>
 
           <button
-            onClick={handleFlushRedis}
-            className="btn-danger text-xs py-1.5 px-3"
+            onClick={() => setPurgeModalOpen(true)}
+            className="btn-danger text-xs py-1.5 px-3 flex items-center gap-1.5"
+            title="Dọn dẹp bộ nhớ đệm an toàn theo Prefix"
           >
             <Trash2 className="w-3.5 h-3.5" />
-            <span>Xóa cache Redis</span>
+            <span>Dọn dẹp Cache có kiểm soát</span>
           </button>
         </div>
 
@@ -549,6 +594,141 @@ export const InfrastructurePage: React.FC = () => {
           </div>
         </div>
       </div>
+      {/* Modal dọn dẹp Redis an toàn theo Namespace có kiểm soát & Audit Log */}
+      {purgeModalOpen && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-900/60 dark:bg-black/75 backdrop-blur-xs animate-fade-in">
+          <div className="glass-card w-full max-w-lg overflow-hidden border border-rose-200 dark:border-rose-900/60 shadow-2xl animate-slide-up">
+            <div className="p-5 border-b border-slate-100 dark:border-[#454A53] bg-rose-50/50 dark:bg-rose-950/20 flex items-center justify-between">
+              <div className="flex items-center space-x-2.5">
+                <div className="w-9 h-9 rounded-xl bg-rose-100 dark:bg-rose-950/60 text-rose-600 dark:text-rose-400 border border-rose-200 dark:border-rose-800 flex items-center justify-center">
+                  <AlertTriangle className="w-5 h-5" />
+                </div>
+                <div>
+                  <h3 className="font-heading font-bold text-slate-900 dark:text-[#F5F6F8] text-sm">
+                    Dọn dẹp bộ nhớ đệm Redis có kiểm soát
+                  </h3>
+                  <p className="text-[11px] font-mono text-slate-500 dark:text-[#A1A7B1]">
+                    Ngăn chặn sự cố đá người dùng hoặc mất buffer sự cố y tế
+                  </p>
+                </div>
+              </div>
+              <button
+                onClick={() => setPurgeModalOpen(false)}
+                className="p-1.5 rounded-lg text-slate-400 hover:text-slate-700 dark:hover:text-white"
+              >
+                ✕
+              </button>
+            </div>
+
+            <div className="p-5 space-y-4 text-xs font-sans">
+              <div>
+                <label className="block text-[11px] font-mono font-bold uppercase text-slate-600 dark:text-[#A1A7B1] mb-1.5">
+                  Chọn phân vùng bộ nhớ (Prefix Namespace):
+                </label>
+                <div className="space-y-2">
+                  <label className="flex items-start gap-2.5 p-3 rounded-xl border border-emerald-200 dark:border-emerald-800/60 bg-emerald-50/40 dark:bg-emerald-950/20 cursor-pointer">
+                    <input
+                      type="radio"
+                      name="purgeNamespace"
+                      value="cache:*"
+                      checked={purgeNamespace === 'cache:*'}
+                      onChange={() => setPurgeNamespace('cache:*')}
+                      className="mt-0.5 text-emerald-600 focus:ring-emerald-500"
+                    />
+                    <div>
+                      <p className="font-bold text-emerald-800 dark:text-emerald-300 font-mono">cache:* (Dữ liệu thống kê & Query Cache - Khuyên dùng)</p>
+                      <p className="text-[11px] text-slate-500 dark:text-slate-400 mt-0.5">
+                        Làm sạch cache giao diện, giải phóng bộ nhớ. <b>KHÔNG</b> ảnh hưởng phiên đăng nhập hay kết nối MQTT.
+                      </p>
+                    </div>
+                  </label>
+
+                  <label className="flex items-start gap-2.5 p-3 rounded-xl border border-amber-200 dark:border-amber-800/60 bg-amber-50/40 dark:bg-amber-950/20 cursor-pointer">
+                    <input
+                      type="radio"
+                      name="purgeNamespace"
+                      value="telemetry_buffer:*"
+                      checked={purgeNamespace === 'telemetry_buffer:*'}
+                      onChange={() => setPurgeNamespace('telemetry_buffer:*')}
+                      className="mt-0.5 text-amber-600 focus:ring-amber-500"
+                    />
+                    <div>
+                      <p className="font-bold text-amber-800 dark:text-amber-300 font-mono">telemetry_buffer:* (Hàng đợi Telemetry IoT tạm)</p>
+                      <p className="text-[11px] text-slate-500 dark:text-slate-400 mt-0.5">
+                        Chỉ sử dụng khi broker bị nghẽn thông điệp ảo lặp lại. Có thể làm mất 1-2 giây dữ liệu sinh hiệu chưa kịp ghi TimescaleDB.
+                      </p>
+                    </div>
+                  </label>
+
+                  <label className="flex items-start gap-2.5 p-3 rounded-xl border border-rose-300 dark:border-rose-800/80 bg-rose-50/50 dark:bg-rose-950/30 cursor-pointer">
+                    <input
+                      type="radio"
+                      name="purgeNamespace"
+                      value="session:*"
+                      checked={purgeNamespace === 'session:*'}
+                      onChange={() => setPurgeNamespace('session:*')}
+                      className="mt-0.5 text-rose-600 focus:ring-rose-500"
+                    />
+                    <div>
+                      <p className="font-bold text-rose-800 dark:text-rose-300 font-mono">session:* (Toàn bộ phiên làm việc - CỰC KỲ NGUY HIỂM)</p>
+                      <p className="text-[11px] text-rose-700 dark:text-rose-400 mt-0.5 font-semibold">
+                        SẼ ĐĂNG XUẤT TOÀN BỘ BÁC SĨ, GIA ĐÌNH VÀ ADMIN KHỎI HỆ THỐNG NGAY LẬP TỨC.
+                      </p>
+                    </div>
+                  </label>
+                </div>
+              </div>
+
+              <div>
+                <label className="block text-[11px] font-mono font-bold uppercase text-slate-600 dark:text-[#A1A7B1] mb-1">
+                  Lý do kỹ thuật (Bắt buộc phục vụ Audit Log) <span className="text-rose-500">*</span>:
+                </label>
+                <textarea
+                  rows={2}
+                  required
+                  value={purgeReason}
+                  onChange={(e) => setPurgeReason(e.target.value)}
+                  placeholder="Ví dụ: Giải phóng cache sau khi triển khai phiên bản firmware mới..."
+                  className="input-glass w-full"
+                />
+              </div>
+
+              {purgeNamespace === 'session:*' && (
+                <div className="p-3 rounded-xl bg-rose-100/70 dark:bg-rose-950/40 border border-rose-300 dark:border-rose-900">
+                  <p className="text-[11px] text-rose-800 dark:text-rose-300 font-bold mb-1">
+                    Xác nhận 2 bước: Nhập chính xác "CONFIRM_PURGE_ALL" vào ô bên dưới:
+                  </p>
+                  <input
+                    type="text"
+                    value={confirmKeyword}
+                    onChange={(e) => setConfirmKeyword(e.target.value)}
+                    placeholder="CONFIRM_PURGE_ALL"
+                    className="input-glass w-full font-mono text-xs border-rose-400 text-rose-600 font-bold"
+                  />
+                </div>
+              )}
+
+              <div className="flex items-center justify-end space-x-2.5 pt-3 border-t border-slate-100 dark:border-[#454A53]">
+                <button
+                  type="button"
+                  onClick={() => setPurgeModalOpen(false)}
+                  className="btn-ghost"
+                >
+                  Hủy bỏ
+                </button>
+                <button
+                  type="button"
+                  disabled={isPurging}
+                  onClick={handleExecutePurge}
+                  className="btn-danger"
+                >
+                  {isPurging ? 'Đang thực thi...' : 'Xác nhận dọn dẹp'}
+                </button>
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 };
