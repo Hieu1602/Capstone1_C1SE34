@@ -28,7 +28,7 @@ services:
         ports:
             - "8000:8000"
         environment:
-            DATABASE_URL: "${DOCKER_DATABASE_URL:-postgresql+asyncpg://postgres:${POSTGRES_PASSWORD}@timescaledb:5432/elderly_care}"
+            DATABASE_URL: "${DATABASE_URL}"
             REDIS_URL: "redis://:${REDIS_PASSWORD}@redis:6379/0"
             MQTT_BROKER_HOST: "emqx"
             MQTT_BROKER_PORT: "1883"
@@ -42,8 +42,6 @@ services:
             MINIO_REGION: "${MINIO_REGION}"
             SECRET_KEY: "${SECRET_KEY}"
         depends_on:
-            timescaledb:
-                condition: service_healthy
             redis:
                 condition: service_healthy
             emqx:
