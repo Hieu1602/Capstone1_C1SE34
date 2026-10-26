@@ -3,11 +3,11 @@
 // PHÂN HỆ: Màn hình Hồ sơ Bệnh án Điện tử Người cao tuổi (Bảo mật chuẩn AES-256)
 // TÁC GIẢ: Phan Nguyễn Giáng My
 // MÔ TẢ CHỨC NĂNG:
-//   1. Quản lý thông tin hành chính & thể trạng của người cao tuổi (Họ tên, Năm sinh,
-//      Nhóm máu, Chiều cao, Cân nặng, Chỉ số BMI).
-//   2. Đăng ký khuôn mặt AI (ArcFace Face Enrollment) phục vụ nhận diện định danh trên Camera.
-//   3. Lưu trữ bệnh lý nền, chỉnh sửa trực tiếp (Inline Edit) Dị ứng & Lưu ý dinh dưỡng.
-//   4. Đồng bộ hai chiều với cơ sở dữ liệu PostgreSQL qua RESTful API (không dùng dữ liệu mẫu).
+//   1. Quản lý thông tin hành chính & thể trạng người cao tuổi (Họ tên, Năm sinh, Giới tính, Nhóm máu, BMI).
+//   2. Hỗ trợ Empty State chuẩn mực khi chưa có hồ sơ bệnh nhân trong hệ thống.
+//   3. Đăng ký khuôn mặt AI (ArcFace Face Enrollment) phục vụ nhận diện định danh trên Camera.
+//   4. Lưu trữ bệnh lý nền, chỉnh sửa trực tiếp (Inline Edit) Dị ứng & Lưu ý dinh dưỡng.
+//   5. Đồng bộ hai chiều với CSDL Supabase / PostgreSQL qua RESTful API không hardcode.
 // ==============================================================================
 
 import React, { useState, useEffect } from 'react';
@@ -46,32 +46,16 @@ const formatDisplayDateVN = (ymd: string) => {
 
 // Tính toán BMI chuẩn y tế: BMI = Cân nặng (kg) / (Chiều cao (m) ^ 2)
 const calculateBMIInfo = (hStr: string, wStr: string) => {
-  const h = parseFloat(hStr);
+  const h = parseFloat(hStr) / 100;
   const w = parseFloat(wStr);
-  if (!isNaN(h) && !isNaN(w) && h > 0 && w > 0) {
-    const val = w / Math.pow(h / 100, 2);
-    const bmiNum = parseFloat(val.toFixed(1));
-    let category = 'Bình thường';
-    let color = '#15803D';
-    let bg = '#DCFCE7';
-    if (bmiNum < 18.5) {
-      category = 'Gầy (Thiếu cân)';
-      color = '#0284C7';
-      bg = '#E0F2FE';
-    } else if (bmiNum < 25) {
-      category = 'Bình thường (Lý tưởng)';
-      color = '#15803D';
-      bg = '#DCFCE7';
-    } else if (bmiNum < 30) {
-      category = 'Tiền béo phì (Thừa cân)';
-      color = '#D97706';
-      bg = '#FEF3C7';
-    } else {
-      category = 'Béo phì';
-      color = '#DC2626';
-      bg = '#FEE2E2';
-    }
-    return { bmi: val.toFixed(1), category, color, bg };
+  if (h > 0 && w > 0) {
+    const bmiNum = parseFloat((w / (h * h)).toFixed(1));
+    const [category, color, bg] =
+      bmiNum < 18.5 ? ['Gầy (Thiếu cân)', '#0284C7', '#E0F2FE']
+      : bmiNum < 25 ? ['Bình thường (Lý tưởng)', '#15803D', '#DCFCE7']
+      : bmiNum < 30 ? ['Tiền béo phì (Thừa cân)', '#D97706', '#FEF3C7']
+      : ['Béo phì', '#DC2626', '#FEE2E2'];
+    return { bmi: bmiNum.toFixed(1), category, color, bg };
   }
   return { bmi: '--', category: 'Chưa tính', color: '#64748B', bg: '#F1F5F9' };
 };
@@ -80,10 +64,7 @@ const calculateBMIInfo = (hStr: string, wStr: string) => {
 const calculateAgeFromYear = (yearStr: string) => {
   const y = parseInt(yearStr, 10);
   const cur = new Date().getFullYear();
-  if (!isNaN(y) && y >= 1900 && y <= cur) {
-    return cur - y;
-  }
-  return 0;
+  return !isNaN(y) && y >= 1900 && y <= cur ? cur - y : 0;
 };
 
 export default function PatientMedicalRecordScreen({ navigation }: any) {
@@ -92,47 +73,42 @@ export default function PatientMedicalRecordScreen({ navigation }: any) {
 
   // Kiểm tra trạng thái đã có hồ sơ người cao tuổi hay chưa
   const hasPatient = Boolean(
-    patientRecord &&
-    patientRecord.name &&
-    patientRecord.name.trim() !== '' &&
-    patientRecord.name.trim() !== '--'
+    patientRecord && patientRecord.name && patientRecord.name.trim() !== '' && patientRecord.name.trim() !== '--'
   );
 
-  // Trích xuất dữ liệu thực tế từ Store (hiển thị trạng thái rỗng nếu chưa có dữ liệu)
-  const patientName = patientRecord?.name?.trim() ? patientRecord.name : '--';
-  const birthYear = patientRecord?.birth_year && String(patientRecord.birth_year).trim() ? String(patientRecord.birth_year) : '--';
+  // Trích xuất dữ liệu thực tế từ Store
+  const patientName = patientRecord?.name?.trim() || '--';
+  const birthYear = patientRecord?.birth_year ? String(patientRecord.birth_year).trim() : '--';
   const age =
     patientRecord?.age && Number(patientRecord.age) > 0
       ? String(patientRecord.age)
       : birthYear !== '--' && calculateAgeFromYear(birthYear) > 0
       ? String(calculateAgeFromYear(birthYear))
       : '--';
-  const gender = patientRecord?.gender?.trim() ? patientRecord.gender : '--';
-  const bloodType = patientRecord?.blood_type?.trim() ? patientRecord.blood_type : '--';
+  const gender = patientRecord?.gender?.trim() || '--';
+  const bloodType = patientRecord?.blood_type?.trim() || '--';
   const height = patientRecord?.height_cm && Number(patientRecord.height_cm) > 0 ? String(patientRecord.height_cm) : '--';
   const weight = patientRecord?.weight_kg && Number(patientRecord.weight_kg) > 0 ? String(patientRecord.weight_kg) : '--';
   const cardBMI = calculateBMIInfo(height, weight);
   const avatarUrl = patientRecord?.avatar_url || null;
   const hasFaceEnrolled = Boolean(patientRecord?.has_face_enrolled);
   const conditions: MedicalConditionItem[] = patientRecord?.conditions || [];
-  const drugAllergies = patientRecord?.drug_allergies?.trim() ? patientRecord.drug_allergies : 'Chưa ghi nhận';
-  const foodAllergies = patientRecord?.food_allergies?.trim() ? patientRecord.food_allergies : 'Chưa ghi nhận';
-  const dietaryNotes = patientRecord?.dietary_notes?.trim() ? patientRecord.dietary_notes : 'Chưa ghi nhận';
-  const doctorName = patientRecord?.doctor_name?.trim() ? patientRecord.doctor_name : 'Chưa chỉ định';
-  const doctorPhone = patientRecord?.doctor_phone?.trim() ? patientRecord.doctor_phone : '';
-  const doctorSpecialty = patientRecord?.doctor_specialty?.trim() ? patientRecord.doctor_specialty : '--';
-  const hospital = patientRecord?.hospital?.trim() ? patientRecord.hospital : '--';
-  const nextAppointment = patientRecord?.next_appointment?.trim() ? patientRecord.next_appointment : 'Chưa có lịch hẹn';
+  const drugAllergies = patientRecord?.drug_allergies?.trim() || 'Chưa ghi nhận';
+  const foodAllergies = patientRecord?.food_allergies?.trim() || 'Chưa ghi nhận';
+  const dietaryNotes = patientRecord?.dietary_notes?.trim() || 'Chưa ghi nhận';
+  const doctorName = patientRecord?.doctor_name?.trim() || 'Chưa chỉ định';
+  const doctorPhone = patientRecord?.doctor_phone?.trim() || '';
+  const doctorSpecialty = patientRecord?.doctor_specialty?.trim() || '--';
+  const hospital = patientRecord?.hospital?.trim() || '--';
+  const nextAppointment = patientRecord?.next_appointment?.trim() || 'Chưa có lịch hẹn';
 
-  // State bộ lọc ngày và các hộp thoại chỉnh sửa
+  // State bộ lọc ngày & Modals
   const [selectedDate, setSelectedDate] = useState(() => getDaysAgoStr(0));
   const [isFaceModalVisible, setFaceModalVisible] = useState(false);
-
-  // State Modal thêm tiền sử bệnh nền
   const [isAddConditionModalVisible, setAddConditionModalVisible] = useState(false);
   const [condDraft, setCondDraft] = useState({ name: '', note: '' });
 
-  // State Modal chỉnh sửa thông tin hành chính / thể trạng
+  // State Modal chỉnh sửa/thêm hồ sơ
   const [isEditPatientVisible, setEditPatientVisible] = useState(false);
   const [patientDraft, setPatientDraft] = useState({
     name: '',
@@ -146,7 +122,7 @@ export default function PatientMedicalRecordScreen({ navigation }: any) {
   const draftAge = calculateAgeFromYear(patientDraft.birthYear);
   const draftBMI = calculateBMIInfo(patientDraft.height, patientDraft.weight);
 
-  // State chỉnh sửa trực tiếp (Inline Edit) phần Dị ứng & Lưu ý dinh dưỡng
+  // State chỉnh sửa trực tiếp (Inline Edit) Dị ứng & Lưu ý dinh dưỡng
   const [isEditingAllergies, setIsEditingAllergies] = useState(false);
   const [allergyDraft, setAllergyDraft] = useState({ drug: '', food: '', diet: '' });
 
@@ -154,7 +130,6 @@ export default function PatientMedicalRecordScreen({ navigation }: any) {
     fetchPatientRecord(1, selectedDate);
   }, [selectedDate]);
 
-  // Mở hộp thoại chỉnh sửa thông tin người cao tuổi
   const openEditPatientModal = () => {
     setPatientDraft({
       name: patientRecord?.name || '',
@@ -167,7 +142,6 @@ export default function PatientMedicalRecordScreen({ navigation }: any) {
     setEditPatientVisible(true);
   };
 
-  // Lưu thông tin hành chính & chỉ số cơ thể xuống DB
   const handleSavePatientInfo = async () => {
     if (!patientDraft.name.trim()) {
       Alert.alert('Thiếu thông tin', 'Vui lòng nhập họ tên người cao tuổi.');
@@ -193,7 +167,6 @@ export default function PatientMedicalRecordScreen({ navigation }: any) {
     Alert.alert('Thành công 🎉', 'Đã lưu hồ sơ người cao tuổi thành công.');
   };
 
-  // Thêm bệnh lý nền mới vào hồ sơ
   const handleAddCondition = async () => {
     if (!condDraft.name.trim()) {
       Alert.alert('Lỗi', 'Vui lòng nhập tên bệnh lý hoặc tiền sử bệnh.');
@@ -201,12 +174,7 @@ export default function PatientMedicalRecordScreen({ navigation }: any) {
     }
     const nextConditions: MedicalConditionItem[] = [
       ...conditions,
-      {
-        id: `c_${Date.now()}`,
-        name: condDraft.name.trim(),
-        severity: 'warning',
-        note: condDraft.note.trim(),
-      },
+      { id: `c_${Date.now()}`, name: condDraft.name.trim(), severity: 'warning', note: condDraft.note.trim() },
     ];
     setCondDraft({ name: '', note: '' });
     setAddConditionModalVisible(false);
@@ -214,7 +182,6 @@ export default function PatientMedicalRecordScreen({ navigation }: any) {
     Alert.alert('Thành công', 'Đã thêm tiền sử bệnh lý vào hồ sơ.');
   };
 
-  // Xóa bệnh lý nền khỏi hồ sơ
   const handleDeleteCondition = (id: string, name: string) => {
     Alert.alert('Xóa bệnh lý', `Bạn có chắc muốn xóa "${name}" khỏi hồ sơ bệnh án?`, [
       { text: 'Hủy', style: 'cancel' },
@@ -228,7 +195,6 @@ export default function PatientMedicalRecordScreen({ navigation }: any) {
     ]);
   };
 
-  // Chuyển sang chế độ chỉnh sửa trực tiếp (Inline Edit) cho Dị ứng & Lưu ý dinh dưỡng
   const handleStartEditAllergies = () => {
     setAllergyDraft({
       drug: patientRecord?.drug_allergies || '',
@@ -238,7 +204,6 @@ export default function PatientMedicalRecordScreen({ navigation }: any) {
     setIsEditingAllergies(true);
   };
 
-  // Lưu thay đổi Dị ứng & Lưu ý dinh dưỡng vào state và cơ sở dữ liệu
   const handleSaveAllergies = async () => {
     setIsEditingAllergies(false);
     await updatePatientRecord(1, {
@@ -248,7 +213,6 @@ export default function PatientMedicalRecordScreen({ navigation }: any) {
     });
   };
 
-  // Gọi điện trực tiếp cho bác sĩ phụ trách
   const handleCallDoctor = async () => {
     if (!doctorPhone) {
       Alert.alert('Thông báo', 'Chưa có số điện thoại của bác sĩ phụ trách.');
@@ -260,34 +224,40 @@ export default function PatientMedicalRecordScreen({ navigation }: any) {
       if (supported) await Linking.openURL(url);
       else Alert.alert('Thông báo', `Gọi số bác sĩ phụ trách: ${doctorPhone}`);
     } catch {
-      Alert.alert('Thông báo', `Gọi số bác sĩ: ${doctorPhone}`);
+      Alert.alert('Lỗi', 'Không thể khởi chạy ứng dụng gọi điện thoại.');
     }
   };
 
-  // Chụp hoặc tải ảnh chân dung để đăng ký khuôn mặt AI
-  const handlePickFaceImage = async (useCamera: boolean) => {
+  const handlePickFaceImage = async (fromCamera = false) => {
     try {
-      if (Platform.OS !== 'web') {
-        const { status } = useCamera
-          ? await ImagePicker.requestCameraPermissionsAsync()
-          : await ImagePicker.requestMediaLibraryPermissionsAsync();
+      let result;
+      if (fromCamera) {
+        const { status } = await ImagePicker.requestCameraPermissionsAsync();
         if (status !== 'granted') {
-          Alert.alert('Quyền truy cập', 'Cần cấp quyền để tải ảnh.');
+          Alert.alert('Quyền truy cập', 'Vui lòng cấp quyền Camera để chụp ảnh khuôn mặt.');
           return;
         }
+        result = await ImagePicker.launchCameraAsync({
+          mediaTypes: ImagePicker.MediaTypeOptions.Images,
+          allowsEditing: true,
+          aspect: [1, 1],
+          quality: 0.8,
+        });
+      } else {
+        const { status } = await ImagePicker.requestMediaLibraryPermissionsAsync();
+        if (status !== 'granted') {
+          Alert.alert('Quyền truy cập', 'Vui lòng cấp quyền Thư viện ảnh để chọn ảnh.');
+          return;
+        }
+        result = await ImagePicker.launchImageLibraryAsync({
+          mediaTypes: ImagePicker.MediaTypeOptions.Images,
+          allowsEditing: true,
+          aspect: [1, 1],
+          quality: 0.8,
+        });
       }
 
-      const options: ImagePicker.ImagePickerOptions = {
-        mediaTypes: ImagePicker.MediaTypeOptions.Images,
-        allowsEditing: true,
-        aspect: [1, 1],
-        quality: 0.85,
-      };
-      const result = useCamera
-        ? await ImagePicker.launchCameraAsync(options)
-        : await ImagePicker.launchImageLibraryAsync(options);
-
-      if (result.canceled || !result.assets?.length) return;
+      if (result.canceled || !result.assets || result.assets.length === 0) return;
       const asset = result.assets[0];
       setFaceModalVisible(false);
 
@@ -310,8 +280,6 @@ export default function PatientMedicalRecordScreen({ navigation }: any) {
     }
   };
 
-  const bmi = cardBMI.bmi;
-
   const bgScreen = isDarkMode ? '#0B0F19' : '#F8FAFC';
   const bgCard = isDarkMode ? '#1E293B' : '#FFFFFF';
   const bgSubtle = isDarkMode ? '#0F172A' : '#F8FAFC';
@@ -322,7 +290,7 @@ export default function PatientMedicalRecordScreen({ navigation }: any) {
 
   return (
     <SafeAreaView style={[styles.safeArea, { backgroundColor: bgScreen }]} edges={['top']}>
-      {/* Thanh tiêu đề (Header) */}
+      {/* Header */}
       <View style={[styles.headerRow, { backgroundColor: isDarkMode ? '#0B0F19' : '#FFFFFF', borderBottomColor: borderCol }]}>
         <TouchableOpacity
           style={[styles.iconCircleBtn, { backgroundColor: isDarkMode ? '#1E293B' : '#F1F5F9', borderColor: borderCol }]}
@@ -342,7 +310,7 @@ export default function PatientMedicalRecordScreen({ navigation }: any) {
           onPress={openEditPatientModal}
           activeOpacity={0.7}
         >
-          <Ionicons name={hasPatient ? "create-outline" : "add"} size={20} color={Colors.primary} />
+          <Ionicons name={hasPatient ? 'create-outline' : 'add'} size={20} color={Colors.primary} />
         </TouchableOpacity>
       </View>
 
@@ -374,17 +342,11 @@ export default function PatientMedicalRecordScreen({ navigation }: any) {
             <View style={[styles.emptyPatientIconCircle, { backgroundColor: isDarkMode ? '#1E293B' : '#F1F5F9' }]}>
               <Ionicons name="person-circle-outline" size={44} color={isDarkMode ? '#64748B' : '#94A3B8'} />
             </View>
-            <Text style={[styles.emptyPatientTitle, { color: textTitle }]}>
-              Chưa có hồ sơ người cao tuổi
-            </Text>
+            <Text style={[styles.emptyPatientTitle, { color: textTitle }]}>Chưa có hồ sơ người cao tuổi</Text>
             <Text style={[styles.emptyPatientDesc, { color: textSub }]}>
               Vui lòng thêm thông tin để theo dõi sức khoẻ và lịch uống thuốc
             </Text>
-            <TouchableOpacity
-              style={styles.addPatientPrimaryBtn}
-              onPress={openEditPatientModal}
-              activeOpacity={0.8}
-            >
+            <TouchableOpacity style={styles.addPatientPrimaryBtn} onPress={openEditPatientModal} activeOpacity={0.8}>
               <Ionicons name="add-circle" size={18} color="#FFFFFF" />
               <Text style={styles.addPatientPrimaryBtnText}>+ Thêm hồ sơ người cao tuổi</Text>
             </TouchableOpacity>
@@ -427,9 +389,7 @@ export default function PatientMedicalRecordScreen({ navigation }: any) {
               </TouchableOpacity>
 
               <View style={{ flex: 1, marginLeft: 14 }}>
-                <Text style={[styles.patientHeroName, { color: textTitle }]}>
-                  {patientName}
-                </Text>
+                <Text style={[styles.patientHeroName, { color: textTitle }]}>{patientName}</Text>
                 <Text style={[styles.patientHeroSub, { color: textSub }]}>
                   {birthYear !== '--'
                     ? `Năm sinh: ${birthYear} (${age !== '--' ? `${age} tuổi` : ''}) • Giới tính: ${gender}`
@@ -441,14 +401,7 @@ export default function PatientMedicalRecordScreen({ navigation }: any) {
                     <Ionicons name="water" size={13} color="#EF4444" />
                     <Text style={styles.bloodBadgeText}>Nhóm máu: {bloodType}</Text>
                   </View>
-                  <View
-                    style={[
-                      styles.bmiBadge,
-                      {
-                        backgroundColor: isDarkMode ? 'rgba(255,255,255,0.08)' : cardBMI.bg,
-                      },
-                    ]}
-                  >
+                  <View style={[styles.bmiBadge, { backgroundColor: isDarkMode ? 'rgba(255,255,255,0.08)' : cardBMI.bg }]}>
                     <Text style={[styles.bmiBadgeText, { color: cardBMI.color }]}>
                       BMI: {cardBMI.bmi} {cardBMI.bmi !== '--' ? `(${cardBMI.category})` : ''}
                     </Text>
@@ -478,38 +431,21 @@ export default function PatientMedicalRecordScreen({ navigation }: any) {
             </View>
 
             <View style={[styles.metricsGrid, { backgroundColor: bgSubtle }]}>
-              <View style={styles.metricItem}>
-                <Text style={[styles.metricLabel, { color: textSub }]}>Chiều cao</Text>
-                <Text style={[styles.metricVal, { color: textTitle }]}>
-                  {height !== '--' ? (
-                    <>
-                      {height} <Text style={styles.metricUnit}>cm</Text>
-                    </>
-                  ) : (
-                    '--'
-                  )}
-                </Text>
-              </View>
-              <View style={[styles.metricDivider, { backgroundColor: borderCol }]} />
-              <View style={styles.metricItem}>
-                <Text style={[styles.metricLabel, { color: textSub }]}>Cân nặng</Text>
-                <Text style={[styles.metricVal, { color: textTitle }]}>
-                  {weight !== '--' ? (
-                    <>
-                      {weight} <Text style={styles.metricUnit}>kg</Text>
-                    </>
-                  ) : (
-                    '--'
-                  )}
-                </Text>
-              </View>
-              <View style={[styles.metricDivider, { backgroundColor: borderCol }]} />
-              <View style={styles.metricItem}>
-                <Text style={[styles.metricLabel, { color: textSub }]}>Nhóm máu</Text>
-                <Text style={[styles.metricVal, { color: bloodType !== '--' ? '#EF4444' : textTitle }]}>
-                  {bloodType}
-                </Text>
-              </View>
+              {[
+                { label: 'Chiều cao', val: height !== '--' ? `${height} cm` : '--' },
+                { label: 'Cân nặng', val: weight !== '--' ? `${weight} kg` : '--' },
+                { label: 'Nhóm máu', val: bloodType, isBlood: true },
+              ].map((m, idx) => (
+                <React.Fragment key={m.label}>
+                  {idx > 0 && <View style={[styles.metricDivider, { backgroundColor: borderCol }]} />}
+                  <View style={styles.metricItem}>
+                    <Text style={[styles.metricLabel, { color: textSub }]}>{m.label}</Text>
+                    <Text style={[styles.metricVal, { color: m.isBlood && bloodType !== '--' ? '#EF4444' : textTitle }]}>
+                      {m.val}
+                    </Text>
+                  </View>
+                </React.Fragment>
+              ))}
             </View>
           </View>
         )}
@@ -538,16 +474,13 @@ export default function PatientMedicalRecordScreen({ navigation }: any) {
           ) : (
             <>
               <ScrollView horizontal showsHorizontalScrollIndicator={false} style={{ marginVertical: 10 }}>
-                {[
-                  { label: 'Hôm nay', value: getDaysAgoStr(0) },
-                  { label: 'Hôm qua', value: getDaysAgoStr(1) },
-                  { label: '2 ngày trước', value: getDaysAgoStr(2) },
-                  { label: '3 ngày trước', value: getDaysAgoStr(3) },
-                ].map((opt) => {
-                  const isSelected = selectedDate === opt.value;
+                {[0, 1, 2, 3].map((daysAgo) => {
+                  const val = getDaysAgoStr(daysAgo);
+                  const isSelected = selectedDate === val;
+                  const label = daysAgo === 0 ? 'Hôm nay' : daysAgo === 1 ? 'Hôm qua' : `${daysAgo} ngày trước`;
                   return (
                     <TouchableOpacity
-                      key={opt.value}
+                      key={val}
                       style={[
                         styles.dateChip,
                         {
@@ -555,11 +488,11 @@ export default function PatientMedicalRecordScreen({ navigation }: any) {
                           borderColor: isSelected ? Colors.primary : borderCol,
                         },
                       ]}
-                      onPress={() => setSelectedDate(opt.value)}
+                      onPress={() => setSelectedDate(val)}
                       activeOpacity={0.8}
                     >
                       <Text style={[styles.dateChipText, { color: isSelected ? '#FFF' : textTitle }]}>
-                        {opt.label} ({opt.value.slice(5)})
+                        {label} ({val.slice(5)})
                       </Text>
                     </TouchableOpacity>
                   );
@@ -677,7 +610,6 @@ export default function PatientMedicalRecordScreen({ navigation }: any) {
 
           {isEditingAllergies ? (
             <View style={{ gap: 12 }}>
-              {/* Trường 1: Dị ứng thuốc */}
               <View>
                 <View style={[styles.allergyTagDanger, { alignSelf: 'flex-start', marginBottom: 6 }]}>
                   <Ionicons name="bandage-outline" size={14} color="#EF4444" />
@@ -692,7 +624,6 @@ export default function PatientMedicalRecordScreen({ navigation }: any) {
                 />
               </View>
 
-              {/* Trường 2: Dị ứng thức ăn */}
               <View>
                 <View style={[styles.allergyTagWarning, { alignSelf: 'flex-start', marginBottom: 6 }]}>
                   <Ionicons name="restaurant-outline" size={14} color="#D97706" />
@@ -707,7 +638,6 @@ export default function PatientMedicalRecordScreen({ navigation }: any) {
                 />
               </View>
 
-              {/* Trường 3: Chế độ ăn khuyến nghị */}
               <View>
                 <View style={[styles.rowCenterGap8, { marginBottom: 6 }]}>
                   <Ionicons name="nutrition-outline" size={16} color="#10B981" />
@@ -724,7 +654,6 @@ export default function PatientMedicalRecordScreen({ navigation }: any) {
                 />
               </View>
 
-              {/* Hành động Hủy và Lưu thay đổi ở góc dưới bên phải */}
               <View style={styles.inlineEditActionRow}>
                 <TouchableOpacity
                   style={[styles.inlineCancelBtn, { backgroundColor: isDarkMode ? '#334155' : '#E2E8F0' }]}
@@ -741,21 +670,18 @@ export default function PatientMedicalRecordScreen({ navigation }: any) {
             </View>
           ) : (
             <View style={{ gap: 8 }}>
-              <View style={styles.allergyRow}>
-                <View style={styles.allergyTagDanger}>
-                  <Ionicons name="bandage-outline" size={14} color="#EF4444" />
-                  <Text style={styles.allergyTagDangerText}>Dị ứng thuốc:</Text>
+              {[
+                { tagStyle: styles.allergyTagDanger, textStyle: styles.allergyTagDangerText, icon: 'bandage-outline' as const, label: 'Dị ứng thuốc:', val: drugAllergies },
+                { tagStyle: styles.allergyTagWarning, textStyle: styles.allergyTagWarningText, icon: 'restaurant-outline' as const, label: 'Dị ứng thức ăn:', val: foodAllergies },
+              ].map((row) => (
+                <View key={row.label} style={styles.allergyRow}>
+                  <View style={row.tagStyle}>
+                    <Ionicons name={row.icon} size={14} color={row.label.includes('thuốc') ? '#EF4444' : '#D97706'} />
+                    <Text style={row.textStyle}>{row.label}</Text>
+                  </View>
+                  <Text style={[styles.allergyValueText, { color: textTitle }]}>{row.val}</Text>
                 </View>
-                <Text style={[styles.allergyValueText, { color: textTitle }]}>{drugAllergies}</Text>
-              </View>
-
-              <View style={styles.allergyRow}>
-                <View style={styles.allergyTagWarning}>
-                  <Ionicons name="restaurant-outline" size={14} color="#D97706" />
-                  <Text style={styles.allergyTagWarningText}>Dị ứng thức ăn:</Text>
-                </View>
-                <Text style={[styles.allergyValueText, { color: textTitle }]}>{foodAllergies}</Text>
-              </View>
+              ))}
 
               <View style={[styles.dietaryNoteCard, { backgroundColor: bgSubtle }]}>
                 <View style={[styles.rowCenterGap8, { marginBottom: 4 }]}>
@@ -846,7 +772,7 @@ export default function PatientMedicalRecordScreen({ navigation }: any) {
         </Pressable>
       </Modal>
 
-      {/* Modal Chỉnh Sửa Thông Tin Bệnh Nhân */}
+      {/* Modal Chỉnh Sửa / Thêm Mới Thông Tin Bệnh Nhân */}
       <Modal transparent visible={isEditPatientVisible} animationType="fade" onRequestClose={() => setEditPatientVisible(false)}>
         <Pressable style={styles.modalOverlay} onPress={() => setEditPatientVisible(false)}>
           <Pressable style={[styles.modalCard, { backgroundColor: bgCard, borderColor: borderCol, maxHeight: '92%' }]} onPress={() => {}}>
@@ -854,7 +780,7 @@ export default function PatientMedicalRecordScreen({ navigation }: any) {
               {hasPatient ? 'Chỉnh sửa thông tin bệnh nhân' : 'Thêm hồ sơ người cao tuổi'}
             </Text>
             <ScrollView showsVerticalScrollIndicator={false} contentContainerStyle={{ paddingBottom: 6 }}>
-              {/* 1. Họ tên */}
+              {/* Họ tên */}
               <Text style={[styles.inputLabel, { color: textSub }]}>Họ tên người cao tuổi:</Text>
               <TextInput
                 style={[styles.textInput, inputThemeStyle]}
@@ -864,16 +790,14 @@ export default function PatientMedicalRecordScreen({ navigation }: any) {
                 placeholderTextColor="#94A3B8"
               />
 
-              {/* 2. Năm sinh & Tự động tính tuổi */}
+              {/* Năm sinh & Tự động tính tuổi */}
               <View style={{ marginTop: 12 }}>
                 <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 4 }}>
                   <Text style={[styles.inputLabel, { color: textSub, marginBottom: 0 }]}>Năm sinh:</Text>
                   {draftAge > 0 && (
                     <View style={[styles.calcBadge, { backgroundColor: isDarkMode ? '#1E3A8A' : '#EFF6FF' }]}>
                       <Ionicons name="calendar-outline" size={12} color="#2563EB" />
-                      <Text style={[styles.calcBadgeText, { color: '#2563EB' }]}>
-                        Tự động tính: {draftAge} tuổi
-                      </Text>
+                      <Text style={[styles.calcBadgeText, { color: '#2563EB' }]}>Tự động tính: {draftAge} tuổi</Text>
                     </View>
                   )}
                 </View>
@@ -888,45 +812,33 @@ export default function PatientMedicalRecordScreen({ navigation }: any) {
                 />
               </View>
 
-              {/* 3. Giới tính */}
+              {/* Giới tính */}
               <Text style={[styles.inputLabel, { color: textSub, marginTop: 12 }]}>Giới tính:</Text>
               <View style={styles.genderRow}>
-                {[
-                  { key: 'Nam', icon: 'male', label: 'Nam' },
-                  { key: 'Nữ', icon: 'female', label: 'Nữ' },
-                  { key: 'Khác', icon: 'person-outline', label: 'Khác' },
-                ].map((g) => {
-                  const isSelected = patientDraft.gender === g.key;
+                {(['Nam', 'Nữ', 'Khác'] as const).map((g) => {
+                  const isSelected = patientDraft.gender === g;
+                  const icon = g === 'Nam' ? 'male' : g === 'Nữ' ? 'female' : 'person-outline';
                   return (
                     <TouchableOpacity
-                      key={g.key}
+                      key={g}
                       style={[
                         styles.genderBtn,
                         isDarkMode && { backgroundColor: bgSubtle, borderColor: borderCol },
                         isSelected && { backgroundColor: isDarkMode ? '#1E3A8A' : '#EFF6FF', borderColor: '#2563EB', borderWidth: 1.5 },
                       ]}
-                      onPress={() => setPatientDraft((prev) => ({ ...prev, gender: g.key }))}
+                      onPress={() => setPatientDraft((prev) => ({ ...prev, gender: g }))}
                       activeOpacity={0.7}
                     >
-                      <Ionicons
-                        name={g.icon as any}
-                        size={15}
-                        color={isSelected ? '#2563EB' : textSub}
-                      />
-                      <Text
-                        style={[
-                          styles.genderBtnText,
-                          { color: isSelected ? '#2563EB' : textSub, fontWeight: isSelected ? '700' : '500' },
-                        ]}
-                      >
-                        {g.label}
+                      <Ionicons name={icon as any} size={15} color={isSelected ? '#2563EB' : textSub} />
+                      <Text style={[styles.genderBtnText, { color: isSelected ? '#2563EB' : textSub, fontWeight: isSelected ? '700' : '500' }]}>
+                        {g}
                       </Text>
                     </TouchableOpacity>
                   );
                 })}
               </View>
 
-              {/* 4. Nhóm máu (Chuẩn A+, A-, B+, B-, AB+, AB-, O+, O-) */}
+              {/* Nhóm máu */}
               <Text style={[styles.inputLabel, { color: textSub, marginTop: 12 }]}>Nhóm máu:</Text>
               <View style={styles.bloodTypeGrid}>
                 {['A+', 'A-', 'B+', 'B-', 'AB+', 'AB-', 'O+', 'O-'].map((b) => {
@@ -943,12 +855,7 @@ export default function PatientMedicalRecordScreen({ navigation }: any) {
                       activeOpacity={0.7}
                     >
                       <Ionicons name="water" size={11} color={isSelected ? '#DC2626' : '#94A3B8'} />
-                      <Text
-                        style={[
-                          styles.bloodChipText,
-                          { color: isSelected ? '#DC2626' : textSub, fontWeight: isSelected ? '800' : '600' },
-                        ]}
-                      >
+                      <Text style={[styles.bloodChipText, { color: isSelected ? '#DC2626' : textSub, fontWeight: isSelected ? '800' : '600' }]}>
                         {b}
                       </Text>
                     </TouchableOpacity>
@@ -956,7 +863,7 @@ export default function PatientMedicalRecordScreen({ navigation }: any) {
                 })}
               </View>
 
-              {/* 5. Chiều cao & Cân nặng */}
+              {/* Chiều cao & Cân nặng */}
               <View style={{ flexDirection: 'row', gap: 10, marginTop: 12 }}>
                 <View style={{ flex: 1 }}>
                   <Text style={[styles.inputLabel, { color: textSub }]}>Chiều cao (cm):</Text>
@@ -967,7 +874,7 @@ export default function PatientMedicalRecordScreen({ navigation }: any) {
                     placeholder="VD: 165"
                     placeholderTextColor="#94A3B8"
                     value={patientDraft.height}
-                    onChangeText={(heightVal) => setPatientDraft((prev) => ({ ...prev, height: heightVal.replace(/[^0-9]/g, '') }))}
+                    onChangeText={(v) => setPatientDraft((prev) => ({ ...prev, height: v.replace(/[^0-9]/g, '') }))}
                   />
                 </View>
                 <View style={{ flex: 1 }}>
@@ -979,30 +886,20 @@ export default function PatientMedicalRecordScreen({ navigation }: any) {
                     placeholder="VD: 58"
                     placeholderTextColor="#94A3B8"
                     value={patientDraft.weight}
-                    onChangeText={(weightVal) => setPatientDraft((prev) => ({ ...prev, weight: weightVal.replace(/[^0-9]/g, '') }))}
+                    onChangeText={(v) => setPatientDraft((prev) => ({ ...prev, weight: v.replace(/[^0-9]/g, '') }))}
                   />
                 </View>
               </View>
 
-              {/* 6. Tự động tính chỉ số BMI */}
-              <View
-                style={[
-                  styles.bmiCalcBox,
-                  {
-                    backgroundColor: isDarkMode ? 'rgba(255,255,255,0.05)' : draftBMI.bg,
-                    borderColor: draftBMI.color,
-                  },
-                ]}
-              >
+              {/* Tự động tính chỉ số BMI */}
+              <View style={[styles.bmiCalcBox, { backgroundColor: isDarkMode ? 'rgba(255,255,255,0.05)' : draftBMI.bg, borderColor: draftBMI.color }]}>
                 <Ionicons name="calculator-outline" size={18} color={draftBMI.color} />
                 <View style={{ flex: 1, marginLeft: 8 }}>
                   <Text style={[styles.bmiCalcTitle, { color: draftBMI.color }]}>
                     Chỉ số BMI: {draftBMI.bmi} {draftBMI.bmi !== '--' ? 'kg/m²' : ''}
                   </Text>
                   <Text style={[styles.bmiCalcSub, { color: isDarkMode ? '#CBD5E1' : '#475569' }]}>
-                    {draftBMI.bmi !== '--'
-                      ? `Thể trạng: ${draftBMI.category} (BMI = Cân nặng / Chiều cao²)`
-                      : 'Nhập đủ chiều cao và cân nặng để tự động tính BMI'}
+                    {draftBMI.bmi !== '--' ? `Thể trạng: ${draftBMI.category} (BMI = Cân nặng / Chiều cao²)` : 'Nhập đủ chiều cao và cân nặng để tự động tính BMI'}
                   </Text>
                 </View>
               </View>
@@ -1032,30 +929,28 @@ export default function PatientMedicalRecordScreen({ navigation }: any) {
                 <Ionicons name="scan" size={28} color="#10B981" />
               </View>
               <Text style={[styles.modalTitle, { color: textTitle, marginTop: 10 }]}>Đăng ký khuôn mặt AI</Text>
-              <Text style={[styles.modalSubDesc, { color: textSub }]}>
-                Chụp ảnh rõ nét chính diện khuôn mặt để camera AI nhận diện an toàn.
-              </Text>
+              <Text style={[styles.modalSubDesc, { color: textSub }]}>Chụp ảnh rõ nét chính diện khuôn mặt để camera AI nhận diện an toàn.</Text>
             </View>
 
-            <TouchableOpacity style={styles.modalActionRowBtn} onPress={() => handlePickFaceImage(true)} activeOpacity={0.8}>
-              <View style={[styles.modalActionIconBox, { backgroundColor: '#EFF6FF' }]}>
-                <Ionicons name="camera" size={20} color="#2563EB" />
-              </View>
-              <View style={{ flex: 1, marginLeft: 12 }}>
-                <Text style={[styles.modalActionTitle, { color: textTitle }]}>Mở máy ảnh chụp trực tiếp</Text>
-                <Text style={[styles.modalActionSub, { color: textSub }]}>Chụp khuôn mặt ngay bây giờ</Text>
-              </View>
-            </TouchableOpacity>
-
-            <TouchableOpacity style={[styles.modalActionRowBtn, { marginTop: 10 }]} onPress={() => handlePickFaceImage(false)} activeOpacity={0.8}>
-              <View style={[styles.modalActionIconBox, { backgroundColor: '#F0FDF4' }]}>
-                <Ionicons name="images" size={20} color="#16A34A" />
-              </View>
-              <View style={{ flex: 1, marginLeft: 12 }}>
-                <Text style={[styles.modalActionTitle, { color: textTitle }]}>Chọn ảnh từ thư viện</Text>
-                <Text style={[styles.modalActionSub, { color: textSub }]}>Tải ảnh chân dung có sẵn</Text>
-              </View>
-            </TouchableOpacity>
+            {[
+              { isCam: true, icon: 'camera' as const, bg: '#EFF6FF', color: '#2563EB', title: 'Mở máy ảnh chụp trực tiếp', sub: 'Chụp khuôn mặt ngay bây giờ' },
+              { isCam: false, icon: 'images' as const, bg: '#F0FDF4', color: '#16A34A', title: 'Chọn ảnh từ thư viện', sub: 'Tải ảnh chân dung có sẵn' },
+            ].map((act, idx) => (
+              <TouchableOpacity
+                key={act.title}
+                style={[styles.modalActionRowBtn, idx > 0 && { marginTop: 10 }]}
+                onPress={() => handlePickFaceImage(act.isCam)}
+                activeOpacity={0.8}
+              >
+                <View style={[styles.modalActionIconBox, { backgroundColor: act.bg }]}>
+                  <Ionicons name={act.icon} size={20} color={act.color} />
+                </View>
+                <View style={{ flex: 1, marginLeft: 12 }}>
+                  <Text style={[styles.modalActionTitle, { color: textTitle }]}>{act.title}</Text>
+                  <Text style={[styles.modalActionSub, { color: textSub }]}>{act.sub}</Text>
+                </View>
+              </TouchableOpacity>
+            ))}
 
             <TouchableOpacity style={[styles.modalCloseBtn, { borderColor: borderCol, marginTop: 14 }]} onPress={() => setFaceModalVisible(false)}>
               <Text style={[styles.modalCloseBtnText, { color: textSub }]}>Hủy bỏ</Text>
@@ -1069,13 +964,7 @@ export default function PatientMedicalRecordScreen({ navigation }: any) {
 
 const styles = StyleSheet.create({
   safeArea: { flex: 1 },
-  headerRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    paddingHorizontal: 16,
-    paddingVertical: 12,
-    borderBottomWidth: StyleSheet.hairlineWidth,
-  },
+  headerRow: { flexDirection: 'row', alignItems: 'center', paddingHorizontal: 16, paddingVertical: 12, borderBottomWidth: StyleSheet.hairlineWidth },
   iconCircleBtn: { width: 38, height: 38, borderRadius: 19, borderWidth: 1, alignItems: 'center', justifyContent: 'center' },
   headerTitleCenter: { flex: 1, marginHorizontal: 12 },
   headerTitle: { fontSize: 16, fontWeight: '700' },
@@ -1096,26 +985,9 @@ const styles = StyleSheet.create({
   emptyPatientIconCircle: { width: 72, height: 72, borderRadius: 36, alignItems: 'center', justifyContent: 'center', marginBottom: 12 },
   emptyPatientTitle: { fontSize: 16, fontWeight: '700', marginBottom: 6, textAlign: 'center' },
   emptyPatientDesc: { fontSize: 13, lineHeight: 19, textAlign: 'center', marginBottom: 18, paddingHorizontal: 16 },
-  addPatientPrimaryBtn: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'center',
-    gap: 6,
-    backgroundColor: Colors.primary,
-    paddingVertical: 12,
-    paddingHorizontal: 20,
-    borderRadius: 12,
-  },
+  addPatientPrimaryBtn: { flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 6, backgroundColor: Colors.primary, paddingVertical: 12, paddingHorizontal: 20, borderRadius: 12 },
   addPatientPrimaryBtnText: { color: '#FFFFFF', fontSize: 14, fontWeight: '700' },
-  emptyNoticeBox: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 8,
-    padding: 14,
-    borderRadius: 10,
-    borderWidth: 1,
-    marginTop: 6,
-  },
+  emptyNoticeBox: { flexDirection: 'row', alignItems: 'center', gap: 8, padding: 14, borderRadius: 10, borderWidth: 1, marginTop: 6 },
   emptyNoticeText: { fontSize: 12.5, fontWeight: '500', flex: 1 },
   cardHeader: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', marginBottom: 14 },
   cardIconBox: { width: 36, height: 36, borderRadius: 10, alignItems: 'center', justifyContent: 'center' },
@@ -1141,7 +1013,6 @@ const styles = StyleSheet.create({
   metricItem: { alignItems: 'center', flex: 1 },
   metricLabel: { fontSize: 11, marginBottom: 3 },
   metricVal: { fontSize: 15, fontWeight: '800' },
-  metricUnit: { fontSize: 11, fontWeight: '500' },
   metricDivider: { width: 1, height: 22 },
 
   dateChip: { paddingHorizontal: 12, paddingVertical: 6, borderRadius: 10, marginRight: 8, borderWidth: 1 },
