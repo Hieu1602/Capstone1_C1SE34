@@ -27,6 +27,8 @@ $MobileDir = "$AiDir\apps\mobile"
 $WebDir = "$AiDir\apps\web"
 $EdgeDir = "$AiDir\edge"
 $DockerComposeFile = "$AiDir\docker-compose.yml"
+$MinioDataDir = "$AiDir\minio_data"
+$MinioLicenseFile = "C:\Users\ACER\minio.license"
 
 # ------------------------------------------------------------------------------
 # 1. TIM KIEM PYTHON RUNTIME HOAC UV CHO BACKEND
@@ -156,6 +158,42 @@ function Start-DockerServices {
     Write-Host "     - TimescaleDB (PostgreSQL 16) : localhost:5433" -ForegroundColor Gray
     Write-Host "     - Redis Cache & PubSub        : localhost:6379" -ForegroundColor Gray
     Write-Host "     - EMQX MQTT Broker            : localhost:1883 (Dashboard: http://localhost:18083)" -ForegroundColor Gray
+    Write-Host ""
+    return $true
+}
+
+# ------------------------------------------------------------------------------
+# 4.1. KHOI DONG MINIO OBJECT STORAGE (STANDALONE BINARY)
+# ------------------------------------------------------------------------------
+function Start-MinioService {
+    Write-Info "Dang khoi dong MinIO Object Storage (minio.exe)..."
+
+    $minioCmd = Get-Command minio.exe -ErrorAction SilentlyContinue
+    if (-not $minioCmd) {
+        Write-Warn "Khong tim thay minio.exe tren he thong! Bo qua khoi dong MinIO."
+        return $false
+    }
+
+    if (Test-PortListening -Port 9000) {
+        Write-Success "MinIO Object Storage da dang chay tren port 9000."
+        return $true
+    }
+
+    if (-not (Test-Path $MinioDataDir)) {
+        New-Item -ItemType Directory -Path $MinioDataDir -Force | Out-Null
+    }
+
+    $licenseArg = if (Test-Path $MinioLicenseFile) { "--license `"$MinioLicenseFile`"" } else { "" }
+    $minioUser = "minioadmin"
+    $minioPass = "minioadmin_secret_123"
+
+    $psCommand = "[Console]::OutputEncoding = [System.Text.Encoding]::UTF8; `$host.UI.RawUI.WindowTitle = '[Elderly Care] MinIO Object Storage (Port 9000/9001)'; `$env:MINIO_ROOT_USER='$minioUser'; `$env:MINIO_ROOT_PASSWORD='$minioPass'; minio.exe server '$MinioDataDir' --address ':9000' --console-address ':9001' $licenseArg"
+    Start-Process powershell.exe -ArgumentList "-NoExit", "-ExecutionPolicy", "Bypass", "-Command", $psCommand
+
+    Write-Success "Da mo tien trinh MinIO Object Storage (Port 9000/9001)."
+    Write-Host "     - S3 API Endpoint             : http://localhost:9000" -ForegroundColor Gray
+    Write-Host "     - MinIO Web Console           : http://localhost:9001" -ForegroundColor Yellow
+    Write-Host "     - Tai khoan                   : $minioUser / $minioPass" -ForegroundColor DarkGray
     Write-Host ""
     return $true
 }
@@ -320,6 +358,12 @@ function Show-SystemStatus {
     $emqxColor = if ($emqxOk) { "Green" } else { "DarkGray" }
     Write-Host ("  {0,-28} : {1}" -f "Local EMQX MQTT (:1883)", $emqxStatus) -ForegroundColor $emqxColor
 
+    # MinIO Local Object Storage
+    $minioOk = Test-PortListening -Port 9000
+    $minioStatus = if ($minioOk) { "[ONLINE] -> API :9000 | Console :9001" } else { "[OFFLINE]" }
+    $minioColor = if ($minioOk) { "Green" } else { "DarkGray" }
+    Write-Host ("  {0,-28} : {1}" -f "MinIO Object Storage (:9000)", $minioStatus) -ForegroundColor $minioColor
+
     # Backend
     $backendOk = Test-PortListening -Port 8000
     if ($backendOk) {
@@ -364,8 +408,9 @@ function Stop-AllServices {
         Write-Success "Da dung Docker containers."
     }
 
-    # Dung tien trinh tren cac cong 8000, 8081, 3000, 19000, 19001
-    $portsToKill = @(8000, 8081, 3000, 19000, 19001)
+    # Dung tien trinh tren cac cong 8000, 8081, 3000, 9000, 9001, 19000, 19001
+    $portsToKill = @(8000, 8081, 3000, 9000, 9001, 19000, 19001)
+    Get-Process minio -ErrorAction SilentlyContinue | Stop-Process -Force -ErrorAction SilentlyContinue
     $killedPids = @()
     foreach ($p in $portsToKill) {
         $pids = Get-NetTCPConnection -LocalPort $p -State Listen -ErrorAction SilentlyContinue | 
@@ -392,6 +437,7 @@ function Open-WebLinks {
     if (Test-PortListening -Port 3000) { Start-Process "http://localhost:3000" }
     if (Test-PortListening -Port 8000) { Start-Process "http://localhost:8000/api/docs" }
     if (Test-PortListening -Port 8081) { Start-Process "http://localhost:8081" }
+    if (Test-PortListening -Port 9001) { Start-Process "http://localhost:9001" }
     if (Test-PortListening -Port 1883) { Start-Process "http://localhost:18083" }
     Write-Success "Da mo cac trang quan tri!"
 }
@@ -406,6 +452,9 @@ function Start-AllServices {
 
     # Khoi dong Docker ha tang neu co
     $dockerOk = Start-DockerServices
+    Start-Sleep -Seconds 1
+
+    Start-MinioService
     Start-Sleep -Seconds 1
 
     Start-BackendService
@@ -426,6 +475,7 @@ function Start-AllServices {
     Write-Host "  - Mobile App Web        : http://localhost:8081" -ForegroundColor White
     Write-Host "  - Backend Swagger Docs  : http://localhost:8000/api/docs" -ForegroundColor White
     Write-Host "  - Health Check API      : http://localhost:8000/health" -ForegroundColor White
+    Write-Host "  - MinIO Console UI      : http://localhost:9001  (User: minioadmin / minioadmin_secret_123)" -ForegroundColor White
     if (Test-PortListening -Port 1883) {
         Write-Host "  - EMQX MQTT Dashboard   : http://localhost:18083  (User: admin / public)" -ForegroundColor White
     }
@@ -446,6 +496,7 @@ function Start-AllServices {
 switch ($Target.ToLower()) {
     "all"     { Start-AllServices; exit }
     "docker"  { Start-DockerServices; exit }
+    "minio"   { Start-MinioService; exit }
     "backend" { Start-BackendService; exit }
     "web"     { Start-WebService; exit }
     "mobile"  { Start-MobileService -Mode "web"; exit }
@@ -465,8 +516,8 @@ do {
 
     Write-Host "  CHON TAC VU BAN MUON THUC HIEN:" -ForegroundColor Yellow
     Write-Host "  ------------------------------------------------------------------------------" -ForegroundColor DarkGray
-    Write-Host "  [1] Khoi dong TOAN BO (Docker + Backend + Web Admin + Mobile Web)" -ForegroundColor Green
-    Write-Host "  [2] Khoi dong Ha tang Docker (TimescaleDB, Redis, EMQX)" -ForegroundColor Cyan
+    Write-Host "  [1] Khoi dong TOAN BO (Docker + MinIO + Backend + Web Admin + Mobile Web)" -ForegroundColor Green
+    Write-Host "  [2] Khoi dong Ha tang (Docker: TimescaleDB, Redis, EMQX + Standalone: MinIO)" -ForegroundColor Cyan
     Write-Host "  [3] Khoi dong Cloud Backend FastAPI (localhost:8000)" -ForegroundColor Cyan
     Write-Host "  [4] Khoi dong Web Admin Portal (localhost:3000)" -ForegroundColor Cyan
     Write-Host "  [5] Khoi dong Mobile App (localhost:8081)" -ForegroundColor Cyan
@@ -484,7 +535,7 @@ do {
 
     switch ($choice) {
         "1"  { Start-AllServices; Write-Host "Nhan Enter de tiep tuc..."; [void][System.Console]::ReadLine() }
-        "2"  { Start-DockerServices; Write-Host "Nhan Enter de tiep tuc..."; [void][System.Console]::ReadLine() }
+        "2"  { Start-DockerServices; Start-MinioService; Write-Host "Nhan Enter de tiep tuc..."; [void][System.Console]::ReadLine() }
         "3"  { Start-BackendService; Write-Host "Nhan Enter de tiep tuc..."; [void][System.Console]::ReadLine() }
         "4"  { Start-WebService; Write-Host "Nhan Enter de tiep tuc..."; [void][System.Console]::ReadLine() }
         "5"  { Start-MobileService -Mode "web"; Write-Host "Nhan Enter de tiep tuc..."; [void][System.Console]::ReadLine() }

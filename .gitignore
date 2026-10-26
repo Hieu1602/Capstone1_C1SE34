@@ -48,6 +48,7 @@ data/raw/
 **/data/raw/
 *.sqlite3
 minio_data/
+*.license
 
 *.tmp
 

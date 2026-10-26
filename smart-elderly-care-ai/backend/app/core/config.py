@@ -74,6 +74,7 @@ class Settings(BaseSettings):
     MINIO_SECRET_KEY: str = "CHANGE_ME"
     MINIO_BUCKET_INCIDENTS: str = "incidents"
     MINIO_SECURE: bool = False
+    MINIO_REGION: str = ""
 
     # ---- Firebase FCM ----
     FCM_SERVICE_ACCOUNT_PATH: str = "config/firebase-service-account.json"

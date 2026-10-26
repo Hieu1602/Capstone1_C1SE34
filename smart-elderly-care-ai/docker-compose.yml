@@ -34,9 +34,12 @@ services:
             MQTT_BROKER_PORT: "1883"
             MQTT_USERNAME: "${MQTT_USERNAME}"
             MQTT_PASSWORD: "${MQTT_PASSWORD}"
-            MINIO_ENDPOINT: "minio:9000"
+            MINIO_ENDPOINT: "${MINIO_ENDPOINT}"
             MINIO_ACCESS_KEY: "${MINIO_ACCESS_KEY}"
             MINIO_SECRET_KEY: "${MINIO_SECRET_KEY}"
+            MINIO_BUCKET_INCIDENTS: "${MINIO_BUCKET_INCIDENTS}"
+            MINIO_SECURE: "${MINIO_SECURE}"
+            MINIO_REGION: "${MINIO_REGION}"
             SECRET_KEY: "${SECRET_KEY}"
         depends_on:
             timescaledb:
