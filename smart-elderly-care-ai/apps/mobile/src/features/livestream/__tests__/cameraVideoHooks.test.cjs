@@ -20,7 +20,7 @@ async function settle() {
 }
 
 /** @param name Hook cần chạy. @param modules Adapter giả. @returns Renderer lifecycle, không dùng native runtime. */
-function harness(name, modules) {
+function harness(name, modules, globals = {}) {
     const slots = [],
         effects = [],
         timers = new Set();
@@ -69,6 +69,7 @@ function harness(name, modules) {
         },
     ).outputText;
     vm.runInNewContext(source, {
+        ...globals,
         exports,
         require: (module) => (module === "react" ? react : modules[module]),
         setTimeout: (callback) => {
@@ -85,6 +86,9 @@ function harness(name, modules) {
             return value;
         },
         timers,
+        unmount() {
+            slots.forEach((slot) => slot?.cleanup?.());
+        },
     };
 }
 
@@ -152,6 +156,99 @@ test("Video Mode ignores an older GET after a confirmed POST", async () => {
     read.resolve({ data: { mode: "day" } });
     await settle();
     assert.equal(h.render(connection).mode, "night");
+});
+
+/** @returns DOM giả chỉ phục vụ vòng đời fullscreen, không mở trình duyệt thật. */
+function browserHarness({ denied = false, delayed = false } = {}) {
+    const request = deferred(),
+        listeners = new Map(),
+        calls = [];
+    const document = {
+        fullscreenElement: null,
+        documentElement: {
+            requestFullscreen() {
+                if (denied) return Promise.reject(new Error("denied"));
+                return (delayed ? request.promise : Promise.resolve()).then(
+                    () => {
+                        document.fullscreenElement = document.documentElement;
+                        listeners.get("fullscreenchange")?.();
+                    },
+                );
+            },
+        },
+        exitFullscreen: async () => {
+            calls.push("exit");
+            document.fullscreenElement = null;
+            listeners.get("fullscreenchange")?.();
+        },
+        addEventListener: (name, listener) => listeners.set(name, listener),
+        removeEventListener: (name) => listeners.delete(name),
+    };
+    const h = harness(
+        "useCameraFullscreen",
+        {
+            "react-native": { Platform: { OS: "web" } },
+            "expo-screen-orientation": {
+                OrientationLock: { LANDSCAPE: 2 },
+                lockAsync: async (value) => {
+                    calls.push(value);
+                },
+                unlockAsync: async () => {
+                    calls.push("unlock");
+                },
+            },
+        },
+        { document },
+    );
+    return { ...h, request, document, calls, listeners };
+}
+
+test("browser fullscreen locks landscape then Escape restores browser state", async () => {
+    const h = browserHarness();
+    h.render(true).open();
+    h.render(true);
+    await settle();
+    assert.deepEqual(h.calls, [2]);
+    h.document.fullscreenElement = null;
+    h.listeners.get("fullscreenchange")();
+    assert.equal(h.render(true).fullscreen, false);
+    await settle();
+    assert.deepEqual(h.calls, [2, "unlock"]);
+});
+
+test("denied browser fullscreen keeps the landscape modal fallback usable", async () => {
+    const h = browserHarness({ denied: true });
+    h.render(true).open();
+    h.render(true);
+    await settle();
+    assert.equal(h.render(true).fullscreen, true);
+    assert.deepEqual(h.calls, []);
+    h.render(true).close();
+    assert.equal(h.render(true).fullscreen, false);
+});
+
+test("a late browser fullscreen response cannot reopen an already closed viewer", async () => {
+    const h = browserHarness({ delayed: true });
+    h.render(true).open();
+    h.render(true).close();
+    h.render(true);
+    h.request.resolve();
+    await settle();
+    assert.equal(h.document.fullscreenElement, null);
+    assert.equal(h.render(true).fullscreen, false);
+    assert.ok(h.calls.includes("exit"));
+    assert.ok(!h.calls.includes(2));
+});
+
+test("unmount also cleans up a pending browser fullscreen request", async () => {
+    const h = browserHarness({ delayed: true });
+    h.render(true).open();
+    h.render(true);
+    h.unmount();
+    h.request.resolve();
+    await settle();
+    assert.equal(h.document.fullscreenElement, null);
+    assert.equal(h.listeners.size, 0);
 });
 
 test("Video Mode drops previous camera response and stops timer on blur", async () => {
