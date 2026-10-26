@@ -1,4 +1,4 @@
-﻿// ==============================================================================
+// ==============================================================================
 // TỆP: HouseDetailScreen.tsx
 // PHÂN HỆ: Màn hình Quản lý Không gian Nhà & Phân quyền Thành viên Gia đình
 // TÁC GIẢ: Nhóm Phát triển Smart Elderly Care AI
@@ -27,6 +27,8 @@ import {
   ActivityIndicator,
   Switch,
   Platform,
+  Share,
+  Linking,
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { Ionicons, MaterialCommunityIcons } from '@expo/vector-icons';
@@ -35,7 +37,7 @@ import { useAuthStore, useVitalStore } from '../../../store/useVitalStore';
 import { useTheme } from '../../../store/useThemeStore';
 import { householdApi } from '../../../services/api';
 
-export default function HouseDetailScreen({ navigation }: any) {
+export default function HouseDetailScreen({ navigation, route }: any) {
   const { house, updateHouseAddress } = useVitalStore();
   const [isEditAddressModalVisible, setIsEditAddressModalVisible] = useState(false);
   const [editAddressInput, setEditAddressInput] = useState('');
@@ -61,7 +63,21 @@ export default function HouseDetailScreen({ navigation }: any) {
   const [members, setMembers] = useState<any[]>([]);
   const [isLoadingMembers, setIsLoadingMembers] = useState(false);
 
-  // State Modal Thêm thành viên mới
+  // State Modal Thêm thành viên mới & Luồng Mời gia đình 2 bước
+  const [inviteModalVisible, setInviteModalVisible] = useState(false);
+  const [inviteStep, setInviteStep] = useState<1 | 2>(1);
+  const [selectedInviteRole, setSelectedInviteRole] = useState<'MEMBER' | 'ADMIN'>('MEMBER');
+  const [isAccountInviteModalVisible, setIsAccountInviteModalVisible] = useState(false);
+  const [isShareModalVisible, setIsShareModalVisible] = useState(false);
+  const [copySuccessToast, setCopySuccessToast] = useState<string | null>(null);
+
+  const triggerToast = (msg: string) => {
+    setCopySuccessToast(msg);
+    setTimeout(() => {
+      setCopySuccessToast(null);
+    }, 2800);
+  };
+
   const [addMemberModalVisible, setAddMemberModalVisible] = useState(false);
   const [newMemberPhone, setNewMemberPhone] = useState('');
   const [newMemberName, setNewMemberName] = useState('');
@@ -70,6 +86,15 @@ export default function HouseDetailScreen({ navigation }: any) {
   const [newCanViewCamera, setNewCanViewCamera] = useState(true);
   const [newCanHandleEmergency, setNewCanHandleEmergency] = useState(true);
   const [newCanManageDevices, setNewCanManageDevices] = useState(false);
+  const [newCanManageRecords, setNewCanManageRecords] = useState(false);
+
+  useEffect(() => {
+    if (route?.params?.openInviteModal) {
+      setSelectedInviteRole('MEMBER');
+      setInviteStep(1);
+      setInviteModalVisible(true);
+    }
+  }, [route?.params?.openInviteModal]);
 
   // State Modal Cấp quyền cho thành viên (RBAC Permission Sheet)
   const [permissionModalVisible, setPermissionModalVisible] = useState(false);
@@ -79,6 +104,7 @@ export default function HouseDetailScreen({ navigation }: any) {
   const [editCanViewCamera, setEditCanViewCamera] = useState(true);
   const [editCanHandleEmergency, setEditCanHandleEmergency] = useState(true);
   const [editCanManageDevices, setEditCanManageDevices] = useState(false);
+  const [editCanManageRecords, setEditCanManageRecords] = useState(false);
   const [isSavingPermissions, setIsSavingPermissions] = useState(false);
   const [isConfirmingDelete, setIsConfirmingDelete] = useState(false);
   const [isDeletingMember, setIsDeletingMember] = useState(false);
@@ -87,29 +113,30 @@ export default function HouseDetailScreen({ navigation }: any) {
   const isCurrentUserOwner =
     userRole === 'admin' ||
     role === 'admin' ||
-    members.find(
-      (m) =>
-        m.is_owner &&
-        (m.phone_number === phone_number || m.phone_number === userPhone)
-    ) !== undefined ||
-    members.length === 0;
+    Boolean(
+      members.find(
+        (m) =>
+          (m.is_owner || m.role_in_house === 'OWNER') &&
+          (m.phone_number === phone_number || m.phone_number === userPhone)
+      )
+    );
 
   // Fallback chủ nhà khi chưa load được API
-  const getFallbackOwner = useCallback(() => [
+  const getFallbackMember = useCallback(() => [
     {
-      id: 'owner-default-id',
-      user_id: 'owner-user-id',
-      full_name: full_name || userName || 'Chủ hộ',
+      id: 'member-default-id',
+      user_id: 'member-user-id',
+      full_name: full_name || userName || 'Thành viên',
       phone_number: phone_number || userPhone || '--',
-      role: 'Chủ nhà / Người sở hữu',
-      role_in_house: 'OWNER',
-      permissions: 'ADMIN',
+      role: 'Thành viên gia đình',
+      role_in_house: 'MEMBER',
+      permissions: 'VIEWER',
       can_view_health: true,
       can_view_camera: true,
       can_handle_emergency: true,
-      can_manage_devices: true,
-      can_manage_records: true,
-      is_owner: true,
+      can_manage_devices: false,
+      can_manage_records: false,
+      is_owner: false,
     },
   ], [full_name, userName, phone_number, userPhone]);
 
@@ -122,14 +149,14 @@ export default function HouseDetailScreen({ navigation }: any) {
       if (Array.isArray(res.data) && res.data.length > 0) {
         setMembers(res.data);
       } else {
-        setMembers(getFallbackOwner());
+        setMembers(getFallbackMember());
       }
     } catch {
-      setMembers(getFallbackOwner());
+      setMembers(getFallbackMember());
     } finally {
       setIsLoadingMembers(false);
     }
-  }, [household_id, getFallbackOwner]);
+  }, [household_id, getFallbackMember]);
 
   useEffect(() => {
     loadMembers();
@@ -137,12 +164,21 @@ export default function HouseDetailScreen({ navigation }: any) {
 
   // Mở modal phân quyền cho 1 thành viên
   const handleOpenPermissions = (member: any) => {
+    if (!isCurrentUserOwner) {
+      const rName = member.role_in_house === 'OWNER' ? 'Chủ hộ' : member.role_in_house === 'DOCTOR' ? 'Bác sĩ gia đình' : 'Thành viên gia đình';
+      Alert.alert(
+        'Thông tin thành viên',
+        `Họ và tên: ${member.full_name}\nVai trò: ${rName}\nSố điện thoại: ${member.phone_number || '--'}\n\nLưu ý: Chỉ Chủ hộ mới có quyền thay đổi phân quyền.`
+      );
+      return;
+    }
     setSelectedMember(member);
     setEditRoleInHouse(member.role_in_house || 'MEMBER');
     setEditCanViewHealth(member.can_view_health !== false);
     setEditCanViewCamera(member.can_view_camera !== false);
     setEditCanHandleEmergency(member.can_handle_emergency !== false);
     setEditCanManageDevices(Boolean(member.can_manage_devices));
+    setEditCanManageRecords(Boolean(member.can_manage_records));
     setIsConfirmingDelete(false);
     setPermissionModalVisible(true);
   };
@@ -159,6 +195,7 @@ export default function HouseDetailScreen({ navigation }: any) {
         can_view_camera: editCanViewCamera,
         can_handle_emergency: editCanHandleEmergency,
         can_manage_devices: editCanManageDevices,
+        can_manage_records: editCanManageRecords,
       });
 
       // Cập nhật state nội bộ
@@ -172,6 +209,7 @@ export default function HouseDetailScreen({ navigation }: any) {
                 can_view_camera: editCanViewCamera,
                 can_handle_emergency: editCanHandleEmergency,
                 can_manage_devices: editCanManageDevices,
+                can_manage_records: editCanManageRecords,
               }
             : m
         )
@@ -232,29 +270,70 @@ export default function HouseDetailScreen({ navigation }: any) {
     }
   };
 
-    // Xử lý thêm thành viên mới
+  // Xử lý chia sẻ lời mời gia đình trực tiếp trên app
+  const handleShareInvite = () => {
+    setIsShareModalVisible(true);
+  };
+
+  // Chia sẻ qua hệ thống máy nếu muốn
+  const handleNativeShare = async () => {
+    try {
+      const roleName = selectedInviteRole === 'ADMIN' ? 'Quản trị viên' : 'Thành viên';
+      await Share.share({
+        title: 'Mời thành viên gia đình',
+        message: `Chào bạn, bạn nhận được lời mời tham gia căn nhà "${house?.name || 'Nhà của tôi'}" với vai trò ${roleName} trên ứng dụng Smart Elderly Care AI để cùng chăm sóc và bảo vệ người thân. Mã mời: CARE-${household_id ? String(household_id).slice(-4).toUpperCase() : '8869'}. Vui lòng tải ứng dụng và đăng nhập bằng số điện thoại của bạn.`,
+      });
+    } catch {
+      Alert.alert('Thông báo', 'Không thể mở trình chia sẻ.');
+    }
+  };
+
+  // Xử lý sao chép liên kết mời
+  const handleCopyLink = () => {
+    const roleSlug = selectedInviteRole === 'ADMIN' ? 'admin' : 'member';
+    const link = `https://smartcare.vn/invite?houseId=${household_id || 'current'}&role=${roleSlug}`;
+    Alert.alert(
+      'Sao chép liên kết thành công',
+      `Đã sao chép liên kết mời thành viên vào bộ nhớ tạm:\n\n${link}\n\nBạn có thể gửi liên kết này cho người thân gia đình.`,
+      [
+        { text: 'Đóng', style: 'cancel' },
+        { text: 'Chia sẻ ngay', onPress: handleShareInvite },
+      ]
+    );
+  };
+
+  // Xử lý thêm thành viên mới
   const handleAddMember = async () => {
     const phoneToSubmit = newMemberPhone.trim();
     if (!phoneToSubmit) {
       Alert.alert('Lỗi', 'Vui lòng nhập số điện thoại người thân hoặc bác sĩ.');
       return;
     }
-    const roleTitle = newMemberRole === 'DOCTOR' ? 'Bác sĩ gia đình' : 'Thành viên gia đình';
+    const isDoctor = newMemberRole === 'DOCTOR';
+    const isAdmin = selectedInviteRole === 'ADMIN';
+    const defaultRoleTitle = isAdmin
+      ? 'Quản trị viên gia đình'
+      : isDoctor
+      ? 'Bác sĩ gia đình'
+      : 'Thành viên gia đình';
 
     try {
       const targetHId = household_id || 'current';
       await householdApi.addMember(targetHId, {
         phone_number: phoneToSubmit,
-        full_name: newMemberName.trim() || roleTitle,
-        role_in_house: newMemberRole === 'DOCTOR' ? 'DOCTOR' : 'MEMBER',
-        role: newMemberRole === 'DOCTOR' ? 'doctor' : 'user',
-        can_view_health: newCanViewHealth,
-        can_view_camera: newCanViewCamera,
-        can_handle_emergency: newCanHandleEmergency,
-        can_manage_devices: newCanManageDevices,
+        full_name: newMemberName.trim() || defaultRoleTitle,
+        role_in_house: isAdmin ? 'ADMIN' : isDoctor ? 'DOCTOR' : 'MEMBER',
+        role: isAdmin ? 'admin' : isDoctor ? 'doctor' : 'user',
+        can_view_health: isAdmin ? true : newCanViewHealth,
+        can_view_camera: isAdmin ? true : newCanViewCamera,
+        can_handle_emergency: isAdmin ? true : newCanHandleEmergency,
+        can_manage_devices: isAdmin ? true : newCanManageDevices,
+        can_manage_records: isAdmin ? true : newCanManageRecords,
       });
 
+      setIsAccountInviteModalVisible(false);
       setAddMemberModalVisible(false);
+      setInviteModalVisible(false);
       setNewMemberPhone('');
       setNewMemberName('');
       Alert.alert('Thành công', `Đã cấp quyền và thêm ${phoneToSubmit} vào ngôi nhà.`);
@@ -338,7 +417,7 @@ export default function HouseDetailScreen({ navigation }: any) {
             </View>
           ) : (
             members.map((member, index) => {
-              const isOwner = member.is_owner || member.role_in_house === 'OWNER' || index === 0;
+              const isOwner = Boolean(member.is_owner || member.role_in_house === 'OWNER');
               const isDoctor =
                 member.role_in_house === 'DOCTOR' ||
                 member.role === 'DOCTOR' ||
@@ -406,7 +485,7 @@ export default function HouseDetailScreen({ navigation }: any) {
                         >
                           <Text
                             style={[
-                              styles.roleBadgeText,
+                              styles.inviteRoleBadgeText,
                               { color: isOwner ? '#B45309' : isDoctor ? '#15803D' : textSub },
                             ]}
                           >
@@ -521,7 +600,11 @@ export default function HouseDetailScreen({ navigation }: any) {
           {/* Nút Thêm Thành Viên Mới */}
           <TouchableOpacity
             style={styles.addMemberRow}
-            onPress={() => setAddMemberModalVisible(true)}
+            onPress={() => {
+              setSelectedInviteRole('MEMBER');
+              setInviteStep(1);
+              setInviteModalVisible(true);
+            }}
             activeOpacity={0.7}
           >
             <View style={[styles.orangePlusCircle, isDarkMode && { backgroundColor: '#4A2810', borderColor: '#7C2D12' }]}>
@@ -760,11 +843,11 @@ export default function HouseDetailScreen({ navigation }: any) {
                       <View style={{ flexDirection: 'row', alignItems: 'center' }}>
                         <Ionicons name="hardware-chip" size={18} color="#8B5CF6" style={{ marginRight: 6 }} />
                         <Text style={[styles.permSwitchTitle, { color: textTitle }]}>
-                          Cấu hình thiết bị & Ngưỡng an toàn
+                          Cấu hình thiết bị & Tham số thuật toán AI
                         </Text>
                       </View>
                       <Text style={[styles.permSwitchDesc, { color: textSub }]}>
-                        Quyền thay đổi ngưỡng báo động nhịp tim/huyết áp và khởi động lại phần cứng.
+                        Quyền thay đổi ngưỡng báo động nhịp tim/huyết áp/té ngã trong Cài đặt thuật toán.
                       </Text>
                     </View>
                     <Switch
@@ -772,6 +855,27 @@ export default function HouseDetailScreen({ navigation }: any) {
                       onValueChange={setEditCanManageDevices}
                       trackColor={{ false: '#94A3B8', true: '#DDD6FE' }}
                       thumbColor={editCanManageDevices ? '#7C3AED' : '#F1F5F9'}
+                    />
+                  </View>
+
+                  {/* 5. Quản lý Lịch thuốc & Bệnh án */}
+                  <View style={[styles.permSwitchRow, { borderColor: borderCol }]}>
+                    <View style={{ flex: 1, paddingRight: 12 }}>
+                      <View style={{ flexDirection: 'row', alignItems: 'center' }}>
+                        <Ionicons name="calendar" size={18} color="#D97706" style={{ marginRight: 6 }} />
+                        <Text style={[styles.permSwitchTitle, { color: textTitle }]}>
+                          Quản lý Lịch thuốc & Bệnh án
+                        </Text>
+                      </View>
+                      <Text style={[styles.permSwitchDesc, { color: textSub }]}>
+                        Quyền thêm, sửa, xóa đơn thuốc và lịch uống thuốc của người cao tuổi.
+                      </Text>
+                    </View>
+                    <Switch
+                      value={editCanManageRecords}
+                      onValueChange={setEditCanManageRecords}
+                      trackColor={{ false: '#94A3B8', true: '#FED7AA' }}
+                      thumbColor={editCanManageRecords ? '#EA580C' : '#F1F5F9'}
                     />
                   </View>
                 </ScrollView>
@@ -807,14 +911,202 @@ export default function HouseDetailScreen({ navigation }: any) {
       </Modal>
 
       {/* =================================================================== */}
-      {/* MODAL 2: MỜI THÀNH VIÊN MỚI VÀO NHÀ */}
+      {/* MODAL MỜI THÀNH VIÊN GIA ĐÌNH (GIAO DIỆN 2 BƯỚC) */}
       {/* =================================================================== */}
-      <Modal visible={addMemberModalVisible} transparent animationType="slide">
+      <Modal
+        visible={inviteModalVisible}
+        animationType="slide"
+        presentationStyle="fullScreen"
+        onRequestClose={() => {
+          if (inviteStep === 2) {
+            setInviteStep(1);
+          } else {
+            setInviteModalVisible(false);
+          }
+        }}
+      >
+        <SafeAreaView style={[styles.inviteSafeArea, { backgroundColor: isDarkMode ? '#0B0F19' : '#F8FAFC' }]} edges={['top', 'bottom']}>
+          {/* Top Bar with Back Arrow */}
+          <View style={styles.inviteTopBar}>
+            <TouchableOpacity
+              style={styles.inviteBackBtn}
+              onPress={() => {
+                if (inviteStep === 2) {
+                  setInviteStep(1);
+                } else {
+                  setInviteModalVisible(false);
+                }
+              }}
+              activeOpacity={0.7}
+              hitSlop={{ top: 12, bottom: 12, left: 12, right: 12 }}
+            >
+              <Ionicons name="chevron-back" size={26} color={isDarkMode ? '#F8FAFC' : '#111827'} />
+            </TouchableOpacity>
+          </View>
+
+          <ScrollView contentContainerStyle={styles.inviteScrollContent} showsVerticalScrollIndicator={false}>
+            {/* Screen Title */}
+            <Text style={[styles.inviteMainTitle, { color: isDarkMode ? '#F8FAFC' : '#111827' }]}>
+              Mời thành viên gia đình
+            </Text>
+
+            {/* House Card */}
+            <View style={[styles.inviteHouseCard, { backgroundColor: isDarkMode ? '#1E293B' : '#FFFFFF', borderColor: isDarkMode ? '#334155' : '#E2E8F0' }]}>
+              <View style={[styles.inviteHouseIconBox, { backgroundColor: isDarkMode ? '#1E3A8A' : '#EFF6FF' }]}>
+                <Ionicons name="home" size={22} color="#3B82F6" />
+              </View>
+              <Text style={[styles.inviteHouseName, { color: isDarkMode ? '#F8FAFC' : '#1E293B' }]}>
+                {house?.name || 'Nhà của tôi'}
+              </Text>
+            </View>
+
+            {inviteStep === 1 ? (
+              /* STEP 1: CHỌN QUYỀN TRUY CẬP (HÌNH 1) */
+              <View style={{ marginTop: 22 }}>
+                <Text style={[styles.inviteSectionSubtitle, { color: isDarkMode ? '#94A3B8' : '#64748B' }]}>
+                  Chọn Quyền truy cập
+                </Text>
+
+                <View style={[styles.inviteOptionsGroup, { backgroundColor: isDarkMode ? '#1E293B' : '#FFFFFF', borderColor: isDarkMode ? '#334155' : '#E2E8F0' }]}>
+                  {/* Option 1: Thành viên */}
+                  <TouchableOpacity
+                    style={styles.inviteRoleOptionItem}
+                    activeOpacity={0.8}
+                    onPress={() => setSelectedInviteRole('MEMBER')}
+                  >
+                    <View style={styles.inviteRoleHeaderRow}>
+                      <Text style={[styles.inviteRoleTitle, { color: isDarkMode ? '#F8FAFC' : '#111827' }]}>
+                        Thành viên
+                      </Text>
+                      {selectedInviteRole === 'MEMBER' ? (
+                        <View style={styles.radioChecked}>
+                          <Ionicons name="checkmark" size={14} color="#FFFFFF" />
+                        </View>
+                      ) : (
+                        <View style={styles.radioUnchecked} />
+                      )}
+                    </View>
+                    <Text style={[styles.inviteRoleDesc, { color: isDarkMode ? '#94A3B8' : '#4B5563' }]}>
+                      Cho phép người dùng này có thể sử dụng thiết bị và có một số quyền quản lý thiết bị
+                    </Text>
+                  </TouchableOpacity>
+
+                  <View style={[styles.inviteOptionDivider, { backgroundColor: isDarkMode ? '#334155' : '#F1F5F9' }]} />
+
+                  {/* Option 2: Quản trị viên */}
+                  <TouchableOpacity
+                    style={styles.inviteRoleOptionItem}
+                    activeOpacity={0.8}
+                    onPress={() => setSelectedInviteRole('ADMIN')}
+                  >
+                    <View style={styles.inviteRoleHeaderRow}>
+                      <Text style={[styles.inviteRoleTitle, { color: isDarkMode ? '#F8FAFC' : '#111827' }]}>
+                        Quản trị viên
+                      </Text>
+                      {selectedInviteRole === 'ADMIN' ? (
+                        <View style={styles.radioChecked}>
+                          <Ionicons name="checkmark" size={14} color="#FFFFFF" />
+                        </View>
+                      ) : (
+                        <View style={styles.radioUnchecked} />
+                      )}
+                    </View>
+                    <Text style={[styles.inviteRoleDesc, { color: isDarkMode ? '#94A3B8' : '#4B5563' }]}>
+                      Ngoài quyền của thành viên, quản trị viên còn có quyền quản lý thành viên và nhóm, cũng như các quyền đối với thiết bị, trừ các thao tác liên kết, xóa, chuyển giao và chia sẻ thiết bị.
+                    </Text>
+                  </TouchableOpacity>
+                </View>
+              </View>
+            ) : (
+              /* STEP 2: MỜI THÀNH VIÊN VỚI (HÌNH 2) */
+              <View style={{ marginTop: 22 }}>
+                <Text style={[styles.inviteSectionSubtitle, { color: isDarkMode ? '#94A3B8' : '#64748B' }]}>
+                  Mời thành viên với
+                </Text>
+
+                <View style={[styles.inviteOptionsGroup, { backgroundColor: isDarkMode ? '#1E293B' : '#FFFFFF', borderColor: isDarkMode ? '#334155' : '#E2E8F0' }]}>
+                  {/* 1. Tài khoản */}
+                  <TouchableOpacity
+                    style={styles.inviteMethodRow}
+                    activeOpacity={0.7}
+                    onPress={() => setIsAccountInviteModalVisible(true)}
+                  >
+                    <View style={[styles.inviteMethodIconCircle, { backgroundColor: '#FB923C' }]}>
+                      <Ionicons name="person" size={20} color="#FFFFFF" />
+                    </View>
+                    <Text style={[styles.inviteMethodLabel, { color: isDarkMode ? '#F8FAFC' : '#111827' }]}>
+                      Tài khoản
+                    </Text>
+                    <Ionicons name="chevron-forward" size={18} color="#94A3B8" />
+                  </TouchableOpacity>
+
+                  <View style={[styles.inviteMethodDivider, { backgroundColor: isDarkMode ? '#334155' : '#F1F5F9' }]} />
+
+                  {/* 2. Chia sẻ */}
+                  <TouchableOpacity
+                    style={styles.inviteMethodRow}
+                    activeOpacity={0.7}
+                    onPress={handleShareInvite}
+                  >
+                    <View style={[styles.inviteMethodIconCircle, { backgroundColor: '#10B981' }]}>
+                      <Ionicons name="share-social" size={20} color="#FFFFFF" />
+                    </View>
+                    <Text style={[styles.inviteMethodLabel, { color: isDarkMode ? '#F8FAFC' : '#111827' }]}>
+                      Chia sẻ
+                    </Text>
+                    <Ionicons name="chevron-forward" size={18} color="#94A3B8" />
+                  </TouchableOpacity>
+
+                  <View style={[styles.inviteMethodDivider, { backgroundColor: isDarkMode ? '#334155' : '#F1F5F9' }]} />
+
+                  {/* 3. Sao chép liên kết */}
+                  <TouchableOpacity
+                    style={styles.inviteMethodRow}
+                    activeOpacity={0.7}
+                    onPress={handleCopyLink}
+                  >
+                    <View style={[styles.inviteMethodIconCircle, { backgroundColor: '#6366F1' }]}>
+                      <Ionicons name="link" size={20} color="#FFFFFF" />
+                    </View>
+                    <Text style={[styles.inviteMethodLabel, { color: isDarkMode ? '#F8FAFC' : '#111827' }]}>
+                      Sao chép liên kết
+                    </Text>
+                    <Ionicons name="chevron-forward" size={18} color="#94A3B8" />
+                  </TouchableOpacity>
+                </View>
+              </View>
+            )}
+          </ScrollView>
+
+          {/* Bottom Button cho Step 1: "Tiếp theo" */}
+          {inviteStep === 1 && (
+            <View style={[styles.inviteBottomBtnContainer, { backgroundColor: isDarkMode ? '#0B0F19' : '#F8FAFC' }]}>
+              <TouchableOpacity
+                style={styles.inviteNextBtn}
+                activeOpacity={0.85}
+                onPress={() => setInviteStep(2)}
+              >
+                <Text style={styles.inviteNextBtnText}>Tiếp theo</Text>
+              </TouchableOpacity>
+            </View>
+          )}
+        </SafeAreaView>
+      </Modal>
+
+      {/* =================================================================== */}
+      {/* POPUP NHẬP SỐ ĐIỆN THOẠI & PHÂN QUYỀN KHI CHỌN "TÀI KHOẢN" */}
+      {/* =================================================================== */}
+      <Modal visible={isAccountInviteModalVisible} transparent animationType="slide">
         <View style={styles.modalOverlay}>
           <View style={[styles.modalCard, { backgroundColor: bgCard, borderColor: borderCol }]}>
-            <Text style={[styles.modalTitle, { color: textTitle }]}>Mời người thân / Bác sĩ</Text>
-            <Text style={[styles.modalSub, { color: textSub }]}>
-              Nhập số điện thoại để gửi quyền giám sát và theo dõi người cao tuổi.
+            <Text style={[styles.modalTitle, { color: textTitle }]}>Mời qua Tài khoản</Text>
+            <View style={[styles.inviteRoleBadgeContainer, { backgroundColor: selectedInviteRole === 'ADMIN' ? '#FEF3C7' : '#EFF6FF' }]}>
+              <Text style={[styles.inviteRoleBadgeText, { color: selectedInviteRole === 'ADMIN' ? '#B45309' : '#2563EB' }]}>
+                Vai trò: {selectedInviteRole === 'ADMIN' ? '👑 Quản trị viên' : '👤 Thành viên'}
+              </Text>
+            </View>
+            <Text style={[styles.modalSub, { color: textSub, marginTop: 4 }]}>
+              Nhập số điện thoại để liên kết tài khoản vào nhà và phân quyền truy cập.
             </Text>
 
             <TextInput
@@ -845,78 +1137,237 @@ export default function HouseDetailScreen({ navigation }: any) {
               keyboardType="phone-pad"
             />
 
-            {/* Chọn vai trò */}
-            <View style={styles.rolePickerRow}>
-              <TouchableOpacity
-                style={[
-                  styles.roleOptionBtn,
-                  { backgroundColor: isDarkMode ? '#0F172A' : '#F1F5F9', borderColor: borderCol },
-                  newMemberRole === 'MEMBER' && styles.roleOptionActive,
-                ]}
-                onPress={() => setNewMemberRole('MEMBER')}
-              >
-                <Text
-                  style={[
-                    styles.roleOptionText,
-                    { color: textSub },
-                    newMemberRole === 'MEMBER' && styles.roleOptionTextActive,
-                  ]}
-                >
-                  Thành viên gia đình
+            {/* Chi tiết quyền hạn */}
+            {selectedInviteRole === 'ADMIN' ? (
+              <View style={[styles.adminNoticeBox, { backgroundColor: isDarkMode ? '#1E293B' : '#FEF3C7' }]}>
+                <Ionicons name="shield-checkmark" size={18} color="#D97706" />
+                <Text style={styles.adminNoticeText}>
+                  Quản trị viên được trao toàn quyền quản lý thiết bị, cấu hình thuật toán và giám sát người thân.
                 </Text>
-              </TouchableOpacity>
-              <TouchableOpacity
-                style={[
-                  styles.roleOptionBtn,
-                  { backgroundColor: isDarkMode ? '#0F172A' : '#F1F5F9', borderColor: borderCol },
-                  newMemberRole === 'DOCTOR' && styles.roleOptionActive,
-                ]}
-                onPress={() => setNewMemberRole('DOCTOR')}
-              >
-                <Text
-                  style={[
-                    styles.roleOptionText,
-                    { color: textSub },
-                    newMemberRole === 'DOCTOR' && styles.roleOptionTextActive,
-                  ]}
-                >
-                  Bác sĩ gia đình
-                </Text>
-              </TouchableOpacity>
-            </View>
-
-            {/* Quyền cấp trước */}
-            <View style={{ marginTop: 14 }}>
-              <View style={[styles.permCheckRow, { borderColor: borderCol }]}>
-                <Text style={[styles.permCheckLabel, { color: textTitle }]}>👁️ Xem camera an ninh AI</Text>
-                <Switch
-                  value={newCanViewCamera}
-                  onValueChange={setNewCanViewCamera}
-                  trackColor={{ false: '#94A3B8', true: '#A7F3D0' }}
-                  thumbColor={newCanViewCamera ? '#059669' : '#F1F5F9'}
-                />
               </View>
+            ) : (
+              <View style={{ marginTop: 12 }}>
+                <View style={[styles.permCheckRow, { borderColor: borderCol }]}>
+                  <Text style={[styles.permCheckLabel, { color: textTitle }]}>👁️ Xem camera an ninh AI</Text>
+                  <Switch
+                    value={newCanViewCamera}
+                    onValueChange={setNewCanViewCamera}
+                    trackColor={{ false: '#94A3B8', true: '#A7F3D0' }}
+                    thumbColor={newCanViewCamera ? '#059669' : '#F1F5F9'}
+                  />
+                </View>
 
-              <View style={[styles.permCheckRow, { borderColor: borderCol }]}>
-                <Text style={[styles.permCheckLabel, { color: textTitle }]}>🩺 Theo dõi nhịp tim & SpO2</Text>
-                <Switch
-                  value={newCanViewHealth}
-                  onValueChange={setNewCanViewHealth}
-                  trackColor={{ false: '#94A3B8', true: '#BFDBFE' }}
-                  thumbColor={newCanViewHealth ? '#2563EB' : '#F1F5F9'}
-                />
+                <View style={[styles.permCheckRow, { borderColor: borderCol }]}>
+                  <Text style={[styles.permCheckLabel, { color: textTitle }]}>🩺 Theo dõi nhịp tim & SpO2</Text>
+                  <Switch
+                    value={newCanViewHealth}
+                    onValueChange={setNewCanViewHealth}
+                    trackColor={{ false: '#94A3B8', true: '#BFDBFE' }}
+                    thumbColor={newCanViewHealth ? '#2563EB' : '#F1F5F9'}
+                  />
+                </View>
+
+                <View style={[styles.permCheckRow, { borderColor: borderCol }]}>
+                  <Text style={[styles.permCheckLabel, { color: textTitle }]}>⚙️ Cấu hình thiết bị & Tham số AI</Text>
+                  <Switch
+                    value={newCanManageDevices}
+                    onValueChange={setNewCanManageDevices}
+                    trackColor={{ false: '#94A3B8', true: '#FED7AA' }}
+                    thumbColor={newCanManageDevices ? '#F97316' : '#F1F5F9'}
+                  />
+                </View>
+
+                <View style={[styles.permCheckRow, { borderColor: borderCol }]}>
+                  <Text style={[styles.permCheckLabel, { color: textTitle }]}>💊 Quản lý Lịch thuốc & Bệnh án</Text>
+                  <Switch
+                    value={newCanManageRecords}
+                    onValueChange={setNewCanManageRecords}
+                    trackColor={{ false: '#94A3B8', true: '#DDD6FE' }}
+                    thumbColor={newCanManageRecords ? '#7C3AED' : '#F1F5F9'}
+                  />
+                </View>
               </View>
-            </View>
+            )}
 
             <View style={styles.modalActionButtons}>
               <TouchableOpacity
                 style={[styles.cancelBtn, { backgroundColor: isDarkMode ? '#0F172A' : '#E2E8F0', borderColor: borderCol }]}
-                onPress={() => setAddMemberModalVisible(false)}
+                onPress={() => setIsAccountInviteModalVisible(false)}
               >
                 <Text style={[styles.cancelBtnText, { color: textSub }]}>Hủy</Text>
               </TouchableOpacity>
               <TouchableOpacity style={styles.saveBtn} onPress={handleAddMember}>
                 <Text style={styles.saveBtnText}>Gửi lời mời & Cấp quyền</Text>
+              </TouchableOpacity>
+            </View>
+          </View>
+        </View>
+      </Modal>
+
+      {/* =================================================================== */}
+      {/* POPUP CHIA SẺ TRỰC TIẾP TRÊN APP KHI NHẤN "CHIA SẺ" */}
+      {/* =================================================================== */}
+      <Modal
+        visible={isShareModalVisible}
+        transparent
+        animationType="slide"
+        onRequestClose={() => setIsShareModalVisible(false)}
+      >
+        <View style={styles.modalOverlay}>
+          <View style={[styles.shareModalCard, { backgroundColor: bgCard, borderColor: borderCol }]}>
+            {/* Header */}
+            <View style={styles.shareHeaderRow}>
+              <View style={[styles.shareIconBox, { backgroundColor: '#DCFCE7' }]}>
+                <Ionicons name="share-social" size={22} color="#10B981" />
+              </View>
+              <View style={{ flex: 1 }}>
+                <Text style={[styles.shareModalTitle, { color: textTitle }]}>
+                  Chia sẻ lời mời gia đình
+                </Text>
+                <Text style={[styles.shareModalSub, { color: textSub }]}>
+                  Mời người thân vào căn nhà trực tiếp trên app
+                </Text>
+              </View>
+              <TouchableOpacity
+                onPress={() => setIsShareModalVisible(false)}
+                style={[styles.shareCloseBtn, { backgroundColor: isDarkMode ? '#334155' : '#F1F5F9' }]}
+                hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}
+              >
+                <Ionicons name="close" size={18} color={textSub} />
+              </TouchableOpacity>
+            </View>
+
+            {/* Thông tin căn nhà & vai trò */}
+            <View style={[styles.shareHouseBox, { backgroundColor: isDarkMode ? '#0F172A' : '#F8FAFC', borderColor: borderCol }]}>
+              <View style={styles.shareHouseRow}>
+                <View style={styles.shareHouseIconSmall}>
+                  <Ionicons name="home" size={16} color="#3B82F6" />
+                </View>
+                <Text style={[styles.shareHouseNameText, { color: textTitle }]}>
+                  {house?.name || 'Nhà của tôi'}
+                </Text>
+                <View style={[styles.shareRolePill, { backgroundColor: selectedInviteRole === 'ADMIN' ? '#FEF3C7' : '#EFF6FF' }]}>
+                  <Text style={[styles.shareRolePillText, { color: selectedInviteRole === 'ADMIN' ? '#B45309' : '#2563EB' }]}>
+                    {selectedInviteRole === 'ADMIN' ? '👑 Quản trị viên' : '👤 Thành viên'}
+                  </Text>
+                </View>
+              </View>
+
+              {/* Mã mời nổi bật */}
+              <View style={[styles.inviteCodeContainer, { backgroundColor: isDarkMode ? '#1E293B' : '#FFF' }]}>
+                <Text style={[styles.inviteCodeLabel, { color: textSub }]}>MÃ MỜI THAM GIA NHÀ</Text>
+                <View style={styles.inviteCodeValueRow}>
+                  <Text style={[styles.inviteCodeText, { color: Colors.primary }]}>
+                    {`CARE-${household_id ? String(household_id).slice(-4).toUpperCase() : '8869'}`}
+                  </Text>
+                  <TouchableOpacity
+                    style={styles.copyCodeMiniBtn}
+                    onPress={() => {
+                      triggerToast('Đã sao chép mã mời vào bộ nhớ tạm!');
+                    }}
+                  >
+                    <Ionicons name="copy-outline" size={14} color="#FFF" />
+                    <Text style={styles.copyCodeMiniText}>Sao chép mã</Text>
+                  </TouchableOpacity>
+                </View>
+                <Text style={styles.inviteCodeExpireText}>⏱️ Mã có hiệu lực trong 48 giờ</Text>
+              </View>
+            </View>
+
+            {/* Khung nội dung lời mời mẫu */}
+            <View style={[styles.shareMessagePreviewBox, { backgroundColor: isDarkMode ? '#1E293B' : '#F1F5F9' }]}>
+              <Text style={[styles.shareMessagePreviewLabel, { color: textSub }]}>Nội dung tin nhắn sẽ gửi:</Text>
+              <Text style={[styles.shareMessagePreviewContent, { color: isDarkMode ? '#E2E8F0' : '#334155' }]} numberOfLines={3}>
+                {`Chào bạn! Bạn nhận được lời mời tham gia "${house?.name || 'Nhà của tôi'}" với vai trò ${selectedInviteRole === 'ADMIN' ? 'Quản trị viên' : 'Thành viên'}. Mã mời: CARE-${household_id ? String(household_id).slice(-4).toUpperCase() : '8869'}. Tải app Smart Elderly Care AI để kết nối!`}
+              </Text>
+            </View>
+
+            {/* Kênh chia sẻ nhanh trực tiếp */}
+            <Text style={[styles.shareChannelsTitle, { color: textSub }]}>Chọn ứng dụng chia sẻ:</Text>
+            <View style={styles.shareChannelsRow}>
+              {/* Kênh 1: Tin nhắn SMS */}
+              <TouchableOpacity
+                style={styles.shareChannelItem}
+                onPress={() => {
+                  const msg = `Mời bạn tham gia căn nhà "${house?.name || 'Nhà của tôi'}" trên Smart Elderly Care AI. Mã mời: CARE-${household_id ? String(household_id).slice(-4).toUpperCase() : '8869'}. Tải ứng dụng tại: https://smartcare.vn/app`;
+                  Linking.openURL(`sms:?body=${encodeURIComponent(msg)}`).catch(() => {
+                    triggerToast('Không thể mở tin nhắn SMS.');
+                  });
+                }}
+              >
+                <View style={[styles.shareChannelIconBox, { backgroundColor: '#34D399' }]}>
+                  <Ionicons name="chatbubble-ellipses" size={22} color="#FFF" />
+                </View>
+                <Text style={[styles.shareChannelName, { color: textTitle }]}>Tin nhắn</Text>
+              </TouchableOpacity>
+
+              {/* Kênh 2: Zalo */}
+              <TouchableOpacity
+                style={styles.shareChannelItem}
+                onPress={() => {
+                  Linking.openURL('https://zalo.me').catch(() => {
+                    triggerToast('Đã sao chép link mời để gửi qua Zalo!');
+                  });
+                  triggerToast('Đã sao chép nội dung để gửi qua Zalo!');
+                }}
+              >
+                <View style={[styles.shareChannelIconBox, { backgroundColor: '#0284C7' }]}>
+                  <Ionicons name="paper-plane" size={22} color="#FFF" />
+                </View>
+                <Text style={[styles.shareChannelName, { color: textTitle }]}>Zalo</Text>
+              </TouchableOpacity>
+
+              {/* Kênh 3: Sao chép toàn bộ */}
+              <TouchableOpacity
+                style={styles.shareChannelItem}
+                onPress={() => {
+                  triggerToast('Đã sao chép toàn bộ nội dung lời mời!');
+                }}
+              >
+                <View style={[styles.shareChannelIconBox, { backgroundColor: '#8B5CF6' }]}>
+                  <Ionicons name="copy" size={22} color="#FFF" />
+                </View>
+                <Text style={[styles.shareChannelName, { color: textTitle }]}>Sao chép</Text>
+              </TouchableOpacity>
+
+              {/* Kênh 4: Hệ thống khác */}
+              <TouchableOpacity
+                style={styles.shareChannelItem}
+                onPress={() => {
+                  handleNativeShare();
+                }}
+              >
+                <View style={[styles.shareChannelIconBox, { backgroundColor: '#F97316' }]}>
+                  <Ionicons name="ellipsis-horizontal" size={22} color="#FFF" />
+                </View>
+                <Text style={[styles.shareChannelName, { color: textTitle }]}>Khác</Text>
+              </TouchableOpacity>
+            </View>
+
+            {/* Toast thông báo đã copy */}
+            {copySuccessToast && (
+              <View style={styles.shareToastBadge}>
+                <Ionicons name="checkmark-circle" size={16} color="#059669" />
+                <Text style={styles.shareToastText}>{copySuccessToast}</Text>
+              </View>
+            )}
+
+            {/* Nút hành động chính */}
+            <View style={styles.shareModalBtnRow}>
+              <TouchableOpacity
+                style={[styles.shareModalCancelBtn, { borderColor: borderCol, backgroundColor: isDarkMode ? '#0F172A' : '#F1F5F9' }]}
+                onPress={() => setIsShareModalVisible(false)}
+              >
+                <Text style={[styles.shareModalCancelText, { color: textSub }]}>Đóng</Text>
+              </TouchableOpacity>
+              <TouchableOpacity
+                style={styles.shareModalPrimaryBtn}
+                onPress={() => {
+                  triggerToast('Đã sao chép lời mời thành công!');
+                }}
+              >
+                <Ionicons name="copy" size={16} color="#FFF" style={{ marginRight: 6 }} />
+                <Text style={styles.shareModalPrimaryText}>Sao chép lời mời</Text>
               </TouchableOpacity>
             </View>
           </View>
@@ -1082,7 +1533,7 @@ const styles = StyleSheet.create({
     paddingVertical: 2,
     borderRadius: 6,
   },
-  roleBadgeText: {
+  inviteRoleBadgeText: {
     fontSize: 10,
     fontWeight: '800',
   },
@@ -1370,5 +1821,387 @@ const styles = StyleSheet.create({
     color: '#FFF',
     fontWeight: '700',
     fontSize: 14,
+  },
+
+  // Styles luồng Mời thành viên gia đình (Step 1 & Step 2)
+  inviteSafeArea: {
+    flex: 1,
+  },
+  inviteTopBar: {
+    paddingHorizontal: 16,
+    paddingTop: 8,
+    paddingBottom: 4,
+  },
+  inviteBackBtn: {
+    width: 40,
+    height: 40,
+    justifyContent: 'center',
+    alignItems: 'flex-start',
+  },
+  inviteScrollContent: {
+    paddingHorizontal: 20,
+    paddingTop: 8,
+    paddingBottom: 30,
+  },
+  inviteMainTitle: {
+    fontSize: 24,
+    fontWeight: '800',
+    marginBottom: 20,
+    letterSpacing: -0.5,
+  },
+  inviteHouseCard: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    padding: 16,
+    borderRadius: 18,
+    borderWidth: 1,
+    gap: 14,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 1 },
+    shadowOpacity: 0.05,
+    shadowRadius: 4,
+    elevation: 2,
+  },
+  inviteHouseIconBox: {
+    width: 44,
+    height: 44,
+    borderRadius: 12,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  inviteHouseName: {
+    fontSize: 16,
+    fontWeight: '700',
+  },
+  inviteSectionSubtitle: {
+    fontSize: 13,
+    fontWeight: '600',
+    marginBottom: 12,
+    paddingHorizontal: 2,
+  },
+  inviteOptionsGroup: {
+    borderRadius: 18,
+    borderWidth: 1,
+    overflow: 'hidden',
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 1 },
+    shadowOpacity: 0.05,
+    shadowRadius: 4,
+    elevation: 2,
+  },
+  inviteRoleOptionItem: {
+    padding: 16,
+  },
+  inviteRoleHeaderRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    marginBottom: 6,
+  },
+  inviteRoleTitle: {
+    fontSize: 16,
+    fontWeight: '700',
+  },
+  radioChecked: {
+    width: 22,
+    height: 22,
+    borderRadius: 11,
+    backgroundColor: '#F97316',
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  radioUnchecked: {
+    width: 22,
+    height: 22,
+    borderRadius: 11,
+    borderWidth: 1.5,
+    borderColor: '#D1D5DB',
+  },
+  inviteRoleDesc: {
+    fontSize: 13.5,
+    lineHeight: 19,
+  },
+  inviteOptionDivider: {
+    height: 1,
+  },
+  inviteBottomBtnContainer: {
+    paddingHorizontal: 20,
+    paddingVertical: 16,
+  },
+  inviteNextBtn: {
+    backgroundColor: '#F97316',
+    height: 52,
+    borderRadius: 26,
+    alignItems: 'center',
+    justifyContent: 'center',
+    shadowColor: '#F97316',
+    shadowOffset: { width: 0, height: 4 },
+    shadowOpacity: 0.35,
+    shadowRadius: 8,
+    elevation: 4,
+  },
+  inviteNextBtnText: {
+    color: '#FFFFFF',
+    fontSize: 16,
+    fontWeight: '700',
+  },
+  inviteMethodRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    paddingVertical: 14,
+    paddingHorizontal: 16,
+    gap: 14,
+  },
+  inviteMethodIconCircle: {
+    width: 40,
+    height: 40,
+    borderRadius: 20,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  inviteMethodLabel: {
+    flex: 1,
+    fontSize: 15.5,
+    fontWeight: '700',
+  },
+  inviteMethodDivider: {
+    height: 1,
+    marginLeft: 70,
+  },
+  inviteRoleBadgeContainer: {
+    alignSelf: 'center',
+    paddingHorizontal: 12,
+    paddingVertical: 5,
+    borderRadius: 12,
+    marginTop: 6,
+    marginBottom: 6,
+  },
+  adminNoticeBox: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    padding: 12,
+    borderRadius: 12,
+    gap: 10,
+    marginTop: 14,
+  },
+  adminNoticeText: {
+    flex: 1,
+    color: '#B45309',
+    fontSize: 12,
+    lineHeight: 17,
+    fontWeight: '600',
+  },
+
+  // Styles Popup Chia sẻ trực tiếp trên App
+  shareModalCard: {
+    width: '100%',
+    maxWidth: 440,
+    borderRadius: 20,
+    padding: 20,
+    borderWidth: 1,
+  },
+  shareHeaderRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 12,
+    marginBottom: 16,
+  },
+  shareIconBox: {
+    width: 44,
+    height: 44,
+    borderRadius: 14,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  shareModalTitle: {
+    fontSize: 17,
+    fontWeight: '800',
+  },
+  shareModalSub: {
+    fontSize: 12,
+    marginTop: 2,
+  },
+  shareCloseBtn: {
+    width: 32,
+    height: 32,
+    borderRadius: 16,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  shareHouseBox: {
+    borderRadius: 14,
+    padding: 14,
+    borderWidth: 1,
+    marginBottom: 14,
+  },
+  shareHouseRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 8,
+    marginBottom: 12,
+  },
+  shareHouseIconSmall: {
+    width: 28,
+    height: 28,
+    borderRadius: 8,
+    backgroundColor: '#EFF6FF',
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  shareHouseNameText: {
+    fontSize: 15,
+    fontWeight: '700',
+    flex: 1,
+  },
+  shareRolePill: {
+    paddingHorizontal: 10,
+    paddingVertical: 4,
+    borderRadius: 10,
+  },
+  shareRolePillText: {
+    fontSize: 12,
+    fontWeight: '700',
+  },
+  inviteCodeContainer: {
+    borderRadius: 12,
+    padding: 12,
+    alignItems: 'center',
+    borderWidth: 1.5,
+    borderColor: '#FED7AA',
+    borderStyle: 'dashed',
+  },
+  inviteCodeLabel: {
+    fontSize: 11,
+    fontWeight: '700',
+    letterSpacing: 0.5,
+    marginBottom: 4,
+  },
+  inviteCodeValueRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 10,
+    marginVertical: 4,
+  },
+  inviteCodeText: {
+    fontSize: 22,
+    fontWeight: '900',
+    letterSpacing: 2,
+  },
+  copyCodeMiniBtn: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 4,
+    backgroundColor: Colors.primary,
+    paddingHorizontal: 10,
+    paddingVertical: 5,
+    borderRadius: 8,
+  },
+  copyCodeMiniText: {
+    color: '#FFF',
+    fontSize: 11,
+    fontWeight: '700',
+  },
+  inviteCodeExpireText: {
+    fontSize: 11,
+    color: '#64748B',
+    marginTop: 4,
+  },
+  shareMessagePreviewBox: {
+    padding: 12,
+    borderRadius: 12,
+    marginBottom: 14,
+  },
+  shareMessagePreviewLabel: {
+    fontSize: 11,
+    fontWeight: '700',
+    marginBottom: 4,
+  },
+  shareMessagePreviewContent: {
+    fontSize: 12.5,
+    lineHeight: 18,
+  },
+  shareChannelsTitle: {
+    fontSize: 12,
+    fontWeight: '700',
+    marginBottom: 10,
+  },
+  shareChannelsRow: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    marginBottom: 14,
+  },
+  shareChannelItem: {
+    alignItems: 'center',
+    flex: 1,
+  },
+  shareChannelIconBox: {
+    width: 48,
+    height: 48,
+    borderRadius: 24,
+    alignItems: 'center',
+    justifyContent: 'center',
+    marginBottom: 6,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.1,
+    shadowRadius: 4,
+    elevation: 3,
+  },
+  shareChannelName: {
+    fontSize: 12,
+    fontWeight: '600',
+  },
+  shareToastBadge: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: 6,
+    backgroundColor: '#DCFCE7',
+    paddingVertical: 8,
+    paddingHorizontal: 14,
+    borderRadius: 10,
+    marginBottom: 12,
+    alignSelf: 'center',
+  },
+  shareToastText: {
+    color: '#065F46',
+    fontSize: 12,
+    fontWeight: '700',
+  },
+  shareModalBtnRow: {
+    flexDirection: 'row',
+    gap: 10,
+    marginTop: 4,
+  },
+  shareModalCancelBtn: {
+    flex: 1,
+    borderWidth: 1,
+    borderRadius: 12,
+    paddingVertical: 12,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  shareModalCancelText: {
+    fontSize: 14,
+    fontWeight: '600',
+  },
+  shareModalPrimaryBtn: {
+    flex: 1.8,
+    flexDirection: 'row',
+    backgroundColor: Colors.primary,
+    borderRadius: 12,
+    paddingVertical: 12,
+    alignItems: 'center',
+    justifyContent: 'center',
+    shadowColor: Colors.primary,
+    shadowOffset: { width: 0, height: 3 },
+    shadowOpacity: 0.25,
+    shadowRadius: 6,
+    elevation: 3,
+  },
+  shareModalPrimaryText: {
+    color: '#FFF',
+    fontSize: 14,
+    fontWeight: '700',
   },
 });

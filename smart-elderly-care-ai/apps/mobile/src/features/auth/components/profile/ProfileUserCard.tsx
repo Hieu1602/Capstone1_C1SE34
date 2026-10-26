@@ -51,6 +51,10 @@ export const ProfileUserCard: React.FC<ProfileUserCardProps> = ({
           >
             {displayName}
           </Text>
+          <View style={styles.fbRoleBadgeRow}>
+            <Ionicons name="person" size={11} color="#FF7A00" />
+            <Text style={styles.fbRoleBadgeText}>Thành viên gia đình</Text>
+          </View>
         </View>
         <View style={styles.fbProfileRightBadge}>
           <Ionicons name="chevron-forward" size={20} color="#64748B" />
@@ -122,6 +126,23 @@ const styles = StyleSheet.create({
     flex: 1,
     marginLeft: 12,
     justifyContent: 'center',
+  },
+  
+  fbRoleBadgeRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 4,
+    marginTop: 2,
+    backgroundColor: '#FFF7ED',
+    paddingHorizontal: 8,
+    paddingVertical: 2,
+    borderRadius: 8,
+    alignSelf: 'flex-start',
+  },
+  fbRoleBadgeText: {
+    fontSize: 11.5,
+    fontWeight: '600',
+    color: '#EA580C',
   },
   fbProfileName: {
     fontSize: 17,

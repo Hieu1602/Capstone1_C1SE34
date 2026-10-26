@@ -5,12 +5,13 @@
 // ==============================================================================
 
 import React, { useState, useEffect } from 'react';
-import { View, StyleSheet, TouchableOpacity, ScrollView } from 'react-native';
+import { View, StyleSheet, TouchableOpacity, ScrollView, RefreshControl } from 'react-native';
 import { LocalizedAlert as Alert, LocalizedText as Text } from '../../../i18n/LocalizedComponents';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
 import { Colors, Shadows } from '../../../theme/colors';
 import { useVitalStore } from '../../../store/useVitalStore';
+import { useAuthStore } from '../../../store/useAuthStore';
 import { useTheme } from '../../../store/useThemeStore';
 import { systemApi } from '../../../services/api';
 import { alertsWS } from '../../../services/websocket';
@@ -30,7 +31,38 @@ export default function HomeScreen({ navigation }: any) {
     currentVitals, incidents, activeDevice, alarmSnooze, setAlarmSnooze,
     cancelAlarmSnooze, todayReminders, markMedicationTaken, fetchVitals,
     fetchSystemMode, fetchReminders, fetchNotifications, syncAllWithBackend,
+    fetchHouseFromBackend, fetchDevicesFromBackend, iotDevices,
   } = useVitalStore();
+
+  const { userRole, full_name, userName, phone_number, userPhone } = useAuthStore();
+  const displayName = full_name || userName || 'Thành viên';
+  const isMember = userRole === 'member' || !userRole || userRole === 'user';
+  const hasLinkedHouse = Boolean(house?.id && house?.hasHouse !== false && house?.name && house.name.trim() !== '');
+  const hasLinkedDevices = (iotDevices || []).length > 0;
+  const isUserEmptyMember = isMember && !hasLinkedHouse && !hasLinkedDevices;
+
+  const [isRefreshing, setIsRefreshing] = useState(false);
+
+  const handleRefreshData = async () => {
+    setIsRefreshing(true);
+    try {
+      await Promise.allSettled([
+        syncAllWithBackend?.(),
+        fetchHouseFromBackend?.(),
+        fetchDevicesFromBackend?.(),
+        fetchVitals(),
+        fetchNotifications(),
+      ]);
+      Alert.alert(
+        '🔄 Đã làm mới',
+        hasLinkedHouse
+          ? 'Đã tải thành công dữ liệu ngôi nhà và thiết bị mới nhất.'
+          : 'Hiện tại tài khoản vẫn chưa được liên kết vào căn nhà nào. Hãy nhắc Chủ hộ thêm số điện thoại của bạn vào nhà nhé!'
+      );
+    } finally {
+      setIsRefreshing(false);
+    }
+  };
 
   const unreadIncidentsCount = (incidents || []).filter((item) => !item.is_acknowledged).length;
   const pendingMedCount = (todayReminders?.medications || []).filter((m) => !m.taken).length;
@@ -211,7 +243,7 @@ export default function HomeScreen({ navigation }: any) {
       {/* 1. Header */}
       <View style={styles.topHeader}>
         <TouchableOpacity style={styles.houseTitleRow} onPress={() => navigation.navigate('HouseDetail')} activeOpacity={0.7}>
-          <Text style={[styles.houseTitleText, { color: colors.textPrimary }]}>{house.name}</Text>
+          <Text style={[styles.houseTitleText, { color: colors.textPrimary }]}>{house.name || 'Nhà của tôi'}</Text>
           <Ionicons name="chevron-down" size={16} color={colors.textPrimary} style={{ marginLeft: 4 }} />
         </TouchableOpacity>
 
@@ -231,9 +263,126 @@ export default function HomeScreen({ navigation }: any) {
 
       <AdminMarqueeBanner targetAudience="caregivers" />
 
-      <ScrollView showsVerticalScrollIndicator={false} contentContainerStyle={styles.scrollContent}>
+      <ScrollView
+        showsVerticalScrollIndicator={false}
+        contentContainerStyle={styles.scrollContent}
+        refreshControl={
+          <RefreshControl
+            refreshing={isRefreshing}
+            onRefresh={handleRefreshData}
+            tintColor={Colors.primary}
+            colors={[Colors.primary]}
+          />
+        }
+      >
         {/* 2. Chế độ an ninh */}
         <View style={styles.modesRow}>
+          {[
+            { key: 'AWAY', label: 'Xa', icon: 'exit-outline', activeColor: '#10B981', activeStyle: styles.modePillActiveAway, textColor: '#047857', isActive: house.currentMode === 'AWAY', onPress: () => handleSelectHouseMode('AWAY') },
+            { key: 'HOME', label: 'Ở nhà', icon: 'home', activeColor: '#3B82F6', activeStyle: styles.modePillActiveHome, textColor: '#1D4ED8', isActive: house.currentMode === 'HOME', onPress: () => handleSelectHouseMode('HOME') },
+            { key: 'DISARM', label: snoozeButtonLabel, icon: isSnoozeActive ? 'volume-mute' : 'notifications-off-outline', activeColor: isSnoozeActive ? '#F59E0B' : '#64748B', activeStyle: isSnoozeActive ? styles.modePillActiveSnooze : styles.modePillActiveDisarm, textColor: isSnoozeActive ? (isDarkMode ? '#FBBF24' : '#D97706') : '#475569', isActive: isSnoozeActive || house.currentMode === 'DISARM', onPress: handlePressSnoozeButton },
+          ].map((m) => (
+            <TouchableOpacity
+              key={m.key}
+              style={[styles.modePill, m.isActive ? m.activeStyle : styles.modePillInactive, !m.isActive && isDarkMode && { backgroundColor: colors.card, borderColor: colors.border }]}
+              onPress={m.onPress}
+              activeOpacity={0.75}
+            >
+              <View style={[styles.modeIconCircle, { backgroundColor: m.isActive ? m.activeColor : (isDarkMode ? colors.surfaceSubtle : '#E2E8F0') }]}>
+                <Ionicons name={m.icon as any} size={14} color={m.isActive ? '#FFF' : (isDarkMode ? colors.textMuted : '#94A3B8')} />
+              </View>
+              <Text style={[styles.modePillText, { color: m.isActive ? m.textColor : (isDarkMode ? colors.textMuted : '#94A3B8') }]} numberOfLines={1}>{m.label}</Text>
+            </TouchableOpacity>
+          ))}
+        </View>
+
+        {/* 2.4. Banner Lịch khám Bác sĩ mới chờ Gia đình xác nhận */}
+        {pendingAppointmentNotice && (
+          <TouchableOpacity
+            style={[styles.appointmentBanner, isDarkMode && { backgroundColor: 'rgba(217, 119, 6, 0.12)', borderColor: '#D97706' }]}
+            activeOpacity={0.88}
+            onPress={() => setFamilyAppointmentsModalVisible(true)}
+          >
+            <View style={styles.appointmentBannerLeft}>
+              <View style={[styles.appointmentIconCircle, isDarkMode && { backgroundColor: 'rgba(217, 119, 6, 0.25)' }]}>
+                <Ionicons name="calendar" size={20} color="#D97706" />
+              </View>
+              <View style={{ flex: 1, marginLeft: 10 }}>
+                <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6 }}>
+                  <Text style={[styles.appointmentBannerTitle, isDarkMode && { color: '#FBBF24' }]}>🗓️ LỊCH KHÁM MỚI TỪ BÁC SĨ</Text>
+                  <View style={styles.appointmentBadge}><Text style={styles.appointmentBadgeText}>Chờ xác nhận</Text></View>
+                </View>
+                <Text style={[styles.appointmentBannerSubtitle, isDarkMode && { color: colors.textSecondary }]} numberOfLines={2}>
+                  {pendingAppointmentNotice.message}
+                </Text>
+              </View>
+            </View>
+            <View style={[styles.appointmentActionBtn, isDarkMode && { backgroundColor: 'rgba(217, 119, 6, 0.25)' }]}>
+              <Text style={[styles.appointmentActionBtnText, isDarkMode && { color: '#FBBF24' }]}>Xác nhận</Text>
+              <Ionicons name="chevron-forward" size={14} color="#D97706" />
+            </View>
+          </TouchableOpacity>
+        )}
+
+        {/* 2.5. Banner Cảnh báo Khẩn cấp / Trạng thái ổn định */}
+        {hasEmergency ? (
+          <TouchableOpacity
+            style={styles.emergencyBanner}
+            activeOpacity={0.9}
+            onPress={() => {
+              if (activeEmergency) {
+                navigation.navigate('EventDetail', {
+                  incidentId: activeEmergency.id, id: activeEmergency.id, alert_type: activeEmergency.alert_type,
+                  alert_level: activeEmergency.alert_level || 'CRITICAL', message: activeEmergency.message,
+                  confidence: activeEmergency.confidence, thumbnail_url: activeEmergency.thumbnail_url ?? null,
+                  video_clip_url: activeEmergency.video_clip_url ?? null, is_acknowledged: activeEmergency.is_acknowledged ?? false,
+                });
+              } else { navigation.navigate('Alerts'); }
+            }}
+          >
+            <View style={styles.emergencyBannerHeader}>
+              <View style={styles.emergencySirenPulse}><Ionicons name="warning" size={20} color="#FFF" /></View>
+              <View style={{ flex: 1, marginLeft: 10 }}>
+                <Text style={styles.emergencyBannerTitle}>🚨 CẢNH BÁO KHẨN CẤP ĐANG KÍCH HOẠT</Text>
+                <Text style={styles.emergencyBannerMessage} numberOfLines={2}>
+                  {activeEmergency?.message || 'Phát hiện sự cố té ngã (YOLO-Pose AI). Cần kiểm tra video và xác nhận xử lý ngay!'}
+                </Text>
+              </View>
+              <View style={styles.emergencyActionBtn}>
+                <Text style={styles.emergencyActionBtnText}>Xem & Xử lý</Text>
+                <Ionicons name="chevron-forward" size={14} color="#DC2626" />
+              </View>
+            </View>
+          </TouchableOpacity>
+        ) : (
+          <View style={[styles.stableHealthCard, { backgroundColor: isDarkMode ? '#064E3B18' : '#F0FDF4', borderColor: isDarkMode ? '#065F46' : '#BBF7D0' }]}>
+            <View style={styles.stablePulseDot} />
+            <Ionicons name="shield-checkmark" size={18} color="#16A34A" />
+            <Text style={[styles.stableHealthText, { color: isDarkMode ? '#86EFAC' : '#15803D' }]}>
+              Sức khoẻ ổn định • Hệ thống giám sát AI đang bảo vệ 24/7
+            </Text>
+          </View>
+        )}
+
+        {isUserEmptyMember ? (
+          <View style={styles.emptyContainer}>
+            {/* 1. Empty Illustration */}
+            <View style={[styles.emptyIconCircle, isDarkMode && { backgroundColor: 'rgba(255,255,255,0.06)' }]}>
+              <Ionicons name="home-outline" size={54} color={isDarkMode ? '#64748B' : '#94A3B8'} />
+            </View>
+
+            <Text style={[styles.emptyTitle, { color: colors.textPrimary }]}>
+              Chưa có dữ liệu theo dõi
+            </Text>
+
+            <Text style={[styles.emptySubtitle, { color: colors.textSecondary }]}>
+              Tài khoản thành viên mới chưa được liên kết với bất kỳ căn nhà hay thiết bị theo dõi nào. Sau khi được Chủ hộ thêm vào nhà, hệ thống sẽ tự động hiển thị camera và sinh hiệu người thân tại đây.
+            </Text>
+          </View>
+        ) : (
+          <>
+            {/* 2. Chế độ an ninh */}
+            <View style={styles.modesRow}>
           {[
             { key: 'AWAY', label: 'Xa', icon: 'exit-outline', activeColor: '#10B981', activeStyle: styles.modePillActiveAway, textColor: '#047857', isActive: house.currentMode === 'AWAY', onPress: () => handleSelectHouseMode('AWAY') },
             { key: 'HOME', label: 'Ở nhà', icon: 'home', activeColor: '#3B82F6', activeStyle: styles.modePillActiveHome, textColor: '#1D4ED8', isActive: house.currentMode === 'HOME', onPress: () => handleSelectHouseMode('HOME') },
@@ -366,6 +515,8 @@ export default function HomeScreen({ navigation }: any) {
 
         {/* 8. Khối Xu hướng sinh hiệu hôm nay */}
         <HealthTrendsCard currentVitals={currentVitals} isDarkMode={isDarkMode} colors={colors} navigation={navigation} />
+          </>
+        )}
       </ScrollView>
 
       {/* Modal Tạm dừng chuông báo động */}
@@ -438,4 +589,42 @@ const styles = StyleSheet.create({
   appointmentBannerSubtitle: { fontSize: 12, color: '#475569', marginTop: 2, lineHeight: 16 },
   appointmentActionBtn: { flexDirection: 'row', alignItems: 'center', backgroundColor: '#FEF3C7', paddingHorizontal: 8, paddingVertical: 6, borderRadius: 10, gap: 2 },
   appointmentActionBtnText: { fontSize: 11, fontWeight: '700', color: '#B45309' },
+  emptyContainer: {
+    paddingTop: 32,
+    paddingBottom: 40,
+    alignItems: 'center',
+    paddingHorizontal: 8,
+  },
+  emptyIconCircle: {
+    width: 96,
+    height: 96,
+    borderRadius: 48,
+    backgroundColor: '#F1F5F9',
+    alignItems: 'center',
+    justifyContent: 'center',
+    marginBottom: 20,
+    ...Shadows.soft,
+  },
+  emptyTitle: {
+    fontSize: 20,
+    fontWeight: '800',
+    textAlign: 'center',
+    marginBottom: 8,
+  },
+  emptySubtitle: {
+    fontSize: 13.5,
+    textAlign: 'center',
+    lineHeight: 20,
+    paddingHorizontal: 16,
+    marginBottom: 24,
+  },
+  userAvatarCircle: {
+    width: 38,
+    height: 38,
+    borderRadius: 19,
+    backgroundColor: Colors.primary,
+    alignItems: 'center',
+    justifyContent: 'center',
+    marginRight: 10,
+  },
 });

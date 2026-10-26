@@ -118,14 +118,18 @@ export const authApi = {
   verifyOtp: (phone: string, otp_code: string) => api.post('/auth/verify-otp', { phone, otp_code }),
   verifyCchn: (cchn_number: string, full_name: string) =>
     api.post('/auth/verify-cchn', { cchn_number, full_name }),
-  login: (phone: string, password: string) => {
+  login: (phone: string, password: string, clientLocation?: string) => {
     // Chuẩn OAuth2 Password Request quy định application/x-www-form-urlencoded
     const params = new URLSearchParams();
     params.append('username', phone);
     params.append('password', password);
-    return api.post('/auth/login', params.toString(), {
-      headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
-    });
+    const headers: Record<string, string> = {
+      'Content-Type': 'application/x-www-form-urlencoded',
+    };
+    if (clientLocation) {
+      headers['x-client-location'] = encodeURIComponent(clientLocation);
+    }
+    return api.post('/auth/login', params.toString(), { headers });
   },
   register: (data: {
     phone: string;
@@ -174,7 +178,13 @@ export const usersApi = {
     new_password: string;
     confirm_new_password: string;
   }) => api.patch('/users/me/password', data),
-  getTerminals: () => api.get('/users/me/terminals'),
+  getTerminals: (clientLocation?: string) => {
+    const headers: Record<string, string> = {};
+    if (clientLocation) {
+      headers['x-client-location'] = encodeURIComponent(clientLocation);
+    }
+    return api.get('/users/me/terminals', { headers });
+  },
   deleteTerminal: (terminalId: string) => api.delete(`/users/me/terminals/${terminalId}`),
   getLoginHistory: (limit: number = 20) => api.get('/users/me/login-history', { params: { limit } }),
   getDevices: () => api.get('/users/me/terminals'),

@@ -32,12 +32,24 @@ router = APIRouter()
 async def _resolve_house(db: AsyncSession, house_id: str, current_user: User) -> House:
     """Xử lý tra cứu căn nhà hỗ trợ cả 'current', ID số hoặc UUID."""
     if house_id in ("current", "1", "default", "me"):
-        return await crud_house.get_or_create_default_house(db, owner_id=current_user.id)
+        house = await crud_house.get_or_create_default_house(db, owner_id=current_user.id)
+        if not house:
+            raise HTTPException(
+                status_code=status.HTTP_404_NOT_FOUND,
+                detail="Bạn chưa tham gia căn nhà nào.",
+            )
+        return house
 
     try:
         house_uuid = UUID(house_id)
     except ValueError:
-        return await crud_house.get_or_create_default_house(db, owner_id=current_user.id)
+        house = await crud_house.get_or_create_default_house(db, owner_id=current_user.id)
+        if not house:
+            raise HTTPException(
+                status_code=status.HTTP_404_NOT_FOUND,
+                detail="Bạn chưa tham gia căn nhà nào.",
+            )
+        return house
 
     house = await crud_house.get_by_id(db, id=house_uuid)
     if not house:
@@ -50,11 +62,11 @@ async def _resolve_house(db: AsyncSession, house_id: str, current_user: User) ->
 
 def _format_member_out(m: HouseMember, house: House) -> HouseMemberOut:
     user = m.user
-    is_owner = (m.user_id == house.owner_id)
+    is_owner = (m.user_id == house.owner_id and m.role_in_house == "OWNER")
     full_name = user.full_name if user else "Thành viên"
     phone_number = user.phone if user else None
     avatar_url = user.avatar_url if user else None
-    user_role = user.role if user else "user"
+    user_role = user.role if user else "member"
 
     return HouseMemberOut(
         id=m.id,
@@ -87,7 +99,13 @@ async def get_current_house(
     db: AsyncSession = Depends(get_db),
 ):
     """Lấy thông tin căn nhà hiện tại của người dùng."""
-    return await crud_house.get_or_create_default_house(db, owner_id=current_user.id)
+    house = await crud_house.get_or_create_default_house(db, owner_id=current_user.id)
+    if not house:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="Người dùng chưa tham gia căn nhà nào.",
+        )
+    return house
 
 
 @router.patch("/current/mode", response_model=HouseOut)
@@ -132,7 +150,20 @@ async def get_my_house_permissions(
     db: AsyncSession = Depends(get_db),
 ):
     """Kiểm tra danh sách quyền thực tế của người dùng đối với căn nhà này."""
-    house = await _resolve_house(db, house_id, current_user)
+    try:
+        house = await _resolve_house(db, house_id, current_user)
+    except HTTPException as e:
+        if e.status_code == status.HTTP_404_NOT_FOUND:
+            return UserHousePermissionsOut(
+                can_view_health=False,
+                can_view_camera=False,
+                can_handle_emergency=False,
+                can_manage_devices=False,
+                can_manage_records=False,
+                role_in_house="MEMBER",
+                permissions="NONE",
+            )
+        raise e
     perms = await crud_house.get_user_permissions(db, house=house, user=current_user)
     return UserHousePermissionsOut(**perms)
 
@@ -145,21 +176,15 @@ async def list_house_members(
     db: AsyncSession = Depends(get_db),
 ):
     """
-    Lấy danh sách tất cả thành viên trong gia đình kèm theo quyền hạn chi tiết:
-    - Quyền xem camera
-    - Quyền theo dõi sức khỏe
-    - Quyền xử lý khẩn cấp SOS
-    - Quyền cấu hình thiết bị
-    - Quyền xem/quản lý hồ sơ bệnh án
+    Lấy danh sách tất cả thành viên trong gia đình kèm theo quyền hạn chi tiết.
     """
-    house = await _resolve_house(db, house_id, current_user)
+    try:
+        house = await _resolve_house(db, house_id, current_user)
+    except HTTPException as e:
+        if e.status_code == status.HTTP_404_NOT_FOUND:
+            return []
+        raise e
     members = await crud_house.get_members(db, house_id=house.id)
-    
-    # Nếu danh sách rỗng (dữ liệu cũ), tự bổ sung chủ sở hữu
-    if not members:
-        house = await crud_house.get_or_create_default_house(db, owner_id=house.owner_id)
-        members = await crud_house.get_members(db, house_id=house.id)
-
     return [_format_member_out(m, house) for m in members]
 
 

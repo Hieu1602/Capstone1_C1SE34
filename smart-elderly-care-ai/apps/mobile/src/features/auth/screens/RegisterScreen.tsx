@@ -24,6 +24,7 @@ import {
     RegisterVerifyOtpStep,
     CchnVerifiedInfo,
 } from "../components/register";
+import { validateFullName } from "../utils/nameValidation";
 
 export default function RegisterScreen({ route, navigation }: any) {
     // Trạng thái màn hình:
@@ -44,6 +45,7 @@ export default function RegisterScreen({ route, navigation }: any) {
     const [phone, setPhone] = useState("");
     const [password, setPassword] = useState("");
     const [confirmPassword, setConfirmPassword] = useState("");
+    const [errorMessage, setErrorMessage] = useState<string | null>(null);
 
     // Doctor-specific states
     const [cchnNumber, setCchnNumber] = useState("");
@@ -126,6 +128,7 @@ export default function RegisterScreen({ route, navigation }: any) {
     };
 
     const handleRegister = async () => {
+        setErrorMessage(null);
         const normalizedPhone = phone.trim().replace(/\s+/g, "");
 
         if (
@@ -134,34 +137,38 @@ export default function RegisterScreen({ route, navigation }: any) {
             !password ||
             !confirmPassword
         ) {
-            Alert.alert(
-                "Thiếu thông tin",
-                "Vui lòng điền đầy đủ họ tên, số điện thoại và mật khẩu.",
-            );
+            const msg = "Vui lòng điền đầy đủ họ tên, số điện thoại và mật khẩu.";
+            setErrorMessage(msg);
+            Alert.alert("Thiếu thông tin", msg);
+            return;
+        }
+
+        const nameValidation = validateFullName(fullName);
+        if (!nameValidation.isValid) {
+            const msg = nameValidation.message || "Họ và tên không hợp lệ.";
+            setErrorMessage(msg);
+            Alert.alert("Họ và tên không hợp lệ", msg);
             return;
         }
 
         if (accountType === "doctor" && !cchnNumber.trim()) {
-            Alert.alert(
-                "Thiếu CCHN",
-                "Vui lòng nhập Số Chứng chỉ hành nghề y khoa của Bác sĩ.",
-            );
+            const msg = "Vui lòng nhập Số Chứng chỉ hành nghề y khoa của Bác sĩ.";
+            setErrorMessage(msg);
+            Alert.alert("Thiếu CCHN", msg);
             return;
         }
 
         if (!/^\+?[0-9]{9,15}$/.test(normalizedPhone)) {
-            Alert.alert(
-                "Lỗi",
-                "Số điện thoại không hợp lệ. Vui lòng kiểm tra lại.",
-            );
+            const msg = "Số điện thoại không hợp lệ. Vui lòng kiểm tra lại.";
+            setErrorMessage(msg);
+            Alert.alert("Lỗi", msg);
             return;
         }
 
         if (password.length < 8 || password.length > 16) {
-            Alert.alert(
-                "Mật khẩu chưa đủ mạnh",
-                "Mật khẩu phải có độ dài từ 8 đến 16 ký tự.",
-            );
+            const msg = "Mật khẩu chưa đủ mạnh: Độ dài phải từ 8 đến 16 ký tự.";
+            setErrorMessage(msg);
+            Alert.alert("Mật khẩu chưa đủ mạnh", msg);
             return;
         }
 
@@ -170,18 +177,17 @@ export default function RegisterScreen({ route, navigation }: any) {
                 password,
             )
         ) {
-            Alert.alert(
-                "Mật khẩu chưa đủ mạnh",
-                "Mật khẩu phải bao gồm chữ hoa, chữ thường, số và ký hiệu đặc biệt (ví dụ: Care@123).",
-            );
+            const msg =
+                "Mật khẩu chưa đủ mạnh: Cần có cả chữ hoa, chữ thường, số và ký hiệu đặc biệt (ví dụ: Care@123).";
+            setErrorMessage(msg);
+            Alert.alert("Mật khẩu chưa đủ mạnh", msg);
             return;
         }
 
         if (password !== confirmPassword) {
-            Alert.alert(
-                "Mật khẩu không khớp",
-                "Mật khẩu và xác nhận lại mật khẩu không trùng khớp.",
-            );
+            const msg = "Mật khẩu và xác nhận lại mật khẩu không trùng khớp.";
+            setErrorMessage(msg);
+            Alert.alert("Mật khẩu không khớp", msg);
             return;
         }
 
@@ -211,11 +217,11 @@ export default function RegisterScreen({ route, navigation }: any) {
                 `Mã xác minh đã được gửi tới số điện thoại ${formattedPhone}.`,
             );
         } catch (error: any) {
-            Alert.alert(
-                "Không thể tiếp tục",
+            const errorMsg =
                 error.response?.data?.detail ||
-                    "Không thể gửi mã xác minh. Vui lòng thử lại.",
-            );
+                "Không thể gửi mã xác minh. Vui lòng thử lại.";
+            setErrorMessage(errorMsg);
+            Alert.alert("Không thể tiếp tục", errorMsg);
         } finally {
             setLoading(false);
         }
@@ -296,9 +302,9 @@ export default function RegisterScreen({ route, navigation }: any) {
             } else {
                 await authApi.register({
                     phone: formattedPhone,
-                    full_name: fullName.trim() || "Người dùng",
+                    full_name: fullName.trim() || "Thành viên",
                     password,
-                    role: "user",
+                    role: "member",
                     otp_code: otp,
                 });
 
@@ -406,19 +412,34 @@ export default function RegisterScreen({ route, navigation }: any) {
                         <RegisterFormStep
                             accountType={accountType}
                             fullName={fullName}
-                            setFullName={setFullName}
+                            setFullName={(val) => {
+                                setFullName(val);
+                                if (errorMessage) setErrorMessage(null);
+                            }}
                             phone={phone}
-                            setPhone={setPhone}
+                            setPhone={(val) => {
+                                setPhone(val);
+                                if (errorMessage) setErrorMessage(null);
+                            }}
                             password={password}
-                            setPassword={setPassword}
+                            setPassword={(val) => {
+                                setPassword(val);
+                                if (errorMessage) setErrorMessage(null);
+                            }}
                             confirmPassword={confirmPassword}
-                            setConfirmPassword={setConfirmPassword}
+                            setConfirmPassword={(val) => {
+                                setConfirmPassword(val);
+                                if (errorMessage) setErrorMessage(null);
+                            }}
                             showPassword={showPassword}
                             setShowPassword={setShowPassword}
                             showConfirmPassword={showConfirmPassword}
                             setShowConfirmPassword={setShowConfirmPassword}
                             cchnNumber={cchnNumber}
-                            setCchnNumber={setCchnNumber}
+                            setCchnNumber={(val) => {
+                                setCchnNumber(val);
+                                if (errorMessage) setErrorMessage(null);
+                            }}
                             workplace={workplace}
                             setWorkplace={setWorkplace}
                             specialty={specialty}
@@ -427,6 +448,7 @@ export default function RegisterScreen({ route, navigation }: any) {
                             cchnVerifiedInfo={cchnVerifiedInfo}
                             setCchnVerifiedInfo={setCchnVerifiedInfo}
                             loading={loading}
+                            errorMessage={errorMessage}
                             onCheckCchn={handleCheckCchn}
                             onSubmit={handleRegister}
                             onChangeRole={() => setStep("select_role")}
