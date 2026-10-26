@@ -49,7 +49,7 @@ export default function HealthDetailScreen({ navigation, route }: any) {
     initialTab === 'week' ? 'WEEK' : initialTab === 'month' ? 'MONTH' : 'DAY'
   );
   const [highlightedMetric, setHighlightedMetric] = useState<string | null>(metric ?? null);
-  const scrollRef = useRef<ScrollView>(null);
+  const scrollRef = useRef<any>(null);
 
   // 1. Quản lý Lọc dữ liệu theo ngày (Date Filter)
   const dateOptions = useMemo(() => {

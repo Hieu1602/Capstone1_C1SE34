@@ -47,7 +47,9 @@
         {
           "locationWhenInUsePermission": "Allow Smart Elderly Care to access your location when sending an emergency alert."
         }
-      ]
+      ],
+      "expo-audio",
+      "expo-status-bar"
     ],
     "platforms": [
       "ios",
