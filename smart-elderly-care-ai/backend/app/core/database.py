@@ -42,12 +42,18 @@ def _async_database_url(database_url: str):
     return url
 
 
+_db_url = _async_database_url(settings.DATABASE_URL)
+_connect_args = {}
+if _db_url.host and ("supabase.com" in _db_url.host or "supabase.co" in _db_url.host or _db_url.port == 6543):
+    _connect_args["statement_cache_size"] = 0
+
 engine = create_async_engine(
-    _async_database_url(settings.DATABASE_URL),
+    _db_url,
     echo=settings.DEBUG,
     pool_size=10,
     max_overflow=20,
     pool_pre_ping=True,
+    connect_args=_connect_args,
 )
 
 AsyncSessionFactory = async_sessionmaker(
