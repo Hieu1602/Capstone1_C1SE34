@@ -9,24 +9,14 @@
 //   4. Hiển thị trạng thái trống (Empty State) chuẩn xác khi chưa tạo lịch nhắc nhở.
 // ==============================================================================
 
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { View, StyleSheet, TouchableOpacity, ScrollView, Switch, Modal, Pressable } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
 import { useTheme } from '../../../store/useThemeStore';
 import { Colors } from '../../../theme/colors';
 import { LocalizedAlert, LocalizedText, LocalizedTextInput } from '../../../i18n/LocalizedComponents';
-
-// Cấu trúc dữ liệu một cữ thuốc nhắc nhở
-interface MedicationItem {
-  id: string;
-  name: string;
-  time: string;
-  session: 'MORNING' | 'NOON' | 'EVENING';
-  dose: string;
-  purpose: string;
-  taken: boolean;
-}
+import { usePatientStore, ReminderItem } from '../../../store/usePatientStore';
 
 // Cấu trúc dữ liệu một mốc nhắc uống nước / sinh hoạt
 interface HydrationSchedule {
@@ -39,6 +29,13 @@ interface HydrationSchedule {
 export default function MedicationReminderScreen({ navigation }: any) {
   const { isDarkMode } = useTheme();
 
+  // Kết nối Store trung tâm usePatientStore để đồng bộ 2 chiều với Trang chủ & Thông báo
+  const { todayReminders, fetchReminders, markMedicationTaken } = usePatientStore();
+
+  useEffect(() => {
+    fetchReminders();
+  }, []);
+
   // Trạng thái bật/tắt phát giọng nói nhắc nhở qua Loa thông minh Edge Hub (FR12)
   const [hubVoiceReminderEnabled, setHubVoiceReminderEnabled] = useState(true);
   const [isPlayingTestVoice, setIsPlayingTestVoice] = useState(false);
@@ -46,10 +43,10 @@ export default function MedicationReminderScreen({ navigation }: any) {
   // Bộ lọc hiển thị theo buổi: Tất cả | Buổi sáng | Buổi trưa | Buổi tối
   const [selectedFilter, setSelectedFilter] = useState<'ALL' | 'MORNING' | 'NOON' | 'EVENING'>('ALL');
 
-  // Danh sách cữ thuốc thực tế của người cao tuổi (khởi tạo rỗng, không dùng mock data)
-  const [medications, setMedications] = useState<MedicationItem[]>([]);
+  // Danh sách cữ thuốc thực tế đồng bộ từ Store
+  const medications: ReminderItem[] = todayReminders?.medications || [];
 
-  // Danh sách lịch uống nước trong ngày (khởi tạo rỗng)
+  // Danh sách lịch uống nước trong ngày
   const [hydrationList, setHydrationList] = useState<HydrationSchedule[]>([]);
 
   // State quản lý Modal thêm cữ thuốc mới
@@ -60,20 +57,18 @@ export default function MedicationReminderScreen({ navigation }: any) {
   const [newMedDose, setNewMedDose] = useState('');
 
   // Đánh dấu hoàn thành hoặc hoàn tác một cữ thuốc
-
-  const toggleMedicationTaken = (id: string) => {
-    setMedications((prev) =>
-      prev.map((item) => {
-        if (item.id === id) {
-          const nextState = !item.taken;
-          if (nextState) {
-            LocalizedAlert.alert('Đã xác nhận', `Đã đánh dấu uống thuốc "${item.name}".`);
-          }
-          return { ...item, taken: nextState };
-        }
-        return item;
-      })
-    );
+  const toggleMedicationTaken = async (id: string) => {
+    const med = medications.find((item) => item.id === id);
+    if (!med) return;
+    const nextState = !med.taken;
+    const now = new Date();
+    const timeStr = `${String(now.getHours()).padStart(2, '0')}:${String(now.getMinutes()).padStart(2, '0')}`;
+    await markMedicationTaken(id, nextState, nextState ? timeStr : undefined);
+    if (nextState) {
+      LocalizedAlert.alert('Đã xác nhận', `Đã đánh dấu uống thuốc "${med.name}" lúc ${timeStr}.`);
+    } else {
+      LocalizedAlert.alert('Hoàn tác', `Đã chuyển "${med.name}" về trạng thái chưa uống.`);
+    }
   };
 
   const toggleHydrationDone = (index: number) => {
@@ -105,7 +100,7 @@ export default function MedicationReminderScreen({ navigation }: any) {
       return;
     }
 
-    const newMed: MedicationItem = {
+    const newMed: ReminderItem = {
       id: `med_${Date.now()}`,
       name: newMedName.trim(),
       time: newMedTime.trim() || '18:30',
@@ -115,7 +110,21 @@ export default function MedicationReminderScreen({ navigation }: any) {
       taken: false,
     };
 
-    setMedications([...medications, newMed]);
+    usePatientStore.setState((state) => {
+      const curMeds = state.todayReminders?.medications || [];
+      const updatedMeds = [...curMeds, newMed];
+      return {
+        todayReminders: {
+          date: state.todayReminders?.date || new Date().toISOString().split('T')[0],
+          total_medications: updatedMeds.length,
+          completed_medications: updatedMeds.filter((m) => m.taken).length,
+          hub_voice_reminder_enabled: state.todayReminders?.hub_voice_reminder_enabled ?? true,
+          medications: updatedMeds,
+          meals: state.todayReminders?.meals || [],
+        },
+      };
+    });
+
     setNewMedName('');
     setNewMedDose('');
     setAddMedModalVisible(false);

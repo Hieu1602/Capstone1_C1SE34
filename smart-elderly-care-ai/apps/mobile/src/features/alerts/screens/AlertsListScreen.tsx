@@ -5,11 +5,11 @@
 // MÔ TẢ CHỨC NĂNG:
 //   1. Hiển thị danh sách sự cố/cảnh báo được đồng bộ từ Cloud Backend theo thời gian thực.
 //   2. Phân loại mức độ nguy hiểm: Cực kỳ nguy hiểm (Té ngã, Tiếng kêu cứu) & Cảnh báo sinh hiệu (Nhịp tim, SpO2).
-//   3. Cung cấp bộ lọc (Filter Chips) để người nhà/bác sĩ dễ dàng tra cứu nhanh sự kiện.
+//   3. Cung cấp bộ lọc (Filter Chips) để người nhà/bác sĩ tra cứu nhanh sự kiện.
 //   4. Cho phép đánh dấu đã đọc tập trung hoặc xem chi tiết clip bằng chứng 5 giây.
 // ==============================================================================
 
-import React, { useState } from 'react';
+import React, { useState, useMemo, useEffect } from 'react';
 import {
   View,
   StyleSheet,
@@ -17,142 +17,125 @@ import {
   TouchableOpacity,
   RefreshControl,
   Image,
+  ScrollView,
 } from 'react-native';
-// Lấy t() để dịch chuỗi động; dùng Text/Alert đã bọc i18n cho nội dung tĩnh và hộp thoại.
 import { useTranslation } from 'react-i18next';
 import { LocalizedAlert as Alert, LocalizedText as Text } from '../../../i18n/LocalizedComponents';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
 import { Colors, Shadows } from '../../../theme/colors';
 import { useAlertStore } from '../../../store';
-import { usePatientStore } from '../../../store/usePatientStore';
+import { usePatientStore, ReminderItem } from '../../../store/usePatientStore';
 import { useTheme } from '../../../store/useThemeStore';
 import { FamilyAppointmentsModal } from '../../dashboard/components/FamilyAppointmentsModal';
 
 // ------------------------------------------------------------------------------
-// 1. Interface cấu hình giao diện hiển thị cho từng loại sự kiện
+// 1. Cấu hình giao diện chuẩn hóa cho từng loại sự kiện
 // ------------------------------------------------------------------------------
 interface AlertConfig {
-  title: string;                               // Tiêu đề sự kiện chuẩn hóa tiếng Việt
-  badgeText: string;                           // Chữ hiển thị trên huy hiệu (Badge)
-  badgeBg: string;                             // Màu nền của huy hiệu
-  badgeColor: string;                          // Màu chữ của huy hiệu
-  iconName: keyof typeof Ionicons.glyphMap;   // Tên biểu tượng Ionicons
-  iconColor: string;                           // Màu biểu tượng
-  iconBg: string;                              // Màu nền tròn bao quanh biểu tượng
-  isCritical: boolean;                         // Cờ xác định mức độ nguy kịch (Red Alert)
+  title: string;
+  badgeText: string;
+  badgeBg: string;
+  badgeColor: string;
+  iconName: keyof typeof Ionicons.glyphMap;
+  iconColor: string;
+  iconBg: string;
+  isCritical: boolean;
 }
 
-/**
- * getAlertConfig: Ánh xạ mã sự kiện từ Backend (alert_type) sang cấu hình giao diện tương ứng.
- * Giúp giao diện hiển thị đồng nhất về màu sắc và icon nhận diện.
- */
+const ALERT_CONFIG_MAP: Record<string, AlertConfig> = {
+  FALL_DETECTED: {
+    title: 'CẢNH BÁO TÉ NGÃ KHẨN CẤP',
+    badgeText: 'CỰC KỲ NGUY HIỂM',
+    badgeBg: '#EF4444',
+    badgeColor: '#FFFFFF',
+    iconName: 'warning',
+    iconColor: '#DC2626',
+    iconBg: '#FEE2E2',
+    isCritical: true,
+  },
+  HIGH_HEART_RATE: {
+    title: 'Nhịp tim tăng cao bất thường',
+    badgeText: 'Cảnh báo tim',
+    badgeBg: '#FFF7ED',
+    badgeColor: '#EA580C',
+    iconName: 'heart',
+    iconColor: '#EA580C',
+    iconBg: '#FFEDD5',
+    isCritical: false,
+  },
+  ACOUSTIC_DISTRESS: {
+    title: 'Phát hiện âm thanh kêu cứu',
+    badgeText: 'Âm thanh YAMNet',
+    badgeBg: '#F3E8FF',
+    badgeColor: '#7C3AED',
+    iconName: 'mic',
+    iconColor: '#9333EA',
+    iconBg: '#F3E8FF',
+    isCritical: true,
+  },
+  PERSON_DETECTED: {
+    title: 'Phát hiện chuyển động người',
+    badgeText: 'Chuyển động',
+    badgeBg: '#ECFDF5',
+    badgeColor: '#059669',
+    iconName: 'person',
+    iconColor: '#10B981',
+    iconBg: '#DCFCE7',
+    isCritical: false,
+  },
+  APPOINTMENT_SCHEDULED: {
+    title: 'Lịch khám mới từ Bác sĩ',
+    badgeText: 'Chờ gia đình xác nhận',
+    badgeBg: '#FEF3C7',
+    badgeColor: '#D97706',
+    iconName: 'calendar',
+    iconColor: '#D97706',
+    iconBg: '#FEF3C7',
+    isCritical: false,
+  },
+  APPOINTMENT_CONFIRMED: {
+    title: 'Lịch khám đã được xác nhận',
+    badgeText: 'Đã xác nhận',
+    badgeBg: '#DCFCE7',
+    badgeColor: '#16A34A',
+    iconName: 'checkmark-circle',
+    iconColor: '#16A34A',
+    iconBg: '#DCFCE7',
+    isCritical: false,
+  },
+  APPOINTMENT_CANCELLED: {
+    title: 'Lịch khám đã bị hủy',
+    badgeText: 'Đã hủy',
+    badgeBg: '#FEE2E2',
+    badgeColor: '#DC2626',
+    iconName: 'close-circle',
+    iconColor: '#DC2626',
+    iconBg: '#FEE2E2',
+    isCritical: false,
+  },
+};
+
 function getAlertConfig(alertType: string): AlertConfig {
-  switch (alertType) {
-    case 'FALL_DETECTED':
-      return {
-        title: 'CẢNH BÁO TÉ NGÃ KHẨN CẤP',
-        badgeText: 'CỰC KỲ NGUY HIỂM',
-        badgeBg: '#EF4444',
-        badgeColor: '#FFFFFF',
-        iconName: 'warning',
-        iconColor: '#DC2626',
-        iconBg: '#FEE2E2',
-        isCritical: true,
-      };
-    case 'HIGH_HEART_RATE':
-      return {
-        title: 'Nhịp tim tăng cao bất thường',
-        badgeText: 'Cảnh báo tim',
-        badgeBg: '#FFF7ED',
-        badgeColor: '#EA580C',
-        iconName: 'heart',
-        iconColor: '#EA580C',
-        iconBg: '#FFEDD5',
-        isCritical: false,
-      };
-    case 'ACOUSTIC_DISTRESS':
-      return {
-        title: 'Phát hiện âm thanh kêu cứu',
-        badgeText: 'Âm thanh YAMNet',
-        badgeBg: '#F3E8FF',
-        badgeColor: '#7C3AED',
-        iconName: 'mic',
-        iconColor: '#9333EA',
-        iconBg: '#F3E8FF',
-        isCritical: true,
-      };
-    case 'PERSON_DETECTED':
-      return {
-        title: 'Phát hiện chuyển động người',
-        badgeText: 'Chuyển động',
-        badgeBg: '#ECFDF5',
-        badgeColor: '#059669',
-        iconName: 'person',
-        iconColor: '#10B981',
-        iconBg: '#DCFCE7',
-        isCritical: false,
-      };
-    case 'APPOINTMENT_SCHEDULED':
-      return {
-        title: 'Lịch khám mới từ Bác sĩ',
-        badgeText: 'Chờ gia đình xác nhận',
-        badgeBg: '#FEF3C7',
-        badgeColor: '#D97706',
-        iconName: 'calendar',
-        iconColor: '#D97706',
-        iconBg: '#FEF3C7',
-        isCritical: false,
-      };
-    case 'APPOINTMENT_CONFIRMED':
-      return {
-        title: 'Lịch khám đã được xác nhận',
-        badgeText: 'Đã xác nhận',
-        badgeBg: '#DCFCE7',
-        badgeColor: '#16A34A',
-        iconName: 'checkmark-circle',
-        iconColor: '#16A34A',
-        iconBg: '#DCFCE7',
-        isCritical: false,
-      };
-    case 'APPOINTMENT_CANCELLED':
-      return {
-        title: 'Lịch khám đã bị hủy',
-        badgeText: 'Đã hủy',
-        badgeBg: '#FEE2E2',
-        badgeColor: '#DC2626',
-        iconName: 'close-circle',
-        iconColor: '#DC2626',
-        iconBg: '#FEE2E2',
-        isCritical: false,
-      };
-    default:
-      // Các loại sự kiện mở rộng khác (Cảm biến nhiệt, ngắt kết nối...)
-      return {
-        title: alertType.replace(/_/g, ' '),
-        badgeText: 'Thông báo',
-        badgeBg: '#F1F5F9',
-        badgeColor: '#64748B',
-        iconName: 'notifications',
-        iconColor: Colors.primary,
-        iconBg: '#FFF4EC',
-        isCritical: false,
-      };
-  }
+  return (
+    ALERT_CONFIG_MAP[alertType] || {
+      title: alertType.replace(/_/g, ' '),
+      badgeText: 'Thông báo',
+      badgeBg: '#F1F5F9',
+      badgeColor: '#64748B',
+      iconName: 'notifications',
+      iconColor: Colors.primary,
+      iconBg: '#FFF4EC',
+      isCritical: false,
+    }
+  );
 }
 
-/**
- * formatFriendlyTime: Định dạng mốc thời gian ISO thành định dạng thân thiện với người dùng
- * (Vừa xong, X phút trước, Hôm qua, hoặc giờ:phút ngày/tháng).
- */
 function formatFriendlyTime(dateStr: string, translate: (key: string, count?: number) => string) {
   try {
-    const date = new Date(dateStr);
-    const now = new Date();
-    const diffMs = now.getTime() - date.getTime();
+    const diffMs = Date.now() - new Date(dateStr).getTime();
     if (diffMs <= 60 * 1000) return translate('Vừa xong');
-    const diffMin = Math.floor(diffMs / (60 * 1000));
-    // Truyền số lượng riêng để i18next thay {{count}} bằng đúng số phút/giờ/ngày.
+    const diffMin = Math.floor(diffMs / 60000);
     if (diffMin < 60) return translate('{{count}} phút trước', diffMin);
     const diffHour = Math.floor(diffMin / 60);
     if (diffHour < 24) return translate('{{count}} giờ trước', diffHour);
@@ -160,11 +143,9 @@ function formatFriendlyTime(dateStr: string, translate: (key: string, count?: nu
     if (diffDay === 1) return translate('Hôm qua');
     if (diffDay < 7) return translate('{{count}} ngày trước', diffDay);
 
-    const hours = String(date.getHours()).padStart(2, '0');
-    const minutes = String(date.getMinutes()).padStart(2, '0');
-    const day = String(date.getDate()).padStart(2, '0');
-    const month = String(date.getMonth() + 1).padStart(2, '0');
-    return `${hours}:${minutes} • ${day}/${month}`;
+    const d = new Date(dateStr);
+    const pad = (n: number) => String(n).padStart(2, '0');
+    return `${pad(d.getHours())}:${pad(d.getMinutes())} • ${pad(d.getDate())}/${pad(d.getMonth() + 1)}`;
   } catch {
     return dateStr;
   }
@@ -175,67 +156,136 @@ function formatFriendlyTime(dateStr: string, translate: (key: string, count?: nu
 // ------------------------------------------------------------------------------
 export default function AlertsListScreen({ navigation }: any) {
   const { t } = useTranslation();
-  // Lấy trạng thái giao diện Sáng / Tối từ ThemeStore
   const { isDarkMode, colors } = useTheme();
 
-  // Kết nối trực tiếp vào Domain Store useAlertStore để lấy danh sách cảnh báo từ Backend
   const { incidents, setIncidents, fetchNotifications } = useAlertStore();
-  const { patientRecord } = usePatientStore();
+  const {
+    patientRecord,
+    todayReminders,
+    markMedicationTaken,
+    snoozeMedication,
+    fetchReminders,
+  } = usePatientStore();
 
-  // State cục bộ quản lý hiệu ứng kéo để tải lại (Pull-to-refresh)
   const [refreshing, setRefreshing] = useState(false);
-
-  // State quản lý mở modal xác nhận lịch khám bác sĩ
   const [familyAppointmentsModalVisible, setFamilyAppointmentsModalVisible] = useState(false);
   const [selectedAppointmentPatientId, setSelectedAppointmentPatientId] = useState<string | number | null>(null);
+  const [filterType, setFilterType] = useState<'ALL' | 'CRITICAL' | 'VITAL' | 'MEDICATION' | 'APPOINTMENT'>('ALL');
 
-  // State bộ lọc: 'ALL' (Tất cả), 'CRITICAL' (Nguy kịch), 'VITAL' (Sức khỏe), 'APPOINTMENT' (Lịch khám)
-  const [filterType, setFilterType] = useState<'ALL' | 'CRITICAL' | 'VITAL' | 'APPOINTMENT'>('ALL');
-
-  // Khi màn hình được mở: Tự động kéo danh sách thông báo mới nhất từ API
-  React.useEffect(() => {
+  useEffect(() => {
     fetchNotifications();
+    fetchReminders();
   }, []);
 
-  // Xử lý kéo xuống để làm mới danh sách
   const handleRefresh = async () => {
     setRefreshing(true);
-    await fetchNotifications();
+    await Promise.all([fetchNotifications(), fetchReminders()]);
     setRefreshing(false);
   };
 
-  // Đếm tổng số thông báo chưa được xác nhận / chưa đọc
-  const unreadCount = incidents.filter((item) => !item.is_acknowledged).length;
+  const medications: ReminderItem[] = todayReminders?.medications || [];
+  const pendingMedCount = medications.filter((m) => !m.taken).length;
+  const unreadIncidentsCount = incidents.filter((item) => !item.is_acknowledged).length;
+  const unreadCount = unreadIncidentsCount + pendingMedCount;
 
-  // Lọc danh sách sự cố theo tab đang chọn
+  // Tính trạng thái cữ thuốc: Sắp đến giờ/Đúng giờ, Đã uống, Quá giờ/Bỏ lỡ
+  const getMedicationStatus = (item: ReminderItem) => {
+    if (item.taken) {
+      return {
+        state: 'TAKEN' as const,
+        badgeText: `Đã uống lúc ${item.takenAt || item.time}`,
+        badgeBg: '#DCFCE7',
+        badgeColor: '#15803D',
+        badgeBorder: '#86EFAC',
+        iconName: 'checkmark-circle' as const,
+        iconColor: '#16A34A',
+        iconBg: '#DCFCE7',
+      };
+    }
+
+    const [h, m] = item.time.split(':').map((v) => parseInt(v, 10) || 0);
+    const medDate = new Date();
+    medDate.setHours(h, m, 0, 0);
+    const diffMin = Math.floor((Date.now() - medDate.getTime()) / 60000);
+
+    if (diffMin > 15) {
+      const lateStr = diffMin >= 60 ? `${Math.floor(diffMin / 60)}h ${diffMin % 60}p` : `${diffMin} phút`;
+      return {
+        state: 'OVERDUE' as const,
+        badgeText: `Chưa uống (Đã trễ ${lateStr})`,
+        badgeBg: '#FEE2E2',
+        badgeColor: '#DC2626',
+        badgeBorder: '#FCA5A5',
+        iconName: 'alert-circle' as const,
+        iconColor: '#DC2626',
+        iconBg: '#FEE2E2',
+      };
+    }
+
+    const isNow = diffMin >= -15 && diffMin <= 15;
+    return {
+      state: 'UPCOMING' as const,
+      badgeText: isNow ? 'Đúng giờ uống thuốc' : `Sắp đến giờ (${Math.abs(diffMin)} phút nữa)`,
+      badgeBg: '#E0F2FE',
+      badgeColor: '#0284C7',
+      badgeBorder: '#BAE6FD',
+      iconName: 'time' as const,
+      iconColor: '#0284C7',
+      iconBg: '#E0F2FE',
+    };
+  };
+
+  const handleConfirmMedication = async (med: ReminderItem) => {
+    const d = new Date();
+    const timeStr = `${String(d.getHours()).padStart(2, '0')}:${String(d.getMinutes()).padStart(2, '0')}`;
+    await markMedicationTaken(med.id, true, timeStr);
+    Alert.alert(
+      'Xác nhận thành công',
+      `Đã ghi nhận người cao tuổi đã uống thuốc "${med.name}" lúc ${timeStr}. Trạng thái đã được đồng bộ toàn hệ thống.`
+    );
+  };
+
+  const handleSnoozeMedication = (med: ReminderItem) => {
+    snoozeMedication(med.id, 15);
+    Alert.alert('Đã hoãn nhắc nhở', `Hệ thống sẽ phát loa Hub và nhắc lại cữ "${med.name}" sau 15 phút nữa.`);
+  };
+
+  const handleReplaySpeakerMedication = (med: ReminderItem) => {
+    Alert.alert(
+      'Loa Hub đã phát lời nhắc',
+      `📢 "Đã đến giờ uống thuốc: ${med.name}. Liều dùng: ${med.dose}. Cụ nhớ uống thuốc cùng một cốc nước ấm nhé!"`
+    );
+  };
+
+  // Lọc danh sách sự cố theo tab
   const filteredIncidents = incidents.filter((item) => {
     if (filterType === 'CRITICAL') {
-      return (
-        item.alert_level === 'CRITICAL' ||
-        item.alert_type === 'FALL_DETECTED' ||
-        item.alert_type === 'ACOUSTIC_DISTRESS'
-      );
+      return item.alert_level === 'CRITICAL' || item.alert_type === 'FALL_DETECTED' || item.alert_type === 'ACOUSTIC_DISTRESS';
     }
     if (filterType === 'VITAL') {
-      return (
-        item.alert_type.includes('HEART') ||
-        item.alert_type.includes('SPO2') ||
-        item.alert_type.includes('TEMP')
-      );
+      return item.alert_type.includes('HEART') || item.alert_type.includes('SPO2') || item.alert_type.includes('TEMP');
     }
     if (filterType === 'APPOINTMENT') {
-      return (
-        item.alert_type === 'APPOINTMENT_SCHEDULED' ||
-        item.alert_type === 'APPOINTMENT_CONFIRMED' ||
-        item.alert_type === 'APPOINTMENT_CANCELLED'
-      );
+      return ['APPOINTMENT_SCHEDULED', 'APPOINTMENT_CONFIRMED', 'APPOINTMENT_CANCELLED'].includes(item.alert_type);
     }
     return true;
   });
 
-  // Xử lý bấm "Đã đọc tất cả": Đánh dấu trạng thái acknowledged cho toàn bộ danh sách
+  type ListItem =
+    | { itemType: 'MEDICATION'; id: string; data: ReminderItem }
+    | { itemType: 'INCIDENT'; id: string; data: any };
+
+  const listData: ListItem[] = useMemo(() => {
+    const medItems: ListItem[] = medications.map((med) => ({ itemType: 'MEDICATION', id: `med-${med.id}`, data: med }));
+    const incItems: ListItem[] = filteredIncidents.map((inc) => ({ itemType: 'INCIDENT', id: `inc-${inc.id}`, data: inc }));
+
+    if (filterType === 'MEDICATION') return medItems;
+    if (filterType !== 'ALL') return incItems;
+    return [...medItems, ...incItems];
+  }, [filterType, medications, filteredIncidents]);
+
   const handleMarkAllAsRead = () => {
-    if (unreadCount === 0) {
+    if (unreadIncidentsCount === 0) {
       Alert.alert('Thông báo', 'Tất cả sự kiện đều đã được đánh dấu đọc.');
       return;
     }
@@ -243,81 +293,35 @@ export default function AlertsListScreen({ navigation }: any) {
     Alert.alert('Thành công', 'Đã đánh dấu đã đọc tất cả thông báo.');
   };
 
-  /**
-   * handlePressCard: Xử lý khi người dùng chạm vào một thẻ cảnh báo cụ thể.
-   * - Đánh dấu thẻ đó là đã đọc (is_acknowledged = true).
-   * - Điều hướng thông minh đến màn hình tương ứng với loại sự kiện.
-   */
   const handlePressCard = (item: any) => {
-    // Tự động đánh dấu đã đọc khi người dùng bấm xem
     if (!item.is_acknowledged) {
-      setIncidents(
-        incidents.map((i) => (i.id === item.id ? { ...i, is_acknowledged: true } : i))
-      );
+      setIncidents(incidents.map((i) => (i.id === item.id ? { ...i, is_acknowledged: true } : i)));
     }
 
-    // Trường hợp 0: Lịch khám bác sĩ -> Mở Modal chi tiết lịch khám và bấm xác nhận / xem lý do hủy
-    if (
-      item.alert_type === 'APPOINTMENT_SCHEDULED' ||
-      item.alert_type === 'APPOINTMENT_CONFIRMED' ||
-      item.alert_type === 'APPOINTMENT_CANCELLED'
-    ) {
+    if (['APPOINTMENT_SCHEDULED', 'APPOINTMENT_CONFIRMED', 'APPOINTMENT_CANCELLED'].includes(item.alert_type)) {
       const pid = item.device_id && !isNaN(Number(item.device_id)) ? item.device_id : (patientRecord?.patient_id || 1);
       setSelectedAppointmentPatientId(pid);
       setFamilyAppointmentsModalVisible(true);
       return;
     }
 
-    // Trường hợp 1: Chuyển động người -> Mở Camera xem lại phát lại (Playback)
     if (item.alert_type === 'PERSON_DETECTED') {
-      navigation.navigate('CameraDetail', {
-        cameraId: item.device_id || 'cam_living_room',
-        tab: 'playback',
-      });
+      navigation.navigate('CameraDetail', { cameraId: item.device_id || 'cam_living_room', tab: 'playback' });
       return;
     }
 
-    // Trường hợp 2: Cảnh báo sinh hiệu (Nhịp tim, SpO2, Thân nhiệt) -> Mở màn hình Sức khỏe chi tiết
-    if (
-      item.alert_type === 'HIGH_HEART_RATE' ||
-      item.alert_type.includes('HEART') ||
-      item.alert_type.includes('SPO2') ||
-      item.alert_type.includes('TEMP')
-    ) {
-      navigation.navigate('HealthDetail', {
-        initialTab: 'today',
-        focusMetric: 'heartRate',
-        metric: 'heartRate',
-      });
+    if (item.alert_type === 'HIGH_HEART_RATE' || item.alert_type.includes('HEART') || item.alert_type.includes('SPO2') || item.alert_type.includes('TEMP')) {
+      navigation.navigate('HealthDetail', { initialTab: 'today', focusMetric: 'heartRate', metric: 'heartRate' });
       return;
     }
 
-    // Trường hợp 3: Sự cố té ngã khẩn cấp -> Mở màn hình Chi tiết Sự cố (IncidentDetail)
-    if (item.alert_type === 'FALL_DETECTED') {
-      navigation.navigate('IncidentDetail', {
-        incidentId: item.id,
-        id: item.id,
-        type: 'FALL',
-        alert_type: 'FALL_DETECTED',
-        alert_level: 'CRITICAL',
-        confidence: item.confidence != null ? `${Math.round(Number(item.confidence) * 100)}%` : undefined,
-        time: item.created_at ?? new Date().toISOString(),
-        created_at: item.created_at ?? new Date().toISOString(),
-        message: item.message,
-        clipAvailable: Boolean(item.video_clip_url || item.thumbnail_url),
-        video_clip_url: item.video_clip_url ?? null,
-        is_acknowledged: item.is_acknowledged ?? false,
-      });
-      return;
-    }
-
-    // Trường hợp 4: Cảnh báo âm thanh kêu cứu hoặc các sự cố khác
+    const isFall = item.alert_type === 'FALL_DETECTED';
     navigation.navigate('IncidentDetail', {
       incidentId: item.id,
       id: item.id,
-      type: item.alert_type === 'ACOUSTIC_DISTRESS' ? 'ACOUSTIC' : item.alert_type,
+      type: isFall ? 'FALL' : item.alert_type === 'ACOUSTIC_DISTRESS' ? 'ACOUSTIC' : item.alert_type,
       alert_type: item.alert_type,
-      alert_level: item.alert_level ?? 'CRITICAL',
+      alert_level: item.alert_level || 'CRITICAL',
       confidence: item.confidence != null ? `${Math.round(Number(item.confidence) * 100)}%` : undefined,
       time: item.created_at ?? new Date().toISOString(),
       created_at: item.created_at ?? new Date().toISOString(),
@@ -328,143 +332,236 @@ export default function AlertsListScreen({ navigation }: any) {
     });
   };
 
+  // Render card cữ thuốc
+  const renderMedicationCard = (item: ReminderItem) => {
+    const status = getMedicationStatus(item);
+    const isOverdue = status.state === 'OVERDUE';
+    const isTaken = status.state === 'TAKEN';
+
+    return (
+      <TouchableOpacity
+        key={`med-${item.id}`}
+        style={[
+          styles.card,
+          styles.medCard,
+          isDarkMode && { backgroundColor: colors.card, borderColor: colors.border },
+          isOverdue && styles.medCardOverdue,
+          isOverdue && isDarkMode && { backgroundColor: '#3F1219', borderColor: '#7F1D1D' },
+          isTaken && styles.medCardTaken,
+          isTaken && isDarkMode && { backgroundColor: 'rgba(16, 185, 129, 0.08)', borderColor: '#065F46' },
+        ]}
+        onPress={() => navigation.navigate('MedicationReminder')}
+        activeOpacity={0.85}
+      >
+        <View style={{ flexDirection: 'row', alignItems: 'flex-start', gap: 12 }}>
+          <View
+            style={[
+              styles.categoryIconCircle,
+              {
+                backgroundColor: isDarkMode
+                  ? isOverdue
+                    ? 'rgba(220, 38, 38, 0.25)'
+                    : isTaken
+                    ? 'rgba(16, 185, 129, 0.2)'
+                    : 'rgba(2, 132, 199, 0.2)'
+                  : status.iconBg,
+              },
+            ]}
+          >
+            <Ionicons name={status.iconName} size={22} color={status.iconColor} />
+          </View>
+
+          <View style={styles.cardCenter}>
+            <View style={styles.cardMetaRow}>
+              <View style={[styles.typeBadge, { backgroundColor: '#F0FDF4' }]}>
+                <Text style={[styles.typeBadgeText, { color: '#16A34A' }]}>💊 UỐNG THUỐC</Text>
+              </View>
+              <View style={[styles.typeBadge, { backgroundColor: status.badgeBg, borderWidth: 1, borderColor: status.badgeBorder }]}>
+                <Text style={[styles.typeBadgeText, { color: status.badgeColor }]}>{status.badgeText}</Text>
+              </View>
+            </View>
+
+            <Text
+              style={[styles.cardTitle, isDarkMode && { color: colors.textPrimary }, isOverdue && { color: '#DC2626' }]}
+              numberOfLines={2}
+            >
+              {item.name}
+            </Text>
+
+            <Text style={[styles.cardMsg, isDarkMode && { color: colors.textSecondary }]} numberOfLines={2}>
+              Liều dùng: {item.dose} {item.purpose ? `• ${item.purpose}` : ''}
+            </Text>
+
+            <View style={styles.timeRow}>
+              <Ionicons name="time-outline" size={12} color={isDarkMode ? '#64748B' : '#94A3B8'} />
+              <Text style={[styles.cardTime, isDarkMode && { color: colors.textSecondary }]}>Lịch: {item.time} hôm nay</Text>
+              <Text style={[styles.dotSeparator, isDarkMode && { color: colors.border }]}>•</Text>
+              <Ionicons name="volume-medium-outline" size={12} color={Colors.primary} />
+              <Text style={[styles.deviceLocationText, { color: Colors.primary, fontWeight: '600' }]}>Loa Edge Hub</Text>
+            </View>
+          </View>
+        </View>
+
+        {!item.taken ? (
+          <View style={styles.medActionsRow}>
+            <TouchableOpacity
+              style={[styles.medConfirmBtn, isOverdue && { backgroundColor: '#EA580C' }]}
+              onPress={() => handleConfirmMedication(item)}
+              activeOpacity={0.8}
+            >
+              <Ionicons name="checkmark-circle" size={16} color="#FFFFFF" />
+              <Text style={styles.medConfirmBtnText}>Xác nhận đã uống</Text>
+            </TouchableOpacity>
+
+            <TouchableOpacity
+              style={[styles.medSnoozeBtn, isDarkMode && { backgroundColor: colors.card, borderColor: colors.border }]}
+              onPress={() => handleSnoozeMedication(item)}
+              activeOpacity={0.8}
+            >
+              <Ionicons name="time-outline" size={15} color={isDarkMode ? '#94A3B8' : '#64748B'} />
+              <Text style={[styles.medSnoozeBtnText, isDarkMode && { color: colors.textSecondary }]}>
+                Bỏ qua / Nhắc lại sau
+              </Text>
+            </TouchableOpacity>
+
+            <TouchableOpacity
+              style={[styles.medSpeakerBtn, isDarkMode && { backgroundColor: 'rgba(2, 132, 199, 0.2)' }]}
+              onPress={() => handleReplaySpeakerMedication(item)}
+              activeOpacity={0.7}
+              hitSlop={{ top: 6, bottom: 6, left: 6, right: 6 }}
+            >
+              <Ionicons name="volume-high" size={16} color="#0284C7" />
+            </TouchableOpacity>
+          </View>
+        ) : (
+          <View style={styles.medCompletedRow}>
+            <Ionicons name="checkmark-done-circle" size={16} color="#16A34A" />
+            <Text style={[styles.medCompletedText, isDarkMode && { color: '#86EFAC' }]}>
+              Đã hoàn thành cữ thuốc lúc {item.takenAt || item.time} • Dữ liệu đã lưu hồ sơ
+            </Text>
+          </View>
+        )}
+      </TouchableOpacity>
+    );
+  };
+
   return (
     <SafeAreaView style={[styles.safeArea, isDarkMode && { backgroundColor: colors.background }]} edges={['top']}>
-      {/* ---------------------------------------------------------------------- */}
-      {/* 1. Header trên cùng: Tiêu đề, số lượng chưa đọc, thao tác nhanh       */}
-      {/* ---------------------------------------------------------------------- */}
+      {/* 1. Header */}
       <View style={[styles.topHeader, isDarkMode && { backgroundColor: colors.background, borderBottomColor: colors.border }]}>
         <View style={styles.headerTitleCol}>
           <Text style={[styles.headerTitle, isDarkMode && { color: colors.textPrimary }]}>Thông Báo &amp; Sự Kiện</Text>
           <Text style={[styles.headerSubtitle, isDarkMode && { color: colors.textSecondary }]}>
-            {unreadCount > 0
-              ? t('{{count}} thông báo mới chưa đọc', { count: unreadCount })
-              : 'Tất cả đã được xử lý'}
+            {unreadCount > 0 ? t('{{count}} thông báo mới chưa đọc', { count: unreadCount }) : 'Tất cả đã được xử lý'}
           </Text>
         </View>
 
         <View style={styles.headerRightActions}>
-          {/* Nút đánh dấu đã đọc tất cả */}
           <TouchableOpacity
             style={[styles.markAllReadBtn, isDarkMode && { backgroundColor: colors.card, borderColor: colors.border }]}
             onPress={handleMarkAllAsRead}
             activeOpacity={0.7}
           >
-            <Ionicons
-              name="checkmark-done"
-              size={15}
-              color={unreadCount > 0 ? '#EA580C' : '#94A3B8'}
-            />
-            <Text
-              style={[
-                styles.markAllReadText,
-                unreadCount === 0 && { color: '#94A3B8' },
-              ]}
-            >
+            <Ionicons name="checkmark-done" size={15} color={unreadIncidentsCount > 0 ? '#EA580C' : '#94A3B8'} />
+            <Text style={[styles.markAllReadText, unreadIncidentsCount === 0 && { color: '#94A3B8' }]}>
               Đã đọc tất cả
             </Text>
           </TouchableOpacity>
 
-          {/* Nút xem trực tiếp camera */}
-          <TouchableOpacity
-            style={styles.cameraQuickBtn}
-            onPress={() => navigation.navigate('CameraDetail')}
-            activeOpacity={0.7}
-          >
+          <TouchableOpacity style={styles.cameraQuickBtn} onPress={() => navigation.navigate('CameraDetail')} activeOpacity={0.7}>
             <Ionicons name="videocam" size={15} color="#FFF" />
             <Text style={styles.cameraQuickText}>Camera</Text>
           </TouchableOpacity>
         </View>
       </View>
 
-      {/* ---------------------------------------------------------------------- */}
-      {/* 2. Thanh bộ lọc phân loại (Filter Chips)                               */}
-      {/* ---------------------------------------------------------------------- */}
-      <View style={[styles.filterBar, isDarkMode && { backgroundColor: colors.background, borderBottomColor: colors.border }]}>
-        {/* Tab Tất cả */}
-        <TouchableOpacity
-          style={[
-            styles.filterPill,
-            isDarkMode && filterType !== 'ALL' && { backgroundColor: colors.card, borderColor: colors.border },
-            filterType === 'ALL' && styles.filterPillActive,
-            filterType === 'ALL' && isDarkMode && { backgroundColor: 'rgba(255, 107, 0, 0.15)', borderColor: '#FF6B00' },
-          ]}
-          onPress={() => setFilterType('ALL')}
-          activeOpacity={0.8}
-        >
-          <Text style={[styles.filterText, isDarkMode && filterType !== 'ALL' && { color: colors.textSecondary }, filterType === 'ALL' && styles.filterTextActive]}>
-            {t('Tất cả ({{count}})', { count: incidents.length })}
-          </Text>
-        </TouchableOpacity>
-
-        {/* Tab Nguy kịch (Red Alert: Té ngã & Tiếng kêu cứu) */}
-        <TouchableOpacity
-          style={[
-            styles.filterPill,
-            isDarkMode && filterType !== 'CRITICAL' && { backgroundColor: colors.card, borderColor: colors.border },
-            filterType === 'CRITICAL' && styles.filterPillActive,
-            filterType === 'CRITICAL' && isDarkMode && { backgroundColor: 'rgba(255, 107, 0, 0.15)', borderColor: '#FF6B00' },
-          ]}
-          onPress={() => setFilterType('CRITICAL')}
-          activeOpacity={0.8}
-        >
-          <Text style={[styles.filterText, isDarkMode && filterType !== 'CRITICAL' && { color: colors.textSecondary }, filterType === 'CRITICAL' && styles.filterTextActive]}>
-            🚨 Nguy kịch (Red Alert)
-          </Text>
-        </TouchableOpacity>
-
-        {/* Tab Sức khỏe (Nhịp tim, SpO2, Thân nhiệt) */}
-        <TouchableOpacity
-          style={[
-            styles.filterPill,
-            isDarkMode && filterType !== 'VITAL' && { backgroundColor: colors.card, borderColor: colors.border },
-            filterType === 'VITAL' && styles.filterPillActive,
-            filterType === 'VITAL' && isDarkMode && { backgroundColor: 'rgba(255, 107, 0, 0.15)', borderColor: '#FF6B00' },
-          ]}
-          onPress={() => setFilterType('VITAL')}
-          activeOpacity={0.8}
-        >
-          <Text style={[styles.filterText, isDarkMode && filterType !== 'VITAL' && { color: colors.textSecondary }, filterType === 'VITAL' && styles.filterTextActive]}>
-            Sức khoẻ
-          </Text>
-        </TouchableOpacity>
-
-        {/* Tab Lịch khám Bác sĩ */}
-        <TouchableOpacity
-          style={[
-            styles.filterPill,
-            isDarkMode && filterType !== 'APPOINTMENT' && { backgroundColor: colors.card, borderColor: colors.border },
-            filterType === 'APPOINTMENT' && styles.filterPillActive,
-            filterType === 'APPOINTMENT' && isDarkMode && { backgroundColor: 'rgba(217, 119, 6, 0.15)', borderColor: '#D97706' },
-          ]}
-          onPress={() => setFilterType('APPOINTMENT')}
-          activeOpacity={0.8}
-        >
-          <Text style={[styles.filterText, isDarkMode && filterType !== 'APPOINTMENT' && { color: colors.textSecondary }, filterType === 'APPOINTMENT' && { color: '#D97706', fontWeight: '700' }]}>
-            🗓️ Lịch khám
-          </Text>
-        </TouchableOpacity>
+      {/* 2. Thanh bộ lọc phân loại */}
+      <View style={[styles.filterBarContainer, isDarkMode && { backgroundColor: colors.background, borderBottomColor: colors.border }]}>
+        <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.filterBarScroll}>
+          {[
+            {
+              key: 'ALL',
+              label: t('Tất cả ({{count}})', { count: incidents.length + medications.length }),
+              activePill: styles.filterPillActive,
+              darkBg: 'rgba(255, 107, 0, 0.15)',
+              darkBorder: '#FF6B00',
+              activeColor: undefined,
+            },
+            {
+              key: 'MEDICATION',
+              label: `💊 Uống thuốc ${pendingMedCount > 0 ? `(${pendingMedCount})` : '(Xong)'}`,
+              activePill: styles.filterPillActiveMed,
+              darkBg: 'rgba(16, 185, 129, 0.15)',
+              darkBorder: '#10B981',
+              activeColor: '#059669',
+            },
+            {
+              key: 'CRITICAL',
+              label: '🚨 Nguy kịch',
+              activePill: styles.filterPillActive,
+              darkBg: 'rgba(255, 107, 0, 0.15)',
+              darkBorder: '#FF6B00',
+              activeColor: undefined,
+            },
+            {
+              key: 'VITAL',
+              label: 'Sức khoẻ',
+              activePill: styles.filterPillActive,
+              darkBg: 'rgba(255, 107, 0, 0.15)',
+              darkBorder: '#FF6B00',
+              activeColor: undefined,
+            },
+            {
+              key: 'APPOINTMENT',
+              label: '🗓️ Lịch khám',
+              activePill: styles.filterPillActive,
+              darkBg: 'rgba(217, 119, 6, 0.15)',
+              darkBorder: '#D97706',
+              activeColor: '#D97706',
+            },
+          ].map((tab) => {
+            const isActive = filterType === tab.key;
+            return (
+              <TouchableOpacity
+                key={tab.key}
+                style={[
+                  styles.filterPill,
+                  isDarkMode && !isActive && { backgroundColor: colors.card, borderColor: colors.border },
+                  isActive && tab.activePill,
+                  isActive && isDarkMode && { backgroundColor: tab.darkBg, borderColor: tab.darkBorder },
+                ]}
+                onPress={() => setFilterType(tab.key as any)}
+                activeOpacity={0.8}
+              >
+                <Text
+                  style={[
+                    styles.filterText,
+                    isDarkMode && !isActive && { color: colors.textSecondary },
+                    isActive && (tab.activeColor ? { color: tab.activeColor, fontWeight: '700' } : styles.filterTextActive),
+                  ]}
+                >
+                  {tab.label}
+                </Text>
+              </TouchableOpacity>
+            );
+          })}
+        </ScrollView>
       </View>
 
-      {/* ---------------------------------------------------------------------- */}
-      {/* 3. Danh sách thông báo (FlatList tối ưu cuộn + Pull-to-refresh)       */}
-      {/* ---------------------------------------------------------------------- */}
+      {/* 3. Danh sách thông báo */}
       <FlatList
-        data={filteredIncidents}
+        data={listData}
         keyExtractor={(item) => item.id}
-        refreshControl={
-          <RefreshControl
-            refreshing={refreshing}
-            onRefresh={handleRefresh}
-            tintColor={Colors.primary}
-          />
-        }
+        refreshControl={<RefreshControl refreshing={refreshing} onRefresh={handleRefresh} tintColor={Colors.primary} />}
         renderItem={({ item }) => {
-          // Lấy cấu hình màu sắc, icon và tiêu đề theo alert_type
-          const config = getAlertConfig(item.alert_type);
-          // Dịch nhãn thời gian lúc render để ngôn ngữ luôn khớp với lựa chọn hiện tại.
-          const friendlyTime = formatFriendlyTime(item.created_at, (key, count) =>
-            count === undefined ? t(key) : t(key, { count }),
+          if (item.itemType === 'MEDICATION') {
+            return renderMedicationCard(item.data);
+          }
+
+          const inc = item.data;
+          const config = getAlertConfig(inc.alert_type);
+          const friendlyTime = formatFriendlyTime(inc.created_at, (key, count) =>
+            count === undefined ? t(key) : t(key, { count })
           );
 
           return (
@@ -474,76 +571,74 @@ export default function AlertsListScreen({ navigation }: any) {
                 isDarkMode && { backgroundColor: colors.card, borderColor: colors.border },
                 config.isCritical && styles.cardCritical,
                 config.isCritical && isDarkMode && { backgroundColor: '#3F1219', borderColor: '#7F1D1D' },
-                !item.is_acknowledged && styles.cardUnread,
+                !inc.is_acknowledged && styles.cardUnread,
               ]}
-              onPress={() => handlePressCard(item)}
+              onPress={() => handlePressCard(inc)}
               activeOpacity={0.8}
             >
-              {/* Cột trái: Biểu tượng phân loại tròn có màu nền theo mức độ */}
-              <View style={[styles.categoryIconCircle, { backgroundColor: isDarkMode ? (config.isCritical ? 'rgba(220, 38, 38, 0.25)' : 'rgba(255, 255, 255, 0.08)') : config.iconBg }]}>
+              <View
+                style={[
+                  styles.categoryIconCircle,
+                  {
+                    backgroundColor: isDarkMode
+                      ? config.isCritical
+                        ? 'rgba(220, 38, 38, 0.25)'
+                        : 'rgba(255, 255, 255, 0.08)'
+                      : config.iconBg,
+                  },
+                ]}
+              >
                 <Ionicons name={config.iconName} size={22} color={config.iconColor} />
               </View>
 
-              {/* Cột giữa: Chi tiết thông tin sự kiện */}
               <View style={styles.cardCenter}>
-                {/* Hàng huy hiệu (Badge) loại cảnh báo & nhãn MỚI */}
                 <View style={styles.cardMetaRow}>
-                  <View style={[styles.typeBadge, { backgroundColor: isDarkMode && config.badgeBg === '#FFF7ED' ? 'rgba(234, 88, 12, 0.2)' : config.badgeBg }]}>
-                    <Text style={[styles.typeBadgeText, { color: config.badgeColor }]}>
-                      {config.badgeText}
-                    </Text>
+                  <View
+                    style={[
+                      styles.typeBadge,
+                      { backgroundColor: isDarkMode && config.badgeBg === '#FFF7ED' ? 'rgba(234, 88, 12, 0.2)' : config.badgeBg },
+                    ]}
+                  >
+                    <Text style={[styles.typeBadgeText, { color: config.badgeColor }]}>{config.badgeText}</Text>
                   </View>
-                  {!item.is_acknowledged && (
+                  {!inc.is_acknowledged && (
                     <View style={styles.newBadge}>
                       <Text style={styles.newBadgeText}>MỚI</Text>
                     </View>
                   )}
                 </View>
 
-                {/* Tiêu đề sự kiện chuẩn hóa tiếng Việt */}
                 <Text
-                  style={[
-                    styles.cardTitle,
-                    isDarkMode && { color: colors.textPrimary },
-                    config.isCritical && styles.cardTitleCritical,
-                  ]}
+                  style={[styles.cardTitle, isDarkMode && { color: colors.textPrimary }, config.isCritical && styles.cardTitleCritical]}
                   numberOfLines={2}
                 >
                   {config.title}
                 </Text>
 
-                {/* Chi tiết thông điệp sự kiện từ AI / cảm biến */}
                 <Text style={[styles.cardMsg, isDarkMode && { color: colors.textSecondary }]} numberOfLines={2}>
-                  {item.message}
+                  {inc.message}
                 </Text>
 
-                {/* Dòng thời gian và định danh nguồn thiết bị phát hiện */}
                 <View style={styles.timeRow}>
                   <Ionicons name="time-outline" size={12} color={isDarkMode ? '#64748B' : '#94A3B8'} />
                   <Text style={[styles.cardTime, isDarkMode && { color: colors.textSecondary }]}>{friendlyTime}</Text>
                   <Text style={[styles.dotSeparator, isDarkMode && { color: colors.border }]}>•</Text>
                   <Text style={[styles.deviceLocationText, isDarkMode && { color: colors.textSecondary }]}>
-                    {item.device_id ? (
-                      <>
-                        <Text>Thiết bị: </Text>
-                        {item.device_id}
-                      </>
-                    ) : 'Hệ thống AI'}
+                    {inc.device_id ? `Thiết bị: ${inc.device_id}` : 'Hệ thống AI'}
                   </Text>
                 </View>
               </View>
 
-              {/* Cột phải: Ảnh chụp bằng chứng hoặc clip 5 giây trích xuất (nếu có) */}
-              {item.thumbnail_url && (
+              {inc.thumbnail_url && (
                 <View style={styles.thumbWrapper}>
-                  <Image source={{ uri: item.thumbnail_url }} style={styles.thumbImg} />
+                  <Image source={{ uri: inc.thumbnail_url }} style={styles.thumbImg} />
                   <View style={styles.thumbOverlay}>
-                    {item.video_clip_url && (
+                    {inc.video_clip_url && (
                       <View style={styles.playCenterBtn}>
                         <Ionicons name="play" size={12} color="#FFFFFF" style={{ marginLeft: 2 }} />
                       </View>
                     )}
-                    {item.video_clip_url && (
+                    {inc.video_clip_url && (
                       <View style={styles.playTag}>
                         <Text style={styles.playTagText}>5s Clip</Text>
                       </View>
@@ -555,21 +650,27 @@ export default function AlertsListScreen({ navigation }: any) {
           );
         }}
         contentContainerStyle={styles.listContainer}
-        // Giao diện khi danh sách trống: Thông báo an toàn
         ListEmptyComponent={
           <View style={styles.emptyBox}>
-            <View style={styles.emptyIconCircle}>
-              <Ionicons name="shield-checkmark-outline" size={36} color="#10B981" />
+            <View style={[styles.emptyIconCircle, filterType === 'MEDICATION' && { backgroundColor: '#EFF6FF' }]}>
+              <Ionicons
+                name={filterType === 'MEDICATION' ? 'medical' : 'shield-checkmark-outline'}
+                size={36}
+                color={filterType === 'MEDICATION' ? '#0284C7' : '#10B981'}
+              />
             </View>
-            <Text style={[styles.emptyTitle, isDarkMode && { color: colors.textPrimary }]}>Không có cảnh báo bất thường nào</Text>
+            <Text style={[styles.emptyTitle, isDarkMode && { color: colors.textPrimary }]}>
+              {filterType === 'MEDICATION' ? 'Không có lịch nhắc uống thuốc nào' : 'Không có cảnh báo bất thường nào'}
+            </Text>
             <Text style={[styles.emptySub, isDarkMode && { color: colors.textSecondary }]}>
-              Hệ thống AI đang giám sát an toàn 24/7 và mọi chỉ số sức khoẻ đều trong ngưỡng chuẩn.
+              {filterType === 'MEDICATION'
+                ? 'Các cữ thuốc sẽ hiển thị theo đơn thuốc của bác sĩ và kế hoạch điều trị trong hồ sơ bệnh án.'
+                : 'Hệ thống AI đang giám sát an toàn 24/7 và mọi chỉ số sức khoẻ đều trong ngưỡng chuẩn.'}
             </Text>
           </View>
         }
       />
 
-      {/* Modal Lịch khám Bác sĩ & Xác nhận cho Người thân */}
       <FamilyAppointmentsModal
         visible={familyAppointmentsModalVisible}
         patientId={selectedAppointmentPatientId || patientRecord?.patient_id || 1}
@@ -584,10 +685,7 @@ export default function AlertsListScreen({ navigation }: any) {
 }
 
 const styles = StyleSheet.create({
-  safeArea: {
-    flex: 1,
-    backgroundColor: '#F8FAFC',
-  },
+  safeArea: { flex: 1, backgroundColor: '#F8FAFC' },
   topHeader: {
     flexDirection: 'row',
     alignItems: 'center',
@@ -598,34 +696,10 @@ const styles = StyleSheet.create({
     borderBottomWidth: 1,
     borderBottomColor: '#F1F5F9',
   },
-  headerTitleCol: {
-    flex: 1,
-    marginRight: 8,
-  },
-  headerTitle: {
-    fontSize: 19,
-    fontWeight: '900',
-    color: Colors.textPrimary,
-  },
-  headerSubtitle: {
-    fontSize: 11.5,
-    color: '#94A3B8',
-    marginTop: 2,
-    fontWeight: '500',
-  },
-  headerRightActions: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 8,
-  },
-  themeToggleBtn: {
-    width: 32,
-    height: 32,
-    borderRadius: 16,
-    backgroundColor: '#F1F5F9',
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
+  headerTitleCol: { flex: 1, marginRight: 8 },
+  headerTitle: { fontSize: 19, fontWeight: '900', color: Colors.textPrimary },
+  headerSubtitle: { fontSize: 11.5, color: '#94A3B8', marginTop: 2, fontWeight: '500' },
+  headerRightActions: { flexDirection: 'row', alignItems: 'center', gap: 8 },
   markAllReadBtn: {
     flexDirection: 'row',
     alignItems: 'center',
@@ -637,11 +711,7 @@ const styles = StyleSheet.create({
     borderWidth: 1,
     borderColor: '#FED7AA',
   },
-  markAllReadText: {
-    fontSize: 11,
-    fontWeight: '700',
-    color: '#EA580C',
-  },
+  markAllReadText: { fontSize: 11, fontWeight: '700', color: '#EA580C' },
   cameraQuickBtn: {
     flexDirection: 'row',
     alignItems: 'center',
@@ -651,20 +721,9 @@ const styles = StyleSheet.create({
     paddingVertical: 6,
     gap: 4,
   },
-  cameraQuickText: {
-    color: '#FFF',
-    fontSize: 11.5,
-    fontWeight: '700',
-  },
-  filterBar: {
-    flexDirection: 'row',
-    paddingHorizontal: 16,
-    paddingVertical: 12,
-    gap: 8,
-    backgroundColor: '#FFFFFF',
-    borderBottomWidth: 1,
-    borderBottomColor: '#F1F5F9',
-  },
+  cameraQuickText: { color: '#FFF', fontSize: 11.5, fontWeight: '700' },
+  filterBarContainer: { backgroundColor: '#FFFFFF', borderBottomWidth: 1, borderBottomColor: '#F1F5F9' },
+  filterBarScroll: { flexDirection: 'row', paddingHorizontal: 16, paddingVertical: 10, gap: 8, alignItems: 'center' },
   filterPill: {
     paddingVertical: 7,
     paddingHorizontal: 13,
@@ -675,25 +734,53 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     justifyContent: 'center',
   },
-  filterPillActive: {
-    backgroundColor: '#FFF4EC',
-    borderColor: '#FF6B00',
-    borderWidth: 1.5,
+  filterPillActive: { backgroundColor: '#FFF4EC', borderColor: '#FF6B00', borderWidth: 1.5 },
+  filterPillActiveMed: { backgroundColor: '#ECFDF5', borderColor: '#10B981', borderWidth: 1.5 },
+  filterText: { fontSize: 12, fontWeight: '600', color: '#64748B' },
+  filterTextActive: { color: '#FF6B00', fontWeight: '700' },
+
+  medCard: { flexDirection: 'column', alignItems: 'stretch', gap: 12 },
+  medCardOverdue: { backgroundColor: '#FFF1F2', borderWidth: 1.5, borderColor: '#FECACA' },
+  medCardTaken: { backgroundColor: '#F0FDF4', borderWidth: 1.2, borderColor: '#BBF7D0' },
+  medActionsRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 8,
+    marginTop: 4,
+    paddingTop: 10,
+    borderTopWidth: 1,
+    borderTopColor: '#F1F5F9',
   },
-  filterText: {
-    fontSize: 12,
-    fontWeight: '600',
-    color: '#64748B',
+  medConfirmBtn: {
+    flex: 1,
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: 6,
+    backgroundColor: '#10B981',
+    paddingVertical: 8,
+    paddingHorizontal: 12,
+    borderRadius: 10,
   },
-  filterTextActive: {
-    color: '#FF6B00',
-    fontWeight: '700',
+  medConfirmBtnText: { color: '#FFFFFF', fontSize: 12.5, fontWeight: '700' },
+  medSnoozeBtn: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: 5,
+    backgroundColor: '#F8FAFC',
+    borderWidth: 1,
+    borderColor: '#CBD5E1',
+    paddingVertical: 8,
+    paddingHorizontal: 10,
+    borderRadius: 10,
   },
-  listContainer: {
-    padding: 16,
-    gap: 12,
-    paddingBottom: 40,
-  },
+  medSnoozeBtnText: { color: '#64748B', fontSize: 11.5, fontWeight: '600' },
+  medSpeakerBtn: { width: 34, height: 34, borderRadius: 17, backgroundColor: '#E0F2FE', alignItems: 'center', justifyContent: 'center' },
+  medCompletedRow: { flexDirection: 'row', alignItems: 'center', gap: 6, paddingTop: 8, borderTopWidth: 1, borderTopColor: '#DCFCE7' },
+  medCompletedText: { fontSize: 12, color: '#15803D', fontWeight: '600' },
+
+  listContainer: { padding: 16, gap: 12, paddingBottom: 40 },
   card: {
     backgroundColor: '#FFFFFF',
     borderRadius: 16,
@@ -705,109 +792,25 @@ const styles = StyleSheet.create({
     borderColor: '#F1F5F9',
     ...Shadows.soft,
   },
-  cardCritical: {
-    backgroundColor: '#FFF1F2',
-    borderWidth: 1.5,
-    borderColor: '#FECACA',
-  },
-  cardUnread: {
-    borderLeftWidth: 3.5,
-    borderLeftColor: '#FF6B00',
-  },
-  categoryIconCircle: {
-    width: 42,
-    height: 42,
-    borderRadius: 21,
-    alignItems: 'center',
-    justifyContent: 'center',
-    marginTop: 2,
-  },
-  cardCenter: {
-    flex: 1,
-  },
-  cardMetaRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 6,
-    marginBottom: 4,
-  },
-  typeBadge: {
-    paddingHorizontal: 7,
-    paddingVertical: 2,
-    borderRadius: 6,
-  },
-  typeBadgeText: {
-    fontSize: 9.5,
-    fontWeight: '800',
-  },
-  newBadge: {
-    backgroundColor: '#EF4444',
-    borderRadius: 6,
-    paddingHorizontal: 5,
-    paddingVertical: 1.5,
-  },
-  newBadgeText: {
-    color: '#FFF',
-    fontSize: 8.5,
-    fontWeight: '800',
-  },
-  cardTitle: {
-    fontSize: 13.5,
-    fontWeight: '700',
-    color: Colors.textPrimary,
-    lineHeight: 19,
-    marginBottom: 3,
-  },
-  cardTitleCritical: {
-    color: '#DC2626',
-    fontWeight: '800',
-  },
-  cardMsg: {
-    fontSize: 12.5,
-    color: '#475569',
-    lineHeight: 18,
-    marginBottom: 6,
-  },
-  timeRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 4,
-  },
-  cardTime: {
-    fontSize: 11,
-    color: '#94A3B8',
-    fontWeight: '500',
-  },
-  dotSeparator: {
-    fontSize: 10,
-    color: '#CBD5E1',
-    marginHorizontal: 2,
-  },
-  deviceLocationText: {
-    fontSize: 11,
-    color: '#94A3B8',
-    fontWeight: '500',
-  },
-  thumbWrapper: {
-    width: 76,
-    height: 58,
-    borderRadius: 12,
-    overflow: 'hidden',
-    position: 'relative',
-    backgroundColor: '#E2E8F0',
-    marginTop: 2,
-  },
-  thumbImg: {
-    width: '100%',
-    height: '100%',
-    borderRadius: 12,
-  },
-  thumbOverlay: {
-    ...StyleSheet.absoluteFill,
-    backgroundColor: 'rgba(0, 0, 0, 0.25)',
-    justifyContent: 'center',
-    alignItems: 'center',
-  },
+  cardCritical: { backgroundColor: '#FFF1F2', borderWidth: 1.5, borderColor: '#FECACA' },
+  cardUnread: { borderLeftWidth: 3.5, borderLeftColor: '#FF6B00' },
+  categoryIconCircle: { width: 42, height: 42, borderRadius: 21, alignItems: 'center', justifyContent: 'center', marginTop: 2 },
+  cardCenter: { flex: 1 },
+  cardMetaRow: { flexDirection: 'row', alignItems: 'center', gap: 6, marginBottom: 4 },
+  typeBadge: { paddingHorizontal: 7, paddingVertical: 2, borderRadius: 6 },
+  typeBadgeText: { fontSize: 9.5, fontWeight: '800' },
+  newBadge: { backgroundColor: '#EF4444', borderRadius: 6, paddingHorizontal: 5, paddingVertical: 1.5 },
+  newBadgeText: { color: '#FFF', fontSize: 8.5, fontWeight: '800' },
+  cardTitle: { fontSize: 13.5, fontWeight: '700', color: Colors.textPrimary, lineHeight: 19, marginBottom: 3 },
+  cardTitleCritical: { color: '#DC2626', fontWeight: '800' },
+  cardMsg: { fontSize: 12.5, color: '#475569', lineHeight: 18, marginBottom: 6 },
+  timeRow: { flexDirection: 'row', alignItems: 'center', gap: 4 },
+  cardTime: { fontSize: 11, color: '#94A3B8', fontWeight: '500' },
+  dotSeparator: { fontSize: 10, color: '#CBD5E1', marginHorizontal: 2 },
+  deviceLocationText: { fontSize: 11, color: '#94A3B8', fontWeight: '500' },
+  thumbWrapper: { width: 76, height: 58, borderRadius: 12, overflow: 'hidden', backgroundColor: '#E2E8F0', marginTop: 2 },
+  thumbImg: { width: '100%', height: '100%', borderRadius: 12 },
+  thumbOverlay: { position: 'absolute', top: 0, left: 0, right: 0, bottom: 0, backgroundColor: 'rgba(0, 0, 0, 0.25)', justifyContent: 'center', alignItems: 'center' },
   playCenterBtn: {
     width: 24,
     height: 24,
@@ -818,46 +821,10 @@ const styles = StyleSheet.create({
     borderWidth: 1,
     borderColor: 'rgba(255, 255, 255, 0.7)',
   },
-  playTag: {
-    position: 'absolute',
-    bottom: 3,
-    right: 3,
-    backgroundColor: 'rgba(0, 0, 0, 0.7)',
-    borderRadius: 4,
-    paddingHorizontal: 4,
-    paddingVertical: 1,
-  },
-  playTagText: {
-    color: '#FFFFFF',
-    fontSize: 8,
-    fontWeight: '700',
-  },
-  emptyBox: {
-    alignItems: 'center',
-    justifyContent: 'center',
-    marginTop: 60,
-    paddingHorizontal: 24,
-    gap: 10,
-  },
-  emptyIconCircle: {
-    width: 64,
-    height: 64,
-    borderRadius: 32,
-    backgroundColor: '#ECFDF5',
-    alignItems: 'center',
-    justifyContent: 'center',
-    marginBottom: 4,
-  },
-  emptyTitle: {
-    fontSize: 15,
-    color: Colors.textPrimary,
-    fontWeight: '700',
-    textAlign: 'center',
-  },
-  emptySub: {
-    fontSize: 13,
-    color: '#64748B',
-    textAlign: 'center',
-    lineHeight: 19,
-  },
+  playTag: { position: 'absolute', bottom: 3, right: 3, backgroundColor: 'rgba(0, 0, 0, 0.7)', borderRadius: 4, paddingHorizontal: 4, paddingVertical: 1 },
+  playTagText: { color: '#FFFFFF', fontSize: 8, fontWeight: '700' },
+  emptyBox: { alignItems: 'center', justifyContent: 'center', marginTop: 60, paddingHorizontal: 24, gap: 10 },
+  emptyIconCircle: { width: 64, height: 64, borderRadius: 32, backgroundColor: '#ECFDF5', alignItems: 'center', justifyContent: 'center', marginBottom: 4 },
+  emptyTitle: { fontSize: 15, color: Colors.textPrimary, fontWeight: '700', textAlign: 'center' },
+  emptySub: { fontSize: 13, color: '#64748B', textAlign: 'center', lineHeight: 19 },
 });

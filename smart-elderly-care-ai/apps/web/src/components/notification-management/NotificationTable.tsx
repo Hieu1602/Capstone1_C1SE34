@@ -33,7 +33,7 @@ export const NotificationTable: React.FC<NotificationTableProps> = ({
       <div className="overflow-x-auto">
         <table className="w-full text-left border-collapse">
           <thead>
-            <tr className="border-b border-[#C8AD8A] dark:border-white/10 bg-[#FFF8EE] dark:bg-[#1A3830] text-[11px] font-bold text-slate-700 dark:text-slate-200 uppercase tracking-wider">
+            <tr className="border-b border-[#E7E9ED] dark:border-[#454A53] bg-[#F5F6F8] dark:bg-[#202329] text-[11px] font-bold text-[#737780] dark:text-[#A1A7B1] uppercase tracking-wider">
               <th className="py-3.5 px-4">Thông báo & Phân loại</th>
               <th className="py-3.5 px-3">Đối tượng</th>
               <th className="py-3.5 px-3">Trạng thái</th>
@@ -42,13 +42,13 @@ export const NotificationTable: React.FC<NotificationTableProps> = ({
               <th className="py-3.5 px-4 text-right">Thao tác điều phối</th>
             </tr>
           </thead>
-          <tbody className="divide-y divide-[#C8AD8A]/30 dark:divide-white/5 text-xs">
+          <tbody className="divide-y divide-[#E7E9ED] dark:divide-[#454A53] text-xs">
             {notifications.length === 0 ? (
               <tr>
-                <td colSpan={6} className="py-12 text-center text-slate-500 dark:text-slate-400">
-                  <Bell className="w-8 h-8 mx-auto mb-2 opacity-40 text-[#D96C3B]" />
-                  <p className="text-sm font-semibold">Không tìm thấy thông báo nào</p>
-                  <p className="text-xs mt-0.5">Thử đổi bộ lọc tìm kiếm hoặc tạo thông báo mới</p>
+                <td colSpan={6} className="py-12 text-center text-[#737780]">
+                  <Bell className="w-8 h-8 mx-auto mb-2 opacity-40 text-[#FF6B35]" />
+                  <p className="text-sm font-semibold text-[#191B20] dark:text-[#F5F6F8]">Không tìm thấy thông báo nào</p>
+                  <p className="text-xs mt-0.5 text-[#737780]">Thử đổi bộ lọc tìm kiếm hoặc tạo thông báo mới</p>
                 </td>
               </tr>
             ) : (
@@ -75,10 +75,10 @@ export const NotificationTable: React.FC<NotificationTableProps> = ({
                           <TypeIcon className="w-4 h-4" />
                         </div>
                         <div className="min-w-0">
-                          <div className="font-bold text-slate-900 dark:text-white truncate text-xs flex items-center gap-1.5">
+                          <div className="font-bold text-[#191B20] dark:text-[#F5F6F8] truncate text-xs flex items-center gap-1.5">
                             <span>{notif.title}</span>
                           </div>
-                          <p className="text-[11px] text-slate-600 dark:text-slate-400 line-clamp-1 mt-0.5">
+                          <p className="text-[11px] text-[#737780] line-clamp-1 mt-0.5">
                             {notif.body}
                           </p>
                           <div className="flex items-center gap-2 mt-1">
@@ -93,8 +93,8 @@ export const NotificationTable: React.FC<NotificationTableProps> = ({
                     {/* Đối tượng */}
                     <td className="py-3.5 px-3">
                       <div className="flex items-center gap-1.5">
-                        <AudienceIcon className="w-3.5 h-3.5 text-slate-500" />
-                        <span className="text-slate-800 dark:text-slate-200 font-medium">
+                        <AudienceIcon className="w-3.5 h-3.5 text-[#737780]" />
+                        <span className="text-[#191B20] dark:text-[#F5F6F8] font-medium">
                           {audienceConf.label}
                         </span>
                       </div>
@@ -117,13 +117,13 @@ export const NotificationTable: React.FC<NotificationTableProps> = ({
 
                     {/* Thời gian gửi */}
                     <td className="py-3.5 px-3">
-                      <div className="text-slate-800 dark:text-slate-200 font-mono text-[11px]">
+                      <div className="text-[#191B20] dark:text-[#F5F6F8] font-mono text-[11px]">
                         {notif.status === 'published' && notif.published_at ? (
                           <div>
-                            <div className="font-semibold text-slate-900 dark:text-white">
+                            <div className="font-semibold text-[#191B20] dark:text-[#F5F6F8]">
                               {new Date(notif.published_at).toLocaleString('vi-VN')}
                             </div>
-                            <span className="text-[10px] text-slate-500 font-sans block mt-0.5">
+                            <span className="text-[10px] text-[#737780] font-sans block mt-0.5">
                               Đã phát hành
                             </span>
                           </div>
@@ -138,7 +138,7 @@ export const NotificationTable: React.FC<NotificationTableProps> = ({
                           </div>
                         ) : notif.status === 'revoked' && notif.revoked_at ? (
                           <div>
-                            <div className="text-slate-500 line-through">
+                            <div className="text-[#737780] line-through">
                               {notif.published_at
                                 ? new Date(notif.published_at).toLocaleString('vi-VN')
                                 : new Date(notif.created_at).toLocaleString('vi-VN')}
@@ -150,7 +150,7 @@ export const NotificationTable: React.FC<NotificationTableProps> = ({
                         ) : (
                           <div>
                             <div className="font-semibold">{new Date(notif.created_at).toLocaleString('vi-VN')}</div>
-                            <span className="text-[10px] text-slate-400 font-sans block mt-0.5">
+                            <span className="text-[10px] text-[#737780] font-sans block mt-0.5">
                               Bản nháp
                             </span>
                           </div>
@@ -184,10 +184,10 @@ export const NotificationTable: React.FC<NotificationTableProps> = ({
                         )
                       ) : (
                         <div>
-                          <div className="font-mono text-[11px] text-slate-700 dark:text-slate-300">
+                          <div className="font-mono text-[11px] text-[#191B20] dark:text-[#F5F6F8]">
                             Vĩnh viễn
                           </div>
-                          <span className="text-[10px] text-slate-400 dark:text-slate-500 block font-sans mt-0.5">
+                          <span className="text-[10px] text-[#737780] block font-sans mt-0.5">
                             Không giới hạn
                           </span>
                         </div>
@@ -201,7 +201,7 @@ export const NotificationTable: React.FC<NotificationTableProps> = ({
                         <button
                           onClick={() => onPreview(notif)}
                           title="Xem chi tiết"
-                          className="p-1.5 rounded-lg text-slate-500 hover:text-[#D96C3B] hover:bg-[#D96C3B]/10 transition-colors cursor-pointer"
+                          className="p-1.5 rounded-lg text-[#737780] hover:text-[#FF6B35] hover:bg-[#FFF0E8] dark:hover:bg-[#FF6B35]/15 transition-colors cursor-pointer"
                         >
                           <Eye className="w-3.5 h-3.5" />
                         </button>
@@ -211,7 +211,7 @@ export const NotificationTable: React.FC<NotificationTableProps> = ({
                           <button
                             onClick={() => onPublishNow(notif.id)}
                             title="Phát hành ngay tới App"
-                            className="px-2.5 py-1.5 rounded-lg text-[11px] font-bold bg-emerald-600 hover:bg-emerald-700 text-white flex items-center gap-1 shadow-sm transition-colors cursor-pointer"
+                            className="px-2.5 py-1.5 rounded-lg text-[11px] font-bold bg-[#16A36A] hover:bg-emerald-700 text-white flex items-center gap-1 shadow-2xs transition-colors cursor-pointer"
                           >
                             <Send className="w-3 h-3" />
                             <span>Phát hành</span>
@@ -223,7 +223,7 @@ export const NotificationTable: React.FC<NotificationTableProps> = ({
                           <button
                             onClick={() => onEdit(notif)}
                             title="Chỉnh sửa thông báo"
-                            className="p-1.5 rounded-lg text-slate-500 hover:text-[#D96C3B] hover:bg-[#D96C3B]/10 transition-colors cursor-pointer"
+                            className="p-1.5 rounded-lg text-[#737780] hover:text-[#FF6B35] hover:bg-[#FFF0E8] dark:hover:bg-[#FF6B35]/15 transition-colors cursor-pointer"
                           >
                             <FileEdit className="w-3.5 h-3.5" />
                           </button>
@@ -246,7 +246,7 @@ export const NotificationTable: React.FC<NotificationTableProps> = ({
                           <button
                             onClick={() => onDelete(notif)}
                             title="Xóa thông báo"
-                            className="p-1.5 rounded-lg text-slate-400 hover:text-rose-600 hover:bg-rose-50 dark:hover:bg-rose-950/40 transition-colors cursor-pointer"
+                            className="p-1.5 rounded-lg text-[#737780] hover:text-rose-600 hover:bg-rose-50 dark:hover:bg-rose-950/40 transition-colors cursor-pointer"
                           >
                             <Trash2 className="w-3.5 h-3.5" />
                           </button>
@@ -263,4 +263,3 @@ export const NotificationTable: React.FC<NotificationTableProps> = ({
     </div>
   );
 };
-

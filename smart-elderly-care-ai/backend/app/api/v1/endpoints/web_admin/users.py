@@ -122,7 +122,7 @@ async def list_users(
             eld_res = await db.execute(eld_stmt)
             eld_list = eld_res.scalars().all()
             for eld in eld_list:
-                house_str = f"{eld.house.name} ({eld.house.address})" if eld.house else "Nhà của tôi (123 Hải Phòng)"
+                house_str = f"{eld.house.name} ({eld.house.address})" if eld.house else ("Chưa có địa chỉ" if not eld.house else eld.house.name)
                 eld_out = UserOut(
                     id=eld.id,
                     phone=eld.emergency_contact_phone or "+84905123456",
@@ -219,7 +219,7 @@ async def create_user_by_admin(
     await db.refresh(user)
 
     user_out = UserOut.model_validate(user)
-    user_out.assigned_house = user_in.get("assigned_house") or "Nhà của tôi (123 Hải Phòng)"
+    user_out.assigned_house = user_in.get("assigned_house") or ("Chưa có địa chỉ" if not eld.house else eld.house.name)
     return user_out
 
 

@@ -1,0 +1,38 @@
+# Chạy độc lập, không cần database/MQTT/AI models.
+services:
+  tapo-audio:
+    image: alexxit/go2rtc:1.9.14
+    init: true
+    restart: unless-stopped
+    env_file: .env.camera
+    networks:
+      - elderly_care_net
+    ports:
+      - '8555:8555/tcp'
+      - '8555:8555/udp'
+    volumes:
+      - ./edge/go2rtc.yaml:/config/go2rtc.yaml:ro
+  tapo-camera:
+    build:
+      context: ./edge
+      dockerfile: Dockerfile.camera
+    init: true
+    restart: unless-stopped
+    env_file: .env.camera
+    networks:
+      - elderly_care_net
+    ports:
+      - "127.0.0.1:8090:8090"
+    volumes:
+      - camera_recordings:/recordings
+    stop_grace_period: 25s
+    healthcheck:
+      test: ["CMD", "python", "-c", "import urllib.request; urllib.request.urlopen('http://127.0.0.1:8090/healthz', timeout=3)"]
+      interval: 30s
+      timeout: 5s
+      start_period: 20s
+volumes:
+  camera_recordings:
+networks:
+  elderly_care_net:
+    driver: bridge

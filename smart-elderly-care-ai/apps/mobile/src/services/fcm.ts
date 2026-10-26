@@ -2,18 +2,21 @@
 // Firebase Cloud Messaging – xử lý push notification khẩn cấp
 // Còi hú ghi đè chế độ im lặng trên Android / iOS
 
-import { Platform, Vibration } from 'react-native';
+import { NativeModules, Platform, Vibration } from 'react-native';
 import Constants, { ExecutionEnvironment } from 'expo-constants';
 import { LocalizedAlert } from '../i18n/LocalizedComponents';
 
 type AlertLevel = 'LOW' | 'MEDIUM' | 'HIGH' | 'CRITICAL';
 
+// Kiểm tra môi trường Expo Go hoặc thiếu Native Module Firebase
+const hasNativeFirebase = Boolean(NativeModules && NativeModules.RNFBAppModule);
 const isExpoGo =
   Constants.executionEnvironment === ExecutionEnvironment.StoreClient ||
-  Constants.appOwnership === 'expo';
+  (Constants as any).appOwnership === 'expo' ||
+  !hasNativeFirebase;
 
 let messaging: any = null;
-if (Platform.OS !== 'web' && !isExpoGo) {
+if (Platform.OS !== 'web' && hasNativeFirebase && !isExpoGo) {
   try {
     messaging = require('@react-native-firebase/messaging').default;
   } catch (e) {
@@ -29,15 +32,19 @@ class FCMService {
   // ------------------------------------------------------------------
 
   async initialize(): Promise<void> {
-    if (Platform.OS === 'web' || !messaging || isExpoGo) {
+    if (Platform.OS === 'web' || !messaging || isExpoGo || !hasNativeFirebase) {
       console.log('[FCM] Running in Expo Go, on web, or without native Firebase module. Skipping FCM initialization.');
       return;
     }
-    await this._requestPermission();
-    await this._registerToken();
-    this._setupForegroundHandler();
-    this._setupBackgroundHandler();
-    this._handleInitialNotification();
+    try {
+      await this._requestPermission();
+      await this._registerToken();
+      this._setupForegroundHandler();
+      this._setupBackgroundHandler();
+      this._handleInitialNotification();
+    } catch (e) {
+      console.warn('[FCM] Skipping native FCM init error:', e);
+    }
   }
 
   // ------------------------------------------------------------------
@@ -78,13 +85,13 @@ class FCMService {
     try {
       const token = await messaging().getToken();
       console.log('[FCM] Device token:', token);
-    } catch (err) {
-      console.error('[FCM] Failed to get device token:', err);
-    }
 
-    messaging().onTokenRefresh(async (newToken: string) => {
-      console.log('[FCM] Token refreshed:', newToken);
-    });
+      messaging().onTokenRefresh(async (newToken: string) => {
+        console.log('[FCM] Token refreshed:', newToken);
+      });
+    } catch (err) {
+      console.warn('[FCM] Failed to get device token:', err);
+    }
   }
 
   // ------------------------------------------------------------------
@@ -93,17 +100,37 @@ class FCMService {
 
   private _setupForegroundHandler(): void {
     if (!messaging) return;
-    this.unsubscribeForeground = messaging().onMessage(
-      async (remoteMessage: any) => {
-        console.log('[FCM] Foreground message:', remoteMessage);
+    try {
+      this.unsubscribeForeground = messaging().onMessage(
+        async (remoteMessage: any) => {
+          console.log('[FCM] Foreground message:', remoteMessage);
 
-        const { notification, data } = remoteMessage;
-        const level = (data?.alert_level as AlertLevel) || 'MEDIUM';
-        const message = notification?.body || data?.message || 'Cảnh báo mới từ hệ thống';
+          const { notification, data } = remoteMessage;
+          const level: AlertLevel = (data?.level as AlertLevel) || 'HIGH';
 
-        this._triggerAlert(level, message);
-      },
-    );
+          if (level === 'CRITICAL' || level === 'HIGH') {
+            this._triggerVibrationPattern(level);
+          }
+
+          LocalizedAlert.alert(
+            notification?.title || 'Cảnh báo khẩn cấp',
+            notification?.body || 'Phát hiện sự cố bất thường!',
+            [{ text: 'Đã hiểu', style: 'default' }]
+          );
+        },
+      );
+    } catch (e) {
+      console.warn('[FCM] Foreground handler setup error:', e);
+    }
+  }
+
+  private _triggerVibrationPattern(level: AlertLevel): void {
+    if (Platform.OS === 'web') return;
+    if (level === 'CRITICAL') {
+      Vibration.vibrate([0, 1000, 500, 1000, 500, 1000], false);
+    } else {
+      Vibration.vibrate([0, 500, 200, 500], false);
+    }
   }
 
   // ------------------------------------------------------------------

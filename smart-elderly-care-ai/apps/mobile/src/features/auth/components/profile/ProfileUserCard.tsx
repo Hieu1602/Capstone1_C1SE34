@@ -78,7 +78,7 @@ export const ProfileUserCard: React.FC<ProfileUserCardProps> = ({
             isDarkMode && { color: colors.textPrimary },
           ]}
         >
-          Thêm thành viên gia đình & Cụ cần chăm sóc
+          Thêm thành viên
         </Text>
       </TouchableOpacity>
     </View>

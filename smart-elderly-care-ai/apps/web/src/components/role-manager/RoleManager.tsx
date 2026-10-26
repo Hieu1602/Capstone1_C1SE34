@@ -246,7 +246,7 @@ export const RoleManager: React.FC<RoleManagerProps> = ({
   // VIEW 2 & 3: Master-Detail
   return (
     <div className="relative space-y-4 animate-fade-in pb-20">
-      <div className="glass-card border border-slate-200 dark:border-slate-800 rounded-2xl bg-white/95 dark:bg-slate-900/95 overflow-hidden shadow-xl grid grid-cols-1 md:grid-cols-12 min-h-[700px]">
+      <div className="glass-card border border-slate-200 dark:border-[#454A53] rounded-2xl bg-white/95 dark:bg-[#17191E] overflow-hidden shadow-xl grid grid-cols-1 md:grid-cols-12 min-h-[700px]">
         {/* Cột trái */}
         <RoleSidebar
           roles={roles}
@@ -281,20 +281,20 @@ export const RoleManager: React.FC<RoleManagerProps> = ({
         <div className="md:col-span-8 lg:col-span-9 p-5 sm:p-6 flex flex-col justify-between">
           <div className="space-y-5">
             {/* Header Cột Phải */}
-            <div className="flex items-center justify-between gap-4 pb-2 border-b border-slate-200 dark:border-slate-800">
+            <div className="flex items-center justify-between gap-4 pb-2 border-b border-slate-200 dark:border-[#454A53]">
               <div className="flex items-center gap-3">
                 <span
                   className="w-3.5 h-3.5 rounded-full shrink-0 shadow-xs"
                   style={{ backgroundColor: draftRole?.color || currentRole.color }}
                 />
-                <h2 className="text-base sm:text-lg font-bold text-slate-900 dark:text-white flex items-center gap-2">
+                <h2 className="text-base sm:text-lg font-bold text-slate-900 dark:text-[#F5F6F8] flex items-center gap-2">
                   <span>
                     {viewMode === 'edit' ? 'Sửa đổi Vai trò' : 'Chi tiết Vai trò'} –{' '}
                     {draftRole?.name || currentRole.name}
                   </span>
                 </h2>
                 {viewMode === 'detail' ? (
-                  <span className="hidden sm:inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full text-[11px] font-medium bg-slate-100 dark:bg-slate-800 text-slate-600 dark:text-slate-400 border border-slate-200 dark:border-slate-700">
+                  <span className="hidden sm:inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full text-[11px] font-medium bg-slate-100 dark:bg-[#202329] text-slate-600 dark:text-[#A1A7B1] border border-slate-200 dark:border-[#454A53]">
                     <Eye className="w-3 h-3 text-slate-400" />
                     Chế độ xem (Chỉ đọc)
                   </span>
@@ -329,7 +329,7 @@ export const RoleManager: React.FC<RoleManagerProps> = ({
                         setViewMode('detail');
                       }
                     }}
-                    className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-bold text-slate-700 dark:text-slate-200 bg-slate-100 hover:bg-slate-200 dark:bg-slate-800 dark:hover:bg-slate-700 border border-slate-200 dark:border-slate-700 transition-all cursor-pointer"
+                    className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-bold text-slate-700 dark:text-[#F5F6F8] bg-slate-100 hover:bg-slate-200 dark:bg-[#202329] dark:hover:bg-[#292D34] border border-slate-200 dark:border-[#454A53] transition-all cursor-pointer"
                   >
                     <RotateCcw className="w-3.5 h-3.5" />
                     <span>Hủy chỉnh sửa</span>
@@ -339,7 +339,7 @@ export const RoleManager: React.FC<RoleManagerProps> = ({
                 <button
                   type="button"
                   onClick={() => setViewMode('list')}
-                  className="p-1.5 rounded-lg text-slate-400 hover:text-slate-700 dark:hover:text-slate-200 hover:bg-slate-100 dark:hover:bg-slate-800 transition-colors cursor-pointer"
+                  className="p-1.5 rounded-lg text-slate-400 hover:text-slate-700 dark:hover:text-[#F5F6F8] hover:bg-slate-100 dark:hover:bg-[#202329] transition-colors cursor-pointer"
                   title="Đóng"
                 >
                   <X className="w-4 h-4" />
@@ -364,13 +364,13 @@ export const RoleManager: React.FC<RoleManagerProps> = ({
             )}
 
             {/* Sub-Tabs: Hiển thị | Quyền hạn | Quản lý thành viên */}
-            <div className="flex items-center gap-6 border-b border-slate-200 dark:border-slate-800 text-xs font-bold">
+            <div className="flex items-center gap-6 border-b border-slate-200 dark:border-[#454A53] text-xs font-bold">
               <button
                 onClick={() => setActiveRightTab('display')}
                 className={`pb-2.5 transition-all cursor-pointer ${
                   activeRightTab === 'display'
-                    ? 'text-sky-500 border-b-2 border-sky-500'
-                    : 'text-slate-500 dark:text-slate-400 hover:text-slate-900 dark:hover:text-white'
+                    ? 'text-sky-500 dark:text-[#FF6B35] border-b-2 border-sky-500 dark:border-[#FF6B35]'
+                    : 'text-slate-500 dark:text-[#A1A7B1] hover:text-slate-900 dark:hover:text-[#F5F6F8]'
                 }`}
               >
                 Hiển thị
@@ -379,12 +379,12 @@ export const RoleManager: React.FC<RoleManagerProps> = ({
                 onClick={() => setActiveRightTab('permissions')}
                 className={`pb-2.5 transition-all cursor-pointer flex items-center gap-1.5 ${
                   activeRightTab === 'permissions'
-                    ? 'text-sky-500 border-b-2 border-sky-500'
-                    : 'text-slate-500 dark:text-slate-400 hover:text-slate-900 dark:hover:text-white'
+                    ? 'text-sky-500 dark:text-[#FF6B35] border-b-2 border-sky-500 dark:border-[#FF6B35]'
+                    : 'text-slate-500 dark:text-[#A1A7B1] hover:text-slate-900 dark:hover:text-[#F5F6F8]'
                 }`}
               >
                 <span>Quyền hạn</span>
-                <span className="px-1.5 py-0.2 rounded-full text-[10px] bg-sky-100 text-sky-700 dark:bg-sky-950 dark:text-sky-300 font-mono">
+                <span className="px-1.5 py-0.2 rounded-full text-[10px] bg-sky-100 text-sky-700 dark:bg-[#FF6B35]/20 dark:text-[#FF8A50] font-mono">
                   {draftRole?.permissions.length || 0}
                 </span>
               </button>
@@ -392,8 +392,8 @@ export const RoleManager: React.FC<RoleManagerProps> = ({
                 onClick={() => setActiveRightTab('members')}
                 className={`pb-2.5 transition-all cursor-pointer ${
                   activeRightTab === 'members'
-                    ? 'text-sky-500 border-b-2 border-sky-500'
-                    : 'text-slate-500 dark:text-slate-400 hover:text-slate-900 dark:hover:text-white'
+                    ? 'text-sky-500 dark:text-[#FF6B35] border-b-2 border-sky-500 dark:border-[#FF6B35]'
+                    : 'text-slate-500 dark:text-[#A1A7B1] hover:text-slate-900 dark:hover:text-[#F5F6F8]'
                 }`}
               >
                 Quản lý thành viên

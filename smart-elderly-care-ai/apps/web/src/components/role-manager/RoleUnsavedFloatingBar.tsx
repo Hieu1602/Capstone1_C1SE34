@@ -16,7 +16,7 @@ export const RoleUnsavedFloatingBar: React.FC<RoleUnsavedFloatingBarProps> = ({
 
   return (
     <div className="fixed bottom-6 left-1/2 -translate-x-1/2 z-50 w-[90%] max-w-2xl animate-bounce-subtle">
-      <div className="px-5 py-3.5 rounded-2xl bg-slate-950/95 dark:bg-slate-900/95 text-white border border-slate-700/80 shadow-2xl backdrop-blur-xl flex flex-col sm:flex-row items-center justify-between gap-3">
+      <div className="px-5 py-3.5 rounded-2xl bg-slate-950/95 dark:bg-[#101216]/95 text-white border border-slate-700/80 dark:border-[#454A53] shadow-2xl dark:shadow-[0_8px_32px_rgba(0,0,0,0.6)] backdrop-blur-xl flex flex-col sm:flex-row items-center justify-between gap-3">
         <div className="flex items-center gap-2.5">
           <AlertTriangle className="w-4 h-4 text-amber-400 shrink-0" />
           <span className="text-xs sm:text-sm font-semibold tracking-wide">
@@ -28,7 +28,7 @@ export const RoleUnsavedFloatingBar: React.FC<RoleUnsavedFloatingBarProps> = ({
           <button
             type="button"
             onClick={onReset}
-            className="px-3.5 py-1.5 rounded-xl text-xs font-bold text-slate-300 hover:text-white hover:bg-slate-800 transition-colors cursor-pointer"
+            className="px-3.5 py-1.5 rounded-xl text-xs font-bold text-slate-300 hover:text-white hover:bg-slate-800 dark:hover:bg-[#202329] transition-colors cursor-pointer"
           >
             Đặt lại
           </button>

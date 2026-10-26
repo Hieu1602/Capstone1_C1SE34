@@ -211,7 +211,7 @@ export default function AIAssistantScreen({ navigation }: any) {
   const backdropAnim = useRef(new Animated.Value(0)).current;
 
   // Refs & Chat State
-  const scrollViewRef = useRef<ScrollView>(null);
+  const scrollViewRef = useRef<any>(null);
   const [messages, setMessages] = useState<ChatMessage[]>([]);
   const [inputText, setInputText] = useState('');
   const [isLoading, setIsLoading] = useState(false);
@@ -569,7 +569,7 @@ export default function AIAssistantScreen({ navigation }: any) {
     <SafeAreaView style={[styles.container, { backgroundColor: isDarkMode ? colors.background : '#FFFFFF' }]} edges={['top']}>
       <StatusBar
         barStyle={isDarkMode ? 'light-content' : 'dark-content'}
-        backgroundColor={isDarkMode ? colors.background : '#FFFFFF'}
+        
       />
 
       {/* 1. Top Navigation Bar */}

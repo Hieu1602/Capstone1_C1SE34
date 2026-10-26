@@ -23,6 +23,8 @@ services:
         restart: unless-stopped
         env_file:
             - .env
+            - path: .env.camera
+              required: false
             - path: ./backend/.env
               required: false
         ports:

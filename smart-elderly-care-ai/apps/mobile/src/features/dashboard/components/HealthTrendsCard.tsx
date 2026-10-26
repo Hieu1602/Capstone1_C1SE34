@@ -44,7 +44,7 @@ export function HealthTrendsCard({
         <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6 }}>
           <Ionicons name="stats-chart" size={17} color={Colors.primary} />
           <Text style={[styles.trendSectionTitle, isDarkMode && { color: colors.textPrimary }]}>
-            Xu hướng sức khoẻ hôm nay
+            Xu hướng sinh hiệu hôm nay
           </Text>
         </View>
         <View

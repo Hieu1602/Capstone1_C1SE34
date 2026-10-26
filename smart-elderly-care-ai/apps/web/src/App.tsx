@@ -6,7 +6,8 @@ import { DashboardPage } from './pages/DashboardPage';
 import { UserManagementPage } from './pages/UserManagementPage';
 import { SecurityManagementPage } from './pages/SecurityManagementPage';
 import { SystemMonitoringPage } from './pages/SystemMonitoringPage';
-import { DeviceMonitoringPage } from './pages/DeviceMonitoringPage';
+
+import { AIMaintenancePage } from './pages/AIMaintenancePage';
 import { InfrastructurePage } from './pages/InfrastructurePage';
 import { NotificationManagementPage } from './pages/NotificationManagementPage';
 import { LoginPage } from './pages/LoginPage';
@@ -54,8 +55,9 @@ export const App: React.FC = () => {
           <Route path="security" element={<SecurityManagementPage />} />
           <Route path="monitoring" element={<SystemMonitoringPage />} />
           <Route path="notifications" element={<NotificationManagementPage />} />
-          <Route path="devices" element={<SystemMonitoringPage />} />
-          <Route path="iot-devices" element={<DeviceMonitoringPage />} />
+
+
+          <Route path="ai-maintenance" element={<AIMaintenancePage />} />
           <Route path="infrastructure" element={<InfrastructurePage />} />
         </Route>
 

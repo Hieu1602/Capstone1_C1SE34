@@ -1,3 +1,4 @@
+import httpx
 """
 emergency.py - API tiếp nhận yêu cầu SOS khẩn cấp.
 
@@ -196,3 +197,44 @@ async def trigger_support_call(
         dial_uri=f"tel:{SUPPORT_HOTLINE_NUMBER}",
     )
 
+
+
+@router.get("/reverse-geocode")
+async def reverse_geocode_location(
+    lat: float,
+    lon: float,
+):
+    """Phân giải tọa độ GPS sang địa chỉ thực tế (hỗ trợ tiếng Việt đầy đủ)."""
+    # 1. Thử Nominatim OpenStreetMap (chính xác số nhà, tên đường, phường, thành phố)
+    try:
+        async with httpx.AsyncClient(timeout=4.0) as client:
+            resp = await client.get(
+                "https://nominatim.openstreetmap.org/reverse",
+                params={"format": "jsonv2", "lat": lat, "lon": lon, "accept-language": "vi"},
+                headers={"User-Agent": "SmartElderlyCare/1.0"},
+            )
+            if resp.status_code == 200:
+                data = resp.json()
+                display_name = data.get("display_name")
+                if display_name:
+                    return {"address": display_name}
+    except Exception as e:
+        logger.warning(f"[ReverseGeocode] Nominatim failed: {e}")
+
+    # 2. Thử BigDataCloud fallback
+    try:
+        async with httpx.AsyncClient(timeout=4.0) as client:
+            resp = await client.get(
+                "https://api.bigdatacloud.net/data/reverse-geocode-client",
+                params={"latitude": lat, "longitude": lon, "localityLanguage": "vi"},
+            )
+            if resp.status_code == 200:
+                data = resp.json()
+                parts = [data.get("locality"), data.get("city") or data.get("principalSubdivision"), data.get("countryName")]
+                parts = [p for p in parts if p]
+                if parts:
+                    return {"address": ", ".join(parts)}
+    except Exception as e:
+        logger.warning(f"[ReverseGeocode] BigDataCloud failed: {e}")
+
+    return {"address": None}

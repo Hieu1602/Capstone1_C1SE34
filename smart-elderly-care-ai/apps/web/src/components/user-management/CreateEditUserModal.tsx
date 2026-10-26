@@ -40,24 +40,24 @@ export const CreateEditUserModal: React.FC<CreateEditUserModalProps> = ({
 
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-900/60 dark:bg-black/75 backdrop-blur-xs animate-fade-in">
-      <div className="glass-card w-full max-w-lg overflow-hidden border border-[#C8AD8A] shadow-2xl animate-slide-up">
-        <div className="p-5 border-b border-[#C8AD8A]/50 bg-[#FFF8EE] dark:bg-[#1A3830] flex items-center justify-between">
+      <div className="glass-card w-full max-w-lg overflow-hidden border border-[#E7E9ED] dark:border-[#454A53] shadow-2xl animate-slide-up">
+        <div className="p-5 border-b border-[#E7E9ED] dark:border-[#454A53] bg-[#F5F6F8] dark:bg-[#202329] flex items-center justify-between">
           <div className="flex items-center space-x-2.5">
-            <div className="w-9 h-9 rounded-xl bg-[#FFF8EE] dark:bg-[#142823] text-[#D96C3B] border border-[#C8AD8A] flex items-center justify-center shadow-xs">
+            <div className="w-9 h-9 rounded-xl bg-[#FFF0E8] dark:bg-[#FF6B35]/15 text-[#FF6B35] border border-[#FF6B35]/20 flex items-center justify-center shadow-2xs">
               {editingUser ? <KeyRound className="w-5 h-5" /> : <UserPlus className="w-5 h-5" />}
             </div>
             <div>
-              <h3 className="font-heading font-bold text-slate-900 dark:text-white text-sm">
+              <h3 className="font-heading font-bold text-[#191B20] dark:text-[#F5F6F8] text-sm">
                 {editingUser ? 'Cập nhật tài khoản & Phân quyền' : 'Thêm tài khoản người dùng mới'}
               </h3>
-              <p className="text-[11px] font-mono text-slate-500 dark:text-slate-400">
-                {editingUser ? editingUser.phone : 'Phân bổ vai trò Chủ nhà, Thành viên hoặc Bác sĩ'}
+              <p className="text-[11px] font-mono text-[#737780] dark:text-[#A1A7B1]">
+                {editingUser ? editingUser.phone : 'Phân bổ vai trò Bác sĩ, Người thân hoặc Thành viên'}
               </p>
             </div>
           </div>
           <button
             onClick={onClose}
-            className="p-1.5 rounded-lg text-slate-400 hover:text-slate-700 dark:hover:text-slate-200 cursor-pointer"
+            className="p-1.5 rounded-lg text-[#737780] hover:text-[#191B20] dark:hover:text-white cursor-pointer"
           >
             <X className="w-5 h-5" />
           </button>
@@ -65,7 +65,7 @@ export const CreateEditUserModal: React.FC<CreateEditUserModalProps> = ({
 
         <form onSubmit={onSubmit} className="p-5 space-y-4">
           <div>
-            <label className="block text-[11px] font-mono font-bold uppercase text-slate-700 dark:text-slate-300 mb-1">
+            <label className="block text-[11px] font-mono font-bold uppercase text-[#737780] dark:text-[#A1A7B1] mb-1">
               Họ và tên <span className="text-rose-500">*</span>
             </label>
             <input
@@ -79,7 +79,7 @@ export const CreateEditUserModal: React.FC<CreateEditUserModalProps> = ({
           </div>
 
           <div>
-            <label className="block text-[11px] font-mono font-bold uppercase text-slate-700 dark:text-slate-300 mb-1">
+            <label className="block text-[11px] font-mono font-bold uppercase text-[#737780] dark:text-[#A1A7B1] mb-1">
               Số điện thoại đăng nhập <span className="text-rose-500">*</span>
             </label>
             <input
@@ -94,50 +94,50 @@ export const CreateEditUserModal: React.FC<CreateEditUserModalProps> = ({
 
           {!editingUser && (
             <div>
-              <label className="block text-[11px] font-mono font-bold uppercase text-slate-700 dark:text-slate-300 mb-1">
-                Mật khẩu khởi tạo
+              <label className="block text-[11px] font-mono font-bold uppercase text-[#737780] dark:text-[#A1A7B1] mb-1">
+                Mật khẩu khởi tạo <span className="text-rose-500">*</span>
               </label>
               <input
                 type="password"
+                required
+                minLength={8}
                 value={formPassword}
                 onChange={(e) => setFormPassword(e.target.value)}
-                placeholder="Mặc định: 12345678"
-                className="input-glass font-mono"
+                placeholder="Tối thiểu 8 ký tự (chữ hoa, thường, số)"
+                className="input-glass"
               />
+              <p className="text-[10px] text-[#737780] dark:text-[#A1A7B1] mt-1">
+                Yêu cầu tuân thủ chính sách mật khẩu an toàn cho tài khoản người dùng y tế.
+              </p>
             </div>
           )}
 
-          {/* Lựa chọn vai trò (Tách rõ ràng Chủ nhà vs Thành viên) */}
           <div>
-            <label className="block text-[11px] font-mono font-bold uppercase text-slate-700 dark:text-slate-300 mb-2">
-              Phân quyền vai trò (Role)
+            <label className="block text-[11px] font-mono font-bold uppercase text-[#737780] dark:text-[#A1A7B1] mb-1">
+              Vai trò & Trách nhiệm (Role) <span className="text-rose-500">*</span>
             </label>
-            <div className="grid grid-cols-2 gap-2.5">
-              {(['user', 'caregiver', 'doctor', 'admin', 'elderly'] as UserRole[]).map((roleKey) => {
-                const cfg = ROLE_CONFIG[roleKey];
+            <div className="grid grid-cols-2 gap-2 mt-1.5">
+              {(Object.keys(ROLE_CONFIG) as UserRole[]).map((r) => {
+                const cfg = ROLE_CONFIG[r];
                 const Icon = cfg.icon;
-                const isSelected = formRole === roleKey;
+                const isSelected = formRole === r;
+
                 return (
                   <button
+                    key={r}
                     type="button"
-                    key={roleKey}
-                    onClick={() => setFormRole(roleKey)}
-                    className={`p-3 rounded-xl border text-left flex flex-col justify-between transition-all cursor-pointer ${
+                    onClick={() => setFormRole(r)}
+                    className={`flex items-start space-x-2 p-2.5 rounded-xl border text-left transition-all cursor-pointer ${
                       isSelected
-                        ? 'border-[#D96C3B] bg-[#FFF8EE] dark:bg-[#1A3830] ring-1 ring-[#D96C3B]'
-                        : 'border-slate-200 dark:border-white/5 bg-slate-50 dark:bg-slate-900/60 hover:bg-slate-100'
+                        ? 'border-[#FF6B35] bg-[#FFF0E8] dark:bg-[#FF6B35]/15 text-[#FF6B35] shadow-2xs font-semibold'
+                        : 'border-[#E7E9ED] dark:border-[#454A53] hover:bg-slate-50 dark:hover:bg-white/5 text-[#737780]'
                     }`}
                   >
-                    <div className="flex items-center justify-between mb-1">
-                      <Icon className={`w-4 h-4 ${isSelected ? 'text-[#D96C3B]' : 'text-slate-400'}`} />
-                      {isSelected && <Check className="w-3.5 h-3.5 text-[#D96C3B]" />}
+                    <Icon className="w-4 h-4 mt-0.5 shrink-0" />
+                    <div className="min-w-0">
+                      <p className="text-xs leading-tight font-bold">{cfg.label}</p>
+                      <p className="text-[10px] opacity-75 truncate">{cfg.description}</p>
                     </div>
-                    <span className="font-heading font-bold text-xs text-slate-900 dark:text-white">
-                      {cfg.label}
-                    </span>
-                    <span className="text-[10px] text-slate-500 dark:text-slate-400 leading-tight mt-1 line-clamp-2">
-                      {cfg.description}
-                    </span>
                   </button>
                 );
               })}
@@ -145,28 +145,32 @@ export const CreateEditUserModal: React.FC<CreateEditUserModalProps> = ({
           </div>
 
           <div>
-            <label className="block text-[11px] font-mono font-bold uppercase text-slate-700 dark:text-slate-300 mb-1">
-              Hộ gia đình / Phạm vi quản lý
+            <label className="block text-[11px] font-mono font-bold uppercase text-[#737780] dark:text-[#A1A7B1] mb-1">
+              Căn hộ / Phòng phụ trách
             </label>
             <input
               type="text"
               value={formHouse}
               onChange={(e) => setFormHouse(e.target.value)}
-              placeholder="Ví dụ: Nhà của tôi (123 Hải Phòng)"
+              placeholder="Ví dụ: Căn hộ 402 - Tháp A hoặc Nhà số 12 Huế"
               className="input-glass"
             />
           </div>
 
-          <div className="pt-3 border-t border-[#C8AD8A]/30 flex items-center justify-end space-x-3">
+          <div className="flex items-center justify-end space-x-2.5 pt-4 border-t border-[#E7E9ED] dark:border-[#454A53]">
             <button
               type="button"
               onClick={onClose}
-              className="btn-ghost text-xs py-2 px-4 cursor-pointer"
+              className="btn-ghost"
             >
-              Hủy
+              Hủy bỏ
             </button>
-            <button type="submit" className="btn-primary text-xs py-2 px-5 cursor-pointer">
-              {editingUser ? 'Lưu thay đổi' : 'Tạo tài khoản'}
+            <button
+              type="submit"
+              className="btn-primary"
+            >
+              <Check className="w-4 h-4 stroke-[2.5]" />
+              <span>{editingUser ? 'Lưu thay đổi' : 'Tạo tài khoản'}</span>
             </button>
           </div>
         </form>
@@ -174,4 +178,3 @@ export const CreateEditUserModal: React.FC<CreateEditUserModalProps> = ({
     </div>
   );
 };
-

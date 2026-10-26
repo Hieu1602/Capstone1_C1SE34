@@ -1,4 +1,4 @@
-// ==============================================================================
+﻿// ==============================================================================
 // TỆP: HouseDetailScreen.tsx
 // PHÂN HỆ: Màn hình Quản lý Không gian Nhà & Phân quyền Thành viên Gia đình
 // TÁC GIẢ: Nhóm Phát triển Smart Elderly Care AI
@@ -35,7 +35,24 @@ import { useTheme } from '../../../store/useThemeStore';
 import { householdApi } from '../../../services/api';
 
 export default function HouseDetailScreen({ navigation }: any) {
-  const { house } = useVitalStore();
+  const { house, updateHouseAddress } = useVitalStore();
+  const [isEditAddressModalVisible, setIsEditAddressModalVisible] = useState(false);
+  const [editAddressInput, setEditAddressInput] = useState('');
+  const [isSavingAddress, setIsSavingAddress] = useState(false);
+
+  const handleSaveAddress = async () => {
+    try {
+      setIsSavingAddress(true);
+      const clean = editAddressInput.trim();
+      updateHouseAddress(clean);
+      setIsEditAddressModalVisible(false);
+      Alert.alert('Thành công', 'Đã cập nhật địa chỉ nhà.');
+    } catch {
+      Alert.alert('Lỗi', 'Không thể lưu địa chỉ. Vui lòng thử lại.');
+    } finally {
+      setIsSavingAddress(false);
+    }
+  };
   const { full_name, userName, phone_number, userPhone, household_id, role, userRole } = useAuthStore();
   const { isDarkMode } = useTheme();
 
@@ -241,9 +258,28 @@ export default function HouseDetailScreen({ navigation }: any) {
         </TouchableOpacity>
         <View style={{ flex: 1 }}>
           <Text style={[styles.headerTitleText, { color: textTitle }]}>{house?.name || 'Nhà của tôi'}</Text>
-          <Text style={[styles.headerSubText, { color: textSub }]}>
-            {house?.address || '123 Hải Phòng, P. Thạch Thang, Q. Hải Châu'}
-          </Text>
+          <TouchableOpacity
+            activeOpacity={0.7}
+            onPress={() => {
+              setEditAddressInput(house?.address || '');
+              setIsEditAddressModalVisible(true);
+            }}
+            style={{ flexDirection: 'row', alignItems: 'center', marginTop: 2, gap: 4 }}
+          >
+            <Ionicons name="location-outline" size={13} color={house?.address ? textSub : Colors.primary} />
+            <Text
+              style={[
+                styles.headerSubText,
+                { color: house?.address ? textSub : Colors.primary, flexShrink: 1 },
+              ]}
+              numberOfLines={1}
+            >
+              {house?.address || 'Chưa có địa chỉ • Chạm để thêm'}
+            </Text>
+            {isCurrentUserOwner && (
+              <Ionicons name="pencil" size={12} color="#94A3B8" style={{ marginLeft: 2 }} />
+            )}
+          </TouchableOpacity>
         </View>
       </View>
 
@@ -805,6 +841,68 @@ export default function HouseDetailScreen({ navigation }: any) {
               </TouchableOpacity>
               <TouchableOpacity style={styles.saveBtn} onPress={handleAddMember}>
                 <Text style={styles.saveBtnText}>Gửi lời mời & Cấp quyền</Text>
+              </TouchableOpacity>
+            </View>
+          </View>
+        </View>
+      </Modal>
+      {/* Modal Cáº­p nháº­t Äá»‹a chá»‰ nhÃ  thá»±c táº¿ */}
+      <Modal
+        visible={isEditAddressModalVisible}
+        transparent
+        animationType="fade"
+        onRequestClose={() => setIsEditAddressModalVisible(false)}
+      >
+        <View style={styles.modalOverlay}>
+          <View style={[styles.modalCard, { backgroundColor: bgCard }]}>
+            <View style={styles.modalHeaderRow}>
+              <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8 }}>
+                <Ionicons name="location" size={20} color={Colors.primary} />
+                <Text style={[styles.modalTitle, { color: textTitle }]}>Địa chỉ nhà thực tế</Text>
+              </View>
+              <TouchableOpacity onPress={() => setIsEditAddressModalVisible(false)}>
+                <Ionicons name="close" size={22} color={textSub} />
+              </TouchableOpacity>
+            </View>
+
+            <Text style={[styles.modalSub, { color: textSub, marginBottom: 14 }]}>
+              Nhập địa chỉ vị trí thực tế của căn hộ / gia đình để thuận tiện khi có cảnh báo khẩn cấp hoặc hỗ trợ y tế.
+            </Text>
+
+            <TextInput
+              style={[
+                styles.addressInput,
+                {
+                  backgroundColor: isDarkMode ? '#0F172A' : '#F8FAFC',
+                  borderColor: borderCol,
+                  color: textTitle,
+                  minHeight: 46,
+                },
+              ]}
+              value={editAddressInput}
+              onChangeText={setEditAddressInput}
+              placeholder="VD: Số 123 Đường ABC, Quận XYZ, TP. Đà Nẵng"
+              placeholderTextColor="#94A3B8"
+              autoFocus
+            />
+
+            <View style={styles.modalActionButtons}>
+              <TouchableOpacity
+                style={[styles.cancelBtn, { borderColor: borderCol }]}
+                onPress={() => setIsEditAddressModalVisible(false)}
+              >
+                <Text style={[styles.cancelBtnText, { color: textSub }]}>Hủy</Text>
+              </TouchableOpacity>
+              <TouchableOpacity
+                style={[styles.saveBtn, { opacity: isSavingAddress ? 0.7 : 1 }]}
+                onPress={handleSaveAddress}
+                disabled={isSavingAddress}
+              >
+                {isSavingAddress ? (
+                  <ActivityIndicator size="small" color="#FFF" />
+                ) : (
+                  <Text style={styles.saveBtnText}>Lưu lại</Text>
+                )}
               </TouchableOpacity>
             </View>
           </View>
