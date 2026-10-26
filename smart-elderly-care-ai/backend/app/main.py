@@ -14,6 +14,7 @@ import json
 from contextlib import asynccontextmanager
 
 from fastapi import FastAPI, HTTPException, Request, status
+from fastapi.exceptions import RequestValidationError
 from fastapi.responses import JSONResponse, Response
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.middleware.trustedhost import TrustedHostMiddleware
@@ -140,6 +141,27 @@ async def http_exception_handler(request: Request, exc: HTTPException):
         status_code=exc.status_code,
         content=content,
         headers=headers,
+    )
+
+
+@app.exception_handler(RequestValidationError)
+async def validation_exception_handler(request: Request, exc: RequestValidationError):
+    errors = exc.errors()
+    logger.error("[422 Validation Error] Path: %s | Errors: %s", request.url.path, errors)
+    first_err = errors[0] if errors else {}
+    loc = " -> ".join(str(l) for l in first_err.get("loc", []))
+    msg = first_err.get("msg", "Dữ liệu không hợp lệ.")
+    error_msg = f"Dữ liệu không hợp lệ tại [{loc}]: {msg}"
+    origin = request.headers.get("origin") or "*"
+    return JSONResponse(
+        status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
+        content={"detail": error_msg, "errors": errors},
+        headers={
+            "Access-Control-Allow-Origin": origin,
+            "Access-Control-Allow-Credentials": "true",
+            "Access-Control-Allow-Methods": "*",
+            "Access-Control-Allow-Headers": "*",
+        },
     )
 
 

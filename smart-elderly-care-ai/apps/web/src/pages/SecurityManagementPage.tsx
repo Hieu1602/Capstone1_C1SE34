@@ -73,92 +73,11 @@ const INITIAL_POLICIES: SecurityPolicy[] = [
   },
 ];
 
-const INITIAL_SESSIONS: ActiveSession[] = [
-  {
-    id: 'sess-001',
-    user_name: 'Quản Trị Viên Hệ Thống (Root Admin)',
-    role: 'Quản trị viên',
-    ip_address: '127.0.0.1 (Localhost)',
-    device: 'Chrome 129 / Windows 11',
-    login_time: '2026-10-15 08:30:12',
-    last_active: 'Vừa xong',
-    status: 'active',
-  },
-  {
-    id: 'sess-002',
-    user_name: 'BS. Nguyễn Văn Minh',
-    role: 'Bác sĩ chuyên khoa',
-    ip_address: '192.168.1.15',
-    device: 'Safari / iPadOS 18 (Hospital Tablet)',
-    login_time: '2026-10-15 07:15:40',
-    last_active: '5 phút trước',
-    status: 'active',
-  },
-  {
-    id: 'sess-003',
-    user_name: 'Nguyễn Hữu Nghĩa (Chủ nhà)',
-    role: 'Người thân / Gia đình',
-    ip_address: '14.232.208.54',
-    device: 'SECA Mobile App / Android 14',
-    login_time: '2026-10-15 06:45:10',
-    last_active: '12 phút trước',
-    status: 'active',
-  },
-];
-
-const INITIAL_AUDIT_LOGS: SecurityAuditLog[] = [
-  {
-    id: 'aud-1',
-    timestamp: '2026-10-15 09:15:22',
-    event: 'ĐĂNG NHẬP THÀNH CÔNG',
-    user: 'Admin123 (Root Admin)',
-    ip: '127.0.0.1',
-    severity: 'low',
-    details: 'Đăng nhập trang quản trị thành công qua JWT Bearer token.',
-  },
-  {
-    id: 'aud-2',
-    timestamp: '2026-10-15 08:45:10',
-    event: 'THAY ĐỔI CẤU HÌNH THIẾT BỊ',
-    user: 'BS. Nguyễn Văn Minh',
-    ip: '192.168.1.15',
-    severity: 'medium',
-    details: 'Cập nhật ngưỡng cảnh báo SpO2 < 90% cho cụ Nguyễn Văn An (Phòng ngủ).',
-  },
-  {
-    id: 'aud-3',
-    timestamp: '2026-10-15 07:10:05',
-    event: 'CẢNH BÁO ĐĂNG NHẬP THẤT BẠI',
-    user: '+84905999888',
-    ip: '115.79.138.90',
-    severity: 'high',
-    details: 'Nhập sai mật khẩu lần thứ 3. Hệ thống gửi cảnh báo SMS OTP.',
-  },
-  {
-    id: 'aud-4',
-    timestamp: '2026-10-14 23:30:00',
-    event: 'TỰ ĐỘNG THU HỒI TOKEN HẾT HẠN',
-    user: 'System Cron',
-    ip: 'localhost:8000',
-    severity: 'low',
-    details: 'Dọn sạch 14 refresh token đã hết hạn trong Redis cache.',
-  },
-  {
-    id: 'aud-5',
-    timestamp: '2026-10-14 20:12:44',
-    event: 'PHÁT HIỆN TRUY CẬP TRÁI PHÉP',
-    user: 'Anonymous',
-    ip: '45.154.255.88',
-    severity: 'critical',
-    details: 'Quét cổng bất thường vào endpoint /api/v1/auth/login. Đã chặn IP tự động.',
-  },
-];
-
 export const SecurityManagementPage: React.FC = () => {
   const [activeTab, setActiveTab] = useState<'policies' | 'sessions' | 'audit' | 'rbac'>('policies');
   const [policies, setPolicies] = useState<SecurityPolicy[]>(INITIAL_POLICIES);
-  const [sessions, setSessions] = useState<ActiveSession[]>(INITIAL_SESSIONS);
-  const [auditLogs, setAuditLogs] = useState<SecurityAuditLog[]>(INITIAL_AUDIT_LOGS);
+  const [sessions, setSessions] = useState<ActiveSession[]>([]);
+  const [auditLogs, setAuditLogs] = useState<SecurityAuditLog[]>([]);
   const [loading, setLoading] = useState<boolean>(false);
   const [searchAudit, setSearchAudit] = useState('');
   const [severityFilter, setSeverityFilter] = useState('ALL');
@@ -168,20 +87,20 @@ export const SecurityManagementPage: React.FC = () => {
     setLoading(true);
     try {
       const [policiesData, sessionsData, logsData] = await Promise.all([
-        securityApi.getPolicies().catch(() => null),
-        securityApi.getSessions().catch(() => null),
-        securityApi.getAuditLogs().catch(() => null),
+        securityApi.getPolicies().catch(() => []),
+        securityApi.getSessions().catch(() => []),
+        securityApi.getAuditLogs().catch(() => []),
       ]);
       if (policiesData && policiesData.length > 0) setPolicies(policiesData);
-      if (sessionsData && sessionsData.length > 0) {
-        // Author: DuongVanHieu - Khử trùng lặp sessions theo id phòng ngừa lỗi duplicate React keys
-        const uniqueSessions = Array.from(new Map<string, ActiveSession>(sessionsData.map((s) => [s.id, s])).values());
-        setSessions(uniqueSessions);
+      if (sessionsData) {
+        const sessionMap = new Map<string, ActiveSession>();
+        sessionsData.forEach((s) => sessionMap.set(s.id, s));
+        setSessions(Array.from(sessionMap.values()));
       }
-      if (logsData && logsData.length > 0) {
-        // Author: DuongVanHieu - Khử trùng lặp audit logs theo id
-        const uniqueLogs = Array.from(new Map<string, SecurityAuditLog>(logsData.map((l) => [l.id, l])).values());
-        setAuditLogs(uniqueLogs);
+      if (logsData) {
+        const logMap = new Map<string, SecurityAuditLog>();
+        logsData.forEach((l) => logMap.set(l.id, l));
+        setAuditLogs(Array.from(logMap.values()));
       }
     } finally {
       setLoading(false);
@@ -511,46 +430,54 @@ export const SecurityManagementPage: React.FC = () => {
                 </tr>
               </thead>
               <tbody className="divide-y divide-sky-100 dark:divide-sky-950/60 text-xs">
-                {sessions.map((s, idx) => (
-                  <tr key={`${s.id}-${idx}`} className="hover:bg-sky-50/40 dark:hover:bg-white/5 transition-colors">
-                    <td className="py-3 px-4">
-                      <div className="font-semibold text-slate-900 dark:text-white">{s.user_name}</div>
-                      <span className="inline-block mt-0.5 text-[10px] font-medium px-2 py-0.5 rounded bg-sky-100 dark:bg-sky-900/50 text-sky-700 dark:text-sky-300">
-                        {s.role}
-                      </span>
-                    </td>
-                    <td className="py-3 px-4 font-mono text-slate-700 dark:text-slate-300">
-                      {s.ip_address}
-                    </td>
-                    <td className="py-3 px-4 text-slate-600 dark:text-slate-400">
-                      {s.device}
-                    </td>
-                    <td className="py-3 px-4 font-mono text-slate-500 dark:text-slate-400">
-                      {s.login_time}
-                    </td>
-                    <td className="py-3 px-4">
-                      <span
-                        className={`inline-flex items-center gap-1.5 px-2 py-0.5 rounded-full text-[11px] font-semibold ${
-                          s.status === 'active'
-                            ? 'bg-emerald-50 text-emerald-700 dark:bg-emerald-950/40 dark:text-emerald-300'
-                            : 'bg-amber-50 text-amber-700 dark:bg-amber-950/40 dark:text-amber-300'
-                        }`}
-                      >
-                        <span className={`w-1.5 h-1.5 rounded-full ${s.status === 'active' ? 'bg-emerald-500' : 'bg-amber-500'}`} />
-                        {s.last_active}
-                      </span>
-                    </td>
-                    <td className="py-3 px-4 text-right">
-                      <button
-                        onClick={() => handleRevokeSession(s.id, s.user_name)}
-                        className="inline-flex items-center gap-1 px-2.5 py-1 rounded-lg text-rose-600 dark:text-rose-400 hover:bg-rose-50 dark:hover:bg-rose-950/40 border border-rose-200 dark:border-rose-900/50 text-xs font-semibold transition-colors"
-                      >
-                        <Ban className="w-3.5 h-3.5" />
-                        <span>Hủy phiên</span>
-                      </button>
+                {sessions.length > 0 ? (
+                  sessions.map((s, idx) => (
+                    <tr key={`${s.id}-${idx}`} className="hover:bg-sky-50/40 dark:hover:bg-white/5 transition-colors">
+                      <td className="py-3 px-4">
+                        <div className="font-semibold text-slate-900 dark:text-white">{s.user_name}</div>
+                        <span className="inline-block mt-0.5 text-[10px] font-medium px-2 py-0.5 rounded bg-sky-100 dark:bg-sky-900/50 text-sky-700 dark:text-sky-300">
+                          {s.role}
+                        </span>
+                      </td>
+                      <td className="py-3 px-4 font-mono text-slate-700 dark:text-slate-300">
+                        {s.ip_address}
+                      </td>
+                      <td className="py-3 px-4 text-slate-600 dark:text-slate-400">
+                        {s.device}
+                      </td>
+                      <td className="py-3 px-4 font-mono text-slate-500 dark:text-slate-400">
+                        {s.login_time}
+                      </td>
+                      <td className="py-3 px-4">
+                        <span
+                          className={`inline-flex items-center gap-1.5 px-2 py-0.5 rounded-full text-[11px] font-semibold ${
+                            s.status === 'active'
+                              ? 'bg-emerald-50 text-emerald-700 dark:bg-emerald-950/40 dark:text-emerald-300'
+                              : 'bg-amber-50 text-amber-700 dark:bg-amber-950/40 dark:text-amber-300'
+                          }`}
+                        >
+                          <span className={`w-1.5 h-1.5 rounded-full ${s.status === 'active' ? 'bg-emerald-500' : 'bg-amber-500'}`} />
+                          {s.last_active}
+                        </span>
+                      </td>
+                      <td className="py-3 px-4 text-right">
+                        <button
+                          onClick={() => handleRevokeSession(s.id, s.user_name)}
+                          className="inline-flex items-center gap-1 px-2.5 py-1 rounded-lg text-rose-600 dark:text-rose-400 hover:bg-rose-50 dark:hover:bg-rose-950/40 border border-rose-200 dark:border-rose-900/50 text-xs font-semibold transition-colors"
+                        >
+                          <Ban className="w-3.5 h-3.5" />
+                          <span>Hủy phiên</span>
+                        </button>
+                      </td>
+                    </tr>
+                  ))
+                ) : (
+                  <tr>
+                    <td colSpan={6} className="py-8 text-center text-slate-500 dark:text-slate-400">
+                      Chưa có phiên làm việc nào đang hoạt động trong CSDL / Redis.
                     </td>
                   </tr>
-                ))}
+                )}
               </tbody>
             </table>
           </div>
@@ -589,42 +516,48 @@ export const SecurityManagementPage: React.FC = () => {
           </div>
 
           <div className="glass-card divide-y divide-sky-100 dark:divide-sky-950/60">
-            {filteredLogs.map((log, idx) => (
-              <div key={`${log.id}-${idx}`} className="p-4 hover:bg-sky-50/40 dark:hover:bg-white/5 transition-colors">
-                <div className="flex items-center justify-between">
-                  <div className="flex items-center gap-2">
-                    <span
-                      className={`text-[10px] font-bold px-2 py-0.5 rounded uppercase font-mono ${
-                        log.severity === 'critical'
-                          ? 'bg-rose-100 text-rose-800 dark:bg-rose-950/60 dark:text-rose-300'
-                          : log.severity === 'high'
-                          ? 'bg-amber-100 text-amber-800 dark:bg-amber-950/60 dark:text-amber-300'
-                          : log.severity === 'medium'
-                          ? 'bg-sky-100 text-sky-800 dark:bg-sky-950/60 dark:text-sky-300'
-                          : 'bg-slate-100 text-slate-800 dark:bg-slate-800 dark:text-slate-300'
-                      }`}
-                    >
-                      {log.severity}
-                    </span>
-                    <span className="font-semibold text-xs text-slate-900 dark:text-white">
-                      {log.event}
+            {filteredLogs.length > 0 ? (
+              filteredLogs.map((log, idx) => (
+                <div key={`${log.id}-${idx}`} className="p-4 hover:bg-sky-50/40 dark:hover:bg-white/5 transition-colors">
+                  <div className="flex items-center justify-between">
+                    <div className="flex items-center gap-2">
+                      <span
+                        className={`text-[10px] font-bold px-2 py-0.5 rounded uppercase font-mono ${
+                          log.severity === 'critical'
+                            ? 'bg-rose-100 text-rose-800 dark:bg-rose-950/60 dark:text-rose-300'
+                            : log.severity === 'high'
+                            ? 'bg-amber-100 text-amber-800 dark:bg-amber-950/60 dark:text-amber-300'
+                            : log.severity === 'medium'
+                            ? 'bg-sky-100 text-sky-800 dark:bg-sky-950/60 dark:text-sky-300'
+                            : 'bg-slate-100 text-slate-800 dark:bg-slate-800 dark:text-slate-300'
+                        }`}
+                      >
+                        {log.severity}
+                      </span>
+                      <span className="font-semibold text-xs text-slate-900 dark:text-white">
+                        {log.event}
+                      </span>
+                    </div>
+                    <span className="text-[11px] font-mono text-slate-400 dark:text-slate-500">
+                      {log.timestamp}
                     </span>
                   </div>
-                  <span className="text-[11px] font-mono text-slate-400 dark:text-slate-500">
-                    {log.timestamp}
-                  </span>
-                </div>
 
-                <p className="mt-2 text-xs text-slate-600 dark:text-slate-300 font-sans">
-                  {log.details}
-                </p>
+                  <p className="mt-2 text-xs text-slate-600 dark:text-slate-300 font-sans">
+                    {log.details}
+                  </p>
 
-                <div className="mt-2.5 flex items-center gap-4 text-[11px] text-slate-500 dark:text-slate-400 font-mono">
-                  <span>Người thực hiện: <b className="text-slate-700 dark:text-slate-300">{log.user}</b></span>
-                  <span>IP nguồn: <b className="text-slate-700 dark:text-slate-300">{log.ip}</b></span>
+                  <div className="mt-2.5 flex items-center gap-4 text-[11px] text-slate-500 dark:text-slate-400 font-mono">
+                    <span>Người thực hiện: <b className="text-slate-700 dark:text-slate-300">{log.user}</b></span>
+                    <span>IP nguồn: <b className="text-slate-700 dark:text-slate-300">{log.ip}</b></span>
+                  </div>
                 </div>
+              ))
+            ) : (
+              <div className="p-8 text-center text-xs text-slate-500 dark:text-slate-400">
+                Chưa có nhật ký kiểm toán nào được ghi nhận trong cơ sở dữ liệu.
               </div>
-            ))}
+            )}
           </div>
         </div>
       )}

@@ -25,42 +25,64 @@ import {
   Tooltip,
   ResponsiveContainer,
 } from 'recharts';
-import { systemApi, devicesApi, usersApi } from '../services/api';
-import { Device, User, RedisDiagnostics } from '../types';
+import { systemApi, devicesApi, usersApi, vitalsApi } from '../services/api';
+import { Device, User, RedisDiagnostics, ServiceHealth, SystemIncident } from '../types';
 import { useThemeStore } from '../store/useThemeStore';
-
-// Mock chart data for vital signs & incidents over 24h
-const ACTIVITY_DATA = [
-  { time: '00:00', heartRate: 68, fallRisk: 5, alerts: 0 },
-  { time: '04:00', heartRate: 64, fallRisk: 2, alerts: 0 },
-  { time: '08:00', heartRate: 78, fallRisk: 25, alerts: 1 },
-  { time: '12:00', heartRate: 85, fallRisk: 15, alerts: 0 },
-  { time: '16:00', heartRate: 82, fallRisk: 40, alerts: 1 },
-  { time: '20:00', heartRate: 74, fallRisk: 18, alerts: 0 },
-  { time: '23:59', heartRate: 70, fallRisk: 8, alerts: 0 },
-];
 
 export const DashboardPage: React.FC = () => {
   const { isDark } = useThemeStore();
   const [devices, setDevices] = useState<Device[]>([]);
   const [users, setUsers] = useState<User[]>([]);
-  const [, setRedis] = useState<RedisDiagnostics | null>(null);
-  const [, setLoading] = useState(true);
+  const [redis, setRedis] = useState<RedisDiagnostics | null>(null);
+  const [incidents, setIncidents] = useState<SystemIncident[]>([]);
+  const [services, setServices] = useState<ServiceHealth[]>([]);
+  const [telemetryData, setTelemetryData] = useState<Array<{ time: string; heartRate: number; fallRisk: number; alerts: number }>>([]);
+  const [loading, setLoading] = useState(true);
 
   useEffect(() => {
     Promise.all([
-      devicesApi.list(),
-      usersApi.list(),
-      systemApi.getRedisStatus(),
-    ]).then(([devs, usrs, rds]) => {
+      devicesApi.list().catch(() => []),
+      usersApi.list().catch(() => []),
+      systemApi.getRedisStatus().catch(() => null),
+      systemApi.getIncidents().catch(() => []),
+      systemApi.getServicesHealth().catch(() => []),
+      vitalsApi.getHistory(24).catch(() => []),
+    ]).then(([devs, usrs, rds, incs, srvs, vits]) => {
       setDevices(devs);
       setUsers(usrs);
       setRedis(rds);
+      setIncidents(incs);
+      setServices(srvs);
+
+      if (Array.isArray(vits) && vits.length > 0) {
+        const mapped = vits.map((v: any) => ({
+          time: v.time ? new Date(v.time).toLocaleTimeString('vi-VN', { hour: '2-digit', minute: '2-digit' }) : '--:--',
+          heartRate: v.heart_rate ?? 0,
+          fallRisk: Math.round((v.fall_risk_score ?? 0) * 100),
+          alerts: v.alert_triggered ? 1 : 0,
+        }));
+        setTelemetryData(mapped.reverse());
+      } else {
+        setTelemetryData([]);
+      }
       setLoading(false);
     });
   }, []);
 
   const onlineDevicesCount = devices.filter((d) => d.is_online).length;
+  const doctorCount = users.filter((u) => u.role === 'doctor').length;
+  const adminCount = users.filter((u) => u.role === 'admin').length;
+  const familyCount = users.filter((u) => u.role === 'user' || u.role === 'caregiver').length;
+
+  const todayStr = new Date().toISOString().slice(0, 10);
+  const incidentsToday = incidents.filter((i) => {
+    const ts = (i.timestamp || '').slice(0, 10);
+    return ts === todayStr;
+  });
+  const resolvedTodayCount = incidentsToday.filter((i) => i.resolved).length;
+
+  const fastApiSrv = services.find((s) => s.id === 'srv-1');
+  const backendLatency = fastApiSrv?.latency_ms ?? 4.2;
 
   return (
     <div className="space-y-6">
@@ -86,7 +108,6 @@ export const DashboardPage: React.FC = () => {
         {/* Card 1: Users */}
         <div className="glass-card p-5 relative group">
           <div className="flex items-center gap-3.5 relative z-10">
-            {/* Circle icon on left as in Master Mock */}
             <div className="w-12 h-12 rounded-full bg-[#FFF8EE] dark:bg-[#1A3830] text-[#D96C3B] dark:text-[#DFB15B] border border-[#C8AD8A] dark:border-[#2F5A4D] flex items-center justify-center shrink-0 shadow-sm group-hover:scale-105 transition-transform">
               <Users className="w-6 h-6 stroke-[2.2]" />
             </div>
@@ -100,13 +121,13 @@ export const DashboardPage: React.FC = () => {
                   {users.length}
                 </span>
                 <span className="badge-sky font-mono text-[10px]">
-                  <TrendingUp className="w-3 h-3" /> +2 Bác sĩ
+                  <TrendingUp className="w-3 h-3" /> +{doctorCount} Bác sĩ
                 </span>
               </div>
             </div>
           </div>
           <p className="mt-3 text-[11px] text-slate-500 dark:text-slate-400 truncate relative z-10 border-t border-[#C8AD8A]/50 dark:border-white/5 pt-2">
-            Chủ nhà, Caregiver & Bác sĩ gia đình
+            {doctorCount > 0 ? `${doctorCount} Bác sĩ` : '0 Bác sĩ'}, {adminCount} Admin, {familyCount} Gia đình
           </p>
         </div>
 
@@ -126,13 +147,13 @@ export const DashboardPage: React.FC = () => {
                   {onlineDevicesCount} / {devices.length}
                 </span>
                 <span className="badge-live font-mono text-[10px]">
-                  <ShieldCheck className="w-3 h-3" /> 100% Online
+                  <ShieldCheck className="w-3 h-3" /> {devices.length > 0 ? Math.round((onlineDevicesCount / devices.length) * 100) : 0}% Online
                 </span>
               </div>
             </div>
           </div>
           <p className="mt-3 text-[11px] text-slate-500 dark:text-slate-400 truncate relative z-10 border-t border-[#C8AD8A]/50 dark:border-white/5 pt-2">
-            Camera SECA_001, BLE Band, Orange Pi 5
+            {devices.length > 0 ? devices.map((d) => d.device_id).slice(0, 3).join(', ') : 'Chưa có thiết bị nào trong CSDL'}
           </p>
         </div>
 
@@ -149,16 +170,18 @@ export const DashboardPage: React.FC = () => {
               </span>
               <div className="mt-1 flex items-baseline space-x-2">
                 <span className="font-mono text-2xl font-extrabold text-slate-900 dark:text-white tracking-tight">
-                  2
+                  {incidentsToday.length}
                 </span>
                 <span className="badge-warn font-mono text-[10px]">
-                  Đã xử lý
+                  {incidentsToday.length === 0 ? 'Ổn định' : (resolvedTodayCount === incidentsToday.length ? 'Đã xử lý' : `${incidentsToday.length - resolvedTodayCount} Cần xử lý`)}
                 </span>
               </div>
             </div>
           </div>
           <p className="mt-3 text-[11px] text-slate-500 dark:text-slate-400 truncate relative z-10 border-t border-[#C8AD8A]/50 dark:border-white/5 pt-2">
-            1 cảnh báo nhịp tim cao, 1 rung chấn BLE
+            {incidentsToday.length > 0
+              ? `${resolvedTodayCount}/${incidentsToday.length} sự cố đã được xử lý an toàn`
+              : 'Không có sự cố nào phát sinh hôm nay'}
           </p>
         </div>
 
@@ -171,20 +194,20 @@ export const DashboardPage: React.FC = () => {
 
             <div className="min-w-0 flex-1">
               <span className="text-[11px] font-mono font-semibold uppercase tracking-wider text-slate-500 dark:text-slate-400 block truncate">
-                Độ trễ suy luận AI
+                Độ trễ xử lý Backend
               </span>
               <div className="mt-1 flex items-baseline space-x-2">
                 <span className="font-mono text-2xl font-extrabold text-slate-900 dark:text-white tracking-tight">
-                  34 ms
+                  {backendLatency} ms
                 </span>
                 <span className="badge-sky font-mono text-[10px]">
-                  <Zap className="w-3 h-3" /> NPU 6 TOPS
+                  <Zap className="w-3 h-3" /> FastAPI ASGI
                 </span>
               </div>
             </div>
           </div>
           <p className="mt-3 text-[11px] text-slate-500 dark:text-slate-400 truncate relative z-10 border-t border-[#C8AD8A]/50 dark:border-white/5 pt-2">
-            YOLOv8-Pose 30 FPS tại Edge Hub
+            Xác thực JWT, WebSocket & điều phối IoT thực tế
           </p>
         </div>
       </div>
@@ -351,51 +374,63 @@ export const DashboardPage: React.FC = () => {
           </div>
 
           <div className="h-64 w-full">
-            <ResponsiveContainer width="100%" height="100%">
-              <AreaChart data={ACTIVITY_DATA}>
-                <defs>
-                  <linearGradient id="colorHr" x1="0" y1="0" x2="0" y2="1">
-                    <stop offset="5%" stopColor="#D96C3B" stopOpacity={0.4} />
-                    <stop offset="95%" stopColor="#D96C3B" stopOpacity={0.0} />
-                  </linearGradient>
-                  <linearGradient id="colorFall" x1="0" y1="0" x2="0" y2="1">
-                    <stop offset="5%" stopColor="#DFB15B" stopOpacity={0.4} />
-                    <stop offset="95%" stopColor="#DFB15B" stopOpacity={0.0} />
-                  </linearGradient>
-                </defs>
-                <CartesianGrid strokeDasharray="3 3" stroke={isDark ? '#23483E' : '#C8AD8A'} opacity={0.6} />
-                <XAxis dataKey="time" stroke={isDark ? '#8EAFA2' : '#9CA3AF'} fontSize={11} tickLine={false} />
-                <YAxis stroke={isDark ? '#8EAFA2' : '#9CA3AF'} fontSize={11} domain={[0, 120]} tickLine={false} />
-                <Tooltip
-                  contentStyle={{
-                    backgroundColor: isDark ? '#142823' : '#ffffff',
-                    borderColor: isDark ? 'rgba(223,177,91,0.3)' : '#C8AD8A',
-                    borderRadius: '12px',
-                    color: isDark ? '#fff' : '#1F2937',
-                    fontSize: '12px',
-                    boxShadow: '0 8px 24px rgba(0,0,0,0.12)',
-                  }}
-                />
-                <Area
-                  type="monotone"
-                  dataKey="heartRate"
-                  name="Nhịp tim"
-                  stroke="#D96C3B"
-                  strokeWidth={2}
-                  fillOpacity={1}
-                  fill="url(#colorHr)"
-                />
-                <Area
-                  type="monotone"
-                  dataKey="fallRisk"
-                  name="Nguy cơ ngã"
-                  stroke="#DFB15B"
-                  strokeWidth={2}
-                  fillOpacity={1}
-                  fill="url(#colorFall)"
-                />
-              </AreaChart>
-            </ResponsiveContainer>
+            {telemetryData.length > 0 ? (
+              <ResponsiveContainer width="100%" height="100%">
+                <AreaChart data={telemetryData}>
+                  <defs>
+                    <linearGradient id="colorHr" x1="0" y1="0" x2="0" y2="1">
+                      <stop offset="5%" stopColor="#D96C3B" stopOpacity={0.4} />
+                      <stop offset="95%" stopColor="#D96C3B" stopOpacity={0.0} />
+                    </linearGradient>
+                    <linearGradient id="colorFall" x1="0" y1="0" x2="0" y2="1">
+                      <stop offset="5%" stopColor="#DFB15B" stopOpacity={0.4} />
+                      <stop offset="95%" stopColor="#DFB15B" stopOpacity={0.0} />
+                    </linearGradient>
+                  </defs>
+                  <CartesianGrid strokeDasharray="3 3" stroke={isDark ? '#23483E' : '#C8AD8A'} opacity={0.6} />
+                  <XAxis dataKey="time" stroke={isDark ? '#8EAFA2' : '#9CA3AF'} fontSize={11} tickLine={false} />
+                  <YAxis stroke={isDark ? '#8EAFA2' : '#9CA3AF'} fontSize={11} domain={[0, 140]} tickLine={false} />
+                  <Tooltip
+                    contentStyle={{
+                      backgroundColor: isDark ? '#142823' : '#ffffff',
+                      borderColor: isDark ? 'rgba(223,177,91,0.3)' : '#C8AD8A',
+                      borderRadius: '12px',
+                      color: isDark ? '#fff' : '#1F2937',
+                      fontSize: '12px',
+                      boxShadow: '0 8px 24px rgba(0,0,0,0.12)',
+                    }}
+                  />
+                  <Area
+                    type="monotone"
+                    dataKey="heartRate"
+                    name="Nhịp tim"
+                    stroke="#D96C3B"
+                    strokeWidth={2}
+                    fillOpacity={1}
+                    fill="url(#colorHr)"
+                  />
+                  <Area
+                    type="monotone"
+                    dataKey="fallRisk"
+                    name="Nguy cơ ngã"
+                    stroke="#DFB15B"
+                    strokeWidth={2}
+                    fillOpacity={1}
+                    fill="url(#colorFall)"
+                  />
+                </AreaChart>
+              </ResponsiveContainer>
+            ) : (
+              <div className="h-full flex flex-col items-center justify-center text-center p-6 border border-dashed border-[#C8AD8A]/50 dark:border-[#23483E] rounded-xl">
+                <Activity className="w-8 h-8 text-[#D96C3B]/60 mb-2" />
+                <p className="text-xs font-semibold text-slate-700 dark:text-slate-300">
+                  Chưa có chuỗi dữ liệu sinh hiệu trong Database
+                </p>
+                <p className="text-[11px] text-slate-500 dark:text-slate-400 mt-1">
+                  Dữ liệu sẽ tự động hiển thị theo thời gian thực khi thiết bị Smartband hoặc Camera truyền telemetry lên hệ thống.
+                </p>
+              </div>
+            )}
           </div>
         </div>
 
@@ -413,42 +448,48 @@ export const DashboardPage: React.FC = () => {
             </div>
 
             <div className="space-y-2.5">
-              {devices.map((dev) => (
-                <div
-                  key={dev.id}
-                  className="p-3 rounded-xl bg-[#FAF5EE] dark:bg-[#18342D] border border-[#C8AD8A] dark:border-[#23483E] flex items-center justify-between hover:border-[#D96C3B]/50 transition-colors"
-                >
-                  <div className="flex items-center space-x-3">
-                    <div
-                      className={`w-2.5 h-2.5 rounded-full ${
-                        dev.is_online ? 'bg-emerald-500 shadow-sm' : 'bg-slate-400'
-                      }`}
-                    />
-                    <div>
-                      <p className="text-xs font-mono font-bold text-slate-800 dark:text-slate-200">
-                        {dev.device_id}
-                      </p>
-                      <p className="text-[10px] text-slate-500 dark:text-slate-400">
-                        {dev.location || 'Trong nhà'} • {dev.device_type}
-                      </p>
+              {devices.length > 0 ? (
+                devices.map((dev) => (
+                  <div
+                    key={dev.id}
+                    className="p-3 rounded-xl bg-[#FAF5EE] dark:bg-[#18342D] border border-[#C8AD8A] dark:border-[#23483E] flex items-center justify-between hover:border-[#D96C3B]/50 transition-colors"
+                  >
+                    <div className="flex items-center space-x-3">
+                      <div
+                        className={`w-2.5 h-2.5 rounded-full ${
+                          dev.is_online ? 'bg-emerald-500 shadow-sm' : 'bg-slate-400'
+                        }`}
+                      />
+                      <div>
+                        <p className="text-xs font-mono font-bold text-slate-800 dark:text-slate-200">
+                          {dev.device_id}
+                        </p>
+                        <p className="text-[10px] text-slate-500 dark:text-slate-400">
+                          {dev.location || 'Trong nhà'} • {dev.device_type}
+                        </p>
+                      </div>
                     </div>
+                    {dev.battery_level !== null && dev.battery_level !== undefined ? (
+                      <span className="text-[11px] font-mono font-semibold text-[#C25828] dark:text-[#DFB15B] bg-[#FFF8EE] dark:bg-[#1A3830] px-2 py-0.5 rounded-md border border-[#C8AD8A] dark:border-[#2F5A4D]">
+                        Pin {dev.battery_level}%
+                      </span>
+                    ) : (
+                      <span className="text-[11px] font-mono font-semibold text-[#B08D57] dark:text-[#DFB15B] bg-[#FAF5EE] dark:bg-[#1E4B3E] px-2 py-0.5 rounded-md border border-[#DFB15B]/30">
+                        2K NPU
+                      </span>
+                    )}
                   </div>
-                  {dev.battery_level !== null && dev.battery_level !== undefined ? (
-                    <span className="text-[11px] font-mono font-semibold text-[#C25828] dark:text-[#DFB15B] bg-[#FFF8EE] dark:bg-[#1A3830] px-2 py-0.5 rounded-md border border-[#C8AD8A] dark:border-[#2F5A4D]">
-                      Pin {dev.battery_level}%
-                    </span>
-                  ) : (
-                    <span className="text-[11px] font-mono font-semibold text-[#B08D57] dark:text-[#DFB15B] bg-[#FAF5EE] dark:bg-[#1E4B3E] px-2 py-0.5 rounded-md border border-[#DFB15B]/30">
-                      2K NPU
-                    </span>
-                  )}
+                ))
+              ) : (
+                <div className="p-4 text-center text-xs text-slate-500 dark:text-slate-400 border border-dashed border-[#C8AD8A]/40 dark:border-[#23483E] rounded-xl">
+                  Chưa có thiết bị nào được kết nối trong cơ sở dữ liệu.
                 </div>
-              ))}
+              )}
             </div>
           </div>
 
           <div className="mt-4 pt-3 border-t border-[#C8AD8A] dark:border-white/5 flex items-center justify-between text-xs text-slate-500 dark:text-slate-400 font-mono">
-            <span>Uptime: 7d 14h</span>
+            <span>Uptime: {redis?.uptime_in_days ? `${redis.uptime_in_days} ngày` : 'Trực tiếp'}</span>
             <Link
               to="/devices"
               className="text-[#D96C3B] dark:text-[#DFB15B] hover:text-[#C25828] font-semibold inline-flex items-center gap-1 group"

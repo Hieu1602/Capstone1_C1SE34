@@ -16,68 +16,11 @@ import {
   AlertTriangle,
   AlertCircle,
 } from 'lucide-react';
-import { RedisDiagnostics, SystemLog } from '../types';
+import { RedisDiagnostics, SystemLog, ServiceHealth } from '../types';
 import { systemApi } from '../services/api';
 
-interface ServiceItem {
-  name: string;
-  category: string;
-  port: number | string;
-  status: 'healthy' | 'degraded' | 'down';
-  latency: string;
-  version: string;
-  description: string;
-}
-
-const SERVICES_LIST: ServiceItem[] = [
-  {
-    name: 'FastAPI Core Backend',
-    category: 'REST & WebSocket Gateway',
-    port: 8000,
-    status: 'healthy',
-    latency: '12ms',
-    version: 'FastAPI 0.111 / Python 3.12',
-    description: 'Xử lý xác thực JWT, API điều phối thiết bị, WebSocket /ws/alerts',
-  },
-  {
-    name: 'PostgreSQL 16 (TimescaleDB)',
-    category: 'Time-Series Database',
-    port: 5432,
-    status: 'healthy',
-    latency: '8ms',
-    version: 'PostgreSQL 16.3 + TimescaleDB',
-    description: 'Lưu trữ tài khoản, thiết bị, cảnh báo sự cố & hypertables chuỗi thời gian sinh hiệu',
-  },
-  {
-    name: 'Redis In-Memory Cache',
-    category: 'RAM Key-Value & PubSub',
-    port: 6379,
-    status: 'healthy',
-    latency: '2ms',
-    version: 'Redis 7.2-alpine',
-    description: 'Quản lý trạng thái thiết bị online/offline (TTL 60s), cache token & phân phối sự kiện',
-  },
-  {
-    name: 'EMQX MQTT Broker',
-    category: 'IoT Messaging Broker',
-    port: 1883,
-    status: 'healthy',
-    latency: '5ms',
-    version: 'EMQX 5.7 Enterprise-ready',
-    description: 'Broker trung chuyển bản tin telemetry nhịp tim, cảnh báo té ngã từ Edge Hub',
-  },
-  {
-    name: 'MinIO S3 Object Storage',
-    category: 'Biometric & Media Storage',
-    port: 9000,
-    status: 'healthy',
-    latency: '15ms',
-    version: 'MinIO RELEASE.2024-05',
-    description: 'Lưu trữ ảnh snapshot sự cố té ngã, video bằng chứng & vector khuôn mặt người cao tuổi',
-  },
-];
-
 export const InfrastructurePage: React.FC = () => {
+  const [services, setServices] = useState<ServiceHealth[]>([]);
   const [redisInfo, setRedisInfo] = useState<RedisDiagnostics | null>(null);
   const [logs, setLogs] = useState<SystemLog[]>([]);
   const [dbStatus, setDbStatus] = useState<any>(null);
@@ -91,12 +34,14 @@ export const InfrastructurePage: React.FC = () => {
   const fetchInfrastructureData = async () => {
     setLoading(true);
     try {
-      const [redisData, logsData, dbData, backupsData] = await Promise.all([
+      const [servicesData, redisData, logsData, dbData, backupsData] = await Promise.all([
+        systemApi.getServicesHealth().catch(() => []),
         systemApi.getRedisStatus().catch(() => null),
-        systemApi.getLogs().catch(() => null),
+        systemApi.getLogs().catch(() => []),
         systemApi.getDatabaseStatus().catch(() => null),
-        systemApi.getBackups().catch(() => null),
+        systemApi.getBackups().catch(() => []),
       ]);
+      if (servicesData) setServices(servicesData);
       if (redisData) setRedisInfo(redisData);
       if (logsData) setLogs(logsData);
       if (dbData) setDbStatus(dbData);
@@ -228,14 +173,18 @@ export const InfrastructurePage: React.FC = () => {
           </h2>
           <span className="badge-live font-mono">
             <span className="w-1.5 h-1.5 rounded-full bg-emerald-500 animate-pulse"></span>
-            <span>Tất cả dịch vụ (5/5) Online</span>
+            <span>
+              {services.length > 0
+                ? `${services.filter((s) => s.status === 'healthy').length}/${services.length} Dịch vụ Online`
+                : 'Đang kiểm tra dịch vụ...'}
+            </span>
           </span>
         </div>
 
         <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
-          {SERVICES_LIST.map((srv) => (
+          {services.map((srv) => (
             <div
-              key={srv.name}
+              key={srv.id || srv.name}
               className="glass-card p-5 relative group flex flex-col justify-between hover:border-[#D96C3B] transition-all duration-200"
             >
               <div className="relative z-10 px-1">
@@ -248,20 +197,26 @@ export const InfrastructurePage: React.FC = () => {
                       {srv.category}
                     </p>
                   </div>
-                  <span className="badge-live font-mono">
-                    Online
+                  <span
+                    className={`badge-live font-mono ${
+                      srv.status === 'healthy'
+                        ? 'text-emerald-700 bg-emerald-100 dark:bg-emerald-950/60 dark:text-emerald-400'
+                        : 'text-amber-700 bg-amber-100 dark:bg-amber-950/60 dark:text-amber-400'
+                    }`}
+                  >
+                    {srv.status === 'healthy' ? 'Online' : 'Degraded'}
                   </span>
                 </div>
 
                 <p className="text-xs text-slate-600 dark:text-slate-400 mt-2.5 line-clamp-2">
-                  {srv.description}
+                  {(srv as any).description || `Dịch vụ vận hành trên cổng ${srv.port}`}
                 </p>
               </div>
 
               <div className="mt-4 pt-3 border-t border-[#C8AD8A]/40 dark:border-white/5 flex items-center justify-between text-xs font-mono px-1 relative z-10">
                 <span className="text-slate-500">Cổng: :{srv.port}</span>
                 <span className="font-bold text-[#D96C3B] dark:text-[#E67A47]">
-                  {srv.latency}
+                  {srv.latency_ms ? `${srv.latency_ms}ms` : '0ms'}
                 </span>
               </div>
             </div>
@@ -289,7 +244,7 @@ export const InfrastructurePage: React.FC = () => {
                 </div>
               </div>
               <span className="text-[10px] font-mono px-2 py-0.5 rounded bg-sky-100 text-sky-800 dark:bg-sky-900/40 dark:text-sky-300">
-                Auto-daily
+                On-Demand & MinIO
               </span>
             </div>
 
@@ -300,7 +255,9 @@ export const InfrastructurePage: React.FC = () => {
 
           <div className="mt-4 pt-3 border-t border-sky-100 dark:border-sky-950/60 flex items-center justify-between">
             <span className="text-[11px] font-mono text-slate-400 dark:text-slate-500">
-              Bản lưu gần nhất: Hôm nay 03:00 (14.2 MB)
+              {backups && backups.length > 0
+                ? `Bản lưu gần nhất: ${backups[0].created_at} (${backups[0].size_mb} MB)`
+                : 'Chưa có bản sao lưu nào'}
             </span>
             <div className="flex items-center gap-2">
               <button
@@ -323,44 +280,55 @@ export const InfrastructurePage: React.FC = () => {
                 </div>
                 <div>
                   <h3 className="font-heading font-bold text-sm text-slate-900 dark:text-white">
-                    Quản lý cấu hình kỹ thuật & Kết nối
+                    Thông số CSDL & Kết nối thực tế
                   </h3>
                   <p className="text-xs text-slate-500 dark:text-slate-400">
-                    Thông số vận hành môi trường backend & Broker
+                    Trích xuất trực tiếp từ PostgreSQL 16 & Redis
                   </p>
                 </div>
               </div>
               <span className="text-[10px] font-mono px-2 py-0.5 rounded bg-emerald-100 text-emerald-800 dark:bg-emerald-900/40 dark:text-emerald-300">
-                Port 5432
+                Port {dbStatus?.port || 5432}
               </span>
             </div>
 
             <div className="mt-3 grid grid-cols-2 gap-2 text-[11px] font-mono">
               <div className="p-2 rounded-lg bg-sky-50/50 dark:bg-white/5 border border-sky-100 dark:border-white/5">
-                <span className="text-slate-400 block text-[10px]">DATABASE URL</span>
-                <span className="font-semibold text-slate-800 dark:text-slate-200">PG-16:5432</span>
+                <span className="text-slate-400 block text-[10px]">DATABASE ENGINE</span>
+                <span className="font-semibold text-slate-800 dark:text-slate-200">
+                  {dbStatus?.engine || 'PostgreSQL 16'}
+                </span>
               </div>
               <div className="p-2 rounded-lg bg-sky-50/50 dark:bg-white/5 border border-sky-100 dark:border-white/5">
-                <span className="text-slate-400 block text-[10px]">MQTT BROKER</span>
-                <span className="font-semibold text-slate-800 dark:text-slate-200">EMQX:1883</span>
+                <span className="text-slate-400 block text-[10px]">DUNG LƯỢNG CSDL</span>
+                <span className="font-semibold text-slate-800 dark:text-slate-200">
+                  {dbStatus?.size_pretty || '0 MB'} ({dbStatus?.tables_count ?? 0} bảng)
+                </span>
               </div>
               <div className="p-2 rounded-lg bg-sky-50/50 dark:bg-white/5 border border-sky-100 dark:border-white/5">
-                <span className="text-slate-400 block text-[10px]">REDIS CACHE</span>
-                <span className="font-semibold text-slate-800 dark:text-slate-200">DB 0 (Port 6379)</span>
+                <span className="text-slate-400 block text-[10px]">KẾT NỐI DB ACTIVE</span>
+                <span className="font-semibold text-slate-800 dark:text-slate-200">
+                  {dbStatus?.active_connections ?? 1} active ({dbStatus?.status || 'ONLINE'})
+                </span>
               </div>
               <div className="p-2 rounded-lg bg-sky-50/50 dark:bg-white/5 border border-sky-100 dark:border-white/5">
-                <span className="text-slate-400 block text-[10px]">WEBSOCKET</span>
-                <span className="font-semibold text-slate-800 dark:text-slate-200">/ws/alerts Active</span>
+                <span className="text-slate-400 block text-[10px]">BẢN GHI SINH HIỆU</span>
+                <span className="font-semibold text-slate-800 dark:text-slate-200">
+                  {dbStatus?.rows_summary?.vital_signs_timeseries ?? 0} bản ghi
+                </span>
               </div>
             </div>
           </div>
 
           <div className="mt-4 pt-3 border-t border-sky-100 dark:border-sky-950/60 flex items-center justify-between">
             <span className="text-[11px] font-mono text-slate-400 dark:text-slate-500">
-              Đồng bộ file .env gốc hệ thống
+              Đồng bộ CSDL: {dbStatus?.database_name || 'elderly_care'}
             </span>
             <button
-              onClick={() => showNotice('success', 'Đã kiểm tra và nạp lại cấu hình thông số kết nối!')}
+              onClick={() => {
+                fetchInfrastructureData();
+                showNotice('success', 'Đã làm mới thông số kết nối CSDL và dịch vụ!');
+              }}
               className="btn-ghost py-1 px-3 text-xs"
             >
               Nạp lại cấu hình
@@ -402,28 +370,28 @@ export const InfrastructurePage: React.FC = () => {
           <div className="p-3.5 rounded-xl bg-slate-50 dark:bg-slate-900/60 border border-slate-200 dark:border-white/5 font-mono shadow-xs">
             <p className="text-[11px] uppercase text-slate-500 dark:text-slate-400 font-semibold">Tổng số khóa (Keys)</p>
             <p className="text-xl font-bold text-slate-900 dark:text-white mt-1">
-              {redisInfo?.total_keys || 142} <span className="text-xs font-normal text-slate-400">keys</span>
+              {redisInfo?.total_keys ?? 0} <span className="text-xs font-normal text-slate-400">keys</span>
             </p>
           </div>
 
           <div className="p-3.5 rounded-xl bg-slate-50 dark:bg-slate-900/60 border border-slate-200 dark:border-white/5 font-mono shadow-xs">
             <p className="text-[11px] uppercase text-slate-500 dark:text-slate-400 font-semibold">RAM sử dụng</p>
             <p className="text-xl font-bold text-sky-600 dark:text-sky-400 mt-1">
-              {redisInfo?.used_memory_human || '2.15 MB'}
+              {redisInfo?.used_memory_human || '0 MB'}
             </p>
           </div>
 
           <div className="p-3.5 rounded-xl bg-slate-50 dark:bg-slate-900/60 border border-slate-200 dark:border-white/5 font-mono shadow-xs">
             <p className="text-[11px] uppercase text-slate-500 dark:text-slate-400 font-semibold">Thiết bị trong Cache</p>
             <p className="text-xl font-bold text-indigo-600 dark:text-indigo-400 mt-1">
-              {redisInfo?.online_devices_count || 3} <span className="text-xs font-normal text-slate-400">active</span>
+              {redisInfo?.online_devices_count ?? 0} <span className="text-xs font-normal text-slate-400">active</span>
             </p>
           </div>
 
           <div className="p-3.5 rounded-xl bg-slate-50 dark:bg-slate-900/60 border border-slate-200 dark:border-white/5 font-mono shadow-xs">
             <p className="text-[11px] uppercase text-slate-500 dark:text-slate-400 font-semibold">Tỷ lệ truy vấn (Hit rate)</p>
             <p className="text-xl font-bold text-amber-600 dark:text-amber-400 mt-1">
-              {redisInfo?.hit_rate || 98.7}%
+              {redisInfo?.hit_rate ?? 0}%
             </p>
           </div>
         </div>

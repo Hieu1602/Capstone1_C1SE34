@@ -83,6 +83,19 @@ class Settings(BaseSettings):
     TWILIO_AUTH_TOKEN: str = ""
     TWILIO_VERIFY_SERVICE_SID: str = ""
 
+    # ---- eSMS Gateway ----
+    ESMS_API_KEY: str = ""
+    ESMS_SECRET_KEY: str = ""
+    ESMS_BRANDNAME: str = "Baotrixemay"
+    ESMS_SMS_TYPE: str = "2"
+    ESMS_SANDBOX: str = "0"
+    ESMS_OTP_REGISTER_TEMPLATE_ID: str = ""
+    ESMS_OTP_RESET_TEMPLATE_ID: str = ""
+
+    # ---- OTP Rate Limit ----
+    OTP_RATE_LIMIT_SECONDS: int = 60  # Thời gian tối thiểu giữa 2 lần gửi OTP (giây)
+    OTP_MAX_ATTEMPTS: int = 5  # Số lần nhập sai OTP tối đa trước khi khoá tạm
+
     # ---- Chatbot AI / LLM ----
     ENABLE_EXTERNAL_LLM: bool = True
     LLM_API_KEY: str = ""
