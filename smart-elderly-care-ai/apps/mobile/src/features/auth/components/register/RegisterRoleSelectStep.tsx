@@ -44,12 +44,7 @@ export const RegisterRoleSelectStep: React.FC<RegisterRoleSelectStepProps> = ({
                         />
                     </TouchableOpacity>
 
-                    <View style={styles.stepBadge}>
-                        <View style={styles.stepBadgeDot} />
-                        <Text style={styles.stepBadgeText}>
-                            BƯỚC 1 / 2 • CHỌN VAI TRÒ
-                        </Text>
-                    </View>
+
                 </View>
 
                 <ScrollView

@@ -1,6 +1,7 @@
 import React from 'react';
 import {
   View,
+  Text,
   TouchableOpacity,
   StyleSheet,
   Platform,
@@ -25,6 +26,7 @@ interface LoginFormSectionProps {
   onSubmit: () => void;
   onForgotPassword: () => void;
   onNavigateRegister: () => void;
+  onOpenLegal?: (type: 'terms' | 'privacy') => void;
 }
 
 export const LoginFormSection: React.FC<LoginFormSectionProps> = ({
@@ -41,6 +43,7 @@ export const LoginFormSection: React.FC<LoginFormSectionProps> = ({
   onSubmit,
   onForgotPassword,
   onNavigateRegister,
+  onOpenLegal,
 }) => {
   return (
     <View style={styles.bottomSection}>
@@ -147,25 +150,43 @@ export const LoginFormSection: React.FC<LoginFormSectionProps> = ({
       </View>
 
       {/* Điều khoản pháp lý ở chân trang với checkbox hình vuông */}
-      <TouchableOpacity
-        style={styles.termsContainer}
-        activeOpacity={0.7}
-        onPress={onToggleAgree}
-      >
-        <Ionicons
-          name={isAgreed ? 'checkbox' : 'square-outline'}
-          size={20}
-          color={isAgreed ? Colors.primary : '#94A3B8'}
-          style={styles.checkboxIcon}
-        />
-        <LocalizedText style={styles.termsNoticeText}>
-          Bằng cách tiếp tục, bạn đồng ý với{' '}
-          <LocalizedText style={styles.termsLink}>Điều khoản dịch vụ</LocalizedText>{' '}
-          của SECA và xác nhận rằng bạn đã đọc{' '}
-          <LocalizedText style={styles.termsLink}>Chính sách quyền riêng tư</LocalizedText>{' '}
-          của chúng tôi.
-        </LocalizedText>
-      </TouchableOpacity>
+      <View style={styles.termsContainer}>
+        <TouchableOpacity
+          activeOpacity={0.7}
+          onPress={onToggleAgree}
+          hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
+        >
+          <Ionicons
+            name={isAgreed ? 'checkbox' : 'square-outline'}
+            size={20}
+            color={isAgreed ? Colors.primary : '#94A3B8'}
+            style={styles.checkboxIcon}
+          />
+        </TouchableOpacity>
+        <Text style={styles.termsNoticeText}>
+          <Text onPress={onToggleAgree}>
+            Bằng cách tiếp tục, bạn đồng ý với{' '}
+          </Text>
+          <Text
+            style={styles.termsLink}
+            onPress={() => onOpenLegal?.('terms')}
+          >
+            Điều khoản dịch vụ
+          </Text>{' '}
+          <Text onPress={onToggleAgree}>
+            của SECA và xác nhận rằng bạn đã đọc{' '}
+          </Text>
+          <Text
+            style={styles.termsLink}
+            onPress={() => onOpenLegal?.('privacy')}
+          >
+            Chính sách quyền riêng tư
+          </Text>{' '}
+          <Text onPress={onToggleAgree}>
+            của chúng tôi.
+          </Text>
+        </Text>
+      </View>
     </View>
   );
 };

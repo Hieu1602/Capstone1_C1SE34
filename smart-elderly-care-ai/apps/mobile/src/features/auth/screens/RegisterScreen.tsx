@@ -157,10 +157,22 @@ export default function RegisterScreen({ route, navigation }: any) {
             return;
         }
 
-        if (password.length < 6) {
+        if (password.length < 8 || password.length > 16) {
             Alert.alert(
-                "Mật khẩu quá ngắn",
-                "Mật khẩu cần có ít nhất 6 ký tự để đảm bảo an toàn.",
+                "Mật khẩu chưa đủ mạnh",
+                "Mật khẩu phải có độ dài từ 8 đến 16 ký tự.",
+            );
+            return;
+        }
+
+        if (
+            !/^(?=.*[a-z])(?=.*[A-Z])(?=.*\d)(?=.*[^A-Za-z0-9]).{8,16}$/.test(
+                password,
+            )
+        ) {
+            Alert.alert(
+                "Mật khẩu chưa đủ mạnh",
+                "Mật khẩu phải bao gồm chữ hoa, chữ thường, số và ký hiệu đặc biệt (ví dụ: Care@123).",
             );
             return;
         }
@@ -357,32 +369,32 @@ export default function RegisterScreen({ route, navigation }: any) {
                         >
                             <Ionicons
                                 name="arrow-back"
-                                size={24}
-                                color="#0F172A"
+                                size={step === "verify" ? 28 : 24}
+                                color="#2F2F2F"
                             />
                         </TouchableOpacity>
 
-                        {/* Badge bước thực hiện */}
-                        <View style={styles.stepBadge}>
-                            <View style={styles.stepBadgeDot} />
-                            <Text style={styles.stepBadgeText}>
-                                {step === "form"
-                                    ? "BƯỚC 2 / 2 • NHẬP THÔNG TIN"
-                                    : "XÁC THỰC BẢO MẬT OTP"}
-                            </Text>
-                        </View>
-
-                        <Text style={styles.welcomeTitle}>
+                        <Text
+                            style={[
+                                styles.welcomeTitle,
+                                step === "verify" && styles.verifyTitle,
+                            ]}
+                        >
                             {step === "verify"
-                                ? "Xác minh số điện thoại"
+                                ? "Xác minh số điện thoại."
                                 : accountType === "doctor"
                                   ? "Đăng ký Bác sĩ gia đình"
                                   : "Đăng ký tài khoản"}
                         </Text>
 
-                        <Text style={styles.subtitle}>
+                        <Text
+                            style={[
+                                styles.subtitle,
+                                step === "verify" && styles.verifySubtitle,
+                            ]}
+                        >
                             {step === "verify"
-                                ? `Vui lòng nhập mã OTP gồm 6 chữ số được gửi tới số ${phone}.`
+                                ? `Nhập mã xác minh gồm 6 chữ số được gửi tới số điện thoại ${phone}.`
                                 : accountType === "doctor"
                                   ? "Dành cho Bác sĩ & Chuyên gia y tế đồng hành chăm sóc sức khỏe người cao tuổi."
                                   : "Hệ thống Smart Elderly Care AI kết nối người cao tuổi, gia đình và bác sĩ chăm sóc chuyên khoa."}
@@ -424,6 +436,7 @@ export default function RegisterScreen({ route, navigation }: any) {
                     {/* MÀN HÌNH 3: XÁC MINH OTP */}
                     {step === "verify" && (
                         <RegisterVerifyOtpStep
+                            phone={phone}
                             otp={otp}
                             setOtp={setOtp}
                             resendSeconds={resendSeconds}
@@ -440,12 +453,23 @@ export default function RegisterScreen({ route, navigation }: any) {
                             onPress={() => navigation.navigate("Login")}
                             activeOpacity={0.7}
                         >
-                            <Text style={styles.loginText}>
-                                Tôi đã có tài khoản.{" "}
-                                <Text style={styles.loginHighlight}>
-                                    Đăng nhập
+                            {step === "verify" ? (
+                                <Text
+                                    style={[
+                                        styles.loginHighlight,
+                                        styles.verifyLoginText,
+                                    ]}
+                                >
+                                    Quay lại màn hình đăng nhập
                                 </Text>
-                            </Text>
+                            ) : (
+                                <Text style={styles.loginText}>
+                                    Tôi đã có tài khoản.{" "}
+                                    <Text style={styles.loginHighlight}>
+                                        Đăng nhập
+                                    </Text>
+                                </Text>
+                            )}
                         </TouchableOpacity>
                     </View>
                 </ScrollView>
@@ -530,5 +554,21 @@ const styles = StyleSheet.create({
     loginHighlight: {
         color: "#FF7A00",
         fontWeight: "700",
+    },
+    verifyTitle: {
+        fontSize: 28,
+        fontWeight: "800",
+        color: "#2F2F2F",
+        marginBottom: 10,
+    },
+    verifySubtitle: {
+        fontSize: 16,
+        lineHeight: 23,
+        color: "#4B5563",
+        maxWidth: 350,
+    },
+    verifyLoginText: {
+        fontSize: 16,
+        fontWeight: "500",
     },
 });

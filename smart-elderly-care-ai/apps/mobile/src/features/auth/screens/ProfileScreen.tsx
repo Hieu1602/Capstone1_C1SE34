@@ -124,10 +124,7 @@ export default function ProfileScreen({ navigation, route }: any) {
         visible={mgr.isSecurityCenterVisible}
         isDarkMode={mgr.isDarkMode}
         onClose={() => mgr.setSecurityCenterVisible(false)}
-        onChangePasswordPress={() => {
-          mgr.setSecurityCenterVisible(false);
-          mgr.setChangePasswordVisible(true);
-        }}
+        onSubmitChangePassword={mgr.handleChangePassword}
       />
 
       {/* ─── MAIN CONTENT ──────────────────────────────────── */}
@@ -163,16 +160,6 @@ export default function ProfileScreen({ navigation, route }: any) {
           onToggleShowMore={() => mgr.setShowMoreGrid(!mgr.showMoreGrid)}
           onNavigate={(screen) => navigation.navigate(screen)}
           onOpenProfile={() => mgr.setUserMenuVisible(true)}
-          onToggleDoctorMode={() => {
-            Alert.alert(
-              'Chuyển sang Chế độ Bác sĩ',
-              'Bạn muốn chuyển sang giao diện chuyên môn của Bác sĩ gia đình (Danh sách bệnh nhân, Kê đơn thuốc, Báo cáo y tế)?',
-              [
-                { text: 'Hủy', style: 'cancel' },
-                { text: 'Chuyển ngay', onPress: () => mgr.toggleViewRole() },
-              ],
-            );
-          }}
         />
 
         <ProfileHelpAccordion

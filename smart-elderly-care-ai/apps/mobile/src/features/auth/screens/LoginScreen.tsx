@@ -20,6 +20,7 @@ import { useAuthStore } from '../../../store/useAuthStore';
 import { useThemeStore } from '../../../store/useThemeStore';
 import { authApi, usersApi } from '../../../services/api';
 import { LoginPhotoCollage, LoginFormSection } from '../components/login';
+import { LegalTermsModal, LegalModalType } from '../components/LegalTermsModal';
 
 const FONT_SCALE_LEVELS = [0.8, 1, 1.2, 1.5, 1.8] as const;
 
@@ -48,6 +49,13 @@ export default function LoginScreen({ navigation, route }: any) {
 
   // Đồng bộ trạng thái đã tích từ màn hình ngoài (Welcome) hoặc mặc định đã tích khi vào màn hình
   const [isAgreed, setIsAgreed] = useState<boolean>(route?.params?.isAgreed ?? true);
+  const [legalModalVisible, setLegalModalVisible] = useState(false);
+  const [legalModalType, setLegalModalType] = useState<LegalModalType>('terms');
+
+  const handleOpenLegal = (type: LegalModalType) => {
+    setLegalModalType(type);
+    setLegalModalVisible(true);
+  };
 
   // Xử lý đăng nhập kết nối trực tiếp với Database qua Backend FastAPI
   const handleLogin = async () => {
@@ -155,9 +163,18 @@ export default function LoginScreen({ navigation, route }: any) {
             onSubmit={handleLogin}
             onForgotPassword={() => navigation.navigate('ForgotPassword')}
             onNavigateRegister={() => navigation.navigate('Register', { isAgreed })}
+            onOpenLegal={handleOpenLegal}
           />
         </ScrollView>
       </KeyboardAvoidingView>
+
+      {/* Modal Điều khoản dịch vụ & Chính sách quyền riêng tư */}
+      <LegalTermsModal
+        visible={legalModalVisible}
+        initialType={legalModalType}
+        onClose={() => setLegalModalVisible(false)}
+        onAgree={() => setIsAgreed(true)}
+      />
     </SafeAreaView>
   );
 }
