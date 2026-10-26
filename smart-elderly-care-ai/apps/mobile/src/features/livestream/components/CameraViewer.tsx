@@ -22,6 +22,8 @@ import { useCameraFullscreen } from "../hooks/useCameraFullscreen";
 import { CameraLiveView } from "./CameraLiveView";
 import CameraVideoOptions from "./CameraVideoOptions";
 import PanTiltControl from "./PanTiltControl";
+import CameraLandscapeView from "./CameraLandscapeView";
+import CameraControlIcon from "./CameraControlIcon";
 
 type Connection = ReturnType<typeof useCameraConnection>;
 interface Props {
@@ -154,7 +156,7 @@ export default function CameraViewer({
             onPress={onPress}
             style={styles.tool}
         >
-            <Ionicons
+            <CameraControlIcon
                 name={icon}
                 size={25}
                 color={selected ? "#ff7a00" : "#FFF"}
@@ -174,246 +176,85 @@ export default function CameraViewer({
             : videoMode.mode === "auto"
               ? "contrast-outline"
               : "sunny-outline";
-    const body = (
-        <View style={styles.body}>
-            <View style={styles.videoArea}>
+    const feeds = (
+        <View style={styles.feeds}>
+            {displayedSlots.map((id, index) => (
                 <View
+                    key={id || `empty-${index}`}
                     style={[
-                        styles.feeds,
-                        !grid && { transform: [{ scale: zoom }] },
+                        grid ? styles.tile : styles.single,
+                        grid && id === activeId && styles.activeTile,
                     ]}
                 >
-                    {displayedSlots.map((id, index) => (
-                        <View
-                            key={id || `empty-${index}`}
-                            style={[
-                                grid ? styles.tile : styles.single,
-                                grid && id === activeId && styles.activeTile,
-                            ]}
+                    {id === activeId || (!id && index === 0 && !activeId) ? (
+                        <CameraLiveView connection={connection} />
+                    ) : id ? (
+                        <AdditionalFeed id={id} quality={quality} />
+                    ) : (
+                        <Pressable
+                            accessibilityRole="button"
+                            accessibilityLabel={`Thêm camera vào ô ${index + 1}`}
+                            onPress={() => setSheet("sources")}
+                            style={styles.empty}
                         >
-                            {id === activeId ||
-                            (!id && index === 0 && !activeId) ? (
-                                <CameraLiveView connection={connection} />
-                            ) : id ? (
-                                <AdditionalFeed id={id} quality={quality} />
-                            ) : (
+                            <Ionicons
+                                name="add-circle"
+                                size={42}
+                                color="#DDD"
+                            />
+                        </Pressable>
+                    )}
+                    {grid && id && (
+                        <>
+                            {id !== activeId && (
                                 <Pressable
                                     accessibilityRole="button"
-                                    accessibilityLabel={`Thêm camera vào ô ${index + 1}`}
-                                    onPress={() => setSheet("sources")}
-                                    style={styles.empty}
+                                    accessibilityLabel="Chọn camera để điều khiển"
+                                    onPress={() => select(id)}
+                                    style={StyleSheet.absoluteFill}
+                                />
+                            )}
+                            <Text
+                                numberOfLines={1}
+                                pointerEvents="none"
+                                style={styles.feedName}
+                            >
+                                {sources.find((source) => source.id === id)
+                                    ?.name ||
+                                    (id === activeId
+                                        ? connection.status?.name
+                                        : `Camera ${index + 1}`)}
+                            </Text>
+                            {id !== activeId && (
+                                <Pressable
+                                    accessibilityRole="button"
+                                    accessibilityLabel="Gỡ luồng camera"
+                                    style={styles.remove}
+                                    onPress={() =>
+                                        setSlots((current) =>
+                                            current.filter(
+                                                (value) => value !== id,
+                                            ),
+                                        )
+                                    }
                                 >
                                     <Ionicons
-                                        name="add-circle"
-                                        size={42}
-                                        color="#DDD"
+                                        name="close-circle"
+                                        size={24}
+                                        color="#FFF"
                                     />
                                 </Pressable>
                             )}
-                            {grid && id && (
-                                <>
-                                    {id !== activeId && (
-                                        <Pressable
-                                            accessibilityRole="button"
-                                            accessibilityLabel="Chọn camera để điều khiển"
-                                            onPress={() => select(id)}
-                                            style={StyleSheet.absoluteFill}
-                                        />
-                                    )}
-                                    <Text
-                                        numberOfLines={1}
-                                        pointerEvents="none"
-                                        style={styles.feedName}
-                                    >
-                                        {sources.find(
-                                            (source) => source.id === id,
-                                        )?.name ||
-                                            (id === activeId
-                                                ? connection.status?.name
-                                                : `Camera ${index + 1}`)}
-                                    </Text>
-                                    {id !== activeId && (
-                                        <Pressable
-                                            accessibilityRole="button"
-                                            accessibilityLabel="Gỡ luồng camera"
-                                            style={styles.remove}
-                                            onPress={() =>
-                                                setSlots((current) =>
-                                                    current.filter(
-                                                        (value) => value !== id,
-                                                    ),
-                                                )
-                                            }
-                                        >
-                                            <Ionicons
-                                                name="close-circle"
-                                                size={24}
-                                                color="#FFF"
-                                            />
-                                        </Pressable>
-                                    )}
-                                </>
-                            )}
-                        </View>
-                    ))}
-                </View>
-                {fullscreen.fullscreen && (
-                    <View style={styles.topBar}>
-                        {tool(
-                            "chevron-back",
-                            "Thoát toàn màn hình",
-                            fullscreen.close,
-                        )}
-                        <Text numberOfLines={1} style={styles.cameraName}>
-                            {connection.status?.name || "Camera"}
-                        </Text>
-                        {!grid &&
-                            tool(
-                                zoom === 1
-                                    ? "search-outline"
-                                    : "remove-circle-outline",
-                                zoom === 1
-                                    ? "Phóng to 2 lần"
-                                    : "Thu về kích thước gốc",
-                                () => setZoom((value) => (value === 1 ? 2 : 1)),
-                                zoom > 1,
-                            )}
-                    </View>
-                )}
-                <View style={styles.toolbar}>
-                    {tool(
-                        grid ? "square-outline" : "duplicate-outline",
-                        grid ? "Xem một camera" : "Xem nhiều camera",
-                        toggleGrid,
-                        grid,
-                    )}
-                    <Pressable
-                        accessibilityRole="button"
-                        accessibilityLabel="Video Quality"
-                        onPress={() => setSheet("quality")}
-                        style={styles.tool}
-                    >
-                        <Text style={styles.quality}>
-                            {quality === "auto"
-                                ? "Auto"
-                                : quality.toUpperCase()}
-                        </Text>
-                    </Pressable>
-                    {tool(modeIcon, "Video Mode", () => setSheet("mode"))}
-                    {fullscreen.fullscreen
-                        ? tool(
-                              intercom.speakerEnabled
-                                  ? "volume-high-outline"
-                                  : "volume-mute-outline",
-                              "Bật/tắt loa camera",
-                              intercom.toggleSpeaker,
-                              intercom.speakerEnabled,
-                          )
-                        : tool(
-                              "expand-outline",
-                              "Phóng to và xoay ngang",
-                              fullscreen.open,
-                          )}
-                </View>
-                {fullscreen.fullscreen && showPan && (
-                    <View style={styles.pan}>
-                        <Pressable
-                            accessibilityRole="button"
-                            accessibilityLabel="Đóng Pan/Tilt"
-                            onPress={() => setShowPan(false)}
-                        >
-                            <Ionicons name="close" size={24} color="#FFF" />
-                        </Pressable>
-                        <PanTiltControl
-                            onMove={(direction) => {
-                                void connection.move(direction);
-                            }}
-                        />
-                    </View>
-                )}
-            </View>
-            {fullscreen.fullscreen && (
-                <View style={styles.rail}>
-                    {tool("camera-outline", "Chụp ảnh", () => {
-                        void connection.open("snapshot.jpg");
-                    })}
-                    {tool(
-                        "radio-button-on-outline",
-                        "Ghi hình",
-                        () => {
-                            void connection.record();
-                        },
-                        !!connection.recordings.active,
-                    )}
-                    {tool(
-                        "move-outline",
-                        "Pan/Tilt",
-                        () => setShowPan((value) => !value),
-                        showPan,
-                    )}
-                    <Pressable
-                        accessibilityRole="button"
-                        accessibilityLabel={
-                            intercom.mode === "call"
-                                ? "Bật/tắt microphone"
-                                : "Giữ để nói"
-                        }
-                        onPress={
-                            intercom.mode === "call"
-                                ? intercom.toggleMic
-                                : undefined
-                        }
-                        onPressIn={
-                            intercom.mode !== "call"
-                                ? intercom.startTalk
-                                : undefined
-                        }
-                        onPressOut={intercom.endTalk}
-                        style={styles.tool}
-                    >
-                        <Ionicons
-                            name="mic-outline"
-                            size={26}
-                            color={intercom.micEnabled ? "#ff7a00" : "#FFF"}
-                        />
-                    </Pressable>
-                    {tool(
-                        "call-outline",
-                        "Bắt đầu/kết thúc Voice Call",
-                        intercom.toggleCall,
-                        intercom.mode === "call",
-                    )}
-                    {(intercom.error || intercom.state === "connecting") && (
-                        <Text
-                            accessibilityLiveRegion="polite"
-                            style={styles.audioStatus}
-                        >
-                            {intercom.error || "Đang kết nối…"}
-                        </Text>
+                        </>
                     )}
                 </View>
-            )}
+            ))}
         </View>
     );
-    return (
+    const options = (
         <>
-            <View style={styles.preview}>{!fullscreen.fullscreen && body}</View>
-            <Modal
-                visible={fullscreen.fullscreen}
-                animationType="fade"
-                presentationStyle="fullScreen"
-                supportedOrientations={["portrait", "landscape"]}
-                onRequestClose={fullscreen.close}
-            >
-                <SafeAreaView
-                    style={styles.fullscreen}
-                    edges={["left", "right"]}
-                >
-                    <StatusBar hidden />
-                    {fullscreen.fullscreen && body}
-                </SafeAreaView>
-            </Modal>
             <CameraVideoOptions
+                inline={fullscreen.fullscreen}
                 visible={sheet === "quality"}
                 title="Video Quality"
                 selected={quality}
@@ -430,6 +271,7 @@ export default function CameraViewer({
                 }}
             />
             <CameraVideoOptions
+                inline={fullscreen.fullscreen}
                 visible={sheet === "mode"}
                 title="Video Mode"
                 selected={videoMode.mode}
@@ -465,6 +307,7 @@ export default function CameraViewer({
                 }}
             />
             <CameraVideoOptions
+                inline={fullscreen.fullscreen}
                 visible={sheet === "sources"}
                 title="Thêm luồng camera"
                 busy={loading}
@@ -486,11 +329,203 @@ export default function CameraViewer({
             />
         </>
     );
+    const qualityButton = (
+        <Pressable
+            accessibilityRole="button"
+            accessibilityLabel="Video Quality"
+            onPress={() => setSheet("quality")}
+            style={styles.tool}
+        >
+            <Text style={styles.quality}>
+                {quality === "auto" ? "Auto" : quality.toUpperCase()}
+            </Text>
+        </Pressable>
+    );
+    const modeButton = tool(modeIcon, "Video Mode", () => setSheet("mode"));
+    const gridButton = tool(
+        grid ? "square-outline" : "duplicate-outline",
+        grid ? "Xem một camera" : "Xem nhiều camera",
+        toggleGrid,
+        grid,
+    );
+    const speakerButton = tool(
+        intercom.speakerEnabled ? "volume-high-outline" : "volume-mute",
+        "Bật/tắt loa camera",
+        intercom.toggleSpeaker,
+        intercom.speakerEnabled,
+    );
+    const actions = (
+        <>
+            {tool("camera", "Chụp ảnh", () => {
+                void connection.open("snapshot.jpg");
+            })}
+            {tool(
+                "videocam",
+                "Ghi hình",
+                () => {
+                    void connection.record();
+                },
+                !!connection.recordings.active,
+            )}
+            {tool(
+                "move",
+                "Pan/Tilt",
+                () => setShowPan((value) => !value),
+                showPan,
+            )}
+            <Pressable
+                accessibilityRole="button"
+                accessibilityLabel={
+                    intercom.mode === "call"
+                        ? "Bật/tắt microphone"
+                        : "Giữ để nói"
+                }
+                onPress={
+                    intercom.mode === "call" ? intercom.toggleMic : undefined
+                }
+                onPressIn={
+                    intercom.mode !== "call" ? intercom.startTalk : undefined
+                }
+                onPressOut={intercom.endTalk}
+                style={styles.tool}
+            >
+                <Ionicons
+                    name={
+                        intercom.mode === "call" && !intercom.micEnabled
+                            ? "mic-off-outline"
+                            : "mic-outline"
+                    }
+                    size={26}
+                    color={intercom.micEnabled ? "#ff7a00" : "#FFF"}
+                />
+            </Pressable>
+            {tool(
+                "call-outline",
+                "Bắt đầu/kết thúc Voice Call",
+                intercom.toggleCall,
+                intercom.mode === "call",
+            )}
+        </>
+    );
+    const closeFullscreen = () => {
+        intercom.endTalk();
+        setSheet(null);
+        setShowPan(false);
+        setZoom(1);
+        fullscreen.close();
+    };
+    // Back đóng bảng đang mở trước, sau đó mới rời toàn màn hình.
+    const handleBack = () => {
+        if (sheet) setSheet(null);
+        else if (showPan) setShowPan(false);
+        else closeFullscreen();
+    };
+    const panPanel = showPan ? (
+        <View style={styles.pan}>
+            <Pressable
+                accessibilityRole="button"
+                accessibilityLabel="Đóng Pan/Tilt"
+                onPress={() => setShowPan(false)}
+                style={styles.panClose}
+            >
+                <Ionicons name="close" size={24} color="#FFF" />
+            </Pressable>
+            <View style={styles.panDial}>
+                <View style={{ transform: [{ scale: 160 / 210 }] }}>
+                    <PanTiltControl
+                        onMove={(direction) => {
+                            void connection.move(direction);
+                        }}
+                    />
+                </View>
+            </View>
+        </View>
+    ) : null;
+    return (
+        <>
+            <View style={styles.preview}>
+                {!fullscreen.fullscreen && (
+                    <View style={styles.videoArea}>
+                        {feeds}
+                        <View style={styles.toolbar}>
+                            {gridButton}
+                            {qualityButton}
+                            {modeButton}
+                            {tool(
+                                "expand-outline",
+                                "Phóng to và xoay ngang",
+                                fullscreen.open,
+                            )}
+                        </View>
+                    </View>
+                )}
+            </View>
+            {fullscreen.fullscreen && (
+                <Modal
+                    visible
+                    animationType="fade"
+                    presentationStyle="fullScreen"
+                    hardwareAccelerated
+                    statusBarTranslucent
+                    navigationBarTranslucent
+                    supportedOrientations={[
+                        "portrait",
+                        "landscape",
+                        "landscape-left",
+                        "landscape-right",
+                    ]}
+                    onRequestClose={handleBack}
+                >
+                    <SafeAreaView
+                        style={styles.fullscreen}
+                        edges={["top", "bottom", "left", "right"]}
+                    >
+                        <StatusBar hidden />
+                        <CameraLandscapeView
+                            actions={actions}
+                            bottomLeft={gridButton}
+                            bottomRight={
+                                <>
+                                    {modeButton}
+                                    {qualityButton}
+                                    {speakerButton}
+                                </>
+                            }
+                            onClose={closeFullscreen}
+                            zoom={zoom}
+                            zoomEnabled={!grid}
+                            onZoom={() =>
+                                setZoom((value) => (value === 1 ? 2 : 1))
+                            }
+                            onHideActions={() => {
+                                intercom.endTalk();
+                                setShowPan(false);
+                            }}
+                            panel={panPanel}
+                            options={options}
+                            status={
+                                intercom.error ||
+                                (intercom.state === "connecting"
+                                    ? "Đang kết nối âm thanh…"
+                                    : intercom.mode === "call"
+                                      ? `Đang đàm thoại • Mic ${intercom.micEnabled ? "bật" : "tắt"}`
+                                      : intercom.micEnabled
+                                        ? "Đang nói…"
+                                        : undefined)
+                            }
+                        >
+                            {feeds}
+                        </CameraLandscapeView>
+                    </SafeAreaView>
+                </Modal>
+            )}
+            {!fullscreen.fullscreen && options}
+        </>
+    );
 }
 const styles = StyleSheet.create({
     preview: { width: "100%", aspectRatio: 16 / 9, backgroundColor: "#000" },
     fullscreen: { flex: 1, backgroundColor: "#000" },
-    body: { flex: 1, flexDirection: "row", backgroundColor: "#000" },
     videoArea: { flex: 1, overflow: "hidden" },
     feeds: { flex: 1, flexDirection: "row", flexWrap: "wrap" },
     single: { width: "100%", height: "100%" },
@@ -535,29 +570,25 @@ const styles = StyleSheet.create({
         paddingHorizontal: 8,
     },
     quality: { color: "#FFF", fontSize: 16 },
-    topBar: {
-        position: "absolute",
-        top: 0,
-        left: 0,
-        right: 0,
-        flexDirection: "row",
+    panDial: {
+        width: 160,
+        height: 160,
         alignItems: "center",
-        backgroundColor: "rgba(0,0,0,0.35)",
+        justifyContent: "center",
     },
-    cameraName: { flex: 1, color: "#FFF", fontSize: 15 },
-    rail: { width: 68, paddingVertical: 10, justifyContent: "center", gap: 10 },
+    panClose: {
+        alignSelf: "flex-end",
+        minWidth: 44,
+        height: 32,
+        alignItems: "center",
+        justifyContent: "center",
+    },
     pan: {
         position: "absolute",
-        bottom: 48,
+        bottom: 54,
         right: 8,
         backgroundColor: "rgba(0,0,0,0.75)",
         borderRadius: 20,
         padding: 8,
-    },
-    audioStatus: {
-        color: "#FFF",
-        fontSize: 10,
-        paddingHorizontal: 4,
-        textAlign: "center",
     },
 });

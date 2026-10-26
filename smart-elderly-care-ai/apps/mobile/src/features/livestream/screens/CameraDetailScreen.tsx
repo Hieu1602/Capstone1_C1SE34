@@ -174,7 +174,7 @@ export default function CameraDetailScreen({ navigation, route }: Props) {
                 {!panel &&
                     (intercom.state === "connecting" ||
                         intercom.state === "connected" ||
-                        intercom.error) && (
+                        Boolean(intercom.error)) && (
                         <Text
                             accessibilityLiveRegion="polite"
                             style={[

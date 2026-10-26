@@ -24,6 +24,7 @@ interface Props {
     options: VideoOption[];
     selected?: string | null;
     busy?: boolean;
+    inline?: boolean;
     message?: string;
     onSelect: (value: string) => void;
     onClose: () => void;
@@ -31,6 +32,97 @@ interface Props {
 /** @param props Dữ liệu lựa chọn và callback. @returns Bottom sheet có lựa chọn hiện tại màu cam. */
 export default function CameraVideoOptions(props: Props) {
     const { colors } = useTheme();
+    const content = (
+        <View style={[styles.overlay, props.inline && styles.landscapeOverlay]}>
+            <Pressable
+                style={StyleSheet.absoluteFill}
+                accessibilityLabel="Đóng bảng lựa chọn"
+                onPress={props.onClose}
+            />
+            <View
+                style={[
+                    styles.sheet,
+                    props.inline && styles.landscapeSheet,
+                    { backgroundColor: colors.card },
+                ]}
+            >
+                <View style={styles.header}>
+                    <Pressable
+                        accessibilityRole="button"
+                        accessibilityLabel="Đóng"
+                        onPress={props.onClose}
+                        style={styles.close}
+                    >
+                        <Ionicons
+                            name="close"
+                            size={28}
+                            color={colors.textPrimary}
+                        />
+                    </Pressable>
+                    <Text style={[styles.title, { color: colors.textPrimary }]}>
+                        {props.title}
+                    </Text>
+                </View>
+                <ScrollView contentContainerStyle={styles.content}>
+                    {props.busy && <ActivityIndicator color="#ff7a00" />}
+                    {props.message ? (
+                        <Text
+                            accessibilityLiveRegion="polite"
+                            style={{
+                                color: colors.textSecondary,
+                                textAlign: "center",
+                            }}
+                        >
+                            {props.message}
+                        </Text>
+                    ) : null}
+                    {props.options.map((option) => {
+                        const selected = props.selected === option.value;
+                        const color = selected ? "#ff7a00" : colors.textPrimary;
+                        return (
+                            <Pressable
+                                key={option.value}
+                                accessibilityRole="radio"
+                                accessibilityState={{
+                                    selected,
+                                    disabled: props.busy || option.disabled,
+                                }}
+                                disabled={props.busy || option.disabled}
+                                onPress={() => props.onSelect(option.value)}
+                                style={[
+                                    styles.option,
+                                    selected && styles.selected,
+                                    option.disabled && { opacity: 0.4 },
+                                ]}
+                            >
+                                {option.icon && (
+                                    <Ionicons
+                                        name={option.icon}
+                                        size={26}
+                                        color={color}
+                                    />
+                                )}
+                                <Text
+                                    style={{
+                                        color,
+                                        fontSize: 20,
+                                        fontWeight: selected ? "600" : "400",
+                                    }}
+                                >
+                                    {option.label}
+                                </Text>
+                            </Pressable>
+                        );
+                    })}
+                </ScrollView>
+            </View>
+        </View>
+    );
+    // Bảng nằm trong modal toàn màn hình để không tạo modal thứ hai trên iOS.
+    if (props.inline)
+        return props.visible ? (
+            <View style={styles.inline}>{content}</View>
+        ) : null;
     return (
         <Modal
             visible={props.visible}
@@ -39,97 +131,32 @@ export default function CameraVideoOptions(props: Props) {
             onRequestClose={props.onClose}
             supportedOrientations={["portrait", "landscape"]}
         >
-            <View style={styles.overlay}>
-                <Pressable
-                    style={StyleSheet.absoluteFill}
-                    accessibilityLabel="Đóng bảng lựa chọn"
-                    onPress={props.onClose}
-                />
-                <View style={[styles.sheet, { backgroundColor: colors.card }]}>
-                    <View style={styles.header}>
-                        <Pressable
-                            accessibilityRole="button"
-                            accessibilityLabel="Đóng"
-                            onPress={props.onClose}
-                            style={styles.close}
-                        >
-                            <Ionicons
-                                name="close"
-                                size={28}
-                                color={colors.textPrimary}
-                            />
-                        </Pressable>
-                        <Text
-                            style={[
-                                styles.title,
-                                { color: colors.textPrimary },
-                            ]}
-                        >
-                            {props.title}
-                        </Text>
-                    </View>
-                    <ScrollView contentContainerStyle={styles.content}>
-                        {props.busy && <ActivityIndicator color="#ff7a00" />}
-                        {props.message ? (
-                            <Text
-                                accessibilityLiveRegion="polite"
-                                style={{
-                                    color: colors.textSecondary,
-                                    textAlign: "center",
-                                }}
-                            >
-                                {props.message}
-                            </Text>
-                        ) : null}
-                        {props.options.map((option) => {
-                            const selected = props.selected === option.value;
-                            const color = selected
-                                ? "#ff7a00"
-                                : colors.textPrimary;
-                            return (
-                                <Pressable
-                                    key={option.value}
-                                    accessibilityRole="radio"
-                                    accessibilityState={{
-                                        selected,
-                                        disabled: props.busy || option.disabled,
-                                    }}
-                                    disabled={props.busy || option.disabled}
-                                    onPress={() => props.onSelect(option.value)}
-                                    style={[
-                                        styles.option,
-                                        selected && styles.selected,
-                                        option.disabled && { opacity: 0.4 },
-                                    ]}
-                                >
-                                    {option.icon && (
-                                        <Ionicons
-                                            name={option.icon}
-                                            size={26}
-                                            color={color}
-                                        />
-                                    )}
-                                    <Text
-                                        style={{
-                                            color,
-                                            fontSize: 20,
-                                            fontWeight: selected
-                                                ? "600"
-                                                : "400",
-                                        }}
-                                    >
-                                        {option.label}
-                                    </Text>
-                                </Pressable>
-                            );
-                        })}
-                    </ScrollView>
-                </View>
-            </View>
+            {content}
         </Modal>
     );
 }
 const styles = StyleSheet.create({
+    inline: {
+        position: "absolute",
+        top: 0,
+        bottom: 0,
+        left: 0,
+        right: 0,
+        zIndex: 10,
+    },
+    landscapeOverlay: {
+        justifyContent: "center",
+        alignItems: "flex-end",
+        padding: 12,
+    },
+    landscapeSheet: {
+        width: 360,
+        maxWidth: "90%",
+        maxHeight: "100%",
+        minHeight: 0,
+        borderRadius: 20,
+        paddingBottom: 0,
+    },
     overlay: {
         flex: 1,
         justifyContent: "flex-end",
