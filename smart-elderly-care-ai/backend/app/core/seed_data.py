@@ -85,7 +85,7 @@ async def seed_master_data() -> None:
                 house = House(
                     owner_id=user.id,
                     name="Nhà của tôi",
-                    address="123 Hải Phòng, P. Thạch Thang, Q. Hải Châu, TP. Đà Nẵng",
+                    address=None,
                     current_mode="HOME",
                 )
                 db.add(house)

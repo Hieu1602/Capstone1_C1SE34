@@ -229,18 +229,31 @@ app.mount("/static", StaticFiles(directory=str(_STATIC_DIR)), name="static")
 @app.get("/", include_in_schema=False)
 async def root():
     """Chuyển hướng trang chủ về tài liệu Swagger API."""
-    from fastapi.responses import RedirectResponse
-    return RedirectResponse(url="/docs")
+
+    from fastapi.openapi.docs import get_swagger_ui_html
+    return get_swagger_ui_html(
+        openapi_url=app.openapi_url or "/openapi.json",
+        title=f"{app.title} - Swagger UI",
+        oauth2_redirect_url=app.swagger_ui_oauth2_redirect_url,
+        init_oauth=app.swagger_ui_init_oauth,
+    )
 
 
 @app.get("/api/docs", include_in_schema=False)
 async def api_docs_redirect():
-    from fastapi.responses import RedirectResponse
-    return RedirectResponse(url="/docs")
+
+    from fastapi.openapi.docs import get_swagger_ui_html
+    return get_swagger_ui_html(
+        openapi_url=app.openapi_url or "/openapi.json",
+        title=f"{app.title} - Swagger UI",
+        oauth2_redirect_url=app.swagger_ui_oauth2_redirect_url,
+        init_oauth=app.swagger_ui_init_oauth,
+    )
 
 
 @app.get("/api/redoc", include_in_schema=False)
 async def api_redoc_redirect():
+
     from fastapi.responses import RedirectResponse
     return RedirectResponse(url="/redoc")
 
