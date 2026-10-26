@@ -23,7 +23,7 @@ export const ForgotOtpStep: React.FC<ForgotOtpStepProps> = ({
   onResend,
   isLoading,
 }) => {
-  const inputRef = useRef<TextInput>(null);
+  const inputRef = useRef<any>(null);
   const [isFocused, setIsFocused] = useState(false);
 
   useEffect(() => {

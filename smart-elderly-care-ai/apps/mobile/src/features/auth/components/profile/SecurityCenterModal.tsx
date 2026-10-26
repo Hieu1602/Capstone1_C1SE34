@@ -128,7 +128,7 @@ export const SecurityCenterModal: React.FC<SecurityCenterModalProps> = ({
         type: "success" | "error";
         message: string;
     } | null>(null);
-    const scrollRef = useRef<ScrollView>(null);
+    const scrollRef = useRef<any>(null);
 
     useEffect(() => {
         if (visible) {
