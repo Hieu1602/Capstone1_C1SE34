@@ -116,31 +116,6 @@ services:
         networks:
             - elderly_care_net
 
-    # ---------------------------------------------------------------
-    # MinIO – Object Storage (Video clips, thumbnails)
-    # ---------------------------------------------------------------
-    minio:
-        image: minio/minio:latest
-        container_name: elderly_care_minio
-        restart: unless-stopped
-        ports:
-            - "9000:9000" # API
-            - "9001:9001" # Console UI
-        environment:
-            MINIO_ROOT_USER: ${MINIO_ACCESS_KEY}
-            MINIO_ROOT_PASSWORD: ${MINIO_SECRET_KEY}
-        volumes:
-            - minio_data:/data
-        command: server /data --console-address ":9001"
-        healthcheck:
-            test:
-                ["CMD", "curl", "-f", "http://localhost:9000/minio/health/live"]
-            interval: 30s
-            timeout: 10s
-            retries: 3
-        networks:
-            - elderly_care_net
-
 # ---------------------------------------------------------------
 # Volumes
 # ---------------------------------------------------------------
@@ -149,7 +124,6 @@ volumes:
     redis_data:
     emqx_data:
     emqx_log:
-    minio_data:
 
 # ---------------------------------------------------------------
 # Networks
