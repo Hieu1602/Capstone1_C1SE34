@@ -77,7 +77,7 @@ class CRUDHouse:
         default_house = House(
             owner_id=owner_id,
             name="Nhà của tôi",
-            address="123 Hải Phòng, P. Thạch Thang, Q. Hải Châu, TP. Đà Nẵng",
+            address=None,
             current_mode="HOME",
         )
         db.add(default_house)

@@ -131,7 +131,7 @@ export const useDeviceStore = create<DeviceState>()(
       activeDevice: null,
       house: {
         name: 'Nhà của tôi',
-        address: '123 Hải Phòng, P. Thạch Thang, Q. Hải Châu, TP. Đà Nẵng',
+        address: '',
         membersCount: 1,
         currentMode: 'HOME',
       },
@@ -305,7 +305,7 @@ export const useDeviceStore = create<DeviceState>()(
               house: {
                 ...state.house,
                 name: res.data.name,
-                address: res.data.address || state.house.address,
+                address: res.data.address || '',
                 currentMode: res.data.current_mode,
               },
             }));

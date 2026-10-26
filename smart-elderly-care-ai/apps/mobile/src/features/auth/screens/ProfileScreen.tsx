@@ -1,4 +1,4 @@
-// ProfileScreen.tsx
+﻿// ProfileScreen.tsx
 // Màn hình Cá nhân / Quản trị hệ thống (Phong cách Elderly Care AI)
 
 import React from 'react';
@@ -2152,32 +2152,7 @@ export default function ProfileScreen({ navigation, route }: any) {
                   Xem nhiều góc quay camera cùng lúc
                 </Text>
               </TouchableOpacity>
-
-              {/* Ô 11: Chuyển vai trò Bác sĩ */}
-              <TouchableOpacity
-                style={[styles.fbGridCard, isDarkMode && { backgroundColor: colors.card, borderColor: '#0284C7' }]}
-                activeOpacity={0.8}
-                onPress={() => {
-                  Alert.alert(
-                    'Chuyển sang Chế độ Bác sĩ',
-                    'Bạn muốn chuyển sang giao diện chuyên môn của Bác sĩ gia đình (Danh sách bệnh nhân, Kê đơn thuốc, Báo cáo y tế)?',
-                    [
-                      { text: 'Hủy', style: 'cancel' },
-                      { text: 'Chuyển ngay', onPress: () => toggleViewRole() },
-                    ]
-                  );
-                }}
-              >
-                <View style={[styles.fbGridIconBox, { backgroundColor: isDarkMode ? '#082F49' : '#E0F2FE' }]}>
-                  <Ionicons name="medical-outline" size={24} color="#0284C7" />
-                </View>
-                <Text style={[styles.fbGridCardTitle, isDarkMode && { color: colors.textPrimary }]}>
-                  Chế độ Bác sĩ
-                </Text>
-                <Text style={[styles.fbGridCardSub, isDarkMode && { color: colors.textSecondary }]}>
-                  Bệnh án, Kê đơn & Báo cáo y tế
-                </Text>
-              </TouchableOpacity>
+
             </>
           )}
         </View>

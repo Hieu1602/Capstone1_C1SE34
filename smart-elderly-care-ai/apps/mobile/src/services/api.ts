@@ -202,6 +202,8 @@ export const emergencyApi = {
     note?: string;
   } = {}) => api.post('/emergency/support-call', data),
   getSupportHotline: () => api.get('/emergency/support-hotline'),
+  reverseGeocode: (lat: number, lon: number) =>
+    api.get<{ address: string | null }>(`/emergency/reverse-geocode?lat=${lat}&lon=${lon}`),
 };
 
 // 1. System Mode API
@@ -350,6 +352,16 @@ export const householdApi = {
     api.delete(`/houses/${householdId}/members/${memberId}`),
   getMyPermissions: (householdId: number | string = 'current') =>
     api.get(`/houses/${householdId}/my-permissions`),
+};
+
+export const houseApi = {
+  getCurrent: () => api.get('/houses/current'),
+  getCurrentHouse: () => api.get('/houses/current'),
+  updateHouse: (data: { name?: string; address?: string; current_mode?: string }) =>
+    api.patch('/houses/current', data),
+  updateHouseMode: (mode: string) => api.patch('/houses/current/mode', { mode }),
+  updateCurrent: (data: { name?: string; address?: string; current_mode?: string }) =>
+    api.patch('/houses/current', data),
 };
 
 // 8. Chatbot AI API
