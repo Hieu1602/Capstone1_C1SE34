@@ -25,6 +25,11 @@ def _async_database_url(database_url: str):
     if url.drivername in {"postgres", "postgresql"}:
         url = url.set(drivername="postgresql+asyncpg")
 
+    # Supabase pooler cổng 5432 hoạt động ở Session Mode (giới hạn 15 clients).
+    # Tự động chuyển sang cổng 6543 (Transaction Mode) để hỗ trợ đồng thời hàng nghìn kết nối.
+    if url.host and "pooler.supabase.com" in url.host and url.port == 5432:
+        url = url.set(port=6543)
+
     if url.drivername == "postgresql+asyncpg":
         query = dict(url.query)
         sslmode = query.pop("sslmode", None)
@@ -50,8 +55,9 @@ if _db_url.host and ("supabase.com" in _db_url.host or "supabase.co" in _db_url.
 engine = create_async_engine(
     _db_url,
     echo=settings.DEBUG,
-    pool_size=10,
-    max_overflow=20,
+    pool_size=5,
+    max_overflow=10,
+    pool_recycle=300,
     pool_pre_ping=True,
     connect_args=_connect_args,
 )
