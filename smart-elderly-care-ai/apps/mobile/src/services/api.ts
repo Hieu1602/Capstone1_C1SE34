@@ -233,6 +233,16 @@ export const vitalsApi = {
     api.get('/vitals/history', { params: { device_id: deviceId, limit, target_date } }),
   getStats: (deviceId: string, hours = 24) =>
     api.get(`/vitals/${deviceId}/stats`, { params: { hours } }),
+  createVital: (data: {
+    device_id?: string;
+    heart_rate?: number;
+    spo2?: number;
+    bp_systolic?: number;
+    bp_diastolic?: number;
+    skin_temp_max?: number;
+    fall_detected?: boolean;
+    raw_payload?: Record<string, any>;
+  }) => api.post('/vitals', data),
 };
 
 // 3. Reminders API

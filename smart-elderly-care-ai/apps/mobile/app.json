@@ -15,7 +15,11 @@
     "ios": {
       "supportsTablet": true,
       "requireFullScreen": true,
-      "bundleIdentifier": "com.c1se34.smartelderlycare"
+      "bundleIdentifier": "com.c1se34.smartelderlycare",
+      "infoPlist": {
+        "NSHealthShareUsageDescription": "Ứng dụng cần quyền đọc nhịp tim và nồng độ oxy trong máu SpO2 từ Apple Watch Series 6 để theo dõi sức khỏe và phát hiện té ngã cho người cao tuổi.",
+        "NSHealthUpdateUsageDescription": "Ứng dụng ghi nhận thông tin sức khỏe của người cao tuổi."
+      }
     },
     "android": {
       "package": "com.c1se34.smartelderlycare",
