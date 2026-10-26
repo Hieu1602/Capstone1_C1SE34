@@ -487,7 +487,7 @@ export const AppointmentFormModal: React.FC<AppointmentFormModalProps> = ({
                         <LocalizedText style={[styles.switchTitle, { color: colors.textPrimary }]}>Phát loa thông minh Hub AI</LocalizedText>
                       </View>
                       <LocalizedText style={[styles.switchSub, { color: isDarkMode ? '#94A3B8' : '#64748B' }]}>
-                        Tự động phát giọng nói nhắc nhở tại nhà cụ trước giờ khám 24h & 2h
+                        Tự động phát giọng nói nhắc nhở tại nhà bệnh nhân trước giờ khám 24h & 2h
                       </LocalizedText>
                     </View>
                     <Switch
@@ -739,3 +739,4 @@ const styles = StyleSheet.create({
   calendarCloseBtn: { marginTop: 10, backgroundColor: '#F1F5F9', borderRadius: 7, paddingVertical: 7, alignItems: 'center' },
   calendarCloseBtnText: { color: '#0284C7', fontWeight: '700', fontSize: 12 },
 });
+
