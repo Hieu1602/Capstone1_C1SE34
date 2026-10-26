@@ -39,7 +39,7 @@ import AdminMarqueeBanner from '../../../components/AdminMarqueeBanner';
 export default function HomeScreen({ navigation }: any) {
   // Quản lý trạng thái giao diện Sáng / Tối (Dark Mode)
   const { isDarkMode, colors, toggleTheme } = useTheme();
-  // Truy xuất dữ liệu trung tâm từ Zustand Store (useVitalStore)
+  // Truy xuất dữ liệu trung tâm từ Zustand Store (useVitalStore & usePatientStore)
   const {
     house,
     setHouseMode,
@@ -61,6 +61,9 @@ export default function HomeScreen({ navigation }: any) {
     syncAllWithBackend,
   } = useVitalStore();
 
+  const { patientRecord, fetchPatientRecord } = usePatientStore();
+  const [familyAppointmentsModalVisible, setFamilyAppointmentsModalVisible] = useState(false);
+
   const [isMicSpeaking, setIsMicSpeaking] = useState(false);
   const [nextMedTaken, setNextMedTaken] = useState(false);
 
@@ -70,6 +73,8 @@ export default function HomeScreen({ navigation }: any) {
     fetchSystemMode();
     fetchReminders();
     fetchNotifications();
+    fetchPatientRecord?.();
+    syncAllWithBackend?.();
 
     // Kết nối WebSocket nhận cảnh báo té ngã thời gian thực & sinh hiệu 5s/lần
     alertsWS.connect();
@@ -80,12 +85,13 @@ export default function HomeScreen({ navigation }: any) {
     return () => clearInterval(interval);
   }, []);
 
-  // Tự động làm mới dữ liệu khi màn hình HomeScreen được focus (quay lại từ IncidentDetailScreen)
+  // Tự động làm mới dữ liệu khi màn hình HomeScreen được focus (quay lại từ các màn hình con)
   useEffect(() => {
     const unsubscribe = navigation.addListener('focus', () => {
       fetchVitals();
       fetchNotifications();
       fetchSystemMode();
+      fetchReminders();
     });
     return unsubscribe;
   }, [navigation]);
@@ -138,14 +144,7 @@ export default function HomeScreen({ navigation }: any) {
   const activeEmergency = criticalIncidents[0];
   const hasEmergency = Boolean(activeEmergency || currentVitals.fall_detected);
 
-  // Hồ sơ bệnh nhân & Lịch khám bác sĩ đang chờ xác nhận
-  const { patientRecord, fetchPatientRecord } = usePatientStore();
-  const [familyAppointmentsModalVisible, setFamilyAppointmentsModalVisible] = useState(false);
-
-  useEffect(() => {
-    fetchPatientRecord?.();
-  }, []);
-
+  // Lịch khám bác sĩ đang chờ xác nhận từ thông báo
   const pendingAppointmentNotice = incidents.find(
     (i) => !i.is_acknowledged && i.alert_type === 'APPOINTMENT_SCHEDULED'
   );
@@ -226,11 +225,6 @@ export default function HomeScreen({ navigation }: any) {
       setSnoozeModalVisible(true);
     }
   };
-
-  // Đồng bộ thông tin nhà và camera từ Backend khi mở HomeScreen
-  React.useEffect(() => {
-    syncAllWithBackend?.();
-  }, []);
 
   // Mở màn hình SOS trước khi người dùng xác nhận gọi cấp cứu.
   const handleSOS115 = () => {
@@ -335,14 +329,15 @@ export default function HomeScreen({ navigation }: any) {
   // Cữ thuốc kế tiếp từ Backend FastAPI / Zustand Store
   const nextMedication =
     todayReminders?.medications?.find((m) => !m.taken) ||
-    todayReminders?.medications?.[todayReminders.medications.length - 1] || {
-      id: 'med-03',
-      name: 'Atorvastatin 10mg (Thuốc mỡ máu & tim mạch)',
-      time: '18:30',
-      dose: '1 viên sau ăn tối',
+    todayReminders?.medications?.[todayReminders.medications.length - 1] ||
+    todayReminders?.medications?.[0] || {
+      id: '',
+      name: '',
+      time: '',
+      dose: '',
       taken: false,
     };
-  const isMedDone = nextMedTaken || Boolean(nextMedication.taken);
+  const isMedDone = nextMedTaken || Boolean(nextMedication?.taken);
 
   return (
     <SafeAreaView style={[styles.safeArea, { backgroundColor: colors.background }]} edges={['top']}>
@@ -568,17 +563,21 @@ export default function HomeScreen({ navigation }: any) {
             style={styles.emergencyBanner}
             activeOpacity={0.9}
             onPress={() => {
-              navigation.navigate('EventDetail', {
-                incidentId: activeEmergency?.id || 'inc-03',
-                id: activeEmergency?.id || 'inc-03',
-                alert_type: activeEmergency?.alert_type || 'FALL_DETECTED',
-                alert_level: activeEmergency?.alert_level || 'CRITICAL',
-                message: activeEmergency?.message || '🚨 Cảnh báo té ngã (Fall Detected) - Trích xuất clip 5s bộ đệm Edge Hub RAM',
-                confidence: 0.94,
-                thumbnail_url: activeEmergency?.thumbnail_url || 'http://localhost:8000/static/evidence/fall_evidence_ai.jpg',
-                video_clip_url: activeEmergency?.video_clip_url || 'https://commondatastorage.googleapis.com/gtv-videos-bucket/sample/BigBuckBunny.mp4',
-                is_acknowledged: false,
-              });
+              if (activeEmergency) {
+                navigation.navigate('EventDetail', {
+                  incidentId: activeEmergency.id,
+                  id: activeEmergency.id,
+                  alert_type: activeEmergency.alert_type,
+                  alert_level: activeEmergency.alert_level || 'CRITICAL',
+                  message: activeEmergency.message,
+                  confidence: activeEmergency.confidence,
+                  thumbnail_url: activeEmergency.thumbnail_url ?? null,
+                  video_clip_url: activeEmergency.video_clip_url ?? null,
+                  is_acknowledged: activeEmergency.is_acknowledged ?? false,
+                });
+              } else {
+                navigation.navigate('Alerts');
+              }
             }}
           >
             <View style={styles.emergencyBannerHeader}>

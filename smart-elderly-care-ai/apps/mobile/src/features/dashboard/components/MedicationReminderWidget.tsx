@@ -143,50 +143,74 @@ export const MedicationReminderWidget: React.FC<MedicationReminderWidgetProps> =
           </View>
         </View>
 
-        <View style={styles.reminderContentRow}>
-          <View style={[styles.reminderClockBox, isMedDone && { backgroundColor: '#DCFCE7' }]}>
-            <Ionicons name="time" size={13} color={isMedDone ? '#15803D' : '#0EA5E9'} />
-            <Text style={[styles.reminderClockText, isMedDone && { color: '#15803D' }]}>
-              {nextMedication.time}
+        {nextMedication?.name ? (
+          <View style={styles.reminderContentRow}>
+            <View style={[styles.reminderClockBox, isMedDone && { backgroundColor: '#DCFCE7' }]}>
+              <Ionicons name="time" size={13} color={isMedDone ? '#15803D' : '#0EA5E9'} />
+              <Text style={[styles.reminderClockText, isMedDone && { color: '#15803D' }]}>
+                {nextMedication.time}
+              </Text>
+            </View>
+            <Text
+              style={[
+                styles.reminderMedText,
+                isDarkMode && { color: colors.textPrimary },
+                isMedDone && styles.reminderMedTextDone,
+              ]}
+              numberOfLines={1}
+            >
+              {nextMedication.name}
             </Text>
           </View>
-          <Text
-            style={[
-              styles.reminderMedText,
-              isDarkMode && { color: colors.textPrimary },
-              isMedDone && styles.reminderMedTextDone,
-            ]}
-            numberOfLines={1}
-          >
-            {nextMedication.name}
-          </Text>
-        </View>
+        ) : (
+          <View style={styles.reminderContentRow}>
+            <Text style={[styles.reminderMedText, { color: isDarkMode ? colors.textSecondary : '#94A3B8' }]}>
+              Chưa có lịch uống thuốc trong ngày
+            </Text>
+          </View>
+        )}
       </TouchableOpacity>
 
-      {/* Nút thao tác chính: Xác nhận đã uống / Đã hoàn thành */}
-      <TouchableOpacity
-        style={[
-          styles.actionBtn,
-          isMedDone ? styles.actionBtnDone : styles.actionBtnPending,
-          isDarkMode && !isMedDone && { backgroundColor: '#1E293B', borderColor: '#FF6B00' },
-        ]}
-        onPress={handlePressActionButton}
-        activeOpacity={0.75}
-      >
-        <Ionicons
-          name={isMedDone ? 'checkmark-circle' : 'checkmark'}
-          size={16}
-          color={isMedDone ? '#10B981' : '#FFFFFF'}
-        />
-        <Text
+      {/* Nút thao tác chính: Xác nhận đã uống / Đã hoàn thành hoặc Thêm lịch nhắc */}
+      {nextMedication?.name ? (
+        <TouchableOpacity
           style={[
-            styles.actionBtnText,
-            { color: isMedDone ? '#10B981' : '#FFFFFF' },
+            styles.actionBtn,
+            isMedDone ? styles.actionBtnDone : styles.actionBtnPending,
+            isDarkMode && !isMedDone && { backgroundColor: '#1E293B', borderColor: '#FF6B00' },
           ]}
+          onPress={handlePressActionButton}
+          activeOpacity={0.75}
         >
-          {isMedDone ? 'Đã hoàn thành' : 'Xác nhận đã uống'}
-        </Text>
-      </TouchableOpacity>
+          <Ionicons
+            name={isMedDone ? 'checkmark-circle' : 'checkmark'}
+            size={16}
+            color={isMedDone ? '#10B981' : '#FFFFFF'}
+          />
+          <Text
+            style={[
+              styles.actionBtnText,
+              { color: isMedDone ? '#10B981' : '#FFFFFF' },
+            ]}
+          >
+            {isMedDone ? 'Đã hoàn thành' : 'Xác nhận đã uống'}
+          </Text>
+        </TouchableOpacity>
+      ) : (
+        <TouchableOpacity
+          style={[
+            styles.actionBtn,
+            { backgroundColor: isDarkMode ? colors.card : '#F8FAFC', borderWidth: 1, borderColor: isDarkMode ? colors.border : '#E2E8F0' },
+          ]}
+          onPress={() => navigation.navigate('MedicationReminder')}
+          activeOpacity={0.75}
+        >
+          <Ionicons name="add-circle-outline" size={16} color={Colors.primary} />
+          <Text style={[styles.actionBtnText, { color: Colors.primary }]}>
+            + Thêm lịch nhắc uống thuốc
+          </Text>
+        </TouchableOpacity>
+      )}
 
       {/* Modal xác nhận đã uống thuốc ngắn gọn */}
       <Modal

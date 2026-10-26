@@ -26,7 +26,7 @@ import { SafeAreaView } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
 import { Colors, Shadows } from '../../../theme/colors';
 import { useAlertStore } from '../../../store';
-import { usePatientStore, DEFAULT_MEDICATIONS, ReminderItem } from '../../../store/usePatientStore';
+import { usePatientStore, ReminderItem } from '../../../store/usePatientStore';
 import { useTheme } from '../../../store/useThemeStore';
 import { FamilyAppointmentsModal } from '../../dashboard/components/FamilyAppointmentsModal';
 
@@ -212,11 +212,8 @@ export default function AlertsListScreen({ navigation }: any) {
     setRefreshing(false);
   };
 
-  // Danh sách thuốc trong ngày từ Store (hoặc fallback mặc định)
-  const medications: ReminderItem[] =
-    todayReminders?.medications && todayReminders.medications.length > 0
-      ? todayReminders.medications
-      : DEFAULT_MEDICATIONS;
+  // Danh sách thuốc trong ngày từ Store
+  const medications: ReminderItem[] = todayReminders?.medications || [];
 
   const pendingMedCount = medications.filter((m) => !m.taken).length;
   const unreadIncidentsCount = incidents.filter((item) => !item.is_acknowledged).length;
