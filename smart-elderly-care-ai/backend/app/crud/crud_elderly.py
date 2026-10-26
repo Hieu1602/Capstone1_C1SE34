@@ -88,7 +88,12 @@ class CRUDElderly:
 
         gender_str = ""
         if profile.gender:
-            gender_str = "Nam" if profile.gender.upper() == "MALE" else "Nữ"
+            if profile.gender.upper() in ["MALE", "NAM"]:
+                gender_str = "Nam"
+            elif profile.gender.upper() in ["FEMALE", "NỮ", "NU"]:
+                gender_str = "Nữ"
+            else:
+                gender_str = "Khác"
 
         return PatientMedicalRecordOut(
             id=str(profile.id),
@@ -146,7 +151,12 @@ class CRUDElderly:
                 except ValueError:
                     pass
             if update_in.gender is not None:
-                profile.gender = "MALE" if update_in.gender in ["Nam", "MALE"] else "FEMALE"
+                if update_in.gender in ["Nam", "MALE"]:
+                    profile.gender = "MALE"
+                elif update_in.gender in ["Nữ", "FEMALE"]:
+                    profile.gender = "FEMALE"
+                else:
+                    profile.gender = "OTHER"
             if update_in.blood_type is not None:
                 profile.blood_type = update_in.blood_type
             if update_in.height_cm is not None:

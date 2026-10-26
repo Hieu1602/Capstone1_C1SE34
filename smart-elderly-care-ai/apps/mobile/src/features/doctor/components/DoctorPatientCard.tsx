@@ -139,10 +139,25 @@ export const DoctorPatientCard: React.FC<DoctorPatientCardProps> = ({
 
         {/* Vòng đeo / Pin */}
         <View style={[styles.vitalChip, { backgroundColor: isDarkMode ? '#0F172A' : '#F8FAFC' }]}>
-          <Ionicons name="watch" size={14} color="#10B981" />
-          <LocalizedText style={[styles.vitalValue, { color: '#10B981' }]}>
-            {patient.battery_level ?? 84}
-            <LocalizedText style={styles.vitalUnit}>%</LocalizedText>
+          <Ionicons
+            name="watch"
+            size={14}
+            color={patient.battery_level !== null && patient.battery_level !== undefined ? "#10B981" : "#94A3B8"}
+          />
+          <LocalizedText
+            style={[
+              styles.vitalValue,
+              { color: patient.battery_level !== null && patient.battery_level !== undefined ? '#10B981' : '#94A3B8' },
+            ]}
+          >
+            {patient.battery_level !== null && patient.battery_level !== undefined ? (
+              <>
+                {patient.battery_level}
+                <LocalizedText style={styles.vitalUnit}>%</LocalizedText>
+              </>
+            ) : (
+              '--'
+            )}
           </LocalizedText>
           <LocalizedText style={styles.vitalLabel}>Pin vòng</LocalizedText>
         </View>

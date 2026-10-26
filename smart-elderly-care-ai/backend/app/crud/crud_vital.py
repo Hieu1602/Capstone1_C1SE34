@@ -229,9 +229,10 @@ class CRUDVital:
             .order_by(Device.created_at.desc())
             .limit(1)
         )
-        device = result.scalar_one_or_none()
+        smartband_device = result.scalar_one_or_none()
 
-        # Nếu không có thiết bị đeo của chính user, tìm thiết bị bất kỳ trong nhà
+        # Nếu không có thiết bị Smartband, tìm thiết bị bất kỳ để lấy các chỉ số đo
+        device = smartband_device
         if not device:
             res_any = await db.execute(
                 select(Device)
@@ -268,6 +269,13 @@ class CRUDVital:
         fall = bool(latest_vital.fall_detected) if latest_vital else False
         v_time = latest_vital.time if latest_vital else None
 
+        is_band_connected = bool(smartband_device and smartband_device.is_online)
+        band_battery = (
+            smartband_device.battery_level
+            if (is_band_connected and smartband_device.battery_level is not None)
+            else None
+        )
+
         return {
             "heart_rate": hr,
             "spo2": sp,
@@ -277,8 +285,8 @@ class CRUDVital:
             "fall_detected": fall,
             "timestamp": int(v_time.timestamp() * 1000) if v_time else None,
             "sound": "Bình thường",
-            "bracelet_battery": device.battery_level,
-            "bracelet_connected": device.is_online,
+            "bracelet_battery": band_battery,
+            "bracelet_connected": is_band_connected,
             "edge_hub_connected": True,
             "device_id": device.device_id,
             "time": v_time,
