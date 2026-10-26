@@ -1,4 +1,5 @@
 import logging
+import re
 from datetime import datetime, timezone
 from typing import Optional
 from uuid import UUID
@@ -56,8 +57,22 @@ class CCHNVerifyRequest(BaseModel):
 
 class UserRegistration(UserCreate):
     password: str = Field(min_length=6, max_length=128)
-    role: str = "user"
+    role: str = "member"
     otp_code: Optional[str] = Field(default=None)
+
+    @field_validator("password")
+    @classmethod
+    def validate_password_strength(cls, v: str) -> str:
+        if len(v) < 8 or len(v) > 16:
+            raise ValueError("Mật khẩu phải có độ dài từ 8 đến 16 ký tự.")
+        if (
+            not re.search(r"[a-z]", v)
+            or not re.search(r"[A-Z]", v)
+            or not re.search(r"\d", v)
+            or not re.search(r"[^A-Za-z0-9]", v)
+        ):
+            raise ValueError("Mật khẩu phải bao gồm chữ hoa, chữ thường, số và ký hiệu đặc biệt (ví dụ: Care@123).")
+        return v
 
     @model_validator(mode="before")
     @classmethod
@@ -80,6 +95,20 @@ class DoctorRegistration(UserCreate):
     cchn_number: Optional[str] = Field(default=None, min_length=3, max_length=50)
     workplace: Optional[str] = Field(default=None, max_length=255)
     specialty: Optional[str] = Field(default=None, max_length=255)
+
+    @field_validator("password")
+    @classmethod
+    def validate_password_strength(cls, v: str) -> str:
+        if len(v) < 8 or len(v) > 16:
+            raise ValueError("Mật khẩu phải có độ dài từ 8 đến 16 ký tự.")
+        if (
+            not re.search(r"[a-z]", v)
+            or not re.search(r"[A-Z]", v)
+            or not re.search(r"\d", v)
+            or not re.search(r"[^A-Za-z0-9]", v)
+        ):
+            raise ValueError("Mật khẩu phải bao gồm chữ hoa, chữ thường, số và ký hiệu đặc biệt (ví dụ: Care@123).")
+        return v
 
     @model_validator(mode="before")
     @classmethod
@@ -302,6 +331,7 @@ async def register(
             )
 
     try:
+        user_in.role = "member"
         user = await crud_user.create(db, obj_in=user_in)
     except IntegrityError as exc:
         await db.rollback()
@@ -427,13 +457,22 @@ async def login(
         user_name = user.full_name or user.phone
         user_role = user.role or "user"
 
-        # Ghi nhận thiết bị đầu cuối & lịch sử đăng nhập
+        # Ghi nhận thiết bị đầu cuối & lịch sử đăng nhập (kèm vị trí GPS từ Mobile client)
+        client_location = request.headers.get("x-client-location")
+        if client_location:
+            try:
+                from urllib.parse import unquote
+                client_location = unquote(client_location).strip()
+            except Exception:
+                pass
+
         try:
             await crud_user_terminal.record_login(
                 db,
                 user_id=user.id,
                 ip_address=client_ip,
                 user_agent=user_agent,
+                custom_location=client_location,
             )
             await db.commit()
         except Exception as terminal_err:
@@ -535,8 +574,15 @@ async def get_user_devices(
     """Lấy danh sách thiết bị đầu cuối của người dùng hiện tại."""
     client_ip = request.client.host if request.client else "127.0.0.1"
     user_agent = request.headers.get("user-agent", "")
+    client_location = request.headers.get("x-client-location")
+    if client_location:
+        try:
+            from urllib.parse import unquote
+            client_location = unquote(client_location).strip()
+        except Exception:
+            pass
     return await crud_user_terminal.get_terminals_for_user(
-        db, user=current_user, current_ip=client_ip, current_user_agent=user_agent
+        db, user=current_user, current_ip=client_ip, current_user_agent=user_agent, custom_location=client_location
     )
 
 

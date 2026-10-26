@@ -148,7 +148,7 @@ export default function ProfileScreen({ navigation, route }: any) {
           isDarkMode={mgr.isDarkMode}
           colors={mgr.colors}
           onPressProfile={() => mgr.setUserMenuVisible(true)}
-          onPressAddMember={() => navigation.navigate('HouseDetail')}
+          onPressAddMember={() => navigation.navigate('HouseDetail', { openInviteModal: true })}
         />
 
         <ProfileQuickGrid

@@ -595,8 +595,15 @@ async def get_my_terminals(
     """Lấy danh sách thiết bị đầu cuối (Client Terminals) đang đăng nhập của tài khoản."""
     client_ip = request.client.host if request.client else "127.0.0.1"
     user_agent = request.headers.get("user-agent", "")
+    client_location = request.headers.get("x-client-location")
+    if client_location:
+        try:
+            from urllib.parse import unquote
+            client_location = unquote(client_location).strip()
+        except Exception:
+            pass
     terminals = await crud_user_terminal.get_terminals_for_user(
-        db, user=current_user, current_ip=client_ip, current_user_agent=user_agent
+        db, user=current_user, current_ip=client_ip, current_user_agent=user_agent, custom_location=client_location
     )
 
     return terminals

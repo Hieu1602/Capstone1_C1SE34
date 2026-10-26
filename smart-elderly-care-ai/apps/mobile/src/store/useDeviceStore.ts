@@ -154,6 +154,8 @@ export interface Device {
 
 export interface HouseInfo {
 
+  id?: string;
+
   name: string;
 
   address: string;
@@ -161,6 +163,8 @@ export interface HouseInfo {
   membersCount: number;
 
   currentMode: 'AWAY' | 'HOME' | 'NIGHT' | 'DISARM' | 'ALARM' | 'PRIVACY';
+
+  hasHouse?: boolean;
 
 }
 
@@ -270,6 +274,8 @@ interface DeviceState {
 
   syncAllWithBackend: () => Promise<void>;
 
+  resetDeviceStore: () => void;
+
 }
 
 
@@ -284,13 +290,17 @@ export const useDeviceStore = create<DeviceState>()(
 
       house: {
 
-        name: 'Nhà của tôi',
+        id: '',
+
+        name: '',
 
         address: '',
 
-        membersCount: 1,
+        membersCount: 0,
 
         currentMode: 'HOME',
+
+        hasHouse: false,
 
       },
 
@@ -624,7 +634,7 @@ export const useDeviceStore = create<DeviceState>()(
 
           const res = await houseApi.getCurrentHouse();
 
-          if (res.data) {
+          if (res.data && res.data.id) {
 
             set((state) => ({
 
@@ -632,11 +642,33 @@ export const useDeviceStore = create<DeviceState>()(
 
                 ...state.house,
 
-                name: res.data.name,
+                id: res.data.id,
+
+                name: res.data.name || 'Căn nhà gia đình',
 
                 address: res.data.address || '',
 
-                currentMode: res.data.current_mode,
+                currentMode: res.data.current_mode || 'HOME',
+
+                hasHouse: true,
+
+              },
+
+            }));
+
+          } else {
+
+            set((state) => ({
+
+              house: {
+
+                ...state.house,
+
+                id: '',
+
+                name: '',
+
+                hasHouse: false,
 
               },
 
@@ -646,7 +678,23 @@ export const useDeviceStore = create<DeviceState>()(
 
         } catch {
 
-          console.log('[DeviceStore] fetchHouseFromBackend fallback to cache');
+          // Người dùng mới chưa có căn nhà nào (HTTP 404)
+
+          set((state) => ({
+
+            house: {
+
+              ...state.house,
+
+              id: '',
+
+              name: '',
+
+              hasHouse: false,
+
+            },
+
+          }));
 
         }
 
@@ -835,6 +883,62 @@ export const useDeviceStore = create<DeviceState>()(
         }
 
       },
+
+
+
+      resetDeviceStore: () =>
+
+        set({
+
+          activeDevice: null,
+
+          house: {
+
+            id: '',
+
+            name: '',
+
+            address: '',
+
+            membersCount: 0,
+
+            currentMode: 'HOME',
+
+            hasHouse: false,
+
+          },
+
+          camera: {
+
+            id: '',
+
+            name: '',
+
+            room: '',
+
+            isOnline: false,
+
+            isSleep: false,
+
+            isAIProtect: false,
+
+            resolution: '2K',
+
+            sdCardStatus: 'NO_CARD',
+
+            wifiStrength: 0,
+
+            streamUrl: '',
+
+          },
+
+          iotDevices: [],
+
+          deviceGroups: [],
+
+          isLoadingDevices: false,
+
+        }),
 
     }),
 

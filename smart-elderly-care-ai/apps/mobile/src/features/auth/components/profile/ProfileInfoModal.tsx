@@ -11,6 +11,7 @@ import {
 import { Ionicons } from "@expo/vector-icons";
 import { Colors } from "../../../../theme/colors";
 import { ProfileEditNameModal } from "./ProfileEditNameModal";
+import { validateFullName, sanitizeNameInput } from "../../utils/nameValidation";
 
 interface ProfileInfoModalProps {
     visible: boolean;
@@ -55,12 +56,9 @@ export const ProfileInfoModal: React.FC<ProfileInfoModalProps> = ({
 
     const handleSaveName = async () => {
         const cleanName = draftName.trim();
-        if (!cleanName) {
-            setNameError("Vui lòng nhập họ và tên.");
-            return;
-        }
-        if (cleanName.length < 2) {
-            setNameError("Họ và tên phải có ít nhất 2 ký tự.");
+        const validation = validateFullName(cleanName);
+        if (!validation.isValid) {
+            setNameError(validation.message || "Họ và tên không hợp lệ.");
             return;
         }
 
@@ -282,7 +280,7 @@ export const ProfileInfoModal: React.FC<ProfileInfoModalProps> = ({
                         visible={isEditingName}
                         isDarkMode={isDarkMode}
                         draftValue={draftName}
-                        setDraftValue={setDraftName}
+                        setDraftValue={(val) => setDraftName(sanitizeNameInput(val))}
                         error={nameError}
                         isSaving={isSavingName}
                         onClose={handleCloseEditName}

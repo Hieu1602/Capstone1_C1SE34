@@ -2,21 +2,68 @@
 user.py – Pydantic Schemas cho User endpoints.
 """
 
+import re
 import uuid
 from datetime import datetime
 from typing import Literal, Optional
 
 from pydantic import BaseModel, Field, field_validator, model_validator
 
+VIETNAMESE_NAME_PATTERN = (
+    r"^[a-zA-ZÀÁÂÃÈÉÊÌÍÒÓÔÕÙÚĂĐĨŨƠàáâãèéêìíòóôõùúăđĩũơ"
+    r"ƯĂẠẢẤẦẨẪẬẮẰẲẴẶẸẺẼỀỀỂưăạảấầẩẫậắằẳẵặẹẻẽềềểỄỆỈỊỌỎỐỒỔỖỘỚỜỞỠỢỤỦỨỪ"
+    r"ễệỉịọỏốồổỗộớờởỡợụủứừỬỮỰỲỴÝỶỸửữựỳỵýỷỹ\s]+$"
+)
+
+BANNED_WORDS = {
+    "dm", "dcm", "vcl", "clgt", "buoi", "cac", "lon", "lồn", "cặc", "buồi",
+    "đụ", "địt", "đĩ", "cave", "ngu", "cho", "chó", "fuck", "shit", "bitch",
+    "admin", "root", "test", "tester", "fake",
+}
+
+
+def validate_vietnamese_full_name(name: str) -> str:
+    cleaned = re.sub(r"\s+", " ", name.strip()) if name else ""
+    if not cleaned:
+        raise ValueError("Họ và tên không được để trống.")
+    if re.search(r"\d", cleaned):
+        raise ValueError("Họ và tên không được chứa chữ số.")
+    if not re.match(VIETNAMESE_NAME_PATTERN, cleaned):
+        raise ValueError(
+            "Họ và tên chỉ được chứa chữ cái tiếng Việt và khoảng trắng, không chứa ký tự đặc biệt."
+        )
+    if len(cleaned) < 4 or len(cleaned) > 50:
+        raise ValueError("Họ và tên phải có độ dài từ 4 đến 50 ký tự.")
+    words = cleaned.split()
+    if len(words) < 2:
+        raise ValueError(
+            "Vui lòng nhập đầy đủ cả Họ và Tên (tối thiểu 2 từ, ví dụ: Nguyễn Văn A)."
+        )
+    for w in words:
+        if re.match(r"^(.)\1{2,}$", w, re.IGNORECASE):
+            raise ValueError(
+                "Họ và tên chứa từ lặp ký tự không hợp lệ. Vui lòng nhập tên thật."
+            )
+        if w.lower() in BANNED_WORDS:
+            raise ValueError(
+                "Họ và tên chứa từ ngữ không phù hợp hoặc không được phép."
+            )
+    return cleaned
+
 
 class UserBase(BaseModel):
     full_name: str
     phone: str
-    role: str = "user"
+    role: str = "member"
     avatar_url: Optional[str] = None
     cchn_number: Optional[str] = None
     specialty: Optional[str] = None
     workplace: Optional[str] = None
+
+    @field_validator("full_name")
+    @classmethod
+    def check_full_name(cls, v: str) -> str:
+        return validate_vietnamese_full_name(v)
 
     @model_validator(mode="after")
     def validate_identifier(self):
@@ -33,6 +80,13 @@ class UserCreate(UserBase):
 
 class UserUpdate(BaseModel):
     full_name: Optional[str] = None
+
+    @field_validator("full_name")
+    @classmethod
+    def check_update_full_name(cls, v: Optional[str]) -> Optional[str]:
+        if v is None:
+            return v
+        return validate_vietnamese_full_name(v)
     phone: Optional[str] = None
     avatar_url: Optional[str] = None
     cchn_number: Optional[str] = None

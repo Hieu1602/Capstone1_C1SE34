@@ -61,9 +61,11 @@ class CRUDHouse:
         )
         return list(result.scalars().all())
 
-    async def get_or_create_default_house(self, db: AsyncSession, owner_id: UUID) -> House:
+    async def get_or_create_default_house(self, db: AsyncSession, owner_id: UUID) -> Optional[House]:
         """
-        Lấy căn nhà đầu tiên của người dùng hoặc tự động tạo 'Nhà của tôi' nếu chưa có.
+        Lấy căn nhà đầu tiên của người dùng (nếu có sở hữu hoặc là thành viên).
+        Chỉ tự động tạo nhà mặc định nếu người dùng là admin.
+        Nếu là thành viên (member/doctor) mới chưa tham gia căn nhà nào, trả về None (không tự gán nhà).
         """
         houses = await self.get_by_owner(db, owner_id)
         if houses:
@@ -73,6 +75,15 @@ class CRUDHouse:
         user_houses = await self.get_user_houses(db, owner_id)
         if user_houses:
             return user_houses[0]
+
+        # Lấy thông tin user
+        stmt_user = select(User).where(User.id == owner_id)
+        res_u = await db.execute(stmt_user)
+        user_obj = res_u.scalar_one_or_none()
+
+        # Nếu không phải admin, không tự động tạo nhà và không gán vào nhà của người khác
+        if not user_obj or user_obj.role != "admin":
+            return None
 
         default_house = House(
             owner_id=owner_id,
@@ -84,7 +95,6 @@ class CRUDHouse:
         await db.flush()
         await db.refresh(default_house)
 
-        # Thêm owner vào bảng house_members với toàn bộ quyền
         membership = HouseMember(
             house_id=default_house.id,
             user_id=owner_id,
