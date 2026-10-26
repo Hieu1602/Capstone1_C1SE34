@@ -58,7 +58,7 @@ export const VitalsSummaryCard: React.FC<VitalsSummaryCardProps> = ({
       <View style={styles.vitalsSummaryHeader}>
         <View style={{ flexDirection: 'row', alignItems: 'center' }}>
           <View style={styles.livePulseDot} />
-          <Text style={[styles.vitalsSummaryTitle, isDarkMode && { color: colors.textPrimary }]}>Tình trạng sức khoẻ</Text>
+          <Text style={[styles.vitalsSummaryTitle, isDarkMode && { color: colors.textPrimary }]}>Chỉ số sinh hiệu</Text>
         </View>
         <TouchableOpacity
           style={[styles.vitalsDetailChip, isDarkMode && { backgroundColor: 'rgba(255, 122, 0, 0.15)', borderColor: 'rgba(255, 122, 0, 0.3)' }]}

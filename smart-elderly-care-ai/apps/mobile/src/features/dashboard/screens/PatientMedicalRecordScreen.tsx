@@ -514,7 +514,7 @@ export default function PatientMedicalRecordScreen({ navigation }: any) {
           </View>
         )}
 
-        {/* Khối Lọc Dữ Liệu Sinh Tồn Theo Ngày */}
+        {/* Khối Lọc Dữ Liệu Sinh Hiệu Theo Ngày */}
         <View style={[styles.cardBlock, { backgroundColor: bgCard, borderColor: borderCol }]}>
           <View style={styles.cardHeader}>
             <View style={styles.rowCenterGap8}>
@@ -522,7 +522,7 @@ export default function PatientMedicalRecordScreen({ navigation }: any) {
                 <Ionicons name="calendar-outline" size={20} color="#2563EB" />
               </View>
               <View>
-                <Text style={[styles.cardTitle, { color: textTitle }]}>Nhật ký sinh tồn theo ngày</Text>
+                <Text style={[styles.cardTitle, { color: textTitle }]}>Nhật ký sinh hiệu theo ngày</Text>
                 <Text style={[styles.cardSubtitle, { color: textSub }]}>Đồng bộ từ vòng đeo tay BLE và Hub AI</Text>
               </View>
             </View>
@@ -532,7 +532,7 @@ export default function PatientMedicalRecordScreen({ navigation }: any) {
             <View style={[styles.emptyNoticeBox, { backgroundColor: bgSubtle, borderColor: borderCol }]}>
               <Ionicons name="information-circle-outline" size={18} color={isDarkMode ? '#64748B' : '#94A3B8'} />
               <Text style={[styles.emptyNoticeText, { color: textSub }]}>
-                Chưa có dữ liệu sinh tồn do chưa thêm người theo dõi
+                Chưa có dữ liệu sinh hiệu do chưa thêm người theo dõi
               </Text>
             </View>
           ) : (
@@ -613,7 +613,7 @@ export default function PatientMedicalRecordScreen({ navigation }: any) {
             <View style={[styles.emptyNoticeBox, { backgroundColor: bgSubtle, borderColor: borderCol }]}>
               <Ionicons name="information-circle-outline" size={18} color={isDarkMode ? '#64748B' : '#94A3B8'} />
               <Text style={[styles.emptyNoticeText, { color: textSub }]}>
-                Chưa có dữ liệu sinh tồn do chưa thêm người theo dõi
+                Chưa có dữ liệu bệnh nền do chưa thêm người theo dõi
               </Text>
             </View>
           ) : conditions.length === 0 ? (

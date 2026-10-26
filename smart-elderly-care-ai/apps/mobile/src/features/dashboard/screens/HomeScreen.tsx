@@ -626,7 +626,7 @@ export default function HomeScreen({ navigation }: any) {
           />
         )}
 
-        {/* 7. Khối hiển thị Tình trạng sức khoẻ */}
+        {/* 7. Khối hiển thị Chỉ số sinh hiệu */}
         <VitalsSummaryCard
           currentVitals={currentVitals}
           isEdgeHubOnline={isEdgeHubOnline}
@@ -637,7 +637,7 @@ export default function HomeScreen({ navigation }: any) {
           navigation={navigation}
         />
 
-        {/* 8. Khối "Xu hướng sức khoẻ hôm nay" */}
+        {/* 8. Khối "Xu hướng sinh hiệu hôm nay" */}
         <HealthTrendsCard
           currentVitals={currentVitals}
           isDarkMode={isDarkMode}
