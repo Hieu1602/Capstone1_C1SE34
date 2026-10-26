@@ -236,6 +236,9 @@ export const vitalsApi = {
 // 3. Reminders API
 export const remindersApi = {
   getToday: () => api.get('/reminders/today'),
+  create: (data: any) => api.post('/reminders', data),
+  toggle: (reminderId: string) => api.put(`/reminders/${reminderId}/toggle`),
+  delete: (reminderId: string) => api.delete(`/reminders/${reminderId}`),
 };
 
 // 4. Patients & Medical Record API

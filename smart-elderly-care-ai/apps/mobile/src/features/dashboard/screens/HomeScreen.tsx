@@ -53,6 +53,7 @@ export default function HomeScreen({ navigation }: any) {
     setAlarmSnooze,
     cancelAlarmSnooze,
     todayReminders,
+    markMedicationTaken,
     fetchVitals,
     fetchSystemMode,
     fetchReminders,
@@ -331,12 +332,14 @@ export default function HomeScreen({ navigation }: any) {
     }
   }
 
-  // Cữ thuốc kế tiếp từ Backend FastAPI
+  // Cữ thuốc kế tiếp từ Backend FastAPI / Zustand Store
   const nextMedication =
     todayReminders?.medications?.find((m) => !m.taken) ||
-    todayReminders?.medications?.[3] || {
-      name: 'Uống thuốc huyết áp (Amlodipine 5mg)',
+    todayReminders?.medications?.[todayReminders.medications.length - 1] || {
+      id: 'med-03',
+      name: 'Atorvastatin 10mg (Thuốc mỡ máu & tim mạch)',
       time: '18:30',
+      dose: '1 viên sau ăn tối',
       taken: false,
     };
   const isMedDone = nextMedTaken || Boolean(nextMedication.taken);
@@ -671,6 +674,10 @@ export default function HomeScreen({ navigation }: any) {
           nextMedication={nextMedication}
           isMedDone={isMedDone}
           setNextMedTaken={setNextMedTaken}
+          onConfirmTaken={(medId, timeStr) => {
+            markMedicationTaken(medId, true, timeStr);
+            setNextMedTaken(true);
+          }}
           isDarkMode={isDarkMode}
           colors={colors}
           navigation={navigation}
