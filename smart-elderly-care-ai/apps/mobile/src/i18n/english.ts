@@ -1151,6 +1151,7 @@ const english: Record<string, string> = {
   'Thêm người': 'Add person',
   'Thêm người chăm sóc / Bác sĩ': 'Add Caregiver / Doctor',
   'Thêm thành viên gia đình & Cụ cần chăm sóc': 'Add Family Member & Senior to Monitor',
+  'Thêm thành viên': 'Add Member',
   'Thêm thiết bị hoặc chia sẻ luồng camera.': 'Add a device or share a camera stream.',
   'Thêm Thiết Bị Mới': 'Add New Device',
   'Thêm thủ công': 'Add manually',

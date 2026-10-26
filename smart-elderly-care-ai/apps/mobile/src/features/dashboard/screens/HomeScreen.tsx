@@ -61,6 +61,11 @@ export default function HomeScreen({ navigation }: any) {
     syncAllWithBackend,
   } = useVitalStore();
 
+  // Tính tổng số thông báo / cảnh báo & cữ thuốc chưa xử lý để hiển thị chấm đỏ badge
+  const unreadIncidentsCount = (incidents || []).filter((item) => !item.is_acknowledged).length;
+  const pendingMedCount = (todayReminders?.medications || []).filter((m) => !m.taken).length;
+  const unreadCount = unreadIncidentsCount + pendingMedCount;
+
   const { patientRecord, fetchPatientRecord } = usePatientStore();
   const [familyAppointmentsModalVisible, setFamilyAppointmentsModalVisible] = useState(false);
 
@@ -367,7 +372,7 @@ export default function HomeScreen({ navigation }: any) {
             activeOpacity={0.7}
           >
             <Ionicons name="notifications-outline" size={22} color={colors.textPrimary} />
-            <View style={styles.redBadgeDot} />
+            {unreadCount > 0 && <View style={styles.redBadgeDot} />}
           </TouchableOpacity>
 
           <TouchableOpacity
