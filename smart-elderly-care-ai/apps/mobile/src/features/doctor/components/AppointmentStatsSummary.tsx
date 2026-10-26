@@ -8,8 +8,9 @@ interface AppointmentStatsSummaryProps {
   totalCount: number;
   upcomingCount: number;
   completedCount: number;
-  filterTab: 'ALL' | 'UPCOMING' | 'COMPLETED';
-  onFilterChange: (tab: 'ALL' | 'UPCOMING' | 'COMPLETED') => void;
+  cancelledCount?: number;
+  filterTab: 'ALL' | 'UPCOMING' | 'COMPLETED' | 'CANCELLED';
+  onFilterChange: (tab: 'ALL' | 'UPCOMING' | 'COMPLETED' | 'CANCELLED') => void;
   isDarkMode: boolean;
   colors: any;
 }
@@ -18,6 +19,7 @@ export const AppointmentStatsSummary: React.FC<AppointmentStatsSummaryProps> = (
   totalCount,
   upcomingCount,
   completedCount,
+  cancelledCount = 0,
   filterTab,
   onFilterChange,
   isDarkMode,
@@ -26,28 +28,36 @@ export const AppointmentStatsSummary: React.FC<AppointmentStatsSummaryProps> = (
     { key: 'total', icon: 'calendar', color: '#2563EB', bg: '#EFF6FF', border: '#3B82F633', label: 'Tổng lịch', count: totalCount },
     { key: 'upcoming', icon: 'time', color: '#D97706', bg: '#FFFBEB', border: '#F59E0B33', label: 'Sắp tới', count: upcomingCount },
     { key: 'completed', icon: 'checkmark-done', color: '#059669', bg: '#ECFDF5', border: '#10B98133', label: 'Đã khám', count: completedCount },
+    { key: 'cancelled', icon: 'close-circle', color: '#DC2626', bg: '#FEF2F2', border: '#EF444433', label: 'Đã hủy', count: cancelledCount },
   ];
 
   return (
     <View>
-      {/* 3 Thẻ thống kê */}
+      {/* 4 Thẻ thống kê */}
       <View style={styles.summaryGrid}>
         {stats.map((s) => (
-          <View
+          <TouchableOpacity
             key={s.key}
+            activeOpacity={0.8}
+            onPress={() => {
+              if (s.key === 'total') onFilterChange('ALL');
+              else if (s.key === 'upcoming') onFilterChange('UPCOMING');
+              else if (s.key === 'completed') onFilterChange('COMPLETED');
+              else if (s.key === 'cancelled') onFilterChange('CANCELLED');
+            }}
             style={[
               styles.summaryCard,
               { backgroundColor: isDarkMode ? '#1E293B' : '#FFFFFF', borderColor: s.border },
             ]}
           >
             <View style={[styles.statIconBox, { backgroundColor: s.bg }]}>
-              <Ionicons name={s.icon as any} size={15} color={s.color} />
+              <Ionicons name={s.icon as any} size={14} color={s.color} />
             </View>
             <LocalizedText style={[styles.statNumber, { color: s.color }]}>{s.count}</LocalizedText>
             <LocalizedText style={[styles.statLabel, { color: isDarkMode ? '#94A3B8' : '#64748B' }]}>
               {s.label}
             </LocalizedText>
-          </View>
+          </TouchableOpacity>
         ))}
       </View>
 
@@ -57,8 +67,10 @@ export const AppointmentStatsSummary: React.FC<AppointmentStatsSummaryProps> = (
           { key: 'ALL' as const, label: `Tất cả (${totalCount})` },
           { key: 'UPCOMING' as const, label: `Sắp tới (${upcomingCount})` },
           { key: 'COMPLETED' as const, label: `Đã khám (${completedCount})` },
+          { key: 'CANCELLED' as const, label: `Đã hủy (${cancelledCount})` },
         ].map((tab) => {
           const active = filterTab === tab.key;
+          const activeBg = tab.key === 'CANCELLED' ? '#DC2626' : Colors.primary;
           return (
             <TouchableOpacity
               key={tab.key}
@@ -66,7 +78,7 @@ export const AppointmentStatsSummary: React.FC<AppointmentStatsSummaryProps> = (
               style={[
                 styles.filterChip,
                 active
-                  ? { backgroundColor: Colors.primary }
+                  ? { backgroundColor: activeBg }
                   : { backgroundColor: isDarkMode ? '#334155' : '#EEF2F6' },
               ]}
             >

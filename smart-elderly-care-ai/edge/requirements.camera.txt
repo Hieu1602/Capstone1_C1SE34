@@ -1,0 +1,4 @@
+numpy==1.26.4
+opencv-python-headless==4.9.0.80
+aiohttp==3.13.3
+pytapo==3.4.30

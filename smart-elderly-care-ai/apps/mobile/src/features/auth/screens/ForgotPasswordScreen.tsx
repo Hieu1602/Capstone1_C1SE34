@@ -17,7 +17,6 @@ import {
   ScrollView,
   StyleSheet,
   Text,
-  TextInput,
   TouchableOpacity,
   View,
   ActivityIndicator,
@@ -25,6 +24,11 @@ import {
 import { Ionicons } from '@expo/vector-icons';
 import { authApi } from '../../../services/api';
 import { useTheme } from '../../../store/useThemeStore';
+import {
+  ForgotRequestStep,
+  ForgotOtpStep,
+  ForgotResetStep,
+} from '../components/forgot_password';
 
 /**
  * Ba giai đoạn trong quy trình khôi phục mật khẩu:
@@ -37,9 +41,7 @@ type Feedback = { type: 'success' | 'error' | 'info' | 'complete'; message: stri
 
 export default function ForgotPasswordScreen({ navigation }: any) {
   const { colors } = useTheme();
-  // ----------------------------------------------------------------------------
-  // State quản lý luồng dữ liệu và giao diện
-  // ----------------------------------------------------------------------------
+
   const [step, setStep] = useState<Step>('request');
   const [phone, setPhone] = useState('');
   const [otp, setOtp] = useState('');
@@ -58,13 +60,10 @@ export default function ForgotPasswordScreen({ navigation }: any) {
     return typeof detail === 'string' ? detail : fallback;
   };
 
-  // ----------------------------------------------------------------------------
   // Bước 1: Gửi yêu cầu cấp mã OTP qua số điện thoại
-  // ----------------------------------------------------------------------------
   const sendCode = async () => {
     const normalizedPhone = phone.replace(/\s+/g, '');
 
-    // Kiểm tra định dạng số điện thoại Việt Nam / quốc tế hợp lệ
     if (!/^\+?[0-9]{9,15}$/.test(normalizedPhone)) {
       setFeedback({ type: 'error', message: 'Số điện thoại không hợp lệ. Vui lòng kiểm tra và nhập lại.' });
       return;
@@ -73,7 +72,6 @@ export default function ForgotPasswordScreen({ navigation }: any) {
     setIsLoading(true);
     setFeedback(null);
     try {
-      // Gọi API gửi mã OTP đến số điện thoại qua hệ thống Backend / Twilio Verify
       await authApi.requestPasswordResetOtp(normalizedPhone);
       setStep('verify');
       setFeedback({ type: 'info', message: `Đã gửi mã xác minh đến ${normalizedPhone}.` });
@@ -85,9 +83,7 @@ export default function ForgotPasswordScreen({ navigation }: any) {
     }
   };
 
-  // ----------------------------------------------------------------------------
   // Bước 2: Xác thực mã OTP 6 chữ số
-  // ----------------------------------------------------------------------------
   const verifyCode = async () => {
     if (otp.length !== 6) {
       setFeedback({ type: 'error', message: 'Vui lòng nhập đủ 6 chữ số của mã xác minh.' });
@@ -99,7 +95,6 @@ export default function ForgotPasswordScreen({ navigation }: any) {
     setFeedback(null);
 
     try {
-      // Gửi mã OTP lên Backend để xác thực
       const res = await authApi.verifyOtp(normalizedPhone, otp);
       if (res?.data?.verified !== false) {
         setStep('newPassword');
@@ -115,9 +110,7 @@ export default function ForgotPasswordScreen({ navigation }: any) {
     }
   };
 
-  // ----------------------------------------------------------------------------
   // Gửi lại mã OTP khi người dùng yêu cầu
-  // ----------------------------------------------------------------------------
   const handleResendCode = async () => {
     const normalizedPhone = phone.replace(/\s+/g, '');
     setIsLoading(true);
@@ -133,11 +126,8 @@ export default function ForgotPasswordScreen({ navigation }: any) {
     }
   };
 
-  // ----------------------------------------------------------------------------
   // Bước 3: Đặt lại mật khẩu mới và hoàn tất
-  // ----------------------------------------------------------------------------
   const resetPassword = async () => {
-    // Kiểm tra độ dài mật khẩu tối thiểu 8 ký tự, tối đa 16 ký tự
     if (password.length < 8 || password.length > 16) {
       setFeedback({ type: 'error', message: 'Mật khẩu cần có độ dài từ 8 đến 16 ký tự.' });
       return;
@@ -148,7 +138,6 @@ export default function ForgotPasswordScreen({ navigation }: any) {
       return;
     }
 
-    // Kiểm tra hai ô mật khẩu phải trùng khớp
     if (password !== confirmPassword) {
       setFeedback({ type: 'error', message: 'Mật khẩu mới và ô xác nhận mật khẩu chưa khớp.' });
       return;
@@ -157,7 +146,6 @@ export default function ForgotPasswordScreen({ navigation }: any) {
     setIsLoading(true);
     setFeedback(null);
     try {
-      // Chỉ báo thành công sau khi backend xác thực OTP và lưu mật khẩu mới.
       await authApi.completePasswordReset({
         phone: phone.replace(/\s+/g, ''),
         otp_code: otp,
@@ -175,9 +163,6 @@ export default function ForgotPasswordScreen({ navigation }: any) {
     }
   };
 
-  // ----------------------------------------------------------------------------
-  // Xác định tiêu đề và hành động chính dựa theo bước hiện tại
-  // ----------------------------------------------------------------------------
   const primaryAction = step === 'request' ? sendCode : step === 'verify' ? verifyCode : resetPassword;
   const title =
     step === 'request'
@@ -217,6 +202,7 @@ export default function ForgotPasswordScreen({ navigation }: any) {
               <Text style={styles.subtitle}>{description}</Text>
             </View>
 
+            {/* Thông báo feedback */}
             {feedback && (
               <View
                 accessibilityRole="alert"
@@ -230,110 +216,57 @@ export default function ForgotPasswordScreen({ navigation }: any) {
                 ]}
               >
                 <Ionicons
-                  name={feedback.type === 'success' || feedback.type === 'complete' ? 'checkmark-circle' : feedback.type === 'error' ? 'alert-circle' : 'information-circle'}
+                  name={
+                    feedback.type === 'success' || feedback.type === 'complete'
+                      ? 'checkmark-circle'
+                      : feedback.type === 'error'
+                        ? 'alert-circle'
+                        : 'information-circle'
+                  }
                   size={20}
-                  color={feedback.type === 'success' || feedback.type === 'complete' ? '#16A34A' : feedback.type === 'error' ? '#DC2626' : '#2563EB'}
+                  color={
+                    feedback.type === 'success' || feedback.type === 'complete'
+                      ? '#16A34A'
+                      : feedback.type === 'error'
+                        ? '#DC2626'
+                        : '#2563EB'
+                  }
                 />
                 <Text style={styles.feedbackText}>{feedback.message}</Text>
               </View>
             )}
 
-            {/* BƯỚC 1: Nhập số điện thoại */}
+            {/* Các bước nhập liệu */}
             {step === 'request' && (
-              <View style={styles.inputContainer}>
-                <Ionicons name="call-outline" size={24} color="#333333" style={styles.inputIcon} />
-                <TextInput
-                  style={styles.input}
-                  placeholder="Nhập số điện thoại của bạn"
-                  placeholderTextColor="#B8B8B8"
-                  value={phone}
-                  onChangeText={setPhone}
-                  keyboardType="phone-pad"
-                  autoFocus
-                />
-              </View>
+              <ForgotRequestStep phone={phone} onChangePhone={setPhone} />
             )}
 
-            {/* BƯỚC 2: Nhập 6 ô mã OTP */}
             {step === 'verify' && (
-              <View style={styles.otpRow}>
-                {[0, 1, 2, 3, 4, 5].map((index) => (
-                  <TextInput
-                    key={index}
-                    style={[
-                      styles.otpInput,
-                      otp.length === index && [styles.otpInputActive, { borderColor: colors.primary }],
-                    ]}
-                    value={otp[index] || ''}
-                    onChangeText={(value) =>
-                      setOtp(
-                        `${otp.slice(0, index)}${value.replace(/[^0-9]/g, '').slice(-1)}${otp.slice(index + 1)}`.slice(0, 6)
-                      )
-                    }
-                    keyboardType="number-pad"
-                    maxLength={1}
-                    textAlign="center"
-                  />
-                ))}
-              </View>
+              <ForgotOtpStep
+                otp={otp}
+                onChangeOtp={setOtp}
+                primaryColor={colors.primary}
+                onResend={handleResendCode}
+                isLoading={isLoading}
+              />
             )}
 
-            {/* BƯỚC 3: Nhập mật khẩu mới và xác nhận mật khẩu */}
             {step === 'newPassword' && (
-              <View style={styles.passwordGroup}>
-                {/* Ô nhập mật khẩu mới */}
-                <View style={styles.inputContainer}>
-                  <TextInput
-                    style={styles.input}
-                    placeholder="Mật khẩu mới (8-16 ký tự)"
-                    placeholderTextColor="#B8B8B8"
-                    value={password}
-                    onChangeText={setPassword}
-                    secureTextEntry={!showPassword}
-                  />
-                  <TouchableOpacity onPress={() => setShowPassword(!showPassword)}>
-                    <Ionicons name={showPassword ? 'eye-outline' : 'eye-off-outline'} size={25} color="#333333" />
-                  </TouchableOpacity>
-                </View>
-
-                {/* Khung hướng dẫn tiêu chuẩn an toàn mật khẩu */}
-                <View style={styles.requirements}>
-                  <Text style={styles.requirementTitle}>Yêu cầu bảo mật mật khẩu:</Text>
-                  <Text style={styles.requirement}>◯  Độ dài từ 8 đến 16 ký tự</Text>
-                  <Text style={styles.requirement}>◯  Nên bao gồm chữ cái, chữ số và ký tự đặc biệt</Text>
-                </View>
-
-                {/* Ô xác nhận lại mật khẩu mới */}
-                <View style={styles.inputContainer}>
-                  <TextInput
-                    style={styles.input}
-                    placeholder="Xác nhận lại mật khẩu mới"
-                    placeholderTextColor="#B8B8B8"
-                    value={confirmPassword}
-                    onChangeText={setConfirmPassword}
-                    secureTextEntry={!showConfirmPassword}
-                  />
-                  <TouchableOpacity onPress={() => setShowConfirmPassword(!showConfirmPassword)}>
-                    <Ionicons
-                      name={showConfirmPassword ? 'eye-outline' : 'eye-off-outline'}
-                      size={25}
-                      color="#333333"
-                    />
-                  </TouchableOpacity>
-                </View>
-              </View>
+              <ForgotResetStep
+                password={password}
+                onChangePassword={setPassword}
+                confirmPassword={confirmPassword}
+                onChangeConfirmPassword={setConfirmPassword}
+                showPassword={showPassword}
+                onToggleShowPassword={() => setShowPassword(!showPassword)}
+                showConfirmPassword={showConfirmPassword}
+                onToggleShowConfirmPassword={() => setShowConfirmPassword(!showConfirmPassword)}
+              />
             )}
           </View>
 
           {/* Nhóm nút hành động ở cuối màn hình */}
           <View>
-            {/* Nút gửi lại mã OTP (ở bước xác thực) */}
-            {step === 'verify' && (
-              <TouchableOpacity style={styles.resend} onPress={handleResendCode} disabled={isLoading}>
-                <Text style={[styles.link, { color: colors.primary }]}>Gửi lại mã xác minh</Text>
-              </TouchableOpacity>
-            )}
-
             {/* Nút chính (Gửi OTP / Xác nhận / Lưu mật khẩu) */}
             <TouchableOpacity
               style={[
@@ -373,9 +306,6 @@ export default function ForgotPasswordScreen({ navigation }: any) {
   );
 }
 
-// ------------------------------------------------------------------------------
-// Định nghĩa Stylesheet giao diện
-// ------------------------------------------------------------------------------
 const styles = StyleSheet.create({
   safeArea: { flex: 1, backgroundColor: '#FFFFFF' },
   flex: { flex: 1 },
@@ -402,50 +332,6 @@ const styles = StyleSheet.create({
   feedbackError: { backgroundColor: '#FEE2E2' },
   feedbackInfo: { backgroundColor: '#DBEAFE' },
   feedbackText: { flex: 1, color: '#1F2937', fontSize: 14, lineHeight: 20 },
-  inputContainer: {
-    minHeight: 56,
-    flexDirection: 'row',
-    alignItems: 'center',
-    borderWidth: 1,
-    borderColor: '#E5E5E5',
-    borderRadius: 14,
-    paddingHorizontal: 18,
-  },
-  inputIcon: { marginRight: 14 },
-  input: {
-    flex: 1,
-    color: '#2F2F2F',
-    fontSize: 17,
-    padding: 0,
-    borderWidth: 0,
-    outlineWidth: 0,
-  },
-  otpRow: { flexDirection: 'row', justifyContent: 'space-between', paddingHorizontal: 0 },
-  otpInput: {
-    width: 48,
-    height: 64,
-    borderWidth: 1,
-    borderColor: '#E5E5E5',
-    borderRadius: 13,
-    color: '#2F2F2F',
-    fontSize: 24,
-    textAlign: 'center',
-    textAlignVertical: 'center',
-    padding: 0,
-    outlineWidth: 0,
-  },
-  otpInputActive: { borderWidth: 2 },
-  passwordGroup: { gap: 14 },
-  requirements: {
-    backgroundColor: '#F8FAFC',
-    borderRadius: 14,
-    padding: 16,
-    borderWidth: 1,
-    borderColor: '#E2E8F0',
-  },
-  requirementTitle: { color: '#475569', fontSize: 15, fontWeight: '600', marginBottom: 8 },
-  requirement: { color: '#64748B', fontSize: 14, lineHeight: 20 },
-  resend: { alignItems: 'flex-start', marginBottom: 14 },
   primaryButton: {
     minHeight: 54,
     borderRadius: 14,

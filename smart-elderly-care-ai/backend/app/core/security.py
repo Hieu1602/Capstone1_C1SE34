@@ -4,7 +4,7 @@ JWT Authentication & Password hashing utilities.
 """
 
 from datetime import datetime, timedelta, timezone
-from typing import Any, Optional
+from typing import Any, Optional, cast
 
 import bcrypt
 if not hasattr(bcrypt, "__about__"):
@@ -33,7 +33,11 @@ def hash_password(plain_password: str) -> str:
         return bcrypt.hashpw(pwd_bytes, salt).decode("utf-8")
 
 
+get_password_hash = hash_password
+
+
 def verify_password(plain_password: str, hashed_password: str) -> bool:
+
     """Xác minh mật khẩu so với hash đã lưu."""
     try:
         return pwd_context.verify(plain_password, hashed_password)
@@ -92,11 +96,14 @@ def create_refresh_token(subject: Any) -> str:
     return jwt.encode(payload, settings.SECRET_KEY, algorithm=settings.ALGORITHM)
 
 
-def decode_token(token: str) -> dict:
+def decode_token(token: str) -> dict[str, Any]:
     """
     Giải mã JWT Token.
 
     Raises:
         JWTError: Nếu token không hợp lệ hoặc hết hạn
     """
-    return jwt.decode(token, settings.SECRET_KEY, algorithms=[settings.ALGORITHM])
+    return cast(
+        dict[str, Any],
+        jwt.decode(token, settings.SECRET_KEY, algorithms=[settings.ALGORITHM]),
+    )

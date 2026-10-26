@@ -15,6 +15,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.api.deps import get_current_user_optional
 from app.core.database import get_db
+from app.crud.crud_house import crud_house
 from app.crud.crud_vital import crud_vital
 from app.models.user import User
 from app.schemas.vital import VitalCreate, VitalCurrentOut, VitalOut, VitalStats
@@ -32,6 +33,14 @@ async def get_current_vitals(
     Nếu người dùng đã đăng nhập, tự động lấy dữ liệu từ thiết bị Smartband trong căn nhà.
     """
     user_id = current_user.id if current_user else UUID("640e3d97-b4e1-4b08-b2d3-d949a0eb075c")
+    if current_user and current_user.role != "admin":
+        house = await crud_house.get_or_create_default_house(db, owner_id=current_user.id)
+        perms = await crud_house.get_user_permissions(db, house=house, user=current_user)
+        if not perms.get("can_view_health", True):
+            raise HTTPException(
+                status_code=status.HTTP_403_FORBIDDEN,
+                detail="Bạn chưa được Chủ sở hữu ủy quyền theo dõi chỉ số sức khỏe.",
+            )
     data = await crud_vital.get_current_for_user(db, user_id=user_id)
     return data
 

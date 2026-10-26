@@ -48,6 +48,7 @@ data/raw/
 **/data/raw/
 *.sqlite3
 minio_data/
+*.license
 
 *.tmp
 
@@ -73,3 +74,7 @@ smart-elderly-care-ai/edge/test_snapshot.jpg
 *firebase-service-account*.json
 *google-services*.json
 .firebase/
+
+# Agent configuration
+.agents/
+.specify/

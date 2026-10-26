@@ -39,6 +39,7 @@ import CreateGroupScreen from '../features/dashboard/screens/CreateGroupScreen';
 import SmartbandDetailScreen from '../features/dashboard/screens/SmartbandDetailScreen';
 import HealthDetailScreen from '../features/dashboard/screens/HealthDetailScreen';
 import SettingsScreen from '../features/auth/screens/SettingsScreen';
+import AppInfoScreen from '../features/dashboard/screens/AppInfoScreen';
 import MedicationReminderScreen from '../features/dashboard/screens/MedicationReminderScreen';
 import PatientMedicalRecordScreen from '../features/dashboard/screens/PatientMedicalRecordScreen';
 import DoctorTabNavigator from './DoctorTabNavigator';
@@ -46,6 +47,8 @@ import DoctorPatientDetailScreen from '../features/doctor/screens/DoctorPatientD
 import DoctorPrescriptionsScreen from '../features/doctor/screens/DoctorPrescriptionsScreen';
 import DoctorAnalyticsReportScreen from '../features/doctor/screens/DoctorAnalyticsReportScreen';
 import { useTheme } from '../store/useThemeStore';
+import { useAlertStore } from '../store/useAlertStore';
+import { usePatientStore } from '../store/usePatientStore';
 
 const Stack = createNativeStackNavigator();
 const Tab = createBottomTabNavigator();
@@ -53,6 +56,12 @@ const Tab = createBottomTabNavigator();
 // ---- 5-Tab Navigator (Trang chủ, Thiết bị, Bot AI, Cảnh báo, Tôi) ----
 function MainTabNavigator() {
   const { isDarkMode, colors } = useTheme();
+  const incidents = useAlertStore((state) => state.incidents);
+  const todayReminders = usePatientStore((state) => state.todayReminders);
+
+  const unreadIncidentsCount = (incidents || []).filter((item) => !item.is_acknowledged).length;
+  const pendingMedCount = (todayReminders?.medications || []).filter((m) => !m.taken).length;
+  const unreadCount = unreadIncidentsCount + pendingMedCount;
 
   return (
     <Tab.Navigator
@@ -97,7 +106,7 @@ function MainTabNavigator() {
                 color={focused ? Colors.primary : (isDarkMode ? '#64748B' : '#94A3B8')}
               />
               {/* Chấm tròn đỏ cho thông báo mới */}
-              {route.name === 'Alerts' && (
+              {route.name === 'Alerts' && unreadCount > 0 && (
                 <View style={[styles.tabBadgeDot, { borderColor: colors.card }]} />
               )}
             </View>
@@ -169,6 +178,7 @@ export default function AppNavigator() {
             <Stack.Screen name="SmartbandDetail" component={SmartbandDetailScreen} />
             <Stack.Screen name="HealthDetail" component={HealthDetailScreen} />
             <Stack.Screen name="Settings" component={SettingsScreen} />
+            <Stack.Screen name="AppInfo" component={AppInfoScreen} />
             <Stack.Screen
               name="EmergencySOS"
               component={EmergencySOSScreen}

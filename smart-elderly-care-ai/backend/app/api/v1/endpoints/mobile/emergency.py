@@ -1,3 +1,4 @@
+import httpx
 """
 emergency.py - API tiếp nhận yêu cầu SOS khẩn cấp.
 
@@ -61,7 +62,8 @@ async def _get_household_recipients(
 
     owner_ids = select(House.owner_id).where(House.id.in_(house_ids))
     member_ids = select(HouseMember.user_id).where(
-        HouseMember.house_id.in_(house_ids)
+        HouseMember.house_id.in_(house_ids),
+        HouseMember.can_handle_emergency.is_(True),
     )
     recipient_result = await db.execute(
         select(User)
@@ -195,3 +197,85 @@ async def trigger_support_call(
         dial_uri=f"tel:{SUPPORT_HOTLINE_NUMBER}",
     )
 
+
+
+@router.get("/reverse-geocode")
+async def reverse_geocode_location(
+    lat: float,
+    lon: float,
+):
+    """Phân giải tọa độ GPS sang địa chỉ thực tế (hỗ trợ tiếng Việt đầy đủ, chi tiết số nhà, tên đường, tổ thôn xã)."""
+    # 1. Thử Photon Komoot (cực nhanh, chính xác số nhà, tên đường, tổ/thôn/khu phố)
+    try:
+        async with httpx.AsyncClient(timeout=4.0) as client:
+            resp = await client.get(
+                "https://photon.komoot.io/reverse",
+                params={"lat": lat, "lon": lon},
+                headers={"User-Agent": "SmartElderlyCare/1.0 (emergency-sos@smartcare.ai)"},
+            )
+            if resp.status_code == 200:
+                data = resp.json()
+                features = data.get("features", [])
+                if features:
+                    props = features[0].get("properties", {})
+                    housenumber = props.get("housenumber")
+                    street = props.get("street")
+                    street_full = f"{housenumber} {street}".strip() if (housenumber or street) else None
+                    name = props.get("name")
+                    is_dup = not name or name == street or name == housenumber or name == street_full
+                    place_name = None if is_dup else name
+                    raw_parts = [
+                        place_name,
+                        street_full,
+                        props.get("locality"),
+                        props.get("district"),
+                        props.get("city") or props.get("county"),
+                        props.get("state"),
+                        props.get("country"),
+                    ]
+                    seen = set()
+                    cleaned = []
+                    for p in raw_parts:
+                        if p and str(p).strip():
+                            val = str(p).strip()
+                            if val.lower() not in seen:
+                                seen.add(val.lower())
+                                cleaned.append(val)
+                    if len(cleaned) >= 2:
+                        return {"address": ", ".join(cleaned)}
+    except Exception as e:
+        logger.warning(f"[ReverseGeocode] Photon failed: {e}")
+
+    # 2. Thử Nominatim OpenStreetMap (chính xác số nhà, tên đường, phường, thành phố)
+    try:
+        async with httpx.AsyncClient(timeout=5.0) as client:
+            resp = await client.get(
+                "https://nominatim.openstreetmap.org/reverse",
+                params={"format": "jsonv2", "lat": lat, "lon": lon, "accept-language": "vi"},
+                headers={"User-Agent": "SmartElderlyCare/1.0 (emergency-sos@smartcare.ai)"},
+            )
+            if resp.status_code == 200:
+                data = resp.json()
+                display_name = data.get("display_name")
+                if display_name:
+                    return {"address": display_name}
+    except Exception as e:
+        logger.warning(f"[ReverseGeocode] Nominatim failed: {e}")
+
+    # 3. Fallback BigDataCloud
+    try:
+        async with httpx.AsyncClient(timeout=4.0) as client:
+            resp = await client.get(
+                "https://api.bigdatacloud.net/data/reverse-geocode-client",
+                params={"latitude": lat, "longitude": lon, "localityLanguage": "vi"},
+            )
+            if resp.status_code == 200:
+                data = resp.json()
+                parts = [data.get("locality"), data.get("city") or data.get("principalSubdivision"), data.get("countryName")]
+                parts = [p for p in parts if p]
+                if parts:
+                    return {"address": ", ".join(parts)}
+    except Exception as e:
+        logger.warning(f"[ReverseGeocode] BigDataCloud failed: {e}")
+
+    return {"address": None}

@@ -15,6 +15,8 @@ export * from './AnalyticsVitalsTable';
 export * from './AppointmentStatsSummary';
 export * from './AppointmentCard';
 export * from './AppointmentFormModal';
+export * from './AppointmentCancelModal';
+export * from './AppointmentCompleteModal';
 export * from './DoctorPatientsHeader';
 export * from './DoctorPatientCard';
 export * from './PrescriptionHeaderStats';

@@ -27,22 +27,32 @@ class ObjectStorageService:
         self.secret_key = settings.MINIO_SECRET_KEY
         self.bucket     = settings.MINIO_BUCKET_INCIDENTS
         self.secure     = settings.MINIO_SECURE
+        self.region     = getattr(settings, "MINIO_REGION", "")
         self._client    = None
 
+    def _get_url(self, object_name: str) -> str:
+        scheme = "https" if self.secure else "http"
+        if "amazonaws.com" in self.endpoint:
+            return f"{scheme}://{self.bucket}.{self.endpoint}/{object_name}"
+        return f"{scheme}://{self.endpoint}/{self.bucket}/{object_name}"
+
     def initialize(self) -> None:
-        """Khởi tạo MinIO client và đảm bảo bucket tồn tại."""
+        """Khởi tạo Storage client (MinIO hoặc AWS S3) và đảm bảo bucket tồn tại."""
         try:
             from minio import Minio  # type: ignore
-            self._client = Minio(
-                self.endpoint,
-                access_key=self.access_key,
-                secret_key=self.secret_key,
-                secure=self.secure,
-            )
+            kwargs = {
+                "endpoint": self.endpoint,
+                "access_key": self.access_key,
+                "secret_key": self.secret_key,
+                "secure": self.secure,
+            }
+            if self.region:
+                kwargs["region"] = self.region
+            self._client = Minio(**kwargs)
             if not self._client.bucket_exists(self.bucket):
                 self._client.make_bucket(self.bucket)
                 logger.info("[Storage] Bucket tạo mới: %s", self.bucket)
-            logger.info("[Storage] MinIO initialized: %s", self.endpoint)
+            logger.info("[Storage] Storage initialized: %s (bucket: %s)", self.endpoint, self.bucket)
         except ImportError:
             logger.warning("[Storage] minio-py chưa cài. Storage disabled.")
         except Exception as exc:  # noqa: BLE001
@@ -82,7 +92,7 @@ class ObjectStorageService:
                 file_path,
                 content_type=content_type,
             )
-            url = f"{'https' if self.secure else 'http'}://{self.endpoint}/{self.bucket}/{obj_name}"
+            url = self._get_url(obj_name)
             logger.info("[Storage] Đã upload: %s → %s", file_path, url)
             return url
         except Exception as exc:  # noqa: BLE001
@@ -112,7 +122,7 @@ class ObjectStorageService:
                 length=len(data),
                 content_type=content_type,
             )
-            url = f"{'https' if self.secure else 'http'}://{self.endpoint}/{self.bucket}/{object_name}"
+            url = self._get_url(object_name)
             return url
         except Exception as exc:  # noqa: BLE001
             logger.error("[Storage] Upload bytes thất bại: %s", exc)

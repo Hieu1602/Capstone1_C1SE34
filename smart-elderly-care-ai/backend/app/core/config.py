@@ -21,7 +21,7 @@ _SEARCH_PATHS = [
 ]
 for _p in _SEARCH_PATHS:
     if _p.is_file():
-        load_dotenv(dotenv_path=_p, override=False)
+        load_dotenv(dotenv_path=_p, override=True)
         break
 
 
@@ -74,6 +74,7 @@ class Settings(BaseSettings):
     MINIO_SECRET_KEY: str = "CHANGE_ME"
     MINIO_BUCKET_INCIDENTS: str = "incidents"
     MINIO_SECURE: bool = False
+    MINIO_REGION: str = ""
 
     # ---- Firebase FCM ----
     FCM_SERVICE_ACCOUNT_PATH: str = "config/firebase-service-account.json"

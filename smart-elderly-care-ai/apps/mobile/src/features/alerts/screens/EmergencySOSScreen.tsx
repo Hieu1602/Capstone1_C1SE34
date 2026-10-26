@@ -18,6 +18,7 @@ import * as ImagePicker from 'expo-image-picker';
 import * as Location from 'expo-location';
 import { emergencyApi } from '../../../services/api';
 import { useAuthStore } from '../../../store/useAuthStore';
+import { useDeviceStore } from '../../../store/useDeviceStore';
 import { useTheme } from '../../../store/useThemeStore';
 
 // Kiểu dữ liệu tối thiểu của phản hồi Photon, dịch tọa độ thành địa chỉ trên web.
@@ -55,8 +56,10 @@ const formatPhotonAddress = (result: PhotonReverseGeocodeResult) => {
   const place = result.features?.[0]?.properties;
   if (!place) return '';
   const street = [place.housenumber, place.street].filter(Boolean).join(' ');
+  const isNameDuplicate = !place.name || place.name === place.street || place.name === place.housenumber || place.name === street;
+  const placeName = isNameDuplicate ? null : place.name;
   const parts = uniqueAddressParts([
-    place.name,
+    placeName,
     street,
     place.locality,
     place.district,
@@ -68,29 +71,57 @@ const formatPhotonAddress = (result: PhotonReverseGeocodeResult) => {
   return parts.join(', ');
 };
 
-const getOpenStreetMapAddress = async (latitude: number, longitude: number) => {
-  // Photon dùng dữ liệu OpenStreetMap để tìm địa chỉ tương ứng với tọa độ.
-  const query = new URLSearchParams({
-    lat: String(latitude),
-    lon: String(longitude),
-    lang: 'vi',
-  });
-  const response = await fetch(`https://photon.komoot.io/reverse?${query}`, {
-    headers: { Accept: 'application/json' },
-  });
-  if (!response.ok) {
-    throw new Error(`OpenStreetMap reverse geocoding failed with status ${response.status}`);
+const resolveAddressFromCoords = async (latitude: number, longitude: number): Promise<string> => {
+  // 1. Thử Photon Komoot (cực nhanh ~1s, không bị CORS, chính xác số nhà, tên đường, tổ thôn xã)
+  try {
+    const photonResp = await fetch(`https://photon.komoot.io/reverse?lat=${latitude}&lon=${longitude}`);
+    if (photonResp.ok) {
+      const result = (await photonResp.json()) as PhotonReverseGeocodeResult;
+      const addr = formatPhotonAddress(result);
+      if (addr) return addr;
+    }
+  } catch (e) {
+    console.warn('[ReverseGeocode] Photon error, trying backend:', e);
   }
-  const result = (await response.json()) as PhotonReverseGeocodeResult;
-  return formatPhotonAddress(result);
+
+  // 2. Thử gọi API backend (Nominatim & Photon Server-side, hỗ trợ tiếng Việt đầy đủ)
+  try {
+    const res = await emergencyApi.reverseGeocode(latitude, longitude);
+    if (res.data?.address) {
+      return res.data.address;
+    }
+  } catch (e) {
+    console.warn('[ReverseGeocode] Backend API error, trying client fallbacks:', e);
+  }
+
+  // 3. Fallback BigDataCloud Client (chỉ có cấp phường/xã, quận, thành phố)
+  try {
+    const bdcUrl = `https://api.bigdatacloud.net/data/reverse-geocode-client?latitude=${latitude}&longitude=${longitude}&localityLanguage=vi`;
+    const resp = await fetch(bdcUrl);
+    if (resp.ok) {
+      const data = await resp.json();
+      const parts = uniqueAddressParts([
+        data.locality,
+        data.city || data.principalSubdivision,
+        data.countryName,
+      ]);
+      if (parts.length > 0) {
+        return parts.join(', ');
+      }
+    }
+  } catch (e) {
+    console.warn('[ReverseGeocode] BigDataCloud error:', e);
+  }
+
+  return '';
 };
 
 export default function EmergencySOSScreen({ navigation }: any) {
   const { colors } = useTheme();
   const { userName, full_name, userPhone, phone_number } = useAuthStore();
+  const house = useDeviceStore((s) => s.house);
   // Dữ liệu biểu mẫu và trạng thái của các thao tác bất đồng bộ.
-  const [address, setAddress] = useState('');
-  const [isOpenStreetMapAddress, setIsOpenStreetMapAddress] = useState(false);
+  const [address, setAddress] = useState(house?.address || '');
   const [coordinates, setCoordinates] = useState<{ latitude: number; longitude: number } | null>(null);
   const [senderName, setSenderName] = useState(userName || full_name || '');
   const [senderPhone, setSenderPhone] = useState(userPhone || phone_number || '');
@@ -111,42 +142,59 @@ export default function EmergencySOSScreen({ navigation }: any) {
       const position = await Location.getCurrentPositionAsync({ accuracy: Location.Accuracy.High });
       const { latitude, longitude } = position.coords;
       setCoordinates({ latitude, longitude });
-      setAddress('');
-      setIsOpenStreetMapAddress(false);
 
       try {
-        let resolvedAddress: string | null | undefined;
+        let resolvedAddress = '';
         if (Platform.OS === 'web') {
-          // Trên web, dùng Photon; ứng dụng native dùng reverse geocoding của Expo.
-          resolvedAddress = await getOpenStreetMapAddress(latitude, longitude);
-          setIsOpenStreetMapAddress(Boolean(resolvedAddress));
+          resolvedAddress = await resolveAddressFromCoords(latitude, longitude);
         } else {
-          const places = await Location.reverseGeocodeAsync({ latitude, longitude });
-          const place = places[0];
-          const street = [place?.streetNumber, place?.street].filter(Boolean).join(' ');
-          resolvedAddress = uniqueAddressParts([
-            street,
-            place?.name,
-            place?.district,
-            place?.subregion,
-            place?.city,
-            place?.region,
-            place?.country,
-          ]).join(', ');
+          try {
+            const places = await Location.reverseGeocodeAsync({ latitude, longitude });
+            const place = places[0];
+            const street = [place?.streetNumber, place?.street].filter(Boolean).join(' ');
+            const resolved = uniqueAddressParts([
+              street,
+              place?.name,
+              place?.district,
+              place?.subregion,
+              place?.city,
+              place?.region,
+              place?.country,
+            ]).join(', ');
+            // Nếu định vị native không trích xuất được số nhà/tên đường thì bổ sung từ Photon
+            if (!street) {
+              const detailedAddr = await resolveAddressFromCoords(latitude, longitude);
+              resolvedAddress = detailedAddr || resolved;
+            } else {
+              resolvedAddress = resolved;
+            }
+          } catch {
+            resolvedAddress = await resolveAddressFromCoords(latitude, longitude);
+          }
         }
-        // Lưu địa chỉ nếu tìm được; tọa độ vẫn có thể dùng để gửi SOS nếu không có địa chỉ.
-        setAddress(resolvedAddress || '');
-        if (!resolvedAddress) {
-          Alert.alert('Không tìm được địa chỉ chi tiết', 'Đã lưu tọa độ hiện tại để gửi cảnh báo.');
+
+        // Nếu geocode không lấy được tên cụ thể thì ưu tiên lấy địa chỉ nhà đã lưu
+        if (!resolvedAddress && house?.address) {
+          resolvedAddress = house.address;
+        }
+
+        if (resolvedAddress) {
+          setAddress(resolvedAddress);
+        } else {
+          Alert.alert('Không tìm được địa chỉ chi tiết', 'Đã lưu tọa độ GPS hiện tại để gửi cấp cứu.');
         }
       } catch (error) {
         console.warn('[EmergencySOSScreen] Could not resolve current address:', error);
-        setAddress('');
-        Alert.alert('Không tìm được địa chỉ chi tiết', 'Đã lưu tọa độ hiện tại để gửi cảnh báo.');
+        if (house?.address) {
+          setAddress(house.address);
+        }
       }
     } catch (error) {
       console.warn('[EmergencySOSScreen] Could not get current location:', error);
-      Alert.alert('Không lấy được vị trí', 'Vui lòng thử lại hoặc nhập địa chỉ cấp cứu thủ công.');
+      if (house?.address) {
+        setAddress(house.address);
+      }
+      Alert.alert('Không lấy được vị trí GPS', 'Đã tải địa chỉ nhà hoặc bạn có thể nhập thủ công.');
     } finally {
       setIsGettingLocation(false);
     }
@@ -160,7 +208,7 @@ export default function EmergencySOSScreen({ navigation }: any) {
     const url = Platform.select({
       ios: `maps://?q=${query}`,
       android: `geo:0,0?q=${query}`,
-      default: `https://www.openstreetmap.org/search?query=${query}`,
+      default: `https://www.google.com/maps/search/?api=1&query=${query}`,
     });
     if (!url) return;
 
@@ -169,15 +217,6 @@ export default function EmergencySOSScreen({ navigation }: any) {
     } catch (error) {
       console.warn('[EmergencySOSScreen] Could not open map application:', error);
       Alert.alert('Không mở được bản đồ', 'Bạn có thể nhập địa chỉ cấp cứu vào ô địa chỉ.');
-    }
-  };
-
-  const handleOpenOpenStreetMapAttribution = async () => {
-    try {
-      await Linking.openURL('https://www.openstreetmap.org/copyright');
-    } catch (error) {
-      console.warn('[EmergencySOSScreen] Could not open OpenStreetMap attribution:', error);
-      Alert.alert('Không mở được liên kết', 'Bạn có thể tìm hiểu về OpenStreetMap tại openstreetmap.org.');
     }
   };
 
@@ -268,22 +307,12 @@ export default function EmergencySOSScreen({ navigation }: any) {
           value={address}
           onChangeText={(value) => {
             setAddress(value);
-            setIsOpenStreetMapAddress(false);
           }}
         />
 
         {coordinates && (
           <Text style={[styles.coordinates, { color: colors.textSecondary }]}>
             Tọa độ: {coordinates.latitude.toFixed(6)}, {coordinates.longitude.toFixed(6)}
-          </Text>
-        )}
-        {isOpenStreetMapAddress && (
-          <Text
-            accessibilityRole="link"
-            onPress={handleOpenOpenStreetMapAttribution}
-            style={[styles.coordinates, { color: colors.textSecondary, textDecorationLine: 'underline' }]}
-          >
-            © OpenStreetMap contributors
           </Text>
         )}
 
@@ -305,6 +334,27 @@ export default function EmergencySOSScreen({ navigation }: any) {
               {isGettingLocation ? 'Đang lấy vị trí hiện tại...' : 'Vị trí hiện tại'}
             </Text>
           </TouchableOpacity>
+          {Boolean(house?.address) && (
+            <>
+              <View style={[styles.divider, { backgroundColor: colors.border }]} />
+              <TouchableOpacity
+                accessibilityRole="button"
+                style={styles.optionRow}
+                onPress={() => {
+                  setAddress(house?.address || '');
+                }}
+                activeOpacity={0.75}
+              >
+                <Ionicons name="home" size={20} color={colors.primary} />
+                <View style={{ flex: 1 }}>
+                  <Text style={[styles.optionText, { color: colors.textPrimary }]}>Dùng địa chỉ nhà của tôi</Text>
+                  <Text style={{ fontSize: 12, color: colors.textSecondary }} numberOfLines={1}>
+                    {house?.address}
+                  </Text>
+                </View>
+              </TouchableOpacity>
+            </>
+          )}
           <View style={[styles.divider, { backgroundColor: colors.border }]} />
           <TouchableOpacity
             accessibilityRole="button"

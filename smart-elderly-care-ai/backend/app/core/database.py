@@ -8,6 +8,7 @@ from collections.abc import AsyncGenerator
 import logging
 
 from redis.asyncio import Redis, from_url  # type: ignore[import-untyped]
+from sqlalchemy.engine import make_url
 from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker, create_async_engine
 from sqlalchemy.orm import DeclarativeBase
 
@@ -19,12 +20,46 @@ logger = logging.getLogger(__name__)
 # SQLAlchemy – PostgreSQL / TimescaleDB
 # ---------------------------------------------------------------------------
 
+def _async_database_url(database_url: str):
+    url = make_url(database_url)
+    if url.drivername in {"postgres", "postgresql"}:
+        url = url.set(drivername="postgresql+asyncpg")
+
+    # Supabase pooler cổng 5432 hoạt động ở Session Mode (giới hạn 15 clients).
+    # Tự động chuyển sang cổng 6543 (Transaction Mode) để hỗ trợ đồng thời hàng nghìn kết nối.
+    if url.host and "pooler.supabase.com" in url.host and url.port == 5432:
+        url = url.set(port=6543)
+
+    if url.drivername == "postgresql+asyncpg":
+        query = dict(url.query)
+        sslmode = query.pop("sslmode", None)
+        if sslmode and "ssl" not in query:
+            query["ssl"] = sslmode
+        if (
+            not query.get("ssl")
+            and url.host
+            and (url.host.endswith(".supabase.co") or url.host.endswith(".pooler.supabase.com"))
+        ):
+            query["ssl"] = "require"
+        if query != dict(url.query):
+            url = url.set(query=query)
+
+    return url
+
+
+_db_url = _async_database_url(settings.DATABASE_URL)
+_connect_args = {}
+if _db_url.host and ("supabase.com" in _db_url.host or "supabase.co" in _db_url.host or _db_url.port == 6543):
+    _connect_args["statement_cache_size"] = 0
+
 engine = create_async_engine(
-    settings.DATABASE_URL,
+    _db_url,
     echo=settings.DEBUG,
-    pool_size=10,
-    max_overflow=20,
+    pool_size=5,
+    max_overflow=10,
+    pool_recycle=300,
     pool_pre_ping=True,
+    connect_args=_connect_args,
 )
 
 AsyncSessionFactory = async_sessionmaker(
@@ -76,6 +111,11 @@ async def init_db() -> None:
             await conn.execute(text("ALTER TABLE device_configs ADD COLUMN IF NOT EXISTS is_custom_thresholds BOOLEAN NOT NULL DEFAULT FALSE;"))
             await conn.execute(text("ALTER TABLE vital_signs ADD COLUMN IF NOT EXISTS bp_systolic INTEGER;"))
             await conn.execute(text("ALTER TABLE vital_signs ADD COLUMN IF NOT EXISTS bp_diastolic INTEGER;"))
+            await conn.execute(text("ALTER TABLE house_members ADD COLUMN IF NOT EXISTS can_view_health BOOLEAN DEFAULT TRUE;"))
+            await conn.execute(text("ALTER TABLE house_members ADD COLUMN IF NOT EXISTS can_view_camera BOOLEAN DEFAULT TRUE;"))
+            await conn.execute(text("ALTER TABLE house_members ADD COLUMN IF NOT EXISTS can_handle_emergency BOOLEAN DEFAULT TRUE;"))
+            await conn.execute(text("ALTER TABLE house_members ADD COLUMN IF NOT EXISTS can_manage_devices BOOLEAN DEFAULT FALSE;"))
+            await conn.execute(text("ALTER TABLE house_members ADD COLUMN IF NOT EXISTS can_manage_records BOOLEAN DEFAULT FALSE;"))
             await conn.execute(text("ALTER TABLE users DROP COLUMN IF EXISTS location_address;"))
             await conn.execute(text("ALTER TABLE users DROP COLUMN IF EXISTS location_longitude;"))
             await conn.execute(text("ALTER TABLE users DROP COLUMN IF EXISTS location_latitude;"))
@@ -183,6 +223,45 @@ async def init_db() -> None:
                     updated_at TIMESTAMPTZ NOT NULL DEFAULT CURRENT_TIMESTAMP
                 );
             """))
+            await conn.execute(text("""
+                CREATE TABLE IF NOT EXISTS appointments (
+                    id UUID NOT NULL DEFAULT gen_random_uuid() PRIMARY KEY,
+                    doctor_id UUID REFERENCES users(id) ON DELETE SET NULL,
+                    patient_id UUID NOT NULL,
+                    house_id UUID REFERENCES houses(id) ON DELETE CASCADE,
+                    created_by UUID REFERENCES users(id) ON DELETE SET NULL,
+                    visit_type VARCHAR(30) NOT NULL DEFAULT 'HOME_VISIT',
+                    scheduled_at TIMESTAMPTZ NOT NULL,
+                    duration_minutes INT NOT NULL DEFAULT 30,
+                    location VARCHAR(255) NOT NULL DEFAULT 'Tại nhà (Khám tại gia)',
+                    clinical_notes TEXT,
+                    status VARCHAR(20) NOT NULL DEFAULT 'UPCOMING',
+                    cancellation_reason TEXT,
+                    recurrence_pattern VARCHAR(20) NOT NULL DEFAULT 'NONE',
+                    recurrence_end_date TIMESTAMPTZ,
+                    parent_recurring_id UUID REFERENCES appointments(id) ON DELETE SET NULL,
+                    enable_speaker_reminder BOOLEAN NOT NULL DEFAULT TRUE,
+                    created_at TIMESTAMPTZ NOT NULL DEFAULT CURRENT_TIMESTAMP,
+                    updated_at TIMESTAMPTZ NOT NULL DEFAULT CURRENT_TIMESTAMP
+                );
+            """))
+            await conn.execute(text("CREATE INDEX IF NOT EXISTS ix_appointments_doctor_time ON appointments(doctor_id, scheduled_at);"))
+            await conn.execute(text("CREATE INDEX IF NOT EXISTS ix_appointments_patient_time ON appointments(patient_id, scheduled_at);"))
+            await conn.execute(text("CREATE INDEX IF NOT EXISTS ix_appointments_status ON appointments(status, scheduled_at);"))
+            await conn.execute(text("CREATE INDEX IF NOT EXISTS ix_appointments_house_id ON appointments(house_id);"))
+            await conn.execute(text("""
+                CREATE TABLE IF NOT EXISTS appointment_reminders (
+                    id UUID NOT NULL DEFAULT gen_random_uuid() PRIMARY KEY,
+                    appointment_id UUID NOT NULL REFERENCES appointments(id) ON DELETE CASCADE,
+                    reminder_type VARCHAR(20) NOT NULL,
+                    scheduled_time TIMESTAMPTZ NOT NULL,
+                    status VARCHAR(20) NOT NULL DEFAULT 'PENDING',
+                    sent_at TIMESTAMPTZ,
+                    created_at TIMESTAMPTZ NOT NULL DEFAULT CURRENT_TIMESTAMP
+                );
+            """))
+            await conn.execute(text("CREATE INDEX IF NOT EXISTS ix_reminders_status_time ON appointment_reminders(status, scheduled_time);"))
+            await conn.execute(text("CREATE INDEX IF NOT EXISTS ix_reminders_appointment_id ON appointment_reminders(appointment_id);"))
 
         # 3. Dữ liệu khởi tạo (Seeding an toàn)
         try:

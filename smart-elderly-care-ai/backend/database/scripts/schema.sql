@@ -1,752 +1,520 @@
 -- =================================================================
--- SMART ELDERLY CARE AI (SECA) - DATABASE SCHEMA & RELATIONSHIPS
--- PostgreSQL 16 + TimescaleDB (Docker)
--- Đồ án tốt nghiệp: C1SE.34
--- Mô tả: CSDL đồng bộ 100% với Backend FastAPI (SQLAlchemy) & Mobile App
--- Đầy đủ các mối quan hệ (1 - 1, 1 - N, N - N) giữa các thực thể
+-- SMART ELDERLY CARE AI (SECA) - DATABASE SCHEMA & FULL SEED DATA
+-- PostgreSQL 16 + TimescaleDB (Docker Local) & Supabase Cloud PG17
+-- Đồng bộ tự động từ Supabase lúc: 2026-10-23 16:33:37
 -- =================================================================
 
 -- PHẦN 1: KÍCH HOẠT EXTENSIONS
 CREATE EXTENSION IF NOT EXISTS "uuid-ossp";
 CREATE EXTENSION IF NOT EXISTS "pgcrypto";
--- Kích hoạt TimescaleDB (nếu server có cài đặt TimescaleDB, nếu không có sẽ bỏ qua an toàn):
 DO $$
 BEGIN
     CREATE EXTENSION IF NOT EXISTS "timescaledb" CASCADE;
 EXCEPTION WHEN OTHERS THEN
-    RAISE NOTICE 'TimescaleDB extension khong co san tren may chu PostgreSQL nay, he thong se dung bang chuan PostgreSQL.';
+    RAISE NOTICE 'TimescaleDB khong co san, he thong se dung bang chuan PostgreSQL.';
 END $$;
 
--- PHẦN 2: XÓA BẢNG CŨ THEO THỨ TỰ RÀNG BUỘC KHÓA NGOẠI (NẾU CẦN RESET)
-DROP TABLE IF EXISTS vital_signs CASCADE;
-DROP TABLE IF EXISTS incidents CASCADE;
-DROP TABLE IF EXISTS chat_messages CASCADE;
-DROP TABLE IF EXISTS chat_sessions CASCADE;
-DROP TABLE IF EXISTS device_configs CASCADE;
-DROP TABLE IF EXISTS devices CASCADE;
-DROP TABLE IF EXISTS device_groups CASCADE;
-DROP TABLE IF EXISTS elderly_profiles CASCADE;
-DROP TABLE IF EXISTS house_members CASCADE;
-DROP TABLE IF EXISTS houses CASCADE;
-DROP TABLE IF EXISTS users CASCADE;
-DROP TABLE IF EXISTS audit_logs CASCADE;
-DROP TABLE IF EXISTS system_incidents CASCADE;
-DROP TABLE IF EXISTS system_notifications CASCADE;
-DROP TABLE IF EXISTS security_policies CASCADE;
+-- PHẦN 2: XÓA CÁC BẢNG CŨ THEO THỨ TỰ RÀNG BUỘC (CASCADE)
+DROP TABLE IF EXISTS "user_login_histories" CASCADE;
+DROP TABLE IF EXISTS "user_terminals" CASCADE;
+DROP TABLE IF EXISTS "system_notifications" CASCADE;
+DROP TABLE IF EXISTS "system_incidents" CASCADE;
+DROP TABLE IF EXISTS "audit_logs" CASCADE;
+DROP TABLE IF EXISTS "support_tickets" CASCADE;
+DROP TABLE IF EXISTS "security_policies" CASCADE;
+DROP TABLE IF EXISTS "appointment_reminders" CASCADE;
+DROP TABLE IF EXISTS "appointments" CASCADE;
+DROP TABLE IF EXISTS "chat_messages" CASCADE;
+DROP TABLE IF EXISTS "chat_sessions" CASCADE;
+DROP TABLE IF EXISTS "incidents" CASCADE;
+DROP TABLE IF EXISTS "vital_signs" CASCADE;
+DROP TABLE IF EXISTS "device_configs" CASCADE;
+DROP TABLE IF EXISTS "devices" CASCADE;
+DROP TABLE IF EXISTS "device_groups" CASCADE;
+DROP TABLE IF EXISTS "elderly_profiles" CASCADE;
+DROP TABLE IF EXISTS "house_members" CASCADE;
+DROP TABLE IF EXISTS "houses" CASCADE;
+DROP TABLE IF EXISTS "users" CASCADE;
 
--- =================================================================
--- PHẦN 3: ĐỊNH NGHĨA CÁC BẢNG & MỐI QUAN HỆ RÀNG BUỘC (FOREIGN KEYS)
--- =================================================================
+-- PHẦN 3: TẠO CÁC BẢNG (DDL)
 
--- -----------------------------------------------------------------
--- 1. Bảng users: Tài khoản người dùng (Người chăm sóc, Bác sĩ, Admin)
---    ĐĂNG NHẬP DUY NHẤT: Bằng SỐ ĐIỆN THOẠI (phone) + Mật khẩu
--- -----------------------------------------------------------------
-CREATE TABLE users (
-    id UUID NOT NULL DEFAULT gen_random_uuid(),
-    phone VARCHAR(20) NOT NULL,                        -- SỐ ĐIỆN THOẠI ĐĂNG NHẬP CHÍNH
-    full_name VARCHAR(255) NOT NULL,
-    hashed_password VARCHAR(255) NOT NULL,
-    role VARCHAR(20) NOT NULL DEFAULT 'user' CHECK (role IN ('user', 'caregiver', 'doctor', 'admin')),  -- 'user', 'caregiver', 'doctor', 'admin'
-    preferred_language VARCHAR(5) NOT NULL DEFAULT 'vi', -- Ngôn ngữ hiển thị ('vi', 'en')
-    font_size_mode VARCHAR(20) NOT NULL DEFAULT 'system', -- Cỡ chữ ('system', 'custom')
-    custom_font_scale INT NOT NULL DEFAULT 2,          -- Tỷ lệ phóng to chữ
-    vibration_enabled BOOLEAN NOT NULL DEFAULT TRUE,   -- Rung thông báo SOS
-    avatar_url VARCHAR(500),                           -- Ảnh đại diện người dùng
-    is_active BOOLEAN NOT NULL DEFAULT TRUE,
-    fcm_token VARCHAR(500),
-    created_at TIMESTAMPTZ NOT NULL DEFAULT CURRENT_TIMESTAMP,
-    updated_at TIMESTAMPTZ NOT NULL DEFAULT CURRENT_TIMESTAMP,
-    last_login_at TIMESTAMPTZ,
-
-    CONSTRAINT pk_users PRIMARY KEY (id),
-    CONSTRAINT uq_users_phone UNIQUE (phone)
+-- Bảng users
+CREATE TABLE "users" (
+    "id" UUID NOT NULL,
+    "full_name" VARCHAR(255) NOT NULL,
+    "hashed_password" VARCHAR(255) NOT NULL,
+    "phone" VARCHAR(20) NULL,
+    "avatar_url" TEXT NULL,
+    "role" VARCHAR(20) NOT NULL,
+    "preferred_language" VARCHAR(5) NOT NULL DEFAULT 'vi'::character varying,
+    "font_size_mode" VARCHAR(20) NOT NULL DEFAULT 'system'::character varying,
+    "custom_font_scale" INTEGER NOT NULL DEFAULT 2,
+    "vibration_enabled" BOOLEAN NOT NULL DEFAULT true,
+    "notifications_enabled" BOOLEAN NOT NULL DEFAULT true,
+    "alert_sound_enabled" BOOLEAN NOT NULL DEFAULT true,
+    "critical_alert_enabled" BOOLEAN NOT NULL DEFAULT true,
+    "cchn_number" VARCHAR(50) NULL,
+    "specialty" VARCHAR(255) NULL,
+    "workplace" VARCHAR(255) NULL,
+    "is_active" BOOLEAN NOT NULL,
+    "fcm_token" VARCHAR(500) NULL,
+    "created_at" TIMESTAMPTZ NOT NULL DEFAULT now(),
+    "updated_at" TIMESTAMPTZ NOT NULL DEFAULT now(),
+    "last_login_at" TIMESTAMPTZ NULL,
+    CONSTRAINT pk_users PRIMARY KEY (id)
 );
-CREATE UNIQUE INDEX ix_users_phone ON users(phone);
 
--- -----------------------------------------------------------------
--- 2. Bảng houses: Căn nhà thông minh / Không gian giám sát
---    MỐI QUAN HỆ:
---    - [users] 1 -- n [houses]: Một người dùng có thể sở hữu nhiều căn nhà
--- -----------------------------------------------------------------
-CREATE TABLE houses (
-    id UUID NOT NULL DEFAULT gen_random_uuid(),
-    name VARCHAR(150) NOT NULL,
-    address VARCHAR(300),
-    current_mode VARCHAR(20) NOT NULL DEFAULT 'HOME' CHECK (current_mode IN ('HOME', 'AWAY', 'NIGHT', 'DISARM', 'ALARM', 'PRIVACY')),  -- Chế độ an ninh đồng bộ Mobile App
-    owner_id UUID NOT NULL,
-    created_at TIMESTAMPTZ NOT NULL DEFAULT CURRENT_TIMESTAMP,
-    updated_at TIMESTAMPTZ NOT NULL DEFAULT CURRENT_TIMESTAMP,
-
-    CONSTRAINT pk_houses PRIMARY KEY (id),
-    -- Khóa ngoại liên kết tới bảng users:
-    CONSTRAINT fk_houses_owner FOREIGN KEY (owner_id) 
-        REFERENCES users(id) ON DELETE RESTRICT
+-- Bảng houses
+CREATE TABLE "houses" (
+    "id" UUID NOT NULL,
+    "name" VARCHAR(150) NOT NULL,
+    "address" VARCHAR(300) NULL,
+    "current_mode" VARCHAR(20) NOT NULL,
+    "owner_id" UUID NOT NULL,
+    "created_at" TIMESTAMPTZ NOT NULL DEFAULT now(),
+    "updated_at" TIMESTAMPTZ NOT NULL DEFAULT now(),
+    CONSTRAINT pk_houses PRIMARY KEY (id)
 );
-CREATE INDEX ix_houses_owner_id ON houses(owner_id);
 
--- -----------------------------------------------------------------
--- 3. Bảng house_members: BẢNG TRUNG GIAN QUAN HỆ NHIỀU - NHIỀU (N - N)
---    MỐI QUAN HỆ:
---    - [users] n -- n [houses]: Nhiều người chăm sóc có thể cùng quản lý nhiều căn nhà
--- -----------------------------------------------------------------
-CREATE TABLE house_members (
-    id UUID NOT NULL DEFAULT gen_random_uuid(),
-    house_id UUID NOT NULL,
-    user_id UUID NOT NULL,
-    role_in_house VARCHAR(50) NOT NULL DEFAULT 'OWNER' CHECK (role_in_house IN ('OWNER', 'CAREGIVER', 'DOCTOR', 'RELATIVE')), -- 'OWNER', 'CAREGIVER', 'DOCTOR', 'RELATIVE'
-    permissions VARCHAR(50) NOT NULL DEFAULT 'VIEW' CHECK (permissions IN ('ADMIN', 'EDIT', 'VIEW', 'OPERATOR')),     -- 'ADMIN', 'EDIT', 'VIEW', 'OPERATOR'
-    joined_at TIMESTAMPTZ NOT NULL DEFAULT CURRENT_TIMESTAMP,
-
+-- Bảng house_members
+CREATE TABLE "house_members" (
+    "id" UUID NOT NULL,
+    "house_id" UUID NOT NULL,
+    "user_id" UUID NOT NULL,
+    "role_in_house" VARCHAR(50) NOT NULL,
+    "permissions" VARCHAR(50) NOT NULL,
+    "can_view_health" BOOLEAN NOT NULL DEFAULT true,
+    "can_view_camera" BOOLEAN NOT NULL DEFAULT true,
+    "can_handle_emergency" BOOLEAN NOT NULL DEFAULT true,
+    "can_manage_devices" BOOLEAN NOT NULL DEFAULT false,
+    "can_manage_records" BOOLEAN NOT NULL DEFAULT false,
+    "joined_at" TIMESTAMPTZ NOT NULL DEFAULT now(),
     CONSTRAINT pk_house_members PRIMARY KEY (id),
-    CONSTRAINT uq_house_member UNIQUE (house_id, user_id),
-    
-    -- Khóa ngoại liên kết tới bảng houses & users:
-    CONSTRAINT fk_house_members_house FOREIGN KEY (house_id) 
-        REFERENCES houses(id) ON DELETE CASCADE,
-    CONSTRAINT fk_house_members_user FOREIGN KEY (user_id) 
-        REFERENCES users(id) ON DELETE CASCADE
+    CONSTRAINT uq_house_member UNIQUE (house_id, user_id)
 );
-CREATE INDEX ix_house_members_house_id ON house_members(house_id);
-CREATE INDEX ix_house_members_user_id ON house_members(user_id);
 
--- -----------------------------------------------------------------
--- 4. Bảng elderly_profiles: Hồ sơ người cao tuổi được chăm sóc
---    MỐI QUAN HỆ:
---    - [houses] 1 -- n [elderly_profiles]: Một căn nhà có thể có nhiều người cao tuổi sống chung
--- -----------------------------------------------------------------
-CREATE TABLE elderly_profiles (
-    id UUID NOT NULL DEFAULT gen_random_uuid(),
-    house_id UUID NOT NULL,
-    full_name VARCHAR(150) NOT NULL,
-    birth_year INT,
-    gender VARCHAR(20) CHECK (gender IN ('MALE', 'FEMALE')),        -- 'MALE', 'FEMALE'
-    medical_history TEXT,                              -- Tiền sử bệnh án (tim mạch, huyết áp...)
-    emergency_contact_phone VARCHAR(20),               -- SĐT người thân khẩn cấp
-    avatar_url VARCHAR(500),
-    face_embedding TEXT,                               -- Vector 128-D nhận diện khuôn mặt AI
-    created_at TIMESTAMPTZ NOT NULL DEFAULT CURRENT_TIMESTAMP,
-    updated_at TIMESTAMPTZ NOT NULL DEFAULT CURRENT_TIMESTAMP,
-
-    CONSTRAINT pk_elderly_profiles PRIMARY KEY (id),
-    -- Khóa ngoại liên kết tới căn nhà:
-    CONSTRAINT fk_elderly_profiles_house FOREIGN KEY (house_id) 
-        REFERENCES houses(id) ON DELETE CASCADE
+-- Bảng elderly_profiles
+CREATE TABLE "elderly_profiles" (
+    "id" UUID NOT NULL,
+    "house_id" UUID NOT NULL,
+    "full_name" VARCHAR(150) NOT NULL,
+    "birth_year" INTEGER NULL,
+    "gender" VARCHAR(20) NULL,
+    "medical_history" TEXT NULL,
+    "conditions_json" TEXT NULL,
+    "blood_type" VARCHAR(10) NULL,
+    "height_cm" INTEGER NULL,
+    "weight_kg" INTEGER NULL,
+    "drug_allergies" TEXT NULL,
+    "food_allergies" TEXT NULL,
+    "dietary_notes" TEXT NULL,
+    "emergency_contact_phone" VARCHAR(20) NULL,
+    "avatar_url" VARCHAR(500) NULL,
+    "face_embedding" TEXT NULL,
+    "created_at" TIMESTAMPTZ NOT NULL DEFAULT now(),
+    "updated_at" TIMESTAMPTZ NOT NULL DEFAULT now(),
+    CONSTRAINT pk_elderly_profiles PRIMARY KEY (id)
 );
-CREATE INDEX ix_elderly_profiles_house_id ON elderly_profiles(house_id);
 
--- -----------------------------------------------------------------
--- 5. Bảng device_groups: Nhóm phân vùng / Phòng (Phòng khách, Phòng ngủ...)
---    MỐI QUAN HỆ:
---    - [houses] 1 -- n [device_groups]: Một căn nhà được chia thành nhiều phòng/khu vực
--- -----------------------------------------------------------------
-CREATE TABLE device_groups (
-    id UUID NOT NULL DEFAULT gen_random_uuid(),
-    house_id UUID NOT NULL,
-    name VARCHAR(100) NOT NULL,
-    description VARCHAR(255),
-    icon VARCHAR(50) NOT NULL DEFAULT 'folder',
-    color VARCHAR(20) NOT NULL DEFAULT '#7C3AED',
-    sort_order INT NOT NULL DEFAULT 0,
-    created_at TIMESTAMPTZ NOT NULL DEFAULT CURRENT_TIMESTAMP,
-    updated_at TIMESTAMPTZ NOT NULL DEFAULT CURRENT_TIMESTAMP,
-
+-- Bảng device_groups
+CREATE TABLE "device_groups" (
+    "id" UUID NOT NULL,
+    "house_id" UUID NOT NULL,
+    "name" VARCHAR(100) NOT NULL,
+    "description" VARCHAR(255) NULL,
+    "icon" VARCHAR(50) NOT NULL,
+    "color" VARCHAR(20) NOT NULL,
+    "sort_order" INTEGER NOT NULL,
+    "created_at" TIMESTAMPTZ NOT NULL DEFAULT now(),
+    "updated_at" TIMESTAMPTZ NOT NULL DEFAULT now(),
     CONSTRAINT pk_device_groups PRIMARY KEY (id),
-    CONSTRAINT uq_device_group_house_name UNIQUE (house_id, name),
-    -- Khóa ngoại liên kết tới căn nhà:
-    CONSTRAINT fk_device_groups_house FOREIGN KEY (house_id) 
-        REFERENCES houses(id) ON DELETE CASCADE
-);
-CREATE INDEX ix_device_groups_house_id ON device_groups(house_id);
-
--- -----------------------------------------------------------------
--- 6. Bảng devices: Danh mục thiết bị IoT (Camera AI, Smartband BLE...)
---    MỐI QUAN HỆ:
---    - [users] 1 -- n [devices]: Người dùng sở hữu thiết bị
---    - [houses] 1 -- n [devices]: Căn nhà lắp đặt thiết bị
---    - [device_groups] 1 -- n [devices]: Thiết bị lắp tại phòng cụ thể
---    - [elderly_profiles] 1 -- n [devices]: Thiết bị đeo gán trực tiếp cho người cao tuổi
--- -----------------------------------------------------------------
-CREATE TABLE devices (
-    id UUID NOT NULL DEFAULT gen_random_uuid(),
-    device_id VARCHAR(100) NOT NULL,                   -- Mã phần cứng duy nhất (VD: 'SECA_001', 'BLE_BAND_001', 'HUB_001')
-    name VARCHAR(150) NOT NULL,
-    sub_title VARCHAR(255),
-    device_type VARCHAR(30) NOT NULL DEFAULT 'CAMERA' CHECK (device_type IN ('CAMERA', 'SMARTBAND', 'SENSOR', 'EDGE_HUB')), -- 'CAMERA', 'SMARTBAND', 'SENSOR', 'EDGE_HUB'
-    location VARCHAR(100),
-    is_online BOOLEAN NOT NULL DEFAULT FALSE,
-    status_text VARCHAR(150),
-    battery_level SMALLINT,
-    mac_address VARCHAR(50),
-    ip_address VARCHAR(45),
-    firmware_version VARCHAR(50),
-    last_heartbeat TIMESTAMPTZ,
-    owner_id UUID NOT NULL,
-    house_id UUID,
-    group_id UUID,
-    elderly_id UUID,
-    created_at TIMESTAMPTZ NOT NULL DEFAULT CURRENT_TIMESTAMP,
-    updated_at TIMESTAMPTZ NOT NULL DEFAULT CURRENT_TIMESTAMP,
-
-    CONSTRAINT pk_devices PRIMARY KEY (id),
-    CONSTRAINT uq_devices_device_id UNIQUE (device_id),
-    
-    -- Các Khóa ngoại liên kết:
-    CONSTRAINT fk_devices_owner FOREIGN KEY (owner_id) 
-        REFERENCES users(id) ON DELETE CASCADE,
-    CONSTRAINT fk_devices_house FOREIGN KEY (house_id) 
-        REFERENCES houses(id) ON DELETE CASCADE,
-    CONSTRAINT fk_devices_group FOREIGN KEY (group_id) 
-        REFERENCES device_groups(id) ON DELETE SET NULL,
-    CONSTRAINT fk_devices_elderly FOREIGN KEY (elderly_id) 
-        REFERENCES elderly_profiles(id) ON DELETE SET NULL
-);
-CREATE UNIQUE INDEX ix_devices_device_id ON devices(device_id);
-CREATE INDEX ix_devices_device_type ON devices(device_type);
-CREATE INDEX ix_devices_owner_id ON devices(owner_id);
-CREATE INDEX ix_devices_house_id ON devices(house_id);
-CREATE INDEX ix_devices_group_id ON devices(group_id);
-CREATE INDEX ix_devices_elderly_id ON devices(elderly_id);
-
--- -----------------------------------------------------------------
--- 7. Bảng device_configs: Cấu hình chi tiết & ngưỡng y tế cho thiết bị
--- -----------------------------------------------------------------
--- 7. Bảng device_configs: CẤU HÌNH THIẾT BỊ & THAM SỐ THUẬT TOÁN (Quan hệ 1 - 1)
---    MỐI QUAN HỆ:
---    - [devices] 1 -- 1 [device_configs]: Mỗi thiết bị có đúng một bộ cấu hình ngưỡng
---    - [users] 1 -- n [device_configs]: Chủ nhà hoặc Bác sĩ trực tiếp thiết lập ngưỡng chỉ số
--- -----------------------------------------------------------------
-CREATE TABLE device_configs (
-    device_id UUID NOT NULL,
-    stream_url VARCHAR(500),
-    resolution VARCHAR(20) NOT NULL DEFAULT '1080p',
-    is_sleep BOOLEAN NOT NULL DEFAULT FALSE,
-    is_ai_protect BOOLEAN NOT NULL DEFAULT TRUE,
-    has_two_way_audio BOOLEAN NOT NULL DEFAULT TRUE,
-
-    -- Cấu hình ngưỡng sinh hiệu nhịp tim & SpO2
-    hr_threshold_high INT NOT NULL DEFAULT 120,       -- Ngưỡng nhịp tim cao (BPM)
-    hr_threshold_low INT NOT NULL DEFAULT 50,         -- Ngưỡng nhịp tim thấp (BPM)
-    spo2_threshold_low INT NOT NULL DEFAULT 90,       -- Ngưỡng SpO2 nguy hiểm (%)
-
-    -- Cấu hình ngưỡng huyết áp (Blood Pressure: Tâm thu / Tâm trương)
-    bp_systolic_high INT NOT NULL DEFAULT 140,        -- Ngưỡng huyết áp tâm thu cao (cảnh báo tăng huyết áp, mmHg)
-    bp_systolic_low INT NOT NULL DEFAULT 90,          -- Ngưỡng huyết áp tâm thu thấp (cảnh báo hạ huyết áp, mmHg)
-    bp_diastolic_high INT NOT NULL DEFAULT 90,        -- Ngưỡng huyết áp tâm trương cao (mmHg)
-    bp_diastolic_low INT NOT NULL DEFAULT 60,         -- Ngưỡng huyết áp tâm trương thấp (mmHg)
-
-    -- Cấu hình ngưỡng an toàn & phát hiện té ngã
-    fall_impact_threshold DOUBLE PRECISION NOT NULL DEFAULT 2.5, -- Gia tốc va chạm té ngã (G)
-    immobility_seconds INT NOT NULL DEFAULT 60,       -- Ngưỡng thời gian bất động (giây)
-
-    -- Phân quyền & Quản lý thiết lập (Chủ nhà hoặc Bác sĩ tự set up)
-    is_custom_thresholds BOOLEAN NOT NULL DEFAULT FALSE, -- FALSE: Mặc định y tế; TRUE: Do chủ nhà/bác sĩ tự tùy chỉnh riêng
-    configured_by_user_id UUID,                       -- ID người thực hiện thiết lập (Chủ nhà hoặc Bác sĩ)
-    configured_by_role VARCHAR(20) CHECK (configured_by_role IN ('OWNER', 'DOCTOR', 'SYSTEM')) DEFAULT 'SYSTEM', -- Vai trò người thiết lập
-
-    mqtt_topic VARCHAR(150),
-    extra_settings JSONB,
-    updated_at TIMESTAMPTZ NOT NULL DEFAULT CURRENT_TIMESTAMP,
-
-    CONSTRAINT pk_device_configs PRIMARY KEY (device_id),
-    -- Khóa ngoại quan hệ 1 - 1 với thiết bị:
-    CONSTRAINT fk_device_configs_device FOREIGN KEY (device_id) 
-        REFERENCES devices(id) ON DELETE CASCADE,
-    -- Khóa ngoại liên kết tới người thực hiện cấu hình (users):
-    CONSTRAINT fk_device_configs_configured_by FOREIGN KEY (configured_by_user_id) 
-        REFERENCES users(id) ON DELETE SET NULL
-);
-CREATE INDEX ix_device_configs_configured_by ON device_configs(configured_by_user_id);
-
--- -----------------------------------------------------------------
--- 8. Bảng vital_signs: Dữ liệu chuỗi thời gian (TimescaleDB Hypertable)
---    MỐI QUAN HỆ:
---    - [devices] 1 -- n [vital_signs]: Thiết bị đo và đẩy liên tục dữ liệu sinh hiệu
--- -----------------------------------------------------------------
-CREATE TABLE vital_signs (
-    id UUID NOT NULL DEFAULT gen_random_uuid(),
-    "time" TIMESTAMPTZ NOT NULL DEFAULT CURRENT_TIMESTAMP,
-    device_id UUID NOT NULL,
-    heart_rate INT,                                   -- Nhịp tim (bpm)
-    spo2 INT,                                         -- Nồng độ oxy trong máu (%)
-    bp_systolic INT,                                  -- Huyết áp tâm thu đo được (mmHg)
-    bp_diastolic INT,                                 -- Huyết áp tâm trương đo được (mmHg)
-    skin_temp_max DOUBLE PRECISION,                   -- Nhiệt độ da (°C)
-    person_count INT,                                 -- Số người phát hiện qua Camera AI
-    fall_detected BOOLEAN,                            -- Cờ phát hiện té ngã
-    
-    CONSTRAINT pk_vital_signs PRIMARY KEY (id, "time"),
-    -- Khóa ngoại liên kết tới thiết bị:
-    CONSTRAINT fk_vital_signs_device FOREIGN KEY (device_id) 
-        REFERENCES devices(id) ON DELETE CASCADE
+    CONSTRAINT uq_device_group_house_name UNIQUE (house_id, name)
 );
 
--- Kích hoạt TimescaleDB Hypertable phân vùng theo thời gian (nếu máy chủ có cài đặt TimescaleDB)
+-- Bảng devices
+CREATE TABLE "devices" (
+    "id" UUID NOT NULL,
+    "device_id" VARCHAR(100) NOT NULL,
+    "name" VARCHAR(150) NOT NULL,
+    "sub_title" VARCHAR(255) NULL,
+    "device_type" VARCHAR(30) NOT NULL,
+    "location" VARCHAR(255) NULL,
+    "is_online" BOOLEAN NOT NULL,
+    "status_text" VARCHAR(150) NULL,
+    "battery_level" SMALLINT NULL,
+    "mac_address" VARCHAR(50) NULL,
+    "ip_address" VARCHAR(45) NULL,
+    "firmware_version" VARCHAR(50) NULL,
+    "last_heartbeat" TIMESTAMPTZ NULL,
+    "owner_id" UUID NOT NULL,
+    "house_id" UUID NULL,
+    "group_id" UUID NULL,
+    "elderly_id" UUID NULL,
+    "created_at" TIMESTAMPTZ NOT NULL DEFAULT now(),
+    "updated_at" TIMESTAMPTZ NOT NULL DEFAULT now(),
+    CONSTRAINT pk_devices PRIMARY KEY (id)
+);
+
+-- Bảng device_configs
+CREATE TABLE "device_configs" (
+    "device_id" UUID NOT NULL,
+    "stream_url" VARCHAR(500) NULL,
+    "resolution" VARCHAR(20) NOT NULL,
+    "is_sleep" BOOLEAN NOT NULL,
+    "is_ai_protect" BOOLEAN NOT NULL,
+    "has_two_way_audio" BOOLEAN NOT NULL,
+    "hr_threshold_high" INTEGER NOT NULL,
+    "hr_threshold_low" INTEGER NOT NULL,
+    "spo2_threshold_low" INTEGER NOT NULL,
+    "bp_systolic_high" INTEGER NOT NULL,
+    "bp_systolic_low" INTEGER NOT NULL,
+    "bp_diastolic_high" INTEGER NOT NULL,
+    "bp_diastolic_low" INTEGER NOT NULL,
+    "fall_impact_threshold" DOUBLE PRECISION NOT NULL,
+    "immobility_seconds" INTEGER NOT NULL,
+    "mqtt_topic" VARCHAR(150) NULL,
+    "is_custom_thresholds" BOOLEAN NOT NULL,
+    "configured_by_user_id" UUID NULL,
+    "configured_by_role" VARCHAR(20) NULL,
+    "extra_settings" JSONB NULL,
+    "updated_at" TIMESTAMPTZ NOT NULL DEFAULT now(),
+    CONSTRAINT pk_device_configs PRIMARY KEY (device_id)
+);
+
+-- Bảng vital_signs
+CREATE TABLE "vital_signs" (
+    "id" UUID NOT NULL,
+    "time" TIMESTAMPTZ NOT NULL DEFAULT now(),
+    "device_id" UUID NOT NULL,
+    "heart_rate" INTEGER NULL,
+    "spo2" INTEGER NULL,
+    "bp_systolic" INTEGER NULL,
+    "bp_diastolic" INTEGER NULL,
+    "skin_temp_max" DOUBLE PRECISION NULL,
+    "person_count" INTEGER NULL,
+    "fall_detected" BOOLEAN NULL,
+    CONSTRAINT pk_vital_signs PRIMARY KEY (id, "time")
+);
+
+-- Bảng incidents
+CREATE TABLE "incidents" (
+    "id" UUID NOT NULL,
+    "device_id" UUID NOT NULL,
+    "alert_type" VARCHAR(50) NOT NULL,
+    "alert_level" VARCHAR(20) NOT NULL,
+    "message" TEXT NOT NULL,
+    "confidence" DOUBLE PRECISION NULL,
+    "sources" VARCHAR(255) NULL,
+    "video_clip_url" VARCHAR(1000) NULL,
+    "thumbnail_url" VARCHAR(1000) NULL,
+    "is_acknowledged" BOOLEAN NOT NULL,
+    "acknowledged_by" UUID NULL,
+    "acknowledged_at" TIMESTAMPTZ NULL,
+    "notes" TEXT NULL,
+    "created_at" TIMESTAMPTZ NOT NULL DEFAULT now(),
+    CONSTRAINT pk_incidents PRIMARY KEY (id)
+);
+
+-- Bảng chat_sessions
+CREATE TABLE "chat_sessions" (
+    "id" UUID NOT NULL,
+    "user_id" UUID NOT NULL,
+    "house_id" UUID NULL,
+    "title" VARCHAR(200) NOT NULL,
+    "model_name" VARCHAR(100) NOT NULL,
+    "is_active" BOOLEAN NOT NULL,
+    "created_at" TIMESTAMPTZ NOT NULL DEFAULT now(),
+    "updated_at" TIMESTAMPTZ NOT NULL DEFAULT now(),
+    CONSTRAINT pk_chat_sessions PRIMARY KEY (id)
+);
+
+-- Bảng chat_messages
+CREATE TABLE "chat_messages" (
+    "id" UUID NOT NULL,
+    "session_id" UUID NOT NULL,
+    "sender" VARCHAR(10) NOT NULL,
+    "text" TEXT NOT NULL,
+    "is_error" BOOLEAN NOT NULL,
+    "created_at" TIMESTAMPTZ NOT NULL DEFAULT now(),
+    CONSTRAINT pk_chat_messages PRIMARY KEY (id)
+);
+
+-- Bảng appointments
+CREATE TABLE "appointments" (
+    "id" UUID NOT NULL,
+    "doctor_id" UUID NULL,
+    "patient_id" UUID NOT NULL,
+    "house_id" UUID NULL,
+    "created_by" UUID NULL,
+    "visit_type" VARCHAR(30) NOT NULL,
+    "scheduled_at" TIMESTAMPTZ NOT NULL,
+    "duration_minutes" INTEGER NOT NULL,
+    "location" VARCHAR(255) NOT NULL,
+    "clinical_notes" TEXT NULL,
+    "status" VARCHAR(20) NOT NULL,
+    "cancellation_reason" TEXT NULL,
+    "recurrence_pattern" VARCHAR(20) NOT NULL,
+    "recurrence_end_date" TIMESTAMPTZ NULL,
+    "parent_recurring_id" UUID NULL,
+    "enable_speaker_reminder" BOOLEAN NOT NULL,
+    "created_at" TIMESTAMPTZ NOT NULL DEFAULT now(),
+    "updated_at" TIMESTAMPTZ NOT NULL DEFAULT now(),
+    CONSTRAINT pk_appointments PRIMARY KEY (id)
+);
+
+-- Bảng appointment_reminders
+CREATE TABLE "appointment_reminders" (
+    "id" UUID NOT NULL,
+    "appointment_id" UUID NOT NULL,
+    "reminder_type" VARCHAR(20) NOT NULL,
+    "scheduled_time" TIMESTAMPTZ NOT NULL,
+    "status" VARCHAR(20) NOT NULL,
+    "sent_at" TIMESTAMPTZ NULL,
+    "created_at" TIMESTAMPTZ NOT NULL DEFAULT now(),
+    CONSTRAINT pk_appointment_reminders PRIMARY KEY (id)
+);
+
+-- Bảng security_policies
+CREATE TABLE "security_policies" (
+    "id" VARCHAR(50) NOT NULL,
+    "name" VARCHAR(255) NOT NULL,
+    "description" TEXT NULL,
+    "category" VARCHAR(50) NOT NULL,
+    "enabled" BOOLEAN NOT NULL DEFAULT true,
+    "value" VARCHAR(100) NULL,
+    "updated_at" TIMESTAMPTZ NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    CONSTRAINT pk_security_policies PRIMARY KEY (id)
+);
+
+-- Bảng support_tickets
+CREATE TABLE "support_tickets" (
+    "id" UUID NOT NULL,
+    "user_id" UUID NULL,
+    "user_name" VARCHAR(255) NOT NULL,
+    "phone" VARCHAR(20) NOT NULL,
+    "topic" VARCHAR(255) NOT NULL,
+    "device_type" VARCHAR(50) NOT NULL,
+    "note" TEXT NULL,
+    "status" VARCHAR(50) NOT NULL,
+    "created_at" TIMESTAMPTZ NOT NULL DEFAULT now(),
+    "updated_at" TIMESTAMPTZ NOT NULL DEFAULT now(),
+    CONSTRAINT pk_support_tickets PRIMARY KEY (id)
+);
+
+-- Bảng audit_logs
+CREATE TABLE "audit_logs" (
+    "id" UUID NOT NULL DEFAULT gen_random_uuid(),
+    "timestamp" TIMESTAMPTZ NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    "event" VARCHAR(150) NOT NULL,
+    "user_name" VARCHAR(255) NOT NULL,
+    "ip_address" VARCHAR(50) NOT NULL,
+    "severity" VARCHAR(20) NOT NULL DEFAULT 'low'::character varying,
+    "details" TEXT NOT NULL,
+    CONSTRAINT pk_audit_logs PRIMARY KEY (id)
+);
+
+-- Bảng system_incidents
+CREATE TABLE "system_incidents" (
+    "id" UUID NOT NULL DEFAULT gen_random_uuid(),
+    "timestamp" TIMESTAMPTZ NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    "service" VARCHAR(100) NOT NULL,
+    "incident_type" VARCHAR(20) NOT NULL DEFAULT 'WARNING'::character varying,
+    "message" TEXT NOT NULL,
+    "resolved" BOOLEAN NOT NULL DEFAULT false,
+    "resolved_at" TIMESTAMPTZ NULL,
+    CONSTRAINT pk_system_incidents PRIMARY KEY (id)
+);
+
+-- Bảng system_notifications
+CREATE TABLE "system_notifications" (
+    "id" UUID NOT NULL,
+    "title" VARCHAR(255) NOT NULL,
+    "body" TEXT NOT NULL,
+    "type" VARCHAR(50) NOT NULL,
+    "target_audience" VARCHAR(50) NOT NULL,
+    "status" VARCHAR(50) NOT NULL,
+    "scheduled_at" TIMESTAMPTZ NULL,
+    "published_at" TIMESTAMPTZ NULL,
+    "revoked_at" TIMESTAMPTZ NULL,
+    "revoke_reason" TEXT NULL,
+    "delivered_count" INTEGER NOT NULL,
+    "read_count" INTEGER NOT NULL,
+    "created_by" UUID NULL,
+    "created_at" TIMESTAMPTZ NOT NULL DEFAULT now(),
+    "updated_at" TIMESTAMPTZ NOT NULL DEFAULT now(),
+    "expires_at" TIMESTAMPTZ NULL,
+    CONSTRAINT pk_system_notifications PRIMARY KEY (id)
+);
+
+-- Bảng user_terminals
+CREATE TABLE "user_terminals" (
+    "id" UUID NOT NULL,
+    "user_id" UUID NOT NULL,
+    "device_name" VARCHAR(255) NOT NULL,
+    "device_type" VARCHAR(50) NOT NULL,
+    "os" VARCHAR(100) NULL,
+    "browser" VARCHAR(100) NULL,
+    "ip_address" VARCHAR(50) NOT NULL,
+    "location" VARCHAR(255) NULL,
+    "last_active_at" TIMESTAMPTZ NOT NULL DEFAULT now(),
+    "is_active" BOOLEAN NOT NULL DEFAULT true,
+    "created_at" TIMESTAMPTZ NOT NULL DEFAULT now(),
+    CONSTRAINT pk_user_terminals PRIMARY KEY (id)
+);
+
+-- Bảng user_login_histories
+CREATE TABLE "user_login_histories" (
+    "id" UUID NOT NULL,
+    "user_id" UUID NOT NULL,
+    "device_name" VARCHAR(255) NOT NULL,
+    "ip_address" VARCHAR(50) NOT NULL,
+    "location" VARCHAR(255) NULL,
+    "login_time" TIMESTAMPTZ NOT NULL DEFAULT now(),
+    "login_method" VARCHAR(50) NOT NULL,
+    "status" VARCHAR(20) NOT NULL,
+    "user_agent" VARCHAR(500) NULL,
+    CONSTRAINT pk_user_login_histories PRIMARY KEY (id)
+);
+
+-- =================================================================
+-- PHẦN 4: RÀNG BUỘC KHÓA NGOẠI (FOREIGN KEYS)
+-- =================================================================
+ALTER TABLE "houses" ADD CONSTRAINT "houses_owner_id_fkey" FOREIGN KEY ("owner_id") REFERENCES "users"("id") ON DELETE RESTRICT;
+ALTER TABLE "house_members" ADD CONSTRAINT "house_members_house_id_fkey" FOREIGN KEY ("house_id") REFERENCES "houses"("id") ON DELETE CASCADE;
+ALTER TABLE "house_members" ADD CONSTRAINT "house_members_user_id_fkey" FOREIGN KEY ("user_id") REFERENCES "users"("id") ON DELETE CASCADE;
+ALTER TABLE "elderly_profiles" ADD CONSTRAINT "elderly_profiles_house_id_fkey" FOREIGN KEY ("house_id") REFERENCES "houses"("id") ON DELETE CASCADE;
+ALTER TABLE "device_groups" ADD CONSTRAINT "device_groups_house_id_fkey" FOREIGN KEY ("house_id") REFERENCES "houses"("id") ON DELETE CASCADE;
+ALTER TABLE "devices" ADD CONSTRAINT "devices_elderly_id_fkey" FOREIGN KEY ("elderly_id") REFERENCES "elderly_profiles"("id") ON DELETE SET NULL;
+ALTER TABLE "devices" ADD CONSTRAINT "devices_group_id_fkey" FOREIGN KEY ("group_id") REFERENCES "device_groups"("id") ON DELETE SET NULL;
+ALTER TABLE "devices" ADD CONSTRAINT "devices_house_id_fkey" FOREIGN KEY ("house_id") REFERENCES "houses"("id") ON DELETE CASCADE;
+ALTER TABLE "devices" ADD CONSTRAINT "devices_owner_id_fkey" FOREIGN KEY ("owner_id") REFERENCES "users"("id") ON DELETE CASCADE;
+ALTER TABLE "device_configs" ADD CONSTRAINT "device_configs_configured_by_user_id_fkey" FOREIGN KEY ("configured_by_user_id") REFERENCES "users"("id") ON DELETE SET NULL;
+ALTER TABLE "device_configs" ADD CONSTRAINT "device_configs_device_id_fkey" FOREIGN KEY ("device_id") REFERENCES "devices"("id") ON DELETE CASCADE;
+ALTER TABLE "vital_signs" ADD CONSTRAINT "vital_signs_device_id_fkey" FOREIGN KEY ("device_id") REFERENCES "devices"("id") ON DELETE NO ACTION;
+ALTER TABLE "incidents" ADD CONSTRAINT "incidents_acknowledged_by_fkey" FOREIGN KEY ("acknowledged_by") REFERENCES "users"("id") ON DELETE NO ACTION;
+ALTER TABLE "incidents" ADD CONSTRAINT "incidents_device_id_fkey" FOREIGN KEY ("device_id") REFERENCES "devices"("id") ON DELETE NO ACTION;
+ALTER TABLE "chat_sessions" ADD CONSTRAINT "chat_sessions_house_id_fkey" FOREIGN KEY ("house_id") REFERENCES "houses"("id") ON DELETE SET NULL;
+ALTER TABLE "chat_sessions" ADD CONSTRAINT "chat_sessions_user_id_fkey" FOREIGN KEY ("user_id") REFERENCES "users"("id") ON DELETE CASCADE;
+ALTER TABLE "chat_messages" ADD CONSTRAINT "chat_messages_session_id_fkey" FOREIGN KEY ("session_id") REFERENCES "chat_sessions"("id") ON DELETE CASCADE;
+ALTER TABLE "appointments" ADD CONSTRAINT "appointments_created_by_fkey" FOREIGN KEY ("created_by") REFERENCES "users"("id") ON DELETE SET NULL;
+ALTER TABLE "appointments" ADD CONSTRAINT "appointments_doctor_id_fkey" FOREIGN KEY ("doctor_id") REFERENCES "users"("id") ON DELETE SET NULL;
+ALTER TABLE "appointments" ADD CONSTRAINT "appointments_house_id_fkey" FOREIGN KEY ("house_id") REFERENCES "houses"("id") ON DELETE CASCADE;
+ALTER TABLE "appointments" ADD CONSTRAINT "appointments_parent_recurring_id_fkey" FOREIGN KEY ("parent_recurring_id") REFERENCES "appointments"("id") ON DELETE SET NULL;
+ALTER TABLE "appointment_reminders" ADD CONSTRAINT "appointment_reminders_appointment_id_fkey" FOREIGN KEY ("appointment_id") REFERENCES "appointments"("id") ON DELETE CASCADE;
+ALTER TABLE "support_tickets" ADD CONSTRAINT "support_tickets_user_id_fkey" FOREIGN KEY ("user_id") REFERENCES "users"("id") ON DELETE SET NULL;
+ALTER TABLE "system_notifications" ADD CONSTRAINT "system_notifications_created_by_fkey" FOREIGN KEY ("created_by") REFERENCES "users"("id") ON DELETE SET NULL;
+ALTER TABLE "user_terminals" ADD CONSTRAINT "user_terminals_user_id_fkey" FOREIGN KEY ("user_id") REFERENCES "users"("id") ON DELETE CASCADE;
+ALTER TABLE "user_login_histories" ADD CONSTRAINT "user_login_histories_user_id_fkey" FOREIGN KEY ("user_id") REFERENCES "users"("id") ON DELETE CASCADE;
+
+-- =================================================================
+-- PHẦN 5: CHỈ MỤC (INDEXES)
+-- =================================================================
+CREATE UNIQUE INDEX ix_users_phone ON public.users USING btree (phone);
+CREATE INDEX ix_house_members_house_id ON public.house_members USING btree (house_id);
+CREATE INDEX ix_house_members_user_id ON public.house_members USING btree (user_id);
+CREATE INDEX ix_elderly_profiles_house_id ON public.elderly_profiles USING btree (house_id);
+CREATE INDEX ix_device_groups_house_id ON public.device_groups USING btree (house_id);
+CREATE UNIQUE INDEX ix_devices_device_id ON public.devices USING btree (device_id);
+CREATE INDEX ix_devices_device_type ON public.devices USING btree (device_type);
+CREATE INDEX ix_devices_elderly_id ON public.devices USING btree (elderly_id);
+CREATE INDEX ix_devices_group_id ON public.devices USING btree (group_id);
+CREATE INDEX ix_devices_house_id ON public.devices USING btree (house_id);
+CREATE INDEX ix_devices_last_heartbeat ON public.devices USING btree (last_heartbeat);
+CREATE INDEX ix_devices_owner_id ON public.devices USING btree (owner_id);
+CREATE INDEX ix_device_configs_configured_by_user_id ON public.device_configs USING btree (configured_by_user_id);
+CREATE INDEX ix_vital_signs_device_id ON public.vital_signs USING btree (device_id);
+CREATE INDEX ix_vital_signs_time ON public.vital_signs USING btree ("time");
+CREATE INDEX ix_incidents_created_at ON public.incidents USING btree (created_at);
+CREATE INDEX ix_incidents_device_id ON public.incidents USING btree (device_id);
+CREATE INDEX ix_chat_sessions_created_at ON public.chat_sessions USING btree (created_at);
+CREATE INDEX ix_chat_sessions_user_id ON public.chat_sessions USING btree (user_id);
+CREATE INDEX ix_chat_messages_created_at ON public.chat_messages USING btree (created_at);
+CREATE INDEX ix_chat_messages_session_id ON public.chat_messages USING btree (session_id);
+CREATE INDEX ix_appointments_doctor_id ON public.appointments USING btree (doctor_id);
+CREATE INDEX ix_appointments_doctor_time ON public.appointments USING btree (doctor_id, scheduled_at);
+CREATE INDEX ix_appointments_house_id ON public.appointments USING btree (house_id);
+CREATE INDEX ix_appointments_parent_recurring_id ON public.appointments USING btree (parent_recurring_id);
+CREATE INDEX ix_appointments_patient_id ON public.appointments USING btree (patient_id);
+CREATE INDEX ix_appointments_patient_time ON public.appointments USING btree (patient_id, scheduled_at);
+CREATE INDEX ix_appointments_scheduled_at ON public.appointments USING btree (scheduled_at);
+CREATE INDEX ix_appointments_status ON public.appointments USING btree (status);
+CREATE INDEX ix_appointment_reminders_appointment_id ON public.appointment_reminders USING btree (appointment_id);
+CREATE INDEX ix_appointment_reminders_scheduled_time ON public.appointment_reminders USING btree (scheduled_time);
+CREATE INDEX ix_appointment_reminders_status ON public.appointment_reminders USING btree (status);
+CREATE INDEX ix_reminders_appointment_id ON public.appointment_reminders USING btree (appointment_id);
+CREATE INDEX ix_reminders_status_time ON public.appointment_reminders USING btree (status, scheduled_time);
+CREATE INDEX ix_audit_logs_timestamp ON public.audit_logs USING btree ("timestamp" DESC);
+CREATE INDEX ix_system_incidents_timestamp ON public.system_incidents USING btree ("timestamp" DESC);
+CREATE INDEX ix_system_notifications_created_at ON public.system_notifications USING btree (created_at);
+CREATE INDEX ix_system_notifications_status ON public.system_notifications USING btree (status);
+CREATE INDEX ix_user_terminals_last_active ON public.user_terminals USING btree (last_active_at DESC);
+CREATE INDEX ix_user_terminals_user_id ON public.user_terminals USING btree (user_id);
+CREATE INDEX ix_user_login_histories_login_time ON public.user_login_histories USING btree (login_time);
+CREATE INDEX ix_user_login_histories_user_id ON public.user_login_histories USING btree (user_id);
+
+-- =================================================================
+-- PHẦN 6: TIMESCALEDB HYPERTABLE CHO VITAL_SIGNS
+-- =================================================================
 DO $$
 BEGIN
     IF EXISTS (SELECT 1 FROM pg_extension WHERE extname = 'timescaledb') THEN
         PERFORM create_hypertable('vital_signs', 'time', if_not_exists => TRUE);
-    ELSE
-        RAISE NOTICE 'Bỏ qua tạo hypertable vì TimescaleDB chưa được kích hoạt trên database này.';
     END IF;
+EXCEPTION WHEN OTHERS THEN
+    RAISE NOTICE 'Bo qua tao hypertable vi TimescaleDB chua san sang.';
 END $$;
-CREATE INDEX IF NOT EXISTS ix_vital_signs_device_id ON vital_signs(device_id);
-CREATE INDEX IF NOT EXISTS ix_vital_signs_time ON vital_signs("time" DESC);
-
--- -----------------------------------------------------------------
--- 9. Bảng incidents: Nhật ký sự cố & cảnh báo khẩn cấp (SOS, Té ngã...)
---    MỐI QUAN HỆ:
---    - [devices] 1 -- n [incidents]: Thiết bị ghi nhận các sự cố khẩn cấp
---    - [users] 1 -- n [incidents]: Người dùng/bác sĩ xử lý và xác nhận sự cố
--- -----------------------------------------------------------------
-CREATE TABLE incidents (
-    id UUID NOT NULL DEFAULT gen_random_uuid(),
-    device_id UUID NOT NULL,
-    alert_type VARCHAR(50) NOT NULL,                  -- 'FALL_DETECTED', 'LOW_SPO2', 'HIGH_HR', 'IMMOBILITY', 'SOS'
-    alert_level VARCHAR(20) NOT NULL DEFAULT 'HIGH' CHECK (alert_level IN ('LOW', 'MEDIUM', 'HIGH', 'CRITICAL')),  -- 'LOW', 'MEDIUM', 'HIGH', 'CRITICAL'
-    message TEXT NOT NULL,
-    confidence DOUBLE PRECISION,                      -- Độ tin cậy thuật toán AI (0.0 -> 1.0)
-    sources VARCHAR(255),                             -- Nguồn phát hiện ('VISION', 'SENSOR', 'FUSION')
-    video_clip_url VARCHAR(1000),                     -- Đường dẫn clip 5s ghi nhận sự cố (MinIO)
-    thumbnail_url VARCHAR(1000),                      -- Ảnh chụp bằng chứng lúc xảy ra sự cố
-    is_acknowledged BOOLEAN NOT NULL DEFAULT FALSE,   -- Đã xác nhận cảnh báo hay chưa
-    acknowledged_by UUID,
-    acknowledged_at TIMESTAMPTZ,
-    notes TEXT,
-    created_at TIMESTAMPTZ NOT NULL DEFAULT CURRENT_TIMESTAMP,
-
-    CONSTRAINT pk_incidents PRIMARY KEY (id),
-    -- Các Khóa ngoại liên kết:
-    CONSTRAINT fk_incidents_device FOREIGN KEY (device_id) 
-        REFERENCES devices(id) ON DELETE CASCADE,
-    CONSTRAINT fk_incidents_acknowledged_by FOREIGN KEY (acknowledged_by) 
-        REFERENCES users(id) ON DELETE SET NULL
-);
-CREATE INDEX ix_incidents_device_id ON incidents(device_id);
-CREATE INDEX ix_incidents_created_at ON incidents(created_at DESC);
-
--- -----------------------------------------------------------------
--- 10. Bảng chat_sessions: Phiên hội thoại AI Assistant
---     MỐI QUAN HỆ:
---     - [users] 1 -- n [chat_sessions]: Một người dùng có nhiều phiên chat
---     - [houses] 1 -- n [chat_sessions]: Chat gắn với căn nhà (context người cao tuổi)
--- -----------------------------------------------------------------
-CREATE TABLE chat_sessions (
-    id UUID NOT NULL DEFAULT gen_random_uuid(),
-    user_id UUID NOT NULL,
-    house_id UUID,                                    -- Context căn nhà được hỏi (óptíonal)
-    title VARCHAR(200) NOT NULL DEFAULT 'Cuộc trò chuyện', -- Tiêu đề tự động tạo từ tin nhắn đầu
-    model_name VARCHAR(100) NOT NULL DEFAULT 'SmartCare Flash 1', -- Mô hình AI đã dùng
-    is_active BOOLEAN NOT NULL DEFAULT TRUE,
-    created_at TIMESTAMPTZ NOT NULL DEFAULT CURRENT_TIMESTAMP,
-    updated_at TIMESTAMPTZ NOT NULL DEFAULT CURRENT_TIMESTAMP,
-
-    CONSTRAINT pk_chat_sessions PRIMARY KEY (id),
-    CONSTRAINT fk_chat_sessions_user FOREIGN KEY (user_id)
-        REFERENCES users(id) ON DELETE CASCADE,
-    CONSTRAINT fk_chat_sessions_house FOREIGN KEY (house_id)
-        REFERENCES houses(id) ON DELETE SET NULL
-);
-CREATE INDEX ix_chat_sessions_user_id ON chat_sessions(user_id);
-CREATE INDEX ix_chat_sessions_created_at ON chat_sessions(created_at DESC);
-
--- -----------------------------------------------------------------
--- 11. Bảng chat_messages: Từng tin nhắn trong phiên hội thoại
---     MỐI QUAN HỆ:
---     - [chat_sessions] 1 -- n [chat_messages]: Một phiên có nhiều tin nhắn
--- -----------------------------------------------------------------
-CREATE TABLE chat_messages (
-    id UUID NOT NULL DEFAULT gen_random_uuid(),
-    session_id UUID NOT NULL,
-    sender VARCHAR(10) NOT NULL CHECK (sender IN ('user', 'ai')), -- 'user' | 'ai'
-    text TEXT NOT NULL,
-    is_error BOOLEAN NOT NULL DEFAULT FALSE,
-    created_at TIMESTAMPTZ NOT NULL DEFAULT CURRENT_TIMESTAMP,
-
-    CONSTRAINT pk_chat_messages PRIMARY KEY (id),
-    CONSTRAINT fk_chat_messages_session FOREIGN KEY (session_id)
-        REFERENCES chat_sessions(id) ON DELETE CASCADE
-);
-CREATE INDEX ix_chat_messages_session_id ON chat_messages(session_id);
-CREATE INDEX ix_chat_messages_created_at ON chat_messages(created_at ASC);
 
 -- =================================================================
--- PHẦN 4: DỮ LIỆU KHỞI TẠO MẪU (SEED DATA CHO HỆ THỐNG)
--- Kịch bản nghiệp vụ:
---   1. Người nhà (+84905123456) đăng ký tài khoản -> Tạo căn nhà (Chủ nhà: OWNER / ADMIN)
---   2. Tạo hồ sơ cụ Nguyễn Văn An, phân chia phòng, lắp đặt Camera AI & Vòng tay BLE
---   3. Chia sẻ quyền căn nhà cho con gái (+84905999888 - CAREGIVER) và Bác sĩ (+84905111222 - DOCTOR)
--- MẬT KHẨU CHUNG TẤT CẢ TÀI KHOẢN: 12345678
+-- PHẦN 7: DỮ LIỆU ĐỒNG BỘ TỪ SUPABASE (SEED DATA TỪ A ĐẾN Z)
 -- =================================================================
 
--- 1. Tài khoản người dùng (users)
-INSERT INTO users (id, phone, full_name, hashed_password, role, is_active)
-VALUES
-    -- [1] Người nhà chính (Chủ sở hữu hệ thống):
-    ('640e3d97-b4e1-4b08-b2d3-d949a0eb075c', '+84905123456', 'Nguyễn Hữu Nghĩa', '$2b$12$1bF.zEJ8SB2Q5ZuWhA.Be.UYmqcaKR3EnUbQI/O42r10T0tDhL9EO', 'user', TRUE),
-    -- [2] Người thân trong gia đình được uỷ quyền (Secondary Caregiver):
-    ('a1111111-b4e1-4b08-b2d3-d949a0eb075c', '+84905999888', 'Nguyễn Thị Lan', '$2b$12$1bF.zEJ8SB2Q5ZuWhA.Be.UYmqcaKR3EnUbQI/O42r10T0tDhL9EO', 'user', TRUE),
-    -- [3] Bác sĩ gia đình (Family Physician):
-    ('b2222222-b4e1-4b08-b2d3-d949a0eb075c', '+84905111222', 'BS. Trần Văn Minh', '$2b$12$1bF.zEJ8SB2Q5ZuWhA.Be.UYmqcaKR3EnUbQI/O42r10T0tDhL9EO', 'user', TRUE),
-    -- [4] Quản trị hệ thống (System Administrator):
-    ('c9999999-b4e1-4b08-b2d3-d949a0eb075c', '+84900000000', 'System Admin', '$2b$12$1bF.zEJ8SB2Q5ZuWhA.Be.UYmqcaKR3EnUbQI/O42r10T0tDhL9EO', 'admin', TRUE)
-ON CONFLICT (phone) DO UPDATE 
-SET full_name = EXCLUDED.full_name,
-    role = EXCLUDED.role,
-    hashed_password = EXCLUDED.hashed_password;
+-- Dữ liệu bảng users (3 rows)
+INSERT INTO "users" ("id", "full_name", "hashed_password", "phone", "avatar_url", "role", "preferred_language", "font_size_mode", "custom_font_scale", "vibration_enabled", "notifications_enabled", "alert_sound_enabled", "critical_alert_enabled", "cchn_number", "specialty", "workplace", "is_active", "fcm_token", "created_at", "updated_at", "last_login_at") VALUES ('677b6120-442c-4e71-b91c-9c12174dedd5', 'System Admin', '$2b$12$c/67QKtag.5RPjrKqLrIw.zYENE/bQSwzl55b4evN3X4AovZgJO/S', '+84900000000', NULL, 'admin', 'vi', 'system', 2, TRUE, TRUE, TRUE, TRUE, NULL, NULL, NULL, TRUE, NULL, '2026-10-23T03:55:02.980091+00:00', '2026-10-23T03:55:02.980091+00:00', '2026-10-23T04:11:51.730636+00:00') ON CONFLICT DO NOTHING;
+INSERT INTO "users" ("id", "full_name", "hashed_password", "phone", "avatar_url", "role", "preferred_language", "font_size_mode", "custom_font_scale", "vibration_enabled", "notifications_enabled", "alert_sound_enabled", "critical_alert_enabled", "cchn_number", "specialty", "workplace", "is_active", "fcm_token", "created_at", "updated_at", "last_login_at") VALUES ('b3333333-b4e1-4b08-b2d3-d949a0eb075c', 'BS. Trần Văn Minh', '$2b$12$gocoFFULa6fGZBZtoim6PeM40ovLZqi0fO04/V.Am2/DGg9OkX2NW', '+84905111222', NULL, 'doctor', 'vi', 'system', 2, TRUE, TRUE, TRUE, TRUE, NULL, NULL, NULL, TRUE, NULL, '2026-10-23T03:15:17.771792+00:00', '2026-10-23T03:15:17.771792+00:00', '2026-10-23T06:04:42.473815+00:00') ON CONFLICT DO NOTHING;
+INSERT INTO "users" ("id", "full_name", "hashed_password", "phone", "avatar_url", "role", "preferred_language", "font_size_mode", "custom_font_scale", "vibration_enabled", "notifications_enabled", "alert_sound_enabled", "critical_alert_enabled", "cchn_number", "specialty", "workplace", "is_active", "fcm_token", "created_at", "updated_at", "last_login_at") VALUES ('25e71534-db36-410f-bfb8-cbc9295f82be', 'Nguyễn Hữu Nghĩa', '$2b$12$SknoBhCfg4K0O6yR5iJj7Ow1zG1wwB7oC8uO9u5MQNgI/lJdhB.Nm', '+84905123456', NULL, 'user', 'vi', 'system', 2, TRUE, TRUE, TRUE, TRUE, NULL, NULL, NULL, TRUE, NULL, '2026-10-23T03:55:02.980091+00:00', '2026-10-23T03:55:02.980091+00:00', '2026-10-23T06:05:56.302608+00:00') ON CONFLICT DO NOTHING;
 
--- 2. Căn nhà thông minh (houses)
-INSERT INTO houses (id, name, address, current_mode, owner_id)
-VALUES (
-    'c3333333-b4e1-4b08-b2d3-d949a0eb075c',
-    'Nhà của tôi',
-    '123 Hải Phòng, P. Thạch Thang, Q. Hải Châu, TP. Đà Nẵng',
-    'HOME',
-    '640e3d97-b4e1-4b08-b2d3-d949a0eb075c'
-) ON CONFLICT (id) DO NOTHING;
+-- Dữ liệu bảng houses (8 rows)
+INSERT INTO "houses" ("id", "name", "address", "current_mode", "owner_id", "created_at", "updated_at") VALUES ('2239ddcc-5473-46d0-9bf0-084c211d9160', 'Nhà của tôi', '123 Hải Phòng, P. Thạch Thang, Q. Hải Châu, TP. Đà Nẵng', 'HOME', 'b3333333-b4e1-4b08-b2d3-d949a0eb075c', '2026-10-23T04:10:07.520546+00:00', '2026-10-23T04:10:07.520546+00:00') ON CONFLICT DO NOTHING;
+INSERT INTO "houses" ("id", "name", "address", "current_mode", "owner_id", "created_at", "updated_at") VALUES ('e7953cde-8292-44e2-a753-7c3fa17a87a7', 'Nhà của tôi', '123 Hải Phòng, P. Thạch Thang, Q. Hải Châu, TP. Đà Nẵng', 'HOME', 'b3333333-b4e1-4b08-b2d3-d949a0eb075c', '2026-10-23T04:10:07.530028+00:00', '2026-10-23T04:10:07.530028+00:00') ON CONFLICT DO NOTHING;
+INSERT INTO "houses" ("id", "name", "address", "current_mode", "owner_id", "created_at", "updated_at") VALUES ('2a2cd98b-6656-4e1f-a89a-bfd044687629', 'Nhà của tôi', '123 Hải Phòng, P. Thạch Thang, Q. Hải Châu, TP. Đà Nẵng', 'HOME', 'b3333333-b4e1-4b08-b2d3-d949a0eb075c', '2026-10-23T04:10:07.756746+00:00', '2026-10-23T04:10:07.756746+00:00') ON CONFLICT DO NOTHING;
+INSERT INTO "houses" ("id", "name", "address", "current_mode", "owner_id", "created_at", "updated_at") VALUES ('a2f4d940-0a33-42b1-a47c-a3e9f317f5fd', 'Nhà của tôi', '123 Hải Phòng, P. Thạch Thang, Q. Hải Châu, TP. Đà Nẵng', 'HOME', 'b3333333-b4e1-4b08-b2d3-d949a0eb075c', '2026-10-23T04:10:07.800097+00:00', '2026-10-23T04:10:07.800097+00:00') ON CONFLICT DO NOTHING;
+INSERT INTO "houses" ("id", "name", "address", "current_mode", "owner_id", "created_at", "updated_at") VALUES ('a424398f-369d-469b-8c75-c57be679732a', 'Nhà của tôi', '123 Hải Phòng, P. Thạch Thang, Q. Hải Châu, TP. Đà Nẵng', 'HOME', '25e71534-db36-410f-bfb8-cbc9295f82be', '2026-10-23T04:10:43.896084+00:00', '2026-10-23T04:10:43.896084+00:00') ON CONFLICT DO NOTHING;
+INSERT INTO "houses" ("id", "name", "address", "current_mode", "owner_id", "created_at", "updated_at") VALUES ('2562e0d0-2962-438c-bbcd-93ce971bd41a', 'Nhà của tôi', '123 Hải Phòng, P. Thạch Thang, Q. Hải Châu, TP. Đà Nẵng', 'HOME', '25e71534-db36-410f-bfb8-cbc9295f82be', '2026-10-23T04:10:43.917114+00:00', '2026-10-23T04:10:43.917114+00:00') ON CONFLICT DO NOTHING;
+INSERT INTO "houses" ("id", "name", "address", "current_mode", "owner_id", "created_at", "updated_at") VALUES ('e5a36553-8451-45cc-a0ed-eac8429fbcac', 'Nhà của tôi', '123 Hải Phòng, P. Thạch Thang, Q. Hải Châu, TP. Đà Nẵng', 'HOME', '25e71534-db36-410f-bfb8-cbc9295f82be', '2026-10-23T04:10:43.898521+00:00', '2026-10-23T04:10:43.898521+00:00') ON CONFLICT DO NOTHING;
+INSERT INTO "houses" ("id", "name", "address", "current_mode", "owner_id", "created_at", "updated_at") VALUES ('dcac5012-ce8b-45c0-9ab6-50a65b9a7c68', 'Nhà của tôi', '123 Hải Phòng, P. Thạch Thang, Q. Hải Châu, TP. Đà Nẵng', 'HOME', '25e71534-db36-410f-bfb8-cbc9295f82be', '2026-10-23T04:10:44.343840+00:00', '2026-10-23T04:10:44.343840+00:00') ON CONFLICT DO NOTHING;
 
--- 3. Phân quyền chia sẻ căn nhà (house_members - Quan hệ N-N)
-INSERT INTO house_members (id, house_id, user_id, role_in_house, permissions)
-VALUES
-    -- Nguyễn Hữu Nghĩa: Chủ sở hữu (OWNER) - Toàn quyền (ADMIN)
-    ('d4444444-b4e1-4b08-b2d3-d949a0eb075c', 'c3333333-b4e1-4b08-b2d3-d949a0eb075c', '640e3d97-b4e1-4b08-b2d3-d949a0eb075c', 'OWNER', 'ADMIN'),
-    -- Nguyễn Thị Lan: Người thân gia đình (CAREGIVER) - Quyền chỉnh sửa cấu hình (EDIT)
-    ('e5555555-b4e1-4b08-b2d3-d949a0eb075c', 'c3333333-b4e1-4b08-b2d3-d949a0eb075c', 'a1111111-b4e1-4b08-b2d3-d949a0eb075c', 'CAREGIVER', 'EDIT'),
-    -- Bác sĩ Trần Văn Minh: Bác sĩ theo dõi (DOCTOR) - Quyền xem sinh hiệu & camera (VIEW)
-    ('f6666666-b4e1-4b08-b2d3-d949a0eb075c', 'c3333333-b4e1-4b08-b2d3-d949a0eb075c', 'b2222222-b4e1-4b08-b2d3-d949a0eb075c', 'DOCTOR', 'VIEW')
-ON CONFLICT (house_id, user_id) DO NOTHING;
+-- Dữ liệu bảng house_members (8 rows)
+INSERT INTO "house_members" ("id", "house_id", "user_id", "role_in_house", "permissions", "can_view_health", "can_view_camera", "can_handle_emergency", "can_manage_devices", "can_manage_records", "joined_at") VALUES ('c4644f79-32ec-4f1b-ba17-8ffc3181b61e', '2239ddcc-5473-46d0-9bf0-084c211d9160', 'b3333333-b4e1-4b08-b2d3-d949a0eb075c', 'OWNER', 'ADMIN', TRUE, TRUE, TRUE, TRUE, TRUE, '2026-10-23T04:10:07.520546+00:00') ON CONFLICT DO NOTHING;
+INSERT INTO "house_members" ("id", "house_id", "user_id", "role_in_house", "permissions", "can_view_health", "can_view_camera", "can_handle_emergency", "can_manage_devices", "can_manage_records", "joined_at") VALUES ('36e0a8db-e0e0-4ec2-bb98-a0be26d9fdee', 'e7953cde-8292-44e2-a753-7c3fa17a87a7', 'b3333333-b4e1-4b08-b2d3-d949a0eb075c', 'OWNER', 'ADMIN', TRUE, TRUE, TRUE, TRUE, TRUE, '2026-10-23T04:10:07.530028+00:00') ON CONFLICT DO NOTHING;
+INSERT INTO "house_members" ("id", "house_id", "user_id", "role_in_house", "permissions", "can_view_health", "can_view_camera", "can_handle_emergency", "can_manage_devices", "can_manage_records", "joined_at") VALUES ('be47cc75-0b04-41fc-b548-decaa6269426', '2a2cd98b-6656-4e1f-a89a-bfd044687629', 'b3333333-b4e1-4b08-b2d3-d949a0eb075c', 'OWNER', 'ADMIN', TRUE, TRUE, TRUE, TRUE, TRUE, '2026-10-23T04:10:07.756746+00:00') ON CONFLICT DO NOTHING;
+INSERT INTO "house_members" ("id", "house_id", "user_id", "role_in_house", "permissions", "can_view_health", "can_view_camera", "can_handle_emergency", "can_manage_devices", "can_manage_records", "joined_at") VALUES ('c3387b87-918b-474a-8495-0ac6d6f37f1d', 'a2f4d940-0a33-42b1-a47c-a3e9f317f5fd', 'b3333333-b4e1-4b08-b2d3-d949a0eb075c', 'OWNER', 'ADMIN', TRUE, TRUE, TRUE, TRUE, TRUE, '2026-10-23T04:10:07.800097+00:00') ON CONFLICT DO NOTHING;
+INSERT INTO "house_members" ("id", "house_id", "user_id", "role_in_house", "permissions", "can_view_health", "can_view_camera", "can_handle_emergency", "can_manage_devices", "can_manage_records", "joined_at") VALUES ('d8071a48-03a1-4c90-aa3f-9224156e2307', 'a424398f-369d-469b-8c75-c57be679732a', '25e71534-db36-410f-bfb8-cbc9295f82be', 'OWNER', 'ADMIN', TRUE, TRUE, TRUE, TRUE, TRUE, '2026-10-23T04:10:43.896084+00:00') ON CONFLICT DO NOTHING;
+INSERT INTO "house_members" ("id", "house_id", "user_id", "role_in_house", "permissions", "can_view_health", "can_view_camera", "can_handle_emergency", "can_manage_devices", "can_manage_records", "joined_at") VALUES ('037a4581-7eec-4cb3-8cad-95627884c1dc', '2562e0d0-2962-438c-bbcd-93ce971bd41a', '25e71534-db36-410f-bfb8-cbc9295f82be', 'OWNER', 'ADMIN', TRUE, TRUE, TRUE, TRUE, TRUE, '2026-10-23T04:10:43.917114+00:00') ON CONFLICT DO NOTHING;
+INSERT INTO "house_members" ("id", "house_id", "user_id", "role_in_house", "permissions", "can_view_health", "can_view_camera", "can_handle_emergency", "can_manage_devices", "can_manage_records", "joined_at") VALUES ('493436be-30c8-4934-91d5-8d71c467ad45', 'dcac5012-ce8b-45c0-9ab6-50a65b9a7c68', '25e71534-db36-410f-bfb8-cbc9295f82be', 'OWNER', 'ADMIN', TRUE, TRUE, TRUE, TRUE, TRUE, '2026-10-23T04:10:44.343840+00:00') ON CONFLICT DO NOTHING;
+INSERT INTO "house_members" ("id", "house_id", "user_id", "role_in_house", "permissions", "can_view_health", "can_view_camera", "can_handle_emergency", "can_manage_devices", "can_manage_records", "joined_at") VALUES ('f2752ef2-9949-4d3d-9402-a794590bb60f', 'e5a36553-8451-45cc-a0ed-eac8429fbcac', '25e71534-db36-410f-bfb8-cbc9295f82be', 'OWNER', 'ADMIN', TRUE, TRUE, TRUE, TRUE, TRUE, '2026-10-23T04:10:43.898521+00:00') ON CONFLICT DO NOTHING;
 
--- 4. Hồ sơ người cao tuổi (elderly_profiles)
-INSERT INTO elderly_profiles (id, house_id, full_name, birth_year, gender, medical_history, emergency_contact_phone)
-VALUES (
-    'e0000000-b4e1-4b08-b2d3-d949a0eb075c',
-    'c3333333-b4e1-4b08-b2d3-d949a0eb075c',
-    'Cụ Nguyễn Văn An',
-    1948,
-    'MALE',
-    'Tiền sử tăng huyết áp độ 2, thiếu máu cơ tim cục bộ, loãng xương, rối loạn tiền đình.',
-    '+84905123456'
-) ON CONFLICT (id) DO NOTHING;
+-- Dữ liệu bảng elderly_profiles (1 rows)
+INSERT INTO "elderly_profiles" ("id", "house_id", "full_name", "birth_year", "gender", "medical_history", "conditions_json", "blood_type", "height_cm", "weight_kg", "drug_allergies", "food_allergies", "dietary_notes", "emergency_contact_phone", "avatar_url", "face_embedding", "created_at", "updated_at") VALUES ('c6738848-6303-44db-8e0c-ad214c815c81', 'a424398f-369d-469b-8c75-c57be679732a', '', NULL, NULL, '', NULL, NULL, NULL, NULL, NULL, NULL, NULL, '', NULL, NULL, '2026-10-23T04:15:49.595421+00:00', '2026-10-23T04:15:49.595421+00:00') ON CONFLICT DO NOTHING;
 
--- 5. Khu vực / Phòng trong nhà (device_groups)
-INSERT INTO device_groups (id, house_id, name, description, icon, color, sort_order)
-VALUES
-    ('a0000001-b4e1-4b08-b2d3-d949a0eb075c', 'c3333333-b4e1-4b08-b2d3-d949a0eb075c', 'Phòng khách', 'Khu vực sinh hoạt chung & giám sát té ngã AI', 'folder', '#7C3AED', 1),
-    ('a0000002-b4e1-4b08-b2d3-d949a0eb075c', 'c3333333-b4e1-4b08-b2d3-d949a0eb075c', 'Phòng ngủ', 'Khu vực nghỉ ngơi & theo dõi sinh hiệu ban đêm', 'folder', '#7C3AED', 2),
-    ('a0000003-b4e1-4b08-b2d3-d949a0eb075c', 'c3333333-b4e1-4b08-b2d3-d949a0eb075c', 'Phòng bếp', 'Khu vực ăn uống & lối đi', 'folder', '#7C3AED', 3),
-    ('a0000004-b4e1-4b08-b2d3-d949a0eb075c', 'c3333333-b4e1-4b08-b2d3-d949a0eb075c', 'Nhà vệ sinh', 'Khu vực nguy cơ té ngã trơn trượt - Cảm biến Radar mmWave riêng tư', 'folder', '#7C3AED', 4)
-ON CONFLICT (house_id, name) DO NOTHING;
+-- Dữ liệu bảng audit_logs (6 rows)
+INSERT INTO "audit_logs" ("id", "timestamp", "event", "user_name", "ip_address", "severity", "details") VALUES ('a226b250-cc70-4fd5-93a9-2e8e1641b00c', '2026-10-23T04:10:06.747540+00:00', 'ĐĂNG NHẬP THÀNH CÔNG', 'BS. Trần Văn Minh (doctor)', '127.0.0.1', 'low', 'Đăng nhập thành công qua Mozilla/5.0 (Windows NT 10.0; Win64; x64.') ON CONFLICT DO NOTHING;
+INSERT INTO "audit_logs" ("id", "timestamp", "event", "user_name", "ip_address", "severity", "details") VALUES ('5b85c280-9a29-48eb-b312-e7e12c7d4a8b', '2026-10-23T04:10:43.095567+00:00', 'ĐĂNG NHẬP THÀNH CÔNG', 'Nguyễn Hữu Nghĩa (user)', '127.0.0.1', 'low', 'Đăng nhập thành công qua Mozilla/5.0 (Windows NT 10.0; Win64; x64.') ON CONFLICT DO NOTHING;
+INSERT INTO "audit_logs" ("id", "timestamp", "event", "user_name", "ip_address", "severity", "details") VALUES ('4fb8a002-b49c-49f0-a85c-70d91bb44b44', '2026-10-23T04:11:53.472864+00:00', 'ĐĂNG NHẬP THÀNH CÔNG', 'System Admin (admin)', '127.0.0.1', 'low', 'Đăng nhập thành công qua Mozilla/5.0 (Windows NT 10.0; Win64; x64.') ON CONFLICT DO NOTHING;
+INSERT INTO "audit_logs" ("id", "timestamp", "event", "user_name", "ip_address", "severity", "details") VALUES ('927a46e8-9463-44d8-84d6-142d07a448df', '2026-10-23T06:04:44.619777+00:00', 'ĐĂNG NHẬP THÀNH CÔNG', 'BS. Trần Văn Minh (doctor)', '127.0.0.1', 'low', 'Đăng nhập thành công qua Mozilla/5.0 (Windows NT 10.0; Win64; x64.') ON CONFLICT DO NOTHING;
+INSERT INTO "audit_logs" ("id", "timestamp", "event", "user_name", "ip_address", "severity", "details") VALUES ('bc8681a3-272b-40a1-9ee6-4c320e869829', '2026-10-23T06:05:58.455320+00:00', 'ĐĂNG NHẬP THÀNH CÔNG', 'Nguyễn Hữu Nghĩa (user)', '127.0.0.1', 'low', 'Đăng nhập thành công qua Mozilla/5.0 (Windows NT 10.0; Win64; x64.') ON CONFLICT DO NOTHING;
+INSERT INTO "audit_logs" ("id", "timestamp", "event", "user_name", "ip_address", "severity", "details") VALUES ('4029a076-cdcf-4697-a6f4-aa77ba82ea58', '2026-10-23T06:52:31.815841+00:00', 'TẠO THÔNG BÁO HỆ THỐNG', '+84900000000', '127.0.0.1', 'medium', 'Tạo thông báo ''Bảo trì '' trạng thái [published] cho nhóm [all].') ON CONFLICT DO NOTHING;
 
--- 6. Danh mục thiết bị IoT (devices)
-INSERT INTO devices (id, device_id, name, sub_title, device_type, location, is_online, status_text, battery_level, mac_address, ip_address, owner_id, house_id, group_id, elderly_id)
-VALUES
-    -- Thiết bị 1: Camera AI an ninh góc rộng (Phòng khách)
-    (
-        'd0000001-b4e1-4b08-b2d3-d949a0eb075c',
-        'SECA_001',
-        'Camera AI An Ninh SECA_001',
-        'Camera góc rộng • 2K Super HD • Đàm thoại 2 chiều',
-        'CAMERA',
-        'Phòng khách',
-        TRUE,
-        'Đang ghi hình & Giám sát AI',
-        NULL,
-        'AA:BB:CC:DD:EE:01',
-        '192.168.1.100',
-        '640e3d97-b4e1-4b08-b2d3-d949a0eb075c',
-        'c3333333-b4e1-4b08-b2d3-d949a0eb075c',
-        'a0000001-b4e1-4b08-b2d3-d949a0eb075c',
-        NULL
-    ),
-    -- Thiết bị 2: Vòng đeo tay BLE Smartband (Phòng ngủ - Gán trực tiếp cho cụ Nguyễn Văn An)
-    (
-        'd0000002-b4e1-4b08-b2d3-d949a0eb075c',
-        'BLE_BAND_001',
-        'Vòng đeo tay BLE Smartband',
-        'Nhịp tim • SpO₂ • Gia tốc kế phát hiện va đập',
-        'SMARTBAND',
-        'Phòng ngủ',
-        TRUE,
-        'Pin 84% • Đang đeo trên tay cụ An',
-        84,
-        'AA:BB:CC:DD:EE:02',
-        NULL,
-        '640e3d97-b4e1-4b08-b2d3-d949a0eb075c',
-        'c3333333-b4e1-4b08-b2d3-d949a0eb075c',
-        'a0000002-b4e1-4b08-b2d3-d949a0eb075c',
-        'e0000000-b4e1-4b08-b2d3-d949a0eb075c'
-    ),
-    -- Thiết bị 3: Edge Hub AI - Orange Pi 5 (Phòng khách)
-    (
-        'd0000003-b4e1-4b08-b2d3-d949a0eb075c',
-        'HUB_OPI5_001',
-        'Edge Hub AI (Orange Pi 5)',
-        'Bộ xử lý biên AI tại chỗ (RK3588 • NPU 6 TOPS)',
-        'EDGE_HUB',
-        'Phòng khách',
-        TRUE,
-        'NPU 38% • Nhiệt độ 48°C • FPS 30',
-        NULL,
-        'AA:BB:CC:DD:EE:03',
-        '192.168.1.10',
-        '640e3d97-b4e1-4b08-b2d3-d949a0eb075c',
-        'c3333333-b4e1-4b08-b2d3-d949a0eb075c',
-        'a0000001-b4e1-4b08-b2d3-d949a0eb075c',
-        NULL
-    ),
-    -- Thiết bị 4: Camera AI Bếp & Lối Đi (Phòng bếp)
-    (
-        'd0000004-b4e1-4b08-b2d3-d949a0eb075c',
-        'SECA_002',
-        'Camera AI Bếp & Lối Đi SECA_002',
-        'Camera góc rộng 2K • Phát hiện té ngã & ngã bất động',
-        'CAMERA',
-        'Phòng bếp',
-        TRUE,
-        'Đang ghi hình & Giám sát AI',
-        NULL,
-        'AA:BB:CC:DD:EE:04',
-        '192.168.1.102',
-        '640e3d97-b4e1-4b08-b2d3-d949a0eb075c',
-        'c3333333-b4e1-4b08-b2d3-d949a0eb075c',
-        'a0000003-b4e1-4b08-b2d3-d949a0eb075c',
-        NULL
-    ),
-    -- Thiết bị 5: Cảm biến Radar mmWave / Nhiệt (Nhà vệ sinh)
-    (
-        'd0000005-b4e1-4b08-b2d3-d949a0eb075c',
-        'SENSOR_RADAR_001',
-        'Cảm biến Radar mmWave WC',
-        'Radar 60GHz bảo vệ riêng tư tuyệt đối (Không dùng Camera)',
-        'SENSOR',
-        'Nhà vệ sinh',
-        TRUE,
-        'Bình thường • An toàn',
-        95,
-        'AA:BB:CC:DD:EE:05',
-        '192.168.1.105',
-        '640e3d97-b4e1-4b08-b2d3-d949a0eb075c',
-        'c3333333-b4e1-4b08-b2d3-d949a0eb075c',
-        'a0000004-b4e1-4b08-b2d3-d949a0eb075c',
-        NULL
-    )
-ON CONFLICT (device_id) DO NOTHING;
+-- Dữ liệu bảng system_notifications (1 rows)
+INSERT INTO "system_notifications" ("id", "title", "body", "type", "target_audience", "status", "scheduled_at", "published_at", "revoked_at", "revoke_reason", "delivered_count", "read_count", "created_by", "created_at", "updated_at", "expires_at") VALUES ('a794a1a7-f820-49d6-827d-0ef7baefe999', 'Bảo trì ', 'Hệ thống sẽ bảo trì sau 30 phút nữa. Vui lòng truy cập sau khi cập nhập.', 'system_maintenance', 'all', 'published', NULL, '2026-10-23T06:52:30.919489+00:00', NULL, NULL, 3, 0, '677b6120-442c-4e71-b91c-9c12174dedd5', '2026-10-23T06:52:31.815841+00:00', '2026-10-23T06:52:31.815841+00:00', NULL) ON CONFLICT DO NOTHING;
 
--- 7. Cấu hình ngưỡng cảnh báo thiết bị (device_configs - Quan hệ 1-1)
-INSERT INTO device_configs (
-    device_id, stream_url, resolution, is_sleep, is_ai_protect, has_two_way_audio,
-    hr_threshold_high, hr_threshold_low, spo2_threshold_low,
-    bp_systolic_high, bp_systolic_low, bp_diastolic_high, bp_diastolic_low,
-    fall_impact_threshold, immobility_seconds,
-    is_custom_thresholds, configured_by_user_id, configured_by_role
-)
-VALUES
-    -- Cấu hình Camera AI SECA_001
-    ('d0000001-b4e1-4b08-b2d3-d949a0eb075c', 'http://10.0.2.2:8080', '2K', FALSE, TRUE, TRUE, 120, 50, 90, 140, 90, 90, 60, 2.5, 60, FALSE, '640e3d97-b4e1-4b08-b2d3-d949a0eb075c', 'OWNER'),
-    -- Cấu hình Vòng tay BLE_BAND_001 (Bác sĩ Trần Văn Minh thiết lập chuyên sâu cho cụ An)
-    ('d0000002-b4e1-4b08-b2d3-d949a0eb075c', NULL, '1080p', FALSE, TRUE, FALSE, 115, 55, 92, 135, 95, 85, 60, 2.5, 45, TRUE, 'b2222222-b4e1-4b08-b2d3-d949a0eb075c', 'DOCTOR'),
-    -- Cấu hình Edge Hub AI HUB_OPI5_001
-    ('d0000003-b4e1-4b08-b2d3-d949a0eb075c', NULL, '1080p', FALSE, TRUE, FALSE, 120, 50, 90, 140, 90, 90, 60, 2.5, 30, FALSE, '640e3d97-b4e1-4b08-b2d3-d949a0eb075c', 'SYSTEM'),
-    -- Cấu hình Camera AI SECA_002 (Bếp)
-    ('d0000004-b4e1-4b08-b2d3-d949a0eb075c', 'http://10.0.2.2:8081', '2K', FALSE, TRUE, TRUE, 120, 50, 90, 140, 90, 90, 60, 2.5, 60, FALSE, '640e3d97-b4e1-4b08-b2d3-d949a0eb075c', 'OWNER'),
-    -- Cấu hình Cảm biến Radar mmWave SENSOR_RADAR_001 (Nhà vệ sinh)
-    ('d0000005-b4e1-4b08-b2d3-d949a0eb075c', NULL, '1080p', FALSE, TRUE, FALSE, 120, 50, 90, 140, 90, 90, 60, 2.0, 30, FALSE, '640e3d97-b4e1-4b08-b2d3-d949a0eb075c', 'SYSTEM')
-ON CONFLICT (device_id) DO NOTHING;
+-- Dữ liệu bảng user_terminals (3 rows)
+INSERT INTO "user_terminals" ("id", "user_id", "device_name", "device_type", "os", "browser", "ip_address", "location", "last_active_at", "is_active", "created_at") VALUES ('0e6fc54c-99f7-41ff-9748-42c8ad9550f8', '677b6120-442c-4e71-b91c-9c12174dedd5', 'Microsoft Edge (Windows 11)', 'desktop', 'Windows 11', 'Microsoft Edge', '127.0.0.1', 'Đà Nẵng, Việt Nam (Mạng cục bộ)', '2026-10-23T04:11:51.341741+00:00', TRUE, '2026-10-23T04:11:51.346321+00:00') ON CONFLICT DO NOTHING;
+INSERT INTO "user_terminals" ("id", "user_id", "device_name", "device_type", "os", "browser", "ip_address", "location", "last_active_at", "is_active", "created_at") VALUES ('91bea68b-50c9-4070-9fe5-35acab7104a0', 'b3333333-b4e1-4b08-b2d3-d949a0eb075c', 'Microsoft Edge (Windows 11)', 'desktop', 'Windows 11', 'Microsoft Edge', '127.0.0.1', 'Đà Nẵng, Việt Nam (Mạng cục bộ)', '2026-10-23T06:04:41.914380+00:00', TRUE, '2026-10-23T04:10:04.207045+00:00') ON CONFLICT DO NOTHING;
+INSERT INTO "user_terminals" ("id", "user_id", "device_name", "device_type", "os", "browser", "ip_address", "location", "last_active_at", "is_active", "created_at") VALUES ('005ab5ef-0422-4b16-9b90-a12349865cfc', '25e71534-db36-410f-bfb8-cbc9295f82be', 'Microsoft Edge (Windows 11)', 'desktop', 'Windows 11', 'Microsoft Edge', '127.0.0.1', 'Đà Nẵng, Việt Nam (Mạng cục bộ)', '2026-10-23T06:05:55.689214+00:00', TRUE, '2026-10-23T04:10:41.020367+00:00') ON CONFLICT DO NOTHING;
 
--- 8. Dữ liệu chuỗi thời gian sinh hiệu (vital_signs - Hypertable)
--- Dữ liệu sinh hiệu thực tế sẽ được đẩy liên tục từ Vòng đeo tay BLE & IoT Edge Hub qua API POST /vitals hoặc MQTT.
--- (Đã xóa bỏ mock data mẫu 76/78/80 bpm để hệ thống phản ánh trung thực dữ liệu đo thời gian thực).
--- INSERT INTO vital_signs (id, "time", device_id, heart_rate, spo2, bp_systolic, bp_diastolic, skin_temp_max, person_count, fall_detected)
--- VALUES
---     (gen_random_uuid(), NOW() - INTERVAL '10 minutes', 'd0000002-b4e1-4b08-b2d3-d949a0eb075c', 76, 98, 122, 80, 36.5, 1, FALSE),
---     (gen_random_uuid(), NOW() - INTERVAL '5 minutes',  'd0000002-b4e1-4b08-b2d3-d949a0eb075c', 78, 97, 125, 82, 36.6, 1, FALSE),
---     (gen_random_uuid(), NOW(),                        'd0000002-b4e1-4b08-b2d3-d949a0eb075c', 80, 98, 128, 83, 36.6, 1, FALSE);
-
--- 9. Nhật ký sự cố khẩn cấp (incidents)
--- INSERT INTO incidents (id, device_id, alert_type, alert_level, message, confidence, sources, is_acknowledged, acknowledged_by, acknowledged_at, notes)
--- VALUES (
---     gen_random_uuid(),
---     'd0000001-b4e1-4b08-b2d3-d949a0eb075c',
---     'FALL_DETECTED',
---     'HIGH',
---     'Phát hiện người cao tuổi té ngã tại khu vực Phòng khách. Hệ thống đã tự động cảnh báo.',
---     0.94,
---     'FUSION',
---     TRUE,
---     '640e3d97-b4e1-4b08-b2d3-d949a0eb075c',
---     NOW(),
---     'Người nhà đã kiểm tra qua Camera, cụ đã được hỗ trợ đứng dậy an toàn.'
--- );
-
--- -----------------------------------------------------------------
--- 10. Bảng security_policies: Quản lý chính sách bảo mật hệ thống
--- -----------------------------------------------------------------
-CREATE TABLE IF NOT EXISTS security_policies (
-    id VARCHAR(50) NOT NULL,
-    name VARCHAR(255) NOT NULL,
-    description TEXT,
-    category VARCHAR(50) NOT NULL,
-    enabled BOOLEAN NOT NULL DEFAULT TRUE,
-    value VARCHAR(100),
-    updated_at TIMESTAMPTZ NOT NULL DEFAULT CURRENT_TIMESTAMP,
-    CONSTRAINT pk_security_policies PRIMARY KEY (id)
-);
-
-INSERT INTO security_policies (id, name, description, category, enabled, value)
-VALUES
-    ('pol-1', 'Xác thực đa yếu tố (2FA / OTP)', 'Bắt buộc xác thực OTP số điện thoại khi đăng nhập tài khoản Bác sĩ và Quản trị viên.', 'authentication', TRUE, NULL),
-    ('pol-2', 'Mật khẩu độ phức tạp cao', 'Yêu cầu mật khẩu tối thiểu 8 ký tự, có chữ hoa, chữ thường, số và ký tự đặc biệt.', 'authentication', TRUE, NULL),
-    ('pol-3', 'Thời gian hết hạn phiên làm việc (JWT Access Token)', 'Tự động thu hồi phiên làm việc sau thời gian không hoạt động để bảo vệ dữ liệu y tế.', 'session', TRUE, '24 giờ'),
-    ('pol-4', 'Khóa tài khoản sau 5 lần đăng nhập sai', 'Tự động tạm khóa tài khoản trong 15 phút nếu phát hiện tấn công Brute-force.', 'access_control', TRUE, '5 lần'),
-    ('pol-5', 'Mã hóa dữ liệu nhạy cảm (At-Rest & In-Transit)', 'Toàn bộ sinh hiệu, hình ảnh khuôn mặt được mã hóa bằng AES-256 và TLS 1.3.', 'data_protection', TRUE, NULL),
-    ('pol-6', 'Giới hạn IP Whitelist cho cổng Admin', 'Chỉ cho phép truy cập trang quản trị từ các dải IP nội bộ hoặc VPN y tế đã xác thực.', 'access_control', FALSE, '192.168.1.0/24')
-ON CONFLICT (id) DO UPDATE
-SET name = EXCLUDED.name,
-    description = EXCLUDED.description,
-    category = EXCLUDED.category,
-    enabled = EXCLUDED.enabled,
-    value = EXCLUDED.value;
-
--- -----------------------------------------------------------------
--- 11. Bảng audit_logs: Nhật ký kiểm toán bảo mật & vận hành hệ thống
--- -----------------------------------------------------------------
-CREATE TABLE IF NOT EXISTS audit_logs (
-    id UUID NOT NULL DEFAULT gen_random_uuid(),
-    timestamp TIMESTAMPTZ NOT NULL DEFAULT CURRENT_TIMESTAMP,
-    event VARCHAR(150) NOT NULL,
-    user_name VARCHAR(255) NOT NULL,
-    ip_address VARCHAR(50) NOT NULL,
-    severity VARCHAR(20) NOT NULL DEFAULT 'low' CHECK (severity IN ('low', 'medium', 'high', 'critical')),
-    details TEXT NOT NULL,
-    CONSTRAINT pk_audit_logs PRIMARY KEY (id)
-);
-CREATE INDEX IF NOT EXISTS ix_audit_logs_timestamp ON audit_logs(timestamp DESC);
-
-INSERT INTO audit_logs (event, user_name, ip_address, severity, details)
-VALUES
-    ('ĐĂNG NHẬP THÀNH CÔNG', 'Admin123 (Root Admin)', '127.0.0.1', 'low', 'Đăng nhập trang quản trị thành công qua JWT Bearer token.'),
-    ('THAY ĐỔI CẤU HÌNH THIẾT BỊ', 'BS. Trần Văn Minh', '192.168.1.15', 'medium', 'Cập nhật ngưỡng cảnh báo SpO2 < 90% cho cụ Nguyễn Văn An.'),
-    ('CẢNH BÁO ĐĂNG NHẬP THẤT BẠI', '+84905999888', '115.79.138.90', 'high', 'Nhập sai mật khẩu lần thứ 3. Hệ thống gửi cảnh báo SMS OTP.'),
-    ('TỰ ĐỘNG THU HỒI TOKEN HẾT HẠN', 'System Cron', 'localhost:8000', 'low', 'Dọn sạch 14 refresh token đã hết hạn trong Redis cache.'),
-    ('PHÁT HIỆN TRUY CẬP TRÁI PHÉP', 'Anonymous', '45.154.255.88', 'critical', 'Quét cổng bất thường vào endpoint /api/v1/auth/login. Đã chặn IP tự động.');
-
--- -----------------------------------------------------------------
--- 12. Bảng system_incidents: Giám sát sự cố vận hành hệ thống & ứng dụng
--- -----------------------------------------------------------------
-CREATE TABLE IF NOT EXISTS system_incidents (
-    id UUID NOT NULL DEFAULT gen_random_uuid(),
-    timestamp TIMESTAMPTZ NOT NULL DEFAULT CURRENT_TIMESTAMP,
-    service VARCHAR(100) NOT NULL,
-    incident_type VARCHAR(20) NOT NULL DEFAULT 'WARNING' CHECK (incident_type IN ('WARNING', 'ERROR', 'CRITICAL')),
-    message TEXT NOT NULL,
-    resolved BOOLEAN NOT NULL DEFAULT FALSE,
-    resolved_at TIMESTAMPTZ,
-    CONSTRAINT pk_system_incidents PRIMARY KEY (id)
-);
-CREATE INDEX IF NOT EXISTS ix_system_incidents_timestamp ON system_incidents(timestamp DESC);
-
-INSERT INTO system_incidents (service, incident_type, message, resolved)
-VALUES
-    ('EMQX Broker', 'WARNING', 'Thiết bị SENSOR_RADAR_001 gửi bản tin heartbeat trễ 45s so với chu kỳ.', TRUE),
-    ('FastAPI Core', 'ERROR', 'Truy vấn bảng users trả về mã 404 cho user_id tạm thời. Đã tự phục hồi.', TRUE),
-    ('PostgreSQL DB', 'CRITICAL', 'Khóa kết nối trên cổng 5433 được phát hiện và đã chuyển mạch an toàn sang cổng 5432.', TRUE);
-
--- -----------------------------------------------------------------
--- 13. Bảng system_notifications: Quản lý thông báo toàn hệ thống (Web Admin)
--- -----------------------------------------------------------------
-CREATE TABLE IF NOT EXISTS system_notifications (
-    id UUID NOT NULL DEFAULT gen_random_uuid(),
-    title VARCHAR(255) NOT NULL,
-    body TEXT NOT NULL,
-    type VARCHAR(50) NOT NULL DEFAULT 'info' CHECK (type IN ('info', 'system_maintenance', 'emergency', 'health_tip', 'feature_update')),
-    target_audience VARCHAR(50) NOT NULL DEFAULT 'all' CHECK (target_audience IN ('all', 'caregivers', 'doctors', 'elderly')),
-    status VARCHAR(50) NOT NULL DEFAULT 'draft' CHECK (status IN ('draft', 'scheduled', 'published', 'revoked')),
-    scheduled_at TIMESTAMPTZ,
-    published_at TIMESTAMPTZ,
-    revoked_at TIMESTAMPTZ,
-    revoke_reason TEXT,
-    delivered_count INTEGER NOT NULL DEFAULT 0,
-    read_count INTEGER NOT NULL DEFAULT 0,
-    created_by UUID REFERENCES users(id) ON DELETE SET NULL,
-    created_at TIMESTAMPTZ NOT NULL DEFAULT CURRENT_TIMESTAMP,
-    updated_at TIMESTAMPTZ NOT NULL DEFAULT CURRENT_TIMESTAMP,
-    CONSTRAINT pk_system_notifications PRIMARY KEY (id)
-);
-CREATE INDEX IF NOT EXISTS ix_system_notifications_status ON system_notifications(status);
-CREATE INDEX IF NOT EXISTS ix_system_notifications_created_at ON system_notifications(created_at DESC);
-
-INSERT INTO system_notifications (title, body, type, target_audience, status, published_at, delivered_count, read_count)
-VALUES
-    ('Bảo trì nâng cấp hệ thống định kỳ', 'Hệ thống Smart Elderly Care AI sẽ tiến hành tối ưu hóa kết nối IoT và sao lưu cơ sở dữ liệu từ 01:00 đến 03:00 ngày 18/10/2026. Trong thời gian này, các tính năng báo cáo có thể bị chậm nhẹ.', 'system_maintenance', 'all', 'published', CURRENT_TIMESTAMP - INTERVAL '1 day', 152, 128),
-    ('Khuyến cáo sức khỏe mùa giao mùa', 'Nhiệt độ thay đổi đột ngột có thể ảnh hưởng đến huyết áp của người cao tuổi. Gia đình vui lòng kiểm tra thiết bị đo sinh hiệu phòng ngủ và duy trì nhiệt độ phòng 26-28 độ C.', 'health_tip', 'caregivers', 'published', CURRENT_TIMESTAMP - INTERVAL '5 hours', 89, 74),
-    ('Cập nhật tính năng trợ lý AI Y khoa', 'Phiên bản mới của Chatbot y khoa đã được tích hợp mô hình phân tích triệu chứng chuyên sâu dành cho bác sĩ gia đình và người chăm sóc.', 'feature_update', 'all', 'scheduled', NULL, 0, 0);
-
-
-
-
--- -----------------------------------------------------------------
--- 14. Bảng user_terminals: Quản lý đầu cuối thiết bị của người dùng
--- -----------------------------------------------------------------
-CREATE TABLE IF NOT EXISTS user_terminals (
-    id UUID NOT NULL DEFAULT gen_random_uuid(),
-    user_id UUID NOT NULL REFERENCES users(id) ON DELETE CASCADE,
-    device_name VARCHAR(255) NOT NULL,
-    device_type VARCHAR(50) NOT NULL DEFAULT 'mobile',
-    os VARCHAR(100),
-    browser VARCHAR(100),
-    ip_address VARCHAR(50) NOT NULL DEFAULT '127.0.0.1',
-    location VARCHAR(255) DEFAULT 'Đà Nẵng, Việt Nam',
-    last_active_at TIMESTAMPTZ NOT NULL DEFAULT CURRENT_TIMESTAMP,
-    is_active BOOLEAN NOT NULL DEFAULT TRUE,
-    created_at TIMESTAMPTZ NOT NULL DEFAULT CURRENT_TIMESTAMP,
-    CONSTRAINT pk_user_terminals PRIMARY KEY (id)
-);
-CREATE INDEX IF NOT EXISTS ix_user_terminals_user_id ON user_terminals(user_id);
-CREATE INDEX IF NOT EXISTS ix_user_terminals_last_active ON user_terminals(last_active_at DESC);
-
--- -----------------------------------------------------------------
--- 15. Bảng user_login_histories: Lịch sử đăng nhập tài khoản
--- -----------------------------------------------------------------
-CREATE TABLE IF NOT EXISTS user_login_histories (
-    id UUID NOT NULL DEFAULT gen_random_uuid(),
-    user_id UUID NOT NULL REFERENCES users(id) ON DELETE CASCADE,
-    device_name VARCHAR(255) NOT NULL,
-    ip_address VARCHAR(50) NOT NULL,
-    location VARCHAR(255) DEFAULT 'Đà Nẵng, Việt Nam',
-    login_time TIMESTAMPTZ NOT NULL DEFAULT CURRENT_TIMESTAMP,
-    login_method VARCHAR(50) NOT NULL DEFAULT 'Mật khẩu',
-    status VARCHAR(20) NOT NULL DEFAULT 'success',
-    user_agent VARCHAR(500),
-    CONSTRAINT pk_user_login_histories PRIMARY KEY (id)
-);
-CREATE INDEX IF NOT EXISTS ix_user_login_histories_user_id ON user_login_histories(user_id);
-CREATE INDEX IF NOT EXISTS ix_user_login_histories_login_time ON user_login_histories(login_time DESC);
-
--- Seed mẫu thiết bị và lịch sử cho tài khoản caregiver mặc định
-INSERT INTO user_terminals (id, user_id, device_name, device_type, os, browser, ip_address, location, last_active_at, is_active)
-SELECT 
-    'f1111111-b4e1-4b08-b2d3-d949a0eb075c',
-    id,
-    'Samsung Galaxy SM-A127F',
-    'mobile',
-    'Android 14',
-    'SECA Mobile App',
-    '127.0.0.1',
-    'Đà Nẵng, Việt Nam',
-    CURRENT_TIMESTAMP,
-    TRUE
-FROM users WHERE phone = '+84905123456'
-ON CONFLICT DO NOTHING;
-
-INSERT INTO user_login_histories (user_id, device_name, ip_address, location, login_time, login_method, status, user_agent)
-SELECT 
-    id,
-    'Samsung Galaxy SM-A127F',
-    '127.0.0.1',
-    'Đà Nẵng, Việt Nam',
-    CURRENT_TIMESTAMP,
-    'Mật khẩu',
-    'success',
-    'SECA Mobile App / Android 14'
-FROM users WHERE phone = '+84905123456'
-LIMIT 1;
+-- Dữ liệu bảng user_login_histories (5 rows)
+INSERT INTO "user_login_histories" ("id", "user_id", "device_name", "ip_address", "location", "login_time", "login_method", "status", "user_agent") VALUES ('faab0904-17c6-47b2-a604-a6affd23c257', 'b3333333-b4e1-4b08-b2d3-d949a0eb075c', 'Microsoft Edge (Windows 11)', '127.0.0.1', 'Đà Nẵng, Việt Nam (Mạng cục bộ)', '2026-10-23T04:10:03.935118+00:00', 'Mật khẩu', 'success', 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/155.0.0.0 Safari/537.36 Edg/155.0.0.0') ON CONFLICT DO NOTHING;
+INSERT INTO "user_login_histories" ("id", "user_id", "device_name", "ip_address", "location", "login_time", "login_method", "status", "user_agent") VALUES ('23e19ae4-8af6-4282-9428-4359f56dc435', '25e71534-db36-410f-bfb8-cbc9295f82be', 'Microsoft Edge (Windows 11)', '127.0.0.1', 'Đà Nẵng, Việt Nam (Mạng cục bộ)', '2026-10-23T04:10:40.846213+00:00', 'Mật khẩu', 'success', 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/155.0.0.0 Safari/537.36 Edg/155.0.0.0') ON CONFLICT DO NOTHING;
+INSERT INTO "user_login_histories" ("id", "user_id", "device_name", "ip_address", "location", "login_time", "login_method", "status", "user_agent") VALUES ('2d714e32-f739-4e50-a62f-2eaa94643aff', '677b6120-442c-4e71-b91c-9c12174dedd5', 'Microsoft Edge (Windows 11)', '127.0.0.1', 'Đà Nẵng, Việt Nam (Mạng cục bộ)', '2026-10-23T04:11:51.184593+00:00', 'Mật khẩu', 'success', 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/155.0.0.0 Safari/537.36 Edg/155.0.0.0') ON CONFLICT DO NOTHING;
+INSERT INTO "user_login_histories" ("id", "user_id", "device_name", "ip_address", "location", "login_time", "login_method", "status", "user_agent") VALUES ('4b29b0fa-1884-4b4a-b2b4-e14fa36cb8ac', 'b3333333-b4e1-4b08-b2d3-d949a0eb075c', 'Microsoft Edge (Windows 11)', '127.0.0.1', 'Đà Nẵng, Việt Nam (Mạng cục bộ)', '2026-10-23T06:04:41.614719+00:00', 'Mật khẩu', 'success', 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/155.0.0.0 Safari/537.36 Edg/155.0.0.0') ON CONFLICT DO NOTHING;
+INSERT INTO "user_login_histories" ("id", "user_id", "device_name", "ip_address", "location", "login_time", "login_method", "status", "user_agent") VALUES ('2a8a4d19-e9b4-47c1-8ebb-213e0c307e27', '25e71534-db36-410f-bfb8-cbc9295f82be', 'Microsoft Edge (Windows 11)', '127.0.0.1', 'Đà Nẵng, Việt Nam (Mạng cục bộ)', '2026-10-23T06:05:55.278932+00:00', 'Mật khẩu', 'success', 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/155.0.0.0 Safari/537.36 Edg/155.0.0.0') ON CONFLICT DO NOTHING;

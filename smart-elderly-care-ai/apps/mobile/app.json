@@ -2,9 +2,8 @@
   "expo": {
     "name": "Smart Elderly Care",
     "slug": "smart-elderly-care-mobile",
-    "owner": "nghia127",
     "version": "1.0.0",
-    "orientation": "portrait",
+    "orientation": "default",
     "icon": "./assets/icon.png",
     "userInterfaceStyle": "light",
     "splash": {
@@ -14,11 +13,15 @@
     },
     "ios": {
       "supportsTablet": true,
-      "bundleIdentifier": "com.c1se34.smartelderlycare"
+      "requireFullScreen": true,
+      "bundleIdentifier": "com.c1se34.smartelderlycare",
+      "infoPlist": {
+        "NSHealthShareUsageDescription": "Ứng dụng cần quyền đọc nhịp tim và nồng độ oxy trong máu SpO2 từ Apple Watch Series 6 để theo dõi sức khỏe và phát hiện té ngã cho người cao tuổi.",
+        "NSHealthUpdateUsageDescription": "Ứng dụng ghi nhận thông tin sức khỏe của người cao tuổi."
+      }
     },
     "android": {
       "package": "com.c1se34.smartelderlycare",
-      "googleServicesFile": "./google-services.json",
       "adaptiveIcon": {
         "foregroundImage": "./assets/adaptive-icon.png",
         "backgroundColor": "#ffffff"
@@ -30,11 +33,25 @@
     },
     "plugins": [
       [
+        "expo-screen-orientation",
+        {
+          "initialOrientation": "PORTRAIT_UP"
+        }
+      ],
+      [
+        "@config-plugins/react-native-webrtc",
+        {
+          "microphonePermission": "Cho phép sử dụng microphone để đàm thoại với camera."
+        }
+      ],
+      [
         "expo-location",
         {
           "locationWhenInUsePermission": "Allow Smart Elderly Care to access your location when sending an emergency alert."
         }
-      ]
+      ],
+      "expo-audio",
+      "expo-status-bar"
     ],
     "platforms": [
       "ios",

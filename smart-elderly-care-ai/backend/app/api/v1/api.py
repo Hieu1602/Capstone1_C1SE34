@@ -36,6 +36,8 @@ from app.api.v1.endpoints.mobile.emergency     import router as mobile_emergency
 from app.api.v1.endpoints.mobile.support       import router as mobile_support_router
 
 api_router = APIRouter()
+from app.api.v1.endpoints.mobile.camera import router as camera_router
+api_router.include_router(camera_router, prefix="/camera", tags=["Camera"])
 
 # ------------------------------------------------------------------------------
 # 1. ĐĂNG KÝ ROUTERS WEB ADMIN PORTAL
@@ -65,7 +67,7 @@ api_router.include_router(admin_notifications_router,  prefix="/system-notificat
 # ------------------------------------------------------------------------------
 api_router.include_router(mobile_auth_router,          prefix="/auth",          tags=["[MOBILE APP] Xác thực & Tài khoản"])
 api_router.include_router(mobile_houses_router,        prefix="/houses",        tags=["[MOBILE APP] Không gian nhà & Gia đình"])
-api_router.include_router(mobile_houses_router,        prefix="/households",    tags=["[MOBILE APP] Không gian nhà & Gia đình (Household Alias)"])
+api_router.include_router(mobile_houses_router,        prefix="/households",    tags=["[MOBILE APP] Không gian nhà & Gia đình (Households Alias)"])
 api_router.include_router(mobile_device_groups_router, prefix="/device-groups", tags=["[MOBILE APP] Phân vùng & Phòng"])
 api_router.include_router(mobile_devices_router,       prefix="/devices",       tags=["[MOBILE APP] Thiết bị IoT & Camera AI"])
 api_router.include_router(mobile_vitals_router,        prefix="/vitals",        tags=["[MOBILE APP] Sinh hiệu thời gian thực"])

@@ -14,6 +14,7 @@ import { Colors } from '../../../theme/colors';
 import { useVitalStore, IoTDeviceItem } from '../../../store/useVitalStore';
 import { LocalizedText, LocalizedTextInput } from '../../../i18n/LocalizedComponents';
 import { createThemeStyles, useTheme } from '../../../store/useThemeStore';
+import { appleWatchService } from '../../../services/appleWatchService';
 
 // Các trạng thái của toàn bộ luồng theo Mermaid flowchart
 type FlowStep =
@@ -419,15 +420,24 @@ export default function AddDeviceScreen({ navigation }: any) {
         setShowBleErrorDialog(true);
       } else {
         // Thành công -> SetupSuccess
+        const isAppleWatch = item.name.includes('Apple Watch') || selectedDeviceModel.includes('Apple Watch');
+        if (isAppleWatch) {
+          appleWatchService.requestPermissions().then((granted) => {
+            if (granted) {
+              appleWatchService.startSync(15);
+            }
+          });
+        }
+
         const newDevice: IoTDeviceItem = {
-          id: 'ble-smartband-' + Date.now(),
-          name: `${item.name} (${wearerName})`,
-          sub: 'BLE 5.2 • Nhịp tim PPG • SpO₂ • MPU6050 ngã',
+          id: isAppleWatch ? 'apple-watch-s6' : 'ble-smartband-' + Date.now(),
+          name: isAppleWatch ? `Apple Watch Series 6 (${wearerName})` : `${item.name} (${wearerName})`,
+          sub: isAppleWatch ? 'Apple HealthKit • Nhịp tim • SpO₂ • Phát hiện ngã' : 'BLE 5.2 • Nhịp tim PPG • SpO₂ • MPU6050 ngã',
           type: 'band',
-          status: `Đang đeo • Pin ${item.battery}%`,
+          status: `Đang kết nối • Pin ${item.battery}%`,
           isOnline: true,
           icon: 'watch',
-          color: '#10B981',
+          color: isAppleWatch ? '#0284C7' : '#10B981',
           location: wearerName,
           macAddress: item.mac,
         };
@@ -435,12 +445,12 @@ export default function AddDeviceScreen({ navigation }: any) {
 
         setSuccessInfo({
           name: newDevice.name,
-          type: 'Đồng hồ y tế thông minh',
-          protocol: 'Giao thức: BLUETOOTH (BLE 5.2 GATT)',
-          details: `MAC: ${item.mac} • Pin ${item.battery}% • RSSI ${item.rssi}`,
+          type: isAppleWatch ? 'Apple Watch Series 6 (HealthKit)' : 'Đồng hồ y tế thông minh',
+          protocol: isAppleWatch ? 'Giao thức: Apple HealthKit Gateway' : 'Giao thức: BLUETOOTH (BLE 5.2 GATT)',
+          details: isAppleWatch ? `Đồng bộ HealthKit • Pin ${item.battery}% • Cảm biến SpO2 S6` : `MAC: ${item.mac} • Pin ${item.battery}% • RSSI ${item.rssi}`,
           location: `Người đeo: ${wearerName}`,
           icon: 'watch',
-          color: '#10B981',
+          color: isAppleWatch ? '#0284C7' : '#10B981',
         });
 
         setCurrentStep('SETUP_SUCCESS');
@@ -525,11 +535,11 @@ export default function AddDeviceScreen({ navigation }: any) {
     },
     {
       id: 'ble-03',
-      name: 'Apple Watch Series 8',
+      name: 'Apple Watch Series 6 (HealthKit)',
       mac: 'BC:D0:74:11:4A:E8',
-      rssi: '-78 dBm (Trung bình)',
-      battery: 65,
-      services: 'Apple Health BLE Peripheral',
+      rssi: '-52 dBm (Tín hiệu tốt)',
+      battery: 85,
+      services: 'Apple HealthKit • Nhịp tim PPG • SpO₂ S6 • Phát hiện ngã',
     },
   ];
 
@@ -1027,27 +1037,27 @@ export default function AddDeviceScreen({ navigation }: any) {
               <Ionicons name="chevron-forward" size={20} color="#94A3B8" />
             </TouchableOpacity>
 
-            {/* Model 3: Apple Watch */}
+            {/* Model 3: Apple Watch Series 6 */}
             <TouchableOpacity
-              style={styles.modelCard}
-              onPress={() => handleSelectWatchModel('Apple Watch Series 8')}
+              style={[styles.modelCard, selectedDeviceModel.includes('Apple Watch') && styles.modelCardActive, { borderColor: '#0284C7' }]}
+              onPress={() => handleSelectWatchModel('Apple Watch Series 6 (HealthKit)')}
               activeOpacity={0.8}
             >
-              <View style={[styles.modelIconBox, { backgroundColor: '#F1F5F9' }]}>
-                <Ionicons name="watch-outline" size={26} color="#64748B" />
+              <View style={[styles.modelIconBox, { backgroundColor: '#E0F2FE' }]}>
+                <Ionicons name="watch" size={26} color="#0284C7" />
               </View>
               <View style={{ flex: 1 }}>
                 <View style={styles.modelHeaderRow}>
-                  <LocalizedText style={styles.modelTitle}>Apple Watch Series 8 / SE</LocalizedText>
-                  <View style={[styles.activeTag, { backgroundColor: '#E2E8F0' }]}>
-                    <LocalizedText style={[styles.activeTagText, { color: '#475569' }]}>Sắp hỗ trợ</LocalizedText>
+                  <LocalizedText style={styles.modelTitle}>Apple Watch Series 6 / SE</LocalizedText>
+                  <View style={[styles.activeTag, { backgroundColor: '#E0F2FE' }]}>
+                    <LocalizedText style={[styles.activeTagText, { color: '#0369A1' }]}>Sẵn sàng</LocalizedText>
                   </View>
                 </View>
                 <LocalizedText style={styles.modelDesc}>
-                  Giao thức: BLUETOOTH • HealthKit Gateway • Cảnh báo ngã Crash Detection
+                  Giao thức: Apple HealthKit • Nhịp tim 24/7 • SpO₂ S6 • Phát hiện ngã & SOS
                 </LocalizedText>
               </View>
-              <Ionicons name="chevron-forward" size={20} color="#94A3B8" />
+              <Ionicons name="chevron-forward" size={20} color="#0284C7" />
             </TouchableOpacity>
 
             {/* CheckProtocol Box */}
