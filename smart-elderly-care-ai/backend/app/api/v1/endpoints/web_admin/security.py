@@ -299,53 +299,7 @@ async def get_audit_logs(
         pass
 
     # Fallback dữ liệu mẫu nếu CSDL chưa có
-    return [
-        {
-            "id": "aud-1",
-            "timestamp": datetime.now().strftime("%Y-%m-%d %H:%M:%S"),
-            "event": "ĐĂNG NHẬP THÀNH CÔNG",
-            "user": "Admin123 (Root Admin)",
-            "ip": "127.0.0.1",
-            "severity": "low",
-            "details": "Đăng nhập trang quản trị thành công qua JWT Bearer token.",
-        },
-        {
-            "id": "aud-2",
-            "timestamp": datetime.now().strftime("%Y-%m-%d %H:%M:%S"),
-            "event": "THAY ĐỔI CẤU HÌNH THIẾT BỊ",
-            "user": "BS. Trần Văn Minh",
-            "ip": "192.168.1.15",
-            "severity": "medium",
-            "details": "Cập nhật ngưỡng cảnh báo SpO2 < 90% cho cụ Nguyễn Văn An (Phòng ngủ).",
-        },
-        {
-            "id": "aud-3",
-            "timestamp": datetime.now().strftime("%Y-%m-%d %H:%M:%S"),
-            "event": "CẢNH BÁO ĐĂNG NHẬP THẤT BẠI",
-            "user": "+84905999888",
-            "ip": "115.79.138.90",
-            "severity": "high",
-            "details": "Nhập sai mật khẩu lần thứ 3. Hệ thống gửi cảnh báo SMS OTP.",
-        },
-        {
-            "id": "aud-4",
-            "timestamp": datetime.now().strftime("%Y-%m-%d %H:%M:%S"),
-            "event": "TỰ ĐỘNG THU HỒI TOKEN HẾT HẠN",
-            "user": "System Cron",
-            "ip": "localhost:8000",
-            "severity": "low",
-            "details": "Dọn sạch 14 refresh token đã hết hạn trong Redis cache.",
-        },
-        {
-            "id": "aud-5",
-            "timestamp": datetime.now().strftime("%Y-%m-%d %H:%M:%S"),
-            "event": "PHÁT HIỆN TRUY CẬP TRÁI PHÉP",
-            "user": "Anonymous",
-            "ip": "45.154.255.88",
-            "severity": "critical",
-            "details": "Quét cổng bất thường vào endpoint /api/v1/auth/login. Đã chặn IP tự động.",
-        },
-    ]
+    return []
 
 
 # ==============================================================================
