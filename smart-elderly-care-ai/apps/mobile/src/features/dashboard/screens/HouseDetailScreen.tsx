@@ -26,6 +26,7 @@ import {
   Modal,
   ActivityIndicator,
   Switch,
+  Platform,
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { Ionicons, MaterialCommunityIcons } from '@expo/vector-icons';
@@ -79,6 +80,8 @@ export default function HouseDetailScreen({ navigation }: any) {
   const [editCanHandleEmergency, setEditCanHandleEmergency] = useState(true);
   const [editCanManageDevices, setEditCanManageDevices] = useState(false);
   const [isSavingPermissions, setIsSavingPermissions] = useState(false);
+  const [isConfirmingDelete, setIsConfirmingDelete] = useState(false);
+  const [isDeletingMember, setIsDeletingMember] = useState(false);
 
   // Kiểm tra người đang đăng nhập có phải là Chủ nhà (Owner) hoặc Admin không
   const isCurrentUserOwner =
@@ -140,6 +143,7 @@ export default function HouseDetailScreen({ navigation }: any) {
     setEditCanViewCamera(member.can_view_camera !== false);
     setEditCanHandleEmergency(member.can_handle_emergency !== false);
     setEditCanManageDevices(Boolean(member.can_manage_devices));
+    setIsConfirmingDelete(false);
     setPermissionModalVisible(true);
   };
 
@@ -181,33 +185,54 @@ export default function HouseDetailScreen({ navigation }: any) {
     }
   };
 
-  // Xóa thành viên khỏi căn nhà
+  // Kích hoạt giao diện xác nhận xóa thành viên
   const handleRemoveMember = (member: any) => {
-    Alert.alert(
-      'Xóa thành viên',
-      `Bạn có chắc chắn muốn xóa "${member.full_name}" khỏi danh sách gia đình không?`,
-      [
-        { text: 'Hủy', style: 'cancel' },
-        {
-          text: 'Xóa thành viên',
-          style: 'destructive',
-          onPress: async () => {
-            try {
-              const targetHId = household_id || 'current';
-              await householdApi.removeMember(targetHId, member.id);
-              setMembers((prev) => prev.filter((m) => m.id !== member.id));
-              setPermissionModalVisible(false);
-              Alert.alert('Đã xóa', `Đã xóa ${member.full_name} khỏi ngôi nhà.`);
-            } catch (error: any) {
-              Alert.alert('Lỗi', error.response?.data?.detail || 'Không thể xóa thành viên.');
-            }
-          },
-        },
-      ]
-    );
+    setSelectedMember(member);
+    setIsConfirmingDelete(true);
   };
 
-  // Xử lý thêm thành viên mới
+  // Thực thi xóa thành viên khỏi căn nhà qua API Backend
+  const executeDeleteMember = async (member: any) => {
+    if (!member) return;
+    const targetMemberId = member.id || member.user_id;
+    if (!targetMemberId) return;
+
+    try {
+      setIsDeletingMember(true);
+      const targetHId = household_id || 'current';
+      await householdApi.removeMember(targetHId, targetMemberId);
+
+      // Cập nhật danh sách thành viên cục bộ ngay lập tức
+      setMembers((prev) =>
+        prev.filter((m) => m.id !== targetMemberId && m.user_id !== targetMemberId)
+      );
+      setPermissionModalVisible(false);
+      setIsConfirmingDelete(false);
+
+      const msg = `Đã xóa ${member.full_name || 'thành viên'} khỏi ngôi nhà thành công.`;
+      if (Platform.OS === 'web') {
+        window.alert(msg);
+      } else {
+        Alert.alert('Đã xóa', msg);
+      }
+
+      loadMembers();
+    } catch (error: any) {
+      const errorMsg =
+        error.response?.data?.detail ||
+        error.message ||
+        'Không thể xóa thành viên. Vui lòng thử lại sau.';
+      if (Platform.OS === 'web') {
+        window.alert(errorMsg);
+      } else {
+        Alert.alert('Lỗi', errorMsg);
+      }
+    } finally {
+      setIsDeletingMember(false);
+    }
+  };
+
+    // Xử lý thêm thành viên mới
   const handleAddMember = async () => {
     const phoneToSubmit = newMemberPhone.trim();
     if (!phoneToSubmit) {
@@ -532,20 +557,69 @@ export default function HouseDetailScreen({ navigation }: any) {
             {/* Modal Header */}
             <View style={styles.modalHeaderRow}>
               <View>
-                <Text style={[styles.modalTitle, { color: textTitle }]}>Phân quyền thành viên</Text>
+                <Text style={[styles.modalTitle, { color: textTitle }]}>
+                  {isConfirmingDelete ? 'Xác nhận xóa thành viên' : 'Phân quyền thành viên'}
+                </Text>
                 <Text style={[styles.modalSub, { color: textSub }]}>
                   {selectedMember?.full_name} ({selectedMember?.phone_number || '--'})
                 </Text>
               </View>
               <TouchableOpacity
-                onPress={() => setPermissionModalVisible(false)}
+                onPress={() => {
+                  setIsConfirmingDelete(false);
+                  setPermissionModalVisible(false);
+                }}
                 style={styles.modalCloseBtn}
+                disabled={isDeletingMember}
               >
                 <Ionicons name="close" size={22} color={textSub} />
               </TouchableOpacity>
             </View>
 
-            {selectedMember?.is_owner || selectedMember?.role_in_house === 'OWNER' ? (
+            {isConfirmingDelete ? (
+              // GIAO DIỆN XÁC NHẬN XÓA THÀNH VIÊN
+              <View style={styles.confirmDeleteContent}>
+                <View style={styles.confirmDeleteIconCircle}>
+                  <Ionicons name="trash-outline" size={36} color="#EF4444" />
+                </View>
+                <Text style={[styles.confirmDeleteHeading, { color: textTitle }]}>
+                  Bạn có chắc muốn xóa thành viên này?
+                </Text>
+                <Text style={[styles.confirmDeleteDescription, { color: textSub }]}>
+                  Tài khoản <Text style={{ fontWeight: '700', color: textTitle }}>{selectedMember?.full_name}</Text> ({selectedMember?.phone_number || '--'}) sẽ bị xóa khỏi căn nhà và mất toàn bộ quyền truy cập dữ liệu sức khỏe, camera AI cũng như thông báo khẩn cấp.
+                </Text>
+
+                <View style={styles.confirmActionButtons}>
+                  <TouchableOpacity
+                    style={[
+                      styles.cancelBtn,
+                      { backgroundColor: isDarkMode ? '#1E293B' : '#F1F5F9', borderColor: borderCol },
+                    ]}
+                    onPress={() => setIsConfirmingDelete(false)}
+                    disabled={isDeletingMember}
+                    activeOpacity={0.7}
+                  >
+                    <Text style={[styles.cancelBtnText, { color: textSub }]}>Hủy bỏ</Text>
+                  </TouchableOpacity>
+
+                  <TouchableOpacity
+                    style={[styles.confirmExecuteDeleteBtn, isDeletingMember && { opacity: 0.7 }]}
+                    onPress={() => executeDeleteMember(selectedMember)}
+                    disabled={isDeletingMember}
+                    activeOpacity={0.8}
+                  >
+                    {isDeletingMember ? (
+                      <ActivityIndicator color="#FFF" size="small" />
+                    ) : (
+                      <>
+                        <Ionicons name="trash" size={16} color="#FFF" style={{ marginRight: 6 }} />
+                        <Text style={styles.confirmExecuteDeleteBtnText}>Xóa thành viên</Text>
+                      </>
+                    )}
+                  </TouchableOpacity>
+                </View>
+              </View>
+            ) : selectedMember?.is_owner || selectedMember?.role_in_house === 'OWNER' ? (
               // Trường hợp là Chủ sở hữu
               <View style={styles.ownerNoticeBox}>
                 <Ionicons name="ribbon" size={28} color="#F59E0B" />
@@ -556,175 +630,177 @@ export default function HouseDetailScreen({ navigation }: any) {
               </View>
             ) : (
               // Trường hợp là Thành viên hoặc Bác sĩ
-              <ScrollView style={{ maxHeight: 380 }} showsVerticalScrollIndicator={false}>
-                {/* Chọn vai trò */}
-                <Text style={[styles.permSectionTitle, { color: textTitle }]}>Vai trò trong gia đình</Text>
-                <View style={styles.rolePickerRow}>
-                  <TouchableOpacity
-                    style={[
-                      styles.roleOptionBtn,
-                      { backgroundColor: isDarkMode ? '#0F172A' : '#F1F5F9', borderColor: borderCol },
-                      editRoleInHouse === 'MEMBER' && styles.roleOptionActive,
-                    ]}
-                    onPress={() => setEditRoleInHouse('MEMBER')}
-                  >
-                    <Ionicons
-                      name="people"
-                      size={16}
-                      color={editRoleInHouse === 'MEMBER' ? '#F97316' : textSub}
-                      style={{ marginRight: 6 }}
-                    />
-                    <Text
+              <>
+                <ScrollView style={{ maxHeight: 380 }} showsVerticalScrollIndicator={false}>
+                  {/* Chọn vai trò */}
+                  <Text style={[styles.permSectionTitle, { color: textTitle }]}>Vai trò trong gia đình</Text>
+                  <View style={styles.rolePickerRow}>
+                    <TouchableOpacity
                       style={[
-                        styles.roleOptionText,
-                        { color: textSub },
-                        editRoleInHouse === 'MEMBER' && styles.roleOptionTextActive,
+                        styles.roleOptionBtn,
+                        { backgroundColor: isDarkMode ? '#0F172A' : '#F1F5F9', borderColor: borderCol },
+                        editRoleInHouse === 'MEMBER' && styles.roleOptionActive,
                       ]}
+                      onPress={() => setEditRoleInHouse('MEMBER')}
                     >
-                      Thành viên
-                    </Text>
+                      <Ionicons
+                        name="people"
+                        size={16}
+                        color={editRoleInHouse === 'MEMBER' ? '#F97316' : textSub}
+                        style={{ marginRight: 6 }}
+                      />
+                      <Text
+                        style={[
+                          styles.roleOptionText,
+                          { color: textSub },
+                          editRoleInHouse === 'MEMBER' && styles.roleOptionTextActive,
+                        ]}
+                      >
+                        Thành viên
+                      </Text>
+                    </TouchableOpacity>
+
+                    <TouchableOpacity
+                      style={[
+                        styles.roleOptionBtn,
+                        { backgroundColor: isDarkMode ? '#0F172A' : '#F1F5F9', borderColor: borderCol },
+                        editRoleInHouse === 'DOCTOR' && styles.roleOptionActive,
+                      ]}
+                      onPress={() => setEditRoleInHouse('DOCTOR')}
+                    >
+                      <Ionicons
+                        name="medkit"
+                        size={16}
+                        color={editRoleInHouse === 'DOCTOR' ? '#F97316' : textSub}
+                        style={{ marginRight: 6 }}
+                      />
+                      <Text
+                        style={[
+                          styles.roleOptionText,
+                          { color: textSub },
+                          editRoleInHouse === 'DOCTOR' && styles.roleOptionTextActive,
+                        ]}
+                      >
+                        Bác sĩ gia đình
+                      </Text>
+                    </TouchableOpacity>
+                  </View>
+
+                  {/* Danh sách các quyền hạn chi tiết */}
+                  <Text style={[styles.permSectionTitle, { color: textTitle, marginTop: 18 }]}>
+                    Danh sách quyền hạn được cấp
+                  </Text>
+
+                  {/* 1. Theo dõi sức khỏe (Ủy quyền) */}
+                  <View style={[styles.permSwitchRow, { borderColor: borderCol }]}>
+                    <View style={{ flex: 1, paddingRight: 12 }}>
+                      <View style={{ flexDirection: 'row', alignItems: 'center' }}>
+                        <Ionicons name="fitness" size={18} color="#3B82F6" style={{ marginRight: 6 }} />
+                        <Text style={[styles.permSwitchTitle, { color: textTitle }]}>
+                          Theo dõi sức khỏe (Ủy quyền)
+                        </Text>
+                      </View>
+                      <Text style={[styles.permSwitchDesc, { color: textSub }]}>
+                        Cho phép xem chỉ số sinh hiệu (nhịp tim, SpO2, huyết áp) và báo cáo y tế.
+                      </Text>
+                    </View>
+                    <Switch
+                      value={editCanViewHealth}
+                      onValueChange={setEditCanViewHealth}
+                      trackColor={{ false: '#94A3B8', true: '#BFDBFE' }}
+                      thumbColor={editCanViewHealth ? '#2563EB' : '#F1F5F9'}
+                    />
+                  </View>
+
+                  {/* 2. Giám sát camera (Được cấp quyền) */}
+                  <View style={[styles.permSwitchRow, { borderColor: borderCol }]}>
+                    <View style={{ flex: 1, paddingRight: 12 }}>
+                      <View style={{ flexDirection: 'row', alignItems: 'center' }}>
+                        <Ionicons name="videocam" size={18} color="#10B981" style={{ marginRight: 6 }} />
+                        <Text style={[styles.permSwitchTitle, { color: textTitle }]}>
+                          Giám sát camera (Được cấp quyền)
+                        </Text>
+                      </View>
+                      <Text style={[styles.permSwitchDesc, { color: textSub }]}>
+                        Cho phép xem trực tiếp luồng stream an ninh AI, đàm thoại và phát lại.
+                      </Text>
+                    </View>
+                    <Switch
+                      value={editCanViewCamera}
+                      onValueChange={setEditCanViewCamera}
+                      trackColor={{ false: '#94A3B8', true: '#A7F3D0' }}
+                      thumbColor={editCanViewCamera ? '#059669' : '#F1F5F9'}
+                    />
+                  </View>
+
+                  {/* 3. Xử lý khẩn cấp */}
+                  <View style={[styles.permSwitchRow, { borderColor: borderCol }]}>
+                    <View style={{ flex: 1, paddingRight: 12 }}>
+                      <View style={{ flexDirection: 'row', alignItems: 'center' }}>
+                        <Ionicons name="alert-circle" size={18} color="#EF4444" style={{ marginRight: 6 }} />
+                        <Text style={[styles.permSwitchTitle, { color: textTitle }]}>
+                          Xử lý khẩn cấp & SOS
+                        </Text>
+                      </View>
+                      <Text style={[styles.permSwitchDesc, { color: textSub }]}>
+                        Nhận chuông báo té ngã, kích hoạt còi hú báo động và gọi cấp cứu 115.
+                      </Text>
+                    </View>
+                    <Switch
+                      value={editCanHandleEmergency}
+                      onValueChange={setEditCanHandleEmergency}
+                      trackColor={{ false: '#94A3B8', true: '#FECACA' }}
+                      thumbColor={editCanHandleEmergency ? '#DC2626' : '#F1F5F9'}
+                    />
+                  </View>
+
+                  {/* 4. Cấu hình thiết bị & Ngưỡng */}
+                  <View style={[styles.permSwitchRow, { borderColor: borderCol }]}>
+                    <View style={{ flex: 1, paddingRight: 12 }}>
+                      <View style={{ flexDirection: 'row', alignItems: 'center' }}>
+                        <Ionicons name="hardware-chip" size={18} color="#8B5CF6" style={{ marginRight: 6 }} />
+                        <Text style={[styles.permSwitchTitle, { color: textTitle }]}>
+                          Cấu hình thiết bị & Ngưỡng an toàn
+                        </Text>
+                      </View>
+                      <Text style={[styles.permSwitchDesc, { color: textSub }]}>
+                        Quyền thay đổi ngưỡng báo động nhịp tim/huyết áp và khởi động lại phần cứng.
+                      </Text>
+                    </View>
+                    <Switch
+                      value={editCanManageDevices}
+                      onValueChange={setEditCanManageDevices}
+                      trackColor={{ false: '#94A3B8', true: '#DDD6FE' }}
+                      thumbColor={editCanManageDevices ? '#7C3AED' : '#F1F5F9'}
+                    />
+                  </View>
+                </ScrollView>
+
+                {/* Modal Action Buttons */}
+                <View style={styles.modalActionButtons}>
+                  <TouchableOpacity
+                    style={[styles.removeBtn, { borderColor: '#EF4444' }]}
+                    onPress={() => handleRemoveMember(selectedMember)}
+                    activeOpacity={0.7}
+                  >
+                    <Ionicons name="trash-outline" size={18} color="#EF4444" style={{ marginRight: 4 }} />
+                    <Text style={styles.removeBtnText}>Xóa</Text>
                   </TouchableOpacity>
 
                   <TouchableOpacity
-                    style={[
-                      styles.roleOptionBtn,
-                      { backgroundColor: isDarkMode ? '#0F172A' : '#F1F5F9', borderColor: borderCol },
-                      editRoleInHouse === 'DOCTOR' && styles.roleOptionActive,
-                    ]}
-                    onPress={() => setEditRoleInHouse('DOCTOR')}
+                    style={styles.saveBtn}
+                    onPress={handleSavePermissions}
+                    disabled={isSavingPermissions}
+                    activeOpacity={0.8}
                   >
-                    <Ionicons
-                      name="medkit"
-                      size={16}
-                      color={editRoleInHouse === 'DOCTOR' ? '#F97316' : textSub}
-                      style={{ marginRight: 6 }}
-                    />
-                    <Text
-                      style={[
-                        styles.roleOptionText,
-                        { color: textSub },
-                        editRoleInHouse === 'DOCTOR' && styles.roleOptionTextActive,
-                      ]}
-                    >
-                      Bác sĩ gia đình
-                    </Text>
+                    {isSavingPermissions ? (
+                      <ActivityIndicator color="#FFF" size="small" />
+                    ) : (
+                      <Text style={styles.saveBtnText}>Lưu phân quyền</Text>
+                    )}
                   </TouchableOpacity>
                 </View>
-
-                {/* Danh sách các quyền hạn chi tiết */}
-                <Text style={[styles.permSectionTitle, { color: textTitle, marginTop: 18 }]}>
-                  Danh sách quyền hạn được cấp
-                </Text>
-
-                {/* 1. Theo dõi sức khỏe (Ủy quyền) */}
-                <View style={[styles.permSwitchRow, { borderColor: borderCol }]}>
-                  <View style={{ flex: 1, paddingRight: 12 }}>
-                    <View style={{ flexDirection: 'row', alignItems: 'center' }}>
-                      <Ionicons name="fitness" size={18} color="#3B82F6" style={{ marginRight: 6 }} />
-                      <Text style={[styles.permSwitchTitle, { color: textTitle }]}>
-                        Theo dõi sức khỏe (Ủy quyền)
-                      </Text>
-                    </View>
-                    <Text style={[styles.permSwitchDesc, { color: textSub }]}>
-                      Cho phép xem chỉ số sinh hiệu (nhịp tim, SpO2, huyết áp) và báo cáo y tế.
-                    </Text>
-                  </View>
-                  <Switch
-                    value={editCanViewHealth}
-                    onValueChange={setEditCanViewHealth}
-                    trackColor={{ false: '#94A3B8', true: '#BFDBFE' }}
-                    thumbColor={editCanViewHealth ? '#2563EB' : '#F1F5F9'}
-                  />
-                </View>
-
-                {/* 2. Giám sát camera (Được cấp quyền) */}
-                <View style={[styles.permSwitchRow, { borderColor: borderCol }]}>
-                  <View style={{ flex: 1, paddingRight: 12 }}>
-                    <View style={{ flexDirection: 'row', alignItems: 'center' }}>
-                      <Ionicons name="videocam" size={18} color="#10B981" style={{ marginRight: 6 }} />
-                      <Text style={[styles.permSwitchTitle, { color: textTitle }]}>
-                        Giám sát camera (Được cấp quyền)
-                      </Text>
-                    </View>
-                    <Text style={[styles.permSwitchDesc, { color: textSub }]}>
-                      Cho phép xem trực tiếp luồng stream an ninh AI, đàm thoại và phát lại.
-                    </Text>
-                  </View>
-                  <Switch
-                    value={editCanViewCamera}
-                    onValueChange={setEditCanViewCamera}
-                    trackColor={{ false: '#94A3B8', true: '#A7F3D0' }}
-                    thumbColor={editCanViewCamera ? '#059669' : '#F1F5F9'}
-                  />
-                </View>
-
-                {/* 3. Xử lý khẩn cấp */}
-                <View style={[styles.permSwitchRow, { borderColor: borderCol }]}>
-                  <View style={{ flex: 1, paddingRight: 12 }}>
-                    <View style={{ flexDirection: 'row', alignItems: 'center' }}>
-                      <Ionicons name="alert-circle" size={18} color="#EF4444" style={{ marginRight: 6 }} />
-                      <Text style={[styles.permSwitchTitle, { color: textTitle }]}>
-                        Xử lý khẩn cấp & SOS
-                      </Text>
-                    </View>
-                    <Text style={[styles.permSwitchDesc, { color: textSub }]}>
-                      Nhận chuông báo té ngã, kích hoạt còi hú báo động và gọi cấp cứu 115.
-                    </Text>
-                  </View>
-                  <Switch
-                    value={editCanHandleEmergency}
-                    onValueChange={setEditCanHandleEmergency}
-                    trackColor={{ false: '#94A3B8', true: '#FECACA' }}
-                    thumbColor={editCanHandleEmergency ? '#DC2626' : '#F1F5F9'}
-                  />
-                </View>
-
-                {/* 4. Cấu hình thiết bị & Ngưỡng */}
-                <View style={[styles.permSwitchRow, { borderColor: borderCol }]}>
-                  <View style={{ flex: 1, paddingRight: 12 }}>
-                    <View style={{ flexDirection: 'row', alignItems: 'center' }}>
-                      <Ionicons name="hardware-chip" size={18} color="#8B5CF6" style={{ marginRight: 6 }} />
-                      <Text style={[styles.permSwitchTitle, { color: textTitle }]}>
-                        Cấu hình thiết bị & Ngưỡng an toàn
-                      </Text>
-                    </View>
-                    <Text style={[styles.permSwitchDesc, { color: textSub }]}>
-                      Quyền thay đổi ngưỡng báo động nhịp tim/huyết áp và khởi động lại phần cứng.
-                    </Text>
-                  </View>
-                  <Switch
-                    value={editCanManageDevices}
-                    onValueChange={setEditCanManageDevices}
-                    trackColor={{ false: '#94A3B8', true: '#DDD6FE' }}
-                    thumbColor={editCanManageDevices ? '#7C3AED' : '#F1F5F9'}
-                  />
-                </View>
-              </ScrollView>
-            )}
-
-            {/* Modal Action Buttons */}
-            {!(selectedMember?.is_owner || selectedMember?.role_in_house === 'OWNER') && (
-              <View style={styles.modalActionButtons}>
-                <TouchableOpacity
-                  style={[styles.removeBtn, { borderColor: '#EF4444' }]}
-                  onPress={() => handleRemoveMember(selectedMember)}
-                >
-                  <Ionicons name="trash-outline" size={18} color="#EF4444" style={{ marginRight: 4 }} />
-                  <Text style={styles.removeBtnText}>Xóa</Text>
-                </TouchableOpacity>
-
-                <TouchableOpacity
-                  style={styles.saveBtn}
-                  onPress={handleSavePermissions}
-                  disabled={isSavingPermissions}
-                >
-                  {isSavingPermissions ? (
-                    <ActivityIndicator color="#FFF" size="small" />
-                  ) : (
-                    <Text style={styles.saveBtnText}>Lưu phân quyền</Text>
-                  )}
-                </TouchableOpacity>
-              </View>
+              </>
             )}
           </View>
         </View>
@@ -1246,6 +1322,51 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
   },
   saveBtnText: {
+    color: '#FFF',
+    fontWeight: '700',
+    fontSize: 14,
+  },
+  confirmDeleteContent: {
+    alignItems: 'center',
+    paddingVertical: 18,
+    paddingHorizontal: 8,
+  },
+  confirmDeleteIconCircle: {
+    width: 64,
+    height: 64,
+    borderRadius: 32,
+    backgroundColor: '#FEE2E2',
+    alignItems: 'center',
+    justifyContent: 'center',
+    marginBottom: 16,
+  },
+  confirmDeleteHeading: {
+    fontSize: 16,
+    fontWeight: '800',
+    textAlign: 'center',
+    marginBottom: 10,
+  },
+  confirmDeleteDescription: {
+    fontSize: 13,
+    lineHeight: 19,
+    textAlign: 'center',
+    marginBottom: 20,
+  },
+  confirmActionButtons: {
+    flexDirection: 'row',
+    gap: 12,
+    width: '100%',
+  },
+  confirmExecuteDeleteBtn: {
+    flex: 1.5,
+    flexDirection: 'row',
+    backgroundColor: '#EF4444',
+    borderRadius: 12,
+    paddingVertical: 12,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  confirmExecuteDeleteBtnText: {
     color: '#FFF',
     fontWeight: '700',
     fontSize: 14,

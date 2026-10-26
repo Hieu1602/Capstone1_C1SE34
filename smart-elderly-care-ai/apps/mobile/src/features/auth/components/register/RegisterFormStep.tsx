@@ -343,7 +343,7 @@ export const RegisterFormStep: React.FC<RegisterFormStepProps> = ({
                 />
                 <TextInput
                     style={[styles.input, { flex: 1 }]}
-                    placeholder="Mật khẩu (tối thiểu 6 ký tự)"
+                    placeholder="Mật khẩu (8-16 ký tự)"
                     placeholderTextColor="#94A3B8"
                     value={password}
                     onChangeText={setPassword}
@@ -358,6 +358,67 @@ export const RegisterFormStep: React.FC<RegisterFormStepProps> = ({
                         color="#94A3B8"
                     />
                 </TouchableOpacity>
+            </View>
+
+            {/* Hướng dẫn tiêu chuẩn mật khẩu an toàn */}
+            <View style={styles.passwordRequirements}>
+                <Text style={styles.passwordRequirementsTitle}>
+                    Yêu cầu mật khẩu:
+                </Text>
+                <View style={styles.passwordRequirementRow}>
+                    <Ionicons
+                        name={
+                            password.length >= 8 && password.length <= 16
+                                ? "checkmark-circle"
+                                : "ellipse-outline"
+                        }
+                        size={16}
+                        color={
+                            password.length >= 8 && password.length <= 16
+                                ? "#10B981"
+                                : "#FF7A00"
+                        }
+                    />
+                    <Text
+                        style={[
+                            styles.passwordRequirement,
+                            password.length >= 8 &&
+                                password.length <= 16 &&
+                                styles.passwordRequirementMet,
+                        ]}
+                    >
+                        Dài 8-16 ký tự
+                    </Text>
+                </View>
+                <View style={styles.passwordRequirementRow}>
+                    <Ionicons
+                        name={
+                            /^(?=.*[a-z])(?=.*[A-Z])(?=.*\d)(?=.*[^A-Za-z0-9]).+$/.test(
+                                password,
+                            )
+                                ? "checkmark-circle"
+                                : "ellipse-outline"
+                        }
+                        size={16}
+                        color={
+                            /^(?=.*[a-z])(?=.*[A-Z])(?=.*\d)(?=.*[^A-Za-z0-9]).+$/.test(
+                                password,
+                            )
+                                ? "#10B981"
+                                : "#FF7A00"
+                        }
+                    />
+                    <Text
+                        style={[
+                            styles.passwordRequirement,
+                            /^(?=.*[a-z])(?=.*[A-Z])(?=.*\d)(?=.*[^A-Za-z0-9]).+$/.test(
+                                password,
+                            ) && styles.passwordRequirementMet,
+                        ]}
+                    >
+                        Bao gồm chữ hoa, chữ thường, số và ký hiệu đặc biệt
+                    </Text>
+                </View>
             </View>
 
             {/* 5. Xác nhận lại mật khẩu */}
@@ -576,6 +637,36 @@ const styles = StyleSheet.create({
         fontSize: 16,
         fontWeight: "700",
         letterSpacing: 0.2,
+    },
+    passwordRequirements: {
+        backgroundColor: "#F8FAFC",
+        borderRadius: 14,
+        padding: 12,
+        marginTop: 2,
+        marginBottom: 4,
+        borderWidth: 1,
+        borderColor: "#E2E8F0",
+        gap: 6,
+    },
+    passwordRequirementsTitle: {
+        fontSize: 12.5,
+        fontWeight: "600",
+        color: "#475569",
+        marginBottom: 2,
+    },
+    passwordRequirementRow: {
+        flexDirection: "row",
+        alignItems: "center",
+        gap: 8,
+    },
+    passwordRequirement: {
+        fontSize: 12,
+        color: "#64748B",
+        flex: 1,
+    },
+    passwordRequirementMet: {
+        color: "#10B981",
+        fontWeight: "600",
     },
 });
 

@@ -56,8 +56,10 @@ const formatPhotonAddress = (result: PhotonReverseGeocodeResult) => {
   const place = result.features?.[0]?.properties;
   if (!place) return '';
   const street = [place.housenumber, place.street].filter(Boolean).join(' ');
+  const isNameDuplicate = !place.name || place.name === place.street || place.name === place.housenumber || place.name === street;
+  const placeName = isNameDuplicate ? null : place.name;
   const parts = uniqueAddressParts([
-    place.name,
+    placeName,
     street,
     place.locality,
     place.district,
@@ -70,7 +72,19 @@ const formatPhotonAddress = (result: PhotonReverseGeocodeResult) => {
 };
 
 const resolveAddressFromCoords = async (latitude: number, longitude: number): Promise<string> => {
-  // 1. Thử gọi API backend (Nominatim Server-side, hỗ trợ tiếng Việt đầy đủ, chuẩn xác tên đường & số nhà, không lo CORS)
+  // 1. Thử Photon Komoot (cực nhanh ~1s, không bị CORS, chính xác số nhà, tên đường, tổ thôn xã)
+  try {
+    const photonResp = await fetch(`https://photon.komoot.io/reverse?lat=${latitude}&lon=${longitude}`);
+    if (photonResp.ok) {
+      const result = (await photonResp.json()) as PhotonReverseGeocodeResult;
+      const addr = formatPhotonAddress(result);
+      if (addr) return addr;
+    }
+  } catch (e) {
+    console.warn('[ReverseGeocode] Photon error, trying backend:', e);
+  }
+
+  // 2. Thử gọi API backend (Nominatim & Photon Server-side, hỗ trợ tiếng Việt đầy đủ)
   try {
     const res = await emergencyApi.reverseGeocode(latitude, longitude);
     if (res.data?.address) {
@@ -80,7 +94,7 @@ const resolveAddressFromCoords = async (latitude: number, longitude: number): Pr
     console.warn('[ReverseGeocode] Backend API error, trying client fallbacks:', e);
   }
 
-  // 2. Thử BigDataCloud Client (miễn phí, có header Access-Control-Allow-Origin: *, hỗ trợ tiếng Việt)
+  // 3. Fallback BigDataCloud Client (chỉ có cấp phường/xã, quận, thành phố)
   try {
     const bdcUrl = `https://api.bigdatacloud.net/data/reverse-geocode-client?latitude=${latitude}&longitude=${longitude}&localityLanguage=vi`;
     const resp = await fetch(bdcUrl);
@@ -99,18 +113,6 @@ const resolveAddressFromCoords = async (latitude: number, longitude: number): Pr
     console.warn('[ReverseGeocode] BigDataCloud error:', e);
   }
 
-  // 3. Thử Photon (bỏ lang=vi để không bị HTTP 400 Bad Request)
-  try {
-    const photonResp = await fetch(`https://photon.komoot.io/reverse?lat=${latitude}&lon=${longitude}`);
-    if (photonResp.ok) {
-      const result = (await photonResp.json()) as PhotonReverseGeocodeResult;
-      const addr = formatPhotonAddress(result);
-      if (addr) return addr;
-    }
-  } catch (e) {
-    console.warn('[ReverseGeocode] Photon error:', e);
-  }
-
   return '';
 };
 
@@ -120,7 +122,6 @@ export default function EmergencySOSScreen({ navigation }: any) {
   const house = useDeviceStore((s) => s.house);
   // Dữ liệu biểu mẫu và trạng thái của các thao tác bất đồng bộ.
   const [address, setAddress] = useState(house?.address || '');
-  const [isOpenStreetMapAddress, setIsOpenStreetMapAddress] = useState(false);
   const [coordinates, setCoordinates] = useState<{ latitude: number; longitude: number } | null>(null);
   const [senderName, setSenderName] = useState(userName || full_name || '');
   const [senderPhone, setSenderPhone] = useState(userPhone || phone_number || '');
@@ -141,7 +142,6 @@ export default function EmergencySOSScreen({ navigation }: any) {
       const position = await Location.getCurrentPositionAsync({ accuracy: Location.Accuracy.High });
       const { latitude, longitude } = position.coords;
       setCoordinates({ latitude, longitude });
-      setIsOpenStreetMapAddress(false);
 
       try {
         let resolvedAddress = '';
@@ -152,7 +152,7 @@ export default function EmergencySOSScreen({ navigation }: any) {
             const places = await Location.reverseGeocodeAsync({ latitude, longitude });
             const place = places[0];
             const street = [place?.streetNumber, place?.street].filter(Boolean).join(' ');
-            resolvedAddress = uniqueAddressParts([
+            const resolved = uniqueAddressParts([
               street,
               place?.name,
               place?.district,
@@ -161,6 +161,13 @@ export default function EmergencySOSScreen({ navigation }: any) {
               place?.region,
               place?.country,
             ]).join(', ');
+            // Nếu định vị native không trích xuất được số nhà/tên đường thì bổ sung từ Photon
+            if (!street) {
+              const detailedAddr = await resolveAddressFromCoords(latitude, longitude);
+              resolvedAddress = detailedAddr || resolved;
+            } else {
+              resolvedAddress = resolved;
+            }
           } catch {
             resolvedAddress = await resolveAddressFromCoords(latitude, longitude);
           }
@@ -173,7 +180,6 @@ export default function EmergencySOSScreen({ navigation }: any) {
 
         if (resolvedAddress) {
           setAddress(resolvedAddress);
-          setIsOpenStreetMapAddress(true);
         } else {
           Alert.alert('Không tìm được địa chỉ chi tiết', 'Đã lưu tọa độ GPS hiện tại để gửi cấp cứu.');
         }
@@ -202,7 +208,7 @@ export default function EmergencySOSScreen({ navigation }: any) {
     const url = Platform.select({
       ios: `maps://?q=${query}`,
       android: `geo:0,0?q=${query}`,
-      default: `https://www.openstreetmap.org/search?query=${query}`,
+      default: `https://www.google.com/maps/search/?api=1&query=${query}`,
     });
     if (!url) return;
 
@@ -211,15 +217,6 @@ export default function EmergencySOSScreen({ navigation }: any) {
     } catch (error) {
       console.warn('[EmergencySOSScreen] Could not open map application:', error);
       Alert.alert('Không mở được bản đồ', 'Bạn có thể nhập địa chỉ cấp cứu vào ô địa chỉ.');
-    }
-  };
-
-  const handleOpenOpenStreetMapAttribution = async () => {
-    try {
-      await Linking.openURL('https://www.openstreetmap.org/copyright');
-    } catch (error) {
-      console.warn('[EmergencySOSScreen] Could not open OpenStreetMap attribution:', error);
-      Alert.alert('Không mở được liên kết', 'Bạn có thể tìm hiểu về OpenStreetMap tại openstreetmap.org.');
     }
   };
 
@@ -310,22 +307,12 @@ export default function EmergencySOSScreen({ navigation }: any) {
           value={address}
           onChangeText={(value) => {
             setAddress(value);
-            setIsOpenStreetMapAddress(false);
           }}
         />
 
         {coordinates && (
           <Text style={[styles.coordinates, { color: colors.textSecondary }]}>
             Tọa độ: {coordinates.latitude.toFixed(6)}, {coordinates.longitude.toFixed(6)}
-          </Text>
-        )}
-        {isOpenStreetMapAddress && (
-          <Text
-            accessibilityRole="link"
-            onPress={handleOpenOpenStreetMapAttribution}
-            style={[styles.coordinates, { color: colors.textSecondary, textDecorationLine: 'underline' }]}
-          >
-            © OpenStreetMap contributors
           </Text>
         )}
 
@@ -355,7 +342,6 @@ export default function EmergencySOSScreen({ navigation }: any) {
                 style={styles.optionRow}
                 onPress={() => {
                   setAddress(house?.address || '');
-                  setIsOpenStreetMapAddress(false);
                 }}
                 activeOpacity={0.75}
               >

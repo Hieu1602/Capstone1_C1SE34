@@ -9,6 +9,7 @@
 import React, { useState } from 'react';
 import {
   View,
+  Text,
   StyleSheet,
   TouchableOpacity,
   SafeAreaView,
@@ -19,6 +20,7 @@ import {
 } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { Colors } from '../../../theme/colors';
+import { LegalTermsModal, LegalModalType } from '../components/LegalTermsModal';
 import { LocalizedText } from '../../../i18n/LocalizedComponents';
 
 const { width: SCREEN_WIDTH } = Dimensions.get('window');
@@ -35,6 +37,13 @@ const COLLAGE_IMAGES = {
 
 export default function WelcomeScreen({ navigation }: any) {
   const [isAgreed, setIsAgreed] = useState(false);
+  const [legalModalVisible, setLegalModalVisible] = useState(false);
+  const [legalModalType, setLegalModalType] = useState<LegalModalType>('terms');
+
+  const handleOpenLegal = (type: LegalModalType) => {
+    setLegalModalType(type);
+    setLegalModalVisible(true);
+  };
 
   const handleNavigate = (screen: 'Register' | 'Login') => {
     if (!isAgreed) {
@@ -120,27 +129,53 @@ export default function WelcomeScreen({ navigation }: any) {
           </View>
 
           {/* Điều khoản pháp lý ở chân trang với checkbox hình vuông */}
-          <TouchableOpacity
-            style={styles.termsContainer}
-            activeOpacity={0.7}
-            onPress={() => setIsAgreed(!isAgreed)}
-          >
-            <Ionicons
-              name={isAgreed ? 'checkbox' : 'square-outline'}
-              size={20}
-              color={isAgreed ? Colors.primary : '#94A3B8'}
-              style={styles.checkboxIcon}
-            />
-            <LocalizedText style={styles.termsNoticeText}>
-              Bằng cách tiếp tục, bạn đồng ý với{' '}
-              <LocalizedText style={styles.termsLink}>Điều khoản dịch vụ</LocalizedText>{' '}
-              của SECA và xác nhận rằng bạn đã đọc{' '}
-              <LocalizedText style={styles.termsLink}>Chính sách quyền riêng tư</LocalizedText>{' '}
-              của chúng tôi.
-            </LocalizedText>
-          </TouchableOpacity>
+          <View style={styles.termsContainer}>
+            <TouchableOpacity
+              activeOpacity={0.7}
+              onPress={() => setIsAgreed(!isAgreed)}
+              hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
+            >
+              <Ionicons
+                name={isAgreed ? 'checkbox' : 'square-outline'}
+                size={20}
+                color={isAgreed ? Colors.primary : '#94A3B8'}
+                style={styles.checkboxIcon}
+              />
+            </TouchableOpacity>
+            <Text style={styles.termsNoticeText}>
+              <Text onPress={() => setIsAgreed(!isAgreed)}>
+                Bằng cách tiếp tục, bạn đồng ý với{' '}
+              </Text>
+              <Text
+                style={styles.termsLink}
+                onPress={() => handleOpenLegal('terms')}
+              >
+                Điều khoản dịch vụ
+              </Text>{' '}
+              <Text onPress={() => setIsAgreed(!isAgreed)}>
+                của SECA và xác nhận rằng bạn đã đọc{' '}
+              </Text>
+              <Text
+                style={styles.termsLink}
+                onPress={() => handleOpenLegal('privacy')}
+              >
+                Chính sách quyền riêng tư
+              </Text>{' '}
+              <Text onPress={() => setIsAgreed(!isAgreed)}>
+                của chúng tôi.
+              </Text>
+            </Text>
+          </View>
         </View>
       </ScrollView>
+
+      {/* Modal Điều khoản dịch vụ & Chính sách quyền riêng tư */}
+      <LegalTermsModal
+        visible={legalModalVisible}
+        initialType={legalModalType}
+        onClose={() => setLegalModalVisible(false)}
+        onAgree={() => setIsAgreed(true)}
+      />
     </SafeAreaView>
   );
 }

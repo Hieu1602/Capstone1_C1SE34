@@ -11,7 +11,6 @@ interface ProfileQuickGridProps {
   onToggleShowMore: () => void;
   onNavigate: (screen: string) => void;
   onOpenProfile: () => void;
-  onToggleDoctorMode: () => void;
 }
 
 export const ProfileQuickGrid: React.FC<ProfileQuickGridProps> = ({
@@ -23,7 +22,6 @@ export const ProfileQuickGrid: React.FC<ProfileQuickGridProps> = ({
   onToggleShowMore,
   onNavigate,
   onOpenProfile,
-  onToggleDoctorMode,
 }) => {
   return (
     <>
@@ -437,46 +435,6 @@ export const ProfileQuickGrid: React.FC<ProfileQuickGridProps> = ({
                 ]}
               >
                 Xem nhiều góc quay camera cùng lúc
-              </Text>
-            </TouchableOpacity>
-
-            {/* Ô 11: Chuyển vai trò Bác sĩ */}
-            <TouchableOpacity
-              style={[
-                styles.fbGridCard,
-                isDarkMode && {
-                  backgroundColor: colors.card,
-                  borderColor: '#0284C7',
-                },
-              ]}
-              activeOpacity={0.8}
-              onPress={onToggleDoctorMode}
-            >
-              <View
-                style={[
-                  styles.fbGridIconBox,
-                  {
-                    backgroundColor: isDarkMode ? '#082F49' : '#E0F2FE',
-                  },
-                ]}
-              >
-                <Ionicons name="medical-outline" size={24} color="#0284C7" />
-              </View>
-              <Text
-                style={[
-                  styles.fbGridCardTitle,
-                  isDarkMode && { color: colors.textPrimary },
-                ]}
-              >
-                Chế độ Bác sĩ
-              </Text>
-              <Text
-                style={[
-                  styles.fbGridCardSub,
-                  isDarkMode && { color: colors.textSecondary },
-                ]}
-              >
-                Bệnh án, Kê đơn & Báo cáo y tế
               </Text>
             </TouchableOpacity>
           </>
