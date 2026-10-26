@@ -214,32 +214,7 @@ async def get_incidents(db: AsyncSession = Depends(get_db)) -> List[Dict[str, An
     except Exception:
         pass
 
-    return [
-        {
-            "id": "inc-01",
-            "timestamp": "2026-10-15 09:35:12",
-            "service": "EMQX Broker",
-            "type": "WARNING",
-            "message": "Thiết bị SENSOR_RADAR_001 gửi bản tin heartbeat trễ 45s so với chu kỳ.",
-            "resolved": True,
-        },
-        {
-            "id": "inc-02",
-            "timestamp": "2026-10-15 08:20:44",
-            "service": "FastAPI Core",
-            "type": "ERROR",
-            "message": "Truy vấn bảng users trả về mã 404 cho user_id tạm thời. Đã tự phục hồi.",
-            "resolved": True,
-        },
-        {
-            "id": "inc-03",
-            "timestamp": "2026-10-15 07:15:00",
-            "service": "PostgreSQL DB",
-            "type": "CRITICAL",
-            "message": "Khóa kết nối trên cổng 5433 được phát hiện và đã chuyển mạch an toàn sang cổng 5432.",
-            "resolved": True,
-        },
-    ]
+    return []
 
 
 @router.post("/incidents/{incident_id}/resolve", summary="Đánh dấu đã giải quyết sự cố vận hành")
