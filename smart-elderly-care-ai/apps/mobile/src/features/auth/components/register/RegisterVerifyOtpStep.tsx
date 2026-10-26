@@ -39,7 +39,7 @@ export const RegisterVerifyOtpStep: React.FC<RegisterVerifyOtpStepProps> = ({
     onResendOtp,
     onSubmit,
 }) => {
-    const inputRef = useRef<TextInput>(null);
+    const inputRef = useRef<any>(null);
     const [isFocused, setIsFocused] = useState(false);
 
     useEffect(() => {
