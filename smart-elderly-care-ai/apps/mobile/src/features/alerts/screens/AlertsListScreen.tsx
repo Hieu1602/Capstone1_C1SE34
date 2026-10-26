@@ -675,91 +675,73 @@ export default function AlertsListScreen({ navigation }: any) {
           showsHorizontalScrollIndicator={false}
           contentContainerStyle={styles.filterBarScroll}
         >
-          {/* Tab Tất cả */}
-          <TouchableOpacity
-            style={[
-              styles.filterPill,
-              isDarkMode && filterType !== 'ALL' && { backgroundColor: colors.card, borderColor: colors.border },
-              filterType === 'ALL' && styles.filterPillActive,
-              filterType === 'ALL' && isDarkMode && { backgroundColor: 'rgba(255, 107, 0, 0.15)', borderColor: '#FF6B00' },
-            ]}
-            onPress={() => setFilterType('ALL')}
-            activeOpacity={0.8}
-          >
-            <Text style={[styles.filterText, isDarkMode && filterType !== 'ALL' && { color: colors.textSecondary }, filterType === 'ALL' && styles.filterTextActive]}>
-              {t('Tất cả ({{count}})', { count: incidents.length + medications.length })}
-            </Text>
-          </TouchableOpacity>
-
-          {/* Tab Uống thuốc */}
-          <TouchableOpacity
-            style={[
-              styles.filterPill,
-              isDarkMode && filterType !== 'MEDICATION' && { backgroundColor: colors.card, borderColor: colors.border },
-              filterType === 'MEDICATION' && styles.filterPillActiveMed,
-              filterType === 'MEDICATION' && isDarkMode && { backgroundColor: 'rgba(16, 185, 129, 0.15)', borderColor: '#10B981' },
-            ]}
-            onPress={() => setFilterType('MEDICATION')}
-            activeOpacity={0.8}
-          >
-            <Text
-              style={[
-                styles.filterText,
-                isDarkMode && filterType !== 'MEDICATION' && { color: colors.textSecondary },
-                filterType === 'MEDICATION' && { color: '#059669', fontWeight: '700' },
-              ]}
-            >
-              💊 Uống thuốc {pendingMedCount > 0 ? `(${pendingMedCount})` : '(Xong)'}
-            </Text>
-          </TouchableOpacity>
-
-          {/* Tab Nguy kịch (Red Alert: Té ngã & Tiếng kêu cứu) */}
-          <TouchableOpacity
-            style={[
-              styles.filterPill,
-              isDarkMode && filterType !== 'CRITICAL' && { backgroundColor: colors.card, borderColor: colors.border },
-              filterType === 'CRITICAL' && styles.filterPillActive,
-              filterType === 'CRITICAL' && isDarkMode && { backgroundColor: 'rgba(255, 107, 0, 0.15)', borderColor: '#FF6B00' },
-            ]}
-            onPress={() => setFilterType('CRITICAL')}
-            activeOpacity={0.8}
-          >
-            <Text style={[styles.filterText, isDarkMode && filterType !== 'CRITICAL' && { color: colors.textSecondary }, filterType === 'CRITICAL' && styles.filterTextActive]}>
-              🚨 Nguy kịch
-            </Text>
-          </TouchableOpacity>
-
-          {/* Tab Sức khỏe (Nhịp tim, SpO2, Thân nhiệt) */}
-          <TouchableOpacity
-            style={[
-              styles.filterPill,
-              isDarkMode && filterType !== 'VITAL' && { backgroundColor: colors.card, borderColor: colors.border },
-              filterType === 'VITAL' && styles.filterPillActive,
-              filterType === 'VITAL' && isDarkMode && { backgroundColor: 'rgba(255, 107, 0, 0.15)', borderColor: '#FF6B00' },
-            ]}
-            onPress={() => setFilterType('VITAL')}
-            activeOpacity={0.8}
-          >
-            <Text style={[styles.filterText, isDarkMode && filterType !== 'VITAL' && { color: colors.textSecondary }, filterType === 'VITAL' && styles.filterTextActive]}>
-              Sức khoẻ
-            </Text>
-          </TouchableOpacity>
-
-          {/* Tab Lịch khám Bác sĩ */}
-          <TouchableOpacity
-            style={[
-              styles.filterPill,
-              isDarkMode && filterType !== 'APPOINTMENT' && { backgroundColor: colors.card, borderColor: colors.border },
-              filterType === 'APPOINTMENT' && styles.filterPillActive,
-              filterType === 'APPOINTMENT' && isDarkMode && { backgroundColor: 'rgba(217, 119, 6, 0.15)', borderColor: '#D97706' },
-            ]}
-            onPress={() => setFilterType('APPOINTMENT')}
-            activeOpacity={0.8}
-          >
-            <Text style={[styles.filterText, isDarkMode && filterType !== 'APPOINTMENT' && { color: colors.textSecondary }, filterType === 'APPOINTMENT' && { color: '#D97706', fontWeight: '700' }]}>
-              🗓️ Lịch khám
-            </Text>
-          </TouchableOpacity>
+          {[
+            {
+              key: 'ALL',
+              label: t('Tất cả ({{count}})', { count: incidents.length + medications.length }),
+              activePill: styles.filterPillActive,
+              darkBg: 'rgba(255, 107, 0, 0.15)',
+              darkBorder: '#FF6B00',
+              activeTextColor: undefined,
+            },
+            {
+              key: 'MEDICATION',
+              label: `💊 Uống thuốc ${pendingMedCount > 0 ? `(${pendingMedCount})` : '(Xong)'}`,
+              activePill: styles.filterPillActiveMed,
+              darkBg: 'rgba(16, 185, 129, 0.15)',
+              darkBorder: '#10B981',
+              activeTextColor: '#059669',
+            },
+            {
+              key: 'CRITICAL',
+              label: '🚨 Nguy kịch',
+              activePill: styles.filterPillActive,
+              darkBg: 'rgba(255, 107, 0, 0.15)',
+              darkBorder: '#FF6B00',
+              activeTextColor: undefined,
+            },
+            {
+              key: 'VITAL',
+              label: 'Sức khoẻ',
+              activePill: styles.filterPillActive,
+              darkBg: 'rgba(255, 107, 0, 0.15)',
+              darkBorder: '#FF6B00',
+              activeTextColor: undefined,
+            },
+            {
+              key: 'APPOINTMENT',
+              label: '🗓️ Lịch khám',
+              activePill: styles.filterPillActive,
+              darkBg: 'rgba(217, 119, 6, 0.15)',
+              darkBorder: '#D97706',
+              activeTextColor: '#D97706',
+            },
+          ].map((tab) => {
+            const isActive = filterType === tab.key;
+            return (
+              <TouchableOpacity
+                key={tab.key}
+                style={[
+                  styles.filterPill,
+                  isDarkMode && !isActive && { backgroundColor: colors.card, borderColor: colors.border },
+                  isActive && tab.activePill,
+                  isActive && isDarkMode && { backgroundColor: tab.darkBg, borderColor: tab.darkBorder },
+                ]}
+                onPress={() => setFilterType(tab.key as any)}
+                activeOpacity={0.8}
+              >
+                <Text
+                  style={[
+                    styles.filterText,
+                    isDarkMode && !isActive && { color: colors.textSecondary },
+                    isActive && (tab.activeTextColor ? { color: tab.activeTextColor, fontWeight: '700' } : styles.filterTextActive),
+                  ]}
+                >
+                  {tab.label}
+                </Text>
+              </TouchableOpacity>
+            );
+          })}
         </ScrollView>
       </View>
 
@@ -950,14 +932,6 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     gap: 8,
   },
-  themeToggleBtn: {
-    width: 32,
-    height: 32,
-    borderRadius: 16,
-    backgroundColor: '#F1F5F9',
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
   markAllReadBtn: {
     flexDirection: 'row',
     alignItems: 'center',
@@ -999,15 +973,6 @@ const styles = StyleSheet.create({
     paddingVertical: 10,
     gap: 8,
     alignItems: 'center',
-  },
-  filterBar: {
-    flexDirection: 'row',
-    paddingHorizontal: 16,
-    paddingVertical: 12,
-    gap: 8,
-    backgroundColor: '#FFFFFF',
-    borderBottomWidth: 1,
-    borderBottomColor: '#F1F5F9',
   },
   filterPill: {
     paddingVertical: 7,

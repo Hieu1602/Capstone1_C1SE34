@@ -46,6 +46,10 @@ export const MedicationReminderWidget: React.FC<MedicationReminderWidgetProps> =
   const [confirmModalVisible, setConfirmModalVisible] = useState(false);
   const [isPlayingSpeaker, setIsPlayingSpeaker] = useState(false);
 
+  if (!nextMedication || !nextMedication.name) {
+    return null;
+  }
+
   // Lấy thời gian hiện tại định dạng HH:MM
   const getCurrentTimeHM = () => {
     const now = new Date();

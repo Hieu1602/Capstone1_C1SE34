@@ -326,17 +326,11 @@ export default function HomeScreen({ navigation }: any) {
     }
   }
 
-  // Cữ thuốc kế tiếp từ Backend FastAPI / Zustand Store
+  // Cữ thuốc kế tiếp từ Backend FastAPI / Zustand Store (không dùng dữ liệu mẫu)
   const nextMedication =
     todayReminders?.medications?.find((m) => !m.taken) ||
-    todayReminders?.medications?.[todayReminders.medications.length - 1] ||
-    todayReminders?.medications?.[0] || {
-      id: '',
-      name: '',
-      time: '',
-      dose: '',
-      taken: false,
-    };
+    todayReminders?.medications?.[0] ||
+    null;
   const isMedDone = nextMedTaken || Boolean(nextMedication?.taken);
 
   return (
@@ -393,130 +387,73 @@ export default function HomeScreen({ navigation }: any) {
         showsVerticalScrollIndicator={false}
         contentContainerStyle={styles.scrollContent}
       >
-        {/* 2. Bộ chọn chế độ an ninh (House Security Mode) dạng Radio / Segmented Control: Xa - Ở nhà - Tắt báo động */}
+        {/* 2. Bộ chọn chế độ an ninh (House Security Mode) dạng Segmented Control: Xa - Ở nhà - Tắt báo động */}
         <View style={styles.modesRow}>
-          {/* Nút 1: Xa (Away) */}
-          <TouchableOpacity
-            style={[
-              styles.modePill,
-              house.currentMode === 'AWAY' ? styles.modePillActiveAway : styles.modePillInactive,
-              house.currentMode !== 'AWAY' && isDarkMode && { backgroundColor: colors.card, borderColor: colors.border },
-            ]}
-            onPress={() => handleSelectHouseMode('AWAY')}
-            activeOpacity={0.75}
-          >
-            <View
+          {[
+            {
+              key: 'AWAY',
+              label: 'Xa',
+              icon: 'exit-outline',
+              activeColor: '#10B981',
+              activeStyle: styles.modePillActiveAway,
+              textColor: '#047857',
+              isActive: house.currentMode === 'AWAY',
+              onPress: () => handleSelectHouseMode('AWAY'),
+            },
+            {
+              key: 'HOME',
+              label: 'Ở nhà',
+              icon: 'home',
+              activeColor: '#3B82F6',
+              activeStyle: styles.modePillActiveHome,
+              textColor: '#1D4ED8',
+              isActive: house.currentMode === 'HOME',
+              onPress: () => handleSelectHouseMode('HOME'),
+            },
+            {
+              key: 'DISARM',
+              label: snoozeButtonLabel,
+              icon: isSnoozeActive ? 'volume-mute' : 'notifications-off-outline',
+              activeColor: isSnoozeActive ? '#F59E0B' : '#64748B',
+              activeStyle: isSnoozeActive ? styles.modePillActiveSnooze : styles.modePillActiveDisarm,
+              textColor: isSnoozeActive ? (isDarkMode ? '#FBBF24' : '#D97706') : '#475569',
+              isActive: isSnoozeActive || house.currentMode === 'DISARM',
+              onPress: handlePressSnoozeButton,
+            },
+          ].map((m) => (
+            <TouchableOpacity
+              key={m.key}
               style={[
-                styles.modeIconCircle,
-                { backgroundColor: house.currentMode === 'AWAY' ? '#10B981' : (isDarkMode ? colors.surfaceSubtle : '#E2E8F0') },
+                styles.modePill,
+                m.isActive ? m.activeStyle : styles.modePillInactive,
+                !m.isActive && isDarkMode && { backgroundColor: colors.card, borderColor: colors.border },
               ]}
+              onPress={m.onPress}
+              activeOpacity={0.75}
             >
-              <Ionicons
-                name="exit-outline"
-                size={14}
-                color={house.currentMode === 'AWAY' ? '#FFF' : (isDarkMode ? colors.textMuted : '#94A3B8')}
-              />
-            </View>
-            <Text
-              style={[
-                styles.modePillText,
-                { color: house.currentMode === 'AWAY' ? '#047857' : (isDarkMode ? colors.textMuted : '#94A3B8') },
-              ]}
-              numberOfLines={1}
-            >
-              Xa
-            </Text>
-          </TouchableOpacity>
-
-          {/* Nút 2: Ở nhà (Home) */}
-          <TouchableOpacity
-            style={[
-              styles.modePill,
-              house.currentMode === 'HOME' ? styles.modePillActiveHome : styles.modePillInactive,
-              house.currentMode !== 'HOME' && isDarkMode && { backgroundColor: colors.card, borderColor: colors.border },
-            ]}
-            onPress={() => handleSelectHouseMode('HOME')}
-            activeOpacity={0.75}
-          >
-            <View
-              style={[
-                styles.modeIconCircle,
-                { backgroundColor: house.currentMode === 'HOME' ? '#3B82F6' : (isDarkMode ? colors.surfaceSubtle : '#E2E8F0') },
-              ]}
-            >
-              <Ionicons
-                name="home"
-                size={14}
-                color={house.currentMode === 'HOME' ? '#FFF' : (isDarkMode ? colors.textMuted : '#94A3B8')}
-              />
-            </View>
-            <Text
-              style={[
-                styles.modePillText,
-                { color: house.currentMode === 'HOME' ? '#1D4ED8' : (isDarkMode ? colors.textMuted : '#94A3B8') },
-              ]}
-              numberOfLines={1}
-            >
-              Ở nhà
-            </Text>
-          </TouchableOpacity>
-
-          {/* Nút 3: Tắt báo động / Tạm dừng chuông báo động (Snooze) */}
-          <TouchableOpacity
-            style={[
-              styles.modePill,
-              isSnoozeActive
-                ? [
-                    styles.modePillActiveSnooze,
-                    isDarkMode && { backgroundColor: 'rgba(245, 158, 11, 0.18)', borderColor: '#F59E0B' },
-                  ]
-                : house.currentMode === 'DISARM'
-                ? styles.modePillActiveDisarm
-                : styles.modePillInactive,
-              !isSnoozeActive && house.currentMode !== 'DISARM' && isDarkMode && { backgroundColor: colors.card, borderColor: colors.border },
-            ]}
-            onPress={handlePressSnoozeButton}
-            activeOpacity={0.75}
-          >
-            <View
-              style={[
-                styles.modeIconCircle,
-                {
-                  backgroundColor: isSnoozeActive
-                    ? '#F59E0B'
-                    : house.currentMode === 'DISARM'
-                    ? '#64748B'
-                    : isDarkMode
-                    ? colors.surfaceSubtle
-                    : '#E2E8F0',
-                },
-              ]}
-            >
-              <Ionicons
-                name={isSnoozeActive ? 'volume-mute' : 'notifications-off-outline'}
-                size={14}
-                color={isSnoozeActive || house.currentMode === 'DISARM' ? '#FFF' : isDarkMode ? colors.textMuted : '#94A3B8'}
-              />
-            </View>
-            <Text
-              style={[
-                styles.modePillText,
-                {
-                  color: isSnoozeActive
-                    ? (isDarkMode ? '#FBBF24' : '#D97706')
-                    : house.currentMode === 'DISARM'
-                    ? '#475569'
-                    : isDarkMode
-                    ? colors.textMuted
-                    : '#94A3B8',
-                  fontWeight: isSnoozeActive ? '700' : '600',
-                },
-              ]}
-              numberOfLines={1}
-            >
-              {snoozeButtonLabel}
-            </Text>
-          </TouchableOpacity>
+              <View
+                style={[
+                  styles.modeIconCircle,
+                  { backgroundColor: m.isActive ? m.activeColor : (isDarkMode ? colors.surfaceSubtle : '#E2E8F0') },
+                ]}
+              >
+                <Ionicons
+                  name={m.icon as any}
+                  size={14}
+                  color={m.isActive ? '#FFF' : (isDarkMode ? colors.textMuted : '#94A3B8')}
+                />
+              </View>
+              <Text
+                style={[
+                  styles.modePillText,
+                  { color: m.isActive ? m.textColor : (isDarkMode ? colors.textMuted : '#94A3B8') },
+                ]}
+                numberOfLines={1}
+              >
+                {m.label}
+              </Text>
+            </TouchableOpacity>
+          ))}
         </View>
 
         {/* 2.4. Banner Lịch khám Bác sĩ mới chờ Gia đình xác nhận */}
@@ -668,19 +605,21 @@ export default function HomeScreen({ navigation }: any) {
           handleToggleAIProtect={handleToggleAIProtect}
         />
 
-        {/* 6. Widget Nhắc nhở uống thuốc & Ăn uống sinh hoạt */}
-        <MedicationReminderWidget
-          nextMedication={nextMedication}
-          isMedDone={isMedDone}
-          setNextMedTaken={setNextMedTaken}
-          onConfirmTaken={(medId, timeStr) => {
-            markMedicationTaken(medId, true, timeStr);
-            setNextMedTaken(true);
-          }}
-          isDarkMode={isDarkMode}
-          colors={colors}
-          navigation={navigation}
-        />
+        {/* 6. Widget Nhắc nhở uống thuốc & Ăn uống sinh hoạt (chỉ hiển thị khi có đơn thuốc thực tế của bệnh nhân) */}
+        {Boolean(nextMedication?.name) && (
+          <MedicationReminderWidget
+            nextMedication={nextMedication!}
+            isMedDone={isMedDone}
+            setNextMedTaken={setNextMedTaken}
+            onConfirmTaken={(medId, timeStr) => {
+              markMedicationTaken(medId, true, timeStr);
+              setNextMedTaken(true);
+            }}
+            isDarkMode={isDarkMode}
+            colors={colors}
+            navigation={navigation}
+          />
+        )}
 
         {/* 7. Khối hiển thị Tình trạng sức khoẻ */}
         <VitalsSummaryCard

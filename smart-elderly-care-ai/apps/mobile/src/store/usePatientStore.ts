@@ -68,45 +68,7 @@ export interface RemindersData {
   meals: Array<{ name: string; time: string; completed: boolean; note: string }>;
 }
 
-export const DEFAULT_MEDICATIONS: ReminderItem[] = [
-  {
-    id: 'med-01',
-    name: 'Amlodipine 5mg (Thuốc hạ huyết áp)',
-    time: '07:30',
-    session: 'MORNING',
-    dose: '1 viên sau ăn sáng',
-    purpose: 'Huyết áp',
-    taken: true,
-    takenAt: '07:35',
-  },
-  {
-    id: 'med-02',
-    name: 'Metformin 500mg (Thuốc tiểu đường)',
-    time: '12:00',
-    session: 'NOON',
-    dose: '1 viên sau ăn trưa',
-    purpose: 'Tiểu đường',
-    taken: false,
-  },
-  {
-    id: 'med-03',
-    name: 'Atorvastatin 10mg (Thuốc mỡ máu & tim mạch)',
-    time: '18:30',
-    session: 'EVENING',
-    dose: '1 viên sau ăn tối',
-    purpose: 'Tim mạch',
-    taken: false,
-  },
-  {
-    id: 'med-04',
-    name: 'Ginkgo Biloba 120mg (Bổ não, hỗ trợ giấc ngủ)',
-    time: '21:00',
-    session: 'EVENING',
-    dose: '1 viên trước khi ngủ',
-    purpose: 'Giấc ngủ',
-    taken: false,
-  },
-];
+export const DEFAULT_MEDICATIONS: ReminderItem[] = [];
 
 interface PatientState {
   patientRecord: PatientMedicalRecord | null;
@@ -127,10 +89,10 @@ export const usePatientStore = create<PatientState>()((set, get) => ({
   patientRecord: null,
   todayReminders: {
     date: new Date().toISOString().split('T')[0],
-    total_medications: DEFAULT_MEDICATIONS.length,
-    completed_medications: DEFAULT_MEDICATIONS.filter((m) => m.taken).length,
+    total_medications: 0,
+    completed_medications: 0,
     hub_voice_reminder_enabled: true,
-    medications: DEFAULT_MEDICATIONS,
+    medications: [],
     meals: [],
   },
   isLoadingReminders: false,
@@ -141,9 +103,7 @@ export const usePatientStore = create<PatientState>()((set, get) => ({
     try {
       const res = await remindersApi.getToday();
       if (res.data) {
-        const meds = Array.isArray(res.data.medications) && res.data.medications.length > 0
-          ? res.data.medications
-          : (get().todayReminders?.medications || DEFAULT_MEDICATIONS);
+        const meds = Array.isArray(res.data.medications) ? res.data.medications : [];
         const completed = meds.filter((m: any) => m.taken).length;
         const normalized: RemindersData = {
           ...res.data,
@@ -160,10 +120,10 @@ export const usePatientStore = create<PatientState>()((set, get) => ({
     set((state) => ({
       todayReminders: state.todayReminders || {
         date: new Date().toISOString().split('T')[0],
-        total_medications: DEFAULT_MEDICATIONS.length,
-        completed_medications: DEFAULT_MEDICATIONS.filter((m) => m.taken).length,
+        total_medications: 0,
+        completed_medications: 0,
         hub_voice_reminder_enabled: true,
-        medications: DEFAULT_MEDICATIONS,
+        medications: [],
         meals: [],
       },
       isLoadingReminders: false,
@@ -174,9 +134,7 @@ export const usePatientStore = create<PatientState>()((set, get) => ({
   markMedicationTaken: async (idOrName: string, taken: boolean = true, takenAt?: string) => {
     const timeStr = takenAt || new Date().toLocaleTimeString('vi-VN', { hour: '2-digit', minute: '2-digit' });
     set((state) => {
-      const currentList = state.todayReminders?.medications && state.todayReminders.medications.length > 0
-        ? state.todayReminders.medications
-        : DEFAULT_MEDICATIONS;
+      const currentList = state.todayReminders?.medications || [];
 
       const updated = currentList.map((m) => {
         if (m.id === idOrName || m.name === idOrName) {
