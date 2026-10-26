@@ -90,6 +90,14 @@ export default function PatientMedicalRecordScreen({ navigation }: any) {
   const { isDarkMode } = useTheme();
   const { fetchPatientRecord, updatePatientRecord, patientRecord, enrollPatientFace } = useVitalStore();
 
+  // Kiểm tra trạng thái đã có hồ sơ người cao tuổi hay chưa
+  const hasPatient = Boolean(
+    patientRecord &&
+    patientRecord.name &&
+    patientRecord.name.trim() !== '' &&
+    patientRecord.name.trim() !== '--'
+  );
+
   // Trích xuất dữ liệu thực tế từ Store (hiển thị trạng thái rỗng nếu chưa có dữ liệu)
   const patientName = patientRecord?.name?.trim() ? patientRecord.name : '--';
   const birthYear = patientRecord?.birth_year && String(patientRecord.birth_year).trim() ? String(patientRecord.birth_year) : '--';
@@ -161,6 +169,10 @@ export default function PatientMedicalRecordScreen({ navigation }: any) {
 
   // Lưu thông tin hành chính & chỉ số cơ thể xuống DB
   const handleSavePatientInfo = async () => {
+    if (!patientDraft.name.trim()) {
+      Alert.alert('Thiếu thông tin', 'Vui lòng nhập họ tên người cao tuổi.');
+      return;
+    }
     const h = parseInt(patientDraft.height, 10) || 0;
     const w = parseInt(patientDraft.weight, 10) || 0;
     const by = patientDraft.birthYear.trim();
@@ -178,7 +190,7 @@ export default function PatientMedicalRecordScreen({ navigation }: any) {
       height_cm: h,
       bmi: computedBMI !== '--' ? parseFloat(computedBMI) : 0,
     });
-    Alert.alert('Đã cập nhật', 'Thông tin bệnh nhân đã được lưu an toàn.');
+    Alert.alert('Thành công 🎉', 'Đã lưu hồ sơ người cao tuổi thành công.');
   };
 
   // Thêm bệnh lý nền mới vào hồ sơ
@@ -330,7 +342,7 @@ export default function PatientMedicalRecordScreen({ navigation }: any) {
           onPress={openEditPatientModal}
           activeOpacity={0.7}
         >
-          <Ionicons name="create-outline" size={20} color={Colors.primary} />
+          <Ionicons name={hasPatient ? "create-outline" : "add"} size={20} color={Colors.primary} />
         </TouchableOpacity>
       </View>
 
@@ -357,128 +369,150 @@ export default function PatientMedicalRecordScreen({ navigation }: any) {
         </View>
 
         {/* Khối 1: Thông tin người cao tuổi */}
-        <View style={[styles.cardBlock, { backgroundColor: bgCard, borderColor: borderCol }]}>
-          <View style={styles.cardHeader}>
-            <View style={styles.rowCenterGap8}>
-              <View style={[styles.cardIconBox, { backgroundColor: isDarkMode ? '#1E3A8A' : '#EFF6FF' }]}>
-                <Ionicons name="person-outline" size={20} color="#2563EB" />
-              </View>
-              <Text style={[styles.cardTitle, { color: textTitle }]}>Thông tin người cao tuổi</Text>
+        {!hasPatient ? (
+          <View style={[styles.cardBlock, styles.emptyPatientCard, { backgroundColor: bgCard, borderColor: borderCol }]}>
+            <View style={[styles.emptyPatientIconCircle, { backgroundColor: isDarkMode ? '#1E293B' : '#F1F5F9' }]}>
+              <Ionicons name="person-circle-outline" size={44} color={isDarkMode ? '#64748B' : '#94A3B8'} />
             </View>
-            <TouchableOpacity onPress={openEditPatientModal}>
-              <Text style={styles.editLink}>Chỉnh sửa</Text>
-            </TouchableOpacity>
-          </View>
-
-          <View style={styles.patientHeroRow}>
+            <Text style={[styles.emptyPatientTitle, { color: textTitle }]}>
+              Chưa có hồ sơ người cao tuổi
+            </Text>
+            <Text style={[styles.emptyPatientDesc, { color: textSub }]}>
+              Vui lòng thêm thông tin để theo dõi sức khoẻ và lịch uống thuốc
+            </Text>
             <TouchableOpacity
-              style={[styles.patientAvatarContainer, { backgroundColor: isDarkMode ? '#0F172A' : '#F1F5F9' }]}
-              onPress={() => setFaceModalVisible(true)}
+              style={styles.addPatientPrimaryBtn}
+              onPress={openEditPatientModal}
               activeOpacity={0.8}
             >
-              {avatarUrl ? (
-                <Image
-                  source={{
-                    uri: avatarUrl.startsWith('http')
-                      ? avatarUrl
-                      : `${BASE_URL.replace('/api/v1', '')}${avatarUrl}?t=${Date.now()}`,
-                  }}
-                  style={styles.patientAvatarImg}
-                />
-              ) : (
-                <Ionicons name="person" size={40} color={isDarkMode ? '#64748B' : '#94A3B8'} />
-              )}
-              <View style={styles.avatarCameraBadge}>
-                <Ionicons name="camera" size={11} color="#FFF" />
-              </View>
+              <Ionicons name="add-circle" size={18} color="#FFFFFF" />
+              <Text style={styles.addPatientPrimaryBtnText}>+ Thêm hồ sơ người cao tuổi</Text>
             </TouchableOpacity>
-
-            <View style={{ flex: 1, marginLeft: 14 }}>
-              <Text style={[styles.patientHeroName, { color: textTitle }]}>
-                {patientName !== '--' ? patientName : 'Chưa cập nhật tên'}
-              </Text>
-              <Text style={[styles.patientHeroSub, { color: textSub }]}>
-                {birthYear !== '--'
-                  ? `Năm sinh: ${birthYear} (${age !== '--' ? `${age} tuổi` : ''}) • Giới tính: ${gender}`
-                  : 'Chưa cập nhật thông tin cá nhân'}
-              </Text>
-
-              <View style={styles.bloodBadgeRow}>
-                <View style={styles.bloodBadge}>
-                  <Ionicons name="water" size={13} color="#EF4444" />
-                  <Text style={styles.bloodBadgeText}>Nhóm máu: {bloodType}</Text>
+          </View>
+        ) : (
+          <View style={[styles.cardBlock, { backgroundColor: bgCard, borderColor: borderCol }]}>
+            <View style={styles.cardHeader}>
+              <View style={styles.rowCenterGap8}>
+                <View style={[styles.cardIconBox, { backgroundColor: isDarkMode ? '#1E3A8A' : '#EFF6FF' }]}>
+                  <Ionicons name="person-outline" size={20} color="#2563EB" />
                 </View>
-                <View
-                  style={[
-                    styles.bmiBadge,
-                    {
-                      backgroundColor: isDarkMode ? 'rgba(255,255,255,0.08)' : cardBMI.bg,
-                    },
-                  ]}
-                >
-                  <Text style={[styles.bmiBadgeText, { color: cardBMI.color }]}>
-                    BMI: {cardBMI.bmi} {cardBMI.bmi !== '--' ? `(${cardBMI.category})` : ''}
-                  </Text>
-                </View>
+                <Text style={[styles.cardTitle, { color: textTitle }]}>Thông tin người cao tuổi</Text>
               </View>
-
-              <TouchableOpacity
-                style={[
-                  styles.faceEnrollPill,
-                  hasFaceEnrolled
-                    ? { backgroundColor: isDarkMode ? '#064E3B' : '#DCFCE7', borderColor: '#10B981' }
-                    : { backgroundColor: isDarkMode ? '#451A03' : '#FEF3C7', borderColor: '#F59E0B' },
-                ]}
-                onPress={() => setFaceModalVisible(true)}
-                activeOpacity={0.7}
-              >
-                <Ionicons
-                  name={hasFaceEnrolled ? 'scan-circle' : 'scan-outline'}
-                  size={14}
-                  color={hasFaceEnrolled ? '#10B981' : '#F59E0B'}
-                />
-                <Text style={[styles.faceEnrollPillText, { color: hasFaceEnrolled ? '#047857' : '#B45309' }]}>
-                  {hasFaceEnrolled ? 'AI Face ID: Đã kích hoạt' : 'Khuôn mặt: Chưa đăng ký'}
-                </Text>
+              <TouchableOpacity onPress={openEditPatientModal}>
+                <Text style={styles.editLink}>Chỉnh sửa</Text>
               </TouchableOpacity>
             </View>
-          </View>
 
-          <View style={[styles.metricsGrid, { backgroundColor: bgSubtle }]}>
-            <View style={styles.metricItem}>
-              <Text style={[styles.metricLabel, { color: textSub }]}>Chiều cao</Text>
-              <Text style={[styles.metricVal, { color: textTitle }]}>
-                {height !== '--' ? (
-                  <>
-                    {height} <Text style={styles.metricUnit}>cm</Text>
-                  </>
+            <View style={styles.patientHeroRow}>
+              <TouchableOpacity
+                style={[styles.patientAvatarContainer, { backgroundColor: isDarkMode ? '#0F172A' : '#F1F5F9' }]}
+                onPress={() => setFaceModalVisible(true)}
+                activeOpacity={0.8}
+              >
+                {avatarUrl ? (
+                  <Image
+                    source={{
+                      uri: avatarUrl.startsWith('http')
+                        ? avatarUrl
+                        : `${BASE_URL.replace('/api/v1', '')}${avatarUrl}?t=${Date.now()}`,
+                    }}
+                    style={styles.patientAvatarImg}
+                  />
                 ) : (
-                  '--'
+                  <Ionicons name="person" size={40} color={isDarkMode ? '#64748B' : '#94A3B8'} />
                 )}
-              </Text>
+                <View style={styles.avatarCameraBadge}>
+                  <Ionicons name="camera" size={11} color="#FFF" />
+                </View>
+              </TouchableOpacity>
+
+              <View style={{ flex: 1, marginLeft: 14 }}>
+                <Text style={[styles.patientHeroName, { color: textTitle }]}>
+                  {patientName}
+                </Text>
+                <Text style={[styles.patientHeroSub, { color: textSub }]}>
+                  {birthYear !== '--'
+                    ? `Năm sinh: ${birthYear} (${age !== '--' ? `${age} tuổi` : ''}) • Giới tính: ${gender}`
+                    : 'Chưa cập nhật thông tin cá nhân'}
+                </Text>
+
+                <View style={styles.bloodBadgeRow}>
+                  <View style={styles.bloodBadge}>
+                    <Ionicons name="water" size={13} color="#EF4444" />
+                    <Text style={styles.bloodBadgeText}>Nhóm máu: {bloodType}</Text>
+                  </View>
+                  <View
+                    style={[
+                      styles.bmiBadge,
+                      {
+                        backgroundColor: isDarkMode ? 'rgba(255,255,255,0.08)' : cardBMI.bg,
+                      },
+                    ]}
+                  >
+                    <Text style={[styles.bmiBadgeText, { color: cardBMI.color }]}>
+                      BMI: {cardBMI.bmi} {cardBMI.bmi !== '--' ? `(${cardBMI.category})` : ''}
+                    </Text>
+                  </View>
+                </View>
+
+                <TouchableOpacity
+                  style={[
+                    styles.faceEnrollPill,
+                    hasFaceEnrolled
+                      ? { backgroundColor: isDarkMode ? '#064E3B' : '#DCFCE7', borderColor: '#10B981' }
+                      : { backgroundColor: isDarkMode ? '#451A03' : '#FEF3C7', borderColor: '#F59E0B' },
+                  ]}
+                  onPress={() => setFaceModalVisible(true)}
+                  activeOpacity={0.7}
+                >
+                  <Ionicons
+                    name={hasFaceEnrolled ? 'scan-circle' : 'scan-outline'}
+                    size={14}
+                    color={hasFaceEnrolled ? '#10B981' : '#F59E0B'}
+                  />
+                  <Text style={[styles.faceEnrollPillText, { color: hasFaceEnrolled ? '#047857' : '#B45309' }]}>
+                    {hasFaceEnrolled ? 'AI Face ID: Đã kích hoạt' : 'Khuôn mặt: Chưa đăng ký'}
+                  </Text>
+                </TouchableOpacity>
+              </View>
             </View>
-            <View style={[styles.metricDivider, { backgroundColor: borderCol }]} />
-            <View style={styles.metricItem}>
-              <Text style={[styles.metricLabel, { color: textSub }]}>Cân nặng</Text>
-              <Text style={[styles.metricVal, { color: textTitle }]}>
-                {weight !== '--' ? (
-                  <>
-                    {weight} <Text style={styles.metricUnit}>kg</Text>
-                  </>
-                ) : (
-                  '--'
-                )}
-              </Text>
-            </View>
-            <View style={[styles.metricDivider, { backgroundColor: borderCol }]} />
-            <View style={styles.metricItem}>
-              <Text style={[styles.metricLabel, { color: textSub }]}>Nhóm máu</Text>
-              <Text style={[styles.metricVal, { color: bloodType !== '--' ? '#EF4444' : textTitle }]}>
-                {bloodType}
-              </Text>
+
+            <View style={[styles.metricsGrid, { backgroundColor: bgSubtle }]}>
+              <View style={styles.metricItem}>
+                <Text style={[styles.metricLabel, { color: textSub }]}>Chiều cao</Text>
+                <Text style={[styles.metricVal, { color: textTitle }]}>
+                  {height !== '--' ? (
+                    <>
+                      {height} <Text style={styles.metricUnit}>cm</Text>
+                    </>
+                  ) : (
+                    '--'
+                  )}
+                </Text>
+              </View>
+              <View style={[styles.metricDivider, { backgroundColor: borderCol }]} />
+              <View style={styles.metricItem}>
+                <Text style={[styles.metricLabel, { color: textSub }]}>Cân nặng</Text>
+                <Text style={[styles.metricVal, { color: textTitle }]}>
+                  {weight !== '--' ? (
+                    <>
+                      {weight} <Text style={styles.metricUnit}>kg</Text>
+                    </>
+                  ) : (
+                    '--'
+                  )}
+                </Text>
+              </View>
+              <View style={[styles.metricDivider, { backgroundColor: borderCol }]} />
+              <View style={styles.metricItem}>
+                <Text style={[styles.metricLabel, { color: textSub }]}>Nhóm máu</Text>
+                <Text style={[styles.metricVal, { color: bloodType !== '--' ? '#EF4444' : textTitle }]}>
+                  {bloodType}
+                </Text>
+              </View>
             </View>
           </View>
-        </View>
+        )}
 
         {/* Khối Lọc Dữ Liệu Sinh Tồn Theo Ngày */}
         <View style={[styles.cardBlock, { backgroundColor: bgCard, borderColor: borderCol }]}>
@@ -494,55 +528,66 @@ export default function PatientMedicalRecordScreen({ navigation }: any) {
             </View>
           </View>
 
-          <ScrollView horizontal showsHorizontalScrollIndicator={false} style={{ marginVertical: 10 }}>
-            {[
-              { label: 'Hôm nay', value: getDaysAgoStr(0) },
-              { label: 'Hôm qua', value: getDaysAgoStr(1) },
-              { label: '2 ngày trước', value: getDaysAgoStr(2) },
-              { label: '3 ngày trước', value: getDaysAgoStr(3) },
-            ].map((opt) => {
-              const isSelected = selectedDate === opt.value;
-              return (
-                <TouchableOpacity
-                  key={opt.value}
-                  style={[
-                    styles.dateChip,
-                    {
-                      backgroundColor: isSelected ? Colors.primary : isDarkMode ? '#0F172A' : '#F1F5F9',
-                      borderColor: isSelected ? Colors.primary : borderCol,
-                    },
-                  ]}
-                  onPress={() => setSelectedDate(opt.value)}
-                  activeOpacity={0.8}
-                >
-                  <Text style={[styles.dateChipText, { color: isSelected ? '#FFF' : textTitle }]}>
-                    {opt.label} ({opt.value.slice(5)})
-                  </Text>
-                </TouchableOpacity>
-              );
-            })}
-          </ScrollView>
-
-          <View style={[styles.daySummaryBox, { backgroundColor: bgSubtle, borderColor: borderCol }]}>
-            <View style={styles.summaryTopRow}>
-              <Text style={{ fontSize: 13, fontWeight: '700', color: isDarkMode ? '#93C5FD' : '#1D4ED8' }}>
-                Tổng kết ngày {formatDisplayDateVN(selectedDate)}
-              </Text>
-              <Text style={{ fontSize: 11, color: textSub }}>
-                {patientRecord?.daily_vitals?.length || 0} mốc đo ghi nhận
+          {!hasPatient ? (
+            <View style={[styles.emptyNoticeBox, { backgroundColor: bgSubtle, borderColor: borderCol }]}>
+              <Ionicons name="information-circle-outline" size={18} color={isDarkMode ? '#64748B' : '#94A3B8'} />
+              <Text style={[styles.emptyNoticeText, { color: textSub }]}>
+                Chưa có dữ liệu sinh tồn do chưa thêm người theo dõi
               </Text>
             </View>
+          ) : (
+            <>
+              <ScrollView horizontal showsHorizontalScrollIndicator={false} style={{ marginVertical: 10 }}>
+                {[
+                  { label: 'Hôm nay', value: getDaysAgoStr(0) },
+                  { label: 'Hôm qua', value: getDaysAgoStr(1) },
+                  { label: '2 ngày trước', value: getDaysAgoStr(2) },
+                  { label: '3 ngày trước', value: getDaysAgoStr(3) },
+                ].map((opt) => {
+                  const isSelected = selectedDate === opt.value;
+                  return (
+                    <TouchableOpacity
+                      key={opt.value}
+                      style={[
+                        styles.dateChip,
+                        {
+                          backgroundColor: isSelected ? Colors.primary : isDarkMode ? '#0F172A' : '#F1F5F9',
+                          borderColor: isSelected ? Colors.primary : borderCol,
+                        },
+                      ]}
+                      onPress={() => setSelectedDate(opt.value)}
+                      activeOpacity={0.8}
+                    >
+                      <Text style={[styles.dateChipText, { color: isSelected ? '#FFF' : textTitle }]}>
+                        {opt.label} ({opt.value.slice(5)})
+                      </Text>
+                    </TouchableOpacity>
+                  );
+                })}
+              </ScrollView>
 
-            <TouchableOpacity
-              style={styles.openDetailChartBtn}
-              onPress={() => navigation.navigate('HealthDetail')}
-              activeOpacity={0.8}
-            >
-              <Ionicons name="stats-chart" size={16} color="#FFF" />
-              <Text style={styles.openDetailChartBtnText}>Xem Biểu Đồ & Dòng Thời Gian Chi Tiết</Text>
-              <Ionicons name="arrow-forward" size={14} color="#FFF" />
-            </TouchableOpacity>
-          </View>
+              <View style={[styles.daySummaryBox, { backgroundColor: bgSubtle, borderColor: borderCol }]}>
+                <View style={styles.summaryTopRow}>
+                  <Text style={{ fontSize: 13, fontWeight: '700', color: isDarkMode ? '#93C5FD' : '#1D4ED8' }}>
+                    Tổng kết ngày {formatDisplayDateVN(selectedDate)}
+                  </Text>
+                  <Text style={{ fontSize: 11, color: textSub }}>
+                    {patientRecord?.daily_vitals?.length || 0} mốc đo ghi nhận
+                  </Text>
+                </View>
+
+                <TouchableOpacity
+                  style={styles.openDetailChartBtn}
+                  onPress={() => navigation.navigate('HealthDetail')}
+                  activeOpacity={0.8}
+                >
+                  <Ionicons name="stats-chart" size={16} color="#FFF" />
+                  <Text style={styles.openDetailChartBtnText}>Xem Biểu Đồ & Dòng Thời Gian Chi Tiết</Text>
+                  <Ionicons name="arrow-forward" size={14} color="#FFF" />
+                </TouchableOpacity>
+              </View>
+            </>
+          )}
         </View>
 
         {/* Khối 2: Tiền sử bệnh nền */}
@@ -552,15 +597,26 @@ export default function PatientMedicalRecordScreen({ navigation }: any) {
               <View style={[styles.cardIconBox, { backgroundColor: isDarkMode ? '#4C1D1D' : '#FEE2E2' }]}>
                 <Ionicons name="pulse-outline" size={20} color="#EF4444" />
               </View>
-              <Text style={[styles.cardTitle, { color: textTitle }]}>Tiền sử bệnh nền ({conditions.length})</Text>
+              <Text style={[styles.cardTitle, { color: textTitle }]}>
+                Tiền sử bệnh nền {hasPatient ? `(${conditions.length})` : ''}
+              </Text>
             </View>
-            <TouchableOpacity style={styles.addBtnSmall} onPress={() => setAddConditionModalVisible(true)} activeOpacity={0.7}>
-              <Ionicons name="add" size={16} color="#FFF" />
-              <Text style={styles.addBtnSmallText}>Thêm</Text>
-            </TouchableOpacity>
+            {hasPatient && (
+              <TouchableOpacity style={styles.addBtnSmall} onPress={() => setAddConditionModalVisible(true)} activeOpacity={0.7}>
+                <Ionicons name="add" size={16} color="#FFF" />
+                <Text style={styles.addBtnSmallText}>Thêm</Text>
+              </TouchableOpacity>
+            )}
           </View>
 
-          {conditions.length === 0 ? (
+          {!hasPatient ? (
+            <View style={[styles.emptyNoticeBox, { backgroundColor: bgSubtle, borderColor: borderCol }]}>
+              <Ionicons name="information-circle-outline" size={18} color={isDarkMode ? '#64748B' : '#94A3B8'} />
+              <Text style={[styles.emptyNoticeText, { color: textSub }]}>
+                Chưa có dữ liệu sinh tồn do chưa thêm người theo dõi
+              </Text>
+            </View>
+          ) : conditions.length === 0 ? (
             <View style={styles.emptyInlineBox}>
               <Text style={[styles.emptyInlineText, { color: textSub }]}>Chưa có ghi nhận tiền sử bệnh nền.</Text>
             </View>
@@ -794,7 +850,9 @@ export default function PatientMedicalRecordScreen({ navigation }: any) {
       <Modal transparent visible={isEditPatientVisible} animationType="fade" onRequestClose={() => setEditPatientVisible(false)}>
         <Pressable style={styles.modalOverlay} onPress={() => setEditPatientVisible(false)}>
           <Pressable style={[styles.modalCard, { backgroundColor: bgCard, borderColor: borderCol, maxHeight: '92%' }]} onPress={() => {}}>
-            <Text style={[styles.modalTitle, { color: textTitle }]}>Chỉnh sửa thông tin bệnh nhân</Text>
+            <Text style={[styles.modalTitle, { color: textTitle }]}>
+              {hasPatient ? 'Chỉnh sửa thông tin bệnh nhân' : 'Thêm hồ sơ người cao tuổi'}
+            </Text>
             <ScrollView showsVerticalScrollIndicator={false} contentContainerStyle={{ paddingBottom: 6 }}>
               {/* 1. Họ tên */}
               <Text style={[styles.inputLabel, { color: textSub }]}>Họ tên người cao tuổi:</Text>
@@ -958,7 +1016,7 @@ export default function PatientMedicalRecordScreen({ navigation }: any) {
                 <Text style={[styles.modalCancelText, { color: textSub }]}>Hủy</Text>
               </TouchableOpacity>
               <TouchableOpacity style={styles.modalSaveBtn} onPress={handleSavePatientInfo}>
-                <Text style={styles.modalSaveText}>Lưu thay đổi</Text>
+                <Text style={styles.modalSaveText}>{hasPatient ? 'Lưu thay đổi' : 'Lưu hồ sơ'}</Text>
               </TouchableOpacity>
             </View>
           </Pressable>
@@ -1034,6 +1092,31 @@ const styles = StyleSheet.create({
   securityDesc: { fontSize: 11, lineHeight: 16 },
 
   cardBlock: { borderRadius: 18, padding: 16, borderWidth: 1 },
+  emptyPatientCard: { alignItems: 'center', justifyContent: 'center', paddingVertical: 28, paddingHorizontal: 20 },
+  emptyPatientIconCircle: { width: 72, height: 72, borderRadius: 36, alignItems: 'center', justifyContent: 'center', marginBottom: 12 },
+  emptyPatientTitle: { fontSize: 16, fontWeight: '700', marginBottom: 6, textAlign: 'center' },
+  emptyPatientDesc: { fontSize: 13, lineHeight: 19, textAlign: 'center', marginBottom: 18, paddingHorizontal: 16 },
+  addPatientPrimaryBtn: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: 6,
+    backgroundColor: Colors.primary,
+    paddingVertical: 12,
+    paddingHorizontal: 20,
+    borderRadius: 12,
+  },
+  addPatientPrimaryBtnText: { color: '#FFFFFF', fontSize: 14, fontWeight: '700' },
+  emptyNoticeBox: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 8,
+    padding: 14,
+    borderRadius: 10,
+    borderWidth: 1,
+    marginTop: 6,
+  },
+  emptyNoticeText: { fontSize: 12.5, fontWeight: '500', flex: 1 },
   cardHeader: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', marginBottom: 14 },
   cardIconBox: { width: 36, height: 36, borderRadius: 10, alignItems: 'center', justifyContent: 'center' },
   cardTitle: { fontSize: 15, fontWeight: '700' },
