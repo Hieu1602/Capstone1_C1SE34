@@ -1,123 +1,128 @@
-"""
-camera.py
-Camera driver – đọc frame từ RTSP stream hoặc USB Camera.
-
-Hỗ trợ:
-- RTSP (IP Camera)
-- USB Camera (V4L2 / /dev/videoX)
-- Mock frame generator (cho unit testing)
-"""
-
+"""OpenCV driver dùng chung cho AI edge và dịch vụ Tapo Docker."""
 import logging
+import os
 import threading
 import time
 from typing import Any, Optional
-
 import numpy as np
 
 logger = logging.getLogger(__name__)
 
 
 class CameraDriver:
-    """
-    Thread-safe camera driver sử dụng OpenCV VideoCapture.
-
-    Usage:
-        cam = CameraDriver(config)
-        cam.start()
-        frame = cam.get_latest_frame()
-        cam.stop()
-    """
-
     def __init__(self, config: dict):
-        self.source = config.get("source", 0)  # RTSP URL hoặc device index
-        self.fps: int = config.get("fps", 15)
-        self.width: int = config.get("resolution", {}).get("width", 1280)
-        self.height: int = config.get("resolution", {}).get("height", 720)
-        self.reconnect_interval: float = config.get("reconnect_interval_sec", 5.0)
+        """Chuẩn bị nguồn ảnh, cấu hình đọc và bộ nhớ dùng chung.
 
+        Args:
+            config: Nguồn ảnh, FPS, độ phân giải và khoảng chờ kết nối lại.
+
+        Returns:
+            Không có. Chưa mở camera hoặc tạo thread.
+        """
+        self.source = config.get("source", 0)
+        if os.getenv("TAPO_HOST"):
+            from .tapo import rtsp_url
+            self.source = rtsp_url()
+        self.fps = max(1, int(config.get("fps", 15)))
+        self.width = config.get("resolution", {}).get("width", 1280)
+        self.height = config.get("resolution", {}).get("height", 720)
+        self.reconnect_interval = float(config.get("reconnect_interval_sec", 5))
         self._cap: Any = None
+        # Frame mới nhất và mốc monotonic để loại ảnh cũ khi mất kết nối.
         self._frame: Optional[np.ndarray] = None
+        self._updated = 0.0
+        # Đồng bộ frame giữa worker và luồng phục vụ HTTP/AI.
         self._lock = threading.Lock()
-        self._running = False
+        # Event báo dừng và ngắt thời gian chờ kết nối lại.
+        self._stop = threading.Event()
         self._thread: Optional[threading.Thread] = None
 
-    # ------------------------------------------------------------------
-    # Lifecycle
-    # ------------------------------------------------------------------
-
     def start(self) -> None:
-        """Bắt đầu thread đọc frame liên tục."""
-        self._running = True
-        self._thread = threading.Thread(
-            target=self._capture_loop, daemon=True, name="CameraThread"
-        )
+        """Khởi động một thread đọc camera nếu chưa chạy.
+
+        Returns:
+            Không có. Tác động: tạo worker nền.
+        """
+        if self._thread and self._thread.is_alive():
+            return
+        self._stop.clear()
+        self._thread = threading.Thread(target=self._capture_loop, daemon=True)
         self._thread.start()
-        logger.info("[Camera] Started capture from: %s", self.source)
 
     def stop(self) -> None:
-        """Dừng thread và giải phóng capture."""
-        self._running = False
-        if self._thread:
-            self._thread.join(timeout=5.0)
-        if self._cap:
-            self._cap.release()
-        logger.info("[Camera] Stopped.")
+        """Báo worker dừng và chờ tối đa 12 giây.
 
-    # ------------------------------------------------------------------
-    # Frame Access
-    # ------------------------------------------------------------------
+        Returns:
+            Không có. Worker tự giải phóng VideoCapture để tránh đua với read().
+        """
+        self._stop.set()
+        if self._thread:
+            self._thread.join(timeout=12)
+        # Chỉ thread đọc sở hữu VideoCapture; không release giữa lúc read().
 
     def get_latest_frame(self) -> Optional[np.ndarray]:
-        """Trả về frame mới nhất (thread-safe). None nếu chưa có frame."""
+        """Lấy bản sao ảnh gần nhất dưới khóa đồng bộ.
+
+        Returns:
+            Ảnh NumPy hoặc None nếu chưa có ảnh/ảnh cũ quá 5 giây.
+        """
         with self._lock:
-            return self._frame.copy() if self._frame is not None else None
+            if self._frame is None or time.monotonic() - self._updated > 5:
+                return None
+            return self._frame.copy()
 
     def is_connected(self) -> bool:
-        """Kiểm tra camera có đang kết nối không."""
-        return self._cap is not None and self._cap.isOpened()
+        """Đánh giá kết nối theo tuổi của frame gần nhất.
 
-    # ------------------------------------------------------------------
-    # Internal Capture Loop
-    # ------------------------------------------------------------------
+        Returns:
+            True khi có frame trong vòng 5 giây.
+        """
+        with self._lock:
+            return self._frame is not None and time.monotonic() - self._updated <= 5
 
     def _capture_loop(self) -> None:
-        while self._running:
-            if not self.is_connected() or self._cap is None:
-                self._connect()
-                if not self.is_connected() or self._cap is None:
-                    logger.warning(
-                        "[Camera] Không kết nối được, thử lại sau %.1fs",
-                        self.reconnect_interval,
-                    )
-                    time.sleep(self.reconnect_interval)
-                    continue
+        """Đọc ảnh liên tục và kết nối lại khi mất nguồn.
 
-            ret, frame = self._cap.read()
-            if ret and frame is not None:
-                with self._lock:
-                    self._frame = frame
-            else:
-                logger.warning("[Camera] Mất frame, đang kết nối lại...")
-                self._disconnect()
-                time.sleep(self.reconnect_interval)
-
-            time.sleep(1.0 / self.fps)
-
-    def _connect(self) -> None:
+        Returns:
+            Không có. Tác động: mở/đóng camera, cập nhật frame dưới khóa cho đến khi dừng.
+        """
+        import cv2
+        is_rtsp = isinstance(self.source, str) and self.source.startswith("rtsp://")
+        # TCP tránh rơi gói qua Docker bridge. Không log URL chứa mật khẩu.
+        os.environ.setdefault("OPENCV_FFMPEG_CAPTURE_OPTIONS", "rtsp_transport;tcp")
         try:
-            import cv2  # type: ignore
-            self._cap = cv2.VideoCapture(self.source)
-            self._cap.set(cv2.CAP_PROP_FRAME_WIDTH, self.width)
-            self._cap.set(cv2.CAP_PROP_FRAME_HEIGHT, self.height)
-            self._cap.set(cv2.CAP_PROP_FPS, self.fps)
-            if self._cap.isOpened():
-                logger.info("[Camera] Kết nối thành công: %s", self.source)
-        except Exception as exc:  # noqa: BLE001
-            logger.error("[Camera] Lỗi kết nối: %s", exc)
-            self._cap = None
-
-    def _disconnect(self) -> None:
-        if self._cap:
-            self._cap.release()
-            self._cap = None
+            while not self._stop.is_set():
+                try:
+                    if is_rtsp:
+                        self._cap = cv2.VideoCapture(self.source, cv2.CAP_FFMPEG, [
+                            cv2.CAP_PROP_OPEN_TIMEOUT_MSEC, 5000,
+                            cv2.CAP_PROP_READ_TIMEOUT_MSEC, 5000,
+                        ])
+                    else:
+                        self._cap = cv2.VideoCapture(self.source)
+                        self._cap.set(cv2.CAP_PROP_FRAME_WIDTH, self.width)
+                        self._cap.set(cv2.CAP_PROP_FRAME_HEIGHT, self.height)
+                        self._cap.set(cv2.CAP_PROP_FPS, self.fps)
+                    while not self._stop.is_set() and self._cap.isOpened():
+                        ok, frame = self._cap.read()
+                        if not ok:
+                            break
+                        with self._lock:
+                            self._frame = frame
+                            self._updated = time.monotonic()
+                        # Đọc RTSP liên tục để không tích lũy độ trễ trong buffer.
+                        if not is_rtsp:
+                            self._stop.wait(1 / self.fps)
+                except Exception:
+                    logger.warning("Camera read failed; reconnecting")
+                finally:
+                    if self._cap is not None:
+                        self._cap.release()
+                        self._cap = None
+                    with self._lock:
+                        self._frame = None
+                if not self._stop.is_set():
+                    logger.warning("Camera disconnected; check LAN, Camera Account and privacy mode")
+                    self._stop.wait(self.reconnect_interval)
+        finally:
+            logger.info("Camera stopped")

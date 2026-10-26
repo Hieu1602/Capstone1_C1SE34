@@ -45,6 +45,12 @@ export const VitalsSummaryCard: React.FC<VitalsSummaryCardProps> = ({
   const hasHR = currentVitals.heart_rate !== null && currentVitals.heart_rate !== undefined;
   const hasSpO2 = currentVitals.spo2 !== null && currentVitals.spo2 !== undefined;
   const hasTemp = currentVitals.skin_temp_max !== null && currentVitals.skin_temp_max !== undefined;
+  // Kiểm tra thiết bị vòng đeo tay BLE có đang kết nối thực tế hay không
+  const isBraceletConnected = Boolean(
+    currentVitals?.bracelet_connected &&
+    braceletBattery !== null &&
+    braceletBattery !== undefined
+  );
 
   return (
     <View style={[styles.vitalsSummaryCard, isDarkMode && { backgroundColor: colors.card, borderColor: colors.border }]}>
@@ -88,11 +94,22 @@ export const VitalsSummaryCard: React.FC<VitalsSummaryCardProps> = ({
         <View style={[styles.deviceStatusDivider, isDarkMode && { backgroundColor: colors.border }]} />
 
         <View style={styles.deviceStatusItem}>
-          <Ionicons name="battery-charging" size={15} color={Colors.aiBlue} />
+          <Ionicons
+            name={isBraceletConnected ? "battery-charging" : "bluetooth-outline"}
+            size={15}
+            color={isBraceletConnected ? Colors.aiBlue : isDarkMode ? '#64748B' : '#94A3B8'}
+          />
           <Text style={[styles.deviceStatusText, isDarkMode && { color: colors.textSecondary }]}>
             Vòng BLE:{' '}
-            <Text style={{ color: isDarkMode ? colors.textPrimary : Colors.textPrimary, fontWeight: '700' }}>
-              {braceletBattery !== null && braceletBattery !== undefined ? `${braceletBattery}% Pin` : 'Chưa kết nối'}
+            <Text
+              style={{
+                color: isBraceletConnected
+                  ? (isDarkMode ? colors.textPrimary : Colors.textPrimary)
+                  : (isDarkMode ? '#94A3B8' : '#64748B'),
+                fontWeight: '700',
+              }}
+            >
+              {isBraceletConnected ? `${braceletBattery}% Pin` : 'Chưa kết nối'}
             </Text>
           </Text>
         </View>

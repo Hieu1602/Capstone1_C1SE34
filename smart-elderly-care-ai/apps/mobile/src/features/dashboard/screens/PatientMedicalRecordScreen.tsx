@@ -44,29 +44,77 @@ const formatDisplayDateVN = (ymd: string) => {
   return parts?.length === 3 ? `${parts[2]}/${parts[1]}/${parts[0]}` : ymd;
 };
 
+// Tính toán BMI chuẩn y tế: BMI = Cân nặng (kg) / (Chiều cao (m) ^ 2)
+const calculateBMIInfo = (hStr: string, wStr: string) => {
+  const h = parseFloat(hStr);
+  const w = parseFloat(wStr);
+  if (!isNaN(h) && !isNaN(w) && h > 0 && w > 0) {
+    const val = w / Math.pow(h / 100, 2);
+    const bmiNum = parseFloat(val.toFixed(1));
+    let category = 'Bình thường';
+    let color = '#15803D';
+    let bg = '#DCFCE7';
+    if (bmiNum < 18.5) {
+      category = 'Gầy (Thiếu cân)';
+      color = '#0284C7';
+      bg = '#E0F2FE';
+    } else if (bmiNum < 25) {
+      category = 'Bình thường (Lý tưởng)';
+      color = '#15803D';
+      bg = '#DCFCE7';
+    } else if (bmiNum < 30) {
+      category = 'Tiền béo phì (Thừa cân)';
+      color = '#D97706';
+      bg = '#FEF3C7';
+    } else {
+      category = 'Béo phì';
+      color = '#DC2626';
+      bg = '#FEE2E2';
+    }
+    return { bmi: val.toFixed(1), category, color, bg };
+  }
+  return { bmi: '--', category: 'Chưa tính', color: '#64748B', bg: '#F1F5F9' };
+};
+
+// Tự động tính tuổi từ năm sinh
+const calculateAgeFromYear = (yearStr: string) => {
+  const y = parseInt(yearStr, 10);
+  const cur = new Date().getFullYear();
+  if (!isNaN(y) && y >= 1900 && y <= cur) {
+    return cur - y;
+  }
+  return 0;
+};
+
 export default function PatientMedicalRecordScreen({ navigation }: any) {
   const { isDarkMode } = useTheme();
   const { fetchPatientRecord, updatePatientRecord, patientRecord, enrollPatientFace } = useVitalStore();
 
   // Trích xuất dữ liệu thực tế từ Store (hiển thị trạng thái rỗng nếu chưa có dữ liệu)
-  const patientName = patientRecord?.name || '--';
-  const birthYear = patientRecord?.birth_year ? String(patientRecord.birth_year) : '--';
-  const age = patientRecord?.age || '--';
-  const gender = patientRecord?.gender || '--';
-  const bloodType = patientRecord?.blood_type || '--';
-  const height = patientRecord?.height_cm ? String(patientRecord.height_cm) : '--';
-  const weight = patientRecord?.weight_kg ? String(patientRecord.weight_kg) : '--';
+  const patientName = patientRecord?.name?.trim() ? patientRecord.name : '--';
+  const birthYear = patientRecord?.birth_year && String(patientRecord.birth_year).trim() ? String(patientRecord.birth_year) : '--';
+  const age =
+    patientRecord?.age && Number(patientRecord.age) > 0
+      ? String(patientRecord.age)
+      : birthYear !== '--' && calculateAgeFromYear(birthYear) > 0
+      ? String(calculateAgeFromYear(birthYear))
+      : '--';
+  const gender = patientRecord?.gender?.trim() ? patientRecord.gender : '--';
+  const bloodType = patientRecord?.blood_type?.trim() ? patientRecord.blood_type : '--';
+  const height = patientRecord?.height_cm && Number(patientRecord.height_cm) > 0 ? String(patientRecord.height_cm) : '--';
+  const weight = patientRecord?.weight_kg && Number(patientRecord.weight_kg) > 0 ? String(patientRecord.weight_kg) : '--';
+  const cardBMI = calculateBMIInfo(height, weight);
   const avatarUrl = patientRecord?.avatar_url || null;
   const hasFaceEnrolled = Boolean(patientRecord?.has_face_enrolled);
   const conditions: MedicalConditionItem[] = patientRecord?.conditions || [];
-  const drugAllergies = patientRecord?.drug_allergies || 'Chưa ghi nhận';
-  const foodAllergies = patientRecord?.food_allergies || 'Chưa ghi nhận';
-  const dietaryNotes = patientRecord?.dietary_notes || 'Chưa ghi nhận';
-  const doctorName = patientRecord?.doctor_name || 'Chưa chỉ định';
-  const doctorPhone = patientRecord?.doctor_phone || '';
-  const doctorSpecialty = patientRecord?.doctor_specialty || '--';
-  const hospital = patientRecord?.hospital || '--';
-  const nextAppointment = patientRecord?.next_appointment || 'Chưa có lịch hẹn';
+  const drugAllergies = patientRecord?.drug_allergies?.trim() ? patientRecord.drug_allergies : 'Chưa ghi nhận';
+  const foodAllergies = patientRecord?.food_allergies?.trim() ? patientRecord.food_allergies : 'Chưa ghi nhận';
+  const dietaryNotes = patientRecord?.dietary_notes?.trim() ? patientRecord.dietary_notes : 'Chưa ghi nhận';
+  const doctorName = patientRecord?.doctor_name?.trim() ? patientRecord.doctor_name : 'Chưa chỉ định';
+  const doctorPhone = patientRecord?.doctor_phone?.trim() ? patientRecord.doctor_phone : '';
+  const doctorSpecialty = patientRecord?.doctor_specialty?.trim() ? patientRecord.doctor_specialty : '--';
+  const hospital = patientRecord?.hospital?.trim() ? patientRecord.hospital : '--';
+  const nextAppointment = patientRecord?.next_appointment?.trim() ? patientRecord.next_appointment : 'Chưa có lịch hẹn';
 
   // State bộ lọc ngày và các hộp thoại chỉnh sửa
   const [selectedDate, setSelectedDate] = useState(() => getDaysAgoStr(0));
@@ -78,7 +126,17 @@ export default function PatientMedicalRecordScreen({ navigation }: any) {
 
   // State Modal chỉnh sửa thông tin hành chính / thể trạng
   const [isEditPatientVisible, setEditPatientVisible] = useState(false);
-  const [patientDraft, setPatientDraft] = useState({ name: '', blood: '', weight: '', height: '' });
+  const [patientDraft, setPatientDraft] = useState({
+    name: '',
+    birthYear: '',
+    gender: 'Nam',
+    blood: 'A+',
+    weight: '',
+    height: '',
+  });
+
+  const draftAge = calculateAgeFromYear(patientDraft.birthYear);
+  const draftBMI = calculateBMIInfo(patientDraft.height, patientDraft.weight);
 
   // State chỉnh sửa trực tiếp (Inline Edit) phần Dị ứng & Lưu ý dinh dưỡng
   const [isEditingAllergies, setIsEditingAllergies] = useState(false);
@@ -92,21 +150,33 @@ export default function PatientMedicalRecordScreen({ navigation }: any) {
   const openEditPatientModal = () => {
     setPatientDraft({
       name: patientRecord?.name || '',
-      blood: patientRecord?.blood_type || '',
-      weight: patientRecord?.weight_kg ? String(patientRecord.weight_kg) : '',
-      height: patientRecord?.height_cm ? String(patientRecord.height_cm) : '',
+      birthYear: patientRecord?.birth_year ? String(patientRecord.birth_year) : '',
+      gender: patientRecord?.gender || 'Nam',
+      blood: patientRecord?.blood_type || 'A+',
+      weight: patientRecord?.weight_kg && Number(patientRecord.weight_kg) > 0 ? String(patientRecord.weight_kg) : '',
+      height: patientRecord?.height_cm && Number(patientRecord.height_cm) > 0 ? String(patientRecord.height_cm) : '',
     });
     setEditPatientVisible(true);
   };
 
   // Lưu thông tin hành chính & chỉ số cơ thể xuống DB
   const handleSavePatientInfo = async () => {
+    const h = parseInt(patientDraft.height, 10) || 0;
+    const w = parseInt(patientDraft.weight, 10) || 0;
+    const by = patientDraft.birthYear.trim();
+    const computedAge = calculateAgeFromYear(by);
+    const { bmi: computedBMI } = calculateBMIInfo(patientDraft.height, patientDraft.weight);
+
     setEditPatientVisible(false);
     await updatePatientRecord(1, {
       name: patientDraft.name.trim(),
-      blood_type: patientDraft.blood.trim(),
-      weight_kg: parseInt(patientDraft.weight, 10) || 0,
-      height_cm: parseInt(patientDraft.height, 10) || 0,
+      birth_year: by,
+      age: computedAge,
+      gender: patientDraft.gender,
+      blood_type: patientDraft.blood,
+      weight_kg: w,
+      height_cm: h,
+      bmi: computedBMI !== '--' ? parseFloat(computedBMI) : 0,
     });
     Alert.alert('Đã cập nhật', 'Thông tin bệnh nhân đã được lưu an toàn.');
   };
@@ -228,9 +298,7 @@ export default function PatientMedicalRecordScreen({ navigation }: any) {
     }
   };
 
-  const numH = parseFloat(height);
-  const numW = parseFloat(weight);
-  const bmi = !isNaN(numH) && !isNaN(numW) && numH > 0 ? (numW / Math.pow(numH / 100, 2)).toFixed(1) : '--';
+  const bmi = cardBMI.bmi;
 
   const bgScreen = isDarkMode ? '#0B0F19' : '#F8FAFC';
   const bgCard = isDarkMode ? '#1E293B' : '#FFFFFF';
@@ -330,7 +398,9 @@ export default function PatientMedicalRecordScreen({ navigation }: any) {
                 {patientName !== '--' ? patientName : 'Chưa cập nhật tên'}
               </Text>
               <Text style={[styles.patientHeroSub, { color: textSub }]}>
-                Năm sinh: {birthYear} ({age} tuổi) • Giới tính: {gender}
+                {birthYear !== '--'
+                  ? `Năm sinh: ${birthYear} (${age !== '--' ? `${age} tuổi` : ''}) • Giới tính: ${gender}`
+                  : 'Chưa cập nhật thông tin cá nhân'}
               </Text>
 
               <View style={styles.bloodBadgeRow}>
@@ -338,8 +408,17 @@ export default function PatientMedicalRecordScreen({ navigation }: any) {
                   <Ionicons name="water" size={13} color="#EF4444" />
                   <Text style={styles.bloodBadgeText}>Nhóm máu: {bloodType}</Text>
                 </View>
-                <View style={[styles.bmiBadge, { backgroundColor: isDarkMode ? '#064E3B' : '#DCFCE7' }]}>
-                  <Text style={styles.bmiBadgeText}>BMI: {bmi}</Text>
+                <View
+                  style={[
+                    styles.bmiBadge,
+                    {
+                      backgroundColor: isDarkMode ? 'rgba(255,255,255,0.08)' : cardBMI.bg,
+                    },
+                  ]}
+                >
+                  <Text style={[styles.bmiBadgeText, { color: cardBMI.color }]}>
+                    BMI: {cardBMI.bmi} {cardBMI.bmi !== '--' ? `(${cardBMI.category})` : ''}
+                  </Text>
                 </View>
               </View>
 
@@ -369,20 +448,34 @@ export default function PatientMedicalRecordScreen({ navigation }: any) {
             <View style={styles.metricItem}>
               <Text style={[styles.metricLabel, { color: textSub }]}>Chiều cao</Text>
               <Text style={[styles.metricVal, { color: textTitle }]}>
-                {height} <Text style={styles.metricUnit}>cm</Text>
+                {height !== '--' ? (
+                  <>
+                    {height} <Text style={styles.metricUnit}>cm</Text>
+                  </>
+                ) : (
+                  '--'
+                )}
               </Text>
             </View>
             <View style={[styles.metricDivider, { backgroundColor: borderCol }]} />
             <View style={styles.metricItem}>
               <Text style={[styles.metricLabel, { color: textSub }]}>Cân nặng</Text>
               <Text style={[styles.metricVal, { color: textTitle }]}>
-                {weight} <Text style={styles.metricUnit}>kg</Text>
+                {weight !== '--' ? (
+                  <>
+                    {weight} <Text style={styles.metricUnit}>kg</Text>
+                  </>
+                ) : (
+                  '--'
+                )}
               </Text>
             </View>
             <View style={[styles.metricDivider, { backgroundColor: borderCol }]} />
             <View style={styles.metricItem}>
               <Text style={[styles.metricLabel, { color: textSub }]}>Nhóm máu</Text>
-              <Text style={[styles.metricVal, { color: '#EF4444' }]}>{bloodType}</Text>
+              <Text style={[styles.metricVal, { color: bloodType !== '--' ? '#EF4444' : textTitle }]}>
+                {bloodType}
+              </Text>
             </View>
           </View>
         </View>
@@ -700,40 +793,163 @@ export default function PatientMedicalRecordScreen({ navigation }: any) {
       {/* Modal Chỉnh Sửa Thông Tin Bệnh Nhân */}
       <Modal transparent visible={isEditPatientVisible} animationType="fade" onRequestClose={() => setEditPatientVisible(false)}>
         <Pressable style={styles.modalOverlay} onPress={() => setEditPatientVisible(false)}>
-          <Pressable style={[styles.modalCard, { backgroundColor: bgCard, borderColor: borderCol }]} onPress={() => {}}>
+          <Pressable style={[styles.modalCard, { backgroundColor: bgCard, borderColor: borderCol, maxHeight: '92%' }]} onPress={() => {}}>
             <Text style={[styles.modalTitle, { color: textTitle }]}>Chỉnh sửa thông tin bệnh nhân</Text>
-            <Text style={[styles.inputLabel, { color: textSub }]}>Họ tên người cao tuổi:</Text>
-            <TextInput
-              style={[styles.textInput, inputThemeStyle]}
-              value={patientDraft.name}
-              onChangeText={(name) => setPatientDraft((prev) => ({ ...prev, name }))}
-            />
-            <View style={{ flexDirection: 'row', gap: 10, marginTop: 10 }}>
-              <View style={{ flex: 1 }}>
-                <Text style={[styles.inputLabel, { color: textSub }]}>Chiều cao (cm):</Text>
+            <ScrollView showsVerticalScrollIndicator={false} contentContainerStyle={{ paddingBottom: 6 }}>
+              {/* 1. Họ tên */}
+              <Text style={[styles.inputLabel, { color: textSub }]}>Họ tên người cao tuổi:</Text>
+              <TextInput
+                style={[styles.textInput, inputThemeStyle]}
+                value={patientDraft.name}
+                onChangeText={(name) => setPatientDraft((prev) => ({ ...prev, name }))}
+                placeholder="Nhập họ và tên người cao tuổi..."
+                placeholderTextColor="#94A3B8"
+              />
+
+              {/* 2. Năm sinh & Tự động tính tuổi */}
+              <View style={{ marginTop: 12 }}>
+                <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 4 }}>
+                  <Text style={[styles.inputLabel, { color: textSub, marginBottom: 0 }]}>Năm sinh:</Text>
+                  {draftAge > 0 && (
+                    <View style={[styles.calcBadge, { backgroundColor: isDarkMode ? '#1E3A8A' : '#EFF6FF' }]}>
+                      <Ionicons name="calendar-outline" size={12} color="#2563EB" />
+                      <Text style={[styles.calcBadgeText, { color: '#2563EB' }]}>
+                        Tự động tính: {draftAge} tuổi
+                      </Text>
+                    </View>
+                  )}
+                </View>
                 <TextInput
                   style={[styles.textInput, inputThemeStyle]}
                   keyboardType="numeric"
-                  value={patientDraft.height}
-                  onChangeText={(heightVal) => setPatientDraft((prev) => ({ ...prev, height: heightVal }))}
+                  maxLength={4}
+                  value={patientDraft.birthYear}
+                  onChangeText={(val) => setPatientDraft((prev) => ({ ...prev, birthYear: val.replace(/[^0-9]/g, '') }))}
+                  placeholder="VD: 1950 (nhập 4 chữ số)"
+                  placeholderTextColor="#94A3B8"
                 />
               </View>
-              <View style={{ flex: 1 }}>
-                <Text style={[styles.inputLabel, { color: textSub }]}>Cân nặng (kg):</Text>
-                <TextInput
-                  style={[styles.textInput, inputThemeStyle]}
-                  keyboardType="numeric"
-                  value={patientDraft.weight}
-                  onChangeText={(weightVal) => setPatientDraft((prev) => ({ ...prev, weight: weightVal }))}
-                />
+
+              {/* 3. Giới tính */}
+              <Text style={[styles.inputLabel, { color: textSub, marginTop: 12 }]}>Giới tính:</Text>
+              <View style={styles.genderRow}>
+                {[
+                  { key: 'Nam', icon: 'male', label: 'Nam' },
+                  { key: 'Nữ', icon: 'female', label: 'Nữ' },
+                  { key: 'Khác', icon: 'person-outline', label: 'Khác' },
+                ].map((g) => {
+                  const isSelected = patientDraft.gender === g.key;
+                  return (
+                    <TouchableOpacity
+                      key={g.key}
+                      style={[
+                        styles.genderBtn,
+                        isDarkMode && { backgroundColor: bgSubtle, borderColor: borderCol },
+                        isSelected && { backgroundColor: isDarkMode ? '#1E3A8A' : '#EFF6FF', borderColor: '#2563EB', borderWidth: 1.5 },
+                      ]}
+                      onPress={() => setPatientDraft((prev) => ({ ...prev, gender: g.key }))}
+                      activeOpacity={0.7}
+                    >
+                      <Ionicons
+                        name={g.icon as any}
+                        size={15}
+                        color={isSelected ? '#2563EB' : textSub}
+                      />
+                      <Text
+                        style={[
+                          styles.genderBtnText,
+                          { color: isSelected ? '#2563EB' : textSub, fontWeight: isSelected ? '700' : '500' },
+                        ]}
+                      >
+                        {g.label}
+                      </Text>
+                    </TouchableOpacity>
+                  );
+                })}
               </View>
-            </View>
-            <Text style={[styles.inputLabel, { color: textSub, marginTop: 10 }]}>Nhóm máu:</Text>
-            <TextInput
-              style={[styles.textInput, inputThemeStyle]}
-              value={patientDraft.blood}
-              onChangeText={(blood) => setPatientDraft((prev) => ({ ...prev, blood }))}
-            />
+
+              {/* 4. Nhóm máu (Chuẩn A+, A-, B+, B-, AB+, AB-, O+, O-) */}
+              <Text style={[styles.inputLabel, { color: textSub, marginTop: 12 }]}>Nhóm máu:</Text>
+              <View style={styles.bloodTypeGrid}>
+                {['A+', 'A-', 'B+', 'B-', 'AB+', 'AB-', 'O+', 'O-'].map((b) => {
+                  const isSelected = patientDraft.blood === b;
+                  return (
+                    <TouchableOpacity
+                      key={b}
+                      style={[
+                        styles.bloodChip,
+                        isDarkMode && { backgroundColor: bgSubtle, borderColor: borderCol },
+                        isSelected && { backgroundColor: '#FEE2E2', borderColor: '#EF4444', borderWidth: 1.5 },
+                      ]}
+                      onPress={() => setPatientDraft((prev) => ({ ...prev, blood: b }))}
+                      activeOpacity={0.7}
+                    >
+                      <Ionicons name="water" size={11} color={isSelected ? '#DC2626' : '#94A3B8'} />
+                      <Text
+                        style={[
+                          styles.bloodChipText,
+                          { color: isSelected ? '#DC2626' : textSub, fontWeight: isSelected ? '800' : '600' },
+                        ]}
+                      >
+                        {b}
+                      </Text>
+                    </TouchableOpacity>
+                  );
+                })}
+              </View>
+
+              {/* 5. Chiều cao & Cân nặng */}
+              <View style={{ flexDirection: 'row', gap: 10, marginTop: 12 }}>
+                <View style={{ flex: 1 }}>
+                  <Text style={[styles.inputLabel, { color: textSub }]}>Chiều cao (cm):</Text>
+                  <TextInput
+                    style={[styles.textInput, inputThemeStyle]}
+                    keyboardType="numeric"
+                    maxLength={3}
+                    placeholder="VD: 165"
+                    placeholderTextColor="#94A3B8"
+                    value={patientDraft.height}
+                    onChangeText={(heightVal) => setPatientDraft((prev) => ({ ...prev, height: heightVal.replace(/[^0-9]/g, '') }))}
+                  />
+                </View>
+                <View style={{ flex: 1 }}>
+                  <Text style={[styles.inputLabel, { color: textSub }]}>Cân nặng (kg):</Text>
+                  <TextInput
+                    style={[styles.textInput, inputThemeStyle]}
+                    keyboardType="numeric"
+                    maxLength={3}
+                    placeholder="VD: 58"
+                    placeholderTextColor="#94A3B8"
+                    value={patientDraft.weight}
+                    onChangeText={(weightVal) => setPatientDraft((prev) => ({ ...prev, weight: weightVal.replace(/[^0-9]/g, '') }))}
+                  />
+                </View>
+              </View>
+
+              {/* 6. Tự động tính chỉ số BMI */}
+              <View
+                style={[
+                  styles.bmiCalcBox,
+                  {
+                    backgroundColor: isDarkMode ? 'rgba(255,255,255,0.05)' : draftBMI.bg,
+                    borderColor: draftBMI.color,
+                  },
+                ]}
+              >
+                <Ionicons name="calculator-outline" size={18} color={draftBMI.color} />
+                <View style={{ flex: 1, marginLeft: 8 }}>
+                  <Text style={[styles.bmiCalcTitle, { color: draftBMI.color }]}>
+                    Chỉ số BMI: {draftBMI.bmi} {draftBMI.bmi !== '--' ? 'kg/m²' : ''}
+                  </Text>
+                  <Text style={[styles.bmiCalcSub, { color: isDarkMode ? '#CBD5E1' : '#475569' }]}>
+                    {draftBMI.bmi !== '--'
+                      ? `Thể trạng: ${draftBMI.category} (BMI = Cân nặng / Chiều cao²)`
+                      : 'Nhập đủ chiều cao và cân nặng để tự động tính BMI'}
+                  </Text>
+                </View>
+              </View>
+            </ScrollView>
+
             <View style={styles.modalBtnRow}>
               <TouchableOpacity
                 style={[styles.modalCancelBtn, { backgroundColor: isDarkMode ? '#0F172A' : '#F1F5F9', borderColor: borderCol }]}
@@ -911,4 +1127,16 @@ const styles = StyleSheet.create({
   modalActionSub: { fontSize: 10.5, marginTop: 2 },
   modalCloseBtn: { borderWidth: 1, borderRadius: 10, paddingVertical: 10, alignItems: 'center' },
   modalCloseBtnText: { fontSize: 12.5, fontWeight: '600' },
+
+  calcBadge: { flexDirection: 'row', alignItems: 'center', gap: 4, paddingHorizontal: 8, paddingVertical: 3, borderRadius: 6 },
+  calcBadgeText: { fontSize: 11.5, fontWeight: '700' },
+  genderRow: { flexDirection: 'row', gap: 8, marginTop: 4 },
+  genderBtn: { flex: 1, flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 6, borderWidth: 1, borderRadius: 10, paddingVertical: 9, borderColor: '#CBD5E1' },
+  genderBtnText: { fontSize: 12.5 },
+  bloodTypeGrid: { flexDirection: 'row', flexWrap: 'wrap', gap: 6, marginTop: 4 },
+  bloodChip: { width: '23%', flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 4, borderWidth: 1, borderRadius: 8, paddingVertical: 7, borderColor: '#CBD5E1' },
+  bloodChipText: { fontSize: 12 },
+  bmiCalcBox: { flexDirection: 'row', alignItems: 'center', borderRadius: 10, borderWidth: 1, padding: 10, marginTop: 12 },
+  bmiCalcTitle: { fontSize: 12.5, fontWeight: '800' },
+  bmiCalcSub: { fontSize: 11, marginTop: 2 },
 });

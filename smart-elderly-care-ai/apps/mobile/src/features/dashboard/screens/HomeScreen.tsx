@@ -27,17 +27,19 @@ import { useTheme } from '../../../store/useThemeStore';
 import { systemApi } from '../../../services/api';
 import { alertsWS } from '../../../services/websocket';
 
-// Các component con đã được tách module hóa giúp code gọn gàng, dễ bảo trì
 import { HomeCameraCard } from '../components/HomeCameraCard';
 import { MedicationReminderWidget } from '../components/MedicationReminderWidget';
 import { VitalsSummaryCard } from '../components/VitalsSummaryCard';
 import { HealthTrendsCard } from '../components/HealthTrendsCard';
 import { AlarmSnoozeModal } from '../components/AlarmSnoozeModal';
+import { FamilyAppointmentsModal } from '../components/FamilyAppointmentsModal';
+import { usePatientStore } from '../../../store/usePatientStore';
+import AdminMarqueeBanner from '../../../components/AdminMarqueeBanner';
 
 export default function HomeScreen({ navigation }: any) {
   // Quản lý trạng thái giao diện Sáng / Tối (Dark Mode)
   const { isDarkMode, colors, toggleTheme } = useTheme();
-  // Truy xuất dữ liệu trung tâm từ Zustand Store (useVitalStore)
+  // Truy xuất dữ liệu trung tâm từ Zustand Store (useVitalStore & usePatientStore)
   const {
     house,
     setHouseMode,
@@ -51,12 +53,16 @@ export default function HomeScreen({ navigation }: any) {
     setAlarmSnooze,
     cancelAlarmSnooze,
     todayReminders,
+    markMedicationTaken,
     fetchVitals,
     fetchSystemMode,
     fetchReminders,
     fetchNotifications,
     syncAllWithBackend,
   } = useVitalStore();
+
+  const { patientRecord, fetchPatientRecord } = usePatientStore();
+  const [familyAppointmentsModalVisible, setFamilyAppointmentsModalVisible] = useState(false);
 
   const [isMicSpeaking, setIsMicSpeaking] = useState(false);
   const [nextMedTaken, setNextMedTaken] = useState(false);
@@ -67,6 +73,8 @@ export default function HomeScreen({ navigation }: any) {
     fetchSystemMode();
     fetchReminders();
     fetchNotifications();
+    fetchPatientRecord?.();
+    syncAllWithBackend?.();
 
     // Kết nối WebSocket nhận cảnh báo té ngã thời gian thực & sinh hiệu 5s/lần
     alertsWS.connect();
@@ -77,12 +85,13 @@ export default function HomeScreen({ navigation }: any) {
     return () => clearInterval(interval);
   }, []);
 
-  // Tự động làm mới dữ liệu khi màn hình HomeScreen được focus (quay lại từ IncidentDetailScreen)
+  // Tự động làm mới dữ liệu khi màn hình HomeScreen được focus (quay lại từ các màn hình con)
   useEffect(() => {
     const unsubscribe = navigation.addListener('focus', () => {
       fetchVitals();
       fetchNotifications();
       fetchSystemMode();
+      fetchReminders();
     });
     return unsubscribe;
   }, [navigation]);
@@ -134,6 +143,11 @@ export default function HomeScreen({ navigation }: any) {
   );
   const activeEmergency = criticalIncidents[0];
   const hasEmergency = Boolean(activeEmergency || currentVitals.fall_detected);
+
+  // Lịch khám bác sĩ đang chờ xác nhận từ thông báo
+  const pendingAppointmentNotice = incidents.find(
+    (i) => !i.is_acknowledged && i.alert_type === 'APPOINTMENT_SCHEDULED'
+  );
 
   const handleConfirmSnooze = async () => {
     const until = selectedDuration > 0 ? Date.now() + selectedDuration * 60 * 1000 : null;
@@ -211,11 +225,6 @@ export default function HomeScreen({ navigation }: any) {
       setSnoozeModalVisible(true);
     }
   };
-
-  // Đồng bộ thông tin nhà và camera từ Backend khi mở HomeScreen
-  React.useEffect(() => {
-    syncAllWithBackend?.();
-  }, []);
 
   // Mở màn hình SOS trước khi người dùng xác nhận gọi cấp cứu.
   const handleSOS115 = () => {
@@ -317,15 +326,12 @@ export default function HomeScreen({ navigation }: any) {
     }
   }
 
-  // Cữ thuốc kế tiếp từ Backend FastAPI
+  // Cữ thuốc kế tiếp từ Backend FastAPI / Zustand Store (không dùng dữ liệu mẫu)
   const nextMedication =
     todayReminders?.medications?.find((m) => !m.taken) ||
-    todayReminders?.medications?.[3] || {
-      name: 'Uống thuốc huyết áp (Amlodipine 5mg)',
-      time: '18:30',
-      taken: false,
-    };
-  const isMedDone = nextMedTaken || Boolean(nextMedication.taken);
+    todayReminders?.medications?.[0] ||
+    null;
+  const isMedDone = nextMedTaken || Boolean(nextMedication?.taken);
 
   return (
     <SafeAreaView style={[styles.safeArea, { backgroundColor: colors.background }]} edges={['top']}>
@@ -374,135 +380,119 @@ export default function HomeScreen({ navigation }: any) {
         </View>
       </View>
 
+      {/* Thanh thông báo chạy chữ từ Admin (dành cho Chủ hộ & Thành viên gia đình) */}
+      <AdminMarqueeBanner targetAudience="caregivers" />
+
       <ScrollView
         showsVerticalScrollIndicator={false}
         contentContainerStyle={styles.scrollContent}
       >
-        {/* 2. Bộ chọn chế độ an ninh (House Security Mode) dạng Radio / Segmented Control: Xa - Ở nhà - Tắt báo động */}
+        {/* 2. Bộ chọn chế độ an ninh (House Security Mode) dạng Segmented Control: Xa - Ở nhà - Tắt báo động */}
         <View style={styles.modesRow}>
-          {/* Nút 1: Xa (Away) */}
-          <TouchableOpacity
-            style={[
-              styles.modePill,
-              house.currentMode === 'AWAY' ? styles.modePillActiveAway : styles.modePillInactive,
-              house.currentMode !== 'AWAY' && isDarkMode && { backgroundColor: colors.card, borderColor: colors.border },
-            ]}
-            onPress={() => handleSelectHouseMode('AWAY')}
-            activeOpacity={0.75}
-          >
-            <View
+          {[
+            {
+              key: 'AWAY',
+              label: 'Xa',
+              icon: 'exit-outline',
+              activeColor: '#10B981',
+              activeStyle: styles.modePillActiveAway,
+              textColor: '#047857',
+              isActive: house.currentMode === 'AWAY',
+              onPress: () => handleSelectHouseMode('AWAY'),
+            },
+            {
+              key: 'HOME',
+              label: 'Ở nhà',
+              icon: 'home',
+              activeColor: '#3B82F6',
+              activeStyle: styles.modePillActiveHome,
+              textColor: '#1D4ED8',
+              isActive: house.currentMode === 'HOME',
+              onPress: () => handleSelectHouseMode('HOME'),
+            },
+            {
+              key: 'DISARM',
+              label: snoozeButtonLabel,
+              icon: isSnoozeActive ? 'volume-mute' : 'notifications-off-outline',
+              activeColor: isSnoozeActive ? '#F59E0B' : '#64748B',
+              activeStyle: isSnoozeActive ? styles.modePillActiveSnooze : styles.modePillActiveDisarm,
+              textColor: isSnoozeActive ? (isDarkMode ? '#FBBF24' : '#D97706') : '#475569',
+              isActive: isSnoozeActive || house.currentMode === 'DISARM',
+              onPress: handlePressSnoozeButton,
+            },
+          ].map((m) => (
+            <TouchableOpacity
+              key={m.key}
               style={[
-                styles.modeIconCircle,
-                { backgroundColor: house.currentMode === 'AWAY' ? '#10B981' : (isDarkMode ? colors.surfaceSubtle : '#E2E8F0') },
+                styles.modePill,
+                m.isActive ? m.activeStyle : styles.modePillInactive,
+                !m.isActive && isDarkMode && { backgroundColor: colors.card, borderColor: colors.border },
               ]}
+              onPress={m.onPress}
+              activeOpacity={0.75}
             >
-              <Ionicons
-                name="exit-outline"
-                size={14}
-                color={house.currentMode === 'AWAY' ? '#FFF' : (isDarkMode ? colors.textMuted : '#94A3B8')}
-              />
-            </View>
-            <Text
-              style={[
-                styles.modePillText,
-                { color: house.currentMode === 'AWAY' ? '#047857' : (isDarkMode ? colors.textMuted : '#94A3B8') },
-              ]}
-              numberOfLines={1}
-            >
-              Xa
-            </Text>
-          </TouchableOpacity>
-
-          {/* Nút 2: Ở nhà (Home) */}
-          <TouchableOpacity
-            style={[
-              styles.modePill,
-              house.currentMode === 'HOME' ? styles.modePillActiveHome : styles.modePillInactive,
-              house.currentMode !== 'HOME' && isDarkMode && { backgroundColor: colors.card, borderColor: colors.border },
-            ]}
-            onPress={() => handleSelectHouseMode('HOME')}
-            activeOpacity={0.75}
-          >
-            <View
-              style={[
-                styles.modeIconCircle,
-                { backgroundColor: house.currentMode === 'HOME' ? '#3B82F6' : (isDarkMode ? colors.surfaceSubtle : '#E2E8F0') },
-              ]}
-            >
-              <Ionicons
-                name="home"
-                size={14}
-                color={house.currentMode === 'HOME' ? '#FFF' : (isDarkMode ? colors.textMuted : '#94A3B8')}
-              />
-            </View>
-            <Text
-              style={[
-                styles.modePillText,
-                { color: house.currentMode === 'HOME' ? '#1D4ED8' : (isDarkMode ? colors.textMuted : '#94A3B8') },
-              ]}
-              numberOfLines={1}
-            >
-              Ở nhà
-            </Text>
-          </TouchableOpacity>
-
-          {/* Nút 3: Tắt báo động / Tạm dừng chuông báo động (Snooze) */}
-          <TouchableOpacity
-            style={[
-              styles.modePill,
-              isSnoozeActive
-                ? [
-                    styles.modePillActiveSnooze,
-                    isDarkMode && { backgroundColor: 'rgba(245, 158, 11, 0.18)', borderColor: '#F59E0B' },
-                  ]
-                : house.currentMode === 'DISARM'
-                ? styles.modePillActiveDisarm
-                : styles.modePillInactive,
-              !isSnoozeActive && house.currentMode !== 'DISARM' && isDarkMode && { backgroundColor: colors.card, borderColor: colors.border },
-            ]}
-            onPress={handlePressSnoozeButton}
-            activeOpacity={0.75}
-          >
-            <View
-              style={[
-                styles.modeIconCircle,
-                {
-                  backgroundColor: isSnoozeActive
-                    ? '#F59E0B'
-                    : house.currentMode === 'DISARM'
-                    ? '#64748B'
-                    : isDarkMode
-                    ? colors.surfaceSubtle
-                    : '#E2E8F0',
-                },
-              ]}
-            >
-              <Ionicons
-                name={isSnoozeActive ? 'volume-mute' : 'notifications-off-outline'}
-                size={14}
-                color={isSnoozeActive || house.currentMode === 'DISARM' ? '#FFF' : isDarkMode ? colors.textMuted : '#94A3B8'}
-              />
-            </View>
-            <Text
-              style={[
-                styles.modePillText,
-                {
-                  color: isSnoozeActive
-                    ? (isDarkMode ? '#FBBF24' : '#D97706')
-                    : house.currentMode === 'DISARM'
-                    ? '#475569'
-                    : isDarkMode
-                    ? colors.textMuted
-                    : '#94A3B8',
-                  fontWeight: isSnoozeActive ? '700' : '600',
-                },
-              ]}
-              numberOfLines={1}
-            >
-              {snoozeButtonLabel}
-            </Text>
-          </TouchableOpacity>
+              <View
+                style={[
+                  styles.modeIconCircle,
+                  { backgroundColor: m.isActive ? m.activeColor : (isDarkMode ? colors.surfaceSubtle : '#E2E8F0') },
+                ]}
+              >
+                <Ionicons
+                  name={m.icon as any}
+                  size={14}
+                  color={m.isActive ? '#FFF' : (isDarkMode ? colors.textMuted : '#94A3B8')}
+                />
+              </View>
+              <Text
+                style={[
+                  styles.modePillText,
+                  { color: m.isActive ? m.textColor : (isDarkMode ? colors.textMuted : '#94A3B8') },
+                ]}
+                numberOfLines={1}
+              >
+                {m.label}
+              </Text>
+            </TouchableOpacity>
+          ))}
         </View>
+
+        {/* 2.4. Banner Lịch khám Bác sĩ mới chờ Gia đình xác nhận */}
+        {pendingAppointmentNotice && (
+          <TouchableOpacity
+            style={[
+              styles.appointmentBanner,
+              isDarkMode && { backgroundColor: 'rgba(217, 119, 6, 0.12)', borderColor: '#D97706' },
+            ]}
+            activeOpacity={0.88}
+            onPress={() => setFamilyAppointmentsModalVisible(true)}
+          >
+            <View style={styles.appointmentBannerLeft}>
+              <View style={[styles.appointmentIconCircle, isDarkMode && { backgroundColor: 'rgba(217, 119, 6, 0.25)' }]}>
+                <Ionicons name="calendar" size={20} color="#D97706" />
+              </View>
+              <View style={{ flex: 1, marginLeft: 10 }}>
+                <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6 }}>
+                  <Text style={[styles.appointmentBannerTitle, isDarkMode && { color: '#FBBF24' }]}>
+                    🗓️ LỊCH KHÁM MỚI TỪ BÁC SĨ
+                  </Text>
+                  <View style={styles.appointmentBadge}>
+                    <Text style={styles.appointmentBadgeText}>Chờ xác nhận</Text>
+                  </View>
+                </View>
+                <Text
+                  style={[styles.appointmentBannerSubtitle, isDarkMode && { color: colors.textSecondary }]}
+                  numberOfLines={2}
+                >
+                  {pendingAppointmentNotice.message}
+                </Text>
+              </View>
+            </View>
+            <View style={[styles.appointmentActionBtn, isDarkMode && { backgroundColor: 'rgba(217, 119, 6, 0.25)' }]}>
+              <Text style={[styles.appointmentActionBtnText, isDarkMode && { color: '#FBBF24' }]}>Xác nhận</Text>
+              <Ionicons name="chevron-forward" size={14} color="#D97706" />
+            </View>
+          </TouchableOpacity>
+        )}
 
         {/* 2.5. Banner Cảnh báo Khẩn cấp màu đỏ (hoặc Trạng thái Sức khoẻ ổn định) */}
         {hasEmergency ? (
@@ -510,17 +500,21 @@ export default function HomeScreen({ navigation }: any) {
             style={styles.emergencyBanner}
             activeOpacity={0.9}
             onPress={() => {
-              navigation.navigate('EventDetail', {
-                incidentId: activeEmergency?.id || 'inc-03',
-                id: activeEmergency?.id || 'inc-03',
-                alert_type: activeEmergency?.alert_type || 'FALL_DETECTED',
-                alert_level: activeEmergency?.alert_level || 'CRITICAL',
-                message: activeEmergency?.message || '🚨 Cảnh báo té ngã (Fall Detected) - Trích xuất clip 5s bộ đệm Edge Hub RAM',
-                confidence: 0.94,
-                thumbnail_url: activeEmergency?.thumbnail_url || 'http://localhost:8000/static/evidence/fall_evidence_ai.jpg',
-                video_clip_url: activeEmergency?.video_clip_url || 'https://commondatastorage.googleapis.com/gtv-videos-bucket/sample/BigBuckBunny.mp4',
-                is_acknowledged: false,
-              });
+              if (activeEmergency) {
+                navigation.navigate('EventDetail', {
+                  incidentId: activeEmergency.id,
+                  id: activeEmergency.id,
+                  alert_type: activeEmergency.alert_type,
+                  alert_level: activeEmergency.alert_level || 'CRITICAL',
+                  message: activeEmergency.message,
+                  confidence: activeEmergency.confidence,
+                  thumbnail_url: activeEmergency.thumbnail_url ?? null,
+                  video_clip_url: activeEmergency.video_clip_url ?? null,
+                  is_acknowledged: activeEmergency.is_acknowledged ?? false,
+                });
+              } else {
+                navigation.navigate('Alerts');
+              }
             }}
           >
             <View style={styles.emergencyBannerHeader}>
@@ -611,15 +605,21 @@ export default function HomeScreen({ navigation }: any) {
           handleToggleAIProtect={handleToggleAIProtect}
         />
 
-        {/* 6. Widget Nhắc nhở uống thuốc & Ăn uống sinh hoạt */}
-        <MedicationReminderWidget
-          nextMedication={nextMedication}
-          isMedDone={isMedDone}
-          setNextMedTaken={setNextMedTaken}
-          isDarkMode={isDarkMode}
-          colors={colors}
-          navigation={navigation}
-        />
+        {/* 6. Widget Nhắc nhở uống thuốc & Ăn uống sinh hoạt (chỉ hiển thị khi có đơn thuốc thực tế của bệnh nhân) */}
+        {Boolean(nextMedication?.name) && (
+          <MedicationReminderWidget
+            nextMedication={nextMedication!}
+            isMedDone={isMedDone}
+            setNextMedTaken={setNextMedTaken}
+            onConfirmTaken={(medId, timeStr) => {
+              markMedicationTaken(medId, true, timeStr);
+              setNextMedTaken(true);
+            }}
+            isDarkMode={isDarkMode}
+            colors={colors}
+            navigation={navigation}
+          />
+        )}
 
         {/* 7. Khối hiển thị Tình trạng sức khoẻ */}
         <VitalsSummaryCard
@@ -658,6 +658,21 @@ export default function HomeScreen({ navigation }: any) {
         onConfirm={handleConfirmSnooze}
         onCancel={handleCancelSnooze}
         isSnoozeActive={isSnoozeActive}
+      />
+
+      {/* Modal Lịch khám Bác sĩ & Xác nhận cho Người thân */}
+      <FamilyAppointmentsModal
+        visible={familyAppointmentsModalVisible}
+        patientId={
+          pendingAppointmentNotice?.device_id && !isNaN(Number(pendingAppointmentNotice.device_id))
+            ? pendingAppointmentNotice.device_id
+            : (patientRecord?.patient_id || 1)
+        }
+        patientName={patientRecord?.name}
+        onClose={() => {
+          setFamilyAppointmentsModalVisible(false);
+          fetchNotifications();
+        }}
       />
     </SafeAreaView>
   );
@@ -931,5 +946,69 @@ const styles = StyleSheet.create({
     backgroundColor: '#FFF7ED',
     alignItems: 'center',
     justifyContent: 'center',
+  },
+  // Appointment Notification Banner
+  appointmentBanner: {
+    backgroundColor: '#FFFBEB',
+    borderRadius: 16,
+    borderWidth: 1.5,
+    borderColor: '#FDE68A',
+    padding: 14,
+    marginBottom: 12,
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    ...Shadows.soft,
+  },
+  appointmentBannerLeft: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    flex: 1,
+    marginRight: 8,
+  },
+  appointmentIconCircle: {
+    width: 38,
+    height: 38,
+    borderRadius: 19,
+    backgroundColor: '#FEF3C7',
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  appointmentBannerTitle: {
+    fontSize: 12,
+    fontWeight: '800',
+    color: '#B45309',
+    letterSpacing: 0.3,
+  },
+  appointmentBadge: {
+    backgroundColor: '#F59E0B',
+    paddingHorizontal: 6,
+    paddingVertical: 2,
+    borderRadius: 8,
+  },
+  appointmentBadgeText: {
+    color: '#FFFFFF',
+    fontSize: 10,
+    fontWeight: '700',
+  },
+  appointmentBannerSubtitle: {
+    fontSize: 12,
+    color: '#475569',
+    marginTop: 2,
+    lineHeight: 16,
+  },
+  appointmentActionBtn: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: '#FEF3C7',
+    paddingHorizontal: 8,
+    paddingVertical: 6,
+    borderRadius: 10,
+    gap: 2,
+  },
+  appointmentActionBtnText: {
+    fontSize: 11,
+    fontWeight: '700',
+    color: '#B45309',
   },
 });

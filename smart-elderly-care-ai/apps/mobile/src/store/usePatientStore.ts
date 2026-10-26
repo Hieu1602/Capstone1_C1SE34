@@ -55,6 +55,8 @@ export interface ReminderItem {
   dose: string;
   purpose: string;
   taken: boolean;
+  takenAt?: string;
+  snoozedUntil?: string;
 }
 
 export interface RemindersData {
@@ -66,6 +68,8 @@ export interface RemindersData {
   meals: Array<{ name: string; time: string; completed: boolean; note: string }>;
 }
 
+export const DEFAULT_MEDICATIONS: ReminderItem[] = [];
+
 interface PatientState {
   patientRecord: PatientMedicalRecord | null;
   todayReminders: RemindersData | null;
@@ -74,14 +78,23 @@ interface PatientState {
 
   // Actions
   fetchReminders: () => Promise<RemindersData | null>;
+  markMedicationTaken: (idOrName: string, taken?: boolean, takenAt?: string) => Promise<void>;
+  snoozeMedication: (idOrName: string, minutes?: number) => void;
   fetchPatientRecord: (patientId?: number | string, target_date?: string) => Promise<PatientMedicalRecord | null>;
   updatePatientRecord: (patientId: number | string, data: Partial<PatientMedicalRecord>) => Promise<PatientMedicalRecord | null>;
   enrollPatientFace: (patientId: number, formData: FormData) => Promise<any>;
 }
 
-export const usePatientStore = create<PatientState>()((set) => ({
+export const usePatientStore = create<PatientState>()((set, get) => ({
   patientRecord: null,
-  todayReminders: null,
+  todayReminders: {
+    date: new Date().toISOString().split('T')[0],
+    total_medications: 0,
+    completed_medications: 0,
+    hub_voice_reminder_enabled: true,
+    medications: [],
+    meals: [],
+  },
   isLoadingReminders: false,
   isLoadingPatient: false,
 
@@ -90,14 +103,90 @@ export const usePatientStore = create<PatientState>()((set) => ({
     try {
       const res = await remindersApi.getToday();
       if (res.data) {
-        set({ todayReminders: res.data, isLoadingReminders: false });
-        return res.data;
+        const meds = Array.isArray(res.data.medications) ? res.data.medications : [];
+        const completed = meds.filter((m: any) => m.taken).length;
+        const normalized: RemindersData = {
+          ...res.data,
+          medications: meds,
+          total_medications: meds.length,
+          completed_medications: completed,
+        };
+        set({ todayReminders: normalized, isLoadingReminders: false });
+        return normalized;
       }
     } catch (e) {
       console.warn('fetchReminders API fallback:', e);
     }
-    set({ isLoadingReminders: false });
+    set((state) => ({
+      todayReminders: state.todayReminders || {
+        date: new Date().toISOString().split('T')[0],
+        total_medications: 0,
+        completed_medications: 0,
+        hub_voice_reminder_enabled: true,
+        medications: [],
+        meals: [],
+      },
+      isLoadingReminders: false,
+    }));
     return null;
+  },
+
+  markMedicationTaken: async (idOrName: string, taken: boolean = true, takenAt?: string) => {
+    const timeStr = takenAt || new Date().toLocaleTimeString('vi-VN', { hour: '2-digit', minute: '2-digit' });
+    set((state) => {
+      const currentList = state.todayReminders?.medications || [];
+
+      const updated = currentList.map((m) => {
+        if (m.id === idOrName || m.name === idOrName) {
+          return {
+            ...m,
+            taken,
+            takenAt: taken ? timeStr : undefined,
+          };
+        }
+        return m;
+      });
+
+      const completedCount = updated.filter((m) => m.taken).length;
+      return {
+        todayReminders: {
+          date: state.todayReminders?.date || new Date().toISOString().split('T')[0],
+          total_medications: updated.length,
+          completed_medications: completedCount,
+          hub_voice_reminder_enabled: state.todayReminders?.hub_voice_reminder_enabled ?? true,
+          medications: updated,
+          meals: state.todayReminders?.meals || [],
+        },
+      };
+    });
+
+    try {
+      if (idOrName && !idOrName.startsWith('med-')) {
+        await remindersApi.toggle(idOrName);
+      }
+    } catch {
+      // offline fallback
+    }
+  },
+
+  snoozeMedication: (idOrName: string, minutes: number = 15) => {
+    const nextTime = new Date(Date.now() + minutes * 60000);
+    const timeStr = nextTime.toLocaleTimeString('vi-VN', { hour: '2-digit', minute: '2-digit' });
+    set((state) => {
+      if (!state.todayReminders?.medications) return state;
+      const updated = state.todayReminders.medications.map((m) => {
+        if (m.id === idOrName || m.name === idOrName) {
+          return { ...m, snoozedUntil: timeStr };
+        }
+        return m;
+      });
+      return {
+        todayReminders: {
+          ...state.todayReminders,
+          medications: updated,
+        },
+      };
+    });
   },
 
   fetchPatientRecord: async (patientId: number | string = 1, target_date?: string) => {

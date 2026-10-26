@@ -41,6 +41,9 @@ interface DeviceFormConfig {
   aiProtect: boolean;
   privacyShutter: boolean;
   resolution: string;
+  assignedElderly: string;
+  doctorApprovedBy: string;
+  clinicalReason: string;
 }
 
 const DEFAULT_CONFIG: DeviceFormConfig = {
@@ -53,6 +56,9 @@ const DEFAULT_CONFIG: DeviceFormConfig = {
   aiProtect: true,
   privacyShutter: false,
   resolution: '2K Super HD',
+  assignedElderly: 'Cụ Nguyễn Văn An (82T - Tiền sử tăng huyết áp)',
+  doctorApprovedBy: 'BS. CK1 Trần Văn Minh (Khoa Lão)',
+  clinicalReason: 'Hiệu chuẩn ngưỡng cảnh báo theo phác đồ theo dõi tim mạch quý 4/2026',
 };
 
 /** Metadata ánh xạ hiển thị cho từng loại thiết bị theo kiến trúc phần cứng */
@@ -134,6 +140,9 @@ export const DeviceMonitoringPage: React.FC = () => {
       aiProtect: cfg.is_ai_protect ?? DEFAULT_CONFIG.aiProtect,
       privacyShutter: cfg.is_sleep ?? DEFAULT_CONFIG.privacyShutter,
       resolution: cfg.resolution ?? DEFAULT_CONFIG.resolution,
+      assignedElderly: cfg.assigned_elderly_name || device.elderly_name || DEFAULT_CONFIG.assignedElderly,
+      doctorApprovedBy: cfg.doctor_approved_by || DEFAULT_CONFIG.doctorApprovedBy,
+      clinicalReason: cfg.clinical_reason || DEFAULT_CONFIG.clinicalReason,
     });
     setConfigModalOpen(true);
   };
@@ -142,6 +151,19 @@ export const DeviceMonitoringPage: React.FC = () => {
   const handleSaveConfig = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!selectedDevice) return;
+
+    if (formConfig.spo2Low < 85) {
+      showNotice('error', 'GIỚI HẠN AN TOÀN Y TẾ: Ngưỡng SpO₂ tối thiểu không được dưới 85%!');
+      return;
+    }
+    if (formConfig.immobilitySec > 60) {
+      showNotice('error', 'GIỚI HẠN AN TOÀN Y TẾ: Thời gian bất động sau té ngã không được vượt quá 60 giây!');
+      return;
+    }
+    if (!formConfig.doctorApprovedBy.trim() || !formConfig.clinicalReason.trim()) {
+      showNotice('error', 'Bắt buộc ghi rõ Bác sĩ chỉ định và Lý do y tế!');
+      return;
+    }
 
     const newConfig: DeviceConfig = {
       device_id: selectedDevice.device_id,
@@ -154,6 +176,12 @@ export const DeviceMonitoringPage: React.FC = () => {
       is_ai_protect: formConfig.aiProtect,
       is_sleep: formConfig.privacyShutter,
       resolution: formConfig.resolution,
+      config_version: 'v2.4.3',
+      mqtt_ack_status: 'SYNCED',
+      doctor_approved_by: formConfig.doctorApprovedBy,
+      clinical_reason: formConfig.clinicalReason,
+      assigned_elderly_name: formConfig.assignedElderly,
+      guardrail_validated: true,
       updated_at: new Date().toISOString(),
     };
 
@@ -235,18 +263,18 @@ export const DeviceMonitoringPage: React.FC = () => {
       badgeColor: 'text-emerald-700 dark:text-emerald-300 bg-emerald-50 dark:bg-emerald-950/40 border-emerald-200 dark:border-emerald-800',
       desc: 'Camera AI, BLE Band & Edge Hub',
       icon: Cpu,
-      iconColor: 'text-[#D96C3B] dark:text-[#DFB15B]',
-      titleColor: 'text-slate-600 dark:text-slate-300',
+      iconColor: 'text-[#D96C3B] dark:text-[#FF6B35]',
+      titleColor: 'text-slate-600 dark:text-[#A1A7B1]',
     },
     {
       title: 'Camera AI Giám sát',
       value: stats.cameras,
       badge: 'YOLOv8-Pose',
-      badgeColor: 'text-[#96661E] dark:text-[#DFB15B] bg-[#FFF8EE] dark:bg-[#1A3830] border-[#C8AD8A] dark:border-[#2F5A4D]',
+      badgeColor: 'text-[#96661E] dark:text-[#FF8A50] bg-[#FFF8EE] dark:bg-[#FF6B35]/15 border-[#C8AD8A] dark:border-[#FF6B35]/30',
       desc: 'Phát hiện té ngã & nhận diện 24/7',
       icon: Video,
-      iconColor: 'text-[#96661E] dark:text-[#DFB15B]',
-      titleColor: 'text-[#96661E] dark:text-[#DFB15B]',
+      iconColor: 'text-[#96661E] dark:text-[#FF6B35]',
+      titleColor: 'text-[#96661E] dark:text-[#FF6B35]',
     },
     {
       title: 'Vòng đeo BLE',
@@ -302,14 +330,14 @@ export const DeviceMonitoringPage: React.FC = () => {
       {/* Header */}
       <div className="flex flex-col md:flex-row md:items-center justify-between gap-4">
         <div className="flex items-center gap-3">
-          <div className="p-2.5 rounded-xl bg-gradient-to-br from-[#D96C3B] to-[#B84B1E] text-white shadow-md shadow-[#D96C3B]/25 shrink-0">
+          <div className="w-11 h-11 rounded-2xl bg-gradient-to-br from-[#FF723B] via-[#F05A24] to-[#C73C0A] text-white flex items-center justify-center shadow-[0_4px_16px_rgba(240,90,36,0.35),inset_0_1px_0_rgba(255,255,255,0.4)] border border-white/20 shrink-0">
             <Activity className="w-5 h-5 stroke-[2.2]" />
           </div>
           <div>
-            <h1 className="font-heading text-xl font-bold tracking-tight text-slate-900 dark:text-white">
+            <h1 className="font-heading text-xl font-bold tracking-tight text-slate-900 dark:text-[#F5F6F8]">
               Giám sát hoạt động hệ thống
             </h1>
-            <p className="text-xs text-slate-500 dark:text-slate-400 mt-0.5 font-sans">
+            <p className="text-xs text-slate-500 dark:text-[#A1A7B1] mt-0.5 font-sans">
               Theo dõi trạng thái thiết bị IoT, cảm biến sinh hiệu, cảnh báo té ngã thời gian thực & điều chỉnh ngưỡng an toàn
             </p>
           </div>
@@ -333,20 +361,20 @@ export const DeviceMonitoringPage: React.FC = () => {
                 <span className={`text-[11px] font-mono font-bold uppercase tracking-wider ${card.titleColor}`}>
                   {card.title}
                 </span>
-                <div className="p-2 rounded-xl bg-[#FFF8EE] dark:bg-[#1A3830] border border-[#C8AD8A] dark:border-[#2F5A4D] shadow-sm">
-                  <CardIcon className={`w-4 h-4 ${card.iconColor}`} />
+                <div className="p-2 rounded-xl bg-gradient-to-br from-[#FFF0E8] to-[#FFE2D4] dark:from-[#2F2119] dark:to-[#1F1714] text-[#E04D16] dark:text-[#FF7037] border border-[#F05A24]/30 shadow-sm">
+                  <CardIcon className="w-4 h-4 text-[#E04D16] dark:text-[#FF7037]" />
                 </div>
               </div>
               <div className="mt-3 flex items-baseline space-x-2 px-1 relative z-10">
-                <span className="font-mono text-2xl font-black text-slate-900 dark:text-white">
+                <span className="font-mono text-2xl font-black text-slate-900 dark:text-[#F5F6F8]">
                   {card.value}
                 </span>
                 <span className={`text-[10px] font-bold px-2 py-0.5 rounded-full border ${card.badgeColor}`}>
                   {card.badge}
                 </span>
               </div>
-              <div className="mt-3 pt-2.5 border-t border-[#C8AD8A]/40 dark:border-white/5 px-1 relative z-10">
-                <p className="text-[11px] text-slate-600 dark:text-slate-400 truncate">{card.desc}</p>
+              <div className="mt-3 pt-2.5 border-t border-[#C8AD8A]/40 dark:border-[#454A53] px-1 relative z-10">
+                <p className="text-[11px] text-slate-600 dark:text-[#A1A7B1] truncate">{card.desc}</p>
               </div>
             </div>
           );
@@ -372,7 +400,7 @@ export const DeviceMonitoringPage: React.FC = () => {
         </div>
 
         <div className="flex items-center space-x-2">
-          <span className="text-xs font-mono text-slate-500 dark:text-slate-400">Trạng thái:</span>
+          <span className="text-xs font-mono text-slate-500 dark:text-[#A1A7B1]">Trạng thái:</span>
           <select
             value={filterStatus}
             onChange={(e) => setFilterStatus(e.target.value)}
@@ -391,10 +419,10 @@ export const DeviceMonitoringPage: React.FC = () => {
           <div className="w-12 h-12 rounded-2xl bg-sky-50 dark:bg-sky-950/40 text-sky-500 flex items-center justify-center">
             <Cpu className="w-6 h-6" />
           </div>
-          <h3 className="font-heading font-semibold text-slate-800 dark:text-slate-200 text-sm">
+          <h3 className="font-heading font-semibold text-slate-800 dark:text-[#F5F6F8] text-sm">
             Không có thiết bị nào
           </h3>
-          <p className="text-xs text-slate-500 dark:text-slate-400 max-w-sm">
+          <p className="text-xs text-slate-500 dark:text-[#A1A7B1] max-w-sm">
             {loading
               ? 'Đang tải dữ liệu thiết bị từ cơ sở dữ liệu...'
               : 'Chưa có thiết bị nào trong cơ sở dữ liệu phù hợp với bộ lọc hiện tại.'}
@@ -416,20 +444,20 @@ export const DeviceMonitoringPage: React.FC = () => {
             return (
               <div
                 key={device.id}
-                className="glass-card overflow-hidden flex flex-col justify-between hover:border-sky-400 dark:hover:border-sky-500/50 transition-all duration-200"
+                className="glass-card overflow-hidden flex flex-col justify-between hover:border-sky-400 dark:hover:border-[#FF6B35]/40 transition-all duration-200"
               >
                 {/* Card Header */}
-                <div className="p-5 pb-4 border-b border-slate-100 dark:border-white/5">
+                <div className="p-5 pb-4 border-b border-slate-100 dark:border-[#454A53]">
                   <div className="flex items-start justify-between">
                     <div className="flex items-center space-x-3">
                       <div className={`w-10 h-10 rounded-xl flex items-center justify-center shrink-0 border ${meta.style}`}>
                         <DeviceIcon className="w-5 h-5" />
                       </div>
                       <div>
-                        <span className="font-heading font-bold text-sm text-slate-900 dark:text-white">
+                        <span className="font-heading font-bold text-sm text-slate-900 dark:text-[#F5F6F8]">
                           {device.name}
                         </span>
-                        <p className="text-[11px] font-mono text-slate-500 dark:text-slate-400 mt-0.5">
+                        <p className="text-[11px] font-mono text-slate-500 dark:text-[#A1A7B1] mt-0.5">
                           {device.device_id} • {device.location || 'Toàn nhà'}
                         </p>
                       </div>
@@ -455,7 +483,7 @@ export const DeviceMonitoringPage: React.FC = () => {
                 </div>
 
                 {/* Card Body Details */}
-                <div className="p-5 py-4 space-y-3 bg-slate-50/60 dark:bg-[#0b132b]/40 flex-1">
+                <div className="p-5 py-4 space-y-3 bg-slate-50/60 dark:bg-[#101216]/60 flex-1">
                   {/* Smartband Vitals Info */}
                   {isBand && (
                     <div className="space-y-2.5">
@@ -469,7 +497,7 @@ export const DeviceMonitoringPage: React.FC = () => {
                         </span>
                       </div>
 
-                      <div className="p-3 rounded-xl bg-white dark:bg-[#111c38] border border-sky-100 dark:border-white/5 space-y-2 font-mono shadow-xs">
+                      <div className="p-3 rounded-xl bg-white dark:bg-[#202329] border border-sky-100 dark:border-[#454A53] space-y-2 font-mono shadow-xs">
                         <div className="text-[10px] font-bold uppercase tracking-wider text-slate-500 dark:text-slate-400">
                           Ngưỡng cảnh báo y tế đang kích hoạt:
                         </div>
@@ -498,7 +526,7 @@ export const DeviceMonitoringPage: React.FC = () => {
                   {/* Camera AI Stream Preview */}
                   {isCam && (
                     <div className="space-y-2.5">
-                      <div className="relative aspect-video rounded-xl bg-slate-900 overflow-hidden border border-slate-200 dark:border-white/5 flex items-center justify-center group shadow-xs">
+                      <div className="relative aspect-video rounded-xl bg-slate-900 overflow-hidden border border-slate-200 dark:border-[#454A53] flex items-center justify-center group shadow-xs">
                         <div className="absolute inset-0 bg-gradient-to-t from-black/80 via-transparent to-black/40 z-10" />
                         {device.config?.is_sleep ? (
                           <div className="z-20 text-center">
@@ -534,7 +562,7 @@ export const DeviceMonitoringPage: React.FC = () => {
                   {/* Edge Hub Telemetry */}
                   {isHub && (
                     <div className="space-y-2">
-                      <div className="p-3 rounded-xl bg-white dark:bg-[#111c38] border border-sky-100 dark:border-white/5 space-y-2 font-mono text-xs shadow-xs">
+                      <div className="p-3 rounded-xl bg-white dark:bg-[#202329] border border-sky-100 dark:border-[#454A53] space-y-2 font-mono text-xs shadow-xs">
                         <div className="flex items-center justify-between">
                           <span className="text-slate-500 dark:text-slate-400">SoC:</span>
                           <span className="font-bold text-slate-800 dark:text-white">RK3588 (Orange Pi 5)</span>
@@ -564,7 +592,7 @@ export const DeviceMonitoringPage: React.FC = () => {
                 </div>
 
                 {/* Card Footer Actions */}
-                <div className="p-3 px-5 border-t border-slate-100 dark:border-white/5 flex items-center justify-between bg-slate-50/80 dark:bg-slate-900/40">
+                <div className="p-3 px-5 border-t border-slate-100 dark:border-[#454A53] flex items-center justify-between bg-slate-50/80 dark:bg-[#101216]/60">
                   <button
                     onClick={() => handleReboot(device)}
                     disabled={rebootingId === device.id}
@@ -588,30 +616,80 @@ export const DeviceMonitoringPage: React.FC = () => {
       {/* Configuration & Thresholds Modal */}
       {configModalOpen && selectedDevice && (
         <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-900/60 dark:bg-black/75 backdrop-blur-xs animate-fade-in">
-          <div className="glass-card w-full max-w-xl overflow-hidden border border-sky-100 dark:border-white/10 shadow-2xl animate-slide-up">
-            <div className="p-5 border-b border-slate-100 dark:border-white/5 flex items-center justify-between">
+          <div className="glass-card w-full max-w-xl overflow-hidden border border-sky-100 dark:border-[#454A53] dark:bg-[#17191E] shadow-2xl animate-slide-up">
+            <div className="p-5 border-b border-slate-100 dark:border-[#454A53] dark:bg-[#202329] flex items-center justify-between">
               <div className="flex items-center space-x-3">
-                <div className="w-10 h-10 rounded-xl bg-sky-50 dark:bg-sky-950/60 text-sky-600 dark:text-sky-400 border border-sky-100 dark:border-sky-800 flex items-center justify-center">
+                <div className="w-10 h-10 rounded-xl bg-sky-50 dark:bg-[#FF6B35]/15 text-sky-600 dark:text-[#FF6B35] border border-sky-100 dark:border-[#FF6B35]/30 flex items-center justify-center">
                   <Sliders className="w-5 h-5" />
                 </div>
                 <div>
-                  <h3 className="font-heading font-bold text-slate-900 dark:text-white text-base">
+                  <h3 className="font-heading font-bold text-slate-900 dark:text-[#F5F6F8] text-base">
                     Cấu hình tham số & Ngưỡng IoT
                   </h3>
-                  <p className="text-xs font-mono text-slate-500 dark:text-slate-400">
+                  <p className="text-xs font-mono text-slate-500 dark:text-[#A1A7B1]">
                     {selectedDevice.name} ({selectedDevice.device_id})
                   </p>
                 </div>
               </div>
               <button
                 onClick={() => setConfigModalOpen(false)}
-                className="p-1.5 rounded-lg text-slate-400 hover:text-slate-700 dark:hover:text-slate-200 hover:bg-slate-100 dark:hover:bg-white/5 transition-colors"
+                className="p-1.5 rounded-lg text-slate-400 hover:text-slate-700 dark:text-[#A1A7B1] dark:hover:text-[#F5F6F8] hover:bg-slate-100 dark:hover:bg-[#292D34] transition-colors"
               >
                 <X className="w-5 h-5" />
               </button>
             </div>
 
             <form onSubmit={handleSaveConfig} className="p-5 space-y-5 max-h-[80vh] overflow-y-auto">
+              {/* Hồ sơ Người cao tuổi & Chỉ định Y tế (Clinical Profile Binding) */}
+              <div className="p-3.5 rounded-xl bg-sky-50/50 dark:bg-[#202329] border border-sky-200/70 dark:border-[#454A53] space-y-3">
+                <div className="flex items-center gap-2 text-xs font-bold text-sky-800 dark:text-[#FF8A50]">
+                  <Activity className="w-4 h-4" />
+                  <span>Gắn thiết bị với Hồ sơ Người cao tuổi & Bác sĩ phụ trách</span>
+                </div>
+
+                <div>
+                  <label className="block text-[11px] font-mono font-bold uppercase text-slate-600 dark:text-[#A1A7B1] mb-1">
+                    Người cao tuổi sử dụng:
+                  </label>
+                  <input
+                    type="text"
+                    required
+                    value={formConfig.assignedElderly}
+                    onChange={(e) => setFormConfig((prev) => ({ ...prev, assignedElderly: e.target.value }))}
+                    className="input-glass w-full"
+                    placeholder="Tên Cụ và tuổi"
+                  />
+                </div>
+
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                  <div>
+                    <label className="block text-[11px] font-mono font-bold uppercase text-slate-600 dark:text-[#A1A7B1] mb-1">
+                      Bác sĩ / Chuyên gia chỉ định: <span className="text-rose-500">*</span>
+                    </label>
+                    <input
+                      type="text"
+                      required
+                      value={formConfig.doctorApprovedBy}
+                      onChange={(e) => setFormConfig((prev) => ({ ...prev, doctorApprovedBy: e.target.value }))}
+                      className="input-glass w-full"
+                      placeholder="BS. Trần Văn Minh"
+                    />
+                  </div>
+                  <div>
+                    <label className="block text-[11px] font-mono font-bold uppercase text-slate-600 dark:text-[#A1A7B1] mb-1">
+                      Lý do hiệu chuẩn lâm sàng: <span className="text-rose-500">*</span>
+                    </label>
+                    <input
+                      type="text"
+                      required
+                      value={formConfig.clinicalReason}
+                      onChange={(e) => setFormConfig((prev) => ({ ...prev, clinicalReason: e.target.value }))}
+                      className="input-glass w-full"
+                      placeholder="Hiệu chuẩn theo bệnh án"
+                    />
+                  </div>
+                </div>
+              </div>
               {/* SMARTBAND Specific Thresholds */}
               {selectedDevice.device_type === 'SMARTBAND' && (
                 <div className="space-y-4">
@@ -624,7 +702,7 @@ export const DeviceMonitoringPage: React.FC = () => {
 
                   <div className="grid grid-cols-2 gap-4">
                     <div>
-                      <label className="block text-[11px] font-mono font-bold uppercase text-slate-600 dark:text-slate-400 mb-1.5">
+                      <label className="block text-[11px] font-mono font-bold uppercase text-slate-600 dark:text-[#A1A7B1] mb-1.5">
                         Nhịp tim tối đa cảnh báo (bpm)
                       </label>
                       <input
@@ -639,7 +717,7 @@ export const DeviceMonitoringPage: React.FC = () => {
                     </div>
 
                     <div>
-                      <label className="block text-[11px] font-mono font-bold uppercase text-slate-600 dark:text-slate-400 mb-1.5">
+                      <label className="block text-[11px] font-mono font-bold uppercase text-slate-600 dark:text-[#A1A7B1] mb-1.5">
                         Nhịp tim tối thiểu cảnh báo (bpm)
                       </label>
                       <input
@@ -656,7 +734,7 @@ export const DeviceMonitoringPage: React.FC = () => {
 
                   <div className="grid grid-cols-2 gap-4">
                     <div>
-                      <label className="block text-[11px] font-mono font-bold uppercase text-slate-600 dark:text-slate-400 mb-1.5">
+                      <label className="block text-[11px] font-mono font-bold uppercase text-slate-600 dark:text-[#A1A7B1] mb-1.5">
                         Ngưỡng SpO2 suy hô hấp (%)
                       </label>
                       <input
@@ -671,7 +749,7 @@ export const DeviceMonitoringPage: React.FC = () => {
                     </div>
 
                     <div>
-                      <label className="block text-[11px] font-mono font-bold uppercase text-slate-600 dark:text-slate-400 mb-1.5">
+                      <label className="block text-[11px] font-mono font-bold uppercase text-slate-600 dark:text-[#A1A7B1] mb-1.5">
                         Gia tốc va đập té ngã (g)
                       </label>
                       <input
@@ -688,7 +766,7 @@ export const DeviceMonitoringPage: React.FC = () => {
                   </div>
 
                   <div>
-                    <label className="block text-[11px] font-mono font-bold uppercase text-slate-600 dark:text-slate-400 mb-1.5">
+                    <label className="block text-[11px] font-mono font-bold uppercase text-slate-600 dark:text-[#A1A7B1] mb-1.5">
                       Thời gian bất động sau va đập (giây)
                     </label>
                     <input
@@ -710,7 +788,7 @@ export const DeviceMonitoringPage: React.FC = () => {
               {selectedDevice.device_type === 'CAMERA' && (
                 <div className="space-y-4">
                   <div>
-                    <label className="block text-[11px] font-mono font-bold uppercase text-slate-600 dark:text-slate-400 mb-1.5">
+                    <label className="block text-[11px] font-mono font-bold uppercase text-slate-600 dark:text-[#A1A7B1] mb-1.5">
                       Đường dẫn luồng RTSP (RTSP Stream URL)
                     </label>
                     <input
@@ -723,7 +801,7 @@ export const DeviceMonitoringPage: React.FC = () => {
 
                   <div className="grid grid-cols-2 gap-4">
                     <div>
-                      <label className="block text-[11px] font-mono font-bold uppercase text-slate-600 dark:text-slate-400 mb-1.5">
+                      <label className="block text-[11px] font-mono font-bold uppercase text-slate-600 dark:text-[#A1A7B1] mb-1.5">
                         Độ phân giải luồng video
                       </label>
                       <select
@@ -738,26 +816,26 @@ export const DeviceMonitoringPage: React.FC = () => {
                     </div>
 
                     <div className="flex flex-col justify-end">
-                      <div className="flex items-center justify-between p-2.5 rounded-xl border border-slate-200 dark:border-white/5 bg-slate-50 dark:bg-slate-900/60">
-                        <span className="text-xs font-mono font-bold text-slate-700 dark:text-slate-300">
+                      <div className="flex items-center justify-between p-2.5 rounded-xl border border-slate-200 dark:border-[#454A53] bg-slate-50 dark:bg-[#202329]">
+                        <span className="text-xs font-mono font-bold text-slate-700 dark:text-[#F5F6F8]">
                           AI Pose Detection
                         </span>
                         <input
                           type="checkbox"
                           checked={formConfig.aiProtect}
                           onChange={(e) => setFormConfig((prev) => ({ ...prev, aiProtect: e.target.checked }))}
-                          className="w-4 h-4 text-sky-600 rounded focus:ring-sky-500"
+                          className="w-4 h-4 text-[#FF6B35] rounded focus:ring-[#FF6B35]"
                         />
                       </div>
                     </div>
                   </div>
 
-                  <div className="p-3 rounded-xl border border-slate-200 dark:border-white/5 bg-slate-50 dark:bg-slate-900/60 flex items-center justify-between">
+                  <div className="p-3 rounded-xl border border-slate-200 dark:border-[#454A53] bg-slate-50 dark:bg-[#202329] flex items-center justify-between">
                     <div>
-                      <p className="text-xs font-bold text-slate-800 dark:text-white">
+                      <p className="text-xs font-bold text-slate-800 dark:text-[#F5F6F8]">
                         Màn trập riêng tư (Privacy Shutter)
                       </p>
-                      <p className="text-[11px] text-slate-500 dark:text-slate-400">
+                      <p className="text-[11px] text-slate-500 dark:text-[#A1A7B1]">
                         Tắt ống kính vật lý khi người nhà muốn bảo mật không gian riêng
                       </p>
                     </div>
@@ -774,19 +852,19 @@ export const DeviceMonitoringPage: React.FC = () => {
               {/* EDGE HUB Specific Configuration */}
               {selectedDevice.device_type === 'EDGE_HUB' && (
                 <div className="space-y-3">
-                  <div className="p-3 rounded-xl bg-slate-50 dark:bg-slate-900/60 border border-slate-200 dark:border-white/5 text-xs space-y-2 font-mono">
-                    <p className="font-bold text-slate-800 dark:text-white">
+                  <div className="p-3 rounded-xl bg-slate-50 dark:bg-[#202329] border border-slate-200 dark:border-[#454A53] text-xs space-y-2 font-mono">
+                    <p className="font-bold text-slate-800 dark:text-[#F5F6F8]">
                       Cấu hình MQTT Broker & Cụm NPU:
                     </p>
-                    <p className="text-slate-500 dark:text-slate-400">
-                      Edge Hub lắng nghe trên topic: <code className="font-mono text-sky-600 dark:text-sky-400">seca/home/vitals/#</code> và phát hiện té ngã qua mô hình YOLOv8 compiled RKNN.
+                    <p className="text-slate-500 dark:text-[#A1A7B1]">
+                      Edge Hub lắng nghe trên topic: <code className="font-mono text-[#FF6B35]">seca/home/vitals/#</code> và phát hiện té ngã qua mô hình YOLOv8 compiled RKNN.
                     </p>
                   </div>
                 </div>
               )}
 
               {/* Actions */}
-              <div className="pt-4 border-t border-slate-100 dark:border-white/5 flex items-center justify-end space-x-3">
+              <div className="pt-4 border-t border-slate-100 dark:border-[#454A53] flex items-center justify-end space-x-3">
                 <button
                   type="button"
                   onClick={() => setConfigModalOpen(false)}

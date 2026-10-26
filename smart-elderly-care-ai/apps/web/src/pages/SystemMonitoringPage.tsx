@@ -177,14 +177,14 @@ export const SystemMonitoringPage: React.FC = () => {
       {/* Header */}
       <div className="flex flex-col md:flex-row md:items-center justify-between gap-4">
         <div className="flex items-center gap-3">
-          <div className="p-2.5 rounded-xl bg-gradient-to-br from-[#D96C3B] to-[#B84B1E] text-white shadow-md shadow-[#D96C3B]/25 shrink-0">
+          <div className="w-11 h-11 rounded-2xl bg-gradient-to-br from-[#FF723B] via-[#F05A24] to-[#C73C0A] text-white flex items-center justify-center shadow-[0_4px_16px_rgba(240,90,36,0.35),inset_0_1px_0_rgba(255,255,255,0.4)] border border-white/20 shrink-0">
             <Activity className="w-5 h-5 stroke-[2.2]" />
           </div>
           <div>
-            <h1 className="font-heading text-xl font-bold tracking-tight text-slate-900 dark:text-white">
+            <h1 className="font-heading text-xl font-bold tracking-tight text-slate-900 dark:text-[#F5F6F8]">
               Giám sát hoạt động hệ thống
             </h1>
-            <p className="text-xs text-slate-500 dark:text-slate-400 mt-0.5 font-sans">
+            <p className="text-xs text-slate-500 dark:text-[#A1A7B1] mt-0.5 font-sans">
               Theo dõi tình trạng máy chủ backend, hiệu năng CPU/RAM, cơ sở dữ liệu và thiết bị IoT thời gian thực
             </p>
           </div>
@@ -206,22 +206,22 @@ export const SystemMonitoringPage: React.FC = () => {
         {/* Card 1: Dịch vụ Backend */}
         <div className="glass-card p-5 relative group">
           <div className="flex items-center justify-between relative z-10 px-1">
-            <span className="text-[11px] font-mono font-bold uppercase tracking-wider text-slate-600 dark:text-slate-300">
+            <span className="text-[11px] font-mono font-bold uppercase tracking-wider text-slate-600 dark:text-[#A1A7B1]">
               Dịch vụ Backend (Active)
             </span>
-            <div className="p-2 rounded-xl bg-emerald-50 dark:bg-emerald-950/50 text-emerald-700 dark:text-emerald-300 border border-emerald-200 dark:border-emerald-800 shadow-sm">
+            <div className="p-2 rounded-xl bg-[#FFF0E8] dark:bg-[#2F2119] text-[#E04D16] dark:text-[#FF7037] border border-[#F05A24]/30 shadow-sm">
               <Server className="w-4 h-4" />
             </div>
           </div>
           <div className="mt-3 flex items-baseline space-x-2 px-1 relative z-10">
-            <span className="font-mono text-2xl font-black text-slate-900 dark:text-white">
+            <span className="font-mono text-2xl font-black text-slate-900 dark:text-[#F5F6F8]">
               4 / 4
             </span>
             <span className="text-[10px] font-bold text-emerald-700 dark:text-emerald-300 bg-emerald-50 dark:bg-emerald-950/40 px-2 py-0.5 rounded-full border border-emerald-200 dark:border-emerald-800">
               100% Sẵn sàng
             </span>
           </div>
-          <div className="mt-3 pt-2.5 border-t border-[#C8AD8A]/40 dark:border-white/5 px-1 relative z-10">
+          <div className="mt-3 pt-2.5 border-t border-[#C8AD8A]/40 dark:border-[#454A53] px-1 relative z-10">
             <p className="text-[11px] text-slate-600 dark:text-slate-400 truncate">
               FastAPI, PG-5432, Redis, EMQX
             </p>
@@ -231,22 +231,22 @@ export const SystemMonitoringPage: React.FC = () => {
         {/* Card 2: Tải CPU */}
         <div className="glass-card p-5 relative group">
           <div className="flex items-center justify-between relative z-10 px-1">
-            <span className="text-[11px] font-mono font-bold uppercase tracking-wider text-slate-600 dark:text-slate-300">
+            <span className="text-[11px] font-mono font-bold uppercase tracking-wider text-slate-600 dark:text-[#A1A7B1]">
               Tải CPU Trung bình
             </span>
-            <div className="p-2 rounded-xl bg-[#FFF8EE] dark:bg-[#1A3830] text-[#D96C3B] dark:text-[#DFB15B] border border-[#C8AD8A] dark:border-[#2F5A4D] shadow-sm">
+            <div className="p-2 rounded-xl bg-[#FFF0E8] dark:bg-[#2F2119] text-[#E04D16] dark:text-[#FF7037] border border-[#F05A24]/30 shadow-sm">
               <Cpu className="w-4 h-4" />
             </div>
           </div>
           <div className="mt-3 flex items-baseline space-x-2 px-1 relative z-10">
-            <span className="font-mono text-2xl font-black text-[#D96C3B] dark:text-[#E67A47]">
+            <span className="font-mono text-2xl font-black text-[#D96C3B] dark:text-[#FF6B35]">
               {metrics.avgCpu}%
             </span>
-            <span className="text-[10px] font-bold text-slate-700 dark:text-slate-300 bg-slate-100 dark:bg-slate-800 px-2 py-0.5 rounded-full font-mono">
+            <span className="text-[10px] font-bold text-slate-700 dark:text-[#A1A7B1] bg-slate-100 dark:bg-[#202329] px-2 py-0.5 rounded-full font-mono">
               RAM: {metrics.totalMem} MB
             </span>
           </div>
-          <div className="mt-3 pt-2.5 border-t border-[#C8AD8A]/40 dark:border-white/5 px-1 relative z-10">
+          <div className="mt-3 pt-2.5 border-t border-[#C8AD8A]/40 dark:border-[#454A53] px-1 relative z-10">
             <p className="text-[11px] text-slate-600 dark:text-slate-400 truncate">
               Hiệu năng vận hành ổn định
             </p>
@@ -256,22 +256,22 @@ export const SystemMonitoringPage: React.FC = () => {
         {/* Card 3: Thiết bị IoT */}
         <div className="glass-card p-5 relative group">
           <div className="flex items-center justify-between relative z-10 px-1">
-            <span className="text-[11px] font-mono font-bold uppercase tracking-wider text-slate-600 dark:text-slate-300">
+            <span className="text-[11px] font-mono font-bold uppercase tracking-wider text-slate-600 dark:text-[#A1A7B1]">
               Thiết bị IoT kết nối
             </span>
-            <div className="p-2 rounded-xl bg-[#FFF8EE] dark:bg-[#1A3830] text-[#B08D57] dark:text-[#DFB15B] border border-[#C8AD8A] dark:border-[#2F5A4D] shadow-sm">
+            <div className="p-2 rounded-xl bg-[#FFF0E8] dark:bg-[#2F2119] text-[#E04D16] dark:text-[#FF7037] border border-[#F05A24]/30 shadow-sm">
               <Radio className="w-4 h-4" />
             </div>
           </div>
           <div className="mt-3 flex items-baseline space-x-2 px-1 relative z-10">
-            <span className="font-mono text-2xl font-black text-slate-900 dark:text-white">
+            <span className="font-mono text-2xl font-black text-slate-900 dark:text-[#F5F6F8]">
               {metrics.onlineDevs} / {devices.length}
             </span>
             <span className="text-[10px] font-bold text-emerald-700 dark:text-emerald-300 bg-emerald-50 dark:bg-emerald-950/40 px-2 py-0.5 rounded-full border border-emerald-200 dark:border-emerald-800">
               Online
             </span>
           </div>
-          <div className="mt-3 pt-2.5 border-t border-[#C8AD8A]/40 dark:border-white/5 px-1 relative z-10">
+          <div className="mt-3 pt-2.5 border-t border-[#C8AD8A]/40 dark:border-[#454A53] px-1 relative z-10">
             <p className="text-[11px] text-slate-600 dark:text-slate-400 truncate">
               Camera AI, BLE Band, Radar
             </p>
@@ -281,22 +281,22 @@ export const SystemMonitoringPage: React.FC = () => {
         {/* Card 4: Sự cố */}
         <div className="glass-card p-5 relative group">
           <div className="flex items-center justify-between relative z-10 px-1">
-            <span className="text-[11px] font-mono font-bold uppercase tracking-wider text-slate-600 dark:text-slate-300">
+            <span className="text-[11px] font-mono font-bold uppercase tracking-wider text-slate-600 dark:text-[#A1A7B1]">
               Sự cố / Lỗi vận hành
             </span>
-            <div className="p-2 rounded-xl bg-amber-50 dark:bg-amber-950/50 text-amber-700 dark:text-amber-300 border border-amber-200 dark:border-amber-800 shadow-sm">
+            <div className="p-2 rounded-xl bg-[#FFF0E8] dark:bg-[#2F2119] text-[#E04D16] dark:text-[#FF7037] border border-[#F05A24]/30 shadow-sm">
               <AlertTriangle className="w-4 h-4" />
             </div>
           </div>
           <div className="mt-3 flex items-baseline space-x-2 px-1 relative z-10">
-            <span className="font-mono text-2xl font-black text-slate-900 dark:text-white">
+            <span className="font-mono text-2xl font-black text-slate-900 dark:text-[#F5F6F8]">
               {metrics.unresolvedInc}
             </span>
             <span className="text-[10px] font-bold text-emerald-700 dark:text-emerald-300 bg-emerald-50 dark:bg-emerald-950/40 px-2 py-0.5 rounded-full border border-emerald-200 dark:border-emerald-800">
               0 Chưa xử lý
             </span>
           </div>
-          <div className="mt-3 pt-2.5 border-t border-[#C8AD8A]/40 dark:border-white/5 px-1 relative z-10">
+          <div className="mt-3 pt-2.5 border-t border-[#C8AD8A]/40 dark:border-[#454A53] px-1 relative z-10">
             <p className="text-[11px] text-slate-600 dark:text-slate-400 truncate">
               Hệ thống vận hành an toàn
             </p>
@@ -305,13 +305,13 @@ export const SystemMonitoringPage: React.FC = () => {
       </div>
 
       {/* Navigation Tabs */}
-      <div className="flex border-b border-[#C8AD8A]/50 dark:border-white/10 gap-2 pb-px">
+      <div className="flex border-b border-[#C8AD8A]/50 dark:border-[#454A53] gap-2 pb-px">
         <button
           onClick={() => setActiveTab('servers')}
           className={`flex items-center gap-2 px-4 py-2.5 text-xs font-semibold rounded-t-xl transition-colors border-b-2 ${
             activeTab === 'servers'
-              ? 'border-sky-500 text-sky-600 dark:text-sky-400 bg-sky-50/50 dark:bg-sky-950/30'
-              : 'border-transparent text-slate-600 dark:text-slate-400 hover:text-slate-900 dark:hover:text-white'
+              ? 'border-[#FF6B35] text-[#FF6B35] dark:text-[#FF6B35] bg-[#FF6B35]/10 dark:bg-[#FF6B35]/15'
+              : 'border-transparent text-slate-600 dark:text-[#A1A7B1] hover:text-slate-900 dark:hover:text-[#F5F6F8]'
           }`}
         >
           <Server className="w-4 h-4" />
@@ -322,8 +322,8 @@ export const SystemMonitoringPage: React.FC = () => {
           onClick={() => setActiveTab('devices')}
           className={`flex items-center gap-2 px-4 py-2.5 text-xs font-semibold rounded-t-xl transition-colors border-b-2 ${
             activeTab === 'devices'
-              ? 'border-sky-500 text-sky-600 dark:text-sky-400 bg-sky-50/50 dark:bg-sky-950/30'
-              : 'border-transparent text-slate-600 dark:text-slate-400 hover:text-slate-900 dark:hover:text-white'
+              ? 'border-[#FF6B35] text-[#FF6B35] dark:text-[#FF6B35] bg-[#FF6B35]/10 dark:bg-[#FF6B35]/15'
+              : 'border-transparent text-slate-600 dark:text-[#A1A7B1] hover:text-slate-900 dark:hover:text-[#F5F6F8]'
           }`}
         >
           <Radio className="w-4 h-4" />
@@ -337,8 +337,8 @@ export const SystemMonitoringPage: React.FC = () => {
           onClick={() => setActiveTab('incidents')}
           className={`flex items-center gap-2 px-4 py-2.5 text-xs font-semibold rounded-t-xl transition-colors border-b-2 ${
             activeTab === 'incidents'
-              ? 'border-sky-500 text-sky-600 dark:text-sky-400 bg-sky-50/50 dark:bg-sky-950/30'
-              : 'border-transparent text-slate-600 dark:text-slate-400 hover:text-slate-900 dark:hover:text-white'
+              ? 'border-[#FF6B35] text-[#FF6B35] dark:text-[#FF6B35] bg-[#FF6B35]/10 dark:bg-[#FF6B35]/15'
+              : 'border-transparent text-slate-600 dark:text-[#A1A7B1] hover:text-slate-900 dark:hover:text-[#F5F6F8]'
           }`}
         >
           <AlertTriangle className="w-4 h-4" />
@@ -356,10 +356,10 @@ export const SystemMonitoringPage: React.FC = () => {
           <div className="glass-card p-5">
             <div className="flex items-center justify-between mb-4">
               <div>
-                <h3 className="font-heading font-bold text-slate-900 dark:text-white text-sm">
+                <h3 className="font-heading font-bold text-slate-900 dark:text-[#F5F6F8] text-sm">
                   Hiệu năng hệ thống & Thông lượng yêu cầu (Throughput)
                 </h3>
-                <p className="text-xs text-slate-500 dark:text-slate-400">
+                <p className="text-xs text-slate-500 dark:text-[#A1A7B1]">
                   Tải CPU (%), bộ nhớ RAM (%) và độ trễ phản hồi (ms)
                 </p>
               </div>
@@ -402,13 +402,13 @@ export const SystemMonitoringPage: React.FC = () => {
                       <stop offset="95%" stopColor="#6366f1" stopOpacity={0.0} />
                     </linearGradient>
                   </defs>
-                  <CartesianGrid strokeDasharray="3 3" stroke={isDark ? '#1e293b' : '#e2e8f0'} opacity={0.6} />
-                  <XAxis dataKey="time" stroke={isDark ? '#64748b' : '#94a3b8'} fontSize={11} tickLine={false} />
-                  <YAxis stroke={isDark ? '#64748b' : '#94a3b8'} fontSize={11} domain={[0, 60]} tickLine={false} />
+                  <CartesianGrid strokeDasharray="3 3" stroke={isDark ? '#454A53' : '#e2e8f0'} opacity={0.6} />
+                  <XAxis dataKey="time" stroke={isDark ? '#777F8B' : '#94a3b8'} fontSize={11} tickLine={false} />
+                  <YAxis stroke={isDark ? '#777F8B' : '#94a3b8'} fontSize={11} domain={[0, 60]} tickLine={false} />
                   <Tooltip
                     contentStyle={{
-                      backgroundColor: isDark ? '#111c38' : '#ffffff',
-                      borderColor: isDark ? 'rgba(56,189,248,0.2)' : '#e2e8f0',
+                      backgroundColor: isDark ? '#17191E' : '#ffffff',
+                      borderColor: isDark ? '#454A53' : '#e2e8f0',
                       borderRadius: '12px',
                       fontSize: '12px',
                     }}
@@ -422,11 +422,11 @@ export const SystemMonitoringPage: React.FC = () => {
 
           {/* Backend Services Table */}
           <div className="glass-card overflow-hidden">
-            <div className="p-4 border-b border-sky-100 dark:border-sky-950/80 flex items-center justify-between">
-              <span className="text-xs font-bold text-slate-900 dark:text-white">
+            <div className="p-4 border-b border-sky-100 dark:border-[#454A53] flex items-center justify-between">
+              <span className="text-xs font-bold text-slate-900 dark:text-[#F5F6F8]">
                 Bảng theo dõi trạng thái các dịch vụ lõi (Microservices Health Matrix)
               </span>
-              <span className="text-xs text-slate-500 dark:text-slate-400">
+              <span className="text-xs text-slate-500 dark:text-[#A1A7B1]">
                 Tự động kiểm tra sức khỏe (Healthcheck) mỗi 10 giây
               </span>
             </div>
@@ -434,7 +434,7 @@ export const SystemMonitoringPage: React.FC = () => {
             <div className="overflow-x-auto">
               <table className="w-full text-left text-xs border-collapse">
                 <thead>
-                  <tr className="border-b border-sky-100 dark:border-sky-950/80 bg-sky-50/50 dark:bg-sky-950/20 text-[11px] font-semibold text-slate-600 dark:text-slate-400">
+                  <tr className="border-b border-sky-100 dark:border-[#454A53] bg-sky-50/50 dark:bg-[#202329] text-[11px] font-semibold text-slate-600 dark:text-[#A1A7B1]">
                     <th className="py-3 px-4">Dịch vụ & Phân loại</th>
                     <th className="py-3 px-4">Cổng (Port)</th>
                     <th className="py-3 px-4">Trạng thái</th>
@@ -445,12 +445,12 @@ export const SystemMonitoringPage: React.FC = () => {
                     <th className="py-3 px-4 text-right">Hành động</th>
                   </tr>
                 </thead>
-                <tbody className="divide-y divide-sky-100 dark:divide-sky-950/60">
+                <tbody className="divide-y divide-sky-100 dark:divide-[#454A53]">
                   {services.map((srv) => (
-                    <tr key={srv.id} className="hover:bg-sky-50/40 dark:hover:bg-white/5 transition-colors">
+                    <tr key={srv.id} className="hover:bg-sky-50/40 dark:hover:bg-[#292D34] transition-colors">
                       <td className="py-3 px-4">
-                        <div className="font-semibold text-slate-900 dark:text-white">{srv.name}</div>
-                        <div className="text-[10px] text-slate-400 dark:text-slate-500 font-sans">{srv.category}</div>
+                        <div className="font-semibold text-slate-900 dark:text-[#F5F6F8]">{srv.name}</div>
+                        <div className="text-[10px] text-slate-400 dark:text-[#727984] font-sans">{srv.category}</div>
                       </td>
                       <td className="py-3 px-4 font-mono text-slate-700 dark:text-slate-300">
                         :{srv.port}
@@ -470,13 +470,13 @@ export const SystemMonitoringPage: React.FC = () => {
                       <td className="py-3 px-4 font-mono text-slate-600 dark:text-slate-300">
                         {srv.memory_usage} MB
                       </td>
-                      <td className="py-3 px-4 font-mono font-semibold text-sky-600 dark:text-sky-400">
+                      <td className="py-3 px-4 font-mono font-semibold text-sky-600 dark:text-[#FF6B35]">
                         {srv.latency_ms} ms
                       </td>
                       <td className="py-3 px-4 text-right">
                         <button
                           onClick={() => handleRestartService(srv)}
-                          className="inline-flex items-center gap-1 px-2.5 py-1 rounded-lg text-sky-600 dark:text-sky-400 hover:bg-sky-50 dark:hover:bg-sky-950/50 border border-sky-200 dark:border-sky-900 text-xs font-semibold transition-colors"
+                          className="inline-flex items-center gap-1 px-2.5 py-1 rounded-lg text-sky-600 dark:text-[#FF6B35] hover:bg-sky-50 dark:hover:bg-[#FF6B35]/20 border border-sky-200 dark:border-[#454A53] text-xs font-semibold transition-colors"
                         >
                           <RotateCw className="w-3.5 h-3.5" />
                           <span>Kiểm tra lại</span>
@@ -494,11 +494,11 @@ export const SystemMonitoringPage: React.FC = () => {
       {/* TAB 2: IOT DEVICES MONITORING */}
       {activeTab === 'devices' && (
         <div className="glass-card overflow-hidden">
-          <div className="p-4 border-b border-sky-100 dark:border-sky-950/80 flex items-center justify-between">
-            <span className="text-xs font-bold text-slate-900 dark:text-white">
+          <div className="p-4 border-b border-sky-100 dark:border-[#454A53] flex items-center justify-between">
+            <span className="text-xs font-bold text-slate-900 dark:text-[#F5F6F8]">
               Danh sách thiết bị phần cứng đang kết nối vào hệ thống
             </span>
-            <span className="text-xs text-slate-500 dark:text-slate-400">
+            <span className="text-xs text-slate-500 dark:text-[#A1A7B1]">
               Nhận telemetry nhịp tim, SpO2 & cảnh báo té ngã qua MQTT
             </span>
           </div>
@@ -506,7 +506,7 @@ export const SystemMonitoringPage: React.FC = () => {
           <div className="overflow-x-auto">
             <table className="w-full text-left text-xs border-collapse">
               <thead>
-                <tr className="border-b border-sky-100 dark:border-sky-950/80 bg-sky-50/50 dark:bg-sky-950/20 text-[11px] font-semibold text-slate-600 dark:text-slate-400">
+                <tr className="border-b border-sky-100 dark:border-[#454A53] bg-sky-50/50 dark:bg-[#202329] text-[11px] font-semibold text-slate-600 dark:text-[#A1A7B1]">
                   <th className="py-3 px-4">Mã & Tên thiết bị</th>
                   <th className="py-3 px-4">Loại thiết bị</th>
                   <th className="py-3 px-4">Vị trí lắp đặt</th>
@@ -516,17 +516,17 @@ export const SystemMonitoringPage: React.FC = () => {
                   <th className="py-3 px-4">Ngưỡng cảnh báo y tế</th>
                 </tr>
               </thead>
-              <tbody className="divide-y divide-sky-100 dark:divide-sky-950/60">
+              <tbody className="divide-y divide-sky-100 dark:divide-[#454A53]">
                 {devices.map((dev) => (
-                  <tr key={dev.id} className="hover:bg-sky-50/40 dark:hover:bg-white/5 transition-colors">
+                  <tr key={dev.id} className="hover:bg-sky-50/40 dark:hover:bg-[#292D34] transition-colors">
                     <td className="py-3 px-4">
-                      <div className="font-semibold text-slate-900 dark:text-white">{dev.name}</div>
-                      <div className="text-[10px] font-mono text-slate-400 dark:text-slate-500">{dev.device_id}</div>
+                      <div className="font-semibold text-slate-900 dark:text-[#F5F6F8]">{dev.name}</div>
+                      <div className="text-[10px] font-mono text-slate-400 dark:text-[#727984]">{dev.device_id}</div>
                     </td>
-                    <td className="py-3 px-4 font-mono text-xs text-slate-700 dark:text-slate-300">
+                    <td className="py-3 px-4 font-mono text-xs text-slate-700 dark:text-[#F5F6F8]">
                       {dev.device_type}
                     </td>
-                    <td className="py-3 px-4 text-slate-600 dark:text-slate-400">
+                    <td className="py-3 px-4 text-slate-600 dark:text-[#A1A7B1]">
                       {dev.location || 'Chưa định vị'}
                     </td>
                     <td className="py-3 px-4">
@@ -545,10 +545,10 @@ export const SystemMonitoringPage: React.FC = () => {
                     <td className="py-3 px-4 font-mono">
                       {dev.battery_level !== null && dev.battery_level !== undefined ? `${dev.battery_level}%` : 'Nguồn AC'}
                     </td>
-                    <td className="py-3 px-4 font-mono text-slate-500 dark:text-slate-400">
+                    <td className="py-3 px-4 font-mono text-slate-500 dark:text-[#A1A7B1]">
                       {dev.last_heartbeat ? new Date(dev.last_heartbeat).toLocaleTimeString('vi-VN') : 'Vừa xong'}
                     </td>
-                    <td className="py-3 px-4 text-[11px] font-mono text-slate-600 dark:text-slate-300">
+                    <td className="py-3 px-4 text-[11px] font-mono text-slate-600 dark:text-[#F5F6F8]">
                       {dev.config ? `HR: ${dev.config.hr_threshold_low}-${dev.config.hr_threshold_high} | SpO2: ${dev.config.spo2_threshold_low}%` : 'Chuẩn Bộ Y Tế'}
                     </td>
                   </tr>
@@ -561,18 +561,18 @@ export const SystemMonitoringPage: React.FC = () => {
 
       {/* TAB 3: SYSTEM INCIDENTS & ERROR LOGS */}
       {activeTab === 'incidents' && (
-        <div className="glass-card divide-y divide-sky-100 dark:divide-sky-950/60">
+        <div className="glass-card divide-y divide-sky-100 dark:divide-[#454A53]">
           <div className="p-4 flex items-center justify-between">
-            <span className="text-xs font-bold text-slate-900 dark:text-white">
+            <span className="text-xs font-bold text-slate-900 dark:text-[#F5F6F8]">
               Danh sách cảnh báo & Sự cố vận hành hệ thống
             </span>
-            <span className="text-xs text-slate-500 dark:text-slate-400">
+            <span className="text-xs text-slate-500 dark:text-[#A1A7B1]">
               Ghi nhận qua kênh giám sát tự động
             </span>
           </div>
 
           {incidents.map((inc) => (
-            <div key={inc.id} className="p-4 hover:bg-sky-50/40 dark:hover:bg-white/5 transition-colors">
+            <div key={inc.id} className="p-4 hover:bg-sky-50/40 dark:hover:bg-[#292D34] transition-colors">
               <div className="flex items-center justify-between">
                 <div className="flex items-center gap-2">
                   <span
@@ -586,12 +586,12 @@ export const SystemMonitoringPage: React.FC = () => {
                   >
                     {inc.type}
                   </span>
-                  <span className="font-semibold text-xs text-slate-900 dark:text-white">
+                  <span className="font-semibold text-xs text-slate-900 dark:text-[#F5F6F8]">
                     {inc.service}
                   </span>
                 </div>
                 <div className="flex items-center gap-3">
-                  <span className="text-[11px] font-mono text-slate-400 dark:text-slate-500">
+                  <span className="text-[11px] font-mono text-slate-400 dark:text-[#727984]">
                     {inc.timestamp}
                   </span>
                   {inc.resolved ? (
@@ -602,7 +602,7 @@ export const SystemMonitoringPage: React.FC = () => {
                   ) : (
                     <button
                       onClick={() => handleResolveIncident(inc.id)}
-                      className="px-2 py-1 rounded text-[11px] font-semibold bg-sky-500 text-white hover:bg-sky-600 transition-colors"
+                      className="px-2 py-1 rounded text-[11px] font-semibold bg-[#FF6B35] text-white hover:bg-[#FF8A50] transition-colors"
                     >
                       Xác nhận đã xử lý
                     </button>
@@ -610,7 +610,7 @@ export const SystemMonitoringPage: React.FC = () => {
                 </div>
               </div>
 
-              <p className="mt-2 text-xs text-slate-600 dark:text-slate-300 font-sans">
+              <p className="mt-2 text-xs text-slate-600 dark:text-[#A1A7B1] font-sans">
                 {inc.message}
               </p>
             </div>

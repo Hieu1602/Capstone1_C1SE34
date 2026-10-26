@@ -15,6 +15,7 @@ from app.models.chat import ChatSession, ChatMessage
 from app.models.system_notification import SystemNotification
 from app.models.user_terminal import UserTerminal, UserLoginHistory
 from app.models.support_ticket import SupportTicket
+from app.models.appointment import Appointment, AppointmentReminder
 
 __all__ = [
     "User",
@@ -34,4 +35,6 @@ __all__ = [
     "UserTerminal",
     "UserLoginHistory",
     "SupportTicket",
+    "Appointment",
+    "AppointmentReminder",
 ]

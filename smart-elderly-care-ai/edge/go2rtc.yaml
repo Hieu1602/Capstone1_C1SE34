@@ -1,0 +1,17 @@
+# API 1984 chỉ dùng trong Docker network; app trao đổi SDP qua backend.
+api:
+  listen: ':1984'
+rtsp:
+  listen: '127.0.0.1:8554'
+streams:
+  tapo_intercom:
+    - '${TAPO_TALK_URL}'
+    # AAC từ một số firmware được chuyển thành Opus để trình duyệt nghe được.
+    - 'ffmpeg:tapo_intercom#audio=opus'
+webrtc:
+  listen: ':8555'
+  candidates:
+    - '${CAMERA_WEBRTC_HOST}:8555'
+  ice_servers: []
+log:
+  level: error

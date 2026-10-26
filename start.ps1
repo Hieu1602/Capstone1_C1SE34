@@ -1,5 +1,5 @@
 # ==============================================================================
-# SMART ELDERLY CARE AI - SCRIPT KHOI DONG NHANH DU AN (C1SE.34)
+# SMART ELDERLY CARE AI - SCRIPT KHOI DONG & QUAN TRI HE THONG (C1SE.34)
 # ==============================================================================
 
 [CmdletBinding()]
@@ -27,17 +27,27 @@ $MobileDir = "$AiDir\apps\mobile"
 $WebDir = "$AiDir\apps\web"
 $EdgeDir = "$AiDir\edge"
 $DockerComposeFile = "$AiDir\docker-compose.yml"
+
+# ------------------------------------------------------------------------------
+# 1. TIM KIEM PYTHON RUNTIME HOAC UV CHO BACKEND
+# ------------------------------------------------------------------------------
 $BackendVenvPy = "$BackendDir\.venv\Scripts\python.exe"
-if (-not (Test-Path $BackendVenvPy)) {
-    if (Test-Path "$ScriptDir\..\.venv\Scripts\python.exe") {
-        $BackendVenvPy = "$ScriptDir\..\.venv\Scripts\python.exe"
-    } elseif (Test-Path "$AiDir\..\.venv\Scripts\python.exe") {
-        $BackendVenvPy = "$AiDir\..\.venv\Scripts\python.exe"
-    } elseif (Test-Path "E:\cap3\.venv\Scripts\python.exe") {
-        $BackendVenvPy = "E:\cap3\.venv\Scripts\python.exe"
+$UvCmd = Get-Command uv -ErrorAction SilentlyContinue
+
+function Get-PythonCommand {
+    if (Test-Path $BackendVenvPy) {
+        return $BackendVenvPy
     }
+    $sysPy = Get-Command python -ErrorAction SilentlyContinue
+    if ($sysPy) {
+        return "python"
+    }
+    return $null
 }
 
+# ------------------------------------------------------------------------------
+# 2. HAM TIEN ICH GIAO DIEN (CONSOLE UI)
+# ------------------------------------------------------------------------------
 function Write-Header {
     Clear-Host
     Write-Host "================================================================================" -ForegroundColor Cyan
@@ -76,7 +86,11 @@ function Test-PortListening {
     }
 }
 
+# ------------------------------------------------------------------------------
+# 3. KIEM TRA TIEN DIEU KIEN (PREREQUISITES)
+# ------------------------------------------------------------------------------
 function Test-Prerequisites {
+    # Check .env
     if (-not (Test-Path "$AiDir\.env")) {
         if (Test-Path "$AiDir\.env.example") {
             Copy-Item "$AiDir\.env.example" "$AiDir\.env"
@@ -98,18 +112,26 @@ function Test-Prerequisites {
 
     docker info >$null 2>&1
     if ($LASTEXITCODE -ne 0) {
-        Write-Warn "Docker Desktop chua duoc bat hoac chua san sang!"
-        Write-Warn "Vui long mo ung dung Docker Desktop tren may tinh roi thu lai."
-        return $false
+        # Thu chuyen context ve default neu desktop-linux loi
+        docker context use default >$null 2>&1
+        docker info >$null 2>&1
+        if ($LASTEXITCODE -ne 0) {
+            Write-Warn "Docker Desktop chua bat hoac chua san sang!"
+            return $false
+        }
     }
 
     return $true
 }
 
+# ------------------------------------------------------------------------------
+# 4. KHOI DONG HA TANG DOCKER (TIMESCALEDB, REDIS, EMQX)
+# ------------------------------------------------------------------------------
 function Start-DockerServices {
-    Write-Info "Dang khoi dong cac dich vu Ha tang Docker (TimescaleDB, Redis, EMQX)..."
+    Write-Info "Dang kiem tra va khoi dong ha tang Docker (TimescaleDB, Redis, EMQX)..."
     
     if (-not (Test-Prerequisites)) {
+        Write-Warn "Bo qua khoi dong Docker (he thong se dung CSDL Cloud Supabase neu da cau hinh trong .env)."
         return $false
     }
 
@@ -119,20 +141,18 @@ function Start-DockerServices {
         return $false
     }
 
-    Write-Info "Dang doi TimescaleDB & Redis san sang (3-5 giay)..."
-    $maxWait = 10
+    Write-Info "Dang doi cac port ha tang san sang..."
+    $maxWait = 8
     $waited = 0
     while ($waited -lt $maxWait) {
         Start-Sleep -Seconds 1
         $waited++
-        $dbUp = Test-PortListening -Port 5433
-        $redisUp = Test-PortListening -Port 6379
-        if ($dbUp -and $redisUp) {
+        if ((Test-PortListening -Port 5433) -and (Test-PortListening -Port 6379)) {
             break
         }
     }
 
-    Write-Success "Ha tang Docker da san sang:"
+    Write-Success "Ha tang Docker san sang:"
     Write-Host "     - TimescaleDB (PostgreSQL 16) : localhost:5433" -ForegroundColor Gray
     Write-Host "     - Redis Cache & PubSub        : localhost:6379" -ForegroundColor Gray
     Write-Host "     - EMQX MQTT Broker            : localhost:1883 (Dashboard: http://localhost:18083)" -ForegroundColor Gray
@@ -140,34 +160,49 @@ function Start-DockerServices {
     return $true
 }
 
+# ------------------------------------------------------------------------------
+# 5. KHOI DONG FASTAPI BACKEND
+# ------------------------------------------------------------------------------
 function Start-BackendService {
     Write-Info "Dang khoi dong Cloud Backend FastAPI..."
 
-    if (-not (Test-Path $BackendVenvPy)) {
-        Write-Warn "Chua tim thay moi truong ao tai: $BackendVenvPy"
-        Write-Info "Dang thu chay voi python mac dinh cua he thong..."
-        $pyCmd = "python"
-    } else {
-        $pyCmd = $BackendVenvPy
+    $pyCmd = Get-PythonCommand
+    if (-not $pyCmd) {
+        Write-ErrorMsg "Khong tim thay moi truong Python hoac venv tai: $BackendVenvPy"
+        return
     }
 
-    $psCommand = "[Console]::OutputEncoding = [System.Text.Encoding]::UTF8; `$host.UI.RawUI.WindowTitle = '[Elderly Care] Backend FastAPI (Port 8000)'; Set-Location '$BackendDir'; & '$pyCmd' -m uvicorn app.main:app --host 0.0.0.0 --port 8000 --reload"
+    # Chay uvicorn qua PowerShell cua so moi voi UTF-8 va PYTHONPATH day du
+    $execCmd = if ($UvCmd) {
+        "uv run uvicorn app.main:app --host 0.0.0.0 --port 8000 --reload"
+    } else {
+        "& '$pyCmd' -m uvicorn app.main:app --host 0.0.0.0 --port 8000 --reload"
+    }
+
+    $psCommand = "[Console]::OutputEncoding = [System.Text.Encoding]::UTF8; `$env:PYTHONIOENCODING='utf-8'; `$env:PYTHONPATH='.'; `$host.UI.RawUI.WindowTitle = '[Elderly Care] Backend FastAPI (Port 8000)'; Set-Location '$BackendDir'; $execCmd"
     Start-Process powershell.exe -ArgumentList "-NoExit", "-ExecutionPolicy", "Bypass", "-Command", $psCommand
 
     Write-Success "Da mo tien trinh Backend FastAPI tren port 8000."
     Write-Host "     - API Docs (Swagger UI)       : http://localhost:8000/api/docs" -ForegroundColor Yellow
-    Write-Host "     - Chatbot AI API              : http://localhost:8000/api/v1/chatbot/chat" -ForegroundColor Yellow
     Write-Host "     - Health Check                : http://localhost:8000/health" -ForegroundColor Gray
     Write-Host ""
 }
 
+# ------------------------------------------------------------------------------
+# 6. KHOI DONG WEB ADMIN PORTAL
+# ------------------------------------------------------------------------------
 function Start-WebService {
-    Write-Host "  [+] Khoi dong Web Admin Portal (http://localhost:3000)..." -ForegroundColor Yellow
     Write-Info "Dang khoi dong Web Admin Portal (Vite React)..."
 
-    $nodeCmd = Get-Command npm -ErrorAction SilentlyContinue
-    if (-not $nodeCmd) {
+    $npmCmd = Get-Command npm -ErrorAction SilentlyContinue
+    if (-not $npmCmd) {
         Write-ErrorMsg "Khong tim thay Node.js / npm! Vui long cai dat Node.js de chay Web Admin."
+        return
+    }
+
+    if (-not (Test-Path "$WebDir\node_modules")) {
+        Write-Warn "Chua tim thay node_modules tai apps/web. Dang tien hanh npm install..."
+        Start-Process powershell.exe -ArgumentList "-NoExit", "-Command", "Set-Location '$WebDir'; npm install; npm run dev"
         return
     }
 
@@ -179,41 +214,54 @@ function Start-WebService {
     Write-Host ""
 }
 
+# ------------------------------------------------------------------------------
+# 7. KHOI DONG MOBILE APP (REACT NATIVE EXPO)
+# ------------------------------------------------------------------------------
 function Start-MobileService {
     [CmdletBinding()]
     param(
         [Parameter()]
-        [string]$Platform = "web"
+        [string]$Mode = "web"
     )
     Write-Info "Dang khoi dong Mobile App (React Native Expo)..."
 
-    $nodeCmd = Get-Command npm -ErrorAction SilentlyContinue
-    if (-not $nodeCmd) {
+    $npmCmd = Get-Command npm -ErrorAction SilentlyContinue
+    if (-not $npmCmd) {
         Write-ErrorMsg "Khong tim thay Node.js / npm! Vui long cai dat Node.js de chay Mobile App."
         return
     }
 
-    $subCmd = "npx expo start -c"
+    if (-not (Test-Path "$MobileDir\node_modules")) {
+        Write-Warn "Chua tim thay node_modules tai apps/mobile. Dang tien hanh npm install..."
+        Start-Process powershell.exe -ArgumentList "-NoExit", "-Command", "Set-Location '$MobileDir'; npm install; npx expo start -c"
+        return
+    }
+
+    $subCmd = if ($Mode -eq "web") { "npx expo start --web" } else { "npx expo start -c" }
     $psCommand = "[Console]::OutputEncoding = [System.Text.Encoding]::UTF8; `$host.UI.RawUI.WindowTitle = '[Elderly Care] Mobile App (Port 8081)'; Set-Location '$MobileDir'; $subCmd"
     Start-Process powershell.exe -ArgumentList "-NoExit", "-ExecutionPolicy", "Bypass", "-Command", $psCommand
 
     Write-Success "Da mo tien trinh Mobile App (Expo Metro Bundler)."
-    Write-Host "     - Quet ma QR tren dien thoai bang ung dung Expo Go" -ForegroundColor Yellow
-    Write-Host "     - Hoac mo tren trinh duyet Web: http://localhost:8081" -ForegroundColor Yellow
+    Write-Host "     - Expo Metro Bundler          : http://localhost:8081" -ForegroundColor Yellow
+    Write-Host "     - Quet QR tren dien thoai bang ung dung Expo Go" -ForegroundColor Yellow
     Write-Host ""
 }
 
+# ------------------------------------------------------------------------------
+# 8. KHOI DONG EDGE AI SENSOR TEST
+# ------------------------------------------------------------------------------
 function Start-EdgeService {
     Write-Info "Dang kiem tra Edge Hub AI..."
-    $edgePy = $BackendVenvPy
-    if (-not (Test-Path $edgePy)) {
-        $edgePy = "python"
+    $pyCmd = Get-PythonCommand
+    if (-not $pyCmd) {
+        Write-ErrorMsg "Khong tim thay Python runtime."
+        return
     }
     
     $testCamPath = "$EdgeDir\test_camera.py"
     if (Test-Path $testCamPath) {
-        Write-Info "Mo cua so chay kiem tra Camera / Edge Sensor Simulation..."
-        $psCommand = "[Console]::OutputEncoding = [System.Text.Encoding]::UTF8; `$host.UI.RawUI.WindowTitle = '[Elderly Care] Edge AI Test'; Set-Location '$EdgeDir'; & '$edgePy' test_camera.py"
+        Write-Info "Mo cua so kiem tra Camera / Edge Sensor Simulation..."
+        $psCommand = "[Console]::OutputEncoding = [System.Text.Encoding]::UTF8; `$env:PYTHONIOENCODING='utf-8'; `$host.UI.RawUI.WindowTitle = '[Elderly Care] Edge AI Test'; Set-Location '$EdgeDir'; & '$pyCmd' test_camera.py"
         Start-Process powershell.exe -ArgumentList "-NoExit", "-ExecutionPolicy", "Bypass", "-Command", $psCommand
         Write-Success "Da mo tien trinh Edge AI Test."
     } else {
@@ -221,28 +269,56 @@ function Start-EdgeService {
     }
 }
 
+# ------------------------------------------------------------------------------
+# 9. CHAY UNIT TESTS BACKEND
+# ------------------------------------------------------------------------------
+function Run-BackendTests {
+    Write-Info "Dang thuc thi bo kiem thu Unit Test Backend..."
+    $pyCmd = Get-PythonCommand
+    if (-not $pyCmd) {
+        Write-ErrorMsg "Khong tim thay Python runtime."
+        return
+    }
+
+    Push-Location $BackendDir
+    try {
+        $env:PYTHONPATH = "."
+        $env:PYTHONIOENCODING = "utf-8"
+        if ($UvCmd) {
+            uv run pytest tests/
+        } else {
+            & $pyCmd -m pytest tests/
+        }
+    } finally {
+        Pop-Location
+    }
+}
+
+# ------------------------------------------------------------------------------
+# 10. BAO CAO TINH TRANG HE THONG (SYSTEM STATUS)
+# ------------------------------------------------------------------------------
 function Show-SystemStatus {
     Write-Host "--------------------------------------------------------------------------------" -ForegroundColor DarkGray
     Write-Host "  BAO CAO TINH TRANG CAC THANH PHAN HE THONG" -ForegroundColor Cyan
     Write-Host "--------------------------------------------------------------------------------" -ForegroundColor DarkGray
 
-    # TimescaleDB
+    # TimescaleDB Local
     $dbOk = Test-PortListening -Port 5433
     $dbStatus = if ($dbOk) { "[ONLINE] Port 5433" } else { "[OFFLINE]" }
-    $dbColor = if ($dbOk) { "Green" } else { "Red" }
-    Write-Host ("  {0,-28} : {1}" -f "TimescaleDB (PostgreSQL)", $dbStatus) -ForegroundColor $dbColor
+    $dbColor = if ($dbOk) { "Green" } else { "DarkGray" }
+    Write-Host ("  {0,-28} : {1}" -f "Local TimescaleDB (:5433)", $dbStatus) -ForegroundColor $dbColor
 
-    # Redis
+    # Redis Local
     $redisOk = Test-PortListening -Port 6379
     $redisStatus = if ($redisOk) { "[ONLINE] Port 6379" } else { "[OFFLINE]" }
-    $redisColor = if ($redisOk) { "Green" } else { "Red" }
-    Write-Host ("  {0,-28} : {1}" -f "Redis Cache", $redisStatus) -ForegroundColor $redisColor
+    $redisColor = if ($redisOk) { "Green" } else { "DarkGray" }
+    Write-Host ("  {0,-28} : {1}" -f "Local Redis Cache (:6379)", $redisStatus) -ForegroundColor $redisColor
 
-    # EMQX
+    # EMQX Local
     $emqxOk = Test-PortListening -Port 1883
-    $emqxStatus = if ($emqxOk) { "[ONLINE] Port 1883 / 18083" } else { "[OFFLINE]" }
-    $emqxColor = if ($emqxOk) { "Green" } else { "Red" }
-    Write-Host ("  {0,-28} : {1}" -f "EMQX MQTT Broker", $emqxStatus) -ForegroundColor $emqxColor
+    $emqxStatus = if ($emqxOk) { "[ONLINE] Port 1883" } else { "[OFFLINE]" }
+    $emqxColor = if ($emqxOk) { "Green" } else { "DarkGray" }
+    Write-Host ("  {0,-28} : {1}" -f "Local EMQX MQTT (:1883)", $emqxStatus) -ForegroundColor $emqxColor
 
     # Backend
     $backendOk = Test-PortListening -Port 8000
@@ -257,68 +333,80 @@ function Show-SystemStatus {
         $backendStatus = "[OFFLINE]"
     }
     $backendColor = if ($backendOk) { "Green" } else { "Red" }
-    Write-Host ("  {0,-28} : {1}" -f "FastAPI Backend", $backendStatus) -ForegroundColor $backendColor
+    Write-Host ("  {0,-28} : {1}" -f "FastAPI Backend (:8000)", $backendStatus) -ForegroundColor $backendColor
 
     # Web Admin Portal
     $webOk = Test-PortListening -Port 3000
     $webStatus = if ($webOk) { "[ONLINE] -> http://localhost:3000" } else { "[OFFLINE]" }
     $webColor = if ($webOk) { "Green" } else { "Red" }
-    Write-Host ("  {0,-28} : {1}" -f "Web Admin Portal", $webStatus) -ForegroundColor $webColor
+    Write-Host ("  {0,-28} : {1}" -f "Web Admin Portal (:3000)", $webStatus) -ForegroundColor $webColor
 
     # Mobile App
     $mobileOk = Test-PortListening -Port 8081
     $mobileStatus = if ($mobileOk) { "[ONLINE] -> http://localhost:8081" } else { "[OFFLINE]" }
     $mobileColor = if ($mobileOk) { "Green" } else { "Red" }
-    Write-Host ("  {0,-28} : {1}" -f "Mobile App Web", $mobileStatus) -ForegroundColor $mobileColor
+    Write-Host ("  {0,-28} : {1}" -f "Mobile App Expo (:8081)", $mobileStatus) -ForegroundColor $mobileColor
 
     Write-Host "--------------------------------------------------------------------------------" -ForegroundColor DarkGray
     Write-Host ""
 }
 
+# ------------------------------------------------------------------------------
+# 11. DUNG TAT CA DICH VU (STOP ALL)
+# ------------------------------------------------------------------------------
 function Stop-AllServices {
-    Write-Warn "Dang tien hanh dung toan bo dich vu cua he thong..."
+    Write-Warn "Dang tien hanh dung toan bo cac tien trinh cua he thong..."
 
-    Write-Info "Dang tat Docker containers..."
-    docker compose -f "$DockerComposeFile" down 2>$null
-    Write-Success "Da dung cac Docker containers."
+    # Tat Docker containers
+    if (Get-Command docker -ErrorAction SilentlyContinue) {
+        Write-Info "Dang tat Docker containers..."
+        docker compose -f "$DockerComposeFile" down 2>$null
+        Write-Success "Da dung Docker containers."
+    }
 
-    $portsToKill = @(8000, 8081, 3000)
+    # Dung tien trinh tren cac cong 8000, 8081, 3000, 19000, 19001
+    $portsToKill = @(8000, 8081, 3000, 19000, 19001)
+    $killedPids = @()
     foreach ($p in $portsToKill) {
-        $conns = Get-NetTCPConnection -LocalPort $p -State Listen -ErrorAction SilentlyContinue
-        if ($conns) {
-            foreach ($c in $conns) {
-                if ($c.OwningProcess -gt 0) {
-                    Write-Info "Dung tien trinh tren Port $p (PID: $($c.OwningProcess))..."
-                    Stop-Process -Id $c.OwningProcess -Force -ErrorAction SilentlyContinue
+        $pids = Get-NetTCPConnection -LocalPort $p -State Listen -ErrorAction SilentlyContinue | 
+                Select-Object -ExpandProperty OwningProcess -Unique
+        if ($pids) {
+            foreach ($procId in $pids) {
+                if ($procId -gt 0 -and ($killedPids -notcontains $procId)) {
+                    Write-Info "Dung tien trinh tren Port $p (PID: $procId)..."
+                    Stop-Process -Id $procId -Force -ErrorAction SilentlyContinue
+                    $killedPids += $procId
                 }
             }
         }
     }
 
-    Write-Success "Toan bo he thong da duoc dung an toan!"
+    Write-Success "Toan bo dich vu da duoc dung an toan!"
 }
 
+# ------------------------------------------------------------------------------
+# 12. MO CAC TRANG WEB QUAN TRI TREN BROWSER
+# ------------------------------------------------------------------------------
 function Open-WebLinks {
     Write-Info "Dang mo cac lien ket tren trinh duyet..."
-    Start-Process "http://localhost:3000"
-    Start-Process "http://localhost:8000/api/docs"
-    Start-Process "http://localhost:8081"
-    Start-Process "http://localhost:18083"
-    Write-Success "Da mo cac trang web!"
+    if (Test-PortListening -Port 3000) { Start-Process "http://localhost:3000" }
+    if (Test-PortListening -Port 8000) { Start-Process "http://localhost:8000/api/docs" }
+    if (Test-PortListening -Port 8081) { Start-Process "http://localhost:8081" }
+    if (Test-PortListening -Port 1883) { Start-Process "http://localhost:18083" }
+    Write-Success "Da mo cac trang quan tri!"
 }
 
+# ------------------------------------------------------------------------------
+# 13. KHOI DONG TOAN BO HE THONG
+# ------------------------------------------------------------------------------
 function Start-AllServices {
     Write-Header
-    Write-Host "  [+] BAT DAU KHOI DONG TOAN BO HE THONG TRONG 1 BUOC..." -ForegroundColor Green
+    Write-Host "  [+] BAT DAU KHOI DONG TOAN BO HE THONG..." -ForegroundColor Green
     Write-Host ""
 
+    # Khoi dong Docker ha tang neu co
     $dockerOk = Start-DockerServices
-    if (-not $dockerOk) {
-        Write-ErrorMsg "Khong the khoi dong ha tang Docker. Vui long kiem tra Docker Desktop!"
-        return
-    }
-
-    Start-Sleep -Seconds 2
+    Start-Sleep -Seconds 1
 
     Start-BackendService
     Start-Sleep -Seconds 2
@@ -326,19 +414,21 @@ function Start-AllServices {
     Start-WebService
     Start-Sleep -Seconds 2
 
-    Start-MobileService -Platform "web"
+    Start-MobileService -Mode "web"
     Start-Sleep -Seconds 2
 
     Write-Host ""
-    Write-Success "KHOI DONG THANH CONG TAT CA CAC THANH PHAN!"
+    Write-Success "KHOI DONG THANH CONG CAC DICH VU CHINH!"
     Write-Host ""
     Write-Host "================================================================================" -ForegroundColor Cyan
     Write-Host "  DIA CHI TRUY CAP CAC DICH VU:" -ForegroundColor Yellow
     Write-Host "  - Web Admin Portal      : http://localhost:3000" -ForegroundColor White
     Write-Host "  - Mobile App Web        : http://localhost:8081" -ForegroundColor White
     Write-Host "  - Backend Swagger Docs  : http://localhost:8000/api/docs" -ForegroundColor White
-    Write-Host "  - Chatbot AI API        : http://localhost:8000/api/v1/chatbot/chat" -ForegroundColor White
-    Write-Host "  - EMQX MQTT Dashboard   : http://localhost:18083  (User: admin / public)" -ForegroundColor White
+    Write-Host "  - Health Check API      : http://localhost:8000/health" -ForegroundColor White
+    if (Test-PortListening -Port 1883) {
+        Write-Host "  - EMQX MQTT Dashboard   : http://localhost:18083  (User: admin / public)" -ForegroundColor White
+    }
     Write-Host "================================================================================" -ForegroundColor Cyan
     Write-Host ""
 
@@ -350,18 +440,25 @@ function Start-AllServices {
     }
 }
 
+# ------------------------------------------------------------------------------
+# 14. DIEU HUONG CLI PARAMETERS
+# ------------------------------------------------------------------------------
 switch ($Target.ToLower()) {
     "all"     { Start-AllServices; exit }
     "docker"  { Start-DockerServices; exit }
     "backend" { Start-BackendService; exit }
     "web"     { Start-WebService; exit }
-    "mobile"  { Start-MobileService -Platform "web"; exit }
+    "mobile"  { Start-MobileService -Mode "web"; exit }
     "edge"    { Start-EdgeService; exit }
+    "test"    { Run-BackendTests; exit }
     "status"  { Show-SystemStatus; exit }
     "stop"    { Stop-AllServices; exit }
     "open"    { Open-WebLinks; exit }
 }
 
+# ------------------------------------------------------------------------------
+# 15. MENU TUONG TAC CLI
+# ------------------------------------------------------------------------------
 do {
     Write-Header
     Show-SystemStatus
@@ -372,29 +469,31 @@ do {
     Write-Host "  [2] Khoi dong Ha tang Docker (TimescaleDB, Redis, EMQX)" -ForegroundColor Cyan
     Write-Host "  [3] Khoi dong Cloud Backend FastAPI (localhost:8000)" -ForegroundColor Cyan
     Write-Host "  [4] Khoi dong Web Admin Portal (localhost:3000)" -ForegroundColor Cyan
-    Write-Host "  [5] Khoi dong Mobile App Web (localhost:8081)" -ForegroundColor Cyan
+    Write-Host "  [5] Khoi dong Mobile App (localhost:8081)" -ForegroundColor Cyan
     Write-Host "  [6] Khoi dong Edge Hub AI (Kiem tra Camera / Cam bien)" -ForegroundColor Cyan
     Write-Host "  ------------------------------------------------------------------------------" -ForegroundColor DarkGray
-    Write-Host "  [7] Kiem tra lai trang thai he thong (Health Check)" -ForegroundColor White
-    Write-Host "  [8] Mo cac trang quan tri Web (Web Admin, Swagger, EMQX, Mobile App)" -ForegroundColor White
-    Write-Host "  [9] Dung toan bo he thong (Docker Down & Tat processes)" -ForegroundColor Yellow
+    Write-Host "  [7] Kiem tra trang thai he thong (Health Check)" -ForegroundColor White
+    Write-Host "  [8] Chay Unit Tests Backend (pytest)" -ForegroundColor White
+    Write-Host "  [9] Mo cac trang quan tri tren Web Browser" -ForegroundColor White
+    Write-Host "  [10] Dung toan bo he thong (Stop All)" -ForegroundColor Yellow
     Write-Host "  [0] Thoat" -ForegroundColor Red
     Write-Host "  ------------------------------------------------------------------------------" -ForegroundColor DarkGray
     Write-Host ""
 
-    $choice = Read-Host "  Nhap lua chon cua ban (0-9)"
+    $choice = Read-Host "  Nhap lua chon cua ban (0-10)"
 
     switch ($choice) {
-        "1" { Start-AllServices; Write-Host "Nhan Enter de tiep tuc..."; [void][System.Console]::ReadLine() }
-        "2" { Start-DockerServices; Write-Host "Nhan Enter de tiep tuc..."; [void][System.Console]::ReadLine() }
-        "3" { Start-BackendService; Write-Host "Nhan Enter de tiep tuc..."; [void][System.Console]::ReadLine() }
-        "4" { Start-WebService; Write-Host "Nhan Enter de tiep tuc..."; [void][System.Console]::ReadLine() }
-        "5" { Start-MobileService -Platform "web"; Write-Host "Nhan Enter de tiep tuc..."; [void][System.Console]::ReadLine() }
-        "6" { Start-EdgeService; Write-Host "Nhan Enter de tiep tuc..."; [void][System.Console]::ReadLine() }
-        "7" { Write-Info "Dang kiem tra..."; Start-Sleep -Seconds 1 }
-        "8" { Open-WebLinks; Write-Host "Nhan Enter de tiep tuc..."; [void][System.Console]::ReadLine() }
-        "9" { Stop-AllServices; Write-Host "Nhan Enter de tiep tuc..."; [void][System.Console]::ReadLine() }
-        "0" { Write-Host "`nTam biet!`n"; break }
-        default { Write-Warn "Lua chon khong hop le, vui long chon tu 0 den 9."; Start-Sleep -Seconds 2 }
+        "1"  { Start-AllServices; Write-Host "Nhan Enter de tiep tuc..."; [void][System.Console]::ReadLine() }
+        "2"  { Start-DockerServices; Write-Host "Nhan Enter de tiep tuc..."; [void][System.Console]::ReadLine() }
+        "3"  { Start-BackendService; Write-Host "Nhan Enter de tiep tuc..."; [void][System.Console]::ReadLine() }
+        "4"  { Start-WebService; Write-Host "Nhan Enter de tiep tuc..."; [void][System.Console]::ReadLine() }
+        "5"  { Start-MobileService -Mode "web"; Write-Host "Nhan Enter de tiep tuc..."; [void][System.Console]::ReadLine() }
+        "6"  { Start-EdgeService; Write-Host "Nhan Enter de tiep tuc..."; [void][System.Console]::ReadLine() }
+        "7"  { Write-Info "Dang kiem tra..."; Start-Sleep -Seconds 1 }
+        "8"  { Run-BackendTests; Write-Host "Nhan Enter de tiep tuc..."; [void][System.Console]::ReadLine() }
+        "9"  { Open-WebLinks; Write-Host "Nhan Enter de tiep tuc..."; [void][System.Console]::ReadLine() }
+        "10" { Stop-AllServices; Write-Host "Nhan Enter de tiep tuc..."; [void][System.Console]::ReadLine() }
+        "0"  { Write-Host "`nTam biet!`n"; break }
+        default { Write-Warn "Lua chon khong hop le, vui long chon tu 0 den 10."; Start-Sleep -Seconds 2 }
     }
 } while ($choice -ne "0")

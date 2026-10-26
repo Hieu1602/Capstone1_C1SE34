@@ -157,7 +157,7 @@ export const AIMaintenancePage: React.FC = () => {
       {/* Header */}
       <div className="flex flex-col md:flex-row md:items-center justify-between gap-4">
         <div className="flex items-center gap-3">
-          <div className="p-2.5 rounded-xl bg-gradient-to-br from-[#D96C3B] to-[#B84B1E] text-white shadow-md shadow-[#D96C3B]/25 shrink-0">
+          <div className="w-11 h-11 rounded-2xl bg-gradient-to-br from-[#FF723B] via-[#F05A24] to-[#C73C0A] text-white flex items-center justify-center shadow-[0_4px_16px_rgba(240,90,36,0.35),inset_0_1px_0_rgba(255,255,255,0.4)] border border-white/20 shrink-0">
             <BrainCircuit className="w-5 h-5 stroke-[2.2]" />
           </div>
           <div>
@@ -191,7 +191,7 @@ export const AIMaintenancePage: React.FC = () => {
               100% Sẵn sàng suy luận
             </p>
           </div>
-          <div className="w-10 h-10 rounded-xl bg-sky-50 dark:bg-sky-950/60 border border-sky-100 dark:border-sky-800 flex items-center justify-center text-sky-600 dark:text-sky-400">
+          <div className="w-10 h-10 rounded-xl bg-gradient-to-br from-[#FFF0E8] to-[#FFE2D4] dark:from-[#2F2119] dark:to-[#1F1714] text-[#E04D16] dark:text-[#FF7037] border border-[#F05A24]/40 flex items-center justify-center shadow-sm">
             <BrainCircuit className="w-5 h-5" />
           </div>
         </div>
@@ -204,7 +204,7 @@ export const AIMaintenancePage: React.FC = () => {
               Thời gian thực &lt; 50ms
             </p>
           </div>
-          <div className="w-10 h-10 rounded-xl bg-sky-50 dark:bg-sky-950/60 border border-sky-100 dark:border-sky-800 flex items-center justify-center text-sky-600 dark:text-sky-400">
+          <div className="w-10 h-10 rounded-xl bg-gradient-to-br from-[#FFF0E8] to-[#FFE2D4] dark:from-[#2F2119] dark:to-[#1F1714] text-[#E04D16] dark:text-[#FF7037] border border-[#F05A24]/40 flex items-center justify-center shadow-sm">
             <Zap className="w-5 h-5" />
           </div>
         </div>
@@ -215,7 +215,7 @@ export const AIMaintenancePage: React.FC = () => {
             <p className="font-mono text-2xl font-bold text-slate-900 dark:text-white mt-1">29.4 FPS</p>
             <p className="text-[11px] font-mono text-slate-500 dark:text-slate-400">Camera 2K Super HD</p>
           </div>
-          <div className="w-10 h-10 rounded-xl bg-amber-50 dark:bg-amber-950/60 border border-amber-100 dark:border-amber-800 flex items-center justify-center text-amber-600 dark:text-amber-400">
+          <div className="w-10 h-10 rounded-xl bg-gradient-to-br from-[#FFF0E8] to-[#FFE2D4] dark:from-[#2F2119] dark:to-[#1F1714] text-[#E04D16] dark:text-[#FF7037] border border-[#F05A24]/40 flex items-center justify-center shadow-sm">
             <Gauge className="w-5 h-5" />
           </div>
         </div>
@@ -226,7 +226,7 @@ export const AIMaintenancePage: React.FC = () => {
             <p className="font-mono text-2xl font-bold text-slate-900 dark:text-white mt-1">RKNN 6.0</p>
             <p className="text-[11px] font-mono text-slate-500 dark:text-slate-400">NPU RK3588 Tri-core</p>
           </div>
-          <div className="w-10 h-10 rounded-xl bg-indigo-50 dark:bg-indigo-950/60 border border-indigo-100 dark:border-indigo-800 flex items-center justify-center text-indigo-600 dark:text-indigo-400">
+          <div className="w-10 h-10 rounded-xl bg-gradient-to-br from-[#FFF0E8] to-[#FFE2D4] dark:from-[#2F2119] dark:to-[#1F1714] text-[#E04D16] dark:text-[#FF7037] border border-[#F05A24]/40 flex items-center justify-center shadow-sm">
             <Cpu className="w-5 h-5" />
           </div>
         </div>
@@ -263,18 +263,18 @@ export const AIMaintenancePage: React.FC = () => {
                 {/* Header */}
                 <div className="flex items-start justify-between">
                   <div className="flex items-center space-x-3">
-                    <div className="w-11 h-11 rounded-xl bg-sky-50 dark:bg-white/5 border border-sky-100 dark:border-white/10 flex items-center justify-center text-sky-600 dark:text-sky-400 shadow-xs">
+                    <div className="w-11 h-11 rounded-xl bg-sky-50 dark:bg-[#202329] border border-sky-100 dark:border-[#454A53] flex items-center justify-center text-sky-600 dark:text-[#FF6B35] shadow-xs">
                       <CategoryIcon className="w-5 h-5" />
                     </div>
                     <div>
-                      <h3 className="font-heading font-bold text-sm text-slate-900 dark:text-white leading-tight">
+                      <h3 className="font-heading font-bold text-sm text-slate-900 dark:text-[#F5F6F8] leading-tight">
                         {model.name}
                       </h3>
                       <div className="flex items-center space-x-2 mt-1">
                         <span className={`text-[9px] font-mono font-bold uppercase px-2 py-0.5 rounded-full border ${badgeColor}`}>
                           {model.category}
                         </span>
-                        <span className="text-[11px] font-mono text-slate-500 dark:text-slate-400">
+                        <span className="text-[11px] font-mono text-slate-500 dark:text-[#A1A7B1]">
                           {model.runtime_engine}
                         </span>
                       </div>
@@ -287,27 +287,27 @@ export const AIMaintenancePage: React.FC = () => {
                   </span>
                 </div>
 
-                <p className="text-xs text-slate-600 dark:text-slate-400 mt-3 leading-relaxed">
+                <p className="text-xs text-slate-600 dark:text-[#A1A7B1] mt-3 leading-relaxed">
                   {model.description}
                 </p>
 
                 {/* Metrics Grid */}
-                <div className="grid grid-cols-3 gap-3 my-4 p-3 rounded-xl bg-slate-50 dark:bg-slate-900/60 border border-slate-200 dark:border-white/5 font-mono shadow-xs">
+                <div className="grid grid-cols-3 gap-3 my-4 p-3 rounded-xl bg-slate-50 dark:bg-[#202329] border border-slate-200 dark:border-[#454A53] font-mono shadow-xs">
                   <div>
                     <span className="text-[10px] text-slate-500 block uppercase">Độ trễ xử lý</span>
-                    <span className="text-xs font-bold text-slate-800 dark:text-white">
+                    <span className="text-xs font-bold text-slate-800 dark:text-[#F5F6F8]">
                       {model.latency_ms} ms
                     </span>
                   </div>
                   <div>
                     <span className="text-[10px] text-slate-500 block uppercase">Độ chính xác</span>
-                    <span className="text-xs font-bold text-sky-600 dark:text-sky-400">
+                    <span className="text-xs font-bold text-sky-600 dark:text-[#FF6B35]">
                       {model.accuracy}%
                     </span>
                   </div>
                   <div>
                     <span className="text-[10px] text-slate-500 block uppercase">Bộ nhớ RAM</span>
-                    <span className="text-xs font-bold text-slate-800 dark:text-white">
+                    <span className="text-xs font-bold text-slate-800 dark:text-[#F5F6F8]">
                       {model.memory_footprint_mb > 0 ? `${model.memory_footprint_mb} MB` : 'Cloud API'}
                     </span>
                   </div>
@@ -316,10 +316,10 @@ export const AIMaintenancePage: React.FC = () => {
                 {/* Threshold Slider */}
                 <div className="space-y-1.5">
                   <div className="flex items-center justify-between text-xs font-semibold">
-                    <span className="text-slate-700 dark:text-slate-300 font-mono text-[11px]">
+                    <span className="text-slate-700 dark:text-[#F5F6F8] font-mono text-[11px]">
                       Ngưỡng tin cậy (Confidence Threshold):
                     </span>
-                    <span className="font-mono text-sky-600 dark:text-sky-400 text-xs font-bold">
+                    <span className="font-mono text-sky-600 dark:text-[#FF6B35] text-xs font-bold">
                       {(currentVal * 100).toFixed(0)}%
                     </span>
                   </div>
@@ -335,7 +335,7 @@ export const AIMaintenancePage: React.FC = () => {
                         [model.id]: parseFloat(e.target.value),
                       }))
                     }
-                    className="w-full h-1.5 bg-slate-200 dark:bg-slate-800 rounded-lg appearance-none cursor-pointer accent-sky-500"
+                    className="w-full h-1.5 bg-slate-200 dark:bg-[#202329] rounded-lg appearance-none cursor-pointer accent-[#FF6B35]"
                   />
                   <div className="flex justify-between text-[10px] font-mono text-slate-500">
                     <span>40% (Nhạy cao)</span>
@@ -345,7 +345,7 @@ export const AIMaintenancePage: React.FC = () => {
               </div>
 
               {/* Action Buttons */}
-              <div className="mt-5 pt-3 border-t border-slate-100 dark:border-white/5 flex items-center justify-between">
+              <div className="mt-5 pt-3 border-t border-slate-100 dark:border-[#454A53] flex items-center justify-between">
                 <button
                   onClick={() => handleOpenTest(model)}
                   className="btn-ghost text-xs py-1.5 px-3"
@@ -370,32 +370,32 @@ export const AIMaintenancePage: React.FC = () => {
       {/* Interactive Inference Test Modal */}
       {testModalOpen && activeTestModel && (
         <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-900/60 dark:bg-black/75 backdrop-blur-xs animate-fade-in">
-          <div className="glass-card w-full max-w-xl overflow-hidden border border-sky-100 dark:border-white/10 shadow-2xl animate-slide-up">
-            <div className="p-5 border-b border-slate-100 dark:border-white/5 flex items-center justify-between">
+          <div className="glass-card w-full max-w-xl overflow-hidden border border-sky-100 dark:border-[#454A53] dark:bg-[#17191E] shadow-2xl animate-slide-up">
+            <div className="p-5 border-b border-slate-100 dark:border-[#454A53] dark:bg-[#202329] flex items-center justify-between">
               <div className="flex items-center space-x-3">
-                <div className="w-10 h-10 rounded-xl bg-sky-50 dark:bg-sky-950/60 text-sky-600 dark:text-sky-400 border border-sky-100 dark:border-sky-800 flex items-center justify-center">
+                <div className="w-10 h-10 rounded-xl bg-sky-50 dark:bg-[#FF6B35]/15 text-sky-600 dark:text-[#FF6B35] border border-sky-100 dark:border-[#FF6B35]/30 flex items-center justify-center">
                   <Play className="w-5 h-5" />
                 </div>
                 <div>
-                  <h3 className="font-heading font-bold text-slate-900 dark:text-white text-base">
+                  <h3 className="font-heading font-bold text-slate-900 dark:text-[#F5F6F8] text-base">
                     Thử nghiệm suy luận AI tại chỗ
                   </h3>
-                  <p className="text-xs font-mono text-slate-500 dark:text-slate-400">
+                  <p className="text-xs font-mono text-slate-500 dark:text-[#A1A7B1]">
                     {activeTestModel.name}
                   </p>
                 </div>
               </div>
               <button
                 onClick={() => setTestModalOpen(false)}
-                className="p-1.5 rounded-lg text-slate-400 hover:text-slate-700 dark:hover:text-slate-200 hover:bg-slate-100 dark:hover:bg-white/5 transition-colors"
+                className="p-1.5 rounded-lg text-slate-400 hover:text-slate-700 dark:text-[#A1A7B1] dark:hover:text-[#F5F6F8] hover:bg-slate-100 dark:hover:bg-[#292D34] transition-colors"
               >
                 <X className="w-5 h-5" />
               </button>
             </div>
 
             <div className="p-5 space-y-4">
-              <div className="p-4 rounded-xl bg-slate-50 dark:bg-slate-900/60 border border-slate-200 dark:border-white/5 text-xs text-slate-600 dark:text-slate-400">
-                <p className="font-semibold text-slate-900 dark:text-white mb-1">
+              <div className="p-4 rounded-xl bg-slate-50 dark:bg-[#202329] border border-slate-200 dark:border-[#454A53] text-xs text-slate-600 dark:text-[#A1A7B1]">
+                <p className="font-semibold text-slate-900 dark:text-[#F5F6F8] mb-1">
                   Kịch bản kiểm thử:
                 </p>
                 {activeTestModel.id === 'model-yolo-pose' &&
@@ -414,7 +414,7 @@ export const AIMaintenancePage: React.FC = () => {
                     <CheckCircle2 className="w-5 h-5 text-sky-600 dark:text-sky-400" />
                     <span>Suy luận thành công (Inference Success)</span>
                   </div>
-                  <pre className="text-xs font-mono text-slate-800 dark:text-slate-200 overflow-x-auto whitespace-pre-wrap bg-white dark:bg-slate-950/80 p-3 rounded-lg border border-slate-200 dark:border-white/5">
+                  <pre className="text-xs font-mono text-slate-800 dark:text-[#F5F6F8] overflow-x-auto whitespace-pre-wrap bg-white dark:bg-[#101216] p-3 rounded-lg border border-slate-200 dark:border-[#454A53]">
                     {JSON.stringify(testResult, null, 2)}
                   </pre>
                 </div>

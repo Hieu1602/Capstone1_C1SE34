@@ -238,6 +238,9 @@ export const vitalsApi = {
 // 3. Reminders API
 export const remindersApi = {
   getToday: () => api.get('/reminders/today'),
+  create: (data: any) => api.post('/reminders', data),
+  toggle: (reminderId: string) => api.put(`/reminders/${reminderId}/toggle`),
+  delete: (reminderId: string) => api.delete(`/reminders/${reminderId}`),
 };
 
 // 4. Patients & Medical Record API
@@ -252,6 +255,10 @@ export const patientApi = {
     api.post(`/patients/${patientId}/face-enroll`, formData, {
       headers: { 'Content-Type': 'multipart/form-data' },
     }),
+  getAppointments: (patientId: number | string = 1, status?: string) =>
+    api.get(`/patients/${patientId}/appointments`, { params: status ? { status } : undefined }),
+  confirmAppointment: (patientId: number | string, appointmentId: string) =>
+    api.post(`/patients/${patientId}/appointments/${appointmentId}/confirm`),
 };
 
 // 5. Notifications & Incidents API
@@ -264,6 +271,53 @@ export const incidentsApi = {
 };
 
 export const notificationsApi = incidentsApi;
+
+export interface AppointmentItem {
+  id: string;
+  doctor_id?: string;
+  doctor_name?: string;
+  patient_id: string;
+  patient_name: string;
+  house_id?: string;
+  visit_type?: string;
+  scheduled_at: string;
+  duration_minutes?: number;
+  location: string;
+  clinical_notes?: string;
+  instructions?: string;
+  status: 'UPCOMING' | 'COMPLETED' | 'CANCELLED';
+  cancellation_reason?: string;
+  recurrence_pattern?: 'NONE' | 'WEEKLY' | 'MONTHLY' | 'QUARTERLY';
+  parent_recurring_id?: string;
+  enable_speaker_reminder?: boolean;
+  created_at?: string;
+  updated_at?: string;
+}
+
+export interface AppointmentCreateData {
+  patient_id: string;
+  patient_name?: string;
+  scheduled_at: string;
+  duration_minutes?: number;
+  visit_type?: string;
+  location?: string;
+  clinical_notes?: string;
+  instructions?: string;
+  enable_speaker_reminder?: boolean;
+  recurrence_pattern?: string;
+  recurrence_occurrences?: number;
+}
+
+export interface AppointmentUpdateData {
+  scheduled_at?: string;
+  duration_minutes?: number;
+  visit_type?: string;
+  location?: string;
+  status?: string;
+  clinical_notes?: string;
+  instructions?: string;
+  enable_speaker_reminder?: boolean;
+}
 
 // 6. Doctor Subsystem API
 export const doctorApi = {
@@ -303,28 +357,15 @@ export const doctorApi = {
     api.get(`/doctor/patients/${id}/analytics`, { params: { days } }),
   updateThresholds: (id: string, data: any) =>
     api.put(`/doctor/patients/${id}/thresholds`, data),
-  getAppointments: (status?: string) =>
-    api.get('/doctor/appointments', { params: status ? { status } : undefined }),
-  createAppointment: (data: {
-    patient_id: string;
-    patient_name: string;
-    scheduled_at: string;
-    exam_type?: string;
-    location?: string;
-    instructions?: string;
-    enable_speaker_reminder?: boolean;
-  }) => api.post('/doctor/appointments', data),
-  updateAppointment: (
-    appointmentId: string,
-    data: {
-      scheduled_at?: string;
-      exam_type?: string;
-      location?: string;
-      status?: string;
-      instructions?: string;
-      enable_speaker_reminder?: boolean;
-    }
-  ) => api.put(`/doctor/appointments/${appointmentId}`, data),
+  getAppointments: (status?: string, patientId?: string) =>
+    api.get('/doctor/appointments', { params: { ...(status ? { status } : {}), ...(patientId ? { patient_id: patientId } : {}) } }),
+  createAppointment: (data: AppointmentCreateData) => api.post('/doctor/appointments', data),
+  updateAppointment: (appointmentId: string, data: AppointmentUpdateData) =>
+    api.put(`/doctor/appointments/${appointmentId}`, data),
+  completeAppointment: (appointmentId: string) =>
+    api.post(`/doctor/appointments/${appointmentId}/complete`),
+  cancelAppointment: (appointmentId: string, data: { cancellation_reason: string }) =>
+    api.post(`/doctor/appointments/${appointmentId}/cancel`, data),
   deleteAppointment: (appointmentId: string) =>
     api.delete(`/doctor/appointments/${appointmentId}`),
 };
@@ -340,7 +381,17 @@ export const householdApi = {
     api.get(`/houses/${householdId}/members`),
   addMember: (
     householdId: number | string = 1,
-    data: { phone_number: string; role_in_house?: string; role?: string; full_name?: string }
+    data: {
+      phone_number: string;
+      role_in_house?: string;
+      role?: string;
+      full_name?: string;
+      can_view_health?: boolean;
+      can_view_camera?: boolean;
+      can_handle_emergency?: boolean;
+      can_manage_devices?: boolean;
+      can_manage_records?: boolean;
+    }
   ) => api.post(`/houses/${householdId}/members`, data),
   updateMemberPermissions: (
     householdId: number | string = 'current',
@@ -423,3 +474,23 @@ export const supportApi = {
 
 
 
+
+// 11. System Notifications / Admin Broadcasts API
+export interface SystemAnnouncement {
+  id: string;
+  title: string;
+  body: string;
+  type: 'info' | 'system_maintenance' | 'emergency' | 'health_tip' | 'feature_update' | string;
+  target_audience: 'all' | 'caregivers' | 'doctors' | 'elderly' | string;
+  status: 'draft' | 'scheduled' | 'published' | 'revoked' | string;
+  created_at?: string;
+  published_at?: string;
+  expires_at?: string;
+}
+
+export const adminBroadcastsApi = {
+  getActive: (targetAudience?: string) =>
+    api.get<SystemAnnouncement[]>('/system-notifications/broadcasts/active', {
+      params: targetAudience ? { target_audience: targetAudience } : {},
+    }),
+};

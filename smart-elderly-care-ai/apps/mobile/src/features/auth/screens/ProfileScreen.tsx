@@ -2152,7 +2152,8 @@ export default function ProfileScreen({ navigation, route }: any) {
                   Xem nhiều góc quay camera cùng lúc
                 </Text>
               </TouchableOpacity>
-
+
+
             </>
           )}
         </View>

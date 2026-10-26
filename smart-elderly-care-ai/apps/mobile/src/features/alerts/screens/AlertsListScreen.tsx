@@ -17,6 +17,7 @@ import {
   TouchableOpacity,
   RefreshControl,
   Image,
+  ScrollView,
 } from 'react-native';
 // Lấy t() để dịch chuỗi động; dùng Text/Alert đã bọc i18n cho nội dung tĩnh và hộp thoại.
 import { useTranslation } from 'react-i18next';
@@ -25,7 +26,9 @@ import { SafeAreaView } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
 import { Colors, Shadows } from '../../../theme/colors';
 import { useAlertStore } from '../../../store';
+import { usePatientStore, ReminderItem } from '../../../store/usePatientStore';
 import { useTheme } from '../../../store/useThemeStore';
+import { FamilyAppointmentsModal } from '../../dashboard/components/FamilyAppointmentsModal';
 
 // ------------------------------------------------------------------------------
 // 1. Interface cấu hình giao diện hiển thị cho từng loại sự kiện
@@ -91,6 +94,39 @@ function getAlertConfig(alertType: string): AlertConfig {
         iconBg: '#DCFCE7',
         isCritical: false,
       };
+    case 'APPOINTMENT_SCHEDULED':
+      return {
+        title: 'Lịch khám mới từ Bác sĩ',
+        badgeText: 'Chờ gia đình xác nhận',
+        badgeBg: '#FEF3C7',
+        badgeColor: '#D97706',
+        iconName: 'calendar',
+        iconColor: '#D97706',
+        iconBg: '#FEF3C7',
+        isCritical: false,
+      };
+    case 'APPOINTMENT_CONFIRMED':
+      return {
+        title: 'Lịch khám đã được xác nhận',
+        badgeText: 'Đã xác nhận',
+        badgeBg: '#DCFCE7',
+        badgeColor: '#16A34A',
+        iconName: 'checkmark-circle',
+        iconColor: '#16A34A',
+        iconBg: '#DCFCE7',
+        isCritical: false,
+      };
+    case 'APPOINTMENT_CANCELLED':
+      return {
+        title: 'Lịch khám đã bị hủy',
+        badgeText: 'Đã hủy',
+        badgeBg: '#FEE2E2',
+        badgeColor: '#DC2626',
+        iconName: 'close-circle',
+        iconColor: '#DC2626',
+        iconBg: '#FEE2E2',
+        isCritical: false,
+      };
     default:
       // Các loại sự kiện mở rộng khác (Cảm biến nhiệt, ngắt kết nối...)
       return {
@@ -145,27 +181,137 @@ export default function AlertsListScreen({ navigation }: any) {
 
   // Kết nối trực tiếp vào Domain Store useAlertStore để lấy danh sách cảnh báo từ Backend
   const { incidents, setIncidents, fetchNotifications } = useAlertStore();
+  const {
+    patientRecord,
+    todayReminders,
+    markMedicationTaken,
+    snoozeMedication,
+    fetchReminders,
+  } = usePatientStore();
 
   // State cục bộ quản lý hiệu ứng kéo để tải lại (Pull-to-refresh)
   const [refreshing, setRefreshing] = useState(false);
 
-  // State bộ lọc: 'ALL' (Tất cả), 'CRITICAL' (Nguy kịch), 'VITAL' (Sức khỏe)
-  const [filterType, setFilterType] = useState<'ALL' | 'CRITICAL' | 'VITAL'>('ALL');
+  // State quản lý mở modal xác nhận lịch khám bác sĩ
+  const [familyAppointmentsModalVisible, setFamilyAppointmentsModalVisible] = useState(false);
+  const [selectedAppointmentPatientId, setSelectedAppointmentPatientId] = useState<string | number | null>(null);
 
-  // Khi màn hình được mở: Tự động kéo danh sách thông báo mới nhất từ API
+  // State bộ lọc: 'ALL' (Tất cả), 'CRITICAL' (Nguy kịch), 'VITAL' (Sức khỏe), 'MEDICATION' (Uống thuốc), 'APPOINTMENT' (Lịch khám)
+  const [filterType, setFilterType] = useState<'ALL' | 'CRITICAL' | 'VITAL' | 'MEDICATION' | 'APPOINTMENT'>('ALL');
+
+  // Khi màn hình được mở: Tự động kéo danh sách thông báo và lịch nhắc thuốc mới nhất từ API
   React.useEffect(() => {
     fetchNotifications();
+    fetchReminders();
   }, []);
 
   // Xử lý kéo xuống để làm mới danh sách
   const handleRefresh = async () => {
     setRefreshing(true);
-    await fetchNotifications();
+    await Promise.all([fetchNotifications(), fetchReminders()]);
     setRefreshing(false);
   };
 
+  // Danh sách thuốc trong ngày từ Store
+  const medications: ReminderItem[] = todayReminders?.medications || [];
+
+  const pendingMedCount = medications.filter((m) => !m.taken).length;
+  const unreadIncidentsCount = incidents.filter((item) => !item.is_acknowledged).length;
   // Đếm tổng số thông báo chưa được xác nhận / chưa đọc
-  const unreadCount = incidents.filter((item) => !item.is_acknowledged).length;
+  const unreadCount = unreadIncidentsCount + pendingMedCount;
+
+  // Helper tính trạng thái nhắc nhở uống thuốc: Sắp đến giờ/Đúng giờ, Đã uống, Quá giờ/Bỏ lỡ
+  const getMedicationStatus = (item: ReminderItem) => {
+    if (item.taken) {
+      return {
+        state: 'TAKEN' as const,
+        badgeText: `Đã uống lúc ${item.takenAt || item.time}`,
+        badgeBg: '#DCFCE7',
+        badgeColor: '#15803D',
+        badgeBorder: '#86EFAC',
+        iconName: 'checkmark-circle' as const,
+        iconColor: '#16A34A',
+        iconBg: '#DCFCE7',
+        statusLabel: 'Đã hoàn thành',
+        isOverdue: false,
+      };
+    }
+
+    // Tính chênh lệch thời gian so với giờ hẹn uống thuốc (phút)
+    const [hourStr, minStr] = item.time.split(':');
+    const now = new Date();
+    const medTime = new Date();
+    medTime.setHours(parseInt(hourStr || '0', 10), parseInt(minStr || '0', 10), 0, 0);
+
+    const diffMinutes = Math.floor((now.getTime() - medTime.getTime()) / (60 * 1000));
+
+    if (diffMinutes > 15) {
+      let lateStr = `${diffMinutes} phút`;
+      if (diffMinutes >= 60) {
+        const h = Math.floor(diffMinutes / 60);
+        const m = diffMinutes % 60;
+        lateStr = m > 0 ? `${h}h ${m}p` : `${h} giờ`;
+      }
+      return {
+        state: 'OVERDUE' as const,
+        badgeText: `Chưa uống (Đã trễ ${lateStr})`,
+        badgeBg: '#FEE2E2',
+        badgeColor: '#DC2626',
+        badgeBorder: '#FCA5A5',
+        iconName: 'alert-circle' as const,
+        iconColor: '#DC2626',
+        iconBg: '#FEE2E2',
+        statusLabel: `Quá giờ ${lateStr}`,
+        isOverdue: true,
+      };
+    }
+
+    const isNow = diffMinutes >= -15 && diffMinutes <= 15;
+    const statusText = isNow
+      ? 'Đúng giờ uống thuốc'
+      : `Sắp đến giờ (${Math.abs(diffMinutes)} phút nữa)`;
+
+    return {
+      state: 'UPCOMING' as const,
+      badgeText: statusText,
+      badgeBg: '#E0F2FE',
+      badgeColor: '#0284C7',
+      badgeBorder: '#BAE6FD',
+      iconName: 'time' as const,
+      iconColor: '#0284C7',
+      iconBg: '#E0F2FE',
+      statusLabel: isNow ? 'Đúng giờ' : 'Sắp tới',
+      isOverdue: false,
+    };
+  };
+
+  // Thao tác thuốc 1: Xác nhận đã uống
+  const handleConfirmMedication = async (med: ReminderItem) => {
+    const now = new Date();
+    const timeStr = `${String(now.getHours()).padStart(2, '0')}:${String(now.getMinutes()).padStart(2, '0')}`;
+    await markMedicationTaken(med.id, true, timeStr);
+    Alert.alert(
+      'Xác nhận thành công',
+      `Đã ghi nhận người cao tuổi đã uống thuốc "${med.name}" lúc ${timeStr}. Trạng thái đã được đồng bộ toàn hệ thống.`
+    );
+  };
+
+  // Thao tác thuốc 2: Bỏ qua / Nhắc lại sau 15 phút
+  const handleSnoozeMedication = (med: ReminderItem) => {
+    snoozeMedication(med.id, 15);
+    Alert.alert(
+      'Đã hoãn nhắc nhở',
+      `Hệ thống sẽ phát loa Hub và nhắc lại cữ "${med.name}" sau 15 phút nữa.`
+    );
+  };
+
+  // Thao tác thuốc 3: Kích hoạt Loa Hub phát lại lời nhắc
+  const handleReplaySpeakerMedication = (med: ReminderItem) => {
+    Alert.alert(
+      'Loa Hub đã phát lời nhắc',
+      `📢 "Đã đến giờ uống thuốc: ${med.name}. Liều dùng: ${med.dose}. Cụ nhớ uống thuốc cùng một cốc nước ấm nhé!"`
+    );
+  };
 
   // Lọc danh sách sự cố theo tab đang chọn
   const filteredIncidents = incidents.filter((item) => {
@@ -183,12 +329,54 @@ export default function AlertsListScreen({ navigation }: any) {
         item.alert_type.includes('TEMP')
       );
     }
+    if (filterType === 'APPOINTMENT') {
+      return (
+        item.alert_type === 'APPOINTMENT_SCHEDULED' ||
+        item.alert_type === 'APPOINTMENT_CONFIRMED' ||
+        item.alert_type === 'APPOINTMENT_CANCELLED'
+      );
+    }
     return true;
   });
 
-  // Xử lý bấm "Đã đọc tất cả": Đánh dấu trạng thái acknowledged cho toàn bộ danh sách
+  // Định nghĩa kiểu phần tử hiển thị trong danh sách thông báo
+  type ListItem =
+    | { itemType: 'INCIDENT'; id: string; data: any }
+    | { itemType: 'MEDICATION'; id: string; data: ReminderItem };
+
+  const listData: ListItem[] = React.useMemo(() => {
+    if (filterType === 'MEDICATION') {
+      return medications.map((med): ListItem => ({
+        itemType: 'MEDICATION',
+        id: `med-${med.id}`,
+        data: med,
+      }));
+    }
+    if (filterType === 'CRITICAL' || filterType === 'VITAL' || filterType === 'APPOINTMENT') {
+      return filteredIncidents.map((inc): ListItem => ({
+        itemType: 'INCIDENT',
+        id: `inc-${inc.id}`,
+        data: inc,
+      }));
+    }
+    // Filter 'ALL' (Tất cả): Hiển thị cữ thuốc hôm nay + các cảnh báo sự cố
+    return [
+      ...medications.map((med): ListItem => ({
+        itemType: 'MEDICATION',
+        id: `med-${med.id}`,
+        data: med,
+      })),
+      ...filteredIncidents.map((inc): ListItem => ({
+        itemType: 'INCIDENT',
+        id: `inc-${inc.id}`,
+        data: inc,
+      })),
+    ];
+  }, [filterType, medications, filteredIncidents]);
+
+  // Xử lý bấm "Đã đọc tất cả": Đánh dấu trạng thái acknowledged cho toàn bộ danh sách sự cố
   const handleMarkAllAsRead = () => {
-    if (unreadCount === 0) {
+    if (unreadIncidentsCount === 0) {
       Alert.alert('Thông báo', 'Tất cả sự kiện đều đã được đánh dấu đọc.');
       return;
     }
@@ -207,6 +395,18 @@ export default function AlertsListScreen({ navigation }: any) {
       setIncidents(
         incidents.map((i) => (i.id === item.id ? { ...i, is_acknowledged: true } : i))
       );
+    }
+
+    // Trường hợp 0: Lịch khám bác sĩ -> Mở Modal chi tiết lịch khám và bấm xác nhận / xem lý do hủy
+    if (
+      item.alert_type === 'APPOINTMENT_SCHEDULED' ||
+      item.alert_type === 'APPOINTMENT_CONFIRMED' ||
+      item.alert_type === 'APPOINTMENT_CANCELLED'
+    ) {
+      const pid = item.device_id && !isNaN(Number(item.device_id)) ? item.device_id : (patientRecord?.patient_id || 1);
+      setSelectedAppointmentPatientId(pid);
+      setFamilyAppointmentsModalVisible(true);
+      return;
     }
 
     // Trường hợp 1: Chuyển động người -> Mở Camera xem lại phát lại (Playback)
@@ -269,6 +469,154 @@ export default function AlertsListScreen({ navigation }: any) {
     });
   };
 
+  /**
+   * renderMedicationCard: Hiển thị card nhắc nhở uống thuốc chuẩn hóa với 3 trạng thái:
+   * 1. Sắp đến giờ / Đúng giờ (Nút Xác nhận đã uống & Bỏ qua / Nhắc lại sau)
+   * 2. Đã uống (Badge xanh lá "Đã uống lúc [giờ]")
+   * 3. Quá giờ / Bỏ lỡ (Cảnh báo cam/đỏ "Chưa uống (Đã trễ X phút)")
+   */
+  const renderMedicationCard = (item: ReminderItem) => {
+    const status = getMedicationStatus(item);
+
+    return (
+      <TouchableOpacity
+        key={`med-${item.id}`}
+        style={[
+          styles.card,
+          styles.medCard,
+          isDarkMode && { backgroundColor: colors.card, borderColor: colors.border },
+          status.state === 'OVERDUE' && styles.medCardOverdue,
+          status.state === 'OVERDUE' && isDarkMode && { backgroundColor: '#3F1219', borderColor: '#7F1D1D' },
+          status.state === 'TAKEN' && styles.medCardTaken,
+          status.state === 'TAKEN' && isDarkMode && { backgroundColor: 'rgba(16, 185, 129, 0.08)', borderColor: '#065F46' },
+        ]}
+        onPress={() => navigation.navigate('MedicationReminder')}
+        activeOpacity={0.85}
+      >
+        <View style={{ flexDirection: 'row', alignItems: 'flex-start', gap: 12 }}>
+          {/* Biểu tượng phân loại tròn */}
+          <View
+            style={[
+              styles.categoryIconCircle,
+              {
+                backgroundColor: isDarkMode
+                  ? status.state === 'OVERDUE'
+                    ? 'rgba(220, 38, 38, 0.25)'
+                    : status.state === 'TAKEN'
+                    ? 'rgba(16, 185, 129, 0.2)'
+                    : 'rgba(2, 132, 199, 0.2)'
+                  : status.iconBg,
+              },
+            ]}
+          >
+            <Ionicons name={status.iconName} size={22} color={status.iconColor} />
+          </View>
+
+          {/* Chi tiết thông tin cữ thuốc */}
+          <View style={styles.cardCenter}>
+            {/* Hàng huy hiệu Badge: Thể loại + Trạng thái */}
+            <View style={styles.cardMetaRow}>
+              <View style={[styles.typeBadge, { backgroundColor: '#F0FDF4' }]}>
+                <Text style={[styles.typeBadgeText, { color: '#16A34A' }]}>
+                  💊 UỐNG THUỐC
+                </Text>
+              </View>
+
+              <View
+                style={[
+                  styles.typeBadge,
+                  { backgroundColor: status.badgeBg, borderWidth: 1, borderColor: status.badgeBorder },
+                ]}
+              >
+                <Text style={[styles.typeBadgeText, { color: status.badgeColor }]}>
+                  {status.badgeText}
+                </Text>
+              </View>
+            </View>
+
+            {/* Tiêu đề: Tên thuốc */}
+            <Text
+              style={[
+                styles.cardTitle,
+                isDarkMode && { color: colors.textPrimary },
+                status.state === 'OVERDUE' && { color: '#DC2626' },
+              ]}
+              numberOfLines={2}
+            >
+              {item.name}
+            </Text>
+
+            {/* Chi tiết liều dùng & mục đích điều trị */}
+            <Text style={[styles.cardMsg, isDarkMode && { color: colors.textSecondary }]} numberOfLines={2}>
+              Liều dùng: {item.dose} {item.purpose ? `• ${item.purpose}` : ''}
+            </Text>
+
+            {/* Dòng mốc thời gian và định danh Loa Hub */}
+            <View style={styles.timeRow}>
+              <Ionicons name="time-outline" size={12} color={isDarkMode ? '#64748B' : '#94A3B8'} />
+              <Text style={[styles.cardTime, isDarkMode && { color: colors.textSecondary }]}>
+                Lịch: {item.time} hôm nay
+              </Text>
+              <Text style={[styles.dotSeparator, isDarkMode && { color: colors.border }]}>•</Text>
+              <Ionicons name="volume-medium-outline" size={12} color={Colors.primary} />
+              <Text style={[styles.deviceLocationText, { color: Colors.primary, fontWeight: '600' }]}>
+                Loa Edge Hub
+              </Text>
+            </View>
+          </View>
+        </View>
+
+        {/* Hàng nút bấm thao tác nhanh */}
+        {!item.taken ? (
+          <View style={styles.medActionsRow}>
+            {/* Nút 1: Xác nhận đã uống */}
+            <TouchableOpacity
+              style={[
+                styles.medConfirmBtn,
+                status.state === 'OVERDUE' && { backgroundColor: '#EA580C' },
+              ]}
+              onPress={() => handleConfirmMedication(item)}
+              activeOpacity={0.8}
+            >
+              <Ionicons name="checkmark-circle" size={16} color="#FFFFFF" />
+              <Text style={styles.medConfirmBtnText}>Xác nhận đã uống</Text>
+            </TouchableOpacity>
+
+            {/* Nút 2: Bỏ qua / Nhắc lại sau */}
+            <TouchableOpacity
+              style={[styles.medSnoozeBtn, isDarkMode && { backgroundColor: colors.card, borderColor: colors.border }]}
+              onPress={() => handleSnoozeMedication(item)}
+              activeOpacity={0.8}
+            >
+              <Ionicons name="time-outline" size={15} color={isDarkMode ? '#94A3B8' : '#64748B'} />
+              <Text style={[styles.medSnoozeBtnText, isDarkMode && { color: colors.textSecondary }]}>
+                Bỏ qua / Nhắc lại sau
+              </Text>
+            </TouchableOpacity>
+
+            {/* Nút 3: Kích hoạt Loa Hub nhắc nhở */}
+            <TouchableOpacity
+              style={[styles.medSpeakerBtn, isDarkMode && { backgroundColor: 'rgba(2, 132, 199, 0.2)' }]}
+              onPress={() => handleReplaySpeakerMedication(item)}
+              activeOpacity={0.7}
+              hitSlop={{ top: 6, bottom: 6, left: 6, right: 6 }}
+            >
+              <Ionicons name="volume-high" size={16} color="#0284C7" />
+            </TouchableOpacity>
+          </View>
+        ) : (
+          /* Khi ĐÃ UỐNG: Hiển thị thanh xác nhận hoàn thành */
+          <View style={styles.medCompletedRow}>
+            <Ionicons name="checkmark-done-circle" size={16} color="#16A34A" />
+            <Text style={[styles.medCompletedText, isDarkMode && { color: '#86EFAC' }]}>
+              Đã hoàn thành cữ thuốc lúc {item.takenAt || item.time} • Dữ liệu đã lưu hồ sơ
+            </Text>
+          </View>
+        )}
+      </TouchableOpacity>
+    );
+  };
+
   return (
     <SafeAreaView style={[styles.safeArea, isDarkMode && { backgroundColor: colors.background }]} edges={['top']}>
       {/* ---------------------------------------------------------------------- */}
@@ -294,12 +642,12 @@ export default function AlertsListScreen({ navigation }: any) {
             <Ionicons
               name="checkmark-done"
               size={15}
-              color={unreadCount > 0 ? '#EA580C' : '#94A3B8'}
+              color={unreadIncidentsCount > 0 ? '#EA580C' : '#94A3B8'}
             />
             <Text
               style={[
                 styles.markAllReadText,
-                unreadCount === 0 && { color: '#94A3B8' },
+                unreadIncidentsCount === 0 && { color: '#94A3B8' },
               ]}
             >
               Đã đọc tất cả
@@ -319,63 +667,89 @@ export default function AlertsListScreen({ navigation }: any) {
       </View>
 
       {/* ---------------------------------------------------------------------- */}
-      {/* 2. Thanh bộ lọc phân loại (Filter Chips)                               */}
+      {/* 2. Thanh bộ lọc phân loại (Filter Chips dạng thanh cuộn ngang)        */}
       {/* ---------------------------------------------------------------------- */}
-      <View style={[styles.filterBar, isDarkMode && { backgroundColor: colors.background, borderBottomColor: colors.border }]}>
-        {/* Tab Tất cả */}
-        <TouchableOpacity
-          style={[
-            styles.filterPill,
-            isDarkMode && filterType !== 'ALL' && { backgroundColor: colors.card, borderColor: colors.border },
-            filterType === 'ALL' && styles.filterPillActive,
-            filterType === 'ALL' && isDarkMode && { backgroundColor: 'rgba(255, 107, 0, 0.15)', borderColor: '#FF6B00' },
-          ]}
-          onPress={() => setFilterType('ALL')}
-          activeOpacity={0.8}
+      <View style={[styles.filterBarContainer, isDarkMode && { backgroundColor: colors.background, borderBottomColor: colors.border }]}>
+        <ScrollView
+          horizontal
+          showsHorizontalScrollIndicator={false}
+          contentContainerStyle={styles.filterBarScroll}
         >
-          <Text style={[styles.filterText, isDarkMode && filterType !== 'ALL' && { color: colors.textSecondary }, filterType === 'ALL' && styles.filterTextActive]}>
-            {t('Tất cả ({{count}})', { count: incidents.length })}
-          </Text>
-        </TouchableOpacity>
-
-        {/* Tab Nguy kịch (Red Alert: Té ngã & Tiếng kêu cứu) */}
-        <TouchableOpacity
-          style={[
-            styles.filterPill,
-            isDarkMode && filterType !== 'CRITICAL' && { backgroundColor: colors.card, borderColor: colors.border },
-            filterType === 'CRITICAL' && styles.filterPillActive,
-            filterType === 'CRITICAL' && isDarkMode && { backgroundColor: 'rgba(255, 107, 0, 0.15)', borderColor: '#FF6B00' },
-          ]}
-          onPress={() => setFilterType('CRITICAL')}
-          activeOpacity={0.8}
-        >
-          <Text style={[styles.filterText, isDarkMode && filterType !== 'CRITICAL' && { color: colors.textSecondary }, filterType === 'CRITICAL' && styles.filterTextActive]}>
-            🚨 Nguy kịch (Red Alert)
-          </Text>
-        </TouchableOpacity>
-
-        {/* Tab Sức khỏe (Nhịp tim, SpO2, Thân nhiệt) */}
-        <TouchableOpacity
-          style={[
-            styles.filterPill,
-            isDarkMode && filterType !== 'VITAL' && { backgroundColor: colors.card, borderColor: colors.border },
-            filterType === 'VITAL' && styles.filterPillActive,
-            filterType === 'VITAL' && isDarkMode && { backgroundColor: 'rgba(255, 107, 0, 0.15)', borderColor: '#FF6B00' },
-          ]}
-          onPress={() => setFilterType('VITAL')}
-          activeOpacity={0.8}
-        >
-          <Text style={[styles.filterText, isDarkMode && filterType !== 'VITAL' && { color: colors.textSecondary }, filterType === 'VITAL' && styles.filterTextActive]}>
-            Sức khoẻ
-          </Text>
-        </TouchableOpacity>
+          {[
+            {
+              key: 'ALL',
+              label: t('Tất cả ({{count}})', { count: incidents.length + medications.length }),
+              activePill: styles.filterPillActive,
+              darkBg: 'rgba(255, 107, 0, 0.15)',
+              darkBorder: '#FF6B00',
+              activeTextColor: undefined,
+            },
+            {
+              key: 'MEDICATION',
+              label: `💊 Uống thuốc ${pendingMedCount > 0 ? `(${pendingMedCount})` : '(Xong)'}`,
+              activePill: styles.filterPillActiveMed,
+              darkBg: 'rgba(16, 185, 129, 0.15)',
+              darkBorder: '#10B981',
+              activeTextColor: '#059669',
+            },
+            {
+              key: 'CRITICAL',
+              label: '🚨 Nguy kịch',
+              activePill: styles.filterPillActive,
+              darkBg: 'rgba(255, 107, 0, 0.15)',
+              darkBorder: '#FF6B00',
+              activeTextColor: undefined,
+            },
+            {
+              key: 'VITAL',
+              label: 'Sức khoẻ',
+              activePill: styles.filterPillActive,
+              darkBg: 'rgba(255, 107, 0, 0.15)',
+              darkBorder: '#FF6B00',
+              activeTextColor: undefined,
+            },
+            {
+              key: 'APPOINTMENT',
+              label: '🗓️ Lịch khám',
+              activePill: styles.filterPillActive,
+              darkBg: 'rgba(217, 119, 6, 0.15)',
+              darkBorder: '#D97706',
+              activeTextColor: '#D97706',
+            },
+          ].map((tab) => {
+            const isActive = filterType === tab.key;
+            return (
+              <TouchableOpacity
+                key={tab.key}
+                style={[
+                  styles.filterPill,
+                  isDarkMode && !isActive && { backgroundColor: colors.card, borderColor: colors.border },
+                  isActive && tab.activePill,
+                  isActive && isDarkMode && { backgroundColor: tab.darkBg, borderColor: tab.darkBorder },
+                ]}
+                onPress={() => setFilterType(tab.key as any)}
+                activeOpacity={0.8}
+              >
+                <Text
+                  style={[
+                    styles.filterText,
+                    isDarkMode && !isActive && { color: colors.textSecondary },
+                    isActive && (tab.activeTextColor ? { color: tab.activeTextColor, fontWeight: '700' } : styles.filterTextActive),
+                  ]}
+                >
+                  {tab.label}
+                </Text>
+              </TouchableOpacity>
+            );
+          })}
+        </ScrollView>
       </View>
 
       {/* ---------------------------------------------------------------------- */}
       {/* 3. Danh sách thông báo (FlatList tối ưu cuộn + Pull-to-refresh)       */}
       {/* ---------------------------------------------------------------------- */}
       <FlatList
-        data={filteredIncidents}
+        data={listData}
         keyExtractor={(item) => item.id}
         refreshControl={
           <RefreshControl
@@ -385,10 +759,15 @@ export default function AlertsListScreen({ navigation }: any) {
           />
         }
         renderItem={({ item }) => {
+          if (item.itemType === 'MEDICATION') {
+            return renderMedicationCard(item.data);
+          }
+
+          const inc = item.data;
           // Lấy cấu hình màu sắc, icon và tiêu đề theo alert_type
-          const config = getAlertConfig(item.alert_type);
+          const config = getAlertConfig(inc.alert_type);
           // Dịch nhãn thời gian lúc render để ngôn ngữ luôn khớp với lựa chọn hiện tại.
-          const friendlyTime = formatFriendlyTime(item.created_at, (key, count) =>
+          const friendlyTime = formatFriendlyTime(inc.created_at, (key, count) =>
             count === undefined ? t(key) : t(key, { count }),
           );
 
@@ -399,9 +778,9 @@ export default function AlertsListScreen({ navigation }: any) {
                 isDarkMode && { backgroundColor: colors.card, borderColor: colors.border },
                 config.isCritical && styles.cardCritical,
                 config.isCritical && isDarkMode && { backgroundColor: '#3F1219', borderColor: '#7F1D1D' },
-                !item.is_acknowledged && styles.cardUnread,
+                !inc.is_acknowledged && styles.cardUnread,
               ]}
-              onPress={() => handlePressCard(item)}
+              onPress={() => handlePressCard(inc)}
               activeOpacity={0.8}
             >
               {/* Cột trái: Biểu tượng phân loại tròn có màu nền theo mức độ */}
@@ -418,7 +797,7 @@ export default function AlertsListScreen({ navigation }: any) {
                       {config.badgeText}
                     </Text>
                   </View>
-                  {!item.is_acknowledged && (
+                  {!inc.is_acknowledged && (
                     <View style={styles.newBadge}>
                       <Text style={styles.newBadgeText}>MỚI</Text>
                     </View>
@@ -439,7 +818,7 @@ export default function AlertsListScreen({ navigation }: any) {
 
                 {/* Chi tiết thông điệp sự kiện từ AI / cảm biến */}
                 <Text style={[styles.cardMsg, isDarkMode && { color: colors.textSecondary }]} numberOfLines={2}>
-                  {item.message}
+                  {inc.message}
                 </Text>
 
                 {/* Dòng thời gian và định danh nguồn thiết bị phát hiện */}
@@ -448,10 +827,10 @@ export default function AlertsListScreen({ navigation }: any) {
                   <Text style={[styles.cardTime, isDarkMode && { color: colors.textSecondary }]}>{friendlyTime}</Text>
                   <Text style={[styles.dotSeparator, isDarkMode && { color: colors.border }]}>•</Text>
                   <Text style={[styles.deviceLocationText, isDarkMode && { color: colors.textSecondary }]}>
-                    {item.device_id ? (
+                    {inc.device_id ? (
                       <>
                         <Text>Thiết bị: </Text>
-                        {item.device_id}
+                        {inc.device_id}
                       </>
                     ) : 'Hệ thống AI'}
                   </Text>
@@ -459,16 +838,16 @@ export default function AlertsListScreen({ navigation }: any) {
               </View>
 
               {/* Cột phải: Ảnh chụp bằng chứng hoặc clip 5 giây trích xuất (nếu có) */}
-              {item.thumbnail_url && (
+              {inc.thumbnail_url && (
                 <View style={styles.thumbWrapper}>
-                  <Image source={{ uri: item.thumbnail_url }} style={styles.thumbImg} />
+                  <Image source={{ uri: inc.thumbnail_url }} style={styles.thumbImg} />
                   <View style={styles.thumbOverlay}>
-                    {item.video_clip_url && (
+                    {inc.video_clip_url && (
                       <View style={styles.playCenterBtn}>
                         <Ionicons name="play" size={12} color="#FFFFFF" style={{ marginLeft: 2 }} />
                       </View>
                     )}
-                    {item.video_clip_url && (
+                    {inc.video_clip_url && (
                       <View style={styles.playTag}>
                         <Text style={styles.playTagText}>5s Clip</Text>
                       </View>
@@ -480,18 +859,39 @@ export default function AlertsListScreen({ navigation }: any) {
           );
         }}
         contentContainerStyle={styles.listContainer}
-        // Giao diện khi danh sách trống: Thông báo an toàn
+        // Giao diện khi danh sách trống
         ListEmptyComponent={
           <View style={styles.emptyBox}>
-            <View style={styles.emptyIconCircle}>
-              <Ionicons name="shield-checkmark-outline" size={36} color="#10B981" />
+            <View style={[styles.emptyIconCircle, filterType === 'MEDICATION' && { backgroundColor: '#EFF6FF' }]}>
+              <Ionicons
+                name={filterType === 'MEDICATION' ? 'medical' : 'shield-checkmark-outline'}
+                size={36}
+                color={filterType === 'MEDICATION' ? '#0284C7' : '#10B981'}
+              />
             </View>
-            <Text style={[styles.emptyTitle, isDarkMode && { color: colors.textPrimary }]}>Không có cảnh báo bất thường nào</Text>
+            <Text style={[styles.emptyTitle, isDarkMode && { color: colors.textPrimary }]}>
+              {filterType === 'MEDICATION'
+                ? 'Không có lịch nhắc uống thuốc nào'
+                : 'Không có cảnh báo bất thường nào'}
+            </Text>
             <Text style={[styles.emptySub, isDarkMode && { color: colors.textSecondary }]}>
-              Hệ thống AI đang giám sát an toàn 24/7 và mọi chỉ số sức khoẻ đều trong ngưỡng chuẩn.
+              {filterType === 'MEDICATION'
+                ? 'Các cữ thuốc sẽ hiển thị theo đơn thuốc của bác sĩ và kế hoạch điều trị trong hồ sơ bệnh án.'
+                : 'Hệ thống AI đang giám sát an toàn 24/7 và mọi chỉ số sức khoẻ đều trong ngưỡng chuẩn.'}
             </Text>
           </View>
         }
+      />
+
+      {/* Modal Lịch khám Bác sĩ & Xác nhận cho Người thân */}
+      <FamilyAppointmentsModal
+        visible={familyAppointmentsModalVisible}
+        patientId={selectedAppointmentPatientId || patientRecord?.patient_id || 1}
+        patientName={patientRecord?.name}
+        onClose={() => {
+          setFamilyAppointmentsModalVisible(false);
+          fetchNotifications();
+        }}
       />
     </SafeAreaView>
   );
@@ -532,14 +932,6 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     gap: 8,
   },
-  themeToggleBtn: {
-    width: 32,
-    height: 32,
-    borderRadius: 16,
-    backgroundColor: '#F1F5F9',
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
   markAllReadBtn: {
     flexDirection: 'row',
     alignItems: 'center',
@@ -570,14 +962,17 @@ const styles = StyleSheet.create({
     fontSize: 11.5,
     fontWeight: '700',
   },
-  filterBar: {
-    flexDirection: 'row',
-    paddingHorizontal: 16,
-    paddingVertical: 12,
-    gap: 8,
+  filterBarContainer: {
     backgroundColor: '#FFFFFF',
     borderBottomWidth: 1,
     borderBottomColor: '#F1F5F9',
+  },
+  filterBarScroll: {
+    flexDirection: 'row',
+    paddingHorizontal: 16,
+    paddingVertical: 10,
+    gap: 8,
+    alignItems: 'center',
   },
   filterPill: {
     paddingVertical: 7,
@@ -594,6 +989,11 @@ const styles = StyleSheet.create({
     borderColor: '#FF6B00',
     borderWidth: 1.5,
   },
+  filterPillActiveMed: {
+    backgroundColor: '#ECFDF5',
+    borderColor: '#10B981',
+    borderWidth: 1.5,
+  },
   filterText: {
     fontSize: 12,
     fontWeight: '600',
@@ -602,6 +1002,84 @@ const styles = StyleSheet.create({
   filterTextActive: {
     color: '#FF6B00',
     fontWeight: '700',
+  },
+  medCard: {
+    flexDirection: 'column',
+    alignItems: 'stretch',
+    gap: 12,
+  },
+  medCardOverdue: {
+    backgroundColor: '#FFF1F2',
+    borderWidth: 1.5,
+    borderColor: '#FECACA',
+  },
+  medCardTaken: {
+    backgroundColor: '#F0FDF4',
+    borderWidth: 1.2,
+    borderColor: '#BBF7D0',
+  },
+  medActionsRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 8,
+    marginTop: 4,
+    paddingTop: 10,
+    borderTopWidth: 1,
+    borderTopColor: '#F1F5F9',
+  },
+  medConfirmBtn: {
+    flex: 1,
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: 6,
+    backgroundColor: '#10B981',
+    paddingVertical: 8,
+    paddingHorizontal: 12,
+    borderRadius: 10,
+  },
+  medConfirmBtnText: {
+    color: '#FFFFFF',
+    fontSize: 12.5,
+    fontWeight: '700',
+  },
+  medSnoozeBtn: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: 5,
+    backgroundColor: '#F8FAFC',
+    borderWidth: 1,
+    borderColor: '#CBD5E1',
+    paddingVertical: 8,
+    paddingHorizontal: 10,
+    borderRadius: 10,
+  },
+  medSnoozeBtnText: {
+    color: '#64748B',
+    fontSize: 11.5,
+    fontWeight: '600',
+  },
+  medSpeakerBtn: {
+    width: 34,
+    height: 34,
+    borderRadius: 17,
+    backgroundColor: '#E0F2FE',
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  medCompletedRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 6,
+    paddingTop: 8,
+    borderTopWidth: 1,
+    borderTopColor: '#DCFCE7',
+  },
+  medCompletedText: {
+    fontSize: 12,
+    color: '#15803D',
+    fontWeight: '600',
   },
   listContainer: {
     padding: 16,

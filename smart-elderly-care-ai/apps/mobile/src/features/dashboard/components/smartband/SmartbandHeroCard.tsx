@@ -54,7 +54,9 @@ export const SmartbandHeroCard: React.FC<SmartbandHeroCardProps> = ({
 
           <LocalizedText style={[styles.wearerInfoText, isDarkMode && { color: colors.textSecondary }]}>
             <Ionicons name="person" size={14} color="#64748B" /> Người đeo:{' '}
-            <LocalizedText style={{ fontWeight: '700', color: colors.textPrimary }}>Cụ Ông (78 tuổi)</LocalizedText>
+            <LocalizedText style={{ fontWeight: '700', color: colors.textPrimary }}>
+              {deviceParam?.wearer_name || 'Chưa cập nhật'}
+            </LocalizedText>
           </LocalizedText>
 
           <LocalizedText style={[styles.locationInfoText, isDarkMode && { color: colors.textSecondary }]}>
@@ -80,8 +82,12 @@ export const SmartbandHeroCard: React.FC<SmartbandHeroCardProps> = ({
           <View style={[styles.specQuickIconBox, isDarkMode && { backgroundColor: 'rgba(16, 185, 129, 0.15)' }]}>
             <Ionicons name="battery-charging" size={18} color="#10B981" />
           </View>
-          <LocalizedText style={[styles.specQuickVal, isDarkMode && { color: colors.textPrimary }]}>84%</LocalizedText>
-          <LocalizedText style={[styles.specQuickLabel, isDarkMode && { color: colors.textSecondary }]}>Pin (~5 ngày)</LocalizedText>
+          <LocalizedText style={[styles.specQuickVal, isDarkMode && { color: colors.textPrimary }]}>
+            {deviceParam?.battery_level !== null && deviceParam?.battery_level !== undefined ? `${deviceParam.battery_level}%` : '--'}
+          </LocalizedText>
+          <LocalizedText style={[styles.specQuickLabel, isDarkMode && { color: colors.textSecondary }]}>
+            {deviceParam?.battery_level !== null && deviceParam?.battery_level !== undefined ? 'Pin (~5 ngày)' : 'Chưa kết nối'}
+          </LocalizedText>
         </View>
 
         <View style={styles.specQuickItem}>

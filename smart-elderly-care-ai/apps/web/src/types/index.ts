@@ -1,6 +1,21 @@
 // types/index.ts - Core types for Admin Web Portal
 
-export type UserRole = 'admin' | 'doctor' | 'caregiver' | 'user' | 'elderly';
+export type UserRole = 'admin' | 'doctor' | 'caregiver' | 'user' | 'elderly' | 'owner' | 'member';
+
+export interface PermissionRule {
+  id: string;
+  name: string;
+  description: string;
+  target_role: UserRole | 'all';
+  module: 'camera' | 'vitals' | 'emergency' | 'devices' | 'members' | 'medical' | 'all';
+  permissions: string[];
+  is_active: boolean;
+  color?: string;
+  is_system?: boolean;
+  member_count?: number;
+  created_at?: string;
+  updated_at?: string;
+}
 
 export interface User {
   id: string;
@@ -23,6 +38,7 @@ export interface SecurityPolicy {
   category: 'authentication' | 'session' | 'access_control' | 'data_protection';
   enabled: boolean;
   value?: string | number | null;
+  is_immutable?: boolean;
 }
 
 export interface ActiveSession {
@@ -69,6 +85,10 @@ export interface SystemIncident {
   type: 'ERROR' | 'WARNING' | 'CRITICAL';
   message: string;
   resolved: boolean;
+  incident_status?: 'NEW' | 'ACKNOWLEDGED' | 'INVESTIGATING' | 'RESOLVED';
+  ack_by?: string;
+  ack_at?: string;
+  resolution_note?: string;
 }
 
 export interface BackupItem {
@@ -112,6 +132,13 @@ export interface DeviceConfig {
   fall_impact_threshold?: number;
   immobility_seconds?: number;
   mqtt_topic?: string;
+  config_version?: string;
+  mqtt_ack_status?: 'SYNCED' | 'PENDING' | 'ERROR';
+  doctor_approved_by?: string;
+  clinical_reason?: string;
+  assigned_elderly_id?: string;
+  assigned_elderly_name?: string;
+  guardrail_validated?: boolean;
   updated_at?: string;
 }
 
@@ -130,6 +157,9 @@ export interface Device {
   elderly_name?: string;
   config?: DeviceConfig;
   last_heartbeat?: string;
+  silent_failure?: boolean;
+  failure_type?: 'NONE' | 'TIMEOUT_HEARTBEAT' | 'WIFI_DISCONNECTED' | 'BATTERY_CRITICAL';
+  last_seen_seconds?: number;
 }
 
 export interface SystemServiceStatus {
@@ -201,10 +231,16 @@ export interface SystemNotification {
   status: NotificationStatus;
   scheduled_at?: string | null;
   published_at?: string | null;
+  expires_at?: string | null;
   revoked_at?: string | null;
   revoke_reason?: string | null;
   delivered_count: number;
   read_count: number;
+  failed_count?: number;
+  secondary_approver?: string | null;
+  is_correction?: boolean;
+  original_notification_id?: string | null;
+  quiet_hours_compliant?: boolean;
   created_by?: string | null;
   created_at: string;
   updated_at: string;
@@ -217,6 +253,8 @@ export interface CreateNotificationPayload {
   target_audience: TargetAudience;
   status?: 'draft' | 'scheduled' | 'published';
   scheduled_at?: string | null;
+  expires_at?: string | null;
+  secondary_approver?: string | null;
 }
 
 export interface UpdateNotificationPayload {
@@ -226,6 +264,8 @@ export interface UpdateNotificationPayload {
   target_audience?: TargetAudience;
   status?: NotificationStatus;
   scheduled_at?: string | null;
+  expires_at?: string | null;
+  secondary_approver?: string | null;
 }
 
 

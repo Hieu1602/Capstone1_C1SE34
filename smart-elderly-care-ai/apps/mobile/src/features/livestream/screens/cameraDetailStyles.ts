@@ -1,0 +1,72 @@
+/**
+ * Định nghĩa style bố cục Camera Detail, danh sách bản ghi, modal và nút SOS.
+ */
+import { StyleSheet } from "react-native";
+export const cameraDetailStyles = StyleSheet.create({
+    screen: { flex: 1 },
+    controls: { flex: 1, minHeight: 0 },
+    dashboard: { padding: 16, gap: 14, paddingBottom: 80 },
+    feedback: { textAlign: "center", fontSize: 13, padding: 8 },
+    playback: {
+        flexDirection: "row",
+        alignItems: "center",
+        gap: 12,
+        padding: 18,
+        borderRadius: 18,
+    },
+    playbackText: { flex: 1, fontSize: 18, fontWeight: "600" },
+    header: {
+        flexDirection: "row",
+        alignItems: "center",
+        paddingHorizontal: 12,
+        paddingVertical: 12,
+    },
+    title: { flex: 1, textAlign: "center", fontSize: 18, fontWeight: "700" },
+    iconButton: {
+        width: 48,
+        height: 48,
+        alignItems: "center",
+        justifyContent: "center",
+    },
+    card: { borderRadius: 18, padding: 16, gap: 12 },
+    sectionTitle: { fontSize: 17, fontWeight: "600" },
+    incident: {
+        gap: 6,
+        borderTopWidth: StyleSheet.hairlineWidth,
+        paddingTop: 12,
+    },
+    sos: {
+        alignSelf: "flex-end",
+        flexDirection: "row",
+        gap: 8,
+        alignItems: "center",
+        padding: 12,
+        marginHorizontal: 16,
+        marginBottom: 6,
+        backgroundColor: "#DC2626",
+        borderRadius: 24,
+    },
+    sosText: { color: "#FFF", fontWeight: "700" },
+    overlay: {
+        flex: 1,
+        justifyContent: "flex-end",
+        backgroundColor: "rgba(0,0,0,0.35)",
+    },
+    sheet: {
+        maxHeight: "80%",
+        borderTopLeftRadius: 24,
+        borderTopRightRadius: 24,
+        paddingBottom: 20,
+    },
+    sheetContent: { padding: 16, gap: 12 },
+    row: {
+        flexDirection: "row",
+        alignItems: "center",
+        gap: 12,
+        minHeight: 48,
+        paddingVertical: 12,
+        borderBottomWidth: StyleSheet.hairlineWidth,
+    },
+    rowText: { flex: 1 },
+    error: { color: "#DC2626" },
+});

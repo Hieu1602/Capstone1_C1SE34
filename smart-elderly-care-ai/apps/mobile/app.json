@@ -4,7 +4,7 @@
     "slug": "smart-elderly-care-mobile",
     "owner": "nghia127",
     "version": "1.0.0",
-    "orientation": "portrait",
+    "orientation": "default",
     "icon": "./assets/icon.png",
     "userInterfaceStyle": "light",
     "splash": {
@@ -14,6 +14,7 @@
     },
     "ios": {
       "supportsTablet": true,
+      "requireFullScreen": true,
       "bundleIdentifier": "com.c1se34.smartelderlycare"
     },
     "android": {
@@ -29,6 +30,18 @@
       "bundler": "metro"
     },
     "plugins": [
+      [
+        "expo-screen-orientation",
+        {
+          "initialOrientation": "PORTRAIT_UP"
+        }
+      ],
+      [
+        "@config-plugins/react-native-webrtc",
+        {
+          "microphonePermission": "Cho phép sử dụng microphone để đàm thoại với camera."
+        }
+      ],
       [
         "expo-location",
         {

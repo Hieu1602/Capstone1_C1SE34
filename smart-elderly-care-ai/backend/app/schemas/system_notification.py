@@ -20,6 +20,7 @@ class SystemNotificationBase(BaseModel):
     type: NotificationType = Field(default="info", description="Phân loại thông báo")
     target_audience: TargetAudience = Field(default="all", description="Đối tượng nhận thông báo")
     scheduled_at: Optional[datetime] = Field(default=None, description="Thời gian dự kiến phát hành")
+    expires_at: Optional[datetime] = Field(default=None, description="Thời gian hết hạn thông báo (tự động đóng/ẩn)")
 
 
 class SystemNotificationCreate(SystemNotificationBase):
@@ -35,6 +36,7 @@ class SystemNotificationUpdate(BaseModel):
     target_audience: Optional[TargetAudience] = None
     status: Optional[NotificationStatus] = None
     scheduled_at: Optional[datetime] = None
+    expires_at: Optional[datetime] = None
 
 
 class SystemNotificationSchedule(BaseModel):
@@ -54,6 +56,7 @@ class SystemNotificationOut(BaseModel):
     status: str
     scheduled_at: Optional[datetime] = None
     published_at: Optional[datetime] = None
+    expires_at: Optional[datetime] = None
     revoked_at: Optional[datetime] = None
     revoke_reason: Optional[str] = None
     delivered_count: int = 0

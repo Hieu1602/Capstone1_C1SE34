@@ -76,8 +76,14 @@ export const usersApi = {
     return res.data;
   },
 
-  create: (data: Partial<User> & { password?: string }) => api.post('/users', data),
-  update: (id: string, data: Partial<User>) => api.patch(`/users/${id}`, data),
+  create: async (data: Partial<User> & { password?: string }): Promise<User> => {
+    const res = await api.post<User>('/users', data);
+    return res.data;
+  },
+  update: async (id: string, data: Partial<User>): Promise<User> => {
+    const res = await api.patch<User>(`/users/${id}`, data);
+    return res.data;
+  },
   toggleStatus: (id: string, active: boolean) => api.patch(`/users/${id}`, { is_active: active }),
   delete: (id: string) => api.delete(`/users/${id}`),
 };

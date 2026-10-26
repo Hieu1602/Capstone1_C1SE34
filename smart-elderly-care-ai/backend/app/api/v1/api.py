@@ -36,6 +36,8 @@ from app.api.v1.endpoints.mobile.emergency     import router as mobile_emergency
 from app.api.v1.endpoints.mobile.support       import router as mobile_support_router
 
 api_router = APIRouter()
+from app.api.v1.endpoints.mobile.camera import router as camera_router
+api_router.include_router(camera_router, prefix="/camera", tags=["Camera"])
 
 # ------------------------------------------------------------------------------
 # 1. ĐĂNG KÝ ROUTERS WEB ADMIN PORTAL

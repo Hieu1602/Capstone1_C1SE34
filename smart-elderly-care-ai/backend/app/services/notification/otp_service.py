@@ -216,10 +216,10 @@ def send_otp(phone: str, purpose: str = "register") -> str:
         reset_template = (getattr(settings, "ESMS_OTP_RESET_TEMPLATE_ID", "") or "").strip()
 
         if purpose in ("reset_password", "forgot_password"):
-            content = f"{code} la ma dat lai mat khau Smart Elderly Care cua ban"
+            content = f"{code} la ma dat lai mat khau Baotrixemay cua ban"
             temp_id = reset_template if reset_template else None
         else:
-            content = f"{code} la ma xac minh dang ky Smart Elderly Care cua ban"
+            content = f"{code} la ma xac minh dang ky Baotrixemay cua ban"
             temp_id = register_template if register_template else None
 
         try:
