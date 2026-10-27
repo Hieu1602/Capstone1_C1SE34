@@ -200,6 +200,8 @@ export interface IoTDeviceItem {
 
   id: string;
 
+  deviceId?: string;
+
   name: string;
 
   sub: string;
@@ -677,25 +679,32 @@ export const useDeviceStore = create<DeviceState>()(
           }
 
         } catch {
-
           // Người dùng mới chưa có căn nhà nào (HTTP 404)
-
-          set((state) => ({
-
+          set({
             house: {
-
-              ...state.house,
-
               id: '',
-
               name: '',
-
+              address: '',
+              membersCount: 0,
+              currentMode: 'HOME',
               hasHouse: false,
-
             },
-
-          }));
-
+            activeDevice: null,
+            iotDevices: [],
+            deviceGroups: [],
+            camera: {
+              id: '',
+              name: '',
+              room: '',
+              isOnline: false,
+              isSleep: false,
+              isAIProtect: false,
+              resolution: '2K',
+              sdCardStatus: 'NO_CARD',
+              wifiStrength: 0,
+              streamUrl: '',
+            },
+          });
         }
 
       },
@@ -738,7 +747,9 @@ export const useDeviceStore = create<DeviceState>()(
 
               return {
 
-                id: dev.device_id || dev.id,
+                id: String(dev.id || dev.device_id),
+
+                deviceId: dev.device_id || dev.id,
 
                 name: dev.name,
 
@@ -768,28 +779,21 @@ export const useDeviceStore = create<DeviceState>()(
 
 
 
-            if (mapped.length > 0 && !get().activeDevice) {
-
-              const firstOnline = res.data.find((d: any) => d.is_online) || res.data[0];
-
-              set({
-
-                activeDevice: {
-
-                  id: firstOnline.id,
-
-                  device_id: firstOnline.device_id,
-
-                  name: firstOnline.name,
-
-                  location: firstOnline.location || 'Phòng khách',
-
-                  is_online: firstOnline.is_online,
-
-                },
-
-              });
-
+            if (mapped.length > 0) {
+              if (!get().activeDevice) {
+                const firstOnline = res.data.find((d: any) => d.is_online) || res.data[0];
+                set({
+                  activeDevice: {
+                    id: firstOnline.id,
+                    device_id: firstOnline.device_id,
+                    name: firstOnline.name,
+                    location: firstOnline.location || 'Phòng khách',
+                    is_online: firstOnline.is_online,
+                  },
+                });
+              }
+            } else {
+              set({ activeDevice: null });
             }
 
 
@@ -851,9 +855,10 @@ export const useDeviceStore = create<DeviceState>()(
           }
 
         } catch (e) {
-
           console.log('[DeviceStore] fetchDevicesFromBackend fallback to cache');
-
+          if (!get().house?.hasHouse) {
+            set({ iotDevices: [], activeDevice: null });
+          }
         }
 
       },

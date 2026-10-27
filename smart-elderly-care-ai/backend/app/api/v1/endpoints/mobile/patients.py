@@ -36,6 +36,28 @@ async def get_patient_medical_record(
     house_id = None
     if current_user:
         house = await crud_house.get_or_create_default_house(db, owner_id=current_user.id)
+        if not house:
+            return PatientMedicalRecordOut(
+                id=patient_id,
+                name="",
+                birth_year="",
+                age=0,
+                gender="",
+                blood_type="",
+                height_cm=0,
+                weight_kg=0,
+                bmi=0,
+                security_badge="",
+                conditions=[],
+                drug_allergies="",
+                food_allergies="",
+                dietary_notes="",
+                doctor_name="",
+                doctor_phone="",
+                doctor_specialty="",
+                hospital="",
+                next_appointment="",
+            )
         house_id = house.id
         if current_user.role not in ("admin", "doctor") and house.owner_id != current_user.id:
             member = await crud_house.get_member_by_user(db, house.id, current_user.id)
@@ -62,6 +84,11 @@ async def update_patient_medical_record(
     house_id = None
     if current_user:
         house = await crud_house.get_or_create_default_house(db, owner_id=current_user.id)
+        if not house:
+            raise HTTPException(
+                status_code=status.HTTP_404_NOT_FOUND,
+                detail="Bạn chưa tham gia căn nhà nào.",
+            )
         house_id = house.id
         if current_user.role not in ("admin", "doctor") and house.owner_id != current_user.id:
             member = await crud_house.get_member_by_user(db, house.id, current_user.id)
@@ -93,6 +120,11 @@ async def enroll_patient_face(
     house_id = None
     if current_user:
         house = await crud_house.get_or_create_default_house(db, owner_id=current_user.id)
+        if not house:
+            raise HTTPException(
+                status_code=status.HTTP_404_NOT_FOUND,
+                detail="Bạn chưa tham gia căn nhà nào.",
+            )
         house_id = house.id
         if current_user.role not in ("admin", "doctor") and house.owner_id != current_user.id:
             member = await crud_house.get_member_by_user(db, house.id, current_user.id)

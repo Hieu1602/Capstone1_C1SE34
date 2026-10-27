@@ -65,6 +65,8 @@ async def list_device_groups(
 ):
     """Lấy danh sách tất cả các nhóm khu vực trong căn nhà hiện tại."""
     house = await crud_house.get_or_create_default_house(db, owner_id=current_user.id)
+    if not house:
+        return []
     return await crud_device_group.get_groups_by_house(db, house_id=house.id)
 
 

@@ -36,13 +36,13 @@ export default function HomeScreen({ navigation }: any) {
 
   const { userRole, role, full_name, userName, phone_number, userPhone, permissions, fetchMyPermissions } = useAuthStore();
   const displayName = full_name || userName || 'Thành viên';
-  const isMember = userRole === 'member' || !userRole || userRole === 'user';
   const hasLinkedHouse = Boolean(house?.id && house?.hasHouse !== false && house?.name && house.name.trim() !== '');
   const hasLinkedDevices = (iotDevices || []).length > 0;
-  const isUserEmptyMember = isMember && !hasLinkedHouse && !hasLinkedDevices;
+  const isOwnerOrAdmin = hasLinkedHouse && (userRole === 'admin' || role === 'admin' || permissions?.is_owner === true || permissions?.role_in_house === 'OWNER');
+  const isMember = !isOwnerOrAdmin && (userRole === 'member' || !userRole || userRole === 'user' || userRole === 'caregiver');
+  const isUserEmptyMember = isMember && (!hasLinkedHouse || (!hasLinkedDevices && !permissions?.can_view_camera && !permissions?.can_view_health));
 
   // Kiểm tra quyền xem camera và chỉ số sinh hiệu của tài khoản thành viên
-  const isOwnerOrAdmin = userRole === 'admin' || role === 'admin' || permissions?.is_owner === true || permissions?.role_in_house === 'OWNER';
   const canViewCamera = isOwnerOrAdmin || Boolean(permissions?.can_view_camera);
   const canViewHealth = isOwnerOrAdmin || Boolean(permissions?.can_view_health);
 
@@ -259,8 +259,14 @@ export default function HomeScreen({ navigation }: any) {
     <SafeAreaView style={[styles.safeArea, { backgroundColor: colors.background }]} edges={['top']}>
       {/* 1. Header */}
       <View style={styles.topHeader}>
-        <TouchableOpacity style={styles.houseTitleRow} onPress={() => navigation.navigate('HouseDetail')} activeOpacity={0.7}>
-          <Text style={[styles.houseTitleText, { color: colors.textPrimary }]}>{house.name || 'Nhà của tôi'}</Text>
+        <TouchableOpacity
+          style={styles.houseTitleRow}
+          onPress={() => navigation.navigate('HouseDetail')}
+          activeOpacity={0.7}
+        >
+          <Text style={[styles.houseTitleText, { color: colors.textPrimary }]}>
+            {house?.name || 'Nhà của tôi'}
+          </Text>
           <Ionicons name="chevron-down" size={16} color={colors.textPrimary} style={{ marginLeft: 4 }} />
         </TouchableOpacity>
 
@@ -314,7 +320,7 @@ export default function HomeScreen({ navigation }: any) {
         </View>
 
         {/* 2.4. Banner Lịch khám Bác sĩ mới chờ Gia đình xác nhận */}
-        {pendingAppointmentNotice && (
+        {hasLinkedHouse && pendingAppointmentNotice && (
           <TouchableOpacity
             style={[styles.appointmentBanner, isDarkMode && { backgroundColor: 'rgba(217, 119, 6, 0.12)', borderColor: '#D97706' }]}
             activeOpacity={0.88}
@@ -371,7 +377,7 @@ export default function HomeScreen({ navigation }: any) {
               </View>
             </View>
           </TouchableOpacity>
-        ) : (
+        ) : hasLinkedHouse && !isUserEmptyMember ? (
           <View style={[styles.stableHealthCard, { backgroundColor: isDarkMode ? '#064E3B18' : '#F0FDF4', borderColor: isDarkMode ? '#065F46' : '#BBF7D0' }]}>
             <View style={styles.stablePulseDot} />
             <Ionicons name="shield-checkmark" size={18} color="#16A34A" />
@@ -379,7 +385,7 @@ export default function HomeScreen({ navigation }: any) {
               Sức khoẻ ổn định • Hệ thống giám sát AI đang bảo vệ 24/7
             </Text>
           </View>
-        )}
+        ) : null}
 
         {isUserEmptyMember ? (
           <View style={styles.emptyContainer}>
@@ -393,8 +399,17 @@ export default function HomeScreen({ navigation }: any) {
             </Text>
 
             <Text style={[styles.emptySubtitle, { color: colors.textSecondary }]}>
-              Tài khoản thành viên mới chưa được liên kết với bất kỳ căn nhà hay thiết bị theo dõi nào. Sau khi được Chủ hộ thêm vào nhà, hệ thống sẽ tự động hiển thị camera và sinh hiệu người thân tại đây.
+              Tài khoản thành viên mới chưa được liên kết với bất kỳ căn nhà hay thiết bị theo dõi nào. Sau khi được Chủ hộ thêm số điện thoại ({userPhone || phone_number || 'của bạn'}) vào nhà, hệ thống sẽ tự động hiển thị camera và sinh hiệu người thân tại đây.
             </Text>
+
+            <TouchableOpacity
+              style={styles.refreshMemberBtn}
+              onPress={handleRefreshData}
+              activeOpacity={0.8}
+            >
+              <Ionicons name="refresh-outline" size={18} color="#FFF" style={{ marginRight: 6 }} />
+              <Text style={styles.refreshMemberBtnText}>Kiểm tra & Làm mới</Text>
+            </TouchableOpacity>
           </View>
         ) : (
           <>
@@ -625,5 +640,20 @@ const styles = StyleSheet.create({
     fontSize: 12,
     color: '#64748B',
     fontWeight: '600',
+  },
+  refreshMemberBtn: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    backgroundColor: Colors.primary,
+    paddingVertical: 12,
+    paddingHorizontal: 24,
+    borderRadius: 24,
+    ...Shadows.card,
+  },
+  refreshMemberBtnText: {
+    color: '#FFFFFF',
+    fontSize: 14,
+    fontWeight: '700',
   },
 });

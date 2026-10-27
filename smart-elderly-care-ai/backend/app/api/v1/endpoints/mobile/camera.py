@@ -18,6 +18,7 @@ from sqlalchemy.exc import IntegrityError
 from app.api.deps import get_current_user, oauth2_scheme
 from app.core.config import settings
 from app.core.database import get_db
+from app.crud.crud_device import crud_device
 from app.crud.crud_house import crud_house
 from app.crud.crud_user import crud_user
 from app.models.device import Device
@@ -53,14 +54,22 @@ async def access(user: User, db: AsyncSession, manage: bool = False, camera_id: 
     Returns:
         Cặp thiết bị và bảng quyền; ném HTTPException khi bị từ chối.
     """
-    try:
-        device_id = UUID(camera_id or os.environ.get("CAMERA_DEVICE_ID", ""))
-    except ValueError:
-        raise HTTPException(503, "Chưa cấu hình CAMERA_DEVICE_ID trên backend") from None
+    device = None
+    if camera_id:
+        device = await crud_device.get_by_id_or_device_id(db, id_or_device_id=camera_id)
+
+    if not device:
+        default_cam_id = os.environ.get("CAMERA_DEVICE_ID", "")
+        if default_cam_id:
+            device = await crud_device.get_by_id_or_device_id(db, id_or_device_id=default_cam_id)
+
+    if not device:
+        raise HTTPException(503, "Chưa cấu hình CAMERA_DEVICE_ID trên backend hoặc camera không tồn tại")
+
+    device_id = device.id
     if camera_id and str(device_id) != os.getenv("CAMERA_DEVICE_ID") and str(device_id) not in extra_sources():
         raise HTTPException(404, "Camera chưa có nguồn video được cấu hình")
-    device = await db.get(Device, device_id)
-    if not device or device.device_type != "CAMERA" or not device.house_id:
+    if device.device_type != "CAMERA" or not device.house_id:
         raise HTTPException(503, "Camera chưa được gắn vào căn nhà")
     house = await db.get(House, device.house_id)
     if not house or not user.is_active:
@@ -129,17 +138,26 @@ def configured_id():
 
 
 @router.get("/setup")
-async def setup(_=Depends(authenticated), db: AsyncSession = Depends(get_db), camera_id: UUID | None = Query(default=None)):
+async def setup(_=Depends(authenticated), db: AsyncSession = Depends(get_db), camera_id: str | None = Query(default=None)):
     """Kiểm tra camera đã được liên kết trong cơ sở dữ liệu.
 
     Args:
         _: Dependency đã kiểm tra đăng nhập hoặc quyền cho endpoint.
         db: Phiên cơ sở dữ liệu của request.
+        camera_id: ID hoặc chuỗi device_id của camera.
 
     Returns:
         Trạng thái paired.
     """
-    return {"paired": await db.get(Device, camera_id or configured_id()) is not None}
+    if camera_id:
+        device = await crud_device.get_by_id_or_device_id(db, id_or_device_id=camera_id)
+        return {"paired": device is not None}
+    try:
+        conf_id = configured_id()
+        device = await db.get(Device, conf_id)
+        return {"paired": device is not None}
+    except Exception:
+        return {"paired": False}
 
 
 class Pair(BaseModel):

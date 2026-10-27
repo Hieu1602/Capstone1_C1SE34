@@ -5,6 +5,9 @@ import { create, StateCreator } from 'zustand';
 import { persist, createJSONStorage, PersistOptions } from 'zustand/middleware';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { useDeviceStore } from './useDeviceStore';
+import { usePatientStore } from './usePatientStore';
+import { useHealthStore } from './useHealthStore';
+import { useAlertStore } from './useAlertStore';
 
 export interface HousePermissions {
   can_view_health: boolean;
@@ -102,14 +105,24 @@ const createAuthStore: StateCreator<AuthStoreState, [], [['zustand/persist', Aut
     const normalizedRole = role.toLowerCase();
     const isDoctor = normalizedRole === 'doctor' || normalizedRole.includes('bác sĩ');
     const isAdmin = normalizedRole === 'admin' || normalizedRole.includes('quản trị');
-    const isMember = !isDoctor && !isAdmin;
 
-    // Khi thành viên đăng nhập, reset cache thiết bị để tránh rò rỉ dữ liệu từ tài khoản trước
-    if (isMember) {
-      try {
-        useDeviceStore.getState().resetDeviceStore?.();
-      } catch {}
-    }
+    // Reset toàn bộ domain stores để tránh rò rỉ dữ liệu hoặc quyền hạn từ tài khoản trước
+    try {
+      useDeviceStore.getState().resetDeviceStore?.();
+      usePatientStore.getState().resetPatientStore?.();
+      useHealthStore.getState().resetHealthStore?.();
+      useAlertStore.getState().resetAlertStore?.();
+    } catch {}
+
+    const initialPermissions: HousePermissions = {
+      can_view_health: false,
+      can_view_camera: false,
+      can_handle_emergency: false,
+      can_manage_devices: false,
+      can_manage_records: false,
+      role_in_house: isDoctor ? 'DOCTOR' : isAdmin ? 'OWNER' : 'MEMBER',
+      is_owner: isAdmin,
+    };
 
     set({
       accessToken: access,
@@ -126,6 +139,7 @@ const createAuthStore: StateCreator<AuthStoreState, [], [['zustand/persist', Aut
       avatar_url: avatarUrl ?? null,
       household_id: householdId ?? null,
       viewRole: isDoctor ? 'DOCTOR' : 'CAREGIVER',
+      permissions: initialPermissions,
     });
 
     setTimeout(() => {
@@ -251,6 +265,9 @@ const createAuthStore: StateCreator<AuthStoreState, [], [['zustand/persist', Aut
   logout: () => {
     try {
       useDeviceStore.getState().resetDeviceStore?.();
+      usePatientStore.getState().resetPatientStore?.();
+      useHealthStore.getState().resetHealthStore?.();
+      useAlertStore.getState().resetAlertStore?.();
     } catch {}
     set({
       accessToken: null,
