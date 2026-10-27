@@ -37,12 +37,12 @@ export default function DoctorProfileScreen({ navigation }: any) {
   const { userName, userPhone, logout } = useAuthStore();
 
   const [docInfo, setDocInfo] = useState<DoctorProfileInfo>({
-    name: userName || 'Bác sĩ',
-    degree: '',
-    specialty: '',
-    hospital: '',
-    department: '',
-    phone: userPhone || '',
+    name: userName || 'BS. Trần Văn Minh',
+    degree: 'Thạc sĩ Y khoa',
+    specialty: 'Chuyên khoa Tim mạch & Lão khoa',
+    hospital: 'Bệnh viện Đa khoa Đà Nẵng',
+    department: 'Khoa Khám bệnh & Cấp cứu',
+    phone: userPhone || '+84 905 111 222',
   });
 
   const [patientCount, setPatientCount] = useState<number>(0);
@@ -240,13 +240,6 @@ export default function DoctorProfileScreen({ navigation }: any) {
       >
         <View style={styles.headerRow}>
           <Text style={[styles.headerTitle, { color: colors.textPrimary }]}>Hồ Sơ Bác Sĩ</Text>
-          <TouchableOpacity
-            style={[styles.editHeaderBtn, { backgroundColor: isDarkMode ? '#334155' : '#E0F2FE' }]}
-            onPress={handleOpenEditModal}
-          >
-            <Ionicons name="pencil" size={15} color="#0284C7" style={{ marginRight: 4 }} />
-            <Text style={styles.editHeaderBtnText}>Chỉnh sửa</Text>
-          </TouchableOpacity>
         </View>
       </View>
 
@@ -258,6 +251,7 @@ export default function DoctorProfileScreen({ navigation }: any) {
           patientCount={patientCount}
           appointmentCount={appointmentCount}
           onPickImage={pickImage}
+          onEditProfile={handleOpenEditModal}
           isDarkMode={isDarkMode}
           colors={colors}
         />
