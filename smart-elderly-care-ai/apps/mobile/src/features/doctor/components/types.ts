@@ -138,74 +138,46 @@ export interface DoctorProfileInfo {
   department: string;
   phone: string;
   avatarUri?: string | null;
+  cchn_number?: string;
 }
 
 // Danh sách tên danh dự chuẩn của các cụ (Tuyệt đối không dùng "Cụ Bệnh nhân")
-export const STANDARD_PATIENT_NAMES = [
-  'Cụ Phan Thị Hoa',
-  'Cụ Nguyễn Văn An',
-  'Cụ Trần Đình Long',
-  'Cụ Lê Thị Mai',
-  'Cụ Đỗ Doãn Hoàng',
-  'Cụ Vũ Thị Tuyết',
-];
+export const STANDARD_PATIENT_NAMES: string[] = [];
 
 // Hàm chuẩn hóa và map dữ liệu bệnh nhân chuẩn xác từ API/Database
 export const normalizePatientsList = (rawList: any[]): PatientCardData[] => {
   if (!Array.isArray(rawList) || rawList.length === 0) {
-    return STANDARD_PATIENT_NAMES.slice(0, 4).map((name, idx) => ({
-      id: `p_default_${idx + 1}`,
-      name,
-      birth_year: 1945 + idx * 3,
-      age: 78 - idx * 2,
-      gender: idx % 2 === 0 ? 'Nữ' : 'Nam',
-      house_id: `h_${idx + 1}`,
-      house_name: `Phòng ${101 + idx} • Nhà An Bình`,
-      house_address: '124 Hải Phòng, Q. Hải Châu, Đà Nẵng',
-      device_id: `dev_${idx + 1}`,
-      is_online: true,
-      health_status: idx === 1 ? 'WARNING' : 'NORMAL',
-      emergency_contact_phone: '0905 123 456',
-    }));
+    return [];
   }
 
   const currentYear = new Date().getFullYear();
   return rawList.map((item: any, idx: number) => {
     const raw = (item.name || item.full_name || item.patient_name || '').trim();
-    const isGenericOrEmpty =
-      !raw || raw === 'Cụ Bệnh nhân' || raw === 'Bệnh nhân' || raw.includes('Bệnh nhân #');
+    const cleanName = raw || `Bệnh nhân #${idx + 1}`;
 
-    const cleanName = !isGenericOrEmpty
-      ? raw.toLowerCase().startsWith('cụ ') || raw.toLowerCase().startsWith('bác ')
-        ? raw
-        : `Cụ ${raw}`
-      : STANDARD_PATIENT_NAMES[idx % STANDARD_PATIENT_NAMES.length];
-
-    const age = item.age || (item.birth_year ? currentYear - item.birth_year : 78 - idx * 2);
+    const age = item.age || (item.birth_year ? currentYear - item.birth_year : 0);
     const gender = item.gender
       ? item.gender.toUpperCase() === 'MALE'
         ? 'Nam'
         : item.gender.toUpperCase() === 'FEMALE'
         ? 'Nữ'
         : item.gender
-      : idx % 2 === 0
-      ? 'Nữ'
-      : 'Nam';
+      : '';
 
     return {
       ...item,
       id: String(item.id || `p_${idx + 1}`),
       name: cleanName,
-      birth_year: item.birth_year || currentYear - age,
+      birth_year: item.birth_year || (age ? currentYear - age : undefined),
       age,
       gender,
-      house_id: String(item.house_id || `h_${idx + 1}`),
-      house_name: item.house_name || `Phòng ${101 + idx} • Nhà An Bình`,
-      house_address: item.house_address || '124 Hải Phòng, Q. Hải Châu, Đà Nẵng',
-      device_id: item.device_id || `dev_${idx + 1}`,
-      emergency_contact_phone: item.emergency_contact_phone || '0905 123 456',
-      health_status: item.health_status || (idx === 1 ? 'WARNING' : 'NORMAL'),
-      is_online: item.is_online !== undefined ? item.is_online : true,
+      house_id: item.house_id ? String(item.house_id) : '',
+      house_name: item.house_name || '',
+      house_address: item.house_address || '',
+      device_id: item.device_id || '',
+      emergency_contact_phone: item.emergency_contact_phone || '',
+      health_status: item.health_status || 'NORMAL',
+      is_online: item.is_online !== undefined ? item.is_online : false,
     };
   });
 };

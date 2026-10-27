@@ -48,9 +48,9 @@ export const DoctorProfileCard: React.FC<DoctorProfileCardProps> = ({
   isDarkMode,
   colors,
 }) => {
-  const doctorInitial = (info.name || 'Minh').trim().split(/\s+/).slice(-1)[0][0]?.toUpperCase() || 'M';
-  const displayPatients = patientCount > 0 ? patientCount : 2;
-  const completedVisits = appointmentCount > 0 ? appointmentCount * 4 + 8 : 32;
+  const doctorInitial = (info.name || 'Bác sĩ').trim().split(/\s+/).slice(-1)[0][0]?.toUpperCase() || 'M';
+  const displayPatients = patientCount;
+  const completedVisits = appointmentCount;
 
   return (
     <View style={{ marginBottom: 12 }}>
@@ -94,17 +94,17 @@ export const DoctorProfileCard: React.FC<DoctorProfileCardProps> = ({
 
         {/* Họ và tên & Chuyên khoa */}
         <Text style={[styles.docName, { color: colors.textPrimary }]} numberOfLines={1}>
-          {info.name || 'BS. Trần Văn Minh'}
+          {info.name || 'Bác sĩ'}
         </Text>
         <Text style={[styles.docSpecialty, { color: isDarkMode ? '#94A3B8' : '#475569' }]}>
-          {info.degree || 'Thạc sĩ Y khoa'} • {info.specialty || 'Chuyên khoa Tim mạch & Lão khoa'}
+          {[info.degree, info.specialty].filter(Boolean).join(' • ') || 'Bác sĩ chuyên khoa'}
         </Text>
 
         {/* Nơi công tác */}
         <View style={[styles.hospitalBadge, { backgroundColor: isDarkMode ? '#0F172A' : '#EFF6FF' }]}>
           <Ionicons name="business" size={13} color="#2563EB" style={{ marginRight: 5 }} />
           <Text style={[styles.hospitalText, { color: isDarkMode ? '#60A5FA' : '#1D4ED8' }]} numberOfLines={1}>
-            {info.hospital || 'Bệnh viện Đa khoa Đà Nẵng'}
+            {info.hospital || 'Chưa cập nhật nơi công tác'}
           </Text>
         </View>
       </View>
@@ -130,7 +130,7 @@ export const DoctorProfileCard: React.FC<DoctorProfileCardProps> = ({
         </View>
         <View style={[styles.statDivider, { backgroundColor: isDarkMode ? '#334155' : '#E2E8F0' }]} />
         <View style={styles.statCol}>
-          <Text style={[styles.statNumber, { color: '#2563EB' }]}>8+</Text>
+          <Text style={[styles.statNumber, { color: '#2563EB' }]}>--</Text>
           <Text style={[styles.statLabel, { color: isDarkMode ? '#94A3B8' : '#64748B' }]}>Năm kinh nghiệm</Text>
         </View>
       </View>
@@ -161,16 +161,16 @@ export const DoctorProfileCard: React.FC<DoctorProfileCardProps> = ({
           <View style={styles.licenseRow}>
             <Text style={[styles.licenseLabel, { color: isDarkMode ? '#94A3B8' : '#64748B' }]}>Số CCHN:</Text>
             <View style={[styles.cchnBadge, { backgroundColor: isDarkMode ? '#1E3A8A33' : '#EFF6FF' }]}>
-              <Text style={[styles.cchnBadgeText, { color: '#2563EB' }]}>001428/BYT-CCHN</Text>
+              <Text style={[styles.cchnBadgeText, { color: '#2563EB' }]}>{info.cchn_number || 'Chưa cập nhật'}</Text>
             </View>
           </View>
           <View style={styles.licenseRow}>
             <Text style={[styles.licenseLabel, { color: isDarkMode ? '#94A3B8' : '#64748B' }]}>Khoa / Phòng:</Text>
-            <Text style={[styles.licenseValue, { color: colors.textPrimary }]}>{info.department || 'Khoa Khám bệnh & Cấp cứu'}</Text>
+            <Text style={[styles.licenseValue, { color: colors.textPrimary }]}>{info.department || 'Chưa cập nhật'}</Text>
           </View>
           <View style={[styles.licenseRow, { borderBottomWidth: 0 }]}>
             <Text style={[styles.licenseLabel, { color: isDarkMode ? '#94A3B8' : '#64748B' }]}>SĐT liên hệ trực:</Text>
-            <Text style={[styles.licenseValue, { color: '#2563EB', fontWeight: '700' }]}>{info.phone || '+84 905 111 222'}</Text>
+            <Text style={[styles.licenseValue, { color: '#2563EB', fontWeight: '700' }]}>{info.phone || 'Chưa cập nhật'}</Text>
           </View>
         </View>
       </View>

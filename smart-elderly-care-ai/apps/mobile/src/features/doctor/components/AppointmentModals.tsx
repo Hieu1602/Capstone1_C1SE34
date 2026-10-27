@@ -914,7 +914,7 @@ export const AppointmentDetailModal: React.FC<AppointmentDetailModalProps> = ({
               {
                 icon: 'person-outline',
                 label: 'Bệnh nhân:',
-                val: `${appointment.patient_name || 'Cụ Nguyễn Văn An'}${patientInfo ? ` (${patientInfo.age} tuổi • ${patientInfo.gender})` : ''}`,
+                val: `${appointment.patient_name || 'Bệnh nhân'}${patientInfo ? ` (${patientInfo.age} tuổi • ${patientInfo.gender})` : ''}`,
               },
               {
                 icon: 'time-outline',
@@ -929,13 +929,13 @@ export const AppointmentDetailModal: React.FC<AppointmentDetailModalProps> = ({
               {
                 icon: 'call-outline',
                 label: 'Số điện thoại người nhà:',
-                val: patientInfo?.emergency_contact_phone || '0905 123 456 (Người thân)',
+                val: patientInfo?.emergency_contact_phone || 'Chưa cập nhật',
                 isPhone: true,
               },
               {
                 icon: 'document-text-outline',
                 label: 'Dặn dò y tế / Ghi chú:',
-                val: appointment.instructions || appointment.clinical_notes || 'Tái khám tim mạch & kiểm tra huyết áp định kỳ.',
+                val: appointment.instructions || appointment.clinical_notes || 'Không có ghi chú.',
               },
             ].map((row, idx) => (
               <View key={idx} style={{ flexDirection: 'row', alignItems: 'flex-start' }}>
