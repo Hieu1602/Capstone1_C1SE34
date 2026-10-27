@@ -179,8 +179,12 @@ export default function HouseDetailScreen({ navigation, route }: any) {
 
   // Mở modal phân quyền cho 1 thành viên
   const handleOpenPermissions = (member: any) => {
+    if (member.is_owner || member.role_in_house === 'OWNER') {
+      // Chủ nhà luôn sở hữu toàn quyền quản trị, không áp dụng phân quyền
+      return;
+    }
     if (!isCurrentUserOwner) {
-      const rName = member.role_in_house === 'OWNER' ? 'Chủ hộ' : member.role_in_house === 'DOCTOR' ? 'Bác sĩ gia đình' : 'Thành viên gia đình';
+      const rName = member.role_in_house === 'DOCTOR' ? 'Bác sĩ gia đình' : 'Thành viên gia đình';
       Alert.alert(
         'Thông tin thành viên',
         `Họ và tên: ${member.full_name}\nVai trò: ${rName}\nSố điện thoại: ${member.phone_number || '--'}\n\nLưu ý: Chỉ Chủ hộ mới có quyền thay đổi phân quyền.`
@@ -491,8 +495,8 @@ export default function HouseDetailScreen({ navigation, route }: any) {
                 <React.Fragment key={member.id || index}>
                   <TouchableOpacity
                     style={styles.memberCardRow}
-                    onPress={() => (isOwner ? handleOpenPermissions(member) : handleRemoveMember(member))}
-                    activeOpacity={0.7}
+                    onPress={() => (!isOwner ? handleRemoveMember(member) : undefined)}
+                    activeOpacity={isOwner ? 1 : 0.7}
                   >
                     {/* Avatar Icon */}
                     <View
@@ -553,101 +557,105 @@ export default function HouseDetailScreen({ navigation, route }: any) {
                         {member.phone_number || '--'}
                       </Text>
 
-                      {/* Permission Chips (Pills) */}
-                      <View style={styles.permissionPillsRow}>
-                        {/* 1. Camera */}
-                        <View
-                          style={[
-                            styles.permChip,
-                            member.can_view_camera !== false || isOwner
-                              ? styles.permChipActive
-                              : styles.permChipDisabled,
-                          ]}
-                        >
-                          <Ionicons
-                            name="videocam"
-                            size={12}
-                            color={member.can_view_camera !== false || isOwner ? '#10B981' : '#94A3B8'}
-                          />
-                          <Text
+                      {/* Permission Chips (Pills) - Chỉ hiển thị cho Thành viên / Bác sĩ, KHÔNG hiển thị cho Chủ nhà */}
+                      {!isOwner && (
+                        <View style={styles.permissionPillsRow}>
+                          {/* 1. Camera */}
+                          <View
                             style={[
-                              styles.permChipText,
-                              { color: member.can_view_camera !== false || isOwner ? '#065F46' : '#94A3B8' },
+                              styles.permChip,
+                              member.can_view_camera !== false
+                                ? styles.permChipActive
+                                : styles.permChipDisabled,
                             ]}
                           >
-                            Camera
-                          </Text>
-                        </View>
-
-                        {/* 2. Sức khỏe */}
-                        <View
-                          style={[
-                            styles.permChip,
-                            member.can_view_health !== false || isOwner
-                              ? styles.permChipActiveBlue
-                              : styles.permChipDisabled,
-                          ]}
-                        >
-                          <Ionicons
-                            name="heart"
-                            size={12}
-                            color={member.can_view_health !== false || isOwner ? '#3B82F6' : '#94A3B8'}
-                          />
-                          <Text
-                            style={[
-                              styles.permChipText,
-                              { color: member.can_view_health !== false || isOwner ? '#1E40AF' : '#94A3B8' },
-                            ]}
-                          >
-                            Sức khỏe
-                          </Text>
-                        </View>
-
-                        {/* 3. SOS */}
-                        <View
-                          style={[
-                            styles.permChip,
-                            member.can_handle_emergency !== false || isOwner
-                              ? styles.permChipActiveRed
-                              : styles.permChipDisabled,
-                          ]}
-                        >
-                          <Ionicons
-                            name="alert-circle"
-                            size={12}
-                            color={member.can_handle_emergency !== false || isOwner ? '#EF4444' : '#94A3B8'}
-                          />
-                          <Text
-                            style={[
-                              styles.permChipText,
-                              { color: member.can_handle_emergency !== false || isOwner ? '#991B1B' : '#94A3B8' },
-                            ]}
-                          >
-                            SOS
-                          </Text>
-                        </View>
-
-                        {/* 4. Cấu hình thiết bị (nếu có) */}
-                        {(member.can_manage_devices || isOwner) && (
-                          <View style={[styles.permChip, styles.permChipActivePurple]}>
-                            <Ionicons name="settings" size={12} color="#8B5CF6" />
-                            <Text style={[styles.permChipText, { color: '#5B21B6' }]}>Cấu hình</Text>
+                            <Ionicons
+                              name="videocam"
+                              size={12}
+                              color={member.can_view_camera !== false ? '#10B981' : '#94A3B8'}
+                            />
+                            <Text
+                              style={[
+                                styles.permChipText,
+                                { color: member.can_view_camera !== false ? '#065F46' : '#94A3B8' },
+                              ]}
+                            >
+                              Camera
+                            </Text>
                           </View>
-                        )}
-                      </View>
+
+                          {/* 2. Sức khỏe */}
+                          <View
+                            style={[
+                              styles.permChip,
+                              member.can_view_health !== false
+                                ? styles.permChipActiveBlue
+                                : styles.permChipDisabled,
+                            ]}
+                          >
+                            <Ionicons
+                              name="heart"
+                              size={12}
+                              color={member.can_view_health !== false ? '#3B82F6' : '#94A3B8'}
+                            />
+                            <Text
+                              style={[
+                                styles.permChipText,
+                                { color: member.can_view_health !== false ? '#1E40AF' : '#94A3B8' },
+                              ]}
+                            >
+                              Sức khỏe
+                            </Text>
+                          </View>
+
+                          {/* 3. SOS */}
+                          <View
+                            style={[
+                              styles.permChip,
+                              member.can_handle_emergency !== false
+                                ? styles.permChipActiveRed
+                                : styles.permChipDisabled,
+                            ]}
+                          >
+                            <Ionicons
+                              name="alert-circle"
+                              size={12}
+                              color={member.can_handle_emergency !== false ? '#EF4444' : '#94A3B8'}
+                            />
+                            <Text
+                              style={[
+                                styles.permChipText,
+                                { color: member.can_handle_emergency !== false ? '#991B1B' : '#94A3B8' },
+                              ]}
+                            >
+                              SOS
+                            </Text>
+                          </View>
+
+                          {/* 4. Cấu hình thiết bị (nếu có) */}
+                          {member.can_manage_devices && (
+                            <View style={[styles.permChip, styles.permChipActivePurple]}>
+                              <Ionicons name="settings" size={12} color="#8B5CF6" />
+                              <Text style={[styles.permChipText, { color: '#5B21B6' }]}>Cấu hình</Text>
+                            </View>
+                          )}
+                        </View>
+                      )}
                     </View>
 
-                    {/* Button Chi tiết (Chủ hộ) / Xóa (Thành viên) */}
-                    <View style={styles.actionChevronBox}>
-                      <Text style={[styles.permissionBtnText, { color: isOwner ? Colors.primary : '#EF4444' }]}>
-                        {isOwner ? 'Chi tiết' : 'Xóa'}
-                      </Text>
-                      <Ionicons
-                        name={isOwner ? 'chevron-forward' : 'trash-outline'}
-                        size={isOwner ? 16 : 14}
-                        color={isOwner ? Colors.primary : '#EF4444'}
-                      />
-                    </View>
+                    {/* Button Xóa chỉ hiển thị cho thành viên/bác sĩ, Chủ hộ KHÔNG hiển thị nút này */}
+                    {!isOwner && (
+                      <View style={styles.actionChevronBox}>
+                        <Text style={[styles.permissionBtnText, { color: '#EF4444' }]}>
+                          Xóa
+                        </Text>
+                        <Ionicons
+                          name="trash-outline"
+                          size={14}
+                          color="#EF4444"
+                        />
+                      </View>
+                    )}
                   </TouchableOpacity>
 
                   {index < members.length - 1 && <View style={[styles.divider, { backgroundColor: borderCol }]} />}
@@ -669,7 +677,7 @@ export default function HouseDetailScreen({ navigation, route }: any) {
             <View style={[styles.orangePlusCircle, isDarkMode && { backgroundColor: '#4A2810', borderColor: '#7C2D12' }]}>
               <Ionicons name="person-add" size={16} color={Colors.primary} />
             </View>
-            <Text style={styles.addMemberText}>Mời thành viên mới & Phân quyền</Text>
+            <Text style={styles.addMemberText}>Mời thành viên mới</Text>
           </TouchableOpacity>
         </View>
 
