@@ -14,17 +14,19 @@ import {
 
 export const resolveAvatarUrl = (url: string | null | undefined): string | null => {
   if (!url) return null;
+  const trimmed = url.trim();
+  if (!trimmed) return null;
   if (
-    url.startsWith('http://') ||
-    url.startsWith('https://') ||
-    url.startsWith('data:') ||
-    url.startsWith('file:') ||
-    url.startsWith('blob:')
+    trimmed.startsWith('http://') ||
+    trimmed.startsWith('https://') ||
+    trimmed.startsWith('data:') ||
+    trimmed.startsWith('file:') ||
+    trimmed.startsWith('blob:')
   ) {
-    return url;
+    return trimmed;
   }
   const hostOrigin = BASE_URL.replace(/\/api\/v1\/?$/, '');
-  return `${hostOrigin}${url.startsWith('/') ? '' : '/'}${url}`;
+  return `${hostOrigin}${trimmed.startsWith('/') ? '' : '/'}${trimmed}`;
 };
 
 export const FONT_SCALE_LEVELS = [0.85, 1, 1.15, 1.3, 1.5];
@@ -200,6 +202,31 @@ export function useProfileManager(navigation: any, route: any) {
         'Không thể lưu tên vào cơ sở dữ liệu. Vui lòng thử lại.';
       throw new Error(
         typeof detail === 'string' ? detail : 'Không thể lưu tên vào cơ sở dữ liệu.',
+      );
+    }
+  };
+
+  const handleSavePhone = async (newPhone: string, otpCode: string): Promise<boolean> => {
+    try {
+      const res = await usersApi.updateMe({ phone: newPhone, otp_code: otpCode });
+      const savedPhone =
+        typeof res?.data?.phone === 'string' && res.data.phone.trim()
+          ? res.data.phone.trim()
+          : newPhone;
+
+      setProfilePhone(savedPhone);
+      setProfile({
+        user_id: res?.data?.id || res?.data?.user_id || userId || undefined,
+        phone_number: savedPhone,
+      });
+      return true;
+    } catch (error: any) {
+      const detail =
+        error?.response?.data?.detail ||
+        error?.response?.data?.message ||
+        'Không thể cập nhật số điện thoại. Vui lòng thử lại.';
+      throw new Error(
+        typeof detail === 'string' ? detail : 'Không thể cập nhật số điện thoại.',
       );
     }
   };
@@ -435,6 +462,7 @@ export function useProfileManager(navigation: any, route: any) {
     toggleViewRole,
     performLogout,
     handleSaveName,
+    handleSavePhone,
     handleChangePassword,
     pickAvatarFromCamera,
     pickAvatarFromLibrary,

@@ -3,6 +3,8 @@ houses.py – Endpoints quản lý Căn nhà, Chế độ an ninh và Phân quy�
 Vị trí: backend/app/api/v1/endpoints/mobile/houses.py
 """
 
+import json
+import logging
 from typing import List, Optional
 from uuid import UUID
 
@@ -14,8 +16,12 @@ from sqlalchemy.orm import selectinload
 from app.api.deps import get_current_user
 from app.core.database import get_db
 from app.crud.crud_house import crud_house
+from app.models.device import Device
 from app.models.house import House, HouseMember
+from app.models.incident import Incident
 from app.models.user import User
+
+logger = logging.getLogger(__name__)
 from app.schemas.house import (
     HouseMemberCreate,
     HouseMemberOut,
@@ -32,12 +38,24 @@ router = APIRouter()
 async def _resolve_house(db: AsyncSession, house_id: str, current_user: User) -> House:
     """Xử lý tra cứu căn nhà hỗ trợ cả 'current', ID số hoặc UUID."""
     if house_id in ("current", "1", "default", "me"):
-        return await crud_house.get_or_create_default_house(db, owner_id=current_user.id)
+        house = await crud_house.get_or_create_default_house(db, owner_id=current_user.id)
+        if not house:
+            raise HTTPException(
+                status_code=status.HTTP_404_NOT_FOUND,
+                detail="Bạn chưa tham gia căn nhà nào.",
+            )
+        return house
 
     try:
         house_uuid = UUID(house_id)
     except ValueError:
-        return await crud_house.get_or_create_default_house(db, owner_id=current_user.id)
+        house = await crud_house.get_or_create_default_house(db, owner_id=current_user.id)
+        if not house:
+            raise HTTPException(
+                status_code=status.HTTP_404_NOT_FOUND,
+                detail="Bạn chưa tham gia căn nhà nào.",
+            )
+        return house
 
     house = await crud_house.get_by_id(db, id=house_uuid)
     if not house:
@@ -50,11 +68,11 @@ async def _resolve_house(db: AsyncSession, house_id: str, current_user: User) ->
 
 def _format_member_out(m: HouseMember, house: House) -> HouseMemberOut:
     user = m.user
-    is_owner = (m.user_id == house.owner_id)
+    is_owner = (m.user_id == house.owner_id and m.role_in_house == "OWNER")
     full_name = user.full_name if user else "Thành viên"
     phone_number = user.phone if user else None
     avatar_url = user.avatar_url if user else None
-    user_role = user.role if user else "user"
+    user_role = user.role if user else "member"
 
     return HouseMemberOut(
         id=m.id,
@@ -87,7 +105,13 @@ async def get_current_house(
     db: AsyncSession = Depends(get_db),
 ):
     """Lấy thông tin căn nhà hiện tại của người dùng."""
-    return await crud_house.get_or_create_default_house(db, owner_id=current_user.id)
+    house = await crud_house.get_or_create_default_house(db, owner_id=current_user.id)
+    if not house:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="Người dùng chưa tham gia căn nhà nào.",
+        )
+    return house
 
 
 @router.patch("/current/mode", response_model=HouseOut)
@@ -132,7 +156,20 @@ async def get_my_house_permissions(
     db: AsyncSession = Depends(get_db),
 ):
     """Kiểm tra danh sách quyền thực tế của người dùng đối với căn nhà này."""
-    house = await _resolve_house(db, house_id, current_user)
+    try:
+        house = await _resolve_house(db, house_id, current_user)
+    except HTTPException as e:
+        if e.status_code == status.HTTP_404_NOT_FOUND:
+            return UserHousePermissionsOut(
+                can_view_health=False,
+                can_view_camera=False,
+                can_handle_emergency=False,
+                can_manage_devices=False,
+                can_manage_records=False,
+                role_in_house="MEMBER",
+                permissions="NONE",
+            )
+        raise e
     perms = await crud_house.get_user_permissions(db, house=house, user=current_user)
     return UserHousePermissionsOut(**perms)
 
@@ -145,21 +182,15 @@ async def list_house_members(
     db: AsyncSession = Depends(get_db),
 ):
     """
-    Lấy danh sách tất cả thành viên trong gia đình kèm theo quyền hạn chi tiết:
-    - Quyền xem camera
-    - Quyền theo dõi sức khỏe
-    - Quyền xử lý khẩn cấp SOS
-    - Quyền cấu hình thiết bị
-    - Quyền xem/quản lý hồ sơ bệnh án
+    Lấy danh sách tất cả thành viên trong gia đình kèm theo quyền hạn chi tiết.
     """
-    house = await _resolve_house(db, house_id, current_user)
+    try:
+        house = await _resolve_house(db, house_id, current_user)
+    except HTTPException as e:
+        if e.status_code == status.HTTP_404_NOT_FOUND:
+            return []
+        raise e
     members = await crud_house.get_members(db, house_id=house.id)
-    
-    # Nếu danh sách rỗng (dữ liệu cũ), tự bổ sung chủ sở hữu
-    if not members:
-        house = await crud_house.get_or_create_default_house(db, owner_id=house.owner_id)
-        members = await crud_house.get_members(db, house_id=house.id)
-
     return [_format_member_out(m, house) for m in members]
 
 
@@ -184,6 +215,83 @@ async def add_house_member(
         )
 
     new_member = await crud_house.add_member(db, house=house, obj_in=member_in)
+
+    # Tự động tạo thông báo gửi đến mục Thông báo của tài khoản thành viên mới
+    try:
+        dev_res = await db.execute(
+            select(Device.id).where(Device.house_id == house.id).limit(1)
+        )
+        device_id = dev_res.scalar_one_or_none()
+        if not device_id:
+            any_dev = await db.execute(select(Device.id).limit(1))
+            device_id = any_dev.scalar_one_or_none()
+
+        target_user = getattr(new_member, "user", None)
+        target_user_id = new_member.user_id
+        owner_name = current_user.full_name or "Chủ hộ"
+        role_desc = "Bác sĩ gia đình" if new_member.role_in_house == "DOCTOR" else "Thành viên gia đình"
+        house_display = house.name or "Nhà của tôi"
+        notif_msg = f"Bạn đã được Chủ hộ {owner_name} thêm vào căn nhà \"{house_display}\" với vai trò {role_desc}. Hãy vào mục Nhà của tôi để kiểm tra quyền hạn."
+
+        if device_id:
+            member_incident = Incident(
+                device_id=device_id,
+                alert_type="HOUSE_MEMBER_ADDED",
+                alert_level="LOW",
+                message=notif_msg,
+                is_acknowledged=False,
+                notes=f"USER:{target_user_id}",
+            )
+            db.add(member_incident)
+            await db.commit()
+            await db.refresh(member_incident)
+
+            # Phát thời gian thực qua WebSocket cho mobile client đang online
+            try:
+                from app.api.websockets.vitals_ws import alert_clients
+                ws_payload = json.dumps({
+                    "type": "ALERT_NEW",
+                    "alert_type": "HOUSE_MEMBER_ADDED",
+                    "data": {
+                        "id": str(member_incident.id),
+                        "alert_type": "HOUSE_MEMBER_ADDED",
+                        "alert_level": "LOW",
+                        "message": member_incident.message,
+                        "target_user_id": str(target_user_id),
+                        "house_id": str(house.id),
+                        "created_at": member_incident.created_at.isoformat() if member_incident.created_at else None,
+                    }
+                }, ensure_ascii=False)
+                for client_ws in list(alert_clients):
+                    try:
+                        await client_ws.send_text(ws_payload)
+                    except Exception:
+                        if client_ws in alert_clients:
+                            alert_clients.remove(client_ws)
+            except Exception as ws_err:
+                logger.warning("[add_house_member] WS broadcast error: %s", ws_err)
+
+            # Gửi Push Notification qua FCM nếu thành viên đã có FCM Token
+            if target_user and getattr(target_user, "fcm_token", None):
+                try:
+                    from app.services.notification.fcm_service import FCMService
+                    from app.core.config import settings
+                    from pathlib import Path
+                    fcm = FCMService()
+                    cred_path = Path(settings.FCM_SERVICE_ACCOUNT_PATH)
+                    if cred_path.exists():
+                        fcm.initialize(str(cred_path))
+                        await fcm.send_alert(
+                            fcm_tokens=[target_user.fcm_token],
+                            title="Thành viên mới trong gia đình",
+                            body=notif_msg,
+                            data={"type": "HOUSE_MEMBER_ADDED", "house_id": str(house.id)},
+                        )
+                except Exception as fcm_err:
+                    logger.warning("[add_house_member] FCM error: %s", fcm_err)
+    except Exception as notif_err:
+        logger.warning("[add_house_member] Failed to create member notification: %s", notif_err)
+
     return _format_member_out(new_member, house)
 
 

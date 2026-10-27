@@ -19,7 +19,8 @@ import AsyncStorage from '@react-native-async-storage/async-storage';
 
 import { useTheme } from '../../../store/useThemeStore';
 import { useAuthStore } from '../../../store/useAuthStore';
-import { doctorApi } from '../../../services/api';
+import { doctorApi, usersApi } from '../../../services/api';
+import { resolveAvatarUrl } from '../../auth/hooks/useProfileManager';
 import {
   DoctorProfileInfo,
   DoctorProfileCard,
@@ -34,7 +35,7 @@ export type { DoctorProfileInfo };
 export default function DoctorProfileScreen({ navigation }: any) {
   const insets = useSafeAreaInsets();
   const { isDarkMode, colors, toggleTheme } = useTheme();
-  const { userName, userPhone, logout } = useAuthStore();
+  const { userName, userPhone, avatarUrl, avatar_url, setAvatar, setProfile, logout } = useAuthStore();
 
   const [docInfo, setDocInfo] = useState<DoctorProfileInfo>({
     name: userName || 'Bác sĩ',
@@ -47,7 +48,10 @@ export default function DoctorProfileScreen({ navigation }: any) {
 
   const [patientCount, setPatientCount] = useState<number>(0);
   const [appointmentCount, setAppointmentCount] = useState<number>(0);
-  const [avatarUri, setAvatarUri] = useState<string | null>(null);
+  const [avatarUri, setAvatarUri] = useState<string | null>(() => {
+    const raw = avatarUrl || avatar_url;
+    return raw && !raw.startsWith('blob:') ? resolveAvatarUrl(raw) : null;
+  });
 
   // Modals state
   const [editModalVisible, setEditModalVisible] = useState(false);
@@ -92,6 +96,16 @@ export default function DoctorProfileScreen({ navigation }: any) {
       fetchDoctorStats();
     }, [fetchDoctorStats])
   );
+
+  useEffect(() => {
+    const raw = avatarUrl || avatar_url;
+    if (raw && !raw.startsWith('blob:')) {
+      const resolved = resolveAvatarUrl(raw);
+      if (resolved) {
+        setAvatarUri(resolved);
+      }
+    }
+  }, [avatarUrl, avatar_url]);
 
   useEffect(() => {
     const loadSavedProfile = async () => {
@@ -165,7 +179,21 @@ export default function DoctorProfileScreen({ navigation }: any) {
       avatarUri: editAvatarUri,
     };
     setDocInfo(updated);
-    if (editAvatarUri) setAvatarUri(editAvatarUri);
+    if (editAvatarUri) {
+      setAvatarUri(editAvatarUri);
+      setAvatar(editAvatarUri);
+      setProfile({ avatar_url: editAvatarUri });
+      // Đồng bộ ảnh đại diện lên backend
+      if (editAvatarUri.startsWith('data:image')) {
+        try {
+          await usersApi.uploadAvatarBase64(editAvatarUri);
+        } catch {
+          try {
+            await usersApi.updateMe({ avatar_url: editAvatarUri });
+          } catch {}
+        }
+      }
+    }
     try {
       await AsyncStorage.setItem('doctor_profile_custom', JSON.stringify(updated));
     } catch {}

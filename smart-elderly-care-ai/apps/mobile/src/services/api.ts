@@ -118,14 +118,18 @@ export const authApi = {
   verifyOtp: (phone: string, otp_code: string) => api.post('/auth/verify-otp', { phone, otp_code }),
   verifyCchn: (cchn_number: string, full_name: string) =>
     api.post('/auth/verify-cchn', { cchn_number, full_name }),
-  login: (phone: string, password: string) => {
+  login: (phone: string, password: string, clientLocation?: string) => {
     // Chuẩn OAuth2 Password Request quy định application/x-www-form-urlencoded
     const params = new URLSearchParams();
     params.append('username', phone);
     params.append('password', password);
-    return api.post('/auth/login', params.toString(), {
-      headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
-    });
+    const headers: Record<string, string> = {
+      'Content-Type': 'application/x-www-form-urlencoded',
+    };
+    if (clientLocation) {
+      headers['x-client-location'] = encodeURIComponent(clientLocation);
+    }
+    return api.post('/auth/login', params.toString(), { headers });
   },
   register: (data: {
     phone: string;
@@ -174,7 +178,13 @@ export const usersApi = {
     new_password: string;
     confirm_new_password: string;
   }) => api.patch('/users/me/password', data),
-  getTerminals: () => api.get('/users/me/terminals'),
+  getTerminals: (clientLocation?: string) => {
+    const headers: Record<string, string> = {};
+    if (clientLocation) {
+      headers['x-client-location'] = encodeURIComponent(clientLocation);
+    }
+    return api.get('/users/me/terminals', { headers });
+  },
   deleteTerminal: (terminalId: string) => api.delete(`/users/me/terminals/${terminalId}`),
   getLoginHistory: (limit: number = 20) => api.get('/users/me/login-history', { params: { limit } }),
   getDevices: () => api.get('/users/me/terminals'),
@@ -233,6 +243,16 @@ export const vitalsApi = {
     api.get('/vitals/history', { params: { device_id: deviceId, limit, target_date } }),
   getStats: (deviceId: string, hours = 24) =>
     api.get(`/vitals/${deviceId}/stats`, { params: { hours } }),
+  createVital: (data: {
+    device_id?: string;
+    heart_rate?: number;
+    spo2?: number;
+    bp_systolic?: number;
+    bp_diastolic?: number;
+    skin_temp_max?: number;
+    fall_detected?: boolean;
+    raw_payload?: Record<string, any>;
+  }) => api.post('/vitals', data),
 };
 
 // 3. Reminders API

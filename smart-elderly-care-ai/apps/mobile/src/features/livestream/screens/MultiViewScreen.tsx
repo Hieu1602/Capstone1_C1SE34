@@ -1,7 +1,7 @@
 /**
  * Liệt kê camera dạng lưới/danh sách, xem luồng được backend hỗ trợ và mở chi tiết.
  */
-import React, { useState } from "react";
+import React, { useState, useEffect } from "react";
 import { View, StyleSheet, TouchableOpacity, ScrollView } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
 import { Ionicons } from "@expo/vector-icons";
@@ -10,6 +10,7 @@ import { useDeviceStore } from "../../../store/useDeviceStore";
 import { useCameraConnection } from "../hooks/useCameraConnection";
 import { CameraLiveView } from "../components/CameraLiveView";
 import { useTheme } from "../../../store/useThemeStore";
+import { useAuthStore } from "../../../store/useAuthStore";
 import {
     LocalizedAlert,
     LocalizedText,
@@ -46,6 +47,20 @@ interface Props {
  */
 export default function MultiViewScreen({ navigation }: Props) {
     const { isDarkMode } = useTheme();
+    const { permissions, userRole, role } = useAuthStore();
+    const isOwnerOrAdmin = userRole === 'admin' || role === 'admin' || permissions?.is_owner === true || permissions?.role_in_house === 'OWNER';
+    const canViewCamera = isOwnerOrAdmin || Boolean(permissions?.can_view_camera);
+
+    useEffect(() => {
+        if (!canViewCamera) {
+            LocalizedAlert.alert(
+                "Không có quyền truy cập",
+                "Chủ hộ đã tắt quyền xem camera đối với tài khoản này. Vui lòng liên hệ Chủ hộ để được mở quyền."
+            );
+            navigation.goBack();
+        }
+    }, [canViewCamera]);
+
     const { house, iotDevices } = useDeviceStore();
     const connection = useCameraConnection();
     // Bố cục danh sách camera: lưới hoặc danh sách dọc.

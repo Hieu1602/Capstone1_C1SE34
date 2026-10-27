@@ -1,7 +1,7 @@
 import React from 'react';
 import { KeyRound, UserPlus, X, Check } from 'lucide-react';
 import { User, UserRole } from '../../types';
-import { ROLE_CONFIG } from './constants';
+import { ROLE_CONFIG, SELECTABLE_ROLES } from './constants';
 
 interface CreateEditUserModalProps {
   isOpen: boolean;
@@ -117,10 +117,18 @@ export const CreateEditUserModal: React.FC<CreateEditUserModalProps> = ({
               Vai trò & Trách nhiệm (Role) <span className="text-rose-500">*</span>
             </label>
             <div className="grid grid-cols-2 gap-2 mt-1.5">
-              {(Object.keys(ROLE_CONFIG) as UserRole[]).map((r) => {
+              {SELECTABLE_ROLES.map((roleKey, idx) => {
+                const r = roleKey as UserRole;
                 const cfg = ROLE_CONFIG[r];
+                if (!cfg) return null;
                 const Icon = cfg.icon;
-                const isSelected = formRole === r;
+                const isSelected =
+                  formRole === r ||
+                  (r === 'owner' && (formRole as string) === 'user') ||
+                  (r === 'user' && (formRole as string) === 'owner') ||
+                  (r === 'member' && (formRole as string) === 'caregiver') ||
+                  (r === 'caregiver' && (formRole as string) === 'member');
+                const isLastOdd = idx === SELECTABLE_ROLES.length - 1 && SELECTABLE_ROLES.length % 2 !== 0;
 
                 return (
                   <button
@@ -128,6 +136,8 @@ export const CreateEditUserModal: React.FC<CreateEditUserModalProps> = ({
                     type="button"
                     onClick={() => setFormRole(r)}
                     className={`flex items-start space-x-2 p-2.5 rounded-xl border text-left transition-all cursor-pointer ${
+                      isLastOdd ? 'col-span-2' : ''
+                    } ${
                       isSelected
                         ? 'border-[#FF6B35] bg-[#FFF0E8] dark:bg-[#FF6B35]/15 text-[#FF6B35] shadow-2xs font-semibold'
                         : 'border-[#E7E9ED] dark:border-[#454A53] hover:bg-slate-50 dark:hover:bg-white/5 text-[#737780]'

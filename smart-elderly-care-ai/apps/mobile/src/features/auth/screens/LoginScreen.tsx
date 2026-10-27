@@ -21,6 +21,7 @@ import { useThemeStore } from '../../../store/useThemeStore';
 import { authApi, usersApi } from '../../../services/api';
 import { LoginPhotoCollage, LoginFormSection } from '../components/login';
 import { LegalTermsModal, LegalModalType } from '../components/LegalTermsModal';
+import * as Location from 'expo-location';
 
 const FONT_SCALE_LEVELS = [0.8, 1, 1.2, 1.5, 1.8] as const;
 
@@ -76,9 +77,45 @@ export default function LoginScreen({ navigation, route }: any) {
     setFontSizeMode('system');
     setFontScale(1);
     let tokensApplied = false;
+
+    // Lấy vị trí địa lý của thiết bị khi đăng nhập để lưu vào Quản lý đầu cuối
+    let detectedLocation: string | undefined;
     try {
-      // 1. Gửi request OAuth2 Password Grant lên Backend FastAPI
-      const { access_token, refresh_token } = (await authApi.login(normalizedAccount, password)).data;
+      const { status } = await Location.getForegroundPermissionsAsync();
+      let permStatus = status;
+      if (permStatus !== 'granted') {
+        const req = await Location.requestForegroundPermissionsAsync();
+        permStatus = req.status;
+      }
+      if (permStatus === 'granted') {
+        const pos = await Promise.race([
+          Location.getCurrentPositionAsync({ accuracy: Location.Accuracy.Balanced }),
+          new Promise<null>((r) => setTimeout(() => r(null), 2500)),
+        ]);
+        if (pos && pos.coords) {
+          const places = await Location.reverseGeocodeAsync({
+            latitude: pos.coords.latitude,
+            longitude: pos.coords.longitude,
+          });
+          if (places && places.length > 0) {
+            const p = places[0];
+            const parts = [
+              p.street || p.name,
+              p.district || p.subregion,
+              p.city || p.region,
+              p.country || 'Việt Nam',
+            ].filter(Boolean);
+            detectedLocation = parts.join(', ');
+          }
+        }
+      }
+    } catch (e) {
+      console.warn('[Login] Không thể lấy vị trí thiết bị:', e);
+    }
+
+    try {
+      // 1. Gửi request OAuth2 Password Grant lên Backend FastAPI (kèm vị trí đăng nhập)
+      const { access_token, refresh_token } = (await authApi.login(normalizedAccount, password, detectedLocation)).data;
 
       // 2. Thiết lập token tạm vào Zustand store
       setTokens(access_token, refresh_token);

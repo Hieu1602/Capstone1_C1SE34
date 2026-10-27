@@ -20,6 +20,7 @@ import { emergencyApi } from '../../../services/api';
 import { useAuthStore } from '../../../store/useAuthStore';
 import { useDeviceStore } from '../../../store/useDeviceStore';
 import { useTheme } from '../../../store/useThemeStore';
+import { MapLocationPickerModal } from '../components/MapLocationPickerModal';
 
 // Kiểu dữ liệu tối thiểu của phản hồi Photon, dịch tọa độ thành địa chỉ trên web.
 type PhotonReverseGeocodeResult = {
@@ -71,7 +72,7 @@ const formatPhotonAddress = (result: PhotonReverseGeocodeResult) => {
   return parts.join(', ');
 };
 
-const resolveAddressFromCoords = async (latitude: number, longitude: number): Promise<string> => {
+export const resolveAddressFromCoords = async (latitude: number, longitude: number): Promise<string> => {
   // 1. Thử Photon Komoot (cực nhanh ~1s, không bị CORS, chính xác số nhà, tên đường, tổ thôn xã)
   try {
     const photonResp = await fetch(`https://photon.komoot.io/reverse?lat=${latitude}&lon=${longitude}`);
@@ -128,6 +129,7 @@ export default function EmergencySOSScreen({ navigation }: any) {
   const [selectedImage, setSelectedImage] = useState<string | null>(null);
   const [isGettingLocation, setIsGettingLocation] = useState(false);
   const [isSending, setIsSending] = useState(false);
+  const [isMapPickerVisible, setIsMapPickerVisible] = useState(false);
 
   const handleGetCurrentLocation = async () => {
     setIsGettingLocation(true);
@@ -200,24 +202,8 @@ export default function EmergencySOSScreen({ navigation }: any) {
     }
   };
 
-  const handleChooseOnMap = async () => {
-    // Mở ứng dụng bản đồ bên ngoài với tọa độ hiện tại hoặc nội dung địa chỉ đã nhập.
-    const query = coordinates
-      ? `${coordinates.latitude},${coordinates.longitude}`
-      : encodeURIComponent(address || 'Vietnam');
-    const url = Platform.select({
-      ios: `maps://?q=${query}`,
-      android: `geo:0,0?q=${query}`,
-      default: `https://www.google.com/maps/search/?api=1&query=${query}`,
-    });
-    if (!url) return;
-
-    try {
-      await Linking.openURL(url);
-    } catch (error) {
-      console.warn('[EmergencySOSScreen] Could not open map application:', error);
-      Alert.alert('Không mở được bản đồ', 'Bạn có thể nhập địa chỉ cấp cứu vào ô địa chỉ.');
-    }
+  const handleChooseOnMap = () => {
+    setIsMapPickerVisible(true);
   };
 
   const handlePickImage = async () => {
@@ -421,6 +407,18 @@ export default function EmergencySOSScreen({ navigation }: any) {
           )}
         </TouchableOpacity>
       </ScrollView>
+
+      {/* Modal Chọn vị trí trên bản đồ trực tiếp trong app mobile */}
+      <MapLocationPickerModal
+        visible={isMapPickerVisible}
+        initialCoordinates={coordinates}
+        initialAddress={address}
+        onClose={() => setIsMapPickerVisible(false)}
+        onSelectLocation={(selectedAddress, coords) => {
+          setAddress(selectedAddress);
+          setCoordinates(coords);
+        }}
+      />
     </SafeAreaView>
   );
 }
