@@ -38,12 +38,12 @@ export default function DoctorProfileScreen({ navigation }: any) {
   const { userName, userPhone, avatarUrl, avatar_url, setAvatar, setProfile, logout } = useAuthStore();
 
   const [docInfo, setDocInfo] = useState<DoctorProfileInfo>({
-    name: userName || 'BS. Trần Văn Minh',
-    degree: 'Thạc sĩ Y khoa',
-    specialty: 'Chuyên khoa Tim mạch & Lão khoa',
-    hospital: 'Bệnh viện Đa khoa Đà Nẵng',
-    department: 'Khoa Khám bệnh & Cấp cứu',
-    phone: userPhone || '+84 905 111 222',
+    name: userName || 'Bác sĩ',
+    degree: '',
+    specialty: '',
+    hospital: '',
+    department: '',
+    phone: userPhone || '',
   });
 
   const [patientCount, setPatientCount] = useState<number>(0);

@@ -155,7 +155,7 @@ export default function DoctorHomeScreen() {
     : null;
 
   const doctorInitial =
-    (userName || 'Minh').trim().split(/\s+/).slice(-1)[0][0]?.toUpperCase() || 'M';
+    (userName || 'Bác sĩ').trim().split(/\s+/).slice(-1)[0][0]?.toUpperCase() || 'B';
 
   return (
     <View style={[styles.container, { backgroundColor: isDarkMode ? '#0F172A' : '#F8FAFC' }]}>
@@ -179,7 +179,7 @@ export default function DoctorHomeScreen() {
           </View>
           <View style={styles.greetingBox}>
             <LocalizedText style={[styles.greetingTitle, { color: colors.textPrimary }]} numberOfLines={1}>
-              Xin chào, {userName || 'BS. Trần Văn Minh'} 👋
+              Xin chào, {userName || 'Bác sĩ'} 👋
             </LocalizedText>
             <LocalizedText style={[styles.greetingSub, { color: isDarkMode ? '#94A3B8' : '#64748B' }]}>
               Hôm nay công việc thế nào?
@@ -242,11 +242,11 @@ export default function DoctorHomeScreen() {
               </View>
 
               <LocalizedText style={styles.bannerPatientName} numberOfLines={1}>
-                {nextAppointment.patient_name || 'Cụ Nguyễn Văn An'}
+                {nextAppointment.patient_name || 'Bệnh nhân'}
               </LocalizedText>
 
               <LocalizedText style={styles.bannerReasonText} numberOfLines={1}>
-                {nextAppointment.clinical_notes || nextAppointment.exam_type || 'Tái khám tim mạch & HA'} •{' '}
+                {nextAppointment.clinical_notes || nextAppointment.exam_type || 'Khám định kỳ'} •{' '}
                 {nextAppointment.visit_type === 'CLINIC' ? 'Phòng khám' : 'Tại nhà'}
               </LocalizedText>
 
@@ -309,6 +309,24 @@ export default function DoctorHomeScreen() {
             <PatientCardSkeleton isDarkMode={isDarkMode} />
             <PatientCardSkeleton isDarkMode={isDarkMode} />
           </>
+        ) : patients.length === 0 ? (
+          <View
+            style={[
+              styles.emptyPatientsBox,
+              {
+                backgroundColor: isDarkMode ? '#1E293B' : '#FFFFFF',
+                borderColor: isDarkMode ? '#334155' : '#E2E8F0',
+              },
+            ]}
+          >
+            <Ionicons name="people-outline" size={40} color="#94A3B8" />
+            <LocalizedText style={[styles.emptyPatientsText, { color: isDarkMode ? '#94A3B8' : '#64748B' }]}>
+              Chưa có bệnh nhân phụ trách
+            </LocalizedText>
+            <LocalizedText style={[styles.emptyPatientsSub, { color: isDarkMode ? '#64748B' : '#94A3B8' }]}>
+              Bác sĩ sẽ thấy danh sách bệnh nhân khi được thêm vào quản lý thành viên căn nhà.
+            </LocalizedText>
+          </View>
         ) : (
           patients.slice(0, 5).map((patient) => {
             const initial = getPatientInitial(patient.name);
@@ -623,6 +641,23 @@ const styles = StyleSheet.create({
     fontWeight: '800',
   },
 
+  emptyPatientsBox: {
+    padding: 24,
+    borderRadius: 16,
+    borderWidth: 1,
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: 8,
+    marginTop: 8,
+  },
+  emptyPatientsText: {
+    fontSize: 14,
+    fontWeight: '700',
+  },
+  emptyPatientsSub: {
+    fontSize: 12,
+    textAlign: 'center',
+  },
   /* Danh sách bệnh nhân phụ trách */
   patientCardItem: {
     flexDirection: 'row',
