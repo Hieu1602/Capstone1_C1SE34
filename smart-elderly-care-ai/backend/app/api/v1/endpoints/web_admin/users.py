@@ -5,7 +5,7 @@ users.py – Quản lý tài khoản Caregiver / Bác sĩ.
 """
 
 from fastapi import APIRouter, Body, Depends, File, HTTPException, Query, Request, UploadFile, status
-
+from starlette.concurrency import run_in_threadpool
 from sqlalchemy import select
 
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -58,9 +58,8 @@ from app.api.deps import get_current_user
 from app.core.database import get_db
 
 from app.core.security import hash_password, verify_password
-
-from app.crud.crud_user import crud_user
-
+from app.crud.crud_user import crud_user, normalize_phone
+from app.services.notification.otp_service import is_recently_verified, verify_otp
 from app.crud.crud_user_terminal import crud_user_terminal
 
 from app.models.elderly_profile import ElderlyProfile
@@ -274,6 +273,42 @@ async def update_profile(
 ):
     """Cập nhật thông tin profile (tên, số điện thoại, FCM token, ngôn ngữ, avatar)."""
     update_data = update_in.model_dump(exclude_unset=True)
+
+    # Cập nhật số điện thoại
+    if "phone" in update_data and update_data["phone"]:
+        new_phone = normalize_phone(update_data["phone"])
+        if new_phone != current_user.phone:
+            existing = await crud_user.get_by_phone(db, phone=new_phone)
+            if existing and existing.id != current_user.id:
+                raise HTTPException(
+                    status_code=status.HTTP_409_CONFLICT,
+                    detail="Số điện thoại này đã được sử dụng bởi một tài khoản khác.",
+                )
+
+            # Bắt buộc xác thực OTP với số điện thoại mới
+            otp_code = update_data.pop("otp_code", None)
+            if not is_recently_verified(new_phone):
+                if otp_code:
+                    try:
+                        valid = await run_in_threadpool(verify_otp, new_phone, str(otp_code).strip())
+                    except Exception as exc:
+                        raise HTTPException(
+                            status_code=status.HTTP_400_BAD_REQUEST,
+                            detail=f"Lỗi xác thực mã OTP: {str(exc)}",
+                        ) from exc
+                    if not valid:
+                        raise HTTPException(
+                            status_code=status.HTTP_400_BAD_REQUEST,
+                            detail="Mã xác thực OTP không chính xác hoặc đã hết hạn.",
+                        )
+                else:
+                    raise HTTPException(
+                        status_code=status.HTTP_400_BAD_REQUEST,
+                        detail="Vui lòng nhập mã OTP để xác nhận thay đổi số điện thoại.",
+                    )
+            update_data["phone"] = new_phone
+    else:
+        update_data.pop("otp_code", None)
 
     # Nếu avatar_url gửi lên dưới dạng Base64 data URI, tự động lưu thành tệp static
     if update_data.get("avatar_url") and update_data["avatar_url"].startswith("data:image"):

@@ -6,8 +6,7 @@
 // - Chặn ký tự vô nghĩa lặp lại và danh sách từ ngữ thô tục / không phù hợp
 // ============================================================================
 
-export const VIETNAMESE_NAME_REGEX =
-    /^[a-zA-ZÀÁÂÃÈÉÊÌÍÒÓÔÕÙÚĂĐĨŨƠàáâãèéêìíòóôõùúăđĩũơƯĂẠẢẤẦẨẪẬẮẰẲẴẶẸẺẼỀỀỂưăạảấầẩẫậắằẳẵặẹẻẽềềểỄỆỈỊỌỎỐỒỔỖỘỚỜỞỠỢỤỦỨỪễệỉịọỏốồổỗộớờởỡợụủứừỬỮỰỲỴÝỶỸửữựỳỵýỷỹ\s]+$/;
+export const VIETNAMESE_NAME_REGEX = /^[\p{L}\s]+$/u;
 
 // Danh sách từ cấm / bậy bạ / tục tĩu tiếng Việt và tiếng Anh
 export const BANNED_NAME_WORDS = new Set([
@@ -44,13 +43,10 @@ export const BANNED_NAME_WORDS = new Set([
 ]);
 
 /**
- * Lọc bỏ mọi ký tự không phải chữ cái tiếng Việt và khoảng trắng ngay khi người dùng gõ.
+ * Lọc bỏ mọi ký tự không phải chữ cái và khoảng trắng ngay khi người dùng gõ.
  */
 export const sanitizeNameInput = (value: string): string => {
-    return value.replace(
-        /[^a-zA-ZÀÁÂÃÈÉÊÌÍÒÓÔÕÙÚĂĐĨŨƠàáâãèéêìíòóôõùúăđĩũơƯĂẠẢẤẦẨẪẬẮẰẲẴẶẸẺẼỀỀỂưăạảấầẩẫậắằẳẵặẹẻẽềềểỄỆỈỊỌỎỐỒỔỖỘỚỜỞỠỢỤỦỨỪễệỉịọỏốồổỗộớờởỡợụủứừỬỮỰỲỴÝỶỸửữựỳỵýỷỹ\s]/g,
-        "",
-    );
+    return value.replace(/[^\p{L}\s]/gu, "");
 };
 
 /**

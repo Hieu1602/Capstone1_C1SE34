@@ -9,11 +9,7 @@ from typing import Literal, Optional
 
 from pydantic import BaseModel, Field, field_validator, model_validator
 
-VIETNAMESE_NAME_PATTERN = (
-    r"^[a-zA-ZÀÁÂÃÈÉÊÌÍÒÓÔÕÙÚĂĐĨŨƠàáâãèéêìíòóôõùúăđĩũơ"
-    r"ƯĂẠẢẤẦẨẪẬẮẰẲẴẶẸẺẼỀỀỂưăạảấầẩẫậắằẳẵặẹẻẽềềểỄỆỈỊỌỎỐỒỔỖỘỚỜỞỠỢỤỦỨỪ"
-    r"ễệỉịọỏốồổỗộớờởỡợụủứừỬỮỰỲỴÝỶỸửữựỳỵýỷỹ\s]+$"
-)
+VIETNAMESE_NAME_PATTERN = r"^[^\W\d_]+(?:\s+[^\W\d_]+)*$"
 
 BANNED_WORDS = {
     "dm", "dcm", "vcl", "clgt", "buoi", "cac", "lon", "lồn", "cặc", "buồi",
@@ -88,6 +84,7 @@ class UserUpdate(BaseModel):
             return v
         return validate_vietnamese_full_name(v)
     phone: Optional[str] = None
+    otp_code: Optional[str] = None
     avatar_url: Optional[str] = None
     cchn_number: Optional[str] = None
     specialty: Optional[str] = None

@@ -59,6 +59,7 @@ export default function ProfileScreen({ navigation, route }: any) {
         onChangePasswordPress={() => mgr.setChangePasswordVisible(true)}
         onLogoutPress={() => mgr.setLogoutConfirmVisible(true)}
         onSaveName={mgr.handleSaveName}
+        onSavePhone={mgr.handleSavePhone}
       />
 
       <CustomerSupportModal

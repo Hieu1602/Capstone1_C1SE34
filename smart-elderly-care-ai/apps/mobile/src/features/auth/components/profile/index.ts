@@ -3,6 +3,7 @@ export * from "./CustomerSupportModal";
 export * from "./AvatarPickerModal";
 export * from "./ChangePasswordModal";
 export * from "./ProfileEditNameModal";
+export * from "./ProfileEditPhoneModal";
 export * from "./ProfileInfoModal";
 export * from "./SecurityCenterModal";
 export * from "./ProfileHeader";

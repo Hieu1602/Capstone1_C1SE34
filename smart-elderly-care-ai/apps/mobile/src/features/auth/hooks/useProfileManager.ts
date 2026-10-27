@@ -204,6 +204,31 @@ export function useProfileManager(navigation: any, route: any) {
     }
   };
 
+  const handleSavePhone = async (newPhone: string, otpCode: string): Promise<boolean> => {
+    try {
+      const res = await usersApi.updateMe({ phone: newPhone, otp_code: otpCode });
+      const savedPhone =
+        typeof res?.data?.phone === 'string' && res.data.phone.trim()
+          ? res.data.phone.trim()
+          : newPhone;
+
+      setProfilePhone(savedPhone);
+      setProfile({
+        user_id: res?.data?.id || res?.data?.user_id || userId || undefined,
+        phone_number: savedPhone,
+      });
+      return true;
+    } catch (error: any) {
+      const detail =
+        error?.response?.data?.detail ||
+        error?.response?.data?.message ||
+        'Không thể cập nhật số điện thoại. Vui lòng thử lại.';
+      throw new Error(
+        typeof detail === 'string' ? detail : 'Không thể cập nhật số điện thoại.',
+      );
+    }
+  };
+
   const handleChangePassword = async (
     currPass: string,
     newPass: string,
@@ -435,6 +460,7 @@ export function useProfileManager(navigation: any, route: any) {
     toggleViewRole,
     performLogout,
     handleSaveName,
+    handleSavePhone,
     handleChangePassword,
     pickAvatarFromCamera,
     pickAvatarFromLibrary,
