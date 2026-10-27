@@ -15,6 +15,7 @@ import {
 import { Ionicons } from "@expo/vector-icons";
 import * as Location from "expo-location";
 import { WebView } from "react-native-webview";
+const NativeWebView = WebView as unknown as React.ComponentType<any>;
 import { resolveAddressFromCoords } from "../screens/EmergencySOSScreen";
 
 interface MapLocationPickerModalProps {
@@ -57,7 +58,7 @@ export const MapLocationPickerModal: React.FC<MapLocationPickerModalProps> = ({
     const debounceTimerRef = useRef<any>(null);
     const searchDebounceRef = useRef<any>(null);
     const iframeRef = useRef<any>(null);
-    const webViewRef = useRef<WebView | null>(null);
+    const webViewRef = useRef<any>(null);
 
     // Khởi tạo tọa độ GPS khi mở modal nếu chưa có
     useEffect(() => {

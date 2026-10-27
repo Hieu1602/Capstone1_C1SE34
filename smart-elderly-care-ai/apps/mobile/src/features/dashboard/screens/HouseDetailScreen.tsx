@@ -1,17 +1,6 @@
 // ==============================================================================
 // TỆP: HouseDetailScreen.tsx
 // PHÂN HỆ: Màn hình Quản lý Không gian Nhà & Phân quyền Thành viên Gia đình
-// TÁC GIẢ: Nhóm Phát triển Smart Elderly Care AI
-// MÔ TẢ CHỨC NĂNG:
-//   1. Hiển thị thông tin căn nhà thông minh hiện tại (Tên nhà, Địa chỉ, Chế độ an ninh).
-//   2. Liệt kê danh sách các thành viên được ủy quyền truy cập hệ thống (Chủ nhà / Owner,
-//      Thành viên / Member, Bác sĩ gia đình / Doctor).
-//   3. Cho phép Chủ nhà (Owner) cấp quyền chi tiết cho thành viên (RBAC):
-//      - Theo dõi sức khỏe (Ủy quyền)
-//      - Giám sát camera (Được cấp quyền)
-//      - Xử lý khẩn cấp (Nhận cảnh báo SOS)
-//      - Cấu hình thiết bị & Ngưỡng an toàn
-//   4. Mời thành viên mới bằng Số điện thoại và xóa thành viên khỏi nhà.
 // ==============================================================================
 
 import React, { useState, useEffect, useCallback } from 'react';
@@ -22,23 +11,31 @@ import {
   TouchableOpacity,
   ScrollView,
   Alert,
-  TextInput,
-  Modal,
   ActivityIndicator,
-  Switch,
   Platform,
   Share,
-  Linking,
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
-import { Ionicons, MaterialCommunityIcons } from '@expo/vector-icons';
+import { Ionicons } from '@expo/vector-icons';
 import { Colors } from '../../../theme/colors';
 import { useAuthStore, useVitalStore } from '../../../store/useVitalStore';
 import { useTheme } from '../../../store/useThemeStore';
 import { householdApi } from '../../../services/api';
+import {
+  HouseMemberRow,
+  HousePermissionModal,
+  HouseInviteFlowModal,
+  HouseAccountInviteModal,
+  HouseShareModal,
+  HouseEditAddressModal,
+} from '../components/house';
 
 export default function HouseDetailScreen({ navigation, route }: any) {
   const { house, updateHouseAddress } = useVitalStore();
+  const { full_name, userName, phone_number, userPhone, household_id, role, userRole } = useAuthStore();
+  const { isDarkMode } = useTheme();
+
+  // State chỉnh sửa địa chỉ
   const [isEditAddressModalVisible, setIsEditAddressModalVisible] = useState(false);
   const [editAddressInput, setEditAddressInput] = useState('');
   const [isSavingAddress, setIsSavingAddress] = useState(false);
@@ -76,7 +73,7 @@ export default function HouseDetailScreen({ navigation, route }: any) {
   const [members, setMembers] = useState<any[]>([]);
   const [isLoadingMembers, setIsLoadingMembers] = useState(false);
 
-  // State Modal Thêm thành viên mới & Luồng Mời gia đình 2 bước
+  // State Modal Mời gia đình 2 bước
   const [inviteModalVisible, setInviteModalVisible] = useState(false);
   const [inviteStep, setInviteStep] = useState<1 | 2>(1);
   const [selectedInviteRole, setSelectedInviteRole] = useState<'MEMBER' | 'DOCTOR'>('MEMBER');
@@ -84,14 +81,7 @@ export default function HouseDetailScreen({ navigation, route }: any) {
   const [isShareModalVisible, setIsShareModalVisible] = useState(false);
   const [copySuccessToast, setCopySuccessToast] = useState<string | null>(null);
 
-  const triggerToast = (msg: string) => {
-    setCopySuccessToast(msg);
-    setTimeout(() => {
-      setCopySuccessToast(null);
-    }, 2800);
-  };
-
-  const [addMemberModalVisible, setAddMemberModalVisible] = useState(false);
+  // State form mời thành viên mới
   const [newMemberPhone, setNewMemberPhone] = useState('');
   const [newMemberName, setNewMemberName] = useState('');
   const [inviteError, setInviteError] = useState<string | null>(null);
@@ -99,17 +89,9 @@ export default function HouseDetailScreen({ navigation, route }: any) {
   const [newMemberRole, setNewMemberRole] = useState<'MEMBER' | 'DOCTOR'>('MEMBER');
   const [newCanViewHealth, setNewCanViewHealth] = useState(true);
   const [newCanViewCamera, setNewCanViewCamera] = useState(true);
-  const [newCanHandleEmergency, setNewCanHandleEmergency] = useState(true);
+  const [newCanHandleEmergency] = useState(true);
   const [newCanManageDevices, setNewCanManageDevices] = useState(false);
   const [newCanManageRecords, setNewCanManageRecords] = useState(false);
-
-  useEffect(() => {
-    if (route?.params?.openInviteModal) {
-      setSelectedInviteRole('MEMBER');
-      setInviteStep(1);
-      setInviteModalVisible(true);
-    }
-  }, [route?.params?.openInviteModal]);
 
   // State Modal Cấp quyền cho thành viên (RBAC Permission Sheet)
   const [permissionModalVisible, setPermissionModalVisible] = useState(false);
@@ -124,7 +106,35 @@ export default function HouseDetailScreen({ navigation, route }: any) {
   const [isConfirmingDelete, setIsConfirmingDelete] = useState(false);
   const [isDeletingMember, setIsDeletingMember] = useState(false);
 
-  // Kiểm tra người đang đăng nhập có phải là Chủ nhà (Owner) hoặc Admin không
+  const triggerToast = (msg: string) => {
+    setCopySuccessToast(msg);
+    setTimeout(() => {
+      setCopySuccessToast(null);
+    }, 2800);
+  };
+
+  useEffect(() => {
+    if (route?.params?.openInviteModal) {
+      setSelectedInviteRole('MEMBER');
+      setInviteStep(1);
+      setInviteModalVisible(true);
+    }
+  }, [route?.params?.openInviteModal]);
+
+  const handleSaveAddress = async () => {
+    try {
+      setIsSavingAddress(true);
+      const clean = editAddressInput.trim();
+      updateHouseAddress(clean);
+      setIsEditAddressModalVisible(false);
+      Alert.alert('Thành công', 'Đã cập nhật địa chỉ nhà.');
+    } catch {
+      Alert.alert('Lỗi', 'Không thể lưu địa chỉ. Vui lòng thử lại.');
+    } finally {
+      setIsSavingAddress(false);
+    }
+  };
+
   const isCurrentUserOwner =
     userRole === 'admin' ||
     role === 'admin' ||
@@ -136,7 +146,6 @@ export default function HouseDetailScreen({ navigation, route }: any) {
       )
     );
 
-  // Fallback chủ nhà khi chưa load được API
   const getFallbackMember = useCallback(() => [
     {
       id: 'member-default-id',
@@ -155,7 +164,6 @@ export default function HouseDetailScreen({ navigation, route }: any) {
     },
   ], [full_name, userName, phone_number, userPhone]);
 
-  // Gọi API Backend lấy danh sách thành viên thực tế của ngôi nhà
   const loadMembers = useCallback(async () => {
     try {
       setIsLoadingMembers(true);
@@ -177,7 +185,6 @@ export default function HouseDetailScreen({ navigation, route }: any) {
     loadMembers();
   }, [loadMembers]);
 
-  // Mở modal phân quyền cho 1 thành viên
   const handleOpenPermissions = (member: any) => {
     if (member.is_owner || member.role_in_house === 'OWNER') {
       // Chủ nhà luôn sở hữu toàn quyền quản trị, không áp dụng phân quyền
@@ -187,7 +194,9 @@ export default function HouseDetailScreen({ navigation, route }: any) {
       const rName = member.role_in_house === 'DOCTOR' ? 'Bác sĩ gia đình' : 'Thành viên gia đình';
       Alert.alert(
         'Thông tin thành viên',
-        `Họ và tên: ${member.full_name}\nVai trò: ${rName}\nSố điện thoại: ${member.phone_number || '--'}\n\nLưu ý: Chỉ Chủ hộ mới có quyền thay đổi phân quyền.`
+        `Họ và tên: ${member.full_name}\nVai trò: ${rName}\nSố điện thoại: ${
+          member.phone_number || '--'
+        }\n\nLưu ý: Chỉ Chủ hộ mới có quyền thay đổi phân quyền.`
       );
       return;
     }
@@ -218,7 +227,6 @@ export default function HouseDetailScreen({ navigation, route }: any) {
         can_manage_records: isDoc,
       });
 
-      // Cập nhật state nội bộ
       setMembers((prev) =>
         prev.map((m) =>
           m.id === selectedMember.id
@@ -243,7 +251,6 @@ export default function HouseDetailScreen({ navigation, route }: any) {
     }
   };
 
-  // Kích hoạt giao diện xác nhận xóa thành viên
   const handleRemoveMember = (member: any) => {
     if (!isCurrentUserOwner) {
       showToast('Chỉ Chủ hộ mới có quyền xóa thành viên khỏi ngôi nhà.', 'info');
@@ -254,7 +261,6 @@ export default function HouseDetailScreen({ navigation, route }: any) {
     setPermissionModalVisible(true);
   };
 
-  // Thực thi xóa thành viên khỏi căn nhà qua API Backend
   const executeDeleteMember = async (member: any) => {
     if (!member) return;
     const targetMemberId = member.id || member.user_id;
@@ -265,7 +271,6 @@ export default function HouseDetailScreen({ navigation, route }: any) {
       const targetHId = household_id || 'current';
       await householdApi.removeMember(targetHId, targetMemberId);
 
-      // Cập nhật danh sách thành viên cục bộ ngay lập tức
       setMembers((prev) =>
         prev.filter((m) => m.id !== targetMemberId && m.user_id !== targetMemberId)
       );
@@ -286,25 +291,22 @@ export default function HouseDetailScreen({ navigation, route }: any) {
     }
   };
 
-  // Xử lý chia sẻ lời mời gia đình trực tiếp trên app
-  const handleShareInvite = () => {
-    setIsShareModalVisible(true);
-  };
-
-  // Chia sẻ qua hệ thống máy nếu muốn
   const handleNativeShare = async () => {
     try {
       const roleName = selectedInviteRole === 'DOCTOR' ? 'Bác sĩ' : 'Thành viên';
       await Share.share({
         title: 'Mời thành viên gia đình',
-        message: `Chào bạn, bạn nhận được lời mời tham gia căn nhà "${house?.name || 'Nhà của tôi'}" với vai trò ${roleName} trên ứng dụng Smart Elderly Care AI để cùng chăm sóc và bảo vệ người thân. Mã mời: CARE-${household_id ? String(household_id).slice(-4).toUpperCase() : '8869'}. Vui lòng tải ứng dụng và đăng nhập bằng số điện thoại của bạn.`,
+        message: `Chào bạn, bạn nhận được lời mời tham gia căn nhà "${
+          house?.name || 'Nhà của tôi'
+        }" với vai trò ${roleName} trên ứng dụng Smart Elderly Care AI để cùng chăm sóc và bảo vệ người thân. Mã mời: CARE-${
+          household_id ? String(household_id).slice(-4).toUpperCase() : '8869'
+        }. Vui lòng tải ứng dụng và đăng nhập bằng số điện thoại của bạn.`,
       });
     } catch {
       Alert.alert('Thông báo', 'Không thể mở trình chia sẻ.');
     }
   };
 
-  // Xử lý sao chép liên kết mời
   const handleCopyLink = () => {
     const roleSlug = selectedInviteRole === 'DOCTOR' ? 'doctor' : 'member';
     const link = `https://smartcare.vn/invite?houseId=${household_id || 'current'}&role=${roleSlug}`;
@@ -313,12 +315,11 @@ export default function HouseDetailScreen({ navigation, route }: any) {
       `Đã sao chép liên kết mời thành viên vào bộ nhớ tạm:\n\n${link}\n\nBạn có thể gửi liên kết này cho người thân gia đình.`,
       [
         { text: 'Đóng', style: 'cancel' },
-        { text: 'Chia sẻ ngay', onPress: handleShareInvite },
+        { text: 'Chia sẻ ngay', onPress: () => setIsShareModalVisible(true) },
       ]
     );
   };
 
-  // Xử lý thêm thành viên mới
   const handleAddMember = async () => {
     const phoneToSubmit = newMemberPhone.trim();
     if (!phoneToSubmit) {
@@ -348,7 +349,6 @@ export default function HouseDetailScreen({ navigation, route }: any) {
       });
 
       setIsAccountInviteModalVisible(false);
-      setAddMemberModalVisible(false);
       setInviteModalVisible(false);
       setNewMemberPhone('');
       setNewMemberName('');
@@ -372,6 +372,7 @@ export default function HouseDetailScreen({ navigation, route }: any) {
   const borderCol = isDarkMode ? '#334155' : '#E2E8F0';
   const textTitle = isDarkMode ? '#F8FAFC' : Colors.textPrimary;
   const textSub = isDarkMode ? '#94A3B8' : '#64748B';
+  const colors = { bgCard, borderCol, textTitle, textSub };
 
   return (
     <SafeAreaView style={[styles.safeArea, { backgroundColor: bgScreen }]} edges={['top']}>
@@ -1334,65 +1335,14 @@ export default function HouseDetailScreen({ navigation, route }: any) {
       {/* Modal Cáº­p nháº­t Äá»‹a chá»‰ nhÃ  thá»±c táº¿ */}
       <Modal
         visible={isEditAddressModalVisible}
-        transparent
-        animationType="fade"
-        onRequestClose={() => setIsEditAddressModalVisible(false)}
-      >
-        <View style={styles.modalOverlay}>
-          <View style={[styles.modalCard, { backgroundColor: bgCard }]}>
-            <View style={styles.modalHeaderRow}>
-              <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8 }}>
-                <Ionicons name="location" size={20} color={Colors.primary} />
-                <Text style={[styles.modalTitle, { color: textTitle }]}>Địa chỉ nhà thực tế</Text>
-              </View>
-              <TouchableOpacity onPress={() => setIsEditAddressModalVisible(false)}>
-                <Ionicons name="close" size={22} color={textSub} />
-              </TouchableOpacity>
-            </View>
-
-            <Text style={[styles.modalSub, { color: textSub, marginBottom: 14 }]}>
-              Nhập địa chỉ vị trí thực tế của căn hộ / gia đình để thuận tiện khi có cảnh báo khẩn cấp hoặc hỗ trợ y tế.
-            </Text>
-
-            <TextInput
-              style={[
-                styles.addressInput,
-                {
-                  backgroundColor: isDarkMode ? '#0F172A' : '#F8FAFC',
-                  borderColor: borderCol,
-                  color: textTitle,
-                  minHeight: 46,
-                },
-              ]}
-              value={editAddressInput}
-              onChangeText={setEditAddressInput}
-              placeholder="VD: Số 123 Đường ABC, Quận XYZ, TP. Đà Nẵng"
-              placeholderTextColor="#94A3B8"
-              autoFocus
-            />
-
-            <View style={styles.modalActionButtons}>
-              <TouchableOpacity
-                style={[styles.cancelBtn, { borderColor: borderCol }]}
-                onPress={() => setIsEditAddressModalVisible(false)}
-              >
-                <Text style={[styles.cancelBtnText, { color: textSub }]}>Hủy</Text>
-              </TouchableOpacity>
-              <TouchableOpacity
-                style={[styles.saveBtn, { opacity: isSavingAddress ? 0.7 : 1 }]}
-                onPress={handleSaveAddress}
-                disabled={isSavingAddress}
-              >
-                {isSavingAddress ? (
-                  <ActivityIndicator size="small" color="#FFF" />
-                ) : (
-                  <Text style={styles.saveBtnText}>Lưu lại</Text>
-                )}
-              </TouchableOpacity>
-            </View>
-          </View>
-        </View>
-      </Modal>
+        address={editAddressInput}
+        setAddress={setEditAddressInput}
+        isSaving={isSavingAddress}
+        onSave={handleSaveAddress}
+        onClose={() => setIsEditAddressModalVisible(false)}
+        isDarkMode={isDarkMode}
+        colors={colors}
+      />
     </SafeAreaView>
   );
 }
@@ -1457,110 +1407,33 @@ const styles = StyleSheet.create({
     fontWeight: '700',
   },
   memberCountBadge: {
-    fontSize: 11,
-    fontWeight: '800',
+    fontSize: 12,
+    fontWeight: '700',
     paddingHorizontal: 8,
-    paddingVertical: 3,
+    paddingVertical: 2,
     borderRadius: 10,
   },
   cardContainer: {
-    borderRadius: 18,
-    paddingHorizontal: 16,
+    borderRadius: 16,
     borderWidth: 1,
     overflow: 'hidden',
-  },
-  memberCardRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    paddingVertical: 14,
-  },
-  memberAvatarCircle: {
-    width: 42,
-    height: 42,
-    borderRadius: 21,
-    alignItems: 'center',
-    justifyContent: 'center',
-    marginRight: 12,
-  },
-  memberNameText: {
-    fontSize: 15,
-    fontWeight: '700',
-  },
-  roleBadge: {
-    paddingHorizontal: 6,
-    paddingVertical: 2,
-    borderRadius: 6,
-  },
-  inviteRoleBadgeText: {
-    fontSize: 10,
-    fontWeight: '800',
-  },
-  memberPhoneSub: {
-    fontSize: 12,
-    marginTop: 2,
-  },
-  permissionPillsRow: {
-    flexDirection: 'row',
-    flexWrap: 'wrap',
-    gap: 6,
-    marginTop: 6,
-  },
-  permChip: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 4,
-    paddingHorizontal: 7,
-    paddingVertical: 2,
-    borderRadius: 6,
-  },
-  permChipActive: {
-    backgroundColor: '#ECFDF5',
-  },
-  permChipActiveBlue: {
-    backgroundColor: '#EFF6FF',
-  },
-  permChipActiveRed: {
-    backgroundColor: '#FEF2F2',
-  },
-  permChipActivePurple: {
-    backgroundColor: '#F5F3FF',
-  },
-  permChipDisabled: {
-    backgroundColor: '#F1F5F9',
-  },
-  permChipText: {
-    fontSize: 10,
-    fontWeight: '700',
-  },
-  actionChevronBox: {
-    alignItems: 'center',
-    justifyContent: 'center',
-    marginLeft: 8,
-    flexDirection: 'row',
-    gap: 2,
-  },
-  permissionBtnText: {
-    fontSize: 12,
-    fontWeight: '700',
-  },
-  divider: {
-    height: 1,
   },
   addMemberRow: {
     flexDirection: 'row',
     alignItems: 'center',
-    paddingVertical: 14,
+    padding: 14,
+    backgroundColor: 'transparent',
   },
   orangePlusCircle: {
-    width: 28,
-    height: 28,
-    borderRadius: 14,
+    width: 36,
+    height: 36,
+    borderRadius: 18,
     backgroundColor: '#FFF7ED',
+    borderWidth: 1,
+    borderColor: '#FFEDD5',
     alignItems: 'center',
     justifyContent: 'center',
-    marginRight: 10,
-    borderWidth: 1,
-    borderColor: '#FED7AA',
+    marginRight: 12,
   },
   addMemberText: {
     fontSize: 14,
@@ -1571,594 +1444,9 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'space-between',
-    paddingVertical: 16,
+    padding: 16,
   },
   rowTitleText: {
-    fontSize: 15,
-    fontWeight: '700',
-  },
-  modalOverlay: {
-    flex: 1,
-    backgroundColor: 'rgba(15, 23, 42, 0.6)',
-    justifyContent: 'center',
-    paddingHorizontal: 16,
-  },
-  modalCard: {
-    width: '100%',
-    maxWidth: 440,
-    alignSelf: 'center',
-    borderRadius: 20,
-    padding: 18,
-    borderWidth: 1,
-  },
-  modalHeaderRow: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    alignItems: 'flex-start',
-    marginBottom: 12,
-  },
-  modalCloseBtn: {
-    padding: 4,
-  },
-  modalTitle: {
-    fontSize: 18,
-    fontWeight: '800',
-  },
-  modalSub: {
-    fontSize: 13,
-    marginTop: 2,
-  },
-  ownerNoticeBox: {
-    alignItems: 'center',
-    padding: 18,
-    backgroundColor: '#FEF3C7',
-    borderRadius: 14,
-    marginVertical: 12,
-  },
-  ownerNoticeTitle: {
-    fontSize: 15,
-    fontWeight: '800',
-    color: '#92400E',
-    marginTop: 8,
-    marginBottom: 4,
-  },
-  ownerNoticeText: {
-    fontSize: 13,
-    lineHeight: 18,
-    color: '#B45309',
-    textAlign: 'center',
-  },
-  permSectionTitle: {
-    fontSize: 13,
-    fontWeight: '800',
-    marginBottom: 8,
-  },
-  permSwitchRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'space-between',
-    paddingVertical: 10,
-    borderBottomWidth: 1,
-  },
-  permSwitchTitle: {
-    fontSize: 13,
-    fontWeight: '700',
-  },
-  permSwitchDesc: {
-    fontSize: 11,
-    lineHeight: 15,
-    marginTop: 2,
-  },
-  permCheckRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'space-between',
-    paddingVertical: 8,
-  },
-  permCheckLabel: {
-    fontSize: 13,
-    fontWeight: '600',
-  },
-  addressInput: {
-    borderRadius: 12,
-    paddingHorizontal: 14,
-    paddingVertical: 12,
-    fontSize: 14,
-    borderWidth: 1,
-  },
-  rolePickerRow: {
-    flexDirection: 'row',
-    gap: 10,
-    marginTop: 8,
-  },
-  roleOptionBtn: {
-    flex: 1,
-    flexDirection: 'row',
-    paddingVertical: 10,
-    borderRadius: 10,
-    borderWidth: 1,
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
-  roleOptionActive: {
-    backgroundColor: '#FFF7ED',
-    borderColor: '#F59E0B',
-  },
-  roleOptionText: {
-    fontSize: 13,
-    fontWeight: '700',
-  },
-  roleOptionTextActive: {
-    color: '#F97316',
-    fontWeight: '800',
-  },
-  modalActionButtons: {
-    flexDirection: 'row',
-    gap: 10,
-    marginTop: 16,
-  },
-  cancelBtn: {
-    flex: 1,
-    paddingVertical: 12,
-    borderRadius: 12,
-    alignItems: 'center',
-    borderWidth: 1,
-  },
-  cancelBtnText: {
-    fontWeight: '700',
-    fontSize: 14,
-  },
-  removeBtn: {
-    flex: 1,
-    flexDirection: 'row',
-    paddingVertical: 12,
-    borderRadius: 12,
-    alignItems: 'center',
-    justifyContent: 'center',
-    borderWidth: 1,
-  },
-  removeBtnText: {
-    color: '#EF4444',
-    fontWeight: '700',
-    fontSize: 14,
-  },
-  saveBtn: {
-    flex: 2,
-    backgroundColor: Colors.primary,
-    borderRadius: 12,
-    paddingVertical: 12,
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
-  saveBtnText: {
-    color: '#FFF',
-    fontWeight: '700',
-    fontSize: 14,
-  },
-  confirmDeleteContent: {
-    alignItems: 'center',
-    paddingVertical: 18,
-    paddingHorizontal: 8,
-  },
-  confirmDeleteIconCircle: {
-    width: 64,
-    height: 64,
-    borderRadius: 32,
-    backgroundColor: '#FEE2E2',
-    alignItems: 'center',
-    justifyContent: 'center',
-    marginBottom: 16,
-  },
-  confirmDeleteHeading: {
-    fontSize: 16,
-    fontWeight: '800',
-    textAlign: 'center',
-    marginBottom: 10,
-  },
-  confirmDeleteDescription: {
-    fontSize: 13,
-    lineHeight: 19,
-    textAlign: 'center',
-    marginBottom: 20,
-  },
-  confirmActionButtons: {
-    flexDirection: 'row',
-    gap: 12,
-    width: '100%',
-  },
-  confirmExecuteDeleteBtn: {
-    flex: 1.5,
-    flexDirection: 'row',
-    backgroundColor: '#EF4444',
-    borderRadius: 12,
-    paddingVertical: 12,
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
-  confirmExecuteDeleteBtnText: {
-    color: '#FFF',
-    fontWeight: '700',
-    fontSize: 14,
-  },
-
-  // Styles luồng Mời thành viên gia đình (Step 1 & Step 2)
-  inviteSafeArea: {
-    flex: 1,
-  },
-  inviteTopBar: {
-    paddingHorizontal: 16,
-    paddingTop: 8,
-    paddingBottom: 4,
-  },
-  inviteBackBtn: {
-    width: 40,
-    height: 40,
-    justifyContent: 'center',
-    alignItems: 'flex-start',
-  },
-  inviteScrollContent: {
-    paddingHorizontal: 20,
-    paddingTop: 8,
-    paddingBottom: 30,
-  },
-  inviteMainTitle: {
-    fontSize: 24,
-    fontWeight: '800',
-    marginBottom: 20,
-    letterSpacing: -0.5,
-  },
-  inviteHouseCard: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    padding: 16,
-    borderRadius: 18,
-    borderWidth: 1,
-    gap: 14,
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 1 },
-    shadowOpacity: 0.05,
-    shadowRadius: 4,
-    elevation: 2,
-  },
-  inviteHouseIconBox: {
-    width: 44,
-    height: 44,
-    borderRadius: 12,
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
-  inviteHouseName: {
-    fontSize: 16,
-    fontWeight: '700',
-  },
-  inviteSectionSubtitle: {
-    fontSize: 13,
-    fontWeight: '600',
-    marginBottom: 12,
-    paddingHorizontal: 2,
-  },
-  inviteOptionsGroup: {
-    borderRadius: 18,
-    borderWidth: 1,
-    overflow: 'hidden',
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 1 },
-    shadowOpacity: 0.05,
-    shadowRadius: 4,
-    elevation: 2,
-  },
-  inviteRoleOptionItem: {
-    padding: 16,
-  },
-  inviteRoleHeaderRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'space-between',
-    marginBottom: 6,
-  },
-  inviteRoleTitle: {
-    fontSize: 16,
-    fontWeight: '700',
-  },
-  radioChecked: {
-    width: 22,
-    height: 22,
-    borderRadius: 11,
-    backgroundColor: '#F97316',
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
-  radioUnchecked: {
-    width: 22,
-    height: 22,
-    borderRadius: 11,
-    borderWidth: 1.5,
-    borderColor: '#D1D5DB',
-  },
-  inviteRoleDesc: {
-    fontSize: 13.5,
-    lineHeight: 19,
-  },
-  inviteOptionDivider: {
-    height: 1,
-  },
-  inviteBottomBtnContainer: {
-    paddingHorizontal: 20,
-    paddingVertical: 16,
-  },
-  inviteNextBtn: {
-    backgroundColor: '#F97316',
-    height: 52,
-    borderRadius: 26,
-    alignItems: 'center',
-    justifyContent: 'center',
-    shadowColor: '#F97316',
-    shadowOffset: { width: 0, height: 4 },
-    shadowOpacity: 0.35,
-    shadowRadius: 8,
-    elevation: 4,
-  },
-  inviteNextBtnText: {
-    color: '#FFFFFF',
-    fontSize: 16,
-    fontWeight: '700',
-  },
-  inviteMethodRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    paddingVertical: 14,
-    paddingHorizontal: 16,
-    gap: 14,
-  },
-  inviteMethodIconCircle: {
-    width: 40,
-    height: 40,
-    borderRadius: 20,
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
-  inviteMethodLabel: {
-    flex: 1,
-    fontSize: 15.5,
-    fontWeight: '700',
-  },
-  inviteMethodDivider: {
-    height: 1,
-    marginLeft: 70,
-  },
-  inviteRoleBadgeContainer: {
-    alignSelf: 'center',
-    paddingHorizontal: 12,
-    paddingVertical: 5,
-    borderRadius: 12,
-    marginTop: 6,
-    marginBottom: 6,
-  },
-  adminNoticeBox: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    padding: 12,
-    borderRadius: 12,
-    gap: 10,
-    marginTop: 14,
-  },
-  adminNoticeText: {
-    flex: 1,
-    color: '#B45309',
-    fontSize: 12,
-    lineHeight: 17,
-    fontWeight: '600',
-  },
-
-  // Styles Popup Chia sẻ trực tiếp trên App
-  shareModalCard: {
-    width: '100%',
-    maxWidth: 440,
-    borderRadius: 20,
-    padding: 20,
-    borderWidth: 1,
-  },
-  shareHeaderRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 12,
-    marginBottom: 16,
-  },
-  shareIconBox: {
-    width: 44,
-    height: 44,
-    borderRadius: 14,
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
-  shareModalTitle: {
-    fontSize: 17,
-    fontWeight: '800',
-  },
-  shareModalSub: {
-    fontSize: 12,
-    marginTop: 2,
-  },
-  shareCloseBtn: {
-    width: 32,
-    height: 32,
-    borderRadius: 16,
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
-  shareHouseBox: {
-    borderRadius: 14,
-    padding: 14,
-    borderWidth: 1,
-    marginBottom: 14,
-  },
-  shareHouseRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 8,
-    marginBottom: 12,
-  },
-  shareHouseIconSmall: {
-    width: 28,
-    height: 28,
-    borderRadius: 8,
-    backgroundColor: '#EFF6FF',
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
-  shareHouseNameText: {
-    fontSize: 15,
-    fontWeight: '700',
-    flex: 1,
-  },
-  shareRolePill: {
-    paddingHorizontal: 10,
-    paddingVertical: 4,
-    borderRadius: 10,
-  },
-  shareRolePillText: {
-    fontSize: 12,
-    fontWeight: '700',
-  },
-  inviteCodeContainer: {
-    borderRadius: 12,
-    padding: 12,
-    alignItems: 'center',
-    borderWidth: 1.5,
-    borderColor: '#FED7AA',
-    borderStyle: 'dashed',
-  },
-  inviteCodeLabel: {
-    fontSize: 11,
-    fontWeight: '700',
-    letterSpacing: 0.5,
-    marginBottom: 4,
-  },
-  inviteCodeValueRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 10,
-    marginVertical: 4,
-  },
-  inviteCodeText: {
-    fontSize: 22,
-    fontWeight: '900',
-    letterSpacing: 2,
-  },
-  copyCodeMiniBtn: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 4,
-    backgroundColor: Colors.primary,
-    paddingHorizontal: 10,
-    paddingVertical: 5,
-    borderRadius: 8,
-  },
-  copyCodeMiniText: {
-    color: '#FFF',
-    fontSize: 11,
-    fontWeight: '700',
-  },
-  inviteCodeExpireText: {
-    fontSize: 11,
-    color: '#64748B',
-    marginTop: 4,
-  },
-  shareMessagePreviewBox: {
-    padding: 12,
-    borderRadius: 12,
-    marginBottom: 14,
-  },
-  shareMessagePreviewLabel: {
-    fontSize: 11,
-    fontWeight: '700',
-    marginBottom: 4,
-  },
-  shareMessagePreviewContent: {
-    fontSize: 12.5,
-    lineHeight: 18,
-  },
-  shareChannelsTitle: {
-    fontSize: 12,
-    fontWeight: '700',
-    marginBottom: 10,
-  },
-  shareChannelsRow: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    marginBottom: 14,
-  },
-  shareChannelItem: {
-    alignItems: 'center',
-    flex: 1,
-  },
-  shareChannelIconBox: {
-    width: 48,
-    height: 48,
-    borderRadius: 24,
-    alignItems: 'center',
-    justifyContent: 'center',
-    marginBottom: 6,
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.1,
-    shadowRadius: 4,
-    elevation: 3,
-  },
-  shareChannelName: {
-    fontSize: 12,
-    fontWeight: '600',
-  },
-  shareToastBadge: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'center',
-    gap: 6,
-    backgroundColor: '#DCFCE7',
-    paddingVertical: 8,
-    paddingHorizontal: 14,
-    borderRadius: 10,
-    marginBottom: 12,
-    alignSelf: 'center',
-  },
-  shareToastText: {
-    color: '#065F46',
-    fontSize: 12,
-    fontWeight: '700',
-  },
-  shareModalBtnRow: {
-    flexDirection: 'row',
-    gap: 10,
-    marginTop: 4,
-  },
-  shareModalCancelBtn: {
-    flex: 1,
-    borderWidth: 1,
-    borderRadius: 12,
-    paddingVertical: 12,
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
-  shareModalCancelText: {
-    fontSize: 14,
-    fontWeight: '600',
-  },
-  shareModalPrimaryBtn: {
-    flex: 1.8,
-    flexDirection: 'row',
-    backgroundColor: Colors.primary,
-    borderRadius: 12,
-    paddingVertical: 12,
-    alignItems: 'center',
-    justifyContent: 'center',
-    shadowColor: Colors.primary,
-    shadowOffset: { width: 0, height: 3 },
-    shadowOpacity: 0.25,
-    shadowRadius: 6,
-    elevation: 3,
-  },
-  shareModalPrimaryText: {
-    color: '#FFF',
     fontSize: 14,
     fontWeight: '700',
   },
