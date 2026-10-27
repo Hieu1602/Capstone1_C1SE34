@@ -18,7 +18,7 @@ import {
 } from 'react-native';
 import { useAuthStore } from '../../../store/useAuthStore';
 import { useThemeStore } from '../../../store/useThemeStore';
-import { authApi, usersApi } from '../../../services/api';
+import api, { authApi, usersApi } from '../../../services/api';
 import { LoginPhotoCollage, LoginFormSection } from '../components/login';
 import { LegalTermsModal, LegalModalType } from '../components/LegalTermsModal';
 import * as Location from 'expo-location';
@@ -39,7 +39,7 @@ const normalizePhoneNumber = (rawPhone: string): string => {
 
 // Component màn hình đăng nhập; navigation dùng để chuyển sang các màn hình liên quan.
 export default function LoginScreen({ navigation, route }: any) {
-  const { login, setViewRole, setTokens, logout } = useAuthStore();
+  const { login, setViewRole, setTokens, logout, setIsRoleLoading } = useAuthStore();
   const { setFontSizeMode, setFontScale } = useThemeStore();
 
   const [phone, setPhone] = useState('');
@@ -72,8 +72,8 @@ export default function LoginScreen({ navigation, route }: any) {
     }
 
     setLoading(true);
+    setIsRoleLoading(true);
     setErrorMessage(null);
-    // Mỗi phiên đăng nhập bắt đầu ở cỡ chữ hệ thống; người dùng có thể bật tùy chỉnh sau.
     setFontSizeMode('system');
     setFontScale(1);
     let tokensApplied = false;
@@ -117,15 +117,14 @@ export default function LoginScreen({ navigation, route }: any) {
       // 1. Gửi request OAuth2 Password Grant lên Backend FastAPI (kèm vị trí đăng nhập)
       const { access_token, refresh_token } = (await authApi.login(normalizedAccount, password, detectedLocation)).data;
 
-      // 2. Thiết lập token tạm vào Zustand store
-      setTokens(access_token, refresh_token);
-      tokensApplied = true;
+      // Gán header Authorization tạm thời cho instance axios để gọi usersApi.getMe()
+      // TUYỆT ĐỐI không gọi setTokens vào Zustand lúc này để tránh kích hoạt re-render giật sang màn hình Owner
+      api.defaults.headers.common['Authorization'] = `Bearer ${access_token}`;
 
-      // 3. Lấy thông tin tài khoản thực tế từ PostgreSQL Database (/api/v1/users/me)
+      // 2. Lấy thông tin tài khoản thực tế từ PostgreSQL Database (/api/v1/users/me)
       const userProfile = (await usersApi.getMe()).data;
       const savedScale = userProfile?.custom_font_scale;
       if (userProfile?.font_size_mode === 'custom') {
-        // Clear a previously saved custom mode so each new login starts with system sizing.
         try {
           const savedScaleIndex =
             Number.isInteger(savedScale) && savedScale >= 0 && savedScale < FONT_SCALE_LEVELS.length
@@ -137,7 +136,10 @@ export default function LoginScreen({ navigation, route }: any) {
         }
       }
 
-      // 4. Lưu thông tin đăng nhập vào Store
+      tokensApplied = true;
+
+      // 3. Cập nhật đồng thời (Atomic) cả Token, Thông tin người dùng và Vai trò vào Store
+      // Lúc này viewRole và accessToken cùng được cập nhật, AppNavigator render đúng thẳng vào Bác sĩ!
       login(
         access_token,
         refresh_token,
@@ -150,6 +152,7 @@ export default function LoginScreen({ navigation, route }: any) {
       );
       setViewRole(userProfile.role === 'doctor' ? 'DOCTOR' : 'CAREGIVER');
     } catch (error: any) {
+      delete api.defaults.headers.common['Authorization'];
       if (tokensApplied) logout();
       console.error('[Login] Error:', error);
       const detail = error?.response?.data?.detail || error?.message || 'Thông tin đăng nhập hoặc mật khẩu không đúng.';
@@ -158,6 +161,7 @@ export default function LoginScreen({ navigation, route }: any) {
         typeof detail === 'string' ? detail : 'Đăng nhập không thành công. Vui lòng kiểm tra lại.'
       );
     } finally {
+      setIsRoleLoading(false);
       setLoading(false);
     }
   };

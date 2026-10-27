@@ -31,6 +31,8 @@ export interface AuthStoreState {
   avatar_url: string | null;
   household_id: number | string | null;
   viewRole: 'CAREGIVER' | 'DOCTOR';
+  isHydrated: boolean;
+  isRoleLoading: boolean;
   permissions: HousePermissions | null;
 
   login: (
@@ -56,6 +58,7 @@ export interface AuthStoreState {
   setAvatar: (url: string | null) => void;
   updateUserName: (nameOrId: string, name?: string) => void;
   setViewRole: (role: 'CAREGIVER' | 'DOCTOR') => void;
+  setIsRoleLoading: (loading: boolean) => void;
   toggleViewRole: () => void;
   fetchMyPermissions: (householdId?: number | string) => Promise<HousePermissions>;
   logout: () => void;
@@ -87,7 +90,11 @@ const createAuthStore: StateCreator<AuthStoreState, [], [['zustand/persist', Aut
   avatar_url: null,
   household_id: null,
   viewRole: 'CAREGIVER',
+  isHydrated: false,
+  isRoleLoading: false,
   permissions: null,
+
+  setIsRoleLoading: (loading: boolean) => set({ isRoleLoading: loading }),
 
   login: (
     access: string,
@@ -276,6 +283,14 @@ const persistOptions: PersistOptions<AuthStoreState> = {
   name: 'auth-storage',
   storage: createJSONStorage(() => AsyncStorage),
   version: 1,
+  partialize: (state) => ({
+    ...state,
+    isRoleLoading: false,
+    isHydrated: false,
+  }),
+  onRehydrateStorage: () => () => {
+    useAuthStore.setState({ isHydrated: true });
+  },
   migrate: (persistedState) => {
     const state = persistedState as AuthStoreState;
     if (!state.accessToken?.startsWith('fake-')) {
@@ -304,3 +319,7 @@ const persistOptions: PersistOptions<AuthStoreState> = {
 export const useAuthStore = create<AuthStoreState>()(
   persist(createAuthStore, persistOptions)
 );
+
+if (useAuthStore.persist?.hasHydrated?.()) {
+  useAuthStore.setState({ isHydrated: true });
+}

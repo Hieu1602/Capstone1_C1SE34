@@ -1,10 +1,116 @@
+// AppointmentComponents.tsx
+// Tập hợp các Component hiển thị thông tin Lịch khám:
+// 1. AppointmentStatsSummary: Thống kê 4 ô & bộ lọc trạng thái (Tổng, Sắp tới, Đã khám, Đã hủy)
+// 2. AppointmentCard: Thẻ hiển thị chi tiết lịch hẹn của từng bệnh nhân
+
 import React from 'react';
 import { View, StyleSheet, TouchableOpacity } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
+import { Colors } from '../../../theme/colors';
 import { LocalizedText } from '../../../i18n/LocalizedComponents';
 import { AppointmentItem } from './types';
 
-interface AppointmentCardProps {
+// =============================================================
+// 1. THỐNG KÊ LỊCH HẸN & BỘ LỌC (AppointmentStatsSummary)
+// =============================================================
+export interface AppointmentStatsSummaryProps {
+  totalCount: number;
+  upcomingCount: number;
+  completedCount: number;
+  cancelledCount?: number;
+  filterTab: 'ALL' | 'UPCOMING' | 'COMPLETED' | 'CANCELLED';
+  onFilterChange: (tab: 'ALL' | 'UPCOMING' | 'COMPLETED' | 'CANCELLED') => void;
+  isDarkMode: boolean;
+  colors: any;
+}
+
+export const AppointmentStatsSummary: React.FC<AppointmentStatsSummaryProps> = ({
+  totalCount,
+  upcomingCount,
+  completedCount,
+  cancelledCount = 0,
+  filterTab,
+  onFilterChange,
+  isDarkMode,
+}) => {
+  const stats = [
+    { key: 'total', icon: 'calendar', color: '#2563EB', bg: '#EFF6FF', border: '#3B82F633', label: 'Tổng lịch', count: totalCount },
+    { key: 'upcoming', icon: 'time', color: '#D97706', bg: '#FFFBEB', border: '#F59E0B33', label: 'Sắp tới', count: upcomingCount },
+    { key: 'completed', icon: 'checkmark-done', color: '#059669', bg: '#ECFDF5', border: '#10B98133', label: 'Đã khám', count: completedCount },
+    { key: 'cancelled', icon: 'close-circle', color: '#DC2626', bg: '#FEF2F2', border: '#EF444433', label: 'Đã hủy', count: cancelledCount },
+  ];
+
+  return (
+    <View>
+      <View style={styles.summaryGrid}>
+        {stats.map((s) => (
+          <TouchableOpacity
+            key={s.key}
+            activeOpacity={0.8}
+            onPress={() => {
+              if (s.key === 'total') onFilterChange('ALL');
+              else if (s.key === 'upcoming') onFilterChange('UPCOMING');
+              else if (s.key === 'completed') onFilterChange('COMPLETED');
+              else if (s.key === 'cancelled') onFilterChange('CANCELLED');
+            }}
+            style={[
+              styles.summaryCard,
+              { backgroundColor: isDarkMode ? '#1E293B' : '#FFFFFF', borderColor: s.border },
+            ]}
+          >
+            <View style={[styles.statIconBox, { backgroundColor: s.bg }]}>
+              <Ionicons name={s.icon as any} size={14} color={s.color} />
+            </View>
+            <LocalizedText style={[styles.statNumber, { color: s.color }]}>{s.count}</LocalizedText>
+            <LocalizedText style={[styles.statLabel, { color: isDarkMode ? '#94A3B8' : '#64748B' }]}>
+              {s.label}
+            </LocalizedText>
+          </TouchableOpacity>
+        ))}
+      </View>
+
+      <View style={styles.filterRow}>
+        {[
+          { key: 'ALL' as const, label: `Tất cả (${totalCount})` },
+          { key: 'UPCOMING' as const, label: `Sắp tới (${upcomingCount})` },
+          { key: 'COMPLETED' as const, label: `Đã khám (${completedCount})` },
+          { key: 'CANCELLED' as const, label: `Đã hủy (${cancelledCount})` },
+        ].map((tab) => {
+          const active = filterTab === tab.key;
+          const activeBg = tab.key === 'CANCELLED' ? '#DC2626' : Colors.primary;
+          return (
+            <TouchableOpacity
+              key={tab.key}
+              onPress={() => onFilterChange(tab.key)}
+              style={[
+                styles.filterChip,
+                active
+                  ? { backgroundColor: activeBg }
+                  : { backgroundColor: isDarkMode ? '#334155' : '#EEF2F6' },
+              ]}
+            >
+              <LocalizedText
+                style={[
+                  styles.filterChipText,
+                  active
+                    ? { color: '#FFFFFF', fontWeight: '700' }
+                    : { color: isDarkMode ? '#CBD5E1' : '#64748B' },
+                ]}
+              >
+                {tab.label}
+              </LocalizedText>
+            </TouchableOpacity>
+          );
+        })}
+      </View>
+    </View>
+  );
+};
+
+// =============================================================
+// 2. CARD LỊCH HẸN (AppointmentCard)
+// =============================================================
+export interface AppointmentCardProps {
   appointment: AppointmentItem;
   onViewPatient: (patientId: string) => void;
   onMarkCompleted: (aptId: string) => void;
@@ -85,13 +191,12 @@ export const AppointmentCard: React.FC<AppointmentCardProps> = ({
         </View>
       </View>
 
-      {/* Thông tin bệnh nhân */}
       <View style={styles.patientRow}>
         <View style={styles.patientAvatar}>
           <LocalizedText style={styles.patientAvatarText}>{initial}</LocalizedText>
         </View>
         <View style={{ flex: 1, marginLeft: 10 }}>
-          <LocalizedText style={[styles.patientName, { color: colors.textPrimary }]} numberOfLines={1}>
+          <LocalizedText style={[styles.patientName, { color: colors.textPrimary }]}>
             {apt.patient_name}
           </LocalizedText>
           {apt.location ? (
@@ -105,7 +210,6 @@ export const AppointmentCard: React.FC<AppointmentCardProps> = ({
         </View>
       </View>
 
-      {/* Chuyên khoa / hình thức khám */}
       <View style={styles.examTypeBox}>
         <Ionicons name="medkit" size={14} color="#0284C7" style={{ marginRight: 6 }} />
         <LocalizedText style={[styles.examTypeText, { color: colors.textPrimary }]}>
@@ -113,7 +217,6 @@ export const AppointmentCard: React.FC<AppointmentCardProps> = ({
         </LocalizedText>
       </View>
 
-      {/* Dặn dò */}
       {cleanInstructions ? (
         <View style={[styles.instructionsBox, { backgroundColor: isDarkMode ? '#0F172A88' : '#F8FAFC' }]}>
           <LocalizedText style={[styles.instructionsText, { color: isDarkMode ? '#CBD5E1' : '#475569' }]}>
@@ -122,7 +225,6 @@ export const AppointmentCard: React.FC<AppointmentCardProps> = ({
         </View>
       ) : null}
 
-      {/* Lý do hủy nếu có */}
       {isCancelled && apt.cancellation_reason ? (
         <View
           style={[
@@ -139,7 +241,6 @@ export const AppointmentCard: React.FC<AppointmentCardProps> = ({
         </View>
       ) : null}
 
-      {/* Trạng thái xác nhận từ gia đình & Loa Hub */}
       <View style={styles.metaBadgesRow}>
         {isUpcoming && (
           <View
@@ -192,7 +293,6 @@ export const AppointmentCard: React.FC<AppointmentCardProps> = ({
         </View>
       </View>
 
-      {/* Nút hành động */}
       <View style={styles.actionRow}>
         <TouchableOpacity
           style={styles.btnViewPatient}
@@ -238,6 +338,33 @@ export const AppointmentCard: React.FC<AppointmentCardProps> = ({
 };
 
 const styles = StyleSheet.create({
+  summaryGrid: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    marginBottom: 10,
+    gap: 8,
+  },
+  summaryCard: {
+    flex: 1,
+    alignItems: 'center',
+    paddingVertical: 8,
+    borderRadius: 10,
+    borderWidth: 1,
+  },
+  statIconBox: {
+    width: 26,
+    height: 26,
+    borderRadius: 13,
+    justifyContent: 'center',
+    alignItems: 'center',
+    marginBottom: 2,
+  },
+  statNumber: { fontSize: 16, fontWeight: '800' },
+  statLabel: { fontSize: 10.5, fontWeight: '600', marginTop: 1 },
+  filterRow: { flexDirection: 'row', gap: 6 },
+  filterChip: { paddingHorizontal: 12, paddingVertical: 5, borderRadius: 16 },
+  filterChipText: { fontSize: 11.5 },
+
   aptCard: {
     borderRadius: 12,
     padding: 12,
@@ -376,3 +503,4 @@ const styles = StyleSheet.create({
     lineHeight: 16,
   },
 });
+
