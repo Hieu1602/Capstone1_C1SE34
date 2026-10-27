@@ -14,17 +14,19 @@ import {
 
 export const resolveAvatarUrl = (url: string | null | undefined): string | null => {
   if (!url) return null;
+  const trimmed = url.trim();
+  if (!trimmed) return null;
   if (
-    url.startsWith('http://') ||
-    url.startsWith('https://') ||
-    url.startsWith('data:') ||
-    url.startsWith('file:') ||
-    url.startsWith('blob:')
+    trimmed.startsWith('http://') ||
+    trimmed.startsWith('https://') ||
+    trimmed.startsWith('data:') ||
+    trimmed.startsWith('file:') ||
+    trimmed.startsWith('blob:')
   ) {
-    return url;
+    return trimmed;
   }
   const hostOrigin = BASE_URL.replace(/\/api\/v1\/?$/, '');
-  return `${hostOrigin}${url.startsWith('/') ? '' : '/'}${url}`;
+  return `${hostOrigin}${trimmed.startsWith('/') ? '' : '/'}${trimmed}`;
 };
 
 export const FONT_SCALE_LEVELS = [0.85, 1, 1.15, 1.3, 1.5];

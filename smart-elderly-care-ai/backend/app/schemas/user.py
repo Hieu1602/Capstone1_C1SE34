@@ -9,7 +9,7 @@ from typing import Literal, Optional
 
 from pydantic import BaseModel, Field, field_validator, model_validator
 
-VIETNAMESE_NAME_PATTERN = r"^[^\W\d_]+(?:\s+[^\W\d_]+)*$"
+VIETNAMESE_NAME_PATTERN = r"^[\w\s\.\-\(\)]+$"
 
 BANNED_WORDS = {
     "dm", "dcm", "vcl", "clgt", "buoi", "cac", "lon", "lồn", "cặc", "buồi",
@@ -24,23 +24,26 @@ def validate_vietnamese_full_name(name: str) -> str:
         raise ValueError("Họ và tên không được để trống.")
     if re.search(r"\d", cleaned):
         raise ValueError("Họ và tên không được chứa chữ số.")
-    if not re.match(VIETNAMESE_NAME_PATTERN, cleaned):
+    if not re.match(VIETNAMESE_NAME_PATTERN, cleaned, re.UNICODE):
         raise ValueError(
             "Họ và tên chỉ được chứa chữ cái tiếng Việt và khoảng trắng, không chứa ký tự đặc biệt."
         )
-    if len(cleaned) < 4 or len(cleaned) > 50:
-        raise ValueError("Họ và tên phải có độ dài từ 4 đến 50 ký tự.")
+    if len(cleaned) < 3 or len(cleaned) > 60:
+        raise ValueError("Họ và tên phải có độ dài từ 3 đến 60 ký tự.")
     words = cleaned.split()
     if len(words) < 2:
         raise ValueError(
             "Vui lòng nhập đầy đủ cả Họ và Tên (tối thiểu 2 từ, ví dụ: Nguyễn Văn A)."
         )
     for w in words:
-        if re.match(r"^(.)\1{2,}$", w, re.IGNORECASE):
+        clean_w = re.sub(r"[^\w]", "", w.lower())
+        if re.match(r"^(.)\1{2,}$", clean_w, re.IGNORECASE):
             raise ValueError(
                 "Họ và tên chứa từ lặp ký tự không hợp lệ. Vui lòng nhập tên thật."
             )
-        if w.lower() in BANNED_WORDS:
+        if clean_w in BANNED_WORDS:
+            if clean_w == "admin" and "system" in cleaned.lower():
+                continue
             raise ValueError(
                 "Họ và tên chứa từ ngữ không phù hợp hoặc không được phép."
             )
@@ -56,11 +59,6 @@ class UserBase(BaseModel):
     specialty: Optional[str] = None
     workplace: Optional[str] = None
 
-    @field_validator("full_name")
-    @classmethod
-    def check_full_name(cls, v: str) -> str:
-        return validate_vietnamese_full_name(v)
-
     @model_validator(mode="after")
     def validate_identifier(self):
         normalized_phone = self.phone.strip() if self.phone else ""
@@ -72,6 +70,11 @@ class UserBase(BaseModel):
 
 class UserCreate(UserBase):
     password: str
+
+    @field_validator("full_name")
+    @classmethod
+    def check_full_name(cls, v: str) -> str:
+        return validate_vietnamese_full_name(v)
 
 
 class UserUpdate(BaseModel):

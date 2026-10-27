@@ -93,6 +93,41 @@ async def lifespan(app: FastAPI):
     await appointment_scheduler_service.start()
     logger.info("✅ AppointmentSchedulerService started.")
 
+    # Background task: Tự động đồng bộ các avatar dạng static file cục bộ lên Base64 trong Supabase
+    async def _sync_local_avatars_to_cloud():
+        try:
+            import io, base64
+            from PIL import Image
+            from sqlalchemy import select
+            from app.core.database import AsyncSessionFactory
+            from app.models.user import User
+            async with AsyncSessionFactory() as session:
+                result = await session.execute(select(User).where(User.avatar_url.like('/static/avatars/%')))
+                legacy_users = result.scalars().all()
+                updated_count = 0
+                for u in legacy_users:
+                    fname = u.avatar_url.split('/static/avatars/')[-1]
+                    local_p = _STATIC_DIR / "avatars" / fname
+                    if local_p.exists():
+                        img = Image.open(local_p)
+                        if img.mode in ('RGBA', 'P'):
+                            img = img.convert('RGB')
+                        w, h = img.size
+                        min_dim = min(w, h)
+                        img = img.crop(((w-min_dim)//2, (h-min_dim)//2, (w+min_dim)//2, (h+min_dim)//2))
+                        img.thumbnail((384, 384))
+                        buf = io.BytesIO()
+                        img.save(buf, format='JPEG', quality=85)
+                        u.avatar_url = f"data:image/jpeg;base64,{base64.b64encode(buf.getvalue()).decode('utf-8')}"
+                        updated_count += 1
+                if updated_count > 0:
+                    await session.commit()
+                    logger.info("✅ Auto-migrated %d local avatar(s) to cloud Base64.", updated_count)
+        except Exception as e:
+            logger.warning("[Lifespan] Avatar cloud sync warning: %s", e)
+
+    asyncio.create_task(_sync_local_avatars_to_cloud())
+
     yield
 
     # ---- Shutdown ----
