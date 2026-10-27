@@ -77,3 +77,13 @@ smart-elderly-care-ai/edge/test_snapshot.jpg
 # Agent configuration
 .agents/
 .specify/
+
+# Playwright & E2E Testing (Local)
+test-results/
+playwright-report/
+blob-report/
+playwright/.cache/
+docs/AUTOMATION_TESTING_GUIDE.md
+smart-elderly-care-ai/apps/mobile/.maestro/
+smart-elderly-care-ai/apps/web/e2e/
+smart-elderly-care-ai/apps/web/playwright.config.ts
