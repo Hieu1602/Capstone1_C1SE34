@@ -34,12 +34,17 @@ export default function HomeScreen({ navigation }: any) {
     fetchHouseFromBackend, fetchDevicesFromBackend, iotDevices,
   } = useVitalStore();
 
-  const { userRole, full_name, userName, phone_number, userPhone } = useAuthStore();
+  const { userRole, role, full_name, userName, phone_number, userPhone, permissions, fetchMyPermissions } = useAuthStore();
   const displayName = full_name || userName || 'Thành viên';
   const isMember = userRole === 'member' || !userRole || userRole === 'user';
   const hasLinkedHouse = Boolean(house?.id && house?.hasHouse !== false && house?.name && house.name.trim() !== '');
   const hasLinkedDevices = (iotDevices || []).length > 0;
   const isUserEmptyMember = isMember && !hasLinkedHouse && !hasLinkedDevices;
+
+  // Kiểm tra quyền xem camera và chỉ số sinh hiệu của tài khoản thành viên
+  const isOwnerOrAdmin = userRole === 'admin' || role === 'admin' || permissions?.is_owner === true || permissions?.role_in_house === 'OWNER';
+  const canViewCamera = isOwnerOrAdmin || Boolean(permissions?.can_view_camera);
+  const canViewHealth = isOwnerOrAdmin || Boolean(permissions?.can_view_health);
 
   const [isRefreshing, setIsRefreshing] = useState(false);
 
@@ -52,6 +57,7 @@ export default function HomeScreen({ navigation }: any) {
         fetchDevicesFromBackend?.(),
         fetchVitals(),
         fetchNotifications(),
+        fetchMyPermissions?.(),
       ]);
       Alert.alert(
         '🔄 Đã làm mới',
@@ -76,14 +82,19 @@ export default function HomeScreen({ navigation }: any) {
   useEffect(() => {
     fetchVitals(); fetchSystemMode(); fetchReminders(); fetchNotifications();
     fetchPatientRecord?.(); syncAllWithBackend?.();
+    fetchMyPermissions?.();
     alertsWS.connect();
-    const interval = setInterval(() => { fetchVitals(); }, 15000);
+    const interval = setInterval(() => {
+      fetchVitals();
+      fetchMyPermissions?.();
+    }, 15000);
     return () => clearInterval(interval);
   }, []);
 
   useEffect(() => {
     return navigation.addListener('focus', () => {
       fetchVitals(); fetchNotifications(); fetchSystemMode(); fetchReminders();
+      fetchMyPermissions?.();
     });
   }, [navigation]);
 
@@ -186,7 +197,13 @@ export default function HomeScreen({ navigation }: any) {
     );
   };
 
-  const handleMultiView = () => { navigation.navigate('MultiView'); };
+  const handleMultiView = () => {
+    if (!canViewCamera) {
+      Alert.alert('Không có quyền truy cập', 'Chủ hộ đã tắt quyền xem trực tiếp camera đối với tài khoản này.');
+      return;
+    }
+    navigation.navigate('MultiView');
+  };
 
   const handleSelectHouseMode = async (mode: 'AWAY' | 'HOME' | 'DISARM') => {
     if (house.currentMode === mode) return;
@@ -381,96 +398,7 @@ export default function HomeScreen({ navigation }: any) {
           </View>
         ) : (
           <>
-            {/* 2. Chế độ an ninh */}
-            <View style={styles.modesRow}>
-          {[
-            { key: 'AWAY', label: 'Xa', icon: 'exit-outline', activeColor: '#10B981', activeStyle: styles.modePillActiveAway, textColor: '#047857', isActive: house.currentMode === 'AWAY', onPress: () => handleSelectHouseMode('AWAY') },
-            { key: 'HOME', label: 'Ở nhà', icon: 'home', activeColor: '#3B82F6', activeStyle: styles.modePillActiveHome, textColor: '#1D4ED8', isActive: house.currentMode === 'HOME', onPress: () => handleSelectHouseMode('HOME') },
-            { key: 'DISARM', label: snoozeButtonLabel, icon: isSnoozeActive ? 'volume-mute' : 'notifications-off-outline', activeColor: isSnoozeActive ? '#F59E0B' : '#64748B', activeStyle: isSnoozeActive ? styles.modePillActiveSnooze : styles.modePillActiveDisarm, textColor: isSnoozeActive ? (isDarkMode ? '#FBBF24' : '#D97706') : '#475569', isActive: isSnoozeActive || house.currentMode === 'DISARM', onPress: handlePressSnoozeButton },
-          ].map((m) => (
-            <TouchableOpacity
-              key={m.key}
-              style={[styles.modePill, m.isActive ? m.activeStyle : styles.modePillInactive, !m.isActive && isDarkMode && { backgroundColor: colors.card, borderColor: colors.border }]}
-              onPress={m.onPress}
-              activeOpacity={0.75}
-            >
-              <View style={[styles.modeIconCircle, { backgroundColor: m.isActive ? m.activeColor : (isDarkMode ? colors.surfaceSubtle : '#E2E8F0') }]}>
-                <Ionicons name={m.icon as any} size={14} color={m.isActive ? '#FFF' : (isDarkMode ? colors.textMuted : '#94A3B8')} />
-              </View>
-              <Text style={[styles.modePillText, { color: m.isActive ? m.textColor : (isDarkMode ? colors.textMuted : '#94A3B8') }]} numberOfLines={1}>{m.label}</Text>
-            </TouchableOpacity>
-          ))}
-        </View>
-
-        {/* 2.4. Banner Lịch khám Bác sĩ mới chờ Gia đình xác nhận */}
-        {pendingAppointmentNotice && (
-          <TouchableOpacity
-            style={[styles.appointmentBanner, isDarkMode && { backgroundColor: 'rgba(217, 119, 6, 0.12)', borderColor: '#D97706' }]}
-            activeOpacity={0.88}
-            onPress={() => setFamilyAppointmentsModalVisible(true)}
-          >
-            <View style={styles.appointmentBannerLeft}>
-              <View style={[styles.appointmentIconCircle, isDarkMode && { backgroundColor: 'rgba(217, 119, 6, 0.25)' }]}>
-                <Ionicons name="calendar" size={20} color="#D97706" />
-              </View>
-              <View style={{ flex: 1, marginLeft: 10 }}>
-                <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6 }}>
-                  <Text style={[styles.appointmentBannerTitle, isDarkMode && { color: '#FBBF24' }]}>🗓️ LỊCH KHÁM MỚI TỪ BÁC SĨ</Text>
-                  <View style={styles.appointmentBadge}><Text style={styles.appointmentBadgeText}>Chờ xác nhận</Text></View>
-                </View>
-                <Text style={[styles.appointmentBannerSubtitle, isDarkMode && { color: colors.textSecondary }]} numberOfLines={2}>
-                  {pendingAppointmentNotice.message}
-                </Text>
-              </View>
-            </View>
-            <View style={[styles.appointmentActionBtn, isDarkMode && { backgroundColor: 'rgba(217, 119, 6, 0.25)' }]}>
-              <Text style={[styles.appointmentActionBtnText, isDarkMode && { color: '#FBBF24' }]}>Xác nhận</Text>
-              <Ionicons name="chevron-forward" size={14} color="#D97706" />
-            </View>
-          </TouchableOpacity>
-        )}
-
-        {/* 2.5. Banner Cảnh báo Khẩn cấp / Trạng thái ổn định */}
-        {hasEmergency ? (
-          <TouchableOpacity
-            style={styles.emergencyBanner}
-            activeOpacity={0.9}
-            onPress={() => {
-              if (activeEmergency) {
-                navigation.navigate('EventDetail', {
-                  incidentId: activeEmergency.id, id: activeEmergency.id, alert_type: activeEmergency.alert_type,
-                  alert_level: activeEmergency.alert_level || 'CRITICAL', message: activeEmergency.message,
-                  confidence: activeEmergency.confidence, thumbnail_url: activeEmergency.thumbnail_url ?? null,
-                  video_clip_url: activeEmergency.video_clip_url ?? null, is_acknowledged: activeEmergency.is_acknowledged ?? false,
-                });
-              } else { navigation.navigate('Alerts'); }
-            }}
-          >
-            <View style={styles.emergencyBannerHeader}>
-              <View style={styles.emergencySirenPulse}><Ionicons name="warning" size={20} color="#FFF" /></View>
-              <View style={{ flex: 1, marginLeft: 10 }}>
-                <Text style={styles.emergencyBannerTitle}>🚨 CẢNH BÁO KHẨN CẤP ĐANG KÍCH HOẠT</Text>
-                <Text style={styles.emergencyBannerMessage} numberOfLines={2}>
-                  {activeEmergency?.message || 'Phát hiện sự cố té ngã (YOLO-Pose AI). Cần kiểm tra video và xác nhận xử lý ngay!'}
-                </Text>
-              </View>
-              <View style={styles.emergencyActionBtn}>
-                <Text style={styles.emergencyActionBtnText}>Xem & Xử lý</Text>
-                <Ionicons name="chevron-forward" size={14} color="#DC2626" />
-              </View>
-            </View>
-          </TouchableOpacity>
-        ) : (
-          <View style={[styles.stableHealthCard, { backgroundColor: isDarkMode ? '#064E3B18' : '#F0FDF4', borderColor: isDarkMode ? '#065F46' : '#BBF7D0' }]}>
-            <View style={styles.stablePulseDot} />
-            <Ionicons name="shield-checkmark" size={18} color="#16A34A" />
-            <Text style={[styles.stableHealthText, { color: isDarkMode ? '#86EFAC' : '#15803D' }]}>
-              Sức khoẻ ổn định • Hệ thống giám sát AI đang bảo vệ 24/7
-            </Text>
-          </View>
-        )}
-
-        {/* 3. NÚT KHẨN CẤP: ONE-TOUCH SOS 115 */}
+            {/* 3. NÚT KHẨN CẤP: ONE-TOUCH SOS 115 */}
         <TouchableOpacity style={styles.sosCard} onPress={handleSOS115} activeOpacity={0.9}>
           <View style={styles.sosLeftContent}>
             <View style={styles.sosIconCircle}><Ionicons name="call" size={24} color="#FFF" /></View>
@@ -485,18 +413,37 @@ export default function HomeScreen({ navigation }: any) {
           <View style={styles.sosActionCircle}><Ionicons name="arrow-forward" size={18} color={Colors.danger} /></View>
         </TouchableOpacity>
 
-        {/* 4. Banner Nhiều chế độ xem (Multi-view) */}
-        <TouchableOpacity style={[styles.multiViewCard, isDarkMode && { backgroundColor: colors.card, borderColor: colors.border }]} onPress={handleMultiView} activeOpacity={0.9}>
-          <Text style={[styles.multiViewText, isDarkMode && { color: colors.textPrimary }]}>Nhiều chế độ xem</Text>
-          <View style={styles.playCircleBtn}><Ionicons name="play" size={14} color={Colors.primary} style={{ marginLeft: 2 }} /></View>
-        </TouchableOpacity>
+        {/* 4. Banner Nhiều chế độ xem (Multi-view) & 5. Main Camera Device Card */}
+        {canViewCamera ? (
+          <>
+            <TouchableOpacity style={[styles.multiViewCard, isDarkMode && { backgroundColor: colors.card, borderColor: colors.border }]} onPress={handleMultiView} activeOpacity={0.9}>
+              <Text style={[styles.multiViewText, isDarkMode && { color: colors.textPrimary }]}>Nhiều chế độ xem</Text>
+              <View style={styles.playCircleBtn}><Ionicons name="play" size={14} color={Colors.primary} style={{ marginLeft: 2 }} /></View>
+            </TouchableOpacity>
 
-        {/* 5. Main Camera Device Card */}
-        <HomeCameraCard
-          cameraDisplayName={cameraDisplayName} camera={camera} house={house} isDarkMode={isDarkMode}
-          colors={colors} navigation={navigation} handleTogglePrivacyMode={handleTogglePrivacyMode}
-          handleMicPress={handleMicPress} isMicSpeaking={isMicSpeaking} handleToggleAIProtect={handleToggleAIProtect}
-        />
+            <HomeCameraCard
+              cameraDisplayName={cameraDisplayName} camera={camera} house={house} isDarkMode={isDarkMode}
+              colors={colors} navigation={navigation} handleTogglePrivacyMode={handleTogglePrivacyMode}
+              handleMicPress={handleMicPress} isMicSpeaking={isMicSpeaking} handleToggleAIProtect={handleToggleAIProtect}
+            />
+          </>
+        ) : (
+          <View style={[styles.cameraBlockedCard, { backgroundColor: isDarkMode ? '#1E293B' : '#FFFFFF', borderColor: isDarkMode ? '#334155' : '#E2E8F0' }]}>
+            <View style={styles.cameraBlockedIconBox}>
+              <Ionicons name="videocam-off" size={32} color="#EF4444" />
+            </View>
+            <Text style={[styles.cameraBlockedTitle, { color: colors.textPrimary }]}>
+              Camera an ninh đã bị khóa
+            </Text>
+            <Text style={[styles.cameraBlockedDesc, { color: colors.textSecondary }]}>
+              Chủ hộ đã tắt quyền giám sát camera an ninh đối với tài khoản này. Vui lòng liên hệ Chủ hộ để được cấp quyền theo dõi.
+            </Text>
+            <View style={[styles.cameraBlockedBadge, isDarkMode && { backgroundColor: '#334155' }]}>
+              <Ionicons name="lock-closed" size={13} color="#94A3B8" />
+              <Text style={[styles.cameraBlockedBadgeText, isDarkMode && { color: '#94A3B8' }]}>Chưa được cấp quyền xem camera</Text>
+            </View>
+          </View>
+        )}
 
         {/* 6. Widget Nhắc nhở uống thuốc */}
         {Boolean(nextMedication?.name) && (
@@ -507,14 +454,17 @@ export default function HomeScreen({ navigation }: any) {
           />
         )}
 
-        {/* 7. Khối hiển thị Chỉ số sinh hiệu */}
-        <VitalsSummaryCard
-          currentVitals={currentVitals} isEdgeHubOnline={isEdgeHubOnline} braceletBattery={braceletBattery}
-          isAcousticAlarm={isAcousticAlarm} isDarkMode={isDarkMode} colors={colors} navigation={navigation}
-        />
+        {/* 7. Khối hiển thị Chỉ số sinh hiệu & 8. Khối Xu hướng sinh hiệu hôm nay */}
+        {canViewHealth && (
+          <>
+            <VitalsSummaryCard
+              currentVitals={currentVitals} isEdgeHubOnline={isEdgeHubOnline} braceletBattery={braceletBattery}
+              isAcousticAlarm={isAcousticAlarm} isDarkMode={isDarkMode} colors={colors} navigation={navigation}
+            />
 
-        {/* 8. Khối Xu hướng sinh hiệu hôm nay */}
-        <HealthTrendsCard currentVitals={currentVitals} isDarkMode={isDarkMode} colors={colors} navigation={navigation} />
+            <HealthTrendsCard currentVitals={currentVitals} isDarkMode={isDarkMode} colors={colors} navigation={navigation} />
+          </>
+        )}
           </>
         )}
       </ScrollView>
@@ -626,5 +576,54 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     justifyContent: 'center',
     marginRight: 10,
+  },
+  cameraBlockedCard: {
+    borderRadius: 20,
+    padding: 24,
+    borderWidth: 1,
+    alignItems: 'center',
+    justifyContent: 'center',
+    marginBottom: 16,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.05,
+    shadowRadius: 8,
+    elevation: 2,
+  },
+  cameraBlockedIconBox: {
+    width: 64,
+    height: 64,
+    borderRadius: 32,
+    backgroundColor: '#FEE2E2',
+    alignItems: 'center',
+    justifyContent: 'center',
+    marginBottom: 14,
+  },
+  cameraBlockedTitle: {
+    fontSize: 16,
+    fontWeight: '800',
+    marginBottom: 6,
+    textAlign: 'center',
+  },
+  cameraBlockedDesc: {
+    fontSize: 13,
+    lineHeight: 18,
+    textAlign: 'center',
+    paddingHorizontal: 12,
+    marginBottom: 14,
+  },
+  cameraBlockedBadge: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 6,
+    backgroundColor: '#F1F5F9',
+    paddingVertical: 6,
+    paddingHorizontal: 12,
+    borderRadius: 12,
+  },
+  cameraBlockedBadgeText: {
+    fontSize: 12,
+    color: '#64748B',
+    fontWeight: '600',
   },
 });

@@ -11,6 +11,7 @@ import {
 import { Ionicons } from "@expo/vector-icons";
 import { Colors } from "../../../../theme/colors";
 import { ProfileEditNameModal } from "./ProfileEditNameModal";
+import { ProfileEditPhoneModal } from "./ProfileEditPhoneModal";
 import { validateFullName, sanitizeNameInput } from "../../utils/nameValidation";
 
 interface ProfileInfoModalProps {
@@ -24,6 +25,7 @@ interface ProfileInfoModalProps {
     onChangePasswordPress: () => void;
     onLogoutPress: () => void;
     onSaveName: (newName: string) => Promise<boolean>;
+    onSavePhone: (newPhone: string, otpCode: string) => Promise<boolean>;
 }
 
 export const ProfileInfoModal: React.FC<ProfileInfoModalProps> = ({
@@ -37,11 +39,14 @@ export const ProfileInfoModal: React.FC<ProfileInfoModalProps> = ({
     onChangePasswordPress,
     onLogoutPress,
     onSaveName,
+    onSavePhone,
 }) => {
     const [isEditingName, setIsEditingName] = useState(false);
     const [draftName, setDraftName] = useState(displayName);
     const [isSavingName, setIsSavingName] = useState(false);
     const [nameError, setNameError] = useState<string | null>(null);
+
+    const [isEditingPhone, setIsEditingPhone] = useState(false);
 
     const handleOpenEditName = () => {
         setDraftName(displayName);
@@ -52,6 +57,14 @@ export const ProfileInfoModal: React.FC<ProfileInfoModalProps> = ({
     const handleCloseEditName = () => {
         setIsEditingName(false);
         setNameError(null);
+    };
+
+    const handleOpenEditPhone = () => {
+        setIsEditingPhone(true);
+    };
+
+    const handleCloseEditPhone = () => {
+        setIsEditingPhone(false);
     };
 
     const handleSaveName = async () => {
@@ -206,6 +219,7 @@ export const ProfileInfoModal: React.FC<ProfileInfoModalProps> = ({
                                 isDarkMode && { borderBottomColor: "#334155" },
                             ]}
                             activeOpacity={0.8}
+                            onPress={handleOpenEditPhone}
                         >
                             <View style={styles.infoLeftWrap}>
                                 <Ionicons
@@ -285,6 +299,15 @@ export const ProfileInfoModal: React.FC<ProfileInfoModalProps> = ({
                         isSaving={isSavingName}
                         onClose={handleCloseEditName}
                         onSave={handleSaveName}
+                    />
+
+                    {/* Modal thay đổi số điện thoại */}
+                    <ProfileEditPhoneModal
+                        visible={isEditingPhone}
+                        isDarkMode={isDarkMode}
+                        currentPhone={phone}
+                        onClose={handleCloseEditPhone}
+                        onSave={onSavePhone}
                     />
                 </Pressable>
             </Pressable>

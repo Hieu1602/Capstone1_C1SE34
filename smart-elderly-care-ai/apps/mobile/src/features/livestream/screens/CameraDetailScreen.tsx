@@ -1,7 +1,7 @@
 /**
  * Ghép Header, Live View, thanh thao tác, lưới chức năng, danh sách Playback và SOS.
  */
-import React, { useState } from "react";
+import React, { useState, useEffect } from "react";
 import {
     Linking,
     Modal,
@@ -17,6 +17,7 @@ import {
 } from "../../../i18n/LocalizedComponents";
 import { useTheme } from "../../../store/useThemeStore";
 import { useAlertStore } from "../../../store/useAlertStore";
+import { useAuthStore } from "../../../store/useAuthStore";
 import { launchEmergencyCall } from "../../../services/emergency";
 import CameraViewer from "../components/CameraViewer";
 import type { VideoQuality } from "../../../services/camera";
@@ -55,6 +56,20 @@ type DetailSheet = "settings" | "recordings" | null;
  */
 export default function CameraDetailScreen({ navigation, route }: Props) {
     const { colors } = useTheme();
+    const { permissions, userRole, role } = useAuthStore();
+    const isOwnerOrAdmin = userRole === 'admin' || role === 'admin' || permissions?.is_owner === true || permissions?.role_in_house === 'OWNER';
+    const canViewCamera = isOwnerOrAdmin || Boolean(permissions?.can_view_camera);
+
+    useEffect(() => {
+        if (!canViewCamera) {
+            LocalizedAlert.alert(
+                "Không có quyền truy cập",
+                "Chủ hộ đã tắt quyền xem camera đối với tài khoản này. Vui lòng liên hệ Chủ hộ để được mở quyền."
+            );
+            navigation.goBack();
+        }
+    }, [canViewCamera]);
+
     // Camera viền cam là đích chung của PTZ, ghi hình, snapshot và đàm thoại.
     const [selectedCameraId, setSelectedCameraId] = useState(
         route?.params?.cameraId,
