@@ -127,6 +127,10 @@ const createAuthStore: StateCreator<AuthStoreState, [], [['zustand/persist', Aut
       household_id: householdId ?? null,
       viewRole: isDoctor ? 'DOCTOR' : 'CAREGIVER',
     });
+
+    setTimeout(() => {
+      get().fetchMyPermissions(householdId);
+    }, 100);
   },
 
   setTokens: (access: string, refresh: string) =>
@@ -232,8 +236,8 @@ const createAuthStore: StateCreator<AuthStoreState, [], [['zustand/persist', Aut
       }
     } catch {}
     const def: HousePermissions = {
-      can_view_health: true,
-      can_view_camera: true,
+      can_view_health: false,
+      can_view_camera: false,
       can_handle_emergency: true,
       can_manage_devices: false,
       can_manage_records: false,

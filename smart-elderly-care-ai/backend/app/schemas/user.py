@@ -88,6 +88,7 @@ class UserUpdate(BaseModel):
             return v
         return validate_vietnamese_full_name(v)
     phone: Optional[str] = None
+    otp_code: Optional[str] = None
     avatar_url: Optional[str] = None
     cchn_number: Optional[str] = None
     specialty: Optional[str] = None
