@@ -55,7 +55,34 @@ class CRUDVital:
                 )
             ).limit(1)
         )
-        return result.scalar_one_or_none()
+        found_id = result.scalar_one_or_none()
+        if found_id:
+            return found_id
+
+        # Tự động tạo bản ghi Device để đáp ứng ràng buộc khóa ngoại (Foreign Key)
+        try:
+            from app.models.house import House
+            house_res = await db.execute(select(House.id, House.owner_id).limit(1))
+            house_row = house_res.first()
+            is_band = any(k in clean_str.lower() for k in ["band", "watch", "ble", "miband", "mi_band"])
+            new_dev = Device(
+                device_id=clean_str,
+                name="Xiaomi Mi Band" if "mi" in clean_str.lower() or "band" in clean_str.lower() else f"Thiết bị {clean_str}",
+                device_type=DeviceType.SMARTBAND if is_band else DeviceType.CAMERA,
+                sub_title="Kết nối qua App Bridge (Notify for Mi Band / Webhook)",
+                status="ONLINE",
+                is_online=True,
+                house_id=house_row[0] if house_row else None,
+                owner_id=house_row[1] if house_row else None,
+            )
+            db.add(new_dev)
+            await db.flush()
+            await db.refresh(new_dev)
+            logger.info("[CRUDVital] Tự động khởi tạo Device '%s' (UUID: %s)", clean_str, new_dev.id)
+            return new_dev.id
+        except Exception as err:
+            logger.warning("[CRUDVital] Không thể tự động tạo Device '%s': %s", clean_str, err)
+            return None
 
     async def get_latest(
         self, db: AsyncSession, device_id: Union[str, UUID]
