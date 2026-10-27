@@ -10,7 +10,7 @@ Vị trí: backend/app/api/v1/endpoints/vitals.py
 from typing import List, Optional
 from uuid import UUID
 
-from fastapi import APIRouter, Body, Depends, HTTPException, Path, Query, status
+from fastapi import APIRouter, Body, Depends, HTTPException, Path, Query, Request, status
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.api.deps import get_current_user_optional
@@ -140,3 +140,76 @@ async def create_vital_for_device(
     data = payload.model_dump(exclude_unset=True)
     data["device_id"] = device_identifier
     return await crud_vital.create(db, data=data)
+
+
+@router.post("/webhook/miband")
+@router.get("/webhook/miband")
+async def webhook_miband(
+    request: Request,
+    db: AsyncSession = Depends(get_db),
+    hr: Optional[int] = Query(None, description="Nhịp tim qua Query param (hr hoặc heart_rate)"),
+    spo2: Optional[int] = Query(None, description="Nồng độ Oxy SpO2 %"),
+    steps: Optional[int] = Query(None, description="Bước chân"),
+    device_id: Optional[str] = Query("XIAOMI_MI_BAND", description="Mã thiết bị định danh"),
+):
+    """
+    Webhook tiếp nhận dữ liệu sinh hiệu từ app cầu nối Xiaomi Mi Band
+    (Notify for Mi Band, Gadgetbridge, Tasker, HTTP Shortcuts, v.v.).
+    Hỗ trợ cả GET và POST (JSON payload, Form-Data, URL Query params).
+    """
+    body_data: dict = {}
+    if request.method == "POST":
+        try:
+            body_data = await request.json()
+        except Exception:
+            try:
+                form = await request.form()
+                body_data = dict(form)
+            except Exception:
+                body_data = {}
+
+    # Trích xuất nhịp tim linh hoạt từ các tên trường phổ biến
+    final_hr = hr
+    for key in ["heartRate", "heart_rate", "hr", "bpm", "rate", "heart"]:
+        if key in body_data and body_data[key] is not None:
+            try:
+                final_hr = int(body_data[key])
+                break
+            except (ValueError, TypeError):
+                pass
+
+    # Trích xuất SpO2 linh hoạt
+    final_spo2 = spo2
+    for key in ["spo2", "oxygen", "spO2", "o2"]:
+        if key in body_data and body_data[key] is not None:
+            try:
+                final_spo2 = int(body_data[key])
+                break
+            except (ValueError, TypeError):
+                pass
+
+    # Trích xuất thiết bị
+    target_device = body_data.get("device_id") or device_id or "XIAOMI_MI_BAND"
+
+    if final_hr is None and final_spo2 is None:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="Vui lòng cung cấp ít nhất chỉ số heart_rate (hr) hoặc spo2.",
+        )
+
+    vital_payload = {
+        "device_id": str(target_device),
+        "heart_rate": final_hr,
+        "spo2": final_spo2,
+        "raw_payload": body_data if body_data else None,
+    }
+
+    created = await crud_vital.create(db, data=vital_payload)
+    return {
+        "status": "success",
+        "message": "Mi Band data received and broadcasted successfully",
+        "device_id": target_device,
+        "heart_rate": created.heart_rate,
+        "spo2": created.spo2,
+        "timestamp": created.time.isoformat() if created.time else None,
+    }

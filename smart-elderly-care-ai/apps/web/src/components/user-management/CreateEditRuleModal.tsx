@@ -135,7 +135,6 @@ export const CreateEditRuleModal: React.FC<CreateEditRuleModalProps> = ({
                 <option value="owner">Chủ nhà (Owner)</option>
                 <option value="member">Thành viên (Member)</option>
                 <option value="elderly">Người cao tuổi (Elderly)</option>
-                <option value="user">Người dùng cơ bản (User)</option>
               </select>
             </div>
 

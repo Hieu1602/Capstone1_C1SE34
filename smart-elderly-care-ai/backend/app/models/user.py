@@ -23,7 +23,8 @@ from app.core.database import Base
 
 
 class UserRole(str):
-    USER      = "member"
+    OWNER     = "owner"
+    USER      = "owner"
     MEMBER    = "member"
     CAREGIVER = "caregiver"
     DOCTOR    = "doctor"

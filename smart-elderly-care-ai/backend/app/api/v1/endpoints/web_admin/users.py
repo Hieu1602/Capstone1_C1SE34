@@ -188,7 +188,9 @@ async def create_user_by_admin(
     from app.schemas.user import UserCreate
     phone = (user_in.get("phone") or "").strip()
     full_name = (user_in.get("full_name") or "").strip()
-    role = (user_in.get("role") or "user").strip().lower()
+    role = (user_in.get("role") or "owner").strip().lower()
+    if role == "user":
+        role = "owner"
 
     if not full_name:
         raise HTTPException(status_code=400, detail="Thiếu họ tên người dùng")

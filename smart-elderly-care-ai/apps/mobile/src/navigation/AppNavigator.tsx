@@ -2,7 +2,7 @@
 // React Navigation – 5 Tabs chuẩn phong cách Imou / SmartCare AI & Stack Screens
 
 import React from 'react';
-import { View, StyleSheet, Platform } from 'react-native';
+import { View, StyleSheet, Platform, ActivityIndicator } from 'react-native';
 import { NavigationContainer } from '@react-navigation/native';
 import { createNativeStackNavigator } from '@react-navigation/native-stack';
 import { createBottomTabNavigator } from '@react-navigation/bottom-tabs';
@@ -44,7 +44,6 @@ import MedicationReminderScreen from '../features/dashboard/screens/MedicationRe
 import PatientMedicalRecordScreen from '../features/dashboard/screens/PatientMedicalRecordScreen';
 import DoctorTabNavigator from './DoctorTabNavigator';
 import DoctorPatientDetailScreen from '../features/doctor/screens/DoctorPatientDetailScreen';
-import DoctorPrescriptionsScreen from '../features/doctor/screens/DoctorPrescriptionsScreen';
 import DoctorAnalyticsReportScreen from '../features/doctor/screens/DoctorAnalyticsReportScreen';
 import { useTheme } from '../store/useThemeStore';
 import { useAlertStore } from '../store/useAlertStore';
@@ -125,9 +124,25 @@ function MainTabNavigator() {
 
 // ---- Root Stack Navigator ----
 export default function AppNavigator() {
-  const { accessToken, viewRole } = useAuthStore();
+  const { accessToken, viewRole, isHydrated, isRoleLoading } = useAuthStore();
   const isAuthenticated = Boolean(accessToken);
   const { isDarkMode, colors } = useTheme();
+
+  // Chặn render giao diện chính khi chưa xác định xong Session hoặc Role
+  if (!isHydrated || isRoleLoading) {
+    return (
+      <View
+        style={{
+          flex: 1,
+          justifyContent: 'center',
+          alignItems: 'center',
+          backgroundColor: isDarkMode ? '#0F172A' : '#FFFFFF',
+        }}
+      >
+        <ActivityIndicator size="large" color="#0284C7" />
+      </View>
+    );
+  }
 
   return (
     <NavigationContainer
@@ -162,7 +177,6 @@ export default function AppNavigator() {
             )}
             <Stack.Screen name="DoctorTabNavigator" component={DoctorTabNavigator} />
             <Stack.Screen name="DoctorPatientDetail" component={DoctorPatientDetailScreen} />
-            <Stack.Screen name="DoctorPrescriptions" component={DoctorPrescriptionsScreen} />
             <Stack.Screen name="DoctorAnalytics" component={DoctorAnalyticsReportScreen} />
             <Stack.Screen name="MedicationReminder" component={MedicationReminderScreen} />
             <Stack.Screen name="PatientMedicalRecord" component={PatientMedicalRecordScreen} />
