@@ -66,7 +66,7 @@ export const UserManagementPage: React.FC = () => {
   const [formName, setFormName] = useState('');
   const [formPhone, setFormPhone] = useState('');
   const [formPassword, setFormPassword] = useState('');
-  const [formRole, setFormRole] = useState<UserRole>('user');
+  const [formRole, setFormRole] = useState<UserRole>('owner');
   const [formHouse, setFormHouse] = useState('');
 
   // Modal State cho Rule (Tạo / Sửa Rule về quyền)
@@ -146,7 +146,7 @@ export const UserManagementPage: React.FC = () => {
     setFormName('');
     setFormPhone('');
     setFormPassword('');
-    setFormRole('user');
+    setFormRole('owner');
     setFormHouse('');
     setIsModalOpen(true);
   };
