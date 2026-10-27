@@ -6,12 +6,13 @@
  */
 
 import React, { useState, useEffect } from 'react';
-import { View, StyleSheet, TouchableOpacity, ScrollView } from 'react-native';
+import { View, StyleSheet, TouchableOpacity, ScrollView, Text } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
 import { Colors, Shadows } from '../../../theme/colors';
 import { useVitalStore, IoTDeviceItem } from '../../../store/useVitalStore';
 import { useTheme } from '../../../store/useThemeStore';
+import { useAuthStore } from '../../../store/useAuthStore';
 import { LocalizedAlert, LocalizedText } from '../../../i18n/LocalizedComponents';
 import { DeviceQrScannerModal } from '../components/devices/DeviceQrScannerModal';
 import { GroupActionModal } from '../components/devices/GroupActionModal';
@@ -23,7 +24,9 @@ import { DeviceGroupCard } from '../components/devices/DeviceGroupCard';
 
 export default function DevicesScreen({ navigation }: any) {
   const { isDarkMode, colors } = useTheme();
+  const { userRole, role, userPhone, phone_number, permissions } = useAuthStore();
   const {
+    house,
     iotDevices,
     addIoTDevice,
     deviceGroups,
@@ -32,6 +35,11 @@ export default function DevicesScreen({ navigation }: any) {
     syncAllWithBackend,
   } = useVitalStore();
   const groups = deviceGroups || [];
+
+  const hasLinkedHouse = Boolean(house?.id && house?.hasHouse !== false && house?.name && house.name.trim() !== '');
+  const isOwnerOrAdmin = hasLinkedHouse && (userRole === 'admin' || role === 'admin' || permissions?.is_owner === true || permissions?.role_in_house === 'OWNER');
+  const isMember = !isOwnerOrAdmin && (userRole === 'member' || !userRole || userRole === 'user' || userRole === 'caregiver');
+  const isUserEmptyMember = isMember && (!hasLinkedHouse || (iotDevices.length === 0 && !permissions?.can_manage_devices));
 
   // Đồng bộ danh sách thiết bị và nhóm từ Backend khi mở màn hình
   useEffect(() => {
@@ -349,7 +357,27 @@ export default function DevicesScreen({ navigation }: any) {
             : `Danh sách các thiết bị ${activeTab.toLowerCase()} đã ghép nối`}
         </LocalizedText>
 
-        {activeTab === 'Nhóm' ? (
+        {isUserEmptyMember ? (
+          <View style={styles.emptyMemberContainer}>
+            <View style={[styles.emptyIconCircle, isDarkMode && { backgroundColor: 'rgba(255,255,255,0.06)' }]}>
+              <Ionicons name="hardware-chip-outline" size={54} color={isDarkMode ? '#64748B' : '#94A3B8'} />
+            </View>
+            <Text style={[styles.emptyMemberTitle, { color: colors.textPrimary }]}>
+              Chưa có thiết bị theo dõi
+            </Text>
+            <Text style={[styles.emptyMemberSubtitle, { color: colors.textSecondary }]}>
+              Tài khoản thành viên mới chưa được liên kết với bất kỳ căn nhà hay thiết bị theo dõi nào. Sau khi được Chủ hộ thêm số điện thoại ({userPhone || phone_number || 'của bạn'}) vào nhà, các thiết bị giám sát (Camera AI, Vòng đeo tay...) sẽ tự động xuất hiện tại đây.
+            </Text>
+            <TouchableOpacity
+              style={styles.refreshMemberBtn}
+              onPress={() => syncAllWithBackend?.()}
+              activeOpacity={0.8}
+            >
+              <Ionicons name="refresh-outline" size={18} color="#FFF" style={{ marginRight: 6 }} />
+              <Text style={styles.refreshMemberBtnText}>Kiểm tra & Làm mới</Text>
+            </TouchableOpacity>
+          </View>
+        ) : activeTab === 'Nhóm' ? (
           <View style={styles.groupViewSection}>
             <View style={[styles.groupHeaderBar, isDarkMode && { backgroundColor: colors.card, borderColor: colors.border }]}>
               <View style={styles.groupHeaderLeft}>
@@ -741,5 +769,46 @@ const styles = StyleSheet.create({
     marginTop: 4,
     paddingHorizontal: 30,
     lineHeight: 18,
+  },
+  emptyMemberContainer: {
+    alignItems: 'center',
+    justifyContent: 'center',
+    paddingHorizontal: 32,
+    paddingVertical: 60,
+  },
+  emptyIconCircle: {
+    width: 96,
+    height: 96,
+    borderRadius: 48,
+    backgroundColor: '#F1F5F9',
+    alignItems: 'center',
+    justifyContent: 'center',
+    marginBottom: 20,
+  },
+  emptyMemberTitle: {
+    fontSize: 18,
+    fontWeight: '700',
+    marginBottom: 10,
+    textAlign: 'center',
+  },
+  emptyMemberSubtitle: {
+    fontSize: 13,
+    lineHeight: 20,
+    textAlign: 'center',
+    marginBottom: 24,
+  },
+  refreshMemberBtn: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: '#FF6B00',
+    paddingHorizontal: 22,
+    paddingVertical: 12,
+    borderRadius: 24,
+    ...Shadows.sm,
+  },
+  refreshMemberBtnText: {
+    color: '#FFFFFF',
+    fontSize: 14,
+    fontWeight: '700',
   },
 });

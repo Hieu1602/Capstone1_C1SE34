@@ -17,7 +17,7 @@ import {
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
-import { Colors } from '../../../theme/colors';
+import { Colors, Shadows } from '../../../theme/colors';
 import { useAuthStore, useVitalStore } from '../../../store/useVitalStore';
 import { useTheme } from '../../../store/useThemeStore';
 import { householdApi } from '../../../services/api';
@@ -31,7 +31,7 @@ import {
 } from '../components/house';
 
 export default function HouseDetailScreen({ navigation, route }: any) {
-  const { house, updateHouseAddress } = useVitalStore();
+  const { house, updateHouseAddress, fetchHouseFromBackend } = useVitalStore();
   const { full_name, userName, phone_number, userPhone, household_id, role, userRole } = useAuthStore();
   const { isDarkMode } = useTheme();
 
@@ -103,16 +103,19 @@ export default function HouseDetailScreen({ navigation, route }: any) {
     }
   };
 
+  const hasLinkedHouse = Boolean(house?.id && house?.hasHouse !== false && house?.name && house.name.trim() !== '');
+
   const isCurrentUserOwner =
-    userRole === 'admin' ||
-    role === 'admin' ||
-    Boolean(
-      members.find(
-        (m) =>
-          (m.is_owner || m.role_in_house === 'OWNER') &&
-          (m.phone_number === phone_number || m.phone_number === userPhone)
-      )
-    );
+    hasLinkedHouse &&
+    (userRole === 'admin' ||
+      role === 'admin' ||
+      Boolean(
+        members.find(
+          (m) =>
+            (m.is_owner || m.role_in_house === 'OWNER') &&
+            (m.phone_number === phone_number || m.phone_number === userPhone)
+        )
+      ));
 
   const getFallbackMember = useCallback(() => [
     {
@@ -133,6 +136,11 @@ export default function HouseDetailScreen({ navigation, route }: any) {
   ], [full_name, userName, phone_number, userPhone]);
 
   const loadMembers = useCallback(async () => {
+    if (!hasLinkedHouse) {
+      setMembers([]);
+      setIsLoadingMembers(false);
+      return;
+    }
     try {
       setIsLoadingMembers(true);
       const targetHId = household_id || 'current';
@@ -140,30 +148,27 @@ export default function HouseDetailScreen({ navigation, route }: any) {
       if (Array.isArray(res.data) && res.data.length > 0) {
         setMembers(res.data);
       } else {
-        setMembers(getFallbackMember());
+        setMembers([]);
       }
     } catch {
-      setMembers(getFallbackMember());
+      setMembers([]);
     } finally {
       setIsLoadingMembers(false);
     }
-  }, [household_id, getFallbackMember]);
+  }, [household_id, hasLinkedHouse]);
 
   useEffect(() => {
     loadMembers();
   }, [loadMembers]);
 
   const handleOpenPermissions = (member: any) => {
-    if (member.is_owner || member.role_in_house === 'OWNER') {
-      return;
-    }
     if (!isCurrentUserOwner) {
       const rName =
         member.role_in_house === 'OWNER'
           ? 'Chủ hộ'
           : member.role_in_house === 'DOCTOR'
           ? 'Bác sĩ gia đình'
-          : 'Thành viên gia đình';
+          : 'Thành viên';
       Alert.alert(
         'Thông tin thành viên',
         `Họ và tên: ${member.full_name}\nVai trò: ${rName}\nSố điện thoại: ${
@@ -301,7 +306,7 @@ export default function HouseDetailScreen({ navigation, route }: any) {
       return;
     }
     const isAdmin = selectedInviteRole === 'ADMIN';
-    const defaultRoleTitle = isAdmin ? 'Quản trị viên gia đình' : 'Thành viên gia đình';
+    const defaultRoleTitle = isAdmin ? 'Quản trị viên gia đình' : 'Thành viên';
 
     try {
       const targetHId = household_id || 'current';
@@ -348,31 +353,34 @@ export default function HouseDetailScreen({ navigation, route }: any) {
         </TouchableOpacity>
         <View style={{ flex: 1 }}>
           <Text style={[styles.headerTitleText, { color: textTitle }]}>{house?.name || 'Nhà của tôi'}</Text>
-          <TouchableOpacity
-            activeOpacity={0.7}
-            onPress={() => {
-              setEditAddressInput(house?.address || '');
-              setIsEditAddressModalVisible(true);
-            }}
-            style={{ flexDirection: 'row', alignItems: 'center', marginTop: 2, gap: 4 }}
-          >
-            <Ionicons name="location-outline" size={13} color={house?.address ? textSub : Colors.primary} />
-            <Text
-              style={[
-                styles.headerSubText,
-                { color: house?.address ? textSub : Colors.primary, flexShrink: 1 },
-              ]}
-              numberOfLines={1}
+          {hasLinkedHouse && (
+            <TouchableOpacity
+              activeOpacity={0.7}
+              onPress={() => {
+                setEditAddressInput(house?.address || '');
+                setIsEditAddressModalVisible(true);
+              }}
+              style={{ flexDirection: 'row', alignItems: 'center', marginTop: 2, gap: 4 }}
             >
-              {house?.address || 'Chưa có địa chỉ • Chạm để thêm'}
-            </Text>
-            {isCurrentUserOwner && (
-              <Ionicons name="pencil" size={12} color="#94A3B8" style={{ marginLeft: 2 }} />
-            )}
-          </TouchableOpacity>
+              <Ionicons name="location-outline" size={13} color={house?.address ? textSub : Colors.primary} />
+              <Text
+                style={[
+                  styles.headerSubText,
+                  { color: house?.address ? textSub : Colors.primary, flexShrink: 1 },
+                ]}
+                numberOfLines={1}
+              >
+                {house?.address || 'Chưa có địa chỉ • Chạm để thêm'}
+              </Text>
+              {isCurrentUserOwner && (
+                <Ionicons name="pencil" size={12} color="#94A3B8" style={{ marginLeft: 2 }} />
+              )}
+            </TouchableOpacity>
+          )}
         </View>
       </View>
 
+      {hasLinkedHouse ? (
       <ScrollView showsVerticalScrollIndicator={false} contentContainerStyle={styles.scrollContent}>
         {/* Banner thông tin phân quyền */}
         <View style={[styles.roleInfoBanner, { backgroundColor: isDarkMode ? '#172554' : '#EFF6FF', borderColor: '#3B82F6' }]}>
@@ -448,6 +456,64 @@ export default function HouseDetailScreen({ navigation, route }: any) {
           </TouchableOpacity>
         </View>
       </ScrollView>
+      ) : (
+        <View style={{ flex: 1, alignItems: 'center', justifyContent: 'center', paddingHorizontal: 32 }}>
+          <View
+            style={{
+              width: 88,
+              height: 88,
+              borderRadius: 44,
+              backgroundColor: isDarkMode ? '#1E293B' : '#F1F5F9',
+              alignItems: 'center',
+              justifyContent: 'center',
+              marginBottom: 20,
+            }}
+          >
+            <Ionicons name="home-outline" size={44} color="#94A3B8" />
+          </View>
+          <Text
+            style={{
+              fontSize: 20,
+              fontWeight: '800',
+              color: textTitle,
+              textAlign: 'center',
+              marginBottom: 10,
+            }}
+          >
+            Chưa tham gia căn nhà nào
+          </Text>
+          <Text
+            style={{
+              fontSize: 14,
+              color: textSub,
+              textAlign: 'center',
+              lineHeight: 22,
+              marginBottom: 28,
+            }}
+          >
+            Tài khoản của bạn là thành viên mới và chưa được liên kết với bất kỳ căn nhà nào. Hãy nhắc Chủ hộ thêm số điện thoại {userPhone || phone_number || 'của bạn'} vào gia đình để bắt đầu theo dõi.
+          </Text>
+          <TouchableOpacity
+            style={{
+              flexDirection: 'row',
+              alignItems: 'center',
+              backgroundColor: Colors.primary,
+              paddingVertical: 12,
+              paddingHorizontal: 24,
+              borderRadius: 24,
+              ...Shadows.card,
+            }}
+            onPress={async () => {
+              await fetchHouseFromBackend?.();
+              await loadMembers();
+            }}
+            activeOpacity={0.8}
+          >
+            <Ionicons name="refresh-outline" size={18} color="#FFF" style={{ marginRight: 6 }} />
+            <Text style={{ color: '#FFF', fontSize: 14, fontWeight: '700' }}>Kiểm tra & Làm mới</Text>
+          </TouchableOpacity>
+        </View>
+      )}
 
       {/* Modal 1: Cấp quyền cho thành viên */}
       <HousePermissionModal

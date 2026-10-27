@@ -51,6 +51,7 @@ interface AlertState {
   setAlarmSnooze: (snooze: Partial<AlarmSnoozeInfo>) => void;
   cancelAlarmSnooze: () => void;
   setSirenActive: (active: boolean) => void;
+  resetAlertStore: () => void;
 }
 
 const DEFAULT_SNOOZE: AlarmSnoozeInfo = {
@@ -120,4 +121,11 @@ export const useAlertStore = create<AlertState>()((set, get) => ({
   cancelAlarmSnooze: () => set({ alarmSnooze: { ...DEFAULT_SNOOZE } }),
 
   setSirenActive: (active: boolean) => set({ sirenActive: active }),
+
+  resetAlertStore: () =>
+    set({
+      incidents: [],
+      alarmSnooze: { ...DEFAULT_SNOOZE },
+      sirenActive: false,
+    }),
 }));
