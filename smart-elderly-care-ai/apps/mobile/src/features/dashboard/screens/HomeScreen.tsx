@@ -42,7 +42,13 @@ export default function HomeScreen({ navigation }: any) {
   const isUserEmptyMember = isMember && !hasLinkedHouse && !hasLinkedDevices;
 
   // Kiểm tra quyền xem camera và chỉ số sinh hiệu của tài khoản thành viên
-  const isOwnerOrAdmin = userRole === 'admin' || role === 'admin' || permissions?.is_owner === true || permissions?.role_in_house === 'OWNER';
+  const isOwnerOrAdmin =
+    userRole === 'admin' ||
+    userRole === 'owner' ||
+    role === 'admin' ||
+    role === 'owner' ||
+    permissions?.is_owner === true ||
+    permissions?.role_in_house === 'OWNER';
   const canViewCamera = isOwnerOrAdmin || Boolean(permissions?.can_view_camera);
   const canViewHealth = isOwnerOrAdmin || Boolean(permissions?.can_view_health);
 

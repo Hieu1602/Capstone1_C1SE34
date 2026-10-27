@@ -56,11 +56,6 @@ class UserBase(BaseModel):
     specialty: Optional[str] = None
     workplace: Optional[str] = None
 
-    @field_validator("full_name")
-    @classmethod
-    def check_full_name(cls, v: str) -> str:
-        return validate_vietnamese_full_name(v)
-
     @model_validator(mode="after")
     def validate_identifier(self):
         normalized_phone = self.phone.strip() if self.phone else ""
@@ -72,6 +67,11 @@ class UserBase(BaseModel):
 
 class UserCreate(UserBase):
     password: str
+
+    @field_validator("full_name")
+    @classmethod
+    def check_full_name(cls, v: str) -> str:
+        return validate_vietnamese_full_name(v)
 
 
 class UserUpdate(BaseModel):
