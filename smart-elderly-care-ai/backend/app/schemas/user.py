@@ -9,11 +9,7 @@ from typing import Literal, Optional
 
 from pydantic import BaseModel, Field, field_validator, model_validator
 
-VIETNAMESE_NAME_PATTERN = (
-    r"^[a-zA-ZÀÁÂÃÈÉÊÌÍÒÓÔÕÙÚĂĐĨŨƠàáâãèéêìíòóôõùúăđĩũơ"
-    r"ƯĂẠẢẤẦẨẪẬẮẰẲẴẶẸẺẼỀỀỂưăạảấầẩẫậắằẳẵặẹẻẽềềểỄỆỈỊỌỎỐỒỔỖỘỚỜỞỠỢỤỦỨỪ"
-    r"ễệỉịọỏốồổỗộớờởỡợụủứừỬỮỰỲỴÝỶỸửữựỳỵýỷỹ\s]+$"
-)
+VIETNAMESE_NAME_PATTERN = r"^[^\W\d_]+(?:\s+[^\W\d_]+)*$"
 
 BANNED_WORDS = {
     "dm", "dcm", "vcl", "clgt", "buoi", "cac", "lon", "lồn", "cặc", "buồi",
