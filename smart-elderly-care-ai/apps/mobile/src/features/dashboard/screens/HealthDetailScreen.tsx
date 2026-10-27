@@ -16,6 +16,7 @@ import { Ionicons } from '@expo/vector-icons';
 import { LocalizedAlert as Alert, LocalizedText as Text } from '../../../i18n/LocalizedComponents';
 import { Colors } from '../../../theme/colors';
 import { useVitalStore } from '../../../store/useVitalStore';
+import { useAuthStore } from '../../../store/useAuthStore';
 import { useTheme } from '../../../store/useThemeStore';
 import { vitalsApi, patientApi } from '../../../services/api';
 
@@ -44,6 +45,16 @@ export default function HealthDetailScreen({ navigation, route }: any) {
   const metric = (route?.params?.focusMetric ?? route?.params?.metric) as 'heartRate' | 'activity' | 'spo2' | undefined;
   const initialTab = route?.params?.initialTab as 'today' | 'week' | 'month' | undefined;
   const { currentVitals, fetchVitals } = useVitalStore();
+  const { permissions, userRole, role } = useAuthStore();
+  const isOwnerOrAdmin = userRole === 'admin' || role === 'admin' || permissions?.is_owner === true || permissions?.role_in_house === 'OWNER';
+  const canViewHealth = isOwnerOrAdmin || Boolean(permissions?.can_view_health);
+
+  useEffect(() => {
+    if (!canViewHealth) {
+      Alert.alert('Không có quyền truy cập', 'Chủ hộ đã tắt quyền xem chỉ số sức khỏe đối với tài khoản này.');
+      navigation.goBack();
+    }
+  }, [canViewHealth, navigation]);
 
   const [selectedRange, setSelectedRange] = useState<TimeRange>(
     initialTab === 'week' ? 'WEEK' : initialTab === 'month' ? 'MONTH' : 'DAY'

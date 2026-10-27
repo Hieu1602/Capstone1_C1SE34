@@ -13,6 +13,8 @@ import {
 import { SafeAreaView } from "react-native-safe-area-context";
 import { Ionicons } from "@expo/vector-icons";
 import { Colors } from "../../../../theme/colors";
+import { usersApi } from "../../../../services/api";
+import * as Location from "expo-location";
 
 interface SecurityCenterModalProps {
     visible: boolean;
@@ -37,6 +39,83 @@ export const SecurityCenterModal: React.FC<SecurityCenterModalProps> = ({
     const [securityDetail, setSecurityDetail] = useState<
         "twoFactor" | "devices" | "logins" | "question" | "changePassword" | null
     >(null);
+    const [terminals, setTerminals] = useState<any[]>([]);
+    const [loginHistories, setLoginHistories] = useState<any[]>([]);
+    const [isLoadingTerminals, setIsLoadingTerminals] = useState(false);
+    const [isLoadingHistories, setIsLoadingHistories] = useState(false);
+
+    const fetchTerminalsData = async () => {
+        setIsLoadingTerminals(true);
+        try {
+            let currentLoc: string | undefined;
+            try {
+                const { status } = await Location.getForegroundPermissionsAsync();
+                if (status === "granted") {
+                    const pos = await Promise.race([
+                        Location.getCurrentPositionAsync({ accuracy: Location.Accuracy.Balanced }),
+                        new Promise<null>((r) => setTimeout(() => r(null), 1500)),
+                    ]);
+                    if (pos && pos.coords) {
+                        const places = await Location.reverseGeocodeAsync({
+                            latitude: pos.coords.latitude,
+                            longitude: pos.coords.longitude,
+                        });
+                        if (places && places.length > 0) {
+                            const p = places[0];
+                            const parts = [
+                                p.district || p.subregion,
+                                p.city || p.region,
+                                p.country || "Việt Nam",
+                            ].filter(Boolean);
+                            currentLoc = parts.join(", ");
+                        }
+                    }
+                }
+            } catch {}
+
+            const res = await usersApi.getTerminals(currentLoc);
+            if (Array.isArray(res.data) && res.data.length > 0) {
+                setTerminals(res.data);
+            }
+        } catch (err) {
+            console.warn("[SecurityCenter] Lỗi tải danh sách thiết bị:", err);
+        } finally {
+            setIsLoadingTerminals(false);
+        }
+    };
+
+    const fetchLoginHistoriesData = async () => {
+        setIsLoadingHistories(true);
+        try {
+            const res = await usersApi.getLoginHistory(20);
+            if (Array.isArray(res.data) && res.data.length > 0) {
+                setLoginHistories(res.data);
+            }
+        } catch (err) {
+            console.warn("[SecurityCenter] Lỗi tải lịch sử đăng nhập:", err);
+        } finally {
+            setIsLoadingHistories(false);
+        }
+    };
+
+    const formatLoginDate = (dateStr?: string | null) => {
+        if (!dateStr) return "Hôm nay · Vừa xong";
+        try {
+            const d = new Date(dateStr);
+            const now = new Date();
+            const isToday = d.toDateString() === now.toDateString();
+            const hours = String(d.getHours()).padStart(2, "0");
+            const mins = String(d.getMinutes()).padStart(2, "0");
+            if (isToday) {
+                return `Hôm nay · ${hours}:${mins}`;
+            }
+            const day = String(d.getDate()).padStart(2, "0");
+            const month = String(d.getMonth() + 1).padStart(2, "0");
+            return `${day}/${month} · ${hours}:${mins}`;
+        } catch {
+            return dateStr;
+        }
+    };
     const [selectedSecurityQuestion, setSelectedSecurityQuestion] = useState("");
     const [currentPassword, setCurrentPassword] = useState("");
     const [newPassword, setNewPassword] = useState("");
@@ -49,11 +128,13 @@ export const SecurityCenterModal: React.FC<SecurityCenterModalProps> = ({
         type: "success" | "error";
         message: string;
     } | null>(null);
-    const scrollRef = useRef<ScrollView>(null);
+    const scrollRef = useRef<any>(null);
 
     useEffect(() => {
         if (visible) {
             scrollRef.current?.scrollTo({ y: 0, animated: false });
+            fetchTerminalsData();
+            fetchLoginHistoriesData();
         }
     }, [visible]);
 
@@ -72,6 +153,12 @@ export const SecurityCenterModal: React.FC<SecurityCenterModalProps> = ({
     ) => {
         if (type === "changePassword") {
             resetPasswordForm();
+        }
+        if (type === "devices") {
+            fetchTerminalsData();
+        }
+        if (type === "logins") {
+            fetchLoginHistoriesData();
         }
         setSecurityDetail(type);
     };
@@ -349,80 +436,133 @@ export const SecurityCenterModal: React.FC<SecurityCenterModalProps> = ({
                                     },
                                 ]}
                             >
-                                <Text
-                                    style={[
-                                        styles.securityDetailCardTitle,
-                                        isDarkMode && { color: "#F8FAFC" },
-                                    ]}
-                                >
-                                    Thiết bị đáng tin cậy: 1
-                                </Text>
-                                <View
-                                    style={[
-                                        styles.securityDeviceItem,
-                                        isDarkMode && {
-                                            backgroundColor: "#0F172A",
-                                            borderColor: "#334155",
-                                        },
-                                    ]}
-                                >
-                                    <View style={styles.securityDeviceIcon}>
+                                <View style={styles.securityDetailCardHeaderRow}>
+                                    <Text
+                                        style={[
+                                            styles.securityDetailCardTitle,
+                                            isDarkMode && { color: "#F8FAFC" },
+                                        ]}
+                                    >
+                                        Thiết bị đáng tin cậy: {terminals.length || 1}
+                                    </Text>
+                                    <TouchableOpacity
+                                        onPress={fetchTerminalsData}
+                                        disabled={isLoadingTerminals}
+                                        hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
+                                    >
                                         <Ionicons
-                                            name="phone-portrait"
-                                            size={22}
-                                            color="#0284C7"
+                                            name="refresh-outline"
+                                            size={18}
+                                            color={isLoadingTerminals ? "#94A3B8" : Colors.primary}
                                         />
-                                    </View>
-                                    <View style={styles.securityDeviceCopy}>
-                                        <Text
-                                            style={[
-                                                styles.securityDeviceName,
-                                                isDarkMode && {
-                                                    color: "#F8FAFC",
-                                                },
-                                            ]}
-                                        >
-                                            Thiết bị này
-                                        </Text>
-                                        <Text
-                                            style={[
-                                                styles.securityDeviceMeta,
-                                                isDarkMode && {
-                                                    color: "#94A3B8",
-                                                },
-                                            ]}
-                                        >
-                                            Android App · Đang hoạt động
-                                        </Text>
-                                        <Text
-                                            style={[
-                                                styles.securityDeviceMeta,
-                                                isDarkMode && {
-                                                    color: "#94A3B8",
-                                                },
-                                            ]}
-                                        >
-                                            Đăng nhập gần nhất: Hôm nay 20:41
-                                        </Text>
-                                    </View>
-                                    <View style={styles.securityActiveBadge}>
-                                        <Text
-                                            style={styles.securityActiveBadgeText}
-                                        >
-                                            Hiện tại
-                                        </Text>
-                                    </View>
+                                    </TouchableOpacity>
                                 </View>
+
+                                {isLoadingTerminals && terminals.length === 0 ? (
+                                    <View style={{ paddingVertical: 24, alignItems: "center" }}>
+                                        <ActivityIndicator color={Colors.primary} size="small" />
+                                    </View>
+                                ) : (
+                                    (terminals.length > 0 ? terminals : [
+                                        {
+                                            id: "current-dev",
+                                            device_name: "Thiết bị này",
+                                            os: "Android App",
+                                            browser: "SECA Mobile App",
+                                            ip_address: "127.0.0.1",
+                                            location: "Đà Nẵng, Việt Nam",
+                                            last_active_at: new Date().toISOString(),
+                                            is_current: true,
+                                        }
+                                    ]).map((item) => (
+                                        <View
+                                            key={item.id || item.device_name}
+                                            style={[
+                                                styles.securityDeviceItem,
+                                                isDarkMode && {
+                                                    backgroundColor: "#0F172A",
+                                                    borderColor: "#334155",
+                                                },
+                                            ]}
+                                        >
+                                            <View style={styles.securityDeviceIcon}>
+                                                <Ionicons
+                                                    name={
+                                                        item.device_type === "desktop"
+                                                            ? "desktop-outline"
+                                                            : item.device_type === "tablet"
+                                                              ? "tablet-portrait-outline"
+                                                              : "phone-portrait"
+                                                    }
+                                                    size={22}
+                                                    color="#0284C7"
+                                                />
+                                            </View>
+                                            <View style={styles.securityDeviceCopy}>
+                                                <View style={{ flexDirection: "row", alignItems: "center", justifyContent: "space-between" }}>
+                                                    <Text
+                                                        style={[
+                                                            styles.securityDeviceName,
+                                                            isDarkMode && { color: "#F8FAFC" },
+                                                        ]}
+                                                    >
+                                                        {item.is_current ? "Thiết bị này" : item.device_name}
+                                                    </Text>
+                                                    {item.is_current && (
+                                                        <View style={styles.securityActiveBadge}>
+                                                            <Text style={styles.securityActiveBadgeText}>
+                                                                Hiện tại
+                                                            </Text>
+                                                        </View>
+                                                    )}
+                                                </View>
+                                                <Text
+                                                    style={[
+                                                        styles.securityDeviceMeta,
+                                                        isDarkMode && { color: "#94A3B8" },
+                                                    ]}
+                                                >
+                                                    {item.os || "Android App"} · {item.browser || "Đang hoạt động"}
+                                                </Text>
+                                                <View style={styles.securityLocationBadge}>
+                                                    <Ionicons name="location-sharp" size={13} color="#EA580C" />
+                                                    <Text
+                                                        style={[
+                                                            styles.securityLocationText,
+                                                            isDarkMode && { color: "#FB923C" },
+                                                        ]}
+                                                    >
+                                                        {item.location || "Đà Nẵng, Việt Nam"}
+                                                    </Text>
+                                                </View>
+                                                <Text
+                                                    style={[
+                                                        styles.securityDeviceMeta,
+                                                        isDarkMode && { color: "#94A3B8" },
+                                                    ]}
+                                                >
+                                                    🌐 IP: {item.ip_address || "127.0.0.1"}
+                                                </Text>
+                                                <Text
+                                                    style={[
+                                                        styles.securityDeviceMeta,
+                                                        isDarkMode && { color: "#94A3B8" },
+                                                    ]}
+                                                >
+                                                    Đăng nhập gần nhất: {formatLoginDate(item.last_active_at)}
+                                                </Text>
+                                            </View>
+                                        </View>
+                                    ))
+                                )}
+
                                 <Text
                                     style={[
                                         styles.securityDetailDescription,
                                         isDarkMode && { color: "#94A3B8" },
                                     ]}
                                 >
-                                    Nếu bạn thấy bất kỳ thiết bị lạ nào đăng nhập
-                                    vào hệ thống, hãy đổi mật khẩu ngay lập tức.
-                                    Các thiết bị không hoạt động trong 3 tháng sẽ
-                                    tự động bị ngắt kết nối.
+                                    Nếu bạn thấy bất kỳ thiết bị lạ nào đăng nhập vào hệ thống, hãy đổi mật khẩu ngay lập tức. Các thiết bị không hoạt động trong 3 tháng sẽ tự động bị ngắt kết nối.
                                 </Text>
                             </View>
                         )}
@@ -437,67 +577,96 @@ export const SecurityCenterModal: React.FC<SecurityCenterModalProps> = ({
                                     },
                                 ]}
                             >
-                                <Text
-                                    style={[
-                                        styles.securityDetailCardTitle,
-                                        isDarkMode && { color: "#F8FAFC" },
-                                    ]}
-                                >
-                                    Lịch sử đăng nhập gần đây
-                                </Text>
-                                {[
-                                    "Hôm nay · 20:41",
-                                    "09-14 · 21:20",
-                                    "09-14 · 21:08",
-                                    "09-12 · 00:07",
-                                ].map((loginItem, idx) => (
-                                    <View
-                                        key={loginItem}
+                                <View style={styles.securityDetailCardHeaderRow}>
+                                    <Text
                                         style={[
-                                            styles.securityLoginItem,
-                                            isDarkMode && {
-                                                borderBottomColor: "#334155",
-                                            },
-                                            idx === 3 && {
-                                                borderBottomWidth: 0,
-                                            },
+                                            styles.securityDetailCardTitle,
+                                            isDarkMode && { color: "#F8FAFC" },
                                         ]}
                                     >
-                                        <View style={styles.securityTimelineDot} />
-                                        <View style={styles.securityDeviceCopy}>
-                                            <Text
-                                                style={[
-                                                    styles.securityLoginName,
-                                                    isDarkMode && {
-                                                        color: "#F8FAFC",
-                                                    },
-                                                ]}
-                                            >
-                                                Đăng nhập ứng dụng
-                                            </Text>
-                                            <Text
-                                                style={[
-                                                    styles.securityDeviceMeta,
-                                                    isDarkMode && {
-                                                        color: "#94A3B8",
-                                                    },
-                                                ]}
-                                            >
-                                                Thiết bị chính · Thành công
-                                            </Text>
-                                        </View>
-                                        <Text
+                                        Lịch sử đăng nhập gần đây
+                                    </Text>
+                                    <TouchableOpacity
+                                        onPress={fetchLoginHistoriesData}
+                                        disabled={isLoadingHistories}
+                                        hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
+                                    >
+                                        <Ionicons
+                                            name="refresh-outline"
+                                            size={18}
+                                            color={isLoadingHistories ? "#94A3B8" : Colors.primary}
+                                        />
+                                    </TouchableOpacity>
+                                </View>
+
+                                {isLoadingHistories && loginHistories.length === 0 ? (
+                                    <View style={{ paddingVertical: 24, alignItems: "center" }}>
+                                        <ActivityIndicator color={Colors.primary} size="small" />
+                                    </View>
+                                ) : (
+                                    (loginHistories.length > 0 ? loginHistories : [
+                                        {
+                                            id: "hist-1",
+                                            device_name: "Thiết bị chính",
+                                            location: "Đà Nẵng, Việt Nam",
+                                            ip_address: "127.0.0.1",
+                                            login_time: new Date().toISOString(),
+                                            status: "success",
+                                        }
+                                    ]).map((loginItem, idx) => (
+                                        <View
+                                            key={loginItem.id || String(idx)}
                                             style={[
-                                                styles.securityLoginTime,
+                                                styles.securityLoginItem,
                                                 isDarkMode && {
-                                                    color: "#94A3B8",
+                                                    borderBottomColor: "#334155",
+                                                },
+                                                idx === (loginHistories.length - 1) && {
+                                                    borderBottomWidth: 0,
                                                 },
                                             ]}
                                         >
-                                            {loginItem}
-                                        </Text>
-                                    </View>
-                                ))}
+                                            <View style={styles.securityTimelineDot} />
+                                            <View style={styles.securityDeviceCopy}>
+                                                <Text
+                                                    style={[
+                                                        styles.securityLoginName,
+                                                        isDarkMode && { color: "#F8FAFC" },
+                                                    ]}
+                                                >
+                                                    {loginItem.device_name || "Đăng nhập ứng dụng"}
+                                                </Text>
+                                                <View style={styles.securityLocationBadge}>
+                                                    <Ionicons name="location-sharp" size={12} color="#EA580C" />
+                                                    <Text
+                                                        style={[
+                                                            styles.securityLocationText,
+                                                            isDarkMode && { color: "#FB923C" },
+                                                        ]}
+                                                    >
+                                                        {loginItem.location || "Đà Nẵng, Việt Nam"}
+                                                    </Text>
+                                                </View>
+                                                <Text
+                                                    style={[
+                                                        styles.securityDeviceMeta,
+                                                        isDarkMode && { color: "#94A3B8" },
+                                                    ]}
+                                                >
+                                                    🌐 IP: {loginItem.ip_address || "127.0.0.1"} · Thành công
+                                                </Text>
+                                            </View>
+                                            <Text
+                                                style={[
+                                                    styles.securityLoginTime,
+                                                    isDarkMode && { color: "#94A3B8" },
+                                                ]}
+                                            >
+                                                {formatLoginDate(loginItem.login_time)}
+                                            </Text>
+                                        </View>
+                                    ))
+                                )}
                             </View>
                         )}
 
@@ -2243,5 +2412,23 @@ const styles = StyleSheet.create({
         fontSize: 15,
         fontWeight: "700",
         color: "#FFFFFF",
+    },
+    securityDetailCardHeaderRow: {
+        flexDirection: "row",
+        alignItems: "center",
+        justifyContent: "space-between",
+        marginBottom: 6,
+    },
+    securityLocationBadge: {
+        flexDirection: "row",
+        alignItems: "center",
+        gap: 4,
+        marginTop: 4,
+        marginBottom: 2,
+    },
+    securityLocationText: {
+        fontSize: 12.5,
+        fontWeight: "600",
+        color: "#EA580C",
     },
 });

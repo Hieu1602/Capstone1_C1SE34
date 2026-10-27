@@ -2,7 +2,6 @@
   "expo": {
     "name": "Smart Elderly Care",
     "slug": "smart-elderly-care-mobile",
-    "owner": "nghia127",
     "version": "1.0.0",
     "orientation": "default",
     "icon": "./assets/icon.png",
@@ -23,7 +22,6 @@
     },
     "android": {
       "package": "com.c1se34.smartelderlycare",
-      "googleServicesFile": "./google-services.json",
       "adaptiveIcon": {
         "foregroundImage": "./assets/adaptive-icon.png",
         "backgroundColor": "#ffffff"

@@ -1,7 +1,9 @@
-import React from 'react';
+import React, { useEffect } from 'react';
 import { View, Text, TouchableOpacity, StyleSheet, Image } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { Colors } from '../../../../theme/colors';
+import { useAuthStore } from '../../../../store/useAuthStore';
+import { useVitalStore } from '../../../../store/useVitalStore';
 
 interface ProfileUserCardProps {
   displayName: string;
@@ -10,6 +12,7 @@ interface ProfileUserCardProps {
   colors: any;
   onPressProfile: () => void;
   onPressAddMember: () => void;
+  roleBadgeText?: string;
 }
 
 export const ProfileUserCard: React.FC<ProfileUserCardProps> = ({
@@ -19,7 +22,54 @@ export const ProfileUserCard: React.FC<ProfileUserCardProps> = ({
   colors,
   onPressProfile,
   onPressAddMember,
+  roleBadgeText: propRoleText,
 }) => {
+  const { permissions, userRole, role, fetchMyPermissions } = useAuthStore();
+  const { house, fetchHouseFromBackend } = useVitalStore();
+
+  useEffect(() => {
+    fetchMyPermissions?.();
+    fetchHouseFromBackend?.();
+  }, []);
+
+  const isOwner =
+    permissions?.is_owner === true ||
+    permissions?.role_in_house === 'OWNER' ||
+    userRole === 'admin' ||
+    role === 'admin';
+
+  const isDoctor =
+    userRole === 'doctor' ||
+    role === 'doctor' ||
+    permissions?.role_in_house === 'DOCTOR';
+
+  const resolvedRoleText =
+    propRoleText ||
+    (isOwner
+      ? 'Chủ hộ'
+      : isDoctor
+      ? 'Bác sĩ gia đình'
+      : 'Thành viên gia đình');
+
+  const roleIcon: keyof typeof Ionicons.glyphMap = isOwner
+    ? 'ribbon'
+    : isDoctor
+    ? 'medkit'
+    : 'person';
+
+  const roleColor = isOwner ? '#D97706' : isDoctor ? '#2563EB' : '#EA580C';
+  const roleBg = isOwner
+    ? isDarkMode
+      ? 'rgba(217, 119, 6, 0.2)'
+      : '#FEF3C7'
+    : isDoctor
+    ? isDarkMode
+      ? 'rgba(37, 99, 235, 0.2)'
+      : '#EFF6FF'
+    : isDarkMode
+    ? 'rgba(234, 88, 12, 0.15)'
+    : '#FFF7ED';
+
   return (
     <View
       style={[
@@ -51,6 +101,12 @@ export const ProfileUserCard: React.FC<ProfileUserCardProps> = ({
           >
             {displayName}
           </Text>
+          <View style={[styles.fbRoleBadgeRow, { backgroundColor: roleBg }]}>
+            <Ionicons name={roleIcon} size={11} color={roleColor} />
+            <Text style={[styles.fbRoleBadgeText, { color: roleColor }]}>
+              {resolvedRoleText}
+            </Text>
+          </View>
         </View>
         <View style={styles.fbProfileRightBadge}>
           <Ionicons name="chevron-forward" size={20} color="#64748B" />
@@ -122,6 +178,23 @@ const styles = StyleSheet.create({
     flex: 1,
     marginLeft: 12,
     justifyContent: 'center',
+  },
+  
+  fbRoleBadgeRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 4,
+    marginTop: 2,
+    backgroundColor: '#FFF7ED',
+    paddingHorizontal: 8,
+    paddingVertical: 2,
+    borderRadius: 8,
+    alignSelf: 'flex-start',
+  },
+  fbRoleBadgeText: {
+    fontSize: 11.5,
+    fontWeight: '600',
+    color: '#EA580C',
   },
   fbProfileName: {
     fontSize: 17,

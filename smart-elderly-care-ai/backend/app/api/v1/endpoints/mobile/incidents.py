@@ -24,6 +24,7 @@ async def list_incidents(
     limit: int = Query(default=20, le=100),
     offset: int = Query(default=0),
     db: AsyncSession = Depends(get_db),
+    current_user: User | None = Depends(get_current_user_optional),
 ):
     """
     Lấy danh sách sự kiện cảnh báo.
@@ -34,12 +35,14 @@ async def list_incidents(
         from app.crud.crud_vital import crud_vital
         resolved_dev_uuid = await crud_vital.resolve_device_uuid(db, device_id)
 
+    curr_uid = current_user.id if current_user else None
     return await crud_incident.list(
         db=db,
         device_id=resolved_dev_uuid,
         alert_level=alert_level,
         limit=limit,
         offset=offset,
+        current_user_id=curr_uid,
     )
 
 

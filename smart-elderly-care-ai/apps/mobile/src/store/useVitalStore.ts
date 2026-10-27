@@ -85,6 +85,7 @@ function getVitalState() {
     fetchGroupsFromBackend: devices.fetchGroupsFromBackend,
     fetchDevicesFromBackend: devices.fetchDevicesFromBackend,
     syncAllWithBackend:     devices.syncAllWithBackend,
+    resetDeviceStore:       devices.resetDeviceStore,
 
     // --- từ usePatientStore ---
     patientRecord:       patient.patientRecord,
@@ -166,6 +167,7 @@ export function useVitalStore() {
     fetchGroupsFromBackend: devices.fetchGroupsFromBackend,
     fetchDevicesFromBackend: devices.fetchDevicesFromBackend,
     syncAllWithBackend:     devices.syncAllWithBackend,
+    resetDeviceStore:       devices.resetDeviceStore,
 
     // --- từ usePatientStore ---
     patientRecord:       patient.patientRecord,

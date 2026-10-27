@@ -35,6 +35,21 @@ async def get_current_vitals(
     user_id = current_user.id if current_user else UUID("640e3d97-b4e1-4b08-b2d3-d949a0eb075c")
     if current_user and current_user.role != "admin":
         house = await crud_house.get_or_create_default_house(db, owner_id=current_user.id)
+        if not house:
+            return VitalCurrentOut(
+                heart_rate=None,
+                spo2=None,
+                skin_temp_max=None,
+                person_count=0,
+                fall_detected=False,
+                timestamp=None,
+                sound="Chưa kết nối thiết bị",
+                bracelet_battery=None,
+                bracelet_connected=False,
+                edge_hub_connected=False,
+                device_id=None,
+                time=None,
+            )
         perms = await crud_house.get_user_permissions(db, house=house, user=current_user)
         if not perms.get("can_view_health", True):
             raise HTTPException(

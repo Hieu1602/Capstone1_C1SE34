@@ -27,6 +27,8 @@ import { Colors, Shadows } from '../../../theme/colors';
 import { useAlertStore } from '../../../store';
 import { usePatientStore, ReminderItem } from '../../../store/usePatientStore';
 import { useTheme } from '../../../store/useThemeStore';
+import { useAuthStore } from '../../../store/useAuthStore';
+import { useDeviceStore } from '../../../store/useDeviceStore';
 import { FamilyAppointmentsModal } from '../../dashboard/components/FamilyAppointmentsModal';
 
 // ------------------------------------------------------------------------------
@@ -114,6 +116,26 @@ const ALERT_CONFIG_MAP: Record<string, AlertConfig> = {
     iconBg: '#FEE2E2',
     isCritical: false,
   },
+  HOUSE_MEMBER_ADDED: {
+    title: 'Đã được thêm vào căn nhà',
+    badgeText: 'Thành viên mới',
+    badgeBg: '#EFF6FF',
+    badgeColor: '#2563EB',
+    iconName: 'home',
+    iconColor: '#2563EB',
+    iconBg: '#DBEAFE',
+    isCritical: false,
+  },
+  MEMBER_ADDED: {
+    title: 'Thành viên mới gia nhập',
+    badgeText: 'Thành viên mới',
+    badgeBg: '#EFF6FF',
+    badgeColor: '#2563EB',
+    iconName: 'home',
+    iconColor: '#2563EB',
+    iconBg: '#DBEAFE',
+    isCritical: false,
+  },
 };
 
 function getAlertConfig(alertType: string): AlertConfig {
@@ -166,6 +188,17 @@ export default function AlertsListScreen({ navigation }: any) {
     snoozeMedication,
     fetchReminders,
   } = usePatientStore();
+  const { userRole, role, permissions, fetchMyPermissions } = useAuthStore();
+  const { house, iotDevices, fetchHouseFromBackend, fetchDevicesFromBackend } = useDeviceStore();
+
+  const isOwnerOrAdmin =
+    userRole === 'admin' ||
+    role === 'admin' ||
+    permissions?.is_owner === true ||
+    permissions?.role_in_house === 'OWNER';
+  const canViewCamera = isOwnerOrAdmin || Boolean(permissions?.can_view_camera);
+  const hasLinkedHouse = Boolean(house?.id && house?.hasHouse !== false && house?.name && house.name.trim() !== '');
+  const isUnassignedAccount = !hasLinkedHouse;
 
   const [refreshing, setRefreshing] = useState(false);
   const [familyAppointmentsModalVisible, setFamilyAppointmentsModalVisible] = useState(false);
@@ -175,11 +208,30 @@ export default function AlertsListScreen({ navigation }: any) {
   useEffect(() => {
     fetchNotifications();
     fetchReminders();
+    fetchMyPermissions?.();
+    fetchHouseFromBackend?.();
+    fetchDevicesFromBackend?.();
   }, []);
+
+  useEffect(() => {
+    return navigation?.addListener?.('focus', () => {
+      fetchNotifications();
+      fetchReminders();
+      fetchMyPermissions?.();
+      fetchHouseFromBackend?.();
+      fetchDevicesFromBackend?.();
+    });
+  }, [navigation]);
 
   const handleRefresh = async () => {
     setRefreshing(true);
-    await Promise.all([fetchNotifications(), fetchReminders()]);
+    await Promise.allSettled([
+      fetchNotifications(),
+      fetchReminders(),
+      fetchMyPermissions?.(),
+      fetchHouseFromBackend?.(),
+      fetchDevicesFromBackend?.(),
+    ]);
     setRefreshing(false);
   };
 
@@ -296,6 +348,11 @@ export default function AlertsListScreen({ navigation }: any) {
   const handlePressCard = (item: any) => {
     if (!item.is_acknowledged) {
       setIncidents(incidents.map((i) => (i.id === item.id ? { ...i, is_acknowledged: true } : i)));
+    }
+
+    if (item.alert_type === 'HOUSE_MEMBER_ADDED' || item.alert_type === 'MEMBER_ADDED') {
+      navigation.navigate('HouseDetail');
+      return;
     }
 
     if (['APPOINTMENT_SCHEDULED', 'APPOINTMENT_CONFIRMED', 'APPOINTMENT_CANCELLED'].includes(item.alert_type)) {
@@ -452,7 +509,11 @@ export default function AlertsListScreen({ navigation }: any) {
         <View style={styles.headerTitleCol}>
           <Text style={[styles.headerTitle, isDarkMode && { color: colors.textPrimary }]}>Thông Báo &amp; Sự Kiện</Text>
           <Text style={[styles.headerSubtitle, isDarkMode && { color: colors.textSecondary }]}>
-            {unreadCount > 0 ? t('{{count}} thông báo mới chưa đọc', { count: unreadCount }) : 'Tất cả đã được xử lý'}
+            {unreadCount > 0
+              ? t('{{count}} thông báo mới chưa đọc', { count: unreadCount })
+              : isUnassignedAccount
+              ? 'Chưa liên kết ngôi nhà'
+              : 'Tất cả đã được xử lý'}
           </Text>
         </View>
 
@@ -468,7 +529,27 @@ export default function AlertsListScreen({ navigation }: any) {
             </Text>
           </TouchableOpacity>
 
-          <TouchableOpacity style={styles.cameraQuickBtn} onPress={() => navigation.navigate('CameraDetail')} activeOpacity={0.7}>
+          <TouchableOpacity
+            style={styles.cameraQuickBtn}
+            onPress={() => {
+              if (isUnassignedAccount) {
+                Alert.alert(
+                  'Chưa liên kết ngôi nhà',
+                  'Tài khoản chưa được thêm vào căn nhà nào. Hãy nhắc Chủ hộ thêm số điện thoại của bạn vào nhà nhé!'
+                );
+                return;
+              }
+              if (!canViewCamera) {
+                Alert.alert(
+                  'Chưa có quyền xem camera',
+                  'Bạn chưa được cấp quyền xem camera an ninh. Hãy liên hệ Chủ hộ để được cấp quyền.'
+                );
+                return;
+              }
+              navigation.navigate('CameraDetail');
+            }}
+            activeOpacity={0.7}
+          >
             <Ionicons name="videocam" size={15} color="#FFF" />
             <Text style={styles.cameraQuickText}>Camera</Text>
           </TouchableOpacity>
@@ -624,7 +705,11 @@ export default function AlertsListScreen({ navigation }: any) {
                   <Text style={[styles.cardTime, isDarkMode && { color: colors.textSecondary }]}>{friendlyTime}</Text>
                   <Text style={[styles.dotSeparator, isDarkMode && { color: colors.border }]}>•</Text>
                   <Text style={[styles.deviceLocationText, isDarkMode && { color: colors.textSecondary }]}>
-                    {inc.device_id ? `Thiết bị: ${inc.device_id}` : 'Hệ thống AI'}
+                    {inc.alert_type === 'HOUSE_MEMBER_ADDED' || inc.alert_type === 'MEMBER_ADDED'
+                      ? 'Ngôi nhà'
+                      : inc.device_id
+                      ? `Thiết bị: ${inc.device_id}`
+                      : 'Hệ thống AI'}
                   </Text>
                 </View>
               </View>
@@ -652,21 +737,59 @@ export default function AlertsListScreen({ navigation }: any) {
         contentContainerStyle={styles.listContainer}
         ListEmptyComponent={
           <View style={styles.emptyBox}>
-            <View style={[styles.emptyIconCircle, filterType === 'MEDICATION' && { backgroundColor: '#EFF6FF' }]}>
-              <Ionicons
-                name={filterType === 'MEDICATION' ? 'medical' : 'shield-checkmark-outline'}
-                size={36}
-                color={filterType === 'MEDICATION' ? '#0284C7' : '#10B981'}
-              />
-            </View>
-            <Text style={[styles.emptyTitle, isDarkMode && { color: colors.textPrimary }]}>
-              {filterType === 'MEDICATION' ? 'Không có lịch nhắc uống thuốc nào' : 'Không có cảnh báo bất thường nào'}
-            </Text>
-            <Text style={[styles.emptySub, isDarkMode && { color: colors.textSecondary }]}>
-              {filterType === 'MEDICATION'
-                ? 'Các cữ thuốc sẽ hiển thị theo đơn thuốc của bác sĩ và kế hoạch điều trị trong hồ sơ bệnh án.'
-                : 'Hệ thống AI đang giám sát an toàn 24/7 và mọi chỉ số sức khoẻ đều trong ngưỡng chuẩn.'}
-            </Text>
+            {isUnassignedAccount ? (
+              <>
+                <View
+                  style={[
+                    styles.emptyIconCircle,
+                    { backgroundColor: isDarkMode ? 'rgba(255, 255, 255, 0.06)' : '#F1F5F9' },
+                  ]}
+                >
+                  <Ionicons
+                    name={filterType === 'MEDICATION' ? 'medical-outline' : 'videocam-off-outline'}
+                    size={36}
+                    color={isDarkMode ? '#64748B' : '#94A3B8'}
+                  />
+                </View>
+                <Text style={[styles.emptyTitle, isDarkMode && { color: colors.textPrimary }]}>
+                  Không có dữ liệu
+                </Text>
+                <Text style={[styles.emptySub, isDarkMode && { color: colors.textSecondary }]}>
+                  {filterType === 'MEDICATION'
+                    ? 'Chưa có thông tin lịch uống thuốc do tài khoản chưa được thêm vào nhà hoặc hồ sơ người cao tuổi.'
+                    : 'Tài khoản chưa được thêm vào camera hoặc căn nhà nào. Hãy nhắc Chủ hộ thêm số điện thoại của bạn vào nhà để bắt đầu theo dõi.'}
+                </Text>
+                <TouchableOpacity
+                  style={[
+                    styles.refreshMemberBtn,
+                    isDarkMode && { backgroundColor: colors.card, borderColor: colors.border },
+                  ]}
+                  onPress={handleRefresh}
+                  activeOpacity={0.7}
+                >
+                  <Ionicons name="refresh-outline" size={14} color={Colors.primary} />
+                  <Text style={styles.refreshMemberBtnText}>Kiểm tra lại</Text>
+                </TouchableOpacity>
+              </>
+            ) : (
+              <>
+                <View style={[styles.emptyIconCircle, filterType === 'MEDICATION' && { backgroundColor: '#EFF6FF' }]}>
+                  <Ionicons
+                    name={filterType === 'MEDICATION' ? 'medical' : 'shield-checkmark-outline'}
+                    size={36}
+                    color={filterType === 'MEDICATION' ? '#0284C7' : '#10B981'}
+                  />
+                </View>
+                <Text style={[styles.emptyTitle, isDarkMode && { color: colors.textPrimary }]}>
+                  {filterType === 'MEDICATION' ? 'Không có lịch nhắc uống thuốc nào' : 'Không có cảnh báo bất thường nào'}
+                </Text>
+                <Text style={[styles.emptySub, isDarkMode && { color: colors.textSecondary }]}>
+                  {filterType === 'MEDICATION'
+                    ? 'Các cữ thuốc sẽ hiển thị theo đơn thuốc của bác sĩ và kế hoạch điều trị trong hồ sơ bệnh án.'
+                    : 'Hệ thống AI đang giám sát an toàn 24/7 và mọi chỉ số sức khoẻ đều trong ngưỡng chuẩn.'}
+                </Text>
+              </>
+            )}
           </View>
         }
       />
@@ -827,4 +950,21 @@ const styles = StyleSheet.create({
   emptyIconCircle: { width: 64, height: 64, borderRadius: 32, backgroundColor: '#ECFDF5', alignItems: 'center', justifyContent: 'center', marginBottom: 4 },
   emptyTitle: { fontSize: 15, color: Colors.textPrimary, fontWeight: '700', textAlign: 'center' },
   emptySub: { fontSize: 13, color: '#64748B', textAlign: 'center', lineHeight: 19 },
+  refreshMemberBtn: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 6,
+    marginTop: 8,
+    paddingHorizontal: 14,
+    paddingVertical: 7,
+    borderRadius: 20,
+    backgroundColor: '#FFF4EC',
+    borderWidth: 1,
+    borderColor: '#FED7AA',
+  },
+  refreshMemberBtnText: {
+    fontSize: 12,
+    fontWeight: '700',
+    color: Colors.primary,
+  },
 });

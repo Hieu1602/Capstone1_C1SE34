@@ -17,6 +17,7 @@ import { useTheme } from '../../../store/useThemeStore';
 import { Colors } from '../../../theme/colors';
 import { LocalizedAlert, LocalizedText, LocalizedTextInput } from '../../../i18n/LocalizedComponents';
 import { usePatientStore, ReminderItem } from '../../../store/usePatientStore';
+import { useAuthStore } from '../../../store/useAuthStore';
 
 // Cấu trúc dữ liệu một mốc nhắc uống nước / sinh hoạt
 interface HydrationSchedule {
@@ -31,10 +32,16 @@ export default function MedicationReminderScreen({ navigation }: any) {
 
   // Kết nối Store trung tâm usePatientStore để đồng bộ 2 chiều với Trang chủ & Thông báo
   const { todayReminders, fetchReminders, markMedicationTaken } = usePatientStore();
+  const { userRole, role, permissions, fetchMyPermissions } = useAuthStore();
+  const [checkingPerms, setCheckingPerms] = useState(true);
 
   useEffect(() => {
     fetchReminders();
+    fetchMyPermissions().finally(() => setCheckingPerms(false));
   }, []);
+
+  const isOwnerOrAdmin = userRole === 'admin' || role === 'admin' || Boolean(permissions?.is_owner);
+  const canManageRecords = isOwnerOrAdmin || Boolean(permissions?.can_manage_records);
 
   // Trạng thái bật/tắt phát giọng nói nhắc nhở qua Loa thông minh Edge Hub (FR12)
   const [hubVoiceReminderEnabled, setHubVoiceReminderEnabled] = useState(true);
@@ -95,6 +102,13 @@ export default function MedicationReminderScreen({ navigation }: any) {
   };
 
   const handleAddNewMed = () => {
+    if (!canManageRecords) {
+      LocalizedAlert.alert(
+        'Không có quyền thay đổi',
+        'Tài khoản Thành viên chưa được cấp quyền "Quản lý Lịch thuốc & Bệnh án". Vui lòng liên hệ Chủ hộ để được cấp quyền.'
+      );
+      return;
+    }
     if (!newMedName.trim()) {
       LocalizedAlert.alert('Lỗi', 'Vui lòng nhập tên thuốc.');
       return;
@@ -167,15 +181,38 @@ export default function MedicationReminderScreen({ navigation }: any) {
         </View>
 
         <TouchableOpacity
-          style={[styles.addHeaderBtn, { backgroundColor: isDarkMode ? '#1E293B' : '#F1F5F9', borderColor: borderCol }]}
-          onPress={() => setAddMedModalVisible(true)}
+          style={[styles.addHeaderBtn, { backgroundColor: isDarkMode ? '#1E293B' : '#F1F5F9', borderColor: borderCol }, !canManageRecords && { opacity: 0.7 }]}
+          onPress={() => {
+            if (!canManageRecords) {
+              LocalizedAlert.alert(
+                'Không có quyền thao tác',
+                'Tài khoản Thành viên chưa được cấp quyền "Quản lý Lịch thuốc & Bệnh án". Vui lòng nhờ Chủ hộ cấp quyền trong mục Quản lý nhà.'
+              );
+              return;
+            }
+            setAddMedModalVisible(true);
+          }}
           activeOpacity={0.7}
         >
-          <Ionicons name="add" size={22} color={Colors.primary} />
+          <Ionicons name={canManageRecords ? "add" : "lock-closed"} size={canManageRecords ? 22 : 18} color={canManageRecords ? Colors.primary : Colors.textMuted} />
         </TouchableOpacity>
       </View>
 
       <ScrollView showsVerticalScrollIndicator={false} contentContainerStyle={styles.scrollContent}>
+        {!canManageRecords && !checkingPerms && (
+          <View style={[styles.lockBanner, isDarkMode && { backgroundColor: '#451A03', borderColor: '#B45309' }]}>
+            <Ionicons name="lock-closed" size={18} color="#D97706" style={{ marginRight: 8, marginTop: 2 }} />
+            <View style={{ flex: 1 }}>
+              <LocalizedText style={[styles.lockBannerTitle, isDarkMode && { color: '#FDE68A' }]}>
+                Chế độ chỉ xem lịch thuốc (Chưa được cấp quyền)
+              </LocalizedText>
+              <LocalizedText style={[styles.lockBannerDesc, isDarkMode && { color: '#FEF3C7' }]}>
+                Tài khoản Thành viên chưa được cấp quyền chỉnh sửa đơn thuốc. Bạn chỉ có thể theo dõi và xem lịch uống thuốc của người cao tuổi.
+              </LocalizedText>
+            </View>
+          </View>
+        )}
+
         {/* Loa thông minh Hub */}
         <View style={[styles.speakerCard, { backgroundColor: bgCard, borderColor: hubVoiceReminderEnabled ? Colors.primary : borderCol }]}>
           <View style={styles.speakerTopRow}>
@@ -190,8 +227,15 @@ export default function MedicationReminderScreen({ navigation }: any) {
             </View>
             <Switch
               value={hubVoiceReminderEnabled}
-              onValueChange={setHubVoiceReminderEnabled}
-              trackColor={{ false: '#CBD5E1', true: Colors.primary }}
+              onValueChange={(val) => {
+                if (!canManageRecords) {
+                  LocalizedAlert.alert('Không có quyền thay đổi', 'Chỉ Chủ hộ hoặc người được ủy quyền mới có thể cấu hình loa nhắc nhở.');
+                  return;
+                }
+                setHubVoiceReminderEnabled(val);
+              }}
+              disabled={!canManageRecords}
+              trackColor={{ false: isDarkMode ? '#334155' : '#CBD5E1', true: Colors.primary }}
               thumbColor="#FFFFFF"
             />
           </View>
@@ -226,8 +270,19 @@ export default function MedicationReminderScreen({ navigation }: any) {
               </View>
               <LocalizedText style={[styles.sectionTitle, { color: textTitle }]}>Danh mục cữ thuốc hôm nay</LocalizedText>
             </View>
-            <TouchableOpacity onPress={() => setAddMedModalVisible(true)}>
-              <LocalizedText style={styles.addMedLink}>+ Thêm cữ</LocalizedText>
+            <TouchableOpacity onPress={() => {
+              if (!canManageRecords) {
+                LocalizedAlert.alert(
+                  'Không có quyền thao tác',
+                  'Tài khoản Thành viên chưa được cấp quyền "Quản lý Lịch thuốc & Bệnh án".'
+                );
+                return;
+              }
+              setAddMedModalVisible(true);
+            }}>
+              <LocalizedText style={[styles.addMedLink, !canManageRecords && { color: textSub }]}>
+                {canManageRecords ? '+ Thêm cữ' : '🔒 Chỉ xem'}
+              </LocalizedText>
             </TouchableOpacity>
           </View>
 
@@ -507,4 +562,24 @@ const styles = StyleSheet.create({
   modalCancelText: { fontSize: 13, fontWeight: '600' },
   modalSaveBtn: { flex: 1, backgroundColor: Colors.primary, borderRadius: 10, paddingVertical: 11, alignItems: 'center' },
   modalSaveText: { fontSize: 13, fontWeight: '700', color: '#FFF' },
+  lockBanner: {
+    flexDirection: 'row',
+    alignItems: 'flex-start',
+    backgroundColor: '#FEF3C7',
+    borderWidth: 1.5,
+    borderColor: '#F59E0B',
+    borderRadius: 14,
+    padding: 12,
+  },
+  lockBannerTitle: {
+    fontSize: 13,
+    fontWeight: '800',
+    color: '#B45309',
+    marginBottom: 2,
+  },
+  lockBannerDesc: {
+    fontSize: 12,
+    color: '#92400E',
+    lineHeight: 16,
+  },
 });
