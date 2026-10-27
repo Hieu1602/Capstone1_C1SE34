@@ -5,7 +5,7 @@ crud_incident.py – CRUD / Repository cho Incident model.
 from typing import List, Optional
 from uuid import UUID
 
-from sqlalchemy import select
+from sqlalchemy import select, or_
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.models.incident import Incident
@@ -26,12 +26,30 @@ class CRUDIncident:
         alert_level: Optional[str] = None,
         limit: int = 20,
         offset: int = 0,
+        current_user_id: Optional[UUID] = None,
     ) -> List[Incident]:
         query = select(Incident).order_by(Incident.created_at.desc())
         if device_id:
             query = query.where(Incident.device_id == device_id)
         if alert_level:
             query = query.where(Incident.alert_level == alert_level)
+
+        if current_user_id:
+            query = query.where(
+                or_(
+                    Incident.notes.is_(None),
+                    ~Incident.notes.startswith("USER:"),
+                    Incident.notes == f"USER:{current_user_id}",
+                )
+            )
+        else:
+            query = query.where(
+                or_(
+                    Incident.notes.is_(None),
+                    ~Incident.notes.startswith("USER:"),
+                )
+            )
+
         query = query.offset(offset).limit(limit)
 
         result = await db.execute(query)

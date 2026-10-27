@@ -520,14 +520,14 @@ export const MapLocationPickerModal: React.FC<MapLocationPickerModalProps> = ({
                                 title: "Bản đồ chọn vị trí cấp cứu",
                             })
                         ) : (
-                            <NativeWebView
-                                key={`map-native-${mapReadyKey}`}
-                                ref={webViewRef}
-                                originWhitelist={["*"]}
-                                source={{ html: leafletHtml }}
-                                onMessage={handleNativeMessage}
-                                style={{ flex: 1 }}
-                            />
+                            React.createElement(WebView as any, {
+                                key: `map-native-${mapReadyKey}`,
+                                ref: webViewRef,
+                                originWhitelist: ["*"],
+                                source: { html: leafletHtml },
+                                onMessage: handleNativeMessage,
+                                style: { flex: 1 },
+                            })
                         )}
 
                         {/* Hướng dẫn thao tác ghim */}

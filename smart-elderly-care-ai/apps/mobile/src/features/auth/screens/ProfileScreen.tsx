@@ -1,7 +1,7 @@
 // ProfileScreen.tsx
 // Màn hình Cá nhân / Quản trị hệ thống (Phong cách Elderly Care AI)
 
-import React from 'react';
+import React, { useEffect } from 'react';
 import {
   StyleSheet,
   ScrollView,
@@ -13,6 +13,7 @@ import { Ionicons } from '@expo/vector-icons';
 import { LocalizedText as Text } from '../../../i18n/LocalizedComponents';
 import { SUPPORT_HOTLINE_NUMBER } from '../../../services/emergency';
 import { useProfileManager } from '../hooks/useProfileManager';
+import { useAuthStore } from '../../../store/useAuthStore';
 import {
   ProfileHeader,
   ProfileUserCard,
@@ -34,6 +35,13 @@ import {
 
 export default function ProfileScreen({ navigation, route }: any) {
   const mgr = useProfileManager(navigation, route);
+
+  useEffect(() => {
+    useAuthStore.getState().fetchMyPermissions?.();
+    return navigation?.addListener?.('focus', () => {
+      useAuthStore.getState().fetchMyPermissions?.();
+    });
+  }, [navigation]);
 
   return (
     <SafeAreaView

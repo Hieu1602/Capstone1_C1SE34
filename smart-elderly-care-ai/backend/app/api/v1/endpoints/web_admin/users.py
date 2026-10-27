@@ -258,8 +258,34 @@ async def create_user_by_admin(
 @router.get("/me", response_model=UserOut)
 async def get_current_user_profile(
     current_user: User = Depends(get_current_user),
+    db: AsyncSession = Depends(get_db),
 ):
     """Lấy thông tin profile của người dùng hiện tại."""
+    # Nếu avatar_url trỏ tới đường dẫn file cục bộ /static/avatars/... và file tồn tại,
+    # tự động đồng bộ chuyển đổi sang Base64 data URI vào database (Supabase)
+    # để khi đăng nhập trên bất kỳ máy nào khác vẫn hiển thị đầy đủ ảnh đại diện.
+    if current_user.avatar_url and current_user.avatar_url.startswith("/static/avatars/"):
+        try:
+            avatar_dir = get_avatar_dir()
+            filename = current_user.avatar_url.split("/static/avatars/")[-1]
+            local_file = avatar_dir / filename
+            if local_file.exists():
+                from PIL import Image
+                img = Image.open(local_file)
+                if img.mode in ("RGBA", "P"):
+                    img = img.convert("RGB")
+                w, h = img.size
+                min_dim = min(w, h)
+                img = img.crop(((w - min_dim) // 2, (h - min_dim) // 2, (w + min_dim) // 2, (h + min_dim) // 2))
+                img.thumbnail((384, 384))
+                buf = io.BytesIO()
+                img.save(buf, format="JPEG", quality=85)
+                b64_str = base64.b64encode(buf.getvalue()).decode("utf-8")
+                current_user.avatar_url = f"data:image/jpeg;base64,{b64_str}"
+                await db.commit()
+                await db.refresh(current_user)
+        except Exception as e:
+            logger.warning("[get_current_user_profile] Auto-sync avatar error: %s", e)
 
     return current_user
 
@@ -310,21 +336,36 @@ async def update_profile(
     else:
         update_data.pop("otp_code", None)
 
-    # Nếu avatar_url gửi lên dưới dạng Base64 data URI, tự động lưu thành tệp static
+    # Nếu avatar_url gửi lên dưới dạng Base64 data URI, tối ưu và lưu trực tiếp vào database
     if update_data.get("avatar_url") and update_data["avatar_url"].startswith("data:image"):
         try:
             raw_val = update_data["avatar_url"]
             _, b64_str = raw_val.split(",", 1)
             raw_bytes = base64.b64decode(b64_str)
-            avatar_dir = get_avatar_dir()
-            fname = f"user_{current_user.id}_{int(time.time())}.jpg"
+            from PIL import Image
+            img = Image.open(io.BytesIO(raw_bytes))
+            if img.mode in ("RGBA", "P"):
+                img = img.convert("RGB")
+            w, h = img.size
+            min_dim = min(w, h)
+            img = img.crop(((w - min_dim) // 2, (h - min_dim) // 2, (w + min_dim) // 2, (h + min_dim) // 2))
+            img.thumbnail((384, 384))
+            buf = io.BytesIO()
+            img.save(buf, format="JPEG", quality=85)
+            opt_bytes = buf.getvalue()
+            opt_b64 = base64.b64encode(opt_bytes).decode("utf-8")
+            update_data["avatar_url"] = f"data:image/jpeg;base64,{opt_b64}"
 
-            with open(avatar_dir / fname, "wb") as f:
-                f.write(raw_bytes)
-
-            update_data["avatar_url"] = f"/static/avatars/{fname}"
+            # Lưu dự phòng vào static/avatars/
+            try:
+                avatar_dir = get_avatar_dir()
+                fname = f"user_{current_user.id}_{int(time.time())}.jpg"
+                with open(avatar_dir / fname, "wb") as f:
+                    f.write(opt_bytes)
+            except Exception:
+                pass
         except Exception as e:
-            logger.warning("[update_profile] Could not save avatar as file: %s", e)
+            logger.warning("[update_profile] Could not optimize avatar: %s", e)
 
     updated_user = await crud_user.update(db, db_obj=current_user, obj_in=update_data)
     await db.commit()
@@ -361,8 +402,9 @@ async def _process_and_save_avatar(
     new_filename = f"user_{current_user.id}_{timestamp}.jpg"
     new_path = avatar_dir / new_filename
 
-    # Tối ưu ảnh qua PIL (cắt vuông, nén JPG 512x512) nếu có
-    saved = False
+    # Tối ưu ảnh qua PIL (cắt vuông, nén JPG 384x384 chất lượng 85 để tiết kiệm dung lượng và đồng bộ đa thiết bị)
+    base64_data_uri = None
+    optimized_bytes = img_bytes
 
     try:
         from PIL import Image
@@ -376,28 +418,31 @@ async def _process_and_save_avatar(
         left = (w - min_dim) // 2
         top = (h - min_dim) // 2
         img = img.crop((left, top, left + min_dim, top + min_dim))
-        img.thumbnail((512, 512))
-        img.save(new_path, format="JPEG", quality=90)
-        saved = True
-    except Exception:
-        pass
+        img.thumbnail((384, 384))
 
-    if not saved:
-        try:
-            with open(new_path, "wb") as f:
-                f.write(img_bytes)
+        buf = io.BytesIO()
+        img.save(buf, format="JPEG", quality=85)
+        optimized_bytes = buf.getvalue()
+        b64_str = base64.b64encode(optimized_bytes).decode("utf-8")
+        base64_data_uri = f"data:image/jpeg;base64,{b64_str}"
+    except Exception as e:
+        logger.warning("[_process_and_save_avatar] PIL optimization failed: %s", e)
 
-            saved = True
-        except Exception as write_err:
-            logger.warning("[_process_and_save_avatar] File write error: %s", write_err)
+    # Lưu thêm bản tệp tĩnh cục bộ static/avatars
+    try:
+        with open(new_path, "wb") as f:
+            f.write(optimized_bytes)
+    except Exception as write_err:
+        logger.warning("[_process_and_save_avatar] File write error: %s", write_err)
 
-    # Lưu đường dẫn avatar_url mới vào database PostgreSQL
-    if saved and new_path.exists():
-        current_user.avatar_url = f"/static/avatars/{new_filename}"
-    else:
-        # Fallback: lưu trực tiếp Base64 data URI vào PostgreSQL TEXT column
-        b64_encoded = base64.b64encode(img_bytes).decode("utf-8")
-        current_user.avatar_url = f"data:image/jpeg;base64,{b64_encoded}"
+    if not base64_data_uri:
+        b64_str = base64.b64encode(img_bytes).decode("utf-8")
+        base64_data_uri = f"data:image/jpeg;base64,{b64_str}"
+
+    # QUAN TRỌNG: Lưu Base64 data URI trực tiếp vào Supabase database.
+    # Nhờ vậy, khi đăng nhập trên bất kỳ máy tính/thiết bị nào khác,
+    # ứng dụng luôn hiển thị ảnh đại diện mới nhất mà không phụ thuộc file cục bộ hay IP server.
+    current_user.avatar_url = base64_data_uri
 
     await db.commit()
     await db.refresh(current_user)
