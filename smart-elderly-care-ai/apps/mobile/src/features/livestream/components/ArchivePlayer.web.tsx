@@ -1,5 +1,4 @@
 import React, { useEffect, useRef } from "react";
-// @ts-ignore
 import Hls from "hls.js";
 import type { ArchivePlayerProps } from "./ArchivePlayer";
 
