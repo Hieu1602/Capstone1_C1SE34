@@ -77,7 +77,7 @@ async def lifespan(app: FastAPI):
                         dev_uuid = await crud_vital.resolve_device_uuid(session, raw_dev)
                         if dev_uuid:
                             payload["device_id"] = dev_uuid
-                    await crud_incident.create(session, payload)
+                    await crud_incident.create_from_edge(session, payload)
                     await session.commit()
             except Exception as e:
                 logger.error("[Lifespan] Error saving MQTT alert: %s", e)
