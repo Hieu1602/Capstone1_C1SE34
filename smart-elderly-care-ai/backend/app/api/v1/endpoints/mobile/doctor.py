@@ -56,10 +56,10 @@ async def get_doctor_assigned_patients(
     """
     if not current_user:
         current_user = User(
-            id="b2222222-b4e1-4b08-b2d3-d949a0eb075c",
-            phone="+84905111222",
+            id="b3333333-b4e1-4b08-b2d3-d949a0eb075c",
+            phone="",
             full_name="BS. Trần Văn Minh",
-            role="user",
+            role="doctor",
         )
 
     return await crud_doctor.get_assigned_patients(db=db, doctor_user=current_user)
@@ -238,15 +238,26 @@ async def get_doctor_appointments(
         status=status,
     )
 
+    patient_ids = list({r.patient_id for r in records if r.patient_id})
+    patient_names: Dict[Any, str] = {}
+    if patient_ids:
+        from sqlalchemy import select
+        from app.models.elderly_profile import ElderlyProfile
+        eld_stmt = select(ElderlyProfile.id, ElderlyProfile.full_name).where(ElderlyProfile.id.in_(patient_ids))
+        eld_res = await db.execute(eld_stmt)
+        for row in eld_res.all():
+            patient_names[row[0]] = row[1]
+
     out = []
     for r in records:
+        real_patient_name = patient_names.get(r.patient_id, "Bệnh nhân")
         out.append(
             AppointmentResponse(
                 id=str(r.id),
                 doctor_id=str(r.doctor_id) if r.doctor_id else None,
-                doctor_name=r.doctor.full_name if r.doctor else "BS. Trần Văn Minh",
+                doctor_name=r.doctor.full_name if r.doctor else "Bác sĩ",
                 patient_id=str(r.patient_id),
-                patient_name="Bệnh nhân người cao tuổi",
+                patient_name=real_patient_name,
                 house_id=str(r.house_id) if r.house_id else None,
                 visit_type=r.visit_type,
                 scheduled_at=r.scheduled_at,

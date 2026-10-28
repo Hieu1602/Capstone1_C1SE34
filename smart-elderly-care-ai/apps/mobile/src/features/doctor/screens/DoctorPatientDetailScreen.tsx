@@ -399,7 +399,7 @@ export default function DoctorPatientDetailScreen() {
             return (
               <TouchableOpacity
                 key={tab.key}
-                style={[styles.segmentBtn, active && styles.segmentBtnActive]}
+                style={[styles.segmentBtn, active && [styles.segmentBtnActive, { backgroundColor: isDarkMode ? '#334155' : '#FFFFFF' }]]}
                 onPress={() => setActiveTab(tab.key as any)}
                 activeOpacity={0.8}
               >

@@ -29,6 +29,7 @@ import {
   normalizePatientsList,
 } from '../components/types';
 import { AppointmentDetailModal } from '../components';
+import NotificationsBottomSheet from '../components/NotificationsBottomSheet';
 
 // Export lại để các màn hình khác (DoctorPatientsScreen) import không bị lỗi
 export { STANDARD_PATIENT_NAMES, normalizePatientsList };
@@ -84,6 +85,7 @@ export default function DoctorHomeScreen() {
   const [todayAppointments, setTodayAppointments] = useState<AppointmentItem[]>([]);
   const [nextAppointment, setNextAppointment] = useState<AppointmentItem | null>(null);
   const [detailModalVisible, setDetailModalVisible] = useState(false);
+  const [notifModalVisible, setNotifModalVisible] = useState(false);
 
   const fetchData = useCallback(async () => {
     try {
@@ -136,18 +138,20 @@ export default function DoctorHomeScreen() {
   };
 
   const formatAptTime = (dateStr?: string) => {
-    if (!dateStr) return '08:30';
+    if (!dateStr) return '--:--';
     try {
       const d = new Date(dateStr);
+      if (isNaN(d.getTime())) return '--:--';
       return d.toLocaleTimeString('vi-VN', { hour: '2-digit', minute: '2-digit', hour12: false });
     } catch {
-      return '08:30';
+      return '--:--';
     }
   };
 
   const getPatientInitial = (name: string) => {
+    if (!name) return 'B';
     const parts = name.replace(/^(cụ|bác|ông|bà)\s+/i, '').trim().split(/\s+/);
-    return parts[parts.length - 1]?.[0]?.toUpperCase() || 'H';
+    return parts[parts.length - 1]?.[0]?.toUpperCase() || 'B';
   };
 
   const currentPatientInfo = nextAppointment
@@ -155,7 +159,7 @@ export default function DoctorHomeScreen() {
     : null;
 
   const doctorInitial =
-    (userName || 'Minh').trim().split(/\s+/).slice(-1)[0][0]?.toUpperCase() || 'M';
+    (userName || 'Bác sĩ').trim().split(/\s+/).slice(-1)[0][0]?.toUpperCase() || 'B';
 
   return (
     <View style={[styles.container, { backgroundColor: isDarkMode ? '#0F172A' : '#F8FAFC' }]}>
@@ -179,7 +183,7 @@ export default function DoctorHomeScreen() {
           </View>
           <View style={styles.greetingBox}>
             <LocalizedText style={[styles.greetingTitle, { color: colors.textPrimary }]} numberOfLines={1}>
-              Xin chào, {userName || 'BS. Trần Văn Minh'} 👋
+              Xin chào, {userName || 'Bác sĩ'} 👋
             </LocalizedText>
             <LocalizedText style={[styles.greetingSub, { color: isDarkMode ? '#94A3B8' : '#64748B' }]}>
               Hôm nay công việc thế nào?
@@ -190,15 +194,7 @@ export default function DoctorHomeScreen() {
         <View style={styles.headerRight}>
           <TouchableOpacity
             style={[styles.headerIconBtn, { backgroundColor: isDarkMode ? '#334155' : '#F1F5F9' }]}
-            onPress={() => navigation.navigate('DoctorPatients')}
-            activeOpacity={0.7}
-          >
-            <Ionicons name="search-outline" size={20} color={isDarkMode ? '#E2E8F0' : '#334155'} />
-          </TouchableOpacity>
-
-          <TouchableOpacity
-            style={[styles.headerIconBtn, { backgroundColor: isDarkMode ? '#334155' : '#F1F5F9' }]}
-            onPress={() => navigation.navigate('DoctorAppointments')}
+            onPress={() => setNotifModalVisible(true)}
             activeOpacity={0.7}
           >
             <Ionicons name="notifications-outline" size={20} color={isDarkMode ? '#E2E8F0' : '#334155'} />
@@ -242,11 +238,11 @@ export default function DoctorHomeScreen() {
               </View>
 
               <LocalizedText style={styles.bannerPatientName} numberOfLines={1}>
-                {nextAppointment.patient_name || 'Cụ Nguyễn Văn An'}
+                {nextAppointment.patient_name || 'Bệnh nhân'}
               </LocalizedText>
 
               <LocalizedText style={styles.bannerReasonText} numberOfLines={1}>
-                {nextAppointment.clinical_notes || nextAppointment.exam_type || 'Tái khám tim mạch & HA'} •{' '}
+                {nextAppointment.clinical_notes || nextAppointment.exam_type || 'Khám sức khỏe'} •{' '}
                 {nextAppointment.visit_type === 'CLINIC' ? 'Phòng khám' : 'Tại nhà'}
               </LocalizedText>
 
@@ -309,6 +305,24 @@ export default function DoctorHomeScreen() {
             <PatientCardSkeleton isDarkMode={isDarkMode} />
             <PatientCardSkeleton isDarkMode={isDarkMode} />
           </>
+        ) : patients.length === 0 ? (
+          <View
+            style={[
+              styles.emptyPatientsCard,
+              {
+                backgroundColor: isDarkMode ? '#1E293B' : '#FFFFFF',
+                borderColor: isDarkMode ? '#334155' : '#E2E8F0',
+              },
+            ]}
+          >
+            <Ionicons name="people-outline" size={38} color={isDarkMode ? '#64748B' : '#94A3B8'} style={{ marginBottom: 8 }} />
+            <LocalizedText style={[styles.emptyPatientsTitle, { color: colors.textPrimary }]}>
+              Chưa có bệnh nhân nào phụ trách
+            </LocalizedText>
+            <LocalizedText style={[styles.emptyPatientsSub, { color: isDarkMode ? '#94A3B8' : '#64748B' }]}>
+              Danh sách sẽ hiển thị khi bạn được phân công phụ trách hồ sơ người cao tuổi.
+            </LocalizedText>
+          </View>
         ) : (
           patients.slice(0, 5).map((patient) => {
             const initial = getPatientInitial(patient.name);
@@ -352,7 +366,7 @@ export default function DoctorHomeScreen() {
                     {patient.name}
                   </LocalizedText>
                   <LocalizedText style={[styles.patientMetaText, { color: isDarkMode ? '#94A3B8' : '#64748B' }]}>
-                    {patient.age} tuổi • {patient.gender || 'Nữ'} • {patient.house_name || 'Phòng 201'}
+                    {patient.age ? `${patient.age} tuổi` : 'Cao tuổi'} • {patient.gender ? (patient.gender === 'Nữ' || patient.gender.toUpperCase() === 'FEMALE' ? 'Nữ' : 'Nam') : 'Chưa cập nhật'} • {patient.house_name || 'Nhà riêng'}
                   </LocalizedText>
                 </View>
 
@@ -385,6 +399,12 @@ export default function DoctorHomeScreen() {
       </ScrollView>
 
       {/* Modal Chi tiết Lịch hẹn khi nhấn vào Card Banner */}
+      <NotificationsBottomSheet
+        visible={notifModalVisible}
+        onClose={() => setNotifModalVisible(false)}
+        appointments={todayAppointments}
+      />
+
       <AppointmentDetailModal
         visible={detailModalVisible}
         appointment={nextAppointment}
@@ -504,7 +524,7 @@ const styles = StyleSheet.create({
   /* Card Lịch khám hôm nay */
   scheduleBannerCard: {
     borderRadius: 20,
-    height: 170,
+    minHeight: 170,
     backgroundColor: '#2563EB',
     flexDirection: 'row',
     overflow: 'hidden',
@@ -692,5 +712,23 @@ const styles = StyleSheet.create({
     fontSize: 12,
     fontWeight: '700',
     color: '#2563EB',
+  },
+  emptyPatientsCard: {
+    borderRadius: 16,
+    padding: 24,
+    alignItems: 'center',
+    justifyContent: 'center',
+    borderWidth: 1,
+    marginVertical: 4,
+  },
+  emptyPatientsTitle: {
+    fontSize: 15,
+    fontWeight: '700',
+    marginBottom: 4,
+  },
+  emptyPatientsSub: {
+    fontSize: 12.5,
+    textAlign: 'center',
+    lineHeight: 18,
   },
 });

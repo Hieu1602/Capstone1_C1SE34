@@ -38,12 +38,12 @@ export default function DoctorProfileScreen({ navigation }: any) {
   const { userName, userPhone, avatarUrl, avatar_url, setAvatar, setProfile, logout } = useAuthStore();
 
   const [docInfo, setDocInfo] = useState<DoctorProfileInfo>({
-    name: userName || 'BS. Trần Văn Minh',
-    degree: 'Thạc sĩ Y khoa',
-    specialty: 'Chuyên khoa Tim mạch & Lão khoa',
-    hospital: 'Bệnh viện Đa khoa Đà Nẵng',
-    department: 'Khoa Khám bệnh & Cấp cứu',
-    phone: userPhone || '+84 905 111 222',
+    name: userName || 'Bác sĩ',
+    degree: 'Bác sĩ chuyên khoa',
+    specialty: 'Y học Gia đình & Lão khoa',
+    hospital: 'Hệ thống Smart Elderly Care AI',
+    department: 'Khoa Chăm sóc Người cao tuổi',
+    phone: userPhone || '',
   });
 
   const [patientCount, setPatientCount] = useState<number>(0);
@@ -67,6 +67,7 @@ export default function DoctorProfileScreen({ navigation }: any) {
   const [oldPassword, setOldPassword] = useState('');
   const [newPassword, setNewPassword] = useState('');
   const [confirmPassword, setConfirmPassword] = useState('');
+  const [isChangingPassword, setIsChangingPassword] = useState(false);
 
   const [logoutModalVisible, setLogoutModalVisible] = useState(false);
 
@@ -201,24 +202,53 @@ export default function DoctorProfileScreen({ navigation }: any) {
     Alert.alert('Thành công', 'Đã cập nhật hồ sơ chuyên môn Bác sĩ thành công.');
   };
 
-  const handleSavePassword = () => {
-    if (!oldPassword || !newPassword) {
-      Alert.alert('Lỗi', 'Vui lòng nhập đầy đủ mật khẩu cũ và mới.');
+  const handleSavePassword = async () => {
+    if (!oldPassword.trim() || !newPassword.trim()) {
+      Alert.alert('Lỗi', 'Vui lòng nhập đầy đủ mật khẩu hiện tại và mật khẩu mới.');
       return;
     }
-    if (newPassword.length < 6) {
-      Alert.alert('Lỗi', 'Mật khẩu mới phải từ 6 ký tự trở lên.');
+    if (newPassword.length < 8 || newPassword.length > 16) {
+      Alert.alert('Lỗi', 'Mật khẩu mới phải từ 8 đến 16 ký tự.');
       return;
     }
     if (newPassword !== confirmPassword) {
       Alert.alert('Lỗi', 'Mật khẩu xác nhận không trùng khớp.');
       return;
     }
-    setPasswordModalVisible(false);
-    setOldPassword('');
-    setNewPassword('');
-    setConfirmPassword('');
-    Alert.alert('Thành công', 'Đã thay đổi mật khẩu tài khoản Bác sĩ an toàn.');
+    if (oldPassword === newPassword) {
+      Alert.alert('Lỗi', 'Mật khẩu mới phải khác mật khẩu hiện tại.');
+      return;
+    }
+
+    try {
+      setIsChangingPassword(true);
+      await usersApi.changePassword({
+        current_password: oldPassword,
+        new_password: newPassword,
+        confirm_new_password: confirmPassword,
+      });
+
+      setPasswordModalVisible(false);
+      setOldPassword('');
+      setNewPassword('');
+      setConfirmPassword('');
+      Alert.alert('Thành công', 'Đã thay đổi mật khẩu tài khoản Bác sĩ thành công.');
+    } catch (err: any) {
+      let errorMsg = 'Không thể thay đổi mật khẩu. Vui lòng kiểm tra lại mật khẩu hiện tại.';
+      if (err?.response?.data?.detail) {
+        const detail = err.response.data.detail;
+        if (typeof detail === 'string') {
+          errorMsg = detail;
+        } else if (Array.isArray(detail) && detail[0]?.msg) {
+          errorMsg = detail[0].msg;
+        }
+      } else if (err?.message) {
+        errorMsg = err.message;
+      }
+      Alert.alert('Đổi mật khẩu thất bại', errorMsg);
+    } finally {
+      setIsChangingPassword(false);
+    }
   };
 
   const performLogout = async () => {
@@ -327,9 +357,10 @@ export default function DoctorProfileScreen({ navigation }: any) {
         onChangeNewPassword={setNewPassword}
         onChangeConfirmPassword={setConfirmPassword}
         onSave={handleSavePassword}
-        onClose={() => setPasswordModalVisible(false)}
+        onClose={() => !isChangingPassword && setPasswordModalVisible(false)}
         isDarkMode={isDarkMode}
         colors={colors}
+        isSubmitting={isChangingPassword}
       />
 
       {/* MODAL 3: XÁC NHẬN ĐĂNG XUẤT */}

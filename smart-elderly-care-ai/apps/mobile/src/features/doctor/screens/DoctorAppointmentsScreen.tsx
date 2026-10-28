@@ -127,7 +127,7 @@ export default function DoctorAppointmentsScreen() {
     tomorrow.setHours(8, 30, 0, 0);
     setScheduledAt(tomorrow.toISOString());
 
-    setExamType('Tái khám tim mạch & HA');
+    setExamType('Khám định kỳ');
     setLocation(
       defaultPat?.house_address
         ? `Tại nhà: ${defaultPat.house_address}`
@@ -177,9 +177,12 @@ export default function DoctorAppointmentsScreen() {
 
     try {
       setIsSubmitting(true);
-      const chosenPatientId =
-        patientId || (patients[0]?.id ? String(patients[0].id) : '00000000-0000-0000-0000-000000000000');
-      const chosenPatientName = patientName.trim() || patients[0]?.name || 'Bệnh nhân người cao tuổi';
+      const chosenPatientId = patientId || (patients[0]?.id ? String(patients[0].id) : null);
+      if (!chosenPatientId) {
+        LocalizedAlert.alert('Chưa chọn bệnh nhân', 'Vui lòng chọn một bệnh nhân từ danh sách để đặt lịch khám.');
+        return;
+      }
+      const chosenPatientName = patientName.trim() || patients.find((p) => String(p.id) === String(chosenPatientId))?.name || 'Bệnh nhân';
 
       const payload: any = {
         patient_id: chosenPatientId,

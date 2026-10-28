@@ -52,15 +52,15 @@ export const AnalyticsOverviewCards: React.FC<AnalyticsOverviewCardsProps> = ({
       icon: 'thermometer' as const,
       color: '#F59E0B',
       unit: '°C',
-      val: analytics?.avg_skin_temp ? `${analytics.avg_skin_temp}°` : '36.8°',
+      val: analytics?.avg_skin_temp ? `${analytics.avg_skin_temp}°C` : '--',
       lbl: 'Nhiệt độ da',
-      sub: 'Ổn định tiêu chuẩn',
+      sub: analytics?.avg_skin_temp ? 'Nhiệt độ đo da' : 'Chưa có dữ liệu',
     },
     {
       icon: 'alert-circle' as const,
       color: '#8B5CF6',
       unit: 'Lần',
-      val: analytics?.spo2_drops_count ?? 0,
+      val: analytics?.spo2_drops_count != null ? analytics.spo2_drops_count : '--',
       lbl: 'Cơn tụt SpO₂',
       sub: 'Trong 7 ngày qua',
     },
@@ -211,19 +211,22 @@ export const AnalyticsTrendChart: React.FC<AnalyticsTrendChartProps> = ({
             let isAlert = false;
 
             if (chartMode === 'HR') {
-              barPercent = Math.min(Math.max(((item.avg_heart_rate - 50) / 60) * 100, 15), 100);
-              barColor = item.avg_heart_rate > 80 ? '#F59E0B' : '#0284C7';
-              displayVal = `${item.avg_heart_rate} bpm`;
-              isAlert = item.avg_heart_rate > 80;
+              const hr = item.avg_heart_rate ?? 0;
+              barPercent = hr > 0 ? Math.min(Math.max(((hr - 50) / 60) * 100, 15), 100) : 0;
+              barColor = hr > 80 ? '#F59E0B' : '#0284C7';
+              displayVal = hr > 0 ? `${hr} bpm` : '--';
+              isAlert = hr > 80;
             } else if (chartMode === 'SPO2') {
-              barPercent = Math.min(Math.max(((item.avg_spo2 - 85) / 15) * 100, 15), 100);
-              barColor = item.min_spo2 < 94 ? '#EF4444' : '#10B981';
-              displayVal = `${item.avg_spo2}%`;
-              isAlert = item.min_spo2 < 94;
+              const spo2 = item.avg_spo2 ?? 0;
+              barPercent = spo2 > 0 ? Math.min(Math.max(((spo2 - 85) / 15) * 100, 15), 100) : 0;
+              barColor = (item.min_spo2 || spo2) < 94 ? '#EF4444' : '#10B981';
+              displayVal = spo2 > 0 ? `${spo2}%` : '--';
+              isAlert = (item.min_spo2 || spo2) < 94;
             } else {
-              barPercent = Math.min(Math.max((item.steps / 3500) * 100, 15), 100);
+              const steps = item.steps ?? 0;
+              barPercent = steps > 0 ? Math.min(Math.max((steps / 3500) * 100, 15), 100) : 0;
               barColor = '#8B5CF6';
-              displayVal = `${item.steps}`;
+              displayVal = steps > 0 ? `${steps}` : '--';
             }
 
             return (

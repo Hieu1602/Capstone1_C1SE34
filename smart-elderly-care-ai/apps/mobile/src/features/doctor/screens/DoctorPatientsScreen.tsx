@@ -9,10 +9,11 @@ import {
   RefreshControl,
   StatusBar,
   Animated,
+  TextInput,
 } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
-import { useNavigation, useFocusEffect } from '@react-navigation/native';
+import { useNavigation, useFocusEffect, useRoute } from '@react-navigation/native';
 
 import { Colors } from '../../../theme/colors';
 import { useTheme } from '../../../store/useThemeStore';
@@ -105,8 +106,10 @@ const GridSkeletonCard = ({ isDarkMode }: { isDarkMode: boolean }) => {
 export default function DoctorPatientsScreen() {
   const insets = useSafeAreaInsets();
   const navigation = useNavigation<any>();
+  const route = useRoute<any>();
   const { isDarkMode, colors } = useTheme();
   const { userName } = useAuthStore();
+  const searchRef = useRef<any>(null);
 
   const [patients, setPatients] = useState<PatientCardData[]>([]);
   const [loading, setLoading] = useState(true);
@@ -148,6 +151,14 @@ export default function DoctorPatientsScreen() {
       fetchPatients();
     }, [fetchPatients])
   );
+
+  // Auto-focus search when navigated from Home search button
+  useEffect(() => {
+    if (route.params?.autoFocus) {
+      const t = setTimeout(() => searchRef.current?.focus(), 300);
+      return () => clearTimeout(t);
+    }
+  }, [route.params?.autoFocus]);
 
   const onRefresh = () => {
     setRefreshing(true);
@@ -235,6 +246,7 @@ export default function DoctorPatientsScreen() {
         onRefresh={onRefresh}
         isDarkMode={isDarkMode}
         colors={colors}
+        searchInputRef={searchRef}
       />
 
       {/* Thanh thông báo chạy chữ từ Admin (dành cho Bác sĩ) */}

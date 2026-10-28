@@ -8,7 +8,7 @@ from functools import lru_cache
 from pathlib import Path
 from typing import List
 
-from pydantic import field_validator
+from pydantic import AliasChoices, Field, field_validator
 from dotenv import load_dotenv
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
@@ -68,13 +68,57 @@ class Settings(BaseSettings):
     MQTT_TOPIC_TELEMETRY: str = "care/+/telemetry"
     MQTT_TOPIC_ALERT: str = "care/+/alert"
 
-    # ---- MinIO / S3 ----
-    MINIO_ENDPOINT: str = "localhost:9000"
-    MINIO_ACCESS_KEY: str = "minioadmin"
-    MINIO_SECRET_KEY: str = "CHANGE_ME"
-    MINIO_BUCKET_INCIDENTS: str = "incidents"
-    MINIO_SECURE: bool = False
-    MINIO_REGION: str = ""
+    # ---- Cloud Object Storage (AWS S3 / MinIO) ----
+    MINIO_ENDPOINT: str = Field(
+        default="localhost:9000",
+        validation_alias=AliasChoices("AWS_S3_ENDPOINT", "MINIO_ENDPOINT", "S3_ENDPOINT"),
+    )
+    MINIO_ACCESS_KEY: str = Field(
+        default="minioadmin",
+        validation_alias=AliasChoices("AWS_ACCESS_KEY_ID", "MINIO_ACCESS_KEY", "S3_ACCESS_KEY"),
+    )
+    MINIO_SECRET_KEY: str = Field(
+        default="CHANGE_ME",
+        validation_alias=AliasChoices("AWS_SECRET_ACCESS_KEY", "MINIO_SECRET_KEY", "S3_SECRET_KEY"),
+    )
+    MINIO_BUCKET_INCIDENTS: str = Field(
+        default="incidents",
+        validation_alias=AliasChoices(
+            "AWS_S3_BUCKET_INCIDENTS", "MINIO_BUCKET_INCIDENTS", "AWS_S3_BUCKET", "S3_BUCKET_INCIDENTS"
+        ),
+    )
+    MINIO_SECURE: bool = Field(
+        default=False,
+        validation_alias=AliasChoices("AWS_S3_SECURE", "MINIO_SECURE", "S3_SECURE"),
+    )
+    MINIO_REGION: str = Field(
+        default="",
+        validation_alias=AliasChoices("AWS_REGION", "MINIO_REGION", "AWS_DEFAULT_REGION", "S3_REGION"),
+    )
+
+    @property
+    def AWS_ACCESS_KEY_ID(self) -> str:
+        return self.MINIO_ACCESS_KEY
+
+    @property
+    def AWS_SECRET_ACCESS_KEY(self) -> str:
+        return self.MINIO_SECRET_KEY
+
+    @property
+    def AWS_S3_ENDPOINT(self) -> str:
+        return self.MINIO_ENDPOINT
+
+    @property
+    def AWS_S3_BUCKET_INCIDENTS(self) -> str:
+        return self.MINIO_BUCKET_INCIDENTS
+
+    @property
+    def AWS_S3_SECURE(self) -> bool:
+        return self.MINIO_SECURE
+
+    @property
+    def AWS_REGION(self) -> str:
+        return self.MINIO_REGION
 
     # ---- Firebase FCM ----
     FCM_SERVICE_ACCOUNT_PATH: str = "config/firebase-service-account.json"

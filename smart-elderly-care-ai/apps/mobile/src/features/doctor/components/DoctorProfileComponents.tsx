@@ -48,9 +48,9 @@ export const DoctorProfileCard: React.FC<DoctorProfileCardProps> = ({
   isDarkMode,
   colors,
 }) => {
-  const doctorInitial = (info.name || 'Minh').trim().split(/\s+/).slice(-1)[0][0]?.toUpperCase() || 'M';
-  const displayPatients = patientCount > 0 ? patientCount : 2;
-  const completedVisits = appointmentCount > 0 ? appointmentCount * 4 + 8 : 32;
+  const doctorInitial = (info.name || 'Bác sĩ').trim().split(/\s+/).slice(-1)[0][0]?.toUpperCase() || 'B';
+  const displayPatients = patientCount;
+  const completedVisits = appointmentCount;
 
   return (
     <View style={{ marginBottom: 12 }}>
@@ -94,17 +94,17 @@ export const DoctorProfileCard: React.FC<DoctorProfileCardProps> = ({
 
         {/* Họ và tên & Chuyên khoa */}
         <Text style={[styles.docName, { color: colors.textPrimary }]} numberOfLines={1}>
-          {info.name || 'BS. Trần Văn Minh'}
+          {info.name || 'Bác sĩ'}
         </Text>
         <Text style={[styles.docSpecialty, { color: isDarkMode ? '#94A3B8' : '#475569' }]}>
-          {info.degree || 'Thạc sĩ Y khoa'} • {info.specialty || 'Chuyên khoa Tim mạch & Lão khoa'}
+          {info.degree || 'Bác sĩ chuyên khoa'} • {info.specialty || 'Y học Gia đình & Lão khoa'}
         </Text>
 
         {/* Nơi công tác */}
         <View style={[styles.hospitalBadge, { backgroundColor: isDarkMode ? '#0F172A' : '#EFF6FF' }]}>
           <Ionicons name="business" size={13} color="#2563EB" style={{ marginRight: 5 }} />
           <Text style={[styles.hospitalText, { color: isDarkMode ? '#60A5FA' : '#1D4ED8' }]} numberOfLines={1}>
-            {info.hospital || 'Bệnh viện Đa khoa Đà Nẵng'}
+            {info.hospital || 'Hệ thống Smart Elderly Care AI'}
           </Text>
         </View>
       </View>
@@ -130,8 +130,8 @@ export const DoctorProfileCard: React.FC<DoctorProfileCardProps> = ({
         </View>
         <View style={[styles.statDivider, { backgroundColor: isDarkMode ? '#334155' : '#E2E8F0' }]} />
         <View style={styles.statCol}>
-          <Text style={[styles.statNumber, { color: '#2563EB' }]}>8+</Text>
-          <Text style={[styles.statLabel, { color: isDarkMode ? '#94A3B8' : '#64748B' }]}>Năm kinh nghiệm</Text>
+          <Text style={[styles.statNumber, { color: '#10B981' }]}>Đã cấp</Text>
+          <Text style={[styles.statLabel, { color: isDarkMode ? '#94A3B8' : '#64748B' }]}>Chứng chỉ CCHN</Text>
         </View>
       </View>
 
@@ -161,16 +161,16 @@ export const DoctorProfileCard: React.FC<DoctorProfileCardProps> = ({
           <View style={styles.licenseRow}>
             <Text style={[styles.licenseLabel, { color: isDarkMode ? '#94A3B8' : '#64748B' }]}>Số CCHN:</Text>
             <View style={[styles.cchnBadge, { backgroundColor: isDarkMode ? '#1E3A8A33' : '#EFF6FF' }]}>
-              <Text style={[styles.cchnBadgeText, { color: '#2563EB' }]}>001428/BYT-CCHN</Text>
+              <Text style={[styles.cchnBadgeText, { color: '#2563EB' }]}>BYT-CCHN</Text>
             </View>
           </View>
           <View style={styles.licenseRow}>
             <Text style={[styles.licenseLabel, { color: isDarkMode ? '#94A3B8' : '#64748B' }]}>Khoa / Phòng:</Text>
-            <Text style={[styles.licenseValue, { color: colors.textPrimary }]}>{info.department || 'Khoa Khám bệnh & Cấp cứu'}</Text>
+            <Text style={[styles.licenseValue, { color: colors.textPrimary }]}>{info.department || 'Khoa Chăm sóc Người cao tuổi'}</Text>
           </View>
           <View style={[styles.licenseRow, { borderBottomWidth: 0 }]}>
             <Text style={[styles.licenseLabel, { color: isDarkMode ? '#94A3B8' : '#64748B' }]}>SĐT liên hệ trực:</Text>
-            <Text style={[styles.licenseValue, { color: '#2563EB', fontWeight: '700' }]}>{info.phone || '+84 905 111 222'}</Text>
+            <Text style={[styles.licenseValue, { color: '#2563EB', fontWeight: '700' }]}>{info.phone || 'Chưa cập nhật'}</Text>
           </View>
         </View>
       </View>
@@ -221,8 +221,8 @@ export const DoctorProfileSettings: React.FC<DoctorProfileSettingsProps> = ({
             <Ionicons name="lock-closed" size={18} color="#2563EB" />
           </View>
           <View style={{ flex: 1 }}>
-            <Text style={[styles.menuItemTitle, { color: colors.textPrimary }]}>Đổi mật khẩu & Bảo mật 2 lớp</Text>
-            <Text style={[styles.menuItemSub, { color: isDarkMode ? '#94A3B8' : '#64748B' }]}>Quản lý mã khóa bảo vệ tài khoản y tế</Text>
+            <Text style={[styles.menuItemTitle, { color: colors.textPrimary }]}>Đổi mật khẩu</Text>
+            <Text style={[styles.menuItemSub, { color: isDarkMode ? '#94A3B8' : '#64748B' }]}>Cập nhật mật khẩu bảo vệ tài khoản y tế</Text>
           </View>
           <Ionicons name="chevron-forward" size={17} color={isDarkMode ? '#64748B' : '#94A3B8'} />
         </TouchableOpacity>
@@ -446,7 +446,7 @@ export const DoctorEditProfileModal: React.FC<DoctorEditProfileModalProps> = ({
           </View>
 
           {[
-            { label: 'Họ và tên Bác sĩ (*)', val: editName, setVal: onChangeName, placeholder: 'VD: BS. Nguyễn Văn An' },
+            { label: 'Họ và tên Bác sĩ (*)', val: editName, setVal: onChangeName, placeholder: 'Nhập họ và tên bác sĩ' },
             { label: 'Học hàm, học vị', val: editDegree, setVal: onChangeDegree, placeholder: 'VD: Bác sĩ CKI, Thạc sĩ Y khoa...' },
             { label: 'Chuyên khoa', val: editSpecialty, setVal: onChangeSpecialty, placeholder: 'VD: Lão khoa, Tim mạch...' },
             { label: 'Bệnh viện / Cơ sở y tế', val: editHospital, setVal: onChangeHospital, placeholder: 'VD: Bệnh viện Đa khoa Đà Nẵng' },
@@ -495,6 +495,7 @@ export interface DoctorChangePasswordModalProps {
   onClose: () => void;
   isDarkMode: boolean;
   colors: any;
+  isSubmitting?: boolean;
 }
 
 export const DoctorChangePasswordModal: React.FC<DoctorChangePasswordModalProps> = ({
@@ -509,6 +510,7 @@ export const DoctorChangePasswordModal: React.FC<DoctorChangePasswordModalProps>
   onClose,
   isDarkMode,
   colors,
+  isSubmitting = false,
 }) => (
   <Modal visible={visible} animationType="slide" transparent onRequestClose={onClose}>
     <KeyboardAvoidingView behavior={Platform.OS === 'ios' ? 'padding' : undefined} style={styles.modalOverlay}>
@@ -526,7 +528,7 @@ export const DoctorChangePasswordModal: React.FC<DoctorChangePasswordModalProps>
         <View style={{ marginVertical: 10 }}>
           {[
             { label: 'Mật khẩu hiện tại (*)', val: oldPassword, setVal: onChangeOldPassword, placeholder: 'Nhập mật khẩu hiện tại' },
-            { label: 'Mật khẩu mới (*)', val: newPassword, setVal: onChangeNewPassword, placeholder: 'Tối thiểu 6 ký tự' },
+            { label: 'Mật khẩu mới (*)', val: newPassword, setVal: onChangeNewPassword, placeholder: '8 - 16 ký tự (Hoa, thường, số, đặc biệt)' },
             { label: 'Xác nhận mật khẩu mới (*)', val: confirmPassword, setVal: onChangeConfirmPassword, placeholder: 'Nhập lại mật khẩu mới' },
           ].map((f, idx) => (
             <View key={idx}>
@@ -547,8 +549,14 @@ export const DoctorChangePasswordModal: React.FC<DoctorChangePasswordModalProps>
           <TouchableOpacity style={[styles.btnCancel, { borderColor: colors.border }]} onPress={onClose}>
             <Text style={{ fontSize: 13, fontWeight: '700', color: isDarkMode ? '#CBD5E1' : '#64748B' }}>Hủy</Text>
           </TouchableOpacity>
-          <TouchableOpacity style={[styles.btnSave, { backgroundColor: '#2563EB' }]} onPress={onSave}>
-            <Text style={{ color: '#FFFFFF', fontSize: 13, fontWeight: '700' }}>Cập Nhật Mật Khẩu</Text>
+          <TouchableOpacity
+            style={[styles.btnSave, { backgroundColor: '#2563EB', opacity: isSubmitting ? 0.7 : 1 }]}
+            onPress={onSave}
+            disabled={isSubmitting}
+          >
+            <Text style={{ color: '#FFFFFF', fontSize: 13, fontWeight: '700' }}>
+              {isSubmitting ? 'Đang cập nhật...' : 'Cập Nhật Mật Khẩu'}
+            </Text>
           </TouchableOpacity>
         </View>
       </View>

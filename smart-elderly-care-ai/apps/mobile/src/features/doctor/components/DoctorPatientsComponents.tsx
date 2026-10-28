@@ -3,7 +3,7 @@
 // 1. DoctorPatientsHeader: Thanh tìm kiếm, đếm số ca cảnh báo, bộ lọc trạng thái & popup lọc
 // 2. DoctorPatientCard: Thẻ bệnh nhân bố cục Grid 2 cột (Avatar, trạng thái, chỉ số & nút hành động)
 
-import React, { useState } from 'react';
+import React, { useState, RefObject } from 'react';
 import { View, StyleSheet, TouchableOpacity, Modal } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { Colors } from '../../../theme/colors';
@@ -25,6 +25,7 @@ export interface DoctorPatientsHeaderProps {
   onRefresh: () => void;
   isDarkMode: boolean;
   colors: any;
+  searchInputRef?: RefObject<any>;
 }
 
 export const DoctorPatientsHeader: React.FC<DoctorPatientsHeaderProps> = ({
@@ -39,6 +40,7 @@ export const DoctorPatientsHeader: React.FC<DoctorPatientsHeaderProps> = ({
   onRefresh,
   isDarkMode,
   colors,
+  searchInputRef,
 }) => {
   const [filterModalVisible, setFilterModalVisible] = useState(false);
 
@@ -87,6 +89,7 @@ export const DoctorPatientsHeader: React.FC<DoctorPatientsHeaderProps> = ({
         >
           <Ionicons name="search" size={18} color="#94A3B8" />
           <LocalizedTextInput
+            ref={searchInputRef}
             style={[styles.searchInput, { color: colors.textPrimary }]}
             placeholder="Tìm theo tên hoặc số điện thoại..."
             placeholderTextColor="#94A3B8"
@@ -230,7 +233,7 @@ export const DoctorPatientCard: React.FC<DoctorPatientCardProps> = ({
 
   const initial = (() => {
     const parts = displayName.replace(/^(cụ|bác|ông|bà)\s+/i, '').trim().split(/\s+/);
-    return parts[parts.length - 1]?.[0]?.toUpperCase() || 'H';
+    return parts[parts.length - 1]?.[0]?.toUpperCase() || 'B';
   })();
 
   const statusDotColor = isDanger ? '#EF4444' : isWarn ? '#F59E0B' : '#10B981';
@@ -289,7 +292,7 @@ export const DoctorPatientCard: React.FC<DoctorPatientCardProps> = ({
         style={[cardStyles.patientSummary, { color: isDarkMode ? '#94A3B8' : '#64748B' }]}
         numberOfLines={1}
       >
-        {patient.age ? `${patient.age} tuổi` : 'Cao tuổi'} • {patient.gender === 'Nữ' || patient.gender === 'FEMALE' ? 'Nữ' : 'Nam'}
+        {patient.age ? `${patient.age} tuổi` : 'Cao tuổi'} • {patient.gender ? (patient.gender === 'Nữ' || patient.gender.toUpperCase() === 'FEMALE' ? 'Nữ' : 'Nam') : 'Chưa cập nhật'}
       </LocalizedText>
 
       {/* 3. Vị trí / Địa chỉ */}
@@ -297,7 +300,7 @@ export const DoctorPatientCard: React.FC<DoctorPatientCardProps> = ({
         style={[cardStyles.patientLocation, { color: isDarkMode ? '#64748B' : '#94A3B8' }]}
         numberOfLines={1}
       >
-        📍 {patient.house_address ? patient.house_address.split(',')[0] : 'Tại nhà riêng'}
+        📍 {patient.house_address ? patient.house_address.split(',')[0] : (patient.house_name || 'Tại nhà riêng')}
       </LocalizedText>
 
       {/* 4. Cụm nút hành động dưới cùng */}
@@ -435,6 +438,7 @@ const styles = StyleSheet.create({
 const cardStyles = StyleSheet.create({
   gridCard: {
     flex: 1,
+    maxWidth: '48.5%',
     borderRadius: 16,
     padding: 14,
     alignItems: 'center',

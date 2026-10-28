@@ -138,7 +138,7 @@ export const AppointmentCard: React.FC<AppointmentCardProps> = ({
   const cleanInstructions = (apt.instructions || '')
     .replace(/\[ĐÃ XÁC NHẬN ĐÓN TIẾP\]/g, '')
     .trim();
-  const initial = apt.patient_name.trim().split(/\s+/).slice(-1)[0][0]?.toUpperCase() || 'A';
+  const initial = (apt.patient_name || 'B').trim().split(/\s+/).slice(-1)[0][0]?.toUpperCase() || 'B';
 
   const recurrenceLabel =
     apt.recurrence_pattern === 'WEEKLY'
@@ -162,7 +162,18 @@ export const AppointmentCard: React.FC<AppointmentCardProps> = ({
       <View style={styles.cardTopRow}>
         <View style={styles.dateTagBox}>
           <Ionicons name="calendar" size={13} color="#0284C7" style={{ marginRight: 4 }} />
-          <LocalizedText style={styles.dateTagText}>{apt.scheduled_at}</LocalizedText>
+          <LocalizedText style={styles.dateTagText}>
+            {(() => {
+              if (!apt.scheduled_at) return '--';
+              try {
+                const d = new Date(apt.scheduled_at);
+                if (isNaN(d.getTime())) return apt.scheduled_at;
+                return `${d.toLocaleTimeString('vi-VN', { hour: '2-digit', minute: '2-digit', hour12: false })} - ${d.toLocaleDateString('vi-VN', { day: '2-digit', month: '2-digit', year: 'numeric' })}`;
+              } catch {
+                return apt.scheduled_at;
+              }
+            })()}
+          </LocalizedText>
         </View>
 
         <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6 }}>

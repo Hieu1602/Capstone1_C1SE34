@@ -56,7 +56,7 @@ export interface AppointmentFormModalProps {
   colors: any;
 }
 
-const STANDARD_EXAM_TYPES = ['Tái khám tim mạch & HA', 'Khám tổng quát', 'Xét nghiệm', 'Khác'];
+const STANDARD_EXAM_TYPES = ['Khám định kỳ', 'Tái khám', 'Khám tổng quát', 'Xét nghiệm', 'Khác'];
 const TIME_PICKER_SLOTS = [
   '07:30', '08:00', '08:30', '09:00', '09:30', '10:00', '10:30', '11:00',
   '13:30', '14:00', '14:30', '15:00', '15:30', '16:00', '16:30', '17:00',
@@ -179,7 +179,7 @@ export const AppointmentFormModal: React.FC<AppointmentFormModalProps> = ({
       }
     }
 
-    if (!examType) onChangeExamType('Tái khám tim mạch & HA');
+    if (!examType) onChangeExamType('Khám định kỳ');
   }, [visible]);
 
   const selectedPatientObj = useMemo(
@@ -193,12 +193,12 @@ export const AppointmentFormModal: React.FC<AppointmentFormModalProps> = ({
   }, [selectedDate]);
 
   const isCustomExamType = useMemo(
-    () => !['Tái khám tim mạch & HA', 'Khám tổng quát', 'Xét nghiệm'].includes(examType),
+    () => !['Khám định kỳ', 'Tái khám', 'Khám tổng quát', 'Xét nghiệm'].includes(examType),
     [examType]
   );
 
   const examTypeDisplay = useMemo(() => {
-    if (['Tái khám tim mạch & HA', 'Khám tổng quát', 'Xét nghiệm'].includes(examType)) return examType;
+    if (['Khám định kỳ', 'Tái khám', 'Khám tổng quát', 'Xét nghiệm'].includes(examType)) return examType;
     return examType ? `Khác: ${examType}` : 'Chọn lý do khám';
   }, [examType]);
 
@@ -208,7 +208,7 @@ export const AppointmentFormModal: React.FC<AppointmentFormModalProps> = ({
       const curPatient = patients.find((p) => String(p.id) === String(patientId));
       onChangeLocation(curPatient?.house_address ? `Tại nhà: ${curPatient.house_address}` : 'Tại nhà bệnh nhân (Khám tại gia)');
     } else {
-      onChangeLocation('Phòng khám Bác sĩ Gia đình (123 Hải Phòng, Đà Nẵng)');
+      onChangeLocation('Phòng khám Bác sĩ Gia đình');
     }
   };
 
@@ -914,7 +914,7 @@ export const AppointmentDetailModal: React.FC<AppointmentDetailModalProps> = ({
               {
                 icon: 'person-outline',
                 label: 'Bệnh nhân:',
-                val: `${appointment.patient_name || 'Cụ Nguyễn Văn An'}${patientInfo ? ` (${patientInfo.age} tuổi • ${patientInfo.gender})` : ''}`,
+                val: `${appointment.patient_name || 'Bệnh nhân'}${patientInfo ? ` (${patientInfo.age ? `${patientInfo.age} tuổi` : ''}${patientInfo.gender ? ` • ${patientInfo.gender}` : ''})` : ''}`,
               },
               {
                 icon: 'time-outline',
@@ -929,13 +929,13 @@ export const AppointmentDetailModal: React.FC<AppointmentDetailModalProps> = ({
               {
                 icon: 'call-outline',
                 label: 'Số điện thoại người nhà:',
-                val: patientInfo?.emergency_contact_phone || '0905 123 456 (Người thân)',
+                val: patientInfo?.emergency_contact_phone || 'Chưa cập nhật',
                 isPhone: true,
               },
               {
                 icon: 'document-text-outline',
                 label: 'Dặn dò y tế / Ghi chú:',
-                val: appointment.instructions || appointment.clinical_notes || 'Tái khám tim mạch & kiểm tra huyết áp định kỳ.',
+                val: appointment.instructions || appointment.clinical_notes || 'Khám sức khỏe định kỳ.',
               },
             ].map((row, idx) => (
               <View key={idx} style={{ flexDirection: 'row', alignItems: 'flex-start' }}>
