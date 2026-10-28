@@ -143,7 +143,7 @@ class VideoArchive:
         if used + reserve > self.max_bytes or shutil.disk_usage(self.directory).free < reserve + 64 * 1024**2:
             raise OSError("Video spool full; pending uploads are preserved")
         recording_id = str(uuid4())
-        suffix = ".jpg" if kind == "snapshot" else ".mp4"
+        suffix = ".jpg" if kind == "snapshot" else ".ts" if kind == "segment" else ".mp4"
         path = self.directory / (recording_id + suffix)
         temporary = path.with_suffix(suffix + ".part")
         try:
@@ -160,8 +160,9 @@ class VideoArchive:
                     "-f", "rawvideo", "-pix_fmt", "bgr24", "-s", f"{width}x{height}",
                     "-r", str(self.fps), "-i", "pipe:0", "-an", "-c:v", "libx264",
                     "-preset", "ultrafast", "-threads", "1", "-pix_fmt", "yuv420p",
-                    "-vf", "pad=ceil(iw/2)*2:ceil(ih/2)*2", "-movflags", "+faststart",
-                    "-f", "mp4", str(temporary),
+                    "-vf", "pad=ceil(iw/2)*2:ceil(ih/2)*2", "-g", str(self.fps * 2),
+                    "-keyint_min", str(self.fps * 2), "-sc_threshold", "0", "-bf", "0",
+                    *(["-f", "mpegts"] if kind == "segment" else ["-movflags", "+faststart", "-f", "mp4"]), str(temporary),
                 ], input=b"".join(f.tobytes() for f in frames), stdout=subprocess.DEVNULL,
                     stderr=subprocess.DEVNULL, check=True, timeout=30)
             temporary.replace(path)
@@ -188,14 +189,14 @@ class VideoArchive:
         from botocore.config import Config
         from boto3.s3.transfer import TransferConfig
         data = manifest["metadata"]
-        path = self.directory / (data["id"] + (".jpg" if data["kind"] == "snapshot" else ".mp4"))
+        path = self.directory / (data["id"] + Path(data["object_key"]).suffix)
         if self._client is None:
             self._client = boto3.client("s3", region_name=self.region, config=Config(
                 signature_version="s3v4", connect_timeout=5, read_timeout=10,
                 retries={"mode": "standard", "total_max_attempts": 3}))
         if not manifest.get("uploaded"):
             self._client.upload_file(str(path), self.bucket, data["object_key"],
-                ExtraArgs={"ContentType": "image/jpeg" if data["kind"] == "snapshot" else "video/mp4",
+                ExtraArgs={"ContentType": "image/jpeg" if data["kind"] == "snapshot" else "video/mp2t" if path.suffix == ".ts" else "video/mp4",
                            "ServerSideEncryption": "AES256"},
                 Config=TransferConfig(use_threads=False))
             manifest["uploaded"] = True

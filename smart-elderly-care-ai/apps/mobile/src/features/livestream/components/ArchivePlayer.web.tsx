@@ -1,17 +1,44 @@
-import React, { useRef } from "react";
+import React, { useEffect, useRef } from "react";
+import Hls from "hls.js";
+import type { ArchivePlayerProps } from "./ArchivePlayer";
 
-export interface ArchivePlayerProps {
-    uri: string;
-    startAt?: number;
-    onEnd: () => void;
-    onError: () => void;
-    onProgress?: (seconds: number) => void;
-}
-
-export default function ArchivePlayer({ uri, startAt = 0, onEnd, onError, onProgress }: ArchivePlayerProps) {
+export default function ArchivePlayer({ uri, startAt = 0, onEnd, onError, onProgress, paused = false, hls = false, seekVersion = 0 }: ArchivePlayerProps) {
     const player = useRef<HTMLVideoElement>(null);
-    return <video ref={player} src={uri} controls autoPlay playsInline onEnded={onEnd} onError={onError}
-        onLoadedMetadata={() => { if (player.current) player.current.currentTime = startAt; }}
+    const latest = useRef({ onError, startAt, paused });
+    latest.current = { onError, startAt, paused };
+    useEffect(() => {
+        const video = player.current!;
+        let stream: Hls | undefined;
+        if (hls && Hls.isSupported()) {
+            stream = new Hls({ maxBufferLength: 30, maxMaxBufferLength: 60, backBufferLength: 60, startPosition: latest.current.startAt });
+            stream.on(Hls.Events.ERROR, (_, data) => { if (data.fatal) latest.current.onError(); });
+            stream.loadSource(uri);
+            stream.attachMedia(video);
+        } else if (!hls || video.canPlayType("application/vnd.apple.mpegurl")) {
+            video.src = uri;
+        } else {
+            latest.current.onError();
+        }
+        return () => {
+            stream?.destroy();
+            video.pause();
+            video.removeAttribute("src");
+            video.load();
+        };
+    }, [uri, hls]);
+    useEffect(() => {
+        if (player.current && player.current.readyState > 0) player.current.currentTime = startAt;
+    }, [startAt, seekVersion]);
+    useEffect(() => {
+        if (paused) player.current?.pause();
+        else void player.current?.play().catch(() => {});
+    }, [paused]);
+    return <video ref={player} controls autoPlay={!paused} playsInline preload="auto" onEnded={onEnd} onError={onError}
+        onLoadedMetadata={() => {
+            if (!player.current) return;
+            player.current.currentTime = latest.current.startAt;
+            if (!latest.current.paused) void player.current.play().catch(() => {});
+        }}
         onTimeUpdate={() => onProgress?.(player.current?.currentTime ?? 0)}
-        style={{ width: "100%", height: 210, backgroundColor: "black" }} />;
+        style={{ display: "block", width: "100%", aspectRatio: "16 / 9", backgroundColor: "black" }} />;
 }

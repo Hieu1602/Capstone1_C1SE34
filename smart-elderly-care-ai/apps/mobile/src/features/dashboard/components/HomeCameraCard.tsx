@@ -146,7 +146,7 @@ export const HomeCameraCard: React.FC<HomeCameraCardProps> = ({
       {/* NÚT TRUY CẬP NHANH: "Xem lại 24/48h" (Interactive Timeline Playback) ngay bên dưới video */}
       <TouchableOpacity
         style={[styles.playbackQuickBar, isDarkMode && { backgroundColor: colors.surfaceSubtle, borderBottomColor: colors.border }]}
-        onPress={() => navigation.navigate('CameraDetail')}
+        onPress={() => navigation.navigate('CameraDetail', { tab: 'playback' })}
         activeOpacity={0.8}
       >
         <View style={styles.playbackLeftBox}>

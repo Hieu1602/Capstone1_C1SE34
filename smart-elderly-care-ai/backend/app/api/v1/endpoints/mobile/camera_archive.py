@@ -18,9 +18,11 @@ from app.api.v1.endpoints.mobile.camera import viewer
 from app.core.database import get_db
 from app.models.camera_recording import CameraRecording
 from app.models.device import Device
+from app.api.v1.endpoints.mobile.camera_hls import router as hls_router
 from app.services.storage import video_storage
 
 router = APIRouter()
+router.include_router(hls_router, prefix="/hls")
 
 
 class RecordingMetadata(BaseModel):
@@ -36,7 +38,10 @@ class RecordingMetadata(BaseModel):
     @model_validator(mode="after")
     def validate_object(self):
         suffix = ".jpg" if self.kind == "snapshot" else ".mp4"
-        if self.object_key != f"cameras/{self.device_id}/{self.id}{suffix}":
+        allowed = [f"cameras/{self.device_id}/{self.id}{suffix}"]
+        if self.kind == "segment":
+            allowed.append(f"cameras/{self.device_id}/{self.id}.ts")
+        if self.object_key not in allowed:
             raise ValueError("Object key must match camera and recording IDs")
         if self.kind == "segment" and (not 0 < self.duration <= 2 or self.incident_id is not None):
             raise ValueError("Invalid two-second segment")
@@ -80,7 +85,7 @@ async def ingest(body: RecordingMetadata, authorization: str = Header(default=""
             Bucket=video_storage.bucket(), Key=body.object_key))
     except (BotoCoreError, ClientError):
         raise HTTPException(503, "S3 object is not available; retry metadata later") from None
-    content_type = "image/jpeg" if body.kind == "snapshot" else "video/mp4"
+    content_type = "image/jpeg" if body.kind == "snapshot" else "video/mp2t" if body.object_key.endswith(".ts") else "video/mp4"
     if head["ContentLength"] != body.size_bytes or head.get("ContentType") != content_type:
         raise HTTPException(400, "S3 object does not match metadata")
     inserted = await db.execute(insert(CameraRecording).values(**body.model_dump())
@@ -140,14 +145,18 @@ async def coverage(start: AwareDatetime, end: AwareDatetime,
 
 
 @router.get("/{recording_id}/playback")
-async def playback(recording_id: UUID, response: Response, context=Depends(viewer), db: AsyncSession = Depends(get_db)):
+async def playback(recording_id: UUID, response: Response, download: bool = False, context=Depends(viewer), db: AsyncSession = Depends(get_db)):
     response.headers["Cache-Control"] = "no-store"
     recording = await db.get(CameraRecording, recording_id)
     if not recording or recording.device_id != context[1][0].id:
         raise HTTPException(404, "Recording not found")
+    params = {"Bucket": video_storage.bucket(), "Key": recording.object_key}
+    if download:
+        suffix = ".jpg" if recording.kind == "snapshot" else ".ts" if recording.object_key.endswith(".ts") else ".mp4"
+        params["ResponseContentDisposition"] = f'attachment; filename="{recording_id}{suffix}"'
     try:
         url = await asyncio.to_thread(lambda: video_storage.client().generate_presigned_url(
-            "get_object", Params={"Bucket": video_storage.bucket(), "Key": recording.object_key}, ExpiresIn=300))
+            "get_object", Params=params, ExpiresIn=300))
     except (BotoCoreError, ClientError):
         raise HTTPException(503, "Playback temporarily unavailable") from None
     return {"url": url, "expires_in": 300}

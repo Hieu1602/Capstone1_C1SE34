@@ -29,3 +29,4 @@ test("24-hour timeline converts between a local day and seconds", () => {
     const window = result.localDayWindow(day);
     assert.equal(new Date(window.end).getDate(), 28);
 });
+

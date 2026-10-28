@@ -122,7 +122,7 @@ class ArchiveTests(unittest.TestCase):
         frame = np.zeros((32, 32, 3), dtype=np.uint8)
         with patch("src.services.video_archive.subprocess.run", side_effect=encode):
             self.archive._save([frame] * 4, time.time(), 2, "segment", None)
-        path = next(Path(self.temp.name).glob("*.mp4"))
+        path = next(Path(self.temp.name).glob("*.ts"))
         result = run([executable, "-i", str(path), "-f", "null", "-"], capture_output=True)
         self.assertEqual(result.returncode, 0)
         self.assertIn(b"Video: h264", result.stderr)

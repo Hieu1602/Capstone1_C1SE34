@@ -37,7 +37,15 @@ export interface ArchivedRecording {
 }
 export interface ArchiveCursor { after_time: string; after_id: string }
 export interface ArchiveCoverage { start: string; end: string }
+export interface HlsRecording { id: string; started_at: string; duration: number }
+export interface HlsSession { url: string; expires_at: number; items: HlsRecording[] }
 export const cameraApi = {
+    hls: async (start: string, end: string, cameraId?: string): Promise<HlsSession> => {
+        const { data } = await api.get<{ path: string; expires_at: number; items: HlsRecording[] }>("/camera/archive/hls", {
+            params: { camera_id: cameraId, start, end },
+        });
+        return { ...data, url: BASE_URL.replace(/\/$/, "") + data.path };
+    },
     timeline: (start: string, end: string, cameraId?: string, cursor?: ArchiveCursor) =>
         api.get<{ items: ArchivedRecording[]; next: ArchiveCursor | null }>("/camera/archive", {
             params: { camera_id: cameraId, start, end, ...cursor },
@@ -46,8 +54,10 @@ export const cameraApi = {
         api.get<{ items: ArchiveCoverage[] }>("/camera/archive/coverage", {
             params: { camera_id: cameraId, start, end },
         }),
-    playback: (id: string, cameraId?: string) =>
-        api.get<{ url: string; expires_in: number }>(`/camera/archive/${id}/playback`, sourceConfig(cameraId)),
+    playback: (id: string, cameraId?: string, download = false) =>
+        api.get<{ url: string; expires_in: number }>(`/camera/archive/${id}/playback`, {
+            params: { ...sourceConfig(cameraId).params, download },
+        }),
     /**
      * Kiểm tra camera đã được liên kết trong hệ thống hay chưa.
      * @returns Promise chứa cờ paired từ backend.

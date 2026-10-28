@@ -1,15 +1,15 @@
 # Ghi hình liên tục và xem lại S3
 
 Driver camera dùng chung đưa frame vào queue RAM giới hạn 4 giây, không chờ mạng.
-Worker encode ghi MP4 H.264 từng đoạn 2 giây; worker riêng upload bằng boto3 rồi
+Worker encode ghi MPEG-TS H.264 từng đoạn 2 giây; worker riêng upload bằng boto3 rồi
 POST metadata lên FastAPI. PostgreSQL lưu khóa object, camera, thời gian UTC,
 thời lượng, dung lượng, loại media và UUID sự kiện. React Native mở Playback,
-chọn ngày/giờ địa phương, phân trang timeline và phát các đoạn kế tiếp trong app.
+chọn ngày/giờ địa phương và phát playlist HLS trong một player liên tục.
 Snapshot và clip sự kiện xuất hiện cùng timeline. API cũng lọc được .`incident_id`.
 
 ## Cấu hình
 
-1. Cài requirements cho backend và edge/camera; máy capture cần `ffmpeg` có
+1. Cài requirements cho backend và edge/camera; **cả backend và máy capture cần FFmpeg trên PATH**. Máy capture cần
    `libx264` trên PATH. Image camera hiện có FFmpeg. Native mobile cần development
    build có `react-native-video` (dependency đã có); không dùng Expo Go để kiểm chứng.
 2. Bucket riêng tư: `elderly-care-incidents-c1se34`, region `ap-southeast-2`.
@@ -97,8 +97,17 @@ Tham khảo [HTTPS Nginx](https://nginx.org/en/docs/http/configuring_https_serve
   buffer trước sự kiện hiện có, snapshot là frame cuối buffer; không có hậu kỳ
   sau té ngã. Thời lượng buffer AI dựa trên FPS cấu hình, cần hiệu chỉnh theo
   tốc độ inference thực tế. Ghi liên tục dùng timestamp monotonic để resample.
-- Playback là các MP4 độc lập; có thể ngắt ngắn khi chuyển đoạn. Chưa có HLS
-  hoặc âm thanh ghi lại. Video lưu là frame camera gốc, chứa hình ảnh nhận diện;
+- Playback dùng HLS VOD, mỗi phiên chứa tối đa 30 phút video. Backend cấp ticket
+  hạn một giờ và kiểm tra lại quyền trên cả playlist lẫn từng segment. App làm mới
+  trước khi ticket hết hạn, tua trong phiên không tạo lại player; hết cửa sổ mới
+  xin phiên kế tiếp. Khoảng mất hình được ánh xạ bằng thời gian thực của metadata.
+- Bản mới lưu `.ts`; MP4 cũ được giữ nguyên. Backend tải S3 và remux cả hai loại
+  sang MPEG-TS với timestamp liên tục theo playlist, không encode lại. HLS đi qua
+  backend, nên backend chịu băng thông video và chi phí remux, tối đa 4 tác vụ đồng
+  thời mỗi worker. Không cần mở S3 public hoặc cấu hình S3 CORS cho web.
+- Web dùng `hls.js` (hoặc HLS native khi MSE không có); Android/iOS dùng player
+  native. Playlist có discontinuity cho các encoder độc lập để xử lý thay đổi codec.
+- Chưa có âm thanh ghi lại. Video lưu là frame camera gốc, chứa hình ảnh nhận diện;
   chỉ cấp quyền camera cho người được phép và bảo vệ volume đệm bằng mã hóa đĩa.
 
 Mỗi camera ghi 24/7 tạo khoảng 43.200 đoạn/ngày, phát sinh PUT, HEAD, lưu trữ và
@@ -115,3 +124,20 @@ Test encoder thật dùng `imageio-ffmpeg` chỉ trong môi trường test (khô
 runtime requirements). Cần kiểm tra thêm trên thiết bị: mất RTSP, privacy mode,
 khởi động lại container, revoke quyền, AWS role/token hết hạn, tốc độ upload,
 CPU/RAM và phát trên Android/iOS. Không bật DEBUG của botocore hoặc log URL đã ký.
+
+## Triển khai bản HLS
+
+Triển khai backend trước Edge để API nhận cả metadata MP4 cũ lẫn TS mới. Build lại
+image backend để có FFmpeg, rồi cập nhật Edge và mobile/web (`npm install` trong
+`apps/mobile`). Không cần migration database hay chuyển/xóa object cũ trên S3.
+Backend chạy trực tiếp trên Windows cũng phải có `ffmpeg` trong PATH của process.
+
+API `GET /camera/archive/hls?start=<UTC>&end=<UTC>&camera_id=...` nhận JWT đăng nhập,
+trả URL playlist có ticket và metadata để ánh xạ seek. Khoảng truy vấn tối đa 30 phút,
+1800 segment. Playlist/segment kiểm tra lại quyền, phạm vi camera và thời gian.
+Nếu metadata thay đổi trong cửa sổ phiên (upload trễ), API trả 409; chọn **Thử lại**
+để lấy playlist và ánh xạ thời gian mới, tránh phát sai thời điểm.
+
+Kiểm thử media thật: từ `backend`, chạy `python -m unittest discover -s tests -p test_camera_hls_media.py`
+trong môi trường test có `imageio-ffmpeg`. Bài kiểm thử tạo MP4/TS, phục vụ playlist
+qua HTTP có độ trễ và kiểm tra 120 frame/8 giây cùng tua tiến/lùi qua nhiều segment.
