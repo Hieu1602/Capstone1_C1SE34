@@ -20,6 +20,7 @@ import { useAlertStore } from "../../../store/useAlertStore";
 import { useAuthStore } from "../../../store/useAuthStore";
 import { launchEmergencyCall } from "../../../services/emergency";
 import CameraViewer from "../components/CameraViewer";
+import CameraTimeline from "../components/CameraTimeline";
 import type { VideoQuality } from "../../../services/camera";
 import { useCameraConnection } from "../hooks/useCameraConnection";
 import { useCameraIntercom } from "../hooks/useCameraIntercom";
@@ -337,6 +338,7 @@ export default function CameraDetailScreen({ navigation, route }: Props) {
                         <ScrollView contentContainerStyle={styles.sheetContent}>
                             {sheet === "recordings" ? (
                                 <>
+                                    <CameraTimeline key={selectedCameraId || "default"} cameraId={selectedCameraId} />
                                     {connection.recordings.active && (
                                         <Text style={textStyle}>
                                             Đang ghi hình…

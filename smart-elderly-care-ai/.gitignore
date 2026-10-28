@@ -1,1 +1,9 @@
 .env.camera
+.env
+.env.*
+!.env.example
+!.env.camera.example
+data/video-spool/
+.local/video-tls/
+**/__pycache__/
+**/.pytest_cache/

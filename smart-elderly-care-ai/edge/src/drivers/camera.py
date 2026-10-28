@@ -36,6 +36,7 @@ class CameraDriver:
         # Event báo dừng và ngắt thời gian chờ kết nối lại.
         self._stop = threading.Event()
         self._thread: Optional[threading.Thread] = None
+        self.archive = None
 
     def start(self) -> None:
         """Khởi động một thread đọc camera nếu chưa chạy.
@@ -46,6 +47,10 @@ class CameraDriver:
         if self._thread and self._thread.is_alive():
             return
         self._stop.clear()
+        if os.getenv("VIDEO_ARCHIVE_ENABLED", "false").lower() == "true":
+            from src.services.video_archive import VideoArchive
+            self.archive = VideoArchive(self.fps)
+            self.archive.start()
         self._thread = threading.Thread(target=self._capture_loop, daemon=True)
         self._thread.start()
 
@@ -58,6 +63,8 @@ class CameraDriver:
         self._stop.set()
         if self._thread:
             self._thread.join(timeout=12)
+        if self.archive:
+            self.archive.close()
         # Chỉ thread đọc sở hữu VideoCapture; không release giữa lúc read().
 
     def get_latest_frame(self) -> Optional[np.ndarray]:
@@ -110,6 +117,8 @@ class CameraDriver:
                         with self._lock:
                             self._frame = frame
                             self._updated = time.monotonic()
+                        if self.archive:
+                            self.archive.submit(frame)
                         # Đọc RTSP liên tục để không tích lũy độ trễ trong buffer.
                         if not is_rtsp:
                             self._stop.wait(1 / self.fps)

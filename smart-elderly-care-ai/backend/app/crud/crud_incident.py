@@ -4,6 +4,7 @@ crud_incident.py – CRUD / Repository cho Incident model.
 
 from typing import List, Optional
 from uuid import UUID
+import json
 
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -12,6 +13,18 @@ from app.models.incident import Incident
 
 
 class CRUDIncident:
+
+    async def create_from_edge(self, db: AsyncSession, data: dict) -> Incident:
+        event_id = UUID(data["id"]) if data.get("id") else None
+        if event_id:
+            existing = await self.get(db, event_id)
+            if existing:
+                return existing
+        payload = {key: data[key] for key in ("device_id", "alert_type", "alert_level", "message", "confidence") if key in data}
+        if event_id:
+            payload["id"] = event_id
+        payload["sources"] = json.dumps(data.get("sources", []))
+        return await self.create(db, payload)
 
     async def get(self, db: AsyncSession, incident_id: UUID) -> Optional[Incident]:
         result = await db.execute(

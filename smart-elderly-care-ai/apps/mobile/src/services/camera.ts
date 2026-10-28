@@ -27,7 +27,27 @@ export interface CameraRecordings {
     files: string[];
 }
 
+export interface ArchivedRecording {
+    id: string;
+    device_id: string;
+    kind: "segment" | "incident" | "snapshot";
+    started_at: string;
+    duration: number;
+    incident_id: string | null;
+}
+export interface ArchiveCursor { after_time: string; after_id: string }
+export interface ArchiveCoverage { start: string; end: string }
 export const cameraApi = {
+    timeline: (start: string, end: string, cameraId?: string, cursor?: ArchiveCursor) =>
+        api.get<{ items: ArchivedRecording[]; next: ArchiveCursor | null }>("/camera/archive", {
+            params: { camera_id: cameraId, start, end, ...cursor },
+        }),
+    coverage: (start: string, end: string, cameraId?: string) =>
+        api.get<{ items: ArchiveCoverage[] }>("/camera/archive/coverage", {
+            params: { camera_id: cameraId, start, end },
+        }),
+    playback: (id: string, cameraId?: string) =>
+        api.get<{ url: string; expires_in: number }>(`/camera/archive/${id}/playback`, sourceConfig(cameraId)),
     /**
      * Kiểm tra camera đã được liên kết trong hệ thống hay chưa.
      * @returns Promise chứa cờ paired từ backend.
