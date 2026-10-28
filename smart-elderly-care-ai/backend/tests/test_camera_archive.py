@@ -58,6 +58,17 @@ class ArchiveTests(unittest.IsolatedAsyncioTestCase):
         self.assertEqual(response.status_code, 200)
         self.db.commit.assert_awaited_once()
 
+    async def test_ingest_accepts_hls_transport_stream_with_matching_content_type(self):
+        self.body["object_key"] = self.body["object_key"].replace(".mp4", ".ts")
+        self.db.get.side_effect = [self.device, None]
+        self.db.execute.return_value = SimpleNamespace(scalar_one_or_none=lambda: self.body["id"])
+        client = MagicMock()
+        client.head_object.return_value = {"ContentLength": 123, "ContentType": "video/mp2t"}
+        with patch.object(archive.video_storage, "client", return_value=client):
+            response = await self.http.post("/archive", json=self.body, headers=self.headers)
+        self.assertEqual(response.status_code, 200)
+        self.db.commit.assert_awaited_once()
+
     async def test_duplicate_metadata_is_idempotent_but_cannot_be_changed(self):
         recording = SimpleNamespace(**archive.RecordingMetadata(**self.body).model_dump())
         self.db.get.side_effect = [self.device, recording, self.device, recording]
@@ -83,6 +94,24 @@ class ArchiveTests(unittest.IsolatedAsyncioTestCase):
         self.assertEqual(response.status_code, 200)
         self.assertEqual(response.headers["cache-control"], "no-store")
         self.assertEqual(client.generate_presigned_url.call_args.kwargs["ExpiresIn"], 300)
+        self.assertNotIn("ResponseContentDisposition", client.generate_presigned_url.call_args.kwargs["Params"])
+
+    async def test_download_signs_attachment_and_checks_camera_scope(self):
+        client = MagicMock()
+        client.generate_presigned_url.return_value = "https://s3.example/download"
+        with patch.object(archive.video_storage, "client", return_value=client):
+            for kind, suffix in (("segment", ".mp4"), ("snapshot", ".jpg")):
+                self.db.get.return_value = SimpleNamespace(device_id=self.device.id, object_key=self.body["object_key"], kind=kind)
+                response = await self.http.get(f"/archive/{self.body['id']}/playback", params={"download": True})
+                self.assertEqual(response.status_code, 200)
+                params = client.generate_presigned_url.call_args.kwargs["Params"]
+                self.assertEqual(params["Key"], self.body["object_key"])
+                self.assertEqual(params["ResponseContentDisposition"], f'attachment; filename="{self.body["id"]}{suffix}"')
+            client.reset_mock()
+            self.db.get.return_value = SimpleNamespace(device_id=uuid4())
+            response = await self.http.get(f"/archive/{self.body['id']}/playback", params={"download": True})
+            self.assertEqual(response.status_code, 404)
+            client.generate_presigned_url.assert_not_called()
 
     async def test_timeline_keyset_and_camera_scope(self):
         row = CameraRecording(**archive.RecordingMetadata(**self.body).model_dump())

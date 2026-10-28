@@ -1,4 +1,4 @@
-import React, { useRef } from "react";
+import React, { useEffect, useMemo, useRef } from "react";
 import Video, { VideoRef } from "react-native-video";
 
 export interface ArchivePlayerProps {
@@ -7,12 +7,23 @@ export interface ArchivePlayerProps {
     onEnd: () => void;
     onError: () => void;
     onProgress?: (seconds: number) => void;
+    paused?: boolean;
+    hls?: boolean;
+    seekVersion?: number;
 }
 
-export default function ArchivePlayer({ uri, startAt = 0, onEnd, onError, onProgress }: ArchivePlayerProps) {
+export default function ArchivePlayer({ uri, startAt = 0, onEnd, onError, onProgress, paused = false, hls = false, seekVersion = 0 }: ArchivePlayerProps) {
     const player = useRef<VideoRef>(null);
-    return <Video ref={player} source={{ uri }} controls resizeMode="contain" onEnd={onEnd} onError={onError}
-        onLoad={() => { if (startAt > 0) player.current?.seek(startAt); }}
+    const loadedUri = useRef("");
+    const source = useMemo(() => ({ uri, ...(hls ? { type: "m3u8" } : {}) }), [uri, hls]);
+    useEffect(() => {
+        if (loadedUri.current === uri) player.current?.seek(startAt);
+    }, [uri, startAt, seekVersion]);
+    return <Video ref={player} source={source} controls paused={paused} resizeMode="contain" automaticallyWaitsToMinimizeStalling
+        bufferConfig={{ minBufferMs: 15000, maxBufferMs: 45000, bufferForPlaybackMs: 1500, bufferForPlaybackAfterRebufferMs: 3000 }}
+        onEnd={onEnd} onError={onError}
+        onLoadStart={() => { loadedUri.current = ""; }}
+        onLoad={() => { loadedUri.current = uri; player.current?.seek(startAt); }}
         onProgress={({ currentTime }) => onProgress?.(currentTime)}
-        style={{ width: "100%", height: 210, backgroundColor: "black" }} />;
+        style={{ width: "100%", aspectRatio: 16 / 9, backgroundColor: "black" }} />;
 }
