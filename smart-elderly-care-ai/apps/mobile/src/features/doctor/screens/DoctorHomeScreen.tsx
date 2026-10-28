@@ -643,6 +643,23 @@ const styles = StyleSheet.create({
     fontWeight: '800',
   },
 
+  emptyPatientsBox: {
+    padding: 24,
+    borderRadius: 16,
+    borderWidth: 1,
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: 8,
+    marginTop: 8,
+  },
+  emptyPatientsText: {
+    fontSize: 14,
+    fontWeight: '700',
+  },
+  emptyPatientsSub: {
+    fontSize: 12,
+    textAlign: 'center',
+  },
   /* Danh sách bệnh nhân phụ trách */
   patientCardItem: {
     flexDirection: 'row',

@@ -38,6 +38,8 @@ from app.api.v1.endpoints.mobile.support       import router as mobile_support_r
 api_router = APIRouter()
 from app.api.v1.endpoints.mobile.camera import router as camera_router
 api_router.include_router(camera_router, prefix="/camera", tags=["Camera"])
+from app.api.v1.endpoints.mobile.camera_archive import router as camera_archive_router
+api_router.include_router(camera_archive_router, prefix="/camera/archive", tags=["Camera"])
 
 # ------------------------------------------------------------------------------
 # 1. ĐĂNG KÝ ROUTERS WEB ADMIN PORTAL

@@ -32,11 +32,14 @@ export const ProfileUserCard: React.FC<ProfileUserCardProps> = ({
     fetchHouseFromBackend?.();
   }, []);
 
+  const hasLinkedHouse = Boolean(house?.id && house?.hasHouse !== false && house?.name && house.name.trim() !== '');
+
   const isOwner =
-    permissions?.is_owner === true ||
-    permissions?.role_in_house === 'OWNER' ||
-    userRole === 'admin' ||
-    role === 'admin';
+    hasLinkedHouse &&
+    (permissions?.is_owner === true ||
+      permissions?.role_in_house === 'OWNER' ||
+      userRole === 'admin' ||
+      role === 'admin');
 
   const isDoctor =
     userRole === 'doctor' ||
@@ -49,7 +52,7 @@ export const ProfileUserCard: React.FC<ProfileUserCardProps> = ({
       ? 'Chủ hộ'
       : isDoctor
       ? 'Bác sĩ gia đình'
-      : 'Thành viên gia đình');
+      : 'Thành viên');
 
   const roleIcon: keyof typeof Ionicons.glyphMap = isOwner
     ? 'ribbon'
@@ -113,30 +116,34 @@ export const ProfileUserCard: React.FC<ProfileUserCardProps> = ({
         </View>
       </TouchableOpacity>
 
-      <View
-        style={[
-          styles.fbCardDivider,
-          isDarkMode && { backgroundColor: colors.border },
-        ]}
-      />
+      {isOwner && Boolean(onPressAddMember) && (
+        <>
+          <View
+            style={[
+              styles.fbCardDivider,
+              isDarkMode && { backgroundColor: colors.border },
+            ]}
+          />
 
-      <TouchableOpacity
-        style={styles.fbSubActionRow}
-        activeOpacity={0.7}
-        onPress={onPressAddMember}
-      >
-        <View style={styles.fbPlusCircleBtn}>
-          <Ionicons name="add" size={20} color="#FFFFFF" />
-        </View>
-        <Text
-          style={[
-            styles.fbSubActionText,
-            isDarkMode && { color: colors.textPrimary },
-          ]}
-        >
-          Thêm thành viên
-        </Text>
-      </TouchableOpacity>
+          <TouchableOpacity
+            style={styles.fbSubActionRow}
+            activeOpacity={0.7}
+            onPress={onPressAddMember}
+          >
+            <View style={styles.fbPlusCircleBtn}>
+              <Ionicons name="add" size={20} color="#FFFFFF" />
+            </View>
+            <Text
+              style={[
+                styles.fbSubActionText,
+                isDarkMode && { color: colors.textPrimary },
+              ]}
+            >
+              Thêm thành viên
+            </Text>
+          </TouchableOpacity>
+        </>
+      )}
     </View>
   );
 };

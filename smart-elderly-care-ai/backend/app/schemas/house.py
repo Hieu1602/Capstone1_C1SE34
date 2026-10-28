@@ -110,12 +110,13 @@ class HouseMemberOut(BaseModel):
 
 class UserHousePermissionsOut(BaseModel):
     """Quyền hạn thực tế của người dùng hiện tại đối với căn nhà."""
-    house_id: UUID
-    user_id: UUID
-    is_owner: bool
-    role_in_house: str
-    can_view_health: bool
-    can_view_camera: bool
-    can_handle_emergency: bool
-    can_manage_devices: bool
-    can_manage_records: bool
+    house_id: Optional[UUID] = None
+    user_id: Optional[UUID] = None
+    is_owner: bool = False
+    role_in_house: str = "MEMBER"
+    permissions: Optional[str] = "NONE"
+    can_view_health: bool = False
+    can_view_camera: bool = False
+    can_handle_emergency: bool = False
+    can_manage_devices: bool = False
+    can_manage_records: bool = False

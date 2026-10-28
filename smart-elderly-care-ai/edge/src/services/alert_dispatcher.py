@@ -9,6 +9,9 @@ Các output channel (MQTT, Speaker) được inject qua constructor (DI).
 import asyncio
 import logging
 import time
+from uuid import uuid4
+from pathlib import Path
+import tempfile
 from typing import Any
 
 logger = logging.getLogger(__name__)
@@ -34,6 +37,7 @@ class AlertDispatcher:
         mqtt_client: Any,
         speaker: Any,
         ring_buffer: Any,
+        camera: Any = None,
     ) -> None:
         """
         Args:
@@ -44,6 +48,7 @@ class AlertDispatcher:
         self._mqtt = mqtt_client
         self._speaker = speaker
         self._ring_buffer = ring_buffer
+        self._camera = camera
 
     # ------------------------------------------------------------------
     # Public API
@@ -67,6 +72,10 @@ class AlertDispatcher:
             incident_id (int) – Unix timestamp dùng làm ID sự kiện.
         """
         incident_id = int(time.time())
+        event_id = str(uuid4())
+        archive = getattr(self._camera, "archive", None)
+        if archive:
+            archive.incident(event_id, self._ring_buffer.get_all())
 
         logger.warning(
             "[Alert] %s [%s] – %s",
@@ -76,14 +85,17 @@ class AlertDispatcher:
         )
 
         # --- Lưu bằng chứng video ---
-        clip_path = f"/tmp/incident_{incident_id}.mp4"
-        self._ring_buffer.save_clip(clip_path, pre_event_sec=5.0)
-        snapshot_paths = self._ring_buffer.save_incident_snapshots(
-            f"/tmp/incident_{incident_id}"
+        evidence_base = str(Path(tempfile.gettempdir()) / f"incident_{event_id}")
+        clip_path = evidence_base + ".mp4"
+        await asyncio.to_thread(self._ring_buffer.save_clip, clip_path, pre_event_sec=5.0)
+        snapshot_paths = await asyncio.to_thread(
+            self._ring_buffer.save_incident_snapshots, evidence_base
         )
 
         # --- Gửi MQTT alert ---
         self._mqtt.publish_alert({
+            "id": event_id,
+            **({"device_id": archive.device_id} if archive else {}),
             "alert_type":  decision.alert_type.value,
             "alert_level": decision.alert_level.value,
             "message":     decision.message_vi,
