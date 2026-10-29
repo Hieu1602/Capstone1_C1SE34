@@ -59,7 +59,7 @@ export class MultiWearableManager {
     if (!hasPerm) return [];
 
     const found: DiscoveredDevice[] = [];
-    mgr.startDeviceScan(null, null, (error, device) => {
+    mgr.startDeviceScan(null, null, (error: any, device: any) => {
       if (error) {
         console.warn('[MultiWearable] Scan error', error);
         return;
@@ -132,7 +132,7 @@ class WearableInstance {
       const sub = this.device.monitorCharacteristicForService(
         serviceUuid,
         charUuid,
-        (error, characteristic) => {
+        (error: any, characteristic: any) => {
           if (error) {
             console.warn(`[MultiWearable] ${metric} monitor error`, error);
             return;

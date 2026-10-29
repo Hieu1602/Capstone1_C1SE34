@@ -72,7 +72,7 @@ export class WearableManager {
     mgr.startDeviceScan(
       [WearableManager.HEART_RATE_SERVICE],
       null,
-      async (error, device) => {
+      async (error: any, device: any) => {
         if (error || !device) return;
         mgr.stopDeviceScan();
         try {
@@ -92,7 +92,7 @@ export class WearableManager {
     const sub = device.monitorCharacteristicForService(
       WearableManager.HEART_RATE_SERVICE,
       WearableManager.HEART_RATE_CHAR,
-      (error, characteristic) => {
+      (error: any, characteristic: any) => {
         if (error || !characteristic?.value) return;
         const bytes = base64ToBytes(characteristic.value);
         const view = new DataView(bytes.buffer, bytes.byteOffset, bytes.byteLength);
