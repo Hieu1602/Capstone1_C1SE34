@@ -503,7 +503,6 @@ export function useProfileManager(navigation: any, route: any) {
     handleSavePhone,
     handleChangePassword,
     handleAvatarPress,
-    handleAvatarPress,
     pickAvatarFromCamera,
     pickAvatarFromLibrary,
     applyFontScaleMode,
