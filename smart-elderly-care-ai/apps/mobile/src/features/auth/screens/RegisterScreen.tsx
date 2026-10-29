@@ -25,6 +25,11 @@ import {
     CchnVerifiedInfo,
 } from "../components/register";
 import { validateFullName } from "../utils/nameValidation";
+import { useAuthStore } from "../../../store/useAuthStore";
+import { useDeviceStore } from "../../../store/useDeviceStore";
+import { useHealthStore } from "../../../store/useHealthStore";
+import { usePatientStore } from "../../../store/usePatientStore";
+import { useAlertStore } from "../../../store/useAlertStore";
 
 export default function RegisterScreen({ route, navigation }: any) {
     // Trạng thái màn hình:
@@ -307,6 +312,14 @@ export default function RegisterScreen({ route, navigation }: any) {
                     role: "member",
                     otp_code: otp,
                 });
+
+                try {
+                    useAuthStore.getState().logout();
+                    useDeviceStore.getState().resetDeviceStore?.();
+                    usePatientStore.getState().resetPatientStore?.();
+                    useHealthStore.getState().resetHealthStore?.();
+                    useAlertStore.getState().resetAlertStore?.();
+                } catch {}
 
                 navigation.replace("Login");
                 Alert.alert(

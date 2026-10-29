@@ -1,4 +1,13 @@
-import { BleManager, Device, Subscription } from 'react-native-ble-plx';
+let BleManagerClass: any = null;
+try {
+  if (Platform.OS !== 'web') {
+    BleManagerClass = require('react-native-ble-plx')?.BleManager;
+  }
+} catch {}
+
+type BleManager = any;
+type Device = any;
+type Subscription = any;
 import { Platform, PermissionsAndroid } from 'react-native';
 
 export interface Measurement {
@@ -31,10 +40,10 @@ export class WearableManager {
   static TEMPERATURE_CHAR = '2A1C';
 
   private getManager(): BleManager | null {
-    if (Platform.OS === 'web') return null;
+    if (Platform.OS === 'web' || !BleManagerClass) return null;
     if (!this.manager) {
       try {
-        this.manager = new BleManager();
+        this.manager = new BleManagerClass();
       } catch (e) {
         console.warn('[Wearable] BleManager init error:', e);
       }

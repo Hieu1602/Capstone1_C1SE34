@@ -1,7 +1,16 @@
 // Multi-device BLE manager – discover, connect, and collect measurements from several smart bands.
 // Safe for both Mobile (Native) and Web environments.
 
-import { BleManager, Device, Subscription } from 'react-native-ble-plx';
+let BleManagerClass: any = null;
+try {
+  if (Platform.OS !== 'web') {
+    BleManagerClass = require('react-native-ble-plx')?.BleManager;
+  }
+} catch {}
+
+type BleManager = any;
+type Device = any;
+type Subscription = any;
 import { Platform, PermissionsAndroid } from 'react-native';
 import { Measurement, base64ToBytes } from './wearableService';
 
@@ -16,10 +25,10 @@ export class MultiWearableManager {
   private devices: Map<string, WearableInstance> = new Map(); // key = device.id
 
   private getManager(): BleManager | null {
-    if (Platform.OS === 'web') return null;
+    if (Platform.OS === 'web' || !BleManagerClass) return null;
     if (!this.manager) {
       try {
-        this.manager = new BleManager();
+        this.manager = new BleManagerClass();
       } catch (e) {
         console.warn('[MultiWearable] BleManager init error:', e);
       }

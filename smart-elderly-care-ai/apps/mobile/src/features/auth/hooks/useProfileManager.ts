@@ -311,49 +311,87 @@ export function useProfileManager(navigation: any, route: any) {
 
   const pickAvatarFromCamera = async () => {
     setAvatarPickerVisible(false);
-    const permission = await ImagePicker.requestCameraPermissionsAsync();
-    if (!permission.granted) {
-      Alert.alert(
-        'Quyền bị từ chối',
-        'Bạn cần cho phép truy cập máy ảnh để chụp ảnh.',
-      );
-      return;
-    }
+    try {
+      const permission = await ImagePicker.requestCameraPermissionsAsync();
+      if (!permission.granted) {
+        Alert.alert(
+          'Quyền bị từ chối',
+          'Bạn cần cho phép truy cập máy ảnh để chụp ảnh.',
+        );
+        return;
+      }
 
-    const result = await ImagePicker.launchCameraAsync({
-      allowsEditing: true,
-      aspect: [1, 1],
-      quality: 0.7,
-      base64: true,
-    });
+      const result = await ImagePicker.launchCameraAsync({
+        allowsEditing: Platform.OS !== 'web',
+        aspect: [1, 1],
+        quality: 0.8,
+        base64: true,
+      });
 
-    if (!result.canceled && result.assets?.[0]) {
-      void handleSaveAvatar(result.assets[0]);
+      if (!result.canceled && result.assets?.[0]) {
+        void handleSaveAvatar(result.assets[0]);
+      }
+    } catch (err: any) {
+      console.warn('[ProfileScreen] pickAvatarFromCamera error:', err);
+      Alert.alert('Lỗi', 'Không thể mở máy ảnh. Vui lòng thử lại.');
     }
   };
 
   const pickAvatarFromLibrary = async () => {
     setAvatarPickerVisible(false);
-    const permission = await ImagePicker.requestMediaLibraryPermissionsAsync();
-    if (!permission.granted) {
-      Alert.alert(
-        'Quyền bị từ chối',
-        'Bạn cần cho phép truy cập thư viện ảnh để chọn ảnh.',
-      );
+    try {
+      if (Platform.OS !== 'web') {
+        const permission = await ImagePicker.requestMediaLibraryPermissionsAsync();
+        if (!permission.granted) {
+          Alert.alert(
+            'Quyền bị từ chối',
+            'Bạn cần cho phép truy cập thư viện ảnh để chọn ảnh.',
+          );
+          return;
+        }
+      }
+
+      const result = await ImagePicker.launchImageLibraryAsync({
+        mediaTypes: ['images'],
+        allowsEditing: Platform.OS !== 'web',
+        aspect: [1, 1],
+        quality: 0.8,
+        base64: true,
+      });
+
+      if (!result.canceled && result.assets?.[0]) {
+        void handleSaveAvatar(result.assets[0]);
+      }
+    } catch (err: any) {
+      console.warn('[ProfileScreen] pickAvatarFromLibrary error:', err);
+      Alert.alert('Lỗi', 'Không thể mở thư viện ảnh. Vui lòng thử lại.');
+    }
+  };
+
+  const handleAvatarPress = async () => {
+    if (Platform.OS === 'web') {
+      await pickAvatarFromLibrary();
       return;
     }
 
-    const result = await ImagePicker.launchImageLibraryAsync({
-      mediaTypes: ['images'],
-      allowsEditing: true,
-      aspect: [1, 1],
-      quality: 0.7,
-      base64: true,
-    });
-
-    if (!result.canceled && result.assets?.[0]) {
-      void handleSaveAvatar(result.assets[0]);
-    }
+    Alert.alert(
+      'Thay đổi ảnh đại diện',
+      'Chọn phương thức chụp hoặc tải ảnh:',
+      [
+        {
+          text: 'Chụp ảnh mới',
+          onPress: () => void pickAvatarFromCamera(),
+        },
+        {
+          text: 'Chọn từ Thư viện',
+          onPress: () => void pickAvatarFromLibrary(),
+        },
+        {
+          text: 'Hủy',
+          style: 'cancel',
+        },
+      ]
+    );
   };
 
   const saveFontPreferences = useCallback(
@@ -464,6 +502,8 @@ export function useProfileManager(navigation: any, route: any) {
     handleSaveName,
     handleSavePhone,
     handleChangePassword,
+    handleAvatarPress,
+    handleAvatarPress,
     pickAvatarFromCamera,
     pickAvatarFromLibrary,
     applyFontScaleMode,

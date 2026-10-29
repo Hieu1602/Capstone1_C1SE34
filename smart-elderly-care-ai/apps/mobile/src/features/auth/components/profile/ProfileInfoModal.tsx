@@ -22,7 +22,8 @@ interface ProfileInfoModalProps {
     phone: string;
     avatarUri: string | null;
     onClose: () => void;
-    onAvatarPress: () => void;
+    onPickFromCamera: () => void;
+    onPickFromLibrary: () => void;
     onChangePasswordPress: () => void;
     onLogoutPress: () => void;
     onSaveName: (newName: string) => Promise<boolean>;
@@ -36,12 +37,14 @@ export const ProfileInfoModal: React.FC<ProfileInfoModalProps> = ({
     phone,
     avatarUri,
     onClose,
-    onAvatarPress,
+    onPickFromCamera,
+    onPickFromLibrary,
     onChangePasswordPress,
     onLogoutPress,
     onSaveName,
     onSavePhone,
 }) => {
+    const [isAvatarPickerVisible, setIsAvatarPickerVisible] = useState(false);
     const [isEditingName, setIsEditingName] = useState(false);
     const [draftName, setDraftName] = useState(displayName);
     const [isSavingName, setIsSavingName] = useState(false);
@@ -129,25 +132,32 @@ export const ProfileInfoModal: React.FC<ProfileInfoModalProps> = ({
 
                     <View style={styles.avatarContainerLarge}>
                         <TouchableOpacity
-                            style={[
-                                styles.avatarCircleLarge,
-                                isDarkMode && { backgroundColor: "#1E293B" },
-                            ]}
+                            style={styles.avatarWrapperLarge}
                             activeOpacity={0.8}
-                            onPress={onAvatarPress}
+                            onPress={() => setIsAvatarPickerVisible(true)}
                         >
-                            {avatarUri ? (
-                                <Image
-                                    source={{ uri: avatarUri }}
-                                    style={styles.avatarImageLarge}
-                                />
-                            ) : (
-                                <Ionicons
-                                    name="person"
-                                    size={42}
-                                    color={isDarkMode ? "#64748B" : "#E8EEF5"}
-                                />
-                            )}
+                            <View
+                                style={[
+                                    styles.avatarCircleLarge,
+                                    isDarkMode && { backgroundColor: "#1E293B" },
+                                ]}
+                            >
+                                {avatarUri ? (
+                                    <Image
+                                        source={{ uri: avatarUri }}
+                                        style={styles.avatarImageLarge}
+                                    />
+                                ) : (
+                                    <Ionicons
+                                        name="person"
+                                        size={42}
+                                        color={isDarkMode ? "#64748B" : "#E8EEF5"}
+                                    />
+                                )}
+                            </View>
+                            <View style={styles.cameraIconBadge}>
+                                <Ionicons name="camera" size={14} color="#FFFFFF" />
+                            </View>
                         </TouchableOpacity>
 
                         <Text
@@ -305,6 +315,90 @@ export const ProfileInfoModal: React.FC<ProfileInfoModalProps> = ({
                         onClose={handleCloseEditPhone}
                         onSave={onSavePhone}
                     />
+
+                    {/* Bottom Sheet chọn Chụp ảnh hoặc Chọn từ Thư viện */}
+                    {isAvatarPickerVisible && (
+                        <Pressable
+                            style={styles.avatarPickerOverlay}
+                            onPress={() => setIsAvatarPickerVisible(false)}
+                        >
+                            <Pressable
+                                style={[
+                                    styles.avatarPickerSheet,
+                                    isDarkMode && {
+                                        backgroundColor: "#1E293B",
+                                        borderColor: "#334155",
+                                        borderWidth: 1,
+                                    },
+                                ]}
+                                onPress={(e) => e.stopPropagation()}
+                            >
+                                <View style={styles.avatarPickerHandle} />
+                                <Text
+                                    style={[
+                                        styles.avatarPickerTitle,
+                                        isDarkMode && { color: "#F8FAFC" },
+                                    ]}
+                                >
+                                    Thay đổi ảnh đại diện
+                                </Text>
+
+                                <View style={styles.avatarPickerOptions}>
+                                    <TouchableOpacity
+                                        style={[
+                                            styles.avatarPickerRow,
+                                            isDarkMode && { borderBottomColor: "#334155" },
+                                        ]}
+                                        activeOpacity={0.75}
+                                        onPress={() => {
+                                            setIsAvatarPickerVisible(false);
+                                            onPickFromCamera();
+                                        }}
+                                    >
+                                        <Ionicons
+                                            name="camera-outline"
+                                            size={24}
+                                            color={isDarkMode ? "#F8FAFC" : "#111827"}
+                                        />
+                                        <Text
+                                            style={[
+                                                styles.avatarPickerText,
+                                                isDarkMode && { color: "#F8FAFC" },
+                                            ]}
+                                        >
+                                            Chụp ảnh
+                                        </Text>
+                                    </TouchableOpacity>
+
+                                    <TouchableOpacity
+                                        style={[
+                                            styles.avatarPickerRow,
+                                            styles.avatarPickerLastRow,
+                                        ]}
+                                        activeOpacity={0.75}
+                                        onPress={() => {
+                                            setIsAvatarPickerVisible(false);
+                                            onPickFromLibrary();
+                                        }}
+                                    >
+                                        <Ionicons
+                                            name="images-outline"
+                                            size={24}
+                                            color={isDarkMode ? "#F8FAFC" : "#111827"}
+                                        />
+                                        <Text
+                                            style={[
+                                                styles.avatarPickerText,
+                                                isDarkMode && { color: "#F8FAFC" },
+                                            ]}
+                                        >
+                                            Chọn từ Thư viện
+                                        </Text>
+                                    </TouchableOpacity>
+                                </View>
+                            </Pressable>
+                        </Pressable>
+                    )}
                 </Pressable>
             </Pressable>
         </SlideRightModal>
@@ -337,6 +431,12 @@ const styles = StyleSheet.create({
         alignItems: "center",
         marginVertical: 20,
     },
+    avatarWrapperLarge: {
+        position: "relative",
+    },
+    avatarWrapperLarge: {
+        position: "relative",
+    },
     avatarCircleLarge: {
         width: 96,
         height: 96,
@@ -352,6 +452,166 @@ const styles = StyleSheet.create({
         shadowOpacity: 0.1,
         shadowRadius: 10,
         elevation: 4,
+    },
+    cameraIconBadge: {
+        position: "absolute",
+        bottom: 0,
+        right: 0,
+        backgroundColor: Colors.primary,
+        width: 28,
+        height: 28,
+        borderRadius: 14,
+        alignItems: "center",
+        justifyContent: "center",
+        borderWidth: 2,
+        borderColor: "#FFFFFF",
+        elevation: 5,
+        shadowColor: "#000",
+        shadowOffset: { width: 0, height: 2 },
+        shadowOpacity: 0.25,
+        shadowRadius: 3.84,
+    },
+    avatarPickerOverlay: {
+        position: "absolute",
+        top: 0,
+        left: 0,
+        right: 0,
+        bottom: 0,
+        backgroundColor: "rgba(15, 23, 42, 0.55)",
+        justifyContent: "flex-end",
+        zIndex: 9999,
+    },
+    avatarPickerSheet: {
+        backgroundColor: "#FFFFFF",
+        borderTopLeftRadius: 24,
+        borderTopRightRadius: 24,
+        paddingHorizontal: 20,
+        paddingTop: 12,
+        paddingBottom: 34,
+        shadowColor: "#000",
+        shadowOffset: { width: 0, height: -3 },
+        shadowOpacity: 0.15,
+        shadowRadius: 10,
+        elevation: 10,
+    },
+    avatarPickerHandle: {
+        width: 36,
+        height: 4,
+        backgroundColor: "#CBD5E1",
+        borderRadius: 2,
+        alignSelf: "center",
+        marginBottom: 14,
+    },
+    avatarPickerTitle: {
+        fontSize: 17,
+        fontWeight: "700",
+        color: "#0F172A",
+        marginBottom: 12,
+        textAlign: "center",
+    },
+    avatarPickerOptions: {
+        width: "100%",
+    },
+    avatarPickerRow: {
+        flexDirection: "row",
+        alignItems: "center",
+        gap: 14,
+        paddingVertical: 16,
+        borderBottomWidth: StyleSheet.hairlineWidth,
+        borderBottomColor: "#E2E8F0",
+    },
+    avatarPickerLastRow: {
+        borderBottomWidth: 0,
+    },
+    avatarPickerText: {
+        fontSize: 16,
+        fontWeight: "600",
+        color: "#1E293B",
+    },
+    changeAvatarLinkText: {
+        fontSize: 13,
+        color: Colors.primary,
+        fontWeight: "700",
+    },
+    cameraIconBadge: {
+        position: "absolute",
+        bottom: 0,
+        right: 0,
+        backgroundColor: Colors.primary,
+        width: 28,
+        height: 28,
+        borderRadius: 14,
+        alignItems: "center",
+        justifyContent: "center",
+        borderWidth: 2,
+        borderColor: "#FFFFFF",
+        elevation: 5,
+        shadowColor: "#000",
+        shadowOffset: { width: 0, height: 2 },
+        shadowOpacity: 0.25,
+        shadowRadius: 3.84,
+    },
+    avatarPickerOverlay: {
+        position: "absolute",
+        top: 0,
+        left: 0,
+        right: 0,
+        bottom: 0,
+        backgroundColor: "rgba(15, 23, 42, 0.55)",
+        justifyContent: "flex-end",
+        zIndex: 9999,
+    },
+    avatarPickerSheet: {
+        backgroundColor: "#FFFFFF",
+        borderTopLeftRadius: 24,
+        borderTopRightRadius: 24,
+        paddingHorizontal: 20,
+        paddingTop: 12,
+        paddingBottom: 34,
+        shadowColor: "#000",
+        shadowOffset: { width: 0, height: -3 },
+        shadowOpacity: 0.15,
+        shadowRadius: 10,
+        elevation: 10,
+    },
+    avatarPickerHandle: {
+        width: 36,
+        height: 4,
+        backgroundColor: "#CBD5E1",
+        borderRadius: 2,
+        alignSelf: "center",
+        marginBottom: 14,
+    },
+    avatarPickerTitle: {
+        fontSize: 17,
+        fontWeight: "700",
+        color: "#0F172A",
+        marginBottom: 12,
+        textAlign: "center",
+    },
+    avatarPickerOptions: {
+        width: "100%",
+    },
+    avatarPickerRow: {
+        flexDirection: "row",
+        alignItems: "center",
+        gap: 14,
+        paddingVertical: 16,
+        borderBottomWidth: StyleSheet.hairlineWidth,
+        borderBottomColor: "#E2E8F0",
+    },
+    avatarPickerLastRow: {
+        borderBottomWidth: 0,
+    },
+    avatarPickerText: {
+        fontSize: 16,
+        fontWeight: "600",
+        color: "#1E293B",
+    },
+    changeAvatarLinkText: {
+        fontSize: 13,
+        color: Colors.primary,
+        fontWeight: "700",
     },
     avatarImageLarge: {
         width: "100%",

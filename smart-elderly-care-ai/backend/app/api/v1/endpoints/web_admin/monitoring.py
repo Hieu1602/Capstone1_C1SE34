@@ -265,6 +265,14 @@ async def get_system_mode(
 ) -> Dict[str, Any]:
     """Trả về chế độ bảo vệ hiện tại và trạng thái tắt chuông."""
     house = await crud_house.get_or_create_default_house(db, owner_id=current_user.id)
+    if not house:
+        return {
+            "mode": "HOME",
+            "is_mute_alarm": False,
+            "is_camera_privacy": False,
+            "mute_mode": "STANDARD",
+            "duration_minutes": 0,
+        }
     return {
         "mode": house.current_mode,
         "is_mute_alarm": False,

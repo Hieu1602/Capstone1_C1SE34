@@ -7,6 +7,7 @@ interface ProfileQuickGridProps {
   colors: any;
   houseName: string;
   membersCount: number;
+  hasHouse?: boolean;
   showMore: boolean;
   onToggleShowMore: () => void;
   onNavigate: (screen: string) => void;
@@ -18,6 +19,7 @@ export const ProfileQuickGrid: React.FC<ProfileQuickGridProps> = ({
   colors,
   houseName,
   membersCount,
+  hasHouse = true,
   showMore,
   onToggleShowMore,
   onNavigate,
@@ -139,7 +141,7 @@ export const ProfileQuickGrid: React.FC<ProfileQuickGridProps> = ({
               isDarkMode && { color: colors.textPrimary },
             ]}
           >
-            {houseName || 'Nhà của tôi'}
+            {hasHouse ? (houseName || 'Nhà của tôi') : 'Chưa tham gia nhà'}
           </Text>
           <Text
             style={[
@@ -147,7 +149,7 @@ export const ProfileQuickGrid: React.FC<ProfileQuickGridProps> = ({
               isDarkMode && { color: colors.textSecondary },
             ]}
           >
-            Thành viên: {membersCount || 1} • Quản lý phòng
+            {hasHouse ? `Thành viên: ${membersCount || 1} • Quản lý phòng` : 'Nhấn để nhập mã mời'}
           </Text>
         </TouchableOpacity>
 
@@ -187,7 +189,7 @@ export const ProfileQuickGrid: React.FC<ProfileQuickGridProps> = ({
               isDarkMode && { color: colors.textSecondary },
             ]}
           >
-            Camera AI, Vòng BLE & Cảm biến
+            {hasHouse ? 'Camera AI, Vòng BLE & Cảm biến' : 'Chưa có thiết bị theo dõi'}
           </Text>
         </TouchableOpacity>
 

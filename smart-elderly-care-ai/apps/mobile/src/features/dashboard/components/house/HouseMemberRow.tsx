@@ -8,6 +8,7 @@ interface HouseMemberRowProps {
   index: number;
   isLast: boolean;
   onPress: (member: any) => void;
+  onDelete?: (member: any) => void;
   isDarkMode: boolean;
   colors: {
     bgCard: string;
@@ -21,6 +22,7 @@ export const HouseMemberRow: React.FC<HouseMemberRowProps> = ({
   member,
   isLast,
   onPress,
+  onDelete,
   isDarkMode,
   colors: { borderCol, textTitle, textSub },
 }) => {
@@ -189,13 +191,22 @@ export const HouseMemberRow: React.FC<HouseMemberRowProps> = ({
           </View>
         </View>
 
-        {/* Button Phân quyền */}
-        <View style={styles.actionChevronBox}>
-          <Text style={[styles.permissionBtnText, { color: Colors.primary }]}>
-            {isOwner ? 'Chi tiết' : 'Cấp quyền'}
-          </Text>
-          <Ionicons name="chevron-forward" size={16} color={Colors.primary} />
-        </View>
+        {/* Nút Xóa thành viên */}
+        {isOwner ? (
+          <View style={styles.ownerBadgeBox}>
+            <Text style={[styles.ownerBadgeText, { color: textSub }]}>Chủ hộ</Text>
+          </View>
+        ) : (
+          <TouchableOpacity
+            style={[styles.deleteBtnBox, { backgroundColor: isDarkMode ? '#450A0A' : '#FEF2F2', borderColor: isDarkMode ? '#7F1D1D' : '#FECACA' }]}
+            onPress={() => (onDelete ? onDelete(member) : onPress(member))}
+            activeOpacity={0.7}
+            hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
+          >
+            <Ionicons name="trash-outline" size={14} color="#EF4444" />
+            <Text style={styles.deleteBtnText}>Xóa</Text>
+          </TouchableOpacity>
+        )}
       </TouchableOpacity>
 
       {!isLast && <View style={[styles.divider, { backgroundColor: borderCol }]} />}
@@ -277,6 +288,30 @@ const styles = StyleSheet.create({
   permissionBtnText: {
     fontSize: 12,
     fontWeight: '700',
+  },
+  ownerBadgeBox: {
+    paddingHorizontal: 8,
+    paddingVertical: 4,
+  },
+  ownerBadgeText: {
+    fontSize: 12,
+    fontWeight: '600',
+  },
+  deleteBtnBox: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    paddingHorizontal: 10,
+    paddingVertical: 6,
+    borderRadius: 8,
+    backgroundColor: '#FEF2F2',
+    borderWidth: 1,
+    borderColor: '#FECACA',
+    gap: 4,
+  },
+  deleteBtnText: {
+    fontSize: 13,
+    fontWeight: '700',
+    color: '#EF4444',
   },
   divider: {
     height: 1,
