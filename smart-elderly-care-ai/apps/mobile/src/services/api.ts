@@ -41,15 +41,35 @@ const getBaseUrl = (): string => {
   }
 
   // 4. Nếu chạy trên Android Emulator
-  if (Platform.OS === 'android') {
-    return 'http://10.0.2.2:8000/api/v1';
-  }
-
-  // 4. Fallback về IP máy tính phát triển trong mạng nội bộ
-  return 'http://192.168.2.7:8000/api/v1';
+  return 'http://192.168.1.5:8000/api/v1';
 };
 
 export const BASE_URL: string = getBaseUrl();
+
+export const setCustomServerUrl = async (url: string) => {
+  let formatted = url.trim();
+  if (!formatted.startsWith('http://') && !formatted.startsWith('https://')) {
+    formatted = `http://${formatted}`;
+  }
+  if (!formatted.endsWith('/api/v1')) {
+    formatted = formatted.replace(/\/+$/, '') + '/api/v1';
+  }
+  api.defaults.baseURL = formatted;
+  await AsyncStorage.setItem('custom_server_url', formatted);
+  return formatted;
+};
+
+export const getCustomServerUrl = async (): Promise<string> => {
+  try {
+    const saved = await AsyncStorage.getItem('custom_server_url');
+    if (saved && saved.trim()) {
+      api.defaults.baseURL = saved.trim();
+      return saved.trim();
+    }
+  } catch {}
+  return api.defaults.baseURL || BASE_URL;
+};
+
 
 const api: AxiosInstance = axios.create({
   baseURL: BASE_URL,
@@ -62,6 +82,13 @@ const api: AxiosInstance = axios.create({
 // ---- Request Interceptor: Attach JWT token ----
 api.interceptors.request.use(
   async (config: import('axios').InternalAxiosRequestConfig) => {
+    try {
+      const saved = await AsyncStorage.getItem('custom_server_url');
+      if (saved && saved.trim()) {
+        config.baseURL = saved.trim();
+      }
+    } catch {}
+
     const token = useAuthStore.getState().accessToken;
     if (token) {
       config.headers.Authorization = `Bearer ${token}`;

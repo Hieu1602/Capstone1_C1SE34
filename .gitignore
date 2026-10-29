@@ -87,3 +87,7 @@ docs/AUTOMATION_TESTING_GUIDE.md
 smart-elderly-care-ai/apps/mobile/.maestro/
 smart-elderly-care-ai/apps/web/e2e/
 smart-elderly-care-ai/apps/web/playwright.config.ts
+
+# Android binaries
+*.apk
+*.aab
