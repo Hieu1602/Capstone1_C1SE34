@@ -10,6 +10,7 @@ import {
 } from "react-native";
 import { Ionicons } from "@expo/vector-icons";
 import { Colors } from "../../../../theme/colors";
+import { SlideRightModal } from "./SlideRightModal";
 
 interface NotificationSettingsModalProps {
     visible: boolean;
@@ -37,12 +38,7 @@ export const NotificationSettingsModal: React.FC<
     onClose,
 }) => {
     return (
-        <Modal
-            transparent
-            visible={visible}
-            animationType="slide"
-            onRequestClose={onClose}
-        >
+        <SlideRightModal visible={visible} onClose={onClose} isDarkMode={isDarkMode}>
             <Pressable
                 style={[
                     styles.settingsOverlay,
@@ -234,7 +230,7 @@ export const NotificationSettingsModal: React.FC<
                     </View>
                 </Pressable>
             </Pressable>
-        </Modal>
+        </SlideRightModal>
     );
 };
 

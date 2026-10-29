@@ -20,6 +20,7 @@ import { Ionicons } from '@expo/vector-icons';
 import { Colors, Shadows } from '../../../theme/colors';
 import { useAuthStore, useVitalStore } from '../../../store/useVitalStore';
 import { useTheme } from '../../../store/useThemeStore';
+import * as Clipboard from 'expo-clipboard';
 import { householdApi } from '../../../services/api';
 import {
   HouseMemberRow,
@@ -28,6 +29,7 @@ import {
   HouseAccountInviteModal,
   HouseShareModal,
   HouseEditAddressModal,
+  HouseJoinCodeModal,
 } from '../components/house';
 
 export default function HouseDetailScreen({ navigation, route }: any) {
@@ -50,6 +52,7 @@ export default function HouseDetailScreen({ navigation, route }: any) {
   const [selectedInviteRole, setSelectedInviteRole] = useState<'MEMBER' | 'ADMIN'>('MEMBER');
   const [isAccountInviteModalVisible, setIsAccountInviteModalVisible] = useState(false);
   const [isShareModalVisible, setIsShareModalVisible] = useState(false);
+  const [isJoinCodeModalVisible, setIsJoinCodeModalVisible] = useState(false);
   const [copySuccessToast, setCopySuccessToast] = useState<string | null>(null);
 
   // State form mời thành viên mới
@@ -74,11 +77,15 @@ export default function HouseDetailScreen({ navigation, route }: any) {
   const [isConfirmingDelete, setIsConfirmingDelete] = useState(false);
   const [isDeletingMember, setIsDeletingMember] = useState(false);
 
-  const triggerToast = (msg: string) => {
+  const [toastInfo, setToastInfo] = useState<{ message: string; type?: 'success' | 'error' } | null>(null);
+
+  const triggerToast = (msg: string, type: 'success' | 'error' = 'success') => {
+    setToastInfo({ message: msg, type });
     setCopySuccessToast(msg);
     setTimeout(() => {
+      setToastInfo(null);
       setCopySuccessToast(null);
-    }, 2800);
+    }, 3200);
   };
 
   useEffect(() => {
@@ -95,9 +102,9 @@ export default function HouseDetailScreen({ navigation, route }: any) {
       const clean = editAddressInput.trim();
       updateHouseAddress(clean);
       setIsEditAddressModalVisible(false);
-      Alert.alert('Thành công', 'Đã cập nhật địa chỉ nhà.');
+      triggerToast('Đã cập nhật địa chỉ căn nhà thành công!');
     } catch {
-      Alert.alert('Lỗi', 'Không thể lưu địa chỉ. Vui lòng thử lại.');
+      triggerToast('Không thể lưu địa chỉ. Vui lòng thử lại.', 'error');
     } finally {
       setIsSavingAddress(false);
     }
@@ -218,9 +225,9 @@ export default function HouseDetailScreen({ navigation, route }: any) {
         )
       );
       setPermissionModalVisible(false);
-      Alert.alert('Thành công', `Đã cập nhật phân quyền cho thành viên ${selectedMember.full_name}.`);
+      triggerToast(`Đã cập nhật phân quyền cho thành viên ${selectedMember.full_name}.`);
     } catch (error: any) {
-      Alert.alert('Lỗi', error.response?.data?.detail || 'Không thể lưu phân quyền. Vui lòng thử lại.');
+      triggerToast(error.response?.data?.detail || 'Không thể lưu phân quyền. Vui lòng thử lại.', 'error');
     } finally {
       setIsSavingPermissions(false);
     }
@@ -248,23 +255,14 @@ export default function HouseDetailScreen({ navigation, route }: any) {
       setIsConfirmingDelete(false);
 
       const msg = `Đã xóa ${member.full_name || 'thành viên'} khỏi ngôi nhà thành công.`;
-      if (Platform.OS === 'web') {
-        window.alert(msg);
-      } else {
-        Alert.alert('Đã xóa', msg);
-      }
-
+      triggerToast(msg);
       loadMembers();
     } catch (error: any) {
       const errorMsg =
         error.response?.data?.detail ||
         error.message ||
         'Không thể xóa thành viên. Vui lòng thử lại sau.';
-      if (Platform.OS === 'web') {
-        window.alert(errorMsg);
-      } else {
-        Alert.alert('Lỗi', errorMsg);
-      }
+      triggerToast(errorMsg, 'error');
     } finally {
       setIsDeletingMember(false);
     }
@@ -286,17 +284,29 @@ export default function HouseDetailScreen({ navigation, route }: any) {
     }
   };
 
-  const handleCopyLink = () => {
+  const handleCopyLink = async () => {
     const roleSlug = selectedInviteRole === 'ADMIN' ? 'admin' : 'member';
-    const link = `https://smartcare.vn/invite?houseId=${household_id || 'current'}&role=${roleSlug}`;
-    Alert.alert(
-      'Sao chép liên kết thành công',
-      `Đã sao chép liên kết mời thành viên vào bộ nhớ tạm:\n\n${link}\n\nBạn có thể gửi liên kết này cho người thân gia đình.`,
-      [
-        { text: 'Đóng', style: 'cancel' },
-        { text: 'Chia sẻ ngay', onPress: () => setIsShareModalVisible(true) },
-      ]
-    );
+    const codeSuffix = household_id ? String(household_id).slice(-4).toUpperCase() : '8869';
+    const inviteCode = `CARE-${codeSuffix}`;
+    const link = `https://smartcare.vn/invite?houseId=${household_id || 'current'}&code=${inviteCode}&role=${roleSlug}`;
+
+    try {
+      if (Platform.OS === 'web' && typeof navigator !== 'undefined' && navigator.clipboard?.writeText) {
+        await navigator.clipboard.writeText(link);
+      } else {
+        await Clipboard.setStringAsync(link);
+      }
+    } catch {
+      // fallback
+    }
+
+    triggerToast('Đã sao chép liên kết mời thành viên vào bộ nhớ tạm!');
+  };
+
+  const handleJoinHouse = async (inputCode: string) => {
+    await householdApi.joinHouse(inputCode);
+    await fetchHouseFromBackend?.();
+    await loadMembers();
   };
 
   const handleAddMember = async () => {
@@ -326,10 +336,10 @@ export default function HouseDetailScreen({ navigation, route }: any) {
       setInviteModalVisible(false);
       setNewMemberPhone('');
       setNewMemberName('');
-      Alert.alert('Thành công', `Đã cấp quyền và thêm ${phoneToSubmit} vào ngôi nhà.`);
+      triggerToast(`Đã cấp quyền và thêm ${phoneToSubmit} vào ngôi nhà.`);
       loadMembers();
     } catch (error: any) {
-      Alert.alert('Lỗi', error.response?.data?.detail || 'Không thể thêm thành viên. Vui lòng kiểm tra lại.');
+      triggerToast(error.response?.data?.detail || 'Không thể thêm thành viên. Vui lòng kiểm tra lại.', 'error');
     }
   };
 
@@ -378,6 +388,13 @@ export default function HouseDetailScreen({ navigation, route }: any) {
             </TouchableOpacity>
           )}
         </View>
+        <TouchableOpacity
+          style={[styles.backBtn, { backgroundColor: isDarkMode ? '#1E293B' : '#F1F5F9', borderColor: borderCol, marginLeft: 8 }]}
+          onPress={() => setIsJoinCodeModalVisible(true)}
+          activeOpacity={0.7}
+        >
+          <Ionicons name="key-outline" size={19} color={textTitle} />
+        </TouchableOpacity>
       </View>
 
       {hasLinkedHouse ? (
@@ -512,6 +529,26 @@ export default function HouseDetailScreen({ navigation, route }: any) {
             <Ionicons name="refresh-outline" size={18} color="#FFF" style={{ marginRight: 6 }} />
             <Text style={{ color: '#FFF', fontSize: 14, fontWeight: '700' }}>Kiểm tra & Làm mới</Text>
           </TouchableOpacity>
+          <TouchableOpacity
+            style={{
+              flexDirection: 'row',
+              alignItems: 'center',
+              backgroundColor: isDarkMode ? '#1E293B' : '#EEF2FF',
+              borderColor: '#6366F1',
+              borderWidth: 1.5,
+              paddingVertical: 12,
+              paddingHorizontal: 22,
+              borderRadius: 24,
+              marginTop: 12,
+            }}
+            onPress={() => setIsJoinCodeModalVisible(true)}
+            activeOpacity={0.8}
+          >
+            <Ionicons name="link-outline" size={18} color="#6366F1" style={{ marginRight: 6 }} />
+            <Text style={{ color: '#6366F1', fontSize: 14, fontWeight: '700' }}>
+              Nhập mã mời / Liên kết tham gia nhà
+            </Text>
+          </TouchableOpacity>
         </View>
       )}
 
@@ -556,6 +593,7 @@ export default function HouseDetailScreen({ navigation, route }: any) {
         onCopyLink={handleCopyLink}
         onClose={() => setInviteModalVisible(false)}
         isDarkMode={isDarkMode}
+        copySuccessToast={copySuccessToast}
       />
 
       {/* Modal 3: Nhập SĐT mời qua tài khoản */}
@@ -605,12 +643,76 @@ export default function HouseDetailScreen({ navigation, route }: any) {
         isDarkMode={isDarkMode}
         colors={colors}
       />
+
+      {/* IN-APP MOBILE FLOATING TOAST NOTIFICATION */}
+      {toastInfo && (
+        <View style={styles.appToastContainer} pointerEvents="none">
+          <View
+            style={[
+              styles.appToastCard,
+              toastInfo.type === 'error' && styles.appToastCardError,
+            ]}
+          >
+            <Ionicons
+              name={toastInfo.type === 'error' ? 'alert-circle' : 'checkmark-circle'}
+              size={20}
+              color="#FFFFFF"
+            />
+            <Text style={styles.appToastText}>{toastInfo.message}</Text>
+          </View>
+        </View>
+      )}
+
+      {/* Modal 6: Nhập mã mời / dán liên kết tham gia nhà */}
+      <HouseJoinCodeModal
+        visible={isJoinCodeModalVisible}
+        onClose={() => setIsJoinCodeModalVisible(false)}
+        onJoin={handleJoinHouse}
+        onJoinSuccess={() => {
+          triggerToast('🎉 Chúc mừng! Bạn đã tham gia vào căn nhà thành công.');
+        }}
+        isDarkMode={isDarkMode}
+        colors={colors}
+      />
     </SafeAreaView>
   );
 }
 
 const styles = StyleSheet.create({
   safeArea: { flex: 1 },
+  appToastContainer: {
+    position: 'absolute',
+    top: 70,
+    left: 20,
+    right: 20,
+    alignItems: 'center',
+    zIndex: 99999,
+    elevation: 99999,
+  },
+  appToastCard: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: '#0F172A',
+    paddingHorizontal: 16,
+    paddingVertical: 12,
+    borderRadius: 20,
+    gap: 10,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 4 },
+    shadowOpacity: 0.25,
+    shadowRadius: 10,
+    elevation: 10,
+    maxWidth: '92%',
+  },
+  appToastCardError: {
+    backgroundColor: '#DC2626',
+  },
+  appToastText: {
+    color: '#FFFFFF',
+    fontSize: 14,
+    fontWeight: '700',
+    flexShrink: 1,
+  },
   topHeader: {
     paddingHorizontal: 16,
     paddingTop: 12,

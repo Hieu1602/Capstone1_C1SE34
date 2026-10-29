@@ -10,6 +10,7 @@ import {
 } from "react-native";
 import { Ionicons } from "@expo/vector-icons";
 import { Colors } from "../../../../theme/colors";
+import { SlideRightModal } from "../settings/SlideRightModal";
 import { ProfileEditNameModal } from "./ProfileEditNameModal";
 import { ProfileEditPhoneModal } from "./ProfileEditPhoneModal";
 import { validateFullName, sanitizeNameInput } from "../../utils/nameValidation";
@@ -90,12 +91,7 @@ export const ProfileInfoModal: React.FC<ProfileInfoModalProps> = ({
     };
 
     return (
-        <Modal
-            transparent
-            visible={visible}
-            animationType="fade"
-            onRequestClose={onClose}
-        >
+        <SlideRightModal visible={visible} onClose={onClose} isDarkMode={isDarkMode}>
             <Pressable
                 style={[
                     styles.modalOverlay,
@@ -311,7 +307,7 @@ export const ProfileInfoModal: React.FC<ProfileInfoModalProps> = ({
                     />
                 </Pressable>
             </Pressable>
-        </Modal>
+        </SlideRightModal>
     );
 };
 

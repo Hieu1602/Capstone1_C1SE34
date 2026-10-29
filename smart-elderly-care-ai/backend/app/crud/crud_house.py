@@ -190,6 +190,8 @@ class CRUDHouse:
         )
         return result.scalar_one_or_none()
 
+    get_member = get_member_by_user
+
     async def add_member(
         self,
         db: AsyncSession,

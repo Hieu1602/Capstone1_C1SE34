@@ -10,6 +10,7 @@ import {
 } from "react-native";
 import { Ionicons } from "@expo/vector-icons";
 import { Colors } from "../../../../theme/colors";
+import { SlideRightModal } from "./SlideRightModal";
 
 interface AccessibilitySettingsModalProps {
     visible: boolean;
@@ -33,12 +34,7 @@ export const AccessibilitySettingsModal: React.FC<
     onClose,
 }) => {
     return (
-        <Modal
-            transparent
-            visible={visible}
-            animationType="slide"
-            onRequestClose={onClose}
-        >
+        <SlideRightModal visible={visible} onClose={onClose} isDarkMode={isDarkMode}>
             <Pressable
                 style={[
                     styles.settingsOverlay,
@@ -99,10 +95,7 @@ export const AccessibilitySettingsModal: React.FC<
                                 isDarkMode && { borderBottomColor: "#334155" },
                             ]}
                             activeOpacity={0.8}
-                            onPress={() => {
-                                onClose();
-                                onOpenFontSize();
-                            }}
+                            onPress={onOpenFontSize}
                         >
                             <Text
                                 style={[
@@ -166,7 +159,7 @@ export const AccessibilitySettingsModal: React.FC<
                     </View>
                 </Pressable>
             </Pressable>
-        </Modal>
+        </SlideRightModal>
     );
 };
 

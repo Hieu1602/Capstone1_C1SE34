@@ -10,6 +10,7 @@ import {
 } from "react-native";
 import { Ionicons } from "@expo/vector-icons";
 import { Colors } from "../../../../theme/colors";
+import { SlideRightModal } from "./SlideRightModal";
 
 interface VibrationSettingsModalProps {
     visible: boolean;
@@ -27,12 +28,7 @@ export const VibrationSettingsModal: React.FC<VibrationSettingsModalProps> = ({
     onClose,
 }) => {
     return (
-        <Modal
-            transparent
-            visible={visible}
-            animationType="slide"
-            onRequestClose={onClose}
-        >
+        <SlideRightModal visible={visible} onClose={onClose} isDarkMode={isDarkMode}>
             <Pressable
                 style={[
                     styles.settingsOverlay,
@@ -119,7 +115,7 @@ export const VibrationSettingsModal: React.FC<VibrationSettingsModalProps> = ({
                     </Text>
                 </Pressable>
             </Pressable>
-        </Modal>
+        </SlideRightModal>
     );
 };
 

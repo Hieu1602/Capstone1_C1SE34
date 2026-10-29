@@ -11,3 +11,6 @@ export * from "./ProfileUserCard";
 export * from "./ProfileQuickGrid";
 export * from "./ProfileHelpAccordion";
 export * from "./ProfileSettingsAccordion";
+export * from "./MenuSearchModal";
+export * from "./MenuSearchModal";
+

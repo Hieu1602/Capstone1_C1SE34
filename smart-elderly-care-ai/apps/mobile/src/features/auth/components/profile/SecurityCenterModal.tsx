@@ -13,6 +13,7 @@ import {
 import { SafeAreaView } from "react-native-safe-area-context";
 import { Ionicons } from "@expo/vector-icons";
 import { Colors } from "../../../../theme/colors";
+import { SlideRightModal } from "../settings/SlideRightModal";
 import { usersApi } from "../../../../services/api";
 import * as Location from "expo-location";
 
@@ -247,18 +248,7 @@ export const SecurityCenterModal: React.FC<SecurityCenterModalProps> = ({
     };
 
     return (
-        <Modal
-            visible={visible}
-            animationType="slide"
-            onRequestClose={() => {
-                if (securityDetail !== null) {
-                    resetPasswordForm();
-                    setSecurityDetail(null);
-                } else {
-                    handleClose();
-                }
-            }}
-        >
+        <SlideRightModal visible={visible} onClose={handleClose} isDarkMode={isDarkMode}>
             {securityDetail !== null ? (
                 <SafeAreaView
                     style={[
@@ -1797,7 +1787,7 @@ export const SecurityCenterModal: React.FC<SecurityCenterModalProps> = ({
                     </ScrollView>
                 </SafeAreaView>
             )}
-        </Modal>
+        </SlideRightModal>
     );
 };
 

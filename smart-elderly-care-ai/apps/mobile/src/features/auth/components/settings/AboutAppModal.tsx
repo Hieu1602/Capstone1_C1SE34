@@ -12,6 +12,7 @@ import {
 } from "react-native";
 import { Ionicons } from "@expo/vector-icons";
 import { Colors } from "../../../../theme/colors";
+import { SlideRightModal } from "./SlideRightModal";
 
 interface AboutAppModalProps {
     visible: boolean;
@@ -34,12 +35,7 @@ export const AboutAppModal: React.FC<AboutAppModalProps> = ({
     };
 
     return (
-        <Modal
-            transparent
-            visible={visible}
-            animationType="slide"
-            onRequestClose={handleClose}
-        >
+        <SlideRightModal visible={visible} onClose={handleClose} isDarkMode={isDarkMode}>
             <Pressable
                 style={[
                     styles.infoOverlay,
@@ -321,7 +317,7 @@ export const AboutAppModal: React.FC<AboutAppModalProps> = ({
                     )}
                 </Pressable>
             </Pressable>
-        </Modal>
+        </SlideRightModal>
     );
 };
 

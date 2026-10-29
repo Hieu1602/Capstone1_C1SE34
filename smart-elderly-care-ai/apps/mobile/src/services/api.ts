@@ -430,6 +430,8 @@ export const householdApi = {
     api.delete(`/houses/${householdId}/members/${memberId}`),
   getMyPermissions: (householdId: number | string = 'current') =>
     api.get(`/houses/${householdId}/my-permissions`),
+  joinHouse: (codeOrLink: string) =>
+    api.post('/houses/join', { code: codeOrLink }),
 };
 
 export const houseApi = {

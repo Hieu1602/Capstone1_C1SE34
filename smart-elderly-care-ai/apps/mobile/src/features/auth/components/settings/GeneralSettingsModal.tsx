@@ -9,6 +9,7 @@ import {
 } from "react-native";
 import { Ionicons } from "@expo/vector-icons";
 import { Colors } from "../../../../theme/colors";
+import { SlideRightModal } from "./SlideRightModal";
 
 interface GeneralSettingsModalProps {
     visible: boolean;
@@ -30,12 +31,7 @@ export const GeneralSettingsModal: React.FC<GeneralSettingsModalProps> = ({
     onClose,
 }) => {
     return (
-        <Modal
-            transparent
-            visible={visible}
-            animationType="slide"
-            onRequestClose={onClose}
-        >
+        <SlideRightModal visible={visible} onClose={onClose} isDarkMode={isDarkMode}>
             <Pressable
                 style={[
                     styles.settingsOverlay,
@@ -123,10 +119,7 @@ export const GeneralSettingsModal: React.FC<GeneralSettingsModalProps> = ({
                                 isDarkMode && { borderBottomColor: "#334155" },
                             ]}
                             activeOpacity={0.8}
-                            onPress={() => {
-                                onClose();
-                                onOpenLanguage();
-                            }}
+                            onPress={onOpenLanguage}
                         >
                             <Text
                                 style={[
@@ -164,10 +157,7 @@ export const GeneralSettingsModal: React.FC<GeneralSettingsModalProps> = ({
                                 { borderBottomWidth: 0 },
                             ]}
                             activeOpacity={0.8}
-                            onPress={() => {
-                                onClose();
-                                onOpenAppearance();
-                            }}
+                            onPress={onOpenAppearance}
                         >
                             <Text
                                 style={[
@@ -201,7 +191,7 @@ export const GeneralSettingsModal: React.FC<GeneralSettingsModalProps> = ({
                     </View>
                 </Pressable>
             </Pressable>
-        </Modal>
+        </SlideRightModal>
     );
 };
 
