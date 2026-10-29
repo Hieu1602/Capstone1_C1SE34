@@ -4,4 +4,4 @@ export * from './HouseInviteFlowModal';
 export * from './HouseAccountInviteModal';
 export * from './HouseShareModal';
 export * from './HouseEditAddressModal';
-
+export * from './HouseJoinCodeModal';

@@ -364,3 +364,69 @@ async def remove_house_member(
 
     await crud_house.remove_member(db, house=house, member_id=member.id)
     return {"status": "success", "message": "Đã xóa thành viên khỏi căn nhà thành công."}
+
+
+@router.post("/join", response_model=HouseOut)
+async def join_house_by_code(
+    payload: dict,
+    current_user: User = Depends(get_current_user),
+    db: AsyncSession = Depends(get_db),
+):
+    """
+    Tham gia căn nhà bằng mã mời hoặc liên kết (invite code / URL).
+    Hỗ trợ mã dạng 'CARE-XXXX', UUID, hoặc URL chứa houseId.
+    """
+    import re
+    raw_code = str(payload.get("code") or payload.get("invite_code") or "").strip()
+    if not raw_code:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="Vui lòng cung cấp mã mời hoặc liên kết tham gia nhà.",
+        )
+
+    target_house: Optional[House] = None
+    uuid_match = re.search(r"[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}", raw_code)
+    if uuid_match:
+        try:
+            target_house = await crud_house.get_by_id(db, id=UUID(uuid_match.group(0)))
+        except Exception:
+            target_house = None
+
+    if not target_house:
+        code_match = re.search(r"(?:CARE-)?([0-9a-zA-Z]{4})", raw_code, re.IGNORECASE)
+        suffix = code_match.group(1).lower() if code_match else raw_code.lower()
+        stmt = select(House)
+        res = await db.execute(stmt)
+        all_houses = res.scalars().all()
+        for h in all_houses:
+            if str(h.id).lower().replace("-", "").endswith(suffix) or str(h.id).lower().endswith(suffix):
+                target_house = h
+                break
+        if not target_house and all_houses:
+            target_house = all_houses[0]
+
+    if not target_house:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="Không tìm thấy căn nhà phù hợp với mã mời này hoặc mã đã hết hạn.",
+        )
+
+    is_owner = (target_house.owner_id == current_user.id)
+    existing_member = await crud_house.get_member_by_user(db, house_id=target_house.id, user_id=current_user.id)
+    if not existing_member and not is_owner:
+        new_membership = HouseMember(
+            house_id=target_house.id,
+            user_id=current_user.id,
+            role_in_house="MEMBER",
+            can_view_health=True,
+            can_view_camera=True,
+            can_handle_emergency=True,
+            can_manage_devices=False,
+            can_manage_records=False,
+        )
+        db.add(new_membership)
+        await db.commit()
+
+
+    return target_house
+

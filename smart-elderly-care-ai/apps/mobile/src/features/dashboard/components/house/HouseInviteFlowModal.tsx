@@ -22,6 +22,7 @@ interface HouseInviteFlowModalProps {
   onCopyLink: () => void;
   onClose: () => void;
   isDarkMode: boolean;
+  copySuccessToast?: string | null;
 }
 
 export const HouseInviteFlowModal: React.FC<HouseInviteFlowModalProps> = ({
@@ -36,6 +37,7 @@ export const HouseInviteFlowModal: React.FC<HouseInviteFlowModalProps> = ({
   onCopyLink,
   onClose,
   isDarkMode,
+  copySuccessToast,
 }) => {
   const handleBack = () => {
     if (step === 2) {
@@ -219,12 +221,27 @@ export const HouseInviteFlowModal: React.FC<HouseInviteFlowModalProps> = ({
                   <Text style={[styles.inviteMethodLabel, { color: isDarkMode ? '#F8FAFC' : '#111827' }]}>
                     Sao chép liên kết
                   </Text>
-                  <Ionicons name="chevron-forward" size={18} color="#94A3B8" />
+                  {copySuccessToast ? (
+                    <View style={styles.copiedBadge}>
+                      <Ionicons name="checkmark-circle" size={16} color="#10B981" />
+                      <Text style={styles.copiedBadgeText}>Đã chép</Text>
+                    </View>
+                  ) : (
+                    <Ionicons name="chevron-forward" size={18} color="#94A3B8" />
+                  )}
                 </TouchableOpacity>
               </View>
             </View>
           )}
         </ScrollView>
+
+        {/* Floating Toast Notification */}
+        {copySuccessToast && (
+          <View style={styles.inviteToastBadge}>
+            <Ionicons name="checkmark-circle" size={18} color="#10B981" />
+            <Text style={styles.inviteToastText}>{copySuccessToast}</Text>
+          </View>
+        )}
 
         {/* Bottom Button cho Step 1: "Tiếp theo" */}
         {step === 1 && (
@@ -249,24 +266,24 @@ const styles = StyleSheet.create({
   },
   inviteTopBar: {
     paddingHorizontal: 16,
-    paddingVertical: 10,
-    flexDirection: 'row',
-    alignItems: 'center',
+    paddingVertical: 12,
   },
   inviteBackBtn: {
-    padding: 6,
-    marginLeft: -6,
+    width: 40,
+    height: 40,
+    borderRadius: 20,
+    alignItems: 'center',
+    justifyContent: 'center',
   },
   inviteScrollContent: {
     paddingHorizontal: 20,
     paddingBottom: 40,
   },
   inviteMainTitle: {
-    fontSize: 24,
+    fontSize: 22,
     fontWeight: '800',
-    marginTop: 6,
     marginBottom: 20,
-    letterSpacing: -0.5,
+    letterSpacing: -0.3,
   },
   inviteHouseCard: {
     flexDirection: 'row',
@@ -274,6 +291,11 @@ const styles = StyleSheet.create({
     padding: 16,
     borderRadius: 16,
     borderWidth: 1,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.04,
+    shadowRadius: 8,
+    elevation: 2,
   },
   inviteHouseIconBox: {
     width: 44,
@@ -292,12 +314,17 @@ const styles = StyleSheet.create({
     fontSize: 13,
     fontWeight: '600',
     marginBottom: 10,
-    marginLeft: 4,
+    textTransform: 'none',
   },
   inviteOptionsGroup: {
     borderRadius: 16,
     borderWidth: 1,
     overflow: 'hidden',
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.04,
+    shadowRadius: 8,
+    elevation: 2,
   },
   inviteRoleOptionItem: {
     padding: 16,
@@ -312,9 +339,12 @@ const styles = StyleSheet.create({
     fontSize: 16,
     fontWeight: '700',
   },
-  inviteRoleDesc: {
-    fontSize: 13,
-    lineHeight: 18,
+  radioUnchecked: {
+    width: 22,
+    height: 22,
+    borderRadius: 11,
+    borderWidth: 2,
+    borderColor: '#D1D5DB',
   },
   radioChecked: {
     width: 22,
@@ -324,12 +354,9 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     justifyContent: 'center',
   },
-  radioUnchecked: {
-    width: 22,
-    height: 22,
-    borderRadius: 11,
-    borderWidth: 2,
-    borderColor: '#94A3B8',
+  inviteRoleDesc: {
+    fontSize: 13,
+    lineHeight: 18,
   },
   inviteOptionDivider: {
     height: 1,
@@ -353,6 +380,42 @@ const styles = StyleSheet.create({
     fontWeight: '700',
     flex: 1,
   },
+  copiedBadge: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: '#DCFCE7',
+    paddingHorizontal: 8,
+    paddingVertical: 4,
+    borderRadius: 12,
+    gap: 4,
+  },
+  copiedBadgeText: {
+    fontSize: 12,
+    fontWeight: '700',
+    color: '#15803D',
+  },
+  inviteToastBadge: {
+    position: 'absolute',
+    bottom: 30,
+    alignSelf: 'center',
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: '#0F172A',
+    paddingHorizontal: 16,
+    paddingVertical: 10,
+    borderRadius: 24,
+    gap: 8,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 4 },
+    shadowOpacity: 0.25,
+    shadowRadius: 10,
+    elevation: 8,
+  },
+  inviteToastText: {
+    color: '#FFFFFF',
+    fontSize: 13,
+    fontWeight: '600',
+  },
   inviteMethodDivider: {
     height: 1,
     marginLeft: 70,
@@ -375,4 +438,3 @@ const styles = StyleSheet.create({
     fontWeight: '800',
   },
 });
-

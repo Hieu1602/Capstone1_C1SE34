@@ -6,8 +6,10 @@ import {
   Modal,
   TouchableOpacity,
   Linking,
+  Platform,
 } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
+import * as Clipboard from 'expo-clipboard';
 import { Colors } from '../../../../theme/colors';
 
 interface HouseShareModalProps {
@@ -41,6 +43,22 @@ export const HouseShareModal: React.FC<HouseShareModalProps> = ({
   colors: { bgCard, borderCol, textTitle, textSub },
 }) => {
   const inviteCode = `CARE-${householdId ? String(householdId).slice(-4).toUpperCase() : '8869'}`;
+  const inviteMsg = `Chào bạn! Bạn nhận được lời mời tham gia "${houseName || 'Nhà của tôi'}" với vai trò ${
+    selectedInviteRole === 'ADMIN' ? 'Quản trị viên' : 'Thành viên'
+  }. Mã mời: ${inviteCode}. Tải app Smart Elderly Care AI để kết nối!`;
+
+  const copyToClipboard = async (text: string, successMessage: string) => {
+    try {
+      if (Platform.OS === 'web' && typeof navigator !== 'undefined' && navigator.clipboard?.writeText) {
+        await navigator.clipboard.writeText(text);
+      } else {
+        await Clipboard.setStringAsync(text);
+      }
+    } catch {
+      // fallback
+    }
+    triggerToast(successMessage);
+  };
 
   return (
     <Modal
@@ -113,9 +131,7 @@ export const HouseShareModal: React.FC<HouseShareModalProps> = ({
                 </Text>
                 <TouchableOpacity
                   style={styles.copyCodeMiniBtn}
-                  onPress={() => {
-                    triggerToast('Đã sao chép mã mời vào bộ nhớ tạm!');
-                  }}
+                  onPress={() => copyToClipboard(inviteCode, 'Đã sao chép mã mời vào bộ nhớ tạm!')}
                 >
                   <Ionicons name="copy-outline" size={14} color="#FFF" />
                   <Text style={styles.copyCodeMiniText}>Sao chép mã</Text>
@@ -132,14 +148,12 @@ export const HouseShareModal: React.FC<HouseShareModalProps> = ({
               style={[styles.shareMessagePreviewContent, { color: isDarkMode ? '#E2E8F0' : '#334155' }]}
               numberOfLines={3}
             >
-              {`Chào bạn! Bạn nhận được lời mời tham gia "${houseName || 'Nhà của tôi'}" với vai trò ${
-                selectedInviteRole === 'ADMIN' ? 'Quản trị viên' : 'Thành viên'
-              }. Mã mời: ${inviteCode}. Tải app Smart Elderly Care AI để kết nối!`}
+              {inviteMsg}
             </Text>
           </View>
 
           {/* Kênh chia sẻ nhanh trực tiếp */}
-          <Text style={[styles.shareChannelsTitle, { color: textSub }]}>Chọn ứng dụng chia sẻ:</Text>
+          <Text style={[styles.shareChannelsTitle, { color: textSub }]}>CHỌN ỨNG DỤNG CHIA SẺ:</Text>
           <View style={styles.shareChannelsRow}>
             {/* Kênh 1: Tin nhắn SMS */}
             <TouchableOpacity
@@ -147,7 +161,7 @@ export const HouseShareModal: React.FC<HouseShareModalProps> = ({
               onPress={() => {
                 const msg = `Mời bạn tham gia căn nhà "${houseName || 'Nhà của tôi'}" trên Smart Elderly Care AI. Mã mời: ${inviteCode}. Tải ứng dụng tại: https://smartcare.vn/app`;
                 Linking.openURL(`sms:?body=${encodeURIComponent(msg)}`).catch(() => {
-                  triggerToast('Không thể mở tin nhắn SMS.');
+                  copyToClipboard(msg, 'Đã sao chép nội dung tin nhắn!');
                 });
               }}
             >
@@ -162,9 +176,9 @@ export const HouseShareModal: React.FC<HouseShareModalProps> = ({
               style={styles.shareChannelItem}
               onPress={() => {
                 Linking.openURL('https://zalo.me').catch(() => {
-                  triggerToast('Đã sao chép link mời để gửi qua Zalo!');
+                  // Fallback
                 });
-                triggerToast('Đã sao chép nội dung để gửi qua Zalo!');
+                copyToClipboard(inviteMsg, 'Đã sao chép nội dung để gửi qua Zalo!');
               }}
             >
               <View style={[styles.shareChannelIconBox, { backgroundColor: '#0284C7' }]}>
@@ -176,9 +190,7 @@ export const HouseShareModal: React.FC<HouseShareModalProps> = ({
             {/* Kênh 3: Sao chép toàn bộ */}
             <TouchableOpacity
               style={styles.shareChannelItem}
-              onPress={() => {
-                triggerToast('Đã sao chép toàn bộ nội dung lời mời!');
-              }}
+              onPress={() => copyToClipboard(inviteMsg, 'Đã sao chép toàn bộ nội dung lời mời!')}
             >
               <View style={[styles.shareChannelIconBox, { backgroundColor: '#8B5CF6' }]}>
                 <Ionicons name="copy" size={22} color="#FFF" />
@@ -219,9 +231,7 @@ export const HouseShareModal: React.FC<HouseShareModalProps> = ({
             </TouchableOpacity>
             <TouchableOpacity
               style={styles.shareModalPrimaryBtn}
-              onPress={() => {
-                triggerToast('Đã sao chép lời mời thành công!');
-              }}
+              onPress={() => copyToClipboard(inviteMsg, 'Đã sao chép lời mời thành công!')}
             >
               <Ionicons name="copy" size={16} color="#FFF" style={{ marginRight: 6 }} />
               <Text style={styles.shareModalPrimaryText}>Sao chép lời mời</Text>
@@ -240,25 +250,29 @@ const styles = StyleSheet.create({
     justifyContent: 'flex-end',
   },
   shareModalCard: {
-    width: '100%',
     borderTopLeftRadius: 24,
     borderTopRightRadius: 24,
+    borderTopWidth: 1,
     padding: 20,
-    borderWidth: 1,
-    borderBottomWidth: 0,
+    paddingBottom: Platform.OS === 'ios' ? 40 : 24,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: -4 },
+    shadowOpacity: 0.1,
+    shadowRadius: 12,
+    elevation: 8,
   },
   shareHeaderRow: {
     flexDirection: 'row',
     alignItems: 'center',
-    marginBottom: 14,
+    marginBottom: 16,
+    gap: 12,
   },
   shareIconBox: {
-    width: 40,
-    height: 40,
-    borderRadius: 20,
+    width: 44,
+    height: 44,
+    borderRadius: 22,
     alignItems: 'center',
     justifyContent: 'center',
-    marginRight: 12,
   },
   shareModalTitle: {
     fontSize: 17,
@@ -277,20 +291,26 @@ const styles = StyleSheet.create({
   },
   shareHouseBox: {
     borderRadius: 16,
-    padding: 14,
     borderWidth: 1,
-    marginBottom: 12,
+    padding: 14,
+    marginBottom: 14,
   },
   shareHouseRow: {
     flexDirection: 'row',
     alignItems: 'center',
-    marginBottom: 10,
+    gap: 8,
+    marginBottom: 12,
   },
   shareHouseIconSmall: {
-    marginRight: 6,
+    width: 28,
+    height: 28,
+    borderRadius: 14,
+    backgroundColor: '#EFF6FF',
+    alignItems: 'center',
+    justifyContent: 'center',
   },
   shareHouseNameText: {
-    fontSize: 14,
+    fontSize: 15,
     fontWeight: '700',
     flex: 1,
   },
@@ -307,36 +327,38 @@ const styles = StyleSheet.create({
     borderRadius: 12,
     padding: 12,
     alignItems: 'center',
+    borderWidth: 1,
+    borderColor: '#E2E8F0',
   },
   inviteCodeLabel: {
-    fontSize: 11,
-    fontWeight: '700',
-    letterSpacing: 0.5,
-    marginBottom: 4,
+    fontSize: 10,
+    fontWeight: '800',
+    letterSpacing: 1,
+    marginBottom: 6,
   },
   inviteCodeValueRow: {
     flexDirection: 'row',
     alignItems: 'center',
-    gap: 10,
-    marginVertical: 4,
+    gap: 12,
+    marginBottom: 4,
   },
   inviteCodeText: {
-    fontSize: 22,
+    fontSize: 24,
     fontWeight: '900',
     letterSpacing: 2,
   },
   copyCodeMiniBtn: {
     flexDirection: 'row',
     alignItems: 'center',
-    backgroundColor: '#F97316',
+    backgroundColor: Colors.primary,
     paddingHorizontal: 10,
-    paddingVertical: 5,
+    paddingVertical: 6,
     borderRadius: 8,
     gap: 4,
   },
   copyCodeMiniText: {
     color: '#FFF',
-    fontSize: 11,
+    fontSize: 12,
     fontWeight: '700',
   },
   inviteCodeExpireText: {
@@ -347,40 +369,45 @@ const styles = StyleSheet.create({
   shareMessagePreviewBox: {
     borderRadius: 12,
     padding: 12,
-    marginBottom: 14,
+    marginBottom: 16,
   },
   shareMessagePreviewLabel: {
     fontSize: 11,
-    fontWeight: '700',
+    fontWeight: '600',
     marginBottom: 4,
   },
   shareMessagePreviewContent: {
     fontSize: 12,
-    lineHeight: 17,
+    lineHeight: 18,
   },
   shareChannelsTitle: {
-    fontSize: 12,
-    fontWeight: '700',
-    marginBottom: 10,
-    textTransform: 'uppercase',
-    letterSpacing: 0.5,
+    fontSize: 11,
+    fontWeight: '800',
+    letterSpacing: 0.8,
+    marginBottom: 12,
   },
   shareChannelsRow: {
     flexDirection: 'row',
     justifyContent: 'space-between',
     marginBottom: 16,
+    paddingHorizontal: 4,
   },
   shareChannelItem: {
     alignItems: 'center',
-    flex: 1,
+    gap: 6,
+    width: 68,
   },
   shareChannelIconBox: {
-    width: 48,
-    height: 48,
-    borderRadius: 24,
+    width: 52,
+    height: 52,
+    borderRadius: 26,
     alignItems: 'center',
     justifyContent: 'center',
-    marginBottom: 6,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.1,
+    shadowRadius: 4,
+    elevation: 3,
   },
   shareChannelName: {
     fontSize: 12,
@@ -390,47 +417,48 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'center',
-    backgroundColor: '#D1FAE5',
+    backgroundColor: '#ECFDF5',
+    borderWidth: 1,
+    borderColor: '#A7F3D0',
     paddingVertical: 8,
-    paddingHorizontal: 14,
+    paddingHorizontal: 12,
     borderRadius: 10,
-    marginBottom: 12,
     gap: 6,
+    marginBottom: 14,
   },
   shareToastText: {
-    color: '#065F46',
     fontSize: 12,
     fontWeight: '700',
+    color: '#065F46',
   },
   shareModalBtnRow: {
     flexDirection: 'row',
-    gap: 10,
+    gap: 12,
   },
   shareModalCancelBtn: {
     flex: 1,
+    height: 48,
+    borderRadius: 14,
+    borderWidth: 1,
     alignItems: 'center',
     justifyContent: 'center',
-    paddingVertical: 13,
-    borderRadius: 12,
-    borderWidth: 1,
   },
   shareModalCancelText: {
     fontSize: 14,
     fontWeight: '700',
   },
   shareModalPrimaryBtn: {
-    flex: 1.8,
+    flex: 2,
+    height: 48,
+    borderRadius: 14,
+    backgroundColor: Colors.primary,
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'center',
-    paddingVertical: 13,
-    borderRadius: 12,
-    backgroundColor: '#F97316',
   },
   shareModalPrimaryText: {
     color: '#FFF',
     fontSize: 14,
-    fontWeight: '800',
+    fontWeight: '700',
   },
 });
-

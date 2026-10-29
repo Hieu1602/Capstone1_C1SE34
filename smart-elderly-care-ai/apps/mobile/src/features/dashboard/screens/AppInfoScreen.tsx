@@ -2,7 +2,7 @@
 // Màn hình Thông tin ứng dụng & Hướng dẫn sử dụng thiết bị
 // Smart Elderly Care AI (SECA)
 
-import React from 'react';
+import React, { useEffect, useRef } from 'react';
 import {
   View,
   StyleSheet,
@@ -10,6 +10,9 @@ import {
   ScrollView,
   Image,
   Linking,
+  Animated,
+  Dimensions,
+  Platform,
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
@@ -35,12 +38,38 @@ export default function AppInfoScreen({ navigation }: any) {
       });
   }, []);
 
+  const screenWidth = Dimensions.get('window').width || 450;
+  const translateX = useRef(new Animated.Value(screenWidth)).current;
+
+  useEffect(() => {
+    translateX.setValue(screenWidth);
+    const raf = requestAnimationFrame(() => {
+      Animated.timing(translateX, {
+        toValue: 0,
+        duration: 260,
+        useNativeDriver: Platform.OS !== 'web',
+      }).start();
+    });
+    return () => cancelAnimationFrame(raf);
+  }, [screenWidth, translateX]);
+
+  const handleGoBack = () => {
+    Animated.timing(translateX, {
+      toValue: screenWidth,
+      duration: 200,
+      useNativeDriver: Platform.OS !== 'web',
+    }).start(() => {
+      navigation?.goBack?.();
+    });
+  };
+
   return (
     <SafeAreaView
       style={[styles.container, isDarkMode && { backgroundColor: '#0B0F19' }]}
       edges={['top']}
     >
-      <View style={[styles.inner, isDarkMode && { backgroundColor: '#0B0F19' }]}>
+      <Animated.View style={{ flex: 1, transform: [{ translateX }] }}>
+        <View style={[styles.inner, isDarkMode && { backgroundColor: '#0B0F19' }]}>
         {/* Header hàng trên cùng */}
         <View style={styles.headerRow}>
           <TouchableOpacity
@@ -48,7 +77,7 @@ export default function AppInfoScreen({ navigation }: any) {
               styles.backButton,
               isDarkMode && { backgroundColor: '#1E293B', borderColor: '#334155' },
             ]}
-            onPress={() => navigation?.goBack?.()}
+            onPress={handleGoBack}
             activeOpacity={0.7}
             accessibilityRole="button"
             accessibilityLabel="Quay lại"
@@ -206,6 +235,7 @@ export default function AppInfoScreen({ navigation }: any) {
           </View>
         </ScrollView>
       </View>
+      </Animated.View>
     </SafeAreaView>
   );
 }

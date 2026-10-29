@@ -10,6 +10,7 @@ import {
 } from "react-native";
 import { Ionicons } from "@expo/vector-icons";
 import { Colors } from "../../../../theme/colors";
+import { SlideRightModal } from "./SlideRightModal";
 
 const FONT_SCALE_LEVELS = [0.85, 1, 1.15, 1.3, 1.5];
 
@@ -62,12 +63,7 @@ export const FontSizeSettingsModal: React.FC<FontSizeSettingsModalProps> = ({
     };
 
     return (
-        <Modal
-            transparent
-            visible={visible}
-            animationType="slide"
-            onRequestClose={onClose}
-        >
+        <SlideRightModal visible={visible} onClose={onClose} isDarkMode={isDarkMode}>
             <Pressable
                 style={[
                     styles.settingsOverlay,
@@ -306,7 +302,7 @@ export const FontSizeSettingsModal: React.FC<FontSizeSettingsModalProps> = ({
                     </View>
                 </Pressable>
             </Pressable>
-        </Modal>
+        </SlideRightModal>
     );
 };
 

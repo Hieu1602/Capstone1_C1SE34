@@ -12,6 +12,7 @@ import {
 import { SafeAreaView } from "react-native-safe-area-context";
 import { Ionicons } from "@expo/vector-icons";
 import { Colors } from "../../../../theme/colors";
+import { SlideRightModal } from "../settings/SlideRightModal";
 
 interface PasswordFeedback {
     type: "success" | "error";
@@ -125,11 +126,7 @@ export const ChangePasswordModal: React.FC<ChangePasswordModalProps> = ({
     };
 
     return (
-        <Modal
-            visible={visible}
-            animationType="slide"
-            onRequestClose={handleClose}
-        >
+        <SlideRightModal visible={visible} onClose={handleClose} isDarkMode={isDarkMode}>
             <SafeAreaView
                 style={[
                     styles.changePasswordScreen,
@@ -585,7 +582,7 @@ export const ChangePasswordModal: React.FC<ChangePasswordModalProps> = ({
                     </View>
                 </ScrollView>
             </SafeAreaView>
-        </Modal>
+        </SlideRightModal>
     );
 };
 
