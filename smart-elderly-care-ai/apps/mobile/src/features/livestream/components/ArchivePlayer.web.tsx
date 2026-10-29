@@ -1,6 +1,5 @@
 import React, { useEffect, useRef } from "react";
-// @ts-ignore
-import Hls from "hls.js/dist/hls.min.js";
+import Hls from "hls.js";
 import type { ArchivePlayerProps } from "./ArchivePlayer";
 
 export default function ArchivePlayer({ uri, startAt = 0, onEnd, onError, onProgress, paused = false, hls = false, seekVersion = 0 }: ArchivePlayerProps) {
