@@ -119,6 +119,12 @@ const createAuthStore: StateCreator<AuthStoreState, [], [['zustand/persist', Aut
       usePatientStore.getState().resetPatientStore?.();
       useHealthStore.getState().resetHealthStore?.();
       useAlertStore.getState().resetAlertStore?.();
+      AsyncStorage.multiRemove([
+        'device-store',
+        'health-store',
+        'patient-store',
+        'alert-store',
+      ]).catch(() => {});
     } catch {}
 
     const initialPermissions: HousePermissions = {
@@ -140,7 +146,7 @@ const createAuthStore: StateCreator<AuthStoreState, [], [['zustand/persist', Aut
       full_name: name,
       userPhone: phone,
       phone_number: phone,
-      userRole: isDoctor ? 'doctor' : isAdmin ? 'admin' : 'member',
+      userRole: isDoctor ? 'doctor' : isAdmin ? 'admin' : normalizedRole === 'owner' ? 'owner' : 'member',
       role,
       avatarUrl: avatarUrl ?? null,
       avatar_url: avatarUrl ?? null,
@@ -192,9 +198,11 @@ const createAuthStore: StateCreator<AuthStoreState, [], [['zustand/persist', Aut
         ? 'doctor'
         : profile.role?.toLowerCase() === 'admin'
           ? 'admin'
-          : profile.role
-            ? 'user'
-            : state.userRole,
+          : profile.role?.toLowerCase() === 'owner'
+            ? 'owner'
+            : profile.role
+              ? 'member'
+              : state.userRole,
       household_id: profile.household_id !== undefined ? profile.household_id : state.household_id,
       viewRole: profile.role?.toLowerCase() === 'doctor' || profile.role?.includes('Bác sĩ')
         ? 'DOCTOR'
@@ -275,6 +283,12 @@ const createAuthStore: StateCreator<AuthStoreState, [], [['zustand/persist', Aut
       usePatientStore.getState().resetPatientStore?.();
       useHealthStore.getState().resetHealthStore?.();
       useAlertStore.getState().resetAlertStore?.();
+      AsyncStorage.multiRemove([
+        'device-store',
+        'health-store',
+        'patient-store',
+        'alert-store',
+      ]).catch(() => {});
     } catch {}
     set({
       accessToken: null,

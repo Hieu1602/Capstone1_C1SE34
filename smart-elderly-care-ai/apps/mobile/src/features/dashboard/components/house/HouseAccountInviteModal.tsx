@@ -64,20 +64,15 @@ export const HouseAccountInviteModal: React.FC<HouseAccountInviteModalProps> = (
           <View
             style={[
               styles.inviteRoleBadgeContainer,
-              { backgroundColor: selectedInviteRole === 'ADMIN' ? '#FEF3C7' : '#EFF6FF' },
+              { backgroundColor: isDarkMode ? '#1E293B' : '#EFF6FF' },
             ]}
           >
-            <Text
-              style={[
-                styles.inviteRoleBadgeText,
-                { color: selectedInviteRole === 'ADMIN' ? '#B45309' : '#2563EB' },
-              ]}
-            >
-              Vai trò: {selectedInviteRole === 'ADMIN' ? '👑 Quản trị viên' : '👤 Thành viên'}
+            <Text style={[styles.inviteRoleBadgeText, { color: '#2563EB' }]}>
+              👤 Vai trò: Thành viên
             </Text>
           </View>
           <Text style={[styles.modalSub, { color: textSub, marginTop: 4 }]}>
-            Nhập số điện thoại để liên kết tài khoản vào nhà và phân quyền truy cập.
+            Nhập số điện thoại để mời tài khoản vào căn nhà.
           </Text>
 
           <TextInput
@@ -87,22 +82,7 @@ export const HouseAccountInviteModal: React.FC<HouseAccountInviteModalProps> = (
                 backgroundColor: isDarkMode ? '#0F172A' : '#F8FAFC',
                 borderColor: borderCol,
                 color: textTitle,
-              },
-            ]}
-            value={newMemberName}
-            onChangeText={setNewMemberName}
-            placeholder="Họ và tên người thân (ví dụ: Anh Ba, Con gái...)"
-            placeholderTextColor="#94A3B8"
-          />
-
-          <TextInput
-            style={[
-              styles.addressInput,
-              {
-                backgroundColor: isDarkMode ? '#0F172A' : '#F8FAFC',
-                borderColor: borderCol,
-                color: textTitle,
-                marginTop: 10,
+                marginTop: 12,
               },
             ]}
             value={newMemberPhone}
@@ -112,57 +92,21 @@ export const HouseAccountInviteModal: React.FC<HouseAccountInviteModalProps> = (
             keyboardType="phone-pad"
           />
 
-          {/* Chi tiết quyền hạn */}
-          {selectedInviteRole === 'ADMIN' ? (
-            <View style={[styles.adminNoticeBox, { backgroundColor: isDarkMode ? '#1E293B' : '#FEF3C7' }]}>
-              <Ionicons name="shield-checkmark" size={18} color="#D97706" />
-              <Text style={styles.adminNoticeText}>
-                Quản trị viên được trao toàn quyền quản lý thiết bị, cấu hình thuật toán và giám sát người thân.
-              </Text>
-            </View>
-          ) : (
-            <View style={{ marginTop: 12 }}>
-              <View style={[styles.permCheckRow, { borderColor: borderCol }]}>
-                <Text style={[styles.permCheckLabel, { color: textTitle }]}>👁️ Xem camera an ninh AI</Text>
-                <Switch
-                  value={newCanViewCamera}
-                  onValueChange={setNewCanViewCamera}
-                  trackColor={{ false: '#94A3B8', true: '#A7F3D0' }}
-                  thumbColor={newCanViewCamera ? '#059669' : '#F1F5F9'}
-                />
-              </View>
-
-              <View style={[styles.permCheckRow, { borderColor: borderCol }]}>
-                <Text style={[styles.permCheckLabel, { color: textTitle }]}>🩺 Theo dõi nhịp tim & SpO2</Text>
-                <Switch
-                  value={newCanViewHealth}
-                  onValueChange={setNewCanViewHealth}
-                  trackColor={{ false: '#94A3B8', true: '#BFDBFE' }}
-                  thumbColor={newCanViewHealth ? '#2563EB' : '#F1F5F9'}
-                />
-              </View>
-
-              <View style={[styles.permCheckRow, { borderColor: borderCol }]}>
-                <Text style={[styles.permCheckLabel, { color: textTitle }]}>⚙️ Cấu hình thiết bị & Tham số AI</Text>
-                <Switch
-                  value={newCanManageDevices}
-                  onValueChange={setNewCanManageDevices}
-                  trackColor={{ false: '#94A3B8', true: '#FED7AA' }}
-                  thumbColor={newCanManageDevices ? '#F97316' : '#F1F5F9'}
-                />
-              </View>
-
-              <View style={[styles.permCheckRow, { borderColor: borderCol }]}>
-                <Text style={[styles.permCheckLabel, { color: textTitle }]}>💊 Quản lý Lịch thuốc & Bệnh án</Text>
-                <Switch
-                  value={newCanManageRecords}
-                  onValueChange={setNewCanManageRecords}
-                  trackColor={{ false: '#94A3B8', true: '#DDD6FE' }}
-                  thumbColor={newCanManageRecords ? '#7C3AED' : '#F1F5F9'}
-                />
-              </View>
-            </View>
-          )}
+          {/* Thông báo quyền hạn thành viên */}
+          <View
+            style={[
+              styles.memberNoticeBox,
+              {
+                backgroundColor: isDarkMode ? '#1E293B' : '#F0FDF4',
+                borderColor: isDarkMode ? '#334155' : '#BBF7D0',
+              },
+            ]}
+          >
+            <Ionicons name="information-circle" size={20} color="#16A34A" style={{ marginRight: 8, marginTop: 1 }} />
+            <Text style={[styles.memberNoticeText, { color: isDarkMode ? '#86EFAC' : '#15803D' }]}>
+              Thành viên được thêm có quyền xem camera, theo dõi sức khỏe và nhận cảnh báo khẩn cấp (chỉ xem, không có quyền xóa hoặc thay đổi cấu hình).
+            </Text>
+          </View>
 
           <View style={styles.modalActionButtons}>
             <TouchableOpacity
@@ -175,7 +119,7 @@ export const HouseAccountInviteModal: React.FC<HouseAccountInviteModalProps> = (
               <Text style={[styles.cancelBtnText, { color: textSub }]}>Hủy</Text>
             </TouchableOpacity>
             <TouchableOpacity style={styles.saveBtn} onPress={onAddMember}>
-              <Text style={styles.saveBtnText}>Gửi lời mời & Cấp quyền</Text>
+              <Text style={styles.saveBtnText}>Thêm thành viên</Text>
             </TouchableOpacity>
           </View>
         </View>
@@ -281,6 +225,20 @@ const styles = StyleSheet.create({
     fontSize: 14,
     fontWeight: '800',
     color: '#FFFFFF',
+  },
+  memberNoticeBox: {
+    flexDirection: 'row',
+    alignItems: 'flex-start',
+    padding: 12,
+    borderRadius: 12,
+    borderWidth: 1,
+    marginTop: 14,
+  },
+  memberNoticeText: {
+    fontSize: 13,
+    lineHeight: 18,
+    flex: 1,
+    fontWeight: '500',
   },
 });
 

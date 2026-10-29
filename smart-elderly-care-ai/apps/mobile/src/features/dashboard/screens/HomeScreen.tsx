@@ -298,26 +298,28 @@ export default function HomeScreen({ navigation }: any) {
           />
         }
       >
-        {/* 2. Chế độ an ninh */}
-        <View style={styles.modesRow}>
-          {[
-            { key: 'AWAY', label: 'Xa', icon: 'exit-outline', activeColor: '#10B981', activeStyle: styles.modePillActiveAway, textColor: '#047857', isActive: house.currentMode === 'AWAY', onPress: () => handleSelectHouseMode('AWAY') },
-            { key: 'HOME', label: 'Ở nhà', icon: 'home', activeColor: '#3B82F6', activeStyle: styles.modePillActiveHome, textColor: '#1D4ED8', isActive: house.currentMode === 'HOME', onPress: () => handleSelectHouseMode('HOME') },
-            { key: 'DISARM', label: snoozeButtonLabel, icon: isSnoozeActive ? 'volume-mute' : 'notifications-off-outline', activeColor: isSnoozeActive ? '#F59E0B' : '#64748B', activeStyle: isSnoozeActive ? styles.modePillActiveSnooze : styles.modePillActiveDisarm, textColor: isSnoozeActive ? (isDarkMode ? '#FBBF24' : '#D97706') : '#475569', isActive: isSnoozeActive || house.currentMode === 'DISARM', onPress: handlePressSnoozeButton },
-          ].map((m) => (
-            <TouchableOpacity
-              key={m.key}
-              style={[styles.modePill, m.isActive ? m.activeStyle : styles.modePillInactive, !m.isActive && isDarkMode && { backgroundColor: colors.card, borderColor: colors.border }]}
-              onPress={m.onPress}
-              activeOpacity={0.75}
-            >
-              <View style={[styles.modeIconCircle, { backgroundColor: m.isActive ? m.activeColor : (isDarkMode ? colors.surfaceSubtle : '#E2E8F0') }]}>
-                <Ionicons name={m.icon as any} size={14} color={m.isActive ? '#FFF' : (isDarkMode ? colors.textMuted : '#94A3B8')} />
-              </View>
-              <Text style={[styles.modePillText, { color: m.isActive ? m.textColor : (isDarkMode ? colors.textMuted : '#94A3B8') }]} numberOfLines={1}>{m.label}</Text>
-            </TouchableOpacity>
-          ))}
-        </View>
+        {/* 2. Chế độ an ninh (Ẩn đối với tài khoản mới chưa liên kết nhà/thiết bị) */}
+        {hasLinkedHouse && !isUserEmptyMember && (
+          <View style={styles.modesRow}>
+            {[
+              { key: 'AWAY', label: 'Xa', icon: 'exit-outline', activeColor: '#10B981', activeStyle: styles.modePillActiveAway, textColor: '#047857', isActive: house.currentMode === 'AWAY', onPress: () => handleSelectHouseMode('AWAY') },
+              { key: 'HOME', label: 'Ở nhà', icon: 'home', activeColor: '#3B82F6', activeStyle: styles.modePillActiveHome, textColor: '#1D4ED8', isActive: house.currentMode === 'HOME', onPress: () => handleSelectHouseMode('HOME') },
+              { key: 'DISARM', label: snoozeButtonLabel, icon: isSnoozeActive ? 'volume-mute' : 'notifications-off-outline', activeColor: isSnoozeActive ? '#F59E0B' : '#64748B', activeStyle: isSnoozeActive ? styles.modePillActiveSnooze : styles.modePillActiveDisarm, textColor: isSnoozeActive ? (isDarkMode ? '#FBBF24' : '#D97706') : '#475569', isActive: isSnoozeActive || house.currentMode === 'DISARM', onPress: handlePressSnoozeButton },
+            ].map((m) => (
+              <TouchableOpacity
+                key={m.key}
+                style={[styles.modePill, m.isActive ? m.activeStyle : styles.modePillInactive, !m.isActive && isDarkMode && { backgroundColor: colors.card, borderColor: colors.border }]}
+                onPress={m.onPress}
+                activeOpacity={0.75}
+              >
+                <View style={[styles.modeIconCircle, { backgroundColor: m.isActive ? m.activeColor : (isDarkMode ? colors.surfaceSubtle : '#E2E8F0') }]}>
+                  <Ionicons name={m.icon as any} size={14} color={m.isActive ? '#FFF' : (isDarkMode ? colors.textMuted : '#94A3B8')} />
+                </View>
+                <Text style={[styles.modePillText, { color: m.isActive ? m.textColor : (isDarkMode ? colors.textMuted : '#94A3B8') }]} numberOfLines={1}>{m.label}</Text>
+              </TouchableOpacity>
+            ))}
+          </View>
+        )}
 
         {/* 2.4. Banner Lịch khám Bác sĩ mới chờ Gia đình xác nhận */}
         {hasLinkedHouse && pendingAppointmentNotice && (

@@ -83,7 +83,7 @@ def _format_member_out(m: HouseMember, house: House) -> HouseMemberOut:
         avatar_url=avatar_url,
         user_role=user_role,
         role=user_role,
-        role_in_house="OWNER" if is_owner else m.role_in_house,
+        role_in_house="OWNER" if is_owner else ("DOCTOR" if (user_role == "doctor" or m.role_in_house == "DOCTOR") else m.role_in_house),
         permissions="ADMIN" if is_owner else m.permissions,
         can_view_health=True if is_owner else m.can_view_health,
         can_view_camera=True if is_owner else m.can_view_camera,
@@ -412,17 +412,18 @@ async def join_house_by_code(
         )
 
     is_owner = (target_house.owner_id == current_user.id)
+    is_doctor = (current_user.role == "doctor")
     existing_member = await crud_house.get_member_by_user(db, house_id=target_house.id, user_id=current_user.id)
     if not existing_member and not is_owner:
         new_membership = HouseMember(
             house_id=target_house.id,
             user_id=current_user.id,
-            role_in_house="MEMBER",
+            role_in_house="DOCTOR" if is_doctor else "MEMBER",
             can_view_health=True,
             can_view_camera=True,
             can_handle_emergency=True,
             can_manage_devices=False,
-            can_manage_records=False,
+            can_manage_records=True if is_doctor else False,
         )
         db.add(new_membership)
         await db.commit()

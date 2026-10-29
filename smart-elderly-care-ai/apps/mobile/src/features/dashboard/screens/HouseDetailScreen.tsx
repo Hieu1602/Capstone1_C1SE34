@@ -236,6 +236,7 @@ export default function HouseDetailScreen({ navigation, route }: any) {
   const handleRemoveMember = (member: any) => {
     setSelectedMember(member);
     setIsConfirmingDelete(true);
+    setPermissionModalVisible(true);
   };
 
   const executeDeleteMember = async (member: any) => {
@@ -315,28 +316,26 @@ export default function HouseDetailScreen({ navigation, route }: any) {
       Alert.alert('Lỗi', 'Vui lòng nhập số điện thoại người thân hoặc bác sĩ.');
       return;
     }
-    const isAdmin = selectedInviteRole === 'ADMIN';
-    const defaultRoleTitle = isAdmin ? 'Quản trị viên gia đình' : 'Thành viên';
 
     try {
       const targetHId = household_id || 'current';
       await householdApi.addMember(targetHId, {
         phone_number: phoneToSubmit,
-        full_name: newMemberName.trim() || defaultRoleTitle,
-        role_in_house: isAdmin ? 'ADMIN' : 'MEMBER',
-        role: isAdmin ? 'admin' : 'user',
-        can_view_health: isAdmin ? true : newCanViewHealth,
-        can_view_camera: isAdmin ? true : newCanViewCamera,
-        can_handle_emergency: isAdmin ? true : newCanHandleEmergency,
-        can_manage_devices: isAdmin ? true : newCanManageDevices,
-        can_manage_records: isAdmin ? true : newCanManageRecords,
+        full_name: newMemberName.trim() || 'Thành viên',
+        role_in_house: 'MEMBER',
+        role: 'user',
+        can_view_health: true,
+        can_view_camera: true,
+        can_handle_emergency: true,
+        can_manage_devices: false,
+        can_manage_records: false,
       });
 
       setIsAccountInviteModalVisible(false);
       setInviteModalVisible(false);
       setNewMemberPhone('');
       setNewMemberName('');
-      triggerToast(`Đã cấp quyền và thêm ${phoneToSubmit} vào ngôi nhà.`);
+      triggerToast(`Đã thêm ${phoneToSubmit} vào ngôi nhà thành công.`);
       loadMembers();
     } catch (error: any) {
       triggerToast(error.response?.data?.detail || 'Không thể thêm thành viên. Vui lòng kiểm tra lại.', 'error');
@@ -404,10 +403,10 @@ export default function HouseDetailScreen({ navigation, route }: any) {
           <Ionicons name="shield-checkmark" size={22} color="#3B82F6" style={{ marginRight: 10, marginTop: 2 }} />
           <View style={{ flex: 1 }}>
             <Text style={[styles.roleInfoTitle, { color: isDarkMode ? '#93C5FD' : '#1E40AF' }]}>
-              Cơ chế Phân quyền Thành viên (RBAC)
+              Quyền hạn thành viên
             </Text>
             <Text style={[styles.roleInfoDesc, { color: isDarkMode ? '#BFDBFE' : '#3B82F6' }]}>
-              Người sở hữu có thể cấp hoặc thu hồi quyền: Xem camera, Theo dõi sức khỏe và Xử lý khẩn cấp cho từng người thân.
+              Thành viên được thêm vào nhà có quyền xem camera, theo dõi sức khỏe và nhận cảnh báo khẩn cấp (chỉ xem, không có quyền xóa hoặc sửa cấu hình).
             </Text>
           </View>
         </View>
@@ -434,6 +433,7 @@ export default function HouseDetailScreen({ navigation, route }: any) {
                 index={index}
                 isLast={index === members.length - 1}
                 onPress={handleOpenPermissions}
+                onDelete={handleRemoveMember}
                 isDarkMode={isDarkMode}
                 colors={colors}
               />
@@ -453,7 +453,7 @@ export default function HouseDetailScreen({ navigation, route }: any) {
             <View style={[styles.orangePlusCircle, isDarkMode && { backgroundColor: '#4A2810', borderColor: '#7C2D12' }]}>
               <Ionicons name="person-add" size={16} color={Colors.primary} />
             </View>
-            <Text style={styles.addMemberText}>Mời thành viên mới & Phân quyền</Text>
+            <Text style={styles.addMemberText}>Mời thành viên mới</Text>
           </TouchableOpacity>
         </View>
 

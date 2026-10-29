@@ -516,7 +516,8 @@ export default function ProfileScreen({ navigation, route }: any) {
         phone={mgr.profilePhone}
         avatarUri={mgr.avatarUri}
         onClose={() => mgr.setUserMenuVisible(false)}
-        onAvatarPress={() => mgr.setAvatarPickerVisible(true)}
+        onPickFromCamera={mgr.pickAvatarFromCamera}
+        onPickFromLibrary={mgr.pickAvatarFromLibrary}
         onChangePasswordPress={() => mgr.setChangePasswordVisible(true)}
         onLogoutPress={() => mgr.setLogoutConfirmVisible(true)}
         onSaveName={mgr.handleSaveName}
@@ -618,6 +619,7 @@ export default function ProfileScreen({ navigation, route }: any) {
           colors={mgr.colors}
           houseName={mgr.house?.name || 'Nhà của tôi'}
           membersCount={mgr.house?.membersCount || 1}
+          hasHouse={Boolean(mgr.house?.id && mgr.house?.hasHouse !== false && mgr.house?.name)}
           showMore={mgr.showMoreGrid}
           onToggleShowMore={() => mgr.setShowMoreGrid(!mgr.showMoreGrid)}
           onNavigate={(screen) => navigation.navigate(screen)}

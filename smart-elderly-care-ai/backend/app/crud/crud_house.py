@@ -221,7 +221,7 @@ class CRUDHouse:
                 detail=f"Tài khoản số điện thoại {phone} đã là thành viên của căn nhà này.",
             )
 
-        is_doctor = "bác sĩ" in (obj_in.role_in_house or "").lower() or (obj_in.role or "").lower() == "doctor"
+        is_doctor = (getattr(user, "role", "") == "doctor" or "bác sĩ" in (obj_in.role_in_house or "").lower() or (obj_in.role or "").lower() == "doctor")
         role_label = "DOCTOR" if is_doctor else (obj_in.role_in_house or "MEMBER")
 
         new_member = HouseMember(
