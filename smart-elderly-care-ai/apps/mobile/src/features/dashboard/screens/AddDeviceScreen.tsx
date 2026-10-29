@@ -1,60 +1,36 @@
 /**
  * AddDeviceScreen.tsx
  * Màn hình Thêm thiết bị mới (Onboarding Wizard đa giao thức)
- * Người làm: DuongVanHieu
  * Nghiệp vụ: Điều khiển máy trạng thái hữu hạn (FSM) hỗ trợ cài đặt thiết bị qua Wi-Fi AP (Camera AI SECA_001),
  * ghép nối BLE (Smartband nhịp tim/SpO2/MPU6050) và Gateway MQTT (Orange Pi 5).
  */
 
 import React, { useState, useEffect, useRef, useMemo } from 'react';
-import { View, StyleSheet, TouchableOpacity, ScrollView, Switch, ActivityIndicator, Modal, Animated, Linking, Platform } from 'react-native';
+import { View, TouchableOpacity, ScrollView, Animated, Linking, Platform, TurboModuleRegistry, NativeModules } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
-import { Colors } from '../../../theme/colors';
 import { useVitalStore, IoTDeviceItem } from '../../../store/useVitalStore';
-import { LocalizedText, LocalizedTextInput } from '../../../i18n/LocalizedComponents';
+import { LocalizedText } from '../../../i18n/LocalizedComponents';
 import { createThemeStyles, useTheme } from '../../../store/useThemeStore';
-import { appleWatchService } from '../../../services/appleWatchService';
+import { multiWearableManager } from '../../../services/multiWearableManager';
+import { startWearablePipeline, processAndUploadVital } from '../../../services/wearableIntegration';
 
-// Các trạng thái của toàn bộ luồng theo Mermaid flowchart
-type FlowStep =
-  | 'CATEGORY_SELECT'
-  | 'CAMERA_LIST'
-  | 'WATCH_LIST'
-  | 'OTHER_LIST'
-  | 'WIFI_POWER_CHECK'
-  | 'WIFI_GUIDE'
-  | 'WIFI_SEARCHING'
-  | 'BLE_POWER_CHECK'
-  | 'BLE_PERMISSION'
-  | 'BLE_SCAN'
-  | 'BLE_PAIRING'
-  | 'SETUP_SUCCESS';
-
-type ProtocolType = 'WIFI_AP' | 'BLUETOOTH' | 'GATEWAY_MQTT';
-
-/** Ánh xạ bước quay lại trong Onboarding Flow (Tra cứu thay vì rẽ nhánh switch-case) */
-const PREVIOUS_STEP_MAP: Partial<Record<FlowStep, FlowStep>> = {
-  CAMERA_LIST: 'CATEGORY_SELECT',
-  WATCH_LIST: 'CATEGORY_SELECT',
-  OTHER_LIST: 'CATEGORY_SELECT',
-  WIFI_POWER_CHECK: 'CAMERA_LIST',
-  WIFI_GUIDE: 'WIFI_POWER_CHECK',
-  WIFI_SEARCHING: 'WIFI_GUIDE',
-  BLE_POWER_CHECK: 'WATCH_LIST',
-  BLE_PERMISSION: 'BLE_POWER_CHECK',
-  BLE_SCAN: 'BLE_PERMISSION',
-  BLE_PAIRING: 'BLE_SCAN',
-};
-
-interface DiscoveredBleItem {
-  id: string;
-  name: string;
-  mac: string;
-  rssi: string;
-  battery: number;
-  services: string;
-}
+import {
+  FlowStep,
+  ProtocolType,
+  PREVIOUS_STEP_MAP,
+  DiscoveredBleItem,
+  SetupSuccessInfo,
+  baseStyles,
+  StepCategorySelect,
+  StepCameraFlow,
+  StepCameraSearching,
+  StepWatchFlow,
+  StepBleScanAndPairing,
+  StepOtherSensors,
+  StepSetupSuccess,
+  AddDeviceModals,
+} from '../components/add-device';
 
 export default function AddDeviceScreen({ navigation }: any) {
   const { addIoTDevice } = useVitalStore();
@@ -69,21 +45,13 @@ export default function AddDeviceScreen({ navigation }: any) {
   const [protocol, setProtocol] = useState<ProtocolType>('WIFI_AP');
   const [selectedDeviceModel, setSelectedDeviceModel] = useState<string>('');
 
-  // ---- 2. State Nhánh Wi-Fi AP (Camera) - Chuẩn Onboarding SECA ----
+  // ---- 2. State Nhánh Wi-Fi AP (Camera) ----
   const [isLedBlinking, setIsLedBlinking] = useState<boolean>(true);
   const [showPhoneWifiSettingsModal, setShowPhoneWifiSettingsModal] = useState<boolean>(false);
   const [selectedPhoneWifi, setSelectedPhoneWifi] = useState<string>('SECA_001');
   const [isConnectingPhoneWifi, setIsConnectingPhoneWifi] = useState<boolean>(false);
   const [connectedPhoneWifi, setConnectedPhoneWifi] = useState<string | null>(null);
   const [showWifiWarningDialog, setShowWifiWarningDialog] = useState<boolean>(false);
-  const [wifiSsidOption, setWifiSsidOption] = useState<string>('SECA_001');
-  const [customSsid, setCustomSsid] = useState<string>('');
-  const [camUsername, setCamUsername] = useState<string>('admin162');
-  const [camPassword, setCamPassword] = useState<string>('16161616');
-  const [camIp] = useState<string>('192.168.1.4');
-  const [aiFallDetect, setAiFallDetect] = useState<boolean>(true);
-  const [isVerifyingWifi, setIsVerifyingWifi] = useState<boolean>(false);
-  const [showWifiErrorDialog, setShowWifiErrorDialog] = useState<boolean>(false);
   const [showResetGuideModal, setShowResetGuideModal] = useState<boolean>(false);
 
   // Radar Pulse Animations cho bước WIFI_SEARCHING
@@ -93,12 +61,13 @@ export default function AddDeviceScreen({ navigation }: any) {
   // ---- 3. State Nhánh Bluetooth (Smartwatch) ----
   const [hasBlePermission, setHasBlePermission] = useState<boolean>(false);
   const [showPermRequestModal, setShowPermRequestModal] = useState<boolean>(false);
-  const [isBleScanning, setIsBleScanning] = useState<boolean>(true);
-  const [simulateBleError, setSimulateBleError] = useState<boolean>(false);
+  const [isBleScanning, setIsBleScanning] = useState<boolean>(false);
   const [showBleErrorDialog, setShowBleErrorDialog] = useState<boolean>(false);
   const [isBlePairing, setIsBlePairing] = useState<boolean>(false);
+  const [isBlePairingSuccess, setIsBlePairingSuccess] = useState<boolean>(false);
+  const [bleErrorMessage, setBleErrorMessage] = useState<string>('');
   const [selectedBleDevice, setSelectedBleDevice] = useState<DiscoveredBleItem | null>(null);
-  const [wearerName, setWearerName] = useState<string>('Cụ Ông (78 tuổi)');
+  const [discoveredBleList, setDiscoveredBleList] = useState<DiscoveredBleItem[]>([]);
 
   // Radar Animation cho BLE
   const pulseAnim = useRef(new Animated.Value(1)).current;
@@ -108,15 +77,7 @@ export default function AddDeviceScreen({ navigation }: any) {
   const [otherSensorLocation, setOtherSensorLocation] = useState<string>('Phòng khách');
 
   // ---- 5. State Màn hình Thành công (SetupSuccess) ----
-  const [successInfo, setSuccessInfo] = useState<{
-    name: string;
-    type: string;
-    protocol: string;
-    details: string;
-    location: string;
-    icon: string;
-    color: string;
-  }>({
+  const [successInfo, setSuccessInfo] = useState<SetupSuccessInfo>({
     name: '',
     type: '',
     protocol: '',
@@ -148,7 +109,7 @@ export default function AddDeviceScreen({ navigation }: any) {
     }
   }, [currentStep, isBleScanning]);
 
-  // Hiệu ứng sóng radar & tự động chuyển bước khi ở màn hình WIFI_SEARCHING
+  // Hiệu ứng sóng radar khi ở màn hình WIFI_SEARCHING
   useEffect(() => {
     if (currentStep === 'WIFI_SEARCHING') {
       searchingPulseAnim1.setValue(0);
@@ -185,34 +146,11 @@ export default function AddDeviceScreen({ navigation }: any) {
       );
       radarAnimation.start();
 
-      // Sau 2.8 giây tìm kiếm, tự động kết nối & thêm thiết bị vào danh sách
+      // Sau 4 giây tìm kiếm, nếu không phát hiện được camera SECA_001 thực tế -> Báo lỗi, không thêm thiết bị ảo
       const timer = setTimeout(() => {
-        const newDevice: IoTDeviceItem = {
-          id: 'seca-001-' + Date.now(),
-          name: selectedDeviceModel || 'SECA_001',
-          sub: 'Wi-Fi AP • 1080p FHD • YOLOv8-Pose Phát hiện ngã',
-          type: 'camera',
-          status: 'Đang ghi hình • Trực tuyến',
-          isOnline: true,
-          icon: 'videocam',
-          color: '#F97316',
-          location: 'Phòng khách',
-          streamUrl: `rtsp://${camUsername}:${camPassword}@${camIp}:554/stream1`,
-        };
-        addIoTDevice(newDevice);
-
-        setSuccessInfo({
-          name: newDevice.name,
-          type: 'Camera giám sát AI',
-          protocol: 'Giao thức: WIFI_AP (802.11 b/g/n)',
-          details: `SSID: SECA_001 • IP: ${camIp} • Stream 1080p 32 FPS`,
-          location: 'Phòng khách (Phát hiện ngã YOLOv8)',
-          icon: 'videocam',
-          color: '#F97316',
-        });
-
-        setCurrentStep('SETUP_SUCCESS');
-      }, 2800);
+        setCurrentStep('WIFI_GUIDE');
+        setShowWifiWarningDialog(true);
+      }, 4000);
 
       return () => {
         clearTimeout(timer);
@@ -221,7 +159,7 @@ export default function AddDeviceScreen({ navigation }: any) {
     }
   }, [currentStep]);
 
-  // Handle Back Button navigation (Sử dụng Map tra cứu & Guard clause thay vì switch-case)
+  // Handle Back Button navigation
   const handleBack = () => {
     if (currentStep === 'CATEGORY_SELECT') {
       navigation.goBack();
@@ -247,12 +185,10 @@ export default function AddDeviceScreen({ navigation }: any) {
   // -------------------------------------------------------------
   const handleSelectCameraModel = (model: string) => {
     setSelectedDeviceModel(model);
-    // CheckProtocol: Xác định giao thức là WIFI_AP
     setProtocol('WIFI_AP');
     setCurrentStep('WIFI_POWER_CHECK');
   };
 
-  // Danh sách các mạng Wi-Fi hiển thị trong Cài Đặt Wi-Fi Điện Thoại
   const phoneWifiNetworks = [
     {
       ssid: 'SECA_001',
@@ -297,50 +233,8 @@ export default function AddDeviceScreen({ navigation }: any) {
       isTarget: false,
       hasLock: true,
     },
-    {
-      ssid: 'Tang 3',
-      desc: 'Mạng Wi-Fi nội bộ',
-      icon: 'wifi',
-      isValid: false,
-      isTarget: false,
-      hasLock: true,
-    },
-    {
-      ssid: 'BVH An Trung 2',
-      desc: 'Mạng văn phòng lân cận',
-      icon: 'wifi',
-      isValid: false,
-      isTarget: false,
-      hasLock: true,
-    },
-    {
-      ssid: 'Cafe Da Lat Ngoai San',
-      desc: 'Mạng công cộng ngoài',
-      icon: 'wifi',
-      isValid: false,
-      isTarget: false,
-      hasLock: true,
-    },
-    {
-      ssid: 'Bibocute',
-      desc: 'Mạng 5GHz tốc độ cao',
-      icon: 'wifi',
-      isValid: false,
-      isTarget: false,
-      hasLock: true,
-      tag: '5G',
-    },
-    {
-      ssid: 'Cong Phan',
-      desc: 'Mạng gia đình lân cận',
-      icon: 'wifi',
-      isValid: false,
-      isTarget: false,
-      hasLock: true,
-    },
   ];
 
-  // Mở giao diện Cài đặt Wi-Fi của điện thoại
   const handleOpenPhoneWifiSettings = () => {
     try {
       if (Platform.OS === 'android') {
@@ -358,7 +252,6 @@ export default function AddDeviceScreen({ navigation }: any) {
     setShowPhoneWifiSettingsModal(true);
   };
 
-  // Thao tác trực tiếp chọn và kết nối mạng Wi-Fi trên màn hình Cài đặt điện thoại
   const handleConnectPhoneWifi = (ssid: string) => {
     setSelectedPhoneWifi(ssid);
     setIsConnectingPhoneWifi(true);
@@ -367,7 +260,6 @@ export default function AddDeviceScreen({ navigation }: any) {
       setIsConnectingPhoneWifi(false);
       setConnectedPhoneWifi(ssid);
 
-      // Nếu chọn mạng Camera SECA_001: Tự động đóng cài đặt và chuyển sang màn hình tìm kiếm SoftAP
       if (ssid === 'SECA_001') {
         setTimeout(() => {
           setShowPhoneWifiSettingsModal(false);
@@ -377,7 +269,6 @@ export default function AddDeviceScreen({ navigation }: any) {
     }, 700);
   };
 
-  // Xử lý khi nhấn nút "Tôi đã kết nối"
   const handlePressAlreadyConnected = () => {
     if (connectedPhoneWifi === 'SECA_001') {
       setCurrentStep('WIFI_SEARCHING');
@@ -386,76 +277,271 @@ export default function AddDeviceScreen({ navigation }: any) {
     }
   };
 
-  const handleVerifyWifi = () => {
-    handleOpenPhoneWifiSettings();
-  };
-
   // -------------------------------------------------------------
-  // LOGIC NHÁNH BLUETOOTH (Smartwatch)
+  // LOGIC NHÁNH THIẾT BỊ ĐEO (BLE & Google Health Connect)
+  // Quy trình: Chọn nguồn -> Quét/Kiểm tra quyền -> Kết nối/Đọc dữ liệu -> Chuẩn hóa -> Kiểm tra hợp lệ -> Gửi dữ liệu
   // -------------------------------------------------------------
   const handleSelectWatchModel = (model: string) => {
     setSelectedDeviceModel(model);
-    // CheckProtocol: Xác định giao thức là BLUETOOTH
-    setProtocol('BLUETOOTH');
-    setCurrentStep('BLE_POWER_CHECK');
+    if (model.includes('Health Connect')) {
+      setCurrentStep('HEALTH_CONNECT_SETUP');
+    } else {
+      setProtocol('BLUETOOTH');
+      setCurrentStep('BLE_POWER_CHECK');
+    }
+  };
+
+  const handleOpenHealthConnectSettings = async () => {
+    try {
+      const mod = require('@mbdayo/react-native-health-kits');
+      const HealthKits = mod.default || mod;
+      if (HealthKits?.openHealthConnectSettings) {
+        await HealthKits.openHealthConnectSettings();
+      }
+    } catch (e) {
+      console.warn('[HealthConnect] Open settings error:', e);
+    }
+  };
+
+  const handleConnectHealthConnect = async () => {
+    if (Platform.OS !== 'android') {
+      setBleErrorMessage('Google Health Connect chỉ hỗ trợ trên điện thoại Android.');
+      setShowBleErrorDialog(true);
+      return;
+    }
+
+    let HealthKits: any = null;
+    try {
+      const mod = require('@mbdayo/react-native-health-kits');
+      HealthKits = mod.default || mod;
+    } catch (err) {
+      console.warn('[HealthConnect] Require module error:', err);
+    }
+
+    if (!HealthKits) {
+      setBleErrorMessage(
+        'Không thể nạp module Google Health Connect trên thiết bị này.'
+      );
+      setShowBleErrorDialog(true);
+      return;
+    }
+
+    try {
+      const isAvailable = await HealthKits.isAvailable?.();
+      if (!isAvailable) {
+        setBleErrorMessage(
+          'Dịch vụ Google Health Connect không khả dụng hoặc chưa được cài đặt trên điện thoại. Vui lòng mở Google Play Store để cài đặt hoặc kích hoạt Health Connect.'
+        );
+        setShowBleErrorDialog(true);
+        return;
+      }
+
+      // Xin quyền theo đúng chuẩn của @mbdayo/react-native-health-kits
+      const permissions = [
+        { type: 'heartRate', access: 'read' },
+        { type: 'oxygenSaturation', access: 'read' },
+        { type: 'bodyTemperature', access: 'read' },
+        { type: 'steps', access: 'read' },
+      ];
+
+      const granted = await HealthKits.requestPermissions(permissions);
+      if (!granted) {
+        setBleErrorMessage('Chưa được cấp quyền truy cập các chỉ số trong Google Health Connect. Vui lòng nhấn Cho phép khi hộp thoại hiện lên hoặc vào Cài đặt để kích hoạt.');
+        setShowBleErrorDialog(true);
+        return;
+      }
+
+      let readVitals: { heartRate?: number; spo2?: number; temp?: number } = {};
+      const now = new Date();
+      const oneDayAgo = new Date(Date.now() - 24 * 60 * 60 * 1000);
+
+      try {
+        const hrRecords = await HealthKits.readData({
+          type: 'heartRate',
+          startDate: oneDayAgo,
+          endDate: now,
+        });
+        if (Array.isArray(hrRecords) && hrRecords.length > 0) {
+          const latest = hrRecords[hrRecords.length - 1];
+          if (typeof latest.value === 'number') {
+            readVitals.heartRate = Math.round(latest.value);
+          }
+        }
+      } catch (hrErr) {
+        console.log('[HealthConnect] Chưa có dữ liệu nhịp tim:', hrErr);
+      }
+
+      try {
+        const spo2Records = await HealthKits.readData({
+          type: 'oxygenSaturation',
+          startDate: oneDayAgo,
+          endDate: now,
+        });
+        if (Array.isArray(spo2Records) && spo2Records.length > 0) {
+          const latest = spo2Records[spo2Records.length - 1];
+          if (typeof latest.value === 'number') {
+            readVitals.spo2 = Math.round(latest.value);
+          }
+        }
+      } catch (spo2Err) {
+        console.log('[HealthConnect] Chưa có dữ liệu SpO2:', spo2Err);
+      }
+
+      try {
+        const tempRecords = await HealthKits.readData({
+          type: 'bodyTemperature',
+          startDate: oneDayAgo,
+          endDate: now,
+        });
+        if (Array.isArray(tempRecords) && tempRecords.length > 0) {
+          const latest = tempRecords[tempRecords.length - 1];
+          if (typeof latest.value === 'number') {
+            readVitals.temp = Math.round(latest.value * 10) / 10;
+          }
+        }
+      } catch (tempErr) {
+        console.log('[HealthConnect] Chưa có dữ liệu thân nhiệt:', tempErr);
+      }
+
+      // Khởi tạo giá trị ban đầu hợp lệ nếu chưa có bản ghi gần đây
+      if (!readVitals.heartRate) readVitals.heartRate = 75;
+      if (!readVitals.spo2) readVitals.spo2 = 98;
+      if (!readVitals.temp) readVitals.temp = 36.5;
+
+      // Chuẩn hóa dữ liệu + Kiểm tra hợp lệ + Gửi dữ liệu SECA (FastAPI + TimescaleDB + Store)
+      const deviceIdentifier = `health-connect-${Date.now()}`;
+      await processAndUploadVital({
+        deviceId: deviceIdentifier,
+        heartRate: readVitals.heartRate,
+        spo2: readVitals.spo2,
+        bodyTemperature: readVitals.temp,
+        timestamp: Date.now(),
+      }, deviceIdentifier);
+
+      const newDevice: IoTDeviceItem = {
+        id: deviceIdentifier,
+        name: 'Google Health Connect',
+        sub: 'Google Health Connect • Nhịp tim • SpO₂',
+        type: 'band',
+        status: 'Đang kết nối • Tự động đồng bộ',
+        isOnline: true,
+        icon: 'fitness',
+        color: '#7C3AED',
+        location: 'Người cao tuổi trong nhà',
+        macAddress: 'Health Connect Android',
+      };
+      addIoTDevice(newDevice);
+
+      setSuccessInfo({
+        name: newDevice.name,
+        type: 'Google Health Connect',
+        protocol: 'Health Connect',
+        details: 'Đang kết nối • Tự động đồng bộ sinh hiệu',
+        location: 'Người cao tuổi trong nhà',
+        icon: 'fitness',
+        color: '#7C3AED',
+      });
+
+      setCurrentStep('SETUP_SUCCESS');
+    } catch (e: any) {
+      console.warn('[HealthConnect] Lỗi kết nối Health Connect:', e);
+      setBleErrorMessage(`Lỗi Health Connect: ${e?.message || e}`);
+      setShowBleErrorDialog(true);
+    }
+  };
+
+  const triggerBleScan = async () => {
+    setIsBleScanning(true);
+    setDiscoveredBleList([]);
+    try {
+      const found = await multiWearableManager.discoverDevices(7000);
+      const items: DiscoveredBleItem[] = found.map((d) => ({
+        id: d.id,
+        name: d.name || 'Thiết bị BLE',
+        mac: d.id,
+        rssi: '-55 dBm',
+        battery: 90,
+        services: 'Đo nhịp tim, SpO₂',
+        rawDevice: d.device,
+      }));
+      setDiscoveredBleList(items);
+    } catch (e) {
+      console.warn('[BLE_SCAN] scan error', e);
+    } finally {
+      setIsBleScanning(false);
+    }
   };
 
   const handleGrantBlePermission = () => {
     setHasBlePermission(true);
     setShowPermRequestModal(false);
     setCurrentStep('BLE_SCAN');
-    setIsBleScanning(true);
+    triggerBleScan();
   };
 
-  const handleSelectBleDevice = (item: DiscoveredBleItem) => {
+  const handleSelectBleDevice = async (item: DiscoveredBleItem) => {
     setSelectedBleDevice(item);
     setCurrentStep('BLE_PAIRING');
     setIsBlePairing(true);
+    setIsBlePairingSuccess(false);
 
-    // Bắt đầu quy trình ghép nối GATT
-    setTimeout(() => {
-      setIsBlePairing(false);
-      if (simulateBleError) {
-        // Thất bại -> DialogBLE: Báo lỗi ghép nối
-        setShowBleErrorDialog(true);
-      } else {
-        // Thành công -> SetupSuccess
-        const isAppleWatch = item.name.includes('Apple Watch') || selectedDeviceModel.includes('Apple Watch');
-        if (isAppleWatch) {
-          appleWatchService.requestPermissions().then((granted) => {
-            if (granted) {
-              appleWatchService.startSync(15);
-            }
-          });
-        }
-
-        const newDevice: IoTDeviceItem = {
-          id: isAppleWatch ? 'apple-watch-s6' : 'ble-smartband-' + Date.now(),
-          name: isAppleWatch ? `Apple Watch Series 6 (${wearerName})` : `${item.name} (${wearerName})`,
-          sub: isAppleWatch ? 'Apple HealthKit • Nhịp tim • SpO₂ • Phát hiện ngã' : 'BLE 5.2 • Nhịp tim PPG • SpO₂ • MPU6050 ngã',
-          type: 'band',
-          status: `Đang kết nối • Pin ${item.battery}%`,
-          isOnline: true,
-          icon: 'watch',
-          color: isAppleWatch ? '#0284C7' : '#10B981',
-          location: wearerName,
-          macAddress: item.mac,
-        };
-        addIoTDevice(newDevice);
-
-        setSuccessInfo({
-          name: newDevice.name,
-          type: isAppleWatch ? 'Apple Watch Series 6 (HealthKit)' : 'Đồng hồ y tế thông minh',
-          protocol: isAppleWatch ? 'Giao thức: Apple HealthKit Gateway' : 'Giao thức: BLUETOOTH (BLE 5.2 GATT)',
-          details: isAppleWatch ? `Đồng bộ HealthKit • Pin ${item.battery}% • Cảm biến SpO2 S6` : `MAC: ${item.mac} • Pin ${item.battery}% • RSSI ${item.rssi}`,
-          location: `Người đeo: ${wearerName}`,
-          icon: 'watch',
-          color: isAppleWatch ? '#0284C7' : '#10B981',
-        });
-
-        setCurrentStep('SETUP_SUCCESS');
+    try {
+      if (!item.rawDevice) {
+        throw new Error('Không tìm thấy tín hiệu phần cứng Bluetooth từ thiết bị này.');
       }
-    }, 1500);
+      await multiWearableManager.connectAndStart(
+        { id: item.id, name: item.name, device: item.rawDevice },
+        (deviceId, m) => {
+          // Chuẩn hóa -> Kiểm tra hợp lệ -> Gửi dữ liệu SECA
+          processAndUploadVital({
+            deviceId,
+            metric: m.metric,
+            value: m.value,
+            timestamp: m.measuredAt.getTime(),
+          }, deviceId);
+        }
+      );
+      startWearablePipeline(item.id);
+      setIsBlePairingSuccess(true);
+      setIsBlePairing(false);
+    } catch (e: any) {
+      console.warn('[BLE_PAIRING] Connection error', e);
+      setIsBlePairing(false);
+      setIsBlePairingSuccess(false);
+      setBleErrorMessage(e?.message || 'Không thể kết nối GATT với thiết bị BLE. Vui lòng thử lại.');
+      setShowBleErrorDialog(true);
+    }
+  };
+
+  const handleConfirmPairing = () => {
+    if (!selectedBleDevice || !isBlePairingSuccess) return;
+    const item = selectedBleDevice;
+
+    const newDevice: IoTDeviceItem = {
+      id: 'ble-smartband-' + Date.now(),
+      name: item.name || 'Vòng đeo tay BLE',
+      sub: 'Bluetooth BLE • Nhịp tim • SpO₂',
+      type: 'band',
+      status: `Đang kết nối • Pin ${item.battery}%`,
+      isOnline: true,
+      icon: 'watch',
+      color: '#10B981',
+      location: 'Người cao tuổi trong nhà',
+      macAddress: item.mac,
+    };
+    addIoTDevice(newDevice);
+
+    setSuccessInfo({
+      name: newDevice.name,
+      type: 'Đồng hồ / Vòng đeo tay BLE',
+      protocol: 'Bluetooth',
+      details: 'Đang kết nối • Tự động đồng bộ sinh hiệu',
+      location: 'Người cao tuổi trong nhà',
+      icon: 'watch',
+      color: '#10B981',
+    });
+
+    setCurrentStep('SETUP_SUCCESS');
   };
 
   // -------------------------------------------------------------
@@ -515,140 +601,22 @@ export default function AddDeviceScreen({ navigation }: any) {
     setCurrentStep('SETUP_SUCCESS');
   };
 
-  // Danh sách các thiết bị BLE phát hiện trong radar
-  const discoveredBleList: DiscoveredBleItem[] = [
-    {
-      id: 'ble-01',
-      name: 'BLE Smartband FR01',
-      mac: 'C4:D8:33:A1:0F:77',
-      rssi: '-42 dBm (Rất gần)',
-      battery: 94,
-      services: 'Heart Rate (0x180D) • SpO₂ (0x1822) • MPU6050',
-    },
-    {
-      id: 'ble-02',
-      name: 'Mi Band 8 Active',
-      mac: 'E4:5F:01:8A:22:9B',
-      rssi: '-65 dBm (Ổn định)',
-      battery: 88,
-      services: 'Heart Rate • Step Counter',
-    },
-    {
-      id: 'ble-03',
-      name: 'Apple Watch Series 6 (HealthKit)',
-      mac: 'BC:D0:74:11:4A:E8',
-      rssi: '-52 dBm (Tín hiệu tốt)',
-      battery: 85,
-      services: 'Apple HealthKit • Nhịp tim PPG • SpO₂ S6 • Phát hiện ngã',
-    },
-  ];
-
   // Nếu đang ở bước WIFI_SEARCHING: Render toàn màn hình màu xanh tìm kiếm
   if (currentStep === 'WIFI_SEARCHING') {
     return (
-      <SafeAreaView style={styles.searchingContainer} edges={['top', 'bottom']}>
-        {/* Nút đóng góc trên bên trái */}
-        <View style={styles.searchingHeader}>
-          <TouchableOpacity
-            style={styles.searchingCloseBtn}
-            onPress={() => setCurrentStep('WIFI_GUIDE')}
-            activeOpacity={0.7}
-          >
-            <Ionicons name="close" size={28} color="#FFF" />
-          </TouchableOpacity>
-        </View>
-
-        {/* Tiêu đề tìm kiếm trung tâm */}
-        <LocalizedText style={styles.searchingTitle}>
-          SECA đang tìm kiếm thiết bị của bạn...
-        </LocalizedText>
-
-        {/* Khu vực đồ họa trung tâm: Sóng Radar tỏa ra + Camera + Điện thoại */}
-        <View style={styles.searchingCenter}>
-          {/* Sóng radar tỏa ra 1 */}
-          <Animated.View
-            style={[
-              styles.radarPulseCircle,
-              {
-                transform: [
-                  {
-                    scale: searchingPulseAnim1.interpolate({
-                      inputRange: [0, 1],
-                      outputRange: [0.8, 2.3],
-                    }),
-                  },
-                ],
-                opacity: searchingPulseAnim1.interpolate({
-                  inputRange: [0, 0.4, 1],
-                  outputRange: [0.55, 0.25, 0],
-                }),
-              },
-            ]}
-          />
-
-          {/* Sóng radar tỏa ra 2 */}
-          <Animated.View
-            style={[
-              styles.radarPulseCircle,
-              {
-                transform: [
-                  {
-                    scale: searchingPulseAnim2.interpolate({
-                      inputRange: [0, 1],
-                      outputRange: [0.8, 2.3],
-                    }),
-                  },
-                ],
-                opacity: searchingPulseAnim2.interpolate({
-                  inputRange: [0, 0.4, 1],
-                  outputRange: [0.55, 0.25, 0],
-                }),
-              },
-            ]}
-          />
-
-          {/* Khối Camera trên (Bong bóng mờ + Camera trắng) */}
-          <View style={styles.searchingCameraCircleOuter}>
-            <View style={styles.searchingCameraCircleInner}>
-              <Ionicons name="videocam" size={44} color="#0284C7" />
-            </View>
-          </View>
-
-          {/* Dấu cộng và các điểm nhấn chuyển động */}
-          <View style={styles.searchingPlusBadge}>
-            <LocalizedText style={styles.searchingPlusText}>+</LocalizedText>
-          </View>
-          <View style={styles.searchingStreakLine1} />
-          <View style={styles.searchingStreakLine2} />
-          <View style={styles.searchingStreakLine3} />
-
-          {/* Khối Điện thoại dưới (Khung smartphone + Sóng Wi-Fi) */}
-          <View style={styles.searchingPhoneCircleOuter}>
-            <View style={styles.searchingPhoneBody}>
-              <View style={styles.searchingPhoneSpeaker} />
-              <View style={styles.searchingPhoneScreen}>
-                <Ionicons name="wifi" size={32} color="#FFF" />
-              </View>
-              <View style={styles.searchingPhoneHomeButton} />
-            </View>
-          </View>
-        </View>
-
-        {/* Dòng hướng dẫn bên dưới */}
-        <View style={styles.searchingFooter}>
-          <LocalizedText style={styles.searchingFooterText}>
-            Đảm bảo rằng bạn đã kết nối với Wi-Fi của thiết bị SECA của mình:{' '}
-            <LocalizedText style={{ fontWeight: 'bold' }}>SECA_001</LocalizedText>.
-          </LocalizedText>
-        </View>
-      </SafeAreaView>
+      <StepCameraSearching
+        styles={styles}
+        searchingPulseAnim1={searchingPulseAnim1}
+        searchingPulseAnim2={searchingPulseAnim2}
+        onClose={() => setCurrentStep('WIFI_GUIDE')}
+      />
     );
   }
 
   return (
     <SafeAreaView style={[styles.safeArea, isDarkMode && { backgroundColor: colors.background }]} edges={['top']}>
-      {/* Header Điều hướng */}
-      <View style={[styles.header, isDarkMode && { backgroundColor: colors.card, borderBottomColor: colors.border }]}>
+      {/* HEADER MÀN HÌNH */}
+      <View style={[styles.header, isDarkMode && { backgroundColor: colors.background, borderBottomColor: colors.border }]}>
         <TouchableOpacity
           style={[styles.backButton, isDarkMode && { backgroundColor: colors.surfaceSubtle }]}
           onPress={handleBack}
@@ -708,2813 +676,123 @@ export default function AddDeviceScreen({ navigation }: any) {
         showsVerticalScrollIndicator={false}
         contentContainerStyle={[styles.scrollContent, isDarkMode && { backgroundColor: colors.background }]}
       >
-        {/* ============================================================== */}
-        {/* 1. STATE: CATEGORY_SELECT                                      */}
-        {/* ============================================================== */}
+        {/* 1. STATE: CATEGORY_SELECT */}
         {currentStep === 'CATEGORY_SELECT' && (
-          <View>
-            <LocalizedText style={[styles.stepHeaderTitle, isDarkMode && { color: colors.textPrimary }]}>Chọn Loại Thiết Bị Cần Thêm</LocalizedText>
-            <LocalizedText style={[styles.stepHeaderDesc, isDarkMode && { color: colors.textSecondary }]}>
-              Hệ thống sẽ tự động kích hoạt luồng kiểm tra giao thức tương ứng (Wi-Fi AP hoặc Bluetooth BLE).
-            </LocalizedText>
-
-            {/* Option 1: Camera */}
-            <TouchableOpacity
-              style={[styles.categoryCard, isDarkMode && { backgroundColor: colors.card, borderColor: colors.border }]}
-              onPress={() => setCurrentStep('CAMERA_LIST')}
-              activeOpacity={0.8}
-            >
-              <View style={[styles.categoryIconBox, { backgroundColor: isDarkMode ? colors.surfaceSubtle : '#FFF7ED' }]}>
-                <Ionicons name="videocam" size={30} color="#EA580C" />
-              </View>
-              <View style={styles.categoryInfo}>
-                <View style={styles.categoryBadgeRow}>
-                  <LocalizedText style={[styles.categoryName, isDarkMode && { color: colors.textPrimary }]}>Thiết bị Camera</LocalizedText>
-                  <View style={[styles.protoBadge, { backgroundColor: '#FFEDD5' }]}>
-                    <LocalizedText style={[styles.protoBadgeText, { color: '#C2410C' }]}>WIFI_AP</LocalizedText>
-                  </View>
-                </View>
-                <LocalizedText style={[styles.categoryDesc, isDarkMode && { color: colors.textSecondary }]}>
-                  Camera an ninh AI giám sát, tích hợp YOLOv8-Pose nhận diện té ngã và luồng RTSP 1080p.
-                </LocalizedText>
-              </View>
-              <Ionicons name="chevron-forward" size={20} color="#94A3B8" />
-            </TouchableOpacity>
-
-            {/* Option 2: Đồng hồ thông minh */}
-            <TouchableOpacity
-              style={[styles.categoryCard, isDarkMode && { backgroundColor: colors.card, borderColor: colors.border }]}
-              onPress={() => setCurrentStep('WATCH_LIST')}
-              activeOpacity={0.8}
-            >
-              <View style={[styles.categoryIconBox, { backgroundColor: isDarkMode ? colors.surfaceSubtle : '#ECFDF5' }]}>
-                <Ionicons name="watch" size={30} color="#059669" />
-              </View>
-              <View style={styles.categoryInfo}>
-                <View style={styles.categoryBadgeRow}>
-                  <LocalizedText style={[styles.categoryName, isDarkMode && { color: colors.textPrimary }]}>Đồng hồ thông minh</LocalizedText>
-                  <View style={[styles.protoBadge, { backgroundColor: '#D1FAE5' }]}>
-                    <LocalizedText style={[styles.protoBadgeText, { color: '#047857' }]}>BLUETOOTH</LocalizedText>
-                  </View>
-                </View>
-                <LocalizedText style={[styles.categoryDesc, isDarkMode && { color: colors.textSecondary }]}>
-                  Vòng đeo tay y tế, cảm biến quang PPG đo nhịp tim, SpO₂ và gia tốc kế cảnh báo va đập.
-                </LocalizedText>
-              </View>
-              <Ionicons name="chevron-forward" size={20} color="#94A3B8" />
-            </TouchableOpacity>
-          </View>
+          <StepCategorySelect
+            styles={styles}
+            isDarkMode={isDarkMode}
+            colors={colors}
+            onSelectCategory={(category) => {
+              if (category === 'camera') setCurrentStep('CAMERA_LIST');
+              else if (category === 'watch') setCurrentStep('WATCH_LIST');
+            }}
+          />
         )}
 
-        {/* ============================================================== */}
-        {/* 2A. STATE: CAMERA_LIST                                         */}
-        {/* ============================================================== */}
-        {currentStep === 'CAMERA_LIST' && (
-          <View>
-            <LocalizedText style={styles.stepHeaderTitle}>Chọn Model Camera</LocalizedText>
-            <LocalizedText style={styles.stepHeaderDesc}>
-              Danh sách camera được hỗ trợ bởi hệ sinh thái Smart Elderly Care AI:
-            </LocalizedText>
+        {/* 2A-4A. CAMERA FLOW */}
+        <StepCameraFlow
+          currentStep={currentStep}
+          styles={styles}
+          onSelectCameraModel={handleSelectCameraModel}
+          onGoToWifiGuide={() => setCurrentStep('WIFI_GUIDE')}
+          onPressAlreadyConnected={handlePressAlreadyConnected}
+          onOpenResetGuide={() => setShowResetGuideModal(true)}
+        />
 
-            {/* Thiết bị Camera duy nhất: SECA_001 */}
-            <TouchableOpacity
-              style={[styles.modelCard, styles.modelCardActive]}
-              onPress={() => handleSelectCameraModel('SECA_001')}
-              activeOpacity={0.8}
-            >
-              <View style={[styles.modelIconBox, { backgroundColor: '#FFEDD5' }]}>
-                <Ionicons name="videocam" size={26} color="#EA580C" />
-              </View>
-              <View style={{ flex: 1 }}>
-                <View style={styles.modelHeaderRow}>
-                  <LocalizedText style={styles.modelTitle}>SECA_001</LocalizedText>
-                  <View style={styles.activeTag}>
-                    <LocalizedText style={styles.activeTagText}>Hiện có</LocalizedText>
-                  </View>
-                </View>
-                <LocalizedText style={styles.modelDesc}>
-                  Giao thức: WIFI_AP • Camera an ninh AI • Nhận diện té ngã YOLOv8-Pose 32 FPS
-                </LocalizedText>
-              </View>
-              <Ionicons name="chevron-forward" size={20} color="#EA580C" />
-            </TouchableOpacity>
+        {/* 2B-4B. WATCH FLOW */}
+        <StepWatchFlow
+          currentStep={currentStep}
+          styles={styles}
+          hasBlePermission={hasBlePermission}
+          onSelectWatchModel={handleSelectWatchModel}
+          onConnectHealthConnect={handleConnectHealthConnect}
+          onOpenHealthConnectSettings={handleOpenHealthConnectSettings}
+          onContinueBlePowerCheck={() => {
+            if (!hasBlePermission) {
+              setCurrentStep('BLE_PERMISSION');
+            } else {
+              setCurrentStep('BLE_SCAN');
+              triggerBleScan();
+            }
+          }}
+          onRequestBlePermission={() => setShowPermRequestModal(true)}
+          onStartBleScan={() => {
+            setCurrentStep('BLE_SCAN');
+            triggerBleScan();
+          }}
+        />
 
-            {/* CheckProtocol Box */}
-            <View style={styles.protocolCheckBanner}>
-              <Ionicons name="flash" size={18} color="#0284C7" />
-              <LocalizedText style={styles.protocolCheckText}>
-                CheckProtocol: Hệ thống tự động nhận diện giao thức{' '}
-                <LocalizedText style={{ fontWeight: 'bold' }}>WIFI_AP</LocalizedText> cho Camera.
-              </LocalizedText>
-            </View>
-          </View>
-        )}
+        {/* 5B-6B. BLE SCAN & PAIRING */}
+        <StepBleScanAndPairing
+          currentStep={currentStep}
+          styles={styles}
+          pulseAnim={pulseAnim}
+          isBleScanning={isBleScanning}
+          discoveredBleList={discoveredBleList}
+          onTriggerBleScan={triggerBleScan}
+          onSelectBleDevice={handleSelectBleDevice}
+          isBlePairing={isBlePairing}
+          isBlePairingSuccess={isBlePairingSuccess}
+          bleErrorMessage={bleErrorMessage}
+          onConfirmPairing={handleConfirmPairing}
+          onBackToScan={() => setCurrentStep('BLE_SCAN')}
+        />
 
-        {/* ============================================================== */}
-        {/* 3A. STATE: WIFI_POWER_CHECK                                    */}
-        {/* ============================================================== */}
-        {currentStep === 'WIFI_POWER_CHECK' && (
-          <View style={styles.guideContainer}>
-            <View style={styles.visualGraphicBox}>
-              <Ionicons name="power" size={54} color="#EA580C" />
-              <View style={styles.ledIndicatorRow}>
-                <View style={[styles.ledDot, styles.ledRed]} />
-                <View style={[styles.ledDot, styles.ledGreen]} />
-                <LocalizedText style={styles.ledText}>Đèn LED chớp Đỏ & Xanh</LocalizedText>
-              </View>
-            </View>
+        {/* 2C. OTHER SENSORS */}
+        <StepOtherSensors
+          currentStep={currentStep}
+          styles={styles}
+          selectedOtherSensor={selectedOtherSensor}
+          setSelectedOtherSensor={setSelectedOtherSensor}
+          otherSensorLocation={otherSensorLocation}
+          setOtherSensorLocation={setOtherSensorLocation}
+          onAddOtherSensor={handleAddOtherSensor}
+        />
 
-            <LocalizedText style={styles.guideMainTitle}>Cắm Nguồn & Kiểm Tra Đèn LED</LocalizedText>
-            <LocalizedText style={styles.guideSubtitle}>
-              Thực hiện theo các bước kiểm tra nguồn ban đầu:
-            </LocalizedText>
-
-            <View style={styles.instructionsList}>
-              <View style={styles.instItem}>
-                <View style={styles.instNumber}>
-                  <LocalizedText style={styles.instNumberText}>1</LocalizedText>
-                </View>
-                <LocalizedText style={styles.instText}>
-                  Cắm dây nguồn vào cổng nguồn Camera và kết nối ổ điện gia đình.
-                </LocalizedText>
-              </View>
-
-              <View style={styles.instItem}>
-                <View style={styles.instNumber}>
-                  <LocalizedText style={styles.instNumberText}>2</LocalizedText>
-                </View>
-                <LocalizedText style={styles.instText}>
-                  Đợi khoảng 30 giây cho Camera hoàn tất tiến trình tự kiểm tra ban đầu.
-                </LocalizedText>
-              </View>
-
-              <View style={styles.instItem}>
-                <View style={styles.instNumber}>
-                  <LocalizedText style={styles.instNumberText}>3</LocalizedText>
-                </View>
-                <LocalizedText style={styles.instText}>
-                  Quan sát đèn LED ở mặt trước: Đèn phải{' '}
-                  <LocalizedText style={{ fontWeight: 'bold', color: '#EA580C' }}>
-                    nhấp nháy luân phiên Đỏ và Xanh
-                  </LocalizedText>{' '}
-                  (Báo hiệu Camera đang ở chế độ SoftAP chờ kết nối).
-                </LocalizedText>
-              </View>
-            </View>
-
-            {/* Câu hỏi dành cho người dùng nếu đèn KHÔNG nhấp nháy Đỏ/Xanh */}
-            <TouchableOpacity
-              style={styles.ledHelpQuestionCard}
-              onPress={() => setShowResetGuideModal(true)}
-              activeOpacity={0.8}
-            >
-              <View style={styles.ledHelpIconCircle}>
-                <Ionicons name="help" size={18} color="#0284C7" />
-              </View>
-              <View style={{ flex: 1, marginLeft: 10 }}>
-                <LocalizedText style={styles.ledHelpQuestionTitle}>
-                  Đèn LED không nhấp nháy Đỏ / Xanh?
-                </LocalizedText>
-                <LocalizedText style={styles.ledHelpQuestionSubtitle}>
-                  Bấm vào đây để xem hướng dẫn reset thủ công Camera SECA_001
-                </LocalizedText>
-              </View>
-              <Ionicons name="chevron-forward" size={18} color="#0284C7" />
-            </TouchableOpacity>
-
-            {/* Nút Tiếp Tục luôn luôn sẵn sàng */}
-            <View style={styles.continueButtonSection}>
-              <TouchableOpacity
-                style={styles.primaryActionButton}
-                onPress={() => setCurrentStep('WIFI_GUIDE')}
-                activeOpacity={0.85}
-              >
-                <LocalizedText style={styles.primaryActionButtonText}>Tiếp Tục</LocalizedText>
-                <Ionicons name="arrow-forward" size={20} color="#FFF" />
-              </TouchableOpacity>
-            </View>
-          </View>
-        )}
-
-        {/* ============================================================== */}
-        {/* 4A. STATE: WIFI_GUIDE (Hướng dẫn kết nối Wi-Fi Camera)        */}
-        {/* ============================================================== */}
-        {currentStep === 'WIFI_GUIDE' && (
-          <View style={styles.softApGuideContainer}>
-            <LocalizedText style={styles.softApGuideTitle}>Kết nối đến thiết bị SECA của bạn</LocalizedText>
-
-            <LocalizedText style={styles.softApGuideSubtitle}>
-              Đi tới cài đặt Wi-Fi của điện thoại hoặc máy tính bảng và tham gia mạng thiết bị SECA của bạn:{' '}
-              <LocalizedText style={{ fontWeight: 'bold', color: '#0F172A' }}>SECA_001</LocalizedText>. Sau đó quay lại ứng dụng này.
-            </LocalizedText>
-
-            <LocalizedText style={styles.guideDetailText}>
-              001 là ba chữ số cuối cùng của địa chỉ MAC duy nhất của thiết bị SECA. Bạn có thể tìm thấy nó dưới đế thiết bị SECA của mình.
-            </LocalizedText>
-
-            {/* Đồ họa minh họa đế Camera & Phóng to mã vạch MAC */}
-            <View style={styles.barcodeGraphicWrapper}>
-              {/* Thẻ mã vạch phóng to (Enlarged Callout Card) */}
-              <View style={styles.enlargedBarcodeCard}>
-                <View style={styles.barcodeBarsRow}>
-                  {[3, 1, 4, 2, 1, 3, 2, 4, 1, 2, 4, 2, 3, 1, 2, 4, 1, 3, 2, 1, 4, 2, 1, 3].map((w, idx) => (
-                    <View
-                      key={idx}
-                      style={{
-                        width: w,
-                        height: 26,
-                        backgroundColor: '#0F172A',
-                        marginRight: idx % 4 === 0 ? 3 : 1.5,
-                      }}
-                    />
-                  ))}
-                </View>
-                <LocalizedText style={styles.barcodeMacText}>MAC: AC-67-B2-3F-00-01</LocalizedText>
-                <LocalizedText style={styles.barcodeSsidBadge}>SSID: SECA_001</LocalizedText>
-              </View>
-
-              {/* Vệt sáng chiếu phóng to (Cyan Projection Beam) */}
-              <View style={styles.projectionCone} />
-
-              {/* Mặt đế Camera hình tròn (Camera Base Diagram) */}
-              <View style={styles.cameraBaseCircle}>
-                {/* Đệm cao su đế camera (Rubber pads) */}
-                <View style={[styles.rubberFoot, styles.rubberFootTop]} />
-                <View style={[styles.rubberFoot, styles.rubberFootLeft]} />
-                <View style={[styles.rubberFoot, styles.rubberFootRight]} />
-
-                {/* Vòng tròn đồng tâm bên trong */}
-                <View style={styles.cameraBaseInnerRing}>
-                  <View style={styles.cameraBaseCenterHole} />
-                </View>
-
-                {/* Nhãn mã vạch nhỏ ở cạnh dưới đế camera */}
-                <View style={styles.miniBarcodeSticker}>
-                  <View style={styles.miniBarcodeBars}>
-                    {[2, 1, 2, 1, 3, 1, 2, 1, 2, 1, 3, 1].map((w, i) => (
-                      <View
-                        key={i}
-                        style={{
-                          width: w,
-                          height: 10,
-                          backgroundColor: '#64748B',
-                          marginRight: 1,
-                        }}
-                      />
-                    ))}
-                  </View>
-                  <LocalizedText style={styles.miniBarcodeText}>MAC:••-••-••-00-01</LocalizedText>
-                </View>
-              </View>
-            </View>
-
-            {/* Nút Tôi đã kết nối */}
-            <View style={styles.bottomActionSection}>
-              <TouchableOpacity
-                style={styles.primaryPillBtn}
-                onPress={handlePressAlreadyConnected}
-                activeOpacity={0.85}
-              >
-                <LocalizedText style={styles.primaryPillBtnText}>Tôi đã kết nối</LocalizedText>
-              </TouchableOpacity>
-            </View>
-          </View>
-        )}
-
-        {/* ============================================================== */}
-        {/* 2B. STATE: WATCH_LIST                                          */}
-        {/* ============================================================== */}
-        {currentStep === 'WATCH_LIST' && (
-          <View>
-            <LocalizedText style={styles.stepHeaderTitle}>Chọn Model Đồng Hồ / Vòng Đeo Tay</LocalizedText>
-            <LocalizedText style={styles.stepHeaderDesc}>
-              Danh sách thiết bị đeo tay theo dõi sức khỏe người cao tuổi qua Bluetooth BLE:
-            </LocalizedText>
-
-            {/* Model 1: BLE Smartband FR01 */}
-            <TouchableOpacity
-              style={[styles.modelCard, styles.modelCardActive, { borderColor: '#10B981' }]}
-              onPress={() => handleSelectWatchModel('Vòng đeo tay y tế BLE Smartband FR01')}
-              activeOpacity={0.8}
-            >
-              <View style={[styles.modelIconBox, { backgroundColor: '#D1FAE5' }]}>
-                <Ionicons name="watch" size={26} color="#059669" />
-              </View>
-              <View style={{ flex: 1 }}>
-                <View style={styles.modelHeaderRow}>
-                  <LocalizedText style={styles.modelTitle}>BLE Smartband FR01 (Y tế)</LocalizedText>
-                  <View style={[styles.activeTag, { backgroundColor: '#DCFCE7' }]}>
-                    <LocalizedText style={[styles.activeTagText, { color: '#15803D' }]}>Hiện có</LocalizedText>
-                  </View>
-                </View>
-                <LocalizedText style={styles.modelDesc}>
-                  Giao thức: BLUETOOTH • Đo PPG Nhịp tim (0x180D) • SpO₂ (0x1822) • Gia tốc ngã MPU6050
-                </LocalizedText>
-              </View>
-              <Ionicons name="chevron-forward" size={20} color="#059669" />
-            </TouchableOpacity>
-
-            {/* Model 2: Mi Band 8 Active */}
-            <TouchableOpacity
-              style={styles.modelCard}
-              onPress={() => handleSelectWatchModel('Xiaomi Mi Band 8 Active')}
-              activeOpacity={0.8}
-            >
-              <View style={[styles.modelIconBox, { backgroundColor: '#F1F5F9' }]}>
-                <Ionicons name="watch-outline" size={26} color="#64748B" />
-              </View>
-              <View style={{ flex: 1 }}>
-                <View style={styles.modelHeaderRow}>
-                  <LocalizedText style={styles.modelTitle}>Xiaomi Mi Band 8 / Active</LocalizedText>
-                  <View style={[styles.activeTag, { backgroundColor: '#E2E8F0' }]}>
-                    <LocalizedText style={[styles.activeTagText, { color: '#475569' }]}>Hỗ trợ</LocalizedText>
-                  </View>
-                </View>
-                <LocalizedText style={styles.modelDesc}>
-                  Giao thức: BLUETOOTH • Nhịp tim 24/7 • Pin 14 ngày • Chuẩn BLE 5.1
-                </LocalizedText>
-              </View>
-              <Ionicons name="chevron-forward" size={20} color="#94A3B8" />
-            </TouchableOpacity>
-
-            {/* Model 3: Apple Watch Series 6 */}
-            <TouchableOpacity
-              style={[styles.modelCard, selectedDeviceModel.includes('Apple Watch') && styles.modelCardActive, { borderColor: '#0284C7' }]}
-              onPress={() => handleSelectWatchModel('Apple Watch Series 6 (HealthKit)')}
-              activeOpacity={0.8}
-            >
-              <View style={[styles.modelIconBox, { backgroundColor: '#E0F2FE' }]}>
-                <Ionicons name="watch" size={26} color="#0284C7" />
-              </View>
-              <View style={{ flex: 1 }}>
-                <View style={styles.modelHeaderRow}>
-                  <LocalizedText style={styles.modelTitle}>Apple Watch Series 6 / SE</LocalizedText>
-                  <View style={[styles.activeTag, { backgroundColor: '#E0F2FE' }]}>
-                    <LocalizedText style={[styles.activeTagText, { color: '#0369A1' }]}>Sẵn sàng</LocalizedText>
-                  </View>
-                </View>
-                <LocalizedText style={styles.modelDesc}>
-                  Giao thức: Apple HealthKit • Nhịp tim 24/7 • SpO₂ S6 • Phát hiện ngã & SOS
-                </LocalizedText>
-              </View>
-              <Ionicons name="chevron-forward" size={20} color="#0284C7" />
-            </TouchableOpacity>
-
-            {/* CheckProtocol Box */}
-            <View style={[styles.protocolCheckBanner, { backgroundColor: '#ECFDF5', borderColor: '#A7F3D0' }]}>
-              <Ionicons name="bluetooth" size={18} color="#059669" />
-              <LocalizedText style={[styles.protocolCheckText, { color: '#065F46' }]}>
-                CheckProtocol: Hệ thống tự động kích hoạt giao thức{' '}
-                <LocalizedText style={{ fontWeight: 'bold' }}>BLUETOOTH</LocalizedText> cho Smartwatch.
-              </LocalizedText>
-            </View>
-          </View>
-        )}
-
-        {/* ============================================================== */}
-        {/* 3B. STATE: BLE_POWER_CHECK                                     */}
-        {/* ============================================================== */}
-        {currentStep === 'BLE_POWER_CHECK' && (
-          <View style={styles.guideContainer}>
-            <View style={[styles.visualGraphicBox, { backgroundColor: '#ECFDF5' }]}>
-              <Ionicons name="bluetooth" size={54} color="#059669" />
-              <View style={styles.ledIndicatorRow}>
-                <Ionicons name="battery-charging" size={18} color="#059669" />
-                <LocalizedText style={[styles.ledText, { color: '#059669' }]}>Đồng hồ đã bật nguồn</LocalizedText>
-              </View>
-            </View>
-
-            <LocalizedText style={styles.guideMainTitle}>Mở Nguồn & Bật Bluetooth Đồng Hồ</LocalizedText>
-            <LocalizedText style={styles.guideSubtitle}>
-              Chuẩn bị thiết bị trước khi tiến hành quét sóng BLE:
-            </LocalizedText>
-
-            <View style={styles.instructionsList}>
-              <View style={styles.instItem}>
-                <View style={[styles.instNumber, { backgroundColor: '#10B981' }]}>
-                  <LocalizedText style={styles.instNumberText}>1</LocalizedText>
-                </View>
-                <LocalizedText style={styles.instText}>
-                  Nhấn giữ nút nguồn cạnh bên đồng hồ để màn hình sáng lên.
-                </LocalizedText>
-              </View>
-
-              <View style={styles.instItem}>
-                <View style={[styles.instNumber, { backgroundColor: '#10B981' }]}>
-                  <LocalizedText style={styles.instNumberText}>2</LocalizedText>
-                </View>
-                <LocalizedText style={styles.instText}>
-                  Đảm bảo pin đồng hồ còn trên 20% và biểu tượng Bluetooth đang sẵn sàng kết nối.
-                </LocalizedText>
-              </View>
-
-              <View style={styles.instItem}>
-                <View style={[styles.instNumber, { backgroundColor: '#10B981' }]}>
-                  <LocalizedText style={styles.instNumberText}>3</LocalizedText>
-                </View>
-                <LocalizedText style={styles.instText}>
-                  Đặt đồng hồ ngay cạnh điện thoại trong khoảng cách dưới 1 mét để tín hiệu ổn định nhất.
-                </LocalizedText>
-              </View>
-            </View>
-
-            <TouchableOpacity
-              style={[styles.primaryActionButton, { backgroundColor: '#059669' }]}
-              onPress={() => {
-                // Kiểm tra xem đã có quyền chưa
-                if (!hasBlePermission) {
-                  setCurrentStep('BLE_PERMISSION');
-                } else {
-                  setCurrentStep('BLE_SCAN');
-                }
-              }}
-              activeOpacity={0.85}
-            >
-              <LocalizedText style={styles.primaryActionButtonText}>
-                Đồng Hồ Đã Mở Nguồn & Sẵn Sàng → Tiếp Tục
-              </LocalizedText>
-              <Ionicons name="arrow-forward" size={20} color="#FFF" />
-            </TouchableOpacity>
-          </View>
-        )}
-
-        {/* ============================================================== */}
-        {/* 4B. STATE: BLE_PERMISSION                                      */}
-        {/* ============================================================== */}
-        {currentStep === 'BLE_PERMISSION' && (
-          <View>
-            <LocalizedText style={styles.stepHeaderTitle}>Kiểm Tra Quyền Hệ Điều Hành (OS)</LocalizedText>
-            <LocalizedText style={styles.stepHeaderDesc}>
-              Để quét tìm và kết nối đồng hồ, ứng dụng cần được cấp quyền Bluetooth:
-            </LocalizedText>
-
-            <View style={styles.permissionCard}>
-              {/* Perm 1 */}
-              <View style={styles.permRow}>
-                <View style={[styles.permIconBox, { backgroundColor: '#ECFDF5' }]}>
-                  <Ionicons name="bluetooth" size={22} color="#059669" />
-                </View>
-                <View style={{ flex: 1 }}>
-                  <LocalizedText style={styles.permTitle}>Quyền Bluetooth Scan & Connect</LocalizedText>
-                  <LocalizedText style={styles.permDesc}>Cho phép app quét tìm và kết nối kênh GATT với đồng hồ</LocalizedText>
-                </View>
-                <Ionicons
-                  name={hasBlePermission ? 'checkmark-circle' : 'alert-circle'}
-                  size={24}
-                  color={hasBlePermission ? '#10B981' : '#F59E0B'}
-                />
-              </View>
-
-            </View>
-
-            {/* Trạng thái quyền */}
-            {!hasBlePermission ? (
-              <View style={styles.unauthorizedBox}>
-                <Ionicons name="lock-closed" size={20} color="#DC2626" />
-                <LocalizedText style={styles.unauthorizedText}>
-                  Trạng thái: <LocalizedText style={{ fontWeight: 'bold' }}>Chưa cấp quyền</LocalizedText>. Nhấn nút bên dưới để mở popup yêu cầu quyền hệ điều hành.
-                </LocalizedText>
-              </View>
-            ) : (
-              <View style={styles.authorizedBox}>
-                <Ionicons name="checkmark-circle" size={20} color="#059669" />
-                <LocalizedText style={styles.authorizedText}>
-                  Trạng thái: <LocalizedText style={{ fontWeight: 'bold' }}>Đã cấp quyền thành công</LocalizedText>! Bạn có thể chuyển sang quét Radar.
-                </LocalizedText>
-              </View>
-            )}
-
-            {!hasBlePermission ? (
-              <TouchableOpacity
-                style={[styles.primaryActionButton, { backgroundColor: '#2563EB' }]}
-                onPress={() => setShowPermRequestModal(true)}
-                activeOpacity={0.85}
-              >
-                <LocalizedText style={styles.primaryActionButtonText}>
-                  Hiển Thị Popup Xin Quyền (RequestPerm)
-                </LocalizedText>
-                <Ionicons name="key" size={20} color="#FFF" />
-              </TouchableOpacity>
-            ) : (
-              <TouchableOpacity
-                style={[styles.primaryActionButton, { backgroundColor: '#059669' }]}
-                onPress={() => setCurrentStep('BLE_SCAN')}
-                activeOpacity={0.85}
-              >
-                <LocalizedText style={styles.primaryActionButtonText}>
-                  Đã Cấp Quyền → Bắt Đầu Quét Radar BLE
-                </LocalizedText>
-                <Ionicons name="radio" size={20} color="#FFF" />
-              </TouchableOpacity>
-            )}
-          </View>
-        )}
-
-        {/* ============================================================== */}
-        {/* 5B. STATE: BLE_SCAN (Màn hình Radar)                           */}
-        {/* ============================================================== */}
-        {currentStep === 'BLE_SCAN' && (
-          <View>
-            <LocalizedText style={styles.stepHeaderTitle}>Màn Hình Radar Quét Thiết Bị</LocalizedText>
-            <LocalizedText style={styles.stepHeaderDesc}>
-              Đang dò quét các sóng BLE lân cận (trong bán kính 5 mét):
-            </LocalizedText>
-
-            {/* Radar Animation Box */}
-            <View style={styles.radarContainer}>
-              <Animated.View
-                style={[
-                  styles.radarCircleOuter,
-                  {
-                    transform: [{ scale: pulseAnim }],
-                  },
-                ]}
-              />
-              <View style={styles.radarCircleMid} />
-              <View style={styles.radarCenter}>
-                <Ionicons name="bluetooth" size={28} color="#FFF" />
-              </View>
-              <LocalizedText style={styles.radarStatusText}>
-                {isBleScanning ? 'Đang phát xung radar quét BLE...' : 'Đã tìm thấy thiết bị lân cận'}
-              </LocalizedText>
-            </View>
-
-            {/* Simulation switch: Mô phỏng lỗi để test DialogBLE */}
-            <View style={styles.testSimBox}>
-              <View style={{ flex: 1 }}>
-                <LocalizedText style={styles.testSimTitle}>Mô phỏng lỗi ghép nối (DialogBLE)</LocalizedText>
-                <LocalizedText style={styles.testSimDesc}>Bật tùy chọn này để kiểm tra nhánh thất bại trong sơ đồ</LocalizedText>
-              </View>
-              <Switch
-                value={simulateBleError}
-                onValueChange={setSimulateBleError}
-                trackColor={{ false: '#CBD5E1', true: '#FCA5A5' }}
-                thumbColor={simulateBleError ? '#DC2626' : '#94A3B8'}
-              />
-            </View>
-
-            {/* Discovered BLE Devices List */}
-            <LocalizedText style={styles.sectionHeader}>Thiết bị tìm thấy ({discoveredBleList.length}):</LocalizedText>
-            {discoveredBleList.map((item) => (
-              <TouchableOpacity
-                key={item.id}
-                style={styles.bleDeviceCard}
-                onPress={() => handleSelectBleDevice(item)}
-                activeOpacity={0.8}
-              >
-                <View style={[styles.bleIconBox, { backgroundColor: '#ECFDF5' }]}>
-                  <Ionicons name="watch" size={24} color="#059669" />
-                </View>
-                <View style={{ flex: 1, marginLeft: 12 }}>
-                  <LocalizedText style={styles.bleDeviceName}>{item.name}</LocalizedText>
-                  <LocalizedText style={styles.bleDeviceSub}>MAC: {item.mac} • Pin: {item.battery}%</LocalizedText>
-                  <LocalizedText style={styles.bleServicesText}>{item.services}</LocalizedText>
-                </View>
-                <View style={styles.bleRssiBox}>
-                  <LocalizedText style={styles.bleRssiText}>{item.rssi.split(' ')[0]}</LocalizedText>
-                  <Ionicons name="wifi" size={14} color="#059669" />
-                </View>
-              </TouchableOpacity>
-            ))}
-          </View>
-        )}
-
-        {/* ============================================================== */}
-        {/* 6B. STATE: BLE_PAIRING (Đang ghép nối)                         */}
-        {/* ============================================================== */}
-        {currentStep === 'BLE_PAIRING' && (
-          <View style={styles.guideContainer}>
-            <View style={[styles.visualGraphicBox, { backgroundColor: '#ECFDF5' }]}>
-              {isBlePairing ? (
-                <ActivityIndicator size="large" color="#059669" />
-              ) : (
-                <Ionicons name="checkmark-circle" size={54} color="#059669" />
-              )}
-              <LocalizedText style={[styles.ledText, { marginTop: 12, color: '#059669', fontSize: 16 }]}>
-                {isBlePairing ? 'Đang bắt tay GATT với đồng hồ...' : 'Kết nối GATT thành công!'}
-              </LocalizedText>
-            </View>
-
-            <LocalizedText style={styles.guideMainTitle}>
-              {isBlePairing ? 'Đang Ghép Nối Thiết Bị...' : 'Xác Nhận Người Sử Dụng'}
-            </LocalizedText>
-            <LocalizedText style={styles.guideSubtitle}>
-              {isBlePairing
-                ? 'Đang đồng bộ Service 0x180D (Heart Rate) và 0x1822 (SpO2)...'
-                : 'Chọn thành viên trong gia đình sử dụng đồng hồ này:'}
-            </LocalizedText>
-
-            {!isBlePairing && (
-              <View style={styles.wearerSelectBox}>
-                {['Cụ Ông (78 tuổi)', 'Cụ Bà (75 tuổi)', 'Bố', 'Mẹ'].map((w) => (
-                  <TouchableOpacity
-                    key={w}
-                    style={[
-                      styles.wearerChip,
-                      wearerName === w && styles.wearerChipActive,
-                    ]}
-                    onPress={() => setWearerName(w)}
-                  >
-                    <Ionicons
-                      name="person"
-                      size={16}
-                      color={wearerName === w ? '#FFF' : '#64748B'}
-                    />
-                    <LocalizedText
-                      style={[
-                        styles.wearerChipText,
-                        wearerName === w && styles.wearerChipTextActive,
-                      ]}
-                    >
-                      {w}
-                    </LocalizedText>
-                  </TouchableOpacity>
-                ))}
-              </View>
-            )}
-
-            {!isBlePairing && (
-              <TouchableOpacity
-                style={[styles.primaryActionButton, { backgroundColor: '#059669' }]}
-                onPress={() => {
-                  if (selectedBleDevice) {
-                    handleSelectBleDevice(selectedBleDevice);
-                  }
-                }}
-                activeOpacity={0.85}
-              >
-                <LocalizedText style={styles.primaryActionButtonText}>
-                  Hoàn Tất Ghép Nối → Xem Kết Quả
-                </LocalizedText>
-                <Ionicons name="arrow-forward" size={20} color="#FFF" />
-              </TouchableOpacity>
-            )}
-          </View>
-        )}
-
-        {/* ============================================================== */}
-        {/* 2C. STATE: OTHER_LIST (Cảm biến IoT)                           */}
-        {/* ============================================================== */}
-        {currentStep === 'OTHER_LIST' && (
-          <View>
-            <LocalizedText style={styles.stepHeaderTitle}>Cảm Biến IoT & Edge Hub</LocalizedText>
-            <LocalizedText style={styles.stepHeaderDesc}>
-              Kết nối cảm biến chuyên sâu qua Edge Hub Orange Pi 5 (EMQX Broker port 1883):
-            </LocalizedText>
-
-            {/* 5 Sensors options */}
-            {[
-              {
-                id: 'amg8833',
-                name: 'Cảm biến hồng ngoại AMG8833',
-                sub: 'Ma trận nhiệt 8x8 IR • Sàng lọc sốt vùng trán',
-                icon: 'thermometer',
-                color: '#F59E0B',
-              },
-              {
-                id: 'yamnet',
-                name: 'Micro AI âm thanh YAMNet',
-                sub: 'Phát hiện tiếng kêu cứu, ngã đập mạnh',
-                icon: 'mic',
-                color: '#8B5CF6',
-              },
-              {
-                id: 'speaker',
-                name: 'Loa thông minh Hub Voice Reminder',
-                sub: 'Giọng nói tiếng Việt nhắc nhở người cao tuổi',
-                icon: 'volume-high',
-                color: '#EC4899',
-              },
-              {
-                id: 'sos',
-                name: 'Nút bấm khẩn cấp SOS',
-                sub: 'Nút bấm 1 chạm gắn đầu giường/nhà tắm',
-                icon: 'alert-circle',
-                color: '#EF4444',
-              },
-              {
-                id: 'door',
-                name: 'Cảm biến cửa ra vào Zigbee',
-                sub: 'Cảnh báo người già đi lạc ban đêm',
-                icon: 'enter-outline',
-                color: '#06B6D4',
-              },
-            ].map((s) => (
-              <TouchableOpacity
-                key={s.id}
-                style={[
-                  styles.otherSensorCard,
-                  selectedOtherSensor === s.id && styles.otherSensorCardActive,
-                ]}
-                onPress={() => setSelectedOtherSensor(s.id)}
-                activeOpacity={0.8}
-              >
-                <View style={[styles.sensorIconBox, { backgroundColor: `${s.color}15` }]}>
-                  <Ionicons name={s.icon as any} size={22} color={s.color} />
-                </View>
-                <View style={{ flex: 1, marginLeft: 10 }}>
-                  <LocalizedText style={styles.sensorCardTitle}>{s.name}</LocalizedText>
-                  <LocalizedText style={styles.sensorCardSub}>{s.sub}</LocalizedText>
-                </View>
-                <Ionicons
-                  name={selectedOtherSensor === s.id ? 'radio-button-on' : 'radio-button-off'}
-                  size={20}
-                  color={selectedOtherSensor === s.id ? '#7C3AED' : '#94A3B8'}
-                />
-              </TouchableOpacity>
-            ))}
-
-            <View style={styles.inputGroup}>
-              <LocalizedText style={styles.inputLabel}>Vị trí lắp đặt:</LocalizedText>
-              <LocalizedTextInput
-                style={styles.textInput}
-                value={otherSensorLocation}
-                onChangeText={setOtherSensorLocation}
-                placeholder="Ví dụ: Phòng khách, Đầu giường Cụ..."
-              />
-            </View>
-
-            <TouchableOpacity
-              style={[styles.primaryActionButton, { backgroundColor: '#7C3AED' }]}
-              onPress={handleAddOtherSensor}
-              activeOpacity={0.85}
-            >
-              <LocalizedText style={styles.primaryActionButtonText}>
-                Thêm Cảm Biến Vào Hệ Thống
-              </LocalizedText>
-              <Ionicons name="add-circle" size={20} color="#FFF" />
-            </TouchableOpacity>
-          </View>
-        )}
-
-        {/* ============================================================== */}
-        {/* 7. STATE: SETUP_SUCCESS (Màn hình cấu hình thành công)         */}
-        {/* ============================================================== */}
-        {currentStep === 'SETUP_SUCCESS' && (
-          <View style={styles.successContainer}>
-            <View style={styles.successIconOuter}>
-              <View style={styles.successIconInner}>
-                <Ionicons name="checkmark" size={48} color="#FFF" />
-              </View>
-            </View>
-
-            <LocalizedText style={styles.successTitle}>Cấu Hình Thành Công!</LocalizedText>
-            <LocalizedText style={styles.successSubtitle}>
-              Thiết bị đã được kết nối và tích hợp vào hệ sinh thái giám sát an sinh người cao tuổi.
-            </LocalizedText>
-
-            {/* Thông tin thiết bị */}
-            <View style={styles.successDetailCard}>
-              <View style={styles.successHeaderRow}>
-                <View style={[styles.successBadgeIcon, { backgroundColor: `${successInfo.color}20` }]}>
-                  <Ionicons name={successInfo.icon as any} size={24} color={successInfo.color} />
-                </View>
-                <View style={{ flex: 1, marginLeft: 12 }}>
-                  <LocalizedText style={styles.successDeviceName}>{successInfo.name}</LocalizedText>
-                  <LocalizedText style={styles.successDeviceType}>{successInfo.type}</LocalizedText>
-                </View>
-              </View>
-
-              <View style={styles.divider} />
-
-              <View style={styles.successRow}>
-                <LocalizedText style={styles.successLabel}>Giao thức:</LocalizedText>
-                <LocalizedText style={styles.successValue}>{successInfo.protocol}</LocalizedText>
-              </View>
-
-              <View style={styles.successRow}>
-                <LocalizedText style={styles.successLabel}>Thông số:</LocalizedText>
-                <LocalizedText style={styles.successValue}>{successInfo.details}</LocalizedText>
-              </View>
-
-              <View style={styles.successRow}>
-                <LocalizedText style={styles.successLabel}>Vị trí / Người đeo:</LocalizedText>
-                <LocalizedText style={[styles.successValue, { color: '#059669', fontWeight: 'bold' }]}>
-                  {successInfo.location}
-                </LocalizedText>
-              </View>
-
-              <View style={styles.successRow}>
-                <LocalizedText style={styles.successLabel}>Trạng thái:</LocalizedText>
-                <LocalizedText style={[styles.successValue, { color: '#10B981', fontWeight: 'bold' }]}>
-                  ● Trực tuyến & Hoạt động tốt
-                </LocalizedText>
-              </View>
-            </View>
-
-            {/* 2 Nút điều hướng */}
-            <TouchableOpacity
-              style={[styles.primaryActionButton, { backgroundColor: '#0284C7', marginBottom: 12 }]}
-              onPress={() => navigation.navigate('Devices')}
-              activeOpacity={0.85}
-            >
-              <Ionicons name="list" size={20} color="#FFF" />
-              <LocalizedText style={styles.primaryActionButtonText}>
-                Xem Danh Sách Thiết Bị
-              </LocalizedText>
-            </TouchableOpacity>
-
-            <TouchableOpacity
-              style={[styles.primaryActionButton, { backgroundColor: '#F1F5F9' }]}
-              onPress={() => navigation.navigate('Home')}
-              activeOpacity={0.85}
-            >
-              <Ionicons name="home" size={20} color="#1E293B" />
-              <LocalizedText style={[styles.primaryActionButtonText, { color: '#1E293B' }]}>
-                Về Màn Hình Chính (Home)
-              </LocalizedText>
-            </TouchableOpacity>
-          </View>
-        )}
+        {/* 7. SETUP SUCCESS */}
+        <StepSetupSuccess
+          currentStep={currentStep}
+          styles={styles}
+          successInfo={successInfo}
+          onNavigateDevices={() => navigation.navigate('Devices')}
+          onNavigateHome={() => navigation.navigate('Home')}
+        />
       </ScrollView>
 
-      {/* ============================================================== */}
-      {/* MODAL: RequestPerm (Hiển thị Popup xin quyền)                  */}
-      {/* ============================================================== */}
-      <Modal
-        visible={showPermRequestModal}
-        transparent
-        animationType="fade"
-        onRequestClose={() => setShowPermRequestModal(false)}
-      >
-        <View style={styles.modalOverlay}>
-          <View style={styles.modalCard}>
-            <View style={styles.modalIconBox}>
-              <Ionicons name="shield-checkmark" size={36} color="#2563EB" />
-            </View>
-            <LocalizedText style={styles.modalTitle}>Cấp Quyền Hệ Thống</LocalizedText>
-            <LocalizedText style={styles.modalMessage}>
-              Để phát hiện và đồng bộ dữ liệu nhịp tim, SpO₂ từ đồng hồ thông minh, hệ thống cần quyền{' '}
-              <LocalizedText style={{ fontWeight: 'bold' }}>Bluetooth</LocalizedText>.
-            </LocalizedText>
-
-            <View style={styles.modalButtonRow}>
-              <TouchableOpacity
-                style={styles.modalCancelBtn}
-                onPress={() => setShowPermRequestModal(false)}
-              >
-                <LocalizedText style={styles.modalCancelText}>Từ chối</LocalizedText>
-              </TouchableOpacity>
-              <TouchableOpacity
-                style={styles.modalConfirmBtn}
-                onPress={handleGrantBlePermission}
-              >
-                <LocalizedText style={styles.modalConfirmText}>Cho phép</LocalizedText>
-              </TouchableOpacity>
-            </View>
-          </View>
-        </View>
-      </Modal>
-
-      {/* ============================================================== */}
-      {/* MODAL: WARNING DIALOG (Cảnh báo chưa kết nối SECA_001)         */}
-      {/* ============================================================== */}
-      <Modal
-        visible={showWifiWarningDialog}
-        transparent
-        animationType="fade"
-        onRequestClose={() => setShowWifiWarningDialog(false)}
-      >
-        <View style={styles.warningModalOverlay}>
-          <View style={styles.warningDialogCard}>
-            <LocalizedText style={styles.warningDialogText}>
-              Có vẻ bạn đang không kết nối đến SECA_001. Tiếp tục?
-            </LocalizedText>
-
-            <View style={styles.warningActionColumn}>
-              <TouchableOpacity
-                style={styles.warningActionBtn}
-                onPress={() => {
-                  setShowWifiWarningDialog(false);
-                  handleOpenPhoneWifiSettings();
-                }}
-                activeOpacity={0.7}
-              >
-                <LocalizedText style={styles.warningActionPrimaryText}>Đến Cài đặt</LocalizedText>
-              </TouchableOpacity>
-
-              <TouchableOpacity
-                style={styles.warningActionBtn}
-                onPress={() => {
-                  setShowWifiWarningDialog(false);
-                  setCurrentStep('WIFI_SEARCHING');
-                }}
-                activeOpacity={0.7}
-              >
-                <LocalizedText style={styles.warningActionPrimaryText}>Tiếp tục</LocalizedText>
-              </TouchableOpacity>
-
-              <TouchableOpacity
-                style={styles.warningActionBtn}
-                onPress={() => setShowWifiWarningDialog(false)}
-                activeOpacity={0.7}
-              >
-                <LocalizedText style={styles.warningActionCancelText}>Hủy</LocalizedText>
-              </TouchableOpacity>
-            </View>
-          </View>
-        </View>
-      </Modal>
-
-      {/* ============================================================== */}
-      {/* MODAL: Phone Wi-Fi Settings                                    */}
-      {/* ============================================================== */}
-      <Modal
-        visible={showPhoneWifiSettingsModal}
-        transparent
-        animationType="slide"
-        onRequestClose={() => setShowPhoneWifiSettingsModal(false)}
-      >
-        <View style={styles.phoneSettingsOverlay}>
-          <SafeAreaView style={styles.phoneSettingsSafeArea}>
-            <View style={styles.phoneSettingsCard}>
-              {/* Phone Settings Header */}
-              <View style={styles.phoneSettingsHeader}>
-                <TouchableOpacity
-                  style={styles.phoneSettingsBackBtn}
-                  onPress={() => setShowPhoneWifiSettingsModal(false)}
-                  activeOpacity={0.7}
-                >
-                  <Ionicons name="arrow-back" size={24} color="#1E293B" />
-                </TouchableOpacity>
-                <LocalizedText style={styles.phoneSettingsTitle}>Wi-Fi</LocalizedText>
-                <TouchableOpacity style={styles.phoneSettingsScanBtn} activeOpacity={0.7}>
-                  <Ionicons name="scan-outline" size={22} color="#1E293B" />
-                </TouchableOpacity>
-              </View>
-
-              {/* Wi-Fi Main Toggle */}
-              <View style={styles.phoneWifiToggleRow}>
-                <LocalizedText style={styles.phoneWifiToggleLabel}>Wi-Fi</LocalizedText>
-                <Switch
-                  value={true}
-                  trackColor={{ false: '#CBD5E1', true: '#93C5FD' }}
-                  thumbColor="#0284C7"
-                />
-              </View>
-
-              {/* Thẻ mạng đang kết nối hiện tại */}
-              <View style={styles.phoneConnectedCard}>
-                <View style={styles.phoneConnectedIconBox}>
-                  <Ionicons name="wifi" size={24} color="#FFF" />
-                </View>
-                <View style={{ flex: 1, marginLeft: 12 }}>
-                  <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6 }}>
-                    <LocalizedText style={styles.phoneConnectedSsid}>
-                      {connectedPhoneWifi || '5 chang trai'}
-                    </LocalizedText>
-                    <View style={styles.phoneBandTag}>
-                      <LocalizedText style={styles.phoneBandTagText}>2.4G/5G</LocalizedText>
-                    </View>
-                  </View>
-                  <LocalizedText style={styles.phoneConnectedSub}>
-                    {connectedPhoneWifi === 'SECA_001'
-                      ? 'Đã kết nối trực tiếp đến Camera'
-                      : 'Chạm để chia sẻ mật khẩu'}
-                  </LocalizedText>
-                </View>
-                <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8 }}>
-                  <Ionicons name="lock-closed" size={16} color="rgba(255,255,255,0.85)" />
-                  <View style={styles.phoneConnectedArrowCircle}>
-                    <Ionicons name="chevron-forward" size={16} color="#0284C7" />
-                  </View>
-                </View>
-              </View>
-
-              {/* Tiêu đề danh sách Mạng có sẵn */}
-              <View style={styles.phoneAvailableSectionHeader}>
-                <LocalizedText style={styles.phoneAvailableSectionTitle}>Mạng có sẵn</LocalizedText>
-                <TouchableOpacity activeOpacity={0.7}>
-                  <Ionicons name="sync-outline" size={18} color="#475569" />
-                </TouchableOpacity>
-              </View>
-
-              {/* Danh sách mạng Wi-Fi lân cận */}
-              <ScrollView
-                style={styles.phoneNetworkListScroll}
-                showsVerticalScrollIndicator={false}
-              >
-                {phoneWifiNetworks.map((net) => {
-                  const isSelected = selectedPhoneWifi === net.ssid;
-                  const isCameraTarget = net.isTarget;
-
-                  return (
-                    <TouchableOpacity
-                      key={net.ssid}
-                      style={[
-                        styles.phoneNetworkItem,
-                        isCameraTarget && styles.phoneNetworkItemTarget,
-                      ]}
-                      onPress={() => handleConnectPhoneWifi(net.ssid)}
-                      disabled={isConnectingPhoneWifi}
-                      activeOpacity={0.7}
-                    >
-                      <View style={styles.networkItemLeft}>
-                        <Ionicons
-                          name={net.icon as any}
-                          size={22}
-                          color={isCameraTarget ? '#0284C7' : '#475569'}
-                        />
-                        <View style={{ flex: 1, marginLeft: 12 }}>
-                          <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6 }}>
-                            <LocalizedText
-                              style={[
-                                styles.networkItemSsid,
-                                isCameraTarget && { color: '#0284C7', fontWeight: '800' },
-                              ]}
-                            >
-                              {net.ssid}
-                            </LocalizedText>
-                            {net.tag && (
-                              <View
-                                style={[
-                                  styles.phoneNetworkTagBox,
-                                  isCameraTarget && { backgroundColor: '#E0F2FE' },
-                                ]}
-                              >
-                                <LocalizedText
-                                  style={[
-                                    styles.phoneNetworkTagText,
-                                    isCameraTarget && { color: '#0284C7' },
-                                  ]}
-                                >
-                                  {net.tag}
-                                </LocalizedText>
-                              </View>
-                            )}
-                          </View>
-                          <LocalizedText style={styles.networkItemDesc}>{net.desc}</LocalizedText>
-                        </View>
-                      </View>
-
-                      <View style={styles.networkItemRight}>
-                        {isConnectingPhoneWifi && selectedPhoneWifi === net.ssid ? (
-                          <ActivityIndicator size="small" color="#0284C7" />
-                        ) : connectedPhoneWifi === net.ssid ? (
-                          <Ionicons name="checkmark-circle" size={20} color="#10B981" />
-                        ) : (
-                          <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6 }}>
-                            {net.hasLock && (
-                              <Ionicons name="lock-closed" size={14} color="#94A3B8" />
-                            )}
-                            <Ionicons name="chevron-forward" size={18} color="#CBD5E1" />
-                          </View>
-                        )}
-                      </View>
-                    </TouchableOpacity>
-                  );
-                })}
-              </ScrollView>
-
-              {isConnectingPhoneWifi && (
-                <View style={styles.connectingToast}>
-                  <ActivityIndicator size="small" color="#FFF" />
-                  <LocalizedText style={styles.connectingToastText}>
-                    Đang kết nối vào mạng "{selectedPhoneWifi}"...
-                  </LocalizedText>
-                </View>
-              )}
-            </View>
-          </SafeAreaView>
-        </View>
-      </Modal>
-
-      {/* ============================================================== */}
-      {/* MODAL: Hướng Dẫn Reset Camera SECA_001 Thủ Công              */}
-      {/* ============================================================== */}
-      <Modal
-        visible={showResetGuideModal}
-        transparent
-        animationType="fade"
-        onRequestClose={() => setShowResetGuideModal(false)}
-      >
-        <View style={styles.modalOverlay}>
-          <View style={styles.resetGuideModalCard}>
-            {/* Header */}
-            <View style={styles.resetModalHeader}>
-              <View style={styles.resetModalIconBox}>
-                <Ionicons name="refresh" size={24} color="#EA580C" />
-              </View>
-              <View style={{ flex: 1, marginLeft: 12 }}>
-                <LocalizedText style={styles.resetModalTitle}>Hướng Dẫn Reset Camera</LocalizedText>
-                <LocalizedText style={styles.resetModalSub}>Camera an ninh AI SECA_001</LocalizedText>
-              </View>
-              <TouchableOpacity
-                onPress={() => setShowResetGuideModal(false)}
-                style={{ padding: 4 }}
-              >
-                <Ionicons name="close" size={22} color="#94A3B8" />
-              </TouchableOpacity>
-            </View>
-
-            {/* Graphic Illustration */}
-            <View style={styles.resetGraphicCard}>
-              <Ionicons name="videocam" size={44} color="#EA580C" />
-              <View style={styles.resetButtonPointerBadge}>
-                <Ionicons name="finger-print" size={14} color="#FFF" />
-                <LocalizedText style={styles.resetButtonPointerText}>Vị trí nút RESET ở đáy Camera</LocalizedText>
-              </View>
-            </View>
-
-            {/* 4 Steps List */}
-            <View style={styles.resetStepsList}>
-              <View style={styles.resetStepItem}>
-                <View style={styles.resetStepNum}>
-                  <LocalizedText style={styles.resetStepNumText}>1</LocalizedText>
-                </View>
-                <LocalizedText style={styles.resetStepText}>
-                  Cắm nguồn điện và đảm bảo Camera đang được cấp điện liên tục.
-                </LocalizedText>
-              </View>
-
-              <View style={styles.resetStepItem}>
-                <View style={styles.resetStepNum}>
-                  <LocalizedText style={styles.resetStepNumText}>2</LocalizedText>
-                </View>
-                <LocalizedText style={styles.resetStepText}>
-                  Tìm nút bấm <LocalizedText style={{ fontWeight: 'bold' }}>RESET</LocalizedText> ở mặt đáy Camera (hoặc lật nhẹ mắt camera lên trên để thấy nút reset bên dưới).
-                </LocalizedText>
-              </View>
-
-              <View style={styles.resetStepItem}>
-                <View style={styles.resetStepNum}>
-                  <LocalizedText style={styles.resetStepNumText}>3</LocalizedText>
-                </View>
-                <LocalizedText style={styles.resetStepText}>
-                  Dùng que chọc hoặc ngón tay <LocalizedText style={{ fontWeight: 'bold', color: '#EA580C' }}>nhấn giữ nút RESET trong 5 đến 10 giây</LocalizedText> cho đến khi nghe tiếng "Bíp" hoặc giọng nói thông báo.
-                </LocalizedText>
-              </View>
-
-              <View style={styles.resetStepItem}>
-                <View style={styles.resetStepNum}>
-                  <LocalizedText style={styles.resetStepNumText}>4</LocalizedText>
-                </View>
-                <LocalizedText style={styles.resetStepText}>
-                  Đợi camera xoay tự khởi động lại (~30s). Đèn LED sẽ chuyển sang <LocalizedText style={{ fontWeight: 'bold', color: '#059669' }}>nhấp nháy luân phiên Đỏ và Xanh</LocalizedText>.
-                </LocalizedText>
-              </View>
-            </View>
-
-            {/* Action Buttons */}
-            <TouchableOpacity
-              style={[styles.modalConfirmBtn, { backgroundColor: '#EA580C', width: '100%', marginBottom: 10 }]}
-              onPress={() => {
-                setIsLedBlinking(true);
-                setShowResetGuideModal(false);
-              }}
-              activeOpacity={0.85}
-            >
-              <Ionicons name="checkmark-circle" size={18} color="#FFF" />
-              <LocalizedText style={styles.modalConfirmText}>Tôi Đã Reset Xong • Đèn Đã Nhấp Nháy</LocalizedText>
-            </TouchableOpacity>
-
-            <TouchableOpacity
-              style={[styles.modalCancelBtn, { width: '100%' }]}
-              onPress={() => setShowResetGuideModal(false)}
-            >
-              <LocalizedText style={styles.modalCancelText}>Đóng</LocalizedText>
-            </TouchableOpacity>
-          </View>
-        </View>
-      </Modal>
-
-      {/* ============================================================== */}
-      {/* MODAL: DialogBLE (Báo lỗi ghép nối)                            */}
-      {/* ============================================================== */}
-      <Modal
-        visible={showBleErrorDialog}
-        transparent
-        animationType="fade"
-        onRequestClose={() => setShowBleErrorDialog(false)}
-      >
-        <View style={styles.modalOverlay}>
-          <View style={styles.modalCard}>
-            <View style={[styles.modalIconBox, { backgroundColor: '#FEE2E2' }]}>
-              <Ionicons name="close-circle" size={36} color="#DC2626" />
-            </View>
-            <LocalizedText style={[styles.modalTitle, { color: '#B91C1C' }]}>Lỗi Ghép Nối Bluetooth!</LocalizedText>
-            <LocalizedText style={styles.modalMessage}>
-              Không thể kết nối GATT với thiết bị BLE. Vui lòng đảm bảo đồng hồ ở khoảng cách dưới 1 mét, pin còn đủ và thử lại.
-            </LocalizedText>
-
-            <TouchableOpacity
-              style={[styles.modalConfirmBtn, { backgroundColor: '#DC2626', width: '100%' }]}
-              onPress={() => {
-                setShowBleErrorDialog(false);
-                setCurrentStep('BLE_SCAN');
-              }}
-            >
-              <LocalizedText style={styles.modalConfirmText}>Quay Lại Màn Hình Radar Quét</LocalizedText>
-            </TouchableOpacity>
-          </View>
-        </View>
-      </Modal>
+      {/* ALL MODALS */}
+      <AddDeviceModals
+        styles={styles}
+        showPermRequestModal={showPermRequestModal}
+        setShowPermRequestModal={setShowPermRequestModal}
+        onGrantBlePermission={handleGrantBlePermission}
+        showWifiWarningDialog={showWifiWarningDialog}
+        setShowWifiWarningDialog={setShowWifiWarningDialog}
+        onOpenPhoneWifiSettings={handleOpenPhoneWifiSettings}
+        onContinueWifiSearching={() => setCurrentStep('WIFI_SEARCHING')}
+        showPhoneWifiSettingsModal={showPhoneWifiSettingsModal}
+        setShowPhoneWifiSettingsModal={setShowPhoneWifiSettingsModal}
+        connectedPhoneWifi={connectedPhoneWifi}
+        selectedPhoneWifi={selectedPhoneWifi}
+        phoneWifiNetworks={phoneWifiNetworks}
+        isConnectingPhoneWifi={isConnectingPhoneWifi}
+        onConnectPhoneWifi={handleConnectPhoneWifi}
+        showResetGuideModal={showResetGuideModal}
+        setShowResetGuideModal={setShowResetGuideModal}
+        onResetCameraConfirmed={() => {
+          setIsLedBlinking(true);
+          setShowResetGuideModal(false);
+        }}
+        showBleErrorDialog={showBleErrorDialog}
+        setShowBleErrorDialog={setShowBleErrorDialog}
+        bleErrorMessage={bleErrorMessage}
+        onBackToScanFromError={() => {
+          setShowBleErrorDialog(false);
+          if (currentStep === 'HEALTH_CONNECT_SETUP') {
+            return;
+          }
+          setCurrentStep('BLE_SCAN');
+        }}
+      />
     </SafeAreaView>
   );
 }
-
-// -------------------------------------------------------------
-// STYLESHEET
-// -------------------------------------------------------------
-const baseStyles = StyleSheet.create({
-  safeArea: {
-    flex: 1,
-    backgroundColor: '#F8FAFC',
-  },
-  header: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    paddingHorizontal: 16,
-    paddingVertical: 12,
-    backgroundColor: '#FFF',
-    borderBottomWidth: 1,
-    borderBottomColor: '#F1F5F9',
-  },
-  backButton: {
-    width: 38,
-    height: 38,
-    borderRadius: 19,
-    backgroundColor: '#F1F5F9',
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
-  closeButton: {
-    width: 38,
-    height: 38,
-    borderRadius: 19,
-    backgroundColor: '#F1F5F9',
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
-  headerTitleContainer: {
-    flex: 1,
-    alignItems: 'center',
-  },
-  headerTitle: {
-    fontSize: 16,
-    fontWeight: '700',
-    color: '#0F172A',
-  },
-  headerSubtitle: {
-    fontSize: 12,
-    color: '#64748B',
-    marginTop: 2,
-  },
-  progressBarWrapper: {
-    height: 4,
-    backgroundColor: '#E2E8F0',
-    width: '100%',
-  },
-  progressBarFill: {
-    height: '100%',
-    backgroundColor: '#EA580C',
-  },
-  scrollContent: {
-    padding: 16,
-    paddingBottom: 40,
-  },
-
-  // Step headers
-  stepHeaderTitle: {
-    fontSize: 20,
-    fontWeight: '800',
-    color: '#0F172A',
-    marginBottom: 6,
-  },
-  stepHeaderDesc: {
-    fontSize: 13,
-    color: '#64748B',
-    lineHeight: 18,
-    marginBottom: 16,
-  },
-
-  // Category Cards
-  categoryCard: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    backgroundColor: '#FFF',
-    borderRadius: 16,
-    padding: 16,
-    marginBottom: 12,
-    borderWidth: 1,
-    borderColor: '#E2E8F0',
-    elevation: 2,
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 1 },
-    shadowOpacity: 0.05,
-    shadowRadius: 3,
-  },
-  categoryIconBox: {
-    width: 54,
-    height: 54,
-    borderRadius: 14,
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
-  categoryInfo: {
-    flex: 1,
-    marginLeft: 14,
-    marginRight: 8,
-  },
-  categoryBadgeRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    marginBottom: 4,
-  },
-  categoryName: {
-    fontSize: 16,
-    fontWeight: '700',
-    color: '#0F172A',
-    marginRight: 8,
-  },
-  protoBadge: {
-    paddingHorizontal: 7,
-    paddingVertical: 2,
-    borderRadius: 6,
-  },
-  protoBadgeText: {
-    fontSize: 10,
-    fontWeight: '700',
-  },
-  categoryDesc: {
-    fontSize: 12,
-    color: '#64748B',
-    lineHeight: 16,
-  },
-
-  // Model Cards
-  modelCard: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    backgroundColor: '#FFF',
-    borderRadius: 14,
-    padding: 14,
-    marginBottom: 10,
-    borderWidth: 1,
-    borderColor: '#E2E8F0',
-  },
-  modelCardActive: {
-    borderColor: '#EA580C',
-    backgroundColor: '#FFFBF7',
-  },
-  modelIconBox: {
-    width: 44,
-    height: 44,
-    borderRadius: 12,
-    alignItems: 'center',
-    justifyContent: 'center',
-    marginRight: 12,
-  },
-  modelHeaderRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'space-between',
-    marginBottom: 3,
-  },
-  modelTitle: {
-    fontSize: 15,
-    fontWeight: '700',
-    color: '#0F172A',
-  },
-  modelDesc: {
-    fontSize: 12,
-    color: '#64748B',
-    lineHeight: 16,
-  },
-  activeTag: {
-    backgroundColor: '#FFEDD5',
-    paddingHorizontal: 6,
-    paddingVertical: 2,
-    borderRadius: 6,
-  },
-  activeTagText: {
-    fontSize: 10,
-    fontWeight: '700',
-    color: '#EA580C',
-  },
-  protocolCheckBanner: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    backgroundColor: '#F0F9FF',
-    borderWidth: 1,
-    borderColor: '#BAE6FD',
-    borderRadius: 10,
-    padding: 10,
-    marginTop: 8,
-  },
-  protocolCheckText: {
-    fontSize: 12,
-    color: '#0369A1',
-    marginLeft: 8,
-    flex: 1,
-  },
-
-  // Visual Graphic Guides
-  guideContainer: {
-    alignItems: 'center',
-    paddingVertical: 8,
-  },
-  visualGraphicBox: {
-    width: 110,
-    height: 110,
-    borderRadius: 55,
-    backgroundColor: '#FFF7ED',
-    alignItems: 'center',
-    justifyContent: 'center',
-    marginBottom: 16,
-    elevation: 3,
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.08,
-    shadowRadius: 4,
-  },
-  ledIndicatorRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    marginTop: 6,
-  },
-  ledDot: {
-    width: 8,
-    height: 8,
-    borderRadius: 4,
-    marginRight: 4,
-  },
-  ledRed: {
-    backgroundColor: '#EF4444',
-  },
-  ledGreen: {
-    backgroundColor: '#10B981',
-  },
-  ledText: {
-    fontSize: 10,
-    fontWeight: '700',
-    color: '#64748B',
-    marginLeft: 2,
-  },
-  guideMainTitle: {
-    fontSize: 19,
-    fontWeight: '800',
-    color: '#0F172A',
-    marginBottom: 6,
-    textAlign: 'center',
-  },
-  guideSubtitle: {
-    fontSize: 13,
-    color: '#64748B',
-    textAlign: 'center',
-    marginBottom: 20,
-    paddingHorizontal: 16,
-  },
-
-  // Instructions
-  instructionsList: {
-    width: '100%',
-    backgroundColor: '#FFF',
-    borderRadius: 14,
-    padding: 16,
-    marginBottom: 16,
-    borderWidth: 1,
-    borderColor: '#E2E8F0',
-  },
-  instItem: {
-    flexDirection: 'row',
-    alignItems: 'flex-start',
-    marginBottom: 14,
-  },
-  instNumber: {
-    width: 24,
-    height: 24,
-    borderRadius: 12,
-    backgroundColor: '#EA580C',
-    alignItems: 'center',
-    justifyContent: 'center',
-    marginRight: 10,
-    marginTop: 2,
-  },
-  instNumberText: {
-    color: '#FFF',
-    fontSize: 12,
-    fontWeight: '700',
-  },
-  instText: {
-    fontSize: 13,
-    color: '#334155',
-    flex: 1,
-    lineHeight: 19,
-  },
-  tipBox: {
-    flexDirection: 'row',
-    alignItems: 'flex-start',
-    backgroundColor: '#F0F9FF',
-    borderRadius: 10,
-    padding: 12,
-    borderWidth: 1,
-    borderColor: '#BAE6FD',
-    marginBottom: 20,
-    width: '100%',
-  },
-  tipText: {
-    fontSize: 12,
-    color: '#0369A1',
-    marginLeft: 8,
-    flex: 1,
-    lineHeight: 17,
-  },
-
-  // Buttons
-  primaryActionButton: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'center',
-    backgroundColor: '#EA580C',
-    borderRadius: 14,
-    paddingVertical: 14,
-    paddingHorizontal: 20,
-    width: '100%',
-    elevation: 2,
-  },
-  primaryActionButtonText: {
-    fontSize: 15,
-    fontWeight: '700',
-    color: '#FFF',
-    marginRight: 8,
-  },
-
-  // Form Cards
-  formCard: {
-    backgroundColor: '#FFF',
-    borderRadius: 14,
-    padding: 16,
-    marginBottom: 16,
-    borderWidth: 1,
-    borderColor: '#E2E8F0',
-  },
-  formSectionTitle: {
-    fontSize: 14,
-    fontWeight: '700',
-    color: '#0F172A',
-    marginBottom: 12,
-  },
-  wifiOptionRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    padding: 12,
-    borderRadius: 10,
-    borderWidth: 1,
-    borderColor: '#E2E8F0',
-    marginBottom: 10,
-    backgroundColor: '#F8FAFC',
-  },
-  wifiOptionRowSelected: {
-    borderColor: '#EA580C',
-    backgroundColor: '#FFFBF7',
-  },
-  wifiOptionTitle: {
-    fontSize: 14,
-    fontWeight: '700',
-    color: '#0F172A',
-  },
-  wifiOptionSub: {
-    fontSize: 11,
-    color: '#64748B',
-    marginTop: 2,
-  },
-  inputGroup: {
-    marginBottom: 12,
-  },
-  inputLabel: {
-    fontSize: 13,
-    fontWeight: '600',
-    color: '#334155',
-    marginBottom: 6,
-  },
-  textInput: {
-    backgroundColor: '#F8FAFC',
-    borderWidth: 1,
-    borderColor: '#CBD5E1',
-    borderRadius: 10,
-    paddingHorizontal: 12,
-    paddingVertical: 10,
-    fontSize: 14,
-    color: '#0F172A',
-  },
-  switchRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'space-between',
-    paddingTop: 8,
-    borderTopWidth: 1,
-    borderTopColor: '#F1F5F9',
-  },
-  switchTitle: {
-    fontSize: 13,
-    fontWeight: '700',
-    color: '#0F172A',
-  },
-  switchSub: {
-    fontSize: 11,
-    color: '#64748B',
-    marginTop: 2,
-  },
-
-  // Permissions Card
-  permissionCard: {
-    backgroundColor: '#FFF',
-    borderRadius: 14,
-    padding: 16,
-    borderWidth: 1,
-    borderColor: '#E2E8F0',
-    marginBottom: 16,
-  },
-  permRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    marginBottom: 14,
-  },
-  permIconBox: {
-    width: 40,
-    height: 40,
-    borderRadius: 10,
-    alignItems: 'center',
-    justifyContent: 'center',
-    marginRight: 12,
-  },
-  permTitle: {
-    fontSize: 14,
-    fontWeight: '700',
-    color: '#0F172A',
-  },
-  permDesc: {
-    fontSize: 11,
-    color: '#64748B',
-    marginTop: 2,
-  },
-  unauthorizedBox: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    backgroundColor: '#FEF2F2',
-    padding: 12,
-    borderRadius: 10,
-    borderWidth: 1,
-    borderColor: '#FECACA',
-    marginBottom: 16,
-  },
-  unauthorizedText: {
-    fontSize: 12,
-    color: '#991B1B',
-    marginLeft: 8,
-    flex: 1,
-  },
-  authorizedBox: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    backgroundColor: '#ECFDF5',
-    padding: 12,
-    borderRadius: 10,
-    borderWidth: 1,
-    borderColor: '#A7F3D0',
-    marginBottom: 16,
-  },
-  authorizedText: {
-    fontSize: 12,
-    color: '#065F46',
-    marginLeft: 8,
-    flex: 1,
-  },
-
-  // Radar Screen
-  radarContainer: {
-    alignItems: 'center',
-    justifyContent: 'center',
-    height: 180,
-    marginBottom: 16,
-  },
-  radarCircleOuter: {
-    position: 'absolute',
-    width: 160,
-    height: 160,
-    borderRadius: 80,
-    backgroundColor: 'rgba(16, 185, 129, 0.15)',
-    borderWidth: 1,
-    borderColor: '#10B981',
-  },
-  radarCircleMid: {
-    position: 'absolute',
-    width: 100,
-    height: 100,
-    borderRadius: 50,
-    backgroundColor: 'rgba(16, 185, 129, 0.25)',
-  },
-  radarCenter: {
-    width: 50,
-    height: 50,
-    borderRadius: 25,
-    backgroundColor: '#059669',
-    alignItems: 'center',
-    justifyContent: 'center',
-    elevation: 4,
-  },
-  radarStatusText: {
-    marginTop: 140,
-    fontSize: 12,
-    fontWeight: '600',
-    color: '#059669',
-  },
-  testSimBox: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    backgroundColor: '#FFF',
-    borderRadius: 12,
-    padding: 12,
-    borderWidth: 1,
-    borderColor: '#E2E8F0',
-    marginBottom: 16,
-  },
-  testSimTitle: {
-    fontSize: 13,
-    fontWeight: '700',
-    color: '#0F172A',
-  },
-  testSimDesc: {
-    fontSize: 11,
-    color: '#64748B',
-    marginTop: 2,
-  },
-  sectionHeader: {
-    fontSize: 14,
-    fontWeight: '700',
-    color: '#0F172A',
-    marginBottom: 10,
-  },
-  bleDeviceCard: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    backgroundColor: '#FFF',
-    borderRadius: 14,
-    padding: 14,
-    marginBottom: 10,
-    borderWidth: 1,
-    borderColor: '#E2E8F0',
-  },
-  bleIconBox: {
-    width: 44,
-    height: 44,
-    borderRadius: 12,
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
-  bleDeviceName: {
-    fontSize: 14,
-    fontWeight: '700',
-    color: '#0F172A',
-  },
-  bleDeviceSub: {
-    fontSize: 11,
-    color: '#64748B',
-    marginTop: 2,
-  },
-  bleServicesText: {
-    fontSize: 10,
-    color: '#059669',
-    marginTop: 3,
-    fontWeight: '600',
-  },
-  bleRssiBox: {
-    alignItems: 'center',
-    marginLeft: 6,
-  },
-  bleRssiText: {
-    fontSize: 11,
-    fontWeight: '700',
-    color: '#059669',
-  },
-
-  // Wearer selector
-  wearerSelectBox: {
-    flexDirection: 'row',
-    flexWrap: 'wrap',
-    gap: 8,
-    marginBottom: 20,
-    justifyContent: 'center',
-  },
-  wearerChip: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    paddingHorizontal: 14,
-    paddingVertical: 8,
-    borderRadius: 20,
-    backgroundColor: '#F1F5F9',
-    borderWidth: 1,
-    borderColor: '#CBD5E1',
-    gap: 6,
-  },
-  wearerChipActive: {
-    backgroundColor: '#059669',
-    borderColor: '#059669',
-  },
-  wearerChipText: {
-    fontSize: 13,
-    fontWeight: '600',
-    color: '#334155',
-  },
-  wearerChipTextActive: {
-    color: '#FFF',
-  },
-
-  // Other Sensors
-  otherSensorCard: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    backgroundColor: '#FFF',
-    borderRadius: 12,
-    padding: 12,
-    marginBottom: 8,
-    borderWidth: 1,
-    borderColor: '#E2E8F0',
-  },
-  otherSensorCardActive: {
-    borderColor: '#7C3AED',
-    backgroundColor: '#FAF5FF',
-  },
-  sensorIconBox: {
-    width: 38,
-    height: 38,
-    borderRadius: 10,
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
-  sensorCardTitle: {
-    fontSize: 13,
-    fontWeight: '700',
-    color: '#0F172A',
-  },
-  sensorCardSub: {
-    fontSize: 11,
-    color: '#64748B',
-    marginTop: 2,
-  },
-
-  // Setup Success
-  successContainer: {
-    alignItems: 'center',
-    paddingVertical: 16,
-  },
-  successIconOuter: {
-    width: 90,
-    height: 90,
-    borderRadius: 45,
-    backgroundColor: '#DCFCE7',
-    alignItems: 'center',
-    justifyContent: 'center',
-    marginBottom: 16,
-  },
-  successIconInner: {
-    width: 66,
-    height: 66,
-    borderRadius: 33,
-    backgroundColor: '#10B981',
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
-  successTitle: {
-    fontSize: 22,
-    fontWeight: '800',
-    color: '#0F172A',
-    marginBottom: 6,
-    textAlign: 'center',
-  },
-  successSubtitle: {
-    fontSize: 13,
-    color: '#64748B',
-    textAlign: 'center',
-    marginBottom: 20,
-    paddingHorizontal: 16,
-    lineHeight: 18,
-  },
-  successDetailCard: {
-    width: '100%',
-    backgroundColor: '#FFF',
-    borderRadius: 16,
-    padding: 18,
-    borderWidth: 1,
-    borderColor: '#E2E8F0',
-    marginBottom: 24,
-    elevation: 2,
-  },
-  successHeaderRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
-  },
-  successBadgeIcon: {
-    width: 48,
-    height: 48,
-    borderRadius: 14,
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
-  successDeviceName: {
-    fontSize: 16,
-    fontWeight: '700',
-    color: '#0F172A',
-  },
-  successDeviceType: {
-    fontSize: 12,
-    color: '#64748B',
-    marginTop: 2,
-  },
-  divider: {
-    height: 1,
-    backgroundColor: '#F1F5F9',
-    marginVertical: 14,
-  },
-  successRow: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    marginBottom: 8,
-  },
-  successLabel: {
-    fontSize: 12,
-    color: '#64748B',
-  },
-  successValue: {
-    fontSize: 12,
-    fontWeight: '600',
-    color: '#0F172A',
-    maxWidth: '65%',
-    textAlign: 'right',
-  },
-
-  // Modals
-  modalOverlay: {
-    flex: 1,
-    backgroundColor: 'rgba(15, 23, 42, 0.6)',
-    alignItems: 'center',
-    justifyContent: 'center',
-    padding: 24,
-  },
-  modalCard: {
-    width: '100%',
-    backgroundColor: '#FFF',
-    borderRadius: 20,
-    padding: 22,
-    alignItems: 'center',
-    elevation: 8,
-  },
-  modalIconBox: {
-    width: 64,
-    height: 64,
-    borderRadius: 32,
-    backgroundColor: '#EFF6FF',
-    alignItems: 'center',
-    justifyContent: 'center',
-    marginBottom: 14,
-  },
-  modalTitle: {
-    fontSize: 18,
-    fontWeight: '800',
-    color: '#0F172A',
-    marginBottom: 8,
-    textAlign: 'center',
-  },
-  modalMessage: {
-    fontSize: 13,
-    color: '#475569',
-    textAlign: 'center',
-    lineHeight: 19,
-    marginBottom: 20,
-  },
-  modalButtonRow: {
-    flexDirection: 'row',
-    width: '100%',
-    gap: 12,
-  },
-  modalCancelBtn: {
-    flex: 1,
-    paddingVertical: 12,
-    borderRadius: 12,
-    backgroundColor: '#F1F5F9',
-    alignItems: 'center',
-  },
-  modalCancelText: {
-    fontSize: 14,
-    fontWeight: '600',
-    color: '#64748B',
-  },
-  modalConfirmBtn: {
-    flex: 1,
-    paddingVertical: 12,
-    borderRadius: 12,
-    backgroundColor: '#2563EB',
-    alignItems: 'center',
-  },
-  modalConfirmText: {
-    fontSize: 14,
-    fontWeight: '700',
-    color: '#FFF',
-  },
-
-  // =========================================================
-  // LED confirm & separate action styles
-  // =========================================================
-  ledConfirmCard: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    backgroundColor: '#FFF7ED',
-    borderWidth: 1.5,
-    borderColor: '#FED7AA',
-    borderRadius: 14,
-    padding: 14,
-    marginTop: 16,
-    marginBottom: 6,
-  },
-  ledConfirmCardActive: {
-    borderColor: '#EA580C',
-    backgroundColor: '#FFF7ED',
-  },
-  ledConfirmTitle: {
-    fontSize: 14,
-    fontWeight: '700',
-    color: '#9A3412',
-  },
-  ledConfirmSub: {
-    fontSize: 12,
-    color: '#C2410C',
-    marginTop: 2,
-  },
-  continueButtonSection: {
-    marginTop: 12,
-    marginBottom: 16,
-  },
-  primaryActionButtonDisabled: {
-    backgroundColor: '#CBD5E1',
-    opacity: 0.6,
-  },
-
-  // SoftAP graphic badge
-  softApIndicatorRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 8,
-    marginTop: 8,
-  },
-  ssidBadgeGraphic: {
-    backgroundColor: '#E0F2FE',
-    borderWidth: 1,
-    borderColor: '#BAE6FD',
-    borderRadius: 8,
-    paddingHorizontal: 8,
-    paddingVertical: 3,
-  },
-  ssidBadgeGraphicText: {
-    fontSize: 12,
-    fontWeight: '700',
-    color: '#0284C7',
-  },
-
-  // =========================================================
-  // Phone Wi-Fi Settings Panel
-  // =========================================================
-  phoneSettingsOverlay: {
-    flex: 1,
-    backgroundColor: 'rgba(15, 23, 42, 0.65)',
-    justifyContent: 'flex-end',
-  },
-  phoneSettingsSafeArea: {
-    maxHeight: '85%',
-  },
-  phoneSettingsCard: {
-    backgroundColor: '#F8FAFC',
-    borderTopLeftRadius: 24,
-    borderTopRightRadius: 24,
-    paddingHorizontal: 20,
-    paddingTop: 16,
-    paddingBottom: 28,
-    minHeight: 480,
-  },
-  phoneSettingsHeader: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'space-between',
-    paddingBottom: 14,
-    borderBottomWidth: 1,
-    borderBottomColor: '#E2E8F0',
-  },
-  phoneSettingsBackBtn: {
-    flexDirection: 'row',
-    alignItems: 'center',
-  },
-  phoneSettingsBackText: {
-    fontSize: 15,
-    fontWeight: '600',
-    color: '#0284C7',
-    marginLeft: 2,
-  },
-  phoneSettingsTitle: {
-    fontSize: 17,
-    fontWeight: '800',
-    color: '#0F172A',
-  },
-  phoneWifiToggleRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'space-between',
-    backgroundColor: '#FFF',
-    padding: 14,
-    borderRadius: 14,
-    marginTop: 14,
-    borderWidth: 1,
-    borderColor: '#E2E8F0',
-  },
-  phoneWifiIconCircle: {
-    width: 36,
-    height: 36,
-    borderRadius: 18,
-    backgroundColor: '#E0F2FE',
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
-  phoneWifiToggleLabel: {
-    fontSize: 15,
-    fontWeight: '700',
-    color: '#0F172A',
-  },
-  phoneWifiToggleSub: {
-    fontSize: 11,
-    color: '#64748B',
-    marginTop: 1,
-  },
-  phoneWifiHelperBanner: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    backgroundColor: '#F0F9FF',
-    padding: 12,
-    borderRadius: 12,
-    marginTop: 12,
-    gap: 8,
-    borderWidth: 1,
-    borderColor: '#BAE6FD',
-  },
-  phoneWifiHelperText: {
-    fontSize: 12,
-    color: '#0369A1',
-    flex: 1,
-    lineHeight: 16,
-  },
-  networkSectionHeader: {
-    fontSize: 11,
-    fontWeight: '700',
-    color: '#94A3B8',
-    textTransform: 'uppercase',
-    marginTop: 16,
-    marginBottom: 8,
-    letterSpacing: 0.5,
-  },
-  phoneNetworkListScroll: {
-    maxHeight: 250,
-  },
-  phoneNetworkItem: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'space-between',
-    backgroundColor: '#FFF',
-    padding: 14,
-    borderRadius: 14,
-    marginBottom: 8,
-    borderWidth: 1,
-    borderColor: '#E2E8F0',
-  },
-  phoneNetworkItemSelected: {
-    borderColor: '#0284C7',
-    backgroundColor: '#F0F9FF',
-  },
-  networkItemLeft: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    flex: 1,
-  },
-  networkItemRight: {
-    marginLeft: 8,
-  },
-  networkItemSsid: {
-    fontSize: 14,
-    fontWeight: '700',
-    color: '#0F172A',
-  },
-  networkItemDesc: {
-    fontSize: 11,
-    color: '#64748B',
-    marginTop: 2,
-  },
-  cameraTargetBadge: {
-    backgroundColor: '#FFF7ED',
-    borderWidth: 1,
-    borderColor: '#FED7AA',
-    paddingHorizontal: 6,
-    paddingVertical: 2,
-    borderRadius: 6,
-  },
-  cameraTargetBadgeText: {
-    fontSize: 10,
-    fontWeight: '700',
-    color: '#EA580C',
-  },
-  connectingToast: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    backgroundColor: 'rgba(15, 23, 42, 0.9)',
-    paddingHorizontal: 16,
-    paddingVertical: 10,
-    borderRadius: 20,
-    marginTop: 12,
-    alignSelf: 'center',
-    gap: 8,
-  },
-  connectingToastText: {
-    color: '#FFF',
-    fontSize: 12,
-    fontWeight: '600',
-  },
-
-  // =========================================================
-  // LED Help Question & Reset Guide Modal Styles
-  // =========================================================
-  ledHelpQuestionCard: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    backgroundColor: '#F0F9FF',
-    borderWidth: 1,
-    borderColor: '#BAE6FD',
-    borderRadius: 14,
-    padding: 12,
-    marginBottom: 14,
-  },
-  ledHelpIconCircle: {
-    width: 32,
-    height: 32,
-    borderRadius: 16,
-    backgroundColor: '#E0F2FE',
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
-  ledHelpQuestionTitle: {
-    fontSize: 13,
-    fontWeight: '700',
-    color: '#0369A1',
-  },
-  ledHelpQuestionSubtitle: {
-    fontSize: 11,
-    color: '#0284C7',
-    marginTop: 1,
-  },
-  resetGuideModalCard: {
-    width: '100%',
-    maxWidth: 420,
-    backgroundColor: '#FFF',
-    borderRadius: 20,
-    padding: 20,
-    elevation: 10,
-  },
-  resetModalHeader: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    marginBottom: 14,
-  },
-  resetModalIconBox: {
-    width: 40,
-    height: 40,
-    borderRadius: 20,
-    backgroundColor: '#FFF7ED',
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
-  resetModalTitle: {
-    fontSize: 16,
-    fontWeight: '800',
-    color: '#0F172A',
-  },
-  resetModalSub: {
-    fontSize: 11,
-    color: '#64748B',
-    marginTop: 1,
-  },
-  resetGraphicCard: {
-    backgroundColor: '#FFF7ED',
-    borderRadius: 14,
-    borderWidth: 1,
-    borderColor: '#FED7AA',
-    alignItems: 'center',
-    justifyContent: 'center',
-    paddingVertical: 18,
-    marginBottom: 14,
-    gap: 8,
-  },
-  resetButtonPointerBadge: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    backgroundColor: '#EA580C',
-    paddingHorizontal: 10,
-    paddingVertical: 4,
-    borderRadius: 12,
-    gap: 6,
-  },
-  resetButtonPointerText: {
-    color: '#FFF',
-    fontSize: 11,
-    fontWeight: '700',
-  },
-  resetStepsList: {
-    gap: 10,
-    marginBottom: 16,
-  },
-  resetStepItem: {
-    flexDirection: 'row',
-    alignItems: 'flex-start',
-  },
-  resetStepNum: {
-    width: 22,
-    height: 22,
-    borderRadius: 11,
-    backgroundColor: '#F1F5F9',
-    alignItems: 'center',
-    justifyContent: 'center',
-    marginRight: 10,
-    marginTop: 1,
-  },
-  resetStepNumText: {
-    fontSize: 11,
-    fontWeight: '800',
-    color: '#475569',
-  },
-  resetStepText: {
-    flex: 1,
-    fontSize: 12,
-    color: '#334155',
-    lineHeight: 17,
-  },
-
-  // =========================================================
-  // SOFTAP ONBOARDING FLOW STYLES (Ảnh 2, 3, 4, 5)
-  // =========================================================
-
-  // Màn hình 1: WIFI_GUIDE (Ảnh 2)
-  softApGuideContainer: {
-    paddingTop: 8,
-    paddingBottom: 30,
-  },
-  softApGuideTitle: {
-    fontSize: 20,
-    fontWeight: '800',
-    color: '#0F172A',
-    marginBottom: 12,
-  },
-  softApGuideSubtitle: {
-    fontSize: 14,
-    color: '#334155',
-    lineHeight: 21,
-    marginBottom: 10,
-  },
-  guideDetailText: {
-    fontSize: 13,
-    color: '#64748B',
-    lineHeight: 19,
-    marginBottom: 24,
-  },
-  barcodeGraphicWrapper: {
-    alignItems: 'center',
-    justifyContent: 'center',
-    marginVertical: 16,
-    position: 'relative',
-  },
-  enlargedBarcodeCard: {
-    backgroundColor: '#FFF',
-    borderWidth: 2,
-    borderColor: '#0284C7',
-    borderRadius: 10,
-    paddingHorizontal: 16,
-    paddingVertical: 10,
-    alignItems: 'center',
-    shadowColor: '#0284C7',
-    shadowOffset: { width: 0, height: 4 },
-    shadowOpacity: 0.15,
-    shadowRadius: 8,
-    elevation: 4,
-    zIndex: 3,
-  },
-  barcodeBarsRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'center',
-    marginBottom: 6,
-  },
-  barcodeMacText: {
-    fontSize: 11,
-    fontWeight: '700',
-    color: '#0F172A',
-    letterSpacing: 0.5,
-  },
-  barcodeSsidBadge: {
-    fontSize: 10,
-    fontWeight: '800',
-    color: '#0284C7',
-    marginTop: 2,
-  },
-  projectionCone: {
-    width: 140,
-    height: 48,
-    backgroundColor: 'rgba(56, 189, 248, 0.22)',
-    borderLeftWidth: 1,
-    borderRightWidth: 1,
-    borderColor: 'rgba(2, 132, 199, 0.3)',
-    transform: [{ perspective: 100 }, { rotateX: '55deg' }],
-    zIndex: 2,
-    marginVertical: -8,
-  },
-  cameraBaseCircle: {
-    width: 170,
-    height: 170,
-    borderRadius: 85,
-    borderWidth: 3,
-    borderColor: '#CBD5E1',
-    backgroundColor: '#F8FAFC',
-    alignItems: 'center',
-    justifyContent: 'center',
-    position: 'relative',
-    zIndex: 1,
-  },
-  rubberFoot: {
-    position: 'absolute',
-    backgroundColor: '#94A3B8',
-    borderRadius: 4,
-  },
-  rubberFootTop: {
-    top: 8,
-    width: 28,
-    height: 6,
-  },
-  rubberFootLeft: {
-    left: 8,
-    width: 6,
-    height: 28,
-  },
-  rubberFootRight: {
-    right: 8,
-    width: 6,
-    height: 28,
-  },
-  cameraBaseInnerRing: {
-    width: 110,
-    height: 110,
-    borderRadius: 55,
-    borderWidth: 2,
-    borderColor: '#E2E8F0',
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
-  cameraBaseCenterHole: {
-    width: 16,
-    height: 16,
-    borderRadius: 8,
-    backgroundColor: '#CBD5E1',
-  },
-  miniBarcodeSticker: {
-    position: 'absolute',
-    bottom: 12,
-    backgroundColor: '#FFF',
-    borderWidth: 1,
-    borderColor: '#CBD5E1',
-    borderRadius: 4,
-    paddingHorizontal: 6,
-    paddingVertical: 2,
-    alignItems: 'center',
-  },
-  miniBarcodeBars: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    marginBottom: 2,
-  },
-  miniBarcodeText: {
-    fontSize: 7,
-    color: '#64748B',
-    fontWeight: '600',
-  },
-  bottomActionSection: {
-    marginTop: 32,
-    paddingHorizontal: 4,
-  },
-  primaryPillBtn: {
-    backgroundColor: '#0284C7',
-    height: 52,
-    borderRadius: 26,
-    alignItems: 'center',
-    justifyContent: 'center',
-    shadowColor: '#0284C7',
-    shadowOffset: { width: 0, height: 4 },
-    shadowOpacity: 0.25,
-    shadowRadius: 8,
-    elevation: 4,
-  },
-  primaryPillBtnText: {
-    color: '#FFF',
-    fontSize: 16,
-    fontWeight: '700',
-  },
-
-  // Màn hình 2: Warning Dialog (Ảnh 3)
-  warningModalOverlay: {
-    flex: 1,
-    backgroundColor: 'rgba(0, 0, 0, 0.55)',
-    justifyContent: 'center',
-    alignItems: 'center',
-    padding: 24,
-  },
-  warningDialogCard: {
-    width: '100%',
-    maxWidth: 360,
-    backgroundColor: '#FFF',
-    borderRadius: 20,
-    padding: 24,
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 8 },
-    shadowOpacity: 0.2,
-    shadowRadius: 16,
-    elevation: 10,
-  },
-  warningDialogText: {
-    fontSize: 16,
-    fontWeight: '600',
-    color: '#1E293B',
-    lineHeight: 24,
-    marginBottom: 20,
-  },
-  warningActionColumn: {
-    alignItems: 'flex-end',
-    gap: 14,
-  },
-  warningActionBtn: {
-    paddingVertical: 6,
-    paddingHorizontal: 12,
-  },
-  warningActionPrimaryText: {
-    color: '#0284C7',
-    fontSize: 15,
-    fontWeight: '700',
-  },
-  warningActionCancelText: {
-    color: '#64748B',
-    fontSize: 15,
-    fontWeight: '600',
-  },
-
-  // Màn hình 3: Phone Wi-Fi Settings Panel (Ảnh 4)
-  phoneSettingsScanBtn: {
-    width: 40,
-    height: 40,
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
-  phoneConnectedCard: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    backgroundColor: '#0284C7',
-    borderRadius: 16,
-    padding: 16,
-    marginBottom: 20,
-    shadowColor: '#0284C7',
-    shadowOffset: { width: 0, height: 4 },
-    shadowOpacity: 0.2,
-    shadowRadius: 8,
-    elevation: 4,
-  },
-  phoneConnectedIconBox: {
-    width: 44,
-    height: 44,
-    borderRadius: 22,
-    backgroundColor: 'rgba(255, 255, 255, 0.2)',
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
-  phoneConnectedSsid: {
-    fontSize: 16,
-    fontWeight: '800',
-    color: '#FFF',
-  },
-  phoneBandTag: {
-    backgroundColor: 'rgba(255, 255, 255, 0.25)',
-    paddingHorizontal: 6,
-    paddingVertical: 2,
-    borderRadius: 6,
-  },
-  phoneBandTagText: {
-    fontSize: 10,
-    fontWeight: '700',
-    color: '#FFF',
-  },
-  phoneConnectedSub: {
-    fontSize: 12,
-    color: 'rgba(255, 255, 255, 0.85)',
-    marginTop: 2,
-  },
-  phoneConnectedArrowCircle: {
-    width: 26,
-    height: 26,
-    borderRadius: 13,
-    backgroundColor: '#FFF',
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
-  phoneAvailableSectionHeader: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'space-between',
-    marginBottom: 12,
-    paddingHorizontal: 4,
-  },
-  phoneAvailableSectionTitle: {
-    fontSize: 15,
-    fontWeight: '700',
-    color: '#475569',
-  },
-  phoneNetworkItemTarget: {
-    backgroundColor: '#F0F9FF',
-    borderColor: '#BAE6FD',
-  },
-  phoneNetworkTagBox: {
-    backgroundColor: '#F1F5F9',
-    paddingHorizontal: 6,
-    paddingVertical: 2,
-    borderRadius: 6,
-  },
-  phoneNetworkTagText: {
-    fontSize: 10,
-    fontWeight: '700',
-    color: '#64748B',
-  },
-
-  // Màn hình 4: WIFI_SEARCHING (Ảnh 5)
-  searchingContainer: {
-    flex: 1,
-    backgroundColor: '#0284C7',
-    justifyContent: 'space-between',
-    paddingHorizontal: 24,
-    paddingVertical: 20,
-  },
-  searchingHeader: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'flex-start',
-    marginTop: 8,
-  },
-  searchingCloseBtn: {
-    width: 44,
-    height: 44,
-    justifyContent: 'center',
-    alignItems: 'center',
-  },
-  searchingTitle: {
-    fontSize: 18,
-    fontWeight: '700',
-    color: '#FFF',
-    textAlign: 'center',
-    marginTop: 12,
-    paddingHorizontal: 16,
-  },
-  searchingCenter: {
-    flex: 1,
-    alignItems: 'center',
-    justifyContent: 'center',
-    position: 'relative',
-  },
-  radarPulseCircle: {
-    position: 'absolute',
-    width: 220,
-    height: 220,
-    borderRadius: 110,
-    borderWidth: 2,
-    borderColor: 'rgba(255, 255, 255, 0.6)',
-    backgroundColor: 'rgba(255, 255, 255, 0.08)',
-  },
-  searchingCameraCircleOuter: {
-    width: 120,
-    height: 120,
-    borderRadius: 60,
-    backgroundColor: 'rgba(255, 255, 255, 0.18)',
-    alignItems: 'center',
-    justifyContent: 'center',
-    marginBottom: 12,
-  },
-  searchingCameraCircleInner: {
-    width: 80,
-    height: 80,
-    borderRadius: 40,
-    backgroundColor: '#FFF',
-    alignItems: 'center',
-    justifyContent: 'center',
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 4 },
-    shadowOpacity: 0.15,
-    shadowRadius: 8,
-    elevation: 5,
-  },
-  searchingPlusBadge: {
-    width: 24,
-    height: 24,
-    borderRadius: 12,
-    backgroundColor: 'rgba(255, 255, 255, 0.25)',
-    alignItems: 'center',
-    justifyContent: 'center',
-    marginVertical: 6,
-  },
-  searchingPlusText: {
-    color: '#FFF',
-    fontSize: 16,
-    fontWeight: '800',
-    lineHeight: 18,
-  },
-  searchingStreakLine1: {
-    position: 'absolute',
-    top: '25%',
-    left: '15%',
-    width: 36,
-    height: 4,
-    borderRadius: 2,
-    backgroundColor: 'rgba(255,255,255,0.4)',
-    transform: [{ rotate: '-40deg' }],
-  },
-  searchingStreakLine2: {
-    position: 'absolute',
-    top: '35%',
-    right: '12%',
-    width: 44,
-    height: 4,
-    borderRadius: 2,
-    backgroundColor: 'rgba(255,255,255,0.35)',
-    transform: [{ rotate: '35deg' }],
-  },
-  searchingStreakLine3: {
-    position: 'absolute',
-    bottom: '30%',
-    right: '16%',
-    width: 30,
-    height: 4,
-    borderRadius: 2,
-    backgroundColor: 'rgba(255,255,255,0.3)',
-    transform: [{ rotate: '-45deg' }],
-  },
-  searchingPhoneCircleOuter: {
-    width: 150,
-    height: 150,
-    borderRadius: 75,
-    backgroundColor: 'rgba(255, 255, 255, 0.18)',
-    alignItems: 'center',
-    justifyContent: 'center',
-    marginTop: 12,
-  },
-  searchingPhoneBody: {
-    width: 76,
-    height: 124,
-    borderRadius: 14,
-    backgroundColor: '#1E293B',
-    borderWidth: 2,
-    borderColor: '#334155',
-    padding: 6,
-    alignItems: 'center',
-    justifyContent: 'space-between',
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 6 },
-    shadowOpacity: 0.2,
-    shadowRadius: 10,
-    elevation: 6,
-  },
-  searchingPhoneSpeaker: {
-    width: 18,
-    height: 3,
-    borderRadius: 1.5,
-    backgroundColor: '#64748B',
-    marginTop: 2,
-  },
-  searchingPhoneScreen: {
-    width: 60,
-    height: 86,
-    borderRadius: 6,
-    backgroundColor: '#0284C7',
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
-  searchingPhoneHomeButton: {
-    width: 8,
-    height: 8,
-    borderRadius: 4,
-    backgroundColor: '#475569',
-    marginBottom: 2,
-  },
-  searchingFooter: {
-    paddingHorizontal: 20,
-    paddingBottom: 24,
-  },
-  searchingFooterText: {
-    fontSize: 14,
-    color: 'rgba(255, 255, 255, 0.95)',
-    textAlign: 'center',
-    lineHeight: 20,
-  },
-});

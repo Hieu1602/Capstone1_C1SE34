@@ -8,17 +8,23 @@
 // - Dấu tích (checkbox) Điều khoản & Chính sách đồng bộ từ WelcomeScreen
 // ==============================================================================
 
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import {
   StyleSheet,
   KeyboardAvoidingView,
   Platform,
   ScrollView,
   SafeAreaView,
+  View,
+  Text,
+  TextInput,
+  TouchableOpacity,
+  Modal,
+  Alert,
 } from 'react-native';
 import { useAuthStore } from '../../../store/useAuthStore';
 import { useThemeStore } from '../../../store/useThemeStore';
-import api, { authApi, usersApi } from '../../../services/api';
+import api, { authApi, usersApi, getCustomServerUrl, setCustomServerUrl } from '../../../services/api';
 import { LoginPhotoCollage, LoginFormSection } from '../components/login';
 import { LegalTermsModal, LegalModalType } from '../components/LegalTermsModal';
 import * as Location from 'expo-location';
@@ -47,6 +53,25 @@ export default function LoginScreen({ navigation, route }: any) {
   const [showPassword, setShowPassword] = useState(false);
   const [loading, setLoading] = useState(false);
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
+
+  // Cấu hình linh hoạt Server URL cho kết nối Wi-Fi thật
+  const [serverUrl, setServerUrl] = useState('http://192.168.1.5:8000/api/v1');
+  const [tempServerUrl, setTempServerUrl] = useState('');
+  const [serverModalVisible, setServerModalVisible] = useState(false);
+
+  useEffect(() => {
+    getCustomServerUrl().then((url) => {
+      if (url) setServerUrl(url);
+    });
+  }, []);
+
+  const handleSaveServerUrl = async () => {
+    if (!tempServerUrl.trim()) return;
+    const updated = await setCustomServerUrl(tempServerUrl.trim());
+    setServerUrl(updated);
+    setServerModalVisible(false);
+    Alert.alert('Thành công', `Đã lưu IP máy chủ: ${updated}`);
+  };
 
   // Đồng bộ trạng thái đã tích từ màn hình ngoài (Welcome) hoặc mặc định đã tích khi vào màn hình
   const [isAgreed, setIsAgreed] = useState<boolean>(route?.params?.isAgreed ?? true);
@@ -155,7 +180,10 @@ export default function LoginScreen({ navigation, route }: any) {
       delete api.defaults.headers.common['Authorization'];
       if (tokensApplied) logout();
       console.error('[Login] Error:', error);
-      const detail = error?.response?.data?.detail || error?.message || 'Thông tin đăng nhập hoặc mật khẩu không đúng.';
+      const isNetworkErr = error?.message?.includes('Network Error') || error?.code === 'ERR_NETWORK' || !error?.response;
+      const detail = isNetworkErr
+        ? `Không thể kết nối đến máy chủ (${api.defaults.baseURL || serverUrl}). Vui lòng kiểm tra Wi-Fi hoặc chạm vào dòng Server bên dưới để đổi IP.`
+        : (error?.response?.data?.detail || error?.message || 'Thông tin đăng nhập hoặc mật khẩu không đúng.');
 
       setErrorMessage(
         typeof detail === 'string' ? detail : 'Đăng nhập không thành công. Vui lòng kiểm tra lại.'
@@ -206,8 +234,57 @@ export default function LoginScreen({ navigation, route }: any) {
             onNavigateRegister={() => navigation.navigate('Register', { isAgreed })}
             onOpenLegal={handleOpenLegal}
           />
+
+          {/* PHẦN 3: SERVER IP CONFIGURATION */}
+          <View style={{ alignItems: 'center', marginTop: 12, marginBottom: 16 }}>
+            <TouchableOpacity
+              onPress={() => {
+                setTempServerUrl(serverUrl.replace(/\/api\/v1\/?$/, ''));
+                setServerModalVisible(true);
+              }}
+              style={styles.serverPill}
+            >
+              <Text style={styles.serverPillText}>
+                ⚙️ Server: <Text style={{ fontWeight: '700', color: '#0284C7' }}>{serverUrl}</Text> (Chạm để đổi IP)
+              </Text>
+            </TouchableOpacity>
+          </View>
         </ScrollView>
       </KeyboardAvoidingView>
+
+      {/* Modal Cấu hình IP Server */}
+      <Modal visible={serverModalVisible} transparent animationType="fade">
+        <View style={styles.modalOverlay}>
+          <View style={styles.modalContent}>
+            <Text style={styles.modalTitle}>⚙️ Cấu hình IP Máy Chủ</Text>
+            <Text style={styles.modalSubtitle}>
+              Nhập IP máy tính đang chạy Backend FastAPI trong mạng Wi-Fi (ví dụ: 192.168.1.5:8000):
+            </Text>
+            <TextInput
+              style={styles.modalInput}
+              value={tempServerUrl}
+              onChangeText={setTempServerUrl}
+              placeholder="192.168.1.5:8000"
+              autoCapitalize="none"
+              autoCorrect={false}
+            />
+            <View style={styles.modalActions}>
+              <TouchableOpacity
+                onPress={() => setServerModalVisible(false)}
+                style={[styles.modalBtn, { backgroundColor: '#F1F5F9' }]}
+              >
+                <Text style={{ color: '#475569', fontWeight: '600' }}>Hủy</Text>
+              </TouchableOpacity>
+              <TouchableOpacity
+                onPress={handleSaveServerUrl}
+                style={[styles.modalBtn, { backgroundColor: '#0284C7' }]}
+              >
+                <Text style={{ color: '#FFFFFF', fontWeight: '600' }}>Lưu cấu hình</Text>
+              </TouchableOpacity>
+            </View>
+          </View>
+        </View>
+      </Modal>
 
       {/* Modal Điều khoản dịch vụ & Chính sách quyền riêng tư */}
       <LegalTermsModal
@@ -230,5 +307,70 @@ const styles = StyleSheet.create({
     justifyContent: 'space-between',
     backgroundColor: '#FFFFFF',
     paddingBottom: 24,
+  },
+  serverPill: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    paddingVertical: 7,
+    paddingHorizontal: 14,
+    borderRadius: 20,
+    backgroundColor: '#F8FAFC',
+    borderWidth: 1,
+    borderColor: '#E2E8F0',
+  },
+  serverPillText: {
+    fontSize: 12,
+    color: '#64748B',
+  },
+  modalOverlay: {
+    flex: 1,
+    backgroundColor: 'rgba(0, 0, 0, 0.5)',
+    justifyContent: 'center',
+    alignItems: 'center',
+    padding: 24,
+  },
+  modalContent: {
+    width: '100%',
+    backgroundColor: '#FFFFFF',
+    borderRadius: 20,
+    padding: 24,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 4 },
+    shadowOpacity: 0.15,
+    shadowRadius: 12,
+    elevation: 8,
+  },
+  modalTitle: {
+    fontSize: 18,
+    fontWeight: '700',
+    color: '#0F172A',
+    marginBottom: 8,
+  },
+  modalSubtitle: {
+    fontSize: 13,
+    color: '#64748B',
+    lineHeight: 18,
+    marginBottom: 16,
+  },
+  modalInput: {
+    borderWidth: 1,
+    borderColor: '#CBD5E1',
+    borderRadius: 12,
+    paddingHorizontal: 14,
+    paddingVertical: 10,
+    fontSize: 14,
+    color: '#0F172A',
+    marginBottom: 20,
+    backgroundColor: '#F8FAFC',
+  },
+  modalActions: {
+    flexDirection: 'row',
+    justifyContent: 'flex-end',
+    gap: 12,
+  },
+  modalBtn: {
+    paddingVertical: 10,
+    paddingHorizontal: 18,
+    borderRadius: 10,
   },
 });
