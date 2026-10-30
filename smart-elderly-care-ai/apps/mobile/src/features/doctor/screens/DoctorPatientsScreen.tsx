@@ -32,8 +32,8 @@ import { normalizePatientsList } from './DoctorHomeScreen';
 
 export type { PatientCardData };
 
-// Component Skeleton Loading cho Card lưới 2 cột
-const GridSkeletonCard = ({ isDarkMode }: { isDarkMode: boolean }) => {
+// Component Skeleton Loading cho Card bệnh nhân
+const PatientSkeletonCard = ({ isDarkMode }: { isDarkMode: boolean }) => {
   const pulseAnim = useRef(new Animated.Value(0.35)).current;
 
   useEffect(() => {
@@ -64,37 +64,40 @@ const GridSkeletonCard = ({ isDarkMode }: { isDarkMode: boolean }) => {
         },
       ]}
     >
+      <View style={{ flexDirection: 'row', alignItems: 'center', marginBottom: 12 }}>
+        <View
+          style={{
+            width: 48,
+            height: 48,
+            borderRadius: 24,
+            backgroundColor: isDarkMode ? '#334155' : '#E2E8F0',
+            marginRight: 12,
+          }}
+        />
+        <View style={{ flex: 1 }}>
+          <View
+            style={{
+              width: '60%',
+              height: 15,
+              borderRadius: 6,
+              backgroundColor: isDarkMode ? '#334155' : '#E2E8F0',
+              marginBottom: 8,
+            }}
+          />
+          <View
+            style={{
+              width: '40%',
+              height: 12,
+              borderRadius: 4,
+              backgroundColor: isDarkMode ? '#334155' : '#F1F5F9',
+            }}
+          />
+        </View>
+      </View>
       <View
         style={{
-          width: 56,
-          height: 56,
-          borderRadius: 28,
-          backgroundColor: isDarkMode ? '#334155' : '#E2E8F0',
-          marginBottom: 12,
-        }}
-      />
-      <View
-        style={{
-          width: '75%',
-          height: 15,
-          borderRadius: 6,
-          backgroundColor: isDarkMode ? '#334155' : '#E2E8F0',
-          marginBottom: 8,
-        }}
-      />
-      <View
-        style={{
-          width: '55%',
-          height: 12,
-          borderRadius: 4,
-          backgroundColor: isDarkMode ? '#334155' : '#F1F5F9',
-          marginBottom: 16,
-        }}
-      />
-      <View
-        style={{
-          width: '90%',
-          height: 32,
+          width: '100%',
+          height: 38,
           borderRadius: 8,
           backgroundColor: isDarkMode ? '#334155' : '#E0F2FE',
         }}
@@ -192,7 +195,26 @@ export default function DoctorPatientsScreen() {
   };
 
   const handleViewAnalytics = (patientId: string) => {
-    navigation.navigate('DoctorAnalytics', { patientId });
+    const p = patients.find((item) => String(item.id) === String(patientId));
+    navigation.navigate('DoctorAnalytics', {
+      patientId,
+      patient: p
+        ? {
+            id: String(p.id),
+            name: p.name,
+            age: p.age,
+            gender: p.gender,
+            condition: p.medical_history || '',
+            deviceId: p.device_id || '',
+            houseName: p.house_name ? `${p.house_name}${p.house_address ? ` • ${p.house_address}` : ''}` : undefined,
+            bloodPressure: p.blood_pressure,
+            heartRate: p.heart_rate,
+            spo2: p.spo2,
+            healthStatus: p.health_status,
+            lastUpdated: p.last_updated,
+          }
+        : undefined,
+    });
   };
 
   const handleOpenAppointmentModal = (patient: PatientCardData) => {
@@ -252,25 +274,18 @@ export default function DoctorPatientsScreen() {
       {/* Thanh thông báo chạy chữ từ Admin (dành cho Bác sĩ) */}
       <AdminMarqueeBanner targetAudience="doctors" />
 
-      {/* Trạng thái chờ: Skeleton Loading dạng lưới 2 cột */}
+      {/* Trạng thái chờ: Skeleton Loading */}
       {loading && !refreshing ? (
-        <View style={styles.skeletonGridWrapper}>
-          <View style={styles.columnWrapper}>
-            <GridSkeletonCard isDarkMode={isDarkMode} />
-            <GridSkeletonCard isDarkMode={isDarkMode} />
-          </View>
-          <View style={styles.columnWrapper}>
-            <GridSkeletonCard isDarkMode={isDarkMode} />
-            <GridSkeletonCard isDarkMode={isDarkMode} />
-          </View>
+        <View style={styles.listContent}>
+          <PatientSkeletonCard isDarkMode={isDarkMode} />
+          <PatientSkeletonCard isDarkMode={isDarkMode} />
+          <PatientSkeletonCard isDarkMode={isDarkMode} />
         </View>
       ) : (
-        /* Danh sách bệnh nhân dạng lưới (Grid 2 cột) */
+        /* Danh sách bệnh nhân dạng danh thiếp ngang đầy đủ thông tin */
         <FlatList
           data={filteredPatients}
           keyExtractor={(item) => item.id.toString()}
-          numColumns={2}
-          columnWrapperStyle={styles.columnWrapper}
           contentContainerStyle={styles.listContent}
           refreshControl={<RefreshControl refreshing={refreshing} onRefresh={onRefresh} colors={[Colors.primary]} />}
           ListEmptyComponent={
@@ -333,23 +348,13 @@ export default function DoctorPatientsScreen() {
 const styles = StyleSheet.create({
   container: { flex: 1 },
   listContent: {
-    padding: 12,
+    padding: 16,
     paddingBottom: 95,
   },
-  skeletonGridWrapper: {
-    padding: 12,
-  },
-  columnWrapper: {
-    justifyContent: 'space-between',
-    marginBottom: 8,
-  },
   skeletonCard: {
-    flex: 1,
-    borderRadius: 16,
-    padding: 16,
-    alignItems: 'center',
+    borderRadius: 14,
+    padding: 14,
     borderWidth: 1,
-    marginHorizontal: 4,
     marginBottom: 12,
   },
   emptyBox: {

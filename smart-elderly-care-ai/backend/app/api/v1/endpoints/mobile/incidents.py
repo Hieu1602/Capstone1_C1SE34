@@ -46,6 +46,18 @@ async def list_incidents(
     )
 
 
+@router.post("/acknowledge-all")
+@router.patch("/acknowledge-all")
+async def acknowledge_all_incidents(
+    db: AsyncSession = Depends(get_db),
+    current_user: User | None = Depends(get_current_user_optional),
+):
+    """Xác nhận đã đọc toàn bộ thông báo/cảnh báo và lưu vào CSDL."""
+    curr_uid = current_user.id if current_user else None
+    count = await crud_incident.acknowledge_all(db, current_user_id=curr_uid)
+    return {"status": "success", "acknowledged_count": count}
+
+
 @router.get("/{incident_id}", response_model=IncidentOut)
 async def get_incident(
     incident_id: UUID,

@@ -315,6 +315,8 @@ export const incidentsApi = {
   get: (id: string) => api.get(`/incidents/${id}`),
   acknowledge: (id: string, notes?: string) =>
     api.post(`/incidents/${id}/acknowledge`, null, { params: { note: notes } }),
+  acknowledgeAll: () =>
+    api.post('/incidents/acknowledge-all'),
 };
 
 export const notificationsApi = incidentsApi;
@@ -376,18 +378,36 @@ export const doctorApi = {
     data: {
       medication_name: string;
       dosage: string;
+      quantity?: string;
       frequency?: string;
       schedule_times?: string[];
       instructions?: string;
       enable_speaker_reminder?: boolean;
     }
   ) => api.post(`/doctor/patients/${id}/prescriptions`, data),
+  createBatchPrescriptions: (
+    id: string,
+    data: {
+      diagnosis?: string;
+      general_notes?: string;
+      enable_speaker_reminder?: boolean;
+      medications: Array<{
+        medication_name: string;
+        quantity?: string;
+        dosage: string;
+        frequency?: string;
+        schedule_times?: string[];
+        instructions?: string;
+      }>;
+    }
+  ) => api.post(`/doctor/patients/${id}/prescriptions/batch`, data),
   updatePrescription: (
     patientId: string,
     rxId: string,
     data: {
       medication_name?: string;
       dosage?: string;
+      quantity?: string;
       frequency?: string;
       schedule_times?: string[];
       instructions?: string;

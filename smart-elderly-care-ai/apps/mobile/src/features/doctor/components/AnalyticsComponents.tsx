@@ -337,6 +337,7 @@ export interface PatientSelectionViewProps {
   onFilterChange: (status: 'ALL' | 'WARNING' | 'NORMAL') => void;
   onSelectPatient: (patient: PatientOption) => void;
   onReload: () => void;
+  onBack?: () => void;
 }
 
 export const PatientSelectionView: React.FC<PatientSelectionViewProps> = ({
@@ -353,6 +354,7 @@ export const PatientSelectionView: React.FC<PatientSelectionViewProps> = ({
   onFilterChange,
   onSelectPatient,
   onReload,
+  onBack,
 }) => {
   return (
     <View style={[styles.container, { backgroundColor: isDarkMode ? '#0F172A' : '#F8FAFC' }]}>
@@ -369,14 +371,25 @@ export const PatientSelectionView: React.FC<PatientSelectionViewProps> = ({
         ]}
       >
         <View style={styles.headerTopRow}>
-          <View style={{ flex: 1 }}>
+          <View style={{ flex: 1, flexDirection: 'row', alignItems: 'center' }}>
+            {onBack && (
+              <TouchableOpacity
+                style={[styles.reloadBtn, { backgroundColor: isDarkMode ? '#334155' : '#EEF2F6', marginRight: 10 }]}
+                onPress={onBack}
+                hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
+              >
+                <Ionicons name="arrow-back" size={18} color={colors.textPrimary} />
+              </TouchableOpacity>
+            )}
+            <View style={{ flex: 1 }}>
             <LocalizedText style={[styles.headerSubtitle, { color: isDarkMode ? '#94A3B8' : '#64748B' }]}>
               Hồ Sơ Y Khoa Bác Sĩ Gia Đình
             </LocalizedText>
-            <LocalizedText style={[styles.headerTitle, { color: colors.textPrimary }]}>
+            <LocalizedText style={[styles.headerTitle, { color: colors.textPrimary }]} numberOfLines={1}>
               Báo Cáo & Phân Tích Sinh Hiệu
             </LocalizedText>
           </View>
+        </View>
 
           <TouchableOpacity
             style={[styles.reloadBtn, { backgroundColor: isDarkMode ? '#334155' : '#EEF2F6' }]}

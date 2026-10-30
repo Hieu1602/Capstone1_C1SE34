@@ -18,10 +18,11 @@ import {
   ActivityIndicator,
   KeyboardAvoidingView,
   Platform,
+  ScrollView,
 } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { Colors } from '../../../theme/colors';
-import { SeverityType } from './types';
+import { SeverityType, MedicationFormItem } from './types';
 
 // Wrapper dùng chung cho các Modal chi tiết bệnh nhân giúp loại bỏ boilerplate
 const BaseModal: React.FC<{
@@ -321,22 +322,35 @@ export const ThresholdsConfigModal: React.FC<ThresholdsConfigModalProps> = ({
 );
 
 // =============================================================
-// 5. MODAL KÊ ĐƠN THUỐC / SỬA ĐƠN THUỐC
+// 5. MODAL KÊ ĐƠN THUỐC / SỬA ĐƠN THUỐC (ĐA LOẠI THUỐC & SỐ LƯỢNG)
 // =============================================================
 export interface PrescriptionFormModalProps {
   visible: boolean;
   isEditing: boolean;
-  medName: string;
-  dosage: string;
-  frequency: string;
-  scheduleTimes: string;
-  instructions: string;
+  // Multi-medication batch mode props
+  diagnosis?: string;
+  generalNotes?: string;
+  medications?: MedicationFormItem[];
+  onChangeDiagnosis?: (val: string) => void;
+  onChangeGeneralNotes?: (val: string) => void;
+  onAddMedication?: () => void;
+  onRemoveMedication?: (index: number) => void;
+  onUpdateMedication?: (index: number, field: keyof MedicationFormItem, value: string) => void;
+  // Single medicine props (for editing)
+  medName?: string;
+  quantity?: string;
+  dosage?: string;
+  frequency?: string;
+  scheduleTimes?: string;
+  instructions?: string;
+  onChangeMedName?: (val: string) => void;
+  onChangeQuantity?: (val: string) => void;
+  onChangeDosage?: (val: string) => void;
+  onChangeFrequency?: (val: string) => void;
+  onChangeScheduleTimes?: (val: string) => void;
+  onChangeInstructions?: (val: string) => void;
+  // Common
   enableSpeaker: boolean;
-  onChangeMedName: (val: string) => void;
-  onChangeDosage: (val: string) => void;
-  onChangeFrequency: (val: string) => void;
-  onChangeScheduleTimes: (val: string) => void;
-  onChangeInstructions: (val: string) => void;
   onToggleEnableSpeaker: (val: boolean) => void;
   isSubmitting: boolean;
   onSave: () => void;
@@ -351,17 +365,27 @@ export interface PrescriptionFormModalProps {
 export const PrescriptionFormModal: React.FC<PrescriptionFormModalProps> = ({
   visible,
   isEditing,
-  medName,
-  dosage,
-  frequency,
-  scheduleTimes,
-  instructions,
-  enableSpeaker,
+  diagnosis = '',
+  generalNotes = '',
+  medications = [],
+  onChangeDiagnosis,
+  onChangeGeneralNotes,
+  onAddMedication,
+  onRemoveMedication,
+  onUpdateMedication,
+  medName = '',
+  quantity = '',
+  dosage = '',
+  frequency = '',
+  scheduleTimes = '',
+  instructions = '',
   onChangeMedName,
+  onChangeQuantity,
   onChangeDosage,
   onChangeFrequency,
   onChangeScheduleTimes,
   onChangeInstructions,
+  enableSpeaker,
   onToggleEnableSpeaker,
   isSubmitting,
   onSave,
@@ -371,84 +395,274 @@ export const PrescriptionFormModal: React.FC<PrescriptionFormModalProps> = ({
   patientName,
   customTitle,
   customSubmitText,
-}) => (
-  <BaseModal
-    visible={visible}
-    title={customTitle || (isEditing ? 'Sửa Đơn Thuốc' : 'Kê Đơn Thuốc Mới')}
-    onClose={onClose}
-    isDarkMode={isDarkMode}
-    colors={colors}
-  >
-    {patientName ? (
-      <>
-        <Text style={styles.fieldLabel}>Bệnh nhân tiếp nhận</Text>
-        <View style={[styles.patientSelector, { backgroundColor: isDarkMode ? '#334155' : '#EEF2F6' }]}>
-          <Text style={[styles.patientSelectorText, { color: colors.textPrimary }]}>👤 {patientName}</Text>
+}) => {
+  const cardBg = isDarkMode ? '#0F172A' : '#F8FAFC';
+  const borderCol = isDarkMode ? '#334155' : '#E2E8F0';
+
+  return (
+    <BaseModal
+      visible={visible}
+      title={customTitle || (isEditing ? 'Sửa Đơn Thuốc' : 'Kê Đơn Thuốc Mới')}
+      onClose={onClose}
+      isDarkMode={isDarkMode}
+      colors={colors}
+    >
+      <ScrollView
+        style={{ maxHeight: 500 }}
+        contentContainerStyle={{ paddingBottom: 12 }}
+        showsVerticalScrollIndicator={false}
+        keyboardShouldPersistTaps="handled"
+      >
+        {patientName ? (
+          <>
+            <Text style={styles.fieldLabel}>Bệnh nhân tiếp nhận</Text>
+            <View style={[styles.patientSelector, { backgroundColor: isDarkMode ? '#334155' : '#EEF2F6' }]}>
+              <Text style={[styles.patientSelectorText, { color: colors.textPrimary }]}>👤 {patientName}</Text>
+            </View>
+          </>
+        ) : null}
+
+        {isEditing ? (
+          /* Chế độ Sửa 1 loại thuốc */
+          <View style={{ marginTop: 4 }}>
+            <Text style={styles.fieldLabel}>Tên thuốc (*)</Text>
+            <TextInput
+              style={[styles.inputField, { color: colors.textPrimary, borderColor: colors.border }]}
+              placeholder="VD: Amlodipine 5mg..."
+              placeholderTextColor="#94A3B8"
+              value={medName}
+              onChangeText={onChangeMedName}
+            />
+
+            <View style={{ flexDirection: 'row', gap: 10, marginTop: 4 }}>
+              <View style={{ flex: 1 }}>
+                <Text style={styles.fieldLabel}>Số lượng & Đơn vị (*)</Text>
+                <TextInput
+                  style={[styles.inputField, { color: colors.textPrimary, borderColor: colors.border }]}
+                  placeholder="VD: 30 viên"
+                  placeholderTextColor="#94A3B8"
+                  value={quantity}
+                  onChangeText={onChangeQuantity}
+                />
+              </View>
+              <View style={{ flex: 1 }}>
+                <Text style={styles.fieldLabel}>Liều dùng (*)</Text>
+                <TextInput
+                  style={[styles.inputField, { color: colors.textPrimary, borderColor: colors.border }]}
+                  placeholder="VD: 1 viên/lần"
+                  placeholderTextColor="#94A3B8"
+                  value={dosage}
+                  onChangeText={onChangeDosage}
+                />
+              </View>
+            </View>
+
+            <View style={{ flexDirection: 'row', gap: 10, marginTop: 4 }}>
+              <View style={{ flex: 1 }}>
+                <Text style={styles.fieldLabel}>Tần suất</Text>
+                <TextInput
+                  style={[styles.inputField, { color: colors.textPrimary, borderColor: colors.border }]}
+                  placeholder="VD: Hàng ngày"
+                  placeholderTextColor="#94A3B8"
+                  value={frequency}
+                  onChangeText={onChangeFrequency}
+                />
+              </View>
+              <View style={{ flex: 1.2 }}>
+                <Text style={styles.fieldLabel}>Giờ uống</Text>
+                <TextInput
+                  style={[styles.inputField, { color: colors.textPrimary, borderColor: colors.border }]}
+                  placeholder="VD: 08:00, 19:30"
+                  placeholderTextColor="#94A3B8"
+                  value={scheduleTimes}
+                  onChangeText={onChangeScheduleTimes}
+                />
+              </View>
+            </View>
+
+            <Text style={styles.fieldLabel}>Dặn dò cách uống</Text>
+            <TextInput
+              style={[styles.inputField, { color: colors.textPrimary, borderColor: colors.border }]}
+              placeholder="VD: Uống sau ăn 15 phút..."
+              placeholderTextColor="#94A3B8"
+              value={instructions}
+              onChangeText={onChangeInstructions}
+            />
+          </View>
+        ) : (
+          /* Chế độ Kê Đơn Thuốc Mới gồm nhiều loại & số lượng */
+          <View style={{ marginTop: 4 }}>
+            <Text style={styles.fieldLabel}>Chẩn đoán / Tên đợt khám</Text>
+            <TextInput
+              style={[styles.inputField, { color: colors.textPrimary, borderColor: colors.border }]}
+              placeholder="VD: Đơn thuốc điều trị Tăng huyết áp & Tim mạch..."
+              placeholderTextColor="#94A3B8"
+              value={diagnosis}
+              onChangeText={onChangeDiagnosis}
+            />
+
+            <Text style={styles.fieldLabel}>Lời dặn dò chung của Bác sĩ</Text>
+            <TextInput
+              style={[styles.inputField, { color: colors.textPrimary, borderColor: colors.border }]}
+              placeholder="VD: Ăn nhạt, uống nhiều nước, tập thể dục nhẹ nhàng..."
+              placeholderTextColor="#94A3B8"
+              value={generalNotes}
+              onChangeText={onChangeGeneralNotes}
+            />
+
+            <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginTop: 12, marginBottom: 6 }}>
+              <Text style={{ fontSize: 13, fontWeight: '800', color: colors.textPrimary }}>
+                Danh mục thuốc kê đơn ({medications.length})
+              </Text>
+            </View>
+
+            {medications.map((item, idx) => (
+              <View
+                key={idx}
+                style={[
+                  styles.medItemCard,
+                  {
+                    backgroundColor: cardBg,
+                    borderColor: borderCol,
+                  },
+                ]}
+              >
+                <View style={styles.medItemHeader}>
+                  <View style={[styles.medIndexBadge, { backgroundColor: isDarkMode ? '#1E3A8A' : '#EFF6FF' }]}>
+                    <Text style={{ fontSize: 11, fontWeight: '700', color: '#0284C7' }}>Thuốc #{idx + 1}</Text>
+                  </View>
+                  {medications.length > 1 && onRemoveMedication ? (
+                    <TouchableOpacity
+                      onPress={() => onRemoveMedication(idx)}
+                      hitSlop={{ top: 6, bottom: 6, left: 6, right: 6 }}
+                    >
+                      <Ionicons name="trash-outline" size={17} color="#EF4444" />
+                    </TouchableOpacity>
+                  ) : null}
+                </View>
+
+                {/* Tên thuốc & Số lượng */}
+                <View style={{ flexDirection: 'row', gap: 8 }}>
+                  <View style={{ flex: 1.6 }}>
+                    <Text style={styles.subFieldLabel}>Tên thuốc (*)</Text>
+                    <TextInput
+                      style={[styles.inputFieldSmall, { color: colors.textPrimary, borderColor: colors.border }]}
+                      placeholder="VD: Amlodipine 5mg"
+                      placeholderTextColor="#94A3B8"
+                      value={item.medication_name}
+                      onChangeText={(val) => onUpdateMedication && onUpdateMedication(idx, 'medication_name', val)}
+                    />
+                  </View>
+                  <View style={{ flex: 1 }}>
+                    <Text style={styles.subFieldLabel}>Số lượng (*)</Text>
+                    <TextInput
+                      style={[styles.inputFieldSmall, { color: colors.textPrimary, borderColor: colors.border }]}
+                      placeholder="VD: 30 viên"
+                      placeholderTextColor="#94A3B8"
+                      value={item.quantity}
+                      onChangeText={(val) => onUpdateMedication && onUpdateMedication(idx, 'quantity', val)}
+                    />
+                  </View>
+                </View>
+
+                {/* Liều dùng & Tần suất */}
+                <View style={{ flexDirection: 'row', gap: 8, marginTop: 6 }}>
+                  <View style={{ flex: 1 }}>
+                    <Text style={styles.subFieldLabel}>Liều dùng (*)</Text>
+                    <TextInput
+                      style={[styles.inputFieldSmall, { color: colors.textPrimary, borderColor: colors.border }]}
+                      placeholder="VD: 1 viên/lần"
+                      placeholderTextColor="#94A3B8"
+                      value={item.dosage}
+                      onChangeText={(val) => onUpdateMedication && onUpdateMedication(idx, 'dosage', val)}
+                    />
+                  </View>
+                  <View style={{ flex: 1.2 }}>
+                    <Text style={styles.subFieldLabel}>Tần suất</Text>
+                    <TextInput
+                      style={[styles.inputFieldSmall, { color: colors.textPrimary, borderColor: colors.border }]}
+                      placeholder="VD: Hàng ngày"
+                      placeholderTextColor="#94A3B8"
+                      value={item.frequency}
+                      onChangeText={(val) => onUpdateMedication && onUpdateMedication(idx, 'frequency', val)}
+                    />
+                  </View>
+                </View>
+
+                {/* Giờ uống thuốc */}
+                <View style={{ marginTop: 6 }}>
+                  <Text style={styles.subFieldLabel}>Giờ uống thuốc (cách nhau dấu phẩy)</Text>
+                  <TextInput
+                    style={[styles.inputFieldSmall, { color: colors.textPrimary, borderColor: colors.border }]}
+                    placeholder="VD: 08:00, 19:30"
+                    placeholderTextColor="#94A3B8"
+                    value={item.schedule_times}
+                    onChangeText={(val) => onUpdateMedication && onUpdateMedication(idx, 'schedule_times', val)}
+                  />
+                </View>
+
+                {/* Dặn dò riêng của thuốc */}
+                <View style={{ marginTop: 6 }}>
+                  <Text style={styles.subFieldLabel}>Dặn dò cách uống</Text>
+                  <TextInput
+                    style={[styles.inputFieldSmall, { color: colors.textPrimary, borderColor: colors.border }]}
+                    placeholder="VD: Uống sau ăn no 15 phút..."
+                    placeholderTextColor="#94A3B8"
+                    value={item.instructions}
+                    onChangeText={(val) => onUpdateMedication && onUpdateMedication(idx, 'instructions', val)}
+                  />
+                </View>
+              </View>
+            ))}
+
+            {/* Nút thêm loại thuốc mới vào đơn */}
+            {onAddMedication && (
+              <TouchableOpacity
+                style={[
+                  styles.btnAddMedRow,
+                  {
+                    backgroundColor: isDarkMode ? '#1E293B' : '#EFF6FF',
+                    borderColor: '#0284C7',
+                  },
+                ]}
+                onPress={onAddMedication}
+                activeOpacity={0.8}
+              >
+                <Ionicons name="add-circle" size={17} color="#0284C7" style={{ marginRight: 6 }} />
+                <Text style={{ fontSize: 13, fontWeight: '700', color: '#0284C7' }}>
+                  + Thêm loại thuốc vào đơn
+                </Text>
+              </TouchableOpacity>
+            )}
+          </View>
+        )}
+
+        <View style={styles.switchRow}>
+          <View style={{ flex: 1, marginRight: 8 }}>
+            <Text style={[styles.switchTitle, { color: colors.textPrimary }]}>Nhắc nhở qua Loa Hub AI</Text>
+            <Text style={styles.switchSub}>Tự động phát lời nhắc uống thuốc cho bệnh nhân</Text>
+          </View>
+          <Switch
+            value={enableSpeaker}
+            onValueChange={onToggleEnableSpeaker}
+            trackColor={{ false: '#94A3B8', true: Colors.primary }}
+          />
         </View>
-      </>
-    ) : null}
 
-    <Text style={styles.fieldLabel}>Tên thuốc (*)</Text>
-    <TextInput
-      style={[styles.inputField, { color: colors.textPrimary, borderColor: colors.border }]}
-      placeholder="VD: Amlodipine 5mg..."
-      placeholderTextColor="#94A3B8"
-      value={medName}
-      onChangeText={onChangeMedName}
-    />
-
-    <View style={{ flexDirection: 'row', gap: 10 }}>
-      <View style={{ flex: 1 }}>
-        <Text style={styles.fieldLabel}>Liều dùng (*)</Text>
-        <TextInput
-          style={[styles.inputField, { color: colors.textPrimary, borderColor: colors.border }]}
-          placeholder="VD: 1 viên"
-          placeholderTextColor="#94A3B8"
-          value={dosage}
-          onChangeText={onChangeDosage}
+        <SubmitBtn
+          title={
+            customSubmitText ||
+            (isEditing
+              ? 'Cập Nhật Thuốc'
+              : `Lưu Đơn Thuốc (${medications.length > 0 ? `${medications.length} loại` : ''})`)
+          }
+          onPress={onSave}
+          loading={isSubmitting}
         />
-      </View>
-      <View style={{ flex: 1.2 }}>
-        <Text style={styles.fieldLabel}>Tần suất</Text>
-        <TextInput
-          style={[styles.inputField, { color: colors.textPrimary, borderColor: colors.border }]}
-          placeholder="VD: Hàng ngày"
-          placeholderTextColor="#94A3B8"
-          value={frequency}
-          onChangeText={onChangeFrequency}
-        />
-      </View>
-    </View>
-
-    <Text style={styles.fieldLabel}>Giờ uống thuốc (cách nhau bởi dấu phẩy)</Text>
-    <TextInput
-      style={[styles.inputField, { color: colors.textPrimary, borderColor: colors.border }]}
-      placeholder="VD: 08:00, 19:30"
-      placeholderTextColor="#94A3B8"
-      value={scheduleTimes}
-      onChangeText={onChangeScheduleTimes}
-    />
-
-    <Text style={styles.fieldLabel}>Dặn dò cách uống</Text>
-    <TextInput
-      style={[styles.inputField, { color: colors.textPrimary, borderColor: colors.border }]}
-      placeholder="VD: Uống sau ăn 15 phút..."
-      placeholderTextColor="#94A3B8"
-      value={instructions}
-      onChangeText={onChangeInstructions}
-    />
-
-    <View style={styles.switchRow}>
-      <View style={{ flex: 1, marginRight: 8 }}>
-        <Text style={[styles.switchTitle, { color: colors.textPrimary }]}>Nhắc nhở qua Loa Hub AI</Text>
-        <Text style={styles.switchSub}>Tự động phát lời nhắc uống thuốc cho bệnh nhân</Text>
-      </View>
-      <Switch value={enableSpeaker} onValueChange={onToggleEnableSpeaker} trackColor={{ false: '#94A3B8', true: Colors.primary }} />
-    </View>
-
-    <SubmitBtn title={customSubmitText || (isEditing ? 'Cập Nhật Đơn Thuốc' : 'Lưu Đơn Thuốc')} onPress={onSave} loading={isSubmitting} />
-  </BaseModal>
-);
+      </ScrollView>
+    </BaseModal>
+  );
+};
 
 const styles = StyleSheet.create({
   modalOverlay: {
@@ -536,5 +750,45 @@ const styles = StyleSheet.create({
     color: '#FFFFFF',
     fontSize: 13,
     fontWeight: '700',
+  },
+  medItemCard: {
+    borderWidth: 1,
+    borderRadius: 12,
+    padding: 10,
+    marginBottom: 10,
+  },
+  medItemHeader: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    marginBottom: 6,
+  },
+  medIndexBadge: {
+    paddingHorizontal: 8,
+    paddingVertical: 3,
+    borderRadius: 6,
+  },
+  subFieldLabel: {
+    fontSize: 11,
+    fontWeight: '600',
+    color: '#64748B',
+    marginBottom: 3,
+  },
+  inputFieldSmall: {
+    borderWidth: 1,
+    borderRadius: 7,
+    paddingHorizontal: 9,
+    paddingVertical: 6,
+    fontSize: 12.5,
+  },
+  btnAddMedRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    paddingVertical: 10,
+    borderRadius: 8,
+    borderWidth: 1.2,
+    marginTop: 4,
+    marginBottom: 6,
   },
 });

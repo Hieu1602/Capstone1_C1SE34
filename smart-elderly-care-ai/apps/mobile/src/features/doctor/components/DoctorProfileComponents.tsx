@@ -53,89 +53,155 @@ export const DoctorProfileCard: React.FC<DoctorProfileCardProps> = ({
   const completedVisits = appointmentCount;
 
   return (
-    <View style={{ marginBottom: 12 }}>
-      {/* 1. Header thông tin cá nhân: Card nền xanh nhẹ */}
+    <View style={{ marginBottom: 16 }}>
+      {/* 1. HERO PROFILE CARD: Bố cục ngang chuẩn Bác sĩ Lão khoa & Gia đình */}
       <View
         style={[
-          styles.headerCard,
-          {
-            backgroundColor: isDarkMode ? '#1E293B' : '#F0F9FF',
-            borderColor: isDarkMode ? '#334155' : '#BAE6FD',
-          },
-        ]}
-      >
-        <TouchableOpacity
-          style={[styles.editBtnCorner, { backgroundColor: isDarkMode ? '#334155' : '#EFF6FF' }]}
-          onPress={onEditProfile}
-          activeOpacity={0.8}
-        >
-          <Ionicons name="pencil-outline" size={13} color="#2563EB" style={{ marginRight: 4 }} />
-          <Text style={styles.editBtnText}>Chỉnh sửa</Text>
-        </TouchableOpacity>
-
-        {/* Avatar tròn đồng bộ Trang chủ */}
-        <View style={styles.avatarWrapper}>
-          <TouchableOpacity style={{ position: 'relative' }} activeOpacity={0.88} onPress={onPickImage}>
-            <View style={styles.avatarBig}>
-              {avatarUri ? (
-                <Image source={{ uri: avatarUri }} style={styles.avatarImage} />
-              ) : (
-                <Text style={styles.avatarLetter}>{doctorInitial}</Text>
-              )}
-            </View>
-            <View style={styles.onlineBadge} />
-          </TouchableOpacity>
-
-          <View style={styles.verifiedBadge}>
-            <Ionicons name="shield-checkmark" size={13} color="#059669" style={{ marginRight: 4 }} />
-            <Text style={styles.verifiedBadgeText}>Đã xác minh CCHN</Text>
-          </View>
-        </View>
-
-        {/* Họ và tên & Chuyên khoa */}
-        <Text style={[styles.docName, { color: colors.textPrimary }]} numberOfLines={1}>
-          {info.name || 'Bác sĩ'}
-        </Text>
-        <Text style={[styles.docSpecialty, { color: isDarkMode ? '#94A3B8' : '#475569' }]}>
-          {info.degree || 'Bác sĩ chuyên khoa'} • {info.specialty || 'Y học Gia đình & Lão khoa'}
-        </Text>
-
-        {/* Nơi công tác */}
-        <View style={[styles.hospitalBadge, { backgroundColor: isDarkMode ? '#0F172A' : '#EFF6FF' }]}>
-          <Ionicons name="business" size={13} color="#2563EB" style={{ marginRight: 5 }} />
-          <Text style={[styles.hospitalText, { color: isDarkMode ? '#60A5FA' : '#1D4ED8' }]} numberOfLines={1}>
-            {info.hospital || 'Hệ thống Smart Elderly Care AI'}
-          </Text>
-        </View>
-      </View>
-
-      {/* 2. Thống kê hoạt động (Cả 3 số cùng màu #2563EB) */}
-      <View
-        style={[
-          styles.statsContainer,
+          styles.heroCard,
           {
             backgroundColor: isDarkMode ? '#1E293B' : '#FFFFFF',
             borderColor: isDarkMode ? '#334155' : '#E2E8F0',
           },
         ]}
       >
-        <View style={styles.statCol}>
-          <Text style={[styles.statNumber, { color: '#2563EB' }]}>{displayPatients}</Text>
-          <Text style={[styles.statLabel, { color: isDarkMode ? '#94A3B8' : '#64748B' }]}>Bệnh nhân phụ trách</Text>
+        <View style={styles.heroTopRow}>
+          {/* Avatar Bác sĩ có nút Camera trực quan */}
+          <TouchableOpacity
+            style={styles.heroAvatarContainer}
+            activeOpacity={0.88}
+            onPress={onPickImage}
+          >
+            <View style={styles.heroAvatarBox}>
+              {avatarUri ? (
+                <Image source={{ uri: avatarUri }} style={styles.avatarImage} />
+              ) : (
+                <Text style={styles.heroAvatarLetter}>{doctorInitial}</Text>
+              )}
+            </View>
+            <View style={styles.heroOnlineBadge} />
+            <View
+              style={[
+                styles.heroCameraBadge,
+                {
+                  backgroundColor: isDarkMode ? '#0F172A' : '#FFFFFF',
+                  borderColor: isDarkMode ? '#334155' : '#CBD5E1',
+                },
+              ]}
+            >
+              <Ionicons name="camera" size={11} color="#0284C7" />
+            </View>
+          </TouchableOpacity>
+
+          {/* Thông tin Bác sĩ bên phải */}
+          <View style={styles.heroInfoCol}>
+            <View style={styles.verifiedRow}>
+              <View
+                style={[
+                  styles.verifiedBadge,
+                  {
+                    backgroundColor: isDarkMode ? '#064E3B44' : '#ECFDF5',
+                    borderColor: isDarkMode ? '#059669' : '#A7F3D0',
+                  },
+                ]}
+              >
+                <Ionicons name="shield-checkmark" size={12} color="#059669" style={{ marginRight: 4 }} />
+                <Text style={styles.verifiedBadgeText}>Đã xác minh CCHN</Text>
+              </View>
+            </View>
+
+            <Text style={[styles.heroDocName, { color: colors.textPrimary }]} numberOfLines={1}>
+              {info.name || 'Bác sĩ'}
+            </Text>
+
+            <Text style={[styles.heroDocDegree, { color: isDarkMode ? '#38BDF8' : '#0284C7' }]} numberOfLines={1}>
+              {info.degree || 'Bác sĩ chuyên khoa'}
+            </Text>
+
+            <Text style={[styles.heroDocSpecialty, { color: isDarkMode ? '#94A3B8' : '#64748B' }]} numberOfLines={1}>
+              {info.specialty || 'Y học Gia đình & Lão khoa'}
+            </Text>
+          </View>
         </View>
-        <View style={[styles.statDivider, { backgroundColor: isDarkMode ? '#334155' : '#E2E8F0' }]} />
-        <View style={styles.statCol}>
-          <Text style={[styles.statNumber, { color: '#2563EB' }]}>{completedVisits}</Text>
-          <Text style={[styles.statLabel, { color: isDarkMode ? '#94A3B8' : '#64748B' }]}>Ca khám hoàn thành</Text>
+
+        {/* Nơi công tác */}
+        <View
+          style={[
+            styles.heroHospitalBanner,
+            {
+              backgroundColor: isDarkMode ? '#0F172A' : '#F8FAFC',
+              borderColor: isDarkMode ? '#334155' : '#E2E8F0',
+            },
+          ]}
+        >
+          <Ionicons name="business-outline" size={15} color="#0284C7" style={{ marginRight: 8 }} />
+          <Text style={[styles.heroHospitalText, { color: isDarkMode ? '#CBD5E1' : '#334155' }]} numberOfLines={1}>
+            {info.hospital || 'Hệ thống Smart Elderly Care AI'}
+          </Text>
         </View>
-        <View style={[styles.statDivider, { backgroundColor: isDarkMode ? '#334155' : '#E2E8F0' }]} />
-        <View style={styles.statCol}>
-          <Text style={[styles.statNumber, { color: '#10B981' }]}>Đã cấp</Text>
-          <Text style={[styles.statLabel, { color: isDarkMode ? '#94A3B8' : '#64748B' }]}>Chứng chỉ CCHN</Text>
+
+        {/* Nút hành động Chỉnh sửa Hồ Sơ: Đầy đủ chiều ngang, tactile button */}
+        <TouchableOpacity
+          style={[
+            styles.heroEditButton,
+            {
+              backgroundColor: isDarkMode ? '#0C4A6E44' : '#EFF6FF',
+              borderColor: isDarkMode ? '#0284C7' : '#BAE6FD',
+            },
+          ]}
+          onPress={onEditProfile}
+          activeOpacity={0.8}
+        >
+          <Ionicons name="create-outline" size={17} color={isDarkMode ? '#38BDF8' : '#0284C7'} style={{ marginRight: 6 }} />
+          <Text style={[styles.heroEditButtonText, { color: isDarkMode ? '#38BDF8' : '#0284C7' }]}>
+            Chỉnh sửa thông tin bác sĩ
+          </Text>
+        </TouchableOpacity>
+      </View>
+
+      {/* 2. CHỈ SỐ CÔNG VIỆC LÂM SÀNG: 2 CỘT RÕ RÀNG (HOÀN TOÀN BỎ ĐÁNH GIÁ Y ĐỨC) */}
+      <View style={styles.statsTwoColRow}>
+        {/* Cột 1: Bệnh nhân phụ trách */}
+        <View
+          style={[
+            styles.statCardTwoCol,
+            {
+              backgroundColor: isDarkMode ? '#1E293B' : '#FFFFFF',
+              borderColor: isDarkMode ? '#334155' : '#E2E8F0',
+            },
+          ]}
+        >
+          <View style={styles.statCardHeader}>
+            <View style={[styles.statIconBox, { backgroundColor: isDarkMode ? '#0C4A6E44' : '#EFF6FF' }]}>
+              <Ionicons name="people" size={17} color="#0284C7" />
+            </View>
+            <Text style={[styles.statCardHeading, { color: isDarkMode ? '#94A3B8' : '#64748B' }]}>Bệnh nhân</Text>
+          </View>
+          <Text style={[styles.statCardValue, { color: isDarkMode ? '#38BDF8' : '#0284C7' }]}>{displayPatients}</Text>
+          <Text style={[styles.statCardSub, { color: isDarkMode ? '#64748B' : '#94A3B8' }]}>Theo dõi sức khỏe</Text>
+        </View>
+
+        {/* Cột 2: Lịch khám phụ trách */}
+        <View
+          style={[
+            styles.statCardTwoCol,
+            {
+              backgroundColor: isDarkMode ? '#1E293B' : '#FFFFFF',
+              borderColor: isDarkMode ? '#334155' : '#E2E8F0',
+            },
+          ]}
+        >
+          <View style={styles.statCardHeader}>
+            <View style={[styles.statIconBox, { backgroundColor: isDarkMode ? '#134E4A44' : '#F0FDFA' }]}>
+              <Ionicons name="calendar" size={17} color="#0D9488" />
+            </View>
+            <Text style={[styles.statCardHeading, { color: isDarkMode ? '#94A3B8' : '#64748B' }]}>Lịch khám</Text>
+          </View>
+          <Text style={[styles.statCardValue, { color: isDarkMode ? '#2DD4BF' : '#0D9488' }]}>{completedVisits}</Text>
+          <Text style={[styles.statCardSub, { color: isDarkMode ? '#64748B' : '#94A3B8' }]}>Ca khám & Tái khám</Text>
         </View>
       </View>
 
-      {/* 3. Chứng chỉ hành nghề y tế */}
+      {/* 3. THÔNG TIN HÀNH NGHỀ & CHỨNG CHỈ */}
       <View
         style={[
           styles.licenseCard,
@@ -148,20 +214,38 @@ export const DoctorProfileCard: React.FC<DoctorProfileCardProps> = ({
         <View style={styles.licenseHeader}>
           <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8 }}>
             <View style={[styles.ribbonIconCircle, { backgroundColor: isDarkMode ? '#1E3A8A33' : '#EFF6FF' }]}>
-              <Ionicons name="ribbon-outline" size={16} color="#2563EB" />
+              <Ionicons name="ribbon-outline" size={16} color="#0284C7" />
             </View>
-            <Text style={[styles.licenseSectionTitle, { color: colors.textPrimary }]}>THÔNG TIN HÀNH NGHỀ & CHỨNG CHỈ</Text>
+            <Text style={[styles.licenseSectionTitle, { color: colors.textPrimary }]}>THÔNG TIN HÀNH NGHỀ & PHÁP LÝ</Text>
           </View>
-          <View style={[styles.verifiedTag, { backgroundColor: isDarkMode ? '#1E3A8A33' : '#EFF6FF' }]}>
-            <Text style={[styles.verifiedTagText, { color: '#2563EB' }]}>BỘ Y TẾ CẤP</Text>
+          <View
+            style={[
+              styles.verifiedTag,
+              {
+                backgroundColor: isDarkMode ? '#1E3A8A33' : '#EFF6FF',
+                borderColor: isDarkMode ? '#1E3A8A' : '#BFDBFE',
+                borderWidth: 1,
+              },
+            ]}
+          >
+            <Text style={[styles.verifiedTagText, { color: '#0284C7' }]}>BỘ Y TẾ CẤP</Text>
           </View>
         </View>
 
-        <View style={{ gap: 10 }}>
+        <View style={{ gap: 12 }}>
           <View style={styles.licenseRow}>
             <Text style={[styles.licenseLabel, { color: isDarkMode ? '#94A3B8' : '#64748B' }]}>Số CCHN:</Text>
-            <View style={[styles.cchnBadge, { backgroundColor: isDarkMode ? '#1E3A8A33' : '#EFF6FF' }]}>
-              <Text style={[styles.cchnBadgeText, { color: '#2563EB' }]}>BYT-CCHN</Text>
+            <View
+              style={[
+                styles.cchnBadge,
+                {
+                  backgroundColor: isDarkMode ? '#1E3A8A33' : '#EFF6FF',
+                  borderColor: isDarkMode ? '#1E3A8A' : '#BFDBFE',
+                  borderWidth: 1,
+                },
+              ]}
+            >
+              <Text style={[styles.cchnBadgeText, { color: '#0284C7' }]}>{info.cchn_number || '028491/BYT-CCHN'}</Text>
             </View>
           </View>
           <View style={styles.licenseRow}>
@@ -170,7 +254,7 @@ export const DoctorProfileCard: React.FC<DoctorProfileCardProps> = ({
           </View>
           <View style={[styles.licenseRow, { borderBottomWidth: 0 }]}>
             <Text style={[styles.licenseLabel, { color: isDarkMode ? '#94A3B8' : '#64748B' }]}>SĐT liên hệ trực:</Text>
-            <Text style={[styles.licenseValue, { color: '#2563EB', fontWeight: '700' }]}>{info.phone || 'Chưa cập nhật'}</Text>
+            <Text style={[styles.licenseValue, { color: '#0284C7', fontWeight: '700' }]}>{info.phone || 'Chưa cập nhật'}</Text>
           </View>
         </View>
       </View>
@@ -197,136 +281,178 @@ export const DoctorProfileSettings: React.FC<DoctorProfileSettingsProps> = ({
   colors,
 }) => {
   const [notificationModalVisible, setNotificationModalVisible] = useState(false);
-  const [notifyShift, setNotifyShift] = useState(true);
   const [notifyAppointment, setNotifyAppointment] = useState(true);
   const [notifyEmergency, setNotifyEmergency] = useState(true);
-  const [notifySound, setNotifySound] = useState(true);
   const [complianceModalVisible, setComplianceModalVisible] = useState(false);
 
   return (
-    <View style={{ marginBottom: 20 }}>
-      <Text style={[styles.sectionTitle, { color: isDarkMode ? '#94A3B8' : '#64748B' }]}>CÀI ĐẶT & BẢO MẬT HỆ THỐNG</Text>
+    <View style={{ marginBottom: 28 }}>
+      {/* CÀI ĐẶT HỆ THỐNG & BẢO MẬT */}
+      <Text style={[styles.groupTitle, { color: isDarkMode ? '#94A3B8' : '#64748B' }]}>
+        CÀI ĐẶT HỆ THỐNG
+      </Text>
 
       <View
         style={[
-          styles.menuCardContainer,
+          styles.settingsCardGroup,
           {
             backgroundColor: isDarkMode ? '#1E293B' : '#FFFFFF',
             borderColor: isDarkMode ? '#334155' : '#E2E8F0',
           },
         ]}
       >
-        <TouchableOpacity style={styles.menuItemRow} activeOpacity={0.75} onPress={onOpenPasswordModal}>
-          <View style={[styles.iconBox, { backgroundColor: isDarkMode ? '#1E3A8A33' : '#EFF6FF' }]}>
-            <Ionicons name="lock-closed" size={18} color="#2563EB" />
+        {/* 1. Đổi mật khẩu */}
+        <TouchableOpacity style={styles.settingsRow} activeOpacity={0.7} onPress={onOpenPasswordModal}>
+          <View style={[styles.settingsIconCircle, { backgroundColor: '#0284C7' }]}>
+            <Ionicons name="key" size={17} color="#FFFFFF" />
           </View>
-          <View style={{ flex: 1 }}>
-            <Text style={[styles.menuItemTitle, { color: colors.textPrimary }]}>Đổi mật khẩu</Text>
-            <Text style={[styles.menuItemSub, { color: isDarkMode ? '#94A3B8' : '#64748B' }]}>Cập nhật mật khẩu bảo vệ tài khoản y tế</Text>
-          </View>
-          <Ionicons name="chevron-forward" size={17} color={isDarkMode ? '#64748B' : '#94A3B8'} />
-        </TouchableOpacity>
-
-        <TouchableOpacity style={styles.menuItemRow} activeOpacity={0.75} onPress={() => setNotificationModalVisible(true)}>
-          <View style={[styles.iconBox, { backgroundColor: isDarkMode ? '#1E3A8A33' : '#EFF6FF' }]}>
-            <Ionicons name="notifications" size={18} color="#2563EB" />
-          </View>
-          <View style={{ flex: 1 }}>
-            <Text style={[styles.menuItemTitle, { color: colors.textPrimary }]}>Cài đặt thông báo ca trực & Lịch khám</Text>
-            <Text style={[styles.menuItemSub, { color: isDarkMode ? '#94A3B8' : '#64748B' }]}>Nhắc nhở lịch hẹn và chuông báo động</Text>
-          </View>
-          <Ionicons name="chevron-forward" size={17} color={isDarkMode ? '#64748B' : '#94A3B8'} />
-        </TouchableOpacity>
-
-        <TouchableOpacity style={styles.menuItemRow} activeOpacity={0.75} onPress={() => setComplianceModalVisible(true)}>
-          <View style={[styles.iconBox, { backgroundColor: isDarkMode ? '#1E3A8A33' : '#EFF6FF' }]}>
-            <Ionicons name="document-text" size={18} color="#2563EB" />
-          </View>
-          <View style={{ flex: 1 }}>
-            <Text style={[styles.menuItemTitle, { color: colors.textPrimary }]}>Điều khoản y tế & Bảo mật HL7/FHIR</Text>
-            <Text style={[styles.menuItemSub, { color: isDarkMode ? '#94A3B8' : '#64748B' }]}>Tiêu chuẩn an toàn dữ liệu bệnh nhân quốc tế</Text>
-          </View>
-          <Ionicons name="chevron-forward" size={17} color={isDarkMode ? '#64748B' : '#94A3B8'} />
-        </TouchableOpacity>
-
-        <View style={[styles.menuItemRow, { borderBottomWidth: 0 }]}>
-          <View style={[styles.iconBox, { backgroundColor: isDarkMode ? '#1E3A8A33' : '#EFF6FF' }]}>
-            <Ionicons name={isDarkMode ? 'moon' : 'sunny'} size={18} color="#2563EB" />
-          </View>
-          <View style={{ flex: 1 }}>
-            <Text style={[styles.menuItemTitle, { color: colors.textPrimary }]}>
-              {isDarkMode ? 'Giao diện Tối (Dark Mode)' : 'Giao diện Sáng (Light Mode)'}
+          <View style={styles.settingsRowContent}>
+            <Text style={[styles.settingsRowTitle, { color: colors.textPrimary }]}>Đổi mật khẩu</Text>
+            <Text style={[styles.settingsRowSub, { color: isDarkMode ? '#94A3B8' : '#64748B' }]}>
+              Bảo mật tài khoản đăng nhập
             </Text>
-            <Text style={[styles.menuItemSub, { color: isDarkMode ? '#94A3B8' : '#64748B' }]}>Bảo vệ thị lực khi làm ca đêm</Text>
           </View>
-          <Switch value={isDarkMode} onValueChange={toggleTheme} trackColor={{ false: '#CBD5E1', true: '#2563EB' }} thumbColor="#FFFFFF" />
+          <Ionicons name="chevron-forward" size={18} color={isDarkMode ? '#64748B' : '#94A3B8'} />
+        </TouchableOpacity>
+
+        <View style={[styles.rowDivider, { backgroundColor: isDarkMode ? '#334155' : '#F1F5F9' }]} />
+
+        {/* 2. Cài đặt thông báo */}
+        <TouchableOpacity style={styles.settingsRow} activeOpacity={0.7} onPress={() => setNotificationModalVisible(true)}>
+          <View style={[styles.settingsIconCircle, { backgroundColor: '#F59E0B' }]}>
+            <Ionicons name="notifications" size={17} color="#FFFFFF" />
+          </View>
+          <View style={styles.settingsRowContent}>
+            <Text style={[styles.settingsRowTitle, { color: colors.textPrimary }]}>Cài đặt thông báo ca trực</Text>
+            <Text style={[styles.settingsRowSub, { color: isDarkMode ? '#94A3B8' : '#64748B' }]}>
+              Chuông cảnh báo sinh hiệu & nhắc lịch
+            </Text>
+          </View>
+          <Ionicons name="chevron-forward" size={18} color={isDarkMode ? '#64748B' : '#94A3B8'} />
+        </TouchableOpacity>
+
+        <View style={[styles.rowDivider, { backgroundColor: isDarkMode ? '#334155' : '#F1F5F9' }]} />
+
+        {/* 3. Chính sách bảo mật y tế */}
+        <TouchableOpacity style={styles.settingsRow} activeOpacity={0.7} onPress={() => setComplianceModalVisible(true)}>
+          <View style={[styles.settingsIconCircle, { backgroundColor: '#10B981' }]}>
+            <Ionicons name="shield-checkmark" size={17} color="#FFFFFF" />
+          </View>
+          <View style={styles.settingsRowContent}>
+            <Text style={[styles.settingsRowTitle, { color: colors.textPrimary }]}>Chính sách & Bảo mật dữ liệu</Text>
+            <Text style={[styles.settingsRowSub, { color: isDarkMode ? '#94A3B8' : '#64748B' }]}>
+              Tiêu chuẩn an toàn hồ sơ bệnh án
+            </Text>
+          </View>
+          <Ionicons name="chevron-forward" size={18} color={isDarkMode ? '#64748B' : '#94A3B8'} />
+        </TouchableOpacity>
+
+        <View style={[styles.rowDivider, { backgroundColor: isDarkMode ? '#334155' : '#F1F5F9' }]} />
+
+        {/* 4. Chế độ nền tối (Dark Mode) */}
+        <View style={styles.settingsRow}>
+          <View style={[styles.settingsIconCircle, { backgroundColor: '#6366F1' }]}>
+            <Ionicons name="moon" size={17} color="#FFFFFF" />
+          </View>
+          <View style={styles.settingsRowContent}>
+            <Text style={[styles.settingsRowTitle, { color: colors.textPrimary }]}>Chế độ nền tối</Text>
+            <Text style={[styles.settingsRowSub, { color: isDarkMode ? '#94A3B8' : '#64748B' }]}>
+              Tối ưu thị giác khi trực ca đêm
+            </Text>
+          </View>
+          <Switch
+            value={isDarkMode}
+            onValueChange={toggleTheme}
+            trackColor={{ false: '#CBD5E1', true: '#6366F1' }}
+            thumbColor="#FFFFFF"
+          />
         </View>
       </View>
 
-      <View style={{ alignItems: 'center', marginBottom: 18, paddingHorizontal: 12 }}>
-        <Text style={[styles.versionTitle, { color: isDarkMode ? '#64748B' : '#94A3B8' }]}>
-          Smart Elderly Care AI • Phiên bản Bác sĩ 2.4.0 (Build 2026)
+      {/* NÚT ĐĂNG XUẤT CHUẨN IOS/MATERIAL NATIVE */}
+      <View style={{ marginTop: 20 }}>
+        <TouchableOpacity
+          style={[
+            styles.nativeLogoutCard,
+            {
+              backgroundColor: isDarkMode ? '#1E293B' : '#FFFFFF',
+              borderColor: isDarkMode ? '#334155' : '#E2E8F0',
+            },
+          ]}
+          onPress={onOpenLogoutModal}
+          activeOpacity={0.75}
+        >
+          <Ionicons name="log-out-outline" size={20} color="#DC2626" style={{ marginRight: 8 }} />
+          <Text style={styles.nativeLogoutText}>Đăng xuất khỏi tài khoản</Text>
+        </TouchableOpacity>
+      </View>
+
+      {/* FOOTER PHIÊN BẢN HỆ THỐNG */}
+      <View style={styles.appFooter}>
+        <Text style={[styles.appFooterVersion, { color: isDarkMode ? '#64748B' : '#94A3B8' }]}>
+          Phiên bản Bác sĩ 2.4.0 • Build 2026
         </Text>
-        <Text style={[styles.versionSub, { color: isDarkMode ? '#475569' : '#CBD5E1' }]}>
-          Hệ thống Quản lý Y tế & Giám sát Sức khỏe Người cao tuổi Toàn diện
+        <Text style={[styles.appFooterOrg, { color: isDarkMode ? '#475569' : '#CBD5E1' }]}>
+          Smart Elderly Care AI Platform
         </Text>
       </View>
 
-      <TouchableOpacity
-        style={[
-          styles.logoutButton,
-          {
-            backgroundColor: isDarkMode ? '#450A0A55' : '#FEF2F2',
-            borderColor: isDarkMode ? '#7F1D1D' : '#FCA5A5',
-          },
-        ]}
-        onPress={onOpenLogoutModal}
-        activeOpacity={0.85}
-      >
-        <Ionicons name="log-out-outline" size={18} color="#DC2626" style={{ marginRight: 8 }} />
-        <Text style={styles.logoutButtonText}>Đăng xuất khỏi tài khoản Bác sĩ</Text>
-      </TouchableOpacity>
-
-      {/* Modal Cài đặt thông báo */}
+      {/* MODAL CÀI ĐẶT THÔNG BÁO: TỐI GIẢN, CHUẨN MỰC, XÓA CÁC CÁI THỪA */}
       <Modal visible={notificationModalVisible} transparent animationType="fade" onRequestClose={() => setNotificationModalVisible(false)}>
         <View style={styles.modalOverlay}>
           <View style={[styles.dialogCard, { backgroundColor: isDarkMode ? '#1E293B' : '#FFFFFF', borderColor: colors.border }]}>
             <View style={styles.dialogHeader}>
-              <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8 }}>
-                <View style={[styles.iconBox, { backgroundColor: isDarkMode ? '#1E3A8A33' : '#EFF6FF' }]}>
-                  <Ionicons name="notifications" size={18} color="#2563EB" />
+              <View style={{ flexDirection: 'row', alignItems: 'center', gap: 10 }}>
+                <View style={[styles.settingsIconCircle, { backgroundColor: '#F59E0B' }]}>
+                  <Ionicons name="notifications" size={18} color="#FFFFFF" />
                 </View>
-                <Text style={[styles.modalTitle, { color: colors.textPrimary }]}>Cài đặt thông báo y tế</Text>
+                <Text style={[styles.modalTitle, { color: colors.textPrimary }]}>Cài đặt thông báo</Text>
               </View>
-              <TouchableOpacity onPress={() => setNotificationModalVisible(false)}>
+              <TouchableOpacity onPress={() => setNotificationModalVisible(false)} hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}>
                 <Ionicons name="close" size={22} color={isDarkMode ? '#94A3B8' : '#64748B'} />
               </TouchableOpacity>
             </View>
 
-            <View style={{ marginBottom: 16 }}>
-              {[
-                { title: 'Thông báo bắt đầu ca trực', sub: 'Nhắc nhở trước 15 phút khi bắt đầu ca trực', val: notifyShift, setVal: setNotifyShift },
-                { title: 'Nhắc nhở lịch khám sắp tới', sub: 'Thông báo trước các lịch tái khám định kỳ của cụ', val: notifyAppointment, setVal: setNotifyAppointment },
-                { title: 'Cảnh báo sinh hiệu khẩn cấp', sub: 'Rung và phát chuông to khi phát hiện té ngã hoặc suy hô hấp', val: notifyEmergency, setVal: setNotifyEmergency, isRed: true },
-                { title: 'Âm thanh chuông báo y tế', sub: 'Phát chuông âm lượng cao ngay cả khi máy ở chế độ im lặng', val: notifySound, setVal: setNotifySound },
-              ].map((item, idx) => (
-                <View key={idx} style={[styles.switchRow, idx === 3 && { borderBottomWidth: 0 }]}>
-                  <View style={{ flex: 1, paddingRight: 10 }}>
-                    <Text style={[styles.switchTitle, { color: item.isRed ? '#DC2626' : colors.textPrimary }]}>{item.title}</Text>
-                    <Text style={[styles.switchSub, { color: isDarkMode ? '#94A3B8' : '#64748B' }]}>{item.sub}</Text>
-                  </View>
-                  <Switch
-                    value={item.val}
-                    onValueChange={item.setVal}
-                    trackColor={{ false: '#CBD5E1', true: item.isRed ? '#DC2626' : '#2563EB' }}
-                    thumbColor="#FFFFFF"
-                  />
+            <View style={{ marginBottom: 18 }}>
+              {/* 1. Cảnh báo khẩn cấp */}
+              <View style={styles.switchRow}>
+                <View style={{ flex: 1, paddingRight: 12 }}>
+                  <Text style={[styles.switchTitle, { color: colors.textPrimary }]}>Cảnh báo sinh hiệu nguy cấp</Text>
+                  <Text style={[styles.switchSub, { color: isDarkMode ? '#94A3B8' : '#64748B' }]}>
+                    Tự động phát chuông to khi phát hiện cụ bị té ngã hoặc suy hô hấp
+                  </Text>
                 </View>
-              ))}
+                <Switch
+                  value={notifyEmergency}
+                  onValueChange={setNotifyEmergency}
+                  trackColor={{ false: '#CBD5E1', true: '#DC2626' }}
+                  thumbColor="#FFFFFF"
+                />
+              </View>
+
+              {/* 2. Nhắc nhở lịch khám */}
+              <View style={[styles.switchRow, { borderBottomWidth: 0 }]}>
+                <View style={{ flex: 1, paddingRight: 12 }}>
+                  <Text style={[styles.switchTitle, { color: colors.textPrimary }]}>Nhắc nhở ca trực & Lịch khám</Text>
+                  <Text style={[styles.switchSub, { color: isDarkMode ? '#94A3B8' : '#64748B' }]}>
+                    Thông báo trước giờ thăm khám định kỳ của bệnh nhân
+                  </Text>
+                </View>
+                <Switch
+                  value={notifyAppointment}
+                  onValueChange={setNotifyAppointment}
+                  trackColor={{ false: '#CBD5E1', true: '#0284C7' }}
+                  thumbColor="#FFFFFF"
+                />
+              </View>
             </View>
 
-            <TouchableOpacity style={styles.btnPrimary} onPress={() => setNotificationModalVisible(false)}>
-              <Text style={styles.btnPrimaryText}>Lưu cấu hình thông báo</Text>
+            <TouchableOpacity
+              style={styles.btnPrimary}
+              onPress={() => setNotificationModalVisible(false)}
+              activeOpacity={0.85}
+            >
+              <Text style={styles.btnPrimaryText}>Lưu cài đặt</Text>
             </TouchableOpacity>
           </View>
         </View>
@@ -337,13 +463,13 @@ export const DoctorProfileSettings: React.FC<DoctorProfileSettingsProps> = ({
         <View style={styles.modalOverlay}>
           <View style={[styles.dialogCard, { backgroundColor: isDarkMode ? '#1E293B' : '#FFFFFF', borderColor: colors.border, maxHeight: '80%' }]}>
             <View style={styles.dialogHeader}>
-              <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8 }}>
-                <View style={[styles.iconBox, { backgroundColor: isDarkMode ? '#1E3A8A33' : '#EFF6FF' }]}>
-                  <Ionicons name="shield-checkmark" size={18} color="#2563EB" />
+              <View style={{ flexDirection: 'row', alignItems: 'center', gap: 10 }}>
+                <View style={[styles.settingsIconCircle, { backgroundColor: '#10B981' }]}>
+                  <Ionicons name="shield-checkmark" size={18} color="#FFFFFF" />
                 </View>
-                <Text style={[styles.modalTitle, { color: colors.textPrimary }]}>Trách nhiệm bảo mật HL7/FHIR</Text>
+                <Text style={[styles.modalTitle, { color: colors.textPrimary }]}>Chính sách bảo mật dữ liệu</Text>
               </View>
-              <TouchableOpacity onPress={() => setComplianceModalVisible(false)}>
+              <TouchableOpacity onPress={() => setComplianceModalVisible(false)} hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}>
                 <Ionicons name="close" size={22} color={isDarkMode ? '#94A3B8' : '#64748B'} />
               </TouchableOpacity>
             </View>
@@ -353,16 +479,16 @@ export const DoctorProfileSettings: React.FC<DoctorProfileSettingsProps> = ({
                 { title: '1. Tiêu chuẩn dữ liệu Y tế HL7 & FHIR Release 4', desc: 'Hệ thống Smart Elderly Care AI tuân thủ nghiêm ngặt các quy chuẩn truyền nhận và lưu trữ thông tin bệnh án điện tử quốc tế HL7/FHIR. Dữ liệu sinh hiệu (Vital Signs), đơn thuốc (MedicationRequest) và tiền sử bệnh lý (Condition) đều được mã hóa đầu cuối bằng thuật toán AES-256.' },
                 { title: '2. Cam kết bảo mật thông tin Bệnh nhân của Bác sĩ', desc: 'Bác sĩ gia đình có nghĩa vụ bảo mật toàn diện thông tin cá nhân, hồ sơ bệnh án và hình ảnh camera của người cao tuổi. Mọi hành vi chụp màn hình hoặc chia sẻ thông tin bệnh án ra bên ngoài mà không có sự đồng ý của gia đình đều vi phạm Luật Khám chữa bệnh.' },
                 { title: '3. Nhật ký kiểm toán bảo mật (Audit Trails)', desc: 'Mọi thao tác tra cứu, chỉnh sửa đơn thuốc, cập nhật chỉ số đều được ghi nhận vĩnh viễn trên hệ thống Audit Log phục vụ công tác thanh tra y tế định kỳ.' },
-              ].map((p, idx) => (
-                <View key={idx} style={{ marginBottom: 12 }}>
-                  <Text style={[styles.complianceSectionTitle, { color: colors.textPrimary }]}>{p.title}</Text>
-                  <Text style={[styles.complianceParagraph, { color: isDarkMode ? '#CBD5E1' : '#475569' }]}>{p.desc}</Text>
+              ].map((item, idx) => (
+                <View key={idx} style={{ marginBottom: 14 }}>
+                  <Text style={[styles.complianceSectionTitle, { color: colors.textPrimary }]}>{item.title}</Text>
+                  <Text style={[styles.complianceParagraph, { color: isDarkMode ? '#94A3B8' : '#475569' }]}>{item.desc}</Text>
                 </View>
               ))}
             </ScrollView>
 
             <TouchableOpacity style={styles.btnPrimary} onPress={() => setComplianceModalVisible(false)}>
-              <Text style={styles.btnPrimaryText}>Tôi đã hiểu & Cam kết tuân thủ</Text>
+              <Text style={styles.btnPrimaryText}>Đã hiểu & Đồng ý</Text>
             </TouchableOpacity>
           </View>
         </View>
@@ -610,13 +736,11 @@ export const DoctorLogoutModal: React.FC<DoctorLogoutModalProps> = ({
 );
 
 const styles = StyleSheet.create({
-  /* Header Card */
-  headerCard: {
+  /* Hero Card */
+  heroCard: {
     borderRadius: 20,
-    padding: 20,
+    padding: 16,
     borderWidth: 1,
-    alignItems: 'center',
-    position: 'relative',
     marginBottom: 14,
     shadowColor: '#000',
     shadowOffset: { width: 0, height: 2 },
@@ -624,46 +748,66 @@ const styles = StyleSheet.create({
     shadowRadius: 8,
     elevation: 2,
   },
-  editBtnCorner: {
-    position: 'absolute',
-    top: 14,
-    right: 14,
+  heroTopRow: {
     flexDirection: 'row',
     alignItems: 'center',
-    paddingHorizontal: 10,
-    paddingVertical: 5,
-    borderRadius: 14,
+    marginBottom: 14,
   },
-  editBtnText: { fontSize: 12, fontWeight: '700', color: '#2563EB' },
-  avatarWrapper: { alignItems: 'center', marginTop: 4, marginBottom: 12 },
-  avatarBig: {
-    width: 86,
-    height: 86,
-    borderRadius: 43,
-    backgroundColor: '#2563EB',
+  heroAvatarContainer: {
+    position: 'relative',
+    marginRight: 14,
+  },
+  heroAvatarBox: {
+    width: 76,
+    height: 76,
+    borderRadius: 38,
+    backgroundColor: '#0284C7',
     justifyContent: 'center',
     alignItems: 'center',
     overflow: 'hidden',
-    borderWidth: 3,
+    borderWidth: 2.5,
     borderColor: '#FFFFFF',
-    shadowColor: '#2563EB',
-    shadowOffset: { width: 0, height: 3 },
+    shadowColor: '#0284C7',
+    shadowOffset: { width: 0, height: 2 },
     shadowOpacity: 0.2,
-    shadowRadius: 6,
+    shadowRadius: 4,
     elevation: 3,
   },
-  avatarLetter: { color: '#FFFFFF', fontSize: 34, fontWeight: '800' },
-  avatarImage: { width: '100%', height: '100%' },
-  onlineBadge: {
+  heroAvatarLetter: {
+    color: '#FFFFFF',
+    fontSize: 30,
+    fontWeight: '800',
+  },
+  heroOnlineBadge: {
     position: 'absolute',
     bottom: 2,
     right: 2,
-    width: 16,
-    height: 16,
-    borderRadius: 8,
+    width: 15,
+    height: 15,
+    borderRadius: 7.5,
     backgroundColor: '#10B981',
-    borderWidth: 2.5,
+    borderWidth: 2,
     borderColor: '#FFFFFF',
+  },
+  heroCameraBadge: {
+    position: 'absolute',
+    top: -2,
+    right: -2,
+    width: 22,
+    height: 22,
+    borderRadius: 11,
+    borderWidth: 1.5,
+    justifyContent: 'center',
+    alignItems: 'center',
+    elevation: 2,
+  },
+  heroInfoCol: {
+    flex: 1,
+    justifyContent: 'center',
+  },
+  verifiedRow: {
+    flexDirection: 'row',
+    marginBottom: 4,
   },
   verifiedBadge: {
     flexDirection: 'row',
@@ -672,36 +816,97 @@ const styles = StyleSheet.create({
     paddingHorizontal: 9,
     paddingVertical: 3.5,
     borderRadius: 12,
-    marginTop: 8,
     borderWidth: 1,
     borderColor: '#A7F3D0',
   },
   verifiedBadgeText: { fontSize: 11, fontWeight: '700', color: '#059669' },
-  docName: { fontSize: 21, fontWeight: '800', textAlign: 'center', marginBottom: 4 },
-  docSpecialty: { fontSize: 13, fontWeight: '500', textAlign: 'center', marginBottom: 10 },
-  hospitalBadge: { flexDirection: 'row', alignItems: 'center', paddingHorizontal: 12, paddingVertical: 6, borderRadius: 12 },
-  hospitalText: { fontSize: 12.5, fontWeight: '600' },
-
-  /* Stats Container */
-  statsContainer: {
+  heroDocName: {
+    fontSize: 18,
+    fontWeight: '800',
+    letterSpacing: -0.2,
+    marginBottom: 2,
+  },
+  heroDocDegree: {
+    fontSize: 13,
+    fontWeight: '700',
+    marginBottom: 2,
+  },
+  heroDocSpecialty: {
+    fontSize: 12.5,
+    fontWeight: '500',
+  },
+  heroHospitalBanner: {
     flexDirection: 'row',
-    borderRadius: 16,
-    paddingVertical: 14,
-    paddingHorizontal: 8,
-    borderWidth: 1,
     alignItems: 'center',
-    justifyContent: 'space-between',
+    paddingHorizontal: 12,
+    paddingVertical: 9,
+    borderRadius: 12,
+    borderWidth: 1,
+    marginBottom: 12,
+  },
+  heroHospitalText: {
+    fontSize: 12.5,
+    fontWeight: '600',
+    flex: 1,
+  },
+  heroEditButton: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    height: 44,
+    borderRadius: 12,
+    borderWidth: 1,
+  },
+  heroEditButtonText: {
+    fontSize: 13.5,
+    fontWeight: '700',
+  },
+  avatarImage: { width: '100%', height: '100%' },
+
+  /* Two Column Clinical Workload Stats */
+  statsTwoColRow: {
+    flexDirection: 'row',
+    gap: 12,
     marginBottom: 14,
+  },
+  statCardTwoCol: {
+    flex: 1,
+    borderRadius: 16,
+    padding: 14,
+    borderWidth: 1,
     shadowColor: '#000',
     shadowOffset: { width: 0, height: 1 },
     shadowOpacity: 0.04,
     shadowRadius: 4,
     elevation: 1,
   },
-  statCol: { flex: 1, alignItems: 'center' },
-  statNumber: { fontSize: 22, fontWeight: '800', marginBottom: 3 },
-  statLabel: { fontSize: 11, fontWeight: '600', textAlign: 'center' },
-  statDivider: { width: 1, height: 34 },
+  statCardHeader: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    marginBottom: 8,
+  },
+  statIconBox: {
+    width: 30,
+    height: 30,
+    borderRadius: 8,
+    justifyContent: 'center',
+    alignItems: 'center',
+    marginRight: 8,
+  },
+  statCardHeading: {
+    fontSize: 12,
+    fontWeight: '700',
+  },
+  statCardValue: {
+    fontSize: 26,
+    fontWeight: '800',
+    lineHeight: 32,
+    marginBottom: 2,
+  },
+  statCardSub: {
+    fontSize: 11,
+    fontWeight: '500',
+  },
 
   /* License & CCHN Card */
   licenseCard: {
@@ -734,42 +939,86 @@ const styles = StyleSheet.create({
   cchnBadge: { paddingHorizontal: 8, paddingVertical: 3, borderRadius: 6 },
   cchnBadgeText: { fontSize: 12.5, fontWeight: '700' },
 
-  /* Settings Menu */
-  sectionTitle: { fontSize: 12, fontWeight: '800', letterSpacing: 0.6, marginBottom: 10, paddingHorizontal: 4 },
-  menuCardContainer: {
-    borderRadius: 18,
+  /* Settings Menu Groups */
+  groupTitle: {
+    fontSize: 12,
+    fontWeight: '700',
+    letterSpacing: 0.6,
+    marginBottom: 8,
+    paddingHorizontal: 4,
+  },
+  settingsCardGroup: {
+    borderRadius: 16,
     borderWidth: 1,
     overflow: 'hidden',
     shadowColor: '#000',
     shadowOffset: { width: 0, height: 1 },
     shadowOpacity: 0.04,
-    shadowRadius: 6,
-    elevation: 2,
-    marginBottom: 20,
+    shadowRadius: 4,
+    elevation: 1,
   },
-  menuItemRow: {
+  settingsRow: {
     flexDirection: 'row',
     alignItems: 'center',
     paddingHorizontal: 16,
     paddingVertical: 14,
-    borderBottomWidth: StyleSheet.hairlineWidth,
-    borderBottomColor: '#CBD5E144',
   },
-  iconBox: { width: 38, height: 38, borderRadius: 12, justifyContent: 'center', alignItems: 'center', marginRight: 14 },
-  menuItemTitle: { fontSize: 14.5, fontWeight: '700', marginBottom: 2 },
-  menuItemSub: { fontSize: 11.5 },
-  versionTitle: { fontSize: 12, fontWeight: '600', textAlign: 'center' },
-  versionSub: { fontSize: 11, textAlign: 'center', marginTop: 3 },
-  logoutButton: {
+  settingsIconCircle: {
+    width: 36,
+    height: 36,
+    borderRadius: 10,
+    justifyContent: 'center',
+    alignItems: 'center',
+    marginRight: 14,
+  },
+  settingsRowContent: {
+    flex: 1,
+    paddingRight: 8,
+  },
+  settingsRowTitle: {
+    fontSize: 14.5,
+    fontWeight: '600',
+    marginBottom: 2,
+  },
+  settingsRowSub: {
+    fontSize: 11.5,
+    lineHeight: 16,
+  },
+  rowDivider: {
+    height: 1,
+    marginLeft: 66,
+  },
+  nativeLogoutCard: {
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'center',
-    paddingVertical: 13,
+    height: 50,
     borderRadius: 14,
     borderWidth: 1,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 1 },
+    shadowOpacity: 0.04,
+    shadowRadius: 4,
     elevation: 1,
   },
-  logoutButtonText: { fontSize: 14, fontWeight: '700', color: '#DC2626' },
+  nativeLogoutText: {
+    fontSize: 15,
+    fontWeight: '700',
+    color: '#DC2626',
+  },
+  appFooter: {
+    alignItems: 'center',
+    marginTop: 24,
+    marginBottom: 8,
+  },
+  appFooterVersion: {
+    fontSize: 12,
+    fontWeight: '600',
+  },
+  appFooterOrg: {
+    fontSize: 11,
+    marginTop: 3,
+  },
 
   /* Common Modal Overlays & Cards */
   modalOverlay: {
@@ -859,8 +1108,8 @@ const styles = StyleSheet.create({
     borderTopColor: '#CBD5E1',
     paddingTop: 10,
   },
-  btnCancel: { paddingVertical: 8, paddingHorizontal: 16, borderRadius: 8, borderWidth: 1, alignItems: 'center', justifyContent: 'center' },
-  btnSave: { paddingVertical: 8, paddingHorizontal: 16, borderRadius: 8, alignItems: 'center', justifyContent: 'center' },
+  btnCancel: { minHeight: 42, paddingVertical: 10, paddingHorizontal: 18, borderRadius: 10, borderWidth: 1, alignItems: 'center', justifyContent: 'center' },
+  btnSave: { minHeight: 42, paddingVertical: 10, paddingHorizontal: 20, borderRadius: 10, alignItems: 'center', justifyContent: 'center' },
 
   /* Logout Dialog */
   logoutIconBox: {

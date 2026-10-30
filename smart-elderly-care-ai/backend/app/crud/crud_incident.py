@@ -93,5 +93,33 @@ class CRUDIncident:
         await db.flush()
         return incident
 
+    async def acknowledge_all(
+        self,
+        db: AsyncSession,
+        current_user_id: Optional[UUID] = None,
+    ) -> int:
+        from datetime import datetime, timezone
+        from sqlalchemy import update
+        stmt = (
+            update(Incident)
+            .where(Incident.is_acknowledged.is_(False))
+            .values(
+                is_acknowledged=True,
+                acknowledged_at=datetime.now(timezone.utc),
+                acknowledged_by=current_user_id,
+            )
+        )
+        if current_user_id:
+            stmt = stmt.where(
+                or_(
+                    Incident.notes.is_(None),
+                    ~Incident.notes.startswith("USER:"),
+                    Incident.notes == f"USER:{current_user_id}",
+                )
+            )
+        result = await db.execute(stmt)
+        await db.flush()
+        return result.rowcount or 0
+
 
 crud_incident = CRUDIncident()

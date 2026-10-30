@@ -23,6 +23,7 @@ from app.schemas.doctor import (
     PrescriptionItem,
     PrescriptionCreate,
     PrescriptionUpdate,
+    BatchPrescriptionCreate,
     DoctorMedicalRecordUpdate,
     DoctorVitalsAnalytics,
     ThresholdsUpdate,
@@ -108,6 +109,25 @@ async def create_prescription(
     return crud_doctor.add_prescription(
         elderly_id=elderly_id,
         obj_in=prescription_in,
+        doctor_name=doctor_name,
+    )
+
+
+@router.post(
+    "/patients/{elderly_id}/prescriptions/batch",
+    response_model=List[PrescriptionItem],
+    status_code=status.HTTP_201_CREATED,
+    summary="Bác sĩ kê một đơn thuốc gồm nhiều loại thuốc và số lượng khác nhau",
+)
+async def create_batch_prescriptions(
+    elderly_id: str,
+    batch_in: BatchPrescriptionCreate,
+    current_user: Optional[User] = Depends(get_current_user_optional),
+):
+    doctor_name = current_user.full_name if current_user else "BS. Trần Văn Minh"
+    return crud_doctor.add_batch_prescriptions(
+        elderly_id=elderly_id,
+        batch=batch_in,
         doctor_name=doctor_name,
     )
 

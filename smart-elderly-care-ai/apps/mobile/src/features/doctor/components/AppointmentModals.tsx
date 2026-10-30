@@ -16,11 +16,12 @@ import {
   ActivityIndicator,
   KeyboardAvoidingView,
   Platform,
+  Image,
 } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
 import { LocalizedText, LocalizedTextInput } from '../../../i18n/LocalizedComponents';
-import { AppointmentItem, PatientCardData } from './types';
+import { AppointmentItem, PatientCardData, getPatientAvatarUrl } from './types';
 
 // =============================================================
 // 1. MODAL ĐẶT / CHỈNH SỬA LỊCH KHÁM (FORM)
@@ -268,9 +269,21 @@ export const AppointmentFormModal: React.FC<AppointmentFormModalProps> = ({
                 >
                   <View style={{ flexDirection: 'row', alignItems: 'center', flex: 1, gap: 10 }}>
                     <View style={styles.patientAvatarMini}>
-                      <LocalizedText style={styles.patientAvatarMiniText}>
-                        {(selectedPatientObj?.name || patientName || 'C')[0]?.toUpperCase()}
-                      </LocalizedText>
+                      {selectedPatientObj?.avatar_url || (selectedPatientObj?.name && selectedPatientObj.name.includes('Nguyễn Văn A')) ? (
+                        <Image
+                          source={{
+                            uri: getPatientAvatarUrl(
+                              selectedPatientObj?.avatar_url || '/static/faces/fc51dc68-3ea2-4394-ac4b-906364ae425d.jpg'
+                            )!,
+                          }}
+                          style={{ width: '100%', height: '100%', borderRadius: 13 }}
+                          resizeMode="cover"
+                        />
+                      ) : (
+                        <LocalizedText style={styles.patientAvatarMiniText}>
+                          {(selectedPatientObj?.name || patientName || 'C')[0]?.toUpperCase()}
+                        </LocalizedText>
+                      )}
                     </View>
                     <View style={{ flex: 1 }}>
                       <LocalizedText style={[styles.dropdownValueText, { color: colors.textPrimary }]} numberOfLines={1}>
@@ -532,7 +545,15 @@ export const AppointmentFormModal: React.FC<AppointmentFormModalProps> = ({
                 }}
               >
                 <View style={[styles.patientAvatarMini, { backgroundColor: isSelected ? '#0284C7' : '#94A3B8' }]}>
-                  <LocalizedText style={styles.patientAvatarMiniText}>{(pat.name || 'C')[0]?.toUpperCase()}</LocalizedText>
+                  {pat.avatar_url ? (
+                    <Image
+                      source={{ uri: getPatientAvatarUrl(pat.avatar_url)! }}
+                      style={{ width: '100%', height: '100%', borderRadius: 13 }}
+                      resizeMode="cover"
+                    />
+                  ) : (
+                    <LocalizedText style={styles.patientAvatarMiniText}>{(pat.name || 'C')[0]?.toUpperCase()}</LocalizedText>
+                  )}
                 </View>
                 <View style={{ flex: 1, marginLeft: 10 }}>
                   <LocalizedText style={{ fontSize: 12.5, color: isSelected ? '#0284C7' : colors.textPrimary, fontWeight: isSelected ? '700' : '500' }}>
@@ -986,7 +1007,7 @@ const styles = StyleSheet.create({
   dropdownTrigger: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', borderWidth: 1, borderRadius: 9, paddingHorizontal: 12, paddingVertical: 9 },
   dropdownValueText: { fontSize: 13, fontWeight: '600' },
   dropdownSubText: { fontSize: 11, color: '#94A3B8', marginTop: 1 },
-  patientAvatarMini: { width: 26, height: 26, borderRadius: 13, backgroundColor: '#0284C7', justifyContent: 'center', alignItems: 'center' },
+  patientAvatarMini: { width: 26, height: 26, borderRadius: 13, backgroundColor: '#0284C7', justifyContent: 'center', alignItems: 'center', overflow: 'hidden' },
   patientAvatarMiniText: { color: '#FFFFFF', fontSize: 11, fontWeight: '800' },
   dateTimeInputBox: { flex: 1, flexDirection: 'row', alignItems: 'center', borderWidth: 1, borderRadius: 9, paddingHorizontal: 10, paddingVertical: 7 },
   inputMiniLabel: { fontSize: 10, color: '#94A3B8', fontWeight: '500' },
