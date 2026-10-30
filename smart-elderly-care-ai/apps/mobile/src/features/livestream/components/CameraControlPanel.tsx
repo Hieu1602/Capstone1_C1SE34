@@ -1,8 +1,8 @@
 /**
  * Hiển thị panel Talk, Voice Call và Pan/Tilt bên dưới video trực tiếp.
  */
-import React, { useEffect, useState } from "react";
-import { ScrollView, StyleSheet, TouchableOpacity, View } from "react-native";
+import React, { useEffect, useRef, useState } from "react";
+import { Animated, ScrollView, StyleSheet, TouchableOpacity, View } from "react-native";
 import { LocalizedText as Text } from "../../../i18n/LocalizedComponents";
 import { useTheme } from "../../../store/useThemeStore";
 import type { CameraIntercom } from "../hooks/useCameraIntercom";
@@ -31,6 +31,41 @@ export default function CameraControlPanel(props: Props) {
     const { colors } = useTheme();
     // Nhớ Talk/Voice Call gần nhất khi chuyển sang tab Pan/Tilt.
     const [audioTab, setAudioTab] = useState<"talk" | "call">("talk");
+    const fadeAnim = useRef(new Animated.Value(0)).current;
+    const slideAnim = useRef(new Animated.Value(24)).current;
+    const contentAnim = useRef(new Animated.Value(1)).current;
+
+    useEffect(() => {
+        if (props.panel) {
+            fadeAnim.setValue(0);
+            slideAnim.setValue(24);
+            Animated.parallel([
+                Animated.timing(fadeAnim, {
+                    toValue: 1,
+                    duration: 220,
+                    useNativeDriver: true,
+                }),
+                Animated.spring(slideAnim, {
+                    toValue: 0,
+                    friction: 9,
+                    tension: 65,
+                    useNativeDriver: true,
+                }),
+            ]).start();
+        }
+    }, [props.panel !== null]);
+
+    useEffect(() => {
+        if (props.panel) {
+            contentAnim.setValue(0.35);
+            Animated.timing(contentAnim, {
+                toValue: 1,
+                duration: 180,
+                useNativeDriver: true,
+            }).start();
+        }
+    }, [props.panel]);
+
     useEffect(() => {
         if (props.panel === "talk" || props.panel === "call")
             setAudioTab(props.panel);
@@ -51,7 +86,16 @@ export default function CameraControlPanel(props: Props) {
         { id: "pan", label: "Pan/Tilt" },
     ] as const;
     return (
-        <View style={[styles.panel, surface]}>
+        <Animated.View
+            style={[
+                styles.panel,
+                surface,
+                {
+                    opacity: fadeAnim,
+                    transform: [{ translateY: slideAnim }],
+                },
+            ]}
+        >
             <View style={styles.panelHeader}>
                 {action({
                     label: "Đóng điều khiển",
@@ -92,6 +136,7 @@ export default function CameraControlPanel(props: Props) {
                     onPress: props.onSettings,
                 })}
             </View>
+            <Animated.View style={{ flex: 1, opacity: contentAnim }}>
             <ScrollView contentContainerStyle={styles.panelBody}>
                 {props.panel === "pan" ? (
                     <PanTiltControl onMove={props.onMove} />
@@ -216,7 +261,8 @@ export default function CameraControlPanel(props: Props) {
                     </Text>
                 </TouchableOpacity>
             )}
-        </View>
+            </Animated.View>
+        </Animated.View>
     );
 }
 const styles = StyleSheet.create({

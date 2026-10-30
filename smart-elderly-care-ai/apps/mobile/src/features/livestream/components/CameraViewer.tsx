@@ -1,6 +1,7 @@
 /** Khung live có lưới tối đa bốn camera, thanh tùy chọn và chế độ xem ngang toàn màn hình. */
 import React, { useEffect, useRef, useState } from "react";
 import {
+    Animated,
     Modal,
     Pressable,
     StatusBar,
@@ -76,6 +77,55 @@ export default function CameraViewer({
     const activeId = connection.status?.id;
     const intercomRef = useRef(intercom);
     intercomRef.current = intercom;
+    const [toolbarVisible, setToolbarVisible] = useState(true);
+    const toolbarOpacity = useRef(new Animated.Value(1)).current;
+    const hideTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
+    const isVisible = useRef(true);
+
+    const resetTimer = () => {
+        if (hideTimer.current) clearTimeout(hideTimer.current);
+        hideTimer.current = setTimeout(() => {
+            isVisible.current = false;
+            Animated.timing(toolbarOpacity, {
+                toValue: 0,
+                duration: 300,
+                useNativeDriver: true,
+            }).start(({ finished }) => {
+                if (finished) setToolbarVisible(false);
+            });
+        }, 4000);
+    };
+
+    const showToolbar = () => {
+        if (!isVisible.current) {
+            isVisible.current = true;
+            setToolbarVisible(true);
+            Animated.timing(toolbarOpacity, {
+                toValue: 1,
+                duration: 200,
+                useNativeDriver: true,
+            }).start();
+        }
+        resetTimer();
+    };
+
+    useEffect(() => {
+        if (sheet) {
+            if (hideTimer.current) clearTimeout(hideTimer.current);
+            isVisible.current = true;
+            setToolbarVisible(true);
+            toolbarOpacity.setValue(1);
+        } else {
+            resetTimer();
+        }
+    }, [sheet]);
+
+    useEffect(() => {
+        resetTimer();
+        return () => {
+            if (hideTimer.current) clearTimeout(hideTimer.current);
+        };
+    }, []);
     useEffect(
         () => () => {
             // Nhả PTT kể cả khi modal biến mất mà native không gửi onPressOut.
@@ -445,9 +495,25 @@ export default function CameraViewer({
         <>
             <View style={styles.preview}>
                 {!fullscreen.fullscreen && (
-                    <View style={styles.videoArea}>
+                    <View
+                        style={styles.videoArea}
+                        onTouchStart={showToolbar}
+                        onPointerDown={showToolbar}
+                        onPointerMove={showToolbar}
+                        onPointerEnter={showToolbar}
+                        onStartShouldSetResponderCapture={() => {
+                            showToolbar();
+                            return false;
+                        }}
+                    >
                         {feeds}
-                        <View style={styles.toolbar}>
+                        <Animated.View
+                            pointerEvents={toolbarVisible ? "auto" : "none"}
+                            style={[
+                                styles.toolbar,
+                                { opacity: toolbarOpacity },
+                            ]}
+                        >
                             {gridButton}
                             {qualityButton}
                             {modeButton}
@@ -456,7 +522,7 @@ export default function CameraViewer({
                                 "Phóng to và xoay ngang",
                                 fullscreen.open,
                             )}
-                        </View>
+                        </Animated.View>
                     </View>
                 )}
             </View>
@@ -559,7 +625,7 @@ const styles = StyleSheet.create({
         right: 0,
         flexDirection: "row",
         justifyContent: "space-around",
-        backgroundColor: "rgba(0,0,0,0.6)",
+        backgroundColor: "rgba(0,0,0,0.35)",
         minHeight: 44,
     },
     tool: {

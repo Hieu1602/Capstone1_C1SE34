@@ -9,7 +9,7 @@ import {
     TouchableOpacity,
     View,
 } from "react-native";
-import { LocalizedText as Text } from "../../../i18n/LocalizedComponents";
+import { LocalizedAlert, LocalizedText as Text } from "../../../i18n/LocalizedComponents";
 import {
     ArchiveCoverage,
     HlsRecording,
@@ -68,6 +68,8 @@ export default function CameraTimeline({ cameraId }: { cameraId?: string }) {
     const [viewport, setViewport] = useState(0);
     const [zoomIndex, setZoomIndex] = useState(2);
     const [busy, setBusy] = useState(true);
+    const [userPaused, setUserPaused] = useState(false);
+    const [downloading, setDownloading] = useState(false);
     const [error, setError] = useState("");
     const timeline = useRef<React.ElementRef<typeof ScrollView>>(null);
     const coverageRequest = useRef(0);
@@ -220,19 +222,24 @@ export default function CameraTimeline({ cameraId }: { cameraId?: string }) {
     }
 
     async function downloadSelected() {
-        if (!selected) return;
+        if (!selected || downloading) return;
+        setDownloading(true);
         const request = playbackRequest.current;
         try {
-            const { data } = await cameraApi.playback(
+            const result = await cameraApi.playback?.(
                 selected.id,
                 cameraId,
                 true,
             );
-            if (request === playbackRequest.current)
-                await downloadVideo(data.url);
+            if (result?.data?.url && request === playbackRequest.current) {
+                await downloadVideo(result.data.url);
+                LocalizedAlert?.alert?.("Tải xuống", "Đang bắt đầu tải đoạn video xuống thiết bị.");
+            }
         } catch {
             if (request === playbackRequest.current)
                 setError("Không tải được video. Vui lòng thử lại.");
+        } finally {
+            if (request === playbackRequest.current) setDownloading(false);
         }
     }
 
@@ -244,6 +251,26 @@ export default function CameraTimeline({ cameraId }: { cameraId?: string }) {
             clearTimeout(scrollSeekTimer.current);
         };
     }, [cameraId, day.getTime()]);
+
+    const initialChecked = useRef(false);
+    useEffect(() => {
+        if (initialChecked.current) return;
+        initialChecked.current = true;
+        const now = new Date();
+        const past = new Date(now.getTime() - 7 * 24 * 3600 * 1000);
+        cameraApi.timeline?.(past.toISOString(), now.toISOString(), cameraId)
+            ?.then(({ data }) => {
+                if (data?.items && data.items.length > 0) {
+                    const latestItem = data.items[0];
+                    const latestDate = new Date(latestItem.started_at);
+                    if (!sameLocalDay(latestDate, now)) {
+                        setDay(new Date(latestDate.getFullYear(), latestDate.getMonth(), latestDate.getDate()));
+                        setPlayhead(latestDate);
+                    }
+                }
+            })
+            ?.catch(() => {});
+    }, [cameraId]);
 
     useEffect(() => {
         if (viewport) requestAnimationFrame(() => scrollTo(playhead));
@@ -279,7 +306,7 @@ export default function CameraTimeline({ cameraId }: { cameraId?: string }) {
                     hls
                     startAt={startAt}
                     seekVersion={seekVersion}
-                    paused={busy || dragging}
+                    paused={busy || dragging || userPaused}
                     onProgress={(seconds) => {
                         if (busy || dragging || !session) return;
                         const position = recordingAtProgress(
@@ -617,6 +644,21 @@ export default function CameraTimeline({ cameraId }: { cameraId?: string }) {
                                 10s
                             </Text>
                         </TouchableOpacity>
+                        <TouchableOpacity
+                            accessibilityRole="button"
+                            accessibilityLabel={userPaused ? "Phát video" : "Tạm dừng video"}
+                            style={[
+                                styles.playPauseButton,
+                                { backgroundColor: colors.surface },
+                            ]}
+                            onPress={() => setUserPaused((prev) => !prev)}
+                        >
+                            <Ionicons
+                                name={userPaused ? "play" : "pause"}
+                                size={24}
+                                color={colors.primary}
+                            />
+                        </TouchableOpacity>
                         <View
                             style={[
                                 styles.clock,
@@ -707,18 +749,26 @@ export default function CameraTimeline({ cameraId }: { cameraId?: string }) {
                 <TouchableOpacity
                     accessibilityRole="button"
                     accessibilityLabel="Tải xuống đoạn video đang chọn"
-                    style={styles.controls}
+                    disabled={downloading}
+                    style={[
+                        styles.downloadButton,
+                        { backgroundColor: colors.primary, opacity: downloading ? 0.7 : 1 },
+                    ]}
                     onPress={() => {
                         void downloadSelected();
                     }}
                 >
-                    <Ionicons
-                        name="download-outline"
-                        size={24}
-                        color={colors.textPrimary}
-                    />
-                    <Text style={{ color: colors.textPrimary }}>
-                        Tải xuống đoạn video
+                    {downloading ? (
+                        <ActivityIndicator size="small" color="#FFF" />
+                    ) : (
+                        <Ionicons
+                            name="download-outline"
+                            size={20}
+                            color="#FFF"
+                        />
+                    )}
+                    <Text style={styles.downloadButtonText}>
+                        {downloading ? "Đang chuẩn bị video…" : "Tải xuống đoạn video đang chọn"}
                     </Text>
                 </TouchableOpacity>
             )}
@@ -845,6 +895,28 @@ const styles = StyleSheet.create({
         justifyContent: "center",
         alignItems: "center",
         gap: 12,
+    },
+    playPauseButton: {
+        width: 50,
+        height: 50,
+        borderRadius: 25,
+        alignItems: "center",
+        justifyContent: "center",
+    },
+    downloadButton: {
+        flexDirection: "row",
+        alignItems: "center",
+        justifyContent: "center",
+        gap: 8,
+        marginHorizontal: 16,
+        paddingVertical: 12,
+        borderRadius: 25,
+        minHeight: 48,
+    },
+    downloadButtonText: {
+        color: "#FFF",
+        fontSize: 16,
+        fontWeight: "600",
     },
     seekButton: {
         minWidth: 76,
