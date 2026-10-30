@@ -25,6 +25,8 @@ from app.schemas.doctor import (
     PrescriptionItem,
     PrescriptionCreate,
     PrescriptionUpdate,
+    MedicationItemCreate,
+    BatchPrescriptionCreate,
     DoctorMedicalRecordUpdate,
     DoctorVitalsAnalytics,
     ThresholdsUpdate,
@@ -302,6 +304,7 @@ class CRUDDoctor:
             patient_id=elderly_id,
             medication_name=obj_in.medication_name,
             dosage=obj_in.dosage,
+            quantity=obj_in.quantity,
             frequency=obj_in.frequency or "",
             schedule_times=obj_in.schedule_times or [],
             instructions=obj_in.instructions or "",
@@ -311,6 +314,36 @@ class CRUDDoctor:
         )
         _PRESCRIPTION_STORE[elderly_id].insert(0, new_item)
         return new_item
+
+    def add_batch_prescriptions(
+        self, elderly_id: str, batch: BatchPrescriptionCreate, doctor_name: Optional[str] = None
+    ) -> List[PrescriptionItem]:
+        """Bác sĩ kê một đơn gồm nhiều loại thuốc và số lượng khác nhau."""
+        if elderly_id not in _PRESCRIPTION_STORE:
+            _PRESCRIPTION_STORE[elderly_id] = []
+
+        now_str = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
+        created_items: List[PrescriptionItem] = []
+        for med in batch.medications:
+            note = med.instructions or ""
+            if batch.general_notes:
+                note = f"{note} (Dặn dò: {batch.general_notes})".strip()
+            item = PrescriptionItem(
+                id=f"rx-{uuid.uuid4().hex[:6]}",
+                patient_id=elderly_id,
+                medication_name=med.medication_name,
+                dosage=med.dosage,
+                quantity=med.quantity,
+                frequency=med.frequency or "Hàng ngày",
+                schedule_times=med.schedule_times or [],
+                instructions=note,
+                doctor_name=doctor_name,
+                enable_speaker_reminder=batch.enable_speaker_reminder,
+                created_at=now_str,
+            )
+            _PRESCRIPTION_STORE[elderly_id].insert(0, item)
+            created_items.append(item)
+        return created_items
 
     def update_prescription(
         self, elderly_id: str, rx_id: str, obj_in: PrescriptionUpdate
@@ -323,6 +356,8 @@ class CRUDDoctor:
                     rx.medication_name = obj_in.medication_name
                 if obj_in.dosage is not None:
                     rx.dosage = obj_in.dosage
+                if obj_in.quantity is not None:
+                    rx.quantity = obj_in.quantity
                 if obj_in.frequency is not None:
                     rx.frequency = obj_in.frequency
                 if obj_in.schedule_times is not None:

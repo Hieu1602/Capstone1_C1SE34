@@ -48,6 +48,7 @@ interface AlertState {
   setIncidents: (incidents: Incident[]) => void;
   addIncident: (incident: Incident) => void;
   acknowledgeIncident: (incidentId: string, note?: string, user?: string) => void;
+  acknowledgeAll: () => Promise<void>;
   setAlarmSnooze: (snooze: Partial<AlarmSnoozeInfo>) => void;
   cancelAlarmSnooze: () => void;
   setSirenActive: (active: boolean) => void;
@@ -111,6 +112,22 @@ export const useAlertStore = create<AlertState>()((set, get) => ({
         sirenActive: hasOtherCritical,
       };
     }),
+
+  acknowledgeAll: async () => {
+    try {
+      await incidentsApi.acknowledgeAll();
+    } catch (e) {
+      console.warn('acknowledgeAll error:', e);
+    }
+    set((state) => ({
+      incidents: state.incidents.map((inc) => ({
+        ...inc,
+        is_acknowledged: true,
+        acknowledged_at: new Date().toISOString(),
+      })),
+      sirenActive: false,
+    }));
+  },
 
   setAlarmSnooze: (snooze: Partial<AlarmSnoozeInfo>) =>
     set((state) => ({

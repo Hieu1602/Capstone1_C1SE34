@@ -24,6 +24,7 @@ import { doctorApi } from '../../../services/api';
 import {
   ConditionItem,
   PrescriptionItem,
+  MedicationFormItem,
   PatientDetail,
   SeverityType,
   PatientHeroCard,
@@ -72,16 +73,31 @@ export default function DoctorPatientDetailScreen() {
   const [editDietaryNotes, setEditDietaryNotes] = useState('');
   const [isSavingAllergies, setIsSavingAllergies] = useState(false);
 
-  // 4. Modal đơn thuốc
+  // 4. Modal đơn thuốc (hỗ trợ nhiều loại thuốc & số lượng)
   const [modalPrescribeVisible, setModalPrescribeVisible] = useState(false);
   const [editingRxId, setEditingRxId] = useState<string | null>(null);
   const [medName, setMedName] = useState('');
+  const [rxQuantity, setRxQuantity] = useState('30 viên');
   const [dosage, setDosage] = useState('');
   const [frequency, setFrequency] = useState('Hàng ngày');
   const [scheduleTimes, setScheduleTimes] = useState('08:00');
   const [instructions, setInstructions] = useState('');
   const [enableSpeaker, setEnableSpeaker] = useState(true);
   const [isSubmittingRx, setIsSubmittingRx] = useState(false);
+
+  // Kê đơn đa loại thuốc cùng lúc
+  const [rxDiagnosis, setRxDiagnosis] = useState('Đơn thuốc điều trị');
+  const [rxGeneralNotes, setRxGeneralNotes] = useState('');
+  const [batchMedications, setBatchMedications] = useState<MedicationFormItem[]>([
+    {
+      medication_name: '',
+      quantity: '30 viên',
+      dosage: '1 viên/lần',
+      frequency: 'Hàng ngày',
+      schedule_times: '08:00',
+      instructions: 'Uống sau ăn 15 phút',
+    },
+  ]);
 
   // 5. Modal ngưỡng y tế
   const [modalThresholdVisible, setModalThresholdVisible] = useState(false);
@@ -240,11 +256,18 @@ export default function DoctorPatientDetailScreen() {
   // Kê đơn / Sửa / Xóa / Loa đơn thuốc
   const handleOpenCreatePrescription = () => {
     setEditingRxId(null);
-    setMedName('');
-    setDosage('');
-    setFrequency('Hàng ngày');
-    setScheduleTimes('08:00');
-    setInstructions('');
+    setRxDiagnosis('Đơn thuốc điều trị');
+    setRxGeneralNotes('');
+    setBatchMedications([
+      {
+        medication_name: '',
+        quantity: '30 viên',
+        dosage: '1 viên/lần',
+        frequency: 'Hàng ngày',
+        schedule_times: '08:00',
+        instructions: 'Uống sau ăn 15 phút',
+      },
+    ]);
     setEnableSpeaker(true);
     setModalPrescribeVisible(true);
   };
@@ -252,51 +275,113 @@ export default function DoctorPatientDetailScreen() {
   const handleOpenEditPrescription = (rx: PrescriptionItem) => {
     setEditingRxId(rx.id);
     setMedName(rx.medication_name);
+    setRxQuantity(rx.quantity || '30 viên');
     setDosage(rx.dosage);
-    setFrequency(rx.frequency);
+    setFrequency(rx.frequency || 'Hàng ngày');
     setScheduleTimes((rx.schedule_times || ['08:00']).join(', '));
-    setInstructions(rx.instructions);
+    setInstructions(rx.instructions || '');
     setEnableSpeaker(rx.enable_speaker_reminder);
     setModalPrescribeVisible(true);
   };
 
+  const handleAddMedicationRow = () => {
+    setBatchMedications((prev) => [
+      ...prev,
+      {
+        medication_name: '',
+        quantity: '30 viên',
+        dosage: '1 viên/lần',
+        frequency: 'Hàng ngày',
+        schedule_times: '08:00',
+        instructions: 'Uống sau ăn 15 phút',
+      },
+    ]);
+  };
+
+  const handleRemoveMedicationRow = (index: number) => {
+    if (batchMedications.length <= 1) return;
+    setBatchMedications((prev) => prev.filter((_, idx) => idx !== index));
+  };
+
+  const handleUpdateMedicationRow = (index: number, field: keyof MedicationFormItem, value: string) => {
+    setBatchMedications((prev) =>
+      prev.map((item, idx) => (idx === index ? { ...item, [field]: value } : item))
+    );
+  };
+
   const handleSavePrescription = async () => {
-    if (!medName.trim() || !dosage.trim()) {
-      Alert.alert('Thiếu thông tin', 'Vui lòng nhập tên thuốc và liều lượng.');
-      return;
-    }
+    if (editingRxId) {
+      if (!medName.trim() || !dosage.trim()) {
+        Alert.alert('Thiếu thông tin', 'Vui lòng nhập tên thuốc và liều lượng.');
+        return;
+      }
 
-    try {
-      setIsSubmittingRx(true);
-      const parsedTimes = scheduleTimes.split(',').map((t) => t.trim()).filter(Boolean);
-      const payload = {
-        medication_name: medName.trim(),
-        dosage: dosage.trim(),
-        frequency: frequency.trim() || 'Hàng ngày',
-        schedule_times: parsedTimes.length > 0 ? parsedTimes : ['08:00'],
-        instructions: instructions.trim(),
-        enable_speaker_reminder: enableSpeaker,
-      };
+      try {
+        setIsSubmittingRx(true);
+        const parsedTimes = scheduleTimes.split(',').map((t) => t.trim()).filter(Boolean);
+        const payload = {
+          medication_name: medName.trim(),
+          quantity: rxQuantity.trim() || undefined,
+          dosage: dosage.trim(),
+          frequency: frequency.trim() || 'Hàng ngày',
+          schedule_times: parsedTimes.length > 0 ? parsedTimes : ['08:00'],
+          instructions: instructions.trim(),
+          enable_speaker_reminder: enableSpeaker,
+        };
 
-      if (editingRxId) {
         const res = await doctorApi.updatePrescription(patientId, editingRxId, payload);
         if (res.data) {
           setPrescriptions((prev) => prev.map((rx) => (rx.id === editingRxId ? res.data : rx)));
         }
         setModalPrescribeVisible(false);
         Alert.alert('Thành công', `Đã cập nhật đơn thuốc "${payload.medication_name}".`);
-      } else {
-        const res = await doctorApi.createPrescription(patientId, payload);
-        if (res.data) {
-          setPrescriptions([res.data, ...prescriptions]);
+      } catch {
+        Alert.alert('Lỗi', 'Không thể lưu đơn thuốc.');
+      } finally {
+        setIsSubmittingRx(false);
+      }
+    } else {
+      for (let i = 0; i < batchMedications.length; i++) {
+        const m = batchMedications[i];
+        if (!m.medication_name.trim() || !m.dosage.trim()) {
+          Alert.alert('Thiếu thông tin', `Vui lòng nhập tên và liều dùng cho thuốc #${i + 1}.`);
+          return;
+        }
+      }
+
+      try {
+        setIsSubmittingRx(true);
+        const batchPayload = {
+          diagnosis: rxDiagnosis.trim() || 'Đơn thuốc điều trị',
+          general_notes: rxGeneralNotes.trim() || undefined,
+          enable_speaker_reminder: enableSpeaker,
+          medications: batchMedications.map((m) => {
+            const parsedTimes = m.schedule_times.split(',').map((t) => t.trim()).filter(Boolean);
+            return {
+              medication_name: m.medication_name.trim(),
+              quantity: m.quantity.trim() || undefined,
+              dosage: m.dosage.trim(),
+              frequency: m.frequency.trim() || 'Hàng ngày',
+              schedule_times: parsedTimes.length > 0 ? parsedTimes : ['08:00'],
+              instructions: m.instructions.trim() || undefined,
+            };
+          }),
+        };
+
+        const res = await doctorApi.createBatchPrescriptions(patientId, batchPayload);
+        if (res.data && Array.isArray(res.data)) {
+          setPrescriptions((prev) => [...res.data, ...prev]);
         }
         setModalPrescribeVisible(false);
-        Alert.alert('Kê đơn thành công', `Đã lưu đơn thuốc "${payload.medication_name}". Lịch nhắc đã đồng bộ qua Hub AI!`);
+        Alert.alert(
+          'Kê đơn thành công',
+          `Đã lưu đơn thuốc gồm ${batchPayload.medications.length} loại thuốc. Lịch nhắc đã đồng bộ qua Hub AI!`
+        );
+      } catch {
+        Alert.alert('Lỗi', 'Không thể lưu đơn thuốc.');
+      } finally {
+        setIsSubmittingRx(false);
       }
-    } catch {
-      Alert.alert('Lỗi', 'Không thể lưu đơn thuốc.');
-    } finally {
-      setIsSubmittingRx(false);
     }
   };
 
@@ -345,7 +430,24 @@ export default function DoctorPatientDetailScreen() {
   };
 
   const handleNavigateAnalytics = () => {
-    navigation.navigate('DoctorAnalytics', { patientId });
+    navigation.navigate('DoctorAnalytics', {
+      patientId,
+      patient: detail
+        ? {
+            id: String(detail.id || patientId),
+            name: detail.name || 'Bệnh nhân',
+            age: detail.age ?? 0,
+            gender: detail.gender ?? '',
+            condition: detail.conditions?.map((c) => c.name).join(', ') || '',
+            deviceId: '',
+            houseName: detail.house_name ? `${detail.house_name}${detail.house_address ? ` • ${detail.house_address}` : ''}` : undefined,
+            bloodPressure: detail.blood_pressure,
+            heartRate: detail.heart_rate,
+            spo2: detail.spo2,
+            healthStatus: 'NORMAL',
+          }
+        : undefined,
+    });
   };
 
   return (
@@ -404,6 +506,7 @@ export default function DoctorPatientDetailScreen() {
                 activeOpacity={0.8}
               >
                 <Text
+                  numberOfLines={1}
                   style={[
                     styles.segmentText,
                     active
@@ -507,17 +610,28 @@ export default function DoctorPatientDetailScreen() {
       <PrescriptionFormModal
         visible={modalPrescribeVisible}
         isEditing={!!editingRxId}
+        patientName={detail?.name}
+        diagnosis={rxDiagnosis}
+        onChangeDiagnosis={setRxDiagnosis}
+        generalNotes={rxGeneralNotes}
+        onChangeGeneralNotes={setRxGeneralNotes}
+        medications={batchMedications}
+        onAddMedication={handleAddMedicationRow}
+        onRemoveMedication={handleRemoveMedicationRow}
+        onUpdateMedication={handleUpdateMedicationRow}
         medName={medName}
+        quantity={rxQuantity}
         dosage={dosage}
         frequency={frequency}
         scheduleTimes={scheduleTimes}
         instructions={instructions}
-        enableSpeaker={enableSpeaker}
         onChangeMedName={setMedName}
+        onChangeQuantity={setRxQuantity}
         onChangeDosage={setDosage}
         onChangeFrequency={setFrequency}
         onChangeScheduleTimes={setScheduleTimes}
         onChangeInstructions={setInstructions}
+        enableSpeaker={enableSpeaker}
         onToggleEnableSpeaker={setEnableSpeaker}
         isSubmitting={isSubmittingRx}
         onSave={handleSavePrescription}
@@ -559,7 +673,7 @@ const styles = StyleSheet.create({
   scrollContent: { padding: 16, paddingBottom: 90 },
 
   segmentContainer: { flexDirection: 'row', borderRadius: 10, padding: 3, marginBottom: 14 },
-  segmentBtn: { flex: 1, paddingVertical: 7, alignItems: 'center', borderRadius: 8 },
+  segmentBtn: { flex: 1, paddingVertical: 8, paddingHorizontal: 4, alignItems: 'center', justifyContent: 'center', borderRadius: 8 },
   segmentBtnActive: { backgroundColor: '#FFFFFF', elevation: 1 },
-  segmentText: { fontSize: 12, fontWeight: '600' },
+  segmentText: { fontSize: 11.5, fontWeight: '600', textAlign: 'center' },
 });

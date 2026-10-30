@@ -363,8 +363,8 @@ export default function DoctorAppointmentsScreen() {
               Theo dõi lịch định kỳ & Tự động phát loa nhắc qua Hub AI
             </LocalizedText>
           </View>
-          <TouchableOpacity style={styles.btnAdd} onPress={handleOpenCreateModal}>
-            <Ionicons name="add" size={18} color="#FFFFFF" style={{ marginRight: 2 }} />
+          <TouchableOpacity style={styles.btnAdd} onPress={handleOpenCreateModal} activeOpacity={0.85}>
+            <Ionicons name="add" size={20} color="#FFFFFF" style={{ marginRight: 3 }} />
             <LocalizedText style={styles.btnAddText}>Đặt lịch</LocalizedText>
           </TouchableOpacity>
         </View>
@@ -493,12 +493,18 @@ const styles = StyleSheet.create({
   btnAdd: {
     flexDirection: 'row',
     alignItems: 'center',
+    justifyContent: 'center',
     backgroundColor: '#0284C7',
-    paddingHorizontal: 12,
-    paddingVertical: 6,
-    borderRadius: 8,
+    paddingHorizontal: 16,
+    height: 42,
+    borderRadius: 12,
+    shadowColor: '#0284C7',
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.25,
+    shadowRadius: 4,
+    elevation: 3,
   },
-  btnAddText: { color: '#FFFFFF', fontSize: 13, fontWeight: '700' },
+  btnAddText: { color: '#FFFFFF', fontSize: 14, fontWeight: '700' },
   scrollContent: { padding: 16, paddingBottom: 95 },
   emptyBox: { alignItems: 'center', paddingVertical: 50 },
   emptyText: { fontSize: 13.5, marginTop: 8 },

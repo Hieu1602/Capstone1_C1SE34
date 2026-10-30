@@ -19,6 +19,7 @@ import { useNavigation, useFocusEffect } from '@react-navigation/native';
 import { Colors } from '../../../theme/colors';
 import { useTheme } from '../../../store/useThemeStore';
 import { useAuthStore } from '../../../store/useAuthStore';
+import { useAlertStore } from '../../../store/useAlertStore';
 import { doctorApi } from '../../../services/api';
 import { LocalizedText } from '../../../i18n/LocalizedComponents';
 import AdminMarqueeBanner from '../../../components/AdminMarqueeBanner';
@@ -27,6 +28,7 @@ import {
   AppointmentItem,
   STANDARD_PATIENT_NAMES,
   normalizePatientsList,
+  getPatientAvatarUrl,
 } from '../components/types';
 import { AppointmentDetailModal } from '../components';
 import NotificationsBottomSheet from '../components/NotificationsBottomSheet';
@@ -78,20 +80,29 @@ export default function DoctorHomeScreen() {
   const navigation = useNavigation<any>();
   const { isDarkMode, colors } = useTheme();
   const { userName } = useAuthStore();
+  const { incidents, fetchNotifications: fetchIncidents } = useAlertStore();
 
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
   const [patients, setPatients] = useState<PatientCardData[]>([]);
   const [todayAppointments, setTodayAppointments] = useState<AppointmentItem[]>([]);
+  const [upcomingAppointments, setUpcomingAppointments] = useState<AppointmentItem[]>([]);
   const [nextAppointment, setNextAppointment] = useState<AppointmentItem | null>(null);
   const [detailModalVisible, setDetailModalVisible] = useState(false);
   const [notifModalVisible, setNotifModalVisible] = useState(false);
+  const [hasUnreadNotifs, setHasUnreadNotifs] = useState(false);
+
+  useEffect(() => {
+    const unread = incidents.some((inc) => !inc.is_acknowledged);
+    setHasUnreadNotifs(unread);
+  }, [incidents]);
 
   const fetchData = useCallback(async () => {
     try {
       const [patRes, aptRes] = await Promise.allSettled([
         doctorApi.getPatients(),
         doctorApi.getAppointments(),
+        fetchIncidents(),
       ]);
 
       if (patRes.status === 'fulfilled' && patRes.value.data) {
@@ -110,6 +121,7 @@ export default function DoctorHomeScreen() {
 
         todays.sort((a, b) => new Date(a.scheduled_at).getTime() - new Date(b.scheduled_at).getTime());
         setTodayAppointments(todays);
+        setUpcomingAppointments(allApts.filter((a) => a.status === 'UPCOMING'));
 
         const upcoming = todays.find((a) => a.status === 'UPCOMING') || todays[0] || null;
         setNextAppointment(upcoming);
@@ -158,6 +170,9 @@ export default function DoctorHomeScreen() {
     ? patients.find((p) => p.id === nextAppointment.patient_id)
     : null;
 
+  const warningPatients = patients.filter((p) => p.health_status === 'WARNING' || p.health_status === 'DANGER');
+  const totalNotifCount = todayAppointments.length + upcomingAppointments.length + warningPatients.length + incidents.length;
+
   const doctorInitial =
     (userName || 'Bác sĩ').trim().split(/\s+/).slice(-1)[0][0]?.toUpperCase() || 'B';
 
@@ -194,11 +209,13 @@ export default function DoctorHomeScreen() {
         <View style={styles.headerRight}>
           <TouchableOpacity
             style={[styles.headerIconBtn, { backgroundColor: isDarkMode ? '#334155' : '#F1F5F9' }]}
-            onPress={() => setNotifModalVisible(true)}
+            onPress={() => {
+              setNotifModalVisible(true);
+            }}
             activeOpacity={0.7}
           >
             <Ionicons name="notifications-outline" size={20} color={isDarkMode ? '#E2E8F0' : '#334155'} />
-            {todayAppointments.length > 0 && <View style={styles.badgeDot} />}
+            {hasUnreadNotifs && <View style={styles.badgeDot} />}
           </TouchableOpacity>
         </View>
       </View>
@@ -343,13 +360,23 @@ export default function DoctorHomeScreen() {
                 activeOpacity={0.85}
                 onPress={() => navigation.navigate('DoctorPatientDetail', { patientId: patient.id })}
               >
-                <View
-                  style={[
-                    styles.patientAvatarWrap,
-                    { backgroundColor: isDanger ? '#EF4444' : isWarn ? '#F59E0B' : '#2563EB' },
-                  ]}
-                >
-                  <LocalizedText style={styles.patientAvatarLetter}>{initial}</LocalizedText>
+                <View style={styles.patientAvatarContainer}>
+                  <View
+                    style={[
+                      styles.patientAvatarWrap,
+                      { backgroundColor: isDanger ? '#EF4444' : isWarn ? '#F59E0B' : '#2563EB' },
+                    ]}
+                  >
+                    {patient.avatar_url ? (
+                      <Image
+                        source={{ uri: getPatientAvatarUrl(patient.avatar_url)! }}
+                        style={styles.patientAvatarImg}
+                        resizeMode="cover"
+                      />
+                    ) : (
+                      <LocalizedText style={styles.patientAvatarLetter}>{initial}</LocalizedText>
+                    )}
+                  </View>
                   <View
                     style={[
                       styles.patientStatusDot,
@@ -401,8 +428,34 @@ export default function DoctorHomeScreen() {
       {/* Modal Chi tiết Lịch hẹn khi nhấn vào Card Banner */}
       <NotificationsBottomSheet
         visible={notifModalVisible}
-        onClose={() => setNotifModalVisible(false)}
+        onClose={() => {
+          setNotifModalVisible(false);
+          setHasUnreadNotifs(false);
+        }}
+        hasUnread={hasUnreadNotifs}
         appointments={todayAppointments}
+        upcomingAppointments={upcomingAppointments}
+        warningPatients={warningPatients}
+        incidents={incidents}
+        onSelectPatient={(pId) => {
+          setNotifModalVisible(false);
+          setHasUnreadNotifs(false);
+          navigation.navigate('DoctorPatientDetail', { patientId: pId });
+        }}
+        onSelectAppointment={() => {
+          setNotifModalVisible(false);
+          setHasUnreadNotifs(false);
+          navigation.navigate('DoctorAppointments');
+        }}
+        onNavigate={(screenName, params) => {
+          setNotifModalVisible(false);
+          setHasUnreadNotifs(false);
+          navigation.navigate(screenName, params);
+        }}
+        onMarkAllRead={async () => {
+          setHasUnreadNotifs(false);
+          await useAlertStore.getState().acknowledgeAll();
+        }}
       />
 
       <AppointmentDetailModal
@@ -658,14 +711,24 @@ const styles = StyleSheet.create({
     shadowRadius: 6,
     elevation: 2,
   },
+  patientAvatarContainer: {
+    width: 46,
+    height: 46,
+    position: 'relative',
+    marginRight: 12,
+  },
   patientAvatarWrap: {
     width: 46,
     height: 46,
     borderRadius: 23,
     justifyContent: 'center',
     alignItems: 'center',
-    position: 'relative',
-    marginRight: 12,
+    overflow: 'hidden',
+  },
+  patientAvatarImg: {
+    width: '100%',
+    height: '100%',
+    borderRadius: 23,
   },
   patientAvatarLetter: {
     color: '#FFFFFF',
@@ -674,12 +737,13 @@ const styles = StyleSheet.create({
   },
   patientStatusDot: {
     position: 'absolute',
-    bottom: 0,
-    right: 0,
-    width: 12,
-    height: 12,
-    borderRadius: 6,
+    bottom: -1,
+    right: -1,
+    width: 13,
+    height: 13,
+    borderRadius: 7,
     borderWidth: 2,
+    zIndex: 2,
   },
   patientInfoCol: { flex: 1, paddingRight: 6 },
   patientFullDisplayName: {

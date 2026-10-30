@@ -45,6 +45,7 @@ export default function DoctorProfileScreen({ navigation }: any) {
     hospital: 'Hệ thống Smart Elderly Care AI',
     department: 'Khoa Chăm sóc Người cao tuổi',
     phone: userPhone || '',
+    cchn_number: '028491/BYT-CCHN',
   });
 
   const [patientCount, setPatientCount] = useState<number>(0);
@@ -501,5 +502,5 @@ const styles = StyleSheet.create({
     fontWeight: '700',
     color: '#0284C7',
   },
-  scrollContent: { padding: 16, paddingBottom: 95 },
+  scrollContent: { padding: 16, paddingBottom: 120 },
 });

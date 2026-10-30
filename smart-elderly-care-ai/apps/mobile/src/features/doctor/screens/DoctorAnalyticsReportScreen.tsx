@@ -6,7 +6,7 @@ import React, { useState, useEffect, useCallback, useMemo } from 'react';
 import { View, StyleSheet, ScrollView, TouchableOpacity, ActivityIndicator, StatusBar } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
-import { useRoute, useFocusEffect } from '@react-navigation/native';
+import { useRoute, useFocusEffect, useNavigation } from '@react-navigation/native';
 
 import { Colors } from '../../../theme/colors';
 import { useTheme } from '../../../store/useThemeStore';
@@ -26,11 +26,29 @@ export type { PatientOption };
 
 export default function DoctorAnalyticsReportScreen() {
   const insets = useSafeAreaInsets();
+  const navigation = useNavigation<any>();
   const route = useRoute<any>();
   const { isDarkMode, colors } = useTheme();
 
   const [patients, setPatients] = useState<PatientOption[]>([]);
-  const [selectedPatient, setSelectedPatient] = useState<PatientOption | null>(null);
+  const paramId = route.params?.patientId;
+  const paramPatient = route.params?.patient;
+  const [hasSwitchedPatient, setHasSwitchedPatient] = useState(false);
+  const [selectedPatient, setSelectedPatient] = useState<PatientOption | null>(() => {
+    if (paramPatient && paramPatient.id) return paramPatient;
+    if (paramId) {
+      return {
+        id: String(paramId),
+        name: 'Đang tải...',
+        age: 0,
+        gender: '',
+        condition: '',
+        deviceId: '',
+        healthStatus: 'NORMAL',
+      };
+    }
+    return null;
+  });
   const [searchQuery, setSearchQuery] = useState('');
   const [filterStatus, setFilterStatus] = useState<'ALL' | 'WARNING' | 'NORMAL'>('ALL');
 
@@ -75,12 +93,42 @@ export default function DoctorAnalyticsReportScreen() {
 
   // 2. Tự động chọn bệnh nhân nếu có param truyền vào
   useEffect(() => {
-    const paramId = route.params?.patientId;
-    if (paramId && patients.length > 0) {
-      const found = patients.find((p) => p.id === String(paramId));
-      if (found) setSelectedPatient(found);
+    if (hasSwitchedPatient) return;
+    if (route.params?.patient && route.params.patient.id) {
+      setSelectedPatient(route.params.patient);
+  
     }
-  }, [route.params?.patientId, patients]);
+    const pId = route.params?.patientId;
+    if (pId) {
+      const found = patients.find((p) => String(p.id) === String(pId));
+      if (found) {
+        setSelectedPatient(found);
+      } else {
+        doctorApi
+          .getPatientDetail(String(pId))
+          .then((res) => {
+            if (res.data) {
+              const d = res.data;
+              setSelectedPatient({
+                id: String(d.id || pId),
+                name: d.name || 'Bệnh nhân',
+                age: d.age ?? 0,
+                gender: d.gender ?? '',
+                condition: d.conditions?.map((c: any) => c.name).join(', ') || d.medical_history || '',
+                deviceId: d.device_id || '',
+                houseName: d.house_name ? `${d.house_name}${d.house_address ? ` • ${d.house_address}` : ''}` : undefined,
+                bloodPressure: d.blood_pressure,
+                heartRate: d.heart_rate,
+                spo2: d.spo2,
+                healthStatus: d.health_status || 'NORMAL',
+                lastUpdated: d.last_updated,
+              });
+            }
+          })
+          .catch(() => {});
+      }
+    }
+  }, [route.params?.patientId, route.params?.patient, patients, hasSwitchedPatient]);
 
   // 3. Tải phân tích khi chọn bệnh nhân
   const fetchAnalytics = useCallback(async () => {
@@ -124,6 +172,13 @@ export default function DoctorAnalyticsReportScreen() {
   // GIAO DIỆN 1: DANH SÁCH CHỌN BỆNH NHÂN
   // =========================================================================
   if (!selectedPatient) {
+    if (paramId && !hasSwitchedPatient) {
+      return (
+        <View style={[styles.container, { justifyContent: 'center', alignItems: 'center', backgroundColor: isDarkMode ? '#0F172A' : '#F8FAFC' }]}>
+          <ActivityIndicator size="large" color={Colors.primary} />
+        </View>
+      );
+    }
     return (
       <PatientSelectionView
         insets={insets}
@@ -137,8 +192,12 @@ export default function DoctorAnalyticsReportScreen() {
         normalCount={normalCount}
         onSearchChange={setSearchQuery}
         onFilterChange={setFilterStatus}
-        onSelectPatient={setSelectedPatient}
+        onSelectPatient={(p) => {
+          setHasSwitchedPatient(false);
+          setSelectedPatient(p);
+        }}
         onReload={loadPatients}
+        onBack={() => navigation.goBack()}
       />
     );
   }
@@ -161,13 +220,25 @@ export default function DoctorAnalyticsReportScreen() {
         ]}
       >
         <View style={styles.detailHeaderTopRow}>
+          <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8 }}>
+            <TouchableOpacity
+              style={[styles.roundBackBtn, { backgroundColor: isDarkMode ? '#334155' : '#EEF2F6' }]}
+              onPress={() => navigation.goBack()}
+              hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
+            >
+              <Ionicons name="arrow-back" size={20} color={colors.textPrimary} />
+            </TouchableOpacity>
           <TouchableOpacity
             style={[styles.backBtn, { backgroundColor: isDarkMode ? '#334155' : '#EEF2F6' }]}
-            onPress={() => setSelectedPatient(null)}
+            onPress={() => {
+              setHasSwitchedPatient(true);
+              setSelectedPatient(null);
+            }}
           >
-            <Ionicons name="arrow-back" size={18} color="#0284C7" style={{ marginRight: 4 }} />
+            <Ionicons name="people-outline" size={16} color="#0284C7" style={{ marginRight: 4 }} />
             <LocalizedText style={styles.backBtnText}>Đổi bệnh nhân</LocalizedText>
           </TouchableOpacity>
+        </View>
 
           <TouchableOpacity
             style={[styles.reloadBtn, { backgroundColor: isDarkMode ? '#334155' : '#EEF2F6' }]}
@@ -268,6 +339,13 @@ const styles = StyleSheet.create({
     paddingHorizontal: 16,
     paddingBottom: 12,
     borderBottomWidth: StyleSheet.hairlineWidth,
+  },
+  roundBackBtn: {
+    width: 34,
+    height: 34,
+    borderRadius: 17,
+    justifyContent: 'center',
+    alignItems: 'center',
   },
   reloadBtn: {
     width: 34,
