@@ -1,14 +1,12 @@
 // src/pages/InfrastructurePage.tsx
-// Phân hệ 3: Vận hành hạ tầng & Log hệ thống (Infrastructure Diagnostics & System Audit Logs)
+// Phân hệ 3: Vận hành hạ tầng (Infrastructure Diagnostics & Services Health)
 // ui-ux-pro-max: Glassmorphism + Dark OLED · High-density infrastructure console
 
-import React, { useState, useEffect, useMemo } from 'react';
+import React, { useState, useEffect } from 'react';
 import {
   Server,
   Zap,
   Sliders,
-  FileText,
-  Search,
   Download,
   Trash2,
   RefreshCw,
@@ -16,34 +14,28 @@ import {
   AlertTriangle,
   AlertCircle,
 } from 'lucide-react';
-import { RedisDiagnostics, SystemLog, ServiceHealth } from '../types';
+import { RedisDiagnostics, ServiceHealth } from '../types';
 import { systemApi } from '../services/api';
 
 export const InfrastructurePage: React.FC = () => {
   const [services, setServices] = useState<ServiceHealth[]>([]);
   const [redisInfo, setRedisInfo] = useState<RedisDiagnostics | null>(null);
-  const [logs, setLogs] = useState<SystemLog[]>([]);
   const [dbStatus, setDbStatus] = useState<any>(null);
   const [backups, setBackups] = useState<any[]>([]);
   const [loading, setLoading] = useState<boolean>(true);
-  const [searchLog, setSearchLog] = useState<string>('');
-  const [selectedLevel, setSelectedLevel] = useState<string>('ALL');
-  const [selectedModule, setSelectedModule] = useState<string>('ALL');
   const [notification, setNotification] = useState<{ type: 'success' | 'error'; message: string } | null>(null);
 
   const fetchInfrastructureData = async () => {
     setLoading(true);
     try {
-      const [servicesData, redisData, logsData, dbData, backupsData] = await Promise.all([
+      const [servicesData, redisData, dbData, backupsData] = await Promise.all([
         systemApi.getServicesHealth().catch(() => []),
         systemApi.getRedisStatus().catch(() => null),
-        systemApi.getLogs().catch(() => []),
         systemApi.getDatabaseStatus().catch(() => null),
         systemApi.getBackups().catch(() => []),
       ]);
       if (servicesData) setServices(servicesData);
       if (redisData) setRedisInfo(redisData);
-      if (logsData) setLogs(logsData);
       if (dbData) setDbStatus(dbData);
       if (backupsData) setBackups(backupsData);
     } catch {
@@ -107,59 +99,6 @@ export const InfrastructurePage: React.FC = () => {
       showNotice('error', 'Lỗi khi kích hoạt sao lưu cơ sở dữ liệu lên MinIO.');
     }
   };
-
-  // Masking PII trước khi xuất nhật ký hệ thống
-  const maskSensitiveLogData = (data: SystemLog[]) => {
-    return data.map((item) => {
-      let maskedMsg = item.message;
-      // Mask phone numbers: 0901234567 -> 090****567
-      maskedMsg = maskedMsg.replace(/(0|\+84)[3|5|7|8|9][0-9]{8}/g, (phone) => {
-        return phone.slice(0, 3) + '****' + phone.slice(-3);
-      });
-      // Mask bearer tokens
-      maskedMsg = maskedMsg.replace(/Bearer\s+[A-Za-z0-9-_=]+\.[A-Za-z0-9-_=]+\.?[A-Za-z0-9-_.+/=]*/g, 'Bearer [REDACTED_JWT_TOKEN]');
-      // Mask RTSP credentials
-      maskedMsg = maskedMsg.replace(/rtsp:\/\/([^:]+):([^@]+)@/g, 'rtsp://$1:••••••@');
-
-      return {
-        ...item,
-        message: maskedMsg,
-        source_ip: item.source_ip ? item.source_ip.replace(/\.\d+\.\d+$/, '.***.***') : undefined,
-      };
-    });
-  };
-
-  const handleExportLogs = () => {
-    const sanitizedLogs = maskSensitiveLogData(logs);
-    const dataStr = 'data:text/json;charset=utf-8,' + encodeURIComponent(JSON.stringify(sanitizedLogs, null, 2));
-    const downloadAnchor = document.createElement('a');
-    downloadAnchor.setAttribute('href', dataStr);
-    downloadAnchor.setAttribute('download', `seca_system_logs_sanitized_${Date.now()}.json`);
-    document.body.appendChild(downloadAnchor);
-    downloadAnchor.click();
-    downloadAnchor.remove();
-    showNotice('success', 'Đã xuất file log (Đã che dữ liệu nhạy cảm PII theo Nghị định 13/2023/NĐ-CP)');
-  };
-
-  const handleClearLogs = () => {
-    setLogs([]);
-    showNotice('success', 'Đã dọn sạch bảng nhật ký hiển thị');
-  };
-
-  // Filtered Logs
-  const filteredLogs = useMemo(() => {
-    return logs.filter((log) => {
-      const matchSearch =
-        log.message.toLowerCase().includes(searchLog.toLowerCase()) ||
-        log.module.toLowerCase().includes(searchLog.toLowerCase()) ||
-        (log.source_ip && log.source_ip.includes(searchLog));
-
-      const matchLevel = selectedLevel === 'ALL' || log.level === selectedLevel;
-      const matchModule = selectedModule === 'ALL' || log.module === selectedModule;
-
-      return matchSearch && matchLevel && matchModule;
-    });
-  }, [logs, searchLog, selectedLevel, selectedModule]);
 
   return (
     <div className="space-y-6">
@@ -442,158 +381,6 @@ export const InfrastructurePage: React.FC = () => {
         </div>
       </div>
 
-      {/* System Audit Logs Section */}
-      <div className="space-y-4">
-        <div className="flex flex-col md:flex-row md:items-center justify-between gap-4">
-          <div className="flex items-center space-x-2">
-            <FileText className="w-4 h-4 text-sky-600 dark:text-[#FF6B35]" />
-            <h2 className="font-heading text-sm font-bold text-slate-900 dark:text-[#F5F6F8]">
-              Nhật ký kiểm toán hệ thống (System Audit Logs)
-            </h2>
-            <span className="badge-sky font-mono text-[9px]">
-              {filteredLogs.length} events
-            </span>
-          </div>
-
-          <div className="flex items-center space-x-2.5">
-            <button
-              onClick={handleExportLogs}
-              className="btn-ghost text-xs py-1.5 px-3 font-mono"
-            >
-              <Download className="w-3.5 h-3.5" />
-              <span>Xuất JSON</span>
-            </button>
-            <button
-              onClick={handleClearLogs}
-              className="btn-danger text-xs py-1.5 px-3 font-mono"
-            >
-              <Trash2 className="w-3.5 h-3.5" />
-              <span>Xóa màn hình</span>
-            </button>
-          </div>
-        </div>
-
-        {/* Log Filter & Search */}
-        <div className="glass-card p-4 flex flex-col md:flex-row items-center justify-between gap-4">
-          <div className="relative w-full md:w-80">
-            <Search className="w-4 h-4 absolute left-3.5 top-1/2 -translate-y-1/2 text-slate-400 dark:text-[#727984]" />
-            <input
-              type="text"
-              value={searchLog}
-              onChange={(e) => setSearchLog(e.target.value)}
-              placeholder="Tìm kiếm log theo nội dung, IP..."
-              className="input-glass pl-10 text-xs font-mono"
-            />
-          </div>
-
-          <div className="flex items-center space-x-2 w-full md:w-auto overflow-x-auto font-mono">
-            {/* Level Filters */}
-            <div className="flex items-center space-x-1 bg-slate-100 dark:bg-[#202329] p-1 rounded-xl border border-slate-200 dark:border-[#454A53]">
-              {['ALL', 'INFO', 'WARN', 'ERROR'].map((lvl) => (
-                <button
-                  key={lvl}
-                  onClick={() => setSelectedLevel(lvl)}
-                  className={`px-2.5 py-1 text-xs font-bold rounded-lg transition-colors ${
-                    selectedLevel === lvl
-                      ? 'bg-[#FF6B35] text-white shadow-xs'
-                      : 'text-slate-600 dark:text-[#A1A7B1] hover:text-slate-900 dark:hover:text-[#F5F6F8]'
-                  }`}
-                >
-                  {lvl}
-                </button>
-              ))}
-            </div>
-
-            {/* Module Filter */}
-            <select
-              value={selectedModule}
-              onChange={(e) => setSelectedModule(e.target.value)}
-              className="input-glass py-1.5 px-3 text-xs w-auto font-mono"
-            >
-              <option value="ALL">Mọi Module</option>
-              <option value="AUTH">AUTH</option>
-              <option value="MQTT">MQTT</option>
-              <option value="EDGE_AI">EDGE_AI</option>
-              <option value="DATABASE">DATABASE</option>
-              <option value="WEBSOCKET">WEBSOCKET</option>
-            </select>
-          </div>
-        </div>
-
-        {/* Log Viewer Table */}
-        <div className="glass-card overflow-hidden">
-          <div className="overflow-x-auto">
-            <table className="w-full text-left text-xs font-mono">
-              <thead className="bg-slate-50 dark:bg-[#202329] text-[11px] font-semibold text-slate-600 dark:text-[#A1A7B1] uppercase tracking-wider border-b border-slate-100 dark:border-[#454A53]">
-                <tr>
-                  <th className="py-3 px-4">Thời gian</th>
-                  <th className="py-3 px-4">Mức độ (Level)</th>
-                  <th className="py-3 px-4">Phân hệ</th>
-                  <th className="py-3 px-4">Nội dung sự kiện</th>
-                  <th className="py-3 px-4 text-right">Nguồn phát (IP)</th>
-                </tr>
-              </thead>
-              <tbody className="divide-y divide-slate-100 dark:divide-[#454A53]">
-                {filteredLogs.length === 0 ? (
-                  <tr>
-                    <td colSpan={5} className="py-12 text-center text-slate-500 dark:text-[#A1A7B1] font-sans">
-                      Không có bản ghi nhật ký nào phù hợp
-                    </td>
-                  </tr>
-                ) : (
-                  filteredLogs.map((log) => {
-                    const isError = log.level === 'ERROR' || log.level === 'CRITICAL';
-                    const isWarn = log.level === 'WARN';
-
-                    return (
-                      <tr
-                        key={log.id}
-                        className={`table-row-glass ${
-                          isError
-                            ? 'bg-rose-500/5'
-                            : isWarn
-                            ? 'bg-amber-500/5'
-                            : ''
-                        }`}
-                      >
-                        <td className="py-2.5 px-4 text-slate-500 whitespace-nowrap">
-                          {log.timestamp}
-                        </td>
-
-                        <td className="py-2.5 px-4 whitespace-nowrap">
-                          <span
-                            className={`px-2 py-0.5 rounded text-[10px] font-bold ${
-                              isError
-                                ? 'badge-danger'
-                                : isWarn
-                                ? 'badge-warn'
-                                : 'badge-live'
-                            }`}
-                          >
-                            {log.level}
-                          </span>
-                        </td>
-
-                        <td className="py-2.5 px-4 whitespace-nowrap font-bold text-slate-700 dark:text-[#F5F6F8]">
-                          {log.module}
-                        </td>
-
-                        <td className="py-2.5 px-4 text-slate-800 dark:text-[#F5F6F8]">
-                          {log.message}
-                        </td>
-
-                        <td className="py-2.5 px-4 text-right text-slate-500 dark:text-[#727984] whitespace-nowrap">
-                          {log.source_ip || 'Internal'}
-                        </td>
-                      </tr>
-                    );
-                  })
-                )}
-              </tbody>
-            </table>
-          </div>
-        </div>
-      </div>
       {/* Modal dọn dẹp Redis an toàn theo Namespace có kiểm soát & Audit Log */}
       {purgeModalOpen && (
         <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-900/60 dark:bg-black/75 backdrop-blur-xs animate-fade-in">
