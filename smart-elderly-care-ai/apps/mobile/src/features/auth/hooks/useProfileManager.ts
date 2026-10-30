@@ -329,7 +329,21 @@ export function useProfileManager(navigation: any, route: any) {
       });
 
       if (!result.canceled && result.assets?.[0]) {
-        void handleSaveAvatar(result.assets[0]);
+        const pickedAsset = result.assets[0];
+        Alert.alert(
+          'Xác nhận cập nhật',
+          'Bạn có chắc chắn muốn lưu ảnh này làm ảnh đại diện mới không?',
+          [
+            { text: 'Hủy', style: 'cancel' },
+            {
+              text: 'Lưu ảnh',
+              onPress: async () => {
+                await handleSaveAvatar(pickedAsset);
+                Alert.alert('Thành công', 'Đã cập nhật ảnh đại diện thành công.');
+              },
+            },
+          ]
+        );
       }
     } catch (err: any) {
       console.warn('[ProfileScreen] pickAvatarFromCamera error:', err);
@@ -360,7 +374,21 @@ export function useProfileManager(navigation: any, route: any) {
       });
 
       if (!result.canceled && result.assets?.[0]) {
-        void handleSaveAvatar(result.assets[0]);
+        const pickedAsset = result.assets[0];
+        Alert.alert(
+          'Xác nhận cập nhật',
+          'Bạn có chắc chắn muốn lưu ảnh này làm ảnh đại diện mới không?',
+          [
+            { text: 'Hủy', style: 'cancel' },
+            {
+              text: 'Lưu ảnh',
+              onPress: async () => {
+                await handleSaveAvatar(pickedAsset);
+                Alert.alert('Thành công', 'Đã cập nhật ảnh đại diện thành công.');
+              },
+            },
+          ]
+        );
       }
     } catch (err: any) {
       console.warn('[ProfileScreen] pickAvatarFromLibrary error:', err);

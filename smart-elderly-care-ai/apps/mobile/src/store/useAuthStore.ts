@@ -279,6 +279,16 @@ const createAuthStore: StateCreator<AuthStoreState, [], [['zustand/persist', Aut
 
   logout: () => {
     try {
+      const state = get();
+      const uName = state.userName || state.full_name || undefined;
+      const uRole = state.userRole || state.role || undefined;
+      import('../services/api')
+        .then(({ authApi }) => {
+          authApi.logout(uName, uRole);
+        })
+        .catch(() => {});
+    } catch {}
+    try {
       useDeviceStore.getState().resetDeviceStore?.();
       usePatientStore.getState().resetPatientStore?.();
       useHealthStore.getState().resetHealthStore?.();

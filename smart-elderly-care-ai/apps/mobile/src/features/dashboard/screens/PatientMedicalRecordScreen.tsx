@@ -93,8 +93,7 @@ export default function PatientMedicalRecordScreen({ navigation }: any) {
     setEditPatientVisible(true);
   };
 
-  const handleSavePatientInfo = async () => {
-    if (!patientDraft.name.trim()) return Alert.alert('Thiếu thông tin', 'Vui lòng nhập họ tên người cao tuổi.');
+  const executeSavePatientInfo = async () => {
     const h = parseInt(patientDraft.height, 10) || 0, w = parseInt(patientDraft.weight, 10) || 0, by = patientDraft.birthYear.trim();
     const { bmi } = calculateBMIInfo(patientDraft.height, patientDraft.weight);
     setEditPatientVisible(false);
@@ -104,6 +103,44 @@ export default function PatientMedicalRecordScreen({ navigation }: any) {
       bmi: bmi !== '--' ? parseFloat(bmi) : 0,
     });
     Alert.alert('Thành công 🎉', 'Đã lưu hồ sơ người cao tuổi thành công.');
+  };
+
+  const handleSavePatientInfo = () => {
+    if (!patientDraft.name.trim()) return Alert.alert('Thiếu thông tin', 'Vui lòng nhập họ tên người cao tuổi.');
+    Alert.alert(
+      'Xác nhận lưu hồ sơ',
+      `Bạn có chắc chắn muốn lưu thông tin hồ sơ cho "${patientDraft.name.trim()}" không?`,
+      [
+        { text: 'Hủy', style: 'cancel' },
+        { text: 'Xác nhận lưu', onPress: executeSavePatientInfo },
+      ]
+    );
+  };
+
+  const handleCloseEditPatient = () => {
+    const isDirty =
+      patientDraft.name.trim() !== (patientRecord?.name || '').trim() ||
+      patientDraft.gender !== (patientRecord?.gender || 'male') ||
+      patientDraft.blood !== (patientRecord?.blood_type || 'A+') ||
+      patientDraft.birthYear !== (patientRecord?.birth_year || '');
+
+    if (isDirty) {
+      Alert.alert(
+        'Thay đổi chưa lưu',
+        'Thông tin hồ sơ đã được chỉnh sửa. Bạn có muốn lưu thay đổi trước khi đóng không?',
+        [
+          { text: 'Tiếp tục sửa', style: 'cancel' },
+          {
+            text: 'Không lưu',
+            style: 'destructive',
+            onPress: () => setEditPatientVisible(false),
+          },
+          { text: 'Lưu thay đổi', onPress: executeSavePatientInfo },
+        ]
+      );
+    } else {
+      setEditPatientVisible(false);
+    }
   };
 
   const handleAddCondition = async () => {
@@ -468,8 +505,8 @@ export default function PatientMedicalRecordScreen({ navigation }: any) {
       </Modal>
 
       {/* Modal Chỉnh Sửa / Thêm Mới Thông Tin Bệnh Nhân */}
-      <Modal transparent visible={isEditPatientVisible} animationType="fade" onRequestClose={() => setEditPatientVisible(false)}>
-        <Pressable style={styles.modalOverlay} onPress={() => setEditPatientVisible(false)}>
+      <Modal transparent visible={isEditPatientVisible} animationType="fade" onRequestClose={handleCloseEditPatient}>
+        <Pressable style={styles.modalOverlay} onPress={handleCloseEditPatient}>
           <Pressable style={[styles.modalCard, { backgroundColor: bgCard, borderColor: borderCol, maxHeight: '92%' }]} onPress={() => {}}>
             <Text style={[styles.modalTitle, { color: textTitle }]}>{hasPatient ? 'Chỉnh sửa thông tin bệnh nhân' : 'Thêm hồ sơ người cao tuổi'}</Text>
             <ScrollView showsVerticalScrollIndicator={false} contentContainerStyle={{ paddingBottom: 6 }}>
@@ -538,7 +575,7 @@ export default function PatientMedicalRecordScreen({ navigation }: any) {
             </ScrollView>
 
             <View style={styles.modalBtnRow}>
-              <TouchableOpacity style={[styles.modalCancelBtn, { backgroundColor: isDarkMode ? '#0F172A' : '#F1F5F9', borderColor: borderCol }]} onPress={() => setEditPatientVisible(false)}>
+              <TouchableOpacity style={[styles.modalCancelBtn, { backgroundColor: isDarkMode ? '#0F172A' : '#F1F5F9', borderColor: borderCol }]} onPress={handleCloseEditPatient}>
                 <Text style={[styles.modalCancelText, { color: textSub }]}>Hủy</Text>
               </TouchableOpacity>
               <TouchableOpacity style={styles.modalSaveBtn} onPress={handleSavePatientInfo}>

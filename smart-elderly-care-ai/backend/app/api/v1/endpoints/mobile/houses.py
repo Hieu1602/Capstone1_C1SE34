@@ -14,6 +14,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import selectinload
 
 from app.api.deps import get_current_user
+from app.core.audit import record_audit_log
 from app.core.database import get_db
 from app.crud.crud_house import crud_house
 from app.models.device import Device
@@ -141,7 +142,15 @@ async def update_current_house(
 ):
     """Cập nhật tên căn nhà hoặc địa chỉ."""
     house = await crud_house.get_or_create_default_house(db, owner_id=current_user.id)
-    return await crud_house.update(db, house=house, obj_in=obj_in)
+    res = await crud_house.update(db, house=house, obj_in=obj_in)
+    await record_audit_log(
+        db=db,
+        event="CẬP NHẬT CĂN NHÀ",
+        user_name=f"{current_user.full_name} ({current_user.role})",
+        details=f"Cập nhật thông tin căn nhà [{house.name}]",
+        severity="low",
+    )
+    return res
 
 
 # ==============================================================================
@@ -292,6 +301,14 @@ async def add_house_member(
     except Exception as notif_err:
         logger.warning("[add_house_member] Failed to create member notification: %s", notif_err)
 
+    await record_audit_log(
+        db=db,
+        event="THÊM THÀNH VIÊN",
+        user_name=f"{current_user.full_name} ({current_user.role})",
+        details=f"Thêm thành viên [{member_name}] ({member_phone}) vào nhà [{house.name}]",
+        severity="low",
+    )
+
     return _format_member_out(new_member, house)
 
 
@@ -326,6 +343,15 @@ async def update_member_permissions(
     updated_member = await crud_house.update_member_permissions(
         db, house=house, member_id=member_id, obj_in=permissions_in
     )
+
+    await record_audit_log(
+        db=db,
+        event="PHÂN QUYỀN THÀNH VIÊN",
+        user_name=f"{current_user.full_name} ({current_user.role})",
+        details=f"Cập nhật phân quyền thành viên trong nhà [{house.name}]",
+        severity="medium",
+    )
+
     return _format_member_out(updated_member, house)
 
 
@@ -363,6 +389,15 @@ async def remove_house_member(
         )
 
     await crud_house.remove_member(db, house=house, member_id=member.id)
+
+    await record_audit_log(
+        db=db,
+        event="XÓA THÀNH VIÊN",
+        user_name=f"{current_user.full_name} ({current_user.role})",
+        details=f"Xóa thành viên khỏi nhà [{house.name}]",
+        severity="medium",
+    )
+
     return {"status": "success", "message": "Đã xóa thành viên khỏi căn nhà thành công."}
 
 

@@ -7,12 +7,14 @@ import {
     Modal,
     Pressable,
     Image,
+    Alert,
 } from "react-native";
 import { Ionicons } from "@expo/vector-icons";
 import { Colors } from "../../../../theme/colors";
 import { SlideRightModal } from "../settings/SlideRightModal";
 import { ProfileEditNameModal } from "./ProfileEditNameModal";
 import { ProfileEditPhoneModal } from "./ProfileEditPhoneModal";
+import { ViewAvatarModal } from "./ViewAvatarModal";
 import { validateFullName, sanitizeNameInput } from "../../utils/nameValidation";
 
 interface ProfileInfoModalProps {
@@ -45,6 +47,7 @@ export const ProfileInfoModal: React.FC<ProfileInfoModalProps> = ({
     onSavePhone,
 }) => {
     const [isAvatarPickerVisible, setIsAvatarPickerVisible] = useState(false);
+    const [isViewingAvatar, setIsViewingAvatar] = useState(false);
     const [isEditingName, setIsEditingName] = useState(false);
     const [draftName, setDraftName] = useState(displayName);
     const [isSavingName, setIsSavingName] = useState(false);
@@ -58,9 +61,67 @@ export const ProfileInfoModal: React.FC<ProfileInfoModalProps> = ({
         setIsEditingName(true);
     };
 
-    const handleCloseEditName = () => {
-        setIsEditingName(false);
+    const executeSaveName = async (cleanName: string) => {
+        setIsSavingName(true);
         setNameError(null);
+        try {
+            const success = await onSaveName(cleanName);
+            if (success) {
+                setIsEditingName(false);
+                Alert.alert("Thành công", "Đã cập nhật họ và tên thành công.");
+            }
+        } catch (error: any) {
+            setNameError(error?.message || "Không thể cập nhật họ tên.");
+        } finally {
+            setIsSavingName(false);
+        }
+    };
+
+    const handleSaveName = () => {
+        const cleanName = draftName.trim();
+        const validation = validateFullName(cleanName);
+        if (!validation.isValid) {
+            setNameError(validation.message || "Họ và tên không hợp lệ.");
+            return;
+        }
+
+        Alert.alert(
+            "Xác nhận thay đổi",
+            `Bạn có chắc chắn muốn cập nhật họ và tên thành "${cleanName}" không?`,
+            [
+                { text: "Hủy", style: "cancel" },
+                { text: "Lưu thay đổi", onPress: () => executeSaveName(cleanName) },
+            ]
+        );
+    };
+
+    const handleCloseEditName = () => {
+        const isDirty = draftName.trim() !== (displayName || "").trim();
+        if (isDirty) {
+            Alert.alert(
+                "Thay đổi chưa lưu",
+                "Họ và tên đã được chỉnh sửa. Bạn có muốn lưu thay đổi trước khi thoát không?",
+                [
+                    { text: "Tiếp tục sửa", style: "cancel" },
+                    {
+                        text: "Không lưu",
+                        style: "destructive",
+                        onPress: () => {
+                            setDraftName(displayName);
+                            setNameError(null);
+                            setIsEditingName(false);
+                        },
+                    },
+                    {
+                        text: "Lưu thay đổi",
+                        onPress: () => handleSaveName(),
+                    },
+                ]
+            );
+        } else {
+            setNameError(null);
+            setIsEditingName(false);
+        }
     };
 
     const handleOpenEditPhone = () => {
@@ -69,28 +130,6 @@ export const ProfileInfoModal: React.FC<ProfileInfoModalProps> = ({
 
     const handleCloseEditPhone = () => {
         setIsEditingPhone(false);
-    };
-
-    const handleSaveName = async () => {
-        const cleanName = draftName.trim();
-        const validation = validateFullName(cleanName);
-        if (!validation.isValid) {
-            setNameError(validation.message || "Họ và tên không hợp lệ.");
-            return;
-        }
-
-        setIsSavingName(true);
-        setNameError(null);
-        try {
-            const success = await onSaveName(cleanName);
-            if (success) {
-                setIsEditingName(false);
-            }
-        } catch (error: any) {
-            setNameError(error?.message || "Không thể cập nhật họ tên.");
-        } finally {
-            setIsSavingName(false);
-        }
     };
 
     return (
@@ -131,12 +170,11 @@ export const ProfileInfoModal: React.FC<ProfileInfoModalProps> = ({
                     </TouchableOpacity>
 
                     <View style={styles.avatarContainerLarge}>
-                        <TouchableOpacity
-                            style={styles.avatarWrapperLarge}
-                            activeOpacity={0.8}
-                            onPress={() => setIsAvatarPickerVisible(true)}
-                        >
-                            <View
+                        <View style={styles.avatarWrapperLarge}>
+                            {/* Chạm vào vòng tròn ảnh chỉ để XEM AVATAR */}
+                            <TouchableOpacity
+                                activeOpacity={0.85}
+                                onPress={() => setIsViewingAvatar(true)}
                                 style={[
                                     styles.avatarCircleLarge,
                                     isDarkMode && { backgroundColor: "#1E293B" },
@@ -154,11 +192,19 @@ export const ProfileInfoModal: React.FC<ProfileInfoModalProps> = ({
                                         color={isDarkMode ? "#64748B" : "#E8EEF5"}
                                     />
                                 )}
-                            </View>
-                            <View style={styles.cameraIconBadge}>
+                            </TouchableOpacity>
+
+                            {/* Nút icon máy ảnh riêng biệt: Bấm vào mới CHỈNH SỬA */}
+                            <TouchableOpacity
+                                style={styles.cameraIconBadge}
+                                activeOpacity={0.8}
+                                onPress={() => setIsAvatarPickerVisible(true)}
+                                hitSlop={{ top: 6, bottom: 6, left: 6, right: 6 }}
+                                accessibilityLabel="Chỉnh sửa ảnh đại diện"
+                            >
                                 <Ionicons name="camera" size={14} color="#FFFFFF" />
-                            </View>
-                        </TouchableOpacity>
+                            </TouchableOpacity>
+                        </View>
 
                         <Text
                             style={[
@@ -167,6 +213,9 @@ export const ProfileInfoModal: React.FC<ProfileInfoModalProps> = ({
                             ]}
                         >
                             {displayName}
+                        </Text>
+                        <Text style={styles.avatarHintText}>
+                            Nhấn vào ảnh để xem · Nhấn máy ảnh để đổi
                         </Text>
                     </View>
 
@@ -314,6 +363,16 @@ export const ProfileInfoModal: React.FC<ProfileInfoModalProps> = ({
                         currentPhone={phone}
                         onClose={handleCloseEditPhone}
                         onSave={onSavePhone}
+                    />
+
+                    {/* Modal Xem Ảnh Đại Diện (Chỉ xem, có nút Chỉnh sửa riêng) */}
+                    <ViewAvatarModal
+                        visible={isViewingAvatar}
+                        avatarUri={avatarUri}
+                        displayName={displayName}
+                        isDarkMode={isDarkMode}
+                        onClose={() => setIsViewingAvatar(false)}
+                        onEditAvatar={() => setIsAvatarPickerVisible(true)}
                     />
 
                     {/* Bottom Sheet chọn Chụp ảnh hoặc Chọn từ Thư viện */}
@@ -467,6 +526,11 @@ const styles = StyleSheet.create({
         shadowOffset: { width: 0, height: 2 },
         shadowOpacity: 0.25,
         shadowRadius: 3.84,
+    },
+    avatarHintText: {
+        fontSize: 11,
+        color: "#94A3B8",
+        marginTop: 4,
     },
     avatarPickerOverlay: {
         position: "absolute",

@@ -21,6 +21,7 @@ import { useTheme } from '../../../store/useThemeStore';
 import { useAuthStore } from '../../../store/useAuthStore';
 import { doctorApi, usersApi } from '../../../services/api';
 import { resolveAvatarUrl } from '../../auth/hooks/useProfileManager';
+import { ViewAvatarModal } from '../../auth/components/profile';
 import {
   DoctorProfileInfo,
   DoctorProfileCard,
@@ -62,6 +63,7 @@ export default function DoctorProfileScreen({ navigation }: any) {
   const [editDepartment, setEditDepartment] = useState(docInfo.department);
   const [editPhone, setEditPhone] = useState(docInfo.phone);
   const [editAvatarUri, setEditAvatarUri] = useState<string | null>(avatarUri);
+  const [isViewingAvatar, setIsViewingAvatar] = useState(false);
 
   const [passwordModalVisible, setPasswordModalVisible] = useState(false);
   const [oldPassword, setOldPassword] = useState('');
@@ -146,8 +148,21 @@ export default function DoctorProfileScreen({ navigation }: any) {
       if (!result.canceled && result.assets?.[0]?.uri) {
         const asset = result.assets[0];
         const selectedUri = asset.base64 ? `data:image/jpeg;base64,${asset.base64}` : asset.uri;
-        setEditAvatarUri(selectedUri);
-        setAvatarUri(selectedUri);
+        Alert.alert(
+          'Xác nhận cập nhật',
+          'Bạn có chắc chắn muốn lưu ảnh này làm ảnh đại diện Bác sĩ không?',
+          [
+            { text: 'Hủy', style: 'cancel' },
+            {
+              text: 'Lưu ảnh',
+              onPress: () => {
+                setEditAvatarUri(selectedUri);
+                setAvatarUri(selectedUri);
+                Alert.alert('Thành công', 'Đã cập nhật ảnh đại diện bác sĩ thành công.');
+              },
+            },
+          ]
+        );
       }
     } catch {
       Alert.alert('Lỗi', 'Không thể chọn ảnh từ thư viện.');
@@ -165,11 +180,7 @@ export default function DoctorProfileScreen({ navigation }: any) {
     setEditModalVisible(true);
   };
 
-  const handleSaveProfile = async () => {
-    if (!editName.trim()) {
-      Alert.alert('Lỗi', 'Vui lòng nhập họ tên bác sĩ.');
-      return;
-    }
+  const executeSaveProfile = async () => {
     const updated: DoctorProfileInfo = {
       name: editName.trim(),
       degree: editDegree.trim(),
@@ -202,24 +213,51 @@ export default function DoctorProfileScreen({ navigation }: any) {
     Alert.alert('Thành công', 'Đã cập nhật hồ sơ chuyên môn Bác sĩ thành công.');
   };
 
-  const handleSavePassword = async () => {
-    if (!oldPassword.trim() || !newPassword.trim()) {
-      Alert.alert('Lỗi', 'Vui lòng nhập đầy đủ mật khẩu hiện tại và mật khẩu mới.');
+  const handleSaveProfile = () => {
+    if (!editName.trim()) {
+      Alert.alert('Lỗi', 'Vui lòng nhập họ tên bác sĩ.');
       return;
     }
-    if (newPassword.length < 8 || newPassword.length > 16) {
-      Alert.alert('Lỗi', 'Mật khẩu mới phải từ 8 đến 16 ký tự.');
-      return;
-    }
-    if (newPassword !== confirmPassword) {
-      Alert.alert('Lỗi', 'Mật khẩu xác nhận không trùng khớp.');
-      return;
-    }
-    if (oldPassword === newPassword) {
-      Alert.alert('Lỗi', 'Mật khẩu mới phải khác mật khẩu hiện tại.');
-      return;
-    }
+    Alert.alert(
+      'Xác nhận lưu hồ sơ',
+      'Bạn có chắc chắn muốn lưu các thay đổi thông tin hồ sơ Bác sĩ không?',
+      [
+        { text: 'Hủy', style: 'cancel' },
+        { text: 'Xác nhận lưu', onPress: executeSaveProfile },
+      ]
+    );
+  };
 
+  const handleCloseEditModal = () => {
+    const isDirty =
+      editName.trim() !== (docInfo.name || '').trim() ||
+      editDegree.trim() !== (docInfo.degree || '').trim() ||
+      editSpecialty.trim() !== (docInfo.specialty || '').trim() ||
+      editHospital.trim() !== (docInfo.hospital || '').trim() ||
+      editDepartment.trim() !== (docInfo.department || '').trim() ||
+      editPhone.trim() !== (docInfo.phone || '').trim() ||
+      editAvatarUri !== avatarUri;
+
+    if (isDirty) {
+      Alert.alert(
+        'Thay đổi chưa lưu',
+        'Thông tin hồ sơ bác sĩ đã được chỉnh sửa. Bạn có muốn lưu thay đổi trước khi đóng không?',
+        [
+          { text: 'Tiếp tục sửa', style: 'cancel' },
+          {
+            text: 'Không lưu',
+            style: 'destructive',
+            onPress: () => setEditModalVisible(false),
+          },
+          { text: 'Lưu thay đổi', onPress: executeSaveProfile },
+        ]
+      );
+    } else {
+      setEditModalVisible(false);
+    }
+  };
+
+  const executeSavePassword = async () => {
     try {
       setIsChangingPassword(true);
       await usersApi.changePassword({
@@ -248,6 +286,58 @@ export default function DoctorProfileScreen({ navigation }: any) {
       Alert.alert('Đổi mật khẩu thất bại', errorMsg);
     } finally {
       setIsChangingPassword(false);
+    }
+  };
+
+  const handleSavePassword = () => {
+    if (!oldPassword.trim() || !newPassword.trim()) {
+      Alert.alert('Lỗi', 'Vui lòng nhập đầy đủ mật khẩu hiện tại và mật khẩu mới.');
+      return;
+    }
+    if (newPassword.length < 8 || newPassword.length > 16) {
+      Alert.alert('Lỗi', 'Mật khẩu mới phải từ 8 đến 16 ký tự.');
+      return;
+    }
+    if (newPassword !== confirmPassword) {
+      Alert.alert('Lỗi', 'Mật khẩu xác nhận không trùng khớp.');
+      return;
+    }
+    if (oldPassword === newPassword) {
+      Alert.alert('Lỗi', 'Mật khẩu mới phải khác mật khẩu hiện tại.');
+      return;
+    }
+
+    Alert.alert(
+      'Xác nhận đổi mật khẩu',
+      'Bạn có chắc chắn muốn thay đổi mật khẩu đăng nhập của Bác sĩ không?',
+      [
+        { text: 'Hủy', style: 'cancel' },
+        { text: 'Đổi mật khẩu', onPress: executeSavePassword },
+      ]
+    );
+  };
+
+  const handleClosePasswordModal = () => {
+    if (oldPassword.trim().length > 0 || newPassword.trim().length > 0) {
+      Alert.alert(
+        'Hủy đổi mật khẩu',
+        'Các mật khẩu đang nhập dở sẽ bị hủy. Bạn có muốn thoát không?',
+        [
+          { text: 'Ở lại', style: 'cancel' },
+          {
+            text: 'Thoát',
+            style: 'destructive',
+            onPress: () => {
+              setOldPassword('');
+              setNewPassword('');
+              setConfirmPassword('');
+              setPasswordModalVisible(false);
+            },
+          },
+        ]
+      );
+    } else {
+      setPasswordModalVisible(false);
     }
   };
 
@@ -309,6 +399,7 @@ export default function DoctorProfileScreen({ navigation }: any) {
           patientCount={patientCount}
           appointmentCount={appointmentCount}
           onPickImage={pickImage}
+          onViewAvatar={() => setIsViewingAvatar(true)}
           onEditProfile={handleOpenEditModal}
           isDarkMode={isDarkMode}
           colors={colors}
@@ -342,7 +433,7 @@ export default function DoctorProfileScreen({ navigation }: any) {
         onChangePhone={setEditPhone}
         onPickImage={pickImage}
         onSave={handleSaveProfile}
-        onClose={() => setEditModalVisible(false)}
+        onClose={handleCloseEditModal}
         isDarkMode={isDarkMode}
         colors={colors}
       />
@@ -357,7 +448,7 @@ export default function DoctorProfileScreen({ navigation }: any) {
         onChangeNewPassword={setNewPassword}
         onChangeConfirmPassword={setConfirmPassword}
         onSave={handleSavePassword}
-        onClose={() => !isChangingPassword && setPasswordModalVisible(false)}
+        onClose={handleClosePasswordModal}
         isDarkMode={isDarkMode}
         colors={colors}
         isSubmitting={isChangingPassword}
@@ -370,6 +461,16 @@ export default function DoctorProfileScreen({ navigation }: any) {
         onClose={() => setLogoutModalVisible(false)}
         isDarkMode={isDarkMode}
         colors={colors}
+      />
+
+      {/* MODAL 4: XEM AVATAR BÁC SĨ (CHẾ ĐỘ XEM, CÓ NÚT ĐỔI RIÊNG) */}
+      <ViewAvatarModal
+        visible={isViewingAvatar}
+        avatarUri={avatarUri}
+        displayName={docInfo.name || 'Bác sĩ'}
+        isDarkMode={isDarkMode}
+        onClose={() => setIsViewingAvatar(false)}
+        onEditAvatar={pickImage}
       />
     </View>
   );

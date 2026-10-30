@@ -33,6 +33,7 @@ export interface DoctorProfileCardProps {
   patientCount: number;
   appointmentCount: number;
   onPickImage: () => void;
+  onViewAvatar?: () => void;
   onEditProfile: () => void;
   isDarkMode: boolean;
   colors: any;
@@ -44,6 +45,7 @@ export const DoctorProfileCard: React.FC<DoctorProfileCardProps> = ({
   patientCount,
   appointmentCount,
   onPickImage,
+  onViewAvatar,
   onEditProfile,
   isDarkMode,
   colors,
@@ -73,9 +75,14 @@ export const DoctorProfileCard: React.FC<DoctorProfileCardProps> = ({
           <Text style={styles.editBtnText}>Chỉnh sửa</Text>
         </TouchableOpacity>
 
-        {/* Avatar tròn đồng bộ Trang chủ */}
+        {/* Avatar tròn đồng bộ Trang chủ - Nhấn vào chỉ để XEM AVATAR */}
         <View style={styles.avatarWrapper}>
-          <TouchableOpacity style={{ position: 'relative' }} activeOpacity={0.88} onPress={onPickImage}>
+          <TouchableOpacity
+            style={{ position: 'relative' }}
+            activeOpacity={0.88}
+            onPress={onViewAvatar || onPickImage}
+            accessibilityLabel="Xem ảnh đại diện bác sĩ"
+          >
             <View style={styles.avatarBig}>
               {avatarUri ? (
                 <Image source={{ uri: avatarUri }} style={styles.avatarImage} />

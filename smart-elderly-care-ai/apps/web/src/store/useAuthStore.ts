@@ -2,6 +2,7 @@
 
 import { create } from 'zustand';
 import { User } from '../types';
+import { authApi } from '../services/api';
 
 interface AuthState {
   token: string | null;
@@ -32,7 +33,7 @@ if (savedUser && savedToken) {
   }
 }
 
-export const useAuthStore = create<AuthState>((set) => ({
+export const useAuthStore = create<AuthState>((set, get) => ({
   token: initialAuth ? savedToken : null,
   user: initialUser,
   isAuthenticated: initialAuth,
@@ -44,6 +45,8 @@ export const useAuthStore = create<AuthState>((set) => ({
   },
 
   logout: () => {
+    const user = get().user;
+    authApi.logout(user?.full_name, user?.role).catch(() => {});
     localStorage.removeItem('seca_admin_token');
     localStorage.removeItem('seca_admin_user');
     set({ token: null, user: null, isAuthenticated: false });
