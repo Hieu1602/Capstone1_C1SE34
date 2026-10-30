@@ -20,7 +20,7 @@ export default function ArchivePlayer({ uri, startAt = 0, onEnd, onError, onProg
         if (loadedUri.current === uri) player.current?.seek(startAt);
     }, [uri, startAt, seekVersion]);
     return <Video ref={player} source={source} controls paused={paused} resizeMode="contain" automaticallyWaitsToMinimizeStalling
-        bufferConfig={{ minBufferMs: 15000, maxBufferMs: 45000, bufferForPlaybackMs: 1500, bufferForPlaybackAfterRebufferMs: 3000 }}
+        bufferConfig={{ minBufferMs: 5000, maxBufferMs: 30000, bufferForPlaybackMs: 1000, bufferForPlaybackAfterRebufferMs: 2000 }}
         onEnd={onEnd} onError={onError}
         onLoadStart={() => { loadedUri.current = ""; }}
         onLoad={() => { loadedUri.current = uri; player.current?.seek(startAt); }}

@@ -45,7 +45,20 @@ function harness(media) {
     };
     const modules = {
         react,
-        "react-native": { Linking: {}, Modal: "modal", ScrollView: "scroll", TouchableOpacity: "button", View: "view" },
+        "react-native": {
+            Linking: {},
+            Modal: "modal",
+            ScrollView: "scroll",
+            TouchableOpacity: "button",
+            View: "view",
+            Animated: {
+                Value: class { constructor(v) { this.v = v; } setValue(v) { this.v = v; } interpolate() { return 0; } },
+                timing: () => ({ start: fn => fn?.() }),
+                spring: () => ({ start: fn => fn?.() }),
+                parallel: () => ({ start: fn => fn?.() }),
+                View: "view",
+            },
+        },
         "react-native-safe-area-context": { SafeAreaView: "safe" },
         "@expo/vector-icons": { Ionicons: "icon" },
         "../../../i18n/LocalizedComponents": { LocalizedText: "text", LocalizedAlert: { alert: (...args) => alerts.push(args) } },

@@ -1,7 +1,7 @@
 /**
  * Hiển thị luồng MJPEG trên web/native, giao diện liên kết và lỗi xem video.
  */
-import React, { useState } from "react";
+import React, { useState, useEffect } from "react";
 import {
     Platform,
     TextInput,
@@ -36,6 +36,23 @@ export function CameraLiveView({
     // URL media đã lỗi để ngừng thử tải lại cùng ticket trong mỗi render.
     const [failed, setFailed] = useState("");
     const uri = connection.liveUrl;
+
+    useEffect(() => {
+        if (connection.active) {
+            setFailed("");
+        }
+    }, [connection.active, uri]);
+
+    const handleMediaError = () => {
+        setFailed(uri);
+        if (connection.active && connection.privacy !== true) {
+            const timer = setTimeout(() => {
+                setFailed("");
+                connection.refresh?.();
+            }, 3000);
+            return () => clearTimeout(timer);
+        }
+    };
     /**
      * Tạo nút liên kết hoặc thử kết nối lại trong khung live.
      * @param label - Nhãn hiển thị và mô tả thao tác.
@@ -95,7 +112,7 @@ export function CameraLiveView({
                     <img
                         src={uri}
                         alt="Camera trực tiếp"
-                        onError={() => setFailed(uri)}
+                        onError={handleMediaError}
                         style={{
                             width: "100%",
                             height: "100%",
@@ -113,10 +130,10 @@ export function CameraLiveView({
                         }}
                         onMessage={(event) => {
                             if (event.nativeEvent.data === "error")
-                                setFailed(uri);
+                                handleMediaError();
                         }}
-                        onError={() => setFailed(uri)}
-                        onHttpError={() => setFailed(uri)}
+                        onError={handleMediaError}
+                        onHttpError={handleMediaError}
                         style={{ flex: 1, backgroundColor: "#000" }}
                     />
                 )
