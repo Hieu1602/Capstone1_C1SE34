@@ -13,7 +13,8 @@ from sqlalchemy import text
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from app.api.deps import get_current_user
+from app.api.deps import get_current_user, get_current_user_optional
+from app.core.audit import get_client_ip, get_user_agent, record_audit_log
 from app.core.config import settings
 from app.core.database import get_db
 from app.core.security import create_access_token, create_refresh_token, verify_password
@@ -617,3 +618,40 @@ async def get_user_login_history(
     return await crud_user_terminal.get_login_history_for_user(
         db, user=current_user, limit=limit
     )
+
+
+class LogoutPayload(BaseModel):
+    user_name: Optional[str] = None
+    role: Optional[str] = None
+
+
+@router.post("/logout", summary="Đăng xuất và ghi nhận nhật ký kiểm toán")
+async def logout(
+    request: Request,
+    payload: Optional[LogoutPayload] = None,
+    current_user: Optional[User] = Depends(get_current_user_optional),
+    db: AsyncSession = Depends(get_db),
+):
+    """Ghi nhận sự kiện ĐĂNG XUẤT vào System Audit Logs."""
+    if current_user:
+        u_name = f"{current_user.full_name} ({current_user.role})"
+    elif payload and payload.user_name:
+        role_label = f" ({payload.role})" if payload.role else ""
+        u_name = f"{payload.user_name}{role_label}"
+    else:
+        u_name = "Người dùng ẩn danh"
+
+    client_ip = get_client_ip(request)
+    user_agent = get_user_agent(request)
+
+    await record_audit_log(
+        db=db,
+        event="ĐĂNG XUẤT",
+        user_name=u_name,
+        details=f"Đăng xuất khỏi hệ thống qua {user_agent}.",
+        severity="low",
+        ip_address=client_ip,
+    )
+
+    return {"message": "Đăng xuất thành công"}
+

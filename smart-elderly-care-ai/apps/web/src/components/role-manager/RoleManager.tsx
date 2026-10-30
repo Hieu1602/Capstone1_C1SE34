@@ -8,6 +8,7 @@ import { RoleDisplayTab } from './RoleDisplayTab';
 import { RolePermissionsTab } from './RolePermissionsTab';
 import { RoleMembersTab } from './RoleMembersTab';
 import { RoleUnsavedFloatingBar } from './RoleUnsavedFloatingBar';
+import { ConfirmActionModal } from '../user-management/ConfirmActionModal';
 
 export const RoleManager: React.FC<RoleManagerProps> = ({
   users,
@@ -71,6 +72,15 @@ export const RoleManager: React.FC<RoleManagerProps> = ({
 
   // Form nháp tạm thời (Draft State) cho vai trò đang chỉnh sửa
   const [draftRole, setDraftRole] = useState<SystemRole | null>(null);
+
+  // States xác nhận thao tác
+  const [confirmDeleteRole, setConfirmDeleteRole] = useState<SystemRole | null>(null);
+  const [pendingAction, setPendingAction] = useState<
+    | { type: 'selectRole'; role: SystemRole }
+    | { type: 'backToList' }
+    | { type: 'cancelEdit' }
+    | null
+  >(null);
 
   // Tìm vai trò hiện tại
   const currentRole = useMemo(() => {
@@ -145,13 +155,36 @@ export const RoleManager: React.FC<RoleManagerProps> = ({
       if (onNotice) onNotice('error', 'Không thể xóa vai trò mặc định của hệ thống SECA!');
       return;
     }
-    if (confirm(`Bạn có chắc chắn muốn xóa vai trò "${target.name}"?`)) {
-      const remaining = roles.filter((r) => r.id !== roleId);
-      setRoles(remaining);
-      setSelectedRoleId(remaining[0]?.id || 'role-admin');
-      setViewMode('list');
-      if (onNotice) onNotice('success', `Đã xóa vai trò "${target.name}"`);
+    setConfirmDeleteRole(target);
+  };
+
+  const executeDeleteRole = () => {
+    if (!confirmDeleteRole) return;
+    const remaining = roles.filter((r) => r.id !== confirmDeleteRole.id);
+    setRoles(remaining);
+    setSelectedRoleId(remaining[0]?.id || 'role-admin');
+    setViewMode('list');
+    if (onNotice) onNotice('success', `Đã xóa vai trò "${confirmDeleteRole.name}" thành công!`);
+    setConfirmDeleteRole(null);
+  };
+
+  const handleConfirmPendingAction = (save: boolean) => {
+    if (!pendingAction) return;
+    if (save) {
+      handleSaveChanges();
+    } else {
+      handleResetChanges();
     }
+    if (pendingAction.type === 'selectRole') {
+      setSelectedRoleId(pendingAction.role.id);
+      setDraftRole(JSON.parse(JSON.stringify(pendingAction.role)));
+      setViewMode('detail');
+    } else if (pendingAction.type === 'backToList') {
+      setViewMode('list');
+    } else if (pendingAction.type === 'cancelEdit') {
+      setViewMode('detail');
+    }
+    setPendingAction(null);
   };
 
   const handleCloneRole = (role: SystemRole) => {
@@ -224,22 +257,36 @@ export const RoleManager: React.FC<RoleManagerProps> = ({
   // VIEW 1: Danh sách tổng quan
   if (viewMode === 'list') {
     return (
-      <RoleListView
-        roles={roles}
-        users={users}
-        searchQuery={roleSearchQuery}
-        onSearchChange={setRoleSearchQuery}
-        onCreateNewRole={handleCreateNewRole}
-        onInspectRole={handleInspectRole}
-        onEditRole={handleEditRole}
-        onCloneRole={handleCloneRole}
-        onDeleteRole={handleDeleteRole}
-        openMenuRoleId={openMenuRoleId}
-        onToggleMenu={(e, roleId) => {
-          e.stopPropagation();
-          setOpenMenuRoleId(openMenuRoleId === roleId ? null : roleId);
-        }}
-      />
+      <>
+        <RoleListView
+          roles={roles}
+          users={users}
+          searchQuery={roleSearchQuery}
+          onSearchChange={setRoleSearchQuery}
+          onCreateNewRole={handleCreateNewRole}
+          onInspectRole={handleInspectRole}
+          onEditRole={handleEditRole}
+          onCloneRole={handleCloneRole}
+          onDeleteRole={handleDeleteRole}
+          openMenuRoleId={openMenuRoleId}
+          onToggleMenu={(e, roleId) => {
+            e.stopPropagation();
+            setOpenMenuRoleId(openMenuRoleId === roleId ? null : roleId);
+          }}
+        />
+
+        {/* Modal xác nhận xóa vai trò */}
+        <ConfirmActionModal
+          isOpen={!!confirmDeleteRole}
+          type="delete"
+          title="Xác nhận xóa vai trò"
+          message={`Bạn có chắc chắn muốn xóa vai trò "${confirmDeleteRole?.name}" không? Thao tác này sẽ xóa quy tắc phân quyền đã gán cho vai trò này.`}
+          confirmLabel="Xóa vai trò"
+          cancelLabel="Hủy bỏ"
+          onConfirm={executeDeleteRole}
+          onCancel={() => setConfirmDeleteRole(null)}
+        />
+      </>
     );
   }
 
@@ -253,11 +300,7 @@ export const RoleManager: React.FC<RoleManagerProps> = ({
           selectedRoleId={selectedRoleId}
           onSelectRole={(role) => {
             if (isDirty) {
-              if (confirm('Bạn có thay đổi chưa lưu. Bạn có muốn đổi sang vai trò khác?')) {
-                setSelectedRoleId(role.id);
-                setDraftRole(JSON.parse(JSON.stringify(role)));
-                setViewMode('detail');
-              }
+              setPendingAction({ type: 'selectRole', role });
             } else {
               setSelectedRoleId(role.id);
               setDraftRole(JSON.parse(JSON.stringify(role)));
@@ -266,9 +309,7 @@ export const RoleManager: React.FC<RoleManagerProps> = ({
           }}
           onBackToList={() => {
             if (isDirty) {
-              if (confirm('Bạn có thay đổi chưa lưu! Bạn có muốn quay lại không?')) {
-                setViewMode('list');
-              }
+              setPendingAction({ type: 'backToList' });
             } else {
               setViewMode('list');
             }
@@ -321,10 +362,7 @@ export const RoleManager: React.FC<RoleManagerProps> = ({
                     type="button"
                     onClick={() => {
                       if (isDirty) {
-                        if (confirm('Bạn có thay đổi chưa lưu. Bạn có muốn hủy và quay lại chế độ xem?')) {
-                          handleResetChanges();
-                          setViewMode('detail');
-                        }
+                        setPendingAction({ type: 'cancelEdit' });
                       } else {
                         setViewMode('detail');
                       }
@@ -338,7 +376,13 @@ export const RoleManager: React.FC<RoleManagerProps> = ({
 
                 <button
                   type="button"
-                  onClick={() => setViewMode('list')}
+                  onClick={() => {
+                    if (isDirty) {
+                      setPendingAction({ type: 'backToList' });
+                    } else {
+                      setViewMode('list');
+                    }
+                  }}
                   className="p-1.5 rounded-lg text-slate-400 hover:text-slate-700 dark:hover:text-[#F5F6F8] hover:bg-slate-100 dark:hover:bg-[#202329] transition-colors cursor-pointer"
                   title="Đóng"
                 >
@@ -439,6 +483,32 @@ export const RoleManager: React.FC<RoleManagerProps> = ({
         isVisible={isDirty}
         onReset={handleResetChanges}
         onSave={handleSaveChanges}
+      />
+
+      {/* Modal xác nhận xóa vai trò */}
+      <ConfirmActionModal
+        isOpen={!!confirmDeleteRole}
+        type="delete"
+        title="Xác nhận xóa vai trò"
+        message={`Bạn có chắc chắn muốn xóa vai trò "${confirmDeleteRole?.name}" không? Thao tác này sẽ xóa quy tắc phân quyền đã gán cho vai trò này.`}
+        confirmLabel="Xóa vai trò"
+        cancelLabel="Hủy bỏ"
+        onConfirm={executeDeleteRole}
+        onCancel={() => setConfirmDeleteRole(null)}
+      />
+
+      {/* Modal xác nhận khi chuyển trang / hủy mà có thay đổi chưa lưu */}
+      <ConfirmActionModal
+        isOpen={!!pendingAction}
+        type="unsaved"
+        title="Bạn có thay đổi chưa lưu"
+        message="Cấu hình quyền hạn của vai trò đang được chỉnh sửa. Bạn có muốn lưu thay đổi trước khi tiếp tục không?"
+        confirmLabel="Lưu thay đổi"
+        discardLabel="Không lưu (Hủy thay đổi)"
+        cancelLabel="Tiếp tục chỉnh sửa"
+        onConfirm={() => handleConfirmPendingAction(true)}
+        onDiscard={() => handleConfirmPendingAction(false)}
+        onCancel={() => setPendingAction(null)}
       />
     </div>
   );

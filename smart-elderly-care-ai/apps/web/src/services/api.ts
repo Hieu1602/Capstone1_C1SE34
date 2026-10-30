@@ -67,6 +67,8 @@ export const authApi = {
     });
   },
   getMe: () => api.get<User>('/auth/me'),
+  logout: (userName?: string, role?: string) =>
+    api.post('/auth/logout', { user_name: userName, role }).catch(() => {}),
 };
 
 // 2. USERS & PERMISSIONS API
@@ -80,7 +82,7 @@ export const usersApi = {
     const res = await api.post<User>('/users', data);
     return res.data;
   },
-  update: async (id: string, data: Partial<User>): Promise<User> => {
+  update: async (id: string, data: Partial<User> & { password?: string }): Promise<User> => {
     const res = await api.patch<User>(`/users/${id}`, data);
     return res.data;
   },

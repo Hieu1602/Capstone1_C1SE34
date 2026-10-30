@@ -239,6 +239,16 @@ export default function DevicesScreen({ navigation }: any) {
   };
 
   // Lưu chỉnh sửa nhóm
+  const executeSaveEditGroup = () => {
+    updateDeviceGroup(editOldGroupName, trimmedEditName, editSelectedDeviceIds);
+    if (selectedGroupFilter === editOldGroupName) {
+      setSelectedGroupFilter(trimmedEditName);
+    }
+    setShowEditGroupModal(false);
+    setSelectedGroupForAction(null);
+    LocalizedAlert.alert('Thành công', `Đã cập nhật nhóm "${trimmedEditName}" thành công.`);
+  };
+
   const handleSaveEditGroup = () => {
     setEditAttempted(true);
     if (isEditNameEmpty) {
@@ -257,13 +267,39 @@ export default function DevicesScreen({ navigation }: any) {
       return;
     }
 
-    updateDeviceGroup(editOldGroupName, trimmedEditName, editSelectedDeviceIds);
-    if (selectedGroupFilter === editOldGroupName) {
-      setSelectedGroupFilter(trimmedEditName);
+    LocalizedAlert.alert(
+      'Xác nhận cập nhật',
+      `Bạn có chắc chắn muốn lưu các thay đổi cho nhóm "${trimmedEditName}" không?`,
+      [
+        { text: 'Hủy', style: 'cancel' },
+        { text: 'Lưu thay đổi', onPress: executeSaveEditGroup },
+      ]
+    );
+  };
+
+  const handleCloseEditGroup = () => {
+    const isDirty = trimmedEditName !== editOldGroupName;
+    if (isDirty) {
+      LocalizedAlert.alert(
+        'Thay đổi chưa lưu',
+        'Tên hoặc danh sách thiết bị đã được chỉnh sửa. Bạn có muốn lưu trước khi đóng không?',
+        [
+          { text: 'Tiếp tục sửa', style: 'cancel' },
+          {
+            text: 'Không lưu',
+            style: 'destructive',
+            onPress: () => {
+              setShowEditGroupModal(false);
+              setSelectedGroupForAction(null);
+            },
+          },
+          { text: 'Lưu thay đổi', onPress: executeSaveEditGroup },
+        ]
+      );
+    } else {
+      setShowEditGroupModal(false);
+      setSelectedGroupForAction(null);
     }
-    setShowEditGroupModal(false);
-    setSelectedGroupForAction(null);
-    LocalizedAlert.alert('Thành công', `Đã cập nhật nhóm "${trimmedEditName}" thành công.`);
   };
 
   return (
@@ -575,7 +611,7 @@ export default function DevicesScreen({ navigation }: any) {
         isAllEditTabSelected={isAllEditTabSelected}
         onToggleSelectAll={handleToggleEditSelectAll}
         onToggleDevice={toggleEditDeviceSelection}
-        onClose={() => setShowEditGroupModal(false)}
+        onClose={handleCloseEditGroup}
         onSave={handleSaveEditGroup}
         isEditFormValid={isEditFormValid}
         isDarkMode={isDarkMode}

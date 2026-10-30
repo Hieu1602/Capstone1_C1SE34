@@ -141,6 +141,8 @@ export default api;
 // ---- API Service Functions ----
 
 export const authApi = {
+  logout: (userName?: string, role?: string) =>
+    api.post('/auth/logout', { user_name: userName, role }).catch(() => {}),
   requestOtp: (phone: string) => api.post('/auth/request-otp', { phone }),
   verifyOtp: (phone: string, otp_code: string) => api.post('/auth/verify-otp', { phone, otp_code }),
   verifyCchn: (cchn_number: string, full_name: string) =>

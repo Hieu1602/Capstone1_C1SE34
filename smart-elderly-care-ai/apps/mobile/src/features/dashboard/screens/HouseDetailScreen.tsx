@@ -96,7 +96,7 @@ export default function HouseDetailScreen({ navigation, route }: any) {
     }
   }, [route?.params?.openInviteModal]);
 
-  const handleSaveAddress = async () => {
+  const executeSaveAddress = async () => {
     try {
       setIsSavingAddress(true);
       const clean = editAddressInput.trim();
@@ -107,6 +107,38 @@ export default function HouseDetailScreen({ navigation, route }: any) {
       triggerToast('Không thể lưu địa chỉ. Vui lòng thử lại.', 'error');
     } finally {
       setIsSavingAddress(false);
+    }
+  };
+
+  const handleSaveAddress = () => {
+    Alert.alert(
+      'Xác nhận lưu địa chỉ',
+      'Bạn có chắc chắn muốn cập nhật địa chỉ căn nhà không?',
+      [
+        { text: 'Hủy', style: 'cancel' },
+        { text: 'Lưu địa chỉ', onPress: executeSaveAddress },
+      ]
+    );
+  };
+
+  const handleCloseAddressModal = () => {
+    const isDirty = editAddressInput.trim() !== (house?.address || '').trim();
+    if (isDirty) {
+      Alert.alert(
+        'Thay đổi chưa lưu',
+        'Địa chỉ đã được chỉnh sửa. Bạn có muốn lưu thay đổi trước khi thoát không?',
+        [
+          { text: 'Tiếp tục sửa', style: 'cancel' },
+          {
+            text: 'Không lưu',
+            style: 'destructive',
+            onPress: () => setIsEditAddressModalVisible(false),
+          },
+          { text: 'Lưu địa chỉ', onPress: executeSaveAddress },
+        ]
+      );
+    } else {
+      setIsEditAddressModalVisible(false);
     }
   };
 
@@ -195,7 +227,7 @@ export default function HouseDetailScreen({ navigation, route }: any) {
     setPermissionModalVisible(true);
   };
 
-  const handleSavePermissions = async () => {
+  const executeSavePermissions = async () => {
     if (!selectedMember) return;
     try {
       setIsSavingPermissions(true);
@@ -225,11 +257,62 @@ export default function HouseDetailScreen({ navigation, route }: any) {
         )
       );
       setPermissionModalVisible(false);
-      triggerToast(`Đã cập nhật phân quyền cho thành viên ${selectedMember.full_name}.`);
+      triggerToast(`Đã cập nhật phân quyền cho thành viên ${selectedMember.full_name} thành công.`);
     } catch (error: any) {
       triggerToast(error.response?.data?.detail || 'Không thể lưu phân quyền. Vui lòng thử lại.', 'error');
     } finally {
       setIsSavingPermissions(false);
+    }
+  };
+
+  const handleSavePermissions = () => {
+    if (!selectedMember) return;
+    Alert.alert(
+      'Xác nhận cập nhật',
+      `Bạn có chắc chắn muốn lưu các thay đổi phân quyền cho thành viên "${selectedMember.full_name}" không?`,
+      [
+        { text: 'Hủy', style: 'cancel' },
+        { text: 'Xác nhận lưu', onPress: executeSavePermissions },
+      ]
+    );
+  };
+
+  const isPermissionsDirty = () => {
+    if (!selectedMember) return false;
+    return (
+      editRoleInHouse !== (selectedMember.role_in_house || 'MEMBER') ||
+      editCanViewHealth !== (selectedMember.can_view_health !== false) ||
+      editCanViewCamera !== (selectedMember.can_view_camera !== false) ||
+      editCanHandleEmergency !== (selectedMember.can_handle_emergency !== false) ||
+      editCanManageDevices !== Boolean(selectedMember.can_manage_devices) ||
+      editCanManageRecords !== Boolean(selectedMember.can_manage_records)
+    );
+  };
+
+  const handleClosePermissionModal = () => {
+    if (isPermissionsDirty()) {
+      Alert.alert(
+        'Thay đổi chưa lưu',
+        'Thông tin phân quyền đã được chỉnh sửa. Bạn có muốn lưu thay đổi trước khi đóng không?',
+        [
+          { text: 'Tiếp tục chỉnh sửa', style: 'cancel' },
+          {
+            text: 'Không lưu',
+            style: 'destructive',
+            onPress: () => {
+              setIsConfirmingDelete(false);
+              setPermissionModalVisible(false);
+            },
+          },
+          {
+            text: 'Lưu thay đổi',
+            onPress: executeSavePermissions,
+          },
+        ]
+      );
+    } else {
+      setIsConfirmingDelete(false);
+      setPermissionModalVisible(false);
     }
   };
 
@@ -310,13 +393,8 @@ export default function HouseDetailScreen({ navigation, route }: any) {
     await loadMembers();
   };
 
-  const handleAddMember = async () => {
+  const executeAddMember = async () => {
     const phoneToSubmit = newMemberPhone.trim();
-    if (!phoneToSubmit) {
-      Alert.alert('Lỗi', 'Vui lòng nhập số điện thoại người thân hoặc bác sĩ.');
-      return;
-    }
-
     try {
       const targetHId = household_id || 'current';
       await householdApi.addMember(targetHId, {
@@ -339,6 +417,45 @@ export default function HouseDetailScreen({ navigation, route }: any) {
       loadMembers();
     } catch (error: any) {
       triggerToast(error.response?.data?.detail || 'Không thể thêm thành viên. Vui lòng kiểm tra lại.', 'error');
+    }
+  };
+
+  const handleAddMember = () => {
+    const phoneToSubmit = newMemberPhone.trim();
+    if (!phoneToSubmit) {
+      Alert.alert('Lỗi', 'Vui lòng nhập số điện thoại người thân hoặc bác sĩ.');
+      return;
+    }
+    Alert.alert(
+      'Xác nhận thêm thành viên',
+      `Bạn có chắc chắn muốn thêm thành viên "${newMemberName.trim() || phoneToSubmit}" (${phoneToSubmit}) vào căn nhà không?`,
+      [
+        { text: 'Hủy', style: 'cancel' },
+        { text: 'Xác nhận thêm', onPress: executeAddMember },
+      ]
+    );
+  };
+
+  const handleCloseAccountInviteModal = () => {
+    if (newMemberPhone.trim().length > 0 || newMemberName.trim().length > 0) {
+      Alert.alert(
+        'Hủy thêm thành viên',
+        'Thông tin mời thành viên đang nhập sẽ bị hủy. Bạn có chắc muốn đóng không?',
+        [
+          { text: 'Tiếp tục nhập', style: 'cancel' },
+          {
+            text: 'Đóng',
+            style: 'destructive',
+            onPress: () => {
+              setNewMemberPhone('');
+              setNewMemberName('');
+              setIsAccountInviteModalVisible(false);
+            },
+          },
+        ]
+      );
+    } else {
+      setIsAccountInviteModalVisible(false);
     }
   };
 
@@ -575,7 +692,7 @@ export default function HouseDetailScreen({ navigation, route }: any) {
         onExecuteDelete={executeDeleteMember}
         onRemoveMember={handleRemoveMember}
         onSavePermissions={handleSavePermissions}
-        onClose={() => setPermissionModalVisible(false)}
+        onClose={handleClosePermissionModal}
         isDarkMode={isDarkMode}
         colors={colors}
       />
@@ -613,7 +730,7 @@ export default function HouseDetailScreen({ navigation, route }: any) {
         newCanManageRecords={newCanManageRecords}
         setNewCanManageRecords={setNewCanManageRecords}
         onAddMember={handleAddMember}
-        onClose={() => setIsAccountInviteModalVisible(false)}
+        onClose={handleCloseAccountInviteModal}
         isDarkMode={isDarkMode}
         colors={colors}
       />
@@ -639,7 +756,7 @@ export default function HouseDetailScreen({ navigation, route }: any) {
         setAddress={setEditAddressInput}
         isSaving={isSavingAddress}
         onSave={handleSaveAddress}
-        onClose={() => setIsEditAddressModalVisible(false)}
+        onClose={handleCloseAddressModal}
         isDarkMode={isDarkMode}
         colors={colors}
       />

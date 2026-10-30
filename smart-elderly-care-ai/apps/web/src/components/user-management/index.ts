@@ -5,4 +5,5 @@ export * from './UserTable';
 export * from './CreateEditUserModal';
 export * from './CreateEditRuleModal';
 export * from './UserPermissionModal';
+export * from './ConfirmActionModal';
 
