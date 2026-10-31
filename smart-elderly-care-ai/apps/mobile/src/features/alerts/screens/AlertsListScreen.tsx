@@ -235,9 +235,24 @@ export default function AlertsListScreen({ navigation }: any) {
     setRefreshing(false);
   };
 
-  const medications: ReminderItem[] = todayReminders?.medications || [];
+  // Đối với tài khoản mới chưa liên kết nhà: KHÔNG có thuốc/lịch khám/thiết bị từ nhà khác.
+  // CHỈ nhận thông báo khi được thêm vào nhà (HOUSE_MEMBER_ADDED, MEMBER_ADDED hoặc USER:).
+  const medications: ReminderItem[] = isUnassignedAccount ? [] : todayReminders?.medications || [];
   const pendingMedCount = medications.filter((m) => !m.taken).length;
-  const unreadIncidentsCount = incidents.filter((item) => !item.is_acknowledged).length;
+
+  const validIncidents = useMemo(() => {
+    if (isUnassignedAccount) {
+      return incidents.filter(
+        (item) =>
+          item.alert_type === 'HOUSE_MEMBER_ADDED' ||
+          item.alert_type === 'MEMBER_ADDED' ||
+          ((typeof item.note === 'string' && item.note.startsWith('USER:')) || (typeof item.notes === 'string' && item.notes.startsWith('USER:')))
+      );
+    }
+    return incidents;
+  }, [isUnassignedAccount, incidents]);
+
+  const unreadIncidentsCount = validIncidents.filter((item) => !item.is_acknowledged).length;
   const unreadCount = unreadIncidentsCount + pendingMedCount;
 
   // Tính trạng thái cữ thuốc: Sắp đến giờ/Đúng giờ, Đã uống, Quá giờ/Bỏ lỡ
@@ -310,7 +325,7 @@ export default function AlertsListScreen({ navigation }: any) {
   };
 
   // Lọc danh sách sự cố theo tab
-  const filteredIncidents = incidents.filter((item) => {
+  const filteredIncidents = validIncidents.filter((item) => {
     if (filterType === 'CRITICAL') {
       return item.alert_level === 'CRITICAL' || item.alert_type === 'FALL_DETECTED' || item.alert_type === 'ACOUSTIC_DISTRESS';
     }
@@ -556,8 +571,9 @@ export default function AlertsListScreen({ navigation }: any) {
         </View>
       </View>
 
-      {/* 2. Thanh bộ lọc phân loại */}
-      <View style={[styles.filterBarContainer, isDarkMode && { backgroundColor: colors.background, borderBottomColor: colors.border }]}>
+      {/* 2. Thanh bộ lọc phân loại (Ẩn khi tài khoản chưa liên kết nhà) */}
+      {!isUnassignedAccount && (
+        <View style={[styles.filterBarContainer, isDarkMode && { backgroundColor: colors.background, borderBottomColor: colors.border }]}>
         <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.filterBarScroll}>
           {[
             {
@@ -627,7 +643,8 @@ export default function AlertsListScreen({ navigation }: any) {
             );
           })}
         </ScrollView>
-      </View>
+        </View>
+      )}
 
       {/* 3. Danh sách thông báo */}
       <FlatList
@@ -752,12 +769,10 @@ export default function AlertsListScreen({ navigation }: any) {
                   />
                 </View>
                 <Text style={[styles.emptyTitle, isDarkMode && { color: colors.textPrimary }]}>
-                  Không có dữ liệu
+                  Chưa có thông báo mới
                 </Text>
                 <Text style={[styles.emptySub, isDarkMode && { color: colors.textSecondary }]}>
-                  {filterType === 'MEDICATION'
-                    ? 'Chưa có thông tin lịch uống thuốc do tài khoản chưa được thêm vào nhà hoặc hồ sơ người cao tuổi.'
-                    : 'Tài khoản chưa được thêm vào camera hoặc căn nhà nào. Hãy nhắc Chủ hộ thêm số điện thoại của bạn vào nhà để bắt đầu theo dõi.'}
+                  Tài khoản của bạn chưa được liên kết với ngôi nhà nào. Khi được Chủ hộ thêm số điện thoại vào nhà, thông báo gia nhập sẽ hiển thị tại đây.
                 </Text>
                 <TouchableOpacity
                   style={[

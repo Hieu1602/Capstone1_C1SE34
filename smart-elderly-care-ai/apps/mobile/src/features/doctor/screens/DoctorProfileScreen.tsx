@@ -134,14 +134,16 @@ export default function DoctorProfileScreen({ navigation }: any) {
 
   const pickImage = async () => {
     try {
-      const permission = await ImagePicker.requestMediaLibraryPermissionsAsync();
-      if (!permission.granted) {
-        Alert.alert('Quyền bị từ chối', 'Ứng dụng cần quyền truy cập thư viện để chọn ảnh đại diện.');
-        return;
+      if (Platform.OS !== 'web') {
+        const permission = await ImagePicker.requestMediaLibraryPermissionsAsync();
+        if (!permission.granted) {
+          Alert.alert('Quyền bị từ chối', 'Ứng dụng cần quyền truy cập thư viện để chọn ảnh đại diện.');
+          return;
+        }
       }
       const result = await ImagePicker.launchImageLibraryAsync({
         mediaTypes: ['images'],
-        allowsEditing: true,
+        allowsEditing: Platform.OS !== 'web',
         aspect: [1, 1],
         quality: 0.8,
         base64: true,
@@ -149,21 +151,19 @@ export default function DoctorProfileScreen({ navigation }: any) {
       if (!result.canceled && result.assets?.[0]?.uri) {
         const asset = result.assets[0];
         const selectedUri = asset.base64 ? `data:image/jpeg;base64,${asset.base64}` : asset.uri;
-        Alert.alert(
-          'Xác nhận cập nhật',
-          'Bạn có chắc chắn muốn lưu ảnh này làm ảnh đại diện Bác sĩ không?',
-          [
-            { text: 'Hủy', style: 'cancel' },
-            {
-              text: 'Lưu ảnh',
-              onPress: () => {
-                setEditAvatarUri(selectedUri);
-                setAvatarUri(selectedUri);
-                Alert.alert('Thành công', 'Đã cập nhật ảnh đại diện bác sĩ thành công.');
-              },
-            },
-          ]
-        );
+        setEditAvatarUri(selectedUri);
+        setAvatarUri(selectedUri);
+        setAvatar(selectedUri);
+        setProfile({ avatar_url: selectedUri });
+        if (selectedUri.startsWith('data:image')) {
+          try {
+            await usersApi.uploadAvatarBase64(selectedUri);
+          } catch {
+            try {
+              await usersApi.updateMe({ avatar_url: selectedUri });
+            } catch {}
+          }
+        }
       }
     } catch {
       Alert.alert('Lỗi', 'Không thể chọn ảnh từ thư viện.');
@@ -219,14 +219,7 @@ export default function DoctorProfileScreen({ navigation }: any) {
       Alert.alert('Lỗi', 'Vui lòng nhập họ tên bác sĩ.');
       return;
     }
-    Alert.alert(
-      'Xác nhận lưu hồ sơ',
-      'Bạn có chắc chắn muốn lưu các thay đổi thông tin hồ sơ Bác sĩ không?',
-      [
-        { text: 'Hủy', style: 'cancel' },
-        { text: 'Xác nhận lưu', onPress: executeSaveProfile },
-      ]
-    );
+    executeSaveProfile();
   };
 
   const handleCloseEditModal = () => {

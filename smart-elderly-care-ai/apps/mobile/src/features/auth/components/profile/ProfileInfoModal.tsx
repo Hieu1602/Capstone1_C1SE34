@@ -171,10 +171,10 @@ export const ProfileInfoModal: React.FC<ProfileInfoModalProps> = ({
 
                     <View style={styles.avatarContainerLarge}>
                         <View style={styles.avatarWrapperLarge}>
-                            {/* Chạm vào vòng tròn ảnh chỉ để XEM AVATAR */}
+                            {/* Chạm vào vòng tròn ảnh hoặc máy ảnh để chọn ảnh / chụp ảnh */}
                             <TouchableOpacity
                                 activeOpacity={0.85}
-                                onPress={() => setIsViewingAvatar(true)}
+                                onPress={() => setIsAvatarPickerVisible(true)}
                                 style={[
                                     styles.avatarCircleLarge,
                                     isDarkMode && { backgroundColor: "#1E293B" },
@@ -194,7 +194,7 @@ export const ProfileInfoModal: React.FC<ProfileInfoModalProps> = ({
                                 )}
                             </TouchableOpacity>
 
-                            {/* Nút icon máy ảnh riêng biệt: Bấm vào mới CHỈNH SỬA */}
+                            {/* Nút icon máy ảnh */}
                             <TouchableOpacity
                                 style={styles.cameraIconBadge}
                                 activeOpacity={0.8}
@@ -206,16 +206,25 @@ export const ProfileInfoModal: React.FC<ProfileInfoModalProps> = ({
                             </TouchableOpacity>
                         </View>
 
+                        {/* Nút bấm chữ Thay đổi ảnh trực quan */}
+                        <TouchableOpacity
+                            activeOpacity={0.7}
+                            onPress={() => setIsAvatarPickerVisible(true)}
+                            style={{ marginTop: 8, paddingHorizontal: 12, paddingVertical: 4 }}
+                        >
+                            <Text style={{ fontSize: 13, fontWeight: "600", color: Colors.primary }}>
+                                Thay đổi ảnh
+                            </Text>
+                        </TouchableOpacity>
+
                         <Text
                             style={[
                                 styles.profileNameText,
+                                { marginTop: 4 },
                                 isDarkMode && { color: "#F8FAFC" },
                             ]}
                         >
                             {displayName}
-                        </Text>
-                        <Text style={styles.avatarHintText}>
-                            Nhấn vào ảnh để xem · Nhấn máy ảnh để đổi
                         </Text>
                     </View>
 

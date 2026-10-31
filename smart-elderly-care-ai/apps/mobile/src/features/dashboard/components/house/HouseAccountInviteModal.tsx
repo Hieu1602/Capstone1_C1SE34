@@ -7,6 +7,7 @@ import {
   TouchableOpacity,
   TextInput,
   Switch,
+  ActivityIndicator,
 } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 
@@ -25,6 +26,7 @@ interface HouseAccountInviteModalProps {
   setNewCanManageDevices: (val: boolean) => void;
   newCanManageRecords: boolean;
   setNewCanManageRecords: (val: boolean) => void;
+  isAddingMember?: boolean;
   onAddMember: () => void;
   onClose: () => void;
   isDarkMode: boolean;
@@ -51,6 +53,7 @@ export const HouseAccountInviteModal: React.FC<HouseAccountInviteModalProps> = (
   setNewCanManageDevices,
   newCanManageRecords,
   setNewCanManageRecords,
+  isAddingMember = false,
   onAddMember,
   onClose,
   isDarkMode,
@@ -118,8 +121,17 @@ export const HouseAccountInviteModal: React.FC<HouseAccountInviteModalProps> = (
             >
               <Text style={[styles.cancelBtnText, { color: textSub }]}>Hủy</Text>
             </TouchableOpacity>
-            <TouchableOpacity style={styles.saveBtn} onPress={onAddMember}>
-              <Text style={styles.saveBtnText}>Thêm thành viên</Text>
+            <TouchableOpacity
+              style={[styles.saveBtn, isAddingMember && { opacity: 0.7 }]}
+              onPress={onAddMember}
+              disabled={isAddingMember}
+              activeOpacity={0.8}
+            >
+              {isAddingMember ? (
+                <ActivityIndicator color="#FFFFFF" size="small" />
+              ) : (
+                <Text style={styles.saveBtnText}>Thêm thành viên</Text>
+              )}
             </TouchableOpacity>
           </View>
         </View>

@@ -76,6 +76,7 @@ export default function HouseDetailScreen({ navigation, route }: any) {
   const [isSavingPermissions, setIsSavingPermissions] = useState(false);
   const [isConfirmingDelete, setIsConfirmingDelete] = useState(false);
   const [isDeletingMember, setIsDeletingMember] = useState(false);
+  const [isAddingMember, setIsAddingMember] = useState(false);
 
   const [toastInfo, setToastInfo] = useState<{ message: string; type?: 'success' | 'error' } | null>(null);
 
@@ -395,7 +396,13 @@ export default function HouseDetailScreen({ navigation, route }: any) {
 
   const executeAddMember = async () => {
     const phoneToSubmit = newMemberPhone.trim();
+    if (!phoneToSubmit) {
+      triggerToast('Vui lòng nhập số điện thoại người thân hoặc bác sĩ.', 'error');
+      return;
+    }
+
     try {
+      setIsAddingMember(true);
       const targetHId = household_id || 'current';
       await householdApi.addMember(targetHId, {
         phone_number: phoneToSubmit,
@@ -416,47 +423,21 @@ export default function HouseDetailScreen({ navigation, route }: any) {
       triggerToast(`Đã thêm ${phoneToSubmit} vào ngôi nhà thành công.`);
       loadMembers();
     } catch (error: any) {
-      triggerToast(error.response?.data?.detail || 'Không thể thêm thành viên. Vui lòng kiểm tra lại.', 'error');
+      const errDetail = error.response?.data?.detail || error.message || 'Không thể thêm thành viên. Vui lòng kiểm tra lại.';
+      triggerToast(errDetail, 'error');
+    } finally {
+      setIsAddingMember(false);
     }
   };
 
-  const handleAddMember = () => {
-    const phoneToSubmit = newMemberPhone.trim();
-    if (!phoneToSubmit) {
-      Alert.alert('Lỗi', 'Vui lòng nhập số điện thoại người thân hoặc bác sĩ.');
-      return;
-    }
-    Alert.alert(
-      'Xác nhận thêm thành viên',
-      `Bạn có chắc chắn muốn thêm thành viên "${newMemberName.trim() || phoneToSubmit}" (${phoneToSubmit}) vào căn nhà không?`,
-      [
-        { text: 'Hủy', style: 'cancel' },
-        { text: 'Xác nhận thêm', onPress: executeAddMember },
-      ]
-    );
+  const handleAddMember = async () => {
+    await executeAddMember();
   };
 
   const handleCloseAccountInviteModal = () => {
-    if (newMemberPhone.trim().length > 0 || newMemberName.trim().length > 0) {
-      Alert.alert(
-        'Hủy thêm thành viên',
-        'Thông tin mời thành viên đang nhập sẽ bị hủy. Bạn có chắc muốn đóng không?',
-        [
-          { text: 'Tiếp tục nhập', style: 'cancel' },
-          {
-            text: 'Đóng',
-            style: 'destructive',
-            onPress: () => {
-              setNewMemberPhone('');
-              setNewMemberName('');
-              setIsAccountInviteModalVisible(false);
-            },
-          },
-        ]
-      );
-    } else {
-      setIsAccountInviteModalVisible(false);
-    }
+    setNewMemberPhone('');
+    setNewMemberName('');
+    setIsAccountInviteModalVisible(false);
   };
 
   const bgScreen = isDarkMode ? '#0B0F19' : Colors.background;
@@ -729,6 +710,7 @@ export default function HouseDetailScreen({ navigation, route }: any) {
         setNewCanManageDevices={setNewCanManageDevices}
         newCanManageRecords={newCanManageRecords}
         setNewCanManageRecords={setNewCanManageRecords}
+        isAddingMember={isAddingMember}
         onAddMember={handleAddMember}
         onClose={handleCloseAccountInviteModal}
         isDarkMode={isDarkMode}
