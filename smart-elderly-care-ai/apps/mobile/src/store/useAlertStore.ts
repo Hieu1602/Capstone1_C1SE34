@@ -27,6 +27,7 @@ export interface Incident {
   acknowledged_by?: string | null;
   acknowledged_at?: string | null;
   note?: string | null;
+  notes?: string | null;
   created_at: string;
 }
 

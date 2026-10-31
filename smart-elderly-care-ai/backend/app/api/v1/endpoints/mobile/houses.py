@@ -301,11 +301,15 @@ async def add_house_member(
     except Exception as notif_err:
         logger.warning("[add_house_member] Failed to create member notification: %s", notif_err)
 
+    target_user = getattr(new_member, "user", None)
+    m_name = (target_user.full_name if target_user else None) or member_in.full_name or "Thành viên"
+    m_phone = (target_user.phone if target_user else None) or member_in.phone_number or ""
+
     await record_audit_log(
         db=db,
         event="THÊM THÀNH VIÊN",
         user_name=f"{current_user.full_name} ({current_user.role})",
-        details=f"Thêm thành viên [{member_name}] ({member_phone}) vào nhà [{house.name}]",
+        details=f"Thêm thành viên [{m_name}] ({m_phone}) vào nhà [{house.name}]",
         severity="low",
     )
 

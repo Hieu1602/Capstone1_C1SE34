@@ -48,20 +48,51 @@ class CRUDIncident:
             query = query.where(Incident.alert_level == alert_level)
 
         if current_user_id:
-            query = query.where(
-                or_(
-                    Incident.notes.is_(None),
-                    ~Incident.notes.startswith("USER:"),
-                    Incident.notes == f"USER:{current_user_id}",
+            from app.models.user import User
+            from app.models.house import House, HouseMember
+            from app.models.device import Device
+            from sqlalchemy import and_
+
+            user = await db.get(User, current_user_id)
+            if user and user.role == "admin":
+                # Admin cấp hệ thống: có thể giám sát toàn bộ
+                pass
+            else:
+                # Tìm danh sách nhà mà người dùng sở hữu hoặc là thành viên
+                member_house_subq = select(HouseMember.house_id).where(HouseMember.user_id == current_user_id)
+                user_houses_query = select(House.id).where(
+                    or_(
+                        House.owner_id == current_user_id,
+                        House.id.in_(member_house_subq),
+                    )
                 )
-            )
+                user_house_ids_res = await db.execute(user_houses_query)
+                user_house_ids = [row[0] for row in user_house_ids_res.fetchall()]
+
+                if not user_house_ids:
+                    # Tài khoản mới chưa liên kết nhà: CHỈ nhận thông báo gửi trực tiếp cho mình (vd: HOUSE_MEMBER_ADDED)
+                    query = query.where(Incident.notes == f"USER:{current_user_id}")
+                else:
+                    # Lấy danh sách thiết bị thuộc các nhà của người dùng
+                    dev_res = await db.execute(select(Device.id).where(Device.house_id.in_(user_house_ids)))
+                    user_device_ids = [row[0] for row in dev_res.fetchall()]
+
+                    conditions = [Incident.notes == f"USER:{current_user_id}"]
+                    if user_device_ids:
+                        conditions.append(
+                            and_(
+                                Incident.device_id.in_(user_device_ids),
+                                or_(
+                                    Incident.notes.is_(None),
+                                    ~Incident.notes.startswith("USER:"),
+                                    Incident.notes == f"USER:{current_user_id}",
+                                ),
+                            )
+                        )
+                    query = query.where(or_(*conditions))
         else:
-            query = query.where(
-                or_(
-                    Incident.notes.is_(None),
-                    ~Incident.notes.startswith("USER:"),
-                )
-            )
+            # Khách chưa đăng nhập: Không xem dữ liệu nhạy cảm
+            query = query.where(Incident.notes.is_(None), ~Incident.notes.startswith("USER:"))
 
         query = query.offset(offset).limit(limit)
 
@@ -110,13 +141,44 @@ class CRUDIncident:
             )
         )
         if current_user_id:
-            stmt = stmt.where(
-                or_(
-                    Incident.notes.is_(None),
-                    ~Incident.notes.startswith("USER:"),
-                    Incident.notes == f"USER:{current_user_id}",
+            from app.models.user import User
+            from app.models.house import House, HouseMember
+            from app.models.device import Device
+            from sqlalchemy import and_
+
+            user = await db.get(User, current_user_id)
+            if user and user.role == "admin":
+                pass
+            else:
+                member_house_subq = select(HouseMember.house_id).where(HouseMember.user_id == current_user_id)
+                user_houses_query = select(House.id).where(
+                    or_(
+                        House.owner_id == current_user_id,
+                        House.id.in_(member_house_subq),
+                    )
                 )
-            )
+                user_house_ids_res = await db.execute(user_houses_query)
+                user_house_ids = [row[0] for row in user_house_ids_res.fetchall()]
+
+                if not user_house_ids:
+                    stmt = stmt.where(Incident.notes == f"USER:{current_user_id}")
+                else:
+                    dev_res = await db.execute(select(Device.id).where(Device.house_id.in_(user_house_ids)))
+                    user_device_ids = [row[0] for row in dev_res.fetchall()]
+
+                    conditions = [Incident.notes == f"USER:{current_user_id}"]
+                    if user_device_ids:
+                        conditions.append(
+                            and_(
+                                Incident.device_id.in_(user_device_ids),
+                                or_(
+                                    Incident.notes.is_(None),
+                                    ~Incident.notes.startswith("USER:"),
+                                    Incident.notes == f"USER:{current_user_id}",
+                                ),
+                            )
+                        )
+                    stmt = stmt.where(or_(*conditions))
         result = await db.execute(stmt)
         await db.flush()
         return result.rowcount or 0
