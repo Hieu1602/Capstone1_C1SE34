@@ -308,7 +308,7 @@ export const MapLocationPickerModal: React.FC<MapLocationPickerModalProps> = ({
         onClose();
     };
 
-    // HTML nhúng Leaflet Interactive Map
+    // HTML nhúng Google Maps Interactive (Bản đồ đường phố & Vệ tinh Google Maps)
     const leafletHtml = `<!DOCTYPE html>
 <html>
 <head>
@@ -317,13 +317,29 @@ export const MapLocationPickerModal: React.FC<MapLocationPickerModalProps> = ({
   <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" />
   <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
   <style>
-    body, html, #map { margin: 0; padding: 0; width: 100%; height: 100%; overflow: hidden; font-family: -apple-system, sans-serif; }
-    .custom-pin {
-      width: 32px;
-      height: 32px;
-      display: flex;
-      align-items: center;
-      justify-content: center;
+    body, html, #map { margin: 0; padding: 0; width: 100%; height: 100%; overflow: hidden; font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif; }
+    .leaflet-control-layers {
+      border-radius: 12px !important;
+      box-shadow: 0 4px 16px rgba(0,0,0,0.18) !important;
+      border: 1px solid rgba(0,0,0,0.08) !important;
+      font-size: 13px !important;
+      font-weight: 600 !important;
+      padding: 6px 10px !important;
+      background: #FFFFFF !important;
+      margin-top: 54px !important;
+      margin-right: 12px !important;
+    }
+    .leaflet-control-attribution {
+      background: rgba(255, 255, 255, 0.9) !important;
+      padding: 3px 10px !important;
+      font-size: 11px !important;
+      border-top-left-radius: 8px !important;
+      box-shadow: 0 -1px 4px rgba(0,0,0,0.08) !important;
+    }
+    .leaflet-control-attribution a {
+      color: #1a73e8 !important;
+      text-decoration: none !important;
+      font-weight: 700 !important;
     }
   </style>
 </head>
@@ -333,11 +349,43 @@ export const MapLocationPickerModal: React.FC<MapLocationPickerModalProps> = ({
     var currentLat = ${coords.latitude};
     var currentLng = ${coords.longitude};
 
-    var map = L.map('map', { zoomControl: false }).setView([currentLat, currentLng], 16);
-    L.tileLayer('https://tile.openstreetmap.org/{z}/{x}/{y}.png', {
-      maxZoom: 19,
-      attribution: '© OpenStreetMap'
-    }).addTo(map);
+    // Google Maps Lớp Đường Phố (Standard Roadmap)
+    var googleRoadmap = L.tileLayer('https://mt{s}.google.com/vt/lyrs=m&hl=vi&x={x}&y={y}&z={z}', {
+      maxZoom: 21,
+      subdomains: ['0', '1', '2', '3'],
+      attribution: '&copy; Google Maps'
+    });
+
+    // Google Maps Lớp Vệ Tinh Lai (Hybrid Satellite)
+    var googleHybrid = L.tileLayer('https://mt{s}.google.com/vt/lyrs=y&hl=vi&x={x}&y={y}&z={z}', {
+      maxZoom: 21,
+      subdomains: ['0', '1', '2', '3'],
+      attribution: '&copy; Google Maps'
+    });
+
+    // Google Maps Lớp Địa Hình (Terrain)
+    var googleTerrain = L.tileLayer('https://mt{s}.google.com/vt/lyrs=p&hl=vi&x={x}&y={y}&z={z}', {
+      maxZoom: 21,
+      subdomains: ['0', '1', '2', '3'],
+      attribution: '&copy; Google Maps'
+    });
+
+    var map = L.map('map', { 
+      zoomControl: false, 
+      layers: [googleRoadmap] 
+    }).setView([currentLat, currentLng], 16);
+
+    if (map.attributionControl) {
+      map.attributionControl.setPrefix('<span style="color:#1a73e8; font-weight:700;">Google</span> Maps');
+    }
+
+    var baseLayers = {
+      "🗺️ Bản đồ": googleRoadmap,
+      "🛰️ Vệ tinh": googleHybrid,
+      "⛰️ Địa hình": googleTerrain
+    };
+
+    L.control.layers(baseLayers, null, { position: 'topright' }).addTo(map);
 
     // Tạo icon ghim đỏ tùy chỉnh
     var redIcon = L.icon({
