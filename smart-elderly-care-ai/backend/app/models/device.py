@@ -109,13 +109,13 @@ class Device(Base):
 
     # Cấu hình chuyên sâu 1 - 1
     config: Mapped["DeviceConfig | None"] = relationship(
-        "DeviceConfig", back_populates="device", uselist=False, cascade="all, delete-orphan", lazy="selectin"
+        "DeviceConfig", back_populates="device", uselist=False, cascade="all, delete-orphan", passive_deletes=True, lazy="selectin"
     )
 
     # Chuỗi thời gian vitals & danh sách sự cố
     vital_signs: Mapped[list["VitalSign"]] = relationship(
-        "VitalSign", back_populates="device", lazy="dynamic"
+        "VitalSign", back_populates="device", cascade="all, delete-orphan", passive_deletes=True, lazy="dynamic"
     )
     incidents: Mapped[list["Incident"]] = relationship(
-        "Incident", back_populates="device", lazy="dynamic"
+        "Incident", back_populates="device", cascade="all, delete-orphan", passive_deletes=True, lazy="dynamic"
     )

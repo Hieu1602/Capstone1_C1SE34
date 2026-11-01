@@ -110,6 +110,7 @@ export interface IoTDeviceItem {
   location?: string;
   streamUrl?: string;
   macAddress?: string;
+  ipAddress?: string;
 }
 interface DeviceState {
   activeDevice: Device | null;
@@ -125,7 +126,8 @@ interface DeviceState {
   toggleCameraSleep: () => void;
   toggleCameraAIProtect: () => void;
   setCameraResolution: (res: CameraDevice["resolution"]) => void;
-  addIoTDevice: (device: IoTDeviceItem) => void;
+  setCameraDefault: (cameraData: Partial<CameraDevice>) => void;
+  addIoTDevice: (device: IoTDeviceItem) => Promise<void>;
   removeIoTDevice: (deviceId: string) => void;
   addDeviceGroup: (groupName: string) => void;
   updateDeviceGroup: (
@@ -217,23 +219,48 @@ export const useDeviceStore = create<DeviceState>()(
       },
       setCameraResolution: (res) =>
         set((state) => ({ camera: { ...state.camera, resolution: res } })),
-      addIoTDevice: (device) => {
+      setCameraDefault: (cameraData) =>
+        set((state) => ({ camera: { ...state.camera, ...cameraData } })),
+      addIoTDevice: async (device) => {
         set((state) => ({ iotDevices: [device, ...state.iotDevices] }));
         const isCam = device.type === "camera";
-        devicesApi
-          .createDevice({
+        try {
+          const res = await devicesApi.createDevice({
             device_id: device.id,
             name: device.name,
             sub_title: device.sub,
             device_type: isCam ? "CAMERA" : "SMARTBAND",
             location: device.location || "Phòng khách",
-          })
-          .catch((err) =>
-            console.log(
-              "[DeviceStore] Thiết bị lưu local cache, đồng bộ backend sau:",
-              err,
-            ),
+            ip_address: (device as any).ipAddress,
+            config: isCam && device.streamUrl ? { stream_url: device.streamUrl } : undefined,
+          });
+          if (res?.data?.id) {
+            const dev = res.data;
+            const def = DEVICE_TYPE_DEFAULTS[dev.device_type] || DEVICE_TYPE_DEFAULTS.SENSOR;
+            const canonical: IoTDeviceItem = {
+              id: String(dev.id),
+              deviceId: dev.device_id || dev.id,
+              name: dev.name,
+              sub: dev.sub_title || def.sub,
+              type: def.type,
+              status: dev.status_text || (dev.is_online ? "Trực tuyến" : "Ngoại tuyến"),
+              isOnline: Boolean(dev.is_online),
+              icon: def.icon,
+              color: def.color,
+              location: dev.location || "Chưa nhóm",
+              streamUrl: dev.config?.stream_url || undefined,
+              macAddress: dev.mac_address || undefined,
+            };
+            set((state) => ({
+              iotDevices: state.iotDevices.map((d) => (d.id === device.id ? canonical : d)),
+            }));
+          }
+        } catch (err) {
+          console.log(
+            "[DeviceStore] Thiết bị lưu local cache, đồng bộ backend sau:",
+            err,
           );
+        }
       },
       removeIoTDevice: (deviceId) => {
         set((state) => ({

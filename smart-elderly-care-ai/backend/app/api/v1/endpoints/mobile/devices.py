@@ -200,9 +200,17 @@ async def delete_device(
     """Gỡ bỏ thiết bị khỏi hệ thống."""
     device = await _get_device_or_404(db, device_id)
     if device.owner_id != current_user.id and current_user.role != "admin":
-        raise HTTPException(
-            status_code=status.HTTP_403_FORBIDDEN,
-            detail="Bạn không có quyền xóa thiết bị này.",
-        )
+        can_delete = False
+        if device.house_id:
+            from app.models.house import House
+            house = await db.get(House, device.house_id)
+            if house:
+                perms = await crud_house.get_user_permissions(db, house, current_user)
+                can_delete = bool(perms.get("is_owner") or perms.get("can_manage_devices"))
+        if not can_delete:
+            raise HTTPException(
+                status_code=status.HTTP_403_FORBIDDEN,
+                detail="Bạn không có quyền xóa thiết bị này.",
+            )
     await crud_device.delete(db, db_obj=device)
     return {"message": f"Đã xóa thiết bị '{device.name}' thành công"}

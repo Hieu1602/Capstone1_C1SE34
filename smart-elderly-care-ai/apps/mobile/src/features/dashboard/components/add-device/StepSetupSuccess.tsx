@@ -10,6 +10,7 @@ interface StepSetupSuccessProps {
   successInfo: SetupSuccessInfo;
   onNavigateDevices: () => void;
   onNavigateHome: () => void;
+  onNavigateCamera?: () => void;
 }
 
 export const StepSetupSuccess: React.FC<StepSetupSuccessProps> = ({
@@ -18,8 +19,11 @@ export const StepSetupSuccess: React.FC<StepSetupSuccessProps> = ({
   successInfo,
   onNavigateDevices,
   onNavigateHome,
+  onNavigateCamera,
 }) => {
   if (currentStep !== 'SETUP_SUCCESS') return null;
+
+  const isCamera = successInfo.icon === 'videocam' || successInfo.type.toLowerCase().includes('camera');
 
   return (
     <View style={styles.successContainer}>
@@ -72,6 +76,19 @@ export const StepSetupSuccess: React.FC<StepSetupSuccessProps> = ({
         </View>
       </View>
 
+      {isCamera && onNavigateCamera && (
+        <TouchableOpacity
+          style={[styles.primaryActionButton, { backgroundColor: '#1D4ED8', marginBottom: 12 }]}
+          onPress={onNavigateCamera}
+          activeOpacity={0.85}
+        >
+          <Ionicons name="videocam" size={20} color="#FFF" />
+          <LocalizedText style={styles.primaryActionButtonText}>
+            Xem Camera Trực Tiếp Ngay
+          </LocalizedText>
+        </TouchableOpacity>
+      )}
+
       <TouchableOpacity
         style={[styles.primaryActionButton, { backgroundColor: '#0284C7', marginBottom: 12 }]}
         onPress={onNavigateDevices}
@@ -96,4 +113,3 @@ export const StepSetupSuccess: React.FC<StepSetupSuccessProps> = ({
     </View>
   );
 };
-

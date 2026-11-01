@@ -5,8 +5,9 @@
  * hỗ trợ phân vùng phòng, ghép nối nhanh qua QR Code và điều phối nhóm giám sát an toàn.
  */
 
-import React, { useState, useEffect } from 'react';
-import { View, StyleSheet, TouchableOpacity, ScrollView, Text } from 'react-native';
+import React, { useState, useEffect, useCallback } from 'react';
+import { View, StyleSheet, TouchableOpacity, ScrollView, Text, RefreshControl } from 'react-native';
+import { useFocusEffect } from '@react-navigation/native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
 import { Colors, Shadows } from '../../../theme/colors';
@@ -17,6 +18,7 @@ import { LocalizedAlert, LocalizedText } from '../../../i18n/LocalizedComponents
 import { DeviceQrScannerModal } from '../components/devices/DeviceQrScannerModal';
 import { GroupActionModal } from '../components/devices/GroupActionModal';
 import { DeleteGroupConfirmModal } from '../components/devices/DeleteGroupConfirmModal';
+import { DeleteDeviceConfirmModal } from '../components/devices/DeleteDeviceConfirmModal';
 import { EditGroupModal } from '../components/devices/EditGroupModal';
 import { DeviceAddMenuModal } from '../components/devices/DeviceAddMenuModal';
 import { DeviceCardItem } from '../components/devices/DeviceCardItem';
@@ -29,6 +31,7 @@ export default function DevicesScreen({ navigation }: any) {
     house,
     iotDevices,
     addIoTDevice,
+    removeIoTDevice,
     deviceGroups,
     updateDeviceGroup,
     removeDeviceGroup,
@@ -41,10 +44,23 @@ export default function DevicesScreen({ navigation }: any) {
   const isMember = !isOwnerOrAdmin && (userRole === 'member' || !userRole || userRole === 'user' || userRole === 'caregiver');
   const isUserEmptyMember = isMember && (!hasLinkedHouse || (iotDevices.length === 0 && !permissions?.can_manage_devices));
 
-  // Đồng bộ danh sách thiết bị và nhóm từ Backend khi mở màn hình
-  useEffect(() => {
-    syncAllWithBackend?.();
-  }, []);
+  const [isRefreshing, setIsRefreshing] = useState(false);
+
+  // Đồng bộ danh sách thiết bị và nhóm từ Backend mỗi khi màn hình được focus
+  useFocusEffect(
+    useCallback(() => {
+      syncAllWithBackend?.();
+    }, [])
+  );
+
+  const handleRefresh = async () => {
+    setIsRefreshing(true);
+    try {
+      await syncAllWithBackend?.();
+    } finally {
+      setIsRefreshing(false);
+    }
+  };
 
   // State menu thả xuống khi bấm dấu cộng (+)
   const [showAddMenu, setShowAddMenu] = useState(false);
@@ -55,6 +71,9 @@ export default function DevicesScreen({ navigation }: any) {
   // State Action Menu cho Nhóm (Nút 3 chấm)
   const [selectedGroupForAction, setSelectedGroupForAction] = useState<string | null>(null);
   const [showGroupActionModal, setShowGroupActionModal] = useState<boolean>(false);
+
+  // State Modal Xác nhận Xóa Thiết Bị
+  const [deviceToDelete, setDeviceToDelete] = useState<IoTDeviceItem | null>(null);
 
   // State Modal Xác nhận Xóa Nhóm
   const [showDeleteConfirmModal, setShowDeleteConfirmModal] = useState<boolean>(false);
@@ -133,6 +152,18 @@ export default function DevicesScreen({ navigation }: any) {
     return true;
   });
 
+  // Xóa thiết bị khỏi hệ thống
+  const handleDeleteDevice = (device: IoTDeviceItem) => {
+    setDeviceToDelete(device);
+  };
+
+  const handleConfirmDeleteDevice = () => {
+    if (!deviceToDelete) return;
+    const target = deviceToDelete;
+    removeIoTDevice(target.id);
+    setDeviceToDelete(null);
+  };
+
   // Xử lý điều hướng khi nhấn vào thiết bị
   const handleDevicePress = (dev: IoTDeviceItem) => {
     if (checkIsCamera(dev)) {
@@ -140,6 +171,7 @@ export default function DevicesScreen({ navigation }: any) {
         cameraId: dev.id,
         cameraName: dev.name,
         room: dev.location || dev.sub,
+        streamUrl: dev.streamUrl,
       });
       return;
     }
@@ -386,6 +418,14 @@ export default function DevicesScreen({ navigation }: any) {
       <ScrollView
         contentContainerStyle={styles.scrollList}
         showsVerticalScrollIndicator={false}
+        refreshControl={
+          <RefreshControl
+            refreshing={isRefreshing}
+            onRefresh={handleRefresh}
+            colors={['#0284C7']}
+            tintColor={isDarkMode ? '#38BDF8' : '#0284C7'}
+          />
+        }
       >
         <LocalizedText style={[styles.sectionSubtitle, isDarkMode && { color: colors.textSecondary }]}>
           {activeTab === 'Nhóm'
@@ -511,6 +551,7 @@ export default function DevicesScreen({ navigation }: any) {
                   groupName={groupName}
                   devicesInGroup={devicesInGroup}
                   onDevicePress={handleDevicePress}
+                  onDeviceDelete={handleDeleteDevice}
                   onOpenGroupActionMenu={handleOpenGroupActionMenu}
                   isDarkMode={isDarkMode}
                   colors={colors}
@@ -525,6 +566,7 @@ export default function DevicesScreen({ navigation }: any) {
                 key={dev.id}
                 device={dev}
                 onPress={handleDevicePress}
+                onDelete={handleDeleteDevice}
                 isDarkMode={isDarkMode}
                 colors={colors}
               />
@@ -589,6 +631,16 @@ export default function DevicesScreen({ navigation }: any) {
         groupName={selectedGroupForAction}
         onClose={() => setShowDeleteConfirmModal(false)}
         onConfirmDelete={handleConfirmDeleteGroup}
+        isDarkMode={isDarkMode}
+        colors={colors}
+      />
+
+      {/* Modal 4B: Xác nhận Xóa Thiết Bị */}
+      <DeleteDeviceConfirmModal
+        visible={!!deviceToDelete}
+        device={deviceToDelete}
+        onClose={() => setDeviceToDelete(null)}
+        onConfirmDelete={handleConfirmDeleteDevice}
         isDarkMode={isDarkMode}
         colors={colors}
       />

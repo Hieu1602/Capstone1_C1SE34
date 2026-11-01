@@ -127,6 +127,9 @@ async def init_db() -> None:
             await conn.execute(text("ALTER TABLE users DROP COLUMN IF EXISTS location_longitude;"))
             await conn.execute(text("ALTER TABLE users DROP COLUMN IF EXISTS location_latitude;"))
             await conn.execute(text("ALTER TABLE users DROP COLUMN IF EXISTS location_enabled;"))
+            await conn.execute(text("ALTER TABLE incidents DROP CONSTRAINT IF EXISTS incidents_device_id_fkey, ADD CONSTRAINT incidents_device_id_fkey FOREIGN KEY (device_id) REFERENCES devices(id) ON DELETE CASCADE;"))
+            await conn.execute(text("ALTER TABLE vital_signs DROP CONSTRAINT IF EXISTS vital_signs_device_id_fkey, ADD CONSTRAINT vital_signs_device_id_fkey FOREIGN KEY (device_id) REFERENCES devices(id) ON DELETE CASCADE;"))
+            await conn.execute(text("ALTER TABLE camera_recordings DROP CONSTRAINT IF EXISTS camera_recordings_device_id_fkey, ADD CONSTRAINT camera_recordings_device_id_fkey FOREIGN KEY (device_id) REFERENCES devices(id) ON DELETE CASCADE;"))
 
         # 2. Tạo các bảng hỗ trợ và quản trị
         async with engine.begin() as conn:

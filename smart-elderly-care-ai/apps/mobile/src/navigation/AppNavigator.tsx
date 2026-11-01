@@ -185,7 +185,6 @@ export default function AppNavigator() {
             <Stack.Screen name="DoctorAnalytics" component={DoctorAnalyticsReportScreen} />
             <Stack.Screen name="MedicationReminder" component={MedicationReminderScreen} />
             <Stack.Screen name="PatientMedicalRecord" component={PatientMedicalRecordScreen} />
-            <Stack.Screen name="Devices" component={DevicesScreen} />
             <Stack.Screen name="CameraDetail" component={CameraDetailScreen} />
             <Stack.Screen name="MultiView" component={MultiViewScreen} />
             <Stack.Screen name="HouseDetail" component={HouseDetailScreen} />

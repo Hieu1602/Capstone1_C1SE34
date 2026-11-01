@@ -19,10 +19,12 @@ class CameraDriver:
         Returns:
             Không có. Chưa mở camera hoặc tạo thread.
         """
-        self.source = config.get("source", 0)
-        if os.getenv("TAPO_HOST"):
+        self.source = config.get("source")
+        if not self.source and os.getenv("TAPO_HOST"):
             from .tapo import rtsp_url
             self.source = rtsp_url()
+        if self.source is None:
+            self.source = 0
         self.fps = max(1, int(config.get("fps", 15)))
         self.width = config.get("resolution", {}).get("width", 1280)
         self.height = config.get("resolution", {}).get("height", 720)
@@ -102,8 +104,8 @@ class CameraDriver:
                 try:
                     if is_rtsp:
                         self._cap = cv2.VideoCapture(self.source, cv2.CAP_FFMPEG, [
-                            cv2.CAP_PROP_OPEN_TIMEOUT_MSEC, 5000,
-                            cv2.CAP_PROP_READ_TIMEOUT_MSEC, 5000,
+                            cv2.CAP_PROP_OPEN_TIMEOUT_MSEC, 3000,
+                            cv2.CAP_PROP_READ_TIMEOUT_MSEC, 3000,
                         ])
                     else:
                         self._cap = cv2.VideoCapture(self.source)

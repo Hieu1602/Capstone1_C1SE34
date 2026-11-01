@@ -26,13 +26,41 @@ export const StepCameraFlow: React.FC<StepCameraFlowProps> = ({
       {/* 2A. STATE: CAMERA_LIST */}
       {currentStep === 'CAMERA_LIST' && (
         <View>
-          <LocalizedText style={styles.stepHeaderTitle}>Chọn Model Camera</LocalizedText>
+          <LocalizedText style={styles.stepHeaderTitle}>Chọn Kiểu Kết Nối Camera</LocalizedText>
           <LocalizedText style={styles.stepHeaderDesc}>
-            Danh sách camera giám sát thông minh:
+            Chọn phương thức hoặc dòng camera giám sát an ninh:
           </LocalizedText>
 
+          {/* Option 1: Camera IP An Ninh RTSP (Khuyên dùng) */}
           <TouchableOpacity
-            style={[styles.modelCard, styles.modelCardActive]}
+            style={[styles.modelCard, styles.modelCardActive, { borderColor: '#0284C7', marginBottom: 14 }]}
+            onPress={() => onSelectCameraModel('CAMERA_IP_RTSP')}
+            activeOpacity={0.8}
+          >
+            <View style={[styles.modelIconBox, { backgroundColor: '#E0F2FE' }]}>
+              <Ionicons name="globe-outline" size={26} color="#0284C7" />
+            </View>
+            <View style={{ flex: 1 }}>
+              <View style={styles.modelHeaderRow}>
+                <LocalizedText style={[styles.modelTitle, { color: '#0369A1' }]}>
+                  Camera IP An Ninh (RTSP)
+                </LocalizedText>
+                <View style={[styles.activeTag, { backgroundColor: '#BAE6FD' }]}>
+                  <LocalizedText style={[styles.activeTagText, { color: '#0369A1' }]}>
+                    Khuyên dùng
+                  </LocalizedText>
+                </View>
+              </View>
+              <LocalizedText style={styles.modelDesc}>
+                TP-Link Tapo, Hikvision, Dahua / Imou, Yoosee, EZVIZ... Luồng RTSP chuẩn ONVIF nội bộ & từ xa
+              </LocalizedText>
+            </View>
+            <Ionicons name="chevron-forward" size={20} color="#0284C7" />
+          </TouchableOpacity>
+
+          {/* Option 2: Camera AI SECA_001 (Wi-Fi SoftAP) */}
+          <TouchableOpacity
+            style={styles.modelCard}
             onPress={() => onSelectCameraModel('SECA_001')}
             activeOpacity={0.8}
           >
@@ -41,22 +69,24 @@ export const StepCameraFlow: React.FC<StepCameraFlowProps> = ({
             </View>
             <View style={{ flex: 1 }}>
               <View style={styles.modelHeaderRow}>
-                <LocalizedText style={styles.modelTitle}>SECA_001</LocalizedText>
-                <View style={styles.activeTag}>
-                  <LocalizedText style={styles.activeTagText}>Hiện có</LocalizedText>
+                <LocalizedText style={styles.modelTitle}>SECA_001 (SoftAP)</LocalizedText>
+                <View style={[styles.activeTag, { backgroundColor: '#FFEDD5' }]}>
+                  <LocalizedText style={[styles.activeTagText, { color: '#C2410C' }]}>
+                    Wi-Fi Trực tiếp
+                  </LocalizedText>
                 </View>
               </View>
               <LocalizedText style={styles.modelDesc}>
-                Tự động nhận diện té ngã, đàm thoại 2 chiều và quan sát ban đêm
+                Camera chuyên dụng SECA: Nhận diện té ngã AI, đàm thoại 2 chiều và quan sát ban đêm
               </LocalizedText>
             </View>
-            <Ionicons name="chevron-forward" size={20} color="#EA580C" />
+            <Ionicons name="chevron-forward" size={20} color="#94A3B8" />
           </TouchableOpacity>
 
           <View style={styles.protocolCheckBanner}>
-            <Ionicons name="flash" size={18} color="#0284C7" />
+            <Ionicons name="shield-checkmark" size={18} color="#0284C7" />
             <LocalizedText style={styles.protocolCheckText}>
-              Hệ thống sẽ hướng dẫn bạn kết nối điện thoại với Camera.
+              Kết nối trực tiếp camera IP qua giao thức RTSP tiêu chuẩn, an toàn và bảo mật cao.
             </LocalizedText>
           </View>
         </View>
@@ -221,4 +251,3 @@ export const StepCameraFlow: React.FC<StepCameraFlowProps> = ({
     </>
   );
 };
-

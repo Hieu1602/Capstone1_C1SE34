@@ -137,6 +137,17 @@ def create_app(camera=None, control=None, recorder=None) -> web.Application:
     if not username or not password:
         raise ValueError("Phải cấu hình HTTP username/password")
     camera = camera or CameraDriver({})
+    camera_pool: dict[str, CameraDriver] = {}
+
+    def get_camera_driver(src: str | None = None) -> CameraDriver:
+        if not src:
+            return camera
+        if src not in camera_pool:
+            driver = CameraDriver({"source": src})
+            driver.start()
+            camera_pool[src] = driver
+        return camera_pool[src]
+
     control = control or TapoControl()
     recorder = recorder or Recorder(rtsp_url(), Path("/recordings"))
 
@@ -190,13 +201,14 @@ def create_app(camera=None, control=None, recorder=None) -> web.Application:
             raise ValueError("expected object")
         return data
 
-    def jpeg(height=None, quality=80):
+    def jpeg(cam_driver=None, height=None, quality=80):
         """Mã hóa frame hiện tại thành JPEG.
 
         Returns:
             Byte JPEG; báo 503 khi chưa có frame.
         """
-        frame = camera.get_latest_frame()
+        target_cam = cam_driver or camera
+        frame = target_cam.get_latest_frame()
         if frame is None:
             raise web.HTTPServiceUnavailable(text="Camera chưa có frame hoặc đã mất kết nối")
         # Giữ tỉ lệ và không phóng giả ảnh nguồn có độ phân giải thấp hơn lựa chọn.
@@ -240,7 +252,14 @@ def create_app(camera=None, control=None, recorder=None) -> web.Application:
         Returns:
             JSON trạng thái kết nối camera.
         """
-        return web.json_response({"connected": camera.is_connected()})
+        cam = get_camera_driver(request.query.get("src"))
+        # Chờ tối đa 2.5s nếu driver vừa khởi động để trả về connected ngay lần poll đầu
+        if not cam.is_connected():
+            for _ in range(25):
+                await asyncio.sleep(0.1)
+                if cam.is_connected():
+                    break
+        return web.json_response({"connected": cam.is_connected()})
 
     async def snapshot(request):
         """Chụp JPEG từ frame hiện tại ngoài event loop.
@@ -251,7 +270,8 @@ def create_app(camera=None, control=None, recorder=None) -> web.Application:
         Returns:
             HTTP response ảnh JPEG.
         """
-        return web.Response(body=await asyncio.to_thread(jpeg), content_type="image/jpeg")
+        cam = get_camera_driver(request.query.get("src"))
+        return web.Response(body=await asyncio.to_thread(jpeg, cam), content_type="image/jpeg")
 
     async def live(request):
         """Phát MJPEG từ frame mới nhất cho tới khi mất kết nối.
@@ -262,12 +282,13 @@ def create_app(camera=None, control=None, recorder=None) -> web.Application:
         Returns:
             StreamResponse. Tác động: ghi ảnh định kỳ, dừng khi client/nguồn ảnh ngắt.
         """
+        cam = get_camera_driver(request.query.get("src"))
         preset = request.query.get("quality", "auto")
         if preset not in ("1080p", "720p", "auto"):
             raise ValueError("invalid video quality")
         height = 1080 if preset == "1080p" else 720
         encoding_quality = 85 if preset == "1080p" else 75
-        frame = await asyncio.to_thread(jpeg, height, encoding_quality)
+        frame = await asyncio.to_thread(jpeg, cam, height, encoding_quality)
         stable_frames = 0
         response = web.StreamResponse(headers={
             "Content-Type": "multipart/x-mixed-replace; boundary=frame", "Cache-Control": "no-store"})
@@ -287,7 +308,7 @@ def create_app(camera=None, control=None, recorder=None) -> web.Application:
                     elif stable_frames >= 30:
                         height, encoding_quality = 720, 75
                 await asyncio.sleep(0.1)  # giới hạn MJPEG 10 FPS cho trình duyệt
-                frame = await asyncio.to_thread(jpeg, height, encoding_quality)
+                frame = await asyncio.to_thread(jpeg, cam, height, encoding_quality)
         except (ConnectionError, asyncio.TimeoutError, web.HTTPServiceUnavailable):
             return response
 
@@ -440,6 +461,8 @@ def create_app(camera=None, control=None, recorder=None) -> web.Application:
             yield
         finally:
             await recorder.close()
+            for d in list(camera_pool.values()):
+                await asyncio.to_thread(d.stop)
             await asyncio.to_thread(camera.stop)
 
     app = web.Application(middlewares=[authentication], client_max_size=4096)

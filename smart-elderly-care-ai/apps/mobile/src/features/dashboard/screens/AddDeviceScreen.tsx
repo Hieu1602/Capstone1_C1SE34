@@ -24,6 +24,7 @@ import {
   baseStyles,
   StepCategorySelect,
   StepCameraFlow,
+  StepCameraRtspConfig,
   StepCameraSearching,
   StepWatchFlow,
   StepBleScanAndPairing,
@@ -33,7 +34,7 @@ import {
 } from '../components/add-device';
 
 export default function AddDeviceScreen({ navigation }: any) {
-  const { addIoTDevice } = useVitalStore();
+  const { addIoTDevice, setCameraDefault, syncAllWithBackend } = useVitalStore();
   const { isDarkMode, colors } = useTheme();
   const styles = useMemo(
     () => createThemeStyles(baseStyles, isDarkMode, colors),
@@ -44,6 +45,7 @@ export default function AddDeviceScreen({ navigation }: any) {
   const [currentStep, setCurrentStep] = useState<FlowStep>('CATEGORY_SELECT');
   const [protocol, setProtocol] = useState<ProtocolType>('WIFI_AP');
   const [selectedDeviceModel, setSelectedDeviceModel] = useState<string>('');
+  const [createdCameraDeviceId, setCreatedCameraDeviceId] = useState<string>('');
 
   // ---- 2. State Nhánh Wi-Fi AP (Camera) ----
   const [isLedBlinking, setIsLedBlinking] = useState<boolean>(true);
@@ -166,7 +168,7 @@ export default function AddDeviceScreen({ navigation }: any) {
       return;
     }
     if (currentStep === 'SETUP_SUCCESS') {
-      navigation.navigate('Devices');
+      navigation.navigate('Main', { screen: 'Devices' });
       return;
     }
     setCurrentStep(PREVIOUS_STEP_MAP[currentStep] || 'CATEGORY_SELECT');
@@ -176,7 +178,7 @@ export default function AddDeviceScreen({ navigation }: any) {
     if (navigation.canGoBack?.()) {
       navigation.goBack();
     } else {
-      navigation.navigate('Main');
+      navigation.navigate('Main', { screen: 'Devices' });
     }
   };
 
@@ -185,8 +187,61 @@ export default function AddDeviceScreen({ navigation }: any) {
   // -------------------------------------------------------------
   const handleSelectCameraModel = (model: string) => {
     setSelectedDeviceModel(model);
+    if (model === 'CAMERA_IP_RTSP') {
+      setProtocol('RTSP_IP');
+      setCurrentStep('CAMERA_RTSP_CONFIG');
+      return;
+    }
     setProtocol('WIFI_AP');
     setCurrentStep('WIFI_POWER_CHECK');
+  };
+
+  const handleApplyRtspCamera = async (deviceData: {
+    name: string;
+    brand: string;
+    streamUrl: string;
+    location: string;
+    ip: string;
+    isDefault: boolean;
+  }) => {
+    const newDevice: IoTDeviceItem = {
+      id: 'camera-ip-' + Date.now(),
+      name: deviceData.name,
+      sub: `${deviceData.brand} • RTSP • IP: ${deviceData.ip}`,
+      type: 'camera',
+      status: 'Trực tuyến • Đang ghi hình',
+      isOnline: true,
+      icon: 'videocam',
+      color: '#0284C7',
+      location: deviceData.location,
+      streamUrl: deviceData.streamUrl,
+      ipAddress: deviceData.ip,
+    };
+
+    await addIoTDevice(newDevice);
+    setCreatedCameraDeviceId(newDevice.id);
+
+    if (deviceData.isDefault && setCameraDefault) {
+      setCameraDefault({
+        id: newDevice.id,
+        name: newDevice.name,
+        room: newDevice.location || 'Phòng khách',
+        streamUrl: newDevice.streamUrl || '',
+        isOnline: true,
+      });
+    }
+
+    setSuccessInfo({
+      name: newDevice.name,
+      type: `Camera IP An Ninh (${deviceData.brand})`,
+      protocol: 'RTSP (Cổng 554)',
+      details: deviceData.streamUrl,
+      location: deviceData.location,
+      icon: 'videocam',
+      color: '#0284C7',
+    });
+
+    setCurrentStep('SETUP_SUCCESS');
   };
 
   const phoneWifiNetworks = [
@@ -660,6 +715,8 @@ export default function AddDeviceScreen({ navigation }: any) {
                   ? '15%'
                   : currentStep === 'CAMERA_LIST' || currentStep === 'WATCH_LIST' || currentStep === 'OTHER_LIST'
                   ? '35%'
+                  : currentStep === 'CAMERA_RTSP_CONFIG'
+                  ? '65%'
                   : currentStep === 'WIFI_POWER_CHECK' || currentStep === 'BLE_POWER_CHECK'
                   ? '50%'
                   : currentStep === 'WIFI_GUIDE' || currentStep === 'BLE_PERMISSION'
@@ -698,6 +755,16 @@ export default function AddDeviceScreen({ navigation }: any) {
           onPressAlreadyConnected={handlePressAlreadyConnected}
           onOpenResetGuide={() => setShowResetGuideModal(true)}
         />
+
+        {/* 2A_RTSP. CAMERA RTSP CONFIG */}
+        {currentStep === 'CAMERA_RTSP_CONFIG' && (
+          <StepCameraRtspConfig
+            currentStep={currentStep}
+            isDarkMode={isDarkMode}
+            colors={colors}
+            onApplyCamera={handleApplyRtspCamera}
+          />
+        )}
 
         {/* 2B-4B. WATCH FLOW */}
         <StepWatchFlow
@@ -754,8 +821,16 @@ export default function AddDeviceScreen({ navigation }: any) {
           currentStep={currentStep}
           styles={styles}
           successInfo={successInfo}
-          onNavigateDevices={() => navigation.navigate('Devices')}
-          onNavigateHome={() => navigation.navigate('Home')}
+          onNavigateDevices={() => navigation.navigate('Main', { screen: 'Devices' })}
+          onNavigateHome={() => navigation.navigate('Main', { screen: 'Home' })}
+          onNavigateCamera={() => {
+            navigation.navigate('CameraDetail', {
+              cameraId: createdCameraDeviceId || undefined,
+              cameraName: successInfo.name,
+              room: successInfo.location,
+              streamUrl: successInfo.details,
+            });
+          }}
         />
       </ScrollView>
 
