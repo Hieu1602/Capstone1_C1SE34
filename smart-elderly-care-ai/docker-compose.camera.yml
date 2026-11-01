@@ -24,6 +24,7 @@ services:
     ports:
       - "127.0.0.1:8090:8090"
     volumes:
+      - ./edge/src:/app/src
       - camera_recordings:/recordings
     stop_grace_period: 60s
     healthcheck:

@@ -13,7 +13,7 @@ class CameraRecording(Base):
     __table_args__ = (Index("ix_camera_recordings_timeline", "device_id", "started_at", "id"),)
 
     id: Mapped[UUID] = mapped_column(primary_key=True)
-    device_id: Mapped[UUID] = mapped_column(ForeignKey("devices.id"), nullable=False)
+    device_id: Mapped[UUID] = mapped_column(ForeignKey("devices.id", ondelete="CASCADE"), nullable=False)
     object_key: Mapped[str] = mapped_column(String(255), unique=True)
     kind: Mapped[str] = mapped_column(String(20))
     started_at: Mapped[datetime] = mapped_column(DateTime(timezone=True))

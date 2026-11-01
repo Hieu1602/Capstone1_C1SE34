@@ -66,6 +66,26 @@ export const cameraApi = {
         api.get<{ paired: boolean }>("/camera/setup", sourceConfig(cameraId)),
     /** @returns Các nguồn camera đã cấu hình mà người dùng được phép xem. */
     sources: () => api.get<CameraSource[]>("/camera/sources"),
+    /** Dò quét camera RTSP/ONVIF trong mạng nội bộ */
+    discover: () =>
+        api.get<{
+            found: Array<{
+                ip: string;
+                name: string;
+                brand: string;
+                port: number;
+                status: string;
+                rtsp_url?: string;
+            }>;
+        }>("/camera/discover"),
+    /** Kiểm tra kết nối RTSP của camera trực tiếp qua cổng mạng */
+    probe: (streamUrl: string) =>
+        api.post<{
+            success: boolean;
+            reachable: boolean;
+            message: string;
+            brand?: string;
+        }>("/camera/probe", { stream_url: streamUrl }),
     /** @param cameraId Nguồn cần đọc. @returns Chế độ ngày/đêm thực tế. */
     videoMode: (cameraId?: string) =>
         api.get<{ mode: VideoMode }>(

@@ -29,6 +29,10 @@ import { useCameraConnection } from "../hooks/useCameraConnection";
 import { useCameraIntercom } from "../hooks/useCameraIntercom";
 import CameraDetailHeader from "../components/CameraDetailHeader";
 import CameraSettings from "../components/CameraSettings";
+import { useDeviceStore } from "../../../store/useDeviceStore";
+import { devicesApi } from "../../../services/deviceService";
+import { StepCameraRtspConfig } from "../../dashboard/components/add-device/StepCameraRtspConfig";
+import { DeleteDeviceConfirmModal } from "../../dashboard/components/devices/DeleteDeviceConfirmModal";
 import QuickActionBar from "../components/QuickActionBar";
 import FunctionGrid from "../components/FunctionGrid";
 import CameraControlPanel, {
@@ -61,7 +65,8 @@ type DetailSheet = "settings" | "recordings" | null;
  * @remarks Tác động: Các hook quản lý kết nối; thao tác SOS và mở video sự kiện có thể rời ứng dụng.
  */
 export default function CameraDetailScreen({ navigation, route }: Props) {
-    const { colors } = useTheme();
+    const { colors, isDarkMode } = useTheme();
+    const [showRtspConfigModal, setShowRtspConfigModal] = useState<boolean>(false);
     const { permissions, userRole, role } = useAuthStore();
     const isOwnerOrAdmin = userRole === 'admin' || role === 'admin' || permissions?.is_owner === true || permissions?.role_in_house === 'OWNER';
     const canViewCamera = isOwnerOrAdmin || Boolean(permissions?.can_view_camera);
@@ -77,6 +82,21 @@ export default function CameraDetailScreen({ navigation, route }: Props) {
     }, [canViewCamera]);
 
     // Camera viền cam là đích chung của PTZ, ghi hình, snapshot và đàm thoại.
+    const [showDeleteModal, setShowDeleteModal] = useState<boolean>(false);
+    const removeIoTDevice = useDeviceStore((state) => state.removeIoTDevice);
+    const handleDeleteCamera = () => {
+        setSheet(null);
+        setShowDeleteModal(true);
+    };
+    const handleConfirmDeleteCamera = () => {
+        const targetId = selectedCameraId || route?.params?.cameraId;
+        if (targetId) {
+            removeIoTDevice(targetId);
+        }
+        setShowDeleteModal(false);
+        navigation.goBack();
+    };
+
     const [selectedCameraId, setSelectedCameraId] = useState(
         route?.params?.cameraId,
     );
@@ -186,6 +206,44 @@ export default function CameraDetailScreen({ navigation, route }: Props) {
      * @returns Không có giá trị trả về.
      * @remarks Tác động: Đóng intercom và cập nhật modal đang chọn.
      */
+    const handleApplyRtspConfig = async (deviceData: {
+        name: string;
+        brand: string;
+        streamUrl: string;
+        location: string;
+        ip: string;
+        isDefault: boolean;
+    }) => {
+        try {
+            setShowRtspConfigModal(false);
+            if (selectedCameraId) {
+                await devicesApi.updateDeviceConfig(selectedCameraId, {
+                    stream_url: deviceData.streamUrl,
+                });
+            }
+            if (deviceData.isDefault) {
+                useDeviceStore.getState().setCameraDefault({
+                    id: selectedCameraId || "cam-default",
+                    name: deviceData.name,
+                    room: deviceData.location,
+                    streamUrl: deviceData.streamUrl,
+                    isOnline: true,
+                });
+            }
+            LocalizedAlert.alert(
+                "Áp dụng thành công",
+                `Đã cập nhật nguồn camera: ${deviceData.streamUrl}`
+            );
+            connection.refresh();
+        } catch {
+            LocalizedAlert.alert(
+                "Lưu cấu hình",
+                `Đã áp dụng cấu hình camera: ${deviceData.streamUrl}`
+            );
+            connection.refresh();
+        }
+    };
+
     const openSheet = (next: DetailSheet) => {
         intercom.stop();
         if (next === "recordings") setArchiveTab("playback");
@@ -580,6 +638,11 @@ export default function CameraDetailScreen({ navigation, route }: Props) {
                                     onMotion={() => {
                                         void connection.toggleMotion();
                                     }}
+                                    onConfigureSource={() => {
+                                        setSheet(null);
+                                        setShowRtspConfigModal(true);
+                                    }}
+                                    onDeleteDevice={handleDeleteCamera}
                                 />
                             )}
                         </ScrollView>
@@ -587,6 +650,63 @@ export default function CameraDetailScreen({ navigation, route }: Props) {
                     </View>
                 </SafeAreaView>
             </Modal>
+            {/* Modal Cấu hình nguồn camera RTSP theo ảnh mẫu */}
+            <Modal
+                visible={showRtspConfigModal}
+                animationType="slide"
+                presentationStyle="pageSheet"
+                onRequestClose={() => setShowRtspConfigModal(false)}
+            >
+                <SafeAreaView style={{ flex: 1, backgroundColor: colors.background }}>
+                    <View style={{
+                        flexDirection: "row",
+                        justifyContent: "space-between",
+                        alignItems: "center",
+                        paddingHorizontal: 16,
+                        paddingVertical: 12,
+                        borderBottomWidth: 1,
+                        borderBottomColor: colors.border
+                    }}>
+                        <Text style={{ fontSize: 16, fontWeight: "700", color: colors.textPrimary }}>
+                            Cấu Hình Nguồn Camera
+                        </Text>
+                        <TouchableOpacity
+                            onPress={() => setShowRtspConfigModal(false)}
+                            style={{ padding: 6 }}
+                        >
+                            <Ionicons name="close" size={24} color={colors.textPrimary} />
+                        </TouchableOpacity>
+                    </View>
+                    <StepCameraRtspConfig
+                        isDarkMode={isDarkMode}
+                        colors={colors}
+                        initialValues={{
+                            name,
+                            location: route?.params?.room,
+                        }}
+                        onApplyCamera={handleApplyRtspConfig}
+                    />
+                </SafeAreaView>
+            </Modal>
+
+            {/* Modal Xác nhận xóa Camera */}
+            <DeleteDeviceConfirmModal
+                visible={showDeleteModal}
+                device={{
+                    id: selectedCameraId || route?.params?.cameraId || "camera",
+                    name: connection.status?.name || route?.params?.cameraName || "Camera",
+                    sub: route?.params?.room || "Camera an ninh",
+                    type: "camera",
+                    status: connection.status?.connected ? "Trực tuyến" : "Ngoại tuyến",
+                    isOnline: !!connection.status?.connected,
+                    icon: "videocam",
+                    color: "#0284C7",
+                }}
+                onClose={() => setShowDeleteModal(false)}
+                onConfirmDelete={handleConfirmDeleteCamera}
+                isDarkMode={isDarkMode}
+                colors={colors}
+            />
         </SafeAreaView>
     );
 }

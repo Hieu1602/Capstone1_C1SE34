@@ -6,6 +6,7 @@
 export type FlowStep =
   | 'CATEGORY_SELECT'
   | 'CAMERA_LIST'
+  | 'CAMERA_RTSP_CONFIG'
   | 'WATCH_LIST'
   | 'OTHER_LIST'
   | 'WIFI_POWER_CHECK'
@@ -18,10 +19,11 @@ export type FlowStep =
   | 'BLE_PAIRING'
   | 'SETUP_SUCCESS';
 
-export type ProtocolType = 'WIFI_AP' | 'BLUETOOTH' | 'GATEWAY_MQTT';
+export type ProtocolType = 'WIFI_AP' | 'BLUETOOTH' | 'GATEWAY_MQTT' | 'RTSP_IP';
 
 export const PREVIOUS_STEP_MAP: Partial<Record<FlowStep, FlowStep>> = {
   CAMERA_LIST: 'CATEGORY_SELECT',
+  CAMERA_RTSP_CONFIG: 'CAMERA_LIST',
   WATCH_LIST: 'CATEGORY_SELECT',
   OTHER_LIST: 'CATEGORY_SELECT',
   WIFI_POWER_CHECK: 'CAMERA_LIST',
@@ -53,4 +55,3 @@ export interface SetupSuccessInfo {
   icon: string;
   color: string;
 }
-

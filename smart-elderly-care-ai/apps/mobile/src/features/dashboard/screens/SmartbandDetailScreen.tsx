@@ -17,7 +17,7 @@ import { SmartbandHardwareSpecsCard } from '../components/smartband/SmartbandHar
 
 export default function SmartbandDetailScreen({ navigation, route }: any) {
   const deviceParam = route?.params?.device;
-  const { currentVitals, setVitals, algoSettings } = useVitalStore();
+  const { currentVitals, setVitals, algoSettings, removeIoTDevice } = useVitalStore();
   const { isDarkMode, colors } = useTheme();
 
   const [isSyncing, setIsSyncing] = useState(false);
@@ -151,6 +151,45 @@ export default function SmartbandDetailScreen({ navigation, route }: any) {
           colors={colors}
           isDarkMode={isDarkMode}
         />
+
+        {/* 5. Nút Gỡ bỏ thiết bị */}
+        <TouchableOpacity
+          style={{
+            flexDirection: 'row',
+            alignItems: 'center',
+            justifyContent: 'center',
+            backgroundColor: '#FEE2E2',
+            paddingVertical: 14,
+            borderRadius: 14,
+            marginTop: 16,
+            marginBottom: 24,
+            gap: 8,
+          }}
+          onPress={() => {
+            LocalizedAlert.alert(
+              'Gỡ thiết bị',
+              `Bạn có chắc muốn xóa thiết bị "${deviceParam?.name || 'Vòng đeo tay'}" khỏi hệ thống không?`,
+              [
+                { text: 'Hủy', style: 'cancel' },
+                {
+                  text: 'Xóa thiết bị',
+                  style: 'destructive',
+                  onPress: () => {
+                    if (deviceParam?.id) {
+                      removeIoTDevice(deviceParam.id);
+                    }
+                    navigation.goBack();
+                  },
+                },
+              ]
+            );
+          }}
+        >
+          <Ionicons name="trash-outline" size={20} color="#DC2626" />
+          <LocalizedText style={{ color: '#DC2626', fontWeight: 'bold', fontSize: 15 }}>
+            Xóa vòng đeo tay này
+          </LocalizedText>
+        </TouchableOpacity>
       </ScrollView>
     </SafeAreaView>
   );
