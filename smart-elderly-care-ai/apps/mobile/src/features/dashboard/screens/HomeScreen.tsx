@@ -238,7 +238,16 @@ export default function HomeScreen({ navigation }: any) {
     );
   };
 
-  const cameraDisplayName = camera.name || 'Camera Phòng Ngủ - Hub #01';
+  const firstCamera = (iotDevices || []).find((d) => d.type === 'camera');
+  const effectiveCamera = {
+    ...camera,
+    id: camera?.id || firstCamera?.id,
+    name: camera?.name || firstCamera?.name,
+    room: camera?.room || firstCamera?.location,
+    streamUrl: camera?.streamUrl || firstCamera?.streamUrl,
+  };
+  const rawDisplayName = effectiveCamera.name || 'Camera Phòng Ngủ - Hub #01';
+  const cameraDisplayName = rawDisplayName.replace(/^Camera\s+Camera\s+/i, 'Camera ');
   const isEdgeHubOnline = activeDevice?.is_online ?? true;
   const braceletBattery = currentVitals.bracelet_battery ?? null;
   const acousticStatus = currentVitals.acoustic_status ?? 'Bình thường';
@@ -439,7 +448,7 @@ export default function HomeScreen({ navigation }: any) {
             </TouchableOpacity>
 
             <HomeCameraCard
-              cameraDisplayName={cameraDisplayName} camera={camera} house={house} isDarkMode={isDarkMode}
+              cameraDisplayName={cameraDisplayName} camera={effectiveCamera} house={house} isDarkMode={isDarkMode}
               colors={colors} navigation={navigation} handleTogglePrivacyMode={handleTogglePrivacyMode}
               handleMicPress={handleMicPress} isMicSpeaking={isMicSpeaking} handleToggleAIProtect={handleToggleAIProtect}
             />

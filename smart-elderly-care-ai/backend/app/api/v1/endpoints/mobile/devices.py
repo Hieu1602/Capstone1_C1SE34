@@ -79,6 +79,11 @@ async def register_device(
 
     if not device_in.house_id:
         house = await crud_house.get_or_create_default_house(db, owner_id=current_user.id)
+        if not house:
+            from app.models.house import House
+            house = House(name="Nhà của tôi", owner_id=current_user.id)
+            db.add(house)
+            await db.flush()
         device_in.house_id = house.id
 
     return await crud_device.create(db, owner_id=current_user.id, obj_in=device_in)

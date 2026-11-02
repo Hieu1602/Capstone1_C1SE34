@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState } from 'react';
 import {
   View,
   TouchableOpacity,
@@ -176,7 +176,8 @@ export const StepCameraRtspConfig: React.FC<StepCameraRtspConfigProps> = ({
 
     // Cập nhật tên camera gợi ý
     if (!initialValues?.name) {
-      setCameraName(`Camera ${brandName}`);
+      const namePrefix = brandName.toLowerCase().startsWith('camera') ? brandName : `Camera ${brandName}`;
+      setCameraName(namePrefix);
     }
   };
 
@@ -330,6 +331,15 @@ export const StepCameraRtspConfig: React.FC<StepCameraRtspConfigProps> = ({
     const trimmedUrl = streamUrl.trim();
     if (!trimmedUrl) {
       LocalizedAlert.alert('Lỗi cấu hình', 'Đường dẫn camera không được để trống.');
+      return;
+    }
+    if (
+      !trimmedUrl.startsWith('rtsp://') &&
+      !trimmedUrl.startsWith('http://') &&
+      !trimmedUrl.startsWith('https://') &&
+      !trimmedUrl.startsWith('rtmp://')
+    ) {
+      LocalizedAlert.alert('Định dạng URL không hợp lệ', 'Đường dẫn camera phải bắt đầu bằng rtsp://, http://, https:// hoặc rtmp://');
       return;
     }
 
@@ -737,35 +747,29 @@ export const StepCameraRtspConfig: React.FC<StepCameraRtspConfigProps> = ({
           </View>
         </View>
 
-        {/* Row 6: Khối Lưu Ý & Hướng Dẫn Kỹ Thuật chuẩn theo hình đính kèm */}
-        <View
-          style={[
-            localStyles.guideCard,
-            isDarkMode && {
-              backgroundColor: 'rgba(30, 41, 59, 0.6)',
-              borderColor: colors.border || '#334155',
-            },
-          ]}
-        >
-          <LocalizedText
+        {/* Row 6: Gợi ý cấu hình nhanh theo từng hãng camera */}
+        {currentBrandInfo?.note ? (
+          <View
             style={[
-              localStyles.guideNoticeText,
-              isDarkMode && { color: colors.textSecondary || '#94A3B8' },
+              localStyles.brandHintBox,
+              isDarkMode && {
+                backgroundColor: 'rgba(2, 132, 199, 0.1)',
+                borderColor: 'rgba(2, 132, 199, 0.3)',
+              },
             ]}
           >
-            Nhập tài khoản/mật khẩu riêng nếu mật khẩu có ký tự đặc biệt (@ : # /). Camera ở xa: dùng tên miền DDNS + mở cổng trên router, hoặc an toàn hơn là VPN (Tailscale/ZeroTier). Hệ thống tự kết nối lại khi mạng chập chờn.
-          </LocalizedText>
-
-          {currentBrandInfo?.note && (
-            <View style={localStyles.brandSpecificNote}>
-              <Ionicons name="information-circle" size={16} color="#0284C7" style={{ marginRight: 6 }} />
-              <LocalizedText style={localStyles.brandSpecificNoteText}>
-                <LocalizedText style={{ fontWeight: '700' }}>{selectedBrand}: </LocalizedText>
-                {currentBrandInfo.note}
-              </LocalizedText>
-            </View>
-          )}
-        </View>
+            <Ionicons name="information-circle" size={16} color="#0284C7" style={{ marginRight: 6, marginTop: 1 }} />
+            <LocalizedText
+              style={[
+                localStyles.brandHintText,
+                isDarkMode && { color: '#38BDF8' },
+              ]}
+            >
+              <LocalizedText style={{ fontWeight: '700' }}>{selectedBrand}: </LocalizedText>
+              {currentBrandInfo.note}
+            </LocalizedText>
+          </View>
+        ) : null}
 
         {/* Row 7: Hai Nút Hành Động Lớn (ÁP DỤNG CAMERA & LƯU MẶC ĐỊNH) */}
         <View style={localStyles.actionButtonsRow}>
@@ -955,6 +959,15 @@ export const StepCameraRtspConfig: React.FC<StepCameraRtspConfigProps> = ({
                   onPress={() => {
                     setSelectedSourceType(src.label);
                     setShowSourceModal(false);
+                    if (src.id === 'SECA_AI') {
+                      handleSelectBrand('Camera AI SECA');
+                    } else if (src.id === 'WEBCAM') {
+                      handleSelectBrand('Tùy chỉnh / Khác');
+                      setStreamUrl('http://192.168.1.100:8000/stream');
+                      setCameraName('Webcam USB');
+                    } else if (src.id === 'RTSP_IP') {
+                      handleSelectBrand('TP-Link Tapo');
+                    }
                   }}
                 >
                   <Ionicons
@@ -1188,32 +1201,22 @@ export const StepCameraRtspConfig: React.FC<StepCameraRtspConfigProps> = ({
       color: '#10B981',
       fontWeight: '600',
     },
-    guideCard: {
-      backgroundColor: '#F1F5F9',
-      borderRadius: 10,
-      padding: 12,
-      marginBottom: 20,
-      borderWidth: 1,
-      borderColor: '#E2E8F0',
-    },
-    guideNoticeText: {
-      fontSize: 12,
-      color: '#64748B',
-      lineHeight: 18,
-    },
-    brandSpecificNote: {
+    brandHintBox: {
       flexDirection: 'row',
-      alignItems: 'center',
-      marginTop: 8,
-      paddingTop: 8,
-      borderTopWidth: StyleSheet.hairlineWidth,
-      borderTopColor: 'rgba(148, 163, 184, 0.3)',
+      alignItems: 'flex-start',
+      backgroundColor: '#E0F2FE',
+      borderWidth: 1,
+      borderColor: '#BAE6FD',
+      borderRadius: 8,
+      paddingHorizontal: 12,
+      paddingVertical: 10,
+      marginBottom: 16,
     },
-    brandSpecificNoteText: {
+    brandHintText: {
       fontSize: 12,
-      color: '#0284C7',
+      color: '#0369A1',
       flex: 1,
-      lineHeight: 16,
+      lineHeight: 18,
     },
     actionButtonsRow: {
       flexDirection: 'row',

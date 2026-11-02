@@ -16,7 +16,7 @@ import { Ionicons } from "@expo/vector-icons";
 import * as Location from "expo-location";
 import { WebView } from "react-native-webview";
 const NativeWebView = WebView as unknown as React.ComponentType<any>;
-import { resolveAddressFromCoords } from "../screens/EmergencySOSScreen";
+import { resolveAddressFromCoords } from "../utils/geocode";
 
 interface MapLocationPickerModalProps {
     visible: boolean;

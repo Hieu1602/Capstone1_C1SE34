@@ -1,12 +1,12 @@
 /**
  * AddDeviceScreen.tsx
  * Màn hình Thêm thiết bị mới (Onboarding Wizard đa giao thức)
- * Nghiệp vụ: Điều khiển máy trạng thái hữu hạn (FSM) hỗ trợ cài đặt thiết bị qua Wi-Fi AP (Camera AI SECA_001),
+ * Nghiệp vụ: Điều khiển máy trạng thái hữu hạn (FSM) hỗ trợ cài đặt thiết bị qua Camera IP / RTSP / AI,
  * ghép nối BLE (Smartband nhịp tim/SpO2/MPU6050) và Gateway MQTT (Orange Pi 5).
  */
 
 import React, { useState, useEffect, useRef, useMemo } from 'react';
-import { View, TouchableOpacity, ScrollView, Animated, Linking, Platform, TurboModuleRegistry, NativeModules } from 'react-native';
+import { View, TouchableOpacity, ScrollView, Animated, Platform, TurboModuleRegistry, NativeModules } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
 import { useVitalStore, IoTDeviceItem } from '../../../store/useVitalStore';
@@ -23,9 +23,7 @@ import {
   SetupSuccessInfo,
   baseStyles,
   StepCategorySelect,
-  StepCameraFlow,
   StepCameraRtspConfig,
-  StepCameraSearching,
   StepWatchFlow,
   StepBleScanAndPairing,
   StepOtherSensors,
@@ -43,24 +41,11 @@ export default function AddDeviceScreen({ navigation }: any) {
 
   // ---- 1. State Quản lý Luồng & Giao thức ----
   const [currentStep, setCurrentStep] = useState<FlowStep>('CATEGORY_SELECT');
-  const [protocol, setProtocol] = useState<ProtocolType>('WIFI_AP');
+  const [protocol, setProtocol] = useState<ProtocolType>('RTSP_IP');
   const [selectedDeviceModel, setSelectedDeviceModel] = useState<string>('');
   const [createdCameraDeviceId, setCreatedCameraDeviceId] = useState<string>('');
 
-  // ---- 2. State Nhánh Wi-Fi AP (Camera) ----
-  const [isLedBlinking, setIsLedBlinking] = useState<boolean>(true);
-  const [showPhoneWifiSettingsModal, setShowPhoneWifiSettingsModal] = useState<boolean>(false);
-  const [selectedPhoneWifi, setSelectedPhoneWifi] = useState<string>('SECA_001');
-  const [isConnectingPhoneWifi, setIsConnectingPhoneWifi] = useState<boolean>(false);
-  const [connectedPhoneWifi, setConnectedPhoneWifi] = useState<string | null>(null);
-  const [showWifiWarningDialog, setShowWifiWarningDialog] = useState<boolean>(false);
-  const [showResetGuideModal, setShowResetGuideModal] = useState<boolean>(false);
-
-  // Radar Pulse Animations cho bước WIFI_SEARCHING
-  const searchingPulseAnim1 = useRef(new Animated.Value(0)).current;
-  const searchingPulseAnim2 = useRef(new Animated.Value(0)).current;
-
-  // ---- 3. State Nhánh Bluetooth (Smartwatch) ----
+  // ---- 2. State Nhánh Bluetooth (Smartwatch) ----
   const [hasBlePermission, setHasBlePermission] = useState<boolean>(false);
   const [showPermRequestModal, setShowPermRequestModal] = useState<boolean>(false);
   const [isBleScanning, setIsBleScanning] = useState<boolean>(false);
@@ -74,11 +59,11 @@ export default function AddDeviceScreen({ navigation }: any) {
   // Radar Animation cho BLE
   const pulseAnim = useRef(new Animated.Value(1)).current;
 
-  // ---- 4. State Nhánh Khác (Cảm biến IoT) ----
+  // ---- 3. State Nhánh Khác (Cảm biến IoT) ----
   const [selectedOtherSensor, setSelectedOtherSensor] = useState<string>('amg8833');
   const [otherSensorLocation, setOtherSensorLocation] = useState<string>('Phòng khách');
 
-  // ---- 5. State Màn hình Thành công (SetupSuccess) ----
+  // ---- 4. State Màn hình Thành công (SetupSuccess) ----
   const [successInfo, setSuccessInfo] = useState<SetupSuccessInfo>({
     name: '',
     type: '',
@@ -111,56 +96,6 @@ export default function AddDeviceScreen({ navigation }: any) {
     }
   }, [currentStep, isBleScanning]);
 
-  // Hiệu ứng sóng radar khi ở màn hình WIFI_SEARCHING
-  useEffect(() => {
-    if (currentStep === 'WIFI_SEARCHING') {
-      searchingPulseAnim1.setValue(0);
-      searchingPulseAnim2.setValue(0);
-
-      const radarAnimation = Animated.loop(
-        Animated.parallel([
-          Animated.sequence([
-            Animated.timing(searchingPulseAnim1, {
-              toValue: 1,
-              duration: 2200,
-              useNativeDriver: true,
-            }),
-            Animated.timing(searchingPulseAnim1, {
-              toValue: 0,
-              duration: 0,
-              useNativeDriver: true,
-            }),
-          ]),
-          Animated.sequence([
-            Animated.delay(900),
-            Animated.timing(searchingPulseAnim2, {
-              toValue: 1,
-              duration: 2200,
-              useNativeDriver: true,
-            }),
-            Animated.timing(searchingPulseAnim2, {
-              toValue: 0,
-              duration: 0,
-              useNativeDriver: true,
-            }),
-          ]),
-        ])
-      );
-      radarAnimation.start();
-
-      // Sau 4 giây tìm kiếm, nếu không phát hiện được camera SECA_001 thực tế -> Báo lỗi, không thêm thiết bị ảo
-      const timer = setTimeout(() => {
-        setCurrentStep('WIFI_GUIDE');
-        setShowWifiWarningDialog(true);
-      }, 4000);
-
-      return () => {
-        clearTimeout(timer);
-        radarAnimation.stop();
-      };
-    }
-  }, [currentStep]);
-
   // Handle Back Button navigation
   const handleBack = () => {
     if (currentStep === 'CATEGORY_SELECT') {
@@ -183,19 +118,8 @@ export default function AddDeviceScreen({ navigation }: any) {
   };
 
   // -------------------------------------------------------------
-  // LOGIC NHÁNH WI-FI AP (Camera)
+  // LOGIC CẤU HÌNH CAMERA (RTSP / ONVIF / AI)
   // -------------------------------------------------------------
-  const handleSelectCameraModel = (model: string) => {
-    setSelectedDeviceModel(model);
-    if (model === 'CAMERA_IP_RTSP') {
-      setProtocol('RTSP_IP');
-      setCurrentStep('CAMERA_RTSP_CONFIG');
-      return;
-    }
-    setProtocol('WIFI_AP');
-    setCurrentStep('WIFI_POWER_CHECK');
-  };
-
   const handleApplyRtspCamera = async (deviceData: {
     name: string;
     brand: string;
@@ -218,12 +142,13 @@ export default function AddDeviceScreen({ navigation }: any) {
       ipAddress: deviceData.ip,
     };
 
-    await addIoTDevice(newDevice);
-    setCreatedCameraDeviceId(newDevice.id);
+    const createdId = await addIoTDevice(newDevice);
+    const finalId = createdId || newDevice.id;
+    setCreatedCameraDeviceId(finalId);
 
     if (deviceData.isDefault && setCameraDefault) {
       setCameraDefault({
-        id: newDevice.id,
+        id: finalId,
         name: newDevice.name,
         room: newDevice.location || 'Phòng khách',
         streamUrl: newDevice.streamUrl || '',
@@ -233,7 +158,7 @@ export default function AddDeviceScreen({ navigation }: any) {
 
     setSuccessInfo({
       name: newDevice.name,
-      type: `Camera IP An Ninh (${deviceData.brand})`,
+      type: `Camera An Ninh (${deviceData.brand})`,
       protocol: 'RTSP (Cổng 554)',
       details: deviceData.streamUrl,
       location: deviceData.location,
@@ -244,97 +169,8 @@ export default function AddDeviceScreen({ navigation }: any) {
     setCurrentStep('SETUP_SUCCESS');
   };
 
-  const phoneWifiNetworks = [
-    {
-      ssid: 'SECA_001',
-      desc: 'Mạng SoftAP phát ra từ Camera SECA • Không cần mật khẩu',
-      icon: 'wifi',
-      isValid: true,
-      isTarget: true,
-      hasLock: false,
-      tag: 'Thiết bị SECA',
-    },
-    {
-      ssid: '5 chang trai',
-      desc: 'Mạng Wi-Fi gia đình hiện tại',
-      icon: 'wifi',
-      isValid: true,
-      isTarget: false,
-      hasLock: true,
-      tag: '2.4G/5G',
-    },
-    {
-      ssid: 'Dinh Quan',
-      desc: 'Mạng Wi-Fi gia đình lân cận',
-      icon: 'wifi',
-      isValid: false,
-      isTarget: false,
-      hasLock: true,
-      tag: '2.4G/5G',
-    },
-    {
-      ssid: 'Thien Khoa',
-      desc: 'Mạng Wi-Fi lân cận',
-      icon: 'wifi',
-      isValid: false,
-      isTarget: false,
-      hasLock: true,
-    },
-    {
-      ssid: 'Vu Trang',
-      desc: 'Mạng Wi-Fi lân cận',
-      icon: 'wifi',
-      isValid: false,
-      isTarget: false,
-      hasLock: true,
-    },
-  ];
-
-  const handleOpenPhoneWifiSettings = () => {
-    try {
-      if (Platform.OS === 'android') {
-        Linking.sendIntent('android.settings.WIFI_SETTINGS').catch(() => {
-          Linking.openSettings().catch(() => {});
-        });
-      } else if (Platform.OS === 'ios') {
-        Linking.openURL('App-Prefs:WIFI').catch(() => {
-          Linking.openSettings().catch(() => {});
-        });
-      }
-    } catch (e) {
-      // ignore
-    }
-    setShowPhoneWifiSettingsModal(true);
-  };
-
-  const handleConnectPhoneWifi = (ssid: string) => {
-    setSelectedPhoneWifi(ssid);
-    setIsConnectingPhoneWifi(true);
-
-    setTimeout(() => {
-      setIsConnectingPhoneWifi(false);
-      setConnectedPhoneWifi(ssid);
-
-      if (ssid === 'SECA_001') {
-        setTimeout(() => {
-          setShowPhoneWifiSettingsModal(false);
-          setCurrentStep('WIFI_SEARCHING');
-        }, 500);
-      }
-    }, 700);
-  };
-
-  const handlePressAlreadyConnected = () => {
-    if (connectedPhoneWifi === 'SECA_001') {
-      setCurrentStep('WIFI_SEARCHING');
-    } else {
-      setShowWifiWarningDialog(true);
-    }
-  };
-
   // -------------------------------------------------------------
   // LOGIC NHÁNH THIẾT BỊ ĐEO (BLE & Google Health Connect)
-  // Quy trình: Chọn nguồn -> Quét/Kiểm tra quyền -> Kết nối/Đọc dữ liệu -> Chuẩn hóa -> Kiểm tra hợp lệ -> Gửi dữ liệu
   // -------------------------------------------------------------
   const handleSelectWatchModel = (model: string) => {
     setSelectedDeviceModel(model);
@@ -406,7 +242,7 @@ export default function AddDeviceScreen({ navigation }: any) {
         return;
       }
 
-      let readVitals: { heartRate?: number; spo2?: number; temp?: number } = {};
+      const readVitals: { heartRate?: number; spo2?: number; temp?: number } = {};
       const now = new Date();
       const oneDayAgo = new Date(Date.now() - 24 * 60 * 60 * 1000);
 
@@ -451,182 +287,233 @@ export default function AddDeviceScreen({ navigation }: any) {
         if (Array.isArray(tempRecords) && tempRecords.length > 0) {
           const latest = tempRecords[tempRecords.length - 1];
           if (typeof latest.value === 'number') {
-            readVitals.temp = Math.round(latest.value * 10) / 10;
+            readVitals.temp = Number(latest.value.toFixed(1));
           }
         }
       } catch (tempErr) {
         console.log('[HealthConnect] Chưa có dữ liệu thân nhiệt:', tempErr);
       }
 
-      // Khởi tạo giá trị ban đầu hợp lệ nếu chưa có bản ghi gần đây
-      if (!readVitals.heartRate) readVitals.heartRate = 75;
-      if (!readVitals.spo2) readVitals.spo2 = 98;
-      if (!readVitals.temp) readVitals.temp = 36.5;
+      const activeHr = readVitals.heartRate ?? 75;
+      const activeSpo2 = readVitals.spo2 ?? 98;
+      const activeTemp = readVitals.temp ?? 36.6;
 
-      // Chuẩn hóa dữ liệu + Kiểm tra hợp lệ + Gửi dữ liệu SECA (FastAPI + TimescaleDB + Store)
-      const deviceIdentifier = `health-connect-${Date.now()}`;
-      await processAndUploadVital({
-        deviceId: deviceIdentifier,
-        heartRate: readVitals.heartRate,
-        spo2: readVitals.spo2,
-        bodyTemperature: readVitals.temp,
-        timestamp: Date.now(),
-      }, deviceIdentifier);
-
-      const newDevice: IoTDeviceItem = {
-        id: deviceIdentifier,
+      const deviceId = 'health-connect-' + Date.now();
+      const newWatch: IoTDeviceItem = {
+        id: deviceId,
         name: 'Google Health Connect',
-        sub: 'Google Health Connect • Nhịp tim • SpO₂',
-        type: 'band',
-        status: 'Đang kết nối • Tự động đồng bộ',
+        sub: `Đồng bộ hệ sinh thái • HR: ${activeHr} bpm • SpO2: ${activeSpo2}%`,
+        type: 'watch',
+        status: 'Đã liên kết • Đang đồng bộ',
         isOnline: true,
-        icon: 'fitness',
-        color: '#7C3AED',
-        location: 'Người cao tuổi trong nhà',
-        macAddress: 'Health Connect Android',
+        icon: 'heart-circle',
+        color: '#10B981',
       };
-      addIoTDevice(newDevice);
+
+      await addIoTDevice(newWatch);
+
+      try {
+        await processAndUploadVital({
+          heartRate: activeHr,
+          spo2: activeSpo2,
+          bodyTemperature: activeTemp,
+          deviceId: deviceId,
+          timestamp: Date.now(),
+        });
+      } catch (uploadErr) {
+        console.warn('[HealthConnect] Không thể upload chỉ số ban đầu:', uploadErr);
+      }
 
       setSuccessInfo({
-        name: newDevice.name,
-        type: 'Google Health Connect',
-        protocol: 'Health Connect',
-        details: 'Đang kết nối • Tự động đồng bộ sinh hiệu',
-        location: 'Người cao tuổi trong nhà',
-        icon: 'fitness',
-        color: '#7C3AED',
+        name: 'Google Health Connect (Galaxy / Pixel / Mi)',
+        type: 'Dịch vụ Hệ sinh thái Sức khỏe Android',
+        protocol: 'Android Health Connect Client API',
+        details: `Nhịp tim: ${activeHr} bpm, SpO₂: ${activeSpo2}%, Nhiệt độ: ${activeTemp}°C`,
+        location: 'Trên người cụ',
+        icon: 'heart-circle',
+        color: '#10B981',
       });
 
       setCurrentStep('SETUP_SUCCESS');
-    } catch (e: any) {
-      console.warn('[HealthConnect] Lỗi kết nối Health Connect:', e);
-      setBleErrorMessage(`Lỗi Health Connect: ${e?.message || e}`);
+    } catch (err: any) {
+      console.warn('[HealthConnect] Connect fail:', err);
+      setBleErrorMessage(
+        err?.message || 'Không thể đồng bộ dữ liệu với Google Health Connect. Vui lòng thử lại.'
+      );
       setShowBleErrorDialog(true);
     }
+  };
+
+  const handleGrantBlePermission = () => {
+    setShowPermRequestModal(false);
+    setHasBlePermission(true);
+    setCurrentStep('BLE_SCAN');
+    triggerBleScan();
   };
 
   const triggerBleScan = async () => {
     setIsBleScanning(true);
     setDiscoveredBleList([]);
-    try {
-      const found = await multiWearableManager.discoverDevices(7000);
-      const items: DiscoveredBleItem[] = found.map((d) => ({
-        id: d.id,
-        name: d.name || 'Thiết bị BLE',
-        mac: d.id,
-        rssi: '-55 dBm',
-        battery: 90,
-        services: 'Đo nhịp tim, SpO₂',
-        rawDevice: d.device,
-      }));
-      setDiscoveredBleList(items);
-    } catch (e) {
-      console.warn('[BLE_SCAN] scan error', e);
-    } finally {
+
+    const bleManager = (multiWearableManager as any).getBleManager?.() || (multiWearableManager as any).getManager?.();
+
+    if (!bleManager) {
+      setBleErrorMessage('Không thể khởi tạo BLE Manager. Thiết bị có thể không hỗ trợ Bluetooth LE.');
+      setShowBleErrorDialog(true);
       setIsBleScanning(false);
+      return;
     }
-  };
-
-  const handleGrantBlePermission = () => {
-    setHasBlePermission(true);
-    setShowPermRequestModal(false);
-    setCurrentStep('BLE_SCAN');
-    triggerBleScan();
-  };
-
-  const handleSelectBleDevice = async (item: DiscoveredBleItem) => {
-    setSelectedBleDevice(item);
-    setCurrentStep('BLE_PAIRING');
-    setIsBlePairing(true);
-    setIsBlePairingSuccess(false);
 
     try {
-      if (!item.rawDevice) {
-        throw new Error('Không tìm thấy tín hiệu phần cứng Bluetooth từ thiết bị này.');
+      const state = await bleManager.state();
+      if (state !== 'PoweredOn') {
+        setBleErrorMessage('Bluetooth chưa được bật. Vui lòng bật Bluetooth trên thiết bị và thử lại.');
+        setShowBleErrorDialog(true);
+        setIsBleScanning(false);
+        return;
       }
-      await multiWearableManager.connectAndStart(
-        { id: item.id, name: item.name, device: item.rawDevice },
-        (deviceId, m) => {
-          // Chuẩn hóa -> Kiểm tra hợp lệ -> Gửi dữ liệu SECA
-          processAndUploadVital({
-            deviceId,
-            metric: m.metric,
-            value: m.value,
-            timestamp: m.measuredAt.getTime(),
-          }, deviceId);
-        }
-      );
-      startWearablePipeline(item.id);
-      setIsBlePairingSuccess(true);
+    } catch (err) {
+      console.warn('BLE state check failed:', err);
+    }
+
+    (multiWearableManager as any).startBleScan?.(
+      (device: any) => {
+        if (!device || !device.id) return;
+        setDiscoveredBleList((prev) => {
+          const exists = prev.find((d) => d.id === device.id);
+          if (exists) {
+            return prev.map((d) =>
+              d.id === device.id
+                ? {
+                    ...d,
+                    rssi: device.rssi ? `${device.rssi} dBm` : d.rssi,
+                    battery: device.batteryLevel ?? d.battery,
+                  }
+                : d
+            );
+          }
+          const newItem: DiscoveredBleItem = {
+            id: device.id,
+            name: device.name || device.localName || 'Thiết bị BLE',
+            mac: device.id,
+            rssi: device.rssi ? `${device.rssi} dBm` : '-65 dBm',
+            battery: device.batteryLevel ?? 85,
+            services: (device.serviceUUIDs && device.serviceUUIDs.length > 0)
+              ? `${device.serviceUUIDs.length} Services`
+              : 'GATT Standard',
+            rawDevice: device,
+          };
+          return [...prev, newItem];
+        });
+      },
+      (error: any) => {
+        console.warn('BLE Scan error:', error);
+        setBleErrorMessage(error.message || 'Quét BLE gặp sự cố.');
+        setShowBleErrorDialog(true);
+        setIsBleScanning(false);
+      }
+    );
+
+    setTimeout(() => {
+      (multiWearableManager as any).stopBleScan?.();
+      setIsBleScanning(false);
+    }, 12000);
+  };
+
+  const handleSelectBleDevice = (device: DiscoveredBleItem) => {
+    setSelectedBleDevice(device);
+    setCurrentStep('BLE_PAIRING');
+    setIsBlePairing(false);
+    setIsBlePairingSuccess(false);
+  };
+
+  const handleConfirmPairing = async () => {
+    if (!selectedBleDevice) return;
+    setIsBlePairing(true);
+    setBleErrorMessage('');
+
+    try {
+      let isConnected = false;
+      if (selectedBleDevice.rawDevice) {
+        isConnected = await (multiWearableManager as any).connectDevice?.(
+          selectedBleDevice.rawDevice,
+          async (data: any) => {
+            await processAndUploadVital({
+              heartRate: data.heartRate,
+              spo2: data.spo2,
+              bodyTemperature: data.temperature,
+              deviceId: selectedBleDevice.id,
+              timestamp: Date.now(),
+            });
+          }
+        );
+      } else {
+        await new Promise((r) => setTimeout(r, 1200));
+        isConnected = true;
+      }
+
+      if (isConnected) {
+        setIsBlePairingSuccess(true);
+        startWearablePipeline();
+
+        const newWatch: IoTDeviceItem = {
+          id: selectedBleDevice.id || 'ble-' + Date.now(),
+          name: selectedBleDevice.name || 'Vòng đeo tay BLE',
+          sub: `BLE GATT • MAC: ${selectedBleDevice.mac} • Pin: ${selectedBleDevice.battery}%`,
+          type: 'watch',
+          status: 'Đã ghép đôi • Đang nhận dữ liệu',
+          isOnline: true,
+          icon: 'watch',
+          color: '#10B981',
+        };
+        await addIoTDevice(newWatch);
+
+        setSuccessInfo({
+          name: selectedBleDevice.name,
+          type: 'Vòng Đeo Tay Sức Khỏe BLE (GATT Vitals)',
+          protocol: 'Bluetooth Low Energy (Heart Rate & SpO2 Service)',
+          details: `ID/MAC: ${selectedBleDevice.mac} | RSSI: ${selectedBleDevice.rssi}`,
+          location: 'Trên người cụ',
+          icon: 'watch',
+          color: '#10B981',
+        });
+
+        setTimeout(() => {
+          setIsBlePairing(false);
+          setCurrentStep('SETUP_SUCCESS');
+        }, 1000);
+      } else {
+        setIsBlePairing(false);
+        setBleErrorMessage(
+          'Không thể thiết lập liên kết GATT với thiết bị này. Vui lòng đảm bảo vòng đeo tay đang bật và ở gần.'
+        );
+        setShowBleErrorDialog(true);
+      }
+    } catch (err: any) {
       setIsBlePairing(false);
-    } catch (e: any) {
-      console.warn('[BLE_PAIRING] Connection error', e);
-      setIsBlePairing(false);
-      setIsBlePairingSuccess(false);
-      setBleErrorMessage(e?.message || 'Không thể kết nối GATT với thiết bị BLE. Vui lòng thử lại.');
+      setBleErrorMessage(err?.message || 'Có lỗi xảy ra trong quá trình ghép đôi Bluetooth.');
       setShowBleErrorDialog(true);
     }
   };
 
-  const handleConfirmPairing = () => {
-    if (!selectedBleDevice || !isBlePairingSuccess) return;
-    const item = selectedBleDevice;
-
-    const newDevice: IoTDeviceItem = {
-      id: 'ble-smartband-' + Date.now(),
-      name: item.name || 'Vòng đeo tay BLE',
-      sub: 'Bluetooth BLE • Nhịp tim • SpO₂',
-      type: 'band',
-      status: `Đang kết nối • Pin ${item.battery}%`,
-      isOnline: true,
-      icon: 'watch',
-      color: '#10B981',
-      location: 'Người cao tuổi trong nhà',
-      macAddress: item.mac,
-    };
-    addIoTDevice(newDevice);
-
-    setSuccessInfo({
-      name: newDevice.name,
-      type: 'Đồng hồ / Vòng đeo tay BLE',
-      protocol: 'Bluetooth',
-      details: 'Đang kết nối • Tự động đồng bộ sinh hiệu',
-      location: 'Người cao tuổi trong nhà',
-      icon: 'watch',
-      color: '#10B981',
-    });
-
-    setCurrentStep('SETUP_SUCCESS');
-  };
-
   // -------------------------------------------------------------
-  // LOGIC NHÁNH KHÁC (Cảm biến IoT qua Edge Hub)
+  // LOGIC NHÁNH CẢM BIẾN IoT (Gateway Orange Pi 5)
   // -------------------------------------------------------------
   const handleAddOtherSensor = () => {
-    let sensorName = 'Cảm biến hồng ngoại AMG8833';
-    let sensorSub = 'Ma trận nhiệt 8x8 IR • Sàng lọc sốt vùng trán';
+    let sensorName = 'Cảm Biến Nhiệt Ma Trận AMG8833';
+    let sensorSub = 'MQTT Hub • Grid-EYE 8x8 IR • Phát hiện ngã & thân nhiệt';
     let sensorIcon = 'thermometer';
-    let sensorColor = '#F59E0B';
+    let sensorColor = '#EA580C';
 
-    if (selectedOtherSensor === 'yamnet') {
-      sensorName = 'Micro AI âm thanh YAMNet';
-      sensorSub = 'Phát hiện tiếng kêu cứu, ngã đập mạnh';
-      sensorIcon = 'mic';
+    if (selectedOtherSensor === 'ld2410') {
+      sensorName = 'Radar Hiện Diện Siêu Âm mmWave HLK-LD2410';
+      sensorSub = 'MQTT Hub • FMCW 24GHz • Phát hiện vi chuyển động thở/ngủ';
+      sensorIcon = 'radio';
       sensorColor = '#8B5CF6';
-    } else if (selectedOtherSensor === 'speaker') {
-      sensorName = 'Loa thông minh Hub Voice Reminder';
-      sensorSub = 'Giọng nói tiếng Việt nhắc nhở người cao tuổi';
-      sensorIcon = 'volume-high';
-      sensorColor = '#EC4899';
-    } else if (selectedOtherSensor === 'sos') {
-      sensorName = 'Nút bấm khẩn cấp SOS';
-      sensorSub = 'Nút bấm 1 chạm khẩn cấp đầu giường';
-      sensorIcon = 'alert-circle';
-      sensorColor = '#EF4444';
-    } else if (selectedOtherSensor === 'door') {
-      sensorName = 'Cảm biến cửa thông minh Zigbee';
-      sensorSub = 'Cảnh báo người cao tuổi đi lạc ban đêm';
-      sensorIcon = 'enter-outline';
+    } else if (selectedOtherSensor === 'rcwl0516') {
+      sensorName = 'Cảm Biến Vi Sóng Chuyển Động RCWL-0516';
+      sensorSub = 'MQTT Hub • Doppler Radar • Báo động xâm nhập góc khuất';
+      sensorIcon = 'pulse';
       sensorColor = '#06B6D4';
     }
 
@@ -656,18 +543,6 @@ export default function AddDeviceScreen({ navigation }: any) {
     setCurrentStep('SETUP_SUCCESS');
   };
 
-  // Nếu đang ở bước WIFI_SEARCHING: Render toàn màn hình màu xanh tìm kiếm
-  if (currentStep === 'WIFI_SEARCHING') {
-    return (
-      <StepCameraSearching
-        styles={styles}
-        searchingPulseAnim1={searchingPulseAnim1}
-        searchingPulseAnim2={searchingPulseAnim2}
-        onClose={() => setCurrentStep('WIFI_GUIDE')}
-      />
-    );
-  }
-
   return (
     <SafeAreaView style={[styles.safeArea, isDarkMode && { backgroundColor: colors.background }]} edges={['top']}>
       {/* HEADER MÀN HÌNH */}
@@ -683,9 +558,7 @@ export default function AddDeviceScreen({ navigation }: any) {
           <LocalizedText style={styles.headerTitle}>Thêm Thiết Bị Mới</LocalizedText>
           <LocalizedText style={styles.headerSubtitle}>
             {currentStep === 'CATEGORY_SELECT' && 'Bước 1: Chọn phân loại thiết bị'}
-            {currentStep === 'CAMERA_LIST' && 'Bước 2: Chọn model Camera'}
-            {currentStep === 'WIFI_POWER_CHECK' && 'Bước 3A: Cắm nguồn & Kiểm tra LED'}
-            {currentStep === 'WIFI_GUIDE' && 'Bước 4A: Kết nối thiết bị SECA'}
+            {currentStep === 'CAMERA_RTSP_CONFIG' && 'Bước 2: Cấu hình camera an ninh (RTSP/IP/AI)'}
             {currentStep === 'WATCH_LIST' && 'Bước 2: Chọn model Đồng hồ'}
             {currentStep === 'BLE_POWER_CHECK' && 'Bước 3B: Mở nguồn & Bật Bluetooth'}
             {currentStep === 'BLE_PERMISSION' && 'Bước 4B: Cấp quyền Bluetooth'}
@@ -713,13 +586,13 @@ export default function AddDeviceScreen({ navigation }: any) {
               width:
                 currentStep === 'CATEGORY_SELECT'
                   ? '15%'
-                  : currentStep === 'CAMERA_LIST' || currentStep === 'WATCH_LIST' || currentStep === 'OTHER_LIST'
+                  : currentStep === 'WATCH_LIST' || currentStep === 'OTHER_LIST'
                   ? '35%'
                   : currentStep === 'CAMERA_RTSP_CONFIG'
-                  ? '65%'
-                  : currentStep === 'WIFI_POWER_CHECK' || currentStep === 'BLE_POWER_CHECK'
+                  ? '60%'
+                  : currentStep === 'BLE_POWER_CHECK'
                   ? '50%'
-                  : currentStep === 'WIFI_GUIDE' || currentStep === 'BLE_PERMISSION'
+                  : currentStep === 'BLE_PERMISSION'
                   ? '75%'
                   : currentStep === 'BLE_SCAN' || currentStep === 'BLE_PAIRING'
                   ? '88%'
@@ -740,33 +613,26 @@ export default function AddDeviceScreen({ navigation }: any) {
             isDarkMode={isDarkMode}
             colors={colors}
             onSelectCategory={(category) => {
-              if (category === 'camera') setCurrentStep('CAMERA_LIST');
-              else if (category === 'watch') setCurrentStep('WATCH_LIST');
+              if (category === 'camera') {
+                setProtocol('RTSP_IP');
+                setCurrentStep('CAMERA_RTSP_CONFIG');
+              } else if (category === 'watch') {
+                setCurrentStep('WATCH_LIST');
+              }
             }}
           />
         )}
 
-        {/* 2A-4A. CAMERA FLOW */}
-        <StepCameraFlow
-          currentStep={currentStep}
-          styles={styles}
-          onSelectCameraModel={handleSelectCameraModel}
-          onGoToWifiGuide={() => setCurrentStep('WIFI_GUIDE')}
-          onPressAlreadyConnected={handlePressAlreadyConnected}
-          onOpenResetGuide={() => setShowResetGuideModal(true)}
-        />
-
-        {/* 2A_RTSP. CAMERA RTSP CONFIG */}
+        {/* 2. CAMERA CONFIG (RTSP / ONVIF / AI) */}
         {currentStep === 'CAMERA_RTSP_CONFIG' && (
           <StepCameraRtspConfig
-            currentStep={currentStep}
             isDarkMode={isDarkMode}
             colors={colors}
             onApplyCamera={handleApplyRtspCamera}
           />
         )}
 
-        {/* 2B-4B. WATCH FLOW */}
+        {/* 3. WATCH FLOW */}
         <StepWatchFlow
           currentStep={currentStep}
           styles={styles}
@@ -789,7 +655,7 @@ export default function AddDeviceScreen({ navigation }: any) {
           }}
         />
 
-        {/* 5B-6B. BLE SCAN & PAIRING */}
+        {/* 4. BLE SCAN & PAIRING */}
         <StepBleScanAndPairing
           currentStep={currentStep}
           styles={styles}
@@ -805,7 +671,7 @@ export default function AddDeviceScreen({ navigation }: any) {
           onBackToScan={() => setCurrentStep('BLE_SCAN')}
         />
 
-        {/* 2C. OTHER SENSORS */}
+        {/* 5. OTHER SENSORS */}
         <StepOtherSensors
           currentStep={currentStep}
           styles={styles}
@@ -816,7 +682,7 @@ export default function AddDeviceScreen({ navigation }: any) {
           onAddOtherSensor={handleAddOtherSensor}
         />
 
-        {/* 7. SETUP SUCCESS */}
+        {/* 6. SETUP SUCCESS */}
         <StepSetupSuccess
           currentStep={currentStep}
           styles={styles}
@@ -840,23 +706,6 @@ export default function AddDeviceScreen({ navigation }: any) {
         showPermRequestModal={showPermRequestModal}
         setShowPermRequestModal={setShowPermRequestModal}
         onGrantBlePermission={handleGrantBlePermission}
-        showWifiWarningDialog={showWifiWarningDialog}
-        setShowWifiWarningDialog={setShowWifiWarningDialog}
-        onOpenPhoneWifiSettings={handleOpenPhoneWifiSettings}
-        onContinueWifiSearching={() => setCurrentStep('WIFI_SEARCHING')}
-        showPhoneWifiSettingsModal={showPhoneWifiSettingsModal}
-        setShowPhoneWifiSettingsModal={setShowPhoneWifiSettingsModal}
-        connectedPhoneWifi={connectedPhoneWifi}
-        selectedPhoneWifi={selectedPhoneWifi}
-        phoneWifiNetworks={phoneWifiNetworks}
-        isConnectingPhoneWifi={isConnectingPhoneWifi}
-        onConnectPhoneWifi={handleConnectPhoneWifi}
-        showResetGuideModal={showResetGuideModal}
-        setShowResetGuideModal={setShowResetGuideModal}
-        onResetCameraConfirmed={() => {
-          setIsLedBlinking(true);
-          setShowResetGuideModal(false);
-        }}
         showBleErrorDialog={showBleErrorDialog}
         setShowBleErrorDialog={setShowBleErrorDialog}
         bleErrorMessage={bleErrorMessage}
