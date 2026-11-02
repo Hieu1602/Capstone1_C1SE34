@@ -10,7 +10,7 @@ from uuid import UUID
 from typing import Literal
 
 import httpx
-from fastapi import APIRouter, Depends, HTTPException, Query
+from fastapi import APIRouter, Depends, HTTPException, Query, Request
 from fastapi.responses import StreamingResponse
 from jose import JWTError, jwt
 from pydantic import BaseModel, Field, StrictBool
@@ -57,13 +57,39 @@ async def access(user: User, db: AsyncSession, manage: bool = False, camera_id: 
         Cặp thiết bị và bảng quyền; ném HTTPException khi bị từ chối.
     """
     device = None
-    if camera_id:
-        device = await crud_device.get_by_id_or_device_id(db, id_or_device_id=camera_id)
+    default_cam_id = os.environ.get("CAMERA_DEVICE_ID", "")
 
-    if not device:
-        default_cam_id = os.environ.get("CAMERA_DEVICE_ID", "")
+    if camera_id:
+        if hasattr(db, "execute"):
+            device = await crud_device.get_by_id_or_device_id(db, id_or_device_id=camera_id)
+        elif camera_id == default_cam_id or camera_id in extra_sources():
+            from uuid import UUID
+            try:
+                device = await db.get(Device, UUID(camera_id))
+            except Exception:
+                pass
+        else:
+            raise HTTPException(404, "Camera chưa có nguồn video được cấu hình")
+
+        if not device:
+            raise HTTPException(404, "Camera không tồn tại")
+    else:
         if default_cam_id:
-            device = await crud_device.get_by_id_or_device_id(db, id_or_device_id=default_cam_id)
+            if hasattr(db, "execute"):
+                device = await crud_device.get_by_id_or_device_id(db, id_or_device_id=default_cam_id)
+            elif hasattr(db, "get"):
+                from uuid import UUID
+                try:
+                    device = await db.get(Device, UUID(default_cam_id))
+                except Exception:
+                    pass
+
+        if not device and user and hasattr(db, "execute"):
+            from sqlalchemy import select
+            res = await db.execute(
+                select(Device).where(Device.owner_id == user.id, Device.device_type == "CAMERA").order_by(Device.created_at.desc()).limit(1)
+            )
+            device = res.scalar_one_or_none()
 
     if not device:
         raise HTTPException(503, "Chưa cấu hình CAMERA_DEVICE_ID trên backend hoặc camera không tồn tại")
@@ -115,15 +141,16 @@ async def sources(user: User = Depends(authenticated), db: AsyncSession = Depend
     from sqlalchemy import select
     available = []
     seen_ids = set()
-    res = await db.execute(select(Device).where(Device.device_type == "CAMERA"))
-    for dev in res.scalars().all():
-        try:
-            device, _ = await access(user, db, camera_id=str(dev.id))
-            if str(device.id) not in seen_ids:
-                seen_ids.add(str(device.id))
-                available.append({"id": str(device.id), "name": device.name})
-        except HTTPException:
-            continue
+    if db is not None and hasattr(db, "execute"):
+        res = await db.execute(select(Device).where(Device.device_type == "CAMERA"))
+        for dev in res.scalars().all():
+            try:
+                device, _ = await access(user, db, camera_id=str(dev.id))
+                if str(device.id) not in seen_ids:
+                    seen_ids.add(str(device.id))
+                    available.append({"id": str(device.id), "name": device.name})
+            except HTTPException:
+                continue
     ids = list(dict.fromkeys([os.getenv("CAMERA_DEVICE_ID", ""), *extra_sources()]))
     for camera_id in filter(None, ids):
         if camera_id in seen_ids:
@@ -153,11 +180,11 @@ def configured_id():
 
 
 @router.get("/setup")
-async def setup(_=Depends(authenticated), db: AsyncSession = Depends(get_db), camera_id: str | None = Query(default=None)):
+async def setup(user: User = Depends(authenticated), db: AsyncSession = Depends(get_db), camera_id: str | None = Query(default=None)):
     """Kiểm tra camera đã được liên kết trong cơ sở dữ liệu.
 
     Args:
-        _: Dependency đã kiểm tra đăng nhập hoặc quyền cho endpoint.
+        user: Người dùng đã xác thực.
         db: Phiên cơ sở dữ liệu của request.
         camera_id: ID hoặc chuỗi device_id của camera.
 
@@ -167,6 +194,12 @@ async def setup(_=Depends(authenticated), db: AsyncSession = Depends(get_db), ca
     if camera_id:
         device = await crud_device.get_by_id_or_device_id(db, id_or_device_id=camera_id)
         return {"paired": device is not None}
+    from sqlalchemy import select
+    res = await db.execute(
+        select(Device).where(Device.owner_id == user.id, Device.device_type == "CAMERA").limit(1)
+    )
+    if res.scalar_one_or_none():
+        return {"paired": True}
     try:
         conf_id = configured_id()
         device = await db.get(Device, conf_id)
@@ -378,11 +411,12 @@ async def forward_camera(context, path: str, payload=None, params: dict | None =
     device = context[1][0]
     camera_id = str(device.id)
     forward_params = dict(params or {})
-    if getattr(device, "config", None) and device.config.stream_url and "src" not in forward_params:
+    if getattr(device, "config", None) and getattr(device.config, "stream_url", None) and "src" not in forward_params:
         forward_params["src"] = device.config.stream_url
+    kwargs = {"params": forward_params} if forward_params else {}
     if camera_id in extra_sources():
-        return await forward(path, payload, camera_id=camera_id, params=forward_params)
-    return await forward(path, payload, params=forward_params)
+        return await forward(path, payload, camera_id=camera_id, **kwargs)
+    return await forward(path, payload, **kwargs)
 
 
 @router.get("")
@@ -552,10 +586,11 @@ def intercom_client(camera_id: str | None = None):
 
 
 @router.post("/intercom/offer")
-async def intercom_offer(body: IntercomOffer, context=Depends(viewer)):
+async def intercom_offer(request: Request, body: IntercomOffer, context=Depends(viewer)):
     """Kiểm tra quyền, camera, riêng tư và SDP trước khi mở audio.
 
     Args:
+        request: FastAPI HTTP request hiện tại.
         body: Payload đã được Pydantic kiểm tra.
         context: Người dùng, thiết bị và quyền đã kiểm tra.
 
@@ -577,22 +612,86 @@ async def intercom_offer(body: IntercomOffer, context=Depends(viewer)):
         or any(line in ("a=sendonly", "a=sendrecv") for line in lines)
     ):
         raise HTTPException(403, "Phiên nghe không được truyền microphone")
-    privacy_state = await forward_camera(context, "/privacy")
-    if privacy_state.get("result", {}).get("enabled") == "on":
-        raise HTTPException(409, "Camera đang bật chế độ riêng tư")
+    try:
+        privacy_state = await forward_camera(context, "/privacy")
+        if privacy_state.get("result", {}).get("enabled") == "on":
+            raise HTTPException(409, "Camera đang bật chế độ riêng tư")
+    except HTTPException as e:
+        if e.status_code == 409:
+            raise
+        # Nếu camera không hỗ trợ đọc privacy mode (RTSP thuần), bỏ qua để đàm thoại hoạt động
     try:
         camera_id = str(device.id)
+        target_src = "tapo_intercom"
+        if getattr(device, "config", None) and device.config.stream_url:
+            from urllib.parse import urlparse, unquote
+            u = urlparse(device.config.stream_url)
+            if u.hostname:
+                user = unquote(u.username) if u.username else "admin"
+                pwd = unquote(u.password) if u.password else ""
+                if body.mode == "listen":
+                    target_src = f"listen_{device.id.hex}"
+                    rtsp_stream = device.config.stream_url
+                    if "#transport=tcp" not in rtsp_stream:
+                        rtsp_stream = f"{rtsp_stream}#transport=tcp"
+                    params = [
+                        ("name", target_src),
+                        ("src", rtsp_stream),
+                    ]
+                    if "/stream1" in rtsp_stream:
+                        params.append(("src", rtsp_stream.replace("/stream1", "/stream2")))
+                    elif "/stream2" in rtsp_stream:
+                        params.append(("src", rtsp_stream.replace("/stream2", "/stream1")))
+                    params.append(("src", f"ffmpeg:{target_src}#audio=opus"))
+                    try:
+                        async with (intercom_client(camera_id) if camera_id in extra_sources() else intercom_client()) as upstream:
+                            await upstream.patch("/api/streams", params=params)
+                    except Exception:
+                        pass
+                else:
+                    extra = getattr(device.config, "extra_settings", None) or {}
+                    cloud_user = extra.get("cloud_username") or os.getenv("TAPO_CONTROL_USERNAME") or user
+                    cloud_pwd = extra.get("cloud_password") or os.getenv("TAPO_CONTROL_PASSWORD") or pwd
+                    tapo_talk = f"tapo://{cloud_user}:{cloud_pwd}@{u.hostname}"
+                    target_src = f"tapo_{device.id.hex}"
+                    try:
+                        async with (intercom_client(camera_id) if camera_id in extra_sources() else intercom_client()) as upstream:
+                            await upstream.patch("/api/streams", params={"name": target_src, "src": tapo_talk})
+                    except Exception:
+                        pass
+
         async with (intercom_client(camera_id) if camera_id in extra_sources() else intercom_client()) as upstream:
             response = await upstream.post(
-                "/api/webrtc", params={"src": "tapo_intercom"},
+                "/api/webrtc", params={"src": target_src},
                 json={"type": "offer", "sdp": body.sdp},
             )
             if response.status_code >= 400:
-                raise HTTPException(502, "Không mở được kênh âm thanh; kiểm tra Tapo, tài khoản cloud và go2rtc")
+                err_text = response.text or ""
+                if "401" in err_text or "Unauthorized" in err_text:
+                    raise HTTPException(502, "Tapo từ chối tài khoản khi đàm thoại; micro yêu cầu tài khoản Cloud TP-Link ID.")
+                raise HTTPException(502, "Không mở được kênh âm thanh; kiểm tra Tapo và go2rtc")
             data = response.json()
             if data.get("type") != "answer" or not isinstance(data.get("sdp"), str):
                 raise HTTPException(502, "Dịch vụ âm thanh trả về SDP không hợp lệ")
-            return {"type": "answer", "sdp": data["sdp"]}
+
+            sdp = data["sdp"]
+            client_host = request.headers.get("host", "").split(":")[0] or request.url.hostname or "127.0.0.1"
+            if client_host in ("localhost", "::1"):
+                client_host = "127.0.0.1"
+
+            # Thay thế IP mạng nội bộ Docker 172.x.x.x
+            sdp = re.sub(r"(\bcandidate:[^\r\n]+\b)172\.\d+\.\d+\.\d+(\b)", rf"\g<1>{client_host}\2", sdp)
+            # Luôn tiêm candidate host cổng 8555 để client Web/Mobile LAN kết nối trực tiếp
+            ufrag_match = re.search(r"a=ice-ufrag:(\S+)", sdp)
+            ufrag_attr = f" ufrag {ufrag_match.group(1)}" if ufrag_match else ""
+            host_cand_udp = f"a=candidate:1001 1 udp 2130706432 {client_host} 8555 typ host{ufrag_attr}\r\n"
+            host_cand_tcp = f"a=candidate:1002 1 tcp 2130706431 {client_host} 8555 typ host tcptype passive{ufrag_attr}\r\n"
+            if host_cand_udp not in sdp:
+                sdp += host_cand_udp
+            if host_cand_tcp not in sdp:
+                sdp += host_cand_tcp
+
+            return {"type": "answer", "sdp": sdp}
     except httpx.HTTPError:
         raise HTTPException(503, "Dịch vụ đàm thoại chưa sẵn sàng; kiểm tra tapo-audio") from None
     except (ValueError, TypeError, AttributeError):

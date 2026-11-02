@@ -50,12 +50,24 @@ export const HomeCameraCard: React.FC<HomeCameraCardProps> = ({
   isMicSpeaking,
   handleToggleAIProtect,
 }) => {
+  const cleanDisplayName = (cameraDisplayName || camera?.name || 'Camera').replace(/^Camera\s+Camera\s+/i, 'Camera ');
+
+  const handleOpenDetail = (tab?: 'playback') => {
+    navigation.navigate('CameraDetail', {
+      cameraId: camera?.id,
+      cameraName: cleanDisplayName,
+      room: camera?.room || 'Phòng khách',
+      streamUrl: camera?.streamUrl,
+      ...(tab ? { tab } : {}),
+    });
+  };
+
   return (
     <View style={[styles.cameraCard, isDarkMode && { backgroundColor: colors.card, borderColor: colors.border }]}>
       {/* Card Video Area (Clickable to open CameraDetail) */}
       <TouchableOpacity
         activeOpacity={0.95}
-        onPress={() => navigation.navigate('CameraDetail')}
+        onPress={() => handleOpenDetail()}
         style={styles.cameraPreviewBox}
       >
         {/* Ảnh phòng khách thực tế của người cao tuổi */}
@@ -71,7 +83,7 @@ export const HomeCameraCard: React.FC<HomeCameraCardProps> = ({
         <View style={styles.cameraOverlayTop}>
           <View style={styles.cameraTitleWithBadge}>
             <Text style={styles.cameraNameOverlay} numberOfLines={1}>
-              {cameraDisplayName}
+              {cleanDisplayName}
             </Text>
             {/* Badge trạng thái kết nối WebRTC / Live */}
             {camera.isSleep ? (
@@ -109,7 +121,7 @@ export const HomeCameraCard: React.FC<HomeCameraCardProps> = ({
             <Ionicons name="wifi" size={14} color="#10B981" style={{ marginLeft: 6 }} />
             <TouchableOpacity
               style={{ marginLeft: 8 }}
-              onPress={() => navigation.navigate('CameraDetail')}
+              onPress={() => handleOpenDetail()}
             >
               <Ionicons name="ellipsis-horizontal" size={16} color="#FFF" />
             </TouchableOpacity>
@@ -146,7 +158,7 @@ export const HomeCameraCard: React.FC<HomeCameraCardProps> = ({
       {/* NÚT TRUY CẬP NHANH: "Xem lại 24/48h" (Interactive Timeline Playback) ngay bên dưới video */}
       <TouchableOpacity
         style={[styles.playbackQuickBar, isDarkMode && { backgroundColor: colors.surfaceSubtle, borderBottomColor: colors.border }]}
-        onPress={() => navigation.navigate('CameraDetail', { tab: 'playback' })}
+        onPress={() => handleOpenDetail('playback')}
         activeOpacity={0.8}
       >
         <View style={styles.playbackLeftBox}>

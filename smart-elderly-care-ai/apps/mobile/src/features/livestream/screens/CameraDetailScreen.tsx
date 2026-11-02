@@ -51,6 +51,7 @@ interface Props {
             cameraId?: string;
             cameraName?: string;
             room?: string;
+            streamUrl?: string;
             tab?: "playback";
         };
     };
@@ -97,8 +98,34 @@ export default function CameraDetailScreen({ navigation, route }: Props) {
         navigation.goBack();
     };
 
-    const [selectedCameraId, setSelectedCameraId] = useState(
-        route?.params?.cameraId,
+    const storeCamera = useDeviceStore((state) => state.camera);
+    const iotDevices = useDeviceStore((state) => state.iotDevices);
+    const defaultCam = (iotDevices || []).find((d) => d.type === "camera");
+
+    const effectiveCameraId =
+        route?.params?.cameraId ||
+        storeCamera?.id ||
+        defaultCam?.id ||
+        undefined;
+    const effectiveCameraName = (
+        route?.params?.cameraName ||
+        storeCamera?.name ||
+        defaultCam?.name ||
+        "Camera"
+    ).replace(/^Camera\s+Camera\s+/i, "Camera ");
+    const effectiveRoom =
+        route?.params?.room ||
+        storeCamera?.room ||
+        defaultCam?.location ||
+        "Phòng khách";
+    const effectiveStreamUrl =
+        route?.params?.streamUrl ||
+        storeCamera?.streamUrl ||
+        defaultCam?.streamUrl ||
+        "";
+
+    const [selectedCameraId, setSelectedCameraId] = useState<string | undefined>(
+        effectiveCameraId,
     );
     const [quality, setQuality] = useState<VideoQuality>("auto");
     const connection = useCameraConnection(selectedCameraId, quality);
@@ -245,23 +272,26 @@ export default function CameraDetailScreen({ navigation, route }: Props) {
     };
 
     const openSheet = (next: DetailSheet) => {
-        intercom.stop();
-        if (next === "recordings") setArchiveTab("playback");
+        if (next === "recordings") {
+            intercom.stop();
+            setArchiveTab("playback");
+        }
         setSheet(next);
     };
     /**
      * Chuyển panel Talk/Voice Call/Pan-Tilt hoặc đóng panel.
      * @param next - Panel mới; null để trở về Function Grid.
      * @returns Không có giá trị trả về.
-     * @remarks Tác động: Dừng intercom và xóa phản hồi PTZ cũ.
      */
     const changePanel = (next: CameraPanel) => {
-        intercom.stop();
         setPanel(next);
         setFeedback(null);
     };
-    const name =
-        connection.status?.name || route?.params?.cameraName || "Camera";
+    const name = (
+        connection.status?.name ||
+        effectiveCameraName ||
+        "Camera"
+    ).replace(/^Camera\s+Camera\s+/i, "Camera ");
     const textStyle = { color: colors.textPrimary };
     const cardStyle = { backgroundColor: colors.card };
     /**
@@ -311,6 +341,7 @@ export default function CameraDetailScreen({ navigation, route }: Props) {
                 quality={quality}
                 onQuality={setQuality}
                 onSelectCamera={setSelectedCameraId}
+                selectedCameraId={selectedCameraId}
             />
             <QuickActionBar
                 recording={!!connection.recordings.active}
@@ -627,7 +658,7 @@ export default function CameraDetailScreen({ navigation, route }: Props) {
                             ) : (
                                 <CameraSettings
                                     name={name}
-                                    room={route?.params?.room}
+                                    room={effectiveRoom}
                                     connected={!!connection.status?.connected}
                                     privacy={connection.privacy}
                                     motion={connection.motion}
@@ -682,7 +713,8 @@ export default function CameraDetailScreen({ navigation, route }: Props) {
                         colors={colors}
                         initialValues={{
                             name,
-                            location: route?.params?.room,
+                            streamUrl: effectiveStreamUrl,
+                            location: effectiveRoom,
                         }}
                         onApplyCamera={handleApplyRtspConfig}
                     />
@@ -695,7 +727,7 @@ export default function CameraDetailScreen({ navigation, route }: Props) {
                 device={{
                     id: selectedCameraId || route?.params?.cameraId || "camera",
                     name: connection.status?.name || route?.params?.cameraName || "Camera",
-                    sub: route?.params?.room || "Camera an ninh",
+                    sub: effectiveRoom || "Camera an ninh",
                     type: "camera",
                     status: connection.status?.connected ? "Trực tuyến" : "Ngoại tuyến",
                     isOnline: !!connection.status?.connected,

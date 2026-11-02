@@ -20,6 +20,7 @@ import { useCameraConnection } from "../hooks/useCameraConnection";
 import { useCameraIntercom } from "../hooks/useCameraIntercom";
 import { useCameraVideoMode } from "../hooks/useCameraVideoMode";
 import { useCameraFullscreen } from "../hooks/useCameraFullscreen";
+import { useDeviceStore } from "../../../store/useDeviceStore";
 import { CameraLiveView } from "./CameraLiveView";
 import CameraVideoOptions from "./CameraVideoOptions";
 import PanTiltControl from "./PanTiltControl";
@@ -33,6 +34,7 @@ interface Props {
     quality: VideoQuality;
     onQuality: (quality: VideoQuality) => void;
     onSelectCamera: (id: string) => void;
+    selectedCameraId?: string;
 }
 
 /** @param props Nguồn phụ chưa được chọn. @returns Luồng riêng, tự dừng khi ô bị gỡ hoặc màn hình mất focus. */
@@ -58,6 +60,7 @@ export default function CameraViewer({
     quality,
     onQuality,
     onSelectCamera,
+    selectedCameraId,
 }: Props) {
     const fullscreen = useCameraFullscreen(connection.active);
     const videoMode = useCameraVideoMode(connection);
@@ -74,7 +77,7 @@ export default function CameraViewer({
     const [zoom, setZoom] = useState(1);
     // Hủy kết quả tải danh sách sau khi đóng bảng hoặc mất focus.
     const sourceRequest = useRef(0);
-    const activeId = connection.status?.id;
+    const activeId = selectedCameraId || connection.status?.id || connection.status?.device_id;
     const intercomRef = useRef(intercom);
     intercomRef.current = intercom;
     const [toolbarVisible, setToolbarVisible] = useState(true);
@@ -148,33 +151,69 @@ export default function CameraViewer({
             setShowPan(false);
         }
     }, [connection.active]);
-    useEffect(() => {
+    const loadSources = () => {
         const request = ++sourceRequest.current;
-        if (sheet !== "sources") return;
         setLoading(true);
         setSourceError("");
+
+        const iotDevices = useDeviceStore.getState().iotDevices || [];
+        const localCameras = iotDevices.filter(
+            (d) => d.type.toLowerCase() === "camera",
+        );
+
         void cameraApi
             .sources()
             .then(({ data }) => {
-                if (sourceRequest.current === request) setSources(data);
+                if (sourceRequest.current !== request) return;
+                if (Array.isArray(data) && data.length > 0) {
+                    setSources(data.map((s) => ({ ...s, name: s.name.replace(/^Camera\s+Camera\s+/i, "Camera ") })));
+                } else {
+                    setSources(localCameras.map((cam) => ({
+                        id: cam.id,
+                        name: cam.name.replace(/^Camera\s+Camera\s+/i, "Camera "),
+                    })));
+                }
             })
             .catch(() => {
-                if (sourceRequest.current === request)
-                    setSourceError(
-                        "Không tải được danh sách nguồn camera. Vui lòng thử lại.",
-                    );
+                if (sourceRequest.current !== request) return;
+                const fallbackSources: CameraSource[] = localCameras.map((cam) => ({
+                    id: cam.id,
+                    name: cam.name.replace(/^Camera\s+Camera\s+/i, "Camera "),
+                }));
+                setSources(fallbackSources);
             })
             .finally(() => {
                 if (sourceRequest.current === request) setLoading(false);
             });
-        return () => {
-            sourceRequest.current++;
-        };
+    };
+
+    useEffect(() => {
+        loadSources();
+    }, []);
+
+    useEffect(() => {
+        if (sheet === "sources") {
+            loadSources();
+        }
     }, [sheet]);
 
-    /** @returns Không có; chuyển sang lưới hoặc trở về luồng đang chọn. */
+    /** @returns Chuyển đổi lưới 2x2 và tự động phân bổ các camera vào các ô */
     const toggleGrid = () => {
-        setGrid((value) => !value);
+        setGrid((value) => {
+            const next = !value;
+            if (next) {
+                setSlots(() => {
+                    const currentId = activeId;
+                    const validIds = new Set(sources.map((s) => s.id));
+                    const combined = [
+                        ...(currentId ? [currentId] : []),
+                        ...sources.map((s) => s.id),
+                    ];
+                    return Array.from(new Set(combined.filter((id) => Boolean(id) && (id === currentId || validIds.has(id))))).slice(0, 4);
+                });
+            }
+            return next;
+        });
         setZoom(1);
     };
     /** @param id ID nguồn được backend cấp quyền. @returns Không có; gắn nguồn vào ô trống tiếp theo. */
@@ -191,6 +230,23 @@ export default function CameraViewer({
         intercom.stop();
         onSelectCamera(id);
         setZoom(1);
+    };
+
+    const lastTapRef = useRef<{ id: string; time: number }>({ id: '', time: 0 });
+
+    /** Nhấn 1 lần để chọn camera; nhấn đúp (hoặc nhấn vào ô đang chọn) để focus phóng to camera đó */
+    const handleTilePress = (id: string) => {
+        const now = Date.now();
+        const isDoubleTap =
+            lastTapRef.current.id === id && now - lastTapRef.current.time < 350;
+        lastTapRef.current = { id, time: now };
+
+        if (isDoubleTap || id === activeId) {
+            select(id);
+            setGrid(false);
+        } else {
+            select(id);
+        }
     };
     /** @param icon Biểu tượng. @param label Nhãn trợ năng. @param onPress Thao tác. @returns Nút trên nền video. */
     const tool = (
@@ -256,24 +312,21 @@ export default function CameraViewer({
                     )}
                     {grid && id && (
                         <>
-                            {id !== activeId && (
-                                <Pressable
-                                    accessibilityRole="button"
-                                    accessibilityLabel="Chọn camera để điều khiển"
-                                    onPress={() => select(id)}
-                                    style={StyleSheet.absoluteFill}
-                                />
-                            )}
+                            <Pressable
+                                accessibilityRole="button"
+                                accessibilityLabel="Nhấn để chọn, nhấn đúp để phóng to camera"
+                                onPress={() => handleTilePress(id)}
+                                style={StyleSheet.absoluteFill}
+                            />
                             <Text
                                 numberOfLines={1}
                                 pointerEvents="none"
                                 style={styles.feedName}
                             >
-                                {sources.find((source) => source.id === id)
-                                    ?.name ||
+                                {(sources.find((source) => source.id === id)?.name ||
                                     (id === activeId
                                         ? connection.status?.name
-                                        : `Camera ${index + 1}`)}
+                                        : `Camera ${index + 1}`) || "Camera").replace(/^Camera\s+Camera\s+/i, "Camera ")}
                             </Text>
                             {id !== activeId && (
                                 <Pressable
@@ -315,7 +368,6 @@ export default function CameraViewer({
                     { value: "auto", label: "Auto" },
                 ]}
                 onSelect={(value) => {
-                    intercom.stop();
                     onQuality(value as VideoQuality);
                     setSheet(null);
                 }}
@@ -365,7 +417,7 @@ export default function CameraViewer({
                     sourceError ||
                     (!loading &&
                     !sources.some((source) => !slots.includes(source.id))
-                        ? "Chưa có camera khác được cấu hình và cấp quyền xem."
+                        ? "Tất cả camera đã được thêm vào lưới hoặc chưa có camera khác."
                         : undefined)
                 }
                 onClose={() => setSheet(null)}
@@ -617,7 +669,7 @@ const styles = StyleSheet.create({
         fontSize: 11,
         backgroundColor: "rgba(0,0,0,0.45)",
     },
-    remove: { position: "absolute", top: 2, right: 2, padding: 4 },
+    remove: { position: "absolute", top: 2, right: 2, padding: 4, zIndex: 10 },
     toolbar: {
         position: "absolute",
         bottom: 0,

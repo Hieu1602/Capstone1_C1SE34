@@ -103,10 +103,22 @@ class CameraDriver:
             while not self._stop.is_set():
                 try:
                     if is_rtsp:
-                        self._cap = cv2.VideoCapture(self.source, cv2.CAP_FFMPEG, [
-                            cv2.CAP_PROP_OPEN_TIMEOUT_MSEC, 3000,
-                            cv2.CAP_PROP_READ_TIMEOUT_MSEC, 3000,
-                        ])
+                        sources = [self.source]
+                        if "/stream1" in self.source:
+                            sources.append(self.source.replace("/stream1", "/stream2"))
+                        elif "/stream2" in self.source:
+                            sources.append(self.source.replace("/stream2", "/stream1"))
+                        cap = None
+                        for src in sources:
+                            c = cv2.VideoCapture(src, cv2.CAP_FFMPEG, [
+                                cv2.CAP_PROP_OPEN_TIMEOUT_MSEC, 3000,
+                                cv2.CAP_PROP_READ_TIMEOUT_MSEC, 3000,
+                            ])
+                            if c.isOpened():
+                                cap = c
+                                break
+                            c.release()
+                        self._cap = cap
                     else:
                         self._cap = cv2.VideoCapture(self.source)
                         self._cap.set(cv2.CAP_PROP_FRAME_WIDTH, self.width)

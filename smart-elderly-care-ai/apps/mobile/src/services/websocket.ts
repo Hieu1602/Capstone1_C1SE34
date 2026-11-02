@@ -9,9 +9,10 @@ import { notificationService } from './notificationService';
 
 
 const getWsBaseUrl = (): string => {
-  // 1. Khi chạy trên Web trình duyệt
+  // 1. Khi chay tren Web trinh duyet
   if (Platform.OS === 'web' || (typeof window !== 'undefined' && window.location?.hostname)) {
-    const host = (typeof window !== 'undefined' && window.location?.hostname) || 'localhost';
+    const rawHost = (typeof window !== 'undefined' && window.location?.hostname) || '127.0.0.1';
+    const host = (rawHost === 'localhost' || rawHost === '::1') ? '127.0.0.1' : rawHost;
     const protocol = (typeof window !== 'undefined' && window.location?.protocol === 'https:') ? 'wss' : 'ws';
     return `${protocol}://${host}:8000/ws`;
   }
