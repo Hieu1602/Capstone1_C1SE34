@@ -3,6 +3,7 @@ report_service.py – Dịch vụ tạo báo cáo y tế (PDF / Excel / JSON Sum
 """
 
 import io
+import os
 from datetime import datetime, timedelta, timezone
 from typing import List, Optional, Tuple, Union
 from uuid import UUID
@@ -13,6 +14,9 @@ from reportlab.lib import colors
 from reportlab.lib.pagesizes import letter
 from reportlab.platypus import Paragraph, SimpleDocTemplate, Spacer, Table, TableStyle
 from reportlab.lib.styles import getSampleStyleSheet
+from reportlab.pdfbase import pdfmetrics
+from reportlab.pdfbase.ttfonts import TTFont
+from reportlab.pdfbase.pdfmetrics import registerFontFamily
 from sqlalchemy import select
 from sqlalchemy.orm import selectinload
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -23,6 +27,60 @@ from app.models.house import HouseMember
 from app.models.incident import Incident
 from app.models.vital_sign import VitalSign
 from app.schemas.report import HealthReportSummaryOut
+
+
+
+_FONTS_SETUP = False
+_PDF_FONT_NAME = "Helvetica"
+_PDF_FONT_BOLD = "Helvetica-Bold"
+
+
+def _setup_pdf_fonts() -> Tuple[str, str]:
+    """Đăng ký font chữ TrueType hỗ trợ đầy đủ tiếng Việt Unicode cho ReportLab."""
+    global _FONTS_SETUP, _PDF_FONT_NAME, _PDF_FONT_BOLD
+    if _FONTS_SETUP:
+        return _PDF_FONT_NAME, _PDF_FONT_BOLD
+
+    candidate_dirs = [
+        os.path.abspath(os.path.join(os.path.dirname(__file__), "../../../static/fonts")),
+        "/app/static/fonts",
+        "static/fonts",
+        "C:/Windows/Fonts",
+        "/usr/share/fonts/truetype/dejavu",
+        "/usr/share/fonts/dejavu",
+    ]
+
+    for d in candidate_dirs:
+        reg = os.path.join(d, "arial.ttf")
+        bold = os.path.join(d, "arialbd.ttf")
+        if os.path.exists(reg) and os.path.exists(bold):
+            try:
+                pdfmetrics.registerFont(TTFont("VNFont", reg))
+                pdfmetrics.registerFont(TTFont("VNFont-Bold", bold))
+                registerFontFamily("VNFont", normal="VNFont", bold="VNFont-Bold")
+                _PDF_FONT_NAME = "VNFont"
+                _PDF_FONT_BOLD = "VNFont-Bold"
+                _FONTS_SETUP = True
+                return _PDF_FONT_NAME, _PDF_FONT_BOLD
+            except Exception:
+                pass
+
+        reg_dj = os.path.join(d, "DejaVuSans.ttf")
+        bold_dj = os.path.join(d, "DejaVuSans-Bold.ttf")
+        if os.path.exists(reg_dj) and os.path.exists(bold_dj):
+            try:
+                pdfmetrics.registerFont(TTFont("VNFont", reg_dj))
+                pdfmetrics.registerFont(TTFont("VNFont-Bold", bold_dj))
+                registerFontFamily("VNFont", normal="VNFont", bold="VNFont-Bold")
+                _PDF_FONT_NAME = "VNFont"
+                _PDF_FONT_BOLD = "VNFont-Bold"
+                _FONTS_SETUP = True
+                return _PDF_FONT_NAME, _PDF_FONT_BOLD
+            except Exception:
+                pass
+
+    _FONTS_SETUP = True
+    return _PDF_FONT_NAME, _PDF_FONT_BOLD
 
 
 class ReportService:
@@ -451,10 +509,21 @@ class ReportService:
         language: str = "vi",
     ) -> bytes:
         """Tạo PDF report tóm tắt các chỉ số sinh hiệu và sự kiện cảnh báo."""
+        font_name, bold_font_name = _setup_pdf_fonts()
         labels = ReportService._labels(language)
         buffer = io.BytesIO()
-        doc = SimpleDocTemplate(buffer, pagesize=letter)
+        doc = SimpleDocTemplate(
+            buffer,
+            pagesize=letter,
+            rightMargin=36,
+            leftMargin=36,
+            topMargin=36,
+            bottomMargin=36,
+        )
         styles = getSampleStyleSheet()
+        for s in styles.byName.values():
+            s.fontName = font_name
+
         elements = []
 
         # Tiêu đề
@@ -485,12 +554,13 @@ class ReportService:
                     f"{v.skin_temp_max:.1f}" if v.skin_temp_max else "-",
                     labels["yes"] if v.fall_detected else labels["no"],
                 ])
-            t = Table(table_data)
+            t = Table(table_data, colWidths=[110, 110, 90, 110, 80])
             t.setStyle(TableStyle([
                 ("BACKGROUND", (0, 0), (-1, 0), colors.HexColor("#2B6CB0")),
                 ("TEXTCOLOR", (0, 0), (-1, 0), colors.whitesmoke),
                 ("ALIGN", (0, 0), (-1, -1), "CENTER"),
-                ("FONTNAME", (0, 0), (-1, 0), "Helvetica-Bold"),
+                ("FONTNAME", (0, 0), (-1, -1), font_name),
+                ("FONTNAME", (0, 0), (-1, 0), bold_font_name),
                 ("BOTTOMPADDING", (0, 0), (-1, 0), 6),
                 ("GRID", (0, 0), (-1, -1), 0.5, colors.grey),
             ]))
@@ -500,20 +570,24 @@ class ReportService:
         if incidents:
             elements.append(Paragraph(f"<b>{labels['incident_history']}</b>", styles["Heading2"]))
             inc_data = [[labels["time"], labels["alert_type"], labels["level"], labels["message"], labels["handled"]]]
+            cell_style = styles["Normal"]
             for inc in incidents[:15]:
+                msg_text = (inc.message or "")[:50] + ("..." if len(inc.message or "") > 50 else "")
                 inc_data.append([
                     inc.created_at.strftime("%d/%m %H:%M") if inc.created_at else "-",
-                    inc.alert_type,
-                    inc.alert_level,
-                    inc.message[:30] + ("..." if len(inc.message) > 30 else ""),
+                    str(inc.alert_type or "-"),
+                    str(inc.alert_level or "-"),
+                    Paragraph(msg_text, cell_style),
                     labels["acknowledged"] if inc.is_acknowledged else labels["pending"],
                 ])
-            it = Table(inc_data)
+            it = Table(inc_data, colWidths=[90, 100, 70, 180, 80])
             it.setStyle(TableStyle([
                 ("BACKGROUND", (0, 0), (-1, 0), colors.HexColor("#C53030")),
                 ("TEXTCOLOR", (0, 0), (-1, 0), colors.whitesmoke),
                 ("ALIGN", (0, 0), (-1, -1), "CENTER"),
-                ("FONTNAME", (0, 0), (-1, 0), "Helvetica-Bold"),
+                ("VALIGN", (0, 0), (-1, -1), "MIDDLE"),
+                ("FONTNAME", (0, 0), (-1, -1), font_name),
+                ("FONTNAME", (0, 0), (-1, 0), bold_font_name),
                 ("BOTTOMPADDING", (0, 0), (-1, 0), 6),
                 ("GRID", (0, 0), (-1, -1), 0.5, colors.grey),
             ]))
