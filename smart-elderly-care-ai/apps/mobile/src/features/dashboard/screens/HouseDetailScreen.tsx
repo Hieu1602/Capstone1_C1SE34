@@ -202,30 +202,8 @@ export default function HouseDetailScreen({ navigation, route }: any) {
   }, [loadMembers]);
 
   const handleOpenPermissions = (member: any) => {
-    if (!isCurrentUserOwner) {
-      const rName =
-        member.role_in_house === 'OWNER'
-          ? 'Chủ hộ'
-          : member.role_in_house === 'DOCTOR'
-          ? 'Bác sĩ gia đình'
-          : 'Thành viên';
-      Alert.alert(
-        'Thông tin thành viên',
-        `Họ và tên: ${member.full_name}\nVai trò: ${rName}\nSố điện thoại: ${
-          member.phone_number || '--'
-        }\n\nLưu ý: Chỉ Chủ hộ mới có quyền thay đổi phân quyền.`
-      );
-      return;
-    }
-    setSelectedMember(member);
-    setEditRoleInHouse(member.role_in_house || 'MEMBER');
-    setEditCanViewHealth(member.can_view_health !== false);
-    setEditCanViewCamera(member.can_view_camera !== false);
-    setEditCanHandleEmergency(member.can_handle_emergency !== false);
-    setEditCanManageDevices(Boolean(member.can_manage_devices));
-    setEditCanManageRecords(Boolean(member.can_manage_records));
-    setIsConfirmingDelete(false);
-    setPermissionModalVisible(true);
+    if (member?.is_owner || member?.role_in_house === 'OWNER') return;
+    handleRemoveMember(member);
   };
 
   const executeSavePermissions = async () => {

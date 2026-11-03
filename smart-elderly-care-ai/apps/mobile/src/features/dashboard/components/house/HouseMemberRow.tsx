@@ -43,11 +43,7 @@ export const HouseMemberRow: React.FC<HouseMemberRowProps> = ({
 
   return (
     <>
-      <TouchableOpacity
-        style={styles.memberCardRow}
-        onPress={() => onPress(member)}
-        activeOpacity={0.7}
-      >
+      <View style={styles.memberCardRow}>
         {/* Avatar Icon */}
         <View
           style={[
@@ -199,7 +195,7 @@ export const HouseMemberRow: React.FC<HouseMemberRowProps> = ({
         ) : (
           <TouchableOpacity
             style={[styles.deleteBtnBox, { backgroundColor: isDarkMode ? '#450A0A' : '#FEF2F2', borderColor: isDarkMode ? '#7F1D1D' : '#FECACA' }]}
-            onPress={() => (onDelete ? onDelete(member) : onPress(member))}
+            onPress={() => (onDelete ? onDelete(member) : undefined)}
             activeOpacity={0.7}
             hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
           >
@@ -207,7 +203,7 @@ export const HouseMemberRow: React.FC<HouseMemberRowProps> = ({
             <Text style={styles.deleteBtnText}>Xóa</Text>
           </TouchableOpacity>
         )}
-      </TouchableOpacity>
+      </View>
 
       {!isLast && <View style={[styles.divider, { backgroundColor: borderCol }]} />}
     </>
