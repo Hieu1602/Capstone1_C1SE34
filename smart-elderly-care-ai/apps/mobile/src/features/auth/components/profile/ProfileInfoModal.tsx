@@ -16,6 +16,7 @@ import { ProfileEditNameModal } from "./ProfileEditNameModal";
 import { ProfileEditPhoneModal } from "./ProfileEditPhoneModal";
 import { ViewAvatarModal } from "./ViewAvatarModal";
 import { validateFullName, sanitizeNameInput } from "../../utils/nameValidation";
+import { maskPhoneNumber } from "../../utils/phoneValidation";
 
 interface ProfileInfoModalProps {
     visible: boolean;
@@ -307,7 +308,7 @@ export const ProfileInfoModal: React.FC<ProfileInfoModalProps> = ({
                                         isDarkMode && { color: "#94A3B8" },
                                     ]}
                                 >
-                                    {phone || "Chưa cập nhật"}
+                                    {maskPhoneNumber(phone)}
                                 </Text>
                                 <Ionicons
                                     name="chevron-forward"

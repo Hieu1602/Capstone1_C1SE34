@@ -52,3 +52,33 @@ export function validatePhoneNumber(rawPhone: string): PhoneValidationResult {
     };
 }
 
+/**
+ * Che giấu một phần số điện thoại vì mục đích bảo mật/riêng tư (VD: +84905123456 -> 0905****6)
+ */
+export function maskPhoneNumber(rawPhone: string | null | undefined, fallback: string = "Chưa cập nhật"): string {
+    if (!rawPhone || typeof rawPhone !== "string") {
+        return fallback;
+    }
+
+    const trimmed = rawPhone.trim().replace(/[\s().-]/g, "");
+    if (!trimmed) {
+        return fallback;
+    }
+
+    // Chuẩn hóa +84 hoặc 84 về dạng 0xxx
+    let clean = trimmed;
+    if (clean.startsWith("+84")) {
+        clean = "0" + clean.slice(3);
+    } else if (clean.startsWith("84") && clean.length >= 11) {
+        clean = "0" + clean.slice(2);
+    }
+
+    if (clean.length <= 5) {
+        return clean;
+    }
+
+    // 4 số đầu + 4 dấu sao + số cuối (VD: 0905****6)
+    const prefix = clean.slice(0, 4);
+    const suffix = clean.slice(-1);
+    return `${prefix}****${suffix}`;
+}

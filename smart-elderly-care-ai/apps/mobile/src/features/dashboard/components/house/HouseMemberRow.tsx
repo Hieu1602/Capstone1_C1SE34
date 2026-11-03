@@ -1,3 +1,4 @@
+import { maskPhoneNumber } from '../../../auth/utils/phoneValidation';
 import React from 'react';
 import { View, Text, StyleSheet, TouchableOpacity } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
@@ -100,7 +101,7 @@ export const HouseMemberRow: React.FC<HouseMemberRowProps> = ({
           </View>
 
           <Text style={[styles.memberPhoneSub, { color: textSub }]}>
-            {member.phone_number || '--'}
+            {maskPhoneNumber(member.phone_number, '--')}
           </Text>
 
           {/* Permission Chips (Pills) */}

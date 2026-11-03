@@ -1,3 +1,4 @@
+import { maskPhoneNumber } from '../../../auth/utils/phoneValidation';
 import React from 'react';
 import {
   View,
@@ -82,7 +83,7 @@ export const HousePermissionModal: React.FC<HousePermissionModalProps> = ({
                 {isOwner ? 'Thông tin chủ hộ' : 'Xác nhận xóa thành viên'}
               </Text>
               <Text style={[styles.modalSub, { color: textSub }]}>
-                {member?.full_name} ({member?.phone_number || '--'})
+                {member?.full_name} ({maskPhoneNumber(member?.phone_number, '--')})
               </Text>
             </View>
             <TouchableOpacity
@@ -116,7 +117,7 @@ export const HousePermissionModal: React.FC<HousePermissionModalProps> = ({
                 Bạn có chắc muốn xóa thành viên này?
               </Text>
               <Text style={[styles.confirmDeleteDescription, { color: textSub }]}>
-                Tài khoản <Text style={{ fontWeight: '700', color: textTitle }}>{member?.full_name}</Text> ({member?.phone_number || '--'}) sẽ bị xóa khỏi căn nhà và mất quyền truy cập dữ liệu căn nhà này.
+                Tài khoản <Text style={{ fontWeight: '700', color: textTitle }}>{member?.full_name}</Text> ({maskPhoneNumber(member?.phone_number, '--')}) sẽ bị xóa khỏi căn nhà và mất quyền truy cập dữ liệu căn nhà này.
               </Text>
 
               <View style={styles.confirmActionButtons}>
