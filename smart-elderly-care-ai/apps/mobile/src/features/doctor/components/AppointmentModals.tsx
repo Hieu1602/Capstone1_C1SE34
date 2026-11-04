@@ -500,7 +500,7 @@ export const AppointmentFormModal: React.FC<AppointmentFormModalProps> = ({
                         Tự động phát giọng nói nhắc nhở tại nhà bệnh nhân trước giờ khám 24h & 2h
                       </LocalizedText>
                     </View>
-                    <Switch value={enableSpeaker} onValueChange={onToggleEnableSpeaker} trackColor={{ false: '#CBD5E1', true: '#0284C7' }} thumbColor="#FFFFFF" />
+                    <Switch value={enableSpeaker} onValueChange={onToggleEnableSpeaker} trackColor={{ false: '#CBD5E1', true: '#2563EB' }} thumbColor="#FFFFFF" {...({ activeThumbColor: '#FFFFFF', activeTrackColor: '#2563EB' } as any)} />
                   </View>
                 </View>
               )}

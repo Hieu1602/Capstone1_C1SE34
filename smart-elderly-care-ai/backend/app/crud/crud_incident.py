@@ -70,14 +70,22 @@ class CRUDIncident:
                 user_house_ids = [row[0] for row in user_house_ids_res.fetchall()]
 
                 if not user_house_ids:
-                    # Tài khoản mới chưa liên kết nhà: CHỈ nhận thông báo gửi trực tiếp cho mình (vd: HOUSE_MEMBER_ADDED)
-                    query = query.where(Incident.notes == f"USER:{current_user_id}")
+                    # Tài khoản mới chưa liên kết nhà: CHỈ nhận thông báo gửi trực tiếp cho mình (vd: HOUSE_MEMBER_ADDED, MEDICAL_RECORD_UPDATED)
+                    query = query.where(
+                        or_(
+                            Incident.notes == f"USER:{current_user_id}",
+                            Incident.notes.startswith(f"USER:{current_user_id}"),
+                        )
+                    )
                 else:
                     # Lấy danh sách thiết bị thuộc các nhà của người dùng
                     dev_res = await db.execute(select(Device.id).where(Device.house_id.in_(user_house_ids)))
                     user_device_ids = [row[0] for row in dev_res.fetchall()]
 
-                    conditions = [Incident.notes == f"USER:{current_user_id}"]
+                    conditions = [
+                        Incident.notes == f"USER:{current_user_id}",
+                        Incident.notes.startswith(f"USER:{current_user_id}"),
+                    ]
                     if user_device_ids:
                         conditions.append(
                             and_(
@@ -86,6 +94,7 @@ class CRUDIncident:
                                     Incident.notes.is_(None),
                                     ~Incident.notes.startswith("USER:"),
                                     Incident.notes == f"USER:{current_user_id}",
+                                    Incident.notes.startswith(f"USER:{current_user_id}"),
                                 ),
                             )
                         )

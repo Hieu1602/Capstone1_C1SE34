@@ -6,7 +6,7 @@
 // 4. ThresholdsConfigModal: Cấu hình ngưỡng cảnh báo nhịp tim & SpO2
 // 5. PrescriptionFormModal: Kê đơn thuốc / Cập nhật đơn thuốc
 
-import React from 'react';
+import React, { useState, useMemo } from 'react';
 import {
   View,
   Text,
@@ -362,6 +362,194 @@ export interface PrescriptionFormModalProps {
   customSubmitText?: string;
 }
 
+// Component chọn giờ uống thuốc trực quan theo cữ (Sáng, Trưa, Chiều, Tối + Giờ tùy chọn)
+export interface ScheduleTimesSelectorProps {
+  value?: string;
+  onChange: (val: string) => void;
+  isDarkMode: boolean;
+  colors: any;
+  label?: string;
+}
+
+const TIME_PRESETS = [
+  { label: 'Sáng', time: '08:00', icon: 'sunny-outline' },
+  { label: 'Trưa', time: '12:00', icon: 'partly-sunny-outline' },
+  { label: 'Chiều', time: '17:30', icon: 'cloud-outline' },
+  { label: 'Tối', time: '20:00', icon: 'moon-outline' },
+];
+
+export const ScheduleTimesSelector: React.FC<ScheduleTimesSelectorProps> = ({
+  value = '',
+  onChange,
+  isDarkMode,
+  colors,
+  label = 'Giờ uống thuốc',
+}) => {
+  const [customInput, setCustomInput] = useState('');
+  const [showCustomInput, setShowCustomInput] = useState(false);
+
+  const selectedTimes: string[] = useMemo(() => {
+    if (!value) return [];
+    return value
+      .split(',')
+      .map((t) => t.trim())
+      .filter(Boolean);
+  }, [value]);
+
+  const togglePreset = (timeStr: string) => {
+    let next: string[];
+    if (selectedTimes.includes(timeStr)) {
+      next = selectedTimes.filter((t) => t !== timeStr);
+    } else {
+      next = [...selectedTimes, timeStr].sort();
+    }
+    onChange(next.join(', '));
+  };
+
+  const removeTime = (timeStr: string) => {
+    const next = selectedTimes.filter((t) => t !== timeStr);
+    onChange(next.join(', '));
+  };
+
+  const addCustomTime = () => {
+    const trimmed = customInput.trim();
+    if (!trimmed) return;
+    if (!selectedTimes.includes(trimmed)) {
+      const next = [...selectedTimes, trimmed].sort();
+      onChange(next.join(', '));
+    }
+    setCustomInput('');
+    setShowCustomInput(false);
+  };
+
+  return (
+    <View style={{ marginVertical: 4 }}>
+      <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 6 }}>
+        <Text style={styles.subFieldLabel}>{label}</Text>
+        {selectedTimes.length > 0 && (
+          <Text style={{ fontSize: 11, color: '#0284C7', fontWeight: '700' }}>
+            Đã chọn {selectedTimes.length} cữ
+          </Text>
+        )}
+      </View>
+
+      {/* Preset session pills */}
+      <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: 6, marginBottom: 6 }}>
+        {TIME_PRESETS.map((p) => {
+          const isSelected = selectedTimes.includes(p.time);
+          return (
+            <TouchableOpacity
+              key={p.time}
+              style={[
+                styles.timePresetChip,
+                {
+                  backgroundColor: isSelected
+                    ? (isDarkMode ? '#0369A1' : '#0284C7')
+                    : (isDarkMode ? '#1E293B' : '#F1F5F9'),
+                  borderColor: isSelected ? '#0284C7' : (isDarkMode ? '#334155' : '#CBD5E1'),
+                },
+              ]}
+              onPress={() => togglePreset(p.time)}
+              activeOpacity={0.7}
+            >
+              <Ionicons
+                name={p.icon as any}
+                size={13}
+                color={isSelected ? '#FFFFFF' : (isDarkMode ? '#94A3B8' : '#64748B')}
+                style={{ marginRight: 4 }}
+              />
+              <Text
+                style={[
+                  styles.timePresetChipText,
+                  { color: isSelected ? '#FFFFFF' : (isDarkMode ? '#E2E8F0' : '#334155') },
+                ]}
+              >
+                {p.label} {p.time}
+              </Text>
+            </TouchableOpacity>
+          );
+        })}
+
+        <TouchableOpacity
+          style={[
+            styles.timePresetChip,
+            {
+              backgroundColor: isDarkMode ? '#1E293B' : '#F8FAFC',
+              borderColor: '#0284C7',
+              borderStyle: 'dashed',
+            },
+          ]}
+          onPress={() => setShowCustomInput(!showCustomInput)}
+          activeOpacity={0.7}
+        >
+          <Ionicons name="add" size={14} color="#0284C7" style={{ marginRight: 2 }} />
+          <Text style={[styles.timePresetChipText, { color: '#0284C7', fontWeight: '700' }]}>
+            + Giờ khác
+          </Text>
+        </TouchableOpacity>
+      </View>
+
+      {/* Custom Time Input row */}
+      {showCustomInput && (
+        <View style={{ flexDirection: 'row', gap: 6, alignItems: 'center', marginBottom: 6 }}>
+          <TextInput
+            style={[
+              styles.inputFieldSmall,
+              { flex: 1, color: colors.textPrimary, borderColor: '#0284C7', height: 36 },
+            ]}
+            placeholder="VD: 06:30 hoặc 14:00"
+            placeholderTextColor="#94A3B8"
+            value={customInput}
+            onChangeText={setCustomInput}
+            keyboardType="numbers-and-punctuation"
+            autoFocus
+          />
+          <TouchableOpacity
+            style={{
+              backgroundColor: '#0284C7',
+              paddingHorizontal: 12,
+              paddingVertical: 8,
+              borderRadius: 8,
+              justifyContent: 'center',
+              alignItems: 'center',
+            }}
+            onPress={addCustomTime}
+          >
+            <Text style={{ color: '#FFFFFF', fontSize: 12, fontWeight: '700' }}>Thêm</Text>
+          </TouchableOpacity>
+        </View>
+      )}
+
+      {/* Selected times list (badges with X) */}
+      {selectedTimes.length > 0 ? (
+        <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: 6, marginTop: 2 }}>
+          {selectedTimes.map((t) => (
+            <View
+              key={t}
+              style={[
+                styles.selectedTimeBadge,
+                { backgroundColor: isDarkMode ? '#1E3A8A' : '#EFF6FF', borderColor: '#38BDF8' },
+              ]}
+            >
+              <Ionicons name="alarm-outline" size={13} color="#0284C7" style={{ marginRight: 4 }} />
+              <Text style={{ fontSize: 12, fontWeight: '700', color: '#0284C7', marginRight: 4 }}>
+                {t}
+              </Text>
+              <TouchableOpacity onPress={() => removeTime(t)} hitSlop={{ top: 6, bottom: 6, left: 6, right: 6 }}>
+                <Ionicons name="close-circle" size={14} color="#EF4444" />
+              </TouchableOpacity>
+            </View>
+          ))}
+        </View>
+      ) : (
+        <Text style={{ fontSize: 11, color: '#94A3B8', fontStyle: 'italic' }}>
+          * Chọn các cữ uống thuốc ở trên hoặc nhấn "+ Giờ khác"
+        </Text>
+      )}
+    </View>
+  );
+};
+
 export const PrescriptionFormModal: React.FC<PrescriptionFormModalProps> = ({
   visible,
   isEditing,
@@ -457,28 +645,24 @@ export const PrescriptionFormModal: React.FC<PrescriptionFormModalProps> = ({
               </View>
             </View>
 
-            <View style={{ flexDirection: 'row', gap: 10, marginTop: 4 }}>
-              <View style={{ flex: 1 }}>
-                <Text style={styles.fieldLabel}>Tần suất</Text>
-                <TextInput
-                  style={[styles.inputField, { color: colors.textPrimary, borderColor: colors.border }]}
-                  placeholder="VD: Hàng ngày"
-                  placeholderTextColor="#94A3B8"
-                  value={frequency}
-                  onChangeText={onChangeFrequency}
-                />
-              </View>
-              <View style={{ flex: 1.2 }}>
-                <Text style={styles.fieldLabel}>Giờ uống</Text>
-                <TextInput
-                  style={[styles.inputField, { color: colors.textPrimary, borderColor: colors.border }]}
-                  placeholder="VD: 08:00, 19:30"
-                  placeholderTextColor="#94A3B8"
-                  value={scheduleTimes}
-                  onChangeText={onChangeScheduleTimes}
-                />
-              </View>
+            <View style={{ marginTop: 4 }}>
+              <Text style={styles.fieldLabel}>Tần suất</Text>
+              <TextInput
+                style={[styles.inputField, { color: colors.textPrimary, borderColor: colors.border }]}
+                placeholder="VD: Hàng ngày"
+                placeholderTextColor="#94A3B8"
+                value={frequency}
+                onChangeText={onChangeFrequency}
+              />
             </View>
+
+            <ScheduleTimesSelector
+              label="Giờ uống thuốc"
+              value={scheduleTimes}
+              onChange={onChangeScheduleTimes || (() => {})}
+              isDarkMode={isDarkMode}
+              colors={colors}
+            />
 
             <Text style={styles.fieldLabel}>Dặn dò cách uống</Text>
             <TextInput
@@ -590,16 +774,13 @@ export const PrescriptionFormModal: React.FC<PrescriptionFormModalProps> = ({
                 </View>
 
                 {/* Giờ uống thuốc */}
-                <View style={{ marginTop: 6 }}>
-                  <Text style={styles.subFieldLabel}>Giờ uống thuốc (cách nhau dấu phẩy)</Text>
-                  <TextInput
-                    style={[styles.inputFieldSmall, { color: colors.textPrimary, borderColor: colors.border }]}
-                    placeholder="VD: 08:00, 19:30"
-                    placeholderTextColor="#94A3B8"
-                    value={item.schedule_times}
-                    onChangeText={(val) => onUpdateMedication && onUpdateMedication(idx, 'schedule_times', val)}
-                  />
-                </View>
+                <ScheduleTimesSelector
+                  label="Giờ uống thuốc"
+                  value={item.schedule_times}
+                  onChange={(val) => onUpdateMedication && onUpdateMedication(idx, 'schedule_times', val)}
+                  isDarkMode={isDarkMode}
+                  colors={colors}
+                />
 
                 {/* Dặn dò riêng của thuốc */}
                 <View style={{ marginTop: 6 }}>
@@ -645,7 +826,9 @@ export const PrescriptionFormModal: React.FC<PrescriptionFormModalProps> = ({
           <Switch
             value={enableSpeaker}
             onValueChange={onToggleEnableSpeaker}
-            trackColor={{ false: '#94A3B8', true: Colors.primary }}
+            trackColor={{ false: isDarkMode ? '#334155' : '#CBD5E1', true: '#2563EB' }}
+            thumbColor="#FFFFFF"
+            {...({ activeThumbColor: '#FFFFFF', activeTrackColor: '#2563EB' } as any)}
           />
         </View>
 
@@ -790,5 +973,25 @@ const styles = StyleSheet.create({
     borderWidth: 1.2,
     marginTop: 4,
     marginBottom: 6,
+  },
+  timePresetChip: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    paddingHorizontal: 9,
+    paddingVertical: 6,
+    borderRadius: 7,
+    borderWidth: 1,
+  },
+  timePresetChipText: {
+    fontSize: 12,
+    fontWeight: '600',
+  },
+  selectedTimeBadge: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    paddingHorizontal: 8,
+    paddingVertical: 4,
+    borderRadius: 6,
+    borderWidth: 1,
   },
 });

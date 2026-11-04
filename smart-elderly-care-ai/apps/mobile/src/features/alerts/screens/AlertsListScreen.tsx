@@ -180,7 +180,7 @@ export default function AlertsListScreen({ navigation }: any) {
   const { t } = useTranslation();
   const { isDarkMode, colors } = useTheme();
 
-  const { incidents, setIncidents, fetchNotifications } = useAlertStore();
+  const { incidents, setIncidents, fetchNotifications, acknowledgeIncident, acknowledgeAll } = useAlertStore();
   const {
     patientRecord,
     todayReminders,
@@ -351,18 +351,22 @@ export default function AlertsListScreen({ navigation }: any) {
     return [...medItems, ...incItems];
   }, [filterType, medications, filteredIncidents]);
 
-  const handleMarkAllAsRead = () => {
+  const handleMarkAllAsRead = async () => {
     if (unreadIncidentsCount === 0) {
       Alert.alert('Thông báo', 'Tất cả sự kiện đều đã được đánh dấu đọc.');
       return;
     }
     setIncidents(incidents.map((i) => ({ ...i, is_acknowledged: true })));
+    try {
+      await acknowledgeAll();
+    } catch {}
     Alert.alert('Thành công', 'Đã đánh dấu đã đọc tất cả thông báo.');
   };
 
   const handlePressCard = (item: any) => {
     if (!item.is_acknowledged) {
       setIncidents(incidents.map((i) => (i.id === item.id ? { ...i, is_acknowledged: true } : i)));
+      acknowledgeIncident(item.id);
     }
 
     if (item.alert_type === 'HOUSE_MEMBER_ADDED' || item.alert_type === 'MEMBER_ADDED') {
@@ -699,9 +703,13 @@ export default function AlertsListScreen({ navigation }: any) {
                   >
                     <Text style={[styles.typeBadgeText, { color: config.badgeColor }]}>{config.badgeText}</Text>
                   </View>
-                  {!inc.is_acknowledged && (
+                  {!inc.is_acknowledged ? (
                     <View style={styles.newBadge}>
                       <Text style={styles.newBadgeText}>MỚI</Text>
+                    </View>
+                  ) : (
+                    <View style={[styles.typeBadge, { backgroundColor: isDarkMode ? 'rgba(16, 185, 129, 0.15)' : '#ECFDF5' }]}>
+                      <Text style={[styles.typeBadgeText, { color: '#059669', fontWeight: '700' }]}>✓ Đã đọc</Text>
                     </View>
                   )}
                 </View>

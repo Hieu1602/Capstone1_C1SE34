@@ -353,7 +353,7 @@ export const DoctorProfileSettings: React.FC<DoctorProfileSettingsProps> = ({
 
         {/* 4. Chế độ nền tối (Dark Mode) */}
         <View style={styles.settingsRow}>
-          <View style={[styles.settingsIconCircle, { backgroundColor: '#6366F1' }]}>
+          <View style={[styles.settingsIconCircle, { backgroundColor: '#2563EB' }]}>
             <Ionicons name="moon" size={17} color="#FFFFFF" />
           </View>
           <View style={styles.settingsRowContent}>
@@ -365,8 +365,9 @@ export const DoctorProfileSettings: React.FC<DoctorProfileSettingsProps> = ({
           <Switch
             value={isDarkMode}
             onValueChange={toggleTheme}
-            trackColor={{ false: '#CBD5E1', true: '#6366F1' }}
+            trackColor={{ false: isDarkMode ? '#334155' : '#CBD5E1', true: '#2563EB' }}
             thumbColor="#FFFFFF"
+            {...({ activeThumbColor: '#FFFFFF', activeTrackColor: '#2563EB' } as any)}
           />
         </View>
       </View>
@@ -427,8 +428,9 @@ export const DoctorProfileSettings: React.FC<DoctorProfileSettingsProps> = ({
                 <Switch
                   value={notifyEmergency}
                   onValueChange={setNotifyEmergency}
-                  trackColor={{ false: '#CBD5E1', true: '#DC2626' }}
+                  trackColor={{ false: '#CBD5E1', true: '#2563EB' }}
                   thumbColor="#FFFFFF"
+                  {...({ activeThumbColor: '#FFFFFF', activeTrackColor: '#2563EB' } as any)}
                 />
               </View>
 
@@ -443,8 +445,9 @@ export const DoctorProfileSettings: React.FC<DoctorProfileSettingsProps> = ({
                 <Switch
                   value={notifyAppointment}
                   onValueChange={setNotifyAppointment}
-                  trackColor={{ false: '#CBD5E1', true: '#0284C7' }}
+                  trackColor={{ false: '#CBD5E1', true: '#2563EB' }}
                   thumbColor="#FFFFFF"
+                  {...({ activeThumbColor: '#FFFFFF', activeTrackColor: '#2563EB' } as any)}
                 />
               </View>
             </View>
@@ -639,58 +642,133 @@ export const DoctorChangePasswordModal: React.FC<DoctorChangePasswordModalProps>
   isDarkMode,
   colors,
   isSubmitting = false,
-}) => (
-  <Modal visible={visible} animationType="slide" transparent onRequestClose={onClose}>
-    <KeyboardAvoidingView behavior={Platform.OS === 'ios' ? 'padding' : undefined} style={styles.modalOverlay}>
-      <View style={[styles.formModalBox, { backgroundColor: isDarkMode ? '#1E293B' : '#FFFFFF' }]}>
-        <View style={styles.formModalHeader}>
-          <View style={{ flexDirection: 'row', alignItems: 'center' }}>
-            <Ionicons name="key" size={20} color="#2563EB" style={{ marginRight: 6 }} />
-            <Text style={[styles.modalTitle, { color: colors.textPrimary }]}>Đổi Mật Khẩu Bác Sĩ</Text>
-          </View>
-          <TouchableOpacity onPress={onClose} hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}>
-            <Ionicons name="close" size={24} color="#94A3B8" />
-          </TouchableOpacity>
-        </View>
+}) => {
+  const [showOld, setShowOld] = useState(false);
+  const [showNew, setShowNew] = useState(false);
+  const [showConfirm, setShowConfirm] = useState(false);
 
-        <View style={{ marginVertical: 10 }}>
-          {[
-            { label: 'Mật khẩu hiện tại (*)', val: oldPassword, setVal: onChangeOldPassword, placeholder: 'Nhập mật khẩu hiện tại' },
-            { label: 'Mật khẩu mới (*)', val: newPassword, setVal: onChangeNewPassword, placeholder: '8 - 16 ký tự (Hoa, thường, số, đặc biệt)' },
-            { label: 'Xác nhận mật khẩu mới (*)', val: confirmPassword, setVal: onChangeConfirmPassword, placeholder: 'Nhập lại mật khẩu mới' },
-          ].map((f, idx) => (
-            <View key={idx}>
-              <Text style={styles.fieldLabel}>{f.label}</Text>
-              <TextInput
-                style={[styles.inputField, { color: colors.textPrimary, borderColor: colors.border }]}
-                secureTextEntry
-                value={f.val}
-                onChangeText={f.setVal}
-                placeholder={f.placeholder}
-                placeholderTextColor="#94A3B8"
-              />
+  const hasMinLength = newPassword.length >= 8 && newPassword.length <= 16;
+  const hasUpper = /[A-Z]/.test(newPassword);
+  const hasLower = /[a-z]/.test(newPassword);
+  const hasNumber = /[0-9]/.test(newPassword);
+  const hasSpecial = /[^A-Za-z0-9]/.test(newPassword);
+  const isMatch = confirmPassword.length > 0 && newPassword === confirmPassword;
+
+  return (
+    <Modal visible={visible} animationType="slide" transparent onRequestClose={onClose}>
+      <KeyboardAvoidingView behavior={Platform.OS === 'ios' ? 'padding' : undefined} style={styles.modalOverlay}>
+        <View style={[styles.formModalBox, { backgroundColor: isDarkMode ? '#1E293B' : '#FFFFFF' }]}>
+          <View style={styles.formModalHeader}>
+            <View style={{ flexDirection: 'row', alignItems: 'center' }}>
+              <Ionicons name="key" size={20} color="#2563EB" style={{ marginRight: 6 }} />
+              <Text style={[styles.modalTitle, { color: colors.textPrimary }]}>Đổi Mật Khẩu Bác Sĩ</Text>
             </View>
-          ))}
-        </View>
+            <TouchableOpacity onPress={onClose} hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}>
+              <Ionicons name="close" size={24} color="#94A3B8" />
+            </TouchableOpacity>
+          </View>
 
-        <View style={styles.modalBtnRow}>
-          <TouchableOpacity style={[styles.btnCancel, { borderColor: colors.border }]} onPress={onClose}>
-            <Text style={{ fontSize: 13, fontWeight: '700', color: isDarkMode ? '#CBD5E1' : '#64748B' }}>Hủy</Text>
-          </TouchableOpacity>
-          <TouchableOpacity
-            style={[styles.btnSave, { backgroundColor: '#2563EB', opacity: isSubmitting ? 0.7 : 1 }]}
-            onPress={onSave}
-            disabled={isSubmitting}
-          >
-            <Text style={{ color: '#FFFFFF', fontSize: 13, fontWeight: '700' }}>
-              {isSubmitting ? 'Đang cập nhật...' : 'Cập Nhật Mật Khẩu'}
-            </Text>
-          </TouchableOpacity>
+          <View style={{ marginVertical: 10 }}>
+            {/* 1. Mật khẩu hiện tại */}
+            <View>
+              <Text style={styles.fieldLabel}>Mật khẩu hiện tại (*)</Text>
+              <View style={[styles.passwordInputWrap, { borderColor: colors.border, backgroundColor: isDarkMode ? '#0F172A' : '#F8FAFC' }]}>
+                <TextInput
+                  style={[styles.passwordInput, { color: colors.textPrimary }]}
+                  secureTextEntry={!showOld}
+                  value={oldPassword}
+                  onChangeText={onChangeOldPassword}
+                  placeholder="Nhập mật khẩu hiện tại (mặc định: 12345678)"
+                  placeholderTextColor="#94A3B8"
+                  autoCapitalize="none"
+                />
+                <TouchableOpacity onPress={() => setShowOld(!showOld)} hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}>
+                  <Ionicons name={showOld ? 'eye-off-outline' : 'eye-outline'} size={19} color="#94A3B8" />
+                </TouchableOpacity>
+              </View>
+            </View>
+
+            {/* 2. Mật khẩu mới */}
+            <View style={{ marginTop: 8 }}>
+              <Text style={styles.fieldLabel}>Mật khẩu mới (*)</Text>
+              <View style={[styles.passwordInputWrap, { borderColor: colors.border, backgroundColor: isDarkMode ? '#0F172A' : '#F8FAFC' }]}>
+                <TextInput
+                  style={[styles.passwordInput, { color: colors.textPrimary }]}
+                  secureTextEntry={!showNew}
+                  value={newPassword}
+                  onChangeText={onChangeNewPassword}
+                  placeholder="8 - 16 ký tự (Hoa, thường, số, đặc biệt)"
+                  placeholderTextColor="#94A3B8"
+                  autoCapitalize="none"
+                />
+                <TouchableOpacity onPress={() => setShowNew(!showNew)} hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}>
+                  <Ionicons name={showNew ? 'eye-off-outline' : 'eye-outline'} size={19} color="#94A3B8" />
+                </TouchableOpacity>
+              </View>
+            </View>
+
+            {/* Bảng checklist yêu cầu bảo mật */}
+            {newPassword.length > 0 && (
+              <View style={[styles.passwordRuleBox, { backgroundColor: isDarkMode ? '#0F172A' : '#F1F5F9' }]}>
+                <View style={styles.ruleItem}>
+                  <Ionicons name={hasMinLength ? 'checkmark-circle' : 'ellipse-outline'} size={13} color={hasMinLength ? '#10B981' : '#94A3B8'} />
+                  <Text style={[styles.ruleText, { color: hasMinLength ? '#10B981' : '#64748B' }]}>Độ dài 8 - 16 ký tự</Text>
+                </View>
+                <View style={styles.ruleItem}>
+                  <Ionicons name={hasUpper && hasLower ? 'checkmark-circle' : 'ellipse-outline'} size={13} color={hasUpper && hasLower ? '#10B981' : '#94A3B8'} />
+                  <Text style={[styles.ruleText, { color: hasUpper && hasLower ? '#10B981' : '#64748B' }]}>Chữ hoa & chữ thường</Text>
+                </View>
+                <View style={styles.ruleItem}>
+                  <Ionicons name={hasNumber && hasSpecial ? 'checkmark-circle' : 'ellipse-outline'} size={13} color={hasNumber && hasSpecial ? '#10B981' : '#94A3B8'} />
+                  <Text style={[styles.ruleText, { color: hasNumber && hasSpecial ? '#10B981' : '#64748B' }]}>Có số & ký tự đặc biệt (!@#$)</Text>
+                </View>
+              </View>
+            )}
+
+            {/* 3. Xác nhận mật khẩu mới */}
+            <View style={{ marginTop: 8 }}>
+              <Text style={styles.fieldLabel}>Xác nhận mật khẩu mới (*)</Text>
+              <View style={[styles.passwordInputWrap, { borderColor: confirmPassword.length > 0 ? (isMatch ? '#10B981' : '#EF4444') : colors.border, backgroundColor: isDarkMode ? '#0F172A' : '#F8FAFC' }]}>
+                <TextInput
+                  style={[styles.passwordInput, { color: colors.textPrimary }]}
+                  secureTextEntry={!showConfirm}
+                  value={confirmPassword}
+                  onChangeText={onChangeConfirmPassword}
+                  placeholder="Nhập lại mật khẩu mới"
+                  placeholderTextColor="#94A3B8"
+                  autoCapitalize="none"
+                />
+                <TouchableOpacity onPress={() => setShowConfirm(!showConfirm)} hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}>
+                  <Ionicons name={showConfirm ? 'eye-off-outline' : 'eye-outline'} size={19} color="#94A3B8" />
+                </TouchableOpacity>
+              </View>
+              {confirmPassword.length > 0 && (
+                <Text style={{ fontSize: 11, marginTop: 4, color: isMatch ? '#10B981' : '#EF4444', fontWeight: '600' }}>
+                  {isMatch ? '✓ Mật khẩu xác nhận khớp' : '✗ Mật khẩu xác nhận chưa khớp'}
+                </Text>
+              )}
+            </View>
+          </View>
+
+          <View style={styles.modalBtnRow}>
+            <TouchableOpacity style={[styles.btnCancel, { borderColor: colors.border }]} onPress={onClose} disabled={isSubmitting}>
+              <Text style={{ fontSize: 13, fontWeight: '700', color: isDarkMode ? '#CBD5E1' : '#64748B' }}>Hủy</Text>
+            </TouchableOpacity>
+            <TouchableOpacity
+              style={[styles.btnSave, { backgroundColor: '#2563EB', opacity: isSubmitting ? 0.7 : 1 }]}
+              onPress={onSave}
+              disabled={isSubmitting}
+            >
+              <Text style={{ color: '#FFFFFF', fontSize: 13, fontWeight: '700' }}>
+                {isSubmitting ? 'Đang cập nhật...' : 'Cập Nhật Mật Khẩu'}
+              </Text>
+            </TouchableOpacity>
+          </View>
         </View>
-      </View>
-    </KeyboardAvoidingView>
-  </Modal>
-);
+      </KeyboardAvoidingView>
+    </Modal>
+  );
+};
 
 // =============================================================
 // 5. MODAL XÁC NHẬN ĐĂNG XUẤT
@@ -1101,6 +1179,33 @@ const styles = StyleSheet.create({
   btnPickImageText: { fontSize: 12.5, fontWeight: '700', color: '#2563EB' },
   fieldLabel: { fontSize: 12, fontWeight: '600', color: '#64748B', marginTop: 8, marginBottom: 4 },
   inputField: { borderWidth: 1, borderRadius: 8, paddingHorizontal: 12, paddingVertical: 8, fontSize: 13 },
+  passwordInputWrap: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    borderWidth: 1,
+    borderRadius: 8,
+    paddingHorizontal: 12,
+    paddingVertical: Platform.OS === 'ios' ? 10 : 4,
+  },
+  passwordInput: {
+    flex: 1,
+    fontSize: 13,
+    paddingVertical: 6,
+  },
+  passwordRuleBox: {
+    marginTop: 8,
+    padding: 8,
+    borderRadius: 8,
+    gap: 4,
+  },
+  ruleItem: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 6,
+  },
+  ruleText: {
+    fontSize: 11.5,
+  },
   modalBtnRow: {
     flexDirection: 'row',
     justifyContent: 'flex-end',

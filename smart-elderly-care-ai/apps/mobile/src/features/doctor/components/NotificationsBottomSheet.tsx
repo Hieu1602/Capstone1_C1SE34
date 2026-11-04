@@ -1,7 +1,8 @@
 // NotificationsBottomSheet.tsx
 // Bottom sheet hiển thị thông báo tập trung cho Bác sĩ: Cảnh báo y tế bệnh nhân & Lịch hẹn khám
+// Quản lý trạng thái Đã đọc / Chưa đọc chuẩn xác, lưu trữ bền vững và hiển thị nhãn rõ ràng
 
-import React, { useState } from 'react';
+import React, { useState, useEffect, useCallback } from 'react';
 import {
   View,
   Text,
@@ -11,8 +12,10 @@ import {
   FlatList,
   SafeAreaView,
 } from 'react-native';
+import AsyncStorage from '@react-native-async-storage/async-storage';
 import { Ionicons } from '@expo/vector-icons';
 import { useTheme } from '../../../store/useThemeStore';
+import { useAlertStore } from '../../../store/useAlertStore';
 import { LocalizedText } from '../../../i18n/LocalizedComponents';
 import type { Incident } from '../../../store/useAlertStore';
 import type { AppointmentItem, PatientCardData } from './types';
@@ -31,10 +34,11 @@ interface Props {
   hasUnread?: boolean;
 }
 
-type TabType = 'ALL' | 'ALERTS' | 'APPOINTMENTS';
+type TabType = 'ALL' | 'UNREAD' | 'ALERTS' | 'APPOINTMENTS';
 
 interface UnifiedNotification {
   id: string;
+  rawIncidentId?: string;
   type: 'INCIDENT' | 'PATIENT_WARNING' | 'APPOINTMENT' | 'PATIENT_ASSIGNMENT';
   title: string;
   subtitle: string;
@@ -44,11 +48,14 @@ interface UnifiedNotification {
   badgeBg: string;
   iconName: keyof typeof Ionicons.glyphMap;
   iconColor: string;
+  isRead: boolean;
   patientId?: string;
   rawAppointment?: AppointmentItem;
   targetScreen: 'DoctorAppointments' | 'DoctorPatients' | 'DoctorPatientDetail';
   targetParams?: any;
 }
+
+const STORAGE_KEY = '@doctor_read_notification_ids';
 
 function formatTime(dateStr?: string): string {
   if (!dateStr) return '--:--';
@@ -90,9 +97,32 @@ export default function NotificationsBottomSheet({
 }: Props) {
   const { isDarkMode, colors } = useTheme();
   const [activeTab, setActiveTab] = useState<TabType>('ALL');
+  const [readIds, setReadIds] = useState<Set<string>>(new Set());
+
+  // Tải danh sách ID đã đọc từ AsyncStorage khi mở Modal
+  useEffect(() => {
+    if (visible) {
+      AsyncStorage.getItem(STORAGE_KEY).then((data) => {
+        if (data) {
+          try {
+            const parsed = JSON.parse(data);
+            if (Array.isArray(parsed)) {
+              setReadIds(new Set(parsed));
+            }
+          } catch {}
+        }
+      });
+    }
+  }, [visible]);
+
+  const persistReadIds = useCallback(async (newSet: Set<string>) => {
+    setReadIds(new Set(newSet));
+    try {
+      await AsyncStorage.setItem(STORAGE_KEY, JSON.stringify(Array.from(newSet)));
+    } catch {}
+  }, []);
 
   const bg = isDarkMode ? '#1E293B' : '#FFFFFF';
-  const cardBg = isDarkMode ? '#0F172A' : '#F8FAFC';
   const border = isDarkMode ? '#334155' : '#E2E8F0';
   const textSub = isDarkMode ? '#94A3B8' : '#64748B';
 
@@ -104,6 +134,8 @@ export default function NotificationsBottomSheet({
     const isCritical = inc.alert_level === 'CRITICAL' || inc.alert_type === 'FALL_DETECTED';
     const rawMsg = inc.message || '';
     const msgLower = rawMsg.toLowerCase();
+
+    const isRead = Boolean(inc.is_acknowledged || readIds.has(inc.id) || readIds.has(`inc_${inc.id}`));
 
     // 1.1 Thông báo liên quan đến lịch khám (Hủy, Dời lịch, Đặt lịch)
     const isAppointmentMsg =
@@ -120,10 +152,18 @@ export default function NotificationsBottomSheet({
       msgLower.includes('chỉ định') ||
       msgLower.includes('bệnh nhân mới');
 
+    // 1.3 Thông báo cập nhật hồ sơ bệnh án, dị ứng, dinh dưỡng
+    const isMedicalRecordMsg =
+      inc.alert_type === 'MEDICAL_RECORD_UPDATED' ||
+      msgLower.includes('bệnh án') ||
+      msgLower.includes('dị ứng') ||
+      msgLower.includes('dinh dưỡng');
+
     if (isAppointmentMsg) {
       const isCancelled = msgLower.includes('hủy');
       unifiedList.push({
         id: `inc_${inc.id}`,
+        rawIncidentId: inc.id,
         type: 'APPOINTMENT',
         title: rawMsg || 'Lịch khám bệnh nhân',
         subtitle: inc.created_at ? formatDate(inc.created_at) : 'Thông báo lịch khám',
@@ -133,11 +173,13 @@ export default function NotificationsBottomSheet({
         badgeBg: isCancelled ? '#FEE2E2' : '#EFF6FF',
         iconName: 'calendar',
         iconColor: isCancelled ? '#DC2626' : '#0284C7',
+        isRead,
         targetScreen: 'DoctorAppointments',
       });
     } else if (isAssignmentMsg) {
       unifiedList.push({
         id: `inc_${inc.id}`,
+        rawIncidentId: inc.id,
         type: 'PATIENT_ASSIGNMENT',
         title: rawMsg || 'Phụ trách bệnh nhân mới',
         subtitle: inc.created_at ? formatDate(inc.created_at) : 'Gia đình chỉ định phụ trách',
@@ -147,11 +189,34 @@ export default function NotificationsBottomSheet({
         badgeBg: '#ECFDF5',
         iconName: 'people',
         iconColor: '#059669',
+        isRead,
         targetScreen: 'DoctorPatients',
+      });
+    } else if (isMedicalRecordMsg) {
+      let targetPatientId = inc.notes && inc.notes.includes('PATIENT:')
+        ? inc.notes.split('PATIENT:')[1].split('|')[0].trim()
+        : undefined;
+      unifiedList.push({
+        id: `inc_${inc.id}`,
+        rawIncidentId: inc.id,
+        type: 'PATIENT_WARNING',
+        title: rawMsg || 'Hồ sơ bệnh án được cập nhật',
+        subtitle: inc.created_at ? formatDate(inc.created_at) : 'Chủ nhà đã cập nhật hồ sơ',
+        timeStr: inc.created_at || '',
+        badgeLabel: 'Hồ sơ y tế',
+        badgeColor: '#0284C7',
+        badgeBg: '#EFF6FF',
+        iconName: 'document-text',
+        iconColor: '#0284C7',
+        isRead,
+        patientId: targetPatientId,
+        targetScreen: targetPatientId ? 'DoctorPatientDetail' : 'DoctorPatients',
+        targetParams: targetPatientId ? { patientId: targetPatientId } : undefined,
       });
     } else {
       unifiedList.push({
         id: `inc_${inc.id}`,
+        rawIncidentId: inc.id,
         type: 'INCIDENT',
         title: rawMsg || (isCritical ? 'Cảnh báo sự cố té ngã khẩn cấp' : 'Cảnh báo y tế'),
         subtitle: inc.created_at ? formatDate(inc.created_at) : 'Vừa xong',
@@ -161,6 +226,7 @@ export default function NotificationsBottomSheet({
         badgeBg: isCritical ? '#FEE2E2' : '#FEF3C7',
         iconName: isCritical ? 'alert-circle' : 'warning',
         iconColor: isCritical ? '#DC2626' : '#D97706',
+        isRead,
         targetScreen: 'DoctorPatients',
       });
     }
@@ -169,6 +235,7 @@ export default function NotificationsBottomSheet({
   // 2. Bệnh nhân có trạng thái sức khỏe cảnh báo (WARNING / DANGER)
   warningPatients.forEach((pat) => {
     const isDanger = pat.health_status === 'DANGER';
+    const isRead = Boolean(readIds.has(`pat_${pat.id}`));
     unifiedList.push({
       id: `pat_${pat.id}`,
       type: 'PATIENT_WARNING',
@@ -180,6 +247,7 @@ export default function NotificationsBottomSheet({
       badgeBg: isDanger ? '#FEE2E2' : '#FEF3C7',
       iconName: 'heart-dislike',
       iconColor: isDanger ? '#DC2626' : '#D97706',
+      isRead,
       patientId: pat.id,
       targetScreen: 'DoctorPatientDetail',
       targetParams: { patientId: pat.id },
@@ -204,6 +272,8 @@ export default function NotificationsBottomSheet({
     const bgCol = isCompleted ? '#DCFCE7' : isCancelled ? '#FEE2E2' : '#EFF6FF';
     const label = isCompleted ? 'Đã khám' : isCancelled ? 'Đã hủy' : isToday ? 'Khám hôm nay' : 'Sắp tới';
 
+    const isRead = Boolean(readIds.has(`apt_${apt.id}`));
+
     unifiedList.push({
       id: `apt_${apt.id}`,
       type: 'APPOINTMENT',
@@ -215,26 +285,39 @@ export default function NotificationsBottomSheet({
       badgeBg: bgCol,
       iconName: isToday ? 'time' : 'calendar',
       iconColor: color,
+      isRead,
       patientId: apt.patient_id,
       rawAppointment: apt,
       targetScreen: 'DoctorAppointments',
     });
   });
 
+  // Đếm số lượng thông báo chưa đọc
+  const unreadCount = unifiedList.filter((i) => !i.isRead).length;
+  const alertsCount = unifiedList.filter((i) => i.type === 'INCIDENT' || i.type === 'PATIENT_WARNING').length;
+  const aptsCount = unifiedList.filter((i) => i.type === 'APPOINTMENT').length;
+
   // Lọc theo Tab được chọn
   const filteredList = unifiedList.filter((item) => {
+    if (activeTab === 'UNREAD') return !item.isRead;
     if (activeTab === 'ALERTS') return item.type === 'INCIDENT' || item.type === 'PATIENT_WARNING';
     if (activeTab === 'APPOINTMENTS') return item.type === 'APPOINTMENT';
     return true;
   });
 
-  const alertsCount = unifiedList.filter((i) => i.type === 'INCIDENT' || i.type === 'PATIENT_WARNING').length;
-  const aptsCount = unifiedList.filter((i) => i.type === 'APPOINTMENT').length;
+  // Xử lý khi nhấn vào 1 thông báo: Đánh dấu đã đọc và điều hướng
+  const handleItemPress = async (item: UnifiedNotification) => {
+    const updated = new Set(readIds);
+    updated.add(item.id);
+    if (item.rawIncidentId) {
+      updated.add(item.rawIncidentId);
+      updated.add(`inc_${item.rawIncidentId}`);
+      // Gọi API cập nhật trạng thái đã xác nhận / đã đọc vào cơ sở dữ liệu
+      useAlertStore.getState().acknowledgeIncident(item.rawIncidentId);
+    }
+    await persistReadIds(updated);
 
-  // Điều hướng chính xác theo đúng từng loại thông báo
-  const handleItemPress = (item: UnifiedNotification) => {
     onClose();
-    if (onMarkAllRead) onMarkAllRead();
     setTimeout(() => {
       if (item.targetScreen === 'DoctorAppointments') {
         if (onSelectAppointment) {
@@ -261,6 +344,22 @@ export default function NotificationsBottomSheet({
     }, 120);
   };
 
+  // Đánh dấu đã đọc toàn bộ thông báo
+  const handleMarkAllRead = async () => {
+    const updated = new Set(readIds);
+    unifiedList.forEach((item) => {
+      updated.add(item.id);
+      if (item.rawIncidentId) {
+        updated.add(item.rawIncidentId);
+        updated.add(`inc_${item.rawIncidentId}`);
+      }
+    });
+    await persistReadIds(updated);
+    if (onMarkAllRead) {
+      onMarkAllRead();
+    }
+  };
+
   return (
     <Modal visible={visible} animationType="slide" transparent onRequestClose={onClose}>
       {/* Backdrop */}
@@ -273,25 +372,29 @@ export default function NotificationsBottomSheet({
         {/* Header */}
         <View style={[styles.header, { borderBottomColor: border }]}>
           <View style={styles.headerTitle}>
-            <Ionicons name="notifications" size={20} color="#0284C7" />
+            <Ionicons name="notifications" size={20} color="#2563EB" />
             <LocalizedText style={[styles.title, { color: colors.textPrimary }]}>
               Trung tâm thông báo
             </LocalizedText>
-            {hasUnread && unifiedList.length > 0 && (
+            {unreadCount > 0 ? (
               <View style={styles.countBadge}>
-                <LocalizedText style={styles.countText}>{unifiedList.length}</LocalizedText>
+                <LocalizedText style={styles.countText}>{unreadCount} chưa đọc</LocalizedText>
+              </View>
+            ) : (
+              <View style={[styles.countBadge, { backgroundColor: '#10B981' }]}>
+                <LocalizedText style={styles.countText}>Đã đọc hết</LocalizedText>
               </View>
             )}
           </View>
           <View style={{ flexDirection: 'row', alignItems: 'center', gap: 12 }}>
-            <TouchableOpacity
-              onPress={() => {
-                if (onMarkAllRead) onMarkAllRead();
-              }}
-              hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
-            >
-              <Text style={{ fontSize: 13, fontWeight: '700', color: '#0284C7' }}>Đã đọc tất cả</Text>
-            </TouchableOpacity>
+            {unreadCount > 0 && (
+              <TouchableOpacity
+                onPress={handleMarkAllRead}
+                hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
+              >
+                <Text style={{ fontSize: 13, fontWeight: '700', color: '#2563EB' }}>Đã đọc tất cả</Text>
+              </TouchableOpacity>
+            )}
             <TouchableOpacity onPress={onClose} hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}>
               <Ionicons name="close" size={22} color={textSub} />
             </TouchableOpacity>
@@ -312,6 +415,21 @@ export default function NotificationsBottomSheet({
               ]}
             >
               Tất cả ({unifiedList.length})
+            </LocalizedText>
+          </TouchableOpacity>
+
+          <TouchableOpacity
+            style={[styles.tabItem, activeTab === 'UNREAD' && styles.tabItemActive]}
+            onPress={() => setActiveTab('UNREAD')}
+          >
+            <LocalizedText
+              style={[
+                styles.tabText,
+                { color: activeTab === 'UNREAD' ? '#2563EB' : textSub },
+                activeTab === 'UNREAD' && styles.tabTextActive,
+              ]}
+            >
+              Chưa đọc ({unreadCount})
             </LocalizedText>
           </TouchableOpacity>
 
@@ -351,14 +469,18 @@ export default function NotificationsBottomSheet({
           <View style={styles.emptyBox}>
             <Ionicons name="checkmark-circle-outline" size={48} color="#10B981" />
             <LocalizedText style={[styles.emptyTitle, { color: colors.textPrimary }]}>
-              {activeTab === 'ALERTS'
+              {activeTab === 'UNREAD'
+                ? 'Tuyệt vời! Không còn thông báo chưa đọc'
+                : activeTab === 'ALERTS'
                 ? 'Không có cảnh báo bất thường'
                 : activeTab === 'APPOINTMENTS'
                 ? 'Không có lịch khám mới'
                 : 'Mọi thứ đều ổn định'}
             </LocalizedText>
             <LocalizedText style={[styles.emptySub, { color: textSub }]}>
-              {activeTab === 'ALERTS'
+              {activeTab === 'UNREAD'
+                ? 'Bác sĩ đã xem và xử lý toàn bộ các thông báo y tế.'
+                : activeTab === 'ALERTS'
                 ? 'Tất cả các bệnh nhân đều đang có sinh hiệu bình thường.'
                 : activeTab === 'APPOINTMENTS'
                 ? 'Bác sĩ có thể chủ động đặt lịch thăm khám định kỳ cho các cụ.'
@@ -373,25 +495,60 @@ export default function NotificationsBottomSheet({
             showsVerticalScrollIndicator={false}
             renderItem={({ item }) => (
               <TouchableOpacity
-                style={[styles.card, { backgroundColor: cardBg, borderColor: border }]}
-                activeOpacity={0.8}
+                style={[
+                  styles.card,
+                  {
+                    backgroundColor: item.isRead
+                      ? (isDarkMode ? '#0F172A66' : '#F8FAFC')
+                      : (isDarkMode ? '#1E293B' : '#FFFFFF'),
+                    borderColor: item.isRead ? border : (isDarkMode ? '#2563EB66' : '#93C5FD'),
+                    borderWidth: item.isRead ? 1 : 1.5,
+                  },
+                ]}
+                activeOpacity={0.75}
                 onPress={() => handleItemPress(item)}
               >
+                {/* Icon box kèm chấm chưa đọc */}
                 <View style={[styles.iconBox, { backgroundColor: item.badgeBg }]}>
-                  <Ionicons name={item.iconName} size={22} color={item.iconColor} />
+                  <Ionicons name={item.iconName} size={20} color={item.iconColor} />
+                  {!item.isRead && <View style={styles.cardUnreadDot} />}
                 </View>
+
+                {/* Nội dung thông báo */}
                 <View style={styles.cardBody}>
-                  <LocalizedText style={[styles.itemTitle, { color: colors.textPrimary }]} numberOfLines={1}>
+                  <LocalizedText
+                    style={[
+                      styles.itemTitle,
+                      { color: item.isRead ? (isDarkMode ? '#94A3B8' : '#64748B') : colors.textPrimary },
+                      !item.isRead && { fontWeight: '700' },
+                    ]}
+                    numberOfLines={1}
+                  >
                     {item.title}
                   </LocalizedText>
                   <LocalizedText style={[styles.itemSub, { color: textSub }]} numberOfLines={1}>
                     {item.subtitle}
                   </LocalizedText>
                 </View>
-                <View style={[styles.statusTag, { backgroundColor: item.badgeBg }]}>
-                  <LocalizedText style={[styles.statusText, { color: item.badgeColor }]}>
-                    {item.badgeLabel}
-                  </LocalizedText>
+
+                {/* Cột trạng thái: Thẻ phân loại & Nhãn Đã đọc / Chưa đọc */}
+                <View style={styles.cardRightCol}>
+                  <View style={[styles.statusTag, { backgroundColor: item.badgeBg }]}>
+                    <LocalizedText style={[styles.statusText, { color: item.badgeColor }]}>
+                      {item.badgeLabel}
+                    </LocalizedText>
+                  </View>
+
+                  {item.isRead ? (
+                    <View style={styles.readBadge}>
+                      <Ionicons name="checkmark-done" size={11} color="#059669" style={{ marginRight: 2 }} />
+                      <LocalizedText style={styles.readBadgeText}>Đã đọc</LocalizedText>
+                    </View>
+                  ) : (
+                    <View style={styles.unreadBadge}>
+                      <LocalizedText style={styles.unreadBadgeText}>Chưa đọc</LocalizedText>
+                    </View>
+                  )}
                 </View>
               </TouchableOpacity>
             )}
@@ -411,7 +568,7 @@ const styles = StyleSheet.create({
     borderTopLeftRadius: 20,
     borderTopRightRadius: 20,
     borderTopWidth: 1,
-    maxHeight: '75%',
+    maxHeight: '78%',
   },
   handle: {
     width: 36,
@@ -456,7 +613,7 @@ const styles = StyleSheet.create({
   },
   tabItem: {
     paddingVertical: 10,
-    marginRight: 16,
+    marginRight: 14,
     borderBottomWidth: 2,
     borderBottomColor: 'transparent',
   },
@@ -464,7 +621,7 @@ const styles = StyleSheet.create({
     borderBottomColor: '#2563EB',
   },
   tabText: {
-    fontSize: 13,
+    fontSize: 12.5,
     fontWeight: '600',
   },
   tabTextActive: {
@@ -479,6 +636,7 @@ const styles = StyleSheet.create({
     fontSize: 15,
     fontWeight: '700',
     marginTop: 12,
+    textAlign: 'center',
   },
   emptySub: {
     fontSize: 13,
@@ -494,7 +652,6 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     alignItems: 'center',
     borderRadius: 12,
-    borderWidth: 1,
     padding: 12,
     marginBottom: 8,
     gap: 10,
@@ -505,25 +662,72 @@ const styles = StyleSheet.create({
     borderRadius: 10,
     alignItems: 'center',
     justifyContent: 'center',
+    position: 'relative',
+  },
+  cardUnreadDot: {
+    position: 'absolute',
+    top: -2,
+    right: -2,
+    width: 8,
+    height: 8,
+    borderRadius: 4,
+    backgroundColor: '#2563EB',
+    borderWidth: 1.5,
+    borderColor: '#FFFFFF',
   },
   cardBody: {
     flex: 1,
     gap: 3,
   },
+  cardTopRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+  },
   itemTitle: {
-    fontSize: 14,
-    fontWeight: '600',
+    fontSize: 13.5,
   },
   itemSub: {
-    fontSize: 12,
+    fontSize: 11.5,
+  },
+  cardRightCol: {
+    alignItems: 'flex-end',
+    gap: 4,
   },
   statusTag: {
-    paddingHorizontal: 8,
-    paddingVertical: 3,
-    borderRadius: 8,
+    paddingHorizontal: 7,
+    paddingVertical: 2,
+    borderRadius: 6,
   },
   statusText: {
-    fontSize: 11,
+    fontSize: 10.5,
     fontWeight: '700',
+  },
+  readBadge: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: '#ECFDF5',
+    paddingHorizontal: 6,
+    paddingVertical: 2,
+    borderRadius: 6,
+    borderWidth: 1,
+    borderColor: '#A7F3D0',
+  },
+  readBadgeText: {
+    fontSize: 10,
+    fontWeight: '700',
+    color: '#059669',
+  },
+  unreadBadge: {
+    backgroundColor: '#EFF6FF',
+    paddingHorizontal: 6,
+    paddingVertical: 2,
+    borderRadius: 6,
+    borderWidth: 1,
+    borderColor: '#BFDBFE',
+  },
+  unreadBadgeText: {
+    fontSize: 10,
+    fontWeight: '700',
+    color: '#2563EB',
   },
 });

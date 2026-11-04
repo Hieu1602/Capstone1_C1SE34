@@ -73,13 +73,26 @@ export interface PatientOption {
   lastUpdated?: string;
 }
 
+export interface HourlyVitalRecord {
+  time: string;
+  heart_rate?: number;
+  spo2?: number;
+  bp?: string;
+  skin_temp?: number;
+  status?: string;
+}
+
 export interface TrendItem {
   date: string;
   avg_heart_rate: number;
   avg_spo2: number;
   min_spo2: number;
+  min_heart_rate?: number;
+  max_heart_rate?: number;
+  avg_skin_temp?: number;
   steps: number;
   bp?: string;
+  hourly_records?: HourlyVitalRecord[];
 }
 
 export interface AnalyticsData {

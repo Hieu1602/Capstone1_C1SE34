@@ -16,6 +16,7 @@ import { useTheme } from '../../../store/useThemeStore';
 import { Colors } from '../../../theme/colors';
 import { useVitalStore, MedicalConditionItem } from '../../../store/useVitalStore';
 import { BASE_URL } from '../../../services/api';
+import { alertsWS } from '../../../services/websocket';
 
 const getDaysAgoStr = (days = 0) => {
   const d = new Date(); d.setDate(d.getDate() - days);
@@ -79,7 +80,22 @@ export default function PatientMedicalRecordScreen({ navigation }: any) {
   const draftAge = calculateAgeFromYear(patientDraft.birthYear);
   const draftBMI = calculateBMIInfo(patientDraft.height, patientDraft.weight);
 
-  useEffect(() => { fetchPatientRecord(1, selectedDate); }, [selectedDate]);
+  useEffect(() => {
+    fetchPatientRecord(1, selectedDate);
+    alertsWS.connect();
+    const handleWs = (event: any) => {
+      if (
+        event?.type === 'ALERT_NEW' &&
+        (event?.alert_type === 'MEDICAL_RECORD_UPDATED' || event?.data?.alert_type === 'MEDICAL_RECORD_UPDATED')
+      ) {
+        fetchPatientRecord(1, selectedDate);
+      }
+    };
+    const unsub = alertsWS.subscribe(handleWs);
+    return () => {
+      unsub();
+    };
+  }, [selectedDate, fetchPatientRecord]);
 
   const openEditPatientModal = () => {
     setPatientDraft({

@@ -10,6 +10,9 @@ import { Colors, Shadows } from '../../../theme/colors';
 import { useVitalStore } from '../../../store/useVitalStore';
 import { useTheme } from '../../../store/useThemeStore';
 import { useAuthStore } from '../../../store/useAuthStore';
+import { useDeviceStore } from '../../../store/useDeviceStore';
+import { devicesApi } from '../../../services/deviceService';
+import { alertsWS } from '../../../services/websocket';
 import { LocalizedAlert, LocalizedText, LocalizedTextInput } from '../../../i18n/LocalizedComponents';
 
 
@@ -18,6 +21,8 @@ export default function AlgoConfigScreen({ navigation }: any) {
   const { algoSettings, updateAlgoSettings } = useVitalStore();
   const { userRole, role, permissions, fetchMyPermissions } = useAuthStore();
   const [checkingPerms, setCheckingPerms] = useState(true);
+
+  const { iotDevices, activeDevice } = useDeviceStore();
 
   useEffect(() => {
     fetchMyPermissions().finally(() => setCheckingPerms(false));
@@ -33,6 +38,32 @@ export default function AlgoConfigScreen({ navigation }: any) {
   const [fallAngle, setFallAngle] = useState(algoSettings.fallAngle.toString());
   const [immobilitySec, setImmobilitySec] = useState(algoSettings.immobilitySec.toString());
 
+  useEffect(() => {
+    alertsWS.connect();
+    const handleWs = (event: any) => {
+      if (
+        event?.type === 'ALERT_NEW' &&
+        (event?.alert_type === 'DEVICE_CONFIG_UPDATED' || event?.data?.alert_type === 'DEVICE_CONFIG_UPDATED')
+      ) {
+        const t = event?.data?.thresholds;
+        if (t) {
+          if (t.hr_threshold_high) setMaxHR(String(t.hr_threshold_high));
+          if (t.hr_threshold_low) setMinHR(String(t.hr_threshold_low));
+          if (t.spo2_threshold_low) setMinSpO2(String(t.spo2_threshold_low));
+          updateAlgoSettings({
+            maxHeartRate: Number(t.hr_threshold_high) || 120,
+            minHeartRate: Number(t.hr_threshold_low) || 50,
+            minSpO2: Number(t.spo2_threshold_low) || 90,
+          });
+        }
+      }
+    };
+    const unsub = alertsWS.subscribe(handleWs);
+    return () => {
+      unsub();
+    };
+  }, [updateAlgoSettings]);
+
   const handleSave = () => {
     if (!canManageDevices) {
       LocalizedAlert.alert(
@@ -41,15 +72,30 @@ export default function AlgoConfigScreen({ navigation }: any) {
       );
       return;
     }
+
+    const hMax = Number(maxHR) || 120;
+    const hMin = Number(minHR) || 50;
+    const sMin = Number(minSpO2) || 90;
+
     updateAlgoSettings({
-      maxHeartRate: Number(maxHR) || 120,
-      minHeartRate: Number(minHR) || 50,
-      minSpO2: Number(minSpO2) || 90,
+      maxHeartRate: hMax,
+      minHeartRate: hMin,
+      minSpO2: sMin,
       maxTemp: Number(maxTemp) || 37.8,
       fallAngle: Number(fallAngle) || 60,
       immobilitySec: Number(immobilitySec) || 30,
     });
-    LocalizedAlert.alert('Thành công', 'Đã cập nhật các tham số thuật toán cảnh báo cho Hub Edge AI.');
+
+    const targetDev = iotDevices.find((d) => d.type === 'watch' || d.type === 'SMARTBAND') || iotDevices[0];
+    const devId = targetDev?.deviceId || targetDev?.id || activeDevice?.id || '1';
+    if (devId) {
+      devicesApi.updateDeviceConfig(devId, {
+        hr_threshold_high: hMax,
+        hr_threshold_low: hMin,
+        spo2_threshold_low: sMin,
+      }).catch((e) => console.log('Sync device config fallback:', e));
+    }
+    LocalizedAlert.alert('Thành công', 'Đã lưu cấu hình ngưỡng sinh hiệu và đồng bộ tới Bác sĩ & Hub Edge AI.');
   };
 
   return (

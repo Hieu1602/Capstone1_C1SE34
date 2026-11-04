@@ -10,6 +10,7 @@ import {
   ActivityIndicator,
   StatusBar,
   RefreshControl,
+  Platform,
 } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
@@ -305,22 +306,36 @@ export default function DoctorAppointmentsScreen() {
   };
 
   const handleDeleteAppointment = (aptId: string, title: string) => {
-    LocalizedAlert.alert('Xóa lịch khám', `Bác sĩ có chắc chắn muốn xóa bản ghi lịch khám "${title}"?`, [
-      { text: 'Quay lại', style: 'cancel' },
-      {
-        text: 'Xóa',
-        style: 'destructive',
-        onPress: async () => {
-          try {
-            await doctorApi.deleteAppointment(aptId);
-            setAppointments((prev) => prev.filter((a) => a.id !== aptId));
-            LocalizedAlert.alert('Đã xóa', 'Đã xóa bản ghi lịch hẹn thành công.');
-          } catch {
-            LocalizedAlert.alert('Lỗi', 'Không thể xóa lịch hẹn.');
-          }
+    const doDelete = async () => {
+      try {
+        await doctorApi.deleteAppointment(aptId);
+        setAppointments((prev) => prev.filter((a) => a.id !== aptId));
+        if (Platform.OS !== 'web') {
+          LocalizedAlert.alert('Đã xóa', 'Đã xóa bản ghi lịch hẹn thành công.');
+        }
+      } catch {
+        LocalizedAlert.alert('Lỗi', 'Không thể xóa lịch hẹn.');
+      }
+    };
+
+    if (Platform.OS === 'web') {
+      if (typeof window !== 'undefined' && window.confirm) {
+        if (window.confirm(`Bác sĩ có chắc chắn muốn xóa bản ghi lịch khám "${title}"?`)) {
+          doDelete();
+        }
+      } else {
+        doDelete();
+      }
+    } else {
+      LocalizedAlert.alert('Xóa lịch khám', `Bác sĩ có chắc chắn muốn xóa bản ghi lịch khám "${title}"?`, [
+        { text: 'Quay lại', style: 'cancel' },
+        {
+          text: 'Xóa',
+          style: 'destructive',
+          onPress: doDelete,
         },
-      },
-    ]);
+      ]);
+    }
   };
 
   const handleViewPatient = (pId: string) => {

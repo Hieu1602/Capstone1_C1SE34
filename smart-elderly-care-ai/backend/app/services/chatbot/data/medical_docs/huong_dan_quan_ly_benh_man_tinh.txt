@@ -1,0 +1,61 @@
+# ==============================================================================
+# HƯỚNG DẪN QUẢN LÝ VÀ CHĂM SÓC CÁC BỆNH MÃN TÍNH PHỔ BIẾN Ở NGƯỜI CAO TUỔI
+# Áp dụng cho: Hệ thống Trợ lý Y tế Thông minh SmartCare AI
+# Biên soạn theo Hướng dẫn Lão khoa của Bộ Y tế & Hội Tim mạch Việt Nam
+# ==============================================================================
+
+--- PHẦN 1: BỆNH TĂNG HUYẾT ÁP Ở NGƯỜI CAO TUỔI (HYPERTENSION) ---
+1.1. Các mức chỉ số huyết áp chuẩn:
+- Huyết áp tối ưu: Huyết áp tâm thu < 120 mmHg và Huyết áp tâm trương < 80 mmHg.
+- Huyết áp bình thường cao (Tiền tăng huyết áp): Tâm thu 120 - 139 mmHg hoặc Tâm trương 80 - 89 mmHg.
+- Tăng huyết áp Độ 1: Tâm thu 140 - 159 mmHg hoặc Tâm trương 90 - 99 mmHg.
+- Tăng huyết áp Độ 2: Tâm thu 160 - 179 mmHg hoặc Tâm trương 100 - 109 mmHg.
+- Cơn tăng huyết áp khẩn cấp (Cần cấp cứu y tế ngay): Tâm thu >= 180 mmHg hoặc Tâm trương >= 120 mmHg.
+
+1.2. Hướng dẫn đo huyết áp đúng chuẩn tại nhà:
+- Ngồi nghỉ ngơi tĩnh tâm ít nhất 5 - 10 phút trước khi đo.
+- Không uống cà phê, trà đậm, hút thuốc lá hoặc vận động mạnh trong vòng 30 phút trước khi đo.
+- Tư thế đo: Ngồi thẳng lưng trên ghế tựa, hai bàn chân đặt phẳng trên mặt sàn (không bắt chéo chân).
+- Đặt cánh tay trên bàn sao cho vòng bít máy đo ngang mức với tim.
+- Giữ yên lặng, không nói chuyện và không cử động ngón tay trong suốt quá trình máy đang bơm xả khí.
+- Nên đo 2 lần liên tiếp cách nhau 1 - 2 phút rồi lấy giá trị trung bình.
+
+1.3. Xử trí khi huyết áp tăng vọt bất thường:
+- Huyết áp tăng nhẹ (140 - 160 mmHg) không có triệu chứng khó chịu: Để người cao tuổi nằm nghỉ ngơi nơi thoáng khí, yên tĩnh 15 - 30 phút rồi đo lại. Uống thuốc hạ áp theo đúng đơn đã được bác sĩ kê nếu đến cữ.
+- Dấu hiệu nguy hiểm cần gọi cấp cứu 115 ngay: Huyết áp >= 180/120 mmHg KÈM THEO một trong các triệu chứng: Đau đầu dữ dội, mờ mắt đột ngột, đau tức ngực, khó thở, nôn ói, tê yếu nửa người, nói ngọng hoặc lú lẫn.
+
+--- PHẦN 2: BỆNH ĐÁI THÁO ĐƯỜNG TYPE 2 (DIABETES TYPE 2) ---
+2.1. Chỉ số đường huyết mục tiêu cho người cao tuổi:
+- Đường huyết lúc đói (hoặc trước bữa ăn): 4.4 - 7.2 mmol/L (tương đương 80 - 130 mg/dL).
+- Đường huyết sau ăn 2 giờ: Dưới 10.0 mmol/L (tương đương dưới 180 mg/dL).
+- Đường huyết trước khi đi ngủ: 5.5 - 8.3 mmol/L (tương đương 100 - 150 mg/dL).
+- Chỉ số HbA1c mục tiêu ở người cao tuổi: Khoảng 7.0% - 7.5% (đối với người già có nhiều bệnh nền, mục tiêu có thể nới lỏng lên 8.0% để tránh nguy cơ hạ đường huyết nguy hiểm).
+
+2.2. Xử trí hạ đường huyết cấp tính (Nguy hiểm hơn tăng đường huyết):
+- Định nghĩa hạ đường huyết: Khi chỉ số đường huyết < 3.9 mmol/L (< 70 mg/dL).
+- Triệu chứng nhận biết: Vã mồ hôi lạnh, run tay chân, đói cồn cào ruột gan, chóng mặt, hoa mắt, tim đập nhanh, lo âu, bồn chồn, lú lẫn, nặng hơn có thể co giật và hôn mê.
+- Xử trí khẩn cấp theo Quy tắc 15 - 15:
+  + Cho người cao tuổi uống ngay 1/2 ly nước đường ấm, hoặc 1/2 ly nước ngọt có đường (không dùng loại ăn kiêng), hoặc ăn 3 viên kẹo ngọt, hoặc 1 thìa canh mật ong.
+  + Để người bệnh ngồi hoặc nằm nghỉ ngơi yên tĩnh.
+  + Đợi 15 phút sau, đo lại đường huyết mao mạch bằng máy đo cầm tay.
+  + Nếu đường huyết vẫn dưới 3.9 mmol/L, tiếp tục cho dùng thêm 1 khẩu phần ngọt như trên và đo lại sau 15 phút.
+  + Khi đường huyết đã ổn định trên 3.9 mmol/L, cho người cao tuổi ăn nhẹ (bát cháo nhỏ, nửa củ khoai hoặc ly sữa) nếu bữa ăn chính còn cách xa hơn 1 giờ.
+
+2.3. Chăm sóc bàn chân cho người đái tháo đường:
+- Rửa chân hàng ngày bằng nước ấm (kiểm tra độ ấm bằng mu bàn tay, không ngâm nước quá nóng vì giảm cảm giác nhiệt dễ gây bỏng).
+- Lau khô kỹ các kẽ ngón chân bằng khăn mềm sạch để tránh nấm mốc.
+- Kiểm tra bàn chân mỗi ngày để phát hiện sớm các vết xước nhỏ, vết chai, phồng rộp hoặc đổi màu da.
+- Đi tất mềm thoáng khí, chọn giày dép vừa vặn, tuyệt đối không đi chân đất dù ở trong nhà.
+
+--- PHẦN 3: SA SÚT TRÍ TUỆ & BỆNH ALZHEIMER (DEMENTIA & ALZHEIMER) ---
+3.1. Phân biệt đãng trí tuổi già thông thường và Sa sút trí tuệ bệnh lý:
+- Đãng trí sinh lý lành tính: Thỉnh thoảng quên chìa khóa, quên tên người quen nhưng sau đó nhớ lại được; vẫn tự quản lý được sinh hoạt cá nhân, tiền bạc và đường đi.
+- Sa sút trí tuệ (Alzheimer): Quên các sự việc mới xảy ra vừa xong; hỏi đi hỏi lại cùng một câu hỏi nhiều lần; mất phương hướng thời gian và không gian (bị lạc ở nơi quen thuộc); thay đổi tính cách (dễ cáu gắt, nghi ngờ vô cớ, thu mình).
+
+3.2. Kỹ năng giao tiếp và chăm sóc người bị sa sút trí tuệ:
+- Sử dụng câu nói ngắn gọn, rõ ràng, tốc độ vừa phải, ngữ điệu dịu dàng, ấm áp.
+- Kiên nhẫn lắng nghe, không tranh cãi, không chỉ trích hoặc ngắt lời khi người già nói sai hay hỏi lại nhiều lần.
+- Đặt các đồ dùng cá nhân quen thuộc ở vị trí cố định, dễ nhìn thấy.
+- Treo đồng hồ số to, lịch treo tường rõ ràng trong phòng ngủ để người cao tuổi dễ định vị thời gian.
+- Phòng ngừa người cao tuổi đi lạc: Đeo vòng đeo tay thông minh định vị GPS, ghi nhãn số điện thoại người thân vào bên trong áo khoác hoặc dây đeo cổ.
+

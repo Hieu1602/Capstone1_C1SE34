@@ -1,0 +1,54 @@
+# CẨM NANG Y KHOA LÃO KHOA: CHĂM SÓC MẮT VÀ SUY GIẢM THỊ LỰC Ở NGƯỜI CAO TUỔI
+Nguồn: SmartCare AI Geriatric Clinical Knowledge Base - Chuyên khoa Mắt và Lão khoa
+
+1. CÁC NGUYÊN NHÂN THƯỜNG GẶP KHIẾN NGƯỜI CAO TUỔI BỊ MỜ MẮT
+Mờ mắt ở người cao tuổi được phân loại thành hai nhóm chính: Mờ mắt diễn tiến từ từ (mãn tính) và Mờ mắt xuất hiện đột ngột (cấp cứu nhãn khoa).
+
+1.1. CÁC NGUYÊN NHÂN MỜ MẮT TỪ TỪ (MÃN TÍNH)
+- Đục thủy tinh thể (Cataract / Cườm khô):
+  + Là nguyên nhân gây giảm thị lực hàng đầu ở người trên 65 tuổi.
+  + Triệu chứng: Mắt mờ từ từ như nhìn qua màn sương mù hoặc lớp kính bẩn; nhạy cảm chói mắt khi gặp ánh sáng mạnh; màu sắc nhìn thấy bị nhạt hoặc ngả vàng; nhìn một vật thành hai; khó nhìn rõ vào ban đêm.
+  + Hướng xử trí: Đến bệnh viện mắt khám. Khi đục nhiều ảnh hưởng sinh hoạt, phẫu thuật Phaco thay thủy tinh thể nhân tạo là phương pháp an toàn, nhanh chóng và phục hồi thị lực rất tốt.
+- Thoái hóa hoàng điểm tuổi già (AMD / Thoái hóa điểm vàng):
+  + Tổn thương vùng trung tâm võng mạc (hoàng điểm), làm mất dần thị lực trung tâm.
+  + Triệu chứng: Nhìn đường thẳng thấy bị méo mó, lượn sóng (biến dạng hình ảnh); xuất hiện vùng tối, đốm mờ đen ngay chính giữa tầm nhìn; nhìn khuôn mặt người đối diện bị mờ dù vẫn thấy xung quanh.
+  + Hướng xử trí: Khám nhãn khoa sớm để phân loại thể khô hay thể ướt; tiêm thuốc kháng VEGF nếu là thể ướt để ngăn mù lòa.
+- Biến chứng võng mạc đái tháo đường:
+  + Gặp ở người cao tuổi có tiền sử tiểu đường nhiều năm, đường huyết kiểm soát chưa tốt.
+  + Triệu chứng: Thị lực mờ dao động thất thường (lúc rõ lúc mờ theo đường huyết); thấy bóng đen lơ lửng, ruồi bay trước mắt; nếu có xuất huyết dịch kính thì mắt mờ sương đột ngột.
+  + Hướng xử trí: Kiểm soát chặt chẽ đường huyết (HbA1c < 7.0%), soi đáy mắt định kỳ 6 tháng/lần để can thiệp laser hoặc tiêm thuốc sớm.
+- Bệnh Glaucoma mãn tính (Cườm nước góc mở):
+  + Thường không đau nhức ở giai đoạn sớm, thị trường thu hẹp dần từ ngoài vào trong ("nhìn qua ống nhòm"). Khi người bệnh nhận ra mờ thì thị thần kinh đã tổn thương nặng.
+  + Hướng xử trí: Đo nhãn áp định kỳ và dùng thuốc hạ nhãn áp theo chỉ định của bác sĩ chuyên khoa mắt.
+- Khô mắt người già (Hội chứng khô mắt) và lão thị:
+  + Mắt cay, cộm rát như có cát, mờ mắt thoáng qua khi đọc sách hoặc xem tivi lâu, chớp mắt nhiều lần thì thị lực tạm thời rõ hơn.
+  + Hướng xử trí: Sử dụng nước mắt nhân tạo không chất bảo quản (Natri Hyaluronate), chườm ấm mi mắt.
+
+1.2. CÁC NGUYÊN NHÂN MỜ MẮT ĐỘT NGỘT (DẤU HIỆU CẤP CỨU Y TẾ)
+- Cơn thiếu máu não thoáng qua (TIA) hoặc Đột quỵ não (Tai biến mạch máu não):
+  + Mắt mờ đột ngột một bên hoặc hai bên, nhìn đôi (song thị), tối sầm mắt đột ngột.
+  + Thường kèm theo các dấu hiệu FAST: Méo miệng, yếu liệt tay chân một bên, nói đớ, choáng váng mất thăng bằng.
+  + XỬ TRÍ: ĐÂY LÀ TÌNH TRẠNG CẤP CỨU NGUY KỊCH. Gọi ngay 115 để chuyển viện trong "thời gian vàng" cấp cứu đột quỵ.
+- Cơn Glaucoma góc đóng cấp (Cơn tăng nhãn áp cấp):
+  + Mờ mắt đột ngột kèm đau nhức hốc mắt và nửa đầu cùng bên dữ dội; đỏ mắt; nhìn bóng đèn thấy quầng hào quang ngũ sắc; buồn nôn hoặc nôn; sờ nhẹ qua mi thấy nhãn cầu căng cứng như hòn đá.
+  + XỬ TRÍ: Phải đến cấp cứu chuyên khoa Mắt ngay trong vòng 24 giờ để hạ nhãn áp khẩn cấp, tránh tổn thương teo dây thần kinh thị giác vĩnh viễn gây mù lòa.
+- Tắc động mạch hoặc tĩnh mạch võng mạc ("Đột quỵ mắt"):
+  + Mất thị lực hoặc tối đen một mắt đột ngột trong vài giây hoặc vài phút, không đau đớn. Thường gặp ở người có tiền sử tăng huyết áp, rung nhĩ, xơ vữa động mạch.
+  + XỬ TRÍ: Cấp cứu nhãn khoa ngay lập tức.
+- Bong võng mạc:
+  + Thấy chớp sáng lóe lên liên tục trong bóng tối, mưa đốm đen ruồi bay tăng vọt, sau đó có một "bức màn đen" che phủ dần một phần tầm nhìn.
+  + XỬ TRÍ: Nằm yên hạn chế cử động mắt và đến viện mắt phẫu thuật áp võng mạc khẩn cấp.
+
+2. NGUY CƠ TÉ NGÃ VÀ MẤT AN TOÀN DO SUY GIẢM THỊ LỰC
+- Thị lực suy giảm là nguyên nhân hàng đầu khiến người cao tuổi bước hụt chân, vấp ngã tại cầu thang, ngưỡng cửa, nhà vệ sinh.
+- Các biện pháp phòng ngừa tai nạn:
+  + Luôn bật đủ ánh sáng đèn ở lối đi, hành lang và nhà vệ sinh, có đèn ngủ ban đêm.
+  + Đánh dấu màu nổi bật (băng keo phản quang) ở mép bậc cầu thang và ngưỡng cửa.
+  + Loại bỏ thảm trải sàn trơn trượt, dây điện vướng víu trên lối đi.
+  + Đeo kính đúng độ khúc xạ và kiểm tra mắt định kỳ.
+
+3. NGUYÊN TẮC AN TOÀN VÀ LƯU Ý KHI CHĂM SÓC MẮT TẠI NHÀ
+- TUYỆT ĐỐI KHÔNG tự ý mua các loại thuốc nhỏ mắt có chứa Corticoid (như Dexamethasone, Prednisolone, Polydexa...) khi chưa có chỉ định của bác sĩ. Dùng kéo dài sẽ gây tăng nhãn áp và đục thủy tinh thể dẫn tới mù mắt vĩnh viễn.
+- TUYỆT ĐỐI KHÔNG đắp lá thuốc, nhỏ chanh, nhỏ sữa mẹ hoặc áp dụng các mẹo dân gian truyền miệng vào mắt người cao tuổi vì nguy cơ viêm loét giác mạc và nhiễm trùng hoại tử nhãn cầu.
+- Chế độ dinh dưỡng bảo vệ mắt: Tăng cường thực phẩm giàu Lutein, Zeaxanthin, Vitamin A, Omega-3 (cá hồi, cá thu, cà rốt, bí đỏ, trứng gà, rau bina, bông cải xanh).
+

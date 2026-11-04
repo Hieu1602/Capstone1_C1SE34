@@ -8,7 +8,6 @@ import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
 import { useRoute, useFocusEffect, useNavigation } from '@react-navigation/native';
 
-import { Colors } from '../../../theme/colors';
 import { useTheme } from '../../../store/useThemeStore';
 import { doctorApi } from '../../../services/api';
 import { LocalizedText } from '../../../i18n/LocalizedComponents';
@@ -16,10 +15,13 @@ import { LocalizedText } from '../../../i18n/LocalizedComponents';
 import {
   PatientOption,
   AnalyticsData,
+  TrendItem,
   PatientSelectionView,
   AnalyticsOverviewCards,
   AnalyticsTrendChart,
   AnalyticsVitalsTable,
+  DayVitalsDetailModal,
+  DayFilterSelectorModal,
 } from '../components';
 
 export type { PatientOption };
@@ -53,7 +55,14 @@ export default function DoctorAnalyticsReportScreen() {
   const [filterStatus, setFilterStatus] = useState<'ALL' | 'WARNING' | 'NORMAL'>('ALL');
 
   const [days, setDays] = useState<number>(7);
-  const [chartMode, setChartMode] = useState<'HR' | 'SPO2' | 'STEPS'>('HR');
+  const [chartMode, setChartMode] = useState<'HR' | 'SPO2' | 'BP' | 'TEMP' | 'STEPS'>('HR');
+  const [selectedMetricFilter, setSelectedMetricFilter] = useState<'ALL' | 'HR' | 'SPO2' | 'BP' | 'TEMP'>('ALL');
+  const [selectedFilteredDate, setSelectedFilteredDate] = useState<string | null>(null);
+  const [isDayFilterModalVisible, setIsDayFilterModalVisible] = useState(false);
+
+  const [selectedDayDetail, setSelectedDayDetail] = useState<TrendItem | null>(null);
+  const [isDayModalVisible, setIsDayModalVisible] = useState(false);
+
   const [loading, setLoading] = useState(false);
   const [analytics, setAnalytics] = useState<AnalyticsData | null>(null);
 
@@ -96,7 +105,6 @@ export default function DoctorAnalyticsReportScreen() {
     if (hasSwitchedPatient) return;
     if (route.params?.patient && route.params.patient.id) {
       setSelectedPatient(route.params.patient);
-  
     }
     const pId = route.params?.patientId;
     if (pId) {
@@ -168,6 +176,18 @@ export default function DoctorAnalyticsReportScreen() {
 
   const trends = analytics?.daily_trends || [];
 
+  // Lấy dữ liệu của ngày đang được lọc (nếu có)
+  const filteredDayItem = useMemo(() => {
+    if (!selectedFilteredDate) return null;
+    return trends.find((t) => t.date === selectedFilteredDate) || null;
+  }, [trends, selectedFilteredDate]);
+
+  // Handler khi nhấn xem chi tiết 1 ngày bất kỳ
+  const handlePressDay = (dayItem: TrendItem) => {
+    setSelectedDayDetail(dayItem);
+    setIsDayModalVisible(true);
+  };
+
   // =========================================================================
   // GIAO DIỆN 1: DANH SÁCH CHỌN BỆNH NHÂN
   // =========================================================================
@@ -175,7 +195,7 @@ export default function DoctorAnalyticsReportScreen() {
     if (paramId && !hasSwitchedPatient) {
       return (
         <View style={[styles.container, { justifyContent: 'center', alignItems: 'center', backgroundColor: isDarkMode ? '#0F172A' : '#F8FAFC' }]}>
-          <ActivityIndicator size="large" color={Colors.primary} />
+          <ActivityIndicator size="large" color="#2563EB" />
         </View>
       );
     }
@@ -228,23 +248,23 @@ export default function DoctorAnalyticsReportScreen() {
             >
               <Ionicons name="arrow-back" size={20} color={colors.textPrimary} />
             </TouchableOpacity>
-          <TouchableOpacity
-            style={[styles.backBtn, { backgroundColor: isDarkMode ? '#334155' : '#EEF2F6' }]}
-            onPress={() => {
-              setHasSwitchedPatient(true);
-              setSelectedPatient(null);
-            }}
-          >
-            <Ionicons name="people-outline" size={16} color="#0284C7" style={{ marginRight: 4 }} />
-            <LocalizedText style={styles.backBtnText}>Đổi bệnh nhân</LocalizedText>
-          </TouchableOpacity>
-        </View>
+            <TouchableOpacity
+              style={[styles.backBtn, { backgroundColor: isDarkMode ? '#334155' : '#EEF2F6' }]}
+              onPress={() => {
+                setHasSwitchedPatient(true);
+                setSelectedPatient(null);
+              }}
+            >
+              <Ionicons name="people-outline" size={16} color="#2563EB" style={{ marginRight: 4 }} />
+              <LocalizedText style={styles.backBtnText}>Đổi bệnh nhân</LocalizedText>
+            </TouchableOpacity>
+          </View>
 
           <TouchableOpacity
             style={[styles.reloadBtn, { backgroundColor: isDarkMode ? '#334155' : '#EEF2F6' }]}
             onPress={fetchAnalytics}
           >
-            <Ionicons name="sync-outline" size={18} color={Colors.primary} />
+            <Ionicons name="sync-outline" size={18} color="#2563EB" />
           </TouchableOpacity>
         </View>
 
@@ -272,18 +292,25 @@ export default function DoctorAnalyticsReportScreen() {
           </View>
         </View>
 
-        {/* Lựa chọn ngày chu kỳ */}
-        <View style={styles.daysRow}>
+        {/* Lựa chọn chu kỳ ngày & Nút Lọc Theo Ngày */}
+        <ScrollView
+          horizontal
+          showsHorizontalScrollIndicator={false}
+          contentContainerStyle={styles.daysRow}
+        >
           {[7, 14, 30].map((d) => {
-            const active = days === d;
+            const active = days === d && !selectedFilteredDate;
             return (
               <TouchableOpacity
                 key={d}
-                onPress={() => setDays(d)}
+                onPress={() => {
+                  setSelectedFilteredDate(null);
+                  setDays(d);
+                }}
                 style={[
                   styles.dayChip,
                   active
-                    ? { backgroundColor: Colors.primary }
+                    ? { backgroundColor: '#2563EB' }
                     : { backgroundColor: isDarkMode ? '#334155' : '#EEF2F6' },
                 ]}
               >
@@ -298,16 +325,147 @@ export default function DoctorAnalyticsReportScreen() {
               </TouchableOpacity>
             );
           })}
-        </View>
+
+          {/* Nút lọc theo từng ngày */}
+          <TouchableOpacity
+            onPress={() => setIsDayFilterModalVisible(true)}
+            style={[
+              styles.dayChip,
+              styles.dayFilterBtn,
+              selectedFilteredDate
+                ? { backgroundColor: '#2563EB', borderColor: '#2563EB' }
+                : { backgroundColor: isDarkMode ? '#334155' : '#EFF6FF', borderColor: '#BFDBFE', borderWidth: 1 },
+            ]}
+          >
+            <Ionicons
+              name="calendar"
+              size={13}
+              color={selectedFilteredDate ? '#FFFFFF' : '#2563EB'}
+              style={{ marginRight: 4 }}
+            />
+            <LocalizedText
+              style={[
+                styles.dayChipText,
+                selectedFilteredDate
+                  ? { color: '#FFFFFF', fontWeight: '800' }
+                  : { color: '#2563EB', fontWeight: '700' },
+              ]}
+            >
+              {selectedFilteredDate ? `Ngày ${selectedFilteredDate}` : 'Lọc theo ngày'}
+            </LocalizedText>
+            {selectedFilteredDate && (
+              <TouchableOpacity
+                onPress={(e) => {
+                  e.stopPropagation();
+                  setSelectedFilteredDate(null);
+                }}
+                hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
+                style={{ marginLeft: 4 }}
+              >
+                <Ionicons name="close-circle" size={14} color="#FFFFFF" />
+              </TouchableOpacity>
+            )}
+          </TouchableOpacity>
+        </ScrollView>
+
+        {/* Bộ lọc dữ liệu sinh hiệu: Tất cả, Nhịp tim, SpO2, Huyết áp, Thân nhiệt */}
+        <ScrollView
+          horizontal
+          showsHorizontalScrollIndicator={false}
+          contentContainerStyle={styles.metricFilterRow}
+        >
+          {[
+            { key: 'ALL' as const, label: 'Tất cả', icon: 'grid-outline' as const },
+            { key: 'HR' as const, label: 'Nhịp tim', icon: 'heart' as const, color: '#EF4444' },
+            { key: 'SPO2' as const, label: 'SpO₂', icon: 'water' as const, color: '#0284C7' },
+            { key: 'BP' as const, label: 'Huyết áp', icon: 'speedometer' as const, color: '#10B981' },
+            { key: 'TEMP' as const, label: 'Nhiệt độ', icon: 'thermometer' as const, color: '#F59E0B' },
+          ].map((m) => {
+            const active = selectedMetricFilter === m.key;
+            return (
+              <TouchableOpacity
+                key={m.key}
+                onPress={() => {
+                  setSelectedMetricFilter(m.key);
+                  if (m.key !== 'ALL') {
+                    setChartMode(m.key as any);
+                  }
+                }}
+                style={[
+                  styles.metricChip,
+                  active
+                    ? { backgroundColor: '#2563EB', borderColor: '#2563EB' }
+                    : {
+                        backgroundColor: isDarkMode ? '#1E293B' : '#FFFFFF',
+                        borderColor: isDarkMode ? '#334155' : '#E2E8F0',
+                      },
+                ]}
+              >
+                <Ionicons
+                  name={m.icon}
+                  size={12}
+                  color={active ? '#FFFFFF' : (m.color || (isDarkMode ? '#94A3B8' : '#64748B'))}
+                  style={{ marginRight: 4 }}
+                />
+                <LocalizedText
+                  style={[
+                    styles.metricChipText,
+                    active ? { color: '#FFFFFF', fontWeight: '700' } : { color: isDarkMode ? '#CBD5E1' : '#475569' },
+                  ]}
+                >
+                  {m.label}
+                </LocalizedText>
+              </TouchableOpacity>
+            );
+          })}
+        </ScrollView>
       </View>
 
-      <ScrollView contentContainerStyle={styles.detailScrollContent}>
-        {loading && <ActivityIndicator size="small" color={Colors.primary} style={{ marginVertical: 10 }} />}
+      <ScrollView contentContainerStyle={styles.detailScrollContent} showsVerticalScrollIndicator={false}>
+        {loading && <ActivityIndicator size="small" color="#2563EB" style={{ marginVertical: 10 }} />}
 
-        {/* Thẻ đánh giá lâm sàng & 4 chỉ số thống kê */}
+        {/* Banner thông báo khi đang lọc theo ngày cụ thể */}
+        {selectedFilteredDate && (
+          <View style={[styles.activeFilterBanner, { backgroundColor: isDarkMode ? '#1E3A8A44' : '#EFF6FF', borderColor: '#BFDBFE' }]}>
+            <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6, flex: 1 }}>
+              <Ionicons name="funnel" size={15} color="#2563EB" />
+              <LocalizedText style={[styles.activeFilterBannerText, { color: isDarkMode ? '#93C5FD' : '#1E40AF' }]}>
+                Đang lọc dữ liệu ngày: <LocalizedText style={{ fontWeight: '800' }}>{selectedFilteredDate}</LocalizedText>
+              </LocalizedText>
+            </View>
+            <TouchableOpacity
+              style={styles.activeFilterActionBtn}
+              onPress={() => {
+                const found = trends.find((t) => t.date === selectedFilteredDate);
+                if (found) {
+                  setSelectedDayDetail(found);
+                  setIsDayModalVisible(true);
+                }
+              }}
+            >
+              <Ionicons name="analytics" size={13} color="#2563EB" style={{ marginRight: 3 }} />
+              <LocalizedText style={styles.activeFilterActionBtnText}>Xem 24h</LocalizedText>
+            </TouchableOpacity>
+            <TouchableOpacity
+              style={styles.activeFilterClearBtn}
+              onPress={() => setSelectedFilteredDate(null)}
+            >
+              <LocalizedText style={styles.activeFilterClearBtnText}>Bỏ lọc</LocalizedText>
+              <Ionicons name="close" size={13} color="#64748B" />
+            </TouchableOpacity>
+          </View>
+        )}
+
+        {/* Thẻ đánh giá lâm sàng & các chỉ số thống kê */}
         <AnalyticsOverviewCards
           selectedPatient={selectedPatient}
           analytics={analytics}
+          filteredDayItem={filteredDayItem}
+          selectedMetricFilter={selectedMetricFilter}
+          onSelectMetricFilter={(m) => {
+            setSelectedMetricFilter(m);
+            if (m !== 'ALL') setChartMode(m as any);
+          }}
           isDarkMode={isDarkMode}
           colors={colors}
         />
@@ -317,7 +475,12 @@ export default function DoctorAnalyticsReportScreen() {
           selectedPatient={selectedPatient}
           trends={trends}
           chartMode={chartMode}
-          onChartModeChange={setChartMode}
+          selectedFilteredDate={selectedFilteredDate}
+          onChartModeChange={(m) => {
+            setChartMode(m);
+            if (m !== 'STEPS') setSelectedMetricFilter(m);
+          }}
+          onPressDay={handlePressDay}
           isDarkMode={isDarkMode}
           colors={colors}
         />
@@ -325,6 +488,35 @@ export default function DoctorAnalyticsReportScreen() {
         {/* Bảng nhật ký sinh hiệu */}
         <AnalyticsVitalsTable
           trends={trends}
+          filterMetric={selectedMetricFilter}
+          selectedFilteredDate={selectedFilteredDate}
+          onPressDay={handlePressDay}
+          isDarkMode={isDarkMode}
+          colors={colors}
+        />
+
+        {/* Modal chi tiết sinh hiệu 24h của ngày bất kỳ */}
+        <DayVitalsDetailModal
+          visible={isDayModalVisible}
+          onClose={() => setIsDayModalVisible(false)}
+          dayItem={selectedDayDetail}
+          selectedPatient={selectedPatient}
+          onSelectFilterDate={(dateStr) => setSelectedFilteredDate(dateStr)}
+          isDarkMode={isDarkMode}
+          colors={colors}
+        />
+
+        {/* Modal bộ lọc ngày */}
+        <DayFilterSelectorModal
+          visible={isDayFilterModalVisible}
+          onClose={() => setIsDayFilterModalVisible(false)}
+          trends={trends}
+          selectedFilteredDate={selectedFilteredDate}
+          onSelectDate={(d) => setSelectedFilteredDate(d)}
+          onViewDetail={(item) => {
+            setSelectedDayDetail(item);
+            setIsDayModalVisible(true);
+          }}
           isDarkMode={isDarkMode}
           colors={colors}
         />
@@ -337,7 +529,7 @@ const styles = StyleSheet.create({
   container: { flex: 1 },
   header: {
     paddingHorizontal: 16,
-    paddingBottom: 12,
+    paddingBottom: 10,
     borderBottomWidth: StyleSheet.hairlineWidth,
   },
   roundBackBtn: {
@@ -358,7 +550,7 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     justifyContent: 'space-between',
     alignItems: 'center',
-    marginBottom: 10,
+    marginBottom: 8,
   },
   backBtn: {
     flexDirection: 'row',
@@ -367,7 +559,7 @@ const styles = StyleSheet.create({
     paddingVertical: 6,
     borderRadius: 8,
   },
-  backBtnText: { fontSize: 13, fontWeight: '700', color: '#0284C7' },
+  backBtnText: { fontSize: 13, fontWeight: '700', color: '#2563EB' },
   activePatientCard: {
     flexDirection: 'row',
     alignItems: 'center',
@@ -380,15 +572,66 @@ const styles = StyleSheet.create({
     width: 36,
     height: 36,
     borderRadius: 18,
-    backgroundColor: '#0284C7',
+    backgroundColor: '#2563EB',
     justifyContent: 'center',
     alignItems: 'center',
   },
   activeAvatarText: { color: '#FFFFFF', fontSize: 15, fontWeight: '800' },
   activeName: { fontSize: 15, fontWeight: '800' },
   activeSub: { fontSize: 11.5 },
-  daysRow: { flexDirection: 'row', gap: 8, marginTop: 4 },
+  daysRow: { flexDirection: 'row', gap: 8, marginTop: 4, marginBottom: 8, paddingVertical: 2 },
   dayChip: { paddingHorizontal: 14, paddingVertical: 5, borderRadius: 20 },
   dayChipText: { fontSize: 11.5 },
+  dayFilterBtn: {
+    flexDirection: 'row',
+    alignItems: 'center',
+  },
+
+  // Bộ lọc sinh hiệu
+  metricFilterRow: { flexDirection: 'row', gap: 6, paddingVertical: 2 },
+  metricChip: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    paddingHorizontal: 10,
+    paddingVertical: 5,
+    borderRadius: 16,
+    borderWidth: 1,
+  },
+  metricChipText: { fontSize: 11.5, fontWeight: '600' },
+
+  // Banner đang lọc ngày
+  activeFilterBanner: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    paddingHorizontal: 12,
+    paddingVertical: 8,
+    borderRadius: 10,
+    borderWidth: 1,
+    marginBottom: 12,
+    gap: 8,
+  },
+  activeFilterBannerText: { fontSize: 12, flex: 1 },
+  activeFilterActionBtn: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: '#FFFFFF',
+    borderWidth: 1,
+    borderColor: '#BFDBFE',
+    paddingHorizontal: 8,
+    paddingVertical: 4,
+    borderRadius: 6,
+  },
+  activeFilterActionBtnText: { fontSize: 11.5, fontWeight: '700', color: '#2563EB' },
+  activeFilterClearBtn: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    paddingHorizontal: 6,
+    paddingVertical: 4,
+    borderRadius: 6,
+    backgroundColor: '#F1F5F9',
+  },
+  activeFilterClearBtnText: { fontSize: 11.5, fontWeight: '600', color: '#64748B', marginRight: 2 },
+
   detailScrollContent: { padding: 16, paddingBottom: 95 },
 });
