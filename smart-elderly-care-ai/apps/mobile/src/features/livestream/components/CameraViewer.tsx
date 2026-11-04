@@ -359,13 +359,13 @@ export default function CameraViewer({
             <CameraVideoOptions
                 inline={fullscreen.fullscreen}
                 visible={sheet === "quality"}
-                title="Video Quality"
+                title="Chất lượng video"
                 selected={quality}
                 onClose={() => setSheet(null)}
                 options={[
                     { value: "1080p", label: "1080P" },
                     { value: "720p", label: "720P" },
-                    { value: "auto", label: "Auto" },
+                    { value: "auto", label: "Tự động" },
                 ]}
                 onSelect={(value) => {
                     onQuality(value as VideoQuality);
@@ -375,7 +375,7 @@ export default function CameraViewer({
             <CameraVideoOptions
                 inline={fullscreen.fullscreen}
                 visible={sheet === "mode"}
-                title="Video Mode"
+                title="Chế độ hình ảnh"
                 selected={videoMode.mode}
                 busy={videoMode.pending}
                 message={
@@ -388,19 +388,19 @@ export default function CameraViewer({
                 options={[
                     {
                         value: "day",
-                        label: "Day Mode",
+                        label: "Ban ngày",
                         icon: "sunny-outline",
                         disabled: !connection.status?.can_control,
                     },
                     {
                         value: "night",
-                        label: "Night Mode",
+                        label: "Ban đêm",
                         icon: "moon-outline",
                         disabled: !connection.status?.can_control,
                     },
                     {
                         value: "auto",
-                        label: "Auto",
+                        label: "Tự động",
                         disabled: !connection.status?.can_control,
                     },
                 ]}
@@ -434,16 +434,16 @@ export default function CameraViewer({
     const qualityButton = (
         <Pressable
             accessibilityRole="button"
-            accessibilityLabel="Video Quality"
+            accessibilityLabel="Chất lượng video"
             onPress={() => setSheet("quality")}
             style={styles.tool}
         >
             <Text style={styles.quality}>
-                {quality === "auto" ? "Auto" : quality.toUpperCase()}
+                {quality === "auto" ? "Tự động" : quality.toUpperCase()}
             </Text>
         </Pressable>
     );
-    const modeButton = tool(modeIcon, "Video Mode", () => setSheet("mode"));
+    const modeButton = tool(modeIcon, "Chế độ hình ảnh", () => setSheet("mode"));
     const gridButton = tool(
         grid ? "square-outline" : "duplicate-outline",
         grid ? "Xem một camera" : "Xem nhiều camera",
@@ -471,7 +471,7 @@ export default function CameraViewer({
             )}
             {tool(
                 "move",
-                "Pan/Tilt",
+                "Xoay camera",
                 () => setShowPan((value) => !value),
                 showPan,
             )}
@@ -503,7 +503,7 @@ export default function CameraViewer({
             </Pressable>
             {tool(
                 "call-outline",
-                "Bắt đầu/kết thúc Voice Call",
+                "Bắt đầu/kết thúc gọi thoại",
                 intercom.toggleCall,
                 intercom.mode === "call",
             )}
@@ -526,7 +526,7 @@ export default function CameraViewer({
         <View style={styles.pan}>
             <Pressable
                 accessibilityRole="button"
-                accessibilityLabel="Đóng Pan/Tilt"
+                accessibilityLabel="Đóng điều khiển xoay"
                 onPress={() => setShowPan(false)}
                 style={styles.panClose}
             >

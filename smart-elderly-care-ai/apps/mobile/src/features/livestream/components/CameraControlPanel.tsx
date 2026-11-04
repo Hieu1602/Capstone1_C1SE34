@@ -82,8 +82,8 @@ export default function CameraControlPanel(props: Props) {
         <ControlActionButton key={item.label} {...item} />
     );
     const tabs = [
-        { id: audioTab, label: audioTab === "call" ? "Voice Call" : "Talk" },
-        { id: "pan", label: "Pan/Tilt" },
+        { id: audioTab, label: audioTab === "call" ? "Gọi thoại" : "Đàm thoại" },
+        { id: "pan", label: "Xoay camera" },
     ] as const;
     return (
         <Animated.View
@@ -145,7 +145,7 @@ export default function CameraControlPanel(props: Props) {
                         {(
                             [
                                 {
-                                    label: "Mic",
+                                    label: "Micro",
                                     icon: props.intercom.micEnabled
                                         ? "mic"
                                         : "mic-off",
@@ -153,7 +153,7 @@ export default function CameraControlPanel(props: Props) {
                                     onPress: props.intercom.toggleMic,
                                 },
                                 {
-                                    label: "Speaker",
+                                    label: "Loa",
                                     icon: props.intercom.speakerEnabled
                                         ? "volume-high-outline"
                                         : "volume-mute",
@@ -173,7 +173,7 @@ export default function CameraControlPanel(props: Props) {
                                     {item.label}
                                 </Text>
                                 <Text style={{ color: colors.textMuted }}>
-                                    {item.enabled ? "On" : "Off"}
+                                    {item.enabled ? "Bật" : "Tắt"}
                                 </Text>
                             </View>
                         ))}
@@ -201,7 +201,7 @@ export default function CameraControlPanel(props: Props) {
                                   ? "Đang truyền giọng nói…"
                                   : "Đã kết nối âm thanh"
                               : props.intercom.error ||
-                                "Giữ nút để nói hoặc bắt đầu Voice Call."}
+                                "Giữ nút để nói hoặc bắt đầu gọi thoại."}
                     </Text>
                 )}
                 {props.feedback && (
@@ -220,7 +220,7 @@ export default function CameraControlPanel(props: Props) {
                 <TouchableOpacity
                     accessibilityRole="button"
                     accessibilityLabel={
-                        props.panel === "call" ? "Voice Call" : "Talk"
+                        props.panel === "call" ? "Gọi thoại" : "Đàm thoại"
                     }
                     onPress={
                         props.panel === "call"
@@ -253,11 +253,11 @@ export default function CameraControlPanel(props: Props) {
                     <Text style={styles.buttonText}>
                         {props.panel === "call"
                             ? props.intercom.mode === "call"
-                                ? "End Call"
-                                : "Tap to Call"
+                                ? "Kết thúc gọi"
+                                : "Nhấn để gọi"
                             : props.intercom.mode === "ptt"
-                              ? "Release To Stop"
-                              : "Hold To Talk"}
+                              ? "Thả ra để dừng"
+                              : "Giữ để nói"}
                     </Text>
                 </TouchableOpacity>
             )}
