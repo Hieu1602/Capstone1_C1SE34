@@ -457,11 +457,11 @@ export const PatientPrescriptionsTab: React.FC<PatientPrescriptionsTabProps> = (
               </Text>
               <View style={{ flexDirection: 'row', gap: 8 }}>
                 <TouchableOpacity style={tabStyles.rxEditBtn} onPress={() => handleEdit(item)}>
-                  <Ionicons name="create-outline" size={13} color="#0284C7" style={{ marginRight: 2 }} />
+                  <Ionicons name="create-outline" size={15} color="#0284C7" style={{ marginRight: 4 }} />
                   <Text style={tabStyles.rxEditBtnText}>Sửa</Text>
                 </TouchableOpacity>
                 <TouchableOpacity style={tabStyles.rxDeleteBtn} onPress={() => onDeletePrescription(item.id, item.medication_name)}>
-                  <Ionicons name="trash-outline" size={13} color="#EF4444" style={{ marginRight: 2 }} />
+                  <Ionicons name="trash-outline" size={15} color="#EF4444" style={{ marginRight: 4 }} />
                   <Text style={tabStyles.rxDeleteBtnText}>Xóa</Text>
                 </TouchableOpacity>
               </View>
@@ -629,10 +629,26 @@ const tabStyles = StyleSheet.create({
   rxInstructions: { fontSize: 11.5, marginTop: 6, lineHeight: 16 },
   rxActionRow: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginTop: 10, paddingTop: 8, borderTopWidth: StyleSheet.hairlineWidth, borderTopColor: '#E2E8F066' },
   rxDoctorCredit: { fontSize: 11 },
-  rxEditBtn: { flexDirection: 'row', alignItems: 'center', paddingHorizontal: 7, paddingVertical: 4, borderRadius: 5, backgroundColor: '#EFF6FF' },
-  rxEditBtnText: { fontSize: 11, color: '#0284C7', fontWeight: '700' },
-  rxDeleteBtn: { flexDirection: 'row', alignItems: 'center', paddingHorizontal: 7, paddingVertical: 4, borderRadius: 5, backgroundColor: '#FEE2E2' },
-  rxDeleteBtnText: { fontSize: 11, color: '#EF4444', fontWeight: '700' },
+  rxEditBtn: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    paddingHorizontal: 12,
+    paddingVertical: 7,
+    borderRadius: 8,
+    backgroundColor: '#EFF6FF',
+    minHeight: 32,
+  },
+  rxEditBtnText: { fontSize: 13, color: '#0284C7', fontWeight: '700' },
+  rxDeleteBtn: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    paddingHorizontal: 12,
+    paddingVertical: 7,
+    borderRadius: 8,
+    backgroundColor: '#FEE2E2',
+    minHeight: 32,
+  },
+  rxDeleteBtnText: { fontSize: 13, color: '#EF4444', fontWeight: '700' },
   thresholdRow: { flexDirection: 'row', justifyContent: 'space-between', paddingVertical: 6, borderBottomWidth: StyleSheet.hairlineWidth, borderBottomColor: '#E2E8F044' },
   thresholdLabel: { fontSize: 12, color: '#64748B' },
   thresholdVal: { fontSize: 12.5, fontWeight: '700' },

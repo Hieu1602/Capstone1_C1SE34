@@ -243,8 +243,8 @@ class ChatbotRAGService:
                 engine_name = f"SmartCare AI ({model_name} - General Knowledge)"
                 sources = ["Tri thức y khoa tổng quát"] if not is_en else ["General Medical Knowledge"]
                 # Thêm ghi chú minh bạch cho câu hỏi ngoài tài liệu nếu LLM chưa có
-                note_vi = "\n\n*(Thông tin trên được tổng hợp từ kiến thức y khoa lão khoa tổng quát của Trợ lý AI SmartCare, ngoài phạm vi cẩm nang riêng của gia đình)*"
-                note_en = "\n\n*(This advice is based on general geriatric medical knowledge of SmartCare AI, outside internal family care documents)*"
+                note_vi = "\n\n*(Nguồn: Tri thức y khoa lão khoa tổng quát)*"
+                note_en = "\n\n*(Source: General geriatric medical knowledge)*"
                 if is_en and "general" not in answer_text.lower():
                     answer_text += note_en
                 elif not is_en and "tổng quát" not in answer_text.lower():

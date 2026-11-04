@@ -1,0 +1,43 @@
+# ==============================================================================
+# HƯỚNG DẪN CHĂM SÓC GIẤC NGỦ, TÂM LÝ VÀ PHÒNG NGỪA ĐỘT QUỴ MÙA LẠNH Ở NGƯỜI GIÀ
+# Áp dụng cho: Hệ thống Trợ lý Y tế Thông minh SmartCare AI
+# Biên soạn theo Khuyến cáo Chăm sóc Sức khỏe Lão khoa Toàn diện
+# ==============================================================================
+
+--- PHẦN 1: ĐẶC ĐIỂM GIẤC NGỦ VÀ XỬ TRÍ MẤT NGỦ Ở NGƯỜI CAO TUỔI ---
+1.1. Đặc điểm sinh lý giấc ngủ tuổi già:
+- Người cao tuổi thường ngủ ít hơn thời trẻ (trung bình 5 - 7 tiếng mỗi ngày đêm).
+- Giấc ngủ nông hơn, dễ bị giật mình thức giấc giữa đêm bởi tiếng động nhỏ hoặc ánh sáng.
+- Thức dậy sớm hơn (khoảng 05:00 - 06:00 sáng).
+
+1.2. Các biện pháp vệ sinh giấc ngủ tự nhiên (Không dùng thuốc):
+- Cố định giờ đi ngủ và giờ thức dậy mỗi ngày kể cả ngày cuối tuần để thiết lập nhịp sinh học ổn định.
+- Hạn chế tối đa trà đặc, cà phê, nước tăng lực và thuốc lá sau 14:00 chiều.
+- Hạn chế ngủ trưa quá nhiều: Thời gian ngủ trưa lý tưởng chỉ nên từ 20 - 30 phút, tối đa 45 phút và trước 14:00 chiều. Ngủ trưa nhiều sẽ gây trằn trọc mất ngủ vào ban đêm.
+- Liệu pháp ngâm chân nước ấm: Trước khi đi ngủ 30 phút, ngâm chân vào chậu nước ấm khoảng 40 độ C trong 15 phút (có thể cho vài lát gừng đập dập hoặc chút muối hạt). Nước ấm giúp giãn mạch máu ngoại vi, làm ấm bàn chân, kích thích tuần hoàn não và giúp đi vào giấc ngủ dễ dàng hơn.
+- Không gian phòng ngủ: Giữ phòng ngủ yên tĩnh, thông thoáng, nhiệt độ phòng duy trì 24 - 26 độ C, dùng đèn ngủ ánh sáng vàng ấm dịu mắt.
+- Không xem tivi, không dùng điện thoại thông minh trên giường ngủ vì ánh sáng xanh ức chế hormone gây ngủ Melatonin.
+
+1.3. Xử trí tình trạng đi tiểu đêm nhiều lần:
+- Hạn chế uống nhiều nước, canh hoặc trà sau 20:00 tối.
+- Kiểm tra các nguyên nhân bệnh lý tiềm ẩn: Phì đại tuyến tiền liệt (ở nam giới), viêm bàng quang, bệnh đái tháo đường không kiểm soát tốt đường huyết.
+- Nếu đang uống thuốc lợi tiểu điều trị tăng huyết áp/suy tim: Cần uống vào buổi sáng, tránh uống thuốc lợi tiểu vào buổi chiều tối.
+
+--- PHẦN 2: PHÒNG NGỪA ĐỘT QUỴ MÙA LẠNH VÀ THAY ĐỔI THỜI TIẾT ĐỘT NGỘT ---
+2.1. Nguy cơ đột quỵ khi trời chuyển lạnh:
+- Thời tiết lạnh làm các mạch máu co thắt đột ngột, khiến huyết áp tăng vọt, làm tăng nguy cơ vỡ mạch máu não hoặc hình thành cục máu đông gây nhồi máu não.
+- Thời điểm nguy hiểm nhất: Đêm khuya và sáng sớm (04:00 - 06:00 sáng) khi người già thức dậy đi vệ sinh hoặc ra ngoài tập thể dục sớm.
+
+2.2. Quy tắc giữ ấm và thức dậy an toàn:
+- Luôn giữ ấm các vùng trọng yếu: Đầu, cổ, ngực và lòng bàn chân. Đội mũ len mềm và đi tất khi ngủ vào mùa đông.
+- Tuyệt đối không bật dậy đột ngột rời giường ngay khi vừa tỉnh giấc: Hãy nằm tại giường làm ấm cơ thể 5 phút, ngồi dậy từ từ buông thõng chân mép giường 2 phút, khoác thêm áo ấm rồi mới đứng lên.
+- Đặt bô đi vệ sinh trong phòng ngủ hoặc đảm bảo lối đi vào nhà vệ sinh kín gió, ấm áp, có dép chống trượt và đèn chiếu sáng rõ ràng.
+- Không tắm nước lạnh, không tắm vào ban đêm muộn.
+
+2.3. Nhận biết sớm dấu hiệu đột quỵ não theo quy tắc FAST:
+- F (Face - Mặt): Một bên mặt bị xệ xuống, nụ cười bị méo lệch, nhân trung lệch sang một bên.
+- A (Arms - Tay chân): Yếu hoặc liệt một bên tay, chân. Yêu cầu giơ hai tay lên cao, một bên tay bị rơi xuống hoặc không thể nhấc lên được.
+- S (Speech - Lời nói): Nói ngọng, phát âm líu lưỡi, nói khó khăn hoặc nói những câu vô nghĩa không hiểu được.
+- T (Time - Thời gian): "THỜI GIAN LÀ NÃO". Nếu phát hiện bất kỳ dấu hiệu nào trên, phải gọi cấp cứu 115 ngay lập tức để đưa người bệnh đến bệnh viện có đơn vị đột quỵ trong "GIỜ VÀNG" (trước 3 - 4.5 giờ kể từ khi khởi phát triệu chứng).
+- Trong khi chờ cấp cứu: Cho người bệnh nằm nghiêng an toàn một bên, đầu kê cao 30 độ, nới lỏng cổ áo, tuyệt đối KHÔNG cạo gió, KHÔNG chích máu đầu ngón tay, KHÔNG cho uống nước hoặc bất kỳ loại thuốc nào để tránh sặc vào đường thở.
+

@@ -46,6 +46,9 @@ class DoctorPatientDetail(DoctorPatientCard):
     bmi: Optional[float] = None
     next_appointment: Optional[str] = None
     prescriptions_count: int = 0
+    hr_threshold_low: Optional[int] = 50
+    hr_threshold_high: Optional[int] = 120
+    spo2_threshold_low: Optional[int] = 90
 
 
 class PrescriptionItem(BaseModel):
@@ -134,9 +137,9 @@ class DoctorVitalsAnalytics(BaseModel):
 
 class ThresholdsUpdate(BaseModel):
     """Cập nhật cấu hình ngưỡng y tế khuyến nghị."""
-    hr_threshold_high: Optional[int] = Field(None, ge=80, le=200)
-    hr_threshold_low: Optional[int] = Field(None, ge=40, le=90)
-    spo2_threshold_low: Optional[int] = Field(None, ge=75, le=95)
+    hr_threshold_high: Optional[int] = Field(None, ge=70, le=220)
+    hr_threshold_low: Optional[int] = Field(None, ge=30, le=100)
+    spo2_threshold_low: Optional[int] = Field(None, ge=70, le=99)
     immobility_seconds: Optional[int] = Field(None, ge=10, le=600)
 
 

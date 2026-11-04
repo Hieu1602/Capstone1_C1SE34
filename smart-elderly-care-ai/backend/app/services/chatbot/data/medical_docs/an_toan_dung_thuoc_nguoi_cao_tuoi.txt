@@ -1,0 +1,41 @@
+# ==============================================================================
+# NGUYÊN TẮC AN TOÀN DÙNG THUỐC VÀ QUẢN LÝ ĐƠN THUỐC CHO NGƯỜI CAO TUỔI
+# Áp dụng cho: Hệ thống Trợ lý Y tế Thông minh SmartCare AI
+# Tuân thủ nghiêm ngặt Quy tắc Nghiệp vụ BR-5 (Không tự ý kê đơn / đổi liều)
+# ==============================================================================
+
+--- MỤC 1: NGUYÊN TẮC 5 ĐÚNG KHI UỐNG THUỐC Ở NGƯỜI CAO TUỔI ---
+1. Đúng người bệnh: Xác nhận đúng tên của người cao tuổi trước khi phát thuốc.
+2. Đúng tên thuốc: Đọc kỹ tên thuốc trên bao bì, phân biệt các thuốc có bao bì hoặc phát âm na ná nhau (Look-alike, Sound-alike).
+3. Đúng liều lượng: Đúng số viên, đúng hàm lượng miligam đã được bác sĩ chuyên khoa chỉ định.
+4. Đúng đường dùng: Uống với nước lọc đun sôi để nguội. Tránh uống thuốc với sữa, nước chè đặc, nước ép bưởi chùm hoặc nước ngọt có ga vì có thể làm biến đổi hấp thu thuốc.
+5. Đúng thời điểm: Uống đúng cữ trước ăn, sau ăn hoặc trước khi đi ngủ theo hướng dẫn điều trị.
+
+--- MỤC 2: PHƯƠNG PHÁP QUẢN LÝ THUỐC ĐỂ TRÁNH QUÊN HOẶC UỐNG NHẦM ---
+2.1. Sử dụng hộp chia thuốc theo tuần:
+- Chuẩn bị hộp chia thuốc 7 ngày (chia sẵn theo 3 - 4 ngăn: Sáng, Trưa, Chiều, Tối).
+- Vào một ngày cố định trong tuần (ví dụ sáng Chủ Nhật), người chăm sóc hoặc người thân cùng người cao tuổi phân loại thuốc vào từng ô.
+- Đặt hộp chia thuốc ở nơi khô ráo, sạch sẽ, vừa tầm mắt (trên bàn ăn hoặc tủ đầu giường), tránh ánh nắng trực tiếp và độ ẩm cao.
+
+2.2. Xử trí khi người cao tuổi quên uống một cữ thuốc:
+- NGUYÊN TẮC VÀNG: TUYỆT ĐỐI KHÔNG BAO GIỜ UỐNG GẤP ĐÔI LIỀU Ở CỮ TIẾP THEO để bù cho cữ đã quên (uống gấp đôi liều thuốc huyết áp hoặc tiểu đường có thể gây tụt huyết áp trụy mạch hoặc hôn mê do hạ đường huyết).
+- Xử trí cụ thể:
+  + Nếu vừa mới qua giờ uống (trong vòng 1 - 2 giờ): Cho người cao tuổi uống ngay cữ thuốc bị quên.
+  + Nếu thời gian đã gần sát cữ uống tiếp theo: Hãy bỏ qua cữ thuốc đã quên và tiếp tục uống cữ tiếp theo đúng giờ và đúng liều quy định.
+
+--- MỤC 3: CÁC TƯƠNG TÁC THUỐC NGUY HIỂM THƯỜNG GẶP Ở NGƯỜI GIÀ ---
+3.1. Thuốc giảm đau kháng viêm NSAID (Ibuprofen, Meloxicam, Diclofenac):
+- Thường tự ý mua uống khi bị đau nhức xương khớp, đau lưng, thoái hóa khớp.
+- Nguy cơ: Gây loét xuất huyết dạ dày, tăng huyết áp khó kiểm soát và làm nặng thêm tình trạng suy thận ở người già.
+- Lưu ý: Chỉ dùng thuốc giảm đau theo đơn của bác sĩ, ưu tiên giảm đau an toàn như Paracetamol liều vừa phải (< 2g/ngày cho người già) hoặc các biện pháp chườm ấm, xoa bóp, vật lý trị liệu.
+
+3.2. Thuốc an thần, thuốc ngủ (Sedatives, Benzodiazepines):
+- Tác dụng phụ: Làm giảm phản xạ vận động, gây lơ mơ, mất thăng bằng kéo dài sang sáng hôm sau.
+- Nguy cơ: Là một trong những nguyên nhân hàng đầu dẫn đến té ngã gãy xương khi thức dậy ban đêm hoặc sáng sớm.
+- Lời khuyên: Hạn chế tối đa lạm dụng thuốc ngủ, ưu tiên các biện pháp vệ sinh giấc ngủ tự nhiên (ngâm chân nước ấm, tập hít thở thư giãn).
+
+--- MỤC 4: NGUYÊN TẮC BR-5 DÀNH CHO TRỢ LÝ AI SMARTCARE ---
+- Trợ lý AI SmartCare chỉ đóng vai trò hỗ trợ nhắc lịch uống thuốc, giải thích công dụng chung và các lưu ý an toàn.
+- AI tuyệt đối KHÔNG tự ý kê đơn thuốc mới, không khuyên dùng các loại thuốc truyền miệng hay thực phẩm chức năng chưa rõ nguồn gốc.
+- Mọi điều chỉnh về loại thuốc hoặc liều lượng bắt buộc phải có chỉ định trực tiếp từ bác sĩ chuyên khoa đang điều trị cho người cao tuổi.
+

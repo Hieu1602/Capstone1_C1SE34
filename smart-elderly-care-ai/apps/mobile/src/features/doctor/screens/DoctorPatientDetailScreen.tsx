@@ -15,7 +15,8 @@ import {
 } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
-import { useNavigation, useRoute } from '@react-navigation/native';
+import { useNavigation, useRoute, useFocusEffect } from '@react-navigation/native';
+import { alertsWS } from '../../../services/websocket';
 
 import { Colors } from '../../../theme/colors';
 import { useTheme } from '../../../store/useThemeStore';
@@ -121,6 +122,9 @@ export default function DoctorPatientDetailScreen() {
         setEditDrugAllergies(resDetail.data.drug_allergies || '');
         setEditFoodAllergies(resDetail.data.food_allergies || '');
         setEditDietaryNotes(resDetail.data.dietary_notes || '');
+        if (resDetail.data.hr_threshold_low) setHrLow(String(resDetail.data.hr_threshold_low));
+        if (resDetail.data.hr_threshold_high) setHrHigh(String(resDetail.data.hr_threshold_high));
+        if (resDetail.data.spo2_threshold_low) setSpo2Low(String(resDetail.data.spo2_threshold_low));
       }
       if (resRx.data && Array.isArray(resRx.data)) {
         setPrescriptions(resRx.data);
@@ -133,7 +137,26 @@ export default function DoctorPatientDetailScreen() {
 
   useEffect(() => {
     fetchDetail();
+    const handleWs = (event: any) => {
+      if (
+        event?.type === 'ALERT_NEW' &&
+        (event?.alert_type === 'MEDICAL_RECORD_UPDATED' || event?.data?.alert_type === 'MEDICAL_RECORD_UPDATED' ||
+         event?.alert_type === 'DEVICE_CONFIG_UPDATED' || event?.data?.alert_type === 'DEVICE_CONFIG_UPDATED')
+      ) {
+        fetchDetail();
+      }
+    };
+    const unsub = alertsWS.subscribe(handleWs);
+    return () => {
+      unsub();
+    };
   }, [fetchDetail]);
+
+  useFocusEffect(
+    useCallback(() => {
+      fetchDetail();
+    }, [fetchDetail])
+  );
 
   const onRefresh = () => {
     setRefreshing(true);
@@ -423,6 +446,7 @@ export default function DoctorPatientDetailScreen() {
         spo2_threshold_low: parseInt(spo2Low, 10),
       });
       setModalThresholdVisible(false);
+      fetchDetail();
       Alert.alert('Cập nhật thành công', 'Đã lưu ngưỡng an toàn y tế và đồng bộ xuống Hub AI.');
     } catch {
       Alert.alert('Lỗi', 'Không thể cập nhật ngưỡng.');

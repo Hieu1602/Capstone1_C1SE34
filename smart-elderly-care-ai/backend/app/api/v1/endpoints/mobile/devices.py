@@ -134,7 +134,93 @@ async def update_device_config(
                     status_code=status.HTTP_403_FORBIDDEN,
                     detail="Bạn không có quyền sửa đổi cấu hình thiết bị & ngưỡng an toàn. Quyền này thuộc về Người sở hữu.",
                 )
-    return await crud_device.update_config(db, device=device, config_in=config_in)
+    res_cfg = await crud_device.update_config(db, device=device, config_in=config_in)
+
+    # Nếu có thay đổi ngưỡng cảnh báo sinh hiệu, đồng bộ và thông báo cho Bác sĩ phụ trách
+    has_threshold_changes = any(
+        v is not None for v in (config_in.hr_threshold_high, config_in.hr_threshold_low, config_in.spo2_threshold_low)
+    )
+    if has_threshold_changes and device.house_id:
+        try:
+            import json
+            from sqlalchemy import select, or_
+            from app.models.incident import Incident
+            from app.models.house import HouseMember
+            from app.models.elderly_profile import ElderlyProfile
+            from app.crud.crud_doctor import _CLINICAL_STORE
+            from app.api.websockets.vitals_ws import alert_clients
+
+            eld_res = await db.execute(select(ElderlyProfile).where(ElderlyProfile.house_id == device.house_id).limit(1))
+            elderly = eld_res.scalar_one_or_none()
+            elderly_name = elderly.full_name if elderly else "người cao tuổi"
+            elderly_id_str = str(elderly.id) if elderly else ""
+
+            # Đồng bộ bộ nhớ lâm sàng
+            for k in (elderly_id_str, "1"):
+                if k and k in _CLINICAL_STORE:
+                    if config_in.hr_threshold_low is not None:
+                        _CLINICAL_STORE[k]["hr_threshold_low"] = config_in.hr_threshold_low
+                    if config_in.hr_threshold_high is not None:
+                        _CLINICAL_STORE[k]["hr_threshold_high"] = config_in.hr_threshold_high
+                    if config_in.spo2_threshold_low is not None:
+                        _CLINICAL_STORE[k]["spo2_threshold_low"] = config_in.spo2_threshold_low
+
+            doc_stmt = (
+                select(User)
+                .join(HouseMember, HouseMember.user_id == User.id)
+                .where(
+                    HouseMember.house_id == device.house_id,
+                    or_(HouseMember.role_in_house == "DOCTOR", User.role == "doctor"),
+                )
+            )
+            doc_res = await db.execute(doc_stmt)
+            doctors = list(doc_res.scalars().all())
+
+            hr_l = config_in.hr_threshold_low or res_cfg.hr_threshold_low
+            hr_h = config_in.hr_threshold_high or res_cfg.hr_threshold_high
+            spo2_l = config_in.spo2_threshold_low or res_cfg.spo2_threshold_low
+            updater_name = current_user.full_name or "Chủ nhà"
+            notif_msg = f"⚙️ {updater_name} đã điều chỉnh ngưỡng an toàn sinh hiệu cho cụ {elderly_name}: Tim {hr_l} - {hr_h} bpm, SpO2 Min {spo2_l}%."
+
+            for doc in doctors:
+                if doc.id == current_user.id:
+                    continue
+                new_incident = Incident(
+                    device_id=device.id,
+                    alert_type="DEVICE_CONFIG_UPDATED",
+                    alert_level="LOW",
+                    message=notif_msg,
+                    is_acknowledged=False,
+                    notes=f"USER:{doc.id}|PATIENT:{elderly_id_str}",
+                )
+                db.add(new_incident)
+                await db.commit()
+                await db.refresh(new_incident)
+
+                ws_payload = json.dumps({
+                    "type": "ALERT_NEW",
+                    "alert_type": "DEVICE_CONFIG_UPDATED",
+                    "data": {
+                        "id": str(new_incident.id),
+                        "alert_type": "DEVICE_CONFIG_UPDATED",
+                        "alert_level": "LOW",
+                        "message": new_incident.message,
+                        "patient_id": elderly_id_str,
+                        "doctor_id": str(doc.id),
+                        "created_at": new_incident.created_at.isoformat() if new_incident.created_at else None,
+                        "thresholds": {
+                            "hr_threshold_low": hr_l,
+                            "hr_threshold_high": hr_h,
+                            "spo2_threshold_low": spo2_l,
+                        },
+                    }
+                }, ensure_ascii=False)
+                for client_ws in list(alert_clients):
+                    await client_ws.send_text(ws_payload)
+        except Exception:
+            pass
+
+    return res_cfg
 
 
 @router.get("/{device_id}/config", response_model=DeviceConfigOut)

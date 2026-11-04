@@ -496,7 +496,7 @@ export const houseApi = {
 // 8. Chatbot AI API
 export const chatbotApi = {
   chat: (data: { message: string; session_id?: string; context_window?: number; house_id?: string }) =>
-    api.post('/chatbot/chat', data),
+    api.post('/chatbot/chat', data, { timeout: 60000 }),
   getHealth: () => api.get('/chatbot/health'),
   getSessions: () => api.get('/chatbot/sessions'),
   getSessionDetail: (sessionId: string) => api.get(`/chatbot/sessions/${sessionId}`),

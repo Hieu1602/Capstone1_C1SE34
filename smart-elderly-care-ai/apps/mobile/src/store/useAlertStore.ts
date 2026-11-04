@@ -90,7 +90,12 @@ export const useAlertStore = create<AlertState>()((set, get) => ({
       sirenActive: incident.alert_level === 'CRITICAL' ? true : state.sirenActive,
     })),
 
-  acknowledgeIncident: (incidentId: string, note?: string, user: string = 'Demo User') =>
+  acknowledgeIncident: async (incidentId: string, note?: string, user: string = 'Demo User') => {
+    try {
+      await incidentsApi.acknowledge(incidentId, note);
+    } catch (e) {
+      console.warn('acknowledgeIncident API error:', e);
+    }
     set((state) => {
       const updatedIncidents = state.incidents.map((inc) =>
         inc.id === incidentId
@@ -112,7 +117,8 @@ export const useAlertStore = create<AlertState>()((set, get) => ({
         incidents: updatedIncidents,
         sirenActive: hasOtherCritical,
       };
-    }),
+    });
+  },
 
   acknowledgeAll: async () => {
     try {

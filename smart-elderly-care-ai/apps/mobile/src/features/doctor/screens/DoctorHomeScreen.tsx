@@ -21,6 +21,7 @@ import { useTheme } from '../../../store/useThemeStore';
 import { useAuthStore } from '../../../store/useAuthStore';
 import { useAlertStore } from '../../../store/useAlertStore';
 import { doctorApi } from '../../../services/api';
+import { alertsWS } from '../../../services/websocket';
 import { LocalizedText } from '../../../i18n/LocalizedComponents';
 import AdminMarqueeBanner from '../../../components/AdminMarqueeBanner';
 import {
@@ -136,6 +137,20 @@ export default function DoctorHomeScreen() {
 
   useEffect(() => {
     fetchData();
+    alertsWS.connect();
+    const handleWs = (event: any) => {
+      if (
+        event?.type === 'ALERT_NEW' ||
+        event?.alert_type === 'MEDICAL_RECORD_UPDATED' ||
+        event?.alert_type === 'APPOINTMENT_SCHEDULED'
+      ) {
+        fetchData();
+      }
+    };
+    const unsub = alertsWS.subscribe(handleWs);
+    return () => {
+      unsub();
+    };
   }, [fetchData]);
 
   useFocusEffect(

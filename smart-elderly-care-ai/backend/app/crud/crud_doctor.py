@@ -204,6 +204,14 @@ class CRUDDoctor:
         except (ValueError, TypeError):
             pass
 
+        if not elderly:
+            res = await db.execute(
+                select(ElderlyProfile)
+                .options(selectinload(ElderlyProfile.house), selectinload(ElderlyProfile.devices))
+                .limit(1)
+            )
+            elderly = res.scalar_one_or_none()
+
         house_id = str(elderly.house_id) if elderly and elderly.house_id else ""
         house_name = elderly.house.name if elderly and elderly.house else ""
         house_address = elderly.house.address if elderly and elderly.house else ""
@@ -247,11 +255,62 @@ class CRUDDoctor:
         elif (spo2 is not None and spo2 < 95) or (hr is not None and (hr > 100 or hr < 55)):
             health_status = "WARNING"
 
-        height = clinical.get("height_cm")
-        weight = clinical.get("weight_kg")
+        height = (
+            elderly.height_cm
+            if (elderly and elderly.height_cm)
+            else (med_record.height_cm or clinical.get("height_cm"))
+        )
+        weight = (
+            elderly.weight_kg
+            if (elderly and elderly.weight_kg)
+            else (med_record.weight_kg or clinical.get("weight_kg"))
+        )
         bmi = None
         if height and weight and height > 0:
             bmi = round(weight / ((height / 100) ** 2), 1)
+        elif med_record.bmi:
+            bmi = med_record.bmi
+
+        # Đồng bộ nguồn dữ liệu chuẩn từ DB ElderlyProfile -> med_record -> clinical
+        resolved_conditions = med_record.conditions if med_record.conditions else clinical.get("conditions", [])
+        resolved_drug_allergies = (
+            elderly.drug_allergies
+            if (elderly and elderly.drug_allergies is not None)
+            else (med_record.drug_allergies or clinical.get("drug_allergies"))
+        )
+        resolved_food_allergies = (
+            elderly.food_allergies
+            if (elderly and elderly.food_allergies is not None)
+            else (med_record.food_allergies or clinical.get("food_allergies"))
+        )
+        resolved_dietary_notes = (
+            elderly.dietary_notes
+            if (elderly and elderly.dietary_notes is not None)
+            else (med_record.dietary_notes or clinical.get("dietary_notes"))
+        )
+        resolved_blood_type = (
+            elderly.blood_type
+            if (elderly and elderly.blood_type)
+            else (med_record.blood_type or clinical.get("blood_type"))
+        )
+
+        # Đọc cấu hình ngưỡng sinh hiệu hiện hành từ DeviceConfig / _CLINICAL_STORE
+        cfg_hr_low = 50
+        cfg_hr_high = 120
+        cfg_spo2_low = 90
+        if band_device:
+            cfg_res = await db.execute(select(DeviceConfig).where(DeviceConfig.device_id == band_device.id))
+            d_cfg = cfg_res.scalar_one_or_none()
+            if d_cfg:
+                cfg_hr_low = d_cfg.hr_threshold_low
+                cfg_hr_high = d_cfg.hr_threshold_high
+                cfg_spo2_low = d_cfg.spo2_threshold_low
+        if clinical.get("hr_threshold_low") is not None:
+            cfg_hr_low = clinical["hr_threshold_low"]
+        if clinical.get("hr_threshold_high") is not None:
+            cfg_hr_high = clinical["hr_threshold_high"]
+        if clinical.get("spo2_threshold_low") is not None:
+            cfg_spo2_low = clinical["spo2_threshold_low"]
 
         return DoctorPatientDetail(
             id=med_record.id,
@@ -275,17 +334,20 @@ class CRUDDoctor:
             blood_pressure=bp_str,
             health_status=health_status,
             last_updated=last_updated_str or "Chưa có dữ liệu",
-            conditions=clinical.get("conditions", []),
-            drug_allergies=clinical.get("drug_allergies"),
-            food_allergies=clinical.get("food_allergies"),
-            dietary_notes=clinical.get("dietary_notes"),
+            conditions=resolved_conditions,
+            drug_allergies=resolved_drug_allergies,
+            food_allergies=resolved_food_allergies,
+            dietary_notes=resolved_dietary_notes,
             doctor_notes=clinical.get("doctor_notes"),
-            blood_type=clinical.get("blood_type"),
+            blood_type=resolved_blood_type,
             height_cm=height,
             weight_kg=weight,
             bmi=bmi,
             next_appointment=clinical.get("next_appointment"),
             prescriptions_count=len(prescriptions),
+            hr_threshold_low=cfg_hr_low,
+            hr_threshold_high=cfg_hr_high,
+            spo2_threshold_low=cfg_spo2_low,
         )
 
     def get_prescriptions(self, elderly_id: str) -> List[PrescriptionItem]:
@@ -388,7 +450,7 @@ class CRUDDoctor:
         return None
 
     async def update_clinical_record(
-        self, db: AsyncSession, elderly_id: str, obj_in: DoctorMedicalRecordUpdate
+        self, db: AsyncSession, elderly_id: str, obj_in: DoctorMedicalRecordUpdate, doctor_name: Optional[str] = "Bác sĩ phụ trách"
     ) -> DoctorPatientDetail:
         """Bác sĩ cập nhật hồ sơ bệnh án, bệnh nền, dị ứng, dinh dưỡng và dặn dò."""
         if elderly_id not in _CLINICAL_STORE:
@@ -413,6 +475,96 @@ class CRUDDoctor:
             clinical["height_cm"] = obj_in.height_cm
         if obj_in.weight_kg is not None:
             clinical["weight_kg"] = obj_in.weight_kg
+
+        # Đồng bộ lưu vào CSDL ElderlyProfile để người nhà/chủ nhà cũng thấy
+        elderly = None
+        try:
+            val_uuid = UUID(elderly_id)
+            res = await db.execute(select(ElderlyProfile).where(ElderlyProfile.id == val_uuid))
+            elderly = res.scalar_one_or_none()
+        except (ValueError, TypeError):
+            pass
+
+        if not elderly:
+            res = await db.execute(select(ElderlyProfile).limit(1))
+            elderly = res.scalar_one_or_none()
+
+        if elderly:
+            import json
+            if obj_in.drug_allergies is not None:
+                elderly.drug_allergies = obj_in.drug_allergies
+            if obj_in.food_allergies is not None:
+                elderly.food_allergies = obj_in.food_allergies
+            if obj_in.dietary_notes is not None:
+                elderly.dietary_notes = obj_in.dietary_notes
+            if obj_in.blood_type is not None:
+                elderly.blood_type = obj_in.blood_type
+            if obj_in.height_cm is not None:
+                elderly.height_cm = obj_in.height_cm
+            if obj_in.weight_kg is not None:
+                elderly.weight_kg = obj_in.weight_kg
+            if obj_in.conditions is not None:
+                elderly.conditions_json = json.dumps([c.model_dump() for c in obj_in.conditions], ensure_ascii=False)
+                elderly.medical_history = ", ".join(c.name for c in obj_in.conditions)
+            await db.commit()
+            await db.refresh(elderly)
+
+        # Gửi thông báo và bắn WebSocket đồng bộ cho gia đình / chủ nhà
+        if elderly and elderly.house_id:
+            try:
+                import json
+                from app.models.incident import Incident
+                from app.api.websockets.vitals_ws import alert_clients
+
+                dev_stmt = select(Device.id).where(Device.house_id == elderly.house_id).limit(1)
+                dev_res = await db.execute(dev_stmt)
+                device_id = dev_res.scalar_one_or_none()
+                if not device_id:
+                    any_dev = await db.execute(select(Device.id).limit(1))
+                    device_id = any_dev.scalar_one_or_none()
+
+                changes = []
+                if obj_in.doctor_notes is not None or obj_in.next_appointment is not None:
+                    changes.append("lời dặn dò & lịch tái khám")
+                if obj_in.conditions is not None:
+                    changes.append(f"bệnh lý nền ({len(obj_in.conditions)} bệnh)")
+                if obj_in.drug_allergies is not None or obj_in.food_allergies is not None or obj_in.dietary_notes is not None:
+                    changes.append("dị ứng & chế độ dinh dưỡng")
+                if not changes:
+                    changes.append("hồ sơ y tế")
+
+                doc_display = doctor_name or "Bác sĩ phụ trách"
+                notif_msg = f"🩺 {doc_display} đã cập nhật {', '.join(changes)} cho cụ {elderly.full_name}."
+
+                if device_id:
+                    new_incident = Incident(
+                        device_id=device_id,
+                        alert_type="MEDICAL_RECORD_UPDATED",
+                        alert_level="LOW",
+                        message=notif_msg,
+                        is_acknowledged=False,
+                        notes=f"PATIENT:{elderly.id}|DOCTOR_RECORD_UPDATE",
+                    )
+                    db.add(new_incident)
+                    await db.commit()
+                    await db.refresh(new_incident)
+
+                    ws_payload = json.dumps({
+                        "type": "ALERT_NEW",
+                        "alert_type": "MEDICAL_RECORD_UPDATED",
+                        "data": {
+                            "id": str(new_incident.id),
+                            "alert_type": "MEDICAL_RECORD_UPDATED",
+                            "alert_level": "LOW",
+                            "message": new_incident.message,
+                            "patient_id": str(elderly.id),
+                            "created_at": new_incident.created_at.isoformat() if new_incident.created_at else None,
+                        }
+                    }, ensure_ascii=False)
+                    for client_ws in list(alert_clients):
+                        await client_ws.send_text(ws_payload)
+            except Exception:
+                pass
 
         return await self.get_patient_detail(db, elderly_id)
 
@@ -499,6 +651,16 @@ class CRUDDoctor:
                             bp_val = f"{r.bp_systolic}/{r.bp_diastolic}"
                             break
 
+                    hourly_list = []
+                    for r in day_recs:
+                        hourly_list.append({
+                            "time": r.time.strftime("%H:%M"),
+                            "heart_rate": r.heart_rate,
+                            "spo2": r.spo2,
+                            "bp": f"{r.bp_systolic}/{r.bp_diastolic}" if (r.bp_systolic and r.bp_diastolic) else None,
+                            "skin_temp": r.skin_temp_max,
+                        })
+
                     daily_trends.append({
                         "date": d_str,
                         "avg_heart_rate": round(sum(d_hrs) / len(d_hrs)) if d_hrs else None,
@@ -509,6 +671,7 @@ class CRUDDoctor:
                         "avg_skin_temp": round(sum(d_temps) / len(d_temps), 1) if d_temps else None,
                         "bp": bp_val,
                         "steps": 0,
+                        "hourly_records": hourly_list,
                     })
 
         return DoctorVitalsAnalytics(
@@ -527,9 +690,116 @@ class CRUDDoctor:
         )
 
     async def update_thresholds(
-        self, db: AsyncSession, elderly_id: str, thresholds_in: ThresholdsUpdate
+        self, db: AsyncSession, elderly_id: str, thresholds_in: ThresholdsUpdate, doctor_name: Optional[str] = "Bác sĩ phụ trách"
     ) -> Dict[str, Any]:
         """Cập nhật cấu hình ngưỡng y tế khuyến nghị cho thiết bị của bệnh nhân."""
+        if elderly_id not in _CLINICAL_STORE:
+            _CLINICAL_STORE[elderly_id] = _init_clinical_data(elderly_id)
+        clinical = _CLINICAL_STORE[elderly_id]
+
+        if thresholds_in.hr_threshold_low is not None:
+            clinical["hr_threshold_low"] = thresholds_in.hr_threshold_low
+        if thresholds_in.hr_threshold_high is not None:
+            clinical["hr_threshold_high"] = thresholds_in.hr_threshold_high
+        if thresholds_in.spo2_threshold_low is not None:
+            clinical["spo2_threshold_low"] = thresholds_in.spo2_threshold_low
+
+        elderly = None
+        try:
+            val_uuid = UUID(elderly_id)
+            res = await db.execute(
+                select(ElderlyProfile)
+                .options(selectinload(ElderlyProfile.devices), selectinload(ElderlyProfile.house))
+                .where(ElderlyProfile.id == val_uuid)
+            )
+            elderly = res.scalar_one_or_none()
+        except (ValueError, TypeError):
+            pass
+
+        if not elderly:
+            res = await db.execute(
+                select(ElderlyProfile)
+                .options(selectinload(ElderlyProfile.devices), selectinload(ElderlyProfile.house))
+                .limit(1)
+            )
+            elderly = res.scalar_one_or_none()
+
+        device_id = None
+        if elderly and elderly.devices:
+            for d in elderly.devices:
+                if d.device_type == "SMARTBAND":
+                    device_id = d.id
+                    break
+            if not device_id and elderly.devices:
+                device_id = elderly.devices[0].id
+
+        if not device_id and elderly and elderly.house_id:
+            dev_stmt = select(Device.id).where(Device.house_id == elderly.house_id).limit(1)
+            dev_res = await db.execute(dev_stmt)
+            device_id = dev_res.scalar_one_or_none()
+
+        if not device_id:
+            any_dev = await db.execute(select(Device.id).limit(1))
+            device_id = any_dev.scalar_one_or_none()
+
+        if device_id:
+            cfg_res = await db.execute(select(DeviceConfig).where(DeviceConfig.device_id == device_id))
+            d_cfg = cfg_res.scalar_one_or_none()
+            if not d_cfg:
+                d_cfg = DeviceConfig(device_id=device_id)
+                db.add(d_cfg)
+            if thresholds_in.hr_threshold_low is not None:
+                d_cfg.hr_threshold_low = thresholds_in.hr_threshold_low
+            if thresholds_in.hr_threshold_high is not None:
+                d_cfg.hr_threshold_high = thresholds_in.hr_threshold_high
+            if thresholds_in.spo2_threshold_low is not None:
+                d_cfg.spo2_threshold_low = thresholds_in.spo2_threshold_low
+            d_cfg.is_custom_thresholds = True
+            d_cfg.configured_by_role = "DOCTOR"
+            await db.commit()
+
+        patient_name = elderly.full_name if elderly else "bệnh nhân"
+        hr_l = thresholds_in.hr_threshold_low or clinical.get("hr_threshold_low", 50)
+        hr_h = thresholds_in.hr_threshold_high or clinical.get("hr_threshold_high", 120)
+        spo2_l = thresholds_in.spo2_threshold_low or clinical.get("spo2_threshold_low", 90)
+
+        notif_msg = f"🩺 {doctor_name} đã điều chỉnh ngưỡng cảnh báo sinh hiệu cho cụ {patient_name} (Nhịp tim: {hr_l} - {hr_h} bpm, SpO2 Min: {spo2_l}%)."
+
+        if device_id:
+            from app.models.incident import Incident
+            new_incident = Incident(
+                device_id=device_id,
+                alert_type="DEVICE_CONFIG_UPDATED",
+                alert_level="LOW",
+                message=notif_msg,
+                is_acknowledged=False,
+                notes=f"PATIENT:{elderly.id if elderly else elderly_id}|DOCTOR_THRESHOLD_UPDATE",
+            )
+            db.add(new_incident)
+            await db.commit()
+            await db.refresh(new_incident)
+
+            try:
+                import json
+                from app.api.websockets.vitals_ws import alert_clients
+                ws_payload = json.dumps({
+                    "type": "ALERT_NEW",
+                    "alert_type": "DEVICE_CONFIG_UPDATED",
+                    "data": {
+                        "id": str(new_incident.id),
+                        "alert_type": "DEVICE_CONFIG_UPDATED",
+                        "alert_level": "LOW",
+                        "message": new_incident.message,
+                        "patient_id": str(elderly.id if elderly else elderly_id),
+                        "created_at": new_incident.created_at.isoformat() if new_incident.created_at else None,
+                        "thresholds": thresholds_in.model_dump(exclude_unset=True),
+                    }
+                }, ensure_ascii=False)
+                for client_ws in list(alert_clients):
+                    await client_ws.send_text(ws_payload)
+            except Exception:
+                pass
+
         return {
             "success": True,
             "message": "Đã cập nhật ngưỡng an toàn y tế thành công và đồng bộ xuống Hub.",

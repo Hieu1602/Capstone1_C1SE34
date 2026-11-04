@@ -28,6 +28,10 @@ from app.services.mqtt.mqtt_subscriber import MQTTSubscriber
 
 logger = logging.getLogger(__name__)
 
+from pathlib import Path
+_BACKEND_DIR = Path(__file__).resolve().parent.parent
+_STATIC_DIR = _BACKEND_DIR / "static" 
+
 
 # ---------------------------------------------------------------------------
 # Application Lifespan (startup / shutdown)
@@ -102,13 +106,17 @@ async def lifespan(app: FastAPI):
             from app.core.database import AsyncSessionFactory
             from app.models.user import User
             async with AsyncSessionFactory() as session:
-                result = await session.execute(select(User).where(User.avatar_url.like('/static/avatars/%')))
+                result = await session.execute(select(User).where(User.avatar_url.like('%/static/avatars/%')))
                 legacy_users = result.scalars().all()
                 updated_count = 0
                 for u in legacy_users:
-                    fname = u.avatar_url.split('/static/avatars/')[-1]
+                    if not u.avatar_url:
+                        continue
+                    fname = Path(u.avatar_url.split('?')[0].split('#')[0]).name
+                    if not fname:
+                        continue
                     local_p = _STATIC_DIR / "avatars" / fname
-                    if local_p.exists():
+                    if local_p.exists() and local_p.is_file():
                         img = Image.open(local_p)
                         if img.mode in ('RGBA', 'P'):
                             img = img.convert('RGB')
@@ -249,11 +257,8 @@ app.include_router(api_router, prefix="/api/v1")
 app.include_router(ws_router, prefix="/ws")
 
 # ---- Static Files (Ảnh hồ sơ khuôn mặt người cao tuổi, avatar người dùng) ----
-from pathlib import Path
 from fastapi.staticfiles import StaticFiles
 
-_BACKEND_DIR = Path(__file__).resolve().parent.parent
-_STATIC_DIR = _BACKEND_DIR / "static"
 _STATIC_DIR.mkdir(parents=True, exist_ok=True)
 (_STATIC_DIR / "faces").mkdir(parents=True, exist_ok=True)
 (_STATIC_DIR / "avatars").mkdir(parents=True, exist_ok=True)

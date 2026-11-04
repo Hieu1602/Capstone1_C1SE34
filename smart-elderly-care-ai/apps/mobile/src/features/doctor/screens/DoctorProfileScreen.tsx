@@ -224,32 +224,7 @@ export default function DoctorProfileScreen({ navigation }: any) {
   };
 
   const handleCloseEditModal = () => {
-    const isDirty =
-      editName.trim() !== (docInfo.name || '').trim() ||
-      editDegree.trim() !== (docInfo.degree || '').trim() ||
-      editSpecialty.trim() !== (docInfo.specialty || '').trim() ||
-      editHospital.trim() !== (docInfo.hospital || '').trim() ||
-      editDepartment.trim() !== (docInfo.department || '').trim() ||
-      editPhone.trim() !== (docInfo.phone || '').trim() ||
-      editAvatarUri !== avatarUri;
-
-    if (isDirty) {
-      Alert.alert(
-        'Thay đổi chưa lưu',
-        'Thông tin hồ sơ bác sĩ đã được chỉnh sửa. Bạn có muốn lưu thay đổi trước khi đóng không?',
-        [
-          { text: 'Tiếp tục sửa', style: 'cancel' },
-          {
-            text: 'Không lưu',
-            style: 'destructive',
-            onPress: () => setEditModalVisible(false),
-          },
-          { text: 'Lưu thay đổi', onPress: executeSaveProfile },
-        ]
-      );
-    } else {
-      setEditModalVisible(false);
-    }
+    setEditModalVisible(false);
   };
 
   const executeSavePassword = async () => {
@@ -265,7 +240,7 @@ export default function DoctorProfileScreen({ navigation }: any) {
       setOldPassword('');
       setNewPassword('');
       setConfirmPassword('');
-      Alert.alert('Thành công', 'Đã thay đổi mật khẩu tài khoản Bác sĩ thành công.');
+      Alert.alert('Thành công 🎉', 'Đã thay đổi mật khẩu tài khoản Bác sĩ thành công.');
     } catch (err: any) {
       let errorMsg = 'Không thể thay đổi mật khẩu. Vui lòng kiểm tra lại mật khẩu hiện tại.';
       if (err?.response?.data?.detail) {
@@ -273,7 +248,7 @@ export default function DoctorProfileScreen({ navigation }: any) {
         if (typeof detail === 'string') {
           errorMsg = detail;
         } else if (Array.isArray(detail) && detail[0]?.msg) {
-          errorMsg = detail[0].msg;
+          errorMsg = String(detail[0].msg).replace(/^Value error,\s*/i, '');
         }
       } else if (err?.message) {
         errorMsg = err.message;
@@ -285,55 +260,47 @@ export default function DoctorProfileScreen({ navigation }: any) {
   };
 
   const handleSavePassword = () => {
-    if (!oldPassword.trim() || !newPassword.trim()) {
-      Alert.alert('Lỗi', 'Vui lòng nhập đầy đủ mật khẩu hiện tại và mật khẩu mới.');
+    if (!oldPassword.trim()) {
+      Alert.alert('Thiếu thông tin', 'Vui lòng nhập mật khẩu hiện tại.');
+      return;
+    }
+    if (!newPassword.trim()) {
+      Alert.alert('Thiếu thông tin', 'Vui lòng nhập mật khẩu mới.');
       return;
     }
     if (newPassword.length < 8 || newPassword.length > 16) {
-      Alert.alert('Lỗi', 'Mật khẩu mới phải từ 8 đến 16 ký tự.');
+      Alert.alert('Mật khẩu không hợp lệ', 'Mật khẩu mới phải từ 8 đến 16 ký tự.');
+      return;
+    }
+    const hasUpper = /[A-Z]/.test(newPassword);
+    const hasLower = /[a-z]/.test(newPassword);
+    const hasDigit = /[0-9]/.test(newPassword);
+    const hasSpecial = /[^A-Za-z0-9]/.test(newPassword);
+    if (!hasUpper || !hasLower || !hasDigit || !hasSpecial) {
+      Alert.alert(
+        'Mật khẩu chưa đủ mạnh',
+        'Mật khẩu mới phải bao gồm đầy đủ: chữ hoa, chữ thường, chữ số và ký tự đặc biệt (!@#$%^&*...).'
+      );
       return;
     }
     if (newPassword !== confirmPassword) {
-      Alert.alert('Lỗi', 'Mật khẩu xác nhận không trùng khớp.');
+      Alert.alert('Mật khẩu không khớp', 'Mật khẩu xác nhận không trùng khớp với mật khẩu mới.');
       return;
     }
     if (oldPassword === newPassword) {
-      Alert.alert('Lỗi', 'Mật khẩu mới phải khác mật khẩu hiện tại.');
+      Alert.alert('Mật khẩu trùng lặp', 'Mật khẩu mới phải khác mật khẩu hiện tại.');
       return;
     }
 
-    Alert.alert(
-      'Xác nhận đổi mật khẩu',
-      'Bạn có chắc chắn muốn thay đổi mật khẩu đăng nhập của Bác sĩ không?',
-      [
-        { text: 'Hủy', style: 'cancel' },
-        { text: 'Đổi mật khẩu', onPress: executeSavePassword },
-      ]
-    );
+    // Thực hiện lưu trực tiếp, không dùng Alert.alert lồng xác nhận (vốn bị nuốt callback trên Expo Web)
+    executeSavePassword();
   };
 
   const handleClosePasswordModal = () => {
-    if (oldPassword.trim().length > 0 || newPassword.trim().length > 0) {
-      Alert.alert(
-        'Hủy đổi mật khẩu',
-        'Các mật khẩu đang nhập dở sẽ bị hủy. Bạn có muốn thoát không?',
-        [
-          { text: 'Ở lại', style: 'cancel' },
-          {
-            text: 'Thoát',
-            style: 'destructive',
-            onPress: () => {
-              setOldPassword('');
-              setNewPassword('');
-              setConfirmPassword('');
-              setPasswordModalVisible(false);
-            },
-          },
-        ]
-      );
-    } else {
-      setPasswordModalVisible(false);
-    }
+    setOldPassword('');
+    setNewPassword('');
+    setConfirmPassword('');
+    setPasswordModalVisible(false);
   };
 
   const performLogout = async () => {

@@ -210,8 +210,38 @@ class AlertsWebSocket {
       return;
     }
 
+    // 0.3. Hồ sơ bệnh án được cập nhật (Medical Record Updated)
+    if (event.alert_type === 'MEDICAL_RECORD_UPDATED' || event.type === 'MEDICAL_RECORD_UPDATED') {
+      const incData = event.data || {};
+      const newIncident: Incident = {
+        id: incData.id || `inc-med-${Date.now()}`,
+        device_id: incData.device_id || 'system',
+        alert_type: 'MEDICAL_RECORD_UPDATED',
+        alert_level: 'LOW',
+        message: incData.message || '📋 Hồ sơ bệnh án người cao tuổi vừa được cập nhật.',
+        video_clip_url: null,
+        thumbnail_url: null,
+        is_acknowledged: false,
+        created_at: incData.created_at || new Date().toISOString(),
+        notes: incData.patient_id ? `PATIENT:${incData.patient_id}` : null,
+      };
+
+      store.addIncident(newIncident);
+
+      notificationService.triggerEmergencyNotification({
+        title: '📋 HỒ SƠ BỆNH ÁN ĐƯỢC CẬP NHẬT',
+        body: newIncident.message,
+        data: {
+          incident_id: newIncident.id,
+          alert_type: 'MEDICAL_RECORD_UPDATED',
+          patient_id: incData.patient_id,
+        },
+      });
+      return;
+    }
+
     // 1. Cảnh báo té ngã / sự cố khẩn cấp mới (Feature 1)
-    if ((event.type === 'ALERT_NEW' && event.alert_type !== 'APPOINTMENT_SCHEDULED') || event.alert_type === 'FALL_DETECTED') {
+    if ((event.type === 'ALERT_NEW' && event.alert_type !== 'APPOINTMENT_SCHEDULED' && event.alert_type !== 'MEDICAL_RECORD_UPDATED') || event.alert_type === 'FALL_DETECTED') {
       const incData = event.data || {};
       const newIncident: Incident = {
         id: incData.id || `inc-${Date.now()}`,
@@ -286,6 +316,10 @@ class AlertsWebSocket {
   subscribe(handler: AlertHandler): () => void {
     this.handlers.add(handler);
     return () => this.handlers.delete(handler);
+  }
+
+  unsubscribe(handler: AlertHandler): void {
+    this.handlers.delete(handler);
   }
 
   disconnect(): void {
