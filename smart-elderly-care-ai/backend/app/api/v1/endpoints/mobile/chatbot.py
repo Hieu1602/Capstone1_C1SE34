@@ -349,6 +349,7 @@ async def get_sessions(
             updated_at=s.updated_at,
         )
         for s in sessions
+        if len(s.messages) > 0
     ]
 
 

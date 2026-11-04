@@ -147,12 +147,145 @@ async def update_patient_medical_record(
                     detail="Chỉ Người sở hữu hoặc Bác sĩ phụ trách mới có quyền chỉnh sửa hồ sơ bệnh án.",
                 )
 
-    return await crud_elderly.update_medical_record(
+    res_record = await crud_elderly.update_medical_record(
         db=db,
         patient_id_or_serial=patient_id,
         update_in=update_in,
         house_id=house_id,
     )
+
+    # Đồng bộ bộ nhớ đệm lâm sàng bác sĩ nếu có
+    try:
+        from app.crud.crud_doctor import _CLINICAL_STORE
+        for k in (str(res_record.id), str(patient_id)):
+            if k in _CLINICAL_STORE:
+                if update_in.drug_allergies is not None:
+                    _CLINICAL_STORE[k]["drug_allergies"] = update_in.drug_allergies
+                if update_in.food_allergies is not None:
+                    _CLINICAL_STORE[k]["food_allergies"] = update_in.food_allergies
+                if update_in.dietary_notes is not None:
+                    _CLINICAL_STORE[k]["dietary_notes"] = update_in.dietary_notes
+                if update_in.blood_type is not None:
+                    _CLINICAL_STORE[k]["blood_type"] = update_in.blood_type
+                if update_in.height_cm is not None:
+                    _CLINICAL_STORE[k]["height_cm"] = update_in.height_cm
+                if update_in.weight_kg is not None:
+                    _CLINICAL_STORE[k]["weight_kg"] = update_in.weight_kg
+                if update_in.conditions is not None:
+                    _CLINICAL_STORE[k]["conditions"] = update_in.conditions
+    except Exception:
+        pass
+
+    # Gửi thông báo cho Bác sĩ phụ trách căn nhà
+    if house_id:
+        try:
+            import json
+            from sqlalchemy import select, or_
+            from app.models.device import Device
+            from app.models.incident import Incident
+            from app.models.house import HouseMember
+            from app.models.user import User
+
+            # Tìm thiết bị trong nhà để gán incident
+            dev_stmt = select(Device.id).where(Device.house_id == house_id).limit(1)
+            dev_res = await db.execute(dev_stmt)
+            device_id = dev_res.scalar_one_or_none()
+            if not device_id:
+                any_dev = await db.execute(select(Device.id).limit(1))
+                device_id = any_dev.scalar_one_or_none()
+
+            # Tìm tất cả bác sĩ phụ trách căn nhà
+            doc_stmt = (
+                select(User)
+                .join(HouseMember, HouseMember.user_id == User.id)
+                .where(
+                    HouseMember.house_id == house_id,
+                    or_(HouseMember.role_in_house == "DOCTOR", User.role == "doctor"),
+                )
+            )
+            doc_res = await db.execute(doc_stmt)
+            doctors = list(doc_res.scalars().all())
+
+            updater_name = current_user.full_name if (current_user and current_user.full_name) else "Chủ nhà"
+            patient_name = res_record.name or "người cao tuổi"
+
+            detail_parts = []
+            if update_in.drug_allergies is not None and update_in.drug_allergies != "":
+                detail_parts.append(f"Dị ứng thuốc: {update_in.drug_allergies}")
+            if update_in.food_allergies is not None and update_in.food_allergies != "":
+                detail_parts.append(f"Dị ứng thức ăn: {update_in.food_allergies}")
+            if update_in.dietary_notes is not None and update_in.dietary_notes != "":
+                detail_parts.append(f"Chế độ ăn: {update_in.dietary_notes}")
+            if update_in.conditions is not None:
+                detail_parts.append(f"Tiền sử bệnh lý: {', '.join(c.name for c in update_in.conditions)}")
+
+            notif_msg = f"📋 {updater_name} đã cập nhật hồ sơ bệnh án của cụ {patient_name}."
+            if detail_parts:
+                notif_msg += f" ({'; '.join(detail_parts)})"
+
+            for doc in doctors:
+                if current_user and doc.id == current_user.id:
+                    continue
+
+                if device_id:
+                    new_incident = Incident(
+                        device_id=device_id,
+                        alert_type="MEDICAL_RECORD_UPDATED",
+                        alert_level="LOW",
+                        message=notif_msg,
+                        is_acknowledged=False,
+                        notes=f"USER:{doc.id}|PATIENT:{res_record.id}",
+                    )
+                    db.add(new_incident)
+                    await db.commit()
+                    await db.refresh(new_incident)
+
+                    # Bắn thời gian thực qua WebSocket
+                    try:
+                        from app.api.websockets.vitals_ws import alert_clients
+                        ws_payload = json.dumps({
+                            "type": "ALERT_NEW",
+                            "alert_type": "MEDICAL_RECORD_UPDATED",
+                            "data": {
+                                "id": str(new_incident.id),
+                                "alert_type": "MEDICAL_RECORD_UPDATED",
+                                "alert_level": "LOW",
+                                "message": new_incident.message,
+                                "patient_id": str(res_record.id),
+                                "doctor_id": str(doc.id),
+                                "created_at": new_incident.created_at.isoformat() if new_incident.created_at else None,
+                            }
+                        }, ensure_ascii=False)
+                        for client_ws in list(alert_clients):
+                            try:
+                                await client_ws.send_text(ws_payload)
+                            except Exception:
+                                if client_ws in alert_clients:
+                                    alert_clients.remove(client_ws)
+                    except Exception:
+                        pass
+
+                    # Bắn thông báo đẩy FCM nếu có token
+                    if doc.fcm_token:
+                        try:
+                            from app.services.notification.fcm_service import send_fcm_notification
+                            await send_fcm_notification(
+                                fcm_token=doc.fcm_token,
+                                title="Hồ sơ bệnh án được cập nhật",
+                                body=notif_msg,
+                                data={
+                                    "type": "MEDICAL_RECORD_UPDATED",
+                                    "patient_id": str(res_record.id),
+                                    "incident_id": str(new_incident.id),
+                                }
+                            )
+                        except Exception:
+                            pass
+        except Exception as notify_err:
+            import logging
+            logging.getLogger(__name__).warning("Lỗi dispatch thông báo cập nhật bệnh án: %s", notify_err)
+
+    return res_record
 
 
 @router.get("/{patient_id}/vitals", response_model=List[VitalOut])

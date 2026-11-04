@@ -1,6 +1,7 @@
 /** Khung live có lưới tối đa bốn camera, thanh tùy chọn và chế độ xem ngang toàn màn hình. */
 import React, { useEffect, useRef, useState } from "react";
 import {
+    Animated,
     Modal,
     Pressable,
     StatusBar,
@@ -19,6 +20,7 @@ import { useCameraConnection } from "../hooks/useCameraConnection";
 import { useCameraIntercom } from "../hooks/useCameraIntercom";
 import { useCameraVideoMode } from "../hooks/useCameraVideoMode";
 import { useCameraFullscreen } from "../hooks/useCameraFullscreen";
+import { useDeviceStore } from "../../../store/useDeviceStore";
 import { CameraLiveView } from "./CameraLiveView";
 import CameraVideoOptions from "./CameraVideoOptions";
 import PanTiltControl from "./PanTiltControl";
@@ -32,6 +34,7 @@ interface Props {
     quality: VideoQuality;
     onQuality: (quality: VideoQuality) => void;
     onSelectCamera: (id: string) => void;
+    selectedCameraId?: string;
 }
 
 /** @param props Nguồn phụ chưa được chọn. @returns Luồng riêng, tự dừng khi ô bị gỡ hoặc màn hình mất focus. */
@@ -57,6 +60,7 @@ export default function CameraViewer({
     quality,
     onQuality,
     onSelectCamera,
+    selectedCameraId,
 }: Props) {
     const fullscreen = useCameraFullscreen(connection.active);
     const videoMode = useCameraVideoMode(connection);
@@ -73,9 +77,58 @@ export default function CameraViewer({
     const [zoom, setZoom] = useState(1);
     // Hủy kết quả tải danh sách sau khi đóng bảng hoặc mất focus.
     const sourceRequest = useRef(0);
-    const activeId = connection.status?.id;
+    const activeId = selectedCameraId || connection.status?.id || connection.status?.device_id;
     const intercomRef = useRef(intercom);
     intercomRef.current = intercom;
+    const [toolbarVisible, setToolbarVisible] = useState(true);
+    const toolbarOpacity = useRef(new Animated.Value(1)).current;
+    const hideTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
+    const isVisible = useRef(true);
+
+    const resetTimer = () => {
+        if (hideTimer.current) clearTimeout(hideTimer.current);
+        hideTimer.current = setTimeout(() => {
+            isVisible.current = false;
+            Animated.timing(toolbarOpacity, {
+                toValue: 0,
+                duration: 300,
+                useNativeDriver: true,
+            }).start(({ finished }) => {
+                if (finished) setToolbarVisible(false);
+            });
+        }, 4000);
+    };
+
+    const showToolbar = () => {
+        if (!isVisible.current) {
+            isVisible.current = true;
+            setToolbarVisible(true);
+            Animated.timing(toolbarOpacity, {
+                toValue: 1,
+                duration: 200,
+                useNativeDriver: true,
+            }).start();
+        }
+        resetTimer();
+    };
+
+    useEffect(() => {
+        if (sheet) {
+            if (hideTimer.current) clearTimeout(hideTimer.current);
+            isVisible.current = true;
+            setToolbarVisible(true);
+            toolbarOpacity.setValue(1);
+        } else {
+            resetTimer();
+        }
+    }, [sheet]);
+
+    useEffect(() => {
+        resetTimer();
+        return () => {
+            if (hideTimer.current) clearTimeout(hideTimer.current);
+        };
+    }, []);
     useEffect(
         () => () => {
             // Nhả PTT kể cả khi modal biến mất mà native không gửi onPressOut.
@@ -98,33 +151,69 @@ export default function CameraViewer({
             setShowPan(false);
         }
     }, [connection.active]);
-    useEffect(() => {
+    const loadSources = () => {
         const request = ++sourceRequest.current;
-        if (sheet !== "sources") return;
         setLoading(true);
         setSourceError("");
+
+        const iotDevices = useDeviceStore.getState().iotDevices || [];
+        const localCameras = iotDevices.filter(
+            (d) => d.type.toLowerCase() === "camera",
+        );
+
         void cameraApi
             .sources()
             .then(({ data }) => {
-                if (sourceRequest.current === request) setSources(data);
+                if (sourceRequest.current !== request) return;
+                if (Array.isArray(data) && data.length > 0) {
+                    setSources(data.map((s) => ({ ...s, name: s.name.replace(/^Camera\s+Camera\s+/i, "Camera ") })));
+                } else {
+                    setSources(localCameras.map((cam) => ({
+                        id: cam.id,
+                        name: cam.name.replace(/^Camera\s+Camera\s+/i, "Camera "),
+                    })));
+                }
             })
             .catch(() => {
-                if (sourceRequest.current === request)
-                    setSourceError(
-                        "Không tải được danh sách nguồn camera. Vui lòng thử lại.",
-                    );
+                if (sourceRequest.current !== request) return;
+                const fallbackSources: CameraSource[] = localCameras.map((cam) => ({
+                    id: cam.id,
+                    name: cam.name.replace(/^Camera\s+Camera\s+/i, "Camera "),
+                }));
+                setSources(fallbackSources);
             })
             .finally(() => {
                 if (sourceRequest.current === request) setLoading(false);
             });
-        return () => {
-            sourceRequest.current++;
-        };
+    };
+
+    useEffect(() => {
+        loadSources();
+    }, []);
+
+    useEffect(() => {
+        if (sheet === "sources") {
+            loadSources();
+        }
     }, [sheet]);
 
-    /** @returns Không có; chuyển sang lưới hoặc trở về luồng đang chọn. */
+    /** @returns Chuyển đổi lưới 2x2 và tự động phân bổ các camera vào các ô */
     const toggleGrid = () => {
-        setGrid((value) => !value);
+        setGrid((value) => {
+            const next = !value;
+            if (next) {
+                setSlots(() => {
+                    const currentId = activeId;
+                    const validIds = new Set(sources.map((s) => s.id));
+                    const combined = [
+                        ...(currentId ? [currentId] : []),
+                        ...sources.map((s) => s.id),
+                    ];
+                    return Array.from(new Set(combined.filter((id) => Boolean(id) && (id === currentId || validIds.has(id))))).slice(0, 4);
+                });
+            }
+            return next;
+        });
         setZoom(1);
     };
     /** @param id ID nguồn được backend cấp quyền. @returns Không có; gắn nguồn vào ô trống tiếp theo. */
@@ -141,6 +230,23 @@ export default function CameraViewer({
         intercom.stop();
         onSelectCamera(id);
         setZoom(1);
+    };
+
+    const lastTapRef = useRef<{ id: string; time: number }>({ id: '', time: 0 });
+
+    /** Nhấn 1 lần để chọn camera; nhấn đúp (hoặc nhấn vào ô đang chọn) để focus phóng to camera đó */
+    const handleTilePress = (id: string) => {
+        const now = Date.now();
+        const isDoubleTap =
+            lastTapRef.current.id === id && now - lastTapRef.current.time < 350;
+        lastTapRef.current = { id, time: now };
+
+        if (isDoubleTap || id === activeId) {
+            select(id);
+            setGrid(false);
+        } else {
+            select(id);
+        }
     };
     /** @param icon Biểu tượng. @param label Nhãn trợ năng. @param onPress Thao tác. @returns Nút trên nền video. */
     const tool = (
@@ -206,24 +312,21 @@ export default function CameraViewer({
                     )}
                     {grid && id && (
                         <>
-                            {id !== activeId && (
-                                <Pressable
-                                    accessibilityRole="button"
-                                    accessibilityLabel="Chọn camera để điều khiển"
-                                    onPress={() => select(id)}
-                                    style={StyleSheet.absoluteFill}
-                                />
-                            )}
+                            <Pressable
+                                accessibilityRole="button"
+                                accessibilityLabel="Nhấn để chọn, nhấn đúp để phóng to camera"
+                                onPress={() => handleTilePress(id)}
+                                style={StyleSheet.absoluteFill}
+                            />
                             <Text
                                 numberOfLines={1}
                                 pointerEvents="none"
                                 style={styles.feedName}
                             >
-                                {sources.find((source) => source.id === id)
-                                    ?.name ||
+                                {(sources.find((source) => source.id === id)?.name ||
                                     (id === activeId
                                         ? connection.status?.name
-                                        : `Camera ${index + 1}`)}
+                                        : `Camera ${index + 1}`) || "Camera").replace(/^Camera\s+Camera\s+/i, "Camera ")}
                             </Text>
                             {id !== activeId && (
                                 <Pressable
@@ -256,16 +359,15 @@ export default function CameraViewer({
             <CameraVideoOptions
                 inline={fullscreen.fullscreen}
                 visible={sheet === "quality"}
-                title="Video Quality"
+                title="Chất lượng video"
                 selected={quality}
                 onClose={() => setSheet(null)}
                 options={[
                     { value: "1080p", label: "1080P" },
                     { value: "720p", label: "720P" },
-                    { value: "auto", label: "Auto" },
+                    { value: "auto", label: "Tự động" },
                 ]}
                 onSelect={(value) => {
-                    intercom.stop();
                     onQuality(value as VideoQuality);
                     setSheet(null);
                 }}
@@ -273,7 +375,7 @@ export default function CameraViewer({
             <CameraVideoOptions
                 inline={fullscreen.fullscreen}
                 visible={sheet === "mode"}
-                title="Video Mode"
+                title="Chế độ hình ảnh"
                 selected={videoMode.mode}
                 busy={videoMode.pending}
                 message={
@@ -286,19 +388,19 @@ export default function CameraViewer({
                 options={[
                     {
                         value: "day",
-                        label: "Day Mode",
+                        label: "Ban ngày",
                         icon: "sunny-outline",
                         disabled: !connection.status?.can_control,
                     },
                     {
                         value: "night",
-                        label: "Night Mode",
+                        label: "Ban đêm",
                         icon: "moon-outline",
                         disabled: !connection.status?.can_control,
                     },
                     {
                         value: "auto",
-                        label: "Auto",
+                        label: "Tự động",
                         disabled: !connection.status?.can_control,
                     },
                 ]}
@@ -315,7 +417,7 @@ export default function CameraViewer({
                     sourceError ||
                     (!loading &&
                     !sources.some((source) => !slots.includes(source.id))
-                        ? "Chưa có camera khác được cấu hình và cấp quyền xem."
+                        ? "Tất cả camera đã được thêm vào lưới hoặc chưa có camera khác."
                         : undefined)
                 }
                 onClose={() => setSheet(null)}
@@ -332,16 +434,16 @@ export default function CameraViewer({
     const qualityButton = (
         <Pressable
             accessibilityRole="button"
-            accessibilityLabel="Video Quality"
+            accessibilityLabel="Chất lượng video"
             onPress={() => setSheet("quality")}
             style={styles.tool}
         >
             <Text style={styles.quality}>
-                {quality === "auto" ? "Auto" : quality.toUpperCase()}
+                {quality === "auto" ? "Tự động" : quality.toUpperCase()}
             </Text>
         </Pressable>
     );
-    const modeButton = tool(modeIcon, "Video Mode", () => setSheet("mode"));
+    const modeButton = tool(modeIcon, "Chế độ hình ảnh", () => setSheet("mode"));
     const gridButton = tool(
         grid ? "square-outline" : "duplicate-outline",
         grid ? "Xem một camera" : "Xem nhiều camera",
@@ -369,7 +471,7 @@ export default function CameraViewer({
             )}
             {tool(
                 "move",
-                "Pan/Tilt",
+                "Xoay camera",
                 () => setShowPan((value) => !value),
                 showPan,
             )}
@@ -401,7 +503,7 @@ export default function CameraViewer({
             </Pressable>
             {tool(
                 "call-outline",
-                "Bắt đầu/kết thúc Voice Call",
+                "Bắt đầu/kết thúc gọi thoại",
                 intercom.toggleCall,
                 intercom.mode === "call",
             )}
@@ -424,7 +526,7 @@ export default function CameraViewer({
         <View style={styles.pan}>
             <Pressable
                 accessibilityRole="button"
-                accessibilityLabel="Đóng Pan/Tilt"
+                accessibilityLabel="Đóng điều khiển xoay"
                 onPress={() => setShowPan(false)}
                 style={styles.panClose}
             >
@@ -445,9 +547,25 @@ export default function CameraViewer({
         <>
             <View style={styles.preview}>
                 {!fullscreen.fullscreen && (
-                    <View style={styles.videoArea}>
+                    <View
+                        style={styles.videoArea}
+                        onTouchStart={showToolbar}
+                        onPointerDown={showToolbar}
+                        onPointerMove={showToolbar}
+                        onPointerEnter={showToolbar}
+                        onStartShouldSetResponderCapture={() => {
+                            showToolbar();
+                            return false;
+                        }}
+                    >
                         {feeds}
-                        <View style={styles.toolbar}>
+                        <Animated.View
+                            pointerEvents={toolbarVisible ? "auto" : "none"}
+                            style={[
+                                styles.toolbar,
+                                { opacity: toolbarOpacity },
+                            ]}
+                        >
                             {gridButton}
                             {qualityButton}
                             {modeButton}
@@ -456,7 +574,7 @@ export default function CameraViewer({
                                 "Phóng to và xoay ngang",
                                 fullscreen.open,
                             )}
-                        </View>
+                        </Animated.View>
                     </View>
                 )}
             </View>
@@ -551,7 +669,7 @@ const styles = StyleSheet.create({
         fontSize: 11,
         backgroundColor: "rgba(0,0,0,0.45)",
     },
-    remove: { position: "absolute", top: 2, right: 2, padding: 4 },
+    remove: { position: "absolute", top: 2, right: 2, padding: 4, zIndex: 10 },
     toolbar: {
         position: "absolute",
         bottom: 0,
@@ -559,7 +677,7 @@ const styles = StyleSheet.create({
         right: 0,
         flexDirection: "row",
         justifyContent: "space-around",
-        backgroundColor: "rgba(0,0,0,0.6)",
+        backgroundColor: "rgba(0,0,0,0.35)",
         minHeight: 44,
     },
     tool: {

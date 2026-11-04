@@ -7,6 +7,7 @@ from __future__ import annotations
 
 import logging
 import os
+import re
 from typing import Any, Dict, List, Optional, Tuple
 
 import httpx
@@ -26,13 +27,13 @@ class MultiModelLLMClient:
     - Local LLM (Ollama, vLLM, LMStudio)
     """
 
-    FALLBACK_MODELS = ["gemini-2.0-flash", "gemini-1.5-flash", "gpt-4o-mini", "deepseek-chat"]
+    FALLBACK_MODELS = ["gemini-3.1-flash-lite", "gemini-3.5-flash", "gpt-4o-mini", "deepseek-chat"]
 
     def __init__(self):
         self.enabled = getattr(settings, "ENABLE_EXTERNAL_LLM", True)
         self.api_key = (getattr(settings, "LLM_API_KEY", "") or os.getenv("LLM_API_KEY", "")).strip()
         self.base_url = (getattr(settings, "LLM_BASE_URL", "") or os.getenv("LLM_BASE_URL", "https://generativelanguage.googleapis.com/v1beta/openai")).rstrip("/")
-        self.model = (getattr(settings, "LLM_MODEL", "") or os.getenv("LLM_MODEL", "gemini-1.5-flash")).strip()
+        self.model = (getattr(settings, "LLM_MODEL", "") or os.getenv("LLM_MODEL", "gemini-3.1-flash-lite")).strip()
 
     def is_configured(self) -> bool:
         """Kiểm tra xem API key và cấu hình LLM đã sẵn sàng hay chưa."""
@@ -44,7 +45,7 @@ class MultiModelLLMClient:
 
     def _sanitize_response(self, text: str) -> Optional[str]:
         """Kiểm tra và làm sạch phản hồi từ LLM, chống rò rỉ prompt và câu cụt lửng."""
-        if not text or len(text.strip()) < 20:
+        if not text or not isinstance(text, str) or len(text.strip()) < 20:
             return None
 
         clean = text.strip()
@@ -66,7 +67,8 @@ class MultiModelLLMClient:
                     return None
 
         # Kiểm tra câu bị cắt dở dang ở cuối
-        last_word = clean.split()[-1].lower() if clean.split() else ""
+        words = clean.split()
+        last_word = re.sub(r"[^\w]", "", words[-1]).lower() if words else ""
         if last_word in ["các", "và", "nhưng", "là", "của", "được", "trong", "thì", "hoặc"]:
             logger.warning("Phát hiện câu trả lời LLM bị ngắt cụt lửng: %s", clean[-50:])
             return None
@@ -100,7 +102,7 @@ class MultiModelLLMClient:
             if fb not in candidate_models:
                 candidate_models.append(fb)
 
-        async with httpx.AsyncClient(timeout=12.0) as client:
+        async with httpx.AsyncClient(timeout=20.0) as client:
             for current_model in candidate_models:
                 payload: Dict[str, Any] = {
                     "model": current_model,
@@ -118,7 +120,7 @@ class MultiModelLLMClient:
                         data = resp.json()
                         choices = data.get("choices", [])
                         if choices:
-                            raw_content = choices[0].get("message", {}).get("content", "")
+                            raw_content = choices[0].get("message", {}).get("content") or ""
                             sanitized = self._sanitize_response(raw_content)
                             if sanitized:
                                 return sanitized, current_model

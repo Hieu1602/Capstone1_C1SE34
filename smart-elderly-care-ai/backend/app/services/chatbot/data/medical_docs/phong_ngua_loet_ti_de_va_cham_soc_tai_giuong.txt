@@ -1,0 +1,37 @@
+# ==============================================================================
+# HƯỚNG DẪN PHÒNG NGỪA VÀ CHĂM SÓC LOÉT TÌ ĐÈ Ở NGƯỜI CAO TUỔI NẰM TẠI GIƯỜNG
+# Áp dụng cho: Hệ thống Trợ lý Y tế Thông minh SmartCare AI
+# Biên soạn theo Hướng dẫn Điều dưỡng Lão khoa chuyên sâu
+# ==============================================================================
+
+--- MỤC 1: CÁC VÙNG CƠ THỂ CÓ NGUY CƠ CAO BỊ LOÉT TÌ ĐÈ ---
+Loét tì đè là tổn thương da và mô dưới da do áp lực đè ép kéo dài làm cản trở lưu thông máu nuôi dưỡng. Thường gặp nhất ở người cao tuổi sau đột quỵ, gãy xương đùi, hoặc suy nhược nằm một chỗ:
+1. Tư thế nằm ngửa: Vùng xương cùng cụt (mông), gót chân, khuỷu tay, hai gai xương bả vai, vùng chẩm sau đầu.
+2. Tư thế nằm nghiêng: Mắt cá chân ngoài, mấu chuyển lớn xương đùi (hai bên hông), vùng xương sườn và tai.
+3. Tư thế ngồi xe lăn: Hai ụ ngồi xương chậu, vùng lưng dưới tiếp xúc với tựa ghế.
+
+--- MỤC 2: QUY TRÌNH PHÒNG NGỪA LOÉT TÌ ĐÈ HIỆU QUẢ ---
+2.1. Quy tắc xoay trở tư thế định kỳ 2 giờ một lần:
+- Không để người bệnh nằm yên ở một tư thế quá 2 giờ đồng hồ.
+- Chu kỳ thay đổi tư thế: Nằm ngửa -> Nghiêng sang trái 30 độ -> Nằm ngửa -> Nghiêng sang phải 30 độ.
+- Khi nằm nghiêng, chỉ nên nghiêng góc 30 độ (không nghiêng vuông góc 90 độ vì sẽ dồn toàn bộ trọng lượng lên mấu chuyển xương đùi gây loét nhanh chóng).
+- Dùng gối mềm chèn lót:
+  + Đặt 1 gối sau lưng để giữ tư thế nghiêng vững vàng.
+  + Đặt 1 gối mềm giữa hai đầu gối và mắt cá chân để tránh hai khớp xương cọ xát vào nhau.
+  + Kê gối dưới bắp chân sao cho gót chân lơ lửng, không chạm trực tiếp xuống mặt đệm (nguyên tắc làm giảm áp lực gót chân).
+
+2.2. Sử dụng đệm hơi chống loét luân chuyển áp lực:
+- Khuyến khích trang bị đệm hơi y tế có máy bơm khí tự động đảo múi hơi xen kẽ mỗi 5 - 10 phút.
+- Đệm hơi giúp thay đổi điểm tì đè liên tục, thúc đẩy tuần hoàn mao mạch dưới da.
+
+2.3. Vệ sinh da và kiểm soát độ ẩm:
+- Giữ da người cao tuổi luôn sạch sẽ và khô ráo.
+- Sau khi người bệnh đi tiêu, tiểu: Phải vệ sinh ngay bằng nước ấm sạch, dùng khăn xô mềm thấm khô nhẹ nhàng, không chà xát mạnh gây trầy xước biểu bì da.
+- Bôi kem bảo vệ da chứa Kẽm Oxit (Zinc Oxide) hoặc mỡ Panthenol lên vùng da mông, bẹn để tạo màng chắn chống kích ứng do phân và nước tiểu.
+- Tuyệt đối KHÔNG dùng cồn hoặc rượu gừng để xoa bóp lên các vùng da đang bị ửng đỏ vì cồn làm khô và mỏng da, đẩy nhanh quá trình hoại tử mô.
+
+--- MỤC 3: NHẬN DIỆN CÁC GIAI ĐOẠN LOÉT VÀ XỬ TRÍ ---
+- Giai đoạn 1 (Chớm loét): Vùng da tì đè bị ửng đỏ, khi dùng ngón tay ấn vào trong 3 giây rồi nhấc ra thì da vẫn giữ nguyên màu đỏ (không chuyển màu trắng tạm thời). Xử trí: Xoay trở ngay, giải phóng áp lực hoàn toàn khỏi vùng da này, thoa kem dưỡng ẩm bảo vệ, theo dõi sát sao.
+- Giai đoạn 2: Da bị trầy xước nông, có bọng nước phồng rộp hoặc vỡ ra tạo vết trợt đỏ ướt. Xử trí: Rửa nhẹ bằng nước muối sinh lý 0.9%, dán băng gạc hydrocolloid hoặc bôi thuốc mỡ kháng khuẩn theo hướng dẫn của điều dưỡng, không tự ý rắc bột kháng sinh lên vết loét.
+- Giai đoạn 3 & 4 (Loét sâu nguy hiểm): Vết loét ăn sâu qua lớp mỡ, lộ cơ hoặc lộ xương, có dịch vàng, mùi hôi hoặc mô hoại tử đen. Xử trí: Cần bác sĩ hoặc điều dưỡng đến thăm khám trực tiếp để cắt lọc mô hoại tử và chăm sóc vết thương vô trùng.
+

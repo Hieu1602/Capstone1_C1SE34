@@ -103,27 +103,41 @@ export function useCameraConnection(
          * @remarks Tác động: Cập nhật state và đặt lịch vòng tiếp theo; bỏ kết quả nếu effect đã hủy.
          */
         const poll = async () => {
+            let isConnected = false;
             try {
-                const setup = await cameraApi.setup(cameraId);
+                // Tải song song setup và status để tiết kiệm thời gian mạng
+                const [setupRes, statusRes] = await Promise.allSettled([
+                    cameraApi.setup(cameraId),
+                    cameraApi.status(cameraId),
+                ]);
                 if (cancelled) return;
-                setNeedsPairing(!setup.data.paired);
-                if (!setup.data.paired) {
-                    setLiveUrl("");
-                    setStatus(null);
-                    setPrivacy(null);
-                    setMotion(null);
-                    setRecordings({ active: null, error: null, files: [] });
-                    ticketAt = 0;
-                    return;
+
+                if (setupRes.status === "fulfilled") {
+                    setNeedsPairing(!setupRes.value.data.paired);
+                    if (!setupRes.value.data.paired) {
+                        setLiveUrl("");
+                        setStatus(null);
+                        setPrivacy(null);
+                        setMotion(null);
+                        setRecordings({ active: null, error: null, files: [] });
+                        ticketAt = 0;
+                        return;
+                    }
                 }
-                const { data } = await cameraApi.status(cameraId);
-                if (cancelled) return;
-                if (cameraId && ![data.id, data.device_id].includes(cameraId))
+
+                if (statusRes.status !== "fulfilled") {
+                    throw statusRes.reason;
+                }
+                const data = statusRes.value.data;
+                if (cameraId && ![data.id, data.device_id].includes(cameraId)) {
                     throw new Error(
                         "Camera được chọn chưa được kết nối với dịch vụ Tapo.",
                     );
+                }
                 setStatus(data);
-                // Gia hạn ticket trước khi hết hạn, kể cả khi lần đầu chưa có ticket.
+                isConnected = Boolean(data.connected);
+
+                // Ưu tiên cấp và tải URL luồng video ngay lập tức
                 if (
                     data.connected &&
                     (!ticketAt ||
@@ -141,41 +155,31 @@ export function useCameraConnection(
                     setLiveUrl("");
                     ticketAt = 0;
                 }
+
+                // Tải các thông số phụ (riêng tư, chuyển động, bản ghi) nền không chặn hiển thị video
                 if (
                     !settingsAt ||
                     Date.now() - settingsAt > SETTINGS_INTERVAL_MS
                 ) {
-                    try {
-                        const result = await cameraApi.privacy(cameraId);
-                        if (!cancelled)
-                            setPrivacy(result.data.result.enabled === "on");
-                    } catch {
-                        if (!cancelled) setPrivacy(null);
-                    }
-                    if (cancelled) return;
-                    try {
-                        const result = await cameraApi.motion(cameraId);
-                        if (!cancelled)
-                            setMotion(result.data.result.enabled === "on");
-                    } catch {
-                        // Không chặn xem video khi tài khoản chỉ có quyền xem.
-                        if (!cancelled) setMotion(null);
-                    }
                     settingsAt = Date.now();
+                    Promise.allSettled([
+                        cameraApi.privacy(cameraId),
+                        cameraApi.motion(cameraId),
+                        cameraApi.recordings(cameraId),
+                    ]).then(([privRes, motRes, recRes]) => {
+                        if (cancelled) return;
+                        if (privRes.status === "fulfilled") {
+                            setPrivacy(privRes.value.data?.result?.enabled === "on");
+                        }
+                        if (motRes.status === "fulfilled") {
+                            setMotion(motRes.value.data?.result?.enabled === "on");
+                        }
+                        if (recRes.status === "fulfilled") {
+                            setRecordings(recRes.value.data);
+                        }
+                    });
                 }
-                if (cancelled) return;
                 setError("");
-                // Lỗi thư viện bản ghi không làm gián đoạn luồng trực tiếp.
-                try {
-                    const result = await cameraApi.recordings(cameraId);
-                    if (!cancelled) setRecordings(result.data);
-                } catch (err) {
-                    if (!cancelled)
-                        setRecordings((previous) => ({
-                            ...previous,
-                            error: errorMessage(err),
-                        }));
-                }
             } catch (err) {
                 if (!cancelled) {
                     setError(errorMessage(err));
@@ -186,7 +190,11 @@ export function useCameraConnection(
                     ticketAt = 0;
                 }
             } finally {
-                if (!cancelled) timer = setTimeout(poll, POLL_INTERVAL_MS);
+                if (!cancelled) {
+                    // Nếu chưa kết nối (driver đang mở RTSP), retry nhanh sau 1s thay vì bắt người dùng chờ 5s
+                    const delay = isConnected ? POLL_INTERVAL_MS : 1000;
+                    timer = setTimeout(poll, delay);
+                }
             }
         };
         void poll();

@@ -23,6 +23,7 @@ from app.schemas.doctor import (
     PrescriptionItem,
     PrescriptionCreate,
     PrescriptionUpdate,
+    BatchPrescriptionCreate,
     DoctorMedicalRecordUpdate,
     DoctorVitalsAnalytics,
     ThresholdsUpdate,
@@ -112,6 +113,25 @@ async def create_prescription(
     )
 
 
+@router.post(
+    "/patients/{elderly_id}/prescriptions/batch",
+    response_model=List[PrescriptionItem],
+    status_code=status.HTTP_201_CREATED,
+    summary="Bác sĩ kê một đơn thuốc gồm nhiều loại thuốc và số lượng khác nhau",
+)
+async def create_batch_prescriptions(
+    elderly_id: str,
+    batch_in: BatchPrescriptionCreate,
+    current_user: Optional[User] = Depends(get_current_user_optional),
+):
+    doctor_name = current_user.full_name if current_user else "BS. Trần Văn Minh"
+    return crud_doctor.add_batch_prescriptions(
+        elderly_id=elderly_id,
+        batch=batch_in,
+        doctor_name=doctor_name,
+    )
+
+
 @router.put(
     "/patients/{elderly_id}/prescriptions/{rx_id}",
     response_model=PrescriptionItem,
@@ -168,13 +188,16 @@ async def toggle_prescription_reminder(
 async def update_patient_medical_record(
     elderly_id: str,
     record_in: DoctorMedicalRecordUpdate,
+    current_user: Optional[User] = Depends(get_current_user_optional),
     db: AsyncSession = Depends(get_db),
 ):
     """Cập nhật chẩn đoán bệnh nền, dị ứng, chế độ ăn hoặc ngày hẹn tái khám."""
+    doc_name = current_user.full_name if (current_user and current_user.full_name) else "Bác sĩ phụ trách"
     return await crud_doctor.update_clinical_record(
         db=db,
         elderly_id=elderly_id,
         obj_in=record_in,
+        doctor_name=doc_name,
     )
 
 
@@ -199,11 +222,13 @@ async def get_vitals_analytics(
 async def update_patient_thresholds(
     elderly_id: str,
     thresholds_in: ThresholdsUpdate,
+    current_user: Optional[User] = Depends(get_current_user_optional),
     db: AsyncSession = Depends(get_db),
 ):
     """Bác sĩ điều chỉnh ngưỡng cảnh báo tim mạch, SpO2 phù hợp với bệnh nền của cụ."""
+    doc_name = current_user.full_name if (current_user and current_user.full_name) else "Bác sĩ phụ trách"
     return await crud_doctor.update_thresholds(
-        db=db, elderly_id=elderly_id, thresholds_in=thresholds_in
+        db=db, elderly_id=elderly_id, thresholds_in=thresholds_in, doctor_name=doc_name
     )
 
 
@@ -719,16 +744,31 @@ async def delete_doctor_appointment(
     db: AsyncSession = Depends(get_db),
 ):
     """Xóa lịch hẹn khỏi cơ sở dữ liệu."""
+    deleted_db = False
     try:
         apt_uuid = uuid.UUID(appointment_id)
-    except ValueError:
-        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="ID lịch khám không hợp lệ.")
+        deleted_db = await crud_appointment.delete_appointment(db=db, appointment_id=apt_uuid)
+    except (ValueError, TypeError):
+        pass
 
-    success = await crud_appointment.delete_appointment(db=db, appointment_id=apt_uuid)
-    if not success:
-        raise HTTPException(
-            status_code=status.HTTP_404_NOT_FOUND,
-            detail="Không tìm thấy lịch khám để xóa.",
-        )
+    crud_doctor.delete_appointment(appointment_id)
+
+    # Broadcast WebSocket thông báo xóa lịch
+    try:
+        import json
+        from app.api.websockets.vitals_ws import alert_clients
+        ws_payload = json.dumps({
+            "type": "ALERT_NEW",
+            "alert_type": "APPOINTMENT_DELETED",
+            "data": {
+                "id": appointment_id,
+                "message": "Một lịch khám đã được xóa khỏi hệ thống.",
+            }
+        }, ensure_ascii=False)
+        for client_ws in list(alert_clients):
+            await client_ws.send_text(ws_payload)
+    except Exception:
+        pass
+
     return {"success": True, "message": "Đã xóa lịch khám thành công"}
 

@@ -3,6 +3,7 @@
  */
 import React, { useState, useEffect, useRef } from "react";
 import {
+    Animated,
     Linking,
     Modal,
     ScrollView,
@@ -23,11 +24,15 @@ import CameraViewer from "../components/CameraViewer";
 import CameraTimeline from "../components/CameraTimeline";
 import ArchivePlayer from "../components/ArchivePlayer";
 import downloadVideo from "../services/downloadVideo";
-import { cameraApi, type VideoQuality } from "../../../services/camera";
+import { cameraApi, type VideoQuality, type ArchivedRecording } from "../../../services/camera";
 import { useCameraConnection } from "../hooks/useCameraConnection";
 import { useCameraIntercom } from "../hooks/useCameraIntercom";
 import CameraDetailHeader from "../components/CameraDetailHeader";
 import CameraSettings from "../components/CameraSettings";
+import { useDeviceStore } from "../../../store/useDeviceStore";
+import { devicesApi } from "../../../services/deviceService";
+import { StepCameraRtspConfig } from "../../dashboard/components/add-device/StepCameraRtspConfig";
+import { DeleteDeviceConfirmModal } from "../../dashboard/components/devices/DeleteDeviceConfirmModal";
 import QuickActionBar from "../components/QuickActionBar";
 import FunctionGrid from "../components/FunctionGrid";
 import CameraControlPanel, {
@@ -39,12 +44,14 @@ import { cameraDetailStyles as styles } from "./cameraDetailStyles";
 interface Props {
     navigation: {
         goBack: () => void;
+        navigate?: (screen: string, params?: any) => void;
     };
     route?: {
         params?: {
             cameraId?: string;
             cameraName?: string;
             room?: string;
+            streamUrl?: string;
             tab?: "playback";
         };
     };
@@ -59,7 +66,8 @@ type DetailSheet = "settings" | "recordings" | null;
  * @remarks Tác động: Các hook quản lý kết nối; thao tác SOS và mở video sự kiện có thể rời ứng dụng.
  */
 export default function CameraDetailScreen({ navigation, route }: Props) {
-    const { colors } = useTheme();
+    const { colors, isDarkMode } = useTheme();
+    const [showRtspConfigModal, setShowRtspConfigModal] = useState<boolean>(false);
     const { permissions, userRole, role } = useAuthStore();
     const isOwnerOrAdmin = userRole === 'admin' || role === 'admin' || permissions?.is_owner === true || permissions?.role_in_house === 'OWNER';
     const canViewCamera = isOwnerOrAdmin || Boolean(permissions?.can_view_camera);
@@ -75,8 +83,49 @@ export default function CameraDetailScreen({ navigation, route }: Props) {
     }, [canViewCamera]);
 
     // Camera viền cam là đích chung của PTZ, ghi hình, snapshot và đàm thoại.
-    const [selectedCameraId, setSelectedCameraId] = useState(
-        route?.params?.cameraId,
+    const [showDeleteModal, setShowDeleteModal] = useState<boolean>(false);
+    const removeIoTDevice = useDeviceStore((state) => state.removeIoTDevice);
+    const handleDeleteCamera = () => {
+        setSheet(null);
+        setShowDeleteModal(true);
+    };
+    const handleConfirmDeleteCamera = () => {
+        const targetId = selectedCameraId || route?.params?.cameraId;
+        if (targetId) {
+            removeIoTDevice(targetId);
+        }
+        setShowDeleteModal(false);
+        navigation.goBack();
+    };
+
+    const storeCamera = useDeviceStore((state) => state.camera);
+    const iotDevices = useDeviceStore((state) => state.iotDevices);
+    const defaultCam = (iotDevices || []).find((d) => d.type === "camera");
+
+    const effectiveCameraId =
+        route?.params?.cameraId ||
+        storeCamera?.id ||
+        defaultCam?.id ||
+        undefined;
+    const effectiveCameraName = (
+        route?.params?.cameraName ||
+        storeCamera?.name ||
+        defaultCam?.name ||
+        "Camera"
+    ).replace(/^Camera\s+Camera\s+/i, "Camera ");
+    const effectiveRoom =
+        route?.params?.room ||
+        storeCamera?.room ||
+        defaultCam?.location ||
+        "Phòng khách";
+    const effectiveStreamUrl =
+        route?.params?.streamUrl ||
+        storeCamera?.streamUrl ||
+        defaultCam?.streamUrl ||
+        "";
+
+    const [selectedCameraId, setSelectedCameraId] = useState<string | undefined>(
+        effectiveCameraId,
     );
     const [quality, setQuality] = useState<VideoQuality>("auto");
     const connection = useCameraConnection(selectedCameraId, quality);
@@ -88,7 +137,21 @@ export default function CameraDetailScreen({ navigation, route }: Props) {
     const [sheet, setSheet] = useState<DetailSheet>(route?.params?.tab === "playback" ? "recordings" : null);
     const [recordingUri, setRecordingUri] = useState("");
     const [archiveTab, setArchiveTab] = useState<"playback" | "download">("playback");
+    const [archiveFiles, setArchiveFiles] = useState<ArchivedRecording[]>([]);
+    const [loadingArchive, setLoadingArchive] = useState(false);
+    const [downloadingId, setDownloadingId] = useState<string | null>(null);
     const recordingRequest = useRef(0);
+    const archiveFade = useRef(new Animated.Value(1)).current;
+    useEffect(() => {
+        if (sheet === "recordings") {
+            archiveFade.setValue(0.35);
+            Animated.timing(archiveFade, {
+                toValue: 1,
+                duration: 200,
+                useNativeDriver: true,
+            }).start();
+        }
+    }, [sheet, archiveTab]);
     useEffect(() => {
         if (route?.params?.tab === "playback") {
             intercom.stop();
@@ -99,8 +162,56 @@ export default function CameraDetailScreen({ navigation, route }: Props) {
         setRecordingUri("");
         return () => { recordingRequest.current++; };
     }, [selectedCameraId, sheet]);
+    const loadArchiveFiles = async () => {
+        if (!cameraApi.timeline) return;
+        setLoadingArchive(true);
+        try {
+            const now = new Date();
+            const past = new Date(now.getTime() - 7 * 24 * 3600 * 1000);
+            const { data } = await cameraApi.timeline(
+                past.toISOString(),
+                now.toISOString(),
+                selectedCameraId,
+            );
+            setArchiveFiles(data?.items || []);
+        } catch {
+            // Không ngắt giao diện khi chưa tải được danh sách lưu trữ
+        } finally {
+            setLoadingArchive(false);
+        }
+    };
+
+    useEffect(() => {
+        if (sheet === "recordings" && archiveTab === "download") {
+            void loadArchiveFiles();
+            void connection.refresh?.();
+        }
+    }, [sheet, archiveTab, selectedCameraId]);
+
+    const openArchiveRecording = async (item: ArchivedRecording, download = false) => {
+        const request = ++recordingRequest.current;
+        if (download) setDownloadingId(item.id);
+        try {
+            const result = await cameraApi.playback?.(item.id, selectedCameraId, download);
+            if (result?.data?.url && request === recordingRequest.current) {
+                if (download) {
+                    await downloadVideo(result.data.url);
+                    LocalizedAlert.alert("Tải xuống", "Đang bắt đầu tải video xuống thiết bị.");
+                } else {
+                    setRecordingUri(result.data.url);
+                }
+            }
+        } catch {
+            if (request === recordingRequest.current)
+                LocalizedAlert.alert(download ? "Tải xuống" : "Xem lại", "Không tải được video. Vui lòng thử lại.");
+        } finally {
+            if (download && request === recordingRequest.current) setDownloadingId(null);
+        }
+    };
+
     const openRecording = async (file: string, download = false) => {
         const request = ++recordingRequest.current;
+        if (download) setDownloadingId(file);
         try {
             const uri = await cameraApi.media("recordings/" + file, selectedCameraId);
             if (request === recordingRequest.current) {
@@ -109,7 +220,9 @@ export default function CameraDetailScreen({ navigation, route }: Props) {
             }
         } catch {
             if (request === recordingRequest.current)
-                LocalizedAlert.alert(download ? "Tải xuống" : "Playback", "Không tải được video. Vui lòng thử lại.");
+                LocalizedAlert.alert(download ? "Tải xuống" : "Xem lại", "Không tải được video. Vui lòng thử lại.");
+        } finally {
+            if (download && request === recordingRequest.current) setDownloadingId(null);
         }
     };
     // Thông báo xác nhận lệnh PTZ trong panel.
@@ -120,24 +233,65 @@ export default function CameraDetailScreen({ navigation, route }: Props) {
      * @returns Không có giá trị trả về.
      * @remarks Tác động: Đóng intercom và cập nhật modal đang chọn.
      */
+    const handleApplyRtspConfig = async (deviceData: {
+        name: string;
+        brand: string;
+        streamUrl: string;
+        location: string;
+        ip: string;
+        isDefault: boolean;
+    }) => {
+        try {
+            setShowRtspConfigModal(false);
+            if (selectedCameraId) {
+                await devicesApi.updateDeviceConfig(selectedCameraId, {
+                    stream_url: deviceData.streamUrl,
+                });
+            }
+            if (deviceData.isDefault) {
+                useDeviceStore.getState().setCameraDefault({
+                    id: selectedCameraId || "cam-default",
+                    name: deviceData.name,
+                    room: deviceData.location,
+                    streamUrl: deviceData.streamUrl,
+                    isOnline: true,
+                });
+            }
+            LocalizedAlert.alert(
+                "Áp dụng thành công",
+                `Đã cập nhật nguồn camera: ${deviceData.streamUrl}`
+            );
+            connection.refresh();
+        } catch {
+            LocalizedAlert.alert(
+                "Lưu cấu hình",
+                `Đã áp dụng cấu hình camera: ${deviceData.streamUrl}`
+            );
+            connection.refresh();
+        }
+    };
+
     const openSheet = (next: DetailSheet) => {
-        intercom.stop();
-        if (next === "recordings") setArchiveTab("playback");
+        if (next === "recordings") {
+            intercom.stop();
+            setArchiveTab("playback");
+        }
         setSheet(next);
     };
     /**
      * Chuyển panel Talk/Voice Call/Pan-Tilt hoặc đóng panel.
      * @param next - Panel mới; null để trở về Function Grid.
      * @returns Không có giá trị trả về.
-     * @remarks Tác động: Dừng intercom và xóa phản hồi PTZ cũ.
      */
     const changePanel = (next: CameraPanel) => {
-        intercom.stop();
         setPanel(next);
         setFeedback(null);
     };
-    const name =
-        connection.status?.name || route?.params?.cameraName || "Camera";
+    const name = (
+        connection.status?.name ||
+        effectiveCameraName ||
+        "Camera"
+    ).replace(/^Camera\s+Camera\s+/i, "Camera ");
     const textStyle = { color: colors.textPrimary };
     const cardStyle = { backgroundColor: colors.card };
     /**
@@ -162,30 +316,15 @@ export default function CameraDetailScreen({ navigation, route }: Props) {
             setFeedback("Đã gửi lệnh xoay tới camera");
     };
     /**
-     * Yêu cầu xác nhận trước khi mở trình gọi cấp cứu 115.
-     * @returns Không có giá trị trả về.
-     * @remarks Tác động: Chỉ mở trình quay số khi người dùng chọn Gọi 115.
+     * Chuyển trực tiếp sang màn hình khẩn cấp EmergencySOS, không bật alert trình duyệt.
      */
-    const sos = () =>
-        LocalizedAlert.alert(
-            "Gọi cấp cứu 115?",
-            "Mở trình gọi điện với số 115.",
-            [
-                { text: "Hủy", style: "cancel" },
-                {
-                    text: "Gọi 115",
-                    style: "destructive",
-                    onPress: () => {
-                        void launchEmergencyCall().catch(() =>
-                            LocalizedAlert.alert(
-                                "SOS",
-                                "Không mở được trình gọi điện.",
-                            ),
-                        );
-                    },
-                },
-            ],
-        );
+    const sos = () => {
+        if (navigation?.navigate) {
+            navigation.navigate("EmergencySOS");
+            return;
+        }
+        void launchEmergencyCall().catch(() => {});
+    };
     return (
         <SafeAreaView
             style={[styles.screen, { backgroundColor: colors.background }]}
@@ -202,6 +341,7 @@ export default function CameraDetailScreen({ navigation, route }: Props) {
                 quality={quality}
                 onQuality={setQuality}
                 onSelectCamera={setSelectedCameraId}
+                selectedCameraId={selectedCameraId}
             />
             <QuickActionBar
                 recording={!!connection.recordings.active}
@@ -255,7 +395,7 @@ export default function CameraDetailScreen({ navigation, route }: Props) {
                             privacyActive={connection.privacy === true}
                             onCare={() =>
                                 LocalizedAlert.alert(
-                                    "AI Care",
+                                    "Chăm sóc AI",
                                     "Các cảnh báo hiện có được hiển thị bên dưới nhóm chức năng.",
                                 )
                             }
@@ -271,7 +411,7 @@ export default function CameraDetailScreen({ navigation, route }: Props) {
                                 color={colors.textPrimary}
                             />
                             <Text style={[styles.playbackText, textStyle]}>
-                                Playback & Download
+                                Xem lại & Tải xuống
                             </Text>
                             <CameraControlIcon
                                 name="chevron-forward"
@@ -334,6 +474,7 @@ export default function CameraDetailScreen({ navigation, route }: Props) {
                 accessibilityRole="button"
                 style={styles.sos}
                 onPress={sos}
+                activeOpacity={0.85}
             >
                 <Ionicons name="call" size={18} color="#FFF" />
                 <Text style={styles.sosText}>SOS 115</Text>
@@ -353,11 +494,11 @@ export default function CameraDetailScreen({ navigation, route }: Props) {
                             {(["playback", "download"] as const).map(tab => <TouchableOpacity key={tab}
                                 activeOpacity={1}
                                 accessibilityRole="tab" accessibilityState={{ selected: archiveTab === tab }}
-                                accessibilityLabel={tab === "playback" ? "Playback" : "Download"}
+                                accessibilityLabel={tab === "playback" ? "Xem lại" : "Tải xuống"}
                                 style={[styles.archiveTab, archiveTab === tab && { borderBottomColor: colors.primary }]}
                                 onPress={() => { setRecordingUri(""); recordingRequest.current++; setArchiveTab(tab); }}>
                                 <Text style={[styles.archiveTabText, { color: archiveTab === tab ? colors.primary : colors.textSecondary }]}>
-                                    {tab === "playback" ? "Playback" : "Download"}
+                                    {tab === "playback" ? "Xem lại" : "Tải xuống"}
                                 </Text>
                             </TouchableOpacity>)}
                         </View> :
@@ -378,18 +519,35 @@ export default function CameraDetailScreen({ navigation, route }: Props) {
                                 />
                             </TouchableOpacity>
                         </View>}
-                        <ScrollView contentContainerStyle={sheet === "recordings" ? styles.archiveContent : styles.sheetContent}>
+                        <Animated.View style={[{ flex: 1 }, sheet === "recordings" && { opacity: archiveFade }]}>
+                            <ScrollView contentContainerStyle={sheet === "recordings" ? styles.archiveContent : styles.sheetContent}>
                             {sheet === "recordings" ? (
                                 archiveTab === "playback" ? <CameraTimeline key={selectedCameraId || "default"} cameraId={selectedCameraId} /> : <View style={styles.downloadContent}>
                                     {recordingUri ? <>
                                         <ArchivePlayer key={recordingUri} uri={recordingUri}
                                             onEnd={() => {}}
-                                            onError={() => LocalizedAlert.alert("Playback", "Không phát được video. Vui lòng thử lại.")} />
+                                            onError={() => LocalizedAlert.alert("Xem lại", "Không phát được video. Vui lòng thử lại.")} />
                                         <TouchableOpacity accessibilityRole="button" style={styles.iconButton}
                                             accessibilityLabel="Quay lại danh sách bản ghi" onPress={() => setRecordingUri("")}>
                                             <Ionicons name="arrow-back" size={24} color={colors.textPrimary} />
                                         </TouchableOpacity>
                                     </> : null}
+                                    <View style={{ flexDirection: "row", justifyContent: "space-between", alignItems: "center" }}>
+                                        <Text style={[styles.sectionTitle, textStyle]}>
+                                            Bản ghi khả dụng
+                                        </Text>
+                                        <TouchableOpacity
+                                            accessibilityRole="button"
+                                            accessibilityLabel="Làm mới danh sách bản ghi"
+                                            style={styles.iconButton}
+                                            onPress={() => {
+                                                void loadArchiveFiles();
+                                                void connection.refresh?.();
+                                            }}
+                                        >
+                                            <Ionicons name="refresh" size={20} color={colors.primary} />
+                                        </TouchableOpacity>
+                                    </View>
                                     {connection.recordings.active && (
                                         <Text style={textStyle}>
                                             Đang ghi hình…
@@ -399,13 +557,6 @@ export default function CameraDetailScreen({ navigation, route }: Props) {
                                         <Text style={styles.error}>
                                             {connection.recordings.error}
                                         </Text>
-                                    )}
-                                    {connection.recordings.files.length === 0 && (
-                                        <View style={styles.downloadEmpty}>
-                                            <Ionicons name="download-outline" size={60} color={colors.textMuted} />
-                                            <Text style={[styles.sectionTitle, textStyle]}>Chưa có bản ghi để tải</Text>
-                                            <Text style={{ color: colors.textSecondary, textAlign: "center" }}>Các bản ghi hoàn tất sẽ xuất hiện tại đây.</Text>
-                                        </View>
                                     )}
                                     {/* Chỉ mở các tệp do server trả về. */}
                                     {[...connection.recordings.files]
@@ -447,11 +598,67 @@ export default function CameraDetailScreen({ navigation, route }: Props) {
                                                 </TouchableOpacity>
                                             </View>
                                         ))}
+                                    {/* Danh sách bản ghi từ Cloud / Edge Hub Archive */}
+                                    {archiveFiles.map((item) => (
+                                        <View
+                                            key={item.id}
+                                            style={[
+                                                styles.row,
+                                                { borderColor: colors.border },
+                                            ]}
+                                        >
+                                            <TouchableOpacity
+                                                accessibilityRole="button"
+                                                accessibilityLabel={`Phát lưu trữ ${item.id}`}
+                                                style={styles.iconButton}
+                                                onPress={() => { void openArchiveRecording(item); }}
+                                            >
+                                                <Ionicons
+                                                    name="play-circle-outline"
+                                                    size={25}
+                                                    color={colors.primary}
+                                                />
+                                            </TouchableOpacity>
+                                            <View style={{ flex: 1 }}>
+                                                <Text style={textStyle}>
+                                                    {new Date(item.started_at).toLocaleString("vi-VN", {
+                                                        day: "2-digit",
+                                                        month: "2-digit",
+                                                        hour: "2-digit",
+                                                        minute: "2-digit",
+                                                        second: "2-digit",
+                                                    })}
+                                                </Text>
+                                                <Text style={{ color: colors.textSecondary, fontSize: 12 }}>
+                                                    {item.duration}s • {item.kind === "incident" ? "Sự kiện AI" : "Đoạn lưu trữ"}
+                                                </Text>
+                                            </View>
+                                            <TouchableOpacity
+                                                accessibilityRole="button"
+                                                accessibilityLabel={`Tải xuống lưu trữ ${item.id}`}
+                                                style={styles.iconButton}
+                                                onPress={() => { void openArchiveRecording(item, true); }}
+                                            >
+                                                <Ionicons
+                                                    name="download-outline"
+                                                    size={22}
+                                                    color={colors.primary}
+                                                />
+                                            </TouchableOpacity>
+                                        </View>
+                                    ))}
+                                    {connection.recordings.files.length === 0 && archiveFiles.length === 0 && !loadingArchive && (
+                                        <View style={styles.downloadEmpty}>
+                                            <Ionicons name="download-outline" size={60} color={colors.textMuted} />
+                                            <Text style={[styles.sectionTitle, textStyle]}>Chưa có bản ghi để tải</Text>
+                                            <Text style={{ color: colors.textSecondary, textAlign: "center" }}>Các bản ghi hoàn tất sẽ xuất hiện tại đây.</Text>
+                                        </View>
+                                    )}
                                 </View>
                             ) : (
                                 <CameraSettings
                                     name={name}
-                                    room={route?.params?.room}
+                                    room={effectiveRoom}
                                     connected={!!connection.status?.connected}
                                     privacy={connection.privacy}
                                     motion={connection.motion}
@@ -462,12 +669,76 @@ export default function CameraDetailScreen({ navigation, route }: Props) {
                                     onMotion={() => {
                                         void connection.toggleMotion();
                                     }}
+                                    onConfigureSource={() => {
+                                        setSheet(null);
+                                        setShowRtspConfigModal(true);
+                                    }}
+                                    onDeleteDevice={handleDeleteCamera}
                                 />
                             )}
                         </ScrollView>
+                        </Animated.View>
                     </View>
                 </SafeAreaView>
             </Modal>
+            {/* Modal Cấu hình nguồn camera RTSP theo ảnh mẫu */}
+            <Modal
+                visible={showRtspConfigModal}
+                animationType="slide"
+                presentationStyle="pageSheet"
+                onRequestClose={() => setShowRtspConfigModal(false)}
+            >
+                <SafeAreaView style={{ flex: 1, backgroundColor: colors.background }}>
+                    <View style={{
+                        flexDirection: "row",
+                        justifyContent: "space-between",
+                        alignItems: "center",
+                        paddingHorizontal: 16,
+                        paddingVertical: 12,
+                        borderBottomWidth: 1,
+                        borderBottomColor: colors.border
+                    }}>
+                        <Text style={{ fontSize: 16, fontWeight: "700", color: colors.textPrimary }}>
+                            Cấu Hình Nguồn Camera
+                        </Text>
+                        <TouchableOpacity
+                            onPress={() => setShowRtspConfigModal(false)}
+                            style={{ padding: 6 }}
+                        >
+                            <Ionicons name="close" size={24} color={colors.textPrimary} />
+                        </TouchableOpacity>
+                    </View>
+                    <StepCameraRtspConfig
+                        isDarkMode={isDarkMode}
+                        colors={colors}
+                        initialValues={{
+                            name,
+                            streamUrl: effectiveStreamUrl,
+                            location: effectiveRoom,
+                        }}
+                        onApplyCamera={handleApplyRtspConfig}
+                    />
+                </SafeAreaView>
+            </Modal>
+
+            {/* Modal Xác nhận xóa Camera */}
+            <DeleteDeviceConfirmModal
+                visible={showDeleteModal}
+                device={{
+                    id: selectedCameraId || route?.params?.cameraId || "camera",
+                    name: connection.status?.name || route?.params?.cameraName || "Camera",
+                    sub: effectiveRoom || "Camera an ninh",
+                    type: "camera",
+                    status: connection.status?.connected ? "Trực tuyến" : "Ngoại tuyến",
+                    isOnline: !!connection.status?.connected,
+                    icon: "videocam",
+                    color: "#0284C7",
+                }}
+                onClose={() => setShowDeleteModal(false)}
+                onConfirmDelete={handleConfirmDeleteCamera}
+                isDarkMode={isDarkMode}
+                colors={colors}
+            />
         </SafeAreaView>
     );
 }

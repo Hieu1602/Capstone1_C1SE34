@@ -36,7 +36,7 @@ class VitalSign(Base):
     )
 
     device_id: Mapped[uuid.UUID] = mapped_column(
-        UUID(as_uuid=True), ForeignKey("devices.id"), nullable=False, index=True
+        UUID(as_uuid=True), ForeignKey("devices.id", ondelete="CASCADE"), nullable=False, index=True
     )
 
     # ---- Vital Signs ----

@@ -1,0 +1,44 @@
+# CẨM NANG Y KHOA LÃO KHOA: CHĂM SÓC CƠ XƯƠNG KHỚP VÀ PHÒNG NGỪA TÉ NGÃ Ở NGƯỜI CAO TUỔI
+Nguồn: SmartCare AI Geriatric Clinical Knowledge Base - Chuyên khoa Cơ Xương Khớp Lão khoa
+
+1. CÁC BỆNH LÝ CƠ XƯƠNG KHỚP PHỔ BIẾN Ở NGƯỜI CAO TUỔI
+1.1. THOÁI HÓA KHỚP (Osteoarthritis - OA)
+- Vị trí thường gặp: Khớp gối, khớp háng, cột sống thắt lưng và cột sống cổ.
+- Triệu chứng:
+  + Đau nhức có tính chất cơ học: Đau tăng khi vận động (đi bộ, leo cầu thang, đứng lên ngồi xuống) và giảm khi nghỉ ngơi.
+  + Tiếng lạo xạo, lục cục trong ổ khớp khi cử động.
+  + Dấu hiệu cứng khớp buổi sáng kéo dài dưới 30 phút.
+  + Giảm tầm vận động, teo cơ đùi quanh khớp nếu ít vận động lâu ngày.
+- Hướng dẫn chăm sóc:
+  + Giữ cân nặng hợp lý để giảm tải trọng lên khớp gối và khớp háng.
+  + Không ngồi xổm, không quỳ gối, không ngồi xếp bằng hoặc khiêng vác vật nặng.
+  + Tập luyện nhẹ nhàng: Đi bộ trên đường phẳng 20-30 phút/ngày, bơi lội, đạp xe tại chỗ, bài tập nâng chân thẳng khi ngồi ghế để tăng sức cơ tứ đầu đùi.
+
+1.2. LOÃNG XƯƠNG (Osteoporosis) VÀ NGUY CƠ GÃY XƯƠNG DÒNG LÃO KHOA
+- Đặc điểm: "Kẻ sát nhân thầm lặng" vì diễn biến âm thầm không có triệu chứng đau rõ ràng cho đến khi xảy ra biến cố gãy xương.
+- Biến chứng nguy hiểm:
+  + Gãy cổ xương đùi sau cú ngã nhẹ: Bệnh nhân mất khả năng đi lại, phải nằm liệt giường kéo theo nguy cơ loét tì đè, viêm phổi hít và huyết khối tĩnh mạch sâu với tỷ lệ tử vong cao trong năm đầu.
+  + Xẹp lún đốt sống: Gây đau lưng âm ỉ kéo dài, gù lưng, giảm chiều cao của cụ.
+- Biện pháp phòng ngừa:
+  + Đo mật độ xương định kỳ (phương pháp DEXA) cho phụ nữ trên 65 tuổi và nam giới trên 70 tuổi.
+  + Chế độ dinh dưỡng giàu Canxi (sữa ít béo, sữa chua, đậu phụ, cá nhỏ kho nhừ xương, rau xanh đậm).
+  + Bổ sung Vitamin D3 (tắm nắng sáng sớm hoặc dùng thuốc theo chỉ định bác sĩ) để tăng hấp thu Canxi.
+
+1.3. BỆNH GÚT (Gout) VÀ VIÊM KHỚP TINH THỂ
+- Triệu chứng: Cơn đau dữ dội, sưng nóng đỏ rực ở một khớp (thường là ngón chân cái, mắt cá chân, khớp gối), xuất hiện đột ngột sau bữa ăn nhiều đạm (thịt đỏ, hải sản) hoặc uống rượu bia.
+- Xử trí tại nhà: Nghỉ ngơi bất động khớp bị viêm, kê cao chi, chườm lạnh (túi đá bọc khăn mềm 15-20 phút), uống nhiều nước lọc. Khám bác sĩ để dùng thuốc cắt cơn gút và thuốc hạ acid uric an toàn.
+
+2. CÁCH GIẢM ĐAU VÀ CHĂM SÓC KHỚP AN TOÀN TẠI NHÀ
+2.1. NGUYÊN TẮC CHƯỜM ẤM VÀ CHƯỜM LẠNH
+- Chườm ấm: Dùng khăn ấm hoặc túi chườm nhiệt 40-45°C trong 15-20 phút. Áp dụng cho đau nhức mãn tính, cứng khớp buổi sáng, thoái hóa khớp để tăng tuần hoàn máu và giãn cơ.
+- Chườm lạnh: Dùng túi đá bọc khăn vải trong 10-15 phút. Áp dụng cho các trường hợp sưng nóng đỏ cấp tính, chấn thương mới trong 48 giờ đầu.
+
+2.2. NGUY HIỂM TỪ THUỐC GIẢM ĐAU TRÔI NỔI (CẢNH BÁO AN TOÀN DÙNG THUỐC)
+- TUYỆT ĐỐI KHÔNG tự ý mua các loại "thuốc tễ", "thuốc nam gia truyền", "thuốc trị đau khớp hoàn tán không rõ nguồn gốc". Đa số các loại thuốc này bị trộn lẫn Corticoid liều cao.
+- Hậu quả: Gây hội chứng Cushing (mặt tròn như mặt trăng, da mỏng bầm tím), loét dạ dày xuất huyết ồ ạt, suy tuyến thượng thận cấp và làm nặng thêm bệnh tiểu đường, huyết áp.
+- Các thuốc giảm đau chống viêm không steroid (NSAIDs như Meloxicam, Diclofenac, Celecoxib) chỉ được dùng khi bác sĩ kê đơn và cần dùng kèm thuốc bảo vệ dạ dày.
+
+3. SỰ LIÊN QUAN GIỮA ĐAU KHỚP VÀ TÉ NGÃ Ở NGƯỜI CAO TUỔI
+- Khớp gối yếu hoặc đau cột sống khiến người già có phản xạ thăng bằng kém, dễ bị khuỵu chân và ngã.
+- Khi cụ kêu đau khớp hoặc đi lại tập tễnh, cần kiểm tra ngay môi trường sống xung quanh (thảm chùi chân, sàn ướt), trang bị gậy chống hoặc khung tập đi hỗ trợ nếu cần.
+

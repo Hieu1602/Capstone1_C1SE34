@@ -10,7 +10,7 @@ from uuid import UUID
 from botocore.exceptions import BotoCoreError, ClientError
 from fastapi import APIRouter, Depends, Header, HTTPException, Query, Response
 from pydantic import AwareDatetime, BaseModel, Field, model_validator
-from sqlalchemy import select, tuple_
+from sqlalchemy import literal, select, tuple_
 from sqlalchemy.dialects.postgresql import insert
 from sqlalchemy.ext.asyncio import AsyncSession
 
@@ -111,7 +111,7 @@ async def timeline(start: AwareDatetime, end: AwareDatetime,
     if incident_id:
         query = query.where(CameraRecording.incident_id == incident_id)
     if after_time is not None:
-        query = query.where(tuple_(CameraRecording.started_at, CameraRecording.id) > tuple_(after_time, after_id))
+        query = query.where(tuple_(CameraRecording.started_at, CameraRecording.id) > tuple_(literal(after_time), literal(after_id)))
     rows = list((await db.execute(query.order_by(CameraRecording.started_at, CameraRecording.id).limit(limit + 1))).scalars())
     items = rows[:limit]
     return {"items": [RecordingMetadata.model_validate(row, from_attributes=True).model_dump() for row in items],

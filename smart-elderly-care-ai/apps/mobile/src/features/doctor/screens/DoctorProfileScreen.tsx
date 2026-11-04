@@ -10,6 +10,7 @@ import {
   TouchableOpacity,
   Alert,
   StatusBar,
+  Platform,
 } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
@@ -21,6 +22,7 @@ import { useTheme } from '../../../store/useThemeStore';
 import { useAuthStore } from '../../../store/useAuthStore';
 import { doctorApi, usersApi } from '../../../services/api';
 import { resolveAvatarUrl } from '../../auth/hooks/useProfileManager';
+import { ViewAvatarModal } from '../../auth/components/profile';
 import {
   DoctorProfileInfo,
   DoctorProfileCard,
@@ -44,6 +46,7 @@ export default function DoctorProfileScreen({ navigation }: any) {
     hospital: 'Hệ thống Smart Elderly Care AI',
     department: 'Khoa Chăm sóc Người cao tuổi',
     phone: userPhone || '',
+    cchn_number: '028491/BYT-CCHN',
   });
 
   const [patientCount, setPatientCount] = useState<number>(0);
@@ -62,6 +65,7 @@ export default function DoctorProfileScreen({ navigation }: any) {
   const [editDepartment, setEditDepartment] = useState(docInfo.department);
   const [editPhone, setEditPhone] = useState(docInfo.phone);
   const [editAvatarUri, setEditAvatarUri] = useState<string | null>(avatarUri);
+  const [isViewingAvatar, setIsViewingAvatar] = useState(false);
 
   const [passwordModalVisible, setPasswordModalVisible] = useState(false);
   const [oldPassword, setOldPassword] = useState('');
@@ -131,14 +135,16 @@ export default function DoctorProfileScreen({ navigation }: any) {
 
   const pickImage = async () => {
     try {
-      const permission = await ImagePicker.requestMediaLibraryPermissionsAsync();
-      if (!permission.granted) {
-        Alert.alert('Quyền bị từ chối', 'Ứng dụng cần quyền truy cập thư viện để chọn ảnh đại diện.');
-        return;
+      if (Platform.OS !== 'web') {
+        const permission = await ImagePicker.requestMediaLibraryPermissionsAsync();
+        if (!permission.granted) {
+          Alert.alert('Quyền bị từ chối', 'Ứng dụng cần quyền truy cập thư viện để chọn ảnh đại diện.');
+          return;
+        }
       }
       const result = await ImagePicker.launchImageLibraryAsync({
         mediaTypes: ['images'],
-        allowsEditing: true,
+        allowsEditing: Platform.OS !== 'web',
         aspect: [1, 1],
         quality: 0.8,
         base64: true,
@@ -148,6 +154,17 @@ export default function DoctorProfileScreen({ navigation }: any) {
         const selectedUri = asset.base64 ? `data:image/jpeg;base64,${asset.base64}` : asset.uri;
         setEditAvatarUri(selectedUri);
         setAvatarUri(selectedUri);
+        setAvatar(selectedUri);
+        setProfile({ avatar_url: selectedUri });
+        if (selectedUri.startsWith('data:image')) {
+          try {
+            await usersApi.uploadAvatarBase64(selectedUri);
+          } catch {
+            try {
+              await usersApi.updateMe({ avatar_url: selectedUri });
+            } catch {}
+          }
+        }
       }
     } catch {
       Alert.alert('Lỗi', 'Không thể chọn ảnh từ thư viện.');
@@ -165,11 +182,7 @@ export default function DoctorProfileScreen({ navigation }: any) {
     setEditModalVisible(true);
   };
 
-  const handleSaveProfile = async () => {
-    if (!editName.trim()) {
-      Alert.alert('Lỗi', 'Vui lòng nhập họ tên bác sĩ.');
-      return;
-    }
+  const executeSaveProfile = async () => {
     const updated: DoctorProfileInfo = {
       name: editName.trim(),
       degree: editDegree.trim(),
@@ -202,24 +215,19 @@ export default function DoctorProfileScreen({ navigation }: any) {
     Alert.alert('Thành công', 'Đã cập nhật hồ sơ chuyên môn Bác sĩ thành công.');
   };
 
-  const handleSavePassword = async () => {
-    if (!oldPassword.trim() || !newPassword.trim()) {
-      Alert.alert('Lỗi', 'Vui lòng nhập đầy đủ mật khẩu hiện tại và mật khẩu mới.');
+  const handleSaveProfile = () => {
+    if (!editName.trim()) {
+      Alert.alert('Lỗi', 'Vui lòng nhập họ tên bác sĩ.');
       return;
     }
-    if (newPassword.length < 8 || newPassword.length > 16) {
-      Alert.alert('Lỗi', 'Mật khẩu mới phải từ 8 đến 16 ký tự.');
-      return;
-    }
-    if (newPassword !== confirmPassword) {
-      Alert.alert('Lỗi', 'Mật khẩu xác nhận không trùng khớp.');
-      return;
-    }
-    if (oldPassword === newPassword) {
-      Alert.alert('Lỗi', 'Mật khẩu mới phải khác mật khẩu hiện tại.');
-      return;
-    }
+    executeSaveProfile();
+  };
 
+  const handleCloseEditModal = () => {
+    setEditModalVisible(false);
+  };
+
+  const executeSavePassword = async () => {
     try {
       setIsChangingPassword(true);
       await usersApi.changePassword({
@@ -232,7 +240,7 @@ export default function DoctorProfileScreen({ navigation }: any) {
       setOldPassword('');
       setNewPassword('');
       setConfirmPassword('');
-      Alert.alert('Thành công', 'Đã thay đổi mật khẩu tài khoản Bác sĩ thành công.');
+      Alert.alert('Thành công 🎉', 'Đã thay đổi mật khẩu tài khoản Bác sĩ thành công.');
     } catch (err: any) {
       let errorMsg = 'Không thể thay đổi mật khẩu. Vui lòng kiểm tra lại mật khẩu hiện tại.';
       if (err?.response?.data?.detail) {
@@ -240,7 +248,7 @@ export default function DoctorProfileScreen({ navigation }: any) {
         if (typeof detail === 'string') {
           errorMsg = detail;
         } else if (Array.isArray(detail) && detail[0]?.msg) {
-          errorMsg = detail[0].msg;
+          errorMsg = String(detail[0].msg).replace(/^Value error,\s*/i, '');
         }
       } else if (err?.message) {
         errorMsg = err.message;
@@ -249,6 +257,50 @@ export default function DoctorProfileScreen({ navigation }: any) {
     } finally {
       setIsChangingPassword(false);
     }
+  };
+
+  const handleSavePassword = () => {
+    if (!oldPassword.trim()) {
+      Alert.alert('Thiếu thông tin', 'Vui lòng nhập mật khẩu hiện tại.');
+      return;
+    }
+    if (!newPassword.trim()) {
+      Alert.alert('Thiếu thông tin', 'Vui lòng nhập mật khẩu mới.');
+      return;
+    }
+    if (newPassword.length < 8 || newPassword.length > 16) {
+      Alert.alert('Mật khẩu không hợp lệ', 'Mật khẩu mới phải từ 8 đến 16 ký tự.');
+      return;
+    }
+    const hasUpper = /[A-Z]/.test(newPassword);
+    const hasLower = /[a-z]/.test(newPassword);
+    const hasDigit = /[0-9]/.test(newPassword);
+    const hasSpecial = /[^A-Za-z0-9]/.test(newPassword);
+    if (!hasUpper || !hasLower || !hasDigit || !hasSpecial) {
+      Alert.alert(
+        'Mật khẩu chưa đủ mạnh',
+        'Mật khẩu mới phải bao gồm đầy đủ: chữ hoa, chữ thường, chữ số và ký tự đặc biệt (!@#$%^&*...).'
+      );
+      return;
+    }
+    if (newPassword !== confirmPassword) {
+      Alert.alert('Mật khẩu không khớp', 'Mật khẩu xác nhận không trùng khớp với mật khẩu mới.');
+      return;
+    }
+    if (oldPassword === newPassword) {
+      Alert.alert('Mật khẩu trùng lặp', 'Mật khẩu mới phải khác mật khẩu hiện tại.');
+      return;
+    }
+
+    // Thực hiện lưu trực tiếp, không dùng Alert.alert lồng xác nhận (vốn bị nuốt callback trên Expo Web)
+    executeSavePassword();
+  };
+
+  const handleClosePasswordModal = () => {
+    setOldPassword('');
+    setNewPassword('');
+    setConfirmPassword('');
+    setPasswordModalVisible(false);
   };
 
   const performLogout = async () => {
@@ -309,6 +361,7 @@ export default function DoctorProfileScreen({ navigation }: any) {
           patientCount={patientCount}
           appointmentCount={appointmentCount}
           onPickImage={pickImage}
+          onViewAvatar={() => setIsViewingAvatar(true)}
           onEditProfile={handleOpenEditModal}
           isDarkMode={isDarkMode}
           colors={colors}
@@ -342,7 +395,7 @@ export default function DoctorProfileScreen({ navigation }: any) {
         onChangePhone={setEditPhone}
         onPickImage={pickImage}
         onSave={handleSaveProfile}
-        onClose={() => setEditModalVisible(false)}
+        onClose={handleCloseEditModal}
         isDarkMode={isDarkMode}
         colors={colors}
       />
@@ -357,7 +410,7 @@ export default function DoctorProfileScreen({ navigation }: any) {
         onChangeNewPassword={setNewPassword}
         onChangeConfirmPassword={setConfirmPassword}
         onSave={handleSavePassword}
-        onClose={() => !isChangingPassword && setPasswordModalVisible(false)}
+        onClose={handleClosePasswordModal}
         isDarkMode={isDarkMode}
         colors={colors}
         isSubmitting={isChangingPassword}
@@ -370,6 +423,16 @@ export default function DoctorProfileScreen({ navigation }: any) {
         onClose={() => setLogoutModalVisible(false)}
         isDarkMode={isDarkMode}
         colors={colors}
+      />
+
+      {/* MODAL 4: XEM AVATAR BÁC SĨ (CHẾ ĐỘ XEM, CÓ NÚT ĐỔI RIÊNG) */}
+      <ViewAvatarModal
+        visible={isViewingAvatar}
+        avatarUri={avatarUri}
+        displayName={docInfo.name || 'Bác sĩ'}
+        isDarkMode={isDarkMode}
+        onClose={() => setIsViewingAvatar(false)}
+        onEditAvatar={pickImage}
       />
     </View>
   );
@@ -400,5 +463,5 @@ const styles = StyleSheet.create({
     fontWeight: '700',
     color: '#0284C7',
   },
-  scrollContent: { padding: 16, paddingBottom: 95 },
+  scrollContent: { padding: 16, paddingBottom: 120 },
 });

@@ -4,11 +4,11 @@
 // 2. DoctorPatientCard: Thẻ bệnh nhân bố cục Grid 2 cột (Avatar, trạng thái, chỉ số & nút hành động)
 
 import React, { useState, RefObject } from 'react';
-import { View, StyleSheet, TouchableOpacity, Modal } from 'react-native';
+import { View, StyleSheet, TouchableOpacity, Modal, Image } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { Colors } from '../../../theme/colors';
 import { LocalizedText, LocalizedTextInput } from '../../../i18n/LocalizedComponents';
-import { PatientCardData } from './types';
+import { PatientCardData, getPatientAvatarUrl } from './types';
 
 // =============================================================
 // 1. HEADER & THANH CÔNG CỤ TÌM KIẾM / LỌC BỆNH NHÂN
@@ -236,113 +236,162 @@ export const DoctorPatientCard: React.FC<DoctorPatientCardProps> = ({
     return parts[parts.length - 1]?.[0]?.toUpperCase() || 'B';
   })();
 
-  const statusDotColor = isDanger ? '#EF4444' : isWarn ? '#F59E0B' : '#10B981';
+  const statusColor = isDanger ? '#EF4444' : isWarn ? '#F59E0B' : '#10B981';
+  const statusLabel = isDanger ? 'Nguy cấp' : isWarn ? 'Cảnh báo' : 'Ổn định';
+  const statusBg = isDanger ? '#FEE2E2' : isWarn ? '#FEF3C7' : '#ECFDF5';
 
   return (
-    <TouchableOpacity
+    <View
       style={[
-        cardStyles.gridCard,
+        cardStyles.fullCard,
         {
           backgroundColor: isDarkMode ? '#1E293B' : '#FFFFFF',
           borderColor: isDanger ? '#FCA5A5' : isWarn ? '#FCD34D' : (isDarkMode ? '#334155' : '#E2E8F0'),
         },
       ]}
-      activeOpacity={0.88}
-      onPress={() => onViewDetail(patient.id)}
     >
-      {/* 1. Avatar tròn với chấm trạng thái */}
-      <View style={cardStyles.avatarSection}>
-        <View
-          style={[
-            cardStyles.avatarCircle,
-            { backgroundColor: isDanger ? '#EF4444' : isWarn ? '#F59E0B' : '#2563EB' },
-          ]}
-        >
-          <LocalizedText style={cardStyles.avatarLetter}>{initial}</LocalizedText>
+      {/* 1. Header Row: Avatar, Tên, Tuổi, Giới tính, Trạng thái */}
+      <TouchableOpacity
+        style={cardStyles.patientInfoRow}
+        activeOpacity={0.8}
+        onPress={() => onViewDetail(patient.id)}
+      >
+        <View style={cardStyles.avatarContainer}>
+          <View
+            style={[
+              cardStyles.avatarCircle,
+              { backgroundColor: isDanger ? '#EF4444' : isWarn ? '#F59E0B' : '#0284C7' },
+            ]}
+          >
+            {patient.avatar_url ? (
+              <Image
+                source={{ uri: getPatientAvatarUrl(patient.avatar_url)! }}
+                style={cardStyles.avatarImg}
+                resizeMode="cover"
+              />
+            ) : (
+              <LocalizedText style={cardStyles.avatarLetter}>{initial}</LocalizedText>
+            )}
+          </View>
           <View
             style={[
               cardStyles.onlineDot,
               {
-                backgroundColor: statusDotColor,
+                backgroundColor: statusColor,
                 borderColor: isDarkMode ? '#1E293B' : '#FFFFFF',
               },
             ]}
           />
         </View>
 
-        {(isDanger || isWarn) && (
-          <View style={cardStyles.dangerBadge}>
-            <Ionicons name="warning" size={10} color="#DC2626" />
-            <LocalizedText style={cardStyles.dangerBadgeText}>
-              {isDanger ? 'Nguy cấp' : 'Cảnh báo'}
+        <View style={{ flex: 1, marginLeft: 12 }}>
+          <View style={cardStyles.nameAndBadgeRow}>
+            <LocalizedText
+              style={[cardStyles.patientName, { color: colors.textPrimary }]}
+              numberOfLines={1}
+            >
+              {displayName}
+            </LocalizedText>
+            <View style={[cardStyles.statusBadge, { backgroundColor: statusBg }]}>
+              <View style={[cardStyles.statusBadgeDot, { backgroundColor: statusColor }]} />
+              <LocalizedText style={[cardStyles.statusBadgeText, { color: statusColor }]}>
+                {statusLabel}
+              </LocalizedText>
+            </View>
+          </View>
+
+          <LocalizedText
+            style={[cardStyles.patientMeta, { color: isDarkMode ? '#94A3B8' : '#64748B' }]}
+            numberOfLines={1}
+          >
+            {patient.age ? `${patient.age} tuổi` : 'Cao tuổi'} • {patient.gender ? (patient.gender === 'Nữ' || patient.gender.toUpperCase() === 'FEMALE' ? 'Nữ' : 'Nam') : 'Chưa cập nhật'}
+            {patient.house_name ? ` • ${patient.house_name}` : ''}
+          </LocalizedText>
+
+          {patient.house_address ? (
+            <LocalizedText
+              style={[cardStyles.patientAddress, { color: isDarkMode ? '#64748B' : '#94A3B8' }]}
+              numberOfLines={1}
+            >
+              📍 {patient.house_address}
+            </LocalizedText>
+          ) : null}
+        </View>
+      </TouchableOpacity>
+
+      {/* 2. Dải chỉ số sinh hiệu (Vitals Strip) nếu có */}
+      {(patient.heart_rate || patient.spo2 || patient.blood_pressure) ? (
+        <View style={[cardStyles.vitalsStrip, { backgroundColor: isDarkMode ? '#0F172A' : '#F8FAFC', borderColor: colors.border }]}>
+          <View style={cardStyles.vitalItem}>
+            <Ionicons name="heart" size={13} color="#EF4444" style={{ marginRight: 4 }} />
+            <LocalizedText style={[cardStyles.vitalText, { color: colors.textPrimary }]}>
+              {patient.heart_rate ? `${patient.heart_rate} bpm` : '--'}
             </LocalizedText>
           </View>
-        )}
-      </View>
+          <View style={cardStyles.vitalDivider} />
+          <View style={cardStyles.vitalItem}>
+            <Ionicons name="water" size={13} color="#0284C7" style={{ marginRight: 4 }} />
+            <LocalizedText style={[cardStyles.vitalText, { color: colors.textPrimary }]}>
+              {patient.spo2 ? `${patient.spo2}% SpO2` : '--'}
+            </LocalizedText>
+          </View>
+          <View style={cardStyles.vitalDivider} />
+          <View style={cardStyles.vitalItem}>
+            <Ionicons name="pulse" size={13} color="#10B981" style={{ marginRight: 4 }} />
+            <LocalizedText style={[cardStyles.vitalText, { color: colors.textPrimary }]}>
+              {patient.blood_pressure || '--'}
+            </LocalizedText>
+          </View>
+        </View>
+      ) : null}
 
-      {/* 2. Tên & Tuổi / Giới tính */}
-      <LocalizedText
-        style={[cardStyles.patientName, { color: colors.textPrimary }]}
-        numberOfLines={1}
-      >
-        {displayName}
-      </LocalizedText>
-
-      <LocalizedText
-        style={[cardStyles.patientSummary, { color: isDarkMode ? '#94A3B8' : '#64748B' }]}
-        numberOfLines={1}
-      >
-        {patient.age ? `${patient.age} tuổi` : 'Cao tuổi'} • {patient.gender ? (patient.gender === 'Nữ' || patient.gender.toUpperCase() === 'FEMALE' ? 'Nữ' : 'Nam') : 'Chưa cập nhật'}
-      </LocalizedText>
-
-      {/* 3. Vị trí / Địa chỉ */}
-      <LocalizedText
-        style={[cardStyles.patientLocation, { color: isDarkMode ? '#64748B' : '#94A3B8' }]}
-        numberOfLines={1}
-      >
-        📍 {patient.house_address ? patient.house_address.split(',')[0] : (patient.house_name || 'Tại nhà riêng')}
-      </LocalizedText>
-
-      {/* 4. Cụm nút hành động dưới cùng */}
-      <View style={cardStyles.actionButtonGroup}>
+      {/* 3. Cụm nút hành động chuẩn y tế */}
+      <View style={[cardStyles.actionRow, { borderTopColor: isDarkMode ? '#334155' : '#E2E8F0' }]}>
         <TouchableOpacity
           style={[
-            cardStyles.btnViewRecord,
-            { backgroundColor: isDarkMode ? '#0F172A' : '#EFF6FF' },
+            cardStyles.btnViewDetail,
+            { backgroundColor: isDarkMode ? '#0284C722' : '#EFF6FF', borderColor: isDarkMode ? '#0284C744' : '#BFDBFE' },
           ]}
           activeOpacity={0.8}
           onPress={() => onViewDetail(patient.id)}
         >
-          <LocalizedText style={cardStyles.btnViewRecordText}>Hồ sơ</LocalizedText>
+          <Ionicons name="document-text" size={15} color="#0284C7" style={{ marginRight: 5 }} />
+          <LocalizedText style={cardStyles.btnViewDetailText}>Xem bệnh án</LocalizedText>
         </TouchableOpacity>
 
         {onBookAppointment && (
           <TouchableOpacity
             style={[
-              cardStyles.btnAppointment,
-              { backgroundColor: isDarkMode ? '#0F172A' : '#EFF6FF' },
+              cardStyles.btnActionSecondary,
+              { backgroundColor: isDarkMode ? '#334155' : '#F1F5F9', borderColor: isDarkMode ? '#475569' : '#E2E8F0' },
             ]}
             activeOpacity={0.8}
             onPress={() => onBookAppointment(patient)}
           >
-            <Ionicons name="calendar-outline" size={16} color="#2563EB" />
+            <Ionicons name="calendar-outline" size={15} color="#0284C7" style={{ marginRight: 4 }} />
+            <LocalizedText style={[cardStyles.btnActionSecondaryText, { color: colors.textPrimary }]}>
+              Đặt lịch
+            </LocalizedText>
           </TouchableOpacity>
         )}
 
         {onViewAnalytics && (
           <TouchableOpacity
             style={[
-              cardStyles.btnAppointment,
-              { backgroundColor: isDarkMode ? '#0F172A' : '#EFF6FF' },
+              cardStyles.btnActionSecondary,
+              { backgroundColor: isDarkMode ? '#334155' : '#F1F5F9', borderColor: isDarkMode ? '#475569' : '#E2E8F0' },
             ]}
             activeOpacity={0.8}
             onPress={() => onViewAnalytics(patient.id)}
           >
-            <Ionicons name="analytics-outline" size={16} color="#2563EB" />
+            <Ionicons name="analytics-outline" size={15} color="#059669" style={{ marginRight: 4 }} />
+            <LocalizedText style={[cardStyles.btnActionSecondaryText, { color: colors.textPrimary }]}>
+              Sinh hiệu
+            </LocalizedText>
           </TouchableOpacity>
         )}
       </View>
-    </TouchableOpacity>
+    </View>
   );
 };
 
@@ -436,110 +485,147 @@ const styles = StyleSheet.create({
 });
 
 const cardStyles = StyleSheet.create({
-  gridCard: {
-    flex: 1,
-    maxWidth: '48.5%',
-    borderRadius: 16,
+  fullCard: {
+    borderRadius: 14,
     padding: 14,
-    alignItems: 'center',
     borderWidth: 1,
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.05,
-    shadowRadius: 6,
-    elevation: 2,
-    marginHorizontal: 4,
     marginBottom: 12,
+    elevation: 2,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 1 },
+    shadowOpacity: 0.05,
+    shadowRadius: 3,
   },
-  avatarSection: {
+  patientInfoRow: {
+    flexDirection: 'row',
     alignItems: 'center',
     marginBottom: 10,
+  },
+  avatarContainer: {
     position: 'relative',
   },
   avatarCircle: {
-    width: 60,
-    height: 60,
-    borderRadius: 30,
+    width: 48,
+    height: 48,
+    borderRadius: 24,
     justifyContent: 'center',
     alignItems: 'center',
-    position: 'relative',
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.1,
-    shadowRadius: 4,
-    elevation: 2,
+    overflow: 'hidden',
+  },
+  avatarImg: {
+    width: '100%',
+    height: '100%',
+    borderRadius: 24,
   },
   avatarLetter: {
     color: '#FFFFFF',
-    fontSize: 22,
+    fontSize: 18,
     fontWeight: '800',
   },
   onlineDot: {
     position: 'absolute',
-    bottom: 2,
-    right: 2,
-    width: 14,
-    height: 14,
-    borderRadius: 7,
-    borderWidth: 2.5,
+    bottom: -1,
+    right: -1,
+    width: 13,
+    height: 13,
+    borderRadius: 6.5,
+    borderWidth: 2,
+    zIndex: 2,
   },
-  dangerBadge: {
+  nameAndBadgeRow: {
     flexDirection: 'row',
     alignItems: 'center',
-    gap: 2,
-    backgroundColor: '#FEE2E2',
-    paddingHorizontal: 6,
-    paddingVertical: 2,
-    borderRadius: 10,
-    marginTop: 6,
-  },
-  dangerBadgeText: {
-    fontSize: 10,
-    fontWeight: '700',
-    color: '#DC2626',
+    justifyContent: 'space-between',
+    marginBottom: 3,
   },
   patientName: {
-    fontSize: 15,
+    fontSize: 15.5,
     fontWeight: '800',
-    textAlign: 'center',
-    marginBottom: 4,
+    flex: 1,
+    marginRight: 8,
   },
-  patientSummary: {
-    fontSize: 12.5,
-    fontWeight: '500',
-    textAlign: 'center',
-    marginBottom: 2,
-  },
-  patientLocation: {
-    fontSize: 11.5,
-    textAlign: 'center',
-    marginBottom: 12,
-  },
-  actionButtonGroup: {
+  statusBadge: {
     flexDirection: 'row',
     alignItems: 'center',
-    gap: 6,
-    width: '100%',
-    marginTop: 'auto',
+    paddingHorizontal: 8,
+    paddingVertical: 3,
+    borderRadius: 6,
   },
-  btnViewRecord: {
-    flex: 1,
-    paddingVertical: 8,
+  statusBadgeDot: {
+    width: 6,
+    height: 6,
+    borderRadius: 3,
+    marginRight: 4,
+  },
+  statusBadgeText: {
+    fontSize: 11,
+    fontWeight: '700',
+  },
+  patientMeta: {
+    fontSize: 12.5,
+    marginBottom: 2,
+  },
+  patientAddress: {
+    fontSize: 11.5,
+  },
+  vitalsStrip: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-around',
+    paddingVertical: 7,
+    paddingHorizontal: 10,
     borderRadius: 8,
+    borderWidth: 1,
+    marginBottom: 10,
+  },
+  vitalItem: {
+    flexDirection: 'row',
+    alignItems: 'center',
+  },
+  vitalDivider: {
+    width: 1,
+    height: 14,
+    backgroundColor: '#CBD5E1',
+  },
+  vitalText: {
+    fontSize: 11.5,
+    fontWeight: '600',
+  },
+  actionRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 8,
+    paddingTop: 10,
+    borderTopWidth: StyleSheet.hairlineWidth,
+  },
+  btnViewDetail: {
+    flex: 1.2,
+    flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'center',
+    height: 40,
+    borderRadius: 10,
+    borderWidth: 1,
+    paddingHorizontal: 10,
   },
-  btnViewRecordText: {
-    fontSize: 12,
+  btnViewDetailText: {
+    fontSize: 13,
     fontWeight: '700',
     color: '#0284C7',
   },
-  btnAppointment: {
-    width: 32,
-    height: 32,
-    borderRadius: 8,
+  btnActionSecondary: {
+    flex: 1,
+    flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'center',
+    height: 40,
+    borderRadius: 10,
+    borderWidth: 1,
+    paddingHorizontal: 8,
+  },
+  btnActionSecondaryText: {
+    fontSize: 12.5,
+    fontWeight: '600',
   },
 });
 

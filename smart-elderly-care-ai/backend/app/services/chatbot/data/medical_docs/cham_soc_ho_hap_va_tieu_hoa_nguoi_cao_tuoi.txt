@@ -1,0 +1,48 @@
+# CẨM NANG Y KHOA LÃO KHOA: CHĂM SÓC HÔ HẤP, TIÊU HÓA VÀ RỐI LOẠN NUỐT Ở NGƯỜI CAO TUỔI
+Nguồn: SmartCare AI Geriatric Clinical Knowledge Base - Chuyên khoa Hô hấp và Tiêu hóa Lão khoa
+
+1. SỨC KHỎE HÔ HẤP Ở NGƯỜI CAO TUỔI
+1.1. NGUY CƠ VIÊM PHỔI HÍT (Aspiration Pneumonia) - NGUY HIỂM HÀNG ĐẦU
+- Định nghĩa: Là tình trạng thức ăn, nước uống hoặc dịch vị dạ dày lọt vào đường thở do rối loạn phản xạ nuốt ở người già, dẫn đến nhiễm trùng phổi nghiêm trọng.
+- Đối tượng nguy cơ cao: Người cao tuổi nằm liệt giường, người sau đột quỵ tai biến, người mắc bệnh Parkinson hoặc suy giảm trí nhớ sa sút trí tuệ (Alzheimer).
+- Dấu hiệu nhận biết:
+  + Hay bị sặc, ho dữ dội khi ăn hoặc uống nước.
+  + Sốt nhẹ âm ỉ hoặc sốt cao, đờm đục, thở khò khè, thở nhanh nông.
+  + Chỉ số SpO2 tụt giảm dưới 95% (thậm chí dưới 90%).
+  + Người già có thể không sốt rõ rệt mà chỉ biểu hiện lờ đờ, mệt lả, bỏ ăn hoặc lú lẫn cấp.
+- Quy tắc vàng phòng ngừa viêm phổi hít:
+  + Tư thế khi ăn: Luôn nâng đầu giường hoặc đỡ cụ ngồi thẳng lưng một góc 60-90 độ khi ăn uống. Tuyệt đối không cho cụ ăn uống khi đang nằm ngửa.
+  + Sau khi ăn xong: Giữ cụ ngồi hoặc nằm đầu cao ít nhất 30-45 phút trước khi cho nằm xuống để tránh trào ngược.
+  + Thức ăn: Chế biến thức ăn mềm, đồng nhất (cháo đặc, súp có độ sệt vừa phải), tránh thức ăn lỏng dễ sặc (như nước lèo trong) hoặc hạt vụn khô.
+  + Ăn chậm, bón từng thìa nhỏ, đảm bảo cụ đã nuốt hết thìa trước mới bón thìa tiếp theo.
+
+1.2. BỆNH PHỔI TẮC NGHẼN MÃN TÍNH (COPD) VÀ THEO DÕI NỒNG ĐỘ OXY (SpO2)
+- Triệu chứng: Ho khạc đờm mãn tính (đặc biệt vào buổi sáng), khó thở khi gắng sức rồi tiến triển thành khó thở ngay cả khi nghỉ ngơi.
+- Theo dõi chỉ số SpO2 từ đồng hồ thông minh:
+  + Ở người bình thường: SpO2 an toàn từ 95% - 100%.
+  + Ở bệnh nhân COPD mãn tính: Ngưỡng mục tiêu thường nằm trong khoảng 88% - 92% (tránh thở oxy liều quá cao gây ức chế trung tâm hô hấp).
+  + Khi SpO2 tụt dưới 88% kèm khó thở tăng dần, môi tím tái: Cần cấp cứu y tế ngay.
+
+2. SỨC KHỎE TIÊU HÓA Ở NGƯỜI CAO TUỔI
+2.1. TÁO BÓN MÃN TÍNH - VẤN ĐỀ PHỔ BIẾN NHƯNG DỄ BỎ QUÊN
+- Nguyên nhân: Nhu động ruột suy giảm sinh lý, ít vận động thể lực, uống quá ít nước do sợ đi tiểu đêm, tác dụng phụ của các loại thuốc (thuốc huyết áp chẹn canxi, thuốc sắt, thuốc giảm đau opioid, thuốc an thần).
+- Nguy cơ biến chứng: Tắc ruột do khối phân ứ đọng, nứt kẽ hậu môn, trĩ, tăng huyết áp kịch phát khi rặn đại tiện (có thể gây vỡ mạch máu não dẫn đến đột quỵ).
+- Hướng dẫn xử trí tự nhiên và khoa học:
+  + Uống đủ 1.5 - 2 lít nước ấm mỗi ngày, chia đều nhiều lần trong ngày (hạn chế uống nhiều sau 19h để tránh thức giấc tiểu đêm).
+  + Bổ sung chất xơ hòa tan: Khoai lang luộc, chuối chín, đu đủ, thanh long, rau mồng tơi, rau đay, bột yến mạch.
+  + Xoa bụng dưỡng sinh: Dùng lòng bàn tay xoa nhẹ nhàng theo chiều kim đồng hồ quanh rốn từ phải sang trái 10-15 phút vào mỗi buổi sáng giúp kích thích nhu động đại tràng.
+  + Không rặn quá sức khi đi vệ sinh; dùng ghế nhỏ kê chân cao khoảng 15-20cm khi ngồi bồn cầu để tạo góc hậu môn trực tràng tối ưu giúp phân ra dễ dàng hơn.
+
+2.2. TRÀO NGƯỢC DẠ DÀY THỰC QUẢN (GERD)
+- Triệu chứng: Ợ hơi, ợ chua, nóng rát sau xương ức, ho khan kéo dài về đêm hoặc cảm giác vướng ở cổ họng như có đờm.
+- Chăm sóc:
+  + Chia nhỏ các bữa ăn (4-5 bữa/ngày), không ăn quá no vào bữa tối.
+  + Bữa ăn tối cách giờ đi ngủ ít nhất 2 đến 3 tiếng.
+  + Kê cao đầu giường 15-20cm (nâng chân giường hoặc dùng gối chống trào ngược chuyên dụng).
+  + Hạn chế đồ ăn cay nóng, nhiều dầu mỡ, đồ uống có gas, cà phê, trà đặc.
+
+3. DẤU HIỆU CẢNH BÁO MẤT NƯỚC Ở NGƯỜI CAO TUỔI
+- Người già thường bị giảm cảm giác khát (trung tâm điều hòa khát ở não bị suy giảm), nên dù cơ thể thiếu nước nghiêm trọng nhưng cụ vẫn không cảm thấy khát để đòi uống.
+- Biểu hiện thiếu nước: Môi khô nứt nẻ, da nhăn nheo, mắt trũng, tiểu ít và nước tiểu có màu vàng sậm, lơ mơ hoặc mê sảng cấp tính.
+- Người chăm sóc cần chủ động mời cụ uống từng ngụm nước ấm đều đặn trong ngày.
+

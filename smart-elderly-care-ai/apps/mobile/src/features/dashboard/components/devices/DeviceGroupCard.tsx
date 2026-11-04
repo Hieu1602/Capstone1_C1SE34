@@ -10,6 +10,7 @@ interface DeviceGroupCardProps {
   groupName: string;
   devicesInGroup: IoTDeviceItem[];
   onDevicePress: (device: IoTDeviceItem) => void;
+  onDeviceDelete?: (device: IoTDeviceItem) => void;
   onOpenGroupActionMenu: (groupName: string) => void;
   onAddDeviceToGroup?: (groupName: string) => void;
   isDarkMode?: boolean;
@@ -20,6 +21,7 @@ export const DeviceGroupCard: React.FC<DeviceGroupCardProps> = ({
   groupName,
   devicesInGroup,
   onDevicePress,
+  onDeviceDelete,
   onOpenGroupActionMenu,
   onAddDeviceToGroup,
   isDarkMode = false,
@@ -93,6 +95,7 @@ export const DeviceGroupCard: React.FC<DeviceGroupCardProps> = ({
                 variant="inGroup"
                 hasDivider={idx > 0}
                 onPress={onDevicePress}
+                onDelete={onDeviceDelete}
                 isDarkMode={isDarkMode}
                 colors={colors}
               />

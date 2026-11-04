@@ -10,7 +10,17 @@ export default function ArchivePlayer({ uri, startAt = 0, onEnd, onError, onProg
         const video = player.current!;
         let stream: any | undefined;
         if (hls && Hls.isSupported()) {
-            stream = new Hls({ maxBufferLength: 30, maxMaxBufferLength: 60, backBufferLength: 60, startPosition: latest.current.startAt });
+            stream = new Hls({
+                enableWorker: true,
+                lowLatencyMode: false,
+                backBufferLength: 30,
+                maxBufferLength: 30,
+                maxMaxBufferLength: 60,
+                maxBufferHole: 0.5,
+                highBufferWatchdogPeriod: 2,
+                nudgeMaxRetry: 5,
+                startPosition: latest.current.startAt,
+            });
             stream.on(Hls.Events.ERROR, (_: any, data: any) => { if (data.fatal) latest.current.onError(); });
             stream.loadSource(uri);
             stream.attachMedia(video);

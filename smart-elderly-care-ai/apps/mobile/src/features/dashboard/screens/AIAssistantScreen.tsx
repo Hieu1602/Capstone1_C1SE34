@@ -49,6 +49,8 @@ export interface HistoryChat {
   id: string;
   title: string;
   messages: ChatMessage[];
+  updated_at?: string;
+  created_at?: string;
 }
 
 // Danh sách gợi ý câu hỏi nhanh ban đầu
@@ -216,6 +218,14 @@ export default function AIAssistantScreen({ navigation }: any) {
   const [inputText, setInputText] = useState('');
   const [isLoading, setIsLoading] = useState(false);
   const [historyChats, setHistoryChats] = useState<HistoryChat[]>([]);
+  const currentSessionIdRef = useRef<string | null>(null);
+  const [currentSessionId, setCurrentSessionId] = useState<string | null>(null);
+
+  const setSessionId = useCallback((id: string | null) => {
+    currentSessionIdRef.current = id;
+    setCurrentSessionId(id);
+  }, []);
+
   const [isSearching, setIsSearching] = useState(false);
   const [searchQuery, setSearchQuery] = useState('');
 
@@ -291,8 +301,83 @@ export default function AIAssistantScreen({ navigation }: any) {
     [speakingMessageId]
   );
 
+  // Tải danh sách phiên chat từ Database (PostgreSQL) - Tự động loại bỏ trùng lặp
+  const fetchSessions = useCallback(async () => {
+    try {
+      const res = await chatbotApi.getSessions();
+      if (Array.isArray(res.data)) {
+        const uniqueMap = new Map<string, HistoryChat>();
+        for (const s of res.data) {
+          if (!uniqueMap.has(s.id)) {
+            uniqueMap.set(s.id, {
+              id: s.id,
+              title: s.title || 'Cuộc trò chuyện',
+              messages: [],
+              updated_at: s.updated_at,
+              created_at: s.created_at,
+            });
+          }
+        }
+        setHistoryChats(Array.from(uniqueMap.values()));
+      }
+    } catch (err) {
+      console.warn('[Chatbot] Lỗi tải lịch sử từ DB:', err);
+    }
+  }, []);
+
+  // Khôi phục phiên chat gần nhất khi mở màn hình để tiếp tục cuộc trò chuyện trong cùng 1 phiên
+  const hasLoadedInitialSessionRef = useRef(false);
+  useEffect(() => {
+    if (hasLoadedInitialSessionRef.current) return;
+    hasLoadedInitialSessionRef.current = true;
+
+    (async () => {
+      try {
+        const res = await chatbotApi.getSessions();
+        if (Array.isArray(res.data) && res.data.length > 0) {
+          const uniqueMap = new Map<string, HistoryChat>();
+          for (const s of res.data) {
+            if (!uniqueMap.has(s.id)) {
+              uniqueMap.set(s.id, {
+                id: s.id,
+                title: s.title || 'Cuộc trò chuyện',
+                messages: [],
+                updated_at: s.updated_at,
+                created_at: s.created_at,
+              });
+            }
+          }
+          const list = Array.from(uniqueMap.values());
+          setHistoryChats(list);
+
+          // Nếu chưa chọn phiên nào, tự động tiếp tục phiên gần nhất
+          if (!currentSessionIdRef.current && list.length > 0) {
+            const latest = list[0];
+            setSessionId(latest.id);
+            const detailRes = await chatbotApi.getSessionDetail(latest.id);
+            if (detailRes.data?.messages && detailRes.data.messages.length > 0) {
+              const loadedMsgs: ChatMessage[] = detailRes.data.messages.map((m: any) => ({
+                id: m.id || String(Date.now()),
+                sender: m.sender,
+                text: m.text,
+                timestamp: m.created_at
+                  ? new Date(m.created_at).toLocaleTimeString('vi-VN', { hour: '2-digit', minute: '2-digit' })
+                  : '',
+                isError: m.is_error,
+              }));
+              setMessages(loadedMsgs);
+            }
+          }
+        }
+      } catch (err) {
+        console.warn('[Chatbot] Lỗi khôi phục phiên chat gần nhất:', err);
+      }
+    })();
+  }, [setSessionId]);
+
   // Mở Sidebar mượt mà (60fps với Native Driver)
   const openSidebar = useCallback(() => {
+    fetchSessions();
     setIsSidebarOpen(true);
     Animated.parallel([
       Animated.timing(backdropAnim, {
@@ -307,7 +392,7 @@ export default function AIAssistantScreen({ navigation }: any) {
         useNativeDriver: true,
       }),
     ]).start();
-  }, [backdropAnim, slideAnim]);
+  }, [backdropAnim, fetchSessions, slideAnim]);
 
   // Đóng Sidebar
   const closeSidebar = useCallback(() => {
@@ -327,34 +412,86 @@ export default function AIAssistantScreen({ navigation }: any) {
     });
   }, [backdropAnim, slideAnim]);
 
-  // Chọn cuộc trò chuyện từ lịch sử
+  // Chọn cuộc trò chuyện từ lịch sử (Tải chi tiết từ DB)
   const handleOpenHistoryChat = useCallback(
-    (chat: HistoryChat) => {
-      setMessages(chat.messages);
+    async (chat: HistoryChat) => {
+      setSessionId(chat.id);
       closeSidebar();
+
+      // Nếu đã có tin nhắn trong bộ nhớ cache
+      if (chat.messages && chat.messages.length > 0) {
+        setMessages(chat.messages);
+        return;
+      }
+
+      // Tải tin nhắn chi tiết từ Database
+      setIsLoading(true);
+      try {
+        const res = await chatbotApi.getSessionDetail(chat.id);
+        if (res.data?.messages) {
+          const loadedMsgs: ChatMessage[] = res.data.messages.map((m: any) => ({
+            id: m.id || String(Date.now()),
+            sender: m.sender,
+            text: m.text,
+            timestamp: m.created_at
+              ? new Date(m.created_at).toLocaleTimeString('vi-VN', { hour: '2-digit', minute: '2-digit' })
+              : '',
+            isError: m.is_error,
+          }));
+          setMessages(loadedMsgs);
+          setHistoryChats((prev) =>
+            prev.map((c) => (c.id === chat.id ? { ...c, messages: loadedMsgs } : c))
+          );
+        }
+      } catch (err) {
+        console.warn('[Chatbot] Lỗi tải chi tiết phiên chat từ DB:', err);
+      } finally {
+        setIsLoading(false);
+      }
     },
-    [closeSidebar]
+    [closeSidebar, setSessionId]
   );
 
   // Bắt đầu cuộc trò chuyện mới
   const handleNewChat = useCallback(() => {
-    if (messages.length > 0) {
-      const firstUserMsg = messages.find((m) => m.sender === 'user');
-      const title = firstUserMsg ? firstUserMsg.text.slice(0, 30) : 'Cuộc trò chuyện';
-      setHistoryChats((prev) => [
-        {
-          id: Date.now().toString(),
-          title: title + (firstUserMsg && firstUserMsg.text.length > 30 ? '...' : ''),
-          messages: [...messages],
-        },
-        ...prev,
-      ]);
-    }
+    setSessionId(null);
     setMessages([]);
+    setInputText('');
     setSearchQuery('');
     setIsSearching(false);
     closeSidebar();
-  }, [messages, closeSidebar]);
+    fetchSessions();
+  }, [closeSidebar, fetchSessions, setSessionId]);
+
+  // Xoá cuộc trò chuyện khỏi DB và danh sách hiển thị có xác nhận
+  const handleDeleteHistoryChat = useCallback(
+    (sessionId: string, sessionTitle?: string) => {
+      Alert.alert(
+        'Xoá cuộc trò chuyện',
+        `Bạn có chắc chắn muốn xoá "${sessionTitle || 'cuộc trò chuyện này'}"?`,
+        [
+          { text: 'Huỷ', style: 'cancel' },
+          {
+            text: 'Xoá',
+            style: 'destructive',
+            onPress: async () => {
+              try {
+                await chatbotApi.deleteSession(sessionId);
+                setHistoryChats((prev) => prev.filter((c) => c.id !== sessionId));
+                if (currentSessionIdRef.current === sessionId) {
+                  setSessionId(null);
+                  setMessages([]);
+                }
+              } catch (err) {
+                console.warn('[Chatbot] Lỗi xoá cuộc trò chuyện:', err);
+              }
+            },
+          },
+        ]
+      );
+    },
+    [setSessionId]
+  );
 
   // Gửi tin nhắn đến Chatbot RAG API
   const handleSend = useCallback(
@@ -369,14 +506,21 @@ export default function AIAssistantScreen({ navigation }: any) {
         timestamp: new Date().toLocaleTimeString('vi-VN', { hour: '2-digit', minute: '2-digit' }),
       };
       setMessages((prev) => [...prev, userMsg]);
-      if (!customText) setInputText('');
+      // Luôn xoá nội dung ô input ngay sau khi tin nhắn được đưa vào danh sách gửi
+      setInputText('');
 
       setIsLoading(true);
       try {
+        const activeSessionId = currentSessionIdRef.current;
         const response = await chatbotApi.chat({
           message: textToSend,
+          session_id: activeSessionId || undefined,
           context_window: 8,
         });
+
+        if (response.data?.session_id) {
+          setSessionId(response.data.session_id);
+        }
 
         const reply = response.data?.answer || 'Tôi đã nhận được câu hỏi nhưng chưa có câu trả lời.';
         const aiMsg: ChatMessage = {
@@ -386,6 +530,7 @@ export default function AIAssistantScreen({ navigation }: any) {
           timestamp: new Date().toLocaleTimeString('vi-VN', { hour: '2-digit', minute: '2-digit' }),
         };
         setMessages((prev) => [...prev, aiMsg]);
+        fetchSessions();
       } catch (error: any) {
         const isOffline =
           error?.response?.status === 503 ||
@@ -406,7 +551,7 @@ export default function AIAssistantScreen({ navigation }: any) {
         setIsLoading(false);
       }
     },
-    [inputText, isLoading]
+    [fetchSessions, inputText, isLoading, setSessionId]
   );
 
   // Dừng ghi âm và gửi lên Backend STT xử lý
@@ -441,7 +586,6 @@ export default function AIAssistantScreen({ navigation }: any) {
 
         if (res.data?.status === 'success' && res.data?.text) {
           const transcribedText = res.data.text.trim();
-          setInputText(transcribedText);
           handleSend(transcribedText);
         } else {
           Alert.alert(
@@ -479,8 +623,7 @@ export default function AIAssistantScreen({ navigation }: any) {
           recognition.onresult = (event: any) => {
             const transcript = event.results?.[0]?.[0]?.transcript;
             if (transcript) {
-              setInputText(transcript);
-              handleSend(transcript);
+              handleSend(transcript.trim());
             }
             setIsRecording(false);
           };
@@ -879,24 +1022,57 @@ export default function AIAssistantScreen({ navigation }: any) {
 
             {filteredChats.length === 0 ? (
               <View style={styles.emptySearchBox}>
-                <Ionicons name="alert-circle-outline" size={18} color="#94A3B8" />
+                <Ionicons name="chatbubbles-outline" size={20} color="#94A3B8" />
                 <Text style={[styles.emptySearchText, isDarkMode && { color: colors.textSecondary }]}>
-                  Không tìm thấy cuộc trò chuyện nào
+                  {isSearching ? 'Không tìm thấy cuộc trò chuyện nào' : 'Chưa có cuộc trò chuyện nào'}
                 </Text>
               </View>
             ) : (
               filteredChats.map((chat) => (
-                <TouchableOpacity
+                <View
                   key={chat.id}
-                  style={[styles.sidebarItemRow, isDarkMode && { backgroundColor: colors.card }]}
-                  onPress={() => handleOpenHistoryChat(chat)}
-                  activeOpacity={0.7}
+                  style={[
+                    styles.sidebarItemRow,
+                    isDarkMode && { backgroundColor: colors.card },
+                    currentSessionId === chat.id && {
+                      borderColor: '#0284C7',
+                      borderWidth: 1.5,
+                      backgroundColor: isDarkMode ? 'rgba(2, 132, 199, 0.15)' : '#F0F9FF',
+                    },
+                  ]}
                 >
-                  <Ionicons name="chatbubble-ellipses-outline" size={16} color="#0284C7" style={{ marginRight: 10 }} />
-                  <Text style={[styles.sidebarItemText, isDarkMode && { color: colors.textPrimary }]} numberOfLines={1}>
-                    {chat.title}
-                  </Text>
-                </TouchableOpacity>
+                  <TouchableOpacity
+                    style={{ flex: 1, flexDirection: 'row', alignItems: 'center' }}
+                    onPress={() => handleOpenHistoryChat(chat)}
+                    activeOpacity={0.7}
+                  >
+                    <Ionicons
+                      name="chatbubble-ellipses-outline"
+                      size={16}
+                      color={currentSessionId === chat.id ? '#0284C7' : isDarkMode ? '#94A3B8' : '#64748B'}
+                      style={{ marginRight: 10 }}
+                    />
+                    <Text
+                      style={[
+                        styles.sidebarItemText,
+                        { flex: 1 },
+                        isDarkMode && { color: colors.textPrimary },
+                        currentSessionId === chat.id && { fontWeight: '600', color: '#0284C7' },
+                      ]}
+                      numberOfLines={1}
+                    >
+                      {chat.title}
+                    </Text>
+                  </TouchableOpacity>
+                  <TouchableOpacity
+                    onPress={() => handleDeleteHistoryChat(chat.id, chat.title)}
+                    hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
+                    style={{ padding: 4, marginLeft: 6 }}
+                    accessibilityLabel="Xoá cuộc trò chuyện"
+                  >
+                    <Ionicons name="trash-outline" size={16} color={isDarkMode ? '#EF4444' : '#DC2626'} />
+                  </TouchableOpacity>
+                </View>
               ))
             )}
           </ScrollView>

@@ -10,6 +10,7 @@ import {
   ActivityIndicator,
   StatusBar,
   RefreshControl,
+  Platform,
 } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
@@ -305,22 +306,36 @@ export default function DoctorAppointmentsScreen() {
   };
 
   const handleDeleteAppointment = (aptId: string, title: string) => {
-    LocalizedAlert.alert('Xóa lịch khám', `Bác sĩ có chắc chắn muốn xóa bản ghi lịch khám "${title}"?`, [
-      { text: 'Quay lại', style: 'cancel' },
-      {
-        text: 'Xóa',
-        style: 'destructive',
-        onPress: async () => {
-          try {
-            await doctorApi.deleteAppointment(aptId);
-            setAppointments((prev) => prev.filter((a) => a.id !== aptId));
-            LocalizedAlert.alert('Đã xóa', 'Đã xóa bản ghi lịch hẹn thành công.');
-          } catch {
-            LocalizedAlert.alert('Lỗi', 'Không thể xóa lịch hẹn.');
-          }
+    const doDelete = async () => {
+      try {
+        await doctorApi.deleteAppointment(aptId);
+        setAppointments((prev) => prev.filter((a) => a.id !== aptId));
+        if (Platform.OS !== 'web') {
+          LocalizedAlert.alert('Đã xóa', 'Đã xóa bản ghi lịch hẹn thành công.');
+        }
+      } catch {
+        LocalizedAlert.alert('Lỗi', 'Không thể xóa lịch hẹn.');
+      }
+    };
+
+    if (Platform.OS === 'web') {
+      if (typeof window !== 'undefined' && window.confirm) {
+        if (window.confirm(`Bác sĩ có chắc chắn muốn xóa bản ghi lịch khám "${title}"?`)) {
+          doDelete();
+        }
+      } else {
+        doDelete();
+      }
+    } else {
+      LocalizedAlert.alert('Xóa lịch khám', `Bác sĩ có chắc chắn muốn xóa bản ghi lịch khám "${title}"?`, [
+        { text: 'Quay lại', style: 'cancel' },
+        {
+          text: 'Xóa',
+          style: 'destructive',
+          onPress: doDelete,
         },
-      },
-    ]);
+      ]);
+    }
   };
 
   const handleViewPatient = (pId: string) => {
@@ -363,8 +378,8 @@ export default function DoctorAppointmentsScreen() {
               Theo dõi lịch định kỳ & Tự động phát loa nhắc qua Hub AI
             </LocalizedText>
           </View>
-          <TouchableOpacity style={styles.btnAdd} onPress={handleOpenCreateModal}>
-            <Ionicons name="add" size={18} color="#FFFFFF" style={{ marginRight: 2 }} />
+          <TouchableOpacity style={styles.btnAdd} onPress={handleOpenCreateModal} activeOpacity={0.85}>
+            <Ionicons name="add" size={20} color="#FFFFFF" style={{ marginRight: 3 }} />
             <LocalizedText style={styles.btnAddText}>Đặt lịch</LocalizedText>
           </TouchableOpacity>
         </View>
@@ -493,12 +508,18 @@ const styles = StyleSheet.create({
   btnAdd: {
     flexDirection: 'row',
     alignItems: 'center',
+    justifyContent: 'center',
     backgroundColor: '#0284C7',
-    paddingHorizontal: 12,
-    paddingVertical: 6,
-    borderRadius: 8,
+    paddingHorizontal: 16,
+    height: 42,
+    borderRadius: 12,
+    shadowColor: '#0284C7',
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.25,
+    shadowRadius: 4,
+    elevation: 3,
   },
-  btnAddText: { color: '#FFFFFF', fontSize: 13, fontWeight: '700' },
+  btnAddText: { color: '#FFFFFF', fontSize: 14, fontWeight: '700' },
   scrollContent: { padding: 16, paddingBottom: 95 },
   emptyBox: { alignItems: 'center', paddingVertical: 50 },
   emptyText: { fontSize: 13.5, marginTop: 8 },

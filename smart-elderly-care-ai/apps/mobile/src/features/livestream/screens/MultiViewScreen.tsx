@@ -398,7 +398,7 @@ export default function MultiViewScreen({ navigation }: Props) {
                         >
                             {isGrid
                                 ? "Chạm vào ô camera bất kỳ để phóng to & xem chi tiết."
-                                : "Ch?m v?o camera ?? m? m?n h?nh chi ti?t."}
+                                : "Chạm vào camera để mở màn hình chi tiết."}
                         </LocalizedText>
                     </View>
                 )}

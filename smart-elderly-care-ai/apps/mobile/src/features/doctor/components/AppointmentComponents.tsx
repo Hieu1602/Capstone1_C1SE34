@@ -4,11 +4,11 @@
 // 2. AppointmentCard: Thẻ hiển thị chi tiết lịch hẹn của từng bệnh nhân
 
 import React from 'react';
-import { View, StyleSheet, TouchableOpacity } from 'react-native';
+import { View, StyleSheet, TouchableOpacity, ScrollView, Image } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { Colors } from '../../../theme/colors';
 import { LocalizedText } from '../../../i18n/LocalizedComponents';
-import { AppointmentItem } from './types';
+import { AppointmentItem, getPatientAvatarUrl } from './types';
 
 // =============================================================
 // 1. THỐNG KÊ LỊCH HẸN & BỘ LỌC (AppointmentStatsSummary)
@@ -55,7 +55,16 @@ export const AppointmentStatsSummary: React.FC<AppointmentStatsSummaryProps> = (
             }}
             style={[
               styles.summaryCard,
-              { backgroundColor: isDarkMode ? '#1E293B' : '#FFFFFF', borderColor: s.border },
+              {
+                backgroundColor: isDarkMode ? '#1E293B' : '#FFFFFF',
+                borderColor:
+                  (s.key === 'total' && filterTab === 'ALL') ||
+                  (s.key === 'upcoming' && filterTab === 'UPCOMING') ||
+                  (s.key === 'completed' && filterTab === 'COMPLETED') ||
+                  (s.key === 'cancelled' && filterTab === 'CANCELLED')
+                    ? s.color
+                    : s.border,
+              },
             ]}
           >
             <View style={[styles.statIconBox, { backgroundColor: s.bg }]}>
@@ -69,7 +78,11 @@ export const AppointmentStatsSummary: React.FC<AppointmentStatsSummaryProps> = (
         ))}
       </View>
 
-      <View style={styles.filterRow}>
+      <ScrollView
+        horizontal
+        showsHorizontalScrollIndicator={false}
+        contentContainerStyle={styles.filterRow}
+      >
         {[
           { key: 'ALL' as const, label: `Tất cả (${totalCount})` },
           { key: 'UPCOMING' as const, label: `Sắp tới (${upcomingCount})` },
@@ -77,7 +90,7 @@ export const AppointmentStatsSummary: React.FC<AppointmentStatsSummaryProps> = (
           { key: 'CANCELLED' as const, label: `Đã hủy (${cancelledCount})` },
         ].map((tab) => {
           const active = filterTab === tab.key;
-          const activeBg = tab.key === 'CANCELLED' ? '#DC2626' : Colors.primary;
+          const activeBg = tab.key === 'CANCELLED' ? '#DC2626' : '#0284C7';
           return (
             <TouchableOpacity
               key={tab.key}
@@ -102,7 +115,7 @@ export const AppointmentStatsSummary: React.FC<AppointmentStatsSummaryProps> = (
             </TouchableOpacity>
           );
         })}
-      </View>
+      </ScrollView>
     </View>
   );
 };
@@ -139,6 +152,19 @@ export const AppointmentCard: React.FC<AppointmentCardProps> = ({
     .replace(/\[ĐÃ XÁC NHẬN ĐÓN TIẾP\]/g, '')
     .trim();
   const initial = (apt.patient_name || 'B').trim().split(/\s+/).slice(-1)[0][0]?.toUpperCase() || 'B';
+  const isHomeVisit = apt.visit_type === 'HOME_VISIT' || apt.exam_type === 'HOME_VISIT';
+  const getExamDisplayTitle = () => {
+    if (apt.exam_type && apt.exam_type !== 'HOME_VISIT' && apt.exam_type !== 'CLINIC') {
+      return apt.exam_type;
+    }
+    if (isHomeVisit) {
+      return 'Khám bệnh tại nhà';
+    }
+    if (apt.visit_type === 'CLINIC' || apt.exam_type === 'CLINIC') {
+      return 'Khám tại phòng khám';
+    }
+    return 'Khám tổng quát định kỳ';
+  };
 
   const recurrenceLabel =
     apt.recurrence_pattern === 'WEEKLY'
@@ -204,7 +230,19 @@ export const AppointmentCard: React.FC<AppointmentCardProps> = ({
 
       <View style={styles.patientRow}>
         <View style={styles.patientAvatar}>
-          <LocalizedText style={styles.patientAvatarText}>{initial}</LocalizedText>
+          {apt.patient_avatar_url || (apt.patient_name && apt.patient_name.includes('Nguyễn Văn A')) ? (
+            <Image
+              source={{
+                uri: getPatientAvatarUrl(
+                  apt.patient_avatar_url || '/static/faces/fc51dc68-3ea2-4394-ac4b-906364ae425d.jpg'
+                )!,
+              }}
+              style={styles.patientAvatarImg}
+              resizeMode="cover"
+            />
+          ) : (
+            <LocalizedText style={styles.patientAvatarText}>{initial}</LocalizedText>
+          )}
         </View>
         <View style={{ flex: 1, marginLeft: 10 }}>
           <LocalizedText style={[styles.patientName, { color: colors.textPrimary }]}>
@@ -221,10 +259,15 @@ export const AppointmentCard: React.FC<AppointmentCardProps> = ({
         </View>
       </View>
 
-      <View style={styles.examTypeBox}>
-        <Ionicons name="medkit" size={14} color="#0284C7" style={{ marginRight: 6 }} />
+      <View
+        style={[
+          styles.examTypeBox,
+          { backgroundColor: isDarkMode ? '#1E293B' : '#F8FAFC', borderColor: isDarkMode ? '#334155' : '#E2E8F0' },
+        ]}
+      >
+        <Ionicons name={isHomeVisit ? 'home' : 'medkit'} size={15} color="#0284C7" style={{ marginRight: 6 }} />
         <LocalizedText style={[styles.examTypeText, { color: colors.textPrimary }]}>
-          {apt.exam_type || apt.visit_type || 'Khám bệnh'}
+          {getExamDisplayTitle()}
         </LocalizedText>
       </View>
 
@@ -304,45 +347,73 @@ export const AppointmentCard: React.FC<AppointmentCardProps> = ({
         </View>
       </View>
 
-      <View style={styles.actionRow}>
+      <View style={[styles.actionRow, { borderTopColor: isDarkMode ? '#334155' : '#E2E8F0' }]}>
         <TouchableOpacity
-          style={styles.btnViewPatient}
+          style={[
+            styles.btnViewPatient,
+            { backgroundColor: isDarkMode ? '#1E293B' : '#EFF6FF', borderColor: isDarkMode ? '#334155' : '#BFDBFE' },
+          ]}
           onPress={() => onViewPatient(apt.patient_id)}
+          activeOpacity={0.75}
         >
-          <Ionicons name="document-text-outline" size={13} color="#0284C7" style={{ marginRight: 4 }} />
-          <LocalizedText style={styles.btnViewPatientText}>Hồ sơ bệnh án</LocalizedText>
+          <Ionicons name="document-text" size={15} color="#0284C7" style={{ marginRight: 4 }} />
+          <LocalizedText style={styles.btnViewPatientText} numberOfLines={1}>
+            Hồ sơ
+          </LocalizedText>
         </TouchableOpacity>
 
-        <View style={{ flexDirection: 'row', gap: 6 }}>
-          {isUpcoming && (
-            <TouchableOpacity style={styles.btnComplete} onPress={() => onMarkCompleted(apt.id)}>
-              <Ionicons name="checkmark" size={13} color="#FFFFFF" style={{ marginRight: 2 }} />
-              <LocalizedText style={styles.btnCompleteText}>Đã khám</LocalizedText>
-            </TouchableOpacity>
-          )}
+        {isUpcoming && (
+          <TouchableOpacity
+            style={styles.btnComplete}
+            onPress={() => onMarkCompleted(apt.id)}
+            activeOpacity={0.85}
+          >
+            <Ionicons name="checkmark-circle" size={16} color="#FFFFFF" style={{ marginRight: 4 }} />
+            <LocalizedText style={styles.btnCompleteText} numberOfLines={1}>
+              Đã khám
+            </LocalizedText>
+          </TouchableOpacity>
+        )}
 
-          {isUpcoming && (
-            <TouchableOpacity style={styles.btnEdit} onPress={() => onEdit(apt)}>
-              <Ionicons name="pencil" size={13} color="#475569" />
-            </TouchableOpacity>
-          )}
+        {isUpcoming && (
+          <TouchableOpacity
+            style={[
+              styles.btnEdit,
+              { backgroundColor: isDarkMode ? '#334155' : '#F1F5F9', borderColor: isDarkMode ? '#475569' : '#E2E8F0' },
+            ]}
+            onPress={() => onEdit(apt)}
+            activeOpacity={0.7}
+            hitSlop={{ top: 6, bottom: 6, left: 6, right: 6 }}
+          >
+            <Ionicons name="pencil" size={16} color={isDarkMode ? '#CBD5E1' : '#475569'} />
+          </TouchableOpacity>
+        )}
 
-          {isUpcoming ? (
-            <TouchableOpacity
-              style={styles.btnDelete}
-              onPress={() => (onCancel ? onCancel(apt) : onDelete(apt.id, apt.exam_type || 'Khám bệnh'))}
-            >
-              <Ionicons name="close-circle-outline" size={14} color="#EF4444" />
-            </TouchableOpacity>
-          ) : (
-            <TouchableOpacity
-              style={styles.btnDelete}
-              onPress={() => onDelete(apt.id, apt.exam_type || 'Khám bệnh')}
-            >
-              <Ionicons name="trash-outline" size={13} color="#EF4444" />
-            </TouchableOpacity>
-          )}
-        </View>
+        {isUpcoming ? (
+          <TouchableOpacity
+            style={[
+              styles.btnDelete,
+              { backgroundColor: isDarkMode ? '#450A0A55' : '#FEE2E2', borderColor: isDarkMode ? '#7F1D1D55' : '#FECACA' },
+            ]}
+            onPress={() => (onCancel ? onCancel(apt) : onDelete(apt.id, apt.exam_type || 'Khám bệnh'))}
+            activeOpacity={0.7}
+            hitSlop={{ top: 6, bottom: 6, left: 6, right: 6 }}
+          >
+            <Ionicons name="close-circle-outline" size={18} color="#DC2626" />
+          </TouchableOpacity>
+        ) : (
+          <TouchableOpacity
+            style={[
+              styles.btnDelete,
+              { backgroundColor: isDarkMode ? '#450A0A55' : '#FEE2E2', borderColor: isDarkMode ? '#7F1D1D55' : '#FECACA' },
+            ]}
+            onPress={() => onDelete(apt.id, apt.exam_type || 'Khám bệnh')}
+            activeOpacity={0.7}
+            hitSlop={{ top: 6, bottom: 6, left: 6, right: 6 }}
+          >
+            <Ionicons name="trash-outline" size={16} color="#DC2626" />
+          </TouchableOpacity>
+        )}
       </View>
     </View>
   );
@@ -352,138 +423,173 @@ const styles = StyleSheet.create({
   summaryGrid: {
     flexDirection: 'row',
     justifyContent: 'space-between',
-    marginBottom: 10,
+    marginBottom: 12,
     gap: 8,
   },
   summaryCard: {
     flex: 1,
     alignItems: 'center',
-    paddingVertical: 8,
-    borderRadius: 10,
-    borderWidth: 1,
+    paddingVertical: 10,
+    borderRadius: 12,
+    borderWidth: 1.5,
   },
   statIconBox: {
-    width: 26,
-    height: 26,
-    borderRadius: 13,
+    width: 32,
+    height: 32,
+    borderRadius: 16,
     justifyContent: 'center',
     alignItems: 'center',
-    marginBottom: 2,
+    marginBottom: 4,
   },
-  statNumber: { fontSize: 16, fontWeight: '800' },
-  statLabel: { fontSize: 10.5, fontWeight: '600', marginTop: 1 },
-  filterRow: { flexDirection: 'row', gap: 6 },
-  filterChip: { paddingHorizontal: 12, paddingVertical: 5, borderRadius: 16 },
-  filterChipText: { fontSize: 11.5 },
+  statNumber: { fontSize: 18, fontWeight: '800' },
+  statLabel: { fontSize: 11, fontWeight: '600', marginTop: 2 },
+    filterChip: {
+    paddingHorizontal: 15,
+    height: 36,
+    borderRadius: 18,
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+  filterChipText: { fontSize: 12.5 },
 
   aptCard: {
-    borderRadius: 12,
-    padding: 12,
+    borderRadius: 14,
+    padding: 14,
     borderWidth: 1,
-    marginBottom: 10,
-    elevation: 1,
+    marginBottom: 12,
+    overflow: 'hidden',
+    elevation: 2,
+    shadowColor: '#000000',
+    shadowOffset: { width: 0, height: 1 },
+    shadowOpacity: 0.05,
+    shadowRadius: 3,
   },
   cardTopRow: {
     flexDirection: 'row',
     justifyContent: 'space-between',
     alignItems: 'center',
-    marginBottom: 8,
+    marginBottom: 10,
   },
   dateTagBox: {
     flexDirection: 'row',
     alignItems: 'center',
     backgroundColor: '#EFF6FF',
-    paddingHorizontal: 7,
-    paddingVertical: 3,
-    borderRadius: 6,
+    paddingHorizontal: 9,
+    paddingVertical: 4,
+    borderRadius: 8,
   },
-  dateTagText: { fontSize: 11.5, fontWeight: '700', color: '#0284C7' },
-  statusPill: { paddingHorizontal: 7, paddingVertical: 3, borderRadius: 5 },
-  statusPillText: { fontSize: 9.5, fontWeight: '800' },
-  patientRow: { flexDirection: 'row', alignItems: 'center', marginBottom: 8 },
+  dateTagText: { fontSize: 12, fontWeight: '700', color: '#0284C7' },
+  statusPill: { paddingHorizontal: 9, paddingVertical: 4, borderRadius: 6 },
+  statusPillText: { fontSize: 10.5, fontWeight: '800' },
+  patientRow: { flexDirection: 'row', alignItems: 'center', marginBottom: 10 },
   patientAvatar: {
-    width: 34,
-    height: 34,
-    borderRadius: 17,
+    width: 42,
+    height: 42,
+    borderRadius: 21,
     backgroundColor: '#0284C7',
     justifyContent: 'center',
     alignItems: 'center',
+    overflow: 'hidden',
   },
-  patientAvatarText: { color: '#FFFFFF', fontSize: 14, fontWeight: '800' },
-  patientName: { fontSize: 14.5, fontWeight: '700' },
-  aptMetaText: { fontSize: 11.5, marginTop: 1 },
+  patientAvatarImg: {
+    width: '100%',
+    height: '100%',
+    borderRadius: 21,
+  },
+  patientAvatarText: { color: '#FFFFFF', fontSize: 16, fontWeight: '800' },
+  patientName: { fontSize: 15.5, fontWeight: '800' },
+  aptMetaText: { fontSize: 12, marginTop: 2 },
   examTypeBox: {
     flexDirection: 'row',
     alignItems: 'center',
-    backgroundColor: '#F1F5F933',
-    paddingVertical: 3,
-    marginBottom: 6,
+    paddingHorizontal: 10,
+    paddingVertical: 6,
+    borderRadius: 8,
+    borderWidth: 1,
+    marginBottom: 8,
   },
   examTypeText: { fontSize: 13.5, fontWeight: '700' },
-  instructionsBox: { borderRadius: 8, padding: 8, marginBottom: 6 },
-  instructionsText: { fontSize: 12, lineHeight: 17 },
+  instructionsBox: { borderRadius: 8, padding: 10, marginBottom: 8 },
+  instructionsText: { fontSize: 12.5, lineHeight: 18 },
   metaBadgesRow: {
     flexDirection: 'row',
     flexWrap: 'wrap',
     alignItems: 'center',
-    gap: 6,
-    marginBottom: 8,
+    gap: 8,
+    marginBottom: 10,
   },
   familyBadge: {
     flexDirection: 'row',
     alignItems: 'center',
-    paddingHorizontal: 7,
-    paddingVertical: 3,
-    borderRadius: 5,
+    paddingHorizontal: 9,
+    height: 28,
+    borderRadius: 8,
     borderWidth: 1,
   },
-  familyBadgeText: { fontSize: 10.5, fontWeight: '700' },
+  familyBadgeText: { fontSize: 11, fontWeight: '700' },
   speakerBadge: {
     flexDirection: 'row',
     alignItems: 'center',
-    paddingHorizontal: 7,
-    paddingVertical: 3,
-    borderRadius: 5,
+    paddingHorizontal: 9,
+    height: 28,
+    borderRadius: 8,
     borderWidth: 1,
   },
-  speakerBadgeText: { fontSize: 10.5, fontWeight: '600' },
+  speakerBadgeText: { fontSize: 11, fontWeight: '600' },
+  filterRow: {
+    flexDirection: 'row',
+    gap: 8,
+    paddingRight: 16,
+    paddingVertical: 2,
+  },
   actionRow: {
     flexDirection: 'row',
-    justifyContent: 'space-between',
     alignItems: 'center',
-    paddingTop: 8,
+    paddingTop: 12,
+    marginTop: 4,
     borderTopWidth: StyleSheet.hairlineWidth,
-    borderTopColor: '#E2E8F066',
+    gap: 6,
   },
   btnViewPatient: {
+    flex: 1,
     flexDirection: 'row',
     alignItems: 'center',
-    paddingHorizontal: 7,
-    paddingVertical: 4,
-    borderRadius: 6,
-    backgroundColor: '#EFF6FF',
+    justifyContent: 'center',
+    height: 40,
+    paddingHorizontal: 8,
+    borderRadius: 10,
+    borderWidth: 1,
   },
-  btnViewPatientText: { fontSize: 11, color: '#0284C7', fontWeight: '700' },
+  btnViewPatientText: { fontSize: 13, color: '#0284C7', fontWeight: '700' },
   btnComplete: {
+    flex: 1.15,
     flexDirection: 'row',
     alignItems: 'center',
+    justifyContent: 'center',
+    height: 40,
+    paddingHorizontal: 8,
+    borderRadius: 10,
     backgroundColor: '#059669',
-    paddingHorizontal: 7,
-    paddingVertical: 4,
-    borderRadius: 6,
+    shadowColor: '#059669',
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.25,
+    shadowRadius: 3,
+    elevation: 2,
   },
-  btnCompleteText: { color: '#FFFFFF', fontSize: 11, fontWeight: '700' },
+  btnCompleteText: { color: '#FFFFFF', fontSize: 13, fontWeight: '700' },
   btnEdit: {
-    padding: 5,
-    borderRadius: 6,
-    backgroundColor: '#F1F5F9',
+    width: 40,
+    height: 40,
+    borderRadius: 10,
+    borderWidth: 1,
     justifyContent: 'center',
     alignItems: 'center',
   },
   btnDelete: {
-    padding: 5,
-    borderRadius: 6,
-    backgroundColor: '#FEE2E2',
+    width: 40,
+    height: 40,
+    borderRadius: 10,
+    borderWidth: 1,
     justifyContent: 'center',
     alignItems: 'center',
   },

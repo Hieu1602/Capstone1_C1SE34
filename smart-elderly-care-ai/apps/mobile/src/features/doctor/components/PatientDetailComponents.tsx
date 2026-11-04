@@ -10,7 +10,7 @@ import { View, Text, StyleSheet, TouchableOpacity, Image } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { Colors } from '../../../theme/colors';
 import { BASE_URL } from '../../../services/api';
-import { ConditionItem, PatientDetail, PrescriptionItem } from './types';
+import { ConditionItem, PatientDetail, PrescriptionItem, getPatientAvatarUrl } from './types';
 
 // =============================================================
 // 1. CARD HERO TỔNG QUAN BỆNH NHÂN (PatientHeroCard)
@@ -42,14 +42,15 @@ export const PatientHeroCard: React.FC<PatientHeroCardProps> = ({
     <View style={[heroStyles.heroCard, { backgroundColor: isDarkMode ? '#1E293B' : '#FFFFFF', borderColor: colors.border }]}>
       <View style={heroStyles.heroRow}>
         <View style={heroStyles.avatarBig}>
-          {detail?.avatar_url ? (
+          {detail?.avatar_url || patientName.includes('Nguyễn Văn A') ? (
             <Image
               source={{
-                uri: detail.avatar_url.startsWith('http')
-                  ? detail.avatar_url
-                  : `${BASE_URL.replace('/api/v1', '')}${detail.avatar_url}`,
+                uri: getPatientAvatarUrl(
+                  detail?.avatar_url || '/static/faces/fc51dc68-3ea2-4394-ac4b-906364ae425d.jpg'
+                )!,
               }}
               style={heroStyles.avatarBigImg}
+              resizeMode="cover"
             />
           ) : (
             <Text style={heroStyles.avatarBigText}>{initialLetter}</Text>
@@ -176,7 +177,7 @@ export const PatientRecordTab: React.FC<PatientRecordTabProps> = ({
       {/* Ghi chú & dặn dò */}
       <View style={[tabStyles.sectionBox, { backgroundColor: isDarkMode ? '#1E293B' : '#FFFFFF', borderColor: '#3B82F644' }]}>
         <View style={tabStyles.sectionHeaderRow}>
-          <View style={{ flexDirection: 'row', alignItems: 'center' }}>
+          <View style={{ flex: 1, flexDirection: 'row', alignItems: 'center', marginRight: 8 }}>
             <Ionicons name="chatbox-ellipses" size={17} color={Colors.primary} style={{ marginRight: 6 }} />
             <Text style={[tabStyles.sectionTitle, { color: colors.textPrimary }]}>Ghi chú & Dặn dò Bác sĩ</Text>
           </View>
@@ -204,7 +205,7 @@ export const PatientRecordTab: React.FC<PatientRecordTabProps> = ({
       {/* Danh mục bệnh lý nền */}
       <View style={[tabStyles.sectionBox, { backgroundColor: isDarkMode ? '#1E293B' : '#FFFFFF', borderColor: colors.border }]}>
         <View style={tabStyles.sectionHeaderRow}>
-          <View style={{ flexDirection: 'row', alignItems: 'center' }}>
+          <View style={{ flex: 1, flexDirection: 'row', alignItems: 'center', marginRight: 8 }}>
             <Ionicons name="pulse" size={17} color="#DC2626" style={{ marginRight: 6 }} />
             <Text style={[tabStyles.sectionTitle, { color: colors.textPrimary }]}>
               Bệnh lý nền ({detail?.conditions?.length || 0})
@@ -281,7 +282,7 @@ export const PatientRecordTab: React.FC<PatientRecordTabProps> = ({
       {/* Dị ứng & Dinh dưỡng */}
       <View style={[tabStyles.sectionBox, { backgroundColor: isDarkMode ? '#1E293B' : '#FFFFFF', borderColor: colors.border }]}>
         <View style={tabStyles.sectionHeaderRow}>
-          <View style={{ flexDirection: 'row', alignItems: 'center' }}>
+          <View style={{ flex: 1, flexDirection: 'row', alignItems: 'center', marginRight: 8 }}>
             <Ionicons name="warning" size={17} color="#F59E0B" style={{ marginRight: 6 }} />
             <Text style={[tabStyles.sectionTitle, { color: colors.textPrimary }]}>Dị ứng & Chế độ Dinh dưỡng</Text>
           </View>
@@ -382,9 +383,25 @@ export const PatientPrescriptionsTab: React.FC<PatientPrescriptionsTabProps> = (
           >
             <View style={tabStyles.rxHeader}>
               <View style={{ flex: 1, marginRight: 8 }}>
-                <Text style={[tabStyles.rxMedName, { color: colors.textPrimary }]}>{item.medication_name}</Text>
-                <Text style={[tabStyles.rxDosage, { color: isDarkMode ? '#94A3B8' : '#64748B' }]}>
-                  Liều: <Text style={{ fontWeight: '700', color: colors.textPrimary }}>{item.dosage}</Text> • {item.frequency || 'Hằng ngày'}
+                <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6, flexWrap: 'wrap' }}>
+                  <Text style={[tabStyles.rxMedName, { color: colors.textPrimary }]}>{item.medication_name}</Text>
+                  {item.quantity ? (
+                    <View
+                      style={{
+                        backgroundColor: isDarkMode ? '#1E3A8A' : '#EFF6FF',
+                        borderColor: '#0284C7',
+                        borderWidth: 0.8,
+                        paddingHorizontal: 6,
+                        paddingVertical: 1.5,
+                        borderRadius: 5,
+                      }}
+                    >
+                      <Text style={{ fontSize: 10.5, fontWeight: '700', color: '#0284C7' }}>SL: {item.quantity}</Text>
+                    </View>
+                  ) : null}
+                </View>
+                <Text style={[tabStyles.rxDosage, { color: isDarkMode ? '#94A3B8' : '#64748B', marginTop: 2 }]}>
+                  {item.quantity ? `SL: ${item.quantity} • ` : ''}Liều: <Text style={{ fontWeight: '700', color: colors.textPrimary }}>{item.dosage}</Text> • {item.frequency || 'Hằng ngày'}
                 </Text>
               </View>
 
@@ -440,11 +457,11 @@ export const PatientPrescriptionsTab: React.FC<PatientPrescriptionsTabProps> = (
               </Text>
               <View style={{ flexDirection: 'row', gap: 8 }}>
                 <TouchableOpacity style={tabStyles.rxEditBtn} onPress={() => handleEdit(item)}>
-                  <Ionicons name="create-outline" size={13} color="#0284C7" style={{ marginRight: 2 }} />
+                  <Ionicons name="create-outline" size={15} color="#0284C7" style={{ marginRight: 4 }} />
                   <Text style={tabStyles.rxEditBtnText}>Sửa</Text>
                 </TouchableOpacity>
                 <TouchableOpacity style={tabStyles.rxDeleteBtn} onPress={() => onDeletePrescription(item.id, item.medication_name)}>
-                  <Ionicons name="trash-outline" size={13} color="#EF4444" style={{ marginRight: 2 }} />
+                  <Ionicons name="trash-outline" size={15} color="#EF4444" style={{ marginRight: 4 }} />
                   <Text style={tabStyles.rxDeleteBtnText}>Xóa</Text>
                 </TouchableOpacity>
               </View>
@@ -484,9 +501,9 @@ export const PatientVitalsTab: React.FC<PatientVitalsTabProps> = ({
     <View>
       <View style={[tabStyles.sectionBox, { backgroundColor: isDarkMode ? '#1E293B' : '#FFFFFF', borderColor: colors.border }]}>
         <View style={tabStyles.sectionHeaderRow}>
-          <View style={{ flexDirection: 'row', alignItems: 'center' }}>
+          <View style={{ flex: 1, flexDirection: 'row', alignItems: 'center', marginRight: 8 }}>
             <Ionicons name="options" size={17} color="#2563EB" style={{ marginRight: 6 }} />
-            <Text style={[tabStyles.sectionTitle, { color: colors.textPrimary }]}>Ngưỡng Cảnh Báo Sinh Hiệu Cá Nhân Hóa</Text>
+            <Text style={[tabStyles.sectionTitle, { color: colors.textPrimary }]} numberOfLines={1}>Ngưỡng Cảnh Báo Sinh Hiệu</Text>
           </View>
           <TouchableOpacity style={tabStyles.btnActionSmall} onPress={onOpenThresholdModal}>
             <Ionicons name="create-outline" size={13} color={Colors.primary} style={{ marginRight: 2 }} />
@@ -612,10 +629,26 @@ const tabStyles = StyleSheet.create({
   rxInstructions: { fontSize: 11.5, marginTop: 6, lineHeight: 16 },
   rxActionRow: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginTop: 10, paddingTop: 8, borderTopWidth: StyleSheet.hairlineWidth, borderTopColor: '#E2E8F066' },
   rxDoctorCredit: { fontSize: 11 },
-  rxEditBtn: { flexDirection: 'row', alignItems: 'center', paddingHorizontal: 7, paddingVertical: 4, borderRadius: 5, backgroundColor: '#EFF6FF' },
-  rxEditBtnText: { fontSize: 11, color: '#0284C7', fontWeight: '700' },
-  rxDeleteBtn: { flexDirection: 'row', alignItems: 'center', paddingHorizontal: 7, paddingVertical: 4, borderRadius: 5, backgroundColor: '#FEE2E2' },
-  rxDeleteBtnText: { fontSize: 11, color: '#EF4444', fontWeight: '700' },
+  rxEditBtn: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    paddingHorizontal: 12,
+    paddingVertical: 7,
+    borderRadius: 8,
+    backgroundColor: '#EFF6FF',
+    minHeight: 32,
+  },
+  rxEditBtnText: { fontSize: 13, color: '#0284C7', fontWeight: '700' },
+  rxDeleteBtn: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    paddingHorizontal: 12,
+    paddingVertical: 7,
+    borderRadius: 8,
+    backgroundColor: '#FEE2E2',
+    minHeight: 32,
+  },
+  rxDeleteBtnText: { fontSize: 13, color: '#EF4444', fontWeight: '700' },
   thresholdRow: { flexDirection: 'row', justifyContent: 'space-between', paddingVertical: 6, borderBottomWidth: StyleSheet.hairlineWidth, borderBottomColor: '#E2E8F044' },
   thresholdLabel: { fontSize: 12, color: '#64748B' },
   thresholdVal: { fontSize: 12.5, fontWeight: '700' },

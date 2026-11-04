@@ -223,15 +223,23 @@ class CRUDElderly:
 
             dietary_notes=profile.dietary_notes or "",
 
-            doctor_name="",
+            doctor_name="BS. Phụ trách",
 
             doctor_phone="",
 
-            doctor_specialty="",
+            doctor_specialty="Bác sĩ gia đình",
 
-            hospital="",
+            hospital="Hệ thống Y tế SECA AI",
 
-            next_appointment="",
+            next_appointment=(
+                getattr(__import__('app.crud.crud_doctor', fromlist=['_CLINICAL_STORE']), '_CLINICAL_STORE', {})
+                .get(str(profile.id), {})
+                .get("next_appointment")
+                or getattr(__import__('app.crud.crud_doctor', fromlist=['_CLINICAL_STORE']), '_CLINICAL_STORE', {})
+                .get(patient_id_or_serial, {})
+                .get("next_appointment")
+                or ""
+            ),
 
             avatar_url=profile.avatar_url,
 

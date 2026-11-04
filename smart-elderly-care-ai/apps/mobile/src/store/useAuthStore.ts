@@ -4,10 +4,6 @@
 import { create, StateCreator } from 'zustand';
 import { persist, createJSONStorage, PersistOptions } from 'zustand/middleware';
 import AsyncStorage from '@react-native-async-storage/async-storage';
-import { useDeviceStore } from './useDeviceStore';
-import { usePatientStore } from './usePatientStore';
-import { useHealthStore } from './useHealthStore';
-import { useAlertStore } from './useAlertStore';
 
 export interface HousePermissions {
   can_view_health: boolean;
@@ -115,10 +111,16 @@ const createAuthStore: StateCreator<AuthStoreState, [], [['zustand/persist', Aut
 
     // Reset toàn bộ domain stores để tránh rò rỉ dữ liệu hoặc quyền hạn từ tài khoản trước
     try {
-      useDeviceStore.getState().resetDeviceStore?.();
-      usePatientStore.getState().resetPatientStore?.();
-      useHealthStore.getState().resetHealthStore?.();
-      useAlertStore.getState().resetAlertStore?.();
+        require('./useDeviceStore').useDeviceStore.getState().resetDeviceStore?.();
+        require('./usePatientStore').usePatientStore.getState().resetPatientStore?.();
+        require('./useHealthStore').useHealthStore.getState().resetHealthStore?.();
+        require('./useAlertStore').useAlertStore.getState().resetAlertStore?.();
+        AsyncStorage.multiRemove([
+        'device-store',
+        'health-store',
+        'patient-store',
+        'alert-store',
+      ]).catch(() => {});
     } catch {}
 
     const initialPermissions: HousePermissions = {
@@ -140,7 +142,7 @@ const createAuthStore: StateCreator<AuthStoreState, [], [['zustand/persist', Aut
       full_name: name,
       userPhone: phone,
       phone_number: phone,
-      userRole: isDoctor ? 'doctor' : isAdmin ? 'admin' : 'member',
+      userRole: isDoctor ? 'doctor' : isAdmin ? 'admin' : normalizedRole === 'owner' ? 'owner' : 'member',
       role,
       avatarUrl: avatarUrl ?? null,
       avatar_url: avatarUrl ?? null,
@@ -192,11 +194,13 @@ const createAuthStore: StateCreator<AuthStoreState, [], [['zustand/persist', Aut
         ? 'doctor'
         : profile.role?.toLowerCase() === 'admin'
           ? 'admin'
-          : profile.role?.toLowerCase() === 'member'
-            ? 'member'
-            : profile.role
-              ? 'user'
-              : state.userRole,
+          : profile.role?.toLowerCase() === 'owner'
+            ? 'owner'
+            : profile.role?.toLowerCase() === 'member'
+              ? 'member'
+              : profile.role
+                ? 'member'
+                : state.userRole,
       household_id: profile.household_id !== undefined ? profile.household_id : state.household_id,
       viewRole: profile.role?.toLowerCase() === 'doctor' || profile.role?.includes('Bác sĩ')
         ? 'DOCTOR'
@@ -273,10 +277,20 @@ const createAuthStore: StateCreator<AuthStoreState, [], [['zustand/persist', Aut
 
   logout: () => {
     try {
-      useDeviceStore.getState().resetDeviceStore?.();
-      usePatientStore.getState().resetPatientStore?.();
-      useHealthStore.getState().resetHealthStore?.();
-      useAlertStore.getState().resetAlertStore?.();
+      const state = get();
+      const uName = state.userName || state.full_name || undefined;
+      const uRole = state.userRole || state.role || undefined;
+      import('../services/api')
+        .then(({ authApi }) => {
+          authApi.logout(uName, uRole);
+        })
+        .catch(() => {});
+    } catch {}
+    try {
+      require('./useDeviceStore').useDeviceStore.getState().resetDeviceStore?.();
+      require('./usePatientStore').usePatientStore.getState().resetPatientStore?.();
+      require('./useHealthStore').useHealthStore.getState().resetHealthStore?.();
+      require('./useAlertStore').useAlertStore.getState().resetAlertStore?.();
       AsyncStorage.multiRemove([
         'auth-storage',
         'device-store',

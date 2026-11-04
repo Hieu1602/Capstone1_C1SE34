@@ -1,7 +1,8 @@
-import React from 'react';
+import React, { useState, useMemo } from 'react';
 import { ShieldCheck, X } from 'lucide-react';
 import { PermissionRule, UserRole } from '../../types';
 import { PERMISSION_GROUPS } from './constants';
+import { ConfirmActionModal } from './ConfirmActionModal';
 
 interface CreateEditRuleModalProps {
   isOpen: boolean;
@@ -40,6 +41,72 @@ export const CreateEditRuleModal: React.FC<CreateEditRuleModalProps> = ({
   setRuleIsActive,
   onSubmit,
 }) => {
+  const [showUnsavedModal, setShowUnsavedModal] = useState(false);
+  const [showSaveModal, setShowSaveModal] = useState(false);
+
+  const isDirty = useMemo(() => {
+    if (editingRule) {
+      const samePerms =
+        rulePermissions.length === editingRule.permissions.length &&
+        rulePermissions.every((p) => editingRule.permissions.includes(p));
+      return (
+        ruleName.trim() !== editingRule.name ||
+        ruleDescription.trim() !== editingRule.description ||
+        ruleTargetRole !== editingRule.target_role ||
+        ruleModule !== editingRule.module ||
+        ruleIsActive !== editingRule.is_active ||
+        !samePerms
+      );
+    } else {
+      return (
+        ruleName.trim().length > 0 ||
+        ruleDescription.trim().length > 0 ||
+        ruleTargetRole !== 'user' ||
+        ruleModule !== 'all'
+      );
+    }
+  }, [editingRule, ruleName, ruleDescription, ruleTargetRole, ruleModule, rulePermissions, ruleIsActive]);
+
+  const handleRequestClose = () => {
+    if (isDirty) {
+      setShowUnsavedModal(true);
+    } else {
+      onClose();
+    }
+  };
+
+  const handleDiscardChanges = () => {
+    if (editingRule) {
+      setRuleName(editingRule.name);
+      setRuleDescription(editingRule.description);
+      setRuleTargetRole(editingRule.target_role);
+      setRuleModule(editingRule.module);
+      setRulePermissions(editingRule.permissions);
+      setRuleIsActive(editingRule.is_active);
+    } else {
+      setRuleName('');
+      setRuleDescription('');
+      setRuleTargetRole('user');
+      setRuleModule('all');
+      setRulePermissions([]);
+      setRuleIsActive(true);
+    }
+    setShowUnsavedModal(false);
+    onClose();
+  };
+
+  const handleFormSubmit = (e: React.FormEvent) => {
+    e.preventDefault();
+    setShowSaveModal(true);
+  };
+
+  const handleConfirmSave = () => {
+    setShowSaveModal(false);
+    setShowUnsavedModal(false);
+    const dummyEvent = { preventDefault: () => {} } as React.FormEvent;
+    onSubmit(dummyEvent);
+  };
+
   if (!isOpen) return null;
 
   const handleTogglePermission = (permId: string) => {
@@ -80,7 +147,7 @@ export const CreateEditRuleModal: React.FC<CreateEditRuleModalProps> = ({
             </div>
           </div>
           <button
-            onClick={onClose}
+            onClick={handleRequestClose}
             className="p-1.5 rounded-lg text-[#737780] hover:text-[#191B20] dark:hover:text-white cursor-pointer"
           >
             <X className="w-5 h-5" />
@@ -88,7 +155,7 @@ export const CreateEditRuleModal: React.FC<CreateEditRuleModalProps> = ({
         </div>
 
         {/* Modal Form Scrollable */}
-        <form onSubmit={onSubmit} className="p-5 space-y-4 overflow-y-auto flex-1">
+        <form onSubmit={handleFormSubmit} className="p-5 space-y-4 overflow-y-auto flex-1">
           {/* Tên Rule */}
           <div>
             <label className="block text-xs font-bold text-[#191B20] dark:text-[#F5F6F8] mb-1">
@@ -252,7 +319,7 @@ export const CreateEditRuleModal: React.FC<CreateEditRuleModalProps> = ({
           <div className="flex items-center justify-end space-x-2.5 pt-4 border-t border-[#E7E9ED] dark:border-[#454A53]">
             <button
               type="button"
-              onClick={onClose}
+              onClick={handleRequestClose}
               className="btn-ghost"
             >
               Hủy bỏ
@@ -266,6 +333,36 @@ export const CreateEditRuleModal: React.FC<CreateEditRuleModalProps> = ({
           </div>
         </form>
       </div>
+
+      {/* Modal xác nhận khi bấm đóng / hủy mà có thay đổi chưa lưu */}
+      <ConfirmActionModal
+        isOpen={showUnsavedModal}
+        type="unsaved"
+        title="Bạn có thay đổi chưa lưu"
+        message="Quy tắc phân quyền đã được chỉnh sửa. Bạn có muốn lưu các thay đổi này trước khi đóng không?"
+        confirmLabel="Lưu thay đổi"
+        discardLabel="Không lưu (Hủy thay đổi)"
+        cancelLabel="Tiếp tục chỉnh sửa"
+        onConfirm={handleConfirmSave}
+        onDiscard={handleDiscardChanges}
+        onCancel={() => setShowUnsavedModal(false)}
+      />
+
+      {/* Modal xác nhận trước khi lưu */}
+      <ConfirmActionModal
+        isOpen={showSaveModal}
+        type="save"
+        title={editingRule ? 'Xác nhận cập nhật quy tắc phân quyền' : 'Xác nhận tạo mới quy tắc phân quyền'}
+        message={
+          editingRule
+            ? `Bạn có chắc chắn muốn lưu các thay đổi cho quy tắc phân quyền "${editingRule.name}" không?`
+            : `Bạn có chắc chắn muốn tạo mới quy tắc phân quyền "${ruleName.trim()}" không?`
+        }
+        confirmLabel="Xác nhận lưu"
+        cancelLabel="Hủy bỏ"
+        onConfirm={handleConfirmSave}
+        onCancel={() => setShowSaveModal(false)}
+      />
     </div>
   );
 };

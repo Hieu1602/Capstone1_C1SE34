@@ -136,11 +136,11 @@ export const UserTable: React.FC<UserTableProps> = ({
                           <ShieldCheck className="w-4 h-4 text-[#FF6B35]" />
                         </button>
 
-                        {/* Chỉnh sửa tài khoản */}
+                        {/* Chỉnh sửa tài khoản & Mật khẩu */}
                         <button
                           onClick={() => onEditUser(userItem)}
                           className="p-1.5 rounded-lg text-[#737780] hover:text-[#FF6B35] hover:bg-[#FFF0E8] dark:hover:bg-[#FF6B35]/15 transition-colors cursor-pointer"
-                          title="Chỉnh sửa thông tin & Vai trò"
+                          title="Chỉnh sửa thông tin, vai trò & Quản lý mật khẩu"
                         >
                           <KeyRound className="w-4 h-4" />
                         </button>

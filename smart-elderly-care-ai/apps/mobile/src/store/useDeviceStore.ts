@@ -16,7 +16,7 @@ import {
 } from "../services/deviceService";
 const getDefaultStreamUrl = () => {
   if (Platform.OS === "android") {
-    return "http://10.0.2.2:8080";
+    return "http://192.168.1.5:8080";
   }
   if (
     Platform.OS === "web" &&
@@ -110,6 +110,7 @@ export interface IoTDeviceItem {
   location?: string;
   streamUrl?: string;
   macAddress?: string;
+  ipAddress?: string;
   elderly_id?: string | number;
   wearer_name?: string;
 }
@@ -127,7 +128,8 @@ interface DeviceState {
   toggleCameraSleep: () => void;
   toggleCameraAIProtect: () => void;
   setCameraResolution: (res: CameraDevice["resolution"]) => void;
-  addIoTDevice: (device: IoTDeviceItem) => void;
+  setCameraDefault: (cameraData: Partial<CameraDevice>) => void;
+  addIoTDevice: (device: IoTDeviceItem) => Promise<string | undefined>;
   removeIoTDevice: (deviceId: string) => void;
   addDeviceGroup: (groupName: string) => void;
   updateDeviceGroup: (
@@ -219,28 +221,87 @@ export const useDeviceStore = create<DeviceState>()(
       },
       setCameraResolution: (res) =>
         set((state) => ({ camera: { ...state.camera, resolution: res } })),
-      addIoTDevice: (device) => {
+      setCameraDefault: (cameraData) =>
+        set((state) => ({ camera: { ...state.camera, ...cameraData } })),
+      addIoTDevice: async (device) => {
         set((state) => ({ iotDevices: [device, ...state.iotDevices] }));
         const isCam = device.type === "camera";
-        devicesApi
-          .createDevice({
+        try {
+          const res = await devicesApi.createDevice({
             device_id: device.id,
             name: device.name,
             sub_title: device.sub,
             device_type: isCam ? "CAMERA" : "SMARTBAND",
             location: device.location || "Phòng khách",
-          })
-          .catch((err) =>
-            console.log(
-              "[DeviceStore] Thiết bị lưu local cache, đồng bộ backend sau:",
-              err,
-            ),
+            ip_address: (device as any).ipAddress,
+            config: isCam && device.streamUrl ? { stream_url: device.streamUrl } : undefined,
+          });
+          if (res?.data?.id) {
+            const dev = res.data;
+            const def = DEVICE_TYPE_DEFAULTS[dev.device_type] || DEVICE_TYPE_DEFAULTS.SENSOR;
+            const canonical: IoTDeviceItem = {
+              id: String(dev.id),
+              deviceId: dev.device_id || dev.id,
+              name: dev.name,
+              sub: dev.sub_title || def.sub,
+              type: def.type,
+              status: dev.status_text || (dev.is_online ? "Trực tuyến" : "Ngoại tuyến"),
+              isOnline: Boolean(dev.is_online),
+              icon: def.icon,
+              color: def.color,
+              location: dev.location || "Chưa nhóm",
+              streamUrl: dev.config?.stream_url || undefined,
+              macAddress: dev.mac_address || undefined,
+            };
+            set((state) => ({
+              iotDevices: state.iotDevices.map((d) => (d.id === device.id ? canonical : d)),
+            }));
+            return String(dev.id);
+          }
+        } catch (err) {
+          console.log(
+            "[DeviceStore] Thiết bị lưu local cache, đồng bộ backend sau:",
+            err,
           );
+        }
+        return device.id;
       },
       removeIoTDevice: (deviceId) => {
-        set((state) => ({
-          iotDevices: state.iotDevices.filter((d) => d.id !== deviceId),
-        }));
+        set((state) => {
+          const nextIot = state.iotDevices.filter(
+            (d) => d.id !== deviceId && (d as any).deviceId !== deviceId,
+          );
+          const isCurrentCam =
+            state.camera?.id === deviceId ||
+            (state.camera as any)?.deviceId === deviceId;
+          const remainingCam = nextIot.find((d) => d.type === "camera");
+          return {
+            iotDevices: nextIot,
+            camera: isCurrentCam
+              ? remainingCam
+                ? {
+                    ...state.camera,
+                    id: remainingCam.id,
+                    name: remainingCam.name,
+                    room: remainingCam.location || "Phòng khách",
+                    streamUrl: remainingCam.streamUrl || "",
+                    isOnline: remainingCam.isOnline,
+                  }
+                : {
+                    id: "",
+                    name: "",
+                    room: "",
+                    isOnline: false,
+                    isSleep: false,
+                    isAIProtect: false,
+                    resolution: "2K",
+                    sdCardStatus: "NO_CARD",
+                    wifiStrength: 0,
+                    streamUrl: "",
+                  }
+              : state.camera,
+          };
+        });
         devicesApi
           .deleteDevice(deviceId)
           .catch((err) =>
@@ -452,7 +513,8 @@ export const useDeviceStore = create<DeviceState>()(
               set((state) => ({
                 camera: {
                   ...state.camera,
-                  id: firstCam.device_id,
+                  id: String(firstCam.id),
+                  deviceId: firstCam.device_id || firstCam.id,
                   name: firstCam.name,
                   room: firstCam.location || "Phòng khách",
                   isOnline: firstCam.is_online,

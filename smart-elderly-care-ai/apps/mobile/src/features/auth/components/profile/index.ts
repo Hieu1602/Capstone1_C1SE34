@@ -12,5 +12,5 @@ export * from "./ProfileQuickGrid";
 export * from "./ProfileHelpAccordion";
 export * from "./ProfileSettingsAccordion";
 export * from "./MenuSearchModal";
-export * from "./MenuSearchModal";
+export * from "./ViewAvatarModal";
 

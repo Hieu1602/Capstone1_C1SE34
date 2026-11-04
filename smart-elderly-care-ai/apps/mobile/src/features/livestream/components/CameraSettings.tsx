@@ -3,6 +3,7 @@
  */
 import React from "react";
 import { StyleSheet, TouchableOpacity } from "react-native";
+import { Ionicons } from "@expo/vector-icons";
 import { LocalizedText as Text } from "../../../i18n/LocalizedComponents";
 import { useTheme } from "../../../store/useThemeStore";
 
@@ -15,6 +16,8 @@ interface Props {
     onPrivacy: () => void;
     onReconnect: () => void;
     onMotion: () => void;
+    onConfigureSource?: () => void;
+    onDeleteDevice?: () => void;
 }
 
 /**
@@ -67,6 +70,32 @@ export default function CameraSettings(props: Props) {
                 </Text>
                 <Text style={textStyle}>{stateLabel(props.motion)}</Text>
             </TouchableOpacity>
+            {props.onConfigureSource && (
+                <TouchableOpacity
+                    accessibilityRole="button"
+                    style={[styles.row, { borderBottomWidth: 0 }]}
+                    onPress={props.onConfigureSource}
+                >
+                    <Ionicons name="videocam" size={20} color="#0284C7" />
+                    <Text style={[styles.rowText, textStyle, { color: "#0284C7", fontWeight: "600" }]}>
+                        Cấu hình nguồn Camera (RTSP)
+                    </Text>
+                    <Ionicons name="chevron-forward" size={16} color={colors.textSecondary} />
+                </TouchableOpacity>
+            )}
+            {props.onDeleteDevice && (
+                <TouchableOpacity
+                    accessibilityRole="button"
+                    style={[styles.row, { borderBottomWidth: 0, marginTop: 4 }]}
+                    onPress={props.onDeleteDevice}
+                >
+                    <Ionicons name="trash-outline" size={20} color="#EF4444" />
+                    <Text style={[styles.rowText, textStyle, { color: "#EF4444", fontWeight: "600" }]}>
+                        Gỡ bỏ camera này
+                    </Text>
+                    <Ionicons name="chevron-forward" size={16} color="#EF4444" />
+                </TouchableOpacity>
+            )}
         </>
     );
 }

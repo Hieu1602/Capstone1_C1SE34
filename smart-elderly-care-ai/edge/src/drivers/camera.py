@@ -19,10 +19,12 @@ class CameraDriver:
         Returns:
             Không có. Chưa mở camera hoặc tạo thread.
         """
-        self.source = config.get("source", 0)
-        if os.getenv("TAPO_HOST"):
+        self.source = config.get("source")
+        if not self.source and os.getenv("TAPO_HOST"):
             from .tapo import rtsp_url
             self.source = rtsp_url()
+        if self.source is None:
+            self.source = 0
         self.fps = max(1, int(config.get("fps", 15)))
         self.width = config.get("resolution", {}).get("width", 1280)
         self.height = config.get("resolution", {}).get("height", 720)
@@ -101,10 +103,22 @@ class CameraDriver:
             while not self._stop.is_set():
                 try:
                     if is_rtsp:
-                        self._cap = cv2.VideoCapture(self.source, cv2.CAP_FFMPEG, [
-                            cv2.CAP_PROP_OPEN_TIMEOUT_MSEC, 5000,
-                            cv2.CAP_PROP_READ_TIMEOUT_MSEC, 5000,
-                        ])
+                        sources = [self.source]
+                        if "/stream1" in self.source:
+                            sources.append(self.source.replace("/stream1", "/stream2"))
+                        elif "/stream2" in self.source:
+                            sources.append(self.source.replace("/stream2", "/stream1"))
+                        cap = None
+                        for src in sources:
+                            c = cv2.VideoCapture(src, cv2.CAP_FFMPEG, [
+                                cv2.CAP_PROP_OPEN_TIMEOUT_MSEC, 3000,
+                                cv2.CAP_PROP_READ_TIMEOUT_MSEC, 3000,
+                            ])
+                            if c.isOpened():
+                                cap = c
+                                break
+                            c.release()
+                        self._cap = cap
                     else:
                         self._cap = cv2.VideoCapture(self.source)
                         self._cap.set(cv2.CAP_PROP_FRAME_WIDTH, self.width)

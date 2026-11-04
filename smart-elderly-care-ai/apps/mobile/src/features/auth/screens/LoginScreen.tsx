@@ -15,6 +15,9 @@ import {
   Platform,
   ScrollView,
   SafeAreaView,
+  View,
+  Text,
+  TouchableOpacity,
 } from 'react-native';
 import { useAuthStore } from '../../../store/useAuthStore';
 import { useThemeStore } from '../../../store/useThemeStore';
@@ -47,6 +50,8 @@ export default function LoginScreen({ navigation, route }: any) {
   const [showPassword, setShowPassword] = useState(false);
   const [loading, setLoading] = useState(false);
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
+
+  
 
   // Đồng bộ trạng thái đã tích từ màn hình ngoài (Welcome) hoặc mặc định đã tích khi vào màn hình
   const [isAgreed, setIsAgreed] = useState<boolean>(route?.params?.isAgreed ?? true);
@@ -155,7 +160,10 @@ export default function LoginScreen({ navigation, route }: any) {
       delete api.defaults.headers.common['Authorization'];
       if (tokensApplied) logout();
       console.error('[Login] Error:', error);
-      const detail = error?.response?.data?.detail || error?.message || 'Thông tin đăng nhập hoặc mật khẩu không đúng.';
+      const isNetworkErr = error?.message?.includes('Network Error') || error?.code === 'ERR_NETWORK' || !error?.response;
+      const detail = isNetworkErr
+        ? 'Không thể kết nối đến máy chủ. Vui lòng kiểm tra kết nối mạng và thử lại.'
+        : (error?.response?.data?.detail || error?.message || 'Thông tin đăng nhập hoặc mật khẩu không đúng.');
 
       setErrorMessage(
         typeof detail === 'string' ? detail : 'Đăng nhập không thành công. Vui lòng kiểm tra lại.'
@@ -206,8 +214,11 @@ export default function LoginScreen({ navigation, route }: any) {
             onNavigateRegister={() => navigation.navigate('Register', { isAgreed })}
             onOpenLegal={handleOpenLegal}
           />
-        </ScrollView>
+
+          </ScrollView>
       </KeyboardAvoidingView>
+
+      
 
       {/* Modal Điều khoản dịch vụ & Chính sách quyền riêng tư */}
       <LegalTermsModal
@@ -231,4 +242,4 @@ const styles = StyleSheet.create({
     backgroundColor: '#FFFFFF',
     paddingBottom: 24,
   },
-});
+  });

@@ -25,6 +25,7 @@ import {
   CreateEditUserModal,
   CreateEditRuleModal,
   UserPermissionModal,
+  ConfirmActionModal,
 } from '../components/user-management';
 
 export const UserManagementPage: React.FC = () => {
@@ -81,6 +82,10 @@ export const UserManagementPage: React.FC = () => {
 
   // Modal State kiểm tra quyền người dùng cụ thể
   const [userPermissionModal, setUserPermissionModal] = useState<User | null>(null);
+
+  // Modal State xác nhận hành động nguy hiểm / thay đổi dữ liệu
+  const [confirmDeleteUser, setConfirmDeleteUser] = useState<User | null>(null);
+  const [confirmStatusUser, setConfirmStatusUser] = useState<User | null>(null);
 
   const showNotice = (type: 'success' | 'error', message: string) => {
     setNotification({ type, message });
@@ -167,6 +172,10 @@ export const UserManagementPage: React.FC = () => {
       showNotice('error', 'Mật khẩu khởi tạo phải có tối thiểu 8 ký tự theo chính sách an ninh.');
       return;
     }
+    if (editingUser && formPassword && formPassword.length < 8) {
+      showNotice('error', 'Mật khẩu mới phải có tối thiểu 8 ký tự.');
+      return;
+    }
     const cleanPhone = formPhone.trim();
     if (!/^(0|\+84)[3|5|7|8|9][0-9]{8}$/.test(cleanPhone) && !/^\+?[0-9]{9,15}$/.test(cleanPhone)) {
       showNotice('error', 'Định dạng số điện thoại không hợp lệ.');
@@ -175,14 +184,21 @@ export const UserManagementPage: React.FC = () => {
 
     try {
       if (editingUser) {
-        const updated = await usersApi.update(editingUser.id, {
+        const updatePayload: any = {
           full_name: formName.trim(),
           phone: cleanPhone,
           role: formRole,
           assigned_house: formHouse.trim(),
-        });
+        };
+        if (formPassword && formPassword.trim()) {
+          updatePayload.password = formPassword.trim();
+        }
+        const updated = await usersApi.update(editingUser.id, updatePayload);
         setUsers((prev) => prev.map((u) => (u.id === updated.id ? updated : u)));
-        showNotice('success', `Đã cập nhật thông tin tài khoản [${formName}]`);
+        showNotice(
+          'success',
+          `Đã cập nhật thông tin tài khoản [${formName}]${formPassword ? ' (kèm đổi mật khẩu thành công)' : ''}`
+        );
       } else {
         const created = await usersApi.create({
           full_name: formName.trim(),
@@ -200,39 +216,51 @@ export const UserManagementPage: React.FC = () => {
     }
   };
 
-  const handleToggleUserStatus = async (userItem: User) => {
+  const handleToggleUserStatus = (userItem: User) => {
     if (userItem.role === 'admin') {
       showNotice('error', 'Không thể khóa tài khoản Quản trị viên hệ thống.');
       return;
     }
-    const newStatus = !userItem.is_active;
+    setConfirmStatusUser(userItem);
+  };
+
+  const executeToggleUserStatus = async () => {
+    if (!confirmStatusUser) return;
+    const newStatus = !confirmStatusUser.is_active;
     try {
-      await usersApi.update(userItem.id, { is_active: newStatus });
+      await usersApi.update(confirmStatusUser.id, { is_active: newStatus });
       setUsers((prev) =>
-        prev.map((u) => (u.id === userItem.id ? { ...u, is_active: newStatus } : u))
+        prev.map((u) => (u.id === confirmStatusUser.id ? { ...u, is_active: newStatus } : u))
       );
       showNotice(
         'success',
-        `Đã ${newStatus ? 'kích hoạt lại' : 'khóa tạm thời'} tài khoản [${userItem.full_name}]`
+        `Đã ${newStatus ? 'kích hoạt lại' : 'khóa tạm thời'} tài khoản [${confirmStatusUser.full_name}] thành công!`
       );
     } catch {
       showNotice('error', 'Lỗi khi cập nhật trạng thái hoạt động.');
+    } finally {
+      setConfirmStatusUser(null);
     }
   };
 
-  const handleDeleteUser = async (userItem: User) => {
+  const handleDeleteUser = (userItem: User) => {
     if (userItem.role === 'admin') {
       showNotice('error', 'Không thể xóa tài khoản Quản trị viên cấp cao!');
       return;
     }
-    if (confirm(`Bạn có chắc chắn muốn xóa vĩnh viễn tài khoản "${userItem.full_name}"?`)) {
-      try {
-        await usersApi.delete(userItem.id);
-        setUsers((prev) => prev.filter((u) => u.id !== userItem.id));
-        showNotice('success', `Đã xóa tài khoản [${userItem.full_name}]`);
-      } catch {
-        showNotice('error', 'Không thể xóa tài khoản này.');
-      }
+    setConfirmDeleteUser(userItem);
+  };
+
+  const executeDeleteUser = async () => {
+    if (!confirmDeleteUser) return;
+    try {
+      await usersApi.delete(confirmDeleteUser.id);
+      setUsers((prev) => prev.filter((u) => u.id !== confirmDeleteUser.id));
+      showNotice('success', `Đã xóa vĩnh viễn tài khoản [${confirmDeleteUser.full_name}] thành công!`);
+    } catch {
+      showNotice('error', 'Không thể xóa tài khoản này.');
+    } finally {
+      setConfirmDeleteUser(null);
     }
   };
 
@@ -319,7 +347,7 @@ export const UserManagementPage: React.FC = () => {
           </div>
           <div>
             <h1 className="text-xl sm:text-2xl font-bold font-heading text-[#191B20] dark:text-[#F5F6F8]">
-              Quản lý Người Dùng & Phân Quyền
+              Quản lý Người Dùng
             </h1>
             <p className="text-xs text-[#737780] dark:text-[#A1A7B1] mt-0.5">
               Điều phối tài khoản, phân định vai trò Bác sĩ, Người thân và thiết lập ma trận Rule quyền hạn
@@ -467,6 +495,34 @@ export const UserManagementPage: React.FC = () => {
         rules={rules}
         onClose={() => setUserPermissionModal(null)}
         onNavigateToRulesTab={() => setActiveMainTab('rules')}
+      />
+
+      {/* MODAL XÁC NHẬN XÓA TÀI KHOẢN */}
+      <ConfirmActionModal
+        isOpen={!!confirmDeleteUser}
+        type="delete"
+        title="Xác nhận xóa tài khoản"
+        message={`Bạn có chắc chắn muốn xóa vĩnh viễn tài khoản "${confirmDeleteUser?.full_name}" (${confirmDeleteUser?.phone}) không? Toàn bộ quyền truy cập và dữ liệu liên kết sẽ bị xóa và không thể hoàn tác.`}
+        confirmLabel="Xóa vĩnh viễn"
+        cancelLabel="Hủy bỏ"
+        onConfirm={executeDeleteUser}
+        onCancel={() => setConfirmDeleteUser(null)}
+      />
+
+      {/* MODAL XÁC NHẬN KHÓA / MỞ KHÓA TÀI KHOẢN */}
+      <ConfirmActionModal
+        isOpen={!!confirmStatusUser}
+        type="status"
+        title={confirmStatusUser?.is_active ? 'Xác nhận khóa tài khoản' : 'Xác nhận kích hoạt tài khoản'}
+        message={
+          confirmStatusUser?.is_active
+            ? `Bạn có chắc chắn muốn khóa tài khoản "${confirmStatusUser?.full_name}"? Người dùng này sẽ bị chặn đăng nhập vào hệ thống cho đến khi được mở khóa.`
+            : `Bạn có chắc chắn muốn kích hoạt mở khóa lại tài khoản "${confirmStatusUser?.full_name}"?`
+        }
+        confirmLabel={confirmStatusUser?.is_active ? 'Khóa tài khoản' : 'Mở khóa'}
+        cancelLabel="Hủy bỏ"
+        onConfirm={executeToggleUserStatus}
+        onCancel={() => setConfirmStatusUser(null)}
       />
     </div>
   );

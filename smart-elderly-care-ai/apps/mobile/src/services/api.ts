@@ -41,15 +41,35 @@ const getBaseUrl = (): string => {
   }
 
   // 4. Nếu chạy trên Android Emulator
-  if (Platform.OS === 'android') {
-    return 'http://10.0.2.2:8000/api/v1';
-  }
-
-  // 4. Fallback về IP máy tính phát triển trong mạng nội bộ
-  return 'http://192.168.2.7:8000/api/v1';
+  return 'http://192.168.1.5:8000/api/v1';
 };
 
 export const BASE_URL: string = getBaseUrl();
+
+export const setCustomServerUrl = async (url: string) => {
+  let formatted = url.trim();
+  if (!formatted.startsWith('http://') && !formatted.startsWith('https://')) {
+    formatted = `http://${formatted}`;
+  }
+  if (!formatted.endsWith('/api/v1')) {
+    formatted = formatted.replace(/\/+$/, '') + '/api/v1';
+  }
+  api.defaults.baseURL = formatted;
+  await AsyncStorage.setItem('custom_server_url', formatted);
+  return formatted;
+};
+
+export const getCustomServerUrl = async (): Promise<string> => {
+  try {
+    const saved = await AsyncStorage.getItem('custom_server_url');
+    if (saved && saved.trim()) {
+      api.defaults.baseURL = saved.trim();
+      return saved.trim();
+    }
+  } catch {}
+  return api.defaults.baseURL || BASE_URL;
+};
+
 
 const api: AxiosInstance = axios.create({
   baseURL: BASE_URL,
@@ -62,6 +82,13 @@ const api: AxiosInstance = axios.create({
 // ---- Request Interceptor: Attach JWT token ----
 api.interceptors.request.use(
   async (config: import('axios').InternalAxiosRequestConfig) => {
+    try {
+      const saved = await AsyncStorage.getItem('custom_server_url');
+      if (saved && saved.trim()) {
+        config.baseURL = saved.trim();
+      }
+    } catch {}
+
     const token = useAuthStore.getState().accessToken;
     if (token) {
       config.headers.Authorization = `Bearer ${token}`;
@@ -114,6 +141,8 @@ export default api;
 // ---- API Service Functions ----
 
 export const authApi = {
+  logout: (userName?: string, role?: string) =>
+    api.post('/auth/logout', { user_name: userName, role }).catch(() => {}),
   requestOtp: (phone: string) => api.post('/auth/request-otp', { phone }),
   verifyOtp: (phone: string, otp_code: string) => api.post('/auth/verify-otp', { phone, otp_code }),
   verifyCchn: (cchn_number: string, full_name: string) =>
@@ -292,6 +321,8 @@ export const incidentsApi = {
     api.post(`/incidents/${id}/acknowledge`, null, { params: { note: notes } }),
   reopen: (id: string, notes?: string) =>
     api.post(`/incidents/${id}/reopen`, null, { params: { note: notes } }),
+  acknowledgeAll: () =>
+    api.post('/incidents/acknowledge-all'),
 };
 
 export const notificationsApi = incidentsApi;
@@ -353,18 +384,36 @@ export const doctorApi = {
     data: {
       medication_name: string;
       dosage: string;
+      quantity?: string;
       frequency?: string;
       schedule_times?: string[];
       instructions?: string;
       enable_speaker_reminder?: boolean;
     }
   ) => api.post(`/doctor/patients/${id}/prescriptions`, data),
+  createBatchPrescriptions: (
+    id: string,
+    data: {
+      diagnosis?: string;
+      general_notes?: string;
+      enable_speaker_reminder?: boolean;
+      medications: Array<{
+        medication_name: string;
+        quantity?: string;
+        dosage: string;
+        frequency?: string;
+        schedule_times?: string[];
+        instructions?: string;
+      }>;
+    }
+  ) => api.post(`/doctor/patients/${id}/prescriptions/batch`, data),
   updatePrescription: (
     patientId: string,
     rxId: string,
     data: {
       medication_name?: string;
       dosage?: string;
+      quantity?: string;
       frequency?: string;
       schedule_times?: string[];
       instructions?: string;
@@ -451,7 +500,7 @@ export const houseApi = {
 // 8. Chatbot AI API
 export const chatbotApi = {
   chat: (data: { message: string; session_id?: string; context_window?: number; house_id?: string }) =>
-    api.post('/chatbot/chat', data),
+    api.post('/chatbot/chat', data, { timeout: 60000 }),
   getHealth: () => api.get('/chatbot/health'),
   getSessions: () => api.get('/chatbot/sessions'),
   getSessionDetail: (sessionId: string) => api.get(`/chatbot/sessions/${sessionId}`),

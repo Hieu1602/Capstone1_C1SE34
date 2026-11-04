@@ -39,7 +39,9 @@ export const ProfileUserCard: React.FC<ProfileUserCardProps> = ({
     (permissions?.is_owner === true ||
       permissions?.role_in_house === 'OWNER' ||
       userRole === 'admin' ||
-      role === 'admin');
+      role === 'admin' ||
+      userRole === 'owner' ||
+      role === 'owner');
 
   const isDoctor =
     userRole === 'doctor' ||
@@ -116,7 +118,7 @@ export const ProfileUserCard: React.FC<ProfileUserCardProps> = ({
         </View>
       </TouchableOpacity>
 
-      {isOwner && Boolean(onPressAddMember) && (
+      {isOwner && Boolean(onPressAddMember) ? (
         <>
           <View
             style={[
@@ -143,7 +145,34 @@ export const ProfileUserCard: React.FC<ProfileUserCardProps> = ({
             </Text>
           </TouchableOpacity>
         </>
-      )}
+      ) : !hasLinkedHouse && Boolean(onPressAddMember) ? (
+        <>
+          <View
+            style={[
+              styles.fbCardDivider,
+              isDarkMode && { backgroundColor: colors.border },
+            ]}
+          />
+
+          <TouchableOpacity
+            style={styles.fbSubActionRow}
+            activeOpacity={0.7}
+            onPress={onPressAddMember}
+          >
+            <View style={[styles.fbPlusCircleBtn, { backgroundColor: '#4F46E5' }]}>
+              <Ionicons name="link-outline" size={18} color="#FFFFFF" />
+            </View>
+            <Text
+              style={[
+                styles.fbSubActionText,
+                { color: '#4F46E5', fontWeight: '700' },
+              ]}
+            >
+              Nhập mã / Liên kết tham gia nhà
+            </Text>
+          </TouchableOpacity>
+        </>
+      ) : null}
     </View>
   );
 };

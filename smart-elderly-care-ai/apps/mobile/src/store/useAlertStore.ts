@@ -28,6 +28,7 @@ export interface Incident {
   acknowledged_by_name?: string | null;
   acknowledged_at?: string | null;
   note?: string | null;
+  notes?: string | null;
   created_at: string;
 }
 
@@ -50,6 +51,7 @@ interface AlertState {
   addIncident: (incident: Incident) => void;
   acknowledgeIncident: (incidentId: string, note?: string, user?: string) => void;
   reopenIncident: (incidentId: string, note?: string) => void;
+  acknowledgeAll: () => Promise<void>;
   setAlarmSnooze: (snooze: Partial<AlarmSnoozeInfo>) => void;
   cancelAlarmSnooze: () => void;
   setSirenActive: (active: boolean) => void;
@@ -90,7 +92,12 @@ export const useAlertStore = create<AlertState>()((set, get) => ({
       sirenActive: incident.alert_level === 'CRITICAL' ? true : state.sirenActive,
     })),
 
-  acknowledgeIncident: (incidentId: string, note?: string, user: string = 'Demo User') =>
+  acknowledgeIncident: async (incidentId: string, note?: string, user: string = 'Demo User') => {
+    try {
+      await incidentsApi.acknowledge(incidentId, note);
+    } catch (e) {
+      console.warn('acknowledgeIncident API error:', e);
+    }
     set((state) => {
       const updatedIncidents = state.incidents.map((inc) =>
         inc.id === incidentId
@@ -113,7 +120,24 @@ export const useAlertStore = create<AlertState>()((set, get) => ({
         incidents: updatedIncidents,
         sirenActive: hasOtherCritical,
       };
-    }),
+    });
+  },
+
+  acknowledgeAll: async () => {
+    try {
+      await incidentsApi.acknowledgeAll();
+    } catch (e) {
+      console.warn('acknowledgeAll error:', e);
+    }
+    set((state) => ({
+      incidents: state.incidents.map((inc) => ({
+        ...inc,
+        is_acknowledged: true,
+        acknowledged_at: new Date().toISOString(),
+      })),
+      sirenActive: false,
+    }));
+  },
 
   reopenIncident: (incidentId: string, note?: string) =>
     set((state) => {

@@ -27,6 +27,8 @@ export interface ControlAction {
  * @param props.showLabel - Hiện nhãn và kích thước ô của Function Grid.
  * @returns Cây giao diện React theo props và theme hiện tại.
  */
+let isPointerInteraction = false;
+
 export default function ControlActionButton({
     label,
     icon,
@@ -46,9 +48,29 @@ export default function ControlActionButton({
             accessibilityRole="button"
             accessibilityLabel={t(label, { defaultValue: label })}
             accessibilityState={active == null ? undefined : { selected: active }}
-            onPress={onPress}
-            onFocus={() => setFocused(true)}
-            onBlur={() => setFocused(false)}
+            onPress={(e) => {
+                isPointerInteraction = false;
+                setFocused(false);
+                if (typeof (e as any)?.target?.blur === "function") {
+                    (e as any).target.blur();
+                }
+                onPress();
+            }}
+            onPressIn={() => {
+                isPointerInteraction = true;
+            }}
+            onPressOut={() => {
+                isPointerInteraction = false;
+            }}
+            onFocus={() => {
+                if (!isPointerInteraction) {
+                    setFocused(true);
+                }
+            }}
+            onBlur={() => {
+                isPointerInteraction = false;
+                setFocused(false);
+            }}
             style={({ pressed }) => [
                 showLabel ? styles.gridAction : styles.iconAction,
                 styles.interaction,
@@ -113,6 +135,7 @@ const styles = StyleSheet.create({
         borderWidth: 2,
         borderColor: "transparent",
         borderRadius: 20,
+        outlineWidth: 0,
     },
     gridAction: {
         width: "33.333%",
