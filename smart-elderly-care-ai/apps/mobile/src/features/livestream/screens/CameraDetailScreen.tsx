@@ -203,7 +203,7 @@ export default function CameraDetailScreen({ navigation, route }: Props) {
             }
         } catch {
             if (request === recordingRequest.current)
-                LocalizedAlert.alert(download ? "Tải xuống" : "Playback", "Không tải được video. Vui lòng thử lại.");
+                LocalizedAlert.alert(download ? "Tải xuống" : "Xem lại", "Không tải được video. Vui lòng thử lại.");
         } finally {
             if (download && request === recordingRequest.current) setDownloadingId(null);
         }
@@ -220,7 +220,7 @@ export default function CameraDetailScreen({ navigation, route }: Props) {
             }
         } catch {
             if (request === recordingRequest.current)
-                LocalizedAlert.alert(download ? "Tải xuống" : "Playback", "Không tải được video. Vui lòng thử lại.");
+                LocalizedAlert.alert(download ? "Tải xuống" : "Xem lại", "Không tải được video. Vui lòng thử lại.");
         } finally {
             if (download && request === recordingRequest.current) setDownloadingId(null);
         }
@@ -395,7 +395,7 @@ export default function CameraDetailScreen({ navigation, route }: Props) {
                             privacyActive={connection.privacy === true}
                             onCare={() =>
                                 LocalizedAlert.alert(
-                                    "AI Care",
+                                    "Chăm sóc AI",
                                     "Các cảnh báo hiện có được hiển thị bên dưới nhóm chức năng.",
                                 )
                             }
@@ -411,7 +411,7 @@ export default function CameraDetailScreen({ navigation, route }: Props) {
                                 color={colors.textPrimary}
                             />
                             <Text style={[styles.playbackText, textStyle]}>
-                                Playback & Download
+                                Xem lại & Tải xuống
                             </Text>
                             <CameraControlIcon
                                 name="chevron-forward"
@@ -494,11 +494,11 @@ export default function CameraDetailScreen({ navigation, route }: Props) {
                             {(["playback", "download"] as const).map(tab => <TouchableOpacity key={tab}
                                 activeOpacity={1}
                                 accessibilityRole="tab" accessibilityState={{ selected: archiveTab === tab }}
-                                accessibilityLabel={tab === "playback" ? "Playback" : "Download"}
+                                accessibilityLabel={tab === "playback" ? "Xem lại" : "Tải xuống"}
                                 style={[styles.archiveTab, archiveTab === tab && { borderBottomColor: colors.primary }]}
                                 onPress={() => { setRecordingUri(""); recordingRequest.current++; setArchiveTab(tab); }}>
                                 <Text style={[styles.archiveTabText, { color: archiveTab === tab ? colors.primary : colors.textSecondary }]}>
-                                    {tab === "playback" ? "Playback" : "Download"}
+                                    {tab === "playback" ? "Xem lại" : "Tải xuống"}
                                 </Text>
                             </TouchableOpacity>)}
                         </View> :
@@ -526,7 +526,7 @@ export default function CameraDetailScreen({ navigation, route }: Props) {
                                     {recordingUri ? <>
                                         <ArchivePlayer key={recordingUri} uri={recordingUri}
                                             onEnd={() => {}}
-                                            onError={() => LocalizedAlert.alert("Playback", "Không phát được video. Vui lòng thử lại.")} />
+                                            onError={() => LocalizedAlert.alert("Xem lại", "Không phát được video. Vui lòng thử lại.")} />
                                         <TouchableOpacity accessibilityRole="button" style={styles.iconButton}
                                             accessibilityLabel="Quay lại danh sách bản ghi" onPress={() => setRecordingUri("")}>
                                             <Ionicons name="arrow-back" size={24} color={colors.textPrimary} />

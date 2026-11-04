@@ -39,7 +39,7 @@ export default function QuickActionBar(props: Props) {
             active: props.speakerEnabled,
         },
         {
-            label: "Voice Call",
+            label: "Gọi thoại",
             icon: "call-outline",
             onPress: props.onCall,
             active: props.callSelected,
