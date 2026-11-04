@@ -131,12 +131,12 @@ interface DeviceState {
   setCameraDefault: (cameraData: Partial<CameraDevice>) => void;
   addIoTDevice: (device: IoTDeviceItem) => Promise<string | undefined>;
   removeIoTDevice: (deviceId: string) => void;
-  addDeviceGroup: (groupName: string) => void;
+  addDeviceGroup: (groupName: string, deviceIds?: string[]) => Promise<void>;
   updateDeviceGroup: (
     oldName: string,
     newName: string,
     deviceIds?: string[],
-  ) => void;
+  ) => Promise<void>;
   removeDeviceGroup: (groupName: string) => void;
   assignDevicesToGroup: (deviceIds: string[], groupName: string) => void;
   fetchHouseFromBackend: () => Promise<void>;
@@ -308,22 +308,46 @@ export const useDeviceStore = create<DeviceState>()(
             console.log("[DeviceStore] Xóa thiết bị backend failed:", err),
           );
       },
-      addDeviceGroup: (groupName) => {
+      addDeviceGroup: async (groupName, deviceIds?) => {
         const trimmed = groupName.trim();
         if (!trimmed) return;
         const exists = get().deviceGroups.some(
           (g) => g.trim().toLowerCase() === trimmed.toLowerCase(),
         );
-        if (!exists) {
-          set((state) => ({ deviceGroups: [...state.deviceGroups, trimmed] }));
-          deviceGroupApi
-            .createGroup({ name: trimmed })
-            .catch((err) =>
-              console.log("[DeviceStore] Tạo nhóm backend failed:", err),
-            );
+        const validUuids = (deviceIds || []).filter((id) =>
+          /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(id),
+        );
+        set((state) => ({
+          deviceGroups: exists ? state.deviceGroups : [...state.deviceGroups, trimmed],
+          iotDevices:
+            deviceIds && deviceIds.length > 0
+              ? state.iotDevices.map((dev) =>
+                  deviceIds.includes(dev.id) ? { ...dev, location: trimmed } : dev,
+                )
+              : state.iotDevices,
+        }));
+        try {
+          if (!exists) {
+            await deviceGroupApi.createGroup({
+              name: trimmed,
+              device_ids: validUuids.length > 0 ? validUuids : undefined,
+            });
+          } else if (validUuids.length > 0) {
+            const groupId = await getGroupIdByName(trimmed);
+            if (groupId) {
+              await deviceGroupApi.assignDevices(validUuids, groupId);
+            }
+          }
+          await Promise.allSettled([
+            get().fetchGroupsFromBackend(),
+            get().fetchDevicesFromBackend(),
+          ]);
+        } catch (err) {
+          console.log("[DeviceStore] Tạo/gán nhóm backend failed:", err);
+          throw err;
         }
       },
-      updateDeviceGroup: (oldName, newName, deviceIds?) => {
+      updateDeviceGroup: async (oldName, newName, deviceIds?) => {
         const trimmedNew = newName.trim();
         const trimmedOld = oldName.trim();
         if (!trimmedNew || !trimmedOld) return;
@@ -347,14 +371,26 @@ export const useDeviceStore = create<DeviceState>()(
           );
         }
         set({ deviceGroups: updatedGroups, iotDevices: updatedDevices });
-        (async () => {
-          const groupId = await getGroupIdByName(trimmedOld);
+        try {
+          const groupId =
+            (await getGroupIdByName(trimmedOld)) ||
+            (await getGroupIdByName(trimmedNew));
           if (groupId) {
-            await deviceGroupApi.updateGroup(groupId, { name: trimmedNew });
+            const validUuids = deviceIds?.filter((id) =>
+              /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(id),
+            );
+            await deviceGroupApi.updateGroup(groupId, {
+              name: trimmedNew,
+              device_ids: validUuids,
+            });
+            await Promise.allSettled([
+              get().fetchGroupsFromBackend(),
+              get().fetchDevicesFromBackend(),
+            ]);
           }
-        })().catch((err) =>
-          console.log("[DeviceStore] Cập nhật nhóm backend failed:", err),
-        );
+        } catch (err) {
+          console.log("[DeviceStore] Cập nhật nhóm backend failed:", err);
+        }
       },
       removeDeviceGroup: (groupName) => {
         const target = groupName.trim();
@@ -387,9 +423,13 @@ export const useDeviceStore = create<DeviceState>()(
           ),
         }));
         (async () => {
+          const validUuids = deviceIds.filter((id) =>
+            /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(id),
+          );
+          if (validUuids.length === 0) return;
           const groupId = await getGroupIdByName(target);
           if (groupId) {
-            await deviceGroupApi.assignDevices(deviceIds, groupId);
+            await deviceGroupApi.assignDevices(validUuids, groupId);
           }
         })().catch((err) =>
           console.log(

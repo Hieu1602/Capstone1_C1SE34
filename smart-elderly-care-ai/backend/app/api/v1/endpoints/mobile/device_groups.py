@@ -177,7 +177,12 @@ async def assign_devices_to_group_body(
         raise HTTPException(status_code=400, detail="Thiếu group_id")
 
     group = await _get_group_or_404(db, UUID(str(raw_group_id)))
-    parsed_dev_ids = [UUID(str(d)) for d in device_ids]
+    parsed_dev_ids: List[UUID] = []
+    for d in device_ids:
+        try:
+            parsed_dev_ids.append(UUID(str(d)))
+        except (ValueError, TypeError, AttributeError):
+            pass
     await crud_device_group.assign_devices(db, group=group, device_ids=parsed_dev_ids)
     return {
         "message": f"Đã gán {len(parsed_dev_ids)} thiết bị vào nhóm '{group.name}'.",

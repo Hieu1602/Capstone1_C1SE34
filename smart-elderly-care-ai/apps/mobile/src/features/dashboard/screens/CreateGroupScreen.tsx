@@ -4,7 +4,7 @@
 
 import React, { useMemo, useState, useCallback } from 'react';
 import { useFocusEffect } from '@react-navigation/native';
-import { View, StyleSheet, TouchableOpacity, ScrollView } from 'react-native';
+import { View, StyleSheet, TouchableOpacity, ScrollView, ActivityIndicator } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
 import { Colors, Shadows } from '../../../theme/colors';
@@ -30,6 +30,7 @@ export default function CreateGroupScreen({ navigation }: any) {
   const [selectedDeviceIds, setSelectedDeviceIds] = useState<string[]>([]);
   const [createdGroupName, setCreatedGroupName] = useState<string>('');
   const [hasAttemptedProceed, setHasAttemptedProceed] = useState<boolean>(false);
+  const [isSubmitting, setIsSubmitting] = useState<boolean>(false);
 
   useFocusEffect(
     useCallback(() => {
@@ -176,7 +177,7 @@ export default function CreateGroupScreen({ navigation }: any) {
   };
 
   // Bước 3 -> Hoàn tất tạo nhóm
-  const handleConfirmCreate = () => {
+  const handleConfirmCreate = async () => {
     if (isNameEmpty || isDuplicateName || !hasSelectedDevices) {
       LocalizedAlert.alert(
         'Không thể tạo nhóm',
@@ -187,15 +188,17 @@ export default function CreateGroupScreen({ navigation }: any) {
     }
 
     setCreatedGroupName(trimmedName);
+    setIsSubmitting(true);
 
-    // 1. Thêm nhóm vào store
-    addDeviceGroup(trimmedName);
-
-    // 2. Gán các thiết bị đã chọn vào nhóm mới
-    assignDevicesToGroup(selectedDeviceIds, trimmedName);
-
-    // 3. Chuyển sang màn hình thành công
-    setCurrentStep('SUCCESS');
+    try {
+      await addDeviceGroup(trimmedName, selectedDeviceIds);
+      setCurrentStep('SUCCESS');
+    } catch (err: any) {
+      const msg = err?.response?.data?.detail || err?.message || 'Có lỗi xảy ra khi tạo nhóm trên máy chủ.';
+      LocalizedAlert.alert('Không thể tạo nhóm', String(msg));
+    } finally {
+      setIsSubmitting(false);
+    }
   };
 
   // Tạo thêm nhóm mới
@@ -724,17 +727,24 @@ export default function CreateGroupScreen({ navigation }: any) {
               <LocalizedText style={styles.cancelBtnText}>Quay lại xem</LocalizedText>
             </TouchableOpacity>
             <TouchableOpacity
-              style={styles.confirmActionBtn}
+              style={[styles.confirmActionBtn, isSubmitting && { opacity: 0.7 }]}
               onPress={handleConfirmCreate}
+              disabled={isSubmitting}
               activeOpacity={0.8}
             >
-              <Ionicons
-                name="checkmark-circle"
-                size={20}
-                color="#FFF"
-                style={{ marginRight: 6 }}
-              />
-              <LocalizedText style={styles.confirmActionBtnText}>Xác Nhận Tạo Nhóm</LocalizedText>
+              {isSubmitting ? (
+                <ActivityIndicator size="small" color="#FFF" style={{ marginRight: 6 }} />
+              ) : (
+                <Ionicons
+                  name="checkmark-circle"
+                  size={20}
+                  color="#FFF"
+                  style={{ marginRight: 6 }}
+                />
+              )}
+              <LocalizedText style={styles.confirmActionBtnText}>
+                {isSubmitting ? 'Đang tạo nhóm...' : 'Xác Nhận Tạo Nhóm'}
+              </LocalizedText>
             </TouchableOpacity>
           </View>
         </View>
