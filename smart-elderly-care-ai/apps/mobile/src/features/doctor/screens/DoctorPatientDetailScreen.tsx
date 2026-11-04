@@ -12,6 +12,7 @@ import {
   ActivityIndicator,
   StatusBar,
   RefreshControl,
+  Platform,
 } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
@@ -85,6 +86,7 @@ export default function DoctorPatientDetailScreen() {
 
   // 5. Modal ngưỡng y tế
   const [modalThresholdVisible, setModalThresholdVisible] = useState(false);
+  const [isSavingThreshold, setIsSavingThreshold] = useState(false);
   const [hrHigh, setHrHigh] = useState('120');
   const [hrLow, setHrLow] = useState('50');
   const [spo2Low, setSpo2Low] = useState('90');
@@ -331,16 +333,65 @@ export default function DoctorPatientDetailScreen() {
   };
 
   const handleSaveThresholds = async () => {
+    const high = parseInt(hrHigh, 10);
+    const low = parseInt(hrLow, 10);
+    const spo2 = parseInt(spo2Low, 10);
+
+    if (isNaN(high) || high < 60 || high > 220) {
+      const msg = 'Nhịp tim tối đa phải nằm trong khoảng từ 60 đến 220 bpm.';
+      Platform.OS === 'web' && typeof window !== 'undefined' ? window.alert(msg) : Alert.alert('Giá trị không hợp lệ', msg);
+      return;
+    }
+    if (isNaN(low) || low < 30 || low >= high) {
+      const msg = 'Nhịp tim tối thiểu phải từ 30 bpm và nhỏ hơn nhịp tim tối đa.';
+      Platform.OS === 'web' && typeof window !== 'undefined' ? window.alert(msg) : Alert.alert('Giá trị không hợp lệ', msg);
+      return;
+    }
+    if (isNaN(spo2) || spo2 < 70 || spo2 > 100) {
+      const msg = 'Ngưỡng SpO₂ tối thiểu phải từ 70% đến 100%.';
+      Platform.OS === 'web' && typeof window !== 'undefined' ? window.alert(msg) : Alert.alert('Giá trị không hợp lệ', msg);
+      return;
+    }
+
+    setIsSavingThreshold(true);
     try {
       await doctorApi.updateThresholds(patientId, {
-        hr_threshold_high: parseInt(hrHigh, 10),
-        hr_threshold_low: parseInt(hrLow, 10),
-        spo2_threshold_low: parseInt(spo2Low, 10),
+        hr_threshold_high: high,
+        hr_threshold_low: low,
+        spo2_threshold_low: spo2,
       });
-      setModalThresholdVisible(false);
-      Alert.alert('Cập nhật thành công', 'Đã lưu ngưỡng an toàn y tế và đồng bộ xuống Hub AI.');
+
+      if (detail) {
+        setDetail((prev) =>
+          prev
+            ? {
+                ...prev,
+                hr_threshold_high: high,
+                hr_threshold_low: low,
+                spo2_threshold_low: spo2,
+              }
+            : null
+        );
+      }
+
+      const title = 'Cập nhật ngưỡng thành công';
+      const msg = `Đã lưu ngưỡng an toàn y tế:\n• Nhịp tim: ${low} - ${high} bpm\n• SpO₂ tối thiểu: ${spo2}%\nDữ liệu đã đồng bộ tức thì xuống Hub AI.`;
+      if (Platform.OS === 'web' && typeof window !== 'undefined') {
+        window.alert(`${title}\n\n${msg}`);
+        setModalThresholdVisible(false);
+      } else {
+        Alert.alert(title, msg, [
+          { text: 'Đồng ý', onPress: () => setModalThresholdVisible(false) },
+        ]);
+      }
     } catch {
-      Alert.alert('Lỗi', 'Không thể cập nhật ngưỡng.');
+      if (Platform.OS === 'web' && typeof window !== 'undefined') {
+        window.alert('Lỗi: Không thể cập nhật ngưỡng an toàn y tế.');
+      } else {
+        Alert.alert('Lỗi', 'Không thể cập nhật ngưỡng an toàn y tế.');
+      }
+    } finally {
+      setIsSavingThreshold(false);
     }
   };
 
@@ -534,6 +585,7 @@ export default function DoctorPatientDetailScreen() {
         onChangeHrHigh={setHrHigh}
         onChangeHrLow={setHrLow}
         onChangeSpo2Low={setSpo2Low}
+        isSaving={isSavingThreshold}
         onSave={handleSaveThresholds}
         onClose={() => setModalThresholdVisible(false)}
         isDarkMode={isDarkMode}

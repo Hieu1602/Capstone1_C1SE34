@@ -272,6 +272,7 @@ export interface ThresholdsConfigModalProps {
   onChangeHrHigh: (val: string) => void;
   onChangeHrLow: (val: string) => void;
   onChangeSpo2Low: (val: string) => void;
+  isSaving?: boolean;
   onSave: () => void;
   onClose: () => void;
   isDarkMode: boolean;
@@ -286,6 +287,7 @@ export const ThresholdsConfigModal: React.FC<ThresholdsConfigModalProps> = ({
   onChangeHrHigh,
   onChangeHrLow,
   onChangeSpo2Low,
+  isSaving,
   onSave,
   onClose,
   isDarkMode,
@@ -316,7 +318,7 @@ export const ThresholdsConfigModal: React.FC<ThresholdsConfigModalProps> = ({
       onChangeText={onChangeSpo2Low}
     />
 
-    <SubmitBtn title="Lưu Cấu Hình" onPress={onSave} />
+    <SubmitBtn title="Lưu Cấu Hình" onPress={onSave} loading={isSaving} />
   </BaseModal>
 );
 

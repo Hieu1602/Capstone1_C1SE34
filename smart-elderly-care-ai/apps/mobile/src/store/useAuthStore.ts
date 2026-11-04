@@ -192,9 +192,11 @@ const createAuthStore: StateCreator<AuthStoreState, [], [['zustand/persist', Aut
         ? 'doctor'
         : profile.role?.toLowerCase() === 'admin'
           ? 'admin'
-          : profile.role
-            ? 'user'
-            : state.userRole,
+          : profile.role?.toLowerCase() === 'member'
+            ? 'member'
+            : profile.role
+              ? 'user'
+              : state.userRole,
       household_id: profile.household_id !== undefined ? profile.household_id : state.household_id,
       viewRole: profile.role?.toLowerCase() === 'doctor' || profile.role?.includes('Bác sĩ')
         ? 'DOCTOR'
@@ -275,6 +277,13 @@ const createAuthStore: StateCreator<AuthStoreState, [], [['zustand/persist', Aut
       usePatientStore.getState().resetPatientStore?.();
       useHealthStore.getState().resetHealthStore?.();
       useAlertStore.getState().resetAlertStore?.();
+      AsyncStorage.multiRemove([
+        'auth-storage',
+        'device-store',
+        'patient-store',
+        'health-store',
+        'alert-store',
+      ]).catch(() => {});
     } catch {}
     set({
       accessToken: null,

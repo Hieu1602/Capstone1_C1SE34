@@ -131,7 +131,13 @@ export default function HomeScreen({ navigation }: any) {
     (i) => !i.is_acknowledged && (i.alert_level === 'CRITICAL' || i.alert_type === 'FALL_DETECTED')
   );
   const activeEmergency = criticalIncidents[0];
-  const hasEmergency = Boolean(activeEmergency || currentVitals.fall_detected);
+  const hasEmergency = Boolean(activeEmergency || (currentVitals.fall_detected && criticalIncidents.length > 0));
+
+  useEffect(() => {
+    if (criticalIncidents.length === 0 && currentVitals.fall_detected) {
+      useVitalStore.getState().setVitals({ fall_detected: false });
+    }
+  }, [criticalIncidents.length, currentVitals.fall_detected]);
   const pendingAppointmentNotice = incidents.find(
     (i) => !i.is_acknowledged && i.alert_type === 'APPOINTMENT_SCHEDULED'
   );
@@ -161,29 +167,28 @@ export default function HomeScreen({ navigation }: any) {
   };
 
   const handlePressSnoozeButton = () => {
-    if (isSnoozeActive) {
-      Alert.alert(
-        'Chuông báo động đang tắt',
-        'Bạn muốn bật lại chuông báo động hay tùy chỉnh thời gian tạm tắt?',
-        [
-          { text: 'Đóng', style: 'cancel' },
-          { text: '🔔 Bật lại ngay', onPress: handleCancelSnooze },
-          {
-            text: '⚙️ Cài đặt lại',
-            onPress: () => {
-              setSelectedDuration(alarmSnooze?.durationMinutes || 15);
-              setSelectedMode(alarmSnooze?.mode || 'VIBRATE');
-              setSyncAllFamily(alarmSnooze?.syncAll ?? true);
-              setSnoozeModalVisible(true);
-            },
-          },
-        ]
-      );
+    setSelectedDuration(alarmSnooze?.durationMinutes || 15);
+    setSelectedMode(alarmSnooze?.mode || 'VIBRATE');
+    setSyncAllFamily(alarmSnooze?.syncAll ?? true);
+    setSnoozeModalVisible(true);
+  };
+
+  const handleNavigateToEmergency = () => {
+    if (activeEmergency) {
+      navigation.navigate('IncidentDetailScreen', {
+        incidentId: activeEmergency.id,
+        id: activeEmergency.id,
+        incident: activeEmergency,
+        alert_type: activeEmergency.alert_type,
+        alert_level: activeEmergency.alert_level || 'CRITICAL',
+        message: activeEmergency.message,
+        confidence: activeEmergency.confidence,
+        thumbnail_url: activeEmergency.thumbnail_url ?? null,
+        video_clip_url: activeEmergency.video_clip_url ?? null,
+        is_acknowledged: activeEmergency.is_acknowledged ?? false,
+      });
     } else {
-      setSelectedDuration(alarmSnooze?.durationMinutes || 15);
-      setSelectedMode(alarmSnooze?.mode || 'VIBRATE');
-      setSyncAllFamily(alarmSnooze?.syncAll ?? true);
-      setSnoozeModalVisible(true);
+      navigation.navigate('Alerts');
     }
   };
 
@@ -352,16 +357,7 @@ export default function HomeScreen({ navigation }: any) {
           <TouchableOpacity
             style={styles.emergencyBanner}
             activeOpacity={0.9}
-            onPress={() => {
-              if (activeEmergency) {
-                navigation.navigate('EventDetail', {
-                  incidentId: activeEmergency.id, id: activeEmergency.id, alert_type: activeEmergency.alert_type,
-                  alert_level: activeEmergency.alert_level || 'CRITICAL', message: activeEmergency.message,
-                  confidence: activeEmergency.confidence, thumbnail_url: activeEmergency.thumbnail_url ?? null,
-                  video_clip_url: activeEmergency.video_clip_url ?? null, is_acknowledged: activeEmergency.is_acknowledged ?? false,
-                });
-              } else { navigation.navigate('Alerts'); }
-            }}
+            onPress={handleNavigateToEmergency}
           >
             <View style={styles.emergencyBannerHeader}>
               <View style={styles.emergencySirenPulse}><Ionicons name="warning" size={20} color="#FFF" /></View>
@@ -371,10 +367,14 @@ export default function HomeScreen({ navigation }: any) {
                   {activeEmergency?.message || 'Phát hiện sự cố té ngã (YOLO-Pose AI). Cần kiểm tra video và xác nhận xử lý ngay!'}
                 </Text>
               </View>
-              <View style={styles.emergencyActionBtn}>
+              <TouchableOpacity
+                style={styles.emergencyActionBtn}
+                onPress={handleNavigateToEmergency}
+                activeOpacity={0.8}
+              >
                 <Text style={styles.emergencyActionBtnText}>Xem & Xử lý</Text>
                 <Ionicons name="chevron-forward" size={14} color="#DC2626" />
-              </View>
+              </TouchableOpacity>
             </View>
           </TouchableOpacity>
         ) : hasLinkedHouse && !isUserEmptyMember ? (

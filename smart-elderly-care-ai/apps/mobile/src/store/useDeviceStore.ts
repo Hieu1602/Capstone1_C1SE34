@@ -110,6 +110,8 @@ export interface IoTDeviceItem {
   location?: string;
   streamUrl?: string;
   macAddress?: string;
+  elderly_id?: string | number;
+  wearer_name?: string;
 }
 interface DeviceState {
   activeDevice: Device | null;
@@ -421,6 +423,8 @@ export const useDeviceStore = create<DeviceState>()(
                 location: dev.location || "Chưa nhóm",
                 streamUrl: dev.config?.stream_url || undefined,
                 macAddress: dev.mac_address || undefined,
+                elderly_id: dev.elderly_id,
+                wearer_name: dev.wearer_name,
               };
             });
             set({ iotDevices: mapped });

@@ -21,6 +21,7 @@ class IncidentOut(BaseModel):
     thumbnail_url: Optional[str] = None
     is_acknowledged: bool
     acknowledged_by: Optional[uuid.UUID] = None
+    acknowledged_by_name: Optional[str] = None
     acknowledged_at: Optional[datetime] = None
     notes: Optional[str] = None
     created_at: datetime

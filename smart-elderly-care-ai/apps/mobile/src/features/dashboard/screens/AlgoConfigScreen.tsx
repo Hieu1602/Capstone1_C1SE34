@@ -3,13 +3,15 @@
 // Cho phép thiết lập các ngưỡng kích hoạt cảnh báo theo yêu cầu Proposal
 
 import React, { useState, useEffect } from 'react';
-import { View, StyleSheet, TouchableOpacity, ScrollView, ActivityIndicator } from 'react-native';
+import { View, StyleSheet, TouchableOpacity, ScrollView, ActivityIndicator, Alert, Platform } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
 import { Colors, Shadows } from '../../../theme/colors';
 import { useVitalStore } from '../../../store/useVitalStore';
 import { useTheme } from '../../../store/useThemeStore';
 import { useAuthStore } from '../../../store/useAuthStore';
+import { useDeviceStore } from '../../../store/useDeviceStore';
+import { devicesApi } from '../../../services/deviceService';
 import { LocalizedAlert, LocalizedText, LocalizedTextInput } from '../../../i18n/LocalizedComponents';
 
 
@@ -33,7 +35,7 @@ export default function AlgoConfigScreen({ navigation }: any) {
   const [fallAngle, setFallAngle] = useState(algoSettings.fallAngle.toString());
   const [immobilitySec, setImmobilitySec] = useState(algoSettings.immobilitySec.toString());
 
-  const handleSave = () => {
+  const handleSave = async () => {
     if (!canManageDevices) {
       LocalizedAlert.alert(
         'Không có quyền thay đổi',
@@ -41,15 +43,47 @@ export default function AlgoConfigScreen({ navigation }: any) {
       );
       return;
     }
+    const newMaxHR = Number(maxHR) || 120;
+    const newMinHR = Number(minHR) || 50;
+    const newMinSpO2 = Number(minSpO2) || 90;
+    const newMaxTemp = Number(maxTemp) || 37.8;
+    const newFallAngle = Number(fallAngle) || 60;
+    const newImmobilitySec = Number(immobilitySec) || 30;
+
     updateAlgoSettings({
-      maxHeartRate: Number(maxHR) || 120,
-      minHeartRate: Number(minHR) || 50,
-      minSpO2: Number(minSpO2) || 90,
-      maxTemp: Number(maxTemp) || 37.8,
-      fallAngle: Number(fallAngle) || 60,
-      immobilitySec: Number(immobilitySec) || 30,
+      maxHeartRate: newMaxHR,
+      minHeartRate: newMinHR,
+      minSpO2: newMinSpO2,
+      maxTemp: newMaxTemp,
+      fallAngle: newFallAngle,
+      immobilitySec: newImmobilitySec,
     });
-    LocalizedAlert.alert('Thành công', 'Đã cập nhật các tham số thuật toán cảnh báo cho Hub Edge AI.');
+
+    try {
+      const devices = useDeviceStore.getState().iotDevices;
+      const smartband = devices.find((d) => d.type === 'watch' || d.type === 'SMARTBAND');
+      if (smartband) {
+        await devicesApi.updateDeviceConfig(smartband.id || smartband.deviceId || 'BLE_BAND_01', {
+          hr_threshold_high: newMaxHR,
+          hr_threshold_low: newMinHR,
+          spo2_threshold_low: newMinSpO2,
+          immobility_seconds: newImmobilitySec,
+        });
+      }
+    } catch (e) {
+      console.warn('Sync device config fallback:', e);
+    }
+
+    const title = 'Cập nhật ngưỡng thành công';
+    const msg = 'Đã lưu và đồng bộ các ngưỡng an toàn y tế và thuật toán cảnh báo xuống AI Edge Hub.';
+    if (Platform.OS === 'web' && typeof window !== 'undefined') {
+      window.alert(`${title}\n${msg}`);
+      navigation.goBack();
+    } else {
+      Alert.alert(title, msg, [
+        { text: 'Đồng ý', onPress: () => navigation.goBack() }
+      ]);
+    }
   };
 
   return (

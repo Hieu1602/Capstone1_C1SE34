@@ -5,6 +5,7 @@ Vị trí: backend/app/api/v1/endpoints/patients.py
 """
 
 from typing import Any, Dict, List, Optional
+from datetime import datetime
 from fastapi import APIRouter, Depends, HTTPException, Query, status, UploadFile, File
 from sqlalchemy.ext.asyncio import AsyncSession
 
@@ -21,6 +22,54 @@ from app.schemas.patient import (
 from app.schemas.vital import VitalOut
 
 router = APIRouter()
+
+
+@router.get("", response_model=List[Dict[str, Any]])
+@router.get("/", response_model=List[Dict[str, Any]], include_in_schema=False)
+async def list_patients(
+    current_user: Optional[User] = Depends(get_current_user_optional),
+    db: AsyncSession = Depends(get_db),
+):
+    """
+    Lấy danh sách người cao tuổi trong nhà để gán thiết bị hoặc theo dõi sức khỏe.
+    """
+    from app.models.elderly_profile import ElderlyProfile
+    from sqlalchemy import select
+
+    house_id = None
+    if current_user:
+        house = await crud_house.get_or_create_default_house(db, owner_id=current_user.id)
+        if house:
+            house_id = house.id
+
+    query = select(ElderlyProfile)
+    if house_id:
+        query = query.where(ElderlyProfile.house_id == house_id)
+    query = query.order_by(ElderlyProfile.created_at.asc())
+
+    res = await db.execute(query)
+    profiles = list(res.scalars().all())
+
+    if not profiles and house_id:
+        default_p = await crud_elderly.get_or_create_default(db, house_id=house_id)
+        profiles = [default_p]
+
+    current_year = datetime.now().year
+    out = []
+    for p in profiles:
+        calc_age = (current_year - p.birth_year) if p.birth_year else 75
+        out.append({
+            "id": str(p.id),
+            "elderly_id": str(p.id),
+            "full_name": p.full_name or "Cụ Nguyễn Văn An",
+            "name": p.full_name or "Cụ Nguyễn Văn An",
+            "birth_year": p.birth_year or (current_year - 75),
+            "age": calc_age,
+            "gender": p.gender or "Nam",
+            "avatar_url": p.avatar_url,
+            "emergency_contact_phone": p.emergency_contact_phone or "",
+        })
+    return out
 
 
 @router.get("/{patient_id}/medical-record", response_model=PatientMedicalRecordOut)
@@ -103,6 +152,23 @@ async def update_patient_medical_record(
         patient_id_or_serial=patient_id,
         update_in=update_in,
         house_id=house_id,
+    )
+
+
+@router.get("/{patient_id}/vitals", response_model=List[VitalOut])
+async def get_patient_vitals(
+    patient_id: str,
+    target_date: Optional[str] = Query(None, description="Ngày lọc (YYYY-MM-DD)"),
+    limit: int = Query(100, ge=1, le=500),
+    current_user: Optional[User] = Depends(get_current_user_optional),
+    db: AsyncSession = Depends(get_db),
+):
+    """Lấy dữ liệu sinh hiệu chuỗi thời gian của bệnh nhân / người cao tuổi theo ngày."""
+    return await crud_vital.get_history(
+        db=db,
+        device_id="BLE_BAND_001",
+        limit=limit,
+        target_date=target_date,
     )
 
 

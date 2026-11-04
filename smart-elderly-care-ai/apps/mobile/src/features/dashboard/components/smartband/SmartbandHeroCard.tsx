@@ -11,6 +11,7 @@ interface SmartbandHeroCardProps {
   isFinding: boolean;
   onSyncNow: () => void;
   onFindBand: () => void;
+  onAssignWearer?: () => void;
   colors?: any;
   isDarkMode?: boolean;
 }
@@ -22,6 +23,7 @@ export const SmartbandHeroCard: React.FC<SmartbandHeroCardProps> = ({
   isFinding,
   onSyncNow,
   onFindBand,
+  onAssignWearer,
   colors = {},
   isDarkMode = false,
 }) => {
@@ -52,12 +54,26 @@ export const SmartbandHeroCard: React.FC<SmartbandHeroCardProps> = ({
             </View>
           </View>
 
-          <LocalizedText style={[styles.wearerInfoText, isDarkMode && { color: colors.textSecondary }]}>
-            <Ionicons name="person" size={14} color="#64748B" /> Người đeo:{' '}
-            <LocalizedText style={{ fontWeight: '700', color: colors.textPrimary }}>
-              {deviceParam?.wearer_name || 'Chưa cập nhật'}
+          <View style={styles.wearerRow}>
+            <LocalizedText style={[styles.wearerInfoText, isDarkMode && { color: colors.textSecondary }]}>
+              <Ionicons name="person" size={14} color="#64748B" /> Người đeo:{' '}
+              <LocalizedText style={{ fontWeight: '700', color: colors.textPrimary }}>
+                {deviceParam?.wearer_name || 'Chưa cập nhật'}
+              </LocalizedText>
             </LocalizedText>
-          </LocalizedText>
+            {onAssignWearer && (
+              <TouchableOpacity
+                style={styles.assignWearerBtn}
+                onPress={onAssignWearer}
+                activeOpacity={0.7}
+              >
+                <Ionicons name="person-add-outline" size={12} color="#059669" />
+                <LocalizedText style={styles.assignWearerBtnText}>
+                  {deviceParam?.wearer_name ? 'Đổi người' : 'Gán người'}
+                </LocalizedText>
+              </TouchableOpacity>
+            )}
+          </View>
 
           <LocalizedText style={[styles.locationInfoText, isDarkMode && { color: colors.textSecondary }]}>
             <Ionicons name="location" size={14} color="#64748B" /> Vị trí:{' '}
@@ -224,10 +240,33 @@ const styles = StyleSheet.create({
     color: '#15803D',
     letterSpacing: 0.5,
   },
+  wearerRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    marginBottom: 4,
+    gap: 8,
+  },
   wearerInfoText: {
     fontSize: 12,
     color: '#475569',
-    marginBottom: 3,
+    flexShrink: 1,
+  },
+  assignWearerBtn: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 4,
+    backgroundColor: '#ECFDF5',
+    borderWidth: 1,
+    borderColor: '#A7F3D0',
+    paddingHorizontal: 8,
+    paddingVertical: 3,
+    borderRadius: 6,
+  },
+  assignWearerBtnText: {
+    fontSize: 10.5,
+    fontWeight: '700',
+    color: '#059669',
   },
   locationInfoText: {
     fontSize: 12,

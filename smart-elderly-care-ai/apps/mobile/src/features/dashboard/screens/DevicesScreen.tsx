@@ -211,7 +211,22 @@ export default function DevicesScreen({ navigation }: any) {
     setEditNewGroupName(target);
 
     const devIdsInGroup = iotDevices
-      .filter((d) => d.location?.toLowerCase() === target.toLowerCase())
+      .filter((d) => d.location?.trim().toLowerCase() === target.trim().toLowerCase())
+      .map((d) => d.id);
+    setEditSelectedDeviceIds(devIdsInGroup);
+    setEditDeviceFilter('Tất cả');
+    setEditAttempted(false);
+    setShowEditGroupModal(true);
+  };
+
+  // Mở trực tiếp modal để gán thiết bị vào nhóm
+  const handleAddDeviceToGroup = (targetGroup: string) => {
+    setSelectedGroupForAction(targetGroup);
+    setEditOldGroupName(targetGroup);
+    setEditNewGroupName(targetGroup);
+
+    const devIdsInGroup = iotDevices
+      .filter((d) => d.location?.trim().toLowerCase() === targetGroup.trim().toLowerCase())
       .map((d) => d.id);
     setEditSelectedDeviceIds(devIdsInGroup);
     setEditDeviceFilter('Tất cả');
@@ -466,7 +481,7 @@ export default function DevicesScreen({ navigation }: any) {
               : groups.filter((g) => g === selectedGroupFilter)
             ).map((groupName) => {
               const devicesInGroup = iotDevices.filter(
-                (dev) => dev.location?.toLowerCase() === groupName.toLowerCase()
+                (dev) => dev.location?.trim().toLowerCase() === groupName.trim().toLowerCase()
               );
 
               return (
@@ -476,6 +491,7 @@ export default function DevicesScreen({ navigation }: any) {
                   devicesInGroup={devicesInGroup}
                   onDevicePress={handleDevicePress}
                   onOpenGroupActionMenu={handleOpenGroupActionMenu}
+                  onAddDeviceToGroup={handleAddDeviceToGroup}
                   isDarkMode={isDarkMode}
                   colors={colors}
                 />

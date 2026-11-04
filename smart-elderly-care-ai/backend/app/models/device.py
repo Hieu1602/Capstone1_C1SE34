@@ -107,6 +107,12 @@ class Device(Base):
     group: Mapped["DeviceGroup | None"] = relationship("DeviceGroup", back_populates="devices")
     elderly: Mapped["ElderlyProfile | None"] = relationship("ElderlyProfile", back_populates="devices")
 
+    @property
+    def wearer_name(self) -> str | None:
+        if self.elderly and self.elderly.full_name:
+            return self.elderly.full_name
+        return None
+
     # Cấu hình chuyên sâu 1 - 1
     config: Mapped["DeviceConfig | None"] = relationship(
         "DeviceConfig", back_populates="device", uselist=False, cascade="all, delete-orphan", lazy="selectin"

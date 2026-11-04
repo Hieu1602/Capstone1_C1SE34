@@ -266,7 +266,7 @@ export default function DoctorHomeScreen() {
             <View style={styles.bannerLeftContent}>
               <LocalizedText style={styles.emptyCardTitle}>Hôm nay không có lịch khám nào</LocalizedText>
               <LocalizedText style={styles.emptyCardSub}>
-                Bác sĩ có thể chủ động lên lịch thăm khám định kỳ cho các cụ.
+                Bác sĩ có thể chủ động lên lịch thăm khám định kỳ cho các bệnh nhân.
               </LocalizedText>
 
               <TouchableOpacity
@@ -275,7 +275,7 @@ export default function DoctorHomeScreen() {
                 onPress={() => navigation.navigate('DoctorAppointments')}
               >
                 <Ionicons name="add-circle" size={16} color="#2563EB" style={{ marginRight: 4 }} />
-                <LocalizedText style={styles.btnWhiteAddScheduleText}>+ Đặt lịch mới</LocalizedText>
+                <LocalizedText style={styles.btnWhiteAddScheduleText}> Đặt lịch mới</LocalizedText>
               </TouchableOpacity>
             </View>
 
@@ -320,7 +320,7 @@ export default function DoctorHomeScreen() {
               Chưa có bệnh nhân nào phụ trách
             </LocalizedText>
             <LocalizedText style={[styles.emptyPatientsSub, { color: isDarkMode ? '#94A3B8' : '#64748B' }]}>
-              Danh sách sẽ hiển thị khi bạn được phân công phụ trách hồ sơ người cao tuổi.
+              Danh sách sẽ hiển thị khi bạn được phân công phụ trách hồ sơ bệnh nhân.
             </LocalizedText>
           </View>
         ) : (

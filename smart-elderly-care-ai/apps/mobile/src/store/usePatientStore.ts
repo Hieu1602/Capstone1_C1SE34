@@ -21,6 +21,7 @@ export interface MedicalConditionItem {
 }
 
 export interface PatientMedicalRecord {
+  id?: string | number;
   patient_id: number;
   name: string;
   birth_year: string;

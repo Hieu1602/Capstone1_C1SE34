@@ -14,6 +14,7 @@ import { Ionicons } from '@expo/vector-icons';
 import { incidentsApi } from '../../../services/api';
 import { useTheme } from '../../../store/useThemeStore';
 import { useAlertStore, useAuthStore } from '../../../store';
+import { useVitalStore } from '../../../store/useVitalStore';
 import type { Incident } from '../../../store/useAlertStore';
 
 let Video: any = null;
@@ -38,13 +39,44 @@ const ALERT_TYPE_LABELS: Record<string, string> = {
 
 export default function IncidentDetailScreen({ route, navigation }: any) {
   const { isDarkMode, colors } = useTheme();
-  const { acknowledgeIncident, setSirenActive, incidents, fetchNotifications } = useAlertStore();
-  const { userName } = useAuthStore();
-  const operatorName = userName || 'Người nhà';
+  const { acknowledgeIncident, reopenIncident, setSirenActive, incidents, fetchNotifications } = useAlertStore();
+  const { userName, userId } = useAuthStore();
+  const operatorName = userName || 'Người chăm sóc';
 
   const params = route.params ?? {};
   const incidentId = params.incidentId ?? params.id;
   const [incident, setIncident] = useState<Incident | null>(null);
+  const [isReopening, setIsReopening] = useState(false);
+
+  const getHandlerDisplayName = (
+    inc: Incident | null,
+    currentUserName?: string | null,
+    currentUserId?: string | number | null
+  ): string => {
+    if (!inc) return currentUserName || 'Người chăm sóc';
+    if (inc.acknowledged_by_name && inc.acknowledged_by_name.trim() !== '') {
+      return inc.acknowledged_by_name;
+    }
+    const raw = inc.acknowledged_by;
+    if (!raw || String(raw).trim() === '') {
+      return currentUserName || 'Người chăm sóc';
+    }
+    const rawStr = String(raw).trim();
+    const isUUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(rawStr);
+    if (isUUID) {
+      if (
+        currentUserId &&
+        rawStr.toLowerCase() === String(currentUserId).toLowerCase() &&
+        currentUserName
+      ) {
+        return currentUserName;
+      }
+      return currentUserName || `Người chăm sóc (${rawStr.slice(0, 8)})`;
+    }
+    return rawStr;
+  };
+
+  const handlerDisplayName = getHandlerDisplayName(incident, userName, userId);
   const [loading, setLoading] = useState(true);
   const [isProcessing, setIsProcessing] = useState(false);
   const [showSuccessToast, setShowSuccessToast] = useState(false);
@@ -96,12 +128,17 @@ export default function IncidentDetailScreen({ route, navigation }: any) {
     } finally { setLoading(false); }
   };
 
-  const handleAcknowledge = async () => {
+  const performAcknowledge = async () => {
     if (!incident || incident.is_acknowledged || isProcessing) return;
     setIsProcessing(true);
     try {
       try { if (Platform.OS !== 'web') Vibration.cancel(); } catch (e) {}
       setSirenActive(false);
+
+      // Tắt cờ té ngã trong vital store
+      try {
+        useVitalStore.getState().setVitals({ fall_detected: false, acoustic_status: 'Bình thường' });
+      } catch (e) {}
 
       try { await incidentsApi.acknowledge(incident.id, 'Đã kiểm tra an toàn'); }
       catch (apiErr) { console.warn('Backend API acknowledge fallback:', apiErr); }
@@ -110,7 +147,10 @@ export default function IncidentDetailScreen({ route, navigation }: any) {
       try { fetchNotifications(); } catch (e) {}
 
       setIncident((prev) => prev ? {
-        ...prev, is_acknowledged: true, acknowledged_by: operatorName,
+        ...prev,
+        is_acknowledged: true,
+        acknowledged_by: operatorName,
+        acknowledged_by_name: operatorName,
         acknowledged_at: new Date().toISOString(),
       } : null);
 
@@ -123,14 +163,104 @@ export default function IncidentDetailScreen({ route, navigation }: any) {
       } else {
         Alert.alert(alertTitle, alertMsg, [{ text: 'Đồng ý' }]);
       }
-
-      setTimeout(() => { if (navigation.canGoBack()) navigation.goBack(); }, 2000);
     } catch (error) {
       console.error('Lỗi khi xác nhận xử lý sự cố:', error);
       if (Platform.OS === 'web' && typeof window !== 'undefined') {
         window.alert('Thông báo: Đã lưu trạng thái xử lý an toàn.');
       } else { Alert.alert('Thông báo', 'Đã lưu trạng thái xử lý an toàn.'); }
     } finally { setIsProcessing(false); }
+  };
+
+  const handleAcknowledge = () => {
+    if (!incident || incident.is_acknowledged || isProcessing) return;
+
+    const confirmTitle = 'Xác nhận an toàn';
+    const confirmMsg = 'Bạn xác nhận người cao tuổi đã an toàn và muốn tắt cảnh báo này?';
+
+    if (Platform.OS === 'web' && typeof window !== 'undefined') {
+      if (window.confirm(`${confirmTitle}\n\n${confirmMsg}`)) {
+        performAcknowledge();
+      }
+    } else {
+      Alert.alert(
+        confirmTitle,
+        confirmMsg,
+        [
+          { text: 'Hủy', style: 'cancel' },
+          { text: 'Đồng ý', onPress: performAcknowledge },
+        ]
+      );
+    }
+  };
+
+  const performReopen = async () => {
+    if (!incident || !incident.is_acknowledged || isReopening) return;
+    setIsReopening(true);
+    try {
+      try {
+        await incidentsApi.reopen(incident.id, 'Chưa an toàn - Người nhà đã mở lại cảnh báo khẩn cấp');
+      } catch (apiErr) {
+        console.warn('Backend API reopen fallback:', apiErr);
+      }
+
+      reopenIncident(incident.id, 'Chưa an toàn - Người nhà đã mở lại cảnh báo khẩn cấp');
+
+      // Kích hoạt lại trạng thái báo động khẩn cấp
+      if (incident.alert_level === 'CRITICAL' || incident.alert_type === 'FALL_DETECTED') {
+        setSirenActive(true);
+        try {
+          useVitalStore.getState().setVitals({
+            fall_detected: incident.alert_type === 'FALL_DETECTED',
+          });
+        } catch (e) {}
+      }
+
+      try { fetchNotifications(); } catch (e) {}
+
+      setIncident((prev) => prev ? {
+        ...prev,
+        is_acknowledged: false,
+        acknowledged_by: undefined,
+        acknowledged_by_name: undefined,
+        acknowledged_at: undefined,
+      } : null);
+
+      setShowSuccessToast(false);
+
+      const title = '🚨 ĐÃ MỞ LẠI CẢNH BÁO KHẨN CẤP!';
+      const msg = '• Trạng thái: Chưa xử lý (PENDING)\n• Còi hú & Banner cảnh báo khẩn cấp ngoài màn hình chính đã được kích hoạt lại để gia đình tiếp tục ứng cứu.';
+      if (Platform.OS === 'web' && typeof window !== 'undefined') {
+        window.alert(`${title}\n\n${msg}`);
+      } else {
+        Alert.alert(title, msg, [{ text: 'Đã hiểu' }]);
+      }
+    } catch (err) {
+      console.error('Lỗi khi mở lại cảnh báo:', err);
+    } finally {
+      setIsReopening(false);
+    }
+  };
+
+  const handleReopen = () => {
+    if (!incident || !incident.is_acknowledged || isReopening) return;
+
+    const confirmTitle = 'Mở lại cảnh báo khẩn cấp';
+    const confirmMsg = 'Bạn muốn kích hoạt lại cảnh báo này vì người cao tuổi vẫn chưa an toàn? Còi hú và thông báo sẽ được bật lại.';
+
+    if (Platform.OS === 'web' && typeof window !== 'undefined') {
+      if (window.confirm(`${confirmTitle}\n\n${confirmMsg}`)) {
+        performReopen();
+      }
+    } else {
+      Alert.alert(
+        confirmTitle,
+        confirmMsg,
+        [
+          { text: 'Hủy', style: 'cancel' },
+          { text: 'Mở lại cảnh báo', style: 'destructive', onPress: performReopen },
+        ]
+      );
+    }
   };
 
   if (loading) {
@@ -182,7 +312,7 @@ export default function IncidentDetailScreen({ route, navigation }: any) {
           ) : (
             <View style={[styles.statusBadge, { backgroundColor: isDarkMode ? 'rgba(34, 197, 94, 0.15)' : '#ECFDF5', borderColor: '#22C55E' }]}>
               <Ionicons name="checkmark-circle" size={14} color="#16A34A" />
-              <Text style={[styles.statusBadgeText, { color: isDarkMode ? '#86EFAC' : '#16A34A' }]}>ĐÃ XỬ LÝ (Bởi {incident.acknowledged_by || operatorName})</Text>
+              <Text style={[styles.statusBadgeText, { color: isDarkMode ? '#86EFAC' : '#16A34A' }]}>ĐÃ XỬ LÝ (Bởi {handlerDisplayName})</Text>
             </View>
           )}
           <View style={[styles.levelBadge, { backgroundColor: `${levelColor}20`, borderColor: levelColor }]}>
@@ -224,7 +354,7 @@ export default function IncidentDetailScreen({ route, navigation }: any) {
               <View style={[styles.rowDivider, { backgroundColor: colors.border }]} />
               <View style={styles.row}>
                 <Text style={[styles.rowLabel, { color: colors.textMuted }]}>Người xử lý</Text>
-                <Text style={[styles.rowValue, { color: '#16A34A', fontWeight: '700' }]}>{incident.acknowledged_by || operatorName}</Text>
+                <Text style={[styles.rowValue, { color: '#16A34A', fontWeight: '700' }]}>{handlerDisplayName}</Text>
               </View>
               {incident.acknowledged_at && (
                 <View style={styles.row}>
@@ -349,8 +479,30 @@ export default function IncidentDetailScreen({ route, navigation }: any) {
           <View style={{ gap: 10, marginTop: 8 }}>
             <View style={[styles.ackBtnDisabled, { backgroundColor: isDarkMode ? '#1E293B' : '#ECFDF5', borderColor: isDarkMode ? '#059669' : '#22C55E' }]}>
               <Ionicons name="checkmark-circle" size={22} color="#16A34A" />
-              <Text style={[styles.ackBtnDisabledText, { color: isDarkMode ? '#86EFAC' : '#15803D' }]}>Đã xử lý thành công (Bởi {incident.acknowledged_by || operatorName})</Text>
+              <Text style={[styles.ackBtnDisabledText, { color: isDarkMode ? '#86EFAC' : '#15803D' }]}>Đã xử lý thành công (Bởi {handlerDisplayName})</Text>
             </View>
+
+            {/* Nút Mở lại cảnh báo (Chưa an toàn) khi bấm nhầm đã xử lý */}
+            <TouchableOpacity
+              style={[
+                styles.reopenBtn,
+                isDarkMode && { backgroundColor: '#450A0A25', borderColor: '#DC2626' },
+                isReopening && { opacity: 0.7 },
+              ]}
+              onPress={handleReopen}
+              disabled={isReopening}
+              activeOpacity={0.8}
+            >
+              {isReopening ? (
+                <ActivityIndicator size="small" color="#DC2626" />
+              ) : (
+                <Ionicons name="alert-circle" size={20} color="#DC2626" />
+              )}
+              <Text style={styles.reopenBtnText}>
+                {isReopening ? 'Đang mở lại...' : 'Mở lại cảnh báo (Chưa an toàn)'}
+              </Text>
+            </TouchableOpacity>
+
             <TouchableOpacity style={[styles.returnBtn, { backgroundColor: isDarkMode ? colors.card : '#F1F5F9', borderColor: colors.border }]} onPress={() => navigation.goBack()} activeOpacity={0.7}>
               <Ionicons name="arrow-back" size={18} color={colors.textPrimary} />
               <Text style={[styles.returnBtnText, { color: colors.textPrimary }]}>Quay lại màn hình chính</Text>
@@ -418,4 +570,20 @@ const styles = StyleSheet.create({
   successToastSubtitle: { fontSize: 12, marginTop: 2 },
   returnBtn: { flexDirection: 'row', alignItems: 'center', justifyContent: 'center', padding: 14, borderRadius: 12, borderWidth: 1, gap: 8 },
   returnBtnText: { fontWeight: '600', fontSize: 15 },
+  reopenBtn: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    padding: 14,
+    borderRadius: 12,
+    borderWidth: 1.5,
+    borderColor: '#EF4444',
+    backgroundColor: '#FEF2F2',
+    gap: 8,
+  },
+  reopenBtnText: {
+    color: '#DC2626',
+    fontWeight: '700',
+    fontSize: 15,
+  },
 });

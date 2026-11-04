@@ -129,21 +129,19 @@ class CRUDElderly:
 
 
         if not profile and house_id:
-
             res_house = await db.execute(
-
                 select(ElderlyProfile)
-
                 .options(selectinload(ElderlyProfile.devices))
-
                 .where(ElderlyProfile.house_id == house_id)
-
             )
-
             profile = res_house.scalar_one_or_none()
-
         elif not profile:
-            profile = None
+            res_first = await db.execute(
+                select(ElderlyProfile)
+                .options(selectinload(ElderlyProfile.devices))
+                .limit(1)
+            )
+            profile = res_first.scalar_one_or_none()
 
 
 
@@ -282,11 +280,10 @@ class CRUDElderly:
 
 
         if not profile and house_id:
-
             profile = await self.get_or_create_default(db, house_id)
-
         elif not profile:
-            profile = None
+            res_first = await db.execute(select(ElderlyProfile).limit(1))
+            profile = res_first.scalar_one_or_none()
 
 
 
@@ -411,11 +408,10 @@ class CRUDElderly:
 
 
         if not profile and house_id:
-
             profile = await self.get_or_create_default(db, house_id)
-
         elif not profile:
-            profile = None
+            res_first = await db.execute(select(ElderlyProfile).limit(1))
+            profile = res_first.scalar_one_or_none()
 
 
 

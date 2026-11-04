@@ -7,7 +7,7 @@
 import React, { useState, useEffect } from 'react';
 import {
   View, Text, StyleSheet, TouchableOpacity, ScrollView, TextInput,
-  Modal, Pressable, Alert, Linking, Platform, Image,
+  Modal, Pressable, Alert, Linking, Platform, Image, ActivityIndicator,
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
@@ -73,8 +73,17 @@ export default function PatientMedicalRecordScreen({ navigation }: any) {
   const [condDraft, setCondDraft] = useState({ name: '', note: '' });
   const [isEditPatientVisible, setEditPatientVisible] = useState(false);
   const [patientDraft, setPatientDraft] = useState({ name: '', birthYear: '', gender: 'Nam', blood: 'A+', weight: '', height: '' });
+  const [isSavingPatient, setIsSavingPatient] = useState(false);
   const [isEditingAllergies, setIsEditingAllergies] = useState(false);
   const [allergyDraft, setAllergyDraft] = useState({ drug: '', food: '', diet: '' });
+
+  const showAlert = (title: string, message: string) => {
+    if (Platform.OS === 'web' && typeof window !== 'undefined') {
+      window.alert(`${title}\n\n${message}`);
+    } else {
+      Alert.alert(title, message);
+    }
+  };
 
   const draftAge = calculateAgeFromYear(patientDraft.birthYear);
   const draftBMI = calculateBMIInfo(patientDraft.height, patientDraft.weight);
@@ -94,16 +103,57 @@ export default function PatientMedicalRecordScreen({ navigation }: any) {
   };
 
   const handleSavePatientInfo = async () => {
-    if (!patientDraft.name.trim()) return Alert.alert('Thiếu thông tin', 'Vui lòng nhập họ tên người cao tuổi.');
-    const h = parseInt(patientDraft.height, 10) || 0, w = parseInt(patientDraft.weight, 10) || 0, by = patientDraft.birthYear.trim();
+    const trimmedName = patientDraft.name.trim();
+    if (!trimmedName || trimmedName.length < 2) {
+      return showAlert('Thiếu thông tin', 'Vui lòng nhập họ và tên người cao tuổi (tối thiểu 2 ký tự).');
+    }
+
+    const curYear = new Date().getFullYear();
+    const by = patientDraft.birthYear.trim();
+    if (by) {
+      const byNum = parseInt(by, 10);
+      if (isNaN(byNum) || byNum < 1900 || byNum > curYear) {
+        return showAlert('Năm sinh không hợp lệ', `Vui lòng nhập năm sinh từ 1900 đến ${curYear}.`);
+      }
+    }
+
+    const h = parseInt(patientDraft.height, 10) || 0;
+    if (patientDraft.height && (isNaN(h) || h < 50 || h > 250)) {
+      return showAlert('Chiều cao không hợp lệ', 'Chiều cao phải nằm trong khoảng từ 50 đến 250 cm.');
+    }
+
+    const w = parseInt(patientDraft.weight, 10) || 0;
+    if (patientDraft.weight && (isNaN(w) || w < 20 || w > 250)) {
+      return showAlert('Cân nặng không hợp lệ', 'Cân nặng phải nằm trong khoảng từ 20 đến 250 kg.');
+    }
+
     const { bmi } = calculateBMIInfo(patientDraft.height, patientDraft.weight);
-    setEditPatientVisible(false);
-    await updatePatientRecord(1, {
-      name: patientDraft.name.trim(), birth_year: by, age: calculateAgeFromYear(by),
-      gender: patientDraft.gender, blood_type: patientDraft.blood, weight_kg: w, height_cm: h,
-      bmi: bmi !== '--' ? parseFloat(bmi) : 0,
-    });
-    Alert.alert('Thành công 🎉', 'Đã lưu hồ sơ người cao tuổi thành công.');
+    const targetId = patientRecord?.id || '1';
+
+    setIsSavingPatient(true);
+    try {
+      await updatePatientRecord(targetId, {
+        name: trimmedName,
+        birth_year: by,
+        age: calculateAgeFromYear(by),
+        gender: patientDraft.gender,
+        blood_type: patientDraft.blood,
+        weight_kg: w,
+        height_cm: h,
+        bmi: bmi !== '--' ? parseFloat(bmi) : 0,
+      });
+
+      // Tự động refetch/cập nhật lại dữ liệu trên giao diện
+      await fetchPatientRecord(targetId, selectedDate);
+
+      showAlert('Thành công 🎉', 'Cập nhật thông tin thành công!');
+      setEditPatientVisible(false);
+    } catch (err) {
+      console.warn('Lỗi cập nhật hồ sơ người cao tuổi:', err);
+      showAlert('Lỗi', 'Không thể cập nhật thông tin người cao tuổi. Vui lòng thử lại.');
+    } finally {
+      setIsSavingPatient(false);
+    }
   };
 
   const handleAddCondition = async () => {
@@ -538,11 +588,24 @@ export default function PatientMedicalRecordScreen({ navigation }: any) {
             </ScrollView>
 
             <View style={styles.modalBtnRow}>
-              <TouchableOpacity style={[styles.modalCancelBtn, { backgroundColor: isDarkMode ? '#0F172A' : '#F1F5F9', borderColor: borderCol }]} onPress={() => setEditPatientVisible(false)}>
+              <TouchableOpacity
+                style={[styles.modalCancelBtn, { backgroundColor: isDarkMode ? '#0F172A' : '#F1F5F9', borderColor: borderCol }]}
+                onPress={() => setEditPatientVisible(false)}
+                disabled={isSavingPatient}
+              >
                 <Text style={[styles.modalCancelText, { color: textSub }]}>Hủy</Text>
               </TouchableOpacity>
-              <TouchableOpacity style={styles.modalSaveBtn} onPress={handleSavePatientInfo}>
-                <Text style={styles.modalSaveText}>{hasPatient ? 'Lưu thay đổi' : 'Lưu hồ sơ'}</Text>
+              <TouchableOpacity
+                style={[styles.modalSaveBtn, isSavingPatient && { opacity: 0.7 }]}
+                onPress={handleSavePatientInfo}
+                disabled={isSavingPatient}
+                activeOpacity={0.8}
+              >
+                {isSavingPatient ? (
+                  <ActivityIndicator size="small" color="#FFFFFF" />
+                ) : (
+                  <Text style={styles.modalSaveText}>{hasPatient ? 'Lưu thay đổi' : 'Lưu hồ sơ'}</Text>
+                )}
               </TouchableOpacity>
             </View>
           </Pressable>

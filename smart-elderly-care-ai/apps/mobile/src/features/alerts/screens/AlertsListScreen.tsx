@@ -29,7 +29,9 @@ import { usePatientStore, ReminderItem } from '../../../store/usePatientStore';
 import { useTheme } from '../../../store/useThemeStore';
 import { useAuthStore } from '../../../store/useAuthStore';
 import { useDeviceStore } from '../../../store/useDeviceStore';
+import { useVitalStore } from '../../../store/useVitalStore';
 import { FamilyAppointmentsModal } from '../../dashboard/components/FamilyAppointmentsModal';
+import { incidentsApi } from '../../../services/api';
 
 // ------------------------------------------------------------------------------
 // 1. Cấu hình giao diện chuẩn hóa cho từng loại sự kiện
@@ -188,7 +190,7 @@ export default function AlertsListScreen({ navigation }: any) {
     snoozeMedication,
     fetchReminders,
   } = usePatientStore();
-  const { userRole, role, permissions, fetchMyPermissions } = useAuthStore();
+  const { userName, userId, userRole, role, permissions, fetchMyPermissions } = useAuthStore();
   const { house, iotDevices, fetchHouseFromBackend, fetchDevicesFromBackend } = useDeviceStore();
 
   const isOwnerOrAdmin =
@@ -336,18 +338,103 @@ export default function AlertsListScreen({ navigation }: any) {
     return [...medItems, ...incItems];
   }, [filterType, medications, filteredIncidents]);
 
-  const handleMarkAllAsRead = () => {
+  const handleMarkAllAsRead = async () => {
     if (unreadIncidentsCount === 0) {
       Alert.alert('Thông báo', 'Tất cả sự kiện đều đã được đánh dấu đọc.');
       return;
     }
-    setIncidents(incidents.map((i) => ({ ...i, is_acknowledged: true })));
+    const handler = userName || 'Người chăm sóc';
+    const unreadList = incidents.filter((i) => !i.is_acknowledged);
+    setIncidents(
+      incidents.map((i) => ({
+        ...i,
+        is_acknowledged: true,
+        acknowledged_by: handler,
+        acknowledged_by_name: handler,
+        acknowledged_at: new Date().toISOString(),
+      }))
+    );
+
+    try {
+      await Promise.allSettled(
+        unreadList.map((i) => incidentsApi.acknowledge(i.id, 'Đã đánh dấu đã đọc'))
+      );
+      fetchNotifications();
+    } catch (e) {}
+
     Alert.alert('Thành công', 'Đã đánh dấu đã đọc tất cả thông báo.');
+  };
+
+  const handleQuickAcknowledge = async (item: any, e?: any) => {
+    e?.stopPropagation?.();
+    const handler = userName || 'Người chăm sóc';
+    const nowIso = new Date().toISOString();
+    // 1. Optimistic update: card lập tức chuyển sang trạng thái xám/đã xử lý
+    const updated = incidents.map((i) =>
+      i.id === item.id
+        ? {
+            ...i,
+            is_acknowledged: true,
+            acknowledged_by: handler,
+            acknowledged_by_name: handler,
+            acknowledged_at: nowIso,
+          }
+        : i
+    );
+    setIncidents(updated);
+    useAlertStore.getState().acknowledgeIncident(
+      item.id,
+      'Đã kiểm tra an toàn từ danh sách sự kiện',
+      handler
+    );
+
+    const remainingCritical = updated.some(
+      (i) => !i.is_acknowledged && (i.alert_level === 'CRITICAL' || i.alert_type === 'FALL_DETECTED')
+    );
+    if (!remainingCritical) {
+      try {
+        useVitalStore.getState().setVitals({ fall_detected: false, acoustic_status: 'Bình thường' });
+      } catch (e) {}
+    }
+
+    // 2. Gọi API backend
+    try {
+      await incidentsApi.acknowledge(item.id, 'Đã kiểm tra an toàn từ danh sách sự kiện');
+    } catch (apiErr) {
+      console.warn('Quick acknowledge API error:', apiErr);
+    }
   };
 
   const handlePressCard = (item: any) => {
     if (!item.is_acknowledged) {
-      setIncidents(incidents.map((i) => (i.id === item.id ? { ...i, is_acknowledged: true } : i)));
+      const handler = userName || 'Người chăm sóc';
+      const nowIso = new Date().toISOString();
+      const updated = incidents.map((i) =>
+        i.id === item.id
+          ? {
+              ...i,
+              is_acknowledged: true,
+              acknowledged_by: handler,
+              acknowledged_by_name: handler,
+              acknowledged_at: nowIso,
+            }
+          : i
+      );
+      setIncidents(updated);
+      useAlertStore.getState().acknowledgeIncident(
+        item.id,
+        'Đã kiểm tra chi tiết sự kiện',
+        handler
+      );
+      const remainingCritical = updated.some(
+        (i) => !i.is_acknowledged && (i.alert_level === 'CRITICAL' || i.alert_type === 'FALL_DETECTED')
+      );
+      if (!remainingCritical) {
+        try {
+          useVitalStore.getState().setVitals({ fall_detected: false, acoustic_status: 'Bình thường' });
+        } catch (e) {}
+      }
+      incidentsApi.acknowledge(item.id, 'Đã kiểm tra chi tiết sự kiện').catch(() => {});
     }
 
     if (item.alert_type === 'HOUSE_MEMBER_ADDED' || item.alert_type === 'MEMBER_ADDED') {
@@ -632,7 +719,12 @@ export default function AlertsListScreen({ navigation }: any) {
       {/* 3. Danh sách thông báo */}
       <FlatList
         data={listData}
-        keyExtractor={(item) => item.id}
+        keyExtractor={(item) =>
+          item.itemType === 'INCIDENT'
+            ? `${item.id}_${item.data.is_acknowledged ? 'handled' : 'unread'}_${item.data.acknowledged_at || ''}`
+            : `${item.id}_${item.data.taken ? 'taken' : 'pending'}`
+        }
+        extraData={[incidents, filterType]}
         refreshControl={<RefreshControl refreshing={refreshing} onRefresh={handleRefresh} tintColor={Colors.primary} />}
         renderItem={({ item }) => {
           if (item.itemType === 'MEDICATION') {
@@ -641,6 +733,8 @@ export default function AlertsListScreen({ navigation }: any) {
 
           const inc = item.data;
           const config = getAlertConfig(inc.alert_type);
+          const isCriticalActive = config.isCritical && !inc.is_acknowledged;
+          const isHandled = Boolean(inc.is_acknowledged);
           const friendlyTime = formatFriendlyTime(inc.created_at, (key, count) =>
             count === undefined ? t(key) : t(key, { count })
           );
@@ -650,9 +744,11 @@ export default function AlertsListScreen({ navigation }: any) {
               style={[
                 styles.card,
                 isDarkMode && { backgroundColor: colors.card, borderColor: colors.border },
-                config.isCritical && styles.cardCritical,
-                config.isCritical && isDarkMode && { backgroundColor: '#3F1219', borderColor: '#7F1D1D' },
+                isCriticalActive && styles.cardCritical,
+                isCriticalActive && isDarkMode && { backgroundColor: '#3F1219', borderColor: '#7F1D1D' },
                 !inc.is_acknowledged && styles.cardUnread,
+                isHandled && styles.cardHandled,
+                isHandled && isDarkMode && { backgroundColor: '#131B2E', borderColor: '#1E293B' },
               ]}
               onPress={() => handlePressCard(inc)}
               activeOpacity={0.8}
@@ -662,14 +758,24 @@ export default function AlertsListScreen({ navigation }: any) {
                   styles.categoryIconCircle,
                   {
                     backgroundColor: isDarkMode
-                      ? config.isCritical
+                      ? isCriticalActive
                         ? 'rgba(220, 38, 38, 0.25)'
+                        : isHandled
+                        ? 'rgba(16, 185, 129, 0.12)'
                         : 'rgba(255, 255, 255, 0.08)'
+                      : isCriticalActive
+                      ? '#FEE2E2'
+                      : isHandled
+                      ? '#ECFDF5'
                       : config.iconBg,
                   },
                 ]}
               >
-                <Ionicons name={config.iconName} size={22} color={config.iconColor} />
+                <Ionicons
+                  name={isHandled ? 'checkmark-circle' : config.iconName}
+                  size={22}
+                  color={isHandled ? '#10B981' : isCriticalActive ? '#EF4444' : config.iconColor}
+                />
               </View>
 
               <View style={styles.cardCenter}>
@@ -682,15 +788,25 @@ export default function AlertsListScreen({ navigation }: any) {
                   >
                     <Text style={[styles.typeBadgeText, { color: config.badgeColor }]}>{config.badgeText}</Text>
                   </View>
-                  {!inc.is_acknowledged && (
+                  {!inc.is_acknowledged ? (
                     <View style={styles.newBadge}>
                       <Text style={styles.newBadgeText}>MỚI</Text>
+                    </View>
+                  ) : (
+                    <View style={styles.handledBadge}>
+                      <Ionicons name="checkmark-circle" size={10} color="#16A34A" />
+                      <Text style={styles.handledBadgeText}>ĐÃ XỬ LÝ</Text>
                     </View>
                   )}
                 </View>
 
                 <Text
-                  style={[styles.cardTitle, isDarkMode && { color: colors.textPrimary }, config.isCritical && styles.cardTitleCritical]}
+                  style={[
+                    styles.cardTitle,
+                    isDarkMode && { color: colors.textPrimary },
+                    isCriticalActive && styles.cardTitleCritical,
+                    isHandled && { color: isDarkMode ? '#94A3B8' : '#64748B' },
+                  ]}
                   numberOfLines={2}
                 >
                   {config.title}
@@ -712,6 +828,19 @@ export default function AlertsListScreen({ navigation }: any) {
                       : 'Hệ thống AI'}
                   </Text>
                 </View>
+
+                {!inc.is_acknowledged && (
+                  <View style={styles.cardQuickActionRow}>
+                    <TouchableOpacity
+                      style={styles.cardQuickAckBtn}
+                      onPress={(e) => handleQuickAcknowledge(inc, e)}
+                      activeOpacity={0.7}
+                    >
+                      <Ionicons name="checkmark-done" size={13} color="#15803D" />
+                      <Text style={styles.cardQuickAckText}>Đánh dấu đã xử lý</Text>
+                    </TouchableOpacity>
+                  </View>
+                )}
               </View>
 
               {inc.thumbnail_url && (
@@ -916,6 +1045,12 @@ const styles = StyleSheet.create({
     ...Shadows.soft,
   },
   cardCritical: { backgroundColor: '#FFF1F2', borderWidth: 1.5, borderColor: '#FECACA' },
+  cardHandled: {
+    backgroundColor: '#F8FAFC',
+    borderWidth: 1,
+    borderColor: '#E2E8F0',
+    opacity: 0.9,
+  },
   cardUnread: { borderLeftWidth: 3.5, borderLeftColor: '#FF6B00' },
   categoryIconCircle: { width: 42, height: 42, borderRadius: 21, alignItems: 'center', justifyContent: 'center', marginTop: 2 },
   cardCenter: { flex: 1 },
@@ -924,6 +1059,22 @@ const styles = StyleSheet.create({
   typeBadgeText: { fontSize: 9.5, fontWeight: '800' },
   newBadge: { backgroundColor: '#EF4444', borderRadius: 6, paddingHorizontal: 5, paddingVertical: 1.5 },
   newBadgeText: { color: '#FFF', fontSize: 8.5, fontWeight: '800' },
+  handledBadge: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 3,
+    backgroundColor: '#ECFDF5',
+    borderWidth: 1,
+    borderColor: '#A7F3D0',
+    borderRadius: 6,
+    paddingHorizontal: 6,
+    paddingVertical: 1.5,
+  },
+  handledBadgeText: {
+    color: '#16A34A',
+    fontSize: 9,
+    fontWeight: '800',
+  },
   cardTitle: { fontSize: 13.5, fontWeight: '700', color: Colors.textPrimary, lineHeight: 19, marginBottom: 3 },
   cardTitleCritical: { color: '#DC2626', fontWeight: '800' },
   cardMsg: { fontSize: 12.5, color: '#475569', lineHeight: 18, marginBottom: 6 },
@@ -931,6 +1082,27 @@ const styles = StyleSheet.create({
   cardTime: { fontSize: 11, color: '#94A3B8', fontWeight: '500' },
   dotSeparator: { fontSize: 10, color: '#CBD5E1', marginHorizontal: 2 },
   deviceLocationText: { fontSize: 11, color: '#94A3B8', fontWeight: '500' },
+  cardQuickActionRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    marginTop: 8,
+  },
+  cardQuickAckBtn: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 4,
+    backgroundColor: '#ECFDF5',
+    borderWidth: 1,
+    borderColor: '#A7F3D0',
+    borderRadius: 6,
+    paddingHorizontal: 8,
+    paddingVertical: 4,
+  },
+  cardQuickAckText: {
+    fontSize: 11,
+    fontWeight: '700',
+    color: '#15803D',
+  },
   thumbWrapper: { width: 76, height: 58, borderRadius: 12, overflow: 'hidden', backgroundColor: '#E2E8F0', marginTop: 2 },
   thumbImg: { width: '100%', height: '100%', borderRadius: 12 },
   thumbOverlay: { position: 'absolute', top: 0, left: 0, right: 0, bottom: 0, backgroundColor: 'rgba(0, 0, 0, 0.25)', justifyContent: 'center', alignItems: 'center' },

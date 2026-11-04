@@ -259,12 +259,14 @@ export const vitalsApi = {
 export const remindersApi = {
   getToday: () => api.get('/reminders/today'),
   create: (data: any) => api.post('/reminders', data),
+  createPrescription: (data: any) => api.post('/reminders/prescription', data),
   toggle: (reminderId: string) => api.put(`/reminders/${reminderId}/toggle`),
   delete: (reminderId: string) => api.delete(`/reminders/${reminderId}`),
 };
 
 // 4. Patients & Medical Record API
 export const patientApi = {
+  list: () => api.get<any[]>('/patients'),
   getMedicalRecord: (patientId: number | string = 1, target_date?: string) =>
     api.get(`/patients/${patientId}/medical-record`, { params: { target_date } }),
   updateMedicalRecord: (patientId: number | string = 1, data: any) =>
@@ -288,6 +290,8 @@ export const incidentsApi = {
   get: (id: string) => api.get(`/incidents/${id}`),
   acknowledge: (id: string, notes?: string) =>
     api.post(`/incidents/${id}/acknowledge`, null, { params: { note: notes } }),
+  reopen: (id: string, notes?: string) =>
+    api.post(`/incidents/${id}/reopen`, null, { params: { note: notes } }),
 };
 
 export const notificationsApi = incidentsApi;

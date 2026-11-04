@@ -8,6 +8,7 @@ import json
 
 from sqlalchemy import select, or_
 from sqlalchemy.ext.asyncio import AsyncSession
+from sqlalchemy.orm import selectinload
 
 from app.models.incident import Incident
 
@@ -28,7 +29,7 @@ class CRUDIncident:
 
     async def get(self, db: AsyncSession, incident_id: UUID) -> Optional[Incident]:
         result = await db.execute(
-            select(Incident).where(Incident.id == incident_id)
+            select(Incident).options(selectinload(Incident.acknowledged_user)).where(Incident.id == incident_id)
         )
         return result.scalar_one_or_none()
 
@@ -41,7 +42,7 @@ class CRUDIncident:
         offset: int = 0,
         current_user_id: Optional[UUID] = None,
     ) -> List[Incident]:
-        query = select(Incident).order_by(Incident.created_at.desc())
+        query = select(Incident).options(selectinload(Incident.acknowledged_user)).order_by(Incident.created_at.desc())
         if device_id:
             query = query.where(Incident.device_id == device_id)
         if alert_level:
@@ -91,7 +92,25 @@ class CRUDIncident:
         if acknowledged_by:
             incident.acknowledged_by = acknowledged_by
         await db.flush()
-        return incident
+        await db.commit()
+        return await self.get(db, incident_id)
+
+    async def reopen(
+        self,
+        db: AsyncSession,
+        incident_id: UUID,
+        notes: Optional[str] = "Chưa an toàn - Cần tiếp tục hỗ trợ",
+    ) -> Optional[Incident]:
+        incident = await self.get(db, incident_id)
+        if not incident:
+            return None
+        incident.is_acknowledged = False
+        incident.notes = notes
+        incident.acknowledged_at = None
+        incident.acknowledged_by = None
+        await db.flush()
+        await db.commit()
+        return await self.get(db, incident_id)
 
 
 crud_incident = CRUDIncident()

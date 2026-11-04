@@ -52,6 +52,7 @@ export interface DeviceBackend {
   house_id?: string | null;
   group_id?: string | null;
   elderly_id?: string | null;
+  wearer_name?: string | null;
   created_at: string;
   updated_at: string;
   config?: DeviceConfigBackend | null;

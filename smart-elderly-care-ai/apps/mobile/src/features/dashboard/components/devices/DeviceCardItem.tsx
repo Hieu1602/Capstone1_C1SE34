@@ -57,6 +57,14 @@ export const DeviceCardItem: React.FC<DeviceCardItemProps> = ({
             <LocalizedText style={[styles.statusText, isDarkMode && { color: colors.textSecondary }]}>
               {device.status}
             </LocalizedText>
+            {(device.icon === 'watch' || device.type === 'watch' || (device as any).device_type === 'SMARTBAND') && (
+              <View style={[styles.wearerPill, isDarkMode && { backgroundColor: 'rgba(5, 150, 105, 0.15)' }]}>
+                <Ionicons name="person-outline" size={10} color={device.wearer_name ? '#059669' : '#64748B'} />
+                <LocalizedText style={[styles.wearerPillText, { color: device.wearer_name ? '#059669' : '#64748B' }]}>
+                  {device.wearer_name ? `Người đeo: ${device.wearer_name}` : 'Người đeo: Chưa cập nhật'}
+                </LocalizedText>
+              </View>
+            )}
           </View>
         </View>
 
@@ -102,6 +110,14 @@ export const DeviceCardItem: React.FC<DeviceCardItemProps> = ({
           <LocalizedText style={[styles.statusText, isDarkMode && { color: colors.textSecondary }]}>
             {device.status}
           </LocalizedText>
+          {(device.icon === 'watch' || device.type === 'watch' || (device as any).device_type === 'SMARTBAND') && (
+            <View style={[styles.wearerPill, isDarkMode && { backgroundColor: 'rgba(5, 150, 105, 0.15)' }]}>
+              <Ionicons name="person-outline" size={10} color={device.wearer_name ? '#059669' : '#64748B'} />
+              <LocalizedText style={[styles.wearerPillText, { color: device.wearer_name ? '#059669' : '#64748B' }]}>
+                {device.wearer_name ? `Người đeo: ${device.wearer_name}` : 'Người đeo: Chưa cập nhật'}
+              </LocalizedText>
+            </View>
+          )}
         </View>
       </View>
 
@@ -153,6 +169,20 @@ const styles = StyleSheet.create({
     fontSize: 11,
     color: '#64748B',
     fontWeight: '500',
+  },
+  wearerPill: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 3,
+    backgroundColor: '#ECFDF5',
+    paddingHorizontal: 6,
+    paddingVertical: 2,
+    borderRadius: 6,
+    marginLeft: 8,
+  },
+  wearerPillText: {
+    fontSize: 10.5,
+    fontWeight: '600',
   },
   deviceItemInGroup: {
     flexDirection: 'row',

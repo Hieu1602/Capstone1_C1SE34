@@ -25,6 +25,7 @@ export interface Incident {
   thumbnail_url: string | null;
   is_acknowledged: boolean;
   acknowledged_by?: string | null;
+  acknowledged_by_name?: string | null;
   acknowledged_at?: string | null;
   note?: string | null;
   created_at: string;
@@ -48,6 +49,7 @@ interface AlertState {
   setIncidents: (incidents: Incident[]) => void;
   addIncident: (incident: Incident) => void;
   acknowledgeIncident: (incidentId: string, note?: string, user?: string) => void;
+  reopenIncident: (incidentId: string, note?: string) => void;
   setAlarmSnooze: (snooze: Partial<AlarmSnoozeInfo>) => void;
   cancelAlarmSnooze: () => void;
   setSirenActive: (active: boolean) => void;
@@ -96,6 +98,7 @@ export const useAlertStore = create<AlertState>()((set, get) => ({
               ...inc,
               is_acknowledged: true,
               acknowledged_by: user,
+              acknowledged_by_name: user,
               acknowledged_at: new Date().toISOString(),
               note: note ?? inc.note,
             }
@@ -109,6 +112,32 @@ export const useAlertStore = create<AlertState>()((set, get) => ({
       return {
         incidents: updatedIncidents,
         sirenActive: hasOtherCritical,
+      };
+    }),
+
+  reopenIncident: (incidentId: string, note?: string) =>
+    set((state) => {
+      const updatedIncidents = state.incidents.map((inc) =>
+        inc.id === incidentId
+          ? {
+              ...inc,
+              is_acknowledged: false,
+              acknowledged_by: undefined,
+              acknowledged_by_name: undefined,
+              acknowledged_at: undefined,
+              note: note ?? 'Chưa an toàn - Cần tiếp tục hỗ trợ',
+            }
+          : inc
+      );
+
+      const reopened = updatedIncidents.find((i) => i.id === incidentId);
+      const isCritical = Boolean(
+        reopened && (reopened.alert_level === 'CRITICAL' || reopened.alert_type === 'FALL_DETECTED')
+      );
+
+      return {
+        incidents: updatedIncidents,
+        sirenActive: isCritical ? true : state.sirenActive,
       };
     }),
 
