@@ -78,11 +78,12 @@ class CRUDIncident:
                 user_house_ids = [row[0] for row in user_house_ids_res.fetchall()]
 
                 if not user_house_ids:
-                    # Tài khoản mới chưa liên kết nhà: CHỈ nhận thông báo gửi trực tiếp cho mình (vd: HOUSE_MEMBER_ADDED, MEDICAL_RECORD_UPDATED)
+                    # Tài khoản mới chưa liên kết nhà: CHỈ nhận thông báo gửi trực tiếp cho mình (vd: HOUSE_MEMBER_ADDED, HOUSE_INVITE_PENDING)
                     query = query.where(
                         or_(
                             Incident.notes == f"USER:{current_user_id}",
                             Incident.notes.startswith(f"USER:{current_user_id}"),
+                            Incident.notes.contains(f"USER:{current_user_id}"),
                         )
                     )
                 else:
@@ -93,16 +94,22 @@ class CRUDIncident:
                     conditions = [
                         Incident.notes == f"USER:{current_user_id}",
                         Incident.notes.startswith(f"USER:{current_user_id}"),
+                        Incident.notes.contains(f"USER:{current_user_id}"),
                     ]
                     if user_device_ids:
                         conditions.append(
                             and_(
                                 Incident.device_id.in_(user_device_ids),
+                                Incident.alert_type != "HOUSE_INVITE_PENDING",
                                 or_(
                                     Incident.notes.is_(None),
-                                    ~Incident.notes.startswith("USER:"),
+                                    and_(
+                                        ~Incident.notes.startswith("USER:"),
+                                        ~Incident.notes.contains("USER:"),
+                                    ),
                                     Incident.notes == f"USER:{current_user_id}",
                                     Incident.notes.startswith(f"USER:{current_user_id}"),
+                                    Incident.notes.contains(f"USER:{current_user_id}"),
                                 ),
                             )
                         )
@@ -134,7 +141,17 @@ class CRUDIncident:
             return None
         from datetime import datetime, timezone
         incident.is_acknowledged = True
-        incident.notes = notes
+        existing_notes = incident.notes or ""
+        import re
+        user_tag_match = re.search(r'(USER:[0-9a-fA-F-]+)', existing_notes)
+        if user_tag_match:
+            user_tag = user_tag_match.group(1)
+            if notes and not notes.startswith("USER:"):
+                incident.notes = f"{user_tag} | {notes}"
+            elif notes:
+                incident.notes = notes
+        elif notes:
+            incident.notes = notes
         incident.acknowledged_at = datetime.now(timezone.utc)
         if acknowledged_by:
             incident.acknowledged_by = acknowledged_by

@@ -18,6 +18,8 @@ import {
   RefreshControl,
   Image,
   ScrollView,
+  Modal,
+  ActivityIndicator,
 } from 'react-native';
 import { useTranslation } from 'react-i18next';
 import { LocalizedAlert as Alert, LocalizedText as Text } from '../../../i18n/LocalizedComponents';
@@ -31,7 +33,7 @@ import { useAuthStore } from '../../../store/useAuthStore';
 import { useDeviceStore } from '../../../store/useDeviceStore';
 import { useVitalStore } from '../../../store/useVitalStore';
 import { FamilyAppointmentsModal } from '../../dashboard/components/FamilyAppointmentsModal';
-import { incidentsApi } from '../../../services/api';
+import { incidentsApi, householdApi } from '../../../services/api';
 
 // ------------------------------------------------------------------------------
 // 1. Cấu hình giao diện chuẩn hóa cho từng loại sự kiện
@@ -138,6 +140,57 @@ const ALERT_CONFIG_MAP: Record<string, AlertConfig> = {
     iconBg: '#DBEAFE',
     isCritical: false,
   },
+  HOUSE_INVITE_PENDING: {
+    title: 'Lời mời tham gia nhà',
+    badgeText: 'Chờ bạn xác nhận',
+    badgeBg: '#FEF3C7',
+    badgeColor: '#D97706',
+    iconName: 'mail-unread',
+    iconColor: '#D97706',
+    iconBg: '#FEF3C7',
+    isCritical: false,
+  },
+  HOUSE_JOIN_REQUEST: {
+    title: 'Yêu cầu vào nhà mới',
+    badgeText: 'Cần duyệt',
+    badgeBg: '#EFF6FF',
+    badgeColor: '#2563EB',
+    iconName: 'person-add',
+    iconColor: '#2563EB',
+    iconBg: '#DBEAFE',
+    isCritical: false,
+  },
+  HOUSE_JOIN_APPROVED: {
+    title: 'Đã duyệt vào nhà',
+    badgeText: 'Đã duyệt',
+    badgeBg: '#DCFCE7',
+    badgeColor: '#16A34A',
+    iconName: 'checkmark-circle',
+    iconColor: '#16A34A',
+    iconBg: '#DCFCE7',
+    isCritical: false,
+  },
+  HOUSE_JOIN_REJECTED: {
+    title: 'Yêu cầu vào nhà bị từ chối',
+    badgeText: 'Từ chối',
+    badgeBg: '#FEE2E2',
+    badgeColor: '#DC2626',
+    iconName: 'close-circle',
+    iconColor: '#DC2626',
+    iconBg: '#FEE2E2',
+    isCritical: false,
+  },
+  HOUSE_INVITE_REJECTED: {
+    title: 'Lời mời vào nhà bị từ chối',
+    badgeText: 'Từ chối',
+    badgeBg: '#FEE2E2',
+    badgeColor: '#DC2626',
+    iconName: 'close-circle',
+    iconColor: '#DC2626',
+    iconBg: '#FEE2E2',
+    isCritical: false,
+  },
+
 };
 
 function getAlertConfig(alertType: string): AlertConfig {
@@ -206,6 +259,9 @@ export default function AlertsListScreen({ navigation }: any) {
   const [familyAppointmentsModalVisible, setFamilyAppointmentsModalVisible] = useState(false);
   const [selectedAppointmentPatientId, setSelectedAppointmentPatientId] = useState<string | number | null>(null);
   const [filterType, setFilterType] = useState<'ALL' | 'CRITICAL' | 'VITAL' | 'MEDICATION' | 'APPOINTMENT'>('ALL');
+  const [selectedInviteModalItem, setSelectedInviteModalItem] = useState<any>(null);
+  const [selectedJoinRequestModalItem, setSelectedJoinRequestModalItem] = useState<any>(null);
+  const [isResponding, setIsResponding] = useState(false);
 
   useEffect(() => {
     fetchNotifications();
@@ -243,16 +299,35 @@ export default function AlertsListScreen({ navigation }: any) {
   const pendingMedCount = medications.filter((m) => !m.taken).length;
 
   const validIncidents = useMemo(() => {
-    if (isUnassignedAccount) {
-      return incidents.filter(
-        (item) =>
+    return incidents.filter((item) => {
+      // 1. Chủ nhà không bao giờ nhận thông báo "Lời mời tham gia nhà" (vốn chỉ dành riêng cho người được mời)
+      if (isOwnerOrAdmin && item.alert_type === 'HOUSE_INVITE_PENDING') {
+        return false;
+      }
+
+      // 2. Nếu thông báo có gán đích danh USER:id thì chỉ đúng user đó mới thấy
+      const noteStr = typeof item.notes === 'string' ? item.notes : typeof item.note === 'string' ? item.note : '';
+      const userMatch = noteStr.match(/USER:([0-9a-fA-F-]+)/);
+      if (userMatch && userId && userMatch[1].toLowerCase() !== userId.toLowerCase()) {
+        return false;
+      }
+
+      // 3. Đối với tài khoản chưa vào nhà: CHỈ nhận thông báo liên quan gia nhập / đích danh
+      if (isUnassignedAccount) {
+        return (
           item.alert_type === 'HOUSE_MEMBER_ADDED' ||
           item.alert_type === 'MEMBER_ADDED' ||
-          ((typeof item.note === 'string' && item.note.startsWith('USER:')) || (typeof item.notes === 'string' && item.notes.startsWith('USER:')))
-      );
-    }
-    return incidents;
-  }, [isUnassignedAccount, incidents]);
+          item.alert_type === 'HOUSE_INVITE_PENDING' ||
+          item.alert_type === 'HOUSE_JOIN_REQUEST' ||
+          item.alert_type === 'HOUSE_JOIN_APPROVED' ||
+          item.alert_type === 'HOUSE_JOIN_REJECTED' ||
+          noteStr.startsWith('USER:')
+        );
+      }
+
+      return true;
+    });
+  }, [isUnassignedAccount, isOwnerOrAdmin, userId, incidents]);
 
   const unreadIncidentsCount = validIncidents.filter((item) => !item.is_acknowledged).length;
   const unreadCount = unreadIncidentsCount + pendingMedCount;
@@ -417,7 +492,126 @@ export default function AlertsListScreen({ navigation }: any) {
     }
   };
 
+  const extractMemberId = (notes?: string | null): string | null => {
+    if (!notes) return null;
+    const match = notes.match(/MEMBER_ID:([0-9a-fA-F-]+)/);
+    return match ? match[1] : null;
+  };
+
+  const handleRespondInvite = async (item: any, action: 'accept' | 'reject') => {
+    if (!item) return;
+    const memberId = extractMemberId(item.notes || item.note) || item.device_id || item.id;
+    try {
+      setIsResponding(true);
+      const handler = userName || 'Người dùng';
+      const nowIso = new Date().toISOString();
+      const updated = incidents.map((i) =>
+        i.id === item.id
+          ? {
+              ...i,
+              is_acknowledged: true,
+              acknowledged_by: handler,
+              acknowledged_by_name: handler,
+              acknowledged_at: nowIso,
+              notes: action === 'accept' ? 'Đã đồng ý vào nhà' : 'Đã từ chối vào nhà',
+            }
+          : i
+      );
+      setIncidents(updated);
+      useAlertStore.getState().acknowledgeIncident(
+        item.id,
+        action === 'accept' ? 'Đã đồng ý vào nhà' : 'Đã từ chối vào nhà',
+        handler
+      );
+
+      await householdApi.respondHouseInvite(memberId, action);
+      await incidentsApi.acknowledge(item.id, action === 'accept' ? 'Đã đồng ý vào nhà' : 'Đã từ chối vào nhà').catch(() => {});
+      setSelectedInviteModalItem(null);
+      if (action === 'accept') {
+        await Promise.allSettled([
+          useDeviceStore.getState().fetchHouseFromBackend(),
+          useDeviceStore.getState().syncAllWithBackend?.(),
+          useVitalStore.getState().fetchHouseFromBackend?.(),
+          useAuthStore.getState().fetchMyPermissions?.(),
+          fetchNotifications(),
+        ]);
+        Alert.alert('Thành công', '🎉 Bạn đã tham gia vào căn nhà thành công!');
+        navigation.navigate('Main', { screen: 'Home' });
+      } else {
+        await fetchNotifications();
+        Alert.alert('Đã từ chối', 'Bạn đã từ chối lời mời tham gia căn nhà.');
+      }
+    } catch (e: any) {
+      Alert.alert('Lỗi', e?.response?.data?.detail || 'Không thể thực hiện thao tác. Vui lòng thử lại.');
+      await fetchNotifications();
+    } finally {
+      setIsResponding(false);
+    }
+  };
+
+  const handleRespondJoinRequest = async (item: any, action: 'accept' | 'reject') => {
+    if (!item) return;
+    const memberId = extractMemberId(item.notes || item.note) || item.device_id || item.id;
+    try {
+      setIsResponding(true);
+      const handler = userName || 'Chủ hộ';
+      const nowIso = new Date().toISOString();
+      const updated = incidents.map((i) =>
+        i.id === item.id
+          ? {
+              ...i,
+              is_acknowledged: true,
+              acknowledged_by: handler,
+              acknowledged_by_name: handler,
+              acknowledged_at: nowIso,
+              notes: action === 'accept' ? 'Chủ hộ đã duyệt vào nhà' : 'Chủ hộ đã từ chối vào nhà',
+            }
+          : i
+      );
+      setIncidents(updated);
+      useAlertStore.getState().acknowledgeIncident(
+        item.id,
+        action === 'accept' ? 'Chủ hộ đã duyệt vào nhà' : 'Chủ hộ đã từ chối vào nhà',
+        handler
+      );
+
+      await householdApi.respondJoinRequest(memberId, action);
+      await incidentsApi.acknowledge(item.id, action === 'accept' ? 'Chủ hộ đã duyệt vào nhà' : 'Chủ hộ đã từ chối vào nhà').catch(() => {});
+      setSelectedJoinRequestModalItem(null);
+      if (action === 'accept') {
+        await Promise.allSettled([
+          useDeviceStore.getState().fetchHouseFromBackend(),
+          useDeviceStore.getState().syncAllWithBackend?.(),
+          useVitalStore.getState().fetchHouseFromBackend?.(),
+          fetchNotifications(),
+        ]);
+        Alert.alert('Đã phê duyệt', '✓ Đã đồng ý cho thành viên gia nhập căn nhà!');
+      } else {
+        await fetchNotifications();
+        Alert.alert('Đã từ chối', 'Đã từ chối yêu cầu tham gia căn nhà.');
+      }
+    } catch (e: any) {
+      Alert.alert('Lỗi', e?.response?.data?.detail || 'Không thể thực hiện thao tác. Vui lòng thử lại.');
+      await fetchNotifications();
+    } finally {
+      setIsResponding(false);
+    }
+  };
+
   const handlePressCard = (item: any) => {
+    if (item.alert_type === 'HOUSE_INVITE_PENDING') {
+      if (!item.is_acknowledged) {
+        setSelectedInviteModalItem(item);
+      }
+      return;
+    }
+    if (item.alert_type === 'HOUSE_JOIN_REQUEST') {
+      if (!item.is_acknowledged) {
+        setSelectedJoinRequestModalItem(item);
+      }
+      return;
+    }
+
     if (!item.is_acknowledged) {
       const handler = userName || 'Người chăm sóc';
       const nowIso = new Date().toISOString();
@@ -448,6 +642,8 @@ export default function AlertsListScreen({ navigation }: any) {
       }
       incidentsApi.acknowledge(item.id, 'Đã kiểm tra chi tiết sự kiện').catch(() => {});
     }
+
+
 
     if (item.alert_type === 'HOUSE_MEMBER_ADDED' || item.alert_type === 'MEMBER_ADDED') {
       navigation.navigate('HouseDetail');
@@ -797,10 +993,33 @@ export default function AlertsListScreen({ navigation }: any) {
                   <View
                     style={[
                       styles.typeBadge,
-                      { backgroundColor: isDarkMode && config.badgeBg === '#FFF7ED' ? 'rgba(234, 88, 12, 0.2)' : config.badgeBg },
+                      {
+                        backgroundColor:
+                          inc.is_acknowledged && (inc.alert_type === 'HOUSE_INVITE_PENDING' || inc.alert_type === 'HOUSE_JOIN_REQUEST')
+                            ? (isDarkMode ? 'rgba(22, 163, 74, 0.2)' : '#DCFCE7')
+                            : isDarkMode && config.badgeBg === '#FFF7ED'
+                            ? 'rgba(234, 88, 12, 0.2)'
+                            : config.badgeBg,
+                      },
                     ]}
                   >
-                    <Text style={[styles.typeBadgeText, { color: config.badgeColor }]}>{config.badgeText}</Text>
+                    <Text
+                      style={[
+                        styles.typeBadgeText,
+                        {
+                          color:
+                            inc.is_acknowledged && (inc.alert_type === 'HOUSE_INVITE_PENDING' || inc.alert_type === 'HOUSE_JOIN_REQUEST')
+                              ? '#16A34A'
+                              : config.badgeColor,
+                        },
+                      ]}
+                    >
+                      {inc.is_acknowledged && inc.alert_type === 'HOUSE_INVITE_PENDING'
+                        ? (inc.notes?.includes('từ chối') || inc.note?.includes('từ chối') ? 'Đã từ chối' : 'Đã tham gia')
+                        : inc.is_acknowledged && inc.alert_type === 'HOUSE_JOIN_REQUEST'
+                        ? (inc.notes?.includes('từ chối') || inc.note?.includes('từ chối') ? 'Đã từ chối' : 'Đã đồng ý')
+                        : config.badgeText}
+                    </Text>
                   </View>
                   {!inc.is_acknowledged ? (
                     <View style={styles.newBadge}>
@@ -845,14 +1064,67 @@ export default function AlertsListScreen({ navigation }: any) {
 
                 {!inc.is_acknowledged && (
                   <View style={styles.cardQuickActionRow}>
-                    <TouchableOpacity
-                      style={styles.cardQuickAckBtn}
-                      onPress={(e) => handleQuickAcknowledge(inc, e)}
-                      activeOpacity={0.7}
-                    >
-                      <Ionicons name="checkmark-done" size={13} color="#15803D" />
-                      <Text style={styles.cardQuickAckText}>Đánh dấu đã xử lý</Text>
-                    </TouchableOpacity>
+                    {inc.alert_type === 'HOUSE_INVITE_PENDING' ? (
+                      <View style={{ flexDirection: 'row', gap: 8, marginTop: 4 }}>
+                        <TouchableOpacity
+                          style={styles.actionBtnReject}
+                          onPress={() => handleRespondInvite(inc, 'reject')}
+                          activeOpacity={0.7}
+                        >
+                          <Ionicons name="close-circle-outline" size={14} color="#DC2626" />
+                          <Text style={styles.actionBtnRejectText}>Từ chối</Text>
+                        </TouchableOpacity>
+
+                        <TouchableOpacity
+                          style={styles.actionBtnAccept}
+                          onPress={() => handleRespondInvite(inc, 'accept')}
+                          activeOpacity={0.7}
+                        >
+                          <Ionicons name="checkmark-circle" size={14} color="#FFFFFF" />
+                          <Text style={styles.actionBtnAcceptText}>Xác nhận vào nhà</Text>
+                        </TouchableOpacity>
+                      </View>
+                    ) : inc.alert_type === 'HOUSE_JOIN_REQUEST' ? (
+                      <View style={{ flexDirection: 'row', gap: 8, marginTop: 4 }}>
+                        <TouchableOpacity
+                          style={styles.actionBtnReject}
+                          onPress={() => handleRespondJoinRequest(inc, 'reject')}
+                          activeOpacity={0.7}
+                        >
+                          <Ionicons name="close-circle-outline" size={14} color="#DC2626" />
+                          <Text style={styles.actionBtnRejectText}>Từ chối</Text>
+                        </TouchableOpacity>
+
+                        <TouchableOpacity
+                          style={styles.actionBtnAccept}
+                          onPress={() => handleRespondJoinRequest(inc, 'accept')}
+                          activeOpacity={0.7}
+                        >
+                          <Ionicons name="checkmark-circle" size={14} color="#FFFFFF" />
+                          <Text style={styles.actionBtnAcceptText}>Cho phép vào nhà</Text>
+                        </TouchableOpacity>
+                      </View>
+                    ) : (
+                      <TouchableOpacity
+                        style={styles.cardQuickAckBtn}
+                        onPress={(e) => handleQuickAcknowledge(inc, e)}
+                        activeOpacity={0.7}
+                      >
+                        <Ionicons name="checkmark-done" size={13} color="#15803D" />
+                        <Text style={styles.cardQuickAckText}>Đánh dấu đã xử lý</Text>
+                      </TouchableOpacity>
+                    )}
+                  </View>
+                )}
+
+                {inc.is_acknowledged && (inc.alert_type === 'HOUSE_INVITE_PENDING' || inc.alert_type === 'HOUSE_JOIN_REQUEST') && (
+                  <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6, marginTop: 8 }}>
+                    <Ionicons name="checkmark-done-circle" size={15} color="#16A34A" />
+                    <Text style={{ fontSize: 12, fontWeight: '700', color: '#16A34A' }}>
+                      {inc.notes?.includes('từ chối') || inc.note?.includes('từ chối')
+                        ? 'Đã từ chối'
+                        : 'Đã hoàn tất xác nhận'}
+                    </Text>
                   </View>
                 )}
               </View>
@@ -934,6 +1206,133 @@ export default function AlertsListScreen({ navigation }: any) {
           </View>
         }
       />
+
+
+      {/* Modal xác nhận Lời mời tham gia căn nhà */}
+      <Modal
+        visible={Boolean(selectedInviteModalItem)}
+        transparent
+        animationType="fade"
+        onRequestClose={() => setSelectedInviteModalItem(null)}
+      >
+        <View style={styles.modalOverlay}>
+          <View style={[styles.modalCard, isDarkMode && { backgroundColor: colors.card, borderColor: colors.border }]}>
+            <View style={styles.modalHeaderRow}>
+              <View style={[styles.modalIconCircle, { backgroundColor: '#FFF7ED' }]}>
+                <Ionicons name="home" size={24} color="#EA580C" />
+              </View>
+              <View style={{ flex: 1 }}>
+                <Text style={[styles.modalTitle, isDarkMode && { color: colors.textPrimary }]}>
+                  Lời mời tham gia căn nhà
+                </Text>
+                <Text style={[styles.modalSub, isDarkMode && { color: colors.textSecondary }]}>
+                  Xác nhận vào ngôi nhà
+                </Text>
+              </View>
+              <TouchableOpacity
+                onPress={() => setSelectedInviteModalItem(null)}
+                hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
+              >
+                <Ionicons name="close" size={20} color={isDarkMode ? '#94A3B8' : '#64748B'} />
+              </TouchableOpacity>
+            </View>
+
+            <Text style={[styles.modalMessage, isDarkMode && { color: colors.textPrimary }]}>
+              {selectedInviteModalItem?.message || 'Bạn nhận được lời mời tham gia căn nhà từ Chủ hộ.'}
+            </Text>
+
+            <View style={styles.modalActionRow}>
+              <TouchableOpacity
+                style={styles.modalBtnReject}
+                onPress={() => handleRespondInvite(selectedInviteModalItem, 'reject')}
+                activeOpacity={0.7}
+                disabled={isResponding}
+              >
+                <Text style={styles.modalBtnRejectText}>Từ chối</Text>
+              </TouchableOpacity>
+
+              <TouchableOpacity
+                style={styles.modalBtnAccept}
+                onPress={() => handleRespondInvite(selectedInviteModalItem, 'accept')}
+                activeOpacity={0.8}
+                disabled={isResponding}
+              >
+                {isResponding ? (
+                  <ActivityIndicator size="small" color="#FFF" />
+                ) : (
+                  <>
+                    <Ionicons name="checkmark-circle" size={18} color="#FFF" />
+                    <Text style={styles.modalBtnAcceptText}>Xác nhận vào nhà</Text>
+                  </>
+                )}
+              </TouchableOpacity>
+            </View>
+          </View>
+        </View>
+      </Modal>
+
+      {/* Modal phê duyệt Yêu cầu vào nhà từ thành viên */}
+      <Modal
+        visible={Boolean(selectedJoinRequestModalItem)}
+        transparent
+        animationType="fade"
+        onRequestClose={() => setSelectedJoinRequestModalItem(null)}
+      >
+        <View style={styles.modalOverlay}>
+          <View style={[styles.modalCard, isDarkMode && { backgroundColor: colors.card, borderColor: colors.border }]}>
+            <View style={styles.modalHeaderRow}>
+              <View style={[styles.modalIconCircle, { backgroundColor: '#EFF6FF' }]}>
+                <Ionicons name="person-add" size={24} color="#2563EB" />
+              </View>
+              <View style={{ flex: 1 }}>
+                <Text style={[styles.modalTitle, isDarkMode && { color: colors.textPrimary }]}>
+                  Yêu cầu gia nhập căn nhà
+                </Text>
+                <Text style={[styles.modalSub, isDarkMode && { color: colors.textSecondary }]}>
+                  Phê duyệt quyền thành viên
+                </Text>
+              </View>
+              <TouchableOpacity
+                onPress={() => setSelectedJoinRequestModalItem(null)}
+                hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
+              >
+                <Ionicons name="close" size={20} color={isDarkMode ? '#94A3B8' : '#64748B'} />
+              </TouchableOpacity>
+            </View>
+
+            <Text style={[styles.modalMessage, isDarkMode && { color: colors.textPrimary }]}>
+              {selectedJoinRequestModalItem?.message || 'Có thành viên yêu cầu tham gia căn nhà của bạn.'}
+            </Text>
+
+            <View style={styles.modalActionRow}>
+              <TouchableOpacity
+                style={styles.modalBtnReject}
+                onPress={() => handleRespondJoinRequest(selectedJoinRequestModalItem, 'reject')}
+                activeOpacity={0.7}
+                disabled={isResponding}
+              >
+                <Text style={styles.modalBtnRejectText}>Từ chối</Text>
+              </TouchableOpacity>
+
+              <TouchableOpacity
+                style={[styles.modalBtnAccept, { backgroundColor: '#2563EB' }]}
+                onPress={() => handleRespondJoinRequest(selectedJoinRequestModalItem, 'accept')}
+                activeOpacity={0.8}
+                disabled={isResponding}
+              >
+                {isResponding ? (
+                  <ActivityIndicator size="small" color="#FFF" />
+                ) : (
+                  <>
+                    <Ionicons name="checkmark-circle" size={18} color="#FFF" />
+                    <Text style={styles.modalBtnAcceptText}>Cho phép vào nhà</Text>
+                  </>
+                )}
+              </TouchableOpacity>
+            </View>
+          </View>
+        </View>
+      </Modal>
 
       <FamilyAppointmentsModal
         visible={familyAppointmentsModalVisible}
@@ -1115,6 +1514,37 @@ const styles = StyleSheet.create({
     fontWeight: '700',
     color: '#15803D',
   },
+  actionBtnAccept: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 4,
+    backgroundColor: '#16A34A',
+    paddingHorizontal: 10,
+    paddingVertical: 5,
+    borderRadius: 8,
+  },
+  actionBtnAcceptText: {
+    fontSize: 12,
+    fontWeight: '700',
+    color: '#FFFFFF',
+  },
+  actionBtnReject: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 4,
+    backgroundColor: '#FEE2E2',
+    borderWidth: 1,
+    borderColor: '#FCA5A5',
+    paddingHorizontal: 10,
+    paddingVertical: 5,
+    borderRadius: 8,
+  },
+  actionBtnRejectText: {
+    fontSize: 12,
+    fontWeight: '600',
+    color: '#DC2626',
+  },
+
   thumbWrapper: { width: 76, height: 58, borderRadius: 12, overflow: 'hidden', backgroundColor: '#E2E8F0', marginTop: 2 },
   thumbImg: { width: '100%', height: '100%', borderRadius: 12 },
   thumbOverlay: { position: 'absolute', top: 0, left: 0, right: 0, bottom: 0, backgroundColor: 'rgba(0, 0, 0, 0.25)', justifyContent: 'center', alignItems: 'center' },
@@ -1150,5 +1580,89 @@ const styles = StyleSheet.create({
     fontSize: 12,
     fontWeight: '700',
     color: Colors.primary,
+  },
+  modalOverlay: {
+    flex: 1,
+    backgroundColor: 'rgba(0,0,0,0.5)',
+    justifyContent: 'center',
+    alignItems: 'center',
+    padding: 20,
+  },
+  modalCard: {
+    width: '100%',
+    maxWidth: 380,
+    backgroundColor: '#FFFFFF',
+    borderRadius: 20,
+    padding: 20,
+    borderWidth: 1,
+    borderColor: '#E2E8F0',
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 8 },
+    shadowOpacity: 0.15,
+    shadowRadius: 16,
+    elevation: 8,
+  },
+  modalHeaderRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 12,
+    marginBottom: 14,
+  },
+  modalIconCircle: {
+    width: 44,
+    height: 44,
+    borderRadius: 22,
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+  modalTitle: {
+    fontSize: 16,
+    fontWeight: '800',
+    color: '#0F172A',
+  },
+  modalSub: {
+    fontSize: 12,
+    color: '#64748B',
+    marginTop: 2,
+  },
+  modalMessage: {
+    fontSize: 14,
+    lineHeight: 21,
+    color: '#334155',
+    marginBottom: 20,
+  },
+  modalActionRow: {
+    flexDirection: 'row',
+    gap: 12,
+  },
+  modalBtnReject: {
+    flex: 1,
+    paddingVertical: 12,
+    borderRadius: 12,
+    borderWidth: 1,
+    borderColor: '#FCA5A5',
+    backgroundColor: '#FEE2E2',
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  modalBtnRejectText: {
+    fontSize: 14,
+    fontWeight: '700',
+    color: '#DC2626',
+  },
+  modalBtnAccept: {
+    flex: 2,
+    flexDirection: 'row',
+    gap: 6,
+    paddingVertical: 12,
+    borderRadius: 12,
+    backgroundColor: '#16A34A',
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  modalBtnAcceptText: {
+    fontSize: 14,
+    fontWeight: '800',
+    color: '#FFFFFF',
   },
 });
