@@ -16,7 +16,7 @@ import {
 } from "../services/deviceService";
 const getDefaultStreamUrl = () => {
   if (Platform.OS === "android") {
-    return "http://192.168.1.5:8080";
+    return "http://16.178.128.42:8080";
   }
   if (
     Platform.OS === "web" &&
