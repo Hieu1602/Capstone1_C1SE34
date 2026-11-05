@@ -26,7 +26,7 @@ class MultiModelLLMClient:
     - DeepSeek / Local LLM (Ollama, vLLM)
     """
 
-    FALLBACK_MODELS = ["gemini-3.1-flash-lite", "gemini-2.5-flash", "gpt-4o-mini", "gemini-2.0-flash"]
+    FALLBACK_MODELS = ["gemini-3.1-flash-lite", "gemini-2.5-flash"]
 
     def __init__(self):
         self.enabled = getattr(settings, "ENABLE_EXTERNAL_LLM", True)
@@ -129,7 +129,7 @@ class MultiModelLLMClient:
         if candidate_models is None:
             models_to_try = [active_model]
             if "generativelanguage" in active_base:
-                for fb in ["gemini-2.0-flash", "gemini-3.1-flash-lite", "gemini-1.5-flash"]:
+                for fb in ["gemini-3.1-flash-lite", "gemini-2.5-flash"]:
                     if fb not in models_to_try:
                         models_to_try.append(fb)
             elif "openai.com" in active_base:
