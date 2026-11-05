@@ -1,5 +1,6 @@
+import { LocalizedText as Text } from '../../../../i18n/LocalizedComponents';
 import React from 'react';
-import { View, Text, TouchableOpacity, StyleSheet } from 'react-native';
+import { View, TouchableOpacity, StyleSheet } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 
 interface ProfileSettingsAccordionProps {
@@ -8,7 +9,7 @@ interface ProfileSettingsAccordionProps {
   isDarkMode: boolean;
   colors: any;
   onOpenNotifications: () => void;
-  onOpenFontSize: () => void;
+  onOpenFontSize?: () => void;
   onOpenAppearance: () => void;
   onOpenSecurityCenter: () => void;
   onOpenChangePassword: () => void;
@@ -105,46 +106,6 @@ export const ProfileSettingsAccordion: React.FC<ProfileSettingsAccordionProps> =
             ]}
           />
 
-          {/* Kích thước chữ cho người cao tuổi */}
-          <TouchableOpacity
-            style={styles.fbAccordionSubRow}
-            activeOpacity={0.7}
-            onPress={onOpenFontSize}
-          >
-            <View
-              style={[
-                styles.fbSubIconBox,
-                { backgroundColor: '#ECFDF5' },
-              ]}
-            >
-              <Ionicons
-                name="text-outline"
-                size={18}
-                color="#10B981"
-              />
-            </View>
-            <View style={{ flex: 1 }}>
-              <Text
-                style={[
-                  styles.fbSubRowTitle,
-                  isDarkMode && { color: colors.textPrimary },
-                ]}
-              >
-                Thay đổi cỡ chữ
-              </Text>
-              <Text style={styles.fbSubRowSub}>
-                Điều chỉnh độ phóng to chữ đọc dễ dàng
-              </Text>
-            </View>
-            <Ionicons name="chevron-forward" size={16} color="#CBD5E1" />
-          </TouchableOpacity>
-
-          <View
-            style={[
-              styles.fbSubDivider,
-              isDarkMode && { backgroundColor: colors.border },
-            ]}
-          />
 
           {/* Chế độ Sáng / Tối */}
           <TouchableOpacity

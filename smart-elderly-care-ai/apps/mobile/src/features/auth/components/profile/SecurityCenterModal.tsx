@@ -1,7 +1,8 @@
+import { LocalizedText as Text } from '../../../../i18n/LocalizedComponents';
 import React, { useState, useRef, useEffect } from "react";
+import { useTranslation } from "react-i18next";
 import {
     View,
-    Text,
     TextInput,
     TouchableOpacity,
     StyleSheet,
@@ -36,6 +37,39 @@ export const SecurityCenterModal: React.FC<SecurityCenterModalProps> = ({
     onChangePasswordPress,
     onSubmitChangePassword,
 }) => {
+    const { t, i18n } = useTranslation();
+    const isEn = i18n.language?.startsWith('en');
+
+    const getSecurityQuestionAnswer = (q: string) => {
+        if (
+            q === "Mật khẩu mã hóa thiết bị là gì?" ||
+            q === "What is device encryption password?"
+        ) {
+            return isEn
+                ? "The device encryption password is a symmetric encryption key used to encrypt camera video streams and sensor data, with a default value based on the device authentication code. You should change the default password to a strong password after pairing the device for the first time. The encryption password is a security key provided by Smart Elderly Care AI. The system does not record or store the encryption password on the central cloud server. The password is only encrypted and stored directly on your monitoring device and mobile app. The Smart Elderly Care AI technical team cannot retrieve, reset, or recover this encryption password to ensure complete privacy for your family."
+                : "Mật khẩu mã hóa thiết bị là một mật khẩu đối xứng được sử dụng để mã hóa luồng video camera và dữ liệu cảm biến của thiết bị, với giá trị mặc định theo mã xác thực thiết bị. Bạn nên thay đổi mật khẩu mặc định thành một mật khẩu an toàn sau khi liên kết thiết bị lần đầu tiên. Mật khẩu mã hóa là chìa khóa bảo mật được cung cấp bởi Smart Elderly Care AI. Hệ thống hoàn toàn không ghi lại hoặc lưu trữ mật khẩu mã hóa trên máy chủ trung tâm. Mật khẩu chỉ được mã hóa lưu trữ trực tiếp trên thiết bị giám sát và ứng dụng di động của bạn. Đội ngũ kỹ thuật Smart Elderly Care AI không có khả năng lấy lại, đặt lại hoặc khôi phục mật khẩu mã hóa nhằm đảm bảo quyền riêng tư tuyệt đối cho gia đình bạn.";
+        }
+        if (
+            q === "Có ràng buộc một thiết bị an toàn không?" ||
+            q === "Is device pairing secure?"
+        ) {
+            return isEn
+                ? "To pair a device with the Smart Elderly Care AI system, three conditions must be met simultaneously:\n\n1. Possess the device's Serial number and security verification code;\n\n2. The monitoring device is online;\n\n3. The device has not been paired by another administrative account;\n\nIf a device has been paired by the household owner, others cannot pair or access it even with the serial number. Only the linked owner account has the authority to share or unbind it. Smart Elderly Care AI recommends configuring device security immediately after completing network setup."
+                : "Để kết nối một thiết bị vào hệ thống Smart Elderly Care AI, ba điều kiện sau phải được đáp ứng đồng thời:\n\n1. Biết mã định danh (Serial) và mã xác thực an toàn của thiết bị;\n\n2. Thiết bị giám sát đang trực tuyến;\n\n3. Thiết bị chưa bị ràng buộc bởi một tài khoản quản trị khác;\n\nNếu một thiết bị đã được kết nối bởi chủ hộ gia đình, người khác tuyệt đối không thể kết nối hoặc xem trộm ngay cả khi biết mã serial. Chỉ có tài khoản chủ hộ đã liên kết thiết bị mới có quyền chia sẻ hoặc hủy liên kết. Smart Elderly Care AI khuyến nghị bạn cấu hình bảo mật thiết bị ngay sau khi hoàn tất kết nối mạng.";
+        }
+        if (
+            q === "Việc sử dụng mã xác minh qua tin nhắn SMS" ||
+            q === "Using SMS verification code"
+        ) {
+            return isEn
+                ? "SMS Verification (OTP) is an enhanced two-step security layer provided by Smart Elderly Care AI, superior to relying on standard passwords alone. When users perform sensitive actions (such as logging in on a new device, updating emergency SOS alert configurations, sharing monitoring privileges, etc.), the system sends an SMS OTP code to authenticate the account owner. This prevents unauthorized account intrusion. Never disclose OTP codes to anyone."
+                : "Mã xác minh SMS (OTP) là lớp bảo mật hai bước nâng cao được cung cấp bởi Smart Elderly Care AI, vượt trội hơn so với việc chỉ dùng mật khẩu thông thường. Khi người dùng thực hiện các thao tác nhạy cảm (như đăng nhập trên thiết bị mới, thay đổi cấu hình cảnh báo SOS khẩn cấp, chia sẻ quyền giám sát, v.v.), hệ thống sẽ gửi mã SMS OTP để xác thực danh tính chính chủ. Điều này giúp ngăn chặn tối đa nguy cơ tài khoản bị xâm nhập trái phép. Hãy lưu ý không bao giờ tiết lộ mã OTP cho bất kỳ ai.";
+        }
+        return isEn
+            ? "The Smart Elderly Care AI system utilizes multiple layers of account protection, device verification, and cryptographic authentication to prevent unauthorized access. You should enable two-step verification and periodically review login history."
+            : "Hệ thống Smart Elderly Care AI sử dụng nhiều lớp bảo vệ tài khoản, xác minh thiết bị và mã xác thực để hạn chế truy cập trái phép. Bạn nên bật xác minh hai bước và thường xuyên kiểm tra lịch sử đăng nhập.";
+    };
+
     const [twoFactorEnabled, setTwoFactorEnabled] = useState(false);
     const [securityDetail, setSecurityDetail] = useState<
         "twoFactor" | "devices" | "logins" | "question" | "changePassword" | null
@@ -381,11 +415,9 @@ export const SecurityCenterModal: React.FC<SecurityCenterModalProps> = ({
                                         isDarkMode && { color: "#94A3B8" },
                                     ]}
                                 >
-                                    Để giữ an toàn tuyệt đối cho tài khoản giám
-                                    sát người cao tuổi, hệ thống sẽ yêu cầu
-                                    nhập mã OTP gửi về tin nhắn SMS khi bạn đăng
-                                    nhập trên thiết bị mới hoặc thực hiện thao
-                                    tác nhạy cảm.
+                                    {isEn
+                                        ? "To keep your elderly care monitoring account completely secure, the system requires an SMS OTP code whenever you log in from a new device or perform sensitive operations."
+                                        : "Để giữ an toàn tuyệt đối cho tài khoản giám sát người cao tuổi, hệ thống sẽ yêu cầu nhập mã OTP gửi về tin nhắn SMS khi bạn đăng nhập trên thiết bị mới hoặc thực hiện thao tác nhạy cảm."}
                                 </Text>
                                 <View
                                     style={[
@@ -409,8 +441,12 @@ export const SecurityCenterModal: React.FC<SecurityCenterModalProps> = ({
                                         ]}
                                     >
                                         {twoFactorEnabled
-                                            ? "Tính năng xác thực 2 lớp đang kích hoạt trên số điện thoại đăng ký của bạn."
-                                            : "Khuyến khích bật xác thực 2 bước để phòng ngừa truy cập trái phép."}
+                                            ? (isEn
+                                                ? "Two-factor authentication is active on your registered phone number."
+                                                : "Tính năng xác thực 2 lớp đang kích hoạt trên số điện thoại đăng ký của bạn.")
+                                            : (isEn
+                                                ? "Two-step verification is recommended to prevent unauthorized access."
+                                                : "Khuyến khích bật xác thực 2 bước để phòng ngừa truy cập trái phép.")}
                                     </Text>
                                 </View>
                             </View>
@@ -433,7 +469,7 @@ export const SecurityCenterModal: React.FC<SecurityCenterModalProps> = ({
                                             isDarkMode && { color: "#F8FAFC" },
                                         ]}
                                     >
-                                        Thiết bị đáng tin cậy: {terminals.length || 1}
+                                        {isEn ? `Trusted devices: ${terminals.length || 1}` : `Thiết bị đáng tin cậy: ${terminals.length || 1}`}
                                     </Text>
                                     <TouchableOpacity
                                         onPress={fetchTerminalsData}
@@ -708,16 +744,7 @@ export const SecurityCenterModal: React.FC<SecurityCenterModalProps> = ({
                                         isDarkMode && { color: "#CBD5E1" },
                                     ]}
                                 >
-                                    {selectedSecurityQuestion ===
-                                    "Mật khẩu mã hóa thiết bị là gì?"
-                                        ? "Mật khẩu mã hóa thiết bị là một mật khẩu đối xứng được sử dụng để mã hóa luồng video camera và dữ liệu cảm biến của thiết bị, với giá trị mặc định theo mã xác thực thiết bị. Bạn nên thay đổi mật khẩu mặc định thành một mật khẩu an toàn sau khi liên kết thiết bị lần đầu tiên. Mật khẩu mã hóa là chìa khóa bảo mật được cung cấp bởi Smart Elderly Care AI. Hệ thống hoàn toàn không ghi lại hoặc lưu trữ mật khẩu mã hóa trên máy chủ trung tâm. Mật khẩu chỉ được mã hóa lưu trữ trực tiếp trên thiết bị giám sát và ứng dụng di động của bạn. Đội ngũ kỹ thuật Smart Elderly Care AI không có khả năng lấy lại, đặt lại hoặc khôi phục mật khẩu mã hóa nhằm đảm bảo quyền riêng tư tuyệt đối cho gia đình bạn."
-                                        : selectedSecurityQuestion ===
-                                            "Có ràng buộc một thiết bị an toàn không?"
-                                          ? "Để kết nối một thiết bị vào hệ thống Smart Elderly Care AI, ba điều kiện sau phải được đáp ứng đồng thời:\n\n1. Biết mã định danh (Serial) và mã xác thực an toàn của thiết bị;\n\n2. Thiết bị giám sát đang trực tuyến;\n\n3. Thiết bị chưa bị ràng buộc bởi một tài khoản quản trị khác;\n\nNếu một thiết bị đã được kết nối bởi chủ hộ gia đình, người khác tuyệt đối không thể kết nối hoặc xem trộm ngay cả khi biết mã serial. Chỉ có tài khoản chủ hộ đã liên kết thiết bị mới có quyền chia sẻ hoặc hủy liên kết. Smart Elderly Care AI khuyến nghị bạn cấu hình bảo mật thiết bị ngay sau khi hoàn tất kết nối mạng."
-                                          : selectedSecurityQuestion ===
-                                              "Việc sử dụng mã xác minh qua tin nhắn SMS"
-                                            ? "Mã xác minh SMS (OTP) là lớp bảo mật hai bước nâng cao được cung cấp bởi Smart Elderly Care AI, vượt trội hơn so với việc chỉ dùng mật khẩu thông thường. Khi người dùng thực hiện các thao tác nhạy cảm (như đăng nhập trên thiết bị mới, thay đổi cấu hình cảnh báo SOS khẩn cấp, chia sẻ quyền giám sát, v.v.), hệ thống sẽ gửi mã SMS OTP để xác thực danh tính chính chủ. Điều này giúp ngăn chặn tối đa nguy cơ tài khoản bị xâm nhập trái phép. Hãy lưu ý không bao giờ tiết lộ mã OTP cho bất kỳ ai."
-                                            : "Hệ thống Smart Elderly Care AI sử dụng nhiều lớp bảo vệ tài khoản, xác minh thiết bị và mã xác thực để hạn chế truy cập trái phép. Bạn nên bật xác minh hai bước và thường xuyên kiểm tra lịch sử đăng nhập."}
+                                    {getSecurityQuestionAnswer(selectedSecurityQuestion)}
                                 </Text>
                             </View>
                         )}

@@ -6,9 +6,10 @@
 
 import React, { useState, useEffect } from 'react';
 import {
-  View, Text, StyleSheet, TouchableOpacity, ScrollView, TextInput,
-  Modal, Pressable, Alert, Linking, Platform, Image, ActivityIndicator,
+  View, StyleSheet, TouchableOpacity, ScrollView, TextInput,
+  Modal, Pressable, Linking, Platform, Image, ActivityIndicator,
 } from 'react-native';
+import { LocalizedAlert as Alert, LocalizedText as Text } from '../../../i18n/LocalizedComponents';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
 import * as ImagePicker from 'expo-image-picker';
