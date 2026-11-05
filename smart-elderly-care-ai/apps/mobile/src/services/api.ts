@@ -485,6 +485,10 @@ export const householdApi = {
     api.get(`/houses/${householdId}/my-permissions`),
   joinHouse: (codeOrLink: string) =>
     api.post('/houses/join', { code: codeOrLink }),
+  respondHouseInvite: (memberId: string, action: 'accept' | 'reject') =>
+    api.post(`/houses/invites/${memberId}/respond`, { action }),
+  respondJoinRequest: (memberId: string, action: 'accept' | 'reject') =>
+    api.post(`/houses/join-requests/${memberId}/respond`, { action }),
 };
 
 export const houseApi = {

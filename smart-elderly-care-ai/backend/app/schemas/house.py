@@ -101,6 +101,7 @@ class HouseMemberOut(BaseModel):
     can_handle_emergency: bool = True
     can_manage_devices: bool = False
     can_manage_records: bool = False
+    status: str = "ACTIVE"
     
     is_owner: bool = False
     joined_at: Optional[datetime] = None
@@ -120,3 +121,7 @@ class UserHousePermissionsOut(BaseModel):
     can_handle_emergency: bool = False
     can_manage_devices: bool = False
     can_manage_records: bool = False
+
+
+class MemberConfirmationRespond(BaseModel):
+    action: str = Field(..., description="'accept' | 'reject'")

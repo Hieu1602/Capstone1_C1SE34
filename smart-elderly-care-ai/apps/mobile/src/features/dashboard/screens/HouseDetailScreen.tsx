@@ -34,8 +34,9 @@ import {
 
 export default function HouseDetailScreen({ navigation, route }: any) {
   const { house, updateHouseAddress, fetchHouseFromBackend } = useVitalStore();
-  const { full_name, userName, phone_number, userPhone, household_id, role, userRole } = useAuthStore();
+  const { full_name, userName, phone_number, userPhone, household_id, role, userRole, permissions, userId, user_id } = useAuthStore();
   const { isDarkMode } = useTheme();
+  const currentUserId = userId || user_id;
 
   // State chỉnh sửa địa chỉ
   const [isEditAddressModalVisible, setIsEditAddressModalVisible] = useState(false);
@@ -86,11 +87,14 @@ export default function HouseDetailScreen({ navigation, route }: any) {
     hasLinkedHouse &&
     (userRole === 'admin' ||
       role === 'admin' ||
+      permissions?.is_owner === true ||
+      permissions?.role_in_house === 'OWNER' ||
       Boolean(
         members.find(
           (m) =>
             (m.is_owner || m.role_in_house === 'OWNER') &&
-            (m.phone_number === phone_number || m.phone_number === userPhone)
+            ((currentUserId && m.user_id === currentUserId) ||
+             (m.phone_number && (m.phone_number === phone_number || m.phone_number === userPhone || m.phone_number?.endsWith((phone_number || '').slice(-9)))))
         )
       ));
 
@@ -394,7 +398,7 @@ export default function HouseDetailScreen({ navigation, route }: any) {
       setInviteModalVisible(false);
       setNewMemberPhone('');
       setNewMemberName('');
-      triggerToast(`Đã thêm ${phoneToSubmit} vào ngôi nhà thành công.`);
+      triggerToast(`Đã gửi lời mời tham gia tới ${phoneToSubmit} . Đang chờ thành viên xác nhận.`);
       loadMembers();
     } catch (error: any) {
       const errDetail = error.response?.data?.detail || error.message || 'Không thể thêm thành viên. Vui lòng kiểm tra lại.';
@@ -742,7 +746,7 @@ export default function HouseDetailScreen({ navigation, route }: any) {
         onClose={() => setIsJoinCodeModalVisible(false)}
         onJoin={handleJoinHouse}
         onJoinSuccess={() => {
-          triggerToast('🎉 Chúc mừng! Bạn đã tham gia vào căn nhà thành công.');
+          triggerToast('📩 Đã gửi yêu cầu tham gia tới Chủ hộ. Vui lòng chờ Chủ hộ xác nhận nhé!');
         }}
         isDarkMode={isDarkMode}
         colors={colors}

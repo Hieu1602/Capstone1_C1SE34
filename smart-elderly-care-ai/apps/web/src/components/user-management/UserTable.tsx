@@ -98,7 +98,9 @@ export const UserTable: React.FC<UserTableProps> = ({
                     <td className="py-3 px-4">
                       <div className="flex items-center space-x-1.5 text-xs text-[#737780] dark:text-[#A1A7B1]">
                         <Home className="w-3.5 h-3.5 text-[#737780] shrink-0" />
-                        <span className="truncate max-w-[180px]">{userItem.assigned_house || 'Chưa phân bổ'}</span>
+                        <span className="truncate max-w-[240px]" title={userItem.assigned_house || undefined}>
+                          {userItem.assigned_house || 'Chưa phân bổ'}
+                        </span>
                       </div>
                     </td>
 

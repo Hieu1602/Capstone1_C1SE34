@@ -1,0 +1,73 @@
+Tổng hợp tình trạng chuẩn bị tại nhà,,,,
+"Số liệu tự tính từ hai sheet ""Dụng cụ y tế"" và ""Thuốc"". Cập nhật cột ""Đã có?"" ở hai sheet đó.",,,,
+,,,,
+Mức ưu tiên,Dụng cụ: tổng,Dụng cụ: đã có,Thuốc: tổng,Thuốc: đã có
+Bắt buộc phải có,5,0,5,0
+Phải có,6,0,6,0
+Nên có,7,0,5,0
+Tổng cộng,18,0,16,0
+,,,,
+Tỷ lệ đã có (dụng cụ + thuốc),0,,,
+Mục bắt buộc còn thiếu,10,,,
+,,,,
+"Nên bổ sung ngay các mục ""Bắt buộc phải có"" còn thiếu (ô B11 phải bằng 0).",,,,
+Dụng cụ y tế tại nhà cho người cao tuổi,,,,,
+"Cột ""Đã có?"" chọn Có hoặc Chưa (ô xanh dương là ô nhập). Mức ưu tiên: Bắt buộc phải có > Phải có > Nên có.",,,,,
+,,,,,
+STT,Mức ưu tiên,Dụng cụ,Dùng để làm gì,Đã có?,"Ghi chú, ngày kiểm tra"
+1,Bắt buộc phải có,Máy đo huyết áp bắp tay (điện tử),"Theo dõi huyết áp hằng ngày, nhận biết cơn tăng hoặc tụt huyết áp",Chưa,
+2,Bắt buộc phải có,Nhiệt kế (điện tử hoặc hồng ngoại),Phát hiện sốt; người già có thể sốt nhẹ nhưng bệnh nặng,Chưa,
+3,Bắt buộc phải có,"Danh sách số điện thoại khẩn cấp và tờ thông tin y tế (tên, tuổi, bệnh nền, thuốc đang dùng, dị ứng)","115, bác sĩ gia đình, người thân; đưa cho đội cấp cứu",Chưa,
+4,Bắt buộc phải có,"Bông, gạc vô trùng, băng dính y tế, băng cuộn","Cầm máu, băng vết thương",Chưa,
+5,Bắt buộc phải có,"Dung dịch sát khuẩn (cồn 70°, povidone-iodine), nước muối sinh lý",Rửa và sát khuẩn vết thương,Chưa,
+6,Phải có,"Máy đo đường huyết, que thử, kim lấy máu",Bắt buộc nếu có người đái tháo đường; nên có kể cả khi không bệnh để xử trí lú lẫn đột ngột,Chưa,
+7,Phải có,Máy đo SpO2 (kẹp ngón tay),"Phát hiện thiếu oxy khi khó thở, viêm phổi, COPD",Chưa,
+8,Phải có,"Găng tay y tế, khẩu trang","Bảo vệ khi chăm sóc, vệ sinh vết thương",Chưa,
+9,Phải có,"Kéo, nhíp y tế, băng tam giác","Cắt băng, nẹp tạm cố định chi khi nghi gãy xương",Chưa,
+10,Phải có,Túi chườm nóng lạnh,"Chườm cho đau cơ, sưng khớp",Chưa,
+11,Phải có,"Đèn pin, pin dự phòng","Mất điện ban đêm, dùng khi cấp cứu",Chưa,
+12,Nên có,Cân sức khỏe,Suy tim cần cân mỗi sáng; theo dõi sụt cân,Chưa,
+13,Nên có,Máy xông khí dung,"Cho người COPD, hen đã được bác sĩ kê thuốc",Chưa,
+14,Nên có,"Gậy, khung tập đi, ghế tắm có tay vịn, thảm chống trượt",Phòng ngã,Chưa,
+15,Nên có,"Máy đo huyết áp cổ tay hoặc dự phòng, ống nghe","Dự phòng, tham khảo",Chưa,
+16,Nên có,Nệm hơi hoặc nệm chống loét,Người nằm lâu,Chưa,
+17,Nên có,Máy tạo oxy hoặc bình oxy,Chỉ khi bác sĩ chỉ định dùng oxy tại nhà,Chưa,
+18,Nên có,"Nẹp cổ tay, nẹp gối, đai lưng","Khi có thoái hóa khớp, theo hướng dẫn",Chưa,
+Thuốc gia đình cho người cao tuổi,,,,,,
+"Thuốc kê đơn (nitroglycerin, salbutamol, glucagon) chỉ dùng khi bác sĩ đã kê, không tự mua. Liều dành cho người lớn không suy gan, suy thận nặng hay dị ứng thuốc. Tham khảo, không thay thế tư vấn của bác sĩ.",,,,,,
+,,,,,,
+STT,Mức ưu tiên,Thuốc,Dùng khi,Lưu ý quan trọng,Đã có?,Hạn dùng (nhập ngày)
+1,Bắt buộc phải có,"Thuốc điều trị bệnh mạn tính đã được bác sĩ kê (huyết áp, tiểu đường, tim, mỡ máu, hen, COPD...)",Dùng hằng ngày,"Dự trữ đủ ít nhất 1-2 tuần, kiểm tra hạn dùng; không tự ngưng hoặc đổi liều",Chưa,
+2,Bắt buộc phải có,Paracetamol 500 mg,"Sốt, đau nhẹ","1 viên mỗi lần, cách nhau ít nhất 6 giờ, tối đa 3 g/ngày (dưới 2 g/ngày nếu có bệnh gan hoặc uống rượu); tránh dùng chung thuốc cảm khác có paracetamol",Chưa,
+3,Bắt buộc phải có,Oresol,"Tiêu chảy, nôn, mất nước","Pha đúng lượng nước theo bao bì, uống từng ngụm nhỏ",Chưa,
+4,Bắt buộc phải có,"Đường, kẹo ngọt hoặc nước ngọt thường",Hạ đường huyết khi còn tỉnh,"15-20 g, đo lại sau 15 phút; không cho khi lơ mơ hoặc bất tỉnh",Chưa,
+5,Bắt buộc phải có,"Nước muối sinh lý 0,9%","Rửa vết thương, nhỏ mũi, súc họng",Dùng riêng từng chai để vệ sinh,Chưa,
+6,Phải có,Aspirin (300 mg hoặc 81 mg),"Nghi nhồi máu cơ tim, nhai 1 lần duy nhất trong khi chờ 115","Không dùng khi nghi đột quỵ, dị ứng aspirin, đang chảy máu, loét hoặc xuất huyết tiêu hóa; không dùng thường xuyên nếu bác sĩ không kê",Chưa,
+7,Phải có,Nitroglycerin ngậm dưới lưỡi (chỉ khi bác sĩ đã kê),"Người có bệnh mạch vành, đau thắt ngực",Ngồi khi dùng; không dùng nếu huyết áp tối đa dưới 90 hoặc đã dùng sildenafil trong 24-48 giờ,Chưa,
+8,Phải có,Thuốc xịt cắt cơn salbutamol (chỉ khi bác sĩ đã kê),Người hen hoặc COPD lên cơn khó thở,Theo đúng số nhát đã hướng dẫn,Chưa,
+9,Phải có,"Glucagon, bút tiêm hoặc xịt (chỉ khi bác sĩ đã kê)",Người dùng insulin hoặc hay hạ đường huyết nặng,Người nhà phải biết cách dùng,Chưa,
+10,Phải có,Thuốc kháng acid (nhôm hydroxide/magie hydroxide),"Ợ chua, đầy bụng, đau dạ dày nhẹ",Dùng theo nhãn; đau ngực hoặc đau thượng vị kèm vã mồ hôi cần loại trừ tim,Chưa,
+11,Phải có,"Thuốc nhuận tràng thẩm thấu (lactulose, macrogol)",Táo bón,Theo hướng dẫn trên bao bì; tránh lạm dụng thuốc xổ kích thích,Chưa,
+12,Nên có,"Gel bôi giảm đau (diclofenac gel, menthol)","Đau cơ, đau khớp nhẹ","Bôi lớp mỏng, không bôi lên vết thương hở; hỏi bác sĩ nếu có bệnh thận hoặc loét dạ dày",Chưa,
+13,Nên có,"Kem dưỡng ẩm, kem chống hăm","Khô da, ngứa, hăm kẽ",Dùng cho người nằm lâu hoặc mặc tã,Chưa,
+14,Nên có,Thuốc nhỏ mắt nước muối hoặc nước mắt nhân tạo,"Khô mắt, rửa mắt",Không dùng thuốc nhỏ mắt có kháng sinh hoặc corticoid khi chưa có chỉ định,Chưa,
+15,Nên có,"Vitamin D, canxi","Loãng xương, theo chỉ định",Không tự dùng liều cao kéo dài,Chưa,
+16,Nên có,Thuốc sát trùng họng hoặc viên ngậm,Đau họng nhẹ,Dùng ngắn ngày,Chưa,
+Thuốc không nên có sẵn hoặc không tự dùng,,
+,,
+STT,Thuốc,Lý do
+1,"Kháng sinh (amoxicillin, azithromycin...)","Tự dùng dễ sai thuốc, sai liều, che lấp bệnh nặng. Chỉ dùng khi bác sĩ kê."
+2,"Thuốc kháng viêm (ibuprofen, diclofenac uống, meloxicam)","Dễ gây loét dạ dày, suy thận, tăng huyết áp ở người già."
+3,"Thuốc ngủ, thuốc an thần (diazepam, zolpidem)",Tăng nguy cơ ngã và lú lẫn.
+4,"Corticoid (prednisolon, dexamethason), thuốc ""xương khớp"" hoặc thuốc nam không rõ nguồn gốc","Có thể trộn corticoid: gây tăng đường huyết, huyết áp, loãng xương, loét dạ dày."
+5,Thuốc cầm tiêu chảy (loperamide) khi có sốt hoặc phân có máu,"Có thể che lấp nhiễm trùng, làm bệnh nặng hơn."
+6,Thuốc cảm tổng hợp nhiều thành phần,"Dễ trùng paracetamol, gây tăng huyết áp, bí tiểu, buồn ngủ."
+Cách quản lý tủ thuốc,
+,
+STT,Nguyên tắc
+1,"Để tủ thuốc nơi khô ráo, mát, tránh ánh nắng, tầm xa trẻ em; không để trong nhà tắm."
+2,"Kiểm tra hạn dùng 3-6 tháng một lần, bỏ thuốc hết hạn hoặc đổi màu."
+3,"Giữ thuốc trong bao bì gốc, có nhãn tên thuốc và liều."
+4,Dùng hộp chia thuốc theo ngày hoặc buổi cho người già dùng nhiều thuốc để tránh quên hoặc uống nhầm.
+5,"Lập danh sách thuốc đang dùng và dị ứng thuốc, dán ở nơi dễ thấy và mang theo khi đi khám."
+6,"Kiểm tra pin của máy đo huyết áp, đường huyết, nhiệt kế định kỳ; que thử đường huyết cũng có hạn dùng."

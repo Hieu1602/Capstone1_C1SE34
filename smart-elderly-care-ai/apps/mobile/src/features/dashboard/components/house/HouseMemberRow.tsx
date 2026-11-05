@@ -100,6 +100,16 @@ export const HouseMemberRow: React.FC<HouseMemberRowProps> = ({
                 {roleDisplay}
               </Text>
             </View>
+            {member.status === 'PENDING_MEMBER_CONFIRM' && (
+              <View style={[styles.roleBadge, { backgroundColor: '#FEF3C7', borderColor: '#FDE68A', borderWidth: 1 }]}>
+                <Text style={[styles.inviteRoleBadgeText, { color: '#D97706', fontWeight: '700' }]}>Chờ xác nhận</Text>
+              </View>
+            )}
+            {member.status === 'PENDING_OWNER_CONFIRM' && (
+              <View style={[styles.roleBadge, { backgroundColor: '#EFF6FF', borderColor: '#BFDBFE', borderWidth: 1 }]}>
+                <Text style={[styles.inviteRoleBadgeText, { color: '#2563EB', fontWeight: '700' }]}>Chờ duyệt</Text>
+              </View>
+            )}
           </View>
 
           <Text style={[styles.memberPhoneSub, { color: textSub }]}>

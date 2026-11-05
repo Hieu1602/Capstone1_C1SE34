@@ -82,20 +82,15 @@ export const ProfileQuickGrid: React.FC<ProfileQuickGridProps> = ({
           activeOpacity={0.8}
           onPress={() => onNavigate('PatientMedicalRecord')}
         >
-          <View style={styles.fbGridCardTopRow}>
-            <View
-              style={[
-                styles.fbGridIconBox,
-                {
-                  backgroundColor: isDarkMode ? '#082F49' : '#E0F2FE',
-                },
-              ]}
-            >
-              <Ionicons name="medkit-outline" size={24} color="#0EA5E9" />
-            </View>
-            <View style={styles.fbAesBadge}>
-              <Text style={styles.fbAesBadgeText}>AES-256</Text>
-            </View>
+          <View
+            style={[
+              styles.fbGridIconBox,
+              {
+                backgroundColor: isDarkMode ? '#082F49' : '#E0F2FE',
+              },
+            ]}
+          >
+            <Ionicons name="medkit-outline" size={24} color="#0EA5E9" />
           </View>
           <Text
             style={[

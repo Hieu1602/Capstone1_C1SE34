@@ -93,6 +93,7 @@ class HouseMember(Base):
     role_in_house: Mapped[str] = mapped_column(String(50), default="MEMBER", nullable=False)
     # Quyền hạn thao tác: ADMIN, EDIT, VIEW, OPERATOR
     permissions: Mapped[str] = mapped_column(String(50), default="VIEW", nullable=False)
+    status: Mapped[str] = mapped_column(String(30), default="ACTIVE", server_default="ACTIVE", nullable=False)
 
     # Phân quyền chi tiết (RBAC) cho Thành viên:
     can_view_health: Mapped[bool] = mapped_column(Boolean, default=True, server_default="true", nullable=False)

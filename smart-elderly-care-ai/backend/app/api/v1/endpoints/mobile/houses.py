@@ -9,7 +9,7 @@ from typing import List, Optional
 from uuid import UUID
 
 from fastapi import APIRouter, Depends, HTTPException, status
-from sqlalchemy import select
+from sqlalchemy import select, or_
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import selectinload
 
@@ -24,6 +24,7 @@ from app.models.user import User
 
 logger = logging.getLogger(__name__)
 from app.schemas.house import (
+    MemberConfirmationRespond,
     HouseMemberCreate,
     HouseMemberOut,
     HouseMemberPermissionsUpdate,
@@ -91,6 +92,7 @@ def _format_member_out(m: HouseMember, house: House) -> HouseMemberOut:
         can_handle_emergency=True if is_owner else m.can_handle_emergency,
         can_manage_devices=True if is_owner else m.can_manage_devices,
         can_manage_records=True if is_owner else m.can_manage_records,
+        status=getattr(m, "status", "ACTIVE") or "ACTIVE",
         is_owner=is_owner,
         joined_at=m.joined_at,
     )
@@ -240,16 +242,16 @@ async def add_house_member(
         owner_name = current_user.full_name or "Chủ hộ"
         role_desc = "Bác sĩ gia đình" if new_member.role_in_house == "DOCTOR" else "Thành viên gia đình"
         house_display = house.name or "Nhà của tôi"
-        notif_msg = f"Bạn đã được Chủ hộ {owner_name} thêm vào căn nhà \"{house_display}\" với vai trò {role_desc}. Hãy vào mục Nhà của tôi để kiểm tra quyền hạn."
+        notif_msg = f"Chủ hộ {owner_name} đã gửi lời mời bạn tham gia căn nhà \"{house_display}\" với vai trò {role_desc}. Hãy nhấn vào đây để xác nhận vào nhà."
 
         if device_id:
             member_incident = Incident(
                 device_id=device_id,
-                alert_type="HOUSE_MEMBER_ADDED",
+                alert_type="HOUSE_INVITE_PENDING",
                 alert_level="LOW",
                 message=notif_msg,
                 is_acknowledged=False,
-                notes=f"USER:{target_user_id}",
+                notes=f"USER:{target_user_id}|HOUSE_INVITE_PENDING|MEMBER_ID:{new_member.id}|HOUSE_ID:{house.id}",
             )
             db.add(member_incident)
             await db.commit()
@@ -260,13 +262,14 @@ async def add_house_member(
                 from app.api.websockets.vitals_ws import alert_clients
                 ws_payload = json.dumps({
                     "type": "ALERT_NEW",
-                    "alert_type": "HOUSE_MEMBER_ADDED",
+                    "alert_type": "HOUSE_INVITE_PENDING",
                     "data": {
                         "id": str(member_incident.id),
-                        "alert_type": "HOUSE_MEMBER_ADDED",
+                        "alert_type": "HOUSE_INVITE_PENDING",
                         "alert_level": "LOW",
                         "message": member_incident.message,
                         "target_user_id": str(target_user_id),
+                        "member_id": str(new_member.id),
                         "house_id": str(house.id),
                         "created_at": member_incident.created_at.isoformat() if member_incident.created_at else None,
                     }
@@ -451,13 +454,23 @@ async def join_house_by_code(
         )
 
     is_owner = (target_house.owner_id == current_user.id)
-    is_doctor = (current_user.role == "doctor")
+    if is_owner:
+        return target_house
+
     existing_member = await crud_house.get_member_by_user(db, house_id=target_house.id, user_id=current_user.id)
-    if not existing_member and not is_owner:
+    if existing_member and existing_member.status == "ACTIVE":
+        return target_house
+
+    is_doctor = (current_user.role == "doctor")
+    if existing_member:
+        existing_member.status = "PENDING_OWNER_CONFIRM"
+        new_membership = existing_member
+    else:
         new_membership = HouseMember(
             house_id=target_house.id,
             user_id=current_user.id,
             role_in_house="DOCTOR" if is_doctor else "MEMBER",
+            status="PENDING_OWNER_CONFIRM",
             can_view_health=True,
             can_view_camera=True,
             can_handle_emergency=True,
@@ -465,8 +478,265 @@ async def join_house_by_code(
             can_manage_records=True if is_doctor else False,
         )
         db.add(new_membership)
-        await db.commit()
+    await db.flush()
+    await db.refresh(new_membership)
 
+    # Gửi thông báo đến Chủ hộ để duyệt yêu cầu vào nhà
+    try:
+        dev_res = await db.execute(
+            select(Device.id).where(Device.house_id == target_house.id).limit(1)
+        )
+        device_id = dev_res.scalar_one_or_none()
+        if not device_id:
+            any_dev = await db.execute(select(Device.id).limit(1))
+            device_id = any_dev.scalar_one_or_none()
+
+        requester_name = current_user.full_name or "Thành viên"
+        requester_phone = current_user.phone or ""
+        owner_id = target_house.owner_id
+        notif_msg = f"{requester_name} ({requester_phone}) đã gửi yêu cầu tham gia vào căn nhà \"{target_house.name}\". Bạn có muốn xác nhận cho vào nhà không?"
+
+        if device_id:
+            owner_incident = Incident(
+                device_id=device_id,
+                alert_type="HOUSE_JOIN_REQUEST",
+                alert_level="LOW",
+                message=notif_msg,
+                is_acknowledged=False,
+                notes=f"USER:{owner_id}|HOUSE_JOIN_REQUEST|MEMBER_ID:{new_membership.id}|HOUSE_ID:{target_house.id}",
+            )
+            db.add(owner_incident)
+            await db.commit()
+            await db.refresh(owner_incident)
+
+            # Phát thời gian thực qua WebSocket
+            try:
+                from app.api.websockets.vitals_ws import alert_clients
+                ws_payload = json.dumps({
+                    "type": "ALERT_NEW",
+                    "alert_type": "HOUSE_JOIN_REQUEST",
+                    "data": {
+                        "id": str(owner_incident.id),
+                        "alert_type": "HOUSE_JOIN_REQUEST",
+                        "alert_level": "LOW",
+                        "message": owner_incident.message,
+                        "target_user_id": str(owner_id),
+                        "member_id": str(new_membership.id),
+                        "house_id": str(target_house.id),
+                        "created_at": owner_incident.created_at.isoformat() if owner_incident.created_at else None,
+                    }
+                }, ensure_ascii=False)
+                for client_ws in list(alert_clients):
+                    try:
+                        await client_ws.send_text(ws_payload)
+                    except Exception:
+                        if client_ws in alert_clients:
+                            alert_clients.remove(client_ws)
+            except Exception as ws_err:
+                logger.warning("[join_house_by_code] WS broadcast error: %s", ws_err)
+    except Exception as e:
+        logger.warning("[join_house_by_code] Incident error: %s", e)
 
     return target_house
 
+
+
+
+# ==============================================================================
+# 3. PHẢN HỒI LỜI MỜI / YÊU CẦU THAM GIA CĂN NHÀ
+# ==============================================================================
+
+@router.post("/invites/{member_id}/respond")
+async def respond_to_house_invite(
+    member_id: UUID,
+    payload: MemberConfirmationRespond,
+    current_user: User = Depends(get_current_user),
+    db: AsyncSession = Depends(get_db),
+):
+    """
+    Thành viên phản hồi lời mời tham gia nhà từ Chủ hộ:
+    - action = 'accept': kích hoạt thành viên (ACTIVE), chính thức vào nhà.
+    - action = 'reject': xóa bản ghi lời mời.
+    """
+    stmt = (
+        select(HouseMember)
+        .options(selectinload(HouseMember.house))
+        .where(
+            or_(
+                HouseMember.id == member_id,
+                HouseMember.user_id == member_id,
+                HouseMember.user_id == current_user.id,
+            )
+        )
+    )
+    res = await db.execute(stmt)
+    members_list = res.scalars().all()
+    member = None
+    for m in members_list:
+        if m.status == "PENDING_MEMBER_CONFIRM":
+            member = m
+            break
+    if not member and members_list:
+        member = members_list[0]
+
+    if not member:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="Không tìm thấy lời mời tham gia nhà phù hợp với tài khoản của bạn.",
+        )
+
+    house_name = member.house.name if member.house else "Nhà của bạn"
+    house_id = member.house_id
+
+    # Đánh dấu incident lời mời đã xử lý
+    from datetime import datetime, timezone
+    now_dt = datetime.now(timezone.utc)
+    inc_stmt = select(Incident).where(
+        Incident.alert_type == "HOUSE_INVITE_PENDING",
+        Incident.notes.contains(str(current_user.id)),
+    )
+    inc_res = await db.execute(inc_stmt)
+    for inc in inc_res.scalars().all():
+        inc.is_acknowledged = True
+        inc.acknowledged_at = now_dt
+
+    if payload.action.lower() == "accept":
+        member.status = "ACTIVE"
+        await db.flush()
+
+        # Tạo thông báo xác nhận thành công cho Chủ hộ
+        if member.house:
+            dev_res = await db.execute(select(Device.id).where(Device.house_id == house_id).limit(1))
+            device_id = dev_res.scalar_one_or_none() or (await db.execute(select(Device.id).limit(1))).scalar_one_or_none()
+            if device_id:
+                accept_inc = Incident(
+                    device_id=device_id,
+                    alert_type="HOUSE_MEMBER_ADDED",
+                    alert_level="LOW",
+                    message=f"{current_user.full_name} đã xác nhận đồng ý tham gia căn nhà \"{house_name}\"!",
+                    is_acknowledged=False,
+                    notes=f"USER:{member.house.owner_id}",
+                )
+                db.add(accept_inc)
+
+        await db.commit()
+        return {"status": "accepted", "message": f"Bạn đã tham gia căn nhà \"{house_name}\" thành công!"}
+    else:
+        # Reject
+        await db.delete(member)
+        if member.house:
+            dev_res = await db.execute(select(Device.id).where(Device.house_id == house_id).limit(1))
+            device_id = dev_res.scalar_one_or_none() or (await db.execute(select(Device.id).limit(1))).scalar_one_or_none()
+            if device_id:
+                reject_inc = Incident(
+                    device_id=device_id,
+                    alert_type="HOUSE_INVITE_REJECTED",
+                    alert_level="LOW",
+                    message=f"{current_user.full_name} đã từ chối lời mời tham gia căn nhà \"{house_name}\".",
+                    is_acknowledged=False,
+                    notes=f"USER:{member.house.owner_id}",
+                )
+                db.add(reject_inc)
+
+        await db.commit()
+        return {"status": "rejected", "message": "Đã từ chối lời mời tham gia căn nhà."}
+
+
+@router.post("/join-requests/{member_id}/respond")
+async def respond_to_join_request(
+    member_id: UUID,
+    payload: MemberConfirmationRespond,
+    current_user: User = Depends(get_current_user),
+    db: AsyncSession = Depends(get_db),
+):
+    """
+    Chủ hộ phản hồi yêu cầu xin vào nhà từ Thành viên:
+    - action = 'accept': phê duyệt thành viên (ACTIVE), cho phép vào nhà.
+    - action = 'reject': từ chối yêu cầu và xóa khỏi danh sách.
+    """
+    stmt = (
+        select(HouseMember)
+        .options(selectinload(HouseMember.house), selectinload(HouseMember.user))
+        .where(
+            or_(
+                HouseMember.id == member_id,
+                HouseMember.user_id == member_id,
+            )
+        )
+    )
+    res = await db.execute(stmt)
+    members_list = res.scalars().all()
+    member = None
+    for m in members_list:
+        if m.status == "PENDING_OWNER_CONFIRM":
+            member = m
+            break
+    if not member and members_list:
+        member = members_list[0]
+
+    if not member or not member.house:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="Không tìm thấy yêu cầu tham gia căn nhà này.",
+        )
+
+    # Chỉ Chủ nhà hoặc Admin mới được duyệt
+    if current_user.role != "admin" and member.house.owner_id != current_user.id:
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="Chỉ Chủ sở hữu căn nhà mới có quyền phê duyệt yêu cầu vào nhà.",
+        )
+
+    target_user_id = member.user_id
+    house_name = member.house.name or "Nhà của tôi"
+    m_name = member.user.full_name if member.user else "Thành viên"
+
+    # Đánh dấu incident yêu cầu của chủ hộ đã xử lý
+    from datetime import datetime, timezone
+    now_dt = datetime.now(timezone.utc)
+    inc_stmt = select(Incident).where(
+        Incident.alert_type == "HOUSE_JOIN_REQUEST",
+        Incident.notes.contains(str(member.id)),
+    )
+    inc_res = await db.execute(inc_stmt)
+    for inc in inc_res.scalars().all():
+        inc.is_acknowledged = True
+        inc.acknowledged_at = now_dt
+
+    dev_res = await db.execute(select(Device.id).where(Device.house_id == member.house_id).limit(1))
+    device_id = dev_res.scalar_one_or_none() or (await db.execute(select(Device.id).limit(1))).scalar_one_or_none()
+
+    if payload.action.lower() == "accept":
+        member.status = "ACTIVE"
+        await db.flush()
+
+        # Tạo thông báo đã duyệt cho Thành viên
+        if device_id:
+            approved_inc = Incident(
+                device_id=device_id,
+                alert_type="HOUSE_JOIN_APPROVED",
+                alert_level="LOW",
+                message=f"Chủ hộ đã chấp thuận yêu cầu tham gia căn nhà \"{house_name}\". Bạn đã là thành viên chính thức!",
+                is_acknowledged=False,
+                notes=f"USER:{target_user_id}",
+            )
+            db.add(approved_inc)
+
+        await db.commit()
+        return {"status": "accepted", "message": f"Đã phê duyệt cho {m_name} vào căn nhà thành công."}
+    else:
+        # Reject
+        await db.delete(member)
+        if device_id:
+            reject_inc = Incident(
+                device_id=device_id,
+                alert_type="HOUSE_JOIN_REJECTED",
+                alert_level="LOW",
+                message=f"Yêu cầu tham gia căn nhà \"{house_name}\" của bạn đã bị từ chối.",
+                is_acknowledged=False,
+                notes=f"USER:{target_user_id}",
+            )
+            db.add(reject_inc)
+
+        await db.commit()
+        return {"status": "rejected", "message": f"Đã từ chối yêu cầu tham gia của {m_name}."}
