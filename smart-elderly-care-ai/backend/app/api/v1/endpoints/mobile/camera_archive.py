@@ -18,6 +18,7 @@ from app.api.v1.endpoints.mobile.camera import viewer
 from app.core.database import get_db
 from app.models.camera_recording import CameraRecording
 from app.models.device import Device
+from app.models.incident import Incident
 from app.api.v1.endpoints.mobile.camera_hls import router as hls_router
 from app.services.storage import video_storage
 
@@ -95,6 +96,10 @@ async def ingest(body: RecordingMetadata, authorization: str = Header(default=""
         if existing is None or any(getattr(existing, key) != value for key, value in body.model_dump().items()):
             await db.rollback()
             raise HTTPException(409, "Recording metadata is immutable")
+    if body.kind == "incident" and body.incident_id:
+        incident = await db.get(Incident, body.incident_id)
+        if incident and not incident.video_clip_url:
+            incident.video_clip_url = f"/api/v1/mobile/camera/archive/{body.id}/playback"
     await db.commit()
     return {"id": str(body.id)}
 

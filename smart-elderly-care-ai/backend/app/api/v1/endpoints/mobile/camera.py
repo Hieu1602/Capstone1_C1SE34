@@ -413,10 +413,12 @@ async def forward_camera(context, path: str, payload=None, params: dict | None =
     forward_params = dict(params or {})
     if getattr(device, "config", None) and getattr(device.config, "stream_url", None) and "src" not in forward_params:
         forward_params["src"] = device.config.stream_url
-    kwargs = {"params": forward_params} if forward_params else {}
+    extra_kw = {}
+    if forward_params:
+        extra_kw["params"] = forward_params
     if camera_id in extra_sources():
-        return await forward(path, payload, camera_id=camera_id, **kwargs)
-    return await forward(path, payload, **kwargs)
+        return await forward(path, payload, camera_id=camera_id, **extra_kw)
+    return await forward(path, payload, **extra_kw)
 
 
 @router.get("")
@@ -545,6 +547,22 @@ async def record(body: Recording, _=Depends(operator)):
         JSON bản ghi. Tác động: khởi động ghi hình ở dịch vụ camera.
     """
     return await forward_camera(_, "/recordings", body.model_dump())
+
+
+class FallDetectionConfig(BaseModel):
+    enabled: StrictBool
+
+
+@router.get("/fall-detection")
+async def get_fall_detection(context=Depends(viewer)):
+    """Đọc trạng thái nhận diện té ngã AI từ camera."""
+    return await forward_camera(context, "/fall-detection")
+
+
+@router.post("/fall-detection")
+async def set_fall_detection(body: FallDetectionConfig, _=Depends(operator)):
+    """Bật/tắt chế độ nhận diện té ngã AI từ camera."""
+    return await forward_camera(_, "/fall-detection", body.model_dump())
 
 
 class VideoMode(BaseModel):
@@ -713,6 +731,7 @@ def valid_resource(resource: str) -> bool:
 class MediaRequest(BaseModel):
     resource: str
     quality: Literal["1080p", "720p", "auto"] = "auto"
+    overlay: bool = False
 
 
 @router.post("/ticket")
@@ -732,14 +751,16 @@ async def ticket(body: MediaRequest, context=Depends(viewer)):
     # Token chỉ mở đúng một tài nguyên trong 5 phút; không phải JWT đăng nhập.
     expires = int(time.time()) + 300
     token = jwt.encode({"sub": str(user.id), "type": "camera_media", "device": str(device.id),
-                        "resource": body.resource, "quality": body.quality, "exp": expires}, settings.SECRET_KEY,
+                        "resource": body.resource, "quality": body.quality, "overlay": body.overlay, "exp": expires}, settings.SECRET_KEY,
                        algorithm=settings.ALGORITHM)
     suffix = f"&quality={body.quality}" if body.resource == "live.mjpg" else ""
+    if body.overlay:
+        suffix += "&overlay=1"
     return {"path": f"/camera/media/{body.resource}?ticket={token}{suffix}", "expires_in": 300}
 
 
 @router.get("/media/{resource:path}")
-async def media(resource: str, ticket: str = Query(...), db: AsyncSession = Depends(get_db), quality: Literal["1080p", "720p", "auto"] = "auto"):
+async def media(resource: str, ticket: str = Query(...), db: AsyncSession = Depends(get_db), quality: Literal["1080p", "720p", "auto"] = "auto", overlay: str = Query(default="0")):
     """Xác minh ticket và kiểm tra lại quyền trước khi truyền media.
 
     Args:
@@ -771,6 +792,8 @@ async def media(resource: str, ticket: str = Query(...), db: AsyncSession = Depe
     upstream = client(str(device.id)) if str(device.id) in extra_sources() else client()
     try:
         params = {"quality": quality} if resource == "live.mjpg" else {}
+        if overlay in ("1", "true", "yes", "True") or payload.get("overlay"):
+            params["overlay"] = "1"
         if getattr(device, "config", None) and device.config.stream_url:
             params["src"] = device.config.stream_url
         response = await upstream.send(upstream.build_request("GET", "/" + resource, params=params), stream=True)

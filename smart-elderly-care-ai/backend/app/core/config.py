@@ -21,7 +21,7 @@ _SEARCH_PATHS = [
 ]
 for _p in _SEARCH_PATHS:
     if _p.is_file():
-        load_dotenv(dotenv_path=_p, override=True)
+        load_dotenv(dotenv_path=_p, override=False)
         break
 
 

@@ -9,6 +9,7 @@ import {
     cameraApi,
     CameraRecordings,
     CameraStatus,
+    FallDetectionStatus,
     VideoQuality,
 } from "../../../services/camera";
 import { useDeviceStore } from "../../../store/useDeviceStore";
@@ -45,6 +46,11 @@ export function useCameraConnection(
     const [privacy, setPrivacy] = useState<boolean | null>(null);
     // Phát hiện chuyển động của Tapo, độc lập AI; null khi chưa đọc được.
     const [motion, setMotion] = useState<boolean | null>(null);
+    // Trạng thái nhận diện té ngã AI (YOLOv8-Pose); null khi chưa đọc được.
+    const [fallDetection, setFallDetection] = useState<boolean | null>(null);
+    const [fallStats, setFallStats] = useState<FallDetectionStatus | null>(null);
+    // Hiển thị khung xương AI (skeleton overlay) trên luồng camera
+    const [overlay, setOverlay] = useState(false);
     // URL MJPEG có ticket ngắn hạn để img/WebView phát video.
     const [liveUrl, setLiveUrl] = useState("");
     // Lỗi chung ảnh hưởng kết nối video, tách khỏi lỗi thư viện bản ghi.
@@ -83,6 +89,8 @@ export function useCameraConnection(
         setStatus(null);
         setPrivacy(null);
         setMotion(null);
+        setFallDetection(null);
+        setFallStats(null);
         setRecordings({ active: null, error: null, files: [] });
         setNeedsPairing(false);
         setError("");
@@ -147,6 +155,7 @@ export function useCameraConnection(
                         "live.mjpg",
                         cameraId,
                         quality,
+                        overlay,
                     );
                     if (cancelled) return;
                     setLiveUrl(url);
@@ -166,7 +175,8 @@ export function useCameraConnection(
                         cameraApi.privacy(cameraId),
                         cameraApi.motion(cameraId),
                         cameraApi.recordings(cameraId),
-                    ]).then(([privRes, motRes, recRes]) => {
+                        cameraApi.fallDetection(cameraId),
+                    ]).then(([privRes, motRes, recRes, fallRes]) => {
                         if (cancelled) return;
                         if (privRes.status === "fulfilled") {
                             setPrivacy(privRes.value.data?.result?.enabled === "on");
@@ -176,6 +186,10 @@ export function useCameraConnection(
                         }
                         if (recRes.status === "fulfilled") {
                             setRecordings(recRes.value.data);
+                        }
+                        if (fallRes.status === "fulfilled") {
+                            setFallDetection(fallRes.value.data.enabled);
+                            setFallStats(fallRes.value.data);
                         }
                     });
                 }
@@ -203,7 +217,7 @@ export function useCameraConnection(
             if (generation.current === currentGeneration) generation.current++;
             clearTimeout(timer);
         };
-    }, [active, cameraId, revision, quality]);
+    }, [active, cameraId, revision, quality, overlay]);
     /**
      * Tuần tự hóa một thao tác và kiểm tra trạng thái/quyền trước khi thực thi.
      * @param operation - Tác vụ API cần thực thi.
@@ -323,6 +337,41 @@ export function useCameraConnection(
         }, true);
     }
     /**
+     * Bật hoặc tắt tính năng nhận diện té ngã AI (YOLOv8-Pose).
+     * Hoạt động độc lập cả khi camera vật lý chưa có luồng hình ảnh.
+     */
+    async function toggleFallDetection(desiredState?: boolean) {
+        try {
+            const next = desiredState !== undefined ? desiredState : !fallDetection;
+            const res = await cameraApi.setFallDetection(next, cameraId);
+            const actual = res.data?.enabled ?? next;
+            setFallDetection(actual);
+            LocalizedAlert.alert(
+                "Chăm sóc AI",
+                actual
+                    ? "Đã BẬT tính năng phát hiện té ngã AI trên camera."
+                    : "Đã TẮT tính năng phát hiện té ngã AI trên camera.",
+            );
+            return actual;
+        } catch (err) {
+            LocalizedAlert.alert("Chăm sóc AI", errorMessage(err));
+            return fallDetection;
+        }
+    }
+    /**
+     * Tải nhanh trạng thái mới nhất của tính năng nhận diện té ngã AI.
+     */
+    async function refreshFallDetection() {
+        try {
+            const res = await cameraApi.fallDetection(cameraId);
+            setFallDetection(res.data.enabled);
+            setFallStats(res.data);
+            return res.data;
+        } catch {
+            return null;
+        }
+    }
+    /**
      * Đổi hướng UI thành bước PTZ và gửi lệnh có kiểm tra quyền.
      * @param direction - Một trong UP, DOWN, LEFT hoặc RIGHT.
      * @returns Promise<boolean> cho biết lệnh xoay đã được xác nhận hay chưa.
@@ -386,6 +435,13 @@ export function useCameraConnection(
         move,
         togglePrivacy,
         toggleMotion,
+        fallDetection,
+        fallStats,
+        toggleFallDetection,
+        refreshFallDetection,
+        overlay,
+        setOverlay,
+        toggleOverlay: () => setOverlay((prev) => !prev),
     };
 }
 /**
