@@ -58,6 +58,7 @@ interface HealthState {
   setConnected: (connected: boolean) => void;
   setSelectedDate: (date: string) => void;
   updateAlgoSettings: (settings: Partial<AlgoSettings>) => void;
+  resetHealthStore: () => void;
 }
 
 export const useHealthStore = create<HealthState>()((set, get) => ({
@@ -146,4 +147,24 @@ export const useHealthStore = create<HealthState>()((set, get) => ({
 
   updateAlgoSettings: (settings: Partial<AlgoSettings>) =>
     set((state) => ({ algoSettings: { ...state.algoSettings, ...settings } })),
+
+  resetHealthStore: () =>
+    set({
+      currentVitals: {
+        heart_rate: null,
+        spo2: null,
+        bp_systolic: null,
+        bp_diastolic: null,
+        skin_temp_max: null,
+        person_count: null,
+        fall_detected: false,
+        timestamp: null,
+        acoustic_status: 'Bình thường',
+        bracelet_battery: null,
+        bracelet_connected: false,
+        edge_hub_connected: false,
+      },
+      isLoadingVitals: false,
+      isLoadingMode: false,
+    }),
 }));

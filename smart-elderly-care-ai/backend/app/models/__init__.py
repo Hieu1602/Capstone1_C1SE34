@@ -11,6 +11,7 @@ from app.models.device import Device, DeviceType
 from app.models.device_config import DeviceConfig
 from app.models.vital_sign import VitalSign
 from app.models.incident import Incident
+from app.models.camera_recording import CameraRecording
 from app.models.chat import ChatSession, ChatMessage
 from app.models.system_notification import SystemNotification
 from app.models.user_terminal import UserTerminal, UserLoginHistory
@@ -29,6 +30,7 @@ __all__ = [
     "DeviceConfig",
     "VitalSign",
     "Incident",
+    "CameraRecording",
     "ChatSession",
     "ChatMessage",
     "SystemNotification",

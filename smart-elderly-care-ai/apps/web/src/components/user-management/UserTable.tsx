@@ -98,7 +98,9 @@ export const UserTable: React.FC<UserTableProps> = ({
                     <td className="py-3 px-4">
                       <div className="flex items-center space-x-1.5 text-xs text-[#737780] dark:text-[#A1A7B1]">
                         <Home className="w-3.5 h-3.5 text-[#737780] shrink-0" />
-                        <span className="truncate max-w-[180px]">{userItem.assigned_house || 'Chưa phân bổ'}</span>
+                        <span className="truncate max-w-[240px]" title={userItem.assigned_house || undefined}>
+                          {userItem.assigned_house || 'Chưa phân bổ'}
+                        </span>
                       </div>
                     </td>
 
@@ -136,11 +138,11 @@ export const UserTable: React.FC<UserTableProps> = ({
                           <ShieldCheck className="w-4 h-4 text-[#FF6B35]" />
                         </button>
 
-                        {/* Chỉnh sửa tài khoản */}
+                        {/* Chỉnh sửa tài khoản & Mật khẩu */}
                         <button
                           onClick={() => onEditUser(userItem)}
                           className="p-1.5 rounded-lg text-[#737780] hover:text-[#FF6B35] hover:bg-[#FFF0E8] dark:hover:bg-[#FF6B35]/15 transition-colors cursor-pointer"
-                          title="Chỉnh sửa thông tin & Vai trò"
+                          title="Chỉnh sửa thông tin, vai trò & Quản lý mật khẩu"
                         >
                           <KeyRound className="w-4 h-4" />
                         </button>

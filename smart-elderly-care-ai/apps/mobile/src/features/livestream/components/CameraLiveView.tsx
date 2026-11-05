@@ -1,7 +1,7 @@
 /**
  * Hiển thị luồng MJPEG trên web/native, giao diện liên kết và lỗi xem video.
  */
-import React, { useState } from "react";
+import React, { useState, useEffect } from "react";
 import {
     Platform,
     TextInput,
@@ -12,6 +12,7 @@ import {
     ViewStyle,
 } from "react-native";
 import { WebView } from "react-native-webview";
+import { Ionicons } from "@expo/vector-icons";
 import { useCameraConnection } from "../hooks/useCameraConnection";
 /**
  * Chọn giao diện liên kết, phát MJPEG hoặc thông báo tạm dừng/riêng tư/lỗi.
@@ -33,9 +34,27 @@ export function CameraLiveView({
 }) {
     // Mã liên kết người dùng đang nhập; xóa sau khi liên kết thành công.
     const [code, setCode] = useState("");
+    const [showPairInput, setShowPairInput] = useState(false);
     // URL media đã lỗi để ngừng thử tải lại cùng ticket trong mỗi render.
     const [failed, setFailed] = useState("");
     const uri = connection.liveUrl;
+
+    useEffect(() => {
+        if (connection.active) {
+            setFailed("");
+        }
+    }, [connection.active, uri]);
+
+    const handleMediaError = () => {
+        setFailed(uri);
+        if (connection.active && connection.privacy !== true) {
+            const timer = setTimeout(() => {
+                setFailed("");
+                connection.refresh?.();
+            }, 3000);
+            return () => clearTimeout(timer);
+        }
+    };
     /**
      * Tạo nút liên kết hoặc thử kết nối lại trong khung live.
      * @param label - Nhãn hiển thị và mô tả thao tác.
@@ -58,33 +77,71 @@ export function CameraLiveView({
                     style={{
                         flex: 1,
                         justifyContent: "center",
-                        padding: 16,
-                        gap: 8,
+                        alignItems: "center",
+                        padding: 20,
+                        gap: 10,
+                        backgroundColor: "#000",
                     }}
                 >
-                    <Text style={{ color: "#fff" }}>
-                        Liên kết camera với tài khoản chủ nhà
+                    <Ionicons name="videocam-outline" size={40} color="#94A3B8" />
+                    <Text style={{ color: "#F8FAFC", fontSize: 14, fontWeight: "700", textAlign: "center" }}>
+                        Đang kết nối luồng camera...
                     </Text>
-                    <TextInput
-                        placeholder="Mã liên kết camera"
-                        placeholderTextColor="#94a3b8"
-                        value={code}
-                        onChangeText={setCode}
-                        secureTextEntry
-                        autoCapitalize="none"
-                        autoCorrect={false}
+                    <Text style={{ color: "#94A3B8", fontSize: 12, textAlign: "center", lineHeight: 18 }}>
+                        Thiết bị chưa phản hồi hoặc đang đồng bộ với hệ thống.
+                    </Text>
+
+                    <TouchableOpacity
+                        accessibilityRole="button"
+                        onPress={() => connection.refresh?.()}
                         style={{
-                            color: "#fff",
-                            borderWidth: 1,
-                            borderColor: "#64748b",
-                            padding: 8,
+                            flexDirection: "row",
+                            alignItems: "center",
+                            backgroundColor: "#0284C7",
+                            paddingHorizontal: 16,
+                            paddingVertical: 10,
+                            borderRadius: 8,
+                            marginTop: 4,
                         }}
-                    />
-                    {button("Liên kết", () => {
-                        void connection.pair(code).then((ok) => {
-                            if (ok) setCode("");
-                        });
-                    })}
+                    >
+                        <Ionicons name="refresh" size={16} color="#FFF" style={{ marginRight: 6 }} />
+                        <Text style={{ color: "#FFF", fontWeight: "700", fontSize: 13 }}>Thử kết nối lại</Text>
+                    </TouchableOpacity>
+
+                    <TouchableOpacity
+                        onPress={() => setShowPairInput(!showPairInput)}
+                        style={{ marginTop: 8 }}
+                    >
+                        <Text style={{ color: "#64748B", fontSize: 12, textDecorationLine: "underline" }}>
+                            {showPairInput ? "Ẩn nhập mã liên kết" : "Liên kết qua mã hệ thống (Dành cho Quản trị)"}
+                        </Text>
+                    </TouchableOpacity>
+
+                    {showPairInput && (
+                        <View style={{ width: "100%", gap: 8, marginTop: 4 }}>
+                            <TextInput
+                                placeholder="Mã liên kết camera"
+                                placeholderTextColor="#94a3b8"
+                                value={code}
+                                onChangeText={setCode}
+                                secureTextEntry
+                                autoCapitalize="none"
+                                autoCorrect={false}
+                                style={{
+                                    color: "#fff",
+                                    borderWidth: 1,
+                                    borderColor: "#64748b",
+                                    padding: 8,
+                                    borderRadius: 6,
+                                }}
+                            />
+                            {button("Liên kết", () => {
+                                void connection.pair(code).then((ok) => {
+                                    if (ok) setCode("");
+                                });
+                            })}
+                        </View>
+                    )}
                 </View>
             ) : connection.active &&
               uri &&
@@ -95,7 +152,7 @@ export function CameraLiveView({
                     <img
                         src={uri}
                         alt="Camera trực tiếp"
-                        onError={() => setFailed(uri)}
+                        onError={handleMediaError}
                         style={{
                             width: "100%",
                             height: "100%",
@@ -113,10 +170,10 @@ export function CameraLiveView({
                         }}
                         onMessage={(event) => {
                             if (event.nativeEvent.data === "error")
-                                setFailed(uri);
+                                handleMediaError();
                         }}
-                        onError={() => setFailed(uri)}
-                        onHttpError={() => setFailed(uri)}
+                        onError={handleMediaError}
+                        onHttpError={handleMediaError}
                         style={{ flex: 1, backgroundColor: "#000" }}
                     />
                 )

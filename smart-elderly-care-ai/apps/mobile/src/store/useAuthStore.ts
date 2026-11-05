@@ -5,6 +5,16 @@ import { create, StateCreator } from 'zustand';
 import { persist, createJSONStorage, PersistOptions } from 'zustand/middleware';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 
+export interface HousePermissions {
+  can_view_health: boolean;
+  can_view_camera: boolean;
+  can_handle_emergency: boolean;
+  can_manage_devices: boolean;
+  can_manage_records: boolean;
+  role_in_house: string;
+  is_owner: boolean;
+}
+
 export interface AuthStoreState {
   accessToken: string | null;
   refreshToken: string | null;
@@ -20,6 +30,9 @@ export interface AuthStoreState {
   avatar_url: string | null;
   household_id: number | string | null;
   viewRole: 'CAREGIVER' | 'DOCTOR';
+  isHydrated: boolean;
+  isRoleLoading: boolean;
+  permissions: HousePermissions | null;
 
   login: (
     access: string,
@@ -44,7 +57,9 @@ export interface AuthStoreState {
   setAvatar: (url: string | null) => void;
   updateUserName: (nameOrId: string, name?: string) => void;
   setViewRole: (role: 'CAREGIVER' | 'DOCTOR') => void;
+  setIsRoleLoading: (loading: boolean) => void;
   toggleViewRole: () => void;
+  fetchMyPermissions: (householdId?: number | string) => Promise<HousePermissions>;
   logout: () => void;
 }
 
@@ -57,7 +72,8 @@ type AuthSet = (
 ) => void;
 
 const createAuthStore: StateCreator<AuthStoreState, [], [['zustand/persist', AuthStoreState]]> = (
-  set: AuthSet
+  set: AuthSet,
+  get
 ) => ({
   accessToken: null,
   refreshToken: null,
@@ -73,6 +89,11 @@ const createAuthStore: StateCreator<AuthStoreState, [], [['zustand/persist', Aut
   avatar_url: null,
   household_id: null,
   viewRole: 'CAREGIVER',
+  isHydrated: false,
+  isRoleLoading: false,
+  permissions: null,
+
+  setIsRoleLoading: (loading: boolean) => set({ isRoleLoading: loading }),
 
   login: (
     access: string,
@@ -88,6 +109,30 @@ const createAuthStore: StateCreator<AuthStoreState, [], [['zustand/persist', Aut
     const isDoctor = normalizedRole === 'doctor' || normalizedRole.includes('bác sĩ');
     const isAdmin = normalizedRole === 'admin' || normalizedRole.includes('quản trị');
 
+    // Reset toàn bộ domain stores để tránh rò rỉ dữ liệu hoặc quyền hạn từ tài khoản trước
+    try {
+        require('./useDeviceStore').useDeviceStore.getState().resetDeviceStore?.();
+        require('./usePatientStore').usePatientStore.getState().resetPatientStore?.();
+        require('./useHealthStore').useHealthStore.getState().resetHealthStore?.();
+        require('./useAlertStore').useAlertStore.getState().resetAlertStore?.();
+        AsyncStorage.multiRemove([
+        'device-store',
+        'health-store',
+        'patient-store',
+        'alert-store',
+      ]).catch(() => {});
+    } catch {}
+
+    const initialPermissions: HousePermissions = {
+      can_view_health: false,
+      can_view_camera: false,
+      can_handle_emergency: false,
+      can_manage_devices: false,
+      can_manage_records: false,
+      role_in_house: isDoctor ? 'DOCTOR' : isAdmin ? 'OWNER' : 'MEMBER',
+      is_owner: isAdmin,
+    };
+
     set({
       accessToken: access,
       refreshToken: refresh,
@@ -97,13 +142,18 @@ const createAuthStore: StateCreator<AuthStoreState, [], [['zustand/persist', Aut
       full_name: name,
       userPhone: phone,
       phone_number: phone,
-      userRole: isDoctor ? 'doctor' : isAdmin ? 'admin' : 'user',
+      userRole: isDoctor ? 'doctor' : isAdmin ? 'admin' : normalizedRole === 'owner' ? 'owner' : 'member',
       role,
       avatarUrl: avatarUrl ?? null,
       avatar_url: avatarUrl ?? null,
       household_id: householdId ?? null,
       viewRole: isDoctor ? 'DOCTOR' : 'CAREGIVER',
+      permissions: initialPermissions,
     });
+
+    setTimeout(() => {
+      get().fetchMyPermissions(householdId);
+    }, 100);
   },
 
   setTokens: (access: string, refresh: string) =>
@@ -122,7 +172,7 @@ const createAuthStore: StateCreator<AuthStoreState, [], [['zustand/persist', Aut
         phone_number: phone ?? state.phone_number ?? null,
         userName: name ?? state.userName ?? null,
         full_name: name ?? state.full_name ?? null,
-        userRole: isDoctor ? 'doctor' : isAdmin ? 'admin' : resolvedRole ? 'user' : state.userRole,
+        userRole: isDoctor ? 'doctor' : isAdmin ? 'admin' : resolvedRole ? 'member' : state.userRole,
         role: resolvedRole ?? null,
         household_id: householdId ?? state.household_id ?? null,
         viewRole: isDoctor ? 'DOCTOR' : isAdmin || resolvedRole ? 'CAREGIVER' : state.viewRole,
@@ -144,9 +194,13 @@ const createAuthStore: StateCreator<AuthStoreState, [], [['zustand/persist', Aut
         ? 'doctor'
         : profile.role?.toLowerCase() === 'admin'
           ? 'admin'
-          : profile.role
-            ? 'user'
-            : state.userRole,
+          : profile.role?.toLowerCase() === 'owner'
+            ? 'owner'
+            : profile.role?.toLowerCase() === 'member'
+              ? 'member'
+              : profile.role
+                ? 'member'
+                : state.userRole,
       household_id: profile.household_id !== undefined ? profile.household_id : state.household_id,
       viewRole: profile.role?.toLowerCase() === 'doctor' || profile.role?.includes('Bác sĩ')
         ? 'DOCTOR'
@@ -173,7 +227,78 @@ const createAuthStore: StateCreator<AuthStoreState, [], [['zustand/persist', Aut
       viewRole: state.viewRole === 'DOCTOR' ? 'CAREGIVER' : 'DOCTOR',
     })),
 
-  logout: () =>
+  fetchMyPermissions: async (hId?: number | string) => {
+    const s = get();
+    const isAdmin = s.userRole === 'admin' || s.role === 'admin';
+    if (isAdmin) {
+      const p: HousePermissions = {
+        can_view_health: true,
+        can_view_camera: true,
+        can_handle_emergency: true,
+        can_manage_devices: true,
+        can_manage_records: true,
+        role_in_house: 'OWNER',
+        is_owner: true,
+      };
+      set({ permissions: p });
+      return p;
+    }
+    try {
+      const { householdApi } = await import('../services/api');
+      const target = hId || s.household_id || 'current';
+      const res = await householdApi.getMyPermissions(target);
+      if (res.data) {
+        const isOwner = res.data.role_in_house === 'OWNER' || res.data.is_owner === true;
+        const p: HousePermissions = {
+          can_view_health: isOwner ? true : Boolean(res.data.can_view_health),
+          can_view_camera: isOwner ? true : Boolean(res.data.can_view_camera),
+          can_handle_emergency: isOwner ? true : Boolean(res.data.can_handle_emergency),
+          can_manage_devices: isOwner ? true : Boolean(res.data.can_manage_devices),
+          can_manage_records: isOwner ? true : Boolean(res.data.can_manage_records),
+          role_in_house: res.data.role_in_house || 'MEMBER',
+          is_owner: isOwner,
+        };
+        set({ permissions: p });
+        return p;
+      }
+    } catch {}
+    const def: HousePermissions = {
+      can_view_health: false,
+      can_view_camera: false,
+      can_handle_emergency: true,
+      can_manage_devices: false,
+      can_manage_records: false,
+      role_in_house: 'MEMBER',
+      is_owner: false,
+    };
+    set({ permissions: def });
+    return def;
+  },
+
+  logout: () => {
+    try {
+      const state = get();
+      const uName = state.userName || state.full_name || undefined;
+      const uRole = state.userRole || state.role || undefined;
+      import('../services/api')
+        .then(({ authApi }) => {
+          authApi.logout(uName, uRole);
+        })
+        .catch(() => {});
+    } catch {}
+    try {
+      require('./useDeviceStore').useDeviceStore.getState().resetDeviceStore?.();
+      require('./usePatientStore').usePatientStore.getState().resetPatientStore?.();
+      require('./useHealthStore').useHealthStore.getState().resetHealthStore?.();
+      require('./useAlertStore').useAlertStore.getState().resetAlertStore?.();
+      AsyncStorage.multiRemove([
+        'auth-storage',
+        'device-store',
+        'patient-store',
+        'health-store',
+        'alert-store',
+      ]).catch(() => {});
+    } catch {}
     set({
       accessToken: null,
       refreshToken: null,
@@ -189,13 +314,23 @@ const createAuthStore: StateCreator<AuthStoreState, [], [['zustand/persist', Aut
       avatar_url: null,
       household_id: null,
       viewRole: 'CAREGIVER',
-    }),
+      permissions: null,
+    });
+  },
 });
 
 const persistOptions: PersistOptions<AuthStoreState> = {
   name: 'auth-storage',
   storage: createJSONStorage(() => AsyncStorage),
   version: 1,
+  partialize: (state) => ({
+    ...state,
+    isRoleLoading: false,
+    isHydrated: false,
+  }),
+  onRehydrateStorage: () => () => {
+    useAuthStore.setState({ isHydrated: true });
+  },
   migrate: (persistedState) => {
     const state = persistedState as AuthStoreState;
     if (!state.accessToken?.startsWith('fake-')) {
@@ -224,3 +359,7 @@ const persistOptions: PersistOptions<AuthStoreState> = {
 export const useAuthStore = create<AuthStoreState>()(
   persist(createAuthStore, persistOptions)
 );
+
+if (useAuthStore.persist?.hasHydrated?.()) {
+  useAuthStore.setState({ isHydrated: true });
+}

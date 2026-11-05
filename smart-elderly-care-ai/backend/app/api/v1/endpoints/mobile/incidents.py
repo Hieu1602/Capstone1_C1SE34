@@ -24,6 +24,7 @@ async def list_incidents(
     limit: int = Query(default=20, le=100),
     offset: int = Query(default=0),
     db: AsyncSession = Depends(get_db),
+    current_user: User | None = Depends(get_current_user_optional),
 ):
     """
     Lấy danh sách sự kiện cảnh báo.
@@ -34,13 +35,27 @@ async def list_incidents(
         from app.crud.crud_vital import crud_vital
         resolved_dev_uuid = await crud_vital.resolve_device_uuid(db, device_id)
 
+    curr_uid = current_user.id if current_user else None
     return await crud_incident.list(
         db=db,
         device_id=resolved_dev_uuid,
         alert_level=alert_level,
         limit=limit,
         offset=offset,
+        current_user_id=curr_uid,
     )
+
+
+@router.post("/acknowledge-all")
+@router.patch("/acknowledge-all")
+async def acknowledge_all_incidents(
+    db: AsyncSession = Depends(get_db),
+    current_user: User | None = Depends(get_current_user_optional),
+):
+    """Xác nhận đã đọc toàn bộ thông báo/cảnh báo và lưu vào CSDL."""
+    curr_uid = current_user.id if current_user else None
+    count = await crud_incident.acknowledge_all(db, current_user_id=curr_uid)
+    return {"status": "success", "acknowledged_count": count}
 
 
 @router.get("/{incident_id}", response_model=IncidentOut)
@@ -79,3 +94,24 @@ async def acknowledge_incident(
             detail="Incident not found",
         )
     return incident
+
+
+@router.patch("/{incident_id}/reopen", response_model=IncidentOut)
+@router.post("/{incident_id}/reopen", response_model=IncidentOut)
+async def reopen_incident(
+    incident_id: UUID,
+    note: str | None = Query(default=None),
+    db: AsyncSession = Depends(get_db),
+    current_user: User | None = Depends(get_current_user_optional),
+):
+    """Mở lại cảnh báo sự cố nếu người cao tuổi chưa an toàn."""
+    incident = await crud_incident.reopen(
+        db, incident_id, notes=note or "Chưa an toàn - Người nhà đã mở lại cảnh báo khẩn cấp"
+    )
+    if not incident:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="Incident not found",
+        )
+    return incident
+

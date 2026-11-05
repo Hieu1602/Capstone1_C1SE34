@@ -35,15 +35,10 @@ export function useCameraIntercom(
     const session = useRef<IntercomSession | null>(null);
     // Chế độ cập nhật đồng bộ để nhả nút PTT không phụ thuộc render tiếp theo.
     const modeRef = useRef<Mode | null>(null);
-    const cameraId = connection.status?.id;
+    const cameraId = connection.status?.id || selectedCameraId;
     const available =
         connection.active &&
-        connection.status?.connected &&
-        connection.privacy !== true &&
-        (!selectedCameraId ||
-            [connection.status.id, connection.status.device_id].includes(
-                selectedCameraId,
-            ));
+        connection.privacy !== true;
 
     /**
      * Dừng phiên hiện tại và đưa trạng thái mic/loa về nghỉ.
@@ -196,17 +191,21 @@ export function useCameraIntercom(
         });
     };
 
+    const prevCameraId = useRef(cameraId);
     useEffect(() => {
         if (
-            !available ||
+            connection.privacy === true ||
             (modeRef.current &&
                 modeRef.current !== "listen" &&
                 !connection.status?.can_control)
         )
             stop();
-    }, [available, cameraId, connection.status?.can_control, stop]);
+    }, [connection.privacy, connection.status?.can_control, stop]);
     useEffect(() => {
-        stop();
+        if (prevCameraId.current && cameraId && prevCameraId.current !== cameraId) {
+            stop();
+        }
+        prevCameraId.current = cameraId;
         return () => {
             session.current?.close();
             session.current = null;

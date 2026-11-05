@@ -2,8 +2,9 @@
 // Màn hình Quản lý & Tạo Nhóm Thiết Bị dạng nhiều trang (Full Screen Multi-Step Flow)
 // Tương tự AddDeviceScreen (Thêm thủ công): SELECT -> REVIEW -> CONFIRM -> SUCCESS
 
-import React, { useMemo, useState } from 'react';
-import { View, StyleSheet, TouchableOpacity, ScrollView } from 'react-native';
+import React, { useMemo, useState, useCallback } from 'react';
+import { useFocusEffect } from '@react-navigation/native';
+import { View, StyleSheet, TouchableOpacity, ScrollView, ActivityIndicator } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
 import { Colors, Shadows } from '../../../theme/colors';
@@ -16,7 +17,7 @@ type GroupStep = 'SELECT' | 'REVIEW' | 'CONFIRM' | 'SUCCESS';
 type GroupDeviceFilter = 'Tất cả' | 'Camera' | 'Đồng hồ';
 
 export default function CreateGroupScreen({ navigation }: any) {
-  const { iotDevices, deviceGroups, addDeviceGroup, assignDevicesToGroup } = useVitalStore();
+  const { iotDevices, deviceGroups, addDeviceGroup, assignDevicesToGroup, syncAllWithBackend } = useVitalStore();
   const { isDarkMode, colors } = useTheme();
   const styles = useMemo(
     () => createThemeStyles(baseStyles, isDarkMode, colors),
@@ -29,6 +30,13 @@ export default function CreateGroupScreen({ navigation }: any) {
   const [selectedDeviceIds, setSelectedDeviceIds] = useState<string[]>([]);
   const [createdGroupName, setCreatedGroupName] = useState<string>('');
   const [hasAttemptedProceed, setHasAttemptedProceed] = useState<boolean>(false);
+  const [isSubmitting, setIsSubmitting] = useState<boolean>(false);
+
+  useFocusEffect(
+    useCallback(() => {
+      syncAllWithBackend?.();
+    }, [])
+  );
 
   // Danh sách tất cả các nhóm hiện có (cả từ store và từ location của thiết bị)
   const existingGroups = Array.from(
@@ -119,7 +127,7 @@ export default function CreateGroupScreen({ navigation }: any) {
         setCurrentStep('REVIEW');
         break;
       case 'SUCCESS':
-        navigation.navigate('Devices');
+        navigation.navigate('Main', { screen: 'Devices' });
         break;
     }
   };
@@ -169,7 +177,7 @@ export default function CreateGroupScreen({ navigation }: any) {
   };
 
   // Bước 3 -> Hoàn tất tạo nhóm
-  const handleConfirmCreate = () => {
+  const handleConfirmCreate = async () => {
     if (isNameEmpty || isDuplicateName || !hasSelectedDevices) {
       LocalizedAlert.alert(
         'Không thể tạo nhóm',
@@ -180,15 +188,17 @@ export default function CreateGroupScreen({ navigation }: any) {
     }
 
     setCreatedGroupName(trimmedName);
+    setIsSubmitting(true);
 
-    // 1. Thêm nhóm vào store
-    addDeviceGroup(trimmedName);
-
-    // 2. Gán các thiết bị đã chọn vào nhóm mới
-    assignDevicesToGroup(selectedDeviceIds, trimmedName);
-
-    // 3. Chuyển sang màn hình thành công
-    setCurrentStep('SUCCESS');
+    try {
+      await addDeviceGroup(trimmedName, selectedDeviceIds);
+      setCurrentStep('SUCCESS');
+    } catch (err: any) {
+      const msg = err?.response?.data?.detail || err?.message || 'Có lỗi xảy ra khi tạo nhóm trên máy chủ.';
+      LocalizedAlert.alert('Không thể tạo nhóm', String(msg));
+    } finally {
+      setIsSubmitting(false);
+    }
   };
 
   // Tạo thêm nhóm mới
@@ -717,17 +727,24 @@ export default function CreateGroupScreen({ navigation }: any) {
               <LocalizedText style={styles.cancelBtnText}>Quay lại xem</LocalizedText>
             </TouchableOpacity>
             <TouchableOpacity
-              style={styles.confirmActionBtn}
+              style={[styles.confirmActionBtn, isSubmitting && { opacity: 0.7 }]}
               onPress={handleConfirmCreate}
+              disabled={isSubmitting}
               activeOpacity={0.8}
             >
-              <Ionicons
-                name="checkmark-circle"
-                size={20}
-                color="#FFF"
-                style={{ marginRight: 6 }}
-              />
-              <LocalizedText style={styles.confirmActionBtnText}>Xác Nhận Tạo Nhóm</LocalizedText>
+              {isSubmitting ? (
+                <ActivityIndicator size="small" color="#FFF" style={{ marginRight: 6 }} />
+              ) : (
+                <Ionicons
+                  name="checkmark-circle"
+                  size={20}
+                  color="#FFF"
+                  style={{ marginRight: 6 }}
+                />
+              )}
+              <LocalizedText style={styles.confirmActionBtnText}>
+                {isSubmitting ? 'Đang tạo nhóm...' : 'Xác Nhận Tạo Nhóm'}
+              </LocalizedText>
             </TouchableOpacity>
           </View>
         </View>
@@ -771,7 +788,7 @@ export default function CreateGroupScreen({ navigation }: any) {
           <View style={styles.successActions}>
             <TouchableOpacity
               style={styles.primaryBtn}
-              onPress={() => navigation.navigate('Devices')}
+              onPress={() => navigation.navigate('Main', { screen: 'Devices' })}
               activeOpacity={0.8}
             >
               <Ionicons

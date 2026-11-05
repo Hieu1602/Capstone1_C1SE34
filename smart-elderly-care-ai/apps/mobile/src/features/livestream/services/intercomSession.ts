@@ -86,27 +86,47 @@ export class IntercomSession {
             // Kết nối WebRTC duy nhất của phiên.
             const peer = platform.createPeer();
             this.peer = peer;
+            const markConnected = () => {
+                if (this.closed || this.connected) return;
+                this.connected = true;
+                clearTimeout(this.timeout);
+                this.setMicEnabled(this.micEnabled);
+                this.options.onState("connected");
+                // Giới hạn một cuộc gọi để không giữ microphone vô thời hạn.
+                this.lifetime = setTimeout(
+                    () =>
+                        this.fail(
+                            new Error(
+                                "Cuộc đàm thoại đã đạt giới hạn 5 phút.",
+                            ),
+                        ),
+                    300000,
+                );
+            };
+
             peer.addEventListener("connectionstatechange", () => {
                 if (this.closed) return;
                 if (peer.connectionState === "connected") {
-                    if (this.connected) return;
-                    this.connected = true;
-                    clearTimeout(this.timeout);
-                    this.setMicEnabled(this.micEnabled);
-                    this.options.onState("connected");
-                    // Giới hạn một cuộc gọi để không giữ microphone vô thời hạn.
-                    this.lifetime = setTimeout(
-                        () =>
-                            this.fail(
-                                new Error(
-                                    "Cuộc đàm thoại đã đạt giới hạn 5 phút.",
-                                ),
-                            ),
-                        300000,
-                    );
+                    markConnected();
                 } else if (
                     ["failed", "disconnected", "closed"].includes(
                         peer.connectionState,
+                    )
+                ) {
+                    this.fail(new Error("Kết nối âm thanh đã bị ngắt."));
+                }
+            });
+
+            peer.addEventListener("iceconnectionstatechange", () => {
+                if (this.closed) return;
+                if (
+                    peer.iceConnectionState === "connected" ||
+                    peer.iceConnectionState === "completed"
+                ) {
+                    markConnected();
+                } else if (
+                    ["failed", "disconnected", "closed"].includes(
+                        peer.iceConnectionState,
                     )
                 ) {
                     this.fail(new Error("Kết nối âm thanh đã bị ngắt."));

@@ -27,7 +27,44 @@ export interface CameraRecordings {
     files: string[];
 }
 
+export interface ArchivedRecording {
+    id: string;
+    device_id: string;
+    kind: "segment" | "incident" | "snapshot";
+    started_at: string;
+    duration: number;
+    incident_id: string | null;
+}
+export interface FallDetectionStatus {
+    enabled: boolean;
+    detected: boolean;
+    last_fall: number | null;
+    fall_count: number;
+    latest_clip: string | null;
+}
+export interface ArchiveCursor { after_time: string; after_id: string }
+export interface ArchiveCoverage { start: string; end: string }
+export interface HlsRecording { id: string; started_at: string; duration: number }
+export interface HlsSession { url: string; expires_at: number; items: HlsRecording[] }
 export const cameraApi = {
+    hls: async (start: string, end: string, cameraId?: string): Promise<HlsSession> => {
+        const { data } = await api.get<{ path: string; expires_at: number; items: HlsRecording[] }>("/camera/archive/hls", {
+            params: { camera_id: cameraId, start, end },
+        });
+        return { ...data, url: BASE_URL.replace(/\/$/, "") + data.path };
+    },
+    timeline: (start: string, end: string, cameraId?: string, cursor?: ArchiveCursor) =>
+        api.get<{ items: ArchivedRecording[]; next: ArchiveCursor | null }>("/camera/archive", {
+            params: { camera_id: cameraId, start, end, ...cursor },
+        }),
+    coverage: (start: string, end: string, cameraId?: string) =>
+        api.get<{ items: ArchiveCoverage[] }>("/camera/archive/coverage", {
+            params: { camera_id: cameraId, start, end },
+        }),
+    playback: (id: string, cameraId?: string, download = false) =>
+        api.get<{ url: string; expires_in: number }>(`/camera/archive/${id}/playback`, {
+            params: { ...sourceConfig(cameraId).params, download },
+        }),
     /**
      * Kiểm tra camera đã được liên kết trong hệ thống hay chưa.
      * @returns Promise chứa cờ paired từ backend.
@@ -36,6 +73,26 @@ export const cameraApi = {
         api.get<{ paired: boolean }>("/camera/setup", sourceConfig(cameraId)),
     /** @returns Các nguồn camera đã cấu hình mà người dùng được phép xem. */
     sources: () => api.get<CameraSource[]>("/camera/sources"),
+    /** Dò quét camera RTSP/ONVIF trong mạng nội bộ */
+    discover: () =>
+        api.get<{
+            found: Array<{
+                ip: string;
+                name: string;
+                brand: string;
+                port: number;
+                status: string;
+                rtsp_url?: string;
+            }>;
+        }>("/camera/discover"),
+    /** Kiểm tra kết nối RTSP của camera trực tiếp qua cổng mạng */
+    probe: (streamUrl: string) =>
+        api.post<{
+            success: boolean;
+            reachable: boolean;
+            message: string;
+            brand?: string;
+        }>("/camera/probe", { stream_url: streamUrl }),
     /** @param cameraId Nguồn cần đọc. @returns Chế độ ngày/đêm thực tế. */
     videoMode: (cameraId?: string) =>
         api.get<{ mode: VideoMode }>(
@@ -105,6 +162,17 @@ export const cameraApi = {
      */
     setMotion: (enabled: boolean, cameraId?: string) =>
         api.post("/camera/motion", { enabled }, sourceConfig(cameraId)),
+    fallDetection: (cameraId?: string) =>
+        api.get<FallDetectionStatus>(
+            "/camera/fall-detection",
+            sourceConfig(cameraId),
+        ),
+    setFallDetection: (enabled: boolean, cameraId?: string) =>
+        api.post<{ enabled: boolean }>(
+            "/camera/fall-detection",
+            { enabled },
+            sourceConfig(cameraId),
+        ),
     /**
      * Lấy bản ghi đang chạy, lỗi và danh sách tệp hoàn tất trên server.
      * @returns Promise chứa CameraRecordings.
@@ -153,12 +221,14 @@ export const cameraApi = {
         resource: string,
         cameraId?: string,
         quality: VideoQuality = "auto",
+        overlay: boolean = false,
     ) => {
         const { data } = await api.post<{ path: string }>(
             "/camera/ticket",
             {
                 resource,
                 quality,
+                overlay,
             },
             sourceConfig(cameraId),
         );

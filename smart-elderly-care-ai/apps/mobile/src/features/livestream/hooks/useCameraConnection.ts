@@ -9,6 +9,7 @@ import {
     cameraApi,
     CameraRecordings,
     CameraStatus,
+    FallDetectionStatus,
     VideoQuality,
 } from "../../../services/camera";
 import { useDeviceStore } from "../../../store/useDeviceStore";
@@ -45,6 +46,11 @@ export function useCameraConnection(
     const [privacy, setPrivacy] = useState<boolean | null>(null);
     // Phát hiện chuyển động của Tapo, độc lập AI; null khi chưa đọc được.
     const [motion, setMotion] = useState<boolean | null>(null);
+    // Trạng thái nhận diện té ngã AI (YOLOv8-Pose); null khi chưa đọc được.
+    const [fallDetection, setFallDetection] = useState<boolean | null>(null);
+    const [fallStats, setFallStats] = useState<FallDetectionStatus | null>(null);
+    // Hiển thị khung xương AI (skeleton overlay) trên luồng camera
+    const [overlay, setOverlay] = useState(false);
     // URL MJPEG có ticket ngắn hạn để img/WebView phát video.
     const [liveUrl, setLiveUrl] = useState("");
     // Lỗi chung ảnh hưởng kết nối video, tách khỏi lỗi thư viện bản ghi.
@@ -83,6 +89,8 @@ export function useCameraConnection(
         setStatus(null);
         setPrivacy(null);
         setMotion(null);
+        setFallDetection(null);
+        setFallStats(null);
         setRecordings({ active: null, error: null, files: [] });
         setNeedsPairing(false);
         setError("");
@@ -103,27 +111,41 @@ export function useCameraConnection(
          * @remarks Tác động: Cập nhật state và đặt lịch vòng tiếp theo; bỏ kết quả nếu effect đã hủy.
          */
         const poll = async () => {
+            let isConnected = false;
             try {
-                const setup = await cameraApi.setup(cameraId);
+                // Tải song song setup và status để tiết kiệm thời gian mạng
+                const [setupRes, statusRes] = await Promise.allSettled([
+                    cameraApi.setup(cameraId),
+                    cameraApi.status(cameraId),
+                ]);
                 if (cancelled) return;
-                setNeedsPairing(!setup.data.paired);
-                if (!setup.data.paired) {
-                    setLiveUrl("");
-                    setStatus(null);
-                    setPrivacy(null);
-                    setMotion(null);
-                    setRecordings({ active: null, error: null, files: [] });
-                    ticketAt = 0;
-                    return;
+
+                if (setupRes.status === "fulfilled") {
+                    setNeedsPairing(!setupRes.value.data.paired);
+                    if (!setupRes.value.data.paired) {
+                        setLiveUrl("");
+                        setStatus(null);
+                        setPrivacy(null);
+                        setMotion(null);
+                        setRecordings({ active: null, error: null, files: [] });
+                        ticketAt = 0;
+                        return;
+                    }
                 }
-                const { data } = await cameraApi.status(cameraId);
-                if (cancelled) return;
-                if (cameraId && ![data.id, data.device_id].includes(cameraId))
+
+                if (statusRes.status !== "fulfilled") {
+                    throw statusRes.reason;
+                }
+                const data = statusRes.value.data;
+                if (cameraId && ![data.id, data.device_id].includes(cameraId)) {
                     throw new Error(
                         "Camera được chọn chưa được kết nối với dịch vụ Tapo.",
                     );
+                }
                 setStatus(data);
-                // Gia hạn ticket trước khi hết hạn, kể cả khi lần đầu chưa có ticket.
+                isConnected = Boolean(data.connected);
+
+                // Ưu tiên cấp và tải URL luồng video ngay lập tức
                 if (
                     data.connected &&
                     (!ticketAt ||
@@ -133,6 +155,7 @@ export function useCameraConnection(
                         "live.mjpg",
                         cameraId,
                         quality,
+                        overlay,
                     );
                     if (cancelled) return;
                     setLiveUrl(url);
@@ -141,41 +164,36 @@ export function useCameraConnection(
                     setLiveUrl("");
                     ticketAt = 0;
                 }
+
+                // Tải các thông số phụ (riêng tư, chuyển động, bản ghi) nền không chặn hiển thị video
                 if (
                     !settingsAt ||
                     Date.now() - settingsAt > SETTINGS_INTERVAL_MS
                 ) {
-                    try {
-                        const result = await cameraApi.privacy(cameraId);
-                        if (!cancelled)
-                            setPrivacy(result.data.result.enabled === "on");
-                    } catch {
-                        if (!cancelled) setPrivacy(null);
-                    }
-                    if (cancelled) return;
-                    try {
-                        const result = await cameraApi.motion(cameraId);
-                        if (!cancelled)
-                            setMotion(result.data.result.enabled === "on");
-                    } catch {
-                        // Không chặn xem video khi tài khoản chỉ có quyền xem.
-                        if (!cancelled) setMotion(null);
-                    }
                     settingsAt = Date.now();
+                    Promise.allSettled([
+                        cameraApi.privacy(cameraId),
+                        cameraApi.motion(cameraId),
+                        cameraApi.recordings(cameraId),
+                        cameraApi.fallDetection(cameraId),
+                    ]).then(([privRes, motRes, recRes, fallRes]) => {
+                        if (cancelled) return;
+                        if (privRes.status === "fulfilled") {
+                            setPrivacy(privRes.value.data?.result?.enabled === "on");
+                        }
+                        if (motRes.status === "fulfilled") {
+                            setMotion(motRes.value.data?.result?.enabled === "on");
+                        }
+                        if (recRes.status === "fulfilled") {
+                            setRecordings(recRes.value.data);
+                        }
+                        if (fallRes.status === "fulfilled") {
+                            setFallDetection(fallRes.value.data.enabled);
+                            setFallStats(fallRes.value.data);
+                        }
+                    });
                 }
-                if (cancelled) return;
                 setError("");
-                // Lỗi thư viện bản ghi không làm gián đoạn luồng trực tiếp.
-                try {
-                    const result = await cameraApi.recordings(cameraId);
-                    if (!cancelled) setRecordings(result.data);
-                } catch (err) {
-                    if (!cancelled)
-                        setRecordings((previous) => ({
-                            ...previous,
-                            error: errorMessage(err),
-                        }));
-                }
             } catch (err) {
                 if (!cancelled) {
                     setError(errorMessage(err));
@@ -186,7 +204,11 @@ export function useCameraConnection(
                     ticketAt = 0;
                 }
             } finally {
-                if (!cancelled) timer = setTimeout(poll, POLL_INTERVAL_MS);
+                if (!cancelled) {
+                    // Nếu chưa kết nối (driver đang mở RTSP), retry nhanh sau 1s thay vì bắt người dùng chờ 5s
+                    const delay = isConnected ? POLL_INTERVAL_MS : 1000;
+                    timer = setTimeout(poll, delay);
+                }
             }
         };
         void poll();
@@ -195,7 +217,7 @@ export function useCameraConnection(
             if (generation.current === currentGeneration) generation.current++;
             clearTimeout(timer);
         };
-    }, [active, cameraId, revision, quality]);
+    }, [active, cameraId, revision, quality, overlay]);
     /**
      * Tuần tự hóa một thao tác và kiểm tra trạng thái/quyền trước khi thực thi.
      * @param operation - Tác vụ API cần thực thi.
@@ -315,6 +337,41 @@ export function useCameraConnection(
         }, true);
     }
     /**
+     * Bật hoặc tắt tính năng nhận diện té ngã AI (YOLOv8-Pose).
+     * Hoạt động độc lập cả khi camera vật lý chưa có luồng hình ảnh.
+     */
+    async function toggleFallDetection(desiredState?: boolean) {
+        try {
+            const next = desiredState !== undefined ? desiredState : !fallDetection;
+            const res = await cameraApi.setFallDetection(next, cameraId);
+            const actual = res.data?.enabled ?? next;
+            setFallDetection(actual);
+            LocalizedAlert.alert(
+                "Chăm sóc AI",
+                actual
+                    ? "Đã BẬT tính năng phát hiện té ngã AI trên camera."
+                    : "Đã TẮT tính năng phát hiện té ngã AI trên camera.",
+            );
+            return actual;
+        } catch (err) {
+            LocalizedAlert.alert("Chăm sóc AI", errorMessage(err));
+            return fallDetection;
+        }
+    }
+    /**
+     * Tải nhanh trạng thái mới nhất của tính năng nhận diện té ngã AI.
+     */
+    async function refreshFallDetection() {
+        try {
+            const res = await cameraApi.fallDetection(cameraId);
+            setFallDetection(res.data.enabled);
+            setFallStats(res.data);
+            return res.data;
+        } catch {
+            return null;
+        }
+    }
+    /**
      * Đổi hướng UI thành bước PTZ và gửi lệnh có kiểm tra quyền.
      * @param direction - Một trong UP, DOWN, LEFT hoặc RIGHT.
      * @returns Promise<boolean> cho biết lệnh xoay đã được xác nhận hay chưa.
@@ -378,6 +435,13 @@ export function useCameraConnection(
         move,
         togglePrivacy,
         toggleMotion,
+        fallDetection,
+        fallStats,
+        toggleFallDetection,
+        refreshFallDetection,
+        overlay,
+        setOverlay,
+        toggleOverlay: () => setOverlay((prev) => !prev),
     };
 }
 /**

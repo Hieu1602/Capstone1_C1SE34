@@ -1,7 +1,10 @@
-import React from 'react';
-import { View, Text, TouchableOpacity, StyleSheet, Image } from 'react-native';
+import { LocalizedText as Text } from '../../../../i18n/LocalizedComponents';
+import React, { useEffect } from 'react';
+import { View, TouchableOpacity, StyleSheet, Image } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { Colors } from '../../../../theme/colors';
+import { useAuthStore } from '../../../../store/useAuthStore';
+import { useVitalStore } from '../../../../store/useVitalStore';
 
 interface ProfileUserCardProps {
   displayName: string;
@@ -9,7 +12,9 @@ interface ProfileUserCardProps {
   isDarkMode: boolean;
   colors: any;
   onPressProfile: () => void;
-  onPressAddMember: () => void;
+  onPressAddMember?: () => void;
+  onPressJoinHouse?: () => void;
+  roleBadgeText?: string;
 }
 
 export const ProfileUserCard: React.FC<ProfileUserCardProps> = ({
@@ -19,7 +24,60 @@ export const ProfileUserCard: React.FC<ProfileUserCardProps> = ({
   colors,
   onPressProfile,
   onPressAddMember,
+  onPressJoinHouse,
+  roleBadgeText: propRoleText,
 }) => {
+  const { permissions, userRole, role, fetchMyPermissions } = useAuthStore();
+  const { house, fetchHouseFromBackend } = useVitalStore();
+
+  useEffect(() => {
+    fetchMyPermissions?.();
+    fetchHouseFromBackend?.();
+  }, []);
+
+  const hasLinkedHouse = Boolean(house?.id && house?.hasHouse !== false && house?.name && house.name.trim() !== '');
+
+  const isOwner =
+    hasLinkedHouse &&
+    (permissions?.is_owner === true ||
+      permissions?.role_in_house === 'OWNER' ||
+      userRole === 'admin' ||
+      role === 'admin' ||
+      userRole === 'owner' ||
+      role === 'owner');
+
+  const isDoctor =
+    userRole === 'doctor' ||
+    role === 'doctor' ||
+    permissions?.role_in_house === 'DOCTOR';
+
+  const resolvedRoleText =
+    propRoleText ||
+    (isOwner
+      ? 'Chủ hộ'
+      : isDoctor
+      ? 'Bác sĩ gia đình'
+      : 'Thành viên');
+
+  const roleIcon: keyof typeof Ionicons.glyphMap = isOwner
+    ? 'ribbon'
+    : isDoctor
+    ? 'medkit'
+    : 'person';
+
+  const roleColor = isOwner ? '#D97706' : isDoctor ? '#2563EB' : '#EA580C';
+  const roleBg = isOwner
+    ? isDarkMode
+      ? 'rgba(217, 119, 6, 0.2)'
+      : '#FEF3C7'
+    : isDoctor
+    ? isDarkMode
+      ? 'rgba(37, 99, 235, 0.2)'
+      : '#EFF6FF'
+    : isDarkMode
+    ? 'rgba(234, 88, 12, 0.15)'
+    : '#FFF7ED';
+
   return (
     <View
       style={[
@@ -51,36 +109,73 @@ export const ProfileUserCard: React.FC<ProfileUserCardProps> = ({
           >
             {displayName}
           </Text>
+          <View style={[styles.fbRoleBadgeRow, { backgroundColor: roleBg }]}>
+            <Ionicons name={roleIcon} size={11} color={roleColor} />
+            <Text style={[styles.fbRoleBadgeText, { color: roleColor }]}>
+              {resolvedRoleText}
+            </Text>
+          </View>
         </View>
         <View style={styles.fbProfileRightBadge}>
           <Ionicons name="chevron-forward" size={20} color="#64748B" />
         </View>
       </TouchableOpacity>
 
-      <View
-        style={[
-          styles.fbCardDivider,
-          isDarkMode && { backgroundColor: colors.border },
-        ]}
-      />
+      {isOwner && Boolean(onPressAddMember) ? (
+        <>
+          <View
+            style={[
+              styles.fbCardDivider,
+              isDarkMode && { backgroundColor: colors.border },
+            ]}
+          />
 
-      <TouchableOpacity
-        style={styles.fbSubActionRow}
-        activeOpacity={0.7}
-        onPress={onPressAddMember}
-      >
-        <View style={styles.fbPlusCircleBtn}>
-          <Ionicons name="add" size={20} color="#FFFFFF" />
-        </View>
-        <Text
-          style={[
-            styles.fbSubActionText,
-            isDarkMode && { color: colors.textPrimary },
-          ]}
-        >
-          Thêm thành viên
-        </Text>
-      </TouchableOpacity>
+          <TouchableOpacity
+            style={styles.fbSubActionRow}
+            activeOpacity={0.7}
+            onPress={onPressAddMember}
+          >
+            <View style={styles.fbPlusCircleBtn}>
+              <Ionicons name="add" size={20} color="#FFFFFF" />
+            </View>
+            <Text
+              style={[
+                styles.fbSubActionText,
+                isDarkMode && { color: colors.textPrimary },
+              ]}
+            >
+              Thêm thành viên
+            </Text>
+          </TouchableOpacity>
+        </>
+      ) : !hasLinkedHouse && Boolean(onPressJoinHouse || onPressAddMember) ? (
+        <>
+          <View
+            style={[
+              styles.fbCardDivider,
+              isDarkMode && { backgroundColor: colors.border },
+            ]}
+          />
+
+          <TouchableOpacity
+            style={styles.fbSubActionRow}
+            activeOpacity={0.7}
+            onPress={onPressJoinHouse || onPressAddMember}
+          >
+            <View style={[styles.fbPlusCircleBtn, { backgroundColor: '#4F46E5' }]}>
+              <Ionicons name="link-outline" size={18} color="#FFFFFF" />
+            </View>
+            <Text
+              style={[
+                styles.fbSubActionText,
+                { color: '#4F46E5', fontWeight: '700' },
+              ]}
+            >
+              Nhập mã / Liên kết tham gia nhà
+            </Text>
+          </TouchableOpacity>
+        </>
+      ) : null}
     </View>
   );
 };
@@ -122,6 +217,23 @@ const styles = StyleSheet.create({
     flex: 1,
     marginLeft: 12,
     justifyContent: 'center',
+  },
+  
+  fbRoleBadgeRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 4,
+    marginTop: 2,
+    backgroundColor: '#FFF7ED',
+    paddingHorizontal: 8,
+    paddingVertical: 2,
+    borderRadius: 8,
+    alignSelf: 'flex-start',
+  },
+  fbRoleBadgeText: {
+    fontSize: 11.5,
+    fontWeight: '600',
+    color: '#EA580C',
   },
   fbProfileName: {
     fontSize: 17,

@@ -20,101 +20,8 @@ import { emergencyApi } from '../../../services/api';
 import { useAuthStore } from '../../../store/useAuthStore';
 import { useDeviceStore } from '../../../store/useDeviceStore';
 import { useTheme } from '../../../store/useThemeStore';
-
-// Kiểu dữ liệu tối thiểu của phản hồi Photon, dịch tọa độ thành địa chỉ trên web.
-type PhotonReverseGeocodeResult = {
-  features?: Array<{
-    properties?: {
-      name?: string;
-      housenumber?: string;
-      street?: string;
-      locality?: string;
-      district?: string;
-      city?: string;
-      county?: string;
-      state?: string;
-      country?: string;
-    };
-  }>;
-};
-
-const uniqueAddressParts = (parts: Array<string | null | undefined>) => {
-  const seen = new Set<string>();
-  // Bỏ phần trống và phần bị lặp (không phân biệt hoa/thường) để địa chỉ gọn hơn.
-  return parts
-    .map((part) => part?.trim())
-    .filter((part): part is string => {
-      if (!part) return false;
-      const normalized = part.toLocaleLowerCase();
-      if (seen.has(normalized)) return false;
-      seen.add(normalized);
-      return true;
-    });
-};
-
-const formatPhotonAddress = (result: PhotonReverseGeocodeResult) => {
-  const place = result.features?.[0]?.properties;
-  if (!place) return '';
-  const street = [place.housenumber, place.street].filter(Boolean).join(' ');
-  const isNameDuplicate = !place.name || place.name === place.street || place.name === place.housenumber || place.name === street;
-  const placeName = isNameDuplicate ? null : place.name;
-  const parts = uniqueAddressParts([
-    placeName,
-    street,
-    place.locality,
-    place.district,
-    place.city,
-    place.county,
-    place.state,
-    place.country,
-  ]);
-  return parts.join(', ');
-};
-
-const resolveAddressFromCoords = async (latitude: number, longitude: number): Promise<string> => {
-  // 1. Thử Photon Komoot (cực nhanh ~1s, không bị CORS, chính xác số nhà, tên đường, tổ thôn xã)
-  try {
-    const photonResp = await fetch(`https://photon.komoot.io/reverse?lat=${latitude}&lon=${longitude}`);
-    if (photonResp.ok) {
-      const result = (await photonResp.json()) as PhotonReverseGeocodeResult;
-      const addr = formatPhotonAddress(result);
-      if (addr) return addr;
-    }
-  } catch (e) {
-    console.warn('[ReverseGeocode] Photon error, trying backend:', e);
-  }
-
-  // 2. Thử gọi API backend (Nominatim & Photon Server-side, hỗ trợ tiếng Việt đầy đủ)
-  try {
-    const res = await emergencyApi.reverseGeocode(latitude, longitude);
-    if (res.data?.address) {
-      return res.data.address;
-    }
-  } catch (e) {
-    console.warn('[ReverseGeocode] Backend API error, trying client fallbacks:', e);
-  }
-
-  // 3. Fallback BigDataCloud Client (chỉ có cấp phường/xã, quận, thành phố)
-  try {
-    const bdcUrl = `https://api.bigdatacloud.net/data/reverse-geocode-client?latitude=${latitude}&longitude=${longitude}&localityLanguage=vi`;
-    const resp = await fetch(bdcUrl);
-    if (resp.ok) {
-      const data = await resp.json();
-      const parts = uniqueAddressParts([
-        data.locality,
-        data.city || data.principalSubdivision,
-        data.countryName,
-      ]);
-      if (parts.length > 0) {
-        return parts.join(', ');
-      }
-    }
-  } catch (e) {
-    console.warn('[ReverseGeocode] BigDataCloud error:', e);
-  }
-
-  return '';
-};
+import { MapLocationPickerModal } from '../components/MapLocationPickerModal';
+import { resolveAddressFromCoords, uniqueAddressParts } from '../utils/geocode';
 
 export default function EmergencySOSScreen({ navigation }: any) {
   const { colors } = useTheme();
@@ -128,6 +35,7 @@ export default function EmergencySOSScreen({ navigation }: any) {
   const [selectedImage, setSelectedImage] = useState<string | null>(null);
   const [isGettingLocation, setIsGettingLocation] = useState(false);
   const [isSending, setIsSending] = useState(false);
+  const [isMapPickerVisible, setIsMapPickerVisible] = useState(false);
 
   const handleGetCurrentLocation = async () => {
     setIsGettingLocation(true);
@@ -200,24 +108,8 @@ export default function EmergencySOSScreen({ navigation }: any) {
     }
   };
 
-  const handleChooseOnMap = async () => {
-    // Mở ứng dụng bản đồ bên ngoài với tọa độ hiện tại hoặc nội dung địa chỉ đã nhập.
-    const query = coordinates
-      ? `${coordinates.latitude},${coordinates.longitude}`
-      : encodeURIComponent(address || 'Vietnam');
-    const url = Platform.select({
-      ios: `maps://?q=${query}`,
-      android: `geo:0,0?q=${query}`,
-      default: `https://www.google.com/maps/search/?api=1&query=${query}`,
-    });
-    if (!url) return;
-
-    try {
-      await Linking.openURL(url);
-    } catch (error) {
-      console.warn('[EmergencySOSScreen] Could not open map application:', error);
-      Alert.alert('Không mở được bản đồ', 'Bạn có thể nhập địa chỉ cấp cứu vào ô địa chỉ.');
-    }
+  const handleChooseOnMap = () => {
+    setIsMapPickerVisible(true);
   };
 
   const handlePickImage = async () => {
@@ -421,6 +313,18 @@ export default function EmergencySOSScreen({ navigation }: any) {
           )}
         </TouchableOpacity>
       </ScrollView>
+
+      {/* Modal Chọn vị trí trên bản đồ trực tiếp trong app mobile */}
+      <MapLocationPickerModal
+        visible={isMapPickerVisible}
+        initialCoordinates={coordinates}
+        initialAddress={address}
+        onClose={() => setIsMapPickerVisible(false)}
+        onSelectLocation={(selectedAddress, coords) => {
+          setAddress(selectedAddress);
+          setCoordinates(coords);
+        }}
+      />
     </SafeAreaView>
   );
 }

@@ -14,17 +14,19 @@ import {
 
 export const resolveAvatarUrl = (url: string | null | undefined): string | null => {
   if (!url) return null;
+  const trimmed = url.trim();
+  if (!trimmed) return null;
   if (
-    url.startsWith('http://') ||
-    url.startsWith('https://') ||
-    url.startsWith('data:') ||
-    url.startsWith('file:') ||
-    url.startsWith('blob:')
+    trimmed.startsWith('http://') ||
+    trimmed.startsWith('https://') ||
+    trimmed.startsWith('data:') ||
+    trimmed.startsWith('file:') ||
+    trimmed.startsWith('blob:')
   ) {
-    return url;
+    return trimmed;
   }
   const hostOrigin = BASE_URL.replace(/\/api\/v1\/?$/, '');
-  return `${hostOrigin}${url.startsWith('/') ? '' : '/'}${url}`;
+  return `${hostOrigin}${trimmed.startsWith('/') ? '' : '/'}${trimmed}`;
 };
 
 export const FONT_SCALE_LEVELS = [0.85, 1, 1.15, 1.3, 1.5];
@@ -100,6 +102,8 @@ export function useProfileManager(navigation: any, route: any) {
     const raw = avatarUrl || avatar_url;
     if (raw && !raw.startsWith('blob:')) {
       setAvatarUri(resolveAvatarUrl(raw));
+    } else {
+      setAvatarUri(null);
     }
   }, [avatarUrl, avatar_url]);
 
@@ -204,6 +208,31 @@ export function useProfileManager(navigation: any, route: any) {
     }
   };
 
+  const handleSavePhone = async (newPhone: string, otpCode: string): Promise<boolean> => {
+    try {
+      const res = await usersApi.updateMe({ phone: newPhone, otp_code: otpCode });
+      const savedPhone =
+        typeof res?.data?.phone === 'string' && res.data.phone.trim()
+          ? res.data.phone.trim()
+          : newPhone;
+
+      setProfilePhone(savedPhone);
+      setProfile({
+        user_id: res?.data?.id || res?.data?.user_id || userId || undefined,
+        phone_number: savedPhone,
+      });
+      return true;
+    } catch (error: any) {
+      const detail =
+        error?.response?.data?.detail ||
+        error?.response?.data?.message ||
+        'Không thể cập nhật số điện thoại. Vui lòng thử lại.';
+      throw new Error(
+        typeof detail === 'string' ? detail : 'Không thể cập nhật số điện thoại.',
+      );
+    }
+  };
+
   const handleChangePassword = async (
     currPass: string,
     newPass: string,
@@ -284,49 +313,89 @@ export function useProfileManager(navigation: any, route: any) {
 
   const pickAvatarFromCamera = async () => {
     setAvatarPickerVisible(false);
-    const permission = await ImagePicker.requestCameraPermissionsAsync();
-    if (!permission.granted) {
-      Alert.alert(
-        'Quyền bị từ chối',
-        'Bạn cần cho phép truy cập máy ảnh để chụp ảnh.',
-      );
-      return;
-    }
+    try {
+      const permission = await ImagePicker.requestCameraPermissionsAsync();
+      if (!permission.granted) {
+        Alert.alert(
+          'Quyền bị từ chối',
+          'Bạn cần cho phép truy cập máy ảnh để chụp ảnh.',
+        );
+        return;
+      }
 
-    const result = await ImagePicker.launchCameraAsync({
-      allowsEditing: true,
-      aspect: [1, 1],
-      quality: 0.7,
-      base64: true,
-    });
+      const result = await ImagePicker.launchCameraAsync({
+        allowsEditing: Platform.OS !== 'web',
+        aspect: [1, 1],
+        quality: 0.8,
+        base64: true,
+      });
 
-    if (!result.canceled && result.assets?.[0]) {
-      void handleSaveAvatar(result.assets[0]);
+      if (!result.canceled && result.assets?.[0]) {
+        const pickedAsset = result.assets[0];
+        await handleSaveAvatar(pickedAsset);
+      }
+    } catch (err: any) {
+      console.warn('[ProfileScreen] pickAvatarFromCamera error:', err);
+      Alert.alert('Lỗi', 'Không thể mở máy ảnh. Vui lòng thử lại.');
     }
   };
 
   const pickAvatarFromLibrary = async () => {
     setAvatarPickerVisible(false);
-    const permission = await ImagePicker.requestMediaLibraryPermissionsAsync();
-    if (!permission.granted) {
-      Alert.alert(
-        'Quyền bị từ chối',
-        'Bạn cần cho phép truy cập thư viện ảnh để chọn ảnh.',
-      );
+    try {
+      if (Platform.OS !== 'web') {
+        const permission = await ImagePicker.requestMediaLibraryPermissionsAsync();
+        if (!permission.granted) {
+          Alert.alert(
+            'Quyền bị từ chối',
+            'Bạn cần cho phép truy cập thư viện ảnh để chọn ảnh.',
+          );
+          return;
+        }
+      }
+
+      const result = await ImagePicker.launchImageLibraryAsync({
+        mediaTypes: ['images'],
+        allowsEditing: Platform.OS !== 'web',
+        aspect: [1, 1],
+        quality: 0.8,
+        base64: true,
+      });
+
+      if (!result.canceled && result.assets?.[0]) {
+        const pickedAsset = result.assets[0];
+        await handleSaveAvatar(pickedAsset);
+      }
+    } catch (err: any) {
+      console.warn('[ProfileScreen] pickAvatarFromLibrary error:', err);
+      Alert.alert('Lỗi', 'Không thể mở thư viện ảnh. Vui lòng thử lại.');
+    }
+  };
+
+  const handleAvatarPress = async () => {
+    if (Platform.OS === 'web') {
+      await pickAvatarFromLibrary();
       return;
     }
 
-    const result = await ImagePicker.launchImageLibraryAsync({
-      mediaTypes: ['images'],
-      allowsEditing: true,
-      aspect: [1, 1],
-      quality: 0.7,
-      base64: true,
-    });
-
-    if (!result.canceled && result.assets?.[0]) {
-      void handleSaveAvatar(result.assets[0]);
-    }
+    Alert.alert(
+      'Thay đổi ảnh đại diện',
+      'Chọn phương thức chụp hoặc tải ảnh:',
+      [
+        {
+          text: 'Chụp ảnh mới',
+          onPress: () => void pickAvatarFromCamera(),
+        },
+        {
+          text: 'Chọn từ Thư viện',
+          onPress: () => void pickAvatarFromLibrary(),
+        },
+        {
+          text: 'Hủy',
+          style: 'cancel',
+        },
+      ]
+    );
   };
 
   const saveFontPreferences = useCallback(
@@ -435,7 +504,9 @@ export function useProfileManager(navigation: any, route: any) {
     toggleViewRole,
     performLogout,
     handleSaveName,
+    handleSavePhone,
     handleChangePassword,
+    handleAvatarPress,
     pickAvatarFromCamera,
     pickAvatarFromLibrary,
     applyFontScaleMode,

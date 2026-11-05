@@ -1,7 +1,7 @@
 import React from "react";
+import { LocalizedText as Text } from '../../../../i18n/LocalizedComponents';
 import {
     View,
-    Text,
     TouchableOpacity,
     StyleSheet,
     Modal,
@@ -9,6 +9,7 @@ import {
 } from "react-native";
 import { Ionicons } from "@expo/vector-icons";
 import { Colors } from "../../../../theme/colors";
+import { SlideRightModal } from "./SlideRightModal";
 
 interface LanguageSettingsModalProps {
     visible: boolean;
@@ -26,12 +27,7 @@ export const LanguageSettingsModal: React.FC<LanguageSettingsModalProps> = ({
     onClose,
 }) => {
     return (
-        <Modal
-            transparent
-            visible={visible}
-            animationType="slide"
-            onRequestClose={onClose}
-        >
+        <SlideRightModal visible={visible} onClose={onClose} isDarkMode={isDarkMode}>
             <Pressable
                 style={[
                     styles.appearanceOverlay,
@@ -114,7 +110,7 @@ export const LanguageSettingsModal: React.FC<LanguageSettingsModalProps> = ({
                                     isDarkMode && { color: "#F8FAFC" },
                                 ]}
                             >
-                                Việt Nam
+                                Tiếng Việt
                             </Text>
                             {languageMode === "vi" && (
                                 <Ionicons
@@ -169,7 +165,7 @@ export const LanguageSettingsModal: React.FC<LanguageSettingsModalProps> = ({
                     </View>
                 </Pressable>
             </Pressable>
-        </Modal>
+        </SlideRightModal>
     );
 };
 

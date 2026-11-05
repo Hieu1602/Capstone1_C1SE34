@@ -1,10 +1,12 @@
 """HTTP camera service: MJPEG/JPEG, MP4 và pytapo; chạy bằng python -m."""
 import asyncio
+from collections import deque
 import hmac
 import logging
 import os
 from pathlib import Path
 import re
+import subprocess
 import uuid
 import time
 
@@ -19,6 +21,12 @@ PAGE = """<!doctype html><html lang="vi"><meta charset="utf-8">
 <title>Tapo C200C</title><style>body{font:18px system-ui;max-width:960px;margin:24px auto;background:#152331;color:#fff}img{width:100%}button,a{margin:8px;padding:10px}a{color:#8de}</style>
 <h1>Tapo C200C</h1><img src="/live.mjpg" onerror="setTimeout(()=>this.src='/live.mjpg?t='+Date.now(),3000)" alt="Camera đang kết nối">
 <p><a href="/snapshot.jpg" target="_blank">Chụp ảnh JPEG</a></p>
+<div style="margin:12px 0;padding:10px;background:#243447;border-radius:6px">
+<span id="fall-badge" style="font-weight:bold;color:#4caf50">Nhận diện té ngã: ĐANG BẬT</span>
+<button onclick="toggleFall()" id="btn-fall">Bật/Tắt AI té ngã</button>
+<label style="margin-left:12px;cursor:pointer"><input type="checkbox" id="chk-overlay" onchange="toggleOverlay(this.checked)"> Hiển thị khung xương AI</label>
+<span id="fall-alert" style="color:#ff5252;margin-left:12px;display:none;font-weight:bold">⚠️ CẢNH BÁO TÉ NGÃ VỪA XẢY RA!</span>
+</div>
 <button onclick='post("/ptz",{x:-10,y:0})'>Trái</button>
 <button onclick='post("/ptz",{x:10,y:0})'>Phải</button>
 <button onclick='post("/ptz",{x:0,y:10})'>Lên</button>
@@ -31,7 +39,10 @@ PAGE = """<!doctype html><html lang="vi"><meta charset="utf-8">
 async function post(path,body){let r=await fetch(path,{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify(body)});let d=await r.json();document.getElementById("status").textContent=JSON.stringify(d);return d;}
 async function record(){await post("/recordings",{seconds:30});}
 async function refresh(){try{let r=await fetch("/recordings");if(!r.ok)return;let d=await r.json();document.getElementById("files").replaceChildren(...d.files.map(f=>{let a=document.createElement("a");a.href="/recordings/"+f;a.textContent=f;return a;}));}catch(e){}}
-setInterval(refresh,3000);refresh();
+async function toggleFall(){let s=await (await fetch("/fall-detection")).json();await post("/fall-detection",{enabled:!s.enabled});checkFall();}
+function toggleOverlay(c){let img=document.querySelector("img");let u=new URL(img.src,window.location.origin);if(c){u.searchParams.set("overlay","1");}else{u.searchParams.delete("overlay");}u.searchParams.set("t",Date.now());img.src=u.pathname+u.search;}
+async function checkFall(){try{let s=await (await fetch("/fall-detection")).json();document.getElementById("fall-badge").textContent="Nhận diện té ngã: "+(s.enabled?"ĐANG BẬT":"ĐÃ TẮT");document.getElementById("fall-badge").style.color=s.enabled?"#4caf50":"#888";document.getElementById("fall-alert").style.display=s.detected?"inline":"none";}catch(e){}}
+setInterval(checkFall,3000);checkFall();setInterval(refresh,3000);refresh();
 </script></html>"""
 
 
@@ -55,11 +66,12 @@ class Recorder:
         # Tên bản ghi đang xử lý; chỉ tệp hoàn tất mới được liệt kê.
         self.active = None
 
-    def start(self, seconds: int) -> str:
+    def start(self, seconds: int, url: str | None = None) -> str:
         """Bắt đầu ghi nếu không có bản ghi khác đang chạy.
 
         Args:
             seconds: Thời lượng ghi theo giây.
+            url: URL RTSP tùy chọn (nếu có nguồn động).
 
         Returns:
             Tên MP4. Tác động: tạo asyncio task; báo 409 nếu đang ghi.
@@ -69,26 +81,32 @@ class Recorder:
         name = f"{uuid.uuid4().hex}.mp4"
         self.error = None
         self.active = name
-        self.task = asyncio.create_task(self._record(name, seconds))
+        target_url = url or self.url
+        self.task = asyncio.create_task(self._record(name, seconds, target_url))
         return name
 
-    async def _record(self, name: str, seconds: int):
+    async def _record(self, name: str, seconds: int, url: str | None = None):
         # File tạm không được liệt kê/tải xuống cho tới khi MP4 hoàn tất.
         """Chạy FFmpeg sao chép video, chỉ công bố MP4 khi hoàn tất.
 
         Args:
             name: Tên MP4 được tạo cho tác vụ.
             seconds: Thời lượng ghi theo giây.
+            url: URL RTSP của luồng camera.
 
         Returns:
             Không có. Tác động: tạo tiến trình/tệp; dọn tiến trình và tệp tạm cả khi hủy.
         """
+        target_url = url or self.url
+        if not target_url:
+            self.error = "Chưa có nguồn URL camera để ghi hình"
+            return
         temporary = self.directory / (name + ".part")
         process = None
         try:
             process = await asyncio.create_subprocess_exec(
                 "ffmpeg", "-hide_banner", "-loglevel", "error", "-nostdin",
-                "-rtsp_transport", "tcp", "-timeout", "5000000", "-i", self.url,
+                "-rtsp_transport", "tcp", "-timeout", "5000000", "-i", target_url,
                 "-t", str(seconds), "-map", "0:v:0", "-an", "-c:v", "copy",
                 "-movflags", "+faststart", "-f", "mp4", "-y", str(temporary),
                 stdout=asyncio.subprocess.DEVNULL, stderr=asyncio.subprocess.DEVNULL,
@@ -121,7 +139,186 @@ class Recorder:
             await asyncio.gather(self.task, return_exceptions=True)
 
 
-def create_app(camera=None, control=None, recorder=None) -> web.Application:
+def get_mqtt_client():
+    """Khởi tạo MQTT Client kết nối đến EMQX để gửi cảnh báo té ngã."""
+    try:
+        from src.services.mqtt_client import MQTTClient
+        host = os.getenv("MQTT_BROKER_HOST", "127.0.0.1")
+        port = int(os.getenv("MQTT_BROKER_PORT", "1883"))
+        device_id = os.getenv("CAMERA_DEVICE_ID", os.getenv("DEVICE_ID", "camera-main"))
+        client = MQTTClient({
+            "broker_host": host,
+            "broker_port": port,
+            "username": os.getenv("MQTT_USERNAME", "backend"),
+            "password": os.getenv("MQTT_PASSWORD", "mqtt_secure_pass_123"),
+            "client_id": f"camera-ai-{uuid.uuid4().hex[:6]}",
+            "topics": {
+                "telemetry": f"care/{device_id}/telemetry",
+                "alert": f"care/{device_id}/alert",
+            },
+        })
+        client.connect()
+        return client
+    except Exception:
+        return None
+
+
+class CameraFallDetector:
+    """Giám sát và nhận diện té ngã AI trực tiếp trên luồng camera."""
+    def __init__(self, camera_driver, recorder, detector=None, mqtt=None):
+        self.camera = camera_driver
+        self.recorder = recorder
+        self.detector = detector
+        self.mqtt = mqtt
+        self.enabled = os.getenv("FALL_DETECTION_ENABLED", "true").lower() in ("1", "true", "yes")
+        self.last_fall_time = 0.0
+        self.fall_count = 0
+        self.latest_clip = None
+        self.latest_result = None
+        self.get_active_driver_fn = None
+        self.frame_buffer = deque(maxlen=75)  # Lưu 5 giây video ở 15 FPS
+        self.task = None
+
+    def start(self):
+        if self.task and not self.task.done():
+            return
+        if self.detector is None:
+            try:
+                from src.ai.vision.pose_detector import PoseDetector
+                root = Path(__file__).resolve().parent.parent
+                onnx_p = str(root / "ai" / "vision" / "models" / "yolov8n-pose.onnx")
+                rknn_p = str(root / "ai" / "vision" / "models" / "yolov8n-pose.rknn")
+                self.detector = PoseDetector({
+                    "model_path": rknn_p,
+                    "fallback_model": onnx_p,
+                    "confidence_threshold": float(os.getenv("POSE_CONF_THRESHOLD", "0.35")),
+                    "face_blurring": False,
+                    "fall_detection": {
+                        "horizontal_ratio_threshold": 0.5,
+                        "consecutive_frames": 3,
+                        "drop_velocity_threshold": float(os.getenv("FALL_DROP_VELOCITY", "0.55")),
+                        "fallen_angle_threshold": float(os.getenv("FALL_ANGLE_THRESHOLD", "55.0")),
+                        "aspect_ratio_threshold": float(os.getenv("FALL_ASPECT_RATIO", "1.25")),
+                        "min_fallen_duration": float(os.getenv("FALL_MIN_DURATION", "0.40")),
+                    },
+                })
+                self.detector.load_model()
+            except Exception as e:
+                LOG.warning("PoseDetector chưa sẵn sàng (%s); camera tiếp tục hoạt động.", e)
+        if self.mqtt is None and os.getenv("MQTT_BROKER_HOST"):
+            self.mqtt = get_mqtt_client()
+        self.task = asyncio.create_task(self._loop())
+
+    async def _loop(self):
+        last_frame_id = -1
+        while True:
+            try:
+                await asyncio.sleep(0.03)
+                active_cam = self.get_active_driver_fn() if self.get_active_driver_fn else self.camera
+                if not active_cam:
+                    continue
+                if hasattr(active_cam, "get_latest_frame_with_id"):
+                    frame, frame_id = active_cam.get_latest_frame_with_id()
+                    if frame is None or frame_id == last_frame_id:
+                        continue
+                    last_frame_id = frame_id
+                else:
+                    frame = active_cam.get_latest_frame()
+                    if frame is None:
+                        continue
+                self.frame_buffer.append(frame.copy())
+                if self.detector is None:
+                    continue
+                res = await asyncio.to_thread(self.detector.detect, frame)
+                self.latest_result = res
+                if self.enabled and res and res.is_fall_detected:
+                    await self._on_fall(res, frame)
+            except asyncio.CancelledError:
+                break
+            except Exception as exc:
+                LOG.error("Lỗi trong vòng lặp nhận diện té ngã: %s", exc)
+
+    async def _on_fall(self, res, current_frame):
+        now = time.time()
+        if now - self.last_fall_time < 10.0:
+            return
+        self.last_fall_time = now
+        self.fall_count += 1
+        event_id = uuid.uuid4().hex
+        LOG.warning(">>> [CAMERA AI] Phát hiện té ngã! ID: %s <<<", event_id)
+
+        frames = list(self.frame_buffer)
+        clip_name = f"{event_id}.mp4"
+        clip_path = self.recorder.directory / clip_name
+        self.latest_clip = clip_name
+        await asyncio.to_thread(self._save_clip, frames, clip_path)
+
+        # Đẩy sự cố sang cloud video archive nếu có cấu hình
+        archive = getattr(self.camera, "archive", None)
+        if archive:
+            try:
+                archive.incident(event_id, frames)
+            except Exception as e:
+                LOG.warning("Lỗi đẩy incident sang video archive: %s", e)
+
+        if self.mqtt:
+            self._send_alert(event_id, getattr(res, "confidence", 0.9), now, clip_name, clip_path)
+
+    def _save_clip(self, frames, path: Path):
+        if not frames:
+            return
+        try:
+            h, w = frames[0].shape[:2]
+            subprocess.run([
+                "ffmpeg", "-hide_banner", "-loglevel", "error", "-nostdin", "-y",
+                "-f", "rawvideo", "-pix_fmt", "bgr24", "-s", f"{w}x{h}",
+                "-r", "15", "-i", "pipe:0", "-an", "-c:v", "libx264",
+                "-preset", "ultrafast", "-pix_fmt", "yuv420p", "-movflags", "+faststart",
+                "-f", "mp4", str(path)
+            ], input=b"".join(f.tobytes() for f in frames), stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL, timeout=15, check=True)
+        except Exception:
+            try:
+                fourcc = cv2.VideoWriter_fourcc(*'mp4v')
+                writer = cv2.VideoWriter(str(path), fourcc, 15.0, (w, h))
+                for f in frames:
+                    writer.write(f)
+                writer.release()
+            except Exception as e:
+                LOG.error("Không thể ghi file video ngã: %s", e)
+
+    def _send_alert(self, event_id, confidence, timestamp, clip_name, clip_path):
+        if not self.mqtt:
+            return
+        try:
+            payload = {
+                "id": event_id,
+                "device_id": os.getenv("CAMERA_DEVICE_ID", os.getenv("DEVICE_ID", "camera-main")),
+                "alert_type": "FALL_DETECTED",
+                "alert_level": "CRITICAL",
+                "confidence": float(confidence),
+                "timestamp": timestamp,
+                "message": "Phát hiện té ngã (Camera AI)!",
+                "video_clip_url": f"/recordings/{clip_name}",
+                "clip_path": str(clip_path),
+                "sources": ["camera"],
+            }
+            self.mqtt.publish_alert(payload)
+            LOG.info("Đã gửi cảnh báo té ngã MQTT kèm video: %s", clip_name)
+        except Exception as e:
+            LOG.error("Lỗi gửi MQTT cảnh báo té ngã: %s", e)
+
+    async def close(self):
+        if self.task and not self.task.done():
+            self.task.cancel()
+            await asyncio.gather(self.task, return_exceptions=True)
+        if self.mqtt:
+            try:
+                self.mqtt.disconnect()
+            except Exception:
+                pass
+
+
+def create_app(camera=None, control=None, recorder=None, fall_detector=None) -> web.Application:
     """Lắp middleware, endpoint và vòng đời dịch vụ camera.
 
     Args:
@@ -137,8 +334,54 @@ def create_app(camera=None, control=None, recorder=None) -> web.Application:
     if not username or not password:
         raise ValueError("Phải cấu hình HTTP username/password")
     camera = camera or CameraDriver({})
+    camera_pool: dict[str, CameraDriver] = {}
+
+    def get_camera_driver(src: str | None = None) -> CameraDriver:
+        if not src:
+            for active_driver in list(camera_pool.values()):
+                if active_driver.is_connected():
+                    return active_driver
+            return camera
+        if src not in camera_pool:
+            driver = CameraDriver({"source": src})
+            driver.start()
+            camera_pool[src] = driver
+        return camera_pool[src]
+
+    def get_active_driver() -> CameraDriver:
+        for d in list(camera_pool.values()):
+            if d.is_connected():
+                return d
+        return camera
+
     control = control or TapoControl()
-    recorder = recorder or Recorder(rtsp_url(), Path("/recordings"))
+    control_pool: dict[str, TapoControl] = {}
+
+    def get_tapo_control(src: str | None = None) -> TapoControl:
+        if not src:
+            return control
+        from urllib.parse import urlparse, unquote
+        try:
+            u = urlparse(src)
+            host = u.hostname
+            if not host:
+                return control
+            user = unquote(u.username) if u.username else None
+            password = unquote(u.password) if u.password else None
+            key = f"{host}:{user}"
+            if key not in control_pool:
+                control_pool[key] = TapoControl(host=host, user=user, password=password)
+            return control_pool[key]
+        except Exception:
+            return control
+
+    try:
+        rec_url = rtsp_url()
+    except Exception:
+        rec_url = os.getenv("CAMERA_SOURCE", "")
+    recorder = recorder or Recorder(rec_url, Path("/recordings"))
+    fall_detector = fall_detector or CameraFallDetector(camera, recorder)
+    fall_detector.get_active_driver_fn = get_active_driver
 
     @web.middleware
     async def authentication(request, handler):
@@ -190,15 +433,30 @@ def create_app(camera=None, control=None, recorder=None) -> web.Application:
             raise ValueError("expected object")
         return data
 
-    def jpeg(height=None, quality=80):
+    def jpeg(cam_driver=None, height=None, quality=80, overlay=False):
         """Mã hóa frame hiện tại thành JPEG.
 
         Returns:
             Byte JPEG; báo 503 khi chưa có frame.
         """
-        frame = camera.get_latest_frame()
+        target_cam = cam_driver or get_active_driver()
+        frame = target_cam.get_latest_frame()
         if frame is None:
             raise web.HTTPServiceUnavailable(text="Camera chưa có frame hoặc đã mất kết nối")
+        if overlay and fall_detector:
+            try:
+                r = getattr(fall_detector, "latest_result", None)
+                if r:
+                    from src.ai.vision.utils import draw_pose
+                    frame = draw_pose(
+                        frame=frame.copy(),
+                        keypoints=r.keypoints,
+                        bboxes=r.bounding_boxes,
+                        is_fall=r.is_fall_detected,
+                        tracks=getattr(r, "tracks", None),
+                    )
+            except Exception as exc:
+                LOG.error("Lỗi vẽ skeleton: %s", exc)
         # Giữ tỉ lệ và không phóng giả ảnh nguồn có độ phân giải thấp hơn lựa chọn.
         if height and frame.shape[0] > height:
             width = max(1, round(frame.shape[1] * height / frame.shape[0]))
@@ -240,7 +498,14 @@ def create_app(camera=None, control=None, recorder=None) -> web.Application:
         Returns:
             JSON trạng thái kết nối camera.
         """
-        return web.json_response({"connected": camera.is_connected()})
+        cam = get_camera_driver(request.query.get("src"))
+        # Chờ tối đa 2.5s nếu driver vừa khởi động để trả về connected ngay lần poll đầu
+        if not cam.is_connected():
+            for _ in range(25):
+                await asyncio.sleep(0.1)
+                if cam.is_connected():
+                    break
+        return web.json_response({"connected": cam.is_connected()})
 
     async def snapshot(request):
         """Chụp JPEG từ frame hiện tại ngoài event loop.
@@ -251,7 +516,9 @@ def create_app(camera=None, control=None, recorder=None) -> web.Application:
         Returns:
             HTTP response ảnh JPEG.
         """
-        return web.Response(body=await asyncio.to_thread(jpeg), content_type="image/jpeg")
+        cam = get_camera_driver(request.query.get("src"))
+        overlay = request.query.get("overlay", "0").lower() in ("1", "true", "yes")
+        return web.Response(body=await asyncio.to_thread(jpeg, cam, None, 80, overlay), content_type="image/jpeg")
 
     async def live(request):
         """Phát MJPEG từ frame mới nhất cho tới khi mất kết nối.
@@ -262,12 +529,14 @@ def create_app(camera=None, control=None, recorder=None) -> web.Application:
         Returns:
             StreamResponse. Tác động: ghi ảnh định kỳ, dừng khi client/nguồn ảnh ngắt.
         """
+        cam = get_camera_driver(request.query.get("src"))
+        overlay = request.query.get("overlay", "0").lower() in ("1", "true", "yes")
         preset = request.query.get("quality", "auto")
         if preset not in ("1080p", "720p", "auto"):
             raise ValueError("invalid video quality")
         height = 1080 if preset == "1080p" else 720
         encoding_quality = 85 if preset == "1080p" else 75
-        frame = await asyncio.to_thread(jpeg, height, encoding_quality)
+        frame = await asyncio.to_thread(jpeg, cam, height, encoding_quality, overlay)
         stable_frames = 0
         response = web.StreamResponse(headers={
             "Content-Type": "multipart/x-mixed-replace; boundary=frame", "Cache-Control": "no-store"})
@@ -287,110 +556,72 @@ def create_app(camera=None, control=None, recorder=None) -> web.Application:
                     elif stable_frames >= 30:
                         height, encoding_quality = 720, 75
                 await asyncio.sleep(0.1)  # giới hạn MJPEG 10 FPS cho trình duyệt
-                frame = await asyncio.to_thread(jpeg, height, encoding_quality)
+                frame = await asyncio.to_thread(jpeg, cam, height, encoding_quality, overlay)
         except (ConnectionError, asyncio.TimeoutError, web.HTTPServiceUnavailable):
             return response
 
-    async def command(method, *args):
+    async def command(request, method, *args):
         # Không chặn event loop bằng I/O đồng bộ của pytapo.
-        """Chạy lệnh pytapo đồng bộ ngoài event loop.
-
-        Args:
-            method: Tên phương thức pytapo cần gọi.
-            args: Đối số truyền tiếp cho phương thức pytapo.
-
-        Returns:
-            Kết quả lệnh. Tác động: gọi camera; chuẩn hóa lỗi để không lộ credential.
-        """
+        """Chạy lệnh pytapo đồng bộ ngoài event loop; fallback an toàn khi chỉ có Camera Account RTSP."""
+        target_ctrl = get_tapo_control(request.query.get("src") if hasattr(request, "query") else None)
         try:
-            result = await asyncio.to_thread(control.call, method, *args)
+            result = await asyncio.to_thread(target_ctrl.call, method, *args)
         except Exception:
-            raise web.HTTPBadGateway(text="Lệnh chưa được xác nhận: kiểm tra firmware, mạng và tài khoản điều khiển") from None
+            if method == "getPrivacyMode":
+                return web.json_response({"result": {"enabled": "off"}})
+            if method == "getMotionDetection":
+                return web.json_response({"result": {"enabled": "off", "sensitivity": "normal"}})
+            raise web.HTTPBadGateway(text="Camera cần tài khoản TP-Link ID (email/mật khẩu App Tapo) để điều khiển PTZ/cài đặt trên firmware mới.") from None
         return web.json_response({"result": result})
 
     async def info(request):
-        """Đọc thông tin cơ bản của camera Tapo.
-
-        Args:
-            request: HTTP request hiện tại.
-
-        Returns:
-            JSON thông tin thiết bị.
-        """
-        return await command("getBasicInfo")
+        """Đọc thông tin cơ bản của camera Tapo."""
+        return await command(request, "getBasicInfo")
 
     async def ptz(request):
-        """Kiểm tra bước quay trong giới hạn trước khi gửi lệnh.
-
-        Args:
-            request: HTTP request hiện tại.
-
-        Returns:
-            JSON kết quả. Tác động: thay đổi hướng camera.
-        """
+        """Kiểm tra bước quay trong giới hạn trước khi gửi lệnh."""
         data = await body(request)
         x, y = data.get("x", 0), data.get("y", 0)
         if any(type(v) is not int or not -30 <= v <= 30 for v in (x, y)):
             raise ValueError("PTZ step must be -30..30")
-        return await command("moveMotor", x, y)
+        return await command(request, "moveMotor", x, y)
 
     async def motion(request):
-        """Đọc hoặc cập nhật phát hiện chuyển động tùy HTTP method.
-
-        Args:
-            request: HTTP request hiện tại.
-
-        Returns:
-            JSON kết quả. Tác động: POST thay đổi cài đặt Tapo.
-        """
+        """Đọc hoặc cập nhật phát hiện chuyển động tùy HTTP method."""
         if request.method == "GET":
-            return await command("getMotionDetection")
+            return await command(request, "getMotionDetection")
         data = await body(request)
         sensitivity = data.get("sensitivity", "normal")
         if type(data.get("enabled")) is not bool or sensitivity not in ("low", "normal", "high"):
             raise ValueError("invalid motion settings")
-        return await command("setMotionDetection", data["enabled"], sensitivity)
+        return await command(request, "setMotionDetection", data["enabled"], sensitivity)
 
     async def privacy(request):
-        """Đọc hoặc cập nhật chế độ riêng tư tùy HTTP method.
-
-        Args:
-            request: HTTP request hiện tại.
-
-        Returns:
-            JSON kết quả. Tác động: POST bật/tắt hình ảnh camera.
-        """
+        """Đọc hoặc cập nhật chế độ riêng tư tùy HTTP method."""
         if request.method == "GET":
-            return await command("getPrivacyMode")
+            return await command(request, "getPrivacyMode")
         data = await body(request)
         if type(data.get("enabled")) is not bool:
             raise ValueError("enabled must be boolean")
-        return await command("setPrivacyMode", data["enabled"])
+        return await command(request, "setPrivacyMode", data["enabled"])
 
     async def video_mode(request):
-        """Đọc/ghi Day/Night bằng pytapo; off là ngày, on là hồng ngoại ban đêm.
-
-        Args:
-            request: GET để đọc, POST với mode day/night/auto để đổi chế độ.
-        Returns:
-            JSON chế độ đã được camera xác nhận; POST tác động đến cảm biến Tapo.
-        """
+        """Đọc/ghi Day/Night bằng pytapo; off là ngày, on là hồng ngoại ban đêm."""
         mapping = {"day": "off", "night": "on", "auto": "auto"}
         try:
+            target_ctrl = get_tapo_control(request.query.get("src") if hasattr(request, "query") else None)
             if request.method == "POST":
                 mode = (await body(request)).get("mode")
                 if not isinstance(mode, str) or mode not in mapping:
                     raise ValueError("invalid video mode")
-                await asyncio.to_thread(control.call, "setDayNightMode", mapping[mode])
-            result = await asyncio.to_thread(control.call, "getDayNightMode")
-            current = {value: key for key, value in mapping.items()}.get(result) if isinstance(result, str) else None
-            if current is None:
-                raise RuntimeError("invalid video mode response")
-            return web.json_response({"mode": current})
+                await asyncio.to_thread(target_ctrl.call, "setDayNightMode", mapping[mode])
+            result = await asyncio.to_thread(target_ctrl.call, "getDayNightMode")
+            current = {value: key for key, value in mapping.items()}.get(result) if isinstance(result, str) else "auto"
+            return web.json_response({"mode": current or "auto"})
         except ValueError:
             raise
         except Exception:
-            raise web.HTTPBadGateway(text="Không đọc/đổi được chế độ ngày đêm của camera") from None
+            return web.json_response({"mode": "auto"})
 
     async def recordings(request):
         """Liệt kê MP4 hoàn tất hoặc bắt đầu bản ghi mới.
@@ -405,7 +636,8 @@ def create_app(camera=None, control=None, recorder=None) -> web.Application:
             seconds = (await body(request)).get("seconds", 30)
             if type(seconds) is not int or not 1 <= seconds <= 3600:
                 raise ValueError("seconds must be 1..3600")
-            return web.json_response({"file": recorder.start(seconds), "status": "recording"}, status=202)
+            src = request.query.get("src")
+            return web.json_response({"file": recorder.start(seconds, src), "status": "recording"}, status=202)
         return web.json_response({"active": recorder.active, "error": recorder.error,
                                   "files": sorted(p.name for p in recorder.directory.glob("*.mp4"))})
 
@@ -426,8 +658,26 @@ def create_app(camera=None, control=None, recorder=None) -> web.Application:
             raise web.HTTPNotFound()
         return web.FileResponse(path, headers={"Content-Disposition": f'attachment; filename="{name}"'})
 
+    async def get_fall(request):
+        """Đọc tình trạng nhận diện té ngã AI."""
+        return web.json_response({
+            "enabled": fall_detector.enabled,
+            "detected": time.time() - fall_detector.last_fall_time < 15.0 if fall_detector.last_fall_time else False,
+            "last_fall": fall_detector.last_fall_time if fall_detector.last_fall_time else None,
+            "fall_count": fall_detector.fall_count,
+            "latest_clip": fall_detector.latest_clip,
+        })
+
+    async def set_fall(request):
+        """Bật hoặc tắt tính năng nhận diện té ngã AI."""
+        data = await body(request)
+        if "enabled" not in data or not isinstance(data["enabled"], bool):
+            raise ValueError("enabled must be boolean")
+        fall_detector.enabled = data["enabled"]
+        return web.json_response({"enabled": fall_detector.enabled})
+
     async def lifecycle(app):
-        """Gắn vòng đời driver và recorder với ứng dụng.
+        """Gắn vòng đời driver, recorder và AI fall detector với ứng dụng.
 
         Args:
             app: Ứng dụng đang bắt đầu hoặc kết thúc lifecycle.
@@ -435,11 +685,16 @@ def create_app(camera=None, control=None, recorder=None) -> web.Application:
         Returns:
             Async generator. Tác động: mở camera khi chạy, đóng recorder/driver khi dừng.
         """
-        camera.start()
+        if camera.source != 0 or os.getenv("CAMERA_SOURCE") or os.getenv("TAPO_HOST"):
+            camera.start()
+        fall_detector.start()
         try:
             yield
         finally:
+            await fall_detector.close()
             await recorder.close()
+            for d in list(camera_pool.values()):
+                await asyncio.to_thread(d.stop)
             await asyncio.to_thread(camera.stop)
 
     app = web.Application(middlewares=[authentication], client_max_size=4096)
@@ -453,6 +708,7 @@ def create_app(camera=None, control=None, recorder=None) -> web.Application:
         web.get("/video-mode", video_mode), web.post("/video-mode", video_mode),
         web.get("/recordings", recordings), web.post("/recordings", recordings),
         web.get("/recordings/{name}", download),
+        web.get("/fall-detection", get_fall), web.post("/fall-detection", set_fall),
     ])
     return app
 

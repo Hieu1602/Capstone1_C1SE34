@@ -14,6 +14,7 @@ interface Props {
     onPrivacy: () => void;
     privacyActive: boolean;
     onCare: () => void;
+    careActive?: boolean;
 }
 
 /**
@@ -24,29 +25,31 @@ interface Props {
 export default function FunctionGrid(props: Props) {
     const { colors } = useTheme();
     const actions: ControlAction[] = [
-        { label: "Talk", icon: "mic", onPress: props.onTalk },
-        { label: "Pan & Tilt", icon: "move", onPress: props.onPanTilt },
+        { label: "Đàm thoại", icon: "mic", onPress: props.onTalk },
+        { label: "Xoay camera", icon: "move", onPress: props.onPanTilt },
         {
             label:
                 props.alarmActive == null
-                    ? "Alarm"
+                    ? "Còi báo động"
                     : props.alarmActive
-                      ? "Alarm On"
-                      : "Alarm Off",
+                      ? "Tắt còi"
+                      : "Bật còi",
             icon: "notifications",
             onPress: props.onAlarm,
             active: props.alarmActive,
         },
         {
-            label: "Privacy Mode",
+            label: "Chế độ riêng tư",
             icon: "eye-off-outline",
             onPress: props.onPrivacy,
             active: props.privacyActive,
         },
         {
-            label: "AI Care",
-            icon: "shield-checkmark-outline",
+            label: "Chăm sóc AI",
+            icon: props.careActive ? "shield-checkmark" : "shield-checkmark-outline",
             onPress: props.onCare,
+            active: props.careActive,
+            activeColor: "#10B981",
         },
     ];
     return (

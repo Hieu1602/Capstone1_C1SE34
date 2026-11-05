@@ -85,6 +85,7 @@ class EdgeApp:
             mqtt_client=self.mqtt_client,
             speaker=self.speaker,
             ring_buffer=self.ring_buffer,
+            camera=self.camera,
         )
 
     # ------------------------------------------------------------------
@@ -119,7 +120,7 @@ class EdgeApp:
         """Tắt toàn bộ Edge Gateway sạch sẽ."""
         logger.info("=== Edge Gateway đang dừng ===")
         self._shutdown_event.set()
-        self.camera.stop()
+        await asyncio.to_thread(self.camera.stop)
         self.mqtt_client.disconnect()
         self.rtsp_stream.stop()
         self.pose_detector.release()

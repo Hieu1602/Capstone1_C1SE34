@@ -1,7 +1,8 @@
+import { LocalizedText as Text } from '../../../../i18n/LocalizedComponents';
 import React, { useState, useRef, useEffect } from "react";
+import { useTranslation } from "react-i18next";
 import {
     View,
-    Text,
     TextInput,
     TouchableOpacity,
     StyleSheet,
@@ -13,6 +14,9 @@ import {
 import { SafeAreaView } from "react-native-safe-area-context";
 import { Ionicons } from "@expo/vector-icons";
 import { Colors } from "../../../../theme/colors";
+import { SlideRightModal } from "../settings/SlideRightModal";
+import { usersApi } from "../../../../services/api";
+import * as Location from "expo-location";
 
 interface SecurityCenterModalProps {
     visible: boolean;
@@ -33,10 +37,120 @@ export const SecurityCenterModal: React.FC<SecurityCenterModalProps> = ({
     onChangePasswordPress,
     onSubmitChangePassword,
 }) => {
+    const { t, i18n } = useTranslation();
+    const isEn = i18n.language?.startsWith('en');
+
+    const getSecurityQuestionAnswer = (q: string) => {
+        if (
+            q === "Mật khẩu mã hóa thiết bị là gì?" ||
+            q === "What is device encryption password?"
+        ) {
+            return isEn
+                ? "The device encryption password is a symmetric encryption key used to encrypt camera video streams and sensor data, with a default value based on the device authentication code. You should change the default password to a strong password after pairing the device for the first time. The encryption password is a security key provided by Smart Elderly Care AI. The system does not record or store the encryption password on the central cloud server. The password is only encrypted and stored directly on your monitoring device and mobile app. The Smart Elderly Care AI technical team cannot retrieve, reset, or recover this encryption password to ensure complete privacy for your family."
+                : "Mật khẩu mã hóa thiết bị là một mật khẩu đối xứng được sử dụng để mã hóa luồng video camera và dữ liệu cảm biến của thiết bị, với giá trị mặc định theo mã xác thực thiết bị. Bạn nên thay đổi mật khẩu mặc định thành một mật khẩu an toàn sau khi liên kết thiết bị lần đầu tiên. Mật khẩu mã hóa là chìa khóa bảo mật được cung cấp bởi Smart Elderly Care AI. Hệ thống hoàn toàn không ghi lại hoặc lưu trữ mật khẩu mã hóa trên máy chủ trung tâm. Mật khẩu chỉ được mã hóa lưu trữ trực tiếp trên thiết bị giám sát và ứng dụng di động của bạn. Đội ngũ kỹ thuật Smart Elderly Care AI không có khả năng lấy lại, đặt lại hoặc khôi phục mật khẩu mã hóa nhằm đảm bảo quyền riêng tư tuyệt đối cho gia đình bạn.";
+        }
+        if (
+            q === "Có ràng buộc một thiết bị an toàn không?" ||
+            q === "Is device pairing secure?"
+        ) {
+            return isEn
+                ? "To pair a device with the Smart Elderly Care AI system, three conditions must be met simultaneously:\n\n1. Possess the device's Serial number and security verification code;\n\n2. The monitoring device is online;\n\n3. The device has not been paired by another administrative account;\n\nIf a device has been paired by the household owner, others cannot pair or access it even with the serial number. Only the linked owner account has the authority to share or unbind it. Smart Elderly Care AI recommends configuring device security immediately after completing network setup."
+                : "Để kết nối một thiết bị vào hệ thống Smart Elderly Care AI, ba điều kiện sau phải được đáp ứng đồng thời:\n\n1. Biết mã định danh (Serial) và mã xác thực an toàn của thiết bị;\n\n2. Thiết bị giám sát đang trực tuyến;\n\n3. Thiết bị chưa bị ràng buộc bởi một tài khoản quản trị khác;\n\nNếu một thiết bị đã được kết nối bởi chủ hộ gia đình, người khác tuyệt đối không thể kết nối hoặc xem trộm ngay cả khi biết mã serial. Chỉ có tài khoản chủ hộ đã liên kết thiết bị mới có quyền chia sẻ hoặc hủy liên kết. Smart Elderly Care AI khuyến nghị bạn cấu hình bảo mật thiết bị ngay sau khi hoàn tất kết nối mạng.";
+        }
+        if (
+            q === "Việc sử dụng mã xác minh qua tin nhắn SMS" ||
+            q === "Using SMS verification code"
+        ) {
+            return isEn
+                ? "SMS Verification (OTP) is an enhanced two-step security layer provided by Smart Elderly Care AI, superior to relying on standard passwords alone. When users perform sensitive actions (such as logging in on a new device, updating emergency SOS alert configurations, sharing monitoring privileges, etc.), the system sends an SMS OTP code to authenticate the account owner. This prevents unauthorized account intrusion. Never disclose OTP codes to anyone."
+                : "Mã xác minh SMS (OTP) là lớp bảo mật hai bước nâng cao được cung cấp bởi Smart Elderly Care AI, vượt trội hơn so với việc chỉ dùng mật khẩu thông thường. Khi người dùng thực hiện các thao tác nhạy cảm (như đăng nhập trên thiết bị mới, thay đổi cấu hình cảnh báo SOS khẩn cấp, chia sẻ quyền giám sát, v.v.), hệ thống sẽ gửi mã SMS OTP để xác thực danh tính chính chủ. Điều này giúp ngăn chặn tối đa nguy cơ tài khoản bị xâm nhập trái phép. Hãy lưu ý không bao giờ tiết lộ mã OTP cho bất kỳ ai.";
+        }
+        return isEn
+            ? "The Smart Elderly Care AI system utilizes multiple layers of account protection, device verification, and cryptographic authentication to prevent unauthorized access. You should enable two-step verification and periodically review login history."
+            : "Hệ thống Smart Elderly Care AI sử dụng nhiều lớp bảo vệ tài khoản, xác minh thiết bị và mã xác thực để hạn chế truy cập trái phép. Bạn nên bật xác minh hai bước và thường xuyên kiểm tra lịch sử đăng nhập.";
+    };
+
     const [twoFactorEnabled, setTwoFactorEnabled] = useState(false);
     const [securityDetail, setSecurityDetail] = useState<
         "twoFactor" | "devices" | "logins" | "question" | "changePassword" | null
     >(null);
+    const [terminals, setTerminals] = useState<any[]>([]);
+    const [loginHistories, setLoginHistories] = useState<any[]>([]);
+    const [isLoadingTerminals, setIsLoadingTerminals] = useState(false);
+    const [isLoadingHistories, setIsLoadingHistories] = useState(false);
+
+    const fetchTerminalsData = async () => {
+        setIsLoadingTerminals(true);
+        try {
+            let currentLoc: string | undefined;
+            try {
+                const { status } = await Location.getForegroundPermissionsAsync();
+                if (status === "granted") {
+                    const pos = await Promise.race([
+                        Location.getCurrentPositionAsync({ accuracy: Location.Accuracy.Balanced }),
+                        new Promise<null>((r) => setTimeout(() => r(null), 1500)),
+                    ]);
+                    if (pos && pos.coords) {
+                        const places = await Location.reverseGeocodeAsync({
+                            latitude: pos.coords.latitude,
+                            longitude: pos.coords.longitude,
+                        });
+                        if (places && places.length > 0) {
+                            const p = places[0];
+                            const parts = [
+                                p.district || p.subregion,
+                                p.city || p.region,
+                                p.country || "Việt Nam",
+                            ].filter(Boolean);
+                            currentLoc = parts.join(", ");
+                        }
+                    }
+                }
+            } catch {}
+
+            const res = await usersApi.getTerminals(currentLoc);
+            if (Array.isArray(res.data) && res.data.length > 0) {
+                setTerminals(res.data);
+            }
+        } catch (err) {
+            console.warn("[SecurityCenter] Lỗi tải danh sách thiết bị:", err);
+        } finally {
+            setIsLoadingTerminals(false);
+        }
+    };
+
+    const fetchLoginHistoriesData = async () => {
+        setIsLoadingHistories(true);
+        try {
+            const res = await usersApi.getLoginHistory(20);
+            if (Array.isArray(res.data) && res.data.length > 0) {
+                setLoginHistories(res.data);
+            }
+        } catch (err) {
+            console.warn("[SecurityCenter] Lỗi tải lịch sử đăng nhập:", err);
+        } finally {
+            setIsLoadingHistories(false);
+        }
+    };
+
+    const formatLoginDate = (dateStr?: string | null) => {
+        if (!dateStr) return "Hôm nay · Vừa xong";
+        try {
+            const d = new Date(dateStr);
+            const now = new Date();
+            const isToday = d.toDateString() === now.toDateString();
+            const hours = String(d.getHours()).padStart(2, "0");
+            const mins = String(d.getMinutes()).padStart(2, "0");
+            if (isToday) {
+                return `Hôm nay · ${hours}:${mins}`;
+            }
+            const day = String(d.getDate()).padStart(2, "0");
+            const month = String(d.getMonth() + 1).padStart(2, "0");
+            return `${day}/${month} · ${hours}:${mins}`;
+        } catch {
+            return dateStr;
+        }
+    };
     const [selectedSecurityQuestion, setSelectedSecurityQuestion] = useState("");
     const [currentPassword, setCurrentPassword] = useState("");
     const [newPassword, setNewPassword] = useState("");
@@ -54,6 +168,8 @@ export const SecurityCenterModal: React.FC<SecurityCenterModalProps> = ({
     useEffect(() => {
         if (visible) {
             scrollRef.current?.scrollTo({ y: 0, animated: false });
+            fetchTerminalsData();
+            fetchLoginHistoriesData();
         }
     }, [visible]);
 
@@ -72,6 +188,12 @@ export const SecurityCenterModal: React.FC<SecurityCenterModalProps> = ({
     ) => {
         if (type === "changePassword") {
             resetPasswordForm();
+        }
+        if (type === "devices") {
+            fetchTerminalsData();
+        }
+        if (type === "logins") {
+            fetchLoginHistoriesData();
         }
         setSecurityDetail(type);
     };
@@ -160,18 +282,7 @@ export const SecurityCenterModal: React.FC<SecurityCenterModalProps> = ({
     };
 
     return (
-        <Modal
-            visible={visible}
-            animationType="slide"
-            onRequestClose={() => {
-                if (securityDetail !== null) {
-                    resetPasswordForm();
-                    setSecurityDetail(null);
-                } else {
-                    handleClose();
-                }
-            }}
-        >
+        <SlideRightModal visible={visible} onClose={handleClose} isDarkMode={isDarkMode}>
             {securityDetail !== null ? (
                 <SafeAreaView
                     style={[
@@ -304,11 +415,9 @@ export const SecurityCenterModal: React.FC<SecurityCenterModalProps> = ({
                                         isDarkMode && { color: "#94A3B8" },
                                     ]}
                                 >
-                                    Để giữ an toàn tuyệt đối cho tài khoản giám
-                                    sát người cao tuổi, hệ thống sẽ yêu cầu
-                                    nhập mã OTP gửi về tin nhắn SMS khi bạn đăng
-                                    nhập trên thiết bị mới hoặc thực hiện thao
-                                    tác nhạy cảm.
+                                    {isEn
+                                        ? "To keep your elderly care monitoring account completely secure, the system requires an SMS OTP code whenever you log in from a new device or perform sensitive operations."
+                                        : "Để giữ an toàn tuyệt đối cho tài khoản giám sát người cao tuổi, hệ thống sẽ yêu cầu nhập mã OTP gửi về tin nhắn SMS khi bạn đăng nhập trên thiết bị mới hoặc thực hiện thao tác nhạy cảm."}
                                 </Text>
                                 <View
                                     style={[
@@ -332,8 +441,12 @@ export const SecurityCenterModal: React.FC<SecurityCenterModalProps> = ({
                                         ]}
                                     >
                                         {twoFactorEnabled
-                                            ? "Tính năng xác thực 2 lớp đang kích hoạt trên số điện thoại đăng ký của bạn."
-                                            : "Khuyến khích bật xác thực 2 bước để phòng ngừa truy cập trái phép."}
+                                            ? (isEn
+                                                ? "Two-factor authentication is active on your registered phone number."
+                                                : "Tính năng xác thực 2 lớp đang kích hoạt trên số điện thoại đăng ký của bạn.")
+                                            : (isEn
+                                                ? "Two-step verification is recommended to prevent unauthorized access."
+                                                : "Khuyến khích bật xác thực 2 bước để phòng ngừa truy cập trái phép.")}
                                     </Text>
                                 </View>
                             </View>
@@ -349,80 +462,133 @@ export const SecurityCenterModal: React.FC<SecurityCenterModalProps> = ({
                                     },
                                 ]}
                             >
-                                <Text
-                                    style={[
-                                        styles.securityDetailCardTitle,
-                                        isDarkMode && { color: "#F8FAFC" },
-                                    ]}
-                                >
-                                    Thiết bị đáng tin cậy: 1
-                                </Text>
-                                <View
-                                    style={[
-                                        styles.securityDeviceItem,
-                                        isDarkMode && {
-                                            backgroundColor: "#0F172A",
-                                            borderColor: "#334155",
-                                        },
-                                    ]}
-                                >
-                                    <View style={styles.securityDeviceIcon}>
+                                <View style={styles.securityDetailCardHeaderRow}>
+                                    <Text
+                                        style={[
+                                            styles.securityDetailCardTitle,
+                                            isDarkMode && { color: "#F8FAFC" },
+                                        ]}
+                                    >
+                                        {isEn ? `Trusted devices: ${terminals.length || 1}` : `Thiết bị đáng tin cậy: ${terminals.length || 1}`}
+                                    </Text>
+                                    <TouchableOpacity
+                                        onPress={fetchTerminalsData}
+                                        disabled={isLoadingTerminals}
+                                        hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
+                                    >
                                         <Ionicons
-                                            name="phone-portrait"
-                                            size={22}
-                                            color="#0284C7"
+                                            name="refresh-outline"
+                                            size={18}
+                                            color={isLoadingTerminals ? "#94A3B8" : Colors.primary}
                                         />
-                                    </View>
-                                    <View style={styles.securityDeviceCopy}>
-                                        <Text
-                                            style={[
-                                                styles.securityDeviceName,
-                                                isDarkMode && {
-                                                    color: "#F8FAFC",
-                                                },
-                                            ]}
-                                        >
-                                            Thiết bị này
-                                        </Text>
-                                        <Text
-                                            style={[
-                                                styles.securityDeviceMeta,
-                                                isDarkMode && {
-                                                    color: "#94A3B8",
-                                                },
-                                            ]}
-                                        >
-                                            Android App · Đang hoạt động
-                                        </Text>
-                                        <Text
-                                            style={[
-                                                styles.securityDeviceMeta,
-                                                isDarkMode && {
-                                                    color: "#94A3B8",
-                                                },
-                                            ]}
-                                        >
-                                            Đăng nhập gần nhất: Hôm nay 20:41
-                                        </Text>
-                                    </View>
-                                    <View style={styles.securityActiveBadge}>
-                                        <Text
-                                            style={styles.securityActiveBadgeText}
-                                        >
-                                            Hiện tại
-                                        </Text>
-                                    </View>
+                                    </TouchableOpacity>
                                 </View>
+
+                                {isLoadingTerminals && terminals.length === 0 ? (
+                                    <View style={{ paddingVertical: 24, alignItems: "center" }}>
+                                        <ActivityIndicator color={Colors.primary} size="small" />
+                                    </View>
+                                ) : (
+                                    (terminals.length > 0 ? terminals : [
+                                        {
+                                            id: "current-dev",
+                                            device_name: "Thiết bị này",
+                                            os: "Android App",
+                                            browser: "SECA Mobile App",
+                                            ip_address: "127.0.0.1",
+                                            location: "Đà Nẵng, Việt Nam",
+                                            last_active_at: new Date().toISOString(),
+                                            is_current: true,
+                                        }
+                                    ]).map((item) => (
+                                        <View
+                                            key={item.id || item.device_name}
+                                            style={[
+                                                styles.securityDeviceItem,
+                                                isDarkMode && {
+                                                    backgroundColor: "#0F172A",
+                                                    borderColor: "#334155",
+                                                },
+                                            ]}
+                                        >
+                                            <View style={styles.securityDeviceIcon}>
+                                                <Ionicons
+                                                    name={
+                                                        item.device_type === "desktop"
+                                                            ? "desktop-outline"
+                                                            : item.device_type === "tablet"
+                                                              ? "tablet-portrait-outline"
+                                                              : "phone-portrait"
+                                                    }
+                                                    size={22}
+                                                    color="#0284C7"
+                                                />
+                                            </View>
+                                            <View style={styles.securityDeviceCopy}>
+                                                <View style={{ flexDirection: "row", alignItems: "center", justifyContent: "space-between" }}>
+                                                    <Text
+                                                        style={[
+                                                            styles.securityDeviceName,
+                                                            isDarkMode && { color: "#F8FAFC" },
+                                                        ]}
+                                                    >
+                                                        {item.is_current ? "Thiết bị này" : item.device_name}
+                                                    </Text>
+                                                    {item.is_current && (
+                                                        <View style={styles.securityActiveBadge}>
+                                                            <Text style={styles.securityActiveBadgeText}>
+                                                                Hiện tại
+                                                            </Text>
+                                                        </View>
+                                                    )}
+                                                </View>
+                                                <Text
+                                                    style={[
+                                                        styles.securityDeviceMeta,
+                                                        isDarkMode && { color: "#94A3B8" },
+                                                    ]}
+                                                >
+                                                    {item.os || "Android App"} · {item.browser || "Đang hoạt động"}
+                                                </Text>
+                                                <View style={styles.securityLocationBadge}>
+                                                    <Ionicons name="location-sharp" size={13} color="#EA580C" />
+                                                    <Text
+                                                        style={[
+                                                            styles.securityLocationText,
+                                                            isDarkMode && { color: "#FB923C" },
+                                                        ]}
+                                                    >
+                                                        {item.location || "Đà Nẵng, Việt Nam"}
+                                                    </Text>
+                                                </View>
+                                                <Text
+                                                    style={[
+                                                        styles.securityDeviceMeta,
+                                                        isDarkMode && { color: "#94A3B8" },
+                                                    ]}
+                                                >
+                                                    🌐 IP: {item.ip_address || "127.0.0.1"}
+                                                </Text>
+                                                <Text
+                                                    style={[
+                                                        styles.securityDeviceMeta,
+                                                        isDarkMode && { color: "#94A3B8" },
+                                                    ]}
+                                                >
+                                                    Đăng nhập gần nhất: {formatLoginDate(item.last_active_at)}
+                                                </Text>
+                                            </View>
+                                        </View>
+                                    ))
+                                )}
+
                                 <Text
                                     style={[
                                         styles.securityDetailDescription,
                                         isDarkMode && { color: "#94A3B8" },
                                     ]}
                                 >
-                                    Nếu bạn thấy bất kỳ thiết bị lạ nào đăng nhập
-                                    vào hệ thống, hãy đổi mật khẩu ngay lập tức.
-                                    Các thiết bị không hoạt động trong 3 tháng sẽ
-                                    tự động bị ngắt kết nối.
+                                    Nếu bạn thấy bất kỳ thiết bị lạ nào đăng nhập vào hệ thống, hãy đổi mật khẩu ngay lập tức. Các thiết bị không hoạt động trong 3 tháng sẽ tự động bị ngắt kết nối.
                                 </Text>
                             </View>
                         )}
@@ -437,67 +603,96 @@ export const SecurityCenterModal: React.FC<SecurityCenterModalProps> = ({
                                     },
                                 ]}
                             >
-                                <Text
-                                    style={[
-                                        styles.securityDetailCardTitle,
-                                        isDarkMode && { color: "#F8FAFC" },
-                                    ]}
-                                >
-                                    Lịch sử đăng nhập gần đây
-                                </Text>
-                                {[
-                                    "Hôm nay · 20:41",
-                                    "09-14 · 21:20",
-                                    "09-14 · 21:08",
-                                    "09-12 · 00:07",
-                                ].map((loginItem, idx) => (
-                                    <View
-                                        key={loginItem}
+                                <View style={styles.securityDetailCardHeaderRow}>
+                                    <Text
                                         style={[
-                                            styles.securityLoginItem,
-                                            isDarkMode && {
-                                                borderBottomColor: "#334155",
-                                            },
-                                            idx === 3 && {
-                                                borderBottomWidth: 0,
-                                            },
+                                            styles.securityDetailCardTitle,
+                                            isDarkMode && { color: "#F8FAFC" },
                                         ]}
                                     >
-                                        <View style={styles.securityTimelineDot} />
-                                        <View style={styles.securityDeviceCopy}>
-                                            <Text
-                                                style={[
-                                                    styles.securityLoginName,
-                                                    isDarkMode && {
-                                                        color: "#F8FAFC",
-                                                    },
-                                                ]}
-                                            >
-                                                Đăng nhập ứng dụng
-                                            </Text>
-                                            <Text
-                                                style={[
-                                                    styles.securityDeviceMeta,
-                                                    isDarkMode && {
-                                                        color: "#94A3B8",
-                                                    },
-                                                ]}
-                                            >
-                                                Thiết bị chính · Thành công
-                                            </Text>
-                                        </View>
-                                        <Text
+                                        Lịch sử đăng nhập gần đây
+                                    </Text>
+                                    <TouchableOpacity
+                                        onPress={fetchLoginHistoriesData}
+                                        disabled={isLoadingHistories}
+                                        hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
+                                    >
+                                        <Ionicons
+                                            name="refresh-outline"
+                                            size={18}
+                                            color={isLoadingHistories ? "#94A3B8" : Colors.primary}
+                                        />
+                                    </TouchableOpacity>
+                                </View>
+
+                                {isLoadingHistories && loginHistories.length === 0 ? (
+                                    <View style={{ paddingVertical: 24, alignItems: "center" }}>
+                                        <ActivityIndicator color={Colors.primary} size="small" />
+                                    </View>
+                                ) : (
+                                    (loginHistories.length > 0 ? loginHistories : [
+                                        {
+                                            id: "hist-1",
+                                            device_name: "Thiết bị chính",
+                                            location: "Đà Nẵng, Việt Nam",
+                                            ip_address: "127.0.0.1",
+                                            login_time: new Date().toISOString(),
+                                            status: "success",
+                                        }
+                                    ]).map((loginItem, idx) => (
+                                        <View
+                                            key={loginItem.id || String(idx)}
                                             style={[
-                                                styles.securityLoginTime,
+                                                styles.securityLoginItem,
                                                 isDarkMode && {
-                                                    color: "#94A3B8",
+                                                    borderBottomColor: "#334155",
+                                                },
+                                                idx === (loginHistories.length - 1) && {
+                                                    borderBottomWidth: 0,
                                                 },
                                             ]}
                                         >
-                                            {loginItem}
-                                        </Text>
-                                    </View>
-                                ))}
+                                            <View style={styles.securityTimelineDot} />
+                                            <View style={styles.securityDeviceCopy}>
+                                                <Text
+                                                    style={[
+                                                        styles.securityLoginName,
+                                                        isDarkMode && { color: "#F8FAFC" },
+                                                    ]}
+                                                >
+                                                    {loginItem.device_name || "Đăng nhập ứng dụng"}
+                                                </Text>
+                                                <View style={styles.securityLocationBadge}>
+                                                    <Ionicons name="location-sharp" size={12} color="#EA580C" />
+                                                    <Text
+                                                        style={[
+                                                            styles.securityLocationText,
+                                                            isDarkMode && { color: "#FB923C" },
+                                                        ]}
+                                                    >
+                                                        {loginItem.location || "Đà Nẵng, Việt Nam"}
+                                                    </Text>
+                                                </View>
+                                                <Text
+                                                    style={[
+                                                        styles.securityDeviceMeta,
+                                                        isDarkMode && { color: "#94A3B8" },
+                                                    ]}
+                                                >
+                                                    🌐 IP: {loginItem.ip_address || "127.0.0.1"} · Thành công
+                                                </Text>
+                                            </View>
+                                            <Text
+                                                style={[
+                                                    styles.securityLoginTime,
+                                                    isDarkMode && { color: "#94A3B8" },
+                                                ]}
+                                            >
+                                                {formatLoginDate(loginItem.login_time)}
+                                            </Text>
+                                        </View>
+                                    ))
+                                )}
                             </View>
                         )}
 
@@ -549,16 +744,7 @@ export const SecurityCenterModal: React.FC<SecurityCenterModalProps> = ({
                                         isDarkMode && { color: "#CBD5E1" },
                                     ]}
                                 >
-                                    {selectedSecurityQuestion ===
-                                    "Mật khẩu mã hóa thiết bị là gì?"
-                                        ? "Mật khẩu mã hóa thiết bị là một mật khẩu đối xứng được sử dụng để mã hóa luồng video camera và dữ liệu cảm biến của thiết bị, với giá trị mặc định theo mã xác thực thiết bị. Bạn nên thay đổi mật khẩu mặc định thành một mật khẩu an toàn sau khi liên kết thiết bị lần đầu tiên. Mật khẩu mã hóa là chìa khóa bảo mật được cung cấp bởi Smart Elderly Care AI. Hệ thống hoàn toàn không ghi lại hoặc lưu trữ mật khẩu mã hóa trên máy chủ trung tâm. Mật khẩu chỉ được mã hóa lưu trữ trực tiếp trên thiết bị giám sát và ứng dụng di động của bạn. Đội ngũ kỹ thuật Smart Elderly Care AI không có khả năng lấy lại, đặt lại hoặc khôi phục mật khẩu mã hóa nhằm đảm bảo quyền riêng tư tuyệt đối cho gia đình bạn."
-                                        : selectedSecurityQuestion ===
-                                            "Có ràng buộc một thiết bị an toàn không?"
-                                          ? "Để kết nối một thiết bị vào hệ thống Smart Elderly Care AI, ba điều kiện sau phải được đáp ứng đồng thời:\n\n1. Biết mã định danh (Serial) và mã xác thực an toàn của thiết bị;\n\n2. Thiết bị giám sát đang trực tuyến;\n\n3. Thiết bị chưa bị ràng buộc bởi một tài khoản quản trị khác;\n\nNếu một thiết bị đã được kết nối bởi chủ hộ gia đình, người khác tuyệt đối không thể kết nối hoặc xem trộm ngay cả khi biết mã serial. Chỉ có tài khoản chủ hộ đã liên kết thiết bị mới có quyền chia sẻ hoặc hủy liên kết. Smart Elderly Care AI khuyến nghị bạn cấu hình bảo mật thiết bị ngay sau khi hoàn tất kết nối mạng."
-                                          : selectedSecurityQuestion ===
-                                              "Việc sử dụng mã xác minh qua tin nhắn SMS"
-                                            ? "Mã xác minh SMS (OTP) là lớp bảo mật hai bước nâng cao được cung cấp bởi Smart Elderly Care AI, vượt trội hơn so với việc chỉ dùng mật khẩu thông thường. Khi người dùng thực hiện các thao tác nhạy cảm (như đăng nhập trên thiết bị mới, thay đổi cấu hình cảnh báo SOS khẩn cấp, chia sẻ quyền giám sát, v.v.), hệ thống sẽ gửi mã SMS OTP để xác thực danh tính chính chủ. Điều này giúp ngăn chặn tối đa nguy cơ tài khoản bị xâm nhập trái phép. Hãy lưu ý không bao giờ tiết lộ mã OTP cho bất kỳ ai."
-                                            : "Hệ thống Smart Elderly Care AI sử dụng nhiều lớp bảo vệ tài khoản, xác minh thiết bị và mã xác thực để hạn chế truy cập trái phép. Bạn nên bật xác minh hai bước và thường xuyên kiểm tra lịch sử đăng nhập."}
+                                    {getSecurityQuestionAnswer(selectedSecurityQuestion)}
                                 </Text>
                             </View>
                         )}
@@ -1628,7 +1814,7 @@ export const SecurityCenterModal: React.FC<SecurityCenterModalProps> = ({
                     </ScrollView>
                 </SafeAreaView>
             )}
-        </Modal>
+        </SlideRightModal>
     );
 };
 
@@ -2243,5 +2429,23 @@ const styles = StyleSheet.create({
         fontSize: 15,
         fontWeight: "700",
         color: "#FFFFFF",
+    },
+    securityDetailCardHeaderRow: {
+        flexDirection: "row",
+        alignItems: "center",
+        justifyContent: "space-between",
+        marginBottom: 6,
+    },
+    securityLocationBadge: {
+        flexDirection: "row",
+        alignItems: "center",
+        gap: 4,
+        marginTop: 4,
+        marginBottom: 2,
+    },
+    securityLocationText: {
+        fontSize: 12.5,
+        fontWeight: "600",
+        color: "#EA580C",
     },
 });

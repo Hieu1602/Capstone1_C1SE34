@@ -23,6 +23,7 @@ from app.schemas.doctor import (
     PrescriptionItem,
     PrescriptionCreate,
     PrescriptionUpdate,
+    BatchPrescriptionCreate,
     DoctorMedicalRecordUpdate,
     DoctorVitalsAnalytics,
     ThresholdsUpdate,
@@ -56,10 +57,10 @@ async def get_doctor_assigned_patients(
     """
     if not current_user:
         current_user = User(
-            id="b2222222-b4e1-4b08-b2d3-d949a0eb075c",
-            phone="+84905111222",
+            id="b3333333-b4e1-4b08-b2d3-d949a0eb075c",
+            phone="",
             full_name="BS. Trần Văn Minh",
-            role="user",
+            role="doctor",
         )
 
     return await crud_doctor.get_assigned_patients(db=db, doctor_user=current_user)
@@ -108,6 +109,25 @@ async def create_prescription(
     return crud_doctor.add_prescription(
         elderly_id=elderly_id,
         obj_in=prescription_in,
+        doctor_name=doctor_name,
+    )
+
+
+@router.post(
+    "/patients/{elderly_id}/prescriptions/batch",
+    response_model=List[PrescriptionItem],
+    status_code=status.HTTP_201_CREATED,
+    summary="Bác sĩ kê một đơn thuốc gồm nhiều loại thuốc và số lượng khác nhau",
+)
+async def create_batch_prescriptions(
+    elderly_id: str,
+    batch_in: BatchPrescriptionCreate,
+    current_user: Optional[User] = Depends(get_current_user_optional),
+):
+    doctor_name = current_user.full_name if current_user else "BS. Trần Văn Minh"
+    return crud_doctor.add_batch_prescriptions(
+        elderly_id=elderly_id,
+        batch=batch_in,
         doctor_name=doctor_name,
     )
 
@@ -168,13 +188,16 @@ async def toggle_prescription_reminder(
 async def update_patient_medical_record(
     elderly_id: str,
     record_in: DoctorMedicalRecordUpdate,
+    current_user: Optional[User] = Depends(get_current_user_optional),
     db: AsyncSession = Depends(get_db),
 ):
     """Cập nhật chẩn đoán bệnh nền, dị ứng, chế độ ăn hoặc ngày hẹn tái khám."""
+    doc_name = current_user.full_name if (current_user and current_user.full_name) else "Bác sĩ phụ trách"
     return await crud_doctor.update_clinical_record(
         db=db,
         elderly_id=elderly_id,
         obj_in=record_in,
+        doctor_name=doc_name,
     )
 
 
@@ -199,11 +222,13 @@ async def get_vitals_analytics(
 async def update_patient_thresholds(
     elderly_id: str,
     thresholds_in: ThresholdsUpdate,
+    current_user: Optional[User] = Depends(get_current_user_optional),
     db: AsyncSession = Depends(get_db),
 ):
     """Bác sĩ điều chỉnh ngưỡng cảnh báo tim mạch, SpO2 phù hợp với bệnh nền của cụ."""
+    doc_name = current_user.full_name if (current_user and current_user.full_name) else "Bác sĩ phụ trách"
     return await crud_doctor.update_thresholds(
-        db=db, elderly_id=elderly_id, thresholds_in=thresholds_in
+        db=db, elderly_id=elderly_id, thresholds_in=thresholds_in, doctor_name=doc_name
     )
 
 
@@ -238,15 +263,26 @@ async def get_doctor_appointments(
         status=status,
     )
 
+    patient_ids = list({r.patient_id for r in records if r.patient_id})
+    patient_names: Dict[Any, str] = {}
+    if patient_ids:
+        from sqlalchemy import select
+        from app.models.elderly_profile import ElderlyProfile
+        eld_stmt = select(ElderlyProfile.id, ElderlyProfile.full_name).where(ElderlyProfile.id.in_(patient_ids))
+        eld_res = await db.execute(eld_stmt)
+        for row in eld_res.all():
+            patient_names[row[0]] = row[1]
+
     out = []
     for r in records:
+        real_patient_name = patient_names.get(r.patient_id, "Bệnh nhân")
         out.append(
             AppointmentResponse(
                 id=str(r.id),
                 doctor_id=str(r.doctor_id) if r.doctor_id else None,
-                doctor_name=r.doctor.full_name if r.doctor else "BS. Trần Văn Minh",
+                doctor_name=r.doctor.full_name if r.doctor else "Bác sĩ",
                 patient_id=str(r.patient_id),
-                patient_name="Bệnh nhân người cao tuổi",
+                patient_name=real_patient_name,
                 house_id=str(r.house_id) if r.house_id else None,
                 visit_type=r.visit_type,
                 scheduled_at=r.scheduled_at,
@@ -708,16 +744,31 @@ async def delete_doctor_appointment(
     db: AsyncSession = Depends(get_db),
 ):
     """Xóa lịch hẹn khỏi cơ sở dữ liệu."""
+    deleted_db = False
     try:
         apt_uuid = uuid.UUID(appointment_id)
-    except ValueError:
-        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="ID lịch khám không hợp lệ.")
+        deleted_db = await crud_appointment.delete_appointment(db=db, appointment_id=apt_uuid)
+    except (ValueError, TypeError):
+        pass
 
-    success = await crud_appointment.delete_appointment(db=db, appointment_id=apt_uuid)
-    if not success:
-        raise HTTPException(
-            status_code=status.HTTP_404_NOT_FOUND,
-            detail="Không tìm thấy lịch khám để xóa.",
-        )
+    crud_doctor.delete_appointment(appointment_id)
+
+    # Broadcast WebSocket thông báo xóa lịch
+    try:
+        import json
+        from app.api.websockets.vitals_ws import alert_clients
+        ws_payload = json.dumps({
+            "type": "ALERT_NEW",
+            "alert_type": "APPOINTMENT_DELETED",
+            "data": {
+                "id": appointment_id,
+                "message": "Một lịch khám đã được xóa khỏi hệ thống.",
+            }
+        }, ensure_ascii=False)
+        for client_ws in list(alert_clients):
+            await client_ws.send_text(ws_payload)
+    except Exception:
+        pass
+
     return {"success": True, "message": "Đã xóa lịch khám thành công"}
 

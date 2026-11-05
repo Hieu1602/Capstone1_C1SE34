@@ -107,6 +107,9 @@ class ChatResponse(BaseModel):
     disclaimer: Optional[str] = None           # BR-1: Khuyến cáo y tế bắt buộc
     session_id: Optional[UUID] = None           # Frontend dùng để cập nhật state
     suggested_questions: List[str] = []         # UC.0 Step 2: Câu hỏi gợi ý cho cuộc chat mới
+    triage_level: Optional[str] = 'GREEN'        # MedX Triage: GREEN, YELLOW, RED
+    is_emergency: Optional[bool] = False        # Cảnh báo khẩn cấp
+    suggested_actions: Optional[List[str]] = [] # Hướng dẫn sơ cứu / liên hệ y tế
 
 
 class MessageOut(BaseModel):
@@ -260,14 +263,7 @@ async def chat(
             current_user.preferred_language,
         )
 
-        res = await service.ask(
-            db=db,
-            user_id=current_user.id,
-            question=request.message,
-            language=language,
-        )
-
-        # Step 8: Lưu lịch sử hội thoại vào DB (Post-condition)
+        # Step 8.1: Lấy hoặc tạo phiên chat trước để nạp ngữ cảnh đối đáp liên tục (Multi-turn Chat)
         session = await _get_or_create_session(
             db=db,
             user_id=current_user.id,
@@ -275,6 +271,34 @@ async def chat(
             house_id=request.house_id,
             model_name=request.model_name or "SmartCare Flash 1",
             first_message=request.message,
+        )
+
+        # Lấy tối đa 6 tin nhắn gần nhất của phiên này để phục vụ đối đáp liên tục
+        history_msgs = []
+        try:
+            hist_stmt = (
+                select(ChatMessage)
+                .where(ChatMessage.session_id == session.id)
+                .order_by(ChatMessage.created_at.desc())
+                .limit(request.context_window or 6)
+            )
+            hist_res = await db.execute(hist_stmt)
+            raw_hist = list(reversed(hist_res.scalars().all()))
+            history_msgs = [
+                {"sender": m.sender, "text": m.text}
+                for m in raw_hist
+                if m.text and m.text.strip()
+            ]
+        except Exception as hist_err:
+            logger.warning("Lỗi truy vấn lịch sử đối đáp: %s", hist_err)
+
+        # Gửi câu hỏi kèm lịch sử đối đáp liên tục vào RAG Service
+        res = await service.ask(
+            db=db,
+            user_id=current_user.id,
+            question=request.message,
+            language=language,
+            chat_history=history_msgs,
         )
 
         # Lưu tin nhắn user
@@ -307,6 +331,9 @@ async def chat(
             disclaimer=res.get("disclaimer"),           # BR-1
             session_id=session.id,
             suggested_questions=suggested,
+            triage_level=res.get('triage_level', 'GREEN'),
+            is_emergency=res.get('is_emergency', False),
+            suggested_actions=res.get('suggested_actions', []),
         )
 
     except HTTPException:
@@ -349,6 +376,7 @@ async def get_sessions(
             updated_at=s.updated_at,
         )
         for s in sessions
+        if len(s.messages) > 0
     ]
 
 

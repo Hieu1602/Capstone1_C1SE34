@@ -23,6 +23,7 @@ DEVICE_EAGER_LOADS = (
     selectinload(Device.config),
     selectinload(Device.group),
     selectinload(Device.house),
+    selectinload(Device.elderly),
 )
 
 
@@ -194,8 +195,9 @@ class CRUDDevice:
         for field, value in update_data.items():
             setattr(device, field, value)
         await db.flush()
-        await db.refresh(device)
-        return device
+        await db.commit()
+        refreshed = await self.get_by_id(db, device.id)
+        return refreshed or device
 
     async def update_config(
         self, db: AsyncSession, device: Device, config_in: DeviceConfigUpdate

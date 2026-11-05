@@ -1,7 +1,7 @@
 /**
  * Liệt kê camera dạng lưới/danh sách, xem luồng được backend hỗ trợ và mở chi tiết.
  */
-import React, { useState } from "react";
+import React, { useState, useEffect } from "react";
 import { View, StyleSheet, TouchableOpacity, ScrollView } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
 import { Ionicons } from "@expo/vector-icons";
@@ -10,6 +10,7 @@ import { useDeviceStore } from "../../../store/useDeviceStore";
 import { useCameraConnection } from "../hooks/useCameraConnection";
 import { CameraLiveView } from "../components/CameraLiveView";
 import { useTheme } from "../../../store/useThemeStore";
+import { useAuthStore } from "../../../store/useAuthStore";
 import {
     LocalizedAlert,
     LocalizedText,
@@ -46,7 +47,15 @@ interface Props {
  */
 export default function MultiViewScreen({ navigation }: Props) {
     const { isDarkMode } = useTheme();
-    const { house, iotDevices } = useDeviceStore();
+    const { permissions, userRole, role } = useAuthStore();
+    const isOwnerOrAdmin = userRole === 'admin' || role === 'admin' || permissions?.is_owner === true || permissions?.role_in_house === 'OWNER';
+    const isCameraExplicitlyBlocked = !isOwnerOrAdmin && permissions?.can_view_camera === false;
+
+    const { house, iotDevices, fetchDevicesFromBackend } = useDeviceStore();
+
+    useEffect(() => {
+        fetchDevicesFromBackend?.();
+    }, []);
     const connection = useCameraConnection();
     // Bố cục danh sách camera: lưới hoặc danh sách dọc.
     const [layoutMode, setLayoutMode] = useState<"GRID" | "LIST">("GRID");
@@ -193,7 +202,32 @@ export default function MultiViewScreen({ navigation }: Props) {
                     isGrid ? styles.gridContainer : styles.listContainer
                 }
             >
-                {cameraFeeds.length === 0 ? (
+                {isCameraExplicitlyBlocked ? (
+                    <View
+                        style={[
+                            styles.emptyContainer,
+                            { backgroundColor: bgCard, borderColor: borderCol },
+                        ]}
+                    >
+                        <View style={[styles.emptyIconCircle, { backgroundColor: isDarkMode ? '#450A0A' : '#FEE2E2' }]}>
+                            <Ionicons
+                                name="videocam-off"
+                                size={40}
+                                color="#EF4444"
+                            />
+                        </View>
+                        <LocalizedText
+                            style={[styles.emptyTitle, { color: textTitle }]}
+                        >
+                            Camera an ninh đã bị khóa
+                        </LocalizedText>
+                        <LocalizedText
+                            style={[styles.emptyDesc, { color: textSub }]}
+                        >
+                            Chủ hộ đã tắt quyền giám sát camera an ninh đối với tài khoản này. Vui lòng liên hệ Chủ hộ để được mở quyền.
+                        </LocalizedText>
+                    </View>
+                ) : cameraFeeds.length === 0 ? (
                     <View
                         style={[
                             styles.emptyContainer,
@@ -383,7 +417,7 @@ export default function MultiViewScreen({ navigation }: Props) {
                         >
                             {isGrid
                                 ? "Chạm vào ô camera bất kỳ để phóng to & xem chi tiết."
-                                : "Ch?m v?o camera ?? m? m?n h?nh chi ti?t."}
+                                : "Chạm vào camera để mở màn hình chi tiết."}
                         </LocalizedText>
                     </View>
                 )}

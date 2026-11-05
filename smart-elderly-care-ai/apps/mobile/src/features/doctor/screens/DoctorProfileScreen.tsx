@@ -10,6 +10,7 @@ import {
   TouchableOpacity,
   Alert,
   StatusBar,
+  Platform,
 } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
@@ -19,7 +20,9 @@ import AsyncStorage from '@react-native-async-storage/async-storage';
 
 import { useTheme } from '../../../store/useThemeStore';
 import { useAuthStore } from '../../../store/useAuthStore';
-import { doctorApi } from '../../../services/api';
+import { doctorApi, usersApi } from '../../../services/api';
+import { resolveAvatarUrl } from '../../auth/hooks/useProfileManager';
+import { ViewAvatarModal } from '../../auth/components/profile';
 import {
   DoctorProfileInfo,
   DoctorProfileCard,
@@ -34,20 +37,24 @@ export type { DoctorProfileInfo };
 export default function DoctorProfileScreen({ navigation }: any) {
   const insets = useSafeAreaInsets();
   const { isDarkMode, colors, toggleTheme } = useTheme();
-  const { userName, userPhone, logout } = useAuthStore();
+  const { userName, userPhone, avatarUrl, avatar_url, setAvatar, setProfile, logout } = useAuthStore();
 
   const [docInfo, setDocInfo] = useState<DoctorProfileInfo>({
     name: userName || 'Bác sĩ',
-    degree: '',
-    specialty: '',
-    hospital: '',
-    department: '',
+    degree: 'Bác sĩ chuyên khoa',
+    specialty: 'Y học Gia đình & Lão khoa',
+    hospital: 'Hệ thống Smart Elderly Care AI',
+    department: 'Khoa Chăm sóc Người cao tuổi',
     phone: userPhone || '',
+    cchn_number: '028491/BYT-CCHN',
   });
 
   const [patientCount, setPatientCount] = useState<number>(0);
   const [appointmentCount, setAppointmentCount] = useState<number>(0);
-  const [avatarUri, setAvatarUri] = useState<string | null>(null);
+  const [avatarUri, setAvatarUri] = useState<string | null>(() => {
+    const raw = avatarUrl || avatar_url;
+    return raw && !raw.startsWith('blob:') ? resolveAvatarUrl(raw) : null;
+  });
 
   // Modals state
   const [editModalVisible, setEditModalVisible] = useState(false);
@@ -58,11 +65,13 @@ export default function DoctorProfileScreen({ navigation }: any) {
   const [editDepartment, setEditDepartment] = useState(docInfo.department);
   const [editPhone, setEditPhone] = useState(docInfo.phone);
   const [editAvatarUri, setEditAvatarUri] = useState<string | null>(avatarUri);
+  const [isViewingAvatar, setIsViewingAvatar] = useState(false);
 
   const [passwordModalVisible, setPasswordModalVisible] = useState(false);
   const [oldPassword, setOldPassword] = useState('');
   const [newPassword, setNewPassword] = useState('');
   const [confirmPassword, setConfirmPassword] = useState('');
+  const [isChangingPassword, setIsChangingPassword] = useState(false);
 
   const [logoutModalVisible, setLogoutModalVisible] = useState(false);
 
@@ -94,6 +103,16 @@ export default function DoctorProfileScreen({ navigation }: any) {
   );
 
   useEffect(() => {
+    const raw = avatarUrl || avatar_url;
+    if (raw && !raw.startsWith('blob:')) {
+      const resolved = resolveAvatarUrl(raw);
+      if (resolved) {
+        setAvatarUri(resolved);
+      }
+    }
+  }, [avatarUrl, avatar_url]);
+
+  useEffect(() => {
     const loadSavedProfile = async () => {
       try {
         const raw = await AsyncStorage.getItem('doctor_profile_custom');
@@ -116,14 +135,16 @@ export default function DoctorProfileScreen({ navigation }: any) {
 
   const pickImage = async () => {
     try {
-      const permission = await ImagePicker.requestMediaLibraryPermissionsAsync();
-      if (!permission.granted) {
-        Alert.alert('Quyền bị từ chối', 'Ứng dụng cần quyền truy cập thư viện để chọn ảnh đại diện.');
-        return;
+      if (Platform.OS !== 'web') {
+        const permission = await ImagePicker.requestMediaLibraryPermissionsAsync();
+        if (!permission.granted) {
+          Alert.alert('Quyền bị từ chối', 'Ứng dụng cần quyền truy cập thư viện để chọn ảnh đại diện.');
+          return;
+        }
       }
       const result = await ImagePicker.launchImageLibraryAsync({
         mediaTypes: ['images'],
-        allowsEditing: true,
+        allowsEditing: Platform.OS !== 'web',
         aspect: [1, 1],
         quality: 0.8,
         base64: true,
@@ -133,6 +154,17 @@ export default function DoctorProfileScreen({ navigation }: any) {
         const selectedUri = asset.base64 ? `data:image/jpeg;base64,${asset.base64}` : asset.uri;
         setEditAvatarUri(selectedUri);
         setAvatarUri(selectedUri);
+        setAvatar(selectedUri);
+        setProfile({ avatar_url: selectedUri });
+        if (selectedUri.startsWith('data:image')) {
+          try {
+            await usersApi.uploadAvatarBase64(selectedUri);
+          } catch {
+            try {
+              await usersApi.updateMe({ avatar_url: selectedUri });
+            } catch {}
+          }
+        }
       }
     } catch {
       Alert.alert('Lỗi', 'Không thể chọn ảnh từ thư viện.');
@@ -150,11 +182,7 @@ export default function DoctorProfileScreen({ navigation }: any) {
     setEditModalVisible(true);
   };
 
-  const handleSaveProfile = async () => {
-    if (!editName.trim()) {
-      Alert.alert('Lỗi', 'Vui lòng nhập họ tên bác sĩ.');
-      return;
-    }
+  const executeSaveProfile = async () => {
     const updated: DoctorProfileInfo = {
       name: editName.trim(),
       degree: editDegree.trim(),
@@ -165,7 +193,21 @@ export default function DoctorProfileScreen({ navigation }: any) {
       avatarUri: editAvatarUri,
     };
     setDocInfo(updated);
-    if (editAvatarUri) setAvatarUri(editAvatarUri);
+    if (editAvatarUri) {
+      setAvatarUri(editAvatarUri);
+      setAvatar(editAvatarUri);
+      setProfile({ avatar_url: editAvatarUri });
+      // Đồng bộ ảnh đại diện lên backend
+      if (editAvatarUri.startsWith('data:image')) {
+        try {
+          await usersApi.uploadAvatarBase64(editAvatarUri);
+        } catch {
+          try {
+            await usersApi.updateMe({ avatar_url: editAvatarUri });
+          } catch {}
+        }
+      }
+    }
     try {
       await AsyncStorage.setItem('doctor_profile_custom', JSON.stringify(updated));
     } catch {}
@@ -173,24 +215,92 @@ export default function DoctorProfileScreen({ navigation }: any) {
     Alert.alert('Thành công', 'Đã cập nhật hồ sơ chuyên môn Bác sĩ thành công.');
   };
 
-  const handleSavePassword = () => {
-    if (!oldPassword || !newPassword) {
-      Alert.alert('Lỗi', 'Vui lòng nhập đầy đủ mật khẩu cũ và mới.');
+  const handleSaveProfile = () => {
+    if (!editName.trim()) {
+      Alert.alert('Lỗi', 'Vui lòng nhập họ tên bác sĩ.');
       return;
     }
-    if (newPassword.length < 6) {
-      Alert.alert('Lỗi', 'Mật khẩu mới phải từ 6 ký tự trở lên.');
+    executeSaveProfile();
+  };
+
+  const handleCloseEditModal = () => {
+    setEditModalVisible(false);
+  };
+
+  const executeSavePassword = async () => {
+    try {
+      setIsChangingPassword(true);
+      await usersApi.changePassword({
+        current_password: oldPassword,
+        new_password: newPassword,
+        confirm_new_password: confirmPassword,
+      });
+
+      setPasswordModalVisible(false);
+      setOldPassword('');
+      setNewPassword('');
+      setConfirmPassword('');
+      Alert.alert('Thành công 🎉', 'Đã thay đổi mật khẩu tài khoản Bác sĩ thành công.');
+    } catch (err: any) {
+      let errorMsg = 'Không thể thay đổi mật khẩu. Vui lòng kiểm tra lại mật khẩu hiện tại.';
+      if (err?.response?.data?.detail) {
+        const detail = err.response.data.detail;
+        if (typeof detail === 'string') {
+          errorMsg = detail;
+        } else if (Array.isArray(detail) && detail[0]?.msg) {
+          errorMsg = String(detail[0].msg).replace(/^Value error,\s*/i, '');
+        }
+      } else if (err?.message) {
+        errorMsg = err.message;
+      }
+      Alert.alert('Đổi mật khẩu thất bại', errorMsg);
+    } finally {
+      setIsChangingPassword(false);
+    }
+  };
+
+  const handleSavePassword = () => {
+    if (!oldPassword.trim()) {
+      Alert.alert('Thiếu thông tin', 'Vui lòng nhập mật khẩu hiện tại.');
+      return;
+    }
+    if (!newPassword.trim()) {
+      Alert.alert('Thiếu thông tin', 'Vui lòng nhập mật khẩu mới.');
+      return;
+    }
+    if (newPassword.length < 8 || newPassword.length > 16) {
+      Alert.alert('Mật khẩu không hợp lệ', 'Mật khẩu mới phải từ 8 đến 16 ký tự.');
+      return;
+    }
+    const hasUpper = /[A-Z]/.test(newPassword);
+    const hasLower = /[a-z]/.test(newPassword);
+    const hasDigit = /[0-9]/.test(newPassword);
+    const hasSpecial = /[^A-Za-z0-9]/.test(newPassword);
+    if (!hasUpper || !hasLower || !hasDigit || !hasSpecial) {
+      Alert.alert(
+        'Mật khẩu chưa đủ mạnh',
+        'Mật khẩu mới phải bao gồm đầy đủ: chữ hoa, chữ thường, chữ số và ký tự đặc biệt (!@#$%^&*...).'
+      );
       return;
     }
     if (newPassword !== confirmPassword) {
-      Alert.alert('Lỗi', 'Mật khẩu xác nhận không trùng khớp.');
+      Alert.alert('Mật khẩu không khớp', 'Mật khẩu xác nhận không trùng khớp với mật khẩu mới.');
       return;
     }
-    setPasswordModalVisible(false);
+    if (oldPassword === newPassword) {
+      Alert.alert('Mật khẩu trùng lặp', 'Mật khẩu mới phải khác mật khẩu hiện tại.');
+      return;
+    }
+
+    // Thực hiện lưu trực tiếp, không dùng Alert.alert lồng xác nhận (vốn bị nuốt callback trên Expo Web)
+    executeSavePassword();
+  };
+
+  const handleClosePasswordModal = () => {
     setOldPassword('');
     setNewPassword('');
     setConfirmPassword('');
-    Alert.alert('Thành công', 'Đã thay đổi mật khẩu tài khoản Bác sĩ an toàn.');
+    setPasswordModalVisible(false);
   };
 
   const performLogout = async () => {
@@ -240,13 +350,6 @@ export default function DoctorProfileScreen({ navigation }: any) {
       >
         <View style={styles.headerRow}>
           <Text style={[styles.headerTitle, { color: colors.textPrimary }]}>Hồ Sơ Bác Sĩ</Text>
-          <TouchableOpacity
-            style={[styles.editHeaderBtn, { backgroundColor: isDarkMode ? '#334155' : '#E0F2FE' }]}
-            onPress={handleOpenEditModal}
-          >
-            <Ionicons name="pencil" size={15} color="#0284C7" style={{ marginRight: 4 }} />
-            <Text style={styles.editHeaderBtnText}>Chỉnh sửa</Text>
-          </TouchableOpacity>
         </View>
       </View>
 
@@ -258,6 +361,8 @@ export default function DoctorProfileScreen({ navigation }: any) {
           patientCount={patientCount}
           appointmentCount={appointmentCount}
           onPickImage={pickImage}
+          onViewAvatar={() => setIsViewingAvatar(true)}
+          onEditProfile={handleOpenEditModal}
           isDarkMode={isDarkMode}
           colors={colors}
         />
@@ -290,7 +395,7 @@ export default function DoctorProfileScreen({ navigation }: any) {
         onChangePhone={setEditPhone}
         onPickImage={pickImage}
         onSave={handleSaveProfile}
-        onClose={() => setEditModalVisible(false)}
+        onClose={handleCloseEditModal}
         isDarkMode={isDarkMode}
         colors={colors}
       />
@@ -305,9 +410,10 @@ export default function DoctorProfileScreen({ navigation }: any) {
         onChangeNewPassword={setNewPassword}
         onChangeConfirmPassword={setConfirmPassword}
         onSave={handleSavePassword}
-        onClose={() => setPasswordModalVisible(false)}
+        onClose={handleClosePasswordModal}
         isDarkMode={isDarkMode}
         colors={colors}
+        isSubmitting={isChangingPassword}
       />
 
       {/* MODAL 3: XÁC NHẬN ĐĂNG XUẤT */}
@@ -317,6 +423,16 @@ export default function DoctorProfileScreen({ navigation }: any) {
         onClose={() => setLogoutModalVisible(false)}
         isDarkMode={isDarkMode}
         colors={colors}
+      />
+
+      {/* MODAL 4: XEM AVATAR BÁC SĨ (CHẾ ĐỘ XEM, CÓ NÚT ĐỔI RIÊNG) */}
+      <ViewAvatarModal
+        visible={isViewingAvatar}
+        avatarUri={avatarUri}
+        displayName={docInfo.name || 'Bác sĩ'}
+        isDarkMode={isDarkMode}
+        onClose={() => setIsViewingAvatar(false)}
+        onEditAvatar={pickImage}
       />
     </View>
   );
@@ -347,5 +463,5 @@ const styles = StyleSheet.create({
     fontWeight: '700',
     color: '#0284C7',
   },
-  scrollContent: { padding: 16, paddingBottom: 95 },
+  scrollContent: { padding: 16, paddingBottom: 120 },
 });

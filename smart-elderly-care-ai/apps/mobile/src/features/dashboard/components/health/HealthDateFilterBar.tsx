@@ -202,6 +202,13 @@ const styles = StyleSheet.create({
   datePillsRow: {
     gap: 8,
     paddingVertical: 2,
+    alignItems: 'center',
+    ...(Platform.OS === 'web' ? {
+      display: 'flex',
+      flexDirection: 'row',
+      whiteSpace: 'nowrap',
+      paddingBottom: 8,
+    } : {}),
   },
   datePill: {
     paddingHorizontal: 12,
@@ -209,6 +216,8 @@ const styles = StyleSheet.create({
     borderRadius: 12,
     borderWidth: 1,
     alignItems: 'center',
+    flexShrink: 0,
+    ...(Platform.OS === 'web' ? { flexShrink: 0, whiteSpace: 'nowrap' } : {}),
   },
   datePillActive: {
     backgroundColor: Colors.primary,
@@ -242,6 +251,8 @@ const styles = StyleSheet.create({
     borderRadius: 12,
     paddingHorizontal: 14,
     paddingVertical: 8,
+    flexShrink: 0,
+    ...(Platform.OS === 'web' ? { flexShrink: 0, whiteSpace: 'nowrap' } : {}),
   },
   calendarPickerBtnActive: {
     backgroundColor: '#2563EB',

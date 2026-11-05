@@ -121,10 +121,16 @@ class APITests(unittest.IsolatedAsyncioTestCase):
 
     async def test_recording_failure_and_validation(self):
         self.assertEqual((await self.client.post("/recordings", json={"seconds": 0}, auth=self.auth)).status, 400)
-        response = await self.client.post("/recordings", json={"seconds": 1}, auth=self.auth)
-        self.assertEqual(response.status, 202)
-        self.assertEqual((await self.client.post("/recordings", json={"seconds": 1}, auth=self.auth)).status, 409)
-        await asyncio.wait_for(self.recorder.task, 10)
+        release = asyncio.Event()
+        async def fail_start(*args, **kwargs):
+            await release.wait()
+            raise OSError("FFmpeg unavailable")
+        with patch("src.services.tapo_camera.asyncio.create_subprocess_exec", side_effect=fail_start):
+            response = await self.client.post("/recordings", json={"seconds": 1}, auth=self.auth)
+            self.assertEqual(response.status, 202)
+            self.assertEqual((await self.client.post("/recordings", json={"seconds": 1}, auth=self.auth)).status, 409)
+            release.set()
+            await asyncio.wait_for(self.recorder.task, 10)
         self.assertIsNotNone(self.recorder.error)
         self.assertEqual(list(Path(self.temp.name).iterdir()), [])
         self.assertEqual((await self.client.get("/recordings/not-a-recording.mp4", auth=self.auth)).status, 404)

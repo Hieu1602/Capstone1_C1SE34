@@ -9,6 +9,7 @@ import {
     Alert,
 } from "react-native";
 import { Ionicons } from "@expo/vector-icons";
+import { sanitizeNameInput } from "../../utils/nameValidation";
 
 export interface CchnVerifiedInfo {
     valid: boolean;
@@ -43,6 +44,7 @@ interface RegisterFormStepProps {
     cchnVerifiedInfo: CchnVerifiedInfo | null;
     setCchnVerifiedInfo: (val: CchnVerifiedInfo | null) => void;
     loading: boolean;
+    errorMessage?: string | null;
     onCheckCchn: () => void;
     onSubmit: () => void;
     onChangeRole: () => void;
@@ -72,10 +74,32 @@ export const RegisterFormStep: React.FC<RegisterFormStepProps> = ({
     cchnVerifiedInfo,
     setCchnVerifiedInfo,
     loading,
+    errorMessage,
     onCheckCchn,
     onSubmit,
     onChangeRole,
 }) => {
+    const isLengthMet = password.length >= 8 && password.length <= 16;
+    const hasComplexity =
+        /^(?=.*[a-z])(?=.*[A-Z])(?=.*\d)(?=.*[^A-Za-z0-9]).+$/.test(password);
+    const isPasswordValid = isLengthMet && hasComplexity;
+
+    const isConfirmFilled = confirmPassword.length > 0;
+    const isConfirmMatch = isConfirmFilled && confirmPassword === password;
+    const isConfirmMismatch = isConfirmFilled && confirmPassword !== password;
+
+    const hasPasswordError = Boolean(
+        errorMessage &&
+            (errorMessage.toLowerCase().includes("mật khẩu") ||
+                errorMessage.toLowerCase().includes("password")),
+    );
+
+    const hasNameError = Boolean(
+        errorMessage &&
+            (errorMessage.toLowerCase().includes("họ và tên") ||
+                errorMessage.toLowerCase().includes("họ tên") ||
+                errorMessage.toLowerCase().includes("tên thật")),
+    );
     return (
         <View style={styles.formContainer}>
             {/* Thanh hiển thị vai trò hiện tại kèm nút đổi vai trò */}
@@ -139,25 +163,37 @@ export const RegisterFormStep: React.FC<RegisterFormStepProps> = ({
             </TouchableOpacity>
 
             {/* 2. Họ và tên */}
-            <View style={styles.inputContainer}>
-                <Ionicons
-                    name="person-outline"
-                    size={20}
-                    color="#94A3B8"
-                    style={styles.inputIcon}
-                />
-                <TextInput
-                    style={styles.input}
-                    placeholder={
-                        accountType === "doctor"
-                            ? "Họ và tên Bác sĩ (trên CCHN)"
-                            : "Họ và tên của bạn"
-                    }
-                    placeholderTextColor="#94A3B8"
-                    value={fullName}
-                    onChangeText={setFullName}
-                    autoCapitalize="words"
-                />
+            <View>
+                <View
+                    style={[
+                        styles.inputContainer,
+                        hasNameError && styles.inputContainerError,
+                    ]}
+                >
+                    <Ionicons
+                        name="person-outline"
+                        size={20}
+                        color={hasNameError ? "#EF4444" : "#94A3B8"}
+                        style={styles.inputIcon}
+                    />
+                    <TextInput
+                        style={styles.input}
+                        placeholder={
+                            accountType === "doctor"
+                                ? "Họ và tên Bác sĩ (trên CCHN)"
+                                : "Họ và tên của bạn (VD: Nguyễn Văn A)"
+                        }
+                        placeholderTextColor="#94A3B8"
+                        value={fullName}
+                        onChangeText={(val) => setFullName(sanitizeNameInput(val))}
+                        autoCapitalize="words"
+                    />
+                </View>
+                {hasNameError && (
+                    <Text style={styles.fieldErrorText}>
+                        {errorMessage}
+                    </Text>
+                )}
             </View>
 
             {/* CÁC TRƯỜNG DÀNH RIÊNG CHO ROLE: BÁC SĨ GIA ĐÌNH */}
@@ -334,57 +370,84 @@ export const RegisterFormStep: React.FC<RegisterFormStepProps> = ({
             </View>
 
             {/* 4. Mật khẩu */}
-            <View style={styles.inputContainer}>
-                <Ionicons
-                    name="lock-closed-outline"
-                    size={20}
-                    color="#94A3B8"
-                    style={styles.inputIcon}
-                />
-                <TextInput
-                    style={[styles.input, { flex: 1 }]}
-                    placeholder="Mật khẩu (8-16 ký tự)"
-                    placeholderTextColor="#94A3B8"
-                    value={password}
-                    onChangeText={setPassword}
-                    secureTextEntry={!showPassword}
-                />
-                <TouchableOpacity
-                    onPress={() => setShowPassword(!showPassword)}
+            <View>
+                <View
+                    style={[
+                        styles.inputContainer,
+                        ((password.length > 0 && !isPasswordValid) ||
+                            (hasPasswordError && !isPasswordValid)) &&
+                            styles.inputContainerError,
+                    ]}
                 >
                     <Ionicons
-                        name={showPassword ? "eye-outline" : "eye-off-outline"}
+                        name="lock-closed-outline"
                         size={20}
-                        color="#94A3B8"
+                        color={
+                            (password.length > 0 && !isPasswordValid) ||
+                            (hasPasswordError && !isPasswordValid)
+                                ? "#EF4444"
+                                : "#94A3B8"
+                        }
+                        style={styles.inputIcon}
                     />
-                </TouchableOpacity>
+                    <TextInput
+                        style={[styles.input, { flex: 1 }]}
+                        placeholder="Mật khẩu (8-16 ký tự)"
+                        placeholderTextColor="#94A3B8"
+                        value={password}
+                        onChangeText={setPassword}
+                        secureTextEntry={!showPassword}
+                    />
+                    <TouchableOpacity
+                        onPress={() => setShowPassword(!showPassword)}
+                    >
+                        <Ionicons
+                            name={showPassword ? "eye-outline" : "eye-off-outline"}
+                            size={20}
+                            color="#94A3B8"
+                        />
+                    </TouchableOpacity>
+                </View>
             </View>
 
             {/* Hướng dẫn tiêu chuẩn mật khẩu an toàn */}
-            <View style={styles.passwordRequirements}>
+            <View
+                style={[
+                    styles.passwordRequirements,
+                    ((password.length > 0 && !isPasswordValid) ||
+                        (hasPasswordError && !isPasswordValid)) &&
+                        styles.passwordRequirementsWarning,
+                ]}
+            >
                 <Text style={styles.passwordRequirementsTitle}>
                     Yêu cầu mật khẩu:
                 </Text>
                 <View style={styles.passwordRequirementRow}>
                     <Ionicons
                         name={
-                            password.length >= 8 && password.length <= 16
+                            isLengthMet
                                 ? "checkmark-circle"
-                                : "ellipse-outline"
+                                : password.length > 0
+                                  ? "close-circle"
+                                  : "ellipse-outline"
                         }
                         size={16}
                         color={
-                            password.length >= 8 && password.length <= 16
+                            isLengthMet
                                 ? "#10B981"
-                                : "#FF7A00"
+                                : password.length > 0
+                                  ? "#EF4444"
+                                  : "#FF7A00"
                         }
                     />
                     <Text
                         style={[
                             styles.passwordRequirement,
-                            password.length >= 8 &&
-                                password.length <= 16 &&
-                                styles.passwordRequirementMet,
+                            isLengthMet
+                                ? styles.passwordRequirementMet
+                                : password.length > 0
+                                  ? styles.passwordRequirementFailed
+                                  : null,
                         ]}
                     >
                         Dài 8-16 ký tự
@@ -393,64 +456,106 @@ export const RegisterFormStep: React.FC<RegisterFormStepProps> = ({
                 <View style={styles.passwordRequirementRow}>
                     <Ionicons
                         name={
-                            /^(?=.*[a-z])(?=.*[A-Z])(?=.*\d)(?=.*[^A-Za-z0-9]).+$/.test(
-                                password,
-                            )
+                            hasComplexity
                                 ? "checkmark-circle"
-                                : "ellipse-outline"
+                                : password.length > 0
+                                  ? "close-circle"
+                                  : "ellipse-outline"
                         }
                         size={16}
                         color={
-                            /^(?=.*[a-z])(?=.*[A-Z])(?=.*\d)(?=.*[^A-Za-z0-9]).+$/.test(
-                                password,
-                            )
+                            hasComplexity
                                 ? "#10B981"
-                                : "#FF7A00"
+                                : password.length > 0
+                                  ? "#EF4444"
+                                  : "#FF7A00"
                         }
                     />
                     <Text
                         style={[
                             styles.passwordRequirement,
-                            /^(?=.*[a-z])(?=.*[A-Z])(?=.*\d)(?=.*[^A-Za-z0-9]).+$/.test(
-                                password,
-                            ) && styles.passwordRequirementMet,
+                            hasComplexity
+                                ? styles.passwordRequirementMet
+                                : password.length > 0
+                                  ? styles.passwordRequirementFailed
+                                  : null,
                         ]}
                     >
                         Bao gồm chữ hoa, chữ thường, số và ký hiệu đặc biệt
                     </Text>
                 </View>
+                {password.length > 0 && !isPasswordValid && (
+                    <Text style={styles.fieldErrorText}>
+                        ⚠️ Mật khẩu chưa đủ điều kiện, vui lòng kiểm tra các tiêu chí trên.
+                    </Text>
+                )}
             </View>
 
             {/* 5. Xác nhận lại mật khẩu */}
-            <View style={styles.inputContainer}>
-                <Ionicons
-                    name="shield-checkmark-outline"
-                    size={20}
-                    color="#94A3B8"
-                    style={styles.inputIcon}
-                />
-                <TextInput
-                    style={[styles.input, { flex: 1 }]}
-                    placeholder="Xác nhận lại mật khẩu"
-                    placeholderTextColor="#94A3B8"
-                    value={confirmPassword}
-                    onChangeText={setConfirmPassword}
-                    secureTextEntry={!showConfirmPassword}
-                />
-                <TouchableOpacity
-                    onPress={() => setShowConfirmPassword(!showConfirmPassword)}
+            <View>
+                <View
+                    style={[
+                        styles.inputContainer,
+                        (isConfirmMismatch ||
+                            (hasPasswordError &&
+                                confirmPassword !== password &&
+                                confirmPassword.length > 0)) &&
+                            styles.inputContainerError,
+                    ]}
                 >
                     <Ionicons
-                        name={
-                            showConfirmPassword
-                                ? "eye-outline"
-                                : "eye-off-outline"
-                        }
+                        name="shield-checkmark-outline"
                         size={20}
-                        color="#94A3B8"
+                        color={
+                            isConfirmMismatch
+                                ? "#EF4444"
+                                : isConfirmMatch
+                                  ? "#10B981"
+                                  : "#94A3B8"
+                        }
+                        style={styles.inputIcon}
                     />
-                </TouchableOpacity>
+                    <TextInput
+                        style={[styles.input, { flex: 1 }]}
+                        placeholder="Xác nhận lại mật khẩu"
+                        placeholderTextColor="#94A3B8"
+                        value={confirmPassword}
+                        onChangeText={setConfirmPassword}
+                        secureTextEntry={!showConfirmPassword}
+                    />
+                    <TouchableOpacity
+                        onPress={() => setShowConfirmPassword(!showConfirmPassword)}
+                    >
+                        <Ionicons
+                            name={
+                                showConfirmPassword
+                                    ? "eye-outline"
+                                    : "eye-off-outline"
+                            }
+                            size={20}
+                            color="#94A3B8"
+                        />
+                    </TouchableOpacity>
+                </View>
+                {isConfirmMismatch && (
+                    <Text style={styles.fieldErrorText}>
+                        ⚠️ Mật khẩu xác nhận không trùng khớp
+                    </Text>
+                )}
+                {isConfirmMatch && (
+                    <Text style={styles.fieldSuccessText}>
+                        ✓ Mật khẩu xác nhận đã trùng khớp
+                    </Text>
+                )}
             </View>
+
+            {/* Thông báo lỗi nổi bật khi có lỗi xác thực */}
+            {errorMessage ? (
+                <View style={styles.errorNoticeBox} accessibilityRole="alert">
+                    <Ionicons name="alert-circle" size={20} color="#DC2626" />
+                    <Text style={styles.errorNoticeText}>{errorMessage}</Text>
+                </View>
+            ) : null}
 
             {/* Nút bấm Tiếp tục (Màu cam) */}
             <TouchableOpacity
@@ -667,6 +772,53 @@ const styles = StyleSheet.create({
     passwordRequirementMet: {
         color: "#10B981",
         fontWeight: "600",
+    },
+    passwordRequirementFailed: {
+        color: "#DC2626",
+        fontWeight: "600",
+    },
+    passwordRequirementsWarning: {
+        borderColor: "#FCA5A5",
+        backgroundColor: "#FFFBFB",
+    },
+    inputContainerError: {
+        borderColor: "#EF4444",
+        borderWidth: 1.5,
+        backgroundColor: "#FEF2F2",
+    },
+    fieldErrorText: {
+        fontSize: 12,
+        color: "#DC2626",
+        marginTop: 4,
+        marginLeft: 4,
+        fontWeight: "500",
+    },
+    fieldSuccessText: {
+        fontSize: 12,
+        color: "#059669",
+        marginTop: 4,
+        marginLeft: 4,
+        fontWeight: "500",
+    },
+    errorNoticeBox: {
+        flexDirection: "row",
+        alignItems: "center",
+        backgroundColor: "#FEF2F2",
+        borderWidth: 1.5,
+        borderColor: "#F87171",
+        borderRadius: 14,
+        paddingVertical: 12,
+        paddingHorizontal: 14,
+        gap: 10,
+        marginTop: 6,
+        marginBottom: 4,
+    },
+    errorNoticeText: {
+        flex: 1,
+        fontSize: 13,
+        fontWeight: "600",
+        color: "#B91C1C",
+        lineHeight: 18,
     },
 });
 

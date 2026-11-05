@@ -49,7 +49,7 @@ class CRUDHouse:
 
     async def get_user_houses(self, db: AsyncSession, user_id: UUID) -> list[House]:
         """Lấy tất cả các căn nhà mà người dùng sở hữu HOẶC là thành viên."""
-        member_houses_subq = select(HouseMember.house_id).where(HouseMember.user_id == user_id)
+        member_houses_subq = select(HouseMember.house_id).where(HouseMember.user_id == user_id, HouseMember.status == "ACTIVE")
         result = await db.execute(
             select(House)
             .where(
@@ -58,12 +58,15 @@ class CRUDHouse:
                     House.id.in_(member_houses_subq),
                 )
             )
+            .order_by(House.address.desc().nullslast(), House.created_at.desc())
         )
         return list(result.scalars().all())
 
-    async def get_or_create_default_house(self, db: AsyncSession, owner_id: UUID) -> House:
+    async def get_or_create_default_house(self, db: AsyncSession, owner_id: UUID) -> Optional[House]:
         """
-        Lấy căn nhà đầu tiên của người dùng hoặc tự động tạo 'Nhà của tôi' nếu chưa có.
+        Lấy căn nhà đầu tiên của người dùng (nếu có sở hữu hoặc là thành viên).
+        Chỉ tự động tạo nhà mặc định nếu người dùng là admin.
+        Nếu là thành viên (member/doctor) mới chưa tham gia căn nhà nào, trả về None (không tự gán nhà).
         """
         houses = await self.get_by_owner(db, owner_id)
         if houses:
@@ -73,6 +76,15 @@ class CRUDHouse:
         user_houses = await self.get_user_houses(db, owner_id)
         if user_houses:
             return user_houses[0]
+
+        # Lấy thông tin user
+        stmt_user = select(User).where(User.id == owner_id)
+        res_u = await db.execute(stmt_user)
+        user_obj = res_u.scalar_one_or_none()
+
+        # Nếu không phải admin, không tự động tạo nhà và không gán vào nhà của người khác
+        if not user_obj or user_obj.role != "admin":
+            return None
 
         default_house = House(
             owner_id=owner_id,
@@ -84,7 +96,6 @@ class CRUDHouse:
         await db.flush()
         await db.refresh(default_house)
 
-        # Thêm owner vào bảng house_members với toàn bộ quyền
         membership = HouseMember(
             house_id=default_house.id,
             user_id=owner_id,
@@ -179,6 +190,8 @@ class CRUDHouse:
         )
         return result.scalar_one_or_none()
 
+    get_member = get_member_by_user
+
     async def add_member(
         self,
         db: AsyncSession,
@@ -195,39 +208,45 @@ class CRUDHouse:
         user = await crud_user.get_by_phone(db, phone=phone)
 
         if not user:
-            # Tạo tài khoản mới cho người thân
-            user = User(
-                full_name=obj_in.full_name or "Người thân gia đình",
-                phone=phone,
-                role=obj_in.role or ("doctor" if "bác sĩ" in (obj_in.role_in_house or "").lower() else "user"),
-                hashed_password=get_password_hash("Care@123456"),
-                is_active=True,
+            raise HTTPException(
+                status_code=status.HTTP_404_NOT_FOUND,
+                detail=f"Số điện thoại {phone} chưa được đăng ký tài khoản trong hệ thống. Vui lòng tạo tài khoản trước khi mời vào nhà.",
             )
-            db.add(user)
-            await db.flush()
-            await db.refresh(user)
 
         # Kiểm tra xem đã là thành viên chưa
         existing = await self.get_member_by_user(db, house.id, user.id)
-        if existing:
-            raise HTTPException(
-                status_code=status.HTTP_400_BAD_REQUEST,
-                detail=f"Tài khoản số điện thoại {phone} đã là thành viên của căn nhà này.",
-            )
-
-        is_doctor = "bác sĩ" in (obj_in.role_in_house or "").lower() or (obj_in.role or "").lower() == "doctor"
+        is_doctor = (getattr(user, "role", "") == "doctor" or "bác sĩ" in (obj_in.role_in_house or "").lower() or (obj_in.role or "").lower() == "doctor")
         role_label = "DOCTOR" if is_doctor else (obj_in.role_in_house or "MEMBER")
+
+        if existing:
+            if existing.status == "ACTIVE":
+                raise HTTPException(
+                    status_code=status.HTTP_400_BAD_REQUEST,
+                    detail=f"Tài khoản số điện thoại {phone} đã là thành viên của căn nhà này.",
+                )
+            existing.status = "PENDING_MEMBER_CONFIRM"
+            existing.role_in_house = role_label
+            existing.permissions = obj_in.permissions or "VIEW"
+            existing.can_view_health = True if obj_in.can_view_health is None else obj_in.can_view_health
+            existing.can_view_camera = True if obj_in.can_view_camera is None else obj_in.can_view_camera
+            existing.can_handle_emergency = True if obj_in.can_handle_emergency is None else obj_in.can_handle_emergency
+            existing.can_manage_devices = bool(obj_in.can_manage_devices)
+            existing.can_manage_records = bool(obj_in.can_manage_records) or is_doctor
+            await db.flush()
+            await db.refresh(existing)
+            return (await self.get_member_by_id(db, house.id, existing.id)) or existing
 
         new_member = HouseMember(
             house_id=house.id,
             user_id=user.id,
             role_in_house=role_label,
             permissions=obj_in.permissions or "VIEW",
-            can_view_health=obj_in.can_view_health,
-            can_view_camera=obj_in.can_view_camera,
-            can_handle_emergency=obj_in.can_handle_emergency,
-            can_manage_devices=obj_in.can_manage_devices,
-            can_manage_records=obj_in.can_manage_records or is_doctor,
+            status="PENDING_MEMBER_CONFIRM",
+            can_view_health=True if obj_in.can_view_health is None else obj_in.can_view_health,
+            can_view_camera=True if obj_in.can_view_camera is None else obj_in.can_view_camera,
+            can_handle_emergency=True if obj_in.can_handle_emergency is None else obj_in.can_handle_emergency,
+            can_manage_devices=bool(obj_in.can_manage_devices),
+            can_manage_records=bool(obj_in.can_manage_records) or is_doctor,
         )
         db.add(new_member)
         await db.flush()
@@ -248,7 +267,7 @@ class CRUDHouse:
         Không cho phép tước quyền của Chủ nhà chính.
         """
         member = await self.get_member_by_id(db, house_id=house.id, member_id=member_id)
-        if not member:
+        if not member or member.status != "ACTIVE":
             raise HTTPException(
                 status_code=status.HTTP_404_NOT_FOUND,
                 detail="Không tìm thấy thành viên này trong căn nhà.",

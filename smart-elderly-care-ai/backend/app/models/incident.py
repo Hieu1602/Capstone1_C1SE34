@@ -10,6 +10,7 @@ from datetime import datetime
 
 if TYPE_CHECKING:
     from app.models.device import Device
+    from app.models.user import User
 
 from sqlalchemy import DateTime, Float, ForeignKey, String, Text
 from sqlalchemy.dialects.postgresql import UUID
@@ -26,7 +27,7 @@ class Incident(Base):
         UUID(as_uuid=True), primary_key=True, default=uuid.uuid4
     )
     device_id: Mapped[uuid.UUID] = mapped_column(
-        UUID(as_uuid=True), ForeignKey("devices.id"), nullable=False, index=True
+        UUID(as_uuid=True), ForeignKey("devices.id", ondelete="CASCADE"), nullable=False, index=True
     )
 
     # ---- Alert Info ----
@@ -56,3 +57,12 @@ class Incident(Base):
 
     # Relationships
     device: Mapped["Device"] = relationship("Device", back_populates="incidents")  # noqa: F821
+    acknowledged_user: Mapped["User | None"] = relationship(
+        "User", foreign_keys=[acknowledged_by], lazy="selectin"
+    )
+
+    @property
+    def acknowledged_by_name(self) -> str | None:
+        if self.acknowledged_user and self.acknowledged_user.full_name:
+            return self.acknowledged_user.full_name
+        return None

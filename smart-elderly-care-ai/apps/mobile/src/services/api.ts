@@ -41,15 +41,35 @@ const getBaseUrl = (): string => {
   }
 
   // 4. Nếu chạy trên Android Emulator
-  if (Platform.OS === 'android') {
-    return 'http://10.0.2.2:8000/api/v1';
-  }
-
-  // 4. Fallback về IP máy tính phát triển trong mạng nội bộ
-  return 'http://192.168.2.7:8000/api/v1';
+  return 'http://16.178.128.42:8000/api/v1';
 };
 
 export const BASE_URL: string = getBaseUrl();
+
+export const setCustomServerUrl = async (url: string) => {
+  let formatted = url.trim();
+  if (!formatted.startsWith('http://') && !formatted.startsWith('https://')) {
+    formatted = `http://${formatted}`;
+  }
+  if (!formatted.endsWith('/api/v1')) {
+    formatted = formatted.replace(/\/+$/, '') + '/api/v1';
+  }
+  api.defaults.baseURL = formatted;
+  await AsyncStorage.setItem('custom_server_url', formatted);
+  return formatted;
+};
+
+export const getCustomServerUrl = async (): Promise<string> => {
+  try {
+    const saved = await AsyncStorage.getItem('custom_server_url');
+    if (saved && saved.trim()) {
+      api.defaults.baseURL = saved.trim();
+      return saved.trim();
+    }
+  } catch {}
+  return api.defaults.baseURL || BASE_URL;
+};
+
 
 const api: AxiosInstance = axios.create({
   baseURL: BASE_URL,
@@ -62,6 +82,13 @@ const api: AxiosInstance = axios.create({
 // ---- Request Interceptor: Attach JWT token ----
 api.interceptors.request.use(
   async (config: import('axios').InternalAxiosRequestConfig) => {
+    try {
+      const saved = await AsyncStorage.getItem('custom_server_url');
+      if (saved && saved.trim()) {
+        config.baseURL = saved.trim();
+      }
+    } catch {}
+
     const token = useAuthStore.getState().accessToken;
     if (token) {
       config.headers.Authorization = `Bearer ${token}`;
@@ -114,18 +141,24 @@ export default api;
 // ---- API Service Functions ----
 
 export const authApi = {
+  logout: (userName?: string, role?: string) =>
+    api.post('/auth/logout', { user_name: userName, role }).catch(() => {}),
   requestOtp: (phone: string) => api.post('/auth/request-otp', { phone }),
   verifyOtp: (phone: string, otp_code: string) => api.post('/auth/verify-otp', { phone, otp_code }),
   verifyCchn: (cchn_number: string, full_name: string) =>
     api.post('/auth/verify-cchn', { cchn_number, full_name }),
-  login: (phone: string, password: string) => {
+  login: (phone: string, password: string, clientLocation?: string) => {
     // Chuẩn OAuth2 Password Request quy định application/x-www-form-urlencoded
     const params = new URLSearchParams();
     params.append('username', phone);
     params.append('password', password);
-    return api.post('/auth/login', params.toString(), {
-      headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
-    });
+    const headers: Record<string, string> = {
+      'Content-Type': 'application/x-www-form-urlencoded',
+    };
+    if (clientLocation) {
+      headers['x-client-location'] = encodeURIComponent(clientLocation);
+    }
+    return api.post('/auth/login', params.toString(), { headers });
   },
   register: (data: {
     phone: string;
@@ -174,7 +207,13 @@ export const usersApi = {
     new_password: string;
     confirm_new_password: string;
   }) => api.patch('/users/me/password', data),
-  getTerminals: () => api.get('/users/me/terminals'),
+  getTerminals: (clientLocation?: string) => {
+    const headers: Record<string, string> = {};
+    if (clientLocation) {
+      headers['x-client-location'] = encodeURIComponent(clientLocation);
+    }
+    return api.get('/users/me/terminals', { headers });
+  },
   deleteTerminal: (terminalId: string) => api.delete(`/users/me/terminals/${terminalId}`),
   getLoginHistory: (limit: number = 20) => api.get('/users/me/login-history', { params: { limit } }),
   getDevices: () => api.get('/users/me/terminals'),
@@ -249,12 +288,14 @@ export const vitalsApi = {
 export const remindersApi = {
   getToday: () => api.get('/reminders/today'),
   create: (data: any) => api.post('/reminders', data),
+  createPrescription: (data: any) => api.post('/reminders/prescription', data),
   toggle: (reminderId: string) => api.put(`/reminders/${reminderId}/toggle`),
   delete: (reminderId: string) => api.delete(`/reminders/${reminderId}`),
 };
 
 // 4. Patients & Medical Record API
 export const patientApi = {
+  list: () => api.get<any[]>('/patients'),
   getMedicalRecord: (patientId: number | string = 1, target_date?: string) =>
     api.get(`/patients/${patientId}/medical-record`, { params: { target_date } }),
   updateMedicalRecord: (patientId: number | string = 1, data: any) =>
@@ -278,6 +319,10 @@ export const incidentsApi = {
   get: (id: string) => api.get(`/incidents/${id}`),
   acknowledge: (id: string, notes?: string) =>
     api.post(`/incidents/${id}/acknowledge`, null, { params: { note: notes } }),
+  reopen: (id: string, notes?: string) =>
+    api.post(`/incidents/${id}/reopen`, null, { params: { note: notes } }),
+  acknowledgeAll: () =>
+    api.post('/incidents/acknowledge-all'),
 };
 
 export const notificationsApi = incidentsApi;
@@ -339,18 +384,36 @@ export const doctorApi = {
     data: {
       medication_name: string;
       dosage: string;
+      quantity?: string;
       frequency?: string;
       schedule_times?: string[];
       instructions?: string;
       enable_speaker_reminder?: boolean;
     }
   ) => api.post(`/doctor/patients/${id}/prescriptions`, data),
+  createBatchPrescriptions: (
+    id: string,
+    data: {
+      diagnosis?: string;
+      general_notes?: string;
+      enable_speaker_reminder?: boolean;
+      medications: Array<{
+        medication_name: string;
+        quantity?: string;
+        dosage: string;
+        frequency?: string;
+        schedule_times?: string[];
+        instructions?: string;
+      }>;
+    }
+  ) => api.post(`/doctor/patients/${id}/prescriptions/batch`, data),
   updatePrescription: (
     patientId: string,
     rxId: string,
     data: {
       medication_name?: string;
       dosage?: string;
+      quantity?: string;
       frequency?: string;
       schedule_times?: string[];
       instructions?: string;
@@ -420,6 +483,12 @@ export const householdApi = {
     api.delete(`/houses/${householdId}/members/${memberId}`),
   getMyPermissions: (householdId: number | string = 'current') =>
     api.get(`/houses/${householdId}/my-permissions`),
+  joinHouse: (codeOrLink: string) =>
+    api.post('/houses/join', { code: codeOrLink }),
+  respondHouseInvite: (memberId: string, action: 'accept' | 'reject') =>
+    api.post(`/houses/invites/${memberId}/respond`, { action }),
+  respondJoinRequest: (memberId: string, action: 'accept' | 'reject') =>
+    api.post(`/houses/join-requests/${memberId}/respond`, { action }),
 };
 
 export const houseApi = {
@@ -435,7 +504,7 @@ export const houseApi = {
 // 8. Chatbot AI API
 export const chatbotApi = {
   chat: (data: { message: string; session_id?: string; context_window?: number; house_id?: string }) =>
-    api.post('/chatbot/chat', data),
+    api.post('/chatbot/chat', data, { timeout: 60000 }),
   getHealth: () => api.get('/chatbot/health'),
   getSessions: () => api.get('/chatbot/sessions'),
   getSessionDetail: (sessionId: string) => api.get(`/chatbot/sessions/${sessionId}`),

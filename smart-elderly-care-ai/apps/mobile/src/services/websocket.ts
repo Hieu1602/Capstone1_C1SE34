@@ -5,13 +5,16 @@
 import { Platform } from 'react-native';
 import Constants from 'expo-constants';
 import { useVitalStore, Incident } from '../store/useVitalStore';
+import { useAuthStore } from '../store/useAuthStore';
+import { useAlertStore } from '../store/useAlertStore';
 import { notificationService } from './notificationService';
 
 
 const getWsBaseUrl = (): string => {
-  // 1. Khi chạy trên Web trình duyệt
+  // 1. Khi chay tren Web trinh duyet
   if (Platform.OS === 'web' || (typeof window !== 'undefined' && window.location?.hostname)) {
-    const host = (typeof window !== 'undefined' && window.location?.hostname) || 'localhost';
+    const rawHost = (typeof window !== 'undefined' && window.location?.hostname) || '127.0.0.1';
+    const host = (rawHost === 'localhost' || rawHost === '::1') ? '127.0.0.1' : rawHost;
     const protocol = (typeof window !== 'undefined' && window.location?.protocol === 'https:') ? 'wss' : 'ws';
     return `${protocol}://${host}:8000/ws`;
   }
@@ -36,7 +39,7 @@ const getWsBaseUrl = (): string => {
   }
 
   // 4. Fallback về IP máy tính phát triển trong mạng nội bộ
-  return 'ws://192.168.2.7:8000/ws';
+  return 'ws://16.178.128.42:8000/ws';
 };
 
 const WS_BASE_URL: string = getWsBaseUrl();
@@ -209,8 +212,76 @@ class AlertsWebSocket {
       return;
     }
 
+    // 0.3. Hồ sơ bệnh án được cập nhật (Medical Record Updated)
+    if (event.alert_type === 'MEDICAL_RECORD_UPDATED' || event.type === 'MEDICAL_RECORD_UPDATED') {
+      const incData = event.data || {};
+      const newIncident: Incident = {
+        id: incData.id || `inc-med-${Date.now()}`,
+        device_id: incData.device_id || 'system',
+        alert_type: 'MEDICAL_RECORD_UPDATED',
+        alert_level: 'LOW',
+        message: incData.message || '📋 Hồ sơ bệnh án người cao tuổi vừa được cập nhật.',
+        video_clip_url: null,
+        thumbnail_url: null,
+        is_acknowledged: false,
+        created_at: incData.created_at || new Date().toISOString(),
+        notes: incData.patient_id ? `PATIENT:${incData.patient_id}` : null,
+      };
+
+      store.addIncident(newIncident);
+
+      notificationService.triggerEmergencyNotification({
+        title: '📋 HỒ SƠ BỆNH ÁN ĐƯỢC CẬP NHẬT',
+        body: newIncident.message,
+        data: {
+          incident_id: newIncident.id,
+          alert_type: 'MEDICAL_RECORD_UPDATED',
+          patient_id: incData.patient_id,
+        },
+      });
+      return;
+    }
+
+    // 0.4. Lời mời tham gia nhà / Yêu cầu vào nhà
+    if (['HOUSE_INVITE_PENDING', 'HOUSE_JOIN_REQUEST', 'HOUSE_MEMBER_ADDED', 'HOUSE_JOIN_APPROVED', 'HOUSE_JOIN_REJECTED', 'HOUSE_INVITE_REJECTED'].includes(event.alert_type || event.type)) {
+      const incData = event.data || {};
+      const alertType = event.alert_type || event.type;
+      const targetUserId = incData.target_user_id;
+      const currentUserId = useAuthStore.getState().userId || useAuthStore.getState().user_id;
+
+      if (targetUserId && currentUserId && String(targetUserId) !== String(currentUserId)) {
+        return;
+      }
+
+      const newIncident: Incident = {
+        id: incData.id || `inc-house-${Date.now()}`,
+        device_id: incData.device_id || 'system',
+        alert_type: alertType,
+        alert_level: 'LOW',
+        message: incData.message || 'Thông báo mới về thành viên gia đình',
+        video_clip_url: null,
+        thumbnail_url: null,
+        is_acknowledged: false,
+        created_at: incData.created_at || new Date().toISOString(),
+        notes: `USER:${targetUserId}|${alertType}|MEMBER_ID:${incData.member_id || ''}|HOUSE_ID:${incData.house_id || ''}`,
+      };
+
+      store.addIncident(newIncident);
+      useAlertStore.getState().addIncident(newIncident);
+
+      notificationService.triggerEmergencyNotification({
+        title: alertType === 'HOUSE_INVITE_PENDING' ? '🏠 LỜI MỜI THAM GIA NHÀ' : '🏠 THÀNH VIÊN GIA ĐÌNH',
+        body: newIncident.message,
+        data: {
+          incident_id: newIncident.id,
+          alert_type: alertType,
+        },
+      });
+      return;
+    }
+
     // 1. Cảnh báo té ngã / sự cố khẩn cấp mới (Feature 1)
-    if ((event.type === 'ALERT_NEW' && event.alert_type !== 'APPOINTMENT_SCHEDULED') || event.alert_type === 'FALL_DETECTED') {
+    if ((event.type === 'ALERT_NEW' && event.alert_type !== 'APPOINTMENT_SCHEDULED' && event.alert_type !== 'MEDICAL_RECORD_UPDATED') || event.alert_type === 'FALL_DETECTED') {
       const incData = event.data || {};
       const newIncident: Incident = {
         id: incData.id || `inc-${Date.now()}`,
@@ -285,6 +356,10 @@ class AlertsWebSocket {
   subscribe(handler: AlertHandler): () => void {
     this.handlers.add(handler);
     return () => this.handlers.delete(handler);
+  }
+
+  unsubscribe(handler: AlertHandler): void {
+    this.handlers.delete(handler);
   }
 
   disconnect(): void {

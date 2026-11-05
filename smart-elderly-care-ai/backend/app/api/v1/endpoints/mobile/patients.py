@@ -5,6 +5,7 @@ Vị trí: backend/app/api/v1/endpoints/patients.py
 """
 
 from typing import Any, Dict, List, Optional
+from datetime import datetime
 from fastapi import APIRouter, Depends, HTTPException, Query, status, UploadFile, File
 from sqlalchemy.ext.asyncio import AsyncSession
 
@@ -23,6 +24,54 @@ from app.schemas.vital import VitalOut
 router = APIRouter()
 
 
+@router.get("", response_model=List[Dict[str, Any]])
+@router.get("/", response_model=List[Dict[str, Any]], include_in_schema=False)
+async def list_patients(
+    current_user: Optional[User] = Depends(get_current_user_optional),
+    db: AsyncSession = Depends(get_db),
+):
+    """
+    Lấy danh sách người cao tuổi trong nhà để gán thiết bị hoặc theo dõi sức khỏe.
+    """
+    from app.models.elderly_profile import ElderlyProfile
+    from sqlalchemy import select
+
+    house_id = None
+    if current_user:
+        house = await crud_house.get_or_create_default_house(db, owner_id=current_user.id)
+        if house:
+            house_id = house.id
+
+    query = select(ElderlyProfile)
+    if house_id:
+        query = query.where(ElderlyProfile.house_id == house_id)
+    query = query.order_by(ElderlyProfile.created_at.asc())
+
+    res = await db.execute(query)
+    profiles = list(res.scalars().all())
+
+    if not profiles and house_id:
+        default_p = await crud_elderly.get_or_create_default(db, house_id=house_id)
+        profiles = [default_p]
+
+    current_year = datetime.now().year
+    out = []
+    for p in profiles:
+        calc_age = (current_year - p.birth_year) if p.birth_year else 75
+        out.append({
+            "id": str(p.id),
+            "elderly_id": str(p.id),
+            "full_name": p.full_name or "Cụ Nguyễn Văn An",
+            "name": p.full_name or "Cụ Nguyễn Văn An",
+            "birth_year": p.birth_year or (current_year - 75),
+            "age": calc_age,
+            "gender": p.gender or "Nam",
+            "avatar_url": p.avatar_url,
+            "emergency_contact_phone": p.emergency_contact_phone or "",
+        })
+    return out
+
+
 @router.get("/{patient_id}/medical-record", response_model=PatientMedicalRecordOut)
 async def get_patient_medical_record(
     patient_id: str,
@@ -36,6 +85,28 @@ async def get_patient_medical_record(
     house_id = None
     if current_user:
         house = await crud_house.get_or_create_default_house(db, owner_id=current_user.id)
+        if not house:
+            return PatientMedicalRecordOut(
+                id=patient_id,
+                name="",
+                birth_year="",
+                age=0,
+                gender="",
+                blood_type="",
+                height_cm=0,
+                weight_kg=0,
+                bmi=0,
+                security_badge="",
+                conditions=[],
+                drug_allergies="",
+                food_allergies="",
+                dietary_notes="",
+                doctor_name="",
+                doctor_phone="",
+                doctor_specialty="",
+                hospital="",
+                next_appointment="",
+            )
         house_id = house.id
         if current_user.role not in ("admin", "doctor") and house.owner_id != current_user.id:
             member = await crud_house.get_member_by_user(db, house.id, current_user.id)
@@ -62,6 +133,11 @@ async def update_patient_medical_record(
     house_id = None
     if current_user:
         house = await crud_house.get_or_create_default_house(db, owner_id=current_user.id)
+        if not house:
+            raise HTTPException(
+                status_code=status.HTTP_404_NOT_FOUND,
+                detail="Bạn chưa tham gia căn nhà nào.",
+            )
         house_id = house.id
         if current_user.role not in ("admin", "doctor") and house.owner_id != current_user.id:
             member = await crud_house.get_member_by_user(db, house.id, current_user.id)
@@ -71,11 +147,161 @@ async def update_patient_medical_record(
                     detail="Chỉ Người sở hữu hoặc Bác sĩ phụ trách mới có quyền chỉnh sửa hồ sơ bệnh án.",
                 )
 
-    return await crud_elderly.update_medical_record(
+    res_record = await crud_elderly.update_medical_record(
         db=db,
         patient_id_or_serial=patient_id,
         update_in=update_in,
         house_id=house_id,
+    )
+
+    # Đồng bộ bộ nhớ đệm lâm sàng bác sĩ nếu có
+    try:
+        from app.crud.crud_doctor import _CLINICAL_STORE
+        for k in (str(res_record.id), str(patient_id)):
+            if k in _CLINICAL_STORE:
+                if update_in.drug_allergies is not None:
+                    _CLINICAL_STORE[k]["drug_allergies"] = update_in.drug_allergies
+                if update_in.food_allergies is not None:
+                    _CLINICAL_STORE[k]["food_allergies"] = update_in.food_allergies
+                if update_in.dietary_notes is not None:
+                    _CLINICAL_STORE[k]["dietary_notes"] = update_in.dietary_notes
+                if update_in.blood_type is not None:
+                    _CLINICAL_STORE[k]["blood_type"] = update_in.blood_type
+                if update_in.height_cm is not None:
+                    _CLINICAL_STORE[k]["height_cm"] = update_in.height_cm
+                if update_in.weight_kg is not None:
+                    _CLINICAL_STORE[k]["weight_kg"] = update_in.weight_kg
+                if update_in.conditions is not None:
+                    _CLINICAL_STORE[k]["conditions"] = update_in.conditions
+    except Exception:
+        pass
+
+    # Gửi thông báo cho Bác sĩ phụ trách căn nhà
+    if house_id:
+        try:
+            import json
+            from sqlalchemy import select, or_
+            from app.models.device import Device
+            from app.models.incident import Incident
+            from app.models.house import HouseMember
+            from app.models.user import User
+
+            # Tìm thiết bị trong nhà để gán incident
+            dev_stmt = select(Device.id).where(Device.house_id == house_id).limit(1)
+            dev_res = await db.execute(dev_stmt)
+            device_id = dev_res.scalar_one_or_none()
+            if not device_id:
+                any_dev = await db.execute(select(Device.id).limit(1))
+                device_id = any_dev.scalar_one_or_none()
+
+            # Tìm tất cả bác sĩ phụ trách căn nhà
+            doc_stmt = (
+                select(User)
+                .join(HouseMember, HouseMember.user_id == User.id)
+                .where(
+                    HouseMember.house_id == house_id,
+                    or_(HouseMember.role_in_house == "DOCTOR", User.role == "doctor"),
+                )
+            )
+            doc_res = await db.execute(doc_stmt)
+            doctors = list(doc_res.scalars().all())
+
+            updater_name = current_user.full_name if (current_user and current_user.full_name) else "Chủ nhà"
+            patient_name = res_record.name or "người cao tuổi"
+
+            detail_parts = []
+            if update_in.drug_allergies is not None and update_in.drug_allergies != "":
+                detail_parts.append(f"Dị ứng thuốc: {update_in.drug_allergies}")
+            if update_in.food_allergies is not None and update_in.food_allergies != "":
+                detail_parts.append(f"Dị ứng thức ăn: {update_in.food_allergies}")
+            if update_in.dietary_notes is not None and update_in.dietary_notes != "":
+                detail_parts.append(f"Chế độ ăn: {update_in.dietary_notes}")
+            if update_in.conditions is not None:
+                detail_parts.append(f"Tiền sử bệnh lý: {', '.join(c.name for c in update_in.conditions)}")
+
+            notif_msg = f"📋 {updater_name} đã cập nhật hồ sơ bệnh án của cụ {patient_name}."
+            if detail_parts:
+                notif_msg += f" ({'; '.join(detail_parts)})"
+
+            for doc in doctors:
+                if current_user and doc.id == current_user.id:
+                    continue
+
+                if device_id:
+                    new_incident = Incident(
+                        device_id=device_id,
+                        alert_type="MEDICAL_RECORD_UPDATED",
+                        alert_level="LOW",
+                        message=notif_msg,
+                        is_acknowledged=False,
+                        notes=f"USER:{doc.id}|PATIENT:{res_record.id}",
+                    )
+                    db.add(new_incident)
+                    await db.commit()
+                    await db.refresh(new_incident)
+
+                    # Bắn thời gian thực qua WebSocket
+                    try:
+                        from app.api.websockets.vitals_ws import alert_clients
+                        ws_payload = json.dumps({
+                            "type": "ALERT_NEW",
+                            "alert_type": "MEDICAL_RECORD_UPDATED",
+                            "data": {
+                                "id": str(new_incident.id),
+                                "alert_type": "MEDICAL_RECORD_UPDATED",
+                                "alert_level": "LOW",
+                                "message": new_incident.message,
+                                "patient_id": str(res_record.id),
+                                "doctor_id": str(doc.id),
+                                "created_at": new_incident.created_at.isoformat() if new_incident.created_at else None,
+                            }
+                        }, ensure_ascii=False)
+                        for client_ws in list(alert_clients):
+                            try:
+                                await client_ws.send_text(ws_payload)
+                            except Exception:
+                                if client_ws in alert_clients:
+                                    alert_clients.remove(client_ws)
+                    except Exception:
+                        pass
+
+                    # Bắn thông báo đẩy FCM nếu có token
+                    if doc.fcm_token:
+                        try:
+                            from app.services.notification.fcm_service import send_fcm_notification
+                            await send_fcm_notification(
+                                fcm_token=doc.fcm_token,
+                                title="Hồ sơ bệnh án được cập nhật",
+                                body=notif_msg,
+                                data={
+                                    "type": "MEDICAL_RECORD_UPDATED",
+                                    "patient_id": str(res_record.id),
+                                    "incident_id": str(new_incident.id),
+                                }
+                            )
+                        except Exception:
+                            pass
+        except Exception as notify_err:
+            import logging
+            logging.getLogger(__name__).warning("Lỗi dispatch thông báo cập nhật bệnh án: %s", notify_err)
+
+    return res_record
+
+
+@router.get("/{patient_id}/vitals", response_model=List[VitalOut])
+async def get_patient_vitals(
+    patient_id: str,
+    target_date: Optional[str] = Query(None, description="Ngày lọc (YYYY-MM-DD)"),
+    limit: int = Query(100, ge=1, le=500),
+    current_user: Optional[User] = Depends(get_current_user_optional),
+    db: AsyncSession = Depends(get_db),
+):
+    """Lấy dữ liệu sinh hiệu chuỗi thời gian của bệnh nhân / người cao tuổi theo ngày."""
+    return await crud_vital.get_history(
+        db=db,
+        device_id="BLE_BAND_001",
+        limit=limit,
+        target_date=target_date,
     )
 
 
@@ -93,6 +319,11 @@ async def enroll_patient_face(
     house_id = None
     if current_user:
         house = await crud_house.get_or_create_default_house(db, owner_id=current_user.id)
+        if not house:
+            raise HTTPException(
+                status_code=status.HTTP_404_NOT_FOUND,
+                detail="Bạn chưa tham gia căn nhà nào.",
+            )
         house_id = house.id
         if current_user.role not in ("admin", "doctor") and house.owner_id != current_user.id:
             member = await crud_house.get_member_by_user(db, house.id, current_user.id)

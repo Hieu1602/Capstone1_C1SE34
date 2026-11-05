@@ -69,7 +69,7 @@ export const ROLE_CONFIG: Record<
     badgeStyle:
       'bg-blue-100 text-blue-800 border-blue-300 dark:bg-blue-500/10 dark:text-blue-400 dark:border-blue-500/30',
     icon: Users,
-    description: 'Thành viên gia đình',
+    description: 'Thành viên gia đình, theo dõi sức khỏe người cao tuổi và nhận thông báo khẩn cấp',
   },
   elderly: {
     label: 'Người cao tuổi',
@@ -80,6 +80,9 @@ export const ROLE_CONFIG: Record<
     description: 'Đối tượng được chăm sóc, giám sát sinh hiệu liên tục & cảnh báo té ngã',
   },
 };
+
+// Danh sách các vai trò chuẩn hiển thị khi tạo hoặc cập nhật tài khoản (tránh bị lặp)
+export const SELECTABLE_ROLES: string[] = ['admin', 'doctor', 'owner', 'member', 'elderly'];
 
 // Danh mục toàn bộ các quyền hạn chi tiết trong hệ thống SECA
 export const PERMISSION_GROUPS = [

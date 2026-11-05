@@ -1,0 +1,39 @@
+# Windows development: use with docker-compose.yml and docker-compose.camera.yml.
+services:
+  backend:
+    volumes:
+      - type: bind
+        source: ${USERPROFILE}/.aws
+        target: /root/.aws
+        read_only: true
+        bind:
+          create_host_path: false
+  tapo-camera:
+    environment:
+      SSL_CERT_FILE: /etc/video-tls/certificate.pem
+    volumes:
+      - type: bind
+        source: ${USERPROFILE}/.aws
+        target: /home/camera/.aws
+        read_only: true
+        bind:
+          create_host_path: false
+      - type: bind
+        source: ./.local/video-tls/certificate.pem
+        target: /etc/video-tls/certificate.pem
+        read_only: true
+        bind:
+          create_host_path: false
+  video-metadata:
+    image: nginx:1.28-alpine
+    restart: unless-stopped
+    networks:
+      - elderly_care_net
+    volumes:
+      - ./edge/video-metadata.nginx.conf:/etc/nginx/conf.d/default.conf:ro
+      - type: bind
+        source: ./.local/video-tls
+        target: /etc/nginx/video-tls
+        read_only: true
+        bind:
+          create_host_path: false

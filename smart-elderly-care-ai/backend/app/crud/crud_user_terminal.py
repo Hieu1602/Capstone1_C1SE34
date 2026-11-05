@@ -20,6 +20,7 @@ def parse_device_info(
     user_agent: str | None,
     client_ip: str,
     custom_device_name: Optional[str] = None,
+    custom_location: Optional[str] = None,
 ) -> dict[str, str]:
     """
     Phân tích User-Agent và IP để trích xuất tên thiết bị, hệ điều hành và vị trí.
@@ -29,18 +30,36 @@ def parse_device_info(
     - Chrome on Windows: "Chrome Web (Windows 11)", "Windows 11", "desktop"
     """
     ua = (user_agent or "").strip()
-
-    # 1. Xác định vị trí địa lý xấp xỉ
     clean_ip = client_ip.strip() if client_ip else "127.0.0.1"
-    if (
+
+    # 1. Xác định vị trí địa lý thực tế (Ưu tiên vị trí từ thiết bị truyền lên)
+    if custom_location and custom_location.strip():
+        location = custom_location.strip()
+    elif (
         clean_ip in ("127.0.0.1", "localhost", "::1")
         or clean_ip.startswith("192.168.")
         or clean_ip.startswith("10.")
         or clean_ip.startswith("172.")
     ):
-        location = "Đà Nẵng, Việt Nam (Mạng cục bộ)"
+        location = "Đà Nẵng, Việt Nam (Mạng nội bộ)"
     else:
-        location = "Đà Nẵng, Việt Nam"
+        # Tra cứu vị trí GeoIP nếu là địa chỉ IP Public
+        try:
+            import httpx
+            with httpx.Client(timeout=2.0) as client:
+                resp = client.get(f"http://ip-api.com/json/{clean_ip}?fields=status,city,regionName,country")
+                if resp.status_code == 200:
+                    geo = resp.json()
+                    if geo.get("status") == "success":
+                        city = geo.get("city") or geo.get("regionName")
+                        country = geo.get("country") or "Việt Nam"
+                        location = f"{city}, {country}" if city else country
+                    else:
+                        location = "Đà Nẵng, Việt Nam"
+                else:
+                    location = "Đà Nẵng, Việt Nam"
+        except Exception:
+            location = "Đà Nẵng, Việt Nam"
 
     if custom_device_name and custom_device_name.strip():
         return {
@@ -132,11 +151,12 @@ class CRUDUserTerminal:
         custom_device_name: Optional[str] = None,
         login_method: str = "Mật khẩu",
         status: str = "success",
+        custom_location: Optional[str] = None,
     ) -> tuple[Optional[UserTerminal], UserLoginHistory]:
         """
         Ghi nhận tự động thiết bị đầu cuối và thêm bản ghi vào lịch sử đăng nhập.
         """
-        info = parse_device_info(user_agent, ip_address, custom_device_name)
+        info = parse_device_info(user_agent, ip_address, custom_device_name, custom_location)
 
         login_record = UserLoginHistory(
             user_id=user_id,
@@ -195,6 +215,7 @@ class CRUDUserTerminal:
         user: User,
         current_ip: Optional[str] = None,
         current_user_agent: Optional[str] = None,
+        custom_location: Optional[str] = None,
     ) -> list[dict]:
         """
         Lấy danh sách thiết bị đầu cuối của người dùng.
@@ -209,7 +230,7 @@ class CRUDUserTerminal:
         res = await db.execute(stmt)
         terminals = list(res.scalars().all())
 
-        parsed_current = parse_device_info(current_user_agent, current_ip or "127.0.0.1")
+        parsed_current = parse_device_info(current_user_agent, current_ip or "127.0.0.1", custom_location=custom_location)
 
         if not terminals:
             new_terminal = UserTerminal(
@@ -239,6 +260,9 @@ class CRUDUserTerminal:
                 ):
                     is_cur = True
                     has_current = True
+                    if custom_location and custom_location.strip() and t.location != custom_location.strip():
+                        t.location = custom_location.strip()
+                        t.last_active_at = datetime.now(timezone.utc)
 
             out_list.append({
                 "id": t.id,

@@ -6,16 +6,19 @@
 
 import React, { useState, useEffect } from 'react';
 import {
-  View, Text, StyleSheet, TouchableOpacity, ScrollView, TextInput,
-  Modal, Pressable, Alert, Linking, Platform, Image,
+  View, StyleSheet, TouchableOpacity, ScrollView, TextInput,
+  Modal, Pressable, Linking, Platform, Image, ActivityIndicator,
 } from 'react-native';
+import { LocalizedAlert as Alert, LocalizedText as Text } from '../../../i18n/LocalizedComponents';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
 import * as ImagePicker from 'expo-image-picker';
 import { useTheme } from '../../../store/useThemeStore';
 import { Colors } from '../../../theme/colors';
 import { useVitalStore, MedicalConditionItem } from '../../../store/useVitalStore';
+import { useAuthStore } from '../../../store/useAuthStore';
 import { BASE_URL } from '../../../services/api';
+import { alertsWS } from '../../../services/websocket';
 
 const getDaysAgoStr = (days = 0) => {
   const d = new Date(); d.setDate(d.getDate() - days);
@@ -49,6 +52,15 @@ const calculateAgeFromYear = (yearStr: string) => {
 export default function PatientMedicalRecordScreen({ navigation }: any) {
   const { isDarkMode } = useTheme();
   const { fetchPatientRecord, updatePatientRecord, patientRecord, enrollPatientFace } = useVitalStore();
+  const { userRole, role, permissions, viewRole } = useAuthStore();
+  const canEdit = Boolean(
+    userRole === 'admin' ||
+    role === 'admin' ||
+    permissions?.is_owner ||
+    permissions?.role_in_house === 'OWNER' ||
+    permissions?.can_manage_records ||
+    viewRole === 'DOCTOR'
+  );
 
   const hasPatient = Boolean(patientRecord?.name && patientRecord.name.trim() !== '' && patientRecord.name.trim() !== '--');
   const patientName = patientRecord?.name?.trim() || '--';
@@ -73,13 +85,37 @@ export default function PatientMedicalRecordScreen({ navigation }: any) {
   const [condDraft, setCondDraft] = useState({ name: '', note: '' });
   const [isEditPatientVisible, setEditPatientVisible] = useState(false);
   const [patientDraft, setPatientDraft] = useState({ name: '', birthYear: '', gender: 'Nam', blood: 'A+', weight: '', height: '' });
+  const [isSavingPatient, setIsSavingPatient] = useState(false);
   const [isEditingAllergies, setIsEditingAllergies] = useState(false);
   const [allergyDraft, setAllergyDraft] = useState({ drug: '', food: '', diet: '' });
+
+  const showAlert = (title: string, message: string) => {
+    if (Platform.OS === 'web' && typeof window !== 'undefined') {
+      window.alert(`${title}\n\n${message}`);
+    } else {
+      Alert.alert(title, message);
+    }
+  };
 
   const draftAge = calculateAgeFromYear(patientDraft.birthYear);
   const draftBMI = calculateBMIInfo(patientDraft.height, patientDraft.weight);
 
-  useEffect(() => { fetchPatientRecord(1, selectedDate); }, [selectedDate]);
+  useEffect(() => {
+    fetchPatientRecord(1, selectedDate);
+    alertsWS.connect();
+    const handleWs = (event: any) => {
+      if (
+        event?.type === 'ALERT_NEW' &&
+        (event?.alert_type === 'MEDICAL_RECORD_UPDATED' || event?.data?.alert_type === 'MEDICAL_RECORD_UPDATED')
+      ) {
+        fetchPatientRecord(1, selectedDate);
+      }
+    };
+    const unsub = alertsWS.subscribe(handleWs);
+    return () => {
+      unsub();
+    };
+  }, [selectedDate, fetchPatientRecord]);
 
   const openEditPatientModal = () => {
     setPatientDraft({
@@ -93,17 +129,96 @@ export default function PatientMedicalRecordScreen({ navigation }: any) {
     setEditPatientVisible(true);
   };
 
-  const handleSavePatientInfo = async () => {
-    if (!patientDraft.name.trim()) return Alert.alert('Thiếu thông tin', 'Vui lòng nhập họ tên người cao tuổi.');
-    const h = parseInt(patientDraft.height, 10) || 0, w = parseInt(patientDraft.weight, 10) || 0, by = patientDraft.birthYear.trim();
+  const executeSavePatientInfo = async () => {
+    const trimmedName = patientDraft.name.trim();
+    if (!trimmedName || trimmedName.length < 2) {
+      return showAlert('Thiếu thông tin', 'Vui lòng nhập họ và tên người cao tuổi (tối thiểu 2 ký tự).');
+    }
+
+    const curYear = new Date().getFullYear();
+    const by = patientDraft.birthYear.trim();
+    if (by) {
+      const byNum = parseInt(by, 10);
+      if (isNaN(byNum) || byNum < 1900 || byNum > curYear) {
+        return showAlert('Năm sinh không hợp lệ', `Vui lòng nhập năm sinh từ 1900 đến ${curYear}.`);
+      }
+    }
+
+    const h = parseInt(patientDraft.height, 10) || 0;
+    if (patientDraft.height && (isNaN(h) || h < 50 || h > 250)) {
+      return showAlert('Chiều cao không hợp lệ', 'Chiều cao phải nằm trong khoảng từ 50 đến 250 cm.');
+    }
+
+    const w = parseInt(patientDraft.weight, 10) || 0;
+    if (patientDraft.weight && (isNaN(w) || w < 20 || w > 250)) {
+      return showAlert('Cân nặng không hợp lệ', 'Cân nặng phải nằm trong khoảng từ 20 đến 250 kg.');
+    }
+
     const { bmi } = calculateBMIInfo(patientDraft.height, patientDraft.weight);
-    setEditPatientVisible(false);
-    await updatePatientRecord(1, {
-      name: patientDraft.name.trim(), birth_year: by, age: calculateAgeFromYear(by),
-      gender: patientDraft.gender, blood_type: patientDraft.blood, weight_kg: w, height_cm: h,
-      bmi: bmi !== '--' ? parseFloat(bmi) : 0,
-    });
-    Alert.alert('Thành công 🎉', 'Đã lưu hồ sơ người cao tuổi thành công.');
+    const targetId = patientRecord?.id || '1';
+
+    setIsSavingPatient(true);
+    try {
+      await updatePatientRecord(targetId, {
+        name: trimmedName,
+        birth_year: by,
+        age: calculateAgeFromYear(by),
+        gender: patientDraft.gender,
+        blood_type: patientDraft.blood,
+        weight_kg: w,
+        height_cm: h,
+        bmi: bmi !== '--' ? parseFloat(bmi) : 0,
+      });
+
+      // Tự động refetch/cập nhật lại dữ liệu trên giao diện
+      await fetchPatientRecord(targetId, selectedDate);
+
+      showAlert('Thành công 🎉', 'Cập nhật thông tin thành công!');
+      setEditPatientVisible(false);
+    } catch (err) {
+      console.warn('Lỗi cập nhật hồ sơ người cao tuổi:', err);
+      showAlert('Lỗi', 'Không thể cập nhật thông tin người cao tuổi. Vui lòng thử lại.');
+    } finally {
+      setIsSavingPatient(false);
+    }
+  };
+
+  const handleSavePatientInfo = () => {
+    if (!patientDraft.name.trim()) return Alert.alert('Thiếu thông tin', 'Vui lòng nhập họ tên người cao tuổi.');
+    Alert.alert(
+      'Xác nhận lưu hồ sơ',
+      `Bạn có chắc chắn muốn lưu thông tin hồ sơ cho "${patientDraft.name.trim()}" không?`,
+      [
+        { text: 'Hủy', style: 'cancel' },
+        { text: 'Xác nhận lưu', onPress: executeSavePatientInfo },
+      ]
+    );
+  };
+
+  const handleCloseEditPatient = () => {
+    const isDirty =
+      patientDraft.name.trim() !== (patientRecord?.name || '').trim() ||
+      patientDraft.gender !== (patientRecord?.gender || 'male') ||
+      patientDraft.blood !== (patientRecord?.blood_type || 'A+') ||
+      patientDraft.birthYear !== (patientRecord?.birth_year || '');
+
+    if (isDirty) {
+      Alert.alert(
+        'Thay đổi chưa lưu',
+        'Thông tin hồ sơ đã được chỉnh sửa. Bạn có muốn lưu thay đổi trước khi đóng không?',
+        [
+          { text: 'Tiếp tục sửa', style: 'cancel' },
+          {
+            text: 'Không lưu',
+            style: 'destructive',
+            onPress: () => setEditPatientVisible(false),
+          },
+          { text: 'Lưu thay đổi', onPress: executeSavePatientInfo },
+        ]
+      );
+    } else {
+      setEditPatientVisible(false);
+    }
   };
 
   const handleAddCondition = async () => {
@@ -177,9 +292,13 @@ export default function PatientMedicalRecordScreen({ navigation }: any) {
           <Text style={[styles.headerTitle, { color: textTitle }]}>Hồ sơ bệnh án người cao tuổi</Text>
           <Text style={[styles.headerSubtitle, { color: textSub }]}>Thông tin y tế, bệnh nền & đơn thuốc</Text>
         </View>
-        <TouchableOpacity style={[styles.iconCircleBtn, { backgroundColor: isDarkMode ? '#1E293B' : '#F1F5F9', borderColor: borderCol }]} onPress={openEditPatientModal} activeOpacity={0.7}>
-          <Ionicons name={hasPatient ? 'create-outline' : 'add'} size={20} color={Colors.primary} />
-        </TouchableOpacity>
+        {canEdit ? (
+          <TouchableOpacity style={[styles.iconCircleBtn, { backgroundColor: isDarkMode ? '#1E293B' : '#F1F5F9', borderColor: borderCol }]} onPress={openEditPatientModal} activeOpacity={0.7}>
+            <Ionicons name={hasPatient ? 'create-outline' : 'add'} size={20} color={Colors.primary} />
+          </TouchableOpacity>
+        ) : (
+          <View style={{ width: 40, height: 40 }} />
+        )}
       </View>
 
       <ScrollView showsVerticalScrollIndicator={false} contentContainerStyle={styles.scrollContent}>
@@ -214,31 +333,31 @@ export default function PatientMedicalRecordScreen({ navigation }: any) {
                 <View style={[styles.cardIconBox, { backgroundColor: isDarkMode ? '#1E3A8A' : '#EFF6FF' }]}><Ionicons name="person-outline" size={20} color="#2563EB" /></View>
                 <Text style={[styles.cardTitle, { color: textTitle }]}>Thông tin người cao tuổi</Text>
               </View>
-              <TouchableOpacity onPress={openEditPatientModal}><Text style={styles.editLink}>Chỉnh sửa</Text></TouchableOpacity>
+              {canEdit && (<TouchableOpacity onPress={openEditPatientModal}><Text style={styles.editLink}>Chỉnh sửa</Text></TouchableOpacity>)}
             </View>
 
             <View style={styles.patientHeroRow}>
-              <TouchableOpacity style={[styles.patientAvatarContainer, { backgroundColor: isDarkMode ? '#0F172A' : '#F1F5F9' }]} onPress={() => setFaceModalVisible(true)} activeOpacity={0.8}>
+              <TouchableOpacity style={[styles.patientAvatarContainer, { backgroundColor: isDarkMode ? '#0F172A' : '#F1F5F9' }]} onPress={canEdit ? () => setFaceModalVisible(true) : undefined} activeOpacity={canEdit ? 0.8 : 1}>
                 {avatarUrl ? (
                   <Image source={{ uri: avatarUrl.startsWith('http') ? avatarUrl : `${BASE_URL.replace('/api/v1', '')}${avatarUrl}?t=${Date.now()}` }} style={styles.patientAvatarImg} />
                 ) : <Ionicons name="person" size={40} color={isDarkMode ? '#64748B' : '#94A3B8'} />}
-                <View style={styles.avatarCameraBadge}><Ionicons name="camera" size={11} color="#FFF" /></View>
+                {canEdit && <View style={styles.avatarCameraBadge}><Ionicons name="camera" size={11} color="#FFF" /></View>}
               </TouchableOpacity>
-              <View style={{ flex: 1, marginLeft: 14 }}>
-                <Text style={[styles.patientHeroName, { color: textTitle }]}>{patientName}</Text>
+              <View style={{ flex: 1, marginLeft: 14, minWidth: 0 }}>
+                <Text style={[styles.patientHeroName, { color: textTitle }]} numberOfLines={1}>{patientName}</Text>
                 <Text style={[styles.patientHeroSub, { color: textSub }]}>
                   {birthYear !== '--' ? `Năm sinh: ${birthYear} (${age !== '--' ? `${age} tuổi` : ''}) • Giới tính: ${gender}` : 'Chưa cập nhật thông tin cá nhân'}
                 </Text>
                 <View style={styles.bloodBadgeRow}>
-                  <View style={styles.bloodBadge}><Ionicons name="water" size={13} color="#EF4444" /><Text style={styles.bloodBadgeText}>Nhóm máu: {bloodType}</Text></View>
+                  <View style={styles.bloodBadge}><Ionicons name="water" size={12} color="#EF4444" /><Text style={styles.bloodBadgeText}>Nhóm máu: {bloodType}</Text></View>
                   <View style={[styles.bmiBadge, { backgroundColor: isDarkMode ? 'rgba(255,255,255,0.08)' : cardBMI.bg }]}>
                     <Text style={[styles.bmiBadgeText, { color: cardBMI.color }]}>BMI: {cardBMI.bmi} {cardBMI.bmi !== '--' ? `(${cardBMI.category})` : ''}</Text>
                   </View>
                 </View>
                 <TouchableOpacity
                   style={[styles.faceEnrollPill, hasFaceEnrolled ? { backgroundColor: isDarkMode ? '#064E3B' : '#DCFCE7', borderColor: '#10B981' } : { backgroundColor: isDarkMode ? '#451A03' : '#FEF3C7', borderColor: '#F59E0B' }]}
-                  onPress={() => setFaceModalVisible(true)}
-                  activeOpacity={0.7}
+                  onPress={canEdit ? () => setFaceModalVisible(true) : undefined}
+                  activeOpacity={canEdit ? 0.7 : 1}
                 >
                   <Ionicons name={hasFaceEnrolled ? 'scan-circle' : 'scan-outline'} size={14} color={hasFaceEnrolled ? '#10B981' : '#F59E0B'} />
                   <Text style={[styles.faceEnrollPillText, { color: hasFaceEnrolled ? '#047857' : '#B45309' }]}>{hasFaceEnrolled ? 'AI Face ID: Đã kích hoạt' : 'Khuôn mặt: Chưa đăng ký'}</Text>
@@ -283,13 +402,47 @@ export default function PatientMedicalRecordScreen({ navigation }: any) {
             </View>
           ) : (
             <>
-              <ScrollView horizontal showsHorizontalScrollIndicator={false} style={{ marginVertical: 10 }}>
+              <ScrollView
+                horizontal
+                showsHorizontalScrollIndicator={false}
+                style={[
+                  styles.dateScrollContainer,
+                  Platform.OS === 'web' && ({
+                    display: 'flex',
+                    overflowX: 'auto',
+                    whiteSpace: 'nowrap',
+                    paddingBottom: 8,
+                  } as any),
+                ]}
+                contentContainerStyle={[
+                  styles.dateScrollContent,
+                  Platform.OS === 'web' && ({
+                    display: 'flex',
+                    flexDirection: 'row',
+                    whiteSpace: 'nowrap',
+                    paddingBottom: 8,
+                  } as any),
+                ]}
+              >
                 {[0, 1, 2, 3].map((daysAgo) => {
                   const val = getDaysAgoStr(daysAgo), isSelected = selectedDate === val;
                   const label = daysAgo === 0 ? 'Hôm nay' : daysAgo === 1 ? 'Hôm qua' : `${daysAgo} ngày trước`;
                   return (
-                    <TouchableOpacity key={val} style={[styles.dateChip, { backgroundColor: isSelected ? Colors.primary : isDarkMode ? '#0F172A' : '#F1F5F9', borderColor: isSelected ? Colors.primary : borderCol }]} onPress={() => setSelectedDate(val)} activeOpacity={0.8}>
-                      <Text style={[styles.dateChipText, { color: isSelected ? '#FFF' : textTitle }]}>{label} ({val.slice(5)})</Text>
+                    <TouchableOpacity
+                      key={val}
+                      style={[
+                        styles.dateChip,
+                        {
+                          backgroundColor: isSelected ? Colors.primary : isDarkMode ? '#0F172A' : '#F1F5F9',
+                          borderColor: isSelected ? Colors.primary : borderCol,
+                        },
+                      ]}
+                      onPress={() => setSelectedDate(val)}
+                      activeOpacity={0.8}
+                    >
+                      <Text style={[styles.dateChipText, { color: isSelected ? '#FFF' : textTitle }]}>
+                        {label} ({val.slice(5)})
+                      </Text>
                     </TouchableOpacity>
                   );
                 })}
@@ -315,7 +468,7 @@ export default function PatientMedicalRecordScreen({ navigation }: any) {
               <View style={[styles.cardIconBox, { backgroundColor: isDarkMode ? '#4C1D1D' : '#FEE2E2' }]}><Ionicons name="pulse-outline" size={20} color="#EF4444" /></View>
               <Text style={[styles.cardTitle, { color: textTitle }]}>Tiền sử bệnh nền {hasPatient ? `(${conditions.length})` : ''}</Text>
             </View>
-            {hasPatient && (
+            {canEdit && hasPatient && (
               <TouchableOpacity style={styles.addBtnSmall} onPress={() => setAddConditionModalVisible(true)} activeOpacity={0.7}>
                 <Ionicons name="add" size={16} color="#FFF" /><Text style={styles.addBtnSmallText}>Thêm</Text>
               </TouchableOpacity>
@@ -338,9 +491,11 @@ export default function PatientMedicalRecordScreen({ navigation }: any) {
                       <View style={[styles.severityDot, { backgroundColor: item.severity === 'danger' ? '#EF4444' : item.severity === 'warning' ? '#F59E0B' : '#0EA5E9' }]} />
                       <Text style={[styles.conditionName, { color: textTitle }]}>{item.name}</Text>
                     </View>
-                    <TouchableOpacity onPress={() => handleDeleteCondition(item.id, item.name)}>
-                      <Ionicons name="trash-outline" size={17} color={isDarkMode ? '#94A3B8' : '#CBD5E1'} />
-                    </TouchableOpacity>
+                    {canEdit && (
+                      <TouchableOpacity onPress={() => handleDeleteCondition(item.id, item.name)}>
+                        <Ionicons name="trash-outline" size={17} color={isDarkMode ? '#94A3B8' : '#CBD5E1'} />
+                      </TouchableOpacity>
+                    )}
                   </View>
                   {item.note ? <Text style={[styles.conditionNote, { color: textSub }]}>{item.note}</Text> : null}
                 </View>
@@ -356,7 +511,7 @@ export default function PatientMedicalRecordScreen({ navigation }: any) {
               <View style={[styles.cardIconBox, { backgroundColor: isDarkMode ? '#452F10' : '#FEF3C7' }]}><Ionicons name="warning-outline" size={20} color="#D97706" /></View>
               <Text style={[styles.cardTitle, { color: textTitle }]}>Dị ứng & Lưu ý dinh dưỡng</Text>
             </View>
-            {!isEditingAllergies && (
+            {canEdit && !isEditingAllergies && (
               <TouchableOpacity
                 style={[styles.editBtnSmall, { backgroundColor: isDarkMode ? 'rgba(255, 107, 0, 0.15)' : '#FFF7ED', borderColor: isDarkMode ? '#EA580C' : '#FDBA74' }]}
                 onPress={handleStartEditAllergies}
@@ -468,8 +623,8 @@ export default function PatientMedicalRecordScreen({ navigation }: any) {
       </Modal>
 
       {/* Modal Chỉnh Sửa / Thêm Mới Thông Tin Bệnh Nhân */}
-      <Modal transparent visible={isEditPatientVisible} animationType="fade" onRequestClose={() => setEditPatientVisible(false)}>
-        <Pressable style={styles.modalOverlay} onPress={() => setEditPatientVisible(false)}>
+      <Modal transparent visible={isEditPatientVisible} animationType="fade" onRequestClose={handleCloseEditPatient}>
+        <Pressable style={styles.modalOverlay} onPress={handleCloseEditPatient}>
           <Pressable style={[styles.modalCard, { backgroundColor: bgCard, borderColor: borderCol, maxHeight: '92%' }]} onPress={() => {}}>
             <Text style={[styles.modalTitle, { color: textTitle }]}>{hasPatient ? 'Chỉnh sửa thông tin bệnh nhân' : 'Thêm hồ sơ người cao tuổi'}</Text>
             <ScrollView showsVerticalScrollIndicator={false} contentContainerStyle={{ paddingBottom: 6 }}>
@@ -538,11 +693,24 @@ export default function PatientMedicalRecordScreen({ navigation }: any) {
             </ScrollView>
 
             <View style={styles.modalBtnRow}>
-              <TouchableOpacity style={[styles.modalCancelBtn, { backgroundColor: isDarkMode ? '#0F172A' : '#F1F5F9', borderColor: borderCol }]} onPress={() => setEditPatientVisible(false)}>
+              <TouchableOpacity
+                style={[styles.modalCancelBtn, { backgroundColor: isDarkMode ? '#0F172A' : '#F1F5F9', borderColor: borderCol }]}
+                onPress={handleCloseEditPatient}
+                disabled={isSavingPatient}
+              >
                 <Text style={[styles.modalCancelText, { color: textSub }]}>Hủy</Text>
               </TouchableOpacity>
-              <TouchableOpacity style={styles.modalSaveBtn} onPress={handleSavePatientInfo}>
-                <Text style={styles.modalSaveText}>{hasPatient ? 'Lưu thay đổi' : 'Lưu hồ sơ'}</Text>
+              <TouchableOpacity
+                style={[styles.modalSaveBtn, isSavingPatient && { opacity: 0.7 }]}
+                onPress={handleSavePatientInfo}
+                disabled={isSavingPatient}
+                activeOpacity={0.8}
+              >
+                {isSavingPatient ? (
+                  <ActivityIndicator size="small" color="#FFFFFF" />
+                ) : (
+                  <Text style={styles.modalSaveText}>{hasPatient ? 'Lưu thay đổi' : 'Lưu hồ sơ'}</Text>
+                )}
               </TouchableOpacity>
             </View>
           </Pressable>
@@ -616,11 +784,43 @@ const styles = StyleSheet.create({
   avatarCameraBadge: { position: 'absolute', bottom: -2, right: -2, backgroundColor: Colors.primary, width: 22, height: 22, borderRadius: 11, alignItems: 'center', justifyContent: 'center', borderWidth: 2, borderColor: '#FFF' },
   patientHeroName: { fontSize: 16, fontWeight: '800' },
   patientHeroSub: { fontSize: 12, marginTop: 2 },
-  bloodBadgeRow: { flexDirection: 'row', alignItems: 'center', gap: 8, marginTop: 6 },
-  bloodBadge: { flexDirection: 'row', alignItems: 'center', gap: 4, backgroundColor: '#FEE2E2', paddingHorizontal: 7, paddingVertical: 3, borderRadius: 6 },
-  bloodBadgeText: { fontSize: 11.5, fontWeight: '700', color: '#B91C1C' },
-  bmiBadge: { paddingHorizontal: 7, paddingVertical: 3, borderRadius: 6 },
-  bmiBadgeText: { fontSize: 11.5, fontWeight: '700' },
+  bloodBadgeRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    flexWrap: 'wrap',
+    gap: 6,
+    marginTop: 6,
+    maxWidth: '100%',
+    ...(Platform.OS === 'web' ? { flexWrap: 'wrap' } : {}),
+  },
+  bloodBadge: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 4,
+    backgroundColor: '#FEE2E2',
+    paddingHorizontal: 7,
+    paddingVertical: 3,
+    borderRadius: 6,
+    flexShrink: 0,
+  },
+  bloodBadgeText: { fontSize: 11, fontWeight: '700', color: '#B91C1C' },
+  bmiBadge: {
+    paddingHorizontal: 6,
+    paddingVertical: 3,
+    borderRadius: 6,
+    flexShrink: 1,
+    maxWidth: '100%',
+    alignSelf: 'flex-start',
+    ...(Platform.OS === 'web' ? { whiteSpace: 'normal', wordBreak: 'break-word' } : {}),
+  },
+  bmiBadgeText: {
+    fontSize: 10.5,
+    fontWeight: '700',
+    flexShrink: 1,
+    flexWrap: 'wrap',
+    lineHeight: 14,
+    ...(Platform.OS === 'web' ? { whiteSpace: 'normal', wordBreak: 'break-word' } : {}),
+  },
   faceEnrollPill: { flexDirection: 'row', alignItems: 'center', gap: 5, paddingHorizontal: 8, paddingVertical: 4, borderRadius: 6, borderWidth: 1, alignSelf: 'flex-start', marginTop: 8 },
   faceEnrollPillText: { fontSize: 11.5, fontWeight: '700' },
   metricsGrid: { flexDirection: 'row', borderRadius: 12, paddingVertical: 10, paddingHorizontal: 8, alignItems: 'center' },
@@ -630,8 +830,44 @@ const styles = StyleSheet.create({
   metricDivider: { width: 1, height: 26 },
   emptyNoticeBox: { flexDirection: 'row', alignItems: 'center', gap: 8, padding: 12, borderRadius: 10, borderWidth: 1 },
   emptyNoticeText: { fontSize: 12, flex: 1, lineHeight: 17 },
-  dateChip: { paddingHorizontal: 12, paddingVertical: 7, borderRadius: 20, borderWidth: 1, marginRight: 8 },
-  dateChipText: { fontSize: 12, fontWeight: '600' },
+  dateScrollContainer: {
+    marginVertical: 10,
+    maxWidth: '100%',
+    ...(Platform.OS === 'web' ? {
+      display: 'flex',
+      overflowX: 'auto',
+      whiteSpace: 'nowrap',
+      paddingBottom: 8,
+    } : {}),
+  },
+  dateScrollContent: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    paddingBottom: 8,
+    paddingRight: 16,
+    ...(Platform.OS === 'web' ? {
+      display: 'flex',
+      flexDirection: 'row',
+      whiteSpace: 'nowrap',
+      paddingBottom: 8,
+    } : {}),
+  },
+  dateChip: {
+    paddingHorizontal: 12,
+    paddingVertical: 7,
+    borderRadius: 20,
+    borderWidth: 1,
+    marginRight: 8,
+    flexShrink: 0,
+    alignItems: 'center',
+    justifyContent: 'center',
+    ...(Platform.OS === 'web' ? { flexShrink: 0, whiteSpace: 'nowrap' } : {}),
+  },
+  dateChipText: {
+    fontSize: 12,
+    fontWeight: '600',
+    ...(Platform.OS === 'web' ? { whiteSpace: 'nowrap' } : {}),
+  },
   daySummaryBox: { borderRadius: 10, padding: 10, borderWidth: 1, marginTop: 6 },
   summaryTopRow: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 8 },
   openDetailChartBtn: { flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 6, backgroundColor: Colors.primary, borderRadius: 8, paddingVertical: 8 },

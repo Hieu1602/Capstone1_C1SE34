@@ -75,6 +75,7 @@ function getVitalState() {
     toggleCameraSleep:      devices.toggleCameraSleep,
     toggleCameraAIProtect:  devices.toggleCameraAIProtect,
     setCameraResolution:    devices.setCameraResolution,
+    setCameraDefault:       devices.setCameraDefault,
     addIoTDevice:           devices.addIoTDevice,
     removeIoTDevice:        devices.removeIoTDevice,
     addDeviceGroup:         devices.addDeviceGroup,
@@ -85,6 +86,7 @@ function getVitalState() {
     fetchGroupsFromBackend: devices.fetchGroupsFromBackend,
     fetchDevicesFromBackend: devices.fetchDevicesFromBackend,
     syncAllWithBackend:     devices.syncAllWithBackend,
+    resetDeviceStore:       devices.resetDeviceStore,
 
     // --- từ usePatientStore ---
     patientRecord:       patient.patientRecord,
@@ -156,6 +158,7 @@ export function useVitalStore() {
     toggleCameraSleep:      devices.toggleCameraSleep,
     toggleCameraAIProtect:  devices.toggleCameraAIProtect,
     setCameraResolution:    devices.setCameraResolution,
+    setCameraDefault:       devices.setCameraDefault,
     addIoTDevice:           devices.addIoTDevice,
     removeIoTDevice:        devices.removeIoTDevice,
     addDeviceGroup:         devices.addDeviceGroup,
@@ -166,6 +169,7 @@ export function useVitalStore() {
     fetchGroupsFromBackend: devices.fetchGroupsFromBackend,
     fetchDevicesFromBackend: devices.fetchDevicesFromBackend,
     syncAllWithBackend:     devices.syncAllWithBackend,
+    resetDeviceStore:       devices.resetDeviceStore,
 
     // --- từ usePatientStore ---
     patientRecord:       patient.patientRecord,

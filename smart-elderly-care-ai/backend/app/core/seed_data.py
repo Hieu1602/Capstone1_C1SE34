@@ -68,7 +68,7 @@ async def seed_master_data() -> None:
                     phone="+84905123456",
                     full_name="Nguyễn Hữu Nghĩa",
                     hashed_password=hash_password("12345678"),
-                    role=UserRole.USER,
+                    role=UserRole.OWNER,
                     is_active=True,
                 )
                 db.add(user)

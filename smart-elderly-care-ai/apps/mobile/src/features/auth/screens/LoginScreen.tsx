@@ -15,12 +15,16 @@ import {
   Platform,
   ScrollView,
   SafeAreaView,
+  View,
+  Text,
+  TouchableOpacity,
 } from 'react-native';
 import { useAuthStore } from '../../../store/useAuthStore';
 import { useThemeStore } from '../../../store/useThemeStore';
-import { authApi, usersApi } from '../../../services/api';
+import api, { authApi, usersApi } from '../../../services/api';
 import { LoginPhotoCollage, LoginFormSection } from '../components/login';
 import { LegalTermsModal, LegalModalType } from '../components/LegalTermsModal';
+import * as Location from 'expo-location';
 
 const FONT_SCALE_LEVELS = [0.8, 1, 1.2, 1.5, 1.8] as const;
 
@@ -38,7 +42,7 @@ const normalizePhoneNumber = (rawPhone: string): string => {
 
 // Component màn hình đăng nhập; navigation dùng để chuyển sang các màn hình liên quan.
 export default function LoginScreen({ navigation, route }: any) {
-  const { login, setViewRole, setTokens, logout } = useAuthStore();
+  const { login, setViewRole, setTokens, logout, setIsRoleLoading } = useAuthStore();
   const { setFontSizeMode, setFontScale } = useThemeStore();
 
   const [phone, setPhone] = useState('');
@@ -46,6 +50,8 @@ export default function LoginScreen({ navigation, route }: any) {
   const [showPassword, setShowPassword] = useState(false);
   const [loading, setLoading] = useState(false);
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
+
+  
 
   // Đồng bộ trạng thái đã tích từ màn hình ngoài (Welcome) hoặc mặc định đã tích khi vào màn hình
   const [isAgreed, setIsAgreed] = useState<boolean>(route?.params?.isAgreed ?? true);
@@ -71,24 +77,59 @@ export default function LoginScreen({ navigation, route }: any) {
     }
 
     setLoading(true);
+    setIsRoleLoading(true);
     setErrorMessage(null);
-    // Mỗi phiên đăng nhập bắt đầu ở cỡ chữ hệ thống; người dùng có thể bật tùy chỉnh sau.
     setFontSizeMode('system');
     setFontScale(1);
     let tokensApplied = false;
+
+    // Lấy vị trí địa lý của thiết bị khi đăng nhập để lưu vào Quản lý đầu cuối
+    let detectedLocation: string | undefined;
     try {
-      // 1. Gửi request OAuth2 Password Grant lên Backend FastAPI
-      const { access_token, refresh_token } = (await authApi.login(normalizedAccount, password)).data;
+      const { status } = await Location.getForegroundPermissionsAsync();
+      let permStatus = status;
+      if (permStatus !== 'granted') {
+        const req = await Location.requestForegroundPermissionsAsync();
+        permStatus = req.status;
+      }
+      if (permStatus === 'granted') {
+        const pos = await Promise.race([
+          Location.getCurrentPositionAsync({ accuracy: Location.Accuracy.Balanced }),
+          new Promise<null>((r) => setTimeout(() => r(null), 2500)),
+        ]);
+        if (pos && pos.coords) {
+          const places = await Location.reverseGeocodeAsync({
+            latitude: pos.coords.latitude,
+            longitude: pos.coords.longitude,
+          });
+          if (places && places.length > 0) {
+            const p = places[0];
+            const parts = [
+              p.street || p.name,
+              p.district || p.subregion,
+              p.city || p.region,
+              p.country || 'Việt Nam',
+            ].filter(Boolean);
+            detectedLocation = parts.join(', ');
+          }
+        }
+      }
+    } catch (e) {
+      console.warn('[Login] Không thể lấy vị trí thiết bị:', e);
+    }
 
-      // 2. Thiết lập token tạm vào Zustand store
-      setTokens(access_token, refresh_token);
-      tokensApplied = true;
+    try {
+      // 1. Gửi request OAuth2 Password Grant lên Backend FastAPI (kèm vị trí đăng nhập)
+      const { access_token, refresh_token } = (await authApi.login(normalizedAccount, password, detectedLocation)).data;
 
-      // 3. Lấy thông tin tài khoản thực tế từ PostgreSQL Database (/api/v1/users/me)
+      // Gán header Authorization tạm thời cho instance axios để gọi usersApi.getMe()
+      // TUYỆT ĐỐI không gọi setTokens vào Zustand lúc này để tránh kích hoạt re-render giật sang màn hình Owner
+      api.defaults.headers.common['Authorization'] = `Bearer ${access_token}`;
+
+      // 2. Lấy thông tin tài khoản thực tế từ PostgreSQL Database (/api/v1/users/me)
       const userProfile = (await usersApi.getMe()).data;
       const savedScale = userProfile?.custom_font_scale;
       if (userProfile?.font_size_mode === 'custom') {
-        // Clear a previously saved custom mode so each new login starts with system sizing.
         try {
           const savedScaleIndex =
             Number.isInteger(savedScale) && savedScale >= 0 && savedScale < FONT_SCALE_LEVELS.length
@@ -100,7 +141,10 @@ export default function LoginScreen({ navigation, route }: any) {
         }
       }
 
-      // 4. Lưu thông tin đăng nhập vào Store
+      tokensApplied = true;
+
+      // 3. Cập nhật đồng thời (Atomic) cả Token, Thông tin người dùng và Vai trò vào Store
+      // Lúc này viewRole và accessToken cùng được cập nhật, AppNavigator render đúng thẳng vào Bác sĩ!
       login(
         access_token,
         refresh_token,
@@ -113,14 +157,19 @@ export default function LoginScreen({ navigation, route }: any) {
       );
       setViewRole(userProfile.role === 'doctor' ? 'DOCTOR' : 'CAREGIVER');
     } catch (error: any) {
+      delete api.defaults.headers.common['Authorization'];
       if (tokensApplied) logout();
       console.error('[Login] Error:', error);
-      const detail = error?.response?.data?.detail || error?.message || 'Thông tin đăng nhập hoặc mật khẩu không đúng.';
+      const isNetworkErr = error?.message?.includes('Network Error') || error?.code === 'ERR_NETWORK' || !error?.response;
+      const detail = isNetworkErr
+        ? 'Không thể kết nối đến máy chủ. Vui lòng kiểm tra kết nối mạng và thử lại.'
+        : (error?.response?.data?.detail || error?.message || 'Thông tin đăng nhập hoặc mật khẩu không đúng.');
 
       setErrorMessage(
         typeof detail === 'string' ? detail : 'Đăng nhập không thành công. Vui lòng kiểm tra lại.'
       );
     } finally {
+      setIsRoleLoading(false);
       setLoading(false);
     }
   };
@@ -165,8 +214,11 @@ export default function LoginScreen({ navigation, route }: any) {
             onNavigateRegister={() => navigation.navigate('Register', { isAgreed })}
             onOpenLegal={handleOpenLegal}
           />
-        </ScrollView>
+
+          </ScrollView>
       </KeyboardAvoidingView>
+
+      
 
       {/* Modal Điều khoản dịch vụ & Chính sách quyền riêng tư */}
       <LegalTermsModal
@@ -190,4 +242,4 @@ const styles = StyleSheet.create({
     backgroundColor: '#FFFFFF',
     paddingBottom: 24,
   },
-});
+  });

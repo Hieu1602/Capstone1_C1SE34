@@ -47,19 +47,26 @@ def _async_database_url(database_url: str):
     return url
 
 
-_db_url = _async_database_url(settings.DATABASE_URL)
+_parsed_db_url = _async_database_url(settings.DATABASE_URL)
+_is_supabase_pooler = (
+    bool(_parsed_db_url.host and "pooler.supabase.com" in _parsed_db_url.host)
+    or _parsed_db_url.port == 6543
+)
+
 _connect_args = {}
-if _db_url.host and ("supabase.com" in _db_url.host or "supabase.co" in _db_url.host or _db_url.port == 6543):
-    _connect_args["statement_cache_size"] = 0
+if _is_supabase_pooler:
+    _connect_args = {
+        "statement_cache_size": 0,
+        "prepared_statement_cache_size": 0,
+    }
 
 engine = create_async_engine(
-    _db_url,
+    _parsed_db_url,
     echo=settings.DEBUG,
-    pool_size=5,
-    max_overflow=10,
-    pool_recycle=300,
-    pool_pre_ping=True,
     connect_args=_connect_args,
+    pool_size=5,
+    max_overflow=5,
+    pool_pre_ping=True,
 )
 
 AsyncSessionFactory = async_sessionmaker(
@@ -120,6 +127,9 @@ async def init_db() -> None:
             await conn.execute(text("ALTER TABLE users DROP COLUMN IF EXISTS location_longitude;"))
             await conn.execute(text("ALTER TABLE users DROP COLUMN IF EXISTS location_latitude;"))
             await conn.execute(text("ALTER TABLE users DROP COLUMN IF EXISTS location_enabled;"))
+            await conn.execute(text("ALTER TABLE incidents DROP CONSTRAINT IF EXISTS incidents_device_id_fkey, ADD CONSTRAINT incidents_device_id_fkey FOREIGN KEY (device_id) REFERENCES devices(id) ON DELETE CASCADE;"))
+            await conn.execute(text("ALTER TABLE vital_signs DROP CONSTRAINT IF EXISTS vital_signs_device_id_fkey, ADD CONSTRAINT vital_signs_device_id_fkey FOREIGN KEY (device_id) REFERENCES devices(id) ON DELETE CASCADE;"))
+            await conn.execute(text("ALTER TABLE camera_recordings DROP CONSTRAINT IF EXISTS camera_recordings_device_id_fkey, ADD CONSTRAINT camera_recordings_device_id_fkey FOREIGN KEY (device_id) REFERENCES devices(id) ON DELETE CASCADE;"))
 
         # 2. Tạo các bảng hỗ trợ và quản trị
         async with engine.begin() as conn:

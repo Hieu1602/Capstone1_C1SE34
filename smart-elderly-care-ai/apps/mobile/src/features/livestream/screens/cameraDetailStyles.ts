@@ -4,6 +4,12 @@
 import { StyleSheet } from "react-native";
 export const cameraDetailStyles = StyleSheet.create({
     screen: { flex: 1 },
+    archiveHeader: { flexDirection: "row", alignItems: "center", paddingHorizontal: 8 },
+    archiveTab: { flex: 1, alignItems: "center", paddingVertical: 18, borderBottomWidth: 4, borderBottomColor: "transparent" },
+    archiveTabText: { fontSize: 19, fontWeight: "600" },
+    archiveContent: { flexGrow: 1, paddingBottom: 24 },
+    downloadContent: { padding: 16, gap: 12 },
+    downloadEmpty: { paddingVertical: 80, alignItems: "center", gap: 16 },
     controls: { flex: 1, minHeight: 0 },
     dashboard: { padding: 16, gap: 14, paddingBottom: 80 },
     feedback: { textAlign: "center", fontSize: 13, padding: 8 },

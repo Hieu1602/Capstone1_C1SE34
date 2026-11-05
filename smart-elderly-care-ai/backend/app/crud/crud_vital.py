@@ -55,7 +55,34 @@ class CRUDVital:
                 )
             ).limit(1)
         )
-        return result.scalar_one_or_none()
+        found_id = result.scalar_one_or_none()
+        if found_id:
+            return found_id
+
+        # Tự động tạo bản ghi Device để đáp ứng ràng buộc khóa ngoại (Foreign Key)
+        try:
+            from app.models.house import House
+            house_res = await db.execute(select(House.id, House.owner_id).limit(1))
+            house_row = house_res.first()
+            is_band = any(k in clean_str.lower() for k in ["band", "watch", "ble", "miband", "mi_band"])
+            new_dev = Device(
+                device_id=clean_str,
+                name="Xiaomi Mi Band" if "mi" in clean_str.lower() or "band" in clean_str.lower() else f"Thiết bị {clean_str}",
+                device_type=DeviceType.SMARTBAND if is_band else DeviceType.CAMERA,
+                sub_title="Kết nối qua App Bridge (Notify for Mi Band / Webhook)",
+                status="ONLINE",
+                is_online=True,
+                house_id=house_row[0] if house_row else None,
+                owner_id=house_row[1] if house_row else None,
+            )
+            db.add(new_dev)
+            await db.flush()
+            await db.refresh(new_dev)
+            logger.info("[CRUDVital] Tự động khởi tạo Device '%s' (UUID: %s)", clean_str, new_dev.id)
+            return new_dev.id
+        except Exception as err:
+            logger.warning("[CRUDVital] Không thể tự động tạo Device '%s': %s", clean_str, err)
+            return None
 
     async def get_latest(
         self, db: AsyncSession, device_id: Union[str, UUID]
@@ -219,32 +246,66 @@ class CRUDVital:
         Lấy dữ liệu sinh hiệu hiện tại chuẩn hóa cho màn hình Dashboard của Người dùng.
         Tự động tìm kiếm thiết bị Vòng đeo tay BLE trong nhà của người dùng.
         """
-        # 1. Tìm thiết bị Smartband trong các nhà của user
+        from app.models.house import House, HouseMember
+
+        # 1. Tìm các căn nhà liên kết với user
+        house_res = await db.execute(
+            select(House.id).where(House.owner_id == user_id)
+        )
+        house_ids = [r[0] for r in house_res.all()]
+        member_res = await db.execute(
+            select(HouseMember.house_id).where(HouseMember.user_id == user_id)
+        )
+        for r in member_res.all():
+            if r[0] not in house_ids:
+                house_ids.append(r[0])
+
+        smartband_cond = [Device.device_type == DeviceType.SMARTBAND]
+        if house_ids:
+            smartband_cond.append(or_(Device.owner_id == user_id, Device.house_id.in_(house_ids)))
+        else:
+            smartband_cond.append(Device.owner_id == user_id)
+
         result = await db.execute(
             select(Device)
-            .where(
-                Device.owner_id == user_id,
-                Device.device_type == DeviceType.SMARTBAND,
-            )
+            .where(*smartband_cond)
             .order_by(Device.created_at.desc())
             .limit(1)
         )
         smartband_device = result.scalar_one_or_none()
 
-        # Nếu không có thiết bị Smartband, tìm thiết bị bất kỳ để lấy các chỉ số đo
+        # Fallback tìm smartband bất kỳ trong hệ thống
+        if not smartband_device:
+            res_any_band = await db.execute(
+                select(Device)
+                .where(Device.device_type == DeviceType.SMARTBAND)
+                .order_by(Device.created_at.desc())
+                .limit(1)
+            )
+            smartband_device = res_any_band.scalar_one_or_none()
+
+        # Nếu không có smartband, tìm thiết bị bất kỳ
         device = smartband_device
         if not device:
             res_any = await db.execute(
-                select(Device)
-                .where(Device.owner_id == user_id)
-                .order_by(Device.created_at.desc())
-                .limit(1)
+                select(Device).order_by(Device.created_at.desc()).limit(1)
             )
             device = res_any.scalar_one_or_none()
 
         now_ms = int(datetime.now(timezone.utc).timestamp() * 1000)
 
-        if not device:
+        # 2. Lấy chỉ số sinh hiệu mới nhất của thiết bị
+        latest_vital = None
+        if device:
+            latest_vital = await self.get_latest(db, device.id)
+        if not latest_vital:
+            # Fallback lấy bản ghi VitalSign mới nhất trong cơ sở dữ liệu
+            res_latest_any = await db.execute(
+                select(VitalSign).order_by(VitalSign.time.desc()).limit(1)
+            )
+            latest_vital = res_latest_any.scalar_one_or_none()
+
+        if not device and not latest_vital:
             return {
                 "heart_rate": None,
                 "spo2": None,

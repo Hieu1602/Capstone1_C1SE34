@@ -10,7 +10,9 @@ interface DeviceGroupCardProps {
   groupName: string;
   devicesInGroup: IoTDeviceItem[];
   onDevicePress: (device: IoTDeviceItem) => void;
+  onDeviceDelete?: (device: IoTDeviceItem) => void;
   onOpenGroupActionMenu: (groupName: string) => void;
+  onAddDeviceToGroup?: (groupName: string) => void;
   isDarkMode?: boolean;
   colors?: any;
 }
@@ -19,7 +21,9 @@ export const DeviceGroupCard: React.FC<DeviceGroupCardProps> = ({
   groupName,
   devicesInGroup,
   onDevicePress,
+  onDeviceDelete,
   onOpenGroupActionMenu,
+  onAddDeviceToGroup,
   isDarkMode = false,
   colors = {},
 }) => {
@@ -82,27 +86,56 @@ export const DeviceGroupCard: React.FC<DeviceGroupCardProps> = ({
 
       {/* Danh sách thiết bị trong nhóm */}
       {devicesInGroup.length > 0 ? (
-        <View style={styles.groupDeviceList}>
-          {devicesInGroup.map((dev, idx) => (
-            <DeviceCardItem
-              key={dev.id}
-              device={dev}
-              variant="inGroup"
-              hasDivider={idx > 0}
-              onPress={onDevicePress}
-              isDarkMode={isDarkMode}
-              colors={colors}
-            />
-          ))}
-        </View>
+        <>
+          <View style={styles.groupDeviceList}>
+            {devicesInGroup.map((dev, idx) => (
+              <DeviceCardItem
+                key={dev.id}
+                device={dev}
+                variant="inGroup"
+                hasDivider={idx > 0}
+                onPress={onDevicePress}
+                onDelete={onDeviceDelete}
+                isDarkMode={isDarkMode}
+                colors={colors}
+              />
+            ))}
+          </View>
+          {onAddDeviceToGroup && (
+            <View style={[styles.groupCardFooter, isDarkMode && { borderTopColor: colors.border }]}>
+              <TouchableOpacity
+                style={styles.groupCardFooterAddBtn}
+                onPress={() => onAddDeviceToGroup(groupName)}
+                activeOpacity={0.7}
+              >
+                <Ionicons name="add-circle-outline" size={15} color="#7C3AED" />
+                <LocalizedText style={styles.groupCardFooterAddText}>
+                  + Gán thêm thiết bị vào nhóm
+                </LocalizedText>
+              </TouchableOpacity>
+            </View>
+          )}
+        </>
       ) : (
         <View style={styles.emptyGroupContent}>
-          <Ionicons name="cube-outline" size={24} color={isDarkMode ? '#64748B' : '#94A3B8'} />
+          <Ionicons name="cube-outline" size={28} color={isDarkMode ? '#64748B' : '#94A3B8'} />
           <LocalizedText
             style={[styles.emptyGroupContentText, isDarkMode && { color: colors.textSecondary }]}
           >
             Chưa có thiết bị nào trong nhóm "{groupName}"
           </LocalizedText>
+          {onAddDeviceToGroup && (
+            <TouchableOpacity
+              style={styles.addDeviceToGroupBtn}
+              onPress={() => onAddDeviceToGroup(groupName)}
+              activeOpacity={0.8}
+            >
+              <Ionicons name="add-circle" size={16} color="#7C3AED" />
+              <LocalizedText style={styles.addDeviceToGroupBtnText}>
+                Thêm thiết bị vào nhóm
+              </LocalizedText>
+            </TouchableOpacity>
+          )}
         </View>
       )}
     </View>
@@ -184,6 +217,41 @@ const styles = StyleSheet.create({
     fontSize: 12,
     color: '#94A3B8',
     marginTop: 6,
+  },
+  addDeviceToGroupBtn: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 6,
+    backgroundColor: '#F5F3FF',
+    borderWidth: 1,
+    borderColor: '#DDD6FE',
+    paddingHorizontal: 14,
+    paddingVertical: 8,
+    borderRadius: 10,
+    marginTop: 12,
+  },
+  addDeviceToGroupBtnText: {
+    fontSize: 12.5,
+    fontWeight: '700',
+    color: '#7C3AED',
+  },
+  groupCardFooter: {
+    borderTopWidth: 1,
+    borderTopColor: '#F3E8FF',
+    paddingVertical: 8,
+    paddingHorizontal: 14,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  groupCardFooterAddBtn: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 4,
+  },
+  groupCardFooterAddText: {
+    fontSize: 11.5,
+    fontWeight: '700',
+    color: '#7C3AED',
   },
 });
 

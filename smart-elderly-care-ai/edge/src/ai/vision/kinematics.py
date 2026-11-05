@@ -260,10 +260,11 @@ class KinematicFallEngine:
                 drop_velocity = (dy / body_h) / dt
                 break
 
-        # 2. Đánh giá tư thế thấp (Low posture)
+        # 2. Đánh giá tư thế thấp / nằm trên mặt phẳng (Low posture)
+        # Bắt buộc người phải nằm ngang (aspect_ratio) VÀ trục cột sống nghiêng (spine_angle)
         is_low_posture = (
-            aspect_ratio >= self.aspect_ratio_threshold
-            or curr_snap.spine_angle_deg >= self.fallen_angle_threshold
+            (aspect_ratio >= self.aspect_ratio_threshold and curr_snap.spine_angle_deg >= self.fallen_angle_threshold)
+            or (aspect_ratio >= 1.45 and curr_snap.spine_angle_deg >= 45.0)
         )
 
         # 3. Tính năng lượng chuyển động (Motion Energy) để phát hiện bất động
@@ -341,17 +342,25 @@ class KinematicFallEngine:
         is_fall_event = False
         is_stroke_alert = False
 
-        if current_state in (PostureState.STANDING, PostureState.SITTING, PostureState.DRINKING):
+        if current_state in (PostureState.STANDING, PostureState.SITTING, PostureState.DRINKING, PostureState.LYING):
             # A. Kiểm tra nguy cơ té ngã (kết hợp Động học và Machine Learning)
             is_ml_fall = ml_fall_prob is not None and ml_fall_prob >= 0.65
             if (drop_velocity >= self.drop_velocity_threshold and is_low_posture) or (is_ml_fall and is_low_posture):
                 new_state = PostureState.FALLING
-            elif is_low_posture and aspect_ratio > 1.4 and drop_velocity > 0.6:
+            elif is_low_posture and aspect_ratio > 1.4 and drop_velocity > 0.45:
                 # Trượt ngã có gia tốc rơi đáng kể
                 new_state = PostureState.FALLING
-            elif is_low_posture and drop_velocity < 0.6 and not is_ml_fall:
+            elif current_state != PostureState.LYING and is_low_posture and drop_velocity < 0.35 and not is_ml_fall:
                 # Nằm xuống giường/sofa từ từ nghỉ ngơi hoặc ngủ (không phải ngã)
                 new_state = PostureState.LYING
+            elif current_state == PostureState.LYING:
+                # Đang nằm bình thường: kiểm tra khi nào ngồi dậy hoặc đứng dậy
+                if not is_low_posture and curr_snap.spine_angle_deg < 45.0:
+                    knee_angle = self.calculate_knee_angle(curr_snap.keypoints)
+                    if knee_angle < 135.0 or aspect_ratio > 0.55:
+                        new_state = PostureState.SITTING
+                    else:
+                        new_state = PostureState.STANDING
             else:
                 # B. Phân loại sinh hoạt thường nhật (ADL)
                 if self.is_hand_to_mouth_gesture(curr_snap.keypoints):
@@ -362,15 +371,6 @@ class KinematicFallEngine:
                         new_state = PostureState.SITTING
                     else:
                         new_state = PostureState.STANDING
-
-        elif current_state == PostureState.LYING:
-            # Người nằm nghỉ / ngủ: kiểm tra xem khi nào ngồi dậy hoặc đứng dậy
-            if not is_low_posture and curr_snap.spine_angle_deg < 45.0:
-                knee_angle = self.calculate_knee_angle(curr_snap.keypoints)
-                if knee_angle < 135.0 or aspect_ratio > 0.55:
-                    new_state = PostureState.SITTING
-                else:
-                    new_state = PostureState.STANDING
 
         elif current_state == PostureState.FALLING:
             # Nếu duy trì tư thế thấp trên sàn đủ lâu -> xác nhận đã ngã

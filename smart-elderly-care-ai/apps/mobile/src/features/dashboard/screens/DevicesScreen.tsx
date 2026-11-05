@@ -5,17 +5,20 @@
  * hỗ trợ phân vùng phòng, ghép nối nhanh qua QR Code và điều phối nhóm giám sát an toàn.
  */
 
-import React, { useState, useEffect } from 'react';
-import { View, StyleSheet, TouchableOpacity, ScrollView } from 'react-native';
+import React, { useState, useEffect, useCallback } from 'react';
+import { View, StyleSheet, TouchableOpacity, ScrollView, Text, RefreshControl } from 'react-native';
+import { useFocusEffect } from '@react-navigation/native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
 import { Colors, Shadows } from '../../../theme/colors';
 import { useVitalStore, IoTDeviceItem } from '../../../store/useVitalStore';
 import { useTheme } from '../../../store/useThemeStore';
+import { useAuthStore } from '../../../store/useAuthStore';
 import { LocalizedAlert, LocalizedText } from '../../../i18n/LocalizedComponents';
 import { DeviceQrScannerModal } from '../components/devices/DeviceQrScannerModal';
 import { GroupActionModal } from '../components/devices/GroupActionModal';
 import { DeleteGroupConfirmModal } from '../components/devices/DeleteGroupConfirmModal';
+import { DeleteDeviceConfirmModal } from '../components/devices/DeleteDeviceConfirmModal';
 import { EditGroupModal } from '../components/devices/EditGroupModal';
 import { DeviceAddMenuModal } from '../components/devices/DeviceAddMenuModal';
 import { DeviceCardItem } from '../components/devices/DeviceCardItem';
@@ -23,9 +26,12 @@ import { DeviceGroupCard } from '../components/devices/DeviceGroupCard';
 
 export default function DevicesScreen({ navigation }: any) {
   const { isDarkMode, colors } = useTheme();
+  const { userRole, role, userPhone, phone_number, permissions } = useAuthStore();
   const {
+    house,
     iotDevices,
     addIoTDevice,
+    removeIoTDevice,
     deviceGroups,
     updateDeviceGroup,
     removeDeviceGroup,
@@ -33,10 +39,28 @@ export default function DevicesScreen({ navigation }: any) {
   } = useVitalStore();
   const groups = deviceGroups || [];
 
-  // Đồng bộ danh sách thiết bị và nhóm từ Backend khi mở màn hình
-  useEffect(() => {
-    syncAllWithBackend?.();
-  }, []);
+  const hasLinkedHouse = Boolean(house?.id && house?.hasHouse !== false && house?.name && house.name.trim() !== '');
+  const isOwnerOrAdmin = hasLinkedHouse && (userRole === 'admin' || role === 'admin' || permissions?.is_owner === true || permissions?.role_in_house === 'OWNER');
+  const isMember = !isOwnerOrAdmin && (userRole === 'member' || !userRole || userRole === 'user' || userRole === 'caregiver');
+  const isUserEmptyMember = isMember && (!hasLinkedHouse || (iotDevices.length === 0 && !permissions?.can_manage_devices));
+
+  const [isRefreshing, setIsRefreshing] = useState(false);
+
+  // Đồng bộ danh sách thiết bị và nhóm từ Backend mỗi khi màn hình được focus
+  useFocusEffect(
+    useCallback(() => {
+      syncAllWithBackend?.();
+    }, [])
+  );
+
+  const handleRefresh = async () => {
+    setIsRefreshing(true);
+    try {
+      await syncAllWithBackend?.();
+    } finally {
+      setIsRefreshing(false);
+    }
+  };
 
   // State menu thả xuống khi bấm dấu cộng (+)
   const [showAddMenu, setShowAddMenu] = useState(false);
@@ -47,6 +71,9 @@ export default function DevicesScreen({ navigation }: any) {
   // State Action Menu cho Nhóm (Nút 3 chấm)
   const [selectedGroupForAction, setSelectedGroupForAction] = useState<string | null>(null);
   const [showGroupActionModal, setShowGroupActionModal] = useState<boolean>(false);
+
+  // State Modal Xác nhận Xóa Thiết Bị
+  const [deviceToDelete, setDeviceToDelete] = useState<IoTDeviceItem | null>(null);
 
   // State Modal Xác nhận Xóa Nhóm
   const [showDeleteConfirmModal, setShowDeleteConfirmModal] = useState<boolean>(false);
@@ -125,6 +152,18 @@ export default function DevicesScreen({ navigation }: any) {
     return true;
   });
 
+  // Xóa thiết bị khỏi hệ thống
+  const handleDeleteDevice = (device: IoTDeviceItem) => {
+    setDeviceToDelete(device);
+  };
+
+  const handleConfirmDeleteDevice = () => {
+    if (!deviceToDelete) return;
+    const target = deviceToDelete;
+    removeIoTDevice(target.id);
+    setDeviceToDelete(null);
+  };
+
   // Xử lý điều hướng khi nhấn vào thiết bị
   const handleDevicePress = (dev: IoTDeviceItem) => {
     if (checkIsCamera(dev)) {
@@ -132,6 +171,7 @@ export default function DevicesScreen({ navigation }: any) {
         cameraId: dev.id,
         cameraName: dev.name,
         room: dev.location || dev.sub,
+        streamUrl: dev.streamUrl,
       });
       return;
     }
@@ -203,7 +243,22 @@ export default function DevicesScreen({ navigation }: any) {
     setEditNewGroupName(target);
 
     const devIdsInGroup = iotDevices
-      .filter((d) => d.location?.toLowerCase() === target.toLowerCase())
+      .filter((d) => d.location?.trim().toLowerCase() === target.trim().toLowerCase())
+      .map((d) => d.id);
+    setEditSelectedDeviceIds(devIdsInGroup);
+    setEditDeviceFilter('Tất cả');
+    setEditAttempted(false);
+    setShowEditGroupModal(true);
+  };
+
+  // Mở trực tiếp modal để gán thiết bị vào nhóm
+  const handleAddDeviceToGroup = (targetGroup: string) => {
+    setSelectedGroupForAction(targetGroup);
+    setEditOldGroupName(targetGroup);
+    setEditNewGroupName(targetGroup);
+
+    const devIdsInGroup = iotDevices
+      .filter((d) => d.location?.trim().toLowerCase() === targetGroup.trim().toLowerCase())
       .map((d) => d.id);
     setEditSelectedDeviceIds(devIdsInGroup);
     setEditDeviceFilter('Tất cả');
@@ -231,6 +286,16 @@ export default function DevicesScreen({ navigation }: any) {
   };
 
   // Lưu chỉnh sửa nhóm
+  const executeSaveEditGroup = () => {
+    updateDeviceGroup(editOldGroupName, trimmedEditName, editSelectedDeviceIds);
+    if (selectedGroupFilter === editOldGroupName) {
+      setSelectedGroupFilter(trimmedEditName);
+    }
+    setShowEditGroupModal(false);
+    setSelectedGroupForAction(null);
+    LocalizedAlert.alert('Thành công', `Đã cập nhật nhóm "${trimmedEditName}" thành công.`);
+  };
+
   const handleSaveEditGroup = () => {
     setEditAttempted(true);
     if (isEditNameEmpty) {
@@ -249,13 +314,39 @@ export default function DevicesScreen({ navigation }: any) {
       return;
     }
 
-    updateDeviceGroup(editOldGroupName, trimmedEditName, editSelectedDeviceIds);
-    if (selectedGroupFilter === editOldGroupName) {
-      setSelectedGroupFilter(trimmedEditName);
+    LocalizedAlert.alert(
+      'Xác nhận cập nhật',
+      `Bạn có chắc chắn muốn lưu các thay đổi cho nhóm "${trimmedEditName}" không?`,
+      [
+        { text: 'Hủy', style: 'cancel' },
+        { text: 'Lưu thay đổi', onPress: executeSaveEditGroup },
+      ]
+    );
+  };
+
+  const handleCloseEditGroup = () => {
+    const isDirty = trimmedEditName !== editOldGroupName;
+    if (isDirty) {
+      LocalizedAlert.alert(
+        'Thay đổi chưa lưu',
+        'Tên hoặc danh sách thiết bị đã được chỉnh sửa. Bạn có muốn lưu trước khi đóng không?',
+        [
+          { text: 'Tiếp tục sửa', style: 'cancel' },
+          {
+            text: 'Không lưu',
+            style: 'destructive',
+            onPress: () => {
+              setShowEditGroupModal(false);
+              setSelectedGroupForAction(null);
+            },
+          },
+          { text: 'Lưu thay đổi', onPress: executeSaveEditGroup },
+        ]
+      );
+    } else {
+      setShowEditGroupModal(false);
+      setSelectedGroupForAction(null);
     }
-    setShowEditGroupModal(false);
-    setSelectedGroupForAction(null);
-    LocalizedAlert.alert('Thành công', `Đã cập nhật nhóm "${trimmedEditName}" thành công.`);
   };
 
   return (
@@ -342,14 +433,46 @@ export default function DevicesScreen({ navigation }: any) {
       <ScrollView
         contentContainerStyle={styles.scrollList}
         showsVerticalScrollIndicator={false}
+        refreshControl={
+          <RefreshControl
+            refreshing={isRefreshing}
+            onRefresh={handleRefresh}
+            colors={['#0284C7']}
+            tintColor={isDarkMode ? '#38BDF8' : '#0284C7'}
+          />
+        }
       >
         <LocalizedText style={[styles.sectionSubtitle, isDarkMode && { color: colors.textSecondary }]}>
           {activeTab === 'Nhóm'
             ? 'Danh sách các khu vực và phòng được thiết lập'
-            : `Danh sách các thiết bị ${activeTab.toLowerCase()} đã ghép nối`}
+            : activeTab === 'Camera'
+            ? 'Danh sách các thiết bị camera đã ghép nối'
+            : activeTab === 'Đồng hồ'
+            ? 'Danh sách các thiết bị watch đã ghép nối'
+            : 'Danh sách các thiết bị tất cả đã ghép nối'}
         </LocalizedText>
 
-        {activeTab === 'Nhóm' ? (
+        {isUserEmptyMember ? (
+          <View style={styles.emptyMemberContainer}>
+            <View style={[styles.emptyIconCircle, isDarkMode && { backgroundColor: 'rgba(255,255,255,0.06)' }]}>
+              <Ionicons name="hardware-chip-outline" size={54} color={isDarkMode ? '#64748B' : '#94A3B8'} />
+            </View>
+            <Text style={[styles.emptyMemberTitle, { color: colors.textPrimary }]}>
+              Chưa có thiết bị theo dõi
+            </Text>
+            <Text style={[styles.emptyMemberSubtitle, { color: colors.textSecondary }]}>
+              Tài khoản thành viên mới chưa được liên kết với bất kỳ căn nhà hay thiết bị theo dõi nào. Sau khi được Chủ hộ thêm số điện thoại ({userPhone || phone_number || 'của bạn'}) vào nhà, các thiết bị giám sát (Camera AI, Vòng đeo tay...) sẽ tự động xuất hiện tại đây.
+            </Text>
+            <TouchableOpacity
+              style={styles.refreshMemberBtn}
+              onPress={() => syncAllWithBackend?.()}
+              activeOpacity={0.8}
+            >
+              <Ionicons name="refresh-outline" size={18} color="#FFF" style={{ marginRight: 6 }} />
+              <Text style={styles.refreshMemberBtnText}>Kiểm tra & Làm mới</Text>
+            </TouchableOpacity>
+          </View>
+        ) : activeTab === 'Nhóm' ? (
           <View style={styles.groupViewSection}>
             <View style={[styles.groupHeaderBar, isDarkMode && { backgroundColor: colors.card, borderColor: colors.border }]}>
               <View style={styles.groupHeaderLeft}>
@@ -438,7 +561,7 @@ export default function DevicesScreen({ navigation }: any) {
               : groups.filter((g) => g === selectedGroupFilter)
             ).map((groupName) => {
               const devicesInGroup = iotDevices.filter(
-                (dev) => dev.location?.toLowerCase() === groupName.toLowerCase()
+                (dev) => dev.location?.trim().toLowerCase() === groupName.trim().toLowerCase()
               );
 
               return (
@@ -447,7 +570,9 @@ export default function DevicesScreen({ navigation }: any) {
                   groupName={groupName}
                   devicesInGroup={devicesInGroup}
                   onDevicePress={handleDevicePress}
+                  onDeviceDelete={isOwnerOrAdmin ? handleDeleteDevice : undefined}
                   onOpenGroupActionMenu={handleOpenGroupActionMenu}
+                  onAddDeviceToGroup={handleAddDeviceToGroup}
                   isDarkMode={isDarkMode}
                   colors={colors}
                 />
@@ -461,6 +586,7 @@ export default function DevicesScreen({ navigation }: any) {
                 key={dev.id}
                 device={dev}
                 onPress={handleDevicePress}
+                onDelete={isOwnerOrAdmin ? handleDeleteDevice : undefined}
                 isDarkMode={isDarkMode}
                 colors={colors}
               />
@@ -514,7 +640,7 @@ export default function DevicesScreen({ navigation }: any) {
         groupName={selectedGroupForAction}
         onClose={() => setShowGroupActionModal(false)}
         onEdit={handleStartEditGroup}
-        onDelete={handlePromptDeleteGroup}
+        onDelete={isOwnerOrAdmin ? handlePromptDeleteGroup : undefined}
         isDarkMode={isDarkMode}
         colors={colors}
       />
@@ -525,6 +651,16 @@ export default function DevicesScreen({ navigation }: any) {
         groupName={selectedGroupForAction}
         onClose={() => setShowDeleteConfirmModal(false)}
         onConfirmDelete={handleConfirmDeleteGroup}
+        isDarkMode={isDarkMode}
+        colors={colors}
+      />
+
+      {/* Modal 4B: Xác nhận Xóa Thiết Bị */}
+      <DeleteDeviceConfirmModal
+        visible={!!deviceToDelete}
+        device={deviceToDelete}
+        onClose={() => setDeviceToDelete(null)}
+        onConfirmDelete={handleConfirmDeleteDevice}
         isDarkMode={isDarkMode}
         colors={colors}
       />
@@ -547,7 +683,7 @@ export default function DevicesScreen({ navigation }: any) {
         isAllEditTabSelected={isAllEditTabSelected}
         onToggleSelectAll={handleToggleEditSelectAll}
         onToggleDevice={toggleEditDeviceSelection}
-        onClose={() => setShowEditGroupModal(false)}
+        onClose={handleCloseEditGroup}
         onSave={handleSaveEditGroup}
         isEditFormValid={isEditFormValid}
         isDarkMode={isDarkMode}
@@ -741,5 +877,46 @@ const styles = StyleSheet.create({
     marginTop: 4,
     paddingHorizontal: 30,
     lineHeight: 18,
+  },
+  emptyMemberContainer: {
+    alignItems: 'center',
+    justifyContent: 'center',
+    paddingHorizontal: 32,
+    paddingVertical: 60,
+  },
+  emptyIconCircle: {
+    width: 96,
+    height: 96,
+    borderRadius: 48,
+    backgroundColor: '#F1F5F9',
+    alignItems: 'center',
+    justifyContent: 'center',
+    marginBottom: 20,
+  },
+  emptyMemberTitle: {
+    fontSize: 18,
+    fontWeight: '700',
+    marginBottom: 10,
+    textAlign: 'center',
+  },
+  emptyMemberSubtitle: {
+    fontSize: 13,
+    lineHeight: 20,
+    textAlign: 'center',
+    marginBottom: 24,
+  },
+  refreshMemberBtn: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: '#FF6B00',
+    paddingHorizontal: 22,
+    paddingVertical: 12,
+    borderRadius: 24,
+    ...Shadows.sm,
+  },
+  refreshMemberBtnText: {
+    color: '#FFFFFF',
+    fontSize: 14,
+    fontWeight: '700',
   },
 });

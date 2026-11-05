@@ -207,3 +207,4 @@ class AppleWatchService {
 }
 
 export const appleWatchService = new AppleWatchService();
+

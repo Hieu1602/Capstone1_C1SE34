@@ -1,0 +1,8 @@
+.env
+.env.*
+venv/
+.venv/
+**/__pycache__/
+.pytest_cache/
+static/
+config/*service-account*.json

@@ -21,6 +21,7 @@ export interface MedicalConditionItem {
 }
 
 export interface PatientMedicalRecord {
+  id?: string | number;
   patient_id: number;
   name: string;
   birth_year: string;
@@ -83,6 +84,7 @@ interface PatientState {
   fetchPatientRecord: (patientId?: number | string, target_date?: string) => Promise<PatientMedicalRecord | null>;
   updatePatientRecord: (patientId: number | string, data: Partial<PatientMedicalRecord>) => Promise<PatientMedicalRecord | null>;
   enrollPatientFace: (patientId: number, formData: FormData) => Promise<any>;
+  resetPatientStore: () => void;
 }
 
 export const usePatientStore = create<PatientState>()((set, get) => ({
@@ -245,4 +247,19 @@ export const usePatientStore = create<PatientState>()((set, get) => ({
     }
     return null;
   },
+
+  resetPatientStore: () =>
+    set({
+      patientRecord: null,
+      todayReminders: {
+        date: new Date().toISOString().split('T')[0],
+        total_medications: 0,
+        completed_medications: 0,
+        hub_voice_reminder_enabled: true,
+        medications: [],
+        meals: [],
+      },
+      isLoadingReminders: false,
+      isLoadingPatient: false,
+    }),
 }));

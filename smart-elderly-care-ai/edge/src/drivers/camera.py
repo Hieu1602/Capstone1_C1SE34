@@ -19,10 +19,15 @@ class CameraDriver:
         Returns:
             Không có. Chưa mở camera hoặc tạo thread.
         """
-        self.source = config.get("source", 0)
-        if os.getenv("TAPO_HOST"):
+        self.source = config.get("source")
+        if not self.source and os.getenv("CAMERA_SOURCE"):
+            src = os.getenv("CAMERA_SOURCE", "").strip()
+            self.source = int(src) if src.isdigit() else src
+        elif not self.source and os.getenv("TAPO_HOST"):
             from .tapo import rtsp_url
             self.source = rtsp_url()
+        if self.source is None:
+            self.source = 0
         self.fps = max(1, int(config.get("fps", 15)))
         self.width = config.get("resolution", {}).get("width", 1280)
         self.height = config.get("resolution", {}).get("height", 720)
@@ -30,12 +35,14 @@ class CameraDriver:
         self._cap: Any = None
         # Frame mới nhất và mốc monotonic để loại ảnh cũ khi mất kết nối.
         self._frame: Optional[np.ndarray] = None
+        self._frame_id: int = 0
         self._updated = 0.0
         # Đồng bộ frame giữa worker và luồng phục vụ HTTP/AI.
         self._lock = threading.Lock()
         # Event báo dừng và ngắt thời gian chờ kết nối lại.
         self._stop = threading.Event()
         self._thread: Optional[threading.Thread] = None
+        self.archive = None
 
     def start(self) -> None:
         """Khởi động một thread đọc camera nếu chưa chạy.
@@ -46,6 +53,10 @@ class CameraDriver:
         if self._thread and self._thread.is_alive():
             return
         self._stop.clear()
+        if os.getenv("VIDEO_ARCHIVE_ENABLED", "false").lower() == "true":
+            from src.services.video_archive import VideoArchive
+            self.archive = VideoArchive(self.fps)
+            self.archive.start()
         self._thread = threading.Thread(target=self._capture_loop, daemon=True)
         self._thread.start()
 
@@ -58,6 +69,8 @@ class CameraDriver:
         self._stop.set()
         if self._thread:
             self._thread.join(timeout=12)
+        if self.archive:
+            self.archive.close()
         # Chỉ thread đọc sở hữu VideoCapture; không release giữa lúc read().
 
     def get_latest_frame(self) -> Optional[np.ndarray]:
@@ -70,6 +83,17 @@ class CameraDriver:
             if self._frame is None or time.monotonic() - self._updated > 5:
                 return None
             return self._frame.copy()
+
+    def get_latest_frame_with_id(self) -> tuple[Optional[np.ndarray], int]:
+        """Lấy bản sao ảnh gần nhất cùng ID tuần tự để phát hiện frame mới.
+
+        Returns:
+            Tuple (Ảnh NumPy hoặc None, frame_id).
+        """
+        with self._lock:
+            if self._frame is None or time.monotonic() - self._updated > 5:
+                return None, 0
+            return self._frame.copy(), self._frame_id
 
     def is_connected(self) -> bool:
         """Đánh giá kết nối theo tuổi của frame gần nhất.
@@ -94,10 +118,23 @@ class CameraDriver:
             while not self._stop.is_set():
                 try:
                     if is_rtsp:
-                        self._cap = cv2.VideoCapture(self.source, cv2.CAP_FFMPEG, [
-                            cv2.CAP_PROP_OPEN_TIMEOUT_MSEC, 5000,
-                            cv2.CAP_PROP_READ_TIMEOUT_MSEC, 5000,
-                        ])
+                        sources = [self.source]
+                        if "/stream1" in self.source:
+                            sources.append(self.source.replace("/stream1", "/stream2"))
+                        elif "/stream2" in self.source:
+                            sources.append(self.source.replace("/stream2", "/stream1"))
+                        cap = None
+                        for src in sources:
+                            c = cv2.VideoCapture(src, cv2.CAP_FFMPEG, [
+                                cv2.CAP_PROP_OPEN_TIMEOUT_MSEC, 3000,
+                                cv2.CAP_PROP_READ_TIMEOUT_MSEC, 3000,
+                            ])
+                            if c.isOpened():
+                                cap = c
+                                self.source = src
+                                break
+                            c.release()
+                        self._cap = cap
                     else:
                         self._cap = cv2.VideoCapture(self.source)
                         self._cap.set(cv2.CAP_PROP_FRAME_WIDTH, self.width)
@@ -109,7 +146,10 @@ class CameraDriver:
                             break
                         with self._lock:
                             self._frame = frame
+                            self._frame_id += 1
                             self._updated = time.monotonic()
+                        if self.archive:
+                            self.archive.submit(frame)
                         # Đọc RTSP liên tục để không tích lũy độ trễ trong buffer.
                         if not is_rtsp:
                             self._stop.wait(1 / self.fps)

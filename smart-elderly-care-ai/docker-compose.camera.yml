@@ -1,31 +1,44 @@
-# Chạy độc lập, không cần database/MQTT/AI models.
 services:
   tapo-audio:
     image: alexxit/go2rtc:1.9.14
     init: true
     restart: unless-stopped
-    env_file: .env.camera
+    env_file:
+      - .env
+      - path: .env.camera
+        required: false
     networks:
       - elderly_care_net
     ports:
       - '8555:8555/tcp'
       - '8555:8555/udp'
     volumes:
-      - ./edge/go2rtc.yaml:/config/go2rtc.yaml:ro
+      - ./edge/go2rtc.yaml:/config/go2rtc.yaml
   tapo-camera:
     build:
       context: ./edge
       dockerfile: Dockerfile.camera
     init: true
     restart: unless-stopped
-    env_file: .env.camera
+    env_file:
+      - .env
+      - path: .env.camera
+        required: false
+    environment:
+      MQTT_BROKER_HOST: "emqx"
+      MQTT_BROKER_PORT: "1883"
+      MQTT_USERNAME: "${MQTT_USERNAME:-backend}"
+      MQTT_PASSWORD: "${MQTT_PASSWORD:-mqtt_secure_pass_123}"
+      FALL_DETECTION_ENABLED: "${FALL_DETECTION_ENABLED:-true}"
+      CAMERA_DEVICE_ID: "${CAMERA_DEVICE_ID:-camera-main}"
     networks:
       - elderly_care_net
     ports:
       - "127.0.0.1:8090:8090"
     volumes:
+      - ./edge/src:/app/src
       - camera_recordings:/recordings
-    stop_grace_period: 25s
+    stop_grace_period: 60s
     healthcheck:
       test: ["CMD", "python", "-c", "import urllib.request; urllib.request.urlopen('http://127.0.0.1:8090/healthz', timeout=3)"]
       interval: 30s

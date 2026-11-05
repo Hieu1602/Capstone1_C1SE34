@@ -46,6 +46,9 @@ class DoctorPatientDetail(DoctorPatientCard):
     bmi: Optional[float] = None
     next_appointment: Optional[str] = None
     prescriptions_count: int = 0
+    hr_threshold_low: Optional[int] = 50
+    hr_threshold_high: Optional[int] = 120
+    spo2_threshold_low: Optional[int] = 90
 
 
 class PrescriptionItem(BaseModel):
@@ -54,6 +57,7 @@ class PrescriptionItem(BaseModel):
     patient_id: str
     medication_name: str
     dosage: str
+    quantity: Optional[str] = None
     frequency: str = "Hàng ngày"
     schedule_times: List[str] = Field(default_factory=list)
     instructions: str = ""
@@ -66,6 +70,7 @@ class PrescriptionCreate(BaseModel):
     """Yêu cầu kê đơn thuốc mới."""
     medication_name: str
     dosage: str
+    quantity: Optional[str] = None
     frequency: Optional[str] = None
     schedule_times: Optional[List[str]] = None
     instructions: Optional[str] = None
@@ -76,10 +81,29 @@ class PrescriptionUpdate(BaseModel):
     """Cập nhật đơn thuốc hiện có."""
     medication_name: Optional[str] = None
     dosage: Optional[str] = None
+    quantity: Optional[str] = None
     frequency: Optional[str] = None
     schedule_times: Optional[List[str]] = None
     instructions: Optional[str] = None
     enable_speaker_reminder: Optional[bool] = None
+
+
+class MedicationItemCreate(BaseModel):
+    """Một loại thuốc trong đơn thuốc gồm nhiều loại."""
+    medication_name: str
+    quantity: Optional[str] = None
+    dosage: str
+    frequency: Optional[str] = "Hàng ngày"
+    schedule_times: Optional[List[str]] = Field(default_factory=list)
+    instructions: Optional[str] = None
+
+
+class BatchPrescriptionCreate(BaseModel):
+    """Kê đơn thuốc gồm nhiều loại thuốc và số lượng khác nhau."""
+    diagnosis: Optional[str] = None
+    general_notes: Optional[str] = None
+    enable_speaker_reminder: bool = True
+    medications: List[MedicationItemCreate]
 
 
 class DoctorMedicalRecordUpdate(BaseModel):
@@ -113,9 +137,9 @@ class DoctorVitalsAnalytics(BaseModel):
 
 class ThresholdsUpdate(BaseModel):
     """Cập nhật cấu hình ngưỡng y tế khuyến nghị."""
-    hr_threshold_high: Optional[int] = Field(None, ge=80, le=200)
-    hr_threshold_low: Optional[int] = Field(None, ge=40, le=90)
-    spo2_threshold_low: Optional[int] = Field(None, ge=75, le=95)
+    hr_threshold_high: Optional[int] = Field(None, ge=70, le=220)
+    hr_threshold_low: Optional[int] = Field(None, ge=30, le=100)
+    spo2_threshold_low: Optional[int] = Field(None, ge=70, le=99)
     immobility_seconds: Optional[int] = Field(None, ge=10, le=600)
 
 

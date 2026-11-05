@@ -1,5 +1,6 @@
+import { LocalizedText as Text } from '../../../../i18n/LocalizedComponents';
 import React from 'react';
-import { View, Text, TouchableOpacity, StyleSheet } from 'react-native';
+import { View, TouchableOpacity, StyleSheet } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 
 interface ProfileQuickGridProps {
@@ -7,10 +8,12 @@ interface ProfileQuickGridProps {
   colors: any;
   houseName: string;
   membersCount: number;
+  hasHouse?: boolean;
   showMore: boolean;
   onToggleShowMore: () => void;
   onNavigate: (screen: string) => void;
   onOpenProfile: () => void;
+  onOpenJoinHouse?: () => void;
 }
 
 export const ProfileQuickGrid: React.FC<ProfileQuickGridProps> = ({
@@ -18,10 +21,12 @@ export const ProfileQuickGrid: React.FC<ProfileQuickGridProps> = ({
   colors,
   houseName,
   membersCount,
+  hasHouse = true,
   showMore,
   onToggleShowMore,
   onNavigate,
   onOpenProfile,
+  onOpenJoinHouse,
 }) => {
   return (
     <>
@@ -78,20 +83,15 @@ export const ProfileQuickGrid: React.FC<ProfileQuickGridProps> = ({
           activeOpacity={0.8}
           onPress={() => onNavigate('PatientMedicalRecord')}
         >
-          <View style={styles.fbGridCardTopRow}>
-            <View
-              style={[
-                styles.fbGridIconBox,
-                {
-                  backgroundColor: isDarkMode ? '#082F49' : '#E0F2FE',
-                },
-              ]}
-            >
-              <Ionicons name="medkit-outline" size={24} color="#0EA5E9" />
-            </View>
-            <View style={styles.fbAesBadge}>
-              <Text style={styles.fbAesBadgeText}>AES-256</Text>
-            </View>
+          <View
+            style={[
+              styles.fbGridIconBox,
+              {
+                backgroundColor: isDarkMode ? '#082F49' : '#E0F2FE',
+              },
+            ]}
+          >
+            <Ionicons name="medkit-outline" size={24} color="#0EA5E9" />
           </View>
           <Text
             style={[
@@ -121,7 +121,7 @@ export const ProfileQuickGrid: React.FC<ProfileQuickGridProps> = ({
             },
           ]}
           activeOpacity={0.8}
-          onPress={() => onNavigate('HouseDetail')}
+          onPress={() => (!hasHouse && onOpenJoinHouse ? onOpenJoinHouse() : onNavigate('HouseDetail'))}
         >
           <View
             style={[
@@ -139,7 +139,7 @@ export const ProfileQuickGrid: React.FC<ProfileQuickGridProps> = ({
               isDarkMode && { color: colors.textPrimary },
             ]}
           >
-            {houseName || 'Nhà của tôi'}
+            {hasHouse ? (houseName || 'Nhà của tôi') : 'Chưa tham gia nhà'}
           </Text>
           <Text
             style={[
@@ -147,7 +147,7 @@ export const ProfileQuickGrid: React.FC<ProfileQuickGridProps> = ({
               isDarkMode && { color: colors.textSecondary },
             ]}
           >
-            Thành viên: {membersCount || 1} • Quản lý phòng
+            {hasHouse ? `Thành viên: ${membersCount || 1} • Quản lý phòng` : 'Nhấn để nhập mã mời'}
           </Text>
         </TouchableOpacity>
 
@@ -187,7 +187,7 @@ export const ProfileQuickGrid: React.FC<ProfileQuickGridProps> = ({
               isDarkMode && { color: colors.textSecondary },
             ]}
           >
-            Camera AI, Vòng BLE & Cảm biến
+            {hasHouse ? 'Camera AI, Vòng BLE & Cảm biến' : 'Chưa có thiết bị theo dõi'}
           </Text>
         </TouchableOpacity>
 

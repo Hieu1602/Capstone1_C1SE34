@@ -2,7 +2,7 @@
 // Màn hình Thông tin ứng dụng & Hướng dẫn sử dụng thiết bị
 // Smart Elderly Care AI (SECA)
 
-import React from 'react';
+import React, { useEffect, useRef } from 'react';
 import {
   View,
   StyleSheet,
@@ -10,6 +10,9 @@ import {
   ScrollView,
   Image,
   Linking,
+  Animated,
+  Dimensions,
+  Platform,
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
@@ -17,9 +20,69 @@ import { Colors } from '../../../theme/colors';
 import { useTheme } from '../../../store/useThemeStore';
 import { LocalizedText as Text } from '../../../i18n/LocalizedComponents';
 import { supportApi } from '../../../services/api';
+import { useTranslation } from 'react-i18next';
+
+const GUIDE_TRANSLATIONS: Record<string, { title: string; badge: string; description: string; steps: string[] }> = {
+  vitals_threshold: {
+    title: 'Configure Vital Signs Thresholds & SOS Alerts',
+    badge: 'Smart Health',
+    description: 'Set minimum/maximum heart rate thresholds, minimum SpO2, and designate emergency family contacts for SOS calls.',
+    steps: [
+      "Step 1: Go to 'Settings' -> 'Vital Signs & Alert Thresholds'.",
+      "Step 2: Adjust heart rate limits (default: Alert if under 60 bpm or over 100 bpm) and SpO2 (under 95%).",
+      "Step 3: Enter priority family contact numbers to receive SOS emergency calls and SMS alerts during incidents.",
+      "Step 4: Press 'Save Configuration' to sync thresholds down to hardware devices.",
+    ],
+  },
+  chatbot_rag: {
+    title: 'Use Medical AI Assistant (Medical Chatbot RAG)',
+    badge: 'Gemini AI',
+    description: 'Look up fall first-aid instructions, drug interactions, and get answers to elderly healthcare questions.',
+    steps: [
+      "Step 1: Tap the AI Chatbot icon on the navigation bar or home screen.",
+      "Step 2: Ask questions in plain language (e.g., 'How to perform first aid after an elderly fall?', 'What should people with hypertension eat?').",
+      "Step 3: Receive professional guidance combined with medical knowledge from trained AI models.",
+    ],
+  },
+  smartband: {
+    title: 'Connect Smartband (BLE Band)',
+    badge: 'BLE 5.0',
+    description: 'Continuously measure heart rate, blood oxygen (SpO2), step count, and body temperature in real time.',
+    steps: [
+      "Step 1: Turn on Bluetooth on your mobile phone or place the band within 5 meters of the Edge Hub.",
+      "Step 2: Open Smart Elderly Care AI app, go to 'Devices' -> Tap (+) 'Add device'.",
+      "Step 3: Select 'Vital signs wristband' category, and the system will scan the BLE address (MAC).",
+      "Step 4: Select the device (e.g., BLE_BAND_001) and tap 'Pair' to complete.",
+    ],
+  },
+  camera: {
+    title: 'Install Fall Detection AI Camera',
+    badge: 'AI Vision',
+    description: 'Real-time fall incident detection using YOLOv8 Pose Estimation algorithm, fully preserving user privacy.',
+    steps: [
+      "Step 1: Mount the camera at an elevated position (recommended 2.0m - 2.5m) overlooking main living areas (living room, hallway, bedroom).",
+      "Step 2: Connect camera to the same WiFi/LAN network as the Edge Hub AI.",
+      "Step 3: In the app, select 'Add AI Camera' and enter the RTSP stream URL (or scan QR code on the camera body).",
+      "Step 4: Verify the pose estimation skeleton overlay on the test video stream.",
+    ],
+  },
+  hub: {
+    title: 'Setup Central AI Hub (Edge Hub)',
+    badge: 'Edge AI',
+    description: 'Local processing brain: connects BLE band, receives RTSP camera stream, runs AI inference, and triggers on-premise sirens.',
+    steps: [
+      "Step 1: Plug the included 5V/3A Type-C power adapter into the Edge Hub.",
+      "Step 2: Connect the LAN cable directly to your home WiFi router (or connect via Access Point mode).",
+      "Step 3: When the green LED turns solid, open the app to scan the QR code on the bottom of the Edge Hub.",
+      "Step 4: Confirm assigning the Hub to your home in the mobile app.",
+    ],
+  },
+};
 
 export default function AppInfoScreen({ navigation }: any) {
   const { isDarkMode } = useTheme();
+  const { t, i18n } = useTranslation();
+  const isEn = i18n.language?.startsWith('en');
   const [docData, setDocData] = React.useState<any>(null);
 
   React.useEffect(() => {
@@ -35,12 +98,38 @@ export default function AppInfoScreen({ navigation }: any) {
       });
   }, []);
 
+  const screenWidth = Dimensions.get('window').width || 450;
+  const translateX = useRef(new Animated.Value(screenWidth)).current;
+
+  useEffect(() => {
+    translateX.setValue(screenWidth);
+    const raf = requestAnimationFrame(() => {
+      Animated.timing(translateX, {
+        toValue: 0,
+        duration: 260,
+        useNativeDriver: Platform.OS !== 'web',
+      }).start();
+    });
+    return () => cancelAnimationFrame(raf);
+  }, [screenWidth, translateX]);
+
+  const handleGoBack = () => {
+    Animated.timing(translateX, {
+      toValue: screenWidth,
+      duration: 200,
+      useNativeDriver: Platform.OS !== 'web',
+    }).start(() => {
+      navigation?.goBack?.();
+    });
+  };
+
   return (
     <SafeAreaView
       style={[styles.container, isDarkMode && { backgroundColor: '#0B0F19' }]}
       edges={['top']}
     >
-      <View style={[styles.inner, isDarkMode && { backgroundColor: '#0B0F19' }]}>
+      <Animated.View style={{ flex: 1, transform: [{ translateX }] }}>
+        <View style={[styles.inner, isDarkMode && { backgroundColor: '#0B0F19' }]}>
         {/* Header hàng trên cùng */}
         <View style={styles.headerRow}>
           <TouchableOpacity
@@ -48,7 +137,7 @@ export default function AppInfoScreen({ navigation }: any) {
               styles.backButton,
               isDarkMode && { backgroundColor: '#1E293B', borderColor: '#334155' },
             ]}
-            onPress={() => navigation?.goBack?.()}
+            onPress={handleGoBack}
             activeOpacity={0.7}
             accessibilityRole="button"
             accessibilityLabel="Quay lại"
@@ -90,13 +179,17 @@ export default function AppInfoScreen({ navigation }: any) {
 
             {/* Phiên bản */}
             <Text style={[styles.appInfoVersion, isDarkMode && { color: '#94A3B8' }]}>
-              {docData ? `${docData.project_code} • Phiên bản ${docData.version}` : 'C1SE.34 • Phiên bản 1.0.0'}
+              {isEn
+                ? `${docData?.project_code || 'C1SE.34'} • Version ${docData?.version || '1.0.0'}`
+                : (docData ? `${docData.project_code} • Phiên bản ${docData.version}` : 'C1SE.34 • Phiên bản 1.0.0')}
             </Text>
 
             {/* Mô tả đồ án */}
             <Text style={[styles.infoDetailText, isDarkMode && { color: '#94A3B8' }]}>
-              {docData?.description ||
-                'Đồ án tốt nghiệp C1SE.34 xây dựng giải pháp công nghệ toàn diện kết hợp trí tuệ nhân tạo (AI) và Internet vạn vật (IoT) nhằm hỗ trợ gia đình và bác sĩ theo dõi sức khỏe, tự động phát hiện té ngã thời gian thực và phát tín hiệu cấp cứu kịp thời cho người cao tuổi tại nhà.'}
+              {isEn
+                ? 'Graduation project C1SE.34 builds a comprehensive technology solution combining Artificial Intelligence (AI) and Internet of Things (IoT) to support families and doctors in monitoring health, automatically detecting falls in real-time, and dispatching emergency alerts for elderly at home.'
+                : (docData?.description ||
+                  'Đồ án tốt nghiệp C1SE.34 xây dựng giải pháp công nghệ toàn diện kết hợp trí tuệ nhân tạo (AI) và Internet vạn vật (IoT) nhằm hỗ trợ gia đình và bác sĩ theo dõi sức khỏe, tự động phát hiện té ngã thời gian thực và phát tín hiệu cấp cứu kịp thời cho người cao tuổi tại nhà.')}
             </Text>
 
             {/* Khối Tổng đài CSKH 24/7 */}
@@ -111,10 +204,10 @@ export default function AppInfoScreen({ navigation }: any) {
               </View>
               <View style={{ flex: 1, marginLeft: 12 }}>
                 <Text style={[styles.docHotlineTitle, isDarkMode && { color: '#F8FAFC' }]}>
-                  Tổng đài hỗ trợ kỹ thuật CSKH 24/7
+                  {isEn ? '24/7 Technical Support Hotline' : 'Tổng đài hỗ trợ kỹ thuật CSKH 24/7'}
                 </Text>
                 <Text style={styles.docHotlineSub}>
-                  Hỗ trợ kết nối camera, vòng tay, hub AI
+                  {isEn ? 'Help connecting cameras, bands, and AI hubs' : 'Hỗ trợ kết nối camera, vòng tay, hub AI'}
                 </Text>
                 <TouchableOpacity
                   style={styles.docHotlineButton}
@@ -122,14 +215,16 @@ export default function AppInfoScreen({ navigation }: any) {
                   onPress={() => Linking.openURL('tel:0898230852')}
                 >
                   <Ionicons name="call" size={15} color="#FFFFFF" />
-                  <Text style={styles.docHotlineButtonText}>Gọi ngay: 0898230852</Text>
+                  <Text style={styles.docHotlineButtonText}>
+                    {isEn ? 'Call now: 0898230852' : 'Gọi ngay: 0898230852'}
+                  </Text>
                 </TouchableOpacity>
               </View>
             </View>
 
             {/* Danh mục Hướng dẫn sử dụng chi tiết từ Backend */}
             <Text style={[styles.docSectionTitle, isDarkMode && { color: '#F8FAFC' }]}>
-              📖 Hướng dẫn sử dụng thiết bị
+              {isEn ? '📖 Device User Guide' : '📖 Hướng dẫn sử dụng thiết bị'}
             </Text>
 
             {(docData?.user_guides || [
@@ -168,44 +263,55 @@ export default function AppInfoScreen({ navigation }: any) {
                   'Bước 2: Mở app, chọn Quét thiết bị và quét mã QR ở mặt đáy Edge Hub để gán vào nhà.',
                 ],
               },
-            ]).map((guide: any) => (
-              <View
-                key={guide.id}
-                style={[
-                  styles.docGuideCard,
-                  isDarkMode && { backgroundColor: '#1E293B', borderColor: '#334155' },
-                ]}
-              >
-                <View style={styles.docGuideHeader}>
-                  <View style={styles.docGuideIconBox}>
-                    <Ionicons name={guide.icon || 'book-outline'} size={18} color={Colors.primary} />
-                  </View>
-                  <Text style={[styles.docGuideTitle, isDarkMode && { color: '#F8FAFC' }]}>
-                    {guide.title}
-                  </Text>
-                  <View style={styles.docGuideBadge}>
-                    <Text style={styles.docGuideBadgeText}>{guide.badge}</Text>
-                  </View>
-                </View>
-                <Text style={[styles.docGuideDesc, isDarkMode && { color: '#94A3B8' }]}>
-                  {guide.description}
-                </Text>
-                <View style={styles.docGuideStepsWrap}>
-                  {guide.steps?.map((step: string, sIdx: number) => (
-                    <Text key={sIdx} style={[styles.docGuideStep, isDarkMode && { color: '#CBD5E1' }]}>
-                      {step}
+            ]).map((guide: any) => {
+              const guideInfo = (isEn && guide.id && GUIDE_TRANSLATIONS[guide.id])
+                ? GUIDE_TRANSLATIONS[guide.id]
+                : {
+                    title: guide.title,
+                    badge: guide.badge,
+                    description: guide.description,
+                    steps: guide.steps,
+                  };
+              return (
+                <View
+                  key={guide.id}
+                  style={[
+                    styles.docGuideCard,
+                    isDarkMode && { backgroundColor: '#1E293B', borderColor: '#334155' },
+                  ]}
+                >
+                  <View style={styles.docGuideHeader}>
+                    <View style={styles.docGuideIconBox}>
+                      <Ionicons name={guide.icon || 'book-outline'} size={18} color={Colors.primary} />
+                    </View>
+                    <Text style={[styles.docGuideTitle, isDarkMode && { color: '#F8FAFC' }]}>
+                      {guideInfo.title}
                     </Text>
-                  ))}
+                    <View style={styles.docGuideBadge}>
+                      <Text style={styles.docGuideBadgeText}>{guideInfo.badge}</Text>
+                    </View>
+                  </View>
+                  <Text style={[styles.docGuideDesc, isDarkMode && { color: '#94A3B8' }]}>
+                    {guideInfo.description}
+                  </Text>
+                  <View style={styles.docGuideStepsWrap}>
+                    {guideInfo.steps?.map((step: string, sIdx: number) => (
+                      <Text key={sIdx} style={[styles.docGuideStep, isDarkMode && { color: '#CBD5E1' }]}>
+                        {step}
+                      </Text>
+                    ))}
+                  </View>
                 </View>
-              </View>
-            ))}
+              );
+            })}
 
             <Text style={[styles.appInfoCopyright, isDarkMode && { color: '#64748B' }]}>
-              © 2026 Smart Elderly Care AI • Đồ án tốt nghiệp C1SE.34
+              {isEn ? '© 2026 Smart Elderly Care AI • Graduation Project C1SE.34' : '© 2026 Smart Elderly Care AI • Đồ án tốt nghiệp C1SE.34'}
             </Text>
           </View>
         </ScrollView>
       </View>
+      </Animated.View>
     </SafeAreaView>
   );
 }

@@ -34,7 +34,9 @@ Nếu backend chạy ngoài Docker, cần truyền các biến cấu hình camer
 - Ghi 30 giây MP4 tại server, báo đang ghi/lỗi và mở liên kết tải bản ghi hoàn tất.
 - Nút riêng tư hiện có đọc/bật/tắt privacy thật. API motion vẫn sẵn có; chưa gắn vào nút AI Protect vì phát hiện chuyển động của Tapo khác với AI YOLO.
 - Tắt live khi chuyển màn hình hoặc đưa app xuống nền; làm mới ticket khi trở lại.
-- Nút Playback mở danh sách bản ghi thực để xem/tải; chưa hỗ trợ tua timeline trên server.
+- Nút Playback mở timeline theo ngày, bắt đầu từ tối đa 30 giây cuối của khoảng ghi hình gần nhất; kéo timeline hoặc bấm ±10 giây để chọn đoạn video.
+- Playback dùng HLS, tải đệm nhiều segment trong cùng player; web dùng `hls.js`, native dùng `react-native-video`. Backend cần FFmpeg để remux MP4 cũ và chuẩn hóa timestamp TS; xem [hướng dẫn triển khai HLS](../../edge/README.video-archive.md#triển-khai-bản-hls).
+- Bản ghi MP4 có nút phát trong ứng dụng và nút tải riêng. Timeline tải từng segment đang chọn, không ghép thành clip dài. Web tải qua liên kết attachment; Android/iOS mở trình duyệt hệ thống để tải/lưu.
 - Preset/Home chưa cấu hình sẽ báo chưa hỗ trợ. Không mô phỏng thành công lệnh PTZ.
 - Audio dùng WebRTC/go2rtc: nghe camera, giữ để nói, Voice Call liên tục và tắt mic/loa.
 - AI chạy qua luồng cảnh báo hiện có; phát hiện chuyển động Tapo không thay thế AI YOLO.

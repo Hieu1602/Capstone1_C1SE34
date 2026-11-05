@@ -226,20 +226,24 @@ export function HealthTrendsCard({
             style={[
               styles.spo2BadgeGreen,
               !hasSpO2 && { backgroundColor: isDarkMode ? '#1E293B' : '#F1F5F9' },
+              hasSpO2 && spo2Value < 95 && { backgroundColor: isDarkMode ? '#451A03' : '#FEF3C7' },
+              hasSpO2 && spo2Value >= 95 && { backgroundColor: isDarkMode ? '#064E3B' : '#DCFCE7' },
             ]}
           >
             <Ionicons
-              name={hasSpO2 ? 'checkmark-circle' : 'information-circle'}
+              name={hasSpO2 && spo2Value >= 95 ? 'checkmark-circle' : hasSpO2 ? 'warning' : 'information-circle'}
               size={13}
-              color={hasSpO2 ? '#15803D' : '#64748B'}
+              color={hasSpO2 && spo2Value >= 95 ? '#15803D' : hasSpO2 ? '#D97706' : '#64748B'}
             />
             <Text
               style={[
                 styles.spo2BadgeGreenText,
                 !hasSpO2 && { color: isDarkMode ? '#94A3B8' : '#64748B' },
+                hasSpO2 && spo2Value < 95 && { color: isDarkMode ? '#FBBF24' : '#D97706' },
+                hasSpO2 && spo2Value >= 95 && { color: isDarkMode ? '#86EFAC' : '#15803D' },
               ]}
             >
-              {hasSpO2 ? `${spo2Value}% - ${spo2Value >= 95 ? 'Rất tốt' : 'Cần theo dõi'}` : 'Chưa có dữ liệu'}
+              {hasSpO2 ? `${spo2Value}% - ${spo2Value >= 95 ? 'Bình thường / An toàn' : 'Cần theo dõi'}` : 'Chưa có dữ liệu'}
             </Text>
           </View>
         </View>

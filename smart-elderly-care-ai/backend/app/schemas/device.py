@@ -105,6 +105,7 @@ class DeviceOut(DeviceBase):
     id: UUID
     owner_id: UUID
     house_id: Optional[UUID] = None
+    wearer_name: Optional[str] = None
     is_online: bool
     last_heartbeat: Optional[datetime] = None
     created_at: datetime

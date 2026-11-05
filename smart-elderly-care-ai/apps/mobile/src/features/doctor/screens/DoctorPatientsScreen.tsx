@@ -1,48 +1,144 @@
 // DoctorPatientsScreen.tsx
-// Danh sách bệnh nhân người cao tuổi phụ trách dành cho Bác sĩ gia đình
+// Danh sách bệnh nhân người cao tuổi phụ trách - Bố cục Card lưới (Grid Layout) 2 cột kèm Skeleton Loading
 
-import React, { useState, useEffect, useCallback } from 'react';
-import { View, StyleSheet, ScrollView, RefreshControl, StatusBar, ActivityIndicator } from 'react-native';
+import React, { useState, useEffect, useCallback, useRef } from 'react';
+import {
+  View,
+  StyleSheet,
+  FlatList,
+  RefreshControl,
+  StatusBar,
+  Animated,
+  TextInput,
+} from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
-import { useNavigation, useFocusEffect } from '@react-navigation/native';
+import { useNavigation, useFocusEffect, useRoute } from '@react-navigation/native';
 
 import { Colors } from '../../../theme/colors';
 import { useTheme } from '../../../store/useThemeStore';
 import { useAuthStore } from '../../../store/useAuthStore';
 import { doctorApi } from '../../../services/api';
-import { LocalizedText } from '../../../i18n/LocalizedComponents';
+import { LocalizedAlert, LocalizedText } from '../../../i18n/LocalizedComponents';
 import AdminMarqueeBanner from '../../../components/AdminMarqueeBanner';
 
 import {
   PatientCardData,
   DoctorPatientsHeader,
   DoctorPatientCard,
+  AppointmentFormModal,
 } from '../components';
+import { normalizePatientsList } from './DoctorHomeScreen';
 
 export type { PatientCardData };
+
+// Component Skeleton Loading cho Card bệnh nhân
+const PatientSkeletonCard = ({ isDarkMode }: { isDarkMode: boolean }) => {
+  const pulseAnim = useRef(new Animated.Value(0.35)).current;
+
+  useEffect(() => {
+    Animated.loop(
+      Animated.sequence([
+        Animated.timing(pulseAnim, {
+          toValue: 0.85,
+          duration: 750,
+          useNativeDriver: true,
+        }),
+        Animated.timing(pulseAnim, {
+          toValue: 0.35,
+          duration: 750,
+          useNativeDriver: true,
+        }),
+      ])
+    ).start();
+  }, [pulseAnim]);
+
+  return (
+    <Animated.View
+      style={[
+        styles.skeletonCard,
+        {
+          backgroundColor: isDarkMode ? '#1E293B' : '#FFFFFF',
+          borderColor: isDarkMode ? '#334155' : '#E2E8F0',
+          opacity: pulseAnim,
+        },
+      ]}
+    >
+      <View style={{ flexDirection: 'row', alignItems: 'center', marginBottom: 12 }}>
+        <View
+          style={{
+            width: 48,
+            height: 48,
+            borderRadius: 24,
+            backgroundColor: isDarkMode ? '#334155' : '#E2E8F0',
+            marginRight: 12,
+          }}
+        />
+        <View style={{ flex: 1 }}>
+          <View
+            style={{
+              width: '60%',
+              height: 15,
+              borderRadius: 6,
+              backgroundColor: isDarkMode ? '#334155' : '#E2E8F0',
+              marginBottom: 8,
+            }}
+          />
+          <View
+            style={{
+              width: '40%',
+              height: 12,
+              borderRadius: 4,
+              backgroundColor: isDarkMode ? '#334155' : '#F1F5F9',
+            }}
+          />
+        </View>
+      </View>
+      <View
+        style={{
+          width: '100%',
+          height: 38,
+          borderRadius: 8,
+          backgroundColor: isDarkMode ? '#334155' : '#E0F2FE',
+        }}
+      />
+    </Animated.View>
+  );
+};
 
 export default function DoctorPatientsScreen() {
   const insets = useSafeAreaInsets();
   const navigation = useNavigation<any>();
+  const route = useRoute<any>();
   const { isDarkMode, colors } = useTheme();
   const { userName } = useAuthStore();
+  const searchRef = useRef<any>(null);
 
   const [patients, setPatients] = useState<PatientCardData[]>([]);
-  const [loading, setLoading] = useState(false);
+  const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
   const [searchQuery, setSearchQuery] = useState('');
   const [filterTab, setFilterTab] = useState<'ALL' | 'WARNING' | 'NORMAL'>('ALL');
 
+  // Modal Đặt lịch hẹn nhanh cho bệnh nhân từ Card
+  const [appointmentModalVisible, setAppointmentModalVisible] = useState(false);
+  const [selectedPatientForApt, setSelectedPatientForApt] = useState<PatientCardData | null>(null);
+  const [scheduledAt, setScheduledAt] = useState('');
+  const [examType, setExamType] = useState('Khám định kỳ');
+  const [visitType, setVisitType] = useState<'HOME_VISIT' | 'CLINIC'>('HOME_VISIT');
+  const [location, setLocation] = useState('');
+  const [instructions, setInstructions] = useState('');
+  const [enableSpeaker, setEnableSpeaker] = useState(true);
+  const [recurrencePattern, setRecurrencePattern] = useState<'NONE' | 'WEEKLY' | 'MONTHLY' | 'QUARTERLY'>('NONE');
+  const [recurrenceOccurrences, setRecurrenceOccurrences] = useState(1);
+  const [isSubmittingApt, setIsSubmittingApt] = useState(false);
+
   const fetchPatients = useCallback(async () => {
     try {
-      setLoading(true);
       const res = await doctorApi.getPatients();
-      if (res.data && Array.isArray(res.data)) {
-        setPatients(res.data);
-      }
+      setPatients(normalizePatientsList(res.data));
     } catch {
-      // Giữ dữ liệu hiện tại khi mất kết nối mạng
+      setPatients(normalizePatientsList([]));
     } finally {
       setLoading(false);
       setRefreshing(false);
@@ -58,6 +154,14 @@ export default function DoctorPatientsScreen() {
       fetchPatients();
     }, [fetchPatients])
   );
+
+  // Auto-focus search when navigated from Home search button
+  useEffect(() => {
+    if (route.params?.autoFocus) {
+      const t = setTimeout(() => searchRef.current?.focus(), 300);
+      return () => clearTimeout(t);
+    }
+  }, [route.params?.autoFocus]);
 
   const onRefresh = () => {
     setRefreshing(true);
@@ -91,14 +195,67 @@ export default function DoctorPatientsScreen() {
   };
 
   const handleViewAnalytics = (patientId: string) => {
-    navigation.navigate('DoctorAnalytics', { patientId });
+    const p = patients.find((item) => String(item.id) === String(patientId));
+    navigation.navigate('DoctorAnalytics', {
+      patientId,
+      patient: p
+        ? {
+            id: String(p.id),
+            name: p.name,
+            age: p.age,
+            gender: p.gender,
+            condition: p.medical_history || '',
+            deviceId: p.device_id || '',
+            houseName: p.house_name ? `${p.house_name}${p.house_address ? ` • ${p.house_address}` : ''}` : undefined,
+            bloodPressure: p.blood_pressure,
+            heartRate: p.heart_rate,
+            spo2: p.spo2,
+            healthStatus: p.health_status,
+            lastUpdated: p.last_updated,
+          }
+        : undefined,
+    });
+  };
+
+  const handleOpenAppointmentModal = (patient: PatientCardData) => {
+    setSelectedPatientForApt(patient);
+    const d = new Date();
+    d.setHours(d.getHours() + 2);
+    setScheduledAt(d.toISOString().slice(0, 16));
+    setLocation(patient.house_address || patient.house_name || 'Khám tại nhà');
+    setAppointmentModalVisible(true);
+  };
+
+  const handleSaveAppointment = async () => {
+    if (!selectedPatientForApt) return;
+    try {
+      setIsSubmittingApt(true);
+      await doctorApi.createAppointment({
+        patient_id: selectedPatientForApt.id,
+        patient_name: selectedPatientForApt.name,
+        scheduled_at: scheduledAt,
+        visit_type: visitType,
+        location: location,
+        clinical_notes: examType,
+        instructions: instructions,
+        enable_speaker_reminder: enableSpeaker,
+        recurrence_pattern: recurrencePattern,
+        recurrence_occurrences: recurrenceOccurrences,
+      });
+      setAppointmentModalVisible(false);
+      LocalizedAlert.alert('Thành công', 'Đã tạo lịch khám thành công cho bệnh nhân!');
+    } catch {
+      LocalizedAlert.alert('Lỗi', 'Không thể tạo lịch khám. Vui lòng thử lại sau.');
+    } finally {
+      setIsSubmittingApt(false);
+    }
   };
 
   return (
     <View style={[styles.container, { backgroundColor: isDarkMode ? '#0F172A' : '#F8FAFC' }]}>
       <StatusBar barStyle={isDarkMode ? 'light-content' : 'dark-content'} />
 
-      {/* Top Doctor Header */}
+      {/* Top Doctor Header & Toolbar */}
       <DoctorPatientsHeader
         insets={insets}
         userName={userName}
@@ -111,47 +268,102 @@ export default function DoctorPatientsScreen() {
         onRefresh={onRefresh}
         isDarkMode={isDarkMode}
         colors={colors}
+        searchInputRef={searchRef}
       />
 
       {/* Thanh thông báo chạy chữ từ Admin (dành cho Bác sĩ) */}
       <AdminMarqueeBanner targetAudience="doctors" />
 
-      {/* Patient Cards List */}
-      <ScrollView
-        contentContainerStyle={styles.listContent}
-        refreshControl={<RefreshControl refreshing={refreshing} onRefresh={onRefresh} colors={[Colors.primary]} />}
-      >
-        {loading && !refreshing && (
-          <ActivityIndicator size="small" color={Colors.primary} style={{ marginVertical: 20 }} />
-        )}
-
-        {filteredPatients.length === 0 ? (
-          <View style={styles.emptyBox}>
-            <Ionicons name="people-outline" size={48} color="#94A3B8" />
-            <LocalizedText style={[styles.emptyText, { color: isDarkMode ? '#94A3B8' : '#64748B' }]}>
-              Không tìm thấy hồ sơ người cao tuổi nào.
-            </LocalizedText>
-          </View>
-        ) : (
-          filteredPatients.map((patient) => (
+      {/* Trạng thái chờ: Skeleton Loading */}
+      {loading && !refreshing ? (
+        <View style={styles.listContent}>
+          <PatientSkeletonCard isDarkMode={isDarkMode} />
+          <PatientSkeletonCard isDarkMode={isDarkMode} />
+          <PatientSkeletonCard isDarkMode={isDarkMode} />
+        </View>
+      ) : (
+        /* Danh sách bệnh nhân dạng danh thiếp ngang đầy đủ thông tin */
+        <FlatList
+          data={filteredPatients}
+          keyExtractor={(item) => item.id.toString()}
+          contentContainerStyle={styles.listContent}
+          refreshControl={<RefreshControl refreshing={refreshing} onRefresh={onRefresh} colors={[Colors.primary]} />}
+          ListEmptyComponent={
+            <View style={styles.emptyBox}>
+              <Ionicons name="people-outline" size={48} color="#94A3B8" />
+              <LocalizedText style={[styles.emptyText, { color: isDarkMode ? '#94A3B8' : '#64748B' }]}>
+                Không tìm thấy hồ sơ bệnh nhân nào phù hợp.
+              </LocalizedText>
+            </View>
+          }
+          renderItem={({ item }) => (
             <DoctorPatientCard
-              key={patient.id}
-              patient={patient}
+              patient={item}
               onViewDetail={handleViewDetail}
               onViewAnalytics={handleViewAnalytics}
+              onBookAppointment={handleOpenAppointmentModal}
               isDarkMode={isDarkMode}
               colors={colors}
             />
-          ))
-        )}
-      </ScrollView>
+          )}
+        />
+      )}
+
+      {/* Modal Đặt lịch hẹn nhanh từ Card Bệnh nhân */}
+      {selectedPatientForApt && (
+        <AppointmentFormModal
+          visible={appointmentModalVisible}
+          onClose={() => setAppointmentModalVisible(false)}
+          onSave={handleSaveAppointment}
+          isEditing={false}
+          patientId={selectedPatientForApt.id}
+          patientName={selectedPatientForApt.name}
+          onChangePatientName={() => {}}
+          scheduledAt={scheduledAt}
+          onChangeScheduledAt={setScheduledAt}
+          examType={examType}
+          onChangeExamType={setExamType}
+          visitType={visitType}
+          onChangeVisitType={setVisitType}
+          location={location}
+          onChangeLocation={setLocation}
+          instructions={instructions}
+          onChangeInstructions={setInstructions}
+          enableSpeaker={enableSpeaker}
+          onToggleEnableSpeaker={setEnableSpeaker}
+          recurrencePattern={recurrencePattern}
+          onChangeRecurrencePattern={setRecurrencePattern}
+          recurrenceOccurrences={recurrenceOccurrences}
+          onChangeRecurrenceOccurrences={setRecurrenceOccurrences}
+          isSubmitting={isSubmittingApt}
+          patients={patients}
+          isDarkMode={isDarkMode}
+          colors={colors}
+        />
+      )}
     </View>
   );
 }
 
 const styles = StyleSheet.create({
   container: { flex: 1 },
-  listContent: { padding: 16, paddingBottom: 95 },
-  emptyBox: { alignItems: 'center', marginTop: 40 },
-  emptyText: { marginTop: 12, fontSize: 14 },
+  listContent: {
+    padding: 16,
+    paddingBottom: 95,
+  },
+  skeletonCard: {
+    borderRadius: 14,
+    padding: 14,
+    borderWidth: 1,
+    marginBottom: 12,
+  },
+  emptyBox: {
+    alignItems: 'center',
+    marginTop: 60,
+  },
+  emptyText: {
+    marginTop: 12,
+    fontSize: 14,
+    textAlign: 'center',
+  },
 });

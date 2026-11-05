@@ -58,7 +58,9 @@ export const UserPermissionModal: React.FC<UserPermissionModalProps> = ({
                   (r.target_role === 'all' ||
                     r.target_role === user.role ||
                     (r.target_role === 'user' && user.role === 'owner') ||
-                    (r.target_role === 'caregiver' && user.role === 'member'))
+                    (r.target_role === 'owner' && user.role === 'user') ||
+                    (r.target_role === 'caregiver' && user.role === 'member') ||
+                    (r.target_role === 'member' && user.role === 'caregiver'))
               )
               .map((r) => (
                 <div
