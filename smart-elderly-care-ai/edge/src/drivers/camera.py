@@ -20,7 +20,10 @@ class CameraDriver:
             Không có. Chưa mở camera hoặc tạo thread.
         """
         self.source = config.get("source")
-        if not self.source and os.getenv("TAPO_HOST"):
+        if not self.source and os.getenv("CAMERA_SOURCE"):
+            src = os.getenv("CAMERA_SOURCE", "").strip()
+            self.source = int(src) if src.isdigit() else src
+        elif not self.source and os.getenv("TAPO_HOST"):
             from .tapo import rtsp_url
             self.source = rtsp_url()
         if self.source is None:
@@ -32,6 +35,7 @@ class CameraDriver:
         self._cap: Any = None
         # Frame mới nhất và mốc monotonic để loại ảnh cũ khi mất kết nối.
         self._frame: Optional[np.ndarray] = None
+        self._frame_id: int = 0
         self._updated = 0.0
         # Đồng bộ frame giữa worker và luồng phục vụ HTTP/AI.
         self._lock = threading.Lock()
@@ -80,6 +84,17 @@ class CameraDriver:
                 return None
             return self._frame.copy()
 
+    def get_latest_frame_with_id(self) -> tuple[Optional[np.ndarray], int]:
+        """Lấy bản sao ảnh gần nhất cùng ID tuần tự để phát hiện frame mới.
+
+        Returns:
+            Tuple (Ảnh NumPy hoặc None, frame_id).
+        """
+        with self._lock:
+            if self._frame is None or time.monotonic() - self._updated > 5:
+                return None, 0
+            return self._frame.copy(), self._frame_id
+
     def is_connected(self) -> bool:
         """Đánh giá kết nối theo tuổi của frame gần nhất.
 
@@ -116,6 +131,7 @@ class CameraDriver:
                             ])
                             if c.isOpened():
                                 cap = c
+                                self.source = src
                                 break
                             c.release()
                         self._cap = cap
@@ -130,6 +146,7 @@ class CameraDriver:
                             break
                         with self._lock:
                             self._frame = frame
+                            self._frame_id += 1
                             self._updated = time.monotonic()
                         if self.archive:
                             self.archive.submit(frame)

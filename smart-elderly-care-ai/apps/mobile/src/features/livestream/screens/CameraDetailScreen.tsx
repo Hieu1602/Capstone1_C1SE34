@@ -29,6 +29,7 @@ import { useCameraConnection } from "../hooks/useCameraConnection";
 import { useCameraIntercom } from "../hooks/useCameraIntercom";
 import CameraDetailHeader from "../components/CameraDetailHeader";
 import CameraSettings from "../components/CameraSettings";
+import CameraAiCareSettings from "../components/CameraAiCareSettings";
 import { useDeviceStore } from "../../../store/useDeviceStore";
 import { devicesApi } from "../../../services/deviceService";
 import { StepCameraRtspConfig } from "../../dashboard/components/add-device/StepCameraRtspConfig";
@@ -56,7 +57,7 @@ interface Props {
         };
     };
 }
-type DetailSheet = "settings" | "recordings" | null;
+type DetailSheet = "settings" | "recordings" | "ai_care" | null;
 /**
  * Ghép các component với hook video/audio và modal bản ghi/cài đặt.
  * @param props - Điều hướng và tham số camera.
@@ -393,12 +394,11 @@ export default function CameraDetailScreen({ navigation, route }: Props) {
                                 void connection.togglePrivacy();
                             }}
                             privacyActive={connection.privacy === true}
-                            onCare={() =>
-                                LocalizedAlert.alert(
-                                    "Chăm sóc AI",
-                                    "Các cảnh báo hiện có được hiển thị bên dưới nhóm chức năng.",
-                                )
-                            }
+                            onCare={() => {
+                                void connection.refreshFallDetection();
+                                openSheet("ai_care");
+                            }}
+                            careActive={connection.fallDetection === true}
                         />
                         <TouchableOpacity
                             accessibilityRole="button"
@@ -504,7 +504,9 @@ export default function CameraDetailScreen({ navigation, route }: Props) {
                         </View> :
                         <View style={styles.header}>
                             <Text style={[styles.title, textStyle]}>
-                                Cài đặt camera
+                                {sheet === "ai_care"
+                                    ? "Chăm sóc AI"
+                                    : "Cài đặt camera"}
                             </Text>
                             <TouchableOpacity
                                 accessibilityRole="button"
@@ -655,6 +657,20 @@ export default function CameraDetailScreen({ navigation, route }: Props) {
                                         </View>
                                     )}
                                 </View>
+                            ) : sheet === "ai_care" ? (
+                                <CameraAiCareSettings
+                                    enabled={connection.fallDetection}
+                                    stats={connection.fallStats}
+                                    connected={!!connection.status?.connected}
+                                    overlay={connection.overlay}
+                                    onToggle={async () => {
+                                        await connection.toggleFallDetection();
+                                    }}
+                                    onToggleOverlay={connection.toggleOverlay}
+                                    onViewIncidents={() => {
+                                        openSheet("recordings");
+                                    }}
+                                />
                             ) : (
                                 <CameraSettings
                                     name={name}

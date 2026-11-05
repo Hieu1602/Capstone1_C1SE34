@@ -21,10 +21,17 @@ class CRUDIncident:
             existing = await self.get(db, event_id)
             if existing:
                 return existing
-        payload = {key: data[key] for key in ("device_id", "alert_type", "alert_level", "message", "confidence") if key in data}
+        payload = {key: data[key] for key in ("device_id", "alert_type", "alert_level", "message", "confidence", "video_clip_url", "thumbnail_url") if key in data}
+        if "device_id" in payload and not isinstance(payload["device_id"], UUID):
+            try:
+                payload["device_id"] = UUID(str(payload["device_id"]))
+            except (ValueError, TypeError):
+                pass
         if event_id:
             payload["id"] = event_id
         payload["sources"] = json.dumps(data.get("sources", []))
+        if not payload.get("video_clip_url") and data.get("video_url"):
+            payload["video_clip_url"] = data["video_url"]
         return await self.create(db, payload)
 
     async def get(self, db: AsyncSession, incident_id: UUID) -> Optional[Incident]:
@@ -209,7 +216,7 @@ class CRUDIncident:
                     stmt = stmt.where(or_(*conditions))
         result = await db.execute(stmt)
         await db.flush()
-        return result.rowcount or 0
+        return getattr(result, "rowcount", 0) or 0
 
 
 crud_incident = CRUDIncident()

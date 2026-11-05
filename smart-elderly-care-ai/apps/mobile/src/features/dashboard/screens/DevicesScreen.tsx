@@ -566,7 +566,7 @@ export default function DevicesScreen({ navigation }: any) {
                   groupName={groupName}
                   devicesInGroup={devicesInGroup}
                   onDevicePress={handleDevicePress}
-                  onDeviceDelete={handleDeleteDevice}
+                  onDeviceDelete={isOwnerOrAdmin ? handleDeleteDevice : undefined}
                   onOpenGroupActionMenu={handleOpenGroupActionMenu}
                   onAddDeviceToGroup={handleAddDeviceToGroup}
                   isDarkMode={isDarkMode}
@@ -582,7 +582,7 @@ export default function DevicesScreen({ navigation }: any) {
                 key={dev.id}
                 device={dev}
                 onPress={handleDevicePress}
-                onDelete={handleDeleteDevice}
+                onDelete={isOwnerOrAdmin ? handleDeleteDevice : undefined}
                 isDarkMode={isDarkMode}
                 colors={colors}
               />
@@ -636,7 +636,7 @@ export default function DevicesScreen({ navigation }: any) {
         groupName={selectedGroupForAction}
         onClose={() => setShowGroupActionModal(false)}
         onEdit={handleStartEditGroup}
-        onDelete={handlePromptDeleteGroup}
+        onDelete={isOwnerOrAdmin ? handlePromptDeleteGroup : undefined}
         isDarkMode={isDarkMode}
         colors={colors}
       />

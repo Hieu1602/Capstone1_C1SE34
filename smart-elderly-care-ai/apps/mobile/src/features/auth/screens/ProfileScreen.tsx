@@ -6,7 +6,11 @@ import {
   StyleSheet,
   ScrollView,
   TouchableOpacity,
+  Alert,
 } from 'react-native';
+import { useVitalStore } from '../../../store/useVitalStore';
+import { householdApi } from '../../../services/api';
+import { HouseJoinCodeModal } from '../../dashboard/components/house';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
 import { LocalizedText as Text } from '../../../i18n/LocalizedComponents';
@@ -37,6 +41,15 @@ import {
 export default function ProfileScreen({ navigation, route }: any) {
   const mgr = useProfileManager(navigation, route);
   const [isSearchVisible, setIsSearchVisible] = useState(false);
+  const [isJoinCodeModalVisible, setIsJoinCodeModalVisible] = useState(false);
+  const { userRole, role, permissions } = useAuthStore();
+
+  const handleJoinHouse = async (inputCode: string) => {
+    await householdApi.joinHouse(inputCode);
+    await useVitalStore.getState().fetchHouseFromBackend?.();
+    await useAuthStore.getState().fetchMyPermissions?.();
+  };
+  const isOwner = userRole === 'admin' || role === 'admin' || permissions?.is_owner === true || permissions?.role_in_house === 'OWNER';
 
   useEffect(() => {
     useAuthStore.getState().fetchMyPermissions?.();
@@ -113,13 +126,13 @@ export default function ProfileScreen({ navigation, route }: any) {
         ],
         onPress: () => navigation.navigate('HouseDetail'),
       },
-      {
+      ...(isOwner ? [{
         id: 'add-member',
         title: 'Thêm thành viên gia đình',
         subtitle: 'Mời người thân cùng theo dõi qua số điện thoại',
-        category: 'account',
+        category: 'account' as const,
         categoryLabel: 'Tài khoản',
-        icon: 'person-add-outline',
+        icon: 'person-add-outline' as const,
         iconColor: '#10B981',
         iconBg: isDark ? '#064E3B' : '#ECFDF5',
         keywords: [
@@ -130,8 +143,8 @@ export default function ProfileScreen({ navigation, route }: any) {
           'invite',
           'member',
         ],
-        onPress: () => navigation.navigate('HouseDetail', { openInviteModal: true }),
-      },
+        onPress: () => navigation.navigate('HouseInvite'),
+      }] : []),
       {
         id: 'devices',
         title: 'Thiết bị kết nối',
@@ -379,8 +392,8 @@ export default function ProfileScreen({ navigation, route }: any) {
       },
       {
         id: 'settings-notification',
-        title: 'Cài đặt thông báo & Âm thanh báo động',
-        subtitle: 'Chuông còi hú, rung, thông báo đẩy',
+        title: 'Cài đặt thông báo & Âm thanh',
+        subtitle: 'Chuông, rung, thông báo đẩy',
         category: 'settings',
         categoryLabel: 'Cài đặt',
         icon: 'notifications-outline',
@@ -398,7 +411,7 @@ export default function ProfileScreen({ navigation, route }: any) {
       },
       {
         id: 'settings-font-size',
-        title: 'Cỡ chữ lớn (Dành cho người cao tuổi)',
+        title: 'Thay đổi cỡ chữ',
         subtitle: 'Điều chỉnh độ phóng to chữ đọc dễ dàng',
         category: 'settings',
         categoryLabel: 'Cài đặt',
@@ -590,6 +603,22 @@ export default function ProfileScreen({ navigation, route }: any) {
         onSubmitChangePassword={mgr.handleChangePassword}
       />
 
+      <HouseJoinCodeModal
+        visible={isJoinCodeModalVisible}
+        onClose={() => setIsJoinCodeModalVisible(false)}
+        onJoin={handleJoinHouse}
+        onJoinSuccess={() => {
+          Alert.alert('Thành công', '🎉 Chúc mừng! Bạn đã tham gia vào căn nhà thành công.');
+        }}
+        isDarkMode={mgr.isDarkMode}
+        colors={{
+          bgCard: mgr.isDarkMode ? '#1E293B' : '#FFFFFF',
+          borderCol: mgr.isDarkMode ? '#334155' : '#E2E8F0',
+          textTitle: mgr.isDarkMode ? '#F8FAFC' : '#0F172A',
+          textSub: mgr.isDarkMode ? '#94A3B8' : '#64748B',
+        }}
+      />
+
       {/* ─── MAIN CONTENT ──────────────────────────────────── */}
       <ScrollView
         showsVerticalScrollIndicator={false}
@@ -611,7 +640,8 @@ export default function ProfileScreen({ navigation, route }: any) {
           isDarkMode={mgr.isDarkMode}
           colors={mgr.colors}
           onPressProfile={() => mgr.setUserMenuVisible(true)}
-          onPressAddMember={() => navigation.navigate('HouseDetail', { openInviteModal: true })}
+          onPressAddMember={() => navigation.navigate('HouseInvite')}
+          onPressJoinHouse={() => setIsJoinCodeModalVisible(true)}
         />
 
         <ProfileQuickGrid
@@ -624,6 +654,7 @@ export default function ProfileScreen({ navigation, route }: any) {
           onToggleShowMore={() => mgr.setShowMoreGrid(!mgr.showMoreGrid)}
           onNavigate={(screen) => navigation.navigate(screen)}
           onOpenProfile={() => mgr.setUserMenuVisible(true)}
+          onOpenJoinHouse={() => setIsJoinCodeModalVisible(true)}
         />
 
         <ProfileHelpAccordion

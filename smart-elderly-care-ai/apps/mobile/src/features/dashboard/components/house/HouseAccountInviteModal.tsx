@@ -36,6 +36,7 @@ interface HouseAccountInviteModalProps {
     textTitle: string;
     textSub: string;
   };
+  toastInfo?: { message: string; type?: 'success' | 'error' } | null;
 }
 
 export const HouseAccountInviteModal: React.FC<HouseAccountInviteModalProps> = ({
@@ -58,9 +59,27 @@ export const HouseAccountInviteModal: React.FC<HouseAccountInviteModalProps> = (
   onClose,
   isDarkMode,
   colors: { bgCard, borderCol, textTitle, textSub },
+  toastInfo,
 }) => {
   return (
     <Modal visible={visible} transparent animationType="slide">
+      {toastInfo && (
+        <View style={styles.modalToastContainer} pointerEvents="none">
+          <View
+            style={[
+              styles.modalToastCard,
+              toastInfo.type === 'error' && styles.modalToastCardError,
+            ]}
+          >
+            <Ionicons
+              name={toastInfo.type === 'error' ? 'alert-circle' : 'checkmark-circle'}
+              size={20}
+              color="#FFFFFF"
+            />
+            <Text style={styles.modalToastText}>{toastInfo.message}</Text>
+          </View>
+        </View>
+      )}
       <View style={styles.modalOverlay}>
         <View style={[styles.modalCard, { backgroundColor: bgCard, borderColor: borderCol }]}>
           <Text style={[styles.modalTitle, { color: textTitle }]}>Mời qua Tài khoản</Text>
@@ -251,6 +270,39 @@ const styles = StyleSheet.create({
     lineHeight: 18,
     flex: 1,
     fontWeight: '500',
+  },
+  modalToastContainer: {
+    position: 'absolute',
+    top: 50,
+    left: 20,
+    right: 20,
+    alignItems: 'center',
+    zIndex: 99999,
+    elevation: 99999,
+  },
+  modalToastCard: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: '#0F172A',
+    paddingHorizontal: 16,
+    paddingVertical: 12,
+    borderRadius: 20,
+    gap: 10,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 4 },
+    shadowOpacity: 0.25,
+    shadowRadius: 10,
+    elevation: 10,
+    maxWidth: '92%',
+  },
+  modalToastCardError: {
+    backgroundColor: '#DC2626',
+  },
+  modalToastText: {
+    color: '#FFFFFF',
+    fontSize: 14,
+    fontWeight: '700',
+    flexShrink: 1,
   },
 });
 

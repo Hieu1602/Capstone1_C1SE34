@@ -11,7 +11,8 @@ interface ProfileUserCardProps {
   isDarkMode: boolean;
   colors: any;
   onPressProfile: () => void;
-  onPressAddMember: () => void;
+  onPressAddMember?: () => void;
+  onPressJoinHouse?: () => void;
   roleBadgeText?: string;
 }
 
@@ -22,6 +23,7 @@ export const ProfileUserCard: React.FC<ProfileUserCardProps> = ({
   colors,
   onPressProfile,
   onPressAddMember,
+  onPressJoinHouse,
   roleBadgeText: propRoleText,
 }) => {
   const { permissions, userRole, role, fetchMyPermissions } = useAuthStore();
@@ -145,7 +147,7 @@ export const ProfileUserCard: React.FC<ProfileUserCardProps> = ({
             </Text>
           </TouchableOpacity>
         </>
-      ) : !hasLinkedHouse && Boolean(onPressAddMember) ? (
+      ) : !hasLinkedHouse && Boolean(onPressJoinHouse || onPressAddMember) ? (
         <>
           <View
             style={[
@@ -157,7 +159,7 @@ export const ProfileUserCard: React.FC<ProfileUserCardProps> = ({
           <TouchableOpacity
             style={styles.fbSubActionRow}
             activeOpacity={0.7}
-            onPress={onPressAddMember}
+            onPress={onPressJoinHouse || onPressAddMember}
           >
             <View style={[styles.fbPlusCircleBtn, { backgroundColor: '#4F46E5' }]}>
               <Ionicons name="link-outline" size={18} color="#FFFFFF" />

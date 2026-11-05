@@ -35,6 +35,13 @@ export interface ArchivedRecording {
     duration: number;
     incident_id: string | null;
 }
+export interface FallDetectionStatus {
+    enabled: boolean;
+    detected: boolean;
+    last_fall: number | null;
+    fall_count: number;
+    latest_clip: string | null;
+}
 export interface ArchiveCursor { after_time: string; after_id: string }
 export interface ArchiveCoverage { start: string; end: string }
 export interface HlsRecording { id: string; started_at: string; duration: number }
@@ -155,6 +162,17 @@ export const cameraApi = {
      */
     setMotion: (enabled: boolean, cameraId?: string) =>
         api.post("/camera/motion", { enabled }, sourceConfig(cameraId)),
+    fallDetection: (cameraId?: string) =>
+        api.get<FallDetectionStatus>(
+            "/camera/fall-detection",
+            sourceConfig(cameraId),
+        ),
+    setFallDetection: (enabled: boolean, cameraId?: string) =>
+        api.post<{ enabled: boolean }>(
+            "/camera/fall-detection",
+            { enabled },
+            sourceConfig(cameraId),
+        ),
     /**
      * Lấy bản ghi đang chạy, lỗi và danh sách tệp hoàn tất trên server.
      * @returns Promise chứa CameraRecordings.
@@ -203,12 +221,14 @@ export const cameraApi = {
         resource: string,
         cameraId?: string,
         quality: VideoQuality = "auto",
+        overlay: boolean = false,
     ) => {
         const { data } = await api.post<{ path: string }>(
             "/camera/ticket",
             {
                 resource,
                 quality,
+                overlay,
             },
             sourceConfig(cameraId),
         );

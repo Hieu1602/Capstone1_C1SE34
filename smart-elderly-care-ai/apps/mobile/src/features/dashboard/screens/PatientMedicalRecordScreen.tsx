@@ -15,6 +15,7 @@ import * as ImagePicker from 'expo-image-picker';
 import { useTheme } from '../../../store/useThemeStore';
 import { Colors } from '../../../theme/colors';
 import { useVitalStore, MedicalConditionItem } from '../../../store/useVitalStore';
+import { useAuthStore } from '../../../store/useAuthStore';
 import { BASE_URL } from '../../../services/api';
 import { alertsWS } from '../../../services/websocket';
 
@@ -50,6 +51,15 @@ const calculateAgeFromYear = (yearStr: string) => {
 export default function PatientMedicalRecordScreen({ navigation }: any) {
   const { isDarkMode } = useTheme();
   const { fetchPatientRecord, updatePatientRecord, patientRecord, enrollPatientFace } = useVitalStore();
+  const { userRole, role, permissions, viewRole } = useAuthStore();
+  const canEdit = Boolean(
+    userRole === 'admin' ||
+    role === 'admin' ||
+    permissions?.is_owner ||
+    permissions?.role_in_house === 'OWNER' ||
+    permissions?.can_manage_records ||
+    viewRole === 'DOCTOR'
+  );
 
   const hasPatient = Boolean(patientRecord?.name && patientRecord.name.trim() !== '' && patientRecord.name.trim() !== '--');
   const patientName = patientRecord?.name?.trim() || '--';
@@ -281,9 +291,13 @@ export default function PatientMedicalRecordScreen({ navigation }: any) {
           <Text style={[styles.headerTitle, { color: textTitle }]}>Hồ sơ bệnh án người cao tuổi</Text>
           <Text style={[styles.headerSubtitle, { color: textSub }]}>Thông tin y tế, bệnh nền & đơn thuốc</Text>
         </View>
-        <TouchableOpacity style={[styles.iconCircleBtn, { backgroundColor: isDarkMode ? '#1E293B' : '#F1F5F9', borderColor: borderCol }]} onPress={openEditPatientModal} activeOpacity={0.7}>
-          <Ionicons name={hasPatient ? 'create-outline' : 'add'} size={20} color={Colors.primary} />
-        </TouchableOpacity>
+        {canEdit ? (
+          <TouchableOpacity style={[styles.iconCircleBtn, { backgroundColor: isDarkMode ? '#1E293B' : '#F1F5F9', borderColor: borderCol }]} onPress={openEditPatientModal} activeOpacity={0.7}>
+            <Ionicons name={hasPatient ? 'create-outline' : 'add'} size={20} color={Colors.primary} />
+          </TouchableOpacity>
+        ) : (
+          <View style={{ width: 40, height: 40 }} />
+        )}
       </View>
 
       <ScrollView showsVerticalScrollIndicator={false} contentContainerStyle={styles.scrollContent}>
@@ -318,15 +332,15 @@ export default function PatientMedicalRecordScreen({ navigation }: any) {
                 <View style={[styles.cardIconBox, { backgroundColor: isDarkMode ? '#1E3A8A' : '#EFF6FF' }]}><Ionicons name="person-outline" size={20} color="#2563EB" /></View>
                 <Text style={[styles.cardTitle, { color: textTitle }]}>Thông tin người cao tuổi</Text>
               </View>
-              <TouchableOpacity onPress={openEditPatientModal}><Text style={styles.editLink}>Chỉnh sửa</Text></TouchableOpacity>
+              {canEdit && (<TouchableOpacity onPress={openEditPatientModal}><Text style={styles.editLink}>Chỉnh sửa</Text></TouchableOpacity>)}
             </View>
 
             <View style={styles.patientHeroRow}>
-              <TouchableOpacity style={[styles.patientAvatarContainer, { backgroundColor: isDarkMode ? '#0F172A' : '#F1F5F9' }]} onPress={() => setFaceModalVisible(true)} activeOpacity={0.8}>
+              <TouchableOpacity style={[styles.patientAvatarContainer, { backgroundColor: isDarkMode ? '#0F172A' : '#F1F5F9' }]} onPress={canEdit ? () => setFaceModalVisible(true) : undefined} activeOpacity={canEdit ? 0.8 : 1}>
                 {avatarUrl ? (
                   <Image source={{ uri: avatarUrl.startsWith('http') ? avatarUrl : `${BASE_URL.replace('/api/v1', '')}${avatarUrl}?t=${Date.now()}` }} style={styles.patientAvatarImg} />
                 ) : <Ionicons name="person" size={40} color={isDarkMode ? '#64748B' : '#94A3B8'} />}
-                <View style={styles.avatarCameraBadge}><Ionicons name="camera" size={11} color="#FFF" /></View>
+                {canEdit && <View style={styles.avatarCameraBadge}><Ionicons name="camera" size={11} color="#FFF" /></View>}
               </TouchableOpacity>
               <View style={{ flex: 1, marginLeft: 14 }}>
                 <Text style={[styles.patientHeroName, { color: textTitle }]}>{patientName}</Text>
@@ -341,8 +355,8 @@ export default function PatientMedicalRecordScreen({ navigation }: any) {
                 </View>
                 <TouchableOpacity
                   style={[styles.faceEnrollPill, hasFaceEnrolled ? { backgroundColor: isDarkMode ? '#064E3B' : '#DCFCE7', borderColor: '#10B981' } : { backgroundColor: isDarkMode ? '#451A03' : '#FEF3C7', borderColor: '#F59E0B' }]}
-                  onPress={() => setFaceModalVisible(true)}
-                  activeOpacity={0.7}
+                  onPress={canEdit ? () => setFaceModalVisible(true) : undefined}
+                  activeOpacity={canEdit ? 0.7 : 1}
                 >
                   <Ionicons name={hasFaceEnrolled ? 'scan-circle' : 'scan-outline'} size={14} color={hasFaceEnrolled ? '#10B981' : '#F59E0B'} />
                   <Text style={[styles.faceEnrollPillText, { color: hasFaceEnrolled ? '#047857' : '#B45309' }]}>{hasFaceEnrolled ? 'AI Face ID: Đã kích hoạt' : 'Khuôn mặt: Chưa đăng ký'}</Text>
@@ -419,7 +433,7 @@ export default function PatientMedicalRecordScreen({ navigation }: any) {
               <View style={[styles.cardIconBox, { backgroundColor: isDarkMode ? '#4C1D1D' : '#FEE2E2' }]}><Ionicons name="pulse-outline" size={20} color="#EF4444" /></View>
               <Text style={[styles.cardTitle, { color: textTitle }]}>Tiền sử bệnh nền {hasPatient ? `(${conditions.length})` : ''}</Text>
             </View>
-            {hasPatient && (
+            {canEdit && hasPatient && (
               <TouchableOpacity style={styles.addBtnSmall} onPress={() => setAddConditionModalVisible(true)} activeOpacity={0.7}>
                 <Ionicons name="add" size={16} color="#FFF" /><Text style={styles.addBtnSmallText}>Thêm</Text>
               </TouchableOpacity>
@@ -442,9 +456,11 @@ export default function PatientMedicalRecordScreen({ navigation }: any) {
                       <View style={[styles.severityDot, { backgroundColor: item.severity === 'danger' ? '#EF4444' : item.severity === 'warning' ? '#F59E0B' : '#0EA5E9' }]} />
                       <Text style={[styles.conditionName, { color: textTitle }]}>{item.name}</Text>
                     </View>
-                    <TouchableOpacity onPress={() => handleDeleteCondition(item.id, item.name)}>
-                      <Ionicons name="trash-outline" size={17} color={isDarkMode ? '#94A3B8' : '#CBD5E1'} />
-                    </TouchableOpacity>
+                    {canEdit && (
+                      <TouchableOpacity onPress={() => handleDeleteCondition(item.id, item.name)}>
+                        <Ionicons name="trash-outline" size={17} color={isDarkMode ? '#94A3B8' : '#CBD5E1'} />
+                      </TouchableOpacity>
+                    )}
                   </View>
                   {item.note ? <Text style={[styles.conditionNote, { color: textSub }]}>{item.note}</Text> : null}
                 </View>
@@ -460,7 +476,7 @@ export default function PatientMedicalRecordScreen({ navigation }: any) {
               <View style={[styles.cardIconBox, { backgroundColor: isDarkMode ? '#452F10' : '#FEF3C7' }]}><Ionicons name="warning-outline" size={20} color="#D97706" /></View>
               <Text style={[styles.cardTitle, { color: textTitle }]}>Dị ứng & Lưu ý dinh dưỡng</Text>
             </View>
-            {!isEditingAllergies && (
+            {canEdit && !isEditingAllergies && (
               <TouchableOpacity
                 style={[styles.editBtnSmall, { backgroundColor: isDarkMode ? 'rgba(255, 107, 0, 0.15)' : '#FFF7ED', borderColor: isDarkMode ? '#EA580C' : '#FDBA74' }]}
                 onPress={handleStartEditAllergies}

@@ -324,20 +324,6 @@ export default function MedicationReminderScreen({ navigation }: any) {
       </View>
 
       <ScrollView showsVerticalScrollIndicator={false} contentContainerStyle={styles.scrollContent}>
-        {!canManageRecords && !checkingPerms && (
-          <View style={[styles.lockBanner, isDarkMode && { backgroundColor: '#451A03', borderColor: '#B45309' }]}>
-            <Ionicons name="lock-closed" size={18} color="#D97706" style={{ marginRight: 8, marginTop: 2 }} />
-            <View style={{ flex: 1 }}>
-              <LocalizedText style={[styles.lockBannerTitle, isDarkMode && { color: '#FDE68A' }]}>
-                Chế độ chỉ xem lịch thuốc (Chưa được cấp quyền)
-              </LocalizedText>
-              <LocalizedText style={[styles.lockBannerDesc, isDarkMode && { color: '#FEF3C7' }]}>
-                Tài khoản Thành viên chưa được cấp quyền chỉnh sửa đơn thuốc. Bạn chỉ có thể theo dõi và xem lịch uống thuốc của người cao tuổi.
-              </LocalizedText>
-            </View>
-          </View>
-        )}
-
         {/* Loa thông minh Hub */}
         <View style={[styles.speakerCard, { backgroundColor: bgCard, borderColor: hubVoiceReminderEnabled ? Colors.primary : borderCol }]}>
           <View style={styles.speakerTopRow}>

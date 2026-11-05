@@ -135,19 +135,7 @@ export default function AlgoConfigScreen({ navigation }: any) {
         showsVerticalScrollIndicator={false}
         contentContainerStyle={styles.scrollContent}
       >
-        {!canManageDevices && !checkingPerms && (
-          <View style={[styles.lockBanner, isDarkMode && { backgroundColor: '#450A0A', borderColor: '#B91C1C' }]}>
-            <Ionicons name="lock-closed" size={20} color="#DC2626" style={{ marginRight: 8, marginTop: 2 }} />
-            <View style={{ flex: 1 }}>
-              <LocalizedText style={[styles.lockBannerTitle, isDarkMode && { color: '#FCA5A5' }]}>
-                Chế độ chỉ đọc (Chưa được cấp quyền)
-              </LocalizedText>
-              <LocalizedText style={[styles.lockBannerDesc, isDarkMode && { color: '#FECACA' }]}>
-                Tài khoản Thành viên không thể thay đổi thông số thuật toán. Bạn cần được Chủ hộ cấp quyền cấu hình thiết bị trong mục Quản lý nhà.
-              </LocalizedText>
-            </View>
-          </View>
-        )}
+
 
         <LocalizedText style={[styles.introText, isDarkMode && { color: '#94A3B8' }]}>
           Tùy chỉnh ngưỡng kích hoạt báo động khẩn cấp (Red Alert) để phù hợp với tình trạng sức khỏe cụ thể của người cao tuổi.
@@ -246,19 +234,18 @@ export default function AlgoConfigScreen({ navigation }: any) {
           </View>
         </View>
 
-        {/* Nút lưu */}
-        <TouchableOpacity
-          style={[styles.saveBtn, !canManageDevices && styles.saveBtnDisabled]}
-          onPress={handleSave}
-          activeOpacity={canManageDevices ? 0.85 : 0.7}
-        >
-          {!canManageDevices && (
-            <Ionicons name="lock-closed" size={18} color="#FFF" style={{ marginRight: 8 }} />
-          )}
-          <LocalizedText style={styles.saveBtnText}>
-            {canManageDevices ? 'Lưu cấu hình thuật toán' : 'Chỉ xem (Không thể chỉnh sửa)'}
-          </LocalizedText>
-        </TouchableOpacity>
+        {/* Nút lưu cấu hình thuật toán (chỉ hiển thị khi có quyền) */}
+        {canManageDevices && (
+          <TouchableOpacity
+            style={styles.saveBtn}
+            onPress={handleSave}
+            activeOpacity={0.85}
+          >
+            <LocalizedText style={styles.saveBtnText}>
+              Lưu cấu hình thuật toán
+            </LocalizedText>
+          </TouchableOpacity>
+        )}
       </ScrollView>
     </SafeAreaView>
   );
