@@ -342,13 +342,13 @@ export default function PatientMedicalRecordScreen({ navigation }: any) {
                 ) : <Ionicons name="person" size={40} color={isDarkMode ? '#64748B' : '#94A3B8'} />}
                 {canEdit && <View style={styles.avatarCameraBadge}><Ionicons name="camera" size={11} color="#FFF" /></View>}
               </TouchableOpacity>
-              <View style={{ flex: 1, marginLeft: 14 }}>
-                <Text style={[styles.patientHeroName, { color: textTitle }]}>{patientName}</Text>
+              <View style={{ flex: 1, marginLeft: 14, minWidth: 0 }}>
+                <Text style={[styles.patientHeroName, { color: textTitle }]} numberOfLines={1}>{patientName}</Text>
                 <Text style={[styles.patientHeroSub, { color: textSub }]}>
                   {birthYear !== '--' ? `Năm sinh: ${birthYear} (${age !== '--' ? `${age} tuổi` : ''}) • Giới tính: ${gender}` : 'Chưa cập nhật thông tin cá nhân'}
                 </Text>
                 <View style={styles.bloodBadgeRow}>
-                  <View style={styles.bloodBadge}><Ionicons name="water" size={13} color="#EF4444" /><Text style={styles.bloodBadgeText}>Nhóm máu: {bloodType}</Text></View>
+                  <View style={styles.bloodBadge}><Ionicons name="water" size={12} color="#EF4444" /><Text style={styles.bloodBadgeText}>Nhóm máu: {bloodType}</Text></View>
                   <View style={[styles.bmiBadge, { backgroundColor: isDarkMode ? 'rgba(255,255,255,0.08)' : cardBMI.bg }]}>
                     <Text style={[styles.bmiBadgeText, { color: cardBMI.color }]}>BMI: {cardBMI.bmi} {cardBMI.bmi !== '--' ? `(${cardBMI.category})` : ''}</Text>
                   </View>
@@ -401,13 +401,47 @@ export default function PatientMedicalRecordScreen({ navigation }: any) {
             </View>
           ) : (
             <>
-              <ScrollView horizontal showsHorizontalScrollIndicator={false} style={{ marginVertical: 10 }}>
+              <ScrollView
+                horizontal
+                showsHorizontalScrollIndicator={false}
+                style={[
+                  styles.dateScrollContainer,
+                  Platform.OS === 'web' && ({
+                    display: 'flex',
+                    overflowX: 'auto',
+                    whiteSpace: 'nowrap',
+                    paddingBottom: 8,
+                  } as any),
+                ]}
+                contentContainerStyle={[
+                  styles.dateScrollContent,
+                  Platform.OS === 'web' && ({
+                    display: 'flex',
+                    flexDirection: 'row',
+                    whiteSpace: 'nowrap',
+                    paddingBottom: 8,
+                  } as any),
+                ]}
+              >
                 {[0, 1, 2, 3].map((daysAgo) => {
                   const val = getDaysAgoStr(daysAgo), isSelected = selectedDate === val;
                   const label = daysAgo === 0 ? 'Hôm nay' : daysAgo === 1 ? 'Hôm qua' : `${daysAgo} ngày trước`;
                   return (
-                    <TouchableOpacity key={val} style={[styles.dateChip, { backgroundColor: isSelected ? Colors.primary : isDarkMode ? '#0F172A' : '#F1F5F9', borderColor: isSelected ? Colors.primary : borderCol }]} onPress={() => setSelectedDate(val)} activeOpacity={0.8}>
-                      <Text style={[styles.dateChipText, { color: isSelected ? '#FFF' : textTitle }]}>{label} ({val.slice(5)})</Text>
+                    <TouchableOpacity
+                      key={val}
+                      style={[
+                        styles.dateChip,
+                        {
+                          backgroundColor: isSelected ? Colors.primary : isDarkMode ? '#0F172A' : '#F1F5F9',
+                          borderColor: isSelected ? Colors.primary : borderCol,
+                        },
+                      ]}
+                      onPress={() => setSelectedDate(val)}
+                      activeOpacity={0.8}
+                    >
+                      <Text style={[styles.dateChipText, { color: isSelected ? '#FFF' : textTitle }]}>
+                        {label} ({val.slice(5)})
+                      </Text>
                     </TouchableOpacity>
                   );
                 })}
@@ -749,11 +783,43 @@ const styles = StyleSheet.create({
   avatarCameraBadge: { position: 'absolute', bottom: -2, right: -2, backgroundColor: Colors.primary, width: 22, height: 22, borderRadius: 11, alignItems: 'center', justifyContent: 'center', borderWidth: 2, borderColor: '#FFF' },
   patientHeroName: { fontSize: 16, fontWeight: '800' },
   patientHeroSub: { fontSize: 12, marginTop: 2 },
-  bloodBadgeRow: { flexDirection: 'row', alignItems: 'center', gap: 8, marginTop: 6 },
-  bloodBadge: { flexDirection: 'row', alignItems: 'center', gap: 4, backgroundColor: '#FEE2E2', paddingHorizontal: 7, paddingVertical: 3, borderRadius: 6 },
-  bloodBadgeText: { fontSize: 11.5, fontWeight: '700', color: '#B91C1C' },
-  bmiBadge: { paddingHorizontal: 7, paddingVertical: 3, borderRadius: 6 },
-  bmiBadgeText: { fontSize: 11.5, fontWeight: '700' },
+  bloodBadgeRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    flexWrap: 'wrap',
+    gap: 6,
+    marginTop: 6,
+    maxWidth: '100%',
+    ...(Platform.OS === 'web' ? { flexWrap: 'wrap' } : {}),
+  },
+  bloodBadge: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 4,
+    backgroundColor: '#FEE2E2',
+    paddingHorizontal: 7,
+    paddingVertical: 3,
+    borderRadius: 6,
+    flexShrink: 0,
+  },
+  bloodBadgeText: { fontSize: 11, fontWeight: '700', color: '#B91C1C' },
+  bmiBadge: {
+    paddingHorizontal: 6,
+    paddingVertical: 3,
+    borderRadius: 6,
+    flexShrink: 1,
+    maxWidth: '100%',
+    alignSelf: 'flex-start',
+    ...(Platform.OS === 'web' ? { whiteSpace: 'normal', wordBreak: 'break-word' } : {}),
+  },
+  bmiBadgeText: {
+    fontSize: 10.5,
+    fontWeight: '700',
+    flexShrink: 1,
+    flexWrap: 'wrap',
+    lineHeight: 14,
+    ...(Platform.OS === 'web' ? { whiteSpace: 'normal', wordBreak: 'break-word' } : {}),
+  },
   faceEnrollPill: { flexDirection: 'row', alignItems: 'center', gap: 5, paddingHorizontal: 8, paddingVertical: 4, borderRadius: 6, borderWidth: 1, alignSelf: 'flex-start', marginTop: 8 },
   faceEnrollPillText: { fontSize: 11.5, fontWeight: '700' },
   metricsGrid: { flexDirection: 'row', borderRadius: 12, paddingVertical: 10, paddingHorizontal: 8, alignItems: 'center' },
@@ -763,8 +829,44 @@ const styles = StyleSheet.create({
   metricDivider: { width: 1, height: 26 },
   emptyNoticeBox: { flexDirection: 'row', alignItems: 'center', gap: 8, padding: 12, borderRadius: 10, borderWidth: 1 },
   emptyNoticeText: { fontSize: 12, flex: 1, lineHeight: 17 },
-  dateChip: { paddingHorizontal: 12, paddingVertical: 7, borderRadius: 20, borderWidth: 1, marginRight: 8 },
-  dateChipText: { fontSize: 12, fontWeight: '600' },
+  dateScrollContainer: {
+    marginVertical: 10,
+    maxWidth: '100%',
+    ...(Platform.OS === 'web' ? {
+      display: 'flex',
+      overflowX: 'auto',
+      whiteSpace: 'nowrap',
+      paddingBottom: 8,
+    } : {}),
+  },
+  dateScrollContent: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    paddingBottom: 8,
+    paddingRight: 16,
+    ...(Platform.OS === 'web' ? {
+      display: 'flex',
+      flexDirection: 'row',
+      whiteSpace: 'nowrap',
+      paddingBottom: 8,
+    } : {}),
+  },
+  dateChip: {
+    paddingHorizontal: 12,
+    paddingVertical: 7,
+    borderRadius: 20,
+    borderWidth: 1,
+    marginRight: 8,
+    flexShrink: 0,
+    alignItems: 'center',
+    justifyContent: 'center',
+    ...(Platform.OS === 'web' ? { flexShrink: 0, whiteSpace: 'nowrap' } : {}),
+  },
+  dateChipText: {
+    fontSize: 12,
+    fontWeight: '600',
+    ...(Platform.OS === 'web' ? { whiteSpace: 'nowrap' } : {}),
+  },
   daySummaryBox: { borderRadius: 10, padding: 10, borderWidth: 1, marginTop: 6 },
   summaryTopRow: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 8 },
   openDetailChartBtn: { flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 6, backgroundColor: Colors.primary, borderRadius: 8, paddingVertical: 8 },
