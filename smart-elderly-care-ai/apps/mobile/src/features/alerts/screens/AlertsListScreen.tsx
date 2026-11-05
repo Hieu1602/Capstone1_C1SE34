@@ -605,15 +605,28 @@ export default function AlertsListScreen({ navigation }: any) {
     <SafeAreaView style={[styles.safeArea, isDarkMode && { backgroundColor: colors.background }]} edges={['top']}>
       {/* 1. Header */}
       <View style={[styles.topHeader, isDarkMode && { backgroundColor: colors.background, borderBottomColor: colors.border }]}>
-        <View style={styles.headerTitleCol}>
-          <Text style={[styles.headerTitle, isDarkMode && { color: colors.textPrimary }]}>Thông Báo &amp; Sự Kiện</Text>
-          <Text style={[styles.headerSubtitle, isDarkMode && { color: colors.textSecondary }]}>
-            {unreadCount > 0
-              ? t('{{count}} thông báo mới chưa đọc', { count: unreadCount })
-              : isUnassignedAccount
-              ? 'Chưa liên kết ngôi nhà'
-              : 'Tất cả đã được xử lý'}
-          </Text>
+        <View style={styles.headerLeftRow}>
+          <TouchableOpacity
+            style={[styles.backBtn, isDarkMode && { backgroundColor: colors.card, borderColor: colors.border }]}
+            onPress={() => (navigation?.canGoBack?.() ? navigation.goBack() : navigation.navigate('Home'))}
+            activeOpacity={0.7}
+            hitSlop={{ top: 12, bottom: 12, left: 12, right: 12 }}
+            accessibilityLabel="Quay lại"
+            accessibilityRole="button"
+          >
+            <Ionicons name="chevron-back" size={22} color={isDarkMode ? colors.textPrimary : Colors.textPrimary} />
+          </TouchableOpacity>
+
+          <View style={styles.headerTitleCol}>
+            <Text style={[styles.headerTitle, isDarkMode && { color: colors.textPrimary }]}>Thông Báo &amp; Sự Kiện</Text>
+            <Text style={[styles.headerSubtitle, isDarkMode && { color: colors.textSecondary }]}>
+              {unreadCount > 0
+                ? t('{{count}} thông báo mới chưa đọc', { count: unreadCount })
+                : isUnassignedAccount
+                ? 'Chưa liên kết ngôi nhà'
+                : 'Tất cả đã được xử lý'}
+            </Text>
+          </View>
         </View>
 
         <View style={styles.headerRightActions}>
@@ -960,9 +973,27 @@ const styles = StyleSheet.create({
     borderBottomWidth: 1,
     borderBottomColor: '#F1F5F9',
   },
-  headerTitleCol: { flex: 1, marginRight: 8 },
-  headerTitle: { fontSize: 19, fontWeight: '900', color: Colors.textPrimary },
-  headerSubtitle: { fontSize: 11.5, color: '#94A3B8', marginTop: 2, fontWeight: '500' },
+  headerLeftRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    flex: 1,
+    marginRight: 8,
+  },
+  backBtn: {
+    width: 36,
+    height: 36,
+    borderRadius: 18,
+    backgroundColor: '#FFFFFF',
+    borderWidth: 1,
+    borderColor: '#E2E8F0',
+    alignItems: 'center',
+    justifyContent: 'center',
+    marginRight: 10,
+    ...Shadows.soft,
+  },
+  headerTitleCol: { flex: 1, marginRight: 4 },
+  headerTitle: { fontSize: 18, fontWeight: '900', color: Colors.textPrimary },
+  headerSubtitle: { fontSize: 11, color: '#94A3B8', marginTop: 2, fontWeight: '500' },
   headerRightActions: { flexDirection: 'row', alignItems: 'center', gap: 8 },
   markAllReadBtn: {
     flexDirection: 'row',
