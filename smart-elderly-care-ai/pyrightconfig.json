@@ -7,7 +7,8 @@
   "reportMissingTypeStubs": "none",
   "extraPaths": [
     "backend",
-    "backend/app"
+    "backend/app",
+    "edge"
   ],
   "exclude": [
     "**/node_modules",

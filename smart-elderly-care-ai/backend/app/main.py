@@ -81,8 +81,72 @@ async def lifespan(app: FastAPI):
                         dev_uuid = await crud_vital.resolve_device_uuid(session, raw_dev)
                         if dev_uuid:
                             payload["device_id"] = dev_uuid
-                    await crud_incident.create_from_edge(session, payload)
+                    incident = await crud_incident.create_from_edge(session, payload)
                     await session.commit()
+
+                    # Real-time WebSocket broadcast
+                    try:
+                        from app.api.websockets.vitals_ws import manager
+                        ws_data = {
+                            "type": "incident_alert",
+                            "alert_type": incident.alert_type,
+                            "alert_level": incident.alert_level,
+                            "message": incident.message,
+                            "incident_id": str(incident.id),
+                            "video_clip_url": incident.video_clip_url,
+                            "device_id": str(incident.device_id),
+                        }
+                        await manager.broadcast_to_device(str(incident.device_id), ws_data)
+                    except Exception as ws_err:
+                        logger.warning("[Lifespan] WS broadcast warning: %s", ws_err)
+
+                    # Gửi thông báo khẩn cấp (FCM) tới người nhà khi té ngã hoặc cảnh báo nguy cấp
+                    if incident.alert_type in ("FALL_DETECTED", "CRITICAL") or incident.alert_level in ("HIGH", "CRITICAL"):
+                        try:
+                            from app.models.device import Device
+                            from app.models.house import House, HouseMember
+                            from app.models.user import User
+                            from app.services.notification.fcm_service import FCMService
+                            from sqlalchemy import select, or_
+
+                            device = await session.get(Device, incident.device_id)
+                            if device and device.house_id:
+                                house = await session.get(House, device.house_id)
+                                member_subq = select(HouseMember.user_id).where(HouseMember.house_id == device.house_id)
+                                user_query = select(User).where(
+                                    User.is_active.is_(True),
+                                    or_(
+                                        User.id == house.owner_id if house else False,
+                                        User.id.in_(member_subq),
+                                    ),
+                                )
+                                users_res = await session.execute(user_query)
+                                house_users = users_res.scalars().all()
+                                tokens = [u.fcm_token for u in house_users if u.fcm_token]
+                                if tokens:
+                                    fcm = FCMService()
+                                    cred_path = Path(settings.FCM_SERVICE_ACCOUNT_PATH)
+                                    if not cred_path.is_absolute() and not cred_path.is_file():
+                                        cred_path = Path(__file__).resolve().parents[1] / cred_path
+                                    if cred_path.is_file():
+                                        fcm.initialize(str(cred_path))
+                                    fcm.send_alert(
+                                        fcm_tokens=tokens,
+                                        title="🚨 CẢNH BÁO TÉ NGÃ KHẨN CẤP",
+                                        body=incident.message or "Phát hiện sự cố té ngã tại camera!",
+                                        data={
+                                            "type": "FALL_ALERT",
+                                            "incident_id": str(incident.id),
+                                            "device_id": str(incident.device_id),
+                                            "alert_type": incident.alert_type,
+                                            "alert_level": incident.alert_level,
+                                            "video_clip_url": incident.video_clip_url or "",
+                                        },
+                                        priority="high",
+                                    )
+                                    logger.info("[Lifespan] Đã gửi thông báo té ngã tới %d thiết bị.", len(tokens))
+                        except Exception as fcm_err:
+                            logger.warning("[Lifespan] FCM push notification warning: %s", fcm_err)
             except Exception as e:
                 logger.error("[Lifespan] Error saving MQTT alert: %s", e)
         asyncio.run_coroutine_threadsafe(_save_alert(), loop)

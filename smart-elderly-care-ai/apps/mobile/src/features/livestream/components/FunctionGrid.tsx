@@ -14,6 +14,7 @@ interface Props {
     onPrivacy: () => void;
     privacyActive: boolean;
     onCare: () => void;
+    careActive?: boolean;
 }
 
 /**
@@ -45,8 +46,10 @@ export default function FunctionGrid(props: Props) {
         },
         {
             label: "Chăm sóc AI",
-            icon: "shield-checkmark-outline",
+            icon: props.careActive ? "shield-checkmark" : "shield-checkmark-outline",
             onPress: props.onCare,
+            active: props.careActive,
+            activeColor: "#10B981",
         },
     ];
     return (

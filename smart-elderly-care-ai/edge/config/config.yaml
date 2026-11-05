@@ -30,10 +30,10 @@ ai:
       classifier_model: "src/ai/vision/models/fall_classifier.pkl"
       # Tỷ lệ chiều cao/rộng bounding box khi ngã (nằm ngang)
       horizontal_ratio_threshold: 0.5
-      aspect_ratio_threshold: 1.1
-      fallen_angle_threshold: 60.0        # Góc nghiêng cột sống > 60°
-      drop_velocity_threshold: 1.2        # Vận tốc rơi hông (chiều cao/giây)
-      min_fallen_duration: 0.5            # Thời gian duy trì tư thế thấp (giây)
+      aspect_ratio_threshold: 1.25
+      fallen_angle_threshold: 55.0        # Góc nghiêng cột sống > 55°
+      drop_velocity_threshold: 0.55       # Vận tốc rơi hông (chiều cao/giây)
+      min_fallen_duration: 0.40           # Thời gian duy trì tư thế thấp (giây)
       immobility_alert_sec: 15.0          # Bất động > 15s sau ngã -> Cảnh báo đột quỵ/hôn mê
       motion_energy_threshold: 8.0        # Ngưỡng dịch chuyển keypoint
       # Multi-person Tracking & Causal Stitching
