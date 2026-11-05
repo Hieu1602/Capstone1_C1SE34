@@ -213,3 +213,87 @@ async def webhook_miband(
         "spo2": created.spo2,
         "timestamp": created.time.isoformat() if created.time else None,
     }
+
+
+from pydantic import BaseModel
+from datetime import datetime
+
+class WatchSyncPayload(BaseModel):
+    """Payload đồng bộ từ ứng dụng watchSmartConnect (HealthSync) / WearOS / BLE."""
+    device_id: Optional[str] = "SMART_WATCH_BLE"
+    device_name: Optional[str] = "HealthSync SmartWatch"
+    brand: Optional[str] = "GENERIC_BLE"
+    platform: Optional[str] = "BLE"
+    heart_rate: Optional[int] = None
+    spo2: Optional[int] = None
+    body_temp: Optional[float] = None
+    skin_temp_max: Optional[float] = None
+    fall_detected: Optional[bool] = False
+    bracelet_battery: Optional[int] = None
+    bracelet_connected: Optional[bool] = True
+    step_count: Optional[int] = None
+    timestamp: Optional[datetime] = None
+
+@router.post("/sync/watch", status_code=status.HTTP_201_CREATED)
+async def sync_smartwatch_vitals(
+    payload: WatchSyncPayload,
+    db: AsyncSession = Depends(get_db),
+    current_user: Optional[User] = Depends(get_current_user_optional),
+):
+    """
+    Tiếp nhận và đồng bộ trực tiếp chỉ số sinh hiệu từ ứng dụng watchSmartConnect (HealthSync).
+    Hỗ trợ BLE trực tiếp, Google Health Connect, Garmin Connect, Samsung Health.
+    Tự động ghi vào TimescaleDB, cập nhật Redis RAM và kích hoạt cảnh báo sự cố nếu vượt ngưỡng.
+    """
+    data = payload.model_dump(exclude_unset=True)
+    device_id = data.get("device_id") or "SMART_WATCH_BLE"
+    
+    created = await crud_vital.create(db, data=data)
+    
+    hr = payload.heart_rate
+    spo2 = payload.spo2
+    fall = payload.fall_detected
+    
+    alerts = []
+    if fall:
+        from app.crud.crud_incident import crud_incident
+        await crud_incident.create(db, data={
+            "alert_type": "FALL",
+            "alert_level": "CRITICAL",
+            "message": f"Phát hiện té ngã từ đồng hồ thông minh ({payload.device_name or device_id})",
+            "is_acknowledged": False,
+        })
+        alerts.append("Cảnh báo té ngã khẩn cấp")
+        
+    if hr and (hr > 130 or hr < 45):
+        from app.crud.crud_incident import crud_incident
+        lvl = "CRITICAL" if (hr > 140 or hr < 40) else "WARNING"
+        await crud_incident.create(db, data={
+            "alert_type": "HEART_RATE",
+            "alert_level": lvl,
+            "message": f"Nhịp tim bất thường đo được từ đồng hồ: {hr} BPM",
+            "is_acknowledged": False,
+        })
+        alerts.append(f"Nhịp tim nguy hiểm ({hr} BPM)")
+        
+    if spo2 and spo2 < 90:
+        from app.crud.crud_incident import crud_incident
+        await crud_incident.create(db, data={
+            "alert_type": "SPO2",
+            "alert_level": "CRITICAL",
+            "message": f"Nồng độ oxy SpO₂ tụt nguy hiểm: {spo2}%",
+            "is_acknowledged": False,
+        })
+        alerts.append(f"SpO₂ tụt sâu ({spo2}%)")
+        
+    return {
+        "status": "success",
+        "message": "Smartwatch vitals synced and processed successfully",
+        "device_id": device_id,
+        "heart_rate": created.heart_rate,
+        "spo2": created.spo2,
+        "fall_detected": created.fall_detected,
+        "bracelet_battery": created.bracelet_battery,
+        "alerts_triggered": alerts,
+        "timestamp": created.time.isoformat() if created.time else None,
+    }

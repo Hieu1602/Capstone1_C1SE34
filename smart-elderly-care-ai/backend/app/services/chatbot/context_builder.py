@@ -4,7 +4,7 @@ context_builder.py – Xây dựng ngữ cảnh y tế thời gian thực (Real-
 Vị trí: backend/app/services/chatbot/context_builder.py
 
 Nguyên tắc:
-- 100% dữ liệu thực tế từ TimescaleDB (chỉ số sinh hiệu, pin, kết nối) và PostgreSQL (hồ sơ bệnh án, cảnh báo).
+- 100% dữ liệu thực tế từ TimescaleDB (chỉ số sinh hiệu, pin, kết nối) và PostgreSQL (hồ sơ bệnh án, cảnh báo, bác sĩ, lịch hẹn).
 - Zero Fake Data: Nếu thiết bị đo chưa kết nối hoặc chưa bật, thông báo rõ ràng "Chưa kết nối",
   tuyệt đối không bịa đặt số liệu nhịp tim, SpO2, thân nhiệt.
 """
@@ -20,7 +20,9 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.crud.crud_incident import crud_incident
 from app.crud.crud_vital import crud_vital
+from app.models.appointment import Appointment
 from app.models.elderly_profile import ElderlyProfile
+from app.models.house import HouseMember
 from app.models.user import User
 
 logger = logging.getLogger(__name__)
@@ -33,7 +35,8 @@ class ChatbotContextBuilder:
         self, db: AsyncSession, user_id: Optional[UUID]
     ) -> Dict[str, Any]:
         """
-        Truy vấn dữ liệu sinh hiệu thực tế, 3 cảnh báo gần nhất và hồ sơ bệnh nhân.
+        Truy vấn dữ liệu sinh hiệu thực tế, 5 cảnh báo gần nhất, hồ sơ bệnh nhân,
+        bác sĩ phụ trách và lịch khám bệnh sắp tới.
         """
         effective_user_id = user_id
         if not effective_user_id:
@@ -47,6 +50,8 @@ class ChatbotContextBuilder:
             "vitals": None,
             "incidents": [],
             "patient": {},
+            "doctor": None,
+            "appointment": None,
         }
 
         # 1. Sinh hiệu thực tế từ TimescaleDB
@@ -62,15 +67,16 @@ class ChatbotContextBuilder:
                 logger.warning("Lỗi truy vấn sinh hiệu thực tế từ DB: %s", e)
                 context["vitals"] = None
 
-        # 2. Cảnh báo sự cố gần nhất
+        # 2. Cảnh báo sự cố gần nhất (lấy 5 sự cố gần nhất để tra cứu lịch sử vượt ngưỡng)
         try:
-            recent_incidents = await crud_incident.list(db, limit=3)
+            recent_incidents = await crud_incident.list(db, limit=5, current_user_id=effective_user_id)
             context["incidents"] = [
                 {
                     "alert_type": inc.alert_type,
                     "alert_level": inc.alert_level,
                     "message": inc.message,
-                    "time": inc.created_at.strftime("%H:%M %d/%m/%Y") if inc.created_at else "",
+                    "is_acknowledged": bool(inc.is_acknowledged),
+                    "time": inc.created_at.strftime("%H:%M ngày %d/%m/%Y") if inc.created_at else "Gần đây",
                 }
                 for inc in recent_incidents
             ]
@@ -91,6 +97,48 @@ class ChatbotContextBuilder:
                 }
         except Exception as e:
             logger.warning("Lỗi truy vấn hồ sơ người cao tuổi từ DB: %s", e)
+
+        # 4. Bác sĩ phụ trách y tế (Database Context Binding - Healthcare Chatbot pattern)
+        try:
+            stmt = (
+                select(User)
+                .join(HouseMember, HouseMember.user_id == User.id)
+                .where(HouseMember.role_in_house == "DOCTOR")
+                .limit(1)
+            )
+            doc_res = await db.execute(stmt)
+            doc = doc_res.scalar_one_or_none()
+            if not doc:
+                doc = (await db.execute(select(User).where(User.role == "DOCTOR").limit(1))).scalar_one_or_none()
+            if doc:
+                context["doctor"] = {
+                    "name": doc.full_name or "Bác sĩ phụ trách",
+                    "phone": getattr(doc, "phone", None) or "Chưa cập nhật",
+                    "specialty": getattr(doc, "specialty", None) or "Bác sĩ gia đình",
+                }
+        except Exception as e:
+            logger.warning("Lỗi truy vấn bác sĩ phụ trách từ DB: %s", e)
+
+        # 5. Lịch khám / tái khám y tế sắp tới (Appointment Context Binding)
+        try:
+            now_dt = datetime.now()
+            appt_stmt = (
+                select(Appointment)
+                .where(Appointment.status == "UPCOMING")
+                .order_by(Appointment.scheduled_at.asc())
+                .limit(1)
+            )
+            appt_res = await db.execute(appt_stmt)
+            appt = appt_res.scalar_one_or_none()
+            if appt:
+                context["appointment"] = {
+                    "scheduled_at": appt.scheduled_at.strftime("%H:%M ngày %d/%m/%Y") if appt.scheduled_at else None,
+                    "location": appt.location or "Tại nhà",
+                    "visit_type": appt.visit_type or "Khám sức khỏe",
+                    "clinical_notes": appt.clinical_notes or "",
+                }
+        except Exception as e:
+            logger.warning("Lỗi truy vấn lịch khám từ DB: %s", e)
 
         return context
 
@@ -174,3 +222,43 @@ class ChatbotContextBuilder:
             f"📋 **Hồ sơ người cao tuổi**: **{full_name}** | Năm sinh: **{birth_year}**{age_str} | "
             f"Giới tính: **{gender_str}** | Tiền sử bệnh lý: {history} | Liên hệ khẩn cấp: **{contact}**"
         )
+
+    def format_care_context_summary(
+        self, context: Dict[str, Any], language: str = "vi"
+    ) -> str:
+        """Định dạng thông tin bác sĩ phụ trách và lịch khám sắp tới (Healthcare Chatbot pattern)."""
+        is_en = language == "en"
+        doctor = context.get("doctor")
+        appointment = context.get("appointment")
+        lines = []
+
+        if doctor:
+            doc_name = doctor.get("name", "Bác sĩ phụ trách")
+            doc_phone = doctor.get("phone", "Chưa cập nhật")
+            if is_en:
+                lines.append(f"👨‍⚕️ **Assigned Doctor**: Dr. {doc_name} (Phone: {doc_phone})")
+            else:
+                lines.append(f"👨‍⚕️ **Bác sĩ phụ trách y tế**: BS. {doc_name} (SĐT: {doc_phone})")
+        else:
+            if is_en:
+                lines.append("👨‍⚕️ **Assigned Doctor**: No designated doctor assigned yet.")
+            else:
+                lines.append("👨‍⚕️ **Bác sĩ phụ trách y tế**: Chưa phân công bác sĩ riêng cho hộ gia đình.")
+
+        if appointment and appointment.get("scheduled_at"):
+            sched = appointment.get("scheduled_at")
+            loc = appointment.get("location", "Tại nhà")
+            vtype = appointment.get("visit_type", "Khám định kỳ")
+            notes = appointment.get("clinical_notes")
+            note_str = f" (Ghi chú: {notes})" if notes else ""
+            if is_en:
+                lines.append(f"📅 **Upcoming Appointment**: {sched} | Type: {vtype} | Location: {loc}{note_str}")
+            else:
+                lines.append(f"📅 **Lịch khám sắp tới**: {sched} | Hình thức: {vtype} | Địa điểm: {loc}{note_str}")
+        else:
+            if is_en:
+                lines.append("📅 **Upcoming Appointment**: No upcoming appointments scheduled.")
+            else:
+                lines.append("📅 **Lịch khám sắp tới**: Hiện không có lịch khám bệnh nào sắp tới.")
+
+        return "\n".join(lines)

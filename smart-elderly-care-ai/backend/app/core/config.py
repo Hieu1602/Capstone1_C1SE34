@@ -143,9 +143,16 @@ class Settings(BaseSettings):
 
     # ---- Chatbot AI / LLM ----
     ENABLE_EXTERNAL_LLM: bool = True
+    ENABLE_AI_CRITIC: bool = True
+    LLM_CRITIC_TIMEOUT: float = 4.0  # Timeout toi da cho AI 2 tham dinh (s) truoc khi fallback sang Pure RAG
     LLM_API_KEY: str = ""
     LLM_BASE_URL: str = "https://generativelanguage.googleapis.com/v1beta/openai"
     LLM_MODEL: str = "gemini-3.1-flash-lite"
+
+    # ---- ChatGPT (OpenAI API) ----
+    OPENAI_API_KEY: str = ""
+    OPENAI_BASE_URL: str = "https://api.openai.com/v1"
+    OPENAI_MODEL: str = "gpt-4o-mini"
 
     # ---- TimescaleDB ----
     TIMESCALE_CHUNK_INTERVAL: str = "1 day"
