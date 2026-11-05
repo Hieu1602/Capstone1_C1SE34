@@ -34,6 +34,7 @@ from app.services.chatbot.prompt_templates import (
     build_critic_user_prompt,
     build_rag_user_prompt,
 )
+from app.services.chatbot.response_guard import ResponseGuard
 from app.services.chatbot.retriever import MedicalRetriever, get_medical_retriever
 
 logger = logging.getLogger(__name__)
@@ -100,7 +101,7 @@ class ChatbotRAGService:
 
         # 1. Kiểm tra RED (Khẩn cấp y tế)
         is_red = False
-        if vitals:
+        if vitals and not vitals.get("is_stale"):
             if vitals.get("fall_detected") is True:
                 is_red = True
             hr = vitals.get("heart_rate")
@@ -205,7 +206,9 @@ class ChatbotRAGService:
         if any(term in q_lower for term in ["bác sĩ", "bac si", "bác sĩ của cụ", "doctor"]):
             doctor = context.get("doctor") if context else None
             if doctor and doctor.get("name"):
-                return f"Bác sĩ phụ trách y tế của gia đình là **BS. {doctor.get('name')}** (Số điện thoại: **{doctor.get('phone')}**)."
+                if is_en:
+                    return f"The designated family doctor is **Dr. {doctor.get('name')}**. Please tap the **'Call Doctor'** button in the app to connect securely."
+                return f"Bác sĩ phụ trách y tế của gia đình là **BS. {doctor.get('name')}**. Bạn vui lòng nhấn nút **'Gọi bác sĩ'** trên ứng dụng để kết nối trực tiếp và đảm bảo an toàn bảo mật."
             return "Dạ, hiện tại hộ gia đình chưa có bác sĩ phụ trách y tế riêng được phân công trong hệ thống."
 
         # 3. Tra cứu lịch khám sắp tới (Appointment Binding)
@@ -284,9 +287,9 @@ class ChatbotRAGService:
 
     async def ask(
         self,
-        db: AsyncSession,
-        user_id: Optional[UUID],
-        question: str,
+        db: Optional[AsyncSession] = None,
+        user_id: Optional[UUID] = None,
+        question: str = "",
         language: str = "vi",
         chat_history: Optional[List[Dict[str, str]]] = None,
     ) -> Dict[str, Any]:
@@ -314,8 +317,43 @@ class ChatbotRAGService:
                 "suggested_actions": ["Đặt câu hỏi về sức khỏe cụ hoặc kiểm tra sinh hiệu"],
             }
 
+        # 1.1. Kiểm tra câu hỏi ngoài phạm vi y tế (lập trình, viết code, tạo robot, câu hỏi không liên quan sức khỏe)
+        if ResponseGuard.is_out_of_scope(question):
+            return {
+                "status": "success",
+                "question": question,
+                "answer": ResponseGuard.format_out_of_scope_response(language=language),
+                "sources": [],
+                "engine": "SmartCare Intent Scope Guard",
+                "timestamp": now_str,
+                "vitals_snapshot": None,
+                "disclaimer": disclaimer,
+                "triage_level": "GREEN",
+                "is_emergency": False,
+                "suggested_actions": ["Đặt câu hỏi về triệu chứng sức khỏe, dùng thuốc hoặc kiểm tra sinh hiệu người cao tuổi"],
+            }
+
+        # 1.2. Kiểm tra câu hỏi vô nghĩa / spam số / spam ký tự
+        if ResponseGuard.is_gibberish_or_spam(question):
+            return {
+                "status": "success",
+                "question": question,
+                "answer": ResponseGuard.format_gibberish_response(language=language),
+                "sources": [],
+                "engine": "SmartCare Input Validator",
+                "timestamp": now_str,
+                "vitals_snapshot": None,
+                "disclaimer": disclaimer,
+                "triage_level": "GREEN",
+                "is_emergency": False,
+                "suggested_actions": ["Đặt câu hỏi rõ ràng về sức khỏe hoặc chăm sóc người cao tuổi"],
+            }
+
         # 2. Truy vấn dữ liệu lâm sàng thực tế từ TimescaleDB và PostgreSQL
-        context = await self.context_builder.get_realtime_context(db=db, user_id=user_id)
+        if db is not None:
+            context = await self.context_builder.get_realtime_context(db=db, user_id=user_id)
+        else:
+            context = {"vitals": None, "incidents": [], "patient": {}, "doctor": None, "appointment": None}
         vitals = context.get("vitals")
         incidents = context.get("incidents", [])
         patient = context.get("patient", {})
@@ -325,8 +363,24 @@ class ChatbotRAGService:
             question=question, vitals=vitals, incidents=incidents
         )
 
-        # 3. Trích xuất cẩm nang y tế
-        chunks = self.retriever.search(question, top_k=3, threshold=5.0)
+        # 3. Trích xuất cẩm nang y tế (Hỗ trợ mở rộng từ khóa trong đối đáp liên tục)
+        search_query = question
+        if chat_history:
+            last_user_msgs = [m.get("text", "") for m in chat_history if m.get("sender") == "user" and m.get("text")]
+            if last_user_msgs:
+                last_user_q = last_user_msgs[-1].strip()
+                follow_up_cues = [
+                    "ngoài ra", "kèm", "thêm", "còn", "với lại", "và", "đồng thời",
+                    "lại bị", "cũng bị", "thế còn", "vậy", "nếu", "sao", "được không",
+                    "bao lâu", "mấy ngày", "uống gì", "ăn gì", "làm sao", "làm gì",
+                    "also", "in addition", "and", "plus", "what about"
+                ]
+                q_lower = question.lower()
+                is_follow_up = any(cue in q_lower for cue in follow_up_cues) or len(question.split()) <= 4
+                if is_follow_up:
+                    search_query = f"{last_user_q} {question}"
+
+        chunks = self.retriever.search(search_query, top_k=3, threshold=5.0)
 
         # 4. Định dạng văn bản ngữ cảnh
         system_prompt = SYSTEM_PROMPT_EN if is_en else SYSTEM_PROMPT_VI
@@ -373,6 +427,7 @@ class ChatbotRAGService:
                     care_context_text=care_context_text,
                     incidents_text=incidents_text,
                     language=language,
+                    chat_history=chat_history,
                 )
                 try:
                     critic_result = await asyncio.wait_for(
@@ -471,6 +526,8 @@ class ChatbotRAGService:
                 "bracelet_battery": vitals.get("bracelet_battery"),
                 "device_id": vitals.get("device_id"),
             }
+
+        answer_text = ResponseGuard.sanitize_response(answer_text)
 
         return {
             "status": "success",
