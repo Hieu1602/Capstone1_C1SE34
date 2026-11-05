@@ -535,67 +535,6 @@ export default function SettingsScreen({ navigation, route }: any) {
                                     />
                                 </TouchableOpacity>
 
-                                <TouchableOpacity
-                                    style={[
-                                        styles.settingsItem,
-                                        isDarkMode && {
-                                            borderBottomColor: "#334155",
-                                        },
-                                    ]}
-                                    activeOpacity={0.8}
-                                    onPress={() =>
-                                        setAccessibilityVisible(true)
-                                    }
-                                >
-                                    <View style={styles.settingsLeft}>
-                                        <View
-                                            style={[
-                                                styles.settingsIconWrap,
-                                                {
-                                                    backgroundColor: isDarkMode
-                                                        ? "#064E3B"
-                                                        : "#ECFDF5",
-                                                },
-                                            ]}
-                                        >
-                                            <Ionicons
-                                                name="accessibility-outline"
-                                                size={21}
-                                                color="#10B981"
-                                            />
-                                        </View>
-                                        <View style={{ flex: 1 }}>
-                                            <Text
-                                                style={[
-                                                    styles.settingsLabel,
-                                                    isDarkMode
-                                                        ? { color: "#F8FAFC" }
-                                                        : { color: "#0F172A" },
-                                                ]}
-                                            >
-                                                Khả năng tiếp cận
-                                            </Text>
-                                            <Text
-                                                style={[
-                                                    styles.settingsItemSub,
-                                                    {
-                                                        color: isDarkMode
-                                                            ? "#94A3B8"
-                                                            : "#64748B",
-                                                    },
-                                                ]}
-                                            >
-                                                Kích thước phông chữ & độ
-                                                tương phản hiển thị
-                                            </Text>
-                                        </View>
-                                    </View>
-                                    <Ionicons
-                                        name="chevron-forward"
-                                        size={18}
-                                        color={Colors.primary}
-                                    />
-                                </TouchableOpacity>
 
                                 <TouchableOpacity
                                     style={[
@@ -908,8 +847,14 @@ export default function SettingsScreen({ navigation, route }: any) {
                 isDarkMode={isDarkMode}
                 languageMode={languageMode}
                 appearanceMode={isDarkMode ? "dark" : "light"}
-                onOpenLanguage={() => setLanguageVisible(true)}
-                onOpenAppearance={() => setAppearanceVisible(true)}
+                onOpenLanguage={() => {
+                    setGeneralSettingsVisible(false);
+                    setLanguageVisible(true);
+                }}
+                onOpenAppearance={() => {
+                    setGeneralSettingsVisible(false);
+                    setAppearanceVisible(true);
+                }}
                 onClose={() => setGeneralSettingsVisible(false)}
             />
 
@@ -917,8 +862,15 @@ export default function SettingsScreen({ navigation, route }: any) {
                 visible={isLanguageVisible}
                 isDarkMode={isDarkMode}
                 languageMode={languageMode}
-                onSelectLanguage={handleLanguageChange}
-                onClose={() => setLanguageVisible(false)}
+                onSelectLanguage={(lang) => {
+                    void handleLanguageChange(lang);
+                    setLanguageVisible(false);
+                    setGeneralSettingsVisible(true);
+                }}
+                onClose={() => {
+                    setLanguageVisible(false);
+                    setGeneralSettingsVisible(true);
+                }}
             />
 
             <AppearanceSettingsModal
@@ -927,7 +879,10 @@ export default function SettingsScreen({ navigation, route }: any) {
                 appearanceMode={isDarkMode ? "dark" : "light"}
                 onSelectMode={(mode) => setDarkMode(mode === "dark")}
                 onClose={() =>
-                    closeWithProfileReturn(() => setAppearanceVisible(false))
+                    closeWithProfileReturn(() => {
+                        setAppearanceVisible(false);
+                        setGeneralSettingsVisible(true);
+                    })
                 }
             />
         </SafeAreaView>

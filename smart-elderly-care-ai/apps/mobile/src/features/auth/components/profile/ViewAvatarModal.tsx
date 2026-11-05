@@ -1,7 +1,7 @@
+import { LocalizedText as Text } from '../../../../i18n/LocalizedComponents';
 import React from 'react';
 import {
   View,
-  Text,
   Image,
   TouchableOpacity,
   StyleSheet,

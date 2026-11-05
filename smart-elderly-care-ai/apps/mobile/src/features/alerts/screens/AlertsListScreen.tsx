@@ -879,7 +879,7 @@ export default function AlertsListScreen({ navigation }: any) {
             },
             {
               key: 'MEDICATION',
-              label: `💊 Uống thuốc ${pendingMedCount > 0 ? `(${pendingMedCount})` : '(Xong)'}`,
+              label: `💊 ${t('Uống thuốc')} ${pendingMedCount > 0 ? `(${pendingMedCount})` : `(${t('Xong')})`}`,
               activePill: styles.filterPillActiveMed,
               darkBg: 'rgba(16, 185, 129, 0.15)',
               darkBorder: '#10B981',
@@ -887,7 +887,7 @@ export default function AlertsListScreen({ navigation }: any) {
             },
             {
               key: 'CRITICAL',
-              label: '🚨 Nguy kịch',
+              label: `🚨 ${t('Nguy kịch')}`,
               activePill: styles.filterPillActive,
               darkBg: 'rgba(255, 107, 0, 0.15)',
               darkBorder: '#FF6B00',
@@ -895,7 +895,7 @@ export default function AlertsListScreen({ navigation }: any) {
             },
             {
               key: 'VITAL',
-              label: 'Sức khoẻ',
+              label: t('Sức khoẻ'),
               activePill: styles.filterPillActive,
               darkBg: 'rgba(255, 107, 0, 0.15)',
               darkBorder: '#FF6B00',
@@ -903,7 +903,7 @@ export default function AlertsListScreen({ navigation }: any) {
             },
             {
               key: 'APPOINTMENT',
-              label: '🗓️ Lịch khám',
+              label: `🗓️ ${t('Lịch khám')}`,
               activePill: styles.filterPillActive,
               darkBg: 'rgba(217, 119, 6, 0.15)',
               darkBorder: '#D97706',
@@ -1028,20 +1028,20 @@ export default function AlertsListScreen({ navigation }: any) {
                       ]}
                     >
                       {inc.is_acknowledged && inc.alert_type === 'HOUSE_INVITE_PENDING'
-                        ? (inc.notes?.includes('từ chối') || inc.note?.includes('từ chối') ? 'Đã từ chối' : 'Đã tham gia')
+                        ? (inc.notes?.includes('từ chối') || inc.note?.includes('từ chối') ? t('Đã từ chối') : t('Đã tham gia'))
                         : inc.is_acknowledged && inc.alert_type === 'HOUSE_JOIN_REQUEST'
-                        ? (inc.notes?.includes('từ chối') || inc.note?.includes('từ chối') ? 'Đã từ chối' : 'Đã đồng ý')
-                        : config.badgeText}
+                        ? (inc.notes?.includes('từ chối') || inc.note?.includes('từ chối') ? t('Đã từ chối') : t('Đã đồng ý'))
+                        : t(config.badgeText)}
                     </Text>
                   </View>
                   {!inc.is_acknowledged ? (
                     <View style={styles.newBadge}>
-                      <Text style={styles.newBadgeText}>MỚI</Text>
+                      <Text style={styles.newBadgeText}>{t('MỚI')}</Text>
                     </View>
                   ) : (
                     <View style={styles.handledBadge}>
                       <Ionicons name="checkmark-circle" size={10} color="#16A34A" />
-                      <Text style={styles.handledBadgeText}>ĐÃ XỬ LÝ</Text>
+                      <Text style={styles.handledBadgeText}>{t('ĐÃ XỬ LÝ')}</Text>
                     </View>
                   )}
                 </View>
@@ -1055,7 +1055,7 @@ export default function AlertsListScreen({ navigation }: any) {
                   ]}
                   numberOfLines={2}
                 >
-                  {config.title}
+                  {t(config.title)}
                 </Text>
 
                 <Text style={[styles.cardMsg, isDarkMode && { color: colors.textSecondary }]} numberOfLines={2}>
@@ -1068,10 +1068,10 @@ export default function AlertsListScreen({ navigation }: any) {
                   <Text style={[styles.dotSeparator, isDarkMode && { color: colors.border }]}>•</Text>
                   <Text style={[styles.deviceLocationText, isDarkMode && { color: colors.textSecondary }]}>
                     {inc.alert_type === 'HOUSE_MEMBER_ADDED' || inc.alert_type === 'MEMBER_ADDED'
-                      ? 'Ngôi nhà'
+                      ? t('Ngôi nhà')
                       : inc.device_id
-                      ? `Thiết bị: ${inc.device_id}`
-                      : 'Hệ thống AI'}
+                      ? `${t('Thiết bị')}: ${inc.device_id}`
+                      : t('Hệ thống AI')}
                   </Text>
                 </View>
 

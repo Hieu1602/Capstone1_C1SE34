@@ -635,6 +635,24 @@ async def update_font_preferences(
     )
 
 
+@router.patch("/me/language", response_model=UserOut)
+@router.put("/me/language", response_model=UserOut)
+async def update_my_language(
+    payload: dict = Body(...),
+    current_user: User = Depends(get_current_user),
+    db: AsyncSession = Depends(get_db),
+):
+    """Cap nhat ngon ngu uu tien cua nguoi dung."""
+    lang = payload.get("preferred_language") or payload.get("language") or "vi"
+    if lang not in ["vi", "en"]:
+        lang = "vi"
+    return await crud_user.update(
+        db,
+        db_obj=current_user,
+        obj_in={"preferred_language": lang, "language": lang},
+    )
+
+
 @router.get("/me/notification-preferences")
 async def get_my_notification_preferences(
     current_user: User = Depends(get_current_user),

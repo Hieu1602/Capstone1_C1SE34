@@ -1,7 +1,7 @@
+import { LocalizedText as Text } from '../../../../i18n/LocalizedComponents';
 import React, { useState, useMemo } from 'react';
 import {
   View,
-  Text,
   TextInput,
   TouchableOpacity,
   FlatList,

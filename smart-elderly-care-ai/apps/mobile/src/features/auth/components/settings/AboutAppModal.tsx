@@ -1,7 +1,6 @@
 import React, { useState } from "react";
 import {
     View,
-    Text,
     TouchableOpacity,
     StyleSheet,
     Modal,
@@ -10,6 +9,7 @@ import {
     Image,
     Linking,
 } from "react-native";
+import { LocalizedText as Text } from "../../../../i18n/LocalizedComponents";
 import { Ionicons } from "@expo/vector-icons";
 import { Colors } from "../../../../theme/colors";
 import { SlideRightModal } from "./SlideRightModal";
