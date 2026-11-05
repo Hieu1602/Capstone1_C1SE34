@@ -93,7 +93,6 @@ export default function ProfileScreen({ navigation, route }: any) {
         icon: 'medkit-outline',
         iconColor: '#0EA5E9',
         iconBg: isDark ? '#082F49' : '#E0F2FE',
-        badge: 'AES-256',
         keywords: [
           'benh an',
           'nguoi cao tuoi',
@@ -608,7 +607,7 @@ export default function ProfileScreen({ navigation, route }: any) {
         onClose={() => setIsJoinCodeModalVisible(false)}
         onJoin={handleJoinHouse}
         onJoinSuccess={() => {
-          Alert.alert('Thành công', '🎉 Chúc mừng! Bạn đã tham gia vào căn nhà thành công.');
+          Alert.alert('Đã gửi yêu cầu', '📩 Đã gửi yêu cầu tham gia tới Chủ hộ. Vui lòng chờ Chủ hộ xác nhận nhé!');
         }}
         isDarkMode={mgr.isDarkMode}
         colors={{

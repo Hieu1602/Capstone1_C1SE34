@@ -76,7 +76,7 @@ export default function HouseInviteScreen({ navigation }: any) {
       setIsAccountInviteModalVisible(false);
       setNewMemberPhone('');
       setNewMemberName('');
-      triggerToast(`Đã thêm ${phoneToSubmit} vào ngôi nhà thành công.`);
+      triggerToast(`Đã gửi lời mời tham gia tới ${phoneToSubmit} . Đang chờ thành viên xác nhận.`);
       await fetchHouseFromBackend?.();
     } catch (error: any) {
       const errDetail =

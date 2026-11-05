@@ -5,6 +5,8 @@
 import { Platform } from 'react-native';
 import Constants from 'expo-constants';
 import { useVitalStore, Incident } from '../store/useVitalStore';
+import { useAuthStore } from '../store/useAuthStore';
+import { useAlertStore } from '../store/useAlertStore';
 import { notificationService } from './notificationService';
 
 
@@ -235,6 +237,44 @@ class AlertsWebSocket {
           incident_id: newIncident.id,
           alert_type: 'MEDICAL_RECORD_UPDATED',
           patient_id: incData.patient_id,
+        },
+      });
+      return;
+    }
+
+    // 0.4. Lời mời tham gia nhà / Yêu cầu vào nhà
+    if (['HOUSE_INVITE_PENDING', 'HOUSE_JOIN_REQUEST', 'HOUSE_MEMBER_ADDED', 'HOUSE_JOIN_APPROVED', 'HOUSE_JOIN_REJECTED', 'HOUSE_INVITE_REJECTED'].includes(event.alert_type || event.type)) {
+      const incData = event.data || {};
+      const alertType = event.alert_type || event.type;
+      const targetUserId = incData.target_user_id;
+      const currentUserId = useAuthStore.getState().userId || useAuthStore.getState().user_id;
+
+      if (targetUserId && currentUserId && String(targetUserId) !== String(currentUserId)) {
+        return;
+      }
+
+      const newIncident: Incident = {
+        id: incData.id || `inc-house-${Date.now()}`,
+        device_id: incData.device_id || 'system',
+        alert_type: alertType,
+        alert_level: 'LOW',
+        message: incData.message || 'Thông báo mới về thành viên gia đình',
+        video_clip_url: null,
+        thumbnail_url: null,
+        is_acknowledged: false,
+        created_at: incData.created_at || new Date().toISOString(),
+        notes: `USER:${targetUserId}|${alertType}|MEMBER_ID:${incData.member_id || ''}|HOUSE_ID:${incData.house_id || ''}`,
+      };
+
+      store.addIncident(newIncident);
+      useAlertStore.getState().addIncident(newIncident);
+
+      notificationService.triggerEmergencyNotification({
+        title: alertType === 'HOUSE_INVITE_PENDING' ? '🏠 LỜI MỜI THAM GIA NHÀ' : '🏠 THÀNH VIÊN GIA ĐÌNH',
+        body: newIncident.message,
+        data: {
+          incident_id: newIncident.id,
+          alert_type: alertType,
         },
       });
       return;

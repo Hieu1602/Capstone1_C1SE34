@@ -49,7 +49,7 @@ class CRUDHouse:
 
     async def get_user_houses(self, db: AsyncSession, user_id: UUID) -> list[House]:
         """Lấy tất cả các căn nhà mà người dùng sở hữu HOẶC là thành viên."""
-        member_houses_subq = select(HouseMember.house_id).where(HouseMember.user_id == user_id)
+        member_houses_subq = select(HouseMember.house_id).where(HouseMember.user_id == user_id, HouseMember.status == "ACTIVE")
         result = await db.execute(
             select(House)
             .where(
@@ -215,20 +215,33 @@ class CRUDHouse:
 
         # Kiểm tra xem đã là thành viên chưa
         existing = await self.get_member_by_user(db, house.id, user.id)
-        if existing:
-            raise HTTPException(
-                status_code=status.HTTP_400_BAD_REQUEST,
-                detail=f"Tài khoản số điện thoại {phone} đã là thành viên của căn nhà này.",
-            )
-
         is_doctor = (getattr(user, "role", "") == "doctor" or "bác sĩ" in (obj_in.role_in_house or "").lower() or (obj_in.role or "").lower() == "doctor")
         role_label = "DOCTOR" if is_doctor else (obj_in.role_in_house or "MEMBER")
+
+        if existing:
+            if existing.status == "ACTIVE":
+                raise HTTPException(
+                    status_code=status.HTTP_400_BAD_REQUEST,
+                    detail=f"Tài khoản số điện thoại {phone} đã là thành viên của căn nhà này.",
+                )
+            existing.status = "PENDING_MEMBER_CONFIRM"
+            existing.role_in_house = role_label
+            existing.permissions = obj_in.permissions or "VIEW"
+            existing.can_view_health = True if obj_in.can_view_health is None else obj_in.can_view_health
+            existing.can_view_camera = True if obj_in.can_view_camera is None else obj_in.can_view_camera
+            existing.can_handle_emergency = True if obj_in.can_handle_emergency is None else obj_in.can_handle_emergency
+            existing.can_manage_devices = bool(obj_in.can_manage_devices)
+            existing.can_manage_records = bool(obj_in.can_manage_records) or is_doctor
+            await db.flush()
+            await db.refresh(existing)
+            return (await self.get_member_by_id(db, house.id, existing.id)) or existing
 
         new_member = HouseMember(
             house_id=house.id,
             user_id=user.id,
             role_in_house=role_label,
             permissions=obj_in.permissions or "VIEW",
+            status="PENDING_MEMBER_CONFIRM",
             can_view_health=True if obj_in.can_view_health is None else obj_in.can_view_health,
             can_view_camera=True if obj_in.can_view_camera is None else obj_in.can_view_camera,
             can_handle_emergency=True if obj_in.can_handle_emergency is None else obj_in.can_handle_emergency,
@@ -254,7 +267,7 @@ class CRUDHouse:
         Không cho phép tước quyền của Chủ nhà chính.
         """
         member = await self.get_member_by_id(db, house_id=house.id, member_id=member_id)
-        if not member:
+        if not member or member.status != "ACTIVE":
             raise HTTPException(
                 status_code=status.HTTP_404_NOT_FOUND,
                 detail="Không tìm thấy thành viên này trong căn nhà.",
