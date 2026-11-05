@@ -41,7 +41,7 @@ const getBaseUrl = (): string => {
   }
 
   // 4. Nếu chạy trên Android Emulator
-  return 'http://192.168.1.5:8000/api/v1';
+  return 'http://16.178.128.42:8000/api/v1';
 };
 
 export const BASE_URL: string = getBaseUrl();
