@@ -4,27 +4,34 @@ rag_service.py – Dịch vụ RAG Chatbot Y tế Thông minh (Modular RAG Orche
 Vị trí: backend/app/services/chatbot/rag_service.py
 
 Kiến trúc:
-1. Context Builder: Lấy dữ liệu sinh hiệu thực tế từ TimescaleDB và hồ sơ bệnh án (Zero Fake Data).
+1. Context Builder: Lấy dữ liệu sinh hiệu thực tế từ TimescaleDB, hồ sơ bệnh án, bác sĩ phụ trách và lịch khám.
 2. Medical Retriever: Trích xuất tri thức cẩm nang lão khoa chính thống (BM25 Pure Python).
-3. Multi-Model LLM Client: Hỗ trợ đa mô hình (Gemini, OpenAI, DeepSeek) với cơ chế tự động Fallback.
-4. Pure RAG Local Synthesizer: Đảm bảo luôn phản hồi chính xác, mạch lạc ngay cả khi mất mạng / hết quota LLM.
+3. Medical Triage & Red Flags: Phân loại khẩn cấp (GREEN, YELLOW, RED) và cảnh báo dấu hiệu đỏ.
+4. Multi-Model LLM Client: Hỗ trợ đa mô hình (Gemini, OpenAI) với cơ chế tự động Fallback.
+5. Dual-AI Verification: AI 1 sinh phản hồi + AI 2 Medical Critic thẩm định an toàn lâm sàng.
+6. Pure RAG Local Synthesizer: Luôn phản hồi chính xác, mạch lạc ngay cả khi mất mạng / timeout / hết quota.
 """
 from __future__ import annotations
 
+import asyncio
 import logging
 from datetime import datetime, timezone
-from typing import Any, Dict, List, Optional
+from typing import Any, Dict, List, Optional, Tuple
 from uuid import UUID
 
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from app.core.config import settings
 from app.services.chatbot.context_builder import ChatbotContextBuilder
 from app.services.chatbot.llm_client import MultiModelLLMClient
 from app.services.chatbot.prompt_templates import (
+    CRITIC_SYSTEM_PROMPT_EN,
+    CRITIC_SYSTEM_PROMPT_VI,
     STANDARD_DISCLAIMER_EN,
     STANDARD_DISCLAIMER_VI,
     SYSTEM_PROMPT_EN,
     SYSTEM_PROMPT_VI,
+    build_critic_user_prompt,
     build_rag_user_prompt,
 )
 from app.services.chatbot.retriever import MedicalRetriever, get_medical_retriever
@@ -39,6 +46,8 @@ class ChatbotRAGService:
         self.retriever: MedicalRetriever = get_medical_retriever()
         self.context_builder: ChatbotContextBuilder = ChatbotContextBuilder()
         self.llm_client: MultiModelLLMClient = MultiModelLLMClient()
+        self.enable_critic: bool = getattr(settings, 'ENABLE_AI_CRITIC', True)
+        self.critic_timeout: float = float(getattr(settings, 'LLM_CRITIC_TIMEOUT', 4.0))
 
     @staticmethod
     def _is_simple_greeting(question: str) -> bool:
@@ -61,15 +70,107 @@ class ChatbotRAGService:
                 "Hello! I am **SmartCare AI**, your dedicated Geriatric Health Assistant.\n\n"
                 "I am here to help you:\n"
                 "• **Monitor real-time vital signs**: Check heart rate, SpO₂, body temperature, and fall alerts.\n"
-                "• **Access medical guidelines**: First aid for falls, pressure ulcer prevention, geriatric nutrition, and medication safety.\n\n"
+                "• **Access medical guidelines**: First aid for falls, pressure ulcer prevention, geriatric nutrition, and medication safety.\n"
+                "• **Care Coordination**: Connect with assigned doctors and upcoming clinic appointments.\n\n"
                 "How may I assist you and your loved ones today?"
             )
         return (
             "Dạ, xin chào bạn! Tôi là **Bác sĩ Trợ lý Y tế SmartCare AI**.\n\n"
             "Tôi luôn sẵn sàng đồng hành cùng gia đình để:\n"
             "• **Theo dõi sinh hiệu thực tế**: Kiểm tra nhịp tim, nồng độ oxy SpO₂, thân nhiệt và cảnh báo té ngã từ thiết bị đeo.\n"
-            "• **Tra cứu Cẩm nang Y khoa Lão khoa**: Sơ cấp cứu té ngã, chống loét tì đè, chế độ dinh dưỡng bệnh mãn tính và an toàn dùng thuốc.\n\n"
+            "• **Tra cứu Cẩm nang Y khoa Lão khoa**: Sơ cấp cứu té ngã, chống loét tì đè, chế độ dinh dưỡng bệnh mãn tính và an toàn dùng thuốc.\n"
+            "• **Kết nối y tế gia đình**: Cung cấp thông tin bác sĩ phụ trách và lịch khám bệnh sắp tới.\n\n"
             "Bạn có thể đặt câu hỏi hoặc yêu cầu kiểm tra sức khỏe của người thân ngay tại đây nhé!"
+        )
+
+    @staticmethod
+    def _compute_triage(
+        question: str, vitals: Optional[Dict[str, Any]], incidents: List[Dict[str, Any]]
+    ) -> Tuple[str, bool, List[str]]:
+        """
+        Phân loại mức độ khẩn cấp y tế (Medical Triage - MedX pattern)
+        kết hợp nhận diện Dấu hiệu Đỏ (Red Flags Rulebook - Telemed-AI pattern).
+
+        Trả về: (triage_level, is_emergency, suggested_actions)
+          - RED: Khẩn cấp (Té ngã, nhịp tim nguy hiểm, SpO2 < 90%, đột quỵ FAST, đau ngực dữ dội).
+          - YELLOW: Cần theo dõi (Sinh hiệu lệch nhẹ, sốt, chóng mặt, mệt mỏi, biến cố gần đây).
+          - GREEN: Bình thường / An toàn (Tra cứu thông tin, lịch khám, dinh dưỡng, sinh hiệu ổn định).
+        """
+        q_lower = question.lower()
+
+        # 1. Kiểm tra RED (Khẩn cấp y tế)
+        is_red = False
+        if vitals:
+            if vitals.get("fall_detected") is True:
+                is_red = True
+            hr = vitals.get("heart_rate")
+            if hr is not None and (hr > 130 or hr < 45):
+                is_red = True
+            spo2 = vitals.get("spo2")
+            if spo2 is not None and spo2 < 90:
+                is_red = True
+
+        red_flag_keywords = [
+            "đột quỵ", "tai biến", "méo miệng", "liệt", "nói ngọng", "khó thở dữ dội",
+            "đau ngực dữ dội", "đau thắt ngực", "bất tỉnh", "hôn mê", "ngừng thở",
+            "co giật", "ngất xỉu", "tím tái", "chấn thương đầu", "chảy máu nhiều",
+            "stroke", "chest pain", "unconscious", "cannot breathe", "fainted"
+        ]
+        if any(kw in q_lower for kw in red_flag_keywords):
+            is_red = True
+
+        if is_red:
+            return (
+                "RED",
+                True,
+                [
+                    "Gọi ngay Cấp cứu 115 hoặc đưa cụ đến cơ sở y tế gần nhất",
+                    "Liên hệ ngay bác sĩ phụ trách y tế của gia đình",
+                    "Đặt cụ nằm nghiêng an toàn (nếu bất tỉnh), đầu kê cao 30 độ",
+                    "Tuyệt đối KHÔNG cạo gió, KHÔNG chích máu đầu ngón tay, KHÔNG cho ăn uống",
+                ],
+            )
+
+        # 2. Kiểm tra YELLOW (Cần lưu tâm theo dõi)
+        is_yellow = False
+        if vitals:
+            hr = vitals.get("heart_rate")
+            if hr is not None and (100 < hr <= 130 or 45 <= hr < 60):
+                is_yellow = True
+            spo2 = vitals.get("spo2")
+            if spo2 is not None and (90 <= spo2 < 95):
+                is_yellow = True
+            temp = vitals.get("skin_temp_max") or vitals.get("body_temp")
+            if temp is not None and (temp >= 38.0 or temp <= 35.5):
+                is_yellow = True
+
+        yellow_keywords = [
+            "sốt", "chóng mặt", "mệt mỏi", "đau đầu", "buồn nôn", "tiêu chảy",
+            "khó ngủ", "mờ mắt", "vượt ngưỡng", "huyết áp cao", "tụt huyết áp",
+            "đau lưng", "chán ăn", "ho", "fever", "dizzy", "fatigue", "headache"
+        ]
+        if any(kw in q_lower for kw in yellow_keywords):
+            is_yellow = True
+
+        if is_yellow:
+            return (
+                "YELLOW",
+                False,
+                [
+                    "Kiểm tra và đo lại sinh hiệu sau 15 - 30 phút",
+                    "Đảm bảo cụ được nghỉ ngơi ở nơi thoáng mát và uống đủ nước ấm",
+                    "Liên hệ bác sĩ phụ trách nếu triệu chứng kéo dài không thuyên giảm",
+                ],
+            )
+
+        # 3. Mặc định GREEN (An toàn / Thông thường)
+        return (
+            "GREEN",
+            False,
+            [
+                "Duy trì chế độ sinh hoạt và uống thuốc đúng chỉ định",
+                "Theo dõi các chỉ số sinh hiệu định kỳ qua thiết bị thông minh",
+            ],
         )
 
     def _generate_pure_rag_response(
@@ -80,6 +181,7 @@ class ChatbotRAGService:
         incidents: List[Dict[str, Any]],
         chunks: List[Dict[str, Any]],
         language: str = "vi",
+        context: Optional[Dict[str, Any]] = None,
     ) -> str:
         """
         Bộ tổng hợp Pure RAG cục bộ (Offline Synthesizer).
@@ -88,16 +190,38 @@ class ChatbotRAGService:
         """
         sections: List[str] = []
         is_en = language == "en"
-
-        # 1. Đưa thông tin sinh hiệu vào nếu câu hỏi có nhắc tới sinh hiệu / nhịp tim / oxy
         q_lower = question.lower()
+
+        # 1. Tra cứu nhanh lần vượt ngưỡng gần nhất theo đúng khuôn mẫu ngắn gọn
+        if any(term in q_lower for term in ["vượt ngưỡng", "gần nhất", "sự cố"]):
+            if incidents:
+                latest = incidents[0]
+                st = "Đã xử lý" if latest.get("is_acknowledged") else "Chưa xử lý"
+                return f"Vượt ngưỡng: {latest.get('time', 'Gần đây')}, {latest.get('message', 'Chỉ số bất thường')}, Tình trạng xử lý: {st}."
+            else:
+                return "Dạ, hệ thống chưa ghi nhận lần vượt ngưỡng sinh hiệu nào trong lịch sử gần đây của cụ."
+
+        # 2. Tra cứu thông tin bác sĩ phụ trách y tế (Database Binding)
+        if any(term in q_lower for term in ["bác sĩ", "bac si", "bác sĩ của cụ", "doctor"]):
+            doctor = context.get("doctor") if context else None
+            if doctor and doctor.get("name"):
+                return f"Bác sĩ phụ trách y tế của gia đình là **BS. {doctor.get('name')}** (Số điện thoại: **{doctor.get('phone')}**)."
+            return "Dạ, hiện tại hộ gia đình chưa có bác sĩ phụ trách y tế riêng được phân công trong hệ thống."
+
+        # 3. Tra cứu lịch khám sắp tới (Appointment Binding)
+        if any(term in q_lower for term in ["lịch khám", "lich kham", "lịch hẹn", "tái khám", "appointment"]):
+            appt = context.get("appointment") if context else None
+            if appt and appt.get("scheduled_at"):
+                return f"Lịch khám sắp tới của cụ là vào lúc **{appt.get('scheduled_at')}** (Hình thức: {appt.get('visit_type')}, Địa điểm: {appt.get('location')})."
+            return "Dạ, hiện tại cụ không có lịch khám bệnh nào sắp tới trong hệ thống."
+
         vital_terms = ["nhịp tim", "spo2", "oxy", "sinh hiệu", "thân nhiệt", "nhiệt độ", "té ngã", "ngã",
                        "heart rate", "oxygen", "vital", "temperature", "fall"]
         if any(term in q_lower for term in vital_terms):
             vitals_text = self.context_builder.format_vitals_summary(vitals, language=language)
             sections.append(vitals_text)
 
-        # 2. Trích dẫn nội dung từ cẩm nang y tế
+        # 4. Trích dẫn nội dung từ cẩm nang y tế
         if chunks:
             if is_en:
                 sections.append("📖 **Clinical Care Guidance (Retrieved from Geriatric Knowledge Base)**:")
@@ -105,13 +229,22 @@ class ChatbotRAGService:
                 sections.append("📖 **Hướng dẫn chăm sóc y tế từ Cẩm nang Lão khoa**:")
 
             sources_cited = set()
-            for c in chunks:
-                text = c.get("text", "").strip()
-                source = c.get("source", "Medical Documents")
+            for c_item in chunks:
+                text = c_item.get("text", "").strip()
+                source = c_item.get("source", "Medical Documents")
                 sources_cited.add(source)
-                # Giới hạn độ dài mỗi trích đoạn
-                snippet = text[:500] + ("..." if len(text) > 500 else "")
-                sections.append(f"• {snippet}")
+                if "🎯 **KẾT LUẬN NHANH**" in text:
+                    sections.append(text)
+                else:
+                    clean_lines = [
+                        line for line in text.split("\n")
+                        if not line.startswith("# ")
+                        and not line.startswith("Kiến thức tham khảo")
+                        and not line.startswith("Nội dung bổ sung")
+                    ]
+                    clean_text = "\n".join(clean_lines).strip()
+                    snippet = clean_text[:800] + ("..." if len(clean_text) > 800 else "")
+                    sections.append(f"• {snippet}")
 
             sources_str = ", ".join(sorted(sources_cited))
             if is_en:
@@ -119,7 +252,6 @@ class ChatbotRAGService:
             else:
                 sections.append(f"📚 **Nguồn cẩm nang tham khảo**: `{sources_str}`")
         elif not sections:
-            # Không tìm thấy chunk và cũng không hỏi sinh hiệu
             if is_en:
                 sections.append(
                     "I could not find a directly matching topic in the current clinical guidelines (.pdf, .docx, .xlsx, .txt).\n\n"
@@ -139,7 +271,7 @@ class ChatbotRAGService:
                     "• Kiểm tra chỉ số nhịp tim, SpO2 từ thiết bị đeo thông minh"
                 )
 
-        # 3. Ghi chú cá nhân hóa theo hồ sơ bệnh án
+        # 5. Ghi chú cá nhân hóa theo hồ sơ bệnh án
         med_history = patient.get("medical_history")
         if med_history and med_history != "Chưa ghi nhận bệnh nền":
             patient_name = patient.get("full_name", "người cao tuổi")
@@ -150,107 +282,172 @@ class ChatbotRAGService:
 
         return "\n\n".join(sections)
 
-    @staticmethod
-    def _generate_english_fallback(
-        question: str,
-        heart_rate: Any,
-        spo2: Any,
-        temperature: Any,
-        fall_detected: bool,
-        battery: Any,
-        incidents: List[Dict[str, Any]],
-        patient: Dict[str, Any],
-    ) -> str:
-        """Hỗ trợ tương thích ngược (backward compatibility) cho các bài kiểm thử tự động."""
-        heart_status = "Normal (60–100 BPM)" if 60 <= heart_rate <= 100 else ("High" if heart_rate > 100 else "Low")
-        oxygen_status = "Within expected range (≥95%)" if spo2 >= 95 else "Below expected range (<95%)"
-        temperature_status = "Within expected range" if 36.0 <= temperature <= 37.5 else "Abnormal"
-
-        return (
-            "📊 **Latest vital signs**\n\n"
-            f"- Heart rate: **{heart_rate} BPM** — {heart_status}\n"
-            f"- SpO₂: **{spo2}%** — {oxygen_status}\n"
-            f"- Temperature: **{temperature}°C** — {temperature_status}\n"
-            f"- Wearable battery: **{battery}%**\n\n"
-            "The readings are within the configured safe ranges."
-        )
-
     async def ask(
         self,
         db: AsyncSession,
         user_id: Optional[UUID],
         question: str,
         language: str = "vi",
+        chat_history: Optional[List[Dict[str, str]]] = None,
     ) -> Dict[str, Any]:
         """
-        Quy trình xử lý câu hỏi RAG:
-        1. Xử lý câu chào hỏi xã giao -> Phản hồi lập tức.
-        2. Truy vấn ngữ cảnh lâm sàng thực tế từ DB (TimescaleDB + PostgreSQL).
-        3. Tìm kiếm tài liệu cẩm nang y tế liên quan bằng MedicalRetriever (BM25).
-        4. Gọi MultiModelLLMClient (Gemini / OpenAI / DeepSeek).
-        5. Nếu LLM lỗi hoặc không cấu hình -> Tự động chuyển sang Pure RAG Local Synthesizer.
-        6. Đóng gói kết quả kèm nguồn tài liệu và snapshot sinh hiệu thực tế.
+        Xử lý toàn diện câu hỏi của người dùng và trả về phản hồi y khoa tiêu chuẩn.
+        Bao gồm phân loại khẩn cấp (Triage), ràng buộc CSDL (Context Binding) và kiểm định an toàn (Red Flags).
         """
+        now_str = datetime.now(timezone.utc).isoformat()
         is_en = language == "en"
         disclaimer = STANDARD_DISCLAIMER_EN if is_en else STANDARD_DISCLAIMER_VI
-        now_str = datetime.now(timezone.utc).strftime("%Y-%m-%d %H:%M:%S")
 
-        # 1. Câu chào hỏi xã giao
+        # 1. Kiểm tra câu chào hỏi xã giao
         if self._is_simple_greeting(question):
             return {
                 "status": "success",
                 "question": question,
                 "answer": self._format_greeting_response(language=language),
                 "sources": [],
-                "engine": "SmartCare Conversational Assistant",
+                "engine": "SmartCare Fast Greeting Engine",
                 "timestamp": now_str,
                 "vitals_snapshot": None,
                 "disclaimer": disclaimer,
+                "triage_level": "GREEN",
+                "is_emergency": False,
+                "suggested_actions": ["Đặt câu hỏi về sức khỏe cụ hoặc kiểm tra sinh hiệu"],
             }
 
-        # 2. Ngữ cảnh lâm sàng thực tế từ DB
-        context = await self.context_builder.get_realtime_context(db, user_id)
+        # 2. Truy vấn dữ liệu lâm sàng thực tế từ TimescaleDB và PostgreSQL
+        context = await self.context_builder.get_realtime_context(db=db, user_id=user_id)
         vitals = context.get("vitals")
         incidents = context.get("incidents", [])
         patient = context.get("patient", {})
 
-        # 3. Trích xuất cẩm nang y tế (ngưỡng tương quan 5.0 để phân tách in-doc vs out-of-doc)
+        # Phân loại mức độ khẩn cấp (MedX Triage & Telemed-AI Red Flags)
+        triage_level, is_emergency, suggested_actions = self._compute_triage(
+            question=question, vitals=vitals, incidents=incidents
+        )
+
+        # 3. Trích xuất cẩm nang y tế
         chunks = self.retriever.search(question, top_k=3, threshold=5.0)
 
-        # 4. Thử sinh câu trả lời qua MultiModelLLMClient
+        # 4. Định dạng văn bản ngữ cảnh
         system_prompt = SYSTEM_PROMPT_EN if is_en else SYSTEM_PROMPT_VI
         vitals_text = self.context_builder.format_vitals_summary(vitals, language=language)
         patient_text = self.context_builder.format_patient_summary(patient, language=language)
-        incidents_text = "\n".join([f"• {i['time']}: {i['message']}" for i in incidents if i.get("message")])
+        care_context_text = self.context_builder.format_care_context_summary(context, language=language)
+
+        inc_lines = []
+        for i in incidents:
+            if i.get("message"):
+                st = "Đã xử lý" if i.get("is_acknowledged") else "Chưa xử lý"
+                inc_lines.append(f"• [Vượt ngưỡng lúc {i.get('time')}]: {i.get('message')} | Tình trạng xử lý: {st}")
+        incidents_text = "\n".join(inc_lines)
 
         user_prompt = build_rag_user_prompt(
             question=question,
             vitals_text=vitals_text,
             patient_text=patient_text,
+            care_context_text=care_context_text,
             incidents_text=incidents_text,
             retrieved_chunks=chunks,
             language=language,
+            chat_history=chat_history,
         )
 
+        # 4.1. AI 1: Generator sinh bản thảo câu trả lời
         llm_result = await self.llm_client.generate_response(system_prompt, user_prompt)
 
         if llm_result:
-            answer_text, model_name = llm_result
-            if chunks:
-                engine_name = f"SmartCare AI ({model_name} + RAG Documents)"
-                sources = list(dict.fromkeys([c.get("source", "") for c in chunks if c.get("source")]))
+            draft_text, generator_model = llm_result
+            final_text = draft_text
+            verified_by_critic = False
+            critic_model_name = None
+            critic_failed_or_timed_out = False
+
+            # 4.2. AI 2: Medical Critic / Clinical Safety Verifier
+            if self.enable_critic:
+                critic_system_prompt = CRITIC_SYSTEM_PROMPT_EN if is_en else CRITIC_SYSTEM_PROMPT_VI
+                critic_user_prompt = build_critic_user_prompt(
+                    question=question,
+                    draft_answer=draft_text,
+                    vitals_text=vitals_text,
+                    patient_text=patient_text,
+                    care_context_text=care_context_text,
+                    incidents_text=incidents_text,
+                    language=language,
+                )
+                try:
+                    critic_result = await asyncio.wait_for(
+                        self.llm_client.generate_critic_response(
+                            system_prompt=critic_system_prompt,
+                            user_prompt=critic_user_prompt,
+                            temperature=0.1,
+                            max_tokens=1000,
+                        ),
+                        timeout=self.critic_timeout,
+                    )
+                    if critic_result:
+                        final_text, critic_model_name = critic_result
+                        verified_by_critic = True
+                    else:
+                        logger.warning("AI 2 Critic không phản hồi, fallback sang Pure RAG cục bộ.")
+                        critic_failed_or_timed_out = True
+                except asyncio.TimeoutError:
+                    logger.warning(
+                        "AI 2 (Medical Critic) bị quá hạn thời gian (> %ss). Tự động kích hoạt Fallback sang Pure RAG.",
+                        self.critic_timeout,
+                    )
+                    critic_failed_or_timed_out = True
+                except Exception as critic_err:
+                    logger.warning("Lỗi ngoại lệ khi gọi AI 2 Critic: %s. Kích hoạt Fallback sang Pure RAG.", critic_err)
+                    critic_failed_or_timed_out = True
+
+            if critic_failed_or_timed_out:
+                # Nếu AI 1 đã tạo bản thảo hoàn chỉnh, sử dụng ngay câu trả lời của AI 1 để phục vụ người dùng nhanh nhất
+                if draft_text and len(draft_text.strip()) > 30:
+                    answer_text = draft_text
+                    if chunks:
+                        engine_name = f"SmartCare AI ({generator_model} + RAG Documents)"
+                        sources = list(dict.fromkeys([c.get("source", "") for c in chunks if c.get("source")]))
+                    else:
+                        engine_name = f"SmartCare AI ({generator_model} - Fast Response)"
+                        sources = ["Tri thức y khoa tổng quát"] if not is_en else ["General Medical Knowledge"]
+                else:
+                    answer_text = self._generate_pure_rag_response(
+                        question=question,
+                        vitals=vitals,
+                        patient=patient,
+                        incidents=incidents,
+                        chunks=chunks,
+                        language=language,
+                        context=context,
+                    )
+                    engine_name = "SmartCare Pure RAG Engine (Fallback from Critic Timeout)"
+                    sources = list(dict.fromkeys([c.get("source", "") for c in chunks if c.get("source")]))
             else:
-                engine_name = f"SmartCare AI ({model_name} - General Knowledge)"
-                sources = ["Tri thức y khoa tổng quát"] if not is_en else ["General Medical Knowledge"]
-                # Thêm ghi chú minh bạch cho câu hỏi ngoài tài liệu nếu LLM chưa có
-                note_vi = "\n\n*(Nguồn: Tri thức y khoa lão khoa tổng quát)*"
-                note_en = "\n\n*(Source: General geriatric medical knowledge)*"
-                if is_en and "general" not in answer_text.lower():
-                    answer_text += note_en
-                elif not is_en and "tổng quát" not in answer_text.lower():
-                    answer_text += note_vi
+                answer_text = final_text
+                if verified_by_critic and critic_model_name:
+                    engine_name = f"SmartCare Dual-AI ({generator_model} + Medical Critic {critic_model_name})"
+                    sources = (
+                        list(dict.fromkeys([c.get("source", "") for c in chunks if c.get("source")]))
+                        if chunks
+                        else (["Tri thức y khoa tổng quát"] if not is_en else ["General Medical Knowledge"])
+                    )
+                else:
+                    if chunks:
+                        engine_name = f"SmartCare AI ({generator_model} + RAG Documents)"
+                        sources = list(dict.fromkeys([c.get("source", "") for c in chunks if c.get("source")]))
+                    else:
+                        engine_name = f"SmartCare AI ({generator_model} - General Knowledge)"
+                        sources = ["Tri thức y khoa tổng quát"] if not is_en else ["General Medical Knowledge"]
+
+                if not chunks:
+                    note_vi = "\n\n*(Nguồn: Tri thức y khoa lão khoa tổng quát)*"
+                    note_en = "\n\n*(Source: General geriatric medical knowledge)*"
+                    if is_en and "general" not in answer_text.lower():
+                        answer_text += note_en
+                    elif not is_en and "tổng quát" not in answer_text.lower():
+                        answer_text += note_vi
         else:
-            # 5. Fallback sang Pure RAG cục bộ
+            # 5. Fallback sang Pure RAG cục bộ khi AI 1 không thể kết nối
             answer_text = self._generate_pure_rag_response(
                 question=question,
                 vitals=vitals,
@@ -258,6 +455,7 @@ class ChatbotRAGService:
                 incidents=incidents,
                 chunks=chunks,
                 language=language,
+                context=context,
             )
             engine_name = "SmartCare Pure RAG Engine (Medical Documents)"
             sources = list(dict.fromkeys([c.get("source", "") for c in chunks if c.get("source")]))
@@ -283,6 +481,9 @@ class ChatbotRAGService:
             "timestamp": now_str,
             "vitals_snapshot": vitals_snapshot,
             "disclaimer": disclaimer,
+            "triage_level": triage_level,
+            "is_emergency": is_emergency,
+            "suggested_actions": suggested_actions,
         }
 
 

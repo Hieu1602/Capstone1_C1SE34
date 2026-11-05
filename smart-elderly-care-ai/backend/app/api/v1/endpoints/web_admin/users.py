@@ -119,12 +119,19 @@ async def list_users(
             role_title = "Quản trị viên"
         elif u.role == "doctor":
             role_title = "Bác sĩ gia đình"
+            # Bác sĩ có thể phụ trách 1 hoặc nhiều nhà -> Liệt kê đầy đủ các nhà phụ trách
+            doctor_houses = []
+            for m in u.house_memberships:
+                if m.house and m.house.name:
+                    h_label = f"{m.house.name} ({m.house.address})" if m.house.address else m.house.name
+                    doctor_houses.append(h_label)
+            for h in u.owned_houses:
+                h_label = f"{h.name} ({h.address})" if h.address else h.name
+                if h_label not in doctor_houses:
+                    doctor_houses.append(h_label)
 
-            if u.house_memberships:
-                h_name = u.house_memberships[0].house.name if u.house_memberships[0].house else "Nhà người cao tuổi"
-                assigned_house = f"Phụ trách y tế ({h_name})"
-            elif u.owned_houses:
-                assigned_house = f"Phụ trách y tế ({u.owned_houses[0].name})"
+            if doctor_houses:
+                assigned_house = f"Phụ trách y tế: {', '.join(doctor_houses)}"
             else:
                 assigned_house = "Bác sĩ chuyên khoa dự phòng"
         elif u.owned_houses:
@@ -132,10 +139,14 @@ async def list_users(
             assigned_house = f"{house.name} ({house.address or 'Chủ sở hữu'})"
             role_title = "Chủ sở hữu hệ thống"
         elif u.house_memberships:
+            # Thành viên được chủ nhà thêm vào -> Có cùng địa chỉ nhà như chủ nhà
             m = u.house_memberships[0]
-            h_name = m.house.name if m.house else "Nhà của tôi"
-            assigned_house = f"{h_name} ({m.role_in_house})"
-            role_title = "Thành viên chăm sóc"
+            if m.house:
+                addr_text = m.house.address or m.role_in_house
+                assigned_house = f"{m.house.name} ({addr_text})"
+            else:
+                assigned_house = "Nhà của tôi"
+            role_title = "Thành viên gia đình"
 
         user_out = UserOut.model_validate(u)
         user_out.assigned_house = assigned_house

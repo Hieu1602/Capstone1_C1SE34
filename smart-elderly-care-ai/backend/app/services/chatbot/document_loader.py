@@ -26,7 +26,7 @@ class DocumentLoader:
 
     SUPPORTED_EXTENSIONS = {".pdf", ".docx", ".xlsx", ".xls", ".txt", ".md"}
 
-    def __init__(self, chunk_size: int = 700, chunk_overlap: int = 100):
+    def __init__(self, chunk_size: int = 1800, chunk_overlap: int = 200):
         self.chunk_size = chunk_size
         self.chunk_overlap = chunk_overlap
 
