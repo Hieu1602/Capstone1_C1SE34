@@ -242,38 +242,21 @@ class ReportService:
                 )
                 device = res_any.scalar_one_or_none()
 
+            if not device:
+                res_any_house = await db.execute(
+                    select(Device)
+                    .join(HouseMember, HouseMember.house_id == Device.house_id)
+                    .options(selectinload(Device.elderly))
+                    .where(HouseMember.user_id == user_id)
+                    .order_by(Device.created_at.desc())
+                    .limit(1)
+                )
+                device = res_any_house.scalar_one_or_none()
+
             if device and device.elderly:
                 elderly = device.elderly
 
-        # 4. Fallback mặc định: BLE_BAND_001 hoặc SMARTBAND bất kỳ
-        if not device:
-            res_default_band = await db.execute(
-                select(Device)
-                .options(selectinload(Device.elderly))
-                .where(Device.device_id == "BLE_BAND_001")
-            )
-            device = res_default_band.scalar_one_or_none()
-
-        if not device:
-            res_any_band = await db.execute(
-                select(Device)
-                .options(selectinload(Device.elderly))
-                .where(Device.device_type == DeviceType.SMARTBAND)
-                .limit(1)
-            )
-            device = res_any_band.scalar_one_or_none()
-
-        if not device:
-            res_any_dev = await db.execute(
-                select(Device)
-                .options(selectinload(Device.elderly))
-                .limit(1)
-            )
-            device = res_any_dev.scalar_one_or_none()
-
-        if device and not elderly and device.elderly:
-            elderly = device.elderly
-
+        # Không tự ý gán thiết bị của người khác hoặc BLE_BAND_001 làm dữ liệu ảo cho tài khoản mới
         return device, elderly
 
     @staticmethod
@@ -302,7 +285,25 @@ class ReportService:
             else:
                 label_str = f"{start_time.strftime('%d Tháng %m')} - {now.strftime('%d Tháng %m, %Y')}"
 
+        # Bản đồ thứ trong tuần
+        VN_WEEKDAYS = {0: "T2", 1: "T3", 2: "T4", 3: "T5", 4: "T6", 5: "T7", 6: "CN"}
+        EN_WEEKDAYS = {0: "Mon", 1: "Tue", 2: "Wed", 3: "Thu", 4: "Fri", 5: "Sat", 6: "Sun"}
+        day_map = EN_WEEKDAYS if language == "en" else VN_WEEKDAYS
+
         if not device:
+            empty_chart_labels: List[str] = []
+            if days == 7:
+                for i in range(7):
+                    day_date = (now - timedelta(days=6 - i)).date()
+                    empty_chart_labels.append(day_map[day_date.weekday()])
+            else:
+                step = 30 / 6
+                for i in range(7):
+                    offset_days = int(round(30 - (i * step)))
+                    offset_days = max(0, min(29, offset_days))
+                    slot_date = (now - timedelta(days=offset_days)).date()
+                    empty_chart_labels.append(f"{slot_date.day}/{slot_date.month}")
+
             return HealthReportSummaryOut(
                 period=period_normalized,
                 days=days,
@@ -314,14 +315,17 @@ class ReportService:
                 spo2="--",
                 temperature="--",
                 adherence="0%",
+                adherencePct=0,
                 healthScore="Chưa có dữ liệu",
                 healthScoreTrend="Chưa kết nối",
                 healthScoreProgress=0.0,
                 heartRateData=[0] * 7,
                 spo2Data=[0] * 7,
-                labels=["T2", "T3", "T4", "T5", "T6", "T7", "CN"] if days == 7 else ["T1", "T2", "T3", "T4", "T5", "T6", "T7"],
+                labels=empty_chart_labels,
                 falls="0",
+                fallsCount=0,
                 anomalies="0",
+                anomaliesCount=0,
                 isSynced=False,
                 hasData=False,
             )
@@ -494,7 +498,7 @@ class ReportService:
             fallsCount=total_falls,
             anomalies=str(total_anomalies),
             anomaliesCount=total_anomalies,
-            isSynced=True,
+            isSynced=has_data,
             deviceId=device.device_id,
             deviceName=device.name,
             patientName=elderly.full_name if elderly else None,

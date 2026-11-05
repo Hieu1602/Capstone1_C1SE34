@@ -88,32 +88,36 @@ export const GroupActionModal: React.FC<GroupActionModalProps> = ({
                 <Ionicons name="chevron-forward" size={18} color={isDarkMode ? '#64748B' : '#CBD5E1'} />
               </TouchableOpacity>
 
-              <View style={[styles.actionMenuDivider, isDarkMode && { backgroundColor: colors.border }]} />
+              {handleDelete && (
+                <>
+                  <View style={[styles.actionMenuDivider, isDarkMode && { backgroundColor: colors.border }]} />
 
-              {/* Option 2: Xóa */}
-              <TouchableOpacity
-                style={styles.actionMenuItem}
-                onPress={handleDelete}
-                activeOpacity={0.7}
-              >
-                <View
-                  style={[
-                    styles.actionMenuIconCircle,
-                    { backgroundColor: isDarkMode ? 'rgba(239, 68, 68, 0.2)' : '#FEF2F2' },
-                  ]}
-                >
-                  <Ionicons name="trash-outline" size={20} color="#EF4444" />
-                </View>
-                <View style={{ flex: 1, marginLeft: 14 }}>
-                  <LocalizedText style={[styles.actionMenuText, { color: '#DC2626' }]}>
-                    Xóa
-                  </LocalizedText>
-                  <LocalizedText style={[styles.actionMenuSub, isDarkMode && { color: colors.textSecondary }]}>
-                    Xóa nhóm này, thiết bị sẽ chuyển về trạng thái Chưa nhóm
-                  </LocalizedText>
-                </View>
-                <Ionicons name="chevron-forward" size={18} color={isDarkMode ? '#64748B' : '#CBD5E1'} />
-              </TouchableOpacity>
+                  {/* Option 2: Xóa */}
+                  <TouchableOpacity
+                    style={styles.actionMenuItem}
+                    onPress={handleDelete}
+                    activeOpacity={0.7}
+                  >
+                    <View
+                      style={[
+                        styles.actionMenuIconCircle,
+                        { backgroundColor: isDarkMode ? 'rgba(239, 68, 68, 0.2)' : '#FEF2F2' },
+                      ]}
+                    >
+                      <Ionicons name="trash-outline" size={20} color="#EF4444" />
+                    </View>
+                    <View style={{ flex: 1, marginLeft: 14 }}>
+                      <LocalizedText style={[styles.actionMenuText, { color: '#DC2626' }]}>
+                        Xóa
+                      </LocalizedText>
+                      <LocalizedText style={[styles.actionMenuSub, isDarkMode && { color: colors.textSecondary }]}>
+                        Xóa nhóm này, thiết bị sẽ chuyển về trạng thái Chưa nhóm
+                      </LocalizedText>
+                    </View>
+                    <Ionicons name="chevron-forward" size={18} color={isDarkMode ? '#64748B' : '#CBD5E1'} />
+                  </TouchableOpacity>
+                </>
+              )}
 
               <View style={[styles.actionMenuDivider, isDarkMode && { backgroundColor: colors.border }]} />
 
