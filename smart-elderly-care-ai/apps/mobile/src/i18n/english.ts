@@ -672,6 +672,8 @@ const english: Record<string, string> = {
   'Cài Đặt Camera': 'Camera Settings',
   'Cài Đặt Ngưỡng Cảnh Báo AI': 'AI Alert Thresholds',
   'Cài đặt thông báo & Âm thanh báo động': 'Notification & Alarm Sound Settings',
+  'Cài đặt thông báo & Âm thanh': 'Notification & Sound Settings',
+  'Thay đổi cỡ chữ': 'Change Font Size',
   'Cài Đặt Thuật Toán (Algo)': 'Algorithm Settings',
   'Cài đặt và quyền riêng tư': 'Settings & Privacy',
   'Cải thiện ngay bây giờ': 'Improve now',

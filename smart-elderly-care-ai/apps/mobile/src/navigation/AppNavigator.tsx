@@ -30,6 +30,7 @@ import ProfileScreen from '../features/auth/screens/ProfileScreen';
 import CameraDetailScreen from '../features/livestream/screens/CameraDetailScreen';
 import MultiViewScreen from '../features/livestream/screens/MultiViewScreen';
 import HouseDetailScreen from '../features/dashboard/screens/HouseDetailScreen';
+import HouseInviteScreen from '../features/dashboard/screens/HouseInviteScreen';
 import AIModelDetailScreen from '../features/dashboard/screens/AIModelDetailScreen';
 import AlgoConfigScreen from '../features/dashboard/screens/AlgoConfigScreen';
 import MedicalReportScreen from '../features/history/MedicalReportScreen';
@@ -188,6 +189,7 @@ export default function AppNavigator() {
             <Stack.Screen name="CameraDetail" component={CameraDetailScreen} />
             <Stack.Screen name="MultiView" component={MultiViewScreen} />
             <Stack.Screen name="HouseDetail" component={HouseDetailScreen} />
+            <Stack.Screen name="HouseInvite" component={HouseInviteScreen} />
             <Stack.Screen name="AIModelDetail" component={AIModelDetailScreen} />
             <Stack.Screen name="AlgoConfig" component={AlgoConfigScreen} />
             <Stack.Screen name="MedicalReport" component={MedicalReportScreen} />

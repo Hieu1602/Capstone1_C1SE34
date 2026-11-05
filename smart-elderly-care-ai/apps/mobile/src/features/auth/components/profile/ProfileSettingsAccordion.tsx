@@ -89,10 +89,10 @@ export const ProfileSettingsAccordion: React.FC<ProfileSettingsAccordionProps> =
                   isDarkMode && { color: colors.textPrimary },
                 ]}
               >
-                Cài đặt thông báo & Âm thanh báo động
+                Cài đặt thông báo & Âm thanh
               </Text>
               <Text style={styles.fbSubRowSub}>
-                Chuông còi hú, rung, thông báo đẩy
+                Chuông, rung, thông báo đẩy
               </Text>
             </View>
             <Ionicons name="chevron-forward" size={16} color="#CBD5E1" />
@@ -130,7 +130,7 @@ export const ProfileSettingsAccordion: React.FC<ProfileSettingsAccordionProps> =
                   isDarkMode && { color: colors.textPrimary },
                 ]}
               >
-                Cỡ chữ lớn (Dành cho người cao tuổi)
+                Thay đổi cỡ chữ
               </Text>
               <Text style={styles.fbSubRowSub}>
                 Điều chỉnh độ phóng to chữ đọc dễ dàng

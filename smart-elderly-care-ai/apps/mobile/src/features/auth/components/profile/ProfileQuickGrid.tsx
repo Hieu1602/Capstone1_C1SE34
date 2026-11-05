@@ -12,6 +12,7 @@ interface ProfileQuickGridProps {
   onToggleShowMore: () => void;
   onNavigate: (screen: string) => void;
   onOpenProfile: () => void;
+  onOpenJoinHouse?: () => void;
 }
 
 export const ProfileQuickGrid: React.FC<ProfileQuickGridProps> = ({
@@ -24,6 +25,7 @@ export const ProfileQuickGrid: React.FC<ProfileQuickGridProps> = ({
   onToggleShowMore,
   onNavigate,
   onOpenProfile,
+  onOpenJoinHouse,
 }) => {
   return (
     <>
@@ -123,7 +125,7 @@ export const ProfileQuickGrid: React.FC<ProfileQuickGridProps> = ({
             },
           ]}
           activeOpacity={0.8}
-          onPress={() => onNavigate('HouseDetail')}
+          onPress={() => (!hasHouse && onOpenJoinHouse ? onOpenJoinHouse() : onNavigate('HouseDetail'))}
         >
           <View
             style={[

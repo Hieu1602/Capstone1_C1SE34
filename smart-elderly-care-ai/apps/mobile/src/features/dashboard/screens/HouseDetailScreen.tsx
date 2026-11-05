@@ -80,6 +80,20 @@ export default function HouseDetailScreen({ navigation, route }: any) {
 
   const [toastInfo, setToastInfo] = useState<{ message: string; type?: 'success' | 'error' } | null>(null);
 
+  const hasLinkedHouse = Boolean(house?.id && house?.hasHouse !== false && house?.name && house.name.trim() !== '');
+
+  const isCurrentUserOwner =
+    hasLinkedHouse &&
+    (userRole === 'admin' ||
+      role === 'admin' ||
+      Boolean(
+        members.find(
+          (m) =>
+            (m.is_owner || m.role_in_house === 'OWNER') &&
+            (m.phone_number === phone_number || m.phone_number === userPhone)
+        )
+      ));
+
   const triggerToast = (msg: string, type: 'success' | 'error' = 'success') => {
     setToastInfo({ message: msg, type });
     setCopySuccessToast(msg);
@@ -89,13 +103,7 @@ export default function HouseDetailScreen({ navigation, route }: any) {
     }, 3200);
   };
 
-  useEffect(() => {
-    if (route?.params?.openInviteModal) {
-      setSelectedInviteRole('MEMBER');
-      setInviteStep(1);
-      setInviteModalVisible(true);
-    }
-  }, [route?.params?.openInviteModal]);
+
 
   const executeSaveAddress = async () => {
     try {
@@ -143,19 +151,7 @@ export default function HouseDetailScreen({ navigation, route }: any) {
     }
   };
 
-  const hasLinkedHouse = Boolean(house?.id && house?.hasHouse !== false && house?.name && house.name.trim() !== '');
 
-  const isCurrentUserOwner =
-    hasLinkedHouse &&
-    (userRole === 'admin' ||
-      role === 'admin' ||
-      Boolean(
-        members.find(
-          (m) =>
-            (m.is_owner || m.role_in_house === 'OWNER') &&
-            (m.phone_number === phone_number || m.phone_number === userPhone)
-        )
-      ));
 
   const getFallbackMember = useCallback(() => [
     {
@@ -510,27 +506,26 @@ export default function HouseDetailScreen({ navigation, route }: any) {
                 isLast={index === members.length - 1}
                 onPress={handleOpenPermissions}
                 onDelete={handleRemoveMember}
+                isCurrentUserOwner={Boolean(isCurrentUserOwner)}
                 isDarkMode={isDarkMode}
                 colors={colors}
               />
             ))
           )}
 
-          {/* Nút Thêm Thành Viên Mới */}
-          <TouchableOpacity
-            style={styles.addMemberRow}
-            onPress={() => {
-              setSelectedInviteRole('MEMBER');
-              setInviteStep(1);
-              setInviteModalVisible(true);
-            }}
-            activeOpacity={0.7}
-          >
-            <View style={[styles.orangePlusCircle, isDarkMode && { backgroundColor: '#4A2810', borderColor: '#7C2D12' }]}>
-              <Ionicons name="person-add" size={16} color={Colors.primary} />
-            </View>
-            <Text style={styles.addMemberText}>Mời thành viên mới</Text>
-          </TouchableOpacity>
+          {/* Nút Thêm Thành Viên Mới (Chỉ hiển thị cho Chủ hộ) */}
+          {isCurrentUserOwner && (
+            <TouchableOpacity
+              style={styles.addMemberRow}
+              onPress={() => navigation.navigate('HouseInvite')}
+              activeOpacity={0.7}
+            >
+              <View style={[styles.orangePlusCircle, isDarkMode && { backgroundColor: '#4A2810', borderColor: '#7C2D12' }]}>
+                <Ionicons name="person-add" size={16} color={Colors.primary} />
+              </View>
+              <Text style={styles.addMemberText}>Mời thành viên mới</Text>
+            </TouchableOpacity>
+          )}
         </View>
 
         {/* 3. Section: Quản lý Phòng & Thiết bị */}
@@ -658,7 +653,7 @@ export default function HouseDetailScreen({ navigation, route }: any) {
 
       {/* Modal 2: Quy trình mời gia đình 2 bước */}
       <HouseInviteFlowModal
-        visible={inviteModalVisible}
+        visible={Boolean(inviteModalVisible && isCurrentUserOwner)}
         step={inviteStep}
         setStep={setInviteStep}
         selectedInviteRole={selectedInviteRole}
@@ -674,7 +669,7 @@ export default function HouseDetailScreen({ navigation, route }: any) {
 
       {/* Modal 3: Nhập SĐT mời qua tài khoản */}
       <HouseAccountInviteModal
-        visible={isAccountInviteModalVisible}
+        visible={Boolean(isAccountInviteModalVisible && isCurrentUserOwner)}
         selectedInviteRole={selectedInviteRole}
         newMemberName={newMemberName}
         setNewMemberName={setNewMemberName}
@@ -693,11 +688,12 @@ export default function HouseDetailScreen({ navigation, route }: any) {
         onClose={handleCloseAccountInviteModal}
         isDarkMode={isDarkMode}
         colors={colors}
+        toastInfo={toastInfo}
       />
 
       {/* Modal 4: Popup chia sẻ trực tiếp trên app */}
       <HouseShareModal
-        visible={isShareModalVisible}
+        visible={Boolean(isShareModalVisible && isCurrentUserOwner)}
         houseName={house?.name || 'Nhà của tôi'}
         householdId={household_id}
         selectedInviteRole={selectedInviteRole}

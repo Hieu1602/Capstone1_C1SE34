@@ -10,6 +10,7 @@ interface HouseMemberRowProps {
   isLast: boolean;
   onPress: (member: any) => void;
   onDelete?: (member: any) => void;
+  isCurrentUserOwner?: boolean;
   isDarkMode: boolean;
   colors: {
     bgCard: string;
@@ -24,6 +25,7 @@ export const HouseMemberRow: React.FC<HouseMemberRowProps> = ({
   isLast,
   onPress,
   onDelete,
+  isCurrentUserOwner = false,
   isDarkMode,
   colors: { borderCol, textTitle, textSub },
 }) => {
@@ -193,7 +195,7 @@ export const HouseMemberRow: React.FC<HouseMemberRowProps> = ({
           <View style={styles.ownerBadgeBox}>
             <Text style={[styles.ownerBadgeText, { color: textSub }]}>Chủ hộ</Text>
           </View>
-        ) : (
+        ) : isCurrentUserOwner ? (
           <TouchableOpacity
             style={[styles.deleteBtnBox, { backgroundColor: isDarkMode ? '#450A0A' : '#FEF2F2', borderColor: isDarkMode ? '#7F1D1D' : '#FECACA' }]}
             onPress={() => (onDelete ? onDelete(member) : undefined)}
@@ -203,7 +205,7 @@ export const HouseMemberRow: React.FC<HouseMemberRowProps> = ({
             <Ionicons name="trash-outline" size={14} color="#EF4444" />
             <Text style={styles.deleteBtnText}>Xóa</Text>
           </TouchableOpacity>
-        )}
+        ) : null}
       </View>
 
       {!isLast && <View style={[styles.divider, { backgroundColor: borderCol }]} />}

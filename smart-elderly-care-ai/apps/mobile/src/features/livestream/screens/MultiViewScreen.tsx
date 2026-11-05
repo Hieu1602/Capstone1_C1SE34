@@ -49,19 +49,13 @@ export default function MultiViewScreen({ navigation }: Props) {
     const { isDarkMode } = useTheme();
     const { permissions, userRole, role } = useAuthStore();
     const isOwnerOrAdmin = userRole === 'admin' || role === 'admin' || permissions?.is_owner === true || permissions?.role_in_house === 'OWNER';
-    const canViewCamera = isOwnerOrAdmin || Boolean(permissions?.can_view_camera);
+    const isCameraExplicitlyBlocked = !isOwnerOrAdmin && permissions?.can_view_camera === false;
+
+    const { house, iotDevices, fetchDevicesFromBackend } = useDeviceStore();
 
     useEffect(() => {
-        if (!canViewCamera) {
-            LocalizedAlert.alert(
-                "Không có quyền truy cập",
-                "Chủ hộ đã tắt quyền xem camera đối với tài khoản này. Vui lòng liên hệ Chủ hộ để được mở quyền."
-            );
-            navigation.goBack();
-        }
-    }, [canViewCamera]);
-
-    const { house, iotDevices } = useDeviceStore();
+        fetchDevicesFromBackend?.();
+    }, []);
     const connection = useCameraConnection();
     // Bố cục danh sách camera: lưới hoặc danh sách dọc.
     const [layoutMode, setLayoutMode] = useState<"GRID" | "LIST">("GRID");
@@ -208,7 +202,32 @@ export default function MultiViewScreen({ navigation }: Props) {
                     isGrid ? styles.gridContainer : styles.listContainer
                 }
             >
-                {cameraFeeds.length === 0 ? (
+                {isCameraExplicitlyBlocked ? (
+                    <View
+                        style={[
+                            styles.emptyContainer,
+                            { backgroundColor: bgCard, borderColor: borderCol },
+                        ]}
+                    >
+                        <View style={[styles.emptyIconCircle, { backgroundColor: isDarkMode ? '#450A0A' : '#FEE2E2' }]}>
+                            <Ionicons
+                                name="videocam-off"
+                                size={40}
+                                color="#EF4444"
+                            />
+                        </View>
+                        <LocalizedText
+                            style={[styles.emptyTitle, { color: textTitle }]}
+                        >
+                            Camera an ninh đã bị khóa
+                        </LocalizedText>
+                        <LocalizedText
+                            style={[styles.emptyDesc, { color: textSub }]}
+                        >
+                            Chủ hộ đã tắt quyền giám sát camera an ninh đối với tài khoản này. Vui lòng liên hệ Chủ hộ để được mở quyền.
+                        </LocalizedText>
+                    </View>
+                ) : cameraFeeds.length === 0 ? (
                     <View
                         style={[
                             styles.emptyContainer,

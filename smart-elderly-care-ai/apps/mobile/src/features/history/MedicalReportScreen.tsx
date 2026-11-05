@@ -98,12 +98,12 @@ export default function MedicalReportScreen({ navigation, route }: any) {
           falls: res.data.falls || '0',
           anomalies: res.data.anomalies || '0',
           adherence: res.data.adherence || '0%',
-          healthScore: res.data.healthScore || 'Ổn định',
-          healthScoreTrend: res.data.healthScoreTrend || 'Tốt',
+          healthScore: res.data.healthScore || (res.data.hasData ? 'Ổn định' : 'Chưa có dữ liệu'),
+          healthScoreTrend: res.data.healthScoreTrend || (res.data.hasData ? 'Tốt' : 'Chưa kết nối'),
           healthScoreProgress:
             typeof res.data.healthScoreProgress === 'number'
               ? res.data.healthScoreProgress
-              : 0.85,
+              : (res.data.hasData ? 0.85 : 0),
           heartRateData:
             Array.isArray(res.data.heartRateData) && res.data.heartRateData.length > 0
               ? res.data.heartRateData
@@ -135,6 +135,13 @@ export default function MedicalReportScreen({ navigation, route }: any) {
   }, [fetchReport]);
 
   const handleExportPDF = async () => {
+    if (!report.hasData && report.total_readings === 0) {
+      LocalizedAlert.alert(
+        'Thông báo',
+        'Tài khoản mới chưa có dữ liệu đo sinh hiệu để xuất báo cáo PDF.'
+      );
+      return;
+    }
     try {
       const url = reportsApi.getPdfUrl(period, patientId, deviceId);
       const supported = await Linking.canOpenURL(url);
@@ -152,6 +159,13 @@ export default function MedicalReportScreen({ navigation, route }: any) {
   };
 
   const handleExportExcel = async () => {
+    if (!report.hasData && report.total_readings === 0) {
+      LocalizedAlert.alert(
+        'Thông báo',
+        'Tài khoản mới chưa có dữ liệu đo sinh hiệu để xuất file Excel.'
+      );
+      return;
+    }
     try {
       const url = reportsApi.getExcelUrl(period, patientId, deviceId);
       const supported = await Linking.canOpenURL(url);
@@ -261,44 +275,102 @@ export default function MedicalReportScreen({ navigation, route }: any) {
         ) : (
           <>
             {/* Card Hero: Điểm sức khỏe */}
-            <View style={[styles.heroCard, isDarkMode && { backgroundColor: '#134E4A' }]}>
+            <View
+              style={[
+                styles.heroCard,
+                isDarkMode && { backgroundColor: '#134E4A' },
+                !report.hasData && {
+                  backgroundColor: isDarkMode ? '#1E293B' : '#F8FAFC',
+                  borderWidth: 1,
+                  borderColor: isDarkMode ? '#334155' : '#E2E8F0',
+                },
+              ]}
+            >
               <View style={styles.heroTopRow}>
                 <View>
-                  <LocalizedText style={styles.heroLabel}>Điểm sức khỏe</LocalizedText>
+                  <LocalizedText
+                    style={[
+                      styles.heroLabel,
+                      !report.hasData && { color: isDarkMode ? '#94A3B8' : '#64748B' },
+                    ]}
+                  >
+                    Điểm sức khỏe
+                  </LocalizedText>
                   <View style={styles.heroScoreRow}>
-                    <LocalizedText style={styles.heroScore}>{report.healthScore}</LocalizedText>
-                    <View style={styles.heroTrend}>
+                    <LocalizedText
+                      style={[
+                        styles.heroScore,
+                        !report.hasData && { color: isDarkMode ? '#F8FAFC' : '#1E293B', fontSize: 20 },
+                      ]}
+                    >
+                      {report.healthScore}
+                    </LocalizedText>
+                    <View
+                      style={[
+                        styles.heroTrend,
+                        !report.hasData && { backgroundColor: isDarkMode ? '#334155' : '#E2E8F0' },
+                      ]}
+                    >
                       <Ionicons
                         name={
-                          report.healthScoreTrend === 'Bất thường' || report.healthScoreTrend === 'Cần chú ý'
+                          !report.hasData
+                            ? 'cloud-offline-outline'
+                            : report.healthScoreTrend === 'Bất thường' || report.healthScoreTrend === 'Cần chú ý'
                             ? 'warning-outline'
                             : 'arrow-up'
                         }
                         size={13}
-                        color="#0F766E"
+                        color={!report.hasData ? '#64748B' : '#0F766E'}
                       />
-                      <LocalizedText style={styles.heroTrendText}>{report.healthScoreTrend}</LocalizedText>
+                      <LocalizedText
+                        style={[
+                          styles.heroTrendText,
+                          !report.hasData && { color: isDarkMode ? '#94A3B8' : '#64748B' },
+                        ]}
+                      >
+                        {report.healthScoreTrend}
+                      </LocalizedText>
                     </View>
                   </View>
                 </View>
-                <View style={styles.heroIcon}>
-                  <Ionicons name="heart" size={22} color="#FFFFFF" />
+                <View
+                  style={[
+                    styles.heroIcon,
+                    !report.hasData && { backgroundColor: isDarkMode ? '#334155' : '#94A3B8' },
+                  ]}
+                >
+                  <Ionicons
+                    name={!report.hasData ? 'pulse-outline' : 'heart'}
+                    size={22}
+                    color="#FFFFFF"
+                  />
                 </View>
               </View>
-              <View style={styles.heroProgressTrack}>
+              <View
+                style={[
+                  styles.heroProgressTrack,
+                  !report.hasData && { backgroundColor: isDarkMode ? '#334155' : '#E2E8F0' },
+                ]}
+              >
                 <View
                   style={[
                     styles.heroProgressValue,
                     {
                       width: `${Math.round(Math.max(0, Math.min(1, report.healthScoreProgress)) * 100)}%`,
                     },
+                    !report.hasData && { backgroundColor: '#94A3B8' },
                   ]}
                 />
               </View>
-              <LocalizedText style={styles.heroFootnote}>
+              <LocalizedText
+                style={[
+                  styles.heroFootnote,
+                  !report.hasData && { color: isDarkMode ? '#94A3B8' : '#64748B' },
+                ]}
+              >
                 {report.total_readings > 0
                   ? `Dữ liệu được tổng hợp từ ${report.readings} lần đo`
-                  : 'Chưa có bản ghi sinh hiệu nào trong kỳ báo cáo'}
+                  : 'Tài khoản mới chưa có dữ liệu đo sinh hiệu'}
               </LocalizedText>
             </View>
 
@@ -315,7 +387,7 @@ export default function MedicalReportScreen({ navigation, route }: any) {
                 </LocalizedText>
                 <LocalizedText style={[styles.metricLabel, isDarkMode && { color: '#94A3B8' }]}>Nhịp tim TB</LocalizedText>
                 <LocalizedText style={[styles.metricDelta, isDarkMode && { color: '#CBD5E1' }]}>
-                  {report.heartRateDelta} so với kỳ trước
+                  {report.total_readings > 0 ? `${report.heartRateDelta} so với kỳ trước` : 'Chưa có dữ liệu'}
                 </LocalizedText>
               </View>
 
@@ -356,7 +428,9 @@ export default function MedicalReportScreen({ navigation, route }: any) {
                 </View>
                 <LocalizedText style={[styles.metricValue, isDarkMode && { color: '#F8FAFC' }]}>{report.adherence}</LocalizedText>
                 <LocalizedText style={[styles.metricLabel, isDarkMode && { color: '#94A3B8' }]}>Tuân thủ đeo vòng</LocalizedText>
-                <LocalizedText style={[styles.metricDelta, isDarkMode && { color: '#CBD5E1' }]}>Mục tiêu &gt; 90%</LocalizedText>
+                <LocalizedText style={[styles.metricDelta, isDarkMode && { color: '#CBD5E1' }]}>
+                  {report.total_readings > 0 ? 'Mục tiêu > 90%' : 'Chưa có dữ liệu'}
+                </LocalizedText>
               </View>
             </View>
 
