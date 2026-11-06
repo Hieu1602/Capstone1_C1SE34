@@ -30,7 +30,7 @@ services:
         ports:
             - "8000:8000"
         environment:
-            DATABASE_URL: "${DATABASE_URL}"
+            DATABASE_URL: "${DATABASE_URL:-postgresql+asyncpg://postgres.lwvoaznmrciezcwktmlg:seca1122cap1@aws-0-ap-northeast-2.pooler.supabase.com:5432/postgres}"
             REDIS_URL: "redis://:${REDIS_PASSWORD}@redis:6379/0"
             MQTT_BROKER_HOST: "emqx"
             MQTT_BROKER_PORT: "1883"
@@ -49,6 +49,12 @@ services:
             AWS_S3_SECURE: "${AWS_S3_SECURE:-${MINIO_SECURE}}"
             AWS_REGION: "${AWS_REGION:-${MINIO_REGION}}"
             SECRET_KEY: "${SECRET_KEY}"
+            OTP_MODE: "${OTP_MODE:-esms}"
+            ESMS_API_KEY: "${ESMS_API_KEY:-33071FCC017F6B71E3CD85E57E9D42}"
+            ESMS_SECRET_KEY: "${ESMS_SECRET_KEY:-FE6A70755A9DC8C802FCC389E5DDA9}"
+            ESMS_BRANDNAME: "${ESMS_BRANDNAME:-Baotrixemay}"
+            ESMS_SMS_TYPE: "${ESMS_SMS_TYPE:-2}"
+            ESMS_SANDBOX: "${ESMS_SANDBOX:-0}"
         depends_on:
             redis:
                 condition: service_healthy
