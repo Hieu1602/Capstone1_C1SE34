@@ -70,6 +70,18 @@ jobs:
             
             # Build và khởi động lại Backend service
             cd smart-elderly-care-ai
+            
+            # Cấu hình đồng bộ DATABASE_URL trỏ về Supabase
+            if [ -f .env ]; then
+              if grep -q "^DATABASE_URL=" .env; then
+                sed -i 's|^DATABASE_URL=.*|DATABASE_URL=postgresql+asyncpg://postgres.lwvoaznmrciezcwktmlg:seca1122cap1@aws-0-ap-northeast-2.pooler.supabase.com:5432/postgres|' .env
+              else
+                echo "DATABASE_URL=postgresql+asyncpg://postgres.lwvoaznmrciezcwktmlg:seca1122cap1@aws-0-ap-northeast-2.pooler.supabase.com:5432/postgres" >> .env
+              fi
+            else
+              echo "DATABASE_URL=postgresql+asyncpg://postgres.lwvoaznmrciezcwktmlg:seca1122cap1@aws-0-ap-northeast-2.pooler.supabase.com:5432/postgres" > .env
+            fi
+
             echo "🐳 [CI/CD] Đang cập nhật và khởi động lại FastAPI Backend..."
             docker compose up -d --build backend
             
