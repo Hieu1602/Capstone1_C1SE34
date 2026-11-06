@@ -175,15 +175,11 @@ def send_otp(phone: str, purpose: str = "register") -> str:
     clean_phone = normalize_phone(phone)
     mode = (getattr(settings, "OTP_MODE", "esms") or "esms").strip().lower()
 
-    # Kiểm tra rate-limit (trừ chế độ mock)
-    if mode != "mock":
-        _check_rate_limit(clean_phone)
+    # Luôn kiểm tra rate-limit
+    _check_rate_limit(clean_phone)
 
-    # Tạo mã OTP ngẫu nhiên (hoặc mã cố định nếu chế độ mock test)
-    if mode == "mock":
-        code = getattr(settings, "OTP_DEV_CODE", None) or "123456"
-    else:
-        code = generate_otp_code(6)
+    # Tạo mã OTP ngẫu nhiên thực tế gồm 6 chữ số
+    code = generate_otp_code(6)
 
     # Lưu mã OTP vào Redis / in-memory cache
     now = time.time()
@@ -262,16 +258,6 @@ def verify_otp(phone: str, code: str) -> bool:
     clean_phone = normalize_phone(phone)
     clean_code = (code or "").strip()
     now = time.time()
-
-    # Bỏ qua xác thực cho mã DEV nếu ở chế độ debug/dev
-    dev_codes = {"123456", "999999"}
-    if getattr(settings, "OTP_DEV_CODE", None):
-        dev_codes.add(settings.OTP_DEV_CODE.strip())
-
-    if getattr(settings, "DEBUG", False) and clean_code in dev_codes:
-        _record_verified(clean_phone, now)
-        _reset_failed_attempts(clean_phone)
-        return True
 
     # Kiểm tra trạng thái đã xác thực gần đây
     if is_recently_verified(clean_phone):
