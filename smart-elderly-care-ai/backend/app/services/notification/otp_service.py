@@ -271,7 +271,8 @@ def verify_otp(phone: str, code: str) -> bool:
     expected_code: Optional[str] = None
     if r:
         try:
-            expected_code = r.get(f"otp:{clean_phone}")
+            val = r.get(f"otp:{clean_phone}")
+            expected_code = val.decode("utf-8") if isinstance(val, bytes) else val
         except Exception as exc:
             logger.warning("[OTP] Lỗi đọc Redis: %s", exc)
 
