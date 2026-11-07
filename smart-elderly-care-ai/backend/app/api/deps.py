@@ -50,10 +50,40 @@ async def get_current_user(
     user = await crud_user.get(db, user_id=user_id)
     if not user:
         raise credentials_exception
+
+    # Kiểm tra token_version (thu hồi phiên đăng nhập khi Admin thu hồi hoặc đổi quyền)
+    token_ver = payload.get("token_version")
+    if token_ver is not None and token_ver < getattr(user, "token_version", 1):
+        raise HTTPException(
+            status_code=status.HTTP_401_UNAUTHORIZED,
+            detail="Phiên đăng nhập đã bị thu hồi bởi Quản trị viên. Vui lòng đăng nhập lại.",
+            headers={"WWW-Authenticate": "Bearer"},
+        )
+
+    # Kiểm tra trạng thái khóa tự động (tự hết hạn sau 15-30 phút không cần Admin)
+    if getattr(user, "status", "active") == "locked_auto":
+        from datetime import datetime, timezone
+        now = datetime.now(timezone.utc)
+        if user.lock_until and user.lock_until <= now:
+            user.status = "active"
+            user.is_active = True
+            user.lock_reason = None
+            user.lock_until = None
+            user.locked_at = None
+            db.add(user)
+            await db.commit()
+            await db.refresh(user)
+        else:
+            raise HTTPException(
+                status_code=status.HTTP_403_FORBIDDEN,
+                detail=f"Tài khoản bị tạm khóa tự động. Lý do: {user.lock_reason or 'Sai mật khẩu quá số lần quy định'}.",
+            )
+
     if not user.is_active:
+        detail_msg = f"Tài khoản đã bị khóa. Lý do: {user.lock_reason or 'Vi phạm chính sách'}."
         raise HTTPException(
             status_code=status.HTTP_403_FORBIDDEN,
-            detail="Tài khoản đã bị vô hiệu hóa.",
+            detail=detail_msg,
         )
     if request is not None and not request.headers.get("accept-language"):
         from app.core.i18n import normalize_language

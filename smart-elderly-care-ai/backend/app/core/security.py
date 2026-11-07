@@ -58,6 +58,7 @@ def verify_password(plain_password: str, hashed_password: str) -> bool:
 def create_access_token(
     subject: Any,
     expires_delta: Optional[timedelta] = None,
+    token_version: int = 1,
 ) -> str:
     """
     Tạo JWT Access Token.
@@ -65,6 +66,7 @@ def create_access_token(
     Args:
         subject: User ID hoặc username (sẽ lưu vào 'sub' claim)
         expires_delta: Thời gian hết hạn (mặc định từ settings)
+        token_version: Phiên bản token để vô hiệu hóa khi thu hồi phiên
 
     Returns:
         Encoded JWT string
@@ -78,11 +80,12 @@ def create_access_token(
         "exp": expire,
         "iat": datetime.now(timezone.utc),
         "type": "access",
+        "token_version": token_version,
     }
     return jwt.encode(payload, settings.SECRET_KEY, algorithm=settings.ALGORITHM)
 
 
-def create_refresh_token(subject: Any) -> str:
+def create_refresh_token(subject: Any, token_version: int = 1) -> str:
     """Tạo JWT Refresh Token với thời gian hết hạn dài hơn."""
     expire = datetime.now(timezone.utc) + timedelta(
         days=settings.REFRESH_TOKEN_EXPIRE_DAYS
@@ -92,6 +95,7 @@ def create_refresh_token(subject: Any) -> str:
         "exp": expire,
         "iat": datetime.now(timezone.utc),
         "type": "refresh",
+        "token_version": token_version,
     }
     return jwt.encode(payload, settings.SECRET_KEY, algorithm=settings.ALGORITHM)
 

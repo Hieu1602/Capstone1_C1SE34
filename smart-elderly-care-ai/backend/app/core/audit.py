@@ -35,16 +35,32 @@ async def record_audit_log(
     severity: str = "low",
     ip_address: Optional[str] = None,
     request: Optional[Request] = None,
+    admin_id: Optional[str] = None,
+    action: Optional[str] = None,
+    target_type: Optional[str] = None,
+    target_id: Optional[str] = None,
+    reason: Optional[str] = None,
+    old_value: Optional[str] = None,
+    new_value: Optional[str] = None,
+    commit: bool = True,
 ) -> None:
     """
     Ghi một bản ghi nhật ký kiểm toán vào bảng audit_logs một cách an toàn.
+    Chỉ thêm (append-only), hỗ trợ chạy trong cùng transaction (commit=False).
     """
     ip = ip_address or get_client_ip(request)
+    act = action or event
     try:
         await db.execute(
             text("""
-                INSERT INTO audit_logs (event, user_name, ip_address, severity, details)
-                VALUES (:event, :user_name, :ip_address, :severity, :details)
+                INSERT INTO audit_logs (
+                    event, user_name, ip_address, severity, details,
+                    admin_id, action, target_type, target_id, reason, old_value, new_value
+                )
+                VALUES (
+                    :event, :user_name, :ip_address, :severity, :details,
+                    :admin_id, :action, :target_type, :target_id, :reason, :old_value, :new_value
+                )
             """),
             {
                 "event": event,
@@ -52,13 +68,22 @@ async def record_audit_log(
                 "ip_address": ip,
                 "severity": severity,
                 "details": details,
+                "admin_id": admin_id,
+                "action": act,
+                "target_type": target_type,
+                "target_id": str(target_id) if target_id else None,
+                "reason": reason,
+                "old_value": old_value,
+                "new_value": new_value,
             },
         )
-        await db.commit()
+        if commit:
+            await db.commit()
     except Exception as exc:
         logger.warning("[AuditLog] Không thể ghi audit log: %s", exc)
-        try:
-            await db.rollback()
-        except Exception:
-            pass
+        if commit:
+            try:
+                await db.rollback()
+            except Exception:
+                pass
 

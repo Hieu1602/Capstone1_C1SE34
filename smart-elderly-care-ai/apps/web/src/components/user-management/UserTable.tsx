@@ -8,6 +8,8 @@ import {
   Lock,
   Unlock,
   Trash2,
+  Smartphone,
+  AlertTriangle,
 } from 'lucide-react';
 import { User } from '../../types';
 import { ROLE_CONFIG } from './constants';
@@ -18,6 +20,7 @@ interface UserTableProps {
   onEditUser: (user: User) => void;
   onToggleStatus: (user: User) => void;
   onDeleteUser: (user: User) => void;
+  onViewTerminals?: (user: User) => void;
 }
 
 export const UserTable: React.FC<UserTableProps> = ({
@@ -26,6 +29,7 @@ export const UserTable: React.FC<UserTableProps> = ({
   onEditUser,
   onToggleStatus,
   onDeleteUser,
+  onViewTerminals,
 }) => {
   return (
     <div className="glass-card overflow-hidden">
@@ -104,31 +108,71 @@ export const UserTable: React.FC<UserTableProps> = ({
                       </div>
                     </td>
 
-                    {/* Status */}
+                    {/* Status & Dormancy */}
                     <td className="py-3 px-4 text-center">
-                      <button
-                        onClick={() => onToggleStatus(userItem)}
-                        className={`inline-flex items-center space-x-1.5 px-2.5 py-0.5 rounded-full text-[11px] font-mono font-semibold transition-all cursor-pointer ${
-                          userItem.is_active ? 'badge-live' : 'badge-danger'
-                        }`}
-                      >
-                        {userItem.is_active ? (
-                          <>
-                            <span className="w-1.5 h-1.5 rounded-full bg-emerald-500 animate-pulse"></span>
-                            <span>HOẠT ĐỘNG</span>
-                          </>
-                        ) : (
-                          <>
-                            <span className="w-1.5 h-1.5 rounded-full bg-rose-500"></span>
-                            <span>ĐÃ KHÓA</span>
-                          </>
+                      <div className="flex flex-col items-center gap-1">
+                        <button
+                          onClick={() => onToggleStatus(userItem)}
+                          title={userItem.lock_reason || (userItem.is_active ? 'Nhấp để khóa tài khoản' : 'Nhấp để mở khóa tài khoản')}
+                          className={`inline-flex items-center space-x-1.5 px-2.5 py-0.5 rounded-full text-[10px] font-mono font-semibold transition-all cursor-pointer ${
+                            userItem.status === 'locked_auto'
+                              ? 'bg-amber-100 dark:bg-amber-950/40 text-amber-700 dark:text-amber-400 border border-amber-300 dark:border-amber-800'
+                              : userItem.is_active
+                              ? 'badge-live'
+                              : 'badge-danger'
+                          }`}
+                        >
+                          {userItem.status === 'locked_auto' ? (
+                            <>
+                              <span className="w-1.5 h-1.5 rounded-full bg-amber-500 animate-pulse"></span>
+                              <span>TỰ KHÓA 30P</span>
+                            </>
+                          ) : userItem.is_active ? (
+                            <>
+                              <span className="w-1.5 h-1.5 rounded-full bg-emerald-500 animate-pulse"></span>
+                              <span>HOẠT ĐỘNG</span>
+                            </>
+                          ) : (
+                            <>
+                              <span className="w-1.5 h-1.5 rounded-full bg-rose-500"></span>
+                              <span>ĐÃ KHÓA</span>
+                            </>
+                          )}
+                        </button>
+
+                        {/* Dormancy Tag */}
+                        {userItem.dormancy_level === 'remind_3m' && (
+                          <span className="text-[9px] font-mono font-bold text-amber-600 dark:text-amber-400 bg-amber-50 dark:bg-amber-950/30 px-1.5 py-0.5 rounded border border-amber-200 dark:border-amber-800/50">
+                            Ngủ đông &gt; 3th
+                          </span>
                         )}
-                      </button>
+                        {userItem.dormancy_level === 'lock_6m' && (
+                          <span className="text-[9px] font-mono font-bold text-orange-600 dark:text-orange-400 bg-orange-50 dark:bg-orange-950/30 px-1.5 py-0.5 rounded border border-orange-200 dark:border-orange-800/50">
+                            Ngủ đông &gt; 6th
+                          </span>
+                        )}
+                        {userItem.dormancy_level === 'eligible_delete_1y' && (
+                          <span className="text-[9px] font-mono font-bold text-rose-600 dark:text-rose-400 bg-rose-50 dark:bg-rose-950/30 px-1.5 py-0.5 rounded border border-rose-200 dark:border-rose-800/50">
+                            Đủ đ/k xóa (&gt; 1 năm)
+                          </span>
+                        )}
+                      </div>
                     </td>
 
                     {/* Actions */}
                     <td className="py-3 px-4 text-right">
                       <div className="flex items-center justify-end space-x-1.5">
+                        {/* Xem thiết bị & quản lý phiên */}
+                        {onViewTerminals && (
+                          <button
+                            onClick={() => onViewTerminals(userItem)}
+                            className="p-1.5 rounded-lg text-[#737780] hover:text-[#008080] hover:bg-[#E6F4F4] dark:hover:bg-[#008080]/15 transition-colors cursor-pointer"
+                            title="Xem thiết bị đang đăng nhập & Quản lý phiên"
+                          >
+                            <Smartphone className="w-4 h-4 text-teal-600 dark:text-teal-400" />
+                          </button>
+                        )}
+
                         {/* Xem & kiểm tra quyền chi tiết */}
                         <button
                           onClick={() => onInspectPermissions(userItem)}
@@ -151,7 +195,7 @@ export const UserTable: React.FC<UserTableProps> = ({
                         <button
                           onClick={() => onToggleStatus(userItem)}
                           className="p-1.5 rounded-lg text-[#737780] hover:text-[#E9A23B] hover:bg-amber-50 dark:hover:bg-white/5 transition-colors cursor-pointer"
-                          title={userItem.is_active ? 'Khóa tài khoản' : 'Mở khóa tài khoản'}
+                          title={userItem.is_active ? 'Khóa tài khoản (bắt buộc nhập lý do)' : 'Mở khóa tài khoản (bắt buộc nhập lý do)'}
                         >
                           {userItem.is_active ? (
                             <Lock className="w-4 h-4" />
@@ -164,8 +208,17 @@ export const UserTable: React.FC<UserTableProps> = ({
                         {userItem.role !== 'admin' && (
                           <button
                             onClick={() => onDeleteUser(userItem)}
-                            className="p-1.5 rounded-lg text-[#737780] hover:text-[#E5484D] hover:bg-rose-50 dark:hover:bg-white/5 transition-colors cursor-pointer"
-                            title="Xóa tài khoản"
+                            disabled={userItem.can_delete === false}
+                            className={`p-1.5 rounded-lg transition-colors ${
+                              userItem.can_delete === false
+                                ? 'opacity-30 cursor-not-allowed text-slate-400'
+                                : 'text-[#737780] hover:text-[#E5484D] hover:bg-rose-50 dark:hover:bg-white/5 cursor-pointer'
+                            }`}
+                            title={
+                              userItem.can_delete === false
+                                ? userItem.cannot_delete_reason || 'Không đủ điều kiện xóa'
+                                : 'Xóa vĩnh viễn tài khoản'
+                            }
                           >
                             <Trash2 className="w-4 h-4" />
                           </button>

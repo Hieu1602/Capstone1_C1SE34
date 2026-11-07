@@ -14,17 +14,17 @@ import { useAuthStore } from '../store/useAuthStore';
 // - Hỗ trợ Android Emulator (10.0.2.2)
 // - Fallback về IP máy tính hiện tại: 192.168.1.7
 const getBaseUrl = (): string => {
-  // 1. Khi chạy trên Web trình duyệt: Tự động dùng host trình duyệt đang truy cập (tránh chết IP LAN khi DHCP đổi IP)
+  // 1. Ưu tiên biến môi trường EXPO_PUBLIC_API_URL (ví dụ AWS EC2) nếu được cấu hình
+  const envUrl = process.env.EXPO_PUBLIC_API_URL;
+  if (envUrl && envUrl.trim().length > 0) {
+    return envUrl.trim();
+  }
+
+  // 2. Khi chạy trên Web trình duyệt: Tự động dùng host trình duyệt đang truy cập
   if (Platform.OS === 'web' && typeof window !== 'undefined' && window.location?.hostname) {
     const host = window.location.hostname;
     const resolvedHost = (host === 'localhost' || host === '::1') ? '127.0.0.1' : host;
     return `http://${resolvedHost}:8000/api/v1`;
-  }
-
-  // 2. Biến môi trường EXPO_PUBLIC_API_URL cho Mobile (Expo Go / Device)
-  const envUrl = process.env.EXPO_PUBLIC_API_URL;
-  if (envUrl && envUrl.trim().length > 0) {
-    return envUrl.trim();
   }
 
   // 3. Tự động nhận diện IP máy tính từ Expo Metro host (kết nối trực tiếp điện thoại thật qua LAN Wi-Fi)
@@ -40,7 +40,7 @@ const getBaseUrl = (): string => {
     }
   }
 
-  // 4. Nếu chạy trên Android Emulator
+  // 4. Fallback về máy chủ AWS EC2
   return 'http://16.178.128.42:8000/api/v1';
 };
 
@@ -73,7 +73,7 @@ export const getCustomServerUrl = async (): Promise<string> => {
 
 const api: AxiosInstance = axios.create({
   baseURL: BASE_URL,
-  timeout: 20000,
+  timeout: 45000,
   headers: {
     'Content-Type': 'application/json',
   },
