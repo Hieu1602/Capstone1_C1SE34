@@ -105,19 +105,35 @@ def invalidate_users_cache():
     _USERS_CACHE["timestamp"] = 0.0
 
 
+# Mốc cấu hình ngủ đông chuyển thành tuple tĩnh để tính toán O(1)
+DORMANCY_THRESHOLDS = (
+    (settings.DORMANT_DELETE_DAYS, "eligible_delete_1y"),
+    (settings.DORMANT_LOCK_DAYS, "lock_6m"),
+    (settings.DORMANT_REMIND_DAYS, "remind_3m"),
+)
+
+# Kỹ thuật 1 & 4: Lookup table & Set O(1) cho các nhóm vai trò
+ROLE_GROUPS: dict[str, set[str]] = {
+    "owner": {"user", "owner"},
+    "member": {"member", "caregiver"},
+}
+
+# Kỹ thuật 1: Lookup table O(1) cho số ngày ngủ đông
+DORMANT_DAYS_MAP: dict[str, int] = {
+    "1y": settings.DORMANT_DELETE_DAYS,
+    "6m": settings.DORMANT_LOCK_DAYS,
+    "3m": settings.DORMANT_REMIND_DAYS,
+}
+
+
 def get_user_dormancy_level(user: User, now: datetime) -> str:
     """Tính mức độ ngủ đông theo last_login_at (hoặc created_at nếu chưa từng đăng nhập)."""
     last_act = user.last_login_at or user.created_at
     if not last_act:
         return "active"
     days = (now - last_act).total_seconds() / 86400
-    if days >= settings.DORMANT_DELETE_DAYS:
-        return "eligible_delete_1y"
-    elif days >= settings.DORMANT_LOCK_DAYS:
-        return "lock_6m"
-    elif days >= settings.DORMANT_REMIND_DAYS:
-        return "remind_3m"
-    return "active"
+    # Kỹ thuật 5: Generator ngắt sớm tại C-level với next()
+    return next((lvl for th, lvl in DORMANCY_THRESHOLDS if days >= th), "active")
 
 
 async def check_user_deletion_guards(db: AsyncSession, target_user: User, current_admin: User) -> tuple[bool, Optional[str]]:
@@ -259,53 +275,48 @@ async def list_users(
             u_owned = owned_houses_by_owner.get(u.id, [])
             u_memberships = memberships_by_user.get(u.id, [])
 
-            if u.role == "admin":
-                assigned_house = "Toàn hệ thống (Root Admin)"
-                role_title = "Quản trị viên"
-            elif u.role == "doctor":
-                role_title = "Bác sĩ gia đình"
-                doctor_houses = []
-                for m in u_memberships:
+            # Kỹ thuật 2: Structural Pattern Matching (match-case) Python 3.10+
+            match u.role:
+                case "admin":
+                    assigned_house = "Toàn hệ thống (Root Admin)"
+                    role_title = "Quản trị viên"
+                case "doctor":
+                    role_title = "Bác sĩ gia đình"
+                    doctor_houses = [
+                        f"{h.name} ({h.address})" if h.address else h.name
+                        for m in u_memberships
+                        if (h := houses_by_id.get(m.house_id)) and h.name
+                    ]
+                    doctor_houses.extend(
+                        f"{h.name} ({h.address})" if h.address else h.name
+                        for h in u_owned
+                        if h.name and (f"{h.name} ({h.address})" if h.address else h.name) not in doctor_houses
+                    )
+                    assigned_house = f"Phụ trách y tế: {', '.join(doctor_houses)}" if doctor_houses else "Bác sĩ chuyên khoa dự phòng"
+                case _ if u_owned:
+                    house = u_owned[0]
+                    assigned_house = f"{house.name} ({house.address or 'Chủ sở hữu'})"
+                    role_title = "Chủ sở hữu hệ thống"
+                case _ if u_memberships:
+                    m = u_memberships[0]
                     h = houses_by_id.get(m.house_id)
-                    if h and h.name:
-                        h_label = f"{h.name} ({h.address})" if h.address else h.name
-                        doctor_houses.append(h_label)
-                for h in u_owned:
-                    h_label = f"{h.name} ({h.address})" if h.address else h.name
-                    if h_label not in doctor_houses:
-                        doctor_houses.append(h_label)
-
-                assigned_house = f"Phụ trách y tế: {', '.join(doctor_houses)}" if doctor_houses else "Bác sĩ chuyên khoa dự phòng"
-            elif u_owned:
-                house = u_owned[0]
-                assigned_house = f"{house.name} ({house.address or 'Chủ sở hữu'})"
-                role_title = "Chủ sở hữu hệ thống"
-            elif u_memberships:
-                m = u_memberships[0]
-                h = houses_by_id.get(m.house_id)
-                if h:
-                    addr_text = h.address or m.role_in_house
-                    assigned_house = f"{h.name} ({addr_text})"
-                else:
-                    assigned_house = "Nhà của tôi"
-                role_title = "Thành viên gia đình"
+                    assigned_house = f"{h.name} ({h.address or m.role_in_house})" if h else "Nhà của tôi"
+                    role_title = "Thành viên gia đình"
+                case _:
+                    pass
 
             u_dormancy = get_user_dormancy_level(u, now)
 
-            u_can_del = True
-            u_reason = None
-            if u.id == current_user.id:
-                u_can_del = False
-                u_reason = "Không thể tự xóa tài khoản của chính mình."
-            elif u.role == "admin" and admin_count <= 1:
-                u_can_del = False
-                u_reason = "Không thể xóa Quản trị viên cuối cùng của hệ thống."
-            elif u.id in owners_with_members:
-                u_can_del = False
-                u_reason = "Căn nhà còn thành viên hoạt động. Vui lòng chuyển quyền Chủ hộ hoặc giải tán nhà trước khi xóa."
-            elif u.id in owners_with_incidents:
-                u_can_del = False
-                u_reason = "Tài khoản đang có cảnh báo khẩn cấp chưa được xử lý."
+            # Kỹ thuật 4 & 5: Kiểm tra nhanh bằng set O(1) và ngắt sớm tại C-level bằng next()
+            guard_checks = (
+                (u.id == current_user.id, "Không thể tự xóa tài khoản của chính mình."),
+                (u.role == "admin" and admin_count <= 1, "Không thể xóa Quản trị viên cuối cùng của hệ thống."),
+                (u.id in owners_with_members, "Căn nhà còn thành viên hoạt động. Vui lòng chuyển quyền Chủ hộ hoặc giải tán nhà trước khi xóa."),
+                (u.id in owners_with_incidents, "Tài khoản đang có cảnh báo khẩn cấp chưa được xử lý."),
+            )
+            u_reason = next((msg for violated, msg in guard_checks if violated), None)
+            # Kỹ thuật 3: Lập trình không phân nhánh (Branchless boolean)
+            u_can_del = (u_reason is None)
 
             user_out = UserOut.model_validate(u)
             user_out.assigned_house = assigned_house
@@ -377,24 +388,18 @@ async def list_users(
             or (u.assigned_house and kw in u.assigned_house.lower())
         ]
 
+    # Kỹ thuật 1 & 4: Sử dụng Dictionary Lookup Table O(1) và kiểm tra bằng Set O(1)
     role_str = role if isinstance(role, str) else None
-    if role_str and role_str.strip() and role_str.strip() != "all":
-        r = role_str.strip().lower()
-        if r == "owner":
-            filtered = [u for u in filtered if u.role in ("user", "owner")]
-        elif r == "member":
-            filtered = [u for u in filtered if u.role in ("member", "caregiver")]
-        else:
-            filtered = [u for u in filtered if u.role.lower() == r]
+    if role_str and (r := role_str.strip().lower()) != "all":
+        allowed_roles = ROLE_GROUPS.get(r, {r})
+        filtered = [u for u in filtered if u.role.lower() in allowed_roles]
 
     status_str = status if isinstance(status, str) else None
-    if status_str and status_str.strip() and status_str.strip() != "all":
-        st = status_str.strip().lower()
+    if status_str and (st := status_str.strip().lower()) != "all":
         filtered = [u for u in filtered if getattr(u, "status", "active") == st]
 
     dormancy_str = dormancy if isinstance(dormancy, str) else None
-    if dormancy_str and dormancy_str.strip() and dormancy_str.strip() != "all":
-        dm = dormancy_str.strip().lower()
+    if dormancy_str and (dm := dormancy_str.strip().lower()) != "all":
         filtered = [u for u in filtered if getattr(u, "dormancy_level", "active") == dm]
 
     # Phân trang nếu page được truyền vào
@@ -1039,13 +1044,8 @@ async def preview_dormant_users(
     - Loại trừ Owner nếu căn nhà còn thiết bị hoặc thành viên hoạt động
     """
     now = datetime.now(timezone.utc)
-    if level == "1y":
-        days = settings.DORMANT_DELETE_DAYS
-    elif level == "6m":
-        days = settings.DORMANT_LOCK_DAYS
-    else:
-        days = settings.DORMANT_REMIND_DAYS
-
+    # Kỹ thuật 1: Dictionary Lookup Table O(1)
+    days = DORMANT_DAYS_MAP.get(level, settings.DORMANT_REMIND_DAYS)
     threshold_dt = now - timedelta(days=days)
 
     stmt = (
@@ -1120,77 +1120,85 @@ async def execute_dormant_batch_action(
     target_users = list(res.scalars().all())
 
     affected_count = 0
-    if payload.action == "remind":
-        for u in target_users:
-            notif = SystemNotification(
-                title="Nhắc nhở duy trì tài khoản",
-                body=f"Xin chào {u.full_name}, tài khoản của bạn đã lâu không hoạt động. Vui lòng đăng nhập lại để duy trì dịch vụ chăm sóc gia đình.",
-                type="info",
-                target_audience="caregivers",
-                status="published",
-                published_at=now,
-                created_by=current_user.id,
+    LOCKED_STATUSES = {UserStatus.LOCKED_ADMIN, UserStatus.LOCKED_AUTO}
+
+    # Kỹ thuật 2: Structural Pattern Matching (match-case) thay thế if-elif-else
+    match payload.action:
+        case "remind":
+            for u in target_users:
+                notif = SystemNotification(
+                    title="Nhắc nhở duy trì tài khoản",
+                    body=f"Xin chào {u.full_name}, tài khoản của bạn đã lâu không hoạt động. Vui lòng đăng nhập lại để duy trì dịch vụ chăm sóc gia đình.",
+                    type="info",
+                    target_audience="caregivers",
+                    status="published",
+                    published_at=now,
+                    created_by=current_user.id,
+                )
+                db.add(notif)
+                affected_count += 1
+
+            await record_audit_log(
+                db=db,
+                event="GỬI CẢNH BÁO NGỦ ĐÔNG HÀNG LOẠT",
+                user_name=f"{current_user.full_name} ({current_user.role})",
+                details=f"Admin gửi thông báo nhắc nhở tới {affected_count} tài khoản ngủ đông mức [{payload.level}]. Lý do: {payload.reason}",
+                severity="medium",
+                admin_id=str(current_user.id),
+                action="BATCH_REMIND_DORMANT",
+                reason=payload.reason,
+                commit=False,
             )
-            db.add(notif)
-            affected_count += 1
 
-        await record_audit_log(
-            db=db,
-            event="GỬI CẢNH BÁO NGỦ ĐÔNG HÀNG LOẠT",
-            user_name=f"{current_user.full_name} ({current_user.role})",
-            details=f"Admin gửi thông báo nhắc nhở tới {affected_count} tài khoản ngủ đông mức [{payload.level}]. Lý do: {payload.reason}",
-            severity="medium",
-            admin_id=str(current_user.id),
-            action="BATCH_REMIND_DORMANT",
-            reason=payload.reason,
-            commit=False,
-        )
+        case "lock":
+            for u in target_users:
+                u.status = UserStatus.LOCKED_ADMIN
+                u.is_active = False
+                u.lock_reason = payload.reason
+                u.locked_at = now
+                u.locked_by = current_user.id
+                u.lock_until = None
+                u.token_version = (u.token_version or 1) + 1
+                db.add(u)
+                affected_count += 1
 
-    elif payload.action == "lock":
-        for u in target_users:
-            u.status = UserStatus.LOCKED_ADMIN
-            u.is_active = False
-            u.lock_reason = payload.reason
-            u.locked_at = now
-            u.locked_by = current_user.id
-            u.lock_until = None
-            u.token_version = (u.token_version or 1) + 1
-            db.add(u)
-            affected_count += 1
+            await record_audit_log(
+                db=db,
+                event="KHÓA TÀI KHOẢN NGỦ ĐÔNG HÀNG LOẠT",
+                user_name=f"{current_user.full_name} ({current_user.role})",
+                details=f"Admin khóa {affected_count} tài khoản ngủ đông mức [{payload.level}]. Lý do: {payload.reason}",
+                severity="high",
+                admin_id=str(current_user.id),
+                action="BATCH_LOCK_DORMANT",
+                reason=payload.reason,
+                commit=False,
+            )
 
-        await record_audit_log(
-            db=db,
-            event="KHÓA TÀI KHOẢN NGỦ ĐÔNG HÀNG LOẠT",
-            user_name=f"{current_user.full_name} ({current_user.role})",
-            details=f"Admin khóa {affected_count} tài khoản ngủ đông mức [{payload.level}]. Lý do: {payload.reason}",
-            severity="high",
-            admin_id=str(current_user.id),
-            action="BATCH_LOCK_DORMANT",
-            reason=payload.reason,
-            commit=False,
-        )
+        case "delete":
+            for u in target_users:
+                # Kỹ thuật 4: Kiểm tra nhanh bằng set O(1)
+                if u.status not in LOCKED_STATUSES:
+                    continue
+                can_del, _ = await check_user_deletion_guards(db, u, current_user)
+                if not can_del:
+                    continue
+                await crud_user.delete(db, u.id)
+                affected_count += 1
 
-    elif payload.action == "delete":
-        for u in target_users:
-            if u.status not in (UserStatus.LOCKED_ADMIN, UserStatus.LOCKED_AUTO):
-                continue
-            can_del, _ = await check_user_deletion_guards(db, u, current_user)
-            if not can_del:
-                continue
-            await crud_user.delete(db, u.id)
-            affected_count += 1
+            await record_audit_log(
+                db=db,
+                event="XÓA TÀI KHOẢN NGỦ ĐÔNG HÀNG LOẠT",
+                user_name=f"{current_user.full_name} ({current_user.role})",
+                details=f"Admin xóa vĩnh viễn {affected_count} tài khoản ngủ đông mức [{payload.level}]. Lý do: {payload.reason}",
+                severity="high",
+                admin_id=str(current_user.id),
+                action="BATCH_DELETE_DORMANT",
+                reason=payload.reason,
+                commit=False,
+            )
 
-        await record_audit_log(
-            db=db,
-            event="XÓA TÀI KHOẢN NGỦ ĐÔNG HÀNG LOẠT",
-            user_name=f"{current_user.full_name} ({current_user.role})",
-            details=f"Admin xóa vĩnh viễn {affected_count} tài khoản ngủ đông mức [{payload.level}]. Lý do: {payload.reason}",
-            severity="high",
-            admin_id=str(current_user.id),
-            action="BATCH_DELETE_DORMANT",
-            reason=payload.reason,
-            commit=False,
-        )
+        case _:
+            raise HTTPException(status_code=400, detail=f"Hành động [{payload.action}] không được hỗ trợ.")
 
     await db.commit()
     invalidate_users_cache()
