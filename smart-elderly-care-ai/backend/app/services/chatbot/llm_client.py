@@ -16,6 +16,18 @@ from app.core.config import settings
 
 logger = logging.getLogger(__name__)
 
+# Connection pool dùng chung tái sử dụng TLS/TCP Keep-Alive, tiết kiệm 300-500ms mỗi request
+_shared_http_client: Optional[httpx.AsyncClient] = None
+
+
+def get_shared_http_client() -> httpx.AsyncClient:
+    """Lấy hoặc khởi tạo singleton AsyncClient với connection pooling."""
+    global _shared_http_client
+    if _shared_http_client is None or _shared_http_client.is_closed:
+        limits = httpx.Limits(max_keepalive_connections=20, max_connections=50, keepalive_expiry=120.0)
+        _shared_http_client = httpx.AsyncClient(limits=limits, timeout=15.0)
+    return _shared_http_client
+
 
 class MultiModelLLMClient:
     """
@@ -139,51 +151,51 @@ class MultiModelLLMClient:
         else:
             models_to_try = list(candidate_models)
 
-        async with httpx.AsyncClient(timeout=20.0) as client:
-            for current_model in models_to_try:
-                payload: Dict[str, Any] = {
-                    "model": current_model,
-                    "messages": [
-                        {"role": "system", "content": system_prompt},
-                        {"role": "user", "content": user_prompt},
-                    ],
-                    "temperature": temperature,
-                    "max_tokens": max_tokens,
-                }
+        client = get_shared_http_client()
+        for current_model in models_to_try:
+            payload: Dict[str, Any] = {
+                "model": current_model,
+                "messages": [
+                    {"role": "system", "content": system_prompt},
+                    {"role": "user", "content": user_prompt},
+                ],
+                "temperature": temperature,
+                "max_tokens": max_tokens,
+            }
 
-                try:
-                    resp = await client.post(endpoint, headers=headers, json=payload)
-                    if resp.status_code == 200:
-                        data = resp.json()
-                        choices = data.get("choices", [])
-                        if choices:
-                            raw_content = choices[0].get("message", {}).get("content") or ""
-                            sanitized = self._sanitize_response(raw_content)
-                            if sanitized:
-                                return sanitized, current_model
-                            logger.warning("Phản hồi từ model %s không vượt qua kiểm định làm sạch.", current_model)
-                    elif resp.status_code in [401, 403]:
-                        logger.warning("LLM API xác thực thất bại (status %d): API key không hợp lệ hoặc hết hạn.", resp.status_code)
+            try:
+                resp = await client.post(endpoint, headers=headers, json=payload)
+                if resp.status_code == 200:
+                    data = resp.json()
+                    choices = data.get("choices", [])
+                    if choices:
+                        raw_content = choices[0].get("message", {}).get("content") or ""
+                        sanitized = self._sanitize_response(raw_content)
+                        if sanitized:
+                            return sanitized, current_model
+                        logger.warning("Phản hồi từ model %s không vượt qua kiểm định làm sạch.", current_model)
+                elif resp.status_code in [401, 403]:
+                    logger.warning("LLM API xác thực thất bại (status %d): API key không hợp lệ hoặc hết hạn.", resp.status_code)
+                    break
+                elif resp.status_code == 429:
+                    logger.warning("Mô hình %s chạm giới hạn tần suất (Rate limit 429)...", current_model)
+                    if "insufficient_quota" in resp.text or "quota" in resp.text.lower():
+                        logger.warning("Tài khoản hết hạn mức Quota (429 Insufficient Quota), chuyển ngay sang Gemini.")
+                        if "openai.com" in active_base:
+                            self._openai_quota_exhausted = True
                         break
-                    elif resp.status_code == 429:
-                        logger.warning("Mô hình %s chạm giới hạn tần suất (Rate limit 429)...", current_model)
-                        if "insufficient_quota" in resp.text or "quota" in resp.text.lower():
-                            logger.warning("Tài khoản hết hạn mức Quota (429 Insufficient Quota), chuyển ngay sang Gemini.")
-                            if "openai.com" in active_base:
-                                self._openai_quota_exhausted = True
-                            break
-                        continue
-                    else:
-                        logger.warning(
-                            "Mô hình %s trả về mã lỗi %d: %s. Đang thử model tiếp theo...",
-                            current_model,
-                            resp.status_code,
-                            resp.text[:120],
-                        )
-                except httpx.TimeoutException:
-                    logger.warning("Hết thời gian chờ (Timeout) khi gọi model %s.", current_model)
-                except Exception as e:
-                    logger.warning("Lỗi ngoại lệ khi gọi LLM model %s: %s", current_model, e)
+                    continue
+                else:
+                    logger.warning(
+                        "Mô hình %s trả về mã lỗi %d: %s. Đang thử model tiếp theo...",
+                        current_model,
+                        resp.status_code,
+                        resp.text[:120],
+                    )
+            except httpx.TimeoutException:
+                logger.warning("Hết thời gian chờ (Timeout) khi gọi model %s.", current_model)
+            except Exception as e:
+                logger.warning("Lỗi ngoại lệ khi gọi LLM model %s: %s", current_model, e)
 
         # Nếu mô hình chính (Gemini) thất bại toàn bộ và có cấu hình OpenAI, thử fallback chéo sang OpenAI
         if not api_key and self.is_openai_configured() and "openai.com" not in active_base:
@@ -206,14 +218,13 @@ class MultiModelLLMClient:
         system_prompt: str,
         user_prompt: str,
         temperature: float = 0.1,
-        max_tokens: int = 1000,
+        max_tokens: int = 700,
     ) -> Optional[Tuple[str, str]]:
         """
         Gọi mô hình AI 2 (Medical Critic / Thẩm định lâm sàng).
-        Ưu tiên sử dụng ChatGPT (OpenAI) để tạo tính kiểm tra chéo độc lập với AI 1 (Gemini).
-        Nếu chưa cấu hình OPENAI_API_KEY, tự động dùng mô hình Gemini chính.
+        Ưu tiên sử dụng ChatGPT (OpenAI) nếu còn quota, ngược lại sử dụng Gemini siêu tốc.
         """
-        if self.is_openai_configured():
+        if self.is_openai_configured() and not getattr(self, "_openai_quota_exhausted", False):
             logger.info("AI 2 (Medical Critic) đang thẩm định độc lập bằng ChatGPT (OpenAI: %s)...", self.openai_model)
             res = await self.generate_response(
                 system_prompt=system_prompt,
@@ -229,7 +240,7 @@ class MultiModelLLMClient:
                 return res
             logger.warning("ChatGPT (OpenAI) phản hồi thất bại hoặc hết quota, fallback sang Gemini cho AI 2.")
 
-        # Fallback về key chung / Gemini
+        # Dùng trực tiếp Gemini tốc độ cao cho AI 2
         return await self.generate_response(
             system_prompt=system_prompt,
             user_prompt=user_prompt,

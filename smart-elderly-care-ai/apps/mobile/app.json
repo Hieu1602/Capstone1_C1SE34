@@ -24,6 +24,7 @@
     },
     "android": {
       "package": "com.c1se34.smartelderlycare",
+      "softwareKeyboardLayoutMode": "resize",
       "permissions": [
         "android.permission.BLUETOOTH",
         "android.permission.BLUETOOTH_ADMIN",

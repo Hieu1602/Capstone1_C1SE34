@@ -13,6 +13,7 @@ from __future__ import annotations
 
 import html
 import re
+import unicodedata
 from typing import Tuple
 
 
@@ -62,6 +63,13 @@ COMMON_VOCABULARY = {
     "hello", "hi", "help", "please", "doctor", "hospital", "pain", "sick", "fever", "cough", "pressure", "heart", "fall", "emergency", "what", "how", "why", "can", "is", "are", "my", "he", "she", "grandpa", "grandma"
 }
 
+# Tập từ vựng bỏ dấu để nhận diện người cao tuổi gõ không dấu (unaccented Vietnamese)
+_UNACCENTED_COMMON_VOCAB: set[str] = set()
+for _w in COMMON_VOCABULARY:
+    _clean = _w.lower().replace("đ", "d")
+    _clean = "".join(c for c in unicodedata.normalize("NFD", _clean) if unicodedata.category(c) != "Mn")
+    _UNACCENTED_COMMON_VOCAB.add(_clean.strip())
+
 PROMPT_LEAK_PATTERNS = [
     r"[-=]{3,}\s*MỤC\s*\d*[:\s]*NGUYÊN TẮC BR-5[^\n]*[-=]{3,}?",
     r"[-=]{3,}\s*NGUYÊN TẮC\s*BR-5[^\n]*",
@@ -82,11 +90,15 @@ class ResponseGuard:
     """Bộ kiểm duyệt và bảo vệ phản hồi y tế."""
 
     @staticmethod
-    def is_gibberish_or_spam(question: str) -> bool:
+    def is_gibberish_or_spam(question: str, has_resolved_entities: bool = False) -> bool:
         """
         Nhận diện chuỗi ký tự vô nghĩa, gõ nhầm, spam bàn phím hoặc chuỗi không có nghĩa.
         Ví dụ: ".ưef", "12314234235324", "asdfghjk", "????", ".......", "abc xyz".
+        Nếu câu đã nhận diện được thực thể y tế (tên thuốc, thiết bị) thì không coi là vô nghĩa.
         """
+        if has_resolved_entities:
+            return False
+
         q = question.strip()
         if not q or len(q) < 2:
             return True
@@ -111,8 +123,14 @@ class ResponseGuard:
                 return False
             return True
 
-        # 5. Kiểm tra tính hợp lệ của từ ngữ (Từ vựng tiếng Việt / tiếng Anh giao tiếp & y tế)
-        valid_words_count = sum(1 for w in words if w in COMMON_VOCABULARY)
+        # 5. Kiểm tra tính hợp lệ của từ ngữ (Từ vựng tiếng Việt có dấu, không dấu & y tế)
+        def _is_valid_word(w: str) -> bool:
+            if w in COMMON_VOCABULARY:
+                return True
+            w_no_acc = "".join(c for c in unicodedata.normalize("NFD", w.replace("đ", "d")) if unicodedata.category(c) != "Mn")
+            return w_no_acc in _UNACCENTED_COMMON_VOCAB
+
+        valid_words_count = sum(1 for w in words if _is_valid_word(w))
 
         # Với câu cực ngắn (1 đến 2 từ), bắt buộc phải có ít nhất 1 từ hợp lệ
         # Ví dụ: ".ưef" -> words=['ưef'], valid=0 -> True (gibberish)

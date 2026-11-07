@@ -1,0 +1,185 @@
+{
+  "drugs": [
+    {
+      "canonical": "Paracetamol",
+      "category": "Hạ sốt, giảm đau",
+      "high_risk": false,
+      "typical_strengths": ["500mg", "650mg", "1000mg", "325mg", "250mg", "150mg", "80mg"],
+      "aliases": [
+        "para", "paracetamon", "pharacetamol", "pharacetamon", "paracel",
+        "panadol", "panadol extra", "hapacol", "efferalgan", "efferalgan sủi",
+        "tylenol", "acetaminophen", "pamin", "decolgen", "coldacmin"
+      ]
+    },
+    {
+      "canonical": "Aspirin",
+      "category": "Kháng kết tập tiểu cầu, giảm đau",
+      "high_risk": true,
+      "typical_strengths": ["81mg", "100mg", "500mg"],
+      "aliases": [
+        "asprin", "aspire", "aspirin 81", "aspirin ph8", "aspirin 100",
+        "cardiprin", "aspilets", "aspegic"
+      ]
+    },
+    {
+      "canonical": "Ibuprofen",
+      "category": "Kháng viêm không steroid (NSAID)",
+      "high_risk": true,
+      "typical_strengths": ["200mg", "400mg", "600mg"],
+      "aliases": [
+        "ibu", "ibubrofen", "ibufen", "brufen", "gofen", "advil", "motrin", "alaxan"
+      ]
+    },
+    {
+      "canonical": "Amlodipine",
+      "category": "Hạ huyết áp (Chẹn kênh calci)",
+      "high_risk": false,
+      "typical_strengths": ["5mg", "10mg"],
+      "aliases": [
+        "amlodipin", "amlo", "amlor", "norvasc", "amlopres", "stamlo"
+      ]
+    },
+    {
+      "canonical": "Losartan",
+      "category": "Hạ huyết áp (Chẹn thụ thể ARB)",
+      "high_risk": false,
+      "typical_strengths": ["25mg", "50mg", "100mg"],
+      "aliases": [
+        "lozartan", "cozaar", "losartas", "losartan stada", "lotan"
+      ]
+    },
+    {
+      "canonical": "Nitroglycerin",
+      "category": "Giãn mạch vành, cắt cơn đau thắt ngực",
+      "high_risk": true,
+      "typical_strengths": ["0.4mg", "0.5mg", "2.5mg"],
+      "aliases": [
+        "nitroglyxerin", "nitrostad", "nitromint", "nitrostat", "ngậm dưới lưỡi đau ngực", "xit duoi luoi"
+      ]
+    },
+    {
+      "canonical": "Metformin",
+      "category": "Hạ đường huyết (Tiểu đường type 2)",
+      "high_risk": false,
+      "typical_strengths": ["500mg", "850mg", "1000mg"],
+      "aliases": [
+        "metfomin", "glucophage", "panfor", "metfor", "diamet"
+      ]
+    },
+    {
+      "canonical": "Insulin",
+      "category": "Hạ đường huyết dạng tiêm",
+      "high_risk": true,
+      "typical_strengths": ["100IU/ml"],
+      "aliases": [
+        "isulin", "insuline", "but tiem tieu duong", "novorapid", "lantus",
+        "mixtard", "humalog", "apidra", "toujeo", "tresiba"
+      ]
+    },
+    {
+      "canonical": "Warfarin",
+      "category": "Thuốc chống đông máu",
+      "high_risk": true,
+      "typical_strengths": ["1mg", "2mg", "5mg"],
+      "aliases": [
+        "waphari", "wafarin", "coumadin", "sintrom", "acenocoumarol", "thuoc chong dong"
+      ]
+    },
+    {
+      "canonical": "Oresol",
+      "category": "Bù nước và điện giải",
+      "high_risk": false,
+      "typical_strengths": ["gói pha 200ml", "gói pha 1 lít"],
+      "aliases": [
+        "oreson", "orezol", "ors", "nuoc dien giai", "goi bu nuoc", "hydrite"
+      ]
+    },
+    {
+      "canonical": "Omeprazole",
+      "category": "Thuốc dạ dày (Ức chế bơm proton)",
+      "high_risk": false,
+      "typical_strengths": ["20mg", "40mg"],
+      "aliases": [
+        "omeprazol", "ome", "losec", "ogast", "thuoc da day chu O", "lomac"
+      ]
+    }
+  ],
+  "devices": [
+    {
+      "canonical": "Máy đo huyết áp",
+      "category": "Thiết bị đo tim mạch",
+      "aliases": [
+        "may do huyet ap", "may do ha", "may do huyetap", "may do tension",
+        "tensiometer", "may do huyet ap bap tay", "may do huyet ap co tay",
+        "omron", "may omron", "may bom hoi do huyet ap"
+      ]
+    },
+    {
+      "canonical": "Máy đo SpO2",
+      "category": "Thiết bị đo oxy trong máu",
+      "aliases": [
+        "spo2", "spo 2", "sp o2", "may do spo2", "may do spo 2",
+        "may kep ngon tay", "kep ngon tay do oxy", "oximeter", "pulse oximeter",
+        "may do nong do oxy", "may do oxy trong mau", "kep dau ngon tay"
+      ]
+    },
+    {
+      "canonical": "Nhiệt kế điện tử",
+      "category": "Thiết bị đo thân nhiệt",
+      "aliases": [
+        "nhiet ke", "nhiet ke dien tu", "nhiet ke thuy ngan", "kep nhiet do",
+        "may ban nhiet do", "sung ban nhiet do", "do than nhiet", "kep nach"
+      ]
+    },
+    {
+      "canonical": "Máy đo đường huyết",
+      "category": "Thiết bị kiểm tra đái tháo đường",
+      "aliases": [
+        "may do duong huyet", "may do tieu duong", "may thu duong", "que thu duong",
+        "accu chek", "accuchek", "onetouch", "one touch", "but ban kim lay mau"
+      ]
+    },
+    {
+      "canonical": "Vòng đeo tay thông minh",
+      "category": "Thiết bị đeo giám sát sinh hiệu",
+      "aliases": [
+        "vong deo tay", "vong tay thong minh", "dong ho thong minh", "smartband",
+        "smartwatch", "thiet bi bao nga", "dong ho bao nga"
+      ]
+    },
+    {
+      "canonical": "Nệm hơi chống loét",
+      "category": "Dụng cụ chăm sóc người nằm liệt",
+      "aliases": [
+        "nem hoi", "dem hoi", "dem chong loet", "nem chong loet",
+        "dem khi rung", "nem hoi y te"
+      ]
+    }
+  ],
+  "medical_terms": [
+    {
+      "canonical": "Huyết áp",
+      "aliases": ["ha", "huyetap", "huyet ap", "blood pressure", "bp"]
+    },
+    {
+      "canonical": "Đường huyết",
+      "aliases": ["dh", "duong huyet", "duong mau", "blood sugar", "glucose"]
+    },
+    {
+      "canonical": "Sốt xuất huyết",
+      "aliases": ["sxh", "sot xuat huyet", "dengue", "dengue fever"]
+    },
+    {
+      "canonical": "Đột quỵ não",
+      "aliases": ["dot quy", "tai bien", "tai bien mach mau nao", "stroke", "meo mieng yeu liet"]
+    },
+    {
+      "canonical": "Nhồi máu cơ tim",
+      "aliases": ["nmct", "nhoi mau co tim", "dau tim", "con dau that nguc", "heart attack"]
+    },
+    {
+      "canonical": "Loét tì đè",
+      "aliases": ["loet ti de", "loet mông", "loet do nam lau", "pressure ulcer", "bedsore"]
+    }
+  ]
+}

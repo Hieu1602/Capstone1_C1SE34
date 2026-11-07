@@ -129,13 +129,21 @@ export const DeviceCardItem: React.FC<DeviceCardItemProps> = ({
                 { backgroundColor: device.isOnline ? Colors.success : Colors.danger },
               ]}
             />
-            <LocalizedText style={[styles.statusText, isDarkMode && { color: colors.textSecondary }]}>
+            <LocalizedText
+              style={[styles.statusText, isDarkMode && { color: colors.textSecondary }]}
+              numberOfLines={1}
+              ellipsizeMode="tail"
+            >
               {device.status}
             </LocalizedText>
             {(device.icon === 'watch' || device.type === 'watch' || (device as any).device_type === 'SMARTBAND') && (
               <View style={[styles.wearerPill, isDarkMode && { backgroundColor: 'rgba(5, 150, 105, 0.15)' }]}>
                 <Ionicons name="person-outline" size={10} color={device.wearer_name ? '#059669' : '#64748B'} />
-                <LocalizedText style={[styles.wearerPillText, { color: device.wearer_name ? '#059669' : '#64748B' }]}>
+                <LocalizedText
+                  numberOfLines={1}
+                  ellipsizeMode="tail"
+                  style={[styles.wearerPillText, { color: device.wearer_name ? '#059669' : '#64748B' }]}
+                >
                   {device.wearer_name ? `Người đeo: ${device.wearer_name}` : 'Người đeo: Chưa cập nhật'}
                 </LocalizedText>
               </View>
@@ -215,18 +223,22 @@ const styles = StyleSheet.create({
   statusRow: {
     flexDirection: 'row',
     alignItems: 'center',
+    flexWrap: 'wrap',
+    rowGap: 4,
+    columnGap: 6,
     marginTop: 6,
   },
   statusDot: {
     width: 7,
     height: 7,
     borderRadius: 4,
-    marginRight: 6,
+    marginRight: 2,
   },
   statusText: {
     fontSize: 12,
     color: '#64748B',
     fontWeight: '500',
+    flexShrink: 1,
   },
   wearerPill: {
     flexDirection: 'row',
@@ -236,11 +248,13 @@ const styles = StyleSheet.create({
     paddingHorizontal: 6,
     paddingVertical: 2,
     borderRadius: 6,
-    marginLeft: 8,
+    maxWidth: '100%',
+    flexShrink: 1,
   },
   wearerPillText: {
     fontSize: 10.5,
     fontWeight: '600',
+    flexShrink: 1,
   },
   deviceItemInGroup: {
     flexDirection: 'row',
