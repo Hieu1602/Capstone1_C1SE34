@@ -814,8 +814,14 @@ export default function AlertsListScreen({ navigation }: any) {
           </TouchableOpacity>
 
           <View style={styles.headerTitleCol}>
-            <Text style={[styles.headerTitle, isDarkMode && { color: colors.textPrimary }]}>Thông Báo &amp; Sự Kiện</Text>
-            <Text style={[styles.headerSubtitle, isDarkMode && { color: colors.textSecondary }]}>
+            <Text
+              style={[styles.headerTitle, isDarkMode && { color: colors.textPrimary }]}
+              numberOfLines={1}
+              adjustsFontSizeToFit
+            >
+              Thông Báo &amp; Sự Kiện
+            </Text>
+            <Text style={[styles.headerSubtitle, isDarkMode && { color: colors.textSecondary }]} numberOfLines={1}>
               {unreadCount > 0
                 ? t('{{count}} thông báo mới chưa đọc', { count: unreadCount })
                 : isUnassignedAccount
@@ -833,7 +839,7 @@ export default function AlertsListScreen({ navigation }: any) {
           >
             <Ionicons name="checkmark-done" size={15} color={unreadIncidentsCount > 0 ? '#EA580C' : '#94A3B8'} />
             <Text style={[styles.markAllReadText, unreadIncidentsCount === 0 && { color: '#94A3B8' }]}>
-              Đã đọc tất cả
+              Đã đọc
             </Text>
           </TouchableOpacity>
 
@@ -1066,7 +1072,11 @@ export default function AlertsListScreen({ navigation }: any) {
                   <Ionicons name="time-outline" size={12} color={isDarkMode ? '#64748B' : '#94A3B8'} />
                   <Text style={[styles.cardTime, isDarkMode && { color: colors.textSecondary }]}>{friendlyTime}</Text>
                   <Text style={[styles.dotSeparator, isDarkMode && { color: colors.border }]}>•</Text>
-                  <Text style={[styles.deviceLocationText, isDarkMode && { color: colors.textSecondary }]}>
+                  <Text
+                    style={[styles.deviceLocationText, isDarkMode && { color: colors.textSecondary }]}
+                    numberOfLines={1}
+                    ellipsizeMode="middle"
+                  >
                     {inc.alert_type === 'HOUSE_MEMBER_ADDED' || inc.alert_type === 'MEMBER_ADDED'
                       ? t('Ngôi nhà')
                       : inc.device_id
@@ -1391,7 +1401,7 @@ const styles = StyleSheet.create({
     ...Shadows.soft,
   },
   headerTitleCol: { flex: 1, marginRight: 4 },
-  headerTitle: { fontSize: 18, fontWeight: '900', color: Colors.textPrimary },
+  headerTitle: { fontSize: 16.5, fontWeight: '800', color: Colors.textPrimary, letterSpacing: -0.3 },
   headerSubtitle: { fontSize: 11, color: '#94A3B8', marginTop: 2, fontWeight: '500' },
   headerRightActions: { flexDirection: 'row', alignItems: 'center', gap: 8 },
   markAllReadBtn: {
@@ -1523,7 +1533,7 @@ const styles = StyleSheet.create({
   timeRow: { flexDirection: 'row', alignItems: 'center', gap: 4 },
   cardTime: { fontSize: 11, color: '#94A3B8', fontWeight: '500' },
   dotSeparator: { fontSize: 10, color: '#CBD5E1', marginHorizontal: 2 },
-  deviceLocationText: { fontSize: 11, color: '#94A3B8', fontWeight: '500' },
+  deviceLocationText: { fontSize: 11, color: '#94A3B8', fontWeight: '500', flexShrink: 1 },
   cardQuickActionRow: {
     flexDirection: 'row',
     alignItems: 'center',

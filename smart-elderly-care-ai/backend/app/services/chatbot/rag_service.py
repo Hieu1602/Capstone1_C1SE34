@@ -23,6 +23,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core.config import settings
 from app.services.chatbot.context_builder import ChatbotContextBuilder
+from app.services.chatbot.entity_resolver import MedicalEntityResolver, get_medical_entity_resolver
 from app.services.chatbot.llm_client import MultiModelLLMClient
 from app.services.chatbot.prompt_templates import (
     CRITIC_SYSTEM_PROMPT_EN,
@@ -47,6 +48,7 @@ class ChatbotRAGService:
         self.retriever: MedicalRetriever = get_medical_retriever()
         self.context_builder: ChatbotContextBuilder = ChatbotContextBuilder()
         self.llm_client: MultiModelLLMClient = MultiModelLLMClient()
+        self.resolver: MedicalEntityResolver = get_medical_entity_resolver()
         self.enable_critic: bool = getattr(settings, 'ENABLE_AI_CRITIC', True)
         self.critic_timeout: float = float(getattr(settings, 'LLM_CRITIC_TIMEOUT', 4.0))
 
@@ -323,8 +325,11 @@ class ChatbotRAGService:
                 "suggested_actions": ["Đặt câu hỏi về sức khỏe cụ hoặc kiểm tra sinh hiệu"],
             }
 
-        # 1.1. Kiểm tra câu hỏi ngoài phạm vi y tế (lập trình, viết code, tạo robot, câu hỏi không liên quan sức khỏe)
-        if ResponseGuard.is_out_of_scope(question):
+        # 1.1. Chuẩn hóa chính tả thực thể y tế (tên thuốc, dụng cụ, lỗi gõ Telex/VNI, viết tắt)
+        normalized_q, resolved_entities = self.resolver.rewrite_and_enrich_query(question)
+
+        # 1.2. Kiểm tra câu hỏi ngoài phạm vi y tế (lập trình, viết code, tạo robot, câu hỏi không liên quan sức khỏe)
+        if ResponseGuard.is_out_of_scope(question) and not resolved_entities:
             return {
                 "status": "success",
                 "question": question,
@@ -339,8 +344,8 @@ class ChatbotRAGService:
                 "suggested_actions": ["Đặt câu hỏi về triệu chứng sức khỏe, dùng thuốc hoặc kiểm tra sinh hiệu người cao tuổi"],
             }
 
-        # 1.2. Kiểm tra câu hỏi vô nghĩa / spam số / spam ký tự
-        if ResponseGuard.is_gibberish_or_spam(question):
+        # 1.3. Kiểm tra câu hỏi vô nghĩa / spam số / spam ký tự (bỏ qua nếu đã nhận diện tên thuốc/dụng cụ)
+        if ResponseGuard.is_gibberish_or_spam(question, has_resolved_entities=bool(resolved_entities)):
             return {
                 "status": "success",
                 "question": question,
@@ -369,8 +374,13 @@ class ChatbotRAGService:
             question=question, vitals=vitals, incidents=incidents
         )
 
-        # 3. Trích xuất cẩm nang y tế (Hỗ trợ mở rộng từ khóa trong đối đáp liên tục)
-        search_query = question
+        # 3. Trích xuất cẩm nang y tế (Hỗ trợ mở rộng từ khóa trong đối đáp liên tục và câu hỏi đã chuẩn hóa)
+        if len(question.strip().split()) <= 2 and resolved_entities:
+            # Người dùng chỉ gõ cụm tên thuốc/dụng cụ ngắn (ví dụ: "prasetamol", "panadol") -> Mở rộng câu hỏi tư vấn toàn diện
+            search_query = f"Hướng dẫn sử dụng, liều dùng an toàn và lưu ý cho người cao tuổi về {resolved_entities[0].canonical}"
+        else:
+            search_query = f"{normalized_q} {question}" if normalized_q != question else question
+
         if chat_history:
             last_user_msgs = [m.get("text", "") for m in chat_history if m.get("sender") == "user" and m.get("text")]
             if last_user_msgs:
@@ -401,8 +411,15 @@ class ChatbotRAGService:
                 inc_lines.append(f"• [Vượt ngưỡng lúc {i.get('time')}]: {i.get('message')} | Tình trạng xử lý: {st}")
         incidents_text = "\n".join(inc_lines)
 
+        prompt_q = question
+        if len(question.strip().split()) <= 2 and resolved_entities:
+            prompt_q = (
+                f"Cho tôi biết thông tin hướng dẫn sử dụng, liều dùng an toàn và các lưu ý lâm sàng cho người cao tuổi "
+                f"về {resolved_entities[0].canonical} (từ khóa người dùng vừa tra cứu: '{question}')."
+            )
+
         user_prompt = build_rag_user_prompt(
-            question=question,
+            question=prompt_q,
             vitals_text=vitals_text,
             patient_text=patient_text,
             care_context_text=care_context_text,
@@ -543,6 +560,14 @@ class ChatbotRAGService:
             }
 
         answer_text = ResponseGuard.sanitize_response(answer_text)
+
+        # Đính kèm lưu ý xác nhận nếu phát hiện thực thể thuốc/thiết bị cần làm rõ hoặc thuốc nguy cơ cao
+        clarification_notes = [
+            e.build_prompt_clarification() for e in resolved_entities if e.build_prompt_clarification()
+        ]
+        if clarification_notes:
+            notes_text = "\n".join(f"• {note}" for note in clarification_notes)
+            answer_text = f"💡 **Xác nhận tên thuốc / thiết bị y tế**:\n{notes_text}\n\n{answer_text}"
 
         return {
             "status": "success",
