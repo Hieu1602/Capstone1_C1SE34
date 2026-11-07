@@ -73,7 +73,7 @@ from app.models.device import Device
 from app.models.incident import Incident
 from app.models.system_notification import SystemNotification
 from app.models.user import User, UserStatus
-from sqlalchemy import func
+from sqlalchemy import func, or_, and_
 
 from app.schemas.user import (
     FontSizePreferenceUpdate,
