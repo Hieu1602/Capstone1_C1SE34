@@ -52,16 +52,22 @@ class ChatbotRAGService:
 
     @staticmethod
     def _is_simple_greeting(question: str) -> bool:
-        """Nhận diện nhanh các câu chào hỏi xã giao thông thường để phản hồi tức thì."""
+        """Nhận diện nhanh các câu chào hỏi xã giao thông thường để phản hồi tức thì (0ms)."""
+        import re
         q = question.strip().lower()
         if not q or len(q) > 40:
             return False
+        # Chuẩn hóa bỏ dấu câu ở cuối (? . ! ,)
+        q_clean = re.sub(r"[?!.,]+$", "", q).strip()
         common_greetings = {
             "chào", "xin chào", "chào bạn", "chào bác sĩ", "chào bs", "chào bot",
+            "xin chào bác sĩ", "xin chào bs", "chào buổi sáng", "chào em", "chào anh", "chào chị",
             "hello", "hi", "hey", "alo", "alo bạn", "alo bác sĩ", "bạn là ai",
-            "giúp tôi với", "tư vấn giúp tôi", "cho hỏi"
+            "giúp tôi với", "tư vấn giúp tôi", "cho hỏi", "tôi muốn hỏi",
         }
-        return q in common_greetings or any(q == g for g in common_greetings)
+        if q_clean in common_greetings:
+            return True
+        return any(q_clean.startswith(prefix) for prefix in ("xin chào", "chào bạn", "chào bác sĩ", "chào bot", "hello", "hi "))
 
     @staticmethod
     def _format_greeting_response(language: str = "vi") -> str:
@@ -417,7 +423,16 @@ class ChatbotRAGService:
             critic_failed_or_timed_out = False
 
             # 4.2. AI 2: Medical Critic / Clinical Safety Verifier
-            if self.enable_critic:
+            # Tối ưu hóa hiệu năng: Chỉ kích hoạt AI 2 Critic khi câu hỏi thuộc diện khẩn cấp/nguy hiểm (is_emergency, triage != GREEN hoặc thuốc/đơn thuốc)
+            # Với các câu hỏi thông thường (GREEN), AI 1 + ResponseGuard đã bảo đảm an toàn lâm sàng, giảm 4-8 giây chờ đợi.
+            DRUG_TERMS = {"uống thuốc", "liều lượng", "đơn thuốc", "kê đơn", "thuốc này", "kháng sinh", "paracetamol", "aspirin", "medication", "dose", "prescription"}
+            q_lower = question.lower()
+            needs_critic = (
+                self.enable_critic
+                and (is_emergency or triage_level in ("YELLOW", "RED") or any(t in q_lower for t in DRUG_TERMS))
+            )
+
+            if needs_critic:
                 critic_system_prompt = CRITIC_SYSTEM_PROMPT_EN if is_en else CRITIC_SYSTEM_PROMPT_VI
                 critic_user_prompt = build_critic_user_prompt(
                     question=question,
@@ -435,7 +450,7 @@ class ChatbotRAGService:
                             system_prompt=critic_system_prompt,
                             user_prompt=critic_user_prompt,
                             temperature=0.1,
-                            max_tokens=1000,
+                            max_tokens=700,
                         ),
                         timeout=self.critic_timeout,
                     )
@@ -443,16 +458,16 @@ class ChatbotRAGService:
                         final_text, critic_model_name = critic_result
                         verified_by_critic = True
                     else:
-                        logger.warning("AI 2 Critic không phản hồi, fallback sang Pure RAG cục bộ.")
+                        logger.warning("AI 2 Critic không phản hồi, fallback sang câu trả lời nhanh của AI 1.")
                         critic_failed_or_timed_out = True
                 except asyncio.TimeoutError:
                     logger.warning(
-                        "AI 2 (Medical Critic) bị quá hạn thời gian (> %ss). Tự động kích hoạt Fallback sang Pure RAG.",
+                        "AI 2 (Medical Critic) bị quá hạn thời gian (> %ss). Tự động dùng câu trả lời trực tiếp của AI 1.",
                         self.critic_timeout,
                     )
                     critic_failed_or_timed_out = True
                 except Exception as critic_err:
-                    logger.warning("Lỗi ngoại lệ khi gọi AI 2 Critic: %s. Kích hoạt Fallback sang Pure RAG.", critic_err)
+                    logger.warning("Lỗi ngoại lệ khi gọi AI 2 Critic: %s. Dùng câu trả lời trực tiếp của AI 1.", critic_err)
                     critic_failed_or_timed_out = True
 
             if critic_failed_or_timed_out:
