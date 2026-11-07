@@ -55,7 +55,7 @@ def get_avatar_dir() -> Path:
 
 import math
 from datetime import datetime, timezone, timedelta
-from typing import Optional, Union, List
+from typing import Optional, Union, List, Any
 
 from app.api.deps import get_current_user
 from app.core.config import settings
@@ -91,6 +91,18 @@ from app.schemas.user import (
 )
 
 router = APIRouter()
+
+# Bộ nhớ đệm In-Memory tối ưu tốc độ phản hồi cho Admin Portal
+_USERS_CACHE: dict[str, Any] = {
+    "data": None,
+    "timestamp": 0.0,
+    "ttl": 30.0,  # 30 giây
+}
+
+def invalidate_users_cache():
+    """Hủy cache danh sách người dùng khi có bất kỳ thay đổi nào (tạo, sửa, xóa, khóa/mở)."""
+    _USERS_CACHE["data"] = None
+    _USERS_CACHE["timestamp"] = 0.0
 
 
 def get_user_dormancy_level(user: User, now: datetime) -> str:
@@ -178,6 +190,7 @@ async def list_users(
     status: Optional[str] = Query(default=None, description="Bộ lọc trạng thái (active, locked_auto, locked_admin)"),
     dormancy: Optional[str] = Query(default=None, description="Bộ lọc ngủ đông (active, remind_3m, lock_6m, eligible_delete_1y)"),
     include_elderly: bool = Query(default=True, description="Hiển thị cả người cao tuổi trong danh sách"),
+    refresh: bool = Query(default=False, description="Bỏ qua cache và tải dữ liệu mới nhất từ DB"),
     db: AsyncSession = Depends(get_db),
     current_user: User = Depends(get_current_user),
 ):
@@ -188,146 +201,174 @@ async def list_users(
     - Kiểm tra trước điều kiện xóa (can_delete, cannot_delete_reason)
     """
     now = datetime.now(timezone.utc)
+    now_ts = time.time()
 
-    # Tối ưu hóa truy vấn: Precompute các guard checks 1 lần duy nhất thay vì N+1 queries trong loop
-    admin_count_res = await db.execute(
-        select(func.count(User.id)).where(User.role == "admin", User.is_active == True)
-    )
-    admin_count = admin_count_res.scalar() or 0
+    # 1. Trả về ngay lập tức từ Cache nếu còn hiệu lực và không yêu cầu refresh
+    cached_data = _USERS_CACHE.get("data")
+    cached_ts = _USERS_CACHE.get("timestamp", 0.0)
+    cached_ttl = _USERS_CACHE.get("ttl", 30.0)
 
-    owner_with_active_members_res = await db.execute(
-        select(House.owner_id)
-        .join(HouseMember, House.id == HouseMember.house_id)
-        .where(
-            HouseMember.user_id != House.owner_id,
-            HouseMember.status == "ACTIVE"
+    if not refresh and cached_data is not None and (now_ts - cached_ts) < cached_ttl:
+        user_outs = cached_data
+    else:
+        # 2. Flat Querying: Truy vấn phẳng độc lập, triệt tiêu hoàn toàn độ trễ của selectinload lồng nhau
+        admin_count_res = await db.execute(
+            select(func.count(User.id)).where(User.role == "admin", User.is_active == True)
         )
-        .distinct()
-    )
-    owners_with_members = set(owner_with_active_members_res.scalars().all())
+        admin_count = admin_count_res.scalar() or 0
 
-    owner_with_unack_incident_res = await db.execute(
-        select(Device.owner_id)
-        .join(Incident, Device.id == Incident.device_id)
-        .where(Incident.is_acknowledged == False)
-        .distinct()
-    )
-    owners_with_incidents = set(owner_with_unack_incident_res.scalars().all())
+        # Lấy trước dữ liệu các bảng liên kết
+        users_res = await db.execute(select(User).order_by(User.created_at.desc()))
+        users = list(users_res.scalars().all())
 
-    stmt = (
-        select(User)
-        .options(
-            selectinload(User.owned_houses),
-            selectinload(User.house_memberships).selectinload(HouseMember.house),
+        houses_res = await db.execute(select(House.id, House.name, House.address, House.owner_id))
+        houses_list = houses_res.all()
+
+        members_res = await db.execute(
+            select(HouseMember.user_id, HouseMember.house_id, HouseMember.role_in_house, HouseMember.status)
         )
-        .order_by(User.created_at.desc())
-    )
-    result = await db.execute(stmt)
-    users = list(result.scalars().all())
-    user_outs: list[UserOut] = []
+        members_list = members_res.all()
 
-    for u in users:
-        assigned_house = "Chưa gán nhà"
-        role_title = "Thành viên gia đình"
+        incidents_res = await db.execute(
+            select(Device.owner_id)
+            .join(Incident, Device.id == Incident.device_id)
+            .where(Incident.is_acknowledged == False)
+            .distinct()
+        )
+        owners_with_incidents = set(incidents_res.scalars().all())
 
-        if u.role == "admin":
-            assigned_house = "Toàn hệ thống (Root Admin)"
-            role_title = "Quản trị viên"
-        elif u.role == "doctor":
-            role_title = "Bác sĩ gia đình"
-            doctor_houses = []
-            for m in u.house_memberships:
-                if m.house and m.house.name:
-                    h_label = f"{m.house.name} ({m.house.address})" if m.house.address else m.house.name
-                    doctor_houses.append(h_label)
-            for h in u.owned_houses:
-                h_label = f"{h.name} ({h.address})" if h.address else h.name
-                if h_label not in doctor_houses:
-                    doctor_houses.append(h_label)
+        # Map nhanh bằng Hash Table trong bộ nhớ RAM
+        houses_by_id = {h.id: h for h in houses_list}
+        owned_houses_by_owner: dict[Any, list] = {}
+        for h in houses_list:
+            owned_houses_by_owner.setdefault(h.owner_id, []).append(h)
 
-            if doctor_houses:
-                assigned_house = f"Phụ trách y tế: {', '.join(doctor_houses)}"
-            else:
-                assigned_house = "Bác sĩ chuyên khoa dự phòng"
-        elif u.owned_houses:
-            house = u.owned_houses[0]
-            assigned_house = f"{house.name} ({house.address or 'Chủ sở hữu'})"
-            role_title = "Chủ sở hữu hệ thống"
-        elif u.house_memberships:
-            m = u.house_memberships[0]
-            if m.house:
-                addr_text = m.house.address or m.role_in_house
-                assigned_house = f"{m.house.name} ({addr_text})"
-            else:
-                assigned_house = "Nhà của tôi"
+        memberships_by_user: dict[Any, list] = {}
+        owners_with_members = set()
+        for m in members_list:
+            memberships_by_user.setdefault(m.user_id, []).append(m)
+            h = houses_by_id.get(m.house_id)
+            if h and m.user_id != h.owner_id and m.status == "ACTIVE":
+                owners_with_members.add(h.owner_id)
+
+        user_outs = []
+        for u in users:
+            assigned_house = "Chưa gán nhà"
             role_title = "Thành viên gia đình"
 
-        u_dormancy = get_user_dormancy_level(u, now)
+            u_owned = owned_houses_by_owner.get(u.id, [])
+            u_memberships = memberships_by_user.get(u.id, [])
 
-        # Kiểm tra Guard nhanh bằng in-memory set (0ms round-trip)
-        u_can_del = True
-        u_reason = None
-        if u.id == current_user.id:
-            u_can_del = False
-            u_reason = "Không thể tự xóa tài khoản của chính mình."
-        elif u.role == "admin" and admin_count <= 1:
-            u_can_del = False
-            u_reason = "Không thể xóa Quản trị viên cuối cùng của hệ thống."
-        elif u.id in owners_with_members:
-            u_can_del = False
-            u_reason = "Căn nhà còn thành viên hoạt động. Vui lòng chuyển quyền Chủ hộ hoặc giải tán nhà trước khi xóa."
-        elif u.id in owners_with_incidents:
-            u_can_del = False
-            u_reason = "Tài khoản đang có cảnh báo khẩn cấp chưa được xử lý."
+            if u.role == "admin":
+                assigned_house = "Toàn hệ thống (Root Admin)"
+                role_title = "Quản trị viên"
+            elif u.role == "doctor":
+                role_title = "Bác sĩ gia đình"
+                doctor_houses = []
+                for m in u_memberships:
+                    h = houses_by_id.get(m.house_id)
+                    if h and h.name:
+                        h_label = f"{h.name} ({h.address})" if h.address else h.name
+                        doctor_houses.append(h_label)
+                for h in u_owned:
+                    h_label = f"{h.name} ({h.address})" if h.address else h.name
+                    if h_label not in doctor_houses:
+                        doctor_houses.append(h_label)
 
-        user_out = UserOut.model_validate(u)
-        user_out.assigned_house = assigned_house
-        user_out.role_title = role_title
-        user_out.dormancy_level = u_dormancy
-        user_out.can_delete = u_can_del
-        user_out.cannot_delete_reason = u_reason
-        user_outs.append(user_out)
+                assigned_house = f"Phụ trách y tế: {', '.join(doctor_houses)}" if doctor_houses else "Bác sĩ chuyên khoa dự phòng"
+            elif u_owned:
+                house = u_owned[0]
+                assigned_house = f"{house.name} ({house.address or 'Chủ sở hữu'})"
+                role_title = "Chủ sở hữu hệ thống"
+            elif u_memberships:
+                m = u_memberships[0]
+                h = houses_by_id.get(m.house_id)
+                if h:
+                    addr_text = h.address or m.role_in_house
+                    assigned_house = f"{h.name} ({addr_text})"
+                else:
+                    assigned_house = "Nhà của tôi"
+                role_title = "Thành viên gia đình"
 
-    if include_elderly:
-        try:
-            eld_stmt = select(ElderlyProfile).options(selectinload(ElderlyProfile.house))
-            eld_res = await db.execute(eld_stmt)
-            eld_list = eld_res.scalars().all()
+            u_dormancy = get_user_dormancy_level(u, now)
 
-            for eld in eld_list:
-                if not eld.full_name or not eld.full_name.strip():
-                    continue
+            u_can_del = True
+            u_reason = None
+            if u.id == current_user.id:
+                u_can_del = False
+                u_reason = "Không thể tự xóa tài khoản của chính mình."
+            elif u.role == "admin" and admin_count <= 1:
+                u_can_del = False
+                u_reason = "Không thể xóa Quản trị viên cuối cùng của hệ thống."
+            elif u.id in owners_with_members:
+                u_can_del = False
+                u_reason = "Căn nhà còn thành viên hoạt động. Vui lòng chuyển quyền Chủ hộ hoặc giải tán nhà trước khi xóa."
+            elif u.id in owners_with_incidents:
+                u_can_del = False
+                u_reason = "Tài khoản đang có cảnh báo khẩn cấp chưa được xử lý."
 
-                house_str = f"{eld.house.name} ({eld.house.address})" if eld.house else ("Chưa có địa chỉ" if not eld.house else eld.house.name)
-                eld_out = UserOut(
-                    id=eld.id,
-                    phone=eld.emergency_contact_phone or "", 
-                    full_name=eld.full_name,
-                    role="elderly",
-                    role_title="Người cao tuổi",
-                    is_active=True,
-                    status="active",
-                    avatar_url=eld.avatar_url,
-                    preferred_language="vi",
-                    language="vi",
-                    font_size_mode="system",
-                    custom_font_scale=2,
-                    vibration_enabled=True,
-                    created_at=eld.created_at,
-                    updated_at=eld.updated_at,
-                    last_login_at=eld.updated_at,
-                    assigned_house=house_str,
-                    dormancy_level="active",
-                    can_delete=True,
+            user_out = UserOut.model_validate(u)
+            user_out.assigned_house = assigned_house
+            user_out.role_title = role_title
+            user_out.dormancy_level = u_dormancy
+            user_out.can_delete = u_can_del
+            user_out.cannot_delete_reason = u_reason
+            user_outs.append(user_out)
+
+        if include_elderly:
+            try:
+                eld_res = await db.execute(
+                    select(
+                        ElderlyProfile.id,
+                        ElderlyProfile.full_name,
+                        ElderlyProfile.emergency_contact_phone,
+                        ElderlyProfile.avatar_url,
+                        ElderlyProfile.created_at,
+                        ElderlyProfile.updated_at,
+                        ElderlyProfile.house_id,
+                    )
                 )
-                user_outs.append(eld_out)
-        except Exception:
-            pass
+                eld_list = eld_res.all()
+                for eld in eld_list:
+                    if not eld.full_name or not eld.full_name.strip():
+                        continue
+
+                    h = houses_by_id.get(eld.house_id)
+                    house_str = f"{h.name} ({h.address})" if (h and h.address) else (h.name if h else "Chưa có địa chỉ")
+                    eld_out = UserOut(
+                        id=eld.id,
+                        phone=eld.emergency_contact_phone or "", 
+                        full_name=eld.full_name,
+                        role="elderly",
+                        role_title="Người cao tuổi",
+                        is_active=True,
+                        status="active",
+                        avatar_url=eld.avatar_url,
+                        preferred_language="vi",
+                        language="vi",
+                        font_size_mode="system",
+                        custom_font_scale=2,
+                        vibration_enabled=True,
+                        created_at=eld.created_at,
+                        updated_at=eld.updated_at,
+                        last_login_at=eld.updated_at,
+                        assigned_house=house_str,
+                        dormancy_level="active",
+                        can_delete=True,
+                    )
+                    user_outs.append(eld_out)
+            except Exception:
+                pass
+
+        # Lưu cache cho các lượt truy vấn tiếp theo (phản hồi tức thì)
+        _USERS_CACHE["data"] = user_outs
+        _USERS_CACHE["timestamp"] = now_ts
 
     # Bộ lọc Tra cứu
     filtered = user_outs
-    if search and search.strip():
-        kw = search.strip().lower()
+    search_str = search if isinstance(search, str) else None
+    if search_str and search_str.strip():
+        kw = search_str.strip().lower()
         filtered = [
             u for u in filtered
             if (u.full_name and kw in u.full_name.lower())
@@ -336,8 +377,9 @@ async def list_users(
             or (u.assigned_house and kw in u.assigned_house.lower())
         ]
 
-    if role and role.strip() and role.strip() != "all":
-        r = role.strip().lower()
+    role_str = role if isinstance(role, str) else None
+    if role_str and role_str.strip() and role_str.strip() != "all":
+        r = role_str.strip().lower()
         if r == "owner":
             filtered = [u for u in filtered if u.role in ("user", "owner")]
         elif r == "member":
@@ -345,25 +387,29 @@ async def list_users(
         else:
             filtered = [u for u in filtered if u.role.lower() == r]
 
-    if status and status.strip() and status.strip() != "all":
-        st = status.strip().lower()
+    status_str = status if isinstance(status, str) else None
+    if status_str and status_str.strip() and status_str.strip() != "all":
+        st = status_str.strip().lower()
         filtered = [u for u in filtered if getattr(u, "status", "active") == st]
 
-    if dormancy and dormancy.strip() and dormancy.strip() != "all":
-        dm = dormancy.strip().lower()
+    dormancy_str = dormancy if isinstance(dormancy, str) else None
+    if dormancy_str and dormancy_str.strip() and dormancy_str.strip() != "all":
+        dm = dormancy_str.strip().lower()
         filtered = [u for u in filtered if getattr(u, "dormancy_level", "active") == dm]
 
     # Phân trang nếu page được truyền vào
-    if page is not None:
+    page_val = page if isinstance(page, int) else None
+    page_size_val = page_size if isinstance(page_size, int) else 10
+    if page_val is not None:
         total = len(filtered)
-        start = (page - 1) * page_size
-        paged_items = filtered[start : start + page_size]
-        total_pages = math.ceil(total / page_size) if total > 0 else 1
+        start = (page_val - 1) * page_size_val
+        paged_items = filtered[start : start + page_size_val]
+        total_pages = math.ceil(total / page_size_val) if total > 0 else 1
         return UserPaginationOut(
             items=paged_items,
             total=total,
-            page=page,
-            page_size=page_size,
+            page=page_val,
+            page_size=page_size_val,
             total_pages=total_pages,
         )
 
@@ -461,6 +507,7 @@ async def create_user_by_admin(
         severity="low",
     )
 
+    invalidate_users_cache()
     user_out = UserOut.model_validate(user)
     user_out.assigned_house = user_in.get("assigned_house")
 
@@ -1146,6 +1193,7 @@ async def execute_dormant_batch_action(
         )
 
     await db.commit()
+    invalidate_users_cache()
     return {
         "status": "success",
         "message": f"Đã thực hiện thao tác [{payload.action}] thành công cho {affected_count} tài khoản.",
@@ -1360,6 +1408,7 @@ async def revoke_user_terminal_by_admin(
         commit=False,
     )
     await db.commit()
+    invalidate_users_cache()
     return {"message": "Đã thu hồi và xóa thiết bị thành công", "terminal_id": terminal_id}
 
 
@@ -1414,6 +1463,7 @@ async def logout_all_devices_by_admin(
         commit=False,
     )
     await db.commit()
+    invalidate_users_cache()
     return {"status": "success", "message": f"Đã đăng xuất toàn bộ thiết bị của tài khoản [{user.full_name}] thành công."}
 
 
@@ -1504,6 +1554,7 @@ async def update_user_status_by_admin(
     await db.commit()
     await db.refresh(user)
 
+    invalidate_users_cache()
     user_out = UserOut.model_validate(user)
     user_out.dormancy_level = get_user_dormancy_level(user, now)
     can_del, r = await check_user_deletion_guards(db, user, current_user)
@@ -1666,6 +1717,7 @@ async def delete_user_by_admin(
 
         await crud_user.delete(db, uid)
         await db.commit()
+        invalidate_users_cache()
 
         return {"message": "Đã xóa tài khoản thành công", "user_id": user_id}
 

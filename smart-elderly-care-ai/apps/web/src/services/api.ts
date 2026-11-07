@@ -73,8 +73,8 @@ export const authApi = {
 
 // 2. USERS & PERMISSIONS API
 export const usersApi = {
-  list: async (): Promise<User[]> => {
-    const res = await api.get<User[]>('/users');
+  list: async (refresh: boolean = false): Promise<User[]> => {
+    const res = await api.get<User[]>('/users', { params: refresh ? { refresh: true } : undefined });
     return res.data;
   },
 

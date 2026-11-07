@@ -124,10 +124,10 @@ export const UserManagementPage: React.FC = () => {
   };
 
   // Fetch users từ backend
-  const fetchUsers = async () => {
+  const fetchUsers = async (forceRefresh: boolean = false) => {
     setLoading(true);
     try {
-      const data = await usersApi.list();
+      const data = await usersApi.list(forceRefresh);
       const userList = Array.isArray(data) ? data : ((data as any)?.items || []);
       setUsers(userList);
     } catch (err) {
@@ -516,7 +516,7 @@ export const UserManagementPage: React.FC = () => {
 
         <div className="flex items-center space-x-2.5">
           <button
-            onClick={fetchUsers}
+            onClick={() => fetchUsers(true)}
             disabled={loading}
             className="btn-secondary"
             title="Tải lại danh sách"
