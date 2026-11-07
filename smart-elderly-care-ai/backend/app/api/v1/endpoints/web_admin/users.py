@@ -188,6 +188,32 @@ async def list_users(
     - Kiểm tra trước điều kiện xóa (can_delete, cannot_delete_reason)
     """
     now = datetime.now(timezone.utc)
+
+    # Tối ưu hóa truy vấn: Precompute các guard checks 1 lần duy nhất thay vì N+1 queries trong loop
+    admin_count_res = await db.execute(
+        select(func.count(User.id)).where(User.role == "admin", User.is_active == True)
+    )
+    admin_count = admin_count_res.scalar() or 0
+
+    owner_with_active_members_res = await db.execute(
+        select(House.owner_id)
+        .join(HouseMember, House.id == HouseMember.house_id)
+        .where(
+            HouseMember.user_id != House.owner_id,
+            HouseMember.status == "ACTIVE"
+        )
+        .distinct()
+    )
+    owners_with_members = set(owner_with_active_members_res.scalars().all())
+
+    owner_with_unack_incident_res = await db.execute(
+        select(Device.owner_id)
+        .join(Incident, Device.id == Incident.device_id)
+        .where(Incident.is_acknowledged == False)
+        .distinct()
+    )
+    owners_with_incidents = set(owner_with_unack_incident_res.scalars().all())
+
     stmt = (
         select(User)
         .options(
@@ -237,7 +263,22 @@ async def list_users(
             role_title = "Thành viên gia đình"
 
         u_dormancy = get_user_dormancy_level(u, now)
-        u_can_del, u_reason = await check_user_deletion_guards(db, u, current_user)
+
+        # Kiểm tra Guard nhanh bằng in-memory set (0ms round-trip)
+        u_can_del = True
+        u_reason = None
+        if u.id == current_user.id:
+            u_can_del = False
+            u_reason = "Không thể tự xóa tài khoản của chính mình."
+        elif u.role == "admin" and admin_count <= 1:
+            u_can_del = False
+            u_reason = "Không thể xóa Quản trị viên cuối cùng của hệ thống."
+        elif u.id in owners_with_members:
+            u_can_del = False
+            u_reason = "Căn nhà còn thành viên hoạt động. Vui lòng chuyển quyền Chủ hộ hoặc giải tán nhà trước khi xóa."
+        elif u.id in owners_with_incidents:
+            u_can_del = False
+            u_reason = "Tài khoản đang có cảnh báo khẩn cấp chưa được xử lý."
 
         user_out = UserOut.model_validate(u)
         user_out.assigned_house = assigned_house
