@@ -128,8 +128,10 @@ export const UserManagementPage: React.FC = () => {
     setLoading(true);
     try {
       const data = await usersApi.list();
-      setUsers(data);
-    } catch {
+      const userList = Array.isArray(data) ? data : ((data as any)?.items || []);
+      setUsers(userList);
+    } catch (err) {
+      console.error('[UserManagement] fetchUsers error:', err);
       showNotice('error', 'Lỗi khi kết nối máy chủ tải danh sách tài khoản.');
     } finally {
       setLoading(false);
