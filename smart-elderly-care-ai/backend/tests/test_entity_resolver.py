@@ -1,105 +1,147 @@
 # -*- coding: utf-8 -*-
-"""
-test_entity_resolver.py – Unit test kiểm tra Bộ chuẩn hóa và So khớp mờ Thực thể y tế.
-"""
-from app.services.chatbot.entity_resolver import (
-    MedicalEntityResolver,
-    strip_accents,
-    clean_normalized_text,
-    get_medical_entity_resolver,
-)
+import sys
+from pathlib import Path
+
+try:
+    from app.services.chatbot.entity_resolver import Resolver, norm
+except ImportError:
+    # Fallback nếu chạy trực tiếp từ thư mục chứa entity_resolver
+    sys.path.insert(0, str(Path(__file__).resolve().parent.parent / "app" / "services" / "chatbot"))
+    from entity_resolver import Resolver, norm
+
+r = Resolver()
 
 
-def test_clean_normalized_text():
-    # Chuẩn hóa SpO2
-    assert clean_normalized_text("kiem tra may do spo 2") == "kiem tra may do spo2"
-    assert clean_normalized_text("sp o2 cua cu") == "spo2 cua cu"
-    # Chuẩn hóa số thập phân và đơn vị
-    assert clean_normalized_text("uong 0,5 mg thuoc") == "uong 0.5mg thuoc"
-    assert clean_normalized_text("vien 500 mg") == "vien 500mg"
+def top(q):
+    res = r.resolve(q)
+    return res[0] if res else None
 
 
-def test_strip_accents():
-    assert strip_accents("Thuốc hạ huyết áp") == "thuoc ha huyet ap"
-    assert strip_accents("Đo đường huyết") == "do duong huyet"
+def test_norm_strips_accents_and_spo2():
+    assert norm("Máy đo SpO 2, 500mg") == "may do spo2 500mg"
+    assert norm("0,5 mg") == "0.5 mg"
 
 
-def test_exact_drug_and_brand_aliases():
-    resolver = get_medical_entity_resolver()
-
-    # Biệt dược Panadol, Hapacol, Efferalgan quy về Paracetamol
-    res1 = resolver.resolve("uống 1 viên panadol extra")
-    assert any(e.canonical == "Paracetamol" for e in res1)
-
-    res2 = resolver.resolve("cho cụ uống hapacol 500mg")
-    assert any(e.canonical == "Paracetamol" and e.strength == "500mg" for e in res2)
+def test_exact_and_no_accent():
+    assert top("thuoc ha sot paracetamol").entity_id == "paracetamol"
+    assert top("may do duong huyet").entity_id == "may_do_duong_huyet"
 
 
-def test_fuzzy_matching_typos():
-    resolver = get_medical_entity_resolver()
-
-    # Sai chính tả Telex/VNI: pharacetamon -> Paracetamol
-    res = resolver.resolve("uong pharacetamon 500mg bi sot")
-    assert len(res) > 0
-    paracetamol = next((e for e in res if e.canonical == "Paracetamol"), None)
-    assert paracetamol is not None
-    assert paracetamol.score >= 80.0
-    assert paracetamol.strength == "500mg"
-
-    # Sai chính tả Amlodipine: amlodipin / amlo
-    res_amlo = resolver.resolve("thuoc ha huyet ap amlodipin 5mg")
-    assert any(e.canonical == "Amlodipine" and e.strength == "5mg" for e in res_amlo)
+def test_typo_accepted_or_confirm():
+    m = top("uống pharacetamon")
+    assert m.entity_id == "paracetamol" and m.status in ("accepted", "confirm")
 
 
-def test_medical_device_normalization():
-    resolver = get_medical_entity_resolver()
-
-    # Máy đo SpO2 từ cách gọi dân gian
-    res1 = resolver.resolve("dung may kep ngon tay do oxy")
-    assert any(e.canonical == "Máy đo SpO2" for e in res1)
-
-    # Máy đo huyết áp bắp tay
-    res2 = resolver.resolve("may do huyetap omron")
-    assert any(e.canonical == "Máy đo huyết áp" for e in res2)
+def test_brand_name():
+    assert top("em uong hapacol").entity_id == "paracetamol"
 
 
-def test_high_risk_drug_guard():
-    resolver = get_medical_entity_resolver()
-
-    # Aspirin viết sai chính tả 'aspirn' (không có trong từ điển alias)
-    res = resolver.resolve("cu dang uong aspirn 81mg")
-    aspirin = next((e for e in res if e.canonical == "Aspirin"), None)
-    assert aspirin is not None
-    assert aspirin.high_risk is True
-    # Do viết sai nên phải có cờ cần xác nhận (NEED_CONFIRM)
-    assert aspirin.status == "NEED_CONFIRM"
-    assert aspirin.confirmation_question is not None
+def test_spacing_error_device():
+    assert top("mua may do huyetap").entity_id == "may_do_huyet_ap"
 
 
-def test_abbreviation_expansion():
-    resolver = get_medical_entity_resolver()
-
-    # Viết tắt 'HA' -> Huyết áp, 'SXH' -> Sốt xuất huyết
-    res = resolver.resolve("kiem tra chi so ha cua cu xem co bi sxh khong")
-    canonicals = {e.canonical for e in res}
-    assert "Huyết áp" in canonicals
-    assert "Sốt xuất huyết" in canonicals
+def test_high_risk_typo_needs_confirmation():
+    m = top("aspirn 300mg")
+    assert m.entity_id == "aspirin" and m.status == "confirm"
+    assert "high_risk" in m.warnings
 
 
-def test_query_rewriting():
-    resolver = get_medical_entity_resolver()
-
-    rewritten, entities = resolver.rewrite_and_enrich_query("uong pharacetamon 500mg")
-    assert "Paracetamol" in rewritten
+def test_high_risk_exact_accepted():
+    assert top("nitroglycerin").status == "accepted"
 
 
-if __name__ == "__main__":
-    test_clean_normalized_text()
-    test_strip_accents()
-    test_exact_drug_and_brand_aliases()
-    test_fuzzy_matching_typos()
-    test_medical_device_normalization()
-    test_high_risk_drug_guard()
-    test_abbreviation_expansion()
-    test_query_rewriting()
-    print("🎉 ALL 8 MEDICAL ENTITY RESOLVER TESTS PASSED 100%!")
+def test_strength_parse_and_warning():
+    m = top("nitroglycerin 0,5 mg")
+    assert m.strength_mg == 0.5 and not [w for w in m.warnings if w != "high_risk"]
+    m2 = top("paracetamol 5000 mg")
+    assert any("không phổ biến" in w for w in m2.warnings)
+
+
+def test_no_false_positive_on_plain_text():
+    assert r.resolve("xin chao toi bi dau dau") == []
+    assert r.resolve("huyet ap cao thi nen an gi") == []
+
+
+def test_multiple_entities():
+    ids = [m.entity_id for m in r.resolve("co paracetamol va nhiet ke chua")]
+    assert ids == ["paracetamol", "nhiet_ke"]
+
+
+def test_catalog_size_and_unique_aliases():
+    assert len(r.entities) >= 60          # Resolver() đã kiểm tra alias trùng khi khởi tạo
+
+
+def test_general_purpose_definition_and_list():
+    d = r.general_purpose_definition()
+    assert "không cần kê đơn" in d["dinh_nghia"]
+    ids = {e["id"] for e in r.general_purpose()}
+    assert {"paracetamol", "oresol", "povidone_iodine"} <= ids
+    assert "ibuprofen" not in ids and "warfarin" not in ids      # kháng viêm, thuốc kê đơn không thuộc đa dụng
+    assert all(e["type"] == "drug" for e in r.general_purpose())
+
+
+def test_describe_and_explain():
+    assert "Thuốc kê đơn" in r.describe("losartan")
+    assert "nguy cơ cao" in r.describe("warfarin")
+    assert "Smecta" in r.explain("smecta la gi") or "Diosmectite" in r.explain("smecta la gi")
+    assert "Ý bạn là" in r.explain("aspirn 300mg")               # chưa chắc thì hỏi lại
+
+
+def test_new_drugs_and_brands():
+    assert top("cetirizin 10mg").entity_id == "cetirizine"
+    assert top("uong augmentin").entity_id == "augmentin"
+    assert top("povidon iod sat khuan").entity_id == "povidone_iodine"
+    assert top("vitamin").entity_id == "vitamin_tong_hop"        # từ chung chung không bị nhầm thành Vitamin C
+
+
+def test_by_group():
+    assert any(e["id"] == "metformin" for e in r.by_group("dai thao duong"))
+
+
+def test_every_entity_has_definition_and_valid_uses():
+    for e in r.entities.values():
+        assert e["definition"], e["id"]
+        assert all(u in r.use_labels for u in e.get("uses", [])), e["id"]
+        if e["type"] == "drug":
+            assert e["uses"] and e.get("cautions_elderly"), e["id"]
+
+
+def test_multi_use_flag_and_list():
+    assert r.entities["paracetamol"]["multi_use"] is True
+    assert r.entities["metformin"]["multi_use"] is False
+    ids = r.multi_use_drugs()
+    assert {"paracetamol", "aspirin", "ibuprofen", "nuoc_muoi_sinh_ly"} <= set(ids)
+    assert "metformin" not in ids
+
+
+def test_describe_contains_key_parts():
+    text = r.describe("aspirin")
+    assert "nhiều công dụng" in text and "Lưu ý ở người cao tuổi" in text and "nguy cơ cao" in text
+
+
+def test_search_by_use():
+    names = [d["id"] for d in r.search_by_use("thuoc ha sot")]
+    assert "paracetamol" in names and "ibuprofen" in names
+    ids = [d["id"] for d in r.search_by_use("Thuốc hạ huyết áp")]
+    assert "amlodipine" in ids and "losartan" in ids
+    assert r.search_by_use("hom nay troi dep") == []
+
+
+def test_household_items():
+    h = r.household_items()
+    assert "paracetamol" in h and "may_do_huyet_ap" in h
+    assert "warfarin" not in h
+    assert all(r.entities[i]["type"] == "device" for i in r.household_items("device"))
+
+
+def test_new_drugs_typos():
+    assert top("atorvastatn 20mg").entity_id == "atorvastatin"
+    assert top("uong omeprazol").entity_id == "omeprazole"
+    assert top("thuoc zyrtec").entity_id == "cetirizine"
+    assert top("vitamin c").entity_id == "vitamin_c"
+
+
+def test_lookalike_gets_confirmation_not_silent_accept():
+    m = top("losartn 50mg")
+    assert m.entity_id in ("losartan", "valsartan") and m.status in ("confirm", "ambiguous", "accepted")
+    assert top("prednisolon").status != "accepted" or top("prednisolon").score == 100

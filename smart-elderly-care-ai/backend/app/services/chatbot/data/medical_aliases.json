@@ -1,185 +1,2371 @@
 {
-  "drugs": [
-    {
-      "canonical": "Paracetamol",
-      "category": "Hạ sốt, giảm đau",
-      "high_risk": false,
-      "typical_strengths": ["500mg", "650mg", "1000mg", "325mg", "250mg", "150mg", "80mg"],
-      "aliases": [
-        "para", "paracetamon", "pharacetamol", "pharacetamon", "paracel",
-        "panadol", "panadol extra", "hapacol", "efferalgan", "efferalgan sủi",
-        "tylenol", "acetaminophen", "pamin", "decolgen", "coldacmin"
-      ]
-    },
-    {
-      "canonical": "Aspirin",
-      "category": "Kháng kết tập tiểu cầu, giảm đau",
-      "high_risk": true,
-      "typical_strengths": ["81mg", "100mg", "500mg"],
-      "aliases": [
-        "asprin", "aspire", "aspirin 81", "aspirin ph8", "aspirin 100",
-        "cardiprin", "aspilets", "aspegic"
-      ]
-    },
-    {
-      "canonical": "Ibuprofen",
-      "category": "Kháng viêm không steroid (NSAID)",
-      "high_risk": true,
-      "typical_strengths": ["200mg", "400mg", "600mg"],
-      "aliases": [
-        "ibu", "ibubrofen", "ibufen", "brufen", "gofen", "advil", "motrin", "alaxan"
-      ]
-    },
-    {
-      "canonical": "Amlodipine",
-      "category": "Hạ huyết áp (Chẹn kênh calci)",
-      "high_risk": false,
-      "typical_strengths": ["5mg", "10mg"],
-      "aliases": [
-        "amlodipin", "amlo", "amlor", "norvasc", "amlopres", "stamlo"
-      ]
-    },
-    {
-      "canonical": "Losartan",
-      "category": "Hạ huyết áp (Chẹn thụ thể ARB)",
-      "high_risk": false,
-      "typical_strengths": ["25mg", "50mg", "100mg"],
-      "aliases": [
-        "lozartan", "cozaar", "losartas", "losartan stada", "lotan"
-      ]
-    },
-    {
-      "canonical": "Nitroglycerin",
-      "category": "Giãn mạch vành, cắt cơn đau thắt ngực",
-      "high_risk": true,
-      "typical_strengths": ["0.4mg", "0.5mg", "2.5mg"],
-      "aliases": [
-        "nitroglyxerin", "nitrostad", "nitromint", "nitrostat", "ngậm dưới lưỡi đau ngực", "xit duoi luoi"
-      ]
-    },
-    {
-      "canonical": "Metformin",
-      "category": "Hạ đường huyết (Tiểu đường type 2)",
-      "high_risk": false,
-      "typical_strengths": ["500mg", "850mg", "1000mg"],
-      "aliases": [
-        "metfomin", "glucophage", "panfor", "metfor", "diamet"
-      ]
-    },
-    {
-      "canonical": "Insulin",
-      "category": "Hạ đường huyết dạng tiêm",
-      "high_risk": true,
-      "typical_strengths": ["100IU/ml"],
-      "aliases": [
-        "isulin", "insuline", "but tiem tieu duong", "novorapid", "lantus",
-        "mixtard", "humalog", "apidra", "toujeo", "tresiba"
-      ]
-    },
-    {
-      "canonical": "Warfarin",
-      "category": "Thuốc chống đông máu",
-      "high_risk": true,
-      "typical_strengths": ["1mg", "2mg", "5mg"],
-      "aliases": [
-        "waphari", "wafarin", "coumadin", "sintrom", "acenocoumarol", "thuoc chong dong"
-      ]
-    },
-    {
-      "canonical": "Oresol",
-      "category": "Bù nước và điện giải",
-      "high_risk": false,
-      "typical_strengths": ["gói pha 200ml", "gói pha 1 lít"],
-      "aliases": [
-        "oreson", "orezol", "ors", "nuoc dien giai", "goi bu nuoc", "hydrite"
-      ]
-    },
-    {
-      "canonical": "Omeprazole",
-      "category": "Thuốc dạ dày (Ức chế bơm proton)",
-      "high_risk": false,
-      "typical_strengths": ["20mg", "40mg"],
-      "aliases": [
-        "omeprazol", "ome", "losec", "ogast", "thuoc da day chu O", "lomac"
-      ]
-    }
-  ],
-  "devices": [
-    {
-      "canonical": "Máy đo huyết áp",
-      "category": "Thiết bị đo tim mạch",
-      "aliases": [
-        "may do huyet ap", "may do ha", "may do huyetap", "may do tension",
-        "tensiometer", "may do huyet ap bap tay", "may do huyet ap co tay",
-        "omron", "may omron", "may bom hoi do huyet ap"
-      ]
-    },
-    {
-      "canonical": "Máy đo SpO2",
-      "category": "Thiết bị đo oxy trong máu",
-      "aliases": [
-        "spo2", "spo 2", "sp o2", "may do spo2", "may do spo 2",
-        "may kep ngon tay", "kep ngon tay do oxy", "oximeter", "pulse oximeter",
-        "may do nong do oxy", "may do oxy trong mau", "kep dau ngon tay"
-      ]
-    },
-    {
-      "canonical": "Nhiệt kế điện tử",
-      "category": "Thiết bị đo thân nhiệt",
-      "aliases": [
-        "nhiet ke", "nhiet ke dien tu", "nhiet ke thuy ngan", "kep nhiet do",
-        "may ban nhiet do", "sung ban nhiet do", "do than nhiet", "kep nach"
-      ]
-    },
-    {
-      "canonical": "Máy đo đường huyết",
-      "category": "Thiết bị kiểm tra đái tháo đường",
-      "aliases": [
-        "may do duong huyet", "may do tieu duong", "may thu duong", "que thu duong",
-        "accu chek", "accuchek", "onetouch", "one touch", "but ban kim lay mau"
-      ]
-    },
-    {
-      "canonical": "Vòng đeo tay thông minh",
-      "category": "Thiết bị đeo giám sát sinh hiệu",
-      "aliases": [
-        "vong deo tay", "vong tay thong minh", "dong ho thong minh", "smartband",
-        "smartwatch", "thiet bi bao nga", "dong ho bao nga"
-      ]
-    },
-    {
-      "canonical": "Nệm hơi chống loét",
-      "category": "Dụng cụ chăm sóc người nằm liệt",
-      "aliases": [
-        "nem hoi", "dem hoi", "dem chong loet", "nem chong loet",
-        "dem khi rung", "nem hoi y te"
-      ]
-    }
-  ],
-  "medical_terms": [
-    {
-      "canonical": "Huyết áp",
-      "aliases": ["ha", "huyetap", "huyet ap", "blood pressure", "bp"]
-    },
-    {
-      "canonical": "Đường huyết",
-      "aliases": ["dh", "duong huyet", "duong mau", "blood sugar", "glucose"]
-    },
-    {
-      "canonical": "Sốt xuất huyết",
-      "aliases": ["sxh", "sot xuat huyet", "dengue", "dengue fever"]
-    },
-    {
-      "canonical": "Đột quỵ não",
-      "aliases": ["dot quy", "tai bien", "tai bien mach mau nao", "stroke", "meo mieng yeu liet"]
-    },
-    {
-      "canonical": "Nhồi máu cơ tim",
-      "aliases": ["nmct", "nhoi mau co tim", "dau tim", "con dau that nguc", "heart attack"]
-    },
-    {
-      "canonical": "Loét tì đè",
-      "aliases": ["loet ti de", "loet mông", "loet do nam lau", "pressure ulcer", "bedsore"]
-    }
-  ]
+ "definitions": {
+  "thuoc_da_dung": {
+   "ten": "Thuốc đa dụng",
+   "dinh_nghia": "Thuốc, vật tư thường có sẵn trong tủ thuốc gia đình, thường không cần kê đơn, dùng cho nhiều tình huống nhẹ hoặc hỗ trợ trước khi đến cơ sở y tế. Dùng đúng hướng dẫn trên nhãn; triệu chứng nặng hoặc kéo dài cần đi khám.",
+   "tieu_chi": [
+    "Thường mua không cần đơn",
+    "Dùng cho nhiều tình huống thường gặp trong nhà",
+    "Ít nguy cơ nếu dùng đúng nhãn",
+    "Không thay thế khám bệnh khi triệu chứng nặng hoặc kéo dài"
+   ]
+  },
+  "thuoc_nhieu_cong_dung": {
+   "ten": "Thuốc có nhiều công dụng",
+   "dinh_nghia": "Thuốc có từ hai nhóm công dụng khác nhau trở lên (ví dụ paracetamol vừa hạ sốt vừa giảm đau). Công dụng thực tế phụ thuộc liều, dạng dùng và chỉ định của bác sĩ; không tự đổi mục đích dùng."
+  }
+ },
+ "meta": {
+  "multi_use_definition": "Thuốc đa dụng là thuốc có từ hai nhóm công dụng khác nhau trở lên (ví dụ paracetamol vừa hạ sốt vừa giảm đau). Công dụng thực tế phụ thuộc liều, dạng dùng và chỉ định của bác sĩ; không tự đổi mục đích dùng.",
+  "household_definition": "Thuốc, vật tư thường có sẵn trong tủ thuốc gia đình để xử lý các tình huống nhẹ hoặc hỗ trợ trước khi đến cơ sở y tế.",
+  "disclaimer": "Thông tin tham khảo, không thay thế tư vấn của bác sĩ hoặc dược sĩ. Tên biệt dược cần đối chiếu với Dược thư Quốc gia hoặc danh mục thuốc của Cục Quản lý Dược."
+ },
+ "uses": {
+  "ha_sot": {
+   "label": "Hạ sốt",
+   "synonyms": [
+    "ha sot",
+    "giam sot",
+    "thuoc sot"
+   ]
+  },
+  "giam_dau": {
+   "label": "Giảm đau",
+   "synonyms": [
+    "giam dau",
+    "thuoc dau",
+    "giam dau nhuc"
+   ]
+  },
+  "giam_dau_manh": {
+   "label": "Giảm đau mạnh (nhóm opioid)",
+   "synonyms": [
+    "giam dau manh",
+    "dau nang"
+   ]
+  },
+  "khang_viem": {
+   "label": "Kháng viêm",
+   "synonyms": [
+    "khang viem",
+    "chong viem"
+   ]
+  },
+  "chong_ket_tap": {
+   "label": "Chống kết tập tiểu cầu (phòng huyết khối)",
+   "synonyms": [
+    "chong ket tap tieu cau",
+    "loang mau",
+    "phong huyet khoi"
+   ]
+  },
+  "chong_dong": {
+   "label": "Chống đông máu",
+   "synonyms": [
+    "chong dong",
+    "chong dong mau",
+    "loang mau"
+   ]
+  },
+  "ha_huyet_ap": {
+   "label": "Hạ huyết áp",
+   "synonyms": [
+    "ha huyet ap",
+    "thuoc huyet ap",
+    "tri cao huyet ap",
+    "tang huyet ap"
+   ]
+  },
+  "dau_that_nguc": {
+   "label": "Đau thắt ngực",
+   "synonyms": [
+    "dau that nguc",
+    "thuoc tim",
+    "mach vanh"
+   ]
+  },
+  "suy_tim": {
+   "label": "Suy tim",
+   "synonyms": [
+    "suy tim"
+   ]
+  },
+  "nhip_tim": {
+   "label": "Kiểm soát nhịp tim",
+   "synonyms": [
+    "nhip tim",
+    "loan nhip"
+   ]
+  },
+  "loi_tieu": {
+   "label": "Lợi tiểu, giảm phù",
+   "synonyms": [
+    "loi tieu",
+    "giam phu",
+    "thuoc phu"
+   ]
+  },
+  "ha_mo_mau": {
+   "label": "Hạ mỡ máu",
+   "synonyms": [
+    "ha mo mau",
+    "mo mau",
+    "cholesterol",
+    "thuoc mo mau"
+   ]
+  },
+  "tieu_duong": {
+   "label": "Đái tháo đường",
+   "synonyms": [
+    "tieu duong",
+    "dai thao duong",
+    "ha duong huyet",
+    "thuoc tieu duong"
+   ]
+  },
+  "ha_duong_huyet_nang": {
+   "label": "Cấp cứu hạ đường huyết nặng",
+   "synonyms": [
+    "ha duong huyet nang",
+    "cap cuu ha duong huyet"
+   ]
+  },
+  "giam_acid": {
+   "label": "Giảm acid, bảo vệ dạ dày",
+   "synonyms": [
+    "giam acid",
+    "khang acid",
+    "dau da day",
+    "trao nguoc",
+    "o chua"
+   ]
+  },
+  "chong_non": {
+   "label": "Chống nôn",
+   "synonyms": [
+    "chong non",
+    "buon non"
+   ]
+  },
+  "day_hoi": {
+   "label": "Giảm đầy hơi",
+   "synonyms": [
+    "day hoi",
+    "chuong bung"
+   ]
+  },
+  "tao_bon": {
+   "label": "Nhuận tràng, trị táo bón",
+   "synonyms": [
+    "tao bon",
+    "nhuan trang"
+   ]
+  },
+  "tieu_chay": {
+   "label": "Cầm tiêu chảy",
+   "synonyms": [
+    "cam tieu chay",
+    "thuoc tieu chay"
+   ]
+  },
+  "bu_nuoc": {
+   "label": "Bù nước, điện giải",
+   "synonyms": [
+    "bu nuoc",
+    "mat nuoc",
+    "dien giai"
+   ]
+  },
+  "hen_copd": {
+   "label": "Giãn phế quản, cắt cơn hen và COPD",
+   "synonyms": [
+    "cat con hen",
+    "gian phe quan",
+    "thuoc hen",
+    "copd"
+   ]
+  },
+  "di_ung": {
+   "label": "Chống dị ứng",
+   "synonyms": [
+    "di ung",
+    "chong di ung",
+    "viem mui di ung"
+   ]
+  },
+  "long_dam": {
+   "label": "Long đờm",
+   "synonyms": [
+    "long dam",
+    "tieu dam"
+   ]
+  },
+  "giam_ho": {
+   "label": "Giảm ho",
+   "synonyms": [
+    "giam ho",
+    "thuoc ho",
+    "ho khan"
+   ]
+  },
+  "khang_sinh": {
+   "label": "Kháng sinh (chỉ dùng khi bác sĩ kê)",
+   "synonyms": [
+    "khang sinh",
+    "khang khuan"
+   ]
+  },
+  "ap_che_mien_dich": {
+   "label": "Ức chế miễn dịch",
+   "synonyms": [
+    "uc che mien dich"
+   ]
+  },
+  "an_than": {
+   "label": "An thần, thuốc ngủ",
+   "synonyms": [
+    "an than",
+    "thuoc ngu",
+    "mat ngu"
+   ]
+  },
+  "co_giat": {
+   "label": "Chống co giật",
+   "synonyms": [
+    "chong co giat",
+    "dong kinh"
+   ]
+  },
+  "gian_co": {
+   "label": "Giãn cơ",
+   "synonyms": [
+    "gian co"
+   ]
+  },
+  "gout": {
+   "label": "Gout",
+   "synonyms": [
+    "gout",
+    "benh gut",
+    "acid uric"
+   ]
+  },
+  "loang_xuong": {
+   "label": "Bổ sung canxi, vitamin D, phòng loãng xương",
+   "synonyms": [
+    "loang xuong",
+    "bo sung canxi",
+    "bo sung vitamin d"
+   ]
+  },
+  "thieu_vitamin": {
+   "label": "Bổ sung vitamin",
+   "synonyms": [
+    "bo sung vitamin",
+    "thieu vitamin"
+   ]
+  },
+  "dau_than_kinh": {
+   "label": "Đau thần kinh",
+   "synonyms": [
+    "dau than kinh",
+    "te bi"
+   ]
+  },
+  "suy_giap": {
+   "label": "Suy giáp",
+   "synonyms": [
+    "suy giap",
+    "tuyen giap"
+   ]
+  },
+  "sa_sut_tri_tue": {
+   "label": "Sa sút trí tuệ",
+   "synonyms": [
+    "sa sut tri tue",
+    "alzheimer",
+    "mat tri nho"
+   ]
+  },
+  "sat_khuan": {
+   "label": "Sát khuẩn",
+   "synonyms": [
+    "sat khuan",
+    "sat trung"
+   ]
+  },
+  "rua_vet_thuong": {
+   "label": "Rửa vết thương",
+   "synonyms": [
+    "rua vet thuong"
+   ]
+  },
+  "rua_mui": {
+   "label": "Rửa mũi, nhỏ mũi",
+   "synonyms": [
+    "rua mui",
+    "nho mui"
+   ]
+  },
+  "suc_hong": {
+   "label": "Súc họng",
+   "synonyms": [
+    "suc hong"
+   ]
+  }
+ },
+ "entities": [
+  {
+   "id": "paracetamol",
+   "type": "drug",
+   "canonical": "Paracetamol",
+   "risk": "normal",
+   "drug_class": "Giảm đau, hạ sốt (không kháng viêm)",
+   "definition": "Thuốc giảm đau nhẹ đến vừa và hạ sốt, dùng nhiều nhất trong gia đình; ít kích ứng dạ dày hơn nhóm kháng viêm.",
+   "uses": [
+    "ha_sot",
+    "giam_dau"
+   ],
+   "multi_use": true,
+   "household": true,
+   "cautions_elderly": "Không dùng chung nhiều chế phẩm cùng chứa paracetamol; thận trọng khi có bệnh gan hoặc uống rượu.",
+   "aliases": [
+    "para",
+    "paracetamon",
+    "paracetamol",
+    "hapacol",
+    "panadol",
+    "efferalgan",
+    "acetaminophen"
+   ],
+   "strengths_mg": [
+    325,
+    500,
+    650,
+    1000
+   ],
+   "multi_use_note": "Cùng một hoạt chất cho hai tác dụng, tùy mục đích bạn dùng; vẫn phải tính tổng liều trong ngày.",
+   "rx": false,
+   "general_purpose": true,
+   "group": "Giảm đau, hạ sốt (không kháng viêm)"
+  },
+  {
+   "id": "oresol",
+   "type": "drug",
+   "canonical": "Oresol",
+   "risk": "normal",
+   "drug_class": "Bù nước và điện giải",
+   "definition": "Gói bột pha nước uống chứa muối và đường theo tỷ lệ chuẩn, bù nước và điện giải khi tiêu chảy, nôn, ra mồ hôi nhiều.",
+   "uses": [
+    "bu_nuoc"
+   ],
+   "multi_use": false,
+   "household": true,
+   "cautions_elderly": "Pha đúng lượng nước theo bao bì; hỏi bác sĩ nếu suy tim hoặc suy thận phải hạn chế nước.",
+   "aliases": [
+    "oresol",
+    "ors",
+    "dien giai oresol"
+   ],
+   "rx": false,
+   "general_purpose": true,
+   "group": "Bù nước và điện giải"
+  },
+  {
+   "id": "aspirin",
+   "type": "drug",
+   "canonical": "Aspirin",
+   "risk": "high",
+   "drug_class": "Chống kết tập tiểu cầu, giảm đau, hạ sốt, kháng viêm",
+   "definition": "Thuốc có nhiều tác dụng tùy liều: liều thấp phòng huyết khối tim mạch, liều cao hơn giảm đau, hạ sốt, kháng viêm.",
+   "uses": [
+    "chong_ket_tap",
+    "giam_dau",
+    "ha_sot",
+    "khang_viem"
+   ],
+   "multi_use": true,
+   "household": false,
+   "cautions_elderly": "Gây loét, chảy máu dạ dày ruột; không dùng khi nghi đột quỵ, đang chảy máu hoặc nghi sốt xuất huyết; chỉ dùng thường xuyên khi bác sĩ kê.",
+   "aliases": [
+    "aspirin",
+    "aspirine",
+    "aspegic",
+    "acid acetylsalicylic"
+   ],
+   "strengths_mg": [
+    81,
+    100,
+    300,
+    325,
+    500
+   ],
+   "multi_use_note": "Mục đích dùng quyết định liều; không tự đổi mục đích hoặc tự dùng hằng ngày.",
+   "rx": false,
+   "general_purpose": false,
+   "group": "Chống kết tập tiểu cầu, giảm đau, hạ sốt, kháng viêm"
+  },
+  {
+   "id": "nitroglycerin",
+   "type": "drug",
+   "canonical": "Nitroglycerin ngậm dưới lưỡi",
+   "risk": "high",
+   "drug_class": "Giãn mạch vành (nitrat)",
+   "definition": "Thuốc ngậm dưới lưỡi cắt cơn đau thắt ngực bằng cách giãn mạch.",
+   "uses": [
+    "dau_that_nguc"
+   ],
+   "multi_use": false,
+   "household": false,
+   "cautions_elderly": "Dùng khi ngồi; tránh khi huyết áp thấp hoặc đã dùng sildenafil trong 24-48 giờ; chỉ dùng khi bác sĩ đã kê.",
+   "aliases": [
+    "nitroglycerin",
+    "nitroglyxerin",
+    "nitroglycerine",
+    "nitromint",
+    "trinitrin",
+    "ntg"
+   ],
+   "strengths_mg": [
+    0.4,
+    0.5
+   ],
+   "rx": true,
+   "general_purpose": false,
+   "group": "Giãn mạch vành (nitrat)"
+  },
+  {
+   "id": "salbutamol",
+   "type": "drug",
+   "canonical": "Salbutamol (thuốc xịt cắt cơn)",
+   "risk": "normal",
+   "drug_class": "Giãn phế quản tác dụng nhanh",
+   "definition": "Thuốc xịt hoặc xông giúp giãn phế quản, cắt cơn khó thở, khò khè trong hen và COPD.",
+   "uses": [
+    "hen_copd"
+   ],
+   "multi_use": false,
+   "household": false,
+   "cautions_elderly": "Có thể gây run tay, tim đập nhanh; dùng theo số nhát được hướng dẫn.",
+   "aliases": [
+    "salbutamol",
+    "ventolin",
+    "albuterol",
+    "thuoc xit cat con"
+   ],
+   "rx": true,
+   "general_purpose": false,
+   "group": "Giãn phế quản tác dụng nhanh"
+  },
+  {
+   "id": "glucagon",
+   "type": "drug",
+   "canonical": "Glucagon",
+   "risk": "high",
+   "drug_class": "Hormon tăng đường huyết",
+   "definition": "Hormon dạng tiêm hoặc xịt mũi dùng cấp cứu hạ đường huyết nặng khi người bệnh không nuốt được.",
+   "uses": [
+    "ha_duong_huyet_nang"
+   ],
+   "multi_use": false,
+   "household": false,
+   "cautions_elderly": "Người nhà cần biết cách dùng; vẫn gọi cấp cứu sau khi dùng.",
+   "aliases": [
+    "glucagon",
+    "glucagen",
+    "glucagone"
+   ],
+   "rx": true,
+   "general_purpose": false,
+   "group": "Hormon tăng đường huyết"
+  },
+  {
+   "id": "insulin",
+   "type": "drug",
+   "canonical": "Insulin",
+   "risk": "high",
+   "drug_class": "Hormon hạ đường huyết",
+   "definition": "Thuốc tiêm điều trị đái tháo đường, giúp đưa đường vào tế bào; có loại tác dụng nhanh, chậm, hỗn hợp.",
+   "uses": [
+    "tieu_duong"
+   ],
+   "multi_use": false,
+   "household": false,
+   "cautions_elderly": "Dễ gây hạ đường huyết; không tự đổi loại hoặc liều; bảo quản đúng cách.",
+   "aliases": [
+    "insulin",
+    "insulyn",
+    "lantus",
+    "novorapid",
+    "mixtard"
+   ],
+   "rx": true,
+   "general_purpose": false,
+   "group": "Hormon hạ đường huyết"
+  },
+  {
+   "id": "warfarin",
+   "type": "drug",
+   "canonical": "Warfarin",
+   "risk": "high",
+   "drug_class": "Chống đông máu (kháng vitamin K)",
+   "definition": "Thuốc uống làm giảm khả năng đông máu, phòng huyết khối và đột quỵ do rung nhĩ hoặc van tim nhân tạo.",
+   "uses": [
+    "chong_dong"
+   ],
+   "multi_use": false,
+   "household": false,
+   "cautions_elderly": "Cần xét nghiệm INR định kỳ; nhiều tương tác với thuốc và thực phẩm; không tự ngưng.",
+   "aliases": [
+    "warfarin",
+    "warfarine",
+    "coumadin",
+    "sintrom"
+   ],
+   "strengths_mg": [
+    1,
+    2,
+    3,
+    5
+   ],
+   "rx": true,
+   "general_purpose": false,
+   "group": "Chống đông máu (kháng vitamin K)"
+  },
+  {
+   "id": "metformin",
+   "type": "drug",
+   "canonical": "Metformin",
+   "risk": "normal",
+   "drug_class": "Hạ đường huyết (biguanide)",
+   "definition": "Thuốc uống thường dùng đầu tay trong đái tháo đường typ 2, giảm sản xuất đường ở gan và tăng nhạy cảm insulin.",
+   "uses": [
+    "tieu_duong"
+   ],
+   "multi_use": false,
+   "household": false,
+   "cautions_elderly": "Thận trọng khi suy thận, mất nước, nôn, tiêu chảy; hỏi bác sĩ về việc tạm ngưng khi ốm.",
+   "aliases": [
+    "metformin",
+    "metfomin",
+    "glucophage"
+   ],
+   "strengths_mg": [
+    500,
+    850,
+    1000
+   ],
+   "rx": true,
+   "general_purpose": false,
+   "group": "Hạ đường huyết (biguanide)"
+  },
+  {
+   "id": "amlodipine",
+   "type": "drug",
+   "canonical": "Amlodipine",
+   "risk": "normal",
+   "drug_class": "Chẹn kênh canxi",
+   "definition": "Thuốc hạ huyết áp, cũng dùng cho đau thắt ngực ổn định.",
+   "uses": [
+    "ha_huyet_ap",
+    "dau_that_nguc"
+   ],
+   "multi_use": true,
+   "household": false,
+   "cautions_elderly": "Có thể gây phù mắt cá chân, đỏ mặt, chóng mặt.",
+   "aliases": [
+    "amlodipine",
+    "amlodipin",
+    "amlo",
+    "norvasc"
+   ],
+   "strengths_mg": [
+    2.5,
+    5,
+    10
+   ],
+   "rx": true,
+   "general_purpose": false,
+   "group": "Chẹn kênh canxi"
+  },
+  {
+   "id": "diclofenac",
+   "type": "drug",
+   "canonical": "Diclofenac",
+   "risk": "normal",
+   "drug_class": "Kháng viêm không steroid (NSAID)",
+   "definition": "Thuốc giảm đau, kháng viêm cho đau khớp, đau cơ; có dạng uống, gel bôi, tiêm.",
+   "uses": [
+    "giam_dau",
+    "khang_viem"
+   ],
+   "multi_use": true,
+   "household": false,
+   "cautions_elderly": "Thuốc kháng viêm không steroid dễ gây loét, chảy máu dạ dày ruột, suy thận, tăng huyết áp ở người cao tuổi; tránh dùng kéo dài khi chưa có chỉ định. Gel bôi ít nguy cơ hơn thuốc uống.",
+   "aliases": [
+    "diclofenac",
+    "diclofenak",
+    "voltaren"
+   ],
+   "strengths_mg": [
+    25,
+    50,
+    75,
+    100
+   ],
+   "rx": false,
+   "general_purpose": false,
+   "group": "Kháng viêm không steroid (NSAID)"
+  },
+  {
+   "id": "ibuprofen",
+   "type": "drug",
+   "canonical": "Ibuprofen",
+   "risk": "normal",
+   "drug_class": "Kháng viêm không steroid (NSAID)",
+   "definition": "Thuốc giảm đau, hạ sốt, kháng viêm dùng cho đau đầu, đau cơ khớp, sốt.",
+   "uses": [
+    "giam_dau",
+    "ha_sot",
+    "khang_viem"
+   ],
+   "multi_use": true,
+   "household": false,
+   "cautions_elderly": "Thuốc kháng viêm không steroid dễ gây loét, chảy máu dạ dày ruột, suy thận, tăng huyết áp ở người cao tuổi; tránh dùng kéo dài khi chưa có chỉ định. Không dùng khi nghi sốt xuất huyết.",
+   "aliases": [
+    "ibuprofen",
+    "ibuprophen",
+    "brufen",
+    "nurofen",
+    "advil"
+   ],
+   "strengths_mg": [
+    200,
+    400,
+    600
+   ],
+   "rx": false,
+   "general_purpose": false,
+   "group": "Kháng viêm không steroid (NSAID)"
+  },
+  {
+   "id": "meloxicam",
+   "type": "drug",
+   "canonical": "Meloxicam",
+   "risk": "normal",
+   "drug_class": "Kháng viêm không steroid (NSAID)",
+   "definition": "Thuốc kháng viêm, giảm đau cho thoái hóa khớp và viêm khớp.",
+   "uses": [
+    "giam_dau",
+    "khang_viem"
+   ],
+   "multi_use": true,
+   "household": false,
+   "cautions_elderly": "Thuốc kháng viêm không steroid dễ gây loét, chảy máu dạ dày ruột, suy thận, tăng huyết áp ở người cao tuổi; tránh dùng kéo dài khi chưa có chỉ định.",
+   "aliases": [
+    "meloxicam",
+    "melocicam",
+    "mobic"
+   ],
+   "strengths_mg": [
+    7.5,
+    15
+   ],
+   "rx": true,
+   "general_purpose": false,
+   "group": "Kháng viêm không steroid (NSAID)"
+  },
+  {
+   "id": "loperamide",
+   "type": "drug",
+   "canonical": "Loperamide",
+   "risk": "normal",
+   "drug_class": "Cầm tiêu chảy",
+   "definition": "Thuốc làm giảm nhu động ruột, giảm số lần đi ngoài trong tiêu chảy.",
+   "uses": [
+    "tieu_chay"
+   ],
+   "multi_use": false,
+   "household": false,
+   "cautions_elderly": "Không dùng khi sốt hoặc phân có máu; không thay thế bù nước.",
+   "aliases": [
+    "loperamide",
+    "loperamid",
+    "imodium"
+   ],
+   "strengths_mg": [
+    2
+   ],
+   "rx": false,
+   "general_purpose": false,
+   "group": "Cầm tiêu chảy"
+  },
+  {
+   "id": "lactulose",
+   "type": "drug",
+   "canonical": "Lactulose",
+   "risk": "normal",
+   "drug_class": "Nhuận tràng thẩm thấu",
+   "definition": "Thuốc kéo nước vào lòng ruột, làm phân mềm, trị táo bón.",
+   "uses": [
+    "tao_bon"
+   ],
+   "multi_use": false,
+   "household": true,
+   "cautions_elderly": "Có thể gây đầy hơi lúc đầu; uống đủ nước.",
+   "aliases": [
+    "lactulose",
+    "lactulos",
+    "duphalac"
+   ],
+   "rx": false,
+   "general_purpose": true,
+   "group": "Nhuận tràng thẩm thấu"
+  },
+  {
+   "id": "macrogol",
+   "type": "drug",
+   "canonical": "Macrogol",
+   "risk": "normal",
+   "drug_class": "Nhuận tràng thẩm thấu",
+   "definition": "Thuốc nhuận tràng dạng bột pha nước, làm mềm phân, trị táo bón.",
+   "uses": [
+    "tao_bon"
+   ],
+   "multi_use": false,
+   "household": true,
+   "cautions_elderly": "Pha đúng lượng nước theo bao bì.",
+   "aliases": [
+    "macrogol",
+    "makrogol",
+    "forlax"
+   ],
+   "rx": false,
+   "general_purpose": true,
+   "group": "Nhuận tràng thẩm thấu"
+  },
+  {
+   "id": "atorvastatin",
+   "type": "drug",
+   "canonical": "Atorvastatin",
+   "risk": "normal",
+   "drug_class": "Statin hạ mỡ máu",
+   "definition": "Thuốc hạ cholesterol, giảm nguy cơ nhồi máu cơ tim và đột quỵ.",
+   "uses": [
+    "ha_mo_mau"
+   ],
+   "multi_use": false,
+   "household": false,
+   "cautions_elderly": "Báo bác sĩ nếu đau nhức cơ lan tỏa hoặc nước tiểu sẫm màu.",
+   "aliases": [
+    "atorvastatin",
+    "atorvastatine",
+    "atorvastatn",
+    "lipitor"
+   ],
+   "strengths_mg": [
+    10,
+    20,
+    40,
+    80
+   ],
+   "rx": true,
+   "general_purpose": false,
+   "group": "Statin hạ mỡ máu"
+  },
+  {
+   "id": "rosuvastatin",
+   "type": "drug",
+   "canonical": "Rosuvastatin",
+   "risk": "normal",
+   "drug_class": "Statin hạ mỡ máu",
+   "definition": "Thuốc hạ cholesterol, giảm nguy cơ biến cố tim mạch.",
+   "uses": [
+    "ha_mo_mau"
+   ],
+   "multi_use": false,
+   "household": false,
+   "cautions_elderly": "Báo bác sĩ nếu đau nhức cơ lan tỏa hoặc nước tiểu sẫm màu.",
+   "aliases": [
+    "rosuvastatin",
+    "rosuvastatine",
+    "crestor"
+   ],
+   "strengths_mg": [
+    5,
+    10,
+    20,
+    40
+   ],
+   "rx": true,
+   "general_purpose": false,
+   "group": "Statin hạ mỡ máu"
+  },
+  {
+   "id": "simvastatin",
+   "type": "drug",
+   "canonical": "Simvastatin",
+   "risk": "normal",
+   "drug_class": "Statin hạ mỡ máu",
+   "definition": "Thuốc hạ cholesterol, giảm nguy cơ biến cố tim mạch.",
+   "uses": [
+    "ha_mo_mau"
+   ],
+   "multi_use": false,
+   "household": false,
+   "cautions_elderly": "Nhiều tương tác thuốc; báo bác sĩ nếu đau nhức cơ.",
+   "aliases": [
+    "simvastatin",
+    "simvastatine"
+   ],
+   "strengths_mg": [
+    10,
+    20,
+    40
+   ],
+   "rx": true,
+   "general_purpose": false,
+   "group": "Statin hạ mỡ máu"
+  },
+  {
+   "id": "losartan",
+   "type": "drug",
+   "canonical": "Losartan",
+   "risk": "normal",
+   "drug_class": "Chẹn thụ thể angiotensin (sartan)",
+   "definition": "Thuốc hạ huyết áp, bảo vệ thận ở người đái tháo đường và dùng trong suy tim.",
+   "uses": [
+    "ha_huyet_ap",
+    "suy_tim"
+   ],
+   "multi_use": true,
+   "household": false,
+   "cautions_elderly": "Theo dõi kali máu và chức năng thận; hỏi bác sĩ về việc tạm ngưng khi mất nước nặng.",
+   "aliases": [
+    "losartan",
+    "losartane",
+    "cozaar"
+   ],
+   "strengths_mg": [
+    25,
+    50,
+    100
+   ],
+   "rx": true,
+   "general_purpose": false,
+   "group": "Chẹn thụ thể angiotensin (sartan)"
+  },
+  {
+   "id": "telmisartan",
+   "type": "drug",
+   "canonical": "Telmisartan",
+   "risk": "normal",
+   "drug_class": "Chẹn thụ thể angiotensin (sartan)",
+   "definition": "Thuốc hạ huyết áp dùng một lần mỗi ngày.",
+   "uses": [
+    "ha_huyet_ap"
+   ],
+   "multi_use": false,
+   "household": false,
+   "cautions_elderly": "Theo dõi kali máu và chức năng thận.",
+   "aliases": [
+    "telmisartan",
+    "micardis"
+   ],
+   "strengths_mg": [
+    20,
+    40,
+    80
+   ],
+   "rx": true,
+   "general_purpose": false,
+   "group": "Chẹn thụ thể angiotensin (sartan)"
+  },
+  {
+   "id": "valsartan",
+   "type": "drug",
+   "canonical": "Valsartan",
+   "risk": "normal",
+   "drug_class": "Chẹn thụ thể angiotensin (sartan)",
+   "definition": "Thuốc hạ huyết áp, dùng trong suy tim.",
+   "uses": [
+    "ha_huyet_ap",
+    "suy_tim"
+   ],
+   "multi_use": true,
+   "household": false,
+   "cautions_elderly": "Theo dõi kali máu và chức năng thận.",
+   "aliases": [
+    "valsartan",
+    "diovan"
+   ],
+   "strengths_mg": [
+    40,
+    80,
+    160,
+    320
+   ],
+   "rx": true,
+   "general_purpose": false,
+   "group": "Chẹn thụ thể angiotensin (sartan)"
+  },
+  {
+   "id": "enalapril",
+   "type": "drug",
+   "canonical": "Enalapril",
+   "risk": "normal",
+   "drug_class": "Ức chế men chuyển",
+   "definition": "Thuốc hạ huyết áp, dùng trong suy tim.",
+   "uses": [
+    "ha_huyet_ap",
+    "suy_tim"
+   ],
+   "multi_use": true,
+   "household": false,
+   "cautions_elderly": "Có thể gây ho khan; theo dõi kali và chức năng thận.",
+   "aliases": [
+    "enalapril",
+    "enalaprill",
+    "renitec"
+   ],
+   "strengths_mg": [
+    5,
+    10,
+    20
+   ],
+   "rx": true,
+   "general_purpose": false,
+   "group": "Ức chế men chuyển"
+  },
+  {
+   "id": "perindopril",
+   "type": "drug",
+   "canonical": "Perindopril",
+   "risk": "normal",
+   "drug_class": "Ức chế men chuyển",
+   "definition": "Thuốc hạ huyết áp, dùng trong suy tim và bệnh mạch vành.",
+   "uses": [
+    "ha_huyet_ap",
+    "suy_tim"
+   ],
+   "multi_use": true,
+   "household": false,
+   "cautions_elderly": "Có thể gây ho khan; theo dõi kali và chức năng thận.",
+   "aliases": [
+    "perindopril",
+    "coversyl"
+   ],
+   "strengths_mg": [
+    2,
+    4,
+    5,
+    8,
+    10
+   ],
+   "rx": true,
+   "general_purpose": false,
+   "group": "Ức chế men chuyển"
+  },
+  {
+   "id": "lisinopril",
+   "type": "drug",
+   "canonical": "Lisinopril",
+   "risk": "normal",
+   "drug_class": "Ức chế men chuyển",
+   "definition": "Thuốc hạ huyết áp, dùng trong suy tim.",
+   "uses": [
+    "ha_huyet_ap",
+    "suy_tim"
+   ],
+   "multi_use": true,
+   "household": false,
+   "cautions_elderly": "Có thể gây ho khan; theo dõi kali và chức năng thận.",
+   "aliases": [
+    "lisinopril",
+    "zestril"
+   ],
+   "strengths_mg": [
+    5,
+    10,
+    20
+   ],
+   "rx": true,
+   "general_purpose": false,
+   "group": "Ức chế men chuyển"
+  },
+  {
+   "id": "bisoprolol",
+   "type": "drug",
+   "canonical": "Bisoprolol",
+   "risk": "normal",
+   "drug_class": "Chẹn beta",
+   "definition": "Thuốc làm chậm nhịp tim, hạ huyết áp, dùng trong suy tim và đau thắt ngực.",
+   "uses": [
+    "ha_huyet_ap",
+    "suy_tim",
+    "dau_that_nguc"
+   ],
+   "multi_use": true,
+   "household": false,
+   "cautions_elderly": "Không tự ngưng đột ngột; có thể làm nhịp tim chậm, chóng mặt.",
+   "aliases": [
+    "bisoprolol",
+    "concor"
+   ],
+   "strengths_mg": [
+    1.25,
+    2.5,
+    5,
+    10
+   ],
+   "rx": true,
+   "general_purpose": false,
+   "group": "Chẹn beta"
+  },
+  {
+   "id": "metoprolol",
+   "type": "drug",
+   "canonical": "Metoprolol",
+   "risk": "normal",
+   "drug_class": "Chẹn beta",
+   "definition": "Thuốc làm chậm nhịp tim, hạ huyết áp, dùng trong đau thắt ngực và rối loạn nhịp.",
+   "uses": [
+    "ha_huyet_ap",
+    "dau_that_nguc",
+    "nhip_tim"
+   ],
+   "multi_use": true,
+   "household": false,
+   "cautions_elderly": "Không tự ngưng đột ngột; có thể làm nhịp tim chậm.",
+   "aliases": [
+    "metoprolol",
+    "betaloc"
+   ],
+   "strengths_mg": [
+    25,
+    50,
+    100
+   ],
+   "rx": true,
+   "general_purpose": false,
+   "group": "Chẹn beta"
+  },
+  {
+   "id": "carvedilol",
+   "type": "drug",
+   "canonical": "Carvedilol",
+   "risk": "normal",
+   "drug_class": "Chẹn beta",
+   "definition": "Thuốc hạ huyết áp, dùng trong suy tim.",
+   "uses": [
+    "ha_huyet_ap",
+    "suy_tim"
+   ],
+   "multi_use": true,
+   "household": false,
+   "cautions_elderly": "Không tự ngưng đột ngột; có thể gây chóng mặt khi đứng dậy.",
+   "aliases": [
+    "carvedilol",
+    "dilatrend"
+   ],
+   "strengths_mg": [
+    3.125,
+    6.25,
+    12.5,
+    25
+   ],
+   "rx": true,
+   "general_purpose": false,
+   "group": "Chẹn beta"
+  },
+  {
+   "id": "furosemide",
+   "type": "drug",
+   "canonical": "Furosemide",
+   "risk": "normal",
+   "drug_class": "Lợi tiểu quai",
+   "definition": "Thuốc lợi tiểu mạnh, giảm phù và ứ dịch trong suy tim, bệnh thận, bệnh gan.",
+   "uses": [
+    "loi_tieu",
+    "suy_tim"
+   ],
+   "multi_use": true,
+   "household": false,
+   "cautions_elderly": "Dễ gây mất nước, hạ kali, tụt huyết áp; hỏi bác sĩ về việc tạm ngưng khi nôn, tiêu chảy.",
+   "aliases": [
+    "furosemide",
+    "furosemid",
+    "lasix"
+   ],
+   "strengths_mg": [
+    20,
+    40
+   ],
+   "rx": true,
+   "general_purpose": false,
+   "group": "Lợi tiểu quai"
+  },
+  {
+   "id": "spironolactone",
+   "type": "drug",
+   "canonical": "Spironolactone",
+   "risk": "normal",
+   "drug_class": "Lợi tiểu giữ kali",
+   "definition": "Thuốc lợi tiểu nhẹ, dùng trong suy tim, tăng huyết áp, phù.",
+   "uses": [
+    "loi_tieu",
+    "suy_tim",
+    "ha_huyet_ap"
+   ],
+   "multi_use": true,
+   "household": false,
+   "cautions_elderly": "Có thể tăng kali máu; cần xét nghiệm kali và chức năng thận định kỳ.",
+   "aliases": [
+    "spironolactone",
+    "aldactone"
+   ],
+   "strengths_mg": [
+    25,
+    50,
+    100
+   ],
+   "rx": true,
+   "general_purpose": false,
+   "group": "Lợi tiểu giữ kali"
+  },
+  {
+   "id": "hydrochlorothiazide",
+   "type": "drug",
+   "canonical": "Hydrochlorothiazide",
+   "risk": "normal",
+   "drug_class": "Lợi tiểu thiazide",
+   "definition": "Thuốc lợi tiểu nhẹ, hạ huyết áp, giảm phù.",
+   "uses": [
+    "loi_tieu",
+    "ha_huyet_ap"
+   ],
+   "multi_use": true,
+   "household": false,
+   "cautions_elderly": "Có thể hạ natri, kali máu, tăng acid uric; dễ mất nước khi trời nóng.",
+   "aliases": [
+    "hydrochlorothiazide",
+    "hctz",
+    "hydrochlorothiazid"
+   ],
+   "strengths_mg": [
+    12.5,
+    25,
+    50
+   ],
+   "rx": true,
+   "general_purpose": false,
+   "group": "Lợi tiểu thiazide"
+  },
+  {
+   "id": "clopidogrel",
+   "type": "drug",
+   "canonical": "Clopidogrel",
+   "risk": "high",
+   "drug_class": "Chống kết tập tiểu cầu",
+   "definition": "Thuốc ngăn tiểu cầu kết dính, phòng nhồi máu cơ tim, đột quỵ, tắc stent.",
+   "uses": [
+    "chong_ket_tap"
+   ],
+   "multi_use": false,
+   "household": false,
+   "cautions_elderly": "Tăng nguy cơ chảy máu; không tự ngưng, báo bác sĩ trước thủ thuật hoặc nhổ răng.",
+   "aliases": [
+    "clopidogrel",
+    "plavix"
+   ],
+   "strengths_mg": [
+    75
+   ],
+   "rx": true,
+   "general_purpose": false,
+   "group": "Chống kết tập tiểu cầu"
+  },
+  {
+   "id": "rivaroxaban",
+   "type": "drug",
+   "canonical": "Rivaroxaban",
+   "risk": "high",
+   "drug_class": "Chống đông máu đường uống (nhóm NOAC)",
+   "definition": "Thuốc chống đông đường uống, phòng đột quỵ do rung nhĩ và điều trị huyết khối.",
+   "uses": [
+    "chong_dong"
+   ],
+   "multi_use": false,
+   "household": false,
+   "cautions_elderly": "Tăng nguy cơ chảy máu; không tự ngưng hoặc tự đổi liều; chỉnh liều khi suy thận.",
+   "aliases": [
+    "rivaroxaban",
+    "xarelto"
+   ],
+   "strengths_mg": [
+    2.5,
+    10,
+    15,
+    20
+   ],
+   "rx": true,
+   "general_purpose": false,
+   "group": "Chống đông máu đường uống (nhóm NOAC)"
+  },
+  {
+   "id": "gliclazide",
+   "type": "drug",
+   "canonical": "Gliclazide",
+   "risk": "normal",
+   "drug_class": "Hạ đường huyết (sulfonylurea)",
+   "definition": "Thuốc uống kích thích tụy tiết insulin trong đái tháo đường typ 2.",
+   "uses": [
+    "tieu_duong"
+   ],
+   "multi_use": false,
+   "household": false,
+   "cautions_elderly": "Dễ hạ đường huyết ở người cao tuổi, nhất là khi ăn ít hoặc bỏ bữa.",
+   "aliases": [
+    "gliclazide",
+    "gliclazid",
+    "diamicron"
+   ],
+   "strengths_mg": [
+    30,
+    60,
+    80
+   ],
+   "rx": true,
+   "general_purpose": false,
+   "group": "Hạ đường huyết (sulfonylurea)"
+  },
+  {
+   "id": "glimepiride",
+   "type": "drug",
+   "canonical": "Glimepiride",
+   "risk": "normal",
+   "drug_class": "Hạ đường huyết (sulfonylurea)",
+   "definition": "Thuốc uống kích thích tụy tiết insulin trong đái tháo đường typ 2.",
+   "uses": [
+    "tieu_duong"
+   ],
+   "multi_use": false,
+   "household": false,
+   "cautions_elderly": "Dễ hạ đường huyết ở người cao tuổi, nhất là khi ăn ít hoặc bỏ bữa.",
+   "aliases": [
+    "glimepiride",
+    "glimepirid",
+    "amaryl"
+   ],
+   "strengths_mg": [
+    1,
+    2,
+    3,
+    4
+   ],
+   "rx": true,
+   "general_purpose": false,
+   "group": "Hạ đường huyết (sulfonylurea)"
+  },
+  {
+   "id": "omeprazole",
+   "type": "drug",
+   "canonical": "Omeprazole",
+   "risk": "normal",
+   "drug_class": "Ức chế bơm proton",
+   "definition": "Thuốc giảm tiết acid dạ dày, dùng cho loét dạ dày, trào ngược, phòng loét do thuốc kháng viêm.",
+   "uses": [
+    "giam_acid"
+   ],
+   "multi_use": false,
+   "household": false,
+   "cautions_elderly": "Dùng kéo dài có thể thiếu B12, canxi và tăng nguy cơ loãng xương; không tự dùng dài ngày.",
+   "aliases": [
+    "omeprazole",
+    "omeprazol",
+    "losec"
+   ],
+   "strengths_mg": [
+    10,
+    20,
+    40
+   ],
+   "rx": true,
+   "general_purpose": false,
+   "group": "Ức chế bơm proton"
+  },
+  {
+   "id": "esomeprazole",
+   "type": "drug",
+   "canonical": "Esomeprazole",
+   "risk": "normal",
+   "drug_class": "Ức chế bơm proton",
+   "definition": "Thuốc giảm tiết acid dạ dày, dùng cho loét, trào ngược.",
+   "uses": [
+    "giam_acid"
+   ],
+   "multi_use": false,
+   "household": false,
+   "cautions_elderly": "Không tự dùng dài ngày khi chưa có chỉ định.",
+   "aliases": [
+    "esomeprazole",
+    "esomeprazol",
+    "nexium"
+   ],
+   "strengths_mg": [
+    20,
+    40
+   ],
+   "rx": true,
+   "general_purpose": false,
+   "group": "Ức chế bơm proton"
+  },
+  {
+   "id": "pantoprazole",
+   "type": "drug",
+   "canonical": "Pantoprazole",
+   "risk": "normal",
+   "drug_class": "Ức chế bơm proton",
+   "definition": "Thuốc giảm tiết acid dạ dày, dùng cho loét, trào ngược.",
+   "uses": [
+    "giam_acid"
+   ],
+   "multi_use": false,
+   "household": false,
+   "cautions_elderly": "Không tự dùng dài ngày khi chưa có chỉ định.",
+   "aliases": [
+    "pantoprazole",
+    "pantoprazol",
+    "pantoloc"
+   ],
+   "strengths_mg": [
+    20,
+    40
+   ],
+   "rx": true,
+   "general_purpose": false,
+   "group": "Ức chế bơm proton"
+  },
+  {
+   "id": "khang_acid",
+   "type": "drug",
+   "canonical": "Thuốc kháng acid (nhôm hydroxide, magie hydroxide)",
+   "risk": "normal",
+   "drug_class": "Trung hòa acid dạ dày",
+   "definition": "Thuốc uống trung hòa acid dạ dày, giảm ợ chua, đầy bụng, đau dạ dày nhẹ.",
+   "uses": [
+    "giam_acid"
+   ],
+   "multi_use": false,
+   "household": true,
+   "cautions_elderly": "Đau thượng vị kèm vã mồ hôi, khó thở cần loại trừ bệnh tim; thận trọng khi suy thận.",
+   "aliases": [
+    "khang acid",
+    "maalox",
+    "aluminium hydroxide",
+    "magnesium hydroxide"
+   ],
+   "rx": false,
+   "general_purpose": true,
+   "group": "Trung hòa acid dạ dày"
+  },
+  {
+   "id": "domperidone",
+   "type": "drug",
+   "canonical": "Domperidone",
+   "risk": "normal",
+   "drug_class": "Chống nôn, tăng nhu động dạ dày",
+   "definition": "Thuốc giảm buồn nôn, đầy bụng chậm tiêu.",
+   "uses": [
+    "chong_non"
+   ],
+   "multi_use": false,
+   "household": false,
+   "cautions_elderly": "Thận trọng ở người có bệnh tim hoặc rối loạn nhịp; chỉ dùng ngắn ngày theo chỉ định.",
+   "aliases": [
+    "domperidone",
+    "motilium"
+   ],
+   "strengths_mg": [
+    10
+   ],
+   "rx": true,
+   "general_purpose": false,
+   "group": "Chống nôn, tăng nhu động dạ dày"
+  },
+  {
+   "id": "simethicone",
+   "type": "drug",
+   "canonical": "Simethicone",
+   "risk": "normal",
+   "drug_class": "Giảm đầy hơi",
+   "definition": "Thuốc làm vỡ bọt khí trong ruột, giảm đầy hơi, chướng bụng.",
+   "uses": [
+    "day_hoi"
+   ],
+   "multi_use": false,
+   "household": false,
+   "cautions_elderly": "Ít tác dụng phụ; chướng bụng kéo dài cần khám.",
+   "aliases": [
+    "simethicone",
+    "simethicon",
+    "espumisan"
+   ],
+   "rx": false,
+   "general_purpose": false,
+   "group": "Giảm đầy hơi"
+  },
+  {
+   "id": "amoxicillin",
+   "type": "drug",
+   "canonical": "Amoxicillin",
+   "risk": "high",
+   "drug_class": "Kháng sinh (nhóm penicillin)",
+   "definition": "Kháng sinh điều trị một số nhiễm khuẩn hô hấp, tiết niệu, tai mũi họng.",
+   "uses": [
+    "khang_sinh"
+   ],
+   "multi_use": false,
+   "household": false,
+   "cautions_elderly": "Chỉ dùng khi bác sĩ kê; không tự mua, không dùng cho cảm cúm do virus; hỏi về dị ứng penicillin.",
+   "aliases": [
+    "amoxicillin",
+    "amoxicilin",
+    "amoxycilline"
+   ],
+   "strengths_mg": [
+    250,
+    500
+   ],
+   "rx": true,
+   "general_purpose": false,
+   "group": "Kháng sinh (nhóm penicillin)"
+  },
+  {
+   "id": "azithromycin",
+   "type": "drug",
+   "canonical": "Azithromycin",
+   "risk": "high",
+   "drug_class": "Kháng sinh (nhóm macrolide)",
+   "definition": "Kháng sinh điều trị một số nhiễm khuẩn hô hấp, tai mũi họng, da.",
+   "uses": [
+    "khang_sinh"
+   ],
+   "multi_use": false,
+   "household": false,
+   "cautions_elderly": "Chỉ dùng khi bác sĩ kê; thận trọng ở người có bệnh tim, rối loạn nhịp.",
+   "aliases": [
+    "azithromycin",
+    "azithromycine",
+    "zithromax"
+   ],
+   "strengths_mg": [
+    250,
+    500
+   ],
+   "rx": true,
+   "general_purpose": false,
+   "group": "Kháng sinh (nhóm macrolide)"
+  },
+  {
+   "id": "cetirizine",
+   "type": "drug",
+   "canonical": "Cetirizine",
+   "risk": "normal",
+   "drug_class": "Kháng histamin thế hệ 2",
+   "definition": "Thuốc chống dị ứng, giảm ngứa, hắt hơi, sổ mũi do dị ứng.",
+   "uses": [
+    "di_ung"
+   ],
+   "multi_use": false,
+   "household": false,
+   "cautions_elderly": "Có thể gây buồn ngủ nhẹ; thận trọng khi suy thận.",
+   "aliases": [
+    "cetirizine",
+    "cetirizin",
+    "zyrtec"
+   ],
+   "strengths_mg": [
+    10
+   ],
+   "rx": false,
+   "general_purpose": false,
+   "group": "Kháng histamin thế hệ 2"
+  },
+  {
+   "id": "loratadine",
+   "type": "drug",
+   "canonical": "Loratadine",
+   "risk": "normal",
+   "drug_class": "Kháng histamin thế hệ 2",
+   "definition": "Thuốc chống dị ứng, ít gây buồn ngủ hơn nhóm cũ.",
+   "uses": [
+    "di_ung"
+   ],
+   "multi_use": false,
+   "household": false,
+   "cautions_elderly": "Thận trọng khi suy gan, suy thận.",
+   "aliases": [
+    "loratadine",
+    "loratadin",
+    "clarityn"
+   ],
+   "strengths_mg": [
+    10
+   ],
+   "rx": false,
+   "general_purpose": false,
+   "group": "Kháng histamin thế hệ 2"
+  },
+  {
+   "id": "diphenhydramine",
+   "type": "drug",
+   "canonical": "Diphenhydramine",
+   "risk": "normal",
+   "drug_class": "Kháng histamin thế hệ 1",
+   "definition": "Thuốc chống dị ứng, gây buồn ngủ, có trong một số thuốc ngủ không kê đơn.",
+   "uses": [
+    "di_ung",
+    "an_than"
+   ],
+   "multi_use": true,
+   "household": false,
+   "cautions_elderly": "Nên tránh ở người cao tuổi: gây buồn ngủ, lú lẫn, bí tiểu, khô miệng, tăng nguy cơ té ngã.",
+   "aliases": [
+    "diphenhydramine",
+    "benadryl"
+   ],
+   "strengths_mg": [
+    25,
+    50
+   ],
+   "multi_use_note": "Thuốc dị ứng và thuốc ngủ là hai công dụng của cùng hoạt chất.",
+   "rx": false,
+   "general_purpose": false,
+   "group": "Kháng histamin thế hệ 1"
+  },
+  {
+   "id": "chlorpheniramine",
+   "type": "drug",
+   "canonical": "Chlorpheniramine",
+   "risk": "normal",
+   "drug_class": "Kháng histamin thế hệ 1",
+   "definition": "Thuốc chống dị ứng, hay có trong thuốc cảm tổng hợp.",
+   "uses": [
+    "di_ung"
+   ],
+   "multi_use": false,
+   "household": false,
+   "cautions_elderly": "Gây buồn ngủ, khô miệng, bí tiểu; tránh ở người cao tuổi khi có thể.",
+   "aliases": [
+    "chlorpheniramine",
+    "clorpheniramin",
+    "clorpheniramine"
+   ],
+   "strengths_mg": [
+    4
+   ],
+   "rx": false,
+   "general_purpose": false,
+   "group": "Kháng histamin thế hệ 1"
+  },
+  {
+   "id": "prednisolone",
+   "type": "drug",
+   "canonical": "Prednisolone",
+   "risk": "high",
+   "drug_class": "Corticoid",
+   "definition": "Thuốc kháng viêm mạnh, chống dị ứng và ức chế miễn dịch, dùng trong nhiều bệnh viêm và dị ứng nặng.",
+   "uses": [
+    "khang_viem",
+    "di_ung",
+    "ap_che_mien_dich"
+   ],
+   "multi_use": true,
+   "household": false,
+   "cautions_elderly": "Tăng đường huyết, huyết áp, loãng xương, loét dạ dày, nhiễm trùng; không tự dùng và không tự ngưng đột ngột.",
+   "aliases": [
+    "prednisolone",
+    "prednisolon",
+    "medrol"
+   ],
+   "strengths_mg": [
+    5,
+    20
+   ],
+   "rx": true,
+   "general_purpose": false,
+   "group": "Corticoid"
+  },
+  {
+   "id": "dexamethasone",
+   "type": "drug",
+   "canonical": "Dexamethasone",
+   "risk": "high",
+   "drug_class": "Corticoid",
+   "definition": "Thuốc kháng viêm rất mạnh, chống dị ứng và ức chế miễn dịch.",
+   "uses": [
+    "khang_viem",
+    "di_ung",
+    "ap_che_mien_dich"
+   ],
+   "multi_use": true,
+   "household": false,
+   "cautions_elderly": "Tăng đường huyết, huyết áp, loãng xương, loét dạ dày, nhiễm trùng; chỉ dùng khi bác sĩ kê.",
+   "aliases": [
+    "dexamethasone",
+    "dexamethason",
+    "dexa"
+   ],
+   "strengths_mg": [
+    0.5,
+    4
+   ],
+   "rx": true,
+   "general_purpose": false,
+   "group": "Corticoid"
+  },
+  {
+   "id": "diazepam",
+   "type": "drug",
+   "canonical": "Diazepam",
+   "risk": "high",
+   "drug_class": "An thần (benzodiazepin)",
+   "definition": "Thuốc an thần, chống lo âu, chống co giật, giãn cơ.",
+   "uses": [
+    "an_than",
+    "co_giat",
+    "gian_co"
+   ],
+   "multi_use": true,
+   "household": false,
+   "cautions_elderly": "Tăng nguy cơ ngã, lú lẫn, phụ thuộc thuốc ở người cao tuổi; chỉ dùng khi bác sĩ kê.",
+   "aliases": [
+    "diazepam",
+    "seduxen",
+    "valium"
+   ],
+   "strengths_mg": [
+    2,
+    5,
+    10
+   ],
+   "rx": true,
+   "general_purpose": false,
+   "group": "An thần (benzodiazepin)"
+  },
+  {
+   "id": "zolpidem",
+   "type": "drug",
+   "canonical": "Zolpidem",
+   "risk": "high",
+   "drug_class": "Thuốc ngủ",
+   "definition": "Thuốc ngủ kê đơn trị mất ngủ ngắn ngày.",
+   "uses": [
+    "an_than"
+   ],
+   "multi_use": false,
+   "household": false,
+   "cautions_elderly": "Tăng nguy cơ ngã, lú lẫn, hành vi bất thường khi ngủ; chỉ dùng khi bác sĩ kê.",
+   "aliases": [
+    "zolpidem",
+    "stilnox"
+   ],
+   "strengths_mg": [
+    5,
+    10
+   ],
+   "rx": true,
+   "general_purpose": false,
+   "group": "Thuốc ngủ"
+  },
+  {
+   "id": "tramadol",
+   "type": "drug",
+   "canonical": "Tramadol",
+   "risk": "high",
+   "drug_class": "Giảm đau nhóm opioid",
+   "definition": "Thuốc giảm đau mạnh kê đơn.",
+   "uses": [
+    "giam_dau_manh"
+   ],
+   "multi_use": false,
+   "household": false,
+   "cautions_elderly": "Gây buồn ngủ, chóng mặt, táo bón, lú lẫn, có thể gây nghiện; chỉ dùng khi bác sĩ kê.",
+   "aliases": [
+    "tramadol",
+    "tramal"
+   ],
+   "strengths_mg": [
+    50,
+    100
+   ],
+   "rx": true,
+   "general_purpose": false,
+   "group": "Giảm đau nhóm opioid"
+  },
+  {
+   "id": "ambroxol",
+   "type": "drug",
+   "canonical": "Ambroxol",
+   "risk": "normal",
+   "drug_class": "Long đờm",
+   "definition": "Thuốc làm loãng đờm, dễ khạc trong ho có đờm.",
+   "uses": [
+    "long_dam"
+   ],
+   "multi_use": false,
+   "household": false,
+   "cautions_elderly": "Ho kéo dài trên 2 tuần cần khám.",
+   "aliases": [
+    "ambroxol",
+    "mucosolvan"
+   ],
+   "strengths_mg": [
+    30
+   ],
+   "rx": false,
+   "general_purpose": false,
+   "group": "Long đờm"
+  },
+  {
+   "id": "acetylcysteine",
+   "type": "drug",
+   "canonical": "Acetylcysteine",
+   "risk": "normal",
+   "drug_class": "Long đờm",
+   "definition": "Thuốc làm loãng đờm, dùng trong bệnh phổi có nhiều đờm.",
+   "uses": [
+    "long_dam"
+   ],
+   "multi_use": false,
+   "household": false,
+   "cautions_elderly": "Uống nhiều nước; ho kéo dài cần khám.",
+   "aliases": [
+    "acetylcysteine",
+    "acetylcystein",
+    "acc",
+    "nac"
+   ],
+   "strengths_mg": [
+    200,
+    600
+   ],
+   "rx": false,
+   "general_purpose": false,
+   "group": "Long đờm"
+  },
+  {
+   "id": "dextromethorphan",
+   "type": "drug",
+   "canonical": "Dextromethorphan",
+   "risk": "normal",
+   "drug_class": "Giảm ho trung ương",
+   "definition": "Thuốc làm giảm phản xạ ho, dùng cho ho khan.",
+   "uses": [
+    "giam_ho"
+   ],
+   "multi_use": false,
+   "household": false,
+   "cautions_elderly": "Không dùng cho ho có nhiều đờm; có thể gây buồn ngủ, chóng mặt.",
+   "aliases": [
+    "dextromethorphan",
+    "dextromethorphane"
+   ],
+   "strengths_mg": [
+    10,
+    15,
+    30
+   ],
+   "rx": false,
+   "general_purpose": false,
+   "group": "Giảm ho trung ương"
+  },
+  {
+   "id": "canxi",
+   "type": "drug",
+   "canonical": "Canxi",
+   "risk": "normal",
+   "drug_class": "Bổ sung khoáng chất",
+   "definition": "Chế phẩm bổ sung canxi, hỗ trợ xương chắc khỏe và phòng loãng xương.",
+   "uses": [
+    "loang_xuong"
+   ],
+   "multi_use": false,
+   "household": true,
+   "cautions_elderly": "Không tự dùng liều cao kéo dài (sỏi thận, tăng canxi máu); có thể gây táo bón.",
+   "aliases": [
+    "canxi",
+    "calcium",
+    "calci",
+    "calcium carbonate"
+   ],
+   "rx": false,
+   "general_purpose": true,
+   "group": "Bổ sung khoáng chất"
+  },
+  {
+   "id": "vitamin_d",
+   "type": "drug",
+   "canonical": "Vitamin D3",
+   "risk": "normal",
+   "drug_class": "Vitamin",
+   "definition": "Vitamin giúp hấp thu canxi, hỗ trợ xương và cơ.",
+   "uses": [
+    "loang_xuong"
+   ],
+   "multi_use": false,
+   "household": true,
+   "cautions_elderly": "Không tự dùng liều cao kéo dài; nên theo tư vấn bác sĩ sau xét nghiệm.",
+   "aliases": [
+    "vitamin d",
+    "vitamin d3",
+    "cholecalciferol"
+   ],
+   "rx": false,
+   "general_purpose": true,
+   "group": "Vitamin"
+  },
+  {
+   "id": "vitamin_b12",
+   "type": "drug",
+   "canonical": "Vitamin B12",
+   "risk": "normal",
+   "drug_class": "Vitamin",
+   "definition": "Vitamin cần cho máu và thần kinh; người cao tuổi hay thiếu.",
+   "uses": [
+    "thieu_vitamin"
+   ],
+   "multi_use": false,
+   "household": false,
+   "cautions_elderly": "Thiếu B12 gây thiếu máu, tê bì; nên xét nghiệm trước khi tự bổ sung dài ngày.",
+   "aliases": [
+    "vitamin b12",
+    "cobalamin",
+    "cyanocobalamin"
+   ],
+   "rx": false,
+   "general_purpose": false,
+   "group": "Vitamin"
+  },
+  {
+   "id": "vitamin_c",
+   "type": "drug",
+   "canonical": "Vitamin C",
+   "risk": "normal",
+   "drug_class": "Vitamin",
+   "definition": "Vitamin hỗ trợ miễn dịch và liền vết thương.",
+   "uses": [
+    "thieu_vitamin"
+   ],
+   "multi_use": false,
+   "household": false,
+   "cautions_elderly": "Liều cao kéo dài có thể gây sỏi thận ở người có nguy cơ.",
+   "aliases": [
+    "vitamin c",
+    "ascorbic acid"
+   ],
+   "rx": false,
+   "general_purpose": false,
+   "group": "Vitamin"
+  },
+  {
+   "id": "allopurinol",
+   "type": "drug",
+   "canonical": "Allopurinol",
+   "risk": "normal",
+   "drug_class": "Hạ acid uric",
+   "definition": "Thuốc dùng lâu dài để phòng cơn gout bằng cách giảm acid uric máu.",
+   "uses": [
+    "gout"
+   ],
+   "multi_use": false,
+   "household": false,
+   "cautions_elderly": "Không bắt đầu trong cơn gout cấp; báo bác sĩ nếu nổi ban, sốt; chỉnh liều khi suy thận.",
+   "aliases": [
+    "allopurinol",
+    "zyloprim"
+   ],
+   "strengths_mg": [
+    100,
+    300
+   ],
+   "rx": true,
+   "general_purpose": false,
+   "group": "Hạ acid uric"
+  },
+  {
+   "id": "colchicine",
+   "type": "drug",
+   "canonical": "Colchicine",
+   "risk": "high",
+   "drug_class": "Chống viêm trong gout",
+   "definition": "Thuốc cắt cơn gout cấp và phòng cơn tái phát.",
+   "uses": [
+    "gout"
+   ],
+   "multi_use": false,
+   "household": false,
+   "cautions_elderly": "Khoảng an toàn hẹp, dễ ngộ độc, nhất là khi suy thận; tiêu chảy, nôn là dấu hiệu cần báo bác sĩ.",
+   "aliases": [
+    "colchicine",
+    "colchicin"
+   ],
+   "strengths_mg": [
+    0.5,
+    1
+   ],
+   "rx": true,
+   "general_purpose": false,
+   "group": "Chống viêm trong gout"
+  },
+  {
+   "id": "gabapentin",
+   "type": "drug",
+   "canonical": "Gabapentin",
+   "risk": "normal",
+   "drug_class": "Thuốc đau thần kinh, chống co giật",
+   "definition": "Thuốc điều trị đau thần kinh và một số loại động kinh.",
+   "uses": [
+    "dau_than_kinh",
+    "co_giat"
+   ],
+   "multi_use": true,
+   "household": false,
+   "cautions_elderly": "Gây buồn ngủ, chóng mặt, tăng nguy cơ té ngã; cần chỉnh liều khi suy thận.",
+   "aliases": [
+    "gabapentin",
+    "neurontin"
+   ],
+   "strengths_mg": [
+    100,
+    300,
+    400
+   ],
+   "rx": true,
+   "general_purpose": false,
+   "group": "Thuốc đau thần kinh, chống co giật"
+  },
+  {
+   "id": "pregabalin",
+   "type": "drug",
+   "canonical": "Pregabalin",
+   "risk": "normal",
+   "drug_class": "Thuốc đau thần kinh",
+   "definition": "Thuốc điều trị đau thần kinh (ví dụ đau do đái tháo đường, đau sau zona).",
+   "uses": [
+    "dau_than_kinh"
+   ],
+   "multi_use": false,
+   "household": false,
+   "cautions_elderly": "Gây buồn ngủ, chóng mặt, phù; cần chỉnh liều khi suy thận.",
+   "aliases": [
+    "pregabalin",
+    "lyrica"
+   ],
+   "strengths_mg": [
+    25,
+    50,
+    75,
+    150
+   ],
+   "rx": true,
+   "general_purpose": false,
+   "group": "Thuốc đau thần kinh"
+  },
+  {
+   "id": "levothyroxine",
+   "type": "drug",
+   "canonical": "Levothyroxine",
+   "risk": "normal",
+   "drug_class": "Hormon tuyến giáp",
+   "definition": "Thuốc thay thế hormon tuyến giáp trong suy giáp.",
+   "uses": [
+    "suy_giap"
+   ],
+   "multi_use": false,
+   "household": false,
+   "cautions_elderly": "Uống lúc đói, cách xa canxi và sắt; cần xét nghiệm TSH định kỳ.",
+   "aliases": [
+    "levothyroxine",
+    "levothyroxin",
+    "levothyrox"
+   ],
+   "strengths_mg": [
+    0.025,
+    0.05,
+    0.075,
+    0.1,
+    0.125
+   ],
+   "rx": true,
+   "general_purpose": false,
+   "group": "Hormon tuyến giáp"
+  },
+  {
+   "id": "donepezil",
+   "type": "drug",
+   "canonical": "Donepezil",
+   "risk": "normal",
+   "drug_class": "Thuốc cho sa sút trí tuệ",
+   "definition": "Thuốc làm chậm triệu chứng của bệnh Alzheimer nhẹ đến vừa.",
+   "uses": [
+    "sa_sut_tri_tue"
+   ],
+   "multi_use": false,
+   "household": false,
+   "cautions_elderly": "Có thể gây chậm nhịp tim, buồn nôn, mất ngủ; theo dõi cân nặng.",
+   "aliases": [
+    "donepezil",
+    "aricept"
+   ],
+   "strengths_mg": [
+    5,
+    10
+   ],
+   "rx": true,
+   "general_purpose": false,
+   "group": "Thuốc cho sa sút trí tuệ"
+  },
+  {
+   "id": "digoxin",
+   "type": "drug",
+   "canonical": "Digoxin",
+   "risk": "high",
+   "drug_class": "Trợ tim (glycosid)",
+   "definition": "Thuốc tăng sức co bóp cơ tim và kiểm soát nhịp tim nhanh do rung nhĩ.",
+   "uses": [
+    "suy_tim",
+    "nhip_tim"
+   ],
+   "multi_use": true,
+   "household": false,
+   "cautions_elderly": "Khoảng an toàn hẹp, dễ ngộ độc ở người cao tuổi và suy thận; buồn nôn, nhìn mờ, nhịp chậm là dấu hiệu cần báo bác sĩ.",
+   "aliases": [
+    "digoxin",
+    "lanoxin"
+   ],
+   "strengths_mg": [
+    0.0625,
+    0.125,
+    0.25
+   ],
+   "rx": true,
+   "general_purpose": false,
+   "group": "Trợ tim (glycosid)"
+  },
+  {
+   "id": "povidone_iodine",
+   "type": "drug",
+   "canonical": "Povidone-iodine",
+   "risk": "normal",
+   "drug_class": "Sát khuẩn",
+   "definition": "Dung dịch sát khuẩn dùng ngoài da, sát trùng vết thương.",
+   "uses": [
+    "sat_khuan"
+   ],
+   "multi_use": false,
+   "household": true,
+   "cautions_elderly": "Không dùng cho người dị ứng iod; không bôi diện rộng kéo dài.",
+   "aliases": [
+    "povidone iodine",
+    "povidone",
+    "betadine",
+    "povidon iodin",
+    "povidon iod"
+   ],
+   "rx": false,
+   "general_purpose": true,
+   "group": "Sát khuẩn"
+  },
+  {
+   "id": "con_70",
+   "type": "drug",
+   "canonical": "Cồn 70 độ",
+   "risk": "normal",
+   "drug_class": "Sát khuẩn",
+   "definition": "Dung dịch cồn dùng sát khuẩn da và dụng cụ.",
+   "uses": [
+    "sat_khuan"
+   ],
+   "multi_use": false,
+   "household": true,
+   "cautions_elderly": "Dễ cháy; không bôi lên vết thương hở sâu; tránh xa nguồn lửa.",
+   "aliases": [
+    "con 70",
+    "con y te",
+    "ethanol 70",
+    "con sat khuan"
+   ],
+   "rx": false,
+   "general_purpose": true,
+   "group": "Sát khuẩn"
+  },
+  {
+   "id": "nuoc_muoi_sinh_ly",
+   "type": "drug",
+   "canonical": "Nước muối sinh lý 0,9%",
+   "risk": "normal",
+   "drug_class": "Dung dịch muối vô trùng",
+   "definition": "Dung dịch muối 0,9% dùng rửa vết thương, rửa mũi, nhỏ mắt mũi và súc họng.",
+   "uses": [
+    "rua_vet_thuong",
+    "rua_mui",
+    "suc_hong"
+   ],
+   "multi_use": true,
+   "household": true,
+   "cautions_elderly": "Dùng riêng từng chai, đậy kín, bỏ khi mở quá lâu.",
+   "aliases": [
+    "nuoc muoi sinh ly",
+    "nuoc muoi 0.9",
+    "natri clorid 0.9",
+    "nacl 0.9"
+   ],
+   "multi_use_note": "Cùng một dung dịch dùng cho nhiều việc vệ sinh khác nhau.",
+   "rx": false,
+   "general_purpose": true,
+   "group": "Dung dịch muối vô trùng"
+  },
+  {
+   "id": "diosmectite",
+   "type": "drug",
+   "canonical": "Diosmectite (Smecta)",
+   "risk": "normal",
+   "drug_class": "Hấp phụ, bảo vệ niêm mạc ruột",
+   "definition": "Thuốc bột pha nước, bao phủ niêm mạc ruột và hấp phụ độc tố, dùng hỗ trợ trong tiêu chảy.",
+   "uses": [
+    "tieu_chay"
+   ],
+   "multi_use": false,
+   "household": true,
+   "cautions_elderly": "Uống cách xa các thuốc khác ít nhất 1-2 giờ; không thay thế bù nước; tiêu chảy kéo dài, sốt hoặc phân có máu cần khám.",
+   "aliases": [
+    "smecta",
+    "diosmectite",
+    "diosmectit"
+   ],
+   "rx": false,
+   "general_purpose": true,
+   "group": "Hấp phụ, bảo vệ niêm mạc ruột"
+  },
+  {
+   "id": "augmentin",
+   "type": "drug",
+   "canonical": "Amoxicillin + acid clavulanic (Augmentin)",
+   "risk": "high",
+   "drug_class": "Kháng sinh (penicillin phối hợp)",
+   "definition": "Kháng sinh phổ rộng điều trị một số nhiễm khuẩn hô hấp, tiết niệu, da; kê đơn.",
+   "uses": [
+    "khang_sinh"
+   ],
+   "multi_use": false,
+   "household": false,
+   "cautions_elderly": "Chỉ dùng khi bác sĩ kê; có thể gây tiêu chảy, rối loạn tiêu hóa; hỏi về dị ứng penicillin.",
+   "aliases": [
+    "augmentin",
+    "amoxicillin clavulanic",
+    "amox clav",
+    "co amoxiclav"
+   ],
+   "rx": true,
+   "general_purpose": false,
+   "group": "Kháng sinh (penicillin phối hợp)"
+  },
+  {
+   "id": "vitamin_tong_hop",
+   "type": "drug",
+   "canonical": "Vitamin tổng hợp (multivitamin)",
+   "risk": "normal",
+   "drug_class": "Vitamin và khoáng chất",
+   "definition": "Chế phẩm bổ sung nhiều vitamin và khoáng chất cùng lúc.",
+   "uses": [
+    "thieu_vitamin"
+   ],
+   "multi_use": false,
+   "household": true,
+   "cautions_elderly": "Không thay thế bữa ăn; tránh dùng chồng nhiều chế phẩm cùng lúc; nên hỏi bác sĩ nếu đang dùng thuốc chống đông.",
+   "aliases": [
+    "vitamin",
+    "multivitamin",
+    "vitamin tong hop"
+   ],
+   "rx": false,
+   "general_purpose": true,
+   "group": "Vitamin và khoáng chất"
+  },
+  {
+   "id": "may_do_huyet_ap",
+   "type": "device",
+   "canonical": "Máy đo huyết áp",
+   "risk": "normal",
+   "definition": "Thiết bị đo huyết áp và nhịp tim tại nhà, loại bắp tay thường cho kết quả đáng tin cậy hơn loại cổ tay.",
+   "uses": [],
+   "multi_use": false,
+   "household": true,
+   "aliases": [
+    "may do huyet ap",
+    "may do ha",
+    "may do tension",
+    "tensiometer"
+   ],
+   "rx": false,
+   "general_purpose": true,
+   "group": "Dụng cụ y tế"
+  },
+  {
+   "id": "may_do_duong_huyet",
+   "type": "device",
+   "canonical": "Máy đo đường huyết",
+   "risk": "normal",
+   "definition": "Thiết bị dùng que thử và kim lấy máu đầu ngón tay để đo đường huyết tại nhà.",
+   "uses": [],
+   "multi_use": false,
+   "household": true,
+   "aliases": [
+    "may do duong huyet",
+    "may thu duong huyet",
+    "may do duong",
+    "glucometer",
+    "que thu duong huyet"
+   ],
+   "rx": false,
+   "general_purpose": true,
+   "group": "Dụng cụ y tế"
+  },
+  {
+   "id": "may_do_spo2",
+   "type": "device",
+   "canonical": "Máy đo SpO2",
+   "risk": "normal",
+   "definition": "Thiết bị kẹp ngón tay đo độ bão hòa oxy trong máu và nhịp tim, giúp phát hiện thiếu oxy.",
+   "uses": [],
+   "multi_use": false,
+   "household": true,
+   "aliases": [
+    "may do spo2",
+    "spo2",
+    "oximeter",
+    "pulse oximeter",
+    "may kep ngon tay",
+    "may do oxy"
+   ],
+   "rx": false,
+   "general_purpose": true,
+   "group": "Dụng cụ y tế"
+  },
+  {
+   "id": "nhiet_ke",
+   "type": "device",
+   "canonical": "Nhiệt kế",
+   "risk": "normal",
+   "definition": "Dụng cụ đo thân nhiệt (điện tử, hồng ngoại) để phát hiện sốt hoặc hạ thân nhiệt.",
+   "uses": [],
+   "multi_use": false,
+   "household": true,
+   "aliases": [
+    "nhiet ke",
+    "nhiet ke dien tu",
+    "nhiet ke hong ngoai",
+    "cap nhiet do"
+   ],
+   "rx": false,
+   "general_purpose": true,
+   "group": "Dụng cụ y tế"
+  },
+  {
+   "id": "may_xong_khi_dung",
+   "type": "device",
+   "canonical": "Máy xông khí dung",
+   "risk": "normal",
+   "definition": "Thiết bị biến thuốc lỏng thành sương để hít vào phổi, dùng khi bác sĩ kê thuốc xông.",
+   "uses": [],
+   "multi_use": false,
+   "household": true,
+   "aliases": [
+    "may xong khi dung",
+    "may xong mui hong",
+    "nebulizer",
+    "may phun khi dung"
+   ],
+   "rx": false,
+   "general_purpose": true,
+   "group": "Dụng cụ y tế"
+  },
+  {
+   "id": "tui_chuom",
+   "type": "device",
+   "canonical": "Túi chườm nóng lạnh",
+   "risk": "normal",
+   "definition": "Túi dùng chườm nóng giảm đau cơ khớp hoặc chườm lạnh giảm sưng; bọc khăn để tránh bỏng hoặc cóng.",
+   "uses": [],
+   "multi_use": false,
+   "household": true,
+   "aliases": [
+    "tui chuom",
+    "tui chuom nong",
+    "tui chuom lanh",
+    "tui suoi"
+   ],
+   "rx": false,
+   "general_purpose": true,
+   "group": "Dụng cụ y tế"
+  },
+  {
+   "id": "can_suc_khoe",
+   "type": "device",
+   "canonical": "Cân sức khỏe",
+   "risk": "normal",
+   "definition": "Cân dùng theo dõi cân nặng, đặc biệt quan trọng với người suy tim hoặc sụt cân.",
+   "uses": [],
+   "multi_use": false,
+   "household": true,
+   "aliases": [
+    "can suc khoe",
+    "can dien tu",
+    "can nguoi"
+   ],
+   "rx": false,
+   "general_purpose": true,
+   "group": "Dụng cụ y tế"
+  },
+  {
+   "id": "khung_tap_di",
+   "type": "device",
+   "canonical": "Gậy, khung tập đi",
+   "risk": "normal",
+   "definition": "Dụng cụ hỗ trợ đi lại, giúp giữ thăng bằng và giảm nguy cơ té ngã; cần chỉnh đúng chiều cao.",
+   "uses": [],
+   "multi_use": false,
+   "household": true,
+   "aliases": [
+    "khung tap di",
+    "gay chong",
+    "gay di bo",
+    "khung di"
+   ],
+   "rx": false,
+   "general_purpose": true,
+   "group": "Dụng cụ y tế"
+  },
+  {
+   "id": "bong_gac",
+   "type": "device",
+   "canonical": "Bông, gạc vô trùng",
+   "risk": "normal",
+   "definition": "Vật tư băng bó dùng cầm máu, che phủ và băng vết thương.",
+   "uses": [],
+   "multi_use": false,
+   "household": true,
+   "aliases": [
+    "bong gac",
+    "gac vo trung",
+    "bong y te",
+    "bang gac"
+   ],
+   "rx": false,
+   "general_purpose": true,
+   "group": "Dụng cụ y tế"
+  }
+ ]
 }

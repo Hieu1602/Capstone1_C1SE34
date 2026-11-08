@@ -290,6 +290,11 @@ async def update_system_mode(
 ) -> Dict[str, Any]:
     """Cập nhật chế độ an ninh ngôi nhà hoặc cấu hình tạm dừng chuông."""
     house = await crud_house.get_or_create_default_house(db, owner_id=current_user.id)
+    if not house:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="Không tìm thấy thông tin ngôi nhà của người dùng",
+        )
     if payload.is_camera_privacy:
         house = await crud_house.update_mode(db, house=house, mode="PRIVACY")
     elif payload.mode:
