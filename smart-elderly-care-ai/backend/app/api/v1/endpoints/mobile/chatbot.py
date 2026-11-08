@@ -44,7 +44,7 @@ except ImportError:
 
 from fastapi import APIRouter, Depends, File, HTTPException, Request, UploadFile, status
 from pydantic import BaseModel, Field
-from sqlalchemy import select
+from sqlalchemy import delete, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.api.deps import get_current_user, get_current_user_optional
@@ -471,6 +471,10 @@ async def delete_session(
             status_code=status.HTTP_404_NOT_FOUND,
             detail="Không tìm thấy phiên chat hoặc bạn không có quyền xoá.",
         )
+    # Dọn dẹp tin nhắn con trước nhằm tránh lỗi ORM cascade trong AsyncSession
+    await db.execute(
+        delete(ChatMessage).where(ChatMessage.session_id == session.id)
+    )
     await db.delete(session)
     await db.commit()
 
