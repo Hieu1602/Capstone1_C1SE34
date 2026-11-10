@@ -230,20 +230,21 @@ class ChatbotRAGService:
                        "heart rate", "oxygen", "vital", "temperature", "fall"]
         if any(term in q_lower for term in vital_terms):
             vitals_text = self.context_builder.format_vitals_summary(vitals, language=language)
+            # Nếu người dùng chỉ tra cứu/kiểm tra chỉ số sinh hiệu (không hỏi xin tư vấn sâu, cách xử lý, dùng thuốc)
+            consult_terms = ["cách", "làm sao", "làm gì", "uống thuốc", "chữa", "điều trị", "nguyên nhân", "tại sao", "thuốc", "bệnh gì", "tư vấn", "hướng dẫn", "phải làm"]
+            if not any(c_term in q_lower for c_term in consult_terms):
+                return vitals_text
             sections.append(vitals_text)
 
-        # 4. Trích dẫn nội dung từ cẩm nang y tế
+        # 4. Trích dẫn nội dung từ cẩm nang y tế (ngắn gọn, tập trung trọng tâm)
         if chunks:
             if is_en:
-                sections.append("📖 **Clinical Care Guidance (Retrieved from Geriatric Knowledge Base)**:")
+                sections.append("📖 **Clinical Care Guidance**:")
             else:
-                sections.append("📖 **Hướng dẫn chăm sóc y tế từ Cẩm nang Lão khoa**:")
+                sections.append("📖 **Hướng dẫn chăm sóc y tế**:")
 
-            sources_cited = set()
-            for c_item in chunks:
+            for c_item in chunks[:1]:
                 text = c_item.get("text", "").strip()
-                source = c_item.get("source", "Medical Documents")
-                sources_cited.add(source)
                 if "🎯 **KẾT LUẬN NHANH**" in text:
                     sections.append(text)
                 else:
@@ -252,16 +253,11 @@ class ChatbotRAGService:
                         if not line.startswith("# ")
                         and not line.startswith("Kiến thức tham khảo")
                         and not line.startswith("Nội dung bổ sung")
+                        and line.strip()
                     ]
-                    clean_text = "\n".join(clean_lines).strip()
-                    snippet = clean_text[:800] + ("..." if len(clean_text) > 800 else "")
+                    clean_text = "\n".join(clean_lines[:6]).strip()
+                    snippet = clean_text[:300] + ("..." if len(clean_text) > 300 else "")
                     sections.append(f"• {snippet}")
-
-            sources_str = ", ".join(sorted(sources_cited))
-            if is_en:
-                sections.append(f"📚 **Sources**: `{sources_str}`")
-            else:
-                sections.append(f"📚 **Nguồn cẩm nang tham khảo**: `{sources_str}`")
         elif not sections:
             if is_en:
                 sections.append(

@@ -270,9 +270,34 @@ export const LocalizedTextInput = React.forwardRef<any, TextInputProps>(function
 export const LocalizedAlert = {
   alert: (...args: Parameters<typeof NativeAlert.alert>) => {
     const [title, message, buttons, options] = args;
+    const localizedTitle = typeof title === 'string' ? localizeString(title, i18n.t.bind(i18n)) : title;
+    const localizedMessage = typeof message === 'string' ? localizeString(message, i18n.t.bind(i18n)) : message;
+
+    if (Platform.OS === 'web') {
+      if (typeof window !== 'undefined') {
+        const fullText = [localizedTitle, localizedMessage].filter(Boolean).join('\n\n');
+        if (buttons && buttons.length > 1) {
+          const okButton = buttons.find((b) => b.style !== 'cancel') || buttons[buttons.length - 1];
+          const cancelButton = buttons.find((b) => b.style === 'cancel');
+          const confirmed = window.confirm(fullText);
+          if (confirmed) {
+            okButton?.onPress?.();
+          } else {
+            cancelButton?.onPress?.();
+          }
+        } else if (buttons && buttons.length === 1) {
+          window.alert(fullText);
+          buttons[0]?.onPress?.();
+        } else {
+          window.alert(fullText);
+        }
+      }
+      return;
+    }
+
     NativeAlert.alert(
-      typeof title === 'string' ? localizeString(title, i18n.t.bind(i18n)) : title,
-      typeof message === 'string' ? localizeString(message, i18n.t.bind(i18n)) : message,
+      localizedTitle,
+      localizedMessage,
       buttons?.map((button) => ({
         ...button,
         text: typeof button.text === 'string' ? localizeString(button.text, i18n.t.bind(i18n)) : button.text,
