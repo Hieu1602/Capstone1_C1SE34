@@ -129,12 +129,23 @@ function MainTabNavigator() {
 
 // ---- Root Stack Navigator ----
 export default function AppNavigator() {
-  const { accessToken, viewRole, isHydrated, isRoleLoading } = useAuthStore();
+  const { accessToken, viewRole, isHydrated } = useAuthStore();
   const isAuthenticated = Boolean(accessToken);
   const { isDarkMode, colors } = useTheme();
 
-  // Chặn render giao diện chính khi chưa xác định xong Session hoặc Role
-  if (!isHydrated || isRoleLoading) {
+  const [ready, setReady] = React.useState(Boolean(isHydrated));
+
+  React.useEffect(() => {
+    if (isHydrated) {
+      setReady(true);
+    } else {
+      const timer = setTimeout(() => setReady(true), 300);
+      return () => clearTimeout(timer);
+    }
+  }, [isHydrated]);
+
+  // Chỉ chặn render tối đa 300ms nếu chưa nạp xong Session từ AsyncStorage
+  if (!ready && !isHydrated) {
     return (
       <View
         style={{

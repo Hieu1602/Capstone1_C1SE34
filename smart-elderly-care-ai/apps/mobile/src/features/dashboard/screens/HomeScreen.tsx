@@ -34,31 +34,102 @@ export default function HomeScreen({ navigation }: any) {
     fetchHouseFromBackend, fetchDevicesFromBackend, iotDevices,
   } = useVitalStore();
 
-  const { userRole, role, full_name, userName, phone_number, userPhone, permissions, fetchMyPermissions } = useAuthStore();
+  const {
+    userRole,
+    role,
+    full_name,
+    userName,
+    phone_number,
+    userPhone,
+    permissions,
+    fetchMyPermissions,
+    has_house,
+    assigned_house,
+    household_id,
+    has_devices,
+    device_count,
+  } = useAuthStore();
   const displayName = full_name || userName || 'Thành viên';
-  const hasLinkedHouse = Boolean(house?.id && house?.hasHouse !== false && house?.name && house.name.trim() !== '');
-  const hasLinkedDevices = (iotDevices || []).length > 0;
-  const isOwnerOrAdmin = hasLinkedHouse && (userRole === 'admin' || role === 'admin' || permissions?.is_owner === true || permissions?.role_in_house === 'OWNER');
-  const isMember = !isOwnerOrAdmin && (userRole === 'member' || !userRole || userRole === 'user' || userRole === 'caregiver');
-  const isUserEmptyMember = isMember && (!hasLinkedHouse || (!hasLinkedDevices && !permissions?.can_view_camera && !permissions?.can_view_health));
+
+  const hasLinkedHouse = Boolean(
+    household_id ||
+    has_house === true ||
+    assigned_house ||
+    (house?.id && house?.hasHouse !== false && house?.name && house.name.trim() !== '') ||
+    permissions?.role_in_house === 'OWNER' ||
+    permissions?.role_in_house === 'MEMBER' ||
+    permissions?.is_owner === true ||
+    (permissions?.role_in_house && permissions?.role_in_house !== 'NONE' && permissions?.role_in_house !== 'NEW_USER')
+  );
+  const isOwnerOrAdmin = Boolean(
+    userRole === 'admin' ||
+    role === 'admin' ||
+    userRole === 'owner' ||
+    role === 'owner' ||
+    permissions?.is_owner === true ||
+    permissions?.role_in_house === 'OWNER'
+  );
+
+  // Phân biệt 3 loại tài khoản chính xác:
+  // 1. Tài khoản mới (chưa có nhà)
+  const isNewAccount = !hasLinkedHouse;
+  // 2. Tài khoản thành viên đã được thêm vào một ngôi nhà (không phải chủ nhà)
+  const isMemberInLinkedHouse = hasLinkedHouse && !isOwnerOrAdmin;
+  // 3. Tài khoản chủ hộ
+  const isHouseOwner = hasLinkedHouse && isOwnerOrAdmin;
+
+  // Quyền thêm / quản lý thiết bị:
+  // - Tài khoản vừa mới tạo chưa liên kết nhà nào: ĐƯỢC PHÉP dùng chức năng thêm thiết bị
+  // - Chủ hộ / Admin: ĐƯỢC PHÉP thêm thiết bị
+  // - Tài khoản thành viên khi được thêm vào nhà khác: KHÔNG ĐƯỢC PHÉP (trừ khi được Chủ hộ cấp quyền can_manage_devices)
+  const canManageDevices = isNewAccount || isHouseOwner || Boolean(permissions?.can_manage_devices);
+
+  // Nhận diện thiết bị tức thì: kiểm tra cả thiết bị trong Zustand store và cờ backend đã trả về khi đăng nhập
+  const hasLinkedDevices = (iotDevices || []).length > 0 || has_devices === true || (typeof device_count === 'number' && device_count > 0);
+  const isUserEmptyMember = isNewAccount || !hasLinkedDevices;
 
   // Kiểm tra quyền xem camera và chỉ số sinh hiệu của tài khoản thành viên
   const canViewCamera = isOwnerOrAdmin || Boolean(permissions?.can_view_camera);
   const canViewHealth = isOwnerOrAdmin || Boolean(permissions?.can_view_health);
 
   const [isRefreshing, setIsRefreshing] = useState(false);
+  const { patientRecord, fetchPatientRecord } = usePatientStore();
+  const lastFetchRef = React.useRef<number>(0);
+  const isLoadingRef = React.useRef<boolean>(false);
+
+  const loadDashboardData = React.useCallback(async (force = false) => {
+    const now = Date.now();
+    if (!force && now - lastFetchRef.current < 8000) {
+      return;
+    }
+    if (isLoadingRef.current) {
+      return;
+    }
+    isLoadingRef.current = true;
+    lastFetchRef.current = now;
+
+    try {
+      const calls: Promise<any>[] = [
+        fetchVitals(),
+        fetchSystemMode(),
+        fetchReminders(),
+        fetchNotifications(),
+        fetchPatientRecord?.(),
+        syncAllWithBackend?.(),
+      ];
+      if (force || !permissions) {
+        calls.push(fetchMyPermissions?.());
+      }
+      await Promise.allSettled(calls);
+    } finally {
+      isLoadingRef.current = false;
+    }
+  }, [fetchVitals, fetchSystemMode, fetchReminders, fetchNotifications, fetchPatientRecord, syncAllWithBackend, fetchMyPermissions]);
 
   const handleRefreshData = async () => {
     setIsRefreshing(true);
     try {
-      await Promise.allSettled([
-        syncAllWithBackend?.(),
-        fetchHouseFromBackend?.(),
-        fetchDevicesFromBackend?.(),
-        fetchVitals(),
-        fetchNotifications(),
-        fetchMyPermissions?.(),
-      ]);
+      await loadDashboardData(true);
       Alert.alert(
         '🔄 Đã làm mới',
         hasLinkedHouse
@@ -74,29 +145,24 @@ export default function HomeScreen({ navigation }: any) {
   const pendingMedCount = (todayReminders?.medications || []).filter((m) => !m.taken).length;
   const unreadCount = unreadIncidentsCount + pendingMedCount;
 
-  const { patientRecord, fetchPatientRecord } = usePatientStore();
   const [familyAppointmentsModalVisible, setFamilyAppointmentsModalVisible] = useState(false);
   const [isMicSpeaking, setIsMicSpeaking] = useState(false);
   const [nextMedTaken, setNextMedTaken] = useState(false);
 
   useEffect(() => {
-    fetchVitals(); fetchSystemMode(); fetchReminders(); fetchNotifications();
-    fetchPatientRecord?.(); syncAllWithBackend?.();
-    fetchMyPermissions?.();
+    loadDashboardData(true);
     alertsWS.connect();
     const interval = setInterval(() => {
       fetchVitals();
-      fetchMyPermissions?.();
-    }, 15000);
+    }, 20000);
     return () => clearInterval(interval);
-  }, []);
+  }, [loadDashboardData]);
 
   useEffect(() => {
     return navigation.addListener('focus', () => {
-      fetchVitals(); fetchNotifications(); fetchSystemMode(); fetchReminders();
-      fetchMyPermissions?.();
+      loadDashboardData(false);
     });
-  }, [navigation]);
+  }, [navigation, loadDashboardData]);
 
   const [snoozeModalVisible, setSnoozeModalVisible] = useState(false);
   const [selectedDuration, setSelectedDuration] = useState<number>(alarmSnooze?.durationMinutes ?? 15);
@@ -143,6 +209,10 @@ export default function HomeScreen({ navigation }: any) {
   );
 
   const handleConfirmSnooze = async () => {
+    if (!isOwnerOrAdmin) {
+      Alert.alert('Quyền truy cập bị giới hạn', 'Tài khoản Thành viên chỉ có quyền xem dữ liệu, không thể thay đổi cài đặt chuông báo động.');
+      return;
+    }
     const until = selectedDuration > 0 ? Date.now() + selectedDuration * 60 * 1000 : null;
     setAlarmSnooze({
       active: true, durationMinutes: selectedDuration, until,
@@ -160,6 +230,10 @@ export default function HomeScreen({ navigation }: any) {
   };
 
   const handleCancelSnooze = async () => {
+    if (!isOwnerOrAdmin) {
+      Alert.alert('Quyền truy cập bị giới hạn', 'Tài khoản Thành viên chỉ có quyền xem dữ liệu, không thể thay đổi cài đặt chuông báo động.');
+      return;
+    }
     cancelAlarmSnooze(); setSnoozeModalVisible(false);
     try { await systemApi.updateMode({ is_mute_alarm: false }); }
     catch (e) { console.warn('API updateMode cancel snooze error:', e); }
@@ -211,6 +285,13 @@ export default function HomeScreen({ navigation }: any) {
   };
 
   const handleSelectHouseMode = async (mode: 'AWAY' | 'HOME' | 'DISARM') => {
+    if (!isOwnerOrAdmin) {
+      Alert.alert(
+        'Quyền truy cập bị giới hạn',
+        'Tài khoản Thành viên chỉ có quyền xem dữ liệu, không được phép thay đổi chế độ an ninh của ngôi nhà.'
+      );
+      return;
+    }
     if (house.currentMode === mode) return;
     setHouseMode(mode);
     const isPrivacy = mode === 'HOME';
@@ -228,6 +309,10 @@ export default function HomeScreen({ navigation }: any) {
   };
 
   const handleTogglePrivacyMode = () => {
+    if (!isOwnerOrAdmin) {
+      Alert.alert('Quyền truy cập bị giới hạn', 'Tài khoản Thành viên chỉ có quyền xem dữ liệu, không thể bật/tắt chế độ riêng tư của camera.');
+      return;
+    }
     toggleCameraSleep();
     Alert.alert(
       camera.isSleep ? 'Đã mở lại ống kính camera' : 'Đã bật Chế độ riêng tư (Che camera)',
@@ -236,6 +321,10 @@ export default function HomeScreen({ navigation }: any) {
   };
 
   const handleToggleAIProtect = () => {
+    if (!isOwnerOrAdmin) {
+      Alert.alert('Quyền truy cập bị giới hạn', 'Tài khoản Thành viên chỉ có quyền xem dữ liệu, không thể thay đổi cài đặt giám sát AI.');
+      return;
+    }
     toggleCameraAIProtect();
     Alert.alert(
       camera.isAIProtect ? '⏸️ Đã tạm dừng tính năng AI' : '🛡️ Đã bật giám sát AI thông minh',
@@ -251,7 +340,8 @@ export default function HomeScreen({ navigation }: any) {
     room: camera?.room || firstCamera?.location,
     streamUrl: camera?.streamUrl || firstCamera?.streamUrl,
   };
-  const rawDisplayName = effectiveCamera.name || 'Camera Phòng Ngủ - Hub #01';
+  const hasValidCamera = Boolean(effectiveCamera.id || effectiveCamera.streamUrl || firstCamera);
+  const rawDisplayName = effectiveCamera.name || 'Camera an ninh AI';
   const cameraDisplayName = rawDisplayName.replace(/^Camera\s+Camera\s+/i, 'Camera ');
   const isEdgeHubOnline = activeDevice?.is_online ?? true;
   const braceletBattery = currentVitals.bracelet_battery ?? null;
@@ -292,9 +382,11 @@ export default function HomeScreen({ navigation }: any) {
             <Ionicons name="notifications-outline" size={22} color={colors.textPrimary} />
             {unreadCount > 0 && <View style={styles.redBadgeDot} />}
           </TouchableOpacity>
-          <TouchableOpacity style={[styles.iconCircleBtn, { marginLeft: 8 }, isDarkMode && { backgroundColor: colors.iconBg }]} onPress={() => navigation.navigate('Devices')} activeOpacity={0.7}>
-            <Ionicons name="add" size={26} color={colors.textPrimary} />
-          </TouchableOpacity>
+          {canManageDevices && (
+            <TouchableOpacity style={[styles.iconCircleBtn, { marginLeft: 8 }, isDarkMode && { backgroundColor: colors.iconBg }]} onPress={() => navigation.navigate('Devices')} activeOpacity={0.7} accessibilityLabel="Quản lý thiết bị">
+              <Ionicons name="add" size={26} color={colors.textPrimary} />
+            </TouchableOpacity>
+          )}
         </View>
       </View>
 
@@ -410,8 +502,23 @@ export default function HomeScreen({ navigation }: any) {
             </Text>
 
             <Text style={[styles.emptySubtitle, { color: colors.textSecondary }]}>
-              Tài khoản thành viên mới chưa được liên kết với bất kỳ căn nhà hay thiết bị theo dõi nào. Sau khi được Chủ hộ thêm số điện thoại ({userPhone || phone_number || 'của bạn'}) vào nhà, hệ thống sẽ tự động hiển thị camera và sinh hiệu người thân tại đây.
+              {isNewAccount
+                ? 'Tài khoản của bạn chưa có thiết bị theo dõi nào. Hãy bấm thêm thiết bị mới để kết nối camera hoặc vòng đeo tay thông minh.'
+                : isMemberInLinkedHouse
+                ? `Tài khoản thành viên chưa có thiết bị theo dõi trong ngôi nhà này. Sau khi Chủ hộ thêm camera hoặc vòng đeo tay thông minh, hệ thống sẽ tự động hiển thị dữ liệu tại đây.`
+                : 'Ngôi nhà của bạn chưa có thiết bị theo dõi nào. Hãy thêm camera an ninh hoặc vòng đeo tay thông minh để bắt đầu giám sát.'}
             </Text>
+
+            {canManageDevices ? (
+              <TouchableOpacity
+                style={styles.addDevicePrimaryBtn}
+                onPress={() => navigation.navigate('Devices')}
+                activeOpacity={0.88}
+              >
+                <Ionicons name="add-circle" size={20} color="#FFF" style={{ marginRight: 6 }} />
+                <Text style={styles.addDevicePrimaryBtnText}>Thêm thiết bị mới</Text>
+              </TouchableOpacity>
+            ) : null}
 
             <TouchableOpacity
               style={styles.refreshMemberBtn}
@@ -440,7 +547,7 @@ export default function HomeScreen({ navigation }: any) {
         </TouchableOpacity>
 
         {/* 4. Banner Nhiều chế độ xem (Multi-view) & 5. Main Camera Device Card */}
-        {canViewCamera ? (
+        {canViewCamera && hasValidCamera ? (
           <>
             <TouchableOpacity style={[styles.multiViewCard, isDarkMode && { backgroundColor: colors.card, borderColor: colors.border }]} onPress={handleMultiView} activeOpacity={0.9}>
               <Text style={[styles.multiViewText, isDarkMode && { color: colors.textPrimary }]}>Nhiều chế độ xem</Text>
@@ -453,7 +560,7 @@ export default function HomeScreen({ navigation }: any) {
               handleMicPress={handleMicPress} isMicSpeaking={isMicSpeaking} handleToggleAIProtect={handleToggleAIProtect}
             />
           </>
-        ) : (
+        ) : !canViewCamera && hasLinkedHouse ? (
           <View style={[styles.cameraBlockedCard, { backgroundColor: isDarkMode ? '#1E293B' : '#FFFFFF', borderColor: isDarkMode ? '#334155' : '#E2E8F0' }]}>
             <View style={styles.cameraBlockedIconBox}>
               <Ionicons name="videocam-off" size={32} color="#EF4444" />
@@ -469,7 +576,7 @@ export default function HomeScreen({ navigation }: any) {
               <Text style={[styles.cameraBlockedBadgeText, isDarkMode && { color: '#94A3B8' }]}>Chưa được cấp quyền xem camera</Text>
             </View>
           </View>
-        )}
+        ) : null}
 
         {/* 6. Widget Nhắc nhở uống thuốc */}
         {Boolean(nextMedication?.name) && (
@@ -651,6 +758,22 @@ const styles = StyleSheet.create({
     fontSize: 12,
     color: '#64748B',
     fontWeight: '600',
+  },
+  addDevicePrimaryBtn: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    backgroundColor: '#EA580C',
+    paddingVertical: 13,
+    paddingHorizontal: 26,
+    borderRadius: 24,
+    marginBottom: 12,
+    ...Shadows.card,
+  },
+  addDevicePrimaryBtnText: {
+    color: '#FFFFFF',
+    fontSize: 15,
+    fontWeight: '700',
   },
   refreshMemberBtn: {
     flexDirection: 'row',

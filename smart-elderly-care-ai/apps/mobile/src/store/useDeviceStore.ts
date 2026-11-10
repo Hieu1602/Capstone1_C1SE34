@@ -123,6 +123,7 @@ interface DeviceState {
   isLoadingDevices: boolean;
   // Actions
   setActiveDevice: (device: Device | null) => void;
+  setHouseInfo: (info: Partial<HouseInfo>) => void;
   setHouseMode: (mode: HouseInfo["currentMode"]) => void;
   updateHouseAddress: (address: string) => void;
   toggleCameraSleep: () => void;
@@ -173,6 +174,13 @@ export const useDeviceStore = create<DeviceState>()(
       deviceGroups: [],
       isLoadingDevices: false,
       setActiveDevice: (device) => set({ activeDevice: device }),
+      setHouseInfo: (info) =>
+        set((state) => ({
+          house: {
+            ...state.house,
+            ...info,
+          },
+        })),
       setHouseMode: (mode) => {
         set((state) => ({ house: { ...state.house, currentMode: mode } }));
         houseApi

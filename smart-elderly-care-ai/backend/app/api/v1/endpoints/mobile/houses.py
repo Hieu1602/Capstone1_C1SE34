@@ -38,34 +38,54 @@ router = APIRouter()
 
 
 async def _resolve_house(db: AsyncSession, house_id: str, current_user: User) -> House:
-    """Xử lý tra cứu căn nhà hỗ trợ cả 'current', ID số hoặc UUID."""
-    if house_id in ("current", "1", "default", "me"):
-        house = await crud_house.get_or_create_default_house(db, owner_id=current_user.id)
-        if not house:
-            raise HTTPException(
-                status_code=status.HTTP_404_NOT_FOUND,
-                detail="Bạn chưa tham gia căn nhà nào.",
-            )
-        return house
+    """Xử lý tra cứu căn nhà hỗ trợ cả 'current', ID số hoặc UUID với tốc độ tối ưu 1 truy vấn."""
+    is_current = house_id in ("current", "1", "default", "me")
+    if not is_current:
+        try:
+            house_uuid = UUID(house_id)
+            house = await crud_house.get_by_id(db, id=house_uuid)
+            if not house:
+                raise HTTPException(
+                    status_code=status.HTTP_404_NOT_FOUND,
+                    detail="Căn nhà không tồn tại.",
+                )
+            return house
+        except ValueError:
+            pass
 
-    try:
-        house_uuid = UUID(house_id)
-    except ValueError:
-        house = await crud_house.get_or_create_default_house(db, owner_id=current_user.id)
-        if not house:
-            raise HTTPException(
-                status_code=status.HTTP_404_NOT_FOUND,
-                detail="Bạn chưa tham gia căn nhà nào.",
-            )
-        return house
-
-    house = await crud_house.get_by_id(db, id=house_uuid)
-    if not house:
-        raise HTTPException(
-            status_code=status.HTTP_404_NOT_FOUND,
-            detail="Căn nhà không tồn tại.",
+    # 1 truy vấn duy nhất tìm nhà thuộc sở hữu HOẶC user đang là thành viên ACTIVE
+    stmt = (
+        select(House)
+        .outerjoin(
+            HouseMember,
+            and_(
+                HouseMember.house_id == House.id,
+                HouseMember.user_id == current_user.id,
+                HouseMember.status == "ACTIVE",
+            ),
         )
-    return house
+        .where(
+            or_(
+                House.owner_id == current_user.id,
+                HouseMember.user_id == current_user.id,
+            )
+        )
+        .order_by((House.owner_id == current_user.id).desc())
+        .limit(1)
+    )
+    res = await db.execute(stmt)
+    house = res.scalar_one_or_none()
+    if house:
+        return house
+
+    # Nếu là admin, tự động tạo nhà mặc định nếu chưa có
+    if current_user.role == "admin":
+        return await crud_house.get_or_create_default_house(db, owner_id=current_user.id)
+
+    raise HTTPException(
+        status_code=status.HTTP_404_NOT_FOUND,
+        detail="Bạn chưa tham gia căn nhà nào.",
+    )
 
 
 def _format_member_out(m: HouseMember, house: House) -> HouseMemberOut:
@@ -166,23 +186,83 @@ async def get_my_house_permissions(
     current_user: User = Depends(get_current_user),
     db: AsyncSession = Depends(get_db),
 ):
-    """Kiểm tra danh sách quyền thực tế của người dùng đối với căn nhà này."""
-    try:
-        house = await _resolve_house(db, house_id, current_user)
-    except HTTPException as e:
-        if e.status_code == status.HTTP_404_NOT_FOUND:
-            return UserHousePermissionsOut(
-                can_view_health=False,
-                can_view_camera=False,
-                can_handle_emergency=False,
-                can_manage_devices=False,
-                can_manage_records=False,
-                role_in_house="MEMBER",
-                permissions="NONE",
-            )
-        raise e
-    perms = await crud_house.get_user_permissions(db, house=house, user=current_user)
-    return UserHousePermissionsOut(**perms)
+    """Kiểm tra danh sách quyền thực tế của người dùng đối với căn nhà này siêu tốc (1 query duy nhất)."""
+    is_admin = current_user.role == "admin"
+    if is_admin:
+        return UserHousePermissionsOut(
+            can_view_health=True,
+            can_view_camera=True,
+            can_handle_emergency=True,
+            can_manage_devices=True,
+            can_manage_records=True,
+            role_in_house="OWNER",
+            permissions="ADMIN",
+            is_owner=True,
+        )
+
+    target_uuid = None
+    if house_id not in ("current", "1", "default", "me"):
+        try:
+            target_uuid = UUID(house_id)
+        except ValueError:
+            pass
+
+    where_clause = or_(
+        House.owner_id == current_user.id,
+        HouseMember.user_id == current_user.id,
+    ) if target_uuid is None else (House.id == target_uuid)
+
+    stmt = (
+        select(
+            House.id,
+            House.owner_id,
+            HouseMember.role_in_house,
+            HouseMember.can_view_health,
+            HouseMember.can_view_camera,
+            HouseMember.can_handle_emergency,
+            HouseMember.can_manage_devices,
+            HouseMember.can_manage_records,
+            HouseMember.permissions,
+        )
+        .outerjoin(
+            HouseMember,
+            and_(
+                HouseMember.house_id == House.id,
+                HouseMember.user_id == current_user.id,
+                HouseMember.status == "ACTIVE",
+            ),
+        )
+        .where(where_clause)
+        .order_by((House.owner_id == current_user.id).desc())
+        .limit(1)
+    )
+    res = await db.execute(stmt)
+    row = res.first()
+    if not row:
+        return UserHousePermissionsOut(
+            can_view_health=False,
+            can_view_camera=False,
+            can_handle_emergency=False,
+            can_manage_devices=False,
+            can_manage_records=False,
+            role_in_house="NONE",
+            permissions="NONE",
+            is_owner=False,
+        )
+    h_id, h_owner_id, m_role, m_health, m_cam, m_sos, m_dev, m_rec, m_perms = row
+    is_owner = (h_owner_id == current_user.id)
+    return UserHousePermissionsOut(
+        house_id=h_id,
+        user_id=current_user.id,
+        is_owner=is_owner,
+        role_in_house="OWNER" if is_owner else (m_role or "MEMBER"),
+        permissions="ADMIN" if is_owner else (m_perms or "VIEW"),
+        can_view_health=is_owner or bool(m_health),
+        can_view_camera=is_owner or bool(m_cam),
+        can_handle_emergency=is_owner or bool(m_sos),
+        can_manage_devices=is_owner or bool(m_dev),
+        can_manage_records=is_owner or bool(m_rec),
+    )
 
 
 @router.get("/current/members", response_model=List[HouseMemberOut])
@@ -548,7 +628,7 @@ async def join_house_by_code(
 
 @router.post("/invites/{member_id}/respond")
 async def respond_to_house_invite(
-    member_id: UUID,
+    member_id: str,
     payload: MemberConfirmationRespond,
     current_user: User = Depends(get_current_user),
     db: AsyncSession = Depends(get_db),
@@ -558,25 +638,32 @@ async def respond_to_house_invite(
     - action = 'accept': kích hoạt thành viên (ACTIVE), chính thức vào nhà.
     - action = 'reject': xóa bản ghi lời mời.
     """
+    parsed_uuid = None
+    try:
+        parsed_uuid = UUID(member_id)
+    except Exception:
+        parsed_uuid = None
+
+    conds = [
+        and_(HouseMember.user_id == current_user.id, HouseMember.status == "PENDING_MEMBER_CONFIRM"),
+        HouseMember.user_id == current_user.id,
+    ]
+    if parsed_uuid:
+        conds.extend([HouseMember.id == parsed_uuid, HouseMember.user_id == parsed_uuid])
+
     stmt = (
         select(HouseMember)
         .options(selectinload(HouseMember.house))
-        .where(
-            or_(
-                HouseMember.id == member_id,
-                HouseMember.user_id == member_id,
-                and_(HouseMember.user_id == current_user.id, HouseMember.status == "PENDING_MEMBER_CONFIRM"),
-                HouseMember.user_id == current_user.id,
-            )
-        )
+        .where(or_(*conds))
     )
     res = await db.execute(stmt)
     members_list = res.scalars().all()
     member = None
-    for m in members_list:
-        if m.id == member_id:
-            member = m
-            break
+    if parsed_uuid:
+        for m in members_list:
+            if m.id == parsed_uuid:
+                member = m
+                break
     if not member:
         for m in members_list:
             if m.status == "PENDING_MEMBER_CONFIRM":
@@ -605,6 +692,10 @@ async def respond_to_house_invite(
     for inc in inc_res.scalars().all():
         inc.is_acknowledged = True
         inc.acknowledged_at = now_dt
+        if payload.action.lower() == "accept":
+            inc.notes = f"USER:{current_user.id} | Đã đồng ý vào nhà"
+        else:
+            inc.notes = f"USER:{current_user.id} | Đã từ chối vào nhà"
 
     if payload.action.lower() == "accept":
         member.status = "ACTIVE"
@@ -635,6 +726,7 @@ async def respond_to_house_invite(
                 "alert_type": "HOUSE_MEMBER_ADDED",
                 "data": {
                     "alert_type": "HOUSE_MEMBER_ADDED",
+                    "event": "HOUSE_INVITE_ACCEPTED",
                     "member_id": str(member.id),
                     "user_id": str(current_user.id),
                     "user_name": current_user.full_name,

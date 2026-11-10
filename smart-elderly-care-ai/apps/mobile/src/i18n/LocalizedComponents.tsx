@@ -267,42 +267,24 @@ export const LocalizedTextInput = React.forwardRef<any, TextInputProps>(function
   );
 });
 
+import { useInAppAlertStore, AlertButton } from '../store/useInAppAlertStore';
+
 export const LocalizedAlert = {
   alert: (...args: Parameters<typeof NativeAlert.alert>) => {
-    const [title, message, buttons, options] = args;
-    const localizedTitle = typeof title === 'string' ? localizeString(title, i18n.t.bind(i18n)) : title;
-    const localizedMessage = typeof message === 'string' ? localizeString(message, i18n.t.bind(i18n)) : message;
+    const [title, message, buttons] = args;
+    const localizedTitle = typeof title === 'string' ? localizeString(title, i18n.t.bind(i18n)) : (title || '');
+    const localizedMessage = typeof message === 'string' ? localizeString(message, i18n.t.bind(i18n)) : (message || '');
+    const localizedButtons: AlertButton[] = (buttons || [{ text: 'Đồng ý' }]).map((button) => ({
+      text: typeof button.text === 'string' ? localizeString(button.text, i18n.t.bind(i18n)) : button.text,
+      onPress: button.onPress,
+      style: (button.style as any) || 'default',
+    }));
 
-    if (Platform.OS === 'web') {
-      if (typeof window !== 'undefined') {
-        const fullText = [localizedTitle, localizedMessage].filter(Boolean).join('\n\n');
-        if (buttons && buttons.length > 1) {
-          const okButton = buttons.find((b) => b.style !== 'cancel') || buttons[buttons.length - 1];
-          const cancelButton = buttons.find((b) => b.style === 'cancel');
-          const confirmed = window.confirm(fullText);
-          if (confirmed) {
-            okButton?.onPress?.();
-          } else {
-            cancelButton?.onPress?.();
-          }
-        } else if (buttons && buttons.length === 1) {
-          window.alert(fullText);
-          buttons[0]?.onPress?.();
-        } else {
-          window.alert(fullText);
-        }
-      }
-      return;
-    }
-
-    NativeAlert.alert(
-      localizedTitle,
-      localizedMessage,
-      buttons?.map((button) => ({
-        ...button,
-        text: typeof button.text === 'string' ? localizeString(button.text, i18n.t.bind(i18n)) : button.text,
-      })),
-      options,
+    // Luôn ưu tiên hiển thị Modal trong App chuẩn Mobile (kể cả trên Web và Mobile)
+    useInAppAlertStore.getState().showAlert(
+      String(localizedTitle),
+      String(localizedMessage),
+      localizedButtons,
     );
   },
 };

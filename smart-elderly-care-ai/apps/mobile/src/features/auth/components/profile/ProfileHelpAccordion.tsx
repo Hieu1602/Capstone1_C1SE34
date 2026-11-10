@@ -138,7 +138,7 @@ export const ProfileHelpAccordion: React.FC<ProfileHelpAccordionProps> = ({
             ]}
           />
 
-          {/* Hướng dẫn sử dụng & Giới thiệu đồ án */}
+          {/* Hướng dẫn sử dụng */}
           <TouchableOpacity
             style={styles.fbAccordionSubRow}
             activeOpacity={0.7}
@@ -159,7 +159,7 @@ export const ProfileHelpAccordion: React.FC<ProfileHelpAccordionProps> = ({
                   isDarkMode && { color: colors.textPrimary },
                 ]}
               >
-                Hướng dẫn sử dụng & Giới thiệu đồ án
+                Hướng dẫn sử dụng
               </Text>
               <Text style={styles.fbSubRowSub}>
                 Tài liệu kỹ thuật Smart Elderly Care AI

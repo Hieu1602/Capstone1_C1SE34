@@ -186,9 +186,15 @@ export default function NotificationsBottomSheet({
         title: 'Lời mời phụ trách Bác sĩ gia đình',
         subtitle: rawMsg || 'Chủ hộ đã gửi lời mời bạn tham gia căn nhà với vai trò Bác sĩ gia đình.',
         timeStr: inc.created_at || '',
-        badgeLabel: isHandled ? 'Đã phản hồi' : 'Chờ xác nhận',
-        badgeColor: isHandled ? '#059669' : '#D97706',
-        badgeBg: isHandled ? '#ECFDF5' : '#FEF3C7',
+        badgeLabel: isHandled
+          ? (inc.notes?.includes('từ chối') || inc.note?.includes('từ chối') ? 'Đã từ chối' : 'Đã tham gia')
+          : 'Chờ xác nhận',
+        badgeColor: isHandled
+          ? (inc.notes?.includes('từ chối') || inc.note?.includes('từ chối') ? '#DC2626' : '#059669')
+          : '#D97706',
+        badgeBg: isHandled
+          ? (inc.notes?.includes('từ chối') || inc.note?.includes('từ chối') ? '#FEE2E2' : '#ECFDF5')
+          : '#FEF3C7',
         iconName: 'mail-unread',
         iconColor: '#D97706',
         isRead: isHandled,
@@ -381,6 +387,18 @@ export default function NotificationsBottomSheet({
 
   // Xử lý khi nhấn vào 1 thông báo: Đánh dấu đã đọc và điều hướng
   const handleItemPress = async (item: UnifiedNotification) => {
+    if (item.type === 'HOUSE_INVITE' && !item.isRead) {
+      Alert.alert(
+        'Lời mời Bác sĩ gia đình',
+        item.subtitle || 'Chủ hộ đã gửi lời mời bạn tham gia căn nhà với vai trò Bác sĩ gia đình. Bạn có đồng ý tham gia không?',
+        [
+          { text: 'Từ chối', style: 'destructive', onPress: () => handleRespondInviteFromSheet(item, 'reject') },
+          { text: 'Đồng ý vào nhà', onPress: () => handleRespondInviteFromSheet(item, 'accept') },
+        ]
+      );
+      return;
+    }
+
     const updated = new Set(readIds);
     updated.add(item.id);
     if (item.rawIncidentId) {

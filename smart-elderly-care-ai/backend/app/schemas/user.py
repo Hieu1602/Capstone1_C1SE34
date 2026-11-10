@@ -206,6 +206,16 @@ class UserOut(UserBase):
     assigned_house: Optional[str] = None
     household_id: Optional[uuid.UUID] = None
     role_title: Optional[str] = None
+    role_in_house: Optional[str] = None
+    is_owner: Optional[bool] = None
+    has_house: Optional[bool] = None
+    can_view_health: Optional[bool] = None
+    can_view_camera: Optional[bool] = None
+    can_handle_emergency: Optional[bool] = None
+    can_manage_devices: Optional[bool] = None
+    can_manage_records: Optional[bool] = None
+    device_count: Optional[int] = 0
+    has_devices: Optional[bool] = False
 
     @model_validator(mode="after")
     def set_language_alias(self) -> "UserOut":
@@ -246,6 +256,7 @@ class Token(BaseModel):
     access_token: str
     refresh_token: str
     token_type: str = "bearer"
+    user: Optional[UserOut] = None
 
 
 class UserTerminalOut(BaseModel):

@@ -352,7 +352,7 @@ export default function ProfileScreen({ navigation, route }: any) {
       },
       {
         id: 'app-info',
-        title: 'Hướng dẫn sử dụng & Giới thiệu đồ án',
+        title: 'Hướng dẫn sử dụng',
         subtitle: 'Tài liệu kỹ thuật Smart Elderly Care AI',
         category: 'support',
         categoryLabel: 'Hỗ trợ',
@@ -361,8 +361,6 @@ export default function ProfileScreen({ navigation, route }: any) {
         iconBg: isDark ? '#3B1D54' : '#F5F3FF',
         keywords: [
           'huong dan su dung',
-          'gioi thieu',
-          'do an',
           'tai lieu',
           'smart elderly care ai',
           'app info',

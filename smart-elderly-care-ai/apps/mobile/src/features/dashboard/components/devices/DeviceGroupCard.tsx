@@ -11,7 +11,7 @@ interface DeviceGroupCardProps {
   devicesInGroup: IoTDeviceItem[];
   onDevicePress: (device: IoTDeviceItem) => void;
   onDeviceDelete?: (device: IoTDeviceItem) => void;
-  onOpenGroupActionMenu: (groupName: string) => void;
+  onOpenGroupActionMenu?: (groupName: string) => void;
   onAddDeviceToGroup?: (groupName: string) => void;
   isDarkMode?: boolean;
   colors?: any;
@@ -73,14 +73,16 @@ export const DeviceGroupCard: React.FC<DeviceGroupCardProps> = ({
               {devicesInGroup.length} thiết bị
             </LocalizedText>
           </View>
-          <TouchableOpacity
-            style={styles.groupMoreBtn}
-            onPress={() => onOpenGroupActionMenu(groupName)}
-            activeOpacity={0.7}
-            hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
-          >
-            <Ionicons name="ellipsis-vertical" size={18} color={isDarkMode ? '#94A3B8' : '#64748B'} />
-          </TouchableOpacity>
+          {Boolean(onOpenGroupActionMenu) && (
+            <TouchableOpacity
+              style={styles.groupMoreBtn}
+              onPress={() => onOpenGroupActionMenu?.(groupName)}
+              activeOpacity={0.7}
+              hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
+            >
+              <Ionicons name="ellipsis-vertical" size={18} color={isDarkMode ? '#94A3B8' : '#64748B'} />
+            </TouchableOpacity>
+          )}
         </View>
       </View>
 
