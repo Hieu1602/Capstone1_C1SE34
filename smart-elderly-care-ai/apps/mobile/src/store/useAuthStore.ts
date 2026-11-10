@@ -15,6 +15,22 @@ export interface HousePermissions {
   is_owner: boolean;
 }
 
+export const selectIsOwner = (state: { userRole?: string | null; role?: string | null; permissions?: HousePermissions | null }): boolean => {
+  return Boolean(
+    state.userRole === 'admin' ||
+    state.role === 'admin' ||
+    state.userRole === 'owner' ||
+    state.role === 'owner' ||
+    state.permissions?.is_owner === true ||
+    state.permissions?.role_in_house === 'OWNER'
+  );
+};
+
+export const selectCanViewCamera = (state: { userRole?: string | null; role?: string | null; permissions?: HousePermissions | null }): boolean => {
+  if (selectIsOwner(state)) return true;
+  return Boolean(state.permissions?.can_view_camera);
+};
+
 export interface AuthStoreState {
   accessToken: string | null;
   refreshToken: string | null;
@@ -133,16 +149,17 @@ const createAuthStore: StateCreator<AuthStoreState, [], [['zustand/persist', Aut
 
     const resolvedHouseId = householdId ?? profileExtras?.household_id ?? null;
 
+    const isPrivileged = isAdmin || isOwner;
     const initialPermissions: HousePermissions = {
-      can_view_health: profileExtras?.can_view_health ?? (isAdmin ? true : false),
-      can_view_camera: profileExtras?.can_view_camera ?? (isAdmin ? true : false),
-      can_handle_emergency: profileExtras?.can_handle_emergency ?? (isAdmin ? true : false),
+      can_view_health: profileExtras?.can_view_health ?? isPrivileged,
+      can_view_camera: profileExtras?.can_view_camera ?? isPrivileged,
+      can_handle_emergency: profileExtras?.can_handle_emergency ?? isPrivileged,
       can_manage_devices: profileExtras?.can_manage_devices !== undefined && profileExtras?.can_manage_devices !== null
         ? Boolean(profileExtras.can_manage_devices)
-        : (isAdmin || isOwner || !resolvedHouseId),
-      can_manage_records: profileExtras?.can_manage_records ?? (isAdmin ? true : false),
-      role_in_house: isDoctor ? 'DOCTOR' : (isAdmin ? 'OWNER' : (profileExtras?.role_in_house || (resolvedHouseId ? 'MEMBER' : 'NEW_USER'))),
-      is_owner: isAdmin || (isOwner && Boolean(resolvedHouseId)),
+        : (isPrivileged || !resolvedHouseId),
+      can_manage_records: profileExtras?.can_manage_records ?? isPrivileged,
+      role_in_house: isDoctor ? 'DOCTOR' : (isPrivileged ? 'OWNER' : (profileExtras?.role_in_house || (resolvedHouseId ? 'MEMBER' : 'NEW_USER'))),
+      is_owner: isPrivileged,
     };
 
     const hasHouse = profileExtras?.has_house ?? Boolean(resolvedHouseId);
@@ -284,20 +301,6 @@ const createAuthStore: StateCreator<AuthStoreState, [], [['zustand/persist', Aut
       set({ permissions: p });
       return p;
     }
-    if (!s.household_id && !hId) {
-      // Tài khoản độc lập / mới tạo chưa liên kết vào nhà người khác: có toàn quyền thêm thiết bị mới
-      const independentPerms: HousePermissions = {
-        can_view_health: false,
-        can_view_camera: false,
-        can_handle_emergency: false,
-        can_manage_devices: true,
-        can_manage_records: false,
-        role_in_house: 'NEW_USER',
-        is_owner: false,
-      };
-      set({ permissions: independentPerms });
-      return independentPerms;
-    }
     try {
       const { householdApi } = await import('../services/api');
       const target = hId || s.household_id || 'current';
@@ -310,10 +313,18 @@ const createAuthStore: StateCreator<AuthStoreState, [], [['zustand/persist', Aut
           can_handle_emergency: isOwner ? true : Boolean(res.data.can_handle_emergency),
           can_manage_devices: isOwner ? true : Boolean(res.data.can_manage_devices),
           can_manage_records: isOwner ? true : Boolean(res.data.can_manage_records),
-          role_in_house: res.data.role_in_house || 'MEMBER',
+          role_in_house: res.data.role_in_house || (isOwner ? 'OWNER' : 'MEMBER'),
           is_owner: isOwner,
         };
-        set({ permissions: p });
+        const nextState: any = { permissions: p };
+        if (res.data.house_id) {
+          nextState.household_id = res.data.house_id;
+          nextState.has_house = true;
+        }
+        if (isOwner) {
+          nextState.userRole = 'owner';
+        }
+        set(nextState);
         return p;
       }
     } catch {}
@@ -321,9 +332,9 @@ const createAuthStore: StateCreator<AuthStoreState, [], [['zustand/persist', Aut
       can_view_health: false,
       can_view_camera: false,
       can_handle_emergency: true,
-      can_manage_devices: false,
+      can_manage_devices: true,
       can_manage_records: false,
-      role_in_house: 'MEMBER',
+      role_in_house: s.household_id ? 'MEMBER' : 'NEW_USER',
       is_owner: false,
     };
     set({ permissions: def });

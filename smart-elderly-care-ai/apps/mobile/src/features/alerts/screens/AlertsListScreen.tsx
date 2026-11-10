@@ -249,6 +249,8 @@ export default function AlertsListScreen({ navigation }: any) {
   const isOwnerOrAdmin =
     userRole === 'admin' ||
     role === 'admin' ||
+    userRole === 'owner' ||
+    role === 'owner' ||
     permissions?.is_owner === true ||
     permissions?.role_in_house === 'OWNER';
   const canViewCamera = isOwnerOrAdmin || Boolean(permissions?.can_view_camera);

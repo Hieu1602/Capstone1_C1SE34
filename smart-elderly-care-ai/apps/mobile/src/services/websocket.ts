@@ -268,6 +268,8 @@ class AlertsWebSocket {
 
       store.addIncident(newIncident);
       useAlertStore.getState().addIncident(newIncident);
+      useAuthStore.getState().fetchMyPermissions?.().catch(() => {});
+      useVitalStore.getState().syncAllWithBackend?.().catch(() => {});
 
       notificationService.triggerEmergencyNotification({
         title: alertType === 'HOUSE_INVITE_PENDING' ? '🏠 LỜI MỜI THAM GIA NHÀ' : '🏠 THÀNH VIÊN GIA ĐÌNH',

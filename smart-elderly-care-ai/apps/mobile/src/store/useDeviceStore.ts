@@ -460,6 +460,16 @@ export const useDeviceStore = create<DeviceState>()(
                 hasHouse: true,
               },
             }));
+            try {
+              const auth = require('./useAuthStore').useAuthStore;
+              if (auth && !auth.getState().household_id) {
+                auth.setState({
+                  household_id: res.data.id,
+                  has_house: true,
+                  assigned_house: res.data.name || "Căn nhà gia đình",
+                });
+              }
+            } catch {}
           } else {
             set((state) => ({
               house: {
