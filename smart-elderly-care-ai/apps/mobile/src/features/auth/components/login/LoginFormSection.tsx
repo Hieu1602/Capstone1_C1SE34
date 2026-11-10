@@ -47,6 +47,14 @@ export const LoginFormSection: React.FC<LoginFormSectionProps> = ({
   onNavigateRegister,
   onOpenLegal,
 }) => {
+  const hasPhoneError = Boolean(
+    errorMessage &&
+      (errorMessage.toLowerCase().includes('số điện thoại') ||
+        errorMessage.toLowerCase().includes('sđt') ||
+        errorMessage.toLowerCase().includes('chưa tồn tại') ||
+        errorMessage.toLowerCase().includes('chưa được đăng ký')),
+  );
+
   return (
     <View style={styles.bottomSection}>
       <View style={styles.logoBadgeContainer}>
@@ -78,14 +86,27 @@ export const LoginFormSection: React.FC<LoginFormSectionProps> = ({
       {errorMessage ? (
         <View style={styles.noticeBox} accessibilityRole="alert">
           <Ionicons name="alert-circle-outline" size={18} color="#B42318" />
-          <LocalizedText style={styles.noticeText}>{errorMessage}</LocalizedText>
+          <View style={{ flex: 1 }}>
+            <LocalizedText style={styles.noticeText}>{errorMessage}</LocalizedText>
+            {hasPhoneError ? (
+              <TouchableOpacity
+                onPress={onNavigateRegister}
+                activeOpacity={0.8}
+                style={{ marginTop: 4 }}
+              >
+                <LocalizedText style={{ fontSize: 13, fontWeight: '700', color: Colors.primary, textDecorationLine: 'underline' }}>
+                  Đăng ký tài khoản ngay →
+                </LocalizedText>
+              </TouchableOpacity>
+            ) : null}
+          </View>
         </View>
       ) : null}
 
       {/* Card các ô nhập liệu */}
       <View style={styles.formCard}>
         {/* Input 1: Số điện thoại */}
-        <View style={styles.inputWrap}>
+        <View style={[styles.inputWrap, hasPhoneError && styles.inputWrapError]}>
           <View style={styles.inputPrefix}>
             <Ionicons name="call-outline" size={18} color="#64748B" />
             <LocalizedText style={styles.prefixText}>+84</LocalizedText>
@@ -285,6 +306,11 @@ const styles = StyleSheet.create({
     paddingHorizontal: 14,
     height: 52,
     marginBottom: 14,
+  },
+  inputWrapError: {
+    borderColor: '#EF4444',
+    borderWidth: 1.5,
+    backgroundColor: '#FEF2F2',
   },
   inputPrefix: {
     flexDirection: 'row',

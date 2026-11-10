@@ -65,6 +65,12 @@ export interface AuthStoreState {
   setIsRoleLoading: (loading: boolean) => void;
   toggleViewRole: () => void;
   fetchMyPermissions: (householdId?: number | string) => Promise<HousePermissions>;
+  setJoinedHouseData: (
+    houseId: string | number,
+    houseName: string,
+    permissions?: Partial<HousePermissions>
+  ) => void;
+  clearHouseData: () => void;
   logout: () => void;
 }
 
@@ -133,15 +139,17 @@ const createAuthStore: StateCreator<AuthStoreState, [], [['zustand/persist', Aut
 
     const resolvedHouseId = householdId ?? profileExtras?.household_id ?? null;
 
+    // Quyền thành viên: Mặc định khi vào nhà được XEM TẤT CẢ (camera, sinh hiệu, xử lý khẩn cấp)
+    // Chỉ không được thêm, sửa, xóa bất cứ gì (can_manage_devices = false, can_manage_records = false)
     const initialPermissions: HousePermissions = {
-      can_view_health: profileExtras?.can_view_health ?? (isAdmin ? true : false),
-      can_view_camera: profileExtras?.can_view_camera ?? (isAdmin ? true : false),
-      can_handle_emergency: profileExtras?.can_handle_emergency ?? (isAdmin ? true : false),
+      can_view_health: profileExtras?.can_view_health !== undefined ? Boolean(profileExtras.can_view_health) : true,
+      can_view_camera: profileExtras?.can_view_camera !== undefined ? Boolean(profileExtras.can_view_camera) : true,
+      can_handle_emergency: profileExtras?.can_handle_emergency !== undefined ? Boolean(profileExtras.can_handle_emergency) : true,
       can_manage_devices: profileExtras?.can_manage_devices !== undefined && profileExtras?.can_manage_devices !== null
         ? Boolean(profileExtras.can_manage_devices)
         : (isAdmin || isOwner || !resolvedHouseId),
-      can_manage_records: profileExtras?.can_manage_records ?? (isAdmin ? true : false),
-      role_in_house: isDoctor ? 'DOCTOR' : (isAdmin ? 'OWNER' : (profileExtras?.role_in_house || (resolvedHouseId ? 'MEMBER' : 'NEW_USER'))),
+      can_manage_records: profileExtras?.can_manage_records ?? (isAdmin || isDoctor ? true : false),
+      role_in_house: isDoctor ? 'DOCTOR' : (isAdmin ? 'OWNER' : (profileExtras?.role_in_house || (resolvedHouseId ? (isOwner ? 'OWNER' : 'MEMBER') : 'NEW_USER'))),
       is_owner: isAdmin || (isOwner && Boolean(resolvedHouseId)),
     };
 
@@ -303,31 +311,114 @@ const createAuthStore: StateCreator<AuthStoreState, [], [['zustand/persist', Aut
       const target = hId || s.household_id || 'current';
       const res = await householdApi.getMyPermissions(target);
       if (res.data) {
+        if (!res.data.house_id || res.data.role_in_house === 'NONE' || res.data.role_in_house === 'NEW_USER') {
+          // Tài khoản đã bị xóa khỏi nhà hoặc chưa thuộc nhà nào
+          const independentPerms: HousePermissions = {
+            can_view_health: false,
+            can_view_camera: false,
+            can_handle_emergency: false,
+            can_manage_devices: true,
+            can_manage_records: false,
+            role_in_house: 'NEW_USER',
+            is_owner: false,
+          };
+          set({
+            household_id: null,
+            has_house: false,
+            assigned_house: null,
+            permissions: independentPerms,
+            has_devices: false,
+            device_count: 0,
+          });
+          return independentPerms;
+        }
+
         const isOwner = res.data.role_in_house === 'OWNER' || res.data.is_owner === true;
         const p: HousePermissions = {
-          can_view_health: isOwner ? true : Boolean(res.data.can_view_health),
-          can_view_camera: isOwner ? true : Boolean(res.data.can_view_camera),
-          can_handle_emergency: isOwner ? true : Boolean(res.data.can_handle_emergency),
+          can_view_health: isOwner ? true : res.data.can_view_health !== false,
+          can_view_camera: isOwner ? true : res.data.can_view_camera !== false,
+          can_handle_emergency: isOwner ? true : res.data.can_handle_emergency !== false,
           can_manage_devices: isOwner ? true : Boolean(res.data.can_manage_devices),
           can_manage_records: isOwner ? true : Boolean(res.data.can_manage_records),
           role_in_house: res.data.role_in_house || 'MEMBER',
           is_owner: isOwner,
         };
-        set({ permissions: p });
+        set({ permissions: p, has_house: true });
         return p;
       }
-    } catch {}
+    } catch {
+      // 404 hoặc lỗi: Người dùng không thuộc căn nhà nào
+      const independentPerms: HousePermissions = {
+        can_view_health: false,
+        can_view_camera: false,
+        can_handle_emergency: false,
+        can_manage_devices: true,
+        can_manage_records: false,
+        role_in_house: 'NEW_USER',
+        is_owner: false,
+      };
+      set({
+        household_id: null,
+        has_house: false,
+        assigned_house: null,
+        permissions: independentPerms,
+        has_devices: false,
+        device_count: 0,
+      });
+      return independentPerms;
+    }
     const def: HousePermissions = {
       can_view_health: false,
       can_view_camera: false,
-      can_handle_emergency: true,
-      can_manage_devices: false,
+      can_handle_emergency: false,
+      can_manage_devices: true,
       can_manage_records: false,
-      role_in_house: 'MEMBER',
+      role_in_house: 'NEW_USER',
       is_owner: false,
     };
-    set({ permissions: def });
+    set({ permissions: def, has_house: false, household_id: null, assigned_house: null });
     return def;
+  },
+
+  setJoinedHouseData: (houseId, houseName, permissions) => {
+    const isOwner = permissions?.is_owner === true || permissions?.role_in_house === 'OWNER';
+    const p: HousePermissions = {
+      can_view_health: isOwner ? true : permissions?.can_view_health !== false,
+      can_view_camera: isOwner ? true : permissions?.can_view_camera !== false,
+      can_handle_emergency: isOwner ? true : permissions?.can_handle_emergency !== false,
+      can_manage_devices: isOwner ? true : Boolean(permissions?.can_manage_devices),
+      can_manage_records: isOwner ? true : Boolean(permissions?.can_manage_records),
+      role_in_house: permissions?.role_in_house || (isOwner ? 'OWNER' : 'MEMBER'),
+      is_owner: isOwner,
+    };
+    set({
+      household_id: houseId,
+      has_house: true,
+      assigned_house: houseName,
+      permissions: p,
+      role: isOwner ? 'owner' : 'member',
+      userRole: isOwner ? 'owner' : 'member',
+    });
+  },
+
+  clearHouseData: () => {
+    const independentPerms: HousePermissions = {
+      can_view_health: false,
+      can_view_camera: false,
+      can_handle_emergency: false,
+      can_manage_devices: true,
+      can_manage_records: false,
+      role_in_house: 'NEW_USER',
+      is_owner: false,
+    };
+    set({
+      household_id: null,
+      has_house: false,
+      assigned_house: null,
+      permissions: independentPerms,
+      has_devices: false,
+      device_count: 0,
+    });
   },
 
   logout: () => {

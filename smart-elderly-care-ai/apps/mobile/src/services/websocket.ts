@@ -242,15 +242,21 @@ class AlertsWebSocket {
       return;
     }
 
-    // 0.4. Lời mời tham gia nhà / Yêu cầu vào nhà
-    if (['HOUSE_INVITE_PENDING', 'HOUSE_JOIN_REQUEST', 'HOUSE_MEMBER_ADDED', 'HOUSE_JOIN_APPROVED', 'HOUSE_JOIN_REJECTED', 'HOUSE_INVITE_REJECTED'].includes(event.alert_type || event.type)) {
+    // 0.4. Lời mời tham gia nhà / Yêu cầu vào nhà / Xóa khỏi nhà
+    if (['HOUSE_INVITE_PENDING', 'HOUSE_JOIN_REQUEST', 'HOUSE_MEMBER_ADDED', 'HOUSE_MEMBER_REMOVED', 'HOUSE_JOIN_APPROVED', 'HOUSE_JOIN_REJECTED', 'HOUSE_INVITE_REJECTED'].includes(event.alert_type || event.type)) {
       const incData = event.data || {};
       const alertType = event.alert_type || event.type;
-      const targetUserId = incData.target_user_id;
+      const targetUserId = incData.target_user_id || incData.user_id;
       const currentUserId = useAuthStore.getState().userId || useAuthStore.getState().user_id;
 
       if (targetUserId && currentUserId && String(targetUserId) !== String(currentUserId)) {
         return;
+      }
+
+      if (alertType === 'HOUSE_MEMBER_REMOVED') {
+        try {
+          useVitalStore.getState().fetchHouseFromBackend?.();
+        } catch {}
       }
 
       const newIncident: Incident = {

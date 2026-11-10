@@ -133,6 +133,20 @@ export default function RegisterScreen({ route, navigation }: any) {
         }
     };
 
+    const handleBlurPhone = async () => {
+        const formatted = normalizePhone(phone);
+        if (!formatted || formatted.length < 9) return;
+        try {
+            const checkRes = await authApi.checkPhone(formatted);
+            if (checkRes.data?.exists) {
+                const errorMsg =
+                    checkRes.data?.message ||
+                    "Số điện thoại này đã được đăng ký tài khoản. Vui lòng đăng nhập hoặc dùng số khác.";
+                setErrorMessage(errorMsg);
+            }
+        } catch (_) {}
+    };
+
     const handleRegister = async () => {
         setErrorMessage(null);
         const formattedPhone = normalizePhone(phone);
@@ -200,6 +214,36 @@ export default function RegisterScreen({ route, navigation }: any) {
 
         setLoading(true);
         try {
+            // 1. Kiểm tra nhanh số điện thoại đã tồn tại trong hệ thống chưa TRƯỚC KHI gửi OTP
+            try {
+                const checkRes = await authApi.checkPhone(formattedPhone);
+                if (checkRes.data?.exists) {
+                    const errorMsg =
+                        checkRes.data?.message ||
+                        "Số điện thoại này đã được đăng ký tài khoản. Vui lòng đăng nhập hoặc dùng số khác.";
+                    setErrorMessage(errorMsg);
+                    Alert.alert(
+                        "Số điện thoại đã tồn tại",
+                        errorMsg,
+                        [
+                            {
+                                text: "Đăng nhập ngay",
+                                onPress: () =>
+                                    navigation.navigate("Login", {
+                                        registeredPhone: phone.trim(),
+                                    }),
+                            },
+                            {
+                                text: "Đổi số khác",
+                                style: "cancel",
+                            },
+                        ],
+                    );
+                    setLoading(false);
+                    return;
+                }
+            } catch (_) {}
+
             if (accountType === "doctor" && !cchnVerifiedInfo?.valid) {
                 try {
                     const verifyRes = await authApi.verifyCchn(
@@ -240,7 +284,7 @@ export default function RegisterScreen({ route, navigation }: any) {
                                 }),
                         },
                         {
-                            text: "Đóng",
+                            text: "Đổi số khác",
                             style: "cancel",
                         },
                     ],
@@ -537,6 +581,12 @@ export default function RegisterScreen({ route, navigation }: any) {
                             onCheckCchn={handleCheckCchn}
                             onSubmit={handleRegister}
                             onChangeRole={() => setStep("select_role")}
+                            onNavigateToLogin={() =>
+                                navigation.navigate("Login", {
+                                    registeredPhone: phone.trim(),
+                                })
+                            }
+                            onBlurPhone={handleBlurPhone}
                         />
                     )}
 

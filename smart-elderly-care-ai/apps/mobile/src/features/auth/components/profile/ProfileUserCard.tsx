@@ -27,7 +27,7 @@ export const ProfileUserCard: React.FC<ProfileUserCardProps> = ({
   onPressJoinHouse,
   roleBadgeText: propRoleText,
 }) => {
-  const { permissions, userRole, role, fetchMyPermissions } = useAuthStore();
+  const { permissions, userRole, role, fetchMyPermissions, household_id, has_house } = useAuthStore();
   const { house, fetchHouseFromBackend } = useVitalStore();
 
   useEffect(() => {
@@ -35,7 +35,11 @@ export const ProfileUserCard: React.FC<ProfileUserCardProps> = ({
     fetchHouseFromBackend?.();
   }, []);
 
-  const hasLinkedHouse = Boolean(house?.id && house?.hasHouse !== false && house?.name && house.name.trim() !== '');
+  const hasLinkedHouse = Boolean(
+    (house?.id && house?.hasHouse !== false && house?.name && house.name.trim() !== '') ||
+    (household_id && has_house) ||
+    (permissions?.role_in_house && permissions?.role_in_house !== 'NEW_USER' && permissions?.role_in_house !== 'NONE')
+  );
 
   const isOwner =
     hasLinkedHouse &&
@@ -51,21 +55,27 @@ export const ProfileUserCard: React.FC<ProfileUserCardProps> = ({
     role === 'doctor' ||
     permissions?.role_in_house === 'DOCTOR';
 
+  const isActuallyInHouse = hasLinkedHouse && permissions?.role_in_house !== 'NEW_USER' && permissions?.role_in_house !== 'NONE';
+
   const resolvedRoleText =
     propRoleText ||
     (isOwner
       ? 'Chủ hộ'
       : isDoctor
       ? 'Bác sĩ gia đình'
-      : 'Thành viên');
+      : isActuallyInHouse
+      ? 'Thành viên'
+      : 'Tài khoản mới');
 
   const roleIcon: keyof typeof Ionicons.glyphMap = isOwner
     ? 'ribbon'
     : isDoctor
     ? 'medkit'
-    : 'person';
+    : isActuallyInHouse
+    ? 'people'
+    : 'sparkles';
 
-  const roleColor = isOwner ? '#D97706' : isDoctor ? '#2563EB' : '#EA580C';
+  const roleColor = isOwner ? '#D97706' : isDoctor ? '#2563EB' : isActuallyInHouse ? '#EA580C' : '#64748B';
   const roleBg = isOwner
     ? isDarkMode
       ? 'rgba(217, 119, 6, 0.2)'
@@ -74,9 +84,13 @@ export const ProfileUserCard: React.FC<ProfileUserCardProps> = ({
     ? isDarkMode
       ? 'rgba(37, 99, 235, 0.2)'
       : '#EFF6FF'
+    : isActuallyInHouse
+    ? isDarkMode
+      ? 'rgba(234, 88, 12, 0.15)'
+      : '#FFF7ED'
     : isDarkMode
-    ? 'rgba(234, 88, 12, 0.15)'
-    : '#FFF7ED';
+    ? 'rgba(100, 116, 139, 0.2)'
+    : '#F1F5F9';
 
   return (
     <View

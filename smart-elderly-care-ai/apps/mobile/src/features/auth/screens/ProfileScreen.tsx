@@ -624,9 +624,15 @@ export default function ProfileScreen({ navigation, route }: any) {
         <ProfileQuickGrid
           isDarkMode={mgr.isDarkMode}
           colors={mgr.colors}
-          houseName={mgr.house?.name || 'Nhà của tôi'}
+          houseName={mgr.house?.name || useAuthStore.getState().assigned_house || 'Nhà của tôi'}
           membersCount={mgr.house?.membersCount || 1}
-          hasHouse={Boolean(mgr.house?.id && mgr.house?.hasHouse !== false && mgr.house?.name)}
+          hasHouse={Boolean(
+            (mgr.house?.id && mgr.house?.hasHouse !== false && mgr.house?.name) ||
+            (useAuthStore.getState().household_id && useAuthStore.getState().has_house) ||
+            (useAuthStore.getState().permissions?.role_in_house &&
+              useAuthStore.getState().permissions?.role_in_house !== 'NEW_USER' &&
+              useAuthStore.getState().permissions?.role_in_house !== 'NONE')
+          )}
           showMore={mgr.showMoreGrid}
           onToggleShowMore={() => mgr.setShowMoreGrid(!mgr.showMoreGrid)}
           onNavigate={(screen) => navigation.navigate(screen)}
