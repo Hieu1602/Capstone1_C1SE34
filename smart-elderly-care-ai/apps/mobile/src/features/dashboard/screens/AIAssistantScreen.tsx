@@ -242,6 +242,21 @@ export default function AIAssistantScreen({ navigation }: any) {
   // Chiều cao bàn phím iOS an toàn (Không dùng try/catch hook)
   const keyboardVerticalOffset = Platform.OS === 'ios' ? 88 : 0;
 
+  // Tự động cuộn xuống tin nhắn mới nhất khi bàn phím xuất hiện
+  useEffect(() => {
+    const showSub = Keyboard.addListener(
+      Platform.OS === 'ios' ? 'keyboardWillShow' : 'keyboardDidShow',
+      () => {
+        setTimeout(() => {
+          scrollViewRef.current?.scrollToEnd({ animated: true });
+        }, 100);
+      }
+    );
+    return () => {
+      showSub.remove();
+    };
+  }, []);
+
   // Tự động dừng TTS & Audio Recorder khi unmount
   useEffect(() => {
     return () => {
@@ -769,11 +784,12 @@ export default function AIAssistantScreen({ navigation }: any) {
       <View style={[styles.mainBody, isDarkMode && { backgroundColor: colors.background }]}>
         <KeyboardAvoidingView
           style={{ flex: 1 }}
-          behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
+          behavior={Platform.OS === 'ios' ? 'padding' : undefined}
           keyboardVerticalOffset={keyboardVerticalOffset}
         >
           <ScrollView
             ref={scrollViewRef}
+            style={{ flex: 1 }}
             showsVerticalScrollIndicator={false}
             contentContainerStyle={styles.mainScroll}
             keyboardShouldPersistTaps="handled"

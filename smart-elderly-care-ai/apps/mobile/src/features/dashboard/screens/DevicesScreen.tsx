@@ -6,7 +6,7 @@
  */
 
 import React, { useState, useEffect, useCallback } from 'react';
-import { View, StyleSheet, TouchableOpacity, ScrollView, Text, RefreshControl } from 'react-native';
+import { View, StyleSheet, TouchableOpacity, ScrollView, Text, RefreshControl, Platform } from 'react-native';
 import { useFocusEffect } from '@react-navigation/native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
@@ -349,14 +349,21 @@ export default function DevicesScreen({ navigation }: any) {
   };
 
   // Lưu chỉnh sửa nhóm
-  const executeSaveEditGroup = () => {
-    updateDeviceGroup(editOldGroupName, trimmedEditName, editSelectedDeviceIds);
+  const executeSaveEditGroup = async () => {
+    // Đóng modal và dọn dẹp state ngay lập tức để giao diện không bị kẹt
+    setShowEditGroupModal(false);
+    setSelectedGroupForAction(null);
+    setEditAttempted(false);
     if (selectedGroupFilter === editOldGroupName) {
       setSelectedGroupFilter(trimmedEditName);
     }
-    setShowEditGroupModal(false);
-    setSelectedGroupForAction(null);
-    LocalizedAlert.alert('Thành công', `Đã cập nhật nhóm "${trimmedEditName}" thành công.`);
+    try {
+      await updateDeviceGroup(editOldGroupName, trimmedEditName, editSelectedDeviceIds);
+      LocalizedAlert.alert('Thành công', `Đã cập nhật nhóm "${trimmedEditName}" thành công.`);
+    } catch (err: any) {
+      const msg = err?.response?.data?.detail || err?.message || 'Không thể lưu thay đổi nhóm. Vui lòng thử lại sau.';
+      LocalizedAlert.alert('Lỗi', msg);
+    }
   };
 
   const handleSaveEditGroup = () => {
@@ -366,10 +373,7 @@ export default function DevicesScreen({ navigation }: any) {
       return;
     }
     if (isEditNameDuplicate) {
-      LocalizedAlert.alert(
-        'Thông báo',
-        `Tên nhóm "${trimmedEditName}" đã tồn tại. Tên nhóm mới phải là duy nhất.`
-      );
+      LocalizedAlert.alert('Thông báo', `Tên nhóm "${trimmedEditName}" đã tồn tại. Tên nhóm mới phải là duy nhất.`);
       return;
     }
     if (!hasEditDevices) {
@@ -377,39 +381,13 @@ export default function DevicesScreen({ navigation }: any) {
       return;
     }
 
-    LocalizedAlert.alert(
-      'Xác nhận cập nhật',
-      `Bạn có chắc chắn muốn lưu các thay đổi cho nhóm "${trimmedEditName}" không?`,
-      [
-        { text: 'Hủy', style: 'cancel' },
-        { text: 'Lưu thay đổi', onPress: executeSaveEditGroup },
-      ]
-    );
+    executeSaveEditGroup();
   };
 
   const handleCloseEditGroup = () => {
-    const isDirty = trimmedEditName !== editOldGroupName;
-    if (isDirty) {
-      LocalizedAlert.alert(
-        'Thay đổi chưa lưu',
-        'Tên hoặc danh sách thiết bị đã được chỉnh sửa. Bạn có muốn lưu trước khi đóng không?',
-        [
-          { text: 'Tiếp tục sửa', style: 'cancel' },
-          {
-            text: 'Không lưu',
-            style: 'destructive',
-            onPress: () => {
-              setShowEditGroupModal(false);
-              setSelectedGroupForAction(null);
-            },
-          },
-          { text: 'Lưu thay đổi', onPress: executeSaveEditGroup },
-        ]
-      );
-    } else {
-      setShowEditGroupModal(false);
-      setSelectedGroupForAction(null);
-    }
+    setShowEditGroupModal(false);
+    setSelectedGroupForAction(null);
+    setEditAttempted(false);
   };
 
   return (

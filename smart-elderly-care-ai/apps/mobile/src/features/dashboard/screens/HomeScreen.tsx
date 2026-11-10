@@ -438,8 +438,8 @@ export default function HomeScreen({ navigation }: any) {
               <View style={[styles.appointmentIconCircle, isDarkMode && { backgroundColor: 'rgba(217, 119, 6, 0.25)' }]}>
                 <Ionicons name="calendar" size={20} color="#D97706" />
               </View>
-              <View style={{ flex: 1, marginLeft: 10 }}>
-                <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6 }}>
+              <View style={{ flex: 1, marginLeft: 10, minWidth: 0 }}>
+                <View style={{ flexDirection: 'row', alignItems: 'center', flexWrap: 'wrap', gap: 6, marginBottom: 2 }}>
                   <Text style={[styles.appointmentBannerTitle, isDarkMode && { color: '#FBBF24' }]}>🗓️ LỊCH KHÁM MỚI TỪ BÁC SĨ</Text>
                   <View style={styles.appointmentBadge}><Text style={styles.appointmentBadgeText}>Chờ xác nhận</Text></View>
                 </View>
@@ -649,7 +649,7 @@ const styles = StyleSheet.create({
   emergencyActionBtnText: { fontSize: 12, fontWeight: '700', color: '#DC2626' },
   stableHealthCard: { flexDirection: 'row', alignItems: 'center', paddingVertical: 9, paddingHorizontal: 12, borderRadius: 12, borderWidth: 1, marginBottom: 16, gap: 8 },
   stablePulseDot: { width: 8, height: 8, borderRadius: 4, backgroundColor: '#10B981' },
-  stableHealthText: { fontSize: 12.5, fontWeight: '600' },
+  stableHealthText: { fontSize: 12, fontWeight: '600', flex: 1, lineHeight: 17 },
   sosCard: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', backgroundColor: '#DC2626', borderRadius: 18, paddingVertical: 14, paddingHorizontal: 16, marginBottom: 18, borderWidth: 1.5, borderColor: '#EF4444', ...Shadows.card },
   sosLeftContent: { flexDirection: 'row', alignItems: 'center', flex: 1 },
   sosIconCircle: { width: 44, height: 44, borderRadius: 22, backgroundColor: 'rgba(255, 255, 255, 0.22)', alignItems: 'center', justifyContent: 'center', marginRight: 12 },
@@ -664,13 +664,13 @@ const styles = StyleSheet.create({
   multiViewText: { fontSize: 15, fontWeight: '700', color: Colors.textPrimary },
   playCircleBtn: { width: 32, height: 32, borderRadius: 16, backgroundColor: '#FFF7ED', alignItems: 'center', justifyContent: 'center' },
   appointmentBanner: { backgroundColor: '#FFFBEB', borderRadius: 16, borderWidth: 1.5, borderColor: '#FDE68A', padding: 14, marginBottom: 12, flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', ...Shadows.soft },
-  appointmentBannerLeft: { flexDirection: 'row', alignItems: 'center', flex: 1, marginRight: 8 },
+  appointmentBannerLeft: { flexDirection: 'row', alignItems: 'center', flex: 1, minWidth: 0, marginRight: 8 },
   appointmentIconCircle: { width: 38, height: 38, borderRadius: 19, backgroundColor: '#FEF3C7', alignItems: 'center', justifyContent: 'center' },
   appointmentBannerTitle: { fontSize: 12, fontWeight: '800', color: '#B45309', letterSpacing: 0.3 },
   appointmentBadge: { backgroundColor: '#F59E0B', paddingHorizontal: 6, paddingVertical: 2, borderRadius: 8 },
   appointmentBadgeText: { color: '#FFFFFF', fontSize: 10, fontWeight: '700' },
   appointmentBannerSubtitle: { fontSize: 12, color: '#475569', marginTop: 2, lineHeight: 16 },
-  appointmentActionBtn: { flexDirection: 'row', alignItems: 'center', backgroundColor: '#FEF3C7', paddingHorizontal: 8, paddingVertical: 6, borderRadius: 10, gap: 2 },
+  appointmentActionBtn: { flexDirection: 'row', alignItems: 'center', backgroundColor: '#FEF3C7', paddingHorizontal: 10, paddingVertical: 6, borderRadius: 10, gap: 2, flexShrink: 0 },
   appointmentActionBtnText: { fontSize: 11, fontWeight: '700', color: '#B45309' },
   emptyContainer: {
     paddingTop: 32,

@@ -1,4 +1,5 @@
 import React from 'react';
+import { createPortal } from 'react-dom';
 import { RotateCcw } from 'lucide-react';
 import { SystemNotification } from '../../types';
 
@@ -21,8 +22,8 @@ export const RevokeNotificationModal: React.FC<RevokeNotificationModalProps> = (
 }) => {
   if (!notification) return null;
 
-  return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-900/60 backdrop-blur-sm animate-fade-in overflow-y-auto">
+  return createPortal(
+    <div className="fixed inset-0 z-[100] flex items-center justify-center p-4 bg-slate-900/60 dark:bg-black/75 backdrop-blur-sm animate-fade-in overflow-y-auto">
       <div className="w-full max-w-md rounded-2xl glass-card border border-rose-300 dark:border-rose-900/60 shadow-2xl p-5 space-y-4 max-h-[90vh] overflow-y-auto my-auto">
         <div className="flex items-start gap-3">
           <div className="p-2.5 rounded-xl bg-rose-50 text-rose-600 dark:bg-rose-500/20 dark:text-rose-300 shrink-0 border border-rose-200">
@@ -93,7 +94,8 @@ export const RevokeNotificationModal: React.FC<RevokeNotificationModalProps> = (
           </div>
         </div>
       </div>
-    </div>
+    </div>,
+    document.body
   );
 };
 

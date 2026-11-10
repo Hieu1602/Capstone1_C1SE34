@@ -3,6 +3,7 @@
 
 import React from 'react';
 import { View, StyleSheet, Platform, ActivityIndicator } from 'react-native';
+import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { NavigationContainer } from '@react-navigation/native';
 import { createNativeStackNavigator } from '@react-navigation/native-stack';
 import { createBottomTabNavigator } from '@react-navigation/bottom-tabs';
@@ -55,6 +56,7 @@ const Tab = createBottomTabNavigator();
 
 // ---- 5-Tab Navigator (Trang chủ, Thiết bị, Bot AI, Cảnh báo, Tôi) ----
 function MainTabNavigator() {
+  const insets = useSafeAreaInsets();
   const { isDarkMode, colors } = useTheme();
   const incidents = useAlertStore((state) => state.incidents);
   const todayReminders = usePatientStore((state) => state.todayReminders);
@@ -75,6 +77,8 @@ function MainTabNavigator() {
           {
             backgroundColor: colors.card,
             borderTopColor: colors.border,
+            height: (Platform.OS === 'ios' ? 56 : 58) + Math.max(insets.bottom, Platform.OS === 'ios' ? 24 : 10),
+            paddingBottom: Math.max(insets.bottom, Platform.OS === 'ios' ? 24 : 10),
           },
         ],
         tabBarActiveTintColor: Colors.primary,
@@ -251,9 +255,7 @@ const styles = StyleSheet.create({
     backgroundColor: '#FFFFFF',
     borderTopColor: '#E2E8F0',
     borderTopWidth: 1,
-    height: Platform.OS === 'ios' ? 84 : 72,
     paddingTop: 8,
-    paddingBottom: Platform.OS === 'ios' ? 26 : 14,
     elevation: 8,
     shadowColor: '#000',
     shadowOffset: { width: 0, height: -2 },
