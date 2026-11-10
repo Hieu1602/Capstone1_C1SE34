@@ -26,6 +26,7 @@ interface RegisterVerifyOtpStepProps {
     setOtp: (val: string) => void;
     resendSeconds: number;
     loading: boolean;
+    errorMessage?: string | null;
     onResendOtp: () => void;
     onSubmit: () => void;
 }
@@ -36,6 +37,7 @@ export const RegisterVerifyOtpStep: React.FC<RegisterVerifyOtpStepProps> = ({
     setOtp,
     resendSeconds,
     loading,
+    errorMessage,
     onResendOtp,
     onSubmit,
 }) => {
@@ -63,6 +65,14 @@ export const RegisterVerifyOtpStep: React.FC<RegisterVerifyOtpStepProps> = ({
                     Đã gửi mã xác minh đến {phone}.
                 </Text>
             </View>
+
+            {/* Thông báo lỗi khi xác minh hoặc đăng ký thất bại */}
+            {errorMessage ? (
+                <View style={styles.errorBox} accessibilityRole="alert">
+                    <Ionicons name="alert-circle-outline" size={18} color="#B42318" />
+                    <Text style={styles.errorText}>{errorMessage}</Text>
+                </View>
+            ) : null}
 
             {/* Cụm 6 ô nhập mã OTP */}
             <Pressable onPress={handleContainerPress} style={styles.otpRow}>
@@ -158,6 +168,25 @@ const styles = StyleSheet.create({
         color: "#1F2937",
         fontSize: 14,
         lineHeight: 20,
+    },
+    errorBox: {
+        flexDirection: "row",
+        alignItems: "center",
+        paddingHorizontal: 14,
+        paddingVertical: 10,
+        borderRadius: 12,
+        marginBottom: 16,
+        gap: 8,
+        backgroundColor: "#FEF3F2",
+        borderWidth: 1,
+        borderColor: "#FECDCA",
+    },
+    errorText: {
+        flex: 1,
+        fontSize: 13,
+        lineHeight: 18,
+        color: "#B42318",
+        fontWeight: "600",
     },
     otpRow: {
         flexDirection: "row",

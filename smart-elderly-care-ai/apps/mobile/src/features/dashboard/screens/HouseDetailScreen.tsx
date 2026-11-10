@@ -12,7 +12,9 @@ import {
   ActivityIndicator,
   Platform,
   Share,
+  RefreshControl,
 } from 'react-native';
+import { useFocusEffect } from '@react-navigation/native';
 import { LocalizedAlert as Alert, LocalizedText as Text } from '../../../i18n/LocalizedComponents';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
@@ -21,6 +23,7 @@ import { useAuthStore, useVitalStore } from '../../../store/useVitalStore';
 import { useTheme } from '../../../store/useThemeStore';
 import * as Clipboard from 'expo-clipboard';
 import { householdApi } from '../../../services/api';
+import { alertsWS } from '../../../services/websocket';
 import {
   HouseMemberRow,
   HousePermissionModal,
@@ -81,7 +84,12 @@ export default function HouseDetailScreen({ navigation, route }: any) {
 
   const [toastInfo, setToastInfo] = useState<{ message: string; type?: 'success' | 'error' } | null>(null);
 
-  const hasLinkedHouse = Boolean(house?.id && house?.hasHouse !== false && house?.name && house.name.trim() !== '');
+  const hasLinkedHouse = Boolean(
+    household_id ||
+    (house?.id && house?.hasHouse !== false && house?.name && house.name.trim() !== '') ||
+    permissions?.role_in_house === 'OWNER' ||
+    permissions?.is_owner === true
+  );
 
   const isCurrentUserOwner =
     hasLinkedHouse &&
@@ -175,15 +183,12 @@ export default function HouseDetailScreen({ navigation, route }: any) {
     },
   ], [full_name, userName, phone_number, userPhone]);
 
+  const [isRefreshing, setIsRefreshing] = useState(false);
+
   const loadMembers = useCallback(async () => {
-    if (!hasLinkedHouse) {
-      setMembers([]);
-      setIsLoadingMembers(false);
-      return;
-    }
     try {
       setIsLoadingMembers(true);
-      const targetHId = household_id || 'current';
+      const targetHId = household_id || (house?.id ? String(house.id) : 'current');
       const res = await householdApi.getMembers(targetHId);
       if (Array.isArray(res.data) && res.data.length > 0) {
         setMembers(res.data);
@@ -195,13 +200,49 @@ export default function HouseDetailScreen({ navigation, route }: any) {
     } finally {
       setIsLoadingMembers(false);
     }
-  }, [household_id, hasLinkedHouse]);
+  }, [household_id, house?.id]);
+
+  const handleRefresh = async () => {
+    setIsRefreshing(true);
+    try {
+      await Promise.allSettled([
+        loadMembers(),
+        fetchHouseFromBackend?.(),
+      ]);
+    } finally {
+      setIsRefreshing(false);
+    }
+  };
+
+  useFocusEffect(
+    useCallback(() => {
+      loadMembers();
+    }, [loadMembers])
+  );
 
   useEffect(() => {
-    loadMembers();
+    alertsWS.connect();
+    const handleWs = (event: any) => {
+      if (
+        event?.type === 'ALERT_NEW' &&
+        (event?.alert_type === 'HOUSE_MEMBER_ADDED' ||
+         event?.alert_type === 'HOUSE_INVITE_PENDING' ||
+         event?.alert_type === 'HOUSE_INVITE_REJECTED' ||
+         event?.alert_type === 'HOUSE_INVITE_ACCEPTED' ||
+         event?.data?.alert_type === 'HOUSE_MEMBER_ADDED' ||
+         event?.data?.alert_type === 'HOUSE_INVITE_ACCEPTED')
+      ) {
+        loadMembers();
+      }
+    };
+    const unsub = alertsWS.subscribe(handleWs);
+    return () => {
+      unsub();
+    };
   }, [loadMembers]);
 
   const handleOpenPermissions = (member: any) => {
+    if (!isCurrentUserOwner) return;
     if (member?.is_owner || member?.role_in_house === 'OWNER') return;
     handleRemoveMember(member);
   };
@@ -446,7 +487,9 @@ export default function HouseDetailScreen({ navigation, route }: any) {
           {hasLinkedHouse && (
             <TouchableOpacity
               activeOpacity={0.7}
+              disabled={!isCurrentUserOwner}
               onPress={() => {
+                if (!isCurrentUserOwner) return;
                 setEditAddressInput(house?.address || '');
                 setIsEditAddressModalVisible(true);
               }}
@@ -478,7 +521,18 @@ export default function HouseDetailScreen({ navigation, route }: any) {
       </View>
 
       {hasLinkedHouse ? (
-      <ScrollView showsVerticalScrollIndicator={false} contentContainerStyle={styles.scrollContent}>
+      <ScrollView
+        showsVerticalScrollIndicator={false}
+        contentContainerStyle={styles.scrollContent}
+        refreshControl={
+          <RefreshControl
+            refreshing={isRefreshing}
+            onRefresh={handleRefresh}
+            tintColor={Colors.primary}
+            colors={[Colors.primary]}
+          />
+        }
+      >
         {/* Banner thông tin phân quyền */}
         <View style={[styles.roleInfoBanner, { backgroundColor: isDarkMode ? '#172554' : '#EFF6FF', borderColor: '#3B82F6' }]}>
           <Ionicons name="shield-checkmark" size={22} color="#3B82F6" style={{ marginRight: 10, marginTop: 2 }} />

@@ -29,6 +29,10 @@ export interface AuthStoreState {
   avatarUrl: string | null;
   avatar_url: string | null;
   household_id: number | string | null;
+  has_house: boolean | null;
+  assigned_house: string | null;
+  has_devices: boolean | null;
+  device_count: number;
   viewRole: 'CAREGIVER' | 'DOCTOR';
   isHydrated: boolean;
   isRoleLoading: boolean;
@@ -42,7 +46,8 @@ export interface AuthStoreState {
     phone: string,
     role: string,
     householdId?: number | string,
-    avatarUrl?: string | null
+    avatarUrl?: string | null,
+    profileExtras?: any
   ) => void;
   setTokens: (access: string, refresh: string) => void;
   setUser: (id: string | number, phone?: string, name?: string, role?: string, householdId?: number | string) => void;
@@ -88,8 +93,12 @@ const createAuthStore: StateCreator<AuthStoreState, [], [['zustand/persist', Aut
   avatarUrl: null,
   avatar_url: null,
   household_id: null,
+  has_house: null,
+  assigned_house: null,
+  has_devices: null,
+  device_count: 0,
   viewRole: 'CAREGIVER',
-  isHydrated: false,
+  isHydrated: true,
   isRoleLoading: false,
   permissions: null,
 
@@ -103,35 +112,43 @@ const createAuthStore: StateCreator<AuthStoreState, [], [['zustand/persist', Aut
     phone: string,
     role: string,
     householdId?: number | string,
-    avatarUrl?: string | null
+    avatarUrl?: string | null,
+    profileExtras?: any
   ) => {
     const normalizedRole = role.toLowerCase();
     const isDoctor = normalizedRole === 'doctor' || normalizedRole.includes('bác sĩ');
     const isAdmin = normalizedRole === 'admin' || normalizedRole.includes('quản trị');
+    const isOwner = normalizedRole === 'owner' || profileExtras?.is_owner === true || profileExtras?.role_in_house === 'OWNER';
 
-    // Reset toàn bộ domain stores để tránh rò rỉ dữ liệu hoặc quyền hạn từ tài khoản trước
-    try {
+    // Chỉ reset domain stores khi chuyển đổi giữa 2 tài khoản khác nhau để tối ưu tốc độ và giữ cache
+    const currentUserId = get().userId;
+    if (currentUserId && String(currentUserId) !== String(userId)) {
+      try {
         require('./useDeviceStore').useDeviceStore.getState().resetDeviceStore?.();
         require('./usePatientStore').usePatientStore.getState().resetPatientStore?.();
         require('./useHealthStore').useHealthStore.getState().resetHealthStore?.();
         require('./useAlertStore').useAlertStore.getState().resetAlertStore?.();
-        AsyncStorage.multiRemove([
-        'device-store',
-        'health-store',
-        'patient-store',
-        'alert-store',
-      ]).catch(() => {});
-    } catch {}
+      } catch {}
+    }
+
+    const resolvedHouseId = householdId ?? profileExtras?.household_id ?? null;
 
     const initialPermissions: HousePermissions = {
-      can_view_health: false,
-      can_view_camera: false,
-      can_handle_emergency: false,
-      can_manage_devices: false,
-      can_manage_records: false,
-      role_in_house: isDoctor ? 'DOCTOR' : isAdmin ? 'OWNER' : 'MEMBER',
-      is_owner: isAdmin,
+      can_view_health: profileExtras?.can_view_health ?? (isAdmin ? true : false),
+      can_view_camera: profileExtras?.can_view_camera ?? (isAdmin ? true : false),
+      can_handle_emergency: profileExtras?.can_handle_emergency ?? (isAdmin ? true : false),
+      can_manage_devices: profileExtras?.can_manage_devices !== undefined && profileExtras?.can_manage_devices !== null
+        ? Boolean(profileExtras.can_manage_devices)
+        : (isAdmin || isOwner || !resolvedHouseId),
+      can_manage_records: profileExtras?.can_manage_records ?? (isAdmin ? true : false),
+      role_in_house: isDoctor ? 'DOCTOR' : (isAdmin ? 'OWNER' : (profileExtras?.role_in_house || (resolvedHouseId ? 'MEMBER' : 'NEW_USER'))),
+      is_owner: isAdmin || (isOwner && Boolean(resolvedHouseId)),
     };
+
+    const hasHouse = profileExtras?.has_house ?? Boolean(resolvedHouseId);
+    const assignedHouse = profileExtras?.assigned_house || (hasHouse ? 'Nhà của tôi' : null);
+    const hasDevices = profileExtras?.has_devices ?? false;
+    const deviceCount = profileExtras?.device_count ?? 0;
 
     set({
       accessToken: access,
@@ -142,18 +159,42 @@ const createAuthStore: StateCreator<AuthStoreState, [], [['zustand/persist', Aut
       full_name: name,
       userPhone: phone,
       phone_number: phone,
-      userRole: isDoctor ? 'doctor' : isAdmin ? 'admin' : normalizedRole === 'owner' ? 'owner' : 'member',
+      userRole: isDoctor ? 'doctor' : isAdmin ? 'admin' : isOwner ? 'owner' : 'member',
       role,
       avatarUrl: avatarUrl ?? null,
       avatar_url: avatarUrl ?? null,
-      household_id: householdId ?? null,
+      household_id: resolvedHouseId,
+      has_house: hasHouse,
+      assigned_house: assignedHouse,
+      has_devices: hasDevices,
+      device_count: deviceCount,
       viewRole: isDoctor ? 'DOCTOR' : 'CAREGIVER',
       permissions: initialPermissions,
     });
 
-    setTimeout(() => {
-      get().fetchMyPermissions(householdId);
-    }, 100);
+    if (resolvedHouseId) {
+      try {
+        const devStore = require('./useDeviceStore').useDeviceStore.getState();
+        devStore.setHouseInfo?.({
+          id: String(resolvedHouseId),
+          name: profileExtras?.assigned_house || 'Nhà của tôi',
+          hasHouse: true,
+        });
+        if (profileExtras?.default_camera_id) {
+          devStore.setCameraDefault?.({
+            id: String(profileExtras.default_camera_id),
+            name: profileExtras.default_camera_name || 'Camera AI',
+            isOnline: true,
+          });
+        }
+        devStore.fetchDevicesFromBackend?.().catch(() => {});
+      } catch {}
+    } else if (profileExtras?.has_house === false) {
+      try {
+        const devStore = require('./useDeviceStore').useDeviceStore.getState();
+        devStore.resetDeviceStore?.();
+      } catch {}
+    }
   },
 
   setTokens: (access: string, refresh: string) =>
@@ -243,6 +284,20 @@ const createAuthStore: StateCreator<AuthStoreState, [], [['zustand/persist', Aut
       set({ permissions: p });
       return p;
     }
+    if (!s.household_id && !hId) {
+      // Tài khoản độc lập / mới tạo chưa liên kết vào nhà người khác: có toàn quyền thêm thiết bị mới
+      const independentPerms: HousePermissions = {
+        can_view_health: false,
+        can_view_camera: false,
+        can_handle_emergency: false,
+        can_manage_devices: true,
+        can_manage_records: false,
+        role_in_house: 'NEW_USER',
+        is_owner: false,
+      };
+      set({ permissions: independentPerms });
+      return independentPerms;
+    }
     try {
       const { householdApi } = await import('../services/api');
       const target = hId || s.household_id || 'current';
@@ -313,21 +368,53 @@ const createAuthStore: StateCreator<AuthStoreState, [], [['zustand/persist', Aut
       avatarUrl: null,
       avatar_url: null,
       household_id: null,
+      has_house: null,
+      assigned_house: null,
+      has_devices: null,
+      device_count: 0,
       viewRole: 'CAREGIVER',
       permissions: null,
     });
   },
 });
 
+const safeStorage = {
+  getItem: async (name: string) => {
+    try {
+      return await AsyncStorage.getItem(name);
+    } catch {
+      return null;
+    }
+  },
+  setItem: async (name: string, value: string) => {
+    try {
+      await AsyncStorage.setItem(name, value);
+    } catch (err) {
+      console.warn('[useAuthStore] AsyncStorage setItem warning (quota handled):', err);
+    }
+  },
+  removeItem: async (name: string) => {
+    try {
+      await AsyncStorage.removeItem(name);
+    } catch {}
+  },
+};
+
 const persistOptions: PersistOptions<AuthStoreState> = {
   name: 'auth-storage',
-  storage: createJSONStorage(() => AsyncStorage),
+  storage: createJSONStorage(() => safeStorage),
   version: 1,
-  partialize: (state) => ({
-    ...state,
-    isRoleLoading: false,
-    isHydrated: false,
-  }),
+  partialize: (state) => {
+    const isBigAvatarUrl = Boolean(state.avatarUrl && state.avatarUrl.length > 5000);
+    const isBigAvatar_url = Boolean(state.avatar_url && state.avatar_url.length > 5000);
+    return {
+      ...state,
+      avatarUrl: isBigAvatarUrl ? null : state.avatarUrl,
+      avatar_url: isBigAvatar_url ? null : state.avatar_url,
+      isRoleLoading: false,
+      isHydrated: true,
+    };
+  },
   onRehydrateStorage: () => () => {
     useAuthStore.setState({ isHydrated: true });
   },
@@ -351,6 +438,10 @@ const persistOptions: PersistOptions<AuthStoreState> = {
       avatarUrl: null,
       avatar_url: null,
       household_id: null,
+      has_house: null,
+      assigned_house: null,
+      has_devices: null,
+      device_count: 0,
       viewRole: 'CAREGIVER',
     };
   },

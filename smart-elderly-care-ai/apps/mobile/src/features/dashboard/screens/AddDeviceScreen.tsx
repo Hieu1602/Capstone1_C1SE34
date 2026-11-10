@@ -10,7 +10,8 @@ import { View, TouchableOpacity, ScrollView, Animated, Platform, TurboModuleRegi
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
 import { useVitalStore, IoTDeviceItem } from '../../../store/useVitalStore';
-import { LocalizedText } from '../../../i18n/LocalizedComponents';
+import { useAuthStore } from '../../../store/useAuthStore';
+import { LocalizedAlert, LocalizedText } from '../../../i18n/LocalizedComponents';
 import { createThemeStyles, useTheme } from '../../../store/useThemeStore';
 import { multiWearableManager } from '../../../services/multiWearableManager';
 import { startWearablePipeline, processAndUploadVital } from '../../../services/wearableIntegration';
@@ -32,7 +33,29 @@ import {
 } from '../components/add-device';
 
 export default function AddDeviceScreen({ navigation }: any) {
-  const { addIoTDevice, setCameraDefault, syncAllWithBackend } = useVitalStore();
+  const { addIoTDevice, setCameraDefault, syncAllWithBackend, house } = useVitalStore();
+  const { userRole, role, permissions } = useAuthStore();
+  const hasLinkedHouse = Boolean(house?.id && house?.hasHouse !== false && house?.name && house.name.trim() !== '');
+  const isOwnerOrAdmin =
+    userRole === 'admin' ||
+    role === 'admin' ||
+    userRole === 'owner' ||
+    role === 'owner' ||
+    permissions?.is_owner === true ||
+    permissions?.role_in_house === 'OWNER';
+  const isMemberInLinkedHouse = hasLinkedHouse && !isOwnerOrAdmin;
+  const canManageDevices = !isMemberInLinkedHouse || Boolean(permissions?.can_manage_devices);
+
+  useEffect(() => {
+    if (!canManageDevices) {
+      LocalizedAlert.alert(
+        'Quyền truy cập bị giới hạn',
+        'Tài khoản Thành viên không có quyền thêm hoặc cấu hình thiết bị mới. Vui lòng liên hệ Chủ hộ để được cấp quyền quản lý thiết bị.',
+        [{ text: 'Quay lại', onPress: () => navigation.goBack() }]
+      );
+    }
+  }, [canManageDevices, navigation]);
+
   const { isDarkMode, colors } = useTheme();
   const styles = useMemo(
     () => createThemeStyles(baseStyles, isDarkMode, colors),

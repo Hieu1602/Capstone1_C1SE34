@@ -1,8 +1,10 @@
 // notificationService.ts
-// Quản lý thông báo đẩy cục bộ (Local Notifications) cho sự cố Critical bằng expo-notifications
-// Tự động kiểm tra môi trường: Native (iOS/Android) hoặc Web fallback
+// Quản lý thông báo đẩy cục bộ (Local Notifications) và rung thiết bị khi có thông báo bác sĩ / khẩn cấp
+// Tự động kiểm tra môi trường: Android Native Module, iOS hoặc Web fallback
 
-import { Platform, Alert } from 'react-native';
+import { Platform, NativeModules, Vibration } from 'react-native';
+
+const { NativeNotificationModule } = NativeModules;
 
 export interface NotificationPayload {
   title: string;
@@ -38,7 +40,7 @@ class NotificationService {
           console.log('[NotificationService] Quyền thông báo cục bộ đã được cấp.');
         }
       } catch (err) {
-        console.log('[NotificationService] expo-notifications fallback:', err);
+        // expo-notifications không có sẵn, NativeNotificationModule sẽ đảm nhiệm
       }
     }
     this.isInitialized = true;
@@ -48,6 +50,24 @@ class NotificationService {
     const { title, body, data } = payload;
 
     if (Platform.OS !== 'web') {
+      // 1. Kích hoạt rung điện thoại ngay lập tức
+      try {
+        Vibration.vibrate([0, 500, 200, 500], false);
+      } catch (vibErr) {
+        console.warn('[NotificationService] Lỗi rung thiết bị:', vibErr);
+      }
+
+      // 2. Bắn thông báo lên thanh trạng thái (Notification Drawer) qua Android Native Module
+      if (Platform.OS === 'android' && NativeNotificationModule?.showNotification) {
+        try {
+          NativeNotificationModule.showNotification(title, body);
+          return;
+        } catch (nativeErr) {
+          console.warn('[NotificationService] NativeNotificationModule failed:', nativeErr);
+        }
+      }
+
+      // 3. Fallback qua expo-notifications nếu có
       try {
         const Notifications = require('expo-notifications');
         await Notifications.scheduleNotificationAsync({
@@ -58,15 +78,15 @@ class NotificationService {
             sound: true,
             priority: Notifications.AndroidNotificationPriority?.MAX ?? 'max',
           },
-          trigger: null, // Bắn thông báo ngay lập tức
+          trigger: null,
         });
         return;
       } catch (e) {
-        console.warn('[NotificationService] Không thể bắn native notification:', e);
+        // Fallback im lặng
       }
     }
 
-    // Web hoặc fallback: Hiển thị browser notification nếu được cấp quyền
+    // 4. Web hoặc fallback: Hiển thị browser notification nếu được cấp quyền
     if (typeof window !== 'undefined' && 'Notification' in window) {
       if (Notification.permission === 'granted') {
         new Notification(title, { body, icon: '/favicon.png' });

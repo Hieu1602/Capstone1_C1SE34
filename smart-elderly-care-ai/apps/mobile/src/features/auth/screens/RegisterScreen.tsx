@@ -10,12 +10,12 @@ import {
     Text,
     TouchableOpacity,
     StyleSheet,
-    Alert,
     KeyboardAvoidingView,
     Platform,
     ScrollView,
     SafeAreaView,
 } from "react-native";
+import { LocalizedAlert as Alert } from "../../../i18n/LocalizedComponents";
 import { Ionicons } from "@expo/vector-icons";
 import { authApi } from "../../../services/api";
 import {
@@ -25,6 +25,7 @@ import {
     CchnVerifiedInfo,
 } from "../components/register";
 import { validateFullName } from "../utils/nameValidation";
+import { normalizePhone, validatePhoneNumber } from "../utils/phoneValidation";
 import { useAuthStore } from "../../../store/useAuthStore";
 import { useDeviceStore } from "../../../store/useDeviceStore";
 import { useHealthStore } from "../../../store/useHealthStore";
@@ -134,11 +135,11 @@ export default function RegisterScreen({ route, navigation }: any) {
 
     const handleRegister = async () => {
         setErrorMessage(null);
-        const normalizedPhone = phone.trim().replace(/\s+/g, "");
+        const formattedPhone = normalizePhone(phone);
 
         if (
             !fullName.trim() ||
-            !normalizedPhone ||
+            !formattedPhone ||
             !password ||
             !confirmPassword
         ) {
@@ -163,8 +164,9 @@ export default function RegisterScreen({ route, navigation }: any) {
             return;
         }
 
-        if (!/^\+?[0-9]{9,15}$/.test(normalizedPhone)) {
-            const msg = "Số điện thoại không hợp lệ. Vui lòng kiểm tra lại.";
+        const phoneValidation = validatePhoneNumber(formattedPhone);
+        if (!phoneValidation.isValid) {
+            const msg = phoneValidation.message || "Số điện thoại không hợp lệ. Vui lòng kiểm tra lại.";
             setErrorMessage(msg);
             Alert.alert("Lỗi", msg);
             return;
@@ -196,12 +198,6 @@ export default function RegisterScreen({ route, navigation }: any) {
             return;
         }
 
-        const formattedPhone = normalizedPhone.startsWith("0")
-            ? `+84${normalizedPhone.slice(1)}`
-            : normalizedPhone.startsWith("+")
-              ? normalizedPhone
-              : `+84${normalizedPhone}`;
-
         setLoading(true);
         try {
             if (accountType === "doctor" && !cchnVerifiedInfo?.valid) {
@@ -222,9 +218,36 @@ export default function RegisterScreen({ route, navigation }: any) {
                 `Mã xác minh đã được gửi tới số điện thoại ${formattedPhone}.`,
             );
         } catch (error: any) {
-            const errorMsg =
+            const status = error?.response?.status;
+            let errorMsg =
                 error.response?.data?.detail ||
                 "Không thể gửi mã xác minh. Vui lòng thử lại.";
+
+            if (status === 409) {
+                errorMsg =
+                    error?.response?.data?.detail ||
+                    "Số điện thoại này đã được đăng ký tài khoản. Vui lòng đăng nhập hoặc dùng số khác.";
+                setErrorMessage(errorMsg);
+                Alert.alert(
+                    "Số điện thoại đã tồn tại",
+                    errorMsg,
+                    [
+                        {
+                            text: "Đăng nhập ngay",
+                            onPress: () =>
+                                navigation.navigate("Login", {
+                                    registeredPhone: phone.trim(),
+                                }),
+                        },
+                        {
+                            text: "Đóng",
+                            style: "cancel",
+                        },
+                    ],
+                );
+                return;
+            }
+
             setErrorMessage(errorMsg);
             Alert.alert("Không thể tiếp tục", errorMsg);
         } finally {
@@ -235,17 +258,11 @@ export default function RegisterScreen({ route, navigation }: any) {
     const resendOtp = async () => {
         if (resendSeconds > 0) return;
 
-        const normalizedPhone = phone.trim().replace(/\s+/g, "");
-        if (!normalizedPhone) {
+        const formattedPhone = normalizePhone(phone);
+        if (!formattedPhone) {
             Alert.alert("Thiếu thông tin", "Vui lòng nhập số điện thoại trước.");
             return;
         }
-
-        const formattedPhone = normalizedPhone.startsWith("0")
-            ? `+84${normalizedPhone.slice(1)}`
-            : normalizedPhone.startsWith("+")
-              ? normalizedPhone
-              : `+84${normalizedPhone}`;
 
         setLoading(true);
         try {
@@ -267,21 +284,18 @@ export default function RegisterScreen({ route, navigation }: any) {
     };
 
     const completeRegistration = async () => {
-        const normalizedPhone = phone.trim().replace(/\s+/g, "");
+        setErrorMessage(null);
+        const formattedPhone = normalizePhone(phone);
 
         if (otp.length !== 6) {
+            const msg = "Vui lòng nhập đủ 6 chữ số mã xác thực OTP.";
+            setErrorMessage(msg);
             Alert.alert(
                 "Mã không hợp lệ",
-                "Vui lòng nhập đủ 6 chữ số mã xác thực OTP.",
+                msg,
             );
             return;
         }
-
-        const formattedPhone = normalizedPhone.startsWith("0")
-            ? `+84${normalizedPhone.slice(1)}`
-            : normalizedPhone.startsWith("+")
-              ? normalizedPhone
-              : `+84${normalizedPhone}`;
 
         setLoading(true);
         try {
@@ -299,10 +313,25 @@ export default function RegisterScreen({ route, navigation }: any) {
                     specialty: specialty.trim() || undefined,
                 });
 
-                navigation.replace("Login");
+                const successMsg =
+                    "Tài khoản Bác sĩ gia đình đã được khởi tạo thành công! Vui lòng đăng nhập để bắt đầu kết nối bệnh nhân.";
+
                 Alert.alert(
                     "Đăng ký Bác sĩ thành công!",
-                    "Tài khoản Bác sĩ gia đình đã được khởi tạo. Bạn có thể đăng nhập để bắt đầu kết nối bệnh nhân.",
+                    successMsg,
+                    [
+                        {
+                            text: "Đăng nhập ngay",
+                            onPress: () => {
+                                navigation.replace("Login", {
+                                    registeredPhone: phone.trim(),
+                                    successMessage:
+                                        "Đăng ký Bác sĩ thành công! Vui lòng nhập mật khẩu để đăng nhập.",
+                                });
+                            },
+                        },
+                    ],
+                    { cancelable: false },
                 );
             } else {
                 await authApi.register({
@@ -321,18 +350,61 @@ export default function RegisterScreen({ route, navigation }: any) {
                     useAlertStore.getState().resetAlertStore?.();
                 } catch {}
 
-                navigation.replace("Login");
+                const successMsg =
+                    "Tài khoản của bạn đã được khởi tạo thành công! Vui lòng đăng nhập để bắt đầu sử dụng.";
+
                 Alert.alert(
-                    "Đăng ký thành công!",
-                    "Tài khoản của bạn đã được khởi tạo thành công. Vui lòng đăng nhập để bắt đầu.",
+                    "Đăng ký tài khoản thành công!",
+                    successMsg,
+                    [
+                        {
+                            text: "Đăng nhập ngay",
+                            onPress: () => {
+                                navigation.replace("Login", {
+                                    registeredPhone: phone.trim(),
+                                    successMessage:
+                                        "Đăng ký tài khoản thành công! Vui lòng nhập mật khẩu để đăng nhập.",
+                                });
+                            },
+                        },
+                    ],
+                    { cancelable: false },
                 );
             }
         } catch (error: any) {
-            Alert.alert(
-                "Đăng ký thất bại",
-                error.response?.data?.detail ||
-                    "Không thể tạo tài khoản. Vui lòng kiểm tra lại thông tin.",
-            );
+            console.error("[Register] Error:", error);
+            const status = error?.response?.status;
+            const isNetworkErr =
+                error?.message?.includes("Network Error") ||
+                error?.code === "ERR_NETWORK" ||
+                !error?.response;
+
+            let errorMsg = "Không thể tạo tài khoản. Vui lòng kiểm tra lại thông tin.";
+
+            if (isNetworkErr) {
+                errorMsg = "Không thể kết nối đến máy chủ. Vui lòng kiểm tra kết nối mạng và thử lại.";
+            } else if (status === 409) {
+                errorMsg =
+                    error?.response?.data?.detail ||
+                    "Số điện thoại này đã được đăng ký tài khoản. Vui lòng đăng nhập hoặc dùng số khác.";
+            } else if (status === 400) {
+                errorMsg =
+                    error?.response?.data?.detail ||
+                    "Mã xác minh không chính xác hoặc đã hết hạn.";
+            } else if (status === 422) {
+                errorMsg =
+                    "Thông tin đăng ký không hợp lệ. Vui lòng kiểm tra lại họ tên, mật khẩu hoặc CCHN.";
+            } else if (error?.response?.data?.detail) {
+                const detail = error.response.data.detail;
+                if (typeof detail === "string") {
+                    errorMsg = detail;
+                } else if (Array.isArray(detail) && detail[0]?.msg) {
+                    errorMsg = detail[0].msg;
+                }
+            }
+
+            setErrorMessage(errorMsg);
+            Alert.alert("Đăng ký không thành công", errorMsg);
         } finally {
             setLoading(false);
         }
@@ -473,9 +545,13 @@ export default function RegisterScreen({ route, navigation }: any) {
                         <RegisterVerifyOtpStep
                             phone={phone}
                             otp={otp}
-                            setOtp={setOtp}
+                            setOtp={(val) => {
+                                setOtp(val);
+                                if (errorMessage) setErrorMessage(null);
+                            }}
                             resendSeconds={resendSeconds}
                             loading={loading}
+                            errorMessage={errorMessage}
                             onResendOtp={resendOtp}
                             onSubmit={completeRegistration}
                         />

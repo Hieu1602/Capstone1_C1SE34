@@ -22,34 +22,66 @@ import {
 import { useAuthStore } from '../../../store/useAuthStore';
 import { useThemeStore } from '../../../store/useThemeStore';
 import api, { authApi, usersApi } from '../../../services/api';
+import { LocalizedAlert as Alert } from '../../../i18n/LocalizedComponents';
 import { LoginPhotoCollage, LoginFormSection } from '../components/login';
+import { normalizePhone } from '../utils/phoneValidation';
 import { LegalTermsModal, LegalModalType } from '../components/LegalTermsModal';
 import * as Location from 'expo-location';
 
 const FONT_SCALE_LEVELS = [0.8, 1, 1.2, 1.5, 1.8] as const;
 
-// Chuẩn hóa số điện thoại Việt Nam chuẩn E.164 (+84...)
-const normalizePhoneNumber = (rawPhone: string): string => {
-  const trimmed = rawPhone.trim();
-  if (['admin', 'admin123', 'root'].includes(trimmed.toLowerCase())) {
-    return trimmed;
-  }
-  const digits = trimmed.replace(/\D/g, '');
-  if (!digits) return '';
-  const national = digits.startsWith('84') ? digits.slice(2) : digits;
-  return `+84${national.replace(/^0/, '')}`;
-};
-
 // Component màn hình đăng nhập; navigation dùng để chuyển sang các màn hình liên quan.
 export default function LoginScreen({ navigation, route }: any) {
-  const { login, setViewRole, setTokens, logout, setIsRoleLoading } = useAuthStore();
+  const { login, setViewRole, logout } = useAuthStore();
   const { setFontSizeMode, setFontScale } = useThemeStore();
 
-  const [phone, setPhone] = useState('');
+  const [phone, setPhone] = useState(route?.params?.registeredPhone || '');
   const [password, setPassword] = useState('');
   const [showPassword, setShowPassword] = useState(false);
   const [loading, setLoading] = useState(false);
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
+  const [successMessage, setSuccessMessage] = useState<string | null>(
+    route?.params?.successMessage || null
+  );
+
+  // Tiền lấy vị trí địa lý chạy ngầm (hoàn toàn không làm chậm nút Đăng nhập)
+  const cachedLocationRef = React.useRef<string | undefined>(undefined);
+
+  React.useEffect(() => {
+    (async () => {
+      try {
+        const { status } = await Location.getForegroundPermissionsAsync();
+        if (status === 'granted') {
+          const lastPos = await Location.getLastKnownPositionAsync();
+          if (lastPos?.coords) {
+            const places = await Location.reverseGeocodeAsync({
+              latitude: lastPos.coords.latitude,
+              longitude: lastPos.coords.longitude,
+            });
+            if (places && places.length > 0) {
+              const p = places[0];
+              const parts = [
+                p.street || p.name,
+                p.district || p.subregion,
+                p.city || p.region,
+                p.country || 'Việt Nam',
+              ].filter(Boolean);
+              cachedLocationRef.current = parts.join(', ');
+            }
+          }
+        }
+      } catch {}
+    })();
+  }, []);
+
+  React.useEffect(() => {
+    if (route?.params?.registeredPhone) {
+      setPhone(route.params.registeredPhone);
+    }
+    if (route?.params?.successMessage) {
+      setSuccessMessage(route.params.successMessage);
+    }
+  }, [route?.params?.registeredPhone, route?.params?.successMessage]);
 
   
 
@@ -66,85 +98,43 @@ export default function LoginScreen({ navigation, route }: any) {
   // Xử lý đăng nhập kết nối trực tiếp với Database qua Backend FastAPI
   const handleLogin = async () => {
     if (!isAgreed) {
-      setErrorMessage('Vui lòng tích chọn đồng ý với Điều khoản dịch vụ & Chính sách quyền riêng tư.');
+      const msg = 'Vui lòng tích chọn đồng ý với Điều khoản dịch vụ & Chính sách quyền riêng tư.';
+      setErrorMessage(msg);
+      Alert.alert('Thông báo', msg);
       return;
     }
 
-    const normalizedAccount = normalizePhoneNumber(phone);
+    const normalizedAccount = normalizePhone(phone);
     if (!normalizedAccount || !password.trim()) {
-      setErrorMessage('Vui lòng nhập số điện thoại và mật khẩu.');
+      const msg = 'Vui lòng nhập số điện thoại và mật khẩu.';
+      setErrorMessage(msg);
+      Alert.alert('Thông báo', msg);
       return;
     }
 
     setLoading(true);
-    setIsRoleLoading(true);
     setErrorMessage(null);
     setFontSizeMode('system');
     setFontScale(1);
     let tokensApplied = false;
 
-    // Lấy vị trí địa lý của thiết bị khi đăng nhập để lưu vào Quản lý đầu cuối
-    let detectedLocation: string | undefined;
     try {
-      const { status } = await Location.getForegroundPermissionsAsync();
-      let permStatus = status;
-      if (permStatus !== 'granted') {
-        const req = await Location.requestForegroundPermissionsAsync();
-        permStatus = req.status;
-      }
-      if (permStatus === 'granted') {
-        const pos = await Promise.race([
-          Location.getCurrentPositionAsync({ accuracy: Location.Accuracy.Balanced }),
-          new Promise<null>((r) => setTimeout(() => r(null), 2500)),
-        ]);
-        if (pos && pos.coords) {
-          const places = await Location.reverseGeocodeAsync({
-            latitude: pos.coords.latitude,
-            longitude: pos.coords.longitude,
-          });
-          if (places && places.length > 0) {
-            const p = places[0];
-            const parts = [
-              p.street || p.name,
-              p.district || p.subregion,
-              p.city || p.region,
-              p.country || 'Việt Nam',
-            ].filter(Boolean);
-            detectedLocation = parts.join(', ');
-          }
-        }
-      }
-    } catch (e) {
-      console.warn('[Login] Không thể lấy vị trí thiết bị:', e);
-    }
+      // 1. Gửi request OAuth2 Password Grant lên Backend FastAPI (vị trí lấy tức thì từ cache nếu có)
+      const res = await authApi.login(normalizedAccount, password, cachedLocationRef.current);
+      const { access_token, refresh_token, user: preloadedUser } = res.data;
 
-    try {
-      // 1. Gửi request OAuth2 Password Grant lên Backend FastAPI (kèm vị trí đăng nhập)
-      const { access_token, refresh_token } = (await authApi.login(normalizedAccount, password, detectedLocation)).data;
-
-      // Gán header Authorization tạm thời cho instance axios để gọi usersApi.getMe()
-      // TUYỆT ĐỐI không gọi setTokens vào Zustand lúc này để tránh kích hoạt re-render giật sang màn hình Owner
+      // Gán header Authorization cho axios
       api.defaults.headers.common['Authorization'] = `Bearer ${access_token}`;
 
-      // 2. Lấy thông tin tài khoản thực tế từ PostgreSQL Database (/api/v1/users/me)
-      const userProfile = (await usersApi.getMe()).data;
-      const savedScale = userProfile?.custom_font_scale;
-      if (userProfile?.font_size_mode === 'custom') {
-        try {
-          const savedScaleIndex =
-            Number.isInteger(savedScale) && savedScale >= 0 && savedScale < FONT_SCALE_LEVELS.length
-              ? savedScale
-              : 2;
-          await usersApi.updateFontPreferences('system', savedScaleIndex);
-        } catch (error) {
-          console.warn('[Login] Could not reset font-size mode to system:', error);
-        }
+      // Tận dụng ngay User Profile được trả về trực tiếp trong response để đăng nhập tức thì không phải đợi
+      let userProfile = preloadedUser;
+      if (!userProfile) {
+        userProfile = (await usersApi.getMe()).data;
       }
 
       tokensApplied = true;
 
-      // 3. Cập nhật đồng thời (Atomic) cả Token, Thông tin người dùng và Vai trò vào Store
-      // Lúc này viewRole và accessToken cùng được cập nhật, AppNavigator render đúng thẳng vào Bác sĩ!
+      // 2. Chuyển thẳng vào Store và Trang chủ tức thì (Atomic)
       login(
         access_token,
         refresh_token,
@@ -153,23 +143,47 @@ export default function LoginScreen({ navigation, route }: any) {
         userProfile.phone,
         userProfile.role,
         userProfile.household_id,
-        userProfile.avatar_url
+        userProfile.avatar_url,
+        userProfile
       );
       setViewRole(userProfile.role === 'doctor' ? 'DOCTOR' : 'CAREGIVER');
+
+      // Tác vụ phụ chạy ngầm không chặn giao diện
+      if (userProfile?.font_size_mode === 'custom') {
+        const savedScale = userProfile?.custom_font_scale;
+        const savedScaleIndex =
+          Number.isInteger(savedScale) && savedScale >= 0 && savedScale < FONT_SCALE_LEVELS.length
+            ? savedScale
+            : 2;
+        usersApi.updateFontPreferences('system', savedScaleIndex).catch(() => {});
+      }
     } catch (error: any) {
       delete api.defaults.headers.common['Authorization'];
       if (tokensApplied) logout();
       console.error('[Login] Error:', error);
-      const isNetworkErr = error?.message?.includes('Network Error') || error?.code === 'ERR_NETWORK' || !error?.response;
-      const detail = isNetworkErr
-        ? 'Không thể kết nối đến máy chủ. Vui lòng kiểm tra kết nối mạng và thử lại.'
-        : (error?.response?.data?.detail || error?.message || 'Thông tin đăng nhập hoặc mật khẩu không đúng.');
 
-      setErrorMessage(
-        typeof detail === 'string' ? detail : 'Đăng nhập không thành công. Vui lòng kiểm tra lại.'
-      );
+      const status = error?.response?.status;
+      const isNetworkErr = error?.message?.includes('Network Error') || error?.code === 'ERR_NETWORK' || !error?.response;
+
+      let msg = 'Số điện thoại hoặc mật khẩu không chính xác. Vui lòng kiểm tra lại.';
+
+      if (isNetworkErr) {
+        msg = 'Không thể kết nối đến máy chủ. Vui lòng kiểm tra kết nối mạng và thử lại.';
+      } else if (status === 401) {
+        msg = 'Số điện thoại hoặc mật khẩu không chính xác. Vui lòng kiểm tra lại.';
+      } else if (status === 403) {
+        msg = error?.response?.data?.detail || 'Tài khoản đã bị tạm khóa do nhập sai mật khẩu quá 5 lần.';
+      } else if (status === 404) {
+        msg = 'Số điện thoại này chưa được đăng ký trong hệ thống.';
+      } else if (status === 422) {
+        msg = 'Vui lòng kiểm tra lại định dạng số điện thoại hoặc mật khẩu.';
+      } else if (error?.response?.data?.detail && typeof error.response.data.detail === 'string') {
+        msg = error.response.data.detail;
+      }
+
+      setErrorMessage(msg);
+      Alert.alert('Đăng nhập thất bại', msg);
     } finally {
-      setIsRoleLoading(false);
       setLoading(false);
     }
   };
@@ -197,16 +211,19 @@ export default function LoginScreen({ navigation, route }: any) {
             onChangePhone={(value) => {
               setPhone(value);
               setErrorMessage(null);
+              setSuccessMessage(null);
             }}
             password={password}
             onChangePassword={(value) => {
               setPassword(value);
               setErrorMessage(null);
+              setSuccessMessage(null);
             }}
             showPassword={showPassword}
             onToggleShowPassword={() => setShowPassword((prev) => !prev)}
             loading={loading}
             errorMessage={errorMessage}
+            successMessage={successMessage}
             isAgreed={isAgreed}
             onToggleAgree={() => setIsAgreed(!isAgreed)}
             onSubmit={handleLogin}

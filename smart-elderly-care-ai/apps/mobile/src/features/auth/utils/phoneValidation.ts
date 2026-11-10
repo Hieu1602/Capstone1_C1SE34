@@ -9,33 +9,76 @@ export interface PhoneValidationResult {
     message?: string;
 }
 
-export function validatePhoneNumber(rawPhone: string): PhoneValidationResult {
-    const cleaned = (rawPhone || "").trim().replace(/[\s().-]/g, "");
+/**
+ * Chuẩn hoá số điện thoại về định dạng E.164 chuẩn (+84xxxxxxxxx).
+ * Hỗ trợ triệt để các trường hợp:
+ * - '0382694409' -> '+84382694409'
+ * - '+84 0382694409' -> '+84382694409' (bỏ số 0 thừa sau +84)
+ * - '+84382694409' -> '+84382694409'
+ * - '84382694409' -> '+84382694409'
+ * - 'Admin123' / 'admin' -> giữ nguyên cho tài khoản quản trị
+ */
+export function normalizePhone(rawPhone: string | null | undefined): string {
+    if (!rawPhone || typeof rawPhone !== "string") return "";
+    const trimmed = rawPhone.trim();
+    if (["admin", "admin123", "root"].includes(trimmed.toLowerCase())) {
+        return trimmed;
+    }
+    let cleaned = trimmed.replace(/[\s().-]/g, "");
+    if (!cleaned) return "";
 
-    if (!cleaned) {
+    if (cleaned.startsWith("0084")) {
+        cleaned = "+84" + cleaned.slice(4);
+    } else if (cleaned.startsWith("84") && cleaned.length >= 11) {
+        cleaned = "+" + cleaned;
+    }
+
+    if (cleaned.startsWith("+84")) {
+        let national = cleaned.slice(3);
+        if (national.startsWith("0")) {
+            national = national.slice(1);
+        }
+        return "+84" + national;
+    }
+
+    if (cleaned.startsWith("0")) {
+        return "+84" + cleaned.slice(1);
+    }
+
+    if (!cleaned.startsWith("+")) {
+        return "+84" + cleaned;
+    }
+
+    return cleaned;
+}
+
+export function validatePhoneNumber(rawPhone: string): PhoneValidationResult {
+    const formatted = normalizePhone(rawPhone);
+
+    if (!formatted) {
         return {
             isValid: false,
             message: "Vui lòng nhập số điện thoại.",
         };
     }
 
+    // Tài khoản đặc biệt Admin123
+    if (["admin", "admin123", "root"].includes(formatted.toLowerCase())) {
+        return {
+            isValid: true,
+            formattedPhone: formatted,
+        };
+    }
+
     // Chỉ cho phép chữ số và dấu + ở đầu
-    if (!/^\+?[0-9]{9,15}$/.test(cleaned)) {
+    if (!/^\+?[0-9]{9,15}$/.test(formatted)) {
         return {
             isValid: false,
             message: "Số điện thoại chỉ được chứa các chữ số (9 - 11 chữ số).",
         };
     }
 
-    // Chuẩn hoá định dạng quốc tế +84
-    let formatted = cleaned;
-    if (formatted.startsWith("0")) {
-        formatted = `+84${formatted.slice(1)}`;
-    } else if (!formatted.startsWith("+")) {
-        formatted = `+84${formatted}`;
-    }
-
-    // Kiểm tra độ dài hợp lệ của đầu số Việt Nam (+84xxxxxxxxx thường có 12 ký tự: +84 và 9 số)
+    // Kiểm tra độ dài hợp lệ của đầu số Việt Nam (+84xxxxxxxxx có 12 ký tự: +84 và 9 số)
     if (formatted.startsWith("+84")) {
         const localPart = formatted.slice(3);
         if (localPart.length !== 9 && localPart.length !== 10) {
