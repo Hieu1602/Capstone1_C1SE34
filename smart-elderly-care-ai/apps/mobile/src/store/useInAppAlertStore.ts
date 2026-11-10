@@ -9,6 +9,7 @@ import { create } from 'zustand';
 
 export interface AlertButton {
   text?: string;
+  // eslint-disable-next-line @typescript-eslint/ban-types
   onPress?: ((value?: any) => any) | Function;
   style?: 'default' | 'cancel' | 'destructive';
   isPreferred?: boolean;

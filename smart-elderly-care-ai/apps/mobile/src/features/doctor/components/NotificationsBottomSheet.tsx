@@ -236,7 +236,7 @@ export default function NotificationsBottomSheet({
         targetScreen: 'DoctorPatients',
       });
     } else if (isMedicalRecordMsg) {
-      let targetPatientId = inc.notes && inc.notes.includes('PATIENT:')
+      const targetPatientId = inc.notes && inc.notes.includes('PATIENT:')
         ? inc.notes.split('PATIENT:')[1].split('|')[0].trim()
         : undefined;
       unifiedList.push({

@@ -50,7 +50,7 @@ function localizeString(value: string, translate: (key: string, options?: any) =
   if (!trimmed) return value;
 
   const normalized = trimmed.replace(/\s+/g, ' ');
-  let translated = translate(normalized, { defaultValue: normalized });
+  const translated = translate(normalized, { defaultValue: normalized });
 
   // Direct hit
   if (translated !== normalized) {
