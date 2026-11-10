@@ -23,6 +23,35 @@ import { Ionicons } from '@expo/vector-icons';
 import { LocalizedText, LocalizedTextInput } from '../../../i18n/LocalizedComponents';
 import { AppointmentItem, PatientCardData, getPatientAvatarUrl } from './types';
 
+function formatModalDateTime(dateStr?: string): string {
+  if (!dateStr) return '--:--';
+  try {
+    const d = new Date(dateStr);
+    if (isNaN(d.getTime())) return dateStr;
+    const time = d.toLocaleTimeString('vi-VN', { hour: '2-digit', minute: '2-digit', hour12: false });
+    const day = String(d.getDate()).padStart(2, '0');
+    const month = String(d.getMonth() + 1).padStart(2, '0');
+    const year = d.getFullYear();
+    return `${time} - ${day}/${month}/${year}`;
+  } catch {
+    return dateStr;
+  }
+}
+
+function formatModalExamType(type?: string): string {
+  if (!type) return 'Khám sức khỏe định kỳ';
+  if (type === 'CLINIC') return 'Khám tại phòng khám';
+  if (type === 'HOME_VISIT') return 'Khám bệnh tại nhà';
+  return type;
+}
+
+function maskPhoneNumber(phone?: string): string {
+  if (!phone || phone.trim().length === 0) return 'Đã bảo mật';
+  const clean = phone.trim();
+  if (clean.length <= 4) return '***';
+  return clean.slice(0, 3) + '****' + clean.slice(-3);
+}
+
 // =============================================================
 // 1. MODAL ĐẶT / CHỈNH SỬA LỊCH KHÁM (FORM)
 // =============================================================
@@ -754,7 +783,7 @@ export const AppointmentCancelModal: React.FC<AppointmentCancelModalProps> = ({
           <View style={[styles.infoCard, { backgroundColor: isDarkMode ? '#0F172A88' : '#F8FAFC', borderColor: colors.border }]}>
             <LocalizedText style={[styles.infoPatient, { color: colors.textPrimary }]}>{appointment.patient_name}</LocalizedText>
             <LocalizedText style={[styles.infoTime, { color: isDarkMode ? '#94A3B8' : '#64748B' }]}>
-              📅 {appointment.scheduled_at} • 🩺 {appointment.exam_type || appointment.visit_type || 'Khám bệnh'}
+              📅 {formatModalDateTime(appointment.scheduled_at)} • 🩺 {formatModalExamType(appointment.exam_type || appointment.visit_type)}
             </LocalizedText>
           </View>
 
@@ -857,9 +886,9 @@ export const AppointmentCompleteModal: React.FC<AppointmentCompleteModalProps> =
 
           <View style={[styles.infoCard, { backgroundColor: isDarkMode ? '#0F172A88' : '#F8FAFC', borderColor: colors.border }]}>
             <LocalizedText style={[styles.infoPatient, { color: colors.textPrimary }]}>{appointment.patient_name}</LocalizedText>
-            <LocalizedText style={[styles.infoTime, { color: isDarkMode ? '#94A3B8' : '#64748B' }]}>📅 Thời gian: {appointment.scheduled_at}</LocalizedText>
+            <LocalizedText style={[styles.infoTime, { color: isDarkMode ? '#94A3B8' : '#64748B' }]}>📅 Thời gian: {formatModalDateTime(appointment.scheduled_at)}</LocalizedText>
             <LocalizedText style={[styles.infoTime, { color: isDarkMode ? '#94A3B8' : '#64748B' }]}>
-              🩺 Chuyên khoa: {appointment.exam_type || appointment.visit_type || 'Khám bệnh'}
+              🩺 Chuyên khoa: {formatModalExamType(appointment.exam_type || appointment.visit_type)}
             </LocalizedText>
             {appointment.location ? (
               <LocalizedText style={[styles.infoTime, { color: isDarkMode ? '#94A3B8' : '#64748B' }]}>📍 Địa điểm: {appointment.location}</LocalizedText>
@@ -950,8 +979,8 @@ export const AppointmentDetailModal: React.FC<AppointmentDetailModalProps> = ({
               {
                 icon: 'call-outline',
                 label: 'Số điện thoại người nhà:',
-                val: patientInfo?.emergency_contact_phone || 'Chưa cập nhật',
-                isPhone: true,
+                val: maskPhoneNumber(patientInfo?.emergency_contact_phone),
+                isPhone: false,
               },
               {
                 icon: 'document-text-outline',

@@ -24,6 +24,7 @@ class PatientMedicalRecordOut(BaseModel):
     blood_type: str = ""
     height_cm: int = 0
     weight_kg: int = 0
+    bmi: Optional[float] = None
     conditions: List[MedicalCondition] = Field(default_factory=list)
     drug_allergies: str = ""
     food_allergies: str = ""

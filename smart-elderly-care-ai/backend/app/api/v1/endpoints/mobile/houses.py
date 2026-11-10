@@ -133,6 +133,11 @@ async def update_current_house_mode(
         )
 
     house = await crud_house.get_or_create_default_house(db, owner_id=current_user.id)
+    if not house:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="Không tìm thấy căn nhà của người dùng.",
+        )
     return await crud_house.update_mode(db, house=house, mode=normalized_mode)
 
 
@@ -144,6 +149,11 @@ async def update_current_house(
 ):
     """Cập nhật tên căn nhà hoặc địa chỉ."""
     house = await crud_house.get_or_create_default_house(db, owner_id=current_user.id)
+    if not house:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="Không tìm thấy căn nhà của người dùng.",
+        )
     res = await crud_house.update(db, house=house, obj_in=obj_in)
     await record_audit_log(
         db=db,
@@ -293,7 +303,7 @@ async def add_house_member(
                     cred_path = Path(settings.FCM_SERVICE_ACCOUNT_PATH)
                     if cred_path.exists():
                         fcm.initialize(str(cred_path))
-                        await fcm.send_alert(
+                        fcm.send_alert(
                             fcm_tokens=[target_user.fcm_token],
                             title="Thành viên mới trong gia đình",
                             body=notif_msg,

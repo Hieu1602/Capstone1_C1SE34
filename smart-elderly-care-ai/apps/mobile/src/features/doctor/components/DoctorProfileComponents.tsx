@@ -24,6 +24,13 @@ import { Ionicons } from '@expo/vector-icons';
 import { Colors } from '../../../theme/colors';
 import { DoctorProfileInfo } from './types';
 
+function maskPhone(phone?: string): string {
+  if (!phone || phone.trim().length === 0) return 'Chưa cập nhật';
+  const clean = phone.trim();
+  if (clean.length <= 4) return '***';
+  return clean.slice(0, 3) + '****' + clean.slice(-3);
+}
+
 // =============================================================
 // 1. CARD HỒ SƠ & THỐNG KÊ BÁC SĨ (PROFILE CARD)
 // =============================================================
@@ -45,7 +52,7 @@ export const DoctorProfileCard: React.FC<DoctorProfileCardProps> = ({
   patientCount,
   appointmentCount,
   onPickImage,
-  onViewAvatar,
+  onViewAvatar: _onViewAvatar,
   onEditProfile,
   isDarkMode,
   colors,
@@ -256,7 +263,7 @@ export const DoctorProfileCard: React.FC<DoctorProfileCardProps> = ({
           </View>
           <View style={[styles.licenseRow, { borderBottomWidth: 0 }]}>
             <Text style={[styles.licenseLabel, { color: isDarkMode ? '#94A3B8' : '#64748B' }]}>SĐT liên hệ trực:</Text>
-            <Text style={[styles.licenseValue, { color: '#0284C7', fontWeight: '700' }]}>{info.phone || 'Chưa cập nhật'}</Text>
+            <Text style={[styles.licenseValue, { color: '#0284C7', fontWeight: '700' }]}>{maskPhone(info.phone)}</Text>
           </View>
         </View>
       </View>
@@ -481,9 +488,18 @@ export const DoctorProfileSettings: React.FC<DoctorProfileSettingsProps> = ({
 
             <ScrollView showsVerticalScrollIndicator={false} style={{ marginBottom: 16 }}>
               {[
-                { title: '1. Tiêu chuẩn dữ liệu Y tế HL7 & FHIR Release 4', desc: 'Hệ thống Smart Elderly Care AI tuân thủ nghiêm ngặt các quy chuẩn truyền nhận và lưu trữ thông tin bệnh án điện tử quốc tế HL7/FHIR. Dữ liệu sinh hiệu (Vital Signs), đơn thuốc (MedicationRequest) và tiền sử bệnh lý (Condition) đều được mã hóa đầu cuối bằng thuật toán AES-256.' },
-                { title: '2. Cam kết bảo mật thông tin Bệnh nhân của Bác sĩ', desc: 'Bác sĩ gia đình có nghĩa vụ bảo mật toàn diện thông tin cá nhân, hồ sơ bệnh án và hình ảnh camera của người cao tuổi. Mọi hành vi chụp màn hình hoặc chia sẻ thông tin bệnh án ra bên ngoài mà không có sự đồng ý của gia đình đều vi phạm Luật Khám chữa bệnh.' },
-                { title: '3. Nhật ký kiểm toán bảo mật (Audit Trails)', desc: 'Mọi thao tác tra cứu, chỉnh sửa đơn thuốc, cập nhật chỉ số đều được ghi nhận vĩnh viễn trên hệ thống Audit Log phục vụ công tác thanh tra y tế định kỳ.' },
+                {
+                  title: '1. Tiêu chuẩn Dữ liệu Y tế Quốc tế & Bảo mật Đa lớp',
+                  desc: 'Hệ thống Smart Elderly Care AI tuân thủ nghiêm ngặt các quy chuẩn truyền nhận và lưu trữ bệnh án điện tử quốc tế. Dữ liệu chỉ số sinh hiệu, đơn thuốc điều trị và tiền sử bệnh lý của người cao tuổi đều được mã hóa đầu cuối bảo mật tuyệt đối bằng thuật toán chuẩn AES-256.',
+                },
+                {
+                  title: '2. Cam kết Bảo mật Thông tin Bệnh nhân của Bác sĩ',
+                  desc: 'Bác sĩ gia đình có nghĩa vụ bảo mật toàn diện thông tin cá nhân, hồ sơ bệnh án và hình ảnh giám sát của người cao tuổi. Mọi hành vi sao chép, chụp màn hình hoặc chia sẻ dữ liệu y tế ra bên ngoài khi chưa có sự đồng ý của gia đình đều vi phạm Luật Khám bệnh, chữa bệnh.',
+                },
+                {
+                  title: '3. Nhật ký Kiểm toán & Giám sát Truy cập An toàn',
+                  desc: 'Mọi thao tác tra cứu hồ sơ, kê đơn thuốc, cập nhật chỉ số sức khỏe của Bác sĩ đều được hệ thống ghi nhận lịch sử kiểm toán tự động, phục vụ công tác thanh tra chuyên môn y tế và đối soát định kỳ.',
+                },
               ].map((item, idx) => (
                 <View key={idx} style={{ marginBottom: 14 }}>
                   <Text style={[styles.complianceSectionTitle, { color: colors.textPrimary }]}>{item.title}</Text>

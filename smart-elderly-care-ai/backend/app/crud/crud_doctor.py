@@ -154,6 +154,7 @@ class CRUDDoctor:
                 age_val = (datetime.now().year - ep.birth_year) if ep.birth_year else 0
                 gender_val = "Nam" if (ep.gender or "").upper() == "MALE" else ("Nữ" if (ep.gender or "").upper() == "FEMALE" else "")
 
+                h_name_display = h.name if h.name and h.name != "Nhà của tôi" else (f"Gia đình {ep.full_name}" if ep.full_name else "Nhà riêng bệnh nhân")
                 cards.append(
                     DoctorPatientCard(
                         id=str(ep.id),
@@ -162,7 +163,7 @@ class CRUDDoctor:
                         age=age_val,
                         gender=gender_val,
                         house_id=str(h.id),
-                        house_name=h.name,
+                        house_name=h_name_display,
                         house_address=h.address or "",
                         medical_history=ep.medical_history or "",
                         emergency_contact_phone=ep.emergency_contact_phone or "",
@@ -216,7 +217,12 @@ class CRUDDoctor:
             elderly = res.scalar_one_or_none()
 
         house_id = str(elderly.house_id) if elderly and elderly.house_id else ""
-        house_name = elderly.house.name if elderly and elderly.house else ""
+        raw_house_name = elderly.house.name if elderly and elderly.house else ""
+        house_name = (
+            raw_house_name
+            if raw_house_name and raw_house_name != "Nhà của tôi"
+            else (f"Gia đình {elderly.full_name}" if elderly and elderly.full_name else "Nhà riêng bệnh nhân")
+        )
         house_address = elderly.house.address if elderly and elderly.house else ""
 
         # Lấy thiết bị và sinh hiệu mới nhất nếu có
@@ -271,8 +277,8 @@ class CRUDDoctor:
         bmi = None
         if height and weight and height > 0:
             bmi = round(weight / ((height / 100) ** 2), 1)
-        elif med_record.bmi:
-            bmi = med_record.bmi
+        elif getattr(med_record, "bmi", None):
+            bmi = float(med_record.bmi)
 
         # Đồng bộ nguồn dữ liệu chuẩn từ DB ElderlyProfile -> med_record -> clinical
         resolved_conditions = med_record.conditions if med_record.conditions else clinical.get("conditions", [])
@@ -570,6 +576,14 @@ class CRUDDoctor:
                 pass
 
         return await self.get_patient_detail(db, elderly_id)
+
+    def sync_clinical_store(self, elderly_ids: List[str], update_data: Dict[str, Any]) -> None:
+        """Đồng bộ dữ liệu cập nhật từ hồ sơ bệnh án người cao tuổi vào bộ nhớ đệm lâm sàng."""
+        for eid in elderly_ids:
+            if eid in _CLINICAL_STORE:
+                for k, v in update_data.items():
+                    if v is not None:
+                        _CLINICAL_STORE[eid][k] = v
 
 
     async def get_vitals_analytics(

@@ -326,7 +326,8 @@ class CRUDVital:
             }
 
         # 2. Lấy chỉ số sinh hiệu mới nhất của thiết bị
-        latest_vital = await self.get_latest(db, device.id)
+        if device:
+            latest_vital = await self.get_latest(db, device.id)
         hr = latest_vital.heart_rate if latest_vital else None
         sp = latest_vital.spo2 if latest_vital else None
         temp = latest_vital.skin_temp_max if latest_vital else None
@@ -336,7 +337,7 @@ class CRUDVital:
         is_band_connected = bool(smartband_device and smartband_device.is_online)
         band_battery = (
             smartband_device.battery_level
-            if (is_band_connected and smartband_device.battery_level is not None)
+            if (smartband_device and is_band_connected and smartband_device.battery_level is not None)
             else None
         )
 
@@ -345,14 +346,14 @@ class CRUDVital:
             "spo2": sp,
             "skin_temp_max": temp,
             "body_temp": temp,
-            "person_count": 1 if device.is_online else 0,
+            "person_count": 1 if (device and device.is_online) else 0,
             "fall_detected": fall,
             "timestamp": int(v_time.timestamp() * 1000) if v_time else None,
             "sound": "Bình thường",
             "bracelet_battery": band_battery,
             "bracelet_connected": is_band_connected,
             "edge_hub_connected": True,
-            "device_id": device.device_id,
+            "device_id": device.device_id if device else (str(latest_vital.device_id) if latest_vital else None),
             "time": v_time,
         }
 
