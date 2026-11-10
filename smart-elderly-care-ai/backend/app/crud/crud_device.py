@@ -135,12 +135,16 @@ class CRUDDevice:
 
         from app.models.device import DeviceType
 
-        # Căn nhà có quyền xem camera & các căn nhà là thành viên chung
+        # Căn nhà có quyền xem camera & các căn nhà là thành viên chung (đã kích hoạt)
         camera_allowed_houses = select(HouseMember.house_id).where(
             HouseMember.user_id == user_id,
             HouseMember.can_view_camera == True,
+            HouseMember.status == "ACTIVE",
         )
-        member_houses_subq = select(HouseMember.house_id).where(HouseMember.user_id == user_id)
+        member_houses_subq = select(HouseMember.house_id).where(
+            HouseMember.user_id == user_id,
+            HouseMember.status == "ACTIVE",
+        )
         query = (
             select(Device)
             .options(*DEVICE_EAGER_LOADS)

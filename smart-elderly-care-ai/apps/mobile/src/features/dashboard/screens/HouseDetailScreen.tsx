@@ -50,6 +50,7 @@ export default function HouseDetailScreen({ navigation, route }: any) {
   const [inviteModalVisible, setInviteModalVisible] = useState(false);
   const [inviteStep, setInviteStep] = useState<1 | 2>(1);
   const [selectedInviteRole, setSelectedInviteRole] = useState<'MEMBER' | 'ADMIN'>('MEMBER');
+  const [inviteRoleType, setInviteRoleType] = useState<'MEMBER' | 'DOCTOR'>('MEMBER');
   const [isAccountInviteModalVisible, setIsAccountInviteModalVisible] = useState(false);
   const [isShareModalVisible, setIsShareModalVisible] = useState(false);
   const [isJoinCodeModalVisible, setIsJoinCodeModalVisible] = useState(false);
@@ -381,23 +382,28 @@ export default function HouseDetailScreen({ navigation, route }: any) {
     try {
       setIsAddingMember(true);
       const targetHId = household_id || 'current';
+      const isDoc = inviteRoleType === 'DOCTOR';
       await householdApi.addMember(targetHId, {
         phone_number: phoneToSubmit,
-        full_name: newMemberName.trim() || 'Thành viên',
-        role_in_house: 'MEMBER',
-        role: 'user',
+        full_name: newMemberName.trim() || (isDoc ? 'Bác sĩ gia đình' : 'Thành viên'),
+        role_in_house: isDoc ? 'DOCTOR' : 'MEMBER',
+        role: isDoc ? 'doctor' : 'user',
         can_view_health: true,
         can_view_camera: true,
         can_handle_emergency: true,
         can_manage_devices: false,
-        can_manage_records: false,
+        can_manage_records: isDoc,
       });
 
       setIsAccountInviteModalVisible(false);
       setInviteModalVisible(false);
       setNewMemberPhone('');
       setNewMemberName('');
-      triggerToast(`Đã gửi lời mời tham gia tới ${phoneToSubmit} . Đang chờ thành viên xác nhận.`);
+      triggerToast(
+        isDoc
+          ? `Đã gửi lời mời tới Bác sĩ (${phoneToSubmit}). Đang chờ Bác sĩ đồng ý để vào nhà.`
+          : `Đã gửi lời mời tham gia tới ${phoneToSubmit}. Đang chờ thành viên xác nhận.`
+      );
       loadMembers();
     } catch (error: any) {
       const errDetail = error.response?.data?.detail || error.message || 'Không thể thêm thành viên. Vui lòng kiểm tra lại.';
@@ -674,6 +680,8 @@ export default function HouseDetailScreen({ navigation, route }: any) {
       <HouseAccountInviteModal
         visible={Boolean(isAccountInviteModalVisible && isCurrentUserOwner)}
         selectedInviteRole={selectedInviteRole}
+        inviteRoleType={inviteRoleType}
+        setInviteRoleType={setInviteRoleType}
         newMemberName={newMemberName}
         setNewMemberName={setNewMemberName}
         newMemberPhone={newMemberPhone}

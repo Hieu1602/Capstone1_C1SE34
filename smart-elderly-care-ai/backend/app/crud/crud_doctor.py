@@ -71,7 +71,10 @@ class CRUDDoctor:
         """
         # 1. Tìm các căn nhà Bác sĩ có quyền truy cập
         mem_query = await db.execute(
-            select(HouseMember.house_id).where(HouseMember.user_id == doctor_user.id)
+            select(HouseMember.house_id).where(
+                HouseMember.user_id == doctor_user.id,
+                HouseMember.status == "ACTIVE",
+            )
         )
         house_ids = list(mem_query.scalars().all())
 
