@@ -322,7 +322,7 @@ export default function HomeScreen({ navigation }: any) {
     }
     toggleCameraSleep();
     Alert.alert(
-      camera.isSleep ? 'Đã mở lại ống kính camera' : 'Đã bật Chế độ riêng tư (Che camera)',
+      camera.isSleep ? 'Đã mở lại ống kính camera' : 'Đã bật Chế độ riêng tư',
       camera.isSleep ? `Ống kính ${cameraDisplayName} đã mở lại và tiếp tục phát trực tiếp bình thường.` : `Ống kính ${cameraDisplayName} đã cụp lại và che khung hình. Màn hình đen riêng tư đã được kích hoạt.`
     );
   };

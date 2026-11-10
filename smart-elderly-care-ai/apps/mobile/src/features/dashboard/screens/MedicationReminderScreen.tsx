@@ -308,7 +308,7 @@ export default function MedicationReminderScreen({ navigation }: any) {
 
         <View style={styles.headerTitleCol}>
           <LocalizedText style={[styles.headerTitle, { color: textTitle }]}>Lịch uống thuốc & Ăn uống</LocalizedText>
-          <LocalizedText style={[styles.headerSubtitle, { color: textSub }]}>Đồng bộ giọng nói Loa thông minh Hub FR12</LocalizedText>
+          <LocalizedText style={[styles.headerSubtitle, { color: textSub }]}>Đồng bộ giọng nói Loa thông minh Hub</LocalizedText>
         </View>
 
         <TouchableOpacity
@@ -337,7 +337,7 @@ export default function MedicationReminderScreen({ navigation }: any) {
               <Ionicons name="volume-high" size={24} color={Colors.primary} />
             </View>
             <View style={{ flex: 1, marginHorizontal: 12 }}>
-              <LocalizedText style={[styles.speakerTitle, { color: textTitle }]}>Loa thông minh Hub (Voice Reminder)</LocalizedText>
+              <LocalizedText style={[styles.speakerTitle, { color: textTitle }]}>Loa thông minh Hub</LocalizedText>
               <LocalizedText style={[styles.speakerSubtitle, { color: textSub }]}>
                 Tự động phát giọng nói tiếng Việt nhắc nhở người cao tuổi khi đến giờ
               </LocalizedText>

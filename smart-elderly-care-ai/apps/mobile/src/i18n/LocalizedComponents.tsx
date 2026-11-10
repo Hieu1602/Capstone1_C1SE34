@@ -49,6 +49,12 @@ function localizeString(value: string, translate: (key: string, options?: any) =
   const trimmed = value.trim();
   if (!trimmed) return value;
 
+  // Khi đang ở chế độ Tiếng Việt, giữ nguyên text gốc trong code mà không chạy regex/fallback tiếng Anh
+  const currentLang = i18n.language || 'vi';
+  if (currentLang.startsWith('vi')) {
+    return value;
+  }
+
   const normalized = trimmed.replace(/\s+/g, ' ');
   const translated = translate(normalized, { defaultValue: normalized });
 

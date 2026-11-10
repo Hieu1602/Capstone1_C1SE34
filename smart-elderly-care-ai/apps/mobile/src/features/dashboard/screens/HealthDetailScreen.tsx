@@ -343,7 +343,7 @@ export default function HealthDetailScreen({ navigation, route }: any) {
           {(['DAY', 'WEEK', 'MONTH'] as const).map((range) => {
             const isActive = selectedRange === range;
             const labels: Record<TimeRange, string> = {
-              DAY: 'Theo ngày (Interactive)',
+              DAY: 'Theo ngày',
               WEEK: '7 ngày qua',
               MONTH: '30 ngày',
             };

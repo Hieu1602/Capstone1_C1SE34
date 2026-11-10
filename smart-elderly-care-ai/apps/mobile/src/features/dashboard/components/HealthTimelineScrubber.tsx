@@ -61,7 +61,7 @@ export const HealthTimelineScrubber: React.FC<HealthTimelineScrubberProps> = ({
             <Ionicons name="time" size={15} color="#FFF" />
           </View>
           <Text style={[styles.timelineTitle, { color: colors.textPrimary }]}>
-            Tua Dòng Thời Gian (Interactive Timeline)
+            Tua Dòng Thời Gian
           </Text>
         </View>
         <View style={styles.timeBadge}>

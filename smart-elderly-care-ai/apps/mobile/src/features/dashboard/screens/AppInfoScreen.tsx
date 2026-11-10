@@ -230,7 +230,7 @@ export default function AppInfoScreen({ navigation }: any) {
             {(docData?.user_guides || [
               {
                 id: 'smartband',
-                title: 'Kết nối Vòng đeo tay thông minh (BLE Band)',
+                title: 'Kết nối Vòng đeo tay thông minh',
                 icon: 'watch-outline',
                 badge: 'BLE 5.0',
                 description: 'Đo nhịp tim, nồng độ oxy trong máu (SpO2), bước chân và thân nhiệt liên tục theo thời gian thực.',
@@ -254,7 +254,7 @@ export default function AppInfoScreen({ navigation }: any) {
               },
               {
                 id: 'hub',
-                title: 'Thiết lập bộ Hub AI trung tâm (Edge Hub)',
+                title: 'Thiết lập bộ Hub AI trung tâm',
                 icon: 'hardware-chip-outline',
                 badge: 'Edge Hub',
                 description: 'Xử lý hình ảnh AI cục bộ không gián đoạn mạng, còi báo động tại chỗ và kết nối đám mây an toàn.',
