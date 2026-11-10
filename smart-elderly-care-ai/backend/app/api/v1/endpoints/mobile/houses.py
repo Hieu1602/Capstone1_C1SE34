@@ -9,7 +9,7 @@ from typing import List, Optional
 from uuid import UUID
 
 from fastapi import APIRouter, Depends, HTTPException, status
-from sqlalchemy import select, or_
+from sqlalchemy import select, or_, and_
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import selectinload
 
@@ -565,6 +565,7 @@ async def respond_to_house_invite(
             or_(
                 HouseMember.id == member_id,
                 HouseMember.user_id == member_id,
+                and_(HouseMember.user_id == current_user.id, HouseMember.status == "PENDING_MEMBER_CONFIRM"),
                 HouseMember.user_id == current_user.id,
             )
         )
@@ -573,9 +574,14 @@ async def respond_to_house_invite(
     members_list = res.scalars().all()
     member = None
     for m in members_list:
-        if m.status == "PENDING_MEMBER_CONFIRM":
+        if m.id == member_id:
             member = m
             break
+    if not member:
+        for m in members_list:
+            if m.status == "PENDING_MEMBER_CONFIRM":
+                member = m
+                break
     if not member and members_list:
         member = members_list[0]
 
@@ -620,6 +626,31 @@ async def respond_to_house_invite(
                 db.add(accept_inc)
 
         await db.commit()
+
+        # Phát WebSocket broadcast thông báo cập nhật thành viên theo thời gian thực
+        try:
+            from app.api.websockets.vitals_ws import alert_clients
+            ws_payload = json.dumps({
+                "type": "ALERT_NEW",
+                "alert_type": "HOUSE_MEMBER_ADDED",
+                "data": {
+                    "alert_type": "HOUSE_MEMBER_ADDED",
+                    "member_id": str(member.id),
+                    "user_id": str(current_user.id),
+                    "user_name": current_user.full_name,
+                    "house_id": str(house_id),
+                    "status": "ACTIVE",
+                }
+            }, ensure_ascii=False)
+            for client_ws in list(alert_clients):
+                try:
+                    await client_ws.send_text(ws_payload)
+                except Exception:
+                    if client_ws in alert_clients:
+                        alert_clients.remove(client_ws)
+        except Exception as ws_err:
+            logger.warning("[respond_to_house_invite] WS broadcast error: %s", ws_err)
+
         return {"status": "accepted", "message": f"Bạn đã tham gia căn nhà \"{house_name}\" thành công!"}
     else:
         # Reject
@@ -639,6 +670,29 @@ async def respond_to_house_invite(
                 db.add(reject_inc)
 
         await db.commit()
+
+        # Phát WebSocket broadcast từ chối lời mời
+        try:
+            from app.api.websockets.vitals_ws import alert_clients
+            ws_payload = json.dumps({
+                "type": "ALERT_NEW",
+                "alert_type": "HOUSE_INVITE_REJECTED",
+                "data": {
+                    "alert_type": "HOUSE_INVITE_REJECTED",
+                    "user_id": str(current_user.id),
+                    "user_name": current_user.full_name,
+                    "house_id": str(house_id),
+                }
+            }, ensure_ascii=False)
+            for client_ws in list(alert_clients):
+                try:
+                    await client_ws.send_text(ws_payload)
+                except Exception:
+                    if client_ws in alert_clients:
+                        alert_clients.remove(client_ws)
+        except Exception as ws_err:
+            logger.warning("[respond_to_house_invite] WS broadcast error: %s", ws_err)
+
         return {"status": "rejected", "message": "Đã từ chối lời mời tham gia căn nhà."}
 
 

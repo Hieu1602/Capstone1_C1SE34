@@ -11,6 +11,8 @@ import {
   StatusBar,
   Image,
   Animated,
+  ActivityIndicator,
+  Alert,
 } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
@@ -20,7 +22,7 @@ import { Colors } from '../../../theme/colors';
 import { useTheme } from '../../../store/useThemeStore';
 import { useAuthStore } from '../../../store/useAuthStore';
 import { useAlertStore } from '../../../store/useAlertStore';
-import { doctorApi } from '../../../services/api';
+import { doctorApi, householdApi } from '../../../services/api';
 import { alertsWS } from '../../../services/websocket';
 import { LocalizedText } from '../../../i18n/LocalizedComponents';
 import AdminMarqueeBanner from '../../../components/AdminMarqueeBanner';
@@ -92,6 +94,7 @@ export default function DoctorHomeScreen() {
   const [detailModalVisible, setDetailModalVisible] = useState(false);
   const [notifModalVisible, setNotifModalVisible] = useState(false);
   const [hasUnreadNotifs, setHasUnreadNotifs] = useState(false);
+  const [respondingInviteId, setRespondingInviteId] = useState<string | null>(null);
 
   useEffect(() => {
     const unread = incidents.some((inc) => !inc.is_acknowledged);
@@ -134,6 +137,40 @@ export default function DoctorHomeScreen() {
       setRefreshing(false);
     }
   }, []);
+
+  const handleRespondHouseInvite = async (incident: any, action: 'accept' | 'reject') => {
+    try {
+      setRespondingInviteId(incident.id);
+      const memberIdMatch = (incident.notes || incident.note || '')?.match(/MEMBER_ID:([a-fA-F0-9-]+)/);
+      const memberId = memberIdMatch ? memberIdMatch[1] : (incident.device_id || incident.id);
+
+      await householdApi.respondHouseInvite(memberId, action);
+      await useAlertStore.getState().acknowledgeIncident(
+        incident.id,
+        action === 'accept' ? 'Đã đồng ý vào nhà' : 'Đã từ chối vào nhà',
+        userName || 'Bác sĩ'
+      );
+
+      await Promise.allSettled([
+        fetchIncidents(),
+        fetchData(),
+      ]);
+
+      if (action === 'accept') {
+        Alert.alert(
+          'Đã tham gia căn nhà',
+          'Bạn đã xác nhận đồng ý tham gia căn nhà! Các bệnh nhân trong căn nhà đã được thêm vào danh sách theo dõi của bạn.'
+        );
+      } else {
+        Alert.alert('Đã từ chối', 'Bạn đã từ chối lời mời tham gia căn nhà.');
+      }
+    } catch (err: any) {
+      console.warn('handleRespondHouseInvite error:', err);
+      Alert.alert('Lỗi', err.response?.data?.detail || 'Không thể phản hồi lời mời. Vui lòng thử lại.');
+    } finally {
+      setRespondingInviteId(null);
+    }
+  };
 
   useEffect(() => {
     fetchData();
@@ -471,6 +508,7 @@ export default function DoctorHomeScreen() {
           setHasUnreadNotifs(false);
           await useAlertStore.getState().acknowledgeAll();
         }}
+        onRespondHouseInvite={handleRespondHouseInvite}
       />
 
       <AppointmentDetailModal
@@ -810,5 +848,81 @@ const styles = StyleSheet.create({
     fontSize: 12.5,
     textAlign: 'center',
     lineHeight: 18,
+  },
+  inviteCard: {
+    borderRadius: 16,
+    padding: 14,
+    borderWidth: 1.5,
+    marginBottom: 16,
+  },
+  inviteCardHeader: {
+    flexDirection: 'row',
+    alignItems: 'flex-start',
+    gap: 12,
+  },
+  inviteIconCircle: {
+    width: 40,
+    height: 40,
+    borderRadius: 20,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  inviteCardTitle: {
+    fontSize: 14.5,
+    fontWeight: '800',
+  },
+  pendingBadge: {
+    backgroundColor: '#FEF3C7',
+    paddingHorizontal: 7,
+    paddingVertical: 2,
+    borderRadius: 6,
+    borderWidth: 1,
+    borderColor: '#FDE68A',
+  },
+  pendingBadgeText: {
+    fontSize: 10.5,
+    fontWeight: '700',
+    color: '#D97706',
+  },
+  inviteCardMessage: {
+    fontSize: 12.5,
+    lineHeight: 18,
+    marginTop: 4,
+  },
+  inviteBtnRow: {
+    flexDirection: 'row',
+    justifyContent: 'flex-end',
+    gap: 10,
+    marginTop: 12,
+    paddingTop: 10,
+    borderTopWidth: StyleSheet.hairlineWidth,
+    borderTopColor: '#CBD5E1',
+  },
+  inviteRejectBtn: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    paddingHorizontal: 14,
+    paddingVertical: 8,
+    borderRadius: 10,
+    borderWidth: 1,
+    gap: 5,
+  },
+  inviteRejectBtnText: {
+    fontSize: 13,
+    fontWeight: '700',
+    color: '#DC2626',
+  },
+  inviteAcceptBtn: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    paddingHorizontal: 16,
+    paddingVertical: 8,
+    borderRadius: 10,
+    gap: 5,
+  },
+  inviteAcceptBtnText: {
+    fontSize: 13,
+    fontWeight: '700',
+    color: '#FFFFFF',
   },
 });
