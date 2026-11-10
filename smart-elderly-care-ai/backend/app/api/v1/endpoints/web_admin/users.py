@@ -640,15 +640,16 @@ async def update_profile(
             _, b64_str = raw_val.split(",", 1)
             raw_bytes = base64.b64decode(b64_str)
             from PIL import Image
+            Image.MAX_IMAGE_PIXELS = None
             img = Image.open(io.BytesIO(raw_bytes))
             if img.mode in ("RGBA", "P"):
                 img = img.convert("RGB")
             w, h = img.size
             min_dim = min(w, h)
             img = img.crop(((w - min_dim) // 2, (h - min_dim) // 2, (w + min_dim) // 2, (h + min_dim) // 2))
-            img.thumbnail((384, 384))
+            img.thumbnail((256, 256))
             buf = io.BytesIO()
-            img.save(buf, format="JPEG", quality=85)
+            img.save(buf, format="JPEG", quality=80)
             opt_bytes = buf.getvalue()
             opt_b64 = base64.b64encode(opt_bytes).decode("utf-8")
             update_data["avatar_url"] = f"data:image/jpeg;base64,{opt_b64}"
@@ -663,6 +664,8 @@ async def update_profile(
                 pass
         except Exception as e:
             logger.warning("[update_profile] Could not optimize avatar: %s", e)
+            if len(update_data.get("avatar_url", "")) > 100000:
+                update_data.pop("avatar_url", None)
 
     updated_user = await crud_user.update(db, db_obj=current_user, obj_in=update_data)
     await db.commit()
@@ -713,6 +716,7 @@ async def _process_and_save_avatar(
 
     try:
         from PIL import Image
+        Image.MAX_IMAGE_PIXELS = None
         img = Image.open(io.BytesIO(img_bytes))
 
         if img.mode in ("RGBA", "P"):
@@ -723,10 +727,10 @@ async def _process_and_save_avatar(
         left = (w - min_dim) // 2
         top = (h - min_dim) // 2
         img = img.crop((left, top, left + min_dim, top + min_dim))
-        img.thumbnail((384, 384))
+        img.thumbnail((256, 256))
 
         buf = io.BytesIO()
-        img.save(buf, format="JPEG", quality=85)
+        img.save(buf, format="JPEG", quality=80)
         optimized_bytes = buf.getvalue()
         b64_str = base64.b64encode(optimized_bytes).decode("utf-8")
         base64_data_uri = f"data:image/jpeg;base64,{b64_str}"
@@ -740,7 +744,7 @@ async def _process_and_save_avatar(
     except Exception as write_err:
         logger.warning("[_process_and_save_avatar] File write error: %s", write_err)
 
-    if not base64_data_uri:
+    if not base64_data_uri and len(img_bytes) <= 100000:
         b64_str = base64.b64encode(img_bytes).decode("utf-8")
         base64_data_uri = f"data:image/jpeg;base64,{b64_str}"
 

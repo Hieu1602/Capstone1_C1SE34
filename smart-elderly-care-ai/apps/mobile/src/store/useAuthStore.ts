@@ -378,15 +378,43 @@ const createAuthStore: StateCreator<AuthStoreState, [], [['zustand/persist', Aut
   },
 });
 
+const safeStorage = {
+  getItem: async (name: string) => {
+    try {
+      return await AsyncStorage.getItem(name);
+    } catch {
+      return null;
+    }
+  },
+  setItem: async (name: string, value: string) => {
+    try {
+      await AsyncStorage.setItem(name, value);
+    } catch (err) {
+      console.warn('[useAuthStore] AsyncStorage setItem warning (quota handled):', err);
+    }
+  },
+  removeItem: async (name: string) => {
+    try {
+      await AsyncStorage.removeItem(name);
+    } catch {}
+  },
+};
+
 const persistOptions: PersistOptions<AuthStoreState> = {
   name: 'auth-storage',
-  storage: createJSONStorage(() => AsyncStorage),
+  storage: createJSONStorage(() => safeStorage),
   version: 1,
-  partialize: (state) => ({
-    ...state,
-    isRoleLoading: false,
-    isHydrated: true,
-  }),
+  partialize: (state) => {
+    const isBigAvatarUrl = Boolean(state.avatarUrl && state.avatarUrl.length > 5000);
+    const isBigAvatar_url = Boolean(state.avatar_url && state.avatar_url.length > 5000);
+    return {
+      ...state,
+      avatarUrl: isBigAvatarUrl ? null : state.avatarUrl,
+      avatar_url: isBigAvatar_url ? null : state.avatar_url,
+      isRoleLoading: false,
+      isHydrated: true,
+    };
+  },
   onRehydrateStorage: () => () => {
     useAuthStore.setState({ isHydrated: true });
   },
