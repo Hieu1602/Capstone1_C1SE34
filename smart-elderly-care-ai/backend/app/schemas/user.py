@@ -216,6 +216,8 @@ class UserOut(UserBase):
     can_manage_records: Optional[bool] = None
     device_count: Optional[int] = 0
     has_devices: Optional[bool] = False
+    default_camera_id: Optional[str] = None
+    default_camera_name: Optional[str] = None
 
     @model_validator(mode="after")
     def set_language_alias(self) -> "UserOut":
