@@ -12,6 +12,7 @@ import {
   Image,
   Animated,
   Alert,
+  ActivityIndicator,
 } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
@@ -93,7 +94,7 @@ export default function DoctorHomeScreen() {
   const [detailModalVisible, setDetailModalVisible] = useState(false);
   const [notifModalVisible, setNotifModalVisible] = useState(false);
   const [hasUnreadNotifs, setHasUnreadNotifs] = useState(false);
-  const [, setRespondingInviteId] = useState<string | null>(null);
+  const [respondingInviteId, setRespondingInviteId] = useState<string | null>(null);
 
   useEffect(() => {
     const unread = incidents.some((inc) => !inc.is_acknowledged);
