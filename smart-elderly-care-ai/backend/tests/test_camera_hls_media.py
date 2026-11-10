@@ -19,7 +19,10 @@ from app.api.v1.endpoints.mobile import camera_hls as hls
 
 class MediaIntegrationTests(unittest.TestCase):
     def test_mixed_archive_plays_eight_seconds_and_seeks_without_bad_timestamps(self):
-        import imageio_ffmpeg
+        try:
+            import imageio_ffmpeg
+        except ImportError:
+            self.skipTest("imageio_ffmpeg is not installed")
         executable = imageio_ffmpeg.get_ffmpeg_exe()
         run = subprocess.run
         rows = []
@@ -47,11 +50,11 @@ class MediaIntegrationTests(unittest.TestCase):
                 rows.append(row)
                 (root / f"{row.id}.ts").write_bytes(converted)
             db = SimpleNamespace(execute=AsyncMock(return_value=SimpleNamespace(scalars=lambda: rows)))
-            response = asyncio.run(hls.manifest("test", ({"fingerprint": hls.fingerprint(rows)}, uuid4(), start, start + timedelta(minutes=30)), db))
+            response = asyncio.run(hls.manifest("test", ({"fingerprint": hls.fingerprint(rows)}, uuid4(), start, start + timedelta(minutes=30)), db))  # type: ignore
             (root / "manifest.m3u8").write_bytes(response.body)
 
             class Handler(SimpleHTTPRequestHandler):
-                def log_message(self, *args):
+                def log_message(self, format, *args):
                     pass
 
                 def do_GET(self):

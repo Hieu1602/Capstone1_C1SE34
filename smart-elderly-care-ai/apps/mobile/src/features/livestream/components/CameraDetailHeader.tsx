@@ -10,7 +10,7 @@ import { useTheme } from "../../../store/useThemeStore";
 interface Props {
     name: string;
     onBack: () => void;
-    onSettings: () => void;
+    onSettings?: () => void;
 }
 
 /**
@@ -47,18 +47,22 @@ export default function CameraDetailHeader({
             >
                 {name}
             </Text>
-            <TouchableOpacity
-                accessibilityRole="button"
-                accessibilityLabel="Cài đặt camera"
-                style={styles.button}
-                onPress={onSettings}
-            >
-                <Ionicons
-                    name="settings-outline"
-                    size={25}
-                    color={colors.textPrimary}
-                />
-            </TouchableOpacity>
+            {onSettings ? (
+                <TouchableOpacity
+                    accessibilityRole="button"
+                    accessibilityLabel="Cài đặt camera"
+                    style={styles.button}
+                    onPress={onSettings}
+                >
+                    <Ionicons
+                        name="settings-outline"
+                        size={25}
+                        color={colors.textPrimary}
+                    />
+                </TouchableOpacity>
+            ) : (
+                <View style={styles.button} />
+            )}
         </View>
     );
 }

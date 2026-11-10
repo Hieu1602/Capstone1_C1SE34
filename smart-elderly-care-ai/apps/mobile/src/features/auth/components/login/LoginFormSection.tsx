@@ -21,6 +21,7 @@ interface LoginFormSectionProps {
   onToggleShowPassword: () => void;
   loading: boolean;
   errorMessage: string | null;
+  successMessage?: string | null;
   isAgreed: boolean;
   onToggleAgree: () => void;
   onSubmit: () => void;
@@ -38,6 +39,7 @@ export const LoginFormSection: React.FC<LoginFormSectionProps> = ({
   onToggleShowPassword,
   loading,
   errorMessage,
+  successMessage,
   isAgreed,
   onToggleAgree,
   onSubmit,
@@ -63,6 +65,14 @@ export const LoginFormSection: React.FC<LoginFormSectionProps> = ({
       <LocalizedText style={styles.heroSubtitle}>
         Hệ sinh thái AI bảo vệ sức khỏe & an toàn người cao tuổi 24/7
       </LocalizedText>
+
+      {/* Thông báo đăng ký thành công */}
+      {successMessage ? (
+        <View style={styles.successBox} accessibilityRole="alert">
+          <Ionicons name="checkmark-circle" size={18} color="#027A48" />
+          <LocalizedText style={styles.successText}>{successMessage}</LocalizedText>
+        </View>
+      ) : null}
 
       {/* Thông báo lỗi / trạng thái */}
       {errorMessage ? (
@@ -221,6 +231,26 @@ const styles = StyleSheet.create({
     lineHeight: 18,
     marginBottom: 20,
     paddingHorizontal: 12,
+  },
+  successBox: {
+    width: '100%',
+    flexDirection: 'row',
+    alignItems: 'center',
+    paddingHorizontal: 14,
+    paddingVertical: 10,
+    borderRadius: 14,
+    marginBottom: 16,
+    gap: 8,
+    backgroundColor: '#ECFDF3',
+    borderWidth: 1,
+    borderColor: '#A6F4C5',
+  },
+  successText: {
+    flex: 1,
+    fontSize: 13,
+    lineHeight: 18,
+    color: '#027A48',
+    fontWeight: '600',
   },
   noticeBox: {
     width: '100%',

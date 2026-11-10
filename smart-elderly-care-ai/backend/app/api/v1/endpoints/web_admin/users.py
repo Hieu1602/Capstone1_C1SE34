@@ -6,7 +6,7 @@ users.py – Quản lý tài khoản Caregiver / Bác sĩ.
 
 from fastapi import APIRouter, Body, Depends, File, HTTPException, Query, Request, UploadFile, status
 from starlette.concurrency import run_in_threadpool
-from sqlalchemy import select
+from sqlalchemy import select, update
 
 from sqlalchemy.ext.asyncio import AsyncSession
 
@@ -524,10 +524,9 @@ async def get_current_user_profile(
     current_user: User = Depends(get_current_user),
     db: AsyncSession = Depends(get_db),
 ):
-    """Lấy thông tin profile của người dùng hiện tại."""
+    """Lấy thông tin profile của người dùng hiện tại kèm theo phân quyền nhà (Owner / Member / Tài khoản mới)."""
     # Nếu avatar_url trỏ tới đường dẫn file cục bộ /static/avatars/... và file tồn tại,
-    # tự động đồng bộ chuyển đổi sang Base64 data URI vào database (Supabase)
-    # để khi đăng nhập trên bất kỳ máy nào khác vẫn hiển thị đầy đủ ảnh đại diện.
+    # tự động đồng bộ chuyển đổi sang Base64 data URI vào database
     if current_user.avatar_url and current_user.avatar_url.startswith("/static/avatars/"):
         try:
             avatar_dir = get_avatar_dir()
@@ -551,7 +550,41 @@ async def get_current_user_profile(
         except Exception as e:
             logger.warning("[get_current_user_profile] Auto-sync avatar error: %s", e)
 
-    return current_user
+    # Tối ưu siêu tốc: Xác định ngay lập tức vai trò (Chủ nhà, Thành viên, Tài khoản mới)
+    # và các quyền hạn xem camera/sức khỏe để Frontend phản hồi tức thì
+    from app.crud.crud_house import crud_house
+    user_out = UserOut.model_validate(current_user)
+    try:
+        house = await crud_house.get_or_create_default_house(db, owner_id=current_user.id)
+        if house:
+            perms = await crud_house.get_user_permissions(db, house=house, user=current_user)
+            user_out.has_house = True
+            user_out.household_id = house.id
+            user_out.assigned_house = house.name
+            user_out.is_owner = perms.get("is_owner", False)
+            user_out.role_in_house = perms.get("role_in_house", "MEMBER")
+            user_out.can_view_health = perms.get("can_view_health", True)
+            user_out.can_view_camera = perms.get("can_view_camera", True)
+            user_out.can_handle_emergency = perms.get("can_handle_emergency", True)
+            user_out.can_manage_devices = perms.get("can_manage_devices", False)
+            user_out.can_manage_records = perms.get("can_manage_records", False)
+            user_out.role_title = "Chủ hộ" if user_out.is_owner else ("Bác sĩ" if current_user.role == "doctor" else "Thành viên")
+        else:
+            user_out.has_house = False
+            user_out.household_id = None
+            user_out.assigned_house = None
+            user_out.is_owner = False
+            user_out.role_in_house = "NONE"
+            user_out.can_view_health = False
+            user_out.can_view_camera = False
+            user_out.can_handle_emergency = False
+            user_out.can_manage_devices = False
+            user_out.can_manage_records = False
+            user_out.role_title = "Tài khoản mới"
+    except Exception as err:
+        logger.warning("[get_current_user_profile] Tra cứu quyền hạn nhà: %s", err)
+
+    return user_out
 
 
 @router.patch("/me", response_model=UserOut)
@@ -607,15 +640,16 @@ async def update_profile(
             _, b64_str = raw_val.split(",", 1)
             raw_bytes = base64.b64decode(b64_str)
             from PIL import Image
+            Image.MAX_IMAGE_PIXELS = None
             img = Image.open(io.BytesIO(raw_bytes))
             if img.mode in ("RGBA", "P"):
                 img = img.convert("RGB")
             w, h = img.size
             min_dim = min(w, h)
             img = img.crop(((w - min_dim) // 2, (h - min_dim) // 2, (w + min_dim) // 2, (h + min_dim) // 2))
-            img.thumbnail((384, 384))
+            img.thumbnail((256, 256))
             buf = io.BytesIO()
-            img.save(buf, format="JPEG", quality=85)
+            img.save(buf, format="JPEG", quality=80)
             opt_bytes = buf.getvalue()
             opt_b64 = base64.b64encode(opt_bytes).decode("utf-8")
             update_data["avatar_url"] = f"data:image/jpeg;base64,{opt_b64}"
@@ -630,6 +664,8 @@ async def update_profile(
                 pass
         except Exception as e:
             logger.warning("[update_profile] Could not optimize avatar: %s", e)
+            if len(update_data.get("avatar_url", "")) > 100000:
+                update_data.pop("avatar_url", None)
 
     updated_user = await crud_user.update(db, db_obj=current_user, obj_in=update_data)
     await db.commit()
@@ -680,6 +716,7 @@ async def _process_and_save_avatar(
 
     try:
         from PIL import Image
+        Image.MAX_IMAGE_PIXELS = None
         img = Image.open(io.BytesIO(img_bytes))
 
         if img.mode in ("RGBA", "P"):
@@ -690,10 +727,10 @@ async def _process_and_save_avatar(
         left = (w - min_dim) // 2
         top = (h - min_dim) // 2
         img = img.crop((left, top, left + min_dim, top + min_dim))
-        img.thumbnail((384, 384))
+        img.thumbnail((256, 256))
 
         buf = io.BytesIO()
-        img.save(buf, format="JPEG", quality=85)
+        img.save(buf, format="JPEG", quality=80)
         optimized_bytes = buf.getvalue()
         b64_str = base64.b64encode(optimized_bytes).decode("utf-8")
         base64_data_uri = f"data:image/jpeg;base64,{b64_str}"
@@ -707,7 +744,7 @@ async def _process_and_save_avatar(
     except Exception as write_err:
         logger.warning("[_process_and_save_avatar] File write error: %s", write_err)
 
-    if not base64_data_uri:
+    if not base64_data_uri and len(img_bytes) <= 100000:
         b64_str = base64.b64encode(img_bytes).decode("utf-8")
         base64_data_uri = f"data:image/jpeg;base64,{b64_str}"
 
@@ -1723,6 +1760,9 @@ async def delete_user_by_admin(
             commit=False,
         )
 
+        await db.execute(
+            update(Incident).where(Incident.acknowledged_by == uid).values(acknowledged_by=None)
+        )
         await crud_user.delete(db, uid)
         await db.commit()
         invalidate_users_cache()

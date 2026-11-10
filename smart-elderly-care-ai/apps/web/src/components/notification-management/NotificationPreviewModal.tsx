@@ -1,4 +1,5 @@
 import React from 'react';
+import { createPortal } from 'react-dom';
 import { X } from 'lucide-react';
 import { SystemNotification } from '../../types';
 import { TYPE_CONFIG, AUDIENCE_CONFIG, STATUS_CONFIG } from './constants';
@@ -14,8 +15,8 @@ export const NotificationPreviewModal: React.FC<NotificationPreviewModalProps> =
 }) => {
   if (!notification) return null;
 
-  return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-900/60 backdrop-blur-sm animate-fade-in overflow-y-auto">
+  return createPortal(
+    <div className="fixed inset-0 z-[100] flex items-center justify-center p-4 bg-slate-900/60 dark:bg-black/75 backdrop-blur-sm animate-fade-in overflow-y-auto">
       <div className="w-full max-w-md rounded-2xl glass-card border border-[#E7E9ED] dark:border-[#454A53] shadow-2xl overflow-hidden flex flex-col max-h-[90vh] my-auto">
         <div className="flex items-center justify-between px-5 py-4 border-b border-[#E7E9ED] dark:border-[#454A53] bg-[#F5F6F8] dark:bg-[#202329] shrink-0">
           <span className="text-xs font-bold text-[#191B20] dark:text-[#F5F6F8]">
@@ -130,6 +131,7 @@ export const NotificationPreviewModal: React.FC<NotificationPreviewModalProps> =
           </div>
         </div>
       </div>
-    </div>
+    </div>,
+    document.body
   );
 };

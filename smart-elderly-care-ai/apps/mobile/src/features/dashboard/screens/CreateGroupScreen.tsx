@@ -2,13 +2,14 @@
 // Màn hình Quản lý & Tạo Nhóm Thiết Bị dạng nhiều trang (Full Screen Multi-Step Flow)
 // Tương tự AddDeviceScreen (Thêm thủ công): SELECT -> REVIEW -> CONFIRM -> SUCCESS
 
-import React, { useMemo, useState, useCallback } from 'react';
+import React, { useMemo, useState, useCallback, useEffect } from 'react';
 import { useFocusEffect } from '@react-navigation/native';
 import { View, StyleSheet, TouchableOpacity, ScrollView, ActivityIndicator } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
 import { Colors, Shadows } from '../../../theme/colors';
 import { useVitalStore, IoTDeviceItem } from '../../../store/useVitalStore';
+import { useAuthStore } from '../../../store/useAuthStore';
 import { LocalizedAlert, LocalizedText, LocalizedTextInput } from '../../../i18n/LocalizedComponents';
 import { createThemeStyles, useTheme } from '../../../store/useThemeStore';
 
@@ -17,7 +18,29 @@ type GroupStep = 'SELECT' | 'REVIEW' | 'CONFIRM' | 'SUCCESS';
 type GroupDeviceFilter = 'Tất cả' | 'Camera' | 'Đồng hồ';
 
 export default function CreateGroupScreen({ navigation }: any) {
-  const { iotDevices, deviceGroups, addDeviceGroup, assignDevicesToGroup, syncAllWithBackend } = useVitalStore();
+  const { iotDevices, deviceGroups, addDeviceGroup, assignDevicesToGroup, syncAllWithBackend, house } = useVitalStore();
+  const { userRole, role, permissions } = useAuthStore();
+  const hasLinkedHouse = Boolean(house?.id && house?.hasHouse !== false && house?.name && house.name.trim() !== '');
+  const isOwnerOrAdmin =
+    userRole === 'admin' ||
+    role === 'admin' ||
+    userRole === 'owner' ||
+    role === 'owner' ||
+    permissions?.is_owner === true ||
+    permissions?.role_in_house === 'OWNER';
+  const isMemberInLinkedHouse = hasLinkedHouse && !isOwnerOrAdmin;
+  const canManageDevices = !isMemberInLinkedHouse || Boolean(permissions?.can_manage_devices);
+
+  useEffect(() => {
+    if (!canManageDevices) {
+      LocalizedAlert.alert(
+        'Quyền truy cập bị giới hạn',
+        'Tài khoản Thành viên không có quyền tạo nhóm thiết bị. Vui lòng liên hệ Chủ hộ để được cấp quyền quản lý thiết bị.',
+        [{ text: 'Quay lại', onPress: () => navigation.goBack() }]
+      );
+    }
+  }, [canManageDevices, navigation]);
+
   const { isDarkMode, colors } = useTheme();
   const styles = useMemo(
     () => createThemeStyles(baseStyles, isDarkMode, colors),

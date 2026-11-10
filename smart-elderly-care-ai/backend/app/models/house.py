@@ -60,10 +60,10 @@ class House(Base):
         "HouseMember", back_populates="house", cascade="all, delete-orphan"
     )
     device_groups: Mapped[list["DeviceGroup"]] = relationship(
-        "DeviceGroup", back_populates="house", cascade="all, delete-orphan", lazy="selectin"
+        "DeviceGroup", back_populates="house", cascade="all, delete-orphan"
     )
     devices: Mapped[list["Device"]] = relationship(
-        "Device", back_populates="house", cascade="all, delete-orphan", lazy="selectin"
+        "Device", back_populates="house", cascade="all, delete-orphan"
     )
     elderly_profiles: Mapped[list["ElderlyProfile"]] = relationship(
         "ElderlyProfile", back_populates="house", cascade="all, delete-orphan"

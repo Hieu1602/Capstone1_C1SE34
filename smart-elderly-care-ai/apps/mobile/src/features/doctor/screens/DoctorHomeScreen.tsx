@@ -236,6 +236,14 @@ export default function DoctorHomeScreen() {
   const doctorInitial =
     (userName || 'Bác sĩ').trim().split(/\s+/).slice(-1)[0][0]?.toUpperCase() || 'B';
 
+  const pendingHouseInvites = (incidents || []).filter(
+    (i) =>
+      !i.is_acknowledged &&
+      (i.alert_type === 'HOUSE_INVITE_PENDING' ||
+       Boolean(i.notes && i.notes.includes('HOUSE_INVITE_PENDING')) ||
+       (i.message || '').toLowerCase().includes('lời mời bạn tham gia căn nhà'))
+  );
+
   return (
     <View style={[styles.container, { backgroundColor: isDarkMode ? '#0F172A' : '#F8FAFC' }]}>
       <StatusBar barStyle={isDarkMode ? 'light-content' : 'dark-content'} />
@@ -287,6 +295,69 @@ export default function DoctorHomeScreen() {
         refreshControl={<RefreshControl refreshing={refreshing} onRefresh={onRefresh} colors={[Colors.primary]} />}
         showsVerticalScrollIndicator={false}
       >
+        {/* Khối Lời mời tham gia Bác sĩ gia đình (nếu có) */}
+        {pendingHouseInvites.map((invite) => (
+          <View
+            key={invite.id}
+            style={[
+              styles.inviteCard,
+              {
+                backgroundColor: isDarkMode ? '#1E293B' : '#FFFFFF',
+                borderColor: '#F59E0B',
+              },
+            ]}
+          >
+            <View style={styles.inviteCardHeader}>
+              <View style={[styles.inviteIconCircle, { backgroundColor: '#FEF3C7' }]}>
+                <Ionicons name="home" size={20} color="#D97706" />
+              </View>
+              <View style={{ flex: 1 }}>
+                <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' }}>
+                  <LocalizedText style={[styles.inviteCardTitle, { color: colors.textPrimary }]}>
+                    Lời mời Bác sĩ gia đình
+                  </LocalizedText>
+                  <View style={styles.pendingBadge}>
+                    <LocalizedText style={styles.pendingBadgeText}>Chờ xác nhận</LocalizedText>
+                  </View>
+                </View>
+                <LocalizedText style={[styles.inviteCardMessage, { color: isDarkMode ? '#94A3B8' : '#64748B' }]}>
+                  {invite.message || 'Chủ hộ đã gửi lời mời bạn tham gia căn nhà với vai trò Bác sĩ gia đình.'}
+                </LocalizedText>
+              </View>
+            </View>
+
+            <View style={styles.inviteBtnRow}>
+              <TouchableOpacity
+                style={[
+                  styles.inviteRejectBtn,
+                  { borderColor: '#FECACA', backgroundColor: isDarkMode ? '#450A0A' : '#FEF2F2' },
+                ]}
+                onPress={() => handleRespondHouseInvite(invite, 'reject')}
+                activeOpacity={0.7}
+                disabled={respondingInviteId === invite.id}
+              >
+                <Ionicons name="close-circle-outline" size={15} color="#DC2626" />
+                <LocalizedText style={styles.inviteRejectBtnText}>Từ chối</LocalizedText>
+              </TouchableOpacity>
+              <TouchableOpacity
+                style={[styles.inviteAcceptBtn, { backgroundColor: '#16A34A' }]}
+                onPress={() => handleRespondHouseInvite(invite, 'accept')}
+                activeOpacity={0.8}
+                disabled={respondingInviteId === invite.id}
+              >
+                {respondingInviteId === invite.id ? (
+                  <ActivityIndicator size="small" color="#FFFFFF" />
+                ) : (
+                  <>
+                    <Ionicons name="checkmark-circle-outline" size={15} color="#FFFFFF" />
+                    <LocalizedText style={styles.inviteAcceptBtnText}>Đồng ý vào nhà</LocalizedText>
+                  </>
+                )}
+              </TouchableOpacity>
+            </View>
+          </View>
+        ))}
+
         {/* 2. Khối Lịch khám hôm nay / sắp tới */}
         <View style={styles.sectionHeaderRow}>
           <LocalizedText style={[styles.sectionTitle, { color: colors.textPrimary }]}>

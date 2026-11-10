@@ -1,4 +1,5 @@
 import React from 'react';
+import { createPortal } from 'react-dom';
 import {
   Bell,
   X,
@@ -67,8 +68,8 @@ export const CreateEditNotificationModal: React.FC<CreateEditNotificationModalPr
 }) => {
   if (!isOpen) return null;
 
-  return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-900/60 backdrop-blur-sm animate-fade-in overflow-y-auto">
+  return createPortal(
+    <div className="fixed inset-0 z-[100] flex items-center justify-center p-4 bg-slate-900/60 dark:bg-black/75 backdrop-blur-sm animate-fade-in overflow-y-auto">
       <div className="w-full max-w-lg rounded-2xl glass-card border border-[#E7E9ED] dark:border-[#454A53] shadow-2xl overflow-hidden flex flex-col max-h-[90vh] my-auto">
         <div className="flex items-center justify-between px-5 py-4 border-b border-[#E7E9ED] dark:border-[#454A53] bg-[#F5F6F8] dark:bg-[#202329] shrink-0">
           <div className="flex items-center gap-2">
@@ -85,7 +86,8 @@ export const CreateEditNotificationModal: React.FC<CreateEditNotificationModalPr
           </button>
         </div>
 
-        <form onSubmit={onSubmit} className="p-5 space-y-4 overflow-y-auto flex-1">
+        <form onSubmit={onSubmit} className="flex flex-col flex-1 min-h-0 overflow-hidden">
+          <div className="p-5 space-y-4 overflow-y-auto flex-1">
           {/* Tiêu đề */}
           <div>
             <label className="block text-xs font-bold text-[#191B20] dark:text-[#F5F6F8] mb-1">
@@ -328,9 +330,10 @@ export const CreateEditNotificationModal: React.FC<CreateEditNotificationModalPr
               </p>
             )}
           </div>
+        </div>
 
-          {/* Action buttons */}
-          <div className="sticky bottom-0 bg-white/95 dark:bg-[#1A1D23]/95 backdrop-blur-sm pt-3 pb-1 border-t border-[#E7E9ED] dark:border-[#454A53] flex items-center justify-end gap-2 -mx-5 px-5 mt-4 z-10">
+        {/* Action buttons footer: Cố định ở đáy, không bao giờ đè lên nội dung */}
+        <div className="shrink-0 px-5 py-3.5 border-t border-[#E7E9ED] dark:border-[#454A53] bg-[#F5F6F8] dark:bg-[#202329] flex items-center justify-end gap-2">
             <button
               type="button"
               onClick={onClose}
@@ -347,6 +350,7 @@ export const CreateEditNotificationModal: React.FC<CreateEditNotificationModalPr
           </div>
         </form>
       </div>
-    </div>
+    </div>,
+    document.body
   );
 };

@@ -36,15 +36,14 @@ class CRUDHouse:
         )
         return result.scalar_one_or_none()
 
-    async def get_by_owner(self, db: AsyncSession, owner_id: UUID) -> list[House]:
-        result = await db.execute(
-            select(House)
-            .options(
+    async def get_by_owner(self, db: AsyncSession, owner_id: UUID, load_relations: bool = False) -> list[House]:
+        query = select(House).where(House.owner_id == owner_id)
+        if load_relations:
+            query = query.options(
                 selectinload(House.device_groups),
                 selectinload(House.devices),
             )
-            .where(House.owner_id == owner_id)
-        )
+        result = await db.execute(query)
         return list(result.scalars().all())
 
     async def get_user_houses(self, db: AsyncSession, user_id: UUID) -> list[House]:
