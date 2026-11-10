@@ -1,4 +1,5 @@
 # tests/test_admin_user_management.py
+import pytest
 import asyncio
 from datetime import datetime, timezone, timedelta
 from app.models.user import User, UserStatus
@@ -76,6 +77,7 @@ def test_token_version_invalidation():
     print("✅ TEST 2 PASSED: Cơ chế token_version vô hiệu hóa phiên tức thì 100%.")
 
 
+@pytest.mark.anyio
 async def test_guard_rules_and_db_flow():
     """3. Nghiệp vụ 4 & 7: Kiểm tra Guard Rules & Xử lý Nhà hoang trên DB thực tế"""
     async with AsyncSessionFactory() as db:
@@ -96,12 +98,12 @@ async def test_guard_rules_and_db_flow():
         # 3.1. Admin không tự khóa mình
         can_lock, lock_reason = await check_user_locking_guards(db, admin, admin)
         assert can_lock is False
-        assert "chính mình" in lock_reason
+        assert lock_reason is not None and "chính mình" in lock_reason
 
         # 3.2. Admin không tự xóa mình
         can_del, del_reason = await check_user_deletion_guards(db, admin, admin)
         assert can_del is False
-        assert "chính mình" in del_reason
+        assert del_reason is not None and "chính mình" in del_reason
 
         print("✅ TEST 3 PASSED: Ràng buộc an toàn ngăn tự khóa/tự xóa Admin 100%.")
 
@@ -147,7 +149,7 @@ async def test_guard_rules_and_db_flow():
         # Kiểm tra Guard: Không xóa Owner khi nhà còn thành viên hoạt động
         can_del_owner, owner_del_reason = await check_user_deletion_guards(db, test_owner, admin)
         assert can_del_owner is False
-        assert "thành viên hoạt động" in owner_del_reason
+        assert owner_del_reason is not None and "thành viên hoạt động" in owner_del_reason
         print("✅ TEST 4 PASSED: Chặn xóa Owner khi nhà còn thành viên hoạt động 100%.")
 
         # Nghiệp vụ 4 (Nhà hoang): Xử lý nhà hoang -> Do còn test_member hoạt động, ưu tiên chuyển quyền Owner
@@ -174,7 +176,6 @@ async def test_guard_rules_and_db_flow():
         await db.execute(delete(User).where(User.id.in_([test_owner.id, test_member.id])))
         await db.commit()
         print("🧹 Cleaned up test entities successfully.")
-
 
 if __name__ == "__main__":
     test_dormancy_calculation()

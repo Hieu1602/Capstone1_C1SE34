@@ -9,7 +9,6 @@ import {
   RefreshControl,
   StatusBar,
   Animated,
-  TextInput,
 } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
@@ -106,6 +105,17 @@ const PatientSkeletonCard = ({ isDarkMode }: { isDarkMode: boolean }) => {
   );
 };
 
+function removeVietnameseTones(str?: string): string {
+  if (!str) return '';
+  return str
+    .normalize('NFD')
+    .replace(/[\u0300-\u036f]/g, '')
+    .replace(/đ/g, 'd')
+    .replace(/Đ/g, 'D')
+    .toLowerCase()
+    .trim();
+}
+
 export default function DoctorPatientsScreen() {
   const insets = useSafeAreaInsets();
   const navigation = useNavigation<any>();
@@ -169,15 +179,21 @@ export default function DoctorPatientsScreen() {
   };
 
   const filteredPatients = patients.filter((p) => {
-    const q = searchQuery.trim().toLowerCase();
-    if (q.length > 0) {
-      const cleanQ = q.replace(/[^0-9]/g, '');
+    const rawQ = searchQuery.trim();
+    if (rawQ.length > 0) {
+      const qNorm = removeVietnameseTones(rawQ);
+      const nameNorm = removeVietnameseTones(p.name || (p as any).full_name || '');
+      const houseNorm = removeVietnameseTones(p.house_name || '');
+      const conditionNorm = removeVietnameseTones((p as any).condition || p.medical_history || '');
+      const cleanQ = rawQ.replace(/[^0-9]/g, '');
       const cleanPhone = (p.emergency_contact_phone || '').replace(/[^0-9]/g, '');
 
-      const matchesName = p.name.toLowerCase().includes(q);
+      const matchesName = nameNorm.includes(qNorm);
+      const matchesHouse = houseNorm.includes(qNorm);
+      const matchesCondition = conditionNorm.includes(qNorm);
       const matchesPhone = cleanQ.length > 0 && cleanPhone.includes(cleanQ);
 
-      if (!matchesName && !matchesPhone) return false;
+      if (!matchesName && !matchesHouse && !matchesCondition && !matchesPhone) return false;
     }
 
     if (filterTab === 'WARNING') return p.health_status === 'WARNING' || p.health_status === 'DANGER';

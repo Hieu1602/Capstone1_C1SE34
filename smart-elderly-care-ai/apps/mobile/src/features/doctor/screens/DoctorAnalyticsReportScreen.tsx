@@ -26,6 +26,17 @@ import {
 
 export type { PatientOption };
 
+function removeVietnameseTones(str?: string): string {
+  if (!str) return '';
+  return str
+    .normalize('NFD')
+    .replace(/[\u0300-\u036f]/g, '')
+    .replace(/đ/g, 'd')
+    .replace(/Đ/g, 'D')
+    .toLowerCase()
+    .trim();
+}
+
 export default function DoctorAnalyticsReportScreen() {
   const insets = useSafeAreaInsets();
   const navigation = useNavigation<any>();
@@ -158,11 +169,14 @@ export default function DoctorAnalyticsReportScreen() {
 
   // Lọc bệnh nhân
   const filteredPatients = useMemo(() => {
+    const rawQ = searchQuery.trim();
+    const qNorm = removeVietnameseTones(rawQ);
     return patients.filter((p) => {
       const matchesSearch =
-        p.name.toLowerCase().includes(searchQuery.toLowerCase()) ||
-        p.condition.toLowerCase().includes(searchQuery.toLowerCase()) ||
-        (p.houseName || '').toLowerCase().includes(searchQuery.toLowerCase());
+        qNorm === '' ||
+        removeVietnameseTones(p.name).includes(qNorm) ||
+        removeVietnameseTones(p.condition).includes(qNorm) ||
+        removeVietnameseTones(p.houseName || '').includes(qNorm);
 
       if (!matchesSearch) return false;
       if (filterStatus === 'WARNING') return p.healthStatus === 'WARNING' || p.healthStatus === 'DANGER';

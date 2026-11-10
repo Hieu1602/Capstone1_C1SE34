@@ -784,7 +784,7 @@ export default function AIAssistantScreen({ navigation }: any) {
       <View style={[styles.mainBody, isDarkMode && { backgroundColor: colors.background }]}>
         <KeyboardAvoidingView
           style={{ flex: 1 }}
-          behavior={Platform.OS === 'ios' ? 'padding' : undefined}
+          behavior="padding"
           keyboardVerticalOffset={keyboardVerticalOffset}
         >
           <ScrollView

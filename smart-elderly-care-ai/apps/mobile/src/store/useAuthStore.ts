@@ -15,6 +15,22 @@ export interface HousePermissions {
   is_owner: boolean;
 }
 
+export const selectIsOwner = (state: { userRole?: string | null; role?: string | null; permissions?: HousePermissions | null }): boolean => {
+  return Boolean(
+    state.userRole === 'admin' ||
+    state.role === 'admin' ||
+    state.userRole === 'owner' ||
+    state.role === 'owner' ||
+    state.permissions?.is_owner === true ||
+    state.permissions?.role_in_house === 'OWNER'
+  );
+};
+
+export const selectCanViewCamera = (state: { userRole?: string | null; role?: string | null; permissions?: HousePermissions | null }): boolean => {
+  if (selectIsOwner(state)) return true;
+  return Boolean(state.permissions?.can_view_camera);
+};
+
 export interface AuthStoreState {
   accessToken: string | null;
   refreshToken: string | null;
@@ -292,20 +308,6 @@ const createAuthStore: StateCreator<AuthStoreState, [], [['zustand/persist', Aut
       set({ permissions: p });
       return p;
     }
-    if (!s.household_id && !hId) {
-      // Tài khoản độc lập / mới tạo chưa liên kết vào nhà người khác: có toàn quyền thêm thiết bị mới
-      const independentPerms: HousePermissions = {
-        can_view_health: false,
-        can_view_camera: false,
-        can_handle_emergency: false,
-        can_manage_devices: true,
-        can_manage_records: false,
-        role_in_house: 'NEW_USER',
-        is_owner: false,
-      };
-      set({ permissions: independentPerms });
-      return independentPerms;
-    }
     try {
       const { householdApi } = await import('../services/api');
       const target = hId || s.household_id || 'current';
@@ -340,7 +342,7 @@ const createAuthStore: StateCreator<AuthStoreState, [], [['zustand/persist', Aut
           can_handle_emergency: isOwner ? true : res.data.can_handle_emergency !== false,
           can_manage_devices: isOwner ? true : Boolean(res.data.can_manage_devices),
           can_manage_records: isOwner ? true : Boolean(res.data.can_manage_records),
-          role_in_house: res.data.role_in_house || 'MEMBER',
+          role_in_house: res.data.role_in_house || (isOwner ? 'OWNER' : 'MEMBER'),
           is_owner: isOwner,
         };
         set({ permissions: p, has_house: true });

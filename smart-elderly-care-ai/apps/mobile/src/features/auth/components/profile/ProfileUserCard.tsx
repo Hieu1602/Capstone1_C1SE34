@@ -42,13 +42,12 @@ export const ProfileUserCard: React.FC<ProfileUserCardProps> = ({
   );
 
   const isOwner =
-    hasLinkedHouse &&
-    (permissions?.is_owner === true ||
-      permissions?.role_in_house === 'OWNER' ||
-      userRole === 'admin' ||
-      role === 'admin' ||
-      userRole === 'owner' ||
-      role === 'owner');
+    permissions?.is_owner === true ||
+    permissions?.role_in_house === 'OWNER' ||
+    userRole === 'admin' ||
+    role === 'admin' ||
+    userRole === 'owner' ||
+    role === 'owner';
 
   const isDoctor =
     userRole === 'doctor' ||

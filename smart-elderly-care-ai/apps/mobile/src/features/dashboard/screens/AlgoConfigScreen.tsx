@@ -28,7 +28,13 @@ export default function AlgoConfigScreen({ navigation }: any) {
     fetchMyPermissions().finally(() => setCheckingPerms(false));
   }, []);
 
-  const isOwnerOrAdmin = userRole === 'admin' || role === 'admin' || Boolean(permissions?.is_owner);
+  const isOwnerOrAdmin =
+    userRole === 'admin' ||
+    role === 'admin' ||
+    userRole === 'owner' ||
+    role === 'owner' ||
+    Boolean(permissions?.is_owner) ||
+    permissions?.role_in_house === 'OWNER';
   const canManageDevices = isOwnerOrAdmin || Boolean(permissions?.can_manage_devices);
 
   const [maxHR, setMaxHR] = useState(algoSettings.maxHeartRate.toString());

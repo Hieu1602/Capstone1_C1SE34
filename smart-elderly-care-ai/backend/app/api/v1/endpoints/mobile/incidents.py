@@ -2,6 +2,7 @@
 incidents.py – API quản lý lịch sử sự kiện và clip video bằng chứng.
 """
 
+import logging
 from typing import List
 from uuid import UUID
 
@@ -12,6 +13,8 @@ from app.core.database import get_db
 from app.crud.crud_incident import crud_incident
 from app.models.user import User
 from app.schemas.incident import IncidentAck, IncidentOut
+
+logger = logging.getLogger("incidents")
 
 router = APIRouter()
 
@@ -93,6 +96,19 @@ async def acknowledge_incident(
             status_code=status.HTTP_404_NOT_FOUND,
             detail="Incident not found",
         )
+
+    # Nếu người nhà xác nhận thông báo đặt lịch khám của Bác sĩ -> đồng bộ xác nhận & báo Bác sĩ
+    if incident.alert_type == "APPOINTMENT_SCHEDULED" and incident.notes:
+        from app.services.notification.appointment_notify import notify_doctor_appointment_confirmed
+        try:
+            await notify_doctor_appointment_confirmed(
+                db=db,
+                appointment_id=incident.notes,
+                ack_user=current_user,
+            )
+        except Exception as notify_err:
+            logger.warning("[acknowledge_incident] Lỗi kích hoạt notify_doctor_appointment_confirmed: %s", notify_err)
+
     return incident
 
 

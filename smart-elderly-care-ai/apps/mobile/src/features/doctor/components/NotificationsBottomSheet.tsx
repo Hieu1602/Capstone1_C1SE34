@@ -99,7 +99,7 @@ export default function NotificationsBottomSheet({
   onSelectAppointment,
   onNavigate,
   onMarkAllRead,
-  hasUnread = true,
+  hasUnread: _hasUnread = true,
   onRespondHouseInvite,
 }: Props) {
   const { isDarkMode, colors } = useTheme();
@@ -144,13 +144,17 @@ export default function NotificationsBottomSheet({
 
     const isRead = Boolean(inc.is_acknowledged || readIds.has(inc.id) || readIds.has(`inc_${inc.id}`));
 
-    // 1.1 Thông báo liên quan đến lịch khám (Hủy, Dời lịch, Đặt lịch)
+    // 1.1 Thông báo liên quan đến lịch khám (Hủy, Dời lịch, Đặt lịch, Gia đình xác nhận đón tiếp)
     const isAppointmentMsg =
+      inc.alert_type === 'APPOINTMENT_CONFIRMED' ||
+      inc.alert_type === 'APPOINTMENT_SCHEDULED' ||
+      inc.alert_type === 'APPOINTMENT_CANCELLED' ||
       msgLower.includes('lịch khám') ||
       msgLower.includes('lịch hẹn') ||
       msgLower.includes('đã hủy') ||
       msgLower.includes('[đã hủy]') ||
-      msgLower.includes('tái khám');
+      msgLower.includes('tái khám') ||
+      msgLower.includes('xác nhận lịch');
 
     // 1.2 Thông báo chỉ định / phụ trách bệnh nhân từ chủ hộ gia đình
     const isAssignmentMsg =
@@ -203,19 +207,23 @@ export default function NotificationsBottomSheet({
         rawIncident: inc,
       });
     } else if (isAppointmentMsg) {
-      const isCancelled = msgLower.includes('hủy');
+      const isCancelled = msgLower.includes('hủy') || inc.alert_type === 'APPOINTMENT_CANCELLED';
+      const isConfirmed =
+        inc.alert_type === 'APPOINTMENT_CONFIRMED' ||
+        msgLower.includes('đã xác nhận') ||
+        msgLower.includes('sẵn sàng đón tiếp');
       unifiedList.push({
         id: `inc_${inc.id}`,
         rawIncidentId: inc.id,
         type: 'APPOINTMENT',
-        title: rawMsg || 'Lịch khám bệnh nhân',
+        title: rawMsg || (isConfirmed ? 'Gia đình đã xác nhận đón tiếp' : 'Lịch khám bệnh nhân'),
         subtitle: inc.created_at ? formatDate(inc.created_at) : 'Thông báo lịch khám',
         timeStr: inc.created_at || '',
-        badgeLabel: isCancelled ? 'Đã hủy' : 'Lịch khám',
-        badgeColor: isCancelled ? '#DC2626' : '#0284C7',
-        badgeBg: isCancelled ? '#FEE2E2' : '#EFF6FF',
-        iconName: 'calendar',
-        iconColor: isCancelled ? '#DC2626' : '#0284C7',
+        badgeLabel: isCancelled ? 'Đã hủy' : isConfirmed ? 'Đã xác nhận' : 'Lịch khám',
+        badgeColor: isCancelled ? '#DC2626' : isConfirmed ? '#059669' : '#0284C7',
+        badgeBg: isCancelled ? '#FEE2E2' : isConfirmed ? '#ECFDF5' : '#EFF6FF',
+        iconName: isConfirmed ? 'checkmark-circle' : isCancelled ? 'close-circle' : 'calendar',
+        iconColor: isCancelled ? '#DC2626' : isConfirmed ? '#059669' : '#0284C7',
         isRead,
         targetScreen: 'DoctorAppointments',
       });
@@ -236,7 +244,7 @@ export default function NotificationsBottomSheet({
         targetScreen: 'DoctorPatients',
       });
     } else if (isMedicalRecordMsg) {
-      let targetPatientId = inc.notes && inc.notes.includes('PATIENT:')
+      const targetPatientId = inc.notes && inc.notes.includes('PATIENT:')
         ? inc.notes.split('PATIENT:')[1].split('|')[0].trim()
         : undefined;
       unifiedList.push({
@@ -283,7 +291,7 @@ export default function NotificationsBottomSheet({
       id: `pat_${pat.id}`,
       type: 'PATIENT_WARNING',
       title: `${pat.name} - Cần chú ý theo dõi`,
-      subtitle: `Nhịp tim: ${pat.heart_rate ?? '--'} bpm • SpO2: ${pat.spo2 ?? '--'}% • ${pat.house_name || 'Nhà riêng'}`,
+      subtitle: `Nhịp tim: ${pat.heart_rate ?? '--'} bpm • SpO2: ${pat.spo2 ?? '--'}% • ${pat.house_address || (pat.house_name && pat.house_name !== 'Nhà của tôi' ? pat.house_name : 'Nhà riêng')}`,
       timeStr: '',
       badgeLabel: isDanger ? 'Nguy cấp' : 'Cần chú ý',
       badgeColor: isDanger ? '#DC2626' : '#D97706',
@@ -583,6 +591,7 @@ export default function NotificationsBottomSheet({
           <FlatList
             data={filteredList}
             keyExtractor={(item) => item.id}
+            style={{ flex: 1 }}
             contentContainerStyle={styles.listContent}
             showsVerticalScrollIndicator={false}
             renderItem={({ item }) => (
@@ -617,7 +626,7 @@ export default function NotificationsBottomSheet({
                         { color: item.isRead ? (isDarkMode ? '#94A3B8' : '#64748B') : colors.textPrimary },
                         !item.isRead && { fontWeight: '700' },
                       ]}
-                      numberOfLines={1}
+                      numberOfLines={2}
                     >
                       {item.title}
                     </LocalizedText>
@@ -703,10 +712,10 @@ const styles = StyleSheet.create({
     backgroundColor: 'rgba(0,0,0,0.45)',
   },
   sheet: {
+    height: '78%',
     borderTopLeftRadius: 20,
     borderTopRightRadius: 20,
     borderTopWidth: 1,
-    maxHeight: '78%',
   },
   handle: {
     width: 36,
@@ -766,7 +775,9 @@ const styles = StyleSheet.create({
     fontWeight: '700',
   },
   emptyBox: {
+    flex: 1,
     alignItems: 'center',
+    justifyContent: 'center',
     paddingVertical: 40,
     paddingHorizontal: 24,
   },

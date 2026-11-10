@@ -41,7 +41,13 @@ export default function MedicationReminderScreen({ navigation }: any) {
     fetchMyPermissions().finally(() => setCheckingPerms(false));
   }, []);
 
-  const isOwnerOrAdmin = userRole === 'admin' || role === 'admin' || Boolean(permissions?.is_owner);
+  const isOwnerOrAdmin =
+    userRole === 'admin' ||
+    role === 'admin' ||
+    userRole === 'owner' ||
+    role === 'owner' ||
+    Boolean(permissions?.is_owner) ||
+    permissions?.role_in_house === 'OWNER';
   const canManageRecords = isOwnerOrAdmin || Boolean(permissions?.can_manage_records);
 
   // Trạng thái bật/tắt phát giọng nói nhắc nhở qua Loa thông minh Edge Hub (FR12)
