@@ -27,32 +27,60 @@ router = APIRouter()
 @router.get("", response_model=List[Dict[str, Any]])
 @router.get("/", response_model=List[Dict[str, Any]], include_in_schema=False)
 async def list_patients(
+    q: Optional[str] = Query(None, description="Tìm kiếm theo tên bệnh nhân"),
     current_user: Optional[User] = Depends(get_current_user_optional),
     db: AsyncSession = Depends(get_db),
 ):
     """
     Lấy danh sách người cao tuổi trong nhà để gán thiết bị hoặc theo dõi sức khỏe.
+    Hỗ trợ tìm kiếm theo tên và hỗ trợ phân quyền cho Bác sĩ & Người nhà.
     """
     from app.models.elderly_profile import ElderlyProfile
-    from sqlalchemy import select
-
-    house_id = None
-    if current_user:
-        house = await crud_house.get_or_create_default_house(db, owner_id=current_user.id)
-        if house:
-            house_id = house.id
+    from app.models.house import House, HouseMember
+    from sqlalchemy import select, or_
 
     query = select(ElderlyProfile)
-    if house_id:
-        query = query.where(ElderlyProfile.house_id == house_id)
+
+    if current_user:
+        if current_user.role == "admin":
+            pass
+        elif current_user.role == "doctor":
+            mem_subq = select(HouseMember.house_id).where(
+                HouseMember.user_id == current_user.id,
+                HouseMember.status == "ACTIVE",
+            )
+            owner_subq = select(House.id).where(House.owner_id == current_user.id)
+            query = query.where(
+                or_(
+                    ElderlyProfile.house_id.in_(mem_subq),
+                    ElderlyProfile.house_id.in_(owner_subq),
+                )
+            )
+        else:
+            house = await crud_house.get_or_create_default_house(db, owner_id=current_user.id)
+            if house:
+                query = query.where(ElderlyProfile.house_id == house.id)
+
+    if q and q.strip():
+        term = q.strip()
+        query = query.where(
+            or_(
+                ElderlyProfile.full_name.ilike(f"%{term}%"),
+                ElderlyProfile.emergency_contact_phone.ilike(f"%{term}%"),
+                ElderlyProfile.medical_history.ilike(f"%{term}%"),
+            )
+        )
+
     query = query.order_by(ElderlyProfile.created_at.asc())
 
     res = await db.execute(query)
     profiles = list(res.scalars().all())
 
-    if not profiles and house_id:
-        default_p = await crud_elderly.get_or_create_default(db, house_id=house_id)
-        profiles = [default_p]
+    if not profiles and current_user and current_user.role not in ("admin", "doctor") and not q:
+        house = await crud_house.get_or_create_default_house(db, owner_id=current_user.id)
+        if house:
+            default_p = await crud_elderly.get_or_create_default(db, house_id=house.id)
+            profiles = [default_p]
 
     current_year = datetime.now().year
     out = []
@@ -82,39 +110,38 @@ async def get_patient_medical_record(
     Lấy thông tin hồ sơ y tế / bệnh án của người cao tuổi theo ID (hoặc patient_id = 1).
     Tự động liên kết với hồ sơ người cao tuổi của Căn nhà người dùng.
     """
+    from app.models.elderly_profile import ElderlyProfile
+    from app.models.house import House
+    import uuid
+
     house_id = None
-    if current_user:
+    patient_uuid = None
+    try:
+        patient_uuid = uuid.UUID(patient_id)
+    except (ValueError, TypeError):
+        pass
+
+    target_profile = None
+    if patient_uuid:
+        target_profile = await db.get(ElderlyProfile, patient_uuid)
+        if target_profile:
+            house_id = target_profile.house_id
+
+    if not house_id and current_user:
         house = await crud_house.get_or_create_default_house(db, owner_id=current_user.id)
-        if not house:
-            return PatientMedicalRecordOut(
-                id=patient_id,
-                name="",
-                birth_year="",
-                age=0,
-                gender="",
-                blood_type="",
-                height_cm=0,
-                weight_kg=0,
-                bmi=0,
-                security_badge="",
-                conditions=[],
-                drug_allergies="",
-                food_allergies="",
-                dietary_notes="",
-                doctor_name="",
-                doctor_phone="",
-                doctor_specialty="",
-                hospital="",
-                next_appointment="",
-            )
-        house_id = house.id
-        if current_user.role not in ("admin", "doctor") and house.owner_id != current_user.id:
-            member = await crud_house.get_member_by_user(db, house.id, current_user.id)
-            if not member or not member.can_view_health:
-                raise HTTPException(
-                    status_code=status.HTTP_403_FORBIDDEN,
-                    detail="Bạn chưa được cấp quyền xem dữ liệu hồ sơ bệnh nhân.",
-                )
+        if house:
+            house_id = house.id
+
+    if current_user and current_user.role not in ("admin", "doctor"):
+        if house_id:
+            house = await db.get(House, house_id)
+            if house and house.owner_id != current_user.id:
+                member = await crud_house.get_member_by_user(db, house.id, current_user.id)
+                if not member or not member.can_view_health:
+                    raise HTTPException(
+                        status_code=status.HTTP_403_FORBIDDEN,
+                        detail="Bạn chưa được cấp quyền xem dữ liệu hồ sơ bệnh nhân.",
+                    )
 
     return await crud_elderly.get_medical_record(
         db=db, patient_id_or_serial=patient_id, house_id=house_id
@@ -130,8 +157,24 @@ async def update_patient_medical_record(
     db: AsyncSession = Depends(get_db),
 ):
     """Cập nhật thông tin hồ sơ bệnh án người cao tuổi."""
+    from app.models.elderly_profile import ElderlyProfile
+    from app.models.house import House
+    import uuid
+
     house_id = None
-    if current_user:
+    patient_uuid = None
+    try:
+        patient_uuid = uuid.UUID(patient_id)
+    except (ValueError, TypeError):
+        pass
+
+    target_profile = None
+    if patient_uuid:
+        target_profile = await db.get(ElderlyProfile, patient_uuid)
+        if target_profile:
+            house_id = target_profile.house_id
+
+    if not house_id and current_user:
         house = await crud_house.get_or_create_default_house(db, owner_id=current_user.id)
         if not house:
             raise HTTPException(
@@ -139,13 +182,17 @@ async def update_patient_medical_record(
                 detail="Bạn chưa tham gia căn nhà nào.",
             )
         house_id = house.id
-        if current_user.role not in ("admin", "doctor") and house.owner_id != current_user.id:
-            member = await crud_house.get_member_by_user(db, house.id, current_user.id)
-            if not member or not member.can_manage_records:
-                raise HTTPException(
-                    status_code=status.HTTP_403_FORBIDDEN,
-                    detail="Chỉ Người sở hữu hoặc Bác sĩ phụ trách mới có quyền chỉnh sửa hồ sơ bệnh án.",
-                )
+
+    if current_user and current_user.role not in ("admin", "doctor"):
+        if house_id:
+            house = await db.get(House, house_id)
+            if house and house.owner_id != current_user.id:
+                member = await crud_house.get_member_by_user(db, house.id, current_user.id)
+                if not member or not member.can_manage_records:
+                    raise HTTPException(
+                        status_code=status.HTTP_403_FORBIDDEN,
+                        detail="Chỉ Người sở hữu hoặc Bác sĩ phụ trách mới có quyền chỉnh sửa hồ sơ bệnh án.",
+                    )
 
     res_record = await crud_elderly.update_medical_record(
         db=db,
@@ -154,25 +201,29 @@ async def update_patient_medical_record(
         house_id=house_id,
     )
 
+    if not res_record:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="Không tìm thấy hồ sơ người cao tuổi yêu cầu.",
+        )
+
+    record_id = str(getattr(res_record, "id", None) or patient_id)
+
     # Đồng bộ bộ nhớ đệm lâm sàng bác sĩ nếu có
     try:
-        from app.crud.crud_doctor import _CLINICAL_STORE
-        for k in (str(res_record.id), str(patient_id)):
-            if k in _CLINICAL_STORE:
-                if update_in.drug_allergies is not None:
-                    _CLINICAL_STORE[k]["drug_allergies"] = update_in.drug_allergies
-                if update_in.food_allergies is not None:
-                    _CLINICAL_STORE[k]["food_allergies"] = update_in.food_allergies
-                if update_in.dietary_notes is not None:
-                    _CLINICAL_STORE[k]["dietary_notes"] = update_in.dietary_notes
-                if update_in.blood_type is not None:
-                    _CLINICAL_STORE[k]["blood_type"] = update_in.blood_type
-                if update_in.height_cm is not None:
-                    _CLINICAL_STORE[k]["height_cm"] = update_in.height_cm
-                if update_in.weight_kg is not None:
-                    _CLINICAL_STORE[k]["weight_kg"] = update_in.weight_kg
-                if update_in.conditions is not None:
-                    _CLINICAL_STORE[k]["conditions"] = update_in.conditions
+        from app.crud.crud_doctor import crud_doctor
+        crud_doctor.sync_clinical_store(
+            elderly_ids=[record_id, str(patient_id)],
+            update_data={
+                "drug_allergies": update_in.drug_allergies,
+                "food_allergies": update_in.food_allergies,
+                "dietary_notes": update_in.dietary_notes,
+                "blood_type": update_in.blood_type,
+                "height_cm": update_in.height_cm,
+                "weight_kg": update_in.weight_kg,
+                "conditions": update_in.conditions,
+            },
+        )
     except Exception:
         pass
 
@@ -234,7 +285,7 @@ async def update_patient_medical_record(
                         alert_level="LOW",
                         message=notif_msg,
                         is_acknowledged=False,
-                        notes=f"USER:{doc.id}|PATIENT:{res_record.id}",
+                        notes=f"USER:{doc.id}|PATIENT:{record_id}",
                     )
                     db.add(new_incident)
                     await db.commit()
@@ -251,7 +302,7 @@ async def update_patient_medical_record(
                                 "alert_type": "MEDICAL_RECORD_UPDATED",
                                 "alert_level": "LOW",
                                 "message": new_incident.message,
-                                "patient_id": str(res_record.id),
+                                "patient_id": record_id,
                                 "doctor_id": str(doc.id),
                                 "created_at": new_incident.created_at.isoformat() if new_incident.created_at else None,
                             }
@@ -268,6 +319,7 @@ async def update_patient_medical_record(
                     # Bắn thông báo đẩy FCM nếu có token
                     if doc.fcm_token:
                         try:
+                            # pyrefly: ignore[missing-module-attribute]
                             from app.services.notification.fcm_service import send_fcm_notification
                             await send_fcm_notification(
                                 fcm_token=doc.fcm_token,
@@ -275,7 +327,7 @@ async def update_patient_medical_record(
                                 body=notif_msg,
                                 data={
                                     "type": "MEDICAL_RECORD_UPDATED",
-                                    "patient_id": str(res_record.id),
+                                    "patient_id": record_id,
                                     "incident_id": str(new_incident.id),
                                 }
                             )
@@ -436,30 +488,15 @@ async def get_patient_appointments(
     return out
 
 
-@router.post(
-    "/{patient_id}/appointments/{appointment_id}/confirm",
-    response_model=Any,
-    summary="Chủ nhà hoặc Người thân xác nhận lịch khám của Bác sĩ",
-)
-@router.post(
-    "/appointments/{appointment_id}/confirm",
-    response_model=Any,
-    summary="Chủ nhà hoặc Người thân xác nhận lịch khám của Bác sĩ",
-)
-async def confirm_patient_appointment(
+async def _execute_confirm_appointment(
     appointment_id: str,
-    patient_id: Optional[str] = None,
-    current_user: Optional[User] = Depends(get_current_user_optional),
-    db: AsyncSession = Depends(get_db),
+    current_user: Optional[User],
+    db: AsyncSession,
 ):
-    """
-    Người thân hoặc chủ nhà bấm 'Xác nhận lịch hẹn' khi nhận được thông báo từ Bác sĩ.
-    Hệ thống ghi nhận trạng thái sẵn sàng đón tiếp và phản hồi thông báo tới Bác sĩ.
-    """
     import uuid
     import logging
-    from app.crud.crud_appointment import crud_appointment
     from app.schemas.appointment import AppointmentResponse
+    from app.services.notification.appointment_notify import notify_doctor_appointment_confirmed
 
     logger = logging.getLogger("appointments")
 
@@ -468,56 +505,13 @@ async def confirm_patient_appointment(
     except ValueError:
         raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="ID lịch khám không hợp lệ.")
 
-    apt = await crud_appointment.get_by_id(db=db, appointment_id=apt_uuid)
+    apt = await notify_doctor_appointment_confirmed(
+        db=db,
+        appointment_id=apt_uuid,
+        ack_user=current_user,
+    )
     if not apt:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Không tìm thấy lịch khám yêu cầu.")
-
-    # Cập nhật ghi chú xác nhận của gia đình
-    confirm_tag = "[ĐÃ XÁC NHẬN ĐÓN TIẾP]"
-    if not apt.clinical_notes or confirm_tag not in apt.clinical_notes:
-        apt.clinical_notes = f"{confirm_tag} {apt.clinical_notes or ''}".strip()
-        await db.commit()
-        await db.refresh(apt)
-
-    # Đánh dấu đã xác nhận trong bảng incidents & broadcast cập nhật qua WebSocket
-    try:
-        import json
-        from app.models.incident import Incident
-        from sqlalchemy import update, func
-        from app.api.websockets.vitals_ws import alert_clients
-
-        await db.execute(
-            update(Incident)
-            .where(
-                Incident.alert_type == "APPOINTMENT_SCHEDULED",
-                Incident.notes == str(apt.id),
-            )
-            .values(
-                is_acknowledged=True,
-                acknowledged_at=func.now(),
-            )
-        )
-        await db.commit()
-
-        ws_msg = json.dumps({
-            "type": "INCIDENT_RESOLVED",
-            "alert_type": "APPOINTMENT_CONFIRMED",
-            "incident_id": str(apt.id),
-            "data": {
-                "id": str(apt.id),
-                "appointment_id": str(apt.id),
-                "is_acknowledged": True,
-                "message": "Gia đình đã xác nhận đón tiếp Bác sĩ",
-            }
-        }, ensure_ascii=False)
-        for client_ws in list(alert_clients):
-            try:
-                await client_ws.send_text(ws_msg)
-            except Exception:
-                if client_ws in alert_clients:
-                    alert_clients.remove(client_ws)
-    except Exception as ack_err:
-        logger.warning("[CONFIRM] Lỗi cập nhật incident/WS: %s", ack_err)
 
     logger.info(
         f"[FAMILY APPOINTMENT CONFIRMED] Người thân đã xác nhận lịch hẹn {apt.id} của Bác sĩ {apt.doctor.full_name if apt.doctor else 'phụ trách'} vào {apt.scheduled_at}."
@@ -544,5 +538,32 @@ async def confirm_patient_appointment(
         created_at=apt.created_at,
         updated_at=apt.updated_at,
     )
+
+
+@router.post(
+    "/{patient_id}/appointments/{appointment_id}/confirm",
+    response_model=Any,
+    summary="Chủ nhà hoặc Người thân xác nhận lịch khám của Bác sĩ",
+)
+async def confirm_patient_appointment_by_patient(
+    patient_id: str,
+    appointment_id: str,
+    current_user: Optional[User] = Depends(get_current_user_optional),
+    db: AsyncSession = Depends(get_db),
+):
+    return await _execute_confirm_appointment(appointment_id, current_user, db)
+
+
+@router.post(
+    "/appointments/{appointment_id}/confirm",
+    response_model=Any,
+    summary="Chủ nhà hoặc Người thân xác nhận lịch khám của Bác sĩ",
+)
+async def confirm_patient_appointment(
+    appointment_id: str,
+    current_user: Optional[User] = Depends(get_current_user_optional),
+    db: AsyncSession = Depends(get_db),
+):
+    return await _execute_confirm_appointment(appointment_id, current_user, db)
 
 

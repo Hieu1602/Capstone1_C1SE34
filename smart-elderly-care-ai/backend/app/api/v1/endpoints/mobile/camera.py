@@ -340,6 +340,8 @@ async def pair(body: Pair, user: User = Depends(authenticated), db: AsyncSession
     if await db.get(Device, device_id):
         raise HTTPException(409, "Camera đã được liên kết; không thể đổi chủ từ app")
     house = await crud_house.get_or_create_default_house(db, owner_id=user.id)
+    if not house:
+        raise HTTPException(404, "Không tìm thấy căn nhà của người dùng")
     if house.owner_id != user.id:
         raise HTTPException(403, "Chủ căn nhà cần thực hiện liên kết camera")
     device = Device(id=device_id, device_id=f"TAPO_{device_id.hex}", name="Tapo C200C",
@@ -794,8 +796,9 @@ async def media(resource: str, ticket: str = Query(...), db: AsyncSession = Depe
         params = {"quality": quality} if resource == "live.mjpg" else {}
         if overlay in ("1", "true", "yes", "True") or payload.get("overlay"):
             params["overlay"] = "1"
-        if getattr(device, "config", None) and device.config.stream_url:
-            params["src"] = device.config.stream_url
+        dev_config = getattr(device, "config", None)
+        if dev_config and getattr(dev_config, "stream_url", None):
+            params["src"] = dev_config.stream_url
         response = await upstream.send(upstream.build_request("GET", "/" + resource, params=params), stream=True)
     except httpx.HTTPError:
         await upstream.aclose()

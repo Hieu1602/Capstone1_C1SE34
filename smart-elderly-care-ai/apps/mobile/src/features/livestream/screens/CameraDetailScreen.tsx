@@ -70,7 +70,13 @@ export default function CameraDetailScreen({ navigation, route }: Props) {
     const { colors, isDarkMode } = useTheme();
     const [showRtspConfigModal, setShowRtspConfigModal] = useState<boolean>(false);
     const { permissions, userRole, role } = useAuthStore();
-    const isOwnerOrAdmin = userRole === 'admin' || role === 'admin' || permissions?.is_owner === true || permissions?.role_in_house === 'OWNER';
+    const isOwnerOrAdmin =
+        userRole === 'admin' ||
+        role === 'admin' ||
+        userRole === 'owner' ||
+        role === 'owner' ||
+        permissions?.is_owner === true ||
+        permissions?.role_in_house === 'OWNER';
     const canViewCamera = isOwnerOrAdmin || Boolean(permissions?.can_view_camera);
 
     useEffect(() => {
@@ -334,7 +340,7 @@ export default function CameraDetailScreen({ navigation, route }: Props) {
             <CameraDetailHeader
                 name={name}
                 onBack={() => navigation.goBack()}
-                onSettings={() => openSheet("settings")}
+                onSettings={isOwnerOrAdmin ? () => openSheet("settings") : undefined}
             />
             <CameraViewer
                 connection={connection}
@@ -380,7 +386,9 @@ export default function CameraDetailScreen({ navigation, route }: Props) {
                     onPanelChange={changePanel}
                     intercom={intercom}
                     onMove={move}
-                    onSettings={() => openSheet("settings")}
+                    onSettings={isOwnerOrAdmin ? () => openSheet("settings") : () => {
+                        LocalizedAlert.alert("Quyền truy cập bị giới hạn", "Tài khoản Thành viên chỉ có quyền xem trực tiếp camera, không được phép thay đổi cài đặt.");
+                    }}
                     feedback={feedback}
                 />
                 {!panel && (
@@ -685,11 +693,11 @@ export default function CameraDetailScreen({ navigation, route }: Props) {
                                     onMotion={() => {
                                         void connection.toggleMotion();
                                     }}
-                                    onConfigureSource={() => {
+                                    onConfigureSource={isOwnerOrAdmin ? () => {
                                         setSheet(null);
                                         setShowRtspConfigModal(true);
-                                    }}
-                                    onDeleteDevice={handleDeleteCamera}
+                                    } : undefined}
+                                    onDeleteDevice={isOwnerOrAdmin ? handleDeleteCamera : undefined}
                                 />
                             )}
                         </ScrollView>

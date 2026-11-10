@@ -12,7 +12,9 @@ import {
   ActivityIndicator,
   Platform,
   Share,
+  RefreshControl,
 } from 'react-native';
+import { useFocusEffect } from '@react-navigation/native';
 import { LocalizedAlert as Alert, LocalizedText as Text } from '../../../i18n/LocalizedComponents';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
@@ -21,6 +23,7 @@ import { useAuthStore, useVitalStore } from '../../../store/useVitalStore';
 import { useTheme } from '../../../store/useThemeStore';
 import * as Clipboard from 'expo-clipboard';
 import { householdApi } from '../../../services/api';
+import { alertsWS } from '../../../services/websocket';
 import {
   HouseMemberRow,
   HousePermissionModal,
@@ -50,6 +53,7 @@ export default function HouseDetailScreen({ navigation, route }: any) {
   const [inviteModalVisible, setInviteModalVisible] = useState(false);
   const [inviteStep, setInviteStep] = useState<1 | 2>(1);
   const [selectedInviteRole, setSelectedInviteRole] = useState<'MEMBER' | 'ADMIN'>('MEMBER');
+  const [inviteRoleType, setInviteRoleType] = useState<'MEMBER' | 'DOCTOR'>('MEMBER');
   const [isAccountInviteModalVisible, setIsAccountInviteModalVisible] = useState(false);
   const [isShareModalVisible, setIsShareModalVisible] = useState(false);
   const [isJoinCodeModalVisible, setIsJoinCodeModalVisible] = useState(false);
@@ -80,7 +84,12 @@ export default function HouseDetailScreen({ navigation, route }: any) {
 
   const [toastInfo, setToastInfo] = useState<{ message: string; type?: 'success' | 'error' } | null>(null);
 
-  const hasLinkedHouse = Boolean(house?.id && house?.hasHouse !== false && house?.name && house.name.trim() !== '');
+  const hasLinkedHouse = Boolean(
+    household_id ||
+    (house?.id && house?.hasHouse !== false && house?.name && house.name.trim() !== '') ||
+    permissions?.role_in_house === 'OWNER' ||
+    permissions?.is_owner === true
+  );
 
   const isCurrentUserOwner =
     hasLinkedHouse &&
@@ -174,15 +183,12 @@ export default function HouseDetailScreen({ navigation, route }: any) {
     },
   ], [full_name, userName, phone_number, userPhone]);
 
+  const [isRefreshing, setIsRefreshing] = useState(false);
+
   const loadMembers = useCallback(async () => {
-    if (!hasLinkedHouse) {
-      setMembers([]);
-      setIsLoadingMembers(false);
-      return;
-    }
     try {
       setIsLoadingMembers(true);
-      const targetHId = household_id || 'current';
+      const targetHId = household_id || (house?.id ? String(house.id) : 'current');
       const res = await householdApi.getMembers(targetHId);
       if (Array.isArray(res.data) && res.data.length > 0) {
         setMembers(res.data);
@@ -194,13 +200,49 @@ export default function HouseDetailScreen({ navigation, route }: any) {
     } finally {
       setIsLoadingMembers(false);
     }
-  }, [household_id, hasLinkedHouse]);
+  }, [household_id, house?.id]);
+
+  const handleRefresh = async () => {
+    setIsRefreshing(true);
+    try {
+      await Promise.allSettled([
+        loadMembers(),
+        fetchHouseFromBackend?.(),
+      ]);
+    } finally {
+      setIsRefreshing(false);
+    }
+  };
+
+  useFocusEffect(
+    useCallback(() => {
+      loadMembers();
+    }, [loadMembers])
+  );
 
   useEffect(() => {
-    loadMembers();
+    alertsWS.connect();
+    const handleWs = (event: any) => {
+      if (
+        event?.type === 'ALERT_NEW' &&
+        (event?.alert_type === 'HOUSE_MEMBER_ADDED' ||
+         event?.alert_type === 'HOUSE_INVITE_PENDING' ||
+         event?.alert_type === 'HOUSE_INVITE_REJECTED' ||
+         event?.alert_type === 'HOUSE_INVITE_ACCEPTED' ||
+         event?.data?.alert_type === 'HOUSE_MEMBER_ADDED' ||
+         event?.data?.alert_type === 'HOUSE_INVITE_ACCEPTED')
+      ) {
+        loadMembers();
+      }
+    };
+    const unsub = alertsWS.subscribe(handleWs);
+    return () => {
+      unsub();
+    };
   }, [loadMembers]);
 
   const handleOpenPermissions = (member: any) => {
+    if (!isCurrentUserOwner) return;
     if (member?.is_owner || member?.role_in_house === 'OWNER') return;
     handleRemoveMember(member);
   };
@@ -381,23 +423,28 @@ export default function HouseDetailScreen({ navigation, route }: any) {
     try {
       setIsAddingMember(true);
       const targetHId = household_id || 'current';
+      const isDoc = inviteRoleType === 'DOCTOR';
       await householdApi.addMember(targetHId, {
         phone_number: phoneToSubmit,
-        full_name: newMemberName.trim() || 'Thành viên',
-        role_in_house: 'MEMBER',
-        role: 'user',
+        full_name: newMemberName.trim() || (isDoc ? 'Bác sĩ gia đình' : 'Thành viên'),
+        role_in_house: isDoc ? 'DOCTOR' : 'MEMBER',
+        role: isDoc ? 'doctor' : 'user',
         can_view_health: true,
         can_view_camera: true,
         can_handle_emergency: true,
         can_manage_devices: false,
-        can_manage_records: false,
+        can_manage_records: isDoc,
       });
 
       setIsAccountInviteModalVisible(false);
       setInviteModalVisible(false);
       setNewMemberPhone('');
       setNewMemberName('');
-      triggerToast(`Đã gửi lời mời tham gia tới ${phoneToSubmit} . Đang chờ thành viên xác nhận.`);
+      triggerToast(
+        isDoc
+          ? `Đã gửi lời mời tới Bác sĩ (${phoneToSubmit}). Đang chờ Bác sĩ đồng ý để vào nhà.`
+          : `Đã gửi lời mời tham gia tới ${phoneToSubmit}. Đang chờ thành viên xác nhận.`
+      );
       loadMembers();
     } catch (error: any) {
       const errDetail = error.response?.data?.detail || error.message || 'Không thể thêm thành viên. Vui lòng kiểm tra lại.';
@@ -440,7 +487,9 @@ export default function HouseDetailScreen({ navigation, route }: any) {
           {hasLinkedHouse && (
             <TouchableOpacity
               activeOpacity={0.7}
+              disabled={!isCurrentUserOwner}
               onPress={() => {
+                if (!isCurrentUserOwner) return;
                 setEditAddressInput(house?.address || '');
                 setIsEditAddressModalVisible(true);
               }}
@@ -472,7 +521,18 @@ export default function HouseDetailScreen({ navigation, route }: any) {
       </View>
 
       {hasLinkedHouse ? (
-      <ScrollView showsVerticalScrollIndicator={false} contentContainerStyle={styles.scrollContent}>
+      <ScrollView
+        showsVerticalScrollIndicator={false}
+        contentContainerStyle={styles.scrollContent}
+        refreshControl={
+          <RefreshControl
+            refreshing={isRefreshing}
+            onRefresh={handleRefresh}
+            tintColor={Colors.primary}
+            colors={[Colors.primary]}
+          />
+        }
+      >
         {/* Banner thông tin phân quyền */}
         <View style={[styles.roleInfoBanner, { backgroundColor: isDarkMode ? '#172554' : '#EFF6FF', borderColor: '#3B82F6' }]}>
           <Ionicons name="shield-checkmark" size={22} color="#3B82F6" style={{ marginRight: 10, marginTop: 2 }} />
@@ -674,6 +734,8 @@ export default function HouseDetailScreen({ navigation, route }: any) {
       <HouseAccountInviteModal
         visible={Boolean(isAccountInviteModalVisible && isCurrentUserOwner)}
         selectedInviteRole={selectedInviteRole}
+        inviteRoleType={inviteRoleType}
+        setInviteRoleType={setInviteRoleType}
         newMemberName={newMemberName}
         setNewMemberName={setNewMemberName}
         newMemberPhone={newMemberPhone}

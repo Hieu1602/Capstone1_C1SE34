@@ -242,6 +242,21 @@ export default function AIAssistantScreen({ navigation }: any) {
   // Chiều cao bàn phím iOS an toàn (Không dùng try/catch hook)
   const keyboardVerticalOffset = Platform.OS === 'ios' ? 88 : 0;
 
+  // Tự động cuộn xuống tin nhắn mới nhất khi bàn phím xuất hiện
+  useEffect(() => {
+    const showSub = Keyboard.addListener(
+      Platform.OS === 'ios' ? 'keyboardWillShow' : 'keyboardDidShow',
+      () => {
+        setTimeout(() => {
+          scrollViewRef.current?.scrollToEnd({ animated: true });
+        }, 100);
+      }
+    );
+    return () => {
+      showSub.remove();
+    };
+  }, []);
+
   // Tự động dừng TTS & Audio Recorder khi unmount
   useEffect(() => {
     return () => {
@@ -463,34 +478,56 @@ export default function AIAssistantScreen({ navigation }: any) {
     fetchSessions();
   }, [closeSidebar, fetchSessions, setSessionId]);
 
-  // Xoá cuộc trò chuyện khỏi DB và danh sách hiển thị có xác nhận
+  // Xoá cuộc trò chuyện khỏi DB và danh sách hiển thị
+  const executeDeleteHistoryChat = useCallback(
+    async (sessionId: string) => {
+      try {
+        await chatbotApi.deleteSession(sessionId);
+        setHistoryChats((prev) => prev.filter((c) => c.id !== sessionId));
+        if (currentSessionIdRef.current === sessionId) {
+          setSessionId(null);
+          setMessages([]);
+        }
+      } catch (err: any) {
+        console.warn('[Chatbot] Lỗi xoá cuộc trò chuyện:', err);
+        const errMsg = err?.response?.data?.detail || 'Không thể xoá cuộc trò chuyện. Vui lòng thử lại sau.';
+        if (Platform.OS === 'web') {
+          if (typeof window !== 'undefined') window.alert(errMsg);
+        } else {
+          Alert.alert('Lỗi', errMsg);
+        }
+      }
+    },
+    [setSessionId]
+  );
+
+  // Xoá cuộc trò chuyện khỏi DB và danh sách hiển thị có xác nhận (Hỗ trợ cả Native và Web)
   const handleDeleteHistoryChat = useCallback(
     (sessionId: string, sessionTitle?: string) => {
+      const confirmMsg = `Bạn có chắc chắn muốn xoá "${sessionTitle || 'cuộc trò chuyện này'}"?`;
+
+      if (Platform.OS === 'web') {
+        const confirmed = typeof window !== 'undefined' ? window.confirm(confirmMsg) : true;
+        if (confirmed) {
+          executeDeleteHistoryChat(sessionId);
+        }
+        return;
+      }
+
       Alert.alert(
         'Xoá cuộc trò chuyện',
-        `Bạn có chắc chắn muốn xoá "${sessionTitle || 'cuộc trò chuyện này'}"?`,
+        confirmMsg,
         [
           { text: 'Huỷ', style: 'cancel' },
           {
             text: 'Xoá',
             style: 'destructive',
-            onPress: async () => {
-              try {
-                await chatbotApi.deleteSession(sessionId);
-                setHistoryChats((prev) => prev.filter((c) => c.id !== sessionId));
-                if (currentSessionIdRef.current === sessionId) {
-                  setSessionId(null);
-                  setMessages([]);
-                }
-              } catch (err) {
-                console.warn('[Chatbot] Lỗi xoá cuộc trò chuyện:', err);
-              }
-            },
+            onPress: () => executeDeleteHistoryChat(sessionId),
           },
         ]
       );
     },
-    [setSessionId]
+    [executeDeleteHistoryChat]
   );
 
   // Gửi tin nhắn đến Chatbot RAG API
@@ -747,11 +784,12 @@ export default function AIAssistantScreen({ navigation }: any) {
       <View style={[styles.mainBody, isDarkMode && { backgroundColor: colors.background }]}>
         <KeyboardAvoidingView
           style={{ flex: 1 }}
-          behavior={Platform.OS === 'ios' ? 'padding' : undefined}
+          behavior="padding"
           keyboardVerticalOffset={keyboardVerticalOffset}
         >
           <ScrollView
             ref={scrollViewRef}
+            style={{ flex: 1 }}
             showsVerticalScrollIndicator={false}
             contentContainerStyle={styles.mainScroll}
             keyboardShouldPersistTaps="handled"
@@ -1066,11 +1104,11 @@ export default function AIAssistantScreen({ navigation }: any) {
                   </TouchableOpacity>
                   <TouchableOpacity
                     onPress={() => handleDeleteHistoryChat(chat.id, chat.title)}
-                    hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
-                    style={{ padding: 4, marginLeft: 6 }}
+                    hitSlop={{ top: 12, bottom: 12, left: 12, right: 12 }}
+                    style={{ padding: 8, marginLeft: 4 }}
                     accessibilityLabel="Xoá cuộc trò chuyện"
                   >
-                    <Ionicons name="trash-outline" size={16} color={isDarkMode ? '#EF4444' : '#DC2626'} />
+                    <Ionicons name="trash-outline" size={18} color={isDarkMode ? '#EF4444' : '#DC2626'} />
                   </TouchableOpacity>
                 </View>
               ))

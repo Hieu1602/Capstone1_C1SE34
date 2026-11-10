@@ -175,11 +175,49 @@ class AlertsWebSocket {
     // 0.1. Lịch khám đã được xác nhận (Doctor Appointment Confirmed)
     if (event.alert_type === 'APPOINTMENT_CONFIRMED' || event.type === 'APPOINTMENT_CONFIRMED') {
       const aptId = event.appointment_id || event.data?.appointment_id;
+      const incData = event.data || {};
+      const targetUserId = incData.target_user_id;
+      const currentUserId = useAuthStore.getState().userId || useAuthStore.getState().user_id;
+      const isDoctor =
+        useAuthStore.getState().viewRole === 'DOCTOR' ||
+        useAuthStore.getState().role?.toLowerCase() === 'doctor';
+
+      // 1. Phía Người nhà: Acknowledge incident APPOINTMENT_SCHEDULED cũ nếu có
       const targetInc = store.incidents.find(
-        (i) => (aptId && i.note === aptId) || i.id === event.incident_id || i.id === event.data?.id
+        (i) => (aptId && (i.note === aptId || i.notes?.includes(aptId))) || i.id === event.incident_id || i.id === incData.id
       );
       if (targetInc) {
         store.acknowledgeIncident(targetInc.id, 'Gia đình đã xác nhận lịch khám');
+      }
+
+      // 2. Phía Bác sĩ: Thêm thông báo mới xác nhận từ Người nhà & Bắn Notification
+      const isTargetForThisDoctor = (targetUserId && currentUserId && String(targetUserId) === String(currentUserId)) || isDoctor;
+      if (isTargetForThisDoctor && event.type !== 'INCIDENT_RESOLVED') {
+        const newDocIncident: Incident = {
+          id: incData.id || `inc-doc-apt-${Date.now()}`,
+          device_id: incData.device_id || 'system',
+          alert_type: 'APPOINTMENT_CONFIRMED',
+          alert_level: 'LOW',
+          message: incData.message || '🗓️ Gia đình đã xác nhận lịch khám. Sẵn sàng đón tiếp Bác sĩ!',
+          video_clip_url: null,
+          thumbnail_url: null,
+          is_acknowledged: false,
+          created_at: incData.created_at || new Date().toISOString(),
+          notes: `USER:${targetUserId || currentUserId}|APPOINTMENT_CONFIRMED|APT:${aptId || ''}`,
+        };
+
+        store.addIncident(newDocIncident);
+        useAlertStore.getState().addIncident(newDocIncident);
+
+        notificationService.triggerEmergencyNotification({
+          title: '🗓️ GIA ĐÌNH ĐÃ XÁC NHẬN LỊCH KHÁM',
+          body: newDocIncident.message,
+          data: {
+            incident_id: newDocIncident.id,
+            alert_type: 'APPOINTMENT_CONFIRMED',
+            appointment_id: aptId,
+          },
+        });
       }
       return;
     }
@@ -242,15 +280,21 @@ class AlertsWebSocket {
       return;
     }
 
-    // 0.4. Lời mời tham gia nhà / Yêu cầu vào nhà
-    if (['HOUSE_INVITE_PENDING', 'HOUSE_JOIN_REQUEST', 'HOUSE_MEMBER_ADDED', 'HOUSE_JOIN_APPROVED', 'HOUSE_JOIN_REJECTED', 'HOUSE_INVITE_REJECTED'].includes(event.alert_type || event.type)) {
+    // 0.4. Lời mời tham gia nhà / Yêu cầu vào nhà / Xóa khỏi nhà
+    if (['HOUSE_INVITE_PENDING', 'HOUSE_JOIN_REQUEST', 'HOUSE_MEMBER_ADDED', 'HOUSE_MEMBER_REMOVED', 'HOUSE_JOIN_APPROVED', 'HOUSE_JOIN_REJECTED', 'HOUSE_INVITE_REJECTED'].includes(event.alert_type || event.type)) {
       const incData = event.data || {};
       const alertType = event.alert_type || event.type;
-      const targetUserId = incData.target_user_id;
+      const targetUserId = incData.target_user_id || incData.user_id;
       const currentUserId = useAuthStore.getState().userId || useAuthStore.getState().user_id;
 
       if (targetUserId && currentUserId && String(targetUserId) !== String(currentUserId)) {
         return;
+      }
+
+      if (alertType === 'HOUSE_MEMBER_REMOVED') {
+        try {
+          useVitalStore.getState().fetchHouseFromBackend?.();
+        } catch {}
       }
 
       const newIncident: Incident = {
@@ -268,6 +312,8 @@ class AlertsWebSocket {
 
       store.addIncident(newIncident);
       useAlertStore.getState().addIncident(newIncident);
+      useAuthStore.getState().fetchMyPermissions?.().catch(() => {});
+      useVitalStore.getState().syncAllWithBackend?.().catch(() => {});
 
       notificationService.triggerEmergencyNotification({
         title: alertType === 'HOUSE_INVITE_PENDING' ? '🏠 LỜI MỜI THAM GIA NHÀ' : '🏠 THÀNH VIÊN GIA ĐÌNH',

@@ -1130,7 +1130,7 @@ export const PatientSelectionView: React.FC<PatientSelectionViewProps> = ({
           <Ionicons name="search" size={17} color="#94A3B8" style={{ marginRight: 8 }} />
           <LocalizedTextInput
             style={[styles.searchInput, { color: colors.textPrimary }]}
-            placeholder="Tìm theo tên hoặc số điện thoại..."
+            placeholder="Tìm theo tên bệnh nhân..."
             placeholderTextColor="#94A3B8"
             value={searchQuery}
             onChangeText={onSearchChange}
@@ -1186,7 +1186,6 @@ export const PatientSelectionView: React.FC<PatientSelectionViewProps> = ({
           filteredPatients.map((pat) => {
             const isWarn = pat.healthStatus === 'WARNING';
             const isDanger = pat.healthStatus === 'DANGER';
-            const patPhone = (pat as any).phone;
             const patAddress = (pat as any).house_address || pat.houseName;
             return (
               <TouchableOpacity
@@ -1247,7 +1246,6 @@ export const PatientSelectionView: React.FC<PatientSelectionViewProps> = ({
 
                     <LocalizedText style={[styles.cardMeta, { color: isDarkMode ? '#94A3B8' : '#64748B' }]}>
                       {pat.age} tuổi • {pat.gender}
-                      {patPhone ? ` • 📞 ${patPhone}` : ''}
                     </LocalizedText>
 
                     {patAddress ? (

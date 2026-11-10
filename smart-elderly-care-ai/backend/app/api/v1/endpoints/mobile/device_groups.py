@@ -66,6 +66,11 @@ async def list_device_groups(
     """Lấy danh sách tất cả các nhóm khu vực trong căn nhà hiện tại."""
     house = await crud_house.get_or_create_default_house(db, owner_id=current_user.id)
     if not house:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="Không tìm thấy căn nhà của người dùng.",
+        )
+    if not house:
         return []
     return await crud_device_group.get_groups_by_house(db, house_id=house.id)
 
@@ -85,6 +90,11 @@ async def create_device_group(
     3. Hỗ trợ gán ngay danh sách thiết bị ban đầu vào nhóm.
     """
     house = await crud_house.get_or_create_default_house(db, owner_id=current_user.id)
+    if not house:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="Không tìm thấy căn nhà của người dùng.",
+        )
 
     existing = await crud_device_group.get_by_house_and_name(
         db, house_id=house.id, name=group_in.name

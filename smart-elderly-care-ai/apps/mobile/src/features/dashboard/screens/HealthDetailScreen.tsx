@@ -46,7 +46,13 @@ export default function HealthDetailScreen({ navigation, route }: any) {
   const initialTab = route?.params?.initialTab as 'today' | 'week' | 'month' | undefined;
   const { currentVitals, fetchVitals } = useVitalStore();
   const { permissions, userRole, role } = useAuthStore();
-  const isOwnerOrAdmin = userRole === 'admin' || role === 'admin' || permissions?.is_owner === true || permissions?.role_in_house === 'OWNER';
+  const isOwnerOrAdmin =
+    userRole === 'admin' ||
+    role === 'admin' ||
+    userRole === 'owner' ||
+    role === 'owner' ||
+    permissions?.is_owner === true ||
+    permissions?.role_in_house === 'OWNER';
   const canViewHealth = isOwnerOrAdmin || Boolean(permissions?.can_view_health);
 
   useEffect(() => {
@@ -337,7 +343,7 @@ export default function HealthDetailScreen({ navigation, route }: any) {
           {(['DAY', 'WEEK', 'MONTH'] as const).map((range) => {
             const isActive = selectedRange === range;
             const labels: Record<TimeRange, string> = {
-              DAY: 'Theo ngày (Interactive)',
+              DAY: 'Theo ngày',
               WEEK: '7 ngày qua',
               MONTH: '30 ngày',
             };

@@ -11,6 +11,7 @@ Nguyên tắc:
 from __future__ import annotations
 
 import logging
+import time
 from datetime import datetime, timezone
 from typing import Any, Dict, List, Optional
 from uuid import UUID
@@ -26,6 +27,16 @@ from app.models.house import HouseMember
 from app.models.user import User
 
 logger = logging.getLogger(__name__)
+
+# Bộ nhớ đệm thông tin lâm sàng tĩnh (Hồ sơ cụ, Bác sĩ, Lịch khám) TTL 60s
+# Giúp cắt giảm 3 lượt truy vấn mạng tuần tự tới Supabase trên mỗi tin nhắn chat
+_STATIC_CARE_CACHE: Dict[str, Any] = {
+    "patient": {},
+    "doctor": None,
+    "appointment": None,
+    "timestamp": 0.0,
+    "ttl": 60.0,
+}
 
 
 class ChatbotContextBuilder:
@@ -93,62 +104,77 @@ class ChatbotContextBuilder:
         except Exception as e:
             logger.warning("Lỗi truy vấn cảnh báo sự cố từ DB: %s", e)
 
-        # 3. Hồ sơ người cao tuổi
-        try:
-            res = await db.execute(select(ElderlyProfile).limit(1))
-            profile = res.scalar_one_or_none()
-            if profile:
-                context["patient"] = {
-                    "full_name": profile.full_name or "Người cao tuổi",
-                    "birth_year": profile.birth_year,
-                    "gender": profile.gender,
-                    "medical_history": profile.medical_history or "Chưa ghi nhận bệnh nền",
-                    "emergency_contact": profile.emergency_contact_phone or "Chưa cập nhật",
-                }
-        except Exception as e:
-            logger.warning("Lỗi truy vấn hồ sơ người cao tuổi từ DB: %s", e)
+        now_ts = time.time()
+        cached_ts = _STATIC_CARE_CACHE.get("timestamp", 0.0)
+        cached_ttl = _STATIC_CARE_CACHE.get("ttl", 60.0)
 
-        # 4. Bác sĩ phụ trách y tế (Database Context Binding - Healthcare Chatbot pattern)
-        try:
-            stmt = (
-                select(User)
-                .join(HouseMember, HouseMember.user_id == User.id)
-                .where(HouseMember.role_in_house == "DOCTOR")
-                .limit(1)
-            )
-            doc_res = await db.execute(stmt)
-            doc = doc_res.scalar_one_or_none()
-            if not doc:
-                doc = (await db.execute(select(User).where(User.role == "DOCTOR").limit(1))).scalar_one_or_none()
-            if doc:
-                context["doctor"] = {
-                    "name": doc.full_name or "Bác sĩ phụ trách",
-                    "phone": getattr(doc, "phone", None) or "Chưa cập nhật",
-                    "specialty": getattr(doc, "specialty", None) or "Bác sĩ gia đình",
-                }
-        except Exception as e:
-            logger.warning("Lỗi truy vấn bác sĩ phụ trách từ DB: %s", e)
+        if (now_ts - cached_ts) < cached_ttl and _STATIC_CARE_CACHE.get("patient"):
+            # Tái sử dụng ngữ cảnh tĩnh từ bộ nhớ đệm
+            context["patient"] = _STATIC_CARE_CACHE.get("patient", {})
+            context["doctor"] = _STATIC_CARE_CACHE.get("doctor")
+            context["appointment"] = _STATIC_CARE_CACHE.get("appointment")
+        else:
+            # 3. Hồ sơ người cao tuổi
+            try:
+                res = await db.execute(select(ElderlyProfile).limit(1))
+                profile = res.scalar_one_or_none()
+                if profile:
+                    context["patient"] = {
+                        "full_name": profile.full_name or "Người cao tuổi",
+                        "birth_year": profile.birth_year,
+                        "gender": profile.gender,
+                        "medical_history": profile.medical_history or "Chưa ghi nhận bệnh nền",
+                        "emergency_contact": profile.emergency_contact_phone or "Chưa cập nhật",
+                    }
+            except Exception as e:
+                logger.warning("Lỗi truy vấn hồ sơ người cao tuổi từ DB: %s", e)
 
-        # 5. Lịch khám / tái khám y tế sắp tới (Appointment Context Binding)
-        try:
-            now_dt = datetime.now()
-            appt_stmt = (
-                select(Appointment)
-                .where(Appointment.status == "UPCOMING")
-                .order_by(Appointment.scheduled_at.asc())
-                .limit(1)
-            )
-            appt_res = await db.execute(appt_stmt)
-            appt = appt_res.scalar_one_or_none()
-            if appt:
-                context["appointment"] = {
-                    "scheduled_at": appt.scheduled_at.strftime("%H:%M ngày %d/%m/%Y") if appt.scheduled_at else None,
-                    "location": appt.location or "Tại nhà",
-                    "visit_type": appt.visit_type or "Khám sức khỏe",
-                    "clinical_notes": appt.clinical_notes or "",
-                }
-        except Exception as e:
-            logger.warning("Lỗi truy vấn lịch khám từ DB: %s", e)
+            # 4. Bác sĩ phụ trách y tế (Database Context Binding - Healthcare Chatbot pattern)
+            try:
+                stmt = (
+                    select(User)
+                    .join(HouseMember, HouseMember.user_id == User.id)
+                    .where(HouseMember.role_in_house == "DOCTOR")
+                    .limit(1)
+                )
+                doc_res = await db.execute(stmt)
+                doc = doc_res.scalar_one_or_none()
+                if not doc:
+                    doc = (await db.execute(select(User).where(User.role == "DOCTOR").limit(1))).scalar_one_or_none()
+                if doc:
+                    context["doctor"] = {
+                        "name": doc.full_name or "Bác sĩ phụ trách",
+                        "phone": getattr(doc, "phone", None) or "Chưa cập nhật",
+                        "specialty": getattr(doc, "specialty", None) or "Bác sĩ gia đình",
+                    }
+            except Exception as e:
+                logger.warning("Lỗi truy vấn bác sĩ phụ trách từ DB: %s", e)
+
+            # 5. Lịch khám / tái khám y tế sắp tới (Appointment Context Binding)
+            try:
+                appt_stmt = (
+                    select(Appointment)
+                    .where(Appointment.status == "UPCOMING")
+                    .order_by(Appointment.scheduled_at.asc())
+                    .limit(1)
+                )
+                appt_res = await db.execute(appt_stmt)
+                appt = appt_res.scalar_one_or_none()
+                if appt:
+                    context["appointment"] = {
+                        "scheduled_at": appt.scheduled_at.strftime("%H:%M ngày %d/%m/%Y") if appt.scheduled_at else None,
+                        "location": appt.location or "Tại nhà",
+                        "visit_type": appt.visit_type or "Khám sức khỏe",
+                        "clinical_notes": appt.clinical_notes or "",
+                    }
+            except Exception as e:
+                logger.warning("Lỗi truy vấn lịch khám từ DB: %s", e)
+
+            # Lưu vào cache 60s
+            _STATIC_CARE_CACHE["patient"] = context["patient"]
+            _STATIC_CARE_CACHE["doctor"] = context["doctor"]
+            _STATIC_CARE_CACHE["appointment"] = context["appointment"]
+            _STATIC_CARE_CACHE["timestamp"] = now_ts
 
         return context
 
@@ -176,7 +202,7 @@ class ChatbotContextBuilder:
         stale_time = vitals.get("stale_time_str", "trước đó")
 
         if language == "en":
-            hr_status = "Normal (60–100 BPM)" if 60 <= hr <= 100 else ("Elevated" if hr > 100 else "Low")
+            hr_status = "Normal (60–100 BPM)" if (hr is not None and 60 <= hr <= 100) else ("Elevated" if (hr is not None and hr > 100) else "Low")
             spo2_status = "Optimal (≥95%)" if spo2 and spo2 >= 95 else "Low (<95%) - Needs observation"
             temp_status = "Normal" if temp and 36.0 <= temp <= 37.5 else "Abnormal"
             fall_str = "🚨 FALL ALERT DETECTED!" if fall and not is_stale else "Normal (No active fall detected)"
@@ -192,7 +218,7 @@ class ChatbotContextBuilder:
             ]
             return "\n".join([line for line in lines if line])
 
-        hr_status = "Bình thường (60-100 BPM)" if 60 <= hr <= 100 else ("Nhanh" if hr > 100 else "Chậm")
+        hr_status = "Bình thường (60-100 BPM)" if (hr is not None and 60 <= hr <= 100) else ("Nhanh" if (hr is not None and hr > 100) else "Chậm")
         spo2_status = "An toàn (≥95%)" if spo2 and spo2 >= 95 else "Thấp (<95%) - Cần chú ý theo dõi"
         temp_status = "Bình thường (36.0 - 37.5°C)" if temp and 36.0 <= temp <= 37.5 else "Cần theo dõi"
         fall_str = "🚨 CẢNH BÁO: CÓ DẤU HIỆU TÉ NGÃ!" if fall and not is_stale else "Bình thường (Không ghi nhận té ngã thời gian thực)"

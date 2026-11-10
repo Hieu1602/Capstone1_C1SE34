@@ -573,7 +573,7 @@ class ReportService:
         # Bảng sự kiện cảnh báo
         if incidents:
             elements.append(Paragraph(f"<b>{labels['incident_history']}</b>", styles["Heading2"]))
-            inc_data = [[labels["time"], labels["alert_type"], labels["level"], labels["message"], labels["handled"]]]
+            inc_data: list[list[Any]] = [[labels["time"], labels["alert_type"], labels["level"], labels["message"], labels["handled"]]]
             cell_style = styles["Normal"]
             for inc in incidents[:15]:
                 msg_text = (inc.message or "")[:50] + ("..." if len(inc.message or "") > 50 else "")

@@ -23,6 +23,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core.config import settings
 from app.services.chatbot.context_builder import ChatbotContextBuilder
+from app.services.chatbot.entity_resolver import MedicalEntityResolver, get_medical_entity_resolver
 from app.services.chatbot.llm_client import MultiModelLLMClient
 from app.services.chatbot.prompt_templates import (
     CRITIC_SYSTEM_PROMPT_EN,
@@ -47,21 +48,28 @@ class ChatbotRAGService:
         self.retriever: MedicalRetriever = get_medical_retriever()
         self.context_builder: ChatbotContextBuilder = ChatbotContextBuilder()
         self.llm_client: MultiModelLLMClient = MultiModelLLMClient()
+        self.resolver: MedicalEntityResolver = get_medical_entity_resolver()
         self.enable_critic: bool = getattr(settings, 'ENABLE_AI_CRITIC', True)
         self.critic_timeout: float = float(getattr(settings, 'LLM_CRITIC_TIMEOUT', 4.0))
 
     @staticmethod
     def _is_simple_greeting(question: str) -> bool:
-        """Nhận diện nhanh các câu chào hỏi xã giao thông thường để phản hồi tức thì."""
+        """Nhận diện nhanh các câu chào hỏi xã giao thông thường để phản hồi tức thì (0ms)."""
+        import re
         q = question.strip().lower()
         if not q or len(q) > 40:
             return False
+        # Chuẩn hóa bỏ dấu câu ở cuối (? . ! ,)
+        q_clean = re.sub(r"[?!.,]+$", "", q).strip()
         common_greetings = {
             "chào", "xin chào", "chào bạn", "chào bác sĩ", "chào bs", "chào bot",
+            "xin chào bác sĩ", "xin chào bs", "chào buổi sáng", "chào em", "chào anh", "chào chị",
             "hello", "hi", "hey", "alo", "alo bạn", "alo bác sĩ", "bạn là ai",
-            "giúp tôi với", "tư vấn giúp tôi", "cho hỏi"
+            "giúp tôi với", "tư vấn giúp tôi", "cho hỏi", "tôi muốn hỏi",
         }
-        return q in common_greetings or any(q == g for g in common_greetings)
+        if q_clean in common_greetings:
+            return True
+        return any(q_clean.startswith(prefix) for prefix in ("xin chào", "chào bạn", "chào bác sĩ", "chào bot", "hello", "hi "))
 
     @staticmethod
     def _format_greeting_response(language: str = "vi") -> str:
@@ -222,20 +230,21 @@ class ChatbotRAGService:
                        "heart rate", "oxygen", "vital", "temperature", "fall"]
         if any(term in q_lower for term in vital_terms):
             vitals_text = self.context_builder.format_vitals_summary(vitals, language=language)
+            # Nếu người dùng chỉ tra cứu/kiểm tra chỉ số sinh hiệu (không hỏi xin tư vấn sâu, cách xử lý, dùng thuốc)
+            consult_terms = ["cách", "làm sao", "làm gì", "uống thuốc", "chữa", "điều trị", "nguyên nhân", "tại sao", "thuốc", "bệnh gì", "tư vấn", "hướng dẫn", "phải làm"]
+            if not any(c_term in q_lower for c_term in consult_terms):
+                return vitals_text
             sections.append(vitals_text)
 
-        # 4. Trích dẫn nội dung từ cẩm nang y tế
+        # 4. Trích dẫn nội dung từ cẩm nang y tế (ngắn gọn, tập trung trọng tâm)
         if chunks:
             if is_en:
-                sections.append("📖 **Clinical Care Guidance (Retrieved from Geriatric Knowledge Base)**:")
+                sections.append("📖 **Clinical Care Guidance**:")
             else:
-                sections.append("📖 **Hướng dẫn chăm sóc y tế từ Cẩm nang Lão khoa**:")
+                sections.append("📖 **Hướng dẫn chăm sóc y tế**:")
 
-            sources_cited = set()
-            for c_item in chunks:
+            for c_item in chunks[:1]:
                 text = c_item.get("text", "").strip()
-                source = c_item.get("source", "Medical Documents")
-                sources_cited.add(source)
                 if "🎯 **KẾT LUẬN NHANH**" in text:
                     sections.append(text)
                 else:
@@ -244,16 +253,11 @@ class ChatbotRAGService:
                         if not line.startswith("# ")
                         and not line.startswith("Kiến thức tham khảo")
                         and not line.startswith("Nội dung bổ sung")
+                        and line.strip()
                     ]
-                    clean_text = "\n".join(clean_lines).strip()
-                    snippet = clean_text[:800] + ("..." if len(clean_text) > 800 else "")
+                    clean_text = "\n".join(clean_lines[:6]).strip()
+                    snippet = clean_text[:300] + ("..." if len(clean_text) > 300 else "")
                     sections.append(f"• {snippet}")
-
-            sources_str = ", ".join(sorted(sources_cited))
-            if is_en:
-                sections.append(f"📚 **Sources**: `{sources_str}`")
-            else:
-                sections.append(f"📚 **Nguồn cẩm nang tham khảo**: `{sources_str}`")
         elif not sections:
             if is_en:
                 sections.append(
@@ -317,8 +321,11 @@ class ChatbotRAGService:
                 "suggested_actions": ["Đặt câu hỏi về sức khỏe cụ hoặc kiểm tra sinh hiệu"],
             }
 
-        # 1.1. Kiểm tra câu hỏi ngoài phạm vi y tế (lập trình, viết code, tạo robot, câu hỏi không liên quan sức khỏe)
-        if ResponseGuard.is_out_of_scope(question):
+        # 1.1. Chuẩn hóa chính tả thực thể y tế (tên thuốc, dụng cụ, lỗi gõ Telex/VNI, viết tắt)
+        normalized_q, resolved_entities = self.resolver.rewrite_and_enrich_query(question)
+
+        # 1.2. Kiểm tra câu hỏi ngoài phạm vi y tế (lập trình, viết code, tạo robot, câu hỏi không liên quan sức khỏe)
+        if ResponseGuard.is_out_of_scope(question) and not resolved_entities:
             return {
                 "status": "success",
                 "question": question,
@@ -333,8 +340,8 @@ class ChatbotRAGService:
                 "suggested_actions": ["Đặt câu hỏi về triệu chứng sức khỏe, dùng thuốc hoặc kiểm tra sinh hiệu người cao tuổi"],
             }
 
-        # 1.2. Kiểm tra câu hỏi vô nghĩa / spam số / spam ký tự
-        if ResponseGuard.is_gibberish_or_spam(question):
+        # 1.3. Kiểm tra câu hỏi vô nghĩa / spam số / spam ký tự (bỏ qua nếu đã nhận diện tên thuốc/dụng cụ)
+        if ResponseGuard.is_gibberish_or_spam(question, has_resolved_entities=bool(resolved_entities)):
             return {
                 "status": "success",
                 "question": question,
@@ -363,8 +370,13 @@ class ChatbotRAGService:
             question=question, vitals=vitals, incidents=incidents
         )
 
-        # 3. Trích xuất cẩm nang y tế (Hỗ trợ mở rộng từ khóa trong đối đáp liên tục)
-        search_query = question
+        # 3. Trích xuất cẩm nang y tế (Hỗ trợ mở rộng từ khóa trong đối đáp liên tục và câu hỏi đã chuẩn hóa)
+        if len(question.strip().split()) <= 2 and resolved_entities:
+            # Người dùng chỉ gõ cụm tên thuốc/dụng cụ ngắn (ví dụ: "prasetamol", "panadol") -> Mở rộng câu hỏi tư vấn toàn diện
+            search_query = f"Hướng dẫn sử dụng, liều dùng an toàn và lưu ý cho người cao tuổi về {resolved_entities[0].canonical}"
+        else:
+            search_query = f"{normalized_q} {question}" if normalized_q != question else question
+
         if chat_history:
             last_user_msgs = [m.get("text", "") for m in chat_history if m.get("sender") == "user" and m.get("text")]
             if last_user_msgs:
@@ -395,8 +407,15 @@ class ChatbotRAGService:
                 inc_lines.append(f"• [Vượt ngưỡng lúc {i.get('time')}]: {i.get('message')} | Tình trạng xử lý: {st}")
         incidents_text = "\n".join(inc_lines)
 
+        prompt_q = question
+        if len(question.strip().split()) <= 2 and resolved_entities:
+            prompt_q = (
+                f"Cho tôi biết thông tin hướng dẫn sử dụng, liều dùng an toàn và các lưu ý lâm sàng cho người cao tuổi "
+                f"về {resolved_entities[0].canonical} (từ khóa người dùng vừa tra cứu: '{question}')."
+            )
+
         user_prompt = build_rag_user_prompt(
-            question=question,
+            question=prompt_q,
             vitals_text=vitals_text,
             patient_text=patient_text,
             care_context_text=care_context_text,
@@ -417,7 +436,16 @@ class ChatbotRAGService:
             critic_failed_or_timed_out = False
 
             # 4.2. AI 2: Medical Critic / Clinical Safety Verifier
-            if self.enable_critic:
+            # Tối ưu hóa hiệu năng: Chỉ kích hoạt AI 2 Critic khi câu hỏi thuộc diện khẩn cấp/nguy hiểm (is_emergency, triage != GREEN hoặc thuốc/đơn thuốc)
+            # Với các câu hỏi thông thường (GREEN), AI 1 + ResponseGuard đã bảo đảm an toàn lâm sàng, giảm 4-8 giây chờ đợi.
+            DRUG_TERMS = {"uống thuốc", "liều lượng", "đơn thuốc", "kê đơn", "thuốc này", "kháng sinh", "paracetamol", "aspirin", "medication", "dose", "prescription"}
+            q_lower = question.lower()
+            needs_critic = (
+                self.enable_critic
+                and (is_emergency or triage_level in ("YELLOW", "RED") or any(t in q_lower for t in DRUG_TERMS))
+            )
+
+            if needs_critic:
                 critic_system_prompt = CRITIC_SYSTEM_PROMPT_EN if is_en else CRITIC_SYSTEM_PROMPT_VI
                 critic_user_prompt = build_critic_user_prompt(
                     question=question,
@@ -435,7 +463,7 @@ class ChatbotRAGService:
                             system_prompt=critic_system_prompt,
                             user_prompt=critic_user_prompt,
                             temperature=0.1,
-                            max_tokens=1000,
+                            max_tokens=700,
                         ),
                         timeout=self.critic_timeout,
                     )
@@ -443,16 +471,16 @@ class ChatbotRAGService:
                         final_text, critic_model_name = critic_result
                         verified_by_critic = True
                     else:
-                        logger.warning("AI 2 Critic không phản hồi, fallback sang Pure RAG cục bộ.")
+                        logger.warning("AI 2 Critic không phản hồi, fallback sang câu trả lời nhanh của AI 1.")
                         critic_failed_or_timed_out = True
                 except asyncio.TimeoutError:
                     logger.warning(
-                        "AI 2 (Medical Critic) bị quá hạn thời gian (> %ss). Tự động kích hoạt Fallback sang Pure RAG.",
+                        "AI 2 (Medical Critic) bị quá hạn thời gian (> %ss). Tự động dùng câu trả lời trực tiếp của AI 1.",
                         self.critic_timeout,
                     )
                     critic_failed_or_timed_out = True
                 except Exception as critic_err:
-                    logger.warning("Lỗi ngoại lệ khi gọi AI 2 Critic: %s. Kích hoạt Fallback sang Pure RAG.", critic_err)
+                    logger.warning("Lỗi ngoại lệ khi gọi AI 2 Critic: %s. Dùng câu trả lời trực tiếp của AI 1.", critic_err)
                     critic_failed_or_timed_out = True
 
             if critic_failed_or_timed_out:
@@ -528,6 +556,14 @@ class ChatbotRAGService:
             }
 
         answer_text = ResponseGuard.sanitize_response(answer_text)
+
+        # Đính kèm lưu ý xác nhận nếu phát hiện thực thể thuốc/thiết bị cần làm rõ hoặc thuốc nguy cơ cao
+        clarification_notes = [
+            e.build_prompt_clarification() for e in resolved_entities if e.build_prompt_clarification()
+        ]
+        if clarification_notes:
+            notes_text = "\n".join(f"• {note}" for note in clarification_notes)
+            answer_text = f"💡 **Xác nhận tên thuốc / thiết bị y tế**:\n{notes_text}\n\n{answer_text}"
 
         return {
             "status": "success",

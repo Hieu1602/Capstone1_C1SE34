@@ -171,7 +171,7 @@ export function AlarmSnoozeModal({
             {[
               {
                 key: 'VIBRATE',
-                title: 'Chỉ rung (Vibrate Mode)',
+                title: 'Chỉ rung',
                 desc: 'Rung điện thoại người nhà, không phát còi loa Hub tại nhà',
                 icon: 'phone-portrait-outline',
               },

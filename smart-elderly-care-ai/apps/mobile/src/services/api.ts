@@ -8,20 +8,21 @@ import AsyncStorage from '@react-native-async-storage/async-storage';
 import { useAuthStore } from '../store/useAuthStore';
 
 // Cấu hình BASE_URL tự động:
+// - Nếu chạy trên Web: dùng 127.0.0.1 nếu là localhost để tránh xung đột IPv6 [::1] và lỗi IP LAN đổi
 // - Ưu tiên EXPO_PUBLIC_API_URL nếu được khai báo
-// - Nếu chạy trên Web: dùng 127.0.0.1 nếu là localhost để tránh xung đột IPv6 [::1] trên Windows
 // - Tự động trích xuất IP từ host của Metro Bundler (Expo Constants)
 // - Hỗ trợ Android Emulator (10.0.2.2)
-// - Fallback về IP máy tính hiện tại: 192.168.1.7
+// - Fallback về IP máy tính hiện tại: 192.168.162.172
 const getBaseUrl = (): string => {
-  // 1. Khi chạy trên Web trình duyệt: Tự động dùng host trình duyệt đang truy cập (tránh chết IP LAN khi DHCP đổi IP)
-  if (Platform.OS === 'web' && typeof window !== 'undefined' && window.location?.hostname) {
-    const host = window.location.hostname;
-    const resolvedHost = (host === 'localhost' || host === '::1') ? '127.0.0.1' : host;
-    return `http://${resolvedHost}:8000/api/v1`;
+  // 1. Khi chạy trên Web trình duyệt: Tự động dùng host trình duyệt đang truy cập
+  if (Platform.OS === 'web' || (typeof window !== 'undefined' && window.location?.hostname)) {
+    const rawHost = (typeof window !== 'undefined' && window.location?.hostname) || '127.0.0.1';
+    const resolvedHost = (rawHost === 'localhost' || rawHost === '::1') ? '127.0.0.1' : rawHost;
+    const protocol = (typeof window !== 'undefined' && window.location?.protocol === 'https:') ? 'https' : 'http';
+    return `${protocol}://${resolvedHost}:8000/api/v1`;
   }
 
-  // 2. Biến môi trường EXPO_PUBLIC_API_URL cho Mobile (Expo Go / Device)
+  // 2. Ưu tiên biến môi trường EXPO_PUBLIC_API_URL (ví dụ AWS EC2) nếu được cấu hình
   const envUrl = process.env.EXPO_PUBLIC_API_URL;
   if (envUrl && envUrl.trim().length > 0) {
     return envUrl.trim();
@@ -40,7 +41,7 @@ const getBaseUrl = (): string => {
     }
   }
 
-  // 4. Nếu chạy trên Android Emulator
+  // 4. Fallback về máy chủ AWS EC2
   return 'http://16.178.128.42:8000/api/v1';
 };
 
@@ -73,7 +74,7 @@ export const getCustomServerUrl = async (): Promise<string> => {
 
 const api: AxiosInstance = axios.create({
   baseURL: BASE_URL,
-  timeout: 20000,
+  timeout: 45000,
   headers: {
     'Content-Type': 'application/json',
   },
@@ -143,6 +144,7 @@ export default api;
 export const authApi = {
   logout: (userName?: string, role?: string) =>
     api.post('/auth/logout', { user_name: userName, role }).catch(() => {}),
+  checkPhone: (phone: string) => api.post('/auth/check-phone', { phone }),
   requestOtp: (phone: string) => api.post('/auth/request-otp', { phone }),
   verifyOtp: (phone: string, otp_code: string) => api.post('/auth/verify-otp', { phone, otp_code }),
   verifyCchn: (cchn_number: string, full_name: string) =>

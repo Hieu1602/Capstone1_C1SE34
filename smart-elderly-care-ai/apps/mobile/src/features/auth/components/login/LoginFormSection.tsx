@@ -21,6 +21,7 @@ interface LoginFormSectionProps {
   onToggleShowPassword: () => void;
   loading: boolean;
   errorMessage: string | null;
+  successMessage?: string | null;
   isAgreed: boolean;
   onToggleAgree: () => void;
   onSubmit: () => void;
@@ -38,6 +39,7 @@ export const LoginFormSection: React.FC<LoginFormSectionProps> = ({
   onToggleShowPassword,
   loading,
   errorMessage,
+  successMessage,
   isAgreed,
   onToggleAgree,
   onSubmit,
@@ -45,6 +47,14 @@ export const LoginFormSection: React.FC<LoginFormSectionProps> = ({
   onNavigateRegister,
   onOpenLegal,
 }) => {
+  const hasPhoneError = Boolean(
+    errorMessage &&
+      (errorMessage.toLowerCase().includes('số điện thoại') ||
+        errorMessage.toLowerCase().includes('sđt') ||
+        errorMessage.toLowerCase().includes('chưa tồn tại') ||
+        errorMessage.toLowerCase().includes('chưa được đăng ký')),
+  );
+
   return (
     <View style={styles.bottomSection}>
       <View style={styles.logoBadgeContainer}>
@@ -64,18 +74,39 @@ export const LoginFormSection: React.FC<LoginFormSectionProps> = ({
         Hệ sinh thái AI bảo vệ sức khỏe & an toàn người cao tuổi 24/7
       </LocalizedText>
 
+      {/* Thông báo đăng ký thành công */}
+      {successMessage ? (
+        <View style={styles.successBox} accessibilityRole="alert">
+          <Ionicons name="checkmark-circle" size={18} color="#027A48" />
+          <LocalizedText style={styles.successText}>{successMessage}</LocalizedText>
+        </View>
+      ) : null}
+
       {/* Thông báo lỗi / trạng thái */}
       {errorMessage ? (
         <View style={styles.noticeBox} accessibilityRole="alert">
           <Ionicons name="alert-circle-outline" size={18} color="#B42318" />
-          <LocalizedText style={styles.noticeText}>{errorMessage}</LocalizedText>
+          <View style={{ flex: 1 }}>
+            <LocalizedText style={styles.noticeText}>{errorMessage}</LocalizedText>
+            {hasPhoneError ? (
+              <TouchableOpacity
+                onPress={onNavigateRegister}
+                activeOpacity={0.8}
+                style={{ marginTop: 4 }}
+              >
+                <LocalizedText style={{ fontSize: 13, fontWeight: '700', color: Colors.primary, textDecorationLine: 'underline' }}>
+                  Đăng ký tài khoản ngay →
+                </LocalizedText>
+              </TouchableOpacity>
+            ) : null}
+          </View>
         </View>
       ) : null}
 
       {/* Card các ô nhập liệu */}
       <View style={styles.formCard}>
         {/* Input 1: Số điện thoại */}
-        <View style={styles.inputWrap}>
+        <View style={[styles.inputWrap, hasPhoneError && styles.inputWrapError]}>
           <View style={styles.inputPrefix}>
             <Ionicons name="call-outline" size={18} color="#64748B" />
             <LocalizedText style={styles.prefixText}>+84</LocalizedText>
@@ -222,6 +253,26 @@ const styles = StyleSheet.create({
     marginBottom: 20,
     paddingHorizontal: 12,
   },
+  successBox: {
+    width: '100%',
+    flexDirection: 'row',
+    alignItems: 'center',
+    paddingHorizontal: 14,
+    paddingVertical: 10,
+    borderRadius: 14,
+    marginBottom: 16,
+    gap: 8,
+    backgroundColor: '#ECFDF3',
+    borderWidth: 1,
+    borderColor: '#A6F4C5',
+  },
+  successText: {
+    flex: 1,
+    fontSize: 13,
+    lineHeight: 18,
+    color: '#027A48',
+    fontWeight: '600',
+  },
   noticeBox: {
     width: '100%',
     flexDirection: 'row',
@@ -255,6 +306,11 @@ const styles = StyleSheet.create({
     paddingHorizontal: 14,
     height: 52,
     marginBottom: 14,
+  },
+  inputWrapError: {
+    borderColor: '#EF4444',
+    borderWidth: 1.5,
+    backgroundColor: '#FEF2F2',
   },
   inputPrefix: {
     flexDirection: 'row',

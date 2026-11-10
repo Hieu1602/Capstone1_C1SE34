@@ -49,8 +49,14 @@ function localizeString(value: string, translate: (key: string, options?: any) =
   const trimmed = value.trim();
   if (!trimmed) return value;
 
+  // Khi đang ở chế độ Tiếng Việt, giữ nguyên text gốc trong code mà không chạy regex/fallback tiếng Anh
+  const currentLang = i18n.language || 'vi';
+  if (currentLang.startsWith('vi')) {
+    return value;
+  }
+
   const normalized = trimmed.replace(/\s+/g, ' ');
-  let translated = translate(normalized, { defaultValue: normalized });
+  const translated = translate(normalized, { defaultValue: normalized });
 
   // Direct hit
   if (translated !== normalized) {
@@ -267,17 +273,24 @@ export const LocalizedTextInput = React.forwardRef<any, TextInputProps>(function
   );
 });
 
+import { useInAppAlertStore, AlertButton } from '../store/useInAppAlertStore';
+
 export const LocalizedAlert = {
   alert: (...args: Parameters<typeof NativeAlert.alert>) => {
-    const [title, message, buttons, options] = args;
-    NativeAlert.alert(
-      typeof title === 'string' ? localizeString(title, i18n.t.bind(i18n)) : title,
-      typeof message === 'string' ? localizeString(message, i18n.t.bind(i18n)) : message,
-      buttons?.map((button) => ({
-        ...button,
-        text: typeof button.text === 'string' ? localizeString(button.text, i18n.t.bind(i18n)) : button.text,
-      })),
-      options,
+    const [title, message, buttons] = args;
+    const localizedTitle = typeof title === 'string' ? localizeString(title, i18n.t.bind(i18n)) : (title || '');
+    const localizedMessage = typeof message === 'string' ? localizeString(message, i18n.t.bind(i18n)) : (message || '');
+    const localizedButtons: AlertButton[] = (buttons || [{ text: 'Đồng ý' }]).map((button) => ({
+      text: typeof button.text === 'string' ? localizeString(button.text, i18n.t.bind(i18n)) : button.text,
+      onPress: button.onPress,
+      style: (button.style as any) || 'default',
+    }));
+
+    // Luôn ưu tiên hiển thị Modal trong App chuẩn Mobile (kể cả trên Web và Mobile)
+    useInAppAlertStore.getState().showAlert(
+      String(localizedTitle),
+      String(localizedMessage),
+      localizedButtons,
     );
   },
 };

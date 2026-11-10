@@ -6,7 +6,7 @@
  */
 
 import React, { useState, useEffect, useCallback } from 'react';
-import { View, StyleSheet, TouchableOpacity, ScrollView, Text, RefreshControl } from 'react-native';
+import { View, StyleSheet, TouchableOpacity, ScrollView, Text, RefreshControl, Platform } from 'react-native';
 import { useFocusEffect } from '@react-navigation/native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
@@ -26,7 +26,16 @@ import { DeviceGroupCard } from '../components/devices/DeviceGroupCard';
 
 export default function DevicesScreen({ navigation }: any) {
   const { isDarkMode, colors } = useTheme();
-  const { userRole, role, userPhone, phone_number, permissions } = useAuthStore();
+  const {
+    userRole,
+    role,
+    userPhone,
+    phone_number,
+    permissions,
+    has_house,
+    assigned_house,
+    household_id,
+  } = useAuthStore();
   const {
     house,
     iotDevices,
@@ -39,10 +48,32 @@ export default function DevicesScreen({ navigation }: any) {
   } = useVitalStore();
   const groups = deviceGroups || [];
 
-  const hasLinkedHouse = Boolean(house?.id && house?.hasHouse !== false && house?.name && house.name.trim() !== '');
-  const isOwnerOrAdmin = hasLinkedHouse && (userRole === 'admin' || role === 'admin' || permissions?.is_owner === true || permissions?.role_in_house === 'OWNER');
-  const isMember = !isOwnerOrAdmin && (userRole === 'member' || !userRole || userRole === 'user' || userRole === 'caregiver');
-  const isUserEmptyMember = isMember && (!hasLinkedHouse || (iotDevices.length === 0 && !permissions?.can_manage_devices));
+  const hasLinkedHouse = Boolean(
+    household_id ||
+    has_house === true ||
+    assigned_house ||
+    (house?.id && house?.hasHouse !== false && house?.name && house.name.trim() !== '') ||
+    permissions?.role_in_house === 'OWNER' ||
+    permissions?.role_in_house === 'MEMBER' ||
+    permissions?.is_owner === true ||
+    (permissions?.role_in_house && permissions?.role_in_house !== 'NONE' && permissions?.role_in_house !== 'NEW_USER')
+  );
+  const isOwnerOrAdmin = Boolean(
+    userRole === 'admin' ||
+    role === 'admin' ||
+    userRole === 'owner' ||
+    role === 'owner' ||
+    permissions?.is_owner === true ||
+    permissions?.role_in_house === 'OWNER'
+  );
+
+  // Phân quyền theo 3 loại tài khoản:
+  // 1. Tài khoản mới chưa vào nhà: ĐƯỢC PHÉP dùng chức năng thêm thiết bị
+  // 2. Tài khoản thành viên khi được thêm vào nhà khác: KHÔNG ĐƯỢC PHÉP thêm thiết bị (trừ khi được cấp quyền can_manage_devices)
+  // 3. Chủ hộ: ĐƯỢC PHÉP thêm thiết bị
+  const isMemberInLinkedHouse = hasLinkedHouse && !isOwnerOrAdmin;
+  const canManageDevices = !isMemberInLinkedHouse || Boolean(permissions?.can_manage_devices);
+  const isUserEmptyMember = isMemberInLinkedHouse && iotDevices.length === 0 && !permissions?.can_manage_devices;
 
   const [isRefreshing, setIsRefreshing] = useState(false);
 
@@ -64,6 +95,17 @@ export default function DevicesScreen({ navigation }: any) {
 
   // State menu thả xuống khi bấm dấu cộng (+)
   const [showAddMenu, setShowAddMenu] = useState(false);
+
+  const handlePressAddBtn = () => {
+    if (!canManageDevices) {
+      LocalizedAlert.alert(
+        'Quyền truy cập bị giới hạn',
+        'Tài khoản Thành viên không có quyền thêm hoặc ghép nối thiết bị mới. Vui lòng liên hệ Chủ hộ để được cấp quyền quản lý thiết bị.'
+      );
+      return;
+    }
+    setShowAddMenu(!showAddMenu);
+  };
 
   // State Modal Quét mã QR
   const [showQrModal, setShowQrModal] = useState(false);
@@ -108,6 +150,13 @@ export default function DevicesScreen({ navigation }: any) {
   // Giả lập quét thành công mã QR
   const handleSimulateQrScan = (type: 'camera' | 'watch') => {
     setShowQrModal(false);
+    if (!canManageDevices) {
+      LocalizedAlert.alert(
+        'Quyền truy cập bị giới hạn',
+        'Tài khoản Thành viên không có quyền ghép nối thêm thiết bị.'
+      );
+      return;
+    }
     if (type === 'camera') {
       const newCam: IoTDeviceItem = {
         id: 'cam-qr-' + Date.now(),
@@ -236,6 +285,13 @@ export default function DevicesScreen({ navigation }: any) {
 
   // Mở modal Chỉnh sửa nhóm
   const handleStartEditGroup = () => {
+    if (!canManageDevices) {
+      LocalizedAlert.alert(
+        'Quyền truy cập bị giới hạn',
+        'Tài khoản Thành viên không có quyền chỉnh sửa nhóm thiết bị. Vui lòng liên hệ Chủ hộ để được cấp quyền quản lý thiết bị.'
+      );
+      return;
+    }
     if (!selectedGroupForAction) return;
     const target = selectedGroupForAction;
     setShowGroupActionModal(false);
@@ -253,6 +309,13 @@ export default function DevicesScreen({ navigation }: any) {
 
   // Mở trực tiếp modal để gán thiết bị vào nhóm
   const handleAddDeviceToGroup = (targetGroup: string) => {
+    if (!canManageDevices) {
+      LocalizedAlert.alert(
+        'Quyền truy cập bị giới hạn',
+        'Tài khoản Thành viên không có quyền gán thiết bị vào nhóm. Vui lòng liên hệ Chủ hộ để được cấp quyền quản lý thiết bị.'
+      );
+      return;
+    }
     setSelectedGroupForAction(targetGroup);
     setEditOldGroupName(targetGroup);
     setEditNewGroupName(targetGroup);
@@ -286,14 +349,21 @@ export default function DevicesScreen({ navigation }: any) {
   };
 
   // Lưu chỉnh sửa nhóm
-  const executeSaveEditGroup = () => {
-    updateDeviceGroup(editOldGroupName, trimmedEditName, editSelectedDeviceIds);
+  const executeSaveEditGroup = async () => {
+    // Đóng modal và dọn dẹp state ngay lập tức để giao diện không bị kẹt
+    setShowEditGroupModal(false);
+    setSelectedGroupForAction(null);
+    setEditAttempted(false);
     if (selectedGroupFilter === editOldGroupName) {
       setSelectedGroupFilter(trimmedEditName);
     }
-    setShowEditGroupModal(false);
-    setSelectedGroupForAction(null);
-    LocalizedAlert.alert('Thành công', `Đã cập nhật nhóm "${trimmedEditName}" thành công.`);
+    try {
+      await updateDeviceGroup(editOldGroupName, trimmedEditName, editSelectedDeviceIds);
+      LocalizedAlert.alert('Thành công', `Đã cập nhật nhóm "${trimmedEditName}" thành công.`);
+    } catch (err: any) {
+      const msg = err?.response?.data?.detail || err?.message || 'Không thể lưu thay đổi nhóm. Vui lòng thử lại sau.';
+      LocalizedAlert.alert('Lỗi', msg);
+    }
   };
 
   const handleSaveEditGroup = () => {
@@ -303,10 +373,7 @@ export default function DevicesScreen({ navigation }: any) {
       return;
     }
     if (isEditNameDuplicate) {
-      LocalizedAlert.alert(
-        'Thông báo',
-        `Tên nhóm "${trimmedEditName}" đã tồn tại. Tên nhóm mới phải là duy nhất.`
-      );
+      LocalizedAlert.alert('Thông báo', `Tên nhóm "${trimmedEditName}" đã tồn tại. Tên nhóm mới phải là duy nhất.`);
       return;
     }
     if (!hasEditDevices) {
@@ -314,39 +381,13 @@ export default function DevicesScreen({ navigation }: any) {
       return;
     }
 
-    LocalizedAlert.alert(
-      'Xác nhận cập nhật',
-      `Bạn có chắc chắn muốn lưu các thay đổi cho nhóm "${trimmedEditName}" không?`,
-      [
-        { text: 'Hủy', style: 'cancel' },
-        { text: 'Lưu thay đổi', onPress: executeSaveEditGroup },
-      ]
-    );
+    executeSaveEditGroup();
   };
 
   const handleCloseEditGroup = () => {
-    const isDirty = trimmedEditName !== editOldGroupName;
-    if (isDirty) {
-      LocalizedAlert.alert(
-        'Thay đổi chưa lưu',
-        'Tên hoặc danh sách thiết bị đã được chỉnh sửa. Bạn có muốn lưu trước khi đóng không?',
-        [
-          { text: 'Tiếp tục sửa', style: 'cancel' },
-          {
-            text: 'Không lưu',
-            style: 'destructive',
-            onPress: () => {
-              setShowEditGroupModal(false);
-              setSelectedGroupForAction(null);
-            },
-          },
-          { text: 'Lưu thay đổi', onPress: executeSaveEditGroup },
-        ]
-      );
-    } else {
-      setShowEditGroupModal(false);
-      setSelectedGroupForAction(null);
-    }
+    setShowEditGroupModal(false);
+    setSelectedGroupForAction(null);
+    setEditAttempted(false);
   };
 
   return (
@@ -361,18 +402,23 @@ export default function DevicesScreen({ navigation }: any) {
         </View>
 
         <View style={styles.headerRightActions}>
-          {/* Nút dấu cộng (+) */}
-          <TouchableOpacity
-            style={[styles.addBtn, showAddMenu && styles.addBtnActive]}
-            onPress={() => setShowAddMenu(!showAddMenu)}
-            activeOpacity={0.8}
-          >
-            <Ionicons
-              name={showAddMenu ? 'close' : 'add'}
-              size={24}
-              color="#FFF"
-            />
-          </TouchableOpacity>
+          {canManageDevices && (
+            <TouchableOpacity
+              style={[
+                styles.addBtn,
+                showAddMenu && styles.addBtnActive,
+              ]}
+              onPress={handlePressAddBtn}
+              activeOpacity={0.8}
+              accessibilityLabel="Thêm thiết bị"
+            >
+              <Ionicons
+                name={showAddMenu ? 'close' : 'add'}
+                size={24}
+                color="#FFF"
+              />
+            </TouchableOpacity>
+          )}
         </View>
       </View>
 
@@ -484,11 +530,24 @@ export default function DevicesScreen({ navigation }: any) {
                 </LocalizedText>
               </View>
               <TouchableOpacity
-                style={styles.createGroupHeaderBtn}
-                onPress={() => navigation.navigate('CreateGroup')}
+                style={[
+                  styles.createGroupHeaderBtn,
+                  !canManageDevices && styles.createGroupHeaderBtnDisabled,
+                  !canManageDevices && isDarkMode && { backgroundColor: '#334155' },
+                ]}
+                onPress={() => {
+                  if (!canManageDevices) {
+                    LocalizedAlert.alert(
+                      'Quyền truy cập bị giới hạn',
+                      'Tài khoản Thành viên không có quyền tạo nhóm thiết bị. Vui lòng liên hệ Chủ hộ để được cấp quyền quản lý thiết bị.'
+                    );
+                    return;
+                  }
+                  navigation.navigate('CreateGroup');
+                }}
                 activeOpacity={0.8}
               >
-                <Ionicons name="add" size={16} color="#FFF" />
+                <Ionicons name={!canManageDevices ? 'lock-closed' : 'add'} size={16} color="#FFF" />
                 <LocalizedText style={styles.createGroupHeaderBtnText}>Tạo nhóm mới</LocalizedText>
               </TouchableOpacity>
             </View>
@@ -571,8 +630,8 @@ export default function DevicesScreen({ navigation }: any) {
                   devicesInGroup={devicesInGroup}
                   onDevicePress={handleDevicePress}
                   onDeviceDelete={isOwnerOrAdmin ? handleDeleteDevice : undefined}
-                  onOpenGroupActionMenu={handleOpenGroupActionMenu}
-                  onAddDeviceToGroup={handleAddDeviceToGroup}
+                  onOpenGroupActionMenu={canManageDevices ? handleOpenGroupActionMenu : undefined}
+                  onAddDeviceToGroup={canManageDevices ? handleAddDeviceToGroup : undefined}
                   isDarkMode={isDarkMode}
                   colors={colors}
                 />
@@ -599,7 +658,9 @@ export default function DevicesScreen({ navigation }: any) {
                   Không có thiết bị trong nhóm này
                 </LocalizedText>
                 <LocalizedText style={[styles.emptyGroupDesc, isDarkMode && { color: colors.textSecondary }]}>
-                  Bấm nút (+) ở góc trên để thêm thiết bị mới vào danh mục "{activeTab}".
+                  {canManageDevices
+                    ? `Bấm nút (+) ở góc trên để thêm thiết bị mới vào danh mục "${activeTab}".`
+                    : `Hiện tại chưa có thiết bị nào trong danh mục "${activeTab}".`}
                 </LocalizedText>
               </View>
             )}
@@ -609,18 +670,39 @@ export default function DevicesScreen({ navigation }: any) {
 
       {/* Menu thả xuống khi bấm dấu cộng (+) */}
       <DeviceAddMenuModal
-        visible={showAddMenu}
+        visible={showAddMenu && canManageDevices}
         onClose={() => setShowAddMenu(false)}
         onSelectManual={() => {
           setShowAddMenu(false);
+          if (!canManageDevices) {
+            LocalizedAlert.alert(
+              'Quyền truy cập bị giới hạn',
+              'Tài khoản Thành viên không có quyền thêm thiết bị.'
+            );
+            return;
+          }
           navigation.navigate('AddDevice');
         }}
         onSelectQr={() => {
           setShowAddMenu(false);
+          if (!canManageDevices) {
+            LocalizedAlert.alert(
+              'Quyền truy cập bị giới hạn',
+              'Tài khoản Thành viên không có quyền quét mã thêm thiết bị.'
+            );
+            return;
+          }
           setShowQrModal(true);
         }}
         onSelectGroup={() => {
           setShowAddMenu(false);
+          if (!canManageDevices) {
+            LocalizedAlert.alert(
+              'Quyền truy cập bị giới hạn',
+              'Tài khoản Thành viên không có quyền tạo nhóm thiết bị.'
+            );
+            return;
+          }
           navigation.navigate('CreateGroup');
         }}
         isDarkMode={isDarkMode}
@@ -732,6 +814,13 @@ const styles = StyleSheet.create({
   addBtnActive: {
     backgroundColor: '#0F172A',
   },
+  addBtnDisabled: {
+    backgroundColor: '#E2E8F0',
+    borderWidth: 1,
+    borderColor: '#CBD5E1',
+    shadowOpacity: 0,
+    elevation: 0,
+  },
   tabContainer: {
     flexDirection: 'row',
     paddingHorizontal: 20,
@@ -824,6 +913,11 @@ const styles = StyleSheet.create({
     paddingVertical: 8,
     borderRadius: 10,
     ...Shadows.sm,
+  },
+  createGroupHeaderBtnDisabled: {
+    backgroundColor: '#94A3B8',
+    shadowOpacity: 0,
+    elevation: 0,
   },
   createGroupHeaderBtnText: {
     color: '#FFF',

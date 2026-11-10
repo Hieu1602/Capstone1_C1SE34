@@ -12,7 +12,7 @@ interface ProfileQuickGridProps {
   showMore: boolean;
   onToggleShowMore: () => void;
   onNavigate: (screen: string) => void;
-  onOpenProfile: () => void;
+  onOpenProfile?: () => void;
   onOpenJoinHouse?: () => void;
 }
 
@@ -31,47 +31,7 @@ export const ProfileQuickGrid: React.FC<ProfileQuickGridProps> = ({
   return (
     <>
       <View style={styles.fbGridContainer}>
-        {/* Ô 1: Hồ sơ giám sát */}
-        <TouchableOpacity
-          style={[
-            styles.fbGridCard,
-            isDarkMode && {
-              backgroundColor: colors.card,
-              borderColor: colors.border,
-            },
-          ]}
-          activeOpacity={0.8}
-          onPress={onOpenProfile}
-        >
-          <View
-            style={[
-              styles.fbGridIconBox,
-              {
-                backgroundColor: isDarkMode ? '#1E1B4B' : '#EEF2FF',
-              },
-            ]}
-          >
-            <Ionicons name="person-circle-outline" size={24} color="#6366F1" />
-          </View>
-          <Text
-            style={[
-              styles.fbGridCardTitle,
-              isDarkMode && { color: colors.textPrimary },
-            ]}
-          >
-            Hồ sơ giám sát
-          </Text>
-          <Text
-            style={[
-              styles.fbGridCardSub,
-              isDarkMode && { color: colors.textSecondary },
-            ]}
-          >
-            Tài khoản người thân & SĐT khẩn cấp
-          </Text>
-        </TouchableOpacity>
-
-        {/* Ô 2: Hồ sơ bệnh án người cao tuổi */}
+        {/* Ô 1: Hồ sơ bệnh án người cao tuổi */}
         <TouchableOpacity
           style={[
             styles.fbGridCard,
@@ -299,7 +259,7 @@ export const ProfileQuickGrid: React.FC<ProfileQuickGridProps> = ({
               isDarkMode && { color: colors.textPrimary },
             ]}
           >
-            Lịch nhắc thuốc
+            Đơn Thuốc 
           </Text>
           <Text
             style={[
@@ -311,7 +271,7 @@ export const ProfileQuickGrid: React.FC<ProfileQuickGridProps> = ({
           </Text>
         </TouchableOpacity>
 
-        {/* Ô 8: Nhật ký cảnh báo */}
+        {/* Ô 7: Nhật ký cảnh báo */}
         <TouchableOpacity
           style={[
             styles.fbGridCard,
@@ -348,6 +308,46 @@ export const ProfileQuickGrid: React.FC<ProfileQuickGridProps> = ({
             ]}
           >
             Sự kiện té ngã & Sinh hiệu bất thường
+          </Text>
+        </TouchableOpacity>
+
+        {/* Ô 8: Multi-View Camera */}
+        <TouchableOpacity
+          style={[
+            styles.fbGridCard,
+            isDarkMode && {
+              backgroundColor: colors.card,
+              borderColor: colors.border,
+            },
+          ]}
+          activeOpacity={0.8}
+          onPress={() => onNavigate('MultiView')}
+        >
+          <View
+            style={[
+              styles.fbGridIconBox,
+              {
+                backgroundColor: isDarkMode ? '#2E1065' : '#F3E8FF',
+              },
+            ]}
+          >
+            <Ionicons name="grid-outline" size={24} color="#7C3AED" />
+          </View>
+          <Text
+            style={[
+              styles.fbGridCardTitle,
+              isDarkMode && { color: colors.textPrimary },
+            ]}
+          >
+            Multi-View Camera
+          </Text>
+          <Text
+            style={[
+              styles.fbGridCardSub,
+              isDarkMode && { color: colors.textSecondary },
+            ]}
+          >
+            Xem nhiều góc quay camera cùng lúc
           </Text>
         </TouchableOpacity>
 
@@ -395,46 +395,6 @@ export const ProfileQuickGrid: React.FC<ProfileQuickGridProps> = ({
                 ]}
               >
                 Tư vấn dinh dưỡng & Vận động 24/7
-              </Text>
-            </TouchableOpacity>
-
-            {/* Ô 10: Multi-View Camera */}
-            <TouchableOpacity
-              style={[
-                styles.fbGridCard,
-                isDarkMode && {
-                  backgroundColor: colors.card,
-                  borderColor: colors.border,
-                },
-              ]}
-              activeOpacity={0.8}
-              onPress={() => onNavigate('MultiView')}
-            >
-              <View
-                style={[
-                  styles.fbGridIconBox,
-                  {
-                    backgroundColor: isDarkMode ? '#2E1065' : '#F3E8FF',
-                  },
-                ]}
-              >
-                <Ionicons name="grid-outline" size={24} color="#7C3AED" />
-              </View>
-              <Text
-                style={[
-                  styles.fbGridCardTitle,
-                  isDarkMode && { color: colors.textPrimary },
-                ]}
-              >
-                Multi-View Camera
-              </Text>
-              <Text
-                style={[
-                  styles.fbGridCardSub,
-                  isDarkMode && { color: colors.textSecondary },
-                ]}
-              >
-                Xem nhiều góc quay camera cùng lúc
               </Text>
             </TouchableOpacity>
           </>

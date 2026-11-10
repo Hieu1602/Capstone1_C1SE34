@@ -28,7 +28,13 @@ export default function AlgoConfigScreen({ navigation }: any) {
     fetchMyPermissions().finally(() => setCheckingPerms(false));
   }, []);
 
-  const isOwnerOrAdmin = userRole === 'admin' || role === 'admin' || Boolean(permissions?.is_owner);
+  const isOwnerOrAdmin =
+    userRole === 'admin' ||
+    role === 'admin' ||
+    userRole === 'owner' ||
+    role === 'owner' ||
+    Boolean(permissions?.is_owner) ||
+    permissions?.role_in_house === 'OWNER';
   const canManageDevices = isOwnerOrAdmin || Boolean(permissions?.can_manage_devices);
 
   const [maxHR, setMaxHR] = useState(algoSettings.maxHeartRate.toString());
@@ -138,12 +144,12 @@ export default function AlgoConfigScreen({ navigation }: any) {
 
 
         <LocalizedText style={[styles.introText, isDarkMode && { color: '#94A3B8' }]}>
-          Tùy chỉnh ngưỡng kích hoạt báo động khẩn cấp (Red Alert) để phù hợp với tình trạng sức khỏe cụ thể của người cao tuổi.
+          Tùy chỉnh ngưỡng kích hoạt báo động khẩn cấp để phù hợp với tình trạng sức khỏe cụ thể của người cao tuổi.
         </LocalizedText>
 
-        {/* 1. Ngưỡng Té ngã (FR03) */}
+        {/* 1. Ngưỡng Té ngã */}
         <View style={[styles.groupCard, isDarkMode && { backgroundColor: '#1E293B', borderColor: '#334155', borderWidth: 1 }]}>
-          <LocalizedText style={styles.groupTitle}>1. Thuật toán phát hiện ngã (YOLO-Pose)</LocalizedText>
+          <LocalizedText style={styles.groupTitle}>1. Thuật toán phát hiện ngã</LocalizedText>
           <View style={styles.inputRow}>
             <LocalizedText style={[styles.inputLabel, isDarkMode && { color: '#F8FAFC' }]}>Góc nghiêng cột sống tối đa:</LocalizedText>
             <View style={[styles.inputBoxWrap, !canManageDevices && styles.inputBoxDisabled, isDarkMode && { backgroundColor: '#0F172A', borderColor: '#334155' }]}>
@@ -172,9 +178,9 @@ export default function AlgoConfigScreen({ navigation }: any) {
           </View>
         </View>
 
-        {/* 2. Ngưỡng Sức khoẻ Vòng BLE (FR02) */}
+        {/* 2. Ngưỡng Sức khoẻ Vòng BLE */}
         <View style={[styles.groupCard, isDarkMode && { backgroundColor: '#1E293B', borderColor: '#334155', borderWidth: 1 }]}>
-          <LocalizedText style={styles.groupTitle}>2. Thuật toán sức khoẻ (Vòng đeo tay BLE)</LocalizedText>
+          <LocalizedText style={styles.groupTitle}>2. Thuật toán sức khoẻ vòng đeo tay</LocalizedText>
           <View style={styles.inputRow}>
             <LocalizedText style={[styles.inputLabel, isDarkMode && { color: '#F8FAFC' }]}>Nhịp tim tối đa (Cảnh báo cao):</LocalizedText>
             <View style={[styles.inputBoxWrap, !canManageDevices && styles.inputBoxDisabled, isDarkMode && { backgroundColor: '#0F172A', borderColor: '#334155' }]}>
@@ -216,9 +222,9 @@ export default function AlgoConfigScreen({ navigation }: any) {
           </View>
         </View>
 
-        {/* 3. Ngưỡng Cảm biến nhiệt AMG8833 (FR04) */}
+        {/* 3. Ngưỡng Cảm biến nhiệt AMG8833 */}
         <View style={[styles.groupCard, isDarkMode && { backgroundColor: '#1E293B', borderColor: '#334155', borderWidth: 1 }]}>
-          <LocalizedText style={styles.groupTitle}>3. Thuật toán nhiệt độ trán (AMG8833)</LocalizedText>
+          <LocalizedText style={styles.groupTitle}>3. Thuật toán nhiệt độ trán</LocalizedText>
           <View style={styles.inputRow}>
             <LocalizedText style={[styles.inputLabel, isDarkMode && { color: '#F8FAFC' }]}>Ngưỡng sốt cao bất thường:</LocalizedText>
             <View style={[styles.inputBoxWrap, !canManageDevices && styles.inputBoxDisabled, isDarkMode && { backgroundColor: '#0F172A', borderColor: '#334155' }]}>

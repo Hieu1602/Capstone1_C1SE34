@@ -15,6 +15,22 @@ export interface HousePermissions {
   is_owner: boolean;
 }
 
+export const selectIsOwner = (state: { userRole?: string | null; role?: string | null; permissions?: HousePermissions | null }): boolean => {
+  return Boolean(
+    state.userRole === 'admin' ||
+    state.role === 'admin' ||
+    state.userRole === 'owner' ||
+    state.role === 'owner' ||
+    state.permissions?.is_owner === true ||
+    state.permissions?.role_in_house === 'OWNER'
+  );
+};
+
+export const selectCanViewCamera = (state: { userRole?: string | null; role?: string | null; permissions?: HousePermissions | null }): boolean => {
+  if (selectIsOwner(state)) return true;
+  return Boolean(state.permissions?.can_view_camera);
+};
+
 export interface AuthStoreState {
   accessToken: string | null;
   refreshToken: string | null;
@@ -29,6 +45,10 @@ export interface AuthStoreState {
   avatarUrl: string | null;
   avatar_url: string | null;
   household_id: number | string | null;
+  has_house: boolean | null;
+  assigned_house: string | null;
+  has_devices: boolean | null;
+  device_count: number;
   viewRole: 'CAREGIVER' | 'DOCTOR';
   isHydrated: boolean;
   isRoleLoading: boolean;
@@ -42,7 +62,8 @@ export interface AuthStoreState {
     phone: string,
     role: string,
     householdId?: number | string,
-    avatarUrl?: string | null
+    avatarUrl?: string | null,
+    profileExtras?: any
   ) => void;
   setTokens: (access: string, refresh: string) => void;
   setUser: (id: string | number, phone?: string, name?: string, role?: string, householdId?: number | string) => void;
@@ -60,6 +81,12 @@ export interface AuthStoreState {
   setIsRoleLoading: (loading: boolean) => void;
   toggleViewRole: () => void;
   fetchMyPermissions: (householdId?: number | string) => Promise<HousePermissions>;
+  setJoinedHouseData: (
+    houseId: string | number,
+    houseName: string,
+    permissions?: Partial<HousePermissions>
+  ) => void;
+  clearHouseData: () => void;
   logout: () => void;
 }
 
@@ -88,8 +115,12 @@ const createAuthStore: StateCreator<AuthStoreState, [], [['zustand/persist', Aut
   avatarUrl: null,
   avatar_url: null,
   household_id: null,
+  has_house: null,
+  assigned_house: null,
+  has_devices: null,
+  device_count: 0,
   viewRole: 'CAREGIVER',
-  isHydrated: false,
+  isHydrated: true,
   isRoleLoading: false,
   permissions: null,
 
@@ -103,35 +134,45 @@ const createAuthStore: StateCreator<AuthStoreState, [], [['zustand/persist', Aut
     phone: string,
     role: string,
     householdId?: number | string,
-    avatarUrl?: string | null
+    avatarUrl?: string | null,
+    profileExtras?: any
   ) => {
     const normalizedRole = role.toLowerCase();
     const isDoctor = normalizedRole === 'doctor' || normalizedRole.includes('bác sĩ');
     const isAdmin = normalizedRole === 'admin' || normalizedRole.includes('quản trị');
+    const isOwner = normalizedRole === 'owner' || profileExtras?.is_owner === true || profileExtras?.role_in_house === 'OWNER';
 
-    // Reset toàn bộ domain stores để tránh rò rỉ dữ liệu hoặc quyền hạn từ tài khoản trước
-    try {
+    // Chỉ reset domain stores khi chuyển đổi giữa 2 tài khoản khác nhau để tối ưu tốc độ và giữ cache
+    const currentUserId = get().userId;
+    if (currentUserId && String(currentUserId) !== String(userId)) {
+      try {
         require('./useDeviceStore').useDeviceStore.getState().resetDeviceStore?.();
         require('./usePatientStore').usePatientStore.getState().resetPatientStore?.();
         require('./useHealthStore').useHealthStore.getState().resetHealthStore?.();
         require('./useAlertStore').useAlertStore.getState().resetAlertStore?.();
-        AsyncStorage.multiRemove([
-        'device-store',
-        'health-store',
-        'patient-store',
-        'alert-store',
-      ]).catch(() => {});
-    } catch {}
+      } catch {}
+    }
 
+    const resolvedHouseId = householdId ?? profileExtras?.household_id ?? null;
+
+    // Quyền thành viên: Mặc định khi vào nhà được XEM TẤT CẢ (camera, sinh hiệu, xử lý khẩn cấp)
+    // Chỉ không được thêm, sửa, xóa bất cứ gì (can_manage_devices = false, can_manage_records = false)
     const initialPermissions: HousePermissions = {
-      can_view_health: false,
-      can_view_camera: false,
-      can_handle_emergency: false,
-      can_manage_devices: false,
-      can_manage_records: false,
-      role_in_house: isDoctor ? 'DOCTOR' : isAdmin ? 'OWNER' : 'MEMBER',
-      is_owner: isAdmin,
+      can_view_health: profileExtras?.can_view_health !== undefined ? Boolean(profileExtras.can_view_health) : true,
+      can_view_camera: profileExtras?.can_view_camera !== undefined ? Boolean(profileExtras.can_view_camera) : true,
+      can_handle_emergency: profileExtras?.can_handle_emergency !== undefined ? Boolean(profileExtras.can_handle_emergency) : true,
+      can_manage_devices: profileExtras?.can_manage_devices !== undefined && profileExtras?.can_manage_devices !== null
+        ? Boolean(profileExtras.can_manage_devices)
+        : (isAdmin || isOwner || !resolvedHouseId),
+      can_manage_records: profileExtras?.can_manage_records ?? (isAdmin || isDoctor ? true : false),
+      role_in_house: isDoctor ? 'DOCTOR' : (isAdmin ? 'OWNER' : (profileExtras?.role_in_house || (resolvedHouseId ? (isOwner ? 'OWNER' : 'MEMBER') : 'NEW_USER'))),
+      is_owner: isAdmin || (isOwner && Boolean(resolvedHouseId)),
     };
+
+    const hasHouse = profileExtras?.has_house ?? Boolean(resolvedHouseId);
+    const assignedHouse = profileExtras?.assigned_house || (hasHouse ? 'Nhà của tôi' : null);
+    const hasDevices = profileExtras?.has_devices ?? false;
+    const deviceCount = profileExtras?.device_count ?? 0;
 
     set({
       accessToken: access,
@@ -142,18 +183,42 @@ const createAuthStore: StateCreator<AuthStoreState, [], [['zustand/persist', Aut
       full_name: name,
       userPhone: phone,
       phone_number: phone,
-      userRole: isDoctor ? 'doctor' : isAdmin ? 'admin' : normalizedRole === 'owner' ? 'owner' : 'member',
+      userRole: isDoctor ? 'doctor' : isAdmin ? 'admin' : isOwner ? 'owner' : 'member',
       role,
       avatarUrl: avatarUrl ?? null,
       avatar_url: avatarUrl ?? null,
-      household_id: householdId ?? null,
+      household_id: resolvedHouseId,
+      has_house: hasHouse,
+      assigned_house: assignedHouse,
+      has_devices: hasDevices,
+      device_count: deviceCount,
       viewRole: isDoctor ? 'DOCTOR' : 'CAREGIVER',
       permissions: initialPermissions,
     });
 
-    setTimeout(() => {
-      get().fetchMyPermissions(householdId);
-    }, 100);
+    if (resolvedHouseId) {
+      try {
+        const devStore = require('./useDeviceStore').useDeviceStore.getState();
+        devStore.setHouseInfo?.({
+          id: String(resolvedHouseId),
+          name: profileExtras?.assigned_house || 'Nhà của tôi',
+          hasHouse: true,
+        });
+        if (profileExtras?.default_camera_id) {
+          devStore.setCameraDefault?.({
+            id: String(profileExtras.default_camera_id),
+            name: profileExtras.default_camera_name || 'Camera AI',
+            isOnline: true,
+          });
+        }
+        devStore.fetchDevicesFromBackend?.().catch(() => {});
+      } catch {}
+    } else if (profileExtras?.has_house === false) {
+      try {
+        const devStore = require('./useDeviceStore').useDeviceStore.getState();
+        devStore.resetDeviceStore?.();
+      } catch {}
+    }
   },
 
   setTokens: (access: string, refresh: string) =>
@@ -248,31 +313,114 @@ const createAuthStore: StateCreator<AuthStoreState, [], [['zustand/persist', Aut
       const target = hId || s.household_id || 'current';
       const res = await householdApi.getMyPermissions(target);
       if (res.data) {
+        if (!res.data.house_id || res.data.role_in_house === 'NONE' || res.data.role_in_house === 'NEW_USER') {
+          // Tài khoản đã bị xóa khỏi nhà hoặc chưa thuộc nhà nào
+          const independentPerms: HousePermissions = {
+            can_view_health: false,
+            can_view_camera: false,
+            can_handle_emergency: false,
+            can_manage_devices: true,
+            can_manage_records: false,
+            role_in_house: 'NEW_USER',
+            is_owner: false,
+          };
+          set({
+            household_id: null,
+            has_house: false,
+            assigned_house: null,
+            permissions: independentPerms,
+            has_devices: false,
+            device_count: 0,
+          });
+          return independentPerms;
+        }
+
         const isOwner = res.data.role_in_house === 'OWNER' || res.data.is_owner === true;
         const p: HousePermissions = {
-          can_view_health: isOwner ? true : Boolean(res.data.can_view_health),
-          can_view_camera: isOwner ? true : Boolean(res.data.can_view_camera),
-          can_handle_emergency: isOwner ? true : Boolean(res.data.can_handle_emergency),
+          can_view_health: isOwner ? true : res.data.can_view_health !== false,
+          can_view_camera: isOwner ? true : res.data.can_view_camera !== false,
+          can_handle_emergency: isOwner ? true : res.data.can_handle_emergency !== false,
           can_manage_devices: isOwner ? true : Boolean(res.data.can_manage_devices),
           can_manage_records: isOwner ? true : Boolean(res.data.can_manage_records),
-          role_in_house: res.data.role_in_house || 'MEMBER',
+          role_in_house: res.data.role_in_house || (isOwner ? 'OWNER' : 'MEMBER'),
           is_owner: isOwner,
         };
-        set({ permissions: p });
+        set({ permissions: p, has_house: true });
         return p;
       }
-    } catch {}
+    } catch {
+      // 404 hoặc lỗi: Người dùng không thuộc căn nhà nào
+      const independentPerms: HousePermissions = {
+        can_view_health: false,
+        can_view_camera: false,
+        can_handle_emergency: false,
+        can_manage_devices: true,
+        can_manage_records: false,
+        role_in_house: 'NEW_USER',
+        is_owner: false,
+      };
+      set({
+        household_id: null,
+        has_house: false,
+        assigned_house: null,
+        permissions: independentPerms,
+        has_devices: false,
+        device_count: 0,
+      });
+      return independentPerms;
+    }
     const def: HousePermissions = {
       can_view_health: false,
       can_view_camera: false,
-      can_handle_emergency: true,
-      can_manage_devices: false,
+      can_handle_emergency: false,
+      can_manage_devices: true,
       can_manage_records: false,
-      role_in_house: 'MEMBER',
+      role_in_house: 'NEW_USER',
       is_owner: false,
     };
-    set({ permissions: def });
+    set({ permissions: def, has_house: false, household_id: null, assigned_house: null });
     return def;
+  },
+
+  setJoinedHouseData: (houseId, houseName, permissions) => {
+    const isOwner = permissions?.is_owner === true || permissions?.role_in_house === 'OWNER';
+    const p: HousePermissions = {
+      can_view_health: isOwner ? true : permissions?.can_view_health !== false,
+      can_view_camera: isOwner ? true : permissions?.can_view_camera !== false,
+      can_handle_emergency: isOwner ? true : permissions?.can_handle_emergency !== false,
+      can_manage_devices: isOwner ? true : Boolean(permissions?.can_manage_devices),
+      can_manage_records: isOwner ? true : Boolean(permissions?.can_manage_records),
+      role_in_house: permissions?.role_in_house || (isOwner ? 'OWNER' : 'MEMBER'),
+      is_owner: isOwner,
+    };
+    set({
+      household_id: houseId,
+      has_house: true,
+      assigned_house: houseName,
+      permissions: p,
+      role: isOwner ? 'owner' : 'member',
+      userRole: isOwner ? 'owner' : 'member',
+    });
+  },
+
+  clearHouseData: () => {
+    const independentPerms: HousePermissions = {
+      can_view_health: false,
+      can_view_camera: false,
+      can_handle_emergency: false,
+      can_manage_devices: true,
+      can_manage_records: false,
+      role_in_house: 'NEW_USER',
+      is_owner: false,
+    };
+    set({
+      household_id: null,
+      has_house: false,
+      assigned_house: null,
+      permissions: independentPerms,
+      has_devices: false,
+      device_count: 0,
+    });
   },
 
   logout: () => {
@@ -313,21 +461,53 @@ const createAuthStore: StateCreator<AuthStoreState, [], [['zustand/persist', Aut
       avatarUrl: null,
       avatar_url: null,
       household_id: null,
+      has_house: null,
+      assigned_house: null,
+      has_devices: null,
+      device_count: 0,
       viewRole: 'CAREGIVER',
       permissions: null,
     });
   },
 });
 
+const safeStorage = {
+  getItem: async (name: string) => {
+    try {
+      return await AsyncStorage.getItem(name);
+    } catch {
+      return null;
+    }
+  },
+  setItem: async (name: string, value: string) => {
+    try {
+      await AsyncStorage.setItem(name, value);
+    } catch (err) {
+      console.warn('[useAuthStore] AsyncStorage setItem warning (quota handled):', err);
+    }
+  },
+  removeItem: async (name: string) => {
+    try {
+      await AsyncStorage.removeItem(name);
+    } catch {}
+  },
+};
+
 const persistOptions: PersistOptions<AuthStoreState> = {
   name: 'auth-storage',
-  storage: createJSONStorage(() => AsyncStorage),
+  storage: createJSONStorage(() => safeStorage),
   version: 1,
-  partialize: (state) => ({
-    ...state,
-    isRoleLoading: false,
-    isHydrated: false,
-  }),
+  partialize: (state) => {
+    const isBigAvatarUrl = Boolean(state.avatarUrl && state.avatarUrl.length > 5000);
+    const isBigAvatar_url = Boolean(state.avatar_url && state.avatar_url.length > 5000);
+    return {
+      ...state,
+      avatarUrl: isBigAvatarUrl ? null : state.avatarUrl,
+      avatar_url: isBigAvatar_url ? null : state.avatar_url,
+      isRoleLoading: false,
+      isHydrated: true,
+    };
+  },
   onRehydrateStorage: () => () => {
     useAuthStore.setState({ isHydrated: true });
   },
@@ -351,6 +531,10 @@ const persistOptions: PersistOptions<AuthStoreState> = {
       avatarUrl: null,
       avatar_url: null,
       household_id: null,
+      has_house: null,
+      assigned_house: null,
+      has_devices: null,
+      device_count: 0,
       viewRole: 'CAREGIVER',
     };
   },

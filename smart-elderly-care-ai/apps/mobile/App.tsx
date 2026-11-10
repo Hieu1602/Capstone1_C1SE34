@@ -3,7 +3,7 @@
 
 import "react-native-gesture-handler";
 import React, { useEffect } from "react";
-import { StatusBar, LogBox, Platform } from "react-native";
+import { StatusBar, LogBox, Platform, Alert as NativeAlert } from "react-native";
 import { registerRootComponent } from "expo";
 import * as ScreenOrientation from "expo-screen-orientation";
 import { GestureHandlerRootView } from "react-native-gesture-handler";
@@ -11,10 +11,24 @@ import { SafeAreaProvider } from "react-native-safe-area-context";
 
 import "./src/i18n/config";
 import AppNavigator from "./src/navigation/AppNavigator";
+import { InAppAlertModal } from "./src/components/InAppAlertModal";
+import { LocalizedAlert } from "./src/i18n/LocalizedComponents";
 import { fcmService } from "./src/services/fcm";
 import api from "./src/services/api";
 import { useAuthStore } from "./src/store/useAuthStore";
 import i18n from "./src/i18n/config";
+
+// Chuyển hướng toàn bộ Alert.alert và window.alert sang In-App Mobile Modal (không hiện pop-up trình duyệt "localhost says")
+if (Platform.OS === "web") {
+    NativeAlert.alert = (...args: any[]) => {
+        (LocalizedAlert.alert as any)(...args);
+    };
+    if (typeof window !== "undefined") {
+        window.alert = (msg?: any) => {
+            (LocalizedAlert.alert as any)("Thông báo", String(msg ?? ""));
+        };
+    }
+}
 
 // Bỏ qua các cảnh báo tương thích style không nghiêm trọng trên nền tảng Web
 LogBox.ignoreLogs([
@@ -146,6 +160,7 @@ export default function App() {
             <SafeAreaProvider>
                 <StatusBar barStyle="light-content"  />
                 <AppNavigator />
+                <InAppAlertModal />
             </SafeAreaProvider>
         </GestureHandlerRootView>
     );
