@@ -14,7 +14,7 @@ if TYPE_CHECKING:
     from app.models.house import House, HouseMember
     from app.models.user_terminal import UserTerminal, UserLoginHistory
 
-from sqlalchemy import Boolean, DateTime, Integer, String, Text
+from sqlalchemy import Boolean, DateTime, ForeignKey, Integer, String, Text
 from sqlalchemy.dialects.postgresql import UUID
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 from sqlalchemy.sql import func
@@ -29,6 +29,12 @@ class UserRole(str):
     CAREGIVER = "caregiver"
     DOCTOR    = "doctor"
     ADMIN     = "admin"
+
+
+class UserStatus(str):
+    ACTIVE       = "active"
+    LOCKED_AUTO  = "locked_auto"
+    LOCKED_ADMIN = "locked_admin"
 
 
 class User(Base):
@@ -70,7 +76,18 @@ class User(Base):
     cchn_number: Mapped[str | None] = mapped_column(String(50), nullable=True)
     specialty: Mapped[str | None] = mapped_column(String(255), nullable=True)
     workplace: Mapped[str | None] = mapped_column(String(255), nullable=True)
+    email: Mapped[str | None] = mapped_column(String(255), unique=True, index=True, nullable=True)
     is_active: Mapped[bool] = mapped_column(Boolean, default=True)
+    status: Mapped[str] = mapped_column(
+        String(30), nullable=False, default=UserStatus.ACTIVE, server_default=UserStatus.ACTIVE
+    )
+    lock_reason: Mapped[str | None] = mapped_column(Text, nullable=True)
+    locked_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
+    locked_by: Mapped[uuid.UUID | None] = mapped_column(
+        UUID(as_uuid=True), ForeignKey("users.id", ondelete="SET NULL"), nullable=True
+    )
+    lock_until: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
+    token_version: Mapped[int] = mapped_column(Integer, default=1, server_default="1", nullable=False)
     fcm_token: Mapped[str | None] = mapped_column(String(500), nullable=True)
     created_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True), server_default=func.now()

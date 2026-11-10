@@ -6,6 +6,10 @@ interface UserFilterBarProps {
   onSearchChange: (value: string) => void;
   selectedRole: string;
   onRoleChange: (value: string) => void;
+  selectedStatus?: string;
+  onStatusChange?: (value: string) => void;
+  selectedDormancy?: string;
+  onDormancyChange?: (value: string) => void;
   totalUsers: number;
   stats: {
     admins: number;
@@ -21,33 +25,34 @@ export const UserFilterBar: React.FC<UserFilterBarProps> = ({
   onSearchChange,
   selectedRole,
   onRoleChange,
+  selectedStatus = 'all',
+  onStatusChange,
+  selectedDormancy = 'all',
+  onDormancyChange,
   totalUsers,
   stats,
 }) => {
   return (
     <div className="glass-card p-4 flex flex-col lg:flex-row items-center justify-between gap-4">
-      {/* Ô tìm kiếm người dùng & Bộ lọc vai trò (Dropdown) */}
-      <div className="flex flex-col sm:flex-row items-center gap-2.5 w-full lg:w-auto flex-1 max-w-2xl">
+      {/* Ô tìm kiếm người dùng & Bộ lọc */}
+      <div className="flex flex-col sm:flex-row items-center gap-2.5 w-full lg:w-auto flex-1 max-w-4xl">
         <div className="relative w-full sm:flex-1">
           <Search className="w-4 h-4 text-[#737780] absolute left-3.5 top-1/2 -translate-y-1/2" />
           <input
             type="text"
             value={searchQuery}
             onChange={(e) => onSearchChange(e.target.value)}
-            placeholder="Tìm theo họ tên, số điện thoại, căn hộ..."
+            placeholder="Tìm theo họ tên, số điện thoại, email, căn hộ..."
             className="w-full pl-9 pr-4 py-2 rounded-xl text-xs bg-[#F5F6F8] dark:bg-[#202329] border border-[#E7E9ED] dark:border-[#454A53] text-[#191B20] dark:text-[#F5F6F8] placeholder:text-[#737780] dark:placeholder:text-[#727984] focus:outline-none focus:border-[#FF6B35] focus:ring-1 focus:ring-[#FF6B35]/30 transition-all font-sans"
           />
         </div>
 
         {/* Dropdown Lọc Vai trò */}
         <div className="relative w-full sm:w-auto shrink-0">
-          <div className="absolute left-3 top-1/2 -translate-y-1/2 pointer-events-none text-[#737780]">
-            <Filter className="w-3.5 h-3.5" />
-          </div>
           <select
             value={selectedRole}
             onChange={(e) => onRoleChange(e.target.value)}
-            className="w-full sm:w-auto pl-8 pr-7 py-2 rounded-xl text-xs font-semibold bg-[#F5F6F8] dark:bg-[#202329] border border-[#E7E9ED] dark:border-[#454A53] text-[#191B20] dark:text-[#F5F6F8] focus:outline-none focus:border-[#FF6B35] transition-all cursor-pointer shadow-2xs appearance-none font-sans"
+            className="w-full sm:w-auto px-3 py-2 rounded-xl text-xs font-semibold bg-[#F5F6F8] dark:bg-[#202329] border border-[#E7E9ED] dark:border-[#454A53] text-[#191B20] dark:text-[#F5F6F8] focus:outline-none focus:border-[#FF6B35] transition-all cursor-pointer shadow-2xs font-sans"
           >
             <option value="all">Tất cả vai trò ({totalUsers})</option>
             <option value="admin">Quản trị viên ({stats.admins})</option>
@@ -56,10 +61,40 @@ export const UserFilterBar: React.FC<UserFilterBarProps> = ({
             <option value="member">Thành viên / Member ({stats.members})</option>
             <option value="elderly">Người cao tuổi ({stats.elderly})</option>
           </select>
-          <div className="absolute right-3 top-1/2 -translate-y-1/2 pointer-events-none text-[#737780] text-[10px]">
-            ▼
-          </div>
         </div>
+
+        {/* Dropdown Lọc Trạng thái (active, locked_auto, locked_admin) */}
+        {onStatusChange && (
+          <div className="relative w-full sm:w-auto shrink-0">
+            <select
+              value={selectedStatus}
+              onChange={(e) => onStatusChange(e.target.value)}
+              className="w-full sm:w-auto px-3 py-2 rounded-xl text-xs font-semibold bg-[#F5F6F8] dark:bg-[#202329] border border-[#E7E9ED] dark:border-[#454A53] text-[#191B20] dark:text-[#F5F6F8] focus:outline-none focus:border-[#FF6B35] transition-all cursor-pointer shadow-2xs font-sans"
+            >
+              <option value="all">Tất cả trạng thái</option>
+              <option value="active">Đang hoạt động</option>
+              <option value="locked_auto">Tự động khóa (Sai pass/Spam)</option>
+              <option value="locked_admin">Admin khóa thủ công</option>
+            </select>
+          </div>
+        )}
+
+        {/* Dropdown Lọc Ngủ đông (Mốc 3 tháng, 6 tháng, 1 năm) */}
+        {onDormancyChange && (
+          <div className="relative w-full sm:w-auto shrink-0">
+            <select
+              value={selectedDormancy}
+              onChange={(e) => onDormancyChange(e.target.value)}
+              className="w-full sm:w-auto px-3 py-2 rounded-xl text-xs font-semibold bg-[#F5F6F8] dark:bg-[#202329] border border-[#E7E9ED] dark:border-[#454A53] text-[#191B20] dark:text-[#F5F6F8] focus:outline-none focus:border-[#FF6B35] transition-all cursor-pointer shadow-2xs font-sans"
+            >
+              <option value="all">Tất cả mức hoạt động</option>
+              <option value="active">Hoạt động bình thường</option>
+              <option value="remind_3m">&gt; 3 tháng (Cảnh báo)</option>
+              <option value="lock_6m">&gt; 6 tháng (Cần khóa)</option>
+              <option value="eligible_delete_1y">&gt; 1 năm (Đủ đ/k xóa)</option>
+            </select>
+          </div>
+        )}
       </div>
 
       {/* Bộ lọc phân loại vai trò (Quick Tabs) */}

@@ -44,7 +44,7 @@ except ImportError:
 
 from fastapi import APIRouter, Depends, File, HTTPException, Request, UploadFile, status
 from pydantic import BaseModel, Field
-from sqlalchemy import select
+from sqlalchemy import delete, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.api.deps import get_current_user, get_current_user_optional
@@ -273,24 +273,25 @@ async def chat(
             first_message=request.message,
         )
 
-        # Lấy tối đa 6 tin nhắn gần nhất của phiên này để phục vụ đối đáp liên tục
+        # Lấy tối đa 6 tin nhắn gần nhất của phiên này để phục vụ đối đáp liên tục (bỏ qua nếu phiên mới)
         history_msgs = []
-        try:
-            hist_stmt = (
-                select(ChatMessage)
-                .where(ChatMessage.session_id == session.id)
-                .order_by(ChatMessage.created_at.desc())
-                .limit(request.context_window or 6)
-            )
-            hist_res = await db.execute(hist_stmt)
-            raw_hist = list(reversed(hist_res.scalars().all()))
-            history_msgs = [
-                {"sender": m.sender, "text": m.text}
-                for m in raw_hist
-                if m.text and m.text.strip()
-            ]
-        except Exception as hist_err:
-            logger.warning("Lỗi truy vấn lịch sử đối đáp: %s", hist_err)
+        if request.session_id:
+            try:
+                hist_stmt = (
+                    select(ChatMessage)
+                    .where(ChatMessage.session_id == session.id)
+                    .order_by(ChatMessage.created_at.desc())
+                    .limit(request.context_window or 6)
+                )
+                hist_res = await db.execute(hist_stmt)
+                raw_hist = list(reversed(hist_res.scalars().all()))
+                history_msgs = [
+                    {"sender": m.sender, "text": m.text}
+                    for m in raw_hist
+                    if m.text and m.text.strip()
+                ]
+            except Exception as hist_err:
+                logger.warning("Lỗi truy vấn lịch sử đối đáp: %s", hist_err)
 
         # Gửi câu hỏi kèm lịch sử đối đáp liên tục vào RAG Service
         res = await service.ask(
@@ -470,6 +471,10 @@ async def delete_session(
             status_code=status.HTTP_404_NOT_FOUND,
             detail="Không tìm thấy phiên chat hoặc bạn không có quyền xoá.",
         )
+    # Dọn dẹp tin nhắn con trước nhằm tránh lỗi ORM cascade trong AsyncSession
+    await db.execute(
+        delete(ChatMessage).where(ChatMessage.session_id == session.id)
+    )
     await db.delete(session)
     await db.commit()
 

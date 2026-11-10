@@ -53,6 +53,7 @@ def validate_vietnamese_full_name(name: str) -> str:
 class UserBase(BaseModel):
     full_name: str
     phone: str
+    email: Optional[str] = None
     role: str = "member"
     avatar_url: Optional[str] = None
     cchn_number: Optional[str] = None
@@ -173,7 +174,17 @@ class PasswordChange(BaseModel):
 
 class UserOut(UserBase):
     id: uuid.UUID
+    email: Optional[str] = None
     is_active: bool
+    status: str = "active"
+    lock_reason: Optional[str] = None
+    locked_at: Optional[datetime] = None
+    locked_by: Optional[uuid.UUID] = None
+    lock_until: Optional[datetime] = None
+    token_version: int = 1
+    dormancy_level: Optional[str] = "active"
+    can_delete: bool = True
+    cannot_delete_reason: Optional[str] = None
     preferred_language: Optional[str] = "vi"
     language: Optional[str] = "vi"
     font_size_mode: Optional[str] = "system"
@@ -202,6 +213,33 @@ class UserOut(UserBase):
         return self
 
     model_config = {"from_attributes": True}
+
+
+class UserStatusUpdate(BaseModel):
+    status: Literal["active", "locked_admin"]
+    reason: str = Field(min_length=3, max_length=500, description="Lý do khóa hoặc mở khóa bắt buộc")
+
+
+class UserPaginationOut(BaseModel):
+    items: list[UserOut]
+    total: int
+    page: int
+    page_size: int
+    total_pages: int
+
+
+class DormantPreviewOut(BaseModel):
+    level: str
+    threshold_days: int
+    count: int
+    items: list[UserOut]
+
+
+class DormantBatchActionIn(BaseModel):
+    level: Literal["3m", "6m", "1y"]
+    action: Literal["remind", "lock", "delete"]
+    reason: str = Field(min_length=3, max_length=500, description="Lý do thực hiện hành động hàng loạt")
+    confirmed: bool = True
 
 
 class Token(BaseModel):

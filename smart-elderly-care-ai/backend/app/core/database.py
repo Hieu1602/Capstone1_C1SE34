@@ -127,6 +127,15 @@ async def init_db() -> None:
             await conn.execute(text("ALTER TABLE users DROP COLUMN IF EXISTS location_longitude;"))
             await conn.execute(text("ALTER TABLE users DROP COLUMN IF EXISTS location_latitude;"))
             await conn.execute(text("ALTER TABLE users DROP COLUMN IF EXISTS location_enabled;"))
+            await conn.execute(text("ALTER TABLE users ADD COLUMN IF NOT EXISTS email VARCHAR(255);"))
+            await conn.execute(text("ALTER TABLE users ADD COLUMN IF NOT EXISTS status VARCHAR(30) DEFAULT 'active';"))
+            await conn.execute(text("ALTER TABLE users ADD COLUMN IF NOT EXISTS lock_reason TEXT;"))
+            await conn.execute(text("ALTER TABLE users ADD COLUMN IF NOT EXISTS locked_at TIMESTAMPTZ;"))
+            await conn.execute(text("ALTER TABLE users ADD COLUMN IF NOT EXISTS locked_by UUID;"))
+            await conn.execute(text("ALTER TABLE users ADD COLUMN IF NOT EXISTS lock_until TIMESTAMPTZ;"))
+            await conn.execute(text("ALTER TABLE users ADD COLUMN IF NOT EXISTS token_version INTEGER DEFAULT 1;"))
+            await conn.execute(text("UPDATE users SET status = 'locked_admin' WHERE is_active = FALSE AND (status IS NULL OR status = 'active');"))
+            await conn.execute(text("UPDATE users SET status = 'active' WHERE status IS NULL;"))
             await conn.execute(text("ALTER TABLE incidents DROP CONSTRAINT IF EXISTS incidents_device_id_fkey, ADD CONSTRAINT incidents_device_id_fkey FOREIGN KEY (device_id) REFERENCES devices(id) ON DELETE CASCADE;"))
             await conn.execute(text("ALTER TABLE vital_signs DROP CONSTRAINT IF EXISTS vital_signs_device_id_fkey, ADD CONSTRAINT vital_signs_device_id_fkey FOREIGN KEY (device_id) REFERENCES devices(id) ON DELETE CASCADE;"))
             await conn.execute(text("ALTER TABLE camera_recordings DROP CONSTRAINT IF EXISTS camera_recordings_device_id_fkey, ADD CONSTRAINT camera_recordings_device_id_fkey FOREIGN KEY (device_id) REFERENCES devices(id) ON DELETE CASCADE;"))
@@ -170,6 +179,13 @@ async def init_db() -> None:
                 );
             """))
             await conn.execute(text("CREATE INDEX IF NOT EXISTS ix_audit_logs_timestamp ON audit_logs(timestamp DESC);"))
+            await conn.execute(text("ALTER TABLE audit_logs ADD COLUMN IF NOT EXISTS admin_id UUID;"))
+            await conn.execute(text("ALTER TABLE audit_logs ADD COLUMN IF NOT EXISTS action VARCHAR(100);"))
+            await conn.execute(text("ALTER TABLE audit_logs ADD COLUMN IF NOT EXISTS target_type VARCHAR(50);"))
+            await conn.execute(text("ALTER TABLE audit_logs ADD COLUMN IF NOT EXISTS target_id VARCHAR(100);"))
+            await conn.execute(text("ALTER TABLE audit_logs ADD COLUMN IF NOT EXISTS reason TEXT;"))
+            await conn.execute(text("ALTER TABLE audit_logs ADD COLUMN IF NOT EXISTS old_value TEXT;"))
+            await conn.execute(text("ALTER TABLE audit_logs ADD COLUMN IF NOT EXISTS new_value TEXT;"))
             await conn.execute(text("""
                 CREATE TABLE IF NOT EXISTS system_incidents (
                     id UUID NOT NULL DEFAULT gen_random_uuid() PRIMARY KEY,

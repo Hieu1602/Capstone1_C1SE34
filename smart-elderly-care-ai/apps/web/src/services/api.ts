@@ -22,7 +22,7 @@ const BASE_URL =
 
 export const api = axios.create({
   baseURL: BASE_URL,
-  timeout: 10000,
+  timeout: 30000,
   headers: {
     'Content-Type': 'application/json',
   },
@@ -73,8 +73,8 @@ export const authApi = {
 
 // 2. USERS & PERMISSIONS API
 export const usersApi = {
-  list: async (): Promise<User[]> => {
-    const res = await api.get<User[]>('/users');
+  list: async (refresh: boolean = false): Promise<User[]> => {
+    const res = await api.get<User[]>('/users', { params: refresh ? { refresh: true } : undefined });
     return res.data;
   },
 
@@ -86,8 +86,34 @@ export const usersApi = {
     const res = await api.patch<User>(`/users/${id}`, data);
     return res.data;
   },
+  updateStatus: async (id: string, status: 'active' | 'locked_admin', reason: string): Promise<User> => {
+    const res = await api.post<User>(`/users/${id}/status`, { status, reason });
+    return res.data;
+  },
   toggleStatus: (id: string, active: boolean) => api.patch(`/users/${id}`, { is_active: active }),
-  delete: (id: string) => api.delete(`/users/${id}`),
+  delete: (id: string, reason?: string) => api.delete(`/users/${id}`, { params: reason ? { reason } : undefined }),
+  getTerminals: async (id: string): Promise<any[]> => {
+    const res = await api.get<any[]>(`/users/${id}/terminals`);
+    return res.data;
+  },
+  revokeTerminal: async (id: string, terminalId: string, reason?: string) => {
+    const res = await api.delete(`/users/${id}/terminals/${terminalId}`, { data: { reason } });
+    return res.data;
+  },
+  logoutAll: async (id: string, reason?: string) => {
+    const res = await api.post(`/users/${id}/logout-all`, { reason });
+    return res.data;
+  },
+  previewDormant: async (level: '3m' | '6m' | '1y'): Promise<{ level: string; threshold_days: number; count: number; items: User[] }> => {
+    const res = await api.get<{ level: string; threshold_days: number; count: number; items: User[] }>('/users/dormant/preview', {
+      params: { level },
+    });
+    return res.data;
+  },
+  batchActionDormant: async (level: '3m' | '6m' | '1y', action: 'remind' | 'lock' | 'delete', reason: string): Promise<any> => {
+    const res = await api.post('/users/dormant/batch-action', { level, action, reason, confirmed: true });
+    return res.data;
+  },
 };
 
 // 3. IOT DEVICES API

@@ -11,12 +11,15 @@ import {
   TouchableOpacity,
   FlatList,
   SafeAreaView,
+  ActivityIndicator,
+  Alert,
 } from 'react-native';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { Ionicons } from '@expo/vector-icons';
 import { useTheme } from '../../../store/useThemeStore';
 import { useAlertStore } from '../../../store/useAlertStore';
 import { LocalizedText } from '../../../i18n/LocalizedComponents';
+import { householdApi } from '../../../services/api';
 import type { Incident } from '../../../store/useAlertStore';
 import type { AppointmentItem, PatientCardData } from './types';
 
@@ -32,6 +35,7 @@ interface Props {
   onNavigate?: (screenName: string, params?: any) => void;
   onMarkAllRead?: () => void;
   hasUnread?: boolean;
+  onRespondHouseInvite?: (incident: Incident, action: 'accept' | 'reject') => Promise<void>;
 }
 
 type TabType = 'ALL' | 'UNREAD' | 'ALERTS' | 'APPOINTMENTS';
@@ -39,7 +43,7 @@ type TabType = 'ALL' | 'UNREAD' | 'ALERTS' | 'APPOINTMENTS';
 interface UnifiedNotification {
   id: string;
   rawIncidentId?: string;
-  type: 'INCIDENT' | 'PATIENT_WARNING' | 'APPOINTMENT' | 'PATIENT_ASSIGNMENT';
+  type: 'INCIDENT' | 'PATIENT_WARNING' | 'APPOINTMENT' | 'PATIENT_ASSIGNMENT' | 'HOUSE_INVITE';
   title: string;
   subtitle: string;
   timeStr: string;
@@ -51,8 +55,10 @@ interface UnifiedNotification {
   isRead: boolean;
   patientId?: string;
   rawAppointment?: AppointmentItem;
-  targetScreen: 'DoctorAppointments' | 'DoctorPatients' | 'DoctorPatientDetail';
+  targetScreen: 'DoctorAppointments' | 'DoctorPatients' | 'DoctorPatientDetail' | 'DoctorHome';
   targetParams?: any;
+  rawIncident?: Incident;
+  memberId?: string;
 }
 
 const STORAGE_KEY = '@doctor_read_notification_ids';
@@ -94,6 +100,7 @@ export default function NotificationsBottomSheet({
   onNavigate,
   onMarkAllRead,
   hasUnread = true,
+  onRespondHouseInvite,
 }: Props) {
   const { isDarkMode, colors } = useTheme();
   const [activeTab, setActiveTab] = useState<TabType>('ALL');
@@ -159,7 +166,37 @@ export default function NotificationsBottomSheet({
       msgLower.includes('dị ứng') ||
       msgLower.includes('dinh dưỡng');
 
-    if (isAppointmentMsg) {
+    // 1.0 Lời mời tham gia căn nhà dành cho Bác sĩ gia đình
+    const isHouseInvite =
+      inc.alert_type === 'HOUSE_INVITE_PENDING' ||
+      Boolean(inc.notes && inc.notes.includes('HOUSE_INVITE_PENDING')) ||
+      msgLower.includes('lời mời bạn tham gia căn nhà') ||
+      msgLower.includes('lời mời tham gia căn nhà') ||
+      msgLower.includes('xác nhận vào nhà');
+
+    if (isHouseInvite) {
+      const memberIdMatch = (inc.notes || inc.note || '')?.match(/MEMBER_ID:([a-fA-F0-9-]+)/);
+      const extractedMemberId = memberIdMatch ? memberIdMatch[1] : undefined;
+      const isHandled = Boolean(inc.is_acknowledged);
+
+      unifiedList.push({
+        id: `inc_${inc.id}`,
+        rawIncidentId: inc.id,
+        type: 'HOUSE_INVITE',
+        title: 'Lời mời phụ trách Bác sĩ gia đình',
+        subtitle: rawMsg || 'Chủ hộ đã gửi lời mời bạn tham gia căn nhà với vai trò Bác sĩ gia đình.',
+        timeStr: inc.created_at || '',
+        badgeLabel: isHandled ? 'Đã phản hồi' : 'Chờ xác nhận',
+        badgeColor: isHandled ? '#059669' : '#D97706',
+        badgeBg: isHandled ? '#ECFDF5' : '#FEF3C7',
+        iconName: 'mail-unread',
+        iconColor: '#D97706',
+        isRead: isHandled,
+        targetScreen: 'DoctorHome',
+        memberId: extractedMemberId,
+        rawIncident: inc,
+      });
+    } else if (isAppointmentMsg) {
       const isCancelled = msgLower.includes('hủy');
       unifiedList.push({
         id: `inc_${inc.id}`,
@@ -294,16 +331,53 @@ export default function NotificationsBottomSheet({
 
   // Đếm số lượng thông báo chưa đọc
   const unreadCount = unifiedList.filter((i) => !i.isRead).length;
-  const alertsCount = unifiedList.filter((i) => i.type === 'INCIDENT' || i.type === 'PATIENT_WARNING').length;
+  const alertsCount = unifiedList.filter((i) => i.type === 'INCIDENT' || i.type === 'PATIENT_WARNING' || i.type === 'HOUSE_INVITE').length;
   const aptsCount = unifiedList.filter((i) => i.type === 'APPOINTMENT').length;
 
   // Lọc theo Tab được chọn
   const filteredList = unifiedList.filter((item) => {
     if (activeTab === 'UNREAD') return !item.isRead;
-    if (activeTab === 'ALERTS') return item.type === 'INCIDENT' || item.type === 'PATIENT_WARNING';
+    if (activeTab === 'ALERTS') return item.type === 'INCIDENT' || item.type === 'PATIENT_WARNING' || item.type === 'HOUSE_INVITE';
     if (activeTab === 'APPOINTMENTS') return item.type === 'APPOINTMENT';
     return true;
   });
+
+  const [respondingId, setRespondingId] = useState<string | null>(null);
+
+  const handleRespondInviteFromSheet = async (item: UnifiedNotification, action: 'accept' | 'reject') => {
+    if (!item.rawIncident) return;
+    setRespondingId(item.id);
+    try {
+      if (onRespondHouseInvite) {
+        await onRespondHouseInvite(item.rawIncident, action);
+      } else {
+        const memberId = item.memberId || item.rawIncident.device_id || item.rawIncident.id;
+        await householdApi.respondHouseInvite(memberId, action);
+        await useAlertStore.getState().acknowledgeIncident(
+          item.rawIncident.id,
+          action === 'accept' ? 'Đã đồng ý vào nhà' : 'Đã từ chối vào nhà'
+        );
+        Alert.alert(
+          action === 'accept' ? 'Thành công' : 'Đã từ chối',
+          action === 'accept'
+            ? 'Bạn đã tham gia căn nhà thành công! Bệnh nhân đã được thêm vào danh sách quản lý.'
+            : 'Bạn đã từ chối lời mời tham gia căn nhà.'
+        );
+      }
+      const updated = new Set(readIds);
+      updated.add(item.id);
+      if (item.rawIncidentId) {
+        updated.add(item.rawIncidentId);
+        updated.add(`inc_${item.rawIncidentId}`);
+      }
+      await persistReadIds(updated);
+    } catch (e: any) {
+      console.warn('handleRespondInviteFromSheet error:', e);
+      Alert.alert('Lỗi', e.response?.data?.detail || 'Không thể phản hồi lời mời. Vui lòng thử lại.');
+    } finally {
+      setRespondingId(null);
+    }
+  };
 
   // Xử lý khi nhấn vào 1 thông báo: Đánh dấu đã đọc và điều hướng
   const handleItemPress = async (item: UnifiedNotification) => {
@@ -494,7 +568,7 @@ export default function NotificationsBottomSheet({
             contentContainerStyle={styles.listContent}
             showsVerticalScrollIndicator={false}
             renderItem={({ item }) => (
-              <TouchableOpacity
+              <View
                 style={[
                   styles.card,
                   {
@@ -505,52 +579,98 @@ export default function NotificationsBottomSheet({
                     borderWidth: item.isRead ? 1 : 1.5,
                   },
                 ]}
-                activeOpacity={0.75}
-                onPress={() => handleItemPress(item)}
               >
-                {/* Icon box kèm chấm chưa đọc */}
-                <View style={[styles.iconBox, { backgroundColor: item.badgeBg }]}>
-                  <Ionicons name={item.iconName} size={20} color={item.iconColor} />
-                  {!item.isRead && <View style={styles.cardUnreadDot} />}
-                </View>
+                <TouchableOpacity
+                  style={styles.cardMainRow}
+                  activeOpacity={0.75}
+                  onPress={() => handleItemPress(item)}
+                >
+                  {/* Icon box kèm chấm chưa đọc */}
+                  <View style={[styles.iconBox, { backgroundColor: item.badgeBg }]}>
+                    <Ionicons name={item.iconName} size={20} color={item.iconColor} />
+                    {!item.isRead && <View style={styles.cardUnreadDot} />}
+                  </View>
 
-                {/* Nội dung thông báo */}
-                <View style={styles.cardBody}>
-                  <LocalizedText
-                    style={[
-                      styles.itemTitle,
-                      { color: item.isRead ? (isDarkMode ? '#94A3B8' : '#64748B') : colors.textPrimary },
-                      !item.isRead && { fontWeight: '700' },
-                    ]}
-                    numberOfLines={1}
-                  >
-                    {item.title}
-                  </LocalizedText>
-                  <LocalizedText style={[styles.itemSub, { color: textSub }]} numberOfLines={1}>
-                    {item.subtitle}
-                  </LocalizedText>
-                </View>
-
-                {/* Cột trạng thái: Thẻ phân loại & Nhãn Đã đọc / Chưa đọc */}
-                <View style={styles.cardRightCol}>
-                  <View style={[styles.statusTag, { backgroundColor: item.badgeBg }]}>
-                    <LocalizedText style={[styles.statusText, { color: item.badgeColor }]}>
-                      {item.badgeLabel}
+                  {/* Nội dung thông báo */}
+                  <View style={styles.cardBody}>
+                    <LocalizedText
+                      style={[
+                        styles.itemTitle,
+                        { color: item.isRead ? (isDarkMode ? '#94A3B8' : '#64748B') : colors.textPrimary },
+                        !item.isRead && { fontWeight: '700' },
+                      ]}
+                      numberOfLines={1}
+                    >
+                      {item.title}
+                    </LocalizedText>
+                    <LocalizedText style={[styles.itemSub, { color: textSub }]} numberOfLines={2}>
+                      {item.subtitle}
                     </LocalizedText>
                   </View>
 
-                  {item.isRead ? (
-                    <View style={styles.readBadge}>
-                      <Ionicons name="checkmark-done" size={11} color="#059669" style={{ marginRight: 2 }} />
-                      <LocalizedText style={styles.readBadgeText}>Đã đọc</LocalizedText>
+                  {/* Cột trạng thái: Thẻ phân loại & Nhãn Đã đọc / Chưa đọc */}
+                  <View style={styles.cardRightCol}>
+                    <View style={[styles.statusTag, { backgroundColor: item.badgeBg }]}>
+                      <LocalizedText style={[styles.statusText, { color: item.badgeColor }]}>
+                        {item.badgeLabel}
+                      </LocalizedText>
                     </View>
-                  ) : (
-                    <View style={styles.unreadBadge}>
-                      <LocalizedText style={styles.unreadBadgeText}>Chưa đọc</LocalizedText>
-                    </View>
-                  )}
-                </View>
-              </TouchableOpacity>
+
+                    {item.isRead ? (
+                      <View style={styles.readBadge}>
+                        <Ionicons name="checkmark-done" size={11} color="#059669" style={{ marginRight: 2 }} />
+                        <LocalizedText style={styles.readBadgeText}>Đã đọc</LocalizedText>
+                      </View>
+                    ) : (
+                      <View style={styles.unreadBadge}>
+                        <LocalizedText style={styles.unreadBadgeText}>Chưa đọc</LocalizedText>
+                      </View>
+                    )}
+                  </View>
+                </TouchableOpacity>
+
+                {item.type === 'HOUSE_INVITE' && !item.isRead && (
+                  <View style={styles.inviteActionRow}>
+                    <TouchableOpacity
+                      style={[
+                        styles.sheetRejectBtn,
+                        {
+                          borderColor: isDarkMode ? '#7F1D1D' : '#FECACA',
+                          backgroundColor: isDarkMode ? '#450A0A' : '#FEF2F2',
+                        },
+                      ]}
+                      onPress={() => handleRespondInviteFromSheet(item, 'reject')}
+                      activeOpacity={0.7}
+                      disabled={respondingId === item.id}
+                    >
+                      {respondingId === item.id ? (
+                        <ActivityIndicator size="small" color="#DC2626" />
+                      ) : (
+                        <>
+                          <Ionicons name="close-circle-outline" size={14} color="#DC2626" />
+                          <LocalizedText style={styles.sheetRejectBtnText}>Từ chối</LocalizedText>
+                        </>
+                      )}
+                    </TouchableOpacity>
+
+                    <TouchableOpacity
+                      style={[styles.sheetAcceptBtn, { backgroundColor: '#16A34A' }]}
+                      onPress={() => handleRespondInviteFromSheet(item, 'accept')}
+                      activeOpacity={0.8}
+                      disabled={respondingId === item.id}
+                    >
+                      {respondingId === item.id ? (
+                        <ActivityIndicator size="small" color="#FFFFFF" />
+                      ) : (
+                        <>
+                          <Ionicons name="checkmark-circle-outline" size={14} color="#FFFFFF" />
+                          <LocalizedText style={styles.sheetAcceptBtnText}>Đồng ý vào nhà</LocalizedText>
+                        </>
+                      )}
+                    </TouchableOpacity>
+                  </View>
+                )}
+              </View>
             )}
           />
         )}
@@ -649,12 +769,50 @@ const styles = StyleSheet.create({
     paddingBottom: 28,
   },
   card: {
-    flexDirection: 'row',
-    alignItems: 'center',
     borderRadius: 12,
     padding: 12,
     marginBottom: 8,
+  },
+  cardMainRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
     gap: 10,
+  },
+  inviteActionRow: {
+    flexDirection: 'row',
+    justifyContent: 'flex-end',
+    gap: 8,
+    marginTop: 10,
+    paddingTop: 8,
+    borderTopWidth: StyleSheet.hairlineWidth,
+    borderTopColor: '#CBD5E1',
+  },
+  sheetRejectBtn: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    paddingHorizontal: 12,
+    paddingVertical: 6,
+    borderRadius: 8,
+    borderWidth: 1,
+    gap: 4,
+  },
+  sheetRejectBtnText: {
+    fontSize: 12,
+    fontWeight: '700',
+    color: '#DC2626',
+  },
+  sheetAcceptBtn: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    paddingHorizontal: 14,
+    paddingVertical: 6,
+    borderRadius: 8,
+    gap: 4,
+  },
+  sheetAcceptBtnText: {
+    fontSize: 12,
+    fontWeight: '700',
+    color: '#FFFFFF',
   },
   iconBox: {
     width: 40,

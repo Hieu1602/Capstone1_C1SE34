@@ -50,8 +50,175 @@ function localizeString(value: string, translate: (key: string, options?: any) =
   if (!trimmed) return value;
 
   const normalized = trimmed.replace(/\s+/g, ' ');
-  const translated = translate(normalized, { defaultValue: normalized });
-  return value.replace(trimmed, translated);
+  let translated = translate(normalized, { defaultValue: normalized });
+
+  // Direct hit
+  if (translated !== normalized) {
+    return value.replace(trimmed, translated);
+  }
+
+  // Trailing colon handling (e.g. "Loại Nguồn:", "Kiểu kết nối:", "Chi tiết:")
+  if (normalized.endsWith(':')) {
+    const withoutColon = normalized.slice(0, -1).trim();
+    const trWithoutColon = translate(withoutColon, { defaultValue: withoutColon });
+    if (trWithoutColon !== withoutColon) {
+      return value.replace(trimmed, `${trWithoutColon}:`);
+    }
+  }
+
+  // Dynamic prefix: "Người đeo: <tên>"
+  const wearerMatch = normalized.match(/^Người đeo:\s*(.+)$/i);
+  if (wearerMatch) {
+    const wearerLabel = translate('Người đeo', { defaultValue: 'Wearer' });
+    const wearerVal = wearerMatch[1].trim() === 'Chưa cập nhật'
+      ? translate('Chưa cập nhật', { defaultValue: 'Not updated' })
+      : wearerMatch[1].trim();
+    return value.replace(trimmed, `${wearerLabel}: ${wearerVal}`);
+  }
+
+  // Dynamic invitation confirm: "<name> đã xác nhận đồng ý tham gia căn nhà \"<house>\"!"
+  const inviteMatch = normalized.match(/^(.+?)\s+đã xác nhận đồng ý tham gia căn nhà\s*"(.*?)"!?$/i);
+  if (inviteMatch) {
+    return value.replace(
+      trimmed,
+      `${inviteMatch[1]} confirmed joining house "${inviteMatch[2]}"!`,
+    );
+  }
+
+  // Dynamic filter pill: "💊 Uống thuốc (<count or Xong>)"
+  const medMatch = normalized.match(/^💊\s*Uống thuốc\s*\((.+)\)$/i);
+  if (medMatch) {
+    const medText = translate('Uống thuốc', { defaultValue: 'Medication' });
+    const innerStatus = medMatch[1].trim();
+    const translatedStatus = innerStatus === 'Xong' ? translate('Xong', { defaultValue: 'Done' }) : innerStatus;
+    return value.replace(trimmed, `💊 ${medText} (${translatedStatus})`);
+  }
+
+  // Emoji pill: "🚨 Nguy kịch"
+  if (/^🚨\s*Nguy kịch$/i.test(normalized)) {
+    return value.replace(trimmed, `🚨 ${translate('Nguy kịch', { defaultValue: 'Critical' })}`);
+  }
+
+  // Emoji pill: "🗓️ Lịch khám"
+  if (/^🗓️\s*Lịch khám$/i.test(normalized)) {
+    return value.replace(trimmed, `🗓️ ${translate('Lịch khám', { defaultValue: 'Appointments' })}`);
+  }
+
+  // Dynamic prefix: "Thiết bị: <id>"
+  const devMatch = normalized.match(/^Thiết bị:\s*(.+)$/i);
+  if (devMatch) {
+    return value.replace(trimmed, `${translate('Thiết bị', { defaultValue: 'Device' })}: ${devMatch[1]}`);
+  }
+
+  // Dynamic prefix: "CẢNH BÁO: <msg>"
+  const alertMatch = normalized.match(/^CẢNH BÁO:\s*(.+)$/i);
+  if (alertMatch) {
+    const warningLabel = translate('CẢNH BÁO', { defaultValue: 'WARNING' });
+    const innerMsg = alertMatch[1].trim();
+    const translatedInner = translate(innerMsg, { defaultValue: innerMsg });
+    return value.replace(trimmed, `${warningLabel}: ${translatedInner}`);
+  }
+
+  // Security center dynamic patterns
+  const improveMatch = normalized.match(/^Cải thiện ngay\s*\((.+)\)$/i);
+  if (improveMatch) {
+    return value.replace(trimmed, `Improve now (${improveMatch[1]})`);
+  }
+
+  const countSettingsMatch = normalized.match(/^(\d+)\s+thiết lập$/i);
+  if (countSettingsMatch) {
+    return value.replace(trimmed, `${countSettingsMatch[1]} settings`);
+  }
+
+  const countQuestionsMatch = normalized.match(/^(\d+)\s+câu hỏi$/i);
+  if (countQuestionsMatch) {
+    return value.replace(trimmed, `${countQuestionsMatch[1]} questions`);
+  }
+
+  const countSessionsMatch = normalized.match(/^(\d+)\s+phiên gần đây$/i);
+  if (countSessionsMatch) {
+    return value.replace(trimmed, `${countSessionsMatch[1]} recent sessions`);
+  }
+
+  const countTrustedMatch = normalized.match(/^(\d+)\s+thiết bị tin cậy$/i);
+  if (countTrustedMatch) {
+    return value.replace(trimmed, `${countTrustedMatch[1]} trusted device(s)`);
+  }
+
+  if (/^Android\s*[·•]\s*Hiện tại$/i.test(normalized)) {
+    return value.replace(trimmed, 'Android · Current');
+  }
+
+  // App info / guides patterns
+  const versionMatch = normalized.match(/^(.+?)\s*[•·]\s*Phiên bản\s*(.+)$/i);
+  if (versionMatch) {
+    return value.replace(trimmed, `${versionMatch[1]} • Version ${versionMatch[2]}`);
+  }
+
+  const callMatch = normalized.match(/^Gọi ngay:\s*(.+)$/i);
+  if (callMatch) {
+    return value.replace(trimmed, `Call now: ${callMatch[1]}`);
+  }
+
+  const stepMatch = normalized.match(/^Bước\s*(\d+[A-Za-z]?):\s*(.+)$/i);
+  if (stepMatch) {
+    const innerStep = stepMatch[2].trim();
+    const trStep = translate(innerStep, { defaultValue: innerStep });
+    return value.replace(trimmed, `Step ${stepMatch[1]}: ${trStep}`);
+  }
+
+  // Medical record dynamic patterns
+  const birthGenderMatch = normalized.match(/^Năm sinh:\s*(\d+)\s*\((.+?)\)\s*[•·]\s*Giới tính:\s*(.+)$/i);
+  if (birthGenderMatch) {
+    const gender = translate(birthGenderMatch[3].trim(), { defaultValue: birthGenderMatch[3].trim() });
+    return value.replace(trimmed, `Birth year: ${birthGenderMatch[1]} (${birthGenderMatch[2]}) • Gender: ${gender}`);
+  }
+
+  const todayPillMatch = normalized.match(/^Hôm nay\s*\((.+)\)$/i);
+  if (todayPillMatch) {
+    return value.replace(trimmed, `Today (${todayPillMatch[1]})`);
+  }
+
+  const yesterdayPillMatch = normalized.match(/^Hôm qua\s*\((.+)\)$/i);
+  if (yesterdayPillMatch) {
+    return value.replace(trimmed, `Yesterday (${yesterdayPillMatch[1]})`);
+  }
+
+  const daysAgoPillMatch = normalized.match(/^(\d+)\s+ngày trước\s*\((.+)\)$/i);
+  if (daysAgoPillMatch) {
+    return value.replace(trimmed, `${daysAgoPillMatch[1]} days ago (${daysAgoPillMatch[2]})`);
+  }
+
+  const dateSummaryMatch = normalized.match(/^Tổng kết ngày\s*(.+)$/i);
+  if (dateSummaryMatch) {
+    return value.replace(trimmed, `Summary for ${dateSummaryMatch[1]}`);
+  }
+
+  const pointsCountMatch = normalized.match(/^(\d+)\s+mốc đo ghi nhận$/i);
+  if (pointsCountMatch) {
+    return value.replace(trimmed, `${pointsCountMatch[1]} recorded reading(s)`);
+  }
+
+  const historyCountMatch = normalized.match(/^Tiền sử bệnh nền\s*\((.+)\)$/i);
+  if (historyCountMatch) {
+    return value.replace(trimmed, `Medical history (${historyCountMatch[1]})`);
+  }
+
+  const membersCountMatch = normalized.match(/^(\d+)\s+người$/i);
+  if (membersCountMatch) {
+    return value.replace(trimmed, `${membersCountMatch[1]} members`);
+  }
+
+  // Unicode subscript ₂ replacement
+  if (normalized.includes('SpO₂')) {
+    const asciiSpO2 = normalized.replace(/SpO₂/g, 'SpO2');
+    const trAscii = translate(asciiSpO2, { defaultValue: asciiSpO2 });
+    if (trAscii !== asciiSpO2) {
+      return value.replace(trimmed, trAscii);
+    }
+  }
+
+  return value;
 }
 
 function localizeChildren(

@@ -442,16 +442,52 @@ async def login(
                 detail="Số điện thoại hoặc mật khẩu không chính xác.",
             )
 
-        if not verify_password(form_data.password, user.hashed_password):
-            raise HTTPException(
-                status_code=status.HTTP_401_UNAUTHORIZED,
-                detail="Số điện thoại hoặc mật khẩu không chính xác.",
-            )
+        now = datetime.now(timezone.utc)
+
+        # Kiểm tra tự hết hạn khóa tự động (15-30 phút)
+        if getattr(user, "status", "active") == "locked_auto":
+            if user.lock_until and user.lock_until > now:
+                mins_left = max(1, int((user.lock_until - now).total_seconds() // 60))
+                raise HTTPException(
+                    status_code=status.HTTP_403_FORBIDDEN,
+                    detail=f"Tài khoản bị tạm khóa tự động còn {mins_left} phút do nhập sai mật khẩu quá 5 lần.",
+                )
+            else:
+                user.status = "active"
+                user.is_active = True
+                user.lock_reason = None
+                user.lock_until = None
+                user.locked_at = None
+                db.add(user)
+                await db.commit()
 
         if not user.is_active:
             raise HTTPException(
                 status_code=status.HTTP_403_FORBIDDEN,
-                detail="Tài khoản đã bị tạm khóa.",
+                detail=f"Tài khoản đã bị khóa. Lý do: {user.lock_reason or 'Vi phạm chính sách'}.",
+            )
+
+        if not verify_password(form_data.password, user.hashed_password):
+            # Tăng số lần thử sai mật khẩu
+            fail_count = getattr(user, "_failed_attempts", 0) + 1
+            setattr(user, "_failed_attempts", fail_count)
+            # Khóa tự động khi nhập sai quá 5 lần
+            if fail_count >= settings.AUTO_LOCK_MAX_FAILED_ATTEMPTS:
+                user.status = "locked_auto"
+                user.is_active = False
+                user.locked_at = now
+                user.lock_until = now + timedelta(minutes=settings.AUTO_LOCK_MINUTES)
+                user.lock_reason = f"Tự động khóa {settings.AUTO_LOCK_MINUTES} phút do nhập sai mật khẩu {fail_count} lần liên tiếp"
+                db.add(user)
+                await db.commit()
+                raise HTTPException(
+                    status_code=status.HTTP_403_FORBIDDEN,
+                    detail=f"Tài khoản đã bị tạm khóa tự động {settings.AUTO_LOCK_MINUTES} phút do nhập sai mật khẩu quá 5 lần.",
+                )
+
+            raise HTTPException(
+                status_code=status.HTTP_401_UNAUTHORIZED,
+                detail="Số điện thoại hoặc mật khẩu không chính xác.",
             )
 
         user_id = user.id
@@ -504,9 +540,10 @@ async def login(
         except Exception:
             await db.rollback()
 
+        user_token_version = getattr(user, "token_version", 1)
         return Token(
-            access_token=create_access_token(subject=user_id),
-            refresh_token=create_refresh_token(subject=user_id),
+            access_token=create_access_token(subject=user_id, token_version=user_token_version),
+            refresh_token=create_refresh_token(subject=user_id, token_version=user_token_version),
             token_type="bearer",
         )
     except HTTPException:

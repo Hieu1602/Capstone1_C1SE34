@@ -1,4 +1,4 @@
-import React from 'react';
+import React, { useState } from 'react';
 import {
   View,
   Text,
@@ -13,7 +13,9 @@ import { Ionicons } from '@expo/vector-icons';
 
 interface HouseAccountInviteModalProps {
   visible: boolean;
-  selectedInviteRole: 'MEMBER' | 'ADMIN';
+  selectedInviteRole?: 'MEMBER' | 'ADMIN';
+  inviteRoleType?: 'MEMBER' | 'DOCTOR';
+  setInviteRoleType?: (role: 'MEMBER' | 'DOCTOR') => void;
   newMemberName: string;
   setNewMemberName: (val: string) => void;
   newMemberPhone: string;
@@ -42,6 +44,8 @@ interface HouseAccountInviteModalProps {
 export const HouseAccountInviteModal: React.FC<HouseAccountInviteModalProps> = ({
   visible,
   selectedInviteRole,
+  inviteRoleType,
+  setInviteRoleType,
   newMemberName,
   setNewMemberName,
   newMemberPhone,
@@ -61,6 +65,11 @@ export const HouseAccountInviteModal: React.FC<HouseAccountInviteModalProps> = (
   colors: { bgCard, borderCol, textTitle, textSub },
   toastInfo,
 }) => {
+  const [internalRoleType, setInternalRoleType] = useState<'MEMBER' | 'DOCTOR'>('MEMBER');
+  const roleType = inviteRoleType || internalRoleType;
+  const updateRoleType = setInviteRoleType || setInternalRoleType;
+  const isDoctor = roleType === 'DOCTOR';
+
   return (
     <Modal visible={visible} transparent animationType="slide">
       {toastInfo && (
@@ -82,19 +91,61 @@ export const HouseAccountInviteModal: React.FC<HouseAccountInviteModalProps> = (
       )}
       <View style={styles.modalOverlay}>
         <View style={[styles.modalCard, { backgroundColor: bgCard, borderColor: borderCol }]}>
-          <Text style={[styles.modalTitle, { color: textTitle }]}>Mời qua Tài khoản</Text>
+          <Text style={[styles.modalTitle, { color: textTitle }]}>Mời vào Căn nhà</Text>
+
+          {/* Chọn vai trò: Thành viên gia đình vs Bác sĩ gia đình */}
+          <View style={styles.roleSelectorRow}>
+            <TouchableOpacity
+              style={[
+                styles.roleSelectBtn,
+                !isDoctor && styles.roleSelectBtnActiveMember,
+                {
+                  backgroundColor: !isDoctor ? (isDarkMode ? '#1E3A8A' : '#EFF6FF') : (isDarkMode ? '#0F172A' : '#F8FAFC'),
+                  borderColor: !isDoctor ? '#3B82F6' : borderCol,
+                },
+              ]}
+              onPress={() => updateRoleType('MEMBER')}
+              activeOpacity={0.7}
+            >
+              <Ionicons name="person" size={16} color={!isDoctor ? '#2563EB' : textSub} />
+              <Text style={[styles.roleSelectBtnText, { color: !isDoctor ? '#2563EB' : textSub, fontWeight: !isDoctor ? '700' : '500' }]}>
+                Thành viên
+              </Text>
+            </TouchableOpacity>
+
+            <TouchableOpacity
+              style={[
+                styles.roleSelectBtn,
+                isDoctor && styles.roleSelectBtnActiveDoctor,
+                {
+                  backgroundColor: isDoctor ? (isDarkMode ? '#064E3B' : '#ECFDF5') : (isDarkMode ? '#0F172A' : '#F8FAFC'),
+                  borderColor: isDoctor ? '#10B981' : borderCol,
+                },
+              ]}
+              onPress={() => updateRoleType('DOCTOR')}
+              activeOpacity={0.7}
+            >
+              <Ionicons name="medkit" size={16} color={isDoctor ? '#059669' : textSub} />
+              <Text style={[styles.roleSelectBtnText, { color: isDoctor ? '#059669' : textSub, fontWeight: isDoctor ? '700' : '500' }]}>
+                Bác sĩ gia đình
+              </Text>
+            </TouchableOpacity>
+          </View>
+
           <View
             style={[
               styles.inviteRoleBadgeContainer,
-              { backgroundColor: isDarkMode ? '#1E293B' : '#EFF6FF' },
+              { backgroundColor: isDoctor ? (isDarkMode ? '#064E3B' : '#ECFDF5') : (isDarkMode ? '#1E293B' : '#EFF6FF') },
             ]}
           >
-            <Text style={[styles.inviteRoleBadgeText, { color: '#2563EB' }]}>
-              👤 Vai trò: Thành viên
+            <Text style={[styles.inviteRoleBadgeText, { color: isDoctor ? '#059669' : '#2563EB' }]}>
+              {isDoctor ? '🩺 Vai trò: Bác sĩ gia đình' : '👤 Vai trò: Thành viên gia đình'}
             </Text>
           </View>
           <Text style={[styles.modalSub, { color: textSub, marginTop: 4 }]}>
-            Nhập số điện thoại để mời tài khoản vào căn nhà.
+            {isDoctor
+              ? 'Nhập số điện thoại của Bác sĩ. Bác sĩ cần xác nhận đồng ý trên ứng dụng mới được vào nhà.'
+              : 'Nhập số điện thoại để mời tài khoản vào căn nhà.'}
           </Text>
 
           <TextInput
@@ -109,24 +160,35 @@ export const HouseAccountInviteModal: React.FC<HouseAccountInviteModalProps> = (
             ]}
             value={newMemberPhone}
             onChangeText={setNewMemberPhone}
-            placeholder="Nhập số điện thoại (ví dụ: 0912 345 678)"
+            placeholder={isDoctor ? 'Nhập số điện thoại Bác sĩ (ví dụ: 0912 345 678)' : 'Nhập số điện thoại (ví dụ: 0912 345 678)'}
             placeholderTextColor="#94A3B8"
             keyboardType="phone-pad"
           />
 
-          {/* Thông báo quyền hạn thành viên */}
+          {/* Thông báo quyền hạn và quy trình phê duyệt */}
           <View
             style={[
               styles.memberNoticeBox,
               {
-                backgroundColor: isDarkMode ? '#1E293B' : '#F0FDF4',
-                borderColor: isDarkMode ? '#334155' : '#BBF7D0',
+                backgroundColor: isDoctor
+                  ? (isDarkMode ? '#064E3B22' : '#F0FDF4')
+                  : (isDarkMode ? '#1E293B' : '#F0FDF4'),
+                borderColor: isDoctor
+                  ? (isDarkMode ? '#059669' : '#BBF7D0')
+                  : (isDarkMode ? '#334155' : '#BBF7D0'),
               },
             ]}
           >
-            <Ionicons name="information-circle" size={20} color="#16A34A" style={{ marginRight: 8, marginTop: 1 }} />
-            <Text style={[styles.memberNoticeText, { color: isDarkMode ? '#86EFAC' : '#15803D' }]}>
-              Thành viên được thêm có quyền xem camera, theo dõi sức khỏe và nhận cảnh báo khẩn cấp (chỉ xem, không có quyền xóa hoặc thay đổi cấu hình).
+            <Ionicons
+              name={isDoctor ? 'medkit' : 'information-circle'}
+              size={20}
+              color={isDoctor ? '#059669' : '#16A34A'}
+              style={{ marginRight: 8, marginTop: 1 }}
+            />
+            <Text style={[styles.memberNoticeText, { color: isDoctor ? (isDarkMode ? '#6EE7B7' : '#065F46') : (isDarkMode ? '#86EFAC' : '#15803D') }]}>
+              {isDoctor
+                ? 'Bác sĩ sau khi được mời sẽ nhận thông báo xác nhận. Chỉ khi Bác sĩ đồng ý, họ mới chính thức vào nhà và được phép theo dõi hồ sơ bệnh án người cao tuổi.'
+                : 'Thành viên sau khi được mời sẽ nhận thông báo xác nhận. Chỉ khi thành viên đồng ý, họ mới chính thức vào nhà để xem camera và nhận cảnh báo khẩn cấp.'}
             </Text>
           </View>
 
@@ -141,7 +203,7 @@ export const HouseAccountInviteModal: React.FC<HouseAccountInviteModalProps> = (
               <Text style={[styles.cancelBtnText, { color: textSub }]}>Hủy</Text>
             </TouchableOpacity>
             <TouchableOpacity
-              style={[styles.saveBtn, isAddingMember && { opacity: 0.7 }]}
+              style={[styles.saveBtn, isDoctor && { backgroundColor: '#10B981' }, isAddingMember && { opacity: 0.7 }]}
               onPress={onAddMember}
               disabled={isAddingMember}
               activeOpacity={0.8}
@@ -149,7 +211,7 @@ export const HouseAccountInviteModal: React.FC<HouseAccountInviteModalProps> = (
               {isAddingMember ? (
                 <ActivityIndicator color="#FFFFFF" size="small" />
               ) : (
-                <Text style={styles.saveBtnText}>Thêm thành viên</Text>
+                <Text style={styles.saveBtnText}>{isDoctor ? 'Mời Bác sĩ gia đình' : 'Thêm thành viên'}</Text>
               )}
             </TouchableOpacity>
           </View>
@@ -180,6 +242,32 @@ const styles = StyleSheet.create({
   modalSub: {
     fontSize: 13,
     marginTop: 2,
+  },
+  roleSelectorRow: {
+    flexDirection: 'row',
+    gap: 10,
+    marginTop: 12,
+    marginBottom: 4,
+  },
+  roleSelectBtn: {
+    flex: 1,
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    paddingVertical: 10,
+    paddingHorizontal: 8,
+    borderRadius: 10,
+    borderWidth: 1.5,
+    gap: 6,
+  },
+  roleSelectBtnActiveMember: {
+    borderColor: '#3B82F6',
+  },
+  roleSelectBtnActiveDoctor: {
+    borderColor: '#10B981',
+  },
+  roleSelectBtnText: {
+    fontSize: 12.5,
   },
   inviteRoleBadgeContainer: {
     alignSelf: 'flex-start',

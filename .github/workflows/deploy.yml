@@ -70,6 +70,8 @@ jobs:
             
             # Build và khởi động lại Backend service
             cd smart-elderly-care-ai
+            python3 sync_ec2_env.py
+            
             echo "🐳 [CI/CD] Đang cập nhật và khởi động lại FastAPI Backend..."
             docker compose up -d --build backend
             

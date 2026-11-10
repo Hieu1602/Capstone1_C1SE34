@@ -254,7 +254,10 @@ class CRUDVital:
         )
         house_ids = [r[0] for r in house_res.all()]
         member_res = await db.execute(
-            select(HouseMember.house_id).where(HouseMember.user_id == user_id)
+            select(HouseMember.house_id).where(
+                HouseMember.user_id == user_id,
+                HouseMember.status == "ACTIVE",
+            )
         )
         for r in member_res.all():
             if r[0] not in house_ids:

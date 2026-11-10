@@ -445,7 +445,11 @@ export default function DevicesScreen({ navigation }: any) {
         <LocalizedText style={[styles.sectionSubtitle, isDarkMode && { color: colors.textSecondary }]}>
           {activeTab === 'Nhóm'
             ? 'Danh sách các khu vực và phòng được thiết lập'
-            : `Danh sách các thiết bị ${activeTab.toLowerCase()} đã ghép nối`}
+            : activeTab === 'Camera'
+            ? 'Danh sách các thiết bị camera đã ghép nối'
+            : activeTab === 'Đồng hồ'
+            ? 'Danh sách các thiết bị watch đã ghép nối'
+            : 'Danh sách các thiết bị tất cả đã ghép nối'}
         </LocalizedText>
 
         {isUserEmptyMember ? (

@@ -48,8 +48,8 @@ class Settings(BaseSettings):
     ALGORITHM: str = "HS256"
     ACCESS_TOKEN_EXPIRE_MINUTES: int = 60 * 24  # 24 hours
     REFRESH_TOKEN_EXPIRE_DAYS: int = 30
-    OTP_MODE: str = "mock"
-    OTP_DEV_CODE: str = "123456"
+    OTP_MODE: str = "esms"
+    OTP_DEV_CODE: str = ""
 
     # ---- Database ----
     DATABASE_URL: str = "postgresql+asyncpg://postgres:postgres@localhost:5432/elderly_care"
@@ -156,6 +156,13 @@ class Settings(BaseSettings):
 
     # ---- TimescaleDB ----
     TIMESCALE_CHUNK_INTERVAL: str = "1 day"
+
+    # ---- User Management & Inactivity (Dormancy) Policy ----
+    DORMANT_REMIND_DAYS: int = 90       # > 3 tháng: Cảnh báo nhắc nhở
+    DORMANT_LOCK_DAYS: int = 180        # > 6 tháng: Khóa tài khoản
+    DORMANT_DELETE_DAYS: int = 365      # > 1 năm: Đủ điều kiện xóa vĩnh viễn
+    AUTO_LOCK_MINUTES: int = 30         # Thời gian tự hết hạn khóa tự động (phút)
+    AUTO_LOCK_MAX_FAILED_ATTEMPTS: int = 5  # Số lần nhập sai pass tối đa trước khi khóa tự động
 
 
 @lru_cache

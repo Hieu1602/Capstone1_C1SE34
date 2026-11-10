@@ -1,7 +1,7 @@
 import React from "react";
+import { LocalizedText as Text } from '../../../../i18n/LocalizedComponents';
 import {
     View,
-    Text,
     TouchableOpacity,
     StyleSheet,
     Modal,
@@ -110,7 +110,7 @@ export const LanguageSettingsModal: React.FC<LanguageSettingsModalProps> = ({
                                     isDarkMode && { color: "#F8FAFC" },
                                 ]}
                             >
-                                Việt Nam
+                                Tiếng Việt
                             </Text>
                             {languageMode === "vi" && (
                                 <Ionicons

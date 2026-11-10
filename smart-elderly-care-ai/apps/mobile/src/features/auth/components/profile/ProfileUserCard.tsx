@@ -1,5 +1,6 @@
+import { LocalizedText as Text } from '../../../../i18n/LocalizedComponents';
 import React, { useEffect } from 'react';
-import { View, Text, TouchableOpacity, StyleSheet, Image } from 'react-native';
+import { View, TouchableOpacity, StyleSheet, Image } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { Colors } from '../../../../theme/colors';
 import { useAuthStore } from '../../../../store/useAuthStore';

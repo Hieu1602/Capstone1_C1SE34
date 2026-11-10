@@ -20,9 +20,18 @@ export interface PermissionRule {
 export interface User {
   id: string;
   phone: string;
+  email?: string | null;
   full_name: string;
   role: UserRole;
   is_active: boolean;
+  status?: 'active' | 'locked_auto' | 'locked_admin';
+  lock_reason?: string | null;
+  locked_at?: string | null;
+  lock_until?: string | null;
+  token_version?: number;
+  dormancy_level?: 'active' | 'remind_3m' | 'lock_6m' | 'eligible_delete_1y';
+  can_delete?: boolean;
+  cannot_delete_reason?: string | null;
   created_at?: string;
   updated_at?: string;
   last_login_at?: string;
