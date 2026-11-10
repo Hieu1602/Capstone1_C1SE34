@@ -180,15 +180,19 @@ const createAuthStore: StateCreator<AuthStoreState, [], [['zustand/persist', Aut
           name: profileExtras?.assigned_house || 'Nhà của tôi',
           hasHouse: true,
         });
+        if (profileExtras?.default_camera_id) {
+          devStore.setCameraDefault?.({
+            id: String(profileExtras.default_camera_id),
+            name: profileExtras.default_camera_name || 'Camera AI',
+            isOnline: true,
+          });
+        }
         devStore.fetchDevicesFromBackend?.().catch(() => {});
       } catch {}
     } else if (profileExtras?.has_house === false) {
       try {
-        require('./useDeviceStore').useDeviceStore.getState().setHouseInfo?.({
-          id: '',
-          name: '',
-          hasHouse: false,
-        });
+        const devStore = require('./useDeviceStore').useDeviceStore.getState();
+        devStore.resetDeviceStore?.();
       } catch {}
     }
   },
