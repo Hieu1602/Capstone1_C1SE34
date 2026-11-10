@@ -334,7 +334,7 @@ export default function CameraDetailScreen({ navigation, route }: Props) {
             <CameraDetailHeader
                 name={name}
                 onBack={() => navigation.goBack()}
-                onSettings={() => openSheet("settings")}
+                onSettings={isOwnerOrAdmin ? () => openSheet("settings") : undefined}
             />
             <CameraViewer
                 connection={connection}
@@ -380,7 +380,9 @@ export default function CameraDetailScreen({ navigation, route }: Props) {
                     onPanelChange={changePanel}
                     intercom={intercom}
                     onMove={move}
-                    onSettings={() => openSheet("settings")}
+                    onSettings={isOwnerOrAdmin ? () => openSheet("settings") : () => {
+                        LocalizedAlert.alert("Quyền truy cập bị giới hạn", "Tài khoản Thành viên chỉ có quyền xem trực tiếp camera, không được phép thay đổi cài đặt.");
+                    }}
                     feedback={feedback}
                 />
                 {!panel && (
@@ -685,11 +687,11 @@ export default function CameraDetailScreen({ navigation, route }: Props) {
                                     onMotion={() => {
                                         void connection.toggleMotion();
                                     }}
-                                    onConfigureSource={() => {
+                                    onConfigureSource={isOwnerOrAdmin ? () => {
                                         setSheet(null);
                                         setShowRtspConfigModal(true);
-                                    }}
-                                    onDeleteDevice={handleDeleteCamera}
+                                    } : undefined}
+                                    onDeleteDevice={isOwnerOrAdmin ? handleDeleteCamera : undefined}
                                 />
                             )}
                         </ScrollView>

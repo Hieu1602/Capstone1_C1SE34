@@ -4,7 +4,7 @@ from datetime import datetime, timezone
 from typing import Optional
 from uuid import UUID
 
-from fastapi import APIRouter, Depends, HTTPException, Query, Request, status
+from fastapi import APIRouter, Depends, HTTPException, Query, Request, status, BackgroundTasks
 from fastapi.concurrency import run_in_threadpool
 from fastapi.security import OAuth2PasswordRequestForm
 from jose import JWTError, jwt
@@ -16,7 +16,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from app.api.deps import get_current_user, get_current_user_optional
 from app.core.audit import get_client_ip, get_user_agent, record_audit_log
 from app.core.config import settings
-from app.core.database import get_db
+from app.core.database import get_db, AsyncSessionFactory
 from app.core.security import create_access_token, create_refresh_token, verify_password
 from app.crud.crud_user import crud_user, normalize_phone
 from app.crud.crud_user_terminal import crud_user_terminal
@@ -126,9 +126,24 @@ class DoctorRegistration(UserCreate):
 
 
 @router.post("/request-otp")
-async def request_otp(payload: OTPRequest):
-    """Gửi mã OTP xác thực qua SMS (eSMS / Twilio / Mock) tới số điện thoại."""
+async def request_otp(
+    payload: OTPRequest,
+    db: AsyncSession = Depends(get_db),
+):
+    """
+    Gửi mã OTP xác thực qua SMS tới số điện thoại để đăng ký tài khoản.
+    Kiểm tra số điện thoại: Nếu đã tồn tại tài khoản thì báo lỗi 409 ngay lập tức, không gửi OTP.
+    """
     phone = normalize_phone(payload.phone)
+
+    # 1. Kiểm tra số điện thoại đã tồn tại trong hệ thống chưa
+    existing_user = await crud_user.get_by_phone(db, phone=phone)
+    if existing_user:
+        raise HTTPException(
+            status_code=status.HTTP_409_CONFLICT,
+            detail="Số điện thoại này đã được đăng ký tài khoản trong hệ thống. Vui lòng đăng nhập hoặc dùng số khác.",
+        )
+
     try:
         await run_in_threadpool(send_otp, phone, "register")
     except RuntimeError as exc:
@@ -420,15 +435,56 @@ async def register_doctor(
     return doctor_user
 
 
+async def _record_login_background(
+    user_id: UUID,
+    client_ip: str,
+    user_agent: str,
+    client_location: Optional[str],
+    user_name: str,
+    user_role: str,
+):
+    """Ghi nhận terminal, last_login_at và audit log chạy ngầm, không làm nghẽn quá trình đăng nhập."""
+    async with AsyncSessionFactory() as session:
+        try:
+            await crud_user_terminal.record_login(
+                session,
+                user_id=user_id,
+                ip_address=client_ip,
+                user_agent=user_agent,
+                custom_location=client_location,
+            )
+            await session.execute(
+                text("UPDATE users SET last_login_at = :now WHERE id = :uid"),
+                {"now": datetime.now(timezone.utc), "uid": str(user_id)},
+            )
+            await session.execute(
+                text("""
+                    INSERT INTO audit_logs (event, user_name, ip_address, severity, details)
+                    VALUES ('ĐĂNG NHẬP THÀNH CÔNG', :u, :ip, 'low', :d)
+                """),
+                {
+                    "u": f"{user_name} ({user_role})",
+                    "ip": client_ip,
+                    "d": f"Đăng nhập thành công qua {user_agent[:40]}.",
+                },
+            )
+            await session.commit()
+        except Exception as err:
+            logger.warning("[_record_login_background] Lỗi ghi nhận nền: %s", err)
+            await session.rollback()
+
+
 @router.post("/login", response_model=Token)
 async def login(
     request: Request,
+    background_tasks: BackgroundTasks,
     form_data: OAuth2PasswordRequestForm = Depends(),
     db: AsyncSession = Depends(get_db),
 ):
     """
     Đăng nhập hệ thống bằng Số điện thoại + Mật khẩu.
-    Hỗ trợ ghi nhận thông tin thiết bị đầu cuối và lịch sử đăng nhập.
+    Tối ưu siêu tốc độ: trả về ngay Token kèm thông tin phân quyền người dùng.
+    Các tác vụ ghi log và lưu thiết bị được đưa vào BackgroundTasks.
     """
     client_ip = request.client.host if request.client else "127.0.0.1"
     user_agent = request.headers.get("user-agent", "")
@@ -494,7 +550,7 @@ async def login(
         user_name = user.full_name or user.phone
         user_role = user.role or "user"
 
-        # Ghi nhận thiết bị đầu cuối & lịch sử đăng nhập (kèm vị trí GPS từ Mobile client)
+        # Lấy vị trí client
         client_location = request.headers.get("x-client-location")
         if client_location:
             try:
@@ -503,48 +559,94 @@ async def login(
             except Exception:
                 pass
 
-        try:
-            await crud_user_terminal.record_login(
-                db,
-                user_id=user.id,
-                ip_address=client_ip,
-                user_agent=user_agent,
-                custom_location=client_location,
-            )
-            await db.commit()
-        except Exception as terminal_err:
-            logger.warning("[login] Failed to record terminal/login-history: %s", terminal_err)
-            await db.rollback()
+        # Ghi nhận terminal, last_login_at và audit log chạy ngầm (Non-blocking)
+        background_tasks.add_task(
+            _record_login_background,
+            user_id=user.id,
+            client_ip=client_ip,
+            user_agent=user_agent,
+            client_location=client_location,
+            user_name=user_name,
+            user_role=user_role,
+        )
 
-        # Cập nhật thời gian đăng nhập mới nhất
+        # Xây dựng UserOut kèm quyền hạn trực tiếp trong response để Frontend không phải gọi thêm /users/me
+        user_out = UserOut.model_validate(user)
         try:
-            await db.execute(
-                text("UPDATE users SET last_login_at = :now WHERE id = :uid"),
-                {"now": datetime.now(timezone.utc), "uid": str(user_id)},
-            )
-            await db.commit()
-        except Exception:
-            await db.rollback()
+            from app.models.house import House, HouseMember
+            from app.models.device import Device
+            from sqlalchemy import func
 
-        # Ghi log Audit
-        try:
-            await db.execute(text("""
-                INSERT INTO audit_logs (event, user_name, ip_address, severity, details)
-                VALUES ('ĐĂNG NHẬP THÀNH CÔNG', :u, :ip, 'low', :d)
-            """), {
-                "u": f"{user_name} ({user_role})",
-                "ip": client_ip,
-                "d": f"Đăng nhập thành công qua {user_agent[:40]}."
-            })
-            await db.commit()
-        except Exception:
-            await db.rollback()
+            # 1 truy vấn duy nhất lấy nhà, vai trò, quyền hạn và số lượng thiết bị (tối ưu siêu tốc độ khi đăng nhập)
+            stmt = (
+                select(
+                    House.id,
+                    House.name,
+                    House.owner_id,
+                    HouseMember.role_in_house,
+                    HouseMember.can_view_health,
+                    HouseMember.can_view_camera,
+                    HouseMember.can_handle_emergency,
+                    HouseMember.can_manage_devices,
+                    HouseMember.can_manage_records,
+                    select(func.count(Device.id)).where(Device.house_id == House.id).scalar_subquery().label("device_count"),
+                )
+                .outerjoin(
+                    HouseMember,
+                    and_(
+                        HouseMember.house_id == House.id,
+                        HouseMember.user_id == user.id,
+                        HouseMember.status == "ACTIVE",
+                    ),
+                )
+                .where(or_(House.owner_id == user.id, HouseMember.user_id == user.id))
+                .order_by((House.owner_id == user.id).desc())
+                .limit(1)
+            )
+            res = await db.execute(stmt)
+            house_row = res.first()
+
+            if house_row:
+                h_id, h_name, h_owner_id, m_role, m_health, m_cam, m_sos, m_dev, m_rec, dev_count = house_row
+                dev_count = int(dev_count or 0)
+                is_owner = (h_owner_id == user.id) or (user.role in ("admin", "owner"))
+                role_in_house = "OWNER" if is_owner else (m_role or "MEMBER")
+                user_out.has_house = True
+                user_out.household_id = h_id
+                user_out.assigned_house = h_name
+                user_out.is_owner = is_owner
+                user_out.role_in_house = role_in_house
+                user_out.can_view_health = is_owner or bool(m_health)
+                user_out.can_view_camera = is_owner or bool(m_cam)
+                user_out.can_handle_emergency = is_owner or bool(m_sos)
+                user_out.can_manage_devices = is_owner or bool(m_dev)
+                user_out.can_manage_records = is_owner or bool(m_rec)
+                user_out.device_count = dev_count
+                user_out.has_devices = dev_count > 0
+                user_out.role_title = "Chủ hộ" if is_owner else ("Bác sĩ" if user.role == "doctor" else "Thành viên")
+            else:
+                user_out.has_house = False
+                user_out.household_id = None
+                user_out.assigned_house = None
+                user_out.is_owner = False
+                user_out.role_in_house = "NEW_USER"
+                user_out.can_view_health = False
+                user_out.can_view_camera = False
+                user_out.can_handle_emergency = False
+                user_out.can_manage_devices = True  # Tài khoản mới được phép thêm thiết bị
+                user_out.can_manage_records = False
+                user_out.device_count = 0
+                user_out.has_devices = False
+                user_out.role_title = "Tài khoản mới"
+        except Exception as err:
+            logger.warning("[login] Tra cứu quyền hạn nhà: %s", err)
 
         user_token_version = getattr(user, "token_version", 1)
         return Token(
             access_token=create_access_token(subject=user_id, token_version=user_token_version),
             refresh_token=create_refresh_token(subject=user_id, token_version=user_token_version),
             token_type="bearer",
+            user=user_out,
         )
     except HTTPException:
         raise
@@ -593,9 +695,42 @@ async def refresh_token(
 @router.get("/me", response_model=UserOut)
 async def get_current_auth_user(
     current_user: User = Depends(get_current_user),
+    db: AsyncSession = Depends(get_db),
 ):
-    """Lấy thông tin người dùng đang đăng nhập."""
-    return current_user
+    """Lấy thông tin người dùng đang đăng nhập kèm phân quyền nhà."""
+    from app.crud.crud_house import crud_house
+    user_out = UserOut.model_validate(current_user)
+    try:
+        house = await crud_house.get_or_create_default_house(db, owner_id=current_user.id)
+        if house:
+            perms = await crud_house.get_user_permissions(db, house=house, user=current_user)
+            user_out.has_house = True
+            user_out.household_id = house.id
+            user_out.assigned_house = house.name
+            user_out.is_owner = perms.get("is_owner", False)
+            user_out.role_in_house = perms.get("role_in_house", "MEMBER")
+            user_out.can_view_health = perms.get("can_view_health", True)
+            user_out.can_view_camera = perms.get("can_view_camera", True)
+            user_out.can_handle_emergency = perms.get("can_handle_emergency", True)
+            user_out.can_manage_devices = perms.get("can_manage_devices", False)
+            user_out.can_manage_records = perms.get("can_manage_records", False)
+            user_out.role_title = "Chủ hộ" if user_out.is_owner else ("Bác sĩ" if current_user.role == "doctor" else "Thành viên")
+        else:
+            user_out.has_house = False
+            user_out.household_id = None
+            user_out.assigned_house = None
+            user_out.is_owner = False
+            user_out.role_in_house = "NONE"
+            user_out.can_view_health = False
+            user_out.can_view_camera = False
+            user_out.can_handle_emergency = False
+            user_out.can_manage_devices = False
+            user_out.can_manage_records = False
+            user_out.role_title = "Tài khoản mới"
+    except Exception as err:
+        logger.warning("[get_current_auth_user] Tra cứu quyền hạn nhà: %s", err)
+
+    return user_out
 
 
 # ==============================================================================
