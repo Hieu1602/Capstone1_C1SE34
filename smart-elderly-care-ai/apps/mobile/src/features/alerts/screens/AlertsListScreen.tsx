@@ -9,7 +9,7 @@
 //   4. Cho phép đánh dấu đã đọc tập trung hoặc xem chi tiết clip bằng chứng 5 giây.
 // ==============================================================================
 
-import React, { useState, useMemo, useEffect } from 'react';
+import React, { useState, useMemo, useEffect, useRef, useCallback } from 'react';
 import {
   View,
   StyleSheet,
@@ -254,9 +254,13 @@ export default function AlertsListScreen({ navigation }: any) {
     permissions?.is_owner === true ||
     permissions?.role_in_house === 'OWNER';
   const canViewCamera = isOwnerOrAdmin || Boolean(permissions?.can_view_camera);
-  const hasLinkedHouse = Boolean(house?.id && house?.hasHouse !== false && house?.name && house.name.trim() !== '');
+  const hasLinkedHouse = Boolean(
+    (house?.id && house?.hasHouse !== false && house?.name && house.name.trim() !== '') ||
+    (permissions?.role_in_house && permissions?.role_in_house !== 'NEW_USER' && permissions?.role_in_house !== 'NONE')
+  );
   const isUnassignedAccount = !hasLinkedHouse;
 
+  const [loading, setLoading] = useState(incidents.length === 0);
   const [refreshing, setRefreshing] = useState(false);
   const [familyAppointmentsModalVisible, setFamilyAppointmentsModalVisible] = useState(false);
   const [selectedAppointmentPatientId, setSelectedAppointmentPatientId] = useState<string | number | null>(null);
@@ -265,40 +269,58 @@ export default function AlertsListScreen({ navigation }: any) {
   const [selectedJoinRequestModalItem, setSelectedJoinRequestModalItem] = useState<any>(null);
   const [isResponding, setIsResponding] = useState(false);
 
-  useEffect(() => {
-    fetchNotifications();
-    fetchReminders();
-    fetchMyPermissions?.();
-    fetchHouseFromBackend?.();
-    fetchDevicesFromBackend?.();
-  }, []);
+  const isFetchingRef = useRef(false);
+
+  const loadData = useCallback(async (isInitial = false) => {
+    if (isFetchingRef.current) return;
+    isFetchingRef.current = true;
+    if (isInitial && incidents.length === 0) {
+      setLoading(true);
+    }
+    try {
+      await Promise.allSettled([
+        fetchNotifications(),
+        fetchReminders(),
+        fetchMyPermissions?.(),
+        fetchHouseFromBackend?.(),
+        fetchDevicesFromBackend?.(),
+      ]);
+    } finally {
+      isFetchingRef.current = false;
+      setLoading(false);
+    }
+  }, [fetchNotifications, fetchReminders, fetchMyPermissions, fetchHouseFromBackend, fetchDevicesFromBackend, incidents.length]);
 
   useEffect(() => {
-    return navigation?.addListener?.('focus', () => {
-      fetchNotifications();
-      fetchReminders();
-      fetchMyPermissions?.();
-      fetchHouseFromBackend?.();
-      fetchDevicesFromBackend?.();
+    loadData(true);
+    const unsub = navigation?.addListener?.('focus', () => {
+      loadData(false);
     });
-  }, [navigation]);
+    return unsub;
+  }, [navigation, loadData]);
 
   const handleRefresh = async () => {
     setRefreshing(true);
-    await Promise.allSettled([
-      fetchNotifications(),
-      fetchReminders(),
-      fetchMyPermissions?.(),
-      fetchHouseFromBackend?.(),
-      fetchDevicesFromBackend?.(),
-    ]);
-    setRefreshing(false);
+    try {
+      await Promise.allSettled([
+        fetchNotifications(),
+        fetchReminders(),
+        fetchMyPermissions?.(),
+        fetchHouseFromBackend?.(),
+        fetchDevicesFromBackend?.(),
+      ]);
+    } finally {
+      setRefreshing(false);
+      setLoading(false);
+    }
   };
 
   // Đối với tài khoản mới chưa liên kết nhà: KHÔNG có thuốc/lịch khám/thiết bị từ nhà khác.
   // CHỈ nhận thông báo khi được thêm vào nhà (HOUSE_MEMBER_ADDED, MEMBER_ADDED hoặc USER:).
   const medications: ReminderItem[] = isUnassignedAccount ? [] : todayReminders?.medications || [];
   const pendingMedCount = medications.filter((m) => !m.taken).length;
+
+  const currentUid = (userId || (useAuthStore.getState().user_id ? String(useAuthStore.getState().user_id) : ''))?.toLowerCase();
 
   const validIncidents = useMemo(() => {
     return incidents.filter((item) => {
@@ -310,7 +332,7 @@ export default function AlertsListScreen({ navigation }: any) {
       // 2. Nếu thông báo có gán đích danh USER:id thì chỉ đúng user đó mới thấy
       const noteStr = typeof item.notes === 'string' ? item.notes : typeof item.note === 'string' ? item.note : '';
       const userMatch = noteStr.match(/USER:([0-9a-fA-F-]+)/);
-      if (userMatch && userId && userMatch[1].toLowerCase() !== userId.toLowerCase()) {
+      if (userMatch && currentUid && userMatch[1].toLowerCase() !== currentUid) {
         return false;
       }
 
@@ -323,13 +345,13 @@ export default function AlertsListScreen({ navigation }: any) {
           item.alert_type === 'HOUSE_JOIN_REQUEST' ||
           item.alert_type === 'HOUSE_JOIN_APPROVED' ||
           item.alert_type === 'HOUSE_JOIN_REJECTED' ||
-          noteStr.startsWith('USER:')
+          noteStr.includes('USER:')
         );
       }
 
       return true;
     });
-  }, [isUnassignedAccount, isOwnerOrAdmin, userId, incidents]);
+  }, [isUnassignedAccount, isOwnerOrAdmin, currentUid, incidents]);
 
   const unreadIncidentsCount = validIncidents.filter((item) => !item.is_acknowledged).length;
   const unreadCount = unreadIncidentsCount + pendingMedCount;
@@ -500,9 +522,17 @@ export default function AlertsListScreen({ navigation }: any) {
     return match ? match[1] : null;
   };
 
+  const extractHouseId = (notes?: string | null): string | null => {
+    if (!notes) return null;
+    const match = notes.match(/HOUSE_ID:([0-9a-fA-F-]+)/);
+    return match ? match[1] : null;
+  };
+
   const handleRespondInvite = async (item: any, action: 'accept' | 'reject') => {
     if (!item) return;
-    const memberId = extractMemberId(item.notes || item.note) || item.device_id || item.id;
+    const noteContent = item.notes || item.note || '';
+    const memberId = extractMemberId(noteContent) || item.device_id || item.id;
+    const fallbackHouseId = extractHouseId(noteContent);
     try {
       setIsResponding(true);
       const handler = userName || 'Người dùng';
@@ -526,26 +556,40 @@ export default function AlertsListScreen({ navigation }: any) {
         handler
       );
 
-      await householdApi.respondHouseInvite(memberId, action);
-      await incidentsApi.acknowledge(item.id, action === 'accept' ? 'Đã đồng ý vào nhà' : 'Đã từ chối vào nhà').catch(() => {});
+      const res = await householdApi.respondHouseInvite(memberId, action);
       setSelectedInviteModalItem(null);
+
       if (action === 'accept') {
-        await Promise.allSettled([
-          useDeviceStore.getState().fetchHouseFromBackend(),
-          useDeviceStore.getState().syncAllWithBackend?.(),
-          useVitalStore.getState().fetchHouseFromBackend?.(),
-          useAuthStore.getState().fetchMyPermissions?.(),
-          fetchNotifications(),
-        ]);
-        Alert.alert('Thành công', '🎉 Bạn đã tham gia vào căn nhà thành công!');
+        const houseData = res.data?.house;
+        const permsData = res.data?.permissions;
+        const finalHouseId = houseData?.id || fallbackHouseId;
+        const finalHouseName = houseData?.name || 'Nhà của tôi';
+
+        // 1. Chuyển đổi trạng thái tài khoản thành THÀNH VIÊN TỨC THÌ (Zero latency)
+        useAuthStore.getState().setJoinedHouseData(finalHouseId, finalHouseName, permsData);
+        useDeviceStore.getState().setHouseInfo?.({
+          id: String(finalHouseId),
+          name: finalHouseName,
+          address: houseData?.address || '',
+          currentMode: houseData?.current_mode || 'HOME',
+          hasHouse: true,
+        });
+
+        // 2. Chuyển thẳng về trang chủ tức thì
         navigation.navigate('Main', { screen: 'Home' });
+
+        // 3. Tác vụ phụ đồng bộ thiết bị & thông báo chạy ngầm ở hậu cảnh không chặn UI
+        Promise.allSettled([
+          useDeviceStore.getState().fetchDevicesFromBackend?.(),
+          fetchNotifications(),
+        ]).catch(() => {});
       } else {
-        await fetchNotifications();
+        fetchNotifications().catch(() => {});
         Alert.alert('Đã từ chối', 'Bạn đã từ chối lời mời tham gia căn nhà.');
       }
     } catch (e: any) {
       Alert.alert('Lỗi', e?.response?.data?.detail || 'Không thể thực hiện thao tác. Vui lòng thử lại.');
-      await fetchNotifications();
+      fetchNotifications().catch(() => {});
     } finally {
       setIsResponding(false);
     }
@@ -1176,59 +1220,65 @@ export default function AlertsListScreen({ navigation }: any) {
         }}
         contentContainerStyle={styles.listContainer}
         ListEmptyComponent={
-          <View style={styles.emptyBox}>
-            {isUnassignedAccount ? (
-              <>
-                <View
-                  style={[
-                    styles.emptyIconCircle,
-                    { backgroundColor: isDarkMode ? 'rgba(255, 255, 255, 0.06)' : '#F1F5F9' },
-                  ]}
-                >
-                  <Ionicons
-                    name={filterType === 'MEDICATION' ? 'medical-outline' : 'videocam-off-outline'}
-                    size={36}
-                    color={isDarkMode ? '#64748B' : '#94A3B8'}
-                  />
-                </View>
-                <Text style={[styles.emptyTitle, isDarkMode && { color: colors.textPrimary }]}>
-                  Chưa có thông báo mới
-                </Text>
-                <Text style={[styles.emptySub, isDarkMode && { color: colors.textSecondary }]}>
-                  Tài khoản của bạn chưa được liên kết với ngôi nhà nào. Khi được Chủ hộ thêm số điện thoại vào nhà, thông báo gia nhập sẽ hiển thị tại đây.
-                </Text>
-                <TouchableOpacity
-                  style={[
-                    styles.refreshMemberBtn,
-                    isDarkMode && { backgroundColor: colors.card, borderColor: colors.border },
-                  ]}
-                  onPress={handleRefresh}
-                  activeOpacity={0.7}
-                >
-                  <Ionicons name="refresh-outline" size={14} color={Colors.primary} />
-                  <Text style={styles.refreshMemberBtnText}>Kiểm tra lại</Text>
-                </TouchableOpacity>
-              </>
-            ) : (
-              <>
-                <View style={[styles.emptyIconCircle, filterType === 'MEDICATION' && { backgroundColor: '#EFF6FF' }]}>
-                  <Ionicons
-                    name={filterType === 'MEDICATION' ? 'medical' : 'shield-checkmark-outline'}
-                    size={36}
-                    color={filterType === 'MEDICATION' ? '#0284C7' : '#10B981'}
-                  />
-                </View>
-                <Text style={[styles.emptyTitle, isDarkMode && { color: colors.textPrimary }]}>
-                  {filterType === 'MEDICATION' ? 'Không có lịch nhắc uống thuốc nào' : 'Không có cảnh báo bất thường nào'}
-                </Text>
-                <Text style={[styles.emptySub, isDarkMode && { color: colors.textSecondary }]}>
-                  {filterType === 'MEDICATION'
-                    ? 'Các cữ thuốc sẽ hiển thị theo đơn thuốc của bác sĩ và kế hoạch điều trị trong hồ sơ bệnh án.'
-                    : 'Hệ thống AI đang giám sát an toàn 24/7 và mọi chỉ số sức khoẻ đều trong ngưỡng chuẩn.'}
-                </Text>
-              </>
-            )}
-          </View>
+          loading ? (
+            <View style={[styles.emptyBox, { paddingVertical: 60 }]}>
+              <ActivityIndicator size="large" color={Colors.primary} />
+            </View>
+          ) : (
+            <View style={styles.emptyBox}>
+              {isUnassignedAccount ? (
+                <>
+                  <View
+                    style={[
+                      styles.emptyIconCircle,
+                      { backgroundColor: isDarkMode ? 'rgba(255, 255, 255, 0.06)' : '#F1F5F9' },
+                    ]}
+                  >
+                    <Ionicons
+                      name={filterType === 'MEDICATION' ? 'medical-outline' : 'videocam-off-outline'}
+                      size={36}
+                      color={isDarkMode ? '#64748B' : '#94A3B8'}
+                    />
+                  </View>
+                  <Text style={[styles.emptyTitle, isDarkMode && { color: colors.textPrimary }]}>
+                    Chưa có thông báo mới
+                  </Text>
+                  <Text style={[styles.emptySub, isDarkMode && { color: colors.textSecondary }]}>
+                    Tài khoản của bạn chưa được liên kết với ngôi nhà nào. Khi được Chủ hộ thêm số điện thoại vào nhà, thông báo gia nhập sẽ hiển thị tại đây.
+                  </Text>
+                  <TouchableOpacity
+                    style={[
+                      styles.refreshMemberBtn,
+                      isDarkMode && { backgroundColor: colors.card, borderColor: colors.border },
+                    ]}
+                    onPress={handleRefresh}
+                    activeOpacity={0.7}
+                  >
+                    <Ionicons name="refresh-outline" size={14} color={Colors.primary} />
+                    <Text style={styles.refreshMemberBtnText}>Kiểm tra lại</Text>
+                  </TouchableOpacity>
+                </>
+              ) : (
+                <>
+                  <View style={[styles.emptyIconCircle, filterType === 'MEDICATION' && { backgroundColor: '#EFF6FF' }]}>
+                    <Ionicons
+                      name={filterType === 'MEDICATION' ? 'medical' : 'shield-checkmark-outline'}
+                      size={36}
+                      color={filterType === 'MEDICATION' ? '#0284C7' : '#10B981'}
+                    />
+                  </View>
+                  <Text style={[styles.emptyTitle, isDarkMode && { color: colors.textPrimary }]}>
+                    {filterType === 'MEDICATION' ? 'Không có lịch nhắc uống thuốc nào' : 'Không có cảnh báo bất thường nào'}
+                  </Text>
+                  <Text style={[styles.emptySub, isDarkMode && { color: colors.textSecondary }]}>
+                    {filterType === 'MEDICATION'
+                      ? 'Các cữ thuốc sẽ hiển thị theo đơn thuốc của bác sĩ và kế hoạch điều trị trong hồ sơ bệnh án.'
+                      : 'Hệ thống AI đang giám sát an toàn 24/7 và mọi chỉ số sức khoẻ đều trong ngưỡng chuẩn.'}
+                  </Text>
+                </>
+              )}
+            </View>
+          )
         }
       />
 

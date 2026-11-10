@@ -259,7 +259,7 @@ export const ProfileQuickGrid: React.FC<ProfileQuickGridProps> = ({
               isDarkMode && { color: colors.textPrimary },
             ]}
           >
-            Lịch nhắc thuốc
+            Đơn Thuốc 
           </Text>
           <Text
             style={[

@@ -66,8 +66,11 @@ class CRUDIncident:
                 # Admin cấp hệ thống: có thể giám sát toàn bộ
                 pass
             else:
-                # Tìm danh sách nhà mà người dùng sở hữu hoặc là thành viên
-                member_house_subq = select(HouseMember.house_id).where(HouseMember.user_id == current_user_id)
+                # Tìm danh sách nhà mà người dùng sở hữu hoặc là thành viên ACTIVE
+                member_house_subq = select(HouseMember.house_id).where(
+                    HouseMember.user_id == current_user_id,
+                    HouseMember.status == "ACTIVE",
+                )
                 user_houses_query = select(House.id).where(
                     or_(
                         House.owner_id == current_user_id,

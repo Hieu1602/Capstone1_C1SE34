@@ -125,6 +125,34 @@ class DoctorRegistration(UserCreate):
         return data
 
 
+class CheckPhoneRequest(BaseModel):
+    phone: str = Field(min_length=9, max_length=20)
+
+
+@router.post("/check-phone")
+async def check_phone_endpoint(
+    payload: CheckPhoneRequest,
+    db: AsyncSession = Depends(get_db),
+):
+    """
+    Kiểm tra nhanh số điện thoại đã tồn tại trên hệ thống hay chưa.
+    Trả về exists: True/False để ứng dụng thông báo trực tiếp trên màn hình.
+    """
+    clean = normalize_phone(payload.phone)
+    existing_user = await crud_user.get_by_phone(db, phone=clean)
+    if existing_user:
+        return {
+            "exists": True,
+            "phone": clean,
+            "message": "Số điện thoại này đã được đăng ký tài khoản trong hệ thống. Vui lòng đăng nhập hoặc dùng số khác.",
+        }
+    return {
+        "exists": False,
+        "phone": clean,
+        "message": "Số điện thoại hợp lệ, có thể đăng ký.",
+    }
+
+
 @router.post("/request-otp")
 async def request_otp(
     payload: OTPRequest,
@@ -550,15 +578,15 @@ async def login(
 
         if not row:
             raise HTTPException(
-                status_code=status.HTTP_401_UNAUTHORIZED,
-                detail="Số điện thoại hoặc mật khẩu không chính xác.",
+                status_code=status.HTTP_404_NOT_FOUND,
+                detail="Số điện thoại chưa tồn tại trong hệ thống. Vui lòng kiểm tra lại hoặc đăng ký tài khoản mới.",
             )
 
         user: User = row[0]
         if not user or not user.hashed_password:
             raise HTTPException(
-                status_code=status.HTTP_401_UNAUTHORIZED,
-                detail="Số điện thoại hoặc mật khẩu không chính xác.",
+                status_code=status.HTTP_404_NOT_FOUND,
+                detail="Số điện thoại chưa tồn tại trong hệ thống. Vui lòng kiểm tra lại hoặc đăng ký tài khoản mới.",
             )
 
         now = datetime.now(timezone.utc)
@@ -606,7 +634,7 @@ async def login(
 
             raise HTTPException(
                 status_code=status.HTTP_401_UNAUTHORIZED,
-                detail="Số điện thoại hoặc mật khẩu không chính xác.",
+                detail="Mật khẩu không chính xác. Vui lòng kiểm tra lại.",
             )
 
         user_id = user.id
@@ -649,15 +677,15 @@ async def login(
         if h_id:
             is_owner = (h_owner_id == user.id) or (user.role in ("admin", "owner"))
             role_in_house = "OWNER" if is_owner else (m_role or "MEMBER")
-            can_cam = is_owner or bool(m_cam)
+            can_cam = is_owner or (bool(m_cam) if m_cam is not None else True)
             user_out.has_house = True
             user_out.household_id = h_id
             user_out.assigned_house = h_name
             user_out.is_owner = is_owner
             user_out.role_in_house = role_in_house
-            user_out.can_view_health = is_owner or bool(m_health)
+            user_out.can_view_health = is_owner or (bool(m_health) if m_health is not None else True)
             user_out.can_view_camera = can_cam
-            user_out.can_handle_emergency = is_owner or bool(m_sos)
+            user_out.can_handle_emergency = is_owner or (bool(m_sos) if m_sos is not None else True)
             user_out.can_manage_devices = is_owner or bool(m_dev)
             user_out.can_manage_records = is_owner or bool(m_rec)
             user_out.device_count = dev_count

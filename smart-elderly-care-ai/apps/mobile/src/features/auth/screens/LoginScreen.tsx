@@ -163,24 +163,53 @@ export default function LoginScreen({ navigation, route }: any) {
       console.error('[Login] Error:', error);
 
       const status = error?.response?.status;
+      const detailMsg = error?.response?.data?.detail;
       const isNetworkErr = error?.message?.includes('Network Error') || error?.code === 'ERR_NETWORK' || !error?.response;
 
-      let msg = 'Số điện thoại hoặc mật khẩu không chính xác. Vui lòng kiểm tra lại.';
-
       if (isNetworkErr) {
-        msg = 'Không thể kết nối đến máy chủ. Vui lòng kiểm tra kết nối mạng và thử lại.';
-      } else if (status === 401) {
-        msg = 'Số điện thoại hoặc mật khẩu không chính xác. Vui lòng kiểm tra lại.';
-      } else if (status === 403) {
-        msg = error?.response?.data?.detail || 'Tài khoản đã bị tạm khóa do nhập sai mật khẩu quá 5 lần.';
-      } else if (status === 404) {
-        msg = 'Số điện thoại này chưa được đăng ký trong hệ thống.';
-      } else if (status === 422) {
-        msg = 'Vui lòng kiểm tra lại định dạng số điện thoại hoặc mật khẩu.';
-      } else if (error?.response?.data?.detail && typeof error.response.data.detail === 'string') {
-        msg = error.response.data.detail;
+        const msg = 'Không thể kết nối đến máy chủ. Vui lòng kiểm tra kết nối mạng và thử lại.';
+        setErrorMessage(msg);
+        Alert.alert('Không thể kết nối', msg);
+        return;
       }
 
+      // Xử lý rõ ràng: Số điện thoại chưa được đăng ký (chưa tồn tại)
+      if (
+        status === 404 ||
+        (typeof detailMsg === 'string' &&
+          (detailMsg.toLowerCase().includes('chưa tồn tại') ||
+            detailMsg.toLowerCase().includes('chưa được đăng ký')))
+      ) {
+        const notFoundMsg = 'Số điện thoại này chưa được đăng ký tài khoản trong hệ thống. Bạn có muốn đăng ký tài khoản mới không?';
+        setErrorMessage('Số điện thoại chưa tồn tại trong hệ thống.');
+        Alert.alert(
+          'Số điện thoại chưa tồn tại',
+          notFoundMsg,
+          [
+            {
+              text: 'Đăng ký ngay',
+              onPress: () =>
+                navigation.navigate('Register', {
+                  phone: phone.trim(),
+                }),
+            },
+            {
+              text: 'Thử lại',
+              style: 'cancel',
+            },
+          ]
+        );
+        return;
+      }
+
+      if (status === 403) {
+        const msg = detailMsg || 'Tài khoản đã bị tạm khóa do nhập sai mật khẩu quá 5 lần.';
+        setErrorMessage(msg);
+        Alert.alert('Tài khoản bị khóa', msg);
+        return;
+      }
+
+      const msg = detailMsg || 'Mật khẩu không chính xác. Vui lòng kiểm tra lại.';
       setErrorMessage(msg);
       Alert.alert('Đăng nhập thất bại', msg);
     } finally {
