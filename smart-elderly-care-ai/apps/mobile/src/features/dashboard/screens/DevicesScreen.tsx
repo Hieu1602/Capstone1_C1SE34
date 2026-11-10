@@ -353,11 +353,24 @@ export default function DevicesScreen({ navigation }: any) {
     <SafeAreaView style={[styles.safeArea, isDarkMode && { backgroundColor: colors.background }]} edges={['top']}>
       {/* Header */}
       <View style={[styles.headerRow, isDarkMode && { backgroundColor: colors.background }]}>
-        <View>
-          <LocalizedText style={[styles.headerTitle, isDarkMode && { color: colors.textPrimary }]}>Thiết bị</LocalizedText>
-          <LocalizedText style={[styles.headerSubtitleTop, isDarkMode && { color: colors.textSecondary }]}>
-            {iotDevices.length} thiết bị đang kết nối
-          </LocalizedText>
+        <View style={styles.headerLeftRow}>
+          <TouchableOpacity
+            style={[styles.backBtn, isDarkMode && { backgroundColor: colors.card, borderColor: colors.border }]}
+            onPress={() => (navigation?.canGoBack?.() ? navigation.goBack() : navigation.navigate('Home'))}
+            activeOpacity={0.7}
+            hitSlop={{ top: 12, bottom: 12, left: 12, right: 12 }}
+            accessibilityLabel="Quay lại"
+            accessibilityRole="button"
+          >
+            <Ionicons name="chevron-back" size={22} color={isDarkMode ? colors.textPrimary : Colors.textPrimary} />
+          </TouchableOpacity>
+
+          <View style={styles.headerTitleCol}>
+            <LocalizedText style={[styles.headerTitle, isDarkMode && { color: colors.textPrimary }]}>Thiết bị</LocalizedText>
+            <LocalizedText style={[styles.headerSubtitleTop, isDarkMode && { color: colors.textSecondary }]}>
+              {iotDevices.length} thiết bị đang kết nối
+            </LocalizedText>
+          </View>
         </View>
 
         <View style={styles.headerRightActions}>
@@ -705,6 +718,27 @@ const styles = StyleSheet.create({
     paddingHorizontal: 20,
     paddingTop: 12,
     paddingBottom: 8,
+  },
+  headerLeftRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    flex: 1,
+    marginRight: 12,
+  },
+  headerTitleCol: {
+    flex: 1,
+  },
+  backBtn: {
+    width: 38,
+    height: 38,
+    borderRadius: 19,
+    backgroundColor: '#FFFFFF',
+    borderWidth: 1,
+    borderColor: '#E2E8F0',
+    alignItems: 'center',
+    justifyContent: 'center',
+    marginRight: 10,
+    ...Shadows.soft,
   },
   headerTitle: {
     fontSize: 24,
