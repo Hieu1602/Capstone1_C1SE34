@@ -162,3 +162,14 @@ class FCMService:
         except Exception as exc:  # noqa: BLE001
             logger.error("[FCM] Lỗi gửi notification: %s", exc)
             return {"success_count": 0, "failure_count": len(fcm_tokens)}
+
+
+async def send_fcm_notification(
+    fcm_token: str,
+    title: str,
+    body: str,
+    data: Optional[dict] = None,
+) -> dict:
+    """Helper gửi FCM notification đơn giản."""
+    fcm = FCMService()
+    return fcm.send_alert(fcm_tokens=[fcm_token], title=title, body=body, data=data)

@@ -91,7 +91,7 @@ export const DoctorPatientsHeader: React.FC<DoctorPatientsHeaderProps> = ({
           <LocalizedTextInput
             ref={searchInputRef}
             style={[styles.searchInput, { color: colors.textPrimary }]}
-            placeholder="Tìm theo tên hoặc số điện thoại..."
+            placeholder="Tìm theo tên bệnh nhân..."
             placeholderTextColor="#94A3B8"
             value={searchQuery}
             onChangeText={onChangeSearch}
@@ -305,7 +305,9 @@ export const DoctorPatientCard: React.FC<DoctorPatientCardProps> = ({
             numberOfLines={1}
           >
             {patient.age ? `${patient.age} tuổi` : 'Cao tuổi'} • {patient.gender ? (patient.gender === 'Nữ' || patient.gender.toUpperCase() === 'FEMALE' ? 'Nữ' : 'Nam') : 'Chưa cập nhật'}
-            {patient.house_name ? ` • ${patient.house_name}` : ''}
+            {patient.house_name && patient.house_name !== 'Nhà của tôi'
+              ? ` • ${patient.house_name}`
+              : (!patient.house_address ? ' • Nhà riêng' : '')}
           </LocalizedText>
 
           {patient.house_address ? (

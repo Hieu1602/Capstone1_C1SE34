@@ -594,7 +594,7 @@ export default function PatientMedicalRecordScreen({ navigation }: any) {
             </View>
             {doctorPhone ? (
               <TouchableOpacity style={styles.callDoctorBtn} onPress={handleCallDoctor} activeOpacity={0.8}>
-                <Ionicons name="call" size={16} color="#FFF" /><Text style={styles.callDoctorBtnText}>Gọi bác sĩ ({doctorPhone})</Text>
+                <Ionicons name="call" size={16} color="#FFF" /><Text style={styles.callDoctorBtnText}>Gọi Bác sĩ phụ trách</Text>
               </TouchableOpacity>
             ) : null}
           </View>
