@@ -120,6 +120,11 @@ class Settings(BaseSettings):
     def AWS_REGION(self) -> str:
         return self.MINIO_REGION
 
+    # ---- Supabase Storage ----
+    SUPABASE_URL: str = "https://pdysvzyrsuawqvlifrlj.supabase.co"
+    SUPABASE_SERVICE_ROLE_KEY: str = ""
+    SUPABASE_STORAGE_BUCKET_INCIDENTS: str = "incidents"
+
     # ---- Firebase FCM ----
     FCM_SERVICE_ACCOUNT_PATH: str = "config/firebase-service-account.json"
 

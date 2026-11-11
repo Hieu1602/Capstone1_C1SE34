@@ -147,9 +147,15 @@ class PoseDetector:
 
     def _try_load_onnx(self, model_path: str) -> bool:
         try:
+            import os
             import onnxruntime as ort  # type: ignore
+            sess_options = ort.SessionOptions()
+            sess_options.intra_op_num_threads = max(1, int(os.getenv("AI_NUM_THREADS", "2")))
+            sess_options.inter_op_num_threads = 1
+            sess_options.execution_mode = ort.ExecutionMode.ORT_SEQUENTIAL
+            sess_options.graph_optimization_level = ort.GraphOptimizationLevel.ORT_ENABLE_ALL
             self.model = ort.InferenceSession(
-                model_path, providers=["CPUExecutionProvider"]
+                model_path, sess_options=sess_options, providers=["CPUExecutionProvider"]
             )
             return True
         except Exception as exc:  # noqa: BLE001
