@@ -41,6 +41,7 @@ export interface PatientMedicalRecord {
   doctor_specialty: string;
   hospital: string;
   next_appointment: string;
+  doctor_avatar_url?: string | null;
   avatar_url?: string | null;
   has_face_enrolled?: boolean;
   target_date?: string;

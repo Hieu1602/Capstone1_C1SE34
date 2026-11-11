@@ -282,6 +282,8 @@ export const vitalsApi = {
     bp_diastolic?: number;
     skin_temp_max?: number;
     fall_detected?: boolean;
+    bracelet_battery?: number;
+    battery_level?: number;
     raw_payload?: Record<string, any>;
   }) => api.post('/vitals', data),
 };
@@ -312,6 +314,8 @@ export const patientApi = {
     api.get(`/patients/${patientId}/appointments`, { params: status ? { status } : undefined }),
   confirmAppointment: (patientId: number | string, appointmentId: string) =>
     api.post(`/patients/${patientId}/appointments/${appointmentId}/confirm`),
+  requestAppointment: (patientId: number | string = 1, data: any) =>
+    api.post(`/patients/${patientId}/appointments`, data),
 };
 
 // 5. Notifications & Incidents API

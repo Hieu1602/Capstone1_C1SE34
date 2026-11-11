@@ -115,6 +115,19 @@ export default function DoctorProfileScreen({ navigation }: any) {
   useEffect(() => {
     const loadSavedProfile = async () => {
       try {
+        const meRes = await usersApi.getMe();
+        if (meRes?.data) {
+          const user = meRes.data;
+          setDocInfo((prev) => ({
+            ...prev,
+            name: user.full_name || prev.name,
+            phone: user.phone || prev.phone,
+            specialty: user.specialty || prev.specialty,
+            hospital: user.workplace || prev.hospital,
+          }));
+        }
+      } catch {}
+      try {
         const raw = await AsyncStorage.getItem('doctor_profile_custom');
         if (raw) {
           const parsed = JSON.parse(raw);
@@ -208,6 +221,14 @@ export default function DoctorProfileScreen({ navigation }: any) {
         }
       }
     }
+    try {
+      await usersApi.updateMe({
+        full_name: editName.trim(),
+        specialty: editSpecialty.trim(),
+        workplace: editHospital.trim(),
+      });
+      setProfile({ full_name: editName.trim() });
+    } catch {}
     try {
       await AsyncStorage.setItem('doctor_profile_custom', JSON.stringify(updated));
     } catch {}

@@ -50,6 +50,26 @@ interface AlertConfig {
 }
 
 const ALERT_CONFIG_MAP: Record<string, AlertConfig> = {
+  LOW_BATTERY: {
+    title: 'Pin vòng đeo tay yếu (≤ 20%)',
+    badgeText: 'Pin yếu',
+    badgeBg: '#FEF3C7',
+    badgeColor: '#D97706',
+    iconName: 'battery-half',
+    iconColor: '#D97706',
+    iconBg: '#FEF3C7',
+    isCritical: false,
+  },
+  DEVICE_BATTERY_DEAD: {
+    title: 'Vòng đeo tay đã hết pin (0%)',
+    badgeText: 'Hết pin',
+    badgeBg: '#FEE2E2',
+    badgeColor: '#DC2626',
+    iconName: 'battery-dead',
+    iconColor: '#DC2626',
+    iconBg: '#FEE2E2',
+    isCritical: true,
+  },
   FALL_DETECTED: {
     title: 'CẢNH BÁO TÉ NGÃ KHẨN CẤP',
     badgeText: 'CỰC KỲ NGUY HIỂM',
@@ -98,6 +118,16 @@ const ALERT_CONFIG_MAP: Record<string, AlertConfig> = {
     iconName: 'calendar',
     iconColor: '#D97706',
     iconBg: '#FEF3C7',
+    isCritical: false,
+  },
+  APPOINTMENT_REQUESTED: {
+    title: 'Yêu cầu lịch khám từ Gia đình',
+    badgeText: 'Chờ Bác sĩ xác nhận',
+    badgeBg: '#EFF6FF',
+    badgeColor: '#2563EB',
+    iconName: 'calendar',
+    iconColor: '#2563EB',
+    iconBg: '#DBEAFE',
     isCritical: false,
   },
   APPOINTMENT_CONFIRMED: {
@@ -193,7 +223,15 @@ const ALERT_CONFIG_MAP: Record<string, AlertConfig> = {
 
 };
 
-function getAlertConfig(alertType: string): AlertConfig {
+function getAlertConfig(alertType: string, notes?: string, message?: string): AlertConfig {
+  if (
+    alertType === 'APPOINTMENT_REQUESTED' ||
+    (alertType === 'APPOINTMENT_SCHEDULED' &&
+      (notes?.includes('APPOINTMENT_REQUESTED') || message?.includes('đã đặt lịch khám')))
+  ) {
+    return ALERT_CONFIG_MAP.APPOINTMENT_REQUESTED;
+  }
+
   return (
     ALERT_CONFIG_MAP[alertType] || {
       title: alertType.replace(/_/g, ' '),
@@ -434,7 +472,7 @@ export default function AlertsListScreen({ navigation }: any) {
       return item.alert_type.includes('HEART') || item.alert_type.includes('SPO2') || item.alert_type.includes('TEMP');
     }
     if (filterType === 'APPOINTMENT') {
-      return ['APPOINTMENT_SCHEDULED', 'APPOINTMENT_CONFIRMED', 'APPOINTMENT_CANCELLED'].includes(item.alert_type);
+      return ['APPOINTMENT_SCHEDULED', 'APPOINTMENT_REQUESTED', 'APPOINTMENT_CONFIRMED', 'APPOINTMENT_CANCELLED'].includes(item.alert_type);
     }
     return true;
   });
@@ -651,45 +689,12 @@ export default function AlertsListScreen({ navigation }: any) {
       return;
     }
 
-    if (!item.is_acknowledged) {
-      const handler = userName || 'Người chăm sóc';
-      const nowIso = new Date().toISOString();
-      const updated = incidents.map((i) =>
-        i.id === item.id
-          ? {
-              ...i,
-              is_acknowledged: true,
-              acknowledged_by: handler,
-              acknowledged_by_name: handler,
-              acknowledged_at: nowIso,
-            }
-          : i
-      );
-      setIncidents(updated);
-      useAlertStore.getState().acknowledgeIncident(
-        item.id,
-        'Đã kiểm tra chi tiết sự kiện',
-        handler
-      );
-      const remainingCritical = updated.some(
-        (i) => !i.is_acknowledged && (i.alert_level === 'CRITICAL' || i.alert_type === 'FALL_DETECTED')
-      );
-      if (!remainingCritical) {
-        try {
-          useVitalStore.getState().setVitals({ fall_detected: false, acoustic_status: 'Bình thường' });
-        } catch (e) {}
-      }
-      incidentsApi.acknowledge(item.id, 'Đã kiểm tra chi tiết sự kiện').catch(() => {});
-    }
-
-
-
     if (item.alert_type === 'HOUSE_MEMBER_ADDED' || item.alert_type === 'MEMBER_ADDED') {
       navigation.navigate('HouseDetail');
       return;
     }
 
-    if (['APPOINTMENT_SCHEDULED', 'APPOINTMENT_CONFIRMED', 'APPOINTMENT_CANCELLED'].includes(item.alert_type)) {
+    if (['APPOINTMENT_SCHEDULED', 'APPOINTMENT_REQUESTED', 'APPOINTMENT_CONFIRMED', 'APPOINTMENT_CANCELLED'].includes(item.alert_type)) {
       const pid = item.device_id && !isNaN(Number(item.device_id)) ? item.device_id : (patientRecord?.patient_id || 1);
       setSelectedAppointmentPatientId(pid);
       setFamilyAppointmentsModalVisible(true);
@@ -924,7 +929,7 @@ export default function AlertsListScreen({ navigation }: any) {
             },
             {
               key: 'MEDICATION',
-              label: `💊 ${t('Uống thuốc')} ${pendingMedCount > 0 ? `(${pendingMedCount})` : `(${t('Xong')})`}`,
+              label: `💊 ${t('Uống thuốc')}${pendingMedCount > 0 ? ` (${pendingMedCount})` : ''}`,
               activePill: styles.filterPillActiveMed,
               darkBg: 'rgba(16, 185, 129, 0.15)',
               darkBorder: '#10B981',
@@ -1000,7 +1005,7 @@ export default function AlertsListScreen({ navigation }: any) {
           }
 
           const inc = item.data;
-          const config = getAlertConfig(inc.alert_type);
+          const config = getAlertConfig(inc.alert_type, inc.notes || inc.note, inc.message);
           const isCriticalActive = config.isCritical && !inc.is_acknowledged;
           const isHandled = Boolean(inc.is_acknowledged);
           const friendlyTime = formatFriendlyTime(inc.created_at, (key, count) =>

@@ -1,19 +1,22 @@
 // ==============================================================================
 // TỆP: HealthChartSection.tsx
-// PHÂN HỆ: Biểu đồ Cột Dao động Nhịp tim theo Thời gian (HealthDetailScreen)
+// PHÂN HỆ: Biểu đồ Đường Sóng Dao động Nhịp tim theo Thời gian (HealthDetailScreen)
 // TÁC GIẢ: Phan Nguyễn Giáng My
 // MÔ TẢ CHỨC NĂNG:
-//   - Vẽ biểu đồ cột (Bar Chart) trực quan hóa biến thiên nhịp tim theo giờ/ngày.
-//   - Tự động đánh dấu nổi bật (Highlight Pin 📍) cột dữ liệu gần nhất với mốc thời gian
+//   - Vẽ biểu đồ đường sóng (Line Chart) trực quan hóa biến thiên nhịp tim theo giờ/ngày.
+//   - Tự động đánh dấu nổi bật (Highlight Pin 📍) điểm dữ liệu gần nhất với mốc thời gian
 //     mà người dùng đang kéo trên Thanh tua dòng thời gian (Timeline Scrubber).
 //   - Hiển thị màn hình Empty State khi ngày/tuần/tháng được chọn chưa có dữ liệu đo.
 // ==============================================================================
 
-import React from 'react';
-import { View, StyleSheet, ScrollView } from 'react-native';
+import React, { useState } from 'react';
+import { View, StyleSheet, ScrollView, Dimensions } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
+import Svg, { Path, Circle, Defs, LinearGradient, Stop, Line, Text as SvgText } from 'react-native-svg';
 import { LocalizedText as Text } from '../../../i18n/LocalizedComponents';
 import { Shadows } from '../../../theme/colors';
+
+const SCREEN_WIDTH = Dimensions.get('window').width;
 
 // Cấu trúc một điểm dữ liệu trên biểu đồ nhịp tim
 interface ChartPoint {
@@ -44,6 +47,69 @@ export const HealthChartSection: React.FC<HealthChartSectionProps> = ({
   isDarkMode,
   colors,
 }) => {
+  const [containerWidth, setContainerWidth] = useState(SCREEN_WIDTH - 64);
+
+  const chartHeight = 150;
+  const pointSpacing = 48;
+  const hasData = Boolean(chartData && chartData.length > 0);
+  const svgWidth = hasData ? Math.max(containerWidth, chartData.length * pointSpacing) : containerWidth;
+
+  const padLeft = 24;
+  const padRight = 24;
+  const padTop = 32;
+  const padBottom = 28;
+  const usableW = Math.max(60, svgWidth - padLeft - padRight);
+  const usableH = chartHeight - padTop - padBottom;
+  const bottomY = chartHeight - padBottom;
+
+  const hrs = hasData ? chartData.map((p) => p.hr) : [75];
+  const minVal = Math.max(30, Math.min(...hrs, 55) - 8);
+  const maxVal = Math.min(180, Math.max(...hrs, 105) + 8);
+  const range = Math.max(20, maxVal - minVal);
+
+  const coords = hasData
+    ? chartData.map((point, idx) => {
+        const x = padLeft + (chartData.length > 1 ? (idx / (chartData.length - 1)) * usableW : usableW / 2);
+        const normY = (point.hr - minVal) / range;
+        const y = padTop + (1 - normY) * usableH;
+        const isClosest =
+          closestVital &&
+          scrubberMinutes !== undefined &&
+          (point.id === closestVital.id ||
+            (point.minute !== undefined && Math.abs(point.minute - scrubberMinutes) < 45));
+
+        return {
+          x,
+          y,
+          hr: point.hr,
+          label: point.label,
+          isClosest: Boolean(isClosest),
+        };
+      })
+    : [];
+
+  let linePath = '';
+  let areaPath = '';
+  if (coords.length > 1) {
+    linePath = `M ${coords[0].x} ${coords[0].y}`;
+    for (let i = 1; i < coords.length; i++) {
+      const prev = coords[i - 1];
+      const curr = coords[i];
+      const cpX = (prev.x + curr.x) / 2;
+      linePath += ` C ${cpX} ${prev.y}, ${cpX} ${curr.y}, ${curr.x} ${curr.y}`;
+    }
+    const lastX = coords[coords.length - 1].x;
+    const firstX = coords[0].x;
+    areaPath = `${linePath} L ${lastX} ${bottomY} L ${firstX} ${bottomY} Z`;
+  } else if (coords.length === 1) {
+    linePath = `M ${padLeft} ${coords[0].y} L ${padLeft + usableW} ${coords[0].y}`;
+    areaPath = `${linePath} L ${padLeft + usableW} ${bottomY} L ${padLeft} ${bottomY} Z`;
+  }
+
+  // Tọa độ tham chiếu chuẩn (60 bpm và 100 bpm)
+  const y60 = padTop + (1 - (60 - minVal) / range) * usableH;
+  const y100 = padTop + (1 - (100 - minVal) / range) * usableH;
+
   return (
     <View style={[styles.chartCard, isDarkMode && { backgroundColor: colors.card, borderWidth: 1, borderColor: colors.border }]}>
       <View style={styles.chartCardHeader}>
@@ -56,56 +122,130 @@ export const HealthChartSection: React.FC<HealthChartSectionProps> = ({
         </View>
       </View>
 
-      {chartData && chartData.length > 0 ? (
-        <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.barsScrollContainer}>
-          <View style={styles.barsContainer}>
-            {chartData.map((point: ChartPoint, idx: number) => {
-              const barHeight = Math.max(28, ((point.hr - 50) / 45) * 90);
-              const isClosest =
-                closestVital &&
-                scrubberMinutes !== undefined &&
-                (point.id === closestVital.id || (point.minute !== undefined && Math.abs(point.minute - scrubberMinutes) < 45));
+      {hasData ? (
+        <ScrollView
+          horizontal
+          showsHorizontalScrollIndicator={false}
+          contentContainerStyle={styles.barsScrollContainer}
+        >
+          <View
+            onLayout={(e) => {
+              const w = e.nativeEvent.layout.width;
+              if (w > 0) setContainerWidth(w);
+            }}
+          >
+            <Svg width={svgWidth} height={chartHeight}>
+              <Defs>
+                <LinearGradient id="healthDetailGrad" x1="0" y1="0" x2="0" y2="1">
+                  <Stop offset="0%" stopColor="#2563EB" stopOpacity={0.32} />
+                  <Stop offset="100%" stopColor="#2563EB" stopOpacity={0.02} />
+                </LinearGradient>
+              </Defs>
 
-              return (
-                <View key={`${point.label}-${idx}`} style={[styles.barCol, isClosest && styles.barColActive]}>
-                  {isClosest ? (
-                    <View style={styles.activePinBadge}>
-                      <Text style={styles.activePinBadgeText}>📍 {point.hr}</Text>
-                    </View>
-                  ) : (
-                    <Text style={[styles.barValText, isDarkMode && { color: colors.textSecondary }]}>{point.hr}</Text>
+              {/* Đường tham chiếu ngưỡng chuẩn 60 - 100 bpm */}
+              {y100 >= padTop && y100 <= bottomY && (
+                <Line
+                  x1={padLeft}
+                  y1={y100}
+                  x2={svgWidth - padRight}
+                  y2={y100}
+                  stroke={isDarkMode ? '#334155' : '#E2E8F0'}
+                  strokeWidth={1}
+                  strokeDasharray="4 4"
+                />
+              )}
+              {y60 >= padTop && y60 <= bottomY && (
+                <Line
+                  x1={padLeft}
+                  y1={y60}
+                  x2={svgWidth - padRight}
+                  y2={y60}
+                  stroke={isDarkMode ? '#334155' : '#E2E8F0'}
+                  strokeWidth={1}
+                  strokeDasharray="4 4"
+                />
+              )}
+
+              {/* Vùng đổ màu gradient dưới đường cong */}
+              <Path d={areaPath} fill="url(#healthDetailGrad)" />
+
+              {/* Đường cong nhịp tim mềm mại */}
+              <Path
+                d={linePath}
+                fill="none"
+                stroke="#2563EB"
+                strokeWidth={2.6}
+                strokeLinecap="round"
+                strokeLinejoin="round"
+              />
+
+              {/* Các điểm đo và nhãn */}
+              {coords.map((pt, idx) => (
+                <React.Fragment key={`pt_${idx}`}>
+                  {pt.isClosest && (
+                    <Line
+                      x1={pt.x}
+                      y1={padTop - 6}
+                      x2={pt.x}
+                      y2={bottomY}
+                      stroke="#2563EB"
+                      strokeWidth={1.5}
+                      strokeDasharray="3 3"
+                      opacity={0.6}
+                    />
                   )}
 
-                  <View style={[styles.barTrack, isDarkMode && { backgroundColor: colors.surfaceSubtle }]}>
-                    <View
-                      style={[
-                        styles.barFill,
-                        {
-                          height: barHeight,
-                          backgroundColor: isClosest ? '#2563EB' : '#38BDF8',
-                        },
-                      ]}
-                    />
-                  </View>
+                  <Circle
+                    cx={pt.x}
+                    cy={pt.y}
+                    r={pt.isClosest ? 5.5 : 3.5}
+                    fill={pt.isClosest ? '#2563EB' : isDarkMode ? '#38BDF8' : '#2563EB'}
+                    stroke="#FFFFFF"
+                    strokeWidth={1.5}
+                  />
 
-                  <Text
-                    style={[
-                      styles.barTimeText,
-                      isDarkMode && { color: colors.textSecondary },
-                      isClosest && styles.barTimeTextActive,
-                    ]}
-                    numberOfLines={1}
+                  {pt.isClosest ? (
+                    <SvgText
+                      x={pt.x}
+                      y={pt.y - 12}
+                      textAnchor="middle"
+                      fontSize={11}
+                      fontWeight="800"
+                      fill={isDarkMode ? '#60A5FA' : '#1D4ED8'}
+                    >
+                      📍 {pt.hr}
+                    </SvgText>
+                  ) : (
+                    <SvgText
+                      x={pt.x}
+                      y={pt.y - 8}
+                      textAnchor="middle"
+                      fontSize={9.5}
+                      fontWeight="600"
+                      fill={isDarkMode ? '#94A3B8' : '#64748B'}
+                    >
+                      {pt.hr}
+                    </SvgText>
+                  )}
+
+                  <SvgText
+                    x={pt.x}
+                    y={bottomY + 18}
+                    textAnchor="middle"
+                    fontSize={9.5}
+                    fontWeight={pt.isClosest ? '800' : '500'}
+                    fill={pt.isClosest ? (isDarkMode ? '#60A5FA' : '#2563EB') : isDarkMode ? '#64748B' : '#94A3B8'}
                   >
-                    {point.label}
-                  </Text>
-                </View>
-              );
-            })}
+                    {pt.label}
+                  </SvgText>
+                </React.Fragment>
+              ))}
+            </Svg>
           </View>
         </ScrollView>
       ) : (
         <View style={styles.emptyChartBox}>
-          <Ionicons name="bar-chart-outline" size={32} color={isDarkMode ? '#64748B' : '#94A3B8'} style={{ marginBottom: 6 }} />
+          <Ionicons name="stats-chart-outline" size={32} color={isDarkMode ? '#64748B' : '#94A3B8'} style={{ marginBottom: 6 }} />
           <Text style={[styles.emptyChartText, { color: colors.textMuted }]}>
             Chưa có dữ liệu đo để vẽ biểu đồ
           </Text>
@@ -129,7 +269,7 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'space-between',
-    marginBottom: 14,
+    marginBottom: 10,
   },
   chartCardTitle: {
     fontSize: 15,
@@ -155,58 +295,6 @@ const styles = StyleSheet.create({
   barsScrollContainer: {
     paddingVertical: 4,
   },
-  barsContainer: {
-    flexDirection: 'row',
-    alignItems: 'flex-end',
-    gap: 12,
-    paddingTop: 16,
-  },
-  barCol: {
-    alignItems: 'center',
-    width: 44,
-  },
-  barColActive: {
-    transform: [{ scale: 1.05 }],
-  },
-  activePinBadge: {
-    backgroundColor: '#2563EB',
-    paddingHorizontal: 5,
-    paddingVertical: 2,
-    borderRadius: 4,
-    marginBottom: 4,
-  },
-  activePinBadgeText: {
-    color: '#FFF',
-    fontSize: 10,
-    fontWeight: '800',
-  },
-  barValText: {
-    fontSize: 11,
-    fontWeight: '600',
-    color: '#64748B',
-    marginBottom: 4,
-  },
-  barTrack: {
-    width: 22,
-    height: 100,
-    backgroundColor: '#F1F5F9',
-    borderRadius: 6,
-    justifyContent: 'flex-end',
-    overflow: 'hidden',
-  },
-  barFill: {
-    width: '100%',
-    borderRadius: 6,
-  },
-  barTimeText: {
-    fontSize: 10,
-    color: '#94A3B8',
-    marginTop: 6,
-  },
-  barTimeTextActive: {
-    color: '#2563EB',
-    fontWeight: '800',
-  },
   emptyChartBox: {
     paddingVertical: 28,
     alignItems: 'center',
@@ -219,4 +307,5 @@ const styles = StyleSheet.create({
 });
 
 export default HealthChartSection;
+
 

@@ -151,15 +151,115 @@ class CRUDVital:
         Tạo bản ghi sinh hiệu mới vào TimescaleDB, cập nhật Redis RAM và bắn WebSocket.
         """
         raw_dev = data.get("device_id")
+        uuid_val = None
         if raw_dev:
             uuid_val = await self.resolve_device_uuid(db, raw_dev)
             if uuid_val:
                 data["device_id"] = uuid_val
 
-        obj = VitalSign(**data)
+        # Tách các trường pin và phụ trợ không thuộc bảng vital_signs
+        b1 = data.pop("bracelet_battery", None)
+        b2 = data.pop("battery_level", None)
+        b3 = data.pop("battery", None)
+        battery = b1 if b1 is not None else (b2 if b2 is not None else b3)
+        if battery is not None:
+            try:
+                battery = int(battery)
+            except (ValueError, TypeError):
+                battery = None
+
+        data.pop("raw_payload", None)
+        data.pop("bracelet_connected", None)
+        data.pop("edge_hub_connected", None)
+
+        # Lọc chỉ truyền các cột thực tế của bảng vital_signs vào model
+        valid_cols = {
+            "id", "time", "device_id", "heart_rate", "spo2",
+            "bp_systolic", "bp_diastolic", "skin_temp_max",
+            "person_count", "fall_detected",
+        }
+        vital_data = {k: v for k, v in data.items() if k in valid_cols}
+
+        obj = VitalSign(**vital_data)
         db.add(obj)
         await db.flush()
         await db.refresh(obj)
+
+        # Cập nhật mức pin và trạng thái kết nối thiết bị nếu có
+        if uuid_val:
+            try:
+                from app.models.device import Device
+                dev = await db.get(Device, uuid_val)
+                if dev:
+                    if battery is not None:
+                        dev.battery_level = battery
+                        dev.is_online = (battery > 0)
+                    else:
+                        dev.is_online = True
+                    dev.last_heartbeat = datetime.now(timezone.utc)
+                    await db.flush()
+
+                from app.crud.crud_incident import crud_incident
+                dev_name = dev.name if dev else str(raw_dev)
+                inc = None
+                battery_alert_type = None
+                battery_alert_level = None
+                battery_alert_msg = None
+
+                if battery <= 0:
+                    battery_alert_type = "DEVICE_BATTERY_DEAD"
+                    battery_alert_level = "CRITICAL"
+                    battery_alert_msg = f"Vòng đeo tay ({dev_name}) đã cạn pin (0%) và ngắt kết nối! Hãy cắm sạc cho cụ."
+                elif battery <= 20:
+                    battery_alert_type = "LOW_BATTERY"
+                    battery_alert_level = "HIGH"
+                    battery_alert_msg = f"Pin đồng hồ thông minh ({dev_name}) sắp hết (còn {battery}%). Hãy sạc pin cho cụ sớm!"
+
+                if battery_alert_type and uuid_val:
+                    from app.models.incident import Incident
+                    from datetime import timedelta
+                    # Tránh tạo trùng lặp cảnh báo nếu đã có sự cố pin chưa xử lý trong 15 phút gần đây
+                    recent_limit = datetime.now(timezone.utc) - timedelta(minutes=15)
+                    dup_res = await db.execute(
+                        select(Incident.id).where(
+                            Incident.device_id == uuid_val,
+                            Incident.alert_type == battery_alert_type,
+                            Incident.is_acknowledged == False,
+                            Incident.created_at >= recent_limit,
+                        ).limit(1)
+                    )
+                    if not dup_res.scalar_one_or_none():
+                        inc = await crud_incident.create(db, data={
+                            "device_id": uuid_val,
+                            "alert_type": battery_alert_type,
+                            "alert_level": battery_alert_level,
+                            "message": battery_alert_msg,
+                            "is_acknowledged": False,
+                        })
+
+                # Bắn thông báo đẩy real-time sự cố pin qua alerts WebSocket
+                if battery_alert_msg and inc:
+                    from app.api.websockets.vitals_ws import alert_clients
+                    alert_payload = json.dumps({
+                        "type": "ALERT_NEW",
+                        "alert_type": battery_alert_type,
+                        "data": {
+                            "id": str(inc.id),
+                            "device_id": str(uuid_val),
+                            "alert_type": battery_alert_type,
+                            "alert_level": battery_alert_level,
+                            "message": battery_alert_msg,
+                            "created_at": datetime.now(timezone.utc).isoformat(),
+                        }
+                    }, ensure_ascii=False)
+                    for client_ws in list(alert_clients):
+                        try:
+                            await client_ws.send_text(alert_payload)
+                        except Exception:
+                            if client_ws in alert_clients:
+                                alert_clients.remove(client_ws)
+            except Exception as e:
+                logger.warning("[CRUDVital] Lỗi cập nhật pin thiết bị: %s", e)
 
         # 1. Cập nhật Redis Cache tức thời (bất đồng bộ, không chặn luồng chính)
         try:
@@ -170,6 +270,8 @@ class CRUDVital:
                 "spo2": obj.spo2,
                 "skin_temp_max": obj.skin_temp_max,
                 "fall_detected": obj.fall_detected or False,
+                "bracelet_battery": battery,
+                "bracelet_connected": (battery > 0) if battery is not None else True,
                 "time": obj.time.isoformat() if obj.time else datetime.now(timezone.utc).isoformat(),
             }
             await redis_service.set_latest_vitals(dev_str, payload)
@@ -187,9 +289,12 @@ class CRUDVital:
                 "spo2": obj.spo2,
                 "skin_temp_max": obj.skin_temp_max,
                 "fall_detected": obj.fall_detected or False,
+                "bracelet_battery": battery,
+                "bracelet_connected": (battery > 0) if battery is not None else True,
                 "timestamp": int(obj.time.timestamp() * 1000) if obj.time else int(datetime.now().timestamp() * 1000),
             }
             await manager.broadcast_to_device(dev_str, ws_data)
+            await manager.broadcast_all(ws_data)
         except Exception as exc:
             logger.warning("[CRUDVital] Lỗi broadcast WebSocket: %s", exc)
 

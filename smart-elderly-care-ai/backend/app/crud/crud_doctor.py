@@ -352,7 +352,9 @@ class CRUDDoctor:
             height_cm=height,
             weight_kg=weight,
             bmi=bmi,
-            next_appointment=clinical.get("next_appointment"),
+            next_appointment=(
+                getattr(__import__("app.crud.crud_elderly", fromlist=["parse_valid_upcoming_appointment"]), "parse_valid_upcoming_appointment", lambda x: x)(clinical.get("next_appointment"))
+            ),
             prescriptions_count=len(prescriptions),
             hr_threshold_low=cfg_hr_low,
             hr_threshold_high=cfg_hr_high,

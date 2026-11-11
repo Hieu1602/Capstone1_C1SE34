@@ -212,7 +212,9 @@ export default function HomeScreen({ navigation }: any) {
     }
   }, [criticalIncidents.length, currentVitals.fall_detected]);
   const pendingAppointmentNotice = incidents.find(
-    (i) => !i.is_acknowledged && i.alert_type === 'APPOINTMENT_SCHEDULED'
+    (i) =>
+      !i.is_acknowledged &&
+      (i.alert_type === 'APPOINTMENT_SCHEDULED' || i.alert_type === 'APPOINTMENT_REQUESTED')
   );
 
   const handleConfirmSnooze = async () => {
@@ -447,8 +449,22 @@ export default function HomeScreen({ navigation }: any) {
               </View>
               <View style={{ flex: 1, marginLeft: 10, minWidth: 0 }}>
                 <View style={{ flexDirection: 'row', alignItems: 'center', flexWrap: 'wrap', gap: 6, marginBottom: 2 }}>
-                  <Text style={[styles.appointmentBannerTitle, isDarkMode && { color: '#FBBF24' }]}>🗓️ LỊCH KHÁM MỚI TỪ BÁC SĨ</Text>
-                  <View style={styles.appointmentBadge}><Text style={styles.appointmentBadgeText}>Chờ xác nhận</Text></View>
+                  <Text style={[styles.appointmentBannerTitle, isDarkMode && { color: '#FBBF24' }]}>
+                    {pendingAppointmentNotice.notes?.includes('APPOINTMENT_REQUESTED') ||
+                    pendingAppointmentNotice.note?.includes('APPOINTMENT_REQUESTED') ||
+                    pendingAppointmentNotice.message?.includes('đã đặt lịch khám')
+                      ? '🗓️ YÊU CẦU LỊCH KHÁM TỪ GIA ĐÌNH'
+                      : '🗓️ LỊCH KHÁM MỚI TỪ BÁC SĨ'}
+                  </Text>
+                  <View style={styles.appointmentBadge}>
+                    <Text style={styles.appointmentBadgeText}>
+                      {pendingAppointmentNotice.notes?.includes('APPOINTMENT_REQUESTED') ||
+                      pendingAppointmentNotice.note?.includes('APPOINTMENT_REQUESTED') ||
+                      pendingAppointmentNotice.message?.includes('đã đặt lịch khám')
+                        ? 'Chờ Bác sĩ xác nhận'
+                        : 'Chờ xác nhận'}
+                    </Text>
+                  </View>
                 </View>
                 <Text style={[styles.appointmentBannerSubtitle, isDarkMode && { color: colors.textSecondary }]} numberOfLines={2}>
                   {pendingAppointmentNotice.message}

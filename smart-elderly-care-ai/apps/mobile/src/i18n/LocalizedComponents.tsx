@@ -91,13 +91,15 @@ function localizeString(value: string, translate: (key: string, options?: any) =
     );
   }
 
-  // Dynamic filter pill: "💊 Uống thuốc (<count or Xong>)"
-  const medMatch = normalized.match(/^💊\s*Uống thuốc\s*\((.+)\)$/i);
+  // Dynamic filter pill: "💊 Uống thuốc" or "💊 Uống thuốc (<count>)"
+  const medMatch = normalized.match(/^💊\s*Uống thuốc(?:\s*\((.+)\))?$/i);
   if (medMatch) {
     const medText = translate('Uống thuốc', { defaultValue: 'Medication' });
-    const innerStatus = medMatch[1].trim();
-    const translatedStatus = innerStatus === 'Xong' ? translate('Xong', { defaultValue: 'Done' }) : innerStatus;
-    return value.replace(trimmed, `💊 ${medText} (${translatedStatus})`);
+    const innerStatus = medMatch[1]?.trim();
+    if (innerStatus && innerStatus !== 'Xong') {
+      return value.replace(trimmed, `💊 ${medText} (${innerStatus})`);
+    }
+    return value.replace(trimmed, `💊 ${medText}`);
   }
 
   // Emoji pill: "🚨 Nguy kịch"

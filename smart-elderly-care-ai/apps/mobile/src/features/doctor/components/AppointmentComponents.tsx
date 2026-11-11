@@ -295,8 +295,8 @@ export const AppointmentCard: React.FC<AppointmentCardProps> = ({
         </View>
       ) : null}
 
-      <View style={styles.metaBadgesRow}>
-        {isUpcoming && (
+      {isUpcoming && (
+        <View style={styles.metaBadgesRow}>
           <View
             style={[
               styles.familyBadge,
@@ -320,32 +320,8 @@ export const AppointmentCard: React.FC<AppointmentCardProps> = ({
               {isFamilyConfirmed ? 'Gia đình đã xác nhận' : 'Chờ gia đình xác nhận'}
             </LocalizedText>
           </View>
-        )}
-
-        <View
-          style={[
-            styles.speakerBadge,
-            apt.enable_speaker_reminder
-              ? { backgroundColor: '#ECFDF5', borderColor: '#10B98144' }
-              : { backgroundColor: '#F1F5F9', borderColor: '#CBD5E1' },
-          ]}
-        >
-          <Ionicons
-            name={apt.enable_speaker_reminder ? 'volume-high' : 'volume-mute'}
-            size={12}
-            color={apt.enable_speaker_reminder ? '#059669' : '#94A3B8'}
-            style={{ marginRight: 4 }}
-          />
-          <LocalizedText
-            style={[
-              styles.speakerBadgeText,
-              { color: apt.enable_speaker_reminder ? '#059669' : '#64748B' },
-            ]}
-          >
-            {apt.enable_speaker_reminder ? 'Loa Hub: BẬT' : 'Loa Hub: TẮT'}
-          </LocalizedText>
         </View>
-      </View>
+      )}
 
       <View style={[styles.actionRow, { borderTopColor: isDarkMode ? '#334155' : '#E2E8F0' }]}>
         <TouchableOpacity

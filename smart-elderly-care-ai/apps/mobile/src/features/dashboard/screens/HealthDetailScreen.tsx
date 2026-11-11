@@ -201,24 +201,38 @@ export default function HealthDetailScreen({ navigation, route }: any) {
     Alert.alert('Đồng bộ thành công', 'Dữ liệu sức khỏe từ Hub và vòng đeo tay đã được làm mới.');
   };
 
-  // Tìm mốc đo gần nhất với giờ tua
+  // Tìm mốc đo gần nhất với giờ tua (chỉ chấp nhận trong khoảng +-45 phút, không đoán trước tương lai)
   const closestVital = useMemo(() => {
     if (!dayVitals || dayVitals.length === 0) return null;
-    let best = dayVitals[0];
+    const isToday = selectedDate === getTodayStr();
+    const now = new Date();
+    const nowMinutes = now.getHours() * 60 + now.getMinutes();
+
+    // Nếu đang xem hôm nay mà tua vào thời điểm tương lai -> chưa có dữ liệu
+    if (isToday && scrubberMinutes > nowMinutes) {
+      return null;
+    }
+
+    let best: any = null;
     let minDiff = 999999;
     for (const v of dayVitals) {
       const rawDate = v.recorded_at || v.time || v.created_at;
       const d = rawDate ? new Date(rawDate) : null;
       if (!d || isNaN(d.getTime())) continue;
       const vMinutes = d.getHours() * 60 + d.getMinutes();
+
+      // Nếu là hôm nay, không chấp nhận bản ghi tương lai
+      if (isToday && vMinutes > nowMinutes) continue;
+
       const diff = Math.abs(vMinutes - scrubberMinutes);
-      if (diff < minDiff) {
+      // Chỉ gắn kết nếu bản ghi thực tế nằm trong khoảng +-45 phút quanh giờ tua
+      if (diff < minDiff && diff <= 45) {
         minDiff = diff;
         best = v;
       }
     }
     return best;
-  }, [dayVitals, scrubberMinutes]);
+  }, [dayVitals, scrubberMinutes, selectedDate]);
 
   // Dữ liệu biểu đồ động theo ngày được chọn
   const chartDataForDay = useMemo(() => {

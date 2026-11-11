@@ -4,7 +4,7 @@
 // TÁC GIẢ: Phan Nguyễn Giáng My
 // ==============================================================================
 
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useCallback } from 'react';
 import {
   View, StyleSheet, TouchableOpacity, ScrollView, TextInput,
   Modal, Pressable, Linking, Platform, Image, ActivityIndicator,
@@ -12,13 +12,15 @@ import {
 import { LocalizedAlert as Alert, LocalizedText as Text } from '../../../i18n/LocalizedComponents';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
+import { useFocusEffect } from '@react-navigation/native';
 import * as ImagePicker from 'expo-image-picker';
 import { useTheme } from '../../../store/useThemeStore';
 import { Colors } from '../../../theme/colors';
 import { useVitalStore, MedicalConditionItem } from '../../../store/useVitalStore';
 import { useAuthStore } from '../../../store/useAuthStore';
-import { BASE_URL } from '../../../services/api';
+import { BASE_URL, patientApi } from '../../../services/api';
 import { alertsWS } from '../../../services/websocket';
+import { resolveAvatarUrl } from '../../auth/hooks/useProfileManager';
 
 const getDaysAgoStr = (days = 0) => {
   const d = new Date(); d.setDate(d.getDate() - days);
@@ -77,7 +79,16 @@ export default function PatientMedicalRecordScreen({ navigation }: any) {
   const dietaryNotes = patientRecord?.dietary_notes?.trim() || 'Chưa ghi nhận';
   const doctorName = patientRecord?.doctor_name?.trim() || 'Chưa chỉ định', doctorPhone = patientRecord?.doctor_phone?.trim() || '';
   const doctorSpecialty = patientRecord?.doctor_specialty?.trim() || '--', hospital = patientRecord?.hospital?.trim() || '--';
-  const nextAppointment = patientRecord?.next_appointment?.trim() || 'Chưa có lịch hẹn';
+  const rawNextAppointment = patientRecord?.next_appointment?.trim();
+  const hasValidAppointment = Boolean(
+    rawNextAppointment &&
+    rawNextAppointment !== '' &&
+    rawNextAppointment !== '--' &&
+    rawNextAppointment !== 'Chưa có lịch hẹn' &&
+    rawNextAppointment !== 'Chưa có'
+  );
+  const nextAppointment = hasValidAppointment ? rawNextAppointment! : 'Chưa có lịch hẹn';
+  const doctorAvatar = patientRecord?.doctor_avatar_url ? resolveAvatarUrl(patientRecord.doctor_avatar_url) : null;
 
   const [selectedDate, setSelectedDate] = useState(() => getDaysAgoStr(0));
   const [isFaceModalVisible, setFaceModalVisible] = useState(false);
@@ -88,6 +99,104 @@ export default function PatientMedicalRecordScreen({ navigation }: any) {
   const [isSavingPatient, setIsSavingPatient] = useState(false);
   const [isEditingAllergies, setIsEditingAllergies] = useState(false);
   const [allergyDraft, setAllergyDraft] = useState({ drug: '', food: '', diet: '' });
+
+  // Quản lý Đặt lịch hẹn gặp Bác sĩ từ phía Người nhà
+  const [isAppointmentModalVisible, setAppointmentModalVisible] = useState(false);
+  const [appointmentDraft, setAppointmentDraft] = useState({
+    dateStr: '',
+    timeStr: '09:00',
+    visitType: 'HOME_VISIT',
+    notes: '',
+  });
+  const [isSubmittingAppointment, setIsSubmittingAppointment] = useState(false);
+
+  const handleOpenAppointmentModal = () => {
+    const tomorrow = new Date();
+    tomorrow.setDate(tomorrow.getDate() + 1);
+    const d = String(tomorrow.getDate()).padStart(2, '0');
+    const m = String(tomorrow.getMonth() + 1).padStart(2, '0');
+    const y = tomorrow.getFullYear();
+    setAppointmentDraft({
+      dateStr: `${d}/${m}/${y}`,
+      timeStr: '09:00',
+      visitType: 'HOME_VISIT',
+      notes: '',
+    });
+    setAppointmentModalVisible(true);
+  };
+
+  const handleQuickPickSlot = (daysOffset: number, timeStr: string) => {
+    const dt = new Date();
+    dt.setDate(dt.getDate() + daysOffset);
+    const d = String(dt.getDate()).padStart(2, '0');
+    const m = String(dt.getMonth() + 1).padStart(2, '0');
+    const y = dt.getFullYear();
+    setAppointmentDraft((prev) => ({
+      ...prev,
+      dateStr: `${d}/${m}/${y}`,
+      timeStr,
+    }));
+  };
+
+  const handleSubmitAppointment = async () => {
+    if (!appointmentDraft.dateStr.trim() || !appointmentDraft.timeStr.trim()) {
+      return showAlert('Thiếu thông tin', 'Vui lòng chọn ngày và giờ hẹn khám.');
+    }
+    const dateParts = appointmentDraft.dateStr.trim().split('/');
+    const timeParts = appointmentDraft.timeStr.trim().split(':');
+    if (dateParts.length !== 3 || timeParts.length !== 2) {
+      return showAlert('Định dạng không hợp lệ', 'Vui lòng nhập ngày dạng DD/MM/YYYY và giờ dạng HH:MM.');
+    }
+    const d = parseInt(dateParts[0], 10);
+    const m = parseInt(dateParts[1], 10) - 1;
+    const y = parseInt(dateParts[2], 10);
+    const hh = parseInt(timeParts[0], 10);
+    const mm = parseInt(timeParts[1], 10);
+
+    const scheduledDate = new Date(y, m, d, hh, mm);
+    if (isNaN(scheduledDate.getTime())) {
+      return showAlert('Lỗi', 'Thời gian hẹn không hợp lệ.');
+    }
+    if (scheduledDate.getTime() <= Date.now()) {
+      return showAlert('Thời gian không hợp lệ', 'Thời gian hẹn phải ở trong tương lai.');
+    }
+
+    try {
+      setIsSubmittingAppointment(true);
+      const targetPatId = patientRecord?.id || 1;
+      await patientApi.requestAppointment(targetPatId, {
+        patient_id: String(targetPatId),
+        patient_name: patientName !== '--' ? patientName : 'Người cao tuổi',
+        scheduled_at: scheduledDate.toISOString(),
+        duration_minutes: 30,
+        visit_type: appointmentDraft.visitType,
+        location:
+          appointmentDraft.visitType === 'HOME_VISIT'
+            ? 'Tại nhà (Khám tại gia)'
+            : hospital !== '--'
+            ? hospital
+            : 'Tại phòng khám Bác sĩ gia đình',
+        clinical_notes: appointmentDraft.notes.trim()
+          ? `[Yêu cầu lịch khám] ${appointmentDraft.notes.trim()}`
+          : 'Gia đình yêu cầu khám sức khỏe',
+        enable_speaker_reminder: true,
+      });
+
+      setAppointmentModalVisible(false);
+      showAlert(
+        'Thành công',
+        `Đã đặt lịch hẹn khám với ${doctorName} thành công vào ${appointmentDraft.timeStr} ngày ${appointmentDraft.dateStr}. Hệ thống đã gửi thông báo đến Bác sĩ phụ trách!`
+      );
+      fetchPatientRecord(1, selectedDate);
+    } catch (err: any) {
+      showAlert(
+        'Lỗi đặt lịch',
+        err?.response?.data?.detail || 'Không thể tạo lịch hẹn lúc này. Vui lòng thử lại sau.'
+      );
+    } finally {
+      setIsSubmittingAppointment(false);
+    }
+  };
 
   const showAlert = (title: string, message: string) => {
     if (Platform.OS === 'web' && typeof window !== 'undefined') {
@@ -100,13 +209,24 @@ export default function PatientMedicalRecordScreen({ navigation }: any) {
   const draftAge = calculateAgeFromYear(patientDraft.birthYear);
   const draftBMI = calculateBMIInfo(patientDraft.height, patientDraft.weight);
 
+  useFocusEffect(
+    useCallback(() => {
+      fetchPatientRecord(1, selectedDate);
+    }, [selectedDate, fetchPatientRecord])
+  );
+
   useEffect(() => {
     fetchPatientRecord(1, selectedDate);
     alertsWS.connect();
     const handleWs = (event: any) => {
       if (
-        event?.type === 'ALERT_NEW' &&
-        (event?.alert_type === 'MEDICAL_RECORD_UPDATED' || event?.data?.alert_type === 'MEDICAL_RECORD_UPDATED')
+        event?.type === 'ALERT_NEW' ||
+        event?.alert_type === 'MEDICAL_RECORD_UPDATED' ||
+        event?.data?.alert_type === 'MEDICAL_RECORD_UPDATED' ||
+        event?.type === 'APPOINTMENT_SCHEDULED' ||
+        event?.type === 'APPOINTMENT_CANCELLED' ||
+        event?.alert_type === 'APPOINTMENT_SCHEDULED' ||
+        event?.alert_type === 'APPOINTMENT_CANCELLED'
       ) {
         fetchPatientRecord(1, selectedDate);
       }
@@ -581,7 +701,13 @@ export default function PatientMedicalRecordScreen({ navigation }: any) {
           </View>
           <View style={[styles.doctorCard, { backgroundColor: bgSubtle, borderColor: borderCol }]}>
             <View style={styles.doctorHeader}>
-              <View style={styles.doctorAvatarBox}><Ionicons name="medical" size={24} color="#0EA5E9" /></View>
+              <View style={[styles.doctorAvatarBox, { overflow: 'hidden' }]}>
+                {doctorAvatar ? (
+                  <Image source={{ uri: doctorAvatar }} style={styles.doctorAvatarImg} />
+                ) : (
+                  <Ionicons name="medical" size={24} color="#0EA5E9" />
+                )}
+              </View>
               <View style={{ flex: 1, marginLeft: 12 }}>
                 <Text style={[styles.doctorName, { color: textTitle }]}>{doctorName}</Text>
                 <Text style={[styles.doctorSpecialty, { color: textSub }]}>Chuyên khoa: {doctorSpecialty}</Text>
@@ -589,14 +715,39 @@ export default function PatientMedicalRecordScreen({ navigation }: any) {
               </View>
             </View>
             <View style={styles.appointmentRow}>
-              <Ionicons name="calendar-outline" size={15} color="#0EA5E9" />
-              <Text style={[styles.appointmentText, { color: textSub }]}>Lịch tái khám: <Text style={{ fontWeight: '700', color: Colors.primary }}>{nextAppointment}</Text></Text>
+              <Ionicons
+                name="calendar-outline"
+                size={15}
+                color={hasValidAppointment ? Colors.primary : textSub}
+              />
+              <Text style={[styles.appointmentText, { color: textSub }]}>
+                Lịch tái khám:{' '}
+                <Text
+                  style={{
+                    fontWeight: '700',
+                    color: hasValidAppointment ? Colors.primary : textSub,
+                  }}
+                >
+                  {nextAppointment}
+                </Text>
+              </Text>
             </View>
-            {doctorPhone ? (
-              <TouchableOpacity style={styles.callDoctorBtn} onPress={handleCallDoctor} activeOpacity={0.8}>
-                <Ionicons name="call" size={16} color="#FFF" /><Text style={styles.callDoctorBtnText}>Gọi Bác sĩ phụ trách</Text>
+            <View style={styles.doctorActionBtnRow}>
+              {doctorPhone ? (
+                <TouchableOpacity style={styles.callDoctorBtn} onPress={handleCallDoctor} activeOpacity={0.8}>
+                  <Ionicons name="call" size={15} color="#FFF" />
+                  <Text style={styles.callDoctorBtnText}>Gọi Bác sĩ</Text>
+                </TouchableOpacity>
+              ) : null}
+              <TouchableOpacity
+                style={styles.bookAppointmentBtn}
+                onPress={handleOpenAppointmentModal}
+                activeOpacity={0.8}
+              >
+                <Ionicons name="calendar" size={15} color="#FFF" />
+                <Text style={styles.bookAppointmentBtnText}>Đặt lịch gặp Bác sĩ</Text>
               </TouchableOpacity>
-            ) : null}
+            </View>
           </View>
         </View>
       </ScrollView>
@@ -743,6 +894,139 @@ export default function PatientMedicalRecordScreen({ navigation }: any) {
             <TouchableOpacity style={[styles.modalCloseBtn, { borderColor: borderCol, marginTop: 14 }]} onPress={() => setFaceModalVisible(false)}>
               <Text style={[styles.modalCloseBtnText, { color: textSub }]}>Hủy bỏ</Text>
             </TouchableOpacity>
+          </Pressable>
+        </Pressable>
+      </Modal>
+
+      {/* Modal Đặt Lịch Hẹn với Bác sĩ Phụ trách */}
+      <Modal visible={isAppointmentModalVisible} transparent animationType="fade" onRequestClose={() => setAppointmentModalVisible(false)}>
+        <Pressable style={styles.modalOverlay} onPress={() => setAppointmentModalVisible(false)}>
+          <Pressable style={[styles.modalCard, { backgroundColor: bgCard, borderColor: borderCol }]} onPress={() => {}}>
+            <Text style={[styles.modalTitle, { color: textTitle }]}>Đặt lịch gặp Bác sĩ</Text>
+            <Text style={[styles.modalSubDesc, { color: textSub, marginBottom: 12 }]}>
+              Hẹn khám với <Text style={{ fontWeight: '700', color: Colors.primary }}>{doctorName}</Text>
+            </Text>
+
+            <Text style={[styles.inputLabel, { color: textSub }]}>Chọn nhanh mốc thời gian:</Text>
+            <View style={styles.quickSlotsRow}>
+              {[
+                { label: 'Sáng mai (08:30)', days: 1, time: '08:30' },
+                { label: 'Chiều mai (14:30)', days: 1, time: '14:30' },
+                { label: '2 ngày nữa (09:00)', days: 2, time: '09:00' },
+              ].map((slot) => (
+                <TouchableOpacity
+                  key={slot.label}
+                  style={[
+                    styles.quickSlotChip,
+                    {
+                      backgroundColor: isDarkMode ? '#0F172A' : '#F0F9FF',
+                      borderColor: isDarkMode ? '#1E3A8A' : '#BAE6FD',
+                    },
+                  ]}
+                  onPress={() => handleQuickPickSlot(slot.days, slot.time)}
+                  activeOpacity={0.7}
+                >
+                  <Text style={[styles.quickSlotChipText, { color: Colors.primary }]}>{slot.label}</Text>
+                </TouchableOpacity>
+              ))}
+            </View>
+
+            <View style={{ flexDirection: 'row', gap: 10, marginBottom: 10 }}>
+              <View style={{ flex: 1.2 }}>
+                <Text style={[styles.inputLabel, { color: textSub }]}>Ngày hẹn (DD/MM/YYYY):</Text>
+                <TextInput
+                  style={inputStyle}
+                  placeholder="DD/MM/YYYY"
+                  placeholderTextColor="#94A3B8"
+                  value={appointmentDraft.dateStr}
+                  onChangeText={(val) => setAppointmentDraft((p) => ({ ...p, dateStr: val }))}
+                />
+              </View>
+              <View style={{ flex: 0.8 }}>
+                <Text style={[styles.inputLabel, { color: textSub }]}>Giờ (HH:MM):</Text>
+                <TextInput
+                  style={inputStyle}
+                  placeholder="HH:MM"
+                  placeholderTextColor="#94A3B8"
+                  value={appointmentDraft.timeStr}
+                  onChangeText={(val) => setAppointmentDraft((p) => ({ ...p, timeStr: val }))}
+                />
+              </View>
+            </View>
+
+            <Text style={[styles.inputLabel, { color: textSub }]}>Hình thức khám:</Text>
+            <View style={styles.visitTypeRow}>
+              {[
+                { key: 'HOME_VISIT', label: 'Khám tại nhà', icon: 'home-outline' as const },
+                { key: 'CLINIC', label: 'Tại phòng khám', icon: 'business-outline' as const },
+              ].map((vt) => {
+                const isSel = appointmentDraft.visitType === vt.key;
+                return (
+                  <TouchableOpacity
+                    key={vt.key}
+                    style={[
+                      styles.visitTypeBtn,
+                      {
+                        backgroundColor: isSel
+                          ? isDarkMode
+                            ? '#064E3B'
+                            : '#ECFDF5'
+                          : isDarkMode
+                          ? bgSubtle
+                          : '#F8FAFC',
+                        borderColor: isSel ? '#059669' : borderCol,
+                        borderWidth: isSel ? 1.5 : 1,
+                      },
+                    ]}
+                    onPress={() => setAppointmentDraft((p) => ({ ...p, visitType: vt.key }))}
+                    activeOpacity={0.7}
+                  >
+                    <Ionicons name={vt.icon} size={15} color={isSel ? '#059669' : textSub} />
+                    <Text
+                      style={[
+                        styles.visitTypeBtnText,
+                        { color: isSel ? '#059669' : textTitle, fontWeight: isSel ? '700' : '500' },
+                      ]}
+                    >
+                      {vt.label}
+                    </Text>
+                  </TouchableOpacity>
+                );
+              })}
+            </View>
+
+            <Text style={[styles.inputLabel, { color: textSub, marginTop: 4 }]}>Ghi chú / Triệu chứng (tùy chọn):</Text>
+            <TextInput
+              style={[...inputStyle, styles.textArea, { height: 60 }]}
+              placeholder="VD: Người cao tuổi bị chóng mặt nhẹ khi thức dậy..."
+              placeholderTextColor="#94A3B8"
+              multiline
+              numberOfLines={2}
+              value={appointmentDraft.notes}
+              onChangeText={(notes) => setAppointmentDraft((p) => ({ ...p, notes }))}
+            />
+
+            <View style={styles.modalBtnRow}>
+              <TouchableOpacity
+                style={[styles.modalCancelBtn, { backgroundColor: isDarkMode ? '#0F172A' : '#F1F5F9', borderColor: borderCol }]}
+                onPress={() => setAppointmentModalVisible(false)}
+                disabled={isSubmittingAppointment}
+              >
+                <Text style={[styles.modalCancelText, { color: textSub }]}>Hủy</Text>
+              </TouchableOpacity>
+              <TouchableOpacity
+                style={[styles.modalSaveBtn, { backgroundColor: '#059669' }, isSubmittingAppointment && { opacity: 0.7 }]}
+                onPress={handleSubmitAppointment}
+                disabled={isSubmittingAppointment}
+                activeOpacity={0.8}
+              >
+                {isSubmittingAppointment ? (
+                  <ActivityIndicator size="small" color="#FFFFFF" />
+                ) : (
+                  <Text style={styles.modalSaveText}>Xác nhận đặt lịch</Text>
+                )}
+              </TouchableOpacity>
+            </View>
           </Pressable>
         </Pressable>
       </Modal>
@@ -900,13 +1184,23 @@ const styles = StyleSheet.create({
   doctorCard: { borderRadius: 12, padding: 12, borderWidth: 1 },
   doctorHeader: { flexDirection: 'row', alignItems: 'center', marginBottom: 10 },
   doctorAvatarBox: { width: 44, height: 44, borderRadius: 22, backgroundColor: '#E0F2FE', alignItems: 'center', justifyContent: 'center' },
+  doctorAvatarImg: { width: 44, height: 44, borderRadius: 22 },
   doctorName: { fontSize: 15, fontWeight: '800' },
   doctorSpecialty: { fontSize: 11.5, marginTop: 2 },
   hospitalName: { fontSize: 11.5, marginTop: 1 },
   appointmentRow: { flexDirection: 'row', alignItems: 'center', gap: 6, marginBottom: 10 },
   appointmentText: { fontSize: 11.5 },
-  callDoctorBtn: { flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 6, backgroundColor: '#0284C7', borderRadius: 10, paddingVertical: 10 },
+  doctorActionBtnRow: { flexDirection: 'row', gap: 8, marginTop: 4 },
+  callDoctorBtn: { flex: 1, flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 6, backgroundColor: '#0284C7', borderRadius: 10, paddingVertical: 10 },
   callDoctorBtnText: { fontSize: 12.5, fontWeight: '700', color: '#FFF' },
+  bookAppointmentBtn: { flex: 1.2, flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 6, backgroundColor: '#059669', borderRadius: 10, paddingVertical: 10 },
+  bookAppointmentBtnText: { fontSize: 12.5, fontWeight: '700', color: '#FFF' },
+  quickSlotsRow: { flexDirection: 'row', flexWrap: 'wrap', gap: 6, marginTop: 6, marginBottom: 10 },
+  quickSlotChip: { paddingHorizontal: 10, paddingVertical: 5, borderRadius: 8, borderWidth: 1 },
+  quickSlotChipText: { fontSize: 11.5, fontWeight: '600' },
+  visitTypeRow: { flexDirection: 'row', gap: 8, marginTop: 6, marginBottom: 10 },
+  visitTypeBtn: { flex: 1, flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 6, borderWidth: 1, borderRadius: 10, paddingVertical: 9 },
+  visitTypeBtnText: { fontSize: 12.5 },
   modalOverlay: { flex: 1, backgroundColor: 'rgba(15,23,42,0.6)', alignItems: 'center', justifyContent: 'center', padding: 20 },
   modalCard: { width: '100%', maxWidth: 420, borderRadius: 18, padding: 18, borderWidth: 1 },
   modalTitle: { fontSize: 16, fontWeight: '800', marginBottom: 12, textAlign: 'center' },

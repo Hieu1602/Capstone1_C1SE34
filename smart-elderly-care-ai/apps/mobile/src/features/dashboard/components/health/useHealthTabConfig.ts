@@ -210,31 +210,61 @@ export function computeHealthTabConfig({
     case 'DAY':
     default: {
       const hasData = dayVitals && dayVitals.length > 0;
-      const hrVal = closestVital ? String(closestVital.heart_rate ?? '--') : (hasData && dayVitals[0].heart_rate ? String(dayVitals[0].heart_rate) : '--');
-      const spo2Val = closestVital ? String(closestVital.spo2 ?? '--') : (hasData && dayVitals[0].spo2 ? String(dayVitals[0].spo2) : '--');
-      const tempVal = closestVital ? String(closestVital.body_temp ?? closestVital.skin_temp_max ?? '--') : (hasData && (dayVitals[0].body_temp ?? dayVitals[0].skin_temp_max) ? String(dayVitals[0].body_temp ?? dayVitals[0].skin_temp_max) : '--');
-      const actVal = closestVital ? (closestVital.activity_state || closestVital.activity || 'Sinh hoạt') : (hasData ? (dayVitals[0].activity_state || 'Sinh hoạt') : 'Chưa có dữ liệu');
+      const isToday = selectedDate === getTodayStr();
+      const now = new Date();
+      const nowMinutes = now.getHours() * 60 + now.getMinutes();
+      const isFutureTime = isToday && scrubberMinutes > nowMinutes;
+
+      // Chỉ lấy số liệu nếu có bản ghi thực tế closestVital trong phạm vi giờ tua
+      const hrVal = closestVital ? String(closestVital.heart_rate ?? '--') : '--';
+      const spo2Val = closestVital ? String(closestVital.spo2 ?? '--') : '--';
+      const tempVal = closestVital ? String(closestVital.body_temp ?? closestVital.skin_temp_max ?? '--') : '--';
+      const actVal = closestVital
+        ? (closestVital.activity_state || closestVital.activity || 'Sinh hoạt')
+        : isFutureTime
+          ? 'Chưa diễn ra'
+          : hasData
+            ? 'Không có số đo'
+            : 'Chưa có dữ liệu';
+
+      const vitalTime = closestVital?.recorded_at || closestVital?.time || closestVital?.created_at;
+      const vitalHM = vitalTime ? (() => {
+        const d = new Date(vitalTime);
+        return !isNaN(d.getTime()) ? `${String(d.getHours()).padStart(2, '0')}:${String(d.getMinutes()).padStart(2, '0')}` : formatTimeHM(scrubberMinutes);
+      })() : formatTimeHM(scrubberMinutes);
+
+      const statusNote = closestVital
+        ? `Ghi nhận lúc ${vitalHM}`
+        : isFutureTime
+          ? 'Thời điểm tương lai'
+          : hasData
+            ? `Không có đo lúc ${formatTimeHM(scrubberMinutes)}`
+            : 'Chưa ghi nhận';
 
       return {
         bannerTitle: isFallDetected
           ? 'Cảnh báo: Phát hiện sự cố ngã!'
-          : hasData
-            ? 'Tình trạng sinh tồn bình thường'
-            : 'Chưa có dữ liệu đo cho ngày này',
+          : isFutureTime
+            ? 'Mốc thời gian tương lai (Chưa tới)'
+            : hasData
+              ? 'Tình trạng sinh tồn bình thường'
+              : 'Chưa có dữ liệu đo cho ngày này',
         bannerSubtitle: isFallDetected
           ? 'Hệ thống AI vừa ghi nhận sự cố té ngã! Hãy kiểm tra clip và tới trợ giúp ngay.'
-          : hasData
-            ? `Đang xem ngày ${formatDisplayDateVN(selectedDate)} - Vòng BLE Band & Hub AI hoạt động ổn định.`
-            : `Ngày ${formatDisplayDateVN(selectedDate)} chưa ghi nhận mốc đo nào trong cơ sở dữ liệu.`,
-        bannerIcon: (isFallDetected ? 'warning' : hasData ? 'checkmark-circle' : 'information-circle') as keyof typeof Ionicons.glyphMap,
+          : isFutureTime
+            ? `Hiện tại chưa đến ${formatTimeHM(scrubberMinutes)}. Hãy tua về trước ${formatTimeHM(nowMinutes)} để xem dữ liệu thực tế.`
+            : hasData
+              ? `Đang xem ngày ${formatDisplayDateVN(selectedDate)} - Vòng BLE Band & Hub AI hoạt động ổn định.`
+              : `Ngày ${formatDisplayDateVN(selectedDate)} chưa ghi nhận mốc đo nào trong cơ sở dữ liệu.`,
+        bannerIcon: (isFallDetected ? 'warning' : isFutureTime ? 'time-outline' : hasData ? 'checkmark-circle' : 'information-circle') as keyof typeof Ionicons.glyphMap,
         bannerAlert: isFallDetected,
         card1: {
           label: 'Nhịp tim',
           value: hrVal,
           unit: hrVal !== '--' ? 'bpm' : '',
-          status: !hasData || hrVal === '--' ? 'Chưa có dữ liệu' : Number(hrVal) > 100 ? 'Cao' : Number(hrVal) < 60 ? 'Thấp' : 'Bình thường',
-          statusColor: !hasData || hrVal === '--' ? '#64748B' : Number(hrVal) > 100 ? Colors.danger : '#15803D',
-          statusBg: !hasData || hrVal === '--' ? '#F1F5F9' : Number(hrVal) > 100 ? '#FEE2E2' : '#DCFCE7',
+          status: !closestVital || hrVal === '--' ? (isFutureTime ? 'Chưa tới' : 'Chưa có dữ liệu') : Number(hrVal) > 100 ? 'Cao' : Number(hrVal) < 60 ? 'Thấp' : 'Bình thường',
+          statusColor: !closestVital || hrVal === '--' ? '#64748B' : Number(hrVal) > 100 ? Colors.danger : '#15803D',
+          statusBg: !closestVital || hrVal === '--' ? '#F1F5F9' : Number(hrVal) > 100 ? '#FEE2E2' : '#DCFCE7',
           range: hasData ? 'Ngưỡng an toàn: 60 - 95 bpm' : 'Chưa ghi nhận',
           icon: 'heart' as keyof typeof Ionicons.glyphMap,
           iconColor: '#EF4444',
@@ -244,9 +274,9 @@ export function computeHealthTabConfig({
           label: 'Nồng độ Oxy (SpO₂)',
           value: spo2Val,
           unit: spo2Val !== '--' ? '%' : '',
-          status: !hasData || spo2Val === '--' ? 'Chưa có dữ liệu' : Number(spo2Val) < 95 ? 'Cần theo dõi' : 'Bình thường / An toàn',
-          statusColor: !hasData || spo2Val === '--' ? '#64748B' : Number(spo2Val) < 95 ? '#D97706' : '#15803D',
-          statusBg: !hasData || spo2Val === '--' ? '#F1F5F9' : Number(spo2Val) < 95 ? '#FEF3C7' : '#DCFCE7',
+          status: !closestVital || spo2Val === '--' ? (isFutureTime ? 'Chưa tới' : 'Chưa có dữ liệu') : Number(spo2Val) < 95 ? 'Cần theo dõi' : 'Bình thường / An toàn',
+          statusColor: !closestVital || spo2Val === '--' ? '#64748B' : Number(spo2Val) < 95 ? '#D97706' : '#15803D',
+          statusBg: !closestVital || spo2Val === '--' ? '#F1F5F9' : Number(spo2Val) < 95 ? '#FEF3C7' : '#DCFCE7',
           range: hasData ? 'Ngưỡng an toàn: ≥ 95%' : 'Chưa ghi nhận',
           icon: 'water' as keyof typeof Ionicons.glyphMap,
           iconColor: '#0284C7',
@@ -256,9 +286,9 @@ export function computeHealthTabConfig({
           label: 'Thân nhiệt cơ thể',
           value: tempVal,
           unit: tempVal !== '--' ? '°C' : '',
-          status: !hasData || tempVal === '--' ? 'Chưa có dữ liệu' : Number(tempVal) > 37.5 ? 'Sốt nhẹ' : 'Bình thường',
-          statusColor: !hasData || tempVal === '--' ? '#64748B' : Number(tempVal) > 37.5 ? Colors.danger : '#15803D',
-          statusBg: !hasData || tempVal === '--' ? '#F1F5F9' : Number(tempVal) > 37.5 ? '#FEE2E2' : '#DCFCE7',
+          status: !closestVital || tempVal === '--' ? (isFutureTime ? 'Chưa tới' : 'Chưa có dữ liệu') : Number(tempVal) > 37.5 ? 'Sốt nhẹ' : 'Bình thường',
+          statusColor: !closestVital || tempVal === '--' ? '#64748B' : Number(tempVal) > 37.5 ? Colors.danger : '#15803D',
+          statusBg: !closestVital || tempVal === '--' ? '#F1F5F9' : Number(tempVal) > 37.5 ? '#FEE2E2' : '#DCFCE7',
           range: hasData ? 'Chuẩn: 36.5 - 37.2°C' : 'Chưa ghi nhận',
           icon: 'thermometer' as keyof typeof Ionicons.glyphMap,
           iconColor: '#D97706',
@@ -268,10 +298,10 @@ export function computeHealthTabConfig({
           label: 'Trạng thái vận động',
           value: actVal,
           unit: '',
-          status: !hasData ? 'Chưa có dữ liệu' : isFallDetected ? 'Cảnh báo' : 'An toàn',
-          statusColor: !hasData ? '#64748B' : isFallDetected ? Colors.danger : '#15803D',
-          statusBg: !hasData ? '#F1F5F9' : isFallDetected ? '#FEE2E2' : '#DCFCE7',
-          range: closestVital ? `Ghi nhận lúc ${formatTimeHM(scrubberMinutes)}` : (hasData ? 'Sinh hoạt & Đi lại' : 'Chưa ghi nhận'),
+          status: !closestVital ? (isFutureTime ? 'Chưa tới' : 'Không có đo') : isFallDetected ? 'Cảnh báo' : 'An toàn',
+          statusColor: !closestVital ? '#64748B' : isFallDetected ? Colors.danger : '#15803D',
+          statusBg: !closestVital ? '#F1F5F9' : isFallDetected ? '#FEE2E2' : '#DCFCE7',
+          range: statusNote,
           icon: 'body' as keyof typeof Ionicons.glyphMap,
           iconColor: '#9333EA',
           iconBg: '#F3E8FF',
