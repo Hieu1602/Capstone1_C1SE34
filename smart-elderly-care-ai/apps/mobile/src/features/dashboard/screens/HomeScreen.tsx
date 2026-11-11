@@ -53,14 +53,15 @@ export default function HomeScreen({ navigation }: any) {
 
   // Xác định rõ ràng: Tài khoản không thuộc ngôi nhà nào (tài khoản mới hoặc vừa bị kick/rời khỏi nhà)
   const isExplicitlyNoHouse =
-    has_house === false ||
-    house?.hasHouse === false ||
+    (has_house === false && (house?.hasHouse === false || !house?.id) && !household_id && !assigned_house) ||
     permissions?.role_in_house === 'NEW_USER' ||
     permissions?.role_in_house === 'NONE';
 
   const hasLinkedHouse = !isExplicitlyNoHouse && Boolean(
     (house?.id && house?.hasHouse !== false && house?.name && house.name.trim() !== '') ||
-    (household_id && has_house) ||
+    household_id ||
+    assigned_house ||
+    has_house === true ||
     permissions?.role_in_house === 'OWNER' ||
     permissions?.role_in_house === 'MEMBER' ||
     permissions?.is_owner === true
@@ -90,7 +91,7 @@ export default function HomeScreen({ navigation }: any) {
 
   // Nhận diện thiết bị tức thì: kiểm tra cả thiết bị trong Zustand store và cờ backend đã trả về khi đăng nhập
   const hasLinkedDevices = (iotDevices || []).length > 0 || has_devices === true || (typeof device_count === 'number' && device_count > 0);
-  const isUserEmptyMember = isNewAccount || !hasLinkedDevices;
+  const isUserEmptyMember = isNewAccount || (!hasLinkedDevices && !isHouseOwner && !permissions?.can_manage_devices);
 
   // Kiểm tra quyền xem camera và chỉ số sinh hiệu của tài khoản thành viên
   // Nguyên tắc: Thành viên khi vào nhà ĐƯỢC XEM TẤT CẢ (camera, sinh hiệu, dữ liệu)

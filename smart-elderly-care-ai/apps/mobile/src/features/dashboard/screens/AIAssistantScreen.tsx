@@ -241,19 +241,31 @@ export default function AIAssistantScreen({ navigation }: any) {
 
   // Chiều cao bàn phím iOS an toàn (Không dùng try/catch hook)
   const keyboardVerticalOffset = Platform.OS === 'ios' ? 88 : 0;
+  const [androidKeyboardHeight, setAndroidKeyboardHeight] = useState(0);
 
-  // Tự động cuộn xuống tin nhắn mới nhất khi bàn phím xuất hiện
+  // Lắng nghe sự kiện bàn phím xuất hiện/ẩn để đẩy thanh chat input lên trên Android & tự động cuộn
   useEffect(() => {
-    const showSub = Keyboard.addListener(
-      Platform.OS === 'ios' ? 'keyboardWillShow' : 'keyboardDidShow',
-      () => {
-        setTimeout(() => {
-          scrollViewRef.current?.scrollToEnd({ animated: true });
-        }, 100);
+    const showEvent = Platform.OS === 'ios' ? 'keyboardWillShow' : 'keyboardDidShow';
+    const hideEvent = Platform.OS === 'ios' ? 'keyboardWillHide' : 'keyboardDidHide';
+
+    const showSub = Keyboard.addListener(showEvent, (e) => {
+      if (Platform.OS === 'android') {
+        setAndroidKeyboardHeight(e.endCoordinates.height);
       }
-    );
+      setTimeout(() => {
+        scrollViewRef.current?.scrollToEnd({ animated: true });
+      }, 80);
+    });
+
+    const hideSub = Keyboard.addListener(hideEvent, () => {
+      if (Platform.OS === 'android') {
+        setAndroidKeyboardHeight(0);
+      }
+    });
+
     return () => {
       showSub.remove();
+      hideSub.remove();
     };
   }, []);
 
@@ -269,19 +281,6 @@ export default function AIAssistantScreen({ navigation }: any) {
       }
     };
   }, []);
-
-  // Cuộn xuống tin nhắn mới nhất khi mở bàn phím
-  useEffect(() => {
-    const showEvent = Platform.OS === 'ios' ? 'keyboardWillShow' : 'keyboardDidShow';
-    const sub = Keyboard.addListener(showEvent, () => {
-      if (messages.length > 0) {
-        setTimeout(() => {
-          scrollViewRef.current?.scrollToEnd({ animated: true });
-        }, 60);
-      }
-    });
-    return () => sub.remove();
-  }, [messages.length]);
 
   // Điều khiển đọc giọng nói AI (TTS tiếng Việt)
   const handleSpeak = useCallback(
@@ -783,8 +782,8 @@ export default function AIAssistantScreen({ navigation }: any) {
       {/* 2. Chat Main Area */}
       <View style={[styles.mainBody, isDarkMode && { backgroundColor: colors.background }]}>
         <KeyboardAvoidingView
-          style={{ flex: 1 }}
-          behavior="padding"
+          style={[{ flex: 1 }, Platform.OS === 'android' && { paddingBottom: androidKeyboardHeight }]}
+          behavior={Platform.OS === 'ios' ? 'padding' : undefined}
           keyboardVerticalOffset={keyboardVerticalOffset}
         >
           <ScrollView

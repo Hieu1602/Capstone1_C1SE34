@@ -48,6 +48,8 @@ export const VitalsSummaryCard: React.FC<VitalsSummaryCardProps> = ({
   // Kiểm tra thiết bị vòng đeo tay BLE có đang kết nối thực tế hay không
   const isBraceletConnected = Boolean(
     currentVitals?.bracelet_connected ||
+    hasHR ||
+    hasSpO2 ||
     (braceletBattery !== null && braceletBattery !== undefined && braceletBattery > 0)
   );
   const isBatteryDead = braceletBattery === 0;
@@ -102,7 +104,7 @@ export const VitalsSummaryCard: React.FC<VitalsSummaryCardProps> = ({
                 : isBatteryLow
                   ? "battery-half"
                   : isBraceletConnected
-                    ? "battery-charging"
+                    ? (braceletBattery !== null && braceletBattery !== undefined ? "battery-full" : "bluetooth")
                     : "bluetooth-outline"
             }
             size={15}

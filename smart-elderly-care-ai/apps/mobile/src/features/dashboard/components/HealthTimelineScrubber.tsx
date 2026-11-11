@@ -9,8 +9,8 @@
 //     SpO2, Nhiệt độ da, Trạng thái té ngã).
 // ==============================================================================
 
-import React from 'react';
-import { View, StyleSheet, TouchableOpacity, Platform } from 'react-native';
+import React, { useRef, useState, useMemo, useCallback } from 'react';
+import { View, StyleSheet, TouchableOpacity, Platform, PanResponder } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { LocalizedText as Text } from '../../../i18n/LocalizedComponents';
 import { Shadows } from '../../../theme/colors';
@@ -60,6 +60,45 @@ export const HealthTimelineScrubber: React.FC<HealthTimelineScrubberProps> = ({
   const maxScrubMinutes = isToday ? nowMinutes : 1439;
   const isFutureScrubber = isToday && scrubberMinutes > nowMinutes;
 
+  const [trackWidth, setTrackWidth] = useState(0);
+  const trackPageXRef = useRef(0);
+
+  const updateScrubberByPageX = useCallback(
+    (pageX: number) => {
+      if (trackWidth <= 0) return;
+      const localX = Math.max(0, Math.min(trackWidth, pageX - trackPageXRef.current));
+      const ratio = localX / trackWidth;
+      const rawMins = ratio * 1439;
+      // Tua mượt theo từng nấc 5 phút
+      const targetMins = Math.round(rawMins / 5) * 5;
+      const clamped = Math.max(0, Math.min(targetMins, maxScrubMinutes));
+      setScrubberMinutes(clamped);
+    },
+    [trackWidth, maxScrubMinutes, setScrubberMinutes]
+  );
+
+  const panResponder = useMemo(
+    () =>
+      PanResponder.create({
+        onStartShouldSetPanResponder: () => true,
+        onMoveShouldSetPanResponder: () => true,
+        onPanResponderGrant: (evt) => {
+          trackPageXRef.current = evt.nativeEvent.pageX - evt.nativeEvent.locationX;
+          updateScrubberByPageX(evt.nativeEvent.pageX);
+        },
+        onPanResponderMove: (evt) => {
+          updateScrubberByPageX(evt.nativeEvent.pageX);
+        },
+        onPanResponderTerminationRequest: () => false,
+      }),
+    [updateScrubberByPageX]
+  );
+
+  const currentScrub = Math.min(scrubberMinutes, maxScrubMinutes);
+  const ratio = Math.max(0, Math.min(1, currentScrub / 1439));
+  const progressPercent = `${ratio * 100}%`;
+  const thumbLeft = trackWidth > 0 ? Math.max(0, Math.min(trackWidth - 24, ratio * trackWidth - 12)) : 0;
+
   return (
     <View style={[styles.timelineCard, isDarkMode && { backgroundColor: colors.card, borderColor: colors.border }]}>
       <View style={styles.timelineHeader}>
@@ -88,7 +127,7 @@ export const HealthTimelineScrubber: React.FC<HealthTimelineScrubberProps> = ({
             type="range"
             min="0"
             max={maxScrubMinutes}
-            step="15"
+            step="5"
             value={Math.min(scrubberMinutes, maxScrubMinutes)}
             onChange={(e: any) => setScrubberMinutes(Number(e.target.value))}
             style={{
@@ -100,9 +139,20 @@ export const HealthTimelineScrubber: React.FC<HealthTimelineScrubberProps> = ({
             }}
           />
         ) : (
-          <View style={styles.sliderMockTrack}>
-            <View style={[styles.sliderMockProgress, { width: `${(Math.min(scrubberMinutes, maxScrubMinutes) / 1439) * 100}%` }]} />
-            <View style={[styles.sliderMockThumb, { left: `${Math.min(94, (Math.min(scrubberMinutes, maxScrubMinutes) / 1439) * 100)}%` }]} />
+          <View
+            style={styles.sliderTouchArea}
+            onLayout={(e) => setTrackWidth(e.nativeEvent.layout.width)}
+            {...panResponder.panHandlers}
+          >
+            <View style={[styles.sliderMockTrack, isDarkMode && { backgroundColor: '#334155' }]}>
+              <View style={[styles.sliderMockProgress, { width: progressPercent }]} />
+            </View>
+            <View
+              style={[
+                styles.sliderMockThumb,
+                { left: thumbLeft },
+              ]}
+            />
           </View>
         )}
 
@@ -289,10 +339,16 @@ const styles = StyleSheet.create({
   sliderContainer: {
     marginBottom: 12,
   },
+  sliderTouchArea: {
+    height: 38,
+    justifyContent: 'center',
+    position: 'relative',
+  },
   sliderMockTrack: {
     height: 8,
     backgroundColor: '#E2E8F0',
     borderRadius: 4,
+    overflow: 'hidden',
     position: 'relative',
     justifyContent: 'center',
   },
@@ -303,13 +359,18 @@ const styles = StyleSheet.create({
   },
   sliderMockThumb: {
     position: 'absolute',
-    width: 20,
-    height: 20,
-    borderRadius: 10,
+    width: 24,
+    height: 24,
+    borderRadius: 12,
     backgroundColor: '#2563EB',
-    borderWidth: 2,
+    borderWidth: 3,
     borderColor: '#FFF',
-    top: -6,
+    top: 7,
+    elevation: 4,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.25,
+    shadowRadius: 3,
   },
   sliderLabelsRow: {
     flexDirection: 'row',

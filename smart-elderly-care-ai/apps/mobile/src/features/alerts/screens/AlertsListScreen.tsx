@@ -34,240 +34,16 @@ import { useDeviceStore } from '../../../store/useDeviceStore';
 import { useVitalStore } from '../../../store/useVitalStore';
 import { FamilyAppointmentsModal } from '../../dashboard/components/FamilyAppointmentsModal';
 import { incidentsApi, householdApi } from '../../../services/api';
+import {
+  AlertConfig,
+  ALERT_CONFIG_MAP,
+  getAlertConfig,
+  formatFriendlyTime,
+} from '../utils/alertConfig';
+import { AlertDetailModal } from '../components/AlertDetailModal';
 
 // ------------------------------------------------------------------------------
-// 1. Cấu hình giao diện chuẩn hóa cho từng loại sự kiện
-// ------------------------------------------------------------------------------
-interface AlertConfig {
-  title: string;
-  badgeText: string;
-  badgeBg: string;
-  badgeColor: string;
-  iconName: keyof typeof Ionicons.glyphMap;
-  iconColor: string;
-  iconBg: string;
-  isCritical: boolean;
-}
-
-const ALERT_CONFIG_MAP: Record<string, AlertConfig> = {
-  LOW_BATTERY: {
-    title: 'Pin vòng đeo tay yếu (≤ 20%)',
-    badgeText: 'Pin yếu',
-    badgeBg: '#FEF3C7',
-    badgeColor: '#D97706',
-    iconName: 'battery-half',
-    iconColor: '#D97706',
-    iconBg: '#FEF3C7',
-    isCritical: false,
-  },
-  DEVICE_BATTERY_DEAD: {
-    title: 'Vòng đeo tay đã hết pin (0%)',
-    badgeText: 'Hết pin',
-    badgeBg: '#FEE2E2',
-    badgeColor: '#DC2626',
-    iconName: 'battery-dead',
-    iconColor: '#DC2626',
-    iconBg: '#FEE2E2',
-    isCritical: true,
-  },
-  FALL_DETECTED: {
-    title: 'CẢNH BÁO TÉ NGÃ KHẨN CẤP',
-    badgeText: 'CỰC KỲ NGUY HIỂM',
-    badgeBg: '#EF4444',
-    badgeColor: '#FFFFFF',
-    iconName: 'warning',
-    iconColor: '#DC2626',
-    iconBg: '#FEE2E2',
-    isCritical: true,
-  },
-  HIGH_HEART_RATE: {
-    title: 'Nhịp tim tăng cao bất thường',
-    badgeText: 'Cảnh báo tim',
-    badgeBg: '#FFF7ED',
-    badgeColor: '#EA580C',
-    iconName: 'heart',
-    iconColor: '#EA580C',
-    iconBg: '#FFEDD5',
-    isCritical: false,
-  },
-  ACOUSTIC_DISTRESS: {
-    title: 'Phát hiện âm thanh kêu cứu',
-    badgeText: 'Âm thanh YAMNet',
-    badgeBg: '#F3E8FF',
-    badgeColor: '#7C3AED',
-    iconName: 'mic',
-    iconColor: '#9333EA',
-    iconBg: '#F3E8FF',
-    isCritical: true,
-  },
-  PERSON_DETECTED: {
-    title: 'Phát hiện chuyển động người',
-    badgeText: 'Chuyển động',
-    badgeBg: '#ECFDF5',
-    badgeColor: '#059669',
-    iconName: 'person',
-    iconColor: '#10B981',
-    iconBg: '#DCFCE7',
-    isCritical: false,
-  },
-  APPOINTMENT_SCHEDULED: {
-    title: 'Lịch khám mới từ Bác sĩ',
-    badgeText: 'Chờ gia đình xác nhận',
-    badgeBg: '#FEF3C7',
-    badgeColor: '#D97706',
-    iconName: 'calendar',
-    iconColor: '#D97706',
-    iconBg: '#FEF3C7',
-    isCritical: false,
-  },
-  APPOINTMENT_REQUESTED: {
-    title: 'Yêu cầu lịch khám từ Gia đình',
-    badgeText: 'Chờ Bác sĩ xác nhận',
-    badgeBg: '#EFF6FF',
-    badgeColor: '#2563EB',
-    iconName: 'calendar',
-    iconColor: '#2563EB',
-    iconBg: '#DBEAFE',
-    isCritical: false,
-  },
-  APPOINTMENT_CONFIRMED: {
-    title: 'Lịch khám đã được xác nhận',
-    badgeText: 'Đã xác nhận',
-    badgeBg: '#DCFCE7',
-    badgeColor: '#16A34A',
-    iconName: 'checkmark-circle',
-    iconColor: '#16A34A',
-    iconBg: '#DCFCE7',
-    isCritical: false,
-  },
-  APPOINTMENT_CANCELLED: {
-    title: 'Lịch khám đã bị hủy',
-    badgeText: 'Đã hủy',
-    badgeBg: '#FEE2E2',
-    badgeColor: '#DC2626',
-    iconName: 'close-circle',
-    iconColor: '#DC2626',
-    iconBg: '#FEE2E2',
-    isCritical: false,
-  },
-  HOUSE_MEMBER_ADDED: {
-    title: 'Đã được thêm vào căn nhà',
-    badgeText: 'Thành viên mới',
-    badgeBg: '#EFF6FF',
-    badgeColor: '#2563EB',
-    iconName: 'home',
-    iconColor: '#2563EB',
-    iconBg: '#DBEAFE',
-    isCritical: false,
-  },
-  MEMBER_ADDED: {
-    title: 'Thành viên mới gia nhập',
-    badgeText: 'Thành viên mới',
-    badgeBg: '#EFF6FF',
-    badgeColor: '#2563EB',
-    iconName: 'home',
-    iconColor: '#2563EB',
-    iconBg: '#DBEAFE',
-    isCritical: false,
-  },
-  HOUSE_INVITE_PENDING: {
-    title: 'Lời mời tham gia nhà',
-    badgeText: 'Chờ bạn xác nhận',
-    badgeBg: '#FEF3C7',
-    badgeColor: '#D97706',
-    iconName: 'mail-unread',
-    iconColor: '#D97706',
-    iconBg: '#FEF3C7',
-    isCritical: false,
-  },
-  HOUSE_JOIN_REQUEST: {
-    title: 'Yêu cầu vào nhà mới',
-    badgeText: 'Cần duyệt',
-    badgeBg: '#EFF6FF',
-    badgeColor: '#2563EB',
-    iconName: 'person-add',
-    iconColor: '#2563EB',
-    iconBg: '#DBEAFE',
-    isCritical: false,
-  },
-  HOUSE_JOIN_APPROVED: {
-    title: 'Đã duyệt vào nhà',
-    badgeText: 'Đã duyệt',
-    badgeBg: '#DCFCE7',
-    badgeColor: '#16A34A',
-    iconName: 'checkmark-circle',
-    iconColor: '#16A34A',
-    iconBg: '#DCFCE7',
-    isCritical: false,
-  },
-  HOUSE_JOIN_REJECTED: {
-    title: 'Yêu cầu vào nhà bị từ chối',
-    badgeText: 'Từ chối',
-    badgeBg: '#FEE2E2',
-    badgeColor: '#DC2626',
-    iconName: 'close-circle',
-    iconColor: '#DC2626',
-    iconBg: '#FEE2E2',
-    isCritical: false,
-  },
-  HOUSE_INVITE_REJECTED: {
-    title: 'Lời mời vào nhà bị từ chối',
-    badgeText: 'Từ chối',
-    badgeBg: '#FEE2E2',
-    badgeColor: '#DC2626',
-    iconName: 'close-circle',
-    iconColor: '#DC2626',
-    iconBg: '#FEE2E2',
-    isCritical: false,
-  },
-
-};
-
-function getAlertConfig(alertType: string, notes?: string, message?: string): AlertConfig {
-  if (
-    alertType === 'APPOINTMENT_REQUESTED' ||
-    (alertType === 'APPOINTMENT_SCHEDULED' &&
-      (notes?.includes('APPOINTMENT_REQUESTED') || message?.includes('đã đặt lịch khám')))
-  ) {
-    return ALERT_CONFIG_MAP.APPOINTMENT_REQUESTED;
-  }
-
-  return (
-    ALERT_CONFIG_MAP[alertType] || {
-      title: alertType.replace(/_/g, ' '),
-      badgeText: 'Thông báo',
-      badgeBg: '#F1F5F9',
-      badgeColor: '#64748B',
-      iconName: 'notifications',
-      iconColor: Colors.primary,
-      iconBg: '#FFF4EC',
-      isCritical: false,
-    }
-  );
-}
-
-function formatFriendlyTime(dateStr: string, translate: (key: string, count?: number) => string) {
-  try {
-    const diffMs = Date.now() - new Date(dateStr).getTime();
-    if (diffMs <= 60 * 1000) return translate('Vừa xong');
-    const diffMin = Math.floor(diffMs / 60000);
-    if (diffMin < 60) return translate('{{count}} phút trước', diffMin);
-    const diffHour = Math.floor(diffMin / 60);
-    if (diffHour < 24) return translate('{{count}} giờ trước', diffHour);
-    const diffDay = Math.floor(diffHour / 24);
-    if (diffDay === 1) return translate('Hôm qua');
-    if (diffDay < 7) return translate('{{count}} ngày trước', diffDay);
-
-    const d = new Date(dateStr);
-    const pad = (n: number) => String(n).padStart(2, '0');
-    return `${pad(d.getHours())}:${pad(d.getMinutes())} • ${pad(d.getDate())}/${pad(d.getMonth() + 1)}`;
-  } catch {
-    return dateStr;
-  }
-}
-
-// ------------------------------------------------------------------------------
-// 2. Component chính: AlertsListScreen
+// Component chính: AlertsListScreen
 // ------------------------------------------------------------------------------
 export default function AlertsListScreen({ navigation }: any) {
   const { t } = useTranslation();
@@ -305,6 +81,7 @@ export default function AlertsListScreen({ navigation }: any) {
   const [filterType, setFilterType] = useState<'ALL' | 'CRITICAL' | 'VITAL' | 'MEDICATION' | 'APPOINTMENT'>('ALL');
   const [selectedInviteModalItem, setSelectedInviteModalItem] = useState<any>(null);
   const [selectedJoinRequestModalItem, setSelectedJoinRequestModalItem] = useState<any>(null);
+  const [selectedAlertDetailItem, setSelectedAlertDetailItem] = useState<any>(null);
   const [isResponding, setIsResponding] = useState(false);
 
   const isFetchingRef = useRef(false);
@@ -675,6 +452,31 @@ export default function AlertsListScreen({ navigation }: any) {
     }
   };
 
+  const handleConfirmAlertAction = async (item: any) => {
+    if (!item) return;
+    setIsResponding(true);
+    try {
+      await handleQuickAcknowledge(item);
+      const handler = userName || 'Người chăm sóc';
+      const nowIso = new Date().toISOString();
+      setSelectedAlertDetailItem((prev: any) =>
+        prev
+          ? {
+              ...prev,
+              is_acknowledged: true,
+              acknowledged_by: handler,
+              acknowledged_by_name: handler,
+              acknowledged_at: nowIso,
+            }
+          : null
+      );
+    } catch (err: any) {
+      Alert.alert('Lỗi', 'Không thể xác nhận xử lý lúc này.');
+    } finally {
+      setIsResponding(false);
+    }
+  };
+
   const handlePressCard = (item: any) => {
     if (item.alert_type === 'HOUSE_INVITE_PENDING') {
       if (!item.is_acknowledged) {
@@ -701,31 +503,8 @@ export default function AlertsListScreen({ navigation }: any) {
       return;
     }
 
-    if (item.alert_type === 'PERSON_DETECTED') {
-      navigation.navigate('CameraDetail', { cameraId: item.device_id || 'cam_living_room', tab: 'playback' });
-      return;
-    }
-
-    if (item.alert_type === 'HIGH_HEART_RATE' || item.alert_type.includes('HEART') || item.alert_type.includes('SPO2') || item.alert_type.includes('TEMP')) {
-      navigation.navigate('HealthDetail', { initialTab: 'today', focusMetric: 'heartRate', metric: 'heartRate' });
-      return;
-    }
-
-    const isFall = item.alert_type === 'FALL_DETECTED';
-    navigation.navigate('IncidentDetail', {
-      incidentId: item.id,
-      id: item.id,
-      type: isFall ? 'FALL' : item.alert_type === 'ACOUSTIC_DISTRESS' ? 'ACOUSTIC' : item.alert_type,
-      alert_type: item.alert_type,
-      alert_level: item.alert_level || 'CRITICAL',
-      confidence: item.confidence != null ? `${Math.round(Number(item.confidence) * 100)}%` : undefined,
-      time: item.created_at ?? new Date().toISOString(),
-      created_at: item.created_at ?? new Date().toISOString(),
-      message: item.message,
-      clipAvailable: Boolean(item.video_clip_url || item.thumbnail_url),
-      video_clip_url: item.video_clip_url ?? null,
-      is_acknowledged: item.is_acknowledged ?? false,
-    });
+    // Hiển thị ngay modal tóm tắt nội dung, nguyên nhân, chỉ số và nút xác nhận xử lý trực tiếp (không chuyển trang)
+    setSelectedAlertDetailItem(item);
   };
 
   // Render card cữ thuốc
@@ -1406,6 +1185,18 @@ export default function AlertsListScreen({ navigation }: any) {
           </View>
         </View>
       </Modal>
+
+      {/* Modal Tóm tắt & Đánh giá Cảnh báo Trực tiếp (Không Chuyển Trang) */}
+      <AlertDetailModal
+        visible={Boolean(selectedAlertDetailItem)}
+        item={selectedAlertDetailItem}
+        onClose={() => setSelectedAlertDetailItem(null)}
+        onConfirmHandled={handleConfirmAlertAction}
+        isResponding={isResponding}
+        isDarkMode={isDarkMode}
+        colors={colors}
+        navigation={navigation}
+      />
 
       <FamilyAppointmentsModal
         visible={familyAppointmentsModalVisible}

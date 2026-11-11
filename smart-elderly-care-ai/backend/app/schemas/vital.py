@@ -40,7 +40,12 @@ class VitalCreate(BaseModel):
     bracelet_battery: Optional[int] = None
     battery_level: Optional[int] = None
     battery: Optional[int] = None
+    activity_state: Optional[str] = None
+    activity: Optional[str] = None
+    is_worn: Optional[bool] = True
     raw_payload: Optional[dict] = None
+
+    model_config = {"extra": "allow"}
 
 
 class VitalCurrentOut(BaseModel):

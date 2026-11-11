@@ -6,6 +6,7 @@ import { Platform } from 'react-native';
 import Constants from 'expo-constants';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { useAuthStore } from '../store/useAuthStore';
+import { notificationService } from './notificationService';
 
 // Cấu hình BASE_URL tự động:
 // - Nếu chạy trên Web: dùng 127.0.0.1 nếu là localhost để tránh xung đột IPv6 [::1] và lỗi IP LAN đổi
@@ -57,6 +58,7 @@ export const setCustomServerUrl = async (url: string) => {
   }
   api.defaults.baseURL = formatted;
   await AsyncStorage.setItem('custom_server_url', formatted);
+  notificationService.startBackgroundMonitor(formatted);
   return formatted;
 };
 
@@ -305,7 +307,7 @@ export const patientApi = {
   updateMedicalRecord: (patientId: number | string = 1, data: any) =>
     api.put(`/patients/${patientId}/medical-record`, data),
   getVitals: (patientId: number | string = 1, target_date?: string) =>
-    api.get(`/patients/${patientId}/vitals`, { params: { target_date } }),
+    api.get(`/patients/${patientId}/vitals`, { params: { target_date, limit: 300 } }),
   enrollFace: (patientId: number, formData: FormData) =>
     api.post(`/patients/${patientId}/face-enroll`, formData, {
       headers: { 'Content-Type': 'multipart/form-data' },

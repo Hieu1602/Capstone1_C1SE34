@@ -107,12 +107,17 @@ export default function HealthDetailScreen({ navigation, route }: any) {
       const res = await patientApi.getVitals(1, dateStr);
       if (res.data && Array.isArray(res.data) && res.data.length > 0) {
         setDayVitals(res.data);
-        const first = res.data[0];
-        const rawDate = first?.recorded_at || first?.time || first?.created_at;
-        if (rawDate) {
-          const d = new Date(rawDate);
-          if (!isNaN(d.getTime())) {
-            setScrubberMinutes(d.getHours() * 60 + d.getMinutes());
+        if (dateStr === getTodayStr()) {
+          const now = new Date();
+          setScrubberMinutes(now.getHours() * 60 + now.getMinutes());
+        } else {
+          const last = res.data[res.data.length - 1];
+          const rawDate = last?.recorded_at || last?.time || last?.created_at;
+          if (rawDate) {
+            const d = new Date(rawDate);
+            if (!isNaN(d.getTime())) {
+              setScrubberMinutes(d.getHours() * 60 + d.getMinutes());
+            }
           }
         }
       } else {
@@ -124,6 +129,10 @@ export default function HealthDetailScreen({ navigation, route }: any) {
         const fallbackRes = await vitalsApi.getHistory('BLE_BAND_001', 100, dateStr);
         if (fallbackRes.data && Array.isArray(fallbackRes.data)) {
           setDayVitals(fallbackRes.data);
+          if (dateStr === getTodayStr()) {
+            const now = new Date();
+            setScrubberMinutes(now.getHours() * 60 + now.getMinutes());
+          }
         } else {
           setDayVitals([]);
         }
@@ -134,6 +143,34 @@ export default function HealthDetailScreen({ navigation, route }: any) {
       setIsLoadingVitals(false);
     }
   };
+
+  // Cập nhật real-time dữ liệu biểu đồ khi có bản tin WebSocket mới đổ về
+  useEffect(() => {
+    if (selectedDate === getTodayStr() && currentVitals?.heart_rate && Number(currentVitals.heart_rate) > 0) {
+      setDayVitals((prev) => {
+        const now = new Date();
+        const newRecord = {
+          id: `live_${Date.now()}`,
+          time: now.toISOString(),
+          recorded_at: now.toISOString(),
+          heart_rate: currentVitals.heart_rate,
+          spo2: currentVitals.spo2,
+          body_temp: currentVitals.skin_temp_max,
+          skin_temp_max: currentVitals.skin_temp_max,
+          fall_detected: currentVitals.fall_detected,
+          activity_state: (currentVitals as any)?.activity_state || 'Sinh hoạt',
+        };
+        if (prev.length > 0) {
+          const last = prev[prev.length - 1];
+          const lastTime = new Date(last.time || last.recorded_at).getTime();
+          if (now.getTime() - lastTime < 3000) {
+            return [...prev.slice(0, -1), newRecord];
+          }
+        }
+        return [...prev, newRecord].slice(-100);
+      });
+    }
+  }, [currentVitals?.heart_rate, currentVitals?.spo2, currentVitals?.timestamp, selectedDate]);
 
   // Tải dữ liệu lịch sử cho Tuần / Tháng từ Backend
   const loadRangeVitals = async (limit: number) => {
@@ -201,9 +238,8 @@ export default function HealthDetailScreen({ navigation, route }: any) {
     Alert.alert('Đồng bộ thành công', 'Dữ liệu sức khỏe từ Hub và vòng đeo tay đã được làm mới.');
   };
 
-  // Tìm mốc đo gần nhất với giờ tua (chỉ chấp nhận trong khoảng +-45 phút, không đoán trước tương lai)
+  // Tìm mốc đo gần nhất với giờ tua (chỉ chấp nhận trong khoảng +-90 phút, không đoán trước tương lai)
   const closestVital = useMemo(() => {
-    if (!dayVitals || dayVitals.length === 0) return null;
     const isToday = selectedDate === getTodayStr();
     const now = new Date();
     const nowMinutes = now.getHours() * 60 + now.getMinutes();
@@ -215,24 +251,44 @@ export default function HealthDetailScreen({ navigation, route }: any) {
 
     let best: any = null;
     let minDiff = 999999;
-    for (const v of dayVitals) {
-      const rawDate = v.recorded_at || v.time || v.created_at;
-      const d = rawDate ? new Date(rawDate) : null;
-      if (!d || isNaN(d.getTime())) continue;
-      const vMinutes = d.getHours() * 60 + d.getMinutes();
+    if (dayVitals && dayVitals.length > 0) {
+      for (const v of dayVitals) {
+        const rawDate = v.recorded_at || v.time || v.created_at;
+        const d = rawDate ? new Date(rawDate) : null;
+        if (!d || isNaN(d.getTime())) continue;
+        const vMinutes = d.getHours() * 60 + d.getMinutes();
 
-      // Nếu là hôm nay, không chấp nhận bản ghi tương lai
-      if (isToday && vMinutes > nowMinutes) continue;
+        // Nếu là hôm nay, không chấp nhận bản ghi tương lai
+        if (isToday && vMinutes > nowMinutes) continue;
 
-      const diff = Math.abs(vMinutes - scrubberMinutes);
-      // Chỉ gắn kết nếu bản ghi thực tế nằm trong khoảng +-45 phút quanh giờ tua
-      if (diff < minDiff && diff <= 45) {
-        minDiff = diff;
-        best = v;
+        const diff = Math.abs(vMinutes - scrubberMinutes);
+        // Gắn kết nếu bản ghi nằm trong khoảng +-90 phút quanh giờ tua
+        if (diff < minDiff && diff <= 90) {
+          minDiff = diff;
+          best = v;
+        }
       }
     }
+
+    // Nếu đang xem hôm nay và giờ tua gần giờ hiện tại (trong vòng 60 phút) mà lịch sử chưa có mốc gần,
+    // dùng ngay giá trị sinh hiệu real-time từ WebSocket (currentVitals)
+    if (!best && isToday && Math.abs(scrubberMinutes - nowMinutes) <= 60 && currentVitals?.heart_rate) {
+      return {
+        id: 'realtime_live',
+        time: now.toISOString(),
+        recorded_at: now.toISOString(),
+        heart_rate: currentVitals.heart_rate,
+        spo2: currentVitals.spo2,
+        body_temp: currentVitals.skin_temp_max,
+        skin_temp_max: currentVitals.skin_temp_max,
+        fall_detected: currentVitals.fall_detected,
+        activity_state: (currentVitals as any)?.activity_state || 'Sinh hoạt',
+        sound_state: (currentVitals as any)?.acoustic_status || 'Bình thường',
+      };
+    }
+
     return best;
-  }, [dayVitals, scrubberMinutes, selectedDate]);
+  }, [dayVitals, scrubberMinutes, selectedDate, currentVitals]);
 
   // Dữ liệu biểu đồ động theo ngày được chọn
   const chartDataForDay = useMemo(() => {

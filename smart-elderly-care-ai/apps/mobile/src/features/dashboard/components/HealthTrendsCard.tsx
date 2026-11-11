@@ -138,6 +138,22 @@ export function HealthTrendsCard({
   const lastPt = hasChartData ? coords[coords.length - 1] : { x: 0, y: 0, val: 0, time: '' };
   const firstPt = hasChartData ? coords[0] : { x: 0, y: 0, val: 0, time: '' };
   const isHighHR = lastPt.val >= 100;
+  const isLowHR = lastPt.val > 0 && lastPt.val < 50;
+  const isLowSpO2 = spo2Value !== null && spo2Value < 95;
+  const isWarning = isHighHR || isLowHR || isLowSpO2;
+
+  const trendStatusText = !hasAnyData
+    ? 'Chưa có dữ liệu'
+    : isHighHR && lastPt.val >= 120
+      ? 'Nhịp tim cao'
+      : isWarning
+        ? 'Cần theo dõi'
+        : 'Đạt chuẩn';
+
+  const trendStatusColor = !hasAnyData ? '#64748B' : isWarning ? '#D97706' : '#15803D';
+  const trendStatusBg = !hasAnyData ? (isDarkMode ? '#1E293B' : '#F1F5F9') : isWarning ? '#FEF3C7' : '#DCFCE7';
+  const trendStatusIcon = !hasAnyData ? 'information-circle' : isWarning ? 'warning' : 'checkmark-circle';
+
   const lineColor = isHighHR ? '#F59E0B' : '#10B981';
   const refY = Math.max(
     padTop,
@@ -169,21 +185,21 @@ export function HealthTrendsCard({
         <View
           style={[
             styles.trendStandardBadge,
-            !hasAnyData && { backgroundColor: isDarkMode ? '#1E293B' : '#F1F5F9' },
+            { backgroundColor: trendStatusBg },
           ]}
         >
           <Ionicons
-            name={hasAnyData ? 'checkmark-circle' : 'information-circle'}
+            name={trendStatusIcon}
             size={13}
-            color={hasAnyData ? '#15803D' : '#64748B'}
+            color={trendStatusColor}
           />
           <Text
             style={[
               styles.trendStandardBadgeText,
-              !hasAnyData && { color: isDarkMode ? '#94A3B8' : '#64748B' },
+              { color: trendStatusColor },
             ]}
           >
-            {hasAnyData ? 'Đạt chuẩn' : 'Chưa có dữ liệu'}
+            {trendStatusText}
           </Text>
         </View>
       </View>
@@ -684,6 +700,7 @@ const styles = StyleSheet.create({
     paddingHorizontal: 8,
     paddingVertical: 3,
     borderRadius: 6,
+    flexShrink: 0,
   },
   spo2BadgeGreenText: {
     fontSize: 11,
