@@ -5,7 +5,7 @@
 // ==============================================================================
 
 import React, { useState, useEffect } from 'react';
-import { View, StyleSheet, TouchableOpacity, ScrollView, RefreshControl } from 'react-native';
+import { View, StyleSheet, TouchableOpacity, ScrollView, RefreshControl, useWindowDimensions } from 'react-native';
 import { LocalizedAlert as Alert, LocalizedText as Text } from '../../../i18n/LocalizedComponents';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
@@ -279,11 +279,12 @@ export default function HomeScreen({ navigation }: any) {
   const handleSOS115 = () => { navigation.navigate('EmergencySOS'); };
 
   const handleMicPress = () => {
-    setIsMicSpeaking(!isMicSpeaking);
-    Alert.alert(
-      isMicSpeaking ? 'Đã tắt đàm thoại' : 'Đang bật đàm thoại 2 chiều 🎙️',
-      isMicSpeaking ? 'Loa tại nhà đã đóng.' : 'Bạn đang kết nối trực tiếp đến loa và micro của camera phòng cụ bà.'
-    );
+    navigation.navigate('CameraDetail', {
+      cameraId: effectiveCamera.id,
+      cameraName: cameraDisplayName,
+      room: effectiveCamera.room || 'Phòng khách',
+      streamUrl: effectiveCamera.streamUrl,
+    });
   };
 
   const handleMultiView = () => {
@@ -342,16 +343,26 @@ export default function HomeScreen({ navigation }: any) {
     );
   };
 
-  const firstCamera = (iotDevices || []).find((d) => d.type === 'camera');
-  const effectiveCamera = {
-    ...camera,
-    id: camera?.id || firstCamera?.id,
-    name: camera?.name || firstCamera?.name,
-    room: camera?.room || firstCamera?.location,
-    streamUrl: camera?.streamUrl || firstCamera?.streamUrl,
-  };
-  const hasValidCamera = Boolean(effectiveCamera.id || effectiveCamera.streamUrl || firstCamera);
-  const rawDisplayName = effectiveCamera.name || 'Camera an ninh AI';
+  const { width: windowWidth } = useWindowDimensions();
+  const cardWidth = Math.max(280, windowWidth - 32);
+  const [activeCamIndex, setActiveCamIndex] = useState(0);
+
+  const cameraDevices = (iotDevices || []).filter((d) => d.type?.toLowerCase() === 'camera');
+  const effectiveCameraList = cameraDevices.length > 0
+    ? cameraDevices.map((dev) => ({
+        ...camera,
+        id: dev.id,
+        name: (dev.name || 'Camera').replace(/^Camera\s+Camera\s+/i, 'Camera '),
+        room: dev.location || 'Phòng giám sát',
+        streamUrl: dev.streamUrl,
+      }))
+    : (camera?.id || camera?.streamUrl)
+      ? [{ ...camera, id: camera.id, name: (camera.name || 'Camera an ninh AI').replace(/^Camera\s+Camera\s+/i, 'Camera '), room: camera.room || 'Phòng khách', streamUrl: camera.streamUrl }]
+      : [];
+  const hasValidCamera = effectiveCameraList.length > 0;
+  const firstCamera = effectiveCameraList[0] || null;
+  const effectiveCamera = firstCamera || camera;
+  const rawDisplayName = effectiveCamera?.name || 'Camera an ninh AI';
   const cameraDisplayName = rawDisplayName.replace(/^Camera\s+Camera\s+/i, 'Camera ');
   const isEdgeHubOnline = activeDevice?.is_online ?? true;
   const braceletBattery = currentVitals.bracelet_battery ?? null;
@@ -601,15 +612,90 @@ export default function HomeScreen({ navigation }: any) {
         ) : canViewCamera && hasValidCamera ? (
           <>
             <TouchableOpacity style={[styles.multiViewCard, isDarkMode && { backgroundColor: colors.card, borderColor: colors.border }]} onPress={handleMultiView} activeOpacity={0.9}>
-              <Text style={[styles.multiViewText, isDarkMode && { color: colors.textPrimary }]}>Nhiều chế độ xem</Text>
+              <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6 }}>
+                <Text style={[styles.multiViewText, isDarkMode && { color: colors.textPrimary }]}>Nhiều chế độ xem</Text>
+                {effectiveCameraList.length > 1 && (
+                  <View style={styles.camCountBadge}>
+                    <Text style={styles.camCountBadgeText}>{effectiveCameraList.length} camera</Text>
+                  </View>
+                )}
+              </View>
               <View style={styles.playCircleBtn}><Ionicons name="play" size={14} color={Colors.primary} style={{ marginLeft: 2 }} /></View>
             </TouchableOpacity>
 
-            <HomeCameraCard
-              cameraDisplayName={cameraDisplayName} camera={effectiveCamera} house={house} isDarkMode={isDarkMode}
-              colors={colors} navigation={navigation} handleTogglePrivacyMode={handleTogglePrivacyMode}
-              handleMicPress={handleMicPress} isMicSpeaking={isMicSpeaking} handleToggleAIProtect={handleToggleAIProtect}
-            />
+            {effectiveCameraList.length === 1 ? (
+              <HomeCameraCard
+                cameraDisplayName={effectiveCameraList[0].name}
+                camera={effectiveCameraList[0]}
+                house={house}
+                isDarkMode={isDarkMode}
+                colors={colors}
+                navigation={navigation}
+                handleTogglePrivacyMode={handleTogglePrivacyMode}
+                handleMicPress={handleMicPress}
+                isMicSpeaking={isMicSpeaking}
+                handleToggleAIProtect={handleToggleAIProtect}
+              />
+            ) : (
+              <View style={{ marginBottom: 16 }}>
+                <ScrollView
+                  horizontal
+                  pagingEnabled
+                  showsHorizontalScrollIndicator={false}
+                  decelerationRate="fast"
+                  snapToInterval={cardWidth + 12}
+                  snapToAlignment="center"
+                  contentContainerStyle={{ gap: 12 }}
+                  onScroll={(e) => {
+                    const x = e.nativeEvent.contentOffset.x;
+                    const idx = Math.round(x / (cardWidth + 12));
+                    if (idx !== activeCamIndex && idx >= 0 && idx < effectiveCameraList.length) {
+                      setActiveCamIndex(idx);
+                    }
+                  }}
+                  scrollEventThrottle={16}
+                >
+                  {effectiveCameraList.map((cam, idx) => (
+                    <View key={cam.id || `cam-${idx}`} style={{ width: cardWidth }}>
+                      <HomeCameraCard
+                        cameraDisplayName={cam.name}
+                        camera={cam}
+                        house={house}
+                        isDarkMode={isDarkMode}
+                        colors={colors}
+                        navigation={navigation}
+                        handleTogglePrivacyMode={handleTogglePrivacyMode}
+                        handleMicPress={() => {
+                          navigation.navigate('CameraDetail', {
+                            cameraId: cam.id,
+                            cameraName: cam.name,
+                            room: cam.room || 'Phòng khách',
+                            streamUrl: cam.streamUrl,
+                          });
+                        }}
+                        isMicSpeaking={isMicSpeaking}
+                        handleToggleAIProtect={handleToggleAIProtect}
+                      />
+                    </View>
+                  ))}
+                </ScrollView>
+
+                {/* Hàng chấm tròn vị trí camera đang xem */}
+                <View style={styles.carouselDotsRow}>
+                  {effectiveCameraList.map((_, idx) => (
+                    <View
+                      key={`dot-${idx}`}
+                      style={[
+                        styles.carouselDot,
+                        idx === activeCamIndex
+                          ? [styles.carouselDotActive, { backgroundColor: Colors.primary }]
+                          : [styles.carouselDotInactive, { backgroundColor: isDarkMode ? '#475569' : '#CBD5E1' }],
+                      ]}
+                    />
+                  ))}
+                </View>
+              </View>
+            )}
           </>
         ) : canViewCamera && hasLinkedHouse ? (
           <View style={[styles.cameraBlockedCard, { backgroundColor: isDarkMode ? '#1E293B' : '#FFFFFF', borderColor: isDarkMode ? '#334155' : '#E2E8F0' }]}>
@@ -720,6 +806,37 @@ const styles = StyleSheet.create({
   sosActionCircle: { width: 32, height: 32, borderRadius: 16, backgroundColor: '#FFF', alignItems: 'center', justifyContent: 'center', marginLeft: 8 },
   multiViewCard: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', backgroundColor: Colors.surface, borderRadius: 18, paddingHorizontal: 18, paddingVertical: 14, marginBottom: 16, ...Shadows.card },
   multiViewText: { fontSize: 15, fontWeight: '700', color: Colors.textPrimary },
+  camCountBadge: {
+    backgroundColor: '#FFF7ED',
+    paddingHorizontal: 8,
+    paddingVertical: 2,
+    borderRadius: 10,
+    borderWidth: 0.8,
+    borderColor: '#FED7AA',
+  },
+  camCountBadgeText: {
+    fontSize: 11,
+    fontWeight: '700',
+    color: Colors.primary,
+  },
+  carouselDotsRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: 6,
+    marginTop: -4,
+    marginBottom: 8,
+  },
+  carouselDot: {
+    height: 6,
+    borderRadius: 3,
+  },
+  carouselDotActive: {
+    width: 20,
+  },
+  carouselDotInactive: {
+    width: 6,
+  },
   playCircleBtn: { width: 32, height: 32, borderRadius: 16, backgroundColor: '#FFF7ED', alignItems: 'center', justifyContent: 'center' },
   appointmentBanner: { backgroundColor: '#FFFBEB', borderRadius: 16, borderWidth: 1.5, borderColor: '#FDE68A', padding: 14, marginBottom: 12, flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', ...Shadows.soft },
   appointmentBannerLeft: { flexDirection: 'row', alignItems: 'center', flex: 1, minWidth: 0, marginRight: 8 },

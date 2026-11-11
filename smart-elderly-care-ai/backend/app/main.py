@@ -81,6 +81,30 @@ async def lifespan(app: FastAPI):
                         dev_uuid = await crud_vital.resolve_device_uuid(session, raw_dev)
                         if dev_uuid:
                             payload["device_id"] = dev_uuid
+
+                    # Tự động đẩy video clip & ảnh sự cố lên Supabase Storage
+                    clip_path = payload.get("clip_path")
+                    if clip_path:
+                        try:
+                            from app.services.storage.supabase_storage import supabase_storage
+                            event_name = f"{payload.get('id', 'incident')}.mp4"
+                            cloud_url = await supabase_storage.upload_file(clip_path, event_name, "video/mp4")
+                            if cloud_url:
+                                payload["video_clip_url"] = cloud_url
+                        except Exception as up_err:
+                            logger.warning("[Lifespan] Không thể upload clip lên Supabase: %s", up_err)
+
+                    thumb_path = payload.get("thumbnail_path")
+                    if thumb_path:
+                        try:
+                            from app.services.storage.supabase_storage import supabase_storage
+                            thumb_name = f"{payload.get('id', 'incident')}.jpg"
+                            cloud_thumb = await supabase_storage.upload_file(thumb_path, thumb_name, "image/jpeg")
+                            if cloud_thumb:
+                                payload["thumbnail_url"] = cloud_thumb
+                        except Exception as up_err:
+                            logger.warning("[Lifespan] Không thể upload ảnh lên Supabase: %s", up_err)
+
                     incident = await crud_incident.create_from_edge(session, payload)
                     await session.commit()
 

@@ -321,6 +321,35 @@ export const AlertDetailModal: React.FC<AlertDetailModalProps> = ({
                 </Text>
               </TouchableOpacity>
             )}
+
+            {(item.alert_type === 'FALL_DETECTED' || item.thumbnail_url || item.video_clip_url) && navigation && (
+              <TouchableOpacity
+                style={styles.secondaryDetailBtn}
+                onPress={() => {
+                  onClose();
+                  navigation.navigate('IncidentDetail', {
+                    incidentId: item.id,
+                    id: item.id,
+                    type: item.alert_type === 'FALL_DETECTED' ? 'FALL' : item.alert_type === 'ACOUSTIC_DISTRESS' ? 'ACOUSTIC' : item.alert_type,
+                    alert_type: item.alert_type,
+                    alert_level: item.alert_level || 'CRITICAL',
+                    confidence: item.confidence != null ? `${Math.round(Number(item.confidence) * 100)}%` : undefined,
+                    time: item.created_at ?? new Date().toISOString(),
+                    created_at: item.created_at ?? new Date().toISOString(),
+                    message: item.message,
+                    clipAvailable: Boolean(item.video_clip_url || item.thumbnail_url),
+                    thumbnail_url: item.thumbnail_url ?? null,
+                    video_clip_url: item.video_clip_url ?? null,
+                    is_acknowledged: item.is_acknowledged ?? false,
+                  });
+                }}
+                activeOpacity={0.7}
+              >
+                <Text style={styles.secondaryDetailBtnText}>
+                  Xem ảnh & video bằng chứng AI →
+                </Text>
+              </TouchableOpacity>
+            )}
           </View>
         </View>
       </View>

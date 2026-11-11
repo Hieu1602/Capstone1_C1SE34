@@ -29,10 +29,12 @@ class RTSPStreamer:
     """
     Đẩy camera frames lên RTSP server (MediaMTX) qua FFmpeg pipe.
 
+    [DEPRECATION] Module legacy cho MediaMTX. Hệ thống hiện tại ưu tiên Go2RTC (tapo-audio).
     Yêu cầu: ffmpeg và mediamtx binary cài trên hệ thống.
     """
 
     def __init__(self, config: dict):
+        logger.warning("[DEPRECATION] RTSPStreamer (MediaMTX) là legacy. Hệ thống chính hiện dùng Go2RTC cho WebRTC/streaming.")
         self.rtsp_port: int = config.get("rtsp_port", 8554)
         self.fps: int = config.get("fps", 15)
         self.width: int = 1280
