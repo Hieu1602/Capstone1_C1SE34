@@ -202,7 +202,7 @@ class ChatbotContextBuilder:
         stale_time = vitals.get("stale_time_str", "trước đó")
 
         if language == "en":
-            hr_status = "Normal (60–100 BPM)" if 60 <= hr <= 100 else ("Elevated" if hr > 100 else "Low")
+            hr_status = "Normal (60–100 BPM)" if (hr is not None and 60 <= hr <= 100) else ("Elevated" if (hr is not None and hr > 100) else "Low")
             spo2_status = "Optimal (≥95%)" if spo2 and spo2 >= 95 else "Low (<95%) - Needs observation"
             temp_status = "Normal" if temp and 36.0 <= temp <= 37.5 else "Abnormal"
             fall_str = "🚨 FALL ALERT DETECTED!" if fall and not is_stale else "Normal (No active fall detected)"
@@ -218,7 +218,7 @@ class ChatbotContextBuilder:
             ]
             return "\n".join([line for line in lines if line])
 
-        hr_status = "Bình thường (60-100 BPM)" if 60 <= hr <= 100 else ("Nhanh" if hr > 100 else "Chậm")
+        hr_status = "Bình thường (60-100 BPM)" if (hr is not None and 60 <= hr <= 100) else ("Nhanh" if (hr is not None and hr > 100) else "Chậm")
         spo2_status = "An toàn (≥95%)" if spo2 and spo2 >= 95 else "Thấp (<95%) - Cần chú ý theo dõi"
         temp_status = "Bình thường (36.0 - 37.5°C)" if temp and 36.0 <= temp <= 37.5 else "Cần theo dõi"
         fall_str = "🚨 CẢNH BÁO: CÓ DẤU HIỆU TÉ NGÃ!" if fall and not is_stale else "Bình thường (Không ghi nhận té ngã thời gian thực)"

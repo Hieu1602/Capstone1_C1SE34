@@ -156,7 +156,7 @@ export const SmartbandVitalsCards: React.FC<SmartbandVitalsCardsProps> = ({
                 Nồng Độ Oxy Trong Máu (SpO₂)
               </LocalizedText>
               <LocalizedText style={[styles.metricSub, isDarkMode && { color: colors.textSecondary }]}>
-                Bão hòa oxy mao mạch ngoại vi (Pulse Oximetry)
+                Bão hòa oxy mao mạch ngoại vi
               </LocalizedText>
             </View>
           </View>

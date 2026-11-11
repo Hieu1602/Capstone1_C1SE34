@@ -144,6 +144,7 @@ export default api;
 export const authApi = {
   logout: (userName?: string, role?: string) =>
     api.post('/auth/logout', { user_name: userName, role }).catch(() => {}),
+  checkPhone: (phone: string) => api.post('/auth/check-phone', { phone }),
   requestOtp: (phone: string) => api.post('/auth/request-otp', { phone }),
   verifyOtp: (phone: string, otp_code: string) => api.post('/auth/verify-otp', { phone, otp_code }),
   verifyCchn: (cchn_number: string, full_name: string) =>

@@ -48,6 +48,8 @@ interface RegisterFormStepProps {
     onCheckCchn: () => void;
     onSubmit: () => void;
     onChangeRole: () => void;
+    onNavigateToLogin?: () => void;
+    onBlurPhone?: () => void;
 }
 
 export const RegisterFormStep: React.FC<RegisterFormStepProps> = ({
@@ -78,6 +80,8 @@ export const RegisterFormStep: React.FC<RegisterFormStepProps> = ({
     onCheckCchn,
     onSubmit,
     onChangeRole,
+    onNavigateToLogin,
+    onBlurPhone,
 }) => {
     const isLengthMet = password.length >= 8 && password.length <= 16;
     const hasComplexity =
@@ -99,6 +103,14 @@ export const RegisterFormStep: React.FC<RegisterFormStepProps> = ({
             (errorMessage.toLowerCase().includes("họ và tên") ||
                 errorMessage.toLowerCase().includes("họ tên") ||
                 errorMessage.toLowerCase().includes("tên thật")),
+    );
+
+    const hasPhoneError = Boolean(
+        errorMessage &&
+            (errorMessage.toLowerCase().includes("số điện thoại") ||
+                errorMessage.toLowerCase().includes("sđt") ||
+                errorMessage.toLowerCase().includes("tồn tại") ||
+                errorMessage.toLowerCase().includes("đã được đăng ký")),
     );
     return (
         <View style={styles.formContainer}>
@@ -350,23 +362,52 @@ export const RegisterFormStep: React.FC<RegisterFormStepProps> = ({
             )}
 
             {/* 3. Số điện thoại nhận OTP */}
-            <View style={styles.inputContainer}>
-                <Ionicons
-                    name="phone-portrait-outline"
-                    size={20}
-                    color="#94A3B8"
-                    style={styles.inputIcon}
-                />
-                <Text style={styles.prefixText}>+84 </Text>
-                <TextInput
-                    style={styles.input}
-                    placeholder="Số điện thoại nhận OTP"
-                    placeholderTextColor="#94A3B8"
-                    value={phone}
-                    onChangeText={setPhone}
-                    keyboardType="phone-pad"
-                    autoCapitalize="none"
-                />
+            <View>
+                <View
+                    style={[
+                        styles.inputContainer,
+                        hasPhoneError && styles.inputContainerError,
+                    ]}
+                >
+                    <Ionicons
+                        name="phone-portrait-outline"
+                        size={20}
+                        color={hasPhoneError ? "#EF4444" : "#94A3B8"}
+                        style={styles.inputIcon}
+                    />
+                    <Text style={styles.prefixText}>+84 </Text>
+                    <TextInput
+                        style={styles.input}
+                        placeholder="Số điện thoại nhận OTP"
+                        placeholderTextColor="#94A3B8"
+                        value={phone}
+                        onChangeText={setPhone}
+                        onBlur={onBlurPhone}
+                        keyboardType="phone-pad"
+                        autoCapitalize="none"
+                    />
+                </View>
+                {hasPhoneError && (
+                    <View style={styles.phoneErrorContainer}>
+                        <View style={styles.phoneErrorRow}>
+                            <Ionicons name="alert-circle" size={15} color="#DC2626" />
+                            <Text style={styles.fieldErrorText}>
+                                {errorMessage}
+                            </Text>
+                        </View>
+                        {(errorMessage?.includes("tồn tại") || errorMessage?.includes("đã được đăng ký")) && onNavigateToLogin ? (
+                            <TouchableOpacity
+                                style={styles.loginNowInlineBtn}
+                                onPress={onNavigateToLogin}
+                                activeOpacity={0.7}
+                            >
+                                <Text style={styles.loginNowInlineText}>
+                                    👉 Tài khoản đã tồn tại. Bấm vào đây để Đăng nhập ngay
+                                </Text>
+                            </TouchableOpacity>
+                        ) : null}
+                    </View>
+                )}
             </View>
 
             {/* 4. Mật khẩu */}
@@ -789,9 +830,34 @@ const styles = StyleSheet.create({
     fieldErrorText: {
         fontSize: 12,
         color: "#DC2626",
-        marginTop: 4,
-        marginLeft: 4,
+        marginTop: 2,
         fontWeight: "500",
+        flex: 1,
+    },
+    phoneErrorContainer: {
+        marginTop: 6,
+        marginLeft: 4,
+        gap: 4,
+    },
+    phoneErrorRow: {
+        flexDirection: "row",
+        alignItems: "center",
+        gap: 6,
+    },
+    loginNowInlineBtn: {
+        alignSelf: "flex-start",
+        paddingVertical: 4,
+        paddingHorizontal: 10,
+        backgroundColor: "#FFF7ED",
+        borderRadius: 8,
+        borderWidth: 1,
+        borderColor: "#FFEDD5",
+        marginTop: 3,
+    },
+    loginNowInlineText: {
+        fontSize: 12.5,
+        fontWeight: "700",
+        color: "#EA580C",
     },
     fieldSuccessText: {
         fontSize: 12,

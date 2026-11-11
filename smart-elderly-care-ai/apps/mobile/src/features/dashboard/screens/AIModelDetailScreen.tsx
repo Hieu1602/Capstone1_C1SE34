@@ -20,7 +20,7 @@ export default function AIModelDetailScreen({ navigation }: any) {
         >
           <Ionicons name="chevron-back" size={26} color={Colors.textPrimary} />
         </TouchableOpacity>
-        <LocalizedText style={styles.headerTitle}>Mô Hình AI Tại Biên (Edge AI)</LocalizedText>
+        <LocalizedText style={styles.headerTitle}>Mô Hình AI Tại Biên</LocalizedText>
       </View>
 
       <ScrollView
@@ -28,33 +28,33 @@ export default function AIModelDetailScreen({ navigation }: any) {
         contentContainerStyle={styles.scrollContent}
       >
         <LocalizedText style={styles.introText}>
-          Tất cả mô hình AI suy luận trực tiếp trên Hub Orange Pi 5 (NPU 6 TOPS), bảo vệ quyền riêng tư tuyệt đối (NFR02) và độ trễ &lt; 500ms (NFR01).
+          Tất cả mô hình AI suy luận trực tiếp trên Hub Orange Pi 5, bảo vệ quyền riêng tư tuyệt đối và độ trễ &lt; 500ms.
         </LocalizedText>
 
-        {/* 1. YOLO-Pose 17 Keypoints (FR03) */}
+        {/* 1. YOLO-Pose 17 Keypoints */}
         <View style={styles.modelCard}>
           <View style={styles.modelHeaderRow}>
             <View style={[styles.modelIconBox, { backgroundColor: '#E0F2FE' }]}>
               <Ionicons name="body" size={24} color="#0284C7" />
             </View>
             <View style={{ flex: 1, marginLeft: 12 }}>
-              <LocalizedText style={styles.modelTitle}>YOLO-Pose 17 Khớp Xương (FR03)</LocalizedText>
-              <LocalizedText style={styles.modelStatusText}>Trạng thái: 32 FPS (Rockchip RK3588S NPU)</LocalizedText>
+              <LocalizedText style={styles.modelTitle}>YOLO-Pose 17 Khớp Xương</LocalizedText>
+              <LocalizedText style={styles.modelStatusText}>Trạng thái: 32 FPS</LocalizedText>
             </View>
           </View>
           <LocalizedText style={styles.modelDesc}>
-            Theo dõi góc nghiêng cột sống và thời gian nằm bất động trên sàn. Tự động kích hoạt Red Alert khi góc nghiêng &gt; 60° và không có chuyển động &gt; 30 giây.
+            Theo dõi góc nghiêng cột sống và thời gian nằm bất động trên sàn. Tự động kích hoạt báo động khi góc nghiêng &gt; 60° và không có chuyển động &gt; 30 giây.
           </LocalizedText>
         </View>
 
-        {/* 2. Contactless Thermal Mapping AMG8833 (FR04) */}
+        {/* 2. Contactless Thermal Mapping AMG8833 */}
         <View style={styles.modelCard}>
           <View style={styles.modelHeaderRow}>
             <View style={[styles.modelIconBox, { backgroundColor: '#FEF3C7' }]}>
               <Ionicons name="thermometer" size={24} color="#D97706" />
             </View>
             <View style={{ flex: 1, marginLeft: 12 }}>
-              <LocalizedText style={styles.modelTitle}>Ma Trận Nhiệt AMG8833 (FR04)</LocalizedText>
+              <LocalizedText style={styles.modelTitle}>Ma Trận Nhiệt AMG8833</LocalizedText>
               <LocalizedText style={styles.modelStatusText}>Độ phân giải: 8x8 IR Grid • Tần số: 10 Hz</LocalizedText>
             </View>
           </View>
@@ -63,14 +63,14 @@ export default function AIModelDetailScreen({ navigation }: any) {
           </LocalizedText>
         </View>
 
-        {/* 3. YAMNet Acoustic Distress Analysis (FR05) */}
+        {/* 3. YAMNet Acoustic Distress Analysis */}
         <View style={styles.modelCard}>
           <View style={styles.modelHeaderRow}>
             <View style={[styles.modelIconBox, { backgroundColor: '#F3E8FF' }]}>
               <Ionicons name="mic" size={24} color="#9333EA" />
             </View>
             <View style={{ flex: 1, marginLeft: 12 }}>
-              <LocalizedText style={styles.modelTitle}>Phân Tích Âm Thanh YAMNet (FR05)</LocalizedText>
+              <LocalizedText style={styles.modelTitle}>Phân Tích Âm Thanh YAMNet</LocalizedText>
               <LocalizedText style={styles.modelStatusText}>Lớp phân loại: Tiếng ngã đập mạnh, Kêu cứu, La hét</LocalizedText>
             </View>
           </View>
@@ -79,14 +79,14 @@ export default function AIModelDetailScreen({ navigation }: any) {
           </LocalizedText>
         </View>
 
-        {/* 4. Multimodal Sensor Fusion Decision Matrix (FR06) */}
+        {/* 4. Multimodal Sensor Fusion Decision Matrix */}
         <View style={[styles.modelCard, { borderColor: '#BBF7D0' }]}>
           <View style={styles.modelHeaderRow}>
             <View style={[styles.modelIconBox, { backgroundColor: '#DCFCE7' }]}>
               <Ionicons name="git-merge" size={24} color="#16A34A" />
             </View>
             <View style={{ flex: 1, marginLeft: 12 }}>
-              <LocalizedText style={[styles.modelTitle, { color: '#15803D' }]}>Hợp Nhất Đa Cảm Biến (FR06)</LocalizedText>
+              <LocalizedText style={[styles.modelTitle, { color: '#15803D' }]}>Hợp Nhất Đa Cảm Biến</LocalizedText>
               <LocalizedText style={styles.modelStatusText}>Độ chính xác: TPR ≥ 95% • Báo giả: FPR &lt; 2%</LocalizedText>
             </View>
           </View>

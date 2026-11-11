@@ -37,6 +37,28 @@ interface FamilyAppointmentItem {
   enable_speaker_reminder?: boolean;
 }
 
+function formatAppointmentTime(dateStr?: string): string {
+  if (!dateStr) return '--:--';
+  try {
+    const d = new Date(dateStr);
+    if (isNaN(d.getTime())) return dateStr;
+    const time = d.toLocaleTimeString('vi-VN', { hour: '2-digit', minute: '2-digit', hour12: false });
+    const day = String(d.getDate()).padStart(2, '0');
+    const month = String(d.getMonth() + 1).padStart(2, '0');
+    const year = d.getFullYear();
+    return `${time} - ${day}/${month}/${year}`;
+  } catch {
+    return dateStr;
+  }
+}
+
+function formatExamType(type?: string): string {
+  if (!type) return 'Khám sức khỏe định kỳ';
+  if (type === 'CLINIC') return 'Khám tại phòng khám';
+  if (type === 'HOME_VISIT') return 'Khám bệnh tại nhà';
+  return type;
+}
+
 export const FamilyAppointmentsModal: React.FC<FamilyAppointmentsModalProps> = ({
   visible,
   patientId,
@@ -225,7 +247,7 @@ export const FamilyAppointmentsModal: React.FC<FamilyAppointmentsModalProps> = (
                     <View style={styles.cardHeader}>
                       <View style={styles.dateBadge}>
                         <Ionicons name="calendar" size={13} color="#0284C7" style={{ marginRight: 4 }} />
-                        <LocalizedText style={styles.dateText}>{apt.scheduled_at}</LocalizedText>
+                        <LocalizedText style={styles.dateText}>{formatAppointmentTime(apt.scheduled_at)}</LocalizedText>
                       </View>
 
                       <View
@@ -248,7 +270,7 @@ export const FamilyAppointmentsModal: React.FC<FamilyAppointmentsModalProps> = (
                             {
                               color: isUpcoming
                                 ? isConfirmed
-                                  ? '#059669'
+                                ? '#059669'
                                   : '#D97706'
                                 : isCompleted
                                 ? '#059669'
@@ -271,7 +293,7 @@ export const FamilyAppointmentsModal: React.FC<FamilyAppointmentsModalProps> = (
                     <View style={styles.specialtyRow}>
                       <Ionicons name="medkit" size={14} color="#0284C7" style={{ marginRight: 6 }} />
                       <LocalizedText style={[styles.specialtyText, { color: colors.textPrimary }]}>
-                        {apt.exam_type || apt.visit_type || 'Khám sức khỏe định kỳ'}
+                        {formatExamType(apt.exam_type || apt.visit_type)}
                       </LocalizedText>
                     </View>
 

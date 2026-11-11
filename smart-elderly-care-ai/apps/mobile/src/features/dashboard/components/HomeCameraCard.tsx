@@ -166,7 +166,7 @@ export const HomeCameraCard: React.FC<HomeCameraCardProps> = ({
             <Ionicons name="play-back" size={16} color={Colors.primary} />
           </View>
           <View>
-            <Text style={[styles.playbackTitle, isDarkMode && { color: colors.textPrimary }]}>Xem lại 24/48h (Interactive Timeline Playback)</Text>
+            <Text style={[styles.playbackTitle, isDarkMode && { color: colors.textPrimary }]}>Xem lại 24/48h</Text>
             <Text style={[styles.playbackSub, isDarkMode && { color: colors.textSecondary }]}>Bộ đệm RAM Edge Hub &amp; lưu trữ MinIO Cloud</Text>
           </View>
         </View>

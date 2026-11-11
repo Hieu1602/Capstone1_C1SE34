@@ -153,6 +153,11 @@ async def update_current_house_mode(
         )
 
     house = await crud_house.get_or_create_default_house(db, owner_id=current_user.id)
+    if not house:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="Không tìm thấy căn nhà của người dùng.",
+        )
     return await crud_house.update_mode(db, house=house, mode=normalized_mode)
 
 
@@ -164,6 +169,11 @@ async def update_current_house(
 ):
     """Cập nhật tên căn nhà hoặc địa chỉ."""
     house = await crud_house.get_or_create_default_house(db, owner_id=current_user.id)
+    if not house:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="Không tìm thấy căn nhà của người dùng.",
+        )
     res = await crud_house.update(db, house=house, obj_in=obj_in)
     await record_audit_log(
         db=db,
@@ -240,12 +250,14 @@ async def get_my_house_permissions(
     row = res.first()
     if not row:
         return UserHousePermissionsOut(
+            house_id=None,
+            user_id=current_user.id,
             can_view_health=False,
             can_view_camera=False,
             can_handle_emergency=False,
-            can_manage_devices=False,
+            can_manage_devices=True,
             can_manage_records=False,
-            role_in_house="NONE",
+            role_in_house="NEW_USER",
             permissions="NONE",
             is_owner=False,
         )
@@ -257,9 +269,9 @@ async def get_my_house_permissions(
         is_owner=is_owner,
         role_in_house="OWNER" if is_owner else (m_role or "MEMBER"),
         permissions="ADMIN" if is_owner else (m_perms or "VIEW"),
-        can_view_health=is_owner or bool(m_health),
-        can_view_camera=is_owner or bool(m_cam),
-        can_handle_emergency=is_owner or bool(m_sos),
+        can_view_health=is_owner or (m_health if m_health is not None else True),
+        can_view_camera=is_owner or (m_cam if m_cam is not None else True),
+        can_handle_emergency=is_owner or (m_sos if m_sos is not None else True),
         can_manage_devices=is_owner or bool(m_dev),
         can_manage_records=is_owner or bool(m_rec),
     )
@@ -373,7 +385,7 @@ async def add_house_member(
                     cred_path = Path(settings.FCM_SERVICE_ACCOUNT_PATH)
                     if cred_path.exists():
                         fcm.initialize(str(cred_path))
-                        await fcm.send_alert(
+                        fcm.send_alert(
                             fcm_tokens=[target_user.fcm_token],
                             title="Thành viên mới trong gia đình",
                             body=notif_msg,
@@ -475,7 +487,30 @@ async def remove_house_member(
             detail="Bạn không có quyền xóa thành viên này khỏi căn nhà.",
         )
 
+    kicked_user_id = member.user_id
     await crud_house.remove_member(db, house=house, member_id=member.id)
+    await db.commit()
+
+    # Phát WebSocket thông báo thời gian thực khi thành viên bị xóa khỏi nhà
+    try:
+        from app.api.websockets.vitals_ws import alert_clients
+        ws_payload = json.dumps({
+            "type": "ALERT_NEW",
+            "alert_type": "HOUSE_MEMBER_REMOVED",
+            "data": {
+                "alert_type": "HOUSE_MEMBER_REMOVED",
+                "event": "MEMBER_REMOVED",
+                "user_id": str(kicked_user_id),
+                "house_id": str(house.id),
+            }
+        }, ensure_ascii=False)
+        for client_ws in list(alert_clients):
+            try:
+                await client_ws.send_text(ws_payload)
+            except Exception:
+                pass
+    except Exception:
+        pass
 
     await record_audit_log(
         db=db,
@@ -743,7 +778,27 @@ async def respond_to_house_invite(
         except Exception as ws_err:
             logger.warning("[respond_to_house_invite] WS broadcast error: %s", ws_err)
 
-        return {"status": "accepted", "message": f"Bạn đã tham gia căn nhà \"{house_name}\" thành công!"}
+        return {
+            "status": "accepted",
+            "message": f"Bạn đã tham gia căn nhà \"{house_name}\" thành công!",
+            "house": {
+                "id": str(house_id),
+                "name": house_name,
+                "address": member.house.address if member.house else "",
+                "current_mode": member.house.current_mode if member.house else "HOME",
+            },
+            "permissions": {
+                "role_in_house": member.role_in_house or "MEMBER",
+                "permissions": member.permissions or "VIEW",
+                "can_view_health": True if member.can_view_health is None else member.can_view_health,
+                "can_view_camera": True if member.can_view_camera is None else member.can_view_camera,
+                "can_handle_emergency": True if member.can_handle_emergency is None else member.can_handle_emergency,
+                "can_manage_devices": bool(member.can_manage_devices),
+                "can_manage_records": bool(member.can_manage_records),
+                "is_owner": False,
+            },
+            "member_id": str(member.id),
+        }
     else:
         # Reject
         await db.delete(member)

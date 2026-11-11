@@ -48,7 +48,13 @@ interface Props {
 export default function MultiViewScreen({ navigation }: Props) {
     const { isDarkMode } = useTheme();
     const { permissions, userRole, role } = useAuthStore();
-    const isOwnerOrAdmin = userRole === 'admin' || role === 'admin' || permissions?.is_owner === true || permissions?.role_in_house === 'OWNER';
+    const isOwnerOrAdmin =
+        userRole === 'admin' ||
+        role === 'admin' ||
+        userRole === 'owner' ||
+        role === 'owner' ||
+        permissions?.is_owner === true ||
+        permissions?.role_in_house === 'OWNER';
     const isCameraExplicitlyBlocked = !isOwnerOrAdmin && permissions?.can_view_camera === false;
 
     const { house, iotDevices, fetchDevicesFromBackend } = useDeviceStore();

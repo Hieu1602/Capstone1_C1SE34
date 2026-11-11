@@ -51,17 +51,21 @@ export default function HomeScreen({ navigation }: any) {
   } = useAuthStore();
   const displayName = full_name || userName || 'Thành viên';
 
-  const hasLinkedHouse = Boolean(
-    household_id ||
-    has_house === true ||
-    assigned_house ||
+  // Xác định rõ ràng: Tài khoản không thuộc ngôi nhà nào (tài khoản mới hoặc vừa bị kick/rời khỏi nhà)
+  const isExplicitlyNoHouse =
+    has_house === false ||
+    house?.hasHouse === false ||
+    permissions?.role_in_house === 'NEW_USER' ||
+    permissions?.role_in_house === 'NONE';
+
+  const hasLinkedHouse = !isExplicitlyNoHouse && Boolean(
     (house?.id && house?.hasHouse !== false && house?.name && house.name.trim() !== '') ||
+    (household_id && has_house) ||
     permissions?.role_in_house === 'OWNER' ||
     permissions?.role_in_house === 'MEMBER' ||
-    permissions?.is_owner === true ||
-    (permissions?.role_in_house && permissions?.role_in_house !== 'NONE' && permissions?.role_in_house !== 'NEW_USER')
+    permissions?.is_owner === true
   );
-  const isOwnerOrAdmin = Boolean(
+  const isOwnerOrAdmin = !isExplicitlyNoHouse && Boolean(
     userRole === 'admin' ||
     role === 'admin' ||
     userRole === 'owner' ||
@@ -71,7 +75,7 @@ export default function HomeScreen({ navigation }: any) {
   );
 
   // Phân biệt 3 loại tài khoản chính xác:
-  // 1. Tài khoản mới (chưa có nhà)
+  // 1. Tài khoản mới / đã rời nhà (chưa có nhà)
   const isNewAccount = !hasLinkedHouse;
   // 2. Tài khoản thành viên đã được thêm vào một ngôi nhà (không phải chủ nhà)
   const isMemberInLinkedHouse = hasLinkedHouse && !isOwnerOrAdmin;
@@ -89,8 +93,11 @@ export default function HomeScreen({ navigation }: any) {
   const isUserEmptyMember = isNewAccount || !hasLinkedDevices;
 
   // Kiểm tra quyền xem camera và chỉ số sinh hiệu của tài khoản thành viên
-  const canViewCamera = isOwnerOrAdmin || Boolean(permissions?.can_view_camera);
-  const canViewHealth = isOwnerOrAdmin || Boolean(permissions?.can_view_health);
+  // Nguyên tắc: Thành viên khi vào nhà ĐƯỢC XEM TẤT CẢ (camera, sinh hiệu, dữ liệu)
+  // Chỉ bị khóa camera nếu Chủ hộ cố ý tắt quyền rõ ràng (permissions?.can_view_camera === false)
+  const isCameraExplicitlyBlocked = !isOwnerOrAdmin && permissions?.can_view_camera === false;
+  const canViewCamera = isOwnerOrAdmin || (!isCameraExplicitlyBlocked && hasLinkedHouse);
+  const canViewHealth = isOwnerOrAdmin || (hasLinkedHouse && permissions?.can_view_health !== false);
 
   const [isRefreshing, setIsRefreshing] = useState(false);
   const { patientRecord, fetchPatientRecord } = usePatientStore();
@@ -315,7 +322,7 @@ export default function HomeScreen({ navigation }: any) {
     }
     toggleCameraSleep();
     Alert.alert(
-      camera.isSleep ? 'Đã mở lại ống kính camera' : 'Đã bật Chế độ riêng tư (Che camera)',
+      camera.isSleep ? 'Đã mở lại ống kính camera' : 'Đã bật Chế độ riêng tư',
       camera.isSleep ? `Ống kính ${cameraDisplayName} đã mở lại và tiếp tục phát trực tiếp bình thường.` : `Ống kính ${cameraDisplayName} đã cụp lại và che khung hình. Màn hình đen riêng tư đã được kích hoạt.`
     );
   };
@@ -365,11 +372,11 @@ export default function HomeScreen({ navigation }: any) {
       <View style={styles.topHeader}>
         <TouchableOpacity
           style={styles.houseTitleRow}
-          onPress={() => navigation.navigate('HouseDetail')}
+          onPress={() => (hasLinkedHouse ? navigation.navigate('HouseDetail') : navigation.navigate('Profile'))}
           activeOpacity={0.7}
         >
           <Text style={[styles.houseTitleText, { color: colors.textPrimary }]}>
-            {house?.name || 'Nhà của tôi'}
+            {hasLinkedHouse ? (house?.name || assigned_house || 'Nhà của tôi') : 'Chưa tham gia nhà'}
           </Text>
           <Ionicons name="chevron-down" size={16} color={colors.textPrimary} style={{ marginLeft: 4 }} />
         </TouchableOpacity>
@@ -503,11 +510,22 @@ export default function HomeScreen({ navigation }: any) {
 
             <Text style={[styles.emptySubtitle, { color: colors.textSecondary }]}>
               {isNewAccount
-                ? 'Tài khoản của bạn chưa có thiết bị theo dõi nào. Hãy bấm thêm thiết bị mới để kết nối camera hoặc vòng đeo tay thông minh.'
+                ? 'Tài khoản của bạn hiện chưa tham gia ngôi nhà nào. Bạn có thể nhập mã mời để tham gia nhà của người thân hoặc bấm thêm thiết bị mới.'
                 : isMemberInLinkedHouse
                 ? `Tài khoản thành viên chưa có thiết bị theo dõi trong ngôi nhà này. Sau khi Chủ hộ thêm camera hoặc vòng đeo tay thông minh, hệ thống sẽ tự động hiển thị dữ liệu tại đây.`
                 : 'Ngôi nhà của bạn chưa có thiết bị theo dõi nào. Hãy thêm camera an ninh hoặc vòng đeo tay thông minh để bắt đầu giám sát.'}
             </Text>
+
+            {isNewAccount && (
+              <TouchableOpacity
+                style={[styles.addDevicePrimaryBtn, { backgroundColor: '#4F46E5', marginBottom: 10 }]}
+                onPress={() => navigation.navigate('Profile')}
+                activeOpacity={0.88}
+              >
+                <Ionicons name="link-outline" size={20} color="#FFF" style={{ marginRight: 6 }} />
+                <Text style={styles.addDevicePrimaryBtnText}>Nhập mã tham gia nhà</Text>
+              </TouchableOpacity>
+            )}
 
             {canManageDevices ? (
               <TouchableOpacity
@@ -547,20 +565,7 @@ export default function HomeScreen({ navigation }: any) {
         </TouchableOpacity>
 
         {/* 4. Banner Nhiều chế độ xem (Multi-view) & 5. Main Camera Device Card */}
-        {canViewCamera && hasValidCamera ? (
-          <>
-            <TouchableOpacity style={[styles.multiViewCard, isDarkMode && { backgroundColor: colors.card, borderColor: colors.border }]} onPress={handleMultiView} activeOpacity={0.9}>
-              <Text style={[styles.multiViewText, isDarkMode && { color: colors.textPrimary }]}>Nhiều chế độ xem</Text>
-              <View style={styles.playCircleBtn}><Ionicons name="play" size={14} color={Colors.primary} style={{ marginLeft: 2 }} /></View>
-            </TouchableOpacity>
-
-            <HomeCameraCard
-              cameraDisplayName={cameraDisplayName} camera={effectiveCamera} house={house} isDarkMode={isDarkMode}
-              colors={colors} navigation={navigation} handleTogglePrivacyMode={handleTogglePrivacyMode}
-              handleMicPress={handleMicPress} isMicSpeaking={isMicSpeaking} handleToggleAIProtect={handleToggleAIProtect}
-            />
-          </>
-        ) : !canViewCamera && hasLinkedHouse ? (
+        {isCameraExplicitlyBlocked && hasLinkedHouse ? (
           <View style={[styles.cameraBlockedCard, { backgroundColor: isDarkMode ? '#1E293B' : '#FFFFFF', borderColor: isDarkMode ? '#334155' : '#E2E8F0' }]}>
             <View style={styles.cameraBlockedIconBox}>
               <Ionicons name="videocam-off" size={32} color="#EF4444" />
@@ -575,6 +580,42 @@ export default function HomeScreen({ navigation }: any) {
               <Ionicons name="lock-closed" size={13} color="#94A3B8" />
               <Text style={[styles.cameraBlockedBadgeText, isDarkMode && { color: '#94A3B8' }]}>Chưa được cấp quyền xem camera</Text>
             </View>
+          </View>
+        ) : canViewCamera && hasValidCamera ? (
+          <>
+            <TouchableOpacity style={[styles.multiViewCard, isDarkMode && { backgroundColor: colors.card, borderColor: colors.border }]} onPress={handleMultiView} activeOpacity={0.9}>
+              <Text style={[styles.multiViewText, isDarkMode && { color: colors.textPrimary }]}>Nhiều chế độ xem</Text>
+              <View style={styles.playCircleBtn}><Ionicons name="play" size={14} color={Colors.primary} style={{ marginLeft: 2 }} /></View>
+            </TouchableOpacity>
+
+            <HomeCameraCard
+              cameraDisplayName={cameraDisplayName} camera={effectiveCamera} house={house} isDarkMode={isDarkMode}
+              colors={colors} navigation={navigation} handleTogglePrivacyMode={handleTogglePrivacyMode}
+              handleMicPress={handleMicPress} isMicSpeaking={isMicSpeaking} handleToggleAIProtect={handleToggleAIProtect}
+            />
+          </>
+        ) : canViewCamera && hasLinkedHouse ? (
+          <View style={[styles.cameraBlockedCard, { backgroundColor: isDarkMode ? '#1E293B' : '#FFFFFF', borderColor: isDarkMode ? '#334155' : '#E2E8F0' }]}>
+            <View style={[styles.cameraBlockedIconBox, { backgroundColor: isDarkMode ? '#334155' : '#F1F5F9' }]}>
+              <Ionicons name="videocam-outline" size={32} color="#64748B" />
+            </View>
+            <Text style={[styles.cameraBlockedTitle, { color: colors.textPrimary }]}>
+              Chưa kết nối Camera an ninh
+            </Text>
+            <Text style={[styles.cameraBlockedDesc, { color: colors.textSecondary }]}>
+              {isOwnerOrAdmin
+                ? 'Ngôi nhà chưa có camera an ninh. Vui lòng thêm camera để bắt đầu theo dõi bảo vệ.'
+                : 'Ngôi nhà hiện chưa kết nối camera an ninh. Khi Chủ hộ kết nối camera, bạn sẽ có thể theo dõi trực tiếp tại đây.'}
+            </Text>
+            {isOwnerOrAdmin && canManageDevices && (
+              <TouchableOpacity
+                style={[styles.cameraBlockedBadge, { backgroundColor: Colors.primary, marginTop: 8 }]}
+                onPress={() => navigation.navigate('Devices')}
+              >
+                <Ionicons name="add" size={14} color="#FFFFFF" />
+                <Text style={[styles.cameraBlockedBadgeText, { color: '#FFFFFF', fontWeight: '700' }]}>Thêm Camera an ninh</Text>
+              </TouchableOpacity>
+            )}
           </View>
         ) : null}
 

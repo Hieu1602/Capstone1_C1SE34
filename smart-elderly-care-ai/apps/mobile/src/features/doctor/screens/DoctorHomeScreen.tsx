@@ -11,8 +11,8 @@ import {
   StatusBar,
   Image,
   Animated,
-  ActivityIndicator,
   Alert,
+  ActivityIndicator,
 } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
@@ -218,12 +218,21 @@ export default function DoctorHomeScreen() {
     return parts[parts.length - 1]?.[0]?.toUpperCase() || 'B';
   };
 
+  const warningPatients = patients.filter((p) => p.health_status === 'WARNING' || p.health_status === 'DANGER');
+
   const currentPatientInfo = nextAppointment
     ? patients.find((p) => p.id === nextAppointment.patient_id)
     : null;
 
-  const warningPatients = patients.filter((p) => p.health_status === 'WARNING' || p.health_status === 'DANGER');
-  const totalNotifCount = todayAppointments.length + upcomingAppointments.length + warningPatients.length + incidents.length;
+  const getPatientAddress = (p: PatientCardData) => {
+    if (p.house_address && p.house_address.trim()) {
+      return p.house_address.trim();
+    }
+    if (p.house_name && p.house_name.trim() && p.house_name !== 'Nhà của tôi') {
+      return p.house_name.trim();
+    }
+    return 'Nhà riêng bệnh nhân';
+  };
 
   const doctorInitial =
     (userName || 'Bác sĩ').trim().split(/\s+/).slice(-1)[0][0]?.toUpperCase() || 'B';
@@ -515,8 +524,8 @@ export default function DoctorHomeScreen() {
                   <LocalizedText style={[styles.patientFullDisplayName, { color: colors.textPrimary }]} numberOfLines={1}>
                     {patient.name}
                   </LocalizedText>
-                  <LocalizedText style={[styles.patientMetaText, { color: isDarkMode ? '#94A3B8' : '#64748B' }]}>
-                    {patient.age ? `${patient.age} tuổi` : 'Cao tuổi'} • {patient.gender ? (patient.gender === 'Nữ' || patient.gender.toUpperCase() === 'FEMALE' ? 'Nữ' : 'Nam') : 'Chưa cập nhật'} • {patient.house_name || 'Nhà riêng'}
+                  <LocalizedText style={[styles.patientMetaText, { color: isDarkMode ? '#94A3B8' : '#64748B' }]} numberOfLines={1}>
+                    {patient.age ? `${patient.age} tuổi` : 'Cao tuổi'} • {patient.gender ? (patient.gender === 'Nữ' || patient.gender.toUpperCase() === 'FEMALE' ? 'Nữ' : 'Nam') : 'Chưa cập nhật'} • {getPatientAddress(patient)}
                   </LocalizedText>
                 </View>
 

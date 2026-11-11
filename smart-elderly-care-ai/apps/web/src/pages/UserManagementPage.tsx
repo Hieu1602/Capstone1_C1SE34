@@ -281,17 +281,25 @@ export const UserManagementPage: React.FC = () => {
 
     const currentStatus = statusModalUser.status || (statusModalUser.is_active ? 'active' : 'locked_admin');
     const targetStatus = currentStatus === 'active' ? 'locked_admin' : 'active';
+    const targetUser = statusModalUser;
+    const prevUsers = [...users];
+
+    // Optimistic Update: Đóng modal, cập nhật bảng và hiện thông báo thao tác ngay lập tức (0ms)
+    setStatusModalUser(null);
+    setUsers((prev) =>
+      prev.map((u) => (u.id === targetUser.id ? { ...u, status: targetStatus, is_active: targetStatus === 'active' } : u))
+    );
+    showNotice(
+      'success',
+      `Đã ${targetStatus === 'active' ? 'mở khóa' : 'khóa'} tài khoản [${targetUser.full_name}] thành công.`
+    );
 
     setIsSubmittingStatus(true);
     try {
-      const updated = await usersApi.updateStatus(statusModalUser.id, targetStatus, statusReason.trim());
+      const updated = await usersApi.updateStatus(targetUser.id, targetStatus, statusReason.trim());
       setUsers((prev) => prev.map((u) => (u.id === updated.id ? updated : u)));
-      showNotice(
-        'success',
-        `Đã ${targetStatus === 'active' ? 'mở khóa' : 'khóa'} tài khoản [${statusModalUser.full_name}] thành công.`
-      );
-      setStatusModalUser(null);
     } catch (err: any) {
+      setUsers(prevUsers);
       const msg = err.response?.data?.detail || 'Lỗi khi cập nhật trạng thái tài khoản.';
       showNotice('error', msg);
     } finally {
@@ -357,13 +365,19 @@ export const UserManagementPage: React.FC = () => {
       return;
     }
 
+    const targetUser = deleteModalUser;
+    const prevUsers = [...users];
+
+    // Optimistic Update: Đóng modal, xóa dòng trên bảng và hiện thông báo thao tác ngay (0ms)
+    setDeleteModalUser(null);
+    setUsers((prev) => prev.filter((u) => u.id !== targetUser.id));
+    showNotice('success', `Đã xóa vĩnh viễn tài khoản [${targetUser.full_name}] thành công!`);
+
     setIsSubmittingDelete(true);
     try {
-      await usersApi.delete(deleteModalUser.id, deleteReason.trim());
-      setUsers((prev) => prev.filter((u) => u.id !== deleteModalUser.id));
-      showNotice('success', `Đã xóa vĩnh viễn tài khoản [${deleteModalUser.full_name}] thành công!`);
-      setDeleteModalUser(null);
+      await usersApi.delete(targetUser.id, deleteReason.trim());
     } catch (err: any) {
+      setUsers(prevUsers);
       const msg = err.response?.data?.detail || 'Không thể xóa tài khoản này.';
       showNotice('error', msg);
     } finally {

@@ -47,7 +47,7 @@ export const SmartbandHeroCard: React.FC<SmartbandHeroCardProps> = ({
         <View style={styles.heroInfoColumn}>
           <View style={styles.modelBadgeRow}>
             <LocalizedText style={[styles.modelNameText, isDarkMode && { color: colors.textPrimary }]}>
-              BLE Smartband FR01
+              Vòng Đeo Tay BLE
             </LocalizedText>
             <View style={styles.medicalBadge}>
               <LocalizedText style={styles.medicalBadgeText}>Y TẾ</LocalizedText>
@@ -145,7 +145,7 @@ export const SmartbandHeroCard: React.FC<SmartbandHeroCardProps> = ({
             <Ionicons name="sync" size={18} color="#FFF" style={{ marginRight: 6 }} />
           )}
           <LocalizedText style={styles.heroActionBtnPrimaryText}>
-            {isSyncing ? 'Đang đồng bộ...' : 'Đo ngay (PPG Live)'}
+            {isSyncing ? 'Đang đồng bộ...' : 'Đo ngay'}
           </LocalizedText>
         </TouchableOpacity>
 

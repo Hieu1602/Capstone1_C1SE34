@@ -6,7 +6,7 @@ users.py – Quản lý tài khoản Caregiver / Bác sĩ.
 
 from fastapi import APIRouter, Body, Depends, File, HTTPException, Query, Request, UploadFile, status
 from starlette.concurrency import run_in_threadpool
-from sqlalchemy import select
+from sqlalchemy import select, update
 
 from sqlalchemy.ext.asyncio import AsyncSession
 
@@ -1760,6 +1760,9 @@ async def delete_user_by_admin(
             commit=False,
         )
 
+        await db.execute(
+            update(Incident).where(Incident.acknowledged_by == uid).values(acknowledged_by=None)
+        )
         await crud_user.delete(db, uid)
         await db.commit()
         invalidate_users_cache()

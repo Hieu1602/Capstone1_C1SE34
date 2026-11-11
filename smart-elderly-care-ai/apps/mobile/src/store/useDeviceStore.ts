@@ -460,18 +460,49 @@ export const useDeviceStore = create<DeviceState>()(
                 hasHouse: true,
               },
             }));
+            try {
+              const auth = require('./useAuthStore').useAuthStore;
+              if (auth && !auth.getState().household_id) {
+                auth.setState({
+                  household_id: res.data.id,
+                  has_house: true,
+                  assigned_house: res.data.name || "Căn nhà gia đình",
+                });
+              }
+            } catch {}
           } else {
-            set((state) => ({
+            set({
               house: {
-                ...state.house,
                 id: "",
                 name: "",
+                address: "",
+                membersCount: 0,
+                currentMode: "HOME",
                 hasHouse: false,
               },
-            }));
+              activeDevice: null,
+              iotDevices: [],
+              deviceGroups: [],
+              camera: {
+                id: "",
+                name: "",
+                room: "",
+                isOnline: false,
+                isSleep: false,
+                isAIProtect: false,
+                resolution: "2K",
+                sdCardStatus: "NO_CARD",
+                wifiStrength: 0,
+                streamUrl: "",
+              },
+            });
+            try {
+              const { useAuthStore } = require('./useAuthStore');
+              useAuthStore.getState().clearHouseData?.();
+            } catch {}
           }
         } catch {
-          // Người dùng mới chưa có căn nhà nào (HTTP 404)
+          // Người dùng mới chưa có căn nhà nào hoặc vừa bị kick khỏi nhà (HTTP 404)
           set({
             house: {
               id: "",
@@ -497,6 +528,14 @@ export const useDeviceStore = create<DeviceState>()(
               streamUrl: "",
             },
           });
+          try {
+            const { useAuthStore } = require('./useAuthStore');
+            useAuthStore.getState().clearHouseData?.();
+          } catch {}
+          try {
+            const { useHealthStore } = require('./useHealthStore');
+            useHealthStore.getState().resetHealthStore?.();
+          } catch {}
         }
       },
       fetchGroupsFromBackend: async () => {

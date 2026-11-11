@@ -84,6 +84,15 @@ class ResolvedEntity:
     strength: Optional[str] = None
     confirmation_question: Optional[str] = None
 
+    def build_prompt_clarification(self) -> Optional[str]:
+        if self.confirmation_question:
+            return self.confirmation_question
+        if getattr(self, "status", None) == "NEED_CONFIRM":
+            return f"Có phải bạn đang hỏi về {self.canonical} (khớp từ '{self.matched_term}')?"
+        if getattr(self, "high_risk", False):
+            return f"Lưu ý: {self.canonical} là thuốc nhóm nguy cơ cao, cần tuân theo chỉ định của bác sĩ."
+        return None
+
 
 class Resolver:
     def __init__(self, path: str | Path | None = None):
@@ -295,7 +304,8 @@ def llm_pick(resolver: Resolver, text: str, cands: list[tuple[str, float]], mode
         max_tokens=100, messages=[{"role": "user", "content": prompt}],
     )
     try:
-        out = json.loads(re.search(r"\{.*\}", resp.content[0].text, re.S).group())
+        m = re.search(r"\{.*\}", resp.content[0].text, re.S)
+        out = json.loads(m.group()) if m else {}
     except Exception:
         return None
     return out.get("id") if out.get("id") in allowed else None   # ép chọn trong danh sách

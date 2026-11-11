@@ -293,7 +293,7 @@ async def sync_smartwatch_vitals(
         "heart_rate": created.heart_rate,
         "spo2": created.spo2,
         "fall_detected": created.fall_detected,
-        "bracelet_battery": created.bracelet_battery,
+        "bracelet_battery": getattr(payload, "bracelet_battery", getattr(payload, "battery_level", None)),
         "alerts_triggered": alerts,
         "timestamp": created.time.isoformat() if created.time else None,
     }

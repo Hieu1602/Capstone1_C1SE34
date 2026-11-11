@@ -115,10 +115,10 @@ class UserHousePermissionsOut(BaseModel):
     user_id: Optional[UUID] = None
     is_owner: bool = False
     role_in_house: str = "MEMBER"
-    permissions: Optional[str] = "NONE"
-    can_view_health: bool = False
-    can_view_camera: bool = False
-    can_handle_emergency: bool = False
+    permissions: Optional[str] = "VIEW"
+    can_view_health: bool = True
+    can_view_camera: bool = True
+    can_handle_emergency: bool = True
     can_manage_devices: bool = False
     can_manage_records: bool = False
 

@@ -493,8 +493,8 @@ export default function AddDeviceScreen({ navigation }: any) {
 
         setSuccessInfo({
           name: selectedBleDevice.name,
-          type: 'Vòng Đeo Tay Sức Khỏe BLE (GATT Vitals)',
-          protocol: 'Bluetooth Low Energy (Heart Rate & SpO2 Service)',
+          type: 'Vòng Đeo Tay Sức Khỏe BLE',
+          protocol: 'Bluetooth Low Energy',
           details: `ID/MAC: ${selectedBleDevice.mac} | RSSI: ${selectedBleDevice.rssi}`,
           location: 'Trên người cụ',
           icon: 'watch',
@@ -581,12 +581,12 @@ export default function AddDeviceScreen({ navigation }: any) {
           <LocalizedText style={styles.headerTitle}>Thêm Thiết Bị Mới</LocalizedText>
           <LocalizedText style={styles.headerSubtitle}>
             {currentStep === 'CATEGORY_SELECT' && 'Bước 1: Chọn phân loại thiết bị'}
-            {currentStep === 'CAMERA_RTSP_CONFIG' && 'Bước 2: Cấu hình camera an ninh (RTSP/IP/AI)'}
+            {currentStep === 'CAMERA_RTSP_CONFIG' && 'Bước 2: Cấu hình camera an ninh'}
             {currentStep === 'WATCH_LIST' && 'Bước 2: Chọn model Đồng hồ'}
             {currentStep === 'BLE_POWER_CHECK' && 'Bước 3B: Mở nguồn & Bật Bluetooth'}
             {currentStep === 'BLE_PERMISSION' && 'Bước 4B: Cấp quyền Bluetooth'}
             {currentStep === 'BLE_SCAN' && 'Bước 5B: Radar quét BLE xung quanh'}
-            {currentStep === 'BLE_PAIRING' && 'Bước 6B: Ghép nối Bluetooth GATT'}
+            {currentStep === 'BLE_PAIRING' && 'Bước 6B: Ghép nối Bluetooth'}
             {currentStep === 'OTHER_LIST' && 'Cảm biến IoT qua Edge Hub'}
             {currentStep === 'SETUP_SUCCESS' && 'Hoàn tất cấu hình'}
           </LocalizedText>
