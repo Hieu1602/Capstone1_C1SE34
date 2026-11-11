@@ -507,13 +507,6 @@ export default function AlertsListScreen({ navigation }: any) {
         useVitalStore.getState().setVitals({ fall_detected: false, acoustic_status: 'Bình thường' });
       } catch (e) {}
     }
-
-    // 2. Gọi API backend
-    try {
-      await incidentsApi.acknowledge(item.id, 'Đã kiểm tra an toàn từ danh sách sự kiện');
-    } catch (apiErr) {
-      console.warn('Quick acknowledge API error:', apiErr);
-    }
   };
 
   const extractMemberId = (notes?: string | null): string | null => {
