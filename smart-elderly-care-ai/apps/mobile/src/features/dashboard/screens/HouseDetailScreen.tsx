@@ -512,7 +512,7 @@ export default function HouseDetailScreen({ navigation, route }: any) {
             </TouchableOpacity>
           )}
         </View>
-        {!isCurrentUserOwner && (
+        {!hasLinkedHouse && (
           <TouchableOpacity
             style={[styles.backBtn, { backgroundColor: isDarkMode ? '#1E293B' : '#F1F5F9', borderColor: borderCol, marginLeft: 8 }]}
             onPress={() => setIsJoinCodeModalVisible(true)}
