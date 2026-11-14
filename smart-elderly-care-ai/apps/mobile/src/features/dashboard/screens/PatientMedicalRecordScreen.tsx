@@ -21,6 +21,7 @@ import { useAuthStore } from '../../../store/useAuthStore';
 import { BASE_URL, patientApi } from '../../../services/api';
 import { alertsWS } from '../../../services/websocket';
 import { resolveAvatarUrl } from '../../auth/hooks/useProfileManager';
+import { handleHeaderBack } from '../../../navigation/navigationHelpers';
 
 const getDaysAgoStr = (days = 0) => {
   const d = new Date(); d.setDate(d.getDate() - days);
@@ -51,7 +52,7 @@ const calculateAgeFromYear = (yearStr: string) => {
   return !isNaN(y) && y >= 1900 && y <= cur ? cur - y : 0;
 };
 
-export default function PatientMedicalRecordScreen({ navigation }: any) {
+export default function PatientMedicalRecordScreen({ navigation, route }: any) {
   const { isDarkMode } = useTheme();
   const { fetchPatientRecord, updatePatientRecord, patientRecord, enrollPatientFace } = useVitalStore();
   const { userRole, role, permissions, viewRole } = useAuthStore();
@@ -405,7 +406,7 @@ export default function PatientMedicalRecordScreen({ navigation }: any) {
     <SafeAreaView style={[styles.safeArea, { backgroundColor: bgScreen }]} edges={['top']}>
       {/* Header */}
       <View style={[styles.headerRow, { backgroundColor: isDarkMode ? '#0B0F19' : '#FFFFFF', borderBottomColor: borderCol }]}>
-        <TouchableOpacity style={[styles.iconCircleBtn, { backgroundColor: isDarkMode ? '#1E293B' : '#F1F5F9', borderColor: borderCol }]} onPress={() => navigation.goBack()} activeOpacity={0.7}>
+        <TouchableOpacity style={[styles.iconCircleBtn, { backgroundColor: isDarkMode ? '#1E293B' : '#F1F5F9', borderColor: borderCol }]} onPress={() => handleHeaderBack(navigation, route, 'Home', true)} activeOpacity={0.7}>
           <Ionicons name="chevron-back" size={22} color={textTitle} />
         </TouchableOpacity>
         <View style={styles.headerTitleCenter}>

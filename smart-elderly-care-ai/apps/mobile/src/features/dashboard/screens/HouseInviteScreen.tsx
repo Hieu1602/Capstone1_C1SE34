@@ -20,8 +20,9 @@ import {
   HouseAccountInviteModal,
   HouseShareModal,
 } from '../components/house';
+import { handleHeaderBack } from '../../../navigation/navigationHelpers';
 
-export default function HouseInviteScreen({ navigation }: any) {
+export default function HouseInviteScreen({ navigation, route }: any) {
   const { house, fetchHouseFromBackend } = useVitalStore();
   const { household_id } = useAuthStore();
   const { isDarkMode } = useTheme();
@@ -142,7 +143,7 @@ export default function HouseInviteScreen({ navigation }: any) {
       <View style={styles.inviteTopBar}>
         <TouchableOpacity
           style={styles.inviteBackBtn}
-          onPress={() => navigation.goBack()}
+          onPress={() => handleHeaderBack(navigation, route, 'Home', true)}
           activeOpacity={0.7}
           hitSlop={{ top: 12, bottom: 12, left: 12, right: 12 }}
         >

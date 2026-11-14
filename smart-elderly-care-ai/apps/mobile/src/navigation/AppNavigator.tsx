@@ -68,6 +68,15 @@ function MainTabNavigator() {
   return (
     <Tab.Navigator
       initialRouteName="Home"
+      backBehavior="history"
+      screenListeners={({ navigation, route }) => ({
+        tabPress: () => {
+          // Khi người dùng bấm trực tiếp vào tab ở thanh Bottom Navigation, xóa param `from` cũ (nếu có)
+          if ((route.params as any)?.from) {
+            navigation.setParams({ from: undefined });
+          }
+        },
+      })}
       screenOptions={({ route }) => ({
         headerShown: false,
         tabBarShowLabel: false, // Thiết kế hiện đại tinh gọn như ảnh mẫu

@@ -41,11 +41,12 @@ import {
   formatFriendlyTime,
 } from '../utils/alertConfig';
 import { AlertDetailModal } from '../components/AlertDetailModal';
+import { handleHeaderBack } from '../../../navigation/navigationHelpers';
 
 // ------------------------------------------------------------------------------
 // Component chính: AlertsListScreen
 // ------------------------------------------------------------------------------
-export default function AlertsListScreen({ navigation }: any) {
+export default function AlertsListScreen({ navigation, route }: any) {
   const { t } = useTranslation();
   const { isDarkMode, colors } = useTheme();
 
@@ -78,11 +79,23 @@ export default function AlertsListScreen({ navigation }: any) {
   const [refreshing, setRefreshing] = useState(false);
   const [familyAppointmentsModalVisible, setFamilyAppointmentsModalVisible] = useState(false);
   const [selectedAppointmentPatientId, setSelectedAppointmentPatientId] = useState<string | number | null>(null);
-  const [filterType, setFilterType] = useState<'ALL' | 'CRITICAL' | 'VITAL' | 'MEDICATION' | 'APPOINTMENT'>('ALL');
+  const initialFilterParam = route?.params?.initialFilter || route?.params?.filter;
+  const [filterType, setFilterType] = useState<'ALL' | 'CRITICAL' | 'VITAL' | 'MEDICATION' | 'APPOINTMENT'>(
+    initialFilterParam && ['ALL', 'CRITICAL', 'VITAL', 'MEDICATION', 'APPOINTMENT'].includes(initialFilterParam)
+      ? initialFilterParam
+      : 'ALL'
+  );
   const [selectedInviteModalItem, setSelectedInviteModalItem] = useState<any>(null);
   const [selectedJoinRequestModalItem, setSelectedJoinRequestModalItem] = useState<any>(null);
   const [selectedAlertDetailItem, setSelectedAlertDetailItem] = useState<any>(null);
   const [isResponding, setIsResponding] = useState(false);
+
+  useEffect(() => {
+    const nextFilter = route?.params?.initialFilter || route?.params?.filter;
+    if (nextFilter && ['ALL', 'CRITICAL', 'VITAL', 'MEDICATION', 'APPOINTMENT'].includes(nextFilter)) {
+      setFilterType(nextFilter);
+    }
+  }, [route?.params?.initialFilter, route?.params?.filter]);
 
   const isFetchingRef = useRef(false);
 
@@ -243,7 +256,18 @@ export default function AlertsListScreen({ navigation }: any) {
   // Lọc danh sách sự cố theo tab
   const filteredIncidents = validIncidents.filter((item) => {
     if (filterType === 'CRITICAL') {
-      return item.alert_level === 'CRITICAL' || item.alert_type === 'FALL_DETECTED' || item.alert_type === 'ACOUSTIC_DISTRESS';
+      const lvl = (item.alert_level || '').toUpperCase();
+      const aType = (item.alert_type || '').toUpperCase();
+      return (
+        lvl === 'CRITICAL' ||
+        lvl === 'EMERGENCY' ||
+        aType === 'FALL_DETECTED' ||
+        aType === 'ACOUSTIC_DISTRESS' ||
+        aType === 'CRITICAL_TRIAD' ||
+        aType === 'DEVICE_BATTERY_DEAD' ||
+        aType === 'SOS_EMERGENCY' ||
+        aType.includes('CRITICAL')
+      );
     }
     if (filterType === 'VITAL') {
       return item.alert_type.includes('HEART') || item.alert_type.includes('SPO2') || item.alert_type.includes('TEMP');
@@ -627,7 +651,7 @@ export default function AlertsListScreen({ navigation }: any) {
         <View style={styles.headerLeftRow}>
           <TouchableOpacity
             style={[styles.backBtn, isDarkMode && { backgroundColor: colors.card, borderColor: colors.border }]}
-            onPress={() => (navigation?.canGoBack?.() ? navigation.goBack() : navigation.navigate('Home'))}
+            onPress={() => handleHeaderBack(navigation, route, 'Home', false)}
             activeOpacity={0.7}
             hitSlop={{ top: 12, bottom: 12, left: 12, right: 12 }}
             accessibilityLabel="Quay lại"

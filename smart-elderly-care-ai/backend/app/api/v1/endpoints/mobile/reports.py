@@ -47,6 +47,7 @@ async def get_health_report_summary(
         elderly=elderly,
         period=period,
         language=get_request_language(request),
+        user_id=user_id,
     )
 
 
@@ -61,8 +62,12 @@ async def export_default_pdf(
     db: AsyncSession = Depends(get_db),
 ):
     """Xuất báo cáo PDF y khoa tổng quan thực tế cho người dùng / bệnh nhân."""
+    from datetime import datetime, timedelta, timezone
+
     calc_days = 30 if period == "MONTH" else (7 if period == "WEEK" else days)
     user_id = current_user.id if current_user else None
+    now = datetime.now(timezone.utc)
+    start_time = now - timedelta(days=calc_days)
 
     device, elderly = await report_service.resolve_device(
         db, user_id=user_id, patient_id=patient_id, device_id=device_id
@@ -72,7 +77,24 @@ async def export_default_pdf(
     resolved_dev_str: str = device.device_id if device else "UNKNOWN_DEVICE"
 
     vitals = await crud_vital.get_history(db, device_id=resolved_id, limit=calc_days * 24 * 6) if resolved_id else []
-    incidents = await crud_incident.list(db, device_id=resolved_id, limit=100) if resolved_id else []
+    incidents = await report_service.get_house_incidents_in_period(
+        db=db,
+        device=device,
+        elderly=elderly,
+        user_id=user_id,
+        start_time=start_time,
+        end_time=now,
+    )
+    if not incidents:
+        all_house_inc = await report_service.get_house_incidents_in_period(
+            db=db,
+            device=device,
+            elderly=elderly,
+            user_id=user_id,
+            start_time=None,
+            end_time=now,
+        )
+        incidents = all_house_inc[:100]
 
     pdf_bytes = report_service.generate_pdf(
         device_id=resolved_dev_str,
@@ -98,8 +120,12 @@ async def export_default_excel(
     db: AsyncSession = Depends(get_db),
 ):
     """Xuất bảng dữ liệu Excel chuỗi thời gian thực tế cho người dùng / bệnh nhân."""
+    from datetime import datetime, timedelta, timezone
+
     calc_days = 30 if period == "MONTH" else (7 if period == "WEEK" else days)
     user_id = current_user.id if current_user else None
+    now = datetime.now(timezone.utc)
+    start_time = now - timedelta(days=calc_days)
 
     device, elderly = await report_service.resolve_device(
         db, user_id=user_id, patient_id=patient_id, device_id=device_id
@@ -109,7 +135,24 @@ async def export_default_excel(
     resolved_dev_str: str = device.device_id if device else "UNKNOWN_DEVICE"
 
     vitals = await crud_vital.get_history(db, device_id=resolved_id, limit=calc_days * 24 * 6) if resolved_id else []
-    incidents = await crud_incident.list(db, device_id=resolved_id, limit=500) if resolved_id else []
+    incidents = await report_service.get_house_incidents_in_period(
+        db=db,
+        device=device,
+        elderly=elderly,
+        user_id=user_id,
+        start_time=start_time,
+        end_time=now,
+    )
+    if not incidents:
+        all_house_inc = await report_service.get_house_incidents_in_period(
+            db=db,
+            device=device,
+            elderly=elderly,
+            user_id=user_id,
+            start_time=None,
+            end_time=now,
+        )
+        incidents = all_house_inc[:500]
 
     excel_bytes = report_service.generate_excel(
         device_id=resolved_dev_str,

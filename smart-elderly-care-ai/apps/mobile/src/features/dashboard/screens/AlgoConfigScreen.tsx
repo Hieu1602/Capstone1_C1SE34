@@ -14,9 +14,10 @@ import { useDeviceStore } from '../../../store/useDeviceStore';
 import { devicesApi } from '../../../services/deviceService';
 import { alertsWS } from '../../../services/websocket';
 import { LocalizedAlert, LocalizedText, LocalizedTextInput } from '../../../i18n/LocalizedComponents';
+import { handleHeaderBack } from '../../../navigation/navigationHelpers';
 
 
-export default function AlgoConfigScreen({ navigation }: any) {
+export default function AlgoConfigScreen({ navigation, route }: any) {
   const { isDarkMode } = useTheme();
   const { algoSettings, updateAlgoSettings } = useVitalStore();
   const { userRole, role, permissions, fetchMyPermissions } = useAuthStore();
@@ -130,7 +131,7 @@ export default function AlgoConfigScreen({ navigation }: any) {
             styles.backBtn,
             isDarkMode && { backgroundColor: '#1E293B', borderRadius: 18, borderWidth: 1, borderColor: '#334155' },
           ]}
-          onPress={() => navigation.goBack()}
+          onPress={() => handleHeaderBack(navigation, route, 'Home', true)}
         >
           <Ionicons name="chevron-back" size={24} color={isDarkMode ? '#F8FAFC' : Colors.textPrimary} />
         </TouchableOpacity>

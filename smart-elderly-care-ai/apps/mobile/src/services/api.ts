@@ -23,13 +23,7 @@ const getBaseUrl = (): string => {
     return `${protocol}://${resolvedHost}:8000/api/v1`;
   }
 
-  // 2. Ưu tiên biến môi trường EXPO_PUBLIC_API_URL (ví dụ AWS EC2) nếu được cấu hình
-  const envUrl = process.env.EXPO_PUBLIC_API_URL;
-  if (envUrl && envUrl.trim().length > 0) {
-    return envUrl.trim();
-  }
-
-  // 3. Tự động nhận diện IP máy tính từ Expo Metro host (kết nối trực tiếp điện thoại thật qua LAN Wi-Fi)
+  // 2. Tự động nhận diện IP máy tính từ Expo Metro host (kết nối trực tiếp điện thoại thật qua LAN Wi-Fi mà không sợ đổi IP)
   const debuggerHost =
     Constants.expoConfig?.hostUri ||
     (Constants as any).manifest2?.extra?.expoClient?.hostUri ||
@@ -40,6 +34,12 @@ const getBaseUrl = (): string => {
     if (hostIp && !hostIp.includes('exp.direct') && hostIp !== 'localhost' && hostIp !== '127.0.0.1') {
       return `http://${hostIp}:8000/api/v1`;
     }
+  }
+
+  // 3. Biến môi trường EXPO_PUBLIC_API_URL (ví dụ build APK production hoặc cấu hình tĩnh)
+  const envUrl = process.env.EXPO_PUBLIC_API_URL;
+  if (envUrl && envUrl.trim().length > 0) {
+    return envUrl.trim();
   }
 
   // 4. Fallback về máy chủ AWS EC2

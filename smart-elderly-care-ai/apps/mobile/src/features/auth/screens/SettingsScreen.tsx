@@ -26,6 +26,7 @@ import { useTheme } from "../../../store/useThemeStore";
 import i18n from "../../../i18n/config";
 import { LocalizedText as Text } from "../../../i18n/LocalizedComponents";
 import { usersApi, supportApi } from "../../../services/api";
+import { handleHeaderBack } from "../../../navigation/navigationHelpers";
 import {
     AccessibilitySettingsModal,
     FontSizeSettingsModal,
@@ -264,7 +265,7 @@ export default function SettingsScreen({ navigation, route }: any) {
                                 borderColor: "#334155",
                             },
                         ]}
-                        onPress={() => navigation?.goBack?.()}
+                        onPress={() => handleHeaderBack(navigation, route, "Home", true)}
                         activeOpacity={0.7}
                     >
                         <Ionicons

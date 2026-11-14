@@ -2,7 +2,7 @@
 // Màn hình Lịch sử Y Tế & Xuất Báo Cáo PDF / Excel (Proposal FR13)
 // Hỗ trợ người chăm sóc & bác sĩ xem xu hướng và tải file báo cáo định kỳ thực tế từ Backend
 
-import React, { useState, useEffect, useCallback } from 'react';
+import React, { useState, useEffect, useCallback, useMemo } from 'react';
 import {
   View,
   StyleSheet,
@@ -17,8 +17,40 @@ import { Ionicons } from '@expo/vector-icons';
 import Svg, { Path, Circle, Defs, LinearGradient, Stop, Line, Text as SvgText } from 'react-native-svg';
 import { Colors, Shadows } from '../../theme/colors';
 import { useTheme } from '../../store/useThemeStore';
+import { useAlertStore } from '../../store';
 import { LocalizedAlert, LocalizedText } from '../../i18n/LocalizedComponents';
 import { reportsApi } from '../../services/api';
+import { handleHeaderBack } from '../../navigation/navigationHelpers';
+
+const NON_MEDICAL_ALERT_TYPES = new Set([
+  'HOUSE_INVITE_PENDING',
+  'HOUSE_MEMBER_ADDED',
+  'MEMBER_ADDED',
+  'HOUSE_JOIN_REQUEST',
+  'HOUSE_JOIN_APPROVED',
+  'HOUSE_JOIN_REJECTED',
+  'HOUSE_INVITE_REJECTED',
+  'APPOINTMENT_SCHEDULED',
+  'APPOINTMENT_CONFIRMED',
+  'APPOINTMENT_CANCELLED',
+]);
+
+function isCriticalIncidentItem(item: any): boolean {
+  const aType = String(item?.alert_type || '').trim().toUpperCase();
+  const lvl = String(item?.alert_level || '').trim().toUpperCase();
+  if (!aType || NON_MEDICAL_ALERT_TYPES.has(aType)) return false;
+  return (
+    lvl === 'CRITICAL' ||
+    lvl === 'EMERGENCY' ||
+    aType === 'FALL_DETECTED' ||
+    aType === 'ACOUSTIC_DISTRESS' ||
+    aType === 'CRITICAL_TRIAD' ||
+    aType === 'DEVICE_BATTERY_DEAD' ||
+    aType === 'SOS_EMERGENCY' ||
+    aType.includes('CRITICAL') ||
+    aType.includes('FALL')
+  );
+}
 
 interface ReportData {
   period: 'WEEK' | 'MONTH';
@@ -32,6 +64,8 @@ interface ReportData {
   temperature: string;
   falls: string;
   anomalies: string;
+  criticalAlerts: string;
+  criticalEvents: string[];
   adherence: string;
   healthScore: string;
   healthScoreTrend: string;
@@ -55,6 +89,8 @@ const DEFAULT_REPORT: ReportData = {
   temperature: '--',
   falls: '0',
   anomalies: '0',
+  criticalAlerts: '0',
+  criticalEvents: [],
   adherence: '0%',
   healthScore: 'Chưa có dữ liệu',
   healthScoreTrend: 'Đang kết nối',
@@ -68,6 +104,8 @@ const DEFAULT_REPORT: ReportData = {
 
 export default function MedicalReportScreen({ navigation, route }: any) {
   const { isDarkMode } = useTheme();
+  const storeIncidents = useAlertStore((state) => state.incidents);
+  const fetchNotifications = useAlertStore((state) => state.fetchNotifications);
   const [period, setPeriod] = useState<'WEEK' | 'MONTH'>('WEEK');
   const [report, setReport] = useState<ReportData>(DEFAULT_REPORT);
   const [loading, setLoading] = useState<boolean>(true);
@@ -77,6 +115,47 @@ export default function MedicalReportScreen({ navigation, route }: any) {
   const patientId = route?.params?.patientId;
   const deviceId = route?.params?.deviceId;
 
+  const storeCriticalStats = useMemo(() => {
+    const daysWindow = period === 'WEEK' ? 7 : 30;
+    const cutoffMs = Date.now() - daysWindow * 24 * 60 * 60 * 1000;
+    const allCritical = storeIncidents.filter((inc) => isCriticalIncidentItem(inc));
+    const inPeriodCritical = allCritical.filter((inc) => {
+      if (!inc.created_at) return true;
+      const t = new Date(inc.created_at).getTime();
+      return isNaN(t) || t >= cutoffMs;
+    });
+    const matched = inPeriodCritical.length > 0 ? inPeriodCritical : allCritical;
+    const tags: string[] = [];
+    for (const inc of matched) {
+      const label = String(inc.alert_type || 'CRITICAL_ALERT').replace(/_/g, ' ').toUpperCase();
+      if (!tags.includes(label)) {
+        tags.push(label);
+      }
+    }
+    return {
+      count: matched.length,
+      events: tags,
+    };
+  }, [storeIncidents, period]);
+
+  const effectiveCriticalCount = Math.max(
+    Number(report.criticalAlerts) || 0,
+    storeCriticalStats.count
+  );
+
+  const effectiveCriticalEvents = useMemo(() => {
+    const merged: string[] = [];
+    for (const ev of [...(report.criticalEvents || []), ...storeCriticalStats.events]) {
+      const normalized = String(ev || '').trim().toUpperCase();
+      if (normalized && !merged.includes(normalized)) {
+        merged.push(normalized);
+      }
+    }
+    return merged;
+  }, [report.criticalEvents, storeCriticalStats.events]);
+
+  const hasAlertWarning = effectiveCriticalCount > 0 || (Number(report.falls) || 0) > 0;
+
   const fetchReport = useCallback(async (isPullRefresh = false) => {
     if (isPullRefresh) {
       setRefreshing(true);
@@ -85,8 +164,22 @@ export default function MedicalReportScreen({ navigation, route }: any) {
     }
 
     try {
-      const res = await reportsApi.getSummary(period, patientId, deviceId);
+      const [res] = await Promise.all([
+        reportsApi.getSummary(period, patientId, deviceId),
+        fetchNotifications().catch(() => null),
+      ]);
       if (res && res.data) {
+        const apiCriticalCount =
+          res.data.critical_alerts_count ??
+          res.data.criticalAlertsCount ??
+          res.data.criticalAlerts ??
+          0;
+        const apiCriticalEvents = Array.isArray(res.data.criticalEvents)
+          ? res.data.criticalEvents
+          : Array.isArray(res.data.critical_events)
+          ? res.data.critical_events
+          : [];
+
         setReport({
           period: res.data.period || period,
           days: res.data.days || (period === 'WEEK' ? 7 : 30),
@@ -99,6 +192,8 @@ export default function MedicalReportScreen({ navigation, route }: any) {
           temperature: res.data.temperature || '--',
           falls: res.data.falls || '0',
           anomalies: res.data.anomalies || '0',
+          criticalAlerts: String(apiCriticalCount),
+          criticalEvents: apiCriticalEvents,
           adherence: res.data.adherence || '0%',
           healthScore: res.data.healthScore || (res.data.hasData ? 'Ổn định' : 'Chưa có dữ liệu'),
           healthScoreTrend: res.data.healthScoreTrend || (res.data.hasData ? 'Tốt' : 'Chưa kết nối'),
@@ -130,7 +225,7 @@ export default function MedicalReportScreen({ navigation, route }: any) {
       setLoading(false);
       setRefreshing(false);
     }
-  }, [period, patientId, deviceId]);
+  }, [period, patientId, deviceId, fetchNotifications]);
 
   useEffect(() => {
     fetchReport();
@@ -190,7 +285,7 @@ export default function MedicalReportScreen({ navigation, route }: any) {
       <View style={[styles.topHeader, isDarkMode && { backgroundColor: '#0B0F19', borderBottomColor: '#334155' }]}>
         <TouchableOpacity
           style={[styles.backBtn, isDarkMode && { backgroundColor: '#1E293B', borderRadius: 18, borderWidth: 1, borderColor: '#334155' }]}
-          onPress={() => navigation.goBack()}
+          onPress={() => handleHeaderBack(navigation, route, 'Home', true)}
         >
           <Ionicons name="chevron-back" size={24} color={isDarkMode ? '#F8FAFC' : Colors.textPrimary} />
         </TouchableOpacity>
@@ -593,8 +688,85 @@ export default function MedicalReportScreen({ navigation, route }: any) {
                   <LocalizedText style={[styles.sectionTitle, isDarkMode && { color: '#F8FAFC' }]}>Cảnh báo & sự kiện</LocalizedText>
                   <LocalizedText style={[styles.sectionSubtitle, isDarkMode && { color: '#94A3B8' }]}>Cần chú ý trong kỳ báo cáo</LocalizedText>
                 </View>
-                <Ionicons name="shield-checkmark-outline" size={24} color="#0F766E" />
+                <Ionicons
+                  name={hasAlertWarning ? 'warning-outline' : 'shield-checkmark-outline'}
+                  size={24}
+                  color={hasAlertWarning ? '#DC2626' : '#0F766E'}
+                />
               </View>
+
+              {/* Dòng Cảnh báo nguy kịch (Cho phép bấm sang Thông Báo & Sự Kiện - Tab Nguy kịch) */}
+              <TouchableOpacity
+                style={styles.alertRow}
+                onPress={() =>
+                  navigation.navigate('Alerts', {
+                    initialFilter: 'CRITICAL',
+                    from: 'MedicalReport',
+                  })
+                }
+                activeOpacity={0.75}
+              >
+                <View style={[styles.alertIcon, { backgroundColor: '#FEE2E2' }]}>
+                  <Ionicons name="alert-circle" size={18} color="#DC2626" />
+                </View>
+                <View style={{ flex: 1, marginLeft: 10 }}>
+                  <LocalizedText style={[styles.alertLabel, { marginLeft: 0 }, isDarkMode && { color: '#F8FAFC' }]}>
+                    Cảnh báo nguy kịch
+                  </LocalizedText>
+                  {effectiveCriticalCount > 0 && (
+                    <LocalizedText style={[styles.alertSubHint, isDarkMode && { color: '#F87171' }]}>
+                      Chạm để xem chi tiết tại tab 🚨 Nguy kịch
+                    </LocalizedText>
+                  )}
+                </View>
+                <View style={{ flexDirection: 'row', alignItems: 'center' }}>
+                  <LocalizedText
+                    style={[
+                      styles.alertValue,
+                      isDarkMode && { color: '#F8FAFC' },
+                      effectiveCriticalCount > 0 && { color: '#DC2626' },
+                    ]}
+                  >
+                    {effectiveCriticalCount} lần
+                  </LocalizedText>
+                  <Ionicons
+                    name="chevron-forward"
+                    size={16}
+                    color={effectiveCriticalCount > 0 ? '#DC2626' : '#94A3B8'}
+                    style={{ marginLeft: 4 }}
+                  />
+                </View>
+              </TouchableOpacity>
+
+              {/* Danh sách tag tóm tắt sự kiện nguy kịch trong kỳ */}
+              {effectiveCriticalCount > 0 && effectiveCriticalEvents.length > 0 && (
+                <View style={styles.criticalEventsTagRow}>
+                  {effectiveCriticalEvents.map((eventName) => (
+                    <TouchableOpacity
+                      key={eventName}
+                      style={[
+                        styles.criticalEventTag,
+                        isDarkMode && { backgroundColor: 'rgba(220, 38, 38, 0.2)', borderColor: '#7F1D1D' },
+                      ]}
+                      onPress={() =>
+                        navigation.navigate('Alerts', {
+                          initialFilter: 'CRITICAL',
+                          from: 'MedicalReport',
+                        })
+                      }
+                      activeOpacity={0.8}
+                    >
+                      <Ionicons name="flame" size={12} color="#DC2626" style={{ marginRight: 4 }} />
+                      <LocalizedText
+                        style={[styles.criticalEventTagText, isDarkMode && { color: '#FCA5A5' }]}
+                      >
+                        {eventName}
+                      </LocalizedText>
+                    </TouchableOpacity>
+                  ))}
+                </View>
+              )}
+
               <View style={styles.alertRow}>
                 <View style={[styles.alertIcon, { backgroundColor: '#FEE2E2' }]}>
                   <Ionicons name="warning" size={17} color="#DC2626" />
@@ -995,6 +1167,35 @@ const styles = StyleSheet.create({
     fontSize: 13,
     fontWeight: '800',
     color: '#102A2B',
+  },
+  alertSubHint: {
+    marginTop: 2,
+    fontSize: 11,
+    fontWeight: '600',
+    color: '#DC2626',
+  },
+  criticalEventsTagRow: {
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+    gap: 6,
+    marginTop: 8,
+    marginLeft: 42,
+  },
+  criticalEventTag: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    paddingHorizontal: 8,
+    paddingVertical: 4,
+    borderRadius: 8,
+    borderWidth: 1,
+    borderColor: '#FECACA',
+    backgroundColor: '#FEF2F2',
+  },
+  criticalEventTagText: {
+    fontSize: 11,
+    fontWeight: '800',
+    color: '#B91C1C',
+    letterSpacing: 0.3,
   },
   exportSectionTitle: {
     marginBottom: 10,

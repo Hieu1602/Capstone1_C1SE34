@@ -103,7 +103,7 @@ export default function ProfileScreen({ navigation, route }: any) {
           'medical',
           'record',
         ],
-        onPress: () => navigation.navigate('PatientMedicalRecord'),
+        onPress: () => navigation.navigate('PatientMedicalRecord', { from: 'Profile' }),
       },
       {
         id: 'house-detail',
@@ -123,7 +123,7 @@ export default function ProfileScreen({ navigation, route }: any) {
           'house',
           'room',
         ],
-        onPress: () => navigation.navigate('HouseDetail'),
+        onPress: () => navigation.navigate('HouseDetail', { from: 'Profile' }),
       },
       ...(isOwner ? [{
         id: 'add-member',
@@ -142,7 +142,7 @@ export default function ProfileScreen({ navigation, route }: any) {
           'invite',
           'member',
         ],
-        onPress: () => navigation.navigate('HouseInvite'),
+        onPress: () => navigation.navigate('HouseInvite', { from: 'Profile' }),
       }] : []),
       {
         id: 'devices',
@@ -163,7 +163,7 @@ export default function ProfileScreen({ navigation, route }: any) {
           'ket noi',
           'devices',
         ],
-        onPress: () => navigation.navigate('Devices'),
+        onPress: () => navigation.navigate('Devices', { from: 'Profile' }),
       },
       {
         id: 'add-device',
@@ -182,7 +182,7 @@ export default function ProfileScreen({ navigation, route }: any) {
           'them camera',
           'them vong tay',
         ],
-        onPress: () => navigation.navigate('AddDevice'),
+        onPress: () => navigation.navigate('AddDevice', { from: 'Profile' }),
       },
       {
         id: 'multiview',
@@ -201,7 +201,7 @@ export default function ProfileScreen({ navigation, route }: any) {
           'chia man hinh',
           'live view',
         ],
-        onPress: () => navigation.navigate('MultiView'),
+        onPress: () => navigation.navigate('MultiView', { from: 'Profile' }),
       },
       {
         id: 'algo-config',
@@ -222,7 +222,7 @@ export default function ProfileScreen({ navigation, route }: any) {
           'fall detection',
           'ai config',
         ],
-        onPress: () => navigation.navigate('AlgoConfig'),
+        onPress: () => navigation.navigate('AlgoConfig', { from: 'Profile' }),
       },
       {
         id: 'medical-report',
@@ -243,7 +243,7 @@ export default function ProfileScreen({ navigation, route }: any) {
           'thong ke',
           'report',
         ],
-        onPress: () => navigation.navigate('MedicalReport'),
+        onPress: () => navigation.navigate('MedicalReport', { from: 'Profile' }),
       },
       {
         id: 'medication-reminder',
@@ -264,7 +264,7 @@ export default function ProfileScreen({ navigation, route }: any) {
           'medication',
           'reminder',
         ],
-        onPress: () => navigation.navigate('MedicationReminder'),
+        onPress: () => navigation.navigate('MedicationReminder', { from: 'Profile' }),
       },
       {
         id: 'alerts-log',
@@ -285,7 +285,7 @@ export default function ProfileScreen({ navigation, route }: any) {
           'alert',
           'notification',
         ],
-        onPress: () => navigation.navigate('Alerts'),
+        onPress: () => navigation.navigate('Alerts', { from: 'Profile' }),
       },
       {
         id: 'ai-assistant',
@@ -306,7 +306,7 @@ export default function ProfileScreen({ navigation, route }: any) {
           'chat bot',
           'assistant',
         ],
-        onPress: () => navigation.navigate('AIAssistant'),
+        onPress: () => navigation.navigate('AIAssistant', { from: 'Profile' }),
       },
       {
         id: 'emergency-115',
@@ -608,7 +608,7 @@ export default function ProfileScreen({ navigation, route }: any) {
           isDarkMode={mgr.isDarkMode}
           colors={mgr.colors}
           onPressSearch={() => setIsSearchVisible(true)}
-          onPressSettings={() => navigation.navigate('Settings')}
+          onPressSettings={() => navigation.navigate('Settings', { from: 'Profile' })}
         />
 
         <ProfileUserCard
@@ -617,7 +617,7 @@ export default function ProfileScreen({ navigation, route }: any) {
           isDarkMode={mgr.isDarkMode}
           colors={mgr.colors}
           onPressProfile={() => mgr.setUserMenuVisible(true)}
-          onPressAddMember={() => navigation.navigate('HouseInvite')}
+          onPressAddMember={() => navigation.navigate('HouseInvite', { from: 'Profile' })}
           onPressJoinHouse={() => setIsJoinCodeModalVisible(true)}
         />
 
@@ -635,7 +635,7 @@ export default function ProfileScreen({ navigation, route }: any) {
           )}
           showMore={mgr.showMoreGrid}
           onToggleShowMore={() => mgr.setShowMoreGrid(!mgr.showMoreGrid)}
-          onNavigate={(screen) => navigation.navigate(screen)}
+          onNavigate={(screen) => navigation.navigate(screen, { from: 'Profile' })}
           onOpenProfile={() => mgr.setUserMenuVisible(true)}
           onOpenJoinHouse={() => setIsJoinCodeModalVisible(true)}
         />
@@ -647,7 +647,7 @@ export default function ProfileScreen({ navigation, route }: any) {
           colors={mgr.colors}
           onCallEmergency={mgr.callEmergencyService}
           onOpenSupport={() => mgr.setCustomerSupportVisible(true)}
-          onNavigateAppInfo={() => navigation.navigate('AppInfo')}
+          onNavigateAppInfo={() => navigation.navigate('AppInfo', { from: 'Profile' })}
         />
 
         <ProfileSettingsAccordion

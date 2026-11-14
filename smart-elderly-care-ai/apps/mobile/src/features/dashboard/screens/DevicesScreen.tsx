@@ -23,8 +23,9 @@ import { EditGroupModal } from '../components/devices/EditGroupModal';
 import { DeviceAddMenuModal } from '../components/devices/DeviceAddMenuModal';
 import { DeviceCardItem } from '../components/devices/DeviceCardItem';
 import { DeviceGroupCard } from '../components/devices/DeviceGroupCard';
+import { handleHeaderBack } from '../../../navigation/navigationHelpers';
 
-export default function DevicesScreen({ navigation }: any) {
+export default function DevicesScreen({ navigation, route }: any) {
   const { isDarkMode, colors } = useTheme();
   const {
     userRole,
@@ -397,7 +398,7 @@ export default function DevicesScreen({ navigation }: any) {
         <View style={styles.headerLeftRow}>
           <TouchableOpacity
             style={[styles.backBtn, isDarkMode && { backgroundColor: colors.card, borderColor: colors.border }]}
-            onPress={() => (navigation?.canGoBack?.() ? navigation.goBack() : navigation.navigate('Home'))}
+            onPress={() => handleHeaderBack(navigation, route, 'Home', false)}
             activeOpacity={0.7}
             hitSlop={{ top: 12, bottom: 12, left: 12, right: 12 }}
             accessibilityLabel="Quay lại"

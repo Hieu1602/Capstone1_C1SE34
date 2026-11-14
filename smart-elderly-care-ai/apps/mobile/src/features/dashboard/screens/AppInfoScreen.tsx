@@ -21,6 +21,7 @@ import { useTheme } from '../../../store/useThemeStore';
 import { LocalizedText as Text } from '../../../i18n/LocalizedComponents';
 import { supportApi } from '../../../services/api';
 import { useTranslation } from 'react-i18next';
+import { handleHeaderBack } from '../../../navigation/navigationHelpers';
 
 const GUIDE_TRANSLATIONS: Record<string, { title: string; badge: string; description: string; steps: string[] }> = {
   vitals_threshold: {
@@ -79,7 +80,7 @@ const GUIDE_TRANSLATIONS: Record<string, { title: string; badge: string; descrip
   },
 };
 
-export default function AppInfoScreen({ navigation }: any) {
+export default function AppInfoScreen({ navigation, route }: any) {
   const { isDarkMode } = useTheme();
   const { t, i18n } = useTranslation();
   const isEn = i18n.language?.startsWith('en');
@@ -119,7 +120,7 @@ export default function AppInfoScreen({ navigation }: any) {
       duration: 200,
       useNativeDriver: Platform.OS !== 'web',
     }).start(() => {
-      navigation?.goBack?.();
+      handleHeaderBack(navigation, route, 'Home', true);
     });
   };
 

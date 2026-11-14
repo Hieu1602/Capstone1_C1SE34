@@ -24,6 +24,7 @@ import { useTheme } from '../../../store/useThemeStore';
 import * as Clipboard from 'expo-clipboard';
 import { householdApi } from '../../../services/api';
 import { alertsWS } from '../../../services/websocket';
+import { handleHeaderBack } from '../../../navigation/navigationHelpers';
 import {
   HouseMemberRow,
   HousePermissionModal,
@@ -477,7 +478,7 @@ export default function HouseDetailScreen({ navigation, route }: any) {
       <View style={styles.topHeader}>
         <TouchableOpacity
           style={[styles.backBtn, { backgroundColor: isDarkMode ? '#1E293B' : '#F1F5F9', borderColor: borderCol }]}
-          onPress={() => navigation.goBack()}
+          onPress={() => handleHeaderBack(navigation, route, 'Home', true)}
           activeOpacity={0.7}
         >
           <Ionicons name="chevron-back" size={24} color={textTitle} />
