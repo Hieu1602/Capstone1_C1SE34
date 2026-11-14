@@ -11,6 +11,7 @@ import {
   ActivityIndicator,
   RefreshControl,
   Linking,
+  Platform,
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
@@ -232,23 +233,34 @@ export default function MedicalReportScreen({ navigation, route }: any) {
   }, [fetchReport]);
 
   const handleExportPDF = async () => {
-    if (!report.hasData && report.total_readings === 0) {
-      LocalizedAlert.alert(
-        'Thông báo',
-        'Tài khoản mới chưa có dữ liệu đo sinh hiệu để xuất báo cáo PDF.'
-      );
-      return;
-    }
     try {
       const url = reportsApi.getPdfUrl(period, patientId, deviceId);
-      const supported = await Linking.canOpenURL(url);
-      if (supported) {
+
+      // Nếu đang chạy trên Web: Tự động kích hoạt tải file trực tiếp hoặc mở tab mới
+      if (Platform.OS === 'web' && typeof window !== 'undefined' && typeof document !== 'undefined') {
+        const link = document.createElement('a');
+        link.href = url;
+        link.setAttribute('download', `bao_cao_suc_khoe_${period.toLowerCase()}.pdf`);
+        link.target = '_blank';
+        document.body.appendChild(link);
+        link.click();
+        document.body.removeChild(link);
+        return;
+      }
+
+      // Trên Mobile: mở trực tiếp URL để tải hoặc xem PDF
+      try {
         await Linking.openURL(url);
-      } else {
-        LocalizedAlert.alert(
-          'Xuất Báo Cáo Y Tế (PDF)',
-          `Đã tạo liên kết báo cáo PDF chuẩn y tế:\n${url}`
-        );
+      } catch {
+        const supported = await Linking.canOpenURL(url).catch(() => false);
+        if (supported) {
+          await Linking.openURL(url);
+        } else {
+          LocalizedAlert.alert(
+            'Xuất Báo Cáo Y Tế (PDF)',
+            `Đã tạo liên kết báo cáo PDF chuẩn y tế:\n${url}`
+          );
+        }
       }
     } catch {
       LocalizedAlert.alert('Xuất Báo Cáo Y Tế (PDF)', 'Không thể mở liên kết tải báo cáo PDF.');
@@ -256,23 +268,34 @@ export default function MedicalReportScreen({ navigation, route }: any) {
   };
 
   const handleExportExcel = async () => {
-    if (!report.hasData && report.total_readings === 0) {
-      LocalizedAlert.alert(
-        'Thông báo',
-        'Tài khoản mới chưa có dữ liệu đo sinh hiệu để xuất file Excel.'
-      );
-      return;
-    }
     try {
       const url = reportsApi.getExcelUrl(period, patientId, deviceId);
-      const supported = await Linking.canOpenURL(url);
-      if (supported) {
+
+      // Nếu đang chạy trên Web: Tự động kích hoạt tải file trực tiếp hoặc mở tab mới
+      if (Platform.OS === 'web' && typeof window !== 'undefined' && typeof document !== 'undefined') {
+        const link = document.createElement('a');
+        link.href = url;
+        link.setAttribute('download', `du_lieu_suc_khoe_${period.toLowerCase()}.xlsx`);
+        link.target = '_blank';
+        document.body.appendChild(link);
+        link.click();
+        document.body.removeChild(link);
+        return;
+      }
+
+      // Trên Mobile
+      try {
         await Linking.openURL(url);
-      } else {
-        LocalizedAlert.alert(
-          'Xuất Dữ Liệu Thô (Excel)',
-          `Đã tạo liên kết tải bảng tính Excel chuỗi thời gian:\n${url}`
-        );
+      } catch {
+        const supported = await Linking.canOpenURL(url).catch(() => false);
+        if (supported) {
+          await Linking.openURL(url);
+        } else {
+          LocalizedAlert.alert(
+            'Xuất Dữ Liệu Thô (Excel)',
+            `Đã tạo liên kết tải bảng tính Excel chuỗi thời gian:\n${url}`
+          );
+        }
       }
     } catch {
       LocalizedAlert.alert('Xuất Dữ Liệu Thô (Excel)', 'Không thể mở liên kết tải file Excel.');

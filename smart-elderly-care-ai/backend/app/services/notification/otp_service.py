@@ -43,7 +43,7 @@ def _get_redis_client():
     try:
         import redis
         if getattr(settings, "REDIS_URL", None):
-            return redis.from_url(settings.REDIS_URL, decode_responses=True)
+            return redis.Redis.from_url(settings.REDIS_URL, decode_responses=True)
     except Exception as exc:
         logger.debug("[OTP] Không thể kết nối Redis, sử dụng in-memory cache: %s", exc)
     return None

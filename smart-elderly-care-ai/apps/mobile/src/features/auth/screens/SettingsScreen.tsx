@@ -398,49 +398,20 @@ export default function SettingsScreen({ navigation, route }: any) {
                                             />
                                         </View>
                                         <View style={{ flex: 1 }}>
-                                            <View
-                                                style={{
-                                                    flexDirection: "row",
-                                                    alignItems: "center",
-                                                    flexWrap: "wrap",
-                                                    gap: 6,
-                                                }}
+                                            <Text
+                                                style={[
+                                                    styles.settingsLabel,
+                                                    isDarkMode
+                                                        ? {
+                                                              color: "#F8FAFC",
+                                                          }
+                                                        : {
+                                                              color: "#0F172A",
+                                                          },
+                                                ]}
                                             >
-                                                <Text
-                                                    style={[
-                                                        styles.settingsLabel,
-                                                        isDarkMode
-                                                            ? {
-                                                                  color: "#F8FAFC",
-                                                              }
-                                                            : {
-                                                                  color: "#0F172A",
-                                                              },
-                                                    ]}
-                                                >
-                                                    Hồ sơ bệnh án người cao tuổi
-                                                </Text>
-                                                <View
-                                                    style={[
-                                                        styles.profileAesBadge,
-                                                        isDarkMode && {
-                                                            backgroundColor:
-                                                                "rgba(255, 122, 0, 0.16)",
-                                                        },
-                                                    ]}
-                                                >
-                                                    <Text
-                                                        style={[
-                                                            styles.profileAesBadgeText,
-                                                            isDarkMode && {
-                                                                color: Colors.primary,
-                                                            },
-                                                        ]}
-                                                    >
-                                                        Bảo mật AES-256
-                                                    </Text>
-                                                </View>
-                                            </View>
+                                                Hồ sơ bệnh án người cao tuổi
+                                            </Text>
                                             <Text
                                                 style={[
                                                     styles.settingsItemSub,

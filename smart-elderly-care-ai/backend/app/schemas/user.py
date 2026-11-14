@@ -102,6 +102,7 @@ class UserUpdate(BaseModel):
     notifications_enabled: Optional[bool] = None
     alert_sound_enabled: Optional[bool] = None
     critical_alert_enabled: Optional[bool] = None
+    two_factor_enabled: Optional[bool] = None
 
     @model_validator(mode="before")
     @classmethod
@@ -141,6 +142,7 @@ class NotificationPreferenceUpdate(BaseModel):
     notifications_enabled: Optional[bool] = None
     alert_sound_enabled: Optional[bool] = None
     critical_alert_enabled: Optional[bool] = None
+    two_factor_enabled: Optional[bool] = None
 
 
 class PasswordChange(BaseModel):
@@ -193,6 +195,7 @@ class UserOut(UserBase):
     notifications_enabled: bool = True
     alert_sound_enabled: bool = True
     critical_alert_enabled: bool = True
+    two_factor_enabled: bool = False
     location_enabled: bool = True
     location_latitude: Optional[float] = None
     location_longitude: Optional[float] = None
@@ -255,10 +258,12 @@ class DormantBatchActionIn(BaseModel):
 
 
 class Token(BaseModel):
-    access_token: str
-    refresh_token: str
+    access_token: str = ""
+    refresh_token: str = ""
     token_type: str = "bearer"
     user: Optional[UserOut] = None
+    requires_2fa: bool = False
+    two_factor_token: Optional[str] = None
 
 
 class UserTerminalOut(BaseModel):

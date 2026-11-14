@@ -75,6 +75,7 @@ from app.models.system_notification import SystemNotification
 from app.models.user import User, UserStatus
 from sqlalchemy import func, or_, and_
 
+from pydantic import BaseModel
 from app.schemas.user import (
     FontSizePreferenceUpdate,
     LanguagePreferenceUpdate,
@@ -951,6 +952,25 @@ async def update_notification_preferences(
         db_obj=current_user,
         obj_in=update_data,
     )
+
+
+class TwoFactorPreferenceUpdate(BaseModel):
+    enabled: bool
+
+
+@router.patch("/me/two-factor", response_model=UserOut)
+@router.put("/me/two-factor", response_model=UserOut)
+async def update_two_factor_preference(
+    payload: TwoFactorPreferenceUpdate,
+    current_user: User = Depends(get_current_user),
+    db: AsyncSession = Depends(get_db),
+):
+    """Cập nhật trạng thái Xác minh 2 bước (2FA qua SMS OTP) khi đăng nhập."""
+    current_user.two_factor_enabled = payload.enabled
+    db.add(current_user)
+    await db.commit()
+    await db.refresh(current_user)
+    return current_user
 
 
 @router.patch("/me/password")

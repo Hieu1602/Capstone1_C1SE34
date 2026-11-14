@@ -19,6 +19,7 @@ import { householdApi } from '../../../services/api';
 import {
   HouseAccountInviteModal,
   HouseShareModal,
+  generateHouseInviteCode30m,
 } from '../components/house';
 import { handleHeaderBack } from '../../../navigation/navigationHelpers';
 
@@ -97,13 +98,12 @@ export default function HouseInviteScreen({ navigation, route }: any) {
   const handleNativeShare = async () => {
     try {
       const roleName = selectedInviteRole === 'ADMIN' ? 'Quản trị viên' : 'Thành viên';
+      const { code } = generateHouseInviteCode30m(household_id);
       await Share.share({
         title: 'Mời thành viên gia đình',
         message: `Chào bạn, bạn nhận được lời mời tham gia căn nhà "${
           house?.name || 'Nhà của tôi'
-        }" với vai trò ${roleName} trên ứng dụng Smart Elderly Care AI để cùng chăm sóc và bảo vệ người thân. Mã mời: CARE-${
-          household_id ? String(household_id).slice(-4).toUpperCase() : '8869'
-        }. Vui lòng tải ứng dụng và đăng nhập bằng số điện thoại của bạn.`,
+        }" với vai trò ${roleName} trên ứng dụng Smart Elderly Care AI để cùng chăm sóc và bảo vệ người thân. Mã mời: ${code} (hiệu lực trong 30 phút). Vui lòng tải ứng dụng và đăng nhập bằng số điện thoại của bạn.`,
       });
     } catch {
       Alert.alert('Thông báo', 'Không thể mở trình chia sẻ.');
@@ -112,9 +112,8 @@ export default function HouseInviteScreen({ navigation, route }: any) {
 
   const handleCopyLink = async () => {
     const roleSlug = selectedInviteRole === 'ADMIN' ? 'admin' : 'member';
-    const codeSuffix = household_id ? String(household_id).slice(-4).toUpperCase() : '8869';
-    const inviteCode = `CARE-${codeSuffix}`;
-    const link = `https://smartcare.vn/invite?houseId=${household_id || 'current'}&code=${inviteCode}&role=${roleSlug}`;
+    const { code } = generateHouseInviteCode30m(household_id);
+    const link = `https://smartcare.vn/invite?houseId=${household_id || 'current'}&code=${code}&role=${roleSlug}`;
 
     try {
       if (Platform.OS === 'web' && typeof navigator !== 'undefined' && navigator.clipboard?.writeText) {

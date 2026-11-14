@@ -7,7 +7,11 @@ import {
   TouchableOpacity,
   TextInput,
   ActivityIndicator,
+  KeyboardAvoidingView,
+  Platform,
+  ScrollView,
 } from 'react-native';
+import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
 import { Colors } from '../../../../theme/colors';
 
@@ -37,6 +41,8 @@ export const HouseEditAddressModal: React.FC<HouseEditAddressModalProps> = ({
   isDarkMode,
   colors: { bgCard, borderCol, textTitle, textSub },
 }) => {
+  const insets = useSafeAreaInsets();
+
   return (
     <Modal
       visible={visible}
@@ -44,60 +50,85 @@ export const HouseEditAddressModal: React.FC<HouseEditAddressModalProps> = ({
       animationType="fade"
       onRequestClose={onClose}
     >
-      <View style={styles.modalOverlay}>
-        <View style={[styles.modalCard, { backgroundColor: bgCard }]}>
-          <View style={styles.modalHeaderRow}>
-            <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8 }}>
-              <Ionicons name="location" size={20} color={Colors.primary} />
-              <Text style={[styles.modalTitle, { color: textTitle }]}>Địa chỉ nhà thực tế</Text>
+      <KeyboardAvoidingView
+        behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
+        style={styles.modalOverlay}
+      >
+        <TouchableOpacity
+          style={styles.backdrop}
+          activeOpacity={1}
+          onPress={onClose}
+        />
+        <View
+          style={[
+            styles.modalCard,
+            {
+              backgroundColor: bgCard,
+              borderColor: borderCol,
+              paddingBottom: Math.max(insets.bottom, 16),
+            },
+          ]}
+        >
+          <ScrollView
+            bounces={false}
+            keyboardShouldPersistTaps="handled"
+            contentContainerStyle={styles.scrollContent}
+          >
+            <View style={styles.modalHeaderRow}>
+              <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8 }}>
+                <Ionicons name="location" size={20} color={Colors.primary} />
+                <Text style={[styles.modalTitle, { color: textTitle }]}>Địa chỉ nhà thực tế</Text>
+              </View>
+              <TouchableOpacity onPress={onClose} hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}>
+                <Ionicons name="close" size={22} color={textSub} />
+              </TouchableOpacity>
             </View>
-            <TouchableOpacity onPress={onClose}>
-              <Ionicons name="close" size={22} color={textSub} />
-            </TouchableOpacity>
-          </View>
 
-          <Text style={[styles.modalSub, { color: textSub, marginBottom: 14 }]}>
-            Nhập địa chỉ vị trí thực tế của căn hộ / gia đình để thuận tiện khi có cảnh báo khẩn cấp hoặc hỗ trợ y tế.
-          </Text>
+            <Text style={[styles.modalSub, { color: textSub, marginBottom: 14 }]}>
+              Nhập địa chỉ vị trí thực tế của căn hộ / gia đình để thuận tiện khi có cảnh báo khẩn cấp hoặc hỗ trợ y tế.
+            </Text>
 
-          <TextInput
-            style={[
-              styles.addressInput,
-              {
-                backgroundColor: isDarkMode ? '#0F172A' : '#F8FAFC',
-                borderColor: borderCol,
-                color: textTitle,
-                minHeight: 46,
-              },
-            ]}
-            value={address}
-            onChangeText={setAddress}
-            placeholder="VD: Số 123 Đường ABC, Quận XYZ, TP. Đà Nẵng"
-            placeholderTextColor="#94A3B8"
-            autoFocus
-          />
+            <TextInput
+              style={[
+                styles.addressInput,
+                {
+                  backgroundColor: isDarkMode ? '#0F172A' : '#F8FAFC',
+                  borderColor: borderCol,
+                  color: textTitle,
+                  minHeight: 46,
+                },
+              ]}
+              value={address}
+              onChangeText={setAddress}
+              placeholder="VD: Số 123 Đường ABC, Quận XYZ, TP. Đà Nẵng"
+              placeholderTextColor="#94A3B8"
+              autoFocus
+              returnKeyType="done"
+              onSubmitEditing={onSave}
+            />
 
-          <View style={styles.modalActionButtons}>
-            <TouchableOpacity
-              style={[styles.cancelBtn, { borderColor: borderCol }]}
-              onPress={onClose}
-            >
-              <Text style={[styles.cancelBtnText, { color: textSub }]}>Hủy</Text>
-            </TouchableOpacity>
-            <TouchableOpacity
-              style={[styles.saveBtn, { opacity: isSaving ? 0.7 : 1 }]}
-              onPress={onSave}
-              disabled={isSaving}
-            >
-              {isSaving ? (
-                <ActivityIndicator size="small" color="#FFF" />
-              ) : (
-                <Text style={styles.saveBtnText}>Lưu lại</Text>
-              )}
-            </TouchableOpacity>
-          </View>
+            <View style={styles.modalActionButtons}>
+              <TouchableOpacity
+                style={[styles.cancelBtn, { borderColor: borderCol }]}
+                onPress={onClose}
+              >
+                <Text style={[styles.cancelBtnText, { color: textSub }]}>Hủy</Text>
+              </TouchableOpacity>
+              <TouchableOpacity
+                style={[styles.saveBtn, { opacity: isSaving ? 0.7 : 1 }]}
+                onPress={onSave}
+                disabled={isSaving}
+              >
+                {isSaving ? (
+                  <ActivityIndicator size="small" color="#FFF" />
+                ) : (
+                  <Text style={styles.saveBtnText}>Lưu lại</Text>
+                )}
+              </TouchableOpacity>
+            </View>
+          </ScrollView>
         </View>
-      </View>
+      </KeyboardAvoidingView>
     </Modal>
   );
 };
@@ -105,8 +136,15 @@ export const HouseEditAddressModal: React.FC<HouseEditAddressModalProps> = ({
 const styles = StyleSheet.create({
   modalOverlay: {
     flex: 1,
-    backgroundColor: 'rgba(0,0,0,0.5)',
     justifyContent: 'flex-end',
+  },
+  backdrop: {
+    position: 'absolute',
+    top: 0,
+    left: 0,
+    right: 0,
+    bottom: 0,
+    backgroundColor: 'rgba(0,0,0,0.5)',
   },
   modalCard: {
     width: '100%',
@@ -115,6 +153,10 @@ const styles = StyleSheet.create({
     padding: 20,
     borderWidth: 1,
     borderBottomWidth: 0,
+    maxHeight: '90%',
+  },
+  scrollContent: {
+    flexGrow: 0,
   },
   modalHeaderRow: {
     flexDirection: 'row',
