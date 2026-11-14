@@ -47,10 +47,13 @@ export const VitalsSummaryCard: React.FC<VitalsSummaryCardProps> = ({
   const hasTemp = currentVitals.skin_temp_max !== null && currentVitals.skin_temp_max !== undefined;
   // Kiểm tra thiết bị vòng đeo tay BLE có đang kết nối thực tế hay không
   const isBraceletConnected = Boolean(
-    currentVitals?.bracelet_connected &&
-    braceletBattery !== null &&
-    braceletBattery !== undefined
+    currentVitals?.bracelet_connected ||
+    hasHR ||
+    hasSpO2 ||
+    (braceletBattery !== null && braceletBattery !== undefined && braceletBattery > 0)
   );
+  const isBatteryDead = braceletBattery === 0;
+  const isBatteryLow = braceletBattery !== null && braceletBattery !== undefined && braceletBattery > 0 && braceletBattery <= 20;
 
   return (
     <View style={[styles.vitalsSummaryCard, isDarkMode && { backgroundColor: colors.card, borderColor: colors.border }]}>
@@ -95,21 +98,43 @@ export const VitalsSummaryCard: React.FC<VitalsSummaryCardProps> = ({
 
         <View style={styles.deviceStatusItem}>
           <Ionicons
-            name={isBraceletConnected ? "battery-charging" : "bluetooth-outline"}
+            name={
+              isBatteryDead
+                ? "battery-dead"
+                : isBatteryLow
+                  ? "battery-half"
+                  : isBraceletConnected
+                    ? (braceletBattery !== null && braceletBattery !== undefined ? "battery-full" : "bluetooth")
+                    : "bluetooth-outline"
+            }
             size={15}
-            color={isBraceletConnected ? Colors.aiBlue : isDarkMode ? '#64748B' : '#94A3B8'}
+            color={
+              isBatteryDead
+                ? Colors.danger
+                : isBatteryLow
+                  ? '#D97706'
+                  : isBraceletConnected
+                    ? Colors.aiBlue
+                    : (isDarkMode ? '#64748B' : '#94A3B8')
+            }
           />
           <Text style={[styles.deviceStatusText, isDarkMode && { color: colors.textSecondary }]}>
             Vòng BLE:{' '}
             <Text
               style={{
-                color: isBraceletConnected
-                  ? (isDarkMode ? colors.textPrimary : Colors.textPrimary)
-                  : (isDarkMode ? '#94A3B8' : '#64748B'),
+                color: isBatteryDead
+                  ? Colors.danger
+                  : isBatteryLow
+                    ? '#D97706'
+                    : isBraceletConnected
+                      ? (isDarkMode ? colors.textPrimary : Colors.textPrimary)
+                      : (isDarkMode ? '#94A3B8' : '#64748B'),
                 fontWeight: '700',
               }}
             >
-              {isBraceletConnected ? `${braceletBattery}% Pin` : 'Chưa kết nối'}
+              {isBraceletConnected
+                ? (braceletBattery !== null && braceletBattery !== undefined ? `${braceletBattery}% Pin` : 'Đang đo')
+                : (isBatteryDead ? 'Hết pin' : 'Chưa kết nối')}
             </Text>
           </Text>
         </View>

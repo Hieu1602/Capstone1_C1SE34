@@ -348,26 +348,34 @@ const createAuthStore: StateCreator<AuthStoreState, [], [['zustand/persist', Aut
         set({ permissions: p, has_house: true });
         return p;
       }
-    } catch {
-      // 404 hoặc lỗi: Người dùng không thuộc căn nhà nào
-      const independentPerms: HousePermissions = {
-        can_view_health: false,
-        can_view_camera: false,
-        can_handle_emergency: false,
-        can_manage_devices: true,
-        can_manage_records: false,
-        role_in_house: 'NEW_USER',
-        is_owner: false,
-      };
-      set({
-        household_id: null,
-        has_house: false,
-        assigned_house: null,
-        permissions: independentPerms,
-        has_devices: false,
-        device_count: 0,
-      });
-      return independentPerms;
+    } catch (err: any) {
+      const status = err?.response?.status;
+      if (status === 404) {
+        // Chỉ khi backend xác nhận HTTP 404 (chưa thuộc nhà nào hoặc vừa bị kick)
+        const independentPerms: HousePermissions = {
+          can_view_health: false,
+          can_view_camera: false,
+          can_handle_emergency: false,
+          can_manage_devices: true,
+          can_manage_records: false,
+          role_in_house: 'NEW_USER',
+          is_owner: false,
+        };
+        set({
+          household_id: null,
+          has_house: false,
+          assigned_house: null,
+          permissions: independentPerms,
+          has_devices: false,
+          device_count: 0,
+        });
+        return independentPerms;
+      }
+      // Lỗi mạng hoặc timeout: giữ nguyên cache hiện có, không xóa dữ liệu căn nhà
+      console.log('[AuthStore] fetchMyPermissions giữ nguyên cache, lỗi mạng:', err?.message || err);
+      if (s.permissions) {
+        return s.permissions;
+      }
     }
     const def: HousePermissions = {
       can_view_health: false,

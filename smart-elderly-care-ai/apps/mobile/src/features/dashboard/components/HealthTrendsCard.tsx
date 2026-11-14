@@ -9,11 +9,13 @@
 //     sẽ hiển thị trạng thái rỗng ("Chưa có dữ liệu" / "--"), không dùng dữ liệu giả.
 // ==============================================================================
 
-import React from 'react';
+import React, { useEffect, useState } from 'react';
 import { View, StyleSheet, TouchableOpacity } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
+import Svg, { Path, Circle, Defs, LinearGradient, Stop, Line } from 'react-native-svg';
 import { Colors, Shadows } from '../../../theme/colors';
 import { LocalizedText as Text } from '../../../i18n/LocalizedComponents';
+import { vitalsApi } from '../../../services/api';
 
 interface HealthTrendsCardProps {
   navigation: any;
@@ -33,10 +35,143 @@ export function HealthTrendsCard({
   const hasSpO2 = currentVitals?.spo2 !== null && currentVitals?.spo2 !== undefined;
   const hasAnyData = hasHR || hasSpO2;
 
+  // Lịch sử đo nhịp tim nhiều mốc thời gian để vẽ biểu đồ line 12h qua
+  const [hrBars, setHrBars] = useState<{ time: string; val: number }[]>([]);
+  const [chartWidth, setChartWidth] = useState(140);
+
+  useEffect(() => {
+    let isMounted = true;
+    const fetchHistory = async () => {
+      try {
+        const devId = currentVitals?.device_id || 'BLE_BAND_001';
+        const res = await vitalsApi.getHistory(devId, 30);
+        if (isMounted && res.data && Array.isArray(res.data) && res.data.length > 0) {
+          const valid = res.data
+            .filter((v: any) => v.heart_rate != null && Number(v.heart_rate) > 0)
+            .reverse();
+          if (valid.length > 0) {
+            // Lấy tối đa 15 mốc gần nhất để vẽ đường cong nhịp tim mềm mại
+            const finalPoints = valid.slice(-15).map((item: any, idx: number, arr: any[]) => {
+              let label = 'Hiện tại';
+              if (idx < arr.length - 1 && item.time) {
+                const d = new Date(item.time);
+                const hh = String(d.getHours()).padStart(2, '0');
+                const mm = String(d.getMinutes()).padStart(2, '0');
+                label = `${hh}:${mm}`;
+              }
+              return {
+                time: label,
+                val: Math.round(Number(item.heart_rate)),
+              };
+            });
+            setHrBars(finalPoints);
+          }
+        }
+      } catch (e) {
+        // Fallback nhẹ
+      }
+    };
+
+    fetchHistory();
+    return () => {
+      isMounted = false;
+    };
+  }, [currentVitals?.device_id]);
+
+  // Cập nhật mốc mới khi có WebSocket nhịp tim đẩy tới
+  useEffect(() => {
+    if (currentVitals?.heart_rate && Number(currentVitals.heart_rate) > 0) {
+      setHrBars((prev) => {
+        const val = Math.round(Number(currentVitals.heart_rate));
+        if (prev.length === 0) {
+          return [{ time: 'Hiện tại', val }];
+        }
+        const now = new Date();
+        const hh = String(now.getHours()).padStart(2, '0');
+        const mm = String(now.getMinutes()).padStart(2, '0');
+        const updated = prev.map((p, i) => (i === prev.length - 1 ? { ...p, time: `${hh}:${mm}` } : p));
+        return [...updated, { time: 'Hiện tại', val }].slice(-15);
+      });
+    }
+  }, [currentVitals?.heart_rate, currentVitals?.timestamp]);
+
   // Giá trị hiển thị thực tế và tính toán vị trí kim chỉ báo SpO2 trên thang đo 90-100%
   const hrValue = hasHR ? currentVitals.heart_rate : null;
+  const displayBars = hrBars.length > 0 ? hrBars : hasHR ? [{ time: 'Hiện tại', val: hrValue }] : [];
+  const avgHR = displayBars.length > 0
+    ? Math.round(displayBars.reduce((s, c) => s + c.val, 0) / displayBars.length)
+    : hrValue;
+
   const spo2Value = hasSpO2 ? currentVitals.spo2 : null;
-  const spo2PinPercent = spo2Value !== null ? Math.min(100, Math.max(0, (spo2Value - 90) * 10)) : 0;
+  const spo2PinPercent = spo2Value !== null ? Math.min(96, Math.max(4, (spo2Value - 90) * 10)) : 0;
+
+  // Tính toán tọa độ vẽ Mini Line Chart
+  const chartHeight = 54;
+  const vals = displayBars.map((p) => p.val);
+  const minVal = vals.length > 0 ? Math.min(...vals, 55) : 55;
+  const maxVal = vals.length > 0 ? Math.max(...vals, 105) : 105;
+  const range = Math.max(15, maxVal - minVal);
+
+  const padLeft = 6;
+  const padRight = 10;
+  const padTop = 6;
+  const padBottom = 6;
+  const usableW = Math.max(80, chartWidth - padLeft - padRight);
+  const usableH = chartHeight - padTop - padBottom;
+
+  const rawCoords = displayBars.map((p, i) => {
+    const x = padLeft + (displayBars.length > 1 ? (i / (displayBars.length - 1)) * usableW : usableW / 2);
+    const normY = (p.val - minVal) / range;
+    const y = padTop + (1 - normY) * usableH;
+    return { x, y, val: p.val, time: p.time };
+  });
+
+  const coords =
+    rawCoords.length === 1
+      ? [
+          { x: padLeft, y: rawCoords[0].y, val: rawCoords[0].val, time: rawCoords[0].time },
+          { x: padLeft + usableW, y: rawCoords[0].y, val: rawCoords[0].val, time: rawCoords[0].time },
+        ]
+      : rawCoords;
+
+  const hasChartData = coords.length > 0;
+  const lastPt = hasChartData ? coords[coords.length - 1] : { x: 0, y: 0, val: 0, time: '' };
+  const firstPt = hasChartData ? coords[0] : { x: 0, y: 0, val: 0, time: '' };
+  const isHighHR = lastPt.val >= 100;
+  const isLowHR = lastPt.val > 0 && lastPt.val < 50;
+  const isLowSpO2 = spo2Value !== null && spo2Value < 95;
+  const isWarning = isHighHR || isLowHR || isLowSpO2;
+
+  const trendStatusText = !hasAnyData
+    ? 'Chưa có dữ liệu'
+    : isHighHR && lastPt.val >= 120
+      ? 'Nhịp tim cao'
+      : isWarning
+        ? 'Cần theo dõi'
+        : 'Đạt chuẩn';
+
+  const trendStatusColor = !hasAnyData ? '#64748B' : isWarning ? '#D97706' : '#15803D';
+  const trendStatusBg = !hasAnyData ? (isDarkMode ? '#1E293B' : '#F1F5F9') : isWarning ? '#FEF3C7' : '#DCFCE7';
+  const trendStatusIcon = !hasAnyData ? 'information-circle' : isWarning ? 'warning' : 'checkmark-circle';
+
+  const lineColor = isHighHR ? '#F59E0B' : '#10B981';
+  const refY = Math.max(
+    padTop,
+    Math.min(chartHeight - padBottom, padTop + (1 - ((avgHR ?? 75) - minVal) / range) * usableH)
+  );
+
+  let linePath = '';
+  let areaPath = '';
+  if (hasChartData) {
+    linePath = `M ${coords[0].x} ${coords[0].y}`;
+    for (let i = 1; i < coords.length; i++) {
+      const prev = coords[i - 1];
+      const curr = coords[i];
+      const cpX = (prev.x + curr.x) / 2;
+      linePath += ` C ${cpX} ${prev.y}, ${cpX} ${curr.y}, ${curr.x} ${curr.y}`;
+    }
+    areaPath = `${linePath} L ${lastPt.x} ${chartHeight} L ${firstPt.x} ${chartHeight} Z`;
+  }
 
   return (
     <View style={styles.trendSectionContainer}>
@@ -50,21 +185,21 @@ export function HealthTrendsCard({
         <View
           style={[
             styles.trendStandardBadge,
-            !hasAnyData && { backgroundColor: isDarkMode ? '#1E293B' : '#F1F5F9' },
+            { backgroundColor: trendStatusBg },
           ]}
         >
           <Ionicons
-            name={hasAnyData ? 'checkmark-circle' : 'information-circle'}
+            name={trendStatusIcon}
             size={13}
-            color={hasAnyData ? '#15803D' : '#64748B'}
+            color={trendStatusColor}
           />
           <Text
             style={[
               styles.trendStandardBadgeText,
-              !hasAnyData && { color: isDarkMode ? '#94A3B8' : '#64748B' },
+              { color: trendStatusColor },
             ]}
           >
-            {hasAnyData ? 'Đạt chuẩn' : 'Chưa có dữ liệu'}
+            {trendStatusText}
           </Text>
         </View>
       </View>
@@ -93,43 +228,64 @@ export function HealthTrendsCard({
                   !hasHR && { color: isDarkMode ? '#94A3B8' : '#64748B' },
                 ]}
               >
-                {hasHR ? `TB ${hrValue}` : 'TB --'}
+                {hasHR ? `TB ${avgHR}` : 'TB --'}
               </Text>
             </View>
           </View>
 
-          {/* Mini bar chart */}
-          {hasHR ? (
-            <View style={styles.miniBarChartArea}>
-              <View style={styles.miniDashedRefLine}>
-                <View style={styles.miniDashedDash} />
-                <Text style={[styles.miniRefLabel, isDarkMode && { color: colors.textSecondary }]}>{hrValue} bpm</Text>
-              </View>
+          {/* Mini line chart */}
+          {hasHR && displayBars.length > 0 ? (
+            <View
+              style={styles.miniBarChartArea}
+              onLayout={(e) => {
+                const w = e.nativeEvent.layout.width;
+                if (w > 0) setChartWidth(w);
+              }}
+            >
+              <Svg width={chartWidth} height={chartHeight}>
+                <Defs>
+                  <LinearGradient id="hrMiniGrad" x1="0" y1="0" x2="0" y2="1">
+                    <Stop offset="0%" stopColor={lineColor} stopOpacity={0.35} />
+                    <Stop offset="100%" stopColor={lineColor} stopOpacity={0.02} />
+                  </LinearGradient>
+                </Defs>
 
-              <View style={styles.miniBarsRow}>
-                {[
-                  { time: 'Hiện tại', val: hrValue },
-                ].map((col) => {
-                  const height = Math.max(14, ((col.val - 50) / 45) * 44);
-                  const isHigh = col.val >= 100;
-                  return (
-                    <View key={col.time} style={styles.miniBarCol}>
-                      <Text style={[styles.miniBarValText, isDarkMode && { color: colors.textSecondary }]}>{col.val}</Text>
-                      <View style={[styles.miniBarTrack, isDarkMode && { backgroundColor: colors.surfaceSubtle }]}>
-                        <View
-                          style={[
-                            styles.miniBarFill,
-                            {
-                              height,
-                              backgroundColor: isHigh ? '#F59E0B' : '#10B981',
-                            },
-                          ]}
-                        />
-                      </View>
-                      <Text style={[styles.miniBarTimeText, isDarkMode && { color: colors.textSecondary }]}>{col.time}</Text>
-                    </View>
-                  );
-                })}
+                {/* Vạch ngang tham chiếu TB */}
+                <Line
+                  x1={padLeft}
+                  y1={refY}
+                  x2={chartWidth - padRight}
+                  y2={refY}
+                  stroke={isDarkMode ? '#334155' : '#CBD5E1'}
+                  strokeWidth={0.8}
+                  strokeDasharray="3 3"
+                />
+
+                {/* Mảng gradient dưới đường sóng */}
+                <Path d={areaPath} fill="url(#hrMiniGrad)" />
+
+                {/* Đường cong nhịp tim mềm mại */}
+                <Path
+                  d={linePath}
+                  fill="none"
+                  stroke={lineColor}
+                  strokeWidth={2.2}
+                  strokeLinecap="round"
+                  strokeLinejoin="round"
+                />
+
+                {/* Điểm đo hiện tại nhấp nháy */}
+                <Circle cx={lastPt.x} cy={lastPt.y} r={5} fill={lineColor} opacity={0.25} />
+                <Circle cx={lastPt.x} cy={lastPt.y} r={3} fill={lineColor} stroke="#FFFFFF" strokeWidth={1.5} />
+              </Svg>
+
+              <View style={styles.lineTimeRow}>
+                <Text style={[styles.miniBarTimeText, isDarkMode && { color: colors.textSecondary }]}>
+                  {displayBars[0]?.time !== 'Hiện tại' ? displayBars[0]?.time : '12h trước'}
+                </Text>
+                <Text style={[styles.miniBarTimeText, { fontWeight: '700', color: lineColor }]}>
+                  {lastPt.val} bpm • Hiện tại
+                </Text>
               </View>
             </View>
           ) : (
@@ -216,11 +372,13 @@ export function HealthTrendsCard({
         onPress={() => navigation.navigate('HealthDetail', { metric: 'spo2' })}
       >
         <View style={styles.spo2CardTop}>
-          <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6 }}>
+          <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6, flex: 1, marginRight: 8 }}>
             <View style={styles.spo2IconCircle}>
               <Ionicons name="water" size={16} color="#0284C7" />
             </View>
-            <Text style={[styles.spo2CardTitle, isDarkMode && { color: colors.textPrimary }]}>Chỉ số Oxy máu SpO₂</Text>
+            <Text style={[styles.spo2CardTitle, isDarkMode && { color: colors.textPrimary }]} numberOfLines={1}>
+              Chỉ số Oxy máu SpO₂
+            </Text>
           </View>
           <View
             style={[
@@ -242,8 +400,9 @@ export function HealthTrendsCard({
                 hasSpO2 && spo2Value < 95 && { color: isDarkMode ? '#FBBF24' : '#D97706' },
                 hasSpO2 && spo2Value >= 95 && { color: isDarkMode ? '#86EFAC' : '#15803D' },
               ]}
+              numberOfLines={1}
             >
-              {hasSpO2 ? `${spo2Value}% - ${spo2Value >= 95 ? 'Bình thường / An toàn' : 'Cần theo dõi'}` : 'Chưa có dữ liệu'}
+              {hasSpO2 ? `${spo2Value}% • ${spo2Value >= 95 ? 'An toàn' : 'Cần theo dõi'}` : 'Chưa có dữ liệu'}
             </Text>
           </View>
         </View>
@@ -261,19 +420,12 @@ export function HealthTrendsCard({
             )}
           </View>
 
-          {/* Các mốc số trên thước đo */}
+          {/* Các mốc số cố định trên thước đo chuẩn y tế */}
           <View style={styles.rulerTicksRow}>
             <Text style={[styles.rulerTickText, isDarkMode && { color: colors.textSecondary }]}>90%</Text>
             <Text style={[styles.rulerTickText, isDarkMode && { color: colors.textSecondary }]}>92%</Text>
             <Text style={[styles.rulerTickText, { fontWeight: '700', color: Colors.primary }]}>95% (Chuẩn)</Text>
-            <Text
-              style={[
-                styles.rulerTickText,
-                { fontWeight: '800', color: hasSpO2 ? '#15803D' : (isDarkMode ? colors.textSecondary : '#64748B') },
-              ]}
-            >
-              {hasSpO2 ? `${spo2Value}%` : '98%'}
-            </Text>
+            <Text style={[styles.rulerTickText, isDarkMode && { color: colors.textSecondary }]}>98%</Text>
             <Text style={[styles.rulerTickText, isDarkMode && { color: colors.textSecondary }]}>100%</Text>
           </View>
         </View>
@@ -363,9 +515,16 @@ const styles = StyleSheet.create({
   },
   miniBarChartArea: {
     height: 78,
-    justifyContent: 'flex-end',
+    justifyContent: 'center',
     position: 'relative',
     marginVertical: 4,
+  },
+  lineTimeRow: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    marginTop: 3,
+    paddingHorizontal: 2,
   },
   miniEmptyBox: {
     height: 78,
@@ -541,6 +700,7 @@ const styles = StyleSheet.create({
     paddingHorizontal: 8,
     paddingVertical: 3,
     borderRadius: 6,
+    flexShrink: 0,
   },
   spo2BadgeGreenText: {
     fontSize: 11,

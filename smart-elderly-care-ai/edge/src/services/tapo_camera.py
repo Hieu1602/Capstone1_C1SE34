@@ -65,6 +65,74 @@ class Recorder:
         self.error = None
         # Tên bản ghi đang xử lý; chỉ tệp hoàn tất mới được liệt kê.
         self.active = None
+        self.cleanup_task = None
+
+    def cleanup_old_recordings(self, retention_hours: float | None = None, max_bytes: int | None = None) -> int:
+        """Xóa các bản ghi MP4 cũ hơn retention_hours hoặc khi tổng dung lượng vượt max_bytes.
+
+        Args:
+            retention_hours: Giờ lưu tối đa trước khi xóa (mặc định CAMERA_RETENTION_HOURS hoặc 48h).
+            max_bytes: Giới hạn dung lượng byte (mặc định MAX_RECORDING_STORAGE_GB hoặc 5GB).
+
+        Returns:
+            Số file đã xóa.
+        """
+        if retention_hours is None:
+            retention_hours = float(os.getenv("CAMERA_RETENTION_HOURS", "48"))
+        if max_bytes is None:
+            max_bytes = int(os.getenv("MAX_RECORDING_STORAGE_GB", "5")) * 1024 * 1024 * 1024
+
+        deleted_count = 0
+        cutoff = time.time() - (retention_hours * 3600)
+        try:
+            mp4_files = [p for p in self.directory.glob("*.mp4") if p.is_file() and p.name != self.active]
+            mp4_files.sort(key=lambda p: p.stat().st_mtime)
+
+            remaining = []
+            for path in mp4_files:
+                try:
+                    if path.stat().st_mtime < cutoff:
+                        path.unlink(missing_ok=True)
+                        deleted_count += 1
+                        LOG.info("Dọn dẹp bản ghi camera hết hạn: %s", path.name)
+                    else:
+                        remaining.append(path)
+                except OSError:
+                    continue
+
+            total_size = sum(p.stat().st_size for p in remaining if p.is_file())
+            for path in remaining:
+                if total_size <= max_bytes:
+                    break
+                try:
+                    size = path.stat().st_size
+                    path.unlink(missing_ok=True)
+                    total_size -= size
+                    deleted_count += 1
+                    LOG.info("Dọn dẹp bản ghi cũ do dung lượng vượt ngưỡng: %s", path.name)
+                except OSError:
+                    continue
+        except Exception as exc:
+            LOG.error("Lỗi dọn dẹp bản ghi camera: %s", exc)
+        return deleted_count
+
+    async def _cleanup_loop(self, interval_seconds: float = 1800):
+        while True:
+            try:
+                await asyncio.to_thread(self.cleanup_old_recordings)
+            except asyncio.CancelledError:
+                break
+            except Exception as e:
+                LOG.error("Lỗi trong vòng lặp dọn dẹp bản ghi: %s", e)
+            try:
+                await asyncio.sleep(interval_seconds)
+            except asyncio.CancelledError:
+                break
+
+    def start_cleanup(self, interval_seconds: float = 1800):
+        if self.cleanup_task and not self.cleanup_task.done():
+            return
+        self.cleanup_task = asyncio.create_task(self._cleanup_loop(interval_seconds))
 
     def start(self, seconds: int, url: str | None = None) -> str:
         """Bắt đầu ghi nếu không có bản ghi khác đang chạy.
@@ -129,11 +197,14 @@ class Recorder:
             self.active = None
 
     async def close(self):
-        """Hủy và chờ tác vụ ghi hiện tại khi đóng dịch vụ.
+        """Hủy và chờ tác vụ ghi và dọn dẹp hiện tại khi đóng dịch vụ.
 
         Returns:
             Không có. Tác động: dọn task và tài nguyên FFmpeg.
         """
+        if self.cleanup_task and not self.cleanup_task.done():
+            self.cleanup_task.cancel()
+            await asyncio.gather(self.cleanup_task, return_exceptions=True)
         if self.task and not self.task.done():
             self.task.cancel()
             await asyncio.gather(self.task, return_exceptions=True)
@@ -163,6 +234,40 @@ def get_mqtt_client():
         return None
 
 
+def _upload_to_supabase(file_path: Path, object_name: str, content_type: str) -> str | None:
+    """Tải file ảnh hoặc video clip sự cố trực tiếp lên Supabase Storage bucket."""
+    supabase_url = os.getenv("SUPABASE_URL", "").rstrip("/")
+    service_key = os.getenv("SUPABASE_SERVICE_ROLE_KEY", "")
+    bucket = os.getenv("SUPABASE_STORAGE_BUCKET_INCIDENTS", "incidents")
+    if not supabase_url or not service_key:
+        return None
+    try:
+        import urllib.request
+        if not file_path.exists():
+            return None
+        with open(file_path, "rb") as f:
+            data = f.read()
+        req = urllib.request.Request(
+            f"{supabase_url}/storage/v1/object/{bucket}/{object_name}",
+            data=data,
+            headers={
+                "Authorization": f"Bearer {service_key}",
+                "apikey": service_key,
+                "Content-Type": content_type,
+                "x-upsert": "true",
+            },
+            method="POST",
+        )
+        with urllib.request.urlopen(req, timeout=15) as resp:
+            if resp.status in (200, 201):
+                url = f"{supabase_url}/storage/v1/object/public/{bucket}/{object_name}"
+                LOG.info("Đã tải %s lên Supabase Cloud: %s", object_name, url)
+                return url
+    except Exception as exc:
+        LOG.warning("Không thể tải %s lên Supabase (%s); dùng URL cục bộ.", object_name, exc)
+    return None
+
+
 class CameraFallDetector:
     """Giám sát và nhận diện té ngã AI trực tiếp trên luồng camera."""
     def __init__(self, camera_driver, recorder, detector=None, mqtt=None):
@@ -177,6 +282,9 @@ class CameraFallDetector:
         self.latest_result = None
         self.get_active_driver_fn = None
         self.frame_buffer = deque(maxlen=75)  # Lưu 5 giây video ở 15 FPS
+        self.inference_fps = max(1.0, float(os.getenv("AI_INFERENCE_FPS", "5.0")))
+        self.inference_interval = 1.0 / self.inference_fps
+        self._last_infer_time = 0.0
         self.task = None
 
     def start(self):
@@ -229,6 +337,10 @@ class CameraFallDetector:
                 self.frame_buffer.append(frame.copy())
                 if self.detector is None:
                     continue
+                now = time.monotonic()
+                if (now - self._last_infer_time) < self.inference_interval:
+                    continue
+                self._last_infer_time = now
                 res = await asyncio.to_thread(self.detector.detect, frame)
                 self.latest_result = res
                 if self.enabled and res and res.is_fall_detected:
@@ -247,11 +359,24 @@ class CameraFallDetector:
         event_id = uuid.uuid4().hex
         LOG.warning(">>> [CAMERA AI] Phát hiện té ngã! ID: %s <<<", event_id)
 
+        # 1. Lưu ảnh chụp hiện trường tại khoảnh khắc ngã
+        thumb_name = f"{event_id}.jpg"
+        thumb_path = self.recorder.directory / thumb_name
+        try:
+            cv2.imwrite(str(thumb_path), current_frame, [cv2.IMWRITE_JPEG_QUALITY, 90])
+        except Exception as e:
+            LOG.warning("Không thể lưu ảnh snapshot ngã: %s", e)
+
+        # 2. Cắt và lưu video clip 5s từ bộ đệm RAM
         frames = list(self.frame_buffer)
         clip_name = f"{event_id}.mp4"
         clip_path = self.recorder.directory / clip_name
         self.latest_clip = clip_name
         await asyncio.to_thread(self._save_clip, frames, clip_path)
+
+        # 3. Tự động đẩy trực tiếp lên Cloud Supabase Storage Bucket
+        cloud_thumb = await asyncio.to_thread(_upload_to_supabase, thumb_path, thumb_name, "image/jpeg")
+        cloud_video = await asyncio.to_thread(_upload_to_supabase, clip_path, clip_name, "video/mp4")
 
         # Đẩy sự cố sang cloud video archive nếu có cấu hình
         archive = getattr(self.camera, "archive", None)
@@ -262,7 +387,16 @@ class CameraFallDetector:
                 LOG.warning("Lỗi đẩy incident sang video archive: %s", e)
 
         if self.mqtt:
-            self._send_alert(event_id, getattr(res, "confidence", 0.9), now, clip_name, clip_path)
+            self._send_alert(
+                event_id=event_id,
+                confidence=getattr(res, "confidence", 0.9),
+                timestamp=now,
+                clip_name=clip_name,
+                clip_path=clip_path,
+                thumb_name=thumb_name,
+                cloud_video=cloud_video,
+                cloud_thumb=cloud_thumb,
+            )
 
     def _save_clip(self, frames, path: Path):
         if not frames:
@@ -286,7 +420,17 @@ class CameraFallDetector:
             except Exception as e:
                 LOG.error("Không thể ghi file video ngã: %s", e)
 
-    def _send_alert(self, event_id, confidence, timestamp, clip_name, clip_path):
+    def _send_alert(
+        self,
+        event_id,
+        confidence,
+        timestamp,
+        clip_name,
+        clip_path,
+        thumb_name=None,
+        cloud_video=None,
+        cloud_thumb=None,
+    ):
         if not self.mqtt:
             return
         try:
@@ -298,12 +442,13 @@ class CameraFallDetector:
                 "confidence": float(confidence),
                 "timestamp": timestamp,
                 "message": "Phát hiện té ngã (Camera AI)!",
-                "video_clip_url": f"/recordings/{clip_name}",
+                "thumbnail_url": cloud_thumb or (f"/recordings/{thumb_name}" if thumb_name else None),
+                "video_clip_url": cloud_video or f"/recordings/{clip_name}",
                 "clip_path": str(clip_path),
                 "sources": ["camera"],
             }
             self.mqtt.publish_alert(payload)
-            LOG.info("Đã gửi cảnh báo té ngã MQTT kèm video: %s", clip_name)
+            LOG.info("Đã gửi cảnh báo té ngã MQTT kèm video: %s (Cloud: %s)", clip_name, bool(cloud_video))
         except Exception as e:
             LOG.error("Lỗi gửi MQTT cảnh báo té ngã: %s", e)
 
@@ -688,6 +833,7 @@ def create_app(camera=None, control=None, recorder=None, fall_detector=None) -> 
         if camera.source != 0 or os.getenv("CAMERA_SOURCE") or os.getenv("TAPO_HOST"):
             camera.start()
         fall_detector.start()
+        recorder.start_cleanup()
         try:
             yield
         finally:

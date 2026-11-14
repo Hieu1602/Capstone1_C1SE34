@@ -19,6 +19,7 @@ from app.schemas.patient import (
     PatientMedicalRecordOut,
     PatientMedicalRecordUpdate,
 )
+from app.schemas.appointment import AppointmentCreate, AppointmentResponse
 from app.schemas.vital import VitalOut
 
 router = APIRouter()
@@ -486,6 +487,175 @@ async def get_patient_appointments(
             )
         )
     return out
+
+
+@router.post(
+    "/{patient_id}/appointments",
+    response_model=AppointmentResponse,
+    status_code=status.HTTP_201_CREATED,
+)
+@router.post(
+    "/appointments",
+    response_model=AppointmentResponse,
+    status_code=status.HTTP_201_CREATED,
+    include_in_schema=False,
+)
+async def request_patient_appointment(
+    appointment_in: AppointmentCreate,
+    patient_id: Optional[str] = None,
+    current_user: Optional[User] = Depends(get_current_user_optional),
+    db: AsyncSession = Depends(get_db),
+):
+    """Người nhà đặt lịch hẹn hoặc yêu cầu lịch khám với Bác sĩ phụ trách."""
+    import uuid
+    from app.crud.crud_appointment import crud_appointment
+    from app.models.elderly_profile import ElderlyProfile
+    from app.models.house import House, HouseMember
+    from app.models.user import User
+    from sqlalchemy import select, or_
+
+    target_id_str = patient_id or appointment_in.patient_id
+    patient_uuid = None
+    try:
+        patient_uuid = uuid.UUID(target_id_str)
+    except (ValueError, TypeError):
+        pass
+
+    target_profile = None
+    if patient_uuid:
+        target_profile = await db.get(ElderlyProfile, patient_uuid)
+    if not target_profile and current_user:
+        house = await crud_house.get_or_create_default_house(db, owner_id=current_user.id)
+        if house:
+            res_house = await db.execute(select(ElderlyProfile).where(ElderlyProfile.house_id == house.id).limit(1))
+            target_profile = res_house.scalar_one_or_none()
+    if not target_profile:
+        res_any = await db.execute(select(ElderlyProfile).limit(1))
+        target_profile = res_any.scalar_one_or_none()
+
+    if not target_profile:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Không tìm thấy hồ sơ người cao tuổi.")
+
+    appointment_in.patient_id = str(target_profile.id)
+    appointment_in.patient_name = target_profile.full_name
+
+    # 1. Tìm bác sĩ phụ trách ngôi nhà
+    doctor_id = None
+    doctor_name = "Bác sĩ phụ trách"
+    if target_profile.house_id:
+        doc_stmt = (
+            select(User)
+            .join(HouseMember, HouseMember.user_id == User.id)
+            .where(
+                HouseMember.house_id == target_profile.house_id,
+                HouseMember.status == "ACTIVE",
+                or_(
+                    HouseMember.role_in_house.ilike("%doctor%"),
+                    User.role == "doctor",
+                ),
+            )
+            .limit(1)
+        )
+        doc_res = await db.execute(doc_stmt)
+        doc_user = doc_res.scalar_one_or_none()
+        if doc_user:
+            doctor_id = doc_user.id
+            doctor_name = doc_user.full_name
+
+    if not doctor_id:
+        doc_sys_res = await db.execute(select(User).where(User.role == "doctor", User.is_active == True).limit(1))
+        doc_sys = doc_sys_res.scalar_one_or_none()
+        if doc_sys:
+            doctor_id = doc_sys.id
+            doctor_name = doc_sys.full_name
+
+    created_by = current_user.id if current_user else None
+
+    try:
+        root_apt, _, _ = await crud_appointment.create_appointment_series(
+            db=db,
+            obj_in=appointment_in,
+            doctor_id=doctor_id,
+            created_by=created_by,
+        )
+    except ValueError as e:
+        raise HTTPException(status_code=status.HTTP_409_CONFLICT, detail=str(e))
+
+    # 2. Tạo Incident & bắn WebSocket thông báo cho Bác sĩ & các thành viên
+    try:
+        import json
+        from app.models.incident import Incident
+        from app.models.device import Device
+        from app.api.websockets.vitals_ws import alert_clients
+
+        dev_res = await db.execute(select(Device.id).where(Device.house_id == target_profile.house_id).limit(1))
+        dev_id = dev_res.scalar_one_or_none()
+        if not dev_id:
+            any_dev = await db.execute(select(Device.id).limit(1))
+            dev_id = any_dev.scalar_one_or_none()
+
+        req_user_name = current_user.full_name if current_user else "Người nhà"
+        from datetime import timezone, timedelta
+        vn_tz = timezone(timedelta(hours=7))
+        sch_dt = root_apt.scheduled_at
+        if sch_dt.tzinfo:
+            sch_dt = sch_dt.astimezone(vn_tz)
+        else:
+            sch_dt = sch_dt.replace(tzinfo=timezone.utc).astimezone(vn_tz)
+        scheduled_str = sch_dt.strftime("%H:%M ngày %d/%m/%Y")
+        msg = f"🗓️ {req_user_name} đã đặt lịch khám cho cụ {target_profile.full_name} vào lúc {scheduled_str}."
+
+        if dev_id:
+            incident = Incident(
+                device_id=dev_id,
+                alert_type="APPOINTMENT_SCHEDULED",
+                alert_level="LOW",
+                message=msg,
+                is_acknowledged=False,
+                notes=f"PATIENT:{target_profile.id}|APPOINTMENT_REQUESTED|APT:{root_apt.id}",
+            )
+            db.add(incident)
+            await db.commit()
+
+        ws_payload = json.dumps({
+            "type": "APPOINTMENT_SCHEDULED",
+            "alert_type": "APPOINTMENT_SCHEDULED",
+            "data": {
+                "id": str(incident.id) if dev_id and incident else None,
+                "title": "🗓️ YÊU CẦU LỊCH KHÁM TỪ GIA ĐÌNH",
+                "appointment_id": str(root_apt.id),
+                "patient_id": str(target_profile.id),
+                "doctor_id": str(doctor_id) if doctor_id else None,
+                "scheduled_at": root_apt.scheduled_at.isoformat(),
+                "message": msg,
+                "notes": f"PATIENT:{target_profile.id}|APPOINTMENT_REQUESTED|APT:{root_apt.id}",
+            }
+        }, ensure_ascii=False)
+        for client_ws in list(alert_clients):
+            await client_ws.send_text(ws_payload)
+    except Exception:
+        pass
+
+    return AppointmentResponse(
+        id=str(root_apt.id),
+        doctor_id=str(root_apt.doctor_id) if root_apt.doctor_id else None,
+        doctor_name=doctor_name,
+        patient_id=str(root_apt.patient_id),
+        patient_name=target_profile.full_name or "Bệnh nhân người cao tuổi",
+        house_id=str(root_apt.house_id) if root_apt.house_id else None,
+        visit_type=root_apt.visit_type,
+        scheduled_at=root_apt.scheduled_at,
+        duration_minutes=root_apt.duration_minutes,
+        location=root_apt.location,
+        clinical_notes=root_apt.clinical_notes,
+        status=root_apt.status,
+        cancellation_reason=root_apt.cancellation_reason,
+        recurrence_pattern=root_apt.recurrence_pattern,
+        parent_recurring_id=str(root_apt.parent_recurring_id) if root_apt.parent_recurring_id else None,
+        enable_speaker_reminder=root_apt.enable_speaker_reminder,
+        created_at=root_apt.created_at,
+        updated_at=root_apt.updated_at,
+    )
 
 
 async def _execute_confirm_appointment(

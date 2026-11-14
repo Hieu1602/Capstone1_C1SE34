@@ -9,11 +9,12 @@
 //     SpO2, Nhiệt độ da, Trạng thái té ngã).
 // ==============================================================================
 
-import React from 'react';
-import { View, StyleSheet, TouchableOpacity, Platform } from 'react-native';
+import React, { useRef, useState, useMemo, useCallback } from 'react';
+import { View, StyleSheet, TouchableOpacity, Platform, PanResponder } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { LocalizedText as Text } from '../../../i18n/LocalizedComponents';
 import { Shadows } from '../../../theme/colors';
+import { getTodayStr } from './health/useHealthTabConfig';
 
 // Chuyển đổi số phút trong ngày sang chuỗi giờ:phút (HH:MM)
 const formatTimeHM = (minutes: number) => {
@@ -53,6 +54,51 @@ export const HealthTimelineScrubber: React.FC<HealthTimelineScrubberProps> = ({
   isDarkMode,
   colors,
 }) => {
+  const now = new Date();
+  const isToday = selectedDate === getTodayStr();
+  const nowMinutes = now.getHours() * 60 + now.getMinutes();
+  const maxScrubMinutes = isToday ? nowMinutes : 1439;
+  const isFutureScrubber = isToday && scrubberMinutes > nowMinutes;
+
+  const [trackWidth, setTrackWidth] = useState(0);
+  const trackPageXRef = useRef(0);
+
+  const updateScrubberByPageX = useCallback(
+    (pageX: number) => {
+      if (trackWidth <= 0) return;
+      const localX = Math.max(0, Math.min(trackWidth, pageX - trackPageXRef.current));
+      const ratio = localX / trackWidth;
+      const rawMins = ratio * 1439;
+      // Tua mượt theo từng nấc 5 phút
+      const targetMins = Math.round(rawMins / 5) * 5;
+      const clamped = Math.max(0, Math.min(targetMins, maxScrubMinutes));
+      setScrubberMinutes(clamped);
+    },
+    [trackWidth, maxScrubMinutes, setScrubberMinutes]
+  );
+
+  const panResponder = useMemo(
+    () =>
+      PanResponder.create({
+        onStartShouldSetPanResponder: () => true,
+        onMoveShouldSetPanResponder: () => true,
+        onPanResponderGrant: (evt) => {
+          trackPageXRef.current = evt.nativeEvent.pageX - evt.nativeEvent.locationX;
+          updateScrubberByPageX(evt.nativeEvent.pageX);
+        },
+        onPanResponderMove: (evt) => {
+          updateScrubberByPageX(evt.nativeEvent.pageX);
+        },
+        onPanResponderTerminationRequest: () => false,
+      }),
+    [updateScrubberByPageX]
+  );
+
+  const currentScrub = Math.min(scrubberMinutes, maxScrubMinutes);
+  const ratio = Math.max(0, Math.min(1, currentScrub / 1439));
+  const progressPercent = `${ratio * 100}%`;
+  const thumbLeft = trackWidth > 0 ? Math.max(0, Math.min(trackWidth - 24, ratio * trackWidth - 12)) : 0;
+
   return (
     <View style={[styles.timelineCard, isDarkMode && { backgroundColor: colors.card, borderColor: colors.border }]}>
       <View style={styles.timelineHeader}>
@@ -80,9 +126,9 @@ export const HealthTimelineScrubber: React.FC<HealthTimelineScrubberProps> = ({
           <input
             type="range"
             min="0"
-            max="1439"
-            step="15"
-            value={scrubberMinutes}
+            max={maxScrubMinutes}
+            step="5"
+            value={Math.min(scrubberMinutes, maxScrubMinutes)}
             onChange={(e: any) => setScrubberMinutes(Number(e.target.value))}
             style={{
               width: '100%',
@@ -93,9 +139,20 @@ export const HealthTimelineScrubber: React.FC<HealthTimelineScrubberProps> = ({
             }}
           />
         ) : (
-          <View style={styles.sliderMockTrack}>
-            <View style={[styles.sliderMockProgress, { width: `${(scrubberMinutes / 1439) * 100}%` }]} />
-            <View style={[styles.sliderMockThumb, { left: `${Math.min(94, (scrubberMinutes / 1439) * 100)}%` }]} />
+          <View
+            style={styles.sliderTouchArea}
+            onLayout={(e) => setTrackWidth(e.nativeEvent.layout.width)}
+            {...panResponder.panHandlers}
+          >
+            <View style={[styles.sliderMockTrack, isDarkMode && { backgroundColor: '#334155' }]}>
+              <View style={[styles.sliderMockProgress, { width: progressPercent }]} />
+            </View>
+            <View
+              style={[
+                styles.sliderMockThumb,
+                { left: thumbLeft },
+              ]}
+            />
           </View>
         )}
 
@@ -105,7 +162,9 @@ export const HealthTimelineScrubber: React.FC<HealthTimelineScrubberProps> = ({
           <Text style={[styles.sliderLabelText, { color: colors.textMuted }]}>06:00</Text>
           <Text style={[styles.sliderLabelText, { color: colors.textMuted }]}>12:00</Text>
           <Text style={[styles.sliderLabelText, { color: colors.textMuted }]}>18:00</Text>
-          <Text style={[styles.sliderLabelText, { color: colors.textMuted }]}>23:59</Text>
+          <Text style={[styles.sliderLabelText, { color: colors.textMuted }]}>
+            {isToday ? `Hiện tại ${formatTimeHM(nowMinutes)}` : '23:59'}
+          </Text>
         </View>
       </View>
 
@@ -116,28 +175,35 @@ export const HealthTimelineScrubber: React.FC<HealthTimelineScrubberProps> = ({
           { label: 'Trưa', time: '12:00', mins: 720 },
           { label: 'Chiều', time: '17:00', mins: 1020 },
           { label: 'Tối', time: '21:00', mins: 1260 },
-        ].map((btn) => (
-          <TouchableOpacity
-            key={btn.label}
-            style={[
-              styles.quickJumpBtn,
-              Math.abs(scrubberMinutes - btn.mins) < 30 && styles.quickJumpBtnActive,
-              isDarkMode && { backgroundColor: colors.surfaceSubtle },
-            ]}
-            onPress={() => setScrubberMinutes(btn.mins)}
-            activeOpacity={0.7}
-          >
-            <Text
+        ].map((btn) => {
+          const isFutureBtn = isToday && btn.mins > nowMinutes;
+          const isActive = Math.abs(scrubberMinutes - btn.mins) < 30 && !isFutureBtn;
+          return (
+            <TouchableOpacity
+              key={btn.label}
+              disabled={isFutureBtn}
               style={[
-                styles.quickJumpBtnText,
-                Math.abs(scrubberMinutes - btn.mins) < 30 && styles.quickJumpBtnTextActive,
-                { color: isDarkMode ? colors.textSecondary : '#475569' },
+                styles.quickJumpBtn,
+                isActive && styles.quickJumpBtnActive,
+                isDarkMode && { backgroundColor: colors.surfaceSubtle },
+                isFutureBtn && { opacity: 0.35, backgroundColor: isDarkMode ? '#1E293B' : '#F1F5F9' },
               ]}
+              onPress={() => setScrubberMinutes(btn.mins)}
+              activeOpacity={0.7}
             >
-              {btn.label} {btn.time}
-            </Text>
-          </TouchableOpacity>
-        ))}
+              <Text
+                style={[
+                  styles.quickJumpBtnText,
+                  isActive && styles.quickJumpBtnTextActive,
+                  { color: isDarkMode ? colors.textSecondary : '#475569' },
+                  isFutureBtn && { color: isDarkMode ? '#64748B' : '#94A3B8' },
+                ]}
+              >
+                {btn.label} {btn.time}
+              </Text>
+            </TouchableOpacity>
+          );
+        })}
       </View>
 
       {/* Highlighted Closest Vital Card */}
@@ -184,8 +250,28 @@ export const HealthTimelineScrubber: React.FC<HealthTimelineScrubberProps> = ({
             </View>
           </View>
         </View>
+      ) : isFutureScrubber ? (
+        <View style={[styles.timelineEmptyBox, { backgroundColor: isDarkMode ? '#0F172A' : '#F8FAFC', borderColor: isDarkMode ? '#334155' : '#E2E8F0', paddingVertical: 14 }]}>
+          <Ionicons name="time-outline" size={24} color="#94A3B8" style={{ marginBottom: 4 }} />
+          <Text style={[styles.timelineEmptyTitle, { color: colors.textPrimary, fontSize: 13 }]}>
+            Mốc thời gian chưa diễn ra ({formatTimeHM(scrubberMinutes)})
+          </Text>
+          <Text style={[styles.timelineEmptySub, { color: colors.textMuted, fontSize: 11 }]}>
+            Thời gian hiện tại là {formatTimeHM(nowMinutes)}. Hệ thống chỉ hiển thị dữ liệu đo thực tế đã lưu trong cơ sở dữ liệu, không dự đoán số đo tương lai.
+          </Text>
+        </View>
+      ) : hasData ? (
+        <View style={[styles.timelineEmptyBox, { backgroundColor: isDarkMode ? '#0F172A' : '#F8FAFC', borderColor: isDarkMode ? '#334155' : '#E2E8F0', paddingVertical: 14 }]}>
+          <Ionicons name="information-circle-outline" size={24} color="#94A3B8" style={{ marginBottom: 4 }} />
+          <Text style={[styles.timelineEmptyTitle, { color: colors.textPrimary, fontSize: 13 }]}>
+            Không có dữ liệu đo quanh mốc {formatTimeHM(scrubberMinutes)}
+          </Text>
+          <Text style={[styles.timelineEmptySub, { color: colors.textMuted, fontSize: 11 }]}>
+            Không có số đo nào trong khoảng ±45 phút quanh mốc này (thiết bị có thể đang sạc pin hoặc chưa đeo).
+          </Text>
+        </View>
       ) : (
-        !isLoadingVitals && !hasData && (
+        !isLoadingVitals && (
           <View style={[styles.timelineEmptyBox, { backgroundColor: isDarkMode ? '#0F172A' : '#F8FAFC', borderColor: isDarkMode ? '#334155' : '#E2E8F0' }]}>
             <Ionicons name="calendar-outline" size={30} color="#94A3B8" style={{ marginBottom: 6 }} />
             <Text style={[styles.timelineEmptyTitle, { color: colors.textPrimary }]}>
@@ -253,10 +339,16 @@ const styles = StyleSheet.create({
   sliderContainer: {
     marginBottom: 12,
   },
+  sliderTouchArea: {
+    height: 38,
+    justifyContent: 'center',
+    position: 'relative',
+  },
   sliderMockTrack: {
     height: 8,
     backgroundColor: '#E2E8F0',
     borderRadius: 4,
+    overflow: 'hidden',
     position: 'relative',
     justifyContent: 'center',
   },
@@ -267,13 +359,18 @@ const styles = StyleSheet.create({
   },
   sliderMockThumb: {
     position: 'absolute',
-    width: 20,
-    height: 20,
-    borderRadius: 10,
+    width: 24,
+    height: 24,
+    borderRadius: 12,
     backgroundColor: '#2563EB',
-    borderWidth: 2,
+    borderWidth: 3,
     borderColor: '#FFF',
-    top: -6,
+    top: 7,
+    elevation: 4,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.25,
+    shadowRadius: 3,
   },
   sliderLabelsRow: {
     flexDirection: 'row',

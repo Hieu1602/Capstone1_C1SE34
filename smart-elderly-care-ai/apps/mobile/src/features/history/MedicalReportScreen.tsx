@@ -14,6 +14,7 @@ import {
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
+import Svg, { Path, Circle, Defs, LinearGradient, Stop, Line, Text as SvgText } from 'react-native-svg';
 import { Colors, Shadows } from '../../theme/colors';
 import { useTheme } from '../../store/useThemeStore';
 import { LocalizedAlert, LocalizedText } from '../../i18n/LocalizedComponents';
@@ -71,6 +72,7 @@ export default function MedicalReportScreen({ navigation, route }: any) {
   const [report, setReport] = useState<ReportData>(DEFAULT_REPORT);
   const [loading, setLoading] = useState<boolean>(true);
   const [refreshing, setRefreshing] = useState<boolean>(false);
+  const [reportChartWidth, setReportChartWidth] = useState<number>(300);
 
   const patientId = route?.params?.patientId;
   const deviceId = route?.params?.deviceId;
@@ -434,48 +436,153 @@ export default function MedicalReportScreen({ navigation, route }: any) {
               </View>
             </View>
 
-            {/* Biểu đồ xu hướng nhịp tim */}
+            {/* Biểu đồ xu hướng nhịp tim (Line Chart) */}
             <View style={[styles.chartCard, isDarkMode && { backgroundColor: '#1E293B', borderColor: '#334155', borderWidth: 1 }]}>
               <View style={styles.sectionHeaderRow}>
                 <View>
                   <LocalizedText style={[styles.sectionTitle, isDarkMode && { color: '#F8FAFC' }]}>Xu hướng nhịp tim</LocalizedText>
-                  <LocalizedText style={[styles.sectionSubtitle, isDarkMode && { color: '#94A3B8' }]}>Trung bình theo ngày</LocalizedText>
+                  <LocalizedText style={[styles.sectionSubtitle, isDarkMode && { color: '#94A3B8' }]}>Đồ thị biến thiên trung bình theo ngày</LocalizedText>
                 </View>
                 <View style={styles.chartLegend}>
                   <View style={styles.legendDot} />
                   <LocalizedText style={[styles.legendText, isDarkMode && { color: '#94A3B8' }]}>bpm</LocalizedText>
                 </View>
               </View>
-              <View style={styles.chartArea}>
-                <View style={styles.chartGuideLines}>
-                  <View style={styles.chartGuideLine} />
-                  <View style={styles.chartGuideLine} />
-                  <View style={styles.chartGuideLine} />
-                </View>
-                <View style={styles.barRow}>
-                  {report.heartRateData.map((value: number, index: number) => {
-                    const isZero = !value || value <= 0;
-                    const barHeightPercent = isZero ? 6 : Math.max(18, Math.min(100, (value - 40) * 1.6));
+              <View
+                style={styles.chartArea}
+                onLayout={(e) => {
+                  const w = e.nativeEvent.layout.width;
+                  if (w > 0) setReportChartWidth(w);
+                }}
+              >
+                {(() => {
+                  const hrList = report.heartRateData || [];
+                  const hasValidData = hrList.some((v: number) => v > 0);
+                  if (!hasValidData) {
                     return (
-                      <View key={`${period}-heart-${index}`} style={styles.barColumn}>
-                        <View
-                          style={[
-                            styles.bar,
-                            {
-                              height: `${barHeightPercent}%`,
-                              backgroundColor: isZero
-                                ? (isDarkMode ? '#334155' : '#CBD5E1')
-                                : '#0F9D8A',
-                            },
-                          ]}
-                        />
-                        <LocalizedText style={[styles.barLabel, isDarkMode && { color: '#94A3B8' }]}>
-                          {report.labels[index] || ''}
-                        </LocalizedText>
+                      <View style={{ flex: 1, alignItems: 'center', justifyContent: 'center' }}>
+                        <Ionicons name="stats-chart-outline" size={28} color={isDarkMode ? '#64748B' : '#94A3B8'} style={{ marginBottom: 4 }} />
+                        <LocalizedText style={{ fontSize: 11, color: isDarkMode ? '#64748B' : '#94A3B8' }}>Chưa có dữ liệu nhịp tim trong kỳ này</LocalizedText>
                       </View>
                     );
-                  })}
-                </View>
+                  }
+
+                  const svgHeight = 150;
+                  const padL = 20;
+                  const padR = 20;
+                  const padT = 24;
+                  const padB = 26;
+                  const usableW = Math.max(60, reportChartWidth - padL - padR);
+                  const usableH = svgHeight - padT - padB;
+                  const bottomY = svgHeight - padB;
+
+                  const nonZeros = hrList.filter((v: number) => v > 0);
+                  const minV = Math.max(30, Math.min(...nonZeros, 55) - 6);
+                  const maxV = Math.min(180, Math.max(...nonZeros, 100) + 6);
+                  const range = Math.max(15, maxV - minV);
+
+                  const coords = hrList.map((val: number, idx: number) => {
+                    const x = padL + (hrList.length > 1 ? (idx / (hrList.length - 1)) * usableW : usableW / 2);
+                    const v = val > 0 ? val : minV;
+                    const normY = (v - minV) / range;
+                    const y = padT + (1 - normY) * usableH;
+                    return { x, y, val, label: report.labels[idx] || '' };
+                  });
+
+                  let linePath = `M ${coords[0].x} ${coords[0].y}`;
+                  for (let i = 1; i < coords.length; i++) {
+                    const prev = coords[i - 1];
+                    const curr = coords[i];
+                    const cpX = (prev.x + curr.x) / 2;
+                    linePath += ` C ${cpX} ${prev.y}, ${cpX} ${curr.y}, ${curr.x} ${curr.y}`;
+                  }
+                  const lastX = coords[coords.length - 1].x;
+                  const firstX = coords[0].x;
+                  const areaPath = `${linePath} L ${lastX} ${bottomY} L ${firstX} ${bottomY} Z`;
+
+                  const y100 = padT + (1 - (100 - minV) / range) * usableH;
+                  const y60 = padT + (1 - (60 - minV) / range) * usableH;
+
+                  return (
+                    <Svg width={reportChartWidth} height={svgHeight}>
+                      <Defs>
+                        <LinearGradient id="reportHrGrad" x1="0" y1="0" x2="0" y2="1">
+                          <Stop offset="0%" stopColor="#0F9D8A" stopOpacity={0.35} />
+                          <Stop offset="100%" stopColor="#0F9D8A" stopOpacity={0.02} />
+                        </LinearGradient>
+                      </Defs>
+
+                      {/* Đường tham chiếu chuẩn 100 bpm & 60 bpm */}
+                      {y100 >= padT && y100 <= bottomY && (
+                        <Line
+                          x1={padL}
+                          y1={y100}
+                          x2={reportChartWidth - padR}
+                          y2={y100}
+                          stroke={isDarkMode ? '#334155' : '#E2E8F0'}
+                          strokeWidth={1}
+                          strokeDasharray="4 4"
+                        />
+                      )}
+                      {y60 >= padT && y60 <= bottomY && (
+                        <Line
+                          x1={padL}
+                          y1={y60}
+                          x2={reportChartWidth - padR}
+                          y2={y60}
+                          stroke={isDarkMode ? '#334155' : '#E2E8F0'}
+                          strokeWidth={1}
+                          strokeDasharray="4 4"
+                        />
+                      )}
+
+                      <Path d={areaPath} fill="url(#reportHrGrad)" />
+                      <Path
+                        d={linePath}
+                        fill="none"
+                        stroke="#0F9D8A"
+                        strokeWidth={2.6}
+                        strokeLinecap="round"
+                        strokeLinejoin="round"
+                      />
+
+                      {coords.map((pt, idx) => (
+                        <React.Fragment key={`rpt_pt_${idx}`}>
+                          <Circle
+                            cx={pt.x}
+                            cy={pt.y}
+                            r={3.8}
+                            fill="#0F9D8A"
+                            stroke="#FFFFFF"
+                            strokeWidth={1.5}
+                          />
+                          {pt.val > 0 && (
+                            <SvgText
+                              x={pt.x}
+                              y={pt.y - 8}
+                              textAnchor="middle"
+                              fontSize={9.5}
+                              fontWeight="700"
+                              fill={isDarkMode ? '#5EEAD4' : '#0F766E'}
+                            >
+                              {pt.val}
+                            </SvgText>
+                          )}
+                          <SvgText
+                            x={pt.x}
+                            y={bottomY + 16}
+                            textAnchor="middle"
+                            fontSize={9.5}
+                            fontWeight="600"
+                            fill={isDarkMode ? '#94A3B8' : '#64748B'}
+                          >
+                            {pt.label}
+                          </SvgText>
+                        </React.Fragment>
+                      ))}
+                    </Svg>
+                  );
+                })()}
               </View>
             </View>
 

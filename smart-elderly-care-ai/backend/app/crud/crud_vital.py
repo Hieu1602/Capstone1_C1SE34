@@ -132,44 +132,262 @@ class CRUDVital:
             try:
                 from datetime import time as dt_time
                 dt = datetime.strptime(target_date.strip(), "%Y-%m-%d").date()
-                start_of_day = datetime.combine(dt, dt_time.min, tzinfo=timezone.utc)
+                # Bao quát cả múi giờ Việt Nam UTC+7
+                start_of_day = datetime.combine(dt, dt_time.min, tzinfo=timezone.utc) - timedelta(hours=7)
                 end_of_day = datetime.combine(dt, dt_time.max, tzinfo=timezone.utc)
                 query = query.where(VitalSign.time >= start_of_day, VitalSign.time <= end_of_day)
-                query = query.order_by(VitalSign.time.asc())
+                # Lấy các mốc mới nhất của ngày đó, sau đó đảo ngược để vẽ biểu đồ theo thứ tự thời gian
+                query = query.order_by(VitalSign.time.desc())
             except Exception as e:
                 logger.warning(f"Lỗi phân tích target_date '{target_date}': {e}")
                 query = query.order_by(VitalSign.time.desc())
         else:
             query = query.order_by(VitalSign.time.desc())
 
-        query = query.offset(offset).limit(limit)
+        # Nếu lọc theo ngày, lấy tối đa 300 mốc đo để vẽ biểu đồ chi tiết trọn vẹn cả ngày
+        fetch_limit = max(limit, 300) if target_date else limit
+        query = query.offset(offset).limit(fetch_limit)
         result = await db.execute(query)
-        return list(result.scalars().all())
+        records = list(result.scalars().all())
+        if target_date:
+            records.reverse()
+        return records
 
     async def create(self, db: AsyncSession, data: dict) -> VitalSign:
         """
         Tạo bản ghi sinh hiệu mới vào TimescaleDB, cập nhật Redis RAM và bắn WebSocket.
         """
         raw_dev = data.get("device_id")
+        uuid_val = None
         if raw_dev:
             uuid_val = await self.resolve_device_uuid(db, raw_dev)
             if uuid_val:
                 data["device_id"] = uuid_val
 
-        obj = VitalSign(**data)
+        # Tách các trường pin và phụ trợ không thuộc bảng vital_signs
+        b1 = data.pop("bracelet_battery", None)
+        b2 = data.pop("battery_level", None)
+        b3 = data.pop("battery", None)
+        battery = b1 if b1 is not None else (b2 if b2 is not None else b3)
+        if battery is not None:
+            try:
+                battery = int(battery)
+            except (ValueError, TypeError):
+                battery = None
+
+        data.pop("raw_payload", None)
+        data.pop("bracelet_connected", None)
+        data.pop("edge_hub_connected", None)
+
+        # Lọc chỉ truyền các cột thực tế của bảng vital_signs vào model
+        valid_cols = {
+            "id", "time", "device_id", "heart_rate", "spo2",
+            "bp_systolic", "bp_diastolic", "skin_temp_max",
+            "person_count", "fall_detected",
+        }
+        vital_data = {k: v for k, v in data.items() if k in valid_cols}
+
+        obj = VitalSign(**vital_data)
         db.add(obj)
         await db.flush()
         await db.refresh(obj)
+
+        # Cập nhật mức pin, trạng thái kết nối và phát hiện sự cố sinh hiệu
+        if uuid_val:
+            try:
+                from app.models.device import Device
+                from app.models.incident import Incident
+                from app.crud.crud_incident import crud_incident
+                from app.api.websockets.vitals_ws import alert_clients
+                from datetime import timedelta
+
+                dev = await db.get(Device, uuid_val)
+                if dev:
+                    if battery is not None:
+                        dev.battery_level = battery
+                        dev.is_online = (battery > 0)
+                    else:
+                        dev.is_online = True
+                    dev.last_heartbeat = datetime.now(timezone.utc)
+                    await db.flush()
+
+                dev_name = dev.name if dev else str(raw_dev)
+                alerts_to_create = []
+
+                # 1. Cảnh báo pin vòng đeo tay
+                is_battery_dead = False
+                if battery is not None:
+                    if battery <= 0:
+                        is_battery_dead = True
+                        alerts_to_create.append((
+                            "DEVICE_BATTERY_DEAD",
+                            "CRITICAL",
+                            f"Vòng đeo tay ({dev_name}) đã cạn pin (0%) và ngắt kết nối! Hãy cắm sạc cho cụ.",
+                            15  # chống spam lặp lại trong 15 phút
+                        ))
+                    elif battery <= 20:
+                        alerts_to_create.append((
+                            "LOW_BATTERY",
+                            "HIGH",
+                            f"Pin đồng hồ thông minh ({dev_name}) sắp hết (còn {battery}%). Hãy sạc pin cho cụ sớm!",
+                            15
+                        ))
+
+                # LỌC TẦNG 2: NẾU THIẾT BỊ ĐÃ THÁO RA KHỎI TAY HOẶC CẠN PIN -> BỎ QUA CẢNH BÁO SINH TỒN GIẢ
+                is_worn = data.get("is_worn", True)
+                if is_battery_dead or is_worn is False:
+                    logger.info(f"[CRUDVital] Vòng tay {dev_name} đang tháo ra hoặc hết pin -> Bỏ qua toàn bộ cảnh báo sinh tồn giả.")
+                else:
+                    hr = obj.heart_rate
+                    spo2 = obj.spo2
+                    temp = obj.skin_temp_max
+                    activity = str(data.get("activity_state") or data.get("activity") or "").lower()
+                    is_exercising = any(k in activity for k in ["vận động", "đi lại", "chạy", "tập", "exercise", "walk"])
+
+                    # 2. KIỂM TRA TỔ HỢP ĐA YẾU TỐ (MULTI-VITAL SYNDROMES) - ƯU TIÊN CAO NHẤT
+                    # A. Tam chứng nguy kịch: Sốt cao + Tim nhanh + SpO2 tụt
+                    if temp and temp >= 38.0 and hr and hr >= 110 and spo2 and 0 < spo2 < 90:
+                        alerts_to_create.append((
+                            "CRITICAL_TRIAD",
+                            "CRITICAL",
+                            f"BÁO ĐỘNG ĐỎ: Phát hiện tam chứng nguy kịch ở {dev_name}! Sốt cao ({temp}°C) + Nhịp tim nhanh ({hr} bpm) + Oxy tụt sâu ({spo2}%). Nguy cơ suy hô hấp / nhiễm trùng huyết!",
+                            5
+                        ))
+                    # B. Suy tim / Suy hô hấp gắng sức: Tim nhanh + Oxy tụt
+                    elif hr and hr > 100 and spo2 and 0 < spo2 < 92:
+                        alerts_to_create.append((
+                            "EXERTION_HYPOXIA",
+                            "CRITICAL",
+                            f"Cảnh báo nguy cấp: Nhịp tim tăng cao ({hr} bpm) nhưng oxy máu SpO₂ tụt sâu ({spo2}%) từ {dev_name}! Nguy cơ quá tải tim phổi / suy hô hấp gắng sức.",
+                            5
+                        ))
+                    # C. Sốt nhiễm khuẩn: Sốt cao + Tim đập nhanh
+                    elif temp and temp >= 38.2 and hr and hr >= 100:
+                        alerts_to_create.append((
+                            "FEVER_TACHYCARDIA",
+                            "HIGH",
+                            f"Cảnh báo: Thân nhiệt cao ({temp}°C) kèm nhịp tim nhanh ({hr} bpm) từ {dev_name}. Dấu hiệu nhiễm trùng tiến triển.",
+                            10
+                        ))
+                    # D. Trụy tim mạch kiệt sức: Tim chậm + Oxy tụt
+                    elif hr and 0 < hr < 50 and spo2 and 0 < spo2 < 90:
+                        alerts_to_create.append((
+                            "CARDIO_COLLAPSE",
+                            "CRITICAL",
+                            f"BÁO ĐỘNG SINH TỬ: Nhịp tim tụt nguy kịch ({hr} bpm) kèm thiếu oxy nặng ({spo2}%) từ {dev_name}! Nguy cơ ngưng tim ngưng thở.",
+                            3
+                        ))
+                    else:
+                        # 3. KIỂM TRA CHỈ SỐ ĐƠN LẺ VỚI BỘ LỌC NGỮ CẢNH (CONTEXT-AWARE GATING)
+                        # A. Nhịp tim bất thường:
+                        if hr and hr > 0:
+                            if hr >= 140:
+                                alerts_to_create.append((
+                                    "HIGH_HEART_RATE",
+                                    "CRITICAL",
+                                    f"Khẩn cấp: Nhịp tim đo được từ {dev_name} tăng vọt nguy hiểm ({hr} bpm)! Nguy cơ nhịp nhanh kịch phát.",
+                                    5
+                                ))
+                            elif hr > 120:
+                                # LỌC TẦNG 3: Nếu đang tập thể dục / đi lại và SpO2 tốt >= 95% -> Vận động thể lực bình thường
+                                if is_exercising and spo2 and spo2 >= 95 and hr <= 125:
+                                    logger.info(f"[CRUDVital] Nhịp tim {hr} bpm trong lúc vận động thể dục sinh lý -> Bỏ qua báo động giả.")
+                                else:
+                                    alerts_to_create.append((
+                                        "HIGH_HEART_RATE",
+                                        "HIGH",
+                                        f"Cảnh báo: Nhịp tim đo được từ {dev_name} tăng cao ({hr} bpm)! Vượt ngưỡng an toàn 120 bpm.",
+                                        5
+                                    ))
+                            elif hr < 50:
+                                alerts_to_create.append((
+                                    "LOW_HEART_RATE",
+                                    "HIGH",
+                                    f"Cảnh báo: Nhịp tim đo được từ {dev_name} quá thấp ({hr} bpm)! Dưới ngưỡng an toàn 50 bpm.",
+                                    5
+                                ))
+
+                        # B. SpO2 đơn lẻ tụt sâu:
+                        if spo2 and 0 < spo2 < 90:
+                            alerts_to_create.append((
+                                "LOW_SPO2",
+                                "CRITICAL",
+                                f"Nguy cấp: Nồng độ oxy trong máu (SpO₂) đo được từ {dev_name} tụt xuống {spo2}% (Dưới ngưỡng 90%)! Cần kiểm tra ngay.",
+                                5
+                            ))
+
+                        # C. Sốt cao đơn lẻ:
+                        if temp and temp >= 38.3:
+                            alerts_to_create.append((
+                                "HIGH_FEVER",
+                                "HIGH",
+                                f"Cảnh báo: Thân nhiệt của cụ đo được từ {dev_name} tăng cao ({temp}°C)! Dấu hiệu sốt cao ở người lớn tuổi.",
+                                15
+                            ))
+
+                # 4. Cảnh báo té ngã từ vòng đeo tay
+                if obj.fall_detected:
+                    alerts_to_create.append((
+                        "FALL_DETECTED",
+                        "CRITICAL",
+                        f"Khẩn cấp: Phát hiện sự cố té ngã từ thiết bị {dev_name}!",
+                        2
+                    ))
+
+                for alert_type, alert_level, alert_msg, dedup_mins in alerts_to_create:
+                    recent_limit = datetime.now(timezone.utc) - timedelta(minutes=dedup_mins)
+                    dup_res = await db.execute(
+                        select(Incident.id).where(
+                            Incident.device_id == uuid_val,
+                            Incident.alert_type == alert_type,
+                            Incident.is_acknowledged == False,
+                            Incident.created_at >= recent_limit,
+                        ).limit(1)
+                    )
+                    if not dup_res.scalar_one_or_none():
+                        inc = await crud_incident.create(db, data={
+                            "device_id": uuid_val,
+                            "alert_type": alert_type,
+                            "alert_level": alert_level,
+                            "message": alert_msg,
+                            "is_acknowledged": False,
+                        })
+                        await db.flush()
+
+                        alert_payload = json.dumps({
+                            "type": "ALERT_NEW",
+                            "alert_type": alert_type,
+                            "data": {
+                                "id": str(inc.id),
+                                "device_id": str(uuid_val),
+                                "alert_type": alert_type,
+                                "alert_level": alert_level,
+                                "message": alert_msg,
+                                "created_at": datetime.now(timezone.utc).isoformat(),
+                            }
+                        }, ensure_ascii=False)
+                        for client_ws in list(alert_clients):
+                            try:
+                                await client_ws.send_text(alert_payload)
+                            except Exception:
+                                if client_ws in alert_clients:
+                                    alert_clients.remove(client_ws)
+            except Exception as e:
+                logger.warning("[CRUDVital] Lỗi kiểm tra sự cố & pin thiết bị: %s", e)
 
         # 1. Cập nhật Redis Cache tức thời (bất đồng bộ, không chặn luồng chính)
         try:
             from app.services.redis import redis_service
             dev_str = str(data.get("device_id", obj.device_id))
+            act_state = data.get("activity_state") or data.get("activity") or "Sinh hoạt"
             payload = {
                 "heart_rate": obj.heart_rate,
                 "spo2": obj.spo2,
                 "skin_temp_max": obj.skin_temp_max,
                 "fall_detected": obj.fall_detected or False,
+                "bracelet_battery": battery,
+                "bracelet_connected": (battery > 0) if battery is not None else True,
+                "activity_state": act_state,
                 "time": obj.time.isoformat() if obj.time else datetime.now(timezone.utc).isoformat(),
             }
             await redis_service.set_latest_vitals(dev_str, payload)
@@ -180,6 +398,7 @@ class CRUDVital:
         try:
             from app.api.websockets.vitals_ws import manager
             dev_str = str(data.get("device_id", obj.device_id))
+            act_state = data.get("activity_state") or data.get("activity") or "Sinh hoạt"
             ws_data = {
                 "type": "vital_update",
                 "device_id": dev_str,
@@ -187,9 +406,13 @@ class CRUDVital:
                 "spo2": obj.spo2,
                 "skin_temp_max": obj.skin_temp_max,
                 "fall_detected": obj.fall_detected or False,
+                "bracelet_battery": battery,
+                "bracelet_connected": (battery > 0) if battery is not None else True,
+                "activity_state": act_state,
                 "timestamp": int(obj.time.timestamp() * 1000) if obj.time else int(datetime.now().timestamp() * 1000),
             }
             await manager.broadcast_to_device(dev_str, ws_data)
+            await manager.broadcast_all(ws_data)
         except Exception as exc:
             logger.warning("[CRUDVital] Lỗi broadcast WebSocket: %s", exc)
 

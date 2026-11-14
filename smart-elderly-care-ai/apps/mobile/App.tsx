@@ -14,7 +14,8 @@ import AppNavigator from "./src/navigation/AppNavigator";
 import { InAppAlertModal } from "./src/components/InAppAlertModal";
 import { LocalizedAlert } from "./src/i18n/LocalizedComponents";
 import { fcmService } from "./src/services/fcm";
-import api from "./src/services/api";
+import api, { getCustomServerUrl } from "./src/services/api";
+import { notificationService } from "./src/services/notificationService";
 import { useAuthStore } from "./src/store/useAuthStore";
 import i18n from "./src/i18n/config";
 
@@ -76,8 +77,14 @@ export default function App() {
     }, []);
 
     useEffect(() => {
-        // Khởi tạo FCM push notifications khi app khởi động
+        // Khởi tạo FCM push notifications & Android Background Service khi app khởi động
         fcmService.initialize();
+        notificationService.init();
+        getCustomServerUrl().then((url) => {
+            if (url) {
+                notificationService.startBackgroundMonitor(url);
+            }
+        }).catch(() => {});
 
         return () => {
             fcmService.cleanup();
