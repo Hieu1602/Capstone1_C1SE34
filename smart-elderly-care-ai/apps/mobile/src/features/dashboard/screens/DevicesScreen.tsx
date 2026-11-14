@@ -497,8 +497,8 @@ export default function DevicesScreen({ navigation, route }: any) {
           <RefreshControl
             refreshing={isRefreshing}
             onRefresh={handleRefresh}
-            colors={['#0284C7']}
-            tintColor={isDarkMode ? '#38BDF8' : '#0284C7'}
+            colors={[Colors.primary]}
+            tintColor={Colors.primary}
           />
         }
       >
@@ -841,7 +841,7 @@ const styles = StyleSheet.create({
     width: 44,
     height: 44,
     borderRadius: 22,
-    backgroundColor: '#2563EB',
+    backgroundColor: Colors.primary,
     alignItems: 'center',
     justifyContent: 'center',
     ...Shadows.md,
@@ -872,7 +872,7 @@ const styles = StyleSheet.create({
     backgroundColor: '#F1F5F9',
   },
   tabButtonActive: {
-    backgroundColor: '#2563EB',
+    backgroundColor: Colors.primary,
   },
   tabText: {
     fontSize: 12,

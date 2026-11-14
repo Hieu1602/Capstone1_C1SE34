@@ -73,6 +73,9 @@ class User(Base):
     critical_alert_enabled: Mapped[bool] = mapped_column(
         Boolean, nullable=False, default=True, server_default="true"
     )
+    two_factor_enabled: Mapped[bool] = mapped_column(
+        Boolean, nullable=False, default=False, server_default="false"
+    )
     cchn_number: Mapped[str | None] = mapped_column(String(50), nullable=True)
     specialty: Mapped[str | None] = mapped_column(String(255), nullable=True)
     workplace: Mapped[str | None] = mapped_column(String(255), nullable=True)
