@@ -43,6 +43,7 @@ interface HealthTimelineScrubberProps {
   selectedDate: string;
   isDarkMode: boolean;
   colors: any;
+  onScrubbingChange?: (isScrubbing: boolean) => void;
 }
 
 export const HealthTimelineScrubber: React.FC<HealthTimelineScrubberProps> = React.memo(({
@@ -55,27 +56,42 @@ export const HealthTimelineScrubber: React.FC<HealthTimelineScrubberProps> = Rea
   selectedDate,
   isDarkMode,
   colors,
+  onScrubbingChange,
 }) => {
   const now = new Date();
   const isToday = selectedDate === getTodayStr();
   const nowMinutes = now.getHours() * 60 + now.getMinutes();
   const maxScrubMinutes = isToday ? nowMinutes : 1439;
 
-  // Local state hiển thị để thumb thanh trượt di chuyển mượt mà 60fps theo ngón tay
+  // Local state hiển thị để thumb thanh trượt di chuyển mượt mà
   const [displayMinutes, setDisplayMinutes] = useState(scrubberMinutes);
   const isDraggingRef = useRef(false);
-  const lastClampedRef = useRef(scrubberMinutes);
+  const pendingMinutesRef = useRef(scrubberMinutes);
+  const lastUpdateRef = useRef<number>(0);
+  const rafIdRef = useRef<number | null>(null);
+
+  const trackRef = useRef<any>(null);
+  const [trackWidth, setTrackWidth] = useState(0);
+  const trackPageXRef = useRef(0);
 
   useEffect(() => {
     if (!isDraggingRef.current) {
       setDisplayMinutes(scrubberMinutes);
-      lastClampedRef.current = scrubberMinutes;
+      pendingMinutesRef.current = scrubberMinutes;
     }
   }, [scrubberMinutes]);
 
+  useEffect(() => {
+    return () => {
+      if (rafIdRef.current) {
+        cancelAnimationFrame(rafIdRef.current);
+      }
+    };
+  }, []);
+
   const isFutureScrubber = isToday && displayMinutes > nowMinutes;
 
-  // Tìm mốc đo thực tế cục bộ trong bộ nhớ RAM cho thẻ nổi bật mà KHÔNG cần ép màn hình cha re-render khi đang kéo
+  // Tìm mốc đo thực tế cục bộ trong bộ nhớ RAM cho thẻ nổi bật
   const localClosestVital = useMemo(() => {
     if (!parsedDayVitals || parsedDayVitals.length === 0) return closestVital;
     if (isToday && displayMinutes > nowMinutes) return null;
@@ -97,27 +113,54 @@ export const HealthTimelineScrubber: React.FC<HealthTimelineScrubberProps> = Rea
     return best ?? closestVital;
   }, [parsedDayVitals, displayMinutes, isToday, nowMinutes, closestVital]);
 
-  const [trackWidth, setTrackWidth] = useState(0);
-  const trackPageXRef = useRef(0);
+  const measureTrack = useCallback(() => {
+    trackRef.current?.measureInWindow?.((x: number, _y: number, width: number) => {
+      if (typeof x === 'number' && x > 0) {
+        trackPageXRef.current = x;
+      }
+      if (typeof width === 'number' && width > 0) {
+        setTrackWidth(width);
+      }
+    });
+  }, []);
 
   const updateScrubberByPageX = useCallback(
     (pageX: number, isFinal = false) => {
       if (trackWidth <= 0) return;
-      const localX = Math.max(0, Math.min(trackWidth, pageX - trackPageXRef.current));
+      const originX = trackPageXRef.current > 0 ? trackPageXRef.current : 0;
+      const localX = Math.max(0, Math.min(trackWidth, pageX - originX));
       const ratio = localX / trackWidth;
       const rawMins = ratio * 1439;
-      // Tua mượt theo từng nấc 5 phút
+      // Tua theo nấc 5 phút
       const targetMins = Math.round(rawMins / 5) * 5;
       const clamped = Math.max(0, Math.min(targetMins, maxScrubMinutes));
 
-      // Cập nhật vị trí thanh trượt và nhãn giờ tức thì ở local (60-120fps)
-      setDisplayMinutes(clamped);
-      lastClampedRef.current = clamped;
-
-      // CHỈ đồng bộ lên màn hình cha khi người dùng THẢ TAY (onStopTrackingTouch / onChangeEnd)
-      // Khi đang kéo dở, tuyệt đối không re-render cha để loại bỏ 100% lỗi ANR
       if (isFinal) {
+        if (rafIdRef.current) {
+          cancelAnimationFrame(rafIdRef.current);
+          rafIdRef.current = null;
+        }
+        pendingMinutesRef.current = clamped;
+        setDisplayMinutes(clamped);
         setScrubberMinutes(clamped);
+        return;
+      }
+
+      // Khi đang kéo: kiểm tra nếu giá trị không đổi thì bỏ qua
+      if (clamped === pendingMinutesRef.current) return;
+      pendingMinutesRef.current = clamped;
+
+      // Throttle cập nhật giao diện local ở mức ~25fps (40ms) để không làm nghẽn JS thread
+      const now = Date.now();
+      if (now - lastUpdateRef.current >= 40) {
+        lastUpdateRef.current = now;
+        setDisplayMinutes(clamped);
+      } else if (!rafIdRef.current) {
+        rafIdRef.current = requestAnimationFrame(() => {
+          rafIdRef.current = null;
+          lastUpdateRef.current = Date.now();
+          setDisplayMinutes(pendingMinutesRef.current);
+        });
       }
     },
     [trackWidth, maxScrubMinutes, setScrubberMinutes]
@@ -127,10 +170,16 @@ export const HealthTimelineScrubber: React.FC<HealthTimelineScrubberProps> = Rea
     () =>
       PanResponder.create({
         onStartShouldSetPanResponder: () => true,
-        onMoveShouldSetPanResponder: () => true,
+        onStartShouldSetPanResponderCapture: () => true,
+        onMoveShouldSetPanResponder: (_, gestureState) => Math.abs(gestureState.dx) > 3,
+        onMoveShouldSetPanResponderCapture: (_, gestureState) => Math.abs(gestureState.dx) > 3,
         onPanResponderGrant: (evt) => {
           isDraggingRef.current = true;
-          trackPageXRef.current = evt.nativeEvent.pageX - evt.nativeEvent.locationX;
+          onScrubbingChange?.(true);
+          measureTrack();
+          if (trackPageXRef.current <= 0) {
+            trackPageXRef.current = Math.max(0, evt.nativeEvent.pageX - evt.nativeEvent.locationX);
+          }
           updateScrubberByPageX(evt.nativeEvent.pageX, false);
         },
         onPanResponderMove: (evt) => {
@@ -138,16 +187,23 @@ export const HealthTimelineScrubber: React.FC<HealthTimelineScrubberProps> = Rea
         },
         onPanResponderRelease: (evt) => {
           isDraggingRef.current = false;
-          // Phát giá trị lên cha một lần duy nhất khi người dùng thả ngón tay
+          onScrubbingChange?.(false);
           updateScrubberByPageX(evt.nativeEvent.pageX, true);
         },
         onPanResponderTerminate: () => {
           isDraggingRef.current = false;
-          setScrubberMinutes(lastClampedRef.current);
+          onScrubbingChange?.(false);
+          if (rafIdRef.current) {
+            cancelAnimationFrame(rafIdRef.current);
+            rafIdRef.current = null;
+          }
+          setDisplayMinutes(pendingMinutesRef.current);
+          setScrubberMinutes(pendingMinutesRef.current);
         },
         onPanResponderTerminationRequest: () => false,
+        onShouldBlockNativeResponder: () => true,
       }),
-    [updateScrubberByPageX, setScrubberMinutes]
+    [measureTrack, updateScrubberByPageX, setScrubberMinutes, onScrubbingChange]
   );
 
   const currentScrub = Math.min(displayMinutes, maxScrubMinutes);
@@ -200,14 +256,23 @@ export const HealthTimelineScrubber: React.FC<HealthTimelineScrubberProps> = Rea
           />
         ) : (
           <View
+            ref={trackRef}
             style={styles.sliderTouchArea}
-            onLayout={(e) => setTrackWidth(e.nativeEvent.layout.width)}
+            onLayout={(e) => {
+              const w = e.nativeEvent.layout.width;
+              if (w > 0) setTrackWidth(w);
+              measureTrack();
+            }}
             {...panResponder.panHandlers}
           >
-            <View style={[styles.sliderMockTrack, isDarkMode && { backgroundColor: '#334155' }]}>
+            <View
+              pointerEvents="none"
+              style={[styles.sliderMockTrack, isDarkMode && { backgroundColor: '#334155' }]}
+            >
               <View style={[styles.sliderMockProgress, { width: progressPercent }]} />
             </View>
             <View
+              pointerEvents="none"
               style={[
                 styles.sliderMockThumb,
                 { left: thumbLeft },
@@ -276,11 +341,11 @@ export const HealthTimelineScrubber: React.FC<HealthTimelineScrubberProps> = Rea
             <View style={{ flexDirection: 'row', alignItems: 'center' }}>
               <Ionicons name="location" size={15} color="#2563EB" style={{ marginRight: 4 }} />
               <Text style={[styles.highlightTitle, { color: isDarkMode ? '#93C5FD' : '#1E40AF' }]}>
-                Mốc đo thực tế: {(() => {
+                Mốc đo thực tế: {localClosestVital._label || (() => {
                   const vitalTime = localClosestVital.recorded_at || localClosestVital.time || localClosestVital.created_at;
-                  if (!vitalTime) return '--:--';
+                  if (!vitalTime) return formatTimeHM(displayMinutes);
                   const d = new Date(vitalTime);
-                  return !isNaN(d.getTime()) ? d.toLocaleTimeString('vi-VN', { hour: '2-digit', minute: '2-digit' }) : '--:--';
+                  return !isNaN(d.getTime()) ? `${String(d.getHours()).padStart(2, '0')}:${String(d.getMinutes()).padStart(2, '0')}` : formatTimeHM(displayMinutes);
                 })()}
               </Text>
             </View>

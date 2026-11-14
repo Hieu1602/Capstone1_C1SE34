@@ -99,6 +99,7 @@ export default function HealthDetailScreen({ navigation, route }: any) {
     const now = new Date();
     return now.getHours() * 60 + now.getMinutes();
   });
+  const [isScrubbingTimeline, setIsScrubbingTimeline] = useState(false);
 
   // Tải dữ liệu từ Backend khi chọn ngày
   const loadDateVitals = async (dateStr: string) => {
@@ -420,6 +421,7 @@ export default function HealthDetailScreen({ navigation, route }: any) {
 
       <ScrollView
         ref={scrollRef}
+        scrollEnabled={!isScrubbingTimeline}
         contentContainerStyle={styles.scrollContent}
         showsVerticalScrollIndicator={false}
       >
@@ -500,6 +502,7 @@ export default function HealthDetailScreen({ navigation, route }: any) {
             selectedDate={selectedDate}
             isDarkMode={isDarkMode}
             colors={colors}
+            onScrubbingChange={setIsScrubbingTimeline}
           />
         )}
 
