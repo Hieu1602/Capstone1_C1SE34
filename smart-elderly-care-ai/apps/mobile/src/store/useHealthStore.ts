@@ -99,18 +99,24 @@ export const useHealthStore = create<HealthState>()((set, get) => ({
       const res = await vitalsApi.getCurrent();
       if (res.data) {
         const d = res.data;
+        // Kiểm tra tính tươi mới của bản ghi: Chỉ coi là dữ liệu trực tiếp nếu ghi nhận trong vòng 2 phút gần nhất
+        const vTime = d.time || d.recorded_at || d.timestamp;
+        const timeMs = vTime ? (typeof vTime === 'number' ? vTime : new Date(vTime).getTime()) : 0;
+        const isFresh = timeMs > 0 && Math.abs(Date.now() - timeMs) <= 2 * 60 * 1000;
+        const isConnected = Boolean(d.bracelet_connected && isFresh);
+
         const updatedVitals: VitalData = {
-          heart_rate: d.heart_rate ?? null,
-          spo2: d.spo2 ?? null,
-          bp_systolic: d.bp_systolic ?? null,
-          bp_diastolic: d.bp_diastolic ?? null,
-          skin_temp_max: d.skin_temp_max ?? d.body_temp ?? null,
+          heart_rate: isFresh ? (d.heart_rate ?? null) : null,
+          spo2: isFresh ? (d.spo2 ?? null) : null,
+          bp_systolic: isFresh ? (d.bp_systolic ?? null) : null,
+          bp_diastolic: isFresh ? (d.bp_diastolic ?? null) : null,
+          skin_temp_max: isFresh ? (d.skin_temp_max ?? d.body_temp ?? null) : null,
           person_count: d.person_count ?? 0,
-          fall_detected: Boolean(d.fall_detected),
-          timestamp: d.timestamp ?? Date.now(),
+          fall_detected: isFresh ? Boolean(d.fall_detected) : false,
+          timestamp: isFresh ? (d.timestamp ?? timeMs) : null,
           acoustic_status: d.sound ?? 'Bình thường',
-          bracelet_battery: d.bracelet_battery ?? null,
-          bracelet_connected: d.bracelet_connected !== undefined ? Boolean(d.bracelet_connected) : true,
+          bracelet_battery: isConnected ? (d.bracelet_battery ?? null) : null,
+          bracelet_connected: isConnected,
           edge_hub_connected: d.edge_hub_connected !== undefined ? Boolean(d.edge_hub_connected) : true,
         };
         set({ currentVitals: updatedVitals, isLoadingVitals: false });
@@ -118,6 +124,17 @@ export const useHealthStore = create<HealthState>()((set, get) => ({
       }
     } catch (e) {
       console.warn('fetchVitals API fallback:', e);
+      set((state) => ({
+        currentVitals: {
+          ...state.currentVitals,
+          heart_rate: null,
+          spo2: null,
+          skin_temp_max: null,
+          bracelet_connected: false,
+          bracelet_battery: null,
+        },
+        isLoadingVitals: false,
+      }));
     }
     set({ isLoadingVitals: false });
     return null;

@@ -41,26 +41,30 @@ export const VitalsSummaryCard: React.FC<VitalsSummaryCardProps> = ({
   colors,
   navigation,
 }) => {
+  // Kiểm tra tính tươi mới của dữ liệu (chỉ hiển thị nếu ghi nhận trong vòng 2 phút gần nhất)
+  const isLiveFresh = (() => {
+    const vTime = currentVitals?.time || currentVitals?.recorded_at || currentVitals?.timestamp;
+    if (!vTime) return false;
+    const timeMs = typeof vTime === 'number' ? vTime : new Date(vTime).getTime();
+    if (isNaN(timeMs)) return false;
+    return Math.abs(Date.now() - timeMs) <= 2 * 60 * 1000;
+  })();
+
   // Kiểm tra các chỉ số sinh hiệu có dữ liệu thực từ cảm biến hay đang rỗng (null)
-  const hasHR = currentVitals.heart_rate !== null && currentVitals.heart_rate !== undefined;
-  const hasSpO2 = currentVitals.spo2 !== null && currentVitals.spo2 !== undefined;
-  const hasTemp = currentVitals.skin_temp_max !== null && currentVitals.skin_temp_max !== undefined;
+  const hasHR = isLiveFresh && currentVitals.heart_rate !== null && currentVitals.heart_rate !== undefined;
+  const hasSpO2 = isLiveFresh && currentVitals.spo2 !== null && currentVitals.spo2 !== undefined;
+  const hasTemp = isLiveFresh && currentVitals.skin_temp_max !== null && currentVitals.skin_temp_max !== undefined;
   // Kiểm tra thiết bị vòng đeo tay BLE có đang kết nối thực tế hay không
-  const isBraceletConnected = Boolean(
-    currentVitals?.bracelet_connected ||
-    hasHR ||
-    hasSpO2 ||
-    (braceletBattery !== null && braceletBattery !== undefined && braceletBattery > 0)
-  );
-  const isBatteryDead = braceletBattery === 0;
-  const isBatteryLow = braceletBattery !== null && braceletBattery !== undefined && braceletBattery > 0 && braceletBattery <= 20;
+  const isBraceletConnected = Boolean(isLiveFresh && currentVitals?.bracelet_connected && (hasHR || hasSpO2 || hasTemp));
+  const isBatteryDead = isBraceletConnected && braceletBattery === 0;
+  const isBatteryLow = isBraceletConnected && braceletBattery !== null && braceletBattery !== undefined && braceletBattery > 0 && braceletBattery <= 20;
 
   return (
     <View style={[styles.vitalsSummaryCard, isDarkMode && { backgroundColor: colors.card, borderColor: colors.border }]}>
       {/* Header Card */}
       <View style={styles.vitalsSummaryHeader}>
         <View style={{ flexDirection: 'row', alignItems: 'center' }}>
-          <View style={styles.livePulseDot} />
+          <View style={[styles.livePulseDot, !isBraceletConnected && { backgroundColor: '#94A3B8' }]} />
           <Text style={[styles.vitalsSummaryTitle, isDarkMode && { color: colors.textPrimary }]}>Chỉ số sinh hiệu</Text>
         </View>
         <TouchableOpacity
@@ -198,19 +202,19 @@ export const VitalsSummaryCard: React.FC<VitalsSummaryCardProps> = ({
           <Ionicons
             name="body"
             size={17}
-            color={currentVitals.fall_detected ? Colors.danger : Colors.success}
+            color={currentVitals.fall_detected && isLiveFresh ? Colors.danger : Colors.success}
           />
           <Text
             style={[
               styles.vitalValText,
               {
                 fontSize: 12,
-                color: currentVitals.fall_detected ? Colors.danger : (hasHR ? Colors.success : colors.textSecondary),
+                color: currentVitals.fall_detected && isLiveFresh ? Colors.danger : (hasHR ? Colors.success : colors.textSecondary),
               },
             ]}
             numberOfLines={1}
           >
-            {currentVitals.fall_detected ? 'Ngã!' : (hasHR ? 'Sinh hoạt' : '--')}
+            {currentVitals.fall_detected && isLiveFresh ? 'Ngã!' : (hasHR ? 'Sinh hoạt' : '--')}
           </Text>
           <Text style={[styles.vitalLblText, isDarkMode && { color: colors.textSecondary }]}>Vận động</Text>
         </View>
@@ -233,7 +237,7 @@ export const VitalsSummaryCard: React.FC<VitalsSummaryCardProps> = ({
             ]}
             numberOfLines={1}
           >
-            {isAcousticAlarm ? 'La hét!' : (currentVitals.acoustic_status ?? 'Bình thường')}
+            {isAcousticAlarm ? 'La hét!' : (hasHR ? (currentVitals.acoustic_status ?? 'Bình thường') : '--')}
           </Text>
           <Text style={[styles.vitalLblText, isDarkMode && { color: colors.textSecondary }]}>Âm thanh</Text>
         </View>

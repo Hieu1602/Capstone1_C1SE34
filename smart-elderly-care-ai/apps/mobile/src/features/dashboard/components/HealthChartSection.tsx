@@ -9,7 +9,7 @@
 //   - Hiển thị màn hình Empty State khi ngày/tuần/tháng được chọn chưa có dữ liệu đo.
 // ==============================================================================
 
-import React, { useState } from 'react';
+import React, { useState, useMemo } from 'react';
 import { View, StyleSheet, ScrollView, Dimensions } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import Svg, { Path, Circle, Defs, LinearGradient, Stop, Line, Text as SvgText } from 'react-native-svg';
@@ -37,7 +37,7 @@ interface HealthChartSectionProps {
   colors: any;
 }
 
-export const HealthChartSection: React.FC<HealthChartSectionProps> = ({
+export const HealthChartSection: React.FC<HealthChartSectionProps> = React.memo(({
   chartTitle,
   chartSubtitle,
   chartAvg,
@@ -62,53 +62,59 @@ export const HealthChartSection: React.FC<HealthChartSectionProps> = ({
   const usableH = chartHeight - padTop - padBottom;
   const bottomY = chartHeight - padBottom;
 
-  const hrs = hasData ? chartData.map((p) => p.hr) : [75];
-  const minVal = Math.max(30, Math.min(...hrs, 55) - 8);
-  const maxVal = Math.min(180, Math.max(...hrs, 105) + 8);
-  const range = Math.max(20, maxVal - minVal);
-
-  const coords = hasData
-    ? chartData.map((point, idx) => {
-        const x = padLeft + (chartData.length > 1 ? (idx / (chartData.length - 1)) * usableW : usableW / 2);
-        const normY = (point.hr - minVal) / range;
-        const y = padTop + (1 - normY) * usableH;
-        const isClosest =
-          closestVital &&
-          scrubberMinutes !== undefined &&
-          (point.id === closestVital.id ||
-            (point.minute !== undefined && Math.abs(point.minute - scrubberMinutes) < 45));
-
-        return {
-          x,
-          y,
-          hr: point.hr,
-          label: point.label,
-          isClosest: Boolean(isClosest),
-        };
-      })
-    : [];
-
-  let linePath = '';
-  let areaPath = '';
-  if (coords.length > 1) {
-    linePath = `M ${coords[0].x} ${coords[0].y}`;
-    for (let i = 1; i < coords.length; i++) {
-      const prev = coords[i - 1];
-      const curr = coords[i];
-      const cpX = (prev.x + curr.x) / 2;
-      linePath += ` C ${cpX} ${prev.y}, ${cpX} ${curr.y}, ${curr.x} ${curr.y}`;
+  // Tối ưu hóa: Memoize việc tính toán đường cong SVG Bezier để không tính lại khi chỉ tua scrubber
+  const { coords, linePath, areaPath, y60, y100 } = useMemo(() => {
+    if (!hasData) {
+      return { coords: [], linePath: '', areaPath: '', y60: 0, y100: 0 };
     }
-    const lastX = coords[coords.length - 1].x;
-    const firstX = coords[0].x;
-    areaPath = `${linePath} L ${lastX} ${bottomY} L ${firstX} ${bottomY} Z`;
-  } else if (coords.length === 1) {
-    linePath = `M ${padLeft} ${coords[0].y} L ${padLeft + usableW} ${coords[0].y}`;
-    areaPath = `${linePath} L ${padLeft + usableW} ${bottomY} L ${padLeft} ${bottomY} Z`;
-  }
+    const hrs = chartData.map((p) => p.hr);
+    const minVal = Math.max(30, Math.min(...hrs, 55) - 8);
+    const maxVal = Math.min(180, Math.max(...hrs, 105) + 8);
+    const range = Math.max(20, maxVal - minVal);
 
-  // Tọa độ tham chiếu chuẩn (60 bpm và 100 bpm)
-  const y60 = padTop + (1 - (60 - minVal) / range) * usableH;
-  const y100 = padTop + (1 - (100 - minVal) / range) * usableH;
+    const baseCoords = chartData.map((point, idx) => {
+      const x = padLeft + (chartData.length > 1 ? (idx / (chartData.length - 1)) * usableW : usableW / 2);
+      const normY = (point.hr - minVal) / range;
+      const y = padTop + (1 - normY) * usableH;
+      return {
+        x,
+        y,
+        hr: point.hr,
+        label: point.label,
+        id: point.id,
+        minute: point.minute,
+      };
+    });
+
+    let lPath = '';
+    let aPath = '';
+    if (baseCoords.length > 1) {
+      lPath = `M ${baseCoords[0].x} ${baseCoords[0].y}`;
+      for (let i = 1; i < baseCoords.length; i++) {
+        const prev = baseCoords[i - 1];
+        const curr = baseCoords[i];
+        const cpX = (prev.x + curr.x) / 2;
+        lPath += ` C ${cpX} ${prev.y}, ${cpX} ${curr.y}, ${curr.x} ${curr.y}`;
+      }
+      const lastX = baseCoords[baseCoords.length - 1].x;
+      const firstX = baseCoords[0].x;
+      aPath = `${lPath} L ${lastX} ${bottomY} L ${firstX} ${bottomY} Z`;
+    } else if (baseCoords.length === 1) {
+      lPath = `M ${padLeft} ${baseCoords[0].y} L ${padLeft + usableW} ${baseCoords[0].y}`;
+      aPath = `${lPath} L ${padLeft + usableW} ${bottomY} L ${padLeft} ${bottomY} Z`;
+    }
+
+    const _y60 = padTop + (1 - (60 - minVal) / range) * usableH;
+    const _y100 = padTop + (1 - (100 - minVal) / range) * usableH;
+
+    return {
+      coords: baseCoords,
+      linePath: lPath,
+      areaPath: aPath,
+      y60: _y60,
+      y100: _y100,
+    };
+  }, [chartData, hasData, usableW, usableH, bottomY]);
 
   return (
     <View style={[styles.chartCard, isDarkMode && { backgroundColor: colors.card, borderWidth: 1, borderColor: colors.border }]}>
@@ -180,42 +186,50 @@ export const HealthChartSection: React.FC<HealthChartSectionProps> = ({
               />
 
               {/* Các điểm đo và nhãn */}
-              {coords.map((pt, idx) => (
-                <React.Fragment key={`pt_${idx}`}>
-                  {pt.isClosest && (
-                    <Line
-                      x1={pt.x}
-                      y1={padTop - 6}
-                      x2={pt.x}
-                      y2={bottomY}
-                      stroke="#2563EB"
+              {coords.map((pt, idx) => {
+                const isClosest = Boolean(
+                  closestVital &&
+                  scrubberMinutes !== undefined &&
+                  (pt.id === closestVital.id ||
+                    (pt.minute !== undefined && Math.abs(pt.minute - scrubberMinutes) < 45))
+                );
+
+                return (
+                  <React.Fragment key={`pt_${idx}`}>
+                    {isClosest && (
+                      <Line
+                        x1={pt.x}
+                        y1={padTop - 6}
+                        x2={pt.x}
+                        y2={bottomY}
+                        stroke="#2563EB"
+                        strokeWidth={1.5}
+                        strokeDasharray="3 3"
+                        opacity={0.6}
+                      />
+                    )}
+
+                    <Circle
+                      cx={pt.x}
+                      cy={pt.y}
+                      r={isClosest ? 5.5 : 3.5}
+                      fill={isClosest ? '#2563EB' : isDarkMode ? '#38BDF8' : '#2563EB'}
+                      stroke="#FFFFFF"
                       strokeWidth={1.5}
-                      strokeDasharray="3 3"
-                      opacity={0.6}
                     />
-                  )}
 
-                  <Circle
-                    cx={pt.x}
-                    cy={pt.y}
-                    r={pt.isClosest ? 5.5 : 3.5}
-                    fill={pt.isClosest ? '#2563EB' : isDarkMode ? '#38BDF8' : '#2563EB'}
-                    stroke="#FFFFFF"
-                    strokeWidth={1.5}
-                  />
-
-                  {pt.isClosest ? (
-                    <SvgText
-                      x={pt.x}
-                      y={pt.y - 12}
-                      textAnchor="middle"
-                      fontSize={11}
-                      fontWeight="800"
-                      fill={isDarkMode ? '#60A5FA' : '#1D4ED8'}
-                    >
-                      📍 {pt.hr}
-                    </SvgText>
-                  ) : (
+                    {isClosest ? (
+                      <SvgText
+                        x={pt.x}
+                        y={pt.y - 12}
+                        textAnchor="middle"
+                        fontSize={11}
+                        fontWeight="800"
+                        fill={isDarkMode ? '#60A5FA' : '#1D4ED8'}
+                      >
+                        📍 {pt.hr}
+                      </SvgText>
+                    ) : (
                     <SvgText
                       x={pt.x}
                       y={pt.y - 8}
@@ -233,14 +247,15 @@ export const HealthChartSection: React.FC<HealthChartSectionProps> = ({
                     y={bottomY + 18}
                     textAnchor="middle"
                     fontSize={9.5}
-                    fontWeight={pt.isClosest ? '800' : '500'}
-                    fill={pt.isClosest ? (isDarkMode ? '#60A5FA' : '#2563EB') : isDarkMode ? '#64748B' : '#94A3B8'}
+                    fontWeight={isClosest ? '800' : '500'}
+                    fill={isClosest ? (isDarkMode ? '#60A5FA' : '#2563EB') : isDarkMode ? '#64748B' : '#94A3B8'}
                   >
                     {pt.label}
                   </SvgText>
                 </React.Fragment>
-              ))}
-            </Svg>
+              );
+            })}
+          </Svg>
           </View>
         </ScrollView>
       ) : (
@@ -253,7 +268,7 @@ export const HealthChartSection: React.FC<HealthChartSectionProps> = ({
       )}
     </View>
   );
-};
+});
 
 const styles = StyleSheet.create({
   chartCard: {
