@@ -6,7 +6,6 @@ import { doctorApi } from '../services/api';
 import { AppointmentItem, DoctorPatientCard } from '../types';
 import { NewAppointmentModal } from '../components/clinical/NewAppointmentModal';
 import {
-  Calendar,
   Clock,
   MapPin,
   Plus,
@@ -30,17 +29,9 @@ export const AppointmentsPage: React.FC = () => {
   const fetchData = useCallback(async () => {
     setLoading(true);
     try {
-      const [aptRes, patRes] = await Promise.allSettled([
-        doctorApi.getAppointments(),
-        doctorApi.getPatients(),
-      ]);
-
-      if (aptRes.status === 'fulfilled' && Array.isArray(aptRes.value)) {
-        setAppointments(aptRes.value);
-      }
-      if (patRes.status === 'fulfilled' && Array.isArray(patRes.value)) {
-        setPatients(patRes.value);
-      }
+      const [aptRes, patRes] = await Promise.allSettled([doctorApi.getAppointments(), doctorApi.getPatients()]);
+      if (aptRes.status === 'fulfilled' && Array.isArray(aptRes.value)) setAppointments(aptRes.value);
+      if (patRes.status === 'fulfilled' && Array.isArray(patRes.value)) setPatients(patRes.value);
     } finally {
       setLoading(false);
     }
@@ -50,11 +41,9 @@ export const AppointmentsPage: React.FC = () => {
     fetchData();
   }, [fetchData]);
 
-  // Hành động: Xác nhận đã khám xong
   const handleComplete = async (apt: AppointmentItem) => {
     const notes = prompt('Nhập ghi chú kết quả khám / chỉ định tiếp theo:', apt.clinical_notes || '');
-    if (notes === null) return; // User canceled prompt
-
+    if (notes === null) return;
     try {
       await doctorApi.completeAppointment(apt.id, notes);
       fetchData();
@@ -63,11 +52,9 @@ export const AppointmentsPage: React.FC = () => {
     }
   };
 
-  // Hành động: Hủy lịch
   const handleCancel = async (apt: AppointmentItem) => {
     const reason = prompt('Nhập lý do hủy cuộc hẹn khám:', 'Bác sĩ có ca cấp cứu đột xuất');
     if (!reason) return;
-
     try {
       await doctorApi.cancelAppointment(apt.id, reason);
       fetchData();
@@ -76,20 +63,24 @@ export const AppointmentsPage: React.FC = () => {
     }
   };
 
-  // Lọc lịch khám
+  const q = searchQuery.toLowerCase();
   const filteredAppointments = appointments.filter((apt) => {
     const matchesSearch =
-      (apt.patient_name && apt.patient_name.toLowerCase().includes(searchQuery.toLowerCase())) ||
-      (apt.clinical_notes && apt.clinical_notes.toLowerCase().includes(searchQuery.toLowerCase())) ||
-      (apt.location && apt.location.toLowerCase().includes(searchQuery.toLowerCase()));
-
-    if (statusFilter === 'ALL') return matchesSearch;
-    return matchesSearch && apt.status === statusFilter;
+      apt.patient_name?.toLowerCase().includes(q) ||
+      apt.clinical_notes?.toLowerCase().includes(q) ||
+      apt.location?.toLowerCase().includes(q);
+    return statusFilter === 'ALL' ? matchesSearch : matchesSearch && apt.status === statusFilter;
   });
+
+  const filterBtns = [
+    { key: 'UPCOMING' as const, label: 'Sắp tới', activeClass: 'bg-blue-600 text-white shadow-xs' },
+    { key: 'COMPLETED' as const, label: 'Đã khám', activeClass: 'bg-emerald-600 text-white shadow-xs' },
+    { key: 'CANCELLED' as const, label: 'Đã hủy', activeClass: 'bg-rose-600 text-white shadow-xs' },
+    { key: 'ALL' as const, label: `Tất cả (${appointments.length})`, activeClass: 'bg-slate-800 text-white shadow-xs' },
+  ];
 
   return (
     <div className="space-y-6">
-      {/* 1. Header & Nút tạo mới */}
       <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
         <div>
           <h1 className="text-xl lg:text-2xl font-extrabold text-slate-900 font-heading">
@@ -109,7 +100,6 @@ export const AppointmentsPage: React.FC = () => {
             <RefreshCw className={`h-3.5 w-3.5 ${loading ? 'animate-spin' : ''}`} />
             <span>Làm mới</span>
           </button>
-
           <button
             onClick={() => setShowCreateModal(true)}
             className="flex items-center space-x-2 rounded-xl bg-blue-600 px-4 py-2 text-xs font-bold text-white shadow-md shadow-blue-500/20 hover:bg-blue-700 transition-colors"
@@ -120,7 +110,6 @@ export const AppointmentsPage: React.FC = () => {
         </div>
       </div>
 
-      {/* 2. Thanh tìm kiếm & Tabs lọc trạng thái */}
       <div className="flex flex-col sm:flex-row gap-3">
         <div className="relative flex-1">
           <Search className="pointer-events-none absolute left-3.5 top-1/2 -translate-y-1/2 h-4 w-4 text-slate-400" />
@@ -132,53 +121,21 @@ export const AppointmentsPage: React.FC = () => {
             className="w-full rounded-2xl border border-slate-200 bg-white py-2.5 pl-10 pr-4 text-xs font-medium text-slate-800 placeholder-slate-400 focus:border-blue-500 focus:outline-hidden focus:ring-3 focus:ring-blue-100 shadow-xs"
           />
         </div>
-
-        {/* Status Filters */}
         <div className="flex items-center rounded-2xl border border-slate-200 bg-white p-1 shadow-xs">
-          <button
-            onClick={() => setStatusFilter('UPCOMING')}
-            className={`rounded-xl px-3 py-1.5 text-xs font-semibold transition-colors ${
-              statusFilter === 'UPCOMING'
-                ? 'bg-blue-600 text-white shadow-xs'
-                : 'text-slate-600 hover:text-slate-900'
-            }`}
-          >
-            Sắp tới
-          </button>
-          <button
-            onClick={() => setStatusFilter('COMPLETED')}
-            className={`rounded-xl px-3 py-1.5 text-xs font-semibold transition-colors ${
-              statusFilter === 'COMPLETED'
-                ? 'bg-emerald-600 text-white shadow-xs'
-                : 'text-slate-600 hover:text-slate-900'
-            }`}
-          >
-            Đã khám
-          </button>
-          <button
-            onClick={() => setStatusFilter('CANCELLED')}
-            className={`rounded-xl px-3 py-1.5 text-xs font-semibold transition-colors ${
-              statusFilter === 'CANCELLED'
-                ? 'bg-rose-600 text-white shadow-xs'
-                : 'text-slate-600 hover:text-slate-900'
-            }`}
-          >
-            Đã hủy
-          </button>
-          <button
-            onClick={() => setStatusFilter('ALL')}
-            className={`rounded-xl px-3 py-1.5 text-xs font-semibold transition-colors ${
-              statusFilter === 'ALL'
-                ? 'bg-slate-800 text-white shadow-xs'
-                : 'text-slate-600 hover:text-slate-900'
-            }`}
-          >
-            Tất cả ({appointments.length})
-          </button>
+          {filterBtns.map((b) => (
+            <button
+              key={b.key}
+              onClick={() => setStatusFilter(b.key)}
+              className={`rounded-xl px-3 py-1.5 text-xs font-semibold transition-colors ${
+                statusFilter === b.key ? b.activeClass : 'text-slate-600 hover:text-slate-900'
+              }`}
+            >
+              {b.label}
+            </button>
+          ))}
         </div>
       </div>
 
-      {/* 3. Danh sách cuộc hẹn */}
       {filteredAppointments.length === 0 ? (
         <div className="rounded-3xl border border-dashed border-slate-200 bg-white p-12 text-center text-xs text-slate-400">
           Không có cuộc hẹn nào phù hợp với bộ lọc hiện tại.
@@ -200,9 +157,7 @@ export const AppointmentsPage: React.FC = () => {
                 key={apt.id}
                 className="flex flex-col lg:flex-row lg:items-center lg:justify-between gap-4 rounded-3xl border border-slate-200/80 bg-white p-5 shadow-xs transition-all hover:border-blue-200 hover:shadow-md"
               >
-                {/* Thông tin bên trái */}
                 <div className="flex items-start space-x-4">
-                  {/* Icon loại khám */}
                   <div
                     className={`flex h-12 w-12 shrink-0 items-center justify-center rounded-2xl ${
                       isClinic ? 'bg-blue-100 text-blue-700' : 'bg-emerald-100 text-emerald-700'
@@ -213,23 +168,17 @@ export const AppointmentsPage: React.FC = () => {
 
                   <div className="space-y-1">
                     <div className="flex items-center space-x-2.5">
-                      <h3 className="font-bold text-slate-900 text-base">
-                        {apt.patient_name || 'Bệnh nhân'}
-                      </h3>
+                      <h3 className="font-bold text-slate-900 text-base">{apt.patient_name || 'Bệnh nhân'}</h3>
                       <span
                         className={`rounded-full px-2.5 py-0.5 text-[10px] font-bold ${
                           apt.status === 'COMPLETED'
                             ? 'bg-emerald-100 text-emerald-800'
                             : apt.status === 'CANCELLED'
-                            ? 'bg-rose-100 text-rose-800'
-                            : 'bg-blue-100 text-blue-800'
+                              ? 'bg-rose-100 text-rose-800'
+                              : 'bg-blue-100 text-blue-800'
                         }`}
                       >
-                        {apt.status === 'COMPLETED'
-                          ? 'Đã khám xong'
-                          : apt.status === 'CANCELLED'
-                          ? 'Đã hủy'
-                          : 'Sắp tới'}
+                        {apt.status === 'COMPLETED' ? 'Đã khám xong' : apt.status === 'CANCELLED' ? 'Đã hủy' : 'Sắp tới'}
                       </span>
                       <span className="rounded-md bg-slate-100 px-2 py-0.5 text-[10px] font-semibold text-slate-600">
                         {isClinic ? 'Phòng khám' : 'Tại nhà'}
@@ -250,7 +199,6 @@ export const AppointmentsPage: React.FC = () => {
                         <MapPin className="h-3.5 w-3.5" />
                         <span>{apt.location || 'Phòng khám Bác sĩ Gia đình'}</span>
                       </div>
-
                       {apt.enable_speaker_reminder !== false && (
                         <div className="flex items-center space-x-1 text-emerald-600 font-medium">
                           <Volume2 className="h-3.5 w-3.5" />
@@ -261,7 +209,6 @@ export const AppointmentsPage: React.FC = () => {
                   </div>
                 </div>
 
-                {/* Nút hành động bên phải */}
                 {apt.status === 'UPCOMING' && (
                   <div className="flex items-center space-x-2 self-end lg:self-auto shrink-0 pt-2 lg:pt-0">
                     <button
@@ -271,7 +218,6 @@ export const AppointmentsPage: React.FC = () => {
                       <XCircle className="h-3.5 w-3.5" />
                       <span>Hủy lịch</span>
                     </button>
-
                     <button
                       onClick={() => handleComplete(apt)}
                       className="flex items-center space-x-1.5 rounded-xl bg-emerald-600 px-4 py-2 text-xs font-bold text-white shadow-xs hover:bg-emerald-700 transition-colors"
@@ -287,15 +233,9 @@ export const AppointmentsPage: React.FC = () => {
         </div>
       )}
 
-      {/* Modal tạo lịch khám mới */}
       {showCreateModal && (
-        <NewAppointmentModal
-          patients={patients}
-          onClose={() => setShowCreateModal(false)}
-          onSuccess={fetchData}
-        />
+        <NewAppointmentModal patients={patients} onClose={() => setShowCreateModal(false)} onSuccess={fetchData} />
       )}
     </div>
   );
 };
-

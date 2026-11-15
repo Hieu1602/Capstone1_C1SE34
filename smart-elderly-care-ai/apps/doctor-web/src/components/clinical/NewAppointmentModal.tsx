@@ -13,6 +13,8 @@ interface NewAppointmentModalProps {
   onSuccess: () => void;
 }
 
+const inputCls = 'w-full rounded-xl border border-slate-200 px-3 py-2 text-xs focus:border-blue-500 focus:outline-hidden bg-white';
+
 export const NewAppointmentModal: React.FC<NewAppointmentModalProps> = ({
   patients,
   initialPatientId,
@@ -22,11 +24,9 @@ export const NewAppointmentModal: React.FC<NewAppointmentModalProps> = ({
   const [saving, setSaving] = useState(false);
   const [errorMsg, setErrorMsg] = useState<string | null>(null);
 
-  // Form states
-  const [patientId, setPatientId] = useState(initialPatientId || (patients[0]?.id || ''));
+  const [patientId, setPatientId] = useState(initialPatientId || patients[0]?.id || '');
   const [visitType, setVisitType] = useState<'CLINIC' | 'HOME_VISIT'>('CLINIC');
   const [scheduledAt, setScheduledAt] = useState(() => {
-    // Ngày mai lúc 09:00 sáng
     const tmr = new Date();
     tmr.setDate(tmr.getDate() + 1);
     tmr.setHours(9, 0, 0, 0);
@@ -46,9 +46,7 @@ export const NewAppointmentModal: React.FC<NewAppointmentModalProps> = ({
     setSaving(true);
     setErrorMsg(null);
     try {
-      // Find patient house_id if available
       const p = patients.find((item) => item.id === patientId);
-
       await doctorApi.createAppointment({
         patient_id: patientId,
         patient_name: p?.name,
@@ -60,7 +58,6 @@ export const NewAppointmentModal: React.FC<NewAppointmentModalProps> = ({
         clinical_notes: clinicalNotes.trim(),
         enable_speaker_reminder: enableSpeaker,
       });
-
       onSuccess();
       onClose();
     } catch (err: any) {
@@ -73,7 +70,6 @@ export const NewAppointmentModal: React.FC<NewAppointmentModalProps> = ({
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-900/50 p-4 backdrop-blur-xs animate-in fade-in duration-150">
       <div className="flex max-h-[90vh] w-full max-w-lg flex-col rounded-3xl bg-white shadow-2xl border border-slate-100 overflow-hidden">
-        {/* Header */}
         <div className="flex items-center justify-between border-b border-slate-100 px-6 py-4 bg-slate-50/50">
           <div className="flex items-center space-x-3">
             <div className="flex h-10 w-10 items-center justify-center rounded-xl bg-blue-100 text-blue-600">
@@ -84,15 +80,11 @@ export const NewAppointmentModal: React.FC<NewAppointmentModalProps> = ({
               <p className="text-xs text-slate-500">Thiết lập cuộc hẹn và hẹn giờ nhắc nhở qua loa</p>
             </div>
           </div>
-          <button
-            onClick={onClose}
-            className="rounded-xl p-2 text-slate-400 hover:bg-slate-100 hover:text-slate-600 transition-colors"
-          >
+          <button onClick={onClose} className="rounded-xl p-2 text-slate-400 hover:bg-slate-100 hover:text-slate-600 transition-colors">
             <X className="h-5 w-5" />
           </button>
         </div>
 
-        {/* Form Body */}
         <form onSubmit={handleSubmit} className="flex-1 overflow-y-auto p-6 space-y-4">
           {errorMsg && (
             <div className="flex items-center space-x-2 rounded-xl bg-rose-50 p-3 text-xs text-rose-700 border border-rose-200">
@@ -109,11 +101,9 @@ export const NewAppointmentModal: React.FC<NewAppointmentModalProps> = ({
                 const selId = e.target.value;
                 setPatientId(selId);
                 const p = patients.find((item) => item.id === selId);
-                if (visitType === 'HOME_VISIT' && p?.house_address) {
-                  setLocation(p.house_address);
-                }
+                if (visitType === 'HOME_VISIT' && p?.house_address) setLocation(p.house_address);
               }}
-              className="w-full rounded-xl border border-slate-200 px-3 py-2 text-xs focus:border-blue-500 focus:outline-hidden bg-white"
+              className={inputCls}
             >
               {patients.map((p) => (
                 <option key={p.id} value={p.id}>
@@ -138,7 +128,7 @@ export const NewAppointmentModal: React.FC<NewAppointmentModalProps> = ({
                     setLocation(p?.house_address || p?.house_name || 'Tại nhà riêng bệnh nhân');
                   }
                 }}
-                className="w-full rounded-xl border border-slate-200 px-3 py-2 text-xs focus:border-blue-500 focus:outline-hidden bg-white"
+                className={inputCls}
               >
                 <option value="CLINIC">Khám tại Phòng khám</option>
                 <option value="HOME_VISIT">Thăm khám Tại nhà</option>
@@ -147,25 +137,13 @@ export const NewAppointmentModal: React.FC<NewAppointmentModalProps> = ({
 
             <div>
               <label className="block text-xs font-semibold text-slate-700 mb-1">Thời gian hẹn *</label>
-              <input
-                type="datetime-local"
-                required
-                value={scheduledAt}
-                onChange={(e) => setScheduledAt(e.target.value)}
-                className="w-full rounded-xl border border-slate-200 px-3 py-2 text-xs focus:border-blue-500 focus:outline-hidden bg-white"
-              />
+              <input type="datetime-local" required value={scheduledAt} onChange={(e) => setScheduledAt(e.target.value)} className={inputCls} />
             </div>
           </div>
 
           <div>
             <label className="block text-xs font-semibold text-slate-700 mb-1">Địa điểm khám *</label>
-            <input
-              type="text"
-              required
-              value={location}
-              onChange={(e) => setLocation(e.target.value)}
-              className="w-full rounded-xl border border-slate-200 px-3 py-2 text-xs focus:border-blue-500 focus:outline-hidden bg-white"
-            />
+            <input type="text" required value={location} onChange={(e) => setLocation(e.target.value)} className={inputCls} />
           </div>
 
           <div>
@@ -198,11 +176,7 @@ export const NewAppointmentModal: React.FC<NewAppointmentModalProps> = ({
           </div>
 
           <div className="flex justify-end space-x-2 pt-2 border-t border-slate-100">
-            <button
-              type="button"
-              onClick={onClose}
-              className="rounded-xl px-4 py-2 text-xs font-semibold text-slate-600 hover:bg-slate-100 transition-colors"
-            >
+            <button type="button" onClick={onClose} className="rounded-xl px-4 py-2 text-xs font-semibold text-slate-600 hover:bg-slate-100 transition-colors">
               Hủy
             </button>
             <button
@@ -219,4 +193,3 @@ export const NewAppointmentModal: React.FC<NewAppointmentModalProps> = ({
     </div>
   );
 };
-

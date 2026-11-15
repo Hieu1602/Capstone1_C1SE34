@@ -5,6 +5,7 @@ import React from 'react';
 import { BrowserRouter, Routes, Route, Navigate } from 'react-router-dom';
 import { DoctorLayout } from './components/layout/DoctorLayout';
 import { LoginPage } from './pages/LoginPage';
+import { ForgotPasswordPage } from './pages/ForgotPasswordPage';
 import { DashboardPage } from './pages/DashboardPage';
 import { PatientsPage } from './pages/PatientsPage';
 import { AppointmentsPage } from './pages/AppointmentsPage';
@@ -25,8 +26,9 @@ export const App: React.FC = () => {
   return (
     <BrowserRouter future={{ v7_startTransition: true, v7_relativeSplatPath: true }}>
       <Routes>
-        {/* Route công khai: Đăng nhập Bác sĩ */}
+        {/* Route công khai: Đăng nhập & Khôi phục mật khẩu Bác sĩ */}
         <Route path="/login" element={<LoginPage />} />
+        <Route path="/forgot-password" element={<ForgotPasswordPage />} />
 
         {/* Các Route được bảo vệ trong Cổng Y Tế Bác sĩ */}
         <Route

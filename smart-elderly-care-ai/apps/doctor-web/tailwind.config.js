@@ -45,8 +45,8 @@ export default {
         },
       },
       fontFamily: {
-        heading: ['Plus Jakarta Sans', 'Be Vietnam Pro', 'Inter', 'sans-serif'],
-        sans: ['Plus Jakarta Sans', 'Inter', 'Be Vietnam Pro', 'system-ui', 'sans-serif'],
+        heading: ['Be Vietnam Pro', 'Plus Jakarta Sans', 'Inter', 'sans-serif'],
+        sans: ['Be Vietnam Pro', 'Inter', 'Plus Jakarta Sans', 'system-ui', 'sans-serif'],
       },
       borderRadius: {
         'xl': '12px',

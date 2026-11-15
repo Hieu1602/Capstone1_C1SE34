@@ -16,7 +16,6 @@ import { MedicalRecordModal } from '../components/clinical/MedicalRecordModal';
 import { NewAppointmentModal } from '../components/clinical/NewAppointmentModal';
 import {
   Search,
-  Filter,
   Heart,
   Activity,
   FileText,
@@ -24,12 +23,10 @@ import {
   Calendar,
   Phone,
   Home,
-  User,
   Edit,
   Plus,
   RefreshCw,
   X,
-  AlertTriangle,
 } from 'lucide-react';
 
 export const PatientsPage: React.FC = () => {
@@ -38,16 +35,13 @@ export const PatientsPage: React.FC = () => {
   const [searchQuery, setSearchQuery] = useState('');
   const [statusFilter, setStatusFilter] = useState<'ALL' | 'NORMAL' | 'WARNING'>('ALL');
 
-  // Drawer chi tiết bệnh nhân
   const [selectedPatientId, setSelectedPatientId] = useState<string | null>(null);
   const [patientDetail, setPatientDetail] = useState<DoctorPatientDetail | null>(null);
   const [analytics, setAnalytics] = useState<AnalyticsData | null>(null);
   const [prescriptions, setPrescriptions] = useState<PrescriptionItem[]>([]);
   const [patientAppointments, setPatientAppointments] = useState<AppointmentItem[]>([]);
   const [activeTab, setActiveTab] = useState<'RECORD' | 'VITALS' | 'PRESCRIPTIONS' | 'APPOINTMENTS'>('RECORD');
-  const [loadingDetail, setLoadingDetail] = useState(false);
 
-  // Modals state
   const [showPrescriptionModal, setShowPrescriptionModal] = useState(false);
   const [showRecordModal, setShowRecordModal] = useState(false);
   const [showAppointmentModal, setShowAppointmentModal] = useState(false);
@@ -56,11 +50,7 @@ export const PatientsPage: React.FC = () => {
     setLoading(true);
     try {
       const data = await doctorApi.getPatients();
-      if (Array.isArray(data)) {
-        setPatients(data);
-      }
-    } catch {
-      // error handled
+      if (Array.isArray(data)) setPatients(data);
     } finally {
       setLoading(false);
     }
@@ -70,33 +60,18 @@ export const PatientsPage: React.FC = () => {
     fetchPatients();
   }, [fetchPatients]);
 
-  // Lấy chi tiết hồ sơ bệnh nhân khi click chọn
   const handleSelectPatient = async (patientId: string) => {
     setSelectedPatientId(patientId);
-    setLoadingDetail(true);
-    try {
-      const [detailRes, analyticsRes, rxRes, aptRes] = await Promise.allSettled([
-        doctorApi.getPatientDetail(patientId),
-        doctorApi.getAnalytics(patientId, 7),
-        doctorApi.getPrescriptions(patientId),
-        doctorApi.getAppointments(undefined, patientId),
-      ]);
-
-      if (detailRes.status === 'fulfilled') {
-        setPatientDetail(detailRes.value);
-      }
-      if (analyticsRes.status === 'fulfilled') {
-        setAnalytics(analyticsRes.value);
-      }
-      if (rxRes.status === 'fulfilled') {
-        setPrescriptions(rxRes.value);
-      }
-      if (aptRes.status === 'fulfilled') {
-        setPatientAppointments(aptRes.value);
-      }
-    } finally {
-      setLoadingDetail(false);
-    }
+    const [detailRes, analyticsRes, rxRes, aptRes] = await Promise.allSettled([
+      doctorApi.getPatientDetail(patientId),
+      doctorApi.getAnalytics(patientId, 7),
+      doctorApi.getPrescriptions(patientId),
+      doctorApi.getAppointments(undefined, patientId),
+    ]);
+    if (detailRes.status === 'fulfilled') setPatientDetail(detailRes.value);
+    if (analyticsRes.status === 'fulfilled') setAnalytics(analyticsRes.value);
+    if (rxRes.status === 'fulfilled') setPrescriptions(rxRes.value);
+    if (aptRes.status === 'fulfilled') setPatientAppointments(aptRes.value);
   };
 
   const handleRefreshDetail = async () => {
@@ -106,18 +81,30 @@ export const PatientsPage: React.FC = () => {
     }
   };
 
-  // Lọc danh sách bệnh nhân
+  const q = searchQuery.toLowerCase();
   const filteredPatients = patients.filter((p) => {
     const matchesSearch =
-      p.name.toLowerCase().includes(searchQuery.toLowerCase()) ||
-      (p.house_name && p.house_name.toLowerCase().includes(searchQuery.toLowerCase())) ||
-      (p.house_address && p.house_address.toLowerCase().includes(searchQuery.toLowerCase()));
-
+      p.name.toLowerCase().includes(q) ||
+      p.house_name?.toLowerCase().includes(q) ||
+      p.house_address?.toLowerCase().includes(q);
     const isWarn = p.health_status === 'WARNING' || p.health_status === 'DANGER';
     if (statusFilter === 'NORMAL') return matchesSearch && !isWarn;
     if (statusFilter === 'WARNING') return matchesSearch && isWarn;
     return matchesSearch;
   });
+
+  const filterBtns = [
+    { key: 'ALL' as const, label: `Tất cả (${patients.length})`, activeClass: 'bg-blue-600 text-white shadow-xs' },
+    { key: 'NORMAL' as const, label: 'Ổn định', activeClass: 'bg-emerald-600 text-white shadow-xs' },
+    { key: 'WARNING' as const, label: 'Cần lưu ý', activeClass: 'bg-amber-600 text-white shadow-xs' },
+  ];
+
+  const drawerTabs = [
+    { key: 'RECORD' as const, label: 'Hồ sơ Bệnh án', icon: FileText },
+    { key: 'VITALS' as const, label: 'Đồ thị Sinh hiệu', icon: Activity },
+    { key: 'PRESCRIPTIONS' as const, label: `Đơn thuốc (${prescriptions.length})`, icon: Pill },
+    { key: 'APPOINTMENTS' as const, label: 'Lịch khám', icon: Calendar },
+  ];
 
   return (
     <div className="space-y-6">
@@ -131,17 +118,14 @@ export const PatientsPage: React.FC = () => {
             Quản lý hồ sơ bệnh án, theo dõi chỉ số sinh hiệu và phác đồ điều trị
           </p>
         </div>
-
-        <div className="flex items-center space-x-2">
-          <button
-            onClick={fetchPatients}
-            disabled={loading}
-            className="flex items-center space-x-2 rounded-xl border border-slate-200 bg-white px-3.5 py-2 text-xs font-semibold text-slate-700 shadow-xs hover:bg-slate-50 transition-colors"
-          >
-            <RefreshCw className={`h-3.5 w-3.5 ${loading ? 'animate-spin' : ''}`} />
-            <span>Làm mới</span>
-          </button>
-        </div>
+        <button
+          onClick={fetchPatients}
+          disabled={loading}
+          className="flex items-center space-x-2 self-start sm:self-auto rounded-xl border border-slate-200 bg-white px-3.5 py-2 text-xs font-semibold text-slate-700 shadow-xs hover:bg-slate-50 transition-colors"
+        >
+          <RefreshCw className={`h-3.5 w-3.5 ${loading ? 'animate-spin' : ''}`} />
+          <span>Làm mới</span>
+        </button>
       </div>
 
       {/* 2. Thanh tìm kiếm & Tabs lọc trạng thái */}
@@ -156,33 +140,18 @@ export const PatientsPage: React.FC = () => {
             className="w-full rounded-2xl border border-slate-200 bg-white py-2.5 pl-10 pr-4 text-xs font-medium text-slate-800 placeholder-slate-400 focus:border-blue-500 focus:outline-hidden focus:ring-3 focus:ring-blue-100 shadow-xs"
           />
         </div>
-
-        {/* Lọc trạng thái */}
         <div className="flex items-center rounded-2xl border border-slate-200 bg-white p-1 shadow-xs">
-          <button
-            onClick={() => setStatusFilter('ALL')}
-            className={`rounded-xl px-3 py-1.5 text-xs font-semibold transition-colors ${
-              statusFilter === 'ALL' ? 'bg-blue-600 text-white shadow-xs' : 'text-slate-600 hover:text-slate-900'
-            }`}
-          >
-            Tất cả ({patients.length})
-          </button>
-          <button
-            onClick={() => setStatusFilter('NORMAL')}
-            className={`rounded-xl px-3 py-1.5 text-xs font-semibold transition-colors ${
-              statusFilter === 'NORMAL' ? 'bg-emerald-600 text-white shadow-xs' : 'text-slate-600 hover:text-slate-900'
-            }`}
-          >
-            Ổn định
-          </button>
-          <button
-            onClick={() => setStatusFilter('WARNING')}
-            className={`rounded-xl px-3 py-1.5 text-xs font-semibold transition-colors ${
-              statusFilter === 'WARNING' ? 'bg-amber-600 text-white shadow-xs' : 'text-slate-600 hover:text-slate-900'
-            }`}
-          >
-            Cần lưu ý
-          </button>
+          {filterBtns.map((b) => (
+            <button
+              key={b.key}
+              onClick={() => setStatusFilter(b.key)}
+              className={`rounded-xl px-3 py-1.5 text-xs font-semibold transition-colors ${
+                statusFilter === b.key ? b.activeClass : 'text-slate-600 hover:text-slate-900'
+              }`}
+            >
+              {b.label}
+            </button>
+          ))}
         </div>
       </div>
 
@@ -196,18 +165,14 @@ export const PatientsPage: React.FC = () => {
           {filteredPatients.map((patient) => {
             const isWarning = patient.health_status === 'WARNING' || patient.health_status === 'DANGER';
             const isSelected = selectedPatientId === patient.id;
-
             return (
               <div
                 key={patient.id}
                 onClick={() => handleSelectPatient(patient.id)}
                 className={`cursor-pointer rounded-3xl border p-5 transition-all bg-white shadow-xs hover:shadow-md ${
-                  isSelected
-                    ? 'border-blue-500 ring-2 ring-blue-100'
-                    : 'border-slate-200/80 hover:border-blue-300'
+                  isSelected ? 'border-blue-500 ring-2 ring-blue-100' : 'border-slate-200/80 hover:border-blue-300'
                 }`}
               >
-                {/* Header card: Avatar + Name + Status */}
                 <div className="flex items-start justify-between">
                   <div className="flex items-center space-x-3.5">
                     <div className="relative flex h-12 w-12 items-center justify-center rounded-2xl bg-blue-100 text-base font-bold text-blue-700 shadow-xs">
@@ -223,19 +188,15 @@ export const PatientsPage: React.FC = () => {
                       </p>
                     </div>
                   </div>
-
                   <span
-                    className={`rounded-full px-2.5 py-0.5 text-[10px] font-bold ${
-                      isWarning
-                        ? 'bg-amber-100 text-amber-800 border border-amber-200'
-                        : 'bg-emerald-50 text-emerald-700 border border-emerald-200'
+                    className={`rounded-full px-2.5 py-0.5 text-[10px] font-bold border ${
+                      isWarning ? 'bg-amber-100 text-amber-800 border-amber-200' : 'bg-emerald-50 text-emerald-700 border-emerald-200'
                     }`}
                   >
                     {isWarning ? 'Cần chú ý' : 'Ổn định'}
                   </span>
                 </div>
 
-                {/* Địa chỉ & số liên hệ */}
                 <div className="mt-3.5 space-y-1 text-xs text-slate-500">
                   <div className="flex items-center space-x-1.5 truncate">
                     <Home className="h-3.5 w-3.5 shrink-0 text-slate-400" />
@@ -249,7 +210,6 @@ export const PatientsPage: React.FC = () => {
                   )}
                 </div>
 
-                {/* Vitals snapshot */}
                 <div className="mt-4 grid grid-cols-2 gap-2 rounded-2xl bg-slate-50 p-3 border border-slate-100">
                   <div className="flex items-center space-x-2">
                     <Heart className="h-4 w-4 text-rose-500" />
@@ -260,7 +220,6 @@ export const PatientsPage: React.FC = () => {
                       </span>
                     </div>
                   </div>
-
                   <div className="flex items-center space-x-2">
                     <Activity className="h-4 w-4 text-blue-500" />
                     <div>
@@ -272,11 +231,8 @@ export const PatientsPage: React.FC = () => {
                   </div>
                 </div>
 
-                {/* Nút xem bệnh án */}
                 <div className="mt-3 flex justify-end">
-                  <button className="text-xs font-bold text-blue-600 hover:text-blue-700">
-                    Xem hồ sơ bệnh án →
-                  </button>
+                  <span className="text-xs font-bold text-blue-600 hover:text-blue-700">Xem hồ sơ bệnh án →</span>
                 </div>
               </div>
             );
@@ -284,11 +240,10 @@ export const PatientsPage: React.FC = () => {
         </div>
       )}
 
-      {/* 4. Drawer / Modal Chi tiết Hồ sơ Bệnh án */}
+      {/* 4. Drawer Chi tiết Hồ sơ Bệnh án */}
       {selectedPatientId && patientDetail && (
         <div className="fixed inset-0 z-40 flex justify-end bg-slate-900/40 backdrop-blur-xs animate-in fade-in duration-200">
           <div className="flex h-full w-full max-w-2xl flex-col bg-white shadow-2xl overflow-hidden">
-            {/* Drawer Header */}
             <div className="flex items-center justify-between border-b border-slate-100 px-6 py-4 bg-slate-50">
               <div className="flex items-center space-x-3">
                 <div className="flex h-11 w-11 items-center justify-center rounded-2xl bg-blue-600 text-white font-bold text-base shadow-xs">
@@ -309,66 +264,29 @@ export const PatientsPage: React.FC = () => {
               </button>
             </div>
 
-            {/* Navigation Tabs */}
             <div className="flex border-b border-slate-100 px-6 bg-white space-x-6 text-xs font-bold">
-              <button
-                onClick={() => setActiveTab('RECORD')}
-                className={`py-3 border-b-2 transition-colors flex items-center space-x-1.5 ${
-                  activeTab === 'RECORD'
-                    ? 'border-blue-600 text-blue-600'
-                    : 'border-transparent text-slate-500 hover:text-slate-800'
-                }`}
-              >
-                <FileText className="h-4 w-4" />
-                <span>Hồ sơ Bệnh án</span>
-              </button>
-
-              <button
-                onClick={() => setActiveTab('VITALS')}
-                className={`py-3 border-b-2 transition-colors flex items-center space-x-1.5 ${
-                  activeTab === 'VITALS'
-                    ? 'border-blue-600 text-blue-600'
-                    : 'border-transparent text-slate-500 hover:text-slate-800'
-                }`}
-              >
-                <Activity className="h-4 w-4" />
-                <span>Đồ thị Sinh hiệu</span>
-              </button>
-
-              <button
-                onClick={() => setActiveTab('PRESCRIPTIONS')}
-                className={`py-3 border-b-2 transition-colors flex items-center space-x-1.5 ${
-                  activeTab === 'PRESCRIPTIONS'
-                    ? 'border-blue-600 text-blue-600'
-                    : 'border-transparent text-slate-500 hover:text-slate-800'
-                }`}
-              >
-                <Pill className="h-4 w-4" />
-                <span>Đơn thuốc ({prescriptions.length})</span>
-              </button>
-
-              <button
-                onClick={() => setActiveTab('APPOINTMENTS')}
-                className={`py-3 border-b-2 transition-colors flex items-center space-x-1.5 ${
-                  activeTab === 'APPOINTMENTS'
-                    ? 'border-blue-600 text-blue-600'
-                    : 'border-transparent text-slate-500 hover:text-slate-800'
-                }`}
-              >
-                <Calendar className="h-4 w-4" />
-                <span>Lịch khám</span>
-              </button>
+              {drawerTabs.map((t) => {
+                const Icon = t.icon;
+                return (
+                  <button
+                    key={t.key}
+                    onClick={() => setActiveTab(t.key)}
+                    className={`py-3 border-b-2 transition-colors flex items-center space-x-1.5 ${
+                      activeTab === t.key ? 'border-blue-600 text-blue-600' : 'border-transparent text-slate-500 hover:text-slate-800'
+                    }`}
+                  >
+                    <Icon className="h-4 w-4" />
+                    <span>{t.label}</span>
+                  </button>
+                );
+              })}
             </div>
 
-            {/* Tab Contents */}
             <div className="flex-1 overflow-y-auto p-6 space-y-6">
-              {/* TAB 1: HỒ SƠ BỆNH ÁN */}
               {activeTab === 'RECORD' && (
                 <div className="space-y-5">
                   <div className="flex items-center justify-between">
-                    <h4 className="text-xs font-bold uppercase tracking-wider text-slate-400">
-                      Chỉ số Thể trạng & Y khoa
-                    </h4>
+                    <h4 className="text-xs font-bold uppercase tracking-wider text-slate-400">Chỉ số Thể trạng & Y khoa</h4>
                     <button
                       onClick={() => setShowRecordModal(true)}
                       className="flex items-center space-x-1 rounded-xl bg-blue-50 px-3 py-1.5 text-xs font-semibold text-blue-700 hover:bg-blue-100 transition-colors"
@@ -378,50 +296,34 @@ export const PatientsPage: React.FC = () => {
                     </button>
                   </div>
 
-                  {/* Grid 4 chỉ số thể trạng */}
                   <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
-                    <div className="rounded-2xl border border-slate-100 bg-slate-50 p-3 text-center">
-                      <span className="text-[10px] text-slate-400 block font-medium">Nhóm máu</span>
-                      <span className="text-sm font-bold text-slate-800">{patientDetail.blood_type || 'O+'}</span>
-                    </div>
-                    <div className="rounded-2xl border border-slate-100 bg-slate-50 p-3 text-center">
-                      <span className="text-[10px] text-slate-400 block font-medium">Chỉ số BMI</span>
-                      <span className="text-sm font-bold text-slate-800">{patientDetail.bmi || '22.0'}</span>
-                    </div>
-                    <div className="rounded-2xl border border-slate-100 bg-slate-50 p-3 text-center">
-                      <span className="text-[10px] text-slate-400 block font-medium">Huyết áp chuẩn</span>
-                      <span className="text-sm font-bold text-slate-800">{patientDetail.blood_pressure || '120/80'}</span>
-                    </div>
-                    <div className="rounded-2xl border border-slate-100 bg-slate-50 p-3 text-center">
-                      <span className="text-[10px] text-slate-400 block font-medium">Nhiệt độ da</span>
-                      <span className="text-sm font-bold text-slate-800">
-                        {patientDetail.skin_temp_max ? `${patientDetail.skin_temp_max}°C` : '36.5°C'}
-                      </span>
-                    </div>
+                    {[
+                      { label: 'Nhóm máu', val: patientDetail.blood_type || 'O+' },
+                      { label: 'Chỉ số BMI', val: patientDetail.bmi || '22.0' },
+                      { label: 'Huyết áp chuẩn', val: patientDetail.blood_pressure || '120/80' },
+                      { label: 'Nhiệt độ da', val: patientDetail.skin_temp_max ? `${patientDetail.skin_temp_max}°C` : '36.5°C' },
+                    ].map((s) => (
+                      <div key={s.label} className="rounded-2xl border border-slate-100 bg-slate-50 p-3 text-center">
+                        <span className="text-[10px] text-slate-400 block font-medium">{s.label}</span>
+                        <span className="text-sm font-bold text-slate-800">{s.val}</span>
+                      </div>
+                    ))}
                   </div>
 
-                  {/* Tiền sử dị ứng & Dinh dưỡng */}
                   <div className="space-y-3">
-                    <div className="rounded-2xl border border-slate-100 bg-slate-50/60 p-4">
-                      <span className="text-xs font-bold text-slate-700 block mb-1">Dị ứng thuốc</span>
-                      <p className="text-xs text-slate-600">
-                        {patientDetail.drug_allergies || 'Không ghi nhận dị ứng thuốc'}
-                      </p>
-                    </div>
-
-                    <div className="rounded-2xl border border-slate-100 bg-slate-50/60 p-4">
-                      <span className="text-xs font-bold text-slate-700 block mb-1">Dị ứng thực phẩm</span>
-                      <p className="text-xs text-slate-600">
-                        {patientDetail.food_allergies || 'Không'}
-                      </p>
-                    </div>
-
-                    <div className="rounded-2xl border border-slate-100 bg-slate-50/60 p-4">
-                      <span className="text-xs font-bold text-slate-700 block mb-1">Chế độ dinh dưỡng khuyến nghị</span>
-                      <p className="text-xs text-slate-600">
-                        {patientDetail.dietary_notes || 'Ăn giảm muối, hạn chế đường tinh luyện, bổ sung chất xơ'}
-                      </p>
-                    </div>
+                    {[
+                      { label: 'Dị ứng thuốc', val: patientDetail.drug_allergies || 'Không ghi nhận dị ứng thuốc' },
+                      { label: 'Dị ứng thực phẩm', val: patientDetail.food_allergies || 'Không' },
+                      {
+                        label: 'Chế độ dinh dưỡng khuyến nghị',
+                        val: patientDetail.dietary_notes || 'Ăn giảm muối, hạn chế đường tinh luyện, bổ sung chất xơ',
+                      },
+                    ].map((row) => (
+                      <div key={row.label} className="rounded-2xl border border-slate-100 bg-slate-50/60 p-4">
+                        <span className="text-xs font-bold text-slate-700 block mb-1">{row.label}</span>
+                        <p className="text-xs text-slate-600">{row.val}</p>
+                      </div>
+                    ))}
 
                     <div className="rounded-2xl border border-blue-100 bg-blue-50/50 p-4">
                       <span className="text-xs font-bold text-blue-900 block mb-1">Dặn dò của Bác sĩ gia đình</span>
@@ -433,14 +335,8 @@ export const PatientsPage: React.FC = () => {
                 </div>
               )}
 
-              {/* TAB 2: ĐỒ THỊ SINH HIỆU */}
-              {activeTab === 'VITALS' && (
-                <div className="space-y-4">
-                  <VitalsTrendChart data={analytics?.daily_trends || []} days={7} />
-                </div>
-              )}
+              {activeTab === 'VITALS' && <VitalsTrendChart data={analytics?.daily_trends || []} days={7} />}
 
-              {/* TAB 3: ĐƠN THUỐC */}
               {activeTab === 'PRESCRIPTIONS' && (
                 <div className="space-y-4">
                   <div className="flex items-center justify-between">
@@ -463,14 +359,9 @@ export const PatientsPage: React.FC = () => {
                   ) : (
                     <div className="space-y-2.5">
                       {prescriptions.map((rx) => (
-                        <div
-                          key={rx.id}
-                          className="rounded-2xl border border-slate-200/80 bg-white p-3.5 shadow-xs"
-                        >
+                        <div key={rx.id} className="rounded-2xl border border-slate-200/80 bg-white p-3.5 shadow-xs">
                           <div className="flex items-center justify-between">
-                            <span className="font-bold text-slate-900 text-xs">
-                              {rx.medication_name}
-                            </span>
+                            <span className="font-bold text-slate-900 text-xs">{rx.medication_name}</span>
                             <span className="rounded-md bg-blue-50 px-2 py-0.5 text-[10px] font-semibold text-blue-700">
                               {rx.dosage}
                             </span>
@@ -479,9 +370,7 @@ export const PatientsPage: React.FC = () => {
                             {rx.frequency} • {rx.instructions}
                           </p>
                           <div className="mt-2 flex items-center justify-between text-[11px]">
-                            <span className="text-slate-400">
-                              Giờ uống: {rx.schedule_times?.join(', ')}
-                            </span>
+                            <span className="text-slate-400">Giờ uống: {rx.schedule_times?.join(', ')}</span>
                             {rx.enable_speaker_reminder && (
                               <span className="rounded-full bg-emerald-50 px-2 py-0.5 text-emerald-700 font-medium">
                                 Loa nhắc: Đang bật
@@ -495,13 +384,10 @@ export const PatientsPage: React.FC = () => {
                 </div>
               )}
 
-              {/* TAB 4: LỊCH KHÁM */}
               {activeTab === 'APPOINTMENTS' && (
                 <div className="space-y-4">
                   <div className="flex items-center justify-between">
-                    <h4 className="text-xs font-bold uppercase tracking-wider text-slate-400">
-                      Lịch khám của bệnh nhân
-                    </h4>
+                    <h4 className="text-xs font-bold uppercase tracking-wider text-slate-400">Lịch khám của bệnh nhân</h4>
                     <button
                       onClick={() => setShowAppointmentModal(true)}
                       className="flex items-center space-x-1.5 rounded-xl bg-blue-600 px-3 py-1.5 text-xs font-semibold text-white shadow-xs hover:bg-blue-700 transition-colors"
@@ -518,28 +404,19 @@ export const PatientsPage: React.FC = () => {
                   ) : (
                     <div className="space-y-2.5">
                       {patientAppointments.map((apt) => (
-                        <div
-                          key={apt.id}
-                          className="rounded-2xl border border-slate-200/80 bg-white p-3.5 shadow-xs"
-                        >
+                        <div key={apt.id} className="rounded-2xl border border-slate-200/80 bg-white p-3.5 shadow-xs">
                           <div className="flex items-center justify-between">
-                            <span className="font-bold text-slate-900 text-xs">
-                              {apt.clinical_notes || 'Khám sức khỏe'}
-                            </span>
+                            <span className="font-bold text-slate-900 text-xs">{apt.clinical_notes || 'Khám sức khỏe'}</span>
                             <span
                               className={`rounded-full px-2 py-0.5 text-[10px] font-bold ${
                                 apt.status === 'COMPLETED'
                                   ? 'bg-emerald-50 text-emerald-700'
                                   : apt.status === 'CANCELLED'
-                                  ? 'bg-rose-50 text-rose-700'
-                                  : 'bg-blue-50 text-blue-700'
+                                    ? 'bg-rose-50 text-rose-700'
+                                    : 'bg-blue-50 text-blue-700'
                               }`}
                             >
-                              {apt.status === 'COMPLETED'
-                                ? 'Đã khám xong'
-                                : apt.status === 'CANCELLED'
-                                ? 'Đã hủy'
-                                : 'Sắp tới'}
+                              {apt.status === 'COMPLETED' ? 'Đã khám xong' : apt.status === 'CANCELLED' ? 'Đã hủy' : 'Sắp tới'}
                             </span>
                           </div>
                           <p className="mt-1 text-xs text-slate-500">
@@ -556,7 +433,6 @@ export const PatientsPage: React.FC = () => {
         </div>
       )}
 
-      {/* Modals */}
       {showPrescriptionModal && selectedPatientId && patientDetail && (
         <PrescriptionModal
           patientId={selectedPatientId}
@@ -586,4 +462,3 @@ export const PatientsPage: React.FC = () => {
     </div>
   );
 };
-

@@ -41,7 +41,10 @@ api.interceptors.response.use(
     if (error.response?.status === 401 && !error.config?.url?.includes('/auth/login')) {
       localStorage.removeItem('seca_doctor_token');
       localStorage.removeItem('seca_doctor_user');
-      if (window.location.pathname !== '/login') {
+      if (
+        window.location.pathname !== '/login' &&
+        window.location.pathname !== '/forgot-password'
+      ) {
         window.location.href = '/login';
       }
     }
@@ -59,6 +62,25 @@ export const authApi = {
     const res = await api.post('/auth/login', params.toString(), {
       headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
     });
+    return res.data;
+  },
+  requestPasswordResetOtp: async (phone: string) => {
+    const res = await api.post('/auth/password/request-otp', { phone: phone.trim() });
+    return res.data;
+  },
+  verifyOtp: async (phone: string, otp_code: string) => {
+    const res = await api.post('/auth/verify-otp', {
+      phone: phone.trim(),
+      otp_code: otp_code.trim(),
+    });
+    return res.data;
+  },
+  completePasswordReset: async (payload: {
+    phone: string;
+    otp_code: string;
+    new_password: string;
+  }) => {
+    const res = await api.post('/auth/password/reset', payload);
     return res.data;
   },
   getMe: async (): Promise<DoctorUser> => {

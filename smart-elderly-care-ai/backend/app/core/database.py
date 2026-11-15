@@ -53,21 +53,25 @@ _is_supabase_pooler = (
     or _parsed_db_url.port == 6543
 )
 
-_connect_args = {}
+_connect_args: dict = {
+    "timeout": 10,
+    "command_timeout": 15,
+}
 if _is_supabase_pooler:
-    _connect_args = {
+    _connect_args.update({
         "statement_cache_size": 0,
         "prepared_statement_cache_size": 0,
-    }
+    })
 
 engine = create_async_engine(
     _parsed_db_url,
     echo=settings.DEBUG,
     connect_args=_connect_args,
-    pool_size=20,
-    max_overflow=20,
-    pool_recycle=1800,
-    pool_pre_ping=False,
+    pool_size=10,
+    max_overflow=15,
+    pool_timeout=10,
+    pool_recycle=120,
+    pool_pre_ping=True,
 )
 
 AsyncSessionFactory = async_sessionmaker(

@@ -12,15 +12,12 @@ interface MedicalRecordModalProps {
   onRefresh: () => void;
 }
 
-export const MedicalRecordModal: React.FC<MedicalRecordModalProps> = ({
-  patient,
-  onClose,
-  onRefresh,
-}) => {
+const inputCls = 'w-full rounded-xl border border-slate-200 px-3 py-2 text-xs focus:border-blue-500 focus:outline-hidden bg-white';
+
+export const MedicalRecordModal: React.FC<MedicalRecordModalProps> = ({ patient, onClose, onRefresh }) => {
   const [saving, setSaving] = useState(false);
   const [errorMsg, setErrorMsg] = useState<string | null>(null);
 
-  // Form states
   const [bloodType, setBloodType] = useState(patient.blood_type || 'O+');
   const [bmi, setBmi] = useState(patient.bmi ? String(patient.bmi) : '22.0');
   const [bloodPressure, setBloodPressure] = useState(patient.blood_pressure || '120/80');
@@ -43,7 +40,6 @@ export const MedicalRecordModal: React.FC<MedicalRecordModalProps> = ({
         dietary_notes: dietaryNotes,
         doctor_notes: doctorNotes,
       });
-
       onRefresh();
       onClose();
     } catch (err: any) {
@@ -56,7 +52,6 @@ export const MedicalRecordModal: React.FC<MedicalRecordModalProps> = ({
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-900/50 p-4 backdrop-blur-xs animate-in fade-in duration-150">
       <div className="flex max-h-[90vh] w-full max-w-xl flex-col rounded-3xl bg-white shadow-2xl border border-slate-100 overflow-hidden">
-        {/* Header */}
         <div className="flex items-center justify-between border-b border-slate-100 px-6 py-4 bg-slate-50/50">
           <div className="flex items-center space-x-3">
             <div className="flex h-10 w-10 items-center justify-center rounded-xl bg-blue-100 text-blue-600">
@@ -64,18 +59,16 @@ export const MedicalRecordModal: React.FC<MedicalRecordModalProps> = ({
             </div>
             <div>
               <h3 className="text-base font-bold text-slate-900">Cập nhật Hồ Sơ Bệnh Án</h3>
-              <p className="text-xs text-slate-500">Bệnh nhân: <span className="font-semibold text-slate-700">{patient.name}</span></p>
+              <p className="text-xs text-slate-500">
+                Bệnh nhân: <span className="font-semibold text-slate-700">{patient.name}</span>
+              </p>
             </div>
           </div>
-          <button
-            onClick={onClose}
-            className="rounded-xl p-2 text-slate-400 hover:bg-slate-100 hover:text-slate-600 transition-colors"
-          >
+          <button onClick={onClose} className="rounded-xl p-2 text-slate-400 hover:bg-slate-100 hover:text-slate-600 transition-colors">
             <X className="h-5 w-5" />
           </button>
         </div>
 
-        {/* Form Body */}
         <form onSubmit={handleSubmit} className="flex-1 overflow-y-auto p-6 space-y-4">
           {errorMsg && (
             <div className="flex items-center space-x-2 rounded-xl bg-rose-50 p-3 text-xs text-rose-700 border border-rose-200">
@@ -87,78 +80,36 @@ export const MedicalRecordModal: React.FC<MedicalRecordModalProps> = ({
           <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
             <div>
               <label className="block text-xs font-semibold text-slate-700 mb-1">Nhóm máu</label>
-              <select
-                value={bloodType}
-                onChange={(e) => setBloodType(e.target.value)}
-                className="w-full rounded-xl border border-slate-200 px-3 py-2 text-xs focus:border-blue-500 focus:outline-hidden bg-white"
-              >
-                <option value="A+">A+</option>
-                <option value="A-">A-</option>
-                <option value="B+">B+</option>
-                <option value="B-">B-</option>
-                <option value="O+">O+</option>
-                <option value="O-">O-</option>
-                <option value="AB+">AB+</option>
-                <option value="AB-">AB-</option>
+              <select value={bloodType} onChange={(e) => setBloodType(e.target.value)} className={inputCls}>
+                {['A+', 'A-', 'B+', 'B-', 'O+', 'O-', 'AB+', 'AB-'].map((bt) => (
+                  <option key={bt} value={bt}>{bt}</option>
+                ))}
               </select>
             </div>
-
             <div>
               <label className="block text-xs font-semibold text-slate-700 mb-1">Chỉ số BMI</label>
-              <input
-                type="number"
-                step="0.1"
-                value={bmi}
-                onChange={(e) => setBmi(e.target.value)}
-                className="w-full rounded-xl border border-slate-200 px-3 py-2 text-xs focus:border-blue-500 focus:outline-hidden bg-white"
-              />
+              <input type="number" step="0.1" value={bmi} onChange={(e) => setBmi(e.target.value)} className={inputCls} />
             </div>
-
             <div>
               <label className="block text-xs font-semibold text-slate-700 mb-1">Huyết áp chuẩn (mmHg)</label>
-              <input
-                type="text"
-                value={bloodPressure}
-                onChange={(e) => setBloodPressure(e.target.value)}
-                placeholder="120/80"
-                className="w-full rounded-xl border border-slate-200 px-3 py-2 text-xs focus:border-blue-500 focus:outline-hidden bg-white"
-              />
+              <input type="text" value={bloodPressure} onChange={(e) => setBloodPressure(e.target.value)} placeholder="120/80" className={inputCls} />
             </div>
           </div>
 
           <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
             <div>
               <label className="block text-xs font-semibold text-slate-700 mb-1">Dị ứng thuốc</label>
-              <input
-                type="text"
-                value={drugAllergies}
-                onChange={(e) => setDrugAllergies(e.target.value)}
-                placeholder="VD: Dị ứng Penicillin, Aspirin..."
-                className="w-full rounded-xl border border-slate-200 px-3 py-2 text-xs focus:border-blue-500 focus:outline-hidden bg-white"
-              />
+              <input type="text" value={drugAllergies} onChange={(e) => setDrugAllergies(e.target.value)} placeholder="VD: Dị ứng Penicillin..." className={inputCls} />
             </div>
-
             <div>
               <label className="block text-xs font-semibold text-slate-700 mb-1">Dị ứng thực phẩm</label>
-              <input
-                type="text"
-                value={foodAllergies}
-                onChange={(e) => setFoodAllergies(e.target.value)}
-                placeholder="VD: Hải sản, đậu phộng..."
-                className="w-full rounded-xl border border-slate-200 px-3 py-2 text-xs focus:border-blue-500 focus:outline-hidden bg-white"
-              />
+              <input type="text" value={foodAllergies} onChange={(e) => setFoodAllergies(e.target.value)} placeholder="VD: Hải sản, đậu phộng..." className={inputCls} />
             </div>
           </div>
 
           <div>
             <label className="block text-xs font-semibold text-slate-700 mb-1">Chế độ dinh dưỡng khuyến nghị</label>
-            <input
-              type="text"
-              value={dietaryNotes}
-              onChange={(e) => setDietaryNotes(e.target.value)}
-              placeholder="VD: Giảm tinh bột, tăng cường rau xanh và bổ sung nước đều đặn"
-              className="w-full rounded-xl border border-slate-200 px-3 py-2 text-xs focus:border-blue-500 focus:outline-hidden bg-white"
-            />
+            <input type="text" value={dietaryNotes} onChange={(e) => setDietaryNotes(e.target.value)} placeholder="VD: Giảm tinh bột, tăng cường rau xanh..." className={inputCls} />
           </div>
 
           <div>
@@ -173,11 +124,7 @@ export const MedicalRecordModal: React.FC<MedicalRecordModalProps> = ({
           </div>
 
           <div className="flex justify-end space-x-2 pt-2 border-t border-slate-100">
-            <button
-              type="button"
-              onClick={onClose}
-              className="rounded-xl px-4 py-2 text-xs font-semibold text-slate-600 hover:bg-slate-100 transition-colors"
-            >
+            <button type="button" onClick={onClose} className="rounded-xl px-4 py-2 text-xs font-semibold text-slate-600 hover:bg-slate-100 transition-colors">
               Hủy bỏ
             </button>
             <button
@@ -194,4 +141,3 @@ export const MedicalRecordModal: React.FC<MedicalRecordModalProps> = ({
     </div>
   );
 };
-

@@ -27,3 +27,49 @@
   background: #94A3B8;
 }
 
+/* Keyframes cho hiệu ứng trôi nổi 3D & sóng nhịp tim ECG trên trang Login */
+@keyframes float {
+  0%, 100% {
+    transform: translateY(0px);
+  }
+  50% {
+    transform: translateY(-6px);
+  }
+}
+
+@keyframes floatSlowReverse {
+  0%, 100% {
+    transform: translateY(0px);
+  }
+  50% {
+    transform: translateY(5px);
+  }
+}
+
+@keyframes ecgDash {
+  0% {
+    stroke-dashoffset: 240;
+  }
+  100% {
+    stroke-dashoffset: 0;
+  }
+}
+
+.animate-float {
+  animation: float 4s ease-in-out infinite;
+}
+
+.animate-float-badge-top {
+  animation: floatSlowReverse 4.6s ease-in-out infinite;
+}
+
+.animate-float-badge-bottom {
+  animation: float 5.2s ease-in-out 1.2s infinite;
+}
+
+.animate-ecg-wave {
+  stroke-dasharray: 120 120;
+  animation: ecgDash 2.6s linear infinite;
+}
+
+

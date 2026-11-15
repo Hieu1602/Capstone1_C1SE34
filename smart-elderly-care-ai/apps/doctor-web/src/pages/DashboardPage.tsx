@@ -5,11 +5,7 @@ import React, { useEffect, useState, useCallback } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useDoctorAuthStore } from '../store/useDoctorAuthStore';
 import { doctorApi, householdApi } from '../services/api';
-import {
-  DoctorPatientCard,
-  AppointmentItem,
-  HouseInvite,
-} from '../types';
+import { DoctorPatientCard, AppointmentItem, HouseInvite } from '../types';
 import { ScheduleBanner } from '../components/dashboard/ScheduleBanner';
 import { HouseInviteCard } from '../components/dashboard/HouseInviteCard';
 import {
@@ -43,27 +39,16 @@ export const DashboardPage: React.FC = () => {
         householdApi.getInvites(),
       ]);
 
-      if (patRes.status === 'fulfilled' && Array.isArray(patRes.value)) {
-        setPatients(patRes.value);
-      }
-
+      if (patRes.status === 'fulfilled' && Array.isArray(patRes.value)) setPatients(patRes.value);
       if (aptRes.status === 'fulfilled' && Array.isArray(aptRes.value)) {
         const allApts = aptRes.value;
         setAppointments(allApts);
-
-        // Tìm lịch khám kế tiếp (trạng thái UPCOMING và có thời gian gần nhất)
         const upcomingList = allApts
           .filter((a) => a.status === 'UPCOMING')
           .sort((a, b) => new Date(a.scheduled_at).getTime() - new Date(b.scheduled_at).getTime());
-
         setNextAppointment(upcomingList[0] || null);
       }
-
-      if (invRes.status === 'fulfilled' && Array.isArray(invRes.value)) {
-        setInvites(invRes.value);
-      }
-    } catch {
-      // Error handled
+      if (invRes.status === 'fulfilled' && Array.isArray(invRes.value)) setInvites(invRes.value);
     } finally {
       setLoading(false);
     }
@@ -73,7 +58,6 @@ export const DashboardPage: React.FC = () => {
     fetchData();
   }, [fetchData]);
 
-  // Thao tác phản hồi lời mời vào nhà
   const handleRespondInvite = async (inviteId: string, action: 'accept' | 'reject') => {
     try {
       await householdApi.respondInvite(inviteId, action);
@@ -84,17 +68,47 @@ export const DashboardPage: React.FC = () => {
     }
   };
 
-  // Tính toán số liệu thống kê
-  const warningPatients = patients.filter(
-    (p) => p.health_status === 'WARNING' || p.health_status === 'DANGER'
-  );
-
+  const warningPatients = patients.filter((p) => p.health_status === 'WARNING' || p.health_status === 'DANGER');
   const todayStr = new Date().toISOString().slice(0, 10);
   const todayAppointments = appointments.filter(
     (a) => a.scheduled_at?.slice(0, 10) === todayStr && a.status !== 'CANCELLED'
   );
-
   const doctorName = user?.full_name || 'BS. Trần Văn Minh';
+
+  const kpis = [
+    {
+      label: 'Bệnh nhân phụ trách',
+      value: patients.length,
+      sub: 'Đã liên kết hồ sơ gia đình',
+      icon: Users,
+      iconClass: 'bg-blue-50 text-blue-600',
+      valClass: 'text-slate-900',
+    },
+    {
+      label: 'Cần lưu ý sức khỏe',
+      value: warningPatients.length,
+      sub: 'Nhịp tim hoặc SpO2 lệch ngưỡng',
+      icon: AlertTriangle,
+      iconClass: 'bg-amber-50 text-amber-600',
+      valClass: 'text-amber-600',
+    },
+    {
+      label: 'Ca khám hôm nay',
+      value: todayAppointments.length,
+      sub: 'Đã lên lịch trong ngày',
+      icon: CalendarCheck,
+      iconClass: 'bg-emerald-50 text-emerald-600',
+      valClass: 'text-emerald-600',
+    },
+    {
+      label: 'Smartband kết nối',
+      value: `${patients.filter((p) => p.is_online).length} / ${patients.length}`,
+      sub: 'Đang phát dữ liệu sinh hiệu',
+      icon: Activity,
+      iconClass: 'bg-indigo-50 text-indigo-600',
+      valClass: 'text-indigo-600',
+    },
+  ];
 
   return (
     <div className="space-y-6">
@@ -133,13 +147,10 @@ export const DashboardPage: React.FC = () => {
         </button>
       </div>
 
-      {/* 2. Banner Hero Card Lịch khám kế tiếp (Chuẩn màu xanh #2563EB Mobile) */}
-      <ScheduleBanner
-        appointment={nextAppointment}
-        onOpenDetail={() => navigate('/appointments')}
-      />
+      {/* 2. Banner Lịch khám kế tiếp */}
+      <ScheduleBanner appointment={nextAppointment} onOpenDetail={() => navigate('/appointments')} />
 
-      {/* 3. Lời mời từ gia đình người cao tuổi (nếu có) */}
+      {/* 3. Lời mời từ gia đình người cao tuổi */}
       {invites.length > 0 && (
         <div className="space-y-3">
           <div className="flex items-center space-x-2">
@@ -150,84 +161,36 @@ export const DashboardPage: React.FC = () => {
           </div>
           <div className="space-y-2.5">
             {invites.map((invite) => (
-              <HouseInviteCard
-                key={invite.id}
-                invite={invite}
-                onRespond={handleRespondInvite}
-              />
+              <HouseInviteCard key={invite.id} invite={invite} onRespond={handleRespondInvite} />
             ))}
           </div>
         </div>
       )}
 
-      {/* 4. Thống kê nhanh chỉ số lâm sàng (4 thẻ KPI) */}
+      {/* 4. 4 thẻ KPI */}
       <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
-        {/* Thẻ 1: Tổng bệnh nhân */}
-        <div className="rounded-2xl border border-slate-200/80 bg-white p-5 shadow-xs transition-all hover:shadow-md">
-          <div className="flex items-center justify-between">
-            <span className="text-xs font-bold text-slate-500 uppercase tracking-wide">
-              Bệnh nhân phụ trách
-            </span>
-            <div className="flex h-10 w-10 items-center justify-center rounded-xl bg-blue-50 text-blue-600">
-              <Users className="h-5 w-5" />
+        {kpis.map((kpi) => {
+          const Icon = kpi.icon;
+          return (
+            <div key={kpi.label} className="rounded-2xl border border-slate-200/80 bg-white p-5 shadow-xs transition-all hover:shadow-md">
+              <div className="flex items-center justify-between">
+                <span className="text-xs font-bold text-slate-500 uppercase tracking-wide">{kpi.label}</span>
+                <div className={`flex h-10 w-10 items-center justify-center rounded-xl ${kpi.iconClass}`}>
+                  <Icon className="h-5 w-5" />
+                </div>
+              </div>
+              <p className={`mt-3 text-2xl font-black ${kpi.valClass}`}>{kpi.value}</p>
+              <p className="mt-1 text-[11px] text-slate-500">{kpi.sub}</p>
             </div>
-          </div>
-          <p className="mt-3 text-2xl font-black text-slate-900">{patients.length}</p>
-          <p className="mt-1 text-[11px] text-slate-500">Đã liên kết hồ sơ gia đình</p>
-        </div>
-
-        {/* Thẻ 2: Cảnh báo sinh hiệu */}
-        <div className="rounded-2xl border border-slate-200/80 bg-white p-5 shadow-xs transition-all hover:shadow-md">
-          <div className="flex items-center justify-between">
-            <span className="text-xs font-bold text-slate-500 uppercase tracking-wide">
-              Cần lưu ý sức khỏe
-            </span>
-            <div className="flex h-10 w-10 items-center justify-center rounded-xl bg-amber-50 text-amber-600">
-              <AlertTriangle className="h-5 w-5" />
-            </div>
-          </div>
-          <p className="mt-3 text-2xl font-black text-amber-600">{warningPatients.length}</p>
-          <p className="mt-1 text-[11px] text-slate-500">Nhịp tim hoặc SpO2 lệch ngưỡng</p>
-        </div>
-
-        {/* Thẻ 3: Ca khám hôm nay */}
-        <div className="rounded-2xl border border-slate-200/80 bg-white p-5 shadow-xs transition-all hover:shadow-md">
-          <div className="flex items-center justify-between">
-            <span className="text-xs font-bold text-slate-500 uppercase tracking-wide">
-              Ca khám hôm nay
-            </span>
-            <div className="flex h-10 w-10 items-center justify-center rounded-xl bg-emerald-50 text-emerald-600">
-              <CalendarCheck className="h-5 w-5" />
-            </div>
-          </div>
-          <p className="mt-3 text-2xl font-black text-emerald-600">{todayAppointments.length}</p>
-          <p className="mt-1 text-[11px] text-slate-500">Đã lên lịch trong ngày</p>
-        </div>
-
-        {/* Thẻ 4: Thiết bị IoT Smartband */}
-        <div className="rounded-2xl border border-slate-200/80 bg-white p-5 shadow-xs transition-all hover:shadow-md">
-          <div className="flex items-center justify-between">
-            <span className="text-xs font-bold text-slate-500 uppercase tracking-wide">
-              Smartband kết nối
-            </span>
-            <div className="flex h-10 w-10 items-center justify-center rounded-xl bg-indigo-50 text-indigo-600">
-              <Activity className="h-5 w-5" />
-            </div>
-          </div>
-          <p className="mt-3 text-2xl font-black text-indigo-600">
-            {patients.filter((p) => p.is_online).length} / {patients.length}
-          </p>
-          <p className="mt-1 text-[11px] text-slate-500">Đang phát dữ liệu sinh hiệu</p>
-        </div>
+          );
+        })}
       </div>
 
-      {/* 5. Danh sách bệnh nhân phụ trách & tình trạng sinh hiệu tức thời */}
+      {/* 5. Danh sách bệnh nhân phụ trách */}
       <div className="rounded-3xl border border-slate-200/80 bg-white p-6 shadow-xs">
         <div className="flex items-center justify-between mb-5">
           <div>
-            <h3 className="text-base font-bold text-slate-900">
-              Danh sách Bệnh nhân Người cao tuổi
-            </h3>
+            <h3 className="text-base font-bold text-slate-900">Danh sách Bệnh nhân Người cao tuổi</h3>
             <p className="text-xs text-slate-500">Theo dõi nhịp tim và nồng độ oxy trong máu thời gian thực</p>
           </div>
           <button
@@ -255,7 +218,6 @@ export const DashboardPage: React.FC = () => {
                 >
                   <div className="flex items-start justify-between">
                     <div className="flex items-center space-x-3">
-                      {/* Avatar */}
                       <div className="relative flex h-11 w-11 items-center justify-center rounded-2xl bg-blue-100 text-sm font-bold text-blue-700">
                         {patient.name.charAt(0)}
                         {patient.is_online && (
@@ -271,20 +233,15 @@ export const DashboardPage: React.FC = () => {
                         </p>
                       </div>
                     </div>
-
-                    {/* Status Badge */}
                     <span
-                      className={`rounded-full px-2.5 py-0.5 text-[10px] font-bold ${
-                        isWarning
-                          ? 'bg-amber-100 text-amber-800 border border-amber-200'
-                          : 'bg-emerald-50 text-emerald-700 border border-emerald-200'
+                      className={`rounded-full px-2.5 py-0.5 text-[10px] font-bold border ${
+                        isWarning ? 'bg-amber-100 text-amber-800 border-amber-200' : 'bg-emerald-50 text-emerald-700 border-emerald-200'
                       }`}
                     >
                       {isWarning ? 'Cần chú ý' : 'Ổn định'}
                     </span>
                   </div>
 
-                  {/* Vitals row */}
                   <div className="mt-3.5 grid grid-cols-2 gap-2 border-t border-slate-100 pt-3">
                     <div className="flex items-center space-x-2">
                       <Heart className="h-4 w-4 text-rose-500" />
@@ -295,7 +252,6 @@ export const DashboardPage: React.FC = () => {
                         </span>
                       </div>
                     </div>
-
                     <div className="flex items-center space-x-2">
                       <Activity className="h-4 w-4 text-blue-500" />
                       <div>
@@ -315,4 +271,3 @@ export const DashboardPage: React.FC = () => {
     </div>
   );
 };
-
