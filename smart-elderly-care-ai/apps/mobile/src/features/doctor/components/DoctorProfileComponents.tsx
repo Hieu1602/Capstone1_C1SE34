@@ -135,6 +135,7 @@ export const DoctorProfileCard: React.FC<DoctorProfileCardProps> = ({
 
   const licenseRows = [
     { label: 'Số CCHN:', badge: info.cchn_number || '028491/BYT-CCHN' },
+    { label: 'Giới tính:', val: info.gender || 'Nam', color: colors.textPrimary },
     { label: 'Khoa / Phòng:', val: info.department || 'Khoa Chăm sóc Người cao tuổi', color: colors.textPrimary },
     { label: 'SĐT liên hệ trực:', val: maskPhone(info.phone), color: '#2563EB', bold: true },
   ];
@@ -426,18 +427,19 @@ export const DoctorProfileSettings: React.FC<DoctorProfileSettingsProps> = ({
 // 3. MODAL SỬA THÔNG TIN BÁC SĨ (REDESIGNED BOTTOM SHEET)
 // =============================================================
 export interface DoctorEditProfileModalProps extends ThemeProps {
-  visible: boolean; editName: string; editDegree: string; editSpecialty: string;
+  visible: boolean; editName: string; editGender: string; editDegree: string; editSpecialty: string;
   editHospital: string; editDepartment: string; editPhone: string; editAvatarUri: string | null;
-  onChangeName: (val: string) => void; onChangeDegree: (val: string) => void;
-  onChangeSpecialty: (val: string) => void; onChangeHospital: (val: string) => void;
-  onChangeDepartment: (val: string) => void; onChangePhone: (val: string) => void;
+  onChangeName: (val: string) => void; onChangeGender: (val: string) => void;
+  onChangeDegree: (val: string) => void; onChangeSpecialty: (val: string) => void;
+  onChangeHospital: (val: string) => void; onChangeDepartment: (val: string) => void;
+  onChangePhone: (val: string) => void;
   onPickImage: () => void; onClearAvatar?: () => void; onSave: () => void; onClose: () => void;
   isSubmitting?: boolean;
 }
 
 export const DoctorEditProfileModal: React.FC<DoctorEditProfileModalProps> = ({
-  visible, editName, editDegree, editSpecialty, editHospital, editDepartment, editPhone,
-  editAvatarUri, onChangeName, onChangeDegree, onChangeSpecialty, onChangeHospital,
+  visible, editName, editGender, editDegree, editSpecialty, editHospital, editDepartment, editPhone,
+  editAvatarUri, onChangeName, onChangeGender, onChangeDegree, onChangeSpecialty, onChangeHospital,
   onChangeDepartment, onChangePhone, onPickImage, onClearAvatar, onSave, onClose, isDarkMode, colors,
   isSubmitting = false,
 }) => {
@@ -690,6 +692,65 @@ export const DoctorEditProfileModal: React.FC<DoctorEditProfileModalProps> = ({
                     placeholder="Nhập họ và tên bác sĩ"
                     placeholderTextColor="#94A3B8"
                   />
+                </View>
+              </View>
+
+              {/* Giới tính (Selectable Radio Cards) */}
+              <View style={{ marginBottom: 12 }}>
+                <Text style={{ fontSize: 12, fontWeight: '600', color: isDarkMode ? '#CBD5E1' : '#475569', marginBottom: 6 }}>
+                  Giới tính
+                </Text>
+                <View style={{ flexDirection: 'row', gap: 8 }}>
+                  {[
+                    { value: 'Nam', label: 'Nam', icon: 'male' as const },
+                    { value: 'Nữ', label: 'Nữ', icon: 'female' as const },
+                    { value: 'Khác', label: 'Khác', icon: 'male-female' as const },
+                  ].map((g) => {
+                    const isSelected = (editGender || 'Nam') === g.value;
+                    return (
+                      <TouchableOpacity
+                        key={g.value}
+                        onPress={() => onChangeGender(g.value)}
+                        activeOpacity={0.8}
+                        style={{
+                          flex: 1,
+                          height: 46,
+                          borderRadius: 12,
+                          borderWidth: isSelected ? 2 : 1,
+                          borderColor: isSelected ? '#2563EB' : colors.border,
+                          backgroundColor: isSelected
+                            ? isDarkMode ? '#1E3A8A33' : '#EFF6FF'
+                            : isDarkMode ? '#0F172A' : '#F8FAFC',
+                          flexDirection: 'row',
+                          alignItems: 'center',
+                          justifyContent: 'center',
+                          paddingHorizontal: 6,
+                          position: 'relative',
+                        }}
+                      >
+                        <Ionicons
+                          name={g.icon}
+                          size={15}
+                          color={isSelected ? '#2563EB' : '#94A3B8'}
+                          style={{ marginRight: 4 }}
+                        />
+                        <Text
+                          style={{
+                            fontSize: 13,
+                            fontWeight: isSelected ? '700' : '500',
+                            color: isSelected ? '#2563EB' : colors.textPrimary,
+                          }}
+                        >
+                          {g.label}
+                        </Text>
+                        {isSelected && (
+                          <View style={{ position: 'absolute', right: 6 }}>
+                            <Ionicons name="checkmark-circle" size={15} color="#2563EB" />
+                          </View>
+                        )}
+                      </TouchableOpacity>
+                    );
+                  })}
                 </View>
               </View>
 

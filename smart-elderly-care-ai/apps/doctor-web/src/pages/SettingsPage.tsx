@@ -45,6 +45,7 @@ interface DoctorProfileInfo {
   phone: string;
   cchn_number: string;
   avatarUri?: string | null;
+  gender?: string;
 }
 
 const maskPhone = (phone?: string) => {
@@ -76,6 +77,7 @@ export const SettingsPage: React.FC = () => {
     const parsed = saved ? JSON.parse(saved) : {};
     return {
       name: parsed.name || user?.full_name || 'BS. Trần Văn Minh',
+      gender: parsed.gender || (user as any)?.gender || 'Nam',
       degree: parsed.degree || 'Bác sĩ chuyên khoa',
       specialty: parsed.specialty || user?.specialty || 'Y học Gia đình & Lão khoa',
       hospital: parsed.hospital || user?.workplace || 'Hệ thống Smart Elderly Care AI',
@@ -233,6 +235,7 @@ export const SettingsPage: React.FC = () => {
       const updated = {
         ...editForm,
         name: editForm.name.trim(),
+        gender: editForm.gender || 'Nam',
         degree: editForm.degree.trim(),
         specialty: editForm.specialty.trim(),
         hospital: editForm.hospital.trim(),
@@ -246,6 +249,7 @@ export const SettingsPage: React.FC = () => {
         specialty: updated.specialty,
         workplace: updated.hospital,
         avatar_url: updated.avatarUri || null,
+        ...({ gender: updated.gender } as any),
       });
       window.dispatchEvent(new Event('doctor-profile-updated'));
       try {
@@ -254,6 +258,7 @@ export const SettingsPage: React.FC = () => {
           specialty: updated.specialty,
           workplace: updated.hospital,
           avatar_url: updated.avatarUri || null,
+          ...({ gender: updated.gender } as any),
         });
       } catch {
         // ignore
@@ -494,6 +499,10 @@ export const SettingsPage: React.FC = () => {
                 <span className="rounded-md border border-blue-200 bg-blue-50 px-2.5 py-0.5 font-bold text-blue-700">
                   {docInfo.cchn_number}
                 </span>
+              </div>
+              <div className="flex items-center justify-between">
+                <span className="font-medium text-slate-500">Giới tính:</span>
+                <span className="font-semibold text-slate-900">{docInfo.gender || 'Nam'}</span>
               </div>
               <div className="flex items-center justify-between">
                 <span className="font-medium text-slate-500">Đơn vị công tác:</span>
@@ -781,7 +790,7 @@ export const SettingsPage: React.FC = () => {
                     </h4>
                   </div>
 
-                  <div className="space-y-3">
+                  <div className="space-y-3.5">
                     {/* Họ và tên Bác sĩ (*) */}
                     <div>
                       <label className="block text-xs font-semibold text-slate-700 mb-1.5">
@@ -802,28 +811,97 @@ export const SettingsPage: React.FC = () => {
                       </div>
                     </div>
 
-                    {/* Số điện thoại liên hệ (*) */}
-                    <div>
-                      <label className="block text-xs font-semibold text-slate-700 mb-1.5">
-                        Số điện thoại liên hệ <span className="text-rose-500">(*)</span>
-                      </label>
-                      <div className="relative">
-                        <div className="pointer-events-none absolute inset-y-0 left-0 flex items-center pl-3.5 text-slate-400">
-                          <Phone className="h-4 w-4" />
+                    {/* Hàng 2 cột: Giới tính & Số điện thoại liên hệ */}
+                    <div className="grid grid-cols-1 sm:grid-cols-2 gap-3.5 items-start">
+                      {/* Giới tính (Selectable Radio Cards) */}
+                      <div>
+                        <label className="block text-xs font-semibold text-slate-700 mb-1.5">
+                          Giới tính
+                        </label>
+                        <div className="grid grid-cols-3 gap-2">
+                          {[
+                            {
+                              value: 'Nam',
+                              label: 'Nam',
+                              icon: (cls: string) => (
+                                <svg className={cls} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round">
+                                  <circle cx="10" cy="14" r="5" />
+                                  <path d="M19 5l-5.4 5.4" />
+                                  <path d="M15 5h4v4" />
+                                </svg>
+                              ),
+                            },
+                            {
+                              value: 'Nữ',
+                              label: 'Nữ',
+                              icon: (cls: string) => (
+                                <svg className={cls} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round">
+                                  <circle cx="12" cy="9" r="5" />
+                                  <path d="M12 14v7" />
+                                  <path d="M9 18h6" />
+                                </svg>
+                              ),
+                            },
+                            {
+                              value: 'Khác',
+                              label: 'Khác',
+                              icon: (cls: string) => (
+                                <svg className={cls} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round">
+                                  <circle cx="12" cy="12" r="5" />
+                                  <path d="M12 2v5" />
+                                  <path d="M12 17v5" />
+                                  <path d="M2 12h5" />
+                                  <path d="M17 12h5" />
+                                </svg>
+                              ),
+                            },
+                          ].map((g) => {
+                            const isSelected = (editForm.gender || 'Nam') === g.value;
+                            return (
+                              <button
+                                key={g.value}
+                                type="button"
+                                onClick={() => setEditForm((prev) => ({ ...prev, gender: g.value }))}
+                                className={`relative flex h-[46px] items-center justify-center gap-1.5 rounded-xl px-2 text-xs transition-all cursor-pointer ${
+                                  isSelected
+                                    ? 'border-2 border-blue-600 bg-blue-50/80 font-bold text-blue-700 shadow-sm'
+                                    : 'border border-slate-200 bg-slate-50/70 font-medium text-slate-600 hover:border-blue-300 hover:bg-white'
+                                }`}
+                              >
+                                {g.icon(isSelected ? 'h-3.5 w-3.5 text-blue-600 shrink-0' : 'h-3.5 w-3.5 text-slate-400 shrink-0')}
+                                <span>{g.label}</span>
+                                {isSelected && (
+                                  <CheckCircle2 className="absolute right-1 top-1/2 -translate-y-1/2 h-3.5 w-3.5 text-blue-600 shrink-0" />
+                                )}
+                              </button>
+                            );
+                          })}
                         </div>
-                        <input
-                          type="tel"
-                          required
-                          value={editForm.phone || ''}
-                          onChange={(e) => setEditForm((prev) => ({ ...prev, phone: e.target.value }))}
-                          placeholder="VD: 0905111222"
-                          className="h-[46px] w-full rounded-xl border border-slate-200 bg-slate-50/70 pl-10 pr-28 text-xs font-medium text-slate-900 transition focus:border-blue-500 focus:bg-white focus:ring-4 focus:ring-blue-500/10 focus:outline-none"
-                        />
-                        <div className="absolute inset-y-0 right-0 flex items-center pr-3 pointer-events-none">
-                          <span className="inline-flex items-center gap-1 rounded-full bg-emerald-50 px-2 py-0.5 text-[10px] font-bold text-emerald-600 border border-emerald-100">
-                            <CheckCircle2 className="h-3 w-3" />
-                            Đã xác thực
-                          </span>
+                      </div>
+
+                      {/* Số điện thoại liên hệ (*) */}
+                      <div>
+                        <label className="block text-xs font-semibold text-slate-700 mb-1.5">
+                          Số điện thoại liên hệ <span className="text-rose-500">(*)</span>
+                        </label>
+                        <div className="relative">
+                          <div className="pointer-events-none absolute inset-y-0 left-0 flex items-center pl-3.5 text-slate-400">
+                            <Phone className="h-4 w-4" />
+                          </div>
+                          <input
+                            type="tel"
+                            required
+                            value={editForm.phone || ''}
+                            onChange={(e) => setEditForm((prev) => ({ ...prev, phone: e.target.value }))}
+                            placeholder="VD: 0905111222"
+                            className="h-[46px] w-full rounded-xl border border-slate-200 bg-slate-50/70 pl-10 pr-24 text-xs font-medium text-slate-900 transition focus:border-blue-500 focus:bg-white focus:ring-4 focus:ring-blue-500/10 focus:outline-none"
+                          />
+                          <div className="absolute inset-y-0 right-0 flex items-center pr-2.5 pointer-events-none">
+                            <span className="inline-flex items-center gap-1 rounded-full bg-emerald-50 px-2 py-0.5 text-[10px] font-bold text-emerald-600 border border-emerald-100">
+                              <CheckCircle2 className="h-3 w-3" />
+                              Đã xác thực
+                            </span>
+                          </div>
                         </div>
                       </div>
                     </div>

@@ -41,6 +41,7 @@ export default function DoctorProfileScreen({ navigation }: any) {
 
   const [docInfo, setDocInfo] = useState<DoctorProfileInfo>({
     name: userName || 'Bác sĩ',
+    gender: 'Nam',
     degree: 'Bác sĩ chuyên khoa',
     specialty: 'Y học Gia đình & Lão khoa',
     hospital: 'Hệ thống Smart Elderly Care AI',
@@ -59,6 +60,7 @@ export default function DoctorProfileScreen({ navigation }: any) {
   // Modals state
   const [editModalVisible, setEditModalVisible] = useState(false);
   const [editName, setEditName] = useState(docInfo.name);
+  const [editGender, setEditGender] = useState(docInfo.gender || 'Nam');
   const [editDegree, setEditDegree] = useState(docInfo.degree);
   const [editSpecialty, setEditSpecialty] = useState(docInfo.specialty);
   const [editHospital, setEditHospital] = useState(docInfo.hospital);
@@ -197,6 +199,7 @@ export default function DoctorProfileScreen({ navigation }: any) {
 
   const handleOpenEditModal = () => {
     setEditName(docInfo.name);
+    setEditGender(docInfo.gender || 'Nam');
     setEditDegree(docInfo.degree);
     setEditSpecialty(docInfo.specialty);
     setEditHospital(docInfo.hospital);
@@ -211,6 +214,7 @@ export default function DoctorProfileScreen({ navigation }: any) {
     try {
       const updated: DoctorProfileInfo = {
         name: editName.trim(),
+        gender: editGender,
         degree: editDegree.trim(),
         specialty: editSpecialty.trim(),
         hospital: editHospital.trim(),
@@ -450,6 +454,7 @@ export default function DoctorProfileScreen({ navigation }: any) {
       <DoctorEditProfileModal
         visible={editModalVisible}
         editName={editName}
+        editGender={editGender}
         editDegree={editDegree}
         editSpecialty={editSpecialty}
         editHospital={editHospital}
@@ -457,6 +462,7 @@ export default function DoctorProfileScreen({ navigation }: any) {
         editPhone={editPhone}
         editAvatarUri={editAvatarUri}
         onChangeName={setEditName}
+        onChangeGender={setEditGender}
         onChangeDegree={setEditDegree}
         onChangeSpecialty={setEditSpecialty}
         onChangeHospital={setEditHospital}
