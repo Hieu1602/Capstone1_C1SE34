@@ -13,7 +13,7 @@ import {
   Tooltip,
 } from 'recharts';
 import { useDoctorAuthStore, getDoctorAvatarUri } from '../store/useDoctorAuthStore';
-import { doctorApi, householdApi } from '../services/api';
+import { doctorApi, householdApi, authApi } from '../services/api';
 import { removeVietnameseTones } from '../utils/text';
 import { DoctorPatientCard, AppointmentItem, HouseInvite } from '../types';
 import { HouseInviteCard } from '../components/dashboard/HouseInviteCard';
@@ -132,6 +132,15 @@ export const DashboardPage: React.FC = () => {
   const [doctorAvatar, setDoctorAvatar] = useState<string | null>(() => {
     return getDoctorAvatarUri(user?.avatar_url);
   });
+
+  useEffect(() => {
+    authApi.getMe().then((me) => {
+      if (me) {
+        useDoctorAuthStore.getState().updateUser(me);
+        setDoctorAvatar(getDoctorAvatarUri(me.avatar_url));
+      }
+    }).catch(() => {});
+  }, []);
 
   useEffect(() => {
     const handleProfileUpdate = () => {

@@ -4,7 +4,7 @@
 import React, { useState, useEffect, useCallback, useRef } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useDoctorAuthStore, getDoctorAvatarUri } from '../../store/useDoctorAuthStore';
-import { doctorApi, householdApi, incidentsApi } from '../../services/api';
+import { doctorApi, householdApi, incidentsApi, authApi } from '../../services/api';
 import { doctorWebSocket } from '../../services/websocket';
 import type { Incident, AppointmentItem, DoctorPatientCard } from '../../types';
 import {
@@ -121,6 +121,16 @@ export const DoctorNavbar: React.FC = () => {
   const [doctorAvatar, setDoctorAvatar] = useState<string | null>(() => {
     return getDoctorAvatarUri(user?.avatar_url);
   });
+
+  useEffect(() => {
+    // Tự động đồng bộ thông tin hồ sơ và avatar mới nhất từ CSDL Backend
+    authApi.getMe().then((me) => {
+      if (me) {
+        useDoctorAuthStore.getState().updateUser(me);
+        setDoctorAvatar(getDoctorAvatarUri(me.avatar_url));
+      }
+    }).catch(() => {});
+  }, []);
 
   useEffect(() => {
     const handleProfileUpdate = () => {

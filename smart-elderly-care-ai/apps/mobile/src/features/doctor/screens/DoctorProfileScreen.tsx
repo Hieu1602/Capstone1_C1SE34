@@ -125,6 +125,16 @@ export default function DoctorProfileScreen({ navigation }: any) {
             specialty: user.specialty || prev.specialty,
             hospital: user.workplace || prev.hospital,
           }));
+          if (user.avatar_url) {
+            const resolved = resolveAvatarUrl(user.avatar_url);
+            setAvatarUri(resolved);
+            setAvatar(user.avatar_url);
+            setProfile({ avatar_url: user.avatar_url });
+          } else {
+            setAvatarUri(null);
+            setAvatar('');
+            setProfile({ avatar_url: null });
+          }
         }
       } catch {}
       try {
@@ -137,8 +147,8 @@ export default function DoctorProfileScreen({ navigation }: any) {
             name: parsed.name || userName || 'Bác sĩ',
             phone: parsed.phone || userPhone || '',
           }));
-          if (parsed.avatarUri) {
-            setAvatarUri(parsed.avatarUri);
+          if ('avatarUri' in parsed) {
+            setAvatarUri(parsed.avatarUri || null);
           }
         }
       } catch {}
@@ -220,6 +230,17 @@ export default function DoctorProfileScreen({ navigation }: any) {
           } catch {}
         }
       }
+    } else {
+      setAvatarUri(null);
+      setAvatar('');
+      setProfile({ avatar_url: null });
+      try {
+        await usersApi.deleteAvatar();
+      } catch {
+        try {
+          await usersApi.updateMe({ avatar_url: null });
+        } catch {}
+      }
     }
     try {
       await usersApi.updateMe({
@@ -234,6 +255,26 @@ export default function DoctorProfileScreen({ navigation }: any) {
     } catch {}
     setEditModalVisible(false);
     Alert.alert('Thành công', 'Đã cập nhật hồ sơ chuyên môn Bác sĩ thành công.');
+  };
+
+  const handleResetAvatar = async () => {
+    setEditAvatarUri(null);
+    setAvatarUri(null);
+    setAvatar('');
+    setProfile({ avatar_url: null });
+    try {
+      const raw = await AsyncStorage.getItem('doctor_profile_custom');
+      const parsed = raw ? JSON.parse(raw) : {};
+      await AsyncStorage.setItem('doctor_profile_custom', JSON.stringify({ ...parsed, avatarUri: null }));
+    } catch {}
+    try {
+      await usersApi.deleteAvatar();
+    } catch {
+      try {
+        await usersApi.updateMe({ avatar_url: null });
+      } catch {}
+    }
+    Alert.alert('Thành công', 'Đã đặt lại ảnh đại diện mặc định (Chữ M nền xanh y tế).');
   };
 
   const handleSaveProfile = () => {
@@ -382,6 +423,7 @@ export default function DoctorProfileScreen({ navigation }: any) {
           patientCount={patientCount}
           appointmentCount={appointmentCount}
           onPickImage={pickImage}
+          onResetAvatar={handleResetAvatar}
           onViewAvatar={() => setIsViewingAvatar(true)}
           onEditProfile={handleOpenEditModal}
           isDarkMode={isDarkMode}
@@ -415,6 +457,7 @@ export default function DoctorProfileScreen({ navigation }: any) {
         onChangeDepartment={setEditDepartment}
         onChangePhone={setEditPhone}
         onPickImage={pickImage}
+        onClearAvatar={() => setEditAvatarUri(null)}
         onSave={handleSaveProfile}
         onClose={handleCloseEditModal}
         isDarkMode={isDarkMode}

@@ -84,11 +84,11 @@ const FormShell: React.FC<ThemeProps & {
 export interface DoctorProfileCardProps extends ThemeProps {
   info: DoctorProfileInfo; avatarUri: string | null;
   patientCount: number; appointmentCount: number;
-  onPickImage: () => void; onViewAvatar?: () => void; onEditProfile: () => void;
+  onPickImage: () => void; onViewAvatar?: () => void; onResetAvatar?: () => void; onEditProfile: () => void;
 }
 
 export const DoctorProfileCard: React.FC<DoctorProfileCardProps> = ({
-  info, avatarUri, patientCount, appointmentCount, onPickImage, onEditProfile, isDarkMode, colors,
+  info, avatarUri, patientCount, appointmentCount, onPickImage, onResetAvatar, onEditProfile, isDarkMode, colors,
 }) => {
   const getDoctorInitial = (name?: string) => {
     if (!name) return 'M';
@@ -116,15 +116,22 @@ export const DoctorProfileCard: React.FC<DoctorProfileCardProps> = ({
     <View style={{ marginBottom: 16 }}>
       <View style={[styles.heroCard, cardSurface]}>
         <View style={styles.heroTopRow}>
-          <TouchableOpacity style={styles.heroAvatarContainer} activeOpacity={0.88} onPress={onPickImage}>
-            <View style={styles.heroAvatarBox}>
-              {avatarUri ? <Image source={{ uri: avatarUri }} style={styles.avatarImage} /> : <Text style={styles.heroAvatarLetter}>{doctorInitial}</Text>}
-            </View>
-            <View style={styles.heroOnlineBadge} />
-            <View style={[styles.heroCameraBadge, { backgroundColor: isDarkMode ? '#0F172A' : '#FFFFFF', borderColor: isDarkMode ? '#334155' : '#CBD5E1' }]}>
-              <Ionicons name="camera" size={11} color="#0284C7" />
-            </View>
-          </TouchableOpacity>
+          <View style={{ alignItems: 'center' }}>
+            <TouchableOpacity style={styles.heroAvatarContainer} activeOpacity={0.88} onPress={onPickImage}>
+              <View style={styles.heroAvatarBox}>
+                {avatarUri ? <Image source={{ uri: avatarUri }} style={styles.avatarImage} /> : <Text style={styles.heroAvatarLetter}>{doctorInitial}</Text>}
+              </View>
+              <View style={styles.heroOnlineBadge} />
+              <View style={[styles.heroCameraBadge, { backgroundColor: isDarkMode ? '#0F172A' : '#FFFFFF', borderColor: isDarkMode ? '#334155' : '#CBD5E1' }]}>
+                <Ionicons name="camera" size={11} color="#0284C7" />
+              </View>
+            </TouchableOpacity>
+            {Boolean(avatarUri) && Boolean(onResetAvatar) && (
+              <TouchableOpacity onPress={onResetAvatar} style={{ marginTop: 6 }} hitSlop={{ top: 6, bottom: 6, left: 10, right: 10 }}>
+                <Text style={{ fontSize: 11, fontWeight: '700', color: '#EF4444' }}>Xóa ảnh</Text>
+              </TouchableOpacity>
+            )}
+          </View>
 
           <View style={styles.heroInfoCol}>
             <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: 6, marginBottom: 4 }}>
@@ -388,13 +395,13 @@ export interface DoctorEditProfileModalProps extends ThemeProps {
   onChangeName: (val: string) => void; onChangeDegree: (val: string) => void;
   onChangeSpecialty: (val: string) => void; onChangeHospital: (val: string) => void;
   onChangeDepartment: (val: string) => void; onChangePhone: (val: string) => void;
-  onPickImage: () => void; onSave: () => void; onClose: () => void;
+  onPickImage: () => void; onClearAvatar?: () => void; onSave: () => void; onClose: () => void;
 }
 
 export const DoctorEditProfileModal: React.FC<DoctorEditProfileModalProps> = ({
   visible, editName, editDegree, editSpecialty, editHospital, editDepartment, editPhone,
   editAvatarUri, onChangeName, onChangeDegree, onChangeSpecialty, onChangeHospital,
-  onChangeDepartment, onChangePhone, onPickImage, onSave, onClose, isDarkMode, colors,
+  onChangeDepartment, onChangePhone, onPickImage, onClearAvatar, onSave, onClose, isDarkMode, colors,
 }) => {
   const fields = [
     { label: 'Họ và tên Bác sĩ (*)', val: editName, setVal: onChangeName, placeholder: 'Nhập họ và tên bác sĩ' },
@@ -412,10 +419,22 @@ export const DoctorEditProfileModal: React.FC<DoctorEditProfileModalProps> = ({
           <View style={styles.modalAvatarWrap}>
             {editAvatarUri ? <Image source={{ uri: editAvatarUri }} style={styles.avatarImage} /> : <Ionicons name="person" size={28} color="#FFFFFF" />}
           </View>
-          <TouchableOpacity style={styles.btnPickImage} onPress={onPickImage} activeOpacity={0.8}>
-            <Ionicons name="camera-outline" size={16} color="#0284C7" style={{ marginRight: 6 }} />
-            <Text style={styles.btnPickImageText}>Chọn / Đổi ảnh đại diện</Text>
-          </TouchableOpacity>
+          <View style={{ flexDirection: 'row', flexWrap: 'wrap', alignItems: 'center', gap: 8 }}>
+            <TouchableOpacity style={styles.btnPickImage} onPress={onPickImage} activeOpacity={0.8}>
+              <Ionicons name="camera-outline" size={16} color="#0284C7" style={{ marginRight: 6 }} />
+              <Text style={styles.btnPickImageText}>Chọn / Đổi ảnh</Text>
+            </TouchableOpacity>
+            {Boolean(editAvatarUri) && Boolean(onClearAvatar) && (
+              <TouchableOpacity
+                style={[styles.btnPickImage, { borderColor: '#FECACA', backgroundColor: '#FEF2F2' }]}
+                onPress={onClearAvatar}
+                activeOpacity={0.8}
+              >
+                <Ionicons name="trash-outline" size={15} color="#EF4444" style={{ marginRight: 4 }} />
+                <Text style={[styles.btnPickImageText, { color: '#EF4444' }]}>Xóa ảnh</Text>
+              </TouchableOpacity>
+            )}
+          </View>
         </View>
 
         {fields.map((f, idx) => (

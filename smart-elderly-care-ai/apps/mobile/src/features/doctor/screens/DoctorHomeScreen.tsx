@@ -22,7 +22,7 @@ import { Colors } from '../../../theme/colors';
 import { useTheme } from '../../../store/useThemeStore';
 import { useAuthStore } from '../../../store/useAuthStore';
 import { useAlertStore } from '../../../store/useAlertStore';
-import { doctorApi, householdApi } from '../../../services/api';
+import { doctorApi, householdApi, usersApi } from '../../../services/api';
 import { alertsWS } from '../../../services/websocket';
 import { resolveAvatarUrl } from '../../auth/hooks/useProfileManager';
 import { LocalizedText } from '../../../i18n/LocalizedComponents';
@@ -101,11 +101,21 @@ export default function DoctorHomeScreen() {
 
   const fetchData = useCallback(async () => {
     try {
-      const [patRes, aptRes] = await Promise.allSettled([
+      const [patRes, aptRes, meRes] = await Promise.allSettled([
         doctorApi.getPatients(),
         doctorApi.getAppointments(),
+        usersApi.getMe(),
         fetchIncidents(),
       ]);
+
+      if (meRes.status === 'fulfilled' && meRes.value?.data) {
+        const u = meRes.value.data;
+        useAuthStore.getState().setProfile({
+          avatar_url: u.avatar_url,
+          full_name: u.full_name,
+        });
+        useAuthStore.getState().setAvatar(u.avatar_url || '');
+      }
 
       setPatients(normalizePatientsList(patRes.status === 'fulfilled' && patRes.value.data ? patRes.value.data : []));
 
