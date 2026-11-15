@@ -5,7 +5,9 @@ Vị trí: backend/app/api/v1/endpoints/mobile/houses.py
 
 import json
 import logging
-from typing import List, Optional
+import math
+from datetime import datetime, timezone
+from typing import List, Optional, Union
 from uuid import UUID
 
 from fastapi import APIRouter, Depends, HTTPException, status
@@ -523,6 +525,52 @@ async def remove_house_member(
     return {"status": "success", "message": "Đã xóa thành viên khỏi căn nhà thành công."}
 
 
+def generate_house_invite_code(house_id: Union[str, UUID], window_offset: int = 0) -> str:
+    """
+    Tạo mã mời tham gia căn nhà thay đổi 30 phút một lần (CARE-XXXX).
+    Thuật toán FNV-1a 32-bit băm từ house_id và 30-minute epoch window.
+    """
+    clean_id = str(house_id).lower().replace("-", "")
+    now_ts = int(datetime.now(timezone.utc).timestamp())
+    window = (now_ts // 1800) + window_offset
+    val = 2166136261
+    key = f"{clean_id}:{window}"
+    for ch in key:
+        val = ((val ^ ord(ch)) * 16777619) & 0xFFFFFFFF
+    code_suffix = f"{val:08X}"[-4:]
+    return f"CARE-{code_suffix}"
+
+
+@router.get("/{house_id}/invite-code")
+async def get_house_invite_code(
+    house_id: str,
+    current_user: User = Depends(get_current_user),
+    db: AsyncSession = Depends(get_db),
+):
+    """
+    Lấy mã mời tham gia căn nhà với cơ chế tự động xoay vòng mã mỗi 30 phút (30m rotation).
+    """
+    house = await _resolve_house(db, house_id, current_user)
+    if not house:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="Không tìm thấy căn nhà.",
+        )
+
+    now_ts = int(datetime.now(timezone.utc).timestamp())
+    code = generate_house_invite_code(house.id, window_offset=0)
+    seconds_remaining = 1800 - (now_ts % 1800)
+    minutes_remaining = max(1, math.ceil(seconds_remaining / 60))
+
+    return {
+        "house_id": str(house.id),
+        "code": code,
+        "validity_minutes": 30,
+        "expires_in_seconds": seconds_remaining,
+        "remaining_minutes": minutes_remaining,
+    }
+
+
 @router.post("/join", response_model=HouseOut)
 async def join_house_by_code(
     payload: dict,
@@ -531,7 +579,7 @@ async def join_house_by_code(
 ):
     """
     Tham gia căn nhà bằng mã mời hoặc liên kết (invite code / URL).
-    Hỗ trợ mã dạng 'CARE-XXXX', UUID, hoặc URL chứa houseId.
+    Hỗ trợ mã xoay vòng 30 phút (CARE-XXXX), UUID, hoặc URL chứa houseId.
     """
     import re
     raw_code = str(payload.get("code") or payload.get("invite_code") or "").strip()
@@ -551,21 +599,35 @@ async def join_house_by_code(
 
     if not target_house:
         code_match = re.search(r"(?:CARE-)?([0-9a-zA-Z]{4})", raw_code, re.IGNORECASE)
-        suffix = code_match.group(1).lower() if code_match else raw_code.lower()
+        suffix = code_match.group(1).upper() if code_match else raw_code.upper()
+        clean_input = f"CARE-{suffix}" if not suffix.startswith("CARE-") else suffix
+
         stmt = select(House)
         res = await db.execute(stmt)
         all_houses = res.scalars().all()
+
+        # 1. Ưu tiên kiểm tra mã xoay vòng 30 phút (cửa sổ 30 phút hiện tại hoặc vừa qua)
         for h in all_houses:
-            if str(h.id).lower().replace("-", "").endswith(suffix) or str(h.id).lower().endswith(suffix):
+            code_cur = generate_house_invite_code(h.id, window_offset=0)
+            code_prev = generate_house_invite_code(h.id, window_offset=-1)
+            if clean_input in (code_cur, code_prev) or suffix in (code_cur[-4:], code_prev[-4:]):
                 target_house = h
                 break
+
+        # 2. Fallback: Kiểm tra theo 4 ký tự cuối của house id (legacy fallback)
+        if not target_house:
+            for h in all_houses:
+                clean_hid = str(h.id).lower().replace("-", "")
+                if clean_hid.endswith(suffix.lower()) or str(h.id).lower().endswith(suffix.lower()):
+                    target_house = h
+                    break
         if not target_house and all_houses:
             target_house = all_houses[0]
 
     if not target_house:
         raise HTTPException(
             status_code=status.HTTP_404_NOT_FOUND,
-            detail="Không tìm thấy căn nhà phù hợp với mã mời này hoặc mã đã hết hạn.",
+            detail="Không tìm thấy căn nhà phù hợp với mã mời này hoặc mã 30 phút đã hết hạn.",
         )
 
     is_owner = (target_house.owner_id == current_user.id)

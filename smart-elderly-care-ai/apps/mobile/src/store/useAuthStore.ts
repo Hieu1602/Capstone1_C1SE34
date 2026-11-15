@@ -53,6 +53,7 @@ export interface AuthStoreState {
   isHydrated: boolean;
   isRoleLoading: boolean;
   permissions: HousePermissions | null;
+  two_factor_enabled: boolean;
 
   login: (
     access: string,
@@ -87,6 +88,7 @@ export interface AuthStoreState {
     permissions?: Partial<HousePermissions>
   ) => void;
   clearHouseData: () => void;
+  setTwoFactorEnabled: (enabled: boolean) => void;
   logout: () => void;
 }
 
@@ -123,6 +125,7 @@ const createAuthStore: StateCreator<AuthStoreState, [], [['zustand/persist', Aut
   isHydrated: true,
   isRoleLoading: false,
   permissions: null,
+  two_factor_enabled: false,
 
   setIsRoleLoading: (loading: boolean) => set({ isRoleLoading: loading }),
 
@@ -194,6 +197,7 @@ const createAuthStore: StateCreator<AuthStoreState, [], [['zustand/persist', Aut
       device_count: deviceCount,
       viewRole: isDoctor ? 'DOCTOR' : 'CAREGIVER',
       permissions: initialPermissions,
+      two_factor_enabled: Boolean(profileExtras?.two_factor_enabled),
     });
 
     if (resolvedHouseId) {
@@ -430,6 +434,8 @@ const createAuthStore: StateCreator<AuthStoreState, [], [['zustand/persist', Aut
       device_count: 0,
     });
   },
+
+  setTwoFactorEnabled: (enabled: boolean) => set({ two_factor_enabled: enabled }),
 
   logout: () => {
     try {

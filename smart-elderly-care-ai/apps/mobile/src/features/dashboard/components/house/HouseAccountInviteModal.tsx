@@ -8,7 +8,11 @@ import {
   TextInput,
   Switch,
   ActivityIndicator,
+  KeyboardAvoidingView,
+  Platform,
+  ScrollView,
 } from 'react-native';
+import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
 
 interface HouseAccountInviteModalProps {
@@ -65,13 +69,14 @@ export const HouseAccountInviteModal: React.FC<HouseAccountInviteModalProps> = (
   colors: { bgCard, borderCol, textTitle, textSub },
   toastInfo,
 }) => {
+  const insets = useSafeAreaInsets();
   const [internalRoleType, setInternalRoleType] = useState<'MEMBER' | 'DOCTOR'>('MEMBER');
   const roleType = inviteRoleType || internalRoleType;
   const updateRoleType = setInviteRoleType || setInternalRoleType;
   const isDoctor = roleType === 'DOCTOR';
 
   return (
-    <Modal visible={visible} transparent animationType="slide">
+    <Modal visible={visible} transparent animationType="slide" onRequestClose={onClose}>
       {toastInfo && (
         <View style={styles.modalToastContainer} pointerEvents="none">
           <View
@@ -89,9 +94,32 @@ export const HouseAccountInviteModal: React.FC<HouseAccountInviteModalProps> = (
           </View>
         </View>
       )}
-      <View style={styles.modalOverlay}>
-        <View style={[styles.modalCard, { backgroundColor: bgCard, borderColor: borderCol }]}>
-          <Text style={[styles.modalTitle, { color: textTitle }]}>Mời vào Căn nhà</Text>
+      <KeyboardAvoidingView
+        behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
+        style={styles.modalOverlay}
+      >
+        <TouchableOpacity
+          style={styles.backdrop}
+          activeOpacity={1}
+          onPress={onClose}
+        />
+        <View
+          style={[
+            styles.modalCard,
+            {
+              backgroundColor: bgCard,
+              borderColor: borderCol,
+              paddingBottom: Math.max(insets.bottom, 16),
+            },
+          ]}
+        >
+          <ScrollView
+            bounces={false}
+            keyboardShouldPersistTaps="handled"
+            showsVerticalScrollIndicator={false}
+            contentContainerStyle={styles.scrollContent}
+          >
+            <Text style={[styles.modalTitle, { color: textTitle }]}>Mời vào Căn nhà</Text>
 
           {/* Chọn vai trò: Thành viên gia đình vs Bác sĩ gia đình */}
           <View style={styles.roleSelectorRow}>
@@ -215,17 +243,25 @@ export const HouseAccountInviteModal: React.FC<HouseAccountInviteModalProps> = (
               )}
             </TouchableOpacity>
           </View>
-        </View>
+        </ScrollView>
       </View>
-    </Modal>
+    </KeyboardAvoidingView>
+  </Modal>
   );
 };
 
 const styles = StyleSheet.create({
   modalOverlay: {
     flex: 1,
-    backgroundColor: 'rgba(0,0,0,0.5)',
     justifyContent: 'flex-end',
+  },
+  backdrop: {
+    position: 'absolute',
+    top: 0,
+    left: 0,
+    right: 0,
+    bottom: 0,
+    backgroundColor: 'rgba(0,0,0,0.5)',
   },
   modalCard: {
     width: '100%',
@@ -234,6 +270,10 @@ const styles = StyleSheet.create({
     padding: 20,
     borderWidth: 1,
     borderBottomWidth: 0,
+    maxHeight: '90%',
+  },
+  scrollContent: {
+    flexGrow: 0,
   },
   modalTitle: {
     fontSize: 18,

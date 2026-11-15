@@ -52,12 +52,22 @@ class CRUDVital:
                 or_(
                     Device.device_id == clean_str,
                     Device.name == clean_str,
+                    Device.device_id.ilike(f"%{clean_str}%"),
                 )
             ).limit(1)
         )
         found_id = result.scalar_one_or_none()
         if found_id:
             return found_id
+
+        # Nếu là vòng CooSpo HW706 hoặc BLE Band, tự động ánh xạ vào Smartband sẵn có
+        if any(k in clean_str.upper() for k in ["HW706", "COOSPO", "BAND", "BLE"]):
+            band_res = await db.execute(
+                select(Device.id).where(Device.device_type == DeviceType.SMARTBAND).limit(1)
+            )
+            band_id = band_res.scalar_one_or_none()
+            if band_id:
+                return band_id
 
         # Tự động tạo bản ghi Device để đáp ứng ràng buộc khóa ngoại (Foreign Key)
         try:
@@ -551,18 +561,35 @@ class CRUDVital:
         # 2. Lấy chỉ số sinh hiệu mới nhất của thiết bị
         if device:
             latest_vital = await self.get_latest(db, device.id)
-        hr = latest_vital.heart_rate if latest_vital else None
-        sp = latest_vital.spo2 if latest_vital else None
-        temp = latest_vital.skin_temp_max if latest_vital else None
-        fall = bool(latest_vital.fall_detected) if latest_vital else False
-        v_time = latest_vital.time if latest_vital else None
 
-        is_band_connected = bool(smartband_device and smartband_device.is_online)
+        # Kiểm tra tính tươi mới của dữ liệu: nếu bản ghi cuối cùng đã quá 90 giây
+        # hoặc thiết bị không còn online, xem như thiết bị đã ngắt kết nối (offline)
+        now_utc = datetime.now(timezone.utc)
+        is_fresh = False
+        v_time = latest_vital.time if latest_vital else None
+        if latest_vital and v_time:
+            # Chuẩn hóa timezone nếu cần
+            v_time_tz = v_time if v_time.tzinfo else v_time.replace(tzinfo=timezone.utc)
+            diff_seconds = abs((now_utc - v_time_tz).total_seconds())
+            if diff_seconds <= 90:
+                is_fresh = True
+
+        # Nếu quá 90s không có dữ liệu mới, cập nhật thiết bị sang offline
+        if not is_fresh and smartband_device and smartband_device.is_online:
+            smartband_device.is_online = False
+            await db.commit()
+
+        is_band_connected = bool(smartband_device and smartband_device.is_online and is_fresh)
         band_battery = (
             smartband_device.battery_level
             if (smartband_device and is_band_connected and smartband_device.battery_level is not None)
             else None
         )
+
+        hr = latest_vital.heart_rate if (latest_vital and is_fresh) else None
+        sp = latest_vital.spo2 if (latest_vital and is_fresh) else None
+        temp = latest_vital.skin_temp_max if (latest_vital and is_fresh) else None
+        fall = bool(latest_vital.fall_detected) if (latest_vital and is_fresh) else False
 
         return {
             "heart_rate": hr,
