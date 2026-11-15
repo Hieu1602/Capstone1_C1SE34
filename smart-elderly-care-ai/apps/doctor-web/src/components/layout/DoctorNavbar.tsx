@@ -170,120 +170,87 @@ export const DoctorNavbar: React.FC = () => {
           const isCritical = inc.alert_level === 'CRITICAL' || inc.alert_type === 'FALL_DETECTED';
           const rawMsg = inc.message || '';
           const msgLower = rawMsg.toLowerCase();
-          const isRead = Boolean(
-            inc.is_acknowledged ||
-            savedReadIds.has(inc.id) ||
-            savedReadIds.has(`inc_${inc.id}`)
-          );
+          const isRead = Boolean(inc.is_acknowledged || savedReadIds.has(inc.id) || savedReadIds.has(`inc_${inc.id}`));
+          const timeStr = formatDate(inc.created_at);
 
-          const isAppointmentMsg =
-            ['APPOINTMENT_CONFIRMED', 'APPOINTMENT_SCHEDULED', 'APPOINTMENT_CANCELLED'].includes(inc.alert_type || '') ||
-            ['lịch khám', 'lịch hẹn', 'đã hủy', '[đã hủy]', 'tái khám', 'xác nhận lịch'].some((k) => msgLower.includes(k));
-
-          const isAssignmentMsg = ['chủ hộ', 'phụ trách', 'chỉ định', 'bệnh nhân mới'].some((k) => msgLower.includes(k));
-
-          const isMedicalRecordMsg =
-            inc.alert_type === 'MEDICAL_RECORD_UPDATED' ||
-            ['bệnh án', 'dị ứng', 'dinh dưỡng'].some((k) => msgLower.includes(k));
+          let type: UnifiedNotification['type'] = 'ALERT';
+          let title = rawMsg;
+          let subtitle = timeStr;
+          let badgeLabel = isCritical ? 'Khẩn cấp' : 'Cảnh báo';
+          let badgeColor = isCritical ? 'text-rose-700 bg-rose-50 border-rose-200' : 'text-amber-700 bg-amber-50 border-amber-200';
+          let badgeBg = isCritical ? 'bg-rose-50' : 'bg-amber-50';
+          let targetUrl = '/patients';
+          let finalRead = isRead;
 
           const isHouseInvite =
             inc.alert_type === 'HOUSE_INVITE_PENDING' ||
             Boolean(inc.notes?.includes('HOUSE_INVITE_PENDING')) ||
             ['lời mời bạn tham gia căn nhà', 'lời mời tham gia căn nhà', 'xác nhận vào nhà'].some((k) => msgLower.includes(k));
+          const isAppointmentMsg =
+            ['APPOINTMENT_CONFIRMED', 'APPOINTMENT_SCHEDULED', 'APPOINTMENT_CANCELLED'].includes(inc.alert_type || '') ||
+            ['lịch khám', 'lịch hẹn', 'đã hủy', '[đã hủy]', 'tái khám', 'xác nhận lịch'].some((k) => msgLower.includes(k));
+          const isAssignmentMsg = ['chủ hộ', 'phụ trách', 'chỉ định', 'bệnh nhân mới'].some((k) => msgLower.includes(k));
+          const isMedicalRecordMsg =
+            inc.alert_type === 'MEDICAL_RECORD_UPDATED' ||
+            ['bệnh án', 'dị ứng', 'dinh dưỡng'].some((k) => msgLower.includes(k));
 
           if (isHouseInvite) {
+            type = 'INVITE';
+            title = 'Lời mời phụ trách Bác sĩ gia đình';
+            subtitle = rawMsg || 'Chủ hộ đã gửi lời mời bạn tham gia căn nhà với vai trò Bác sĩ gia đình.';
             const isHandled = Boolean(inc.is_acknowledged);
             const isRejected = Boolean(inc.notes?.includes('từ chối') || inc.note?.includes('từ chối'));
-            unifiedList.push({
-              id: `inc_${inc.id}`,
-              rawIncidentId: inc.id,
-              type: 'INVITE',
-              title: 'Lời mời phụ trách Bác sĩ gia đình',
-              subtitle: rawMsg || 'Chủ hộ đã gửi lời mời bạn tham gia căn nhà với vai trò Bác sĩ gia đình.',
-              timeStr: formatDate(inc.created_at),
-              badgeLabel: isHandled ? (isRejected ? 'Đã từ chối' : 'Đã tham gia') : 'Lời mời',
-              badgeColor: isHandled
-                ? isRejected
-                  ? 'text-rose-700 bg-rose-50 border-rose-200'
-                  : 'text-emerald-700 bg-emerald-50 border-emerald-200'
-                : 'text-amber-700 bg-amber-50 border-amber-200',
-              badgeBg: isHandled ? (isRejected ? 'bg-rose-50' : 'bg-emerald-50') : 'bg-amber-50',
-              isRead: isHandled || isRead,
-              targetUrl: '/',
-              rawIncident: inc,
-            });
+            badgeLabel = isHandled ? (isRejected ? 'Đã từ chối' : 'Đã tham gia') : 'Lời mời';
+            badgeColor = isHandled
+              ? isRejected ? 'text-rose-700 bg-rose-50 border-rose-200' : 'text-emerald-700 bg-emerald-50 border-emerald-200'
+              : 'text-amber-700 bg-amber-50 border-amber-200';
+            badgeBg = isHandled ? (isRejected ? 'bg-rose-50' : 'bg-emerald-50') : 'bg-amber-50';
+            targetUrl = '/';
+            finalRead = isHandled || isRead;
           } else if (isAppointmentMsg) {
+            type = 'APPOINTMENT';
             const isCancelled = msgLower.includes('hủy') || inc.alert_type === 'APPOINTMENT_CANCELLED';
             const isConfirmed =
               inc.alert_type === 'APPOINTMENT_CONFIRMED' ||
               msgLower.includes('đã xác nhận') ||
               msgLower.includes('sẵn sàng đón tiếp');
-            unifiedList.push({
-              id: `inc_${inc.id}`,
-              rawIncidentId: inc.id,
-              type: 'APPOINTMENT',
-              title: rawMsg || (isConfirmed ? 'Gia đình đã xác nhận đón tiếp' : 'Lịch khám bệnh nhân'),
-              subtitle: formatDate(inc.created_at),
-              timeStr: formatDate(inc.created_at),
-              badgeLabel: isCancelled ? 'Đã hủy' : isConfirmed ? 'Đã xác nhận' : 'Lịch khám',
-              badgeColor: isCancelled
-                ? 'text-rose-700 bg-rose-50 border-rose-200'
-                : isConfirmed
-                  ? 'text-emerald-700 bg-emerald-50 border-emerald-200'
-                  : 'text-sky-700 bg-sky-50 border-sky-200',
-              badgeBg: isCancelled ? 'bg-rose-50' : isConfirmed ? 'bg-emerald-50' : 'bg-sky-50',
-              isRead,
-              targetUrl: '/appointments',
-              rawIncident: inc,
-            });
+            title = rawMsg || (isConfirmed ? 'Gia đình đã xác nhận đón tiếp' : 'Lịch khám bệnh nhân');
+            badgeLabel = isCancelled ? 'Đã hủy' : isConfirmed ? 'Đã xác nhận' : 'Lịch khám';
+            badgeColor = isCancelled
+              ? 'text-rose-700 bg-rose-50 border-rose-200'
+              : isConfirmed
+                ? 'text-emerald-700 bg-emerald-50 border-emerald-200'
+                : 'text-sky-700 bg-sky-50 border-sky-200';
+            badgeBg = isCancelled ? 'bg-rose-50' : isConfirmed ? 'bg-emerald-50' : 'bg-sky-50';
+            targetUrl = '/appointments';
           } else if (isAssignmentMsg) {
-            unifiedList.push({
-              id: `inc_${inc.id}`,
-              rawIncidentId: inc.id,
-              type: 'ALERT',
-              title: rawMsg || 'Phụ trách bệnh nhân mới',
-              subtitle: formatDate(inc.created_at),
-              timeStr: formatDate(inc.created_at),
-              badgeLabel: 'Bệnh nhân',
-              badgeColor: 'text-emerald-700 bg-emerald-50 border-emerald-200',
-              badgeBg: 'bg-emerald-50',
-              isRead,
-              targetUrl: '/patients',
-              rawIncident: inc,
-            });
+            title = rawMsg || 'Phụ trách bệnh nhân mới';
+            badgeLabel = 'Bệnh nhân';
+            badgeColor = 'text-emerald-700 bg-emerald-50 border-emerald-200';
+            badgeBg = 'bg-emerald-50';
           } else if (isMedicalRecordMsg) {
-            unifiedList.push({
-              id: `inc_${inc.id}`,
-              rawIncidentId: inc.id,
-              type: 'ALERT',
-              title: rawMsg || 'Hồ sơ bệnh án được cập nhật',
-              subtitle: formatDate(inc.created_at),
-              timeStr: formatDate(inc.created_at),
-              badgeLabel: 'Hồ sơ y tế',
-              badgeColor: 'text-indigo-700 bg-indigo-50 border-indigo-200',
-              badgeBg: 'bg-indigo-50',
-              isRead,
-              targetUrl: '/patients',
-              rawIncident: inc,
-            });
-          } else {
-            unifiedList.push({
-              id: `inc_${inc.id}`,
-              rawIncidentId: inc.id,
-              type: 'ALERT',
-              title: rawMsg || (isCritical ? 'Cảnh báo sự cố té ngã khẩn cấp' : 'Cảnh báo y tế'),
-              subtitle: formatDate(inc.created_at),
-              timeStr: formatDate(inc.created_at),
-              badgeLabel: isCritical ? 'Khẩn cấp' : 'Cảnh báo',
-              badgeColor: isCritical
-                ? 'text-rose-700 bg-rose-50 border-rose-200'
-                : 'text-amber-700 bg-amber-50 border-amber-200',
-              badgeBg: isCritical ? 'bg-rose-50' : 'bg-amber-50',
-              isRead,
-              targetUrl: '/patients',
-              rawIncident: inc,
-            });
+            title = rawMsg || 'Hồ sơ bệnh án được cập nhật';
+            badgeLabel = 'Hồ sơ y tế';
+            badgeColor = 'text-indigo-700 bg-indigo-50 border-indigo-200';
+            badgeBg = 'bg-indigo-50';
+          } else if (!rawMsg) {
+            title = isCritical ? 'Cảnh báo sự cố té ngã khẩn cấp' : 'Cảnh báo y tế';
           }
+
+          unifiedList.push({
+            id: `inc_${inc.id}`,
+            rawIncidentId: inc.id,
+            type,
+            title,
+            subtitle,
+            timeStr,
+            badgeLabel,
+            badgeColor,
+            badgeBg,
+            isRead: finalRead,
+            targetUrl,
+            rawIncident: inc,
+          });
         });
       }
 

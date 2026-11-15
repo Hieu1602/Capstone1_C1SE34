@@ -92,6 +92,24 @@ const getPatientAvatar = (avatarUrl?: string | null) => {
   return `http://localhost:8000${clean.startsWith('/') ? clean : `/${clean}`}`;
 };
 
+const getFallbackTrend = (range: '7D' | '30D', liveHr: number, liveSpO2: number) =>
+  range === '7D'
+    ? [
+        { label: 'T2', heart_rate: 74, spo2: 97 },
+        { label: 'T3', heart_rate: 76, spo2: 98 },
+        { label: 'T4', heart_rate: 78, spo2: 96 },
+        { label: 'T5', heart_rate: 75, spo2: 97 },
+        { label: 'T6', heart_rate: 82, spo2: 95 },
+        { label: 'T7', heart_rate: 77, spo2: 98 },
+        { label: 'CN (Hôm nay)', heart_rate: liveHr, spo2: liveSpO2 },
+      ]
+    : [
+        { label: 'Tuần 1', heart_rate: 75, spo2: 98 },
+        { label: 'Tuần 2', heart_rate: 79, spo2: 96 },
+        { label: 'Tuần 3', heart_rate: 76, spo2: 97 },
+        { label: 'Tuần 4 (Hiện tại)', heart_rate: Math.round((76 + liveHr) / 2), spo2: liveSpO2 },
+      ];
+
 export const DashboardPage: React.FC = () => {
   const navigate = useNavigate();
   const { user } = useDoctorAuthStore();
@@ -198,51 +216,14 @@ export const DashboardPage: React.FC = () => {
               }))
             );
           } else {
-            // Khi hệ thống IoT mới kích hoạt và CSDL chưa đủ 7 ngày/30 ngày lịch sử:
-            // Kết hợp số đo thực tế hôm nay của Cụ Nguyễn Văn A với xu hướng lâm sàng chuẩn
             const liveHr = loadedPatients[0].heart_rate || 76;
             const liveSpO2 = loadedPatients[0].spo2 || 97;
-
-            if (chartRange === '7D') {
-              setTrendSeries([
-                { label: 'T2', heart_rate: 74, spo2: 97 },
-                { label: 'T3', heart_rate: 76, spo2: 98 },
-                { label: 'T4', heart_rate: 78, spo2: 96 },
-                { label: 'T5', heart_rate: 75, spo2: 97 },
-                { label: 'T6', heart_rate: 82, spo2: 95 },
-                { label: 'T7', heart_rate: 77, spo2: 98 },
-                { label: 'CN (Hôm nay)', heart_rate: liveHr, spo2: liveSpO2 },
-              ]);
-            } else {
-              setTrendSeries([
-                { label: 'Tuần 1', heart_rate: 75, spo2: 98 },
-                { label: 'Tuần 2', heart_rate: 79, spo2: 96 },
-                { label: 'Tuần 3', heart_rate: 76, spo2: 97 },
-                { label: 'Tuần 4 (Hiện tại)', heart_rate: Math.round((76 + liveHr) / 2), spo2: liveSpO2 },
-              ]);
-            }
+            setTrendSeries(getFallbackTrend(chartRange, liveHr, liveSpO2));
           }
         } catch {
           const liveHr = loadedPatients[0]?.heart_rate || 76;
           const liveSpO2 = loadedPatients[0]?.spo2 || 97;
-          if (chartRange === '7D') {
-            setTrendSeries([
-              { label: 'T2', heart_rate: 74, spo2: 97 },
-              { label: 'T3', heart_rate: 76, spo2: 98 },
-              { label: 'T4', heart_rate: 78, spo2: 96 },
-              { label: 'T5', heart_rate: 75, spo2: 97 },
-              { label: 'T6', heart_rate: 82, spo2: 95 },
-              { label: 'T7', heart_rate: 77, spo2: 98 },
-              { label: 'CN (Hôm nay)', heart_rate: liveHr, spo2: liveSpO2 },
-            ]);
-          } else {
-            setTrendSeries([
-              { label: 'Tuần 1', heart_rate: 75, spo2: 98 },
-              { label: 'Tuần 2', heart_rate: 79, spo2: 96 },
-              { label: 'Tuần 3', heart_rate: 76, spo2: 97 },
-              { label: 'Tuần 4 (Hiện tại)', heart_rate: Math.round((76 + liveHr) / 2), spo2: liveSpO2 },
-            ]);
-          }
+          setTrendSeries(getFallbackTrend(chartRange, liveHr, liveSpO2));
         }
       } else {
         setTrendSeries(chartRange === '7D' ? DEFAULT_TREND_7D : DEFAULT_TREND_30D);

@@ -594,38 +594,21 @@ export default function DoctorHomeScreen() {
 
             {/* 3 Ô KÍNH MỜ SINH HIỆU THỜI GIAN THỰC (Glassmorphism Pills - Ảnh 5) */}
             <View style={styles.glassPillsRow}>
-              {/* Ô 1: Nhịp tim */}
-              <View style={styles.glassPill}>
-                <View style={styles.pillIconRow}>
-                  <Ionicons name="heart" size={14} color="#F87171" />
-                  <Text style={styles.glassPillLabel}>Nhịp tim</Text>
+              {[
+                { icon: 'heart', color: '#F87171', label: 'Nhịp tim', val: activePatient.heart_rate ? `${activePatient.heart_rate} bpm` : '78 bpm' },
+                { icon: 'water', color: '#67E8F9', label: 'SpO2', val: activePatient.spo2 ? `${activePatient.spo2}%` : '97%' },
+                { icon: 'watch-outline', color: '#A7F3D0', label: 'Smartband', val: 'CooSpo HW706', isSmall: true },
+              ].map((pill) => (
+                <View key={pill.label} style={styles.glassPill}>
+                  <View style={styles.pillIconRow}>
+                    <Ionicons name={pill.icon as any} size={14} color={pill.color} />
+                    <Text style={styles.glassPillLabel}>{pill.label}</Text>
+                  </View>
+                  <Text style={[styles.glassPillVal, pill.isSmall && { fontSize: 12 }]} numberOfLines={1}>
+                    {pill.val}
+                  </Text>
                 </View>
-                <Text style={styles.glassPillVal}>
-                  {activePatient.heart_rate ? `${activePatient.heart_rate} bpm` : '78 bpm'}
-                </Text>
-              </View>
-
-              {/* Ô 2: SpO2 */}
-              <View style={styles.glassPill}>
-                <View style={styles.pillIconRow}>
-                  <Ionicons name="water" size={14} color="#67E8F9" />
-                  <Text style={styles.glassPillLabel}>SpO2</Text>
-                </View>
-                <Text style={styles.glassPillVal}>
-                  {activePatient.spo2 ? `${activePatient.spo2}%` : '97%'}
-                </Text>
-              </View>
-
-              {/* Ô 3: Vòng Smartband */}
-              <View style={styles.glassPill}>
-                <View style={styles.pillIconRow}>
-                  <Ionicons name="watch-outline" size={14} color="#A7F3D0" />
-                  <Text style={styles.glassPillLabel}>Smartband</Text>
-                </View>
-                <Text style={[styles.glassPillVal, { fontSize: 12 }]} numberOfLines={1}>
-                  CooSpo HW706
-                </Text>
-              </View>
+              ))}
             </View>
           </TouchableOpacity>
         ) : null}
