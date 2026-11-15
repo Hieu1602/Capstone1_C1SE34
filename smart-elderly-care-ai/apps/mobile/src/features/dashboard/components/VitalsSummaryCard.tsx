@@ -159,39 +159,35 @@ export const VitalsSummaryCard: React.FC<VitalsSummaryCardProps> = ({
         </View>
         <View style={[styles.vitalDivider, isDarkMode && { backgroundColor: colors.border }]} />
 
-        {/* SpO2 */}
-        <View style={styles.vitalItem}>
-          <Ionicons name="water" size={17} color="#3B82F6" />
-          <Text style={[styles.vitalValText, isDarkMode && { color: colors.textPrimary }]} numberOfLines={1}>
-            {hasSpO2 ? (
-              <>
+        {/* SpO2 - Ẩn đi nếu phần cứng không hỗ trợ */}
+        {hasSpO2 && (
+          <>
+            <View style={styles.vitalItem}>
+              <Ionicons name="water" size={17} color="#3B82F6" />
+              <Text style={[styles.vitalValText, isDarkMode && { color: colors.textPrimary }]} numberOfLines={1}>
                 {currentVitals.spo2}{' '}
                 <Text style={styles.vitalUnit}>%</Text>
-              </>
-            ) : (
-              '--'
-            )}
-          </Text>
-          <Text style={[styles.vitalLblText, isDarkMode && { color: colors.textSecondary }]}>SpO₂</Text>
-        </View>
-        <View style={[styles.vitalDivider, isDarkMode && { backgroundColor: colors.border }]} />
+              </Text>
+              <Text style={[styles.vitalLblText, isDarkMode && { color: colors.textSecondary }]}>SpO₂</Text>
+            </View>
+            <View style={[styles.vitalDivider, isDarkMode && { backgroundColor: colors.border }]} />
+          </>
+        )}
 
-        {/* Thân nhiệt */}
-        <View style={styles.vitalItem}>
-          <Ionicons name="thermometer" size={17} color="#F59E0B" />
-          <Text style={[styles.vitalValText, isDarkMode && { color: colors.textPrimary }]} numberOfLines={1}>
-            {hasTemp ? (
-              <>
+        {/* Thân nhiệt (AMG8833) - Ẩn đi nếu chưa có dữ liệu */}
+        {hasTemp && (
+          <>
+            <View style={styles.vitalItem}>
+              <Ionicons name="thermometer" size={17} color="#F59E0B" />
+              <Text style={[styles.vitalValText, isDarkMode && { color: colors.textPrimary }]} numberOfLines={1}>
                 {currentVitals.skin_temp_max}{' '}
                 <Text style={styles.vitalUnit}>°C</Text>
-              </>
-            ) : (
-              '--'
-            )}
-          </Text>
-          <Text style={[styles.vitalLblText, isDarkMode && { color: colors.textSecondary }]}>Thân nhiệt</Text>
-        </View>
-        <View style={[styles.vitalDivider, isDarkMode && { backgroundColor: colors.border }]} />
+              </Text>
+              <Text style={[styles.vitalLblText, isDarkMode && { color: colors.textSecondary }]}>Thân nhiệt</Text>
+            </View>
+            <View style={[styles.vitalDivider, isDarkMode && { backgroundColor: colors.border }]} />
+          </>
+        )}
 
         {/* Trạng thái vận động */}
         <View style={styles.vitalItem}>

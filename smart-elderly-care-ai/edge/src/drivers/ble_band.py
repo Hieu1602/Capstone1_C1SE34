@@ -25,6 +25,8 @@ class VitalReading:
     heart_rate: Optional[int] = None      # bpm
     spo2: Optional[int] = None            # %
     battery_level: Optional[int] = None   # %
+    sensor_contact: bool = True           # True: Đang đeo, False: Tháo vòng
+    rr_intervals: list[float] = None      # ms (HRV)
     timestamp: float = 0.0
 
 
@@ -87,6 +89,15 @@ class BLEBandDriver:
             self._client = BleakClient(address)
             await self._client.connect()
             logger.info("[BLE] Đã kết nối: %s", address)
+
+            # Đọc mức pin ban đầu
+            try:
+                bat_raw = await self._client.read_gatt_char(self.BATTERY_LEVEL_UUID)
+                self._latest.battery_level = bat_raw[0]
+                logger.info("[BLE] Mức pin thiết bị: %d%%", self._latest.battery_level)
+            except Exception:
+                pass
+
             return True
 
         except ImportError:
@@ -169,11 +180,29 @@ class BLEBandDriver:
 
         if hr_format_16bit:
             reading.heart_rate = struct.unpack_from("<H", data, 1)[0]
+            offset = 3
         else:
             reading.heart_rate = data[1]
+            offset = 2
 
-        # SpO2 thường nằm ở byte tùy chỉnh (không chuẩn GATT)
-        # Một số band gửi SpO2 ở byte 2 hoặc 3
+        # Sensor Contact status
+        contact_bits = (flags >> 1) & 0x03
+        reading.sensor_contact = (contact_bits == 3)
+
+        # Energy Expended (nếu bit 3 bật -> bỏ qua 2 bytes)
+        if (flags & 0x08) and len(data) >= offset + 2:
+            offset += 2
+
+        # RR-interval (HRV) nếu bit 4 bật
+        if (flags & 0x10) and len(data) >= offset + 2:
+            rr_vals = []
+            while offset + 1 < len(data):
+                rr_raw = struct.unpack_from("<H", data, offset)[0]
+                rr_vals.append(round(rr_raw / 1024.0 * 1000, 1))
+                offset += 2
+            reading.rr_intervals = rr_vals
+
+        # Fallback SpO2 nếu band gửi ở byte tùy chỉnh
         if len(data) >= 4:
             potential_spo2 = data[3]
             if 70 <= potential_spo2 <= 100:

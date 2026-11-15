@@ -52,12 +52,22 @@ class CRUDVital:
                 or_(
                     Device.device_id == clean_str,
                     Device.name == clean_str,
+                    Device.device_id.ilike(f"%{clean_str}%"),
                 )
             ).limit(1)
         )
         found_id = result.scalar_one_or_none()
         if found_id:
             return found_id
+
+        # Nếu là vòng CooSpo HW706 hoặc BLE Band, tự động ánh xạ vào Smartband sẵn có
+        if any(k in clean_str.upper() for k in ["HW706", "COOSPO", "BAND", "BLE"]):
+            band_res = await db.execute(
+                select(Device.id).where(Device.device_type == DeviceType.SMARTBAND).limit(1)
+            )
+            band_id = band_res.scalar_one_or_none()
+            if band_id:
+                return band_id
 
         # Tự động tạo bản ghi Device để đáp ứng ràng buộc khóa ngoại (Foreign Key)
         try:
