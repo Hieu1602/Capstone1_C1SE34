@@ -206,7 +206,7 @@ export const AppointmentsPage: React.FC = () => {
             className="flex items-center space-x-2 rounded-xl bg-blue-600 px-4 py-2.5 text-xs font-bold text-white shadow-md shadow-blue-500/25 hover:bg-blue-700 transition-all"
           >
             <Plus className="h-4 w-4" />
-            <span>Lên lịch khám mới</span>
+            <span>Đặt lịch mới</span>
           </button>
         </div>
       </div>

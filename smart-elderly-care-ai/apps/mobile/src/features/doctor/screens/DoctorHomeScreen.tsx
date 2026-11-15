@@ -391,7 +391,7 @@ export default function DoctorHomeScreen() {
                 </LocalizedText>
                 <TouchableOpacity style={styles.btnWhiteAddSchedule} activeOpacity={0.85} onPress={() => navigation.navigate('DoctorAppointments')}>
                   <Ionicons name="add-circle" size={16} color="#2563EB" style={{ marginRight: 4 }} />
-                  <LocalizedText style={styles.btnWhiteAddScheduleText}>+ Đặt lịch mới</LocalizedText>
+                  <LocalizedText style={styles.btnWhiteAddScheduleText}>Đặt lịch mới</LocalizedText>
                 </TouchableOpacity>
               </View>
               <View style={styles.bannerRightImageWrap}>
@@ -537,7 +537,7 @@ export default function DoctorHomeScreen() {
                 <View style={[styles.stripAddCircle, { backgroundColor: isDarkMode ? '#334155' : '#EEF2F6' }]}>
                   <Ionicons name="add" size={20} color="#2563EB" />
                 </View>
-                <Text style={[styles.stripPatientName, { color: '#2563EB', fontWeight: '600' }]}>+ Thêm</Text>
+                <Text style={[styles.stripPatientName, { color: '#2563EB', fontWeight: '600' }]}>Thêm</Text>
               </TouchableOpacity>
             </ScrollView>
           </View>

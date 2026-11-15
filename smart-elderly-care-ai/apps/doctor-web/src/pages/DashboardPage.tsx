@@ -477,7 +477,7 @@ export const DashboardPage: React.FC = () => {
                 className="flex items-center gap-2 rounded-full bg-white px-5 py-2.5 text-xs font-extrabold text-blue-700 shadow-md transition hover:bg-blue-50"
               >
                 <Plus className="h-4 w-4" />
-                <span>Lên lịch khám mới</span>
+                <span>Đặt lịch mới</span>
               </button>
               <button
                 onClick={() => navigate('/appointments')}
