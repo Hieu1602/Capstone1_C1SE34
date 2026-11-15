@@ -1038,7 +1038,12 @@ async def get_my_terminals(
         except Exception:
             pass
     terminals = await crud_user_terminal.get_terminals_for_user(
-        db, user=current_user, current_ip=client_ip, current_user_agent=user_agent, custom_location=client_location
+        db,
+        user=current_user,
+        current_ip=client_ip,
+        current_user_agent=user_agent,
+        custom_location=client_location,
+        custom_device_name=request.headers.get("x-client-platform"),
     )
 
     return terminals

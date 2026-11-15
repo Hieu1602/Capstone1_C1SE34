@@ -105,12 +105,12 @@ export const DoctorAuthSplitShell: React.FC<{ children: React.ReactNode }> = ({ 
           </p>
         </div>
 
-        {/* Thẻ nổi 2: Cảnh báo Lâm sàng & Tái khám */}
+        {/* Thẻ nổi 2: Cảnh báo Lâm sàng & Lịch khám */}
         <div className="animate-float-badge-bottom absolute -bottom-4 -left-3 z-20 flex items-center gap-2.5 rounded-2xl border border-blue-100 bg-white/90 px-4 py-2.5 shadow-lg backdrop-blur-md">
           <div className="flex h-7 w-7 items-center justify-center rounded-xl bg-blue-50 text-[#2563EB]">
             <BellRing className="h-3.5 w-3.5" />
           </div>
-          <span className="text-xs font-bold text-[#0F172A]">Cảnh báo Lâm sàng &amp; Tái khám</span>
+          <span className="text-xs font-bold text-[#0F172A]">Cảnh báo Lâm sàng &amp; Lịch khám</span>
         </div>
       </div>
     </div>

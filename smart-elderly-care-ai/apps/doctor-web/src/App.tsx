@@ -9,6 +9,7 @@ import { ForgotPasswordPage } from './pages/ForgotPasswordPage';
 import { DashboardPage } from './pages/DashboardPage';
 import { PatientsPage } from './pages/PatientsPage';
 import { AppointmentsPage } from './pages/AppointmentsPage';
+import { SettingsPage } from './pages/SettingsPage';
 import { useDoctorAuthStore } from './store/useDoctorAuthStore';
 
 // Protected Route Component: Chỉ cho phép tài khoản vai trò Bác Sĩ truy cập
@@ -40,8 +41,9 @@ export const App: React.FC = () => {
           }
         >
           <Route index element={<DashboardPage />} />
-          <Route path="patients" element={<PatientsPage />} />
           <Route path="appointments" element={<AppointmentsPage />} />
+          <Route path="patients" element={<PatientsPage />} />
+          <Route path="settings" element={<SettingsPage />} />
         </Route>
 
         {/* Catch-all fallback */}

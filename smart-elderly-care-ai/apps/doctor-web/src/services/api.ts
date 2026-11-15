@@ -9,6 +9,7 @@ import {
   AppointmentItem,
   AnalyticsData,
   DoctorUser,
+  Incident,
 } from '../types';
 
 const BASE_URL =
@@ -25,12 +26,13 @@ export const api = axios.create({
   },
 });
 
-// Interceptor đính kèm JWT Token của Bác sĩ
+// Interceptor đính kèm JWT Token và định danh nền tảng Cổng Web Bác sĩ
 api.interceptors.request.use((config) => {
   const token = localStorage.getItem('seca_doctor_token');
   if (token) {
     config.headers.Authorization = `Bearer ${token}`;
   }
+  config.headers['x-client-platform'] = 'DOCTOR_WEB';
   return config;
 });
 
@@ -85,6 +87,30 @@ export const authApi = {
   },
   getMe: async (): Promise<DoctorUser> => {
     const res = await api.get('/auth/me');
+    return res.data;
+  },
+  updateMe: async (data: any) => {
+    const res = await api.patch('/users/me', data);
+    return res.data;
+  },
+  changePassword: async (data: {
+    current_password: string;
+    new_password: string;
+    confirm_new_password: string;
+  }) => {
+    const res = await api.patch('/users/me/password', data);
+    return res.data;
+  },
+  getTerminals: async (): Promise<any[]> => {
+    try {
+      const res = await api.get('/users/me/terminals');
+      return Array.isArray(res.data) ? res.data : [];
+    } catch {
+      return [];
+    }
+  },
+  deleteTerminal: async (terminalId: string) => {
+    const res = await api.delete(`/users/me/terminals/${terminalId}`);
     return res.data;
   },
   logout: async () => {
@@ -181,4 +207,33 @@ export const householdApi = {
     return res.data;
   },
 };
+
+// 4. INCIDENTS & NOTIFICATIONS API (Đồng bộ trực tiếp với Backend CSDL & Mobile App)
+export const incidentsApi = {
+  list: async (deviceId?: string, limit = 50): Promise<Incident[]> => {
+    try {
+      const res = await api.get('/notifications', { params: { device_id: deviceId, limit } });
+      return Array.isArray(res.data) ? res.data : [];
+    } catch {
+      return [];
+    }
+  },
+  get: async (id: string): Promise<Incident> => {
+    const res = await api.get(`/incidents/${id}`);
+    return res.data;
+  },
+  acknowledge: async (id: string, notes?: string) => {
+    const res = await api.post(`/incidents/${id}/acknowledge`, null, { params: { note: notes } });
+    return res.data;
+  },
+  reopen: async (id: string, notes?: string) => {
+    const res = await api.post(`/incidents/${id}/reopen`, null, { params: { note: notes } });
+    return res.data;
+  },
+  acknowledgeAll: async () => {
+    const res = await api.post('/incidents/acknowledge-all');
+    return res.data;
+  },
+};
+
 

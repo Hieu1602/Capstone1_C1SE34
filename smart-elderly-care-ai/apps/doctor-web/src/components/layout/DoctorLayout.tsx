@@ -1,5 +1,5 @@
 // src/components/layout/DoctorLayout.tsx
-// Bố cục tổng thể trang Bác sĩ: Navbar + Sidebar + Vùng nội dung
+// Bố cục tổng thể trang Bác sĩ: Navbar + Sidebar + Vùng nội dung (#F4F7FE)
 
 import React, { useEffect, useState } from 'react';
 import { Outlet } from 'react-router-dom';
@@ -21,7 +21,7 @@ export const DoctorLayout: React.FC = () => {
     const unsubscribe = doctorWebSocket.subscribe((event) => {
       if (event && (event.type === 'ALERT_NEW' || event.message || event.heart_rate || event.spo2)) {
         setRealtimeAlert({
-          message: event.message || `Cảnh báo sinh hiệu bất thường từ bệnh nhân!`,
+          message: event.message || 'Cảnh báo sinh hiệu bất thường từ bệnh nhân!',
           time: new Date().toLocaleTimeString('vi-VN', { hour: '2-digit', minute: '2-digit' }),
           type: event.type || 'warning',
         });
@@ -35,7 +35,7 @@ export const DoctorLayout: React.FC = () => {
   }, []);
 
   return (
-    <div className="flex min-h-screen flex-col bg-[#F8FAFC] text-slate-800">
+    <div className="flex min-h-screen flex-col bg-[#F4F7FE] dark:bg-[#0F172A] text-slate-800 dark:text-slate-100 transition-colors">
       {/* Top Navbar */}
       <DoctorNavbar />
 
@@ -48,7 +48,7 @@ export const DoctorLayout: React.FC = () => {
         <main className="flex-1 min-w-0 p-6 lg:p-8 overflow-y-auto">
           {/* Banner thông báo thời gian thực nếu có sự cố */}
           {realtimeAlert && (
-            <div className="mb-6 flex items-center justify-between rounded-2xl border border-rose-200 bg-rose-50/90 p-4 shadow-sm backdrop-blur-sm animate-in fade-in duration-200">
+            <div className="mb-6 flex items-center justify-between rounded-2xl border border-rose-200 bg-rose-50/95 p-4 shadow-sm backdrop-blur-sm animate-in fade-in duration-200">
               <div className="flex items-center space-x-3">
                 <div className="rounded-xl bg-rose-500 p-2 text-white shadow-xs">
                   <AlertCircle className="h-5 w-5 animate-pulse" />
@@ -57,9 +57,7 @@ export const DoctorLayout: React.FC = () => {
                   <p className="text-[11px] font-bold uppercase tracking-wider text-rose-600">
                     CẢNH BÁO LÂM SÀNG THỜI GIAN THỰC ({realtimeAlert.time})
                   </p>
-                  <p className="text-xs font-semibold text-rose-950">
-                    {realtimeAlert.message}
-                  </p>
+                  <p className="text-xs font-semibold text-rose-950">{realtimeAlert.message}</p>
                 </div>
               </div>
               <button
@@ -78,4 +76,3 @@ export const DoctorLayout: React.FC = () => {
     </div>
   );
 };
-

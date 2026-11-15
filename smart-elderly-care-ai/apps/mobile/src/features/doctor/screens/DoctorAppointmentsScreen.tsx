@@ -372,7 +372,7 @@ export default function DoctorAppointmentsScreen() {
         <View style={styles.headerRow}>
           <View style={{ flex: 1 }}>
             <LocalizedText style={[styles.headerTitle, { color: colors.textPrimary }]}>
-              Lịch Khám & Tái Khám
+              Lịch Khám
             </LocalizedText>
             <LocalizedText style={[styles.headerSub, { color: isDarkMode ? '#94A3B8' : '#64748B' }]} numberOfLines={1}>
               Theo dõi lịch định kỳ & Tự động phát loa nhắc qua Hub AI

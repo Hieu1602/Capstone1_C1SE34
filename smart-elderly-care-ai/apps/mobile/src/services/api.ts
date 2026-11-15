@@ -96,6 +96,7 @@ api.interceptors.request.use(
     if (token) {
       config.headers.Authorization = `Bearer ${token}`;
     }
+    config.headers['x-client-platform'] = 'MOBILE_APP';
     try {
       const language = await AsyncStorage.getItem('smartcare-user-language');
       if (language === 'en' || language === 'vi') {

@@ -470,6 +470,7 @@ async def _record_login_background(
     client_location: Optional[str],
     user_name: str,
     user_role: str,
+    client_platform: Optional[str] = None,
 ):
     """Ghi nhận terminal, last_login_at và audit log chạy ngầm, không làm nghẽn quá trình đăng nhập."""
     async with AsyncSessionFactory() as session:
@@ -479,6 +480,7 @@ async def _record_login_background(
                 user_id=user_id,
                 ip_address=client_ip,
                 user_agent=user_agent,
+                custom_device_name=client_platform,
                 custom_location=client_location,
             )
             await session.execute(
@@ -592,6 +594,7 @@ def _build_login_success_token(
             pass
 
     # Ghi nhận terminal, last_login_at và audit log chạy ngầm (Non-blocking)
+    client_platform = request.headers.get("x-client-platform")
     background_tasks.add_task(
         _record_login_background,
         user_id=user.id,
@@ -600,6 +603,7 @@ def _build_login_success_token(
         client_location=client_location,
         user_name=user_name,
         user_role=user_role,
+        client_platform=client_platform,
     )
 
     # Xây dựng UserOut kèm quyền hạn trực tiếp trong response để Frontend nhận diện ngay tức thì
@@ -980,7 +984,12 @@ async def get_user_devices(
         except Exception:
             pass
     return await crud_user_terminal.get_terminals_for_user(
-        db, user=current_user, current_ip=client_ip, current_user_agent=user_agent, custom_location=client_location
+        db,
+        user=current_user,
+        current_ip=client_ip,
+        current_user_agent=user_agent,
+        custom_location=client_location,
+        custom_device_name=request.headers.get("x-client-platform"),
     )
 
 

@@ -8,6 +8,9 @@ export interface DoctorUser {
   role: 'doctor';
   email?: string;
   avatar_url?: string;
+  specialty?: string;
+  workplace?: string;
+  cchn_number?: string;
 }
 
 export type HealthStatus = 'NORMAL' | 'WARNING' | 'DANGER' | string;
@@ -134,5 +137,24 @@ export interface HouseInvite {
   inviter_name: string;
   message?: string;
   created_at?: string;
+}
+
+export interface Incident {
+  id: string;
+  device_id?: string;
+  alert_type: string;
+  alert_level: 'LOW' | 'MEDIUM' | 'HIGH' | 'CRITICAL' | string;
+  message: string;
+  confidence?: number | null;
+  sources?: string | null;
+  video_clip_url?: string | null;
+  thumbnail_url?: string | null;
+  is_acknowledged: boolean;
+  acknowledged_by?: string | null;
+  acknowledged_by_name?: string | null;
+  acknowledged_at?: string | null;
+  note?: string | null;
+  notes?: string | null;
+  created_at: string;
 }
 

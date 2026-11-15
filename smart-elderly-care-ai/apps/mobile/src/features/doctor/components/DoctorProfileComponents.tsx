@@ -1,13 +1,14 @@
 // DoctorProfileComponents.tsx
 // Tập hợp các component cho màn hình Hồ Sơ Bác Sĩ (Profile & Settings)
 
-import React, { useState } from 'react';
+import React, { useState, useEffect, useCallback } from 'react';
 import {
   View, Text, StyleSheet, TouchableOpacity, Image, Switch,
   Modal, ScrollView, TextInput, KeyboardAvoidingView, Platform,
 } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { Colors } from '../../../theme/colors';
+import { usersApi } from '../../../services/api';
 import { DoctorProfileInfo } from './types';
 
 const maskPhone = (phone?: string) => {
@@ -96,7 +97,7 @@ export const DoctorProfileCard: React.FC<DoctorProfileCardProps> = ({
 
   const stats = [
     { icon: 'people' as const, bg: isDarkMode ? '#0C4A6E44' : '#EFF6FF', color: '#0284C7', valColor: isDarkMode ? '#38BDF8' : '#0284C7', heading: 'Bệnh nhân', value: patientCount, sub: 'Theo dõi sức khỏe' },
-    { icon: 'calendar' as const, bg: isDarkMode ? '#134E4A44' : '#F0FDFA', color: '#0D9488', valColor: isDarkMode ? '#2DD4BF' : '#0D9488', heading: 'Lịch khám', value: appointmentCount, sub: 'Ca khám & Tái khám' },
+    { icon: 'calendar' as const, bg: isDarkMode ? '#134E4A44' : '#F0FDFA', color: '#0D9488', valColor: isDarkMode ? '#2DD4BF' : '#0D9488', heading: 'Lịch khám', value: appointmentCount, sub: 'Ca khám bệnh' },
   ];
 
   const licenseRows = [
@@ -120,10 +121,14 @@ export const DoctorProfileCard: React.FC<DoctorProfileCardProps> = ({
           </TouchableOpacity>
 
           <View style={styles.heroInfoCol}>
-            <View style={{ flexDirection: 'row', marginBottom: 4 }}>
+            <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: 6, marginBottom: 4 }}>
               <View style={[styles.verifiedBadge, { backgroundColor: isDarkMode ? '#064E3B44' : '#ECFDF5', borderColor: isDarkMode ? '#059669' : '#A7F3D0' }]}>
                 <Ionicons name="shield-checkmark" size={12} color="#059669" style={{ marginRight: 4 }} />
                 <Text style={styles.verifiedBadgeText}>Đã xác minh CCHN</Text>
+              </View>
+              <View style={[styles.verifiedBadge, { backgroundColor: isDarkMode ? '#1E3A8A44' : '#EFF6FF', borderColor: isDarkMode ? '#2563EB' : '#BFDBFE' }]}>
+                <Ionicons name="phone-portrait-outline" size={11} color="#2563EB" style={{ marginRight: 3 }} />
+                <Text style={[styles.verifiedBadgeText, { color: '#2563EB' }]}>App ĐT + Web MT</Text>
               </View>
             </View>
             <Text style={[styles.heroDocName, { color: colors.textPrimary }]} numberOfLines={1}>{info.name || 'Bác sĩ'}</Text>
@@ -218,12 +223,27 @@ export const DoctorProfileSettings: React.FC<DoctorProfileSettingsProps> = ({
   const [notifyAppt, setNotifyAppt] = useState(true);
   const [notifyEmergency, setNotifyEmergency] = useState(true);
   const [complianceVisible, setComplianceVisible] = useState(false);
+  const [devicesVisible, setDevicesVisible] = useState(false);
+  const [terminals, setTerminals] = useState<any[]>([]);
+
+  const loadTerminals = useCallback(async () => {
+    try {
+      const res = await usersApi.getTerminals();
+      if (Array.isArray(res.data)) setTerminals(res.data);
+    } catch {}
+  }, []);
+
+  useEffect(() => {
+    loadTerminals();
+  }, [loadTerminals]);
 
   const cardSurface = { backgroundColor: isDarkMode ? '#1E293B' : '#FFFFFF', borderColor: isDarkMode ? '#334155' : '#E2E8F0' };
   const mutedText = isDarkMode ? '#94A3B8' : '#64748B';
   const dividerColor = isDarkMode ? '#334155' : '#F1F5F9';
+  const hasWeb = terminals.some((t) => t.device_type === 'desktop');
 
   const menuActions = [
+    { icon: 'laptop-outline' as const, bg: '#6366F1', title: 'Thiết bị đang đăng nhập (Web & App)', sub: hasWeb ? 'Đang mở trên cả Điện thoại & Máy tính (Web)' : 'Đang mở trên Ứng dụng Điện thoại', onPress: () => { setDevicesVisible(true); loadTerminals(); } },
     { icon: 'key' as const, bg: '#0284C7', title: 'Đổi mật khẩu', sub: 'Bảo mật tài khoản đăng nhập', onPress: onOpenPasswordModal },
     { icon: 'notifications' as const, bg: '#F59E0B', title: 'Cài đặt thông báo ca trực', sub: 'Chuông cảnh báo sinh hiệu & nhắc lịch', onPress: () => setNotifVisible(true) },
     { icon: 'shield-checkmark' as const, bg: '#10B981', title: 'Chính sách & Bảo mật dữ liệu', sub: 'Tiêu chuẩn an toàn hồ sơ bệnh án', onPress: () => setComplianceVisible(true) },
@@ -307,6 +327,46 @@ export const DoctorProfileSettings: React.FC<DoctorProfileSettingsProps> = ({
         </ScrollView>
         <TouchableOpacity style={styles.btnPrimary} onPress={() => setComplianceVisible(false)}>
           <Text style={styles.btnPrimaryText}>Đã hiểu & Đồng ý</Text>
+        </TouchableOpacity>
+      </DialogShell>
+
+      <DialogShell visible={devicesVisible} onClose={() => setDevicesVisible(false)} icon="laptop-outline" iconBg="#6366F1" title="Thiết bị Bác sĩ đang mở" maxHeight="80%" isDarkMode={isDarkMode} colors={colors}>
+        <ScrollView showsVerticalScrollIndicator={false} style={{ marginBottom: 14 }}>
+          {terminals.map((t) => {
+            const isDesktop = t.device_type === 'desktop';
+            return (
+              <View key={String(t.id)} style={[styles.switchRow, { alignItems: 'flex-start' }]}>
+                <View style={[styles.settingsIconCircle, { backgroundColor: isDesktop ? '#2563EB' : '#10B981', width: 34, height: 34, marginRight: 10 }]}>
+                  <Ionicons name={isDesktop ? 'desktop-outline' : 'phone-portrait-outline'} size={17} color="#FFFFFF" />
+                </View>
+                <View style={{ flex: 1 }}>
+                  <Text style={[styles.switchTitle, { color: colors.textPrimary }]}>
+                    {t.device_name || (isDesktop ? 'Cổng Web Bác sĩ — Máy tính' : 'Ứng dụng SECA — Điện thoại')}
+                  </Text>
+                  <Text style={[styles.switchSub, { color: mutedText }]}>
+                    {t.browser || (isDesktop ? 'Doctor Web Portal' : 'SECA Mobile App')} • {t.location || 'Đà Nẵng, VN'}
+                  </Text>
+                  <Text style={{ fontSize: 11, fontWeight: '700', color: t.is_current ? '#2563EB' : '#10B981', marginTop: 3 }}>
+                    {t.is_current ? '● Đang mở trên thiết bị này' : '● Đang trực tuyến song song'}
+                  </Text>
+                </View>
+                {!t.is_current && (
+                  <TouchableOpacity
+                    onPress={async () => {
+                      await usersApi.deleteTerminal(String(t.id)).catch(() => {});
+                      loadTerminals();
+                    }}
+                    style={{ padding: 6 }}
+                  >
+                    <Ionicons name="trash-outline" size={18} color="#EF4444" />
+                  </TouchableOpacity>
+                )}
+              </View>
+            );
+          })}
+        </ScrollView>
+        <TouchableOpacity style={styles.btnPrimary} onPress={() => setDevicesVisible(false)}>
+          <Text style={styles.btnPrimaryText}>Đóng</Text>
         </TouchableOpacity>
       </DialogShell>
     </View>

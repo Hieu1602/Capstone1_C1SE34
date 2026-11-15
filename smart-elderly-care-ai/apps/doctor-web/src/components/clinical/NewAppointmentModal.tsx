@@ -76,7 +76,7 @@ export const NewAppointmentModal: React.FC<NewAppointmentModalProps> = ({
               <Calendar className="h-5 w-5" />
             </div>
             <div>
-              <h3 className="text-base font-bold text-slate-900">Lên Lịch Khám / Tái Khám Mới</h3>
+              <h3 className="text-base font-bold text-slate-900">Lên Lịch Khám Mới</h3>
               <p className="text-xs text-slate-500">Thiết lập cuộc hẹn và hẹn giờ nhắc nhở qua loa</p>
             </div>
           </div>
