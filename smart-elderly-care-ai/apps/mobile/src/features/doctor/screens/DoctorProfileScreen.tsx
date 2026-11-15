@@ -66,6 +66,7 @@ export default function DoctorProfileScreen({ navigation }: any) {
   const [editPhone, setEditPhone] = useState(docInfo.phone);
   const [editAvatarUri, setEditAvatarUri] = useState<string | null>(avatarUri);
   const [isViewingAvatar, setIsViewingAvatar] = useState(false);
+  const [isSavingProfile, setIsSavingProfile] = useState(false);
 
   const [passwordModalVisible, setPasswordModalVisible] = useState(false);
   const [oldPassword, setOldPassword] = useState('');
@@ -206,55 +207,60 @@ export default function DoctorProfileScreen({ navigation }: any) {
   };
 
   const executeSaveProfile = async () => {
-    const updated: DoctorProfileInfo = {
-      name: editName.trim(),
-      degree: editDegree.trim(),
-      specialty: editSpecialty.trim(),
-      hospital: editHospital.trim(),
-      department: editDepartment.trim(),
-      phone: editPhone.trim(),
-      avatarUri: editAvatarUri,
-    };
-    setDocInfo(updated);
-    if (editAvatarUri) {
-      setAvatarUri(editAvatarUri);
-      setAvatar(editAvatarUri);
-      setProfile({ avatar_url: editAvatarUri });
-      // Đồng bộ ảnh đại diện lên backend
-      if (editAvatarUri.startsWith('data:image')) {
+    setIsSavingProfile(true);
+    try {
+      const updated: DoctorProfileInfo = {
+        name: editName.trim(),
+        degree: editDegree.trim(),
+        specialty: editSpecialty.trim(),
+        hospital: editHospital.trim(),
+        department: editDepartment.trim(),
+        phone: editPhone.trim(),
+        avatarUri: editAvatarUri,
+      };
+      setDocInfo(updated);
+      if (editAvatarUri) {
+        setAvatarUri(editAvatarUri);
+        setAvatar(editAvatarUri);
+        setProfile({ avatar_url: editAvatarUri });
+        // Đồng bộ ảnh đại diện lên backend
+        if (editAvatarUri.startsWith('data:image')) {
+          try {
+            await usersApi.uploadAvatarBase64(editAvatarUri);
+          } catch {
+            try {
+              await usersApi.updateMe({ avatar_url: editAvatarUri });
+            } catch {}
+          }
+        }
+      } else {
+        setAvatarUri(null);
+        setAvatar('');
+        setProfile({ avatar_url: null });
         try {
-          await usersApi.uploadAvatarBase64(editAvatarUri);
+          await usersApi.deleteAvatar();
         } catch {
           try {
-            await usersApi.updateMe({ avatar_url: editAvatarUri });
+            await usersApi.updateMe({ avatar_url: null });
           } catch {}
         }
       }
-    } else {
-      setAvatarUri(null);
-      setAvatar('');
-      setProfile({ avatar_url: null });
       try {
-        await usersApi.deleteAvatar();
-      } catch {
-        try {
-          await usersApi.updateMe({ avatar_url: null });
-        } catch {}
-      }
+        await usersApi.updateMe({
+          full_name: editName.trim(),
+          specialty: editSpecialty.trim(),
+          workplace: editHospital.trim(),
+        });
+        setProfile({ full_name: editName.trim() });
+      } catch {}
+      try {
+        await AsyncStorage.setItem('doctor_profile_custom', JSON.stringify(updated));
+      } catch {}
+      setEditModalVisible(false);
+      Alert.alert('Thành công', 'Đã cập nhật hồ sơ chuyên môn Bác sĩ thành công.');
+    } finally {
+      setIsSavingProfile(false);
     }
-    try {
-      await usersApi.updateMe({
-        full_name: editName.trim(),
-        specialty: editSpecialty.trim(),
-        workplace: editHospital.trim(),
-      });
-      setProfile({ full_name: editName.trim() });
-    } catch {}
-    try {
-      await AsyncStorage.setItem('doctor_profile_custom', JSON.stringify(updated));
-    } catch {}
-    setEditModalVisible(false);
-    Alert.alert('Thành công', 'Đã cập nhật hồ sơ chuyên môn Bác sĩ thành công.');
   };
 
   const handleResetAvatar = async () => {
@@ -462,6 +468,7 @@ export default function DoctorProfileScreen({ navigation }: any) {
         onClose={handleCloseEditModal}
         isDarkMode={isDarkMode}
         colors={colors}
+        isSubmitting={isSavingProfile}
       />
 
       {/* MODAL 2: ĐỔI MẬT KHẨU */}

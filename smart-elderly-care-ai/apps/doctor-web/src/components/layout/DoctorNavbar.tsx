@@ -718,10 +718,8 @@ export const DoctorNavbar: React.FC = () => {
                     setShowNotifMenu(false);
                     if (notifTab === 'APPOINTMENTS') {
                       navigate('/appointments');
-                    } else if (notifTab === 'ALERTS' || notifTab === 'UNREAD') {
-                      navigate('/patients');
                     } else {
-                      navigate('/appointments');
+                      navigate('/patients');
                     }
                   }}
                   className="inline-flex items-center space-x-1 text-xs font-bold text-blue-600 hover:text-blue-700 dark:text-blue-400"
@@ -730,10 +728,10 @@ export const DoctorNavbar: React.FC = () => {
                     {notifTab === 'APPOINTMENTS'
                       ? 'Xem toàn bộ lịch khám'
                       : notifTab === 'ALERTS'
-                        ? 'Xem toàn bộ cảnh báo & bệnh nhân'
+                        ? 'Xem toàn bộ cảnh báo sinh hiệu'
                         : notifTab === 'UNREAD'
-                          ? 'Xem danh sách cần xử lý'
-                          : 'Xem toàn bộ lịch khám & bệnh nhân'}
+                          ? 'Xem toàn bộ thông báo chưa đọc'
+                          : 'Xem toàn bộ thông báo'}
                   </span>
                   <ChevronRight className="h-3.5 w-3.5" />
                 </button>

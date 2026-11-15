@@ -26,6 +26,14 @@ import {
   Circle,
   RefreshCw,
   Moon,
+  User,
+  Phone,
+  GraduationCap,
+  Stethoscope,
+  Building2,
+  Briefcase,
+  Check,
+  Loader2,
 } from 'lucide-react';
 
 interface DoctorProfileInfo {
@@ -676,83 +684,267 @@ export const SettingsPage: React.FC = () => {
       </div>
 
       {/* =========================================================
-          MODAL 1: CHỈNH SỬA HỒ SƠ BÁC SĨ
+          MODAL 1: CHỈNH SỬA HỒ SƠ BÁC SĨ (REDESIGNED)
          ========================================================= */}
       {activeModal === 'EDIT_PROFILE' && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-900/50 p-4 backdrop-blur-xs">
-          <div className="w-full max-w-lg rounded-2xl bg-white p-6 shadow-2xl">
-            <div className="flex items-center justify-between border-b border-slate-100 pb-3 mb-4">
-              <h3 className="text-base font-extrabold text-slate-900">Sửa Hồ Sơ Bác Sĩ</h3>
-              <button onClick={() => setActiveModal('NONE')} className="text-slate-400 hover:text-slate-600">
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-900/60 p-4 backdrop-blur-sm animate-fade-in">
+          <div className="flex max-h-[92vh] w-full max-w-2xl flex-col overflow-hidden rounded-3xl bg-white shadow-2xl border border-slate-100 animate-scale-up">
+            {/* 1. Header Cố Định (Sticky Top) */}
+            <div className="sticky top-0 z-10 flex items-center justify-between border-b border-slate-100 bg-white/95 px-6 py-4 backdrop-blur-md">
+              <div className="flex items-center gap-3">
+                <div className="flex h-10 w-10 items-center justify-center rounded-2xl bg-blue-50 text-blue-600 shadow-xs">
+                  <Edit3 className="h-5 w-5" />
+                </div>
+                <div>
+                  <h3 className="font-heading text-base font-extrabold text-slate-900">
+                    Sửa Hồ Sơ Bác Sĩ
+                  </h3>
+                  <p className="text-xs text-slate-500">
+                    Cập nhật thông tin định danh & hồ sơ chuyên môn y tế
+                  </p>
+                </div>
+              </div>
+              <button
+                onClick={() => setActiveModal('NONE')}
+                className="rounded-xl p-2 text-slate-400 hover:bg-slate-100 hover:text-slate-600 transition"
+              >
                 <X className="h-5 w-5" />
               </button>
             </div>
 
-            <form onSubmit={handleSaveProfile} className="space-y-3">
-              <div className="flex items-center gap-3 rounded-xl bg-slate-50 p-3">
-                <div className="flex h-12 w-12 items-center justify-center overflow-hidden rounded-full bg-blue-600 text-base font-bold text-white shrink-0">
-                  {editForm.avatarUri ? (
-                    <img src={editForm.avatarUri} alt="" className="h-full w-full object-cover" />
-                  ) : (
-                    doctorInitial
-                  )}
-                </div>
-                <div className="flex flex-wrap items-center gap-2">
-                  <button
-                    type="button"
-                    onClick={() => fileInputRef.current?.click()}
-                    className="inline-flex items-center gap-1.5 rounded-lg border border-blue-200 bg-blue-50 px-3 py-1.5 text-xs font-bold text-blue-600 hover:bg-blue-100"
-                  >
-                    <Camera className="h-3.5 w-3.5" />
-                    <span>Chọn / Đổi ảnh</span>
-                  </button>
-                  {editForm.avatarUri && (
+            {/* 2. Thân Modal Cuộn Mượt (Scrollable Body) */}
+            <form onSubmit={handleSaveProfile} className="flex flex-1 flex-col overflow-hidden">
+              <div className="flex-1 overflow-y-auto px-6 py-5 space-y-6">
+                {/* Khu vực Ảnh Đại Diện (Profile Avatar Card) */}
+                <div className="flex flex-col sm:flex-row items-center sm:items-stretch gap-4 rounded-2xl border border-blue-100 bg-gradient-to-r from-blue-50 via-indigo-50/60 to-white p-4 shadow-xs">
+                  <div className="relative shrink-0">
+                    <div className="flex h-20 w-20 items-center justify-center overflow-hidden rounded-full bg-blue-600 text-2xl font-bold text-white shadow-md ring-4 ring-white">
+                      {editForm.avatarUri ? (
+                        <img src={editForm.avatarUri} alt="" className="h-full w-full object-cover" />
+                      ) : (
+                        doctorInitial
+                      )}
+                    </div>
                     <button
                       type="button"
-                      onClick={() => setEditForm((prev) => ({ ...prev, avatarUri: null }))}
-                      className="inline-flex items-center gap-1 rounded-lg border border-rose-200 bg-rose-50 px-2.5 py-1.5 text-xs font-bold text-rose-600 hover:bg-rose-100"
+                      onClick={() => fileInputRef.current?.click()}
+                      className="absolute bottom-0 right-0 flex h-7 w-7 items-center justify-center rounded-full bg-blue-600 text-white shadow-md ring-2 ring-white hover:bg-blue-700 transition"
+                      title="Đổi ảnh đại diện"
                     >
-                      <Trash2 className="h-3 w-3" />
-                      <span>Xóa ảnh</span>
+                      <Camera className="h-3.5 w-3.5" />
                     </button>
-                  )}
+                  </div>
+
+                  <div className="flex flex-1 flex-col justify-center text-center sm:text-left">
+                    <div className="flex flex-wrap items-center justify-center sm:justify-start gap-2">
+                      <span className="font-heading text-sm font-bold text-slate-900">
+                        {editForm.name || 'BS. Trần Văn Minh'}
+                      </span>
+                      <span className="inline-flex items-center gap-1 rounded-full bg-emerald-50 px-2 py-0.5 text-[10px] font-bold text-emerald-600 border border-emerald-100">
+                        <CheckCircle2 className="h-3 w-3" />
+                        CCHN Đã xác thực
+                      </span>
+                    </div>
+                    <p className="text-xs text-slate-500 mt-1">
+                      Ảnh chân dung hiển thị trên hồ sơ bệnh nhân & cổng tư vấn
+                    </p>
+
+                    <div className="mt-3 flex flex-wrap items-center justify-center sm:justify-start gap-2">
+                      <button
+                        type="button"
+                        onClick={() => fileInputRef.current?.click()}
+                        className="inline-flex items-center gap-1.5 rounded-xl border border-blue-200 bg-white/90 px-3 py-1.5 text-xs font-bold text-blue-600 shadow-2xs hover:bg-blue-50 transition"
+                      >
+                        <Camera className="h-3.5 w-3.5" />
+                        <span>Tải ảnh mới</span>
+                      </button>
+                      {editForm.avatarUri && (
+                        <button
+                          type="button"
+                          onClick={() => setEditForm((prev) => ({ ...prev, avatarUri: null }))}
+                          className="inline-flex items-center gap-1.5 rounded-xl border border-rose-200 bg-white/90 px-3 py-1.5 text-xs font-bold text-rose-600 shadow-2xs hover:bg-rose-50 transition"
+                        >
+                          <Trash2 className="h-3.5 w-3.5" />
+                          <span>Xóa ảnh</span>
+                        </button>
+                      )}
+                    </div>
+                  </div>
+                </div>
+
+                {/* Nhóm 1 — Thông tin Định danh & Liên hệ */}
+                <div className="space-y-3">
+                  <div className="flex items-center gap-2">
+                    <span className="h-2 w-2 rounded-full bg-blue-600" />
+                    <h4 className="text-xs font-semibold uppercase tracking-wider text-blue-600">
+                      Nhóm 1 — Thông tin Định danh & Liên hệ
+                    </h4>
+                  </div>
+
+                  <div className="space-y-3">
+                    {/* Họ và tên Bác sĩ (*) */}
+                    <div>
+                      <label className="block text-xs font-semibold text-slate-700 mb-1.5">
+                        Họ và tên Bác sĩ <span className="text-rose-500">(*)</span>
+                      </label>
+                      <div className="relative">
+                        <div className="pointer-events-none absolute inset-y-0 left-0 flex items-center pl-3.5 text-slate-400">
+                          <User className="h-4 w-4" />
+                        </div>
+                        <input
+                          type="text"
+                          required
+                          value={editForm.name || ''}
+                          onChange={(e) => setEditForm((prev) => ({ ...prev, name: e.target.value }))}
+                          placeholder="Nhập họ và tên bác sĩ"
+                          className="h-[46px] w-full rounded-xl border border-slate-200 bg-slate-50/70 pl-10 pr-4 text-xs font-medium text-slate-900 transition focus:border-blue-500 focus:bg-white focus:ring-4 focus:ring-blue-500/10 focus:outline-none"
+                        />
+                      </div>
+                    </div>
+
+                    {/* Số điện thoại liên hệ (*) */}
+                    <div>
+                      <label className="block text-xs font-semibold text-slate-700 mb-1.5">
+                        Số điện thoại liên hệ <span className="text-rose-500">(*)</span>
+                      </label>
+                      <div className="relative">
+                        <div className="pointer-events-none absolute inset-y-0 left-0 flex items-center pl-3.5 text-slate-400">
+                          <Phone className="h-4 w-4" />
+                        </div>
+                        <input
+                          type="tel"
+                          required
+                          value={editForm.phone || ''}
+                          onChange={(e) => setEditForm((prev) => ({ ...prev, phone: e.target.value }))}
+                          placeholder="VD: 0905111222"
+                          className="h-[46px] w-full rounded-xl border border-slate-200 bg-slate-50/70 pl-10 pr-28 text-xs font-medium text-slate-900 transition focus:border-blue-500 focus:bg-white focus:ring-4 focus:ring-blue-500/10 focus:outline-none"
+                        />
+                        <div className="absolute inset-y-0 right-0 flex items-center pr-3 pointer-events-none">
+                          <span className="inline-flex items-center gap-1 rounded-full bg-emerald-50 px-2 py-0.5 text-[10px] font-bold text-emerald-600 border border-emerald-100">
+                            <CheckCircle2 className="h-3 w-3" />
+                            Đã xác thực
+                          </span>
+                        </div>
+                      </div>
+                    </div>
+                  </div>
+                </div>
+
+                {/* Nhóm 2 — Thông tin Chuyên môn & Công tác */}
+                <div className="space-y-3">
+                  <div className="flex items-center gap-2">
+                    <span className="h-2 w-2 rounded-full bg-indigo-600" />
+                    <h4 className="text-xs font-semibold uppercase tracking-wider text-blue-600">
+                      Nhóm 2 — Thông tin Chuyên môn & Công tác
+                    </h4>
+                  </div>
+
+                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-3.5">
+                    {/* Học hàm, học vị */}
+                    <div>
+                      <label className="block text-xs font-semibold text-slate-700 mb-1.5">
+                        Học hàm, học vị
+                      </label>
+                      <div className="relative">
+                        <div className="pointer-events-none absolute inset-y-0 left-0 flex items-center pl-3.5 text-slate-400">
+                          <GraduationCap className="h-4 w-4" />
+                        </div>
+                        <input
+                          type="text"
+                          value={editForm.degree || ''}
+                          onChange={(e) => setEditForm((prev) => ({ ...prev, degree: e.target.value }))}
+                          placeholder="VD: Bác sĩ CKI, ThS. Y khoa..."
+                          className="h-[46px] w-full rounded-xl border border-slate-200 bg-slate-50/70 pl-10 pr-4 text-xs font-medium text-slate-900 transition focus:border-blue-500 focus:bg-white focus:ring-4 focus:ring-blue-500/10 focus:outline-none"
+                        />
+                      </div>
+                    </div>
+
+                    {/* Chuyên khoa */}
+                    <div>
+                      <label className="block text-xs font-semibold text-slate-700 mb-1.5">
+                        Chuyên khoa
+                      </label>
+                      <div className="relative">
+                        <div className="pointer-events-none absolute inset-y-0 left-0 flex items-center pl-3.5 text-slate-400">
+                          <Stethoscope className="h-4 w-4" />
+                        </div>
+                        <input
+                          type="text"
+                          value={editForm.specialty || ''}
+                          onChange={(e) => setEditForm((prev) => ({ ...prev, specialty: e.target.value }))}
+                          placeholder="VD: Lão khoa, Tim mạch..."
+                          className="h-[46px] w-full rounded-xl border border-slate-200 bg-slate-50/70 pl-10 pr-4 text-xs font-medium text-slate-900 transition focus:border-blue-500 focus:bg-white focus:ring-4 focus:ring-blue-500/10 focus:outline-none"
+                        />
+                      </div>
+                    </div>
+
+                    {/* Bệnh viện / Cơ sở y tế */}
+                    <div>
+                      <label className="block text-xs font-semibold text-slate-700 mb-1.5">
+                        Bệnh viện / Cơ sở y tế
+                      </label>
+                      <div className="relative">
+                        <div className="pointer-events-none absolute inset-y-0 left-0 flex items-center pl-3.5 text-slate-400">
+                          <Building2 className="h-4 w-4" />
+                        </div>
+                        <input
+                          type="text"
+                          value={editForm.hospital || ''}
+                          onChange={(e) => setEditForm((prev) => ({ ...prev, hospital: e.target.value }))}
+                          placeholder="VD: Bệnh viện Đa khoa Đà Nẵng"
+                          className="h-[46px] w-full rounded-xl border border-slate-200 bg-slate-50/70 pl-10 pr-4 text-xs font-medium text-slate-900 transition focus:border-blue-500 focus:bg-white focus:ring-4 focus:ring-blue-500/10 focus:outline-none"
+                        />
+                      </div>
+                    </div>
+
+                    {/* Khoa / Phòng công tác */}
+                    <div>
+                      <label className="block text-xs font-semibold text-slate-700 mb-1.5">
+                        Khoa / Phòng công tác
+                      </label>
+                      <div className="relative">
+                        <div className="pointer-events-none absolute inset-y-0 left-0 flex items-center pl-3.5 text-slate-400">
+                          <Briefcase className="h-4 w-4" />
+                        </div>
+                        <input
+                          type="text"
+                          value={editForm.department || ''}
+                          onChange={(e) => setEditForm((prev) => ({ ...prev, department: e.target.value }))}
+                          placeholder="VD: Khoa Chăm sóc Người cao tuổi"
+                          className="h-[46px] w-full rounded-xl border border-slate-200 bg-slate-50/70 pl-10 pr-4 text-xs font-medium text-slate-900 transition focus:border-blue-500 focus:bg-white focus:ring-4 focus:ring-blue-500/10 focus:outline-none"
+                        />
+                      </div>
+                    </div>
+                  </div>
                 </div>
               </div>
 
-              {[
-                { label: 'Họ và tên Bác sĩ (*)', key: 'name' as const, placeholder: 'Nhập họ và tên bác sĩ' },
-                { label: 'Học hàm, học vị', key: 'degree' as const, placeholder: 'VD: Bác sĩ CKI, Thạc sĩ Y khoa...' },
-                { label: 'Chuyên khoa', key: 'specialty' as const, placeholder: 'VD: Lão khoa, Tim mạch...' },
-                { label: 'Bệnh viện / Cơ sở y tế', key: 'hospital' as const, placeholder: 'VD: Bệnh viện Đa khoa Đà Nẵng' },
-                { label: 'Khoa / Phòng công tác', key: 'department' as const, placeholder: 'VD: Khoa Chăm sóc Người cao tuổi' },
-                { label: 'Số điện thoại liên hệ (*)', key: 'phone' as const, placeholder: 'VD: 0905111222' },
-              ].map((f) => (
-                <div key={f.key}>
-                  <label className="block text-xs font-semibold text-slate-600 mb-1">{f.label}</label>
-                  <input
-                    type="text"
-                    value={editForm[f.key] || ''}
-                    onChange={(e) => setEditForm((prev) => ({ ...prev, [f.key]: e.target.value }))}
-                    placeholder={f.placeholder}
-                    className="w-full rounded-xl border border-slate-200 px-3 py-2 text-xs text-slate-900 focus:border-blue-600 focus:outline-none"
-                  />
-                </div>
-              ))}
-
-              <div className="flex justify-end gap-2 pt-3 border-t border-slate-100">
+              {/* 3. Thanh Nút Hành Động Ở Đáy (Sticky Footer) */}
+              <div className="sticky bottom-0 z-10 flex items-center justify-end gap-3 border-t border-slate-100 bg-white/95 px-6 py-4 backdrop-blur-md rounded-b-3xl">
                 <button
                   type="button"
                   onClick={() => setActiveModal('NONE')}
-                  className="rounded-xl border border-slate-200 px-4 py-2 text-xs font-bold text-slate-600 hover:bg-slate-50"
+                  disabled={savingProfile}
+                  className="rounded-xl bg-slate-100 px-5 py-2.5 text-xs font-bold text-slate-700 transition hover:bg-slate-200 disabled:opacity-50"
                 >
                   Hủy
                 </button>
                 <button
                   type="submit"
                   disabled={savingProfile}
-                  className="rounded-xl bg-blue-600 px-5 py-2 text-xs font-bold text-white hover:bg-blue-700 disabled:opacity-60"
+                  className="inline-flex items-center gap-2 rounded-xl bg-blue-600 px-6 py-2.5 text-xs font-bold text-white shadow-lg shadow-blue-600/25 transition hover:bg-blue-700 disabled:opacity-60"
                 >
-                  {savingProfile ? 'Đang lưu...' : 'Lưu Hồ Sơ'}
+                  {savingProfile ? (
+                    <>
+                      <Loader2 className="h-4 w-4 animate-spin" />
+                      <span>Đang lưu...</span>
+                    </>
+                  ) : (
+                    <>
+                      <Check className="h-4 w-4" />
+                      <span>Lưu thay đổi</span>
+                    </>
+                  )}
                 </button>
               </div>
             </form>

@@ -5,6 +5,7 @@ import React, { useState, useEffect, useCallback } from 'react';
 import {
   View, Text, StyleSheet, TouchableOpacity, Image, Switch,
   Modal, ScrollView, TextInput, KeyboardAvoidingView, Platform,
+  ActivityIndicator,
 } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { Colors } from '../../../theme/colors';
@@ -422,7 +423,7 @@ export const DoctorProfileSettings: React.FC<DoctorProfileSettingsProps> = ({
 };
 
 // =============================================================
-// 3. MODAL SỬA THÔNG TIN BÁC SĨ
+// 3. MODAL SỬA THÔNG TIN BÁC SĨ (REDESIGNED BOTTOM SHEET)
 // =============================================================
 export interface DoctorEditProfileModalProps extends ThemeProps {
   visible: boolean; editName: string; editDegree: string; editSpecialty: string;
@@ -431,62 +432,521 @@ export interface DoctorEditProfileModalProps extends ThemeProps {
   onChangeSpecialty: (val: string) => void; onChangeHospital: (val: string) => void;
   onChangeDepartment: (val: string) => void; onChangePhone: (val: string) => void;
   onPickImage: () => void; onClearAvatar?: () => void; onSave: () => void; onClose: () => void;
+  isSubmitting?: boolean;
 }
 
 export const DoctorEditProfileModal: React.FC<DoctorEditProfileModalProps> = ({
   visible, editName, editDegree, editSpecialty, editHospital, editDepartment, editPhone,
   editAvatarUri, onChangeName, onChangeDegree, onChangeSpecialty, onChangeHospital,
   onChangeDepartment, onChangePhone, onPickImage, onClearAvatar, onSave, onClose, isDarkMode, colors,
+  isSubmitting = false,
 }) => {
-  const fields = [
-    { label: 'Họ và tên Bác sĩ (*)', val: editName, setVal: onChangeName, placeholder: 'Nhập họ và tên bác sĩ' },
-    { label: 'Học hàm, học vị', val: editDegree, setVal: onChangeDegree, placeholder: 'VD: Bác sĩ CKI, Thạc sĩ Y khoa...' },
-    { label: 'Chuyên khoa', val: editSpecialty, setVal: onChangeSpecialty, placeholder: 'VD: Lão khoa, Tim mạch...' },
-    { label: 'Bệnh viện / Cơ sở y tế', val: editHospital, setVal: onChangeHospital, placeholder: 'VD: Bệnh viện Đa khoa Đà Nẵng' },
-    { label: 'Khoa / Phòng công tác', val: editDepartment, setVal: onChangeDepartment, placeholder: 'VD: Khoa Khám bệnh' },
-    { label: 'Số điện thoại liên hệ (*)', val: editPhone, setVal: onChangePhone, placeholder: 'VD: 0905123456', keyboard: 'phone-pad' as const },
-  ];
+  const getDoctorInitial = (name?: string) => {
+    if (!name) return 'M';
+    const clean = name.replace(/^(bs\.|bác sĩ|dr\.)\s+/i, '').trim();
+    const parts = clean.split(/\s+/);
+    return parts[parts.length - 1]?.[0]?.toUpperCase() || 'M';
+  };
+  const docInitial = getDoctorInitial(editName);
 
   return (
-    <FormShell visible={visible} onClose={onClose} onSave={onSave} icon="person-circle" iconColor={Colors.primary} title="Sửa Hồ Sơ Bác Sĩ" saveLabel="Lưu Hồ Sơ" isDarkMode={isDarkMode} colors={colors}>
-      <ScrollView showsVerticalScrollIndicator={false} style={{ marginVertical: 10 }}>
-        <View style={[styles.modalAvatarRow, { backgroundColor: isDarkMode ? '#334155' : '#F8FAFC' }]}>
-          <View style={styles.modalAvatarWrap}>
-            {editAvatarUri ? <Image source={{ uri: editAvatarUri }} style={styles.avatarImage} /> : <Ionicons name="person" size={28} color="#FFFFFF" />}
-          </View>
-          <View style={{ flexDirection: 'row', flexWrap: 'wrap', alignItems: 'center', gap: 8 }}>
-            <TouchableOpacity style={styles.btnPickImage} onPress={onPickImage} activeOpacity={0.8}>
-              <Ionicons name="camera-outline" size={16} color="#0284C7" style={{ marginRight: 6 }} />
-              <Text style={styles.btnPickImageText}>Chọn / Đổi ảnh</Text>
-            </TouchableOpacity>
-            {Boolean(editAvatarUri) && Boolean(onClearAvatar) && (
-              <TouchableOpacity
-                style={[styles.btnPickImage, { borderColor: '#FECACA', backgroundColor: '#FEF2F2' }]}
-                onPress={onClearAvatar}
-                activeOpacity={0.8}
+    <Modal visible={visible} animationType="slide" transparent onRequestClose={onClose}>
+      <KeyboardAvoidingView
+        behavior={Platform.OS === 'ios' ? 'padding' : undefined}
+        style={{ flex: 1, backgroundColor: 'rgba(15, 23, 42, 0.6)', justifyContent: 'flex-end' }}
+      >
+        <View
+          style={{
+            backgroundColor: isDarkMode ? '#1E293B' : '#FFFFFF',
+            borderTopLeftRadius: 28,
+            borderTopRightRadius: 28,
+            maxHeight: '92%',
+            borderWidth: 1,
+            borderColor: isDarkMode ? '#334155' : '#E2E8F0',
+            borderBottomWidth: 0,
+            overflow: 'hidden',
+          }}
+        >
+          {/* Thanh Kéo Đỉnh Sheet (Drag Handle Bar) */}
+          <View
+            style={{
+              width: 44,
+              height: 4,
+              borderRadius: 2,
+              backgroundColor: isDarkMode ? '#475569' : '#CBD5E1',
+              alignSelf: 'center',
+              marginTop: 10,
+              marginBottom: 8,
+            }}
+          />
+
+          {/* Header Bottom Sheet */}
+          <View
+            style={{
+              flexDirection: 'row',
+              justifyContent: 'space-between',
+              alignItems: 'center',
+              paddingHorizontal: 20,
+              paddingBottom: 12,
+              borderBottomWidth: 1,
+              borderBottomColor: isDarkMode ? '#334155' : '#F1F5F9',
+            }}
+          >
+            <View style={{ flexDirection: 'row', alignItems: 'center', gap: 10 }}>
+              <View
+                style={{
+                  width: 36,
+                  height: 36,
+                  borderRadius: 12,
+                  backgroundColor: '#EFF6FF',
+                  justifyContent: 'center',
+                  alignItems: 'center',
+                }}
               >
-                <Ionicons name="trash-outline" size={15} color="#EF4444" style={{ marginRight: 4 }} />
-                <Text style={[styles.btnPickImageText, { color: '#EF4444' }]}>Xóa ảnh</Text>
-              </TouchableOpacity>
-            )}
+                <Ionicons name="person-circle" size={22} color="#2563EB" />
+              </View>
+              <View>
+                <Text style={{ fontSize: 16, fontWeight: '800', color: colors.textPrimary }}>
+                  Sửa Hồ Sơ Bác Sĩ
+                </Text>
+                <Text style={{ fontSize: 11, color: '#64748B' }}>
+                  Cập nhật định danh & hồ sơ y tế
+                </Text>
+              </View>
+            </View>
+            <TouchableOpacity onPress={onClose} hitSlop={10} style={{ padding: 4 }}>
+              <Ionicons name="close" size={22} color={isDarkMode ? '#94A3B8' : '#64748B'} />
+            </TouchableOpacity>
+          </View>
+
+          {/* Thân Form Cuộn Mượt (Scrollable Body) */}
+          <ScrollView
+            showsVerticalScrollIndicator={false}
+            contentContainerStyle={{ paddingHorizontal: 20, paddingTop: 16, paddingBottom: 24 }}
+          >
+            {/* 1. Nâng Cấp Khu Vực Ảnh Đại Diện (Profile Avatar Card) */}
+            <View
+              style={{
+                backgroundColor: isDarkMode ? '#0F172A' : '#EFF6FF',
+                borderWidth: 1,
+                borderColor: isDarkMode ? '#334155' : '#DBEAFE',
+                borderRadius: 20,
+                padding: 14,
+                flexDirection: 'row',
+                alignItems: 'center',
+                gap: 14,
+                marginBottom: 18,
+              }}
+            >
+              <View style={{ position: 'relative' }}>
+                <View
+                  style={{
+                    width: 76,
+                    height: 76,
+                    borderRadius: 38,
+                    borderWidth: 3,
+                    borderColor: '#FFFFFF',
+                    backgroundColor: '#2563EB',
+                    overflow: 'hidden',
+                    justifyContent: 'center',
+                    alignItems: 'center',
+                    elevation: 3,
+                    shadowColor: '#000',
+                    shadowOffset: { width: 0, height: 2 },
+                    shadowOpacity: 0.1,
+                    shadowRadius: 4,
+                  }}
+                >
+                  {editAvatarUri ? (
+                    <Image source={{ uri: editAvatarUri }} style={{ width: '100%', height: '100%' }} />
+                  ) : (
+                    <Text style={{ fontSize: 28, fontWeight: '800', color: '#FFFFFF' }}>{docInitial}</Text>
+                  )}
+                </View>
+                <TouchableOpacity
+                  onPress={onPickImage}
+                  activeOpacity={0.8}
+                  style={{
+                    position: 'absolute',
+                    bottom: -2,
+                    right: -2,
+                    width: 28,
+                    height: 28,
+                    borderRadius: 14,
+                    backgroundColor: '#2563EB',
+                    borderWidth: 2,
+                    borderColor: '#FFFFFF',
+                    justifyContent: 'center',
+                    alignItems: 'center',
+                    elevation: 2,
+                  }}
+                >
+                  <Ionicons name="camera" size={14} color="#FFFFFF" />
+                </TouchableOpacity>
+              </View>
+
+              <View style={{ flex: 1 }}>
+                <View style={{ flexDirection: 'row', alignItems: 'center', flexWrap: 'wrap', gap: 6 }}>
+                  <Text style={{ fontSize: 14, fontWeight: '800', color: colors.textPrimary }} numberOfLines={1}>
+                    {editName || 'BS. Trần Văn Minh'}
+                  </Text>
+                  <View
+                    style={{
+                      flexDirection: 'row',
+                      alignItems: 'center',
+                      backgroundColor: '#ECFDF5',
+                      paddingHorizontal: 6,
+                      paddingVertical: 2,
+                      borderRadius: 12,
+                      borderWidth: 1,
+                      borderColor: '#A7F3D0',
+                      gap: 2,
+                    }}
+                  >
+                    <Ionicons name="checkmark-circle" size={11} color="#16A34A" />
+                    <Text style={{ fontSize: 9.5, fontWeight: '700', color: '#16A34A' }}>CCHN Đã xác thực</Text>
+                  </View>
+                </View>
+                <Text style={{ fontSize: 11, color: '#64748B', marginTop: 2, lineHeight: 15 }}>
+                  Ảnh chân dung hiển thị trên hồ sơ bệnh nhân & cổng tư vấn
+                </Text>
+
+                <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8, marginTop: 8, flexWrap: 'wrap' }}>
+                  <TouchableOpacity
+                    onPress={onPickImage}
+                    activeOpacity={0.8}
+                    style={{
+                      flexDirection: 'row',
+                      alignItems: 'center',
+                      backgroundColor: isDarkMode ? '#1E293B' : '#FFFFFF',
+                      borderWidth: 1,
+                      borderColor: '#BFDBFE',
+                      paddingHorizontal: 10,
+                      paddingVertical: 5,
+                      borderRadius: 10,
+                      gap: 4,
+                    }}
+                  >
+                    <Ionicons name="camera-outline" size={14} color="#2563EB" />
+                    <Text style={{ fontSize: 11.5, fontWeight: '700', color: '#2563EB' }}>Tải ảnh mới</Text>
+                  </TouchableOpacity>
+                  {Boolean(editAvatarUri) && Boolean(onClearAvatar) && (
+                    <TouchableOpacity
+                      onPress={onClearAvatar}
+                      activeOpacity={0.8}
+                      style={{
+                        flexDirection: 'row',
+                        alignItems: 'center',
+                        backgroundColor: isDarkMode ? '#1E293B' : '#FEF2F2',
+                        borderWidth: 1,
+                        borderColor: '#FECACA',
+                        paddingHorizontal: 8,
+                        paddingVertical: 5,
+                        borderRadius: 10,
+                        gap: 3,
+                      }}
+                    >
+                      <Ionicons name="trash-outline" size={13} color="#DC2626" />
+                      <Text style={{ fontSize: 11.5, fontWeight: '700', color: '#DC2626' }}>Xóa ảnh</Text>
+                    </TouchableOpacity>
+                  )}
+                </View>
+              </View>
+            </View>
+
+            {/* 2. Nhóm 1 — Thông tin Định danh & Liên hệ */}
+            <View style={{ marginBottom: 18 }}>
+              <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6, marginBottom: 10 }}>
+                <View style={{ width: 6, height: 6, borderRadius: 3, backgroundColor: '#2563EB' }} />
+                <Text style={{ fontSize: 11, fontWeight: '800', color: '#2563EB', textTransform: 'uppercase', letterSpacing: 0.8 }}>
+                  Nhóm 1 — Thông tin Định danh & Liên hệ
+                </Text>
+              </View>
+
+              {/* Họ và tên Bác sĩ (*) */}
+              <View style={{ marginBottom: 12 }}>
+                <Text style={{ fontSize: 12, fontWeight: '600', color: isDarkMode ? '#CBD5E1' : '#475569', marginBottom: 6 }}>
+                  Họ và tên Bác sĩ <Text style={{ color: '#EF4444' }}>(*)</Text>
+                </Text>
+                <View style={{ position: 'relative', justifyContent: 'center' }}>
+                  <View style={{ position: 'absolute', left: 12, zIndex: 1 }}>
+                    <Ionicons name="person-outline" size={18} color="#94A3B8" />
+                  </View>
+                  <TextInput
+                    style={{
+                      height: 46,
+                      borderRadius: 12,
+                      borderWidth: 1,
+                      borderColor: colors.border,
+                      backgroundColor: isDarkMode ? '#0F172A' : '#F8FAFC',
+                      paddingLeft: 38,
+                      paddingRight: 12,
+                      fontSize: 13,
+                      fontWeight: '500',
+                      color: colors.textPrimary,
+                    }}
+                    value={editName}
+                    onChangeText={onChangeName}
+                    placeholder="Nhập họ và tên bác sĩ"
+                    placeholderTextColor="#94A3B8"
+                  />
+                </View>
+              </View>
+
+              {/* Số điện thoại liên hệ (*) */}
+              <View>
+                <Text style={{ fontSize: 12, fontWeight: '600', color: isDarkMode ? '#CBD5E1' : '#475569', marginBottom: 6 }}>
+                  Số điện thoại liên hệ <Text style={{ color: '#EF4444' }}>(*)</Text>
+                </Text>
+                <View style={{ position: 'relative', justifyContent: 'center' }}>
+                  <View style={{ position: 'absolute', left: 12, zIndex: 1 }}>
+                    <Ionicons name="call-outline" size={18} color="#94A3B8" />
+                  </View>
+                  <TextInput
+                    style={{
+                      height: 46,
+                      borderRadius: 12,
+                      borderWidth: 1,
+                      borderColor: colors.border,
+                      backgroundColor: isDarkMode ? '#0F172A' : '#F8FAFC',
+                      paddingLeft: 38,
+                      paddingRight: 96,
+                      fontSize: 13,
+                      fontWeight: '500',
+                      color: colors.textPrimary,
+                    }}
+                    value={editPhone}
+                    onChangeText={onChangePhone}
+                    keyboardType="phone-pad"
+                    placeholder="VD: 0905111222"
+                    placeholderTextColor="#94A3B8"
+                  />
+                  <View
+                    style={{
+                      position: 'absolute',
+                      right: 10,
+                      flexDirection: 'row',
+                      alignItems: 'center',
+                      backgroundColor: '#ECFDF5',
+                      paddingHorizontal: 7,
+                      paddingVertical: 3,
+                      borderRadius: 10,
+                      borderWidth: 1,
+                      borderColor: '#A7F3D0',
+                      gap: 3,
+                    }}
+                  >
+                    <Ionicons name="checkmark-circle" size={12} color="#16A34A" />
+                    <Text style={{ fontSize: 10, fontWeight: '700', color: '#16A34A' }}>Đã xác thực</Text>
+                  </View>
+                </View>
+              </View>
+            </View>
+
+            {/* 3. Nhóm 2 — Thông tin Chuyên môn & Công tác */}
+            <View>
+              <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6, marginBottom: 10 }}>
+                <View style={{ width: 6, height: 6, borderRadius: 3, backgroundColor: '#4F46E5' }} />
+                <Text style={{ fontSize: 11, fontWeight: '800', color: '#2563EB', textTransform: 'uppercase', letterSpacing: 0.8 }}>
+                  Nhóm 2 — Thông tin Chuyên môn & Công tác
+                </Text>
+              </View>
+
+              {/* Học hàm, học vị */}
+              <View style={{ marginBottom: 12 }}>
+                <Text style={{ fontSize: 12, fontWeight: '600', color: isDarkMode ? '#CBD5E1' : '#475569', marginBottom: 6 }}>
+                  Học hàm, học vị
+                </Text>
+                <View style={{ position: 'relative', justifyContent: 'center' }}>
+                  <View style={{ position: 'absolute', left: 12, zIndex: 1 }}>
+                    <Ionicons name="school-outline" size={18} color="#94A3B8" />
+                  </View>
+                  <TextInput
+                    style={{
+                      height: 46,
+                      borderRadius: 12,
+                      borderWidth: 1,
+                      borderColor: colors.border,
+                      backgroundColor: isDarkMode ? '#0F172A' : '#F8FAFC',
+                      paddingLeft: 38,
+                      paddingRight: 12,
+                      fontSize: 13,
+                      fontWeight: '500',
+                      color: colors.textPrimary,
+                    }}
+                    value={editDegree}
+                    onChangeText={onChangeDegree}
+                    placeholder="VD: Bác sĩ CKI, Thạc sĩ Y khoa..."
+                    placeholderTextColor="#94A3B8"
+                  />
+                </View>
+              </View>
+
+              {/* Chuyên khoa */}
+              <View style={{ marginBottom: 12 }}>
+                <Text style={{ fontSize: 12, fontWeight: '600', color: isDarkMode ? '#CBD5E1' : '#475569', marginBottom: 6 }}>
+                  Chuyên khoa
+                </Text>
+                <View style={{ position: 'relative', justifyContent: 'center' }}>
+                  <View style={{ position: 'absolute', left: 12, zIndex: 1 }}>
+                    <Ionicons name="medkit-outline" size={18} color="#94A3B8" />
+                  </View>
+                  <TextInput
+                    style={{
+                      height: 46,
+                      borderRadius: 12,
+                      borderWidth: 1,
+                      borderColor: colors.border,
+                      backgroundColor: isDarkMode ? '#0F172A' : '#F8FAFC',
+                      paddingLeft: 38,
+                      paddingRight: 12,
+                      fontSize: 13,
+                      fontWeight: '500',
+                      color: colors.textPrimary,
+                    }}
+                    value={editSpecialty}
+                    onChangeText={onChangeSpecialty}
+                    placeholder="VD: Lão khoa, Tim mạch..."
+                    placeholderTextColor="#94A3B8"
+                  />
+                </View>
+              </View>
+
+              {/* Bệnh viện / Cơ sở y tế */}
+              <View style={{ marginBottom: 12 }}>
+                <Text style={{ fontSize: 12, fontWeight: '600', color: isDarkMode ? '#CBD5E1' : '#475569', marginBottom: 6 }}>
+                  Bệnh viện / Cơ sở y tế
+                </Text>
+                <View style={{ position: 'relative', justifyContent: 'center' }}>
+                  <View style={{ position: 'absolute', left: 12, zIndex: 1 }}>
+                    <Ionicons name="business-outline" size={18} color="#94A3B8" />
+                  </View>
+                  <TextInput
+                    style={{
+                      height: 46,
+                      borderRadius: 12,
+                      borderWidth: 1,
+                      borderColor: colors.border,
+                      backgroundColor: isDarkMode ? '#0F172A' : '#F8FAFC',
+                      paddingLeft: 38,
+                      paddingRight: 12,
+                      fontSize: 13,
+                      fontWeight: '500',
+                      color: colors.textPrimary,
+                    }}
+                    value={editHospital}
+                    onChangeText={onChangeHospital}
+                    placeholder="VD: Bệnh viện Đa khoa Đà Nẵng"
+                    placeholderTextColor="#94A3B8"
+                  />
+                </View>
+              </View>
+
+              {/* Khoa / Phòng công tác */}
+              <View>
+                <Text style={{ fontSize: 12, fontWeight: '600', color: isDarkMode ? '#CBD5E1' : '#475569', marginBottom: 6 }}>
+                  Khoa / Phòng công tác
+                </Text>
+                <View style={{ position: 'relative', justifyContent: 'center' }}>
+                  <View style={{ position: 'absolute', left: 12, zIndex: 1 }}>
+                    <Ionicons name="briefcase-outline" size={18} color="#94A3B8" />
+                  </View>
+                  <TextInput
+                    style={{
+                      height: 46,
+                      borderRadius: 12,
+                      borderWidth: 1,
+                      borderColor: colors.border,
+                      backgroundColor: isDarkMode ? '#0F172A' : '#F8FAFC',
+                      paddingLeft: 38,
+                      paddingRight: 12,
+                      fontSize: 13,
+                      fontWeight: '500',
+                      color: colors.textPrimary,
+                    }}
+                    value={editDepartment}
+                    onChangeText={onChangeDepartment}
+                    placeholder="VD: Khoa Chăm sóc Người cao tuổi"
+                    placeholderTextColor="#94A3B8"
+                  />
+                </View>
+              </View>
+            </View>
+          </ScrollView>
+
+          {/* 4. Thanh Nút Hành Động Ở Đáy (Sticky Footer) */}
+          <View
+            style={{
+              paddingHorizontal: 20,
+              paddingVertical: 14,
+              borderTopWidth: 1,
+              borderTopColor: isDarkMode ? '#334155' : '#F1F5F9',
+              backgroundColor: isDarkMode ? '#1E293B' : '#FFFFFF',
+              flexDirection: 'row',
+              gap: 12,
+            }}
+          >
+            <TouchableOpacity
+              onPress={onClose}
+              disabled={isSubmitting}
+              style={{
+                flex: 1,
+                height: 46,
+                borderRadius: 12,
+                backgroundColor: isDarkMode ? '#334155' : '#F1F5F9',
+                justifyContent: 'center',
+                alignItems: 'center',
+              }}
+              activeOpacity={0.8}
+            >
+              <Text
+                style={{
+                  fontSize: 13,
+                  fontWeight: '700',
+                  color: isDarkMode ? '#CBD5E1' : '#475569',
+                }}
+              >
+                Hủy
+              </Text>
+            </TouchableOpacity>
+
+            <TouchableOpacity
+              onPress={onSave}
+              disabled={isSubmitting}
+              style={{
+                flex: 1.5,
+                height: 46,
+                borderRadius: 12,
+                backgroundColor: '#2563EB',
+                flexDirection: 'row',
+                justifyContent: 'center',
+                alignItems: 'center',
+                gap: 6,
+                shadowColor: '#2563EB',
+                shadowOffset: { width: 0, height: 4 },
+                shadowOpacity: 0.25,
+                shadowRadius: 8,
+                elevation: 4,
+                opacity: isSubmitting ? 0.7 : 1,
+              }}
+              activeOpacity={0.8}
+            >
+              {isSubmitting ? (
+                <>
+                  <ActivityIndicator size="small" color="#FFFFFF" />
+                  <Text style={{ fontSize: 13, fontWeight: '700', color: '#FFFFFF' }}>Đang lưu...</Text>
+                </>
+              ) : (
+                <>
+                  <Ionicons name="checkmark-sharp" size={17} color="#FFFFFF" />
+                  <Text style={{ fontSize: 13, fontWeight: '700', color: '#FFFFFF' }}>Lưu thay đổi</Text>
+                </>
+              )}
+            </TouchableOpacity>
           </View>
         </View>
-
-        {fields.map((f, idx) => (
-          <View key={idx}>
-            <Text style={styles.fieldLabel}>{f.label}</Text>
-            <TextInput
-              style={[styles.inputField, { color: colors.textPrimary, borderColor: colors.border }]}
-              value={f.val}
-              onChangeText={f.setVal}
-              keyboardType={f.keyboard}
-              placeholder={f.placeholder}
-              placeholderTextColor="#94A3B8"
-            />
-          </View>
-        ))}
-      </ScrollView>
-    </FormShell>
+      </KeyboardAvoidingView>
+    </Modal>
   );
 };
 
