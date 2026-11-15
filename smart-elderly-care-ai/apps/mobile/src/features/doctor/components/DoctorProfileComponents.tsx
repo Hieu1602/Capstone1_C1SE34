@@ -90,7 +90,13 @@ export interface DoctorProfileCardProps extends ThemeProps {
 export const DoctorProfileCard: React.FC<DoctorProfileCardProps> = ({
   info, avatarUri, patientCount, appointmentCount, onPickImage, onEditProfile, isDarkMode, colors,
 }) => {
-  const doctorInitial = (info.name || 'Bác sĩ').trim().split(/\s+/).slice(-1)[0][0]?.toUpperCase() || 'B';
+  const getDoctorInitial = (name?: string) => {
+    if (!name) return 'M';
+    const clean = name.replace(/^(bs\.|bác sĩ|dr\.)\s+/i, '').trim();
+    const parts = clean.split(/\s+/);
+    return parts[parts.length - 1]?.[0]?.toUpperCase() || 'M';
+  };
+  const doctorInitial = getDoctorInitial(info.name);
   const cardSurface = { backgroundColor: isDarkMode ? '#1E293B' : '#FFFFFF', borderColor: isDarkMode ? '#334155' : '#E2E8F0' };
   const mutedText = isDarkMode ? '#94A3B8' : '#64748B';
   const blueBadgeStyle = { backgroundColor: isDarkMode ? '#1E3A8A33' : '#EFF6FF', borderColor: isDarkMode ? '#1E3A8A' : '#BFDBFE', borderWidth: 1 };
@@ -542,9 +548,9 @@ const styles = StyleSheet.create({
   heroCard: { borderRadius: 20, padding: 16, borderWidth: 1, marginBottom: 14, elevation: 2 },
   heroTopRow: { flexDirection: 'row', alignItems: 'center', marginBottom: 14 },
   heroAvatarContainer: { position: 'relative', marginRight: 14 },
-  heroAvatarBox: { width: 76, height: 76, borderRadius: 38, backgroundColor: '#0284C7', justifyContent: 'center', alignItems: 'center', overflow: 'hidden', borderWidth: 2.5, borderColor: '#FFFFFF', elevation: 3 },
+  heroAvatarBox: { width: 76, height: 76, borderRadius: 38, backgroundColor: '#2563EB', justifyContent: 'center', alignItems: 'center', overflow: 'hidden', borderWidth: 2.5, borderColor: '#FFFFFF', elevation: 3 },
   heroAvatarLetter: { color: '#FFFFFF', fontSize: 30, fontWeight: '800' },
-  heroOnlineBadge: { position: 'absolute', bottom: 2, right: 2, width: 15, height: 15, borderRadius: 7.5, backgroundColor: '#10B981', borderWidth: 2, borderColor: '#FFFFFF' },
+  heroOnlineBadge: { position: 'absolute', bottom: 1, right: 1, width: 16, height: 16, borderRadius: 8, backgroundColor: '#10B981', borderWidth: 2.5, borderColor: '#FFFFFF' },
   heroCameraBadge: { position: 'absolute', top: -2, right: -2, width: 22, height: 22, borderRadius: 11, borderWidth: 1.5, justifyContent: 'center', alignItems: 'center', elevation: 2 },
   heroInfoCol: { flex: 1, justifyContent: 'center' },
   verifiedBadge: { flexDirection: 'row', alignItems: 'center', backgroundColor: '#ECFDF5', paddingHorizontal: 9, paddingVertical: 3.5, borderRadius: 12, borderWidth: 1, borderColor: '#A7F3D0' },

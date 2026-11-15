@@ -24,6 +24,7 @@ import { useAuthStore } from '../../../store/useAuthStore';
 import { useAlertStore } from '../../../store/useAlertStore';
 import { doctorApi, householdApi } from '../../../services/api';
 import { alertsWS } from '../../../services/websocket';
+import { resolveAvatarUrl } from '../../auth/hooks/useProfileManager';
 import { LocalizedText } from '../../../i18n/LocalizedComponents';
 import AdminMarqueeBanner from '../../../components/AdminMarqueeBanner';
 import {
@@ -76,7 +77,11 @@ export default function DoctorHomeScreen() {
   const insets = useSafeAreaInsets();
   const navigation = useNavigation<any>();
   const { isDarkMode, colors } = useTheme();
-  const { userName } = useAuthStore();
+  const { userName, avatarUrl, avatar_url } = useAuthStore();
+  const doctorAvatarUri = (() => {
+    const raw = avatarUrl || avatar_url;
+    return raw && !raw.startsWith('blob:') ? resolveAvatarUrl(raw) : null;
+  })();
   const { incidents, fetchNotifications: fetchIncidents } = useAlertStore();
 
   const [loading, setLoading] = useState(true);
@@ -190,7 +195,13 @@ export default function DoctorHomeScreen() {
 
   const warningPatients = patients.filter((p) => p.health_status === 'WARNING' || p.health_status === 'DANGER');
   const currentPatientInfo = nextAppointment ? patients.find((p) => p.id === nextAppointment.patient_id) : null;
-  const doctorInitial = (userName || 'Bác sĩ').trim().split(/\s+/).slice(-1)[0][0]?.toUpperCase() || 'B';
+  const getDoctorInitial = (name?: string | null) => {
+    if (!name) return 'M';
+    const clean = name.replace(/^(bs\.|bác sĩ|dr\.)\s+/i, '').trim();
+    const parts = clean.split(/\s+/);
+    return parts[parts.length - 1]?.[0]?.toUpperCase() || 'M';
+  };
+  const doctorInitial = getDoctorInitial(userName);
 
   const pendingHouseInvites = (incidents || []).filter(
     (i) =>
@@ -213,10 +224,20 @@ export default function DoctorHomeScreen() {
       {/* 1. Header trang chủ */}
       <View style={[styles.header, { paddingTop: insets.top + 8, backgroundColor: isDarkMode ? '#1E293B' : '#FFFFFF', borderBottomColor: colors.border }]}>
         <View style={styles.headerLeft}>
-          <View style={styles.doctorAvatar}>
-            <LocalizedText style={styles.doctorAvatarLetter}>{doctorInitial}</LocalizedText>
-            <View style={styles.onlineBadge} />
-          </View>
+          <TouchableOpacity
+            style={styles.doctorAvatarContainer}
+            activeOpacity={0.85}
+            onPress={() => navigation.navigate('DoctorProfile')}
+          >
+            <View style={styles.doctorAvatar}>
+              {doctorAvatarUri ? (
+                <Image source={{ uri: doctorAvatarUri }} style={styles.doctorAvatarImg} resizeMode="cover" />
+              ) : (
+                <LocalizedText style={styles.doctorAvatarLetter}>{doctorInitial}</LocalizedText>
+              )}
+            </View>
+            <View style={[styles.onlineBadge, { borderColor: isDarkMode ? '#1E293B' : '#FFFFFF' }]} />
+          </TouchableOpacity>
           <View style={styles.greetingBox}>
             <LocalizedText style={[styles.greetingTitle, { color: colors.textPrimary }]} numberOfLines={1}>
               Xin chào, {userName || 'Bác sĩ'} 👋
@@ -471,9 +492,11 @@ const styles = StyleSheet.create({
   container: { flex: 1 },
   header: { paddingHorizontal: 16, paddingBottom: 14, borderBottomWidth: StyleSheet.hairlineWidth, flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' },
   headerLeft: { flexDirection: 'row', alignItems: 'center', flex: 1 },
-  doctorAvatar: { width: 44, height: 44, borderRadius: 22, backgroundColor: '#2563EB', justifyContent: 'center', alignItems: 'center', position: 'relative', marginRight: 12 },
+  doctorAvatarContainer: { position: 'relative', marginRight: 12 },
+  doctorAvatar: { width: 44, height: 44, borderRadius: 22, backgroundColor: '#2563EB', justifyContent: 'center', alignItems: 'center', overflow: 'hidden' },
+  doctorAvatarImg: { width: '100%', height: '100%' },
   doctorAvatarLetter: { color: '#FFFFFF', fontSize: 18, fontWeight: '800' },
-  onlineBadge: { position: 'absolute', bottom: 0, right: 0, width: 12, height: 12, borderRadius: 6, backgroundColor: '#10B981', borderWidth: 2, borderColor: '#FFFFFF' },
+  onlineBadge: { position: 'absolute', bottom: -1, right: -1, width: 14, height: 14, borderRadius: 7, backgroundColor: '#10B981', borderWidth: 2.5, borderColor: '#FFFFFF' },
   greetingBox: { flex: 1 },
   greetingTitle: { fontSize: 15.5, fontWeight: '800' },
   greetingSub: { fontSize: 12, fontWeight: '500', marginTop: 2 },
