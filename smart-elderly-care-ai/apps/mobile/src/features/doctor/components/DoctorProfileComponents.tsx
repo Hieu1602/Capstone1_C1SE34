@@ -813,125 +813,42 @@ export const DoctorEditProfileModal: React.FC<DoctorEditProfileModalProps> = ({
                 </Text>
               </View>
 
-              {/* Học hàm, học vị */}
-              <View style={{ marginBottom: 12 }}>
-                <Text style={{ fontSize: 12, fontWeight: '600', color: isDarkMode ? '#CBD5E1' : '#475569', marginBottom: 6 }}>
-                  Học hàm, học vị
-                </Text>
-                <View style={{ position: 'relative', justifyContent: 'center' }}>
-                  <View style={{ position: 'absolute', left: 12, zIndex: 1 }}>
-                    <Ionicons name="school-outline" size={18} color="#94A3B8" />
+              {/* Danh sách trường chuyên môn & công tác */}
+              {[
+                { label: 'Học hàm, học vị', icon: 'school-outline' as const, val: editDegree, setVal: onChangeDegree, ph: 'VD: Bác sĩ CKI, Thạc sĩ Y khoa...' },
+                { label: 'Chuyên khoa', icon: 'medkit-outline' as const, val: editSpecialty, setVal: onChangeSpecialty, ph: 'VD: Lão khoa, Tim mạch...' },
+                { label: 'Bệnh viện / Cơ sở y tế', icon: 'business-outline' as const, val: editHospital, setVal: onChangeHospital, ph: 'VD: Bệnh viện Đa khoa Đà Nẵng' },
+                { label: 'Khoa / Phòng công tác', icon: 'briefcase-outline' as const, val: editDepartment, setVal: onChangeDepartment, ph: 'VD: Khoa Chăm sóc Người cao tuổi' },
+              ].map((f, idx, arr) => (
+                <View key={f.label} style={{ marginBottom: idx === arr.length - 1 ? 0 : 12 }}>
+                  <Text style={{ fontSize: 12, fontWeight: '600', color: isDarkMode ? '#CBD5E1' : '#475569', marginBottom: 6 }}>
+                    {f.label}
+                  </Text>
+                  <View style={{ position: 'relative', justifyContent: 'center' }}>
+                    <View style={{ position: 'absolute', left: 12, zIndex: 1 }}>
+                      <Ionicons name={f.icon} size={18} color="#94A3B8" />
+                    </View>
+                    <TextInput
+                      style={{
+                        height: 46,
+                        borderRadius: 12,
+                        borderWidth: 1,
+                        borderColor: colors.border,
+                        backgroundColor: isDarkMode ? '#0F172A' : '#F8FAFC',
+                        paddingLeft: 38,
+                        paddingRight: 12,
+                        fontSize: 13,
+                        fontWeight: '500',
+                        color: colors.textPrimary,
+                      }}
+                      value={f.val}
+                      onChangeText={f.setVal}
+                      placeholder={f.ph}
+                      placeholderTextColor="#94A3B8"
+                    />
                   </View>
-                  <TextInput
-                    style={{
-                      height: 46,
-                      borderRadius: 12,
-                      borderWidth: 1,
-                      borderColor: colors.border,
-                      backgroundColor: isDarkMode ? '#0F172A' : '#F8FAFC',
-                      paddingLeft: 38,
-                      paddingRight: 12,
-                      fontSize: 13,
-                      fontWeight: '500',
-                      color: colors.textPrimary,
-                    }}
-                    value={editDegree}
-                    onChangeText={onChangeDegree}
-                    placeholder="VD: Bác sĩ CKI, Thạc sĩ Y khoa..."
-                    placeholderTextColor="#94A3B8"
-                  />
                 </View>
-              </View>
-
-              {/* Chuyên khoa */}
-              <View style={{ marginBottom: 12 }}>
-                <Text style={{ fontSize: 12, fontWeight: '600', color: isDarkMode ? '#CBD5E1' : '#475569', marginBottom: 6 }}>
-                  Chuyên khoa
-                </Text>
-                <View style={{ position: 'relative', justifyContent: 'center' }}>
-                  <View style={{ position: 'absolute', left: 12, zIndex: 1 }}>
-                    <Ionicons name="medkit-outline" size={18} color="#94A3B8" />
-                  </View>
-                  <TextInput
-                    style={{
-                      height: 46,
-                      borderRadius: 12,
-                      borderWidth: 1,
-                      borderColor: colors.border,
-                      backgroundColor: isDarkMode ? '#0F172A' : '#F8FAFC',
-                      paddingLeft: 38,
-                      paddingRight: 12,
-                      fontSize: 13,
-                      fontWeight: '500',
-                      color: colors.textPrimary,
-                    }}
-                    value={editSpecialty}
-                    onChangeText={onChangeSpecialty}
-                    placeholder="VD: Lão khoa, Tim mạch..."
-                    placeholderTextColor="#94A3B8"
-                  />
-                </View>
-              </View>
-
-              {/* Bệnh viện / Cơ sở y tế */}
-              <View style={{ marginBottom: 12 }}>
-                <Text style={{ fontSize: 12, fontWeight: '600', color: isDarkMode ? '#CBD5E1' : '#475569', marginBottom: 6 }}>
-                  Bệnh viện / Cơ sở y tế
-                </Text>
-                <View style={{ position: 'relative', justifyContent: 'center' }}>
-                  <View style={{ position: 'absolute', left: 12, zIndex: 1 }}>
-                    <Ionicons name="business-outline" size={18} color="#94A3B8" />
-                  </View>
-                  <TextInput
-                    style={{
-                      height: 46,
-                      borderRadius: 12,
-                      borderWidth: 1,
-                      borderColor: colors.border,
-                      backgroundColor: isDarkMode ? '#0F172A' : '#F8FAFC',
-                      paddingLeft: 38,
-                      paddingRight: 12,
-                      fontSize: 13,
-                      fontWeight: '500',
-                      color: colors.textPrimary,
-                    }}
-                    value={editHospital}
-                    onChangeText={onChangeHospital}
-                    placeholder="VD: Bệnh viện Đa khoa Đà Nẵng"
-                    placeholderTextColor="#94A3B8"
-                  />
-                </View>
-              </View>
-
-              {/* Khoa / Phòng công tác */}
-              <View>
-                <Text style={{ fontSize: 12, fontWeight: '600', color: isDarkMode ? '#CBD5E1' : '#475569', marginBottom: 6 }}>
-                  Khoa / Phòng công tác
-                </Text>
-                <View style={{ position: 'relative', justifyContent: 'center' }}>
-                  <View style={{ position: 'absolute', left: 12, zIndex: 1 }}>
-                    <Ionicons name="briefcase-outline" size={18} color="#94A3B8" />
-                  </View>
-                  <TextInput
-                    style={{
-                      height: 46,
-                      borderRadius: 12,
-                      borderWidth: 1,
-                      borderColor: colors.border,
-                      backgroundColor: isDarkMode ? '#0F172A' : '#F8FAFC',
-                      paddingLeft: 38,
-                      paddingRight: 12,
-                      fontSize: 13,
-                      fontWeight: '500',
-                      color: colors.textPrimary,
-                    }}
-                    value={editDepartment}
-                    onChangeText={onChangeDepartment}
-                    placeholder="VD: Khoa Chăm sóc Người cao tuổi"
-                    placeholderTextColor="#94A3B8"
-                  />
-                </View>
-              </View>
+              ))}
             </View>
           </ScrollView>
 

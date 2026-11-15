@@ -53,6 +53,44 @@ const maskPhone = (phone?: string) => {
   return !c ? 'Chưa cập nhật' : c.length <= 4 ? '***' : `${c.slice(0, 3)}****${c.slice(-3)}`;
 };
 
+const GENDER_OPTIONS = [
+  {
+    value: 'Nam',
+    label: 'Nam',
+    path: (
+      <>
+        <circle cx="10" cy="14" r="5" />
+        <path d="M19 5l-5.4 5.4" />
+        <path d="M15 5h4v4" />
+      </>
+    ),
+  },
+  {
+    value: 'Nữ',
+    label: 'Nữ',
+    path: (
+      <>
+        <circle cx="12" cy="9" r="5" />
+        <path d="M12 14v7" />
+        <path d="M9 18h6" />
+      </>
+    ),
+  },
+  {
+    value: 'Khác',
+    label: 'Khác',
+    path: (
+      <>
+        <circle cx="12" cy="12" r="5" />
+        <path d="M12 2v5" />
+        <path d="M12 17v5" />
+        <path d="M2 12h5" />
+        <path d="M17 12h5" />
+      </>
+    ),
+  },
+] as const;
+
 const COMPLIANCE_SECTIONS = [
   {
     title: '1. Tiêu chuẩn Dữ liệu Y tế Quốc tế & Bảo mật Đa lớp',
@@ -819,43 +857,7 @@ export const SettingsPage: React.FC = () => {
                           Giới tính
                         </label>
                         <div className="grid grid-cols-3 gap-2">
-                          {[
-                            {
-                              value: 'Nam',
-                              label: 'Nam',
-                              icon: (cls: string) => (
-                                <svg className={cls} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round">
-                                  <circle cx="10" cy="14" r="5" />
-                                  <path d="M19 5l-5.4 5.4" />
-                                  <path d="M15 5h4v4" />
-                                </svg>
-                              ),
-                            },
-                            {
-                              value: 'Nữ',
-                              label: 'Nữ',
-                              icon: (cls: string) => (
-                                <svg className={cls} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round">
-                                  <circle cx="12" cy="9" r="5" />
-                                  <path d="M12 14v7" />
-                                  <path d="M9 18h6" />
-                                </svg>
-                              ),
-                            },
-                            {
-                              value: 'Khác',
-                              label: 'Khác',
-                              icon: (cls: string) => (
-                                <svg className={cls} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round">
-                                  <circle cx="12" cy="12" r="5" />
-                                  <path d="M12 2v5" />
-                                  <path d="M12 17v5" />
-                                  <path d="M2 12h5" />
-                                  <path d="M17 12h5" />
-                                </svg>
-                              ),
-                            },
-                          ].map((g) => {
+                          {GENDER_OPTIONS.map((g) => {
                             const isSelected = (editForm.gender || 'Nam') === g.value;
                             return (
                               <button
@@ -868,7 +870,17 @@ export const SettingsPage: React.FC = () => {
                                     : 'border border-slate-200 bg-slate-50/70 font-medium text-slate-600 hover:border-blue-300 hover:bg-white'
                                 }`}
                               >
-                                {g.icon(isSelected ? 'h-3.5 w-3.5 text-blue-600 shrink-0' : 'h-3.5 w-3.5 text-slate-400 shrink-0')}
+                                <svg
+                                  className={`h-3.5 w-3.5 shrink-0 ${isSelected ? 'text-blue-600' : 'text-slate-400'}`}
+                                  viewBox="0 0 24 24"
+                                  fill="none"
+                                  stroke="currentColor"
+                                  strokeWidth="2.2"
+                                  strokeLinecap="round"
+                                  strokeLinejoin="round"
+                                >
+                                  {g.path}
+                                </svg>
                                 <span>{g.label}</span>
                                 {isSelected && (
                                   <CheckCircle2 className="absolute right-1 top-1/2 -translate-y-1/2 h-3.5 w-3.5 text-blue-600 shrink-0" />
@@ -918,81 +930,33 @@ export const SettingsPage: React.FC = () => {
                   </div>
 
                   <div className="grid grid-cols-1 sm:grid-cols-2 gap-3.5">
-                    {/* Học hàm, học vị */}
-                    <div>
-                      <label className="block text-xs font-semibold text-slate-700 mb-1.5">
-                        Học hàm, học vị
-                      </label>
-                      <div className="relative">
-                        <div className="pointer-events-none absolute inset-y-0 left-0 flex items-center pl-3.5 text-slate-400">
-                          <GraduationCap className="h-4 w-4" />
+                    {[
+                      { label: 'Học hàm, học vị', key: 'degree' as const, icon: GraduationCap, ph: 'VD: Bác sĩ CKI, ThS. Y khoa...' },
+                      { label: 'Chuyên khoa', key: 'specialty' as const, icon: Stethoscope, ph: 'VD: Lão khoa, Tim mạch...' },
+                      { label: 'Bệnh viện / Cơ sở y tế', key: 'hospital' as const, icon: Building2, ph: 'VD: Bệnh viện Đa khoa Đà Nẵng' },
+                      { label: 'Khoa / Phòng công tác', key: 'department' as const, icon: Briefcase, ph: 'VD: Khoa Chăm sóc Người cao tuổi' },
+                    ].map((f) => {
+                      const Icon = f.icon;
+                      return (
+                        <div key={f.key}>
+                          <label className="block text-xs font-semibold text-slate-700 mb-1.5">
+                            {f.label}
+                          </label>
+                          <div className="relative">
+                            <div className="pointer-events-none absolute inset-y-0 left-0 flex items-center pl-3.5 text-slate-400">
+                              <Icon className="h-4 w-4" />
+                            </div>
+                            <input
+                              type="text"
+                              value={editForm[f.key] || ''}
+                              onChange={(e) => setEditForm((prev) => ({ ...prev, [f.key]: e.target.value }))}
+                              placeholder={f.ph}
+                              className="h-[46px] w-full rounded-xl border border-slate-200 bg-slate-50/70 pl-10 pr-4 text-xs font-medium text-slate-900 transition focus:border-blue-500 focus:bg-white focus:ring-4 focus:ring-blue-500/10 focus:outline-none"
+                            />
+                          </div>
                         </div>
-                        <input
-                          type="text"
-                          value={editForm.degree || ''}
-                          onChange={(e) => setEditForm((prev) => ({ ...prev, degree: e.target.value }))}
-                          placeholder="VD: Bác sĩ CKI, ThS. Y khoa..."
-                          className="h-[46px] w-full rounded-xl border border-slate-200 bg-slate-50/70 pl-10 pr-4 text-xs font-medium text-slate-900 transition focus:border-blue-500 focus:bg-white focus:ring-4 focus:ring-blue-500/10 focus:outline-none"
-                        />
-                      </div>
-                    </div>
-
-                    {/* Chuyên khoa */}
-                    <div>
-                      <label className="block text-xs font-semibold text-slate-700 mb-1.5">
-                        Chuyên khoa
-                      </label>
-                      <div className="relative">
-                        <div className="pointer-events-none absolute inset-y-0 left-0 flex items-center pl-3.5 text-slate-400">
-                          <Stethoscope className="h-4 w-4" />
-                        </div>
-                        <input
-                          type="text"
-                          value={editForm.specialty || ''}
-                          onChange={(e) => setEditForm((prev) => ({ ...prev, specialty: e.target.value }))}
-                          placeholder="VD: Lão khoa, Tim mạch..."
-                          className="h-[46px] w-full rounded-xl border border-slate-200 bg-slate-50/70 pl-10 pr-4 text-xs font-medium text-slate-900 transition focus:border-blue-500 focus:bg-white focus:ring-4 focus:ring-blue-500/10 focus:outline-none"
-                        />
-                      </div>
-                    </div>
-
-                    {/* Bệnh viện / Cơ sở y tế */}
-                    <div>
-                      <label className="block text-xs font-semibold text-slate-700 mb-1.5">
-                        Bệnh viện / Cơ sở y tế
-                      </label>
-                      <div className="relative">
-                        <div className="pointer-events-none absolute inset-y-0 left-0 flex items-center pl-3.5 text-slate-400">
-                          <Building2 className="h-4 w-4" />
-                        </div>
-                        <input
-                          type="text"
-                          value={editForm.hospital || ''}
-                          onChange={(e) => setEditForm((prev) => ({ ...prev, hospital: e.target.value }))}
-                          placeholder="VD: Bệnh viện Đa khoa Đà Nẵng"
-                          className="h-[46px] w-full rounded-xl border border-slate-200 bg-slate-50/70 pl-10 pr-4 text-xs font-medium text-slate-900 transition focus:border-blue-500 focus:bg-white focus:ring-4 focus:ring-blue-500/10 focus:outline-none"
-                        />
-                      </div>
-                    </div>
-
-                    {/* Khoa / Phòng công tác */}
-                    <div>
-                      <label className="block text-xs font-semibold text-slate-700 mb-1.5">
-                        Khoa / Phòng công tác
-                      </label>
-                      <div className="relative">
-                        <div className="pointer-events-none absolute inset-y-0 left-0 flex items-center pl-3.5 text-slate-400">
-                          <Briefcase className="h-4 w-4" />
-                        </div>
-                        <input
-                          type="text"
-                          value={editForm.department || ''}
-                          onChange={(e) => setEditForm((prev) => ({ ...prev, department: e.target.value }))}
-                          placeholder="VD: Khoa Chăm sóc Người cao tuổi"
-                          className="h-[46px] w-full rounded-xl border border-slate-200 bg-slate-50/70 pl-10 pr-4 text-xs font-medium text-slate-900 transition focus:border-blue-500 focus:bg-white focus:ring-4 focus:ring-blue-500/10 focus:outline-none"
-                        />
-                      </div>
-                    </div>
+                      );
+                    })}
                   </div>
                 </div>
               </div>
