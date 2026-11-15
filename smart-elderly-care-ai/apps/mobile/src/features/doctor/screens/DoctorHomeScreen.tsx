@@ -345,9 +345,132 @@ export default function DoctorHomeScreen() {
           </View>
         ))}
 
-        {/* 2. DẢI CHỌN NHANH BỆNH NHÂN PHỤ TRÁCH (Lấy cảm hứng Ảnh 5) */}
+        {/* 2. KHỐI LỊCH KHÁM HÔM NAY (Được đưa lên trên theo yêu cầu) */}
+        <View style={[styles.sectionArea, { marginTop: 8 }]}>
+          <View style={styles.sectionHeaderRow}>
+            <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6 }}>
+              <Ionicons name="calendar" size={18} color="#2563EB" />
+              <LocalizedText style={[styles.sectionTitle, { color: colors.textPrimary }]}>Lịch khám hôm nay</LocalizedText>
+            </View>
+            <TouchableOpacity onPress={() => navigation.navigate('DoctorAppointments')}>
+              <LocalizedText style={styles.seeAllText}>Xem tất cả</LocalizedText>
+            </TouchableOpacity>
+          </View>
+
+          {nextAppointment ? (
+            <TouchableOpacity style={styles.scheduleBannerCard} activeOpacity={0.92} onPress={() => setDetailModalVisible(true)}>
+              <View style={styles.cardGradientLayer} />
+              <View style={styles.bannerLeftContent}>
+                <View style={styles.nextTagBadge}>
+                  <Ionicons name="calendar" size={11} color="#FFFFFF" style={{ marginRight: 4 }} />
+                  <LocalizedText style={styles.nextTagText}>Lịch khám kế tiếp</LocalizedText>
+                </View>
+                <LocalizedText style={styles.bannerPatientName} numberOfLines={1}>
+                  {nextAppointment.patient_name || 'Bệnh nhân'}
+                </LocalizedText>
+                <LocalizedText style={styles.bannerReasonText} numberOfLines={1}>
+                  {nextAppointment.clinical_notes || nextAppointment.exam_type || 'Khám sức khỏe'} • {nextAppointment.visit_type === 'CLINIC' ? 'Phòng khám' : 'Tại nhà'}
+                </LocalizedText>
+                <View style={styles.bannerTimeContainer}>
+                  <Ionicons name="time" size={13} color="#FFFFFF" style={{ marginRight: 5 }} />
+                  <LocalizedText style={styles.bannerTimeText}>Hôm nay, {formatAptTime(nextAppointment.scheduled_at)}</LocalizedText>
+                </View>
+              </View>
+              <View style={styles.bannerRightImageWrap}>
+                <Image source={doctorBannerImg} style={styles.doctorBannerImage} resizeMode="cover" />
+                <View style={styles.imageFadeOverlay} />
+              </View>
+            </TouchableOpacity>
+          ) : (
+            <View style={styles.scheduleBannerCard}>
+              <View style={styles.cardGradientLayer} />
+              <View style={styles.bannerLeftContent}>
+                <LocalizedText style={styles.emptyCardTitle}>Hôm nay không có lịch khám nào</LocalizedText>
+                <LocalizedText style={styles.emptyCardSub}>
+                  Bác sĩ có thể chủ động lên lịch thăm khám định kỳ cho các bệnh nhân.
+                </LocalizedText>
+                <TouchableOpacity style={styles.btnWhiteAddSchedule} activeOpacity={0.85} onPress={() => navigation.navigate('DoctorAppointments')}>
+                  <Ionicons name="add-circle" size={16} color="#2563EB" style={{ marginRight: 4 }} />
+                  <LocalizedText style={styles.btnWhiteAddScheduleText}>+ Đặt lịch mới</LocalizedText>
+                </TouchableOpacity>
+              </View>
+              <View style={styles.bannerRightImageWrap}>
+                <Image source={doctorBannerImg} style={styles.doctorBannerImage} resizeMode="cover" />
+                <View style={styles.imageFadeOverlay} />
+              </View>
+            </View>
+          )}
+        </View>
+
+        {/* 3. MỤC CẦN LƯU Ý LÂM SÀNG (Nếu có bệnh nhân cảnh báo) */}
+        {warningPatients.length > 0 && (
+          <View style={[styles.sectionArea, { marginTop: 14 }]}>
+            <View style={styles.sectionHeaderRow}>
+              <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6 }}>
+                <Ionicons name="alert-circle" size={18} color="#EF4444" />
+                <LocalizedText style={[styles.sectionTitle, { color: colors.textPrimary }]}>
+                  Cần lưu ý lâm sàng ({warningPatients.length})
+                </LocalizedText>
+              </View>
+              <TouchableOpacity onPress={() => navigation.navigate('DoctorPatients')}>
+                <LocalizedText style={styles.seeAllText}>Xem tất cả</LocalizedText>
+              </TouchableOpacity>
+            </View>
+
+            {warningPatients.slice(0, 2).map((p) => (
+              <View
+                key={p.id}
+                style={[
+                  styles.warningAlertCard,
+                  {
+                    backgroundColor: isDarkMode ? '#1E293B' : '#FFFFFF',
+                    borderColor: p.health_status === 'DANGER' ? '#FCA5A5' : '#FCD34D',
+                  },
+                ]}
+              >
+                <View style={styles.warningAlertTop}>
+                  <View style={[styles.warningIconSquare, { backgroundColor: p.health_status === 'DANGER' ? '#FEE2E2' : '#FEF3C7' }]}>
+                    <Ionicons
+                      name={p.health_status === 'DANGER' ? 'warning' : 'pulse'}
+                      size={18}
+                      color={p.health_status === 'DANGER' ? '#DC2626' : '#D97706'}
+                    />
+                  </View>
+                  <View style={{ flex: 1 }}>
+                    <Text style={[styles.warningPatientName, { color: colors.textPrimary }]}>
+                      {p.name} ({p.age ? `${p.age} tuổi` : 'Cao tuổi'})
+                    </Text>
+                    <Text style={styles.warningVitalText}>
+                      Nhịp tim: <Text style={{ fontWeight: '700', color: '#DC2626' }}>{p.heart_rate || 122} bpm</Text> • SpO2:{' '}
+                      <Text style={{ fontWeight: '700', color: '#059669' }}>{p.spo2 || 94}%</Text>
+                    </Text>
+                  </View>
+                </View>
+
+                <View style={styles.warningActionRow}>
+                  <TouchableOpacity
+                    style={[styles.btnOutlineRecord, { borderColor: isDarkMode ? '#334155' : '#DBEAFE' }]}
+                    onPress={() => navigation.navigate('DoctorPatientDetail', { patientId: p.id })}
+                  >
+                    <Text style={styles.btnOutlineRecordText}>Xem bệnh án</Text>
+                  </TouchableOpacity>
+
+                  <TouchableOpacity
+                    style={styles.btnPrimaryAppt}
+                    onPress={() => navigation.navigate('DoctorAppointments')}
+                  >
+                    <Ionicons name="calendar-outline" size={13} color="#FFFFFF" style={{ marginRight: 4 }} />
+                    <Text style={styles.btnPrimaryApptText}>Đặt lịch ngay</Text>
+                  </TouchableOpacity>
+                </View>
+              </View>
+            ))}
+          </View>
+        )}
+
+        {/* 4. DẢI CHỌN NHANH BỆNH NHÂN PHỤ TRÁCH (Đưa xuống dưới theo yêu cầu) */}
         {patients.length > 0 && (
-          <View style={styles.patientSelectorSection}>
+          <View style={[styles.patientSelectorSection, { marginTop: 14 }]}>
             <View style={styles.sectionHeaderCompact}>
               <LocalizedText style={[styles.selectorHeading, { color: colors.textPrimary }]}>
                 Bệnh nhân đang theo dõi
@@ -420,7 +543,7 @@ export default function DoctorHomeScreen() {
           </View>
         )}
 
-        {/* 3. THẺ TỔNG QUAN SINH HIỆU NỔI BẬT — HERO HEALTH CARD (Ảnh 5) */}
+        {/* 5. THẺ TỔNG QUAN SINH HIỆU NỔI BẬT — HERO HEALTH CARD (Đưa xuống dưới) */}
         {activePatient ? (
           <TouchableOpacity
             style={styles.heroHealthCard}
@@ -506,129 +629,6 @@ export default function DoctorHomeScreen() {
             </View>
           </TouchableOpacity>
         ) : null}
-
-        {/* 4. MỤC CẦN LƯU Ý LÂM SÀNG (Nếu có bệnh nhân cảnh báo) */}
-        {warningPatients.length > 0 && (
-          <View style={styles.sectionArea}>
-            <View style={styles.sectionHeaderRow}>
-              <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6 }}>
-                <Ionicons name="alert-circle" size={18} color="#EF4444" />
-                <LocalizedText style={[styles.sectionTitle, { color: colors.textPrimary }]}>
-                  Cần lưu ý lâm sàng ({warningPatients.length})
-                </LocalizedText>
-              </View>
-              <TouchableOpacity onPress={() => navigation.navigate('DoctorPatients')}>
-                <LocalizedText style={styles.seeAllText}>Xem tất cả</LocalizedText>
-              </TouchableOpacity>
-            </View>
-
-            {warningPatients.slice(0, 2).map((p) => (
-              <View
-                key={p.id}
-                style={[
-                  styles.warningAlertCard,
-                  {
-                    backgroundColor: isDarkMode ? '#1E293B' : '#FFFFFF',
-                    borderColor: p.health_status === 'DANGER' ? '#FCA5A5' : '#FCD34D',
-                  },
-                ]}
-              >
-                <View style={styles.warningAlertTop}>
-                  <View style={[styles.warningIconSquare, { backgroundColor: p.health_status === 'DANGER' ? '#FEE2E2' : '#FEF3C7' }]}>
-                    <Ionicons
-                      name={p.health_status === 'DANGER' ? 'warning' : 'pulse'}
-                      size={18}
-                      color={p.health_status === 'DANGER' ? '#DC2626' : '#D97706'}
-                    />
-                  </View>
-                  <View style={{ flex: 1 }}>
-                    <Text style={[styles.warningPatientName, { color: colors.textPrimary }]}>
-                      {p.name} ({p.age ? `${p.age} tuổi` : 'Cao tuổi'})
-                    </Text>
-                    <Text style={styles.warningVitalText}>
-                      Nhịp tim: <Text style={{ fontWeight: '700', color: '#DC2626' }}>{p.heart_rate || 122} bpm</Text> • SpO2:{' '}
-                      <Text style={{ fontWeight: '700', color: '#059669' }}>{p.spo2 || 94}%</Text>
-                    </Text>
-                  </View>
-                </View>
-
-                <View style={styles.warningActionRow}>
-                  <TouchableOpacity
-                    style={[styles.btnOutlineRecord, { borderColor: isDarkMode ? '#334155' : '#DBEAFE' }]}
-                    onPress={() => navigation.navigate('DoctorPatientDetail', { patientId: p.id })}
-                  >
-                    <Text style={styles.btnOutlineRecordText}>Xem bệnh án</Text>
-                  </TouchableOpacity>
-
-                  <TouchableOpacity
-                    style={styles.btnPrimaryAppt}
-                    onPress={() => navigation.navigate('DoctorAppointments')}
-                  >
-                    <Ionicons name="calendar-outline" size={13} color="#FFFFFF" style={{ marginRight: 4 }} />
-                    <Text style={styles.btnPrimaryApptText}>Đặt lịch ngay</Text>
-                  </TouchableOpacity>
-                </View>
-              </View>
-            ))}
-          </View>
-        )}
-
-        {/* 5. KHỐI LỊCH KHÁM HÔM NAY (Ảnh 1 & 5) */}
-        <View style={[styles.sectionArea, { marginTop: 20 }]}>
-          <View style={styles.sectionHeaderRow}>
-            <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6 }}>
-              <Ionicons name="calendar" size={18} color="#2563EB" />
-              <LocalizedText style={[styles.sectionTitle, { color: colors.textPrimary }]}>Lịch khám hôm nay</LocalizedText>
-            </View>
-            <TouchableOpacity onPress={() => navigation.navigate('DoctorAppointments')}>
-              <LocalizedText style={styles.seeAllText}>Xem tất cả</LocalizedText>
-            </TouchableOpacity>
-          </View>
-
-          {nextAppointment ? (
-            <TouchableOpacity style={styles.scheduleBannerCard} activeOpacity={0.92} onPress={() => setDetailModalVisible(true)}>
-              <View style={styles.cardGradientLayer} />
-              <View style={styles.bannerLeftContent}>
-                <View style={styles.nextTagBadge}>
-                  <Ionicons name="calendar" size={11} color="#FFFFFF" style={{ marginRight: 4 }} />
-                  <LocalizedText style={styles.nextTagText}>Lịch khám kế tiếp</LocalizedText>
-                </View>
-                <LocalizedText style={styles.bannerPatientName} numberOfLines={1}>
-                  {nextAppointment.patient_name || 'Bệnh nhân'}
-                </LocalizedText>
-                <LocalizedText style={styles.bannerReasonText} numberOfLines={1}>
-                  {nextAppointment.clinical_notes || nextAppointment.exam_type || 'Khám sức khỏe'} • {nextAppointment.visit_type === 'CLINIC' ? 'Phòng khám' : 'Tại nhà'}
-                </LocalizedText>
-                <View style={styles.bannerTimeContainer}>
-                  <Ionicons name="time" size={13} color="#FFFFFF" style={{ marginRight: 5 }} />
-                  <LocalizedText style={styles.bannerTimeText}>Hôm nay, {formatAptTime(nextAppointment.scheduled_at)}</LocalizedText>
-                </View>
-              </View>
-              <View style={styles.bannerRightImageWrap}>
-                <Image source={doctorBannerImg} style={styles.doctorBannerImage} resizeMode="cover" />
-                <View style={styles.imageFadeOverlay} />
-              </View>
-            </TouchableOpacity>
-          ) : (
-            <View style={styles.scheduleBannerCard}>
-              <View style={styles.cardGradientLayer} />
-              <View style={styles.bannerLeftContent}>
-                <LocalizedText style={styles.emptyCardTitle}>Hôm nay không có lịch khám nào</LocalizedText>
-                <LocalizedText style={styles.emptyCardSub}>
-                  Bác sĩ có thể chủ động lên lịch thăm khám định kỳ cho các bệnh nhân.
-                </LocalizedText>
-                <TouchableOpacity style={styles.btnWhiteAddSchedule} activeOpacity={0.85} onPress={() => navigation.navigate('DoctorAppointments')}>
-                  <Ionicons name="add-circle" size={16} color="#2563EB" style={{ marginRight: 4 }} />
-                  <LocalizedText style={styles.btnWhiteAddScheduleText}>+ Đặt lịch mới</LocalizedText>
-                </TouchableOpacity>
-              </View>
-              <View style={styles.bannerRightImageWrap}>
-                <Image source={doctorBannerImg} style={styles.doctorBannerImage} resizeMode="cover" />
-                <View style={styles.imageFadeOverlay} />
-              </View>
-            </View>
-          )}
-        </View>
       </ScrollView>
 
       {/* Bottom Sheet Thông Báo */}
