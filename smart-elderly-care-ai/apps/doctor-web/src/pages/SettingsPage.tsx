@@ -168,6 +168,8 @@ export const SettingsPage: React.FC = () => {
       setDocInfo(next);
       setEditForm((prev) => ({ ...prev, avatarUri: dataUrl }));
       localStorage.setItem('seca_doctor_profile_custom', JSON.stringify(next));
+      window.dispatchEvent(new Event('doctor-profile-updated'));
+      window.dispatchEvent(new Event('doctor-profile-updated'));
       try {
         await authApi.updateMe({ avatar_url: dataUrl });
       } catch {
@@ -199,6 +201,7 @@ export const SettingsPage: React.FC = () => {
       };
       setDocInfo(updated);
       localStorage.setItem('seca_doctor_profile_custom', JSON.stringify(updated));
+      window.dispatchEvent(new Event('doctor-profile-updated'));
       try {
         await authApi.updateMe({
           full_name: updated.name,
@@ -257,8 +260,13 @@ export const SettingsPage: React.FC = () => {
     }
   };
 
-  const doctorInitial =
-    (docInfo.name || 'Bác sĩ').trim().split(/\s+/).slice(-1)[0]?.[0]?.toUpperCase() || 'B';
+  const getDoctorInitial = (name?: string) => {
+    if (!name) return 'M';
+    const clean = name.replace(/^(bs\.|bác sĩ|dr\.)\s+/i, '').trim();
+    const parts = clean.split(/\s+/);
+    return parts[parts.length - 1]?.[0]?.toUpperCase() || 'M';
+  };
+  const doctorInitial = getDoctorInitial(docInfo.name);
   const hasMobile = terminals.some((t) => t.device_type === 'mobile');
 
   const menuActions = [

@@ -95,6 +95,7 @@ const getPatientAvatar = (avatarUrl?: string | null) => {
 export const DashboardPage: React.FC = () => {
   const navigate = useNavigate();
   const { user } = useDoctorAuthStore();
+  const doctorName = user?.full_name || 'BS. Trần Văn Minh';
 
   const [loading, setLoading] = useState(true);
   const [patients, setPatients] = useState<DoctorPatientCard[]>([]);
@@ -116,6 +117,52 @@ export const DashboardPage: React.FC = () => {
 
   // Create Appointment Modal
   const [showCreateModal, setShowCreateModal] = useState(false);
+
+  // Chữ cái viết tắt chuẩn xác: "M" (trong "Minh") thay vì "B" (trong "BS.")
+  const getDoctorInitial = (name?: string) => {
+    if (!name) return 'M';
+    const clean = name.replace(/^(bs\.|bác sĩ|dr\.)\s+/i, '').trim();
+    const parts = clean.split(/\s+/);
+    return parts[parts.length - 1]?.[0]?.toUpperCase() || 'M';
+  };
+
+  const doctorInitial = getDoctorInitial(doctorName);
+
+  // Avatar Bác sĩ lấy từ tài khoản hoặc localStorage đồng bộ 100% với Mobile App
+  const [doctorAvatar, setDoctorAvatar] = useState<string | null>(() => {
+    if (user?.avatar_url) return user.avatar_url;
+    try {
+      const saved = localStorage.getItem('seca_doctor_profile_custom');
+      if (saved) {
+        const parsed = JSON.parse(saved);
+        if (parsed.avatarUri) return parsed.avatarUri;
+      }
+    } catch {}
+    return null;
+  });
+
+  useEffect(() => {
+    const handleProfileUpdate = () => {
+      try {
+        const saved = localStorage.getItem('seca_doctor_profile_custom');
+        if (saved) {
+          const parsed = JSON.parse(saved);
+          if (parsed.avatarUri) {
+            setDoctorAvatar(parsed.avatarUri);
+            return;
+          }
+        }
+      } catch {}
+      if (user?.avatar_url) setDoctorAvatar(user.avatar_url);
+    };
+
+    window.addEventListener('doctor-profile-updated', handleProfileUpdate);
+    window.addEventListener('storage', handleProfileUpdate);
+    return () => {
+      window.removeEventListener('doctor-profile-updated', handleProfileUpdate);
+      window.removeEventListener('storage', handleProfileUpdate);
+    };
+  }, [user]);
 
   const fetchData = useCallback(async () => {
     setLoading(true);
@@ -195,7 +242,6 @@ export const DashboardPage: React.FC = () => {
     (a) => a.scheduled_at?.slice(0, 10) === todayStr && a.status !== 'CANCELLED'
   );
   const onlineCount = patients.filter((p) => p.is_online).length;
-  const doctorName = user?.full_name || 'BS. Trần Văn Minh';
 
   // 4 Thẻ KPI (Tầng 2)
   const kpis = [
@@ -350,9 +396,26 @@ export const DashboardPage: React.FC = () => {
               </span>
             </div>
 
-            <h1 className="font-heading text-2xl lg:text-3xl font-extrabold tracking-tight text-white">
-              Xin chào, {doctorName} 👋
-            </h1>
+            <div className="flex items-center gap-3.5 pt-1">
+              {/* Avatar tròn Bác sĩ đồng bộ 100% với Mobile App (Chữ "M" nền xanh có chấm xanh Online) */}
+              <div className="relative flex h-12 w-12 shrink-0 items-center justify-center rounded-full bg-blue-700/90 border-2 border-white/70 text-lg font-black text-white shadow-md overflow-hidden">
+                {doctorAvatar ? (
+                  <img src={doctorAvatar} alt={doctorName} className="h-full w-full object-cover" />
+                ) : (
+                  doctorInitial
+                )}
+                <span className="absolute bottom-0 right-0 h-3 w-3 rounded-full bg-emerald-400 ring-2 ring-blue-600" />
+              </div>
+
+              <div>
+                <h1 className="font-heading text-2xl lg:text-3xl font-extrabold tracking-tight text-white">
+                  Xin chào, {doctorName} 👋
+                </h1>
+                <p className="text-xs text-blue-100 font-medium">
+                  Hôm nay công việc thế nào? Hệ thống AI luôn đồng hành cùng Bác sĩ.
+                </p>
+              </div>
+            </div>
 
             <p className="text-xs sm:text-sm text-blue-50/95 leading-relaxed">
               {nextAppointment ? (

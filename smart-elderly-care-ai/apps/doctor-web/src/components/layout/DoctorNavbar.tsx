@@ -107,6 +107,52 @@ export const DoctorNavbar: React.FC = () => {
   const notifDropdownRef = useRef<HTMLDivElement | null>(null);
   const doctorName = user?.full_name || 'BS. Trần Văn Minh';
 
+  // Chữ cái viết tắt chuẩn xác: "M" (trong "Minh") thay vì "B" (trong "BS.")
+  const getDoctorInitial = (name?: string) => {
+    if (!name) return 'M';
+    const clean = name.replace(/^(bs\.|bác sĩ|dr\.)\s+/i, '').trim();
+    const parts = clean.split(/\s+/);
+    return parts[parts.length - 1]?.[0]?.toUpperCase() || 'M';
+  };
+
+  const doctorInitial = getDoctorInitial(doctorName);
+
+  // Avatar Bác sĩ lấy từ tài khoản hoặc localStorage đồng bộ với Mobile App
+  const [doctorAvatar, setDoctorAvatar] = useState<string | null>(() => {
+    if (user?.avatar_url) return user.avatar_url;
+    try {
+      const saved = localStorage.getItem('seca_doctor_profile_custom');
+      if (saved) {
+        const parsed = JSON.parse(saved);
+        if (parsed.avatarUri) return parsed.avatarUri;
+      }
+    } catch {}
+    return null;
+  });
+
+  useEffect(() => {
+    const handleProfileUpdate = () => {
+      try {
+        const saved = localStorage.getItem('seca_doctor_profile_custom');
+        if (saved) {
+          const parsed = JSON.parse(saved);
+          if (parsed.avatarUri) {
+            setDoctorAvatar(parsed.avatarUri);
+            return;
+          }
+        }
+      } catch {}
+      if (user?.avatar_url) setDoctorAvatar(user.avatar_url);
+    };
+
+    window.addEventListener('doctor-profile-updated', handleProfileUpdate);
+    window.addEventListener('storage', handleProfileUpdate);
+    return () => {
+      window.removeEventListener('doctor-profile-updated', handleProfileUpdate);
+      window.removeEventListener('storage', handleProfileUpdate);
+    };
+  }, [user]);
+
   const fetchNotifData = useCallback(async () => {
     try {
       const [incRes, patRes, aptRes, invRes] = await Promise.allSettled([
@@ -670,16 +716,30 @@ export const DoctorNavbar: React.FC = () => {
                 )}
               </div>
 
-              {/* Footer */}
+              {/* Footer động linh hoạt theo từng Tab: Lịch khám, Cảnh báo, Chưa đọc, Tất cả */}
               <div className="border-t border-slate-100 bg-slate-50 p-2.5 text-center dark:border-slate-800 dark:bg-slate-800/60">
                 <button
                   onClick={() => {
                     setShowNotifMenu(false);
-                    navigate('/appointments');
+                    if (notifTab === 'APPOINTMENTS') {
+                      navigate('/appointments');
+                    } else if (notifTab === 'ALERTS' || notifTab === 'UNREAD') {
+                      navigate('/patients');
+                    } else {
+                      navigate('/appointments');
+                    }
                   }}
                   className="inline-flex items-center space-x-1 text-xs font-bold text-blue-600 hover:text-blue-700 dark:text-blue-400"
                 >
-                  <span>Xem toàn bộ lịch khám</span>
+                  <span>
+                    {notifTab === 'APPOINTMENTS'
+                      ? 'Xem toàn bộ lịch khám'
+                      : notifTab === 'ALERTS'
+                        ? 'Xem toàn bộ cảnh báo & bệnh nhân'
+                        : notifTab === 'UNREAD'
+                          ? 'Xem danh sách cần xử lý'
+                          : 'Xem toàn bộ lịch khám & bệnh nhân'}
+                  </span>
                   <ChevronRight className="h-3.5 w-3.5" />
                 </button>
               </div>
@@ -696,9 +756,13 @@ export const DoctorNavbar: React.FC = () => {
             }}
             className="flex items-center space-x-3 rounded-xl p-1.5 transition-colors hover:bg-slate-50 border border-transparent hover:border-slate-200 dark:hover:bg-slate-800 dark:hover:border-slate-700"
           >
-            {/* Avatar Bác sĩ có chấm xanh Online */}
-            <div className="relative flex h-9 w-9 items-center justify-center rounded-full bg-blue-600 text-sm font-bold text-white shadow-sm">
-              {doctorName.charAt(0) || 'B'}
+            {/* Avatar Bác sĩ có chấm xanh Online (Chữ "M" nền xanh chuẩn như bên App) */}
+            <div className="relative flex h-9 w-9 shrink-0 items-center justify-center rounded-full bg-blue-600 text-sm font-extrabold text-white shadow-sm overflow-hidden">
+              {doctorAvatar ? (
+                <img src={doctorAvatar} alt={doctorName} className="h-full w-full object-cover" />
+              ) : (
+                doctorInitial
+              )}
               <span className="absolute bottom-0 right-0 h-2.5 w-2.5 rounded-full bg-emerald-500 ring-2 ring-white dark:ring-slate-900" />
             </div>
             <div className="text-left hidden sm:block">
@@ -710,12 +774,22 @@ export const DoctorNavbar: React.FC = () => {
           {/* Dropdown Menu */}
           {showProfileMenu && (
             <div className="absolute right-0 mt-2 w-60 rounded-2xl border border-slate-200 bg-white p-2 shadow-xl shadow-slate-200/60 animate-in fade-in slide-in-from-top-2 duration-150 dark:border-slate-700 dark:bg-slate-900 dark:shadow-slate-950/80">
-              <div className="px-3 py-2 border-b border-slate-100 dark:border-slate-800">
-                <p className="text-xs font-bold text-slate-900 dark:text-white">{doctorName}</p>
-                <p className="text-[11px] text-slate-500 dark:text-slate-400">{user?.phone || 'Bác sĩ gia đình'}</p>
-                <div className="mt-1 flex items-center space-x-1 text-[10px] text-emerald-600 font-medium dark:text-emerald-400">
-                  <ShieldCheck className="h-3 w-3" />
-                  <span>Chứng chỉ hành nghề đã xác thực</span>
+              <div className="flex items-center space-x-3 px-3 py-2.5 border-b border-slate-100 dark:border-slate-800">
+                <div className="relative flex h-10 w-10 shrink-0 items-center justify-center rounded-full bg-blue-600 text-base font-extrabold text-white shadow-sm overflow-hidden">
+                  {doctorAvatar ? (
+                    <img src={doctorAvatar} alt={doctorName} className="h-full w-full object-cover" />
+                  ) : (
+                    doctorInitial
+                  )}
+                  <span className="absolute bottom-0 right-0 h-2.5 w-2.5 rounded-full bg-emerald-500 ring-2 ring-white dark:ring-slate-900" />
+                </div>
+                <div className="min-w-0 flex-1">
+                  <p className="text-xs font-bold text-slate-900 dark:text-white truncate">{doctorName}</p>
+                  <p className="text-[11px] text-slate-500 dark:text-slate-400 truncate">{user?.phone || 'Bác sĩ gia đình'}</p>
+                  <div className="mt-0.5 flex items-center space-x-1 text-[10px] text-emerald-600 font-medium dark:text-emerald-400">
+                    <ShieldCheck className="h-3 w-3" />
+                    <span>Chứng chỉ hành nghề đã xác thực</span>
+                  </div>
                 </div>
               </div>
 
