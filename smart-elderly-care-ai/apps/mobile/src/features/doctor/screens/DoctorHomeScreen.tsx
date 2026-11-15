@@ -1,9 +1,14 @@
 // DoctorHomeScreen.tsx
-// Trang chủ Bác sĩ gia đình - Giao diện hiện đại cao cấp, Skeleton Loading mượt mà không giật
+// Trang chủ Bác sĩ gia đình - Nâng cấp giao diện kết hợp tinh hoa Ảnh 1, 2 & 5:
+// 1. Header chào hỏi bác sĩ + avatar có chấm xanh + nút tìm kiếm & chuông thông báo
+// 2. Dải chọn nhanh Bệnh nhân phụ trách (Horizontal Avatar Strip - Ảnh 5)
+// 3. Thẻ Tổng quan Sinh hiệu Nổi bật (Hero Health Card màu xanh gradient - Ảnh 5)
+// 4. Mục Cần lưu ý lâm sàng & Lịch khám hôm nay
 
 import React, { useState, useEffect, useCallback, useRef } from 'react';
 import {
   View,
+  Text,
   StyleSheet,
   ScrollView,
   TouchableOpacity,
@@ -13,6 +18,7 @@ import {
   Animated,
   Alert,
   ActivityIndicator,
+  Platform,
 } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
@@ -41,38 +47,6 @@ export { STANDARD_PATIENT_NAMES, normalizePatientsList };
 
 const doctorBannerImg = require('../../../../assets/images/doctor-banner.png');
 
-const PatientCardSkeleton = ({ isDarkMode }: { isDarkMode: boolean }) => {
-  const pulseAnim = useRef(new Animated.Value(0.35)).current;
-
-  useEffect(() => {
-    Animated.loop(
-      Animated.sequence([
-        Animated.timing(pulseAnim, { toValue: 0.85, duration: 750, useNativeDriver: true }),
-        Animated.timing(pulseAnim, { toValue: 0.35, duration: 750, useNativeDriver: true }),
-      ])
-    ).start();
-  }, [pulseAnim]);
-
-  const bgPlaceholder = isDarkMode ? '#334155' : '#E2E8F0';
-  const bgSub = isDarkMode ? '#334155' : '#F1F5F9';
-
-  return (
-    <Animated.View
-      style={[
-        styles.patientCardItem,
-        { backgroundColor: isDarkMode ? '#1E293B' : '#FFFFFF', borderColor: bgPlaceholder, opacity: pulseAnim },
-      ]}
-    >
-      <View style={[styles.patientAvatarWrap, { backgroundColor: bgPlaceholder }]} />
-      <View style={styles.patientInfoCol}>
-        <View style={{ height: 16, width: '55%', borderRadius: 6, backgroundColor: bgPlaceholder, marginBottom: 6 }} />
-        <View style={{ height: 12, width: '80%', borderRadius: 4, backgroundColor: bgSub }} />
-      </View>
-      <View style={{ width: 60, height: 24, borderRadius: 8, backgroundColor: bgSub }} />
-    </Animated.View>
-  );
-};
-
 export default function DoctorHomeScreen() {
   const insets = useSafeAreaInsets();
   const navigation = useNavigation<any>();
@@ -87,6 +61,7 @@ export default function DoctorHomeScreen() {
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
   const [patients, setPatients] = useState<PatientCardData[]>([]);
+  const [selectedPatientId, setSelectedPatientId] = useState<string | null>(null);
   const [todayAppointments, setTodayAppointments] = useState<AppointmentItem[]>([]);
   const [upcomingAppointments, setUpcomingAppointments] = useState<AppointmentItem[]>([]);
   const [nextAppointment, setNextAppointment] = useState<AppointmentItem | null>(null);
@@ -117,7 +92,17 @@ export default function DoctorHomeScreen() {
         useAuthStore.getState().setAvatar(u.avatar_url || '');
       }
 
-      setPatients(normalizePatientsList(patRes.status === 'fulfilled' && patRes.value.data ? patRes.value.data : []));
+      const normalized = normalizePatientsList(
+        patRes.status === 'fulfilled' && patRes.value.data ? patRes.value.data : []
+      );
+      setPatients(normalized);
+
+      // Mặc định chọn bệnh nhân có cảnh báo hoặc người đầu tiên
+      setSelectedPatientId((curr) => {
+        if (curr && normalized.some((p) => p.id === curr)) return curr;
+        const warn = normalized.find((p) => p.health_status === 'DANGER' || p.health_status === 'WARNING');
+        return warn ? warn.id : normalized[0]?.id || null;
+      });
 
       if (aptRes.status === 'fulfilled' && Array.isArray(aptRes.value.data)) {
         const allApts: AppointmentItem[] = aptRes.value.data;
@@ -171,7 +156,11 @@ export default function DoctorHomeScreen() {
     fetchData();
     alertsWS.connect();
     const unsub = alertsWS.subscribe((event: any) => {
-      if (event?.type === 'ALERT_NEW' || event?.alert_type === 'MEDICAL_RECORD_UPDATED' || event?.alert_type === 'APPOINTMENT_SCHEDULED') {
+      if (
+        event?.type === 'ALERT_NEW' ||
+        event?.alert_type === 'MEDICAL_RECORD_UPDATED' ||
+        event?.alert_type === 'APPOINTMENT_SCHEDULED'
+      ) {
         fetchData();
       }
     });
@@ -204,7 +193,8 @@ export default function DoctorHomeScreen() {
     p.house_address?.trim() || (p.house_name?.trim() && p.house_name !== 'Nhà của tôi' ? p.house_name.trim() : 'Nhà riêng bệnh nhân');
 
   const warningPatients = patients.filter((p) => p.health_status === 'WARNING' || p.health_status === 'DANGER');
-  const currentPatientInfo = nextAppointment ? patients.find((p) => p.id === nextAppointment.patient_id) : null;
+  const activePatient = patients.find((p) => p.id === selectedPatientId) || patients[0] || null;
+
   const getDoctorInitial = (name?: string | null) => {
     if (!name) return 'M';
     const clean = name.replace(/^(bs\.|bác sĩ|dr\.)\s+/i, '').trim();
@@ -227,12 +217,30 @@ export default function DoctorHomeScreen() {
     cb?.();
   };
 
+  // Tính điểm an toàn sức khỏe
+  const getSafetyScore = (p: PatientCardData | null) => {
+    if (!p) return 86;
+    if (p.health_status === 'DANGER') return 48;
+    if (p.health_status === 'WARNING') return 74;
+    return 92;
+  };
+  const safetyScore = getSafetyScore(activePatient);
+
   return (
     <View style={[styles.container, { backgroundColor: isDarkMode ? '#0F172A' : '#F8FAFC' }]}>
       <StatusBar barStyle={isDarkMode ? 'light-content' : 'dark-content'} />
 
-      {/* 1. Header trang chủ */}
-      <View style={[styles.header, { paddingTop: insets.top + 8, backgroundColor: isDarkMode ? '#1E293B' : '#FFFFFF', borderBottomColor: colors.border }]}>
+      {/* 1. HEADER CHÀO HỎI BÁC SĨ (Ảnh 1 & 5) */}
+      <View
+        style={[
+          styles.headerGradientArea,
+          {
+            paddingTop: insets.top + 8,
+            backgroundColor: isDarkMode ? '#1E293B' : '#EFF6FF',
+            borderBottomColor: isDarkMode ? '#334155' : '#DBEAFE',
+          },
+        ]}
+      >
         <View style={styles.headerLeft}>
           <TouchableOpacity
             style={styles.doctorAvatarContainer}
@@ -248,9 +256,10 @@ export default function DoctorHomeScreen() {
             </View>
             <View style={[styles.onlineBadge, { borderColor: isDarkMode ? '#1E293B' : '#FFFFFF' }]} />
           </TouchableOpacity>
+
           <View style={styles.greetingBox}>
             <LocalizedText style={[styles.greetingTitle, { color: colors.textPrimary }]} numberOfLines={1}>
-              Xin chào, {userName || 'Bác sĩ'} 👋
+              Xin chào, {userName || 'BS. Trần Văn Minh'} 👋
             </LocalizedText>
             <LocalizedText style={[styles.greetingSub, { color: isDarkMode ? '#94A3B8' : '#64748B' }]}>
               Hôm nay công việc thế nào?
@@ -259,12 +268,22 @@ export default function DoctorHomeScreen() {
         </View>
 
         <View style={styles.headerRight}>
+          {/* Nút tìm kiếm nhanh */}
           <TouchableOpacity
-            style={[styles.headerIconBtn, { backgroundColor: isDarkMode ? '#334155' : '#F1F5F9' }]}
+            style={[styles.headerIconBtn, { backgroundColor: isDarkMode ? '#334155' : '#FFFFFF' }]}
+            onPress={() => navigation.navigate('DoctorPatients')}
+            activeOpacity={0.7}
+          >
+            <Ionicons name="search-outline" size={19} color={isDarkMode ? '#E2E8F0' : '#1E293B'} />
+          </TouchableOpacity>
+
+          {/* Nút chuông thông báo có chấm đỏ */}
+          <TouchableOpacity
+            style={[styles.headerIconBtn, { backgroundColor: isDarkMode ? '#334155' : '#FFFFFF' }]}
             onPress={() => setNotifModalVisible(true)}
             activeOpacity={0.7}
           >
-            <Ionicons name="notifications-outline" size={20} color={isDarkMode ? '#E2E8F0' : '#334155'} />
+            <Ionicons name="notifications-outline" size={19} color={isDarkMode ? '#E2E8F0' : '#1E293B'} />
             {hasUnreadNotifs && <View style={styles.badgeDot} />}
           </TouchableOpacity>
         </View>
@@ -277,7 +296,7 @@ export default function DoctorHomeScreen() {
         refreshControl={<RefreshControl refreshing={refreshing} onRefresh={() => { setRefreshing(true); fetchData(); }} colors={[Colors.primary]} />}
         showsVerticalScrollIndicator={false}
       >
-        {/* Khối Lời mời tham gia Bác sĩ gia đình */}
+        {/* Khối Lời mời tham gia Bác sĩ gia đình (nếu có) */}
         {pendingHouseInvites.map((invite) => (
           <View key={invite.id} style={[styles.inviteCard, { backgroundColor: isDarkMode ? '#1E293B' : '#FFFFFF', borderColor: '#F59E0B' }]}>
             <View style={styles.inviteCardHeader}>
@@ -326,139 +345,293 @@ export default function DoctorHomeScreen() {
           </View>
         ))}
 
-        {/* 2. Khối Lịch khám hôm nay */}
-        <View style={styles.sectionHeaderRow}>
-          <LocalizedText style={[styles.sectionTitle, { color: colors.textPrimary }]}>Lịch khám hôm nay</LocalizedText>
-          <TouchableOpacity onPress={() => navigation.navigate('DoctorAppointments')} hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}>
-            <LocalizedText style={styles.seeAllText}>Xem tất cả</LocalizedText>
-          </TouchableOpacity>
-        </View>
-
-        {nextAppointment ? (
-          <TouchableOpacity style={styles.scheduleBannerCard} activeOpacity={0.92} onPress={() => setDetailModalVisible(true)}>
-            <View style={styles.cardGradientLayer} />
-            <View style={styles.bannerLeftContent}>
-              <View style={styles.nextTagBadge}>
-                <Ionicons name="calendar" size={11} color="#FFFFFF" style={{ marginRight: 4 }} />
-                <LocalizedText style={styles.nextTagText}>Lịch khám kế tiếp</LocalizedText>
-              </View>
-              <LocalizedText style={styles.bannerPatientName} numberOfLines={1}>
-                {nextAppointment.patient_name || 'Bệnh nhân'}
+        {/* 2. DẢI CHỌN NHANH BỆNH NHÂN PHỤ TRÁCH (Lấy cảm hứng Ảnh 5) */}
+        {patients.length > 0 && (
+          <View style={styles.patientSelectorSection}>
+            <View style={styles.sectionHeaderCompact}>
+              <LocalizedText style={[styles.selectorHeading, { color: colors.textPrimary }]}>
+                Bệnh nhân đang theo dõi
               </LocalizedText>
-              <LocalizedText style={styles.bannerReasonText} numberOfLines={1}>
-                {nextAppointment.clinical_notes || nextAppointment.exam_type || 'Khám sức khỏe'} • {nextAppointment.visit_type === 'CLINIC' ? 'Phòng khám' : 'Tại nhà'}
-              </LocalizedText>
-              <View style={styles.bannerTimeContainer}>
-                <Ionicons name="time" size={13} color="#FFFFFF" style={{ marginRight: 5 }} />
-                <LocalizedText style={styles.bannerTimeText}>Hôm nay, {formatAptTime(nextAppointment.scheduled_at)}</LocalizedText>
-              </View>
-            </View>
-            <View style={styles.bannerRightImageWrap}>
-              <Image source={doctorBannerImg} style={styles.doctorBannerImage} resizeMode="cover" />
-              <View style={styles.imageFadeOverlay} />
-            </View>
-          </TouchableOpacity>
-        ) : (
-          <View style={styles.scheduleBannerCard}>
-            <View style={styles.cardGradientLayer} />
-            <View style={styles.bannerLeftContent}>
-              <LocalizedText style={styles.emptyCardTitle}>Hôm nay không có lịch khám nào</LocalizedText>
-              <LocalizedText style={styles.emptyCardSub}>
-                Bác sĩ có thể chủ động lên lịch thăm khám định kỳ cho các bệnh nhân.
-              </LocalizedText>
-              <TouchableOpacity style={styles.btnWhiteAddSchedule} activeOpacity={0.85} onPress={() => navigation.navigate('DoctorAppointments')}>
-                <Ionicons name="add-circle" size={16} color="#2563EB" style={{ marginRight: 4 }} />
-                <LocalizedText style={styles.btnWhiteAddScheduleText}> Đặt lịch mới</LocalizedText>
+              <TouchableOpacity onPress={() => navigation.navigate('DoctorPatients')}>
+                <LocalizedText style={styles.seeAllText}>Tất cả ({patients.length})</LocalizedText>
               </TouchableOpacity>
             </View>
-            <View style={styles.bannerRightImageWrap}>
-              <Image source={doctorBannerImg} style={styles.doctorBannerImage} resizeMode="cover" />
-              <View style={styles.imageFadeOverlay} />
-            </View>
+
+            <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.patientAvatarStrip}>
+              {patients.map((p) => {
+                const isSelected = p.id === activePatient?.id;
+                const isWarn = p.health_status === 'WARNING';
+                const isDanger = p.health_status === 'DANGER';
+                const ringColor = isDanger ? '#EF4444' : isWarn ? '#F59E0B' : '#10B981';
+
+                return (
+                  <TouchableOpacity
+                    key={p.id}
+                    onPress={() => setSelectedPatientId(p.id)}
+                    style={[
+                      styles.avatarPillItem,
+                      isSelected && {
+                        backgroundColor: isDarkMode ? '#1E293B' : '#FFFFFF',
+                        borderColor: '#2563EB',
+                        borderWidth: 1.5,
+                        shadowColor: '#2563EB',
+                        shadowOpacity: 0.15,
+                        shadowRadius: 6,
+                        elevation: 3,
+                      },
+                    ]}
+                    activeOpacity={0.8}
+                  >
+                    <View style={[styles.stripAvatarRing, { borderColor: ringColor }]}>
+                      {p.avatar_url ? (
+                        <Image source={{ uri: getPatientAvatarUrl(p.avatar_url)! }} style={styles.stripAvatarImg} />
+                      ) : (
+                        <View style={[styles.stripAvatarPlaceholder, { backgroundColor: ringColor }]}>
+                          <Text style={styles.stripAvatarLetter}>{getPatientInitial(p.name)}</Text>
+                        </View>
+                      )}
+                    </View>
+                    <Text
+                      style={[
+                        styles.stripPatientName,
+                        { color: isSelected ? '#2563EB' : colors.textPrimary },
+                        isSelected && { fontWeight: '700' },
+                      ]}
+                      numberOfLines={1}
+                    >
+                      {p.name.replace(/^(cụ|bác|ông|bà)\s+/i, '')}
+                    </Text>
+                  </TouchableOpacity>
+                );
+              })}
+
+              {/* Nút Thêm bệnh nhân */}
+              <TouchableOpacity
+                style={[styles.avatarPillItem, styles.addPatientPill, { borderColor: isDarkMode ? '#334155' : '#CBD5E1' }]}
+                onPress={() => navigation.navigate('DoctorPatients')}
+                activeOpacity={0.7}
+              >
+                <View style={[styles.stripAddCircle, { backgroundColor: isDarkMode ? '#334155' : '#EEF2F6' }]}>
+                  <Ionicons name="add" size={20} color="#2563EB" />
+                </View>
+                <Text style={[styles.stripPatientName, { color: '#2563EB', fontWeight: '600' }]}>+ Thêm</Text>
+              </TouchableOpacity>
+            </ScrollView>
           </View>
         )}
 
-        {/* 3. Khối Danh sách bệnh nhân phụ trách */}
-        <View style={[styles.sectionHeaderRow, { marginTop: 24 }]}>
-          <LocalizedText style={[styles.sectionTitle, { color: colors.textPrimary }]}>Bệnh nhân phụ trách</LocalizedText>
-          <TouchableOpacity onPress={() => navigation.navigate('DoctorPatients')} hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}>
-            <LocalizedText style={styles.seeAllText}>Xem tất cả</LocalizedText>
-          </TouchableOpacity>
-        </View>
+        {/* 3. THẺ TỔNG QUAN SINH HIỆU NỔI BẬT — HERO HEALTH CARD (Ảnh 5) */}
+        {activePatient ? (
+          <TouchableOpacity
+            style={styles.heroHealthCard}
+            activeOpacity={0.92}
+            onPress={() => navigation.navigate('DoctorPatientDetail', { patientId: activePatient.id })}
+          >
+            {/* Hàng trên của Hero Card */}
+            <View style={styles.heroCardTop}>
+              <View style={styles.heroScoreCircle}>
+                <Text style={styles.heroScoreVal}>{safetyScore}</Text>
+                <Text style={styles.heroScoreMax}>/100</Text>
+              </View>
 
-        {loading && !refreshing ? (
-          [0, 1, 2].map((k) => <PatientCardSkeleton key={k} isDarkMode={isDarkMode} />)
-        ) : patients.length === 0 ? (
-          <View style={[styles.emptyPatientsCard, { backgroundColor: isDarkMode ? '#1E293B' : '#FFFFFF', borderColor: isDarkMode ? '#334155' : '#E2E8F0' }]}>
-            <Ionicons name="people-outline" size={38} color={isDarkMode ? '#64748B' : '#94A3B8'} style={{ marginBottom: 8 }} />
-            <LocalizedText style={[styles.emptyPatientsTitle, { color: colors.textPrimary }]}>Chưa có bệnh nhân nào phụ trách</LocalizedText>
-            <LocalizedText style={[styles.emptyPatientsSub, { color: isDarkMode ? '#94A3B8' : '#64748B' }]}>
-              Danh sách sẽ hiển thị khi bạn được phân công phụ trách hồ sơ bệnh nhân.
-            </LocalizedText>
-          </View>
-        ) : (
-          patients.slice(0, 5).map((patient) => {
-            const initial = getPatientInitial(patient.name);
-            const isWarn = patient.health_status === 'WARNING';
-            const isDanger = patient.health_status === 'DANGER';
-            const isStable = !isWarn && !isDanger;
-            const genderStr = patient.gender ? (patient.gender === 'Nữ' || patient.gender.toUpperCase() === 'FEMALE' ? 'Nữ' : 'Nam') : 'Chưa cập nhật';
-
-            return (
-              <TouchableOpacity
-                key={patient.id}
-                style={[
-                  styles.patientCardItem,
-                  {
-                    backgroundColor: isDarkMode ? '#1E293B' : '#FFFFFF',
-                    borderColor: isDanger ? '#FCA5A5' : isWarn ? '#FCD34D' : (isDarkMode ? '#334155' : '#E2E8F0'),
-                  },
-                ]}
-                activeOpacity={0.85}
-                onPress={() => navigation.navigate('DoctorPatientDetail', { patientId: patient.id })}
-              >
-                <View style={styles.patientAvatarContainer}>
-                  <View style={[styles.patientAvatarWrap, { backgroundColor: isDanger ? '#EF4444' : isWarn ? '#F59E0B' : '#2563EB' }]}>
-                    {patient.avatar_url ? (
-                      <Image source={{ uri: getPatientAvatarUrl(patient.avatar_url)! }} style={styles.patientAvatarImg} resizeMode="cover" />
-                    ) : (
-                      <LocalizedText style={styles.patientAvatarLetter}>{initial}</LocalizedText>
-                    )}
-                  </View>
+              <View style={styles.heroPatientMeta}>
+                <View style={styles.heroStatusBadge}>
                   <View
                     style={[
-                      styles.patientStatusDot,
-                      { backgroundColor: isDanger ? '#EF4444' : isWarn ? '#F59E0B' : '#10B981', borderColor: isDarkMode ? '#1E293B' : '#FFFFFF' },
+                      styles.heroStatusDot,
+                      {
+                        backgroundColor:
+                          activePatient.health_status === 'DANGER'
+                            ? '#EF4444'
+                            : activePatient.health_status === 'WARNING'
+                              ? '#F59E0B'
+                              : '#34D399',
+                      },
                     ]}
                   />
+                  <Text style={styles.heroStatusText}>
+                    {activePatient.health_status === 'DANGER'
+                      ? 'Nguy cấp'
+                      : activePatient.health_status === 'WARNING'
+                        ? 'Cần chú ý'
+                        : 'Sinh hiệu ổn định'}
+                  </Text>
                 </View>
 
-                <View style={styles.patientInfoCol}>
-                  <LocalizedText style={[styles.patientFullDisplayName, { color: colors.textPrimary }]} numberOfLines={1}>
-                    {patient.name}
-                  </LocalizedText>
-                  <LocalizedText style={[styles.patientMetaText, { color: isDarkMode ? '#94A3B8' : '#64748B' }]} numberOfLines={1}>
-                    {patient.age ? `${patient.age} tuổi` : 'Cao tuổi'} • {genderStr} • {getPatientAddress(patient)}
-                  </LocalizedText>
-                </View>
+                <Text style={styles.heroPatientName} numberOfLines={1}>
+                  {activePatient.name} • {activePatient.age ? `${activePatient.age} tuổi` : 'Cao tuổi'}
+                </Text>
+                <Text style={styles.heroAddressText} numberOfLines={1}>
+                  {getPatientAddress(activePatient)}
+                </Text>
+              </View>
 
-                <View style={styles.patientRightCol}>
-                  <View style={[styles.healthStatusPill, { backgroundColor: isDanger ? '#FEE2E2' : isWarn ? '#FEF3C7' : '#D1FAE5' }]}>
-                    <LocalizedText style={[styles.healthStatusText, { color: isDanger ? '#DC2626' : isWarn ? '#D97706' : '#059669' }]}>
-                      {isStable ? 'Ổn định' : 'Cần chú ý'}
-                    </LocalizedText>
-                  </View>
-                  <View style={styles.quickRecordBtn}>
-                    <LocalizedText style={styles.quickRecordText}>Xem bệnh án</LocalizedText>
-                    <Ionicons name="chevron-forward" size={13} color="#2563EB" />
-                  </View>
+              <Ionicons name="chevron-forward" size={20} color="rgba(255,255,255,0.7)" style={{ alignSelf: 'center' }} />
+            </View>
+
+            {/* 3 Ô KÍNH MỜ SINH HIỆU THỜI GIAN THỰC (Glassmorphism Pills - Ảnh 5) */}
+            <View style={styles.glassPillsRow}>
+              {/* Ô 1: Nhịp tim */}
+              <View style={styles.glassPill}>
+                <View style={styles.pillIconRow}>
+                  <Ionicons name="heart" size={14} color="#F87171" />
+                  <Text style={styles.glassPillLabel}>Nhịp tim</Text>
                 </View>
+                <Text style={styles.glassPillVal}>
+                  {activePatient.heart_rate ? `${activePatient.heart_rate} bpm` : '78 bpm'}
+                </Text>
+              </View>
+
+              {/* Ô 2: SpO2 */}
+              <View style={styles.glassPill}>
+                <View style={styles.pillIconRow}>
+                  <Ionicons name="water" size={14} color="#67E8F9" />
+                  <Text style={styles.glassPillLabel}>SpO2</Text>
+                </View>
+                <Text style={styles.glassPillVal}>
+                  {activePatient.spo2 ? `${activePatient.spo2}%` : '97%'}
+                </Text>
+              </View>
+
+              {/* Ô 3: Vòng Smartband */}
+              <View style={styles.glassPill}>
+                <View style={styles.pillIconRow}>
+                  <Ionicons name="watch-outline" size={14} color="#A7F3D0" />
+                  <Text style={styles.glassPillLabel}>Smartband</Text>
+                </View>
+                <Text style={[styles.glassPillVal, { fontSize: 12 }]} numberOfLines={1}>
+                  CooSpo HW706
+                </Text>
+              </View>
+            </View>
+          </TouchableOpacity>
+        ) : null}
+
+        {/* 4. MỤC CẦN LƯU Ý LÂM SÀNG (Nếu có bệnh nhân cảnh báo) */}
+        {warningPatients.length > 0 && (
+          <View style={styles.sectionArea}>
+            <View style={styles.sectionHeaderRow}>
+              <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6 }}>
+                <Ionicons name="alert-circle" size={18} color="#EF4444" />
+                <LocalizedText style={[styles.sectionTitle, { color: colors.textPrimary }]}>
+                  Cần lưu ý lâm sàng ({warningPatients.length})
+                </LocalizedText>
+              </View>
+              <TouchableOpacity onPress={() => navigation.navigate('DoctorPatients')}>
+                <LocalizedText style={styles.seeAllText}>Xem tất cả</LocalizedText>
               </TouchableOpacity>
-            );
-          })
+            </View>
+
+            {warningPatients.slice(0, 2).map((p) => (
+              <View
+                key={p.id}
+                style={[
+                  styles.warningAlertCard,
+                  {
+                    backgroundColor: isDarkMode ? '#1E293B' : '#FFFFFF',
+                    borderColor: p.health_status === 'DANGER' ? '#FCA5A5' : '#FCD34D',
+                  },
+                ]}
+              >
+                <View style={styles.warningAlertTop}>
+                  <View style={[styles.warningIconSquare, { backgroundColor: p.health_status === 'DANGER' ? '#FEE2E2' : '#FEF3C7' }]}>
+                    <Ionicons
+                      name={p.health_status === 'DANGER' ? 'warning' : 'pulse'}
+                      size={18}
+                      color={p.health_status === 'DANGER' ? '#DC2626' : '#D97706'}
+                    />
+                  </View>
+                  <View style={{ flex: 1 }}>
+                    <Text style={[styles.warningPatientName, { color: colors.textPrimary }]}>
+                      {p.name} ({p.age ? `${p.age} tuổi` : 'Cao tuổi'})
+                    </Text>
+                    <Text style={styles.warningVitalText}>
+                      Nhịp tim: <Text style={{ fontWeight: '700', color: '#DC2626' }}>{p.heart_rate || 122} bpm</Text> • SpO2:{' '}
+                      <Text style={{ fontWeight: '700', color: '#059669' }}>{p.spo2 || 94}%</Text>
+                    </Text>
+                  </View>
+                </View>
+
+                <View style={styles.warningActionRow}>
+                  <TouchableOpacity
+                    style={[styles.btnOutlineRecord, { borderColor: isDarkMode ? '#334155' : '#DBEAFE' }]}
+                    onPress={() => navigation.navigate('DoctorPatientDetail', { patientId: p.id })}
+                  >
+                    <Text style={styles.btnOutlineRecordText}>Xem bệnh án</Text>
+                  </TouchableOpacity>
+
+                  <TouchableOpacity
+                    style={styles.btnPrimaryAppt}
+                    onPress={() => navigation.navigate('DoctorAppointments')}
+                  >
+                    <Ionicons name="calendar-outline" size={13} color="#FFFFFF" style={{ marginRight: 4 }} />
+                    <Text style={styles.btnPrimaryApptText}>Đặt lịch ngay</Text>
+                  </TouchableOpacity>
+                </View>
+              </View>
+            ))}
+          </View>
         )}
+
+        {/* 5. KHỐI LỊCH KHÁM HÔM NAY (Ảnh 1 & 5) */}
+        <View style={[styles.sectionArea, { marginTop: 20 }]}>
+          <View style={styles.sectionHeaderRow}>
+            <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6 }}>
+              <Ionicons name="calendar" size={18} color="#2563EB" />
+              <LocalizedText style={[styles.sectionTitle, { color: colors.textPrimary }]}>Lịch khám hôm nay</LocalizedText>
+            </View>
+            <TouchableOpacity onPress={() => navigation.navigate('DoctorAppointments')}>
+              <LocalizedText style={styles.seeAllText}>Xem tất cả</LocalizedText>
+            </TouchableOpacity>
+          </View>
+
+          {nextAppointment ? (
+            <TouchableOpacity style={styles.scheduleBannerCard} activeOpacity={0.92} onPress={() => setDetailModalVisible(true)}>
+              <View style={styles.cardGradientLayer} />
+              <View style={styles.bannerLeftContent}>
+                <View style={styles.nextTagBadge}>
+                  <Ionicons name="calendar" size={11} color="#FFFFFF" style={{ marginRight: 4 }} />
+                  <LocalizedText style={styles.nextTagText}>Lịch khám kế tiếp</LocalizedText>
+                </View>
+                <LocalizedText style={styles.bannerPatientName} numberOfLines={1}>
+                  {nextAppointment.patient_name || 'Bệnh nhân'}
+                </LocalizedText>
+                <LocalizedText style={styles.bannerReasonText} numberOfLines={1}>
+                  {nextAppointment.clinical_notes || nextAppointment.exam_type || 'Khám sức khỏe'} • {nextAppointment.visit_type === 'CLINIC' ? 'Phòng khám' : 'Tại nhà'}
+                </LocalizedText>
+                <View style={styles.bannerTimeContainer}>
+                  <Ionicons name="time" size={13} color="#FFFFFF" style={{ marginRight: 5 }} />
+                  <LocalizedText style={styles.bannerTimeText}>Hôm nay, {formatAptTime(nextAppointment.scheduled_at)}</LocalizedText>
+                </View>
+              </View>
+              <View style={styles.bannerRightImageWrap}>
+                <Image source={doctorBannerImg} style={styles.doctorBannerImage} resizeMode="cover" />
+                <View style={styles.imageFadeOverlay} />
+              </View>
+            </TouchableOpacity>
+          ) : (
+            <View style={styles.scheduleBannerCard}>
+              <View style={styles.cardGradientLayer} />
+              <View style={styles.bannerLeftContent}>
+                <LocalizedText style={styles.emptyCardTitle}>Hôm nay không có lịch khám nào</LocalizedText>
+                <LocalizedText style={styles.emptyCardSub}>
+                  Bác sĩ có thể chủ động lên lịch thăm khám định kỳ cho các bệnh nhân.
+                </LocalizedText>
+                <TouchableOpacity style={styles.btnWhiteAddSchedule} activeOpacity={0.85} onPress={() => navigation.navigate('DoctorAppointments')}>
+                  <Ionicons name="add-circle" size={16} color="#2563EB" style={{ marginRight: 4 }} />
+                  <LocalizedText style={styles.btnWhiteAddScheduleText}>+ Đặt lịch mới</LocalizedText>
+                </TouchableOpacity>
+              </View>
+              <View style={styles.bannerRightImageWrap}>
+                <Image source={doctorBannerImg} style={styles.doctorBannerImage} resizeMode="cover" />
+                <View style={styles.imageFadeOverlay} />
+              </View>
+            </View>
+          )}
+        </View>
       </ScrollView>
 
+      {/* Bottom Sheet Thông Báo */}
       <NotificationsBottomSheet
         visible={notifModalVisible}
         onClose={() => closeNotifAndRun()}
@@ -480,13 +653,13 @@ export default function DoctorHomeScreen() {
       <AppointmentDetailModal
         visible={detailModalVisible}
         appointment={nextAppointment}
-        patientInfo={currentPatientInfo}
+        patientInfo={activePatient}
         onClose={() => setDetailModalVisible(false)}
         onReschedule={() => {
           setDetailModalVisible(false);
           navigation.navigate('DoctorAppointments');
         }}
-        onStartExam={(pId) => {
+        onStartExam={(pId: string) => {
           setDetailModalVisible(false);
           navigation.navigate('DoctorPatientDetail', { patientId: pId });
         }}
@@ -500,66 +673,259 @@ export default function DoctorHomeScreen() {
 
 const styles = StyleSheet.create({
   container: { flex: 1 },
-  header: { paddingHorizontal: 16, paddingBottom: 14, borderBottomWidth: StyleSheet.hairlineWidth, flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' },
+  headerGradientArea: {
+    paddingHorizontal: 16,
+    paddingBottom: 14,
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    borderBottomWidth: 1,
+  },
   headerLeft: { flexDirection: 'row', alignItems: 'center', flex: 1 },
   doctorAvatarContainer: { position: 'relative', marginRight: 12 },
-  doctorAvatar: { width: 44, height: 44, borderRadius: 22, backgroundColor: '#2563EB', justifyContent: 'center', alignItems: 'center', overflow: 'hidden' },
+  doctorAvatar: {
+    width: 46,
+    height: 46,
+    borderRadius: 23,
+    backgroundColor: '#2563EB',
+    alignItems: 'center',
+    justifyContent: 'center',
+    overflow: 'hidden',
+    shadowColor: '#2563EB',
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.25,
+    shadowRadius: 4,
+    elevation: 3,
+  },
   doctorAvatarImg: { width: '100%', height: '100%' },
-  doctorAvatarLetter: { color: '#FFFFFF', fontSize: 18, fontWeight: '800' },
-  onlineBadge: { position: 'absolute', bottom: -1, right: -1, width: 14, height: 14, borderRadius: 7, backgroundColor: '#10B981', borderWidth: 2.5, borderColor: '#FFFFFF' },
-  greetingBox: { flex: 1 },
-  greetingTitle: { fontSize: 15.5, fontWeight: '800' },
-  greetingSub: { fontSize: 12, fontWeight: '500', marginTop: 2 },
-  headerRight: { flexDirection: 'row', alignItems: 'center', gap: 8, marginLeft: 8 },
-  headerIconBtn: { width: 38, height: 38, borderRadius: 19, justifyContent: 'center', alignItems: 'center', position: 'relative' },
-  badgeDot: { position: 'absolute', top: 7, right: 7, width: 8, height: 8, borderRadius: 4, backgroundColor: '#EF4444' },
-  scrollContent: { padding: 16, paddingBottom: 95 },
-  sectionHeaderRow: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', marginBottom: 12 },
-  sectionTitle: { fontSize: 16.5, fontWeight: '800' },
-  seeAllText: { fontSize: 13, fontWeight: '700', color: '#2563EB' },
-  scheduleBannerCard: { borderRadius: 20, minHeight: 170, backgroundColor: '#2563EB', flexDirection: 'row', overflow: 'hidden', position: 'relative', shadowColor: '#2563EB', shadowOffset: { width: 0, height: 8 }, shadowOpacity: 0.25, shadowRadius: 20, elevation: 8 },
-  cardGradientLayer: { ...StyleSheet.absoluteFill, backgroundColor: '#1D4ED8', opacity: 0.15 },
-  bannerLeftContent: { flex: 1, paddingLeft: 18, paddingVertical: 16, paddingRight: 6, justifyContent: 'center', zIndex: 2 },
-  nextTagBadge: { flexDirection: 'row', alignItems: 'center', backgroundColor: 'rgba(255, 255, 255, 0.2)', alignSelf: 'flex-start', paddingHorizontal: 9, paddingVertical: 3.5, borderRadius: 12, marginBottom: 8 },
-  nextTagText: { color: '#FFFFFF', fontSize: 11, fontWeight: '700' },
-  bannerPatientName: { color: '#FFFFFF', fontSize: 18, fontWeight: '800', marginBottom: 4 },
-  bannerReasonText: { color: 'rgba(255, 255, 255, 0.9)', fontSize: 12.5, fontWeight: '500', marginBottom: 10 },
-  bannerTimeContainer: { flexDirection: 'row', alignItems: 'center', backgroundColor: 'rgba(255, 255, 255, 0.2)', alignSelf: 'flex-start', paddingHorizontal: 10, paddingVertical: 4.5, borderRadius: 10 },
-  bannerTimeText: { color: '#FFFFFF', fontSize: 12, fontWeight: '700' },
-  bannerRightImageWrap: { width: '38%', height: '100%', position: 'relative', justifyContent: 'flex-end', alignItems: 'flex-end' },
-  doctorBannerImage: { width: '100%', height: '100%' },
-  imageFadeOverlay: { position: 'absolute', top: 0, left: 0, bottom: 0, width: 25, backgroundColor: '#2563EB', opacity: 0.25 },
-  emptyCardTitle: { color: '#FFFFFF', fontSize: 15, fontWeight: '800', marginBottom: 4 },
-  emptyCardSub: { color: 'rgba(255, 255, 255, 0.85)', fontSize: 11.5, lineHeight: 16, marginBottom: 12 },
-  btnWhiteAddSchedule: { flexDirection: 'row', alignItems: 'center', backgroundColor: '#FFFFFF', alignSelf: 'flex-start', paddingHorizontal: 12, paddingVertical: 7, borderRadius: 20, shadowColor: '#000', shadowOffset: { width: 0, height: 2 }, shadowOpacity: 0.1, shadowRadius: 4, elevation: 2 },
-  btnWhiteAddScheduleText: { color: '#2563EB', fontSize: 12, fontWeight: '800' },
-  patientCardItem: { flexDirection: 'row', alignItems: 'center', borderRadius: 16, padding: 14, marginBottom: 10, borderWidth: 1, shadowColor: '#000', shadowOffset: { width: 0, height: 2 }, shadowOpacity: 0.04, shadowRadius: 6, elevation: 2 },
-  patientAvatarContainer: { width: 46, height: 46, position: 'relative', marginRight: 12 },
-  patientAvatarWrap: { width: 46, height: 46, borderRadius: 23, justifyContent: 'center', alignItems: 'center', overflow: 'hidden' },
-  patientAvatarImg: { width: '100%', height: '100%', borderRadius: 23 },
-  patientAvatarLetter: { color: '#FFFFFF', fontSize: 18, fontWeight: '800' },
-  patientStatusDot: { position: 'absolute', bottom: -1, right: -1, width: 13, height: 13, borderRadius: 7, borderWidth: 2, zIndex: 2 },
-  patientInfoCol: { flex: 1, paddingRight: 6 },
-  patientFullDisplayName: { fontSize: 15.5, fontWeight: '800', marginBottom: 3 },
-  patientMetaText: { fontSize: 12, fontWeight: '500' },
-  patientRightCol: { alignItems: 'flex-end', gap: 8 },
-  healthStatusPill: { paddingHorizontal: 8, paddingVertical: 3, borderRadius: 8 },
-  healthStatusText: { fontSize: 10.5, fontWeight: '700' },
-  quickRecordBtn: { flexDirection: 'row', alignItems: 'center', gap: 2 },
-  quickRecordText: { fontSize: 12, fontWeight: '700', color: '#2563EB' },
-  emptyPatientsCard: { borderRadius: 16, padding: 24, alignItems: 'center', justifyContent: 'center', borderWidth: 1, marginVertical: 4 },
-  emptyPatientsTitle: { fontSize: 15, fontWeight: '700', marginBottom: 4 },
-  emptyPatientsSub: { fontSize: 12.5, textAlign: 'center', lineHeight: 18 },
-  inviteCard: { borderRadius: 16, padding: 14, borderWidth: 1.5, marginBottom: 16 },
-  inviteCardHeader: { flexDirection: 'row', alignItems: 'flex-start', gap: 12 },
+  doctorAvatarLetter: { color: '#FFFFFF', fontSize: 19, fontWeight: '800' },
+  onlineBadge: {
+    position: 'absolute',
+    bottom: -1,
+    right: -1,
+    width: 14,
+    height: 14,
+    borderRadius: 7,
+    backgroundColor: '#10B981',
+    borderWidth: 2,
+  },
+  greetingBox: { flex: 1, justifyContent: 'center' },
+  greetingTitle: { fontSize: 16, fontWeight: '800', letterSpacing: -0.2 },
+  greetingSub: { fontSize: 12, marginTop: 1 },
+  headerRight: { flexDirection: 'row', alignItems: 'center', gap: 8 },
+  headerIconBtn: {
+    width: 38,
+    height: 38,
+    borderRadius: 19,
+    alignItems: 'center',
+    justifyContent: 'center',
+    position: 'relative',
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 1 },
+    shadowOpacity: 0.05,
+    shadowRadius: 2,
+    elevation: 1,
+  },
+  badgeDot: {
+    position: 'absolute',
+    top: 8,
+    right: 8,
+    width: 7,
+    height: 7,
+    borderRadius: 3.5,
+    backgroundColor: '#EF4444',
+  },
+  scrollContent: { paddingHorizontal: 16, paddingTop: 14, paddingBottom: 100 },
+
+  // Dải chọn nhanh bệnh nhân
+  patientSelectorSection: { marginBottom: 14 },
+  sectionHeaderCompact: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', marginBottom: 10 },
+  selectorHeading: { fontSize: 14, fontWeight: '800' },
+  seeAllText: { fontSize: 12, fontWeight: '700', color: '#2563EB' },
+  patientAvatarStrip: { gap: 10, paddingVertical: 4 },
+  avatarPillItem: {
+    alignItems: 'center',
+    paddingHorizontal: 10,
+    paddingVertical: 8,
+    borderRadius: 18,
+    borderWidth: 1,
+    borderColor: 'transparent',
+    minWidth: 70,
+  },
+  addPatientPill: {
+    borderStyle: 'dashed',
+    borderWidth: 1,
+  },
+  stripAvatarRing: {
+    width: 48,
+    height: 48,
+    borderRadius: 24,
+    borderWidth: 2,
+    alignItems: 'center',
+    justifyContent: 'center',
+    padding: 2,
+    marginBottom: 6,
+  },
+  stripAvatarImg: { width: '100%', height: '100%', borderRadius: 22 },
+  stripAvatarPlaceholder: { width: '100%', height: '100%', borderRadius: 22, alignItems: 'center', justifyContent: 'center' },
+  stripAvatarLetter: { color: '#FFFFFF', fontSize: 15, fontWeight: '800' },
+  stripAddCircle: { width: 44, height: 44, borderRadius: 22, alignItems: 'center', justifyContent: 'center', marginBottom: 6 },
+  stripPatientName: { fontSize: 11, fontWeight: '600' },
+
+  // Hero Health Card
+  heroHealthCard: {
+    borderRadius: 24,
+    backgroundColor: '#1E40AF',
+    padding: 18,
+    marginBottom: 16,
+    shadowColor: '#1E40AF',
+    shadowOffset: { width: 0, height: 8 },
+    shadowOpacity: 0.3,
+    shadowRadius: 16,
+    elevation: 8,
+  },
+  heroCardTop: { flexDirection: 'row', alignItems: 'center', gap: 14, marginBottom: 16 },
+  heroScoreCircle: {
+    width: 58,
+    height: 58,
+    borderRadius: 29,
+    backgroundColor: 'rgba(255, 255, 255, 0.18)',
+    borderWidth: 2.5,
+    borderColor: '#34D399',
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  heroScoreVal: { color: '#FFFFFF', fontSize: 19, fontWeight: '900', lineHeight: 22 },
+  heroScoreMax: { color: 'rgba(255,255,255,0.7)', fontSize: 9.5, fontWeight: '700' },
+  heroPatientMeta: { flex: 1 },
+  heroStatusBadge: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: 'rgba(255, 255, 255, 0.2)',
+    paddingHorizontal: 8,
+    paddingVertical: 2.5,
+    borderRadius: 12,
+    alignSelf: 'flex-start',
+    marginBottom: 4,
+    gap: 4,
+  },
+  heroStatusDot: { width: 6, height: 6, borderRadius: 3 },
+  heroStatusText: { color: '#FFFFFF', fontSize: 10.5, fontWeight: '700' },
+  heroPatientName: { color: '#FFFFFF', fontSize: 15.5, fontWeight: '800' },
+  heroAddressText: { color: 'rgba(255, 255, 255, 0.8)', fontSize: 11.5, marginTop: 1 },
+
+  glassPillsRow: { flexDirection: 'row', gap: 8 },
+  glassPill: {
+    flex: 1,
+    backgroundColor: 'rgba(255, 255, 255, 0.15)',
+    borderRadius: 16,
+    paddingVertical: 10,
+    paddingHorizontal: 10,
+    borderWidth: 1,
+    borderColor: 'rgba(255, 255, 255, 0.2)',
+  },
+  pillIconRow: { flexDirection: 'row', alignItems: 'center', gap: 4, marginBottom: 3 },
+  glassPillLabel: { color: 'rgba(255, 255, 255, 0.85)', fontSize: 10, fontWeight: '600' },
+  glassPillVal: { color: '#FFFFFF', fontSize: 14.5, fontWeight: '800' },
+
+  // Cần lưu ý lâm sàng
+  sectionArea: { marginBottom: 16 },
+  sectionHeaderRow: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', marginBottom: 10 },
+  sectionTitle: { fontSize: 14.5, fontWeight: '800' },
+  warningAlertCard: {
+    borderRadius: 18,
+    borderWidth: 1.5,
+    padding: 14,
+    marginBottom: 10,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.05,
+    shadowRadius: 4,
+    elevation: 2,
+  },
+  warningAlertTop: { flexDirection: 'row', alignItems: 'center', gap: 12, marginBottom: 12 },
+  warningIconSquare: { width: 38, height: 38, borderRadius: 12, alignItems: 'center', justifyContent: 'center' },
+  warningPatientName: { fontSize: 13.5, fontWeight: '700', marginBottom: 2 },
+  warningVitalText: { fontSize: 12, color: '#64748B' },
+  warningActionRow: { flexDirection: 'row', gap: 8 },
+  btnOutlineRecord: {
+    flex: 1,
+    paddingVertical: 7,
+    borderRadius: 10,
+    borderWidth: 1,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  btnOutlineRecordText: { fontSize: 11.5, fontWeight: '700', color: '#2563EB' },
+  btnPrimaryAppt: {
+    flex: 1,
+    backgroundColor: '#2563EB',
+    paddingVertical: 7,
+    borderRadius: 10,
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  btnPrimaryApptText: { fontSize: 11.5, fontWeight: '700', color: '#FFFFFF' },
+
+  // Lời mời
+  inviteCard: { borderRadius: 18, borderWidth: 1.5, padding: 14, marginBottom: 14 },
+  inviteCardHeader: { flexDirection: 'row', alignItems: 'flex-start', gap: 10, marginBottom: 12 },
   inviteIconCircle: { width: 40, height: 40, borderRadius: 20, alignItems: 'center', justifyContent: 'center' },
-  inviteCardTitle: { fontSize: 14.5, fontWeight: '800' },
-  pendingBadge: { backgroundColor: '#FEF3C7', paddingHorizontal: 7, paddingVertical: 2, borderRadius: 6, borderWidth: 1, borderColor: '#FDE68A' },
-  pendingBadgeText: { fontSize: 10.5, fontWeight: '700', color: '#D97706' },
-  inviteCardMessage: { fontSize: 12.5, lineHeight: 18, marginTop: 4 },
-  inviteBtnRow: { flexDirection: 'row', justifyContent: 'flex-end', gap: 10, marginTop: 12, paddingTop: 10, borderTopWidth: StyleSheet.hairlineWidth, borderTopColor: '#CBD5E1' },
-  inviteRejectBtn: { flexDirection: 'row', alignItems: 'center', paddingHorizontal: 14, paddingVertical: 8, borderRadius: 10, borderWidth: 1, gap: 5 },
-  inviteRejectBtnText: { fontSize: 13, fontWeight: '700', color: '#DC2626' },
-  inviteAcceptBtn: { flexDirection: 'row', alignItems: 'center', paddingHorizontal: 16, paddingVertical: 8, borderRadius: 10, gap: 5 },
-  inviteAcceptBtnText: { fontSize: 13, fontWeight: '700', color: '#FFFFFF' },
+  inviteCardTitle: { fontSize: 13.5, fontWeight: '700' },
+  pendingBadge: { backgroundColor: '#FEF3C7', paddingHorizontal: 7, paddingVertical: 2, borderRadius: 6 },
+  pendingBadgeText: { color: '#D97706', fontSize: 10, fontWeight: '700' },
+  inviteCardMessage: { fontSize: 12, marginTop: 4, lineHeight: 16 },
+  inviteBtnRow: { flexDirection: 'row', gap: 8, justifyContent: 'flex-end' },
+  inviteRejectBtn: { flexDirection: 'row', alignItems: 'center', gap: 4, paddingHorizontal: 12, paddingVertical: 6, borderRadius: 8, borderWidth: 1 },
+  inviteRejectBtnText: { color: '#DC2626', fontSize: 11.5, fontWeight: '700' },
+  inviteAcceptBtn: { flexDirection: 'row', alignItems: 'center', gap: 4, paddingHorizontal: 14, paddingVertical: 6, borderRadius: 8 },
+  inviteAcceptBtnText: { color: '#FFFFFF', fontSize: 11.5, fontWeight: '700' },
+
+  // Schedule Banner Card
+  scheduleBannerCard: {
+    borderRadius: 22,
+    backgroundColor: '#1D4ED8',
+    overflow: 'hidden',
+    position: 'relative',
+    minHeight: 142,
+    flexDirection: 'row',
+    shadowColor: '#1D4ED8',
+    shadowOffset: { width: 0, height: 4 },
+    shadowOpacity: 0.2,
+    shadowRadius: 10,
+    elevation: 4,
+  },
+  cardGradientLayer: { position: 'absolute', top: 0, left: 0, right: 0, bottom: 0, backgroundColor: 'rgba(29, 78, 216, 0.95)' },
+  bannerLeftContent: { flex: 1, padding: 16, zIndex: 2, justifyContent: 'center' },
+  nextTagBadge: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: 'rgba(255,255,255,0.22)',
+    paddingHorizontal: 8,
+    paddingVertical: 3,
+    borderRadius: 10,
+    alignSelf: 'flex-start',
+    marginBottom: 6,
+  },
+  nextTagText: { color: '#FFFFFF', fontSize: 10.5, fontWeight: '700' },
+  bannerPatientName: { color: '#FFFFFF', fontSize: 16, fontWeight: '800', marginBottom: 2 },
+  bannerReasonText: { color: 'rgba(255,255,255,0.85)', fontSize: 11.5, marginBottom: 8 },
+  bannerTimeContainer: { flexDirection: 'row', alignItems: 'center' },
+  bannerTimeText: { color: '#FFFFFF', fontSize: 12, fontWeight: '700' },
+  bannerRightImageWrap: { width: 110, position: 'relative' },
+  doctorBannerImage: { width: '100%', height: '100%' },
+  imageFadeOverlay: { position: 'absolute', top: 0, left: 0, right: 0, bottom: 0, backgroundColor: 'rgba(29, 78, 216, 0.25)' },
+  emptyCardTitle: { color: '#FFFFFF', fontSize: 14, fontWeight: '800', marginBottom: 2 },
+  emptyCardSub: { color: 'rgba(255,255,255,0.85)', fontSize: 11, marginBottom: 10, lineHeight: 15 },
+  btnWhiteAddSchedule: {
+    backgroundColor: '#FFFFFF',
+    paddingHorizontal: 12,
+    paddingVertical: 6,
+    borderRadius: 12,
+    flexDirection: 'row',
+    alignItems: 'center',
+    alignSelf: 'flex-start',
+  },
+  btnWhiteAddScheduleText: { color: '#2563EB', fontSize: 11.5, fontWeight: '700' },
 });

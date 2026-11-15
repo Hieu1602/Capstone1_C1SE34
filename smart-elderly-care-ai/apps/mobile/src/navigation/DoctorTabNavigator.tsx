@@ -1,10 +1,12 @@
 // DoctorTabNavigator.tsx
-// 4-Tab Taskbar chuyên dụng dành riêng cho Bác sĩ gia đình (Icon-only, căn đều, hiệu ứng active rõ ràng)
+// Thanh điều hướng đáy dạng nổi bo tròn mềm (Floating Bottom Tab Bar - Lấy cảm hứng Ảnh 2)
+// Tab đang chọn hiển thị dạng viên thuốc xanh dương (#2563EB) nổi bật kèm tên tab
 
 import React from 'react';
-import { View, StyleSheet, Platform } from 'react-native';
+import { View, Text, StyleSheet, Platform } from 'react-native';
 import { createBottomTabNavigator } from '@react-navigation/bottom-tabs';
 import { Ionicons } from '@expo/vector-icons';
+import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
 import { useTheme } from '../store/useThemeStore';
 
@@ -17,6 +19,21 @@ const Tab = createBottomTabNavigator();
 
 export default function DoctorTabNavigator() {
   const { isDarkMode, colors } = useTheme();
+  const insets = useSafeAreaInsets();
+
+  const tabLabels: Record<string, string> = {
+    DoctorHome: 'Trang chủ',
+    DoctorAppointments: 'Lịch khám',
+    DoctorPatients: 'Bệnh nhân',
+    DoctorProfile: 'Cài đặt',
+  };
+
+  const tabIcons: Record<string, { active: keyof typeof Ionicons.glyphMap; inactive: keyof typeof Ionicons.glyphMap }> = {
+    DoctorHome: { active: 'home', inactive: 'home-outline' },
+    DoctorAppointments: { active: 'calendar', inactive: 'calendar-outline' },
+    DoctorPatients: { active: 'people', inactive: 'people-outline' },
+    DoctorProfile: { active: 'settings', inactive: 'settings-outline' },
+  };
 
   return (
     <Tab.Navigator
@@ -24,54 +41,40 @@ export default function DoctorTabNavigator() {
       backBehavior="history"
       screenOptions={({ route }) => ({
         headerShown: false,
-        tabBarShowLabel: false, // Ẩn hoàn toàn nhãn chữ theo yêu cầu
+        tabBarShowLabel: false,
         tabBarHideOnKeyboard: true,
         tabBarStyle: [
           styles.tabBar,
           {
-            backgroundColor: colors.card,
-            borderTopColor: colors.border,
+            backgroundColor: isDarkMode ? '#1E293B' : '#FFFFFF',
+            borderColor: isDarkMode ? '#334155' : 'rgba(226, 232, 240, 0.8)',
+            bottom: Platform.OS === 'ios' ? Math.max(insets.bottom, 12) : 14,
           },
         ],
-        tabBarActiveTintColor: '#0284C7',
-        tabBarInactiveTintColor: isDarkMode ? '#64748B' : '#94A3B8',
         tabBarItemStyle: styles.tabBarItem,
-        tabBarIcon: ({ focused, color }) => {
-          let iconName: any = 'ellipse';
+        tabBarIcon: ({ focused }) => {
+          const icons = tabIcons[route.name] || { active: 'ellipse', inactive: 'ellipse-outline' };
+          const iconName = focused ? icons.active : icons.inactive;
+          const label = tabLabels[route.name] || '';
 
-          // 1. Trang chủ (Home)
-          if (route.name === 'DoctorHome') {
-            iconName = focused ? 'home' : 'home-outline';
-          }
-          // 2. Lịch khám (Calendar)
-          else if (route.name === 'DoctorAppointments') {
-            iconName = focused ? 'calendar' : 'calendar-outline';
-          }
-          // 3. Bệnh nhân (Users / People)
-          else if (route.name === 'DoctorPatients') {
-            iconName = focused ? 'people' : 'people-outline';
-          }
-          // 4. Cài đặt (Settings / Cog)
-          else if (route.name === 'DoctorProfile') {
-            iconName = focused ? 'settings' : 'settings-outline';
+          if (focused) {
+            return (
+              <View style={styles.activePill}>
+                <Ionicons name={iconName} size={18} color="#FFFFFF" />
+                <Text style={styles.activePillText} numberOfLines={1}>
+                  {label}
+                </Text>
+              </View>
+            );
           }
 
           return (
-            <View
-              style={[
-                styles.iconWrapper,
-                focused && {
-                  backgroundColor: isDarkMode ? '#0284C72B' : '#E0F2FE',
-                },
-              ]}
-            >
+            <View style={styles.inactiveIconWrap}>
               <Ionicons
                 name={iconName}
-                size={focused ? 24 : 22}
-                color={focused ? '#0284C7' : color}
+                size={22}
+                color={isDarkMode ? '#94A3B8' : '#64748B'}
               />
-              {/* Chỉ báo active tinh tế */}
-              {focused && <View style={styles.activeDot} />}
             </View>
           );
         },
@@ -94,34 +97,52 @@ export default function DoctorTabNavigator() {
 
 const styles = StyleSheet.create({
   tabBar: {
-    height: Platform.OS === 'ios' ? 84 : 68,
-    paddingTop: 8,
-    paddingBottom: Platform.OS === 'ios' ? 24 : 10,
-    borderTopWidth: StyleSheet.hairlineWidth,
-    elevation: 8,
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: -2 },
-    shadowOpacity: 0.06,
-    shadowRadius: 6,
+    position: 'absolute',
+    left: 16,
+    right: 16,
+    height: 64,
+    borderRadius: 36,
+    borderWidth: 1,
+    paddingHorizontal: 8,
+    paddingVertical: 0,
+    alignItems: 'center',
+    justifyContent: 'space-around',
+    elevation: 12,
+    shadowColor: '#0F172A',
+    shadowOffset: { width: 0, height: 6 },
+    shadowOpacity: 0.12,
+    shadowRadius: 16,
   },
   tabBarItem: {
+    height: 64,
     alignItems: 'center',
     justifyContent: 'center',
   },
-  iconWrapper: {
-    width: 52,
-    height: 40,
-    borderRadius: 20,
+  activePill: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: '#2563EB',
+    paddingHorizontal: 14,
+    paddingVertical: 8,
+    borderRadius: 24,
+    shadowColor: '#2563EB',
+    shadowOffset: { width: 0, height: 3 },
+    shadowOpacity: 0.28,
+    shadowRadius: 6,
+    elevation: 4,
+    gap: 6,
+  },
+  activePillText: {
+    color: '#FFFFFF',
+    fontSize: 12.5,
+    fontWeight: '700',
+    letterSpacing: 0.2,
+  },
+  inactiveIconWrap: {
+    width: 44,
+    height: 44,
+    borderRadius: 22,
     alignItems: 'center',
     justifyContent: 'center',
-    position: 'relative',
-  },
-  activeDot: {
-    position: 'absolute',
-    bottom: 3,
-    width: 4,
-    height: 4,
-    borderRadius: 2,
-    backgroundColor: '#0284C7',
   },
 });

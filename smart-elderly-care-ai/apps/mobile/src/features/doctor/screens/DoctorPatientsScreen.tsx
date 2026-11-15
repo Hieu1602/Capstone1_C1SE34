@@ -128,7 +128,7 @@ export default function DoctorPatientsScreen() {
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
   const [searchQuery, setSearchQuery] = useState('');
-  const [filterTab, setFilterTab] = useState<'ALL' | 'WARNING' | 'NORMAL'>('ALL');
+  const [filterTab, setFilterTab] = useState<'ALL' | 'DANGER' | 'WARNING' | 'NORMAL'>('ALL');
 
   // Modal Đặt lịch hẹn nhanh cho bệnh nhân từ Card
   const [appointmentModalVisible, setAppointmentModalVisible] = useState(false);
@@ -196,15 +196,16 @@ export default function DoctorPatientsScreen() {
       if (!matchesName && !matchesHouse && !matchesCondition && !matchesPhone) return false;
     }
 
-    if (filterTab === 'WARNING') return p.health_status === 'WARNING' || p.health_status === 'DANGER';
+    if (filterTab === 'DANGER') return p.health_status === 'DANGER';
+    if (filterTab === 'WARNING') return p.health_status === 'WARNING';
     if (filterTab === 'NORMAL') return p.health_status === 'NORMAL';
     return true;
   });
 
   const totalPatients = patients.length;
-  const warningCount = patients.filter(
-    (p) => p.health_status === 'WARNING' || p.health_status === 'DANGER'
-  ).length;
+  const dangerCount = patients.filter((p) => p.health_status === 'DANGER').length;
+  const warningCount = patients.filter((p) => p.health_status === 'WARNING').length;
+  const normalCount = patients.filter((p) => p.health_status === 'NORMAL').length;
 
   const handleViewDetail = (patientId: string) => {
     navigation.navigate('DoctorPatientDetail', { patientId });
@@ -277,6 +278,8 @@ export default function DoctorPatientsScreen() {
         userName={userName}
         totalPatients={totalPatients}
         warningCount={warningCount}
+        dangerCount={dangerCount}
+        normalCount={normalCount}
         searchQuery={searchQuery}
         filterTab={filterTab}
         onChangeSearch={setSearchQuery}
@@ -365,7 +368,7 @@ const styles = StyleSheet.create({
   container: { flex: 1 },
   listContent: {
     padding: 16,
-    paddingBottom: 95,
+    paddingBottom: 120,
   },
   skeletonCard: {
     borderRadius: 14,

@@ -101,19 +101,46 @@ export const DoctorProfileCard: React.FC<DoctorProfileCardProps> = ({
   const mutedText = isDarkMode ? '#94A3B8' : '#64748B';
   const blueBadgeStyle = { backgroundColor: isDarkMode ? '#1E3A8A33' : '#EFF6FF', borderColor: isDarkMode ? '#1E3A8A' : '#BFDBFE', borderWidth: 1 };
 
+  // 3 Ô THỐNG KÊ BO TRÒN (Lấy cảm hứng từ màn hình Dr. Omara ở Ảnh 1)
   const stats = [
-    { icon: 'people' as const, bg: isDarkMode ? '#0C4A6E44' : '#EFF6FF', color: '#0284C7', valColor: isDarkMode ? '#38BDF8' : '#0284C7', heading: 'Bệnh nhân', value: patientCount, sub: 'Theo dõi sức khỏe' },
-    { icon: 'calendar' as const, bg: isDarkMode ? '#134E4A44' : '#F0FDFA', color: '#0D9488', valColor: isDarkMode ? '#2DD4BF' : '#0D9488', heading: 'Lịch khám', value: appointmentCount, sub: 'Ca khám bệnh' },
+    {
+      icon: 'people' as const,
+      bg: isDarkMode ? '#1E3A8A33' : '#EFF6FF',
+      color: '#2563EB',
+      valColor: isDarkMode ? '#60A5FA' : '#1D4ED8',
+      heading: 'Bệnh nhân',
+      value: patientCount,
+      sub: 'Đang theo dõi',
+    },
+    {
+      icon: 'calendar' as const,
+      bg: isDarkMode ? '#2E106533' : '#F5F3FF',
+      color: '#7C3AED',
+      valColor: isDarkMode ? '#C084FC' : '#6D28D9',
+      heading: 'Ca khám',
+      value: appointmentCount,
+      sub: 'Đã phụ trách',
+    },
+    {
+      icon: 'ribbon' as const,
+      bg: isDarkMode ? '#064E3B33' : '#ECFDF5',
+      color: '#059669',
+      valColor: isDarkMode ? '#34D399' : '#047857',
+      heading: 'Chứng chỉ',
+      value: 'Đã cấp',
+      sub: '10+ năm KN',
+    },
   ];
 
   const licenseRows = [
     { label: 'Số CCHN:', badge: info.cchn_number || '028491/BYT-CCHN' },
     { label: 'Khoa / Phòng:', val: info.department || 'Khoa Chăm sóc Người cao tuổi', color: colors.textPrimary },
-    { label: 'SĐT liên hệ trực:', val: maskPhone(info.phone), color: '#0284C7', bold: true },
+    { label: 'SĐT liên hệ trực:', val: maskPhone(info.phone), color: '#2563EB', bold: true },
   ];
 
   return (
     <View style={{ marginBottom: 16 }}>
+      {/* HEADER HỒ SƠ BÁC SĨ (Ảnh 1 - Dr. Omara) */}
       <View style={[styles.heroCard, cardSurface]}>
         <View style={styles.heroTopRow}>
           <View style={{ alignItems: 'center' }}>
@@ -123,7 +150,7 @@ export const DoctorProfileCard: React.FC<DoctorProfileCardProps> = ({
               </View>
               <View style={styles.heroOnlineBadge} />
               <View style={[styles.heroCameraBadge, { backgroundColor: isDarkMode ? '#0F172A' : '#FFFFFF', borderColor: isDarkMode ? '#334155' : '#CBD5E1' }]}>
-                <Ionicons name="camera" size={11} color="#0284C7" />
+                <Ionicons name="camera" size={12} color="#2563EB" />
               </View>
             </TouchableOpacity>
             {Boolean(avatarUri) && Boolean(onResetAvatar) && (
@@ -134,52 +161,60 @@ export const DoctorProfileCard: React.FC<DoctorProfileCardProps> = ({
           </View>
 
           <View style={styles.heroInfoCol}>
-            <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: 6, marginBottom: 4 }}>
+            <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: 6, marginBottom: 5 }}>
               <View style={[styles.verifiedBadge, { backgroundColor: isDarkMode ? '#064E3B44' : '#ECFDF5', borderColor: isDarkMode ? '#059669' : '#A7F3D0' }]}>
                 <Ionicons name="shield-checkmark" size={12} color="#059669" style={{ marginRight: 4 }} />
                 <Text style={styles.verifiedBadgeText}>Đã xác minh CCHN</Text>
               </View>
               <View style={[styles.verifiedBadge, { backgroundColor: isDarkMode ? '#1E3A8A44' : '#EFF6FF', borderColor: isDarkMode ? '#2563EB' : '#BFDBFE' }]}>
                 <Ionicons name="phone-portrait-outline" size={11} color="#2563EB" style={{ marginRight: 3 }} />
-                <Text style={[styles.verifiedBadgeText, { color: '#2563EB' }]}>App ĐT + Web MT</Text>
+                <Text style={[styles.verifiedBadgeText, { color: '#2563EB' }]}>Web & App</Text>
               </View>
             </View>
-            <Text style={[styles.heroDocName, { color: colors.textPrimary }]} numberOfLines={1}>{info.name || 'Bác sĩ'}</Text>
-            <Text style={[styles.heroDocDegree, { color: isDarkMode ? '#38BDF8' : '#0284C7' }]} numberOfLines={1}>{info.degree || 'Bác sĩ chuyên khoa'}</Text>
-            <Text style={[styles.heroDocSpecialty, { color: mutedText }]} numberOfLines={1}>{info.specialty || 'Y học Gia đình & Lão khoa'}</Text>
+            <Text style={[styles.heroDocName, { color: colors.textPrimary }]} numberOfLines={1}>{info.name || 'BS. Trần Văn Minh'}</Text>
+            <Text style={[styles.heroDocDegree, { color: isDarkMode ? '#60A5FA' : '#2563EB' }]} numberOfLines={1}>{info.degree || 'Bác sĩ chuyên khoa Lão khoa'}</Text>
+            <Text style={[styles.heroDocSpecialty, { color: mutedText }]} numberOfLines={1}>{info.specialty || 'Y học Gia đình & Chăm sóc Người cao tuổi'}</Text>
           </View>
         </View>
 
+        {/* HÀNG 3 Ô THỐNG KÊ BO TRÒN (Ảnh 1 - Dr. Omara) */}
+        <View style={styles.statsThreeColRow}>
+          {stats.map((s) => (
+            <View
+              key={s.heading}
+              style={[
+                styles.statCardThreeCol,
+                {
+                  backgroundColor: isDarkMode ? '#0F172A' : s.bg,
+                  borderColor: isDarkMode ? '#334155' : 'transparent',
+                },
+              ]}
+            >
+              <View style={[styles.statIconBoxSmall, { backgroundColor: isDarkMode ? '#1E293B' : '#FFFFFF' }]}>
+                <Ionicons name={s.icon} size={15} color={s.color} />
+              </View>
+              <Text style={[styles.statCardValueSmall, { color: s.valColor }]}>{s.value}</Text>
+              <Text style={[styles.statCardHeadingSmall, { color: mutedText }]}>{s.heading}</Text>
+            </View>
+          ))}
+        </View>
+
         <TouchableOpacity
-          style={[styles.heroEditButton, { backgroundColor: isDarkMode ? '#0C4A6E44' : '#EFF6FF', borderColor: isDarkMode ? '#0284C7' : '#BAE6FD' }]}
+          style={[styles.heroEditButton, { backgroundColor: isDarkMode ? '#1E3A8A33' : '#EFF6FF', borderColor: isDarkMode ? '#2563EB55' : '#BFDBFE' }]}
           onPress={onEditProfile}
           activeOpacity={0.8}
         >
-          <Ionicons name="create-outline" size={17} color={isDarkMode ? '#38BDF8' : '#0284C7'} style={{ marginRight: 6 }} />
-          <Text style={[styles.heroEditButtonText, { color: isDarkMode ? '#38BDF8' : '#0284C7' }]}>Chỉnh sửa thông tin bác sĩ</Text>
+          <Ionicons name="create-outline" size={16} color="#2563EB" style={{ marginRight: 6 }} />
+          <Text style={[styles.heroEditButtonText, { color: '#2563EB' }]}>Chỉnh sửa thông tin bác sĩ</Text>
         </TouchableOpacity>
       </View>
 
-      <View style={styles.statsTwoColRow}>
-        {stats.map((s) => (
-          <View key={s.heading} style={[styles.statCardTwoCol, cardSurface]}>
-            <View style={styles.statCardHeader}>
-              <View style={[styles.statIconBox, { backgroundColor: s.bg }]}>
-                <Ionicons name={s.icon} size={17} color={s.color} />
-              </View>
-              <Text style={[styles.statCardHeading, { color: mutedText }]}>{s.heading}</Text>
-            </View>
-            <Text style={[styles.statCardValue, { color: s.valColor }]}>{s.value}</Text>
-            <Text style={[styles.statCardSub, { color: isDarkMode ? '#64748B' : '#94A3B8' }]}>{s.sub}</Text>
-          </View>
-        ))}
-      </View>
-
+      {/* THÔNG TIN HÀNH NGHỀ & PHÁP LÝ */}
       <View style={[styles.licenseCard, cardSurface]}>
         <View style={styles.licenseHeader}>
           <View style={[styles.rowCenter, { gap: 8 }]}>
             <View style={[styles.ribbonIconCircle, { backgroundColor: isDarkMode ? '#1E3A8A33' : '#EFF6FF' }]}>
-              <Ionicons name="ribbon-outline" size={16} color="#0284C7" />
+              <Ionicons name="ribbon-outline" size={16} color="#2563EB" />
             </View>
             <Text style={[styles.licenseSectionTitle, { color: colors.textPrimary }]}>THÔNG TIN HÀNH NGHỀ & PHÁP LÝ</Text>
           </View>
@@ -580,6 +615,44 @@ const styles = StyleSheet.create({
   heroEditButton: { flexDirection: 'row', alignItems: 'center', justifyContent: 'center', height: 44, borderRadius: 12, borderWidth: 1 },
   heroEditButtonText: { fontSize: 13.5, fontWeight: '700' },
   avatarImage: { width: '100%', height: '100%' },
+  statsThreeColRow: {
+    flexDirection: 'row',
+    gap: 8,
+    marginBottom: 14,
+  },
+  statCardThreeCol: {
+    flex: 1,
+    borderRadius: 16,
+    paddingVertical: 12,
+    paddingHorizontal: 8,
+    alignItems: 'center',
+    justifyContent: 'center',
+    borderWidth: 1,
+  },
+  statIconBoxSmall: {
+    width: 28,
+    height: 28,
+    borderRadius: 14,
+    justifyContent: 'center',
+    alignItems: 'center',
+    marginBottom: 6,
+    elevation: 1,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 1 },
+    shadowOpacity: 0.05,
+    shadowRadius: 2,
+  },
+  statCardValueSmall: {
+    fontSize: 15,
+    fontWeight: '800',
+    marginBottom: 2,
+    textAlign: 'center',
+  },
+  statCardHeadingSmall: {
+    fontSize: 10.5,
+    fontWeight: '600',
+    textAlign: 'center',
+  },
   statsTwoColRow: { flexDirection: 'row', gap: 12, marginBottom: 14 },
   statCardTwoCol: { flex: 1, borderRadius: 16, padding: 14, borderWidth: 1, elevation: 1 },
   statCardHeader: { flexDirection: 'row', alignItems: 'center', marginBottom: 8 },

@@ -18,10 +18,24 @@ import { AppointmentItem, PatientCardData, getPatientAvatarUrl } from './types';
 const pad2 = (n: number) => String(n).padStart(2, '0');
 const DAYS_SHORT = ['CN', 'T2', 'T3', 'T4', 'T5', 'T6', 'T7'];
 const STANDARD_EXAM_TYPES = ['Khám định kỳ', 'Tái khám', 'Khám tổng quát', 'Xét nghiệm', 'Khác'];
-const TIME_PICKER_SLOTS = [
-  '07:30', '08:00', '08:30', '09:00', '09:30', '10:00', '10:30', '11:00',
-  '13:30', '14:00', '14:30', '15:00', '15:30', '16:00', '16:30', '17:00',
+const TIME_GROUPS = [
+  {
+    title: 'Buổi sáng (Morning)',
+    icon: 'sunny-outline',
+    slots: ['07:30', '08:00', '08:30', '09:00', '09:30', '10:00', '10:30', '11:00', '11:30'],
+  },
+  {
+    title: 'Buổi chiều (Afternoon)',
+    icon: 'partly-sunny-outline',
+    slots: ['13:30', '14:00', '14:30', '15:00', '15:30', '16:00', '16:30', '17:00'],
+  },
+  {
+    title: 'Buổi tối (Evening)',
+    icon: 'moon-outline',
+    slots: ['17:30', '18:00', '18:30', '19:00', '19:30', '20:00'],
+  },
 ];
+const TIME_PICKER_SLOTS = TIME_GROUPS.flatMap((g) => g.slots);
 
 const formatModalDateTime = (dateStr?: string) => {
   if (!dateStr) return '--:--';
@@ -276,28 +290,55 @@ export const AppointmentFormModal: React.FC<AppointmentFormModalProps> = ({
             {/* 3. Hình thức khám & Địa điểm */}
             <View style={styles.sectionBlock}>
               <SectionTitle icon="medical" label="Hình thức & Địa điểm (*)" />
-              <View style={styles.rowGap10}>
+              <View style={[styles.pillSwitchContainer, { backgroundColor: isDarkMode ? '#0F172A' : '#F1F5F9' }]}>
                 {[
-                  { key: 'HOME_VISIT' as const, label: 'Ở nhà bệnh nhân', icon: 'home' },
-                  { key: 'CLINIC' as const, label: 'Phòng khám bác sĩ', icon: 'business' },
+                  { key: 'HOME_VISIT' as const, label: 'Khám tại nhà (In Person)', icon: 'home' },
+                  { key: 'CLINIC' as const, label: 'Phòng khám SECA (Clinic)', icon: 'business' },
                 ].map((item) => {
                   const active = visitType === item.key;
                   return (
                     <TouchableOpacity
                       key={item.key}
-                      style={[styles.modalityPill, active ? styles.activePill : { backgroundColor: isDarkMode ? '#0F172A' : '#F1F5F9', borderColor: colors.border }]}
+                      style={[
+                        styles.pillSwitchBtn,
+                        active
+                          ? { backgroundColor: '#2563EB', shadowColor: '#2563EB', shadowOffset: { width: 0, height: 2 }, shadowOpacity: 0.25, shadowRadius: 4, elevation: 3 }
+                          : { backgroundColor: 'transparent' },
+                      ]}
                       onPress={() => {
                         onChangeVisitType?.(item.key);
-                        item.key === 'HOME_VISIT' ? applyHomeLocation(selectedPatientObj) : onChangeLocation('Phòng khám Bác sĩ Gia đình');
+                        item.key === 'HOME_VISIT' ? applyHomeLocation(selectedPatientObj) : onChangeLocation('Phòng khám Bác sĩ Gia đình SECA');
                       }}
                     >
-                      <Ionicons name={item.icon as any} size={15} color={active ? '#FFFFFF' : colors.textPrimary} style={{ marginRight: 6 }} />
-                      <LocalizedText style={{ color: active ? '#FFFFFF' : colors.textPrimary, fontSize: 11.5, fontWeight: active ? '700' : '600' }}>{item.label}</LocalizedText>
+                      <Ionicons
+                        name={item.icon as any}
+                        size={15}
+                        color={active ? '#FFFFFF' : (isDarkMode ? '#94A3B8' : '#64748B')}
+                        style={{ marginRight: 6 }}
+                      />
+                      <LocalizedText
+                        style={{
+                          color: active ? '#FFFFFF' : (isDarkMode ? '#94A3B8' : '#64748B'),
+                          fontSize: 12,
+                          fontWeight: active ? '700' : '600',
+                        }}
+                      >
+                        {item.label}
+                      </LocalizedText>
                     </TouchableOpacity>
                   );
                 })}
               </View>
-              <LocalizedTextInput style={[styles.inputField, { marginTop: 8, color: colors.textPrimary, borderColor: colors.border }]} value={location} onChangeText={onChangeLocation} placeholder="Địa chỉ nhà cụ hoặc phòng khám..." placeholderTextColor="#94A3B8" />
+              <LocalizedTextInput
+                style={[
+                  styles.inputField,
+                  { marginTop: 10, color: colors.textPrimary, borderColor: colors.border },
+                ]}
+                value={location}
+                onChangeText={onChangeLocation}
+                placeholder="Địa chỉ nhà cụ hoặc phòng khám..."
+                placeholderTextColor="#94A3B8"
+              />
             </View>
 
             {/* 4. Chuyên khoa / Lý do khám */}
@@ -466,27 +507,66 @@ export const AppointmentFormModal: React.FC<AppointmentFormModalProps> = ({
         </TouchableOpacity>
       </PopoverCard>
 
-      {/* POPOVER 3: Chọn Giờ Khám */}
-      <PopoverCard visible={activePopover === 'TIME'} title="Chọn Giờ Khám" onClose={() => setActivePopover('NONE')} isDarkMode={isDarkMode} colors={colors}>
-        <View style={styles.timeSlotGrid}>
-          {TIME_PICKER_SLOTS.map((slot) => {
-            const active = selectedTimeSlot === slot;
-            return (
-              <TouchableOpacity
-                key={slot}
-                style={[styles.timeSlotBtn, active ? styles.activePill : { backgroundColor: fieldBg, borderColor: colors.border }]}
-                onPress={() => { syncScheduledAt(selectedDate, slot); setCustomTimeInput(slot); setActivePopover('NONE'); }}
-              >
-                <LocalizedText style={{ fontSize: 11.5, color: active ? '#FFFFFF' : colors.textPrimary, fontWeight: active ? '700' : '500' }}>{slot}</LocalizedText>
-              </TouchableOpacity>
-            );
-          })}
-        </View>
-        <View style={[styles.customTimeRow, { borderTopColor: colors.border }]}>
-          <LocalizedTextInput style={[styles.inputField, { flex: 1, paddingVertical: 6, fontSize: 12, color: colors.textPrimary, borderColor: colors.border }]} value={customTimeInput} onChangeText={setCustomTimeInput} placeholder="HH:mm (vd: 08:15)" placeholderTextColor="#94A3B8" maxLength={5} />
+      {/* POPOVER 3: Chọn Giờ Khám (Nhóm theo Buổi sáng, Chiều, Tối như Ảnh 3) */}
+      <PopoverCard visible={activePopover === 'TIME'} title="Chọn Khung Giờ Khám" onClose={() => setActivePopover('NONE')} isDarkMode={isDarkMode} colors={colors}>
+        <ScrollView style={{ maxHeight: 340 }} showsVerticalScrollIndicator={false}>
+          {TIME_GROUPS.map((group) => (
+            <View key={group.title} style={{ marginBottom: 14 }}>
+              <View style={[styles.rowCenter, { gap: 6, marginBottom: 8 }]}>
+                <Ionicons name={group.icon as any} size={15} color="#2563EB" />
+                <LocalizedText style={{ fontSize: 12.5, fontWeight: '700', color: isDarkMode ? '#93C5FD' : '#1D4ED8' }}>
+                  {group.title}
+                </LocalizedText>
+              </View>
+              <View style={styles.timeSlotGrid}>
+                {group.slots.map((slot) => {
+                  const active = selectedTimeSlot === slot;
+                  return (
+                    <TouchableOpacity
+                      key={slot}
+                      style={[
+                        styles.timeSlotBtn,
+                        active
+                          ? { backgroundColor: '#2563EB', borderColor: '#2563EB' }
+                          : { backgroundColor: fieldBg, borderColor: colors.border },
+                      ]}
+                      onPress={() => {
+                        syncScheduledAt(selectedDate, slot);
+                        setCustomTimeInput(slot);
+                        setActivePopover('NONE');
+                      }}
+                    >
+                      <LocalizedText
+                        style={{
+                          fontSize: 12,
+                          color: active ? '#FFFFFF' : colors.textPrimary,
+                          fontWeight: active ? '700' : '500',
+                        }}
+                      >
+                        {slot}
+                      </LocalizedText>
+                    </TouchableOpacity>
+                  );
+                })}
+              </View>
+            </View>
+          ))}
+        </ScrollView>
+        <View style={[styles.customTimeRow, { borderTopColor: colors.border, marginTop: 4 }]}>
+          <LocalizedTextInput
+            style={[styles.inputField, { flex: 1, paddingVertical: 6, fontSize: 12, color: colors.textPrimary, borderColor: colors.border }]}
+            value={customTimeInput}
+            onChangeText={setCustomTimeInput}
+            placeholder="HH:mm (vd: 08:15)"
+            placeholderTextColor="#94A3B8"
+            maxLength={5}
+          />
           <TouchableOpacity
             style={styles.btnConfirmSmall}
-            onPress={() => { if (customTimeInput.trim()) syncScheduledAt(selectedDate, customTimeInput.trim()); setActivePopover('NONE'); }}
+            onPress={() => {
+              if (customTimeInput.trim()) syncScheduledAt(selectedDate, customTimeInput.trim());
+              setActivePopover('NONE');
+            }}
           >
             <LocalizedText style={{ color: '#FFFFFF', fontSize: 12, fontWeight: '700' }}>Xác nhận</LocalizedText>
           </TouchableOpacity>
@@ -701,6 +781,20 @@ const styles = StyleSheet.create({
   dateTimeInputBox: { flex: 1, flexDirection: 'row', alignItems: 'center', borderWidth: 1, borderRadius: 9, paddingHorizontal: 10, paddingVertical: 8 },
   inputMiniLabel: { fontSize: 10, color: '#64748B', fontWeight: '500' },
   dateTimeValueText: { fontSize: 12.5, fontWeight: '700', marginTop: 1 },
+  pillSwitchContainer: {
+    flexDirection: 'row',
+    borderRadius: 24,
+    padding: 4,
+    gap: 4,
+  },
+  pillSwitchBtn: {
+    flex: 1,
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    paddingVertical: 10,
+    borderRadius: 20,
+  },
   modalityPill: { flex: 1, flexDirection: 'row', alignItems: 'center', justifyContent: 'center', paddingVertical: 10, borderRadius: 9, borderWidth: 1 },
   accordionHeader: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', paddingHorizontal: 12, paddingVertical: 10, borderRadius: 9, borderWidth: 1 },
   accordionTitle: { fontSize: 12.5, fontWeight: '700' },
