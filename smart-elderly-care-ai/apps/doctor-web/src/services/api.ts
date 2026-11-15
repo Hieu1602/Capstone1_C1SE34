@@ -93,6 +93,10 @@ export const authApi = {
     const res = await api.patch('/users/me', data);
     return res.data;
   },
+  deleteAvatar: async () => {
+    const res = await api.delete('/users/me/avatar');
+    return res.data;
+  },
   changePassword: async (data: {
     current_password: string;
     new_password: string;

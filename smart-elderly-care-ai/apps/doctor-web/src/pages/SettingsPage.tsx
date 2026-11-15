@@ -2,7 +2,7 @@
 // Trang Cài đặt & Hồ sơ Bác sĩ Gia đình (Đồng bộ 100% tính năng với tab Cài đặt trên Mobile App)
 
 import React, { useState, useEffect, useCallback, useRef } from 'react';
-import { useDoctorAuthStore } from '../store/useDoctorAuthStore';
+import { useDoctorAuthStore, getDoctorAvatarUri } from '../store/useDoctorAuthStore';
 import { authApi, doctorApi } from '../services/api';
 import {
   ShieldCheck,
@@ -74,9 +74,23 @@ export const SettingsPage: React.FC = () => {
       department: parsed.department || 'Khoa Chăm sóc Người cao tuổi',
       phone: parsed.phone || user?.phone || '0905111222',
       cchn_number: parsed.cchn_number || user?.cchn_number || '028491/BYT-CCHN',
-      avatarUri: parsed.avatarUri || null,
+      avatarUri: getDoctorAvatarUri(user?.avatar_url),
     };
   });
+
+  useEffect(() => {
+    const handleProfileUpdate = () => {
+      const nextAvatar = getDoctorAvatarUri(user?.avatar_url);
+      setDocInfo((prev) => ({ ...prev, avatarUri: nextAvatar }));
+      setEditForm((prev) => ({ ...prev, avatarUri: nextAvatar }));
+    };
+    window.addEventListener('doctor-profile-updated', handleProfileUpdate);
+    window.addEventListener('storage', handleProfileUpdate);
+    return () => {
+      window.removeEventListener('doctor-profile-updated', handleProfileUpdate);
+      window.removeEventListener('storage', handleProfileUpdate);
+    };
+  }, [user]);
 
   const [patientCount, setPatientCount] = useState(0);
   const [appointmentCount, setAppointmentCount] = useState(0);
@@ -168,16 +182,34 @@ export const SettingsPage: React.FC = () => {
       setDocInfo(next);
       setEditForm((prev) => ({ ...prev, avatarUri: dataUrl }));
       localStorage.setItem('seca_doctor_profile_custom', JSON.stringify(next));
-      window.dispatchEvent(new Event('doctor-profile-updated'));
+      useDoctorAuthStore.getState().updateUser({ avatar_url: dataUrl });
       window.dispatchEvent(new Event('doctor-profile-updated'));
       try {
         await authApi.updateMe({ avatar_url: dataUrl });
       } catch {
         // ignore
       }
-      showToast('Đã cập nhật ảnh đại diện Bác sĩ.');
+      showToast('Đã cập nhật ảnh đại diện Bác sĩ thành công.');
     };
     reader.readAsDataURL(file);
+  };
+
+  const handleResetAvatar = async (e?: React.MouseEvent) => {
+    if (e) e.stopPropagation();
+    const next = { ...docInfo, avatarUri: null };
+    setDocInfo(next);
+    setEditForm((prev) => ({ ...prev, avatarUri: null }));
+    localStorage.setItem('seca_doctor_profile_custom', JSON.stringify(next));
+    useDoctorAuthStore.getState().updateUser({ avatar_url: null });
+    window.dispatchEvent(new Event('doctor-profile-updated'));
+    try {
+      await authApi.deleteAvatar();
+    } catch {
+      try {
+        await authApi.updateMe({ avatar_url: null });
+      } catch {}
+    }
+    showToast('Đã đặt lại ảnh đại diện mặc định (Chữ M nền xanh y tế).');
   };
 
   const handleOpenEdit = () => {
@@ -201,12 +233,19 @@ export const SettingsPage: React.FC = () => {
       };
       setDocInfo(updated);
       localStorage.setItem('seca_doctor_profile_custom', JSON.stringify(updated));
+      useDoctorAuthStore.getState().updateUser({
+        full_name: updated.name,
+        specialty: updated.specialty,
+        workplace: updated.hospital,
+        avatar_url: updated.avatarUri || null,
+      });
       window.dispatchEvent(new Event('doctor-profile-updated'));
       try {
         await authApi.updateMe({
           full_name: updated.name,
           specialty: updated.specialty,
           workplace: updated.hospital,
+          avatar_url: updated.avatarUri || null,
         });
       } catch {
         // ignore
@@ -343,22 +382,34 @@ export const SettingsPage: React.FC = () => {
           <div className="rounded-2xl border border-slate-200/80 bg-white p-6 shadow-xs">
             <div className="flex flex-col sm:flex-row sm:items-center gap-5">
               {/* Avatar */}
-              <div
-                onClick={() => fileInputRef.current?.click()}
-                className="relative h-20 w-20 shrink-0 cursor-pointer group"
-                title="Nhấn để đổi ảnh đại diện"
-              >
-                <div className="flex h-20 w-20 items-center justify-center overflow-hidden rounded-full border-2 border-white bg-blue-600 text-2xl font-extrabold text-white shadow-md">
-                  {docInfo.avatarUri ? (
-                    <img src={docInfo.avatarUri} alt={docInfo.name} className="h-full w-full object-cover" />
-                  ) : (
-                    doctorInitial
-                  )}
+              <div className="flex flex-col items-center sm:items-start gap-1.5 shrink-0">
+                <div
+                  onClick={() => fileInputRef.current?.click()}
+                  className="relative h-20 w-20 cursor-pointer group"
+                  title="Nhấn để đổi ảnh đại diện"
+                >
+                  <div className="flex h-20 w-20 items-center justify-center overflow-hidden rounded-full border-2 border-white bg-blue-600 text-2xl font-extrabold text-white shadow-md">
+                    {docInfo.avatarUri ? (
+                      <img src={docInfo.avatarUri} alt={docInfo.name} className="h-full w-full object-cover" />
+                    ) : (
+                      doctorInitial
+                    )}
+                  </div>
+                  <span className="absolute bottom-1 right-1 h-4 w-4 rounded-full border-2 border-white bg-emerald-500" />
+                  <span className="absolute -top-1 -right-1 flex h-6 w-6 items-center justify-center rounded-full border border-slate-200 bg-white text-blue-600 shadow-xs group-hover:scale-110 transition">
+                    <Camera className="h-3.5 w-3.5" />
+                  </span>
                 </div>
-                <span className="absolute bottom-1 right-1 h-4 w-4 rounded-full border-2 border-white bg-emerald-500" />
-                <span className="absolute -top-1 -right-1 flex h-6 w-6 items-center justify-center rounded-full border border-slate-200 bg-white text-blue-600 shadow-xs group-hover:scale-110 transition">
-                  <Camera className="h-3.5 w-3.5" />
-                </span>
+                {docInfo.avatarUri && (
+                  <button
+                    type="button"
+                    onClick={handleResetAvatar}
+                    className="text-[11px] font-semibold text-rose-500 hover:text-rose-700 hover:underline transition"
+                    title="Khôi phục về chữ M nền xanh chuẩn y tế"
+                  >
+                    Xóa ảnh / Đặt lại
+                  </button>
+                )}
               </div>
 
               {/* Thông tin */}
@@ -639,21 +690,33 @@ export const SettingsPage: React.FC = () => {
 
             <form onSubmit={handleSaveProfile} className="space-y-3">
               <div className="flex items-center gap-3 rounded-xl bg-slate-50 p-3">
-                <div className="flex h-12 w-12 items-center justify-center overflow-hidden rounded-full bg-blue-600 text-base font-bold text-white">
+                <div className="flex h-12 w-12 items-center justify-center overflow-hidden rounded-full bg-blue-600 text-base font-bold text-white shrink-0">
                   {editForm.avatarUri ? (
                     <img src={editForm.avatarUri} alt="" className="h-full w-full object-cover" />
                   ) : (
                     doctorInitial
                   )}
                 </div>
-                <button
-                  type="button"
-                  onClick={() => fileInputRef.current?.click()}
-                  className="inline-flex items-center gap-1.5 rounded-lg border border-blue-200 bg-blue-50 px-3 py-1.5 text-xs font-bold text-blue-600 hover:bg-blue-100"
-                >
-                  <Camera className="h-3.5 w-3.5" />
-                  <span>Chọn / Đổi ảnh đại diện</span>
-                </button>
+                <div className="flex flex-wrap items-center gap-2">
+                  <button
+                    type="button"
+                    onClick={() => fileInputRef.current?.click()}
+                    className="inline-flex items-center gap-1.5 rounded-lg border border-blue-200 bg-blue-50 px-3 py-1.5 text-xs font-bold text-blue-600 hover:bg-blue-100"
+                  >
+                    <Camera className="h-3.5 w-3.5" />
+                    <span>Chọn / Đổi ảnh</span>
+                  </button>
+                  {editForm.avatarUri && (
+                    <button
+                      type="button"
+                      onClick={() => setEditForm((prev) => ({ ...prev, avatarUri: null }))}
+                      className="inline-flex items-center gap-1 rounded-lg border border-rose-200 bg-rose-50 px-2.5 py-1.5 text-xs font-bold text-rose-600 hover:bg-rose-100"
+                    >
+                      <Trash2 className="h-3 w-3" />
+                      <span>Xóa ảnh</span>
+                    </button>
+                  )}
+                </div>
               </div>
 
               {[

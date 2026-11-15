@@ -3,7 +3,7 @@
 
 import React, { useState, useEffect, useCallback, useRef } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { useDoctorAuthStore } from '../../store/useDoctorAuthStore';
+import { useDoctorAuthStore, getDoctorAvatarUri } from '../../store/useDoctorAuthStore';
 import { doctorApi, householdApi, incidentsApi } from '../../services/api';
 import { doctorWebSocket } from '../../services/websocket';
 import type { Incident, AppointmentItem, DoctorPatientCard } from '../../types';
@@ -119,30 +119,12 @@ export const DoctorNavbar: React.FC = () => {
 
   // Avatar Bác sĩ lấy từ tài khoản hoặc localStorage đồng bộ với Mobile App
   const [doctorAvatar, setDoctorAvatar] = useState<string | null>(() => {
-    if (user?.avatar_url) return user.avatar_url;
-    try {
-      const saved = localStorage.getItem('seca_doctor_profile_custom');
-      if (saved) {
-        const parsed = JSON.parse(saved);
-        if (parsed.avatarUri) return parsed.avatarUri;
-      }
-    } catch {}
-    return null;
+    return getDoctorAvatarUri(user?.avatar_url);
   });
 
   useEffect(() => {
     const handleProfileUpdate = () => {
-      try {
-        const saved = localStorage.getItem('seca_doctor_profile_custom');
-        if (saved) {
-          const parsed = JSON.parse(saved);
-          if (parsed.avatarUri) {
-            setDoctorAvatar(parsed.avatarUri);
-            return;
-          }
-        }
-      } catch {}
-      if (user?.avatar_url) setDoctorAvatar(user.avatar_url);
+      setDoctorAvatar(getDoctorAvatarUri(user?.avatar_url));
     };
 
     window.addEventListener('doctor-profile-updated', handleProfileUpdate);
