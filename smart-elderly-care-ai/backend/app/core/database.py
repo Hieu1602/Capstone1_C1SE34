@@ -100,6 +100,7 @@ async def init_db() -> None:
             await conn.execute(text("ALTER TABLE users ADD COLUMN IF NOT EXISTS notifications_enabled BOOLEAN DEFAULT TRUE;"))
             await conn.execute(text("ALTER TABLE users ADD COLUMN IF NOT EXISTS alert_sound_enabled BOOLEAN DEFAULT TRUE;"))
             await conn.execute(text("ALTER TABLE users ADD COLUMN IF NOT EXISTS critical_alert_enabled BOOLEAN DEFAULT TRUE;"))
+            await conn.execute(text("ALTER TABLE users ADD COLUMN IF NOT EXISTS two_factor_enabled BOOLEAN DEFAULT FALSE;"))
             await conn.execute(text("ALTER TABLE users ADD COLUMN IF NOT EXISTS avatar_url TEXT;"))
             await conn.execute(text("ALTER TABLE users ADD COLUMN IF NOT EXISTS cchn_number VARCHAR(50);"))
             await conn.execute(text("ALTER TABLE users ADD COLUMN IF NOT EXISTS specialty VARCHAR(255);"))

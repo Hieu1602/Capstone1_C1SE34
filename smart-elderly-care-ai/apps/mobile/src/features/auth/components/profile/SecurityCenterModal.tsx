@@ -1,4 +1,4 @@
-import { LocalizedText as Text } from '../../../../i18n/LocalizedComponents';
+import { LocalizedText as Text, LocalizedAlert as Alert } from '../../../../i18n/LocalizedComponents';
 import React, { useState, useRef, useEffect } from "react";
 import { useTranslation } from "react-i18next";
 import {
@@ -16,6 +16,7 @@ import { Ionicons } from "@expo/vector-icons";
 import { Colors } from "../../../../theme/colors";
 import { SlideRightModal } from "../settings/SlideRightModal";
 import { usersApi } from "../../../../services/api";
+import { useAuthStore } from "../../../../store/useAuthStore";
 import * as Location from "expo-location";
 
 interface SecurityCenterModalProps {
@@ -70,7 +71,9 @@ export const SecurityCenterModal: React.FC<SecurityCenterModalProps> = ({
             : "Hệ thống Smart Elderly Care AI sử dụng nhiều lớp bảo vệ tài khoản, xác minh thiết bị và mã xác thực để hạn chế truy cập trái phép. Bạn nên bật xác minh hai bước và thường xuyên kiểm tra lịch sử đăng nhập.";
     };
 
-    const [twoFactorEnabled, setTwoFactorEnabled] = useState(false);
+    const authTwoFactor = useAuthStore((s) => s.two_factor_enabled);
+    const [twoFactorEnabled, setTwoFactorEnabled] = useState(authTwoFactor || false);
+    const [isUpdating2FA, setIsUpdating2FA] = useState(false);
     const [securityDetail, setSecurityDetail] = useState<
         "twoFactor" | "devices" | "logins" | "question" | "changePassword" | null
     >(null);
@@ -168,10 +171,45 @@ export const SecurityCenterModal: React.FC<SecurityCenterModalProps> = ({
     useEffect(() => {
         if (visible) {
             scrollRef.current?.scrollTo({ y: 0, animated: false });
+            setTwoFactorEnabled(Boolean(useAuthStore.getState().two_factor_enabled));
+            usersApi
+                .getMe()
+                .then((res) => {
+                    if (res?.data?.two_factor_enabled !== undefined) {
+                        const is2fa = Boolean(res.data.two_factor_enabled);
+                        setTwoFactorEnabled(is2fa);
+                        useAuthStore.getState().setTwoFactorEnabled?.(is2fa);
+                    }
+                })
+                .catch(() => {});
             fetchTerminalsData();
             fetchLoginHistoriesData();
         }
     }, [visible]);
+
+    const handleToggle2FA = async (val: boolean) => {
+        setTwoFactorEnabled(val);
+        setIsUpdating2FA(true);
+        try {
+            await usersApi.updateTwoFactor(val);
+            useAuthStore.getState().setTwoFactorEnabled?.(val);
+            Alert.alert(
+                val ? "Đã bật Xác minh 2 bước" : "Đã tắt Xác minh 2 bước",
+                val
+                    ? "Từ lần đăng nhập tiếp theo, bạn sẽ nhận được mã OTP qua tin nhắn SMS để xác thực."
+                    : "Đã tắt lớp bảo mật xác minh OTP qua SMS khi đăng nhập."
+            );
+        } catch (err: any) {
+            setTwoFactorEnabled(!val);
+            const errMsg =
+                err?.response?.data?.detail ||
+                err?.message ||
+                "Không thể cập nhật trạng thái Xác minh 2 bước.";
+            Alert.alert("Lỗi cập nhật", errMsg);
+        } finally {
+            setIsUpdating2FA(false);
+        }
+    };
 
     const resetPasswordForm = () => {
         setCurrentPassword("");
@@ -397,7 +435,8 @@ export const SecurityCenterModal: React.FC<SecurityCenterModalProps> = ({
                                     </View>
                                     <Switch
                                         value={twoFactorEnabled}
-                                        onValueChange={setTwoFactorEnabled}
+                                        onValueChange={handleToggle2FA}
+                                        disabled={isUpdating2FA}
                                         trackColor={{
                                             false: "#CBD5E1",
                                             true: "#7DD3FC",

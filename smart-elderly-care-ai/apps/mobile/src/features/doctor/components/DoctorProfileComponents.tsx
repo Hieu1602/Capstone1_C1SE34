@@ -132,21 +132,7 @@ export const DoctorProfileCard: React.FC<DoctorProfileCardProps> = ({
           </View>
         </View>
 
-        {/* Nơi công tác */}
-        <View
-          style={[
-            styles.heroHospitalBanner,
-            {
-              backgroundColor: isDarkMode ? '#0F172A' : '#F8FAFC',
-              borderColor: isDarkMode ? '#334155' : '#E2E8F0',
-            },
-          ]}
-        >
-          <Ionicons name="business-outline" size={15} color="#0284C7" style={{ marginRight: 8 }} />
-          <Text style={[styles.heroHospitalText, { color: isDarkMode ? '#CBD5E1' : '#334155' }]} numberOfLines={1}>
-            {info.hospital || 'Hệ thống Smart Elderly Care AI'}
-          </Text>
-        </View>
+
 
         {/* Nút hành động Chỉnh sửa Hồ Sơ: Đầy đủ chiều ngang, tactile button */}
         <TouchableOpacity

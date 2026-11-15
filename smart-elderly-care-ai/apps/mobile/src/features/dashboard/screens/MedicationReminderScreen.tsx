@@ -19,6 +19,7 @@ import { LocalizedAlert, LocalizedText, LocalizedTextInput } from '../../../i18n
 import { usePatientStore, ReminderItem } from '../../../store/usePatientStore';
 import { useAuthStore } from '../../../store/useAuthStore';
 import { remindersApi } from '../../../services/api';
+import { handleHeaderBack } from '../../../navigation/navigationHelpers';
 
 // Cấu trúc dữ liệu một mốc nhắc uống nước / sinh hoạt
 interface HydrationSchedule {
@@ -28,7 +29,7 @@ interface HydrationSchedule {
   done: boolean;
 }
 
-export default function MedicationReminderScreen({ navigation }: any) {
+export default function MedicationReminderScreen({ navigation, route }: any) {
   const { isDarkMode } = useTheme();
 
   // Kết nối Store trung tâm usePatientStore để đồng bộ 2 chiều với Trang chủ & Thông báo
@@ -300,7 +301,7 @@ export default function MedicationReminderScreen({ navigation }: any) {
       <View style={[styles.headerRow, { backgroundColor: isDarkMode ? '#0B0F19' : '#FFFFFF', borderBottomColor: borderCol }]}>
         <TouchableOpacity
           style={[styles.backBtn, { backgroundColor: isDarkMode ? '#1E293B' : '#F1F5F9', borderColor: borderCol }]}
-          onPress={() => navigation.goBack()}
+          onPress={() => handleHeaderBack(navigation, route, 'Home', true)}
           activeOpacity={0.7}
         >
           <Ionicons name="chevron-back" size={22} color={textTitle} />

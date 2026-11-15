@@ -1,4 +1,4 @@
-import React from 'react';
+import React, { useState, useEffect } from 'react';
 import {
   View,
   Text,
@@ -8,9 +8,34 @@ import {
   Linking,
   Platform,
 } from 'react-native';
+import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
 import * as Clipboard from 'expo-clipboard';
 import { Colors } from '../../../../theme/colors';
+
+/**
+ * Thuật toán tạo mã mời xoay vòng 30 phút đồng bộ với Backend (CARE-XXXX).
+ * Sử dụng FNV-1a 32-bit băm từ householdId và 30-minute epoch window.
+ */
+export function generateHouseInviteCode30m(householdId?: string | number | null): {
+  code: string;
+  remainingMinutes: number;
+  remainingSeconds: number;
+} {
+  const cleanId = String(householdId || 'default').toLowerCase().replace(/-/g, '');
+  const nowTs = Math.floor(Date.now() / 1000);
+  const windowIndex = Math.floor(nowTs / 1800);
+  let val = 2166136261;
+  const key = `${cleanId}:${windowIndex}`;
+  for (let i = 0; i < key.length; i++) {
+    val = Math.imul(val ^ key.charCodeAt(i), 16777619) >>> 0;
+  }
+  const hex = val.toString(16).toUpperCase().padStart(8, '0');
+  const code = `CARE-${hex.slice(-4)}`;
+  const remainingSeconds = 1800 - (nowTs % 1800);
+  const remainingMinutes = Math.max(1, Math.ceil(remainingSeconds / 60));
+  return { code, remainingMinutes, remainingSeconds };
+}
 
 interface HouseShareModalProps {
   visible: boolean;
@@ -42,10 +67,24 @@ export const HouseShareModal: React.FC<HouseShareModalProps> = ({
   isDarkMode,
   colors: { bgCard, borderCol, textTitle, textSub },
 }) => {
-  const inviteCode = `CARE-${householdId ? String(householdId).slice(-4).toUpperCase() : '8869'}`;
+  const insets = useSafeAreaInsets();
+  const [inviteState, setInviteState] = useState(() => generateHouseInviteCode30m(householdId));
+
+  useEffect(() => {
+    const update = () => {
+      setInviteState(generateHouseInviteCode30m(householdId));
+    };
+    update();
+    const timer = setInterval(update, 5000);
+    return () => clearInterval(timer);
+  }, [householdId]);
+
+  const inviteCode = inviteState.code;
+  const remainingMinutes = inviteState.remainingMinutes;
+
   const inviteMsg = `Chào bạn! Bạn nhận được lời mời tham gia "${houseName || 'Nhà của tôi'}" với vai trò ${
     selectedInviteRole === 'ADMIN' ? 'Quản trị viên' : 'Thành viên'
-  }. Mã mời: ${inviteCode}. Tải app Smart Elderly Care AI để kết nối!`;
+  }. Mã mời: ${inviteCode} (hiệu lực trong 30 phút). Tải app Smart Elderly Care AI để kết nối!`;
 
   const copyToClipboard = async (text: string, successMessage: string) => {
     try {
@@ -60,6 +99,39 @@ export const HouseShareModal: React.FC<HouseShareModalProps> = ({
     triggerToast(successMessage);
   };
 
+  const handleOpenZalo = async () => {
+    await copyToClipboard(inviteMsg, 'Đã sao chép nội dung lời mời! Đang chuyển sang Zalo...');
+
+    if (Platform.OS === 'web') {
+      Linking.openURL('https://chat.zalo.me').catch(() => {
+        Linking.openURL('https://zalo.me').catch(() => {});
+      });
+      return;
+    }
+
+    const zaloAppUrl = 'zalo://';
+    try {
+      const supported = await Linking.canOpenURL(zaloAppUrl);
+      if (supported) {
+        await Linking.openURL(zaloAppUrl);
+        return;
+      }
+    } catch {
+      // canOpenURL có thể bị chặn trên một số phiên bản OS, thử mở trực tiếp
+    }
+
+    try {
+      await Linking.openURL(zaloAppUrl);
+    } catch {
+      // Fallback mở Store nếu máy chưa cài Zalo
+      const storeUrl =
+        Platform.OS === 'ios'
+          ? 'https://apps.apple.com/vn/app/zalo/id579523920'
+          : 'https://play.google.com/store/apps/details?id=com.zing.zalo';
+      Linking.openURL(storeUrl).catch(() => {});
+    }
+  };
+
   return (
     <Modal
       visible={visible}
@@ -68,7 +140,21 @@ export const HouseShareModal: React.FC<HouseShareModalProps> = ({
       onRequestClose={onClose}
     >
       <View style={styles.modalOverlay}>
-        <View style={[styles.shareModalCard, { backgroundColor: bgCard, borderColor: borderCol }]}>
+        <TouchableOpacity
+          style={styles.backdrop}
+          activeOpacity={1}
+          onPress={onClose}
+        />
+        <View
+          style={[
+            styles.shareModalCard,
+            {
+              backgroundColor: bgCard,
+              borderColor: borderCol,
+              paddingBottom: Math.max(insets.bottom, 20),
+            },
+          ]}
+        >
           {/* Header */}
           <View style={styles.shareHeaderRow}>
             <View style={[styles.shareIconBox, { backgroundColor: '#DCFCE7' }]}>
@@ -137,7 +223,9 @@ export const HouseShareModal: React.FC<HouseShareModalProps> = ({
                   <Text style={styles.copyCodeMiniText}>Sao chép mã</Text>
                 </TouchableOpacity>
               </View>
-              <Text style={styles.inviteCodeExpireText}>⏱️ Mã có hiệu lực trong 48 giờ</Text>
+              <Text style={styles.inviteCodeExpireText}>
+                ⏱️ Mã có hiệu lực trong 30 phút (còn {remainingMinutes} phút)
+              </Text>
             </View>
           </View>
 
@@ -159,7 +247,7 @@ export const HouseShareModal: React.FC<HouseShareModalProps> = ({
             <TouchableOpacity
               style={styles.shareChannelItem}
               onPress={() => {
-                const msg = `Mời bạn tham gia căn nhà "${houseName || 'Nhà của tôi'}" trên Smart Elderly Care AI. Mã mời: ${inviteCode}. Tải ứng dụng tại: https://smartcare.vn/app`;
+                const msg = `Mời bạn tham gia căn nhà "${houseName || 'Nhà của tôi'}" trên Smart Elderly Care AI. Mã mời: ${inviteCode} (hiệu lực trong 30 phút). Tải ứng dụng tại: https://smartcare.vn/app`;
                 Linking.openURL(`sms:?body=${encodeURIComponent(msg)}`).catch(() => {
                   copyToClipboard(msg, 'Đã sao chép nội dung tin nhắn!');
                 });
@@ -171,15 +259,10 @@ export const HouseShareModal: React.FC<HouseShareModalProps> = ({
               <Text style={[styles.shareChannelName, { color: textTitle }]}>Tin nhắn</Text>
             </TouchableOpacity>
 
-            {/* Kênh 2: Zalo */}
+            {/* Kênh 2: Zalo (Ưu tiên chuyển sang App Zalo trên mobile) */}
             <TouchableOpacity
               style={styles.shareChannelItem}
-              onPress={() => {
-                Linking.openURL('https://zalo.me').catch(() => {
-                  // Fallback
-                });
-                copyToClipboard(inviteMsg, 'Đã sao chép nội dung để gửi qua Zalo!');
-              }}
+              onPress={handleOpenZalo}
             >
               <View style={[styles.shareChannelIconBox, { backgroundColor: '#0284C7' }]}>
                 <Ionicons name="paper-plane" size={22} color="#FFF" />
@@ -246,8 +329,15 @@ export const HouseShareModal: React.FC<HouseShareModalProps> = ({
 const styles = StyleSheet.create({
   modalOverlay: {
     flex: 1,
-    backgroundColor: 'rgba(0,0,0,0.5)',
     justifyContent: 'flex-end',
+  },
+  backdrop: {
+    position: 'absolute',
+    top: 0,
+    left: 0,
+    right: 0,
+    bottom: 0,
+    backgroundColor: 'rgba(0,0,0,0.5)',
   },
   shareModalCard: {
     borderTopLeftRadius: 24,

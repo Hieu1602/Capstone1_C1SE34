@@ -23,13 +23,7 @@ const getBaseUrl = (): string => {
     return `${protocol}://${resolvedHost}:8000/api/v1`;
   }
 
-  // 2. Ưu tiên biến môi trường EXPO_PUBLIC_API_URL (ví dụ AWS EC2) nếu được cấu hình
-  const envUrl = process.env.EXPO_PUBLIC_API_URL;
-  if (envUrl && envUrl.trim().length > 0) {
-    return envUrl.trim();
-  }
-
-  // 3. Tự động nhận diện IP máy tính từ Expo Metro host (kết nối trực tiếp điện thoại thật qua LAN Wi-Fi)
+  // 2. Tự động nhận diện IP máy tính từ Expo Metro host (kết nối trực tiếp điện thoại thật qua LAN Wi-Fi mà không sợ đổi IP)
   const debuggerHost =
     Constants.expoConfig?.hostUri ||
     (Constants as any).manifest2?.extra?.expoClient?.hostUri ||
@@ -40,6 +34,12 @@ const getBaseUrl = (): string => {
     if (hostIp && !hostIp.includes('exp.direct') && hostIp !== 'localhost' && hostIp !== '127.0.0.1') {
       return `http://${hostIp}:8000/api/v1`;
     }
+  }
+
+  // 3. Biến môi trường EXPO_PUBLIC_API_URL (ví dụ build APK production hoặc cấu hình tĩnh)
+  const envUrl = process.env.EXPO_PUBLIC_API_URL;
+  if (envUrl && envUrl.trim().length > 0) {
+    return envUrl.trim();
   }
 
   // 4. Fallback về máy chủ AWS EC2
@@ -193,12 +193,22 @@ export const authApi = {
     otp_code: string;
     new_password: string;
   }) => api.post('/auth/password/reset', data),
+  verifyLogin2fa: (twoFactorToken: string, otpCode: string, phone?: string) =>
+    api.post('/auth/login/verify-2fa', {
+      two_factor_token: twoFactorToken,
+      otp_code: otpCode,
+      phone,
+    }),
+  resendLogin2fa: (twoFactorToken: string) =>
+    api.post('/auth/login/resend-2fa', { two_factor_token: twoFactorToken }),
 };
 
 // 0. Users API
 export const usersApi = {
   getMe: () => api.get('/users/me'),
   updateMe: (data: any) => api.patch('/users/me', data),
+  updateTwoFactor: (enabled: boolean) =>
+    api.patch('/users/me/two-factor', { enabled }),
   updateLanguage: (language: 'vi' | 'en') =>
     api.patch('/users/me/language', { preferred_language: language, language }),
   updateFontPreferences: (fontSizeMode: 'system' | 'custom', customFontScale: number) =>
@@ -533,12 +543,16 @@ export const reportsApi = {
     let url = `${BASE_URL}/reports/pdf?period=${period}`;
     if (patientId) url += `&patient_id=${encodeURIComponent(patientId)}`;
     if (deviceId) url += `&device_id=${encodeURIComponent(deviceId)}`;
+    const token = useAuthStore.getState().accessToken;
+    if (token) url += `&token=${encodeURIComponent(token)}`;
     return url;
   },
   getExcelUrl: (period: 'WEEK' | 'MONTH' = 'WEEK', patientId?: string, deviceId?: string) => {
     let url = `${BASE_URL}/reports/excel?period=${period}`;
     if (patientId) url += `&patient_id=${encodeURIComponent(patientId)}`;
     if (deviceId) url += `&device_id=${encodeURIComponent(deviceId)}`;
+    const token = useAuthStore.getState().accessToken;
+    if (token) url += `&token=${encodeURIComponent(token)}`;
     return url;
   },
 };

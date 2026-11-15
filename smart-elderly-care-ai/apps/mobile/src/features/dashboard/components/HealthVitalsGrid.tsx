@@ -41,7 +41,7 @@ interface HealthVitalsGridProps {
   colors: any;
 }
 
-export const HealthVitalsGrid: React.FC<HealthVitalsGridProps> = ({
+export const HealthVitalsGrid: React.FC<HealthVitalsGridProps> = React.memo(({
   card1,
   card2,
   card3,
@@ -181,7 +181,7 @@ export const HealthVitalsGrid: React.FC<HealthVitalsGridProps> = ({
       </TouchableOpacity>
     </View>
   );
-};
+});
 
 const styles = StyleSheet.create({
   vitalsGrid: {

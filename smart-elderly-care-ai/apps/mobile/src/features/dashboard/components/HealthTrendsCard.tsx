@@ -30,9 +30,18 @@ export function HealthTrendsCard({
   colors,
   currentVitals,
 }: HealthTrendsCardProps) {
+  // Kiểm tra tính tươi mới của dữ liệu (chỉ hiển thị nếu ghi nhận trong vòng 2 phút gần nhất)
+  const isLiveFresh = (() => {
+    const vTime = currentVitals?.time || currentVitals?.recorded_at || currentVitals?.timestamp;
+    if (!vTime) return false;
+    const timeMs = typeof vTime === 'number' ? vTime : new Date(vTime).getTime();
+    if (isNaN(timeMs)) return false;
+    return Math.abs(Date.now() - timeMs) <= 2 * 60 * 1000;
+  })();
+
   // Kiểm tra sự tồn tại của dữ liệu nhịp tim và SpO2 thực tế từ vòng đeo tay BLE
-  const hasHR = currentVitals?.heart_rate !== null && currentVitals?.heart_rate !== undefined;
-  const hasSpO2 = currentVitals?.spo2 !== null && currentVitals?.spo2 !== undefined;
+  const hasHR = isLiveFresh && currentVitals?.heart_rate !== null && currentVitals?.heart_rate !== undefined;
+  const hasSpO2 = isLiveFresh && currentVitals?.spo2 !== null && currentVitals?.spo2 !== undefined;
   const hasAnyData = hasHR || hasSpO2;
 
   // Lịch sử đo nhịp tim nhiều mốc thời gian để vẽ biểu đồ line 12h qua
@@ -46,8 +55,16 @@ export function HealthTrendsCard({
         const devId = currentVitals?.device_id || 'BLE_BAND_001';
         const res = await vitalsApi.getHistory(devId, 30);
         if (isMounted && res.data && Array.isArray(res.data) && res.data.length > 0) {
+          const now = Date.now();
+          const twelveHoursAgo = now - 12 * 60 * 60 * 1000;
+          // Chỉ lấy các mốc đo THỰC SỰ diễn ra trong vòng 12h qua (không lấy dữ liệu cũ từ ngày hôm trước)
           const valid = res.data
-            .filter((v: any) => v.heart_rate != null && Number(v.heart_rate) > 0)
+            .filter((v: any) => {
+              if (v.heart_rate == null || Number(v.heart_rate) <= 0) return false;
+              const rawTime = v.time || v.recorded_at || v.created_at;
+              const vTime = rawTime ? new Date(rawTime).getTime() : 0;
+              return vTime >= twelveHoursAgo;
+            })
             .reverse();
           if (valid.length > 0) {
             // Lấy tối đa 15 mốc gần nhất để vẽ đường cong nhịp tim mềm mại
@@ -65,10 +82,14 @@ export function HealthTrendsCard({
               };
             });
             setHrBars(finalPoints);
+          } else {
+            setHrBars([]);
           }
+        } else if (isMounted) {
+          setHrBars([]);
         }
       } catch (e) {
-        // Fallback nhẹ
+        if (isMounted) setHrBars([]);
       }
     };
 
@@ -80,7 +101,7 @@ export function HealthTrendsCard({
 
   // Cập nhật mốc mới khi có WebSocket nhịp tim đẩy tới
   useEffect(() => {
-    if (currentVitals?.heart_rate && Number(currentVitals.heart_rate) > 0) {
+    if (hasHR && Number(currentVitals?.heart_rate) > 0) {
       setHrBars((prev) => {
         const val = Math.round(Number(currentVitals.heart_rate));
         if (prev.length === 0) {
@@ -93,7 +114,7 @@ export function HealthTrendsCard({
         return [...updated, { time: 'Hiện tại', val }].slice(-15);
       });
     }
-  }, [currentVitals?.heart_rate, currentVitals?.timestamp]);
+  }, [currentVitals?.heart_rate, currentVitals?.timestamp, hasHR]);
 
   // Giá trị hiển thị thực tế và tính toán vị trí kim chỉ báo SpO2 trên thang đo 90-100%
   const hrValue = hasHR ? currentVitals.heart_rate : null;

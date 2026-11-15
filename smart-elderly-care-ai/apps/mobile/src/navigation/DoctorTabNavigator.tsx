@@ -21,6 +21,7 @@ export default function DoctorTabNavigator() {
   return (
     <Tab.Navigator
       initialRouteName="DoctorHome"
+      backBehavior="history"
       screenOptions={({ route }) => ({
         headerShown: false,
         tabBarShowLabel: false, // Ẩn hoàn toàn nhãn chữ theo yêu cầu

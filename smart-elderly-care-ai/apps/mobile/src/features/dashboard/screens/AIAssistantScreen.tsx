@@ -25,7 +25,7 @@ import {
   Keyboard,
   StatusBar,
 } from 'react-native';
-import { SafeAreaView } from 'react-native-safe-area-context';
+import { SafeAreaView, useSafeAreaInsets } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
 import * as Speech from 'expo-speech';
 import { AudioModule, requestRecordingPermissionsAsync, setAudioModeAsync } from 'expo-audio';
@@ -239,9 +239,18 @@ export default function AIAssistantScreen({ navigation }: any) {
   const recorderRef = useRef<any>(null);
   const recordingTimerRef = useRef<any>(null);
 
+  const insets = useSafeAreaInsets();
+
   // Chiều cao bàn phím iOS an toàn (Không dùng try/catch hook)
   const keyboardVerticalOffset = Platform.OS === 'ios' ? 88 : 0;
   const [androidKeyboardHeight, setAndroidKeyboardHeight] = useState(0);
+
+  // Bù khoảng thụt do thanh điều hướng Android (navigation bar) và tạo khoảng thở trên bàn phím
+  const androidKeyboardPadding = useMemo(() => {
+    if (androidKeyboardHeight <= 0) return 0;
+    // Bù thêm chiều cao thanh điều hướng (thường từ 24-48dp) + 12dp khoảng thở phía trên bàn phím
+    return androidKeyboardHeight + Math.max(insets.bottom, 28) + 12;
+  }, [androidKeyboardHeight, insets.bottom]);
 
   // Lắng nghe sự kiện bàn phím xuất hiện/ẩn để đẩy thanh chat input lên trên Android & tự động cuộn
   useEffect(() => {
@@ -250,7 +259,10 @@ export default function AIAssistantScreen({ navigation }: any) {
 
     const showSub = Keyboard.addListener(showEvent, (e) => {
       if (Platform.OS === 'android') {
-        setAndroidKeyboardHeight(e.endCoordinates.height);
+        const h = e.endCoordinates ? e.endCoordinates.height : 0;
+        if (h > 0) {
+          setAndroidKeyboardHeight(h);
+        }
       }
       setTimeout(() => {
         scrollViewRef.current?.scrollToEnd({ animated: true });
@@ -391,6 +403,7 @@ export default function AIAssistantScreen({ navigation }: any) {
 
   // Mở Sidebar mượt mà (60fps với Native Driver)
   const openSidebar = useCallback(() => {
+    Keyboard.dismiss();
     fetchSessions();
     setIsSidebarOpen(true);
     Animated.parallel([
@@ -782,7 +795,7 @@ export default function AIAssistantScreen({ navigation }: any) {
       {/* 2. Chat Main Area */}
       <View style={[styles.mainBody, isDarkMode && { backgroundColor: colors.background }]}>
         <KeyboardAvoidingView
-          style={[{ flex: 1 }, Platform.OS === 'android' && { paddingBottom: androidKeyboardHeight }]}
+          style={[{ flex: 1 }, Platform.OS === 'android' && { paddingBottom: androidKeyboardPadding }]}
           behavior={Platform.OS === 'ios' ? 'padding' : undefined}
           keyboardVerticalOffset={keyboardVerticalOffset}
         >

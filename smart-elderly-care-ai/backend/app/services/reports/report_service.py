@@ -17,13 +17,13 @@ from reportlab.lib.styles import getSampleStyleSheet
 from reportlab.pdfbase import pdfmetrics
 from reportlab.pdfbase.ttfonts import TTFont
 from reportlab.pdfbase.pdfmetrics import registerFontFamily
-from sqlalchemy import select
+from sqlalchemy import and_, or_, select
 from sqlalchemy.orm import selectinload
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.models.device import Device, DeviceType
 from app.models.elderly_profile import ElderlyProfile
-from app.models.house import HouseMember
+from app.models.house import House, HouseMember
 from app.models.incident import Incident
 from app.models.vital_sign import VitalSign
 from app.schemas.report import HealthReportSummaryOut
@@ -85,6 +85,159 @@ def _setup_pdf_fonts() -> Tuple[str, str]:
 
 class ReportService:
 
+    NON_ALERT_INCIDENT_TYPES = {
+        "HOUSE_INVITE_PENDING",
+        "HOUSE_MEMBER_ADDED",
+        "MEMBER_ADDED",
+        "HOUSE_JOIN_REQUEST",
+        "HOUSE_JOIN_APPROVED",
+        "HOUSE_JOIN_REJECTED",
+        "HOUSE_INVITE_REJECTED",
+        "APPOINTMENT_SCHEDULED",
+        "APPOINTMENT_CONFIRMED",
+        "APPOINTMENT_CANCELLED",
+    }
+
+    CRITICAL_ALERT_TYPES = {
+        "FALL_DETECTED",
+        "FALL",
+        "ACOUSTIC_DISTRESS",
+        "CRITICAL_TRIAD",
+        "DEVICE_BATTERY_DEAD",
+        "SOS_EMERGENCY",
+        "EMERGENCY_SOS",
+        "SPO2_LOW",
+        "SPO2_CRITICAL",
+        "HIGH_FEVER",
+        "HEART_RATE_CRITICAL",
+    }
+
+    @classmethod
+    def is_critical_incident(cls, inc: Incident) -> bool:
+        """
+        Kiểm tra sự kiện có thuộc phân loại Nguy kịch (khớp 100% với tab '🚨 Nguy kịch'
+        trên màn hình Thông Báo & Sự Kiện, tính cả các bản ghi ĐÃ XỬ LÝ).
+        """
+        a_type = (inc.alert_type or "").strip().upper()
+        a_level = (inc.alert_level or "").strip().upper()
+        if a_type in cls.NON_ALERT_INCIDENT_TYPES:
+            return False
+        return (
+            a_level in {"CRITICAL", "EMERGENCY"}
+            or a_type in cls.CRITICAL_ALERT_TYPES
+            or "CRITICAL" in a_type
+            or "FALL" in a_type
+        )
+
+    @staticmethod
+    def format_critical_event_label(inc: Incident) -> str:
+        """Chuyển mã loại cảnh báo sang nhãn hiển thị chuẩn (VD: CRITICAL TRIAD, DEVICE BATTERY DEAD)."""
+        a_type = (inc.alert_type or "").strip()
+        if not a_type:
+            return "CRITICAL ALERT"
+        return a_type.replace("_", " ").upper()
+
+    @classmethod
+    async def get_house_incidents_in_period(
+        cls,
+        db: AsyncSession,
+        device: Optional[Device] = None,
+        elderly: Optional[ElderlyProfile] = None,
+        user_id: Optional[UUID] = None,
+        start_time: Optional[datetime] = None,
+        end_time: Optional[datetime] = None,
+    ) -> List[Incident]:
+        """
+        Lấy toàn bộ sự kiện cảnh báo sức khỏe / thiết bị trong kỳ báo cáo của căn nhà
+        (tính cả các sự kiện đã xử lý `is_acknowledged = True`, đồng bộ với màn hình Thông Báo & Sự Kiện).
+        """
+        from app.models.user import User
+
+        target_device_ids: set[UUID] = set()
+        house_ids: set[UUID] = set()
+        is_admin = False
+
+        if device:
+            target_device_ids.add(device.id)
+            if device.house_id:
+                house_ids.add(device.house_id)
+
+        if elderly and getattr(elderly, "devices", None):
+            for d in elderly.devices:
+                target_device_ids.add(d.id)
+                if d.house_id:
+                    house_ids.add(d.house_id)
+
+        if user_id:
+            user_obj = await db.get(User, user_id)
+            if user_obj and user_obj.role == "admin":
+                is_admin = True
+            else:
+                member_house_subq = select(HouseMember.house_id).where(
+                    HouseMember.user_id == user_id,
+                    HouseMember.status == "ACTIVE",
+                )
+                user_houses_res = await db.execute(
+                    select(House.id).where(
+                        or_(
+                            House.owner_id == user_id,
+                            House.id.in_(member_house_subq),
+                        )
+                    )
+                )
+                for row in user_houses_res.fetchall():
+                    if row[0]:
+                        house_ids.add(row[0])
+
+                owner_dev_res = await db.execute(select(Device.id).where(Device.owner_id == user_id))
+                for row in owner_dev_res.fetchall():
+                    if row[0]:
+                        target_device_ids.add(row[0])
+
+        if house_ids:
+            house_dev_res = await db.execute(
+                select(Device.id).where(Device.house_id.in_(list(house_ids)))
+            )
+            for row in house_dev_res.fetchall():
+                if row[0]:
+                    target_device_ids.add(row[0])
+
+        if not is_admin and not target_device_ids:
+            return []
+
+        query = (
+            select(Incident)
+            .where(
+                Incident.alert_type.notin_(list(cls.NON_ALERT_INCIDENT_TYPES)),
+            )
+            .order_by(Incident.created_at.desc())
+        )
+
+        if not is_admin:
+            query = query.where(Incident.device_id.in_(list(target_device_ids)))
+
+        if start_time is not None:
+            query = query.where(Incident.created_at >= start_time)
+        if end_time is not None:
+            query = query.where(Incident.created_at <= end_time)
+
+        if user_id and not is_admin:
+            query = query.where(
+                or_(
+                    Incident.notes.is_(None),
+                    and_(
+                        ~Incident.notes.startswith("USER:"),
+                        ~Incident.notes.contains("USER:"),
+                    ),
+                    Incident.notes == f"USER:{user_id}",
+                    Incident.notes.startswith(f"USER:{user_id}"),
+                    Incident.notes.contains(f"USER:{user_id}"),
+                )
+            )
+
+        res = await db.execute(query)
+        return list(res.scalars().all())
+
     @staticmethod
     def _labels(language: str) -> dict[str, str]:
         if language == "en":
@@ -94,6 +247,9 @@ class ReportService:
                 "exported": "Exported",
                 "vital_records": "Total vital-sign records",
                 "alert_events": "Alert events",
+                "critical_alerts": "Critical alerts",
+                "fall_events": "Fall events",
+                "abnormal_hr": "Abnormal heart rate",
                 "recent_vitals": "Recent vital signs",
                 "time": "Time",
                 "heart_rate": "Heart rate (bpm)",
@@ -110,6 +266,7 @@ class ReportService:
                 "pending": "Pending",
                 "vital_sheet": "Vital Signs",
                 "incident_sheet": "Incidents",
+                "summary_sheet": "Alert Summary",
                 "id": "ID",
                 "device_id": "Device ID",
                 "people": "People count",
@@ -123,6 +280,9 @@ class ReportService:
             "exported": "Ngày xuất",
             "vital_records": "Tổng số bản ghi sinh hiệu",
             "alert_events": "Số sự kiện cảnh báo",
+            "critical_alerts": "Cảnh báo nguy kịch",
+            "fall_events": "Sự kiện té ngã",
+            "abnormal_hr": "Nhịp tim bất thường",
             "recent_vitals": "Dữ liệu sinh hiệu gần nhất",
             "time": "Thời gian",
             "heart_rate": "Nhịp tim (bpm)",
@@ -135,10 +295,11 @@ class ReportService:
             "alert_type": "Loại cảnh báo",
             "level": "Mức độ",
             "message": "Thông điệp",
-            "acknowledged": "Đã duyệt",
-            "pending": "Chưa",
+            "acknowledged": "Đã xử lý",
+            "pending": "Chưa xử lý",
             "vital_sheet": "Sinh hiệu",
             "incident_sheet": "Sự kiện",
+            "summary_sheet": "Tổng hợp cảnh báo",
             "id": "ID",
             "device_id": "Device ID",
             "people": "Số người",
@@ -266,9 +427,12 @@ class ReportService:
         elderly: Optional[ElderlyProfile],
         period: str = "WEEK",
         language: str = "vi",
+        user_id: Optional[UUID] = None,
     ) -> HealthReportSummaryOut:
         """
         Tính toán dữ liệu tổng quan báo cáo sức khỏe từ cơ sở dữ liệu thực tế.
+        Đồng bộ 100% số lượng Cảnh báo nguy kịch (Critical Alerts) với màn hình Thông Báo & Sự Kiện,
+        tính cả các sự kiện đã đánh dấu ĐÃ XỬ LÝ (is_acknowledged = True).
         """
         period_normalized = period.upper() if period else "WEEK"
         days = 7 if period_normalized == "WEEK" else 30
@@ -326,6 +490,11 @@ class ReportService:
                 fallsCount=0,
                 anomalies="0",
                 anomaliesCount=0,
+                criticalAlerts="0",
+                critical_alerts_count=0,
+                criticalAlertsCount=0,
+                criticalEvents=[],
+                critical_events=[],
                 isSynced=False,
                 hasData=False,
             )
@@ -354,19 +523,41 @@ class ReportService:
         )
         prior_hrs = [hr for hr in prior_res.scalars().all() if hr and hr > 0]
 
-        # 3. Truy vấn các sự kiện cảnh báo trong kỳ
-        inc_res = await db.execute(
-            select(Incident)
-            .where(
-                Incident.device_id == device.id,
-                Incident.created_at >= start_time,
-                Incident.created_at <= now,
-            )
+        # 3. Truy vấn toàn bộ sự kiện cảnh báo của căn nhà trong kỳ báo cáo (tính cả ĐÃ XỬ LÝ)
+        incidents = await ReportService.get_house_incidents_in_period(
+            db=db,
+            device=device,
+            elderly=elderly,
+            user_id=user_id,
+            start_time=start_time,
+            end_time=now,
         )
-        incidents = list(inc_res.scalars().all())
+        critical_inc_list = [inc for inc in incidents if ReportService.is_critical_incident(inc)]
+
+        # Nếu trong cửa sổ ngày hiện tại chưa bắt được bản ghi nhưng danh sách sự kiện của nhà (giống màn hình Thông Báo & Sự Kiện) có ghi nhận
+        if not critical_inc_list:
+            all_house_incidents = await ReportService.get_house_incidents_in_period(
+                db=db,
+                device=device,
+                elderly=elderly,
+                user_id=user_id,
+                start_time=None,
+                end_time=now,
+            )
+            recent_house_incidents = all_house_incidents[:20]
+            critical_inc_list = [inc for inc in recent_house_incidents if ReportService.is_critical_incident(inc)]
+            if not incidents and recent_house_incidents:
+                incidents = recent_house_incidents
+
+        critical_alerts_count = len(critical_inc_list)
+        critical_events: List[str] = []
+        for inc in critical_inc_list:
+            lbl = ReportService.format_critical_event_label(inc)
+            if lbl not in critical_events:
+                critical_events.append(lbl)
 
         total_readings = len(vitals)
-        has_data = total_readings > 0
+        has_data = total_readings > 0 or len(incidents) > 0
 
         # Trích xuất danh sách giá trị hợp lệ
         hrs = [v.heart_rate for v in vitals if v.heart_rate is not None and v.heart_rate > 0]
@@ -392,18 +583,18 @@ class ReportService:
 
         # Đếm sự kiện té ngã
         fall_vital_count = sum(1 for v in vitals if v.fall_detected)
-        fall_inc_count = sum(1 for inc in incidents if "FALL" in inc.alert_type.upper())
+        fall_inc_count = sum(1 for inc in incidents if "FALL" in (inc.alert_type or "").upper())
         total_falls = max(fall_vital_count, fall_inc_count)
 
         # Đếm sự kiện bất thường sinh hiệu
         vital_anomalies = sum(
             1 for v in vitals if (v.heart_rate and (v.heart_rate < 50 or v.heart_rate > 110)) or (v.spo2 and v.spo2 < 92)
         )
-        incident_anomalies = sum(1 for inc in incidents if "FALL" not in inc.alert_type.upper())
+        incident_anomalies = sum(1 for inc in incidents if "FALL" not in (inc.alert_type or "").upper())
         total_anomalies = max(vital_anomalies, incident_anomalies)
 
         # Tỷ lệ tuân thủ đeo vòng (% số giờ ghi nhận dữ liệu)
-        if has_data:
+        if total_readings > 0:
             hours_set = set(v.time.strftime("%Y-%m-%d-%H") for v in vitals if v.time)
             expected_hours = days * 24
             adherence_raw = min(100, int(round((len(hours_set) / expected_hours) * 100)))
@@ -418,10 +609,11 @@ class ReportService:
             score_status = "Chưa có dữ liệu"
             score_trend = "Đang chờ đo"
             progress = 0.0
-        elif total_falls > 0 or (avg_hr and (avg_hr < 55 or avg_hr > 105)) or (avg_spo2 and avg_spo2 < 93):
-            score_status = "Cần theo dõi" if total_falls <= 1 else "Cảnh báo"
-            score_trend = "Chú ý" if total_falls <= 1 else "Bất thường"
-            progress = 0.60 if total_falls <= 1 else 0.40
+        elif total_falls > 0 or critical_alerts_count > 0 or (avg_hr and (avg_hr < 55 or avg_hr > 105)) or (avg_spo2 and avg_spo2 < 93):
+            is_severe = total_falls > 1 or critical_alerts_count > 1
+            score_status = "Cảnh báo" if is_severe else "Cần theo dõi"
+            score_trend = "Cần chú ý" if not is_severe else "Bất thường"
+            progress = 0.65 if not is_severe else 0.45
         else:
             score_status = "Ổn định"
             score_trend = "Tốt"
@@ -498,6 +690,11 @@ class ReportService:
             fallsCount=total_falls,
             anomalies=str(total_anomalies),
             anomaliesCount=total_anomalies,
+            criticalAlerts=str(critical_alerts_count),
+            critical_alerts_count=critical_alerts_count,
+            criticalAlertsCount=critical_alerts_count,
+            criticalEvents=critical_events,
+            critical_events=critical_events,
             isSynced=has_data,
             deviceId=device.device_id,
             deviceName=device.name,
@@ -512,7 +709,7 @@ class ReportService:
         incidents: List[Incident],
         language: str = "vi",
     ) -> bytes:
-        """Tạo PDF report tóm tắt các chỉ số sinh hiệu và sự kiện cảnh báo."""
+        """Tạo PDF report tóm tắt các chỉ số sinh hiệu và sự kiện cảnh báo (bao gồm Cảnh báo nguy kịch)."""
         font_name, bold_font_name = _setup_pdf_fonts()
         labels = ReportService._labels(language)
         buffer = io.BytesIO()
@@ -530,6 +727,25 @@ class ReportService:
 
         elements = []
 
+        # Tính toán thống kê cảnh báo nguy kịch, té ngã và bất thường sinh hiệu
+        critical_inc_list = [inc for inc in incidents if ReportService.is_critical_incident(inc)]
+        critical_count = len(critical_inc_list)
+        critical_labels: List[str] = []
+        for inc in critical_inc_list:
+            lbl = ReportService.format_critical_event_label(inc)
+            if lbl not in critical_labels:
+                critical_labels.append(lbl)
+
+        fall_vital_count = sum(1 for v in vitals if v.fall_detected)
+        fall_inc_count = sum(1 for inc in incidents if "FALL" in (inc.alert_type or "").upper())
+        total_falls = max(fall_vital_count, fall_inc_count)
+
+        vital_anomalies = sum(
+            1 for v in vitals if (v.heart_rate and (v.heart_rate < 50 or v.heart_rate > 110)) or (v.spo2 and v.spo2 < 92)
+        )
+        incident_anomalies = sum(1 for inc in incidents if "FALL" not in (inc.alert_type or "").upper())
+        total_anomalies = max(vital_anomalies, incident_anomalies)
+
         # Tiêu đề
         title = Paragraph(f"<b>{labels['title']}</b>", styles["Title"])
         subtitle = Paragraph(
@@ -538,10 +754,14 @@ class ReportService:
         )
         elements.extend([title, subtitle, Spacer(1, 14)])
 
-        # Thống kê tổng quan
+        # Thống kê tổng quan (bao gồm Cảnh báo nguy kịch)
+        critical_detail_str = f" ({', '.join(critical_labels)})" if critical_labels else ""
         summary_text = Paragraph(
             f"<b>{labels['vital_records']}:</b> {len(vitals)} &nbsp;&nbsp;|&nbsp;&nbsp; "
-            f"<b>{labels['alert_events']}:</b> {len(incidents)}",
+            f"<b>{labels['alert_events']}:</b> {len(incidents)}<br/>"
+            f"<b>{labels['critical_alerts']}:</b> {critical_count}{critical_detail_str} &nbsp;&nbsp;|&nbsp;&nbsp; "
+            f"<b>{labels['fall_events']}:</b> {total_falls} &nbsp;&nbsp;|&nbsp;&nbsp; "
+            f"<b>{labels['abnormal_hr']}:</b> {total_anomalies}",
             styles["Heading3"],
         )
         elements.extend([summary_text, Spacer(1, 10)])
@@ -573,13 +793,13 @@ class ReportService:
         # Bảng sự kiện cảnh báo
         if incidents:
             elements.append(Paragraph(f"<b>{labels['incident_history']}</b>", styles["Heading2"]))
-            inc_data: list[list[Any]] = [[labels["time"], labels["alert_type"], labels["level"], labels["message"], labels["handled"]]]
+            inc_data = [[labels["time"], labels["alert_type"], labels["level"], labels["message"], labels["handled"]]]
             cell_style = styles["Normal"]
-            for inc in incidents[:15]:
-                msg_text = (inc.message or "")[:50] + ("..." if len(inc.message or "") > 50 else "")
+            for inc in incidents[:20]:
+                msg_text = (inc.message or "")[:60] + ("..." if len(inc.message or "") > 60 else "")
                 inc_data.append([
                     inc.created_at.strftime("%d/%m %H:%M") if inc.created_at else "-",
-                    str(inc.alert_type or "-"),
+                    ReportService.format_critical_event_label(inc) if ReportService.is_critical_incident(inc) else str(inc.alert_type or "-"),
                     str(inc.alert_level or "-"),
                     Paragraph(msg_text, cell_style),
                     labels["acknowledged"] if inc.is_acknowledged else labels["pending"],
@@ -608,9 +828,27 @@ class ReportService:
         incidents: List[Incident],
         language: str = "vi",
     ) -> bytes:
-        """Tạo bảng tính Excel chứa toàn bộ raw data sinh hiệu và incidents."""
+        """Tạo bảng tính Excel chứa toàn bộ raw data sinh hiệu, incidents và bảng tổng hợp cảnh báo nguy kịch."""
         labels = ReportService._labels(language)
         wb = Workbook()
+
+        critical_inc_list = [inc for inc in incidents if ReportService.is_critical_incident(inc)]
+        critical_count = len(critical_inc_list)
+        critical_labels: List[str] = []
+        for inc in critical_inc_list:
+            lbl = ReportService.format_critical_event_label(inc)
+            if lbl not in critical_labels:
+                critical_labels.append(lbl)
+
+        fall_vital_count = sum(1 for v in vitals if v.fall_detected)
+        fall_inc_count = sum(1 for inc in incidents if "FALL" in (inc.alert_type or "").upper())
+        total_falls = max(fall_vital_count, fall_inc_count)
+
+        vital_anomalies = sum(
+            1 for v in vitals if (v.heart_rate and (v.heart_rate < 50 or v.heart_rate > 110)) or (v.spo2 and v.spo2 < 92)
+        )
+        incident_anomalies = sum(1 for inc in incidents if "FALL" not in (inc.alert_type or "").upper())
+        total_anomalies = max(vital_anomalies, incident_anomalies)
 
         # Sheet 1: Vital Signs
         ws_vitals = wb.active
@@ -667,6 +905,23 @@ class ReportService:
                 inc.is_acknowledged,
                 inc.created_at.strftime("%Y-%m-%d %H:%M:%S") if inc.created_at else "",
             ])
+
+        # Sheet 3: Alert Summary (Tổng hợp cảnh báo & sự kiện trong kỳ)
+        ws_sum = wb.create_sheet(title=labels["summary_sheet"])
+        ws_sum.append(["Hạng mục thống kê", "Số lần", "Chi tiết sự kiện"])
+        for col_idx in range(1, 4):
+            s_cell = ws_sum.cell(row=1, column=col_idx)
+            s_cell.fill = header_fill
+            s_cell.font = header_font
+
+        ws_sum.append([
+            labels["critical_alerts"],
+            critical_count,
+            ", ".join(critical_labels) if critical_labels else "-",
+        ])
+        ws_sum.append([labels["fall_events"], total_falls, "-"])
+        ws_sum.append([labels["abnormal_hr"], total_anomalies, "-"])
+        ws_sum.append([labels["vital_records"], len(vitals), "-"])
 
         stream = io.BytesIO()
         wb.save(stream)

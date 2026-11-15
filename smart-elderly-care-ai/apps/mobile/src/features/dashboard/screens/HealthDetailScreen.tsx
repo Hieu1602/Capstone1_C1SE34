@@ -99,6 +99,7 @@ export default function HealthDetailScreen({ navigation, route }: any) {
     const now = new Date();
     return now.getHours() * 60 + now.getMinutes();
   });
+  const [isScrubbingTimeline, setIsScrubbingTimeline] = useState(false);
 
   // Tải dữ liệu từ Backend khi chọn ngày
   const loadDateVitals = async (dateStr: string) => {
@@ -147,6 +148,12 @@ export default function HealthDetailScreen({ navigation, route }: any) {
   // Cập nhật real-time dữ liệu biểu đồ khi có bản tin WebSocket mới đổ về
   useEffect(() => {
     if (selectedDate === getTodayStr() && currentVitals?.heart_rate && Number(currentVitals.heart_rate) > 0) {
+      const vTime = (currentVitals as any)?.time || (currentVitals as any)?.recorded_at || currentVitals?.timestamp;
+      const timeMs = vTime ? (typeof vTime === 'number' ? vTime : new Date(vTime).getTime()) : 0;
+      // Chỉ tự động cập nhật biểu đồ hôm nay nếu bản ghi mới nhận trong vòng 2 phút
+      if (timeMs && Math.abs(Date.now() - timeMs) > 2 * 60 * 1000) {
+        return;
+      }
       setDayVitals((prev) => {
         const now = new Date();
         const newRecord = {
@@ -238,7 +245,22 @@ export default function HealthDetailScreen({ navigation, route }: any) {
     Alert.alert('Đồng bộ thành công', 'Dữ liệu sức khỏe từ Hub và vòng đeo tay đã được làm mới.');
   };
 
-  // Tìm mốc đo gần nhất với giờ tua (chỉ chấp nhận trong khoảng +-90 phút, không đoán trước tương lai)
+  // Tối ưu hóa: Tiền xử lý thời gian (phút trong ngày) một lần duy nhất khi danh sách dayVitals thay đổi
+  const parsedDayVitals = useMemo(() => {
+    if (!dayVitals || dayVitals.length === 0) return [];
+    return dayVitals.map((v) => {
+      const rawDate = v.recorded_at || v.time || v.created_at;
+      const d = rawDate ? new Date(rawDate) : null;
+      const isValid = Boolean(d && !isNaN(d.getTime()));
+      return {
+        ...v,
+        _minutes: isValid && d ? d.getHours() * 60 + d.getMinutes() : -1,
+        _label: isValid && d ? `${String(d.getHours()).padStart(2, '0')}:${String(d.getMinutes()).padStart(2, '0')}` : '--:--',
+      };
+    });
+  }, [dayVitals]);
+
+  // Tìm mốc đo gần nhất với giờ tua (chỉ so khớp số phút nguyên đã tiền xử lý, tránh tính lại Date khi kéo thanh trượt)
   const closestVital = useMemo(() => {
     const isToday = selectedDate === getTodayStr();
     const now = new Date();
@@ -251,12 +273,11 @@ export default function HealthDetailScreen({ navigation, route }: any) {
 
     let best: any = null;
     let minDiff = 999999;
-    if (dayVitals && dayVitals.length > 0) {
-      for (const v of dayVitals) {
-        const rawDate = v.recorded_at || v.time || v.created_at;
-        const d = rawDate ? new Date(rawDate) : null;
-        if (!d || isNaN(d.getTime())) continue;
-        const vMinutes = d.getHours() * 60 + d.getMinutes();
+    if (parsedDayVitals && parsedDayVitals.length > 0) {
+      for (let i = 0; i < parsedDayVitals.length; i++) {
+        const v = parsedDayVitals[i];
+        const vMinutes = v._minutes;
+        if (vMinutes < 0) continue;
 
         // Nếu là hôm nay, không chấp nhận bản ghi tương lai
         if (isToday && vMinutes > nowMinutes) continue;
@@ -271,8 +292,19 @@ export default function HealthDetailScreen({ navigation, route }: any) {
     }
 
     // Nếu đang xem hôm nay và giờ tua gần giờ hiện tại (trong vòng 60 phút) mà lịch sử chưa có mốc gần,
-    // dùng ngay giá trị sinh hiệu real-time từ WebSocket (currentVitals)
-    if (!best && isToday && Math.abs(scrubberMinutes - nowMinutes) <= 60 && currentVitals?.heart_rate) {
+    // chỉ dùng giá trị sinh hiệu real-time từ WebSocket nếu bản tin THỰC SỰ MỚI (trong vòng 2 phút)
+    // và thiết bị đang kết nối. Tuyệt đối không lấy dữ liệu cũ từ phiên hôm trước gán vào mốc hiện tại!
+    const isLiveFresh = (() => {
+      if (!currentVitals?.heart_rate) return false;
+      if (currentVitals.bracelet_connected === false) return false;
+      const vTime = (currentVitals as any)?.time || (currentVitals as any)?.recorded_at || currentVitals?.timestamp;
+      if (!vTime) return false;
+      const timeMs = typeof vTime === 'number' ? vTime : new Date(vTime).getTime();
+      if (isNaN(timeMs)) return false;
+      return Math.abs(Date.now() - timeMs) <= 2 * 60 * 1000;
+    })();
+
+    if (!best && isToday && Math.abs(scrubberMinutes - nowMinutes) <= 60 && isLiveFresh) {
       return {
         id: 'realtime_live',
         time: now.toISOString(),
@@ -288,27 +320,21 @@ export default function HealthDetailScreen({ navigation, route }: any) {
     }
 
     return best;
-  }, [dayVitals, scrubberMinutes, selectedDate, currentVitals]);
+  }, [parsedDayVitals, scrubberMinutes, selectedDate, currentVitals]);
 
-  // Dữ liệu biểu đồ động theo ngày được chọn
+  // Dữ liệu biểu đồ động theo ngày được chọn (sử dụng cache tiền xử lý)
   const chartDataForDay = useMemo(() => {
-    if (!dayVitals || dayVitals.length === 0) return [];
-    return dayVitals.map((v) => {
-      const rawDate = v.recorded_at || v.time || v.created_at;
-      const d = rawDate ? new Date(rawDate) : null;
-      const isValid = d && !isNaN(d.getTime());
-      const label = isValid ? `${String(d.getHours()).padStart(2, '0')}:${String(d.getMinutes()).padStart(2, '0')}` : '--:--';
-      return {
-        id: v.id,
-        label,
-        hr: v.heart_rate,
-        spo2: v.spo2,
-        temp: v.body_temp ?? v.skin_temp_max,
-        activity: v.activity || v.activity_state || 'Sinh hoạt',
-        minute: isValid ? d.getHours() * 60 + d.getMinutes() : 0,
-      };
-    });
-  }, [dayVitals]);
+    if (!parsedDayVitals || parsedDayVitals.length === 0) return [];
+    return parsedDayVitals.map((v) => ({
+      id: v.id,
+      label: v._label,
+      hr: v.heart_rate,
+      spo2: v.spo2,
+      temp: v.body_temp ?? v.skin_temp_max,
+      activity: v.activity || v.activity_state || 'Sinh hoạt',
+      minute: v._minutes >= 0 ? v._minutes : 0,
+    }));
+  }, [parsedDayVitals]);
 
   // Nhịp tim trung bình trong ngày thực tế
   const dailyAvgHR = useMemo(() => {
@@ -395,6 +421,7 @@ export default function HealthDetailScreen({ navigation, route }: any) {
 
       <ScrollView
         ref={scrollRef}
+        scrollEnabled={!isScrubbingTimeline}
         contentContainerStyle={styles.scrollContent}
         showsVerticalScrollIndicator={false}
       >
@@ -469,11 +496,13 @@ export default function HealthDetailScreen({ navigation, route }: any) {
             scrubberMinutes={scrubberMinutes}
             setScrubberMinutes={setScrubberMinutes}
             closestVital={closestVital}
+            parsedDayVitals={parsedDayVitals}
             isLoadingVitals={isLoadingVitals}
             hasData={hasData}
             selectedDate={selectedDate}
             isDarkMode={isDarkMode}
             colors={colors}
+            onScrubbingChange={setIsScrubbingTimeline}
           />
         )}
 
