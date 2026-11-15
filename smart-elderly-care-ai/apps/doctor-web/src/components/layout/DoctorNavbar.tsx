@@ -8,7 +8,6 @@ import { doctorApi, householdApi, incidentsApi, authApi } from '../../services/a
 import { doctorWebSocket } from '../../services/websocket';
 import type { Incident, AppointmentItem, DoctorPatientCard } from '../../types';
 import {
-  Stethoscope,
   Bell,
   LogOut,
   ShieldCheck,
@@ -486,8 +485,12 @@ export const DoctorNavbar: React.FC = () => {
         onClick={() => navigate('/')}
         className="flex cursor-pointer items-center space-x-3 shrink-0"
       >
-        <div className="flex h-10 w-10 items-center justify-center rounded-xl bg-gradient-to-tr from-blue-700 to-blue-500 text-white shadow-md shadow-blue-500/20">
-          <Stethoscope className="h-5 w-5" />
+        <div className="flex h-10 w-10 items-center justify-center rounded-xl bg-white p-1 border border-slate-200/80 shadow-xs dark:bg-slate-800 dark:border-slate-700 overflow-hidden shrink-0">
+          <img
+            src="/assets/logo.png"
+            alt="SECA Logo"
+            className="h-full w-full object-contain"
+          />
         </div>
         <div>
           <div className="flex items-center space-x-2">

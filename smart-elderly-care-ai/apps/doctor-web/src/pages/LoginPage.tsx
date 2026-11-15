@@ -26,8 +26,8 @@ export const DoctorAuthSplitShell: React.FC<{ children: React.ReactNode }> = ({ 
       <div className="flex flex-1 flex-col items-center justify-center px-6 py-4 sm:px-10">
         {/* Header thương hiệu */}
         <div className="mb-5 flex items-center justify-center gap-2.5">
-          <div className="flex h-10 w-10 items-center justify-center rounded-xl bg-[#2563EB] text-white shadow-md shadow-blue-500/25">
-            <Stethoscope className="h-5 w-5" />
+          <div className="flex h-10 w-10 items-center justify-center rounded-xl bg-white p-1 shadow-md border border-blue-100 shrink-0">
+            <img src="/assets/logo.png" alt="SECA Logo" className="h-full w-full object-contain" />
           </div>
           <span className="font-heading text-xl font-extrabold tracking-tight text-[#1D4ED8] border-b-2 border-[#2563EB] pb-0.5">
             Smart Elderly Care AI
@@ -72,8 +72,8 @@ export const DoctorAuthSplitShell: React.FC<{ children: React.ReactNode }> = ({ 
         <div className="animate-float relative rounded-3xl border border-white/80 bg-white/80 px-7 py-6 text-center shadow-[0_20px_50px_rgba(37,99,235,0.18)] backdrop-blur-xl">
           <div className="relative mx-auto mb-3 flex h-12 w-12 items-center justify-center">
             <span className="absolute inline-flex h-12 w-12 animate-ping rounded-2xl bg-blue-400/35" />
-            <div className="relative flex h-12 w-12 items-center justify-center rounded-2xl bg-[#2563EB] text-white shadow-md shadow-blue-600/30">
-              <Stethoscope className="h-6 w-6" />
+            <div className="relative flex h-14 w-14 items-center justify-center rounded-2xl bg-white p-2 shadow-md shadow-blue-600/20 border border-blue-100">
+              <img src="/assets/logo.png" alt="SECA Logo" className="h-full w-full object-contain" />
             </div>
           </div>
 
