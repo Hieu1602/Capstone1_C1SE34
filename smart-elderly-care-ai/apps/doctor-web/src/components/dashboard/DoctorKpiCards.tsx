@@ -9,6 +9,7 @@ export interface DoctorKpiCardsProps {
   onlineCount: number;
   onNavigatePatients: () => void;
   onNavigateAppointments: () => void;
+  loading?: boolean;
 }
 
 export const DoctorKpiCards: React.FC<DoctorKpiCardsProps> = ({
@@ -19,6 +20,7 @@ export const DoctorKpiCards: React.FC<DoctorKpiCardsProps> = ({
   onlineCount,
   onNavigatePatients,
   onNavigateAppointments,
+  loading = false,
 }) => {
   const kpis = [
     {
@@ -92,9 +94,13 @@ export const DoctorKpiCards: React.FC<DoctorKpiCardsProps> = ({
             <div className="mt-4 flex items-end justify-between">
               <div>
                 <p className="text-xs font-bold text-slate-500">{kpi.label}</p>
-                <p className="mt-1 text-3xl font-black tracking-tight text-slate-900">
-                  {kpi.value}
-                </p>
+                {loading && patientCount === 0 ? (
+                  <div className="mt-1 h-8 w-16 rounded-lg bg-slate-200 animate-pulse" />
+                ) : (
+                  <p className="mt-1 text-3xl font-black tracking-tight text-slate-900">
+                    {kpi.value}
+                  </p>
+                )}
                 <p className="mt-1 text-[11px] text-slate-400">{kpi.sub}</p>
               </div>
 
