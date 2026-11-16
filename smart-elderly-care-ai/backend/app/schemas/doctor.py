@@ -29,6 +29,8 @@ class DoctorPatientCard(BaseModel):
     spo2: Optional[int] = None
     skin_temp_max: Optional[float] = None
     blood_pressure: Optional[str] = None
+    blood_type: Optional[str] = None
+    bmi: Optional[float] = None
     health_status: str = "NORMAL"  # NORMAL | WARNING | DANGER
     last_updated: Optional[str] = None
 
