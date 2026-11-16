@@ -6,4 +6,8 @@ export * from './CreateEditUserModal';
 export * from './CreateEditRuleModal';
 export * from './UserPermissionModal';
 export * from './ConfirmActionModal';
-
+export * from './StatusReasonModal';
+export * from './UserTerminalsModal';
+export * from './DeleteUserModal';
+export * from './DormantBatchModal';
+export * from './DormantAccountsTab';
