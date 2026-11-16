@@ -111,8 +111,9 @@ jobs:
             cd smart-elderly-care-ai
             python3 sync_ec2_env.py || true
             
-            # Giải phóng port 8000 nếu có tiến trình uvicorn chạy thủ công cũ trên host
-            sudo pkill -f "uvicorn app.main:app" || true
+            # Giải phóng port 8000 nếu có tiến trình uvicorn chạy thủ công cũ trên host (tránh tự kill shell SSH)
+            sudo fuser -k 8000/tcp 2>/dev/null || true
+            sudo pkill -9 -f '[u]vicorn app.main:app' 2>/dev/null || true
             
             echo "🐳 [CI/CD] Đang cập nhật và khởi động lại FastAPI Backend qua Docker Compose..."
             docker compose up -d --build backend || sudo docker compose up -d --build backend
