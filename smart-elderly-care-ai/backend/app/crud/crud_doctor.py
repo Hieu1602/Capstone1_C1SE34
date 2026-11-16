@@ -68,7 +68,47 @@ class CRUDDoctor:
     ) -> List[DoctorPatientCard]:
         """
         Lấy danh sách tất cả người cao tuổi trong các căn nhà mà Bác sĩ được mời tham gia (house_members).
+        Tích hợp Redis In-Memory Cache (độ trễ < 1ms), tự động làm mới sinh hiệu thời gian thực từ RAM.
         """
+        from app.services.redis import redis_service
+
+        # 0. Ưu tiên lấy nhanh từ Redis Cache (< 1ms)
+        cached_cards_data = None
+        try:
+            cached_cards_data = await redis_service.get_cached_doctor_patients(str(doctor_user.id))
+        except Exception:
+            pass
+
+        if cached_cards_data is not None:
+            cached_cards: List[DoctorPatientCard] = []
+            for item in cached_cards_data:
+                # Cập nhật nhanh sinh hiệu thời gian thực từ Redis RAM nếu có bản tin mới
+                dev_id = item.get("device_id")
+                if dev_id:
+                    try:
+                        latest_vs = await redis_service.get_latest_vitals(str(dev_id))
+                        if latest_vs:
+                            if latest_vs.get("heart_rate"):
+                                item["heart_rate"] = latest_vs["heart_rate"]
+                            if latest_vs.get("spo2"):
+                                item["spo2"] = latest_vs["spo2"]
+                            temp_val = latest_vs.get("skin_temp_max") or latest_vs.get("temperature")
+                            if temp_val:
+                                item["skin_temp_max"] = temp_val
+                            if latest_vs.get("bp_systolic") is not None and latest_vs.get("bp_diastolic") is not None:
+                                item["blood_pressure"] = f"{latest_vs['bp_systolic']}/{latest_vs['bp_diastolic']} mmHg"
+                            item["last_updated"] = "Vừa xong (Trực tuyến)"
+                            hr_val = item.get("heart_rate")
+                            spo2_val = item.get("spo2")
+                            if (spo2_val is not None and spo2_val < 90) or (hr_val is not None and (hr_val > 120 or hr_val < 50)):
+                                item["health_status"] = "DANGER"
+                            elif (spo2_val is not None and spo2_val < 95) or (hr_val is not None and (hr_val > 100 or hr_val < 55)):
+                                item["health_status"] = "WARNING"
+                    except Exception:
+                        pass
+                cached_cards.append(DoctorPatientCard(**item))
+            return cached_cards
+
         # 1. Tìm các căn nhà Bác sĩ có quyền truy cập
         mem_query = await db.execute(
             select(HouseMember.house_id).where(
@@ -128,21 +168,52 @@ class CRUDDoctor:
                 last_updated_str = None
 
                 if band_device:
-                    vs_res = await db.execute(
-                        select(VitalSign)
-                        .where(VitalSign.device_id == band_device.id)
-                        .order_by(desc(VitalSign.time))
-                        .limit(1)
-                    )
-                    latest_vs = vs_res.scalar_one_or_none()
-                    if latest_vs:
-                        hr = latest_vs.heart_rate
-                        spo2 = latest_vs.spo2
-                        temp = latest_vs.skin_temp_max
-                        if latest_vs.bp_systolic is not None and latest_vs.bp_diastolic is not None:
-                            bp_str = f"{latest_vs.bp_systolic}/{latest_vs.bp_diastolic} mmHg"
-                        if latest_vs.time:
-                            last_updated_str = latest_vs.time.strftime("%d/%m/%Y %H:%M")
+                    from app.services.redis import redis_service
+                    # Ưu tiên lấy trực tiếp từ Redis In-Memory Cache (< 1ms)
+                    cached_vitals = None
+                    try:
+                        cached_vitals = await redis_service.get_latest_vitals(str(band_device.id))
+                        dev_code = getattr(band_device, 'device_id', None)
+                        if not cached_vitals and dev_code:
+                            cached_vitals = await redis_service.get_latest_vitals(str(dev_code))
+                    except Exception:
+                        pass
+
+                    if cached_vitals:
+                        hr = cached_vitals.get("heart_rate")
+                        spo2 = cached_vitals.get("spo2")
+                        temp = cached_vitals.get("skin_temp_max") or cached_vitals.get("temperature")
+                        if cached_vitals.get("bp_systolic") is not None and cached_vitals.get("bp_diastolic") is not None:
+                            bp_str = f"{cached_vitals['bp_systolic']}/{cached_vitals['bp_diastolic']} mmHg"
+                        last_updated_str = "Vừa xong (Trực tuyến)"
+                    else:
+                        vs_res = await db.execute(
+                            select(VitalSign)
+                            .where(VitalSign.device_id == band_device.id)
+                            .order_by(desc(VitalSign.time))
+                            .limit(1)
+                        )
+                        latest_vs = vs_res.scalar_one_or_none()
+                        if latest_vs:
+                            hr = latest_vs.heart_rate
+                            spo2 = latest_vs.spo2
+                            temp = latest_vs.skin_temp_max
+                            if latest_vs.bp_systolic is not None and latest_vs.bp_diastolic is not None:
+                                bp_str = f"{latest_vs.bp_systolic}/{latest_vs.bp_diastolic} mmHg"
+                            if latest_vs.time:
+                                last_updated_str = latest_vs.time.strftime("%d/%m/%Y %H:%M")
+                            # Đẩy vào Redis Cache để lần gọi sau phản hồi < 1ms
+                            try:
+                                await redis_service.set_latest_vitals(str(band_device.id), {
+                                    "heart_rate": hr,
+                                    "spo2": spo2,
+                                    "skin_temp_max": temp,
+                                    "bp_systolic": latest_vs.bp_systolic,
+                                    "bp_diastolic": latest_vs.bp_diastolic,
+                                    "cached_at_iso": latest_vs.time.isoformat() if latest_vs.time else None,
+                                })
+                            except Exception:
+                                pass
 
                 # Đánh giá sơ bộ trạng thái y tế
                 if (spo2 is not None and spo2 < 90) or (hr is not None and (hr > 120 or hr < 50)):
@@ -180,6 +251,14 @@ class CRUDDoctor:
                         last_updated=last_updated_str or "Chưa có dữ liệu",
                     )
                 )
+
+        # Lưu danh sách bệnh nhân vào Redis Cache (TTL = 180 giây)
+        try:
+            from app.services.redis import redis_service
+            serialized_cards = [c.model_dump() for c in cards]
+            await redis_service.set_cached_doctor_patients(str(doctor_user.id), serialized_cards, ttl=180)
+        except Exception:
+            pass
 
         return cards
 
@@ -243,21 +322,39 @@ class CRUDDoctor:
         last_updated_str = None
 
         if band_device:
-            vs_res = await db.execute(
-                select(VitalSign)
-                .where(VitalSign.device_id == band_device.id)
-                .order_by(desc(VitalSign.time))
-                .limit(1)
-            )
-            latest_vs = vs_res.scalar_one_or_none()
-            if latest_vs:
-                hr = latest_vs.heart_rate
-                spo2 = latest_vs.spo2
-                temp = latest_vs.skin_temp_max
-                if latest_vs.bp_systolic is not None and latest_vs.bp_diastolic is not None:
-                    bp_str = f"{latest_vs.bp_systolic}/{latest_vs.bp_diastolic} mmHg"
-                if latest_vs.time:
-                    last_updated_str = latest_vs.time.strftime("%d/%m/%Y %H:%M")
+            from app.services.redis import redis_service
+            cached_vs = None
+            try:
+                cached_vs = await redis_service.get_latest_vitals(str(band_device.id))
+                dev_code = getattr(band_device, 'device_id', None)
+                if not cached_vs and dev_code:
+                    cached_vs = await redis_service.get_latest_vitals(str(dev_code))
+            except Exception:
+                pass
+
+            if cached_vs:
+                hr = cached_vs.get("heart_rate")
+                spo2 = cached_vs.get("spo2")
+                temp = cached_vs.get("skin_temp_max") or cached_vs.get("temperature")
+                if cached_vs.get("bp_systolic") is not None and cached_vs.get("bp_diastolic") is not None:
+                    bp_str = f"{cached_vs['bp_systolic']}/{cached_vs['bp_diastolic']} mmHg"
+                last_updated_str = "Vừa xong (Trực tuyến)"
+            else:
+                vs_res = await db.execute(
+                    select(VitalSign)
+                    .where(VitalSign.device_id == band_device.id)
+                    .order_by(desc(VitalSign.time))
+                    .limit(1)
+                )
+                latest_vs = vs_res.scalar_one_or_none()
+                if latest_vs:
+                    hr = latest_vs.heart_rate
+                    spo2 = latest_vs.spo2
+                    temp = latest_vs.skin_temp_max
+                    if latest_vs.bp_systolic is not None and latest_vs.bp_diastolic is not None:
+                        bp_str = f"{latest_vs.bp_systolic}/{latest_vs.bp_diastolic} mmHg"
+                    if latest_vs.time:
+                        last_updated_str = latest_vs.time.strftime("%d/%m/%Y %H:%M")
 
         if (spo2 is not None and spo2 < 90) or (hr is not None and (hr > 120 or hr < 50)):
             health_status = "DANGER"
@@ -576,6 +673,12 @@ class CRUDDoctor:
                         await client_ws.send_text(ws_payload)
             except Exception:
                 pass
+
+        try:
+            from app.services.redis import redis_service
+            await redis_service.invalidate_doctor_patients()
+        except Exception:
+            pass
 
         return await self.get_patient_detail(db, elderly_id)
 

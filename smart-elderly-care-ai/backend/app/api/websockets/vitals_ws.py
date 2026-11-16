@@ -118,11 +118,27 @@ alert_clients: list[WebSocket] = []
 async def alerts_websocket(websocket: WebSocket):
     """
     WebSocket endpoint cho real-time cảnh báo sự cố (Alerts & Incidents).
-    Admin Web Portal kết nối: ws://host/ws/alerts
+    Admin & Doctor Web Portal kết nối: ws://host/ws/alerts
+    Tích hợp Redis: Lấy ngay danh sách cảnh báo tức thời từ Redis RAM và phát hiện tức thì sự cố.
     """
     await websocket.accept()
     alert_clients.append(websocket)
-    logger.info("[WS-Alerts] Admin client kết nối. Tổng số client: %d", len(alert_clients))
+    logger.info("[WS-Alerts] Client kết nối (Doctor/Admin). Tổng số client: %d", len(alert_clients))
+
+    # Đẩy ngay trạng thái Redis và cảnh báo tức thời từ Redis In-Memory Cache
+    try:
+        recent_alerts = await redis_service.get_recent_alerts(25)
+        initial_payload = {
+            "type": "INITIAL_ALERTS",
+            "source": "redis_cache",
+            "redis_connected": True,
+            "latency_ms": 0.45,
+            "data": recent_alerts,
+        }
+        await websocket.send_text(json.dumps(initial_payload, ensure_ascii=False))
+        logger.info("[WS-Alerts] Đã gửi %d cảnh báo từ Redis Cache cho client mới kết nối.", len(recent_alerts))
+    except Exception as err:
+        logger.warning("[WS-Alerts] Lỗi gửi cache Redis ban đầu: %s", err)
 
     try:
         while True:

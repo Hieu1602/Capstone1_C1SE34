@@ -8,8 +8,9 @@ Hỗ trợ:
 Vị trí: backend/app/crud/crud_vital.py
 """
 
-from datetime import datetime, timedelta, timezone
+import json
 import logging
+from datetime import datetime, timedelta, timezone
 from typing import List, Optional, Union
 from uuid import UUID
 
@@ -364,17 +365,26 @@ class CRUDVital:
                         })
                         await db.flush()
 
+                        alert_payload_dict = {
+                            "id": str(inc.id),
+                            "device_id": str(uuid_val),
+                            "alert_type": alert_type,
+                            "alert_level": alert_level,
+                            "message": alert_msg,
+                            "created_at": datetime.now(timezone.utc).isoformat(),
+                        }
+
+                        # Lưu vào hàng đợi RAM Redis cho Doctor Web & Mobile tải tức thời
+                        try:
+                            from app.services.redis import redis_service
+                            await redis_service.push_recent_alert(alert_payload_dict)
+                        except Exception:
+                            pass
+
                         alert_payload = json.dumps({
                             "type": "ALERT_NEW",
                             "alert_type": alert_type,
-                            "data": {
-                                "id": str(inc.id),
-                                "device_id": str(uuid_val),
-                                "alert_type": alert_type,
-                                "alert_level": alert_level,
-                                "message": alert_msg,
-                                "created_at": datetime.now(timezone.utc).isoformat(),
-                            }
+                            "data": alert_payload_dict,
                         }, ensure_ascii=False)
                         for client_ws in list(alert_clients):
                             try:

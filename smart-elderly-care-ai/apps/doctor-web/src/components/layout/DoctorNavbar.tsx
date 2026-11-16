@@ -24,22 +24,7 @@ import {
   Moon,
   Sun,
 } from 'lucide-react';
-
-interface UnifiedNotification {
-  id: string;
-  rawIncidentId?: string;
-  type: 'ALERT' | 'APPOINTMENT' | 'INVITE';
-  title: string;
-  subtitle: string;
-  timeStr: string;
-  badgeLabel: string;
-  badgeColor: string;
-  badgeBg: string;
-  isRead: boolean;
-  targetUrl: string;
-  patientId?: string;
-  rawIncident?: Incident;
-}
+import { NotificationDetailModal, UnifiedNotification } from '../clinical/NotificationDetailModal';
 
 type TabType = 'ALL' | 'UNREAD' | 'ALERTS' | 'APPOINTMENTS';
 
@@ -93,6 +78,8 @@ export const DoctorNavbar: React.FC = () => {
   };
 
   const [notifications, setNotifications] = useState<UnifiedNotification[]>([]);
+  const [selectedNotif, setSelectedNotif] = useState<UnifiedNotification | null>(null);
+  const [showDetailModal, setShowDetailModal] = useState(false);
   const [readIds, setReadIds] = useState<Set<string>>(() => {
     try {
       const saved = localStorage.getItem(READ_STORAGE_KEY);
@@ -237,6 +224,10 @@ export const DoctorNavbar: React.FC = () => {
             title = isCritical ? 'Cảnh báo sự cố té ngã khẩn cấp' : 'Cảnh báo y tế';
           }
 
+          const matchedPat = (patRes.status === 'fulfilled' && Array.isArray(patRes.value))
+            ? patRes.value.find((p: DoctorPatientCard) => p.id === (inc as any).elderly_id || (inc.notes && inc.notes.includes(p.id))) || patRes.value[0]
+            : undefined;
+
           unifiedList.push({
             id: `inc_${inc.id}`,
             rawIncidentId: inc.id,
@@ -250,6 +241,13 @@ export const DoctorNavbar: React.FC = () => {
             isRead: finalRead,
             targetUrl,
             rawIncident: inc,
+            patientId: matchedPat?.id,
+            patientName: matchedPat?.name || (isHouseInvite ? 'Hộ gia đình mới' : 'Người cao tuổi'),
+            patientAddress: matchedPat?.house_address || matchedPat?.house_name,
+            heartRate: (matchedPat?.heart_rate && matchedPat.heart_rate > 0) ? matchedPat.heart_rate : undefined,
+            spo2: (matchedPat?.spo2 && matchedPat.spo2 > 0) ? matchedPat.spo2 : undefined,
+            alertLevel: inc.alert_level,
+            alertType: inc.alert_type,
           });
         });
       }
@@ -276,6 +274,11 @@ export const DoctorNavbar: React.FC = () => {
                 isRead: savedReadIds.has(pId),
                 targetUrl: `/patients?search=${encodeURIComponent(p.name)}`,
                 patientId: p.id,
+                patientName: p.name,
+                patientAddress: p.house_address || p.house_name,
+                heartRate: p.heart_rate,
+                spo2: p.spo2,
+                alertLevel: isDanger ? 'CRITICAL' : 'WARNING',
               });
             }
           }
@@ -307,6 +310,8 @@ export const DoctorNavbar: React.FC = () => {
               badgeBg: isCompleted ? 'bg-emerald-50' : isCancelled ? 'bg-rose-50' : 'bg-sky-50',
               isRead: savedReadIds.has(aptId),
               targetUrl: '/appointments',
+              patientName: apt.patient_name,
+              patientAddress: apt.location,
             });
           }
         });
@@ -379,18 +384,13 @@ export const DoctorNavbar: React.FC = () => {
     setNotifications((prev) => prev.map((n) => ({ ...n, isRead: true })));
   };
 
-  // Click vào một thông báo
+  // Click vào một thông báo: Mở ngay Tab / Modal chi tiết thông báo
   const handleNotificationClick = async (item: UnifiedNotification) => {
     const next = new Set(readIds);
     next.add(item.id);
     if (item.rawIncidentId) {
       next.add(item.rawIncidentId);
       next.add(`inc_${item.rawIncidentId}`);
-      try {
-        await incidentsApi.acknowledge(item.rawIncidentId);
-      } catch (err) {
-        console.warn('Acknowledge incident error:', err);
-      }
     }
     setReadIds(next);
     localStorage.setItem(READ_STORAGE_KEY, JSON.stringify(Array.from(next)));
@@ -398,7 +398,45 @@ export const DoctorNavbar: React.FC = () => {
       prev.map((n) => (n.id === item.id ? { ...n, isRead: true } : n))
     );
     setShowNotifMenu(false);
-    navigate(item.targetUrl);
+    setSelectedNotif(item);
+    setShowDetailModal(true);
+  };
+
+  const handleAcknowledgeNotification = async (item: UnifiedNotification) => {
+    if (item.rawIncidentId) {
+      try {
+        await incidentsApi.acknowledge(item.rawIncidentId);
+      } catch (err) {
+        console.warn('Acknowledge incident error:', err);
+      }
+    }
+    const next = new Set(readIds);
+    next.add(item.id);
+    if (item.rawIncidentId) {
+      next.add(item.rawIncidentId);
+      next.add(`inc_${item.rawIncidentId}`);
+    }
+    setReadIds(next);
+    localStorage.setItem(READ_STORAGE_KEY, JSON.stringify(Array.from(next)));
+    setNotifications((prev) =>
+      prev.map((n) =>
+        n.id === item.id || n.rawIncidentId === item.rawIncidentId
+          ? { ...n, isRead: true, badgeLabel: 'Đã xử lý' }
+          : n
+      )
+    );
+  };
+
+  const handleRespondInvite = async (incident: Incident, action: 'accept' | 'reject') => {
+    const memberIdMatch = (incident.notes || incident.note || '')?.match(/MEMBER_ID:([a-fA-F0-9-]+)/);
+    const memberId = memberIdMatch?.[1] || incident.device_id || incident.id;
+    try {
+      await householdApi.respondInvite(memberId, action);
+      await incidentsApi.acknowledge(incident.id, action === 'accept' ? 'Đã đồng ý vào nhà' : 'Đã từ chối vào nhà');
+      fetchNotifData();
+    } catch (e) {
+      console.warn('Respond invite error:', e);
+    }
   };
 
   const handleQuickSearchSubmit = (e: React.FormEvent) => {
@@ -446,7 +484,7 @@ export const DoctorNavbar: React.FC = () => {
   };
 
   return (
-    <header className="sticky top-0 z-30 flex h-16 w-full items-center justify-between gap-4 border-b border-slate-200/80 bg-white/95 px-6 backdrop-blur-md dark:border-slate-800 dark:bg-slate-900/95">
+    <header className="sticky top-0 z-30 flex h-16 w-full items-center justify-between gap-4 border-b border-slate-200/80 bg-white/95 px-6 backdrop-blur-md dark:border-slate-800 dark:bg-slate-900/95 shrink-0">
       {/* Bên trái: Brand & Định danh Bác sĩ gia đình */}
       <div
         onClick={() => navigate('/')}
@@ -493,7 +531,7 @@ export const DoctorNavbar: React.FC = () => {
         </kbd>
       </form>
 
-      {/* Bên phải: Nút Nền tối, Chuông thông báo & Hồ sơ Bác sĩ */}
+      {/* Bên phải: Nền tối, Chuông thông báo & Hồ sơ Bác sĩ */}
       <div className="flex items-center space-x-2.5 shrink-0">
         {/* Nút Chuyển đổi Chế độ Nền tối / Nền sáng */}
         <button
@@ -678,28 +716,16 @@ export const DoctorNavbar: React.FC = () => {
                 )}
               </div>
 
-              {/* Footer động linh hoạt theo từng Tab: Lịch khám, Cảnh báo, Chưa đọc, Tất cả */}
+              {/* Footer điều hướng sang trang Tất cả thông báo */}
               <div className="border-t border-slate-100 bg-slate-50 p-2.5 text-center dark:border-slate-800 dark:bg-slate-800/60">
                 <button
                   onClick={() => {
                     setShowNotifMenu(false);
-                    if (notifTab === 'APPOINTMENTS') {
-                      navigate('/appointments');
-                    } else {
-                      navigate('/patients');
-                    }
+                    navigate('/notifications');
                   }}
                   className="inline-flex items-center space-x-1 text-xs font-bold text-blue-600 hover:text-blue-700 dark:text-blue-400"
                 >
-                  <span>
-                    {notifTab === 'APPOINTMENTS'
-                      ? 'Xem toàn bộ lịch khám'
-                      : notifTab === 'ALERTS'
-                        ? 'Xem toàn bộ cảnh báo sinh hiệu'
-                        : notifTab === 'UNREAD'
-                          ? 'Xem toàn bộ thông báo chưa đọc'
-                          : 'Xem toàn bộ thông báo'}
-                  </span>
+                  <span>Xem toàn bộ thông báo</span>
                   <ChevronRight className="h-3.5 w-3.5" />
                 </button>
               </div>
@@ -783,6 +809,23 @@ export const DoctorNavbar: React.FC = () => {
           )}
         </div>
       </div>
+
+      {/* Modal / Tab Chi tiết Thông báo Bác sĩ */}
+      <NotificationDetailModal
+        isOpen={showDetailModal}
+        notif={selectedNotif}
+        onClose={() => {
+          setShowDetailModal(false);
+          setSelectedNotif(null);
+        }}
+        onAcknowledge={handleAcknowledgeNotification}
+        onNavigate={(url) => {
+          setShowDetailModal(false);
+          setSelectedNotif(null);
+          navigate(url);
+        }}
+        onRespondInvite={handleRespondInvite}
+      />
     </header>
   );
 };

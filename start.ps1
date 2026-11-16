@@ -25,6 +25,7 @@ if (Test-Path "$ScriptDir\smart-elderly-care-ai") {
 $BackendDir = "$AiDir\backend"
 $MobileDir = "$AiDir\apps\mobile"
 $WebDir = "$AiDir\apps\web"
+$DoctorWebDir = "$AiDir\apps\doctor-web"
 $EdgeDir = "$AiDir\edge"
 $DockerComposeFile = "$AiDir\docker-compose.yml"
 
@@ -215,6 +216,32 @@ function Start-WebService {
 }
 
 # ------------------------------------------------------------------------------
+# 6b. KHOI DONG DOCTOR WEB PORTAL (VITE REACT)
+# ------------------------------------------------------------------------------
+function Start-DoctorWebService {
+    Write-Info "Dang khoi dong Doctor Web Portal (Vite React)..."
+
+    $npmCmd = Get-Command npm -ErrorAction SilentlyContinue
+    if (-not $npmCmd) {
+        Write-ErrorMsg "Khong tim thay Node.js / npm! Vui long cai dat Node.js de chay Doctor Web Portal."
+        return
+    }
+
+    if (-not (Test-Path "$DoctorWebDir\node_modules")) {
+        Write-Warn "Chua tim thay node_modules tai apps/doctor-web. Dang tien hanh npm install..."
+        Start-Process powershell.exe -ArgumentList "-NoExit", "-Command", "Set-Location '$DoctorWebDir'; npm install; npm run dev"
+        return
+    }
+
+    $psCommand = "[Console]::OutputEncoding = [System.Text.Encoding]::UTF8; `$host.UI.RawUI.WindowTitle = '[Elderly Care] Doctor Web Portal (Port 3001)'; Set-Location '$DoctorWebDir'; npm run dev"
+    Start-Process powershell.exe -ArgumentList "-NoExit", "-ExecutionPolicy", "Bypass", "-Command", $psCommand
+
+    Write-Success "Da mo tien trinh Doctor Web Portal tren port 3001."
+    Write-Host "     - Cong Bac Si Doctor Web      : http://localhost:3001" -ForegroundColor Yellow
+    Write-Host ""
+}
+
+# ------------------------------------------------------------------------------
 # 7. KHOI DONG MOBILE APP (REACT NATIVE EXPO)
 # ------------------------------------------------------------------------------
 function Start-MobileService {
@@ -341,6 +368,12 @@ function Show-SystemStatus {
     $webColor = if ($webOk) { "Green" } else { "Red" }
     Write-Host ("  {0,-28} : {1}" -f "Web Admin Portal (:3000)", $webStatus) -ForegroundColor $webColor
 
+    # Doctor Web Portal
+    $docOk = Test-PortListening -Port 3001
+    $docStatus = if ($docOk) { "[ONLINE] -> http://localhost:3001" } else { "[OFFLINE]" }
+    $docColor = if ($docOk) { "Green" } else { "DarkGray" }
+    Write-Host ("  {0,-28} : {1}" -f "Doctor Web Portal (:3001)", $docStatus) -ForegroundColor $docColor
+
     # Mobile App
     $mobileOk = Test-PortListening -Port 8081
     $mobileStatus = if ($mobileOk) { "[ONLINE] -> http://localhost:8081" } else { "[OFFLINE]" }
@@ -364,8 +397,8 @@ function Stop-AllServices {
         Write-Success "Da dung Docker containers."
     }
 
-    # Dung tien trinh tren cac cong 8000, 8081, 3000, 19000, 19001
-    $portsToKill = @(8000, 8081, 3000, 19000, 19001)
+    # Dung tien trinh tren cac cong 8000, 8081, 3000, 3001, 19000, 19001
+    $portsToKill = @(8000, 8081, 3000, 3001, 19000, 19001)
     $killedPids = @()
     foreach ($p in $portsToKill) {
         $pids = Get-NetTCPConnection -LocalPort $p -State Listen -ErrorAction SilentlyContinue | 
@@ -390,6 +423,7 @@ function Stop-AllServices {
 function Open-WebLinks {
     Write-Info "Dang mo cac lien ket tren trinh duyet..."
     if (Test-PortListening -Port 3000) { Start-Process "http://localhost:3000" }
+    if (Test-PortListening -Port 3001) { Start-Process "http://localhost:3001" }
     if (Test-PortListening -Port 8000) { Start-Process "http://localhost:8000/api/docs" }
     if (Test-PortListening -Port 8081) { Start-Process "http://localhost:8081" }
     if (Test-PortListening -Port 1883) { Start-Process "http://localhost:18083" }
@@ -414,6 +448,9 @@ function Start-AllServices {
     Start-WebService
     Start-Sleep -Seconds 2
 
+    Start-DoctorWebService
+    Start-Sleep -Seconds 2
+
     Start-MobileService -Mode "web"
     Start-Sleep -Seconds 2
 
@@ -423,6 +460,7 @@ function Start-AllServices {
     Write-Host "================================================================================" -ForegroundColor Cyan
     Write-Host "  DIA CHI TRUY CAP CAC DICH VU:" -ForegroundColor Yellow
     Write-Host "  - Web Admin Portal      : http://localhost:3000" -ForegroundColor White
+    Write-Host "  - Doctor Web Portal     : http://localhost:3001" -ForegroundColor White
     Write-Host "  - Mobile App Web        : http://localhost:8081" -ForegroundColor White
     Write-Host "  - Backend Swagger Docs  : http://localhost:8000/api/docs" -ForegroundColor White
     Write-Host "  - Health Check API      : http://localhost:8000/health" -ForegroundColor White
@@ -432,9 +470,10 @@ function Start-AllServices {
     Write-Host "================================================================================" -ForegroundColor Cyan
     Write-Host ""
 
-    $openNow = Read-Host "Ban co muon mo ngay Web Admin, Mobile App & Swagger Docs tren trinh duyet? (Y/N) [Mac dinh: Y]"
+    $openNow = Read-Host "Ban co muon mo ngay Web Admin, Doctor Web, Mobile App & Swagger Docs tren trinh duyet? (Y/N) [Mac dinh: Y]"
     if ($openNow -eq "" -or $openNow -match "^[yY]") {
         Start-Process "http://localhost:3000"
+        Start-Process "http://localhost:3001"
         Start-Process "http://localhost:8000/api/docs"
         Start-Process "http://localhost:8081"
     }
@@ -444,16 +483,18 @@ function Start-AllServices {
 # 14. DIEU HUONG CLI PARAMETERS
 # ------------------------------------------------------------------------------
 switch ($Target.ToLower()) {
-    "all"     { Start-AllServices; exit }
-    "docker"  { Start-DockerServices; exit }
-    "backend" { Start-BackendService; exit }
-    "web"     { Start-WebService; exit }
-    "mobile"  { Start-MobileService -Mode "web"; exit }
-    "edge"    { Start-EdgeService; exit }
-    "test"    { Run-BackendTests; exit }
-    "status"  { Show-SystemStatus; exit }
-    "stop"    { Stop-AllServices; exit }
-    "open"    { Open-WebLinks; exit }
+    "all"        { Start-AllServices; exit }
+    "docker"     { Start-DockerServices; exit }
+    "backend"    { Start-BackendService; exit }
+    "web"        { Start-WebService; exit }
+    "doctor"     { Start-DoctorWebService; exit }
+    "doctor-web" { Start-DoctorWebService; exit }
+    "mobile"     { Start-MobileService -Mode "web"; exit }
+    "edge"       { Start-EdgeService; exit }
+    "test"       { Run-BackendTests; exit }
+    "status"     { Show-SystemStatus; exit }
+    "stop"       { Stop-AllServices; exit }
+    "open"       { Open-WebLinks; exit }
 }
 
 # ------------------------------------------------------------------------------
@@ -465,35 +506,37 @@ do {
 
     Write-Host "  CHON TAC VU BAN MUON THUC HIEN:" -ForegroundColor Yellow
     Write-Host "  ------------------------------------------------------------------------------" -ForegroundColor DarkGray
-    Write-Host "  [1] Khoi dong TOAN BO (Docker + Backend + Web Admin + Mobile Web)" -ForegroundColor Green
+    Write-Host "  [1] Khoi dong TOAN BO (Docker + Backend + Web Admin + Doctor Web + Mobile Web)" -ForegroundColor Green
     Write-Host "  [2] Khoi dong Ha tang (Docker: TimescaleDB, Redis, EMQX)" -ForegroundColor Cyan
     Write-Host "  [3] Khoi dong Cloud Backend FastAPI (localhost:8000)" -ForegroundColor Cyan
     Write-Host "  [4] Khoi dong Web Admin Portal (localhost:3000)" -ForegroundColor Cyan
-    Write-Host "  [5] Khoi dong Mobile App (localhost:8081)" -ForegroundColor Cyan
-    Write-Host "  [6] Khoi dong Edge Hub AI (Kiem tra Camera / Cam bien)" -ForegroundColor Cyan
+    Write-Host "  [5] Khoi dong Doctor Web Portal (localhost:3001)" -ForegroundColor Cyan
+    Write-Host "  [6] Khoi dong Mobile App (localhost:8081)" -ForegroundColor Cyan
+    Write-Host "  [7] Khoi dong Edge Hub AI (Kiem tra Camera / Cam bien)" -ForegroundColor Cyan
     Write-Host "  ------------------------------------------------------------------------------" -ForegroundColor DarkGray
-    Write-Host "  [7] Kiem tra trang thai he thong (Health Check)" -ForegroundColor White
-    Write-Host "  [8] Chay Unit Tests Backend (pytest)" -ForegroundColor White
-    Write-Host "  [9] Mo cac trang quan tri tren Web Browser" -ForegroundColor White
-    Write-Host "  [10] Dung toan bo he thong (Stop All)" -ForegroundColor Yellow
+    Write-Host "  [8] Kiem tra trang thai he thong (Health Check)" -ForegroundColor White
+    Write-Host "  [9] Chay Unit Tests Backend (pytest)" -ForegroundColor White
+    Write-Host "  [10] Mo cac trang quan tri tren Web Browser" -ForegroundColor White
+    Write-Host "  [11] Dung toan bo he thong (Stop All)" -ForegroundColor Yellow
     Write-Host "  [0] Thoat" -ForegroundColor Red
     Write-Host "  ------------------------------------------------------------------------------" -ForegroundColor DarkGray
     Write-Host ""
 
-    $choice = Read-Host "  Nhap lua chon cua ban (0-10)"
+    $choice = Read-Host "  Nhap lua chon cua ban (0-11)"
 
     switch ($choice) {
         "1"  { Start-AllServices; Write-Host "Nhan Enter de tiep tuc..."; [void][System.Console]::ReadLine() }
         "2"  { Start-DockerServices; Write-Host "Nhan Enter de tiep tuc..."; [void][System.Console]::ReadLine() }
         "3"  { Start-BackendService; Write-Host "Nhan Enter de tiep tuc..."; [void][System.Console]::ReadLine() }
         "4"  { Start-WebService; Write-Host "Nhan Enter de tiep tuc..."; [void][System.Console]::ReadLine() }
-        "5"  { Start-MobileService -Mode "web"; Write-Host "Nhan Enter de tiep tuc..."; [void][System.Console]::ReadLine() }
-        "6"  { Start-EdgeService; Write-Host "Nhan Enter de tiep tuc..."; [void][System.Console]::ReadLine() }
-        "7"  { Write-Info "Dang kiem tra..."; Start-Sleep -Seconds 1 }
-        "8"  { Run-BackendTests; Write-Host "Nhan Enter de tiep tuc..."; [void][System.Console]::ReadLine() }
-        "9"  { Open-WebLinks; Write-Host "Nhan Enter de tiep tuc..."; [void][System.Console]::ReadLine() }
-        "10" { Stop-AllServices; Write-Host "Nhan Enter de tiep tuc..."; [void][System.Console]::ReadLine() }
+        "5"  { Start-DoctorWebService; Write-Host "Nhan Enter de tiep tuc..."; [void][System.Console]::ReadLine() }
+        "6"  { Start-MobileService -Mode "web"; Write-Host "Nhan Enter de tiep tuc..."; [void][System.Console]::ReadLine() }
+        "7"  { Start-EdgeService; Write-Host "Nhan Enter de tiep tuc..."; [void][System.Console]::ReadLine() }
+        "8"  { Write-Info "Dang kiem tra..."; Start-Sleep -Seconds 1 }
+        "9"  { Run-BackendTests; Write-Host "Nhan Enter de tiep tuc..."; [void][System.Console]::ReadLine() }
+        "10" { Open-WebLinks; Write-Host "Nhan Enter de tiep tuc..."; [void][System.Console]::ReadLine() }
+        "11" { Stop-AllServices; Write-Host "Nhan Enter de tiep tuc..."; [void][System.Console]::ReadLine() }
         "0"  { Write-Host "`nTam biet!`n"; break }
-        default { Write-Warn "Lua chon khong hop le, vui long chon tu 0 den 10."; Start-Sleep -Seconds 2 }
+        default { Write-Warn "Lua chon khong hop le, vui long chon tu 0 den 11."; Start-Sleep -Seconds 2 }
     }
 } while ($choice -ne "0")
