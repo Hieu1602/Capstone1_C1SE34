@@ -116,7 +116,7 @@ export const PatientDetailDrawer: React.FC<PatientDetailDrawerProps> = ({
                   )}
                 </div>
                 <span
-                  className={`absolute -bottom-1 -right-1 h-4 w-4 rounded-full ring-2 ring-white z-10 ${
+                  className={`absolute bottom-0 right-0 h-4 w-4 rounded-full ring-2 ring-white shadow-sm z-10 ${
                     selectedPatientCard?.is_online ? 'bg-emerald-500' : 'bg-slate-300'
                   }`}
                   title={selectedPatientCard?.is_online ? 'Smartband đang kết nối' : 'Chờ tín hiệu Smartband'}

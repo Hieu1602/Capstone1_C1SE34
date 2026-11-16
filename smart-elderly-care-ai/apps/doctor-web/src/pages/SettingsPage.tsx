@@ -377,7 +377,7 @@ export const SettingsPage: React.FC = () => {
                       doctorInitial
                     )}
                   </div>
-                  <span className="absolute bottom-1 right-1 h-4 w-4 rounded-full border-2 border-white bg-emerald-500" />
+                  <span className="absolute bottom-0.5 right-0.5 h-4 w-4 rounded-full ring-2 ring-white shadow-md bg-emerald-500 z-10" />
                   <span className="absolute -top-1 -right-1 flex h-6 w-6 items-center justify-center rounded-full border border-slate-200 bg-white text-blue-600 shadow-xs group-hover:scale-110 transition">
                     <Camera className="h-3.5 w-3.5" />
                   </span>

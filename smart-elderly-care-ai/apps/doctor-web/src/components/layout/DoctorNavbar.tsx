@@ -751,7 +751,7 @@ export const DoctorNavbar: React.FC = () => {
                   doctorInitial
                 )}
               </div>
-              <span className="absolute -bottom-0.5 -right-0.5 h-3 w-3 rounded-full bg-emerald-500 ring-2 ring-white dark:ring-slate-900 z-10" />
+              <span className="absolute bottom-0 right-0 h-3 w-3 rounded-full bg-emerald-500 ring-2 ring-white shadow-sm dark:ring-slate-900 z-10" />
             </div>
             <div className="text-left hidden sm:block">
               <p className="text-xs font-bold text-slate-900 dark:text-white">{doctorName}</p>
@@ -771,7 +771,7 @@ export const DoctorNavbar: React.FC = () => {
                       doctorInitial
                     )}
                   </div>
-                  <span className="absolute -bottom-0.5 -right-0.5 h-3 w-3 rounded-full bg-emerald-500 ring-2 ring-white dark:ring-slate-900 z-10" />
+                  <span className="absolute bottom-0 right-0 h-3.5 w-3.5 rounded-full bg-emerald-500 ring-2 ring-white shadow-sm dark:ring-slate-900 z-10" />
                 </div>
                 <div className="min-w-0 flex-1">
                   <p className="text-xs font-bold text-slate-900 dark:text-white truncate">{doctorName}</p>
