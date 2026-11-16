@@ -12,6 +12,9 @@ import {
   Server,
   LogOut,
   Wifi,
+  Stethoscope,
+  ExternalLink,
+  Smartphone,
 } from 'lucide-react';
 import { useAuthStore } from '../../store/useAuthStore';
 
@@ -175,6 +178,63 @@ export const Sidebar: React.FC = () => {
             </NavLink>
           );
         })}
+
+        {/* ── Subsystem Portals Quick Access ── */}
+        <div className="pt-3 pb-1 px-3 text-[10px] font-bold uppercase tracking-[0.14em] text-[#737780] dark:text-[#727984] border-t border-[#262A34] dark:border-[#323846] mt-2">
+          Cổng dịch vụ phân hệ
+        </div>
+
+        {/* Doctor Web Portal Link */}
+        <a
+          href="http://localhost:3001"
+          target="_blank"
+          rel="noopener noreferrer"
+          className="group flex items-center justify-between px-3 py-2 rounded-xl text-xs font-medium text-[#9DA3AE] dark:text-[#A1A7B1] hover:text-white hover:bg-blue-600/20 border border-transparent hover:border-blue-500/30 transition-all duration-150"
+        >
+          <div className="flex items-center gap-2.5 truncate">
+            <div className="p-1.5 rounded-lg bg-[#23272F] dark:bg-[#242936] text-blue-400 group-hover:bg-blue-600 group-hover:text-white transition-all">
+              <Stethoscope className="w-4 h-4" />
+            </div>
+            <div className="truncate text-left">
+              <div className="text-[12px] font-semibold text-[#E1E4EA] dark:text-[#F1F3F7] group-hover:text-blue-300">
+                Web Bác Sĩ
+              </div>
+              <div className="text-[10px] text-[#737780] dark:text-[#727984] truncate">
+                Cổng lâm sàng :3001
+              </div>
+            </div>
+          </div>
+          <span className="text-[9px] font-mono font-bold px-1.5 py-0.5 rounded bg-blue-500/20 text-blue-300 border border-blue-500/30 flex items-center gap-1">
+            <span>3001</span>
+            <ExternalLink className="w-2.5 h-2.5" />
+          </span>
+        </a>
+
+        {/* Mobile Web App Link */}
+        <a
+          href="http://localhost:8081"
+          target="_blank"
+          rel="noopener noreferrer"
+          className="group flex items-center justify-between px-3 py-2 rounded-xl text-xs font-medium text-[#9DA3AE] dark:text-[#A1A7B1] hover:text-white hover:bg-[#23272F] dark:hover:bg-[#2C3342] transition-all duration-150"
+        >
+          <div className="flex items-center gap-2.5 truncate">
+            <div className="p-1.5 rounded-lg bg-[#23272F] dark:bg-[#242936] text-[#8E929C] dark:text-[#777F8B] group-hover:bg-[#2B303B] group-hover:text-white transition-all">
+              <Smartphone className="w-4 h-4" />
+            </div>
+            <div className="truncate text-left">
+              <div className="text-[12px] text-[#E1E4EA] dark:text-[#F1F3F7]">
+                Mobile Web
+              </div>
+              <div className="text-[10px] text-[#737780] dark:text-[#727984] truncate">
+                Gia đình :8081
+              </div>
+            </div>
+          </div>
+          <span className="text-[9px] font-mono text-[#737780] dark:text-[#727984] flex items-center gap-1">
+            <span>8081</span>
+            <ExternalLink className="w-2.5 h-2.5" />
+          </span>
+        </a>
       </nav>
 
       {/* ── User Profile & Logout Footer ── */}
