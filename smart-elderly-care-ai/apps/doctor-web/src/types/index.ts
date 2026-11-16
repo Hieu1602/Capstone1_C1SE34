@@ -180,3 +180,18 @@ export interface DoctorTerminalItem {
   is_current?: boolean;
   last_active?: string;
 }
+
+export interface SystemNotification {
+  id: string;
+  title: string;
+  body: string;
+  type: 'info' | 'system_maintenance' | 'emergency' | 'health_tip' | 'feature_update';
+  target_audience: 'all' | 'caregivers' | 'doctors' | 'elderly';
+  status: 'draft' | 'scheduled' | 'published' | 'revoked';
+  scheduled_at?: string;
+  published_at?: string;
+  expires_at?: string;
+  delivered_count?: number;
+  read_count?: number;
+  created_at: string;
+}
