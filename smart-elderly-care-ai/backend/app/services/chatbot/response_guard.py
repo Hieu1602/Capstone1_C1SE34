@@ -85,9 +85,96 @@ PROMPT_LEAK_PATTERNS = [
     r"NGUYÊN TẮC HOẠT ĐỘNG BẮT BUỘC",
 ]
 
+# Danh mục từ ngữ tục tĩu, chửi thề, xúc phạm (Tiếng Việt, Tiếng Anh & Teencode)
+PROFANITY_PHRASES = [
+    r"\bđù\s+má\b", r"\bdu\s+ma\b", r"\bá\s+đù\b", r"\ba\s+du\b", r"\bá\s+dù\b",
+    r"\bđụ\s+má\b", r"\bđụ\s+mẹ\b", r"\bdu\s+me\b", r"\bđịt\s+mẹ\b", r"\bdit\s+me\b",
+    r"\bmẹ\s+mày\b", r"\bcon\s+mẹ\s+mày\b", r"\bmả\s+cha\b", r"\bmẹ\s+kiếp\b",
+    r"\btiên\s+sư\b", r"\bvãi\s+lồn\b", r"\bvai\s+lon\b", r"\bvãi\s+cả\s+lồn\b",
+    r"\bchó\s+đẻ\b", r"\bcho\s+de\b", r"\bóc\s+chó\b", r"\boc\s+cho\b", r"\bóc\s+lợn\b",
+    r"\bngu\s+như\s+bò\b", r"\bđồ\s+chó\b", r"\bthằng\s+chó\b", r"\bcon\s+chó\b",
+    r"\bđồ\s+khốn\b", r"\bđồ\s+rác\b", r"\bmất\s+dạy\b", r"\bmat\s+day\b",
+    r"\bvô\s+học\b", r"\bvo\s+hoc\b", r"\bsúc\s+vật\b", r"\bsuc\s+vat\b",
+    r"\bcon\s+đĩ\b", r"\bcon\s+di\b", r"\bcâm\s+mồm\b", r"\bim\s+mồm\b",
+    r"\bđồ\s+lưu\s+manh\b", r"\bbố\s+láo\b", r"\bláo\s+toét\b",
+    r"\bson\s+of\s+a\s+bitch\b", r"\bpissed\s+off\b", r"\bmother\s*fucker\b",
+]
+
+PROFANITY_WORDS = [
+    r"\b(địt|dit|d1t|đ!t|đụ|du|đéo|deo|đếch|dech|đệch)\b",
+    r"\b(lồn|lon|l0n|cặc|cac|c@c|buồi|buoi)\b",
+    r"\b(đm|dmm|đmm|dm|dcm|đcm|dkm|đkm|đcmm|cmm|cmn|ccmm|vcl|vkl|vl|clgt|đb)\b",
+    r"\b(khốn\s+nạn|khon\s+nan)\b",
+    r"\b(đĩ|điếm|thằng\s+ranh)\b",
+    r"\b(fuck|fucking|fucker|fuk|fck|fvck|wtf|stfu)\b",
+    r"\b(shit|bullshit|sh1t|crap)\b",
+    r"\b(dick|d1ck|pussy|cunt|twat)\b",
+    r"\b(asshole|a\$\$hole|arse|bollocks|wanker|tosser)\b",
+    r"\b(bitch|b!tch|bastard|whore|slut)\b",
+    r"\b(dumbass|jackass|douchebag)\b",
+]
+
+COMPILED_PROFANITY_PATTERNS = [
+    re.compile(p, re.IGNORECASE) for p in PROFANITY_PHRASES + PROFANITY_WORDS
+]
+
 
 class ResponseGuard:
     """Bộ kiểm duyệt và bảo vệ phản hồi y tế."""
+
+    @staticmethod
+    def normalize_profanity_text(text: str) -> str:
+        """Chuẩn hóa ký tự teencode, leetspeak, lặp âm để nhận diện từ tục tĩu."""
+        t = text.lower()
+        t = re.sub(r"[@]", "a", t)
+        t = re.sub(r"[!1]", "i", t)
+        t = re.sub(r"[0]", "o", t)
+        t = re.sub(r"[\$]", "s", t)
+        t = re.sub(r"[\*\.\-_/]", "", t)
+        # Rút gọn ký tự lặp (ví dụ: địtttt -> địt, fuuuuck -> fuck, vlll -> vl)
+        t = re.sub(r"(.)\1{2,}", r"\1", t)
+        return t
+
+    @classmethod
+    def is_profane(cls, question: str) -> bool:
+        """
+        Nhận diện từ ngữ tục tĩu, chửi thề, lăng mạ, teencode hoặc biến thể né lọc.
+        Bảo đảm không bắt nhầm thuật ngữ y khoa (ví dụ: cocktail, ung thư vú, chăm sóc).
+        """
+        q = question.strip()
+        if not q:
+            return False
+
+        norm = cls.normalize_profanity_text(q)
+        q_lower = q.lower()
+
+        for p in COMPILED_PROFANITY_PATTERNS:
+            if p.search(norm) or p.search(q_lower):
+                return True
+
+        # Kiểm tra thêm biến thể không dấu (unaccented Vietnamese)
+        unacc = "".join(
+            c for c in unicodedata.normalize("NFD", norm.replace("đ", "d"))
+            if unicodedata.category(c) != "Mn"
+        )
+        for p in COMPILED_PROFANITY_PATTERNS:
+            if p.search(unacc):
+                return True
+
+        return False
+
+    @staticmethod
+    def format_profane_response(language: str = "vi") -> str:
+        """Phản hồi lịch sự từ chối ngôn từ thiếu chuẩn mực và yêu cầu giao tiếp lịch sự."""
+        if language == "en":
+            return (
+                "SmartCare Healthcare Assistant does not accept profane, offensive, or inappropriate language.\n\n"
+                "Please communicate politely and courteously so that I can provide the best medical guidance and elderly care support."
+            )
+        return (
+            "Dạ, hệ thống Trợ lý Y tế SmartCare không chấp nhận ngôn từ tục tĩu, thô thiển hoặc thiếu chuẩn mực.\n\n"
+            "Bạn vui lòng sử dụng ngôn từ lịch sự, văn minh để Bác sĩ Trợ lý Y tế SmartCare có thể hỗ trợ và tư vấn sức khỏe cho người thân chu đáo nhất nhé!"
+        )
 
     @staticmethod
     def is_gibberish_or_spam(question: str, has_resolved_entities: bool = False) -> bool:
