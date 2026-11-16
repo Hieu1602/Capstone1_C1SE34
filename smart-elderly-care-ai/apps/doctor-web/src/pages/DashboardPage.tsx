@@ -411,13 +411,15 @@ export const DashboardPage: React.FC = () => {
 
             <div className="flex items-center gap-3.5 pt-1">
               {/* Avatar tròn Bác sĩ đồng bộ 100% với Mobile App (Chữ "M" nền xanh có chấm xanh Online) */}
-              <div className="relative flex h-12 w-12 shrink-0 items-center justify-center rounded-full bg-blue-700/90 border-2 border-white/70 text-lg font-black text-white shadow-md overflow-hidden">
-                {doctorAvatar ? (
-                  <img src={doctorAvatar} alt={doctorName} className="h-full w-full object-cover" />
-                ) : (
-                  doctorInitial
-                )}
-                <span className="absolute bottom-0 right-0 h-3 w-3 rounded-full bg-emerald-400 ring-2 ring-blue-600" />
+              <div className="relative inline-block shrink-0">
+                <div className="flex h-12 w-12 items-center justify-center rounded-full bg-blue-700/90 border-2 border-white/70 text-lg font-black text-white shadow-md overflow-hidden">
+                  {doctorAvatar ? (
+                    <img src={doctorAvatar} alt={doctorName} className="h-full w-full object-cover" />
+                  ) : (
+                    doctorInitial
+                  )}
+                </div>
+                <span className="absolute -bottom-0.5 -right-0.5 h-3.5 w-3.5 rounded-full bg-emerald-400 ring-2 ring-blue-600 z-10" />
               </div>
 
               <div>
@@ -839,21 +841,23 @@ export const DashboardPage: React.FC = () => {
                       </td>
                       <td className="py-3.5 px-3">
                         <div className="flex items-center gap-3">
-                          <div className="relative flex h-9 w-9 shrink-0 items-center justify-center rounded-xl overflow-hidden bg-blue-100 text-xs font-extrabold text-blue-700">
-                            {patient.avatar_url ? (
-                              <img
-                                src={getPatientAvatar(patient.avatar_url)!}
-                                alt={patient.name}
-                                className="h-full w-full object-cover"
-                                onError={(e) => {
-                                  (e.target as HTMLElement).style.display = 'none';
-                                }}
-                              />
-                            ) : (
-                              patient.name.charAt(0)
-                            )}
+                          <div className="relative inline-block shrink-0">
+                            <div className="flex h-9 w-9 items-center justify-center rounded-xl overflow-hidden bg-blue-100 text-xs font-extrabold text-blue-700">
+                              {patient.avatar_url ? (
+                                <img
+                                  src={getPatientAvatar(patient.avatar_url)!}
+                                  alt={patient.name}
+                                  className="h-full w-full object-cover"
+                                  onError={(e) => {
+                                    (e.target as HTMLElement).style.display = 'none';
+                                  }}
+                                />
+                              ) : (
+                                patient.name.charAt(0)
+                              )}
+                            </div>
                             {patient.is_online && (
-                              <span className="absolute -bottom-0.5 -right-0.5 h-2.5 w-2.5 rounded-full bg-emerald-500 ring-2 ring-white" />
+                              <span className="absolute -bottom-0.5 -right-0.5 h-2.5 w-2.5 rounded-full bg-emerald-500 ring-2 ring-white z-10" />
                             )}
                           </div>
                           <div>

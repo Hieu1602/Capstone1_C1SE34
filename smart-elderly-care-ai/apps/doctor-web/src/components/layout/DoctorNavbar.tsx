@@ -717,13 +717,15 @@ export const DoctorNavbar: React.FC = () => {
             className="flex items-center space-x-3 rounded-xl p-1.5 transition-colors hover:bg-slate-50 border border-transparent hover:border-slate-200 dark:hover:bg-slate-800 dark:hover:border-slate-700"
           >
             {/* Avatar Bác sĩ có chấm xanh Online (Chữ "M" nền xanh chuẩn như bên App) */}
-            <div className="relative flex h-9 w-9 shrink-0 items-center justify-center rounded-full bg-blue-600 text-sm font-extrabold text-white shadow-sm overflow-hidden">
-              {doctorAvatar ? (
-                <img src={doctorAvatar} alt={doctorName} className="h-full w-full object-cover" />
-              ) : (
-                doctorInitial
-              )}
-              <span className="absolute bottom-0 right-0 h-2.5 w-2.5 rounded-full bg-emerald-500 ring-2 ring-white dark:ring-slate-900" />
+            <div className="relative inline-block shrink-0">
+              <div className="flex h-9 w-9 items-center justify-center rounded-full bg-blue-600 text-sm font-extrabold text-white shadow-sm overflow-hidden">
+                {doctorAvatar ? (
+                  <img src={doctorAvatar} alt={doctorName} className="h-full w-full object-cover" />
+                ) : (
+                  doctorInitial
+                )}
+              </div>
+              <span className="absolute -bottom-0.5 -right-0.5 h-3 w-3 rounded-full bg-emerald-500 ring-2 ring-white dark:ring-slate-900 z-10" />
             </div>
             <div className="text-left hidden sm:block">
               <p className="text-xs font-bold text-slate-900 dark:text-white">{doctorName}</p>
@@ -735,13 +737,15 @@ export const DoctorNavbar: React.FC = () => {
           {showProfileMenu && (
             <div className="absolute right-0 mt-2 w-60 rounded-2xl border border-slate-200 bg-white p-2 shadow-xl shadow-slate-200/60 animate-in fade-in slide-in-from-top-2 duration-150 dark:border-slate-700 dark:bg-slate-900 dark:shadow-slate-950/80">
               <div className="flex items-center space-x-3 px-3 py-2.5 border-b border-slate-100 dark:border-slate-800">
-                <div className="relative flex h-10 w-10 shrink-0 items-center justify-center rounded-full bg-blue-600 text-base font-extrabold text-white shadow-sm overflow-hidden">
-                  {doctorAvatar ? (
-                    <img src={doctorAvatar} alt={doctorName} className="h-full w-full object-cover" />
-                  ) : (
-                    doctorInitial
-                  )}
-                  <span className="absolute bottom-0 right-0 h-2.5 w-2.5 rounded-full bg-emerald-500 ring-2 ring-white dark:ring-slate-900" />
+                <div className="relative inline-block shrink-0">
+                  <div className="flex h-10 w-10 items-center justify-center rounded-full bg-blue-600 text-base font-extrabold text-white shadow-sm overflow-hidden">
+                    {doctorAvatar ? (
+                      <img src={doctorAvatar} alt={doctorName} className="h-full w-full object-cover" />
+                    ) : (
+                      doctorInitial
+                    )}
+                  </div>
+                  <span className="absolute -bottom-0.5 -right-0.5 h-3 w-3 rounded-full bg-emerald-500 ring-2 ring-white dark:ring-slate-900 z-10" />
                 </div>
                 <div className="min-w-0 flex-1">
                   <p className="text-xs font-bold text-slate-900 dark:text-white truncate">{doctorName}</p>
