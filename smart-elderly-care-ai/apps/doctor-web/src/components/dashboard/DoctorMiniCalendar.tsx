@@ -5,6 +5,7 @@ export interface MiniCalendarCell {
   day: number | null;
   dateStr?: string;
   isToday?: boolean;
+  isSelected?: boolean;
   dotStatus?: 'COMPLETED' | 'UPCOMING' | 'CRITICAL' | null;
 }
 
@@ -12,15 +13,19 @@ export interface DoctorMiniCalendarProps {
   calendarMonth: Date;
   onMonthChange: (date: Date) => void;
   miniCalendarCells: MiniCalendarCell[];
+  selectedDate?: string;
+  onSelectDate?: (dateStr: string) => void;
   onNavigateAppointments: () => void;
 }
 
-const WEEKDAYS_HEADER = ['CN', 'T2', 'T3', 'T4', 'T5', 'T6', 'T7'];
+const WEEKDAYS_HEADER = ['T2', 'T3', 'T4', 'T5', 'T6', 'T7', 'CN'];
 
 export const DoctorMiniCalendar: React.FC<DoctorMiniCalendarProps> = ({
   calendarMonth,
   onMonthChange,
   miniCalendarCells,
+  selectedDate,
+  onSelectDate,
   onNavigateAppointments,
 }) => {
   return (
@@ -63,7 +68,7 @@ export const DoctorMiniCalendar: React.FC<DoctorMiniCalendarProps> = ({
         {/* Header thứ */}
         <div className="grid grid-cols-7 gap-1 text-center mb-1.5">
           {WEEKDAYS_HEADER.map((d) => (
-            <span key={d} className="text-[10.5px] font-bold text-slate-400 py-1">
+            <span key={d} className={`text-[10.5px] font-bold py-1 ${d === 'CN' ? 'text-rose-500' : 'text-slate-400'}`}>
               {d}
             </span>
           ))}
@@ -77,10 +82,19 @@ export const DoctorMiniCalendar: React.FC<DoctorMiniCalendarProps> = ({
             ) : (
               <button
                 key={idx}
-                onClick={onNavigateAppointments}
+                type="button"
+                onClick={() => {
+                  if (cell.dateStr && onSelectDate) {
+                    onSelectDate(cell.dateStr);
+                  } else {
+                    onNavigateAppointments();
+                  }
+                }}
                 className={`relative flex h-8 flex-col items-center justify-center rounded-lg text-xs font-semibold transition cursor-pointer ${
                   cell.isToday
                     ? 'bg-blue-600 text-white font-extrabold shadow-xs'
+                    : cell.isSelected
+                    ? 'bg-blue-50 text-blue-700 font-bold ring-2 ring-blue-500'
                     : 'text-slate-700 hover:bg-slate-100'
                 }`}
               >
