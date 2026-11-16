@@ -95,8 +95,18 @@ export const DoctorHeroBanner: React.FC<DoctorHeroBannerProps> = ({
             ) : (
               <>
                 Chúc Bác sĩ một ngày làm việc hiệu quả! Hệ thống AI đang giám sát{' '}
-                <strong>{patientCount} hồ sơ người cao tuổi</strong> và{' '}
-                <strong>{warningCount} cảnh báo cần lưu ý</strong> hôm nay.
+                {loading && patientCount === 0 ? (
+                  <span className="inline-block h-4 w-7 rounded bg-white/30 animate-pulse align-middle mx-1" />
+                ) : (
+                  <strong>{patientCount} hồ sơ người cao tuổi</strong>
+                )}{' '}
+                và{' '}
+                {loading && warningCount === 0 ? (
+                  <span className="inline-block h-4 w-7 rounded bg-white/30 animate-pulse align-middle mx-1" />
+                ) : (
+                  <strong>{warningCount} cảnh báo cần lưu ý</strong>
+                )}{' '}
+                hôm nay.
               </>
             )}
           </p>

@@ -3,17 +3,9 @@
 
 import React, { useEffect, useState, useCallback, useMemo } from 'react';
 import { useNavigate } from 'react-router-dom';
-import {
-  ResponsiveContainer,
-  BarChart,
-  Bar,
-  XAxis,
-  YAxis,
-  CartesianGrid,
-  Tooltip,
-} from 'recharts';
 import { useDoctorAuthStore, getDoctorAvatarUri } from '../store/useDoctorAuthStore';
-import { doctorApi, householdApi, authApi, incidentsApi } from '../services/api';
+import { useDoctorDataStore } from '../store/useDoctorDataStore';
+import { householdApi, authApi } from '../services/api';
 import { doctorWebSocket } from '../services/websocket';
 import { removeVietnameseTones } from '../utils/text';
 import { DoctorPatientCard, AppointmentItem, HouseInvite } from '../types';
@@ -22,18 +14,9 @@ import { NewAppointmentModal } from '../components/clinical/NewAppointmentModal'
 import { DoctorHeroBanner } from '../components/dashboard/DoctorHeroBanner';
 import { DoctorKpiCards } from '../components/dashboard/DoctorKpiCards';
 import { DoctorMiniCalendar, MiniCalendarCell } from '../components/dashboard/DoctorMiniCalendar';
+import { DoctorAlertsAreaChart, AlertDayStat } from '../components/dashboard/DoctorAlertsAreaChart';
 import { DoctorPatientTable } from '../components/dashboard/DoctorPatientTable';
 import { Sparkles } from 'lucide-react';
-
-export interface AlertDayStat {
-  label: string;
-  fullLabel: string;
-  fall: number;
-  heart_alert: number;
-  spo2_alert: number;
-  sos_alert: number;
-  total: number;
-}
 
 const DEFAULT_ALERT_STATS_7D: AlertDayStat[] = [
   { label: 'T2', fullLabel: 'Thứ Hai', fall: 1, heart_alert: 3, spo2_alert: 1, sos_alert: 0, total: 5 },
@@ -51,59 +34,6 @@ const DEFAULT_ALERT_STATS_30D: AlertDayStat[] = [
   { label: 'Tuần 3', fullLabel: 'Tuần 3 (15 - 21)', fall: 4, heart_alert: 11, spo2_alert: 4, sos_alert: 3, total: 22 },
   { label: 'Tuần 4', fullLabel: 'Tuần 4 (22 - 30)', fall: 1, heart_alert: 9, spo2_alert: 3, sos_alert: 1, total: 14 },
 ];
-
-const CustomAlertsTooltip = ({ active, payload, label }: any) => {
-  if (!active || !payload || !payload.length) return null;
-  const data = payload[0]?.payload as AlertDayStat;
-  const fall = data?.fall ?? 0;
-  const heart = data?.heart_alert ?? 0;
-  const spo2 = data?.spo2_alert ?? 0;
-  const sos = data?.sos_alert ?? 0;
-  const total = data?.total ?? (fall + heart + spo2 + sos);
-
-  return (
-    <div className="rounded-2xl border border-slate-200/90 bg-white/95 p-3.5 shadow-xl backdrop-blur-md min-w-[220px]">
-      <div className="flex items-center justify-between pb-2 mb-2 border-b border-slate-100">
-        <p className="text-xs font-bold text-slate-800">
-          {data?.fullLabel || label}
-        </p>
-        <span className="rounded-md bg-slate-100 px-2 py-0.5 text-[11px] font-extrabold text-slate-700">
-          Tổng: {total} cảnh báo
-        </span>
-      </div>
-      <div className="space-y-1.5 text-xs">
-        <div className="flex items-center justify-between">
-          <span className="flex items-center gap-1.5 text-slate-600 font-medium">
-            <span className="h-2.5 w-2.5 rounded-sm bg-rose-500" />
-            Té ngã AI:
-          </span>
-          <span className="font-bold text-rose-600">{fall}</span>
-        </div>
-        <div className="flex items-center justify-between">
-          <span className="flex items-center gap-1.5 text-slate-600 font-medium">
-            <span className="h-2.5 w-2.5 rounded-sm bg-blue-600" />
-            Nhịp tim bất thường:
-          </span>
-          <span className="font-bold text-blue-600">{heart}</span>
-        </div>
-        <div className="flex items-center justify-between">
-          <span className="flex items-center gap-1.5 text-slate-600 font-medium">
-            <span className="h-2.5 w-2.5 rounded-sm bg-amber-500" />
-            SpO2 hạ thấp:
-          </span>
-          <span className="font-bold text-amber-600">{spo2}</span>
-        </div>
-        <div className="flex items-center justify-between">
-          <span className="flex items-center gap-1.5 text-slate-600 font-medium">
-            <span className="h-2.5 w-2.5 rounded-sm bg-violet-600" />
-            Nút SOS khẩn cấp:
-          </span>
-          <span className="font-bold text-violet-600">{sos}</span>
-        </div>
-      </div>
-    </div>
-  );
-};
 
 function computeAlertStats(incidents: any[], range: '7D' | '30D'): AlertDayStat[] {
   if (range === '30D') {
@@ -176,13 +106,29 @@ export const DashboardPage: React.FC = () => {
   const { user } = useDoctorAuthStore();
   const doctorName = user?.full_name || 'BS. Trần Văn Minh';
 
-  const [loading, setLoading] = useState(true);
-  const [patients, setPatients] = useState<DoctorPatientCard[]>([]);
-  const [appointments, setAppointments] = useState<AppointmentItem[]>([]);
-  const [nextAppointment, setNextAppointment] = useState<AppointmentItem | null>(null);
-  const [invites, setInvites] = useState<HouseInvite[]>([]);
+  const {
+    patients,
+    appointments,
+    invites,
+    incidents,
+    isLoading,
+    fetchAllData,
+    setPatients,
+    setInvites,
+  } = useDoctorDataStore();
+
   const [chartRange, setChartRange] = useState<'7D' | '30D'>('7D');
-  const [alertStats, setAlertStats] = useState<AlertDayStat[]>(DEFAULT_ALERT_STATS_7D);
+
+  const nextAppointment = useMemo(() => {
+    const upcomingList = appointments
+      .filter((a) => a.status === 'UPCOMING')
+      .sort((a, b) => new Date(a.scheduled_at).getTime() - new Date(b.scheduled_at).getTime());
+    return upcomingList[0] || null;
+  }, [appointments]);
+
+  const alertStats = useMemo(() => {
+    return computeAlertStats(incidents, chartRange);
+  }, [incidents, chartRange]);
 
   // Table search & filter
   const [tableSearch, setTableSearch] = useState('');
@@ -231,73 +177,18 @@ export const DashboardPage: React.FC = () => {
     };
   }, [user]);
 
-  const fetchData = useCallback(async () => {
-    setLoading(true);
-    try {
-      const [patRes, aptRes, invRes, incRes] = await Promise.allSettled([
-        doctorApi.getPatients(),
-        doctorApi.getAppointments(),
-        householdApi.getInvites(),
-        incidentsApi.list(undefined, 100),
-      ]);
-
-      let loadedPatients: DoctorPatientCard[] = [];
-      if (patRes.status === 'fulfilled' && Array.isArray(patRes.value)) {
-        loadedPatients = patRes.value;
-        setPatients(loadedPatients);
-      }
-
-      if (aptRes.status === 'fulfilled' && Array.isArray(aptRes.value)) {
-        const allApts = aptRes.value;
-        setAppointments(allApts);
-        const upcomingList = allApts
-          .filter((a) => a.status === 'UPCOMING')
-          .sort((a, b) => new Date(a.scheduled_at).getTime() - new Date(b.scheduled_at).getTime());
-        setNextAppointment(upcomingList[0] || null);
-      }
-
-      if (invRes.status === 'fulfilled' && Array.isArray(invRes.value)) {
-        setInvites(invRes.value);
-      }
-
-      let incidentsList: any[] = [];
-      if (incRes.status === 'fulfilled' && Array.isArray(incRes.value)) {
-        incidentsList = incRes.value;
-      }
-      setAlertStats(computeAlertStats(incidentsList, chartRange));
-    } finally {
-      setLoading(false);
-    }
-  }, [chartRange]);
-
   useEffect(() => {
-    fetchData();
-    doctorWebSocket.connect();
+    // Tải trước / revalidate dữ liệu trong nền không chặn UI
+    fetchAllData();
+
+    // Lắng nghe WebSocket thông qua kết nối toàn cục sẵn có từ Root Layout
     const unsub = doctorWebSocket.subscribe((data) => {
-      // Khi có cảnh báo mới hoặc sự cố, làm mới dữ liệu hệ thống và biểu đồ
       if (
         data?.type === 'ALERT_NEW' ||
         data?.type === 'INITIAL_ALERTS' ||
         data?.alert_type
       ) {
-        const alertType = (data.alert_type || data?.data?.alert_type || '').toUpperCase();
-        const currentDay = new Date().getDay();
-        const todayIdx = currentDay === 0 ? 6 : currentDay - 1;
-        setAlertStats((prev) => {
-          const next = [...prev];
-          if (chartRange === '7D' && next[todayIdx]) {
-            const item = { ...next[todayIdx] };
-            if (alertType.includes('FALL')) item.fall++;
-            else if (alertType.includes('HEART') || alertType.includes('NHIP_TIM')) item.heart_alert++;
-            else if (alertType.includes('SPO2') || alertType.includes('OXY')) item.spo2_alert++;
-            else if (alertType.includes('SOS')) item.sos_alert++;
-            else item.heart_alert++;
-            item.total = item.fall + item.heart_alert + item.spo2_alert + item.sos_alert;
-            next[todayIdx] = item;
-          }
-          return next;
-        });
-        fetchData();
+        fetchAllData(true);
       }
 
       // Cập nhật sinh hiệu bệnh nhân thay đổi thời gian thực tức thì khi có bản tin
@@ -305,8 +196,8 @@ export const DashboardPage: React.FC = () => {
         const liveHr = data.heart_rate ? Number(data.heart_rate) : undefined;
         const liveSpo2 = data.spo2 ? Number(data.spo2) : undefined;
         if (liveHr || liveSpo2) {
-          setPatients((prev) =>
-            prev.map((p, idx) =>
+          setPatients(
+            patients.map((p, idx) =>
               idx === 0
                 ? {
                     ...p,
@@ -321,13 +212,13 @@ export const DashboardPage: React.FC = () => {
       }
     });
     return () => unsub();
-  }, [fetchData, chartRange]);
+  }, [fetchAllData, patients, setPatients]);
 
   const handleRespondInvite = async (inviteId: string, action: 'accept' | 'reject') => {
     try {
       await householdApi.respondInvite(inviteId, action);
-      setInvites((prev) => prev.filter((i) => i.id !== inviteId));
-      fetchData();
+      setInvites(invites.filter((i) => i.id !== inviteId));
+      fetchAllData(true);
     } catch {
       alert('Không thể thực hiện thao tác phản hồi.');
     }
@@ -422,8 +313,8 @@ export const DashboardPage: React.FC = () => {
         nextAppointment={nextAppointment}
         patientCount={patients.length}
         warningCount={warningPatients.length}
-        loading={loading}
-        onRefresh={fetchData}
+        loading={isLoading && patients.length === 0}
+        onRefresh={() => fetchAllData(true)}
         onOpenCreateAppointment={() => setShowCreateModal(true)}
         onNavigateAppointments={() => navigate('/appointments')}
       />
@@ -456,94 +347,20 @@ export const DashboardPage: React.FC = () => {
         onlineCount={onlineCount}
         onNavigatePatients={() => navigate('/patients')}
         onNavigateAppointments={() => navigate('/appointments')}
+        loading={isLoading && patients.length === 0}
       />
 
       {/* =========================================================
           TẦNG 3: LƯỚI 2 CỘT (Biểu đồ Cột chồng Cảnh báo & Lịch tháng)
          ========================================================= */}
       <div className="grid grid-cols-1 lg:grid-cols-12 gap-6">
-        {/* Cột trái (8 cột): Biểu đồ Cột chồng Cảnh báo Y tế & Sự cố */}
-        <div className="lg:col-span-8 rounded-2xl border border-slate-200/80 bg-white p-6 shadow-sm flex flex-col justify-between">
-          <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3 mb-5">
-            <div>
-              <div className="flex items-center gap-2.5">
-                <h3 className="font-heading text-base font-extrabold text-slate-900">
-                  Phân loại Cảnh báo Y tế & Sự cố
-                </h3>
-                <span className="inline-flex items-center gap-1.5 px-2.5 py-0.5 rounded-full bg-emerald-50 border border-emerald-200 text-[10.5px] font-extrabold text-emerald-700 animate-pulse">
-                  <span className="h-1.5 w-1.5 rounded-full bg-emerald-500 animate-ping" />
-                  Thời gian thực
-                </span>
-              </div>
-              <p className="text-xs text-slate-500 mt-0.5">
-                Thống kê Té ngã AI, Nhịp tim bất thường, SpO2 hạ thấp & Nút SOS theo từng ngày
-              </p>
-            </div>
-
-            <div className="flex flex-wrap items-center gap-2.5">
-              {/* Chú thích màu sắc */}
-              <div className="hidden sm:flex items-center gap-3 text-xs font-semibold text-slate-600 mr-1">
-                <span className="flex items-center gap-1.5">
-                  <span className="h-2.5 w-2.5 rounded-sm bg-rose-500" />
-                  Té ngã AI
-                </span>
-                <span className="flex items-center gap-1.5">
-                  <span className="h-2.5 w-2.5 rounded-sm bg-blue-600" />
-                  Nhịp tim bất thường
-                </span>
-                <span className="flex items-center gap-1.5">
-                  <span className="h-2.5 w-2.5 rounded-sm bg-amber-500" />
-                  SpO2 hạ
-                </span>
-                <span className="flex items-center gap-1.5">
-                  <span className="h-2.5 w-2.5 rounded-sm bg-violet-600" />
-                  Nút SOS
-                </span>
-              </div>
-
-              {/* Bộ lọc khoảng thời gian */}
-              <div className="inline-flex rounded-xl border border-slate-200 bg-slate-50 p-1">
-                {(['7D', '30D'] as const).map((r) => (
-                  <button
-                    key={r}
-                    onClick={() => setChartRange(r)}
-                    className={`rounded-lg px-2.5 py-1 text-xs font-bold transition cursor-pointer ${
-                      chartRange === r
-                        ? 'bg-blue-600 text-white shadow-2xs'
-                        : 'text-slate-600 hover:text-slate-900'
-                    }`}
-                  >
-                    {r === '7D' ? 'Theo tuần' : 'Theo tháng'}
-                  </button>
-                ))}
-              </div>
-            </div>
-          </div>
-
-          <div className="h-64 w-full">
-            <ResponsiveContainer width="100%" height="100%">
-              <BarChart data={alertStats} margin={{ top: 12, right: 12, left: -20, bottom: 0 }}>
-                <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="#F1F5F9" />
-                <XAxis
-                  dataKey="label"
-                  tick={{ fontSize: 11, fill: '#64748B', fontWeight: 600 }}
-                  axisLine={false}
-                  tickLine={false}
-                />
-                <YAxis
-                  allowDecimals={false}
-                  tick={{ fontSize: 11, fill: '#64748B' }}
-                  axisLine={false}
-                  tickLine={false}
-                />
-                <Tooltip content={<CustomAlertsTooltip />} />
-                <Bar dataKey="fall" name="Té ngã AI" stackId="alerts" fill="#EF4444" barSize={26} />
-                <Bar dataKey="heart_alert" name="Nhịp tim bất thường" stackId="alerts" fill="#2563EB" barSize={26} />
-                <Bar dataKey="spo2_alert" name="SpO2 hạ thấp" stackId="alerts" fill="#F59E0B" barSize={26} />
-                <Bar dataKey="sos_alert" name="Nút SOS khẩn cấp" stackId="alerts" fill="#7C3AED" radius={[6, 6, 0, 0]} barSize={26} />
-              </BarChart>
-            </ResponsiveContainer>
-          </div>
+        {/* Cột trái (8 cột): Biểu đồ Đường cong đổ bóng mượt Cảnh báo Y tế & Sự cố */}
+        <div className="lg:col-span-8 flex flex-col justify-between">
+          <DoctorAlertsAreaChart
+            data={alertStats}
+            range={chartRange}
+            onRangeChange={setChartRange}
+          />
         </div>
 
         {/* Cột phải (4 cột): Widget Lịch tháng thu nhỏ */}
@@ -591,13 +408,14 @@ export const DashboardPage: React.FC = () => {
         onFilterChange={setTableFilter}
         onOpenCreateAppointment={() => setShowCreateModal(true)}
         onSelectPatient={() => navigate('/patients')}
+        loading={isLoading && patients.length === 0}
       />
 
       {showCreateModal && (
         <NewAppointmentModal
           patients={patients}
           onClose={() => setShowCreateModal(false)}
-          onSuccess={fetchData}
+          onSuccess={() => fetchAllData(true)}
         />
       )}
     </div>

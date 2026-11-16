@@ -4,6 +4,7 @@
 import React, { useState, useEffect, useCallback, useRef } from 'react';
 import { useDoctorAuthStore, getDoctorAvatarUri } from '../store/useDoctorAuthStore';
 import { authApi, doctorApi } from '../services/api';
+import { useDoctorDataStore } from '../store/useDoctorDataStore';
 import { DoctorProfileInfo } from '../types';
 import {
   DoctorEditProfileModal,
@@ -69,8 +70,8 @@ export const SettingsPage: React.FC = () => {
     };
   }, [user]);
 
-  const [patientCount, setPatientCount] = useState(0);
-  const [appointmentCount, setAppointmentCount] = useState(0);
+  const [patientCount, setPatientCount] = useState(() => useDoctorDataStore.getState().patients.length);
+  const [appointmentCount, setAppointmentCount] = useState(() => useDoctorDataStore.getState().appointments.length);
   const [terminals, setTerminals] = useState<any[]>([]);
   const [loadingTerminals, setLoadingTerminals] = useState(false);
 

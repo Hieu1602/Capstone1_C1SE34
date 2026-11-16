@@ -328,7 +328,6 @@ export const DoctorNavbar: React.FC = () => {
     fetchNotifData();
     const interval = setInterval(fetchNotifData, 30000);
 
-    doctorWebSocket.connect();
     const unsubscribe = doctorWebSocket.subscribe(() => {
       fetchNotifData();
     });

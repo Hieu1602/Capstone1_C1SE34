@@ -1,10 +1,12 @@
 // src/pages/NotificationsPage.tsx
-// Trang Trung tâm Thông báo & Cảnh báo toàn diện dành cho Bác sĩ gia đình
+// Trung tâm Thông báo & Cảnh báo Lâm sàng (Linear Inbox SaaS Y tế)
+// Tối ưu gọn gàng, chia nhóm theo ngày, phân biệt viền mức độ, phân trang và dọn dẹp văn bản
 
 import React, { useState, useEffect, useCallback, useMemo } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { doctorApi, householdApi, incidentsApi } from '../services/api';
 import { doctorWebSocket } from '../services/websocket';
+import { useDoctorDataStore } from '../store/useDoctorDataStore';
 import { removeVietnameseTones } from '../utils/text';
 import { NotificationDetailModal, UnifiedNotification } from '../components/clinical/NotificationDetailModal';
 import type { Incident, AppointmentItem, DoctorPatientCard } from '../types';
@@ -14,642 +16,624 @@ import {
   RefreshCw,
   Search,
   AlertTriangle,
-  AlertCircle,
   Calendar,
   Sparkles,
-  Clock,
   User,
-  MapPin,
   Check,
   ChevronRight,
-  Filter,
   ShieldAlert,
   Inbox,
-  FileText,
+  X,
 } from 'lucide-react';
 
 type TabType = 'ALL' | 'UNREAD' | 'ALERTS' | 'APPOINTMENTS' | 'OTHERS';
+type SeverityType = 'ALL' | 'CRITICAL' | 'WARNING';
 
-const READ_STORAGE_KEY = '@doctor_web_read_notifs';
+const STORAGE_KEY = '@doctor_web_read_notifs';
+const PAGE_SIZE = 10;
 
-function formatTime(dateStr?: string): string {
-  if (!dateStr) return '--:--';
-  try {
-    const d = new Date(dateStr);
-    return isNaN(d.getTime())
-      ? '--:--'
-      : d.toLocaleTimeString('vi-VN', { hour: '2-digit', minute: '2-digit', hour12: false });
-  } catch {
-    return '--:--';
-  }
+// 1. Helpers làm sạch văn bản và trích xuất tiêu đề ngắn gọn
+function cleanText(raw?: string): string {
+  if (!raw) return '';
+  return raw
+    .replace(/Bác sĩ BS\./g, 'BS.')
+    .replace(/Đồng hồ thông minh\s*\(\s*Đồng hồ thông minh Smartband\s*\)/gi, 'Đồng hồ thông minh Smartband')
+    .replace(/\(\s*Đồng hồ thông minh Smartband\s*\)/gi, 'Smartband')
+    .replace(/(?:\(|;\s*)?Tiền sử(?: bệnh lý)?:\s*(?:\)|;|\.|$)?/gi, '')
+    .replace(/\(\s*\)/g, '')
+    .replace(/\s{2,}/g, ' ')
+    .trim();
 }
 
-function formatDate(dateStr?: string): string {
-  if (!dateStr) return 'Vừa xong';
-  try {
-    const d = new Date(dateStr);
-    if (isNaN(d.getTime())) return 'Vừa xong';
-    const todayStr = new Date().toISOString().slice(0, 10);
-    return dateStr.slice(0, 10) === todayStr
-      ? `Hôm nay, ${formatTime(dateStr)}`
-      : `${d.getDate()}/${d.getMonth() + 1}/${d.getFullYear()} lúc ${formatTime(dateStr)}`;
-  } catch {
-    return 'Vừa xong';
+function parseTitleAndBody(raw: string, type: UnifiedNotification['type'], alertType?: string, alertLevel?: string, patientName?: string) {
+  const text = cleanText(raw);
+  const lower = text.toLowerCase();
+
+  if (type === 'INVITE' || lower.includes('lời mời')) {
+    return { title: 'Lời mời phụ trách Bác sĩ gia đình', desc: text || 'Chủ hộ đã gửi lời mời bạn tham gia với vai trò Bác sĩ gia đình.' };
   }
+  if (type === 'APPOINTMENT' || alertType?.startsWith('APPOINTMENT_') || lower.includes('lịch khám') || lower.includes('lịch hẹn')) {
+    const isCancelled = lower.includes('hủy') || alertType === 'APPOINTMENT_CANCELLED';
+    const isConfirmed = lower.includes('xác nhận') || alertType === 'APPOINTMENT_CONFIRMED' || lower.includes('đón tiếp');
+    const title = isCancelled
+      ? 'Lịch khám y tế đã hủy'
+      : isConfirmed
+        ? lower.includes('tại nhà') ? 'Xác nhận lịch khám tại nhà' : 'Xác nhận lịch khám tại phòng khám'
+        : patientName ? `Lịch khám bệnh nhân ${patientName}` : 'Lịch khám định kỳ';
+    return { title, desc: text };
+  }
+  if (alertLevel === 'CRITICAL' || alertType === 'FALL_DETECTED' || lower.includes('báo động đỏ') || lower.includes('té ngã')) {
+    if (lower.includes('tam chứng')) return { title: 'BÁO ĐỘNG ĐỎ: Tam chứng nguy kịch', desc: text.replace(/^BÁO ĐỘNG ĐỎ:?\s*(?:Tam chứng nguy kịch:?)?\s*/i, '').trim() };
+    if (lower.includes('té ngã') || alertType === 'FALL_DETECTED') return { title: 'BÁO ĐỘNG ĐỎ: Phát hiện sự cố té ngã', desc: text.replace(/^BÁO ĐỘNG ĐỎ:?\s*/i, '').trim() };
+    return { title: 'BÁO ĐỘNG ĐỎ: Cảnh báo khẩn cấp', desc: text.replace(/^BÁO ĐỘNG ĐỎ:?\s*/i, '').trim() };
+  }
+  const hrMatch = text.match(/Cảnh báo nhịp tim (?:cao|chậm|bất thường)\s*\(\d+\s*bpm\)/i);
+  if (hrMatch) return { title: hrMatch[0], desc: text };
+  const spo2Match = text.match(/Cảnh báo SpO2 (?:thấp|nguy hiểm)\s*\(\d+%\)/i);
+  if (spo2Match) return { title: spo2Match[0], desc: text };
+  if (alertType === 'MEDICAL_RECORD_UPDATED' || lower.includes('bệnh án')) return { title: 'Cập nhật hồ sơ bệnh án', desc: text };
+
+  const parts = text.split(/[:\.\n]/);
+  if (parts.length > 1 && parts[0].trim().length >= 5 && parts[0].trim().length < 50) {
+    return { title: parts[0].trim(), desc: text.slice(parts[0].length + 1).trim() || parts[0].trim() };
+  }
+  return { title: text.slice(0, 50), desc: text };
+}
+
+function formatTime(str?: string): string {
+  if (!str) return '--:--';
+  const d = new Date(str);
+  return isNaN(d.getTime()) ? '--:--' : d.toLocaleTimeString('vi-VN', { hour: '2-digit', minute: '2-digit', hour12: false });
+}
+
+function getDateGroup(str?: string) {
+  const d = str ? new Date(str) : new Date();
+  const time = isNaN(d.getTime()) ? Date.now() : d.getTime();
+  const now = new Date();
+  const pad = (n: number) => String(n).padStart(2, '0');
+  const dKey = `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}`;
+  const todayKey = `${now.getFullYear()}-${pad(now.getMonth() + 1)}-${pad(now.getDate())}`;
+  const yest = new Date(now);
+  yest.setDate(yest.getDate() - 1);
+  const yestKey = `${yest.getFullYear()}-${pad(yest.getMonth() + 1)}-${pad(yest.getDate())}`;
+
+  if (dKey === todayKey) return { key: dKey, label: 'Hôm nay', timestamp: time };
+  if (dKey === yestKey) return { key: dKey, label: 'Hôm qua', timestamp: time };
+  return { key: dKey, label: `${pad(d.getDate())}/${pad(d.getMonth() + 1)}/${d.getFullYear()}`, timestamp: time };
+}
+
+interface Item extends UnifiedNotification {
+  cleanTitle: string;
+  cleanDesc: string;
+  timeOnly: string;
+  dateKey: string;
+  dateLabel: string;
+  sortTimestamp: number;
 }
 
 export const NotificationsPage: React.FC = () => {
   const navigate = useNavigate();
+  const { patients: cachedPatients, appointments: cachedAppointments, incidents: cachedIncidents } = useDoctorDataStore();
+
   const [activeTab, setActiveTab] = useState<TabType>('ALL');
-  const [searchQuery, setSearchQuery] = useState('');
+  const [severity, setSeverity] = useState<SeverityType>('ALL');
+  const [search, setSearch] = useState('');
   const [loading, setLoading] = useState(false);
-  const [notifications, setNotifications] = useState<UnifiedNotification[]>([]);
+  const [page, setPage] = useState(1);
+  const [notifications, setNotifications] = useState<Item[]>([]);
   const [selectedNotif, setSelectedNotif] = useState<UnifiedNotification | null>(null);
-  const [showDetailModal, setShowDetailModal] = useState(false);
+  const [showModal, setShowModal] = useState(false);
 
   const [readIds, setReadIds] = useState<Set<string>>(() => {
     try {
-      const saved = localStorage.getItem(READ_STORAGE_KEY);
-      return saved ? new Set(JSON.parse(saved)) : new Set();
+      const s = localStorage.getItem(STORAGE_KEY);
+      return s ? new Set<string>(JSON.parse(s)) : new Set<string>();
     } catch {
-      return new Set();
+      return new Set<string>();
     }
   });
 
-  const fetchData = useCallback(async () => {
+  const saveReadIds = (set: Set<string>) => {
+    setReadIds(set);
+    localStorage.setItem(STORAGE_KEY, JSON.stringify(Array.from(set)));
+  };
+
+  // 2. Chuyển đổi dữ liệu thống nhất (Incidents, Sinh hiệu cảnh báo, Lịch khám)
+  const buildItems = useCallback((incs: Incident[], pats: DoctorPatientCard[], apts: AppointmentItem[], readSet: Set<string>) => {
+    const list: Item[] = [];
+
+    // A. Incidents
+    incs?.forEach((inc) => {
+      const isCrit = inc.alert_level === 'CRITICAL' || inc.alert_type === 'FALL_DETECTED';
+      const msg = inc.message || '';
+      const lower = msg.toLowerCase();
+      const isRead = Boolean(inc.is_acknowledged || readSet.has(inc.id) || readSet.has(`inc_${inc.id}`));
+      let type: UnifiedNotification['type'] = 'ALERT';
+      let label = isCrit ? 'Khẩn cấp' : 'Cảnh báo';
+      let color = isCrit ? 'text-rose-700 bg-rose-50 border-rose-200 dark:bg-rose-950/60 dark:text-rose-300' : 'text-amber-700 bg-amber-50 border-amber-200 dark:bg-amber-950/60 dark:text-amber-300';
+      let target = '/patients';
+      let finalRead = isRead;
+
+      if (inc.alert_type === 'HOUSE_INVITE_PENDING' || lower.includes('lời mời bạn tham gia') || lower.includes('xác nhận vào nhà')) {
+        type = 'INVITE';
+        const handled = Boolean(inc.is_acknowledged);
+        label = handled ? (inc.notes?.includes('từ chối') ? 'Đã từ chối' : 'Đã tham gia') : 'Lời mời';
+        color = handled ? 'text-emerald-700 bg-emerald-50 border-emerald-200' : 'text-amber-700 bg-amber-50 border-amber-200';
+        target = '/';
+        finalRead = handled || isRead;
+      } else if (['APPOINTMENT_CONFIRMED', 'APPOINTMENT_SCHEDULED', 'APPOINTMENT_CANCELLED'].includes(inc.alert_type || '') || lower.includes('lịch khám') || lower.includes('lịch hẹn')) {
+        type = 'APPOINTMENT';
+        const isCancel = lower.includes('hủy');
+        const isConfirm = lower.includes('xác nhận');
+        label = isCancel ? 'Đã hủy' : isConfirm ? 'Đã xác nhận' : 'Lịch khám';
+        color = isCancel ? 'text-rose-700 bg-rose-50 border-rose-200' : isConfirm ? 'text-emerald-700 bg-emerald-50 border-emerald-200' : 'text-sky-700 bg-sky-50 border-sky-200';
+        target = '/appointments';
+      } else if (lower.includes('bệnh nhân mới') || lower.includes('phụ trách')) {
+        label = 'Bệnh nhân';
+        color = 'text-emerald-700 bg-emerald-50 border-emerald-200';
+      } else if (inc.alert_type === 'MEDICAL_RECORD_UPDATED' || lower.includes('bệnh án')) {
+        label = 'Hồ sơ y tế';
+        color = 'text-indigo-700 bg-indigo-50 border-indigo-200';
+      }
+
+      const pat = pats?.find((p) => p.id === (inc as any).elderly_id || (inc.notes && inc.notes.includes(p.id))) || pats?.[0];
+      const pName = pat?.name || (type === 'INVITE' ? 'Hộ gia đình mới' : undefined);
+      const parsed = parseTitleAndBody(msg, type, inc.alert_type, inc.alert_level, pName);
+      const dg = getDateGroup(inc.created_at);
+      const timeOnly = formatTime(inc.created_at);
+
+      list.push({
+        id: `inc_${inc.id}`,
+        rawIncidentId: inc.id,
+        type,
+        title: parsed.title,
+        subtitle: parsed.desc,
+        cleanTitle: parsed.title,
+        cleanDesc: parsed.desc,
+        timeStr: dg.label === 'Hôm nay' ? timeOnly : `${dg.label} ${timeOnly}`,
+        timeOnly,
+        dateKey: dg.key,
+        dateLabel: dg.label,
+        sortTimestamp: dg.timestamp,
+        badgeLabel: label,
+        badgeColor: color,
+        badgeBg: isCrit ? 'bg-rose-50' : 'bg-amber-50',
+        isRead: finalRead,
+        targetUrl: target,
+        rawIncident: inc,
+        patientId: pat?.id,
+        patientName: pName,
+        patientAddress: pat?.house_address || pat?.house_name,
+        heartRate: pat?.heart_rate && pat.heart_rate > 0 ? pat.heart_rate : undefined,
+        spo2: pat?.spo2 && pat.spo2 > 0 ? pat.spo2 : undefined,
+        alertLevel: inc.alert_level,
+        alertType: inc.alert_type,
+      });
+    });
+
+    // B. Sinh hiệu cảnh báo từ Bệnh nhân (DANGER / WARNING)
+    pats?.forEach((p) => {
+      const isDanger = p.health_status === 'DANGER';
+      if ((isDanger || p.health_status === 'WARNING') && !list.some((i) => i.id === `pat_${p.id}`)) {
+        const dg = getDateGroup(new Date().toISOString());
+        const title = isDanger ? `BÁO ĐỘNG ĐỎ: ${p.name} - Sinh hiệu nguy cấp` : `Cảnh báo: ${p.name} - Cần theo dõi sinh hiệu`;
+        const desc = `Nhịp tim: ${p.heart_rate || '--'} bpm • SpO2: ${p.spo2 || '--'}% • Địa chỉ: ${p.house_address || p.house_name || 'Nhà riêng'}`;
+        list.push({
+          id: `pat_${p.id}`,
+          type: 'ALERT',
+          title,
+          subtitle: desc,
+          cleanTitle: title,
+          cleanDesc: desc,
+          timeStr: 'Hôm nay',
+          timeOnly: 'Vừa xong',
+          dateKey: dg.key,
+          dateLabel: dg.label,
+          sortTimestamp: dg.timestamp,
+          badgeLabel: isDanger ? 'Khẩn cấp' : 'Cảnh báo',
+          badgeColor: isDanger ? 'text-rose-700 bg-rose-50 border-rose-200' : 'text-amber-700 bg-amber-50 border-amber-200',
+          badgeBg: isDanger ? 'bg-rose-50' : 'bg-amber-50',
+          isRead: readSet.has(`pat_${p.id}`),
+          targetUrl: `/patients?search=${encodeURIComponent(p.name)}`,
+          patientId: p.id,
+          patientName: p.name,
+          patientAddress: p.house_address || p.house_name,
+          heartRate: p.heart_rate,
+          spo2: p.spo2,
+          alertLevel: isDanger ? 'CRITICAL' : 'WARNING',
+        });
+      }
+    });
+
+    // C. Lịch khám
+    apts?.forEach((apt) => {
+      if (!list.some((i) => i.id === `apt_${apt.id}`)) {
+        const dg = getDateGroup(apt.scheduled_at);
+        const timeOnly = formatTime(apt.scheduled_at);
+        const isDone = apt.status === 'COMPLETED';
+        const isCancel = apt.status === 'CANCELLED';
+        const title = `Lịch khám: ${apt.patient_name || 'Bệnh nhân'}`;
+        const desc = `${apt.visit_type === 'HOME_VISIT' ? 'Khám tại nhà' : 'Tại phòng khám'} • Địa chỉ: ${apt.location || 'Chưa cập nhật'}`;
+        list.push({
+          id: `apt_${apt.id}`,
+          type: 'APPOINTMENT',
+          title,
+          subtitle: desc,
+          cleanTitle: title,
+          cleanDesc: desc,
+          timeStr: dg.label === 'Hôm nay' ? timeOnly : `${dg.label} ${timeOnly}`,
+          timeOnly,
+          dateKey: dg.key,
+          dateLabel: dg.label,
+          sortTimestamp: dg.timestamp,
+          badgeLabel: isDone ? 'Đã khám' : isCancel ? 'Đã hủy' : 'Sắp tới',
+          badgeColor: isDone ? 'text-emerald-700 bg-emerald-50 border-emerald-200' : isCancel ? 'text-rose-700 bg-rose-50 border-rose-200' : 'text-sky-700 bg-sky-50 border-sky-200',
+          badgeBg: isDone ? 'bg-emerald-50' : isCancel ? 'bg-rose-50' : 'bg-sky-50',
+          isRead: readSet.has(`apt_${apt.id}`),
+          targetUrl: '/appointments',
+          patientName: apt.patient_name,
+          patientAddress: apt.location,
+        });
+      }
+    });
+
+    return list.sort((a, b) => b.sortTimestamp - a.sortTimestamp);
+  }, []);
+
+  // Tải dữ liệu từ cache (0ms) rồi revalidate ngầm
+  useEffect(() => {
+    if (cachedIncidents.length || cachedPatients.length || cachedAppointments.length) {
+      setNotifications(buildItems(cachedIncidents, cachedPatients, cachedAppointments, readIds));
+    }
+  }, [cachedIncidents, cachedPatients, cachedAppointments, buildItems, readIds]);
+
+  const loadData = useCallback(async () => {
     setLoading(true);
     try {
-      const [incRes, patRes, aptRes, invRes] = await Promise.allSettled([
-        incidentsApi.list(undefined, 50),
+      const [iRes, pRes, aRes] = await Promise.allSettled([
+        incidentsApi.list(undefined, 100),
         doctorApi.getPatients(),
         doctorApi.getAppointments(),
-        householdApi.getInvites(),
       ]);
-
-      const savedReadIds = (() => {
-        try {
-          const saved = localStorage.getItem(READ_STORAGE_KEY);
-          return saved ? new Set(JSON.parse(saved)) : new Set();
-        } catch {
-          return new Set();
-        }
-      })();
-
-      const unifiedList: UnifiedNotification[] = [];
-
-      // 1. Cảnh báo và sự cố từ Incidents API
-      if (incRes.status === 'fulfilled' && Array.isArray(incRes.value)) {
-        incRes.value.forEach((inc: Incident) => {
-          const isCritical = inc.alert_level === 'CRITICAL' || inc.alert_type === 'FALL_DETECTED';
-          const rawMsg = inc.message || '';
-          const msgLower = rawMsg.toLowerCase();
-          const isRead = Boolean(
-            inc.is_acknowledged || savedReadIds.has(inc.id) || savedReadIds.has(`inc_${inc.id}`)
-          );
-          const timeStr = formatDate(inc.created_at);
-
-          let type: UnifiedNotification['type'] = 'ALERT';
-          let title = rawMsg;
-          let subtitle = timeStr;
-          let badgeLabel = isCritical ? 'Khẩn cấp' : 'Cảnh báo';
-          let badgeColor = isCritical
-            ? 'text-rose-700 bg-rose-50 border-rose-200'
-            : 'text-amber-700 bg-amber-50 border-amber-200';
-          let badgeBg = isCritical ? 'bg-rose-50' : 'bg-amber-50';
-          let targetUrl = '/patients';
-          let finalRead = isRead;
-
-          const isHouseInvite =
-            inc.alert_type === 'HOUSE_INVITE_PENDING' ||
-            Boolean(inc.notes?.includes('HOUSE_INVITE_PENDING')) ||
-            ['lời mời bạn tham gia căn nhà', 'lời mời tham gia căn nhà', 'xác nhận vào nhà'].some((k) =>
-              msgLower.includes(k)
-            );
-          const isAppointmentMsg =
-            ['APPOINTMENT_CONFIRMED', 'APPOINTMENT_SCHEDULED', 'APPOINTMENT_CANCELLED'].includes(
-              inc.alert_type || ''
-            ) ||
-            ['lịch khám', 'lịch hẹn', 'đã hủy', '[đã hủy]', 'tái khám', 'xác nhận lịch'].some((k) =>
-              msgLower.includes(k)
-            );
-          const isAssignmentMsg = ['chủ hộ', 'phụ trách', 'chỉ định', 'bệnh nhân mới'].some((k) =>
-            msgLower.includes(k)
-          );
-          const isMedicalRecordMsg =
-            inc.alert_type === 'MEDICAL_RECORD_UPDATED' ||
-            ['bệnh án', 'dị ứng', 'dinh dưỡng'].some((k) => msgLower.includes(k));
-
-          if (isHouseInvite) {
-            type = 'INVITE';
-            title = 'Lời mời phụ trách Bác sĩ gia đình';
-            subtitle = rawMsg || 'Chủ hộ đã gửi lời mời bạn tham gia căn nhà với vai trò Bác sĩ gia đình.';
-            const isHandled = Boolean(inc.is_acknowledged);
-            const isRejected = Boolean(inc.notes?.includes('từ chối') || inc.note?.includes('từ chối'));
-            badgeLabel = isHandled ? (isRejected ? 'Đã từ chối' : 'Đã tham gia') : 'Lời mời';
-            badgeColor = isHandled
-              ? isRejected
-                ? 'text-rose-700 bg-rose-50 border-rose-200'
-                : 'text-emerald-700 bg-emerald-50 border-emerald-200'
-              : 'text-amber-700 bg-amber-50 border-amber-200';
-            badgeBg = isHandled ? (isRejected ? 'bg-rose-50' : 'bg-emerald-50') : 'bg-amber-50';
-            targetUrl = '/';
-            finalRead = isHandled || isRead;
-          } else if (isAppointmentMsg) {
-            type = 'APPOINTMENT';
-            const isCancelled = msgLower.includes('hủy') || inc.alert_type === 'APPOINTMENT_CANCELLED';
-            const isConfirmed =
-              inc.alert_type === 'APPOINTMENT_CONFIRMED' ||
-              msgLower.includes('đã xác nhận') ||
-              msgLower.includes('sẵn sàng đón tiếp');
-            title = rawMsg || (isConfirmed ? 'Gia đình đã xác nhận đón tiếp' : 'Lịch khám bệnh nhân');
-            badgeLabel = isCancelled ? 'Đã hủy' : isConfirmed ? 'Đã xác nhận' : 'Lịch khám';
-            badgeColor = isCancelled
-              ? 'text-rose-700 bg-rose-50 border-rose-200'
-              : isConfirmed
-                ? 'text-emerald-700 bg-emerald-50 border-emerald-200'
-                : 'text-sky-700 bg-sky-50 border-sky-200';
-            badgeBg = isCancelled ? 'bg-rose-50' : isConfirmed ? 'bg-emerald-50' : 'bg-sky-50';
-            targetUrl = '/appointments';
-          } else if (isAssignmentMsg) {
-            title = rawMsg || 'Phụ trách bệnh nhân mới';
-            badgeLabel = 'Bệnh nhân';
-            badgeColor = 'text-emerald-700 bg-emerald-50 border-emerald-200';
-            badgeBg = 'bg-emerald-50';
-          } else if (isMedicalRecordMsg) {
-            title = rawMsg || 'Hồ sơ bệnh án được cập nhật';
-            badgeLabel = 'Hồ sơ y tế';
-            badgeColor = 'text-indigo-700 bg-indigo-50 border-indigo-200';
-            badgeBg = 'bg-indigo-50';
-          } else if (!rawMsg) {
-            title = isCritical ? 'Cảnh báo sự cố té ngã khẩn cấp' : 'Cảnh báo y tế';
-          }
-
-          const matchedPat =
-            patRes.status === 'fulfilled' && Array.isArray(patRes.value)
-              ? patRes.value.find(
-                  (p: DoctorPatientCard) =>
-                    p.id === (inc as any).elderly_id || (inc.notes && inc.notes.includes(p.id))
-                ) || patRes.value[0]
-              : undefined;
-
-          unifiedList.push({
-            id: `inc_${inc.id}`,
-            rawIncidentId: inc.id,
-            type,
-            title,
-            subtitle,
-            timeStr,
-            badgeLabel,
-            badgeColor,
-            badgeBg,
-            isRead: finalRead,
-            targetUrl,
-            rawIncident: inc,
-            patientId: matchedPat?.id,
-            patientName: matchedPat?.name || (isHouseInvite ? 'Hộ gia đình mới' : 'Người cao tuổi'),
-            patientAddress: matchedPat?.house_address || matchedPat?.house_name,
-            heartRate: matchedPat?.heart_rate && matchedPat.heart_rate > 0 ? matchedPat.heart_rate : undefined,
-            spo2: matchedPat?.spo2 && matchedPat.spo2 > 0 ? matchedPat.spo2 : undefined,
-            alertLevel: inc.alert_level,
-            alertType: inc.alert_type,
-          });
-        });
-      }
-
-      // 2. Bệnh nhân có trạng thái sinh hiệu cảnh báo (WARNING / DANGER)
-      if (patRes.status === 'fulfilled' && Array.isArray(patRes.value)) {
-        patRes.value.forEach((p: DoctorPatientCard) => {
-          const isDanger = p.health_status === 'DANGER';
-          const isWarn = p.health_status === 'WARNING' || isDanger;
-          if (isWarn) {
-            const pId = `pat_${p.id}`;
-            if (!unifiedList.some((item) => item.id === pId)) {
-              unifiedList.push({
-                id: pId,
-                type: 'ALERT',
-                title: `${p.name} - Cần chú ý theo dõi`,
-                subtitle: `Nhịp tim: ${p.heart_rate || '--'} bpm • SpO2: ${p.spo2 || '--'}% • ${p.house_address || p.house_name || 'Nhà riêng'}`,
-                timeStr: 'Hôm nay',
-                badgeLabel: isDanger ? 'Nguy cấp' : 'Cần chú ý',
-                badgeColor: isDanger
-                  ? 'text-rose-700 bg-rose-50 border-rose-200'
-                  : 'text-amber-700 bg-amber-50 border-amber-200',
-                badgeBg: isDanger ? 'bg-rose-50' : 'bg-amber-50',
-                isRead: savedReadIds.has(pId),
-                targetUrl: `/patients?search=${encodeURIComponent(p.name)}`,
-                patientId: p.id,
-                patientName: p.name,
-                patientAddress: p.house_address || p.house_name,
-                heartRate: p.heart_rate,
-                spo2: p.spo2,
-                alertLevel: isDanger ? 'CRITICAL' : 'WARNING',
-              });
-            }
-          }
-        });
-      }
-
-      // 3. Lịch khám từ Doctor API (UPCOMING & TODAY)
-      if (aptRes.status === 'fulfilled' && Array.isArray(aptRes.value)) {
-        const todayStr = new Date().toISOString().slice(0, 10);
-        aptRes.value.forEach((apt: AppointmentItem) => {
-          const isToday = apt.scheduled_at?.slice(0, 10) === todayStr;
-          const isCompleted = apt.status === 'COMPLETED';
-          const isCancelled = apt.status === 'CANCELLED';
-          const label = isCompleted ? 'Đã khám' : isCancelled ? 'Đã hủy' : isToday ? 'Khám hôm nay' : 'Sắp tới';
-          const aptId = `apt_${apt.id}`;
-          if (!unifiedList.some((item) => item.id === aptId)) {
-            unifiedList.push({
-              id: aptId,
-              type: 'APPOINTMENT',
-              title: `Lịch khám: ${apt.patient_name || 'Bệnh nhân'}`,
-              subtitle: `${formatDate(apt.scheduled_at)} · ${apt.visit_type === 'HOME_VISIT' ? 'Khám tại nhà' : 'Tại phòng khám'}`,
-              timeStr: formatDate(apt.scheduled_at),
-              badgeLabel: label,
-              badgeColor: isCompleted
-                ? 'text-emerald-700 bg-emerald-50 border-emerald-200'
-                : isCancelled
-                  ? 'text-rose-700 bg-rose-50 border-rose-200'
-                  : 'text-sky-700 bg-sky-50 border-sky-200',
-              badgeBg: isCompleted ? 'bg-emerald-50' : isCancelled ? 'bg-rose-50' : 'bg-sky-50',
-              isRead: savedReadIds.has(aptId),
-              targetUrl: '/appointments',
-              patientName: apt.patient_name,
-              patientAddress: apt.location,
-            });
-          }
-        });
-      }
-
-      setNotifications(unifiedList);
-    } catch (err) {
-      console.warn('Lỗi tải dữ liệu thông báo:', err);
+      const saved = localStorage.getItem(STORAGE_KEY);
+      const currentRead = saved ? new Set<string>(JSON.parse(saved)) : new Set<string>();
+      const incs = iRes.status === 'fulfilled' && Array.isArray(iRes.value) ? iRes.value : [];
+      const pats = pRes.status === 'fulfilled' && Array.isArray(pRes.value) ? pRes.value : [];
+      const apts = aRes.status === 'fulfilled' && Array.isArray(aRes.value) ? aRes.value : [];
+      setNotifications(buildItems(incs, pats, apts, currentRead));
     } finally {
       setLoading(false);
     }
-  }, []);
+  }, [buildItems]);
 
   useEffect(() => {
-    fetchData();
-    doctorWebSocket.connect();
+    loadData();
     const unsub = doctorWebSocket.subscribe((data) => {
-      if (data?.type === 'ALERT_NEW' || data?.type === 'INITIAL_ALERTS' || data?.alert_type) {
-        fetchData();
-      }
+      if (data?.type === 'ALERT_NEW' || data?.type === 'INITIAL_ALERTS' || data?.alert_type) loadData();
     });
     return () => unsub();
-  }, [fetchData]);
+  }, [loadData]);
 
-  // Click vào thông báo để mở modal chi tiết
-  const handleNotificationClick = async (item: UnifiedNotification) => {
+  useEffect(() => setPage(1), [activeTab, severity, search]);
+
+  // Đánh dấu đã đọc
+  const handleItemClick = (item: UnifiedNotification) => {
     const next = new Set(readIds);
     next.add(item.id);
     if (item.rawIncidentId) {
       next.add(item.rawIncidentId);
       next.add(`inc_${item.rawIncidentId}`);
     }
-    setReadIds(next);
-    localStorage.setItem(READ_STORAGE_KEY, JSON.stringify(Array.from(next)));
-    setNotifications((prev) =>
-      prev.map((n) => (n.id === item.id ? { ...n, isRead: true } : n))
-    );
+    saveReadIds(next);
+    setNotifications((prev) => prev.map((n) => (n.id === item.id ? { ...n, isRead: true } : n)));
     setSelectedNotif(item);
-    setShowDetailModal(true);
+    setShowModal(true);
+  };
+
+  const handleAcknowledge = async (item: UnifiedNotification) => {
+    if (item.rawIncidentId) incidentsApi.acknowledge(item.rawIncidentId).catch(console.warn);
+    const next = new Set(readIds);
+    next.add(item.id);
+    if (item.rawIncidentId) {
+      next.add(item.rawIncidentId);
+      next.add(`inc_${item.rawIncidentId}`);
+    }
+    saveReadIds(next);
+    setNotifications((prev) => prev.map((n) => (n.id === item.id || n.rawIncidentId === item.rawIncidentId ? { ...n, isRead: true, badgeLabel: 'Đã xử lý' } : n)));
   };
 
   const handleMarkAllRead = async () => {
-    try {
-      await incidentsApi.acknowledgeAll();
-    } catch (err) {
-      console.warn('Acknowledge all backend fallback:', err);
-    }
-    const allIds = new Set(readIds);
+    incidentsApi.acknowledgeAll().catch(console.warn);
+    const next = new Set(readIds);
     notifications.forEach((n) => {
-      allIds.add(n.id);
+      next.add(n.id);
       if (n.rawIncidentId) {
-        allIds.add(n.rawIncidentId);
-        allIds.add(`inc_${n.rawIncidentId}`);
+        next.add(n.rawIncidentId);
+        next.add(`inc_${n.rawIncidentId}`);
       }
     });
-    setReadIds(allIds);
-    localStorage.setItem(READ_STORAGE_KEY, JSON.stringify(Array.from(allIds)));
+    saveReadIds(next);
     setNotifications((prev) => prev.map((n) => ({ ...n, isRead: true })));
   };
 
-  const handleAcknowledgeNotification = async (item: UnifiedNotification) => {
-    if (item.rawIncidentId) {
-      try {
-        await incidentsApi.acknowledge(item.rawIncidentId);
-      } catch (err) {
-        console.warn('Acknowledge error:', err);
-      }
-    }
-    const next = new Set(readIds);
-    next.add(item.id);
-    if (item.rawIncidentId) {
-      next.add(item.rawIncidentId);
-      next.add(`inc_${item.rawIncidentId}`);
-    }
-    setReadIds(next);
-    localStorage.setItem(READ_STORAGE_KEY, JSON.stringify(Array.from(next)));
-    setNotifications((prev) =>
-      prev.map((n) =>
-        n.id === item.id || n.rawIncidentId === item.rawIncidentId
-          ? { ...n, isRead: true, badgeLabel: 'Đã xử lý' }
-          : n
-      )
-    );
-  };
-
   const handleRespondInvite = async (incident: Incident, action: 'accept' | 'reject') => {
-    const memberIdMatch = (incident.notes || incident.note || '')?.match(/MEMBER_ID:([a-fA-F0-9-]+)/);
-    const memberId = memberIdMatch?.[1] || incident.device_id || incident.id;
+    const memberId = incident.notes?.match(/MEMBER_ID:([a-fA-F0-9-]+)/)?.[1] || incident.device_id || incident.id;
     try {
       await householdApi.respondInvite(memberId, action);
       await incidentsApi.acknowledge(incident.id, action === 'accept' ? 'Đã đồng ý vào nhà' : 'Đã từ chối vào nhà');
-      fetchData();
+      loadData();
     } catch (e) {
       console.warn('Respond invite error:', e);
     }
   };
 
+  // Lọc dữ liệu
   const unreadCount = notifications.filter((n) => !n.isRead).length;
-  const alertsCount = notifications.filter((n) => n.type === 'ALERT').length;
-  const aptsCount = notifications.filter((n) => n.type === 'APPOINTMENT').length;
-  const othersCount = notifications.filter((n) => n.type === 'INVITE' || n.badgeLabel === 'Hồ sơ y tế').length;
-
-  const filteredNotifications = useMemo(() => {
-    const rawQ = searchQuery.trim();
-    const qNorm = removeVietnameseTones(rawQ);
-
+  const filtered = useMemo(() => {
+    const qNorm = removeVietnameseTones(search.trim());
     return notifications.filter((item) => {
-      // 1. Lọc theo tab
       if (activeTab === 'UNREAD' && item.isRead) return false;
       if (activeTab === 'ALERTS' && item.type !== 'ALERT') return false;
       if (activeTab === 'APPOINTMENTS' && item.type !== 'APPOINTMENT') return false;
       if (activeTab === 'OTHERS' && item.type !== 'INVITE' && item.badgeLabel !== 'Hồ sơ y tế') return false;
 
-      // 2. Tìm kiếm
-      if (rawQ) {
-        const titleNorm = removeVietnameseTones(item.title);
-        const subNorm = removeVietnameseTones(item.subtitle);
-        const patNorm = removeVietnameseTones(item.patientName || '');
-        const addrNorm = removeVietnameseTones(item.patientAddress || '');
-        const match =
-          titleNorm.includes(qNorm) ||
-          subNorm.includes(qNorm) ||
-          patNorm.includes(qNorm) ||
-          addrNorm.includes(qNorm);
-        if (!match) return false;
-      }
+      const isCrit = item.alertLevel === 'CRITICAL' || item.alertType === 'FALL_DETECTED' || item.badgeLabel === 'Khẩn cấp';
+      if (severity === 'CRITICAL' && !isCrit) return false;
+      if (severity === 'WARNING' && (isCrit || item.badgeLabel !== 'Cảnh báo')) return false;
 
+      if (qNorm) {
+        const full = removeVietnameseTones(`${item.cleanTitle} ${item.cleanDesc} ${item.patientName || ''} ${item.patientAddress || ''}`);
+        if (!full.includes(qNorm)) return false;
+      }
       return true;
     });
-  }, [notifications, activeTab, searchQuery]);
+  }, [notifications, activeTab, severity, search]);
+
+  // Phân trang
+  const totalPages = Math.max(1, Math.ceil(filtered.length / PAGE_SIZE));
+  const startIdx = (page - 1) * PAGE_SIZE;
+  const endIdx = Math.min(startIdx + PAGE_SIZE, filtered.length);
+  const pagedList = useMemo(() => filtered.slice(startIdx, endIdx), [filtered, startIdx, endIdx]);
+
+  // Gom nhóm theo ngày
+  const grouped = useMemo(() => {
+    const map = new Map<string, { label: string; items: Item[] }>();
+    pagedList.forEach((it) => {
+      const g = map.get(it.dateKey) || { label: it.dateLabel, items: [] };
+      g.items.push(it);
+      map.set(it.dateKey, g);
+    });
+    return Array.from(map.entries()).map(([key, v]) => ({ key, ...v }));
+  }, [pagedList]);
 
   return (
-    <div className="space-y-6">
-      {/* Header Trang */}
-      <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4 rounded-3xl bg-white p-6 shadow-xs border border-slate-200/80 dark:bg-slate-900 dark:border-slate-800">
-        <div className="flex items-center space-x-3.5">
-          <div className="flex h-12 w-12 items-center justify-center rounded-2xl bg-blue-50 text-blue-600 dark:bg-blue-950/60 dark:text-blue-400">
-            <Bell className="h-6 w-6" />
+    <div className="space-y-4">
+      {/* Header gọn gàng */}
+      <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3 rounded-2xl bg-white p-4.5 shadow-xs border border-slate-200/80 dark:bg-slate-900 dark:border-slate-800">
+        <div className="flex items-center space-x-3">
+          <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl bg-blue-50 text-blue-600 dark:bg-blue-950/60 dark:text-blue-400">
+            <Bell className="h-5 w-5" />
           </div>
           <div>
             <div className="flex items-center gap-2">
-              <h1 className="text-xl font-bold text-slate-900 dark:text-white">
-                Trung tâm Thông Báo &amp; Cảnh Báo Lâm Sàng
-              </h1>
-              {unreadCount > 0 && (
-                <span className="rounded-full bg-rose-500 px-2 py-0.5 text-xs font-bold text-white animate-pulse">
-                  {unreadCount} chưa đọc
-                </span>
-              )}
+              <h1 className="text-lg font-bold text-slate-900 dark:text-white">Trung tâm Thông Báo &amp; Cảnh Báo Lâm Sàng</h1>
+              {unreadCount > 0 && <span className="rounded-full bg-rose-500 px-2 py-0.5 text-[11px] font-bold text-white animate-pulse">{unreadCount} chưa đọc</span>}
             </div>
-            <p className="text-xs text-slate-500 dark:text-slate-400 mt-0.5">
-              Toàn bộ các sự cố y tế, cảnh báo sinh hiệu bất thường, lịch khám và lời mời phụ trách gia đình
-            </p>
+            <p className="text-xs text-slate-500 dark:text-slate-400 mt-0.5">Hộp thư cảnh báo y tế, biến động sinh hiệu và phân công Bác sĩ gia đình</p>
           </div>
         </div>
 
-        <div className="flex items-center gap-2.5 shrink-0">
+        <div className="flex items-center gap-2 shrink-0">
           {unreadCount > 0 && (
-            <button
-              onClick={handleMarkAllRead}
-              className="flex items-center gap-1.5 rounded-xl border border-slate-200 bg-white px-3.5 py-2 text-xs font-bold text-slate-700 hover:bg-slate-50 transition-colors shadow-2xs dark:border-slate-700 dark:bg-slate-800 dark:text-slate-200"
-            >
-              <CheckCheck className="h-4 w-4 text-blue-600 dark:text-blue-400" />
+            <button onClick={handleMarkAllRead} className="flex items-center gap-1.5 rounded-xl border border-slate-200 bg-white px-3 py-1.5 text-xs font-semibold text-slate-700 hover:bg-slate-50 shadow-2xs dark:border-slate-700 dark:bg-slate-800 dark:text-slate-200 cursor-pointer">
+              <CheckCheck className="h-3.5 w-3.5 text-blue-600" />
               <span>Đã đọc tất cả</span>
             </button>
           )}
-
-          <button
-            onClick={fetchData}
-            disabled={loading}
-            className="flex items-center gap-1.5 rounded-xl bg-blue-600 px-4 py-2 text-xs font-bold text-white hover:bg-blue-700 transition-colors shadow-xs disabled:opacity-50"
-          >
-            <RefreshCw className={`h-4 w-4 ${loading ? 'animate-spin' : ''}`} />
+          <button onClick={loadData} disabled={loading} className="flex items-center gap-1.5 rounded-xl bg-blue-600 px-3.5 py-1.5 text-xs font-bold text-white hover:bg-blue-700 shadow-xs disabled:opacity-50 cursor-pointer">
+            <RefreshCw className={`h-3.5 w-3.5 ${loading ? 'animate-spin' : ''}`} />
             <span>{loading ? 'Đang tải...' : 'Làm mới'}</span>
           </button>
         </div>
       </div>
 
-      {/* Bộ lọc Tab & Tìm kiếm */}
-      <div className="flex flex-col md:flex-row md:items-center md:justify-between gap-4">
-        {/* Tabs */}
-        <div className="flex items-center gap-1.5 overflow-x-auto pb-1">
+      {/* Toolbar lọc đồng bộ (h-9, text-xs) */}
+      <div className="flex flex-col lg:flex-row lg:items-center lg:justify-between gap-2.5">
+        <div className="flex items-center gap-1 overflow-x-auto pb-1 lg:pb-0 scrollbar-none">
           {[
-            { key: 'ALL' as const, label: 'Tất cả', count: notifications.length },
-            { key: 'UNREAD' as const, label: 'Chưa đọc', count: unreadCount, badge: unreadCount > 0 },
-            { key: 'ALERTS' as const, label: 'Cảnh báo y tế', count: alertsCount },
-            { key: 'APPOINTMENTS' as const, label: 'Lịch khám', count: aptsCount },
-            { key: 'OTHERS' as const, label: 'Lời mời & Hồ sơ', count: othersCount },
-          ].map((tab) => {
-            const isActive = activeTab === tab.key;
-            return (
-              <button
-                key={tab.key}
-                onClick={() => setActiveTab(tab.key)}
-                className={`flex items-center gap-2 rounded-2xl px-4 py-2 text-xs font-bold whitespace-nowrap transition-all duration-150 ${
-                  isActive
-                    ? 'bg-blue-600 text-white shadow-blue-200 shadow-md'
-                    : 'bg-white text-slate-600 hover:bg-slate-50 hover:text-slate-900 border border-slate-200/80 dark:bg-slate-900 dark:border-slate-800 dark:text-slate-300'
-                }`}
-              >
-                <span>{tab.label}</span>
-                <span
-                  className={`rounded-full px-2 py-0.5 text-[10.5px] font-extrabold ${
-                    isActive
-                      ? 'bg-white/25 text-white'
-                      : tab.badge
-                        ? 'bg-rose-100 text-rose-700 dark:bg-rose-950 dark:text-rose-300'
-                        : 'bg-slate-100 text-slate-600 dark:bg-slate-800 dark:text-slate-400'
-                  }`}
-                >
-                  {tab.count}
-                </span>
-              </button>
-            );
-          })}
+            { k: 'ALL', l: 'Tất cả', c: notifications.length },
+            { k: 'UNREAD', l: 'Chưa đọc', c: unreadCount, badge: unreadCount > 0 },
+            { k: 'ALERTS', l: 'Cảnh báo y tế', c: notifications.filter((n) => n.type === 'ALERT').length },
+            { k: 'APPOINTMENTS', l: 'Lịch khám', c: notifications.filter((n) => n.type === 'APPOINTMENT').length },
+            { k: 'OTHERS', l: 'Lời mời & Hồ sơ', c: notifications.filter((n) => n.type === 'INVITE' || n.badgeLabel === 'Hồ sơ y tế').length },
+          ].map((t) => (
+            <button
+              key={t.k}
+              onClick={() => setActiveTab(t.k as TabType)}
+              className={`flex h-9 items-center gap-1.5 rounded-xl px-3 text-xs font-semibold whitespace-nowrap transition-all cursor-pointer ${
+                activeTab === t.k ? 'bg-blue-600 text-white shadow-xs' : 'bg-white text-slate-600 hover:bg-slate-50 border border-slate-200/90 dark:bg-slate-900 dark:border-slate-800 dark:text-slate-300'
+              }`}
+            >
+              <span>{t.l}</span>
+              <span className={`rounded-full px-1.5 py-0.5 text-[10px] font-bold ${activeTab === t.k ? 'bg-white/25 text-white' : t.badge ? 'bg-rose-100 text-rose-700' : 'bg-slate-100 text-slate-600'}`}>{t.c}</span>
+            </button>
+          ))}
         </div>
 
-        {/* Input Tìm kiếm */}
-        <div className="relative w-full md:w-80">
-          <Search className="absolute left-3.5 top-1/2 -translate-y-1/2 h-4 w-4 text-slate-400" />
-          <input
-            type="text"
-            value={searchQuery}
-            onChange={(e) => setSearchQuery(e.target.value)}
-            placeholder="Tìm theo nội dung, tên bệnh nhân..."
-            className="w-full rounded-2xl border border-slate-200/90 bg-white pl-10 pr-4 py-2 text-xs font-medium text-slate-900 placeholder:text-slate-400 focus:border-blue-500 focus:outline-hidden dark:border-slate-800 dark:bg-slate-900 dark:text-white"
-          />
+        <div className="flex items-center gap-2 shrink-0">
+          <select
+            value={severity}
+            onChange={(e) => setSeverity(e.target.value as SeverityType)}
+            className="h-9 rounded-xl border border-slate-200/90 bg-white px-3 pr-8 text-xs font-semibold text-slate-700 focus:border-blue-500 focus:outline-hidden cursor-pointer shadow-2xs dark:border-slate-800 dark:bg-slate-900 dark:text-slate-300"
+          >
+            <option value="ALL">Tất cả mức độ</option>
+            <option value="CRITICAL">🚨 Khẩn cấp</option>
+            <option value="WARNING">⚠️ Cảnh báo</option>
+          </select>
+
+          <div className="relative w-56 sm:w-64">
+            <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-3.5 w-3.5 text-slate-400" />
+            <input
+              type="text"
+              value={search}
+              onChange={(e) => setSearch(e.target.value)}
+              placeholder="Tìm theo nội dung, bệnh nhân..."
+              className="h-9 w-full rounded-xl border border-slate-200/90 bg-white pl-9 pr-7 text-xs font-medium text-slate-900 placeholder:text-slate-400 focus:border-blue-500 focus:outline-hidden shadow-2xs dark:border-slate-800 dark:bg-slate-900 dark:text-white"
+            />
+            {search && <button onClick={() => setSearch('')} className="absolute right-2.5 top-1/2 -translate-y-1/2 text-slate-400 hover:text-slate-600"><X className="h-3.5 w-3.5" /></button>}
+          </div>
         </div>
       </div>
 
-      {/* Danh sách thông báo */}
-      {filteredNotifications.length === 0 ? (
-        <div className="flex flex-col items-center justify-center rounded-3xl bg-white p-12 text-center shadow-xs border border-slate-200/80 dark:bg-slate-900 dark:border-slate-800">
-          <div className="flex h-16 w-16 items-center justify-center rounded-2xl bg-slate-50 text-slate-400 dark:bg-slate-800">
-            <Inbox className="h-8 w-8" />
-          </div>
-          <h3 className="mt-4 text-base font-bold text-slate-900 dark:text-white">
-            Không tìm thấy thông báo nào
-          </h3>
-          <p className="mt-1 text-xs text-slate-500 dark:text-slate-400 max-w-sm">
-            {searchQuery
-              ? `Không có thông báo nào khớp với từ khóa "${searchQuery}".`
-              : 'Hiện không có thông báo y tế nào trong mục này.'}
-          </p>
+      {/* Danh sách thông báo chia nhóm Linear Inbox */}
+      {filtered.length === 0 ? (
+        <div className="flex flex-col items-center justify-center rounded-2xl bg-white p-12 text-center shadow-xs border border-slate-200/80 dark:bg-slate-900 dark:border-slate-800">
+          <div className="flex h-12 w-12 items-center justify-center rounded-2xl bg-slate-100 text-slate-400 dark:bg-slate-800"><Inbox className="h-6 w-6" /></div>
+          <h3 className="mt-3 text-sm font-bold text-slate-900 dark:text-white">Không tìm thấy thông báo nào</h3>
+          <p className="mt-1 text-xs text-slate-500 dark:text-slate-400 max-w-sm">{search ? `Không khớp với từ khóa "${search}".` : 'Hiện không có thông báo y tế nào.'}</p>
         </div>
       ) : (
-        <div className="space-y-3">
-          {filteredNotifications.map((item) => {
-            const isCritical =
-              item.alertLevel === 'CRITICAL' ||
-              item.alertType === 'FALL_DETECTED' ||
-              item.badgeLabel === 'Khẩn cấp' ||
-              item.badgeLabel === 'Nguy cấp';
-            const isInvite = item.type === 'INVITE';
-            const isApt = item.type === 'APPOINTMENT';
-
-            return (
-              <div
-                key={item.id}
-                onClick={() => handleNotificationClick(item)}
-                className={`group flex flex-col sm:flex-row sm:items-center justify-between gap-4 rounded-2xl border p-4.5 cursor-pointer transition-all duration-150 hover:shadow-md ${
-                  !item.isRead
-                    ? 'border-blue-200 bg-blue-50/30 hover:border-blue-300 dark:border-blue-900/40 dark:bg-blue-950/20'
-                    : 'border-slate-200/80 bg-white hover:border-slate-300 dark:border-slate-800 dark:bg-slate-900'
-                }`}
-              >
-                <div className="flex items-start space-x-3.5 min-w-0">
-                  {/* Icon Loại thông báo */}
-                  <div
-                    className={`flex h-11 w-11 shrink-0 items-center justify-center rounded-2xl relative shadow-2xs ${
-                      isApt
-                        ? 'bg-sky-50 text-sky-600 dark:bg-sky-950/60 dark:text-sky-400'
-                        : isInvite
-                          ? 'bg-emerald-50 text-emerald-600 dark:bg-emerald-950/60 dark:text-emerald-400'
-                          : isCritical
-                            ? 'bg-rose-50 text-rose-600 dark:bg-rose-950/60 dark:text-rose-400'
-                            : 'bg-amber-50 text-amber-600 dark:bg-amber-950/60 dark:text-amber-400'
-                    }`}
-                  >
-                    {isApt ? (
-                      <Calendar className="h-5 w-5" />
-                    ) : isInvite ? (
-                      <Sparkles className="h-5 w-5" />
-                    ) : isCritical ? (
-                      <ShieldAlert className="h-5 w-5 animate-pulse" />
-                    ) : (
-                      <AlertTriangle className="h-5 w-5" />
-                    )}
-                    {!item.isRead && (
-                      <span className="absolute -top-1 -right-1 h-3 w-3 rounded-full bg-blue-600 ring-2 ring-white dark:ring-slate-900" />
-                    )}
-                  </div>
-
-                  {/* Nội dung thông báo */}
-                  <div className="flex-1 min-w-0">
-                    <div className="flex flex-wrap items-center gap-2 mb-1">
-                      <span
-                        className={`inline-flex items-center rounded-md px-2 py-0.5 text-[10.5px] font-bold border ${item.badgeColor}`}
-                      >
-                        {item.badgeLabel}
-                      </span>
-
-                      {item.patientName && (
-                        <span className="inline-flex items-center gap-1 rounded-md bg-slate-100 px-2 py-0.5 text-[11px] font-semibold text-slate-700 dark:bg-slate-800 dark:text-slate-300">
-                          <User className="h-3 w-3 text-slate-400" />
-                          {item.patientName}
-                        </span>
-                      )}
-
-                      <span className="inline-flex items-center gap-1 text-[11px] text-slate-400">
-                        <Clock className="h-3 w-3" />
-                        {item.timeStr}
-                      </span>
-                    </div>
-
-                    <h4
-                      className={`text-sm leading-snug ${
-                        !item.isRead
-                          ? 'font-bold text-slate-900 dark:text-white'
-                          : 'font-semibold text-slate-700 dark:text-slate-300'
-                      }`}
-                    >
-                      {item.title}
-                    </h4>
-
-                    <p className="mt-1 text-xs text-slate-500 dark:text-slate-400 line-clamp-2">
-                      {item.subtitle}
-                    </p>
-                  </div>
-                </div>
-
-                {/* Cột hành động & trạng thái */}
-                <div className="flex items-center justify-between sm:justify-end gap-3 shrink-0 pt-2 sm:pt-0 border-t sm:border-t-0 border-slate-100 dark:border-slate-800">
-                  <span
-                    className={`text-[11px] font-bold ${
-                      item.isRead
-                        ? 'text-emerald-600 dark:text-emerald-400'
-                        : 'text-blue-600 dark:text-blue-400'
-                    }`}
-                  >
-                    {item.isRead ? 'Đã xem' : 'Chưa đọc'}
-                  </span>
-
-                  <button
-                    onClick={(e) => {
-                      e.stopPropagation();
-                      handleNotificationClick(item);
-                    }}
-                    className="flex items-center gap-1 rounded-xl border border-slate-200 bg-white px-3.5 py-1.5 text-xs font-bold text-slate-700 hover:bg-slate-50 shadow-2xs transition-colors group-hover:border-blue-300 group-hover:text-blue-600 dark:border-slate-700 dark:bg-slate-800 dark:text-slate-200"
-                  >
-                    <span>Xem chi tiết</span>
-                    <ChevronRight className="h-3.5 w-3.5 transition-transform group-hover:translate-x-0.5" />
-                  </button>
-                </div>
+        <div className="space-y-3.5">
+          {grouped.map((g) => (
+            <div key={g.key} className="space-y-1.5">
+              <div className="flex items-center gap-2 px-2 pt-1 text-[11px] font-bold uppercase tracking-wider text-slate-400">
+                <span>{g.label}</span>
+                <span className="h-1 w-1 rounded-full bg-slate-300 dark:bg-slate-700" />
+                <span className="font-normal text-slate-400">{g.items.length} thông báo</span>
               </div>
-            );
-          })}
+
+              <div className="divide-y divide-slate-100 rounded-2xl border border-slate-200/90 bg-white shadow-xs overflow-hidden dark:divide-slate-800 dark:border-slate-800 dark:bg-slate-900">
+                {g.items.map((item) => {
+                  const isCrit = item.alertLevel === 'CRITICAL' || item.alertType === 'FALL_DETECTED' || item.badgeLabel === 'Khẩn cấp';
+                  const isWarn = !isCrit && (item.alertLevel === 'WARNING' || item.badgeLabel === 'Cảnh báo');
+                  const borderL = isCrit
+                    ? 'border-l-4 border-l-rose-500 bg-rose-50/20 dark:bg-rose-950/20'
+                    : isWarn
+                      ? 'border-l-4 border-l-amber-400 bg-amber-50/15 dark:bg-amber-950/10'
+                      : !item.isRead
+                        ? 'border-l-4 border-l-blue-500 bg-blue-50/20 dark:bg-blue-950/20'
+                        : 'border-l-4 border-l-transparent bg-white dark:bg-slate-900';
+
+                  return (
+                    <div
+                      key={item.id}
+                      onClick={() => handleItemClick(item)}
+                      className={`group flex flex-col sm:flex-row sm:items-center justify-between gap-3 px-4 py-3 cursor-pointer transition-colors hover:bg-slate-50/80 dark:hover:bg-slate-800/50 ${borderL} ${item.isRead ? 'opacity-85' : 'opacity-100'}`}
+                    >
+                      <div className="flex items-start space-x-3 min-w-0 flex-1">
+                        <div className={`flex h-8 w-8 shrink-0 items-center justify-center rounded-xl relative shadow-2xs mt-0.5 ${
+                          item.type === 'APPOINTMENT' ? 'bg-sky-50 text-sky-600' : item.type === 'INVITE' ? 'bg-emerald-50 text-emerald-600' : isCrit ? 'bg-rose-50 text-rose-600' : 'bg-amber-50 text-amber-600'
+                        }`}>
+                          {item.type === 'APPOINTMENT' ? <Calendar className="h-4 w-4" /> : item.type === 'INVITE' ? <Sparkles className="h-4 w-4" /> : isCrit ? <ShieldAlert className="h-4 w-4 text-rose-600" /> : <AlertTriangle className="h-4 w-4 text-amber-600" />}
+                          {!item.isRead && <span className="absolute -top-0.5 -right-0.5 h-2 w-2 rounded-full bg-blue-600 ring-2 ring-white dark:ring-slate-900" />}
+                        </div>
+
+                        <div className="flex-1 min-w-0">
+                          <div className="flex flex-wrap items-center gap-1.5 mb-0.5">
+                            <span className={`rounded px-1.5 py-0.2 text-[10px] font-bold border ${item.badgeColor}`}>{item.badgeLabel}</span>
+                            {item.patientName && (
+                              <span className="inline-flex items-center gap-1 rounded bg-slate-100 px-1.5 py-0.2 text-[10.5px] font-semibold text-slate-700 dark:bg-slate-800 dark:text-slate-300">
+                                <User className="h-2.5 w-2.5 text-slate-400" />
+                                {item.patientName}
+                              </span>
+                            )}
+                            {isCrit && <span className="inline-flex items-center gap-1 text-[10.5px] font-bold text-rose-600"><span className="h-1.5 w-1.5 rounded-full bg-rose-500 animate-pulse" />Khẩn cấp</span>}
+                          </div>
+
+                          <h4 className={`text-sm leading-snug line-clamp-1 ${!item.isRead ? 'font-bold text-slate-900 dark:text-white' : 'font-semibold text-slate-700 dark:text-slate-300'}`}>
+                            {item.cleanTitle}
+                          </h4>
+                          <p className="text-xs text-slate-600 dark:text-slate-400 line-clamp-2 mt-0.5 leading-relaxed">{item.cleanDesc}</p>
+                        </div>
+                      </div>
+
+                      <div className="flex items-center justify-between sm:justify-end gap-2.5 shrink-0 pt-1 sm:pt-0 sm:self-center">
+                        <span className="text-xs text-slate-400 font-medium whitespace-nowrap">{item.timeOnly}</span>
+                        {!item.isRead ? (
+                          <button
+                            type="button"
+                            onClick={(e) => { e.stopPropagation(); handleAcknowledge(item); }}
+                            title="Đánh dấu đã đọc"
+                            className="flex h-7 w-7 items-center justify-center rounded-lg text-slate-400 hover:bg-blue-50 hover:text-blue-600 transition-colors cursor-pointer"
+                          >
+                            <Check className="h-3.5 w-3.5" />
+                          </button>
+                        ) : <span className="w-2" />}
+
+                        <button
+                          type="button"
+                          onClick={(e) => { e.stopPropagation(); handleItemClick(item); }}
+                          className="flex items-center gap-1 rounded-lg border border-slate-200 bg-white px-2.5 py-1 text-xs font-semibold text-slate-700 hover:bg-slate-50 hover:border-blue-300 hover:text-blue-600 shadow-2xs transition-all dark:border-slate-700 dark:bg-slate-800 dark:text-slate-200 cursor-pointer"
+                        >
+                          <span>Chi tiết</span>
+                          <ChevronRight className="h-3 w-3" />
+                        </button>
+                      </div>
+                    </div>
+                  );
+                })}
+              </div>
+            </div>
+          ))}
+
+          {/* Phân trang */}
+          {totalPages > 1 && (
+            <div className="flex flex-col sm:flex-row items-center justify-between gap-3 pt-3 px-2 border-t border-slate-200/80 dark:border-slate-800">
+              <p className="text-xs text-slate-500 font-medium">
+                Hiển thị <span className="font-bold text-slate-800 dark:text-slate-200">{startIdx + 1}–{endIdx}</span> trên <span className="font-bold text-slate-800 dark:text-slate-200">{filtered.length}</span> thông báo
+              </p>
+
+              <div className="flex items-center gap-1">
+                <button
+                  type="button"
+                  onClick={() => setPage((p) => Math.max(1, p - 1))}
+                  disabled={page === 1}
+                  className="px-3 py-1.5 rounded-lg border border-slate-200 bg-white text-xs font-semibold text-slate-700 hover:bg-slate-50 disabled:opacity-40 disabled:cursor-not-allowed shadow-2xs cursor-pointer"
+                >
+                  Trước
+                </button>
+
+                {Array.from({ length: totalPages }).map((_, idx) => {
+                  const pNum = idx + 1;
+                  if (pNum === 1 || pNum === totalPages || (pNum >= page - 1 && pNum <= page + 1)) {
+                    return (
+                      <button
+                        key={pNum}
+                        type="button"
+                        onClick={() => setPage(pNum)}
+                        className={`h-7 w-7 rounded-lg text-xs font-bold transition-all cursor-pointer ${
+                          page === pNum ? 'bg-blue-600 text-white shadow-xs' : 'border border-slate-200 bg-white text-slate-700 hover:bg-slate-50'
+                        }`}
+                      >
+                        {pNum}
+                      </button>
+                    );
+                  }
+                  if (pNum === page - 2 || pNum === page + 2) return <span key={pNum} className="px-1 text-xs text-slate-400">...</span>;
+                  return null;
+                })}
+
+                <button
+                  type="button"
+                  onClick={() => setPage((p) => Math.min(totalPages, p + 1))}
+                  disabled={page === totalPages}
+                  className="px-3 py-1.5 rounded-lg border border-slate-200 bg-white text-xs font-semibold text-slate-700 hover:bg-slate-50 disabled:opacity-40 disabled:cursor-not-allowed shadow-2xs cursor-pointer"
+                >
+                  Sau
+                </button>
+              </div>
+            </div>
+          )}
         </div>
       )}
 
-      {/* Modal Xem chi tiết thông báo */}
+      {/* Modal chi tiết */}
       <NotificationDetailModal
-        isOpen={showDetailModal}
+        isOpen={showModal}
         notif={selectedNotif}
-        onClose={() => {
-          setShowDetailModal(false);
-          setSelectedNotif(null);
-        }}
-        onAcknowledge={handleAcknowledgeNotification}
-        onNavigate={(url) => {
-          setShowDetailModal(false);
-          setSelectedNotif(null);
-          navigate(url);
-        }}
+        onClose={() => { setShowModal(false); setSelectedNotif(null); }}
+        onAcknowledge={handleAcknowledge}
+        onNavigate={(url) => { setShowModal(false); setSelectedNotif(null); navigate(url); }}
         onRespondInvite={handleRespondInvite}
       />
     </div>

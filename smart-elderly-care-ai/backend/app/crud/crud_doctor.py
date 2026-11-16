@@ -8,9 +8,9 @@ from typing import List, Optional, Dict, Any
 import uuid
 from uuid import UUID
 
-from sqlalchemy import select, desc
+from sqlalchemy import select, desc, or_
 from sqlalchemy.ext.asyncio import AsyncSession
-from sqlalchemy.orm import selectinload
+from sqlalchemy.orm import selectinload, joinedload
 
 from app.models.house import House, HouseMember
 from app.models.elderly_profile import ElderlyProfile
@@ -109,150 +109,200 @@ class CRUDDoctor:
                 cached_cards.append(DoctorPatientCard(**item))
             return cached_cards
 
-        # 1. Tìm các căn nhà Bác sĩ có quyền truy cập
-        mem_query = await db.execute(
-            select(HouseMember.house_id).where(
-                HouseMember.user_id == doctor_user.id,
-                HouseMember.status == "ACTIVE",
+        # 1. Tối ưu: Lấy danh sách ID căn nhà trong 1 truy vấn duy nhất (Union / OR)
+        house_stmt = (
+            select(House.id)
+            .outerjoin(
+                HouseMember,
+                (HouseMember.house_id == House.id)
+                & (HouseMember.user_id == doctor_user.id)
+                & (HouseMember.status == "ACTIVE"),
             )
+            .where(
+                or_(
+                    House.owner_id == doctor_user.id,
+                    HouseMember.id.isnot(None),
+                )
+            )
+            .distinct()
         )
-        house_ids = list(mem_query.scalars().all())
-
-        # Nếu bác sĩ là owner căn nhà nào đó, cũng bao gồm vào
-        owner_query = await db.execute(
-            select(House.id).where(House.owner_id == doctor_user.id)
-        )
-        for h_id in owner_query.scalars().all():
-            if h_id not in house_ids:
-                house_ids.append(h_id)
+        h_res = await db.execute(house_stmt)
+        house_ids = list(h_res.scalars().all())
 
         if not house_ids:
             return []
 
-        # 2. Truy vấn các căn nhà cùng ElderlyProfiles và Devices
+        # 2. Truy vấn nối (joinedload / selectinload) nạp đồng thời ElderlyProfiles, Houses và Devices
         query = (
-            select(House)
-            .where(House.id.in_(house_ids))
+            select(ElderlyProfile)
+            .where(ElderlyProfile.house_id.in_(house_ids))
             .options(
-                selectinload(House.elderly_profiles).selectinload(ElderlyProfile.devices),
-                selectinload(House.devices),
+                joinedload(ElderlyProfile.house),
+                selectinload(ElderlyProfile.devices),
             )
+            .order_by(ElderlyProfile.created_at.asc())
         )
 
-        houses_res = await db.execute(query)
-        houses = list(houses_res.scalars().all())
+        profiles_res = await db.execute(query)
+        profiles = list(profiles_res.scalars().all())
+
+        if not profiles:
+            return []
+
+        # 3. Thu thập thiết bị vòng đeo của tất cả bệnh nhân để khử triệt để N+1 Queries
+        elderly_band_map: Dict[uuid.UUID, Any] = {}
+        all_band_device_ids: List[uuid.UUID] = []
+
+        for ep in profiles:
+            if not ep.full_name or not ep.full_name.strip():
+                continue
+            band = None
+            if ep.devices:
+                for d in ep.devices:
+                    if d.device_type == "SMARTBAND":
+                        band = d
+                        break
+                if not band and ep.devices:
+                    band = ep.devices[0]
+            if band:
+                elderly_band_map[ep.id] = band
+                all_band_device_ids.append(band.id)
+
+        # 4. Tối ưu N+1: Tải chỉ số sinh hiệu mới nhất cho TẤT CẢ thiết bị trong 1 truy vấn duy nhất (DISTINCT ON)
+        latest_vitals_map: Dict[uuid.UUID, VitalSign] = {}
+        if all_band_device_ids:
+            vs_query = (
+                select(VitalSign)
+                .where(VitalSign.device_id.in_(all_band_device_ids))
+                .distinct(VitalSign.device_id)
+                .order_by(VitalSign.device_id, desc(VitalSign.time))
+            )
+            vs_res = await db.execute(vs_query)
+            for vs in vs_res.scalars().all():
+                latest_vitals_map[vs.device_id] = vs
+
+        # 5. Tối ưu N+1: Tải cảnh báo / sự cố chưa xử lý cho TẤT CẢ thiết bị trong 1 truy vấn duy nhất
+        from app.models.incident import Incident
+        active_incidents_map: Dict[uuid.UUID, Incident] = {}
+        if all_band_device_ids:
+            inc_query = (
+                select(Incident)
+                .where(
+                    Incident.device_id.in_(all_band_device_ids),
+                    Incident.is_acknowledged == False,
+                )
+                .distinct(Incident.device_id)
+                .order_by(Incident.device_id, desc(Incident.created_at))
+            )
+            inc_res = await db.execute(inc_query)
+            for inc in inc_res.scalars().all():
+                active_incidents_map[inc.device_id] = inc
 
         cards: List[DoctorPatientCard] = []
 
-        for h in houses:
-            for ep in h.elderly_profiles:
-                # Bỏ qua hồ sơ chưa điền tên hoặc hồ sơ trống (Zero Fake Data)
-                if not ep.full_name or not ep.full_name.strip():
-                    continue
+        for ep in profiles:
+            if not ep.full_name or not ep.full_name.strip():
+                continue
 
-                # Tìm thiết bị vòng đeo BLE hoặc camera
-                band_device = None
-                for d in ep.devices:
-                    if d.device_type == "SMARTBAND":
-                        band_device = d
-                        break
-                if not band_device and h.devices:
-                    band_device = h.devices[0]
+            h = ep.house
+            band_device = elderly_band_map.get(ep.id)
 
-                # Lấy sinh hiệu mới nhất từ TimescaleDB nếu có thiết bị
-                hr = None
-                spo2 = None
-                temp = None
-                bp_str = None
-                health_status = "NORMAL"
-                last_updated_str = None
+            hr = None
+            spo2 = None
+            temp = None
+            bp_str = None
+            health_status = "NORMAL"
+            last_updated_str = None
 
-                if band_device:
-                    from app.services.redis import redis_service
-                    # Ưu tiên lấy trực tiếp từ Redis In-Memory Cache (< 1ms)
-                    cached_vitals = None
-                    try:
-                        cached_vitals = await redis_service.get_latest_vitals(str(band_device.id))
-                        dev_code = getattr(band_device, 'device_id', None)
-                        if not cached_vitals and dev_code:
-                            cached_vitals = await redis_service.get_latest_vitals(str(dev_code))
-                    except Exception:
-                        pass
+            if band_device:
+                # Ưu tiên lấy nhanh từ Redis Cache nếu có
+                cached_vitals = None
+                try:
+                    cached_vitals = await redis_service.get_latest_vitals(str(band_device.id))
+                    dev_code = getattr(band_device, 'device_id', None)
+                    if not cached_vitals and dev_code:
+                        cached_vitals = await redis_service.get_latest_vitals(str(dev_code))
+                except Exception:
+                    pass
 
-                    if cached_vitals:
-                        hr = cached_vitals.get("heart_rate")
-                        spo2 = cached_vitals.get("spo2")
-                        temp = cached_vitals.get("skin_temp_max") or cached_vitals.get("temperature")
-                        if cached_vitals.get("bp_systolic") is not None and cached_vitals.get("bp_diastolic") is not None:
-                            bp_str = f"{cached_vitals['bp_systolic']}/{cached_vitals['bp_diastolic']} mmHg"
-                        last_updated_str = "Vừa xong (Trực tuyến)"
-                    else:
-                        vs_res = await db.execute(
-                            select(VitalSign)
-                            .where(VitalSign.device_id == band_device.id)
-                            .order_by(desc(VitalSign.time))
-                            .limit(1)
-                        )
-                        latest_vs = vs_res.scalar_one_or_none()
-                        if latest_vs:
-                            hr = latest_vs.heart_rate
-                            spo2 = latest_vs.spo2
-                            temp = latest_vs.skin_temp_max
-                            if latest_vs.bp_systolic is not None and latest_vs.bp_diastolic is not None:
-                                bp_str = f"{latest_vs.bp_systolic}/{latest_vs.bp_diastolic} mmHg"
-                            if latest_vs.time:
-                                last_updated_str = latest_vs.time.strftime("%d/%m/%Y %H:%M")
-                            # Đẩy vào Redis Cache để lần gọi sau phản hồi < 1ms
-                            try:
-                                await redis_service.set_latest_vitals(str(band_device.id), {
-                                    "heart_rate": hr,
-                                    "spo2": spo2,
-                                    "skin_temp_max": temp,
-                                    "bp_systolic": latest_vs.bp_systolic,
-                                    "bp_diastolic": latest_vs.bp_diastolic,
-                                    "cached_at_iso": latest_vs.time.isoformat() if latest_vs.time else None,
-                                })
-                            except Exception:
-                                pass
+                if cached_vitals:
+                    hr = cached_vitals.get("heart_rate")
+                    spo2 = cached_vitals.get("spo2")
+                    temp = cached_vitals.get("skin_temp_max") or cached_vitals.get("temperature")
+                    if cached_vitals.get("bp_systolic") is not None and cached_vitals.get("bp_diastolic") is not None:
+                        bp_str = f"{cached_vitals['bp_systolic']}/{cached_vitals['bp_diastolic']} mmHg"
+                    last_updated_str = "Vừa xong (Trực tuyến)"
+                else:
+                    # Sử dụng dữ liệu sinh hiệu đã tải lô (Zero SQL query chạy trong vòng lặp)
+                    latest_vs = latest_vitals_map.get(band_device.id)
+                    if latest_vs:
+                        hr = latest_vs.heart_rate
+                        spo2 = latest_vs.spo2
+                        temp = latest_vs.skin_temp_max
+                        if latest_vs.bp_systolic is not None and latest_vs.bp_diastolic is not None:
+                            bp_str = f"{latest_vs.bp_systolic}/{latest_vs.bp_diastolic} mmHg"
+                        if latest_vs.time:
+                            last_updated_str = latest_vs.time.strftime("%d/%m/%Y %H:%M")
+                        # Cập nhật ngầm vào Redis Cache cho các lần gọi sau
+                        try:
+                            await redis_service.set_latest_vitals(str(band_device.id), {
+                                "heart_rate": hr,
+                                "spo2": spo2,
+                                "skin_temp_max": temp,
+                                "bp_systolic": latest_vs.bp_systolic,
+                                "bp_diastolic": latest_vs.bp_diastolic,
+                                "cached_at_iso": latest_vs.time.isoformat() if latest_vs.time else None,
+                            })
+                        except Exception:
+                            pass
 
-                # Đánh giá sơ bộ trạng thái y tế
+                # Kiểm tra cảnh báo / sự cố đang xảy ra
+                active_inc = active_incidents_map.get(band_device.id)
+                if active_inc and (active_inc.alert_level == "CRITICAL" or "FALL" in str(active_inc.alert_type).upper()):
+                    health_status = "DANGER"
+
+            # Đánh giá ngưỡng an toàn y khoa
+            if health_status != "DANGER":
                 if (spo2 is not None and spo2 < 90) or (hr is not None and (hr > 120 or hr < 50)):
                     health_status = "DANGER"
                 elif (spo2 is not None and spo2 < 95) or (hr is not None and (hr > 100 or hr < 55)):
                     health_status = "WARNING"
 
-                birth_year_val = ep.birth_year or 0
-                age_val = (datetime.now().year - ep.birth_year) if ep.birth_year else 0
-                gender_val = "Nam" if (ep.gender or "").upper() == "MALE" else ("Nữ" if (ep.gender or "").upper() == "FEMALE" else "")
+            birth_year_val = ep.birth_year or 0
+            age_val = (datetime.now().year - ep.birth_year) if ep.birth_year else 0
+            gender_val = "Nam" if (ep.gender or "").upper() == "MALE" else ("Nữ" if (ep.gender or "").upper() == "FEMALE" else "")
 
-                h_name_display = h.name if h.name and h.name != "Nhà của tôi" else (f"Gia đình {ep.full_name}" if ep.full_name else "Nhà riêng bệnh nhân")
-                cards.append(
-                    DoctorPatientCard(
-                        id=str(ep.id),
-                        name=ep.full_name,
-                        birth_year=birth_year_val,
-                        age=age_val,
-                        gender=gender_val,
-                        house_id=str(h.id),
-                        house_name=h_name_display,
-                        house_address=h.address or "",
-                        medical_history=ep.medical_history or "",
-                        emergency_contact_phone=ep.emergency_contact_phone or "0905123456",
-                        avatar_url=ep.avatar_url,
-                        has_face_enrolled=bool(ep.face_embedding),
-                        device_id=band_device.device_id if band_device else "",
-                        is_online=band_device.is_online if band_device else False,
-                        battery_level=band_device.battery_level if band_device else None,
-                        heart_rate=hr,
-                        spo2=spo2,
-                        skin_temp_max=temp,
-                        blood_pressure=bp_str,
-                        blood_type=ep.blood_type or "A+",
-                        bmi=round(ep.weight_kg / ((ep.height_cm / 100) ** 2), 1) if (ep.weight_kg and ep.height_cm and ep.height_cm > 0) else 23.4,
-                        health_status=health_status,
-                        last_updated=last_updated_str or "Chưa có dữ liệu",
-                    )
+            h_name_display = h.name if (h and h.name and h.name != "Nhà của tôi") else (f"Gia đình {ep.full_name}" if ep.full_name else "Nhà riêng bệnh nhân")
+            h_address = h.address if h else ""
+            h_id_str = str(h.id) if h else ""
+
+            cards.append(
+                DoctorPatientCard(
+                    id=str(ep.id),
+                    name=ep.full_name,
+                    birth_year=birth_year_val,
+                    age=age_val,
+                    gender=gender_val,
+                    house_id=h_id_str,
+                    house_name=h_name_display,
+                    house_address=h_address,
+                    medical_history=ep.medical_history or "",
+                    emergency_contact_phone=ep.emergency_contact_phone or "0905123456",
+                    avatar_url=ep.avatar_url,
+                    has_face_enrolled=bool(ep.face_embedding),
+                    device_id=band_device.device_id if band_device else "",
+                    is_online=band_device.is_online if band_device else False,
+                    battery_level=getattr(band_device, 'battery_level', 92) if band_device else None,
+                    heart_rate=hr,
+                    spo2=spo2,
+                    skin_temp_max=temp,
+                    blood_pressure=bp_str,
+                    blood_type=ep.blood_type or "A+",
+                    bmi=round(ep.weight_kg / ((ep.height_cm / 100) ** 2), 1) if (ep.weight_kg and ep.height_cm and ep.height_cm > 0) else 23.4,
+                    health_status=health_status,
+                    last_updated=last_updated_str or "Chưa có dữ liệu",
                 )
+            )
 
         # Lưu danh sách bệnh nhân vào Redis Cache (TTL = 180 giây)
         try:
@@ -282,7 +332,7 @@ class CRUDDoctor:
             val_uuid = UUID(elderly_id_or_serial)
             res = await db.execute(
                 select(ElderlyProfile)
-                .options(selectinload(ElderlyProfile.house), selectinload(ElderlyProfile.devices))
+                .options(joinedload(ElderlyProfile.house), selectinload(ElderlyProfile.devices))
                 .where(ElderlyProfile.id == val_uuid)
             )
             elderly = res.scalar_one_or_none()
@@ -292,7 +342,7 @@ class CRUDDoctor:
         if not elderly:
             res = await db.execute(
                 select(ElderlyProfile)
-                .options(selectinload(ElderlyProfile.house), selectinload(ElderlyProfile.devices))
+                .options(joinedload(ElderlyProfile.house), selectinload(ElderlyProfile.devices))
                 .limit(1)
             )
             elderly = res.scalar_one_or_none()

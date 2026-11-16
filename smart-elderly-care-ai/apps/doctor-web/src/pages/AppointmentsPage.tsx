@@ -1,9 +1,10 @@
 // src/pages/AppointmentsPage.tsx
 // Quản lý Lịch khám & Tái khám định kỳ dành cho Bác sĩ gia đình
 
-import React, { useEffect, useState, useCallback, useMemo } from 'react';
+import React, { useEffect, useState, useMemo } from 'react';
 import { doctorApi } from '../services/api';
-import { AppointmentItem, DoctorPatientCard } from '../types';
+import { useDoctorDataStore } from '../store/useDoctorDataStore';
+import { AppointmentItem } from '../types';
 import { NewAppointmentModal } from '../components/clinical/NewAppointmentModal';
 import {
   Clock,
@@ -31,9 +32,14 @@ import {
 const WEEKDAY_LABELS = ['T2', 'T3', 'T4', 'T5', 'T6', 'T7', 'CN'];
 
 export const AppointmentsPage: React.FC = () => {
-  const [loading, setLoading] = useState(true);
-  const [appointments, setAppointments] = useState<AppointmentItem[]>([]);
-  const [patients, setPatients] = useState<DoctorPatientCard[]>([]);
+  const {
+    appointments,
+    patients,
+    isLoadingAppointments,
+    isRevalidating,
+    fetchAllData,
+  } = useDoctorDataStore();
+
   const [statusFilter, setStatusFilter] = useState<'UPCOMING' | 'COMPLETED' | 'CANCELLED' | 'ALL'>('UPCOMING');
   const [searchQuery, setSearchQuery] = useState('');
   const [showCreateModal, setShowCreateModal] = useState(false);
@@ -46,20 +52,9 @@ export const AppointmentsPage: React.FC = () => {
     setTimeout(() => setToastMsg(null), 3000);
   };
 
-  const fetchData = useCallback(async () => {
-    setLoading(true);
-    try {
-      const [aptRes, patRes] = await Promise.allSettled([doctorApi.getAppointments(), doctorApi.getPatients()]);
-      if (aptRes.status === 'fulfilled' && Array.isArray(aptRes.value)) setAppointments(aptRes.value);
-      if (patRes.status === 'fulfilled' && Array.isArray(patRes.value)) setPatients(patRes.value);
-    } finally {
-      setLoading(false);
-    }
-  }, []);
-
   useEffect(() => {
-    fetchData();
-  }, [fetchData]);
+    fetchAllData();
+  }, [fetchAllData]);
 
   // Tính toán 7 ngày trong tuần (Thứ 2 -> Chủ Nhật)
   const weekDays = useMemo(() => {
@@ -104,7 +99,7 @@ export const AppointmentsPage: React.FC = () => {
     try {
       await doctorApi.completeAppointment(apt.id, notes);
       showToast(`Đã hoàn tất ca khám cho bệnh nhân ${apt.patient_name || ''}`);
-      fetchData();
+      fetchAllData(true);
     } catch {
       alert('Không thể cập nhật trạng thái lịch khám.');
     }
@@ -116,7 +111,7 @@ export const AppointmentsPage: React.FC = () => {
     try {
       await doctorApi.cancelAppointment(apt.id, reason);
       showToast('Đã hủy lịch hẹn khám và thông báo tới gia đình.');
-      fetchData();
+      fetchAllData(true);
     } catch {
       alert('Không thể hủy cuộc hẹn khám.');
     }
@@ -194,11 +189,11 @@ export const AppointmentsPage: React.FC = () => {
 
         <div className="flex items-center space-x-3">
           <button
-            onClick={fetchData}
-            disabled={loading}
-            className="flex items-center space-x-1.5 rounded-xl border border-slate-200 bg-white px-3.5 py-2.5 text-xs font-semibold text-slate-700 shadow-xs hover:bg-slate-50 transition-all"
+            onClick={() => fetchAllData(true)}
+            disabled={isRevalidating}
+            className="flex items-center space-x-1.5 rounded-xl border border-slate-200 bg-white px-3.5 py-2.5 text-xs font-semibold text-slate-700 shadow-xs hover:bg-slate-50 transition-all cursor-pointer"
           >
-            <RefreshCw className={`h-3.5 w-3.5 ${loading ? 'animate-spin text-blue-600' : ''}`} />
+            <RefreshCw className={`h-3.5 w-3.5 ${isRevalidating ? 'animate-spin text-blue-600' : ''}`} />
             <span>Làm mới</span>
           </button>
           <button
@@ -360,7 +355,11 @@ export const AppointmentsPage: React.FC = () => {
                       : 'bg-slate-100 text-slate-600 group-hover:bg-slate-200'
                   }`}
                 >
-                  {tab.count}
+                  {isLoadingAppointments && appointments.length === 0 ? (
+                    <span className="inline-block h-2 w-3 rounded-full bg-slate-300 animate-pulse" />
+                  ) : (
+                    tab.count
+                  )}
                 </span>
               </button>
             );
@@ -383,7 +382,29 @@ export const AppointmentsPage: React.FC = () => {
       <div className="grid grid-cols-1 lg:grid-cols-12 gap-6">
         {/* Cột trái: Danh sách thẻ cuộc hẹn (8 cột) */}
         <div className="lg:col-span-8 space-y-4">
-          {filteredAppointments.length === 0 ? (
+          {isLoadingAppointments && appointments.length === 0 ? (
+            <div className="space-y-4">
+              {Array.from({ length: 4 }).map((_, i) => (
+                <div
+                  key={i}
+                  className="rounded-2xl border border-slate-200/80 bg-white p-5 shadow-xs animate-pulse"
+                >
+                  <div className="flex flex-col sm:flex-row sm:items-start gap-4">
+                    <div className="h-16 w-16 rounded-2xl bg-slate-200 shrink-0" />
+                    <div className="flex-1 space-y-2.5">
+                      <div className="flex flex-wrap items-center gap-2">
+                        <div className="h-5 w-40 rounded bg-slate-200" />
+                        <div className="h-4 w-20 rounded-full bg-slate-100" />
+                        <div className="h-4 w-32 rounded bg-slate-100" />
+                      </div>
+                      <div className="h-3.5 w-3/4 rounded bg-slate-100" />
+                      <div className="h-3 w-1/2 rounded bg-slate-100" />
+                    </div>
+                  </div>
+                </div>
+              ))}
+            </div>
+          ) : filteredAppointments.length === 0 ? (
             <div className="rounded-2xl border border-slate-200/80 bg-white p-10 text-center shadow-xs">
               <div className="mx-auto mb-4 flex h-20 w-20 items-center justify-center rounded-full bg-gradient-to-br from-blue-50 via-cyan-50 to-indigo-50 border border-blue-100 shadow-inner">
                 <Stethoscope className="h-10 w-10 text-blue-600" />
@@ -398,14 +419,14 @@ export const AppointmentsPage: React.FC = () => {
                 {selectedDateStr && (
                   <button
                     onClick={() => setSelectedDateStr(null)}
-                    className="rounded-xl border border-slate-200 bg-slate-50 px-4 py-2.5 text-xs font-bold text-slate-700 hover:bg-slate-100 transition"
+                    className="rounded-xl border border-slate-200 bg-slate-50 px-4 py-2.5 text-xs font-bold text-slate-700 hover:bg-slate-100 transition cursor-pointer"
                   >
                     Xem tất cả các ngày
                   </button>
                 )}
                 <button
                   onClick={() => setShowCreateModal(true)}
-                  className="inline-flex items-center space-x-2 rounded-xl bg-blue-600 px-5 py-2.5 text-xs font-bold text-white shadow-md shadow-blue-500/25 hover:bg-blue-700 transition"
+                  className="inline-flex items-center space-x-2 rounded-xl bg-blue-600 px-5 py-2.5 text-xs font-bold text-white shadow-md shadow-blue-500/25 hover:bg-blue-700 transition cursor-pointer"
                 >
                   <Plus className="h-4 w-4" />
                   <span>Tạo lịch khám đầu tiên</span>
@@ -638,7 +659,7 @@ export const AppointmentsPage: React.FC = () => {
       </div>
 
       {showCreateModal && (
-        <NewAppointmentModal patients={patients} onClose={() => setShowCreateModal(false)} onSuccess={fetchData} />
+        <NewAppointmentModal patients={patients} onClose={() => setShowCreateModal(false)} onSuccess={() => fetchAllData(true)} />
       )}
     </div>
   );

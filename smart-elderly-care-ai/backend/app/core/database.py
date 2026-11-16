@@ -56,6 +56,12 @@ _is_supabase_pooler = (
 _connect_args: dict = {
     "timeout": 10,
     "command_timeout": 15,
+    "server_settings": {
+        "application_name": "smartcare_ai_fastapi",
+        "tcp_keepalives_idle": "30",
+        "tcp_keepalives_interval": "10",
+        "tcp_keepalives_count": "5",
+    },
 }
 if _is_supabase_pooler:
     _connect_args.update({
@@ -68,9 +74,9 @@ engine = create_async_engine(
     echo=settings.DEBUG,
     connect_args=_connect_args,
     pool_size=10,
-    max_overflow=15,
+    max_overflow=20,
     pool_timeout=10,
-    pool_recycle=120,
+    pool_recycle=300,
     pool_pre_ping=True,
 )
 
@@ -117,6 +123,9 @@ async def init_db() -> None:
             await conn.execute(text("ALTER TABLE elderly_profiles ADD COLUMN IF NOT EXISTS food_allergies TEXT;"))
             await conn.execute(text("ALTER TABLE elderly_profiles ADD COLUMN IF NOT EXISTS dietary_notes TEXT;"))
             await conn.execute(text("ALTER TABLE elderly_profiles ADD COLUMN IF NOT EXISTS face_embedding TEXT;"))
+            await conn.execute(text("ALTER TABLE elderly_profiles ADD COLUMN IF NOT EXISTS doctor_id UUID REFERENCES users(id) ON DELETE SET NULL;"))
+            await conn.execute(text("CREATE INDEX IF NOT EXISTS ix_elderly_profiles_doctor_id ON elderly_profiles(doctor_id);"))
+            await conn.execute(text("CREATE INDEX IF NOT EXISTS ix_elderly_profiles_house_id ON elderly_profiles(house_id);"))
             await conn.execute(text("ALTER TABLE device_configs ADD COLUMN IF NOT EXISTS bp_systolic_high INTEGER NOT NULL DEFAULT 140;"))
             await conn.execute(text("ALTER TABLE device_configs ADD COLUMN IF NOT EXISTS bp_systolic_low INTEGER NOT NULL DEFAULT 90;"))
             await conn.execute(text("ALTER TABLE device_configs ADD COLUMN IF NOT EXISTS bp_diastolic_high INTEGER NOT NULL DEFAULT 90;"))
@@ -124,6 +133,12 @@ async def init_db() -> None:
             await conn.execute(text("ALTER TABLE device_configs ADD COLUMN IF NOT EXISTS is_custom_thresholds BOOLEAN NOT NULL DEFAULT FALSE;"))
             await conn.execute(text("ALTER TABLE vital_signs ADD COLUMN IF NOT EXISTS bp_systolic INTEGER;"))
             await conn.execute(text("ALTER TABLE vital_signs ADD COLUMN IF NOT EXISTS bp_diastolic INTEGER;"))
+            await conn.execute(text("ALTER TABLE vital_signs ADD COLUMN IF NOT EXISTS elderly_id UUID REFERENCES elderly_profiles(id) ON DELETE CASCADE;"))
+            await conn.execute(text("ALTER TABLE vital_signs ADD COLUMN IF NOT EXISTS recorded_at TIMESTAMPTZ DEFAULT CURRENT_TIMESTAMP;"))
+            await conn.execute(text("CREATE INDEX IF NOT EXISTS ix_vital_signs_elderly_id ON vital_signs(elderly_id);"))
+            await conn.execute(text("CREATE INDEX IF NOT EXISTS ix_vital_signs_recorded_at_desc ON vital_signs(recorded_at DESC NULLS LAST);"))
+            await conn.execute(text("CREATE INDEX IF NOT EXISTS ix_vital_signs_time_desc ON vital_signs(\"time\" DESC);"))
+            await conn.execute(text("CREATE INDEX IF NOT EXISTS ix_vital_signs_device_time_desc ON vital_signs(device_id, \"time\" DESC);"))
             await conn.execute(text("ALTER TABLE house_members ADD COLUMN IF NOT EXISTS can_view_health BOOLEAN DEFAULT TRUE;"))
             await conn.execute(text("ALTER TABLE house_members ADD COLUMN IF NOT EXISTS can_view_camera BOOLEAN DEFAULT TRUE;"))
             await conn.execute(text("ALTER TABLE house_members ADD COLUMN IF NOT EXISTS can_handle_emergency BOOLEAN DEFAULT TRUE;"))
@@ -277,6 +292,15 @@ async def init_db() -> None:
                     updated_at TIMESTAMPTZ NOT NULL DEFAULT CURRENT_TIMESTAMP
                 );
             """))
+            await conn.execute(text("ALTER TABLE appointments ADD COLUMN IF NOT EXISTS elderly_id UUID REFERENCES elderly_profiles(id) ON DELETE CASCADE;"))
+            await conn.execute(text("ALTER TABLE appointments ADD COLUMN IF NOT EXISTS recorded_at TIMESTAMPTZ DEFAULT CURRENT_TIMESTAMP;"))
+            await conn.execute(text("UPDATE appointments SET elderly_id = patient_id WHERE elderly_id IS NULL AND patient_id IS NOT NULL;"))
+            await conn.execute(text("UPDATE appointments SET recorded_at = scheduled_at WHERE recorded_at IS NULL AND scheduled_at IS NOT NULL;"))
+            await conn.execute(text("CREATE INDEX IF NOT EXISTS ix_appointments_doctor_id ON appointments(doctor_id);"))
+            await conn.execute(text("CREATE INDEX IF NOT EXISTS ix_appointments_elderly_id ON appointments(elderly_id);"))
+            await conn.execute(text("CREATE INDEX IF NOT EXISTS ix_appointments_recorded_at_desc ON appointments(recorded_at DESC NULLS LAST);"))
+            await conn.execute(text("CREATE INDEX IF NOT EXISTS ix_appointments_scheduled_at_desc ON appointments(scheduled_at DESC);"))
+            await conn.execute(text("CREATE INDEX IF NOT EXISTS ix_appointments_doctor_recorded ON appointments(doctor_id, recorded_at DESC NULLS LAST);"))
             await conn.execute(text("CREATE INDEX IF NOT EXISTS ix_appointments_doctor_time ON appointments(doctor_id, scheduled_at);"))
             await conn.execute(text("CREATE INDEX IF NOT EXISTS ix_appointments_patient_time ON appointments(patient_id, scheduled_at);"))
             await conn.execute(text("CREATE INDEX IF NOT EXISTS ix_appointments_status ON appointments(status, scheduled_at);"))
