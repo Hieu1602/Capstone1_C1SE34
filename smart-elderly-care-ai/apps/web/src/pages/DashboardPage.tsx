@@ -11,9 +11,6 @@ import {
   ArrowUpRight,
   ShieldCheck,
   Zap,
-  Stethoscope,
-  Smartphone,
-  ExternalLink,
 } from 'lucide-react';
 import {
   AreaChart,
@@ -232,128 +229,6 @@ export const DashboardPage: React.FC = () => {
             </div>
           );
         })}
-      </div>
-
-      {/* ── SECA Subsystem Portals Quick Launch ── */}
-      <div>
-        <div className="flex items-center justify-between mb-3.5 px-0.5">
-          <h2 className="section-title flex items-center gap-2">
-            <span className="w-2 h-2 rounded-sm bg-blue-500" />
-            Cổng Phân Hệ Hệ Sinh Thái (SECA Ecosystem Portals)
-          </h2>
-          <span className="text-[10.5px] font-mono font-medium text-[#68707E] dark:text-[#9AA1AF] tracking-wider">
-            [ PORTAL LAUNCHERS ]
-          </span>
-        </div>
-        <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-          {/* Doctor Web Portal */}
-          <a
-            href="http://localhost:3001"
-            target="_blank"
-            rel="noopener noreferrer"
-            className="glass-card p-5 group hover:border-blue-500 transition-all duration-200 border-l-4 border-l-blue-500 flex flex-col justify-between"
-          >
-            <div>
-              <div className="flex items-center justify-between">
-                <div className="w-10 h-10 rounded-xl bg-blue-500/10 text-blue-500 dark:text-blue-400 group-hover:bg-blue-600 group-hover:text-white transition-all flex items-center justify-center border border-blue-500/20">
-                  <Stethoscope className="w-5 h-5 stroke-[2.2]" />
-                </div>
-                <span className="text-[10px] font-mono font-bold px-2 py-0.5 rounded-full bg-blue-50 text-blue-700 dark:bg-blue-950/60 dark:text-blue-300 border border-blue-200 dark:border-blue-800 flex items-center gap-1">
-                  <span>Port 3001</span>
-                  <ExternalLink className="w-2.5 h-2.5" />
-                </span>
-              </div>
-              <div className="mt-3.5">
-                <h3 className="font-heading font-bold text-sm text-[#16191F] dark:text-[#F1F4F9] group-hover:text-blue-600 dark:group-hover:text-blue-400 transition-colors">
-                  Cổng Web Bác Sĩ Gia Đình
-                </h3>
-                <p className="text-xs text-[#68707E] dark:text-[#9AA1AF] mt-1.5 leading-relaxed font-sans">
-                  Giao diện lâm sàng chuyên sâu: xem hồ sơ bệnh án, kê đơn thuốc và quản lý lịch khám người cao tuổi.
-                </p>
-              </div>
-            </div>
-            <div className="mt-4 pt-3 border-t border-[#DCE1E8] dark:border-[#323846] flex items-center justify-between text-xs">
-              <span className="font-mono text-[11px] text-[#68707E] dark:text-[#9AA1AF]">
-                {stats.docCount} Bác sĩ được kích hoạt
-              </span>
-              <span className="text-blue-600 dark:text-blue-400 font-bold group-hover:underline inline-flex items-center gap-1">
-                Mở Cổng <ArrowUpRight className="w-3.5 h-3.5" />
-              </span>
-            </div>
-          </a>
-
-          {/* Mobile Web Portal */}
-          <a
-            href="http://localhost:8081"
-            target="_blank"
-            rel="noopener noreferrer"
-            className="glass-card p-5 group hover:border-emerald-500 transition-all duration-200 border-l-4 border-l-emerald-500 flex flex-col justify-between"
-          >
-            <div>
-              <div className="flex items-center justify-between">
-                <div className="w-10 h-10 rounded-xl bg-emerald-500/10 text-emerald-600 dark:text-emerald-400 group-hover:bg-emerald-600 group-hover:text-white transition-all flex items-center justify-center border border-emerald-500/20">
-                  <Smartphone className="w-5 h-5 stroke-[2.2]" />
-                </div>
-                <span className="text-[10px] font-mono font-bold px-2 py-0.5 rounded-full bg-emerald-50 text-emerald-700 dark:bg-emerald-950/60 dark:text-emerald-300 border border-emerald-200 dark:border-emerald-800 flex items-center gap-1">
-                  <span>Port 8081</span>
-                  <ExternalLink className="w-2.5 h-2.5" />
-                </span>
-              </div>
-              <div className="mt-3.5">
-                <h3 className="font-heading font-bold text-sm text-[#16191F] dark:text-[#F1F4F9] group-hover:text-emerald-600 dark:group-hover:text-emerald-400 transition-colors">
-                  Ứng Dụng Di Động (Mobile Web)
-                </h3>
-                <p className="text-xs text-[#68707E] dark:text-[#9AA1AF] mt-1.5 leading-relaxed font-sans">
-                  Giao diện dành cho người thân và gia đình: nhận cảnh báo té ngã SOS và xem luồng trực tiếp camera AI.
-                </p>
-              </div>
-            </div>
-            <div className="mt-4 pt-3 border-t border-[#DCE1E8] dark:border-[#323846] flex items-center justify-between text-xs">
-              <span className="font-mono text-[11px] text-[#68707E] dark:text-[#9AA1AF]">
-                {stats.eldCount} Cụ già • {stats.famCount} Thành viên
-              </span>
-              <span className="text-emerald-600 dark:text-emerald-400 font-bold group-hover:underline inline-flex items-center gap-1">
-                Mở App <ArrowUpRight className="w-3.5 h-3.5" />
-              </span>
-            </div>
-          </a>
-
-          {/* FastAPI Swagger Docs */}
-          <a
-            href="http://localhost:8000/api/docs"
-            target="_blank"
-            rel="noopener noreferrer"
-            className="glass-card p-5 group hover:border-[#F05A24] transition-all duration-200 border-l-4 border-l-[#F05A24] flex flex-col justify-between"
-          >
-            <div>
-              <div className="flex items-center justify-between">
-                <div className="w-10 h-10 rounded-xl bg-[#F05A24]/10 text-[#F05A24] group-hover:bg-[#F05A24] group-hover:text-white transition-all flex items-center justify-center border border-[#F05A24]/20">
-                  <Server className="w-5 h-5 stroke-[2.2]" />
-                </div>
-                <span className="text-[10px] font-mono font-bold px-2 py-0.5 rounded-full bg-[#FFF0E8] text-[#F05A24] dark:bg-[#F05A24]/20 border border-[#F05A24]/30 flex items-center gap-1">
-                  <span>Port 8000</span>
-                  <ExternalLink className="w-2.5 h-2.5" />
-                </span>
-              </div>
-              <div className="mt-3.5">
-                <h3 className="font-heading font-bold text-sm text-[#16191F] dark:text-[#F1F4F9] group-hover:text-[#F05A24] transition-colors">
-                  Backend Swagger API & WS
-                </h3>
-                <p className="text-xs text-[#68707E] dark:text-[#9AA1AF] mt-1.5 leading-relaxed font-sans">
-                  Tài liệu kỹ thuật OpenAPI 3.0, Swagger UI và các kênh WebSocket điều phối dữ liệu telemetry y tế.
-                </p>
-              </div>
-            </div>
-            <div className="mt-4 pt-3 border-t border-[#DCE1E8] dark:border-[#323846] flex items-center justify-between text-xs">
-              <span className="font-mono text-[11px] text-[#68707E] dark:text-[#9AA1AF]">
-                FastAPI ASGI Core
-              </span>
-              <span className="text-[#F05A24] font-bold group-hover:underline inline-flex items-center gap-1">
-                Swagger UI <ArrowUpRight className="w-3.5 h-3.5" />
-              </span>
-            </div>
-          </a>
-        </div>
       </div>
 
       {/* ── Core Modules Quick Navigation ── */}

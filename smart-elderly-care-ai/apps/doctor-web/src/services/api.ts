@@ -10,6 +10,7 @@ import {
   AnalyticsData,
   DoctorUser,
   Incident,
+  SystemNotification,
 } from '../types';
 
 const BASE_URL =
@@ -250,5 +251,20 @@ export const incidentsApi = {
     return res.data;
   },
 };
+
+// 5. SYSTEM NOTIFICATIONS API (Đồng bộ thông báo toàn hệ thống từ Web Admin)
+export const systemNotificationsApi = {
+  getActiveBroadcasts: async (targetAudience: string = 'doctors'): Promise<SystemNotification[]> => {
+    try {
+      const res = await api.get<SystemNotification[]>('/system-notifications/broadcasts/active', {
+        params: { target_audience: targetAudience },
+      });
+      return Array.isArray(res.data) ? res.data : [];
+    } catch {
+      return [];
+    }
+  },
+};
+
 
 

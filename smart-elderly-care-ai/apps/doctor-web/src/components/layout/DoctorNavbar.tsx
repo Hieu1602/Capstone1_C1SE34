@@ -4,9 +4,9 @@
 import React, { useState, useEffect, useCallback, useRef } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useDoctorAuthStore, getDoctorAvatarUri } from '../../store/useDoctorAuthStore';
-import { doctorApi, householdApi, incidentsApi, authApi } from '../../services/api';
+import { doctorApi, householdApi, incidentsApi, authApi, systemNotificationsApi } from '../../services/api';
 import { doctorWebSocket } from '../../services/websocket';
-import type { Incident, AppointmentItem, DoctorPatientCard } from '../../types';
+import type { Incident, AppointmentItem, DoctorPatientCard, SystemNotification } from '../../types';
 import {
   Bell,
   LogOut,
@@ -23,10 +23,11 @@ import {
   Sparkles,
   Moon,
   Sun,
+  Megaphone,
 } from 'lucide-react';
 import { NotificationDetailModal, UnifiedNotification } from '../clinical/NotificationDetailModal';
 
-type TabType = 'ALL' | 'UNREAD' | 'ALERTS' | 'APPOINTMENTS';
+type TabType = 'ALL' | 'UNREAD' | 'ADMIN' | 'ALERTS' | 'APPOINTMENTS';
 
 const READ_STORAGE_KEY = '@doctor_web_read_notifs';
 
@@ -133,11 +134,12 @@ export const DoctorNavbar: React.FC = () => {
 
   const fetchNotifData = useCallback(async () => {
     try {
-      const [incRes, patRes, aptRes, invRes] = await Promise.allSettled([
+      const [incRes, patRes, aptRes, invRes, sysRes] = await Promise.allSettled([
         incidentsApi.list(undefined, 50),
         doctorApi.getPatients(),
         doctorApi.getAppointments(),
         householdApi.getInvites(),
+        systemNotificationsApi.getActiveBroadcasts('doctors'),
       ]);
 
       const savedReadIds = (() => {
@@ -150,6 +152,52 @@ export const DoctorNavbar: React.FC = () => {
       })();
 
       const unifiedList: UnifiedNotification[] = [];
+
+      // 0. Thông báo toàn hệ thống từ Web Admin (System Notifications & Broadcasts)
+      if (sysRes.status === 'fulfilled' && Array.isArray(sysRes.value)) {
+        sysRes.value.forEach((sys: SystemNotification) => {
+          const sysId = `sys_${sys.id}`;
+          const isRead = Boolean(savedReadIds.has(sysId) || savedReadIds.has(sys.id));
+          const timeStr = formatDate(sys.published_at || sys.created_at);
+
+          let badgeLabel = 'Thông báo Admin';
+          let badgeColor = 'text-sky-700 bg-sky-50 border-sky-200 dark:bg-sky-900/50 dark:text-sky-300';
+          let badgeBg = 'bg-sky-50';
+
+          if (sys.type === 'system_maintenance') {
+            badgeLabel = 'Bảo trì hệ thống';
+            badgeColor = 'text-amber-700 bg-amber-50 border-amber-200 dark:bg-amber-950/60 dark:text-amber-300';
+            badgeBg = 'bg-amber-50';
+          } else if (sys.type === 'emergency') {
+            badgeLabel = 'Khẩn cấp Admin';
+            badgeColor = 'text-rose-700 bg-rose-50 border-rose-200 dark:bg-rose-950/60 dark:text-rose-300';
+            badgeBg = 'bg-rose-50';
+          } else if (sys.type === 'feature_update') {
+            badgeLabel = 'Cập nhật tính năng';
+            badgeColor = 'text-blue-700 bg-blue-50 border-blue-200 dark:bg-blue-900/50 dark:text-blue-300';
+            badgeBg = 'bg-blue-50';
+          } else if (sys.type === 'health_tip') {
+            badgeLabel = 'Chỉ dẫn y tế';
+            badgeColor = 'text-emerald-700 bg-emerald-50 border-emerald-200 dark:bg-emerald-950/60 dark:text-emerald-300';
+            badgeBg = 'bg-emerald-50';
+          }
+
+          unifiedList.push({
+            id: sysId,
+            type: 'ADMIN',
+            title: sys.title,
+            subtitle: sys.body,
+            timeStr,
+            badgeLabel,
+            badgeColor,
+            badgeBg,
+            isRead,
+            targetUrl: '/notifications',
+            patientName: 'Ban Quản Trị Hệ Thống (Admin)',
+            adminNotification: sys,
+          });
+        });
+      }
 
       // 1. Cảnh báo và sự cố từ Backend API /notifications (Đồng bộ thời gian thực với Mobile App và CSDL)
       if (incRes.status === 'fulfilled' && Array.isArray(incRes.value)) {
@@ -453,11 +501,13 @@ export const DoctorNavbar: React.FC = () => {
   };
 
   const unreadCount = notifications.filter((n) => !n.isRead).length;
+  const adminCount = notifications.filter((n) => n.type === 'ADMIN').length;
   const alertsCount = notifications.filter((n) => n.type === 'ALERT' || n.type === 'INVITE').length;
   const aptsCount = notifications.filter((n) => n.type === 'APPOINTMENT').length;
 
   const filteredNotifs = notifications.filter((item) => {
     if (notifTab === 'UNREAD') return !item.isRead;
+    if (notifTab === 'ADMIN') return item.type === 'ADMIN';
     if (notifTab === 'ALERTS') return item.type === 'ALERT' || item.type === 'INVITE';
     if (notifTab === 'APPOINTMENTS') return item.type === 'APPOINTMENT';
     return true;
@@ -467,6 +517,10 @@ export const DoctorNavbar: React.FC = () => {
     UNREAD: {
       title: 'Tuyệt vời! Không còn thông báo chưa đọc',
       sub: 'Bác sĩ đã xem và xử lý toàn bộ các thông báo y tế.',
+    },
+    ADMIN: {
+      title: 'Chưa có thông báo nào từ Quản trị viên',
+      sub: 'Các thông báo bảo trì hoặc chỉ đạo y tế từ Admin sẽ hiển thị ở đây.',
     },
     ALERTS: {
       title: 'Không có cảnh báo bất thường',
@@ -595,11 +649,12 @@ export const DoctorNavbar: React.FC = () => {
                 )}
               </div>
 
-              {/* Tabs lọc thông báo chuẩn như App: Tất cả, Chưa đọc, Cảnh báo, Lịch khám */}
+              {/* Tabs lọc thông báo chuẩn như App: Tất cả, Chưa đọc, Từ Admin, Cảnh báo, Lịch khám */}
               <div className="flex border-b border-slate-100 px-4 pt-2 bg-white gap-4 text-xs font-bold dark:border-slate-800 dark:bg-slate-900 overflow-x-auto">
                 {[
                   { key: 'ALL' as const, label: `Tất cả (${notifications.length})` },
                   { key: 'UNREAD' as const, label: `Chưa đọc (${unreadCount})` },
+                  { key: 'ADMIN' as const, label: `Từ Admin (${adminCount})` },
                   { key: 'ALERTS' as const, label: `Cảnh báo (${alertsCount})` },
                   { key: 'APPOINTMENTS' as const, label: `Lịch khám (${aptsCount})` },
                 ].map((t) => (
@@ -610,7 +665,9 @@ export const DoctorNavbar: React.FC = () => {
                       notifTab === t.key
                         ? t.key === 'ALERTS'
                           ? 'border-rose-600 text-rose-600 dark:border-rose-500 dark:text-rose-400'
-                          : 'border-blue-600 text-blue-600 dark:border-blue-400 dark:text-blue-400'
+                          : t.key === 'ADMIN'
+                            ? 'border-sky-600 text-sky-600 dark:border-sky-400 dark:text-sky-400'
+                            : 'border-blue-600 text-blue-600 dark:border-blue-400 dark:text-blue-400'
                         : 'border-transparent text-slate-400 hover:text-slate-700 dark:text-slate-500 dark:hover:text-slate-300'
                     }`}
                   >
@@ -633,6 +690,7 @@ export const DoctorNavbar: React.FC = () => {
                   </div>
                 ) : (
                   filteredNotifs.map((item) => {
+                    const isAdmin = item.type === 'ADMIN';
                     const isAlert = item.type === 'ALERT';
                     const isInvite = item.type === 'INVITE';
                     const isApt = item.type === 'APPOINTMENT';
@@ -650,16 +708,20 @@ export const DoctorNavbar: React.FC = () => {
                         {/* Icon Box */}
                         <div
                           className={`flex h-10 w-10 shrink-0 items-center justify-center rounded-xl relative ${
-                            isApt
+                            isAdmin
                               ? 'bg-sky-50 text-sky-600 dark:bg-sky-950/60 dark:text-sky-400'
-                              : isInvite
-                                ? 'bg-indigo-50 text-indigo-600 dark:bg-indigo-950/60 dark:text-indigo-400'
-                                : item.badgeLabel === 'Khẩn cấp' || item.badgeLabel === 'Nguy cấp'
-                                  ? 'bg-rose-50 text-rose-600 dark:bg-rose-950/60 dark:text-rose-400'
-                                  : 'bg-amber-50 text-amber-600 dark:bg-amber-950/60 dark:text-amber-400'
+                              : isApt
+                                ? 'bg-sky-50 text-sky-600 dark:bg-sky-950/60 dark:text-sky-400'
+                                : isInvite
+                                  ? 'bg-indigo-50 text-indigo-600 dark:bg-indigo-950/60 dark:text-indigo-400'
+                                  : item.badgeLabel === 'Khẩn cấp' || item.badgeLabel === 'Nguy cấp'
+                                    ? 'bg-rose-50 text-rose-600 dark:bg-rose-950/60 dark:text-rose-400'
+                                    : 'bg-amber-50 text-amber-600 dark:bg-amber-950/60 dark:text-amber-400'
                           }`}
                         >
-                          {isApt ? (
+                          {isAdmin ? (
+                            <Megaphone className="h-5 w-5" />
+                          ) : isApt ? (
                             <Calendar className="h-5 w-5" />
                           ) : isInvite ? (
                             <Sparkles className="h-5 w-5" />
