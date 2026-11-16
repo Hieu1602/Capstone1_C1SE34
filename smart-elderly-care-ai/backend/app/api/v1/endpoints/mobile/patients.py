@@ -35,7 +35,20 @@ async def list_patients(
     """
     Lấy danh sách người cao tuổi trong nhà để gán thiết bị hoặc theo dõi sức khỏe.
     Hỗ trợ tìm kiếm theo tên và hỗ trợ phân quyền cho Bác sĩ & Người nhà.
+    Tích hợp Redis In-Memory Cache (độ trễ < 1ms).
     """
+    curr_uid_str = str(current_user.id) if current_user else "none"
+    cache_key = f"cache:patients:list:u_{curr_uid_str}:q_{q or 'all'}"
+
+    # Thử lấy nhanh từ Redis Cache
+    from app.services.redis import redis_service
+    try:
+        cached = await redis_service.get_cached_patients_list(cache_key)
+        if cached is not None:
+            return cached
+    except Exception:
+        pass
+
     from app.models.elderly_profile import ElderlyProfile
     from app.models.house import House, HouseMember
     from sqlalchemy import select, or_
@@ -98,6 +111,13 @@ async def list_patients(
             "avatar_url": p.avatar_url,
             "emergency_contact_phone": p.emergency_contact_phone or "",
         })
+
+    # Lưu kết quả vào Redis Cache (TTL = 180s)
+    try:
+        await redis_service.set_cached_patients_list(cache_key, out, ttl=180)
+    except Exception:
+        pass
+
     return out
 
 
@@ -214,7 +234,7 @@ async def update_patient_medical_record(
     try:
         from app.crud.crud_doctor import crud_doctor
         crud_doctor.sync_clinical_store(
-            elderly_ids=[record_id, str(patient_id)],
+            elderly_ids=[record_id, patient_id],
             update_data={
                 "drug_allergies": update_in.drug_allergies,
                 "food_allergies": update_in.food_allergies,
@@ -605,6 +625,7 @@ async def request_patient_appointment(
         scheduled_str = sch_dt.strftime("%H:%M ngày %d/%m/%Y")
         msg = f"🗓️ {req_user_name} đã đặt lịch khám cho cụ {target_profile.full_name} vào lúc {scheduled_str}."
 
+        incident = None
         if dev_id:
             incident = Incident(
                 device_id=dev_id,

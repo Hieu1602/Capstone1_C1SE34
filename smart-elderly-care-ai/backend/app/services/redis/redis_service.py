@@ -356,6 +356,119 @@ class RedisService:
             logger.error("[Redis] Lỗi khi flushdb: %s", exc)
             return False
 
+    async def _delete_by_pattern(self, pattern: str) -> int:
+        """Xoá an toàn các key theo mẫu (pattern) sử dụng cursor scan để tránh block Redis."""
+        try:
+            r = await self._client()
+            cursor = 0
+            total = 0
+            while True:
+                cursor, keys = await r.scan(cursor=cursor, match=pattern, count=100)
+                if keys:
+                    total += await r.delete(*keys)
+                if cursor == 0:
+                    break
+            return total
+        except Exception as exc:
+            logger.error("[Redis] Lỗi khi xoá theo pattern %s: %s", pattern, exc)
+            return 0
+
+    # ==========================================================================
+    # 7. BỘ NHỚ ĐỆM DANH SÁCH THÔNG BÁO & CẢNH BÁO (INCIDENTS / NOTIFICATIONS)
+    # ==========================================================================
+
+    async def get_cached_incidents(self, cache_key: str) -> Optional[List[Dict[str, Any]]]:
+        """Lấy danh sách thông báo đã cache từ Redis (độ trễ < 1ms)."""
+        try:
+            r = await self._client()
+            val = await r.get(cache_key)
+            if val:
+                return json.loads(val)
+            return None
+        except Exception as exc:
+            logger.debug("[Redis] Lỗi get_cached_incidents (%s): %s", cache_key, exc)
+            return None
+
+    async def set_cached_incidents(self, cache_key: str, data: List[Dict[str, Any]], ttl: int = 180) -> bool:
+        """Lưu danh sách thông báo vào Redis cache với TTL (mặc định 180 giây)."""
+        try:
+            r = await self._client()
+            json_str = json.dumps(data, ensure_ascii=False)
+            await r.set(cache_key, json_str, ex=ttl)
+            return True
+        except Exception as exc:
+            logger.error("[Redis] Lỗi set_cached_incidents (%s): %s", cache_key, exc)
+            return False
+
+    async def invalidate_incidents_cache(self) -> int:
+        """Xoá sạch toàn bộ cache danh sách thông báo khi có thông báo mới hoặc cập nhật trạng thái."""
+        deleted = await self._delete_by_pattern("cache:incidents:*")
+        logger.info("[Redis] Đã xoá %d keys cache incidents", deleted)
+        return deleted
+
+    # ==========================================================================
+    # 8. BỘ NHỚ ĐỆM DANH SÁCH BỆNH NHÂN (DOCTOR ASSIGNED PATIENTS & PATIENTS LIST)
+    # ==========================================================================
+
+    async def get_cached_doctor_patients(self, doctor_id: str) -> Optional[List[Dict[str, Any]]]:
+        """Lấy danh sách bệnh nhân phụ trách của Bác sĩ từ Redis (độ trễ < 1ms)."""
+        try:
+            r = await self._client()
+            val = await r.get(f"cache:doctor:{doctor_id}:patients")
+            if val:
+                return json.loads(val)
+            return None
+        except Exception as exc:
+            logger.debug("[Redis] Lỗi get_cached_doctor_patients (%s): %s", doctor_id, exc)
+            return None
+
+    async def set_cached_doctor_patients(self, doctor_id: str, data: List[Dict[str, Any]], ttl: int = 180) -> bool:
+        """Lưu danh sách bệnh nhân phụ trách của Bác sĩ vào Redis."""
+        try:
+            r = await self._client()
+            json_str = json.dumps(data, ensure_ascii=False)
+            await r.set(f"cache:doctor:{doctor_id}:patients", json_str, ex=ttl)
+            return True
+        except Exception as exc:
+            logger.error("[Redis] Lỗi set_cached_doctor_patients (%s): %s", doctor_id, exc)
+            return False
+
+    async def invalidate_doctor_patients(self, doctor_id: Optional[str] = None) -> int:
+        """Xoá cache bệnh nhân của bác sĩ khi có cập nhật bệnh án/đơn thuốc/phân quyền."""
+        if doctor_id:
+            try:
+                r = await self._client()
+                return await r.delete(f"cache:doctor:{doctor_id}:patients")
+            except Exception:
+                return 0
+        else:
+            return await self._delete_by_pattern("cache:doctor:*:patients")
+
+    async def get_cached_patients_list(self, cache_key: str) -> Optional[List[Dict[str, Any]]]:
+        """Lấy danh sách bệnh nhân tổng quan từ Redis."""
+        try:
+            r = await self._client()
+            val = await r.get(cache_key)
+            if val:
+                return json.loads(val)
+            return None
+        except Exception:
+            return None
+
+    async def set_cached_patients_list(self, cache_key: str, data: List[Dict[str, Any]], ttl: int = 180) -> bool:
+        """Lưu danh sách bệnh nhân tổng quan vào Redis."""
+        try:
+            r = await self._client()
+            json_str = json.dumps(data, ensure_ascii=False)
+            await r.set(cache_key, json_str, ex=ttl)
+            return True
+        except Exception:
+            return False
+
+    async def invalidate_patients_list(self) -> int:
+        """Xoá cache danh sách bệnh nhân tổng quan."""
+        return await self._delete_by_pattern("cache:patients:list:*")
+
 
 # Khởi tạo singleton instance sử dụng xuyên suốt ứng dụng
 redis_service = RedisService()

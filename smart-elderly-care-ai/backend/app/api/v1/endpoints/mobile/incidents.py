@@ -32,14 +32,26 @@ async def list_incidents(
     """
     Lấy danh sách sự kiện cảnh báo.
     Có thể lọc theo device_id (chuỗi hoặc UUID) và alert_level.
+    Tích hợp Redis In-Memory Cache (độ trễ < 1ms) cho danh sách thông báo cũ.
     """
+    curr_uid = current_user.id if current_user else None
+    cache_key = f"cache:incidents:u_{str(curr_uid)}:d_{device_id or 'all'}:l_{alert_level or 'all'}:lim_{limit}:off_{offset}"
+
+    # 1. Thử lấy từ Redis Cache (< 1ms)
+    from app.services.redis import redis_service
+    try:
+        cached = await redis_service.get_cached_incidents(cache_key)
+        if cached is not None:
+            return [IncidentOut(**item) for item in cached]
+    except Exception as e:
+        logger.debug("[Redis] Cache miss hoặc lỗi: %s", e)
+
     resolved_dev_uuid = None
     if device_id:
         from app.crud.crud_vital import crud_vital
         resolved_dev_uuid = await crud_vital.resolve_device_uuid(db, device_id)
 
-    curr_uid = current_user.id if current_user else None
-    return await crud_incident.list(
+    incidents = await crud_incident.list(
         db=db,
         device_id=resolved_dev_uuid,
         alert_level=alert_level,
@@ -47,6 +59,15 @@ async def list_incidents(
         offset=offset,
         current_user_id=curr_uid,
     )
+
+    # 2. Lưu vào Redis Cache (TTL = 180s)
+    try:
+        serialized = [IncidentOut.model_validate(inc).model_dump(mode="json") for inc in incidents]
+        await redis_service.set_cached_incidents(cache_key, serialized, ttl=180)
+    except Exception as cache_err:
+        logger.debug("[Redis] Không thể lưu cache incidents: %s", cache_err)
+
+    return incidents
 
 
 @router.post("/acknowledge-all")
@@ -58,6 +79,11 @@ async def acknowledge_all_incidents(
     """Xác nhận đã đọc toàn bộ thông báo/cảnh báo và lưu vào CSDL."""
     curr_uid = current_user.id if current_user else None
     count = await crud_incident.acknowledge_all(db, current_user_id=curr_uid)
+    try:
+        from app.services.redis import redis_service
+        await redis_service.invalidate_incidents_cache()
+    except Exception:
+        pass
     return {"status": "success", "acknowledged_count": count}
 
 
@@ -109,6 +135,12 @@ async def acknowledge_incident(
         except Exception as notify_err:
             logger.warning("[acknowledge_incident] Lỗi kích hoạt notify_doctor_appointment_confirmed: %s", notify_err)
 
+    try:
+        from app.services.redis import redis_service
+        await redis_service.invalidate_incidents_cache()
+    except Exception:
+        pass
+
     return incident
 
 
@@ -129,5 +161,10 @@ async def reopen_incident(
             status_code=status.HTTP_404_NOT_FOUND,
             detail="Incident not found",
         )
+    try:
+        from app.services.redis import redis_service
+        await redis_service.invalidate_incidents_cache()
+    except Exception:
+        pass
     return incident
 

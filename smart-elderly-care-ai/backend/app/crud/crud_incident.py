@@ -130,6 +130,11 @@ class CRUDIncident:
         obj = Incident(**data)
         db.add(obj)
         await db.flush()
+        try:
+            from app.services.redis import redis_service
+            await redis_service.invalidate_incidents_cache()
+        except Exception:
+            pass
         return obj
 
     async def acknowledge(

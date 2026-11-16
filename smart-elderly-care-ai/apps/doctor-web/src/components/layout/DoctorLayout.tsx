@@ -35,16 +35,16 @@ export const DoctorLayout: React.FC = () => {
   }, []);
 
   return (
-    <div className="flex min-h-screen flex-col bg-[#F4F7FE] dark:bg-[#0F172A] text-slate-800 dark:text-slate-100 transition-colors">
-      {/* Top Navbar */}
+    <div className="flex h-screen flex-col overflow-hidden bg-[#F4F7FE] dark:bg-[#0F172A] text-slate-800 dark:text-slate-100 transition-colors">
+      {/* Top Navbar: cố định tuyệt đối trên đỉnh */}
       <DoctorNavbar />
 
-      {/* Main Body */}
-      <div className="flex flex-1">
-        {/* Sidebar */}
+      {/* Main Body: chiếm toàn bộ chiều cao còn lại của màn hình */}
+      <div className="flex flex-1 min-h-0 overflow-hidden">
+        {/* Sidebar: cố định bên trái, hỗ trợ cuộn nội bộ nếu màn hình nhỏ */}
         <DoctorSidebar />
 
-        {/* Content Area */}
+        {/* Content Area: phân vùng nội dung duy nhất cuộn theo chiều dọc */}
         <main className="flex-1 min-w-0 p-6 lg:p-8 overflow-y-auto">
           {/* Banner thông báo thời gian thực nếu có sự cố */}
           {realtimeAlert && (

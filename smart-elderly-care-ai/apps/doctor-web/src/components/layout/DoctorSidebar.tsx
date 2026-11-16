@@ -3,7 +3,7 @@
 
 import React from 'react';
 import { NavLink } from 'react-router-dom';
-import { Home, CalendarDays, Users, Settings, Activity } from 'lucide-react';
+import { Home, CalendarDays, Users, Bell, Settings, Activity } from 'lucide-react';
 
 export const DoctorSidebar: React.FC = () => {
   const navItems = [
@@ -26,6 +26,12 @@ export const DoctorSidebar: React.FC = () => {
       description: 'Hồ sơ bệnh án & sinh hiệu',
     },
     {
+      to: '/notifications',
+      label: 'Thông báo',
+      icon: Bell,
+      description: 'Cảnh báo y tế & sự cố khẩn cấp',
+    },
+    {
       to: '/settings',
       label: 'Cài đặt',
       icon: Settings,
@@ -34,7 +40,7 @@ export const DoctorSidebar: React.FC = () => {
   ];
 
   return (
-    <aside className="w-64 shrink-0 border-r border-slate-200/80 bg-white min-h-[calc(100vh-4rem)] flex flex-col justify-between p-4">
+    <aside className="w-64 shrink-0 border-r border-slate-200/80 bg-white dark:bg-slate-900 h-full flex flex-col justify-between p-4 overflow-y-auto select-none z-20">
       <div className="space-y-6">
         {/* Nhãn phân loại */}
         <div>
@@ -94,7 +100,7 @@ export const DoctorSidebar: React.FC = () => {
           </p>
           <div className="mt-2.5 flex items-center space-x-1.5 text-[10.5px] font-semibold text-emerald-600">
             <span className="h-2 w-2 rounded-full bg-emerald-500 animate-ping" />
-            <span>Kênh dữ liệu WebSocket đang mở</span>
+            <span>Kênh giám sát trực tuyến 24/7</span>
           </div>
         </div>
       </div>
