@@ -38,14 +38,12 @@ CÂU HỎI TRA CỨU NHANH / CÂU HỎI CÓ-KHÔNG / KIỂM TRA 1 CHỈ SỐ / B
 - Nêu ngay kết luận khẳng định/phủ định ngay câu đầu tiên.
 - Tuyệt đối KHÔNG chia nhiều mục la liệt, KHÔNG chào hỏi vòng vo dài dòng.
 
-ĐỐI ĐÁP LIÊN TỤC (MULTI-TURN CHAT) & BỔ SUNG TRIỆU CHỨNG:
-- Đọc kỹ [LỊCH SỬ ĐỐI ĐÁP LIÊN TỤC TRƯỚC ĐÓ] để hiểu toàn bộ diễn tiến câu chuyện!
-- Khi người dùng hỏi tiếp nối hoặc bổ sung triệu chứng (ví dụ câu trước nói "tôi chóng mặt", câu sau nói "ngoài ra, kèm thêm chảy máu mũi" hoặc "bị thêm sốt"):
-  BẠN BẮT BUỘC PHẢI TỔNG HỢP TẤT CẢ CÁC TRIỆU CHỨNG ĐÃ NÊU TRƯỚC ĐÓ VÀ TRIỆU CHỨNG MỚI (ở đây là CHÓNG MẶT KÈM THEO CHẢY MÁU MŨI) để:
-  1. 🎯 **KẾT LUẬN NHANH**: Đưa ra nhận định tổng hợp ngay (ví dụ: nguy cơ cơn tăng huyết áp kịch phát, rối loạn tuần hoàn mạch máu não kèm xuất huyết niêm mạc).
-  2. 📋 **HÀNH ĐỘNG CỤ THỂ**: Hướng dẫn xử lý đồng thời (vừa cho cụ ngồi cúi nhẹ đầu ép cánh mũi cầm máu, vừa giữ yên tĩnh chống té ngã do chóng mặt, đo huyết áp ngay nếu có máy đo).
-  3. 🚨 **CẢNH BÁO ĐỎ**: Dấu hiệu nguy cấp tổng hợp (huyết áp kịch phát, chảy máu không cầm, yếu liệt, lú lẫn).
-  TUYỆT ĐỐI KHÔNG được trả lời tách rời hay bỏ quên các triệu chứng người dùng vừa chia sẻ ở câu nói ngay trước đó!
+ĐỐI ĐÁP LIÊN TỤC (MULTI-TURN CHAT) & QUY TẮC KHÔNG TỰ NỐI BỪA BÃI:
+- Đọc kỹ [LỊCH SỬ ĐỐI ĐÁP LIÊN TỤC TRƯỚC ĐÓ] để hiểu toàn bộ diễn tiến câu chuyện.
+- NGUYÊN TẮC ĐỘC LẬP (QUAN TRỌNG):
+  + TUYỆT ĐỐI KHÔNG tự động liên kết các câu từ vô nghĩa, tiếng cảm thán (như 'á dù', 'ủa', 'ơi', 'alo', 'haizz'...), từ lóng, câu chửi tục hoặc câu hỏi không rõ ràng/đã bị từ chối ở lượt trước vào triệu chứng bệnh lý ở lượt này!
+  + CHỈ kết hợp triệu chứng khi câu trước đó là một triệu chứng y khoa RÕ RÀNG (ví dụ: "chóng mặt", "đau đầu", "ho sốt") VÀ câu sau có từ khóa liên kết tiếp nối rõ ràng (ví dụ: "ngoài ra", "kèm thêm chảy máu", "còn bị thêm sốt").
+  + Khi người dùng hỏi một chủ đề/triệu chứng mới (ví dụ: 'tình trạng tim', 'huyết áp', 'thuốc này uống sao'), BẠN BẮT BUỘC TRẢ LỜI ĐỘC LẬP, TRỰC DIỆN cho câu hỏi hiện tại, TUYỆT ĐỐI KHÔNG suy diễn tiếng cảm thán hay câu vô nghĩa ở lượt trước thành triệu chứng bệnh của cụ!
 - Khi người dùng hỏi về "lần vượt ngưỡng gần nhất" / "sự cố gần nhất", BẮT BUỘC trả lời đúng 1 dòng theo mẫu:
   "Vượt ngưỡng: [giờ/ngày/tháng/năm], [loại chỉ số]: [ngưỡng đo được] (ngưỡng an toàn là [ngưỡng thiết lập]), Tình trạng xử lý: [Đã xử lý / Chưa xử lý]."
 - Nếu không có lần vượt ngưỡng nào: Trả lời ngắn gọn: "Dạ, hệ thống chưa ghi nhận lần vượt ngưỡng sinh hiệu nào trong lịch sử gần đây của cụ."
@@ -242,7 +240,8 @@ def build_critic_user_prompt(
         last_user_msgs = [m.get("text", "") for m in chat_history if m.get("sender") == "user" and m.get("text")]
         if last_user_msgs:
             last_q = last_user_msgs[-1].strip()
-            if any(cue in question.lower() for cue in ["ngoài ra", "kèm", "thêm", "còn", "với lại", "và"]) or len(question.split()) <= 4:
+            follow_cues = ["ngoài ra", "kèm", "thêm", "còn bị", "với lại", "và bị", "đồng thời bị"]
+            if any(cue in question.lower() for cue in follow_cues):
                 history_note = f"\n*(Lưu ý đối đáp liên tục: Câu này tiếp nối triệu chứng trước: '{last_q}'. Bản thảo kết hợp cả 2 triệu chứng là đúng yêu cầu)*"
 
     if language == "en":
