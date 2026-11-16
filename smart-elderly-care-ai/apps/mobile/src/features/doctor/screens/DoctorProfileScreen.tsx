@@ -41,6 +41,7 @@ export default function DoctorProfileScreen({ navigation }: any) {
 
   const [docInfo, setDocInfo] = useState<DoctorProfileInfo>({
     name: userName || 'Bác sĩ',
+    gender: 'Nam',
     degree: 'Bác sĩ chuyên khoa',
     specialty: 'Y học Gia đình & Lão khoa',
     hospital: 'Hệ thống Smart Elderly Care AI',
@@ -59,6 +60,7 @@ export default function DoctorProfileScreen({ navigation }: any) {
   // Modals state
   const [editModalVisible, setEditModalVisible] = useState(false);
   const [editName, setEditName] = useState(docInfo.name);
+  const [editGender, setEditGender] = useState(docInfo.gender || 'Nam');
   const [editDegree, setEditDegree] = useState(docInfo.degree);
   const [editSpecialty, setEditSpecialty] = useState(docInfo.specialty);
   const [editHospital, setEditHospital] = useState(docInfo.hospital);
@@ -66,6 +68,7 @@ export default function DoctorProfileScreen({ navigation }: any) {
   const [editPhone, setEditPhone] = useState(docInfo.phone);
   const [editAvatarUri, setEditAvatarUri] = useState<string | null>(avatarUri);
   const [isViewingAvatar, setIsViewingAvatar] = useState(false);
+  const [isSavingProfile, setIsSavingProfile] = useState(false);
 
   const [passwordModalVisible, setPasswordModalVisible] = useState(false);
   const [oldPassword, setOldPassword] = useState('');
@@ -115,6 +118,29 @@ export default function DoctorProfileScreen({ navigation }: any) {
   useEffect(() => {
     const loadSavedProfile = async () => {
       try {
+        const meRes = await usersApi.getMe();
+        if (meRes?.data) {
+          const user = meRes.data;
+          setDocInfo((prev) => ({
+            ...prev,
+            name: user.full_name || prev.name,
+            phone: user.phone || prev.phone,
+            specialty: user.specialty || prev.specialty,
+            hospital: user.workplace || prev.hospital,
+          }));
+          if (user.avatar_url) {
+            const resolved = resolveAvatarUrl(user.avatar_url);
+            setAvatarUri(resolved);
+            setAvatar(user.avatar_url);
+            setProfile({ avatar_url: user.avatar_url });
+          } else {
+            setAvatarUri(null);
+            setAvatar('');
+            setProfile({ avatar_url: null });
+          }
+        }
+      } catch {}
+      try {
         const raw = await AsyncStorage.getItem('doctor_profile_custom');
         if (raw) {
           const parsed = JSON.parse(raw);
@@ -124,8 +150,8 @@ export default function DoctorProfileScreen({ navigation }: any) {
             name: parsed.name || userName || 'Bác sĩ',
             phone: parsed.phone || userPhone || '',
           }));
-          if (parsed.avatarUri) {
-            setAvatarUri(parsed.avatarUri);
+          if ('avatarUri' in parsed) {
+            setAvatarUri(parsed.avatarUri || null);
           }
         }
       } catch {}
@@ -173,6 +199,7 @@ export default function DoctorProfileScreen({ navigation }: any) {
 
   const handleOpenEditModal = () => {
     setEditName(docInfo.name);
+    setEditGender(docInfo.gender || 'Nam');
     setEditDegree(docInfo.degree);
     setEditSpecialty(docInfo.specialty);
     setEditHospital(docInfo.hospital);
@@ -183,36 +210,81 @@ export default function DoctorProfileScreen({ navigation }: any) {
   };
 
   const executeSaveProfile = async () => {
-    const updated: DoctorProfileInfo = {
-      name: editName.trim(),
-      degree: editDegree.trim(),
-      specialty: editSpecialty.trim(),
-      hospital: editHospital.trim(),
-      department: editDepartment.trim(),
-      phone: editPhone.trim(),
-      avatarUri: editAvatarUri,
-    };
-    setDocInfo(updated);
-    if (editAvatarUri) {
-      setAvatarUri(editAvatarUri);
-      setAvatar(editAvatarUri);
-      setProfile({ avatar_url: editAvatarUri });
-      // Đồng bộ ảnh đại diện lên backend
-      if (editAvatarUri.startsWith('data:image')) {
+    setIsSavingProfile(true);
+    try {
+      const updated: DoctorProfileInfo = {
+        name: editName.trim(),
+        gender: editGender,
+        degree: editDegree.trim(),
+        specialty: editSpecialty.trim(),
+        hospital: editHospital.trim(),
+        department: editDepartment.trim(),
+        phone: editPhone.trim(),
+        avatarUri: editAvatarUri,
+      };
+      setDocInfo(updated);
+      if (editAvatarUri) {
+        setAvatarUri(editAvatarUri);
+        setAvatar(editAvatarUri);
+        setProfile({ avatar_url: editAvatarUri });
+        // Đồng bộ ảnh đại diện lên backend
+        if (editAvatarUri.startsWith('data:image')) {
+          try {
+            await usersApi.uploadAvatarBase64(editAvatarUri);
+          } catch {
+            try {
+              await usersApi.updateMe({ avatar_url: editAvatarUri });
+            } catch {}
+          }
+        }
+      } else {
+        setAvatarUri(null);
+        setAvatar('');
+        setProfile({ avatar_url: null });
         try {
-          await usersApi.uploadAvatarBase64(editAvatarUri);
+          await usersApi.deleteAvatar();
         } catch {
           try {
-            await usersApi.updateMe({ avatar_url: editAvatarUri });
+            await usersApi.updateMe({ avatar_url: null });
           } catch {}
         }
       }
+      try {
+        await usersApi.updateMe({
+          full_name: editName.trim(),
+          specialty: editSpecialty.trim(),
+          workplace: editHospital.trim(),
+        });
+        setProfile({ full_name: editName.trim() });
+      } catch {}
+      try {
+        await AsyncStorage.setItem('doctor_profile_custom', JSON.stringify(updated));
+      } catch {}
+      setEditModalVisible(false);
+      Alert.alert('Thành công', 'Đã cập nhật hồ sơ chuyên môn Bác sĩ thành công.');
+    } finally {
+      setIsSavingProfile(false);
     }
+  };
+
+  const handleResetAvatar = async () => {
+    setEditAvatarUri(null);
+    setAvatarUri(null);
+    setAvatar('');
+    setProfile({ avatar_url: null });
     try {
-      await AsyncStorage.setItem('doctor_profile_custom', JSON.stringify(updated));
+      const raw = await AsyncStorage.getItem('doctor_profile_custom');
+      const parsed = raw ? JSON.parse(raw) : {};
+      await AsyncStorage.setItem('doctor_profile_custom', JSON.stringify({ ...parsed, avatarUri: null }));
     } catch {}
-    setEditModalVisible(false);
-    Alert.alert('Thành công', 'Đã cập nhật hồ sơ chuyên môn Bác sĩ thành công.');
+    try {
+      await usersApi.deleteAvatar();
+    } catch {
+      try {
+        await usersApi.updateMe({ avatar_url: null });
+      } catch {}
+    }
+    Alert.alert('Thành công', 'Đã đặt lại ảnh đại diện mặc định (Chữ M nền xanh y tế).');
   };
 
   const handleSaveProfile = () => {
@@ -361,6 +433,7 @@ export default function DoctorProfileScreen({ navigation }: any) {
           patientCount={patientCount}
           appointmentCount={appointmentCount}
           onPickImage={pickImage}
+          onResetAvatar={handleResetAvatar}
           onViewAvatar={() => setIsViewingAvatar(true)}
           onEditProfile={handleOpenEditModal}
           isDarkMode={isDarkMode}
@@ -381,6 +454,7 @@ export default function DoctorProfileScreen({ navigation }: any) {
       <DoctorEditProfileModal
         visible={editModalVisible}
         editName={editName}
+        editGender={editGender}
         editDegree={editDegree}
         editSpecialty={editSpecialty}
         editHospital={editHospital}
@@ -388,16 +462,19 @@ export default function DoctorProfileScreen({ navigation }: any) {
         editPhone={editPhone}
         editAvatarUri={editAvatarUri}
         onChangeName={setEditName}
+        onChangeGender={setEditGender}
         onChangeDegree={setEditDegree}
         onChangeSpecialty={setEditSpecialty}
         onChangeHospital={setEditHospital}
         onChangeDepartment={setEditDepartment}
         onChangePhone={setEditPhone}
         onPickImage={pickImage}
+        onClearAvatar={() => setEditAvatarUri(null)}
         onSave={handleSaveProfile}
         onClose={handleCloseEditModal}
         isDarkMode={isDarkMode}
         colors={colors}
+        isSubmitting={isSavingProfile}
       />
 
       {/* MODAL 2: ĐỔI MẬT KHẨU */}

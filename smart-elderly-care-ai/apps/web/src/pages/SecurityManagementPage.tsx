@@ -7,15 +7,11 @@ import {
   Shield,
   KeyRound,
   Lock,
-  Unlock,
   AlertTriangle,
   CheckCircle2,
   AlertCircle,
   FileText,
   UserCheck,
-  Globe,
-  Clock,
-  RefreshCw,
   Search,
   Filter,
   Check,
@@ -75,12 +71,29 @@ const INITIAL_POLICIES: SecurityPolicy[] = [
   },
 ];
 
+const RBAC_ROWS = [
+  { name: 'Quản lý tài khoản, thêm/sửa/khóa user', permissions: [true, false, false, false] },
+  { name: 'Cấu hình bảo mật hệ thống & xem Audit Logs', permissions: [true, false, false, false] },
+  { name: 'Vận hành hạ tầng Redis, EMQX, CSDL', permissions: [true, false, false, false] },
+  { name: 'Xem hồ sơ sức khỏe & lịch sử sinh hiệu', permissions: [true, true, true, true] },
+  { name: 'Điều chỉnh ngưỡng y tế (SpO2, Nhịp tim, Huyết áp)', permissions: [true, true, false, true] },
+  { name: 'Xem trực tiếp camera AI & đàm thoại 2 chiều', permissions: [true, true, true, true] },
+  { name: 'Khởi động lại thiết bị IoT từ xa qua MQTT', permissions: [true, false, false, true] },
+];
+
+const ROLE_COLORS = [
+  'text-sky-600 dark:text-[#FF6B35]',
+  'text-emerald-600 dark:text-emerald-400',
+  'text-indigo-600 dark:text-indigo-400',
+  'text-amber-600 dark:text-amber-400',
+];
+
 export const SecurityManagementPage: React.FC = () => {
   const [activeTab, setActiveTab] = useState<'policies' | 'sessions' | 'audit' | 'rbac'>('policies');
   const [policies, setPolicies] = useState<SecurityPolicy[]>(INITIAL_POLICIES);
   const [sessions, setSessions] = useState<ActiveSession[]>([]);
   const [auditLogs, setAuditLogs] = useState<SecurityAuditLog[]>([]);
-  const [loading, setLoading] = useState<boolean>(false);
+  const [, setLoading] = useState<boolean>(false);
   const [searchAudit, setSearchAudit] = useState('');
   const [severityFilter, setSeverityFilter] = useState('ALL');
   const [sessionFilter, setSessionFilter] = useState<'ALL' | 'WARNING'>('ALL');
@@ -99,14 +112,14 @@ export const SecurityManagementPage: React.FC = () => {
       ]);
       if (policiesData && policiesData.length > 0) setPolicies(policiesData);
       if (sessionsData) {
-        const sessionMap = new Map<string, ActiveSession>();
-        sessionsData.forEach((s) => sessionMap.set(s.id, s));
-        setSessions(Array.from(sessionMap.values()));
+        const sMap = new Map<string, ActiveSession>();
+        sessionsData.forEach((s) => sMap.set(s.id, s));
+        setSessions(Array.from(sMap.values()));
       }
       if (logsData) {
-        const logMap = new Map<string, SecurityAuditLog>();
-        logsData.forEach((l) => logMap.set(l.id, l));
-        setAuditLogs(Array.from(logMap.values()));
+        const lMap = new Map<string, SecurityAuditLog>();
+        logsData.forEach((l) => lMap.set(l.id, l));
+        setAuditLogs(Array.from(lMap.values()));
       }
     } finally {
       setLoading(false);
@@ -142,7 +155,6 @@ export const SecurityManagementPage: React.FC = () => {
         `Đã ${newState ? 'kích hoạt' : 'vô hiệu hóa'} chính sách: ${target.name}`
       );
     } catch {
-      // Rollback UI khi API thất bại
       setPolicies((prev) =>
         prev.map((p) => (p.id === id ? { ...p, enabled: !newState } : p))
       );
@@ -161,7 +173,6 @@ export const SecurityManagementPage: React.FC = () => {
         await securityApi.revokeSession(id);
         showNotice('success', `Đã thu hồi phiên làm việc của ${userName} thành công!`);
       } catch {
-        // Rollback UI khi gọi API thất bại
         setSessions(prevSessions);
         showNotice('error', `Lỗi khi thu hồi phiên làm việc của ${userName}.`);
       }
@@ -177,6 +188,45 @@ export const SecurityManagementPage: React.FC = () => {
     const matchSeverity = severityFilter === 'ALL' || log.severity === severityFilter;
     return matchSearch && matchSeverity;
   });
+
+  const kpis = [
+    {
+      title: 'Trạng thái an ninh',
+      icon: Shield,
+      value: <span className="font-mono text-2xl font-black text-emerald-700 dark:text-emerald-400">Tối ưu (A+)</span>,
+      badge: null,
+      desc: '5/6 chính sách bảo vệ kích hoạt',
+    },
+    {
+      title: 'Phiên hoạt động (JWT)',
+      icon: KeyRound,
+      value: <span className="font-mono text-2xl font-black text-slate-900 dark:text-[#F5F6F8]">{sessions.length}</span>,
+      badge: (
+        <span className="text-[10px] font-bold text-emerald-700 dark:text-emerald-300 bg-emerald-50 dark:bg-emerald-950/40 px-2 py-0.5 rounded-full border border-emerald-200 dark:border-emerald-800">
+          Hợp lệ
+        </span>
+      ),
+      desc: 'Quản trị, Bác sĩ & Chủ nhà',
+    },
+    {
+      title: 'Sự kiện kiểm toán (24h)',
+      icon: FileText,
+      value: <span className="font-mono text-2xl font-black text-slate-900 dark:text-[#F5F6F8]">{auditLogs.length}</span>,
+      badge: (
+        <span className="text-[10px] font-bold text-[#C25828] dark:text-[#FF8A50] bg-[#FFF8EE] dark:bg-[#202329] px-2 py-0.5 rounded-full border border-[#C8AD8A] dark:border-[#454A53]">
+          Audit Logs
+        </span>
+      ),
+      desc: 'Đầy đủ bản ghi định danh',
+    },
+  ];
+
+  const tabs = [
+    { key: 'policies' as const, label: 'Chính sách an ninh', icon: Lock },
+    { key: 'sessions' as const, label: 'Phiên làm việc & JWT', icon: Fingerprint, count: sessions.length },
+    { key: 'audit' as const, label: 'Nhật ký kiểm toán (Audit Logs)', icon: FileText },
+    { key: 'rbac' as const, label: 'Ma trận phân quyền (RBAC)', icon: UserCheck },
+  ];
 
   return (
     <div className="space-y-6">
@@ -214,7 +264,7 @@ export const SecurityManagementPage: React.FC = () => {
           </div>
         </div>
 
-        <div className="flex items-center space-x-2">
+        <div className="flex items-center space-x-2 self-start md:self-auto">
           <span className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-xl bg-sky-50 dark:bg-[#202329] text-sky-700 dark:text-[#F5F6F8] border border-sky-200 dark:border-[#454A53] text-xs font-semibold">
             <Shield className="w-4 h-4 text-sky-600 dark:text-[#FF6B35]" />
             <span>Mã hóa AES-256 / TLS 1.3 Active</span>
@@ -224,77 +274,28 @@ export const SecurityManagementPage: React.FC = () => {
 
       {/* Security Overview KPI Cards */}
       <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
-        {/* Card 1: Trạng thái an ninh */}
-        <div className="glass-card p-5 relative group">
-          <div className="flex items-center justify-between relative z-10 px-1">
-            <span className="text-[11px] font-mono font-bold uppercase tracking-wider text-slate-600 dark:text-[#A1A7B1]">
-              Trạng thái an ninh
-            </span>
-            <div className="p-2 rounded-xl bg-gradient-to-br from-[#FFF0E8] to-[#FFE2D4] dark:from-[#2F2119] dark:to-[#1F1714] text-[#E04D16] dark:text-[#FF7037] border border-[#F05A24]/40 shadow-sm">
-              <Shield className="w-4 h-4" />
+        {kpis.map((card, idx) => {
+          const Icon = card.icon;
+          return (
+            <div key={idx} className="glass-card p-5 relative group">
+              <div className="flex items-center justify-between relative z-10 px-1">
+                <span className="text-[11px] font-mono font-bold uppercase tracking-wider text-slate-600 dark:text-[#A1A7B1]">
+                  {card.title}
+                </span>
+                <div className="p-2 rounded-xl bg-gradient-to-br from-[#FFF0E8] to-[#FFE2D4] dark:from-[#2F2119] dark:to-[#1F1714] text-[#E04D16] dark:text-[#FF7037] border border-[#F05A24]/40 shadow-sm">
+                  <Icon className="w-4 h-4" />
+                </div>
+              </div>
+              <div className="mt-3 flex items-baseline space-x-2 px-1 relative z-10">
+                {card.value}
+                {card.badge}
+              </div>
+              <div className="mt-3 pt-2.5 border-t border-[#C8AD8A]/40 dark:border-[#454A53] px-1 relative z-10">
+                <p className="text-[11px] text-slate-600 dark:text-[#A1A7B1] truncate">{card.desc}</p>
+              </div>
             </div>
-          </div>
-          <div className="mt-3 flex items-baseline space-x-2 px-1 relative z-10">
-            <span className="font-mono text-2xl font-black text-emerald-700 dark:text-emerald-400">
-              Tối ưu (A+)
-            </span>
-          </div>
-          <div className="mt-3 pt-2.5 border-t border-[#C8AD8A]/40 dark:border-[#454A53] px-1 relative z-10">
-            <p className="text-[11px] text-slate-600 dark:text-[#A1A7B1] truncate">
-              5/6 chính sách bảo vệ kích hoạt
-            </p>
-          </div>
-        </div>
-
-        {/* Card 2: Phiên hoạt động */}
-        <div className="glass-card p-5 relative group">
-          <div className="flex items-center justify-between relative z-10 px-1">
-            <span className="text-[11px] font-mono font-bold uppercase tracking-wider text-slate-600 dark:text-[#A1A7B1]">
-              Phiên hoạt động (JWT)
-            </span>
-            <div className="p-2 rounded-xl bg-gradient-to-br from-[#FFF0E8] to-[#FFE2D4] dark:from-[#2F2119] dark:to-[#1F1714] text-[#E04D16] dark:text-[#FF7037] border border-[#F05A24]/40 shadow-sm">
-              <KeyRound className="w-4 h-4" />
-            </div>
-          </div>
-          <div className="mt-3 flex items-baseline space-x-2 px-1 relative z-10">
-            <span className="font-mono text-2xl font-black text-slate-900 dark:text-[#F5F6F8]">
-              {sessions.length}
-            </span>
-            <span className="text-[10px] font-bold text-emerald-700 dark:text-emerald-300 bg-emerald-50 dark:bg-emerald-950/40 px-2 py-0.5 rounded-full border border-emerald-200 dark:border-emerald-800">
-              Hợp lệ
-            </span>
-          </div>
-          <div className="mt-3 pt-2.5 border-t border-[#C8AD8A]/40 dark:border-[#454A53] px-1 relative z-10">
-            <p className="text-[11px] text-slate-600 dark:text-[#A1A7B1] truncate">
-              Quản trị, Bác sĩ & Chủ nhà
-            </p>
-          </div>
-        </div>
-
-        {/* Card 3: Sự kiện kiểm toán */}
-        <div className="glass-card p-5 relative group">
-          <div className="flex items-center justify-between relative z-10 px-1">
-            <span className="text-[11px] font-mono font-bold uppercase tracking-wider text-slate-600 dark:text-[#A1A7B1]">
-              Sự kiện kiểm toán (24h)
-            </span>
-            <div className="p-2 rounded-xl bg-gradient-to-br from-[#FFF0E8] to-[#FFE2D4] dark:from-[#2F2119] dark:to-[#1F1714] text-[#E04D16] dark:text-[#FF7037] border border-[#F05A24]/40 shadow-sm">
-              <FileText className="w-4 h-4" />
-            </div>
-          </div>
-          <div className="mt-3 flex items-baseline space-x-2 px-1 relative z-10">
-            <span className="font-mono text-2xl font-black text-slate-900 dark:text-[#F5F6F8]">
-              {auditLogs.length}
-            </span>
-            <span className="text-[10px] font-bold text-[#C25828] dark:text-[#FF8A50] bg-[#FFF8EE] dark:bg-[#202329] px-2 py-0.5 rounded-full border border-[#C8AD8A] dark:border-[#454A53]">
-              Audit Logs
-            </span>
-          </div>
-          <div className="mt-3 pt-2.5 border-t border-[#C8AD8A]/40 dark:border-[#454A53] px-1 relative z-10">
-            <p className="text-[11px] text-slate-600 dark:text-[#A1A7B1] truncate">
-              Đầy đủ bản ghi định danh
-            </p>
-          </div>
-        </div>
+          );
+        })}
 
         {/* Card 4: Cảnh báo bảo mật */}
         <div
@@ -321,15 +322,13 @@ export const SecurityManagementPage: React.FC = () => {
             }`}>
               {warningSessionsCount}
             </span>
-            {warningSessionsCount > 0 ? (
-              <span className="text-[10px] font-bold text-amber-700 dark:text-amber-300 bg-amber-50 dark:bg-amber-950/40 px-2 py-0.5 rounded-full border border-amber-200 dark:border-amber-900">
-                Phiên bất thường
-              </span>
-            ) : (
-              <span className="text-[10px] font-bold text-emerald-700 dark:text-emerald-300 bg-emerald-50 dark:bg-emerald-950/40 px-2 py-0.5 rounded-full border border-emerald-200 dark:border-emerald-800">
-                An toàn
-              </span>
-            )}
+            <span className={`text-[10px] font-bold px-2 py-0.5 rounded-full border ${
+              warningSessionsCount > 0
+                ? 'text-amber-700 dark:text-amber-300 bg-amber-50 dark:bg-amber-950/40 border-amber-200 dark:border-amber-900'
+                : 'text-emerald-700 dark:text-emerald-300 bg-emerald-50 dark:bg-emerald-950/40 border-emerald-200 dark:border-emerald-800'
+            }`}>
+              {warningSessionsCount > 0 ? 'Phiên bất thường' : 'An toàn'}
+            </span>
           </div>
           <div className="mt-3 pt-2.5 border-t border-[#C8AD8A]/40 dark:border-[#454A53] px-1 relative z-10 flex items-center justify-between">
             <p className="text-[11px] text-slate-600 dark:text-[#A1A7B1] truncate">
@@ -345,57 +344,30 @@ export const SecurityManagementPage: React.FC = () => {
       </div>
 
       {/* Navigation Tabs */}
-      <div className="flex border-b border-[#C8AD8A]/50 dark:border-[#454A53] gap-2 pb-px">
-        <button
-          onClick={() => setActiveTab('policies')}
-          className={`flex items-center gap-2 px-4 py-2.5 text-xs font-bold rounded-t-xl transition-colors border-b-2 cursor-pointer ${
-            activeTab === 'policies'
-              ? 'border-[#D96C3B] text-[#D96C3B] dark:text-[#FF6B35] dark:border-[#FF6B35] bg-[#D96C3B]/10 dark:bg-[#FF6B35]/15'
-              : 'border-transparent text-slate-600 dark:text-[#A1A7B1] hover:text-slate-900 dark:hover:text-[#F5F6F8]'
-          }`}
-        >
-          <Lock className="w-4 h-4" />
-          <span>Chính sách an ninh</span>
-        </button>
-
-        <button
-          onClick={() => setActiveTab('sessions')}
-          className={`flex items-center gap-2 px-4 py-2.5 text-xs font-bold rounded-t-xl transition-colors border-b-2 cursor-pointer ${
-            activeTab === 'sessions'
-              ? 'border-[#D96C3B] text-[#D96C3B] dark:text-[#FF6B35] dark:border-[#FF6B35] bg-[#D96C3B]/10 dark:bg-[#FF6B35]/15'
-              : 'border-transparent text-slate-600 dark:text-[#A1A7B1] hover:text-slate-900 dark:hover:text-[#F5F6F8]'
-          }`}
-        >
-          <Fingerprint className="w-4 h-4" />
-          <span>Phiên làm việc & JWT</span>
-          <span className="px-2 py-0.5 rounded-full text-[10px] font-mono bg-[#FFF8EE] text-[#C25828] dark:bg-[#FF6B35]/20 dark:text-[#FF8A50] border border-[#C8AD8A] dark:border-[#FF6B35]/40">
-            {sessions.length}
-          </span>
-        </button>
-
-        <button
-          onClick={() => setActiveTab('audit')}
-          className={`flex items-center gap-2 px-4 py-2.5 text-xs font-bold rounded-t-xl transition-colors border-b-2 cursor-pointer ${
-            activeTab === 'audit'
-              ? 'border-[#D96C3B] text-[#D96C3B] dark:text-[#FF6B35] dark:border-[#FF6B35] bg-[#D96C3B]/10 dark:bg-[#FF6B35]/15'
-              : 'border-transparent text-slate-600 dark:text-[#A1A7B1] hover:text-slate-900 dark:hover:text-[#F5F6F8]'
-          }`}
-        >
-          <FileText className="w-4 h-4" />
-          <span>Nhật ký kiểm toán (Audit Logs)</span>
-        </button>
-
-        <button
-          onClick={() => setActiveTab('rbac')}
-          className={`flex items-center gap-2 px-4 py-2.5 text-xs font-bold rounded-t-xl transition-colors border-b-2 cursor-pointer ${
-            activeTab === 'rbac'
-              ? 'border-[#D96C3B] text-[#D96C3B] dark:text-[#FF6B35] dark:border-[#FF6B35] bg-[#D96C3B]/10 dark:bg-[#FF6B35]/15'
-              : 'border-transparent text-slate-600 dark:text-[#A1A7B1] hover:text-slate-900 dark:hover:text-[#F5F6F8]'
-          }`}
-        >
-          <UserCheck className="w-4 h-4" />
-          <span>Ma trận phân quyền (RBAC)</span>
-        </button>
+      <div className="flex border-b border-[#C8AD8A]/50 dark:border-[#454A53] gap-2 pb-px overflow-x-auto">
+        {tabs.map((tab) => {
+          const TabIcon = tab.icon;
+          const isActive = activeTab === tab.key;
+          return (
+            <button
+              key={tab.key}
+              onClick={() => setActiveTab(tab.key)}
+              className={`flex items-center gap-2 px-4 py-2.5 text-xs font-bold rounded-t-xl transition-colors border-b-2 cursor-pointer whitespace-nowrap ${
+                isActive
+                  ? 'border-[#D96C3B] text-[#D96C3B] dark:text-[#FF6B35] dark:border-[#FF6B35] bg-[#D96C3B]/10 dark:bg-[#FF6B35]/15'
+                  : 'border-transparent text-slate-600 dark:text-[#A1A7B1] hover:text-slate-900 dark:hover:text-[#F5F6F8]'
+              }`}
+            >
+              <TabIcon className="w-4 h-4" />
+              <span>{tab.label}</span>
+              {tab.count !== undefined && (
+                <span className="px-2 py-0.5 rounded-full text-[10px] font-mono bg-[#FFF8EE] text-[#C25828] dark:bg-[#FF6B35]/20 dark:text-[#FF8A50] border border-[#C8AD8A] dark:border-[#FF6B35]/40">
+                  {tab.count}
+                </span>
+              )}
+            </button>
+          );
+        })}
       </div>
 
       {/* TAB 1: POLICIES */}
@@ -459,7 +431,6 @@ export const SecurityManagementPage: React.FC = () => {
       {/* TAB 2: ACTIVE SESSIONS */}
       {activeTab === 'sessions' && (
         <div className="space-y-3">
-          {/* Header & Filter Bar */}
           <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 p-3 rounded-xl bg-white dark:bg-[#1A1D24] border border-sky-100 dark:border-[#454A53]">
             <div className="flex items-center gap-2">
               <button
@@ -491,7 +462,6 @@ export const SecurityManagementPage: React.FC = () => {
             </span>
           </div>
 
-          {/* Banner hướng dẫn rà soát khi đang lọc cảnh báo */}
           {sessionFilter === 'WARNING' && (
             <div className="p-3.5 rounded-xl bg-amber-50/80 dark:bg-amber-950/40 border border-amber-200 dark:border-amber-800 text-xs text-amber-800 dark:text-amber-200 flex items-start gap-2.5 animate-slide-up">
               <AlertTriangle className="w-4 h-4 shrink-0 mt-0.5 text-amber-600" />
@@ -695,29 +665,18 @@ export const SecurityManagementPage: React.FC = () => {
                 </tr>
               </thead>
               <tbody className="divide-y divide-sky-100 dark:divide-[#454A53]">
-                {[
-                  { name: 'Quản lý tài khoản, thêm/sửa/khóa user', admin: true, doc: false, care: false, user: false },
-                  { name: 'Cấu hình bảo mật hệ thống & xem Audit Logs', admin: true, doc: false, care: false, user: false },
-                  { name: 'Vận hành hạ tầng Redis, EMQX, CSDL', admin: true, doc: false, care: false, user: false },
-                  { name: 'Xem hồ sơ sức khỏe & lịch sử sinh hiệu', admin: true, doc: true, care: true, user: true },
-                  { name: 'Điều chỉnh ngưỡng y tế (SpO2, Nhịp tim, Huyết áp)', admin: true, doc: true, care: false, user: true },
-                  { name: 'Xem trực tiếp camera AI & đàm thoại 2 chiều', admin: true, doc: true, care: true, user: true },
-                  { name: 'Khởi động lại thiết bị IoT từ xa qua MQTT', admin: true, doc: false, care: false, user: true },
-                ].map((row, idx) => (
+                {RBAC_ROWS.map((row, idx) => (
                   <tr key={idx} className="hover:bg-sky-50/40 dark:hover:bg-[#202329] transition-colors">
                     <td className="py-3 px-4 font-medium text-slate-800 dark:text-[#F5F6F8]">{row.name}</td>
-                    <td className="py-3 px-4 text-center">
-                      {row.admin ? <Check className="w-4 h-4 text-sky-600 dark:text-[#FF6B35] mx-auto" /> : <span className="text-slate-300 dark:text-slate-700">—</span>}
-                    </td>
-                    <td className="py-3 px-4 text-center">
-                      {row.doc ? <Check className="w-4 h-4 text-emerald-600 dark:text-emerald-400 mx-auto" /> : <span className="text-slate-300 dark:text-slate-700">—</span>}
-                    </td>
-                    <td className="py-3 px-4 text-center">
-                      {row.care ? <Check className="w-4 h-4 text-indigo-600 dark:text-indigo-400 mx-auto" /> : <span className="text-slate-300 dark:text-slate-700">—</span>}
-                    </td>
-                    <td className="py-3 px-4 text-center">
-                      {row.user ? <Check className="w-4 h-4 text-amber-600 dark:text-amber-400 mx-auto" /> : <span className="text-slate-300 dark:text-slate-700">—</span>}
-                    </td>
+                    {row.permissions.map((hasPerm, pIdx) => (
+                      <td key={pIdx} className="py-3 px-4 text-center">
+                        {hasPerm ? (
+                          <Check className={`w-4 h-4 ${ROLE_COLORS[pIdx]} mx-auto`} />
+                        ) : (
+                          <span className="text-slate-300 dark:text-slate-700">—</span>
+                        )}
+                      </td>
+                    ))}
                   </tr>
                 ))}
               </tbody>
@@ -728,4 +687,3 @@ export const SecurityManagementPage: React.FC = () => {
     </div>
   );
 };
-

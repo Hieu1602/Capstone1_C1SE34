@@ -59,13 +59,17 @@ export const LoginPage: React.FC = () => {
       localStorage.removeItem('seca_admin_token');
       localStorage.removeItem('seca_admin_user');
 
-      const axiosErr = err as { response?: { data?: { detail?: string } }; message?: string };
+      const axiosErr = err as { response?: { data?: { detail?: string } }; message?: string; code?: string };
       const detail = axiosErr.response?.data?.detail;
       const msg = axiosErr.message || '';
 
       if (msg.includes('Network Error')) {
         setErrorMsg(
-          'Không thể kết nối đến máy chủ AWS EC2 (Network Error / Mixed Content). Nếu đang mở trên trình duyệt HTTPS, hãy cấp quyền: Bấm biểu tượng ổ khóa/cài đặt cạnh URL -> Cài đặt trang web (Site settings) -> Nội dung không an toàn (Insecure content) -> Cho phép (Allow).'
+          'Không thể kết nối đến máy chủ Backend (Port 8000). Vui lòng kiểm tra xem Backend FastAPI đang chạy và thử lại.'
+        );
+      } else if (msg.includes('timeout') || axiosErr.code === 'ECONNABORTED') {
+        setErrorMsg(
+          'Quá thời gian phản hồi từ máy chủ (Timeout). Vui lòng bấm Đăng nhập lại hoặc kiểm tra kết nối mạng.'
         );
       } else {
         setErrorMsg(

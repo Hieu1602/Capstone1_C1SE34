@@ -16,6 +16,7 @@ import {
     LocalizedText,
 } from "../../../i18n/LocalizedComponents";
 import { launchEmergencyCall } from "../../../services/emergency";
+import { handleHeaderBack } from "../../../navigation/navigationHelpers";
 // Cấu trúc dữ liệu cho một kênh truyền phát Camera trong chế độ Multi-View
 interface CameraFeed {
     id: string;
@@ -27,15 +28,22 @@ interface Props {
     navigation: {
         goBack: () => void;
         canGoBack: () => boolean;
+        setParams?: (params: any) => void;
+        getState?: () => any;
         navigate: (
             screen: "Main" | "CameraDetail",
-            params: {
-                screen?: "Home" | "Devices";
+            params?: {
+                screen?: "Home" | "Devices" | "Profile";
                 cameraId?: string;
                 cameraName?: string;
                 room?: string;
             },
         ) => void;
+    };
+    route?: {
+        params?: {
+            from?: string;
+        };
     };
 }
 /**
@@ -45,7 +53,7 @@ interface Props {
  * @returns Cây giao diện React theo props và theme hiện tại.
  * @remarks Tải trạng thái nguồn mặc định để xem trước; mở Camera Detail để chọn nhiều nguồn.
  */
-export default function MultiViewScreen({ navigation }: Props) {
+export default function MultiViewScreen({ navigation, route }: Props) {
     const { isDarkMode } = useTheme();
     const { permissions, userRole, role } = useAuthStore();
     const isOwnerOrAdmin =
@@ -120,11 +128,7 @@ export default function MultiViewScreen({ navigation }: Props) {
                             },
                         ]}
                         onPress={() =>
-                            navigation.canGoBack()
-                                ? navigation.goBack()
-                                : navigation.navigate("Main", {
-                                      screen: "Home",
-                                  })
+                            handleHeaderBack(navigation, route, "Home", true)
                         }
                         activeOpacity={0.7}
                         hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}

@@ -49,6 +49,11 @@ class HealthReportSummaryOut(BaseModel):
     fallsCount: int = 0
     anomalies: str = "0"
     anomaliesCount: int = 0
+    criticalAlerts: str = "0"
+    critical_alerts_count: int = 0
+    criticalAlertsCount: int = 0
+    criticalEvents: List[str] = Field(default_factory=list)
+    critical_events: List[str] = Field(default_factory=list)
 
     # Thiết bị & trạng thái đồng bộ
     isSynced: bool = True

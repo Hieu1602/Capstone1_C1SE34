@@ -23,7 +23,7 @@ import { useAuthStore } from '../../../store/useAuthStore';
 import { useThemeStore } from '../../../store/useThemeStore';
 import api, { authApi, usersApi } from '../../../services/api';
 import { LocalizedAlert as Alert } from '../../../i18n/LocalizedComponents';
-import { LoginPhotoCollage, LoginFormSection } from '../components/login';
+import { LoginPhotoCollage, LoginFormSection, Login2FAStep } from '../components/login';
 import { normalizePhone } from '../utils/phoneValidation';
 import { LegalTermsModal, LegalModalType } from '../components/LegalTermsModal';
 import * as Location from 'expo-location';
@@ -43,6 +43,24 @@ export default function LoginScreen({ navigation, route }: any) {
   const [successMessage, setSuccessMessage] = useState<string | null>(
     route?.params?.successMessage || null
   );
+
+  // Trạng thái Xác thực 2 bước (2FA)
+  const [is2faStep, setIs2faStep] = useState(false);
+  const [twoFactorToken, setTwoFactorToken] = useState<string | null>(null);
+  const [otp, setOtp] = useState('');
+  const [otpErrorMessage, setOtpErrorMessage] = useState<string | null>(null);
+  const [resendSeconds, setResendSeconds] = useState(60);
+
+  // Đếm ngược gửi lại mã OTP 2FA
+  React.useEffect(() => {
+    let timer: any;
+    if (is2faStep && resendSeconds > 0) {
+      timer = setInterval(() => {
+        setResendSeconds((prev) => (prev > 0 ? prev - 1 : 0));
+      }, 1000);
+    }
+    return () => clearInterval(timer);
+  }, [is2faStep, resendSeconds]);
 
   // Tiền lấy vị trí địa lý chạy ngầm (hoàn toàn không làm chậm nút Đăng nhập)
   const cachedLocationRef = React.useRef<string | undefined>(undefined);
@@ -95,6 +113,88 @@ export default function LoginScreen({ navigation, route }: any) {
     setLegalModalVisible(true);
   };
 
+  const applySuccessfulLogin = (access_token: string, refresh_token: string, userProfile: any) => {
+    api.defaults.headers.common['Authorization'] = `Bearer ${access_token}`;
+
+    login(
+      access_token,
+      refresh_token,
+      userProfile.full_name,
+      userProfile.id,
+      userProfile.phone,
+      userProfile.role,
+      userProfile.household_id,
+      userProfile.avatar_url,
+      userProfile
+    );
+    setViewRole(userProfile.role === 'doctor' ? 'DOCTOR' : 'CAREGIVER');
+
+    if (userProfile?.font_size_mode === 'custom') {
+      const savedScale = userProfile?.custom_font_scale;
+      const savedScaleIndex =
+        Number.isInteger(savedScale) && savedScale >= 0 && savedScale < FONT_SCALE_LEVELS.length
+          ? savedScale
+          : 2;
+      usersApi.updateFontPreferences('system', savedScaleIndex).catch(() => {});
+    }
+  };
+
+  // Xử lý xác thực OTP khi tài khoản bật Xác minh 2 bước
+  const handleVerify2fa = async () => {
+    if (!twoFactorToken || otp.length < 6) return;
+    setLoading(true);
+    setOtpErrorMessage(null);
+    let tokensApplied = false;
+
+    try {
+      const normalizedAccount = normalizePhone(phone);
+      const res = await authApi.verifyLogin2fa(twoFactorToken, otp, normalizedAccount);
+      const { access_token, refresh_token, user: preloadedUser } = res.data;
+
+      let userProfile = preloadedUser;
+      if (!userProfile) {
+        api.defaults.headers.common['Authorization'] = `Bearer ${access_token}`;
+        userProfile = (await usersApi.getMe()).data;
+      }
+
+      tokensApplied = true;
+      applySuccessfulLogin(access_token, refresh_token, userProfile);
+    } catch (error: any) {
+      delete api.defaults.headers.common['Authorization'];
+      if (tokensApplied) logout();
+      console.error('[Login 2FA] Error:', error);
+      const detailMsg = error?.response?.data?.detail;
+      const msg = detailMsg || 'Mã xác thực OTP không chính xác hoặc đã hết hạn.';
+      setOtpErrorMessage(msg);
+      Alert.alert('Xác thực thất bại', msg);
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const handleResend2fa = async () => {
+    if (!twoFactorToken || resendSeconds > 0) return;
+    try {
+      setLoading(true);
+      await authApi.resendLogin2fa(twoFactorToken);
+      setResendSeconds(60);
+      setOtpErrorMessage(null);
+      Alert.alert('Đã gửi lại mã', 'Mã xác thực OTP mới đã được gửi qua SMS.');
+    } catch (error: any) {
+      const detailMsg = error?.response?.data?.detail;
+      Alert.alert('Không thể gửi lại', detailMsg || 'Vui lòng thử lại sau.');
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const handleBackFrom2fa = () => {
+    setIs2faStep(false);
+    setTwoFactorToken(null);
+    setOtp('');
+    setOtpErrorMessage(null);
+  };
+
   // Xử lý đăng nhập kết nối trực tiếp với Database qua Backend FastAPI
   const handleLogin = async () => {
     if (!isAgreed) {
@@ -119,44 +219,29 @@ export default function LoginScreen({ navigation, route }: any) {
     let tokensApplied = false;
 
     try {
-      // 1. Gửi request OAuth2 Password Grant lên Backend FastAPI (vị trí lấy tức thì từ cache nếu có)
+      // 1. Gửi request OAuth2 Password Grant lên Backend FastAPI
       const res = await authApi.login(normalizedAccount, password, cachedLocationRef.current);
+
+      // NẾU TÀI KHOẢN BẬT XÁC MINH 2 BƯỚC (2FA QUA SMS OTP)
+      if (res.data?.requires_2fa) {
+        setTwoFactorToken(res.data.two_factor_token);
+        setIs2faStep(true);
+        setOtp('');
+        setOtpErrorMessage(null);
+        setResendSeconds(60);
+        return;
+      }
+
       const { access_token, refresh_token, user: preloadedUser } = res.data;
 
-      // Gán header Authorization cho axios
-      api.defaults.headers.common['Authorization'] = `Bearer ${access_token}`;
-
-      // Tận dụng ngay User Profile được trả về trực tiếp trong response để đăng nhập tức thì không phải đợi
       let userProfile = preloadedUser;
       if (!userProfile) {
+        api.defaults.headers.common['Authorization'] = `Bearer ${access_token}`;
         userProfile = (await usersApi.getMe()).data;
       }
 
       tokensApplied = true;
-
-      // 2. Chuyển thẳng vào Store và Trang chủ tức thì (Atomic)
-      login(
-        access_token,
-        refresh_token,
-        userProfile.full_name,
-        userProfile.id,
-        userProfile.phone,
-        userProfile.role,
-        userProfile.household_id,
-        userProfile.avatar_url,
-        userProfile
-      );
-      setViewRole(userProfile.role === 'doctor' ? 'DOCTOR' : 'CAREGIVER');
-
-      // Tác vụ phụ chạy ngầm không chặn giao diện
-      if (userProfile?.font_size_mode === 'custom') {
-        const savedScale = userProfile?.custom_font_scale;
-        const savedScaleIndex =
-          Number.isInteger(savedScale) && savedScale >= 0 && savedScale < FONT_SCALE_LEVELS.length
-            ? savedScale
-            : 2;
-        usersApi.updateFontPreferences('system', savedScaleIndex).catch(() => {});
-      }
+      applySuccessfulLogin(access_token, refresh_token, userProfile);
     } catch (error: any) {
       delete api.defaults.headers.common['Authorization'];
       if (tokensApplied) logout();
@@ -231,35 +316,60 @@ export default function LoginScreen({ navigation, route }: any) {
         >
           {/* PHẦN 1: DYNAMIC PHOTO COLLAGE */}
           <LoginPhotoCollage
-            onBack={() => (navigation.canGoBack() ? navigation.goBack() : navigation.navigate('Welcome'))}
+            onBack={() => {
+              if (is2faStep) {
+                handleBackFrom2fa();
+              } else if (navigation.canGoBack()) {
+                navigation.goBack();
+              } else {
+                navigation.navigate('Welcome');
+              }
+            }}
           />
 
-          {/* PHẦN 2: LOGO BADGE, TIÊU ĐỀ & FORM ĐĂNG NHẬP TRỰC TIẾP */}
-          <LoginFormSection
-            phone={phone}
-            onChangePhone={(value) => {
-              setPhone(value);
-              setErrorMessage(null);
-              setSuccessMessage(null);
-            }}
-            password={password}
-            onChangePassword={(value) => {
-              setPassword(value);
-              setErrorMessage(null);
-              setSuccessMessage(null);
-            }}
-            showPassword={showPassword}
-            onToggleShowPassword={() => setShowPassword((prev) => !prev)}
-            loading={loading}
-            errorMessage={errorMessage}
-            successMessage={successMessage}
-            isAgreed={isAgreed}
-            onToggleAgree={() => setIsAgreed(!isAgreed)}
-            onSubmit={handleLogin}
-            onForgotPassword={() => navigation.navigate('ForgotPassword')}
-            onNavigateRegister={() => navigation.navigate('Register', { isAgreed })}
-            onOpenLegal={handleOpenLegal}
-          />
+          {/* PHẦN 2: FORM ĐĂNG NHẬP HOẶC BƯỚC XÁC THỰC 2FA QUA OTP */}
+          {is2faStep ? (
+            <Login2FAStep
+              phone={phone}
+              otp={otp}
+              setOtp={(val) => {
+                setOtp(val);
+                setOtpErrorMessage(null);
+              }}
+              resendSeconds={resendSeconds}
+              loading={loading}
+              errorMessage={otpErrorMessage}
+              onResendOtp={handleResend2fa}
+              onSubmit={handleVerify2fa}
+              onBack={handleBackFrom2fa}
+            />
+          ) : (
+            <LoginFormSection
+              phone={phone}
+              onChangePhone={(value) => {
+                setPhone(value);
+                setErrorMessage(null);
+                setSuccessMessage(null);
+              }}
+              password={password}
+              onChangePassword={(value) => {
+                setPassword(value);
+                setErrorMessage(null);
+                setSuccessMessage(null);
+              }}
+              showPassword={showPassword}
+              onToggleShowPassword={() => setShowPassword((prev) => !prev)}
+              loading={loading}
+              errorMessage={errorMessage}
+              successMessage={successMessage}
+              isAgreed={isAgreed}
+              onToggleAgree={() => setIsAgreed(!isAgreed)}
+              onSubmit={handleLogin}
+              onForgotPassword={() => navigation.navigate('ForgotPassword')}
+              onNavigateRegister={() => navigation.navigate('Register', { isAgreed })}
+              onOpenLegal={handleOpenLegal}
+            />
+          )}
 
           </ScrollView>
       </KeyboardAvoidingView>

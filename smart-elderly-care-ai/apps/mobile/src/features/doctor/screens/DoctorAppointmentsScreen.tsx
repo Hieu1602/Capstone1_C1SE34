@@ -24,6 +24,7 @@ import AdminMarqueeBanner from '../../../components/AdminMarqueeBanner';
 import {
   AppointmentItem,
   AppointmentStatsSummary,
+  WeekCalendarStrip,
   AppointmentCard,
   AppointmentFormModal,
   AppointmentCancelModal,
@@ -41,6 +42,7 @@ export default function DoctorAppointmentsScreen() {
   const [refreshing, setRefreshing] = useState(false);
   const [appointments, setAppointments] = useState<AppointmentItem[]>([]);
   const [filterTab, setFilterTab] = useState<'ALL' | 'UPCOMING' | 'COMPLETED' | 'CANCELLED'>('ALL');
+  const [selectedWeekDate, setSelectedWeekDate] = useState<Date | null>(null);
   const [patients, setPatients] = useState<any[]>([]);
 
   // Create / Edit Modal State
@@ -348,9 +350,18 @@ export default function DoctorAppointmentsScreen() {
   const cancelledCount = appointments.filter((a) => a.status === 'CANCELLED').length;
 
   const filteredAppointments = appointments.filter((a) => {
-    if (filterTab === 'UPCOMING') return a.status === 'UPCOMING';
-    if (filterTab === 'COMPLETED') return a.status === 'COMPLETED';
-    if (filterTab === 'CANCELLED') return a.status === 'CANCELLED';
+    if (filterTab === 'UPCOMING' && a.status !== 'UPCOMING') return false;
+    if (filterTab === 'COMPLETED' && a.status !== 'COMPLETED') return false;
+    if (filterTab === 'CANCELLED' && a.status !== 'CANCELLED') return false;
+
+    if (selectedWeekDate && a.scheduled_at) {
+      try {
+        const aptDate = new Date(a.scheduled_at);
+        if (aptDate.toDateString() !== selectedWeekDate.toDateString()) {
+          return false;
+        }
+      } catch {}
+    }
     return true;
   });
 
@@ -372,7 +383,7 @@ export default function DoctorAppointmentsScreen() {
         <View style={styles.headerRow}>
           <View style={{ flex: 1 }}>
             <LocalizedText style={[styles.headerTitle, { color: colors.textPrimary }]}>
-              Lịch Khám & Tái Khám
+              Lịch Khám
             </LocalizedText>
             <LocalizedText style={[styles.headerSub, { color: isDarkMode ? '#94A3B8' : '#64748B' }]} numberOfLines={1}>
               Theo dõi lịch định kỳ & Tự động phát loa nhắc qua Hub AI
@@ -395,18 +406,27 @@ export default function DoctorAppointmentsScreen() {
           isDarkMode={isDarkMode}
           colors={colors}
         />
+
+        {/* Dải chọn 7 ngày trong tuần nằm ngang (Ảnh 2 & 3) */}
+        <WeekCalendarStrip
+          selectedDate={selectedWeekDate}
+          onSelectDate={setSelectedWeekDate}
+          appointments={appointments}
+          isDarkMode={isDarkMode}
+          colors={colors}
+        />
       </View>
 
       {/* Thanh thông báo chạy chữ từ Admin (dành cho Bác sĩ) */}
       <AdminMarqueeBanner targetAudience="doctors" />
 
-      {/* Danh sách lịch hẹn */}
+      {/* Danh sách lịch hẹn theo dòng thời gian (Vertical Timeline - Ảnh 4) */}
       <ScrollView
         contentContainerStyle={styles.scrollContent}
         refreshControl={<RefreshControl refreshing={refreshing} onRefresh={onRefresh} />}
       >
         {loading && !refreshing && (
-          <ActivityIndicator size="small" color="#0284C7" style={{ marginVertical: 20 }} />
+          <ActivityIndicator size="small" color="#2563EB" style={{ marginVertical: 20 }} />
         )}
 
         {filteredAppointments.length === 0 ? (
@@ -417,10 +437,13 @@ export default function DoctorAppointmentsScreen() {
             </LocalizedText>
           </View>
         ) : (
-          filteredAppointments.map((apt) => (
+          filteredAppointments.map((apt, index) => (
             <AppointmentCard
               key={apt.id}
               appointment={apt}
+              isFirst={index === 0}
+              isLast={index === filteredAppointments.length - 1}
+              isCurrentOrNext={index === 0 && apt.status === 'UPCOMING'}
               onViewPatient={handleViewPatient}
               onMarkCompleted={handleOpenCompleteModal}
               onEdit={handleOpenEditModal}
@@ -509,18 +532,18 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'center',
-    backgroundColor: '#0284C7',
+    backgroundColor: '#2563EB',
     paddingHorizontal: 16,
     height: 42,
-    borderRadius: 12,
-    shadowColor: '#0284C7',
+    borderRadius: 21,
+    shadowColor: '#2563EB',
     shadowOffset: { width: 0, height: 2 },
     shadowOpacity: 0.25,
     shadowRadius: 4,
     elevation: 3,
   },
-  btnAddText: { color: '#FFFFFF', fontSize: 14, fontWeight: '700' },
-  scrollContent: { padding: 16, paddingBottom: 95 },
+  btnAddText: { color: '#FFFFFF', fontSize: 13.5, fontWeight: '700' },
+  scrollContent: { padding: 16, paddingBottom: 120 },
   emptyBox: { alignItems: 'center', paddingVertical: 50 },
   emptyText: { fontSize: 13.5, marginTop: 8 },
 });

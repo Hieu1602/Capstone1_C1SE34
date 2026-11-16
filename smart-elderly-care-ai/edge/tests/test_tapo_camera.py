@@ -34,6 +34,51 @@ class ConfigurationTests(unittest.TestCase):
         frame[:] = 255
         self.assertFalse(camera._frame.any())
 
+    def test_fall_detector_throttling(self):
+        from src.services.tapo_camera import CameraFallDetector
+        with patch.dict(os.environ, {"AI_INFERENCE_FPS": "4"}):
+            detector = CameraFallDetector(None, None)
+            self.assertEqual(detector.inference_fps, 4.0)
+            self.assertAlmostEqual(detector.inference_interval, 0.25)
+
+    def test_cleanup_old_recordings_by_age(self):
+        with tempfile.TemporaryDirectory() as tmp_dir:
+            dir_path = Path(tmp_dir)
+            rec = Recorder("rtsp://mock", dir_path)
+            
+            old_file = dir_path / "old.mp4"
+            old_file.write_bytes(b"data1")
+            past_time = time.time() - (50 * 3600)
+            os.utime(old_file, (past_time, past_time))
+            
+            new_file = dir_path / "new.mp4"
+            new_file.write_bytes(b"data2")
+            
+            deleted = rec.cleanup_old_recordings(retention_hours=48)
+            self.assertEqual(deleted, 1)
+            self.assertFalse(old_file.exists())
+            self.assertTrue(new_file.exists())
+
+    def test_cleanup_old_recordings_by_size(self):
+        with tempfile.TemporaryDirectory() as tmp_dir:
+            dir_path = Path(tmp_dir)
+            rec = Recorder("rtsp://mock", dir_path)
+            
+            f1 = dir_path / "f1.mp4"
+            f1.write_bytes(b"x" * 60)
+            t1 = time.time() - 200
+            os.utime(f1, (t1, t1))
+            
+            f2 = dir_path / "f2.mp4"
+            f2.write_bytes(b"y" * 60)
+            t2 = time.time() - 100
+            os.utime(f2, (t2, t2))
+            
+            deleted = rec.cleanup_old_recordings(retention_hours=1000, max_bytes=80)
+            self.assertEqual(deleted, 1)
+            self.assertFalse(f1.exists())
+            self.assertTrue(f2.exists())
+
 
 class APITests(unittest.IsolatedAsyncioTestCase):
     async def test_day_night_mapping_and_validation(self):

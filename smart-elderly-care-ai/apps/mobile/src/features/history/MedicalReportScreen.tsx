@@ -2,7 +2,7 @@
 // Màn hình Lịch sử Y Tế & Xuất Báo Cáo PDF / Excel (Proposal FR13)
 // Hỗ trợ người chăm sóc & bác sĩ xem xu hướng và tải file báo cáo định kỳ thực tế từ Backend
 
-import React, { useState, useEffect, useCallback } from 'react';
+import React, { useState, useEffect, useCallback, useMemo } from 'react';
 import {
   View,
   StyleSheet,
@@ -11,13 +11,47 @@ import {
   ActivityIndicator,
   RefreshControl,
   Linking,
+  Platform,
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
+import Svg, { Path, Circle, Defs, LinearGradient, Stop, Line, Text as SvgText } from 'react-native-svg';
 import { Colors, Shadows } from '../../theme/colors';
 import { useTheme } from '../../store/useThemeStore';
+import { useAlertStore } from '../../store';
 import { LocalizedAlert, LocalizedText } from '../../i18n/LocalizedComponents';
 import { reportsApi } from '../../services/api';
+import { handleHeaderBack } from '../../navigation/navigationHelpers';
+
+const NON_MEDICAL_ALERT_TYPES = new Set([
+  'HOUSE_INVITE_PENDING',
+  'HOUSE_MEMBER_ADDED',
+  'MEMBER_ADDED',
+  'HOUSE_JOIN_REQUEST',
+  'HOUSE_JOIN_APPROVED',
+  'HOUSE_JOIN_REJECTED',
+  'HOUSE_INVITE_REJECTED',
+  'APPOINTMENT_SCHEDULED',
+  'APPOINTMENT_CONFIRMED',
+  'APPOINTMENT_CANCELLED',
+]);
+
+function isCriticalIncidentItem(item: any): boolean {
+  const aType = String(item?.alert_type || '').trim().toUpperCase();
+  const lvl = String(item?.alert_level || '').trim().toUpperCase();
+  if (!aType || NON_MEDICAL_ALERT_TYPES.has(aType)) return false;
+  return (
+    lvl === 'CRITICAL' ||
+    lvl === 'EMERGENCY' ||
+    aType === 'FALL_DETECTED' ||
+    aType === 'ACOUSTIC_DISTRESS' ||
+    aType === 'CRITICAL_TRIAD' ||
+    aType === 'DEVICE_BATTERY_DEAD' ||
+    aType === 'SOS_EMERGENCY' ||
+    aType.includes('CRITICAL') ||
+    aType.includes('FALL')
+  );
+}
 
 interface ReportData {
   period: 'WEEK' | 'MONTH';
@@ -31,6 +65,8 @@ interface ReportData {
   temperature: string;
   falls: string;
   anomalies: string;
+  criticalAlerts: string;
+  criticalEvents: string[];
   adherence: string;
   healthScore: string;
   healthScoreTrend: string;
@@ -54,6 +90,8 @@ const DEFAULT_REPORT: ReportData = {
   temperature: '--',
   falls: '0',
   anomalies: '0',
+  criticalAlerts: '0',
+  criticalEvents: [],
   adherence: '0%',
   healthScore: 'Chưa có dữ liệu',
   healthScoreTrend: 'Đang kết nối',
@@ -67,13 +105,57 @@ const DEFAULT_REPORT: ReportData = {
 
 export default function MedicalReportScreen({ navigation, route }: any) {
   const { isDarkMode } = useTheme();
+  const storeIncidents = useAlertStore((state) => state.incidents);
+  const fetchNotifications = useAlertStore((state) => state.fetchNotifications);
   const [period, setPeriod] = useState<'WEEK' | 'MONTH'>('WEEK');
   const [report, setReport] = useState<ReportData>(DEFAULT_REPORT);
   const [loading, setLoading] = useState<boolean>(true);
   const [refreshing, setRefreshing] = useState<boolean>(false);
+  const [reportChartWidth, setReportChartWidth] = useState<number>(300);
 
   const patientId = route?.params?.patientId;
   const deviceId = route?.params?.deviceId;
+
+  const storeCriticalStats = useMemo(() => {
+    const daysWindow = period === 'WEEK' ? 7 : 30;
+    const cutoffMs = Date.now() - daysWindow * 24 * 60 * 60 * 1000;
+    const allCritical = storeIncidents.filter((inc) => isCriticalIncidentItem(inc));
+    const inPeriodCritical = allCritical.filter((inc) => {
+      if (!inc.created_at) return true;
+      const t = new Date(inc.created_at).getTime();
+      return isNaN(t) || t >= cutoffMs;
+    });
+    const matched = inPeriodCritical.length > 0 ? inPeriodCritical : allCritical;
+    const tags: string[] = [];
+    for (const inc of matched) {
+      const label = String(inc.alert_type || 'CRITICAL_ALERT').replace(/_/g, ' ').toUpperCase();
+      if (!tags.includes(label)) {
+        tags.push(label);
+      }
+    }
+    return {
+      count: matched.length,
+      events: tags,
+    };
+  }, [storeIncidents, period]);
+
+  const effectiveCriticalCount = Math.max(
+    Number(report.criticalAlerts) || 0,
+    storeCriticalStats.count
+  );
+
+  const effectiveCriticalEvents = useMemo(() => {
+    const merged: string[] = [];
+    for (const ev of [...(report.criticalEvents || []), ...storeCriticalStats.events]) {
+      const normalized = String(ev || '').trim().toUpperCase();
+      if (normalized && !merged.includes(normalized)) {
+        merged.push(normalized);
+      }
+    }
+    return merged;
+  }, [report.criticalEvents, storeCriticalStats.events]);
+
+  const hasAlertWarning = effectiveCriticalCount > 0 || (Number(report.falls) || 0) > 0;
 
   const fetchReport = useCallback(async (isPullRefresh = false) => {
     if (isPullRefresh) {
@@ -83,8 +165,22 @@ export default function MedicalReportScreen({ navigation, route }: any) {
     }
 
     try {
-      const res = await reportsApi.getSummary(period, patientId, deviceId);
+      const [res] = await Promise.all([
+        reportsApi.getSummary(period, patientId, deviceId),
+        fetchNotifications().catch(() => null),
+      ]);
       if (res && res.data) {
+        const apiCriticalCount =
+          res.data.critical_alerts_count ??
+          res.data.criticalAlertsCount ??
+          res.data.criticalAlerts ??
+          0;
+        const apiCriticalEvents = Array.isArray(res.data.criticalEvents)
+          ? res.data.criticalEvents
+          : Array.isArray(res.data.critical_events)
+          ? res.data.critical_events
+          : [];
+
         setReport({
           period: res.data.period || period,
           days: res.data.days || (period === 'WEEK' ? 7 : 30),
@@ -97,6 +193,8 @@ export default function MedicalReportScreen({ navigation, route }: any) {
           temperature: res.data.temperature || '--',
           falls: res.data.falls || '0',
           anomalies: res.data.anomalies || '0',
+          criticalAlerts: String(apiCriticalCount),
+          criticalEvents: apiCriticalEvents,
           adherence: res.data.adherence || '0%',
           healthScore: res.data.healthScore || (res.data.hasData ? 'Ổn định' : 'Chưa có dữ liệu'),
           healthScoreTrend: res.data.healthScoreTrend || (res.data.hasData ? 'Tốt' : 'Chưa kết nối'),
@@ -128,30 +226,41 @@ export default function MedicalReportScreen({ navigation, route }: any) {
       setLoading(false);
       setRefreshing(false);
     }
-  }, [period, patientId, deviceId]);
+  }, [period, patientId, deviceId, fetchNotifications]);
 
   useEffect(() => {
     fetchReport();
   }, [fetchReport]);
 
   const handleExportPDF = async () => {
-    if (!report.hasData && report.total_readings === 0) {
-      LocalizedAlert.alert(
-        'Thông báo',
-        'Tài khoản mới chưa có dữ liệu đo sinh hiệu để xuất báo cáo PDF.'
-      );
-      return;
-    }
     try {
       const url = reportsApi.getPdfUrl(period, patientId, deviceId);
-      const supported = await Linking.canOpenURL(url);
-      if (supported) {
+
+      // Nếu đang chạy trên Web: Tự động kích hoạt tải file trực tiếp hoặc mở tab mới
+      if (Platform.OS === 'web' && typeof window !== 'undefined' && typeof document !== 'undefined') {
+        const link = document.createElement('a');
+        link.href = url;
+        link.setAttribute('download', `bao_cao_suc_khoe_${period.toLowerCase()}.pdf`);
+        link.target = '_blank';
+        document.body.appendChild(link);
+        link.click();
+        document.body.removeChild(link);
+        return;
+      }
+
+      // Trên Mobile: mở trực tiếp URL để tải hoặc xem PDF
+      try {
         await Linking.openURL(url);
-      } else {
-        LocalizedAlert.alert(
-          'Xuất Báo Cáo Y Tế (PDF)',
-          `Đã tạo liên kết báo cáo PDF chuẩn y tế:\n${url}`
-        );
+      } catch {
+        const supported = await Linking.canOpenURL(url).catch(() => false);
+        if (supported) {
+          await Linking.openURL(url);
+        } else {
+          LocalizedAlert.alert(
+            'Xuất Báo Cáo Y Tế (PDF)',
+            `Đã tạo liên kết báo cáo PDF chuẩn y tế:\n${url}`
+          );
+        }
       }
     } catch {
       LocalizedAlert.alert('Xuất Báo Cáo Y Tế (PDF)', 'Không thể mở liên kết tải báo cáo PDF.');
@@ -159,23 +268,34 @@ export default function MedicalReportScreen({ navigation, route }: any) {
   };
 
   const handleExportExcel = async () => {
-    if (!report.hasData && report.total_readings === 0) {
-      LocalizedAlert.alert(
-        'Thông báo',
-        'Tài khoản mới chưa có dữ liệu đo sinh hiệu để xuất file Excel.'
-      );
-      return;
-    }
     try {
       const url = reportsApi.getExcelUrl(period, patientId, deviceId);
-      const supported = await Linking.canOpenURL(url);
-      if (supported) {
+
+      // Nếu đang chạy trên Web: Tự động kích hoạt tải file trực tiếp hoặc mở tab mới
+      if (Platform.OS === 'web' && typeof window !== 'undefined' && typeof document !== 'undefined') {
+        const link = document.createElement('a');
+        link.href = url;
+        link.setAttribute('download', `du_lieu_suc_khoe_${period.toLowerCase()}.xlsx`);
+        link.target = '_blank';
+        document.body.appendChild(link);
+        link.click();
+        document.body.removeChild(link);
+        return;
+      }
+
+      // Trên Mobile
+      try {
         await Linking.openURL(url);
-      } else {
-        LocalizedAlert.alert(
-          'Xuất Dữ Liệu Thô (Excel)',
-          `Đã tạo liên kết tải bảng tính Excel chuỗi thời gian:\n${url}`
-        );
+      } catch {
+        const supported = await Linking.canOpenURL(url).catch(() => false);
+        if (supported) {
+          await Linking.openURL(url);
+        } else {
+          LocalizedAlert.alert(
+            'Xuất Dữ Liệu Thô (Excel)',
+            `Đã tạo liên kết tải bảng tính Excel chuỗi thời gian:\n${url}`
+          );
+        }
       }
     } catch {
       LocalizedAlert.alert('Xuất Dữ Liệu Thô (Excel)', 'Không thể mở liên kết tải file Excel.');
@@ -188,7 +308,7 @@ export default function MedicalReportScreen({ navigation, route }: any) {
       <View style={[styles.topHeader, isDarkMode && { backgroundColor: '#0B0F19', borderBottomColor: '#334155' }]}>
         <TouchableOpacity
           style={[styles.backBtn, isDarkMode && { backgroundColor: '#1E293B', borderRadius: 18, borderWidth: 1, borderColor: '#334155' }]}
-          onPress={() => navigation.goBack()}
+          onPress={() => handleHeaderBack(navigation, route, 'Home', true)}
         >
           <Ionicons name="chevron-back" size={24} color={isDarkMode ? '#F8FAFC' : Colors.textPrimary} />
         </TouchableOpacity>
@@ -434,48 +554,153 @@ export default function MedicalReportScreen({ navigation, route }: any) {
               </View>
             </View>
 
-            {/* Biểu đồ xu hướng nhịp tim */}
+            {/* Biểu đồ xu hướng nhịp tim (Line Chart) */}
             <View style={[styles.chartCard, isDarkMode && { backgroundColor: '#1E293B', borderColor: '#334155', borderWidth: 1 }]}>
               <View style={styles.sectionHeaderRow}>
                 <View>
                   <LocalizedText style={[styles.sectionTitle, isDarkMode && { color: '#F8FAFC' }]}>Xu hướng nhịp tim</LocalizedText>
-                  <LocalizedText style={[styles.sectionSubtitle, isDarkMode && { color: '#94A3B8' }]}>Trung bình theo ngày</LocalizedText>
+                  <LocalizedText style={[styles.sectionSubtitle, isDarkMode && { color: '#94A3B8' }]}>Đồ thị biến thiên trung bình theo ngày</LocalizedText>
                 </View>
                 <View style={styles.chartLegend}>
                   <View style={styles.legendDot} />
                   <LocalizedText style={[styles.legendText, isDarkMode && { color: '#94A3B8' }]}>bpm</LocalizedText>
                 </View>
               </View>
-              <View style={styles.chartArea}>
-                <View style={styles.chartGuideLines}>
-                  <View style={styles.chartGuideLine} />
-                  <View style={styles.chartGuideLine} />
-                  <View style={styles.chartGuideLine} />
-                </View>
-                <View style={styles.barRow}>
-                  {report.heartRateData.map((value: number, index: number) => {
-                    const isZero = !value || value <= 0;
-                    const barHeightPercent = isZero ? 6 : Math.max(18, Math.min(100, (value - 40) * 1.6));
+              <View
+                style={styles.chartArea}
+                onLayout={(e) => {
+                  const w = e.nativeEvent.layout.width;
+                  if (w > 0) setReportChartWidth(w);
+                }}
+              >
+                {(() => {
+                  const hrList = report.heartRateData || [];
+                  const hasValidData = hrList.some((v: number) => v > 0);
+                  if (!hasValidData) {
                     return (
-                      <View key={`${period}-heart-${index}`} style={styles.barColumn}>
-                        <View
-                          style={[
-                            styles.bar,
-                            {
-                              height: `${barHeightPercent}%`,
-                              backgroundColor: isZero
-                                ? (isDarkMode ? '#334155' : '#CBD5E1')
-                                : '#0F9D8A',
-                            },
-                          ]}
-                        />
-                        <LocalizedText style={[styles.barLabel, isDarkMode && { color: '#94A3B8' }]}>
-                          {report.labels[index] || ''}
-                        </LocalizedText>
+                      <View style={{ flex: 1, alignItems: 'center', justifyContent: 'center' }}>
+                        <Ionicons name="stats-chart-outline" size={28} color={isDarkMode ? '#64748B' : '#94A3B8'} style={{ marginBottom: 4 }} />
+                        <LocalizedText style={{ fontSize: 11, color: isDarkMode ? '#64748B' : '#94A3B8' }}>Chưa có dữ liệu nhịp tim trong kỳ này</LocalizedText>
                       </View>
                     );
-                  })}
-                </View>
+                  }
+
+                  const svgHeight = 150;
+                  const padL = 20;
+                  const padR = 20;
+                  const padT = 24;
+                  const padB = 26;
+                  const usableW = Math.max(60, reportChartWidth - padL - padR);
+                  const usableH = svgHeight - padT - padB;
+                  const bottomY = svgHeight - padB;
+
+                  const nonZeros = hrList.filter((v: number) => v > 0);
+                  const minV = Math.max(30, Math.min(...nonZeros, 55) - 6);
+                  const maxV = Math.min(180, Math.max(...nonZeros, 100) + 6);
+                  const range = Math.max(15, maxV - minV);
+
+                  const coords = hrList.map((val: number, idx: number) => {
+                    const x = padL + (hrList.length > 1 ? (idx / (hrList.length - 1)) * usableW : usableW / 2);
+                    const v = val > 0 ? val : minV;
+                    const normY = (v - minV) / range;
+                    const y = padT + (1 - normY) * usableH;
+                    return { x, y, val, label: report.labels[idx] || '' };
+                  });
+
+                  let linePath = `M ${coords[0].x} ${coords[0].y}`;
+                  for (let i = 1; i < coords.length; i++) {
+                    const prev = coords[i - 1];
+                    const curr = coords[i];
+                    const cpX = (prev.x + curr.x) / 2;
+                    linePath += ` C ${cpX} ${prev.y}, ${cpX} ${curr.y}, ${curr.x} ${curr.y}`;
+                  }
+                  const lastX = coords[coords.length - 1].x;
+                  const firstX = coords[0].x;
+                  const areaPath = `${linePath} L ${lastX} ${bottomY} L ${firstX} ${bottomY} Z`;
+
+                  const y100 = padT + (1 - (100 - minV) / range) * usableH;
+                  const y60 = padT + (1 - (60 - minV) / range) * usableH;
+
+                  return (
+                    <Svg width={reportChartWidth} height={svgHeight}>
+                      <Defs>
+                        <LinearGradient id="reportHrGrad" x1="0" y1="0" x2="0" y2="1">
+                          <Stop offset="0%" stopColor="#0F9D8A" stopOpacity={0.35} />
+                          <Stop offset="100%" stopColor="#0F9D8A" stopOpacity={0.02} />
+                        </LinearGradient>
+                      </Defs>
+
+                      {/* Đường tham chiếu chuẩn 100 bpm & 60 bpm */}
+                      {y100 >= padT && y100 <= bottomY && (
+                        <Line
+                          x1={padL}
+                          y1={y100}
+                          x2={reportChartWidth - padR}
+                          y2={y100}
+                          stroke={isDarkMode ? '#334155' : '#E2E8F0'}
+                          strokeWidth={1}
+                          strokeDasharray="4 4"
+                        />
+                      )}
+                      {y60 >= padT && y60 <= bottomY && (
+                        <Line
+                          x1={padL}
+                          y1={y60}
+                          x2={reportChartWidth - padR}
+                          y2={y60}
+                          stroke={isDarkMode ? '#334155' : '#E2E8F0'}
+                          strokeWidth={1}
+                          strokeDasharray="4 4"
+                        />
+                      )}
+
+                      <Path d={areaPath} fill="url(#reportHrGrad)" />
+                      <Path
+                        d={linePath}
+                        fill="none"
+                        stroke="#0F9D8A"
+                        strokeWidth={2.6}
+                        strokeLinecap="round"
+                        strokeLinejoin="round"
+                      />
+
+                      {coords.map((pt, idx) => (
+                        <React.Fragment key={`rpt_pt_${idx}`}>
+                          <Circle
+                            cx={pt.x}
+                            cy={pt.y}
+                            r={3.8}
+                            fill="#0F9D8A"
+                            stroke="#FFFFFF"
+                            strokeWidth={1.5}
+                          />
+                          {pt.val > 0 && (
+                            <SvgText
+                              x={pt.x}
+                              y={pt.y - 8}
+                              textAnchor="middle"
+                              fontSize={9.5}
+                              fontWeight="700"
+                              fill={isDarkMode ? '#5EEAD4' : '#0F766E'}
+                            >
+                              {pt.val}
+                            </SvgText>
+                          )}
+                          <SvgText
+                            x={pt.x}
+                            y={bottomY + 16}
+                            textAnchor="middle"
+                            fontSize={9.5}
+                            fontWeight="600"
+                            fill={isDarkMode ? '#94A3B8' : '#64748B'}
+                          >
+                            {pt.label}
+                          </SvgText>
+                        </React.Fragment>
+                      ))}
+                    </Svg>
+                  );
+                })()}
               </View>
             </View>
 
@@ -486,8 +711,85 @@ export default function MedicalReportScreen({ navigation, route }: any) {
                   <LocalizedText style={[styles.sectionTitle, isDarkMode && { color: '#F8FAFC' }]}>Cảnh báo & sự kiện</LocalizedText>
                   <LocalizedText style={[styles.sectionSubtitle, isDarkMode && { color: '#94A3B8' }]}>Cần chú ý trong kỳ báo cáo</LocalizedText>
                 </View>
-                <Ionicons name="shield-checkmark-outline" size={24} color="#0F766E" />
+                <Ionicons
+                  name={hasAlertWarning ? 'warning-outline' : 'shield-checkmark-outline'}
+                  size={24}
+                  color={hasAlertWarning ? '#DC2626' : '#0F766E'}
+                />
               </View>
+
+              {/* Dòng Cảnh báo nguy kịch (Cho phép bấm sang Thông Báo & Sự Kiện - Tab Nguy kịch) */}
+              <TouchableOpacity
+                style={styles.alertRow}
+                onPress={() =>
+                  navigation.navigate('Alerts', {
+                    initialFilter: 'CRITICAL',
+                    from: 'MedicalReport',
+                  })
+                }
+                activeOpacity={0.75}
+              >
+                <View style={[styles.alertIcon, { backgroundColor: '#FEE2E2' }]}>
+                  <Ionicons name="alert-circle" size={18} color="#DC2626" />
+                </View>
+                <View style={{ flex: 1, marginLeft: 10 }}>
+                  <LocalizedText style={[styles.alertLabel, { marginLeft: 0 }, isDarkMode && { color: '#F8FAFC' }]}>
+                    Cảnh báo nguy kịch
+                  </LocalizedText>
+                  {effectiveCriticalCount > 0 && (
+                    <LocalizedText style={[styles.alertSubHint, isDarkMode && { color: '#F87171' }]}>
+                      Chạm để xem chi tiết tại tab 🚨 Nguy kịch
+                    </LocalizedText>
+                  )}
+                </View>
+                <View style={{ flexDirection: 'row', alignItems: 'center' }}>
+                  <LocalizedText
+                    style={[
+                      styles.alertValue,
+                      isDarkMode && { color: '#F8FAFC' },
+                      effectiveCriticalCount > 0 && { color: '#DC2626' },
+                    ]}
+                  >
+                    {effectiveCriticalCount} lần
+                  </LocalizedText>
+                  <Ionicons
+                    name="chevron-forward"
+                    size={16}
+                    color={effectiveCriticalCount > 0 ? '#DC2626' : '#94A3B8'}
+                    style={{ marginLeft: 4 }}
+                  />
+                </View>
+              </TouchableOpacity>
+
+              {/* Danh sách tag tóm tắt sự kiện nguy kịch trong kỳ */}
+              {effectiveCriticalCount > 0 && effectiveCriticalEvents.length > 0 && (
+                <View style={styles.criticalEventsTagRow}>
+                  {effectiveCriticalEvents.map((eventName) => (
+                    <TouchableOpacity
+                      key={eventName}
+                      style={[
+                        styles.criticalEventTag,
+                        isDarkMode && { backgroundColor: 'rgba(220, 38, 38, 0.2)', borderColor: '#7F1D1D' },
+                      ]}
+                      onPress={() =>
+                        navigation.navigate('Alerts', {
+                          initialFilter: 'CRITICAL',
+                          from: 'MedicalReport',
+                        })
+                      }
+                      activeOpacity={0.8}
+                    >
+                      <Ionicons name="flame" size={12} color="#DC2626" style={{ marginRight: 4 }} />
+                      <LocalizedText
+                        style={[styles.criticalEventTagText, isDarkMode && { color: '#FCA5A5' }]}
+                      >
+                        {eventName}
+                      </LocalizedText>
+                    </TouchableOpacity>
+                  ))}
+                </View>
+              )}
+
               <View style={styles.alertRow}>
                 <View style={[styles.alertIcon, { backgroundColor: '#FEE2E2' }]}>
                   <Ionicons name="warning" size={17} color="#DC2626" />
@@ -888,6 +1190,35 @@ const styles = StyleSheet.create({
     fontSize: 13,
     fontWeight: '800',
     color: '#102A2B',
+  },
+  alertSubHint: {
+    marginTop: 2,
+    fontSize: 11,
+    fontWeight: '600',
+    color: '#DC2626',
+  },
+  criticalEventsTagRow: {
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+    gap: 6,
+    marginTop: 8,
+    marginLeft: 42,
+  },
+  criticalEventTag: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    paddingHorizontal: 8,
+    paddingVertical: 4,
+    borderRadius: 8,
+    borderWidth: 1,
+    borderColor: '#FECACA',
+    backgroundColor: '#FEF2F2',
+  },
+  criticalEventTagText: {
+    fontSize: 11,
+    fontWeight: '800',
+    color: '#B91C1C',
+    letterSpacing: 0.3,
   },
   exportSectionTitle: {
     marginBottom: 10,

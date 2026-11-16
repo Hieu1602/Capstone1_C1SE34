@@ -34,204 +34,19 @@ import { useDeviceStore } from '../../../store/useDeviceStore';
 import { useVitalStore } from '../../../store/useVitalStore';
 import { FamilyAppointmentsModal } from '../../dashboard/components/FamilyAppointmentsModal';
 import { incidentsApi, householdApi } from '../../../services/api';
+import {
+  AlertConfig,
+  ALERT_CONFIG_MAP,
+  getAlertConfig,
+  formatFriendlyTime,
+} from '../utils/alertConfig';
+import { AlertDetailModal } from '../components/AlertDetailModal';
+import { handleHeaderBack } from '../../../navigation/navigationHelpers';
 
 // ------------------------------------------------------------------------------
-// 1. Cấu hình giao diện chuẩn hóa cho từng loại sự kiện
+// Component chính: AlertsListScreen
 // ------------------------------------------------------------------------------
-interface AlertConfig {
-  title: string;
-  badgeText: string;
-  badgeBg: string;
-  badgeColor: string;
-  iconName: keyof typeof Ionicons.glyphMap;
-  iconColor: string;
-  iconBg: string;
-  isCritical: boolean;
-}
-
-const ALERT_CONFIG_MAP: Record<string, AlertConfig> = {
-  FALL_DETECTED: {
-    title: 'CẢNH BÁO TÉ NGÃ KHẨN CẤP',
-    badgeText: 'CỰC KỲ NGUY HIỂM',
-    badgeBg: '#EF4444',
-    badgeColor: '#FFFFFF',
-    iconName: 'warning',
-    iconColor: '#DC2626',
-    iconBg: '#FEE2E2',
-    isCritical: true,
-  },
-  HIGH_HEART_RATE: {
-    title: 'Nhịp tim tăng cao bất thường',
-    badgeText: 'Cảnh báo tim',
-    badgeBg: '#FFF7ED',
-    badgeColor: '#EA580C',
-    iconName: 'heart',
-    iconColor: '#EA580C',
-    iconBg: '#FFEDD5',
-    isCritical: false,
-  },
-  ACOUSTIC_DISTRESS: {
-    title: 'Phát hiện âm thanh kêu cứu',
-    badgeText: 'Âm thanh YAMNet',
-    badgeBg: '#F3E8FF',
-    badgeColor: '#7C3AED',
-    iconName: 'mic',
-    iconColor: '#9333EA',
-    iconBg: '#F3E8FF',
-    isCritical: true,
-  },
-  PERSON_DETECTED: {
-    title: 'Phát hiện chuyển động người',
-    badgeText: 'Chuyển động',
-    badgeBg: '#ECFDF5',
-    badgeColor: '#059669',
-    iconName: 'person',
-    iconColor: '#10B981',
-    iconBg: '#DCFCE7',
-    isCritical: false,
-  },
-  APPOINTMENT_SCHEDULED: {
-    title: 'Lịch khám mới từ Bác sĩ',
-    badgeText: 'Chờ gia đình xác nhận',
-    badgeBg: '#FEF3C7',
-    badgeColor: '#D97706',
-    iconName: 'calendar',
-    iconColor: '#D97706',
-    iconBg: '#FEF3C7',
-    isCritical: false,
-  },
-  APPOINTMENT_CONFIRMED: {
-    title: 'Lịch khám đã được xác nhận',
-    badgeText: 'Đã xác nhận',
-    badgeBg: '#DCFCE7',
-    badgeColor: '#16A34A',
-    iconName: 'checkmark-circle',
-    iconColor: '#16A34A',
-    iconBg: '#DCFCE7',
-    isCritical: false,
-  },
-  APPOINTMENT_CANCELLED: {
-    title: 'Lịch khám đã bị hủy',
-    badgeText: 'Đã hủy',
-    badgeBg: '#FEE2E2',
-    badgeColor: '#DC2626',
-    iconName: 'close-circle',
-    iconColor: '#DC2626',
-    iconBg: '#FEE2E2',
-    isCritical: false,
-  },
-  HOUSE_MEMBER_ADDED: {
-    title: 'Đã được thêm vào căn nhà',
-    badgeText: 'Thành viên mới',
-    badgeBg: '#EFF6FF',
-    badgeColor: '#2563EB',
-    iconName: 'home',
-    iconColor: '#2563EB',
-    iconBg: '#DBEAFE',
-    isCritical: false,
-  },
-  MEMBER_ADDED: {
-    title: 'Thành viên mới gia nhập',
-    badgeText: 'Thành viên mới',
-    badgeBg: '#EFF6FF',
-    badgeColor: '#2563EB',
-    iconName: 'home',
-    iconColor: '#2563EB',
-    iconBg: '#DBEAFE',
-    isCritical: false,
-  },
-  HOUSE_INVITE_PENDING: {
-    title: 'Lời mời tham gia nhà',
-    badgeText: 'Chờ bạn xác nhận',
-    badgeBg: '#FEF3C7',
-    badgeColor: '#D97706',
-    iconName: 'mail-unread',
-    iconColor: '#D97706',
-    iconBg: '#FEF3C7',
-    isCritical: false,
-  },
-  HOUSE_JOIN_REQUEST: {
-    title: 'Yêu cầu vào nhà mới',
-    badgeText: 'Cần duyệt',
-    badgeBg: '#EFF6FF',
-    badgeColor: '#2563EB',
-    iconName: 'person-add',
-    iconColor: '#2563EB',
-    iconBg: '#DBEAFE',
-    isCritical: false,
-  },
-  HOUSE_JOIN_APPROVED: {
-    title: 'Đã duyệt vào nhà',
-    badgeText: 'Đã duyệt',
-    badgeBg: '#DCFCE7',
-    badgeColor: '#16A34A',
-    iconName: 'checkmark-circle',
-    iconColor: '#16A34A',
-    iconBg: '#DCFCE7',
-    isCritical: false,
-  },
-  HOUSE_JOIN_REJECTED: {
-    title: 'Yêu cầu vào nhà bị từ chối',
-    badgeText: 'Từ chối',
-    badgeBg: '#FEE2E2',
-    badgeColor: '#DC2626',
-    iconName: 'close-circle',
-    iconColor: '#DC2626',
-    iconBg: '#FEE2E2',
-    isCritical: false,
-  },
-  HOUSE_INVITE_REJECTED: {
-    title: 'Lời mời vào nhà bị từ chối',
-    badgeText: 'Từ chối',
-    badgeBg: '#FEE2E2',
-    badgeColor: '#DC2626',
-    iconName: 'close-circle',
-    iconColor: '#DC2626',
-    iconBg: '#FEE2E2',
-    isCritical: false,
-  },
-
-};
-
-function getAlertConfig(alertType: string): AlertConfig {
-  return (
-    ALERT_CONFIG_MAP[alertType] || {
-      title: alertType.replace(/_/g, ' '),
-      badgeText: 'Thông báo',
-      badgeBg: '#F1F5F9',
-      badgeColor: '#64748B',
-      iconName: 'notifications',
-      iconColor: Colors.primary,
-      iconBg: '#FFF4EC',
-      isCritical: false,
-    }
-  );
-}
-
-function formatFriendlyTime(dateStr: string, translate: (key: string, count?: number) => string) {
-  try {
-    const diffMs = Date.now() - new Date(dateStr).getTime();
-    if (diffMs <= 60 * 1000) return translate('Vừa xong');
-    const diffMin = Math.floor(diffMs / 60000);
-    if (diffMin < 60) return translate('{{count}} phút trước', diffMin);
-    const diffHour = Math.floor(diffMin / 60);
-    if (diffHour < 24) return translate('{{count}} giờ trước', diffHour);
-    const diffDay = Math.floor(diffHour / 24);
-    if (diffDay === 1) return translate('Hôm qua');
-    if (diffDay < 7) return translate('{{count}} ngày trước', diffDay);
-
-    const d = new Date(dateStr);
-    const pad = (n: number) => String(n).padStart(2, '0');
-    return `${pad(d.getHours())}:${pad(d.getMinutes())} • ${pad(d.getDate())}/${pad(d.getMonth() + 1)}`;
-  } catch {
-    return dateStr;
-  }
-}
-
-// ------------------------------------------------------------------------------
-// 2. Component chính: AlertsListScreen
-// ------------------------------------------------------------------------------
-export default function AlertsListScreen({ navigation }: any) {
+export default function AlertsListScreen({ navigation, route }: any) {
   const { t } = useTranslation();
   const { isDarkMode, colors } = useTheme();
 
@@ -264,10 +79,23 @@ export default function AlertsListScreen({ navigation }: any) {
   const [refreshing, setRefreshing] = useState(false);
   const [familyAppointmentsModalVisible, setFamilyAppointmentsModalVisible] = useState(false);
   const [selectedAppointmentPatientId, setSelectedAppointmentPatientId] = useState<string | number | null>(null);
-  const [filterType, setFilterType] = useState<'ALL' | 'CRITICAL' | 'VITAL' | 'MEDICATION' | 'APPOINTMENT'>('ALL');
+  const initialFilterParam = route?.params?.initialFilter || route?.params?.filter;
+  const [filterType, setFilterType] = useState<'ALL' | 'CRITICAL' | 'VITAL' | 'MEDICATION' | 'APPOINTMENT'>(
+    initialFilterParam && ['ALL', 'CRITICAL', 'VITAL', 'MEDICATION', 'APPOINTMENT'].includes(initialFilterParam)
+      ? initialFilterParam
+      : 'ALL'
+  );
   const [selectedInviteModalItem, setSelectedInviteModalItem] = useState<any>(null);
   const [selectedJoinRequestModalItem, setSelectedJoinRequestModalItem] = useState<any>(null);
+  const [selectedAlertDetailItem, setSelectedAlertDetailItem] = useState<any>(null);
   const [isResponding, setIsResponding] = useState(false);
+
+  useEffect(() => {
+    const nextFilter = route?.params?.initialFilter || route?.params?.filter;
+    if (nextFilter && ['ALL', 'CRITICAL', 'VITAL', 'MEDICATION', 'APPOINTMENT'].includes(nextFilter)) {
+      setFilterType(nextFilter);
+    }
+  }, [route?.params?.initialFilter, route?.params?.filter]);
 
   const isFetchingRef = useRef(false);
 
@@ -428,13 +256,24 @@ export default function AlertsListScreen({ navigation }: any) {
   // Lọc danh sách sự cố theo tab
   const filteredIncidents = validIncidents.filter((item) => {
     if (filterType === 'CRITICAL') {
-      return item.alert_level === 'CRITICAL' || item.alert_type === 'FALL_DETECTED' || item.alert_type === 'ACOUSTIC_DISTRESS';
+      const lvl = (item.alert_level || '').toUpperCase();
+      const aType = (item.alert_type || '').toUpperCase();
+      return (
+        lvl === 'CRITICAL' ||
+        lvl === 'EMERGENCY' ||
+        aType === 'FALL_DETECTED' ||
+        aType === 'ACOUSTIC_DISTRESS' ||
+        aType === 'CRITICAL_TRIAD' ||
+        aType === 'DEVICE_BATTERY_DEAD' ||
+        aType === 'SOS_EMERGENCY' ||
+        aType.includes('CRITICAL')
+      );
     }
     if (filterType === 'VITAL') {
       return item.alert_type.includes('HEART') || item.alert_type.includes('SPO2') || item.alert_type.includes('TEMP');
     }
     if (filterType === 'APPOINTMENT') {
-      return ['APPOINTMENT_SCHEDULED', 'APPOINTMENT_CONFIRMED', 'APPOINTMENT_CANCELLED'].includes(item.alert_type);
+      return ['APPOINTMENT_SCHEDULED', 'APPOINTMENT_REQUESTED', 'APPOINTMENT_CONFIRMED', 'APPOINTMENT_CANCELLED'].includes(item.alert_type);
     }
     return true;
   });
@@ -506,13 +345,6 @@ export default function AlertsListScreen({ navigation }: any) {
       try {
         useVitalStore.getState().setVitals({ fall_detected: false, acoustic_status: 'Bình thường' });
       } catch (e) {}
-    }
-
-    // 2. Gọi API backend
-    try {
-      await incidentsApi.acknowledge(item.id, 'Đã kiểm tra an toàn từ danh sách sự kiện');
-    } catch (apiErr) {
-      console.warn('Quick acknowledge API error:', apiErr);
     }
   };
 
@@ -644,6 +476,31 @@ export default function AlertsListScreen({ navigation }: any) {
     }
   };
 
+  const handleConfirmAlertAction = async (item: any) => {
+    if (!item) return;
+    setIsResponding(true);
+    try {
+      await handleQuickAcknowledge(item);
+      const handler = userName || 'Người chăm sóc';
+      const nowIso = new Date().toISOString();
+      setSelectedAlertDetailItem((prev: any) =>
+        prev
+          ? {
+              ...prev,
+              is_acknowledged: true,
+              acknowledged_by: handler,
+              acknowledged_by_name: handler,
+              acknowledged_at: nowIso,
+            }
+          : null
+      );
+    } catch (err: any) {
+      Alert.alert('Lỗi', 'Không thể xác nhận xử lý lúc này.');
+    } finally {
+      setIsResponding(false);
+    }
+  };
+
   const handlePressCard = (item: any) => {
     if (item.alert_type === 'HOUSE_INVITE_PENDING') {
       if (!item.is_acknowledged) {
@@ -658,76 +515,20 @@ export default function AlertsListScreen({ navigation }: any) {
       return;
     }
 
-    if (!item.is_acknowledged) {
-      const handler = userName || 'Người chăm sóc';
-      const nowIso = new Date().toISOString();
-      const updated = incidents.map((i) =>
-        i.id === item.id
-          ? {
-              ...i,
-              is_acknowledged: true,
-              acknowledged_by: handler,
-              acknowledged_by_name: handler,
-              acknowledged_at: nowIso,
-            }
-          : i
-      );
-      setIncidents(updated);
-      useAlertStore.getState().acknowledgeIncident(
-        item.id,
-        'Đã kiểm tra chi tiết sự kiện',
-        handler
-      );
-      const remainingCritical = updated.some(
-        (i) => !i.is_acknowledged && (i.alert_level === 'CRITICAL' || i.alert_type === 'FALL_DETECTED')
-      );
-      if (!remainingCritical) {
-        try {
-          useVitalStore.getState().setVitals({ fall_detected: false, acoustic_status: 'Bình thường' });
-        } catch (e) {}
-      }
-      incidentsApi.acknowledge(item.id, 'Đã kiểm tra chi tiết sự kiện').catch(() => {});
-    }
-
-
-
     if (item.alert_type === 'HOUSE_MEMBER_ADDED' || item.alert_type === 'MEMBER_ADDED') {
       navigation.navigate('HouseDetail');
       return;
     }
 
-    if (['APPOINTMENT_SCHEDULED', 'APPOINTMENT_CONFIRMED', 'APPOINTMENT_CANCELLED'].includes(item.alert_type)) {
+    if (['APPOINTMENT_SCHEDULED', 'APPOINTMENT_REQUESTED', 'APPOINTMENT_CONFIRMED', 'APPOINTMENT_CANCELLED'].includes(item.alert_type)) {
       const pid = item.device_id && !isNaN(Number(item.device_id)) ? item.device_id : (patientRecord?.patient_id || 1);
       setSelectedAppointmentPatientId(pid);
       setFamilyAppointmentsModalVisible(true);
       return;
     }
 
-    if (item.alert_type === 'PERSON_DETECTED') {
-      navigation.navigate('CameraDetail', { cameraId: item.device_id || 'cam_living_room', tab: 'playback' });
-      return;
-    }
-
-    if (item.alert_type === 'HIGH_HEART_RATE' || item.alert_type.includes('HEART') || item.alert_type.includes('SPO2') || item.alert_type.includes('TEMP')) {
-      navigation.navigate('HealthDetail', { initialTab: 'today', focusMetric: 'heartRate', metric: 'heartRate' });
-      return;
-    }
-
-    const isFall = item.alert_type === 'FALL_DETECTED';
-    navigation.navigate('IncidentDetail', {
-      incidentId: item.id,
-      id: item.id,
-      type: isFall ? 'FALL' : item.alert_type === 'ACOUSTIC_DISTRESS' ? 'ACOUSTIC' : item.alert_type,
-      alert_type: item.alert_type,
-      alert_level: item.alert_level || 'CRITICAL',
-      confidence: item.confidence != null ? `${Math.round(Number(item.confidence) * 100)}%` : undefined,
-      time: item.created_at ?? new Date().toISOString(),
-      created_at: item.created_at ?? new Date().toISOString(),
-      message: item.message,
-      clipAvailable: Boolean(item.video_clip_url || item.thumbnail_url),
-      video_clip_url: item.video_clip_url ?? null,
-      is_acknowledged: item.is_acknowledged ?? false,
-    });
+    // Hiển thị ngay modal tóm tắt nội dung, nguyên nhân, chỉ số và nút xác nhận xử lý trực tiếp (không chuyển trang)
+    setSelectedAlertDetailItem(item);
   };
 
   // Render card cữ thuốc
@@ -850,7 +651,7 @@ export default function AlertsListScreen({ navigation }: any) {
         <View style={styles.headerLeftRow}>
           <TouchableOpacity
             style={[styles.backBtn, isDarkMode && { backgroundColor: colors.card, borderColor: colors.border }]}
-            onPress={() => (navigation?.canGoBack?.() ? navigation.goBack() : navigation.navigate('Home'))}
+            onPress={() => handleHeaderBack(navigation, route, 'Home', false)}
             activeOpacity={0.7}
             hitSlop={{ top: 12, bottom: 12, left: 12, right: 12 }}
             accessibilityLabel="Quay lại"
@@ -931,7 +732,7 @@ export default function AlertsListScreen({ navigation }: any) {
             },
             {
               key: 'MEDICATION',
-              label: `💊 ${t('Uống thuốc')} ${pendingMedCount > 0 ? `(${pendingMedCount})` : `(${t('Xong')})`}`,
+              label: `💊 ${t('Uống thuốc')}${pendingMedCount > 0 ? ` (${pendingMedCount})` : ''}`,
               activePill: styles.filterPillActiveMed,
               darkBg: 'rgba(16, 185, 129, 0.15)',
               darkBorder: '#10B981',
@@ -1007,7 +808,7 @@ export default function AlertsListScreen({ navigation }: any) {
           }
 
           const inc = item.data;
-          const config = getAlertConfig(inc.alert_type);
+          const config = getAlertConfig(inc.alert_type, inc.notes || inc.note, inc.message);
           const isCriticalActive = config.isCritical && !inc.is_acknowledged;
           const isHandled = Boolean(inc.is_acknowledged);
           const friendlyTime = formatFriendlyTime(inc.created_at, (key, count) =>
@@ -1408,6 +1209,18 @@ export default function AlertsListScreen({ navigation }: any) {
           </View>
         </View>
       </Modal>
+
+      {/* Modal Tóm tắt & Đánh giá Cảnh báo Trực tiếp (Không Chuyển Trang) */}
+      <AlertDetailModal
+        visible={Boolean(selectedAlertDetailItem)}
+        item={selectedAlertDetailItem}
+        onClose={() => setSelectedAlertDetailItem(null)}
+        onConfirmHandled={handleConfirmAlertAction}
+        isResponding={isResponding}
+        isDarkMode={isDarkMode}
+        colors={colors}
+        navigation={navigation}
+      />
 
       <FamilyAppointmentsModal
         visible={familyAppointmentsModalVisible}

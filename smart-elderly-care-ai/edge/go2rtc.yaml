@@ -6,4 +6,6 @@ rtsp:
   default_query: tcp
 webrtc:
   listen: ':8555'
-streams: {}
+streams:
+  tapo_intercom:
+    - ${TAPO_TALK_URL}

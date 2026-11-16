@@ -10,6 +10,7 @@ services:
     networks:
       - elderly_care_net
     ports:
+      - '127.0.0.1:1984:1984'
       - '8555:8555/tcp'
       - '8555:8555/udp'
     volumes:
@@ -20,6 +21,8 @@ services:
       dockerfile: Dockerfile.camera
     init: true
     restart: unless-stopped
+    cpus: 2.0
+    mem_limit: 2g
     env_file:
       - .env
       - path: .env.camera
@@ -31,6 +34,11 @@ services:
       MQTT_PASSWORD: "${MQTT_PASSWORD:-mqtt_secure_pass_123}"
       FALL_DETECTION_ENABLED: "${FALL_DETECTION_ENABLED:-true}"
       CAMERA_DEVICE_ID: "${CAMERA_DEVICE_ID:-camera-main}"
+      AI_INFERENCE_FPS: "${AI_INFERENCE_FPS:-5}"
+      AI_NUM_THREADS: "${AI_NUM_THREADS:-2}"
+      TAPO_STREAM: "${TAPO_STREAM:-stream2}"
+      CAMERA_RETENTION_HOURS: "${CAMERA_RETENTION_HOURS:-48}"
+      MAX_RECORDING_STORAGE_GB: "${MAX_RECORDING_STORAGE_GB:-5}"
     networks:
       - elderly_care_net
     ports:

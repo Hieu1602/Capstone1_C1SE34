@@ -39,6 +39,81 @@ from app.schemas.patient import (
 )
 
 
+def parse_valid_upcoming_appointment(val) -> Optional[str]:
+    """Kiểm tra và chuẩn hóa lịch hẹn. Nếu không có hoặc đã hết hạn thì trả về None."""
+    if not val:
+        return None
+    from datetime import timezone, timedelta
+    if isinstance(val, datetime):
+        now = datetime.now(timezone.utc) if val.tzinfo else datetime.now()
+        if val >= now:
+            if val.tzinfo:
+                vn_time = val.astimezone(timezone(timedelta(hours=7)))
+                return vn_time.strftime("%H:%M ngày %d/%m/%Y")
+            return val.strftime("%H:%M ngày %d/%m/%Y")
+        return None
+
+    s = str(val).strip()
+    if not s or s.lower() in ["chưa có lịch hẹn", "chưa có", "không có", "--"]:
+        return None
+
+    import re
+    now = datetime.now()
+
+    # Thử ISO format
+    try:
+        dt = datetime.fromisoformat(s.replace("Z", "+00:00"))
+        if dt.tzinfo:
+            now_utc = datetime.now(timezone.utc)
+            if dt >= now_utc:
+                vn_time = dt.astimezone(timezone(timedelta(hours=7)))
+                return vn_time.strftime("%H:%M ngày %d/%m/%Y")
+            return None
+        elif dt >= now:
+            return dt.strftime("%H:%M ngày %d/%m/%Y")
+        return None
+    except Exception:
+        pass
+
+    # HH:MM ngày DD/MM/YYYY hoặc HH:MM - DD/MM/YYYY
+    m1 = re.search(r"(\d{1,2}):(\d{2})\s*(?:ngày|-)?\s*(\d{1,2})/(\d{1,2})/(\d{4})", s)
+    if m1:
+        hh, mm, d, m_val, y = map(int, m1.groups())
+        try:
+            dt = datetime(y, m_val, d, hh, mm)
+            if dt >= now:
+                return f"{hh:02d}:{mm:02d} ngày {d:02d}/{m_val:02d}/{y:04d}"
+            return None
+        except Exception:
+            pass
+
+    # DD/MM/YYYY HH:MM
+    m2 = re.search(r"(\d{1,2})/(\d{1,2})/(\d{4})\s*(\d{1,2}):(\d{2})", s)
+    if m2:
+        d, m_val, y, hh, mm = map(int, m2.groups())
+        try:
+            dt = datetime(y, m_val, d, hh, mm)
+            if dt >= now:
+                return f"{hh:02d}:{mm:02d} ngày {d:02d}/{m_val:02d}/{y:04d}"
+            return None
+        except Exception:
+            pass
+
+    # DD/MM/YYYY (cuối ngày)
+    m3 = re.search(r"(\d{1,2})/(\d{1,2})/(\d{4})", s)
+    if m3:
+        d, m_val, y = map(int, m3.groups())
+        try:
+            dt = datetime(y, m_val, d, 23, 59, 59)
+            if dt >= now:
+                return f"{d:02d}/{m_val:02d}/{y:04d}"
+            return None
+        except Exception:
+            pass
+
+    return None
+
+
 
 
 
@@ -195,7 +270,111 @@ class CRUDElderly:
 
                 gender_str = "Khác"
 
+        # 1. Tìm Bác sĩ phụ trách người cao tuổi (từ HouseMember của ngôi nhà, hoặc Lịch hẹn)
+        doc_user = None
+        if profile.house_id:
+            try:
+                from app.models.house import HouseMember
+                from app.models.user import User
+                from sqlalchemy import or_
 
+                doc_stmt = (
+                    select(User)
+                    .join(HouseMember, HouseMember.user_id == User.id)
+                    .where(
+                        HouseMember.house_id == profile.house_id,
+                        HouseMember.status == "ACTIVE",
+                        or_(
+                            HouseMember.role_in_house.ilike("%doctor%"),
+                            User.role == "doctor",
+                        ),
+                    )
+                    .limit(1)
+                )
+                doc_res = await db.execute(doc_stmt)
+                doc_user = doc_res.scalar_one_or_none()
+            except Exception:
+                pass
+
+        if not doc_user:
+            try:
+                from app.models.appointment import Appointment
+                from app.models.user import User
+                apt_stmt = (
+                    select(User)
+                    .join(Appointment, Appointment.doctor_id == User.id)
+                    .where(Appointment.patient_id == profile.id)
+                    .order_by(Appointment.scheduled_at.desc())
+                    .limit(1)
+                )
+                apt_res = await db.execute(apt_stmt)
+                doc_user = apt_res.scalar_one_or_none()
+            except Exception:
+                pass
+
+        if not doc_user:
+            try:
+                from app.models.user import User
+                doc_sys_stmt = select(User).where(User.role == "doctor", User.is_active == True).limit(1)
+                doc_sys_res = await db.execute(doc_sys_stmt)
+                doc_user = doc_sys_res.scalar_one_or_none()
+            except Exception:
+                pass
+
+        clinical_info = (
+            getattr(__import__('app.crud.crud_doctor', fromlist=['_CLINICAL_STORE']), '_CLINICAL_STORE', {})
+            .get(str(profile.id), {})
+            or getattr(__import__('app.crud.crud_doctor', fromlist=['_CLINICAL_STORE']), '_CLINICAL_STORE', {})
+            .get(patient_id_or_serial, {})
+            or {}
+        )
+
+        doc_name = clinical_info.get("doctor_name") or (doc_user.full_name if doc_user else "") or ""
+        doc_phone = clinical_info.get("doctor_phone") or (doc_user.phone if doc_user else "") or ""
+        doc_specialty = clinical_info.get("doctor_specialty") or (doc_user.specialty if doc_user and doc_user.specialty else "Bác sĩ gia đình")
+        hospital_val = clinical_info.get("hospital") or (doc_user.workplace if doc_user and doc_user.workplace else "Hệ thống Y tế SECA AI")
+        doc_avatar = clinical_info.get("doctor_avatar_url") or (doc_user.avatar_url if doc_user else None)
+
+        # 2. Lịch tái khám sắp tới (từ DB appointments hoặc _CLINICAL_STORE / _APPOINTMENT_STORE)
+        next_appointment_str = ""
+        try:
+            from app.models.appointment import Appointment
+            from datetime import timezone
+            now_dt = datetime.now(timezone.utc)
+            apt_q = (
+                select(Appointment)
+                .where(
+                    Appointment.patient_id == profile.id,
+                    Appointment.status == "UPCOMING",
+                    Appointment.scheduled_at >= now_dt,
+                )
+                .order_by(Appointment.scheduled_at.asc())
+                .limit(1)
+            )
+            apt_q_res = await db.execute(apt_q)
+            upcoming_apt = apt_q_res.scalar_one_or_none()
+            if upcoming_apt and upcoming_apt.scheduled_at:
+                next_appointment_str = parse_valid_upcoming_appointment(upcoming_apt.scheduled_at) or ""
+        except Exception:
+            pass
+
+        if not next_appointment_str:
+            try:
+                from app.crud.crud_doctor import _APPOINTMENT_STORE
+                pid_str = str(profile.id)
+                for apt in _APPOINTMENT_STORE:
+                    if str(getattr(apt, "patient_id", "")) == pid_str and getattr(apt, "status", "") == "UPCOMING":
+                        sch = getattr(apt, "scheduled_at", "")
+                        parsed_sch = parse_valid_upcoming_appointment(sch)
+                        if parsed_sch:
+                            next_appointment_str = parsed_sch
+                            break
+            except Exception:
+                pass
+
+        if not next_appointment_str:
+            raw_next = clinical_info.get("next_appointment") or ""
+            next_appointment_str = parse_valid_upcoming_appointment(raw_next) or ""
 
         return PatientMedicalRecordOut(
 
@@ -223,23 +402,17 @@ class CRUDElderly:
 
             dietary_notes=profile.dietary_notes or "",
 
-            doctor_name="BS. Phụ trách",
+            doctor_name=doc_name,
 
-            doctor_phone="",
+            doctor_phone=doc_phone,
 
-            doctor_specialty="Bác sĩ gia đình",
+            doctor_specialty=doc_specialty,
 
-            hospital="Hệ thống Y tế SECA AI",
+            hospital=hospital_val,
 
-            next_appointment=(
-                getattr(__import__('app.crud.crud_doctor', fromlist=['_CLINICAL_STORE']), '_CLINICAL_STORE', {})
-                .get(str(profile.id), {})
-                .get("next_appointment")
-                or getattr(__import__('app.crud.crud_doctor', fromlist=['_CLINICAL_STORE']), '_CLINICAL_STORE', {})
-                .get(patient_id_or_serial, {})
-                .get("next_appointment")
-                or ""
-            ),
+            next_appointment=next_appointment_str,
+
+            doctor_avatar_url=doc_avatar,
 
             avatar_url=profile.avatar_url,
 
@@ -354,6 +527,40 @@ class CRUDElderly:
                 profile.conditions_json = json.dumps([c.model_dump() for c in update_in.conditions], ensure_ascii=False)
 
                 profile.medical_history = ", ".join(c.name for c in update_in.conditions)
+
+            # Đồng bộ thông tin Bác sĩ / Lịch hẹn nếu có cập nhật lâm sàng
+            has_doc_updates = any(
+                v is not None
+                for v in [
+                    update_in.doctor_name,
+                    update_in.doctor_phone,
+                    update_in.doctor_specialty,
+                    update_in.hospital,
+                    update_in.next_appointment,
+                    update_in.doctor_avatar_url,
+                ]
+            )
+            if has_doc_updates:
+                clinical_store = getattr(
+                    __import__("app.crud.crud_doctor", fromlist=["_CLINICAL_STORE"]),
+                    "_CLINICAL_STORE",
+                    {},
+                )
+                p_key = str(profile.id)
+                if p_key not in clinical_store:
+                    clinical_store[p_key] = {}
+                if update_in.doctor_name is not None:
+                    clinical_store[p_key]["doctor_name"] = update_in.doctor_name
+                if update_in.doctor_phone is not None:
+                    clinical_store[p_key]["doctor_phone"] = update_in.doctor_phone
+                if update_in.doctor_specialty is not None:
+                    clinical_store[p_key]["doctor_specialty"] = update_in.doctor_specialty
+                if update_in.hospital is not None:
+                    clinical_store[p_key]["hospital"] = update_in.hospital
+                if update_in.next_appointment is not None:
+                    clinical_store[p_key]["next_appointment"] = update_in.next_appointment
+                if update_in.doctor_avatar_url is not None:
+                    clinical_store[p_key]["doctor_avatar_url"] = update_in.doctor_avatar_url
 
             await db.commit()
 

@@ -41,23 +41,30 @@ export const VitalsSummaryCard: React.FC<VitalsSummaryCardProps> = ({
   colors,
   navigation,
 }) => {
+  // Kiểm tra tính tươi mới của dữ liệu (chỉ hiển thị nếu ghi nhận trong vòng 2 phút gần nhất)
+  const isLiveFresh = (() => {
+    const vTime = currentVitals?.time || currentVitals?.recorded_at || currentVitals?.timestamp;
+    if (!vTime) return false;
+    const timeMs = typeof vTime === 'number' ? vTime : new Date(vTime).getTime();
+    if (isNaN(timeMs)) return false;
+    return Math.abs(Date.now() - timeMs) <= 2 * 60 * 1000;
+  })();
+
   // Kiểm tra các chỉ số sinh hiệu có dữ liệu thực từ cảm biến hay đang rỗng (null)
-  const hasHR = currentVitals.heart_rate !== null && currentVitals.heart_rate !== undefined;
-  const hasSpO2 = currentVitals.spo2 !== null && currentVitals.spo2 !== undefined;
-  const hasTemp = currentVitals.skin_temp_max !== null && currentVitals.skin_temp_max !== undefined;
+  const hasHR = isLiveFresh && currentVitals.heart_rate !== null && currentVitals.heart_rate !== undefined;
+  const hasSpO2 = isLiveFresh && currentVitals.spo2 !== null && currentVitals.spo2 !== undefined;
+  const hasTemp = isLiveFresh && currentVitals.skin_temp_max !== null && currentVitals.skin_temp_max !== undefined;
   // Kiểm tra thiết bị vòng đeo tay BLE có đang kết nối thực tế hay không
-  const isBraceletConnected = Boolean(
-    currentVitals?.bracelet_connected &&
-    braceletBattery !== null &&
-    braceletBattery !== undefined
-  );
+  const isBraceletConnected = Boolean(isLiveFresh && currentVitals?.bracelet_connected && (hasHR || hasSpO2 || hasTemp));
+  const isBatteryDead = isBraceletConnected && braceletBattery === 0;
+  const isBatteryLow = isBraceletConnected && braceletBattery !== null && braceletBattery !== undefined && braceletBattery > 0 && braceletBattery <= 20;
 
   return (
     <View style={[styles.vitalsSummaryCard, isDarkMode && { backgroundColor: colors.card, borderColor: colors.border }]}>
       {/* Header Card */}
       <View style={styles.vitalsSummaryHeader}>
         <View style={{ flexDirection: 'row', alignItems: 'center' }}>
-          <View style={styles.livePulseDot} />
+          <View style={[styles.livePulseDot, !isBraceletConnected && { backgroundColor: '#94A3B8' }]} />
           <Text style={[styles.vitalsSummaryTitle, isDarkMode && { color: colors.textPrimary }]}>Chỉ số sinh hiệu</Text>
         </View>
         <TouchableOpacity
@@ -95,21 +102,43 @@ export const VitalsSummaryCard: React.FC<VitalsSummaryCardProps> = ({
 
         <View style={styles.deviceStatusItem}>
           <Ionicons
-            name={isBraceletConnected ? "battery-charging" : "bluetooth-outline"}
+            name={
+              isBatteryDead
+                ? "battery-dead"
+                : isBatteryLow
+                  ? "battery-half"
+                  : isBraceletConnected
+                    ? (braceletBattery !== null && braceletBattery !== undefined ? "battery-full" : "bluetooth")
+                    : "bluetooth-outline"
+            }
             size={15}
-            color={isBraceletConnected ? Colors.aiBlue : isDarkMode ? '#64748B' : '#94A3B8'}
+            color={
+              isBatteryDead
+                ? Colors.danger
+                : isBatteryLow
+                  ? '#D97706'
+                  : isBraceletConnected
+                    ? Colors.aiBlue
+                    : (isDarkMode ? '#64748B' : '#94A3B8')
+            }
           />
           <Text style={[styles.deviceStatusText, isDarkMode && { color: colors.textSecondary }]}>
             Vòng BLE:{' '}
             <Text
               style={{
-                color: isBraceletConnected
-                  ? (isDarkMode ? colors.textPrimary : Colors.textPrimary)
-                  : (isDarkMode ? '#94A3B8' : '#64748B'),
+                color: isBatteryDead
+                  ? Colors.danger
+                  : isBatteryLow
+                    ? '#D97706'
+                    : isBraceletConnected
+                      ? (isDarkMode ? colors.textPrimary : Colors.textPrimary)
+                      : (isDarkMode ? '#94A3B8' : '#64748B'),
                 fontWeight: '700',
               }}
             >
-              {isBraceletConnected ? `${braceletBattery}% Pin` : 'Chưa kết nối'}
+              {isBraceletConnected
+                ? (braceletBattery !== null && braceletBattery !== undefined ? `${braceletBattery}% Pin` : 'Đang đo')
+                : (isBatteryDead ? 'Hết pin' : 'Chưa kết nối')}
             </Text>
           </Text>
         </View>
@@ -134,58 +163,54 @@ export const VitalsSummaryCard: React.FC<VitalsSummaryCardProps> = ({
         </View>
         <View style={[styles.vitalDivider, isDarkMode && { backgroundColor: colors.border }]} />
 
-        {/* SpO2 */}
-        <View style={styles.vitalItem}>
-          <Ionicons name="water" size={17} color="#3B82F6" />
-          <Text style={[styles.vitalValText, isDarkMode && { color: colors.textPrimary }]} numberOfLines={1}>
-            {hasSpO2 ? (
-              <>
+        {/* SpO2 - Ẩn đi nếu phần cứng không hỗ trợ */}
+        {hasSpO2 && (
+          <>
+            <View style={styles.vitalItem}>
+              <Ionicons name="water" size={17} color="#3B82F6" />
+              <Text style={[styles.vitalValText, isDarkMode && { color: colors.textPrimary }]} numberOfLines={1}>
                 {currentVitals.spo2}{' '}
                 <Text style={styles.vitalUnit}>%</Text>
-              </>
-            ) : (
-              '--'
-            )}
-          </Text>
-          <Text style={[styles.vitalLblText, isDarkMode && { color: colors.textSecondary }]}>SpO₂</Text>
-        </View>
-        <View style={[styles.vitalDivider, isDarkMode && { backgroundColor: colors.border }]} />
+              </Text>
+              <Text style={[styles.vitalLblText, isDarkMode && { color: colors.textSecondary }]}>SpO₂</Text>
+            </View>
+            <View style={[styles.vitalDivider, isDarkMode && { backgroundColor: colors.border }]} />
+          </>
+        )}
 
-        {/* Thân nhiệt */}
-        <View style={styles.vitalItem}>
-          <Ionicons name="thermometer" size={17} color="#F59E0B" />
-          <Text style={[styles.vitalValText, isDarkMode && { color: colors.textPrimary }]} numberOfLines={1}>
-            {hasTemp ? (
-              <>
+        {/* Thân nhiệt (AMG8833) - Ẩn đi nếu chưa có dữ liệu */}
+        {hasTemp && (
+          <>
+            <View style={styles.vitalItem}>
+              <Ionicons name="thermometer" size={17} color="#F59E0B" />
+              <Text style={[styles.vitalValText, isDarkMode && { color: colors.textPrimary }]} numberOfLines={1}>
                 {currentVitals.skin_temp_max}{' '}
                 <Text style={styles.vitalUnit}>°C</Text>
-              </>
-            ) : (
-              '--'
-            )}
-          </Text>
-          <Text style={[styles.vitalLblText, isDarkMode && { color: colors.textSecondary }]}>Thân nhiệt</Text>
-        </View>
-        <View style={[styles.vitalDivider, isDarkMode && { backgroundColor: colors.border }]} />
+              </Text>
+              <Text style={[styles.vitalLblText, isDarkMode && { color: colors.textSecondary }]}>Thân nhiệt</Text>
+            </View>
+            <View style={[styles.vitalDivider, isDarkMode && { backgroundColor: colors.border }]} />
+          </>
+        )}
 
         {/* Trạng thái vận động */}
         <View style={styles.vitalItem}>
           <Ionicons
             name="body"
             size={17}
-            color={currentVitals.fall_detected ? Colors.danger : Colors.success}
+            color={currentVitals.fall_detected && isLiveFresh ? Colors.danger : Colors.success}
           />
           <Text
             style={[
               styles.vitalValText,
               {
                 fontSize: 12,
-                color: currentVitals.fall_detected ? Colors.danger : (hasHR ? Colors.success : colors.textSecondary),
+                color: currentVitals.fall_detected && isLiveFresh ? Colors.danger : (hasHR ? Colors.success : colors.textSecondary),
               },
             ]}
             numberOfLines={1}
           >
-            {currentVitals.fall_detected ? 'Ngã!' : (hasHR ? 'Sinh hoạt' : '--')}
+            {currentVitals.fall_detected && isLiveFresh ? 'Ngã!' : (hasHR ? 'Sinh hoạt' : '--')}
           </Text>
           <Text style={[styles.vitalLblText, isDarkMode && { color: colors.textSecondary }]}>Vận động</Text>
         </View>
@@ -208,7 +233,7 @@ export const VitalsSummaryCard: React.FC<VitalsSummaryCardProps> = ({
             ]}
             numberOfLines={1}
           >
-            {isAcousticAlarm ? 'La hét!' : (currentVitals.acoustic_status ?? 'Bình thường')}
+            {isAcousticAlarm ? 'La hét!' : (hasHR ? (currentVitals.acoustic_status ?? 'Bình thường') : '--')}
           </Text>
           <Text style={[styles.vitalLblText, isDarkMode && { color: colors.textSecondary }]}>Âm thanh</Text>
         </View>

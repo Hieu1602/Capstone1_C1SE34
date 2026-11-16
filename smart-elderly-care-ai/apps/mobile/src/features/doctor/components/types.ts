@@ -166,6 +166,7 @@ export interface DoctorProfileInfo {
   phone: string;
   avatarUri?: string | null;
   cchn_number?: string;
+  gender?: string;
 }
 
 // Danh sách danh xưng hỗ trợ

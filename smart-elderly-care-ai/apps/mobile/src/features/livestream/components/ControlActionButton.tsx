@@ -87,13 +87,21 @@ export default function ControlActionButton({
                 importantForAccessibility="no-hide-descendants"
                 style={[
                     styles.iconSurface,
+                    !isDarkMode && styles.iconSurfaceShadow,
                     {
                         backgroundColor: active
                             ? activeColor
                                 ? colors.card
                                 : colors.primaryLight
-                            : colors.surfaceSubtle,
-                        borderColor: active ? accent : "transparent",
+                            : isDarkMode
+                              ? colors.surfaceSubtle
+                              : "#FFFFFF",
+                        borderColor: active
+                            ? accent
+                            : isDarkMode
+                              ? "transparent"
+                              : "#E2E8F0",
+                        borderWidth: active ? 1.5 : 1,
                     },
                 ]}
             >
@@ -153,6 +161,13 @@ const styles = StyleSheet.create({
         borderWidth: 1,
         alignItems: "center",
         justifyContent: "center",
+    },
+    iconSurfaceShadow: {
+        shadowColor: "#64748B",
+        shadowOffset: { width: 0, height: 3 },
+        shadowOpacity: 0.12,
+        shadowRadius: 8,
+        elevation: 3,
     },
     activeDot: {
         position: "absolute",

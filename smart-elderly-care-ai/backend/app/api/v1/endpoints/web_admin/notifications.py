@@ -14,7 +14,7 @@ from typing import Optional
 from uuid import UUID
 
 from fastapi import APIRouter, Depends, HTTPException, Query, status
-from sqlalchemy import desc, select, text
+from sqlalchemy import desc, select, text, func
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.api.deps import get_current_user
@@ -82,16 +82,16 @@ async def create_notification(
     published_at = now if target_status == "published" else None
     scheduled_at = payload.scheduled_at if target_status == "scheduled" else None
 
-    # Ước tính số lượng người nhận
+    # Ước tính số lượng người nhận nhanh bằng COUNT
     delivered_count = 0
     if target_status == "published":
-        count_stmt = select(User).where(User.is_active == True)  # noqa: E712
+        count_stmt = select(func.count(User.id)).where(User.is_active == True)  # noqa: E712
         if payload.target_audience == "caregivers":
             count_stmt = count_stmt.where(User.role.in_(["owner", "member", "caregiver"]))
         elif payload.target_audience == "doctors":
             count_stmt = count_stmt.where(User.role == "doctor")
         res = await db.execute(count_stmt)
-        delivered_count = max(len(res.scalars().all()), 1)
+        delivered_count = max(res.scalar() or 0, 1)
 
     notif = SystemNotification(
         title=payload.title,
@@ -233,16 +233,14 @@ async def publish_notification(
     notif.revoked_at = None
     notif.revoke_reason = None
 
-    # Lấy số lượng người dùng nhận thông báo
-    count_stmt = select(User).where(User.is_active == True)  # noqa: E712
+    # Lấy nhanh số lượng người dùng nhận thông báo
+    count_stmt = select(func.count(User.id)).where(User.is_active == True)  # noqa: E712
     if notif.target_audience == "caregivers":
         count_stmt = count_stmt.where(User.role.in_(["owner", "member", "caregiver"]))
     elif notif.target_audience == "doctors":
         count_stmt = count_stmt.where(User.role == "doctor")
     users_res = await db.execute(count_stmt)
-    all_users = list(users_res.scalars().all())
-
-    notif.delivered_count = max(len(all_users), 1)
+    notif.delivered_count = max(users_res.scalar() or 0, 1)
     await db.flush()
     await db.refresh(notif)
 

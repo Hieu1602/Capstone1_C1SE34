@@ -61,23 +61,14 @@ def parse_device_info(
         except Exception:
             location = "Đà Nẵng, Việt Nam"
 
-    if custom_device_name and custom_device_name.strip():
-        return {
-            "device_name": custom_device_name.strip(),
-            "device_type": "mobile",
-            "os": "Mobile OS",
-            "browser": "SECA App",
-            "ip_address": clean_ip,
-            "location": location,
-        }
-
-    # 2. Phân tích User-Agent
+    # 2. Phân tích User-Agent & Header Nền tảng (DOCTOR_WEB / MOBILE_APP)
     device_name = "Samsung Galaxy SM-A127F"
     device_type = "mobile"
     os_name = "Android 14"
     browser = "SECA Mobile App"
 
     ua_lower = ua.lower()
+    platform_hint = (custom_device_name or "").strip().upper()
 
     if "iphone" in ua_lower:
         device_name = "iPhone 15 Pro"
@@ -129,6 +120,39 @@ def parse_device_info(
         device_type = "mobile"
         os_name = "Android 14"
         browser = "SECA Mobile App"
+
+    if platform_hint == "DOCTOR_WEB":
+        device_type = "desktop"
+        os_label = os_name if os_name not in ("Android 14", "iOS") else "macOS / Windows"
+        return {
+            "device_name": f"Cổng Web Bác sĩ — Máy tính ({os_label})",
+            "device_type": "desktop",
+            "os": os_label,
+            "browser": f"{browser} • Doctor Web",
+            "ip_address": clean_ip,
+            "location": location,
+        }
+
+    if platform_hint == "MOBILE_APP":
+        mobile_os = os_name if os_name in ("iOS", "Android 14", "iPadOS") else "iOS / Android"
+        return {
+            "device_name": "Ứng dụng SECA — Điện thoại Di động",
+            "device_type": "mobile",
+            "os": mobile_os,
+            "browser": "SECA Mobile App",
+            "ip_address": clean_ip,
+            "location": location,
+        }
+
+    if custom_device_name and custom_device_name.strip():
+        return {
+            "device_name": custom_device_name.strip(),
+            "device_type": "mobile",
+            "os": "Mobile OS",
+            "browser": "SECA App",
+            "ip_address": clean_ip,
+            "location": location,
+        }
 
     return {
         "device_name": device_name,
@@ -216,11 +240,12 @@ class CRUDUserTerminal:
         current_ip: Optional[str] = None,
         current_user_agent: Optional[str] = None,
         custom_location: Optional[str] = None,
+        custom_device_name: Optional[str] = None,
     ) -> list[dict]:
         """
         Lấy danh sách thiết bị đầu cuối của người dùng.
         Gắn nhãn is_current cho thiết bị đang thực hiện yêu cầu.
-        Nếu người dùng chưa có thiết bị nào trong DB, tự động khởi tạo thiết bị hiện tại.
+        Tự động đồng bộ thiết bị hiện tại (Web máy tính hoặc App di động) nếu đang mở phiên hoạt động.
         """
         stmt = (
             select(UserTerminal)
@@ -230,9 +255,35 @@ class CRUDUserTerminal:
         res = await db.execute(stmt)
         terminals = list(res.scalars().all())
 
-        parsed_current = parse_device_info(current_user_agent, current_ip or "127.0.0.1", custom_location=custom_location)
+        parsed_current = parse_device_info(
+            current_user_agent,
+            current_ip or "127.0.0.1",
+            custom_device_name=custom_device_name,
+            custom_location=custom_location,
+        )
 
-        if not terminals:
+        # Tìm xem thiết bị hiện tại (theo tên hoặc loại thiết bị mobile/desktop) đã có trong DB chưa
+        matched_terminal = None
+        for t in terminals:
+            if t.device_name == parsed_current["device_name"] or (
+                custom_device_name in ("DOCTOR_WEB", "MOBILE_APP")
+                and t.device_type == parsed_current["device_type"]
+            ):
+                matched_terminal = t
+                break
+
+        if matched_terminal:
+            matched_terminal.device_name = parsed_current["device_name"]
+            matched_terminal.device_type = parsed_current["device_type"]
+            matched_terminal.os = parsed_current["os"]
+            matched_terminal.browser = parsed_current["browser"]
+            matched_terminal.ip_address = parsed_current["ip_address"]
+            if custom_location and custom_location.strip():
+                matched_terminal.location = custom_location.strip()
+            matched_terminal.last_active_at = datetime.now(timezone.utc)
+            await db.commit()
+            await db.refresh(matched_terminal)
+        elif current_ip or current_user_agent or custom_device_name or not terminals:
             new_terminal = UserTerminal(
                 user_id=user.id,
                 device_name=parsed_current["device_name"],
@@ -241,28 +292,26 @@ class CRUDUserTerminal:
                 browser=parsed_current["browser"],
                 ip_address=parsed_current["ip_address"],
                 location=parsed_current["location"],
-                last_active_at=user.last_login_at or datetime.now(timezone.utc),
+                last_active_at=datetime.now(timezone.utc),
                 is_active=True,
             )
             db.add(new_terminal)
-            await db.flush()
+            await db.commit()
             await db.refresh(new_terminal)
-            terminals = [new_terminal]
+            terminals.insert(0, new_terminal)
+            matched_terminal = new_terminal
 
         out_list = []
         has_current = False
         for t in terminals:
             is_cur = False
             if not has_current:
-                if (
-                    t.device_name == parsed_current["device_name"]
-                    or t.ip_address == parsed_current["ip_address"]
-                ):
+                if matched_terminal and t.id == matched_terminal.id:
                     is_cur = True
                     has_current = True
-                    if custom_location and custom_location.strip() and t.location != custom_location.strip():
-                        t.location = custom_location.strip()
-                        t.last_active_at = datetime.now(timezone.utc)
+                elif t.device_name == parsed_current["device_name"]:
+                    is_cur = True
+                    has_current = True
 
             out_list.append({
                 "id": t.id,

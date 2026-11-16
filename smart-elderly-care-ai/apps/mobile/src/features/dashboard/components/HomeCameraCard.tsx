@@ -10,11 +10,12 @@
 //     Bật/Tắt AI phát hiện té ngã, Chế độ đa khung hình 2x2 (MultiView).
 // ==============================================================================
 
-import React from 'react';
+import React, { useEffect, useState } from 'react';
 import { View, StyleSheet, TouchableOpacity, Image } from 'react-native';
 import { Ionicons, MaterialCommunityIcons } from '@expo/vector-icons';
 import { LocalizedText as Text } from '../../../i18n/LocalizedComponents';
 import { Colors, Shadows } from '../../../theme/colors';
+import { cameraApi } from '../../../services/camera';
 
 // Định nghĩa Props điều khiển trạng thái Camera và điều hướng màn hình
 interface HomeCameraCardProps {
@@ -51,6 +52,29 @@ export const HomeCameraCard: React.FC<HomeCameraCardProps> = ({
   handleToggleAIProtect,
 }) => {
   const cleanDisplayName = (cameraDisplayName || camera?.name || 'Camera').replace(/^Camera\s+Camera\s+/i, 'Camera ');
+  const [snapshotUrl, setSnapshotUrl] = useState<string | null>(null);
+
+  useEffect(() => {
+    let isMounted = true;
+    const fetchSnapshot = async () => {
+      try {
+        const url = await cameraApi.media('snapshot.jpg', camera?.id);
+        if (isMounted && url) {
+          setSnapshotUrl(url);
+        }
+      } catch {
+        // Fallback nhẹ nhàng sang ảnh mặc định
+      }
+    };
+    if (camera?.id) {
+      void fetchSnapshot();
+      const interval = setInterval(fetchSnapshot, 30000);
+      return () => {
+        isMounted = false;
+        clearInterval(interval);
+      };
+    }
+  }, [camera?.id]);
 
   const handleOpenDetail = (tab?: 'playback') => {
     navigation.navigate('CameraDetail', {
@@ -66,18 +90,25 @@ export const HomeCameraCard: React.FC<HomeCameraCardProps> = ({
     <View style={[styles.cameraCard, isDarkMode && { backgroundColor: colors.card, borderColor: colors.border }]}>
       {/* Card Video Area (Clickable to open CameraDetail) */}
       <TouchableOpacity
-        activeOpacity={0.95}
+        activeOpacity={0.92}
         onPress={() => handleOpenDetail()}
         style={styles.cameraPreviewBox}
       >
-        {/* Ảnh phòng khách thực tế của người cao tuổi */}
+        {/* Ảnh snapshot thực tế của camera hoặc ảnh mẫu */}
         <Image
           source={{
-            uri: 'https://images.unsplash.com/photo-1586023492125-27b2c045efd7?w=800&q=80',
+            uri: snapshotUrl || 'https://images.unsplash.com/photo-1586023492125-27b2c045efd7?w=800&q=80',
           }}
           style={styles.cameraSnapshot}
           resizeMode="cover"
         />
+
+        {/* Nút Play trung tâm: biểu tượng tròn kính mờ tối giản tinh tế */}
+        {!camera.isSleep && (
+          <View style={styles.centerPlayButton}>
+            <Ionicons name="play" size={26} color="#FFF" style={{ marginLeft: 3 }} />
+          </View>
+        )}
 
         {/* Live Stream Overlay Header: Tên thiết bị thân thiện & Badge WebRTC / Edge Hub */}
         <View style={styles.cameraOverlayTop}>
@@ -203,17 +234,27 @@ export const HomeCameraCard: React.FC<HomeCameraCardProps> = ({
 
         <View style={[styles.toolDivider, isDarkMode && { backgroundColor: colors.border }]} />
 
-        {/* 2. Nút Đàm thoại 2 chiều (Micro ở giữa) */}
+        {/* 2. Nút Đàm thoại 2 chiều: Mở CameraDetail để đàm thoại trực tiếp */}
         <TouchableOpacity
           style={styles.toolBtn}
           onPress={handleMicPress}
           activeOpacity={0.7}
         >
-          <Ionicons
-            name={isMicSpeaking ? 'mic' : 'mic-outline'}
-            size={22}
-            color={isMicSpeaking ? Colors.danger : (isDarkMode ? colors.textPrimary : Colors.textPrimary)}
-          />
+          <View style={styles.toolBtnContent}>
+            <Ionicons
+              name="mic"
+              size={18}
+              color={Colors.primary}
+            />
+            <Text
+              style={[
+                styles.toolBtnText,
+                { color: isDarkMode ? colors.textPrimary : Colors.textPrimary },
+              ]}
+            >
+              Đàm thoại
+            </Text>
+          </View>
         </TouchableOpacity>
 
         <View style={[styles.toolDivider, isDarkMode && { backgroundColor: colors.border }]} />
@@ -532,6 +573,30 @@ const styles = StyleSheet.create({
     gap: 4,
   },
   cameraPrivacyText: {
+    fontSize: 12,
+    fontWeight: '800',
+  },
+  centerPlayButton: {
+    position: 'absolute',
+    alignSelf: 'center',
+    top: '50%',
+    marginTop: -26,
+    width: 52,
+    height: 52,
+    borderRadius: 26,
+    backgroundColor: 'rgba(0, 0, 0, 0.42)',
+    borderWidth: 1.5,
+    borderColor: 'rgba(255, 255, 255, 0.75)',
+    alignItems: 'center',
+    justifyContent: 'center',
+    ...Shadows.md,
+  },
+  toolBtnContent: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 5,
+  },
+  toolBtnText: {
     fontSize: 12,
     fontWeight: '800',
   },

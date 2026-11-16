@@ -46,6 +46,27 @@ class NotificationService {
     this.isInitialized = true;
   }
 
+  startBackgroundMonitor(serverUrl: string): void {
+    if (Platform.OS === 'android' && NativeNotificationModule?.startBackgroundMonitor) {
+      try {
+        NativeNotificationModule.startBackgroundMonitor(serverUrl);
+        console.log('[NotificationService] Đã kích hoạt Android Foreground Service tới server:', serverUrl);
+      } catch (err) {
+        console.warn('[NotificationService] Lỗi kích hoạt Background Service:', err);
+      }
+    }
+  }
+
+  stopBackgroundMonitor(): void {
+    if (Platform.OS === 'android' && NativeNotificationModule?.stopBackgroundMonitor) {
+      try {
+        NativeNotificationModule.stopBackgroundMonitor();
+      } catch (err) {
+        console.warn('[NotificationService] Lỗi dừng Background Service:', err);
+      }
+    }
+  }
+
   async triggerEmergencyNotification(payload: NotificationPayload): Promise<void> {
     const { title, body, data } = payload;
 

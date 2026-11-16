@@ -421,12 +421,19 @@ export default function CameraViewer({
                         : undefined)
                 }
                 onClose={() => setSheet(null)}
-                options={sources.map((source) => ({
-                    value: source.id,
-                    label: source.name,
-                    icon: "videocam-outline",
-                    disabled: slots.includes(source.id),
-                }))}
+                options={sources.map((source) => {
+                    const added = slots.includes(source.id);
+                    return {
+                        value: source.id,
+                        label: source.name,
+                        subtitle: added
+                            ? "Đang hiển thị trong lưới"
+                            : "Nhấn để thêm vào ô trống",
+                        badge: added ? "Đang phát" : undefined,
+                        icon: "videocam-outline",
+                        disabled: added,
+                    };
+                })}
                 onSelect={addSource}
             />
         </>

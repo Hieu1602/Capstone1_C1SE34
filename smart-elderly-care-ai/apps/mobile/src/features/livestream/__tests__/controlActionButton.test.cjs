@@ -55,8 +55,8 @@ test("active controls have a non-color cue and preserve custom recording colors 
             assert.equal(button.props.accessibilityState.selected, active);
             assert.equal(surface.props.importantForAccessibility, "no-hide-descendants");
             const [icon, indicator] = surface.props.children;
-            assert.equal(surface.props.style[1].borderColor, active ? "#F15B67" : "transparent");
-            assert.equal(surface.props.style[1].backgroundColor, active ? (dark ? "#1E293B" : "#FFFFFF") : (dark ? "#162032" : "#F1F5F9"));
+            assert.equal(surface.props.style[2].borderColor, active ? "#F15B67" : (dark ? "transparent" : "#E2E8F0"));
+            assert.equal(surface.props.style[2].backgroundColor, active ? (dark ? "#1E293B" : "#FFFFFF") : (dark ? "#162032" : "#FFFFFF"));
             assert.equal(icon.props.color, active ? "#F15B67" : (dark ? "#F8FAFC" : "#0F172A"));
             assert.equal(Boolean(indicator), active);
         }
@@ -71,7 +71,7 @@ test("grid labels can wrap and default active colors adapt to the theme", () => 
         assert.equal(label.props.children, "Talk");
         assert.equal(label.props.numberOfLines, undefined);
         assert.equal(surface.props.children[0].props.color, dark ? "#FFAD66" : "#B54708");
-        assert.equal(surface.props.style[1].backgroundColor, dark ? "rgba(255, 122, 0, 0.15)" : "#FFF7ED");
+        assert.equal(surface.props.style[2].backgroundColor, dark ? "rgba(255, 122, 0, 0.15)" : "#FFF7ED");
     }
 });
 

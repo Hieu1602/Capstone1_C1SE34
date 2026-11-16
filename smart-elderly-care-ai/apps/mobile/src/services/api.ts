@@ -6,6 +6,7 @@ import { Platform } from 'react-native';
 import Constants from 'expo-constants';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { useAuthStore } from '../store/useAuthStore';
+import { notificationService } from './notificationService';
 
 // Cấu hình BASE_URL tự động:
 // - Nếu chạy trên Web: dùng 127.0.0.1 nếu là localhost để tránh xung đột IPv6 [::1] và lỗi IP LAN đổi
@@ -22,13 +23,7 @@ const getBaseUrl = (): string => {
     return `${protocol}://${resolvedHost}:8000/api/v1`;
   }
 
-  // 2. Ưu tiên biến môi trường EXPO_PUBLIC_API_URL (ví dụ AWS EC2) nếu được cấu hình
-  const envUrl = process.env.EXPO_PUBLIC_API_URL;
-  if (envUrl && envUrl.trim().length > 0) {
-    return envUrl.trim();
-  }
-
-  // 3. Tự động nhận diện IP máy tính từ Expo Metro host (kết nối trực tiếp điện thoại thật qua LAN Wi-Fi)
+  // 2. Tự động nhận diện IP máy tính từ Expo Metro host (kết nối trực tiếp điện thoại thật qua LAN Wi-Fi mà không sợ đổi IP)
   const debuggerHost =
     Constants.expoConfig?.hostUri ||
     (Constants as any).manifest2?.extra?.expoClient?.hostUri ||
@@ -39,6 +34,12 @@ const getBaseUrl = (): string => {
     if (hostIp && !hostIp.includes('exp.direct') && hostIp !== 'localhost' && hostIp !== '127.0.0.1') {
       return `http://${hostIp}:8000/api/v1`;
     }
+  }
+
+  // 3. Biến môi trường EXPO_PUBLIC_API_URL (ví dụ build APK production hoặc cấu hình tĩnh)
+  const envUrl = process.env.EXPO_PUBLIC_API_URL;
+  if (envUrl && envUrl.trim().length > 0) {
+    return envUrl.trim();
   }
 
   // 4. Fallback về máy chủ AWS EC2
@@ -57,6 +58,7 @@ export const setCustomServerUrl = async (url: string) => {
   }
   api.defaults.baseURL = formatted;
   await AsyncStorage.setItem('custom_server_url', formatted);
+  notificationService.startBackgroundMonitor(formatted);
   return formatted;
 };
 
@@ -94,6 +96,7 @@ api.interceptors.request.use(
     if (token) {
       config.headers.Authorization = `Bearer ${token}`;
     }
+    config.headers['x-client-platform'] = 'MOBILE_APP';
     try {
       const language = await AsyncStorage.getItem('smartcare-user-language');
       if (language === 'en' || language === 'vi') {
@@ -191,12 +194,22 @@ export const authApi = {
     otp_code: string;
     new_password: string;
   }) => api.post('/auth/password/reset', data),
+  verifyLogin2fa: (twoFactorToken: string, otpCode: string, phone?: string) =>
+    api.post('/auth/login/verify-2fa', {
+      two_factor_token: twoFactorToken,
+      otp_code: otpCode,
+      phone,
+    }),
+  resendLogin2fa: (twoFactorToken: string) =>
+    api.post('/auth/login/resend-2fa', { two_factor_token: twoFactorToken }),
 };
 
 // 0. Users API
 export const usersApi = {
   getMe: () => api.get('/users/me'),
   updateMe: (data: any) => api.patch('/users/me', data),
+  updateTwoFactor: (enabled: boolean) =>
+    api.patch('/users/me/two-factor', { enabled }),
   updateLanguage: (language: 'vi' | 'en') =>
     api.patch('/users/me/language', { preferred_language: language, language }),
   updateFontPreferences: (fontSizeMode: 'system' | 'custom', customFontScale: number) =>
@@ -282,6 +295,8 @@ export const vitalsApi = {
     bp_diastolic?: number;
     skin_temp_max?: number;
     fall_detected?: boolean;
+    bracelet_battery?: number;
+    battery_level?: number;
     raw_payload?: Record<string, any>;
   }) => api.post('/vitals', data),
 };
@@ -303,7 +318,7 @@ export const patientApi = {
   updateMedicalRecord: (patientId: number | string = 1, data: any) =>
     api.put(`/patients/${patientId}/medical-record`, data),
   getVitals: (patientId: number | string = 1, target_date?: string) =>
-    api.get(`/patients/${patientId}/vitals`, { params: { target_date } }),
+    api.get(`/patients/${patientId}/vitals`, { params: { target_date, limit: 300 } }),
   enrollFace: (patientId: number, formData: FormData) =>
     api.post(`/patients/${patientId}/face-enroll`, formData, {
       headers: { 'Content-Type': 'multipart/form-data' },
@@ -312,6 +327,8 @@ export const patientApi = {
     api.get(`/patients/${patientId}/appointments`, { params: status ? { status } : undefined }),
   confirmAppointment: (patientId: number | string, appointmentId: string) =>
     api.post(`/patients/${patientId}/appointments/${appointmentId}/confirm`),
+  requestAppointment: (patientId: number | string = 1, data: any) =>
+    api.post(`/patients/${patientId}/appointments`, data),
 };
 
 // 5. Notifications & Incidents API
@@ -527,12 +544,16 @@ export const reportsApi = {
     let url = `${BASE_URL}/reports/pdf?period=${period}`;
     if (patientId) url += `&patient_id=${encodeURIComponent(patientId)}`;
     if (deviceId) url += `&device_id=${encodeURIComponent(deviceId)}`;
+    const token = useAuthStore.getState().accessToken;
+    if (token) url += `&token=${encodeURIComponent(token)}`;
     return url;
   },
   getExcelUrl: (period: 'WEEK' | 'MONTH' = 'WEEK', patientId?: string, deviceId?: string) => {
     let url = `${BASE_URL}/reports/excel?period=${period}`;
     if (patientId) url += `&patient_id=${encodeURIComponent(patientId)}`;
     if (deviceId) url += `&device_id=${encodeURIComponent(deviceId)}`;
+    const token = useAuthStore.getState().accessToken;
+    if (token) url += `&token=${encodeURIComponent(token)}`;
     return url;
   },
 };

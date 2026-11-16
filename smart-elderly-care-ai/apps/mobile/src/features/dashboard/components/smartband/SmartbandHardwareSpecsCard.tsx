@@ -33,36 +33,36 @@ export const SmartbandHardwareSpecsCard: React.FC<SmartbandHardwareSpecsCardProp
         </LocalizedText>
 
         <View style={[styles.specTableRow, isDarkMode && { borderBottomColor: colors.border }]}>
-          <LocalizedText style={[styles.specTableKey, isDarkMode && { color: colors.textSecondary }]}>Chip vi điều khiển</LocalizedText>
-          <LocalizedText style={[styles.specTableVal, isDarkMode && { color: colors.textPrimary }]}>Nordic nRF52840</LocalizedText>
+          <LocalizedText style={[styles.specTableKey, isDarkMode && { color: colors.textSecondary }]}>Thiết bị đo sinh hiệu</LocalizedText>
+          <LocalizedText style={[styles.specTableVal, isDarkMode && { color: colors.textPrimary }]}>CooSpo HW706 (Armband)</LocalizedText>
         </View>
         <View style={[styles.specTableRow, isDarkMode && { borderBottomColor: colors.border }]}>
-          <LocalizedText style={[styles.specTableKey, isDarkMode && { color: colors.textSecondary }]}>Cảm biến sinh trắc PPG</LocalizedText>
-          <LocalizedText style={[styles.specTableVal, isDarkMode && { color: colors.textPrimary }]}>Maxim MAX30102</LocalizedText>
+          <LocalizedText style={[styles.specTableKey, isDarkMode && { color: colors.textSecondary }]}>Cảm biến quang học PPG</LocalizedText>
+          <LocalizedText style={[styles.specTableVal, isDarkMode && { color: colors.textPrimary }]}>Optical Heart Rate Sensor (1Hz)</LocalizedText>
         </View>
         <View style={[styles.specTableRow, isDarkMode && { borderBottomColor: colors.border }]}>
-          <LocalizedText style={[styles.specTableKey, isDarkMode && { color: colors.textSecondary }]}>Cảm biến chuyển động IMU</LocalizedText>
-          <LocalizedText style={[styles.specTableVal, isDarkMode && { color: colors.textPrimary }]}>MPU6050 6-DoF</LocalizedText>
+          <LocalizedText style={[styles.specTableKey, isDarkMode && { color: colors.textSecondary }]}>Chỉ số sinh tồn hỗ trợ</LocalizedText>
+          <LocalizedText style={[styles.specTableVal, isDarkMode && { color: colors.textPrimary }]}>Nhịp tim (BPM) &amp; HRV (RR-Intervals)</LocalizedText>
         </View>
         <View style={[styles.specTableRow, isDarkMode && { borderBottomColor: colors.border }]}>
-          <LocalizedText style={[styles.specTableKey, isDarkMode && { color: colors.textSecondary }]}>Cảm biến nhiệt độ bề mặt</LocalizedText>
-          <LocalizedText style={[styles.specTableVal, isDarkMode && { color: colors.textPrimary }]}>NTC Skin Contact Thermistor</LocalizedText>
+          <LocalizedText style={[styles.specTableKey, isDarkMode && { color: colors.textSecondary }]}>Cảm biến tiếp xúc da</LocalizedText>
+          <LocalizedText style={[styles.specTableVal, isDarkMode && { color: colors.textPrimary }]}>Sensor Contact (Phát hiện tháo vòng)</LocalizedText>
         </View>
         <View style={[styles.specTableRow, isDarkMode && { borderBottomColor: colors.border }]}>
           <LocalizedText style={[styles.specTableKey, isDarkMode && { color: colors.textSecondary }]}>Giao thức kết nối không dây</LocalizedText>
-          <LocalizedText style={[styles.specTableVal, isDarkMode && { color: colors.textPrimary }]}>Bluetooth Low Energy 5.0</LocalizedText>
+          <LocalizedText style={[styles.specTableVal, isDarkMode && { color: colors.textPrimary }]}>BLE 5.0 (GATT 0x180D) &amp; ANT+</LocalizedText>
         </View>
         <View style={[styles.specTableRow, isDarkMode && { borderBottomColor: colors.border }]}>
           <LocalizedText style={[styles.specTableKey, isDarkMode && { color: colors.textSecondary }]}>Dung lượng Pin &amp; Nguồn sạc</LocalizedText>
-          <LocalizedText style={[styles.specTableVal, isDarkMode && { color: colors.textPrimary }]}>Li-Po 110mAh • Sạc từ tính 5V/1A</LocalizedText>
+          <LocalizedText style={[styles.specTableVal, isDarkMode && { color: colors.textPrimary }]}>Pin sạc Li-Po 90mAh (25h đo liên tục)</LocalizedText>
         </View>
         <View style={[styles.specTableRow, isDarkMode && { borderBottomColor: colors.border }]}>
           <LocalizedText style={[styles.specTableKey, isDarkMode && { color: colors.textSecondary }]}>Chuẩn kháng nước &amp; bụi</LocalizedText>
           <LocalizedText style={[styles.specTableVal, isDarkMode && { color: colors.textPrimary }]}>IP67</LocalizedText>
         </View>
         <View style={[styles.specTableRow, { borderBottomWidth: 0 }]}>
-          <LocalizedText style={[styles.specTableKey, isDarkMode && { color: colors.textSecondary }]}>Phiên bản Firmware OTA</LocalizedText>
-          <LocalizedText style={[styles.specTableVal, isDarkMode && { color: colors.textPrimary }]}>v2.4.1-seca</LocalizedText>
+          <LocalizedText style={[styles.specTableKey, isDarkMode && { color: colors.textSecondary }]}>Mã MAC Bluetooth</LocalizedText>
+          <LocalizedText style={[styles.specTableVal, isDarkMode && { color: colors.textPrimary }]}>C8:DE:BD:8F:78:3C</LocalizedText>
         </View>
       </View>
 

@@ -74,8 +74,8 @@ thresholds:
 # ---- BLE Smart Band ----
 ble:
   enabled: true
-  device_name: "SmartBand_001"
-  device_mac: "AA:BB:CC:DD:EE:FF"
+  device_name: "HW706-0011099"
+  device_mac: "C8:DE:BD:8F:78:3C"
   service_uuid: "0000180d-0000-1000-8000-00805f9b34fb"   # Heart Rate Service
   characteristic_uuid: "00002a37-0000-1000-8000-00805f9b34fb"
   reconnect_interval_sec: 10

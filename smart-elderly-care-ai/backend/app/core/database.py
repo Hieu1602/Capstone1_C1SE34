@@ -53,20 +53,24 @@ _is_supabase_pooler = (
     or _parsed_db_url.port == 6543
 )
 
-_connect_args = {}
+_connect_args: dict = {
+    "timeout": 10,
+    "command_timeout": 15,
+}
 if _is_supabase_pooler:
-    _connect_args = {
+    _connect_args.update({
         "statement_cache_size": 0,
         "prepared_statement_cache_size": 0,
-    }
+    })
 
 engine = create_async_engine(
     _parsed_db_url,
     echo=settings.DEBUG,
     connect_args=_connect_args,
-    pool_size=20,
-    max_overflow=20,
-    pool_recycle=300,
+    pool_size=10,
+    max_overflow=15,
+    pool_timeout=10,
+    pool_recycle=120,
     pool_pre_ping=True,
 )
 
@@ -100,6 +104,7 @@ async def init_db() -> None:
             await conn.execute(text("ALTER TABLE users ADD COLUMN IF NOT EXISTS notifications_enabled BOOLEAN DEFAULT TRUE;"))
             await conn.execute(text("ALTER TABLE users ADD COLUMN IF NOT EXISTS alert_sound_enabled BOOLEAN DEFAULT TRUE;"))
             await conn.execute(text("ALTER TABLE users ADD COLUMN IF NOT EXISTS critical_alert_enabled BOOLEAN DEFAULT TRUE;"))
+            await conn.execute(text("ALTER TABLE users ADD COLUMN IF NOT EXISTS two_factor_enabled BOOLEAN DEFAULT FALSE;"))
             await conn.execute(text("ALTER TABLE users ADD COLUMN IF NOT EXISTS avatar_url TEXT;"))
             await conn.execute(text("ALTER TABLE users ADD COLUMN IF NOT EXISTS cchn_number VARCHAR(50);"))
             await conn.execute(text("ALTER TABLE users ADD COLUMN IF NOT EXISTS specialty VARCHAR(255);"))

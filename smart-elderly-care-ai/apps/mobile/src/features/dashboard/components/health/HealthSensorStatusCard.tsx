@@ -17,6 +17,9 @@ export const HealthSensorStatusCard: React.FC<HealthSensorStatusCardProps> = ({
   isDarkMode = false,
   colors = {},
 }) => {
+  const isDead = batteryDisplay === '0%' || batteryDisplay === '0';
+  const isLow = !isDead && parseInt(batteryDisplay, 10) <= 20;
+
   return (
     <View
       style={[
@@ -29,20 +32,37 @@ export const HealthSensorStatusCard: React.FC<HealthSensorStatusCardProps> = ({
       </Text>
 
       <View style={styles.statusRowItem}>
-        <View style={[styles.statusIconBox, isDarkMode && { backgroundColor: 'rgba(255, 122, 0, 0.15)' }]}>
-          <Ionicons name="watch-outline" size={20} color={Colors.primary} />
+        <View
+          style={[
+            styles.statusIconBox,
+            isDead
+              ? { backgroundColor: '#FEE2E2' }
+              : isLow
+                ? { backgroundColor: '#FEF3C7' }
+                : isDarkMode
+                  ? { backgroundColor: 'rgba(255, 122, 0, 0.15)' }
+                  : undefined,
+          ]}
+        >
+          <Ionicons
+            name={isDead ? 'battery-dead' : isLow ? 'battery-half' : 'watch-outline'}
+            size={20}
+            color={isDead ? '#DC2626' : isLow ? '#D97706' : Colors.primary}
+          />
         </View>
         <View style={{ flex: 1 }}>
           <Text style={[styles.statusItemTitle, isDarkMode && { color: colors.textPrimary }]}>
             Vòng tay thông minh BLE
           </Text>
           <Text style={[styles.statusItemSub, isDarkMode && { color: colors.textSecondary }]}>
-            Pin: {batteryDisplay} • Kết nối liên tục
+            Pin: {batteryDisplay} • {isDead ? 'Cạn pin ngắt kết nối' : isLow ? 'Sắp hết pin' : 'Kết nối liên tục'}
           </Text>
         </View>
-        <View style={styles.onlineBadge}>
-          <View style={styles.onlineDot} />
-          <Text style={styles.onlineText}>Đang đo</Text>
+        <View style={isDead ? styles.deadBadge : isLow ? styles.lowBadge : styles.onlineBadge}>
+          <View style={isDead ? styles.deadDot : isLow ? styles.lowDot : styles.onlineDot} />
+          <Text style={isDead ? styles.deadText : isLow ? styles.lowText : styles.onlineText}>
+            {isDead ? 'Hết pin' : isLow ? 'Pin yếu' : 'Đang đo'}
+          </Text>
         </View>
       </View>
 
@@ -148,6 +168,46 @@ const styles = StyleSheet.create({
   safeText: {
     fontSize: 11,
     color: '#15803D',
+    fontWeight: '700',
+  },
+  deadBadge: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: '#FEE2E2',
+    paddingHorizontal: 8,
+    paddingVertical: 4,
+    borderRadius: 8,
+  },
+  deadDot: {
+    width: 6,
+    height: 6,
+    borderRadius: 3,
+    backgroundColor: '#DC2626',
+    marginRight: 4,
+  },
+  deadText: {
+    fontSize: 11,
+    color: '#DC2626',
+    fontWeight: '700',
+  },
+  lowBadge: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: '#FEF3C7',
+    paddingHorizontal: 8,
+    paddingVertical: 4,
+    borderRadius: 8,
+  },
+  lowDot: {
+    width: 6,
+    height: 6,
+    borderRadius: 3,
+    backgroundColor: '#D97706',
+    marginRight: 4,
+  },
+  lowText: {
+    fontSize: 11,
+    color: '#D97706',
     fontWeight: '700',
   },
 });

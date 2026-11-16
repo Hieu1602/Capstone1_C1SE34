@@ -1,7 +1,7 @@
 import logging
 import re
 from datetime import datetime, timezone, timedelta
-from typing import Optional
+from typing import Optional, Any
 from uuid import UUID
 
 from fastapi import APIRouter, Depends, HTTPException, Query, Request, status, BackgroundTasks
@@ -470,6 +470,7 @@ async def _record_login_background(
     client_location: Optional[str],
     user_name: str,
     user_role: str,
+    client_platform: Optional[str] = None,
 ):
     """Ghi nhận terminal, last_login_at và audit log chạy ngầm, không làm nghẽn quá trình đăng nhập."""
     async with AsyncSessionFactory() as session:
@@ -479,6 +480,7 @@ async def _record_login_background(
                 user_id=user_id,
                 ip_address=client_ip,
                 user_agent=user_agent,
+                custom_device_name=client_platform,
                 custom_location=client_location,
             )
             await session.execute(
@@ -502,6 +504,166 @@ async def _record_login_background(
             await session.rollback()
 
 
+class Login2FAVerifyRequest(BaseModel):
+    two_factor_token: str
+    otp_code: str
+    phone: Optional[str] = None
+
+
+class Login2FAResendRequest(BaseModel):
+    two_factor_token: str
+
+
+async def _fetch_user_and_house_row(
+    db: AsyncSession,
+    user_id: Optional[UUID] = None,
+    phone_variants: Optional[list[str]] = None,
+    is_admin_alias: bool = False,
+):
+    from app.models.house import House, HouseMember
+    from app.models.device import Device
+    from sqlalchemy import func, and_, or_, select, cast, String
+
+    where_clause = (
+        (User.id == user_id)
+        if user_id is not None
+        else or_(
+            User.phone.in_(phone_variants or []),
+            (User.phone == "Admin123") if is_admin_alias else False,
+            (User.role == "admin") if is_admin_alias else False,
+        )
+    )
+
+    stmt = (
+        select(
+            User,
+            House.id.label("house_id"),
+            House.name.label("house_name"),
+            House.owner_id.label("house_owner_id"),
+            HouseMember.role_in_house.label("m_role"),
+            HouseMember.can_view_health.label("m_health"),
+            HouseMember.can_view_camera.label("m_cam"),
+            HouseMember.can_handle_emergency.label("m_sos"),
+            HouseMember.can_manage_devices.label("m_dev"),
+            HouseMember.can_manage_records.label("m_rec"),
+            select(func.count(Device.id)).where(Device.house_id == House.id).scalar_subquery().label("dev_count"),
+            select(cast(Device.id, String)).where(and_(Device.house_id == House.id, Device.device_type == "CAMERA")).limit(1).scalar_subquery().label("cam_id"),
+            select(Device.name).where(and_(Device.house_id == House.id, Device.device_type == "CAMERA")).limit(1).scalar_subquery().label("cam_name"),
+        )
+        .outerjoin(
+            HouseMember,
+            and_(
+                HouseMember.user_id == User.id,
+                HouseMember.status == "ACTIVE",
+            ),
+        )
+        .outerjoin(
+            House,
+            or_(
+                House.id == HouseMember.house_id,
+                House.owner_id == User.id,
+            ),
+        )
+        .where(where_clause)
+        .order_by((House.owner_id == User.id).desc().nullslast())
+        .limit(1)
+    )
+    res = await db.execute(stmt)
+    return res.first()
+
+
+def _build_login_success_token(
+    user: User,
+    row: Any,
+    request: Request,
+    background_tasks: BackgroundTasks,
+) -> Token:
+    client_ip = request.client.host if request.client else "127.0.0.1"
+    user_agent = request.headers.get("user-agent", "")
+    user_id = user.id
+    user_name = user.full_name or user.phone
+    user_role = user.role or "user"
+
+    # Lấy vị trí client
+    client_location = request.headers.get("x-client-location")
+    if client_location:
+        try:
+            from urllib.parse import unquote
+            client_location = unquote(client_location).strip()
+        except Exception:
+            pass
+
+    # Ghi nhận terminal, last_login_at và audit log chạy ngầm (Non-blocking)
+    client_platform = request.headers.get("x-client-platform")
+    background_tasks.add_task(
+        _record_login_background,
+        user_id=user.id,
+        client_ip=client_ip,
+        user_agent=user_agent,
+        client_location=client_location,
+        user_name=user_name,
+        user_role=user_role,
+        client_platform=client_platform,
+    )
+
+    # Xây dựng UserOut kèm quyền hạn trực tiếp trong response để Frontend nhận diện ngay tức thì
+    user_out = UserOut.model_validate(user)
+    h_id = row.house_id
+    h_name = row.house_name
+    h_owner_id = row.house_owner_id
+    m_role = row.m_role
+    m_health = row.m_health
+    m_cam = row.m_cam
+    m_sos = row.m_sos
+    m_dev = row.m_dev
+    m_rec = row.m_rec
+    dev_count = int(row.dev_count or 0)
+
+    if h_id:
+        is_owner = (h_owner_id == user.id) or (user.role in ("admin", "owner"))
+        role_in_house = "OWNER" if is_owner else (m_role or "MEMBER")
+        can_cam = is_owner or (bool(m_cam) if m_cam is not None else True)
+        user_out.has_house = True
+        user_out.household_id = h_id
+        user_out.assigned_house = h_name
+        user_out.is_owner = is_owner
+        user_out.role_in_house = role_in_house
+        user_out.can_view_health = is_owner or (bool(m_health) if m_health is not None else True)
+        user_out.can_view_camera = can_cam
+        user_out.can_handle_emergency = is_owner or (bool(m_sos) if m_sos is not None else True)
+        user_out.can_manage_devices = is_owner or bool(m_dev)
+        user_out.can_manage_records = is_owner or bool(m_rec)
+        user_out.device_count = dev_count
+        user_out.has_devices = dev_count > 0
+        user_out.role_title = "Chủ hộ" if is_owner else ("Bác sĩ" if user.role == "doctor" else "Thành viên")
+        if can_cam and row.cam_id:
+            user_out.default_camera_id = str(row.cam_id)
+            user_out.default_camera_name = str(row.cam_name or "Camera AI")
+    else:
+        user_out.has_house = False
+        user_out.household_id = None
+        user_out.assigned_house = None
+        user_out.is_owner = False
+        user_out.role_in_house = "NEW_USER"
+        user_out.can_view_health = False
+        user_out.can_view_camera = False
+        user_out.can_handle_emergency = False
+        user_out.can_manage_devices = True
+        user_out.can_manage_records = False
+        user_out.device_count = 0
+        user_out.has_devices = False
+        user_out.role_title = "Tài khoản mới"
+
+    user_token_version = getattr(user, "token_version", 1)
+    return Token(
+        access_token=create_access_token(subject=user_id, token_version=user_token_version),
+        refresh_token=create_refresh_token(subject=user_id, token_version=user_token_version),
+        token_type="bearer",
+        user=user_out,
+        requires_2fa=False,
+    )
+
+
 @router.post("/login", response_model=Token)
 async def login(
     request: Request,
@@ -513,9 +675,8 @@ async def login(
     Đăng nhập hệ thống bằng Số điện thoại + Mật khẩu.
     Tối ưu siêu tốc độ (1 SQL Query duy nhất): Lấy User + Căn nhà + Vai trò + Toàn bộ quyền hạn + Số lượng thiết bị
     trong 1 network roundtrip duy nhất. Xác định ngay là Chủ hộ, Thành viên hay Tài khoản mới.
+    Hỗ trợ luồng Xác minh 2 bước (2FA): Yêu cầu OTP khi tài khoản đã bật tính năng này.
     """
-    client_ip = request.client.host if request.client else "127.0.0.1"
-    user_agent = request.headers.get("user-agent", "")
     clean_phone = (form_data.username or "").strip()
     normalized = normalize_phone(clean_phone)
     phone_variants = [clean_phone, normalized]
@@ -528,54 +689,7 @@ async def login(
     is_admin_alias = clean_phone.lower() in ("admin123", "admin", "root")
 
     try:
-        from app.models.house import House, HouseMember
-        from app.models.device import Device
-        from sqlalchemy import func, and_, or_, select, cast, String
-
-        # 1 TRUY VẤN DUY NHẤT LẤY TẤT CẢ (Zero duplicate roundtrips)
-        stmt = (
-            select(
-                User,
-                House.id.label("house_id"),
-                House.name.label("house_name"),
-                House.owner_id.label("house_owner_id"),
-                HouseMember.role_in_house.label("m_role"),
-                HouseMember.can_view_health.label("m_health"),
-                HouseMember.can_view_camera.label("m_cam"),
-                HouseMember.can_handle_emergency.label("m_sos"),
-                HouseMember.can_manage_devices.label("m_dev"),
-                HouseMember.can_manage_records.label("m_rec"),
-                select(func.count(Device.id)).where(Device.house_id == House.id).scalar_subquery().label("dev_count"),
-                select(cast(Device.id, String)).where(and_(Device.house_id == House.id, Device.device_type == "CAMERA")).limit(1).scalar_subquery().label("cam_id"),
-                select(Device.name).where(and_(Device.house_id == House.id, Device.device_type == "CAMERA")).limit(1).scalar_subquery().label("cam_name"),
-            )
-            .outerjoin(
-                HouseMember,
-                and_(
-                    HouseMember.user_id == User.id,
-                    HouseMember.status == "ACTIVE",
-                ),
-            )
-            .outerjoin(
-                House,
-                or_(
-                    House.id == HouseMember.house_id,
-                    House.owner_id == User.id,
-                ),
-            )
-            .where(
-                or_(
-                    User.phone.in_(phone_variants),
-                    (User.phone == "Admin123") if is_admin_alias else False,
-                    (User.role == "admin") if is_admin_alias else False,
-                )
-            )
-            .order_by((House.owner_id == User.id).desc().nullslast())
-            .limit(1)
-        )
-        res = await db.execute(stmt)
-        row = res.first()
-
+        row = await _fetch_user_and_house_row(db, phone_variants=phone_variants, is_admin_alias=is_admin_alias)
         if not row:
             raise HTTPException(
                 status_code=status.HTTP_404_NOT_FOUND,
@@ -637,85 +751,35 @@ async def login(
                 detail="Mật khẩu không chính xác. Vui lòng kiểm tra lại.",
             )
 
-        user_id = user.id
-        user_name = user.full_name or user.phone
-        user_role = user.role or "user"
-
-        # Lấy vị trí client
-        client_location = request.headers.get("x-client-location")
-        if client_location:
+        # KIỂM TRA LUỒNG XÁC MINH 2 BƯỚC (2FA QUA SMS OTP)
+        if getattr(user, "two_factor_enabled", False):
+            # Gửi mã OTP xác thực đăng nhập qua SMS
             try:
-                from urllib.parse import unquote
-                client_location = unquote(client_location).strip()
-            except Exception:
-                pass
+                await run_in_threadpool(send_otp, user.phone, "login_2fa")
+            except Exception as otp_err:
+                logger.warning("[login 2FA] Không thể gửi OTP SMS: %s", otp_err)
 
-        # Ghi nhận terminal, last_login_at và audit log chạy ngầm (Non-blocking)
-        background_tasks.add_task(
-            _record_login_background,
-            user_id=user.id,
-            client_ip=client_ip,
-            user_agent=user_agent,
-            client_location=client_location,
-            user_name=user_name,
-            user_role=user_role,
-        )
+            pre_auth_token = jwt.encode(
+                {
+                    "sub": str(user.id),
+                    "phone": user.phone,
+                    "type": "2fa_pre_auth",
+                    "exp": datetime.now(timezone.utc) + timedelta(minutes=5),
+                },
+                settings.SECRET_KEY,
+                algorithm="HS256",
+            )
+            return Token(
+                access_token="",
+                refresh_token="",
+                token_type="bearer",
+                requires_2fa=True,
+                two_factor_token=pre_auth_token,
+                user=None,
+            )
 
-        # Xây dựng UserOut kèm quyền hạn trực tiếp trong response để Frontend nhận diện ngay tức thì
-        user_out = UserOut.model_validate(user)
-        h_id = row.house_id
-        h_name = row.house_name
-        h_owner_id = row.house_owner_id
-        m_role = row.m_role
-        m_health = row.m_health
-        m_cam = row.m_cam
-        m_sos = row.m_sos
-        m_dev = row.m_dev
-        m_rec = row.m_rec
-        dev_count = int(row.dev_count or 0)
+        return _build_login_success_token(user, row, request, background_tasks)
 
-        if h_id:
-            is_owner = (h_owner_id == user.id) or (user.role in ("admin", "owner"))
-            role_in_house = "OWNER" if is_owner else (m_role or "MEMBER")
-            can_cam = is_owner or (bool(m_cam) if m_cam is not None else True)
-            user_out.has_house = True
-            user_out.household_id = h_id
-            user_out.assigned_house = h_name
-            user_out.is_owner = is_owner
-            user_out.role_in_house = role_in_house
-            user_out.can_view_health = is_owner or (bool(m_health) if m_health is not None else True)
-            user_out.can_view_camera = can_cam
-            user_out.can_handle_emergency = is_owner or (bool(m_sos) if m_sos is not None else True)
-            user_out.can_manage_devices = is_owner or bool(m_dev)
-            user_out.can_manage_records = is_owner or bool(m_rec)
-            user_out.device_count = dev_count
-            user_out.has_devices = dev_count > 0
-            user_out.role_title = "Chủ hộ" if is_owner else ("Bác sĩ" if user.role == "doctor" else "Thành viên")
-            if can_cam and row.cam_id:
-                user_out.default_camera_id = str(row.cam_id)
-                user_out.default_camera_name = str(row.cam_name or "Camera AI")
-        else:
-            user_out.has_house = False
-            user_out.household_id = None
-            user_out.assigned_house = None
-            user_out.is_owner = False
-            user_out.role_in_house = "NEW_USER"
-            user_out.can_view_health = False
-            user_out.can_view_camera = False
-            user_out.can_handle_emergency = False
-            user_out.can_manage_devices = True  # Tài khoản mới được phép thêm thiết bị
-            user_out.can_manage_records = False
-            user_out.device_count = 0
-            user_out.has_devices = False
-            user_out.role_title = "Tài khoản mới"
-
-        user_token_version = getattr(user, "token_version", 1)
-        return Token(
-            access_token=create_access_token(subject=user_id, token_version=user_token_version),
-            refresh_token=create_refresh_token(subject=user_id, token_version=user_token_version),
-            token_type="bearer",
-            user=user_out,
-        )
     except HTTPException:
         raise
     except Exception as exc:
@@ -724,6 +788,103 @@ async def login(
             status_code=500,
             detail=f"Lỗi hệ thống khi đăng nhập: {str(exc)}"
         )
+
+
+@router.post("/login/verify-2fa", response_model=Token)
+async def verify_login_2fa(
+    request: Request,
+    payload: Login2FAVerifyRequest,
+    background_tasks: BackgroundTasks,
+    db: AsyncSession = Depends(get_db),
+):
+    """
+    Bước 2 Đăng nhập: Xác thực mã OTP 2FA để hoàn tất đăng nhập sau khi nhập đúng mật khẩu.
+    """
+    try:
+        decoded = jwt.decode(
+            payload.two_factor_token,
+            settings.SECRET_KEY,
+            algorithms=["HS256"],
+        )
+        if decoded.get("type") != "2fa_pre_auth":
+            raise HTTPException(status_code=400, detail="Mã phiên xác thực 2 bước không hợp lệ.")
+        uid_str = decoded.get("sub")
+        phone_in_token = decoded.get("phone")
+        if not uid_str or not phone_in_token:
+            raise HTTPException(status_code=400, detail="Phiên xác thực thiếu thông tin tài khoản.")
+        user_id = UUID(uid_str)
+    except (JWTError, ValueError):
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="Phiên xác thực 2 bước đã hết hạn. Vui lòng đăng nhập lại.",
+        )
+
+    # Xác thực mã OTP qua otp_service (hỗ trợ Redis / cache / DEV codes)
+    try:
+        valid = await run_in_threadpool(verify_otp, phone_in_token, payload.otp_code)
+    except Exception as exc:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail=f"Lỗi xác thực mã OTP: {str(exc)}",
+        ) from exc
+
+    if not valid:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="Mã OTP không chính xác hoặc đã hết hạn. Vui lòng thử lại.",
+        )
+
+    row = await _fetch_user_and_house_row(db, user_id=user_id)
+    if not row:
+        raise HTTPException(status_code=404, detail="Không tìm thấy tài khoản người dùng.")
+
+    user: User = row[0]
+    if not user.is_active:
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail=f"Tài khoản đã bị khóa. Lý do: {user.lock_reason or 'Vi phạm chính sách'}.",
+        )
+
+    return _build_login_success_token(user, row, request, background_tasks)
+
+
+@router.post("/login/resend-2fa")
+async def resend_login_2fa_otp(
+    payload: Login2FAResendRequest,
+):
+    """Gửi lại mã OTP xác thực 2FA khi đăng nhập."""
+    try:
+        decoded = jwt.decode(
+            payload.two_factor_token,
+            settings.SECRET_KEY,
+            algorithms=["HS256"],
+        )
+        if decoded.get("type") != "2fa_pre_auth":
+            raise HTTPException(status_code=400, detail="Mã phiên không hợp lệ.")
+        phone = decoded.get("phone")
+        if not phone:
+            raise HTTPException(status_code=400, detail="Mã phiên không hợp lệ.")
+    except (JWTError, ValueError):
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="Phiên xác thực đã hết hạn. Vui lòng đăng nhập lại.",
+        )
+
+    try:
+        await run_in_threadpool(send_otp, phone, "login_2fa")
+    except Exception as exc:
+        error_msg = str(exc)
+        if "chờ" in error_msg.lower() or "rate" in error_msg.lower():
+            raise HTTPException(
+                status_code=status.HTTP_429_TOO_MANY_REQUESTS,
+                detail=error_msg,
+            ) from exc
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail=error_msg or "Không thể gửi lại mã xác minh SMS.",
+        ) from exc
+
+    return {"message": "Mã xác minh mới đã được gửi qua SMS."}
 
 
 class RefreshTokenRequest(BaseModel):
@@ -823,7 +984,12 @@ async def get_user_devices(
         except Exception:
             pass
     return await crud_user_terminal.get_terminals_for_user(
-        db, user=current_user, current_ip=client_ip, current_user_agent=user_agent, custom_location=client_location
+        db,
+        user=current_user,
+        current_ip=client_ip,
+        current_user_agent=user_agent,
+        custom_location=client_location,
+        custom_device_name=request.headers.get("x-client-platform"),
     )
 
 

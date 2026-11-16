@@ -85,23 +85,27 @@ export default function RealtimeDashboardScreen() {
             normalRange={{ min: 60, max: 100 }}
             color="#EF4444"
           />
-          <VitalCard
-            icon="water"
-            label="SpO₂"
-            value={currentVitals.spo2}
-            unit="%"
-            normalRange={{ min: 95, max: 100 }}
-            color="#3B82F6"
-          />
-          <VitalCard
-            icon="thermometer"
-            label="Nhiệt độ cơ thể"
-            value={currentVitals.skin_temp_max}
-            unit="°C"
-            normalRange={{ min: 35, max: 38 }}
-            color="#F97316"
-            decimals={1}
-          />
+          {currentVitals.spo2 != null && (
+            <VitalCard
+              icon="water"
+              label="SpO₂"
+              value={currentVitals.spo2}
+              unit="%"
+              normalRange={{ min: 95, max: 100 }}
+              color="#3B82F6"
+            />
+          )}
+          {currentVitals.skin_temp_max != null && (
+            <VitalCard
+              icon="thermometer"
+              label="Nhiệt độ cơ thể"
+              value={currentVitals.skin_temp_max}
+              unit="°C"
+              normalRange={{ min: 35, max: 38 }}
+              color="#F97316"
+              decimals={1}
+            />
+          )}
           <VitalCard
             icon="person"
             label="Phát hiện người"

@@ -140,31 +140,48 @@ class AlertsWebSocket {
   private _handleStoreUpdate(event: WebSocketAlertEvent) {
     const store = useVitalStore.getState();
 
-    // 0. Lịch khám mới từ Bác sĩ (Doctor Appointment Scheduled)
-    if (event.alert_type === 'APPOINTMENT_SCHEDULED' || event.type === 'APPOINTMENT_SCHEDULED') {
+    // 0. Lịch khám mới từ Bác sĩ hoặc Yêu cầu lịch khám từ Gia đình
+    if (
+      event.alert_type === 'APPOINTMENT_SCHEDULED' ||
+      event.type === 'APPOINTMENT_SCHEDULED' ||
+      event.alert_type === 'APPOINTMENT_REQUESTED' ||
+      event.type === 'APPOINTMENT_REQUESTED'
+    ) {
       const incData = event.data || {};
+      const isRequestedByFamily =
+        event.alert_type === 'APPOINTMENT_REQUESTED' ||
+        event.type === 'APPOINTMENT_REQUESTED' ||
+        incData.notes?.includes('APPOINTMENT_REQUESTED') ||
+        incData.message?.includes('đã đặt lịch khám');
       const newIncident: Incident = {
         id: incData.id || `inc-apt-${Date.now()}`,
         device_id: incData.device_id || event.house_id || 'system',
-        alert_type: 'APPOINTMENT_SCHEDULED',
+        alert_type: isRequestedByFamily ? 'APPOINTMENT_REQUESTED' : 'APPOINTMENT_SCHEDULED',
         alert_level: 'LOW',
-        message: incData.message || '🗓️ Bác sĩ vừa lên lịch khám mới. Vui lòng kiểm tra và xác nhận.',
+        message:
+          incData.message ||
+          (isRequestedByFamily
+            ? '🗓️ Người nhà vừa yêu cầu lịch khám mới.'
+            : '🗓️ Bác sĩ vừa lên lịch khám mới. Vui lòng kiểm tra và xác nhận.'),
         video_clip_url: null,
         thumbnail_url: null,
         is_acknowledged: false,
         created_at: incData.created_at || new Date().toISOString(),
-        note: event.appointment_id || incData.appointment_id || null,
+        note: event.appointment_id || incData.appointment_id || (isRequestedByFamily ? 'APPOINTMENT_REQUESTED' : null),
+        notes: incData.notes || (isRequestedByFamily ? 'APPOINTMENT_REQUESTED' : null),
       };
 
       store.addIncident(newIncident);
 
       // Bắn thông báo đẩy cục bộ nhẹ nhàng (không kích hoạt còi hú khẩn cấp)
       notificationService.triggerEmergencyNotification({
-        title: incData.title || '🗓️ LỊCH KHÁM MỚI TỪ BÁC SĨ',
+        title:
+          incData.title ||
+          (isRequestedByFamily ? '🗓️ YÊU CẦU LỊCH KHÁM TỪ GIA ĐÌNH' : '🗓️ LỊCH KHÁM MỚI TỪ BÁC SĨ'),
         body: newIncident.message,
         data: {
           incident_id: newIncident.id,
-          alert_type: 'APPOINTMENT_SCHEDULED',
+          alert_type: newIncident.alert_type,
           appointment_id: event.appointment_id,
           patient_id: event.patient_id,
         },
@@ -326,34 +343,57 @@ class AlertsWebSocket {
       return;
     }
 
-    // 1. Cảnh báo té ngã / sự cố khẩn cấp mới (Feature 1)
-    if ((event.type === 'ALERT_NEW' && event.alert_type !== 'APPOINTMENT_SCHEDULED' && event.alert_type !== 'MEDICAL_RECORD_UPDATED') || event.alert_type === 'FALL_DETECTED') {
+    // 1. Cảnh báo té ngã / pin yếu / sự cố khẩn cấp mới (Feature 1)
+    if (
+      event.alert_type === 'LOW_BATTERY' ||
+      event.alert_type === 'DEVICE_BATTERY_DEAD' ||
+      ((event.type === 'ALERT_NEW' && event.alert_type !== 'APPOINTMENT_SCHEDULED' && event.alert_type !== 'MEDICAL_RECORD_UPDATED') || event.alert_type === 'FALL_DETECTED')
+    ) {
       const incData = event.data || {};
+      const alertType = incData.type || event.alert_type || 'FALL_DETECTED';
+      const isBatteryAlert = alertType === 'LOW_BATTERY' || alertType === 'DEVICE_BATTERY_DEAD';
       const newIncident: Incident = {
         id: incData.id || `inc-${Date.now()}`,
-        device_id: incData.device_id || 'hub-001',
-        alert_type: incData.type || event.alert_type || 'FALL_DETECTED',
-        alert_level: incData.alert_level || 'CRITICAL',
-        message: incData.message || incData.description || '🚨 Cảnh báo té ngã khẩn cấp (Phát hiện bởi Edge AI)',
-        video_clip_url: incData.video_clip_url || 'http://localhost:8000/static/evidence/fall_evidence_ai.jpg',
-        thumbnail_url: incData.thumbnail_url || 'http://localhost:8000/static/evidence/fall_evidence_ai.jpg',
+        device_id: incData.device_id || 'BLE_BAND_001',
+        alert_type: alertType,
+        alert_level: incData.alert_level || (alertType === 'DEVICE_BATTERY_DEAD' ? 'CRITICAL' : alertType === 'LOW_BATTERY' ? 'HIGH' : 'CRITICAL'),
+        message:
+          incData.message ||
+          incData.description ||
+          (alertType === 'DEVICE_BATTERY_DEAD'
+            ? '🪫 Vòng đeo tay thông minh đã cạn pin (0%) và ngắt kết nối!'
+            : isBatteryAlert
+              ? '🔋 Cảnh báo: Pin đồng hồ thông minh sắp hết (< 15%)!'
+              : '🚨 Cảnh báo té ngã khẩn cấp (Phát hiện bởi Edge AI)'),
+        video_clip_url: incData.video_clip_url || null,
+        thumbnail_url: incData.thumbnail_url || null,
         is_acknowledged: false,
         created_at: incData.created_at || new Date().toISOString(),
       };
 
       store.addIncident(newIncident);
-      store.setVitals({
-        fall_detected: true,
-        acoustic_status: 'Phát hiện sự cố té ngã!',
-      });
-      store.setSirenActive(true);
+      useAlertStore.getState().addIncident(newIncident);
 
-      // Bắn thông báo khẩn cấp cục bộ (Feature 5)
-      notificationService.triggerEmergencyNotification({
-        title: '🚨 CẢNH BÁO TÉ NGÃ KHẨN CẤP',
-        body: newIncident.message,
-        data: { incident_id: newIncident.id, alert_type: newIncident.alert_type },
-      });
+      if (isBatteryAlert) {
+        notificationService.triggerEmergencyNotification({
+          title: alertType === 'DEVICE_BATTERY_DEAD' ? '🪫 ĐỒNG HỒ ĐÃ HẾT PIN' : '🔋 CẢNH BÁO PIN ĐỒNG HỒ YẾU',
+          body: newIncident.message,
+          data: { incident_id: newIncident.id, alert_type: newIncident.alert_type },
+        });
+      } else {
+        store.setVitals({
+          fall_detected: true,
+          acoustic_status: 'Phát hiện sự cố té ngã!',
+        });
+        store.setSirenActive(true);
+
+        // Bắn thông báo khẩn cấp cục bộ (Feature 5)
+        notificationService.triggerEmergencyNotification({
+          title: '🚨 CẢNH BÁO TÉ NGÃ KHẨN CẤP',
+          body: newIncident.message,
+          data: { incident_id: newIncident.id, alert_type: newIncident.alert_type },
+        });
+      }
     }
 
 
@@ -374,8 +414,11 @@ class AlertsWebSocket {
     }
 
     // 3. Chỉ số sinh hiệu mô phỏng thời gian thực (Feature 3)
-    else if (event.type === 'VITALS_UPDATE' && event.data) {
-      const d = event.data;
+    else if (
+      (event.type === 'VITALS_UPDATE' || event.type === 'vital_update') &&
+      (event.data || (event as any).heart_rate !== undefined || (event as any).bracelet_battery !== undefined)
+    ) {
+      const d = event.data || (event as any);
       store.setVitals({
         heart_rate: d.heart_rate,
         spo2: d.spo2,
@@ -383,6 +426,8 @@ class AlertsWebSocket {
         person_count: d.person_count ?? 1,
         fall_detected: Boolean(d.fall_detected),
         acoustic_status: d.sound ?? d.acoustic_status ?? 'Bình thường',
+        bracelet_battery: d.bracelet_battery !== undefined ? d.bracelet_battery : d.battery_level !== undefined ? d.battery_level : undefined,
+        bracelet_connected: d.bracelet_connected !== undefined ? Boolean(d.bracelet_connected) : (d.bracelet_battery !== undefined ? d.bracelet_battery > 0 : undefined),
         timestamp: d.timestamp ?? Date.now(),
       });
     }

@@ -26,6 +26,7 @@ import { useTheme } from "../../../store/useThemeStore";
 import i18n from "../../../i18n/config";
 import { LocalizedText as Text } from "../../../i18n/LocalizedComponents";
 import { usersApi, supportApi } from "../../../services/api";
+import { handleHeaderBack } from "../../../navigation/navigationHelpers";
 import {
     AccessibilitySettingsModal,
     FontSizeSettingsModal,
@@ -264,7 +265,7 @@ export default function SettingsScreen({ navigation, route }: any) {
                                 borderColor: "#334155",
                             },
                         ]}
-                        onPress={() => navigation?.goBack?.()}
+                        onPress={() => handleHeaderBack(navigation, route, "Home", true)}
                         activeOpacity={0.7}
                     >
                         <Ionicons
@@ -397,49 +398,20 @@ export default function SettingsScreen({ navigation, route }: any) {
                                             />
                                         </View>
                                         <View style={{ flex: 1 }}>
-                                            <View
-                                                style={{
-                                                    flexDirection: "row",
-                                                    alignItems: "center",
-                                                    flexWrap: "wrap",
-                                                    gap: 6,
-                                                }}
+                                            <Text
+                                                style={[
+                                                    styles.settingsLabel,
+                                                    isDarkMode
+                                                        ? {
+                                                              color: "#F8FAFC",
+                                                          }
+                                                        : {
+                                                              color: "#0F172A",
+                                                          },
+                                                ]}
                                             >
-                                                <Text
-                                                    style={[
-                                                        styles.settingsLabel,
-                                                        isDarkMode
-                                                            ? {
-                                                                  color: "#F8FAFC",
-                                                              }
-                                                            : {
-                                                                  color: "#0F172A",
-                                                              },
-                                                    ]}
-                                                >
-                                                    Hồ sơ bệnh án người cao tuổi
-                                                </Text>
-                                                <View
-                                                    style={[
-                                                        styles.profileAesBadge,
-                                                        isDarkMode && {
-                                                            backgroundColor:
-                                                                "rgba(255, 122, 0, 0.16)",
-                                                        },
-                                                    ]}
-                                                >
-                                                    <Text
-                                                        style={[
-                                                            styles.profileAesBadgeText,
-                                                            isDarkMode && {
-                                                                color: Colors.primary,
-                                                            },
-                                                        ]}
-                                                    >
-                                                        Bảo mật AES-256
-                                                    </Text>
-                                                </View>
-                                            </View>
+                                                Hồ sơ bệnh án người cao tuổi
+                                            </Text>
                                             <Text
                                                 style={[
                                                     styles.settingsItemSub,

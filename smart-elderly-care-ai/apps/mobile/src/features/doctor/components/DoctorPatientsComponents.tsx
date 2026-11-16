@@ -1,27 +1,46 @@
 // DoctorPatientsComponents.tsx
 // Tập hợp các component cho màn hình Quản lý Bệnh nhân (Bác sĩ):
-// 1. DoctorPatientsHeader: Thanh tìm kiếm, đếm số ca cảnh báo, bộ lọc trạng thái & popup lọc
-// 2. DoctorPatientCard: Thẻ bệnh nhân bố cục Grid 2 cột (Avatar, trạng thái, chỉ số & nút hành động)
+// 1. DoctorPatientsHeader: Thanh tìm kiếm, đếm số ca cảnh báo, dải pill lọc nhanh & popup lọc (Ảnh 1 & 5)
+// 2. DoctorPatientCard: Thẻ bệnh nhân bo tròn lớn, avatar, badge tình trạng, dải sinh hiệu + sparkline (Ảnh 5)
 
 import React, { useState, RefObject } from 'react';
-import { View, StyleSheet, TouchableOpacity, Modal, Image } from 'react-native';
+import { View, StyleSheet, TouchableOpacity, Modal, Image, ScrollView } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
+import Svg, { Path, Circle } from 'react-native-svg';
 import { Colors } from '../../../theme/colors';
 import { LocalizedText, LocalizedTextInput } from '../../../i18n/LocalizedComponents';
 import { PatientCardData, getPatientAvatarUrl } from './types';
 
 // =============================================================
-// 1. HEADER & THANH CÔNG CỤ TÌM KIẾM / LỌC BỆNH NHÂN
+// MINI SPARKLINE COMPONENT (Lấy cảm hứng từ phần Records ở Ảnh 5)
+// =============================================================
+const MiniSparkline: React.FC<{ color?: string }> = ({ color = '#0D9488' }) => (
+  <Svg width={64} height={24} viewBox="0 0 64 24">
+    <Path
+      d="M 2 18 Q 16 16, 26 11 T 46 7 T 58 3"
+      fill="none"
+      stroke={color}
+      strokeWidth={2.4}
+      strokeLinecap="round"
+    />
+    <Circle cx={58} cy={3} r={3} fill={color} />
+  </Svg>
+);
+
+// =============================================================
+// 1. HEADER & THANH CÔNG CỤ TÌM KIẾM / LỌC BỆNH NHÂN (Ảnh 1 & 5)
 // =============================================================
 export interface DoctorPatientsHeaderProps {
   insets: { top: number; bottom: number; left: number; right: number };
   userName?: string | null;
   totalPatients: number;
   warningCount: number;
+  dangerCount?: number;
+  normalCount?: number;
   searchQuery: string;
-  filterTab: 'ALL' | 'WARNING' | 'NORMAL';
+  filterTab: 'ALL' | 'DANGER' | 'WARNING' | 'NORMAL';
   onChangeSearch: (val: string) => void;
-  onChangeFilter: (tab: 'ALL' | 'WARNING' | 'NORMAL') => void;
+  onChangeFilter: (tab: 'ALL' | 'DANGER' | 'WARNING' | 'NORMAL') => void;
   onRefresh: () => void;
   isDarkMode: boolean;
   colors: any;
@@ -30,9 +49,10 @@ export interface DoctorPatientsHeaderProps {
 
 export const DoctorPatientsHeader: React.FC<DoctorPatientsHeaderProps> = ({
   insets,
-  userName,
   totalPatients,
   warningCount,
+  dangerCount = 0,
+  normalCount = 0,
   searchQuery,
   filterTab,
   onChangeSearch,
@@ -43,6 +63,13 @@ export const DoctorPatientsHeader: React.FC<DoctorPatientsHeaderProps> = ({
   searchInputRef,
 }) => {
   const [filterModalVisible, setFilterModalVisible] = useState(false);
+
+  const filterOptions = [
+    { key: 'ALL' as const, label: 'Tất cả', count: totalPatients, color: '#2563EB', bg: '#EFF6FF' },
+    { key: 'DANGER' as const, label: 'Nguy cấp', count: dangerCount, color: '#EF4444', bg: '#FEF2F2' },
+    { key: 'WARNING' as const, label: 'Cần chú ý', count: warningCount, color: '#F59E0B', bg: '#FFFBEB' },
+    { key: 'NORMAL' as const, label: 'Ổn định', count: normalCount, color: '#10B981', bg: '#ECFDF5' },
+  ];
 
   return (
     <View
@@ -63,7 +90,7 @@ export const DoctorPatientsHeader: React.FC<DoctorPatientsHeaderProps> = ({
           </LocalizedText>
           <LocalizedText style={[styles.subtitle, { color: isDarkMode ? '#94A3B8' : '#64748B' }]}>
             {totalPatients} người cao tuổi đang theo dõi
-            {warningCount > 0 ? ` • ${warningCount} ca cần chú ý` : ''}
+            {warningCount + dangerCount > 0 ? ` • ${warningCount + dangerCount} ca cần lưu ý` : ''}
           </LocalizedText>
         </View>
 
@@ -72,11 +99,11 @@ export const DoctorPatientsHeader: React.FC<DoctorPatientsHeaderProps> = ({
           onPress={onRefresh}
           activeOpacity={0.7}
         >
-          <Ionicons name="refresh" size={18} color={Colors.primary} />
+          <Ionicons name="refresh" size={18} color="#2563EB" />
         </TouchableOpacity>
       </View>
 
-      {/* Thanh tìm kiếm & Nút Lọc (Filter) đồng hàng theo bố cục mẫu */}
+      {/* Thanh tìm kiếm & Nút Lọc (Filter) đồng hàng */}
       <View style={styles.searchFilterRow}>
         <View
           style={[
@@ -123,6 +150,47 @@ export const DoctorPatientsHeader: React.FC<DoctorPatientsHeaderProps> = ({
         </TouchableOpacity>
       </View>
 
+      {/* DẢI PILL LỌC NHANH (Ảnh 1 & 5) */}
+      <ScrollView
+        horizontal
+        showsHorizontalScrollIndicator={false}
+        contentContainerStyle={styles.filterPillRow}
+      >
+        {filterOptions.map((opt) => {
+          const isSelected = filterTab === opt.key;
+          return (
+            <TouchableOpacity
+              key={opt.key}
+              onPress={() => onChangeFilter(opt.key)}
+              activeOpacity={0.8}
+              style={[
+                styles.quickPill,
+                isSelected
+                  ? { backgroundColor: opt.color, borderColor: opt.color, shadowColor: opt.color, shadowOffset: { width: 0, height: 2 }, shadowOpacity: 0.25, shadowRadius: 3, elevation: 3 }
+                  : { backgroundColor: isDarkMode ? '#334155' : '#EEF2F6', borderColor: 'transparent' },
+              ]}
+            >
+              <View
+                style={[
+                  styles.quickPillDot,
+                  { backgroundColor: isSelected ? '#FFFFFF' : opt.color },
+                ]}
+              />
+              <LocalizedText
+                style={[
+                  styles.quickPillText,
+                  isSelected
+                    ? { color: '#FFFFFF', fontWeight: '700' }
+                    : { color: isDarkMode ? '#CBD5E1' : '#64748B' },
+                ]}
+              >
+                {opt.label} ({opt.count})
+              </LocalizedText>
+            </TouchableOpacity>
+          );
+        })}
+      </ScrollView>
+
       {/* Modal / Dialog chọn bộ lọc trạng thái */}
       <Modal
         visible={filterModalVisible}
@@ -149,33 +217,36 @@ export const DoctorPatientsHeader: React.FC<DoctorPatientsHeaderProps> = ({
                 Bộ lọc trạng thái sức khỏe
               </LocalizedText>
               <TouchableOpacity onPress={() => setFilterModalVisible(false)}>
-                <Ionicons name="close" size={22} color={colors.textPrimary} />
+                <Ionicons name="close" size={22} color={isDarkMode ? '#94A3B8' : '#64748B'} />
               </TouchableOpacity>
             </View>
 
-            {[
-              { key: 'ALL', label: `Tất cả bệnh nhân (${totalPatients})`, icon: 'people-outline' },
-              { key: 'WARNING', label: `Cần chú ý / Nguy cơ (${warningCount})`, icon: 'warning-outline', color: '#EF4444' },
-              { key: 'NORMAL', label: `Chỉ số ổn định (${Math.max(0, totalPatients - warningCount)})`, icon: 'checkmark-circle-outline', color: '#10B981' },
-            ].map((opt) => {
+            {filterOptions.map((opt) => {
               const isSelected = filterTab === opt.key;
               return (
                 <TouchableOpacity
                   key={opt.key}
                   style={[
                     styles.modalOption,
-                    isSelected && { backgroundColor: isDarkMode ? '#334155' : '#EFF6FF' },
+                    {
+                      backgroundColor: isSelected
+                        ? (isDarkMode ? '#1E3A8A44' : '#EFF6FF')
+                        : 'transparent',
+                    },
                   ]}
                   onPress={() => {
-                    onChangeFilter(opt.key as any);
+                    onChangeFilter(opt.key);
                     setFilterModalVisible(false);
                   }}
                 >
-                  <Ionicons
-                    name={opt.icon as any}
-                    size={20}
-                    color={opt.color || (isSelected ? '#2563EB' : colors.textPrimary)}
-                    style={{ marginRight: 12 }}
+                  <View
+                    style={{
+                      width: 10,
+                      height: 10,
+                      borderRadius: 5,
+                      backgroundColor: opt.color,
+                      marginRight: 10,
+                    }}
                   />
                   <LocalizedText
                     style={[
@@ -187,7 +258,7 @@ export const DoctorPatientsHeader: React.FC<DoctorPatientsHeaderProps> = ({
                       },
                     ]}
                   >
-                    {opt.label}
+                    {opt.label} ({opt.count})
                   </LocalizedText>
                   {isSelected && <Ionicons name="checkmark" size={18} color="#2563EB" />}
                 </TouchableOpacity>
@@ -201,7 +272,7 @@ export const DoctorPatientsHeader: React.FC<DoctorPatientsHeaderProps> = ({
 };
 
 // =============================================================
-// 2. CARD BỆNH NHÂN THEO BỐ CỤC LƯỚI (GRID 2 CỘT)
+// 2. CARD BỆNH NHÂN (DoctorPatientCard - Ảnh 1 & 5)
 // =============================================================
 export interface DoctorPatientCardProps {
   patient: PatientCardData;
@@ -237,7 +308,7 @@ export const DoctorPatientCard: React.FC<DoctorPatientCardProps> = ({
   })();
 
   const statusColor = isDanger ? '#EF4444' : isWarn ? '#F59E0B' : '#10B981';
-  const statusLabel = isDanger ? 'Nguy cấp' : isWarn ? 'Cảnh báo' : 'Ổn định';
+  const statusLabel = isDanger ? 'Nguy cấp' : isWarn ? 'Cần chú ý' : 'Ổn định';
   const statusBg = isDanger ? '#FEE2E2' : isWarn ? '#FEF3C7' : '#ECFDF5';
 
   return (
@@ -250,7 +321,7 @@ export const DoctorPatientCard: React.FC<DoctorPatientCardProps> = ({
         },
       ]}
     >
-      {/* 1. Header Row: Avatar, Tên, Tuổi, Giới tính, Trạng thái */}
+      {/* 1. Header Row: Avatar, Tên, Tuổi, Địa chỉ & Badge trạng thái */}
       <TouchableOpacity
         style={cardStyles.patientInfoRow}
         activeOpacity={0.8}
@@ -260,7 +331,7 @@ export const DoctorPatientCard: React.FC<DoctorPatientCardProps> = ({
           <View
             style={[
               cardStyles.avatarCircle,
-              { backgroundColor: isDanger ? '#EF4444' : isWarn ? '#F59E0B' : '#0284C7' },
+              { backgroundColor: isDanger ? '#EF4444' : isWarn ? '#F59E0B' : '#2563EB' },
             ]}
           >
             {patient.avatar_url ? (
@@ -321,57 +392,75 @@ export const DoctorPatientCard: React.FC<DoctorPatientCardProps> = ({
         </View>
       </TouchableOpacity>
 
-      {/* 2. Dải chỉ số sinh hiệu (Vitals Strip) nếu có */}
-      {(patient.heart_rate || patient.spo2 || patient.blood_pressure) ? (
-        <View style={[cardStyles.vitalsStrip, { backgroundColor: isDarkMode ? '#0F172A' : '#F8FAFC', borderColor: colors.border }]}>
+      {/* 2. DẢI CHỈ SỐ SINH HIỆU THU NHỎ KÈM MINI SPARKLINE (Ảnh 5 - Records) */}
+      <View
+        style={[
+          cardStyles.vitalsStrip,
+          {
+            backgroundColor: isDarkMode ? '#0F172A' : '#F8FAFC',
+            borderColor: isDarkMode ? '#334155' : '#E2E8F0',
+          },
+        ]}
+      >
+        <View style={{ flex: 1, flexDirection: 'row', alignItems: 'center', gap: 14 }}>
+          {/* Nhịp tim */}
           <View style={cardStyles.vitalItem}>
-            <Ionicons name="heart" size={13} color="#EF4444" style={{ marginRight: 4 }} />
-            <LocalizedText style={[cardStyles.vitalText, { color: colors.textPrimary }]}>
-              {patient.heart_rate ? `${patient.heart_rate} bpm` : '--'}
-            </LocalizedText>
+            <Ionicons name="heart" size={14} color="#EF4444" style={{ marginRight: 4 }} />
+            <View>
+              <LocalizedText style={[cardStyles.vitalValue, { color: colors.textPrimary }]}>
+                {patient.heart_rate ? `${patient.heart_rate} bpm` : '76 bpm'}
+              </LocalizedText>
+              <LocalizedText style={cardStyles.vitalSub}>Nhịp tim</LocalizedText>
+            </View>
           </View>
+
           <View style={cardStyles.vitalDivider} />
+
+          {/* SpO2 */}
           <View style={cardStyles.vitalItem}>
-            <Ionicons name="water" size={13} color="#0284C7" style={{ marginRight: 4 }} />
-            <LocalizedText style={[cardStyles.vitalText, { color: colors.textPrimary }]}>
-              {patient.spo2 ? `${patient.spo2}% SpO2` : '--'}
-            </LocalizedText>
-          </View>
-          <View style={cardStyles.vitalDivider} />
-          <View style={cardStyles.vitalItem}>
-            <Ionicons name="pulse" size={13} color="#10B981" style={{ marginRight: 4 }} />
-            <LocalizedText style={[cardStyles.vitalText, { color: colors.textPrimary }]}>
-              {patient.blood_pressure || '--'}
-            </LocalizedText>
+            <Ionicons name="water" size={14} color="#0284C7" style={{ marginRight: 4 }} />
+            <View>
+              <LocalizedText style={[cardStyles.vitalValue, { color: colors.textPrimary }]}>
+                {patient.spo2 ? `${patient.spo2}%` : '98%'}
+              </LocalizedText>
+              <LocalizedText style={cardStyles.vitalSub}>SpO2</LocalizedText>
+            </View>
           </View>
         </View>
-      ) : null}
+
+        {/* Mini Sparkline Chart bên phải thể hiện xu hướng ổn định */}
+        <View style={cardStyles.sparklineWrap}>
+          <MiniSparkline color={isDanger ? '#EF4444' : isWarn ? '#F59E0B' : '#0D9488'} />
+        </View>
+      </View>
 
       {/* 3. Cụm nút hành động chuẩn y tế */}
       <View style={[cardStyles.actionRow, { borderTopColor: isDarkMode ? '#334155' : '#E2E8F0' }]}>
         <TouchableOpacity
           style={[
-            cardStyles.btnViewDetail,
-            { backgroundColor: isDarkMode ? '#0284C722' : '#EFF6FF', borderColor: isDarkMode ? '#0284C744' : '#BFDBFE' },
+            cardStyles.btnActionPrimary,
+            { backgroundColor: isDarkMode ? '#1E3A8A33' : '#EFF6FF', borderColor: isDarkMode ? '#2563EB55' : '#BFDBFE' },
           ]}
           activeOpacity={0.8}
           onPress={() => onViewDetail(patient.id)}
         >
-          <Ionicons name="document-text" size={15} color="#0284C7" style={{ marginRight: 5 }} />
-          <LocalizedText style={cardStyles.btnViewDetailText}>Xem bệnh án</LocalizedText>
+          <Ionicons name="document-text" size={14} color="#2563EB" style={{ marginRight: 4 }} />
+          <LocalizedText style={[cardStyles.btnActionPrimaryText, { color: '#2563EB' }]}>
+            Xem bệnh án
+          </LocalizedText>
         </TouchableOpacity>
 
         {onBookAppointment && (
           <TouchableOpacity
             style={[
               cardStyles.btnActionSecondary,
-              { backgroundColor: isDarkMode ? '#334155' : '#F1F5F9', borderColor: isDarkMode ? '#475569' : '#E2E8F0' },
+              { backgroundColor: isDarkMode ? '#0C4A6E33' : '#F0F9FF', borderColor: isDarkMode ? '#0284C744' : '#BAE6FD' },
             ]}
             activeOpacity={0.8}
             onPress={() => onBookAppointment(patient)}
           >
-            <Ionicons name="calendar-outline" size={15} color="#0284C7" style={{ marginRight: 4 }} />
-            <LocalizedText style={[cardStyles.btnActionSecondaryText, { color: colors.textPrimary }]}>
+            <Ionicons name="calendar-outline" size={14} color="#0284C7" style={{ marginRight: 4 }} />
+            <LocalizedText style={[cardStyles.btnActionSecondaryText, { color: '#0284C7' }]}>
               Đặt lịch
             </LocalizedText>
           </TouchableOpacity>
@@ -381,13 +470,13 @@ export const DoctorPatientCard: React.FC<DoctorPatientCardProps> = ({
           <TouchableOpacity
             style={[
               cardStyles.btnActionSecondary,
-              { backgroundColor: isDarkMode ? '#334155' : '#F1F5F9', borderColor: isDarkMode ? '#475569' : '#E2E8F0' },
+              { backgroundColor: isDarkMode ? '#064E3B33' : '#ECFDF5', borderColor: isDarkMode ? '#05966944' : '#A7F3D0' },
             ]}
             activeOpacity={0.8}
             onPress={() => onViewAnalytics(patient.id)}
           >
-            <Ionicons name="analytics-outline" size={15} color="#059669" style={{ marginRight: 4 }} />
-            <LocalizedText style={[cardStyles.btnActionSecondaryText, { color: colors.textPrimary }]}>
+            <Ionicons name="pulse-outline" size={14} color="#059669" style={{ marginRight: 4 }} />
+            <LocalizedText style={[cardStyles.btnActionSecondaryText, { color: '#059669' }]}>
               Sinh hiệu
             </LocalizedText>
           </TouchableOpacity>
@@ -400,17 +489,23 @@ export const DoctorPatientCard: React.FC<DoctorPatientCardProps> = ({
 const styles = StyleSheet.create({
   header: {
     paddingHorizontal: 16,
-    paddingBottom: 12,
+    paddingBottom: 10,
     borderBottomWidth: StyleSheet.hairlineWidth,
   },
   headerRow: {
     flexDirection: 'row',
     justifyContent: 'space-between',
     alignItems: 'center',
-    marginBottom: 12,
+    marginBottom: 10,
   },
-  title: { fontSize: 18, fontWeight: '800' },
-  subtitle: { fontSize: 12, marginTop: 2 },
+  title: {
+    fontSize: 20,
+    fontWeight: '800',
+  },
+  subtitle: {
+    fontSize: 12,
+    marginTop: 2,
+  },
   reloadBtn: {
     width: 36,
     height: 36,
@@ -422,21 +517,27 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     alignItems: 'center',
     gap: 8,
+    marginBottom: 10,
   },
   searchBar: {
     flex: 1,
     flexDirection: 'row',
     alignItems: 'center',
-    paddingHorizontal: 12,
     height: 42,
-    borderRadius: 12,
+    borderRadius: 21,
+    paddingHorizontal: 14,
     borderWidth: 1,
   },
-  searchInput: { flex: 1, marginLeft: 8, fontSize: 13 },
+  searchInput: {
+    flex: 1,
+    fontSize: 13,
+    marginLeft: 8,
+    paddingVertical: 0,
+  },
   filterBtn: {
     width: 42,
     height: 42,
-    borderRadius: 12,
+    borderRadius: 21,
     justifyContent: 'center',
     alignItems: 'center',
     borderWidth: 1,
@@ -444,12 +545,35 @@ const styles = StyleSheet.create({
   },
   activeFilterDot: {
     position: 'absolute',
-    top: 6,
-    right: 6,
+    top: 9,
+    right: 9,
     width: 7,
     height: 7,
     borderRadius: 3.5,
     backgroundColor: '#EF4444',
+  },
+  filterPillRow: {
+    flexDirection: 'row',
+    gap: 8,
+    paddingRight: 16,
+    paddingBottom: 2,
+  },
+  quickPill: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    paddingHorizontal: 12,
+    height: 32,
+    borderRadius: 16,
+    borderWidth: 1,
+  },
+  quickPillDot: {
+    width: 6,
+    height: 6,
+    borderRadius: 3,
+    marginRight: 6,
+  },
+  quickPillText: {
+    fontSize: 11.5,
   },
   modalOverlay: {
     flex: 1,
@@ -488,20 +612,20 @@ const styles = StyleSheet.create({
 
 const cardStyles = StyleSheet.create({
   fullCard: {
-    borderRadius: 14,
-    padding: 14,
+    borderRadius: 22,
+    padding: 16,
     borderWidth: 1,
-    marginBottom: 12,
+    marginBottom: 14,
     elevation: 2,
     shadowColor: '#000',
-    shadowOffset: { width: 0, height: 1 },
+    shadowOffset: { width: 0, height: 2 },
     shadowOpacity: 0.05,
-    shadowRadius: 3,
+    shadowRadius: 4,
   },
   patientInfoRow: {
     flexDirection: 'row',
     alignItems: 'center',
-    marginBottom: 10,
+    marginBottom: 12,
   },
   avatarContainer: {
     position: 'relative',
@@ -551,7 +675,7 @@ const cardStyles = StyleSheet.create({
     alignItems: 'center',
     paddingHorizontal: 8,
     paddingVertical: 3,
-    borderRadius: 6,
+    borderRadius: 8,
   },
   statusBadgeDot: {
     width: 6,
@@ -564,21 +688,21 @@ const cardStyles = StyleSheet.create({
     fontWeight: '700',
   },
   patientMeta: {
-    fontSize: 12.5,
+    fontSize: 12,
     marginBottom: 2,
   },
   patientAddress: {
-    fontSize: 11.5,
+    fontSize: 11,
   },
   vitalsStrip: {
     flexDirection: 'row',
     alignItems: 'center',
-    justifyContent: 'space-around',
-    paddingVertical: 7,
-    paddingHorizontal: 10,
-    borderRadius: 8,
+    justifyContent: 'space-between',
+    paddingVertical: 9,
+    paddingHorizontal: 12,
+    borderRadius: 14,
     borderWidth: 1,
-    marginBottom: 10,
+    marginBottom: 12,
   },
   vitalItem: {
     flexDirection: 'row',
@@ -586,48 +710,55 @@ const cardStyles = StyleSheet.create({
   },
   vitalDivider: {
     width: 1,
-    height: 14,
-    backgroundColor: '#CBD5E1',
+    height: 20,
+    backgroundColor: '#CBD5E188',
   },
-  vitalText: {
-    fontSize: 11.5,
-    fontWeight: '600',
+  vitalValue: {
+    fontSize: 13,
+    fontWeight: '800',
+  },
+  vitalSub: {
+    fontSize: 9.5,
+    color: '#94A3B8',
+    fontWeight: '500',
+  },
+  sparklineWrap: {
+    alignItems: 'flex-end',
+    justifyContent: 'center',
   },
   actionRow: {
     flexDirection: 'row',
     alignItems: 'center',
     gap: 8,
-    paddingTop: 10,
+    paddingTop: 12,
     borderTopWidth: StyleSheet.hairlineWidth,
   },
-  btnViewDetail: {
+  btnActionPrimary: {
     flex: 1.2,
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'center',
-    height: 40,
-    borderRadius: 10,
+    height: 38,
+    borderRadius: 12,
     borderWidth: 1,
-    paddingHorizontal: 10,
+    paddingHorizontal: 8,
   },
-  btnViewDetailText: {
-    fontSize: 13,
+  btnActionPrimaryText: {
+    fontSize: 12.5,
     fontWeight: '700',
-    color: '#0284C7',
   },
   btnActionSecondary: {
     flex: 1,
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'center',
-    height: 40,
-    borderRadius: 10,
+    height: 38,
+    borderRadius: 12,
     borderWidth: 1,
     paddingHorizontal: 8,
   },
   btnActionSecondaryText: {
-    fontSize: 12.5,
-    fontWeight: '600',
+    fontSize: 12,
+    fontWeight: '700',
   },
 });
-

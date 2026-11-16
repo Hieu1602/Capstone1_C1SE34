@@ -227,23 +227,39 @@ export const NotificationManagementPage: React.FC = () => {
   };
 
   const handlePublishNow = async (id: string) => {
+    // Optimistic UI: Cập nhật ngay trên bảng và hiện thông báo thao tác tức thì (0ms)
+    const prevNotifications = [...notifications];
+    setNotifications((prev) =>
+      prev.map((n) => (n.id === id ? { ...n, status: 'published' as const, published_at: new Date().toISOString() } : n))
+    );
+    showToast('Đã phát hành thông báo thành công');
+
     try {
       const updated = await notificationsApi.publish(id);
       setNotifications((prev) => prev.map((n) => (n.id === updated.id ? updated : n)));
-      showToast('Đã phát hành thông báo thành công');
     } catch {
+      setNotifications(prevNotifications);
       showToast('Lỗi khi phát hành thông báo');
     }
   };
 
   const handleConfirmRevoke = async () => {
     if (!revokingNotification) return;
+    const targetId = revokingNotification.id;
+    const prevNotifications = [...notifications];
+
+    // Optimistic UI: Đóng modal, đổi trạng thái và hiện thông báo ngay
+    setNotifications((prev) =>
+      prev.map((n) => (n.id === targetId ? { ...n, status: 'revoked' as const, revoke_reason: revokeReason } : n))
+    );
+    showToast('Đã thu hồi thông báo thành công');
+    setRevokingNotification(null);
+
     try {
-      const updated = await notificationsApi.revoke(revokingNotification.id, revokeReason);
+      const updated = await notificationsApi.revoke(targetId, revokeReason);
       setNotifications((prev) => prev.map((n) => (n.id === updated.id ? updated : n)));
-      showToast('Đã thu hồi thông báo thành công');
-      setRevokingNotification(null);
     } catch {
+      setNotifications(prevNotifications);
       showToast('Lỗi khi thu hồi thông báo');
     }
   };
@@ -252,11 +268,15 @@ export const NotificationManagementPage: React.FC = () => {
     if (!window.confirm(`Bạn có chắc muốn xóa vĩnh viễn thông báo "${notif.title}"?`)) {
       return;
     }
+    const prevNotifications = [...notifications];
+    // Optimistic UI: Xóa khỏi bảng và hiện thông báo ngay
+    setNotifications((prev) => prev.filter((n) => n.id !== notif.id));
+    showToast('Đã xóa thông báo');
+
     try {
       await notificationsApi.delete(notif.id);
-      setNotifications((prev) => prev.filter((n) => n.id !== notif.id));
-      showToast('Đã xóa thông báo');
     } catch {
+      setNotifications(prevNotifications);
       showToast('Lỗi khi xóa thông báo');
     }
   };

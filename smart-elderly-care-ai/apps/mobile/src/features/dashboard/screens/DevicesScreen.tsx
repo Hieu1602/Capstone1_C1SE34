@@ -23,8 +23,9 @@ import { EditGroupModal } from '../components/devices/EditGroupModal';
 import { DeviceAddMenuModal } from '../components/devices/DeviceAddMenuModal';
 import { DeviceCardItem } from '../components/devices/DeviceCardItem';
 import { DeviceGroupCard } from '../components/devices/DeviceGroupCard';
+import { handleHeaderBack } from '../../../navigation/navigationHelpers';
 
-export default function DevicesScreen({ navigation }: any) {
+export default function DevicesScreen({ navigation, route }: any) {
   const { isDarkMode, colors } = useTheme();
   const {
     userRole,
@@ -394,11 +395,24 @@ export default function DevicesScreen({ navigation }: any) {
     <SafeAreaView style={[styles.safeArea, isDarkMode && { backgroundColor: colors.background }]} edges={['top']}>
       {/* Header */}
       <View style={[styles.headerRow, isDarkMode && { backgroundColor: colors.background }]}>
-        <View>
-          <LocalizedText style={[styles.headerTitle, isDarkMode && { color: colors.textPrimary }]}>Thiết bị</LocalizedText>
-          <LocalizedText style={[styles.headerSubtitleTop, isDarkMode && { color: colors.textSecondary }]}>
-            {iotDevices.length} thiết bị đang kết nối
-          </LocalizedText>
+        <View style={styles.headerLeftRow}>
+          <TouchableOpacity
+            style={[styles.backBtn, isDarkMode && { backgroundColor: colors.card, borderColor: colors.border }]}
+            onPress={() => handleHeaderBack(navigation, route, 'Home', false)}
+            activeOpacity={0.7}
+            hitSlop={{ top: 12, bottom: 12, left: 12, right: 12 }}
+            accessibilityLabel="Quay lại"
+            accessibilityRole="button"
+          >
+            <Ionicons name="chevron-back" size={22} color={isDarkMode ? colors.textPrimary : Colors.textPrimary} />
+          </TouchableOpacity>
+
+          <View style={styles.headerTitleCol}>
+            <LocalizedText style={[styles.headerTitle, isDarkMode && { color: colors.textPrimary }]}>Thiết bị</LocalizedText>
+            <LocalizedText style={[styles.headerSubtitleTop, isDarkMode && { color: colors.textSecondary }]}>
+              {iotDevices.length} thiết bị đang kết nối
+            </LocalizedText>
+          </View>
         </View>
 
         <View style={styles.headerRightActions}>
@@ -483,8 +497,8 @@ export default function DevicesScreen({ navigation }: any) {
           <RefreshControl
             refreshing={isRefreshing}
             onRefresh={handleRefresh}
-            colors={['#0284C7']}
-            tintColor={isDarkMode ? '#38BDF8' : '#0284C7'}
+            colors={[Colors.primary]}
+            tintColor={Colors.primary}
           />
         }
       >
@@ -788,6 +802,27 @@ const styles = StyleSheet.create({
     paddingTop: 12,
     paddingBottom: 8,
   },
+  headerLeftRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    flex: 1,
+    marginRight: 12,
+  },
+  headerTitleCol: {
+    flex: 1,
+  },
+  backBtn: {
+    width: 38,
+    height: 38,
+    borderRadius: 19,
+    backgroundColor: '#FFFFFF',
+    borderWidth: 1,
+    borderColor: '#E2E8F0',
+    alignItems: 'center',
+    justifyContent: 'center',
+    marginRight: 10,
+    ...Shadows.soft,
+  },
   headerTitle: {
     fontSize: 24,
     fontWeight: '800',
@@ -806,7 +841,7 @@ const styles = StyleSheet.create({
     width: 44,
     height: 44,
     borderRadius: 22,
-    backgroundColor: '#2563EB',
+    backgroundColor: Colors.primary,
     alignItems: 'center',
     justifyContent: 'center',
     ...Shadows.md,
@@ -837,7 +872,7 @@ const styles = StyleSheet.create({
     backgroundColor: '#F1F5F9',
   },
   tabButtonActive: {
-    backgroundColor: '#2563EB',
+    backgroundColor: Colors.primary,
   },
   tabText: {
     fontSize: 12,

@@ -139,7 +139,7 @@ export const FamilyAppointmentsModal: React.FC<FamilyAppointmentsModalProps> = (
           <View style={styles.modalHeader}>
             <View style={{ flex: 1 }}>
               <LocalizedText style={[styles.modalTitle, { color: colors.textPrimary }]}>
-                Lịch Khám & Tái Khám
+                Lịch Khám
               </LocalizedText>
               {patientName ? (
                 <LocalizedText style={[styles.modalSub, { color: isDarkMode ? '#94A3B8' : '#64748B' }]}>

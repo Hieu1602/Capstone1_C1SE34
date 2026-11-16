@@ -93,11 +93,7 @@ export const useAlertStore = create<AlertState>()((set, get) => ({
     })),
 
   acknowledgeIncident: async (incidentId: string, note?: string, user: string = 'Demo User') => {
-    try {
-      await incidentsApi.acknowledge(incidentId, note);
-    } catch (e) {
-      console.warn('acknowledgeIncident API error:', e);
-    }
+    // 1. Optimistic Update tức thời trong RAM (0ms)
     set((state) => {
       const updatedIncidents = state.incidents.map((inc) =>
         inc.id === incidentId
@@ -121,14 +117,17 @@ export const useAlertStore = create<AlertState>()((set, get) => ({
         sirenActive: hasOtherCritical,
       };
     });
+
+    // 2. Đồng bộ ngầm xuống backend
+    try {
+      await incidentsApi.acknowledge(incidentId, note);
+    } catch (e) {
+      console.warn('acknowledgeIncident API error:', e);
+    }
   },
 
   acknowledgeAll: async () => {
-    try {
-      await incidentsApi.acknowledgeAll();
-    } catch (e) {
-      console.warn('acknowledgeAll error:', e);
-    }
+    // 1. Optimistic Update tức thời trong RAM (0ms)
     set((state) => ({
       incidents: state.incidents.map((inc) => ({
         ...inc,
@@ -137,6 +136,13 @@ export const useAlertStore = create<AlertState>()((set, get) => ({
       })),
       sirenActive: false,
     }));
+
+    // 2. Đồng bộ ngầm xuống backend
+    try {
+      await incidentsApi.acknowledgeAll();
+    } catch (e) {
+      console.warn('acknowledgeAll error:', e);
+    }
   },
 
   reopenIncident: (incidentId: string, note?: string) =>

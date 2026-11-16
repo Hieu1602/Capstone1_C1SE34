@@ -144,54 +144,54 @@ export const SmartbandVitalsCards: React.FC<SmartbandVitalsCardsProps> = ({
         </View>
       </View>
 
-      {/* THẺ 2: NỒNG ĐỘ OXY TRONG MÁU (SpO2) */}
-      <View style={[styles.metricCard, isDarkMode && { backgroundColor: colors.card, borderColor: colors.border }]}>
-        <View style={styles.metricCardHeader}>
-          <View style={styles.metricHeaderLeft}>
-            <View style={[styles.metricIconCircle, { backgroundColor: '#E0F2FE' }]}>
-              <Ionicons name="water" size={22} color="#0284C7" />
+      {/* THẺ 2: NỒNG ĐỘ OXY TRONG MÁU (SpO2) - Chỉ hiển thị khi phần cứng hỗ trợ / có dữ liệu */}
+      {hasSpO2 && (
+        <View style={[styles.metricCard, isDarkMode && { backgroundColor: colors.card, borderColor: colors.border }]}>
+          <View style={styles.metricCardHeader}>
+            <View style={styles.metricHeaderLeft}>
+              <View style={[styles.metricIconCircle, { backgroundColor: '#E0F2FE' }]}>
+                <Ionicons name="water" size={22} color="#0284C7" />
+              </View>
+              <View style={{ marginLeft: 12 }}>
+                <LocalizedText style={[styles.metricTitle, isDarkMode && { color: colors.textPrimary }]}>
+                  Nồng Độ Oxy Trong Máu (SpO₂)
+                </LocalizedText>
+                <LocalizedText style={[styles.metricSub, isDarkMode && { color: colors.textSecondary }]}>
+                  Bão hòa oxy mao mạch ngoại vi
+                </LocalizedText>
+              </View>
             </View>
-            <View style={{ marginLeft: 12 }}>
-              <LocalizedText style={[styles.metricTitle, isDarkMode && { color: colors.textPrimary }]}>
-                Nồng Độ Oxy Trong Máu (SpO₂)
+
+            <View style={styles.statusPillGreen}>
+              <LocalizedText style={styles.statusPillGreenText}>Tối ưu</LocalizedText>
+            </View>
+          </View>
+
+          <View style={styles.metricMainRow}>
+            <View style={styles.metricValueWrapper}>
+              <LocalizedText style={[styles.metricMainValue, { color: '#0284C7' }]}>{displaySpO2}</LocalizedText>
+              <LocalizedText style={styles.metricMainUnit}>%</LocalizedText>
+            </View>
+
+            <View style={styles.metricMiniStatsColumn}>
+              <LocalizedText style={[styles.metricMiniStatItem, isDarkMode && { color: colors.textSecondary }]}>
+                Ngưỡng an toàn: <LocalizedText style={{ fontWeight: '700', color: '#059669' }}>≥ 95%</LocalizedText>
               </LocalizedText>
-              <LocalizedText style={[styles.metricSub, isDarkMode && { color: colors.textSecondary }]}>
-                Bão hòa oxy mao mạch ngoại vi
+              <LocalizedText style={[styles.metricMiniStatItem, isDarkMode && { color: colors.textSecondary }]}>
+                Cảnh báo nguy hiểm:{' '}
+                <LocalizedText style={{ fontWeight: '700', color: '#EF4444' }}>&lt; 90%</LocalizedText>
+              </LocalizedText>
+              <LocalizedText style={[styles.metricMiniStatItem, isDarkMode && { color: colors.textSecondary }]}>
+                Phương thức đo: <LocalizedText style={{ fontWeight: '600' }}>LED Đỏ 660nm &amp; IR 880nm</LocalizedText>
               </LocalizedText>
             </View>
           </View>
 
-          <View style={styles.statusPillGreen}>
-            <LocalizedText style={styles.statusPillGreenText}>Tối ưu</LocalizedText>
-          </View>
-        </View>
-
-        <View style={styles.metricMainRow}>
-          <View style={styles.metricValueWrapper}>
-            <LocalizedText style={[styles.metricMainValue, { color: '#0284C7' }]}>{displaySpO2}</LocalizedText>
-            <LocalizedText style={styles.metricMainUnit}>%</LocalizedText>
-          </View>
-
-          <View style={styles.metricMiniStatsColumn}>
-            <LocalizedText style={[styles.metricMiniStatItem, isDarkMode && { color: colors.textSecondary }]}>
-              Ngưỡng an toàn: <LocalizedText style={{ fontWeight: '700', color: '#059669' }}>≥ 95%</LocalizedText>
-            </LocalizedText>
-            <LocalizedText style={[styles.metricMiniStatItem, isDarkMode && { color: colors.textSecondary }]}>
-              Cảnh báo nguy hiểm:{' '}
-              <LocalizedText style={{ fontWeight: '700', color: '#EF4444' }}>&lt; 90%</LocalizedText>
-            </LocalizedText>
-            <LocalizedText style={[styles.metricMiniStatItem, isDarkMode && { color: colors.textSecondary }]}>
-              Phương thức đo: <LocalizedText style={{ fontWeight: '600' }}>LED Đỏ 660nm &amp; IR 880nm</LocalizedText>
-            </LocalizedText>
-          </View>
-        </View>
-
-        {/* Thanh SpO2 phân cấp y tế */}
-        <View style={styles.spo2BarWrapper}>
-          <View style={styles.spo2BarSegmentDanger} />
-          <View style={styles.spo2BarSegmentWarning} />
-          <View style={styles.spo2BarSegmentSafe} />
-          {hasSpO2 && (
+          {/* Thanh SpO2 phân cấp y tế */}
+          <View style={styles.spo2BarWrapper}>
+            <View style={styles.spo2BarSegmentDanger} />
+            <View style={styles.spo2BarSegmentWarning} />
+            <View style={styles.spo2BarSegmentSafe} />
             <View
               style={[
                 styles.spo2IndicatorPin,
@@ -200,23 +200,21 @@ export const SmartbandVitalsCards: React.FC<SmartbandVitalsCardsProps> = ({
             >
               <View style={styles.spo2PinDot} />
             </View>
-          )}
-        </View>
-        <View style={styles.rangeLabelsRow}>
-          <LocalizedText style={[styles.rangeLabelText, { color: '#EF4444' }]}>Nguy hiểm (&lt;90%)</LocalizedText>
-          <LocalizedText style={[styles.rangeLabelText, { color: '#F59E0B' }]}>Cần theo dõi (90-94%)</LocalizedText>
-          <LocalizedText style={[styles.rangeLabelText, { color: '#059669' }]}>Lý tưởng (95-100%)</LocalizedText>
-        </View>
+          </View>
+          <View style={styles.rangeLabelsRow}>
+            <LocalizedText style={[styles.rangeLabelText, { color: '#EF4444' }]}>Nguy hiểm (&lt;90%)</LocalizedText>
+            <LocalizedText style={[styles.rangeLabelText, { color: '#F59E0B' }]}>Cần theo dõi (90-94%)</LocalizedText>
+            <LocalizedText style={[styles.rangeLabelText, { color: '#059669' }]}>Lý tưởng (95-100%)</LocalizedText>
+          </View>
 
-        <View style={[styles.aiInsightBox, isDarkMode && { backgroundColor: colors.surfaceSubtle }]}>
-          <Ionicons name="sparkles" size={15} color="#0284C7" />
-          <LocalizedText style={[styles.aiInsightText, isDarkMode && { color: colors.textSecondary }]}>
-            {hasSpO2
-              ? `Đánh giá AI: Độ bão hòa oxy mô ngoại vi đạt mức lý tưởng ${displaySpO2}%, lưu thông phế nang phổi hoạt động thông suốt.`
-              : 'Đánh giá AI: Chưa ghi nhận dữ liệu SpO₂ từ vòng đeo tay.'}
-          </LocalizedText>
+          <View style={[styles.aiInsightBox, isDarkMode && { backgroundColor: colors.surfaceSubtle }]}>
+            <Ionicons name="sparkles" size={15} color="#0284C7" />
+            <LocalizedText style={[styles.aiInsightText, isDarkMode && { color: colors.textSecondary }]}>
+              {`Đánh giá AI: Độ bão hòa oxy mô ngoại vi đạt mức lý tưởng ${displaySpO2}%, lưu thông phế nang phổi hoạt động thông suốt.`}
+            </LocalizedText>
+          </View>
         </View>
-      </View>
+      )}
 
       {/* THẺ 3 & 4 (2 CỘT): GIA TỐC KẾ PHÁT HIỆN NGÃ & THÂN NHIỆT */}
       <View style={styles.twoColumnGrid}>

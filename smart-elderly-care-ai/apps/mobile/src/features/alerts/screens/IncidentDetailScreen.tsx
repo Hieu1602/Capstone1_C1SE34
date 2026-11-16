@@ -11,7 +11,7 @@ import {
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
-import { incidentsApi } from '../../../services/api';
+import { incidentsApi, BASE_URL } from '../../../services/api';
 import { useTheme } from '../../../store/useThemeStore';
 import { useAlertStore, useAuthStore } from '../../../store';
 import { useVitalStore } from '../../../store/useVitalStore';
@@ -84,6 +84,7 @@ export default function IncidentDetailScreen({ route, navigation }: any) {
   const [viewMode, setViewMode] = useState<'ai_box' | 'video'>('ai_box');
 
   useEffect(() => {
+    setImgError(false);
     if (!incidentId) { setLoading(false); return; }
     const storeInc = incidents.find((i) => i.id === incidentId);
 
@@ -96,6 +97,9 @@ export default function IncidentDetailScreen({ route, navigation }: any) {
         conf = isNaN(p) ? undefined : (p > 1 ? p / 100 : p);
       }
 
+      const mediaThumb = params.thumbnail_url ?? storeInc?.thumbnail_url ?? null;
+      const mediaVideo = params.video_clip_url ?? storeInc?.video_clip_url ?? null;
+
       setIncident({
         id: incidentId,
         device_id: params.device_id ?? storeInc?.device_id,
@@ -103,14 +107,18 @@ export default function IncidentDetailScreen({ route, navigation }: any) {
         alert_level: params.alert_level ?? 'CRITICAL',
         message: params.message ?? 'Cảnh báo khẩn cấp ghi nhận từ hệ thống cảm biến.',
         confidence: conf,
-        video_clip_url: params.video_clip_url ?? null,
-        thumbnail_url: params.thumbnail_url ?? null,
+        video_clip_url: mediaVideo,
+        thumbnail_url: mediaThumb,
         is_acknowledged: storeInc ? storeInc.is_acknowledged : (params.is_acknowledged ?? false),
         acknowledged_by: storeInc?.acknowledged_by ?? params.acknowledged_by ?? (storeInc?.is_acknowledged ? operatorName : null),
         acknowledged_at: storeInc?.acknowledged_at ?? params.acknowledged_at,
         created_at: params.created_at ?? params.time ?? new Date().toISOString(),
       });
       setLoading(false);
+
+      if (!mediaThumb || !mediaVideo) {
+        fetchIncident();
+      }
       return;
     }
 
@@ -289,8 +297,17 @@ export default function IncidentDetailScreen({ route, navigation }: any) {
 
   const levelColor = LEVEL_COLORS[incident.alert_level] ?? '#64748B';
   const typeLabel = ALERT_TYPE_LABELS[incident.alert_type] ?? incident.alert_type;
-  const videoUrl = incident.video_clip_url || null;
-  const evidenceImg = imgError ? null : (incident.thumbnail_url || null);
+  const resolveMediaUrl = (url?: string | null) => {
+    if (!url) return null;
+    if (url.startsWith('http://') || url.startsWith('https://') || url.startsWith('data:') || url.startsWith('file://')) {
+      return url;
+    }
+    const origin = (BASE_URL || '').replace(/\/api\/v1\/?$/, '');
+    return `${origin}${url.startsWith('/') ? '' : '/'}${url}`;
+  };
+
+  const videoUrl = resolveMediaUrl(incident.video_clip_url);
+  const evidenceImg = imgError ? null : resolveMediaUrl(incident.thumbnail_url);
 
   return (
     <SafeAreaView style={[styles.container, { backgroundColor: colors.background }]}>

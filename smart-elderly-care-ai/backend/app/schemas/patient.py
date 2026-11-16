@@ -34,6 +34,7 @@ class PatientMedicalRecordOut(BaseModel):
     doctor_specialty: str = ""
     hospital: str = ""
     next_appointment: str = ""
+    doctor_avatar_url: Optional[str] = None
     avatar_url: Optional[str] = None
     has_face_enrolled: bool = False
 
@@ -64,3 +65,4 @@ class PatientMedicalRecordUpdate(BaseModel):
     doctor_specialty: Optional[str] = None
     hospital: Optional[str] = None
     next_appointment: Optional[str] = None
+    doctor_avatar_url: Optional[str] = None

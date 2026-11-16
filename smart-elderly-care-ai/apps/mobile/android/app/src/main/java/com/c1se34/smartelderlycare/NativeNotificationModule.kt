@@ -80,6 +80,32 @@ class NativeNotificationModule(private val reactContext: ReactApplicationContext
     }
 
     @ReactMethod
+    fun startBackgroundMonitor(serverUrl: String) {
+        try {
+            val intent = Intent(reactContext, SmartCareBackgroundService::class.java).apply {
+                putExtra("SERVER_URL", serverUrl)
+            }
+            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
+                reactContext.startForegroundService(intent)
+            } else {
+                reactContext.startService(intent)
+            }
+        } catch (e: Exception) {
+            e.printStackTrace()
+        }
+    }
+
+    @ReactMethod
+    fun stopBackgroundMonitor() {
+        try {
+            val intent = Intent(reactContext, SmartCareBackgroundService::class.java)
+            reactContext.stopService(intent)
+        } catch (e: Exception) {
+            e.printStackTrace()
+        }
+    }
+
+    @ReactMethod
     fun triggerVibration() {
         try {
             if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.S) {

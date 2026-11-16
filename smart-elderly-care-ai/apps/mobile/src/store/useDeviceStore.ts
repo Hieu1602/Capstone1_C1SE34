@@ -462,7 +462,7 @@ export const useDeviceStore = create<DeviceState>()(
             }));
             try {
               const auth = require('./useAuthStore').useAuthStore;
-              if (auth && !auth.getState().household_id) {
+              if (auth && (!auth.getState().household_id || !auth.getState().has_house)) {
                 auth.setState({
                   household_id: res.data.id,
                   has_house: true,
@@ -470,7 +470,12 @@ export const useDeviceStore = create<DeviceState>()(
                 });
               }
             } catch {}
-          } else {
+          }
+        } catch (err: any) {
+          // Chỉ xóa dữ liệu nhà khi server trả về mã HTTP 404 (chưa tham gia nhà hoặc đã bị gỡ)
+          // Lỗi mạng hoặc timeout phải giữ nguyên cache để tránh nhấp nháy màn hình trống
+          const status = err?.response?.status;
+          if (status === 404) {
             set({
               house: {
                 id: "",
@@ -500,42 +505,13 @@ export const useDeviceStore = create<DeviceState>()(
               const { useAuthStore } = require('./useAuthStore');
               useAuthStore.getState().clearHouseData?.();
             } catch {}
+            try {
+              const { useHealthStore } = require('./useHealthStore');
+              useHealthStore.getState().resetHealthStore?.();
+            } catch {}
+          } else {
+            console.log("[DeviceStore] fetchHouseFromBackend giữ nguyên cache, lỗi mạng:", err?.message || err);
           }
-        } catch {
-          // Người dùng mới chưa có căn nhà nào hoặc vừa bị kick khỏi nhà (HTTP 404)
-          set({
-            house: {
-              id: "",
-              name: "",
-              address: "",
-              membersCount: 0,
-              currentMode: "HOME",
-              hasHouse: false,
-            },
-            activeDevice: null,
-            iotDevices: [],
-            deviceGroups: [],
-            camera: {
-              id: "",
-              name: "",
-              room: "",
-              isOnline: false,
-              isSleep: false,
-              isAIProtect: false,
-              resolution: "2K",
-              sdCardStatus: "NO_CARD",
-              wifiStrength: 0,
-              streamUrl: "",
-            },
-          });
-          try {
-            const { useAuthStore } = require('./useAuthStore');
-            useAuthStore.getState().clearHouseData?.();
-          } catch {}
-          try {
-            const { useHealthStore } = require('./useHealthStore');
-            useHealthStore.getState().resetHealthStore?.();
-          } catch {}
         }
       },
       fetchGroupsFromBackend: async () => {
