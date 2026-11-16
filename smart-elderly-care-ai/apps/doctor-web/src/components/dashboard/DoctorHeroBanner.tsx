@@ -67,7 +67,7 @@ export const DoctorHeroBanner: React.FC<DoctorHeroBannerProps> = ({
                   doctorInitial
                 )}
               </div>
-              <span className="absolute -bottom-0.5 -right-0.5 h-3.5 w-3.5 rounded-full bg-emerald-400 ring-2 ring-blue-600 z-10" />
+              <span className="absolute bottom-0 right-0 h-3.5 w-3.5 rounded-full bg-emerald-400 ring-2 ring-white shadow-md z-10" />
             </div>
 
             <div>

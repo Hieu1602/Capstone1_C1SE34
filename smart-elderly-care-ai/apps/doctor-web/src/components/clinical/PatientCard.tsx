@@ -46,7 +46,7 @@ export const PatientCard: React.FC<PatientCardProps> = ({
                 )}
               </div>
               <span
-                className={`absolute -bottom-0.5 -right-0.5 h-3.5 w-3.5 rounded-full ring-2 ring-white z-10 ${
+                className={`absolute bottom-0 right-0 h-3.5 w-3.5 rounded-full ring-2 ring-white shadow-sm z-10 ${
                   patient.is_online ? 'bg-emerald-500' : 'bg-slate-300'
                 }`}
                 title={patient.is_online ? 'Smartband trực tuyến' : 'Chờ tín hiệu'}

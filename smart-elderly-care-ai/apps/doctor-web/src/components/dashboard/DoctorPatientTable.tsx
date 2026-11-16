@@ -138,7 +138,7 @@ export const DoctorPatientTable: React.FC<DoctorPatientTableProps> = ({
                             )}
                           </div>
                           {patient.is_online && (
-                            <span className="absolute -bottom-0.5 -right-0.5 h-2.5 w-2.5 rounded-full bg-emerald-500 ring-2 ring-white z-10" />
+                            <span className="absolute bottom-0 right-0 h-2.5 w-2.5 rounded-full bg-emerald-500 ring-2 ring-white shadow-xs z-10" />
                           )}
                         </div>
                         <div>
