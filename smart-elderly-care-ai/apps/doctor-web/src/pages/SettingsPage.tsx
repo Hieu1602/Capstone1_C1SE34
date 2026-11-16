@@ -4,6 +4,15 @@
 import React, { useState, useEffect, useCallback, useRef } from 'react';
 import { useDoctorAuthStore, getDoctorAvatarUri } from '../store/useDoctorAuthStore';
 import { authApi, doctorApi } from '../services/api';
+import { DoctorProfileInfo } from '../types';
+import {
+  DoctorEditProfileModal,
+  DoctorChangePasswordModal,
+  DoctorDevicesModal,
+  DoctorNotificationModal,
+  DoctorComplianceModal,
+  DoctorLogoutModal,
+} from '../components/settings';
 import {
   ShieldCheck,
   Camera,
@@ -17,94 +26,14 @@ import {
   LogOut,
   ChevronRight,
   Monitor,
-  Smartphone,
-  Trash2,
-  X,
-  Eye,
-  EyeOff,
   CheckCircle2,
-  Circle,
-  RefreshCw,
   Moon,
-  User,
-  Phone,
-  GraduationCap,
-  Stethoscope,
-  Building2,
-  Briefcase,
-  Check,
-  Loader2,
 } from 'lucide-react';
-
-interface DoctorProfileInfo {
-  name: string;
-  degree: string;
-  specialty: string;
-  hospital: string;
-  department: string;
-  phone: string;
-  cchn_number: string;
-  avatarUri?: string | null;
-  gender?: string;
-}
 
 const maskPhone = (phone?: string) => {
   const c = phone?.trim() || '';
   return !c ? 'Chưa cập nhật' : c.length <= 4 ? '***' : `${c.slice(0, 3)}****${c.slice(-3)}`;
 };
-
-const GENDER_OPTIONS = [
-  {
-    value: 'Nam',
-    label: 'Nam',
-    path: (
-      <>
-        <circle cx="10" cy="14" r="5" />
-        <path d="M19 5l-5.4 5.4" />
-        <path d="M15 5h4v4" />
-      </>
-    ),
-  },
-  {
-    value: 'Nữ',
-    label: 'Nữ',
-    path: (
-      <>
-        <circle cx="12" cy="9" r="5" />
-        <path d="M12 14v7" />
-        <path d="M9 18h6" />
-      </>
-    ),
-  },
-  {
-    value: 'Khác',
-    label: 'Khác',
-    path: (
-      <>
-        <circle cx="12" cy="12" r="5" />
-        <path d="M12 2v5" />
-        <path d="M12 17v5" />
-        <path d="M2 12h5" />
-        <path d="M17 12h5" />
-      </>
-    ),
-  },
-] as const;
-
-const COMPLIANCE_SECTIONS = [
-  {
-    title: '1. Tiêu chuẩn Dữ liệu Y tế Quốc tế & Bảo mật Đa lớp',
-    desc: 'Hệ thống Smart Elderly Care AI tuân thủ nghiêm ngặt các quy chuẩn truyền nhận và lưu trữ bệnh án điện tử quốc tế. Dữ liệu chỉ số sinh hiệu, đơn thuốc điều trị và tiền sử bệnh lý của người cao tuổi đều được mã hóa đầu cuối bảo mật tuyệt đối bằng thuật toán chuẩn AES-256.',
-  },
-  {
-    title: '2. Cam kết Bảo mật Thông tin Bệnh nhân của Bác sĩ',
-    desc: 'Bác sĩ gia đình có nghĩa vụ bảo mật toàn diện thông tin cá nhân, hồ sơ bệnh án và hình ảnh giám sát của người cao tuổi. Mọi hành vi sao chép, chụp màn hình hoặc chia sẻ dữ liệu y tế ra bên ngoài khi chưa có sự đồng ý của gia đình đều vi phạm Luật Khám bệnh, chữa bệnh.',
-  },
-  {
-    title: '3. Nhật ký Kiểm toán & Giám sát Truy cập An toàn',
-    desc: 'Mọi thao tác tra cứu hồ sơ, kê đơn thuốc, cập nhật chỉ số sức khỏe của Bác sĩ đều được hệ thống ghi nhận lịch sử kiểm toán tự động, phục vụ công tác thanh tra chuyên môn y tế và đối soát định kỳ.',
-  },
-];
 
 export const SettingsPage: React.FC = () => {
   const { user, logout } = useDoctorAuthStore();
@@ -155,12 +84,7 @@ export const SettingsPage: React.FC = () => {
   const [savingProfile, setSavingProfile] = useState(false);
 
   // Change password state
-  const [oldPassword, setOldPassword] = useState('');
-  const [newPassword, setNewPassword] = useState('');
-  const [confirmPassword, setConfirmPassword] = useState('');
-  const [showPwd, setShowPwd] = useState({ old: false, new: false, confirm: false });
   const [pwdError, setPwdError] = useState('');
-  const [pwdSuccess, setPwdSuccess] = useState('');
   const [savingPwd, setSavingPwd] = useState(false);
 
   // Notification switches & Vital Thresholds
@@ -308,34 +232,32 @@ export const SettingsPage: React.FC = () => {
     }
   };
 
-  const pwdRules = [
-    { valid: newPassword.length >= 8 && newPassword.length <= 16, text: 'Độ dài 8 - 16 ký tự' },
-    { valid: /[A-Z]/.test(newPassword) && /[a-z]/.test(newPassword), text: 'Chữ hoa & chữ thường' },
-    { valid: /[0-9]/.test(newPassword) && /[^A-Za-z0-9]/.test(newPassword), text: 'Có số & ký tự đặc biệt (!@#$)' },
-  ];
-  const isConfirmMatch = confirmPassword.length > 0 && newPassword === confirmPassword;
-
-  const handleSavePassword = async (e: React.FormEvent) => {
-    e.preventDefault();
+  const handleSavePassword = async (oldPwd: string, newPwd: string, confirmPwd: string) => {
     setPwdError('');
-    setPwdSuccess('');
-    if (!oldPassword.trim()) return setPwdError('Vui lòng nhập mật khẩu hiện tại.');
-    if (!pwdRules.every((r) => r.valid)) {
-      return setPwdError('Mật khẩu mới phải từ 8-16 ký tự, gồm chữ hoa, chữ thường, số và ký tự đặc biệt.');
+    if (!oldPwd.trim()) {
+      setPwdError('Vui lòng nhập mật khẩu hiện tại.');
+      return;
     }
-    if (!isConfirmMatch) return setPwdError('Mật khẩu xác nhận không khớp với mật khẩu mới.');
-    if (oldPassword === newPassword) return setPwdError('Mật khẩu mới phải khác mật khẩu hiện tại.');
+    if (newPwd.length < 8 || newPwd.length > 16) {
+      setPwdError('Mật khẩu mới phải từ 8-16 ký tự, gồm chữ hoa, chữ thường, số và ký tự đặc biệt.');
+      return;
+    }
+    if (newPwd !== confirmPwd) {
+      setPwdError('Mật khẩu xác nhận không khớp với mật khẩu mới.');
+      return;
+    }
+    if (oldPwd === newPwd) {
+      setPwdError('Mật khẩu mới phải khác mật khẩu hiện tại.');
+      return;
+    }
 
     setSavingPwd(true);
     try {
       await authApi.changePassword({
-        current_password: oldPassword,
-        new_password: newPassword,
-        confirm_new_password: confirmPassword,
+        current_password: oldPwd,
+        new_password: newPwd,
+        confirm_new_password: confirmPwd,
       });
-      setOldPassword('');
-      setNewPassword('');
-      setConfirmPassword('');
       setActiveModal('NONE');
       showToast('Đã thay đổi mật khẩu tài khoản Bác sĩ thành công.');
     } catch (err: any) {
@@ -347,6 +269,16 @@ export const SettingsPage: React.FC = () => {
       );
     } finally {
       setSavingPwd(false);
+    }
+  };
+
+  const handleRevokeTerminal = async (terminalId: string) => {
+    try {
+      await authApi.deleteTerminal(terminalId);
+      await fetchStatsAndDevices();
+      showToast('Đã thu hồi phiên đăng nhập thành công.');
+    } catch {
+      showToast('Không thể thu hồi phiên đăng nhập.');
     }
   };
 
@@ -379,7 +311,6 @@ export const SettingsPage: React.FC = () => {
       sub: 'Bảo mật tài khoản đăng nhập Cổng Bác sĩ',
       onClick: () => {
         setPwdError('');
-        setPwdSuccess('');
         setActiveModal('PASSWORD');
       },
     },
@@ -730,571 +661,63 @@ export const SettingsPage: React.FC = () => {
         </div>
       </div>
 
-      {/* =========================================================
-          MODAL 1: CHỈNH SỬA HỒ SƠ BÁC SĨ (REDESIGNED)
-         ========================================================= */}
+      {/* MODALS */}
       {activeModal === 'EDIT_PROFILE' && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-900/60 p-4 backdrop-blur-sm animate-fade-in">
-          <div className="flex max-h-[92vh] w-full max-w-2xl flex-col overflow-hidden rounded-3xl bg-white shadow-2xl border border-slate-100 animate-scale-up">
-            {/* 1. Header Cố Định (Sticky Top) */}
-            <div className="sticky top-0 z-10 flex items-center justify-between border-b border-slate-100 bg-white/95 px-6 py-4 backdrop-blur-md">
-              <div className="flex items-center gap-3">
-                <div className="flex h-10 w-10 items-center justify-center rounded-2xl bg-blue-50 text-blue-600 shadow-xs">
-                  <Edit3 className="h-5 w-5" />
-                </div>
-                <div>
-                  <h3 className="font-heading text-base font-extrabold text-slate-900">
-                    Sửa Hồ Sơ Bác Sĩ
-                  </h3>
-                  <p className="text-xs text-slate-500">
-                    Cập nhật thông tin định danh & hồ sơ chuyên môn y tế
-                  </p>
-                </div>
-              </div>
-              <button
-                onClick={() => setActiveModal('NONE')}
-                className="rounded-xl p-2 text-slate-400 hover:bg-slate-100 hover:text-slate-600 transition"
-              >
-                <X className="h-5 w-5" />
-              </button>
-            </div>
-
-            {/* 2. Thân Modal Cuộn Mượt (Scrollable Body) */}
-            <form onSubmit={handleSaveProfile} className="flex flex-1 flex-col overflow-hidden">
-              <div className="flex-1 overflow-y-auto px-6 py-5 space-y-6">
-                {/* Khu vực Ảnh Đại Diện (Profile Avatar Card) */}
-                <div className="flex flex-col sm:flex-row items-center sm:items-stretch gap-4 rounded-2xl border border-blue-100 bg-gradient-to-r from-blue-50 via-indigo-50/60 to-white p-4 shadow-xs">
-                  <div className="relative shrink-0">
-                    <div className="flex h-20 w-20 items-center justify-center overflow-hidden rounded-full bg-blue-600 text-2xl font-bold text-white shadow-md ring-4 ring-white">
-                      {editForm.avatarUri ? (
-                        <img src={editForm.avatarUri} alt="" className="h-full w-full object-cover" />
-                      ) : (
-                        doctorInitial
-                      )}
-                    </div>
-                    <button
-                      type="button"
-                      onClick={() => fileInputRef.current?.click()}
-                      className="absolute bottom-0 right-0 flex h-7 w-7 items-center justify-center rounded-full bg-blue-600 text-white shadow-md ring-2 ring-white hover:bg-blue-700 transition"
-                      title="Đổi ảnh đại diện"
-                    >
-                      <Camera className="h-3.5 w-3.5" />
-                    </button>
-                  </div>
-
-                  <div className="flex flex-1 flex-col justify-center text-center sm:text-left">
-                    <div className="flex flex-wrap items-center justify-center sm:justify-start gap-2">
-                      <span className="font-heading text-sm font-bold text-slate-900">
-                        {editForm.name || 'BS. Trần Văn Minh'}
-                      </span>
-                      <span className="inline-flex items-center gap-1 rounded-full bg-emerald-50 px-2 py-0.5 text-[10px] font-bold text-emerald-600 border border-emerald-100">
-                        <CheckCircle2 className="h-3 w-3" />
-                        CCHN Đã xác thực
-                      </span>
-                    </div>
-                    <p className="text-xs text-slate-500 mt-1">
-                      Ảnh chân dung hiển thị trên hồ sơ bệnh nhân & cổng tư vấn
-                    </p>
-
-                    <div className="mt-3 flex flex-wrap items-center justify-center sm:justify-start gap-2">
-                      <button
-                        type="button"
-                        onClick={() => fileInputRef.current?.click()}
-                        className="inline-flex items-center gap-1.5 rounded-xl border border-blue-200 bg-white/90 px-3 py-1.5 text-xs font-bold text-blue-600 shadow-2xs hover:bg-blue-50 transition"
-                      >
-                        <Camera className="h-3.5 w-3.5" />
-                        <span>Tải ảnh mới</span>
-                      </button>
-                      {editForm.avatarUri && (
-                        <button
-                          type="button"
-                          onClick={() => setEditForm((prev) => ({ ...prev, avatarUri: null }))}
-                          className="inline-flex items-center gap-1.5 rounded-xl border border-rose-200 bg-white/90 px-3 py-1.5 text-xs font-bold text-rose-600 shadow-2xs hover:bg-rose-50 transition"
-                        >
-                          <Trash2 className="h-3.5 w-3.5" />
-                          <span>Xóa ảnh</span>
-                        </button>
-                      )}
-                    </div>
-                  </div>
-                </div>
-
-                {/* Nhóm 1 — Thông tin Định danh & Liên hệ */}
-                <div className="space-y-3">
-                  <div className="flex items-center gap-2">
-                    <span className="h-2 w-2 rounded-full bg-blue-600" />
-                    <h4 className="text-xs font-semibold uppercase tracking-wider text-blue-600">
-                      Nhóm 1 — Thông tin Định danh & Liên hệ
-                    </h4>
-                  </div>
-
-                  <div className="space-y-3.5">
-                    {/* Họ và tên Bác sĩ (*) */}
-                    <div>
-                      <label className="block text-xs font-semibold text-slate-700 mb-1.5">
-                        Họ và tên Bác sĩ <span className="text-rose-500">(*)</span>
-                      </label>
-                      <div className="relative">
-                        <div className="pointer-events-none absolute inset-y-0 left-0 flex items-center pl-3.5 text-slate-400">
-                          <User className="h-4 w-4" />
-                        </div>
-                        <input
-                          type="text"
-                          required
-                          value={editForm.name || ''}
-                          onChange={(e) => setEditForm((prev) => ({ ...prev, name: e.target.value }))}
-                          placeholder="Nhập họ và tên bác sĩ"
-                          className="h-[46px] w-full rounded-xl border border-slate-200 bg-slate-50/70 pl-10 pr-4 text-xs font-medium text-slate-900 transition focus:border-blue-500 focus:bg-white focus:ring-4 focus:ring-blue-500/10 focus:outline-none"
-                        />
-                      </div>
-                    </div>
-
-                    {/* Hàng 2 cột: Giới tính & Số điện thoại liên hệ */}
-                    <div className="grid grid-cols-1 sm:grid-cols-2 gap-3.5 items-start">
-                      {/* Giới tính (Selectable Radio Cards) */}
-                      <div>
-                        <label className="block text-xs font-semibold text-slate-700 mb-1.5">
-                          Giới tính
-                        </label>
-                        <div className="grid grid-cols-3 gap-2">
-                          {GENDER_OPTIONS.map((g) => {
-                            const isSelected = (editForm.gender || 'Nam') === g.value;
-                            return (
-                              <button
-                                key={g.value}
-                                type="button"
-                                onClick={() => setEditForm((prev) => ({ ...prev, gender: g.value }))}
-                                className={`relative flex h-[46px] items-center justify-center gap-1.5 rounded-xl px-2 text-xs transition-all cursor-pointer ${
-                                  isSelected
-                                    ? 'border-2 border-blue-600 bg-blue-50/80 font-bold text-blue-700 shadow-sm'
-                                    : 'border border-slate-200 bg-slate-50/70 font-medium text-slate-600 hover:border-blue-300 hover:bg-white'
-                                }`}
-                              >
-                                <svg
-                                  className={`h-3.5 w-3.5 shrink-0 ${isSelected ? 'text-blue-600' : 'text-slate-400'}`}
-                                  viewBox="0 0 24 24"
-                                  fill="none"
-                                  stroke="currentColor"
-                                  strokeWidth="2.2"
-                                  strokeLinecap="round"
-                                  strokeLinejoin="round"
-                                >
-                                  {g.path}
-                                </svg>
-                                <span>{g.label}</span>
-                                {isSelected && (
-                                  <CheckCircle2 className="absolute right-1 top-1/2 -translate-y-1/2 h-3.5 w-3.5 text-blue-600 shrink-0" />
-                                )}
-                              </button>
-                            );
-                          })}
-                        </div>
-                      </div>
-
-                      {/* Số điện thoại liên hệ (*) */}
-                      <div>
-                        <label className="block text-xs font-semibold text-slate-700 mb-1.5">
-                          Số điện thoại liên hệ <span className="text-rose-500">(*)</span>
-                        </label>
-                        <div className="relative">
-                          <div className="pointer-events-none absolute inset-y-0 left-0 flex items-center pl-3.5 text-slate-400">
-                            <Phone className="h-4 w-4" />
-                          </div>
-                          <input
-                            type="tel"
-                            required
-                            value={editForm.phone || ''}
-                            onChange={(e) => setEditForm((prev) => ({ ...prev, phone: e.target.value }))}
-                            placeholder="VD: 0905111222"
-                            className="h-[46px] w-full rounded-xl border border-slate-200 bg-slate-50/70 pl-10 pr-24 text-xs font-medium text-slate-900 transition focus:border-blue-500 focus:bg-white focus:ring-4 focus:ring-blue-500/10 focus:outline-none"
-                          />
-                          <div className="absolute inset-y-0 right-0 flex items-center pr-2.5 pointer-events-none">
-                            <span className="inline-flex items-center gap-1 rounded-full bg-emerald-50 px-2 py-0.5 text-[10px] font-bold text-emerald-600 border border-emerald-100">
-                              <CheckCircle2 className="h-3 w-3" />
-                              Đã xác thực
-                            </span>
-                          </div>
-                        </div>
-                      </div>
-                    </div>
-                  </div>
-                </div>
-
-                {/* Nhóm 2 — Thông tin Chuyên môn & Công tác */}
-                <div className="space-y-3">
-                  <div className="flex items-center gap-2">
-                    <span className="h-2 w-2 rounded-full bg-indigo-600" />
-                    <h4 className="text-xs font-semibold uppercase tracking-wider text-blue-600">
-                      Nhóm 2 — Thông tin Chuyên môn & Công tác
-                    </h4>
-                  </div>
-
-                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-3.5">
-                    {[
-                      { label: 'Học hàm, học vị', key: 'degree' as const, icon: GraduationCap, ph: 'VD: Bác sĩ CKI, ThS. Y khoa...' },
-                      { label: 'Chuyên khoa', key: 'specialty' as const, icon: Stethoscope, ph: 'VD: Lão khoa, Tim mạch...' },
-                      { label: 'Bệnh viện / Cơ sở y tế', key: 'hospital' as const, icon: Building2, ph: 'VD: Bệnh viện Đa khoa Đà Nẵng' },
-                      { label: 'Khoa / Phòng công tác', key: 'department' as const, icon: Briefcase, ph: 'VD: Khoa Chăm sóc Người cao tuổi' },
-                    ].map((f) => {
-                      const Icon = f.icon;
-                      return (
-                        <div key={f.key}>
-                          <label className="block text-xs font-semibold text-slate-700 mb-1.5">
-                            {f.label}
-                          </label>
-                          <div className="relative">
-                            <div className="pointer-events-none absolute inset-y-0 left-0 flex items-center pl-3.5 text-slate-400">
-                              <Icon className="h-4 w-4" />
-                            </div>
-                            <input
-                              type="text"
-                              value={editForm[f.key] || ''}
-                              onChange={(e) => setEditForm((prev) => ({ ...prev, [f.key]: e.target.value }))}
-                              placeholder={f.ph}
-                              className="h-[46px] w-full rounded-xl border border-slate-200 bg-slate-50/70 pl-10 pr-4 text-xs font-medium text-slate-900 transition focus:border-blue-500 focus:bg-white focus:ring-4 focus:ring-blue-500/10 focus:outline-none"
-                            />
-                          </div>
-                        </div>
-                      );
-                    })}
-                  </div>
-                </div>
-              </div>
-
-              {/* 3. Thanh Nút Hành Động Ở Đáy (Sticky Footer) */}
-              <div className="sticky bottom-0 z-10 flex items-center justify-end gap-3 border-t border-slate-100 bg-white/95 px-6 py-4 backdrop-blur-md rounded-b-3xl">
-                <button
-                  type="button"
-                  onClick={() => setActiveModal('NONE')}
-                  disabled={savingProfile}
-                  className="rounded-xl bg-slate-100 px-5 py-2.5 text-xs font-bold text-slate-700 transition hover:bg-slate-200 disabled:opacity-50"
-                >
-                  Hủy
-                </button>
-                <button
-                  type="submit"
-                  disabled={savingProfile}
-                  className="inline-flex items-center gap-2 rounded-xl bg-blue-600 px-6 py-2.5 text-xs font-bold text-white shadow-lg shadow-blue-600/25 transition hover:bg-blue-700 disabled:opacity-60"
-                >
-                  {savingProfile ? (
-                    <>
-                      <Loader2 className="h-4 w-4 animate-spin" />
-                      <span>Đang lưu...</span>
-                    </>
-                  ) : (
-                    <>
-                      <Check className="h-4 w-4" />
-                      <span>Lưu thay đổi</span>
-                    </>
-                  )}
-                </button>
-              </div>
-            </form>
-          </div>
-        </div>
+        <DoctorEditProfileModal
+          editForm={editForm}
+          setEditForm={setEditForm}
+          doctorInitial={doctorInitial}
+          savingProfile={savingProfile}
+          onClose={() => setActiveModal('NONE')}
+          onSave={handleSaveProfile}
+          onTriggerFileInput={() => fileInputRef.current?.click()}
+        />
       )}
 
-      {/* =========================================================
-          MODAL 2: ĐỔI MẬT KHẨU BÁC SĨ
-         ========================================================= */}
       {activeModal === 'PASSWORD' && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-900/50 p-4 backdrop-blur-xs">
-          <div className="w-full max-w-md rounded-2xl bg-white p-6 shadow-2xl">
-            <div className="flex items-center justify-between border-b border-slate-100 pb-3 mb-4">
-              <div className="flex items-center gap-2">
-                <KeyRound className="h-5 w-5 text-blue-600" />
-                <h3 className="text-base font-extrabold text-slate-900">Đổi Mật Khẩu Bác Sĩ</h3>
-              </div>
-              <button onClick={() => setActiveModal('NONE')} className="text-slate-400 hover:text-slate-600">
-                <X className="h-5 w-5" />
-              </button>
-            </div>
-
-            {pwdError && (
-              <div className="mb-3 rounded-xl border border-rose-200 bg-rose-50 p-3 text-xs font-semibold text-rose-600">
-                {pwdError}
-              </div>
-            )}
-
-            <form onSubmit={handleSavePassword} className="space-y-3">
-              {[
-                { key: 'old' as const, label: 'Mật khẩu hiện tại (*)', val: oldPassword, setVal: setOldPassword, ph: 'Nhập mật khẩu hiện tại' },
-                { key: 'new' as const, label: 'Mật khẩu mới (*)', val: newPassword, setVal: setNewPassword, ph: '8 - 16 ký tự (Hoa, thường, số, đặc biệt)' },
-                { key: 'confirm' as const, label: 'Xác nhận mật khẩu mới (*)', val: confirmPassword, setVal: setConfirmPassword, ph: 'Nhập lại mật khẩu mới' },
-              ].map((f) => (
-                <div key={f.key}>
-                  <label className="block text-xs font-semibold text-slate-600 mb-1">{f.label}</label>
-                  <div className="relative">
-                    <input
-                      type={showPwd[f.key] ? 'text' : 'password'}
-                      value={f.val}
-                      onChange={(e) => f.setVal(e.target.value)}
-                      placeholder={f.ph}
-                      className="w-full rounded-xl border border-slate-200 bg-slate-50 px-3 py-2.5 pr-9 text-xs text-slate-900 focus:border-blue-600 focus:bg-white focus:outline-none"
-                    />
-                    <button
-                      type="button"
-                      onClick={() => setShowPwd((s) => ({ ...s, [f.key]: !s[f.key] }))}
-                      className="absolute right-2.5 top-2.5 text-slate-400 hover:text-slate-600"
-                    >
-                      {showPwd[f.key] ? <EyeOff className="h-4 w-4" /> : <Eye className="h-4 w-4" />}
-                    </button>
-                  </div>
-
-                  {f.key === 'new' && newPassword.length > 0 && (
-                    <div className="mt-2 space-y-1 rounded-xl bg-slate-50 p-2.5">
-                      {pwdRules.map((r) => (
-                        <div key={r.text} className="flex items-center gap-1.5 text-[11px]">
-                          {r.valid ? (
-                            <CheckCircle2 className="h-3.5 w-3.5 text-emerald-500" />
-                          ) : (
-                            <Circle className="h-3.5 w-3.5 text-slate-400" />
-                          )}
-                          <span className={r.valid ? 'font-semibold text-emerald-600' : 'text-slate-500'}>
-                            {r.text}
-                          </span>
-                        </div>
-                      ))}
-                    </div>
-                  )}
-                </div>
-              ))}
-
-              <div className="flex justify-end gap-2 pt-3 border-t border-slate-100">
-                <button
-                  type="button"
-                  onClick={() => setActiveModal('NONE')}
-                  className="rounded-xl border border-slate-200 px-4 py-2 text-xs font-bold text-slate-600 hover:bg-slate-50"
-                >
-                  Hủy
-                </button>
-                <button
-                  type="submit"
-                  disabled={savingPwd}
-                  className="rounded-xl bg-blue-600 px-5 py-2 text-xs font-bold text-white hover:bg-blue-700 disabled:opacity-60"
-                >
-                  {savingPwd ? 'Đang cập nhật...' : 'Cập Nhật Mật Khẩu'}
-                </button>
-              </div>
-            </form>
-          </div>
-        </div>
+        <DoctorChangePasswordModal
+          onClose={() => setActiveModal('NONE')}
+          onSavePassword={handleSavePassword}
+          pwdError={pwdError}
+          savingPwd={savingPwd}
+        />
       )}
 
-      {/* =========================================================
-          MODAL 3: THIẾT BỊ ĐANG ĐĂNG NHẬP (WEB & APP)
-         ========================================================= */}
       {activeModal === 'DEVICES' && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-900/50 p-4 backdrop-blur-xs">
-          <div className="w-full max-w-lg rounded-2xl bg-white p-6 shadow-2xl">
-            <div className="flex items-center justify-between border-b border-slate-100 pb-3 mb-4">
-              <div className="flex items-center gap-2">
-                <Monitor className="h-5 w-5 text-indigo-600" />
-                <h3 className="text-base font-extrabold text-slate-900">Thiết bị Bác sĩ đang mở</h3>
-              </div>
-              <div className="flex items-center gap-2">
-                <button
-                  onClick={fetchStatsAndDevices}
-                  className="rounded-lg p-1.5 text-slate-400 hover:bg-slate-100 hover:text-blue-600"
-                >
-                  <RefreshCw className={`h-4 w-4 ${loadingTerminals ? 'animate-spin text-blue-600' : ''}`} />
-                </button>
-                <button onClick={() => setActiveModal('NONE')} className="text-slate-400 hover:text-slate-600">
-                  <X className="h-5 w-5" />
-                </button>
-              </div>
-            </div>
-
-            <div className="space-y-3 max-h-80 overflow-y-auto mb-4">
-              {terminals.map((t) => {
-                const isDesktop = t.device_type === 'desktop';
-                return (
-                  <div
-                    key={String(t.id)}
-                    className={`flex items-start justify-between rounded-xl border p-3.5 ${
-                      t.is_current ? 'border-blue-200 bg-blue-50/40' : 'border-slate-200 bg-slate-50/60'
-                    }`}
-                  >
-                    <div className="flex items-start gap-3">
-                      <div
-                        className={`flex h-9 w-9 shrink-0 items-center justify-center rounded-xl text-white ${
-                          isDesktop ? 'bg-blue-600' : 'bg-emerald-600'
-                        }`}
-                      >
-                        {isDesktop ? <Monitor className="h-4 w-4" /> : <Smartphone className="h-4 w-4" />}
-                      </div>
-                      <div>
-                        <p className="text-xs font-bold text-slate-900">
-                          {t.device_name || (isDesktop ? 'Cổng Web Bác sĩ — Máy tính' : 'Ứng dụng SECA — Điện thoại')}
-                        </p>
-                        <p className="text-[11px] text-slate-500 mt-0.5">
-                          {t.browser || (isDesktop ? 'Doctor Web Portal' : 'SECA Mobile App')} • {t.location || 'Đà Nẵng, VN'}
-                        </p>
-                        <p className={`text-[11px] font-bold mt-1 ${t.is_current ? 'text-blue-600' : 'text-emerald-600'}`}>
-                          {t.is_current ? '● Đang mở trên thiết bị này' : '● Đang trực tuyến song song'}
-                        </p>
-                      </div>
-                    </div>
-                    {!t.is_current && (
-                      <button
-                        onClick={async () => {
-                          await authApi.deleteTerminal(String(t.id)).catch(() => {});
-                          fetchStatsAndDevices();
-                        }}
-                        className="rounded-lg p-1.5 text-slate-400 hover:bg-rose-50 hover:text-rose-600"
-                        title="Thu hồi phiên đăng nhập"
-                      >
-                        <Trash2 className="h-4 w-4" />
-                      </button>
-                    )}
-                  </div>
-                );
-              })}
-            </div>
-
-            <button
-              onClick={() => setActiveModal('NONE')}
-              className="w-full rounded-xl bg-blue-600 py-2.5 text-xs font-bold text-white hover:bg-blue-700"
-            >
-              Đóng
-            </button>
-          </div>
-        </div>
+        <DoctorDevicesModal
+          terminals={terminals}
+          loadingTerminals={loadingTerminals}
+          onRefresh={fetchStatsAndDevices}
+          onRevokeTerminal={handleRevokeTerminal}
+          onClose={() => setActiveModal('NONE')}
+        />
       )}
 
-      {/* =========================================================
-          MODAL 4: CÀI ĐẶT THÔNG BÁO CA TRỰC
-         ========================================================= */}
       {activeModal === 'NOTIF' && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-900/50 p-4 backdrop-blur-xs">
-          <div className="w-full max-w-md rounded-2xl bg-white p-6 shadow-2xl">
-            <div className="flex items-center justify-between border-b border-slate-100 pb-3 mb-4">
-              <div className="flex items-center gap-2">
-                <Bell className="h-5 w-5 text-amber-500" />
-                <h3 className="text-base font-extrabold text-slate-900">Cài đặt thông báo</h3>
-              </div>
-              <button onClick={() => setActiveModal('NONE')} className="text-slate-400 hover:text-slate-600">
-                <X className="h-5 w-5" />
-              </button>
-            </div>
-
-            <div className="space-y-4 mb-5">
-              {[
-                {
-                  title: 'Cảnh báo sinh hiệu nguy cấp',
-                  sub: 'Tự động phát chuông to khi phát hiện cụ bị té ngã hoặc suy hô hấp',
-                  val: notifyEmergency,
-                  setVal: setNotifyEmergency,
-                },
-                {
-                  title: 'Nhắc nhở ca trực & Lịch khám',
-                  sub: 'Thông báo trước giờ thăm khám định kỳ của bệnh nhân',
-                  val: notifyAppt,
-                  setVal: setNotifyAppt,
-                },
-              ].map((sw) => (
-                <div key={sw.title} className="flex items-center justify-between gap-4 border-b border-slate-100 pb-3 last:border-0">
-                  <div>
-                    <p className="text-xs font-bold text-slate-900">{sw.title}</p>
-                    <p className="text-[11px] text-slate-500 mt-0.5">{sw.sub}</p>
-                  </div>
-                  <button
-                    type="button"
-                    onClick={() => sw.setVal(!sw.val)}
-                    className={`relative h-6 w-11 shrink-0 rounded-full transition ${
-                      sw.val ? 'bg-blue-600' : 'bg-slate-300'
-                    }`}
-                  >
-                    <span
-                      className={`absolute top-0.5 left-0.5 h-5 w-5 rounded-full bg-white shadow-xs transition ${
-                        sw.val ? 'translate-x-5' : ''
-                      }`}
-                    />
-                  </button>
-                </div>
-              ))}
-            </div>
-
-            <button
-              onClick={() => {
-                setActiveModal('NONE');
-                showToast('Đã lưu cài đặt thông báo ca trực.');
-              }}
-              className="w-full rounded-xl bg-blue-600 py-2.5 text-xs font-bold text-white hover:bg-blue-700"
-            >
-              Lưu cài đặt
-            </button>
-          </div>
-        </div>
+        <DoctorNotificationModal
+          notifyEmergency={notifyEmergency}
+          setNotifyEmergency={setNotifyEmergency}
+          notifyAppt={notifyAppt}
+          setNotifyAppt={setNotifyAppt}
+          onSave={() => {
+            setActiveModal('NONE');
+            showToast('Đã lưu cài đặt thông báo ca trực.');
+          }}
+          onClose={() => setActiveModal('NONE')}
+        />
       )}
 
-      {/* =========================================================
-          MODAL 5: CHÍNH SÁCH & BẢO MẬT DỮ LIỆU
-         ========================================================= */}
       {activeModal === 'COMPLIANCE' && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-900/50 p-4 backdrop-blur-xs">
-          <div className="w-full max-w-lg rounded-2xl bg-white p-6 shadow-2xl">
-            <div className="flex items-center justify-between border-b border-slate-100 pb-3 mb-4">
-              <div className="flex items-center gap-2">
-                <ShieldCheck className="h-5 w-5 text-emerald-600" />
-                <h3 className="text-base font-extrabold text-slate-900">Chính sách bảo mật dữ liệu</h3>
-              </div>
-              <button onClick={() => setActiveModal('NONE')} className="text-slate-400 hover:text-slate-600">
-                <X className="h-5 w-5" />
-              </button>
-            </div>
-
-            <div className="space-y-4 max-h-80 overflow-y-auto mb-5">
-              {COMPLIANCE_SECTIONS.map((item) => (
-                <div key={item.title}>
-                  <p className="text-xs font-bold text-slate-900 mb-1">{item.title}</p>
-                  <p className="text-xs leading-relaxed text-slate-600">{item.desc}</p>
-                </div>
-              ))}
-            </div>
-
-            <button
-              onClick={() => setActiveModal('NONE')}
-              className="w-full rounded-xl bg-blue-600 py-2.5 text-xs font-bold text-white hover:bg-blue-700"
-            >
-              Đã hiểu & Đồng ý
-            </button>
-          </div>
-        </div>
+        <DoctorComplianceModal onClose={() => setActiveModal('NONE')} />
       )}
 
-      {/* =========================================================
-          MODAL 6: XÁC NHẬN ĐĂNG XUẤT
-         ========================================================= */}
       {activeModal === 'LOGOUT' && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-900/50 p-4 backdrop-blur-xs">
-          <div className="w-full max-w-sm rounded-2xl bg-white p-6 text-center shadow-2xl">
-            <div className="mx-auto mb-4 flex h-14 w-14 items-center justify-center rounded-full bg-rose-50 text-rose-600">
-              <LogOut className="h-7 w-7" />
-            </div>
-            <h3 className="text-base font-extrabold text-slate-900 mb-1.5">
-              Đăng xuất tài khoản Bác sĩ
-            </h3>
-            <p className="text-xs leading-relaxed text-slate-500 mb-5">
-              Bạn có chắc chắn muốn đăng xuất khỏi hệ thống? Mọi phiên làm việc và bảo mật hồ sơ bệnh án sẽ được kết thúc.
-            </p>
-            <div className="flex gap-3">
-              <button
-                onClick={() => setActiveModal('NONE')}
-                className="flex-1 rounded-xl border border-slate-200 py-2.5 text-xs font-bold text-slate-600 hover:bg-slate-50"
-              >
-                Hủy bỏ
-              </button>
-              <button
-                onClick={logout}
-                className="flex-1 rounded-xl bg-rose-600 py-2.5 text-xs font-bold text-white hover:bg-rose-700"
-              >
-                Đăng xuất ngay
-              </button>
-            </div>
-          </div>
-        </div>
+        <DoctorLogoutModal
+          onClose={() => setActiveModal('NONE')}
+          onLogout={logout}
+        />
       )}
     </div>
   );
 };
+export default SettingsPage;

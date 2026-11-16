@@ -158,3 +158,25 @@ export interface Incident {
   created_at: string;
 }
 
+
+export interface DoctorProfileInfo {
+  name: string;
+  degree: string;
+  specialty: string;
+  hospital: string;
+  department: string;
+  phone: string;
+  cchn_number: string;
+  avatarUri?: string | null;
+  gender?: string;
+}
+
+export interface DoctorTerminalItem {
+  id: string | number;
+  device_name?: string;
+  device_type?: 'desktop' | 'mobile' | string;
+  browser?: string;
+  location?: string;
+  is_current?: boolean;
+  last_active?: string;
+}
