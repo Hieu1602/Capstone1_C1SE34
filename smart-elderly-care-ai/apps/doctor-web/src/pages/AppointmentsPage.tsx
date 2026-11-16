@@ -6,6 +6,7 @@ import { doctorApi } from '../services/api';
 import { useDoctorDataStore } from '../store/useDoctorDataStore';
 import { AppointmentItem } from '../types';
 import { NewAppointmentModal } from '../components/clinical/NewAppointmentModal';
+import { CancelAppointmentModal } from '../components/clinical/CancelAppointmentModal';
 import {
   Clock,
   MapPin,
@@ -43,6 +44,7 @@ export const AppointmentsPage: React.FC = () => {
   const [statusFilter, setStatusFilter] = useState<'UPCOMING' | 'COMPLETED' | 'CANCELLED' | 'ALL'>('UPCOMING');
   const [searchQuery, setSearchQuery] = useState('');
   const [showCreateModal, setShowCreateModal] = useState(false);
+  const [cancellingApt, setCancellingApt] = useState<AppointmentItem | null>(null);
   const [weekOffset, setWeekOffset] = useState(0);
   const [selectedDateStr, setSelectedDateStr] = useState<string | null>(null);
   const [toastMsg, setToastMsg] = useState<string | null>(null);
@@ -94,26 +96,26 @@ export const AppointmentsPage: React.FC = () => {
   }, [appointments, weekOffset]);
 
   const handleComplete = async (apt: AppointmentItem) => {
-    const notes = prompt('Nhập ghi chú kết quả khám / chỉ định tiếp theo:', apt.clinical_notes || '');
-    if (notes === null) return;
     try {
-      await doctorApi.completeAppointment(apt.id, notes);
+      await doctorApi.completeAppointment(apt.id, apt.clinical_notes || 'Hoàn tất ca khám');
       showToast(`Đã hoàn tất ca khám cho bệnh nhân ${apt.patient_name || ''}`);
       fetchAllData(true);
     } catch {
-      alert('Không thể cập nhật trạng thái lịch khám.');
+      showToast('Không thể cập nhật trạng thái lịch khám.');
     }
   };
 
-  const handleCancel = async (apt: AppointmentItem) => {
-    const reason = prompt('Nhập lý do hủy cuộc hẹn khám:', 'Bác sĩ có ca cấp cứu đột xuất');
-    if (!reason) return;
+  const handleCancel = (apt: AppointmentItem) => {
+    setCancellingApt(apt);
+  };
+
+  const handleConfirmCancel = async (aptId: string, reason: string) => {
     try {
-      await doctorApi.cancelAppointment(apt.id, reason);
-      showToast('Đã hủy lịch hẹn khám và thông báo tới gia đình.');
+      await doctorApi.cancelAppointment(aptId, reason);
+      showToast('Đã hủy lịch hẹn khám và gửi thông báo tới gia đình.');
       fetchAllData(true);
     } catch {
-      alert('Không thể hủy cuộc hẹn khám.');
+      showToast('Không thể hủy cuộc hẹn khám. Vui lòng thử lại.');
     }
   };
 
@@ -661,6 +663,13 @@ export const AppointmentsPage: React.FC = () => {
       {showCreateModal && (
         <NewAppointmentModal patients={patients} onClose={() => setShowCreateModal(false)} onSuccess={() => fetchAllData(true)} />
       )}
+
+      <CancelAppointmentModal
+        isOpen={Boolean(cancellingApt)}
+        appointment={cancellingApt}
+        onClose={() => setCancellingApt(null)}
+        onConfirm={handleConfirmCancel}
+      />
     </div>
   );
 };
