@@ -1,5 +1,5 @@
 // src/pages/UserManagementPage.tsx
-// Phân hệ 1: Quản lý người dùng & Phân quyền (User Management & Role/Permission Rules)
+// Phân hệ: Quản lý người dùng & Phân quyền (User Management & Role/Permission Rules)
 // Thiết kế: Chia rõ Chủ nhà (Owner) & Thành viên (Member); Bổ sung Tạo & Chỉnh sửa Rule về quyền.
 // Nghiệp vụ Admin: Tra cứu, Khóa/Mở khóa có lý do, Phiên đăng nhập & Thiết bị, Quản trị tài khoản ngủ đông.
 
@@ -19,15 +19,12 @@ import {
   Trash2,
   Lock,
   Unlock,
-  Clock,
-  Eye,
   AlertTriangle,
 } from 'lucide-react';
 import { User, UserRole, PermissionRule } from '../types';
 import { usersApi } from '../services/api';
 import { RoleManager } from '../components/RoleManager';
 import {
-  ROLE_CONFIG,
   INITIAL_PERMISSION_RULES,
   UserStatsCards,
   UserFilterBar,
@@ -35,11 +32,15 @@ import {
   CreateEditUserModal,
   CreateEditRuleModal,
   UserPermissionModal,
-  ConfirmActionModal,
 } from '../components/user-management';
 
+const DORMANT_LEVEL_OPTIONS: Array<{ key: '3m' | '6m' | '1y'; label: string; activeColor: string }> = [
+  { key: '3m', label: '> 3 tháng (Nhắc nhở)', activeColor: 'bg-amber-500' },
+  { key: '6m', label: '> 6 tháng (Khóa)', activeColor: 'bg-rose-500' },
+  { key: '1y', label: '> 1 năm (Đủ đ/k xóa)', activeColor: 'bg-purple-600' },
+];
+
 export const UserManagementPage: React.FC = () => {
-  // Quản lý tab chính: Danh sách tài khoản vs Quy tắc phân quyền vs Tài khoản ngủ đông
   const [activeMainTab, setActiveMainTab] = useState<'accounts' | 'rules' | 'dormant'>('accounts');
 
   // Danh sách người dùng & bộ lọc
@@ -94,12 +95,12 @@ export const UserManagementPage: React.FC = () => {
   // Modal State kiểm tra quyền người dùng cụ thể
   const [userPermissionModal, setUserPermissionModal] = useState<User | null>(null);
 
-  // Modal State Khóa / Mở khóa thủ công có lý do (Nghiệp vụ 2)
+  // Modal State Khóa / Mở khóa thủ công có lý do
   const [statusModalUser, setStatusModalUser] = useState<User | null>(null);
   const [statusReason, setStatusReason] = useState<string>('');
   const [isSubmittingStatus, setIsSubmittingStatus] = useState<boolean>(false);
 
-  // Modal State Phiên đăng nhập & Thiết bị (Nghiệp vụ 5)
+  // Modal State Phiên đăng nhập & Thiết bị
   const [terminalsUser, setTerminalsUser] = useState<User | null>(null);
   const [terminalsList, setTerminalsList] = useState<any[]>([]);
   const [loadingTerminals, setLoadingTerminals] = useState<boolean>(false);
@@ -109,7 +110,7 @@ export const UserManagementPage: React.FC = () => {
   const [deleteReason, setDeleteReason] = useState<string>('');
   const [isSubmittingDelete, setIsSubmittingDelete] = useState<boolean>(false);
 
-  // Tab Ngủ đông State (Nghiệp vụ 3)
+  // Tab Ngủ đông State
   const [dormantLevel, setDormantLevel] = useState<'3m' | '6m' | '1y'>('3m');
   const [dormantData, setDormantData] = useState<{ level: string; threshold_days: number; count: number; items: User[] } | null>(null);
   const [loadingDormant, setLoadingDormant] = useState<boolean>(false);
@@ -130,8 +131,7 @@ export const UserManagementPage: React.FC = () => {
       const data = await usersApi.list(forceRefresh);
       const userList = Array.isArray(data) ? data : ((data as any)?.items || []);
       setUsers(userList);
-    } catch (err) {
-      console.error('[UserManagement] fetchUsers error:', err);
+    } catch {
       showNotice('error', 'Lỗi khi kết nối máy chủ tải danh sách tài khoản.');
     } finally {
       setLoading(false);
@@ -144,12 +144,13 @@ export const UserManagementPage: React.FC = () => {
 
   // Lọc người dùng
   const filteredUsers = useMemo(() => {
+    const q = searchQuery.toLowerCase();
     return users.filter((u) => {
       const matchesSearch =
-        u.full_name.toLowerCase().includes(searchQuery.toLowerCase()) ||
+        u.full_name.toLowerCase().includes(q) ||
         u.phone.includes(searchQuery) ||
-        (u.email && u.email.toLowerCase().includes(searchQuery.toLowerCase())) ||
-        (u.assigned_house && u.assigned_house.toLowerCase().includes(searchQuery.toLowerCase()));
+        (u.email && u.email.toLowerCase().includes(q)) ||
+        (u.assigned_house && u.assigned_house.toLowerCase().includes(q));
 
       let matchesRole = true;
       if (selectedRole !== 'all') {
@@ -162,16 +163,9 @@ export const UserManagementPage: React.FC = () => {
         }
       }
 
-      let matchesStatus = true;
-      if (selectedStatus !== 'all') {
-        const uStatus = u.status || (u.is_active ? 'active' : 'locked_admin');
-        matchesStatus = uStatus === selectedStatus;
-      }
-
-      let matchesDormancy = true;
-      if (selectedDormancy !== 'all') {
-        matchesDormancy = u.dormancy_level === selectedDormancy;
-      }
+      const uStatus = u.status || (u.is_active ? 'active' : 'locked_admin');
+      const matchesStatus = selectedStatus === 'all' || uStatus === selectedStatus;
+      const matchesDormancy = selectedDormancy === 'all' || u.dormancy_level === selectedDormancy;
 
       return matchesSearch && matchesRole && matchesStatus && matchesDormancy;
     });
@@ -179,15 +173,15 @@ export const UserManagementPage: React.FC = () => {
 
   // Thống kê KPIs
   const stats = useMemo(() => {
-    const total = users.length;
-    const active = users.filter((u) => (u.status ? u.status === 'active' : u.is_active)).length;
-    const admins = users.filter((u) => u.role === 'admin').length;
-    const doctors = users.filter((u) => u.role === 'doctor').length;
-    const owners = users.filter((u) => u.role === 'user' || (u.role as string) === 'owner').length;
-    const members = users.filter((u) => u.role === 'caregiver' || (u.role as string) === 'member').length;
-    const elderly = users.filter((u) => u.role === 'elderly').length;
-
-    return { total, active, admins, doctors, owners, members, elderly };
+    return {
+      total: users.length,
+      active: users.filter((u) => (u.status ? u.status === 'active' : u.is_active)).length,
+      admins: users.filter((u) => u.role === 'admin').length,
+      doctors: users.filter((u) => u.role === 'doctor').length,
+      owners: users.filter((u) => u.role === 'user' || (u.role as string) === 'owner').length,
+      members: users.filter((u) => u.role === 'caregiver' || (u.role as string) === 'member').length,
+      elderly: users.filter((u) => u.role === 'elderly').length,
+    };
   }, [users]);
 
   // Handlers cho User
@@ -284,7 +278,7 @@ export const UserManagementPage: React.FC = () => {
     const targetUser = statusModalUser;
     const prevUsers = [...users];
 
-    // Optimistic Update: Đóng modal, cập nhật bảng và hiện thông báo thao tác ngay lập tức (0ms)
+    // Optimistic Update: Đóng modal, cập nhật bảng và hiện thông báo thao tác ngay lập tức
     setStatusModalUser(null);
     setUsers((prev) =>
       prev.map((u) => (u.id === targetUser.id ? { ...u, status: targetStatus, is_active: targetStatus === 'active' } : u))
@@ -368,7 +362,7 @@ export const UserManagementPage: React.FC = () => {
     const targetUser = deleteModalUser;
     const prevUsers = [...users];
 
-    // Optimistic Update: Đóng modal, xóa dòng trên bảng và hiện thông báo thao tác ngay (0ms)
+    // Optimistic Update: Đóng modal, xóa dòng trên bảng và hiện thông báo thao tác ngay
     setDeleteModalUser(null);
     setUsers((prev) => prev.filter((u) => u.id !== targetUser.id));
     showNotice('success', `Đã xóa vĩnh viễn tài khoản [${targetUser.full_name}] thành công!`);
@@ -462,6 +456,7 @@ export const UserManagementPage: React.FC = () => {
       return;
     }
 
+    const now = new Date().toISOString();
     if (editingRule) {
       setRules((prev) =>
         prev.map((r) =>
@@ -474,7 +469,7 @@ export const UserManagementPage: React.FC = () => {
                 module: ruleModule as any,
                 permissions: rulePermissions,
                 is_active: ruleIsActive,
-                updated_at: new Date().toISOString(),
+                updated_at: now,
               }
             : r
         )
@@ -489,8 +484,8 @@ export const UserManagementPage: React.FC = () => {
         module: ruleModule as any,
         permissions: rulePermissions,
         is_active: ruleIsActive,
-        created_at: new Date().toISOString(),
-        updated_at: new Date().toISOString(),
+        created_at: now,
+        updated_at: now,
       };
       setRules((prev) => [newRule, ...prev]);
       showNotice('success', `Đã tạo mới quy tắc phân quyền [${ruleName}]`);
@@ -556,42 +551,29 @@ export const UserManagementPage: React.FC = () => {
       </div>
 
       {/* Main Tabs Navigation */}
-      <div className="flex items-center space-x-2 border-b border-[#E7E9ED] dark:border-[#454A53] pb-1">
-        <button
-          onClick={() => setActiveMainTab('accounts')}
-          className={`flex items-center space-x-2 px-4 py-2 rounded-xl text-xs font-bold font-mono transition-all cursor-pointer ${
-            activeMainTab === 'accounts'
-              ? 'bg-[#FFF0E8] dark:bg-[#FF6B35]/15 text-[#FF6B35] border border-[#FF6B35]/30 shadow-2xs'
-              : 'text-[#737780] dark:text-[#A1A7B1] hover:text-[#191B20] dark:hover:text-[#F5F6F8]'
-          }`}
-        >
-          <Users className="w-4 h-4" />
-          <span>Danh sách tài khoản ({users.length})</span>
-        </button>
-
-        <button
-          onClick={() => setActiveMainTab('dormant')}
-          className={`flex items-center space-x-2 px-4 py-2 rounded-xl text-xs font-bold font-mono transition-all cursor-pointer ${
-            activeMainTab === 'dormant'
-              ? 'bg-[#FFF0E8] dark:bg-[#FF6B35]/15 text-[#FF6B35] border border-[#FF6B35]/30 shadow-2xs'
-              : 'text-[#737780] dark:text-[#A1A7B1] hover:text-[#191B20] dark:hover:text-[#F5F6F8]'
-          }`}
-        >
-          <Moon className="w-4 h-4" />
-          <span>Tài khoản ngủ đông & Nhà hoang</span>
-        </button>
-
-        <button
-          onClick={() => setActiveMainTab('rules')}
-          className={`flex items-center space-x-2 px-4 py-2 rounded-xl text-xs font-bold font-mono transition-all cursor-pointer ${
-            activeMainTab === 'rules'
-              ? 'bg-[#FFF0E8] dark:bg-[#FF6B35]/15 text-[#FF6B35] border border-[#FF6B35]/30 shadow-2xs'
-              : 'text-[#737780] dark:text-[#A1A7B1] hover:text-[#191B20] dark:hover:text-[#F5F6F8]'
-          }`}
-        >
-          <Sliders className="w-4 h-4" />
-          <span>Vai trò & Phân quyền ({rules.length} Policies)</span>
-        </button>
+      <div className="flex items-center space-x-2 border-b border-[#E7E9ED] dark:border-[#454A53] pb-1 overflow-x-auto">
+        {[
+          { key: 'accounts' as const, label: `Danh sách tài khoản (${users.length})`, icon: Users },
+          { key: 'dormant' as const, label: 'Tài khoản ngủ đông & Nhà hoang', icon: Moon },
+          { key: 'rules' as const, label: `Vai trò & Phân quyền (${rules.length} Policies)`, icon: Sliders },
+        ].map((tab) => {
+          const TabIcon = tab.icon;
+          const isActive = activeMainTab === tab.key;
+          return (
+            <button
+              key={tab.key}
+              onClick={() => setActiveMainTab(tab.key)}
+              className={`flex items-center space-x-2 px-4 py-2 rounded-xl text-xs font-bold font-mono transition-all cursor-pointer whitespace-nowrap ${
+                isActive
+                  ? 'bg-[#FFF0E8] dark:bg-[#FF6B35]/15 text-[#FF6B35] border border-[#FF6B35]/30 shadow-2xs'
+                  : 'text-[#737780] dark:text-[#A1A7B1] hover:text-[#191B20] dark:hover:text-[#F5F6F8]'
+              }`}
+            >
+              <TabIcon className="w-4 h-4" />
+              <span>{tab.label}</span>
+            </button>
+          );
+        })}
       </div>
 
       {/* TAB 1: DANH SÁCH TÀI KHOẢN */}
@@ -639,36 +621,19 @@ export const UserManagementPage: React.FC = () => {
             </div>
 
             <div className="flex items-center gap-2">
-              <button
-                onClick={() => handlePreviewDormant('3m')}
-                className={`px-3 py-1.5 rounded-xl text-xs font-semibold font-mono transition-all ${
-                  dormantLevel === '3m'
-                    ? 'bg-amber-500 text-white shadow-xs'
-                    : 'bg-[#F3F4F6] dark:bg-[#2A2D33] text-[#737780] dark:text-[#A1A7B1]'
-                }`}
-              >
-                &gt; 3 tháng (Nhắc nhở)
-              </button>
-              <button
-                onClick={() => handlePreviewDormant('6m')}
-                className={`px-3 py-1.5 rounded-xl text-xs font-semibold font-mono transition-all ${
-                  dormantLevel === '6m'
-                    ? 'bg-rose-500 text-white shadow-xs'
-                    : 'bg-[#F3F4F6] dark:bg-[#2A2D33] text-[#737780] dark:text-[#A1A7B1]'
-                }`}
-              >
-                &gt; 6 tháng (Khóa)
-              </button>
-              <button
-                onClick={() => handlePreviewDormant('1y')}
-                className={`px-3 py-1.5 rounded-xl text-xs font-semibold font-mono transition-all ${
-                  dormantLevel === '1y'
-                    ? 'bg-purple-600 text-white shadow-xs'
-                    : 'bg-[#F3F4F6] dark:bg-[#2A2D33] text-[#737780] dark:text-[#A1A7B1]'
-                }`}
-              >
-                &gt; 1 năm (Đủ đ/k xóa)
-              </button>
+              {DORMANT_LEVEL_OPTIONS.map((opt) => (
+                <button
+                  key={opt.key}
+                  onClick={() => handlePreviewDormant(opt.key)}
+                  className={`px-3 py-1.5 rounded-xl text-xs font-semibold font-mono transition-all ${
+                    dormantLevel === opt.key
+                      ? `${opt.activeColor} text-white shadow-xs`
+                      : 'bg-[#F3F4F6] dark:bg-[#2A2D33] text-[#737780] dark:text-[#A1A7B1]'
+                  }`}
+                >
+                  {opt.label}
+                </button>
+              ))}
             </div>
           </div>
 
@@ -835,7 +800,7 @@ export const UserManagementPage: React.FC = () => {
         onNavigateToRulesTab={() => setActiveMainTab('rules')}
       />
 
-      {/* MODAL 4: KHÓA / MỞ KHÓA THỦ CÔNG CÓ LÝ DO (Nghiệp vụ 2) */}
+      {/* MODAL 4: KHÓA / MỞ KHÓA THỦ CÔNG CÓ LÝ DO */}
       {statusModalUser && (
         <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/60 backdrop-blur-xs animate-fade-in">
           <div className="bg-white dark:bg-[#1E2024] rounded-2xl max-w-md w-full p-6 shadow-2xl border border-[#E7E9ED] dark:border-[#2E3238] space-y-4">
@@ -907,7 +872,7 @@ export const UserManagementPage: React.FC = () => {
         </div>
       )}
 
-      {/* MODAL 5: PHIÊN ĐĂNG NHẬP & THIẾT BỊ ĐẦU CUỐI (Nghiệp vụ 5) */}
+      {/* MODAL 5: PHIÊN ĐĂNG NHẬP & THIẾT BỊ ĐẦU CUỐI */}
       {terminalsUser && (
         <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/60 backdrop-blur-xs animate-fade-in">
           <div className="bg-white dark:bg-[#1E2024] rounded-2xl max-w-lg w-full p-6 shadow-2xl border border-[#E7E9ED] dark:border-[#2E3238] space-y-4">
@@ -985,7 +950,7 @@ export const UserManagementPage: React.FC = () => {
         </div>
       )}
 
-      {/* MODAL 6: XÓA TÀI KHOẢN CÓ LÝ DO (Audit Log bắt buộc) */}
+      {/* MODAL 6: XÓA TÀI KHOẢN CÓ LÝ DO */}
       {deleteModalUser && (
         <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/60 backdrop-blur-xs animate-fade-in">
           <div className="bg-white dark:bg-[#1E2024] rounded-2xl max-w-md w-full p-6 shadow-2xl border border-[#E7E9ED] dark:border-[#2E3238] space-y-4">
