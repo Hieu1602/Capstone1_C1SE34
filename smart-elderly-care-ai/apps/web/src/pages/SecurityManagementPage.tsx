@@ -96,6 +96,8 @@ export const SecurityManagementPage: React.FC = () => {
   const [, setLoading] = useState<boolean>(false);
   const [searchAudit, setSearchAudit] = useState('');
   const [severityFilter, setSeverityFilter] = useState('ALL');
+  const [roleFilter, setRoleFilter] = useState<'ALL' | 'doctor' | 'admin' | 'user'>('ALL');
+  const [actionFilter, setActionFilter] = useState<'ALL' | 'LOGIN' | 'LOGOUT'>('ALL');
   const [sessionFilter, setSessionFilter] = useState<'ALL' | 'WARNING'>('ALL');
   const [notification, setNotification] = useState<{ type: 'success' | 'error'; message: string } | null>(null);
 
@@ -179,6 +181,13 @@ export const SecurityManagementPage: React.FC = () => {
     }
   };
 
+  const doctorLogsCount = auditLogs.filter(
+    (l) =>
+      l.user.toLowerCase().includes('doctor') ||
+      l.user.toLowerCase().includes('bác sĩ') ||
+      l.details.toLowerCase().includes('bác sĩ')
+  ).length;
+
   const filteredLogs = auditLogs.filter((log) => {
     const matchSearch =
       log.event.toLowerCase().includes(searchAudit.toLowerCase()) ||
@@ -186,7 +195,23 @@ export const SecurityManagementPage: React.FC = () => {
       log.details.toLowerCase().includes(searchAudit.toLowerCase()) ||
       log.ip.includes(searchAudit);
     const matchSeverity = severityFilter === 'ALL' || log.severity === severityFilter;
-    return matchSearch && matchSeverity;
+    const isDoctor =
+      log.user.toLowerCase().includes('doctor') ||
+      log.user.toLowerCase().includes('bác sĩ') ||
+      log.details.toLowerCase().includes('bác sĩ');
+    const isAdmin =
+      log.user.toLowerCase().includes('admin') ||
+      log.details.toLowerCase().includes('admin');
+    const matchRole =
+      roleFilter === 'ALL' ||
+      (roleFilter === 'doctor' && isDoctor) ||
+      (roleFilter === 'admin' && isAdmin) ||
+      (roleFilter === 'user' && !isDoctor && !isAdmin);
+    const matchAction =
+      actionFilter === 'ALL' ||
+      (actionFilter === 'LOGIN' && log.event.toLowerCase().includes('đăng nhập')) ||
+      (actionFilter === 'LOGOUT' && log.event.toLowerCase().includes('đăng xuất'));
+    return matchSearch && matchSeverity && matchRole && matchAction;
   });
 
   const kpis = [
@@ -566,8 +591,8 @@ export const SecurityManagementPage: React.FC = () => {
       {/* TAB 3: AUDIT LOGS */}
       {activeTab === 'audit' && (
         <div className="space-y-4">
-          <div className="flex flex-col sm:flex-row gap-3 justify-between items-center">
-            <div className="relative w-full sm:w-80">
+          <div className="flex flex-col lg:flex-row gap-3 justify-between items-start lg:items-center">
+            <div className="relative w-full lg:w-80">
               <Search className="w-4 h-4 absolute left-3 top-2.5 text-slate-400" />
               <input
                 type="text"
@@ -578,14 +603,35 @@ export const SecurityManagementPage: React.FC = () => {
               />
             </div>
 
-            <div className="flex items-center gap-2 w-full sm:w-auto">
+            <div className="flex flex-wrap items-center gap-2 w-full lg:w-auto">
               <Filter className="w-4 h-4 text-slate-400" />
+              <select
+                value={roleFilter}
+                onChange={(e) => setRoleFilter(e.target.value as any)}
+                className="text-xs py-1.5 px-3 rounded-xl border border-sky-200 dark:border-[#454A53] bg-white dark:bg-[#202329] text-slate-900 dark:text-[#F5F6F8]"
+              >
+                <option value="ALL">Mọi đối tượng</option>
+                <option value="doctor">🩺 Bác sĩ (Doctor Web)</option>
+                <option value="admin">🛡️ Quản trị viên (Admin)</option>
+                <option value="user">👤 Người dùng / Gia đình</option>
+              </select>
+
+              <select
+                value={actionFilter}
+                onChange={(e) => setActionFilter(e.target.value as any)}
+                className="text-xs py-1.5 px-3 rounded-xl border border-sky-200 dark:border-[#454A53] bg-white dark:bg-[#202329] text-slate-900 dark:text-[#F5F6F8]"
+              >
+                <option value="ALL">Mọi hành động</option>
+                <option value="LOGIN">Đăng nhập</option>
+                <option value="LOGOUT">Đăng xuất</option>
+              </select>
+
               <select
                 value={severityFilter}
                 onChange={(e) => setSeverityFilter(e.target.value)}
                 className="text-xs py-1.5 px-3 rounded-xl border border-sky-200 dark:border-[#454A53] bg-white dark:bg-[#202329] text-slate-900 dark:text-[#F5F6F8]"
               >
-                <option value="ALL">Mọi mức độ nghiêm trọng</option>
+                <option value="ALL">Mọi mức độ</option>
                 <option value="low">Thấp (Low)</option>
                 <option value="medium">Trung bình (Medium)</option>
                 <option value="high">Cao (High)</option>
@@ -594,44 +640,117 @@ export const SecurityManagementPage: React.FC = () => {
             </div>
           </div>
 
+          {/* Quick filter pills */}
+          <div className="flex flex-wrap items-center gap-2 text-xs">
+            <span className="text-[11px] font-semibold text-slate-400">Lọc nhanh:</span>
+            <button
+              type="button"
+              onClick={() => { setRoleFilter('ALL'); setActionFilter('ALL'); setSeverityFilter('ALL'); }}
+              className={`px-2.5 py-1 rounded-lg text-xs font-medium transition cursor-pointer ${
+                roleFilter === 'ALL' && actionFilter === 'ALL' && severityFilter === 'ALL'
+                  ? 'bg-sky-600 text-white shadow-xs'
+                  : 'bg-slate-100 dark:bg-[#202329] text-slate-600 dark:text-[#A1A7B1] hover:bg-slate-200'
+              }`}
+            >
+              Tất cả ({auditLogs.length})
+            </button>
+            <button
+              type="button"
+              onClick={() => setRoleFilter(roleFilter === 'doctor' ? 'ALL' : 'doctor')}
+              className={`inline-flex items-center gap-1.5 px-2.5 py-1 rounded-lg text-xs font-semibold transition cursor-pointer ${
+                roleFilter === 'doctor'
+                  ? 'bg-blue-600 text-white shadow-xs'
+                  : 'bg-blue-50 dark:bg-blue-950/40 text-blue-700 dark:text-blue-300 border border-blue-200 dark:border-blue-800 hover:bg-blue-100'
+              }`}
+            >
+              <span>🩺 Bác sĩ ({doctorLogsCount})</span>
+            </button>
+            <button
+              type="button"
+              onClick={() => setActionFilter(actionFilter === 'LOGIN' ? 'ALL' : 'LOGIN')}
+              className={`inline-flex items-center gap-1 px-2.5 py-1 rounded-lg text-xs font-medium transition cursor-pointer ${
+                actionFilter === 'LOGIN'
+                  ? 'bg-emerald-600 text-white shadow-xs'
+                  : 'bg-emerald-50 dark:bg-emerald-950/40 text-emerald-700 dark:text-emerald-300 border border-emerald-200 dark:border-emerald-800 hover:bg-emerald-100'
+              }`}
+            >
+              <span>Đăng nhập</span>
+            </button>
+            <button
+              type="button"
+              onClick={() => setActionFilter(actionFilter === 'LOGOUT' ? 'ALL' : 'LOGOUT')}
+              className={`inline-flex items-center gap-1 px-2.5 py-1 rounded-lg text-xs font-medium transition cursor-pointer ${
+                actionFilter === 'LOGOUT'
+                  ? 'bg-purple-600 text-white shadow-xs'
+                  : 'bg-purple-50 dark:bg-purple-950/40 text-purple-700 dark:text-purple-300 border border-purple-200 dark:border-purple-800 hover:bg-purple-100'
+              }`}
+            >
+              <span>Đăng xuất</span>
+            </button>
+          </div>
+
           <div className="glass-card divide-y divide-sky-100 dark:divide-[#454A53]">
             {filteredLogs.length > 0 ? (
-              filteredLogs.map((log, idx) => (
-                <div key={`${log.id}-${idx}`} className="p-4 hover:bg-sky-50/40 dark:hover:bg-[#202329] transition-colors">
-                  <div className="flex items-center justify-between">
-                    <div className="flex items-center gap-2">
-                      <span
-                        className={`text-[10px] font-bold px-2 py-0.5 rounded uppercase font-mono ${
-                          log.severity === 'critical'
-                            ? 'bg-rose-100 text-rose-800 dark:bg-rose-950/60 dark:text-rose-300'
-                            : log.severity === 'high'
-                            ? 'bg-amber-100 text-amber-800 dark:bg-amber-950/60 dark:text-amber-300'
-                            : log.severity === 'medium'
-                            ? 'bg-sky-100 text-sky-800 dark:bg-sky-950/60 dark:text-sky-300'
-                            : 'bg-slate-100 text-slate-800 dark:bg-[#202329] dark:text-[#A1A7B1]'
-                        }`}
-                      >
-                        {log.severity}
-                      </span>
-                      <span className="font-semibold text-xs text-slate-900 dark:text-[#F5F6F8]">
-                        {log.event}
+              filteredLogs.map((log, idx) => {
+                const isDoctorLog =
+                  log.user.toLowerCase().includes('doctor') ||
+                  log.user.toLowerCase().includes('bác sĩ') ||
+                  log.details.toLowerCase().includes('bác sĩ');
+                const isLogout = log.event.toLowerCase().includes('đăng xuất');
+                const isLogin = log.event.toLowerCase().includes('đăng nhập');
+
+                return (
+                  <div key={`${log.id}-${idx}`} className="p-4 hover:bg-sky-50/40 dark:hover:bg-[#202329] transition-colors">
+                    <div className="flex items-center justify-between">
+                      <div className="flex items-center gap-2">
+                        <span
+                          className={`text-[10px] font-bold px-2 py-0.5 rounded uppercase font-mono ${
+                            log.severity === 'critical'
+                              ? 'bg-rose-100 text-rose-800 dark:bg-rose-950/60 dark:text-rose-300'
+                              : log.severity === 'high'
+                              ? 'bg-amber-100 text-amber-800 dark:bg-amber-950/60 dark:text-amber-300'
+                              : log.severity === 'medium'
+                              ? 'bg-sky-100 text-sky-800 dark:bg-sky-950/60 dark:text-sky-300'
+                              : 'bg-slate-100 text-slate-800 dark:bg-[#202329] dark:text-[#A1A7B1]'
+                          }`}
+                        >
+                          {log.severity}
+                        </span>
+                        <span className="font-semibold text-xs text-slate-900 dark:text-[#F5F6F8]">
+                          {log.event}
+                        </span>
+                        {isDoctorLog && (
+                          <span className="text-[10px] font-bold px-2 py-0.5 rounded-full bg-blue-100 text-blue-800 dark:bg-blue-950/60 dark:text-blue-300 border border-blue-200 dark:border-blue-800">
+                            🩺 Bác sĩ
+                          </span>
+                        )}
+                        {isLogout && (
+                          <span className="text-[10px] font-bold px-2 py-0.5 rounded-full bg-purple-100 text-purple-800 dark:bg-purple-950/60 dark:text-purple-300 border border-purple-200 dark:border-purple-800">
+                            Đăng xuất
+                          </span>
+                        )}
+                        {isLogin && !isLogout && (
+                          <span className="text-[10px] font-bold px-2 py-0.5 rounded-full bg-emerald-100 text-emerald-800 dark:bg-emerald-950/60 dark:text-emerald-300 border border-emerald-200 dark:border-emerald-800">
+                            Đăng nhập
+                          </span>
+                        )}
+                      </div>
+                      <span className="text-[11px] font-mono text-slate-400 dark:text-[#727984]">
+                        {log.timestamp}
                       </span>
                     </div>
-                    <span className="text-[11px] font-mono text-slate-400 dark:text-[#727984]">
-                      {log.timestamp}
-                    </span>
-                  </div>
 
-                  <p className="mt-2 text-xs text-slate-600 dark:text-[#A1A7B1] font-sans">
-                    {log.details}
-                  </p>
+                    <p className="mt-2 text-xs text-slate-600 dark:text-[#A1A7B1] font-sans">
+                      {log.details}
+                    </p>
 
-                  <div className="mt-2.5 flex items-center gap-4 text-[11px] text-slate-500 dark:text-[#727984] font-mono">
-                    <span>Người thực hiện: <b className="text-slate-700 dark:text-[#F5F6F8]">{log.user}</b></span>
-                    <span>IP nguồn: <b className="text-slate-700 dark:text-[#F5F6F8]">{log.ip}</b></span>
+                    <div className="mt-2.5 flex items-center gap-4 text-[11px] text-slate-500 dark:text-[#727984] font-mono">
+                      <span>Người thực hiện: <b className="text-slate-700 dark:text-[#F5F6F8]">{log.user}</b></span>
+                      <span>IP nguồn: <b className="text-slate-700 dark:text-[#F5F6F8]">{log.ip}</b></span>
+                    </div>
                   </div>
-                </div>
-              ))
+                );
+              })
             ) : (
               <div className="p-8 text-center text-xs text-slate-500 dark:text-[#A1A7B1]">
                 Chưa có nhật ký kiểm toán nào được ghi nhận trong cơ sở dữ liệu.

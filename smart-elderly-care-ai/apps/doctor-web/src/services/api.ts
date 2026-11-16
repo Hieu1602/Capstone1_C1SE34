@@ -117,9 +117,20 @@ export const authApi = {
     const res = await api.delete(`/users/me/terminals/${terminalId}`);
     return res.data;
   },
-  logout: async () => {
-    localStorage.removeItem('seca_doctor_token');
-    localStorage.removeItem('seca_doctor_user');
+  logout: async (userName?: string, role: string = 'doctor') => {
+    const token = localStorage.getItem('seca_doctor_token');
+    try {
+      await api.post(
+        '/auth/logout',
+        { user_name: userName, role },
+        { headers: token ? { Authorization: `Bearer ${token}` } : {} }
+      );
+    } catch (e) {
+      console.warn('[DoctorWeb] Lỗi gửi yêu cầu ghi nhận đăng xuất:', e);
+    } finally {
+      localStorage.removeItem('seca_doctor_token');
+      localStorage.removeItem('seca_doctor_user');
+    }
   },
 };
 

@@ -72,13 +72,12 @@ export const useDoctorAuthStore = create<DoctorAuthState>((set) => ({
   },
 
   logout: () => {
+    const currentUser = useDoctorAuthStore.getState().user;
     try {
       doctorWebSocket.disconnect();
       useDoctorDataStore.getState().clearCache();
     } catch {}
-    authApi.logout().catch(() => {});
-    localStorage.removeItem('seca_doctor_token');
-    localStorage.removeItem('seca_doctor_user');
+    authApi.logout(currentUser?.full_name, currentUser?.role || 'doctor').catch(() => {});
     set({ token: null, user: null, isAuthenticated: false });
   },
 }));
