@@ -76,6 +76,8 @@ class ObjectStorageService:
             Public URL của object, hoặc None nếu lỗi
         """
         if self._client is None:
+            self.initialize()
+        if self._client is None:
             return None
 
         path = Path(file_path)
@@ -112,6 +114,8 @@ class ObjectStorageService:
             Public URL của object, hoặc None nếu lỗi
         """
         if self._client is None:
+            self.initialize()
+        if self._client is None:
             return None
 
         try:
@@ -135,6 +139,8 @@ class ObjectStorageService:
     ) -> Optional[str]:
         """Tạo presigned URL tạm thời cho download."""
         if self._client is None:
+            self.initialize()
+        if self._client is None:
             return None
 
         from datetime import timedelta
@@ -148,3 +154,7 @@ class ObjectStorageService:
         except Exception as exc:  # noqa: BLE001
             logger.error("[Storage] Presigned URL thất bại: %s", exc)
             return None
+
+
+object_storage = ObjectStorageService()
+

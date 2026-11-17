@@ -752,7 +752,7 @@ async def _process_and_save_avatar(
         b64_str = base64.b64encode(img_bytes).decode("utf-8")
         base64_data_uri = f"data:image/jpeg;base64,{b64_str}"
 
-    # QUAN TRỌNG: Lưu Base64 data URI trực tiếp vào Supabase database.
+    # QUAN TRỌNG: Lưu Base64 data URI trực tiếp vào database.
     # Nhờ vậy, khi đăng nhập trên bất kỳ máy tính/thiết bị nào khác,
     # ứng dụng luôn hiển thị ảnh đại diện mới nhất mà không phụ thuộc file cục bộ hay IP server.
     current_user.avatar_url = base64_data_uri

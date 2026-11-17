@@ -25,6 +25,8 @@ def main():
                 stripped = line.strip()
                 if "=" in stripped and not stripped.startswith("#"):
                     k = stripped.split("=", 1)[0].strip()
+                    if k.startswith("SUPABASE_"):
+                        continue
                     if k in REQUIRED_VARS:
                         lines.append(f"{k}={REQUIRED_VARS[k]}\n")
                         existing_keys.add(k)

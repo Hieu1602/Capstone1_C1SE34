@@ -132,7 +132,7 @@ function Start-DockerServices {
     Write-Info "Dang kiem tra va khoi dong ha tang Docker (TimescaleDB, Redis, EMQX)..."
     
     if (-not (Test-Prerequisites)) {
-        Write-Warn "Bo qua khoi dong Docker (he thong se dung CSDL Cloud Supabase neu da cau hinh trong .env)."
+        Write-Warn "Bo qua khoi dong Docker (he thong se dung CSDL Cloud AWS RDS neu da cau hinh trong .env)."
         return $false
     }
 
