@@ -406,7 +406,6 @@ export const DashboardPage: React.FC = () => {
         onSearchChange={setTableSearch}
         tableFilter={tableFilter}
         onFilterChange={setTableFilter}
-        onOpenCreateAppointment={() => setShowCreateModal(true)}
         onSelectPatient={() => navigate('/patients')}
         loading={isLoading && patients.length === 0}
       />

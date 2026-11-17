@@ -532,7 +532,7 @@ export default function HealthDetailScreen({ navigation, route }: any) {
 
         {/* 8. Link tới Hồ sơ Bệnh án Điện Tử */}
         <HealthMedicalRecordLink
-          onPress={() => navigation.navigate('PatientMedicalRecord')}
+          onPress={() => navigation.navigate('PatientsList')}
           isDarkMode={isDarkMode}
           colors={colors}
         />

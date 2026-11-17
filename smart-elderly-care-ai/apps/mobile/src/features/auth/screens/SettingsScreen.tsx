@@ -383,7 +383,7 @@ export default function SettingsScreen({ navigation, route }: any) {
                                     activeOpacity={0.8}
                                     onPress={() =>
                                         navigation.navigate(
-                                            "PatientMedicalRecord",
+                                            "PatientsList",
                                         )
                                     }
                                 >

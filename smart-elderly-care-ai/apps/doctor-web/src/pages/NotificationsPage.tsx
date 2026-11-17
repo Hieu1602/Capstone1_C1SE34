@@ -7,6 +7,7 @@ import { useNavigate } from 'react-router-dom';
 import { doctorApi, householdApi, incidentsApi, systemNotificationsApi } from '../services/api';
 import { doctorWebSocket } from '../services/websocket';
 import { useDoctorDataStore } from '../store/useDoctorDataStore';
+import { useDoctorAuthStore } from '../store/useDoctorAuthStore';
 import { removeVietnameseTones } from '../utils/text';
 import {
   getStoredReadIds,
@@ -120,7 +121,7 @@ export const NotificationsPage: React.FC = () => {
   const [activeTab, setActiveTab] = useState<TabType>('ALL');
   const [severity, setSeverity] = useState<SeverityType>('ALL');
   const [search, setSearch] = useState('');
-  const [loading, setLoading] = useState(false);
+  const [isRefreshing, setIsRefreshing] = useState(false);
   const [page, setPage] = useState(1);
   const [notifications, setNotifications] = useState<Item[]>([]);
   const [selectedNotif, setSelectedNotif] = useState<UnifiedNotification | null>(null);
@@ -161,11 +162,40 @@ export const NotificationsPage: React.FC = () => {
   const buildItems = useCallback((incs: Incident[], pats: DoctorPatientCard[], apts: AppointmentItem[], sysList: SystemNotification[] = [], readSet: Set<string> = new Set()) => {
     const list: Item[] = [];
 
-    // A. Incidents
+    // A. Incidents (Lọc chống Alert Fatigue cho Bác sĩ)
+    const doctorUser = useDoctorAuthStore.getState().user;
+
     incs?.forEach((inc) => {
-      const isCrit = inc.alert_level === 'CRITICAL' || inc.alert_type === 'FALL_DETECTED';
       const msg = inc.message || '';
       const lower = msg.toLowerCase();
+
+      // Lọc tầng UI: Tuyệt đối ẩn cảnh báo vận hành thiết bị (pin, sạc, mất kết nối)
+      const isDeviceOp =
+        ['pin', 'sạc', 'mất kết nối', 'ngắt kết nối', 'ngoại tuyến', 'offline', 'mất tín hiệu'].some((k) => lower.includes(k)) ||
+        Boolean(inc.alert_type?.startsWith('BATTERY_') || inc.alert_type?.startsWith('DEVICE_'));
+      if (isDeviceOp) return;
+
+      const isCrit = inc.alert_level === 'CRITICAL' || inc.alert_type === 'FALL_DETECTED' || inc.alert_type === 'LOW_SPO2';
+      const isHouseInvite =
+        inc.alert_type === 'HOUSE_INVITE_PENDING' ||
+        Boolean(inc.notes?.includes('HOUSE_INVITE_PENDING')) ||
+        lower.includes('lời mời bạn tham gia') || lower.includes('xác nhận vào nhà');
+      const isAppointment =
+        ['APPOINTMENT_CONFIRMED', 'APPOINTMENT_SCHEDULED', 'APPOINTMENT_CANCELLED'].includes(inc.alert_type || '') ||
+        lower.includes('lịch khám') || lower.includes('lịch hẹn');
+      const isAssignment = lower.includes('bệnh nhân mới') || lower.includes('phụ trách');
+      const isMedicalRecord = inc.alert_type === 'MEDICAL_RECORD_UPDATED' || lower.includes('bệnh án');
+
+      // Chống tự làm phiền (No Self-Notification khi bác sĩ tự cập nhật)
+      if (isMedicalRecord && (inc.acknowledged_by === doctorUser?.id || (doctorUser?.id && inc.notes?.includes(doctorUser.id)))) {
+        return;
+      }
+
+      // Tuyệt đối ẩn dao động nhẹ; Bác sĩ chỉ nhận Cảnh báo Nguy cấp HOẶC Lịch khám / Lời mời
+      if (!isCrit && !isHouseInvite && !isAppointment && !isAssignment) {
+        return;
+      }
+
       const isRead = Boolean(inc.is_acknowledged || readSet.has(inc.id) || readSet.has(`inc_${inc.id}`));
       let type: UnifiedNotification['type'] = 'ALERT';
       let label = isCrit ? 'Khẩn cấp' : 'Cảnh báo';
@@ -173,33 +203,37 @@ export const NotificationsPage: React.FC = () => {
       let target = '/patients';
       let finalRead = isRead;
 
-      if (inc.alert_type === 'HOUSE_INVITE_PENDING' || lower.includes('lời mời bạn tham gia') || lower.includes('xác nhận vào nhà')) {
+      if (isHouseInvite) {
         type = 'INVITE';
         const handled = Boolean(inc.is_acknowledged);
         label = handled ? (inc.notes?.includes('từ chối') ? 'Đã từ chối' : 'Đã tham gia') : 'Lời mời';
         color = handled ? 'text-emerald-700 bg-emerald-50 border-emerald-200' : 'text-amber-700 bg-amber-50 border-amber-200';
         target = '/';
         finalRead = handled || isRead;
-      } else if (['APPOINTMENT_CONFIRMED', 'APPOINTMENT_SCHEDULED', 'APPOINTMENT_CANCELLED'].includes(inc.alert_type || '') || lower.includes('lịch khám') || lower.includes('lịch hẹn')) {
+      } else if (isAppointment) {
         type = 'APPOINTMENT';
         const isCancel = lower.includes('hủy');
         const isConfirm = lower.includes('xác nhận');
         label = isCancel ? 'Đã hủy' : isConfirm ? 'Đã xác nhận' : 'Lịch khám';
         color = isCancel ? 'text-rose-700 bg-rose-50 border-rose-200' : isConfirm ? 'text-emerald-700 bg-emerald-50 border-emerald-200' : 'text-sky-700 bg-sky-50 border-sky-200';
         target = '/appointments';
-      } else if (lower.includes('bệnh nhân mới') || lower.includes('phụ trách')) {
+      } else if (isAssignment) {
         label = 'Bệnh nhân';
         color = 'text-emerald-700 bg-emerald-50 border-emerald-200';
-      } else if (inc.alert_type === 'MEDICAL_RECORD_UPDATED' || lower.includes('bệnh án')) {
+      } else if (isMedicalRecord) {
         label = 'Hồ sơ y tế';
         color = 'text-indigo-700 bg-indigo-50 border-indigo-200';
       }
 
-      const pat = pats?.find((p) => p.id === (inc as any).elderly_id || (inc.notes && inc.notes.includes(p.id))) || pats?.[0];
+      const patIdx = pats?.findIndex((p) => p.id === (inc as any).elderly_id || (inc.notes && inc.notes.includes(p.id)));
+      const pat = (patIdx !== undefined && patIdx >= 0) ? pats[patIdx] : pats?.[0];
+      const mrCode = (patIdx !== undefined && patIdx >= 0) ? `MR-${String(patIdx + 1).padStart(3, '0')}` : 'MR-001';
       const pName = pat?.name || (type === 'INVITE' ? 'Hộ gia đình mới' : undefined);
       const parsed = parseTitleAndBody(msg, type, inc.alert_type, inc.alert_level, pName);
       const dg = getDateGroup(inc.created_at);
       const timeOnly = formatTime(inc.created_at);
+      const repeatCount = inc.repeat_count || 1;
+      const repeatBadge = inc.repeat_badge || (repeatCount > 1 ? `Lặp lại ${repeatCount} lần trong 15 phút qua` : undefined);
 
       list.push({
         id: `inc_${inc.id}`,
@@ -222,6 +256,9 @@ export const NotificationsPage: React.FC = () => {
         rawIncident: inc,
         patientId: pat?.id,
         patientName: pName,
+        patientMrCode: mrCode,
+        repeatCount,
+        repeatBadge,
         patientAddress: pat?.house_address || pat?.house_name,
         heartRate: pat?.heart_rate && pat.heart_rate > 0 ? pat.heart_rate : undefined,
         spo2: pat?.spo2 && pat.spo2 > 0 ? pat.spo2 : undefined,
@@ -230,13 +267,14 @@ export const NotificationsPage: React.FC = () => {
       });
     });
 
-    // B. Sinh hiệu cảnh báo từ Bệnh nhân (DANGER / WARNING)
-    pats?.forEach((p) => {
+    // B. Sinh hiệu cảnh báo từ Bệnh nhân (CHỈ NGUY CẤP DANGER)
+    pats?.forEach((p, idx) => {
       const isDanger = p.health_status === 'DANGER';
-      if ((isDanger || p.health_status === 'WARNING') && !list.some((i) => i.id === `pat_${p.id}`)) {
+      if (isDanger && !list.some((i) => i.id === `pat_${p.id}`)) {
         const dg = getDateGroup(new Date().toISOString());
-        const title = isDanger ? `BÁO ĐỘNG ĐỎ: ${p.name} - Sinh hiệu nguy cấp` : `Cảnh báo: ${p.name} - Cần theo dõi sinh hiệu`;
+        const title = `BÁO ĐỘNG ĐỎ: ${p.name} - Sinh hiệu nguy cấp`;
         const desc = `Nhịp tim: ${p.heart_rate || '--'} bpm • SpO2: ${p.spo2 || '--'}% • Địa chỉ: ${p.house_address || p.house_name || 'Nhà riêng'}`;
+        const mrCode = `MR-${String(idx + 1).padStart(3, '0')}`;
         list.push({
           id: `pat_${p.id}`,
           type: 'ALERT',
@@ -249,17 +287,18 @@ export const NotificationsPage: React.FC = () => {
           dateKey: dg.key,
           dateLabel: dg.label,
           sortTimestamp: dg.timestamp,
-          badgeLabel: isDanger ? 'Khẩn cấp' : 'Cảnh báo',
-          badgeColor: isDanger ? 'text-rose-700 bg-rose-50 border-rose-200' : 'text-amber-700 bg-amber-50 border-amber-200',
-          badgeBg: isDanger ? 'bg-rose-50' : 'bg-amber-50',
+          badgeLabel: 'Nguy cấp',
+          badgeColor: 'text-rose-700 bg-rose-50 border-rose-200',
+          badgeBg: 'bg-rose-50',
           isRead: readSet.has(`pat_${p.id}`),
           targetUrl: `/patients?search=${encodeURIComponent(p.name)}`,
           patientId: p.id,
           patientName: p.name,
+          patientMrCode: mrCode,
           patientAddress: p.house_address || p.house_name,
           heartRate: p.heart_rate,
           spo2: p.spo2,
-          alertLevel: isDanger ? 'CRITICAL' : 'WARNING',
+          alertLevel: 'CRITICAL',
         });
       }
     });
@@ -352,7 +391,7 @@ export const NotificationsPage: React.FC = () => {
   }, [cachedIncidents, cachedPatients, cachedAppointments, buildItems, readIds]);
 
   const loadData = useCallback(async () => {
-    setLoading(true);
+    setIsRefreshing(true);
     try {
       const [iRes, pRes, aRes, sRes] = await Promise.allSettled([
         incidentsApi.list(undefined, 100),
@@ -367,7 +406,7 @@ export const NotificationsPage: React.FC = () => {
       const sysList = sRes.status === 'fulfilled' && Array.isArray(sRes.value) ? sRes.value : [];
       setNotifications(buildItems(incs, pats, apts, sysList, currentRead));
     } finally {
-      setLoading(false);
+      setIsRefreshing(false);
     }
   }, [buildItems]);
 
@@ -394,7 +433,44 @@ export const NotificationsPage: React.FC = () => {
     if (item.rawIncidentId) incidentsApi.acknowledge(item.rawIncidentId).catch(console.warn);
     const next = markAsRead(item.id, item.rawIncidentId);
     setReadIds(next);
-    setNotifications((prev) => prev.map((n) => (n.id === item.id || n.rawIncidentId === item.rawIncidentId ? { ...n, isRead: true, badgeLabel: 'Đã xử lý' } : n)));
+    const doctorUser = useDoctorAuthStore.getState().user;
+    const doctorName = doctorUser?.full_name ? `BS. ${doctorUser.full_name}` : 'Bác sĩ phụ trách';
+    setNotifications((prev) =>
+      prev.map((n) =>
+        n.id === item.id || (n.rawIncidentId && n.rawIncidentId === item.rawIncidentId)
+          ? {
+              ...n,
+              isRead: true,
+              badgeLabel: 'Đã xử lý',
+              rawIncident: n.rawIncident
+                ? {
+                    ...n.rawIncident,
+                    is_acknowledged: true,
+                    acknowledged_by_name: doctorName,
+                    acknowledged_at: new Date().toISOString(),
+                  }
+                : undefined,
+            }
+          : n
+      )
+    );
+    setSelectedNotif((curr) =>
+      curr && (curr.id === item.id || (curr.rawIncidentId && curr.rawIncidentId === item.rawIncidentId))
+        ? {
+            ...curr,
+            isRead: true,
+            badgeLabel: 'Đã xử lý',
+            rawIncident: curr.rawIncident
+              ? {
+                  ...curr.rawIncident,
+                  is_acknowledged: true,
+                  acknowledged_by_name: doctorName,
+                  acknowledged_at: new Date().toISOString(),
+                }
+              : undefined,
+          }
+        : curr
+    );
   };
 
   // Đảo trạng thái Đã đọc <-> Chưa đọc
@@ -496,8 +572,8 @@ export const NotificationsPage: React.FC = () => {
   return (
     <div className="space-y-4">
       {/* Header gọn gàng */}
-      <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3 rounded-2xl bg-white p-4.5 shadow-xs border border-slate-200/80 dark:bg-slate-900 dark:border-slate-800">
-        <div className="flex items-center space-x-3">
+      <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4 rounded-2xl bg-white p-5 sm:p-6 shadow-xs border border-slate-200/80 dark:bg-[#131C31] dark:border-slate-800/80">
+        <div className="flex items-center space-x-3.5">
           <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl bg-blue-50 text-blue-600 dark:bg-blue-950/60 dark:text-blue-400">
             <Bell className="h-5 w-5" />
           </div>
@@ -506,7 +582,9 @@ export const NotificationsPage: React.FC = () => {
               <h1 className="text-lg font-bold text-slate-900 dark:text-white">Trung tâm Thông Báo &amp; Cảnh Báo Lâm Sàng</h1>
               {unreadCount > 0 && <span className="rounded-full bg-rose-500 px-2 py-0.5 text-[11px] font-bold text-white animate-pulse">{unreadCount} chưa đọc</span>}
             </div>
-            <p className="text-xs text-slate-500 dark:text-slate-400 mt-0.5">Hộp thư cảnh báo y tế, biến động sinh hiệu và phân công Bác sĩ gia đình</p>
+            <p className="text-xs text-slate-500 dark:text-slate-400 mt-1">
+              Hệ thống tự động ưu tiên hiển thị cảnh báo y tế nguy cấp và điều phối lịch khám của bệnh nhân phụ trách.
+            </p>
           </div>
         </div>
 
@@ -535,13 +613,18 @@ export const NotificationsPage: React.FC = () => {
           <button
             type="button"
             onClick={loadData}
-            disabled={loading}
-            className="flex items-center gap-1.5 rounded-xl bg-blue-600 px-3.5 py-1.5 text-xs font-bold text-white hover:bg-blue-700 shadow-xs disabled:opacity-50 cursor-pointer"
+            className="flex items-center gap-1.5 rounded-xl bg-blue-600 px-3.5 py-2 text-xs font-bold text-white hover:bg-blue-700 shadow-xs transition-colors cursor-pointer"
           >
-            <RefreshCw className={`h-3.5 w-3.5 ${loading ? 'animate-spin' : ''}`} />
-            <span>{loading ? 'Đang tải...' : 'Làm mới'}</span>
+            <RefreshCw className={`h-3.5 w-3.5 ${isRefreshing ? 'animate-spin' : ''}`} />
+            <span>Làm mới</span>
           </button>
         </div>
+      </div>
+
+      {/* Chú thích tự động lọc chống Alert Fatigue */}
+      <div className="flex items-center gap-2 rounded-xl border border-blue-100 bg-blue-50/70 px-4 py-2.5 text-xs text-blue-800 dark:border-blue-900/40 dark:bg-blue-950/30 dark:text-blue-300">
+        <ShieldAlert className="h-4 w-4 shrink-0 text-blue-600 dark:text-blue-400" />
+        <span>Hệ thống tự động lọc bỏ các cảnh báo thiết bị (pin yếu, mất tín hiệu) và dao động nhẹ; các mục này được chuyển trực tiếp tới Gia đình.</span>
       </div>
 
       {/* Toolbar lọc đồng bộ (h-9, text-xs) */}
@@ -559,7 +642,7 @@ export const NotificationsPage: React.FC = () => {
               key={t.k}
               onClick={() => setActiveTab(t.k as TabType)}
               className={`flex h-9 items-center gap-1.5 rounded-xl px-3 text-xs font-semibold whitespace-nowrap transition-all cursor-pointer ${
-                activeTab === t.k ? 'bg-blue-600 text-white shadow-xs' : 'bg-white text-slate-600 hover:bg-slate-50 border border-slate-200/90 dark:bg-slate-900 dark:border-slate-800 dark:text-slate-300'
+                activeTab === t.k ? 'bg-blue-600 text-white shadow-xs' : 'bg-white text-slate-600 hover:bg-slate-50 border border-slate-200/90 dark:bg-[#131C31] dark:border-slate-800/80 dark:text-slate-300'
               }`}
             >
               <span>{t.l}</span>
@@ -572,7 +655,7 @@ export const NotificationsPage: React.FC = () => {
           <select
             value={severity}
             onChange={(e) => setSeverity(e.target.value as SeverityType)}
-            className="h-9 rounded-xl border border-slate-200/90 bg-white px-3 pr-8 text-xs font-semibold text-slate-700 focus:border-blue-500 focus:outline-hidden cursor-pointer shadow-2xs dark:border-slate-800 dark:bg-slate-900 dark:text-slate-300"
+            className="h-9 rounded-xl border border-slate-200/90 bg-white px-3 pr-8 text-xs font-semibold text-slate-700 focus:border-blue-500 focus:outline-hidden cursor-pointer shadow-2xs dark:border-slate-700/60 dark:bg-[#0F172A] dark:text-slate-300"
           >
             <option value="ALL">Tất cả mức độ</option>
             <option value="CRITICAL">🚨 Khẩn cấp</option>
@@ -586,7 +669,7 @@ export const NotificationsPage: React.FC = () => {
               value={search}
               onChange={(e) => setSearch(e.target.value)}
               placeholder="Tìm theo nội dung, bệnh nhân..."
-              className="h-9 w-full rounded-xl border border-slate-200/90 bg-white pl-9 pr-7 text-xs font-medium text-slate-900 placeholder:text-slate-400 focus:border-blue-500 focus:outline-hidden shadow-2xs dark:border-slate-800 dark:bg-slate-900 dark:text-white"
+              className="h-9 w-full rounded-xl border border-slate-200/90 bg-white pl-9 pr-7 text-xs font-medium text-slate-900 placeholder:text-slate-400 focus:border-blue-500 focus:outline-hidden shadow-2xs dark:border-slate-700/60 dark:bg-[#0F172A] dark:text-white"
             />
             {search && <button onClick={() => setSearch('')} className="absolute right-2.5 top-1/2 -translate-y-1/2 text-slate-400 hover:text-slate-600"><X className="h-3.5 w-3.5" /></button>}
           </div>
@@ -595,7 +678,7 @@ export const NotificationsPage: React.FC = () => {
 
       {/* Danh sách thông báo chia nhóm Linear Inbox */}
       {filtered.length === 0 ? (
-        <div className="flex flex-col items-center justify-center rounded-2xl bg-white p-12 text-center shadow-xs border border-slate-200/80 dark:bg-slate-900 dark:border-slate-800">
+        <div className="flex flex-col items-center justify-center rounded-2xl bg-white p-12 text-center shadow-xs border border-slate-200/80 dark:bg-[#131C31] dark:border-slate-800/80">
           <div className="flex h-12 w-12 items-center justify-center rounded-2xl bg-slate-100 text-slate-400 dark:bg-slate-800"><Inbox className="h-6 w-6" /></div>
           <h3 className="mt-3 text-sm font-bold text-slate-900 dark:text-white">Không tìm thấy thông báo nào</h3>
           <p className="mt-1 text-xs text-slate-500 dark:text-slate-400 max-w-sm">{search ? `Không khớp với từ khóa "${search}".` : 'Hiện không có thông báo y tế nào.'}</p>
@@ -610,7 +693,7 @@ export const NotificationsPage: React.FC = () => {
                 <span className="font-normal text-slate-400">{g.items.length} thông báo</span>
               </div>
 
-              <div className="divide-y divide-slate-100 rounded-2xl border border-slate-200/90 bg-white shadow-xs overflow-hidden dark:divide-slate-800 dark:border-slate-800 dark:bg-slate-900">
+              <div className="divide-y divide-slate-100 rounded-2xl border border-slate-200/90 bg-white shadow-xs overflow-hidden dark:divide-slate-800 dark:border-slate-800/80 dark:bg-[#131C31]">
                 {g.items.map((item) => {
                   const isAdmin = item.type === 'ADMIN';
                   const isCrit = item.alertLevel === 'CRITICAL' || item.alertType === 'FALL_DETECTED' || item.badgeLabel === 'Khẩn cấp';
@@ -623,7 +706,7 @@ export const NotificationsPage: React.FC = () => {
                         ? 'border-l-4 border-l-amber-400 bg-amber-50/15 dark:bg-amber-950/10'
                         : !item.isRead
                           ? 'border-l-4 border-l-blue-500 bg-blue-50/20 dark:bg-blue-950/20'
-                          : 'border-l-4 border-l-transparent bg-white dark:bg-slate-900';
+                          : 'border-l-4 border-l-transparent bg-white dark:bg-[#131C31]';
 
                   return (
                     <div
@@ -663,7 +746,12 @@ export const NotificationsPage: React.FC = () => {
                             {item.patientName && (
                               <span className="inline-flex items-center gap-1 rounded bg-slate-100 px-1.5 py-0.2 text-[10.5px] font-semibold text-slate-700 dark:bg-slate-800 dark:text-slate-300">
                                 <User className="h-2.5 w-2.5 text-slate-400" />
-                                {item.patientName}
+                                {item.patientName} {item.patientMrCode ? `• ${item.patientMrCode}` : ''}
+                              </span>
+                            )}
+                            {item.repeatBadge && (
+                              <span className="inline-flex items-center px-1.5 py-0.2 text-[10px] font-bold rounded bg-rose-100 text-rose-700 border border-rose-200 dark:bg-rose-950/60 dark:text-rose-300">
+                                {item.repeatBadge}
                               </span>
                             )}
                             {isCrit && <span className="inline-flex items-center gap-1 text-[10.5px] font-bold text-rose-600"><span className="h-1.5 w-1.5 rounded-full bg-rose-500 animate-pulse" />Khẩn cấp</span>}
@@ -726,7 +814,7 @@ export const NotificationsPage: React.FC = () => {
                   type="button"
                   onClick={() => setPage((p) => Math.max(1, p - 1))}
                   disabled={page === 1}
-                  className="px-3 py-1.5 rounded-lg border border-slate-200 bg-white text-xs font-semibold text-slate-700 hover:bg-slate-50 disabled:opacity-40 disabled:cursor-not-allowed shadow-2xs cursor-pointer"
+                  className="px-3 py-1.5 rounded-lg border border-slate-200 bg-white text-xs font-semibold text-slate-700 hover:bg-slate-50 disabled:opacity-40 disabled:cursor-not-allowed shadow-2xs dark:border-slate-700 dark:bg-slate-800 dark:text-slate-200 dark:hover:bg-slate-700 cursor-pointer"
                 >
                   Trước
                 </button>
@@ -740,7 +828,7 @@ export const NotificationsPage: React.FC = () => {
                         type="button"
                         onClick={() => setPage(pNum)}
                         className={`h-7 w-7 rounded-lg text-xs font-bold transition-all cursor-pointer ${
-                          page === pNum ? 'bg-blue-600 text-white shadow-xs' : 'border border-slate-200 bg-white text-slate-700 hover:bg-slate-50'
+                          page === pNum ? 'bg-blue-600 text-white shadow-xs' : 'border border-slate-200 bg-white text-slate-700 hover:bg-slate-50 dark:border-slate-700 dark:bg-slate-800 dark:text-slate-200 dark:hover:bg-slate-700'
                         }`}
                       >
                         {pNum}
@@ -755,7 +843,7 @@ export const NotificationsPage: React.FC = () => {
                   type="button"
                   onClick={() => setPage((p) => Math.min(totalPages, p + 1))}
                   disabled={page === totalPages}
-                  className="px-3 py-1.5 rounded-lg border border-slate-200 bg-white text-xs font-semibold text-slate-700 hover:bg-slate-50 disabled:opacity-40 disabled:cursor-not-allowed shadow-2xs cursor-pointer"
+                  className="px-3 py-1.5 rounded-lg border border-slate-200 bg-white text-xs font-semibold text-slate-700 hover:bg-slate-50 disabled:opacity-40 disabled:cursor-not-allowed shadow-2xs dark:border-slate-700 dark:bg-slate-800 dark:text-slate-200 dark:hover:bg-slate-700 cursor-pointer"
                 >
                   Sau
                 </button>
@@ -765,7 +853,7 @@ export const NotificationsPage: React.FC = () => {
         </div>
       )}
 
-      {/* Modal chi tiết */}
+      {/* Modal chi tiết */} 
       <NotificationDetailModal
         isOpen={showModal}
         notif={selectedNotif}

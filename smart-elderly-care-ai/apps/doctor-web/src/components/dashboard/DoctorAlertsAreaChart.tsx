@@ -56,7 +56,7 @@ const CustomAreaTooltip = ({ active, payload, label }: any) => {
   const total = data?.total ?? (fall + heart + spo2 + sos);
 
   return (
-    <div className="rounded-xl border border-slate-100 bg-white/95 p-3 shadow-lg backdrop-blur-sm min-w-[210px] text-xs space-y-2 dark:border-slate-800 dark:bg-slate-900/95">
+    <div className="rounded-xl border border-slate-100 bg-white/95 p-3 shadow-lg backdrop-blur-sm min-w-[210px] text-xs space-y-2 dark:border-slate-800/80 dark:bg-[#0F172A]/95">
       <div className="flex items-center justify-between pb-1.5 border-b border-slate-100 dark:border-slate-800">
         <span className="font-bold text-slate-800 dark:text-slate-100">{data?.fullLabel || label}</span>
         <span className="text-[10px] text-slate-400 font-medium">Báo cáo lâm sàng</span>
@@ -123,7 +123,7 @@ export const DoctorAlertsAreaChart: React.FC<DoctorAlertsAreaChartProps> = ({
   };
 
   return (
-    <div className="rounded-2xl border border-slate-200/80 bg-white p-5 shadow-xs flex flex-col justify-between dark:border-slate-800 dark:bg-slate-900">
+    <div className="rounded-2xl border border-slate-200/80 bg-white p-5 shadow-xs flex flex-col justify-between dark:border-slate-800/80 dark:bg-[#131C31]">
       {/* 1. Header & Segmented Control */}
       <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3 mb-3">
         <div>
@@ -192,7 +192,7 @@ export const DoctorAlertsAreaChart: React.FC<DoctorAlertsAreaChartProps> = ({
       {/* 3. Smooth Area Chart */}
       <div className="h-64 w-full">
         <ResponsiveContainer width="100%" height="100%">
-          <AreaChart data={data} margin={{ top: 12, right: 16, left: -12, bottom: 0 }}>
+          <AreaChart data={data} margin={{ top: 20, right: 20, left: 0, bottom: 5 }}>
             <defs>
               <linearGradient id="gradFall" x1="0" y1="0" x2="0" y2="1">
                 <stop offset="5%" stopColor="#F43F5E" stopOpacity={0.28} />
@@ -231,8 +231,8 @@ export const DoctorAlertsAreaChart: React.FC<DoctorAlertsAreaChartProps> = ({
               tickLine={false}
               allowDecimals={false}
               tick={{ fontSize: 11, fill: '#94A3B8', fontWeight: 500 }}
-              domain={[0, 'auto']}
-              width={28}
+              domain={[0, (dataMax: number) => Math.ceil((dataMax + 3) / 4) * 4]}
+              width={40}
             />
 
             <Tooltip

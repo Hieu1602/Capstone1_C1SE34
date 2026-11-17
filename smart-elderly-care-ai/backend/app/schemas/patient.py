@@ -39,6 +39,18 @@ class PatientMedicalRecordOut(BaseModel):
     has_face_enrolled: bool = False
 
 
+class ElderlyProfileCreate(BaseModel):
+    full_name: str
+    birth_year: Optional[int] = None
+    gender: Optional[str] = "Nam"
+    blood_type: Optional[str] = None
+    height_cm: Optional[int] = None
+    weight_kg: Optional[int] = None
+    medical_history: Optional[str] = None
+    emergency_contact_phone: Optional[str] = None
+    avatar_url: Optional[str] = None
+
+
 class FaceEnrollResponse(BaseModel):
     success: bool
     message: str

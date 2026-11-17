@@ -252,7 +252,14 @@ export const AlertDetailModal: React.FC<AlertDetailModalProps> = ({
                 <Ionicons name="checkmark-done-circle" size={18} color="#16A34A" />
                 <Text style={styles.handledStatusText}>
                   Đã xác nhận xử lý
-                  {item.acknowledged_by ? ` bởi ${item.acknowledged_by}` : ''}{' '}
+                  {(() => {
+                    const name = item.acknowledged_by_name?.trim();
+                    if (name) return ` bởi ${name}`;
+                    const raw = item.acknowledged_by ? String(item.acknowledged_by).trim() : '';
+                    if (!raw) return '';
+                    const isUUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(raw);
+                    return isUUID ? ' bởi Bác sĩ / Người phụ trách' : ` bởi ${raw}`;
+                  })()}{' '}
                   lúc {formatFriendlyTime(item.acknowledged_at, (k, c) => (c === undefined ? t(k) : t(k, { count: c })))}
                 </Text>
               </View>

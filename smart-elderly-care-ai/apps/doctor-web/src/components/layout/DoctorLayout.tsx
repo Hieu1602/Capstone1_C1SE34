@@ -45,7 +45,7 @@ export const DoctorLayout: React.FC = () => {
   }, []);
 
   return (
-    <div className="flex h-screen flex-col overflow-hidden bg-[#F4F7FE] dark:bg-[#0F172A] text-slate-800 dark:text-slate-100 transition-colors">
+    <div className="flex h-screen flex-col overflow-hidden bg-[#F4F7FE] dark:bg-[#0B1120] text-slate-800 dark:text-slate-100 transition-colors">
       {/* Top Navbar: cố định tuyệt đối trên đỉnh */}
       <DoctorNavbar />
 

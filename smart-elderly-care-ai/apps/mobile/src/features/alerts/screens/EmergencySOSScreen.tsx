@@ -17,6 +17,7 @@ import { Ionicons } from '@expo/vector-icons';
 import * as ImagePicker from 'expo-image-picker';
 import * as Location from 'expo-location';
 import { emergencyApi } from '../../../services/api';
+import { EMERGENCY_TEST_PHONE } from '../../../services/emergency';
 import { useAuthStore } from '../../../store/useAuthStore';
 import { useDeviceStore } from '../../../store/useDeviceStore';
 import { useTheme } from '../../../store/useThemeStore';
@@ -160,7 +161,7 @@ export default function EmergencySOSScreen({ navigation }: any) {
 
     setIsSending(false);
     try {
-      await Linking.openURL('tel:115');
+      await Linking.openURL(`tel:${EMERGENCY_TEST_PHONE}`);
     } catch (error) {
       console.warn('[EmergencySOSScreen] Could not open emergency dialer:', error);
       Alert.alert('Đã báo người thân', 'Không thể mở trình gọi. Vui lòng gọi cấp cứu 115 trực tiếp.');

@@ -224,7 +224,6 @@ class AlertsWebSocket {
         };
 
         store.addIncident(newDocIncident);
-        useAlertStore.getState().addIncident(newDocIncident);
 
         notificationService.triggerEmergencyNotification({
           title: '🗓️ GIA ĐÌNH ĐÃ XÁC NHẬN LỊCH KHÁM',
@@ -328,7 +327,6 @@ class AlertsWebSocket {
       };
 
       store.addIncident(newIncident);
-      useAlertStore.getState().addIncident(newIncident);
       useAuthStore.getState().fetchMyPermissions?.().catch(() => {});
       useVitalStore.getState().syncAllWithBackend?.().catch(() => {});
 
@@ -397,7 +395,6 @@ class AlertsWebSocket {
       };
 
       store.addIncident(newIncident);
-      useAlertStore.getState().addIncident(newIncident);
 
       if (isBatteryAlert) {
         notificationService.triggerEmergencyNotification({
@@ -452,7 +449,15 @@ class AlertsWebSocket {
     else if (event.type === 'INCIDENT_RESOLVED') {
       const incId = event.incident_id || event.data?.id;
       if (incId) {
-        store.acknowledgeIncident(incId, event.data?.note || 'Đã kiểm tra an toàn');
+        const handlerName =
+          event.data?.acknowledged_by_name ||
+          event.data?.acknowledged_by ||
+          'Bác sĩ phụ trách';
+        store.acknowledgeIncident(
+          incId,
+          event.data?.note || 'Đã kiểm tra an toàn',
+          handlerName
+        );
       }
       // Kiểm tra lại nếu không còn sự cố Critical chưa xử lý nào thì tắt còi & tắt cờ té ngã
       const remainingCritical = useVitalStore.getState().incidents.some(

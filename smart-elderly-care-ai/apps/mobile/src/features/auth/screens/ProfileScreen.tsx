@@ -103,7 +103,7 @@ export default function ProfileScreen({ navigation, route }: any) {
           'medical',
           'record',
         ],
-        onPress: () => navigation.navigate('PatientMedicalRecord', { from: 'Profile' }),
+        onPress: () => navigation.navigate('PatientsList', { from: 'Profile' }),
       },
       {
         id: 'house-detail',

@@ -226,9 +226,9 @@ export const householdApi = {
 
 // 4. INCIDENTS & NOTIFICATIONS API (Đồng bộ trực tiếp với Backend CSDL & Mobile App)
 export const incidentsApi = {
-  list: async (deviceId?: string, limit = 50): Promise<Incident[]> => {
+  list: async (deviceId?: string, limit = 50, targetRole = 'doctor'): Promise<Incident[]> => {
     try {
-      const res = await api.get('/notifications', { params: { device_id: deviceId, limit } });
+      const res = await api.get('/notifications', { params: { device_id: deviceId, limit, target_role: targetRole } });
       return Array.isArray(res.data) ? res.data : [];
     } catch {
       return [];

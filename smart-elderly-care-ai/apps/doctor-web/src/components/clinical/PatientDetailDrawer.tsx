@@ -101,15 +101,15 @@ export const PatientDetailDrawer: React.FC<PatientDetailDrawerProps> = ({
 
   return createPortal(
     <div className="fixed inset-0 top-0 left-0 right-0 bottom-0 w-screen h-screen z-[100] !mt-0 flex justify-end bg-slate-900/50 backdrop-blur-sm animate-in fade-in duration-200">
-      <div className="relative z-[101] flex h-full w-full max-w-2xl flex-col bg-white shadow-2xl overflow-hidden animate-in slide-in-from-right duration-200">
+      <div className="relative z-[101] flex h-full w-full max-w-2xl flex-col bg-white dark:bg-[#131C31] dark:border-l dark:border-slate-800/80 shadow-2xl overflow-hidden animate-in slide-in-from-right duration-200">
         {/* 1. Rich Clinical Header */}
-        <div className="border-b border-slate-200/80 bg-slate-50/80 px-6 py-4">
+        <div className="border-b border-slate-200/80 dark:border-slate-800/80 bg-slate-50/80 dark:bg-[#131C31] px-6 py-4">
           <div className="flex items-start justify-between gap-4">
             {/* Thông tin định danh & Avatar Bệnh nhân */}
             <div className="flex items-start space-x-3.5 min-w-0">
               {/* Avatar tròn với Status Dot không bị clip */}
               <div className="relative inline-block shrink-0">
-                <div className="flex h-14 w-14 items-center justify-center rounded-2xl overflow-hidden bg-gradient-to-br from-blue-600 to-cyan-500 text-lg font-extrabold text-white shadow-md ring-2 ring-white">
+                <div className="flex h-14 w-14 items-center justify-center rounded-2xl overflow-hidden bg-gradient-to-br from-blue-600 to-cyan-500 text-lg font-extrabold text-white shadow-md ring-2 ring-white dark:ring-[#131C31]">
                   {activeAvatar ? (
                     <img
                       src={getPatientAvatar(activeAvatar)!}
@@ -124,8 +124,8 @@ export const PatientDetailDrawer: React.FC<PatientDetailDrawerProps> = ({
                   )}
                 </div>
                 <span
-                  className={`absolute bottom-0 right-0 h-4 w-4 rounded-full ring-2 ring-white shadow-sm z-10 ${
-                    selectedPatientCard?.is_online ? 'bg-emerald-500' : 'bg-slate-300'
+                  className={`absolute bottom-0 right-0 h-4 w-4 rounded-full ring-2 ring-white dark:ring-[#131C31] shadow-sm z-10 ${
+                    selectedPatientCard?.is_online ? 'bg-emerald-500' : 'bg-slate-300 dark:bg-slate-600'
                   }`}
                   title={selectedPatientCard?.is_online ? 'Smartband đang kết nối' : 'Chờ tín hiệu Smartband'}
                 />
@@ -134,16 +134,16 @@ export const PatientDetailDrawer: React.FC<PatientDetailDrawerProps> = ({
               <div className="min-w-0">
                 {/* Hàng nhãn mã bệnh nhân & trạng thái lâm sàng */}
                 <div className="flex flex-wrap items-center gap-2 mb-1">
-                  <span className="rounded-md bg-blue-50 border border-blue-200/80 px-2 py-0.5 text-[10.5px] font-mono font-extrabold text-blue-700">
+                  <span className="rounded-md bg-blue-50 border border-blue-200/80 px-2 py-0.5 text-[10.5px] font-mono font-extrabold text-blue-700 dark:bg-blue-950/40 dark:border-blue-900/60 dark:text-blue-300">
                     {selectedMrCode}
                   </span>
                   <span
                     className={`rounded-full px-2.5 py-0.5 text-[10px] font-extrabold border ${
                       isSelectedDanger
-                        ? 'bg-rose-50 text-rose-700 border-rose-200'
+                        ? 'bg-rose-50 text-rose-700 border-rose-200 dark:bg-rose-950/60 dark:text-rose-300 dark:border-rose-900/60'
                         : isSelectedWarning
-                          ? 'bg-amber-50 text-amber-700 border-amber-200'
-                          : 'bg-emerald-50 text-emerald-700 border-emerald-200'
+                          ? 'bg-amber-50 text-amber-700 border-amber-200 dark:bg-amber-950/60 dark:text-amber-300 dark:border-amber-900/60'
+                          : 'bg-emerald-50 text-emerald-700 border-emerald-200 dark:bg-emerald-950/60 dark:text-emerald-300 dark:border-emerald-900/60'
                     }`}
                   >
                     {isSelectedDanger ? 'Khẩn cấp' : isSelectedWarning ? 'Cần chú ý' : 'Ổn định'}
@@ -151,8 +151,8 @@ export const PatientDetailDrawer: React.FC<PatientDetailDrawerProps> = ({
                   <span
                     className={`hidden sm:inline-flex items-center gap-1 rounded-full px-2 py-0.5 text-[10px] font-semibold border ${
                       selectedPatientCard?.is_online
-                        ? 'bg-emerald-50/80 text-emerald-700 border-emerald-200/70'
-                        : 'bg-slate-100 text-slate-500 border-slate-200'
+                        ? 'bg-emerald-50/80 text-emerald-700 border-emerald-200/70 dark:bg-emerald-950/40 dark:text-emerald-300 dark:border-emerald-800/60'
+                        : 'bg-slate-100 text-slate-500 border-slate-200 dark:bg-slate-800 dark:text-slate-400 dark:border-slate-700'
                     }`}
                   >
                     <Watch className="h-3 w-3" />
@@ -160,21 +160,21 @@ export const PatientDetailDrawer: React.FC<PatientDetailDrawerProps> = ({
                   </span>
                 </div>
 
-                <h3 className="font-heading font-extrabold text-slate-900 text-lg leading-tight truncate">
+                <h3 className="font-heading font-extrabold text-slate-900 dark:text-white text-lg leading-tight truncate">
                   {patientDetail.name}
                 </h3>
-                <p className="mt-0.5 text-xs text-slate-500 truncate">
-                  {patientDetail.age || selectedPatientCard?.age} tuổi • {patientDetail.gender || selectedPatientCard?.gender} • Nhóm máu <span className="font-bold text-slate-800">{activeBloodType}</span>
+                <p className="mt-0.5 text-xs text-slate-500 dark:text-slate-400 truncate">
+                  {patientDetail.age || selectedPatientCard?.age} tuổi • {patientDetail.gender || selectedPatientCard?.gender} • Nhóm máu <span className="font-bold text-slate-800 dark:text-white">{activeBloodType}</span>
                 </p>
-                <div className="mt-1 flex items-center space-x-1.5 text-xs text-slate-500 truncate">
+                <div className="mt-1 flex items-center space-x-1.5 text-xs text-slate-500 dark:text-slate-400 truncate">
                   <Home className="h-3.5 w-3.5 shrink-0 text-slate-400" />
-                  <span className="truncate font-medium text-slate-700">
+                  <span className="truncate font-medium text-slate-700 dark:text-slate-300">
                     {patientDetail.house_name || selectedPatientCard?.house_name || 'Nhà riêng'}
                   </span>
                   {selectedPatientCard?.house_address && (
                     <>
-                      <span className="text-slate-300">•</span>
-                      <span className="truncate text-slate-500 text-[11px]">
+                      <span className="text-slate-300 dark:text-slate-600">•</span>
+                      <span className="truncate text-slate-500 dark:text-slate-400 text-[11px]">
                         {selectedPatientCard.house_address}
                       </span>
                     </>
@@ -194,27 +194,27 @@ export const PatientDetailDrawer: React.FC<PatientDetailDrawerProps> = ({
                     alert('Chưa có số điện thoại liên hệ khẩn cấp của bệnh nhân.');
                   }
                 }}
-                className="inline-flex items-center gap-1.5 rounded-xl border border-slate-200 bg-white px-2.5 py-1.5 text-xs font-bold text-slate-700 hover:bg-slate-100 hover:border-slate-300 transition-colors shadow-2xs"
+                className="inline-flex items-center gap-1.5 rounded-xl border border-slate-200 bg-white px-2.5 py-1.5 text-xs font-bold text-slate-700 hover:bg-slate-100 hover:border-slate-300 transition-colors shadow-2xs cursor-pointer dark:border-slate-700 dark:bg-slate-800/80 dark:text-slate-200 dark:hover:bg-slate-700"
                 title={`Gọi người nhà: ${activeEmergencyPhone || 'Chưa cập nhật'}`}
               >
-                <PhoneCall className="h-3.5 w-3.5 text-emerald-600" />
+                <PhoneCall className="h-3.5 w-3.5 text-emerald-600 dark:text-emerald-400" />
                 <span className="hidden sm:inline">Gọi người nhà</span>
               </button>
 
               <button
                 type="button"
                 onClick={() => window.print()}
-                className="inline-flex items-center gap-1.5 rounded-xl border border-slate-200 bg-white px-2.5 py-1.5 text-xs font-bold text-slate-700 hover:bg-slate-100 hover:border-slate-300 transition-colors shadow-2xs"
+                className="inline-flex items-center gap-1.5 rounded-xl border border-slate-200 bg-white px-2.5 py-1.5 text-xs font-bold text-slate-700 hover:bg-slate-100 hover:border-slate-300 transition-colors shadow-2xs cursor-pointer dark:border-slate-700 dark:bg-slate-800/80 dark:text-slate-200 dark:hover:bg-slate-700"
                 title="In tóm tắt bệnh án"
               >
-                <Printer className="h-3.5 w-3.5 text-slate-600" />
+                <Printer className="h-3.5 w-3.5 text-slate-600 dark:text-slate-400" />
                 <span className="hidden sm:inline">In hồ sơ</span>
               </button>
 
               <button
                 type="button"
                 onClick={onClose}
-                className="rounded-xl p-1.5 text-slate-400 hover:bg-slate-200/80 hover:text-slate-600 transition-colors ml-1"
+                className="rounded-xl p-1.5 text-slate-400 hover:bg-slate-200/80 hover:text-slate-600 dark:hover:bg-slate-800 dark:hover:text-slate-200 transition-colors ml-1 cursor-pointer"
                 title="Đóng hồ sơ"
               >
                 <X className="h-5 w-5" />
@@ -224,8 +224,8 @@ export const PatientDetailDrawer: React.FC<PatientDetailDrawerProps> = ({
         </div>
 
         {/* 2. Modern Segmented Tab Bar */}
-        <div className="border-b border-slate-100 bg-white px-6 py-2.5">
-          <div className="grid grid-cols-4 gap-1 rounded-2xl bg-slate-100/80 p-1 border border-slate-200/50">
+        <div className="border-b border-slate-100 dark:border-slate-800/80 bg-white dark:bg-[#131C31] px-6 py-2.5">
+          <div className="grid grid-cols-4 gap-1 rounded-2xl bg-slate-100/80 p-1 border border-slate-200/50 dark:bg-[#0F172A] dark:border-slate-800">
             {drawerTabs.map((t) => {
               const Icon = t.icon;
               const isActive = activeTab === t.key;
@@ -234,20 +234,20 @@ export const PatientDetailDrawer: React.FC<PatientDetailDrawerProps> = ({
                   key={t.key}
                   type="button"
                   onClick={() => setActiveTab(t.key)}
-                  className={`flex items-center justify-center gap-1.5 rounded-xl py-2 px-2 text-xs font-bold transition-all ${
+                  className={`flex items-center justify-center gap-1.5 rounded-xl py-2 px-2 text-xs font-bold transition-all cursor-pointer ${
                     isActive
-                      ? 'bg-white text-blue-600 shadow-xs'
-                      : 'text-slate-500 hover:text-slate-800 hover:bg-white/50'
+                      ? 'bg-white dark:bg-blue-600 text-blue-600 dark:text-white shadow-xs'
+                      : 'text-slate-500 hover:text-slate-800 hover:bg-white/50 dark:text-slate-400 dark:hover:text-slate-200 dark:hover:bg-slate-800/60'
                   }`}
                 >
-                  <Icon className={`h-3.5 w-3.5 shrink-0 ${isActive ? 'text-blue-600' : 'text-slate-400'}`} />
+                  <Icon className={`h-3.5 w-3.5 shrink-0 ${isActive ? 'text-blue-600 dark:text-white' : 'text-slate-400'}`} />
                   <span className="truncate">{t.label}</span>
                   {t.count !== undefined && (
                     <span
                       className={`rounded-full px-1.5 py-0.2 text-[10px] font-extrabold ${
                         isActive
-                          ? 'bg-blue-100 text-blue-700'
-                          : 'bg-slate-200/80 text-slate-600'
+                          ? 'bg-blue-100 dark:bg-blue-500 text-blue-700 dark:text-white'
+                          : 'bg-slate-200/80 text-slate-600 dark:bg-slate-800 dark:text-slate-400'
                       }`}
                     >
                       {t.count}
@@ -266,7 +266,7 @@ export const PatientDetailDrawer: React.FC<PatientDetailDrawerProps> = ({
               {/* Header phân mục Thể trạng & Nút Cập nhật */}
               <div className="flex items-center justify-between">
                 <div>
-                  <h4 className="text-xs font-extrabold uppercase tracking-wider text-slate-900">
+                  <h4 className="text-xs font-extrabold uppercase tracking-wider text-slate-900 dark:text-white">
                     Chỉ số Thể trạng & Nhân trắc học
                   </h4>
                   <p className="text-[11px] text-slate-400 mt-0.5">
@@ -276,7 +276,7 @@ export const PatientDetailDrawer: React.FC<PatientDetailDrawerProps> = ({
                 <button
                   type="button"
                   onClick={onOpenRecordModal}
-                  className="flex items-center space-x-1.5 rounded-xl bg-blue-50 border border-blue-200/70 px-3 py-1.5 text-xs font-bold text-blue-700 hover:bg-blue-100 transition-colors shadow-2xs"
+                  className="flex items-center space-x-1.5 rounded-xl bg-blue-50 border border-blue-200/70 px-3 py-1.5 text-xs font-bold text-blue-700 hover:bg-blue-100 transition-colors shadow-2xs cursor-pointer dark:bg-blue-950/40 dark:border-blue-900/60 dark:text-blue-300 dark:hover:bg-blue-900/50"
                 >
                   <Edit className="h-3.5 w-3.5" />
                   <span>Cập nhật hồ sơ</span>
@@ -286,65 +286,65 @@ export const PatientDetailDrawer: React.FC<PatientDetailDrawerProps> = ({
               {/* Bento-Grid Vitals & Anthropometrics (4-Column Cards) */}
               <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
                 {/* Card 1: Nhóm máu */}
-                <div className="rounded-2xl border border-slate-200/70 bg-gradient-to-b from-rose-50/40 to-slate-50/70 p-3.5 shadow-2xs transition hover:border-rose-200">
+                <div className="rounded-2xl border border-slate-200/70 bg-gradient-to-b from-rose-50/40 to-slate-50/70 dark:from-rose-950/20 dark:to-[#0F172A] dark:border-slate-800/80 p-3.5 shadow-2xs transition hover:border-rose-200 dark:hover:border-rose-900/50">
                   <div className="flex items-center justify-between mb-2">
-                    <div className="flex h-7 w-7 items-center justify-center rounded-lg bg-rose-100/80 text-rose-600">
+                    <div className="flex h-7 w-7 items-center justify-center rounded-lg bg-rose-100/80 dark:bg-rose-950/60 text-rose-600 dark:text-rose-400">
                       <Droplet className="h-4 w-4" />
                     </div>
                     <span className="text-[10px] font-bold text-slate-400 uppercase tracking-wider">Hệ ABO</span>
                   </div>
-                  <span className="text-[11px] font-semibold text-slate-500 block">Nhóm máu</span>
-                  <p className="text-lg font-extrabold text-slate-900 mt-0.5">{activeBloodType}</p>
-                  <div className="mt-1 flex items-center gap-1 text-[10px] font-bold text-emerald-600">
-                    <CheckCircle2 className="h-3 w-3" />
+                  <span className="text-[11px] font-semibold text-slate-500 dark:text-slate-400 block">Nhóm máu</span>
+                  <p className="text-lg font-extrabold text-slate-900 dark:text-white mt-0.5">{activeBloodType}</p>
+                  <div className="mt-1 flex items-center gap-1 text-[10px] font-bold text-emerald-600 dark:text-emerald-400">
+                    <CheckCircle2 className="h-3.5 w-3.5" />
                     <span>Đã định nhóm</span>
                   </div>
                 </div>
 
                 {/* Card 2: Chỉ số BMI */}
-                <div className="rounded-2xl border border-slate-200/70 bg-gradient-to-b from-teal-50/40 to-slate-50/70 p-3.5 shadow-2xs transition hover:border-teal-200">
+                <div className="rounded-2xl border border-slate-200/70 bg-gradient-to-b from-teal-50/40 to-slate-50/70 dark:from-teal-950/20 dark:to-[#0F172A] dark:border-slate-800/80 p-3.5 shadow-2xs transition hover:border-teal-200 dark:hover:border-teal-900/50">
                   <div className="flex items-center justify-between mb-2">
-                    <div className="flex h-7 w-7 items-center justify-center rounded-lg bg-teal-100/80 text-teal-600">
+                    <div className="flex h-7 w-7 items-center justify-center rounded-lg bg-teal-100/80 dark:bg-teal-950/60 text-teal-600 dark:text-teal-400">
                       <Activity className="h-4 w-4" />
                     </div>
                     <span className="text-[10px] font-bold text-slate-400 uppercase tracking-wider">Thể trạng</span>
                   </div>
-                  <span className="text-[11px] font-semibold text-slate-500 block">Chỉ số BMI</span>
-                  <p className="text-lg font-extrabold text-slate-900 mt-0.5">{activeBmi}</p>
-                  <div className="mt-1 flex items-center gap-1 text-[10px] font-bold text-emerald-600">
-                    <CheckCircle2 className="h-3 w-3" />
+                  <span className="text-[11px] font-semibold text-slate-500 dark:text-slate-400 block">Chỉ số BMI</span>
+                  <p className="text-lg font-extrabold text-slate-900 dark:text-white mt-0.5">{activeBmi}</p>
+                  <div className="mt-1 flex items-center gap-1 text-[10px] font-bold text-emerald-600 dark:text-emerald-400">
+                    <CheckCircle2 className="h-3.5 w-3.5" />
                     <span>Bình thường (18.5 - 22.9)</span>
                   </div>
                 </div>
 
                 {/* Card 3: Huyết áp chuẩn */}
-                <div className="rounded-2xl border border-slate-200/70 bg-gradient-to-b from-blue-50/40 to-slate-50/70 p-3.5 shadow-2xs transition hover:border-blue-200">
+                <div className="rounded-2xl border border-slate-200/70 bg-gradient-to-b from-blue-50/40 to-slate-50/70 dark:from-blue-950/20 dark:to-[#0F172A] dark:border-slate-800/80 p-3.5 shadow-2xs transition hover:border-blue-200 dark:hover:border-blue-900/50">
                   <div className="flex items-center justify-between mb-2">
-                    <div className="flex h-7 w-7 items-center justify-center rounded-lg bg-blue-100/80 text-blue-600">
+                    <div className="flex h-7 w-7 items-center justify-center rounded-lg bg-blue-100/80 dark:bg-blue-950/60 text-blue-600 dark:text-blue-400">
                       <HeartPulse className="h-4 w-4" />
                     </div>
                     <span className="text-[10px] font-bold text-slate-400 uppercase tracking-wider">Huyết động</span>
                   </div>
-                  <span className="text-[11px] font-semibold text-slate-500 block">Huyết áp chuẩn</span>
-                  <p className="text-lg font-extrabold text-slate-900 mt-0.5">{activeBp}</p>
-                  <div className="mt-1 flex items-center gap-1 text-[10px] font-bold text-emerald-600">
-                    <CheckCircle2 className="h-3 w-3" />
+                  <span className="text-[11px] font-semibold text-slate-500 dark:text-slate-400 block">Huyết áp chuẩn</span>
+                  <p className="text-lg font-extrabold text-slate-900 dark:text-white mt-0.5">{activeBp}</p>
+                  <div className="mt-1 flex items-center gap-1 text-[10px] font-bold text-emerald-600 dark:text-emerald-400">
+                    <CheckCircle2 className="h-3.5 w-3.5" />
                     <span>mmHg (Mục tiêu)</span>
                   </div>
                 </div>
 
                 {/* Card 4: Nhiệt độ da */}
-                <div className="rounded-2xl border border-slate-200/70 bg-gradient-to-b from-cyan-50/40 to-slate-50/70 p-3.5 shadow-2xs transition hover:border-cyan-200">
+                <div className="rounded-2xl border border-slate-200/70 bg-gradient-to-b from-cyan-50/40 to-slate-50/70 dark:from-cyan-950/20 dark:to-[#0F172A] dark:border-slate-800/80 p-3.5 shadow-2xs transition hover:border-cyan-200 dark:hover:border-cyan-900/50">
                   <div className="flex items-center justify-between mb-2">
-                    <div className="flex h-7 w-7 items-center justify-center rounded-lg bg-cyan-100/80 text-cyan-600">
+                    <div className="flex h-7 w-7 items-center justify-center rounded-lg bg-cyan-100/80 dark:bg-cyan-950/60 text-cyan-600 dark:text-cyan-400">
                       <Thermometer className="h-4 w-4" />
                     </div>
                     <span className="text-[10px] font-bold text-slate-400 uppercase tracking-wider">Cảm biến</span>
                   </div>
-                  <span className="text-[11px] font-semibold text-slate-500 block">Nhiệt độ da</span>
-                  <p className="text-lg font-extrabold text-slate-900 mt-0.5">{activeSkinTemp}</p>
-                  <div className="mt-1 flex items-center gap-1 text-[10px] font-bold text-emerald-600">
-                    <CheckCircle2 className="h-3 w-3" />
+                  <span className="text-[11px] font-semibold text-slate-500 dark:text-slate-400 block">Nhiệt độ da</span>
+                  <p className="text-lg font-extrabold text-slate-900 dark:text-white mt-0.5">{activeSkinTemp}</p>
+                  <div className="mt-1 flex items-center gap-1 text-[10px] font-bold text-emerald-600 dark:text-emerald-400">
+                    <CheckCircle2 className="h-3.5 w-3.5" />
                     <span>Ổn định (36.2 - 37.2°C)</span>
                   </div>
                 </div>
@@ -365,8 +365,8 @@ export const PatientDetailDrawer: React.FC<PatientDetailDrawerProps> = ({
                   <div
                     className={`rounded-2xl border p-4 transition-all ${
                       hasDrugAllergy
-                        ? 'border-rose-200 bg-rose-50/70 shadow-xs'
-                        : 'border-slate-200/80 bg-slate-50/70'
+                        ? 'border-rose-200 bg-rose-50/70 dark:border-rose-900/60 dark:bg-rose-950/30 shadow-xs'
+                        : 'border-slate-200/80 bg-slate-50/70 dark:border-slate-800/80 dark:bg-[#0F172A]'
                     }`}
                   >
                     <div className="flex items-center justify-between mb-2">
@@ -374,25 +374,25 @@ export const PatientDetailDrawer: React.FC<PatientDetailDrawerProps> = ({
                         <div
                           className={`flex h-8 w-8 items-center justify-center rounded-xl ${
                             hasDrugAllergy
-                              ? 'bg-rose-100 text-rose-700 shadow-2xs'
-                              : 'bg-emerald-100 text-emerald-700'
+                              ? 'bg-rose-100 text-rose-700 dark:bg-rose-950/60 dark:text-rose-400 shadow-2xs'
+                              : 'bg-emerald-100 text-emerald-700 dark:bg-emerald-950/60 dark:text-emerald-400'
                           }`}
                         >
                           {hasDrugAllergy ? (
-                            <AlertTriangle className="h-4 w-4 text-rose-600" />
+                            <AlertTriangle className="h-4 w-4 text-rose-600 dark:text-rose-400" />
                           ) : (
-                            <CheckCircle2 className="h-4 w-4 text-emerald-600" />
+                            <CheckCircle2 className="h-4 w-4 text-emerald-600 dark:text-emerald-400" />
                           )}
                         </div>
                         <div>
                           <h5
                             className={`text-xs font-extrabold uppercase tracking-wider ${
-                              hasDrugAllergy ? 'text-rose-900' : 'text-slate-800'
+                              hasDrugAllergy ? 'text-rose-900 dark:text-rose-200' : 'text-slate-800 dark:text-slate-200'
                             }`}
                           >
                             Dị ứng thuốc (Chống chỉ định lâm sàng)
                           </h5>
-                          <p className="text-[10.5px] text-slate-500">
+                          <p className="text-[10.5px] text-slate-500 dark:text-slate-400">
                             Cảnh báo y khoa quan trọng trước khi chỉ định phác đồ điều trị
                           </p>
                         </div>
@@ -400,8 +400,8 @@ export const PatientDetailDrawer: React.FC<PatientDetailDrawerProps> = ({
                       <span
                         className={`rounded-md px-2 py-0.5 text-[10px] font-extrabold border ${
                           hasDrugAllergy
-                            ? 'bg-rose-100 text-rose-800 border-rose-200'
-                            : 'bg-emerald-50 text-emerald-700 border-emerald-200'
+                            ? 'bg-rose-100 text-rose-800 border-rose-200 dark:bg-rose-950/60 dark:text-rose-300 dark:border-rose-900/60'
+                            : 'bg-emerald-50 text-emerald-700 border-emerald-200 dark:bg-emerald-950/60 dark:text-emerald-300 dark:border-emerald-900/60'
                         }`}
                       >
                         {hasDrugAllergy ? 'CẢNH BÁO CAO' : 'AN TOÀN'}
@@ -409,20 +409,20 @@ export const PatientDetailDrawer: React.FC<PatientDetailDrawerProps> = ({
                     </div>
 
                     {hasDrugAllergy ? (
-                      <div className="flex flex-wrap items-center gap-2 mt-3 pt-2 border-t border-rose-200/60">
+                      <div className="flex flex-wrap items-center gap-2 mt-3 pt-2 border-t border-rose-200/60 dark:border-rose-900/60">
                         {tags.map((allergen, idx) => (
                           <span
                             key={idx}
-                            className="inline-flex items-center gap-1.5 rounded-xl bg-rose-100 text-rose-800 px-3 py-1.5 text-xs font-bold border border-rose-200/80 shadow-2xs"
+                            className="inline-flex items-center gap-1.5 rounded-xl bg-rose-100 text-rose-800 dark:bg-rose-950/60 dark:text-rose-300 px-3 py-1.5 text-xs font-bold border border-rose-200/80 dark:border-rose-900/60 shadow-2xs"
                           >
-                            <ShieldAlert className="h-3.5 w-3.5 text-rose-600 shrink-0" />
+                            <ShieldAlert className="h-3.5 w-3.5 text-rose-600 dark:text-rose-400 shrink-0" />
                             <span>{allergen}</span>
                           </span>
                         ))}
                       </div>
                     ) : (
-                      <div className="flex items-center gap-2 mt-2 pt-2 border-t border-slate-200/60 text-xs font-semibold text-emerald-700">
-                        <CheckCircle2 className="h-3.5 w-3.5 text-emerald-600 shrink-0" />
+                      <div className="flex items-center gap-2 mt-2 pt-2 border-t border-slate-200/60 dark:border-slate-800 text-xs font-semibold text-emerald-700 dark:text-emerald-400">
+                        <CheckCircle2 className="h-3.5 w-3.5 text-emerald-600 dark:text-emerald-400 shrink-0" />
                         <span>Không ghi nhận tiền sử dị ứng thuốc nguy hiểm</span>
                       </div>
                     )}
@@ -433,13 +433,13 @@ export const PatientDetailDrawer: React.FC<PatientDetailDrawerProps> = ({
               {/* 2-Column Grid for Secondary Info: Dị ứng thực phẩm & Chế độ dinh dưỡng */}
               <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                 {/* Cột 1: Dị ứng thực phẩm */}
-                <div className="rounded-2xl border border-slate-200/80 bg-white p-4 shadow-2xs flex flex-col justify-between">
+                <div className="rounded-2xl border border-slate-200/80 bg-white dark:bg-[#0F172A] dark:border-slate-800/80 p-4 shadow-2xs flex flex-col justify-between">
                   <div>
                     <div className="flex items-center gap-2 mb-1.5">
-                      <div className="flex h-7 w-7 items-center justify-center rounded-lg bg-amber-50 text-amber-600">
+                      <div className="flex h-7 w-7 items-center justify-center rounded-lg bg-amber-50 text-amber-600 dark:bg-amber-950/40 dark:text-amber-400">
                         <Utensils className="h-3.5 w-3.5" />
                       </div>
-                      <span className="text-xs font-extrabold text-slate-900">
+                      <span className="text-xs font-extrabold text-slate-900 dark:text-white">
                         Dị ứng thực phẩm
                       </span>
                     </div>
@@ -458,14 +458,14 @@ export const PatientDetailDrawer: React.FC<PatientDetailDrawerProps> = ({
                           .map((food, i) => (
                             <span
                               key={i}
-                              className="rounded-lg bg-amber-50 px-2.5 py-1 text-xs font-bold text-amber-800 border border-amber-200/60"
+                              className="rounded-lg bg-amber-50 px-2.5 py-1 text-xs font-bold text-amber-800 border border-amber-200/60 dark:bg-amber-950/40 dark:text-amber-300 dark:border-amber-900/60"
                             >
                               {food}
                             </span>
                           ))}
                       </div>
                     ) : (
-                      <span className="text-xs font-semibold text-slate-600 bg-slate-50 px-2.5 py-1 rounded-lg border border-slate-100 inline-block">
+                      <span className="text-xs font-semibold text-slate-600 bg-slate-50 px-2.5 py-1 rounded-lg border border-slate-100 inline-block dark:bg-slate-800/60 dark:text-slate-300 dark:border-slate-700/60">
                         Không ghi nhận dị ứng thực phẩm
                       </span>
                     )}
@@ -473,13 +473,13 @@ export const PatientDetailDrawer: React.FC<PatientDetailDrawerProps> = ({
                 </div>
 
                 {/* Cột 2: Chế độ dinh dưỡng khuyến nghị */}
-                <div className="rounded-2xl border border-slate-200/80 bg-white p-4 shadow-2xs flex flex-col justify-between">
+                <div className="rounded-2xl border border-slate-200/80 bg-white dark:bg-[#0F172A] dark:border-slate-800/80 p-4 shadow-2xs flex flex-col justify-between">
                   <div>
                     <div className="flex items-center gap-2 mb-1.5">
-                      <div className="flex h-7 w-7 items-center justify-center rounded-lg bg-emerald-50 text-emerald-600">
+                      <div className="flex h-7 w-7 items-center justify-center rounded-lg bg-emerald-50 text-emerald-600 dark:bg-emerald-950/40 dark:text-emerald-400">
                         <Apple className="h-3.5 w-3.5" />
                       </div>
-                      <span className="text-xs font-extrabold text-slate-900">
+                      <span className="text-xs font-extrabold text-slate-900 dark:text-white">
                             Chế độ dinh dưỡng
                       </span>
                     </div>
@@ -497,14 +497,14 @@ export const PatientDetailDrawer: React.FC<PatientDetailDrawerProps> = ({
                           .map((diet, i) => (
                             <span
                               key={i}
-                              className="rounded-lg bg-emerald-50 px-2.5 py-1 text-xs font-semibold text-emerald-800 border border-emerald-200/60"
+                              className="rounded-lg bg-emerald-50 px-2.5 py-1 text-xs font-semibold text-emerald-800 border border-emerald-200/60 dark:bg-emerald-950/40 dark:text-emerald-300 dark:border-emerald-900/60"
                             >
                               {diet}
                             </span>
                           ))}
                       </div>
                     ) : (
-                      <span className="text-xs font-semibold text-slate-600 bg-slate-50 px-2.5 py-1 rounded-lg border border-slate-100 inline-block">
+                      <span className="text-xs font-semibold text-slate-600 bg-slate-50 px-2.5 py-1 rounded-lg border border-slate-100 inline-block dark:bg-slate-800/60 dark:text-slate-300 dark:border-slate-700/60">
                         Ăn giảm muối, hạn chế đường, bổ sung chất xơ
                       </span>
                     )}
@@ -513,28 +513,28 @@ export const PatientDetailDrawer: React.FC<PatientDetailDrawerProps> = ({
               </div>
 
               {/* 5. Highlighted Doctor's Note Card */}
-              <div className="rounded-2xl border-y border-r border-blue-100/90 border-l-4 border-l-blue-600 bg-gradient-to-r from-blue-50/60 via-blue-50/20 to-white p-4.5 shadow-2xs">
+              <div className="rounded-2xl border-y border-r border-blue-100/90 border-l-4 border-l-blue-600 bg-gradient-to-r from-blue-50/60 via-blue-50/20 to-white dark:border-slate-800/80 dark:border-l-blue-500 dark:from-blue-950/40 dark:via-blue-950/20 dark:to-[#0F172A] p-4.5 shadow-2xs">
                 <div className="flex items-center justify-between mb-2">
                   <div className="flex items-center gap-2">
-                    <div className="flex h-7 w-7 items-center justify-center rounded-lg bg-blue-100 text-blue-700">
+                    <div className="flex h-7 w-7 items-center justify-center rounded-lg bg-blue-100 text-blue-700 dark:bg-blue-950/60 dark:text-blue-300">
                       <Stethoscope className="h-4 w-4" />
                     </div>
-                    <span className="text-xs font-extrabold text-blue-900 tracking-wide uppercase">
+                    <span className="text-xs font-extrabold text-blue-900 dark:text-blue-300 tracking-wide uppercase">
                       Dặn dò của Bác sĩ gia đình
                     </span>
                   </div>
-                  <span className="rounded-md bg-blue-100/70 px-2 py-0.5 text-[10px] font-bold text-blue-700">
+                  <span className="rounded-md bg-blue-100/70 px-2 py-0.5 text-[10px] font-bold text-blue-700 dark:bg-blue-900/50 dark:text-blue-300">
                     LÂM SÀNG
                   </span>
                 </div>
 
-                <p className="text-xs font-medium text-slate-700 leading-relaxed pl-9">
+                <p className="text-xs font-medium text-slate-700 dark:text-slate-200 leading-relaxed pl-9">
                   {patientDetail.doctor_notes ||
                     'Bệnh nhân tuân thủ phác đồ điều trị tốt. Duy trì vận động nhẹ nhàng và tái khám định kỳ theo đúng hẹn.'}
                 </p>
 
-                <div className="mt-3.5 flex items-center justify-between border-t border-blue-100/60 pt-2.5 pl-9 text-[11px] text-slate-400">
-                  <span className="flex items-center gap-1.5 font-medium text-slate-600">
+                <div className="mt-3.5 flex items-center justify-between border-t border-blue-100/60 dark:border-slate-800 pt-2.5 pl-9 text-[11px] text-slate-400">
+                  <span className="flex items-center gap-1.5 font-medium text-slate-600 dark:text-slate-300">
                     <span className="h-1.5 w-1.5 rounded-full bg-blue-600" />
                     Phụ trách: BS. Trần Văn Minh
                   </span>
@@ -555,7 +555,7 @@ export const PatientDetailDrawer: React.FC<PatientDetailDrawerProps> = ({
             <div className="space-y-4">
               <div className="flex items-center justify-between">
                 <div>
-                  <h4 className="text-xs font-extrabold uppercase tracking-wider text-slate-900">
+                  <h4 className="text-xs font-extrabold uppercase tracking-wider text-slate-900 dark:text-white">
                     Thuốc đang sử dụng ({prescriptions.length})
                   </h4>
                   <p className="text-[11px] text-slate-400 mt-0.5">
@@ -565,7 +565,7 @@ export const PatientDetailDrawer: React.FC<PatientDetailDrawerProps> = ({
                 <button
                   type="button"
                   onClick={onOpenPrescriptionModal}
-                  className="flex items-center space-x-1.5 rounded-xl bg-blue-600 px-3.5 py-2 text-xs font-bold text-white shadow-xs hover:bg-blue-700 transition-colors"
+                  className="flex items-center space-x-1.5 rounded-xl bg-blue-600 px-3.5 py-2 text-xs font-bold text-white shadow-xs hover:bg-blue-700 transition-colors cursor-pointer"
                 >
                   <Plus className="h-3.5 w-3.5" />
                   <span>Kê đơn thuốc mới</span>
@@ -573,26 +573,26 @@ export const PatientDetailDrawer: React.FC<PatientDetailDrawerProps> = ({
               </div>
 
               {prescriptions.length === 0 ? (
-                <div className="rounded-2xl border border-dashed border-slate-200 p-8 text-center text-xs text-slate-400 bg-slate-50/50">
+                <div className="rounded-2xl border border-dashed border-slate-200 dark:border-slate-700/80 p-8 text-center text-xs text-slate-400 bg-slate-50/50 dark:bg-[#0F172A]/50">
                   Chưa có đơn thuốc nào. Bấm nút Kê đơn thuốc mới ở trên để thêm.
                 </div>
               ) : (
                 <div className="space-y-2.5">
                   {prescriptions.map((rx) => (
-                    <div key={rx.id} className="rounded-2xl border border-slate-200/80 bg-white p-4 shadow-xs">
+                    <div key={rx.id} className="rounded-2xl border border-slate-200/80 bg-white dark:bg-[#0F172A] dark:border-slate-800/80 p-4 shadow-xs">
                       <div className="flex items-center justify-between">
-                        <span className="font-extrabold text-slate-900 text-xs">{rx.medication_name}</span>
-                        <span className="rounded-md bg-blue-50 px-2 py-0.5 text-[10px] font-bold text-blue-700 border border-blue-100">
+                        <span className="font-extrabold text-slate-900 dark:text-white text-xs">{rx.medication_name}</span>
+                        <span className="rounded-md bg-blue-50 px-2 py-0.5 text-[10px] font-bold text-blue-700 border border-blue-100 dark:bg-blue-950/50 dark:text-blue-300 dark:border-blue-900/60">
                           {rx.dosage}
                         </span>
                       </div>
-                      <p className="mt-1 text-xs text-slate-500">
+                      <p className="mt-1 text-xs text-slate-500 dark:text-slate-400">
                         {rx.frequency} • {rx.instructions}
                       </p>
-                      <div className="mt-2.5 flex items-center justify-between text-[11px] border-t border-slate-100 pt-2">
+                      <div className="mt-2.5 flex items-center justify-between text-[11px] border-t border-slate-100 dark:border-slate-800 pt-2">
                         <span className="text-slate-400">Giờ uống: {rx.schedule_times?.join(', ')}</span>
                         {rx.enable_speaker_reminder && (
-                          <span className="rounded-full bg-emerald-50 px-2 py-0.5 text-emerald-700 font-bold border border-emerald-100">
+                          <span className="rounded-full bg-emerald-50 px-2 py-0.5 text-emerald-700 font-bold border border-emerald-100 dark:bg-emerald-950/40 dark:text-emerald-300 dark:border-emerald-800/60">
                             Loa nhắc: Đang bật
                           </span>
                         )}
@@ -608,7 +608,7 @@ export const PatientDetailDrawer: React.FC<PatientDetailDrawerProps> = ({
             <div className="space-y-4">
               <div className="flex items-center justify-between">
                 <div>
-                  <h4 className="text-xs font-extrabold uppercase tracking-wider text-slate-900">
+                  <h4 className="text-xs font-extrabold uppercase tracking-wider text-slate-900 dark:text-white">
                     Lịch khám của bệnh nhân
                   </h4>
                   <p className="text-[11px] text-slate-400 mt-0.5">
@@ -618,7 +618,7 @@ export const PatientDetailDrawer: React.FC<PatientDetailDrawerProps> = ({
                 <button
                   type="button"
                   onClick={onOpenAppointmentModal}
-                  className="flex items-center space-x-1.5 rounded-xl bg-blue-600 px-3.5 py-2 text-xs font-bold text-white shadow-xs hover:bg-blue-700 transition-colors"
+                  className="flex items-center space-x-1.5 rounded-xl bg-blue-600 px-3.5 py-2 text-xs font-bold text-white shadow-xs hover:bg-blue-700 transition-colors cursor-pointer"
                 >
                   <Plus className="h-3.5 w-3.5" />
                   <span>Hẹn lịch khám mới</span>
@@ -626,28 +626,28 @@ export const PatientDetailDrawer: React.FC<PatientDetailDrawerProps> = ({
               </div>
 
               {patientAppointments.length === 0 ? (
-                <div className="rounded-2xl border border-dashed border-slate-200 p-8 text-center text-xs text-slate-400 bg-slate-50/50">
+                <div className="rounded-2xl border border-dashed border-slate-200 dark:border-slate-700/80 p-8 text-center text-xs text-slate-400 bg-slate-50/50 dark:bg-[#0F172A]/50">
                   Chưa có lịch khám nào với bệnh nhân này.
                 </div>
               ) : (
                 <div className="space-y-2.5">
                   {patientAppointments.map((apt) => (
-                    <div key={apt.id} className="rounded-2xl border border-slate-200/80 bg-white p-4 shadow-xs">
+                    <div key={apt.id} className="rounded-2xl border border-slate-200/80 bg-white dark:bg-[#0F172A] dark:border-slate-800/80 p-4 shadow-xs">
                       <div className="flex items-center justify-between">
-                        <span className="font-extrabold text-slate-900 text-xs">{apt.clinical_notes || 'Khám sức khỏe'}</span>
+                        <span className="font-extrabold text-slate-900 dark:text-white text-xs">{apt.clinical_notes || 'Khám sức khỏe'}</span>
                         <span
                           className={`rounded-full px-2.5 py-0.5 text-[10px] font-extrabold border ${
                             apt.status === 'COMPLETED'
-                              ? 'bg-emerald-50 text-emerald-700 border-emerald-200'
+                              ? 'bg-emerald-50 text-emerald-700 border-emerald-200 dark:bg-emerald-950/60 dark:text-emerald-300 dark:border-emerald-900/60'
                               : apt.status === 'CANCELLED'
-                                ? 'bg-rose-50 text-rose-700 border-rose-200'
-                                : 'bg-blue-50 text-blue-700 border-blue-200'
+                                ? 'bg-rose-50 text-rose-700 border-rose-200 dark:bg-rose-950/60 dark:text-rose-300 dark:border-rose-900/60'
+                                : 'bg-blue-50 text-blue-700 border-blue-200 dark:bg-blue-950/60 dark:text-blue-300 dark:border-blue-900/60'
                           }`}
                         >
                           {apt.status === 'COMPLETED' ? 'Đã khám xong' : apt.status === 'CANCELLED' ? 'Đã hủy' : 'Sắp tới'}
                         </span>
                       </div>
-                      <p className="mt-1 text-xs text-slate-500">
+                      <p className="mt-1 text-xs text-slate-500 dark:text-slate-400">
                         {new Date(apt.scheduled_at).toLocaleString('vi-VN')} • {apt.location}
                       </p>
                     </div>
@@ -659,11 +659,11 @@ export const PatientDetailDrawer: React.FC<PatientDetailDrawerProps> = ({
         </div>
 
         {/* 6. Sticky Footer Action Bar */}
-        <div className="sticky bottom-0 z-10 flex items-center justify-between border-t border-slate-100 bg-white/95 px-6 py-3.5 backdrop-blur-md">
-          <div className="flex items-center gap-2 text-xs text-slate-500">
+        <div className="sticky bottom-0 z-10 flex items-center justify-between border-t border-slate-100 dark:border-slate-800/80 bg-white/95 dark:bg-[#131C31]/95 px-6 py-3.5 backdrop-blur-md">
+          <div className="flex items-center gap-2 text-xs text-slate-500 dark:text-slate-400">
             <span className="flex h-2 w-2 rounded-full bg-emerald-500" />
-            <span className="font-semibold text-slate-700">Hồ sơ điện tử (EHR)</span>
-            <span className="text-slate-300">•</span>
+            <span className="font-semibold text-slate-700 dark:text-slate-200">Hồ sơ điện tử (EHR)</span>
+            <span className="text-slate-300 dark:text-slate-600">•</span>
             <span className="text-[11px] font-medium text-slate-400">{selectedMrCode}</span>
           </div>
 
@@ -671,14 +671,14 @@ export const PatientDetailDrawer: React.FC<PatientDetailDrawerProps> = ({
             <button
               type="button"
               onClick={onClose}
-              className="rounded-xl border border-slate-200 bg-white px-4 py-2 text-xs font-bold text-slate-700 shadow-2xs hover:bg-slate-50 transition"
+              className="rounded-xl border border-slate-200 bg-white px-4 py-2 text-xs font-bold text-slate-700 shadow-2xs hover:bg-slate-50 transition cursor-pointer dark:border-slate-700 dark:bg-slate-800/80 dark:text-slate-200 dark:hover:bg-slate-700"
             >
               Đóng
             </button>
             <button
               type="button"
               onClick={onOpenRecordModal}
-              className="inline-flex items-center gap-1.5 rounded-xl bg-blue-600 px-5 py-2 text-xs font-bold text-white shadow-md shadow-blue-600/25 hover:bg-blue-700 transition"
+              className="inline-flex items-center gap-1.5 rounded-xl bg-blue-600 px-5 py-2 text-xs font-bold text-white shadow-md shadow-blue-600/25 hover:bg-blue-700 transition cursor-pointer"
             >
               <Edit className="h-3.5 w-3.5" />
               <span>Cập nhật hồ sơ</span>
