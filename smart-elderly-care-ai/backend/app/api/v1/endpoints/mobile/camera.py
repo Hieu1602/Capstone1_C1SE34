@@ -246,6 +246,15 @@ async def probe_single_ip(ip: str, port: int = 554, timeout: float = 0.25):
         elif "dahua" in resp.lower():
             brand = "Dahua / Imou"
             channel_path = "/cam/realmonitor?channel=1&subtype=0"
+        else:
+            try:
+                _, w2020 = await asyncio.wait_for(asyncio.open_connection(ip, 2020), timeout=0.3)
+                w2020.close()
+                await w2020.wait_closed()
+                brand = "TP-Link Tapo"
+                channel_path = "/stream1"
+            except Exception:
+                pass
 
         return {
             "ip": ip,
@@ -267,15 +276,38 @@ async def probe_single_ip(ip: str, port: int = 554, timeout: float = 0.25):
 
 
 @router.get("/discover")
-async def discover_cameras(_=Depends(authenticated)):
+async def discover_cameras(
+    request: Request,
+    subnet: str | None = Query(None, description="Subnet tùy chọn cần dò (vd: 192.168.10.)"),
+    _=Depends(authenticated),
+):
     """Dò quét camera RTSP/ONVIF trong mạng nội bộ."""
-    subnets = ["192.168.1.", "192.168.31.", "192.168.0."]
+    subnets = ["192.168.10.", "192.168.1.", "192.168.0.", "192.168.31.", "192.168.2.", "192.168.100."]
+    if subnet:
+        clean_sub = subnet.strip()
+        if not clean_sub.endswith("."):
+            clean_sub += "."
+        if clean_sub not in subnets:
+            subnets.insert(0, clean_sub)
+
+    client_ip = getattr(request.client, "host", "") if request.client else ""
+    if client_ip and re.match(r"^(192\.168\.\d+|10\.\d+\.\d+|172\.(1[6-9]|2\d|3[01])\.\d+)\.\d+$", client_ip):
+        client_sub = ".".join(client_ip.split(".")[:3]) + "."
+        if client_sub not in subnets:
+            subnets.insert(0, client_sub)
+
     configured_host = os.getenv("TAPO_HOST", "").strip()
     ips = [f"{sub}{i}" for sub in subnets for i in range(1, 255)]
     if configured_host and configured_host not in ips:
         ips.insert(0, configured_host)
 
-    tasks = [probe_single_ip(ip) for ip in ips]
+    sem = asyncio.Semaphore(100)
+
+    async def _sem_probe(ip: str):
+        async with sem:
+            return await probe_single_ip(ip)
+
+    tasks = [_sem_probe(ip) for ip in ips]
     results = await asyncio.gather(*tasks)
     found = [c for c in results if c is not None]
     return {"found": found}
@@ -303,6 +335,16 @@ async def probe_camera(body: ProbeRequest, _=Depends(authenticated)):
         await writer.wait_closed()
         resp = data.decode("utf-8", errors="ignore")
         brand = "Hikvision" if ("hikvision" in resp.lower() or "webs" in resp.lower() or "404" in resp) else "Camera IP"
+        if "tapo" in resp.lower():
+            brand = "TP-Link Tapo"
+        elif brand == "Camera IP":
+            try:
+                _, w2020 = await asyncio.wait_for(asyncio.open_connection(host, 2020), timeout=0.3)
+                w2020.close()
+                await w2020.wait_closed()
+                brand = "TP-Link Tapo"
+            except Exception:
+                pass
         return {
             "success": True,
             "reachable": True,
