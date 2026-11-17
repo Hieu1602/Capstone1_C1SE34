@@ -1,12 +1,12 @@
-"""sync_ec2_env.py – Tự động đồng bộ các cấu hình Supabase và eSMS vào file .env trên EC2."""
+"""sync_ec2_env.py – Tự động đồng bộ các cấu hình AWS RDS Database và eSMS vào file .env trên EC2."""
 from pathlib import Path
 
 env_file = Path(__file__).resolve().parent / ".env"
 
-SUPABASE_URL = "postgresql+asyncpg://postgres.lwvoaznmrciezcwktmlg:seca1122cap1@aws-0-ap-northeast-2.pooler.supabase.com:5432/postgres"
+AWS_RDS_DATABASE_URL = "postgresql+asyncpg://postgres:Seca2026@seca.cdeea4mcuj3h.ap-southeast-2.rds.amazonaws.com:5432/postgres?ssl=require"
 
 REQUIRED_VARS = {
-    "DATABASE_URL": SUPABASE_URL,
+    "DATABASE_URL": AWS_RDS_DATABASE_URL,
     "OTP_MODE": "esms",
     "ESMS_API_KEY": "33071FCC017F6B71E3CD85E57E9D42",
     "ESMS_SECRET_KEY": "FE6A70755A9DC8C802FCC389E5DDA9",
@@ -37,7 +37,7 @@ def main():
 
     with open(env_file, "w", encoding="utf-8") as f:
         f.writelines(lines)
-    print("✅ Đã đồng bộ cấu hình Supabase & eSMS vào .env thành công!")
+    print("✅ Đã đồng bộ cấu hình AWS RDS & eSMS vào .env thành công!")
 
 
 if __name__ == "__main__":

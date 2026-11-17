@@ -38,7 +38,7 @@ def _async_database_url(database_url: str):
         if (
             not query.get("ssl")
             and url.host
-            and (url.host.endswith(".supabase.co") or url.host.endswith(".pooler.supabase.com"))
+            and (url.host.endswith(".supabase.co") or url.host.endswith(".pooler.supabase.com") or url.host.endswith(".rds.amazonaws.com"))
         ):
             query["ssl"] = "require"
         if query != dict(url.query):
