@@ -84,6 +84,7 @@ CREATE TABLE "house_members" (
     "user_id" UUID NOT NULL,
     "role_in_house" VARCHAR(50) NOT NULL,
     "permissions" VARCHAR(50) NOT NULL,
+    "status" VARCHAR(30) NOT NULL DEFAULT 'ACTIVE',
     "can_view_health" BOOLEAN NOT NULL DEFAULT true,
     "can_view_camera" BOOLEAN NOT NULL DEFAULT true,
     "can_handle_emergency" BOOLEAN NOT NULL DEFAULT true,
