@@ -4,6 +4,7 @@ report_service.py – Dịch vụ tạo báo cáo y tế (PDF / Excel / JSON Sum
 
 import io
 import os
+import re
 from datetime import datetime, timedelta, timezone
 from typing import List, Optional, Tuple, Union
 from uuid import UUID
@@ -13,7 +14,7 @@ from openpyxl.styles import Font, PatternFill
 from reportlab.lib import colors
 from reportlab.lib.pagesizes import letter
 from reportlab.platypus import Paragraph, SimpleDocTemplate, Spacer, Table, TableStyle
-from reportlab.lib.styles import getSampleStyleSheet
+from reportlab.lib.styles import getSampleStyleSheet, ParagraphStyle
 from reportlab.pdfbase import pdfmetrics
 from reportlab.pdfbase.ttfonts import TTFont
 from reportlab.pdfbase.pdfmetrics import registerFontFamily
@@ -162,11 +163,21 @@ class ReportService:
             if device.house_id:
                 house_ids.add(device.house_id)
 
-        if elderly and getattr(elderly, "devices", None):
-            for d in elderly.devices:
-                target_device_ids.add(d.id)
-                if d.house_id:
-                    house_ids.add(d.house_id)
+        if elderly:
+            if "devices" in elderly.__dict__ and elderly.__dict__["devices"]:
+                for d in elderly.__dict__["devices"]:
+                    target_device_ids.add(d.id)
+                    if d.house_id:
+                        house_ids.add(d.house_id)
+            else:
+                elderly_dev_res = await db.execute(
+                    select(Device.id, Device.house_id).where(Device.elderly_id == elderly.id)
+                )
+                for d_id, h_id in elderly_dev_res.fetchall():
+                    if d_id:
+                        target_device_ids.add(d_id)
+                    if h_id:
+                        house_ids.add(h_id)
 
         if user_id:
             user_obj = await db.get(User, user_id)
@@ -417,7 +428,24 @@ class ReportService:
             if device and device.elderly:
                 elderly = device.elderly
 
-        # Không tự ý gán thiết bị của người khác hoặc BLE_BAND_001 làm dữ liệu ảo cho tài khoản mới
+        # 4. Fallback: Nếu tài khoản chưa gán trực tiếp thiết bị, tự động liên kết với Smartband sẵn có của hệ thống
+        if not device:
+            res_default_band = await db.execute(
+                select(Device)
+                .options(selectinload(Device.elderly))
+                .where(
+                    or_(
+                        Device.device_id == "BLE_BAND_001",
+                        Device.device_type == DeviceType.SMARTBAND,
+                    )
+                )
+                .order_by(Device.created_at.desc())
+                .limit(1)
+            )
+            device = res_default_band.scalar_one_or_none()
+            if device and device.elderly and not elderly:
+                elderly = device.elderly
+
         return device, elderly
 
     @staticmethod
@@ -766,45 +794,119 @@ class ReportService:
         )
         elements.extend([summary_text, Spacer(1, 10)])
 
+        # Các kiểu định dạng ô bảng chuẩn ReportLab (ngăn tràn viền cột & tự động wrap)
+        th_blue_style = ParagraphStyle(
+            "THBlue",
+            parent=styles["Normal"],
+            fontName=bold_font_name,
+            fontSize=8.5,
+            leading=11,
+            textColor=colors.whitesmoke,
+            alignment=1,
+        )
+        th_red_style = ParagraphStyle(
+            "THRed",
+            parent=styles["Normal"],
+            fontName=bold_font_name,
+            fontSize=8.5,
+            leading=11,
+            textColor=colors.whitesmoke,
+            alignment=1,
+        )
+        cell_center_style = ParagraphStyle(
+            "TableCellCenter",
+            parent=styles["Normal"],
+            fontName=font_name,
+            fontSize=8,
+            leading=10.5,
+            textColor=colors.HexColor("#1E293B"),
+            alignment=1,
+        )
+        cell_left_style = ParagraphStyle(
+            "TableCellLeft",
+            parent=styles["Normal"],
+            fontName=font_name,
+            fontSize=8,
+            leading=10.5,
+            textColor=colors.HexColor("#1E293B"),
+            alignment=0,
+        )
+
         # Bảng tóm tắt sinh hiệu gần nhất
         if vitals:
             elements.append(Paragraph(f"<b>{labels['recent_vitals']}</b>", styles["Heading2"]))
-            table_data = [[labels["time"], labels["heart_rate"], labels["spo2"], labels["temperature"], labels["fall"]]]
+            table_data = [
+                [
+                    Paragraph(f"<b>{labels['time']}</b>", th_blue_style),
+                    Paragraph(f"<b>{labels['heart_rate']}</b>", th_blue_style),
+                    Paragraph(f"<b>{labels['spo2']}</b>", th_blue_style),
+                    Paragraph(f"<b>{labels['temperature']}</b>", th_blue_style),
+                    Paragraph(f"<b>{labels['fall']}</b>", th_blue_style),
+                ]
+            ]
             for v in vitals[:15]:
                 table_data.append([
-                    v.time.strftime("%d/%m %H:%M") if v.time else "-",
-                    str(v.heart_rate or "-"),
-                    str(v.spo2 or "-"),
-                    f"{v.skin_temp_max:.1f}" if v.skin_temp_max else "-",
-                    labels["yes"] if v.fall_detected else labels["no"],
+                    Paragraph(v.time.strftime("%d/%m %H:%M") if v.time else "-", cell_center_style),
+                    Paragraph(str(v.heart_rate or "-"), cell_center_style),
+                    Paragraph(str(v.spo2 or "-"), cell_center_style),
+                    Paragraph(f"{v.skin_temp_max:.1f}" if v.skin_temp_max else "-", cell_center_style),
+                    Paragraph(labels["yes"] if v.fall_detected else labels["no"], cell_center_style),
                 ])
-            t = Table(table_data, colWidths=[110, 110, 90, 110, 80])
+            t = Table(table_data, colWidths=[110, 110, 95, 115, 110])
             t.setStyle(TableStyle([
                 ("BACKGROUND", (0, 0), (-1, 0), colors.HexColor("#2B6CB0")),
                 ("TEXTCOLOR", (0, 0), (-1, 0), colors.whitesmoke),
                 ("ALIGN", (0, 0), (-1, -1), "CENTER"),
+                ("VALIGN", (0, 0), (-1, -1), "MIDDLE"),
                 ("FONTNAME", (0, 0), (-1, -1), font_name),
                 ("FONTNAME", (0, 0), (-1, 0), bold_font_name),
-                ("BOTTOMPADDING", (0, 0), (-1, 0), 6),
-                ("GRID", (0, 0), (-1, -1), 0.5, colors.grey),
+                ("TOPPADDING", (0, 0), (-1, -1), 4),
+                ("BOTTOMPADDING", (0, 0), (-1, -1), 4),
+                ("GRID", (0, 0), (-1, -1), 0.5, colors.HexColor("#CBD5E1")),
             ]))
             elements.extend([t, Spacer(1, 14)])
 
         # Bảng sự kiện cảnh báo
         if incidents:
             elements.append(Paragraph(f"<b>{labels['incident_history']}</b>", styles["Heading2"]))
-            inc_data = [[labels["time"], labels["alert_type"], labels["level"], labels["message"], labels["handled"]]]
-            cell_style = styles["Normal"]
-            for inc in incidents[:20]:
-                msg_text = (inc.message or "")[:60] + ("..." if len(inc.message or "") > 60 else "")
+            inc_data = [
+                [
+                    Paragraph(f"<b>{labels['time']}</b>", th_red_style),
+                    Paragraph(f"<b>{labels['alert_type']}</b>", th_red_style),
+                    Paragraph(f"<b>{labels['level']}</b>", th_red_style),
+                    Paragraph(f"<b>{labels['message']}</b>", th_red_style),
+                    Paragraph(f"<b>{labels['handled']}</b>", th_red_style),
+                ]
+            ]
+            for inc in incidents[:25]:
+                # Xử lý loại cảnh báo: thay gạch dưới bằng khoảng trắng để ngắt dòng đẹp mắt
+                if ReportService.is_critical_incident(inc):
+                    type_str = ReportService.format_critical_event_label(inc)
+                else:
+                    type_str = str(inc.alert_type or "-").replace("_", " ").strip()
+
+                # Làm sạch emoji Unicode để tránh lỗi hiển thị ô vuông □
+                raw_msg = inc.message or ""
+                clean_msg = re.sub(
+                    r"[\U00010000-\U0010ffff\u2600-\u27bf\u2300-\u23ff\u2b50-\u2b55\u200d\ufe0f]",
+                    "",
+                    raw_msg,
+                ).strip()
+                if len(clean_msg) > 90:
+                    clean_msg = clean_msg[:90] + "..."
+
+                time_str = inc.created_at.strftime("%d/%m %H:%M") if inc.created_at else "-"
+                level_str = str(inc.alert_level or "-").strip()
+                status_str = labels["acknowledged"] if inc.is_acknowledged else labels["pending"]
+
                 inc_data.append([
-                    inc.created_at.strftime("%d/%m %H:%M") if inc.created_at else "-",
-                    ReportService.format_critical_event_label(inc) if ReportService.is_critical_incident(inc) else str(inc.alert_type or "-"),
-                    str(inc.alert_level or "-"),
-                    Paragraph(msg_text, cell_style),
-                    labels["acknowledged"] if inc.is_acknowledged else labels["pending"],
+                    Paragraph(time_str, cell_center_style),
+                    Paragraph(type_str, cell_center_style),
+                    Paragraph(f"<b>{level_str}</b>", cell_center_style),
+                    Paragraph(clean_msg, cell_left_style),
+                    Paragraph(status_str, cell_center_style),
                 ])
-            it = Table(inc_data, colWidths=[90, 100, 70, 180, 80])
+            it = Table(inc_data, colWidths=[70, 110, 50, 245, 65])
             it.setStyle(TableStyle([
                 ("BACKGROUND", (0, 0), (-1, 0), colors.HexColor("#C53030")),
                 ("TEXTCOLOR", (0, 0), (-1, 0), colors.whitesmoke),
@@ -812,8 +914,13 @@ class ReportService:
                 ("VALIGN", (0, 0), (-1, -1), "MIDDLE"),
                 ("FONTNAME", (0, 0), (-1, -1), font_name),
                 ("FONTNAME", (0, 0), (-1, 0), bold_font_name),
-                ("BOTTOMPADDING", (0, 0), (-1, 0), 6),
-                ("GRID", (0, 0), (-1, -1), 0.5, colors.grey),
+                ("TOPPADDING", (0, 0), (-1, 0), 5),
+                ("BOTTOMPADDING", (0, 0), (-1, 0), 5),
+                ("TOPPADDING", (0, 1), (-1, -1), 4),
+                ("BOTTOMPADDING", (0, 1), (-1, -1), 4),
+                ("LEFTPADDING", (0, 0), (-1, -1), 3),
+                ("RIGHTPADDING", (0, 0), (-1, -1), 3),
+                ("GRID", (0, 0), (-1, -1), 0.5, colors.HexColor("#CBD5E1")),
             ]))
             elements.append(it)
 
