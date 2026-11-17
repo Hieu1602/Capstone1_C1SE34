@@ -1,8 +1,8 @@
 // notificationService.ts
-// Quản lý thông báo đẩy cục bộ (Local Notifications) và rung thiết bị khi có thông báo bác sĩ / khẩn cấp
-// Tự động kiểm tra môi trường: Android Native Module, iOS hoặc Web fallback
+// Quản lý thông báo đẩy cục bộ (Local Notifications), quyền hệ thống và rung thiết bị khi có thông báo bác sĩ / khẩn cấp
+// Hỗ trợ hiển thị trực tiếp trên thanh thông báo (Notification Drawer / Status Bar) của điện thoại Android & iOS
 
-import { Platform, NativeModules, Vibration } from 'react-native';
+import { Platform, NativeModules, Vibration, PermissionsAndroid } from 'react-native';
 
 const { NativeNotificationModule } = NativeModules;
 
@@ -18,32 +18,60 @@ class NotificationService {
   async init(): Promise<void> {
     if (this.isInitialized) return;
 
-    if (Platform.OS !== 'web') {
+    if (Platform.OS === 'android') {
+      await this.requestNotificationPermission();
+    } else if (Platform.OS === 'ios') {
       try {
         const Notifications = require('expo-notifications');
-        Notifications.setNotificationHandler({
-          handleNotification: async () => ({
-            shouldShowAlert: true,
-            shouldPlaySound: true,
-            shouldSetBadge: true,
-          }),
+        await Notifications.requestPermissionsAsync({
+          ios: {
+            allowAlert: true,
+            allowBadge: true,
+            allowSound: true,
+          },
         });
-
-        const { status: existingStatus } = await Notifications.getPermissionsAsync();
-        let finalStatus = existingStatus;
-        if (existingStatus !== 'granted') {
-          const { status } = await Notifications.requestPermissionsAsync();
-          finalStatus = status;
-        }
-
-        if (finalStatus === 'granted') {
-          console.log('[NotificationService] Quyền thông báo cục bộ đã được cấp.');
-        }
-      } catch (err) {
-        // expo-notifications không có sẵn, NativeNotificationModule sẽ đảm nhiệm
+      } catch (e) {
+        // Fallback im lặng nếu expo-notifications chưa cấu hình
       }
     }
+
     this.isInitialized = true;
+  }
+
+  /**
+   * Yêu cầu quyền gửi thông báo lên thanh thông báo hệ thống (bắt buộc từ Android 13+)
+   */
+  async requestNotificationPermission(): Promise<boolean> {
+    if (Platform.OS !== 'android') return true;
+
+    try {
+      // Android 13+ (API level 33+) yêu cầu xin quyền runtime POST_NOTIFICATIONS
+      if (Platform.Version >= 33) {
+        const hasPermission = await PermissionsAndroid.check(
+          PermissionsAndroid.PERMISSIONS.POST_NOTIFICATIONS
+        );
+        if (!hasPermission) {
+          const status = await PermissionsAndroid.request(
+            PermissionsAndroid.PERMISSIONS.POST_NOTIFICATIONS,
+            {
+              title: 'Cấp quyền thông báo',
+              message:
+                'SmartCare AI cần quyền gửi thông báo để hiển thị các cảnh báo sức khỏe khẩn cấp, nhắc nhở lịch khám bác sĩ trên thanh thông báo của điện thoại.',
+              buttonPositive: 'Cho phép',
+              buttonNegative: 'Để sau',
+            }
+          );
+          const granted = status === PermissionsAndroid.RESULTS.GRANTED;
+          console.log('[NotificationService] Kết quả cấp quyền POST_NOTIFICATIONS:', status);
+          return granted;
+        }
+        return true;
+      }
+      return true;
+    } catch (err) {
+      console.warn('[NotificationService] Lỗi khi kiểm tra/xin quyền thông báo Android:', err);
+      return false;
+    }
   }
 
   startBackgroundMonitor(serverUrl: string): void {
@@ -67,6 +95,9 @@ class NotificationService {
     }
   }
 
+  /**
+   * Bắn thông báo đẩy lên thanh thông báo hệ thống của điện thoại (Notification Tray / Status Bar)
+   */
   async triggerEmergencyNotification(payload: NotificationPayload): Promise<void> {
     const { title, body, data } = payload;
 
@@ -82,6 +113,7 @@ class NotificationService {
       if (Platform.OS === 'android' && NativeNotificationModule?.showNotification) {
         try {
           NativeNotificationModule.showNotification(title, body);
+          console.log('[NotificationService] Đã gửi thông báo qua NativeNotificationModule:', title);
           return;
         } catch (nativeErr) {
           console.warn('[NotificationService] NativeNotificationModule failed:', nativeErr);
@@ -91,6 +123,14 @@ class NotificationService {
       // 3. Fallback qua expo-notifications nếu có
       try {
         const Notifications = require('expo-notifications');
+        Notifications.setNotificationHandler({
+          handleNotification: async () => ({
+            shouldShowAlert: true,
+            shouldPlaySound: true,
+            shouldSetBadge: true,
+          }),
+        });
+
         await Notifications.scheduleNotificationAsync({
           content: {
             title,

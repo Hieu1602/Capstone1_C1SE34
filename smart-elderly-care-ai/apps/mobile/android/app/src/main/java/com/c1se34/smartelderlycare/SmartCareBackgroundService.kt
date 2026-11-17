@@ -110,7 +110,7 @@ class SmartCareBackgroundService : Service() {
         )
 
         return NotificationCompat.Builder(this, SERVICE_CHANNEL_ID)
-            .setSmallIcon(R.mipmap.ic_launcher)
+            .setSmallIcon(R.drawable.ic_notification)
             .setContentTitle("SmartCare AI đang bảo vệ người cao tuổi")
             .setContentText("Hệ thống giám sát sinh tồn & sự cố té ngã 24/7 đang hoạt động trong nền")
             .setPriority(NotificationCompat.PRIORITY_LOW)
@@ -218,7 +218,7 @@ class SmartCareBackgroundService : Service() {
             getSystemService(Context.NOTIFICATION_SERVICE) as NotificationManager
 
         val notification = NotificationCompat.Builder(this, ALERT_CHANNEL_ID)
-            .setSmallIcon(R.mipmap.ic_launcher)
+            .setSmallIcon(R.drawable.ic_notification)
             .setContentTitle(title)
             .setContentText(message)
             .setStyle(NotificationCompat.BigTextStyle().bigText(message))

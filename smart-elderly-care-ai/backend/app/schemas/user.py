@@ -174,6 +174,12 @@ class PasswordChange(BaseModel):
         return self
 
 
+class DeleteAccountRequest(BaseModel):
+    password: Optional[str] = None
+    reason: Optional[str] = None
+    confirmation: Optional[str] = None
+
+
 class UserOut(UserBase):
     id: uuid.UUID
     email: Optional[str] = None

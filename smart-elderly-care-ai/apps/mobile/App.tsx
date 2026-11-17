@@ -149,6 +149,9 @@ export default function App() {
             return undefined;
         }
 
+        // Tự động đồng bộ FCM push token lên máy chủ khi người dùng đăng nhập
+        fcmService.syncTokenOnLogin().catch(() => {});
+
         let isActive = true;
         api.get("/users/me")
             .then(({ data }) => {
