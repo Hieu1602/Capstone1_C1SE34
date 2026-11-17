@@ -108,9 +108,17 @@ async def lifespan(app: FastAPI):
                     incident = await crud_incident.create_from_edge(session, payload)
                     await session.commit()
 
-                    # Real-time WebSocket broadcast
+                    # Real-time WebSocket broadcast & Auto-Escalation (45s)
                     try:
-                        from app.api.websockets.vitals_ws import manager
+                        from app.api.websockets.vitals_ws import manager, alert_clients
+                        from app.services.escalation_service import schedule_auto_escalation, DEFAULT_ESCALATION_DELAY_SECONDS
+                        is_escalatable = (
+                            incident.alert_type in ("FALL_DETECTED", "AI_FALL_DETECTED", "CRITICAL_TRIAD", "CARDIO_COLLAPSE")
+                            or incident.alert_level == "CRITICAL"
+                        )
+                        if is_escalatable:
+                            schedule_auto_escalation(incident.id, DEFAULT_ESCALATION_DELAY_SECONDS)
+
                         ws_data = {
                             "type": "incident_alert",
                             "alert_type": incident.alert_type,
@@ -118,9 +126,34 @@ async def lifespan(app: FastAPI):
                             "message": incident.message,
                             "incident_id": str(incident.id),
                             "video_clip_url": incident.video_clip_url,
+                            "thumbnail_url": incident.thumbnail_url,
                             "device_id": str(incident.device_id),
+                            "escalation_seconds": DEFAULT_ESCALATION_DELAY_SECONDS if is_escalatable else None,
                         }
                         await manager.broadcast_to_device(str(incident.device_id), ws_data)
+
+                        alert_new_payload = json.dumps({
+                            "type": "ALERT_NEW",
+                            "alert_type": incident.alert_type,
+                            "data": {
+                                "id": str(incident.id),
+                                "device_id": str(incident.device_id),
+                                "type": incident.alert_type,
+                                "alert_type": incident.alert_type,
+                                "alert_level": incident.alert_level,
+                                "message": incident.message,
+                                "video_clip_url": incident.video_clip_url,
+                                "thumbnail_url": incident.thumbnail_url,
+                                "created_at": incident.created_at.isoformat() if incident.created_at else None,
+                                "escalation_seconds": DEFAULT_ESCALATION_DELAY_SECONDS if is_escalatable else None,
+                            },
+                        }, ensure_ascii=False)
+                        for client_ws in list(alert_clients):
+                            try:
+                                await client_ws.send_text(alert_new_payload)
+                            except Exception:
+                                if client_ws in alert_clients:
+                                    alert_clients.remove(client_ws)
                     except Exception as ws_err:
                         logger.warning("[Lifespan] WS broadcast warning: %s", ws_err)
 

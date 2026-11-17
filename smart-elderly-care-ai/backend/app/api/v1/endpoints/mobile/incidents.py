@@ -6,7 +6,7 @@ import logging
 from typing import List
 from uuid import UUID
 
-from fastapi import APIRouter, Body, Depends, HTTPException, Query, status
+from fastapi import APIRouter, BackgroundTasks, Body, Depends, HTTPException, Query, status
 from sqlalchemy.ext.asyncio import AsyncSession
 from app.api.deps import get_current_user_optional
 from app.core.database import get_db
@@ -105,16 +105,57 @@ async def get_incident(
     return incident
 
 
+async def _bg_post_acknowledge(ack_ws_payload: str):
+    """Background task: Phát WebSocket và xóa cache Redis sau khi phản hồi nhanh <200ms."""
+    try:
+        from app.api.websockets.vitals_ws import alert_clients
+        for client_ws in list(alert_clients):
+            try:
+                await client_ws.send_text(ack_ws_payload)
+            except Exception:
+                if client_ws in alert_clients:
+                    alert_clients.remove(client_ws)
+    except Exception as ws_err:
+        logger.warning("[acknowledge_incident] WS broadcast error: %s", ws_err)
+
+    try:
+        from app.services.redis import redis_service
+        await redis_service.invalidate_incidents_cache()
+    except Exception:
+        pass
+
+
+async def _bg_post_reopen(reopen_ws_payload: str):
+    """Background task: Phát WebSocket kích hoạt lại còi & xóa cache Redis."""
+    try:
+        from app.api.websockets.vitals_ws import alert_clients
+        for client_ws in list(alert_clients):
+            try:
+                await client_ws.send_text(reopen_ws_payload)
+            except Exception:
+                if client_ws in alert_clients:
+                    alert_clients.remove(client_ws)
+    except Exception as ws_err:
+        logger.warning("[reopen_incident] WS broadcast error: %s", ws_err)
+
+    try:
+        from app.services.redis import redis_service
+        await redis_service.invalidate_incidents_cache()
+    except Exception:
+        pass
+
+
 @router.patch("/{incident_id}/acknowledge", response_model=IncidentOut)
 @router.post("/{incident_id}/acknowledge", response_model=IncidentOut)
 async def acknowledge_incident(
     incident_id: UUID,
+    background_tasks: BackgroundTasks,
     ack: IncidentAck | None = Body(default=None),
     note: str | None = Query(default=None),
     db: AsyncSession = Depends(get_db),
     current_user: User | None = Depends(get_current_user_optional),
 ):
-    """Xác nhận đã xử lý sự kiện (caregiver/bác sĩ mark as handled)."""
+    """Xác nhận đã xử lý sự kiện (caregiver/bác sĩ mark as handled) - phản hồi <200ms."""
     resolved_note = ack.notes if (ack and ack.notes) else note
     ack_by = current_user.id if current_user else None
     incident = await crud_incident.acknowledge(
@@ -138,6 +179,13 @@ async def acknowledge_incident(
         except Exception as notify_err:
             logger.warning("[acknowledge_incident] Lỗi kích hoạt notify_doctor_appointment_confirmed: %s", notify_err)
 
+    # Hủy bộ đếm ngược tự động gọi cấp cứu nếu đang chạy
+    try:
+        from app.services.escalation_service import cancel_auto_escalation
+        cancel_auto_escalation(incident.id)
+    except Exception:
+        pass
+
     # Lấy tên hiển thị của người xử lý
     handler_name = incident.acknowledged_by_name
     if not handler_name and current_user:
@@ -145,36 +193,20 @@ async def acknowledge_incident(
     if not handler_name:
         handler_name = "Bác sĩ phụ trách"
 
-    # Broadcast WebSocket INCIDENT_RESOLVED tới tất cả client (Mobile + Web Bác sĩ + Web Admin)
-    try:
-        from app.api.websockets.vitals_ws import alert_clients
-        import json
-        ack_ws_payload = json.dumps({
-            "type": "INCIDENT_RESOLVED",
-            "incident_id": str(incident.id),
-            "data": {
-                "id": str(incident.id),
-                "is_acknowledged": True,
-                "acknowledged_by": str(incident.acknowledged_by) if incident.acknowledged_by else str(ack_by or ""),
-                "acknowledged_by_name": handler_name,
-                "acknowledged_at": incident.acknowledged_at.isoformat() if incident.acknowledged_at else None,
-                "note": resolved_note or "Đã xác nhận xử lý",
-            }
-        }, ensure_ascii=False)
-        for client_ws in list(alert_clients):
-            try:
-                await client_ws.send_text(ack_ws_payload)
-            except Exception:
-                if client_ws in alert_clients:
-                    alert_clients.remove(client_ws)
-    except Exception as ws_err:
-        logger.warning("[acknowledge_incident] WS broadcast error: %s", ws_err)
-
-    try:
-        from app.services.redis import redis_service
-        await redis_service.invalidate_incidents_cache()
-    except Exception:
-        pass
+    import json
+    ack_ws_payload = json.dumps({
+        "type": "INCIDENT_RESOLVED",
+        "incident_id": str(incident.id),
+        "data": {
+            "id": str(incident.id),
+            "is_acknowledged": True,
+            "acknowledged_by": str(incident.acknowledged_by) if incident.acknowledged_by else str(ack_by or ""),
+            "acknowledged_by_name": handler_name,
+            "acknowledged_at": incident.acknowledged_at.isoformat() if incident.acknowledged_at else None,
+            "note": resolved_note or "Đã xác nhận xử lý",
+        }
+    }, ensure_ascii=False)
+    background_tasks.add_task(_bg_post_acknowledge, ack_ws_payload)
 
     return incident
 
@@ -183,11 +215,12 @@ async def acknowledge_incident(
 @router.post("/{incident_id}/reopen", response_model=IncidentOut)
 async def reopen_incident(
     incident_id: UUID,
+    background_tasks: BackgroundTasks,
     note: str | None = Query(default=None),
     db: AsyncSession = Depends(get_db),
     current_user: User | None = Depends(get_current_user_optional),
 ):
-    """Mở lại cảnh báo sự cố nếu người cao tuổi chưa an toàn."""
+    """Mở lại cảnh báo sự cố nếu người cao tuổi chưa an toàn - phản hồi <200ms."""
     incident = await crud_incident.reopen(
         db, incident_id, notes=note or "Chưa an toàn - Người nhà đã mở lại cảnh báo khẩn cấp"
     )
@@ -196,10 +229,46 @@ async def reopen_incident(
             status_code=status.HTTP_404_NOT_FOUND,
             detail="Incident not found",
         )
-    try:
-        from app.services.redis import redis_service
-        await redis_service.invalidate_incidents_cache()
-    except Exception:
-        pass
+
+    import json
+    reopen_ws_payload = json.dumps({
+        "type": "ALERT_NEW",
+        "alert_type": incident.alert_type,
+        "data": {
+            "id": str(incident.id),
+            "device_id": str(incident.device_id),
+            "type": incident.alert_type,
+            "alert_type": incident.alert_type,
+            "alert_level": incident.alert_level,
+            "message": incident.message,
+            "is_acknowledged": False,
+        }
+    }, ensure_ascii=False)
+    background_tasks.add_task(_bg_post_reopen, reopen_ws_payload)
+
     return incident
+
+
+@router.post("/{incident_id}/escalate")
+async def escalate_incident(
+    incident_id: UUID,
+    ack: IncidentAck | None = Body(default=None),
+    note: str | None = Query(default=None),
+):
+    """
+    Leo thang khẩn cấp tự động (ESCALATED_AUTO_CALL):
+    - Đánh dấu sự cố đã kích hoạt gọi cấp cứu tự động sau 45s không phản hồi hoặc gọi ngay.
+    - Broadcast sự kiện INCIDENT_ESCALATED qua WebSocket tới Bác sĩ & Gia đình.
+    """
+    from app.services.escalation_service import cancel_auto_escalation, mark_incident_escalated
+
+    cancel_auto_escalation(incident_id)
+    reason = ack.notes if (ack and ack.notes) else note
+    result = await mark_incident_escalated(incident_id, reason=reason)
+    if not result:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="Incident not found",
+        )
+    return {"status": "ok", "data": result}
 

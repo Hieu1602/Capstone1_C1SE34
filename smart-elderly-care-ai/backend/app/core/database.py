@@ -54,8 +54,8 @@ _is_supabase_pooler = (
 )
 
 _connect_args: dict = {
-    "timeout": 10,
-    "command_timeout": 15,
+    "timeout": 20,
+    "command_timeout": 30,
     "server_settings": {
         "application_name": "smartcare_ai_fastapi",
         "tcp_keepalives_idle": "30",

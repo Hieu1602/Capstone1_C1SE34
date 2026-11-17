@@ -344,6 +344,8 @@ export const incidentsApi = {
   get: (id: string) => api.get(`/incidents/${id}`),
   acknowledge: (id: string, notes?: string) =>
     api.post(`/incidents/${id}/acknowledge`, null, { params: { note: notes } }),
+  escalate: (id: string, notes?: string) =>
+    api.post(`/incidents/${id}/escalate`, null, { params: { note: notes } }),
   reopen: (id: string, notes?: string) =>
     api.post(`/incidents/${id}/reopen`, null, { params: { note: notes } }),
   acknowledgeAll: () =>

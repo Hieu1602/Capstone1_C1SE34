@@ -110,6 +110,10 @@ export const SettingsPage: React.FC = () => {
   const [notifyAppt, setNotifyAppt] = useState(true);
   const [notifyHubSpeaker, setNotifyHubSpeaker] = useState(true);
   const [notifyFallAlert, setNotifyFallAlert] = useState(true);
+  const [autoEscalationEnabled, setAutoEscalationEnabled] = useState<boolean>(() => {
+    const saved = localStorage.getItem('@seca_auto_escalation_enabled');
+    return saved === null ? true : saved === 'true';
+  });
   const [isDarkMode, setIsDarkMode] = useState<boolean>(() => {
     return document.documentElement.classList.contains('dark') || localStorage.getItem('@doctor_theme') === 'dark';
   });
@@ -567,6 +571,15 @@ export const SettingsPage: React.FC = () => {
                   sub: 'Phát âm thanh cảnh báo mức cao nhất ngay cả khi ở chế độ im lặng',
                   val: notifyFallAlert,
                   setVal: setNotifyFallAlert,
+                },
+                {
+                  title: 'Tự động gọi cấp cứu nếu không có phản hồi sau [45 giây]',
+                  sub: 'Tự động chuyển trạng thái ESCALATED_AUTO_CALL và kích hoạt gọi 115 khi gia đình không phản hồi',
+                  val: autoEscalationEnabled,
+                  setVal: (nextVal: boolean) => {
+                    setAutoEscalationEnabled(nextVal);
+                    localStorage.setItem('@seca_auto_escalation_enabled', String(nextVal));
+                  },
                 },
               ].map((sw) => (
                 <div key={sw.title} className="flex items-center justify-between gap-4 pt-3 first:pt-0">
