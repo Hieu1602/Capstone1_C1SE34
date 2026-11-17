@@ -1,6 +1,9 @@
 import { Linking } from 'react-native';
 import { emergencyApi } from './api';
 
+// Số điện thoại dùng cho Test Mode khi gọi khẩn cấp SOS (UI vẫn hiển thị 115)
+export const EMERGENCY_TEST_PHONE = '0898230852';
+
 export async function launchEmergencyCall() {
   const notificationRequest = emergencyApi.triggerSOS().then(
     ({ data }) => {
@@ -14,7 +17,7 @@ export async function launchEmergencyCall() {
   );
 
   // Start dialing immediately; do not wait for the backend in an emergency.
-  await Linking.openURL('tel:115');
+  await Linking.openURL(`tel:${EMERGENCY_TEST_PHONE}`);
   void notificationRequest;
 }
 
