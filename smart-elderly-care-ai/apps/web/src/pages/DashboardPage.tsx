@@ -57,38 +57,63 @@ const CORE_MODULES = [
   },
 ];
 
-// Đánh giá nguy cơ té ngã tổng hợp (Clinical Fall Risk):
-// Kết hợp sự kiện té ngã vật lý và các bất thường huyết động (nhịp tim quá nhanh/chậm, tụt oxy gây hoa mắt, choáng váng)
+// Đánh giá nguy cơ té ngã tổng hợp (Clinical Fall Risk Matrix):
+// Kết hợp sự kiện té ngã vật lý và các bất thường huyết động (nhịp tim, SpO2, huyết áp, thân nhiệt, vận động)
 const evaluateVitalFallRisk = (v: any): number => {
-  if (v.fall_detected) return 85;
-  if (typeof v.fall_risk_score === 'number' && v.fall_risk_score > 0) {
-    return Math.round(v.fall_risk_score * 100);
-  }
-
-  let risk = 5; // Mức nền sinh hoạt an toàn bình thường (5%)
+  // 1. Nếu tháo vòng tay hoặc không có nhịp tim -> Tắt rủi ro đo đạc (0%)
   const hr = typeof v.heart_rate === 'number' ? v.heart_rate : 0;
+  if (v.is_worn === false || hr === 0) return 0;
+
+  // 2. KỊCH BẢN 11: Sự cố té ngã vật lý thực tế đã xảy ra (Fall = True) -> Báo động đỏ 95%
+  if (v.fall_detected) return 95;
+
+  let risk = 5; // Mức nền sinh hoạt an toàn bình thường (Kịch bản 1: 5%)
   const spo2 = typeof v.spo2 === 'number' ? v.spo2 : 98;
   const bp = typeof v.bp_systolic === 'number' ? v.bp_systolic : 120;
+  const temp = typeof v.skin_temp_max === 'number' ? v.skin_temp_max : 36.5;
+  const act = String(v.activity_state || v.activity || '').toLowerCase();
+  const isExercising = act.includes('tập') || act.includes('vận động') || act.includes('đi lại') || act.includes('exercise') || act.includes('walk');
 
-  // 1. Rối loạn nhịp tim ảnh hưởng tưới máu não (syncope / choáng váng)
-  if (hr > 0) {
-    if (hr >= 140) risk += 55;      // Nhịp tim tăng vọt nguy hiểm (>= 140 bpm) -> Rủi ro ngã ~60%
-    else if (hr >= 120) risk += 35; // Nhịp tim nhanh (120 - 139 bpm) -> Rủi ro ngã ~40%
-    else if (hr >= 100) risk += 15; // Nhịp tim nhanh nhẹ (100 - 119 bpm) -> Rủi ro ngã ~20%
-    else if (hr <= 45) risk += 60;  // Nhịp tim quá chậm (<= 45 bpm, nguy cơ ngất cấp) -> Rủi ro ngã ~65%
-    else if (hr <= 55) risk += 40;  // Nhịp tim chậm (46 - 55 bpm) -> Rủi ro ngã ~45%
+  // 3. CÁC TỔ HỢP ĐA YẾU TỐ NGUY HIỂM CAO (MULTI-VITAL SYNDROMES):
+  // A. KỊCH BẢN 10: Tam chứng nguy kịch (Sốt cao >= 38.5°C + Tim >= 115 bpm + SpO2 < 90%) -> 90%
+  if (temp >= 38.5 && hr >= 115 && spo2 > 0 && spo2 < 90) return 90;
+
+  // B. KỊCH BẢN 8: Quá tải tim phổi khi gắng sức (Tim >= 115 bpm + SpO2 tụt < 90%) -> 85%
+  if (hr >= 115 && spo2 > 0 && spo2 < 90) return 85;
+
+  // C. KỊCH BẢN 6: Trụy tim mạch / Tụt huyết áp tư thế (Tim chậm <= 50 bpm + Huyết áp tụt < 90 mmHg) -> 85%
+  if (bp > 0 && bp < 90 && hr <= 50) return 85;
+
+  // 4. BIẾN ĐỘNG CHỈ SỐ ĐƠN LẺ VÀ NGỮ CẢNH:
+  // A. Nhịp tim:
+  if (hr >= 140) {
+    // KỊCH BẢN 5: Nhịp tim tăng vọt nguy hiểm (>= 140 bpm, nguy cơ nhịp nhanh kịch phát / choáng)
+    risk += 50;
+  } else if (hr >= 120) {
+    // KỊCH BẢN 2 (Vận động thể dục sinh lý: chỉ tăng nhẹ 15%) vs KỊCH BẢN 4 (Ngồi yên mà tim nhanh: +35%)
+    risk += (isExercising && spo2 >= 95) ? 15 : 35;
+  } else if (hr >= 100) {
+    risk += (isExercising && spo2 >= 95) ? 10 : 20;
+  } else if (hr <= 45) {
+    // Nhịp tim quá chậm (<= 45 bpm, nguy cơ ngất cấp syncope do giảm tưới máu não)
+    risk += 60;
+  } else if (hr <= 55) {
+    risk += 35;
   }
 
-  // 2. Tụt oxy máu SpO2 (thiếu oxy não, mất thăng bằng)
+  // B. KỊCH BẢN 7: Tụt oxy máu SpO2 đơn lẻ (Thiếu oxy tế bào não, hoa mắt mất thăng bằng):
   if (spo2 > 0) {
-    if (spo2 < 88) risk += 30;
-    else if (spo2 < 92) risk += 15;
+    if (spo2 < 88) risk += 35;
+    else if (spo2 < 92) risk += 20;
   }
 
-  // 3. Tụt huyết áp tâm thu
+  // C. Tụt huyết áp tâm thu (< 90 mmHg):
   if (bp > 0 && bp < 90) risk += 25;
 
-  return Math.min(100, Math.max(0, risk));
+  // D. KỊCH BẢN 9: Sốt cao (>= 38.5°C run rẩy, yếu cơ, lú lẫn):
+  if (temp >= 38.5) risk += 20;
+
+  return Math.min(95, Math.max(0, risk));
 };
 
 export const DashboardPage: React.FC = () => {
@@ -256,6 +281,7 @@ export const DashboardPage: React.FC = () => {
         spo2Sum: number; spo2Cnt: number;
         bpSum: number; bpCnt: number;
         tempSum: number; tempCnt: number;
+        fallSum: number; fallCnt: number;
         fallMax: number; alerts: number;
       }>();
 
@@ -267,6 +293,7 @@ export const DashboardPage: React.FC = () => {
           spo2Sum: 0, spo2Cnt: 0,
           bpSum: 0, bpCnt: 0,
           tempSum: 0, tempCnt: 0,
+          fallSum: 0, fallCnt: 0,
           fallMax: 0, alerts: 0,
         };
         if (typeof v.heart_rate === 'number' && v.heart_rate > 35) {
@@ -282,6 +309,7 @@ export const DashboardPage: React.FC = () => {
           cur.tempSum += v.skin_temp_max; cur.tempCnt++;
         }
         const fScore = evaluateVitalFallRisk(v);
+        cur.fallSum += fScore; cur.fallCnt++;
         cur.fallMax = Math.max(cur.fallMax, fScore);
         if (v.alert_triggered) cur.alerts++;
         dayMap.set(dKey, cur);
@@ -298,7 +326,7 @@ export const DashboardPage: React.FC = () => {
         const hasSpo2 = Boolean(rec && rec.spo2Cnt > 0);
         const hasBp = Boolean(rec && rec.bpCnt > 0);
         const hasTemp = Boolean(rec && rec.tempCnt > 0);
-        const hasFall = Boolean(rec && rec.fallMax > 0);
+        const hasFall = Boolean(rec && rec.fallCnt > 0);
         const hasAny = hasHr || hasSpo2 || hasBp || hasTemp || hasFall;
 
         points.push({
@@ -307,7 +335,8 @@ export const DashboardPage: React.FC = () => {
           spo2: hasSpo2 ? Math.round(rec!.spo2Sum / rec!.spo2Cnt) : null,
           bloodPressure: hasBp ? Math.round(rec!.bpSum / rec!.bpCnt) : null,
           temperature: hasTemp ? Math.round((rec!.tempSum / rec!.tempCnt) * 10) / 10 : null,
-          fallRisk: hasFall ? rec!.fallMax : hasAny ? 0 : null,
+          fallRisk: hasFall ? Math.round(rec!.fallSum / rec!.fallCnt) : hasAny ? 0 : null,
+          fallMax: rec?.fallMax ?? 0,
           alerts: rec?.alerts ?? 0,
         });
       }
@@ -320,6 +349,7 @@ export const DashboardPage: React.FC = () => {
       spo2Sum: number; spo2Cnt: number;
       bpSum: number; bpCnt: number;
       tempSum: number; tempCnt: number;
+      fallSum: number; fallCnt: number;
       fallMax: number; alerts: number;
     }>();
 
@@ -331,6 +361,7 @@ export const DashboardPage: React.FC = () => {
         spo2Sum: 0, spo2Cnt: 0,
         bpSum: 0, bpCnt: 0,
         tempSum: 0, tempCnt: 0,
+        fallSum: 0, fallCnt: 0,
         fallMax: 0, alerts: 0,
       };
       if (typeof v.heart_rate === 'number' && v.heart_rate > 35) {
@@ -346,6 +377,7 @@ export const DashboardPage: React.FC = () => {
         cur.tempSum += v.skin_temp_max; cur.tempCnt++;
       }
       const fScore = evaluateVitalFallRisk(v);
+      cur.fallSum += fScore; cur.fallCnt++;
       cur.fallMax = Math.max(cur.fallMax, fScore);
       if (v.alert_triggered) cur.alerts++;
       dayMap.set(dKey, cur);
@@ -362,7 +394,7 @@ export const DashboardPage: React.FC = () => {
       const hasSpo2 = Boolean(rec && rec.spo2Cnt > 0);
       const hasBp = Boolean(rec && rec.bpCnt > 0);
       const hasTemp = Boolean(rec && rec.tempCnt > 0);
-      const hasFall = Boolean(rec && rec.fallMax > 0);
+      const hasFall = Boolean(rec && rec.fallCnt > 0);
       const hasAny = hasHr || hasSpo2 || hasBp || hasTemp || hasFall;
 
       points.push({
@@ -371,7 +403,8 @@ export const DashboardPage: React.FC = () => {
         spo2: hasSpo2 ? Math.round(rec!.spo2Sum / rec!.spo2Cnt) : null,
         bloodPressure: hasBp ? Math.round(rec!.bpSum / rec!.bpCnt) : null,
         temperature: hasTemp ? Math.round((rec!.tempSum / rec!.tempCnt) * 10) / 10 : null,
-        fallRisk: hasFall ? rec!.fallMax : hasAny ? 0 : null,
+        fallRisk: hasFall ? Math.round(rec!.fallSum / rec!.fallCnt) : hasAny ? 0 : null,
+        fallMax: rec?.fallMax ?? 0,
         alerts: rec?.alerts ?? 0,
       });
     }
@@ -749,13 +782,17 @@ export const DashboardPage: React.FC = () => {
                         fontSize: '12px',
                         boxShadow: '0 8px 24px rgba(0,0,0,0.3)',
                       }}
-                      formatter={(value: any, name: string) => {
+                      formatter={(value: any, name: string, item: any) => {
                         if (value === null || value === undefined) return ['Chưa có dữ liệu', name];
                         if (name.includes('Nhịp tim')) return [`${value} bpm`, name];
                         if (name.includes('SpO2')) return [`${value}%`, name];
                         if (name.includes('Huyết áp')) return [`${value} mmHg`, name];
                         if (name.includes('Thân nhiệt')) return [`${value} °C`, name];
-                        if (name.includes('Nguy cơ ngã')) return [`${value}%`, name];
+                        if (name.includes('Nguy cơ ngã')) {
+                          const fMax = item?.payload?.fallMax;
+                          const peakInfo = fMax && fMax > value ? ` (Đỉnh điểm sự cố: ${fMax}%)` : '';
+                          return [`${value}%${peakInfo}`, name];
+                        }
                         return [value, name];
                       }}
                     />

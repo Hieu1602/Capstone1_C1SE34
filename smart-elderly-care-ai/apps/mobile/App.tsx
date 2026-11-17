@@ -39,13 +39,21 @@ LogBox.ignoreLogs([
 ]);
 
 if (Platform.OS === "web") {
+    const isIgnoredWebLog = (msg: unknown) => {
+        if (typeof msg !== "string") return false;
+        return (
+            msg.includes("style props are deprecated") ||
+            msg.includes("pointerEvents is deprecated") ||
+            msg.includes("does not recognize the") ||
+            msg.includes("Unknown event handler property") ||
+            msg.includes("Invalid DOM property") ||
+            msg.includes("Failed prop type")
+        );
+    };
+
     const originalWarn = console.warn;
     console.warn = (...args: any[]) => {
-        if (
-            typeof args[0] === "string" &&
-            (args[0].includes("style props are deprecated") ||
-                args[0].includes("pointerEvents is deprecated"))
-        ) {
+        if (isIgnoredWebLog(args[0])) {
             return;
         }
         originalWarn(...args);
@@ -53,11 +61,7 @@ if (Platform.OS === "web") {
 
     const originalError = console.error;
     console.error = (...args: any[]) => {
-        if (
-            typeof args[0] === "string" &&
-            (args[0].includes("style props are deprecated") ||
-                args[0].includes("pointerEvents is deprecated"))
-        ) {
+        if (isIgnoredWebLog(args[0])) {
             return;
         }
         originalError(...args);
