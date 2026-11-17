@@ -74,14 +74,21 @@ export const DEFAULT_MEDICATIONS: ReminderItem[] = [];
 
 interface PatientState {
   patientRecord: PatientMedicalRecord | null;
+  patientsList: any[];
+  activePatientId: string | number | null;
   todayReminders: RemindersData | null;
   isLoadingReminders: boolean;
   isLoadingPatient: boolean;
+  isLoadingList: boolean;
 
   // Actions
   fetchReminders: () => Promise<RemindersData | null>;
   markMedicationTaken: (idOrName: string, taken?: boolean, takenAt?: string) => Promise<void>;
   snoozeMedication: (idOrName: string, minutes?: number) => void;
+  fetchPatientsList: () => Promise<any[]>;
+  setActivePatientId: (patientId: string | number) => void;
+  createPatient: (data: any) => Promise<any>;
+  deletePatient: (patientId: string | number) => Promise<boolean>;
   fetchPatientRecord: (patientId?: number | string, target_date?: string) => Promise<PatientMedicalRecord | null>;
   updatePatientRecord: (patientId: number | string, data: Partial<PatientMedicalRecord>) => Promise<PatientMedicalRecord | null>;
   enrollPatientFace: (patientId: number, formData: FormData) => Promise<any>;
@@ -90,6 +97,8 @@ interface PatientState {
 
 export const usePatientStore = create<PatientState>()((set, get) => ({
   patientRecord: null,
+  patientsList: [],
+  activePatientId: null,
   todayReminders: {
     date: new Date().toISOString().split('T')[0],
     total_medications: 0,
@@ -100,6 +109,64 @@ export const usePatientStore = create<PatientState>()((set, get) => ({
   },
   isLoadingReminders: false,
   isLoadingPatient: false,
+  isLoadingList: false,
+
+  fetchPatientsList: async () => {
+    set({ isLoadingList: true });
+    try {
+      const res = await patientApi.list();
+      if (Array.isArray(res.data)) {
+        const list = res.data;
+        const currentActive = get().activePatientId;
+        const exists = list.some((p: any) => p.id === currentActive || p.elderly_id === currentActive);
+        const newActive = exists ? currentActive : (list[0]?.id || list[0]?.elderly_id || null);
+        set({ patientsList: list, activePatientId: newActive, isLoadingList: false });
+        return list;
+      }
+    } catch (e) {
+      console.warn('fetchPatientsList API fallback:', e);
+    }
+    set({ isLoadingList: false });
+    return [];
+  },
+
+  setActivePatientId: (patientId: string | number) => {
+    set({ activePatientId: patientId });
+    get().fetchPatientRecord(patientId);
+  },
+
+  createPatient: async (data: any) => {
+    try {
+      const res = await patientApi.create(data);
+      if (res.data) {
+        await get().fetchPatientsList();
+        if (res.data.id) {
+          get().setActivePatientId(res.data.id);
+        }
+        return res.data;
+      }
+    } catch (e) {
+      console.warn('createPatient API error:', e);
+      throw e;
+    }
+    return null;
+  },
+
+  deletePatient: async (patientId: string | number) => {
+    try {
+      const res = await patientApi.delete(patientId);
+      if (res.data?.success) {
+        const updatedList = await get().fetchPatientsList();
+        const nextId = updatedList[0]?.id || updatedList[0]?.elderly_id || 1;
+        get().setActivePatientId(nextId);
+        return true;
+      }
+    } catch (e) {
+      console.warn('deletePatient API error:', e);
+      throw e;
+    }
+    return false;
+  },
 
   fetchReminders: async () => {
     set({ isLoadingReminders: true });

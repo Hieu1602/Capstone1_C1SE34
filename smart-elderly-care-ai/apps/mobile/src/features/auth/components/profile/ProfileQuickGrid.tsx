@@ -41,7 +41,7 @@ export const ProfileQuickGrid: React.FC<ProfileQuickGridProps> = ({
             },
           ]}
           activeOpacity={0.8}
-          onPress={() => onNavigate('PatientMedicalRecord')}
+          onPress={() => onNavigate('PatientsList')}
         >
           <View
             style={[

@@ -16,6 +16,7 @@ from app.crud.crud_house import crud_house
 from app.crud.crud_vital import crud_vital
 from app.models.user import User
 from app.schemas.patient import (
+    ElderlyProfileCreate,
     PatientMedicalRecordOut,
     PatientMedicalRecordUpdate,
 )
@@ -115,6 +116,8 @@ async def list_patients(
             "birth_year": p.birth_year or (current_year - 75),
             "age": calc_age,
             "gender": p.gender or "Nam",
+            "blood_type": p.blood_type or "A+",
+            "house_name": p.house.name if (hasattr(p, "house") and p.house) else f"Gia đình {p.full_name or ''}".strip(),
             "avatar_url": p.avatar_url,
             "emergency_contact_phone": p.emergency_contact_phone or "",
         })
@@ -126,6 +129,96 @@ async def list_patients(
         pass
 
     return out
+
+
+@router.post("", response_model=Dict[str, Any], status_code=status.HTTP_201_CREATED)
+@router.post("/", response_model=Dict[str, Any], status_code=status.HTTP_201_CREATED, include_in_schema=False)
+async def create_patient(
+    payload: ElderlyProfileCreate,
+    current_user: Optional[User] = Depends(get_current_user_optional),
+    db: AsyncSession = Depends(get_db),
+):
+    """
+    Thêm một người cao tuổi mới vào căn nhà (> 1 người cao tuổi/nhà).
+    """
+    if not current_user:
+        raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="Yêu cầu đăng nhập")
+
+    house = await crud_house.get_or_create_default_house(db, owner_id=current_user.id)
+    if not house:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Không tìm thấy căn nhà")
+
+    new_profile = await crud_elderly.create_profile(db, house_id=house.id, data=payload.model_dump())
+
+    # Xóa cache danh sách người cao tuổi
+    try:
+        from app.services.redis import redis_service
+        r = await redis_service._client()
+        keys = await r.keys("cache:patients:*")
+        if keys:
+            await r.delete(*keys)
+    except Exception:
+        pass
+
+    current_year = datetime.now().year
+    calc_age = (current_year - new_profile.birth_year) if new_profile.birth_year else 75
+    return {
+        "id": str(new_profile.id),
+        "elderly_id": str(new_profile.id),
+        "full_name": new_profile.full_name,
+        "name": new_profile.full_name,
+        "birth_year": new_profile.birth_year,
+        "age": calc_age,
+        "gender": new_profile.gender or "Nam",
+        "avatar_url": new_profile.avatar_url,
+        "emergency_contact_phone": new_profile.emergency_contact_phone or "",
+        "message": "Thêm hồ sơ người cao tuổi thành công",
+    }
+
+
+@router.delete("/{patient_id}")
+async def delete_patient(
+    patient_id: str,
+    current_user: Optional[User] = Depends(get_current_user_optional),
+    db: AsyncSession = Depends(get_db),
+):
+    """
+    Xóa hồ sơ người cao tuổi (khi qua đời hoặc không còn chăm sóc).
+    Tự động giải phóng các thiết bị đang gán (devices.elderly_id = NULL).
+    """
+    if not current_user:
+        raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="Yêu cầu đăng nhập")
+
+    import uuid
+    try:
+        p_uuid = uuid.UUID(patient_id)
+    except (ValueError, TypeError):
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Mã người cao tuổi không hợp lệ")
+
+    from app.models.elderly_profile import ElderlyProfile
+    profile = await db.get(ElderlyProfile, p_uuid)
+    if not profile:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Hồ sơ người cao tuổi không tồn tại")
+
+    success = await crud_elderly.delete_profile(db, profile_id=p_uuid)
+    if not success:
+        raise HTTPException(status_code=status.HTTP_500_INTERNAL_SERVER_ERROR, detail="Không thể xóa hồ sơ")
+
+    # Xóa cache Redis
+    try:
+        from app.services.redis import redis_service
+        r = await redis_service._client()
+        keys = await r.keys("cache:patients:*")
+        if keys:
+            await r.delete(*keys)
+    except Exception:
+        pass
+
+    return {
+        "success": True,
+        "message": f"Đã xóa hồ sơ người cao tuổi {profile.full_name} và giải phóng các thiết bị theo dõi liên quan.",
+        "deleted_id": str(p_uuid),
+    }
 
 
 @router.get("/{patient_id}/medical-record", response_model=PatientMedicalRecordOut)
