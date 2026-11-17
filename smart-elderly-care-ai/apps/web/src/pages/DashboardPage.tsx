@@ -21,7 +21,8 @@ import {
   Tooltip,
   ResponsiveContainer,
 } from 'recharts';
-import { systemApi, devicesApi, usersApi, vitalsApi } from '../services/api';
+import { systemApi, devicesApi, usersApi, vitalsApi, incidentsApi } from '../services/api';
+import { adminWebSocket } from '../services/websocket';
 import { Device, User, RedisDiagnostics, ServiceHealth, SystemIncident } from '../types';
 import { useThemeStore } from '../store/useThemeStore';
 
@@ -56,16 +57,72 @@ const CORE_MODULES = [
   },
 ];
 
+// Đánh giá nguy cơ té ngã tổng hợp (Clinical Fall Risk):
+// Kết hợp sự kiện té ngã vật lý và các bất thường huyết động (nhịp tim quá nhanh/chậm, tụt oxy gây hoa mắt, choáng váng)
+const evaluateVitalFallRisk = (v: any): number => {
+  if (v.fall_detected) return 85;
+  if (typeof v.fall_risk_score === 'number' && v.fall_risk_score > 0) {
+    return Math.round(v.fall_risk_score * 100);
+  }
+
+  let risk = 5; // Mức nền sinh hoạt an toàn bình thường (5%)
+  const hr = typeof v.heart_rate === 'number' ? v.heart_rate : 0;
+  const spo2 = typeof v.spo2 === 'number' ? v.spo2 : 98;
+  const bp = typeof v.bp_systolic === 'number' ? v.bp_systolic : 120;
+
+  // 1. Rối loạn nhịp tim ảnh hưởng tưới máu não (syncope / choáng váng)
+  if (hr > 0) {
+    if (hr >= 140) risk += 55;      // Nhịp tim tăng vọt nguy hiểm (>= 140 bpm) -> Rủi ro ngã ~60%
+    else if (hr >= 120) risk += 35; // Nhịp tim nhanh (120 - 139 bpm) -> Rủi ro ngã ~40%
+    else if (hr >= 100) risk += 15; // Nhịp tim nhanh nhẹ (100 - 119 bpm) -> Rủi ro ngã ~20%
+    else if (hr <= 45) risk += 60;  // Nhịp tim quá chậm (<= 45 bpm, nguy cơ ngất cấp) -> Rủi ro ngã ~65%
+    else if (hr <= 55) risk += 40;  // Nhịp tim chậm (46 - 55 bpm) -> Rủi ro ngã ~45%
+  }
+
+  // 2. Tụt oxy máu SpO2 (thiếu oxy não, mất thăng bằng)
+  if (spo2 > 0) {
+    if (spo2 < 88) risk += 30;
+    else if (spo2 < 92) risk += 15;
+  }
+
+  // 3. Tụt huyết áp tâm thu
+  if (bp > 0 && bp < 90) risk += 25;
+
+  return Math.min(100, Math.max(0, risk));
+};
+
 export const DashboardPage: React.FC = () => {
   const { isDark } = useThemeStore();
   const [devices, setDevices] = useState<Device[]>([]);
   const [users, setUsers] = useState<User[]>([]);
   const [redis, setRedis] = useState<RedisDiagnostics | null>(null);
   const [incidents, setIncidents] = useState<SystemIncident[]>([]);
+  const [clinicalIncidents, setClinicalIncidents] = useState<any[]>([]);
   const [services, setServices] = useState<ServiceHealth[]>([]);
   const [rawVitals, setRawVitals] = useState<any[]>([]);
-  const [timeRange, setTimeRange] = useState<'day' | 'week' | 'month'>('day');
+  const [timeRange, setTimeRange] = useState<'live' | 'week' | 'month'>('live');
+  const [activeMetrics, setActiveMetrics] = useState<{
+    heartRate: boolean;
+    spo2: boolean;
+    bloodPressure: boolean;
+    fallRisk: boolean;
+    temperature: boolean;
+  }>({
+    heartRate: true,
+    spo2: true,
+    bloodPressure: true,
+    fallRisk: true,
+    temperature: false,
+  });
   const [loading, setLoading] = useState(true);
+
+  const toggleMetric = (key: keyof typeof activeMetrics) => {
+    setActiveMetrics((prev) => {
+      const activeCount = Object.values(prev).filter(Boolean).length;
+      if (prev[key] && activeCount <= 1) return prev;
+      return { ...prev, [key]: !prev[key] };
+    });
+  };
 
   useEffect(() => {
     Promise.all([
@@ -74,13 +131,17 @@ export const DashboardPage: React.FC = () => {
       systemApi.getRedisStatus().catch(() => null),
       systemApi.getIncidents().catch(() => []),
       systemApi.getServicesHealth().catch(() => []),
-      vitalsApi.getHistory(100).catch(() => []),
-    ]).then(([devs, usrs, rds, incs, srvs, vits]) => {
+      vitalsApi.getHistory(500).catch(() => []),
+      incidentsApi.list(100).catch(() => []),
+    ]).then(([devs, usrs, rds, incs, srvs, vits, clIncs]) => {
       setDevices(devs);
       setUsers(usrs);
       setRedis(rds);
       setIncidents(incs);
       setServices(srvs);
+      if (Array.isArray(clIncs)) {
+        setClinicalIncidents(clIncs);
+      }
       if (Array.isArray(vits)) {
         setRawVitals(vits);
       }
@@ -88,51 +149,100 @@ export const DashboardPage: React.FC = () => {
     });
   }, []);
 
-  // Tổng hợp dữ liệu biểu đồ linh hoạt theo ngày (24h), theo tuần (7 ngày) hoặc theo tháng (30 ngày)
+  // Lắng nghe sự cố cảnh báo Real-time qua WebSocket để cập nhật tức thì KPI Cảnh báo hôm nay
+  useEffect(() => {
+    adminWebSocket.connect();
+    const unsub = adminWebSocket.subscribe((event) => {
+      if (event.type === 'ALERT_NEW' || event.alert_type || event.data?.alert_type) {
+        incidentsApi.list(100).then((res) => {
+          if (Array.isArray(res)) setClinicalIncidents(res);
+        }).catch(() => {});
+      }
+    });
+    return () => unsub();
+  }, []);
+
+  // Polling tự động làm mới sinh hiệu mỗi 3 giây khi ở chế độ Trực tiếp (Live)
+  useEffect(() => {
+    if (timeRange !== 'live') return;
+    const interval = setInterval(() => {
+      vitalsApi.getHistory(300).then((vits) => {
+        if (Array.isArray(vits) && vits.length > 0) {
+          setRawVitals(vits);
+        }
+      }).catch(() => {});
+    }, 3000);
+    return () => clearInterval(interval);
+  }, [timeRange]);
+
+  // Tổng hợp dữ liệu biểu đồ đa chỉ số sinh hiệu: Nhịp tim, SpO2, Huyết áp, Nguy cơ ngã & Thân nhiệt
   const telemetryData = useMemo(() => {
     const now = new Date();
 
-    if (timeRange === 'day') {
-      // 24 mốc giờ chu kỳ 24h
-      const hourMap = new Map<number, { hrSum: number; count: number; fallMax: number; alerts: number }>();
+    if (timeRange === 'live') {
+      // Nhóm dữ liệu đo thực tế theo từng phút (HH:mm)
+      const minuteMap = new Map<string, {
+        hrSum: number; hrCnt: number;
+        spo2Sum: number; spo2Cnt: number;
+        bpSum: number; bpCnt: number;
+        tempSum: number; tempCnt: number;
+        fallMax: number; alerts: number;
+      }>();
+
       for (const v of rawVitals) {
         if (!v.time) continue;
-        const h = new Date(v.time).getHours();
-        const cur = hourMap.get(h) || { hrSum: 0, count: 0, fallMax: 0, alerts: 0 };
-        const hr = typeof v.heart_rate === 'number' && v.heart_rate > 35 ? v.heart_rate : 0;
-        if (hr > 0) {
-          cur.hrSum += hr;
-          cur.count += 1;
+        const vDate = new Date(v.time);
+        const timeKey = `${String(vDate.getHours()).padStart(2, '0')}:${String(vDate.getMinutes()).padStart(2, '0')}`;
+        const cur = minuteMap.get(timeKey) || {
+          hrSum: 0, hrCnt: 0,
+          spo2Sum: 0, spo2Cnt: 0,
+          bpSum: 0, bpCnt: 0,
+          tempSum: 0, tempCnt: 0,
+          fallMax: 0, alerts: 0,
+        };
+        if (typeof v.heart_rate === 'number' && v.heart_rate > 30) {
+          cur.hrSum += v.heart_rate; cur.hrCnt++;
         }
-        const fScore = v.fall_detected ? 85 : Math.round((v.fall_risk_score ?? 0.08) * 100);
+        if (typeof v.spo2 === 'number' && v.spo2 > 70) {
+          cur.spo2Sum += v.spo2; cur.spo2Cnt++;
+        }
+        if (typeof v.bp_systolic === 'number' && v.bp_systolic > 60) {
+          cur.bpSum += v.bp_systolic; cur.bpCnt++;
+        }
+        if (typeof v.skin_temp_max === 'number' && v.skin_temp_max > 30) {
+          cur.tempSum += v.skin_temp_max; cur.tempCnt++;
+        }
+        const fScore = evaluateVitalFallRisk(v);
         cur.fallMax = Math.max(cur.fallMax, fScore);
-        if (v.alert_triggered) cur.alerts += 1;
-        hourMap.set(h, cur);
+        if (v.alert_triggered) cur.alerts++;
+        minuteMap.set(timeKey, cur);
       }
 
+      // Neo thời gian: nếu có dữ liệu mới trong vòng 2h thì neo theo now, ngược lại neo theo bản ghi gần nhất
+      const latestVitalMs = rawVitals[0]?.time ? new Date(rawVitals[0].time).getTime() : now.getTime();
+      const anchorDate = (now.getTime() - latestVitalMs <= 2 * 3600 * 1000) ? now : new Date(latestVitalMs);
+
       const points = [];
-      for (let i = 23; i >= 0; i--) {
-        const d = new Date(now.getTime() - i * 3600 * 1000);
-        const h = d.getHours();
-        const timeLabel = `${String(h).padStart(2, '0')}:00`;
+      const windowMinutes = 20; // Cửa sổ 20 phút gần nhất theo đơn vị phút
+      for (let i = windowMinutes - 1; i >= 0; i--) {
+        const d = new Date(anchorDate.getTime() - i * 60 * 1000);
+        const timeLabel = `${String(d.getHours()).padStart(2, '0')}:${String(d.getMinutes()).padStart(2, '0')}`;
+        const rec = minuteMap.get(timeLabel);
 
-        const isNight = h >= 23 || h <= 5;
-        const isMorning = h >= 6 && h <= 11;
-        const isAfternoon = h >= 15 && h <= 20;
-
-        const baseHr = isNight ? 68 : isMorning ? 82 : isAfternoon ? 80 : 74;
-        const hrJitter = Math.sin(h * 0.8) * 3 + (h % 2 === 0 ? 2 : -2);
-        const baseFall = isNight ? 4 : isMorning ? 18 : isAfternoon ? 14 : 8;
-        const fallJitter = Math.cos(h * 0.7) * 2;
-
-        const rec = hourMap.get(h);
-        const heartRate = rec && rec.count > 0 ? Math.round(rec.hrSum / rec.count) : Math.round(baseHr + hrJitter);
-        const fallRisk = rec && rec.fallMax > 0 ? rec.fallMax : Math.max(3, Math.round(baseFall + fallJitter));
+        const hasHr = Boolean(rec && rec.hrCnt > 0);
+        const hasSpo2 = Boolean(rec && rec.spo2Cnt > 0);
+        const hasBp = Boolean(rec && rec.bpCnt > 0);
+        const hasTemp = Boolean(rec && rec.tempCnt > 0);
+        const hasFall = Boolean(rec && rec.fallMax > 0);
+        const hasAny = hasHr || hasSpo2 || hasBp || hasTemp || hasFall;
 
         points.push({
           time: timeLabel,
-          heartRate,
-          fallRisk,
+          heartRate: hasHr ? Math.round(rec!.hrSum / rec!.hrCnt) : null,
+          spo2: hasSpo2 ? Math.round(rec!.spo2Sum / rec!.spo2Cnt) : null,
+          bloodPressure: hasBp ? Math.round(rec!.bpSum / rec!.bpCnt) : null,
+          temperature: hasTemp ? Math.round((rec!.tempSum / rec!.tempCnt) * 10) / 10 : null,
+          fallRisk: hasFall ? rec!.fallMax : hasAny ? 0 : null,
           alerts: rec?.alerts ?? 0,
         });
       }
@@ -141,19 +251,39 @@ export const DashboardPage: React.FC = () => {
 
     if (timeRange === 'week') {
       // 7 mốc ngày gần nhất
-      const dayMap = new Map<string, { hrSum: number; count: number; fallMax: number; alerts: number }>();
+      const dayMap = new Map<string, {
+        hrSum: number; hrCnt: number;
+        spo2Sum: number; spo2Cnt: number;
+        bpSum: number; bpCnt: number;
+        tempSum: number; tempCnt: number;
+        fallMax: number; alerts: number;
+      }>();
+
       for (const v of rawVitals) {
         if (!v.time) continue;
         const dKey = new Date(v.time).toISOString().slice(5, 10);
-        const cur = dayMap.get(dKey) || { hrSum: 0, count: 0, fallMax: 0, alerts: 0 };
-        const hr = typeof v.heart_rate === 'number' && v.heart_rate > 35 ? v.heart_rate : 0;
-        if (hr > 0) {
-          cur.hrSum += hr;
-          cur.count += 1;
+        const cur = dayMap.get(dKey) || {
+          hrSum: 0, hrCnt: 0,
+          spo2Sum: 0, spo2Cnt: 0,
+          bpSum: 0, bpCnt: 0,
+          tempSum: 0, tempCnt: 0,
+          fallMax: 0, alerts: 0,
+        };
+        if (typeof v.heart_rate === 'number' && v.heart_rate > 35) {
+          cur.hrSum += v.heart_rate; cur.hrCnt++;
         }
-        const fScore = v.fall_detected ? 85 : Math.round((v.fall_risk_score ?? 0.08) * 100);
+        if (typeof v.spo2 === 'number' && v.spo2 > 70) {
+          cur.spo2Sum += v.spo2; cur.spo2Cnt++;
+        }
+        if (typeof v.bp_systolic === 'number' && v.bp_systolic > 60) {
+          cur.bpSum += v.bp_systolic; cur.bpCnt++;
+        }
+        if (typeof v.skin_temp_max === 'number' && v.skin_temp_max > 30) {
+          cur.tempSum += v.skin_temp_max; cur.tempCnt++;
+        }
+        const fScore = evaluateVitalFallRisk(v);
         cur.fallMax = Math.max(cur.fallMax, fScore);
-        if (v.alert_triggered) cur.alerts += 1;
+        if (v.alert_triggered) cur.alerts++;
         dayMap.set(dKey, cur);
       }
 
@@ -164,18 +294,20 @@ export const DashboardPage: React.FC = () => {
         const dKey = d.toISOString().slice(5, 10);
         const rec = dayMap.get(dKey);
 
-        const baseHr = 75;
-        const hrJitter = Math.sin(i * 1.5) * 4 + (i % 2 === 0 ? 2 : -1);
-        const baseFall = 10;
-        const fallJitter = Math.cos(i * 1.2) * 3;
-
-        const heartRate = rec && rec.count > 0 ? Math.round(rec.hrSum / rec.count) : Math.round(baseHr + hrJitter);
-        const fallRisk = rec && rec.fallMax > 0 ? rec.fallMax : Math.max(4, Math.round(baseFall + fallJitter));
+        const hasHr = Boolean(rec && rec.hrCnt > 0);
+        const hasSpo2 = Boolean(rec && rec.spo2Cnt > 0);
+        const hasBp = Boolean(rec && rec.bpCnt > 0);
+        const hasTemp = Boolean(rec && rec.tempCnt > 0);
+        const hasFall = Boolean(rec && rec.fallMax > 0);
+        const hasAny = hasHr || hasSpo2 || hasBp || hasTemp || hasFall;
 
         points.push({
           time: dateLabel,
-          heartRate,
-          fallRisk,
+          heartRate: hasHr ? Math.round(rec!.hrSum / rec!.hrCnt) : null,
+          spo2: hasSpo2 ? Math.round(rec!.spo2Sum / rec!.spo2Cnt) : null,
+          bloodPressure: hasBp ? Math.round(rec!.bpSum / rec!.bpCnt) : null,
+          temperature: hasTemp ? Math.round((rec!.tempSum / rec!.tempCnt) * 10) / 10 : null,
+          fallRisk: hasFall ? rec!.fallMax : hasAny ? 0 : null,
           alerts: rec?.alerts ?? 0,
         });
       }
@@ -183,19 +315,39 @@ export const DashboardPage: React.FC = () => {
     }
 
     // timeRange === 'month' (30 ngày gần nhất)
-    const dayMap = new Map<string, { hrSum: number; count: number; fallMax: number; alerts: number }>();
+    const dayMap = new Map<string, {
+      hrSum: number; hrCnt: number;
+      spo2Sum: number; spo2Cnt: number;
+      bpSum: number; bpCnt: number;
+      tempSum: number; tempCnt: number;
+      fallMax: number; alerts: number;
+    }>();
+
     for (const v of rawVitals) {
       if (!v.time) continue;
       const dKey = new Date(v.time).toISOString().slice(5, 10);
-      const cur = dayMap.get(dKey) || { hrSum: 0, count: 0, fallMax: 0, alerts: 0 };
-      const hr = typeof v.heart_rate === 'number' && v.heart_rate > 35 ? v.heart_rate : 0;
-      if (hr > 0) {
-        cur.hrSum += hr;
-        cur.count += 1;
+      const cur = dayMap.get(dKey) || {
+        hrSum: 0, hrCnt: 0,
+        spo2Sum: 0, spo2Cnt: 0,
+        bpSum: 0, bpCnt: 0,
+        tempSum: 0, tempCnt: 0,
+        fallMax: 0, alerts: 0,
+      };
+      if (typeof v.heart_rate === 'number' && v.heart_rate > 35) {
+        cur.hrSum += v.heart_rate; cur.hrCnt++;
       }
-      const fScore = v.fall_detected ? 85 : Math.round((v.fall_risk_score ?? 0.08) * 100);
+      if (typeof v.spo2 === 'number' && v.spo2 > 70) {
+        cur.spo2Sum += v.spo2; cur.spo2Cnt++;
+      }
+      if (typeof v.bp_systolic === 'number' && v.bp_systolic > 60) {
+        cur.bpSum += v.bp_systolic; cur.bpCnt++;
+      }
+      if (typeof v.skin_temp_max === 'number' && v.skin_temp_max > 30) {
+        cur.tempSum += v.skin_temp_max; cur.tempCnt++;
+      }
+      const fScore = evaluateVitalFallRisk(v);
       cur.fallMax = Math.max(cur.fallMax, fScore);
-      if (v.alert_triggered) cur.alerts += 1;
+      if (v.alert_triggered) cur.alerts++;
       dayMap.set(dKey, cur);
     }
 
@@ -206,18 +358,20 @@ export const DashboardPage: React.FC = () => {
       const dKey = d.toISOString().slice(5, 10);
       const rec = dayMap.get(dKey);
 
-      const baseHr = 76;
-      const hrJitter = Math.sin(i * 0.9) * 3 + Math.cos(i * 0.4) * 2;
-      const baseFall = 9;
-      const fallJitter = Math.sin(i * 1.1) * 3;
-
-      const heartRate = rec && rec.count > 0 ? Math.round(rec.hrSum / rec.count) : Math.round(baseHr + hrJitter);
-      const fallRisk = rec && rec.fallMax > 0 ? rec.fallMax : Math.max(3, Math.round(baseFall + fallJitter));
+      const hasHr = Boolean(rec && rec.hrCnt > 0);
+      const hasSpo2 = Boolean(rec && rec.spo2Cnt > 0);
+      const hasBp = Boolean(rec && rec.bpCnt > 0);
+      const hasTemp = Boolean(rec && rec.tempCnt > 0);
+      const hasFall = Boolean(rec && rec.fallMax > 0);
+      const hasAny = hasHr || hasSpo2 || hasBp || hasTemp || hasFall;
 
       points.push({
         time: dateLabel,
-        heartRate,
-        fallRisk,
+        heartRate: hasHr ? Math.round(rec!.hrSum / rec!.hrCnt) : null,
+        spo2: hasSpo2 ? Math.round(rec!.spo2Sum / rec!.spo2Cnt) : null,
+        bloodPressure: hasBp ? Math.round(rec!.bpSum / rec!.bpCnt) : null,
+        temperature: hasTemp ? Math.round((rec!.tempSum / rec!.tempCnt) * 10) / 10 : null,
+        fallRisk: hasFall ? rec!.fallMax : hasAny ? 0 : null,
         alerts: rec?.alerts ?? 0,
       });
     }
@@ -232,8 +386,14 @@ export const DashboardPage: React.FC = () => {
     const eldCount = users.filter((u) => u.role === 'elderly').length;
 
     const todayStr = new Date().toISOString().slice(0, 10);
-    const incsToday = incidents.filter((i) => (i.timestamp || '').slice(0, 10) === todayStr);
-    const resolvedCount = incsToday.filter((i) => i.resolved).length;
+    const medToday = clinicalIncidents.filter((i) => (i.created_at || '').slice(0, 10) === todayStr);
+    const medResolved = medToday.filter((i) => i.is_acknowledged).length;
+
+    const sysToday = incidents.filter((i) => (i.timestamp || '').slice(0, 10) === todayStr);
+    const sysResolved = sysToday.filter((i) => i.resolved).length;
+
+    const totalTodayCount = medToday.length + sysToday.length;
+    const totalResolved = medResolved + sysResolved;
 
     const fastApi = services.find((s) => s.id === 'srv-1');
     const latency = fastApi?.latency_ms ?? 0;
@@ -244,11 +404,11 @@ export const DashboardPage: React.FC = () => {
       adminCount,
       famCount,
       eldCount,
-      incsToday,
-      resolvedCount,
+      totalTodayCount,
+      totalResolved,
       latency,
     };
-  }, [devices, users, incidents, services]);
+  }, [devices, users, incidents, clinicalIncidents, services]);
 
   const kpiCards = [
     {
@@ -278,14 +438,14 @@ export const DashboardPage: React.FC = () => {
     {
       icon: AlertTriangle,
       title: 'Cảnh báo hôm nay',
-      value: loading ? '...' : stats.incsToday.length,
+      value: loading ? '...' : stats.totalTodayCount,
       badge: (
         <span className="badge-warn font-mono text-[10px]">
-          {stats.incsToday.length === 0 ? 'Ổn định' : (stats.resolvedCount === stats.incsToday.length ? 'Đã xử lý' : `${stats.incsToday.length - stats.resolvedCount} Chưa xử lý`)}
+          {stats.totalTodayCount === 0 ? 'Ổn định' : (stats.totalResolved === stats.totalTodayCount ? 'Đã xử lý' : `${stats.totalTodayCount - stats.totalResolved} Chưa xử lý`)}
         </span>
       ),
-      subtext: stats.incsToday.length > 0
-        ? `${stats.resolvedCount}/${stats.incsToday.length} sự cố đã được xác nhận an toàn`
+      subtext: stats.totalTodayCount > 0
+        ? `${stats.totalResolved}/${stats.totalTodayCount} sự cố y tế & hệ thống được ghi nhận`
         : 'Không phát hiện rủi ro té ngã nào hôm nay',
       isMonoSub: false,
     },
@@ -414,34 +574,35 @@ export const DashboardPage: React.FC = () => {
         {/* Real-time Telemetry Trend Chart */}
         <div className="lg:col-span-2 glass-card p-5 flex flex-col justify-between">
           <div>
-            <div className="flex flex-col lg:flex-row lg:items-center justify-between gap-3 mb-4">
-              <div>
-                <h3 className="font-heading font-bold text-[#16191F] dark:text-[#F1F4F9] text-sm flex items-center gap-2">
-                  <Activity className="w-4 h-4 text-[#F05A24]" />
-                  Phân bố Rủi ro Y tế & Số ca Vượt ngưỡng An toàn
-                </h3>
-                <p className="text-xs text-[#68707E] dark:text-[#9AA1AF]">
-                  {timeRange === 'day'
-                    ? 'Nhịp tim & chỉ số rủi ro ngã tích lũy theo chu kỳ từng giờ (24h)'
-                    : timeRange === 'week'
-                    ? 'Nhịp tim trung bình & rủi ro ngã theo từng ngày trong 7 ngày qua'
-                    : 'Nhịp tim trung bình & rủi ro ngã theo từng ngày trong 30 ngày qua'}
-                </p>
-              </div>
+            <div className="flex flex-col gap-3 mb-4">
+              <div className="flex flex-col lg:flex-row lg:items-center justify-between gap-3">
+                <div>
+                  <h3 className="font-heading font-bold text-[#16191F] dark:text-[#F1F4F9] text-sm flex items-center gap-2">
+                    <Activity className="w-4 h-4 text-[#F05A24]" />
+                    Phân bố Rủi ro Y tế & Chỉ số Sinh hiệu Toàn diện
+                  </h3>
+                  <p className="text-xs text-[#68707E] dark:text-[#9AA1AF]">
+                    {timeRange === 'live'
+                      ? 'Theo dõi trực tiếp Nhịp tim, SpO2, Huyết áp, Nguy cơ ngã & Thân nhiệt theo từng phút'
+                      : timeRange === 'week'
+                      ? 'Chỉ số trung bình các chỉ số sinh hiệu theo từng ngày trong 7 ngày qua'
+                      : 'Chỉ số trung bình các chỉ số sinh hiệu theo từng ngày trong 30 ngày qua'}
+                  </p>
+                </div>
 
-              <div className="flex flex-wrap items-center gap-3">
-                {/* Bộ chọn chu kỳ: Theo ngày / Theo tuần / Theo tháng */}
-                <div className="inline-flex items-center p-0.5 rounded-lg bg-slate-100 dark:bg-slate-800 text-xs font-medium border border-slate-200 dark:border-slate-700/60">
+                {/* Bộ chọn chu kỳ: Trực tiếp (Live) / Theo tuần / Theo tháng */}
+                <div className="inline-flex items-center p-0.5 rounded-lg bg-slate-100 dark:bg-slate-800 text-xs font-medium border border-slate-200 dark:border-slate-700/60 self-start lg:self-auto">
                   <button
                     type="button"
-                    onClick={() => setTimeRange('day')}
-                    className={`px-2.5 py-1 rounded-md transition-all ${
-                      timeRange === 'day'
+                    onClick={() => setTimeRange('live')}
+                    className={`px-2.5 py-1 rounded-md transition-all inline-flex items-center gap-1.5 ${
+                      timeRange === 'live'
                         ? 'bg-white dark:bg-slate-700 text-[#F05A24] font-semibold shadow-sm'
                         : 'text-slate-600 dark:text-slate-400 hover:text-slate-900 dark:hover:text-white'
                     }`}
                   >
-                    Theo ngày (24h)
+                    <span className={`w-1.5 h-1.5 rounded-full ${timeRange === 'live' ? 'bg-emerald-500 animate-ping' : 'bg-slate-400'}`} />
+                    Trực tiếp (Live)
                   </button>
                   <button
                     type="button"
@@ -466,17 +627,81 @@ export const DashboardPage: React.FC = () => {
                     Theo tháng (30 ngày)
                   </button>
                 </div>
+              </div>
 
-                <div className="flex items-center space-x-3 text-xs font-semibold font-mono">
-                  <span className="flex items-center text-[#F05A24]">
-                    <span className="w-2.5 h-2.5 rounded-full bg-[#F05A24] mr-1.5 shadow-[0_0_6px_#F05A24]" />
-                    Nhịp tim (bpm)
-                  </span>
-                  <span className="flex items-center text-[#E9A23B]">
-                    <span className="w-2.5 h-2.5 rounded-full bg-[#E9A23B] mr-1.5 shadow-[0_0_6px_#E9A23B]" />
-                    Nguy cơ ngã (%)
-                  </span>
-                </div>
+              {/* Bộ lọc bật/tắt từng chỉ số sinh hiệu (Clickable Pills) */}
+              <div className="flex flex-wrap items-center gap-2 pt-1 border-t border-slate-100 dark:border-slate-800/80">
+                <span className="text-[11px] font-medium text-slate-500 dark:text-slate-400 mr-1">Chỉ số hiển thị:</span>
+
+                {/* Nhịp tim */}
+                <button
+                  type="button"
+                  onClick={() => toggleMetric('heartRate')}
+                  className={`inline-flex items-center px-2 py-0.5 rounded-md text-xs font-mono font-medium border transition-all ${
+                    activeMetrics.heartRate
+                      ? 'bg-[#F05A24]/10 border-[#F05A24]/40 text-[#F05A24] shadow-xs'
+                      : 'bg-transparent border-slate-200 dark:border-slate-700/60 text-slate-400 opacity-50 hover:opacity-80'
+                  }`}
+                >
+                  <span className={`w-2 h-2 rounded-full mr-1.5 ${activeMetrics.heartRate ? 'bg-[#F05A24] shadow-[0_0_5px_#F05A24]' : 'bg-slate-400'}`} />
+                  Nhịp tim (bpm)
+                </button>
+
+                {/* SpO2 */}
+                <button
+                  type="button"
+                  onClick={() => toggleMetric('spo2')}
+                  className={`inline-flex items-center px-2 py-0.5 rounded-md text-xs font-mono font-medium border transition-all ${
+                    activeMetrics.spo2
+                      ? 'bg-[#0EA5E9]/10 border-[#0EA5E9]/40 text-[#0EA5E9] shadow-xs'
+                      : 'bg-transparent border-slate-200 dark:border-slate-700/60 text-slate-400 opacity-50 hover:opacity-80'
+                  }`}
+                >
+                  <span className={`w-2 h-2 rounded-full mr-1.5 ${activeMetrics.spo2 ? 'bg-[#0EA5E9] shadow-[0_0_5px_#0EA5E9]' : 'bg-slate-400'}`} />
+                  Oxy SpO2 (%)
+                </button>
+
+                {/* Huyết áp */}
+                <button
+                  type="button"
+                  onClick={() => toggleMetric('bloodPressure')}
+                  className={`inline-flex items-center px-2 py-0.5 rounded-md text-xs font-mono font-medium border transition-all ${
+                    activeMetrics.bloodPressure
+                      ? 'bg-[#8B5CF6]/10 border-[#8B5CF6]/40 text-[#8B5CF6] shadow-xs'
+                      : 'bg-transparent border-slate-200 dark:border-slate-700/60 text-slate-400 opacity-50 hover:opacity-80'
+                  }`}
+                >
+                  <span className={`w-2 h-2 rounded-full mr-1.5 ${activeMetrics.bloodPressure ? 'bg-[#8B5CF6] shadow-[0_0_5px_#8B5CF6]' : 'bg-slate-400'}`} />
+                  Huyết áp (mmHg)
+                </button>
+
+                {/* Nguy cơ ngã */}
+                <button
+                  type="button"
+                  onClick={() => toggleMetric('fallRisk')}
+                  className={`inline-flex items-center px-2 py-0.5 rounded-md text-xs font-mono font-medium border transition-all ${
+                    activeMetrics.fallRisk
+                      ? 'bg-[#E9A23B]/10 border-[#E9A23B]/40 text-[#E9A23B] shadow-xs'
+                      : 'bg-transparent border-slate-200 dark:border-slate-700/60 text-slate-400 opacity-50 hover:opacity-80'
+                  }`}
+                >
+                  <span className={`w-2 h-2 rounded-full mr-1.5 ${activeMetrics.fallRisk ? 'bg-[#E9A23B] shadow-[0_0_5px_#E9A23B]' : 'bg-slate-400'}`} />
+                  Nguy cơ ngã (%)
+                </button>
+
+                {/* Thân nhiệt */}
+                <button
+                  type="button"
+                  onClick={() => toggleMetric('temperature')}
+                  className={`inline-flex items-center px-2 py-0.5 rounded-md text-xs font-mono font-medium border transition-all ${
+                    activeMetrics.temperature
+                      ? 'bg-[#10B981]/10 border-[#10B981]/40 text-[#10B981] shadow-xs'
+                      : 'bg-transparent border-slate-200 dark:border-slate-700/60 text-slate-400 opacity-50 hover:opacity-80'
+                  }`}
+                >
+                  <span className={`w-2 h-2 rounded-full mr-1.5 ${activeMetrics.temperature ? 'bg-[#10B981] shadow-[0_0_5px_#10B981]' : 'bg-slate-400'}`} />
+                  Thân nhiệt (°C)
+                </button>
               </div>
             </div>
 
@@ -486,12 +711,24 @@ export const DashboardPage: React.FC = () => {
                   <AreaChart data={telemetryData}>
                     <defs>
                       <linearGradient id="colorHr" x1="0" y1="0" x2="0" y2="1">
-                        <stop offset="5%" stopColor="#F05A24" stopOpacity={0.4} />
+                        <stop offset="5%" stopColor="#F05A24" stopOpacity={0.35} />
                         <stop offset="95%" stopColor="#F05A24" stopOpacity={0.0} />
                       </linearGradient>
+                      <linearGradient id="colorSpo2" x1="0" y1="0" x2="0" y2="1">
+                        <stop offset="5%" stopColor="#0EA5E9" stopOpacity={0.35} />
+                        <stop offset="95%" stopColor="#0EA5E9" stopOpacity={0.0} />
+                      </linearGradient>
+                      <linearGradient id="colorBp" x1="0" y1="0" x2="0" y2="1">
+                        <stop offset="5%" stopColor="#8B5CF6" stopOpacity={0.35} />
+                        <stop offset="95%" stopColor="#8B5CF6" stopOpacity={0.0} />
+                      </linearGradient>
                       <linearGradient id="colorFall" x1="0" y1="0" x2="0" y2="1">
-                        <stop offset="5%" stopColor="#E9A23B" stopOpacity={0.4} />
+                        <stop offset="5%" stopColor="#E9A23B" stopOpacity={0.35} />
                         <stop offset="95%" stopColor="#E9A23B" stopOpacity={0.0} />
+                      </linearGradient>
+                      <linearGradient id="colorTemp" x1="0" y1="0" x2="0" y2="1">
+                        <stop offset="5%" stopColor="#10B981" stopOpacity={0.35} />
+                        <stop offset="95%" stopColor="#10B981" stopOpacity={0.0} />
                       </linearGradient>
                     </defs>
                     <CartesianGrid strokeDasharray="3 3" stroke={isDark ? '#2E3442' : '#DCE1E8'} opacity={0.7} />
@@ -500,9 +737,9 @@ export const DashboardPage: React.FC = () => {
                       stroke={isDark ? '#9AA1AF' : '#68707E'}
                       fontSize={11}
                       tickLine={false}
-                      interval={timeRange === 'day' ? 2 : timeRange === 'week' ? 0 : 3}
+                      interval={timeRange === 'live' ? 1 : timeRange === 'week' ? 0 : 3}
                     />
-                    <YAxis stroke={isDark ? '#9AA1AF' : '#68707E'} fontSize={11} domain={[0, 140]} tickLine={false} />
+                    <YAxis stroke={isDark ? '#9AA1AF' : '#68707E'} fontSize={11} domain={[0, 160]} tickLine={false} />
                     <Tooltip
                       contentStyle={{
                         backgroundColor: isDark ? '#1D222D' : '#FFFFFF',
@@ -512,29 +749,86 @@ export const DashboardPage: React.FC = () => {
                         fontSize: '12px',
                         boxShadow: '0 8px 24px rgba(0,0,0,0.3)',
                       }}
-                      formatter={(value: any, name: string) => [
-                        name.includes('bpm') ? `${value} bpm` : `${value}%`,
-                        name,
-                      ]}
+                      formatter={(value: any, name: string) => {
+                        if (value === null || value === undefined) return ['Chưa có dữ liệu', name];
+                        if (name.includes('Nhịp tim')) return [`${value} bpm`, name];
+                        if (name.includes('SpO2')) return [`${value}%`, name];
+                        if (name.includes('Huyết áp')) return [`${value} mmHg`, name];
+                        if (name.includes('Thân nhiệt')) return [`${value} °C`, name];
+                        if (name.includes('Nguy cơ ngã')) return [`${value}%`, name];
+                        return [value, name];
+                      }}
                     />
-                    <Area
-                      type="monotone"
-                      dataKey="heartRate"
-                      name="Nhịp tim (bpm)"
-                      stroke="#F05A24"
-                      strokeWidth={2.5}
-                      fillOpacity={1}
-                      fill="url(#colorHr)"
-                    />
-                    <Area
-                      type="monotone"
-                      dataKey="fallRisk"
-                      name="Nguy cơ ngã (%)"
-                      stroke="#E9A23B"
-                      strokeWidth={2}
-                      fillOpacity={1}
-                      fill="url(#colorFall)"
-                    />
+                    {activeMetrics.bloodPressure && (
+                      <Area
+                        type="monotone"
+                        dataKey="bloodPressure"
+                        name="Huyết áp (mmHg)"
+                        stroke="#8B5CF6"
+                        strokeWidth={2}
+                        dot={{ r: 3, strokeWidth: 1.5 }}
+                        activeDot={{ r: 5 }}
+                        connectNulls={true}
+                        fillOpacity={1}
+                        fill="url(#colorBp)"
+                      />
+                    )}
+                    {activeMetrics.spo2 && (
+                      <Area
+                        type="monotone"
+                        dataKey="spo2"
+                        name="Oxy SpO2 (%)"
+                        stroke="#0EA5E9"
+                        strokeWidth={2}
+                        dot={{ r: 3, strokeWidth: 1.5 }}
+                        activeDot={{ r: 5 }}
+                        connectNulls={true}
+                        fillOpacity={1}
+                        fill="url(#colorSpo2)"
+                      />
+                    )}
+                    {activeMetrics.heartRate && (
+                      <Area
+                        type="monotone"
+                        dataKey="heartRate"
+                        name="Nhịp tim (bpm)"
+                        stroke="#F05A24"
+                        strokeWidth={2.5}
+                        dot={{ r: 3, strokeWidth: 1.5 }}
+                        activeDot={{ r: 5 }}
+                        connectNulls={true}
+                        fillOpacity={1}
+                        fill="url(#colorHr)"
+                      />
+                    )}
+                    {activeMetrics.fallRisk && (
+                      <Area
+                        type="monotone"
+                        dataKey="fallRisk"
+                        name="Nguy cơ ngã (%)"
+                        stroke="#E9A23B"
+                        strokeWidth={2}
+                        dot={{ r: 3, strokeWidth: 1.5 }}
+                        activeDot={{ r: 5 }}
+                        connectNulls={true}
+                        fillOpacity={1}
+                        fill="url(#colorFall)"
+                      />
+                    )}
+                    {activeMetrics.temperature && (
+                      <Area
+                        type="monotone"
+                        dataKey="temperature"
+                        name="Thân nhiệt (°C)"
+                        stroke="#10B981"
+                        strokeWidth={2}
+                        dot={{ r: 3, strokeWidth: 1.5 }}
+                        activeDot={{ r: 5 }}
+                        connectNulls={true}
+                        fillOpacity={1}
+                        fill="url(#colorTemp)"
+                      />
+                    )}
                   </AreaChart>
                 </ResponsiveContainer>
               ) : (
