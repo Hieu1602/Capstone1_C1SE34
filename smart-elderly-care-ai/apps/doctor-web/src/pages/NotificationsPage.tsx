@@ -8,6 +8,17 @@ import { doctorApi, householdApi, incidentsApi, systemNotificationsApi } from '.
 import { doctorWebSocket } from '../services/websocket';
 import { useDoctorDataStore } from '../store/useDoctorDataStore';
 import { removeVietnameseTones } from '../utils/text';
+import {
+  getStoredReadIds,
+  markAllAsReadWithUndo,
+  restorePreviousReadState,
+  markAsRead,
+  toggleReadStatus,
+  hasUndoSnapshot,
+  NOTIFS_SYNC_EVENT,
+  cleanNotificationText,
+  SyncPayload,
+} from '../utils/notificationSync';
 import { NotificationDetailModal, UnifiedNotification } from '../components/clinical/NotificationDetailModal';
 import type { Incident, AppointmentItem, DoctorPatientCard, SystemNotification } from '../types';
 import {
@@ -24,27 +35,17 @@ import {
   ShieldAlert,
   Inbox,
   X,
+  RotateCcw,
   Megaphone,
 } from 'lucide-react';
 
 type TabType = 'ALL' | 'UNREAD' | 'ADMIN' | 'ALERTS' | 'APPOINTMENTS' | 'OTHERS';
 type SeverityType = 'ALL' | 'CRITICAL' | 'WARNING';
 
-const STORAGE_KEY = '@doctor_web_read_notifs';
 const PAGE_SIZE = 10;
 
 // 1. Helpers làm sạch văn bản và trích xuất tiêu đề ngắn gọn
-function cleanText(raw?: string): string {
-  if (!raw) return '';
-  return raw
-    .replace(/Bác sĩ BS\./g, 'BS.')
-    .replace(/Đồng hồ thông minh\s*\(\s*Đồng hồ thông minh Smartband\s*\)/gi, 'Đồng hồ thông minh Smartband')
-    .replace(/\(\s*Đồng hồ thông minh Smartband\s*\)/gi, 'Smartband')
-    .replace(/(?:\(|;\s*)?Tiền sử(?: bệnh lý)?:\s*(?:\)|;|\.|$)?/gi, '')
-    .replace(/\(\s*\)/g, '')
-    .replace(/\s{2,}/g, ' ')
-    .trim();
-}
+const cleanText = cleanNotificationText;
 
 function parseTitleAndBody(raw: string, type: UnifiedNotification['type'], alertType?: string, alertLevel?: string, patientName?: string) {
   const text = cleanText(raw);
@@ -125,19 +126,36 @@ export const NotificationsPage: React.FC = () => {
   const [selectedNotif, setSelectedNotif] = useState<UnifiedNotification | null>(null);
   const [showModal, setShowModal] = useState(false);
 
-  const [readIds, setReadIds] = useState<Set<string>>(() => {
-    try {
-      const s = localStorage.getItem(STORAGE_KEY);
-      return s ? new Set<string>(JSON.parse(s)) : new Set<string>();
-    } catch {
-      return new Set<string>();
-    }
-  });
+  const [readIds, setReadIds] = useState<Set<string>>(() => getStoredReadIds());
+  const [canUndo, setCanUndo] = useState<boolean>(() => hasUndoSnapshot());
 
-  const saveReadIds = (set: Set<string>) => {
-    setReadIds(set);
-    localStorage.setItem(STORAGE_KEY, JSON.stringify(Array.from(set)));
-  };
+  // Lắng nghe sự kiện đồng bộ từ thanh Navbar hoặc các tab/component khác (0ms)
+  useEffect(() => {
+    const handleSync = (e: Event) => {
+      const customEvent = e as CustomEvent<SyncPayload>;
+      const nextSet = customEvent.detail?.readIds
+        ? new Set(customEvent.detail.readIds)
+        : getStoredReadIds();
+      setReadIds(nextSet);
+      setCanUndo(customEvent.detail?.canUndo ?? hasUndoSnapshot());
+      setNotifications((prev) =>
+        prev.map((n) => {
+          const isRead = Boolean(
+            nextSet.has(n.id) ||
+            (n.rawIncidentId && (nextSet.has(n.rawIncidentId) || nextSet.has(`inc_${n.rawIncidentId}`)))
+          );
+          return { ...n, isRead };
+        })
+      );
+    };
+
+    window.addEventListener(NOTIFS_SYNC_EVENT, handleSync);
+    window.addEventListener('storage', handleSync);
+    return () => {
+      window.removeEventListener(NOTIFS_SYNC_EVENT, handleSync);
+      window.removeEventListener('storage', handleSync);
+    };
+  }, []);
 
   // 2. Chuyển đổi dữ liệu thống nhất (Incidents, Sinh hiệu cảnh báo, Lịch khám, Thông báo Admin)
   const buildItems = useCallback((incs: Incident[], pats: DoctorPatientCard[], apts: AppointmentItem[], sysList: SystemNotification[] = [], readSet: Set<string> = new Set()) => {
@@ -342,8 +360,7 @@ export const NotificationsPage: React.FC = () => {
         doctorApi.getAppointments(),
         systemNotificationsApi.getActiveBroadcasts('doctors'),
       ]);
-      const saved = localStorage.getItem(STORAGE_KEY);
-      const currentRead = saved ? new Set<string>(JSON.parse(saved)) : new Set<string>();
+      const currentRead = getStoredReadIds();
       const incs = iRes.status === 'fulfilled' && Array.isArray(iRes.value) ? iRes.value : [];
       const pats = pRes.status === 'fulfilled' && Array.isArray(pRes.value) ? pRes.value : [];
       const apts = aRes.status === 'fulfilled' && Array.isArray(aRes.value) ? aRes.value : [];
@@ -364,15 +381,10 @@ export const NotificationsPage: React.FC = () => {
 
   useEffect(() => setPage(1), [activeTab, severity, search]);
 
-  // Đánh dấu đã đọc
+  // Đánh dấu đã đọc khi xem chi tiết
   const handleItemClick = (item: UnifiedNotification) => {
-    const next = new Set(readIds);
-    next.add(item.id);
-    if (item.rawIncidentId) {
-      next.add(item.rawIncidentId);
-      next.add(`inc_${item.rawIncidentId}`);
-    }
-    saveReadIds(next);
+    const next = markAsRead(item.id, item.rawIncidentId);
+    setReadIds(next);
     setNotifications((prev) => prev.map((n) => (n.id === item.id ? { ...n, isRead: true } : n)));
     setSelectedNotif(item);
     setShowModal(true);
@@ -380,28 +392,54 @@ export const NotificationsPage: React.FC = () => {
 
   const handleAcknowledge = async (item: UnifiedNotification) => {
     if (item.rawIncidentId) incidentsApi.acknowledge(item.rawIncidentId).catch(console.warn);
-    const next = new Set(readIds);
-    next.add(item.id);
-    if (item.rawIncidentId) {
-      next.add(item.rawIncidentId);
-      next.add(`inc_${item.rawIncidentId}`);
-    }
-    saveReadIds(next);
+    const next = markAsRead(item.id, item.rawIncidentId);
+    setReadIds(next);
     setNotifications((prev) => prev.map((n) => (n.id === item.id || n.rawIncidentId === item.rawIncidentId ? { ...n, isRead: true, badgeLabel: 'Đã xử lý' } : n)));
   };
 
+  // Đảo trạng thái Đã đọc <-> Chưa đọc
+  const handleToggleRead = (item: UnifiedNotification) => {
+    if (!item.isRead && item.rawIncidentId) {
+      incidentsApi.acknowledge(item.rawIncidentId).catch(console.warn);
+    }
+    const { nextIds, isRead } = toggleReadStatus(item.id, item.rawIncidentId);
+    setReadIds(nextIds);
+    setNotifications((prev) =>
+      prev.map((n) =>
+        n.id === item.id || (n.rawIncidentId && n.rawIncidentId === item.rawIncidentId)
+          ? { ...n, isRead }
+          : n
+      )
+    );
+  };
+
+  // Đánh dấu tất cả đã đọc (có lưu snapshot Hoàn tác)
   const handleMarkAllRead = async () => {
     incidentsApi.acknowledgeAll().catch(console.warn);
-    const next = new Set(readIds);
-    notifications.forEach((n) => {
-      next.add(n.id);
-      if (n.rawIncidentId) {
-        next.add(n.rawIncidentId);
-        next.add(`inc_${n.rawIncidentId}`);
-      }
-    });
-    saveReadIds(next);
+    const allIds = notifications.map((n) => n.id);
+    const rawIds = notifications.map((n) => n.rawIncidentId || '').filter(Boolean);
+    const next = markAllAsReadWithUndo(allIds, rawIds);
+    setReadIds(next);
+    setCanUndo(true);
     setNotifications((prev) => prev.map((n) => ({ ...n, isRead: true })));
+  };
+
+  // Khôi phục trạng thái chưa đọc trước đó (Hoàn tác)
+  const handleUndoMarkAll = () => {
+    const restored = restorePreviousReadState();
+    if (restored) {
+      setReadIds(restored);
+      setCanUndo(false);
+      setNotifications((prev) =>
+        prev.map((n) => {
+          const isRead = Boolean(
+            restored.has(n.id) ||
+            (n.rawIncidentId && (restored.has(n.rawIncidentId) || restored.has(`inc_${n.rawIncidentId}`)))
+          );
+          return { ...n, isRead };
+        })
+      );
+    }
   };
 
   const handleRespondInvite = async (incident: Incident, action: 'accept' | 'reject') => {
@@ -473,13 +511,33 @@ export const NotificationsPage: React.FC = () => {
         </div>
 
         <div className="flex items-center gap-2 shrink-0">
+          {canUndo && (
+            <button
+              type="button"
+              onClick={handleUndoMarkAll}
+              className="flex items-center gap-1.5 rounded-xl border border-amber-200 bg-amber-50 px-3 py-1.5 text-xs font-semibold text-amber-800 hover:bg-amber-100 shadow-2xs transition-colors dark:border-amber-800 dark:bg-amber-950/40 dark:text-amber-300 cursor-pointer"
+              title="Khôi phục trạng thái chưa đọc trước khi bấm Đã đọc tất cả"
+            >
+              <RotateCcw className="h-3.5 w-3.5 text-amber-600 dark:text-amber-400" />
+              <span>Khôi phục</span>
+            </button>
+          )}
           {unreadCount > 0 && (
-            <button onClick={handleMarkAllRead} className="flex items-center gap-1.5 rounded-xl border border-slate-200 bg-white px-3 py-1.5 text-xs font-semibold text-slate-700 hover:bg-slate-50 shadow-2xs dark:border-slate-700 dark:bg-slate-800 dark:text-slate-200 cursor-pointer">
+            <button
+              type="button"
+              onClick={handleMarkAllRead}
+              className="flex items-center gap-1.5 rounded-xl border border-slate-200 bg-white px-3 py-1.5 text-xs font-semibold text-slate-700 hover:bg-slate-50 shadow-2xs dark:border-slate-700 dark:bg-slate-800 dark:text-slate-200 cursor-pointer"
+            >
               <CheckCheck className="h-3.5 w-3.5 text-blue-600" />
               <span>Đã đọc tất cả</span>
             </button>
           )}
-          <button onClick={loadData} disabled={loading} className="flex items-center gap-1.5 rounded-xl bg-blue-600 px-3.5 py-1.5 text-xs font-bold text-white hover:bg-blue-700 shadow-xs disabled:opacity-50 cursor-pointer">
+          <button
+            type="button"
+            onClick={loadData}
+            disabled={loading}
+            className="flex items-center gap-1.5 rounded-xl bg-blue-600 px-3.5 py-1.5 text-xs font-bold text-white hover:bg-blue-700 shadow-xs disabled:opacity-50 cursor-pointer"
+          >
             <RefreshCw className={`h-3.5 w-3.5 ${loading ? 'animate-spin' : ''}`} />
             <span>{loading ? 'Đang tải...' : 'Làm mới'}</span>
           </button>
@@ -623,13 +681,22 @@ export const NotificationsPage: React.FC = () => {
                         {!item.isRead ? (
                           <button
                             type="button"
-                            onClick={(e) => { e.stopPropagation(); handleAcknowledge(item); }}
+                            onClick={(e) => { e.stopPropagation(); handleToggleRead(item); }}
                             title="Đánh dấu đã đọc"
-                            className="flex h-7 w-7 items-center justify-center rounded-lg text-slate-400 hover:bg-blue-50 hover:text-blue-600 transition-colors cursor-pointer"
+                            className="flex h-7 w-7 items-center justify-center rounded-lg text-slate-400 hover:bg-blue-50 hover:text-blue-600 transition-colors cursor-pointer dark:hover:bg-slate-800 dark:hover:text-blue-400"
                           >
                             <Check className="h-3.5 w-3.5" />
                           </button>
-                        ) : <span className="w-2" />}
+                        ) : (
+                          <button
+                            type="button"
+                            onClick={(e) => { e.stopPropagation(); handleToggleRead(item); }}
+                            title="Đánh dấu chưa đọc lại"
+                            className="flex h-7 w-7 items-center justify-center rounded-lg text-slate-400 hover:bg-amber-50 hover:text-amber-600 transition-colors cursor-pointer dark:hover:bg-slate-800 dark:hover:text-amber-400"
+                          >
+                            <RotateCcw className="h-3.5 w-3.5" />
+                          </button>
+                        )}
 
                         <button
                           type="button"

@@ -271,6 +271,7 @@ export const useDeviceStore = create<DeviceState>()(
             "[DeviceStore] Thiết bị lưu local cache, đồng bộ backend sau:",
             err,
           );
+          return undefined;
         }
         return device.id;
       },
