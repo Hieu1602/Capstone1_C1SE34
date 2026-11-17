@@ -27,6 +27,12 @@ config.resolver.resolveRequest = (context, moduleName, platform) => {
       type: 'sourceFile',
     };
   }
+  if (platform === 'web' && moduleName === 'react-native-svg') {
+    return {
+      filePath: path.resolve(__dirname, 'node_modules/react-native-svg/lib/module/elements.web.js'),
+      type: 'sourceFile',
+    };
+  }
   if (originalResolveRequest) {
     return originalResolveRequest(context, moduleName, platform);
   }
