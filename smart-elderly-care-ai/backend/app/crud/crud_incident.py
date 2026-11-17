@@ -48,6 +48,7 @@ class CRUDIncident:
         limit: int = 20,
         offset: int = 0,
         current_user_id: Optional[UUID] = None,
+        target_role: Optional[str] = None,
     ) -> List[Incident]:
         query = select(Incident).options(selectinload(Incident.acknowledged_user)).order_by(Incident.created_at.desc())
         if device_id:
@@ -55,6 +56,7 @@ class CRUDIncident:
         if alert_level:
             query = query.where(Incident.alert_level == alert_level)
 
+        is_doctor = False
         if current_user_id:
             from app.models.user import User
             from app.models.house import House, HouseMember
@@ -62,6 +64,8 @@ class CRUDIncident:
             from sqlalchemy import and_
 
             user = await db.get(User, current_user_id)
+            is_doctor = (target_role == "doctor") or (user is not None and user.role == "doctor")
+
             if user and user.role == "admin":
                 # Admin cấp hệ thống: có thể giám sát toàn bộ
                 pass
@@ -81,7 +85,7 @@ class CRUDIncident:
                 user_house_ids = [row[0] for row in user_house_ids_res.fetchall()]
 
                 if not user_house_ids:
-                    # Tài khoản mới chưa liên kết nhà: CHỈ nhận thông báo gửi trực tiếp cho mình (vd: HOUSE_MEMBER_ADDED, HOUSE_INVITE_PENDING)
+                    # Tài khoản mới chưa liên kết nhà: CHỈ nhận thông báo gửi trực tiếp cho mình
                     query = query.where(
                         or_(
                             Incident.notes == f"USER:{current_user_id}",
@@ -121,10 +125,110 @@ class CRUDIncident:
             # Khách chưa đăng nhập: Không xem dữ liệu nhạy cảm
             query = query.where(Incident.notes.is_(None), ~Incident.notes.startswith("USER:"))
 
-        query = query.offset(offset).limit(limit)
+        # Lọc chống Alert Fatigue cho Bác sĩ (Doctor Portal)
+        if is_doctor:
+            # 1. Ẩn toàn bộ sự kiện vận hành thiết bị & kết nối
+            excluded_device_alerts = [
+                "BATTERY_LOW", "BATTERY_CRITICAL", "BATTERY_DRAIN",
+                "DEVICE_OFFLINE", "DEVICE_DISCONNECTED", "DEVICE_ONLINE",
+                "DEVICE_CHARGING", "CHARGER_CONNECTED", "BLE_DISCONNECTED", "SENSOR_OFFLINE"
+            ]
+            query = query.where(Incident.alert_type.not_in(excluded_device_alerts))
+            query = query.where(
+                and_(
+                    ~Incident.message.ilike("%pin yếu%"),
+                    ~Incident.message.ilike("%đã cắm sạc%"),
+                    ~Incident.message.ilike("%rút sạc%"),
+                    ~Incident.message.ilike("%mất kết nối%"),
+                    ~Incident.message.ilike("%ngắt kết nối%"),
+                    ~Incident.message.ilike("%ngoại tuyến%"),
+                    ~Incident.message.ilike("%mất tín hiệu%"),
+                )
+            )
+
+            # 2. Chống tự làm phiền (No Self-Notification khi bác sĩ tự cập nhật)
+            if current_user_id:
+                query = query.where(
+                    or_(
+                        Incident.notes.is_(None),
+                        and_(
+                            ~Incident.notes.contains(f"BY_DOCTOR:{current_user_id}"),
+                            ~Incident.notes.contains(f"DOCTOR_UPDATED:{current_user_id}"),
+                            ~Incident.notes.contains(f"BY:{current_user_id}"),
+                        )
+                    )
+                )
+
+            # 3. Phân tuyến chỉ lấy 2 nhóm: Cảnh báo nguy cấp (CRITICAL) HOẶC Lịch khám / Lời mời
+            critical_types = [
+                "FALL_DETECTED", "SOS_BUTTON", "SOS", "EMERGENCY_BUTTON",
+                "CRITICAL_TRIAD", "TRIAD_FEVER_TACHYCARDIA_HYPOXIA",
+                "LOW_SPO2", "LOW_SPO2_CRITICAL", "EXERTION_HYPOXIA",
+                "CARDIO_COLLAPSE", "HIGH_HEART_RATE_CRITICAL", "HIGH_FEVER"
+            ]
+            appointment_invite_types = [
+                "APPOINTMENT_SCHEDULED", "APPOINTMENT_CONFIRMED",
+                "APPOINTMENT_CANCELLED", "APPOINTMENT_RESCHEDULED",
+                "HOUSE_INVITE_PENDING", "DOCTOR_ASSIGNED", "INVITATION"
+            ]
+
+            doctor_allowed = or_(
+                Incident.alert_level == "CRITICAL",
+                Incident.alert_type.in_(critical_types),
+                Incident.alert_type.in_(appointment_invite_types),
+                Incident.message.ilike("%lịch khám%"),
+                Incident.message.ilike("%lời mời%"),
+                Incident.message.ilike("%tái khám%"),
+                Incident.message.ilike("%hẹn khám%"),
+            )
+            query = query.where(doctor_allowed)
+
+        # Nếu là Bác sĩ: truy vấn dôi dư một ít để thực hiện gom nhóm Cooldown 15-30 phút
+        fetch_limit = limit * 3 if is_doctor else limit
+        query = query.offset(offset).limit(fetch_limit)
 
         result = await db.execute(query)
-        return list(result.scalars().all())
+        raw_incidents = list(result.scalars().all())
+
+        if not is_doctor:
+            return raw_incidents
+
+        # Cooldown 15–30 phút & Gom nhóm các cảnh báo lặp lại liên tiếp cho Bác sĩ
+        from datetime import timedelta
+        grouped_incidents: List[Incident] = []
+        # Key: (device_id, alert_type) -> list of incidents
+        for inc in raw_incidents:
+            is_critical = (inc.alert_level == "CRITICAL" or inc.alert_type in [
+                "FALL_DETECTED", "SOS_BUTTON", "LOW_SPO2", "EXERTION_HYPOXIA", "CARDIO_COLLAPSE"
+            ])
+            if not is_critical:
+                setattr(inc, "repeat_count", 1)
+                setattr(inc, "repeat_badge", None)
+                grouped_incidents.append(inc)
+                continue
+
+            # Kiểm tra xem đã có cảnh báo cùng loại trong 20 phút trước đó chưa
+            merged = False
+            for existing in grouped_incidents:
+                if (
+                    str(existing.device_id) == str(inc.device_id) and
+                    existing.alert_type == inc.alert_type and
+                    existing.created_at and inc.created_at
+                ):
+                    time_diff = abs((existing.created_at - inc.created_at).total_seconds())
+                    if time_diff <= 1200:  # 20 phút (nằm trong khoảng Cooldown 15-30 phút)
+                        current_repeats = getattr(existing, "repeat_count", 1) + 1
+                        setattr(existing, "repeat_count", current_repeats)
+                        setattr(existing, "repeat_badge", f"Lặp lại {current_repeats} lần trong 15 phút qua")
+                        merged = True
+                        break
+
+            if not merged:
+                setattr(inc, "repeat_count", 1)
+                setattr(inc, "repeat_badge", None)
+                grouped_incidents.append(inc)
+
+        return grouped_incidents[:limit]
 
     async def create(self, db: AsyncSession, data: dict) -> Incident:
         obj = Incident(**data)

@@ -28,13 +28,13 @@ export const DoctorNotificationModal: React.FC<DoctorNotificationModalProps> = (
 
   return createPortal(
     <div className="fixed inset-0 top-0 left-0 right-0 bottom-0 w-screen h-screen z-[100] !mt-0 flex items-center justify-center bg-slate-900/50 p-4 backdrop-blur-sm">
-      <div className="relative z-[101] w-full max-w-md rounded-2xl bg-white p-6 shadow-2xl">
-        <div className="flex items-center justify-between border-b border-slate-100 pb-3 mb-4">
+      <div className="relative z-[101] w-full max-w-md rounded-2xl bg-white dark:bg-[#131C31] dark:border dark:border-slate-800/80 p-6 shadow-2xl">
+        <div className="flex items-center justify-between border-b border-slate-100 dark:border-slate-800 pb-3 mb-4">
           <div className="flex items-center gap-2">
             <Bell className="h-5 w-5 text-amber-500" />
-            <h3 className="text-base font-extrabold text-slate-900">Cài đặt thông báo</h3>
+            <h3 className="text-base font-extrabold text-slate-900 dark:text-white">Cài đặt thông báo</h3>
           </div>
-          <button type="button" onClick={onClose} className="text-slate-400 hover:text-slate-600">
+          <button type="button" onClick={onClose} className="text-slate-400 hover:text-slate-600 dark:hover:text-slate-200 cursor-pointer">
             <X className="h-5 w-5" />
           </button>
         </div>
@@ -56,17 +56,17 @@ export const DoctorNotificationModal: React.FC<DoctorNotificationModalProps> = (
           ].map((sw) => (
             <div
               key={sw.title}
-              className="flex items-center justify-between gap-4 border-b border-slate-100 pb-3 last:border-0"
+              className="flex items-center justify-between gap-4 border-b border-slate-100 dark:border-slate-800 pb-3 last:border-0"
             >
               <div>
-                <p className="text-xs font-bold text-slate-900">{sw.title}</p>
-                <p className="text-[11px] text-slate-500 mt-0.5">{sw.sub}</p>
+                <p className="text-xs font-bold text-slate-900 dark:text-white">{sw.title}</p>
+                <p className="text-[11px] text-slate-500 dark:text-slate-400 mt-0.5">{sw.sub}</p>
               </div>
               <button
                 type="button"
                 onClick={sw.toggle}
-                className={`relative h-6 w-11 shrink-0 rounded-full transition ${
-                  sw.val ? 'bg-blue-600' : 'bg-slate-300'
+                className={`relative h-6 w-11 shrink-0 rounded-full transition cursor-pointer ${
+                  sw.val ? 'bg-blue-600' : 'bg-slate-300 dark:bg-slate-700'
                 }`}
               >
                 <span

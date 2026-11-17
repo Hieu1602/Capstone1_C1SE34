@@ -2,6 +2,7 @@
 // Trang Cài đặt & Hồ sơ Bác sĩ Gia đình (Đồng bộ 100% tính năng với tab Cài đặt trên Mobile App)
 
 import React, { useState, useEffect, useCallback, useRef } from 'react';
+import { createPortal } from 'react-dom';
 import { useDoctorAuthStore, getDoctorAvatarUri } from '../store/useDoctorAuthStore';
 import { authApi, doctorApi } from '../services/api';
 import { useDoctorDataStore } from '../store/useDoctorDataStore';
@@ -29,6 +30,7 @@ import {
   Monitor,
   CheckCircle2,
   Moon,
+  X,
 } from 'lucide-react';
 
 const maskPhone = (phone?: string) => {
@@ -79,6 +81,21 @@ export const SettingsPage: React.FC = () => {
   const [activeModal, setActiveModal] = useState<
     'NONE' | 'EDIT_PROFILE' | 'PASSWORD' | 'NOTIF' | 'COMPLIANCE' | 'DEVICES' | 'LOGOUT'
   >('NONE');
+  const [isPreviewAvatarOpen, setIsPreviewAvatarOpen] = useState(false);
+
+  useEffect(() => {
+    const handleKeyDown = (e: KeyboardEvent) => {
+      if (e.key === 'Escape' && isPreviewAvatarOpen) {
+        setIsPreviewAvatarOpen(false);
+      }
+    };
+    if (isPreviewAvatarOpen) {
+      window.addEventListener('keydown', handleKeyDown);
+    }
+    return () => {
+      window.removeEventListener('keydown', handleKeyDown);
+    };
+  }, [isPreviewAvatarOpen]);
 
   // Edit profile state
   const [editForm, setEditForm] = useState<DoctorProfileInfo>(docInfo);
@@ -88,13 +105,11 @@ export const SettingsPage: React.FC = () => {
   const [pwdError, setPwdError] = useState('');
   const [savingPwd, setSavingPwd] = useState(false);
 
-  // Notification switches & Vital Thresholds
+  // Notification switches
   const [notifyEmergency, setNotifyEmergency] = useState(true);
   const [notifyAppt, setNotifyAppt] = useState(true);
   const [notifyHubSpeaker, setNotifyHubSpeaker] = useState(true);
   const [notifyFallAlert, setNotifyFallAlert] = useState(true);
-  const [hrThresholdMax, setHrThresholdMax] = useState('110');
-  const [spo2ThresholdMin, setSpo2ThresholdMin] = useState('94');
   const [isDarkMode, setIsDarkMode] = useState<boolean>(() => {
     return document.documentElement.classList.contains('dark') || localStorage.getItem('@doctor_theme') === 'dark';
   });
@@ -350,10 +365,10 @@ export const SettingsPage: React.FC = () => {
 
       {/* Tiêu đề trang */}
       <div>
-        <h1 className="font-heading text-xl lg:text-2xl font-extrabold text-slate-900">
+        <h1 className="font-heading text-xl lg:text-2xl font-extrabold text-slate-900 dark:text-white">
           Cài đặt & Hồ sơ Bác sĩ
         </h1>
-        <p className="text-xs text-slate-500 mt-0.5">
+        <p className="text-xs text-slate-500 dark:text-slate-400 mt-0.5">
           Quản lý thông tin hành nghề, chứng chỉ CCHN, thiết bị đăng nhập và cài đặt hệ thống
         </p>
       </div>
@@ -362,32 +377,50 @@ export const SettingsPage: React.FC = () => {
         {/* Cột trái: Card Hồ sơ Bác sĩ, Thống kê & Pháp lý (6 cột) */}
         <div className="lg:col-span-6 space-y-5">
           {/* 1. Hero Profile Card */}
-          <div className="rounded-2xl border border-slate-200/80 bg-white p-6 shadow-xs">
+          <div className="rounded-2xl border border-slate-200/80 bg-white p-6 shadow-xs dark:border-slate-800/80 dark:bg-[#131C31]">
             <div className="flex flex-col sm:flex-row sm:items-center gap-5">
               {/* Avatar */}
               <div className="flex flex-col items-center sm:items-start gap-1.5 shrink-0">
-                <div
-                  onClick={() => fileInputRef.current?.click()}
-                  className="relative h-20 w-20 cursor-pointer group"
-                  title="Nhấn để đổi ảnh đại diện"
-                >
-                  <div className="flex h-20 w-20 items-center justify-center overflow-hidden rounded-full border-2 border-white bg-blue-600 text-2xl font-extrabold text-white shadow-md">
+                <div className="relative h-20 w-20">
+                  {/* Vòng tròn Avatar chính - Nhấn để xem ảnh kích thước lớn */}
+                  <div
+                    onClick={() => setIsPreviewAvatarOpen(true)}
+                    className="flex h-20 w-20 items-center justify-center overflow-hidden rounded-full border-2 border-white dark:border-[#131C31] bg-blue-600 text-2xl font-extrabold text-white shadow-md cursor-pointer hover:ring-2 hover:ring-blue-400/80 transition-all group"
+                    title="Nhấn để xem ảnh đại diện"
+                  >
                     {docInfo.avatarUri ? (
-                      <img src={docInfo.avatarUri} alt={docInfo.name} className="h-full w-full object-cover" />
+                      <img
+                        src={docInfo.avatarUri}
+                        alt={docInfo.name}
+                        className="h-full w-full object-cover transition-transform duration-200 group-hover:scale-105"
+                      />
                     ) : (
                       doctorInitial
                     )}
                   </div>
-                  <span className="absolute bottom-0.5 right-0.5 h-4 w-4 rounded-full ring-2 ring-white shadow-md bg-emerald-500 z-10" />
-                  <span className="absolute -top-1 -right-1 flex h-6 w-6 items-center justify-center rounded-full border border-slate-200 bg-white text-blue-600 shadow-xs group-hover:scale-110 transition">
+
+                  {/* Chấm xanh trạng thái Online */}
+                  <span className="absolute bottom-0.5 right-0.5 h-4 w-4 rounded-full ring-2 ring-white dark:ring-[#131C31] shadow-md bg-emerald-500 z-10 pointer-events-none" />
+
+                  {/* Nút icon Máy ảnh - DUY NHẤT kích hoạt chọn file tải ảnh mới */}
+                  <button
+                    type="button"
+                    onClick={(e) => {
+                      e.stopPropagation();
+                      fileInputRef.current?.click();
+                    }}
+                    className="absolute -top-1 -right-1 flex h-7 w-7 items-center justify-center rounded-full border border-slate-200 bg-white text-blue-600 shadow-sm hover:scale-110 hover:bg-slate-50 transition cursor-pointer dark:border-slate-700 dark:bg-slate-800 dark:text-blue-400 z-20"
+                    title="Thay đổi ảnh đại diện"
+                  >
                     <Camera className="h-3.5 w-3.5" />
-                  </span>
+                  </button>
                 </div>
+
                 {docInfo.avatarUri && (
                   <button
                     type="button"
                     onClick={handleResetAvatar}
-                    className="text-[11px] font-semibold text-rose-500 hover:text-rose-700 hover:underline transition"
+                    className="text-[11px] font-semibold text-rose-500 hover:text-rose-700 hover:underline transition cursor-pointer"
                     title="Khôi phục về chữ M nền xanh chuẩn y tế"
                   >
                     Xóa ảnh / Đặt lại
@@ -398,24 +431,24 @@ export const SettingsPage: React.FC = () => {
               {/* Thông tin */}
               <div className="flex-1 min-w-0">
                 <div className="flex flex-wrap items-center gap-2 mb-1.5">
-                  <span className="inline-flex items-center gap-1 rounded-full border border-emerald-200 bg-emerald-50 px-2.5 py-0.5 text-[11px] font-bold text-emerald-700">
+                  <span className="inline-flex items-center gap-1 rounded-full border border-emerald-200 bg-emerald-50 px-2.5 py-0.5 text-[11px] font-bold text-emerald-700 dark:border-emerald-900/60 dark:bg-emerald-950/40 dark:text-emerald-300">
                     <ShieldCheck className="h-3.5 w-3.5" />
                     Đã xác minh CCHN
                   </span>
-                  <span className="inline-flex items-center gap-1 rounded-full border border-blue-200 bg-blue-50 px-2.5 py-0.5 text-[11px] font-bold text-blue-700">
+                  <span className="inline-flex items-center gap-1 rounded-full border border-blue-200 bg-blue-50 px-2.5 py-0.5 text-[11px] font-bold text-blue-700 dark:border-blue-900/60 dark:bg-blue-950/40 dark:text-blue-300">
                     <Monitor className="h-3 w-3" />
                     Web MT + App ĐT
                   </span>
                 </div>
-                <h2 className="truncate text-lg font-extrabold text-slate-900">{docInfo.name}</h2>
-                <p className="text-xs font-bold text-blue-600 mt-0.5">{docInfo.degree}</p>
-                <p className="text-xs text-slate-500 mt-0.5">{docInfo.specialty}</p>
+                <h2 className="truncate text-lg font-extrabold text-slate-900 dark:text-white">{docInfo.name}</h2>
+                <p className="text-xs font-bold text-blue-600 dark:text-blue-400 mt-0.5">{docInfo.degree}</p>
+                <p className="text-xs text-slate-500 dark:text-slate-400 mt-0.5">{docInfo.specialty}</p>
               </div>
             </div>
 
             <button
               onClick={handleOpenEdit}
-              className="mt-5 flex w-full items-center justify-center gap-2 rounded-xl border border-blue-200 bg-blue-50/80 py-2.5 text-xs font-bold text-blue-700 transition hover:bg-blue-100"
+              className="mt-5 flex w-full items-center justify-center gap-2 rounded-xl border border-blue-200 bg-blue-50/80 py-2.5 text-xs font-bold text-blue-700 transition hover:bg-blue-100 cursor-pointer dark:border-blue-900/50 dark:bg-blue-950/40 dark:text-blue-300 dark:hover:bg-blue-900/50"
             >
               <Edit3 className="h-4 w-4" />
               <span>Chỉnh sửa hồ sơ chuyên môn Bác sĩ</span>
@@ -424,67 +457,67 @@ export const SettingsPage: React.FC = () => {
 
           {/* 2. Thống kê 2 cột: Bệnh nhân & Lịch khám */}
           <div className="grid grid-cols-2 gap-4">
-            <div className="rounded-2xl border border-slate-200/80 bg-white p-4 shadow-xs">
+            <div className="rounded-2xl border border-slate-200/80 bg-white p-4 shadow-xs dark:border-slate-800/80 dark:bg-[#131C31]">
               <div className="flex items-center gap-2 mb-2">
-                <div className="flex h-8 w-8 items-center justify-center rounded-lg bg-blue-50 text-blue-600">
+                <div className="flex h-8 w-8 items-center justify-center rounded-lg bg-blue-50 text-blue-600 dark:bg-blue-950/40 dark:text-blue-400">
                   <Users className="h-4 w-4" />
                 </div>
-                <span className="text-xs font-bold text-slate-500">Bệnh nhân</span>
+                <span className="text-xs font-bold text-slate-500 dark:text-slate-400">Bệnh nhân</span>
               </div>
-              <p className="text-2xl font-extrabold text-blue-600">{patientCount}</p>
+              <p className="text-2xl font-extrabold text-blue-600 dark:text-blue-400">{patientCount}</p>
               <p className="text-[11px] text-slate-400 mt-0.5">Đang phụ trách điều trị</p>
             </div>
 
-            <div className="rounded-2xl border border-slate-200/80 bg-white p-4 shadow-xs">
+            <div className="rounded-2xl border border-slate-200/80 bg-white p-4 shadow-xs dark:border-slate-800/80 dark:bg-[#131C31]">
               <div className="flex items-center gap-2 mb-2">
-                <div className="flex h-8 w-8 items-center justify-center rounded-lg bg-teal-50 text-teal-600">
+                <div className="flex h-8 w-8 items-center justify-center rounded-lg bg-teal-50 text-teal-600 dark:bg-teal-950/40 dark:text-teal-400">
                   <Calendar className="h-4 w-4" />
                 </div>
-                <span className="text-xs font-bold text-slate-500">Lịch khám</span>
+                <span className="text-xs font-bold text-slate-500 dark:text-slate-400">Lịch khám</span>
               </div>
-              <p className="text-2xl font-extrabold text-teal-600">{appointmentCount}</p>
+              <p className="text-2xl font-extrabold text-teal-600 dark:text-teal-400">{appointmentCount}</p>
               <p className="text-[11px] text-slate-400 mt-0.5">Ca khám bệnh</p>
             </div>
           </div>
 
           {/* 3. Thông tin hành nghề & Pháp lý */}
-          <div className="rounded-2xl border border-slate-200/80 bg-white p-5 shadow-xs">
-            <div className="flex items-center justify-between border-b border-slate-100 pb-3 mb-4">
+          <div className="rounded-2xl border border-slate-200/80 bg-white p-5 shadow-xs dark:border-slate-800/80 dark:bg-[#131C31]">
+            <div className="flex items-center justify-between border-b border-slate-100 dark:border-slate-800/80 pb-3 mb-4">
               <div className="flex items-center gap-2">
-                <div className="flex h-7 w-7 items-center justify-center rounded-full bg-blue-50 text-blue-600">
+                <div className="flex h-7 w-7 items-center justify-center rounded-full bg-blue-50 text-blue-600 dark:bg-blue-950/40 dark:text-blue-400">
                   <Award className="h-4 w-4" />
                 </div>
-                <span className="text-xs font-extrabold tracking-wide text-slate-900">
+                <span className="text-xs font-extrabold tracking-wide text-slate-900 dark:text-white">
                   HỒ SƠ CHUYÊN MÔN & PHÁP LÝ
                 </span>
               </div>
-              <span className="rounded-md border border-blue-200 bg-blue-50 px-2 py-0.5 text-[10px] font-extrabold text-blue-700">
+              <span className="rounded-md border border-blue-200 bg-blue-50 px-2 py-0.5 text-[10px] font-extrabold text-blue-700 dark:border-blue-900/60 dark:bg-blue-950/50 dark:text-blue-300">
                 BỘ Y TẾ CẤP
               </span>
             </div>
 
             <div className="space-y-3 text-xs">
               <div className="flex items-center justify-between">
-                <span className="font-medium text-slate-500">Số chứng chỉ CCHN:</span>
-                <span className="rounded-md border border-blue-200 bg-blue-50 px-2.5 py-0.5 font-bold text-blue-700">
+                <span className="font-medium text-slate-500 dark:text-slate-400">Số chứng chỉ CCHN:</span>
+                <span className="rounded-md border border-blue-200 bg-blue-50 px-2.5 py-0.5 font-bold text-blue-700 dark:border-blue-900/60 dark:bg-blue-950/50 dark:text-blue-300">
                   {docInfo.cchn_number}
                 </span>
               </div>
               <div className="flex items-center justify-between">
-                <span className="font-medium text-slate-500">Giới tính:</span>
-                <span className="font-semibold text-slate-900">{docInfo.gender || 'Nam'}</span>
+                <span className="font-medium text-slate-500 dark:text-slate-400">Giới tính:</span>
+                <span className="font-semibold text-slate-900 dark:text-white">{docInfo.gender || 'Nam'}</span>
               </div>
               <div className="flex items-center justify-between">
-                <span className="font-medium text-slate-500">Đơn vị công tác:</span>
-                <span className="font-semibold text-slate-900">{docInfo.hospital}</span>
+                <span className="font-medium text-slate-500 dark:text-slate-400">Đơn vị công tác:</span>
+                <span className="font-semibold text-slate-900 dark:text-white">{docInfo.hospital}</span>
               </div>
               <div className="flex items-center justify-between">
-                <span className="font-medium text-slate-500">Chuyên khoa phụ trách:</span>
-                <span className="font-semibold text-slate-900">{docInfo.department}</span>
+                <span className="font-medium text-slate-500 dark:text-slate-400">Chuyên khoa phụ trách:</span>
+                <span className="font-semibold text-slate-900 dark:text-white">{docInfo.department}</span>
               </div>
               <div className="flex items-center justify-between">
-                <span className="font-medium text-slate-500">SĐT trực cấp cứu:</span>
-                <span className="font-bold text-blue-600">{maskPhone(docInfo.phone)}</span>
+                <span className="font-medium text-slate-500 dark:text-slate-400">SĐT trực cấp cứu:</span>
+                <span className="font-bold text-blue-600 dark:text-blue-400">{maskPhone(docInfo.phone)}</span>
               </div>
             </div>
           </div>
@@ -493,60 +526,27 @@ export const SettingsPage: React.FC = () => {
         {/* Cột phải: Cấu hình ngưỡng cảnh báo sinh hiệu, Loa Hub & Bảo mật tài khoản (6 cột) */}
         <div className="lg:col-span-6 space-y-5">
           {/* 1. Thẻ Cấu hình Ngưỡng Cảnh báo Sinh hiệu & Thông báo Loa Hub */}
-          <div className="rounded-2xl border border-slate-200/80 bg-white p-5 shadow-xs">
-            <div className="flex items-center justify-between border-b border-slate-100 pb-3 mb-4">
+          <div className="rounded-2xl border border-slate-200/80 bg-white p-5 shadow-xs dark:border-slate-800/80 dark:bg-[#131C31]">
+            <div className="flex items-center justify-between border-b border-slate-100 dark:border-slate-800/80 pb-3 mb-4">
               <div className="flex items-center gap-2">
-                <div className="flex h-7 w-7 items-center justify-center rounded-full bg-amber-50 text-amber-600">
+                <div className="flex h-7 w-7 items-center justify-center rounded-full bg-amber-50 text-amber-600 dark:bg-amber-950/40 dark:text-amber-400">
                   <Bell className="h-4 w-4" />
                 </div>
-                <span className="text-xs font-extrabold uppercase tracking-wide text-slate-900">
-                  Ngưỡng Cảnh báo Sinh hiệu & Loa Hub
+                <span className="text-xs font-extrabold uppercase tracking-wide text-slate-900 dark:text-white">
+                  Cảnh báo Sinh hiệu &amp; Loa Hub
                 </span>
               </div>
-              <span className="rounded-full bg-emerald-50 px-2.5 py-0.5 text-[10px] font-bold text-emerald-700">
+              <span className="rounded-full bg-emerald-50 px-2.5 py-0.5 text-[10px] font-bold text-emerald-700 dark:bg-emerald-950/50 dark:text-emerald-300">
                 Đang kích hoạt
               </span>
             </div>
 
-            {/* Ngưỡng Nhịp tim & SpO2 */}
-            <div className="grid grid-cols-2 gap-3 mb-4">
-              <div className="rounded-xl border border-slate-200/80 bg-slate-50/70 p-3">
-                <label className="block text-[10px] font-bold uppercase text-slate-400">
-                  Ngưỡng Nhịp tim tối đa
-                </label>
-                <div className="mt-1 flex items-center justify-between">
-                  <input
-                    type="number"
-                    value={hrThresholdMax}
-                    onChange={(e) => setHrThresholdMax(e.target.value)}
-                    className="w-16 rounded-lg border border-slate-200 bg-white px-2 py-1 text-sm font-extrabold text-slate-900 focus:border-blue-600 focus:outline-hidden"
-                  />
-                  <span className="text-xs font-bold text-rose-600">bpm (Cảnh báo)</span>
-                </div>
-              </div>
-
-              <div className="rounded-xl border border-slate-200/80 bg-slate-50/70 p-3">
-                <label className="block text-[10px] font-bold uppercase text-slate-400">
-                  Ngưỡng SpO2 tối thiểu
-                </label>
-                <div className="mt-1 flex items-center justify-between">
-                  <input
-                    type="number"
-                    value={spo2ThresholdMin}
-                    onChange={(e) => setSpo2ThresholdMin(e.target.value)}
-                    className="w-16 rounded-lg border border-slate-200 bg-white px-2 py-1 text-sm font-extrabold text-slate-900 focus:border-blue-600 focus:outline-hidden"
-                  />
-                  <span className="text-xs font-bold text-blue-600">% (Suy hô hấp)</span>
-                </div>
-              </div>
-            </div>
-
             {/* Danh sách Toggle Switch hiện đại */}
-            <div className="space-y-3.5 divide-y divide-slate-100">
+            <div className="space-y-3.5 divide-y divide-slate-100 dark:divide-slate-800">
               {[
                 {
                   title: 'Cảnh báo Nhịp tim & SpO2 vượt ngưỡng an toàn',
-                  sub: `Báo động đỏ khi Nhịp tim > ${hrThresholdMax} bpm hoặc SpO2 < ${spo2ThresholdMin}%`,
+                  sub: 'Báo động khi sinh hiệu vượt ngưỡng riêng của từng bệnh nhân (trong Hồ sơ bệnh án)',
                   val: notifyEmergency,
                   setVal: setNotifyEmergency,
                 },
@@ -571,8 +571,8 @@ export const SettingsPage: React.FC = () => {
               ].map((sw) => (
                 <div key={sw.title} className="flex items-center justify-between gap-4 pt-3 first:pt-0">
                   <div className="min-w-0">
-                    <p className="text-xs font-bold text-slate-900">{sw.title}</p>
-                    <p className="text-[11px] text-slate-500 mt-0.5">{sw.sub}</p>
+                    <p className="text-xs font-bold text-slate-900 dark:text-white">{sw.title}</p>
+                    <p className="text-[11px] text-slate-500 dark:text-slate-400 mt-0.5">{sw.sub}</p>
                   </div>
                   <button
                     type="button"
@@ -580,8 +580,8 @@ export const SettingsPage: React.FC = () => {
                       sw.setVal(!sw.val);
                       showToast(`Đã cập nhật cấu hình: ${sw.title}`);
                     }}
-                    className={`relative h-6 w-11 shrink-0 rounded-full transition-colors ${
-                      sw.val ? 'bg-blue-600' : 'bg-slate-300'
+                    className={`relative h-6 w-11 shrink-0 rounded-full transition-colors cursor-pointer ${
+                      sw.val ? 'bg-blue-600' : 'bg-slate-300 dark:bg-slate-700'
                     }`}
                   >
                     <span
@@ -600,21 +600,21 @@ export const SettingsPage: React.FC = () => {
             <p className="px-1 mb-2 text-[11px] font-bold uppercase tracking-wider text-slate-400">
               BẢO MẬT TÀI KHOẢN & THIẾT BỊ ĐỒNG BỘ
             </p>
-            <div className="overflow-hidden rounded-2xl border border-slate-200/80 bg-white divide-y divide-slate-100 shadow-xs">
+            <div className="overflow-hidden rounded-2xl border border-slate-200/80 bg-white divide-y divide-slate-100 shadow-xs dark:border-slate-800/80 dark:bg-[#131C31] dark:divide-slate-800">
               {menuActions.map((item) => {
                 const Icon = item.icon;
                 return (
                   <button
                     key={item.title}
                     onClick={item.onClick}
-                    className="flex w-full items-center gap-3.5 px-4 py-3.5 text-left transition hover:bg-slate-50"
+                    className="flex w-full items-center gap-3.5 px-4 py-3.5 text-left transition hover:bg-slate-50 dark:hover:bg-slate-800/60 cursor-pointer"
                   >
                     <div className={`flex h-9 w-9 shrink-0 items-center justify-center rounded-xl text-white ${item.bg}`}>
                       <Icon className="h-4 w-4" />
                     </div>
                     <div className="flex-1 min-w-0">
-                      <p className="text-xs font-bold text-slate-900">{item.title}</p>
-                      <p className="text-[11px] text-slate-500 mt-0.5 truncate">{item.sub}</p>
+                      <p className="text-xs font-bold text-slate-900 dark:text-white">{item.title}</p>
+                      <p className="text-[11px] text-slate-500 dark:text-slate-400 mt-0.5 truncate">{item.sub}</p>
                     </div>
                     <ChevronRight className="h-4 w-4 text-slate-400 shrink-0" />
                   </button>
@@ -622,14 +622,14 @@ export const SettingsPage: React.FC = () => {
               })}
 
               {/* Chế độ nền tối (Tối ưu thị giác khi trực ca đêm - Đồng bộ 100% với App Mobile) */}
-              <div className="flex w-full items-center justify-between gap-3.5 px-4 py-3.5 transition hover:bg-slate-50">
+              <div className="flex w-full items-center justify-between gap-3.5 px-4 py-3.5 transition hover:bg-slate-50 dark:hover:bg-slate-800/60">
                 <div className="flex items-center gap-3.5 min-w-0">
                   <div className="flex h-9 w-9 shrink-0 items-center justify-center rounded-xl text-white bg-blue-600">
                     <Moon className="h-4 w-4" />
                   </div>
                   <div className="min-w-0">
-                    <p className="text-xs font-bold text-slate-900">Chế độ nền tối</p>
-                    <p className="text-[11px] text-slate-500 mt-0.5 truncate">
+                    <p className="text-xs font-bold text-slate-900 dark:text-white">Chế độ nền tối</p>
+                    <p className="text-[11px] text-slate-500 dark:text-slate-400 mt-0.5 truncate">
                       Tối ưu thị giác khi Bác sĩ trực ca đêm
                     </p>
                   </div>
@@ -637,8 +637,8 @@ export const SettingsPage: React.FC = () => {
                 <button
                   type="button"
                   onClick={toggleDarkMode}
-                  className={`relative h-6 w-11 shrink-0 rounded-full transition-colors ${
-                    isDarkMode ? 'bg-blue-600' : 'bg-slate-300'
+                  className={`relative h-6 w-11 shrink-0 rounded-full transition-colors cursor-pointer ${
+                    isDarkMode ? 'bg-blue-600' : 'bg-slate-300 dark:bg-slate-700'
                   }`}
                 >
                   <span
@@ -654,7 +654,7 @@ export const SettingsPage: React.FC = () => {
           {/* Nút Đăng xuất */}
           <button
             onClick={() => setActiveModal('LOGOUT')}
-            className="flex w-full items-center justify-center gap-2 rounded-2xl border border-rose-200 bg-white py-3.5 text-xs font-bold text-rose-600 shadow-xs transition hover:bg-rose-50"
+            className="flex w-full items-center justify-center gap-2 rounded-2xl border border-rose-200 bg-white py-3.5 text-xs font-bold text-rose-600 shadow-xs transition hover:bg-rose-50 cursor-pointer dark:border-rose-900/60 dark:bg-[#131C31] dark:text-rose-400 dark:hover:bg-rose-950/40"
           >
             <LogOut className="h-4 w-4" />
             <span>Đăng xuất khỏi tài khoản Bác sĩ</span>
@@ -718,6 +718,84 @@ export const SettingsPage: React.FC = () => {
           onLogout={logout}
         />
       )}
+
+      {/* Lightbox Phóng to Xem Ảnh Đại Diện */}
+      {isPreviewAvatarOpen &&
+        createPortal(
+          <div
+            className="fixed inset-0 z-[100] flex items-center justify-center p-4 bg-slate-900/75 backdrop-blur-sm animate-in fade-in duration-200 !mt-0"
+            onClick={() => setIsPreviewAvatarOpen(false)}
+          >
+            <div
+              className="relative w-full max-w-sm sm:max-w-md rounded-3xl border border-slate-100 bg-white p-6 shadow-2xl dark:border-slate-800/80 dark:bg-[#131C31] animate-in zoom-in-95 duration-200"
+              onClick={(e) => e.stopPropagation()}
+            >
+              {/* Nút đóng X */}
+              <button
+                type="button"
+                onClick={() => setIsPreviewAvatarOpen(false)}
+                className="absolute top-4 right-4 flex h-9 w-9 items-center justify-center rounded-full text-slate-400 hover:bg-slate-100 hover:text-slate-600 dark:text-slate-400 dark:hover:bg-slate-800 dark:hover:text-slate-200 transition cursor-pointer"
+                title="Đóng (Esc)"
+              >
+                <X className="h-5 w-5" />
+              </button>
+
+              {/* Tiêu đề & Thông tin bác sĩ */}
+              <div className="text-center mb-5 px-6">
+                <h3 className="text-base font-extrabold text-slate-900 dark:text-white">
+                  Ảnh đại diện Bác sĩ
+                </h3>
+                <p className="text-xs text-slate-500 dark:text-slate-400 mt-0.5 truncate">
+                  {docInfo.name} • {docInfo.degree || 'Bác sĩ phụ trách'}
+                </p>
+              </div>
+
+              {/* Khung ảnh phóng to */}
+              <div className="mx-auto flex h-64 w-64 items-center justify-center overflow-hidden rounded-2xl border-4 border-slate-100 shadow-inner bg-slate-100 dark:border-slate-800 dark:bg-[#0F172A]">
+                {docInfo.avatarUri ? (
+                  <img
+                    src={docInfo.avatarUri}
+                    alt={docInfo.name}
+                    className="h-full w-full object-cover"
+                  />
+                ) : (
+                  <div className="flex h-full w-full items-center justify-center bg-blue-600 text-6xl font-extrabold text-white">
+                    {doctorInitial}
+                  </div>
+                )}
+              </div>
+
+              {/* Action Buttons */}
+              <div className="mt-6 flex flex-col sm:flex-row items-center justify-center gap-2.5">
+                <button
+                  type="button"
+                  onClick={() => {
+                    setIsPreviewAvatarOpen(false);
+                    fileInputRef.current?.click();
+                  }}
+                  className="flex w-full sm:w-auto items-center justify-center gap-2 rounded-xl bg-blue-600 px-5 py-2.5 text-xs font-bold text-white shadow-xs hover:bg-blue-700 transition cursor-pointer"
+                >
+                  <Camera className="h-4 w-4" />
+                  <span>Thay đổi ảnh đại diện</span>
+                </button>
+
+                {docInfo.avatarUri && (
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setIsPreviewAvatarOpen(false);
+                      handleResetAvatar();
+                    }}
+                    className="flex w-full sm:w-auto items-center justify-center gap-1.5 rounded-xl border border-rose-200 bg-rose-50 px-4 py-2.5 text-xs font-bold text-rose-600 hover:bg-rose-100 dark:border-rose-900/60 dark:bg-rose-950/40 dark:text-rose-400 dark:hover:bg-rose-900/50 transition cursor-pointer"
+                  >
+                    <span>Đặt lại mặc định</span>
+                  </button>
+                )}
+              </div>
+            </div>
+          </div>,
+          document.body
+        )}
     </div>
   );
 };

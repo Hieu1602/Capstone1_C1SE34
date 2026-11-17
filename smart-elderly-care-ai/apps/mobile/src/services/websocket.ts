@@ -401,7 +401,15 @@ class AlertsWebSocket {
     else if (event.type === 'INCIDENT_RESOLVED') {
       const incId = event.incident_id || event.data?.id;
       if (incId) {
-        store.acknowledgeIncident(incId, event.data?.note || 'Đã kiểm tra an toàn');
+        const handlerName =
+          event.data?.acknowledged_by_name ||
+          event.data?.acknowledged_by ||
+          'Bác sĩ phụ trách';
+        store.acknowledgeIncident(
+          incId,
+          event.data?.note || 'Đã kiểm tra an toàn',
+          handlerName
+        );
       }
       // Kiểm tra lại nếu không còn sự cố Critical chưa xử lý nào thì tắt còi & tắt cờ té ngã
       const remainingCritical = useVitalStore.getState().incidents.some(

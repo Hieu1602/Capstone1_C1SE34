@@ -2,9 +2,24 @@ import React, { useEffect, useRef, useState } from 'react';
 import { View, StyleSheet, TouchableOpacity, Modal, Animated, Linking } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
-import { CameraView, useCameraPermissions, type BarcodeScanningResult } from 'expo-camera';
 import { LocalizedAlert, LocalizedText } from '../../../../i18n/LocalizedComponents';
 import { parseDeviceQr } from '../../utils/deviceQr';
+
+// Dynamic safe load expo-camera to prevent bundler crash when module is uninstalled or on web
+let CameraView: any = View;
+let useCameraPermissions: any = () => [null, () => {}];
+try {
+  // eslint-disable-next-line @typescript-eslint/no-var-requires
+  const cam = require('expo-camera');
+  if (cam) {
+    CameraView = cam.CameraView || View;
+    useCameraPermissions = cam.useCameraPermissions || (() => [null, () => {}]);
+  }
+} catch {
+  // expo-camera not available
+}
+
+type BarcodeScanningResult = { data: string; type: string };
 
 interface DeviceQrScannerModalProps {
   visible: boolean;

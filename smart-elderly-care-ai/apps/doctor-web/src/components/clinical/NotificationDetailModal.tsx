@@ -37,6 +37,9 @@ export interface UnifiedNotification {
   targetUrl: string;
   patientId?: string;
   patientName?: string;
+  patientMrCode?: string;
+  repeatCount?: number;
+  repeatBadge?: string;
   patientAddress?: string;
   heartRate?: number;
   spo2?: number;
@@ -324,11 +327,24 @@ export const NotificationDetailModal: React.FC<NotificationDetailModalProps> = (
               </p>
               <div className="space-y-1.5 text-xs">
                 <div className="flex items-center justify-between">
-                  <span className="text-slate-500 dark:text-slate-400">Họ và tên:</span>
-                  <span className="font-bold text-slate-900 dark:text-white">
+                  <span className="text-slate-500 dark:text-slate-400">Họ và tên &amp; Mã hồ sơ:</span>
+                  <span className="font-bold text-slate-900 dark:text-white flex items-center gap-1.5">
                     {notif.patientName || 'Người cao tuổi'}
+                    {notif.patientMrCode && (
+                      <span className="rounded bg-blue-100 px-1.5 py-0.5 text-[10px] font-bold text-blue-800 dark:bg-blue-900/60 dark:text-blue-300">
+                        {notif.patientMrCode}
+                      </span>
+                    )}
                   </span>
                 </div>
+                {notif.repeatBadge && (
+                  <div className="flex items-center justify-between">
+                    <span className="text-slate-500 dark:text-slate-400">Tần suất cảnh báo:</span>
+                    <span className="font-bold text-rose-600 dark:text-rose-400">
+                      {notif.repeatBadge}
+                    </span>
+                  </div>
+                )}
                 {notif.patientAddress && (
                   <div className="flex items-center justify-between">
                     <span className="text-slate-500 dark:text-slate-400">Khu vực / Nhà:</span>
@@ -411,7 +427,12 @@ export const NotificationDetailModal: React.FC<NotificationDetailModalProps> = (
             <div className="text-xs text-slate-500 dark:text-slate-400">
               {isAlreadyHandled ? (
                 <span className="text-emerald-600 font-semibold flex items-center gap-1">
-                  <Check className="h-3.5 w-3.5" /> Bác sĩ đã xác nhận &amp; xử lý
+                  <Check className="h-3.5 w-3.5" />
+                  {notif.rawIncident?.acknowledged_by_name
+                    ? `Đã xử lý bởi ${notif.rawIncident.acknowledged_by_name}`
+                    : notif.rawIncident?.acknowledged_by && !/^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(String(notif.rawIncident.acknowledged_by))
+                    ? `Đã xử lý bởi ${notif.rawIncident.acknowledged_by}`
+                    : 'Bác sĩ đã xác nhận & xử lý'}
                 </span>
               ) : (
                 <span>Cần xác nhận xử lý y khoa</span>

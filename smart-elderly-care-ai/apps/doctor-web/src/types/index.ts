@@ -155,6 +155,8 @@ export interface Incident {
   acknowledged_at?: string | null;
   note?: string | null;
   notes?: string | null;
+  repeat_count?: number;
+  repeat_badge?: string;
   created_at: string;
 }
 

@@ -53,13 +53,13 @@ export default function IncidentDetailScreen({ route, navigation }: any) {
     currentUserName?: string | null,
     currentUserId?: string | number | null
   ): string => {
-    if (!inc) return currentUserName || 'Người chăm sóc';
+    if (!inc) return 'Người phụ trách';
     if (inc.acknowledged_by_name && inc.acknowledged_by_name.trim() !== '') {
       return inc.acknowledged_by_name;
     }
     const raw = inc.acknowledged_by;
     if (!raw || String(raw).trim() === '') {
-      return currentUserName || 'Người chăm sóc';
+      return 'Người phụ trách';
     }
     const rawStr = String(raw).trim();
     const isUUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(rawStr);
@@ -71,7 +71,7 @@ export default function IncidentDetailScreen({ route, navigation }: any) {
       ) {
         return currentUserName;
       }
-      return currentUserName || `Người chăm sóc (${rawStr.slice(0, 8)})`;
+      return 'Bác sĩ / Người phụ trách';
     }
     return rawStr;
   };
@@ -110,7 +110,8 @@ export default function IncidentDetailScreen({ route, navigation }: any) {
         video_clip_url: mediaVideo,
         thumbnail_url: mediaThumb,
         is_acknowledged: storeInc ? storeInc.is_acknowledged : (params.is_acknowledged ?? false),
-        acknowledged_by: storeInc?.acknowledged_by ?? params.acknowledged_by ?? (storeInc?.is_acknowledged ? operatorName : null),
+        acknowledged_by: storeInc?.acknowledged_by ?? params.acknowledged_by ?? null,
+        acknowledged_by_name: storeInc?.acknowledged_by_name ?? params.acknowledged_by_name ?? null,
         acknowledged_at: storeInc?.acknowledged_at ?? params.acknowledged_at,
         created_at: params.created_at ?? params.time ?? new Date().toISOString(),
       });
