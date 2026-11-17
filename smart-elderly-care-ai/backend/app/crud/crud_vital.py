@@ -290,6 +290,18 @@ class CRUDVital:
                         ))
                     else:
                         # 3. KIỂM TRA CHỈ SỐ ĐƠN LẺ VỚI BỘ LỌC NGỮ CẢNH (CONTEXT-AWARE GATING)
+                        # Đọc ngưỡng cấu hình từ DeviceConfig nếu có
+                        hr_high_limit = 100
+                        hr_low_limit = 50
+                        try:
+                            if dev and dev.config:
+                                if dev.config.hr_threshold_high and dev.config.hr_threshold_high > 60:
+                                    hr_high_limit = dev.config.hr_threshold_high
+                                if dev.config.hr_threshold_low and dev.config.hr_threshold_low > 30:
+                                    hr_low_limit = dev.config.hr_threshold_low
+                        except Exception:
+                            pass
+
                         # A. Nhịp tim bất thường:
                         if hr and hr > 0:
                             if hr >= 140:
@@ -299,22 +311,22 @@ class CRUDVital:
                                     f"Khẩn cấp: Nhịp tim đo được từ {dev_name} tăng vọt nguy hiểm ({hr} bpm)! Nguy cơ nhịp nhanh kịch phát.",
                                     5
                                 ))
-                            elif hr > 120:
+                            elif hr > 120 or hr > hr_high_limit:
                                 # LỌC TẦNG 3: Nếu đang tập thể dục / đi lại và SpO2 tốt >= 95% -> Vận động thể lực bình thường
-                                if is_exercising and spo2 and spo2 >= 95 and hr <= 125:
+                                if is_exercising and spo2 and spo2 >= 95 and hr <= 125 and hr_high_limit >= 120:
                                     logger.info(f"[CRUDVital] Nhịp tim {hr} bpm trong lúc vận động thể dục sinh lý -> Bỏ qua báo động giả.")
                                 else:
                                     alerts_to_create.append((
                                         "HIGH_HEART_RATE",
-                                        "HIGH",
-                                        f"Cảnh báo: Nhịp tim đo được từ {dev_name} tăng cao ({hr} bpm)! Vượt ngưỡng an toàn 120 bpm.",
+                                        "CRITICAL" if hr >= 120 else "HIGH",
+                                        f"Cảnh báo: Nhịp tim đo được từ {dev_name} tăng cao ({hr} bpm)! Vượt ngưỡng an toàn ({hr_high_limit} bpm).",
                                         5
                                     ))
-                            elif hr < 50:
+                            elif hr < hr_low_limit:
                                 alerts_to_create.append((
                                     "LOW_HEART_RATE",
-                                    "HIGH",
-                                    f"Cảnh báo: Nhịp tim đo được từ {dev_name} quá thấp ({hr} bpm)! Dưới ngưỡng an toàn 50 bpm.",
+                                    "CRITICAL" if hr < 45 else "HIGH",
+                                    f"Cảnh báo: Nhịp tim đo được từ {dev_name} quá thấp ({hr} bpm)! Dưới ngưỡng an toàn ({hr_low_limit} bpm).",
                                     5
                                 ))
 
@@ -370,6 +382,32 @@ class CRUDVital:
                                 f"Cảnh báo: Thân nhiệt của cụ đo được từ {dev_name} tăng cao ({temp}°C)! Dấu hiệu sốt cao ở người lớn tuổi.",
                                 15
                             ))
+
+                        # D. Máy trạng thái 4 tầng phân tích loạn nhịp & Cửa sổ trượt 60 phút
+                        try:
+                            from app.services.vitals.vital_state_machine import vital_state_machine, VitalSample
+                            ts_now = (obj.time if (obj.time and obj.time.tzinfo) else datetime.now(timezone.utc)).timestamp()
+                            v_sample = VitalSample(
+                                ts=ts_now,
+                                hr=obj.heart_rate,
+                                spo2=obj.spo2,
+                                bp_sys=obj.bp_systolic,
+                                skin_temp=obj.skin_temp_max,
+                                is_worn=is_worn,
+                                sqi=float(data.get("sqi", 1.0)),
+                                is_exercising=data.get("is_exercising"),
+                                activity_state=activity,
+                            )
+                            st_alert = await vital_state_machine.process_sample(str(uuid_val), v_sample)
+                            if st_alert:
+                                alerts_to_create.append((
+                                    "ARRHYTHMIA_RECURRENT" if st_alert["level"] >= 2 else "ARRHYTHMIA_SUSPECT",
+                                    "CRITICAL" if st_alert["level"] >= 2 else "HIGH",
+                                    st_alert["reason"],
+                                    15  # Cooldown 15 phút
+                                ))
+                        except Exception as e_sm:
+                            logger.warning(f"[CRUDVital] Lỗi VitalStateMachine: {e_sm}")
 
                 # 4. Cảnh báo té ngã từ vòng đeo tay
                 if obj.fall_detected:
@@ -429,6 +467,102 @@ class CRUDVital:
                             except Exception:
                                 if client_ws in alert_clients:
                                     alert_clients.remove(client_ws)
+
+                        # Broadcast tới WebSocket quản lý theo thiết bị
+                        try:
+                            from app.api.websockets.vitals_ws import manager
+                            await manager.broadcast_to_device(str(uuid_val), alert_payload_dict)
+                            if dev and dev.device_id and dev.device_id != str(uuid_val):
+                                await manager.broadcast_to_device(dev.device_id, alert_payload_dict)
+                        except Exception:
+                            pass
+
+                        # Gửi Push Notification (FCM) trực tiếp đến Chủ nhà, Người sở hữu & Thành viên gia đình
+                        try:
+                            from app.models.house import House, HouseMember
+                            from app.models.user import User
+                            from app.services.notification.fcm_service import FCMService
+
+                            target_user_ids = set()
+                            if dev and dev.owner_id:
+                                target_user_ids.add(dev.owner_id)
+
+                            h_id = dev.house_id if dev else None
+                            if h_id:
+                                house_obj = await db.get(House, h_id)
+                                if house_obj and house_obj.owner_id:
+                                    target_user_ids.add(house_obj.owner_id)
+                                mem_res = await db.execute(
+                                    select(HouseMember.user_id).where(HouseMember.house_id == h_id)
+                                )
+                                for m_uid in mem_res.scalars():
+                                    if m_uid:
+                                        target_user_ids.add(m_uid)
+                            elif dev and dev.owner_id:
+                                house_res = await db.execute(
+                                    select(House).where(House.owner_id == dev.owner_id).limit(1)
+                                )
+                                h_row = house_res.scalar_one_or_none()
+                                if h_row:
+                                    target_user_ids.add(h_row.owner_id)
+                                    mem_res = await db.execute(
+                                        select(HouseMember.user_id).where(HouseMember.house_id == h_row.id)
+                                    )
+                                    for m_uid in mem_res.scalars():
+                                        if m_uid:
+                                            target_user_ids.add(m_uid)
+
+                            if target_user_ids:
+                                u_res = await db.execute(
+                                    select(User).where(User.id.in_(target_user_ids), User.is_active.is_(True))
+                                )
+                                house_users = u_res.scalars().all()
+                                fcm_tokens = [u.fcm_token for u in house_users if u.fcm_token]
+
+                                if fcm_tokens:
+                                    fcm = FCMService()
+                                    fcm.initialize()
+
+                                    alert_titles = {
+                                        "HIGH_HEART_RATE": "💓 CẢNH BÁO NHỊP TIM CAO BẤT THƯỜNG",
+                                        "LOW_HEART_RATE": "💓 CẢNH BÁO NHỊP TIM QUÁ THẤP",
+                                        "SUDDEN_HR_SPIKE": "💓 CẢNH BÁO LOẠN NHỊP: TIM TĂNG VỌT",
+                                        "SUDDEN_HR_DROP": "💓 CẢNH BÁO LOẠN NHỊP: TIM TỤT ĐỘT NGỘT",
+                                        "CRITICAL_TRIAD": "🚨 BÁO ĐỘNG ĐỎ: TAM CHỨNG NGUY KỊCH",
+                                        "EXERTION_HYPOXIA": "🚨 CẢNH BÁO NGUY CẤP: QUÁ TẢI TIM PHỔI",
+                                        "FEVER_TACHYCARDIA": "⚠️ CẢNH BÁO: SỐT CAO KÈM TIM NHANH",
+                                        "CARDIO_COLLAPSE": "🚨 BÁO ĐỘNG ĐỎ: NGUY CƠ TRỤY TIM MẠCH",
+                                        "LOW_SPO2": "⚠️ CẢNH BÁO NGUY CẤP: OXY MÁU (SPO2) TỤT SÂU",
+                                        "HIGH_FEVER": "⚠️ CẢNH BÁO: THÂN NHIỆT SỐT CAO",
+                                        "FALL_DETECTED": "🚨 CẢNH BÁO TÉ NGÃ KHẨN CẤP",
+                                        "DEVICE_BATTERY_DEAD": "🪫 VÒNG TAY ĐÃ CẠN PIN (0%)",
+                                        "LOW_BATTERY": "🔋 CẢNH BÁO PIN ĐỒNG HỒ YẾU",
+                                    }
+                                    alert_title = alert_titles.get(alert_type, f"⚠️ CẢNH BÁO SỨC KHỎE ({alert_type})")
+
+                                    fcm_res = fcm.send_alert(
+                                        fcm_tokens=fcm_tokens,
+                                        title=alert_title,
+                                        body=alert_msg,
+                                        data={
+                                            "type": "VITAL_ALERT",
+                                            "incident_id": str(inc.id),
+                                            "device_id": str(uuid_val),
+                                            "device_name": dev_name,
+                                            "alert_type": alert_type,
+                                            "alert_level": alert_level,
+                                            "heart_rate": str(obj.heart_rate or ""),
+                                            "spo2": str(obj.spo2 or ""),
+                                            "skin_temp_max": str(obj.skin_temp_max or ""),
+                                        },
+                                        priority="high",
+                                    )
+                                    logger.info(
+                                        "[CRUDVital] Đã gửi FCM push alert '%s' tới %d thiết bị của chủ nhà/gia đình: %s",
+                                        alert_type, len(fcm_tokens), fcm_res,
+                                    )
+                        except Exception as fcm_err:
+                            logger.warning("[CRUDVital] Lỗi gửi thông báo FCM cho chủ nhà: %s", fcm_err)
             except Exception as e:
                 logger.warning("[CRUDVital] Lỗi kiểm tra sự cố & pin thiết bị: %s", e)
 

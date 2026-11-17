@@ -43,6 +43,7 @@ import HealthDetailScreen from '../features/dashboard/screens/HealthDetailScreen
 import SettingsScreen from '../features/auth/screens/SettingsScreen';
 import AppInfoScreen from '../features/dashboard/screens/AppInfoScreen';
 import MedicationReminderScreen from '../features/dashboard/screens/MedicationReminderScreen';
+import PatientsListScreen from '../features/dashboard/screens/PatientsListScreen';
 import PatientMedicalRecordScreen from '../features/dashboard/screens/PatientMedicalRecordScreen';
 import DoctorTabNavigator from './DoctorTabNavigator';
 import DoctorPatientDetailScreen from '../features/doctor/screens/DoctorPatientDetailScreen';
@@ -209,6 +210,7 @@ export default function AppNavigator() {
             <Stack.Screen name="DoctorPatientDetail" component={DoctorPatientDetailScreen} />
             <Stack.Screen name="DoctorAnalytics" component={DoctorAnalyticsReportScreen} />
             <Stack.Screen name="MedicationReminder" component={MedicationReminderScreen} />
+            <Stack.Screen name="PatientsList" component={PatientsListScreen} />
             <Stack.Screen name="PatientMedicalRecord" component={PatientMedicalRecordScreen} />
             <Stack.Screen name="CameraDetail" component={CameraDetailScreen} />
             <Stack.Screen name="MultiView" component={MultiViewScreen} />

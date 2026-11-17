@@ -7,6 +7,7 @@ import {
   TouchableOpacity,
   Linking,
   Platform,
+  NativeModules,
 } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
@@ -109,6 +110,17 @@ export const HouseShareModal: React.FC<HouseShareModalProps> = ({
       return;
     }
 
+    // 1. Trên Android: Gọi trực tiếp NativeModule để mở app Zalo và chuyển tiếp tin nhắn
+    if (Platform.OS === 'android' && NativeModules.NativeNotificationModule?.openZalo) {
+      try {
+        const opened = await NativeModules.NativeNotificationModule.openZalo(inviteMsg);
+        if (opened) return;
+      } catch (err) {
+        console.warn('[Zalo] Native openZalo failed, falling back:', err);
+      }
+    }
+
+    // 2. Mở qua custom scheme zalo://
     const zaloAppUrl = 'zalo://';
     try {
       const supported = await Linking.canOpenURL(zaloAppUrl);
@@ -117,13 +129,21 @@ export const HouseShareModal: React.FC<HouseShareModalProps> = ({
         return;
       }
     } catch {
-      // canOpenURL có thể bị chặn trên một số phiên bản OS, thử mở trực tiếp
+      // canOpenURL có thể bị chặn trên một số phiên bản OS
     }
 
     try {
       await Linking.openURL(zaloAppUrl);
+      return;
     } catch {
-      // Fallback mở Store nếu máy chưa cài Zalo
+      // Tiếp tục fallback
+    }
+
+    // 3. Fallback mở web chat Zalo hoặc store nếu máy chưa cài Zalo
+    try {
+      await Linking.openURL('https://zalo.me');
+      return;
+    } catch {
       const storeUrl =
         Platform.OS === 'ios'
           ? 'https://apps.apple.com/vn/app/zalo/id579523920'

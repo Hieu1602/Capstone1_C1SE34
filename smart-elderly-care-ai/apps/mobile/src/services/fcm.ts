@@ -1,10 +1,13 @@
 // fcm.ts
 // Firebase Cloud Messaging – xử lý push notification khẩn cấp
-// Còi hú ghi đè chế độ im lặng trên Android / iOS
+// Hiển thị trực tiếp lên thanh thông báo hệ thống (Notification Drawer) và còi hú ghi đè chế độ im lặng trên Android / iOS
 
 import { NativeModules, Platform, Vibration } from 'react-native';
+import AsyncStorage from '@react-native-async-storage/async-storage';
 import Constants, { ExecutionEnvironment } from 'expo-constants';
 import { LocalizedAlert } from '../i18n/LocalizedComponents';
+import { notificationService } from './notificationService';
+import { usersApi } from './api';
 
 type AlertLevel = 'LOW' | 'MEDIUM' | 'HIGH' | 'CRITICAL';
 
@@ -59,7 +62,7 @@ class FCMService {
         announcement: false,
         badge: true,
         carPlay: false,
-        criticalAlert: true,  // iOS: critical alert ghi đè silent mode
+        criticalAlert: true, // iOS: critical alert ghi đè silent mode
         provisional: false,
         sound: true,
       });
@@ -77,7 +80,7 @@ class FCMService {
   }
 
   // ------------------------------------------------------------------
-  // Token Registration
+  // Token Registration & Sync
   // ------------------------------------------------------------------
 
   private async _registerToken(): Promise<void> {
@@ -85,12 +88,45 @@ class FCMService {
     try {
       const token = await messaging().getToken();
       console.log('[FCM] Device token:', token);
+      await this._syncTokenToBackend(token);
 
       messaging().onTokenRefresh(async (newToken: string) => {
         console.log('[FCM] Token refreshed:', newToken);
+        await this._syncTokenToBackend(newToken);
       });
     } catch (err) {
       console.warn('[FCM] Failed to get device token:', err);
+    }
+  }
+
+  private async _syncTokenToBackend(token: string): Promise<void> {
+    if (!token) return;
+    try {
+      await AsyncStorage.setItem('user_fcm_token', token);
+      await usersApi.updateFcmToken(token);
+      console.log('[FCM] Đã đồng bộ FCM Token lên máy chủ backend thành công.');
+    } catch (e) {
+      // Có thể người dùng chưa đăng nhập, token vẫn được lưu trong AsyncStorage để gửi khi login
+      console.log('[FCM] Lưu token cục bộ (sẽ đồng bộ khi đăng nhập).');
+    }
+  }
+
+  /**
+   * Đồng bộ lại FCM token khi người dùng đăng nhập thành công
+   */
+  async syncTokenOnLogin(): Promise<void> {
+    try {
+      let token = await AsyncStorage.getItem('user_fcm_token');
+      if (!token && messaging && !isExpoGo && hasNativeFirebase) {
+        token = await messaging().getToken();
+        if (token) await AsyncStorage.setItem('user_fcm_token', token);
+      }
+      if (token) {
+        await usersApi.updateFcmToken(token);
+        console.log('[FCM] Đã cập nhật fcm_token sau khi đăng nhập.');
+      }
+    } catch (e) {
+      console.warn('[FCM] Lỗi cập nhật fcm_token sau đăng nhập:', e);
     }
   }
 
@@ -107,15 +143,34 @@ class FCMService {
 
           const { notification, data } = remoteMessage;
           const level: AlertLevel = (data?.level as AlertLevel) || 'HIGH';
+          const title = notification?.title || data?.title || '🚨 Cảnh báo SmartCare AI';
+          const body = notification?.body || data?.body || data?.message || 'Phát hiện sự cố bất thường!';
 
+          // 1. Luôn bắn thông báo lên thanh trạng thái (Notification Drawer) của điện thoại
+          await notificationService.triggerEmergencyNotification({
+            title,
+            body,
+            data,
+          });
+
+          // 2. Rung điện thoại theo mức độ cảnh báo
           if (level === 'CRITICAL' || level === 'HIGH') {
             this._triggerVibrationPattern(level);
           }
 
+          // 3. Hiển thị hộp thoại trong app
           LocalizedAlert.alert(
-            notification?.title || 'Cảnh báo khẩn cấp',
-            notification?.body || 'Phát hiện sự cố bất thường!',
-            [{ text: 'Đã hiểu', style: 'default' }]
+            title,
+            body,
+            [
+              {
+                text: 'Đã hiểu / Tắt chuông',
+                style: 'default',
+                onPress: () => {
+                  notificationService.stopEmergencyAlarm();
+                },
+              },
+            ]
           );
         },
       );
@@ -127,9 +182,9 @@ class FCMService {
   private _triggerVibrationPattern(level: AlertLevel): void {
     if (Platform.OS === 'web') return;
     if (level === 'CRITICAL') {
-      Vibration.vibrate([0, 1000, 500, 1000, 500, 1000], false);
+      Vibration.vibrate([0, 1000, 400, 1000, 400, 1000, 800], true);
     } else {
-      Vibration.vibrate([0, 500, 200, 500], false);
+      Vibration.vibrate([0, 800, 400, 800], true);
     }
   }
 
@@ -143,6 +198,17 @@ class FCMService {
       messaging().setBackgroundMessageHandler(
         async (remoteMessage: any) => {
           console.log('[FCM] Background message:', remoteMessage);
+          const { notification, data } = remoteMessage;
+          const title = notification?.title || data?.title || '🚨 Cảnh báo SmartCare AI';
+          const body = notification?.body || data?.body || data?.message || 'Phát hiện sự cố bất thường!';
+
+          // Bắn thông báo lên thanh trạng thái khi app ở chế độ chạy nền
+          await notificationService.triggerEmergencyNotification({
+            title,
+            body,
+            data,
+          });
+
           return Promise.resolve();
         },
       );
@@ -160,28 +226,6 @@ class FCMService {
       }
     } catch (e) {
       console.warn('[FCM] Error getting initial notification:', e);
-    }
-  }
-
-  // ------------------------------------------------------------------
-  // Alert Trigger
-  // ------------------------------------------------------------------
-
-  private _triggerAlert(level: AlertLevel, message: string): void {
-    if (level === 'CRITICAL' || level === 'HIGH') {
-      if (Platform.OS !== 'web') {
-        Vibration.vibrate([0, 500, 200, 500, 200, 500], false);
-      }
-
-      LocalizedAlert.alert(
-        level === 'CRITICAL' ? '🚨 KHẨN CẤP!' : '⚠️ CẢNH BÁO!',
-        message,
-        [
-          { text: 'Xem chi tiết', style: 'default' },
-          { text: 'Đã xử lý', style: 'cancel' },
-        ],
-        { cancelable: false },
-      );
     }
   }
 

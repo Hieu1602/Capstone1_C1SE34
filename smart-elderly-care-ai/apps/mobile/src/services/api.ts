@@ -23,7 +23,13 @@ const getBaseUrl = (): string => {
     return `${protocol}://${resolvedHost}:8000/api/v1`;
   }
 
-  // 2. Tự động nhận diện IP máy tính từ Expo Metro host (kết nối trực tiếp điện thoại thật qua LAN Wi-Fi mà không sợ đổi IP)
+  // 2. Biến môi trường EXPO_PUBLIC_API_URL (ưu tiên cao nhất khi build APK hoặc cấu hình đường dẫn công khai)
+  const envUrl = process.env.EXPO_PUBLIC_API_URL;
+  if (envUrl && envUrl.trim().length > 0) {
+    return envUrl.trim();
+  }
+
+  // 3. Tự động nhận diện IP máy tính từ Expo Metro host
   const debuggerHost =
     Constants.expoConfig?.hostUri ||
     (Constants as any).manifest2?.extra?.expoClient?.hostUri ||
@@ -34,12 +40,6 @@ const getBaseUrl = (): string => {
     if (hostIp && !hostIp.includes('exp.direct') && hostIp !== 'localhost' && hostIp !== '127.0.0.1') {
       return `http://${hostIp}:8000/api/v1`;
     }
-  }
-
-  // 3. Biến môi trường EXPO_PUBLIC_API_URL (ví dụ build APK production hoặc cấu hình tĩnh)
-  const envUrl = process.env.EXPO_PUBLIC_API_URL;
-  if (envUrl && envUrl.trim().length > 0) {
-    return envUrl.trim();
   }
 
   // 4. Fallback về máy chủ AWS EC2
@@ -240,6 +240,10 @@ export const usersApi = {
   uploadAvatarBase64: (base64: string) =>
     api.post('/users/me/avatar', { avatar_base64: base64 }),
   deleteAvatar: () => api.delete('/users/me/avatar'),
+  deleteMe: (data: { password?: string; reason?: string }) =>
+    api.delete('/users/me', { data }),
+  updateFcmToken: (fcm_token: string) =>
+    api.patch('/users/me/fcm-token', { fcm_token }),
   getNotificationPreferences: () =>
     api.get('/users/me/notification-preferences'),
   updateNotificationPreferences: (preferences: {
@@ -313,6 +317,8 @@ export const remindersApi = {
 // 4. Patients & Medical Record API
 export const patientApi = {
   list: () => api.get<any[]>('/patients'),
+  create: (data: any) => api.post('/patients', data),
+  delete: (patientId: string | number) => api.delete(`/patients/${patientId}`),
   getMedicalRecord: (patientId: number | string = 1, target_date?: string) =>
     api.get(`/patients/${patientId}/medical-record`, { params: { target_date } }),
   updateMedicalRecord: (patientId: number | string = 1, data: any) =>
