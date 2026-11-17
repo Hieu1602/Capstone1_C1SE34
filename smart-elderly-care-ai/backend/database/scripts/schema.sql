@@ -26,6 +26,7 @@ DROP TABLE IF EXISTS "appointment_reminders" CASCADE;
 DROP TABLE IF EXISTS "appointments" CASCADE;
 DROP TABLE IF EXISTS "chat_messages" CASCADE;
 DROP TABLE IF EXISTS "chat_sessions" CASCADE;
+DROP TABLE IF EXISTS "camera_recordings" CASCADE;
 DROP TABLE IF EXISTS "incidents" CASCADE;
 DROP TABLE IF EXISTS "vital_signs" CASCADE;
 DROP TABLE IF EXISTS "device_configs" CASCADE;
@@ -213,6 +214,21 @@ CREATE TABLE "incidents" (
     "notes" TEXT NULL,
     "created_at" TIMESTAMPTZ NOT NULL DEFAULT now(),
     CONSTRAINT pk_incidents PRIMARY KEY (id)
+);
+
+-- Bảng camera_recordings
+CREATE TABLE "camera_recordings" (
+    "id" UUID NOT NULL,
+    "device_id" UUID NOT NULL,
+    "object_key" VARCHAR(255) NOT NULL,
+    "kind" VARCHAR(20) NOT NULL,
+    "started_at" TIMESTAMPTZ NOT NULL,
+    "duration" DOUBLE PRECISION NOT NULL,
+    "size_bytes" BIGINT NOT NULL,
+    "incident_id" UUID NULL,
+    CONSTRAINT pk_camera_recordings PRIMARY KEY (id),
+    CONSTRAINT uq_camera_recordings_object_key UNIQUE (object_key),
+    CONSTRAINT fk_camera_recordings_device_id FOREIGN KEY (device_id) REFERENCES devices(id) ON DELETE CASCADE
 );
 
 -- Bảng chat_sessions
@@ -428,6 +444,8 @@ CREATE INDEX ix_vital_signs_time_desc ON public.vital_signs USING btree ("time" 
 CREATE INDEX ix_vital_signs_device_time_desc ON public.vital_signs USING btree (device_id, "time" DESC);
 CREATE INDEX ix_incidents_created_at ON public.incidents USING btree (created_at);
 CREATE INDEX ix_incidents_device_id ON public.incidents USING btree (device_id);
+CREATE INDEX ix_camera_recordings_incident_id ON public.camera_recordings USING btree (incident_id);
+CREATE INDEX ix_camera_recordings_timeline ON public.camera_recordings USING btree (device_id, started_at, id);
 CREATE INDEX ix_chat_sessions_created_at ON public.chat_sessions USING btree (created_at);
 CREATE INDEX ix_chat_sessions_user_id ON public.chat_sessions USING btree (user_id);
 CREATE INDEX ix_chat_messages_created_at ON public.chat_messages USING btree (created_at);
