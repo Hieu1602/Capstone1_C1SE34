@@ -37,10 +37,18 @@ import {
     LanguageSettingsModal,
     AppearanceSettingsModal,
 } from "../components/settings";
+import {
+    ProfileInfoModal,
+    ChangePasswordModal,
+    LogoutConfirmModal,
+    AvatarPickerModal,
+} from "../components/profile";
+import { useProfileManager } from "../hooks/useProfileManager";
 
 const FONT_SCALE_LEVELS = [0.85, 1, 1.15, 1.3, 1.5];
 
 export default function SettingsScreen({ navigation, route }: any) {
+    const profileMgr = useProfileManager(navigation, route);
     const {
         isDarkMode,
         setDarkMode,
@@ -127,6 +135,8 @@ export default function SettingsScreen({ navigation, route }: any) {
             setFontSizeVisible(true);
         } else if (initialModal === "appearance") {
             setAppearanceVisible(true);
+        } else if (initialModal === "profile") {
+            profileMgr.setUserMenuVisible(true);
         }
         navigation?.setParams?.({
             initialModal: undefined,
@@ -309,10 +319,7 @@ export default function SettingsScreen({ navigation, route }: any) {
                                     ]}
                                     activeOpacity={0.8}
                                     onPress={() => {
-                                        navigation.navigate("Main", {
-                                            screen: "Profile",
-                                            params: { openUserMenu: true },
-                                        });
+                                        profileMgr.setUserMenuVisible(true);
                                     }}
                                 >
                                     <View style={styles.settingsLeft}>
@@ -856,6 +863,46 @@ export default function SettingsScreen({ navigation, route }: any) {
                         setGeneralSettingsVisible(true);
                     })
                 }
+            />
+
+            {/* Profile Modals */}
+            <ProfileInfoModal
+                visible={profileMgr.isUserMenuVisible}
+                isDarkMode={isDarkMode}
+                displayName={profileMgr.resolvedDisplayName}
+                phone={profileMgr.profilePhone}
+                avatarUri={profileMgr.avatarUri}
+                onClose={() => profileMgr.setUserMenuVisible(false)}
+                onPickFromCamera={profileMgr.pickAvatarFromCamera}
+                onPickFromLibrary={profileMgr.pickAvatarFromLibrary}
+                onChangePasswordPress={() =>
+                    profileMgr.setChangePasswordVisible(true)
+                }
+                onLogoutPress={() => profileMgr.setLogoutConfirmVisible(true)}
+                onSaveName={profileMgr.handleSaveName}
+                onSavePhone={profileMgr.handleSavePhone}
+            />
+
+            <ChangePasswordModal
+                visible={profileMgr.isChangePasswordVisible}
+                isDarkMode={isDarkMode}
+                onClose={() => profileMgr.setChangePasswordVisible(false)}
+                onSubmit={profileMgr.handleChangePassword}
+            />
+
+            <LogoutConfirmModal
+                visible={profileMgr.isLogoutConfirmVisible}
+                isDarkMode={isDarkMode}
+                onClose={() => profileMgr.setLogoutConfirmVisible(false)}
+                onConfirm={profileMgr.performLogout}
+            />
+
+            <AvatarPickerModal
+                visible={profileMgr.isAvatarPickerVisible}
+                isDarkMode={isDarkMode}
+                onClose={() => profileMgr.setAvatarPickerVisible(false)}
+                onPickFromCamera={profileMgr.pickAvatarFromCamera}
+                onPickFromLibrary={profileMgr.pickAvatarFromLibrary}
             />
         </SafeAreaView>
     );
