@@ -52,8 +52,15 @@ async def list_patients(
     from app.models.elderly_profile import ElderlyProfile
     from app.models.house import House, HouseMember
     from sqlalchemy import select, or_
+    from sqlalchemy.orm import joinedload, selectinload
 
-    query = select(ElderlyProfile)
+    query = (
+        select(ElderlyProfile)
+        .options(
+            joinedload(ElderlyProfile.house),
+            selectinload(ElderlyProfile.devices),
+        )
+    )
 
     if current_user:
         if current_user.role == "admin":

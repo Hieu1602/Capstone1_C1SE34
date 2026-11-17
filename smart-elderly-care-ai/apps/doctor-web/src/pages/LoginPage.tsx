@@ -164,13 +164,13 @@ export const LoginPage: React.FC = () => {
 
   return (
     <DoctorAuthSplitShell>
-      <div>
+      <div className="flex flex-col items-center text-center">
         <h1 className="font-heading text-2xl font-extrabold tracking-tight text-[#1D4ED8]">Đăng nhập</h1>
         <p className="mt-0.5 text-sm font-bold text-[#0F172A]">Cổng Y Tế Bác Sĩ Gia Đình</p>
         <p className="mt-1.5 text-xs leading-relaxed text-[#475569]">
           Hệ thống Giám sát &amp; Quản lý Chăm sóc Sức khỏe Người cao tuổi AI
         </p>
-        <div className="mt-3 inline-flex items-center space-x-1.5 rounded-full border border-blue-300/80 bg-white/85 px-3 py-1 text-[11px] font-semibold text-[#1D4ED8] shadow-xs">
+        <div className="mt-3 inline-flex items-center justify-center space-x-1.5 rounded-full border border-blue-300/80 bg-white/85 px-3 py-1 text-[11px] font-semibold text-[#1D4ED8] shadow-xs">
           <HeartPulse className="h-3.5 w-3.5 text-[#2563EB]" />
           <span>Chăm sóc Lâm sàng &amp; Theo dõi Từ xa</span>
         </div>

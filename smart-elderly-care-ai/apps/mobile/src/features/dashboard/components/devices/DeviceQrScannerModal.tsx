@@ -1,26 +1,31 @@
 import React, { useEffect, useRef, useState } from 'react';
-import { View, StyleSheet, TouchableOpacity, Modal, Animated } from 'react-native';
+import { View, StyleSheet, TouchableOpacity, Modal, Animated, Linking } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
-import { LocalizedText } from '../../../../i18n/LocalizedComponents';
+import { CameraView, useCameraPermissions, type BarcodeScanningResult } from 'expo-camera';
+import { LocalizedAlert, LocalizedText } from '../../../../i18n/LocalizedComponents';
+import { parseDeviceQr } from '../../utils/deviceQr';
 
 interface DeviceQrScannerModalProps {
   visible: boolean;
   onClose: () => void;
-  onSimulateScan: (type: 'camera' | 'watch') => void;
+  onScan: (type: 'camera' | 'watch', deviceId: string) => void;
 }
 
 export const DeviceQrScannerModal: React.FC<DeviceQrScannerModalProps> = ({
   visible,
   onClose,
-  onSimulateScan,
+  onScan,
 }) => {
   const [isFlashOn, setIsFlashOn] = useState(false);
+  const [scanned, setScanned] = useState(false);
+  const [permission, requestPermission] = useCameraPermissions();
   const laserAnim = useRef(new Animated.Value(0)).current;
 
   useEffect(() => {
     if (visible) {
-      Animated.loop(
+      setScanned(false);
+      const animation = Animated.loop(
         Animated.sequence([
           Animated.timing(laserAnim, {
             toValue: 220,
@@ -33,11 +38,29 @@ export const DeviceQrScannerModal: React.FC<DeviceQrScannerModalProps> = ({
             useNativeDriver: true,
           }),
         ])
-      ).start();
+      );
+      animation.start();
+      return () => animation.stop();
     } else {
+      setIsFlashOn(false);
       laserAnim.setValue(0);
     }
-  }, [visible]);
+  }, [laserAnim, visible]);
+
+  const handleBarcodeScanned = ({ data, type }: BarcodeScanningResult) => {
+    setScanned(true);
+    const device = parseDeviceQr(data, type);
+    if (device) {
+      onScan(device.type, device.deviceId);
+      return;
+    }
+
+    LocalizedAlert.alert(
+      'Mã thiết bị không hợp lệ',
+      'Hãy quét mã vạch S/N trên tem Tapo hoặc mã QR của thiết bị SECA/BLE.',
+      [{ text: 'Quét lại', onPress: () => setScanned(false) }]
+    );
+  };
 
   return (
     <Modal
@@ -72,6 +95,33 @@ export const DeviceQrScannerModal: React.FC<DeviceQrScannerModalProps> = ({
           {/* Viewfinder Khung quét */}
           <View style={styles.qrViewfinderWrapper}>
             <View style={styles.qrViewfinder}>
+              {permission?.granted ? (
+                <CameraView
+                  style={StyleSheet.absoluteFill}
+                  facing="back"
+                  enableTorch={isFlashOn}
+                  barcodeScannerSettings={{ barcodeTypes: ['qr', 'code128'] }}
+                  onBarcodeScanned={scanned ? undefined : handleBarcodeScanned}
+                />
+              ) : (
+                <View style={styles.permissionMessage}>
+                  <Ionicons name="camera-outline" size={42} color="#94A3B8" />
+                  <LocalizedText style={styles.permissionText}>
+                    Cần quyền camera để quét mã thiết bị
+                  </LocalizedText>
+                  {permission && (
+                    <TouchableOpacity
+                      style={styles.permissionButton}
+                      onPress={permission.canAskAgain ? requestPermission : Linking.openSettings}
+                    >
+                      <LocalizedText style={styles.permissionButtonText}>
+                        {permission.canAskAgain ? 'Cho phép camera' : 'Mở cài đặt'}
+                      </LocalizedText>
+                    </TouchableOpacity>
+                  )}
+                </View>
+              )}
+
               {/* 4 Góc khung quét */}
               <View style={[styles.corner, styles.cornerTL]} />
               <View style={[styles.corner, styles.cornerTR]} />
@@ -88,12 +138,14 @@ export const DeviceQrScannerModal: React.FC<DeviceQrScannerModalProps> = ({
                 ]}
               />
 
-              <Ionicons name="scan-outline" size={80} color="rgba(255,255,255,0.2)" />
+              {!permission && (
+                <Ionicons name="scan-outline" size={80} color="rgba(255,255,255,0.2)" />
+              )}
             </View>
 
             <LocalizedText style={styles.qrGuideText}>
-              Căn chỉnh mã QR ở mặt đáy Camera{' '}
-              <LocalizedText style={{ fontWeight: 'bold', color: '#38BDF8' }}>SECA_001</LocalizedText> hoặc mặt sau{' '}
+              Căn chỉnh mã QR hoặc mã vạch{' '}
+              <LocalizedText style={{ fontWeight: 'bold', color: '#38BDF8' }}>S/N của Camera Tapo</LocalizedText> vào khung; hoặc quét mã mặt sau{' '}
               <LocalizedText style={{ fontWeight: 'bold', color: '#34D399' }}>Vòng đeo tay BLE</LocalizedText> vào trong khung hình.
             </LocalizedText>
           </View>
@@ -104,7 +156,7 @@ export const DeviceQrScannerModal: React.FC<DeviceQrScannerModalProps> = ({
             <View style={styles.qrSimRow}>
               <TouchableOpacity
                 style={[styles.qrSimBtn, { backgroundColor: '#EA580C' }]}
-                onPress={() => onSimulateScan('camera')}
+                onPress={() => onScan('camera', `SECA_${Date.now()}`)}
               >
                 <Ionicons name="videocam" size={18} color="#FFF" />
                 <LocalizedText style={styles.qrSimBtnText}>Quét Camera SECA_001</LocalizedText>
@@ -112,7 +164,7 @@ export const DeviceQrScannerModal: React.FC<DeviceQrScannerModalProps> = ({
 
               <TouchableOpacity
                 style={[styles.qrSimBtn, { backgroundColor: '#059669' }]}
-                onPress={() => onSimulateScan('watch')}
+                onPress={() => onScan('watch', `BLE_BAND_${Date.now()}`)}
               >
                 <Ionicons name="watch" size={18} color="#FFF" />
                 <LocalizedText style={styles.qrSimBtnText}>Quét Vòng Tay BLE</LocalizedText>
@@ -218,6 +270,27 @@ const styles = StyleSheet.create({
     shadowOffset: { width: 0, height: 0 },
     shadowOpacity: 0.9,
     shadowRadius: 8,
+  },
+  permissionMessage: {
+    alignItems: 'center',
+    paddingHorizontal: 16,
+    gap: 8,
+  },
+  permissionText: {
+    color: '#CBD5E1',
+    fontSize: 12,
+    textAlign: 'center',
+  },
+  permissionButton: {
+    backgroundColor: '#0284C7',
+    borderRadius: 8,
+    paddingHorizontal: 12,
+    paddingVertical: 8,
+  },
+  permissionButtonText: {
+    color: '#FFF',
+    fontSize: 12,
+    fontWeight: '700',
   },
   qrGuideText: {
     color: '#94A3B8',

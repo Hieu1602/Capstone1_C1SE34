@@ -26,6 +26,7 @@ DROP TABLE IF EXISTS "appointment_reminders" CASCADE;
 DROP TABLE IF EXISTS "appointments" CASCADE;
 DROP TABLE IF EXISTS "chat_messages" CASCADE;
 DROP TABLE IF EXISTS "chat_sessions" CASCADE;
+DROP TABLE IF EXISTS "camera_recordings" CASCADE;
 DROP TABLE IF EXISTS "incidents" CASCADE;
 DROP TABLE IF EXISTS "vital_signs" CASCADE;
 DROP TABLE IF EXISTS "device_configs" CASCADE;
@@ -213,6 +214,21 @@ CREATE TABLE "incidents" (
     "notes" TEXT NULL,
     "created_at" TIMESTAMPTZ NOT NULL DEFAULT now(),
     CONSTRAINT pk_incidents PRIMARY KEY (id)
+);
+
+-- Bảng camera_recordings
+CREATE TABLE "camera_recordings" (
+    "id" UUID NOT NULL,
+    "device_id" UUID NOT NULL,
+    "object_key" VARCHAR(255) NOT NULL,
+    "kind" VARCHAR(20) NOT NULL,
+    "started_at" TIMESTAMPTZ NOT NULL,
+    "duration" DOUBLE PRECISION NOT NULL,
+    "size_bytes" BIGINT NOT NULL,
+    "incident_id" UUID NULL,
+    CONSTRAINT pk_camera_recordings PRIMARY KEY (id),
+    CONSTRAINT uq_camera_recordings_object_key UNIQUE (object_key),
+    CONSTRAINT fk_camera_recordings_device_id FOREIGN KEY (device_id) REFERENCES devices(id) ON DELETE CASCADE
 );
 
 -- Bảng chat_sessions
@@ -424,13 +440,18 @@ CREATE INDEX ix_devices_owner_id ON public.devices USING btree (owner_id);
 CREATE INDEX ix_device_configs_configured_by_user_id ON public.device_configs USING btree (configured_by_user_id);
 CREATE INDEX ix_vital_signs_device_id ON public.vital_signs USING btree (device_id);
 CREATE INDEX ix_vital_signs_time ON public.vital_signs USING btree ("time");
+CREATE INDEX ix_vital_signs_time_desc ON public.vital_signs USING btree ("time" DESC);
+CREATE INDEX ix_vital_signs_device_time_desc ON public.vital_signs USING btree (device_id, "time" DESC);
 CREATE INDEX ix_incidents_created_at ON public.incidents USING btree (created_at);
 CREATE INDEX ix_incidents_device_id ON public.incidents USING btree (device_id);
+CREATE INDEX ix_camera_recordings_incident_id ON public.camera_recordings USING btree (incident_id);
+CREATE INDEX ix_camera_recordings_timeline ON public.camera_recordings USING btree (device_id, started_at, id);
 CREATE INDEX ix_chat_sessions_created_at ON public.chat_sessions USING btree (created_at);
 CREATE INDEX ix_chat_sessions_user_id ON public.chat_sessions USING btree (user_id);
 CREATE INDEX ix_chat_messages_created_at ON public.chat_messages USING btree (created_at);
 CREATE INDEX ix_chat_messages_session_id ON public.chat_messages USING btree (session_id);
 CREATE INDEX ix_appointments_doctor_id ON public.appointments USING btree (doctor_id);
+CREATE INDEX ix_appointments_scheduled_at_desc ON public.appointments USING btree (scheduled_at DESC);
 CREATE INDEX ix_appointments_doctor_time ON public.appointments USING btree (doctor_id, scheduled_at);
 CREATE INDEX ix_appointments_house_id ON public.appointments USING btree (house_id);
 CREATE INDEX ix_appointments_parent_recurring_id ON public.appointments USING btree (parent_recurring_id);

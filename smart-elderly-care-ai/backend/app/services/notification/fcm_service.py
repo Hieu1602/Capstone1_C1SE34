@@ -107,16 +107,19 @@ class FCMService:
 
             notification = messaging.Notification(title=title, body=body)
 
-            # Android config: high priority để ghi đè silent/DND mode
+            # Android config: high priority để ghi đè silent/DND mode, phát chuông chuẩn của hệ thống và cho phép xóa
             android_config = messaging.AndroidConfig(
                 priority="high",
                 notification=messaging.AndroidNotification(
                     title=title,
                     body=body,
-                    sound="alert_siren",  # Custom sound trong app
+                    sound="default",
                     channel_id="emergency_alerts",
                     priority="max",
                     visibility="PUBLIC",
+                    default_sound=True,
+                    default_vibrate_timings=True,
+                    sticky=False,
                 ),
             )
 

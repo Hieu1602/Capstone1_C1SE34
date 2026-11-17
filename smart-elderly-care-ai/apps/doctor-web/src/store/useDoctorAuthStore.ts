@@ -4,6 +4,8 @@
 import { create } from 'zustand';
 import { DoctorUser } from '../types';
 import { authApi } from '../services/api';
+import { doctorWebSocket } from '../services/websocket';
+import { useDoctorDataStore } from './useDoctorDataStore';
 
 interface DoctorAuthState {
   token: string | null;
@@ -70,9 +72,12 @@ export const useDoctorAuthStore = create<DoctorAuthState>((set) => ({
   },
 
   logout: () => {
-    authApi.logout().catch(() => {});
-    localStorage.removeItem('seca_doctor_token');
-    localStorage.removeItem('seca_doctor_user');
+    const currentUser = useDoctorAuthStore.getState().user;
+    try {
+      doctorWebSocket.disconnect();
+      useDoctorDataStore.getState().clearCache();
+    } catch {}
+    authApi.logout(currentUser?.full_name, currentUser?.role || 'doctor').catch(() => {});
     set({ token: null, user: null, isAuthenticated: false });
   },
 }));

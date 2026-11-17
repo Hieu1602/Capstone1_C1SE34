@@ -4,7 +4,7 @@ from typing import TYPE_CHECKING
 import uuid
 from datetime import datetime
 
-from sqlalchemy import DateTime, Float, ForeignKey, Integer, String
+from sqlalchemy import DateTime, Float, ForeignKey, Integer, String, Index, text
 from sqlalchemy.dialects.postgresql import UUID
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 from sqlalchemy.sql import func
@@ -23,6 +23,10 @@ class VitalSign(Base):
     """
 
     __tablename__ = "vital_signs"
+    __table_args__ = (
+        Index("ix_vital_signs_time_desc", text('"time" DESC')),
+        Index("ix_vital_signs_device_time_desc", "device_id", text('"time" DESC')),
+    )
 
     id: Mapped[uuid.UUID] = mapped_column(
         UUID(as_uuid=True), primary_key=True, default=uuid.uuid4

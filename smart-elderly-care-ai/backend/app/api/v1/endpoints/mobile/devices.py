@@ -24,6 +24,7 @@ from app.schemas.device import (
     DeviceStatus,
     DeviceUpdate,
 )
+from app.schemas.house import HouseCreate
 
 router = APIRouter()
 
@@ -77,16 +78,32 @@ async def register_device(
             detail=f"Mã thiết bị '{device_in.device_id}' đã được đăng ký trên hệ thống.",
         )
 
-    if not device_in.house_id:
+    if device_in.house_id:
+        house = await crud_house.get_by_id(db, id=device_in.house_id)
+        if not house:
+            raise HTTPException(
+                status_code=status.HTTP_404_NOT_FOUND,
+                detail="Căn nhà không tồn tại.",
+            )
+    else:
         house = await crud_house.get_or_create_default_house(db, owner_id=current_user.id)
         if not house:
-            from app.models.house import House
-            house = House(name="Nhà của tôi", owner_id=current_user.id)
-            db.add(house)
-            await db.flush()
+            house = await crud_house.create(
+                db,
+                owner_id=current_user.id,
+                obj_in=HouseCreate(name="Nhà của tôi"),
+            )
         device_in.house_id = house.id
 
-    return await crud_device.create(db, owner_id=current_user.id, obj_in=device_in)
+    if house.owner_id != current_user.id:
+        permissions = await crud_house.get_user_permissions(db, house=house, user=current_user)
+        if not permissions.get("can_manage_devices", False):
+            raise HTTPException(
+                status_code=status.HTTP_403_FORBIDDEN,
+                detail="Bạn không có quyền thêm thiết bị vào căn nhà này.",
+            )
+
+    return await crud_device.create(db, owner_id=house.owner_id, obj_in=device_in)
 
 
 @router.get("/{device_id}", response_model=DeviceOut)

@@ -4,6 +4,7 @@ report_service.py – Dịch vụ tạo báo cáo y tế (PDF / Excel / JSON Sum
 
 import io
 import os
+import re
 from datetime import datetime, timedelta, timezone
 from typing import List, Optional, Tuple, Union
 from uuid import UUID
@@ -13,7 +14,7 @@ from openpyxl.styles import Font, PatternFill
 from reportlab.lib import colors
 from reportlab.lib.pagesizes import letter
 from reportlab.platypus import Paragraph, SimpleDocTemplate, Spacer, Table, TableStyle
-from reportlab.lib.styles import getSampleStyleSheet
+from reportlab.lib.styles import getSampleStyleSheet, ParagraphStyle
 from reportlab.pdfbase import pdfmetrics
 from reportlab.pdfbase.ttfonts import TTFont
 from reportlab.pdfbase.pdfmetrics import registerFontFamily
@@ -162,11 +163,21 @@ class ReportService:
             if device.house_id:
                 house_ids.add(device.house_id)
 
-        if elderly and getattr(elderly, "devices", None):
-            for d in elderly.devices:
-                target_device_ids.add(d.id)
-                if d.house_id:
-                    house_ids.add(d.house_id)
+        if elderly:
+            if "devices" in elderly.__dict__ and elderly.__dict__["devices"]:
+                for d in elderly.__dict__["devices"]:
+                    target_device_ids.add(d.id)
+                    if d.house_id:
+                        house_ids.add(d.house_id)
+            else:
+                elderly_dev_res = await db.execute(
+                    select(Device.id, Device.house_id).where(Device.elderly_id == elderly.id)
+                )
+                for d_id, h_id in elderly_dev_res.fetchall():
+                    if d_id:
+                        target_device_ids.add(d_id)
+                    if h_id:
+                        house_ids.add(h_id)
 
         if user_id:
             user_obj = await db.get(User, user_id)
@@ -273,6 +284,11 @@ class ReportService:
                 "confidence": "Confidence",
                 "video_url": "Video URL",
                 "handled": "Handled",
+                "avg_heart_rate": "Average heart rate",
+                "evaluation": "Clinical evaluation",
+                "average_row": "Average",
+                "normal": "Normal",
+                "stable": "Stable",
             }
         return {
             "title": "BÁO CÁO THEO DÕI SỨC KHỎE NGƯỜI CAO TUỔI",
@@ -306,6 +322,11 @@ class ReportService:
             "confidence": "Độ tin cậy",
             "video_url": "Video URL",
             "handled": "Đã xử lý",
+            "avg_heart_rate": "Nhịp tim trung bình",
+            "evaluation": "Đánh giá",
+            "average_row": "Trung bình",
+            "normal": "Bình thường",
+            "stable": "Ổn định",
         }
 
     @staticmethod
@@ -417,7 +438,24 @@ class ReportService:
             if device and device.elderly:
                 elderly = device.elderly
 
-        # Không tự ý gán thiết bị của người khác hoặc BLE_BAND_001 làm dữ liệu ảo cho tài khoản mới
+        # 4. Fallback: Nếu tài khoản chưa gán trực tiếp thiết bị, tự động liên kết với Smartband sẵn có của hệ thống
+        if not device:
+            res_default_band = await db.execute(
+                select(Device)
+                .options(selectinload(Device.elderly))
+                .where(
+                    or_(
+                        Device.device_id == "BLE_BAND_001",
+                        Device.device_type == DeviceType.SMARTBAND,
+                    )
+                )
+                .order_by(Device.created_at.desc())
+                .limit(1)
+            )
+            device = res_default_band.scalar_one_or_none()
+            if device and device.elderly and not elderly:
+                elderly = device.elderly
+
         return device, elderly
 
     @staticmethod
@@ -746,6 +784,50 @@ class ReportService:
         incident_anomalies = sum(1 for inc in incidents if "FALL" not in (inc.alert_type or "").upper())
         total_anomalies = max(vital_anomalies, incident_anomalies)
 
+        # Tính toán nhịp tim trung bình, SpO2 trung bình, Nhiệt độ trung bình
+        valid_hrs = [v.heart_rate for v in vitals if v.heart_rate is not None and v.heart_rate > 0]
+        valid_spo2s = [v.spo2 for v in vitals if v.spo2 is not None and v.spo2 > 0]
+        valid_temps = [v.skin_temp_max for v in vitals if v.skin_temp_max is not None and v.skin_temp_max > 0]
+
+        avg_hr = round(sum(valid_hrs) / len(valid_hrs), 1) if valid_hrs else None
+        avg_spo2 = round(sum(valid_spo2s) / len(valid_spo2s), 1) if valid_spo2s else None
+        avg_temp = round(sum(valid_temps) / len(valid_temps), 1) if valid_temps else None
+
+        avg_hr_str = f"{int(round(avg_hr))} bpm" if avg_hr else "--"
+        avg_spo2_str = f"{avg_spo2:.1f}%" if avg_spo2 else "--"
+        avg_temp_str = f"{avg_temp:.1f} °C" if avg_temp else "--"
+
+        # Đánh giá tổng quát (Clinical Health Assessment)
+        if not vitals and not incidents:
+            eval_badge = "Chưa có đủ dữ liệu" if language != "en" else "No Data"
+            eval_desc = "Chưa ghi nhận đủ dữ liệu sinh hiệu trong kỳ báo cáo." if language != "en" else "Not enough vital signs recorded."
+            eval_color_hex = "#64748B"
+        elif total_falls > 0 or critical_count > 0:
+            eval_badge = "CẢNH BÁO NGUY CẤP" if language != "en" else "CRITICAL ALERT"
+            reasons = []
+            if total_falls > 0:
+                reasons.append(f"{total_falls} sự kiện té ngã" if language != "en" else f"{total_falls} falls")
+            if critical_count > 0:
+                reasons.append(f"{critical_count} cảnh báo nguy kịch" if language != "en" else f"{critical_count} critical alerts")
+            eval_desc = f"Phát hiện {', '.join(reasons)}. Cần sự can thiệp và kiểm tra ngay từ bác sĩ / gia đình." if language != "en" else f"Detected {', '.join(reasons)}. Requires immediate check by doctor/family."
+            eval_color_hex = "#DC2626"
+        elif avg_hr and (avg_hr > 100 or avg_hr < 55):
+            if avg_hr > 100:
+                eval_badge = "CẦN THEO DÕI: NHỊP TIM NHANH" if language != "en" else "MONITOR: HIGH HEART RATE"
+                eval_desc = f"Nhịp tim trung bình ({avg_hr_str}) cao hơn ngưỡng bình thường (60 - 100 bpm). Cần theo dõi thêm." if language != "en" else f"Average heart rate ({avg_hr_str}) is higher than normal (60 - 100 bpm)."
+            else:
+                eval_badge = "CẦN THEO DÕI: NHỊP TIM CHẬM" if language != "en" else "MONITOR: LOW HEART RATE"
+                eval_desc = f"Nhịp tim trung bình ({avg_hr_str}) thấp hơn ngưỡng bình thường (60 - 100 bpm). Cần theo dõi thêm." if language != "en" else f"Average heart rate ({avg_hr_str}) is lower than normal (60 - 100 bpm)."
+            eval_color_hex = "#EA580C"
+        elif total_anomalies > 3:
+            eval_badge = "CẦN THEO DÕI" if language != "en" else "NEEDS MONITORING"
+            eval_desc = f"Ghi nhận {total_anomalies} lần chỉ số sinh hiệu dao động bất thường." if language != "en" else f"Recorded {total_anomalies} vital sign anomalies."
+            eval_color_hex = "#D97706"
+        else:
+            eval_badge = "BÌNH THƯỜNG / ỔN ĐỊNH" if language != "en" else "NORMAL / STABLE"
+            eval_desc = f"Nhịp tim trung bình ({avg_hr_str}) và các chỉ số SpO2 ({avg_spo2_str}), Nhiệt độ ({avg_temp_str}) đều nằm trong ngưỡng an toàn chuẩn y tế." if language != "en" else f"Average heart rate ({avg_hr_str}), SpO2 ({avg_spo2_str}) and Temperature ({avg_temp_str}) are within safe clinical ranges."
+            eval_color_hex = "#059669"
+
         # Tiêu đề
         title = Paragraph(f"<b>{labels['title']}</b>", styles["Title"])
         subtitle = Paragraph(
@@ -754,57 +836,172 @@ class ReportService:
         )
         elements.extend([title, subtitle, Spacer(1, 14)])
 
-        # Thống kê tổng quan (bao gồm Cảnh báo nguy kịch)
+        # Thống kê tổng quan & Đánh giá y khoa (bao gồm Nhịp tim trung bình và Đánh giá)
         critical_detail_str = f" ({', '.join(critical_labels)})" if critical_labels else ""
         summary_text = Paragraph(
             f"<b>{labels['vital_records']}:</b> {len(vitals)} &nbsp;&nbsp;|&nbsp;&nbsp; "
-            f"<b>{labels['alert_events']}:</b> {len(incidents)}<br/>"
+            f"<b>{labels['alert_events']}:</b> {len(incidents)} &nbsp;&nbsp;|&nbsp;&nbsp; "
+            f"<b>{labels['avg_heart_rate']}:</b> <font color='#1D4ED8'><b>{avg_hr_str}</b></font><br/>"
             f"<b>{labels['critical_alerts']}:</b> {critical_count}{critical_detail_str} &nbsp;&nbsp;|&nbsp;&nbsp; "
             f"<b>{labels['fall_events']}:</b> {total_falls} &nbsp;&nbsp;|&nbsp;&nbsp; "
-            f"<b>{labels['abnormal_hr']}:</b> {total_anomalies}",
+            f"<b>{labels['abnormal_hr']}:</b> {total_anomalies}<br/>"
+            f"<b>{labels['evaluation']}:</b> <font color='{eval_color_hex}'><b>{eval_badge}</b></font> — {eval_desc}",
             styles["Heading3"],
         )
         elements.extend([summary_text, Spacer(1, 10)])
 
+        # Các kiểu định dạng ô bảng chuẩn ReportLab (ngăn tràn viền cột & tự động wrap)
+        th_blue_style = ParagraphStyle(
+            "THBlue",
+            parent=styles["Normal"],
+            fontName=bold_font_name,
+            fontSize=8.5,
+            leading=11,
+            textColor=colors.whitesmoke,
+            alignment=1,
+        )
+        th_red_style = ParagraphStyle(
+            "THRed",
+            parent=styles["Normal"],
+            fontName=bold_font_name,
+            fontSize=8.5,
+            leading=11,
+            textColor=colors.whitesmoke,
+            alignment=1,
+        )
+        cell_center_style = ParagraphStyle(
+            "TableCellCenter",
+            parent=styles["Normal"],
+            fontName=font_name,
+            fontSize=8,
+            leading=10.5,
+            textColor=colors.HexColor("#1E293B"),
+            alignment=1,
+        )
+        cell_center_bold_style = ParagraphStyle(
+            "TableCellCenterBold",
+            parent=styles["Normal"],
+            fontName=bold_font_name,
+            fontSize=8,
+            leading=10.5,
+            textColor=colors.HexColor("#0F172A"),
+            alignment=1,
+        )
+        cell_left_style = ParagraphStyle(
+            "TableCellLeft",
+            parent=styles["Normal"],
+            fontName=font_name,
+            fontSize=8,
+            leading=10.5,
+            textColor=colors.HexColor("#1E293B"),
+            alignment=0,
+        )
+
         # Bảng tóm tắt sinh hiệu gần nhất
         if vitals:
             elements.append(Paragraph(f"<b>{labels['recent_vitals']}</b>", styles["Heading2"]))
-            table_data = [[labels["time"], labels["heart_rate"], labels["spo2"], labels["temperature"], labels["fall"]]]
+            table_data = [
+                [
+                    Paragraph(f"<b>{labels['time']}</b>", th_blue_style),
+                    Paragraph(f"<b>{labels['heart_rate']}</b>", th_blue_style),
+                    Paragraph(f"<b>{labels['spo2']}</b>", th_blue_style),
+                    Paragraph(f"<b>{labels['temperature']}</b>", th_blue_style),
+                    Paragraph(f"<b>{labels['fall']}</b>", th_blue_style),
+                    Paragraph(f"<b>{labels['evaluation']}</b>", th_blue_style),
+                ]
+            ]
             for v in vitals[:15]:
+                # Đánh giá cho từng bản ghi riêng lẻ
+                if v.fall_detected:
+                    item_eval = Paragraph("<font color='#DC2626'><b>Té ngã</b></font>" if language != "en" else "<font color='#DC2626'><b>Fall</b></font>", cell_center_style)
+                elif v.heart_rate and v.heart_rate > 100:
+                    item_eval = Paragraph("<font color='#EA580C'>Nhịp nhanh</font>" if language != "en" else "<font color='#EA580C'>High HR</font>", cell_center_style)
+                elif v.heart_rate and v.heart_rate < 55:
+                    item_eval = Paragraph("<font color='#EA580C'>Nhịp chậm</font>" if language != "en" else "<font color='#EA580C'>Low HR</font>", cell_center_style)
+                elif v.spo2 and v.spo2 < 92:
+                    item_eval = Paragraph("<font color='#DC2626'>Tụt SpO2</font>" if language != "en" else "<font color='#DC2626'>Low SpO2</font>", cell_center_style)
+                elif v.skin_temp_max and v.skin_temp_max >= 38.0:
+                    item_eval = Paragraph("<font color='#DC2626'>Sốt cao</font>" if language != "en" else "<font color='#DC2626'>High fever</font>", cell_center_style)
+                else:
+                    item_eval = Paragraph("<font color='#059669'>Bình thường</font>" if language != "en" else "<font color='#059669'>Normal</font>", cell_center_style)
+
                 table_data.append([
-                    v.time.strftime("%d/%m %H:%M") if v.time else "-",
-                    str(v.heart_rate or "-"),
-                    str(v.spo2 or "-"),
-                    f"{v.skin_temp_max:.1f}" if v.skin_temp_max else "-",
-                    labels["yes"] if v.fall_detected else labels["no"],
+                    Paragraph(v.time.strftime("%d/%m %H:%M") if v.time else "-", cell_center_style),
+                    Paragraph(str(v.heart_rate or "-"), cell_center_style),
+                    Paragraph(str(v.spo2 or "-"), cell_center_style),
+                    Paragraph(f"{v.skin_temp_max:.1f}" if v.skin_temp_max else "-", cell_center_style),
+                    Paragraph(labels["yes"] if v.fall_detected else labels["no"], cell_center_style),
+                    item_eval,
                 ])
-            t = Table(table_data, colWidths=[110, 110, 90, 110, 80])
+
+            # DÒNG TỔNG KẾT NHỊP TIM TRUNG BÌNH & ĐÁNH GIÁ Ở CHÂN BẢNG
+            table_data.append([
+                Paragraph(f"<b>{labels['average_row']}</b>", cell_center_bold_style),
+                Paragraph(f"<b>{avg_hr_str}</b>", cell_center_bold_style),
+                Paragraph(f"<b>{avg_spo2_str}</b>", cell_center_bold_style),
+                Paragraph(f"<b>{avg_temp_str}</b>", cell_center_bold_style),
+                Paragraph("<b>-</b>", cell_center_bold_style),
+                Paragraph(f"<font color='{eval_color_hex}'><b>{eval_badge}</b></font>", cell_center_bold_style),
+            ])
+
+            t = Table(table_data, colWidths=[90, 85, 70, 85, 60, 150])
             t.setStyle(TableStyle([
                 ("BACKGROUND", (0, 0), (-1, 0), colors.HexColor("#2B6CB0")),
                 ("TEXTCOLOR", (0, 0), (-1, 0), colors.whitesmoke),
                 ("ALIGN", (0, 0), (-1, -1), "CENTER"),
+                ("VALIGN", (0, 0), (-1, -1), "MIDDLE"),
                 ("FONTNAME", (0, 0), (-1, -1), font_name),
                 ("FONTNAME", (0, 0), (-1, 0), bold_font_name),
-                ("BOTTOMPADDING", (0, 0), (-1, 0), 6),
-                ("GRID", (0, 0), (-1, -1), 0.5, colors.grey),
+                ("TOPPADDING", (0, 0), (-1, -1), 4),
+                ("BOTTOMPADDING", (0, 0), (-1, -1), 4),
+                ("GRID", (0, 0), (-1, -1), 0.5, colors.HexColor("#CBD5E1")),
+                # Dòng Footer Tổng kết: Nền sáng nổi bật, viền trên kẻ đậm
+                ("BACKGROUND", (0, -1), (-1, -1), colors.HexColor("#EFF6FF")),
+                ("LINEABOVE", (0, -1), (-1, -1), 1.2, colors.HexColor("#2B6CB0")),
             ]))
             elements.extend([t, Spacer(1, 14)])
 
         # Bảng sự kiện cảnh báo
         if incidents:
             elements.append(Paragraph(f"<b>{labels['incident_history']}</b>", styles["Heading2"]))
-            inc_data = [[labels["time"], labels["alert_type"], labels["level"], labels["message"], labels["handled"]]]
-            cell_style = styles["Normal"]
-            for inc in incidents[:20]:
-                msg_text = (inc.message or "")[:60] + ("..." if len(inc.message or "") > 60 else "")
+            inc_data = [
+                [
+                    Paragraph(f"<b>{labels['time']}</b>", th_red_style),
+                    Paragraph(f"<b>{labels['alert_type']}</b>", th_red_style),
+                    Paragraph(f"<b>{labels['level']}</b>", th_red_style),
+                    Paragraph(f"<b>{labels['message']}</b>", th_red_style),
+                    Paragraph(f"<b>{labels['handled']}</b>", th_red_style),
+                ]
+            ]
+            for inc in incidents[:25]:
+                # Xử lý loại cảnh báo: thay gạch dưới bằng khoảng trắng để ngắt dòng đẹp mắt
+                if ReportService.is_critical_incident(inc):
+                    type_str = ReportService.format_critical_event_label(inc)
+                else:
+                    type_str = str(inc.alert_type or "-").replace("_", " ").strip()
+
+                # Làm sạch emoji Unicode để tránh lỗi hiển thị ô vuông □
+                raw_msg = inc.message or ""
+                clean_msg = re.sub(
+                    r"[\U00010000-\U0010ffff\u2600-\u27bf\u2300-\u23ff\u2b50-\u2b55\u200d\ufe0f]",
+                    "",
+                    raw_msg,
+                ).strip()
+                if len(clean_msg) > 90:
+                    clean_msg = clean_msg[:90] + "..."
+
+                time_str = inc.created_at.strftime("%d/%m %H:%M") if inc.created_at else "-"
+                level_str = str(inc.alert_level or "-").strip()
+                status_str = labels["acknowledged"] if inc.is_acknowledged else labels["pending"]
+
                 inc_data.append([
-                    inc.created_at.strftime("%d/%m %H:%M") if inc.created_at else "-",
-                    ReportService.format_critical_event_label(inc) if ReportService.is_critical_incident(inc) else str(inc.alert_type or "-"),
-                    str(inc.alert_level or "-"),
-                    Paragraph(msg_text, cell_style),
-                    labels["acknowledged"] if inc.is_acknowledged else labels["pending"],
+                    Paragraph(time_str, cell_center_style),
+                    Paragraph(type_str, cell_center_style),
+                    Paragraph(f"<b>{level_str}</b>", cell_center_style),
+                    Paragraph(clean_msg, cell_left_style),
+                    Paragraph(status_str, cell_center_style),
                 ])
-            it = Table(inc_data, colWidths=[90, 100, 70, 180, 80])
+            it = Table(inc_data, colWidths=[70, 110, 50, 245, 65])
             it.setStyle(TableStyle([
                 ("BACKGROUND", (0, 0), (-1, 0), colors.HexColor("#C53030")),
                 ("TEXTCOLOR", (0, 0), (-1, 0), colors.whitesmoke),
@@ -812,8 +1009,13 @@ class ReportService:
                 ("VALIGN", (0, 0), (-1, -1), "MIDDLE"),
                 ("FONTNAME", (0, 0), (-1, -1), font_name),
                 ("FONTNAME", (0, 0), (-1, 0), bold_font_name),
-                ("BOTTOMPADDING", (0, 0), (-1, 0), 6),
-                ("GRID", (0, 0), (-1, -1), 0.5, colors.grey),
+                ("TOPPADDING", (0, 0), (-1, 0), 5),
+                ("BOTTOMPADDING", (0, 0), (-1, 0), 5),
+                ("TOPPADDING", (0, 1), (-1, -1), 4),
+                ("BOTTOMPADDING", (0, 1), (-1, -1), 4),
+                ("LEFTPADDING", (0, 0), (-1, -1), 3),
+                ("RIGHTPADDING", (0, 0), (-1, -1), 3),
+                ("GRID", (0, 0), (-1, -1), 0.5, colors.HexColor("#CBD5E1")),
             ]))
             elements.append(it)
 

@@ -1,4 +1,5 @@
-import React from 'react';
+import React, { useEffect } from 'react';
+import { createPortal } from 'react-dom';
 import { ShieldCheck, X } from 'lucide-react';
 
 export const COMPLIANCE_SECTIONS = [
@@ -21,9 +22,16 @@ export interface DoctorComplianceModalProps {
 }
 
 export const DoctorComplianceModal: React.FC<DoctorComplianceModalProps> = ({ onClose }) => {
-  return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-900/50 p-4 backdrop-blur-xs">
-      <div className="w-full max-w-lg rounded-2xl bg-white p-6 shadow-2xl">
+  useEffect(() => {
+    document.body.classList.add('overflow-hidden');
+    return () => {
+      document.body.classList.remove('overflow-hidden');
+    };
+  }, []);
+
+  return createPortal(
+    <div className="fixed inset-0 top-0 left-0 right-0 bottom-0 w-screen h-screen z-[100] !mt-0 flex items-center justify-center bg-slate-900/50 p-4 backdrop-blur-sm">
+      <div className="relative z-[101] w-full max-w-lg rounded-2xl bg-white p-6 shadow-2xl">
         <div className="flex items-center justify-between border-b border-slate-100 pb-3 mb-4">
           <div className="flex items-center gap-2">
             <ShieldCheck className="h-5 w-5 text-emerald-600" />
@@ -51,6 +59,7 @@ export const DoctorComplianceModal: React.FC<DoctorComplianceModalProps> = ({ on
           Đã hiểu & Đồng ý
         </button>
       </div>
-    </div>
+    </div>,
+    document.body
   );
 };

@@ -12,15 +12,21 @@ export const MainLayout: React.FC = () => {
   const [latestAlert, setLatestAlert] = useState<{
     id?: string;
     message?: string;
+    location?: string;
     time?: string;
   } | null>(null);
 
   useEffect(() => {
     adminWebSocket.connect();
     const unsubscribe = adminWebSocket.subscribe((event) => {
-      if (event.type === 'ALERT_NEW' || event.message) {
+      if (event.type === 'ALERT_NEW' || event.alert_type || event.message) {
+        const payloadData = event.data || {};
+        const msg = payloadData.message || event.message || 'Phát hiện sự cố bất thường từ thiết bị!';
+        const loc = payloadData.location || event.location || 'Trong nhà';
         setLatestAlert({
-          message: event.message || 'Phát hiện sự cố bất thường từ thiết bị Edge Hub!',
+          id: payloadData.id || event.id,
+          message: msg,
+          location: loc,
           time: new Date().toLocaleTimeString(),
         });
       }
@@ -45,9 +51,16 @@ export const MainLayout: React.FC = () => {
                 <AlertTriangle className="w-5 h-5 animate-pulse" />
               </div>
               <div>
-                <p className="text-[10px] uppercase font-mono font-bold tracking-wider text-[#F05A24]">
-                  CẢNH BÁO THỜI GIAN THỰC ({latestAlert.time})
-                </p>
+                <div className="flex items-center gap-2">
+                  <p className="text-[10px] uppercase font-mono font-bold tracking-wider text-[#F05A24]">
+                    CẢNH BÁO THỜI GIAN THỰC ({latestAlert.time})
+                  </p>
+                  {latestAlert.location && (
+                    <span className="text-[10px] font-medium px-1.5 py-0.5 rounded bg-amber-500/10 text-amber-700 dark:text-amber-400 border border-amber-500/20">
+                      📍 {latestAlert.location}
+                    </span>
+                  )}
+                </div>
                 <p className="text-xs font-semibold text-[#191B20] dark:text-[#F5F6F8]">
                   {latestAlert.message}
                 </p>

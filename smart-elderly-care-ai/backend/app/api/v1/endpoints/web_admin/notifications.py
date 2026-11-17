@@ -34,6 +34,34 @@ router = APIRouter()
 fcm_service = FCMService()
 
 
+async def _broadcast_system_notification_ws(notif: SystemNotification):
+    """Phát thông báo Admin tới toàn bộ Web Bác sĩ & Client qua WebSocket."""
+    try:
+        from app.api.websockets.vitals_ws import alert_clients
+        import json
+        ws_payload = json.dumps({
+            "type": "SYSTEM_NOTIFICATION",
+            "data": {
+                "id": str(notif.id),
+                "title": notif.title,
+                "body": notif.body,
+                "type": notif.type,
+                "target_audience": notif.target_audience,
+                "status": notif.status,
+                "published_at": notif.published_at.isoformat() if notif.published_at else None,
+                "created_at": notif.created_at.isoformat() if notif.created_at else None,
+            }
+        }, ensure_ascii=False)
+        for client_ws in list(alert_clients):
+            try:
+                await client_ws.send_text(ws_payload)
+            except Exception:
+                if client_ws in alert_clients:
+                    alert_clients.remove(client_ws)
+    except Exception:
+        pass
+
+
 @router.get("", response_model=list[SystemNotificationOut])
 @router.get("/", response_model=list[SystemNotificationOut])
 async def list_notifications(
@@ -127,6 +155,12 @@ async def create_notification(
         await db.commit()
     except Exception:
         pass
+
+    if target_status == "published":
+        try:
+            await _broadcast_system_notification_ws(notif)
+        except Exception:
+            pass
 
     return notif
 
@@ -260,6 +294,11 @@ async def publish_notification(
     except Exception:
         pass
 
+    try:
+        await _broadcast_system_notification_ws(notif)
+    except Exception:
+        pass
+
     return notif
 
 
@@ -338,6 +377,11 @@ async def revoke_notification(
             },
         )
         await db.commit()
+    except Exception:
+        pass
+
+    try:
+        await _broadcast_system_notification_ws(notif)
     except Exception:
         pass
 

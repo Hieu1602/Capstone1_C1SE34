@@ -305,6 +305,23 @@ class ChatbotRAGService:
         is_en = language == "en"
         disclaimer = STANDARD_DISCLAIMER_EN if is_en else STANDARD_DISCLAIMER_VI
 
+        # 1.0. Kiểm tra từ ngữ tục tĩu / chửi thề / xúc phạm (Profanity Guard)
+        if ResponseGuard.is_profane(question):
+            return {
+                "status": "success",
+                "question": question,
+                "answer": ResponseGuard.format_profane_response(language=language),
+                "sources": [],
+                "engine": "SmartCare Profanity Filter",
+                "timestamp": now_str,
+                "vitals_snapshot": None,
+                "disclaimer": disclaimer,
+                "triage_level": "GREEN",
+                "is_emergency": False,
+                "suggested_actions": ["Sử dụng ngôn từ lịch sự để được tư vấn sức khỏe"],
+                "is_rejected_turn": True,
+            }
+
         # 1. Kiểm tra câu chào hỏi xã giao
         if self._is_simple_greeting(question):
             return {
@@ -319,6 +336,7 @@ class ChatbotRAGService:
                 "triage_level": "GREEN",
                 "is_emergency": False,
                 "suggested_actions": ["Đặt câu hỏi về sức khỏe cụ hoặc kiểm tra sinh hiệu"],
+                "is_rejected_turn": False,
             }
 
         # 1.1. Chuẩn hóa chính tả thực thể y tế (tên thuốc, dụng cụ, lỗi gõ Telex/VNI, viết tắt)
@@ -338,6 +356,7 @@ class ChatbotRAGService:
                 "triage_level": "GREEN",
                 "is_emergency": False,
                 "suggested_actions": ["Đặt câu hỏi về triệu chứng sức khỏe, dùng thuốc hoặc kiểm tra sinh hiệu người cao tuổi"],
+                "is_rejected_turn": True,
             }
 
         # 1.3. Kiểm tra câu hỏi vô nghĩa / spam số / spam ký tự (bỏ qua nếu đã nhận diện tên thuốc/dụng cụ)
@@ -354,6 +373,7 @@ class ChatbotRAGService:
                 "triage_level": "GREEN",
                 "is_emergency": False,
                 "suggested_actions": ["Đặt câu hỏi rõ ràng về sức khỏe hoặc chăm sóc người cao tuổi"],
+                "is_rejected_turn": True,
             }
 
         # 2. Truy vấn dữ liệu lâm sàng thực tế từ TimescaleDB và PostgreSQL
@@ -377,8 +397,25 @@ class ChatbotRAGService:
         else:
             search_query = f"{normalized_q} {question}" if normalized_q != question else question
 
+        # Lọc sạch chat_history: loại bỏ các tin nhắn chửi tục, spam, vô nghĩa hoặc ngoài phạm vi
+        filtered_chat_history = []
         if chat_history:
-            last_user_msgs = [m.get("text", "") for m in chat_history if m.get("sender") == "user" and m.get("text")]
+            for m in chat_history:
+                txt = (m.get("text") or "").strip()
+                if not txt:
+                    continue
+                if ResponseGuard.is_profane(txt) or ResponseGuard.is_gibberish_or_spam(txt):
+                    continue
+                filtered_chat_history.append(m)
+
+        if filtered_chat_history:
+            last_user_msgs = [
+                m.get("text", "").strip()
+                for m in filtered_chat_history
+                if m.get("sender") == "user"
+                and m.get("text")
+                and not ResponseGuard.is_out_of_scope(m.get("text"))
+            ]
             if last_user_msgs:
                 last_user_q = last_user_msgs[-1].strip()
                 follow_up_cues = [
@@ -388,7 +425,9 @@ class ChatbotRAGService:
                     "also", "in addition", "and", "plus", "what about"
                 ]
                 q_lower = question.lower()
-                is_follow_up = any(cue in q_lower for cue in follow_up_cues) or len(question.split()) <= 4
+                # CHỈ nối khi câu hiện tại có từ khóa liên kết tiếp nối rõ ràng (cues),
+                # TUYỆT ĐỐI KHÔNG tự động nối chỉ vì câu ngắn (như 'tình trạng tim', 'huyết áp')!
+                is_follow_up = any(cue in q_lower for cue in follow_up_cues)
                 if is_follow_up:
                     search_query = f"{last_user_q} {question}"
 
@@ -422,7 +461,7 @@ class ChatbotRAGService:
             incidents_text=incidents_text,
             retrieved_chunks=chunks,
             language=language,
-            chat_history=chat_history,
+            chat_history=filtered_chat_history,
         )
 
         # 4.1. AI 1: Generator sinh bản thảo câu trả lời

@@ -1,5 +1,6 @@
 // src/services/websocket.ts
 // WebSocket client cho Doctor Web Portal (nhận cảnh báo khẩn cấp & cập nhật thời gian thực)
+// Duy trì kết nối Global duy nhất trong Root Layout, không ngắt khi chuyển tab
 
 type AlertCallback = (event: any) => void;
 
@@ -8,16 +9,24 @@ class DoctorWebSocketClient {
   private listeners: Set<AlertCallback> = new Set();
   private isConnecting = false;
   private reconnectTimer: any = null;
+  private shouldStayConnected = false;
 
   connect() {
+    this.shouldStayConnected = true;
+
+    // Nếu đã mở hoặc đang kết nối, không tạo kết nối mới
     if (this.ws && (this.ws.readyState === WebSocket.OPEN || this.ws.readyState === WebSocket.CONNECTING)) {
+      return;
+    }
+
+    if (this.isConnecting) {
       return;
     }
 
     let wsUrl = import.meta.env.VITE_WS_URL;
     if (!wsUrl) {
-      const host = window.location.hostname || 'localhost';
-      const protocol = window.location.protocol === 'https:' ? 'wss:' : 'ws:';
+      const host = typeof window !== 'undefined' ? window.location.hostname || 'localhost' : 'localhost';
+      const protocol = typeof window !== 'undefined' && window.location.protocol === 'https:' ? 'wss:' : 'ws:';
       wsUrl = `${protocol}//${host}:8000/ws/alerts`;
     }
 
@@ -30,7 +39,7 @@ class DoctorWebSocketClient {
 
       this.ws.onopen = () => {
         if (import.meta.env.DEV) {
-          console.log('[Doctor WS] Kết nối WebSocket Real-time thành công');
+          console.log('[Doctor WS] Kết nối WebSocket Real-time thành công (Global)');
         }
         this.isConnecting = false;
       };
@@ -46,7 +55,9 @@ class DoctorWebSocketClient {
 
       this.ws.onclose = () => {
         this.isConnecting = false;
-        this.scheduleReconnect();
+        if (this.shouldStayConnected) {
+          this.scheduleReconnect();
+        }
       };
 
       this.ws.onerror = () => {
@@ -54,14 +65,20 @@ class DoctorWebSocketClient {
       };
     } catch {
       this.isConnecting = false;
-      this.scheduleReconnect();
+      if (this.shouldStayConnected) {
+        this.scheduleReconnect();
+      }
     }
   }
 
   private scheduleReconnect() {
     if (this.reconnectTimer) clearTimeout(this.reconnectTimer);
+    if (!this.shouldStayConnected) return;
+
     this.reconnectTimer = setTimeout(() => {
-      this.connect();
+      if (this.shouldStayConnected) {
+        this.connect();
+      }
     }, 5000);
   }
 
@@ -73,13 +90,19 @@ class DoctorWebSocketClient {
   }
 
   disconnect() {
-    if (this.reconnectTimer) clearTimeout(this.reconnectTimer);
+    this.shouldStayConnected = false;
+    if (this.reconnectTimer) {
+      clearTimeout(this.reconnectTimer);
+      this.reconnectTimer = null;
+    }
     if (this.ws) {
-      this.ws.close();
+      try {
+        this.ws.close();
+      } catch {}
       this.ws = null;
     }
+    this.isConnecting = false;
   }
 }
 
 export const doctorWebSocket = new DoctorWebSocketClient();
-

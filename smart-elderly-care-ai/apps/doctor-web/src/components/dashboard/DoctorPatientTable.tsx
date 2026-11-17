@@ -10,6 +10,7 @@ export interface DoctorPatientTableProps {
   onFilterChange: (val: 'ALL' | 'ALERT' | 'STABLE') => void;
   onOpenCreateAppointment: () => void;
   onSelectPatient: (patientId: string) => void;
+  loading?: boolean;
 }
 
 const getPatientAvatar = (avatarUrl?: string | null) => {
@@ -27,6 +28,7 @@ export const DoctorPatientTable: React.FC<DoctorPatientTableProps> = ({
   onFilterChange,
   onOpenCreateAppointment,
   onSelectPatient,
+  loading = false,
 }) => {
   return (
     <div className="rounded-2xl border border-slate-200/80 bg-white p-6 shadow-sm">
@@ -84,7 +86,44 @@ export const DoctorPatientTable: React.FC<DoctorPatientTableProps> = ({
         </div>
       </div>
 
-      {patients.length === 0 ? (
+      {loading && patients.length === 0 ? (
+        <div className="overflow-x-auto">
+          <table className="w-full text-left border-collapse">
+            <thead>
+              <tr className="border-b border-slate-100 text-[11px] font-bold uppercase tracking-wider text-slate-400">
+                <th className="py-3 px-3">Mã HS</th>
+                <th className="py-3 px-3">Tên bệnh nhân</th>
+                <th className="py-3 px-3">Tuổi / Giới tính</th>
+                <th className="py-3 px-3">Hộ gia đình</th>
+                <th className="py-3 px-3">Chỉ số thời gian thực</th>
+                <th className="py-3 px-3">Mức độ cảnh báo</th>
+                <th className="py-3 px-3 text-right">Thao tác</th>
+              </tr>
+            </thead>
+            <tbody className="divide-y divide-slate-100 text-xs">
+              {Array.from({ length: 5 }).map((_, i) => (
+                <tr key={i} className="animate-pulse">
+                  <td className="py-3.5 px-3"><div className="h-4 w-12 rounded bg-slate-200" /></td>
+                  <td className="py-3.5 px-3">
+                    <div className="flex items-center space-x-3">
+                      <div className="h-9 w-9 rounded-full bg-slate-200 shrink-0" />
+                      <div className="space-y-1.5 flex-1">
+                        <div className="h-4 w-28 rounded bg-slate-200" />
+                        <div className="h-3 w-16 rounded bg-slate-100" />
+                      </div>
+                    </div>
+                  </td>
+                  <td className="py-3.5 px-3"><div className="h-4 w-20 rounded bg-slate-200" /></td>
+                  <td className="py-3.5 px-3"><div className="h-4 w-24 rounded bg-slate-200" /></td>
+                  <td className="py-3.5 px-3"><div className="h-4 w-28 rounded bg-slate-100" /></td>
+                  <td className="py-3.5 px-3"><div className="h-5 w-24 rounded-full bg-slate-100" /></td>
+                  <td className="py-3.5 px-3 text-right"><div className="inline-block h-7 w-20 rounded-lg bg-slate-200" /></td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </div>
+      ) : patients.length === 0 ? (
         <div className="rounded-2xl border border-dashed border-slate-200 p-10 text-center">
           <Filter className="mx-auto h-8 w-8 text-slate-300 mb-2" />
           <p className="text-xs font-semibold text-slate-500">

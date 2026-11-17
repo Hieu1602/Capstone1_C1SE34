@@ -4,9 +4,9 @@
 import React, { useState, useEffect, useCallback, useRef } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useDoctorAuthStore, getDoctorAvatarUri } from '../../store/useDoctorAuthStore';
-import { doctorApi, householdApi, incidentsApi, authApi } from '../../services/api';
+import { doctorApi, householdApi, incidentsApi, authApi, systemNotificationsApi } from '../../services/api';
 import { doctorWebSocket } from '../../services/websocket';
-import type { Incident, AppointmentItem, DoctorPatientCard } from '../../types';
+import type { Incident, AppointmentItem, DoctorPatientCard, SystemNotification } from '../../types';
 import {
   Bell,
   LogOut,
@@ -23,10 +23,23 @@ import {
   Sparkles,
   Moon,
   Sun,
+  RotateCcw,
+  Megaphone,
 } from 'lucide-react';
 import { NotificationDetailModal, UnifiedNotification } from '../clinical/NotificationDetailModal';
+import {
+  getStoredReadIds,
+  markAllAsReadWithUndo,
+  restorePreviousReadState,
+  markAsRead,
+  toggleReadStatus,
+  hasUndoSnapshot,
+  NOTIFS_SYNC_EVENT,
+  cleanNotificationText,
+  SyncPayload,
+} from '../../utils/notificationSync';
 
-type TabType = 'ALL' | 'UNREAD' | 'ALERTS' | 'APPOINTMENTS';
+type TabType = 'ALL' | 'UNREAD' | 'ADMIN' | 'ALERTS' | 'APPOINTMENTS';
 
 const READ_STORAGE_KEY = '@doctor_web_read_notifs';
 
@@ -80,14 +93,8 @@ export const DoctorNavbar: React.FC = () => {
   const [notifications, setNotifications] = useState<UnifiedNotification[]>([]);
   const [selectedNotif, setSelectedNotif] = useState<UnifiedNotification | null>(null);
   const [showDetailModal, setShowDetailModal] = useState(false);
-  const [readIds, setReadIds] = useState<Set<string>>(() => {
-    try {
-      const saved = localStorage.getItem(READ_STORAGE_KEY);
-      return saved ? new Set(JSON.parse(saved)) : new Set();
-    } catch {
-      return new Set();
-    }
-  });
+  const [readIds, setReadIds] = useState<Set<string>>(() => getStoredReadIds());
+  const [canUndo, setCanUndo] = useState<boolean>(() => hasUndoSnapshot());
 
   const searchInputRef = useRef<HTMLInputElement | null>(null);
   const notifDropdownRef = useRef<HTMLDivElement | null>(null);
@@ -131,31 +138,99 @@ export const DoctorNavbar: React.FC = () => {
     };
   }, [user]);
 
+  // Lắng nghe sự kiện đồng bộ trạng thái đọc/chưa đọc toàn cục từ bất kỳ component nào (0ms)
+  useEffect(() => {
+    const handleSync = (e: Event) => {
+      const customEvent = e as CustomEvent<SyncPayload>;
+      const nextSet = customEvent.detail?.readIds
+        ? new Set(customEvent.detail.readIds)
+        : getStoredReadIds();
+      setReadIds(nextSet);
+      setCanUndo(customEvent.detail?.canUndo ?? hasUndoSnapshot());
+      setNotifications((prev) =>
+        prev.map((n) => {
+          const isRead = Boolean(
+            nextSet.has(n.id) ||
+            (n.rawIncidentId && (nextSet.has(n.rawIncidentId) || nextSet.has(`inc_${n.rawIncidentId}`)))
+          );
+          return { ...n, isRead };
+        })
+      );
+    };
+
+    window.addEventListener(NOTIFS_SYNC_EVENT, handleSync);
+    window.addEventListener('storage', handleSync);
+    return () => {
+      window.removeEventListener(NOTIFS_SYNC_EVENT, handleSync);
+      window.removeEventListener('storage', handleSync);
+    };
+  }, []);
+
   const fetchNotifData = useCallback(async () => {
     try {
-      const [incRes, patRes, aptRes, invRes] = await Promise.allSettled([
+      const [incRes, patRes, aptRes, invRes, sysRes] = await Promise.allSettled([
         incidentsApi.list(undefined, 50),
         doctorApi.getPatients(),
         doctorApi.getAppointments(),
         householdApi.getInvites(),
+        systemNotificationsApi.getActiveBroadcasts('doctors'),
       ]);
 
-      const savedReadIds = (() => {
-        try {
-          const saved = localStorage.getItem(READ_STORAGE_KEY);
-          return saved ? new Set(JSON.parse(saved)) : new Set();
-        } catch {
-          return new Set();
-        }
-      })();
+      const savedReadIds = getStoredReadIds();
 
       const unifiedList: UnifiedNotification[] = [];
+
+      // 0. Thông báo toàn hệ thống từ Web Admin (System Notifications & Broadcasts)
+      if (sysRes.status === 'fulfilled' && Array.isArray(sysRes.value)) {
+        sysRes.value.forEach((sys: SystemNotification) => {
+          const sysId = `sys_${sys.id}`;
+          const isRead = Boolean(savedReadIds.has(sysId) || savedReadIds.has(sys.id));
+          const timeStr = formatDate(sys.published_at || sys.created_at);
+
+          let badgeLabel = 'Thông báo Admin';
+          let badgeColor = 'text-sky-700 bg-sky-50 border-sky-200 dark:bg-sky-900/50 dark:text-sky-300';
+          let badgeBg = 'bg-sky-50';
+
+          if (sys.type === 'system_maintenance') {
+            badgeLabel = 'Bảo trì hệ thống';
+            badgeColor = 'text-amber-700 bg-amber-50 border-amber-200 dark:bg-amber-950/60 dark:text-amber-300';
+            badgeBg = 'bg-amber-50';
+          } else if (sys.type === 'emergency') {
+            badgeLabel = 'Khẩn cấp Admin';
+            badgeColor = 'text-rose-700 bg-rose-50 border-rose-200 dark:bg-rose-950/60 dark:text-rose-300';
+            badgeBg = 'bg-rose-50';
+          } else if (sys.type === 'feature_update') {
+            badgeLabel = 'Cập nhật tính năng';
+            badgeColor = 'text-blue-700 bg-blue-50 border-blue-200 dark:bg-blue-900/50 dark:text-blue-300';
+            badgeBg = 'bg-blue-50';
+          } else if (sys.type === 'health_tip') {
+            badgeLabel = 'Chỉ dẫn y tế';
+            badgeColor = 'text-emerald-700 bg-emerald-50 border-emerald-200 dark:bg-emerald-950/60 dark:text-emerald-300';
+            badgeBg = 'bg-emerald-50';
+          }
+
+          unifiedList.push({
+            id: sysId,
+            type: 'ADMIN',
+            title: sys.title,
+            subtitle: sys.body,
+            timeStr,
+            badgeLabel,
+            badgeColor,
+            badgeBg,
+            isRead,
+            targetUrl: '/notifications',
+            patientName: 'Ban Quản Trị Hệ Thống (Admin)',
+            adminNotification: sys,
+          });
+        });
+      }
 
       // 1. Cảnh báo và sự cố từ Backend API /notifications (Đồng bộ thời gian thực với Mobile App và CSDL)
       if (incRes.status === 'fulfilled' && Array.isArray(incRes.value)) {
         incRes.value.forEach((inc: Incident) => {
           const isCritical = inc.alert_level === 'CRITICAL' || inc.alert_type === 'FALL_DETECTED';
-          const rawMsg = inc.message || '';
+          const rawMsg = cleanNotificationText(inc.message || '');
           const msgLower = rawMsg.toLowerCase();
           const isRead = Boolean(inc.is_acknowledged || savedReadIds.has(inc.id) || savedReadIds.has(`inc_${inc.id}`));
           const timeStr = formatDate(inc.created_at);
@@ -328,7 +403,6 @@ export const DoctorNavbar: React.FC = () => {
     fetchNotifData();
     const interval = setInterval(fetchNotifData, 30000);
 
-    doctorWebSocket.connect();
     const unsubscribe = doctorWebSocket.subscribe(() => {
       fetchNotifData();
     });
@@ -364,36 +438,57 @@ export const DoctorNavbar: React.FC = () => {
     return () => document.removeEventListener('mousedown', handleClickOutside);
   }, [showNotifMenu]);
 
-  // Đánh dấu đã đọc tất cả
+  // Đánh dấu đã đọc tất cả (có hỗ trợ Hoàn tác / Khôi phục)
   const handleMarkAllRead = async () => {
     try {
-      await incidentsApi.acknowledgeAll();
+      incidentsApi.acknowledgeAll().catch(console.warn);
     } catch (err) {
       console.warn('Acknowledge all backend fallback:', err);
     }
-    const allIds = new Set(readIds);
-    notifications.forEach((n) => {
-      allIds.add(n.id);
-      if (n.rawIncidentId) {
-        allIds.add(n.rawIncidentId);
-        allIds.add(`inc_${n.rawIncidentId}`);
-      }
-    });
-    setReadIds(allIds);
-    localStorage.setItem(READ_STORAGE_KEY, JSON.stringify(Array.from(allIds)));
+    const allIds = notifications.map((n) => n.id);
+    const rawIds = notifications.map((n) => n.rawIncidentId || '').filter(Boolean);
+    const next = markAllAsReadWithUndo(allIds, rawIds);
+    setReadIds(next);
+    setCanUndo(true);
     setNotifications((prev) => prev.map((n) => ({ ...n, isRead: true })));
   };
 
-  // Click vào một thông báo: Mở ngay Tab / Modal chi tiết thông báo
-  const handleNotificationClick = async (item: UnifiedNotification) => {
-    const next = new Set(readIds);
-    next.add(item.id);
-    if (item.rawIncidentId) {
-      next.add(item.rawIncidentId);
-      next.add(`inc_${item.rawIncidentId}`);
+  // Khôi phục trạng thái chưa đọc (Hoàn tác khi lỡ bấm nhầm Đã đọc tất cả)
+  const handleUndoMarkAll = () => {
+    const restored = restorePreviousReadState();
+    if (restored) {
+      setReadIds(restored);
+      setCanUndo(false);
+      setNotifications((prev) =>
+        prev.map((n) => {
+          const isRead = Boolean(
+            restored.has(n.id) ||
+            (n.rawIncidentId && (restored.has(n.rawIncidentId) || restored.has(`inc_${n.rawIncidentId}`)))
+          );
+          return { ...n, isRead };
+        })
+      );
     }
+  };
+
+  // Đảo trạng thái Đã đọc <-> Chưa đọc cho một thông báo cụ thể
+  const handleToggleSingleRead = (e: React.MouseEvent, item: UnifiedNotification) => {
+    e.stopPropagation();
+    const { nextIds, isRead } = toggleReadStatus(item.id, item.rawIncidentId);
+    setReadIds(nextIds);
+    setNotifications((prev) =>
+      prev.map((n) =>
+        n.id === item.id || (n.rawIncidentId && n.rawIncidentId === item.rawIncidentId)
+          ? { ...n, isRead }
+          : n
+      )
+    );
+  };
+
+  // Click vào một thông báo: Đánh dấu đã đọc & mở ngay Modal chi tiết
+  const handleNotificationClick = async (item: UnifiedNotification) => {
+    const next = markAsRead(item.id, item.rawIncidentId);
     setReadIds(next);
-    localStorage.setItem(READ_STORAGE_KEY, JSON.stringify(Array.from(next)));
     setNotifications((prev) =>
       prev.map((n) => (n.id === item.id ? { ...n, isRead: true } : n))
     );
@@ -410,14 +505,8 @@ export const DoctorNavbar: React.FC = () => {
         console.warn('Acknowledge incident error:', err);
       }
     }
-    const next = new Set(readIds);
-    next.add(item.id);
-    if (item.rawIncidentId) {
-      next.add(item.rawIncidentId);
-      next.add(`inc_${item.rawIncidentId}`);
-    }
+    const next = markAsRead(item.id, item.rawIncidentId);
     setReadIds(next);
-    localStorage.setItem(READ_STORAGE_KEY, JSON.stringify(Array.from(next)));
     setNotifications((prev) =>
       prev.map((n) =>
         n.id === item.id || n.rawIncidentId === item.rawIncidentId
@@ -454,11 +543,13 @@ export const DoctorNavbar: React.FC = () => {
   };
 
   const unreadCount = notifications.filter((n) => !n.isRead).length;
+  const adminCount = notifications.filter((n) => n.type === 'ADMIN').length;
   const alertsCount = notifications.filter((n) => n.type === 'ALERT' || n.type === 'INVITE').length;
   const aptsCount = notifications.filter((n) => n.type === 'APPOINTMENT').length;
 
   const filteredNotifs = notifications.filter((item) => {
     if (notifTab === 'UNREAD') return !item.isRead;
+    if (notifTab === 'ADMIN') return item.type === 'ADMIN';
     if (notifTab === 'ALERTS') return item.type === 'ALERT' || item.type === 'INVITE';
     if (notifTab === 'APPOINTMENTS') return item.type === 'APPOINTMENT';
     return true;
@@ -468,6 +559,10 @@ export const DoctorNavbar: React.FC = () => {
     UNREAD: {
       title: 'Tuyệt vời! Không còn thông báo chưa đọc',
       sub: 'Bác sĩ đã xem và xử lý toàn bộ các thông báo y tế.',
+    },
+    ADMIN: {
+      title: 'Chưa có thông báo nào từ Quản trị viên',
+      sub: 'Các thông báo bảo trì hoặc chỉ đạo y tế từ Admin sẽ hiển thị ở đây.',
     },
     ALERTS: {
       title: 'Không có cảnh báo bất thường',
@@ -585,22 +680,37 @@ export const DoctorNavbar: React.FC = () => {
                     {unreadCount > 0 ? `${unreadCount} chưa đọc` : 'Đã đọc hết'}
                   </span>
                 </div>
-                {unreadCount > 0 && (
-                  <button
-                    onClick={handleMarkAllRead}
-                    className="flex items-center space-x-1 text-[11px] font-bold text-blue-600 hover:text-blue-700 dark:text-blue-400"
-                  >
-                    <CheckCheck className="h-3.5 w-3.5" />
-                    <span>Đã đọc tất cả</span>
-                  </button>
-                )}
+                <div className="flex items-center space-x-2">
+                  {canUndo && (
+                    <button
+                      type="button"
+                      onClick={handleUndoMarkAll}
+                      className="flex items-center space-x-1 text-[11px] font-bold text-amber-700 hover:text-amber-800 bg-amber-50 hover:bg-amber-100 border border-amber-200 px-2 py-0.5 rounded-lg transition-colors cursor-pointer dark:bg-amber-950/40 dark:text-amber-300 dark:border-amber-800"
+                      title="Khôi phục trạng thái chưa đọc trước khi bấm Đã đọc tất cả"
+                    >
+                      <RotateCcw className="h-3 w-3" />
+                      <span>Khôi phục</span>
+                    </button>
+                  )}
+                  {unreadCount > 0 && (
+                    <button
+                      type="button"
+                      onClick={handleMarkAllRead}
+                      className="flex items-center space-x-1 text-[11px] font-bold text-blue-600 hover:text-blue-700 transition-colors cursor-pointer dark:text-blue-400"
+                    >
+                      <CheckCheck className="h-3.5 w-3.5" />
+                      <span>Đã đọc tất cả</span>
+                    </button>
+                  )}
+                </div>
               </div>
 
-              {/* Tabs lọc thông báo chuẩn như App: Tất cả, Chưa đọc, Cảnh báo, Lịch khám */}
+              {/* Tabs lọc thông báo chuẩn như App: Tất cả, Chưa đọc, Từ Admin, Cảnh báo, Lịch khám */}
               <div className="flex border-b border-slate-100 px-4 pt-2 bg-white gap-4 text-xs font-bold dark:border-slate-800 dark:bg-slate-900 overflow-x-auto">
                 {[
                   { key: 'ALL' as const, label: `Tất cả (${notifications.length})` },
                   { key: 'UNREAD' as const, label: `Chưa đọc (${unreadCount})` },
+                  { key: 'ADMIN' as const, label: `Từ Admin (${adminCount})` },
                   { key: 'ALERTS' as const, label: `Cảnh báo (${alertsCount})` },
                   { key: 'APPOINTMENTS' as const, label: `Lịch khám (${aptsCount})` },
                 ].map((t) => (
@@ -611,7 +721,9 @@ export const DoctorNavbar: React.FC = () => {
                       notifTab === t.key
                         ? t.key === 'ALERTS'
                           ? 'border-rose-600 text-rose-600 dark:border-rose-500 dark:text-rose-400'
-                          : 'border-blue-600 text-blue-600 dark:border-blue-400 dark:text-blue-400'
+                          : t.key === 'ADMIN'
+                            ? 'border-sky-600 text-sky-600 dark:border-sky-400 dark:text-sky-400'
+                            : 'border-blue-600 text-blue-600 dark:border-blue-400 dark:text-blue-400'
                         : 'border-transparent text-slate-400 hover:text-slate-700 dark:text-slate-500 dark:hover:text-slate-300'
                     }`}
                   >
@@ -634,6 +746,7 @@ export const DoctorNavbar: React.FC = () => {
                   </div>
                 ) : (
                   filteredNotifs.map((item) => {
+                    const isAdmin = item.type === 'ADMIN';
                     const isAlert = item.type === 'ALERT';
                     const isInvite = item.type === 'INVITE';
                     const isApt = item.type === 'APPOINTMENT';
@@ -651,16 +764,20 @@ export const DoctorNavbar: React.FC = () => {
                         {/* Icon Box */}
                         <div
                           className={`flex h-10 w-10 shrink-0 items-center justify-center rounded-xl relative ${
-                            isApt
+                            isAdmin
                               ? 'bg-sky-50 text-sky-600 dark:bg-sky-950/60 dark:text-sky-400'
-                              : isInvite
-                                ? 'bg-indigo-50 text-indigo-600 dark:bg-indigo-950/60 dark:text-indigo-400'
-                                : item.badgeLabel === 'Khẩn cấp' || item.badgeLabel === 'Nguy cấp'
-                                  ? 'bg-rose-50 text-rose-600 dark:bg-rose-950/60 dark:text-rose-400'
-                                  : 'bg-amber-50 text-amber-600 dark:bg-amber-950/60 dark:text-amber-400'
+                              : isApt
+                                ? 'bg-sky-50 text-sky-600 dark:bg-sky-950/60 dark:text-sky-400'
+                                : isInvite
+                                  ? 'bg-indigo-50 text-indigo-600 dark:bg-indigo-950/60 dark:text-indigo-400'
+                                  : item.badgeLabel === 'Khẩn cấp' || item.badgeLabel === 'Nguy cấp'
+                                    ? 'bg-rose-50 text-rose-600 dark:bg-rose-950/60 dark:text-rose-400'
+                                    : 'bg-amber-50 text-amber-600 dark:bg-amber-950/60 dark:text-amber-400'
                           }`}
                         >
-                          {isApt ? (
+                          {isAdmin ? (
+                            <Megaphone className="h-5 w-5" />
+                          ) : isApt ? (
                             <Calendar className="h-5 w-5" />
                           ) : isInvite ? (
                             <Sparkles className="h-5 w-5" />
@@ -700,14 +817,24 @@ export const DoctorNavbar: React.FC = () => {
                             {item.badgeLabel}
                           </span>
                           {item.isRead ? (
-                            <span className="inline-flex items-center gap-0.5 rounded-md bg-emerald-50 px-1.5 py-0.5 text-[9.5px] font-medium text-emerald-700 border border-emerald-200 dark:bg-emerald-950/50 dark:text-emerald-300 dark:border-emerald-800">
+                            <button
+                              type="button"
+                              onClick={(e) => handleToggleSingleRead(e, item)}
+                              title="Bấm để đánh dấu Chưa đọc"
+                              className="inline-flex items-center gap-0.5 rounded-md bg-emerald-50 hover:bg-emerald-100 px-1.5 py-0.5 text-[9.5px] font-medium text-emerald-700 border border-emerald-200 transition-colors cursor-pointer dark:bg-emerald-950/50 dark:hover:bg-emerald-900/60 dark:text-emerald-300 dark:border-emerald-800"
+                            >
                               <Check className="h-2.5 w-2.5" />
                               <span>Đã đọc</span>
-                            </span>
+                            </button>
                           ) : (
-                            <span className="rounded-md bg-blue-50 px-1.5 py-0.5 text-[9.5px] font-bold text-blue-700 border border-blue-200 dark:bg-blue-950/50 dark:text-blue-300 dark:border-blue-800">
+                            <button
+                              type="button"
+                              onClick={(e) => handleToggleSingleRead(e, item)}
+                              title="Bấm để đánh dấu Đã đọc"
+                              className="rounded-md bg-blue-50 hover:bg-blue-100 px-1.5 py-0.5 text-[9.5px] font-bold text-blue-700 border border-blue-200 transition-colors cursor-pointer dark:bg-blue-950/50 dark:hover:bg-blue-900/60 dark:text-blue-300 dark:border-blue-800"
+                            >
                               Chưa đọc
-                            </span>
+                            </button>
                           )}
                         </div>
                       </div>

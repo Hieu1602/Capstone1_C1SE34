@@ -5,7 +5,9 @@ import React, { useEffect, useState } from 'react';
 import { Outlet } from 'react-router-dom';
 import { DoctorNavbar } from './DoctorNavbar';
 import { DoctorSidebar } from './DoctorSidebar';
+import { AdminMarqueeBanner } from './AdminMarqueeBanner';
 import { doctorWebSocket } from '../../services/websocket';
+import { useDoctorDataStore } from '../../store/useDoctorDataStore';
 import { AlertCircle, X } from 'lucide-react';
 
 export const DoctorLayout: React.FC = () => {
@@ -17,9 +19,17 @@ export const DoctorLayout: React.FC = () => {
   } | null>(null);
 
   useEffect(() => {
+    // Duy trì kết nối WebSocket duy nhất tại Root Layout
     doctorWebSocket.connect();
+
+    // Tải trước dữ liệu toàn cục song song để các tab có dữ liệu ngay (0ms)
+    useDoctorDataStore.getState().fetchAllData();
+
     const unsubscribe = doctorWebSocket.subscribe((event) => {
       if (event && (event.type === 'ALERT_NEW' || event.message || event.heart_rate || event.spo2)) {
+        // Revalidate background data khi nhận cảnh báo lâm sàng mới
+        useDoctorDataStore.getState().fetchAllData(true);
+
         setRealtimeAlert({
           message: event.message || 'Cảnh báo sinh hiệu bất thường từ bệnh nhân!',
           time: new Date().toLocaleTimeString('vi-VN', { hour: '2-digit', minute: '2-digit' }),
@@ -46,6 +56,9 @@ export const DoctorLayout: React.FC = () => {
 
         {/* Content Area: phân vùng nội dung duy nhất cuộn theo chiều dọc */}
         <main className="flex-1 min-w-0 p-6 lg:p-8 overflow-y-auto">
+          {/* Thanh thông báo chữ chạy từ trái sang phải chuẩn như Mobile App */}
+          <AdminMarqueeBanner />
+
           {/* Banner thông báo thời gian thực nếu có sự cố */}
           {realtimeAlert && (
             <div className="mb-6 flex items-center justify-between rounded-2xl border border-rose-200 bg-rose-50/95 p-4 shadow-sm backdrop-blur-sm animate-in fade-in duration-200">

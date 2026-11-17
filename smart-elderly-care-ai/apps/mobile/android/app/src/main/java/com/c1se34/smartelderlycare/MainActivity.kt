@@ -31,6 +31,13 @@ class MainActivity : ReactActivity() {
     }
   }
 
+  override fun onResume() {
+    super.onResume()
+    if (intent?.getBooleanExtra("STOP_ALARM", false) == true) {
+      NativeNotificationModule.stopAlarm(this)
+    }
+  }
+
   private fun hideSystemNavigationBar() {
     val insetsController = WindowCompat.getInsetsController(window, window.decorView)
     insetsController.systemBarsBehavior =

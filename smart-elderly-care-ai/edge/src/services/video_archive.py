@@ -166,11 +166,12 @@ class VideoArchive:
                 ], input=b"".join(f.tobytes() for f in frames), stdout=subprocess.DEVNULL,
                     stderr=subprocess.DEVNULL, check=True, timeout=30)
             temporary.replace(path)
+            folder = "incidents" if kind in ("incident", "snapshot") else "cameras"
             data = {"id": recording_id, "device_id": self.device_id, "kind": kind,
                     "started_at": datetime.fromtimestamp(started, timezone.utc).isoformat(),
                     "duration": duration, "size_bytes": path.stat().st_size,
                     "incident_id": incident_id,
-                    "object_key": f"cameras/{self.device_id}/{recording_id}{suffix}"}
+                    "object_key": f"{folder}/{self.device_id}/{recording_id}{suffix}"}
             self._manifest(path.with_suffix(".json"), {"metadata": data, "attempt": 0, "next_retry": 0})
         finally:
             temporary.unlink(missing_ok=True)
@@ -191,9 +192,21 @@ class VideoArchive:
         data = manifest["metadata"]
         path = self.directory / (data["id"] + Path(data["object_key"]).suffix)
         if self._client is None:
-            self._client = boto3.client("s3", region_name=self.region, config=Config(
-                signature_version="s3v4", connect_timeout=5, read_timeout=10,
-                retries={"mode": "standard", "total_max_attempts": 3}))
+            client_kwargs = {
+                "region_name": self.region,
+                "config": Config(
+                    signature_version="s3v4", connect_timeout=5, read_timeout=10,
+                    retries={"mode": "standard", "total_max_attempts": 3},
+                ),
+            }
+            access_key = os.getenv("AWS_ACCESS_KEY_ID")
+            secret_key = os.getenv("AWS_SECRET_ACCESS_KEY")
+            if access_key and secret_key:
+                client_kwargs["aws_access_key_id"] = access_key
+                client_kwargs["aws_secret_access_key"] = secret_key
+                if os.getenv("AWS_SESSION_TOKEN"):
+                    client_kwargs["aws_session_token"] = os.getenv("AWS_SESSION_TOKEN")
+            self._client = boto3.client("s3", **client_kwargs)
         if not manifest.get("uploaded"):
             self._client.upload_file(str(path), self.bucket, data["object_key"],
                 ExtraArgs={"ContentType": "image/jpeg" if data["kind"] == "snapshot" else "video/mp2t" if path.suffix == ".ts" else "video/mp4",
@@ -204,7 +217,15 @@ class VideoArchive:
         request = Request(self.endpoint, data=json.dumps(data).encode(), method="POST",
                           headers={"Authorization": f"Bearer {self.token}", "Content-Type": "application/json"})
         # Metadata acknowledgement is required before deleting the durable outbox entry.
-        with urlopen(request, timeout=15) as response:
+        import ssl
+        ctx = ssl.create_default_context()
+        cert_file = os.getenv("SSL_CERT_FILE")
+        if cert_file and os.path.exists(cert_file):
+            ctx.load_verify_locations(cert_file)
+        else:
+            ctx.check_hostname = False
+            ctx.verify_mode = ssl.CERT_NONE
+        with urlopen(request, timeout=15, context=ctx) as response:
             if response.status != 200:
                 raise RuntimeError("Metadata acknowledgement failed")
         path.with_suffix(".json").unlink()
@@ -217,7 +238,15 @@ class VideoArchive:
                     return
                 manifest = None
                 try:
-                    manifest = json.loads(path.read_text(encoding="utf-8"))
+                    raw_txt = path.read_text(encoding="utf-8").strip()
+                    try:
+                        manifest = json.loads(raw_txt)
+                    except Exception:
+                        r_idx = raw_txt.rfind("}")
+                        if r_idx != -1:
+                            manifest = json.loads(raw_txt[:r_idx + 1])
+                        else:
+                            raise
                     if manifest["next_retry"] > time.time():
                         continue
                     self._deliver(manifest)

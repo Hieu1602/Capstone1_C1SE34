@@ -16,6 +16,7 @@ import {
   FlatList,
   TouchableOpacity,
   RefreshControl,
+  Platform,
   Image,
   ScrollView,
   Modal,
@@ -801,7 +802,11 @@ export default function AlertsListScreen({ navigation, route }: any) {
             : `${item.id}_${item.data.taken ? 'taken' : 'pending'}`
         }
         extraData={[incidents, filterType]}
-        refreshControl={<RefreshControl refreshing={refreshing} onRefresh={handleRefresh} tintColor={Colors.primary} />}
+        refreshControl={
+          Platform.OS !== 'web' ? (
+            <RefreshControl refreshing={refreshing} onRefresh={handleRefresh} tintColor={Colors.primary} />
+          ) : undefined
+        }
         renderItem={({ item }) => {
           if (item.itemType === 'MEDICATION') {
             return renderMedicationCard(item.data);
