@@ -39,9 +39,14 @@ class RecordingMetadata(BaseModel):
     @model_validator(mode="after")
     def validate_object(self):
         suffix = ".jpg" if self.kind == "snapshot" else ".mp4"
-        allowed = [f"cameras/{self.device_id}/{self.id}{suffix}"]
+        folder = "incidents" if self.kind in ("incident", "snapshot") else "cameras"
+        allowed = [
+            f"cameras/{self.device_id}/{self.id}{suffix}",
+            f"{folder}/{self.device_id}/{self.id}{suffix}",
+        ]
         if self.kind == "segment":
             allowed.append(f"cameras/{self.device_id}/{self.id}.ts")
+            allowed.append(f"{folder}/{self.device_id}/{self.id}.ts")
         if self.object_key not in allowed:
             raise ValueError("Object key must match camera and recording IDs")
         if self.kind == "segment" and (not 0 < self.duration <= 2 or self.incident_id is not None):
