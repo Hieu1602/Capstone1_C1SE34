@@ -371,6 +371,32 @@ class CRUDVital:
                                 15
                             ))
 
+                        # D. Máy trạng thái 4 tầng phân tích loạn nhịp & Cửa sổ trượt 60 phút
+                        try:
+                            from app.services.vitals.vital_state_machine import vital_state_machine, VitalSample
+                            ts_now = (obj.time if (obj.time and obj.time.tzinfo) else datetime.now(timezone.utc)).timestamp()
+                            v_sample = VitalSample(
+                                ts=ts_now,
+                                hr=obj.heart_rate,
+                                spo2=obj.spo2,
+                                bp_sys=obj.bp_systolic,
+                                skin_temp=obj.skin_temp_max,
+                                is_worn=is_worn,
+                                sqi=float(data.get("sqi", 1.0)),
+                                is_exercising=data.get("is_exercising"),
+                                activity_state=activity,
+                            )
+                            st_alert = await vital_state_machine.process_sample(str(uuid_val), v_sample)
+                            if st_alert:
+                                alerts_to_create.append((
+                                    "ARRHYTHMIA_RECURRENT" if st_alert["level"] >= 2 else "ARRHYTHMIA_SUSPECT",
+                                    "CRITICAL" if st_alert["level"] >= 2 else "HIGH",
+                                    st_alert["reason"],
+                                    15  # Cooldown 15 phút
+                                ))
+                        except Exception as e_sm:
+                            logger.warning(f"[CRUDVital] Lỗi VitalStateMachine: {e_sm}")
+
                 # 4. Cảnh báo té ngã từ vòng đeo tay
                 if obj.fall_detected:
                     alerts_to_create.append((

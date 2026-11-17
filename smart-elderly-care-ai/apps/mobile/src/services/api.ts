@@ -240,6 +240,10 @@ export const usersApi = {
   uploadAvatarBase64: (base64: string) =>
     api.post('/users/me/avatar', { avatar_base64: base64 }),
   deleteAvatar: () => api.delete('/users/me/avatar'),
+  deleteMe: (data: { password?: string; reason?: string }) =>
+    api.delete('/users/me', { data }),
+  updateFcmToken: (fcm_token: string) =>
+    api.patch('/users/me/fcm-token', { fcm_token }),
   getNotificationPreferences: () =>
     api.get('/users/me/notification-preferences'),
   updateNotificationPreferences: (preferences: {

@@ -10,9 +10,11 @@ import {
     ScrollView,
     Switch,
     ActivityIndicator,
+    Platform,
 } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
 import { Ionicons } from "@expo/vector-icons";
+import { useNavigation } from "@react-navigation/native";
 import { Colors } from "../../../../theme/colors";
 import { SlideRightModal } from "../settings/SlideRightModal";
 import { usersApi } from "../../../../services/api";
@@ -38,6 +40,7 @@ export const SecurityCenterModal: React.FC<SecurityCenterModalProps> = ({
     onChangePasswordPress,
     onSubmitChangePassword,
 }) => {
+    const navigation = useNavigation<any>();
     const { t, i18n } = useTranslation();
     const isEn = i18n.language?.startsWith('en');
 
@@ -75,7 +78,7 @@ export const SecurityCenterModal: React.FC<SecurityCenterModalProps> = ({
     const [twoFactorEnabled, setTwoFactorEnabled] = useState(authTwoFactor || false);
     const [isUpdating2FA, setIsUpdating2FA] = useState(false);
     const [securityDetail, setSecurityDetail] = useState<
-        "twoFactor" | "devices" | "logins" | "question" | "changePassword" | null
+        "twoFactor" | "devices" | "logins" | "question" | "changePassword" | "deleteAccount" | null
     >(null);
     const [terminals, setTerminals] = useState<any[]>([]);
     const [loginHistories, setLoginHistories] = useState<any[]>([]);
@@ -221,11 +224,109 @@ export const SecurityCenterModal: React.FC<SecurityCenterModalProps> = ({
         setPasswordFeedback(null);
     };
 
+    const [deleteStep, setDeleteStep] = useState<1 | 2>(1);
+    const [deletePassword, setDeletePassword] = useState("");
+    const [showDeletePassword, setShowDeletePassword] = useState(false);
+    const [deleteConfirmPassword, setDeleteConfirmPassword] = useState("");
+    const [showDeleteConfirmPassword, setShowDeleteConfirmPassword] = useState(false);
+    const [deleteReason, setDeleteReason] = useState("Tôi không còn nhu cầu sử dụng");
+    const [customReason, setCustomReason] = useState("");
+    const [isDeletingAccount, setIsDeletingAccount] = useState(false);
+    const [deleteError, setDeleteError] = useState<string | null>(null);
+
+    const resetDeleteAccountForm = () => {
+        setDeleteStep(1);
+        setDeletePassword("");
+        setShowDeletePassword(false);
+        setDeleteConfirmPassword("");
+        setShowDeleteConfirmPassword(false);
+        setDeleteReason("Tôi không còn nhu cầu sử dụng");
+        setCustomReason("");
+        setDeleteError(null);
+        setIsDeletingAccount(false);
+    };
+
+    const handleDeleteAccount = async () => {
+        if (!deletePassword.trim()) {
+            setDeleteError("Vui lòng nhập mật khẩu để xác thực.");
+            return;
+        }
+        if (!deleteConfirmPassword.trim()) {
+            setDeleteError("Vui lòng xác nhận lại mật khẩu.");
+            return;
+        }
+        if (deletePassword !== deleteConfirmPassword) {
+            setDeleteError("Mật khẩu xác nhận không khớp. Vui lòng kiểm tra lại.");
+            return;
+        }
+
+        Alert.alert(
+            "Xác nhận xóa vĩnh viễn?",
+            "Tất cả dữ liệu cá nhân, thiết bị và lịch sử sinh tồn sẽ bị xóa vĩnh viễn không thể khôi phục. Bạn có chắc chắn muốn tiếp tục?",
+            [
+                { text: "Hủy bỏ", style: "cancel" },
+                {
+                    text: "Xác nhận xóa",
+                    style: "destructive",
+                    onPress: async () => {
+                        setIsDeletingAccount(true);
+                        setDeleteError(null);
+                        try {
+                            const finalReason =
+                                deleteReason === "Khác" && customReason.trim()
+                                    ? `Khác: ${customReason.trim()}`
+                                    : deleteReason;
+                            await usersApi.deleteMe({
+                                password: deletePassword,
+                                reason: finalReason,
+                            });
+                            Alert.alert(
+                                "Đã xóa tài khoản",
+                                "Tài khoản của bạn đã được xóa vĩnh viễn khỏi hệ thống Smart Elderly Care AI.",
+                                [
+                                    {
+                                        text: "Đồng ý",
+                                        onPress: async () => {
+                                            resetDeleteAccountForm();
+                                            setSecurityDetail(null);
+                                            onClose();
+                                            useAuthStore.getState().logout();
+                                            await useAuthStore.persist?.clearStorage?.();
+                                            if (Platform.OS !== "web") {
+                                                navigation?.getParent?.()?.reset?.({
+                                                    index: 0,
+                                                    routes: [{ name: "Login" }],
+                                                });
+                                            }
+                                        },
+                                    },
+                                ],
+                                { cancelable: false }
+                            );
+                        } catch (err: any) {
+                            const msg =
+                                err?.response?.data?.detail ||
+                                err?.message ||
+                                "Xóa tài khoản thất bại. Vui lòng kiểm tra lại mật khẩu.";
+                            setDeleteError(msg);
+                            Alert.alert("Không thể xóa tài khoản", msg);
+                        } finally {
+                            setIsDeletingAccount(false);
+                        }
+                    },
+                },
+            ]
+        );
+    };
+
     const openSecurityDetail = (
-        type: "twoFactor" | "devices" | "logins" | "question" | "changePassword",
+        type: "twoFactor" | "devices" | "logins" | "question" | "changePassword" | "deleteAccount",
     ) => {
         if (type === "changePassword") {
             resetPasswordForm();
+        }
+        if (type === "deleteAccount") {
+            resetDeleteAccountForm();
         }
         if (type === "devices") {
             fetchTerminalsData();
@@ -238,6 +339,7 @@ export const SecurityCenterModal: React.FC<SecurityCenterModalProps> = ({
 
     const handleClose = () => {
         resetPasswordForm();
+        resetDeleteAccountForm();
         setSecurityDetail(null);
         onClose();
     };
@@ -344,7 +446,13 @@ export const SecurityCenterModal: React.FC<SecurityCenterModalProps> = ({
                                 isDarkMode && { backgroundColor: "#1E293B" },
                             ]}
                             onPress={() => {
+                                if (securityDetail === "deleteAccount" && deleteStep === 2) {
+                                    setDeleteError(null);
+                                    setDeleteStep(1);
+                                    return;
+                                }
                                 resetPasswordForm();
+                                resetDeleteAccountForm();
                                 setSecurityDetail(null);
                             }}
                             activeOpacity={0.7}
@@ -370,7 +478,11 @@ export const SecurityCenterModal: React.FC<SecurityCenterModalProps> = ({
                                     ? "Nhật ký đăng nhập"
                                     : securityDetail === "changePassword"
                                       ? "Đổi mật khẩu"
-                                      : "Hướng dẫn bảo mật"}
+                                      : securityDetail === "deleteAccount"
+                                        ? deleteStep === 2
+                                          ? "Xác nhận xóa tài khoản"
+                                          : "Xóa tài khoản vĩnh viễn"
+                                        : "Hướng dẫn bảo mật"}
                         </Text>
                         <View style={{ width: 40 }} />
                     </View>
@@ -1194,6 +1306,591 @@ export const SecurityCenterModal: React.FC<SecurityCenterModalProps> = ({
                                 </TouchableOpacity>
                             </View>
                         )}
+
+                        {securityDetail === "deleteAccount" && (
+                            <View style={styles.deleteAccountContainer}>
+                                {/* Step Indicator */}
+                                <View style={styles.deleteStepIndicator}>
+                                    <View style={styles.stepItem}>
+                                        <View
+                                            style={[
+                                                styles.stepCircle,
+                                                deleteStep === 1
+                                                    ? styles.stepCircleActive
+                                                    : styles.stepCircleDone,
+                                            ]}
+                                        >
+                                            {deleteStep === 2 ? (
+                                                <Ionicons name="checkmark" size={13} color="#FFFFFF" />
+                                            ) : (
+                                                <Text style={styles.stepNumberText}>1</Text>
+                                            )}
+                                        </View>
+                                        <Text
+                                            style={[
+                                                styles.stepLabel,
+                                                deleteStep === 1 && styles.stepLabelActive,
+                                                isDarkMode && {
+                                                    color: deleteStep === 1 ? Colors.primary : "#94A3B8",
+                                                },
+                                            ]}
+                                        >
+                                            1. Chọn lý do
+                                        </Text>
+                                    </View>
+
+                                    <View
+                                        style={[
+                                            styles.stepLine,
+                                            deleteStep === 2 && styles.stepLineActive,
+                                            isDarkMode && {
+                                                backgroundColor:
+                                                    deleteStep === 2 ? Colors.primary : "#334155",
+                                            },
+                                        ]}
+                                    />
+
+                                    <View style={styles.stepItem}>
+                                        <View
+                                            style={[
+                                                styles.stepCircle,
+                                                deleteStep === 2
+                                                    ? styles.stepCircleActive
+                                                    : styles.stepCircleInactive,
+                                            ]}
+                                        >
+                                            <Text
+                                                style={[
+                                                    styles.stepNumberText,
+                                                    deleteStep !== 2 && { color: "#94A3B8" },
+                                                ]}
+                                            >
+                                                2
+                                            </Text>
+                                        </View>
+                                        <Text
+                                            style={[
+                                                styles.stepLabel,
+                                                deleteStep === 2 && styles.stepLabelActive,
+                                                isDarkMode && {
+                                                    color: deleteStep === 2 ? Colors.primary : "#94A3B8",
+                                                },
+                                            ]}
+                                        >
+                                            2. Xác nhận bảo mật
+                                        </Text>
+                                    </View>
+                                </View>
+
+                                {deleteStep === 1 ? (
+                                    <>
+                                        {/* Card Cảnh báo hậu quả */}
+                                        <View
+                                            style={[
+                                                styles.deleteWarningCard,
+                                                isDarkMode && {
+                                                    backgroundColor: "#1E293B",
+                                                    borderColor: "rgba(239, 68, 68, 0.35)",
+                                                },
+                                            ]}
+                                        >
+                                            <View style={styles.deleteWarningHeader}>
+                                                <View style={styles.deleteWarningIconBox}>
+                                                    <Ionicons name="warning" size={26} color="#EF4444" />
+                                                </View>
+                                                <View style={{ flex: 1 }}>
+                                                    <Text
+                                                        style={[
+                                                            styles.deleteWarningTitle,
+                                                            isDarkMode && { color: "#F8FAFC" },
+                                                        ]}
+                                                    >
+                                                        Cảnh báo bảo mật quan trọng
+                                                    </Text>
+                                                    <Text
+                                                        style={[
+                                                            styles.deleteWarningSubtitle,
+                                                            isDarkMode && { color: "#94A3B8" },
+                                                        ]}
+                                                    >
+                                                        Hành động này sẽ xóa vĩnh viễn tài khoản của bạn và KHÔNG THỂ HOÀN TÁC.
+                                                    </Text>
+                                                </View>
+                                            </View>
+
+                                            <View style={styles.deleteConsequencesList}>
+                                                <View style={styles.consequenceRow}>
+                                                    <Ionicons name="close-circle" size={18} color="#EF4444" />
+                                                    <Text
+                                                        style={[
+                                                            styles.consequenceText,
+                                                            isDarkMode && { color: "#E2E8F0" },
+                                                        ]}
+                                                    >
+                                                        Hồ sơ người giám sát, họ tên, số điện thoại sẽ bị xóa vĩnh viễn.
+                                                    </Text>
+                                                </View>
+
+                                                <View style={styles.consequenceRow}>
+                                                    <Ionicons name="close-circle" size={18} color="#EF4444" />
+                                                    <Text
+                                                        style={[
+                                                            styles.consequenceText,
+                                                            isDarkMode && { color: "#E2E8F0" },
+                                                        ]}
+                                                    >
+                                                        Hủy toàn bộ liên kết thiết bị giám sát (Camera AI, Vòng BLE, Hub AI).
+                                                    </Text>
+                                                </View>
+
+                                                <View style={styles.consequenceRow}>
+                                                    <Ionicons name="close-circle" size={18} color="#EF4444" />
+                                                    <Text
+                                                        style={[
+                                                            styles.consequenceText,
+                                                            isDarkMode && { color: "#E2E8F0" },
+                                                        ]}
+                                                    >
+                                                        Toàn bộ chuỗi dữ liệu nhịp tim, SpO2, thân nhiệt và lịch sử SOS bị xóa sạch.
+                                                    </Text>
+                                                </View>
+
+                                                <View style={styles.consequenceRow}>
+                                                    <Ionicons name="close-circle" size={18} color="#EF4444" />
+                                                    <Text
+                                                        style={[
+                                                            styles.consequenceText,
+                                                            isDarkMode && { color: "#E2E8F0" },
+                                                        ]}
+                                                    >
+                                                        Nếu bạn là Chủ hộ, nhà không thể còn thành viên khác khi xóa tài khoản.
+                                                    </Text>
+                                                </View>
+                                            </View>
+                                        </View>
+
+                                        {/* Card Lý do xóa tài khoản */}
+                                        <View
+                                            style={[
+                                                styles.deleteFormCard,
+                                                isDarkMode && {
+                                                    backgroundColor: "#1E293B",
+                                                    borderColor: "#334155",
+                                                },
+                                            ]}
+                                        >
+                                            <Text
+                                                style={[
+                                                    styles.deleteCardHeading,
+                                                    isDarkMode && { color: "#F8FAFC" },
+                                                ]}
+                                            >
+                                                Lý do bạn muốn xóa tài khoản?
+                                            </Text>
+                                            <Text
+                                                style={[
+                                                    styles.deleteCardSub,
+                                                    isDarkMode && { color: "#94A3B8" },
+                                                ]}
+                                            >
+                                                Ý kiến đóng góp giúp chúng tôi cải thiện chất lượng dịch vụ:
+                                            </Text>
+
+                                            <View style={styles.reasonChipsContainer}>
+                                                {[
+                                                    "Tôi không còn nhu cầu sử dụng",
+                                                    "Tôi muốn tạo tài khoản mới",
+                                                    "Lo ngại về quyền riêng tư / dữ liệu",
+                                                    "Trải nghiệm ứng dụng chưa phù hợp",
+                                                    "Khác",
+                                                ].map((reason) => {
+                                                    const isSelected = deleteReason === reason;
+                                                    return (
+                                                        <TouchableOpacity
+                                                            key={reason}
+                                                            style={[
+                                                                styles.reasonChip,
+                                                                isSelected && styles.reasonChipSelected,
+                                                                isDarkMode && {
+                                                                    backgroundColor: isSelected
+                                                                        ? "rgba(255, 122, 0, 0.16)"
+                                                                        : "#0F172A",
+                                                                    borderColor: isSelected
+                                                                        ? Colors.primary
+                                                                        : "#334155",
+                                                                },
+                                                            ]}
+                                                            onPress={() => setDeleteReason(reason)}
+                                                            activeOpacity={0.7}
+                                                        >
+                                                            <Ionicons
+                                                                name={
+                                                                    isSelected
+                                                                        ? "radio-button-on"
+                                                                        : "radio-button-off"
+                                                                }
+                                                                size={16}
+                                                                color={
+                                                                    isSelected
+                                                                        ? Colors.primary
+                                                                        : isDarkMode
+                                                                          ? "#64748B"
+                                                                          : "#94A3B8"
+                                                                }
+                                                            />
+                                                            <Text
+                                                                style={[
+                                                                    styles.reasonChipText,
+                                                                    isSelected && styles.reasonChipTextSelected,
+                                                                    isDarkMode && {
+                                                                        color: isSelected
+                                                                            ? Colors.primary
+                                                                            : "#94A3B8",
+                                                                    },
+                                                                ]}
+                                                            >
+                                                                {reason}
+                                                            </Text>
+                                                        </TouchableOpacity>
+                                                    );
+                                                })}
+                                            </View>
+
+                                            {deleteReason === "Khác" && (
+                                                <TextInput
+                                                    style={[
+                                                        styles.deleteInput,
+                                                        { marginTop: 12, height: 70, textAlignVertical: "top" },
+                                                        isDarkMode && {
+                                                            backgroundColor: "#0F172A",
+                                                            borderColor: "#334155",
+                                                            color: "#F8FAFC",
+                                                        },
+                                                    ]}
+                                                    multiline
+                                                    numberOfLines={3}
+                                                    placeholder="Vui lòng cho biết lý do của bạn..."
+                                                    placeholderTextColor={isDarkMode ? "#64748B" : "#94A3B8"}
+                                                    value={customReason}
+                                                    onChangeText={setCustomReason}
+                                                />
+                                            )}
+                                        </View>
+
+                                        {/* Nút Tiếp tục sang bước xác nhận */}
+                                        <TouchableOpacity
+                                            style={styles.stepNextBtn}
+                                            onPress={() => {
+                                                if (deleteReason === "Khác" && !customReason.trim()) {
+                                                    setDeleteError("Vui lòng nhập lý do cụ thể của bạn.");
+                                                    return;
+                                                }
+                                                setDeleteError(null);
+                                                setDeleteStep(2);
+                                            }}
+                                            activeOpacity={0.8}
+                                        >
+                                            <Text style={styles.stepNextBtnText}>Tiếp tục</Text>
+                                            <Ionicons name="arrow-forward" size={18} color="#FFFFFF" />
+                                        </TouchableOpacity>
+
+                                        <TouchableOpacity
+                                            style={[
+                                                styles.deleteCancelBtn,
+                                                isDarkMode && {
+                                                    backgroundColor: "#0F172A",
+                                                    borderColor: "#334155",
+                                                },
+                                            ]}
+                                            onPress={() => {
+                                                resetDeleteAccountForm();
+                                                setSecurityDetail(null);
+                                            }}
+                                            activeOpacity={0.7}
+                                        >
+                                            <Text
+                                                style={[
+                                                    styles.deleteCancelBtnText,
+                                                    isDarkMode && { color: "#94A3B8" },
+                                                ]}
+                                            >
+                                                Hủy bỏ & Giữ lại tài khoản
+                                            </Text>
+                                        </TouchableOpacity>
+                                    </>
+                                ) : (
+                                    <>
+                                        {/* Box Tóm tắt lý do */}
+                                        <View
+                                            style={[
+                                                styles.selectedReasonSummaryBox,
+                                                isDarkMode && {
+                                                    backgroundColor: "#1E293B",
+                                                    borderColor: "#334155",
+                                                },
+                                            ]}
+                                        >
+                                            <Ionicons
+                                                name="information-circle-outline"
+                                                size={20}
+                                                color={Colors.primary}
+                                            />
+                                            <View style={{ flex: 1 }}>
+                                                <Text
+                                                    style={[
+                                                        styles.selectedReasonLabel,
+                                                        isDarkMode && { color: "#94A3B8" },
+                                                    ]}
+                                                >
+                                                    Lý do xóa tài khoản:
+                                                </Text>
+                                                <Text
+                                                    style={[
+                                                        styles.selectedReasonValue,
+                                                        isDarkMode && { color: "#F8FAFC" },
+                                                    ]}
+                                                >
+                                                    {deleteReason === "Khác" && customReason.trim()
+                                                        ? customReason.trim()
+                                                        : deleteReason}
+                                                </Text>
+                                            </View>
+                                            <TouchableOpacity
+                                                onPress={() => {
+                                                    setDeleteError(null);
+                                                    setDeleteStep(1);
+                                                }}
+                                                hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
+                                            >
+                                                <Text
+                                                    style={{
+                                                        fontSize: 13,
+                                                        color: Colors.primary,
+                                                        fontWeight: "700",
+                                                    }}
+                                                >
+                                                    Đổi
+                                                </Text>
+                                            </TouchableOpacity>
+                                        </View>
+
+                                        {/* Card Xác thực bảo mật (Hình 2 circled) */}
+                                        <View
+                                            style={[
+                                                styles.deleteFormCard,
+                                                isDarkMode && {
+                                                    backgroundColor: "#1E293B",
+                                                    borderColor: "#334155",
+                                                },
+                                            ]}
+                                        >
+                                            <Text
+                                                style={[
+                                                    styles.deleteCardHeading,
+                                                    isDarkMode && { color: "#F8FAFC" },
+                                                ]}
+                                            >
+                                                Xác thực bảo mật
+                                            </Text>
+                                            <Text
+                                                style={[
+                                                    styles.deleteCardSub,
+                                                    isDarkMode && { color: "#94A3B8" },
+                                                ]}
+                                            >
+                                                Vui lòng nhập mật khẩu tài khoản và xác nhận lại mật khẩu để tiếp tục:
+                                            </Text>
+
+                                            {deleteError && (
+                                                <View
+                                                    style={[
+                                                        styles.deleteErrorBanner,
+                                                        isDarkMode && {
+                                                            backgroundColor: "rgba(239, 68, 68, 0.15)",
+                                                            borderColor: "#7F1D1D",
+                                                        },
+                                                    ]}
+                                                >
+                                                    <Ionicons name="alert-circle" size={18} color="#EF4444" />
+                                                    <Text style={styles.deleteErrorBannerText}>
+                                                        {deleteError}
+                                                    </Text>
+                                                </View>
+                                            )}
+
+                                            {/* 1. Nhập mật khẩu */}
+                                            <Text
+                                                style={[
+                                                    styles.deleteFieldLabel,
+                                                    isDarkMode && { color: "#F8FAFC" },
+                                                ]}
+                                            >
+                                                1. Nhập mật khẩu <Text style={{ color: "#EF4444" }}>*</Text>
+                                            </Text>
+                                            <View
+                                                style={[
+                                                    styles.deleteInputWrap,
+                                                    isDarkMode && {
+                                                        backgroundColor: "#0F172A",
+                                                        borderColor: "#334155",
+                                                    },
+                                                ]}
+                                            >
+                                                <Ionicons
+                                                    name="lock-closed-outline"
+                                                    size={20}
+                                                    color={isDarkMode ? "#64748B" : "#94A3B8"}
+                                                />
+                                                <TextInput
+                                                    style={[
+                                                        styles.deleteInputInner,
+                                                        isDarkMode && { color: "#F8FAFC" },
+                                                    ]}
+                                                    secureTextEntry={!showDeletePassword}
+                                                    placeholder="Nhập mật khẩu của bạn"
+                                                    placeholderTextColor={
+                                                        isDarkMode ? "#64748B" : "#94A3B8"
+                                                    }
+                                                    value={deletePassword}
+                                                    onChangeText={(val) => {
+                                                        setDeletePassword(val);
+                                                        if (deleteError) setDeleteError(null);
+                                                    }}
+                                                />
+                                                <TouchableOpacity
+                                                    onPress={() =>
+                                                        setShowDeletePassword(!showDeletePassword)
+                                                    }
+                                                    hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
+                                                >
+                                                    <Ionicons
+                                                        name={
+                                                            showDeletePassword
+                                                                ? "eye-off-outline"
+                                                                : "eye-outline"
+                                                        }
+                                                        size={20}
+                                                        color={isDarkMode ? "#64748B" : "#94A3B8"}
+                                                    />
+                                                </TouchableOpacity>
+                                            </View>
+
+                                            {/* 2. Xác nhận mật khẩu */}
+                                            <Text
+                                                style={[
+                                                    styles.deleteFieldLabel,
+                                                    { marginTop: 14 },
+                                                    isDarkMode && { color: "#F8FAFC" },
+                                                ]}
+                                            >
+                                                2. Xác nhận mật khẩu <Text style={{ color: "#EF4444" }}>*</Text>
+                                            </Text>
+                                            <View
+                                                style={[
+                                                    styles.deleteInputWrap,
+                                                    isDarkMode && {
+                                                        backgroundColor: "#0F172A",
+                                                        borderColor: "#334155",
+                                                    },
+                                                ]}
+                                            >
+                                                <Ionicons
+                                                    name="lock-closed-outline"
+                                                    size={20}
+                                                    color={isDarkMode ? "#64748B" : "#94A3B8"}
+                                                />
+                                                <TextInput
+                                                    style={[
+                                                        styles.deleteInputInner,
+                                                        isDarkMode && { color: "#F8FAFC" },
+                                                    ]}
+                                                    secureTextEntry={!showDeleteConfirmPassword}
+                                                    placeholder="Nhập lại mật khẩu để xác nhận"
+                                                    placeholderTextColor={
+                                                        isDarkMode ? "#64748B" : "#94A3B8"
+                                                    }
+                                                    value={deleteConfirmPassword}
+                                                    onChangeText={(val) => {
+                                                        setDeleteConfirmPassword(val);
+                                                        if (deleteError) setDeleteError(null);
+                                                    }}
+                                                />
+                                                <TouchableOpacity
+                                                    onPress={() =>
+                                                        setShowDeleteConfirmPassword(!showDeleteConfirmPassword)
+                                                    }
+                                                    hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
+                                                >
+                                                    <Ionicons
+                                                        name={
+                                                            showDeleteConfirmPassword
+                                                                ? "eye-off-outline"
+                                                                : "eye-outline"
+                                                        }
+                                                        size={20}
+                                                        color={isDarkMode ? "#64748B" : "#94A3B8"}
+                                                    />
+                                                </TouchableOpacity>
+                                            </View>
+
+                                            {/* Nút hành động */}
+                                            <TouchableOpacity
+                                                style={[
+                                                    styles.deleteSubmitBtn,
+                                                    (!deletePassword.trim() ||
+                                                        !deleteConfirmPassword.trim() ||
+                                                        deletePassword !== deleteConfirmPassword) &&
+                                                        styles.deleteSubmitBtnDisabled,
+                                                ]}
+                                                disabled={
+                                                    isDeletingAccount ||
+                                                    !deletePassword.trim() ||
+                                                    !deleteConfirmPassword.trim() ||
+                                                    deletePassword !== deleteConfirmPassword
+                                                }
+                                                onPress={handleDeleteAccount}
+                                                activeOpacity={0.8}
+                                            >
+                                                {isDeletingAccount ? (
+                                                    <ActivityIndicator size="small" color="#FFFFFF" />
+                                                ) : (
+                                                    <>
+                                                        <Ionicons name="trash" size={18} color="#FFFFFF" />
+                                                        <Text style={styles.deleteSubmitBtnText}>
+                                                            Xóa vĩnh viễn tài khoản của tôi
+                                                        </Text>
+                                                    </>
+                                                )}
+                                            </TouchableOpacity>
+
+                                            <TouchableOpacity
+                                                style={[
+                                                    styles.deleteCancelBtn,
+                                                    isDarkMode && {
+                                                        backgroundColor: "#0F172A",
+                                                        borderColor: "#334155",
+                                                    },
+                                                ]}
+                                                onPress={() => {
+                                                    setDeleteError(null);
+                                                    setDeleteStep(1);
+                                                }}
+                                                activeOpacity={0.7}
+                                            >
+                                                <Text
+                                                    style={[
+                                                        styles.deleteCancelBtnText,
+                                                        isDarkMode && { color: "#94A3B8" },
+                                                    ]}
+                                                >
+                                                    Quay lại chọn lý do
+                                                </Text>
+                                            </TouchableOpacity>
+                                        </View>
+                                    </>
+                                )}
+                            </View>
+                        )}
                     </ScrollView>
                 </SafeAreaView>
             ) : (
@@ -1704,6 +2401,44 @@ export const SecurityCenterModal: React.FC<SecurityCenterModalProps> = ({
                                 </View>
                             </TouchableOpacity>
                         </View>
+
+                        {/* XÓA TÀI KHOẢN VĨNH VIỄN */}
+                        <TouchableOpacity
+                            style={[
+                                styles.securityDangerRow,
+                                isDarkMode && {
+                                    backgroundColor: "#1E293B",
+                                    borderColor: "rgba(239, 68, 68, 0.3)",
+                                },
+                            ]}
+                            onPress={() => openSecurityDetail("deleteAccount")}
+                            activeOpacity={0.75}
+                        >
+                            <View style={styles.securityDangerRowLeft}>
+                                <View
+                                    style={[
+                                        styles.securityDangerIconSquircle,
+                                        { backgroundColor: "#FEF2F2" },
+                                        isDarkMode && { backgroundColor: "rgba(239, 68, 68, 0.15)" },
+                                    ]}
+                                >
+                                    <Ionicons name="trash-outline" size={22} color="#EF4444" />
+                                </View>
+                                <Text
+                                    style={[
+                                        styles.securityDangerRowTitle,
+                                        isDarkMode && { color: "#F8FAFC" },
+                                    ]}
+                                >
+                                    Xóa tài khoản vĩnh viễn
+                                </Text>
+                            </View>
+                            <Ionicons
+                                name="chevron-forward"
+                                size={18}
+                                color={isDarkMode ? "#64748B" : "#94A3B8"}
+                            />
+                        </TouchableOpacity>
 
                         {/* AI CARE ADVISORY CARD */}
                         <View
@@ -2486,5 +3221,321 @@ const styles = StyleSheet.create({
         fontSize: 12.5,
         fontWeight: "600",
         color: "#EA580C",
+    },
+
+    // Danger Row (gọn gàng, loại bỏ các chi tiết thừa)
+    securityDangerRow: {
+        flexDirection: "row",
+        alignItems: "center",
+        justifyContent: "space-between",
+        backgroundColor: "#FFFFFF",
+        borderRadius: 16,
+        paddingVertical: 12,
+        paddingHorizontal: 16,
+        borderWidth: 1,
+        borderColor: "#FECACA",
+        marginBottom: 16,
+    },
+    securityDangerRowLeft: {
+        flexDirection: "row",
+        alignItems: "center",
+        gap: 12,
+    },
+    securityDangerIconSquircle: {
+        width: 42,
+        height: 42,
+        borderRadius: 12,
+        alignItems: "center",
+        justifyContent: "center",
+    },
+    securityDangerRowTitle: {
+        fontSize: 15,
+        fontWeight: "700",
+        color: "#EF4444",
+    },
+
+    // Step Indicator
+    deleteStepIndicator: {
+        flexDirection: "row",
+        alignItems: "center",
+        justifyContent: "center",
+        paddingVertical: 8,
+        paddingHorizontal: 8,
+        marginBottom: 8,
+    },
+    stepItem: {
+        flexDirection: "row",
+        alignItems: "center",
+        gap: 6,
+    },
+    stepCircle: {
+        width: 24,
+        height: 24,
+        borderRadius: 12,
+        alignItems: "center",
+        justifyContent: "center",
+    },
+    stepCircleActive: {
+        backgroundColor: Colors.primary,
+    },
+    stepCircleDone: {
+        backgroundColor: "#10B981",
+    },
+    stepCircleInactive: {
+        backgroundColor: "#CBD5E1",
+    },
+    stepNumberText: {
+        fontSize: 12,
+        fontWeight: "700",
+        color: "#FFFFFF",
+    },
+    stepLabel: {
+        fontSize: 12.5,
+        fontWeight: "600",
+        color: "#94A3B8",
+    },
+    stepLabelActive: {
+        color: Colors.primary,
+        fontWeight: "700",
+    },
+    stepLine: {
+        flex: 1,
+        height: 2,
+        backgroundColor: "#E2E8F0",
+        marginHorizontal: 10,
+    },
+    stepLineActive: {
+        backgroundColor: Colors.primary,
+    },
+    stepNextBtn: {
+        flexDirection: "row",
+        alignItems: "center",
+        justifyContent: "center",
+        backgroundColor: Colors.primary,
+        height: 48,
+        borderRadius: 14,
+        marginTop: 14,
+        gap: 8,
+        shadowColor: Colors.primary,
+        shadowOffset: { width: 0, height: 4 },
+        shadowOpacity: 0.25,
+        shadowRadius: 8,
+        elevation: 3,
+    },
+    stepNextBtnText: {
+        fontSize: 15,
+        fontWeight: "700",
+        color: "#FFFFFF",
+    },
+    selectedReasonSummaryBox: {
+        flexDirection: "row",
+        alignItems: "center",
+        gap: 10,
+        backgroundColor: "#FFF7ED",
+        borderWidth: 1,
+        borderColor: "#FFEDD5",
+        borderRadius: 14,
+        padding: 12,
+        marginBottom: 4,
+    },
+    selectedReasonLabel: {
+        fontSize: 11.5,
+        color: "#9A3412",
+        fontWeight: "500",
+    },
+    selectedReasonValue: {
+        fontSize: 13,
+        fontWeight: "700",
+        color: "#C2410C",
+        marginTop: 1,
+    },
+
+    // Delete Account detail view
+    deleteAccountContainer: {
+        gap: 16,
+    },
+    deleteWarningCard: {
+        backgroundColor: "#FEF2F2",
+        borderRadius: 20,
+        padding: 18,
+        borderWidth: 1,
+        borderColor: "#FECACA",
+    },
+    deleteWarningHeader: {
+        flexDirection: "row",
+        alignItems: "flex-start",
+        gap: 12,
+        marginBottom: 14,
+    },
+    deleteWarningIconBox: {
+        width: 44,
+        height: 44,
+        borderRadius: 12,
+        backgroundColor: "rgba(239, 68, 68, 0.12)",
+        alignItems: "center",
+        justifyContent: "center",
+    },
+    deleteWarningTitle: {
+        fontSize: 16,
+        fontWeight: "800",
+        color: "#B91C1C",
+    },
+    deleteWarningSubtitle: {
+        fontSize: 12.5,
+        color: "#7F1D1D",
+        marginTop: 2,
+        lineHeight: 18,
+    },
+    deleteConsequencesList: {
+        gap: 10,
+        paddingTop: 8,
+        borderTopWidth: 1,
+        borderTopColor: "rgba(239, 68, 68, 0.15)",
+    },
+    consequenceRow: {
+        flexDirection: "row",
+        alignItems: "flex-start",
+        gap: 8,
+    },
+    consequenceText: {
+        flex: 1,
+        fontSize: 12.5,
+        color: "#374151",
+        lineHeight: 18,
+    },
+    deleteFormCard: {
+        backgroundColor: "#FFFFFF",
+        borderRadius: 20,
+        padding: 18,
+        borderWidth: 1,
+        borderColor: "#E2E8F0",
+    },
+    deleteCardHeading: {
+        fontSize: 15.5,
+        fontWeight: "700",
+        color: "#0F172A",
+    },
+    deleteCardSub: {
+        fontSize: 12.5,
+        color: "#64748B",
+        marginTop: 4,
+        marginBottom: 14,
+    },
+    reasonChipsContainer: {
+        gap: 8,
+    },
+    reasonChip: {
+        flexDirection: "row",
+        alignItems: "center",
+        gap: 10,
+        paddingVertical: 10,
+        paddingHorizontal: 12,
+        borderRadius: 12,
+        borderWidth: 1,
+        borderColor: "#E2E8F0",
+        backgroundColor: "#F8FAFC",
+    },
+    reasonChipSelected: {
+        borderColor: Colors.primary,
+        backgroundColor: Colors.primaryLight,
+    },
+    reasonChipText: {
+        fontSize: 13,
+        fontWeight: "600",
+        color: "#475569",
+    },
+    reasonChipTextSelected: {
+        color: Colors.primary,
+        fontWeight: "700",
+    },
+    deleteInput: {
+        borderRadius: 12,
+        borderWidth: 1,
+        borderColor: "#E2E8F0",
+        backgroundColor: "#F8FAFC",
+        padding: 10,
+        fontSize: 13,
+        color: "#0F172A",
+    },
+    deleteFieldLabel: {
+        fontSize: 13.5,
+        fontWeight: "700",
+        color: "#0F172A",
+        marginBottom: 8,
+    },
+    deleteInputWrap: {
+        flexDirection: "row",
+        alignItems: "center",
+        backgroundColor: "#F8FAFC",
+        borderWidth: 1,
+        borderColor: "#E2E8F0",
+        borderRadius: 14,
+        paddingHorizontal: 14,
+        height: 48,
+        gap: 10,
+    },
+    deleteInputInner: {
+        flex: 1,
+        fontSize: 14,
+        color: "#0F172A",
+    },
+    deleteErrorBanner: {
+        flexDirection: "row",
+        alignItems: "center",
+        gap: 8,
+        backgroundColor: "#FEF2F2",
+        borderWidth: 1,
+        borderColor: "#FECACA",
+        borderRadius: 12,
+        padding: 12,
+        marginBottom: 14,
+    },
+    deleteErrorBannerText: {
+        flex: 1,
+        fontSize: 12.5,
+        fontWeight: "600",
+        color: "#EF4444",
+        lineHeight: 18,
+    },
+    deleteSubmitBtn: {
+        flexDirection: "row",
+        alignItems: "center",
+        justifyContent: "center",
+        backgroundColor: "#EF4444",
+        height: 48,
+        borderRadius: 14,
+        marginTop: 20,
+        gap: 8,
+        shadowColor: "#EF4444",
+        shadowOffset: { width: 0, height: 4 },
+        shadowOpacity: 0.25,
+        shadowRadius: 8,
+        elevation: 3,
+    },
+    deleteSubmitBtnDisabled: {
+        backgroundColor: "#FCA5A5",
+        opacity: 0.7,
+        shadowOpacity: 0,
+        elevation: 0,
+    },
+    deleteSubmitBtnText: {
+        fontSize: 14.5,
+        fontWeight: "700",
+        color: "#FFFFFF",
+    },
+    deleteCancelBtn: {
+        height: 44,
+        borderRadius: 14,
+        alignItems: "center",
+        justifyContent: "center",
+        marginTop: 10,
+        borderWidth: 1,
+        borderColor: "#E2E8F0",
+        backgroundColor: "#FFFFFF",
+    },
+    deleteCancelBtnText: {
+        fontSize: 13.5,
+        fontWeight: "600",
+        color: "#64748B",
     },
 });

@@ -6,7 +6,7 @@ users.py – Quản lý tài khoản Caregiver / Bác sĩ.
 
 from fastapi import APIRouter, Body, Depends, File, HTTPException, Query, Request, UploadFile, status
 from starlette.concurrency import run_in_threadpool
-from sqlalchemy import select, update
+from sqlalchemy import select, update, delete
 
 from sqlalchemy.ext.asyncio import AsyncSession
 
@@ -73,10 +73,13 @@ from app.models.device import Device
 from app.models.incident import Incident
 from app.models.system_notification import SystemNotification
 from app.models.user import User, UserStatus
+from app.models.user_terminal import UserTerminal, UserLoginHistory
+from app.models.device_group import DeviceGroup
 from sqlalchemy import func, or_, and_
 
 from pydantic import BaseModel
 from app.schemas.user import (
+    DeleteAccountRequest,
     FontSizePreferenceUpdate,
     LanguagePreferenceUpdate,
     NotificationPreferenceUpdate,
@@ -869,6 +872,158 @@ async def delete_my_avatar(
     await db.refresh(current_user)
 
     return current_user
+
+
+@router.delete("/me")
+async def delete_my_account(
+    payload: Optional[DeleteAccountRequest] = Body(default=None),
+    password: Optional[str] = Query(default=None),
+    reason: Optional[str] = Query(default=None),
+    current_user: User = Depends(get_current_user),
+    db: AsyncSession = Depends(get_db),
+):
+    """
+    Người dùng tự xóa vĩnh viễn tài khoản của chính mình.
+    Yêu cầu mật khẩu xác thực.
+    Kiểm tra các ràng buộc an toàn:
+    - Admin cuối cùng không được tự xóa
+    - Chủ hộ còn thành viên khác thì không được tự xóa (cần chuyển quyền hoặc giải tán trước)
+    - Dọn dẹp tài nguyên nhà (nếu không còn ai), thiết bị, nhật ký và tài khoản
+    """
+    provided_password = (payload.password if payload and payload.password else password)
+    provided_reason = (payload.reason if payload and payload.reason else reason) or "Người dùng chủ động yêu cầu xóa tài khoản vĩnh viễn"
+
+    # 1. Xác thực mật khẩu
+    if not provided_password:
+        raise HTTPException(
+            status_code=400,
+            detail="Vui lòng cung cấp mật khẩu hiện tại để xác nhận xóa tài khoản."
+        )
+    if not verify_password(provided_password, current_user.hashed_password):
+        raise HTTPException(
+            status_code=400,
+            detail="Mật khẩu xác nhận không chính xác. Vui lòng kiểm tra lại."
+        )
+
+    # 2. Kiểm tra ràng buộc an toàn
+    # 2.1 Admin duy nhất
+    if current_user.role == "admin":
+        admin_count_res = await db.execute(
+            select(func.count(User.id)).where(User.role == "admin", User.is_active == True)
+        )
+        admin_count = admin_count_res.scalar() or 0
+        if admin_count <= 1:
+            raise HTTPException(
+                status_code=400,
+                detail="Không thể xóa tài khoản Quản trị viên duy nhất của hệ thống."
+            )
+
+    # 2.2 Kiểm tra căn nhà sở hữu
+    houses_res = await db.execute(select(House).where(House.owner_id == current_user.id))
+    owned_houses = list(houses_res.scalars().all())
+    for house in owned_houses:
+        mem_res = await db.execute(
+            select(func.count(HouseMember.id)).where(
+                HouseMember.house_id == house.id,
+                HouseMember.user_id != current_user.id,
+                HouseMember.status == "ACTIVE"
+            )
+        )
+        active_mems = mem_res.scalar() or 0
+        if active_mems > 0:
+            raise HTTPException(
+                status_code=400,
+                detail=f"Căn nhà '{house.name}' vẫn còn {active_mems} thành viên gia đình khác đang hoạt động. Vui lòng chuyển quyền Chủ hộ hoặc mời thành viên rời nhà trước khi xóa tài khoản."
+            )
+
+    # 2.3 Cảnh báo khẩn cấp chưa xử lý
+    inc_res = await db.execute(
+        select(Incident.id)
+        .join(Device, Incident.device_id == Device.id)
+        .where(
+            Device.owner_id == current_user.id,
+            Incident.is_acknowledged == False,
+        )
+        .limit(1)
+    )
+    if inc_res.scalar_one_or_none():
+        raise HTTPException(
+            status_code=400,
+            detail="Tài khoản đang có cảnh báo khẩn cấp chưa được xử lý. Vui lòng kiểm tra và xử lý cảnh báo trước khi xóa."
+        )
+
+    # 3. Tiến hành dọn dẹp dữ liệu
+    target_name = current_user.full_name
+    target_phone = current_user.phone or ""
+    uid = current_user.id
+
+    # 3.1 Dọn dẹp nhà do user sở hữu (khi không còn thành viên nào khác)
+    for house in owned_houses:
+        devs_res = await db.execute(select(Device).where(Device.house_id == house.id))
+        for dev in devs_res.scalars().all():
+            dev.house_id = None
+            dev.group_id = None
+            dev.is_online = False
+            db.add(dev)
+        await db.execute(delete(HouseMember).where(HouseMember.house_id == house.id))
+        await db.execute(delete(ElderlyProfile).where(ElderlyProfile.house_id == house.id))
+        await db.execute(delete(DeviceGroup).where(DeviceGroup.house_id == house.id))
+        await db.delete(house)
+
+    # 3.2 Gỡ thiết bị cá nhân
+    user_devs_res = await db.execute(select(Device).where(Device.owner_id == uid))
+    for dev in user_devs_res.scalars().all():
+        dev.owner_id = None
+        dev.house_id = None
+        dev.group_id = None
+        dev.is_online = False
+        db.add(dev)
+
+    # 3.3 Gỡ acknowledged_by trên Incident
+    await db.execute(
+        update(Incident).where(Incident.acknowledged_by == uid).values(acknowledged_by=None)
+    )
+
+    # 3.4 Xóa UserTerminal, UserLoginHistory, HouseMember
+    await db.execute(delete(UserTerminal).where(UserTerminal.user_id == uid))
+    await db.execute(delete(UserLoginHistory).where(UserLoginHistory.user_id == uid))
+    await db.execute(delete(HouseMember).where(HouseMember.user_id == uid))
+
+    # 3.5 Xóa avatar trên đĩa nếu có
+    if current_user.avatar_url and "/static/avatars/" in current_user.avatar_url:
+        old_filename = current_user.avatar_url.split("/static/avatars/")[-1]
+        old_path = get_avatar_dir() / old_filename
+        if old_path.exists():
+            try:
+                old_path.unlink()
+            except Exception:
+                pass
+
+    # 3.6 Ghi log kiểm toán
+    await record_audit_log(
+        db=db,
+        event="XÓA TÀI KHOẢN VĨNH VIỄN",
+        user_name=f"{target_name} ({current_user.role})",
+        details=f"Người dùng tự xóa vĩnh viễn tài khoản [{target_name}] ({target_phone}). Lý do: {provided_reason}",
+        severity="high",
+        admin_id=str(uid),
+        action="SELF_DELETE_USER",
+        target_type="user",
+        target_id=str(uid),
+        reason=provided_reason,
+        commit=False,
+    )
+
+    # 3.7 Xóa người dùng và commit transaction
+    await crud_user.delete(db, uid)
+    await db.commit()
+    invalidate_users_cache()
+
+    return {
+        "success": True,
+        "message": "Tài khoản của bạn đã được xóa vĩnh viễn thành công.",
+        "user_id": str(uid),
+    }
 
 
 @router.patch("/me/language", response_model=UserOut)

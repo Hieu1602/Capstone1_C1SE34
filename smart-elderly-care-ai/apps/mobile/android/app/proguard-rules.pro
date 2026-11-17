@@ -11,4 +11,11 @@
 -keep class com.swmansion.reanimated.** { *; }
 -keep class com.facebook.react.turbomodule.** { *; }
 
+# SmartCare Native Modules & Background Services
+-keep class com.c1se34.smartelderlycare.** { *; }
+-keepclassmembers class com.c1se34.smartelderlycare.** {
+    @com.facebook.react.bridge.ReactMethod *;
+}
+
+
 # Add any project specific keep options here:

@@ -57,63 +57,87 @@ const CORE_MODULES = [
   },
 ];
 
-// Đánh giá nguy cơ té ngã tổng hợp (Clinical Fall Risk Matrix):
-// Kết hợp sự kiện té ngã vật lý và các bất thường huyết động (nhịp tim, SpO2, huyết áp, thân nhiệt, vận động)
+// Đánh giá chỉ số bất ổn sinh hiệu & nguy cơ ngã tổng hợp (Vital Instability & Fall Risk Index - Thang điểm 0–100):
+// Hệ thống hỗ trợ sàng lọc tham khảo – Kết hợp sự kiện té ngã vật lý (IMU) và các bất thường huyết động (HR, SpO2, Huyết áp, Thân nhiệt, Vận động).
+// Sử dụng nội suy tuyến tính (Piecewise Linear Interpolation) tránh giật ngưỡng và xử lý nghiêm ngặt khi thiếu dữ liệu cảm biến.
 const evaluateVitalFallRisk = (v: any): number => {
-  // 1. Nếu tháo vòng tay hoặc không có nhịp tim -> Tắt rủi ro đo đạc (0%)
+  // 1. Tháo vòng tay hoặc mất tín hiệu nhịp tim -> Tắt rủi ro đo đạc (0 điểm)
   const hr = typeof v.heart_rate === 'number' ? v.heart_rate : 0;
-  if (v.is_worn === false || hr === 0) return 0;
+  if (v.is_worn === false || hr <= 0) return 0;
 
-  // 2. KỊCH BẢN 11: Sự cố té ngã vật lý thực tế đã xảy ra (Fall = True) -> Báo động đỏ 95%
+  // 2. KỊCH BẢN 11: Sự cố té ngã vật lý thực tế được kích hoạt (Fall Detected) -> Điểm báo động đỏ 95
   if (v.fall_detected) return 95;
 
-  let risk = 5; // Mức nền sinh hoạt an toàn bình thường (Kịch bản 1: 5%)
-  const spo2 = typeof v.spo2 === 'number' ? v.spo2 : 98;
-  const bp = typeof v.bp_systolic === 'number' ? v.bp_systolic : 120;
-  const temp = typeof v.skin_temp_max === 'number' ? v.skin_temp_max : 36.5;
+  // Xử lý dữ liệu cảm biến: KHÔNG gán mặc định 98% SpO2 hay 120 mmHg để tránh che giấu lỗi cảm biến
+  const spo2 = typeof v.spo2 === 'number' && v.spo2 > 0 ? v.spo2 : null;
+  const bp = typeof v.bp_systolic === 'number' && v.bp_systolic > 0 ? v.bp_systolic : null;
+  const temp = typeof v.skin_temp_max === 'number' && v.skin_temp_max > 0 ? v.skin_temp_max : null;
+
+  // Nhận diện vận động: Ưu tiên cờ boolean chuẩn; nếu không rõ thì mặc định KHÔNG miễn trừ
   const act = String(v.activity_state || v.activity || '').toLowerCase();
-  const isExercising = act.includes('tập') || act.includes('vận động') || act.includes('đi lại') || act.includes('exercise') || act.includes('walk');
+  const isExercising = Boolean(
+    v.is_exercising === true ||
+    act.includes('tập') ||
+    act.includes('exercise') ||
+    act.includes('vận động thể dục')
+  );
 
   // 3. CÁC TỔ HỢP ĐA YẾU TỐ NGUY HIỂM CAO (MULTI-VITAL SYNDROMES):
-  // A. KỊCH BẢN 10: Tam chứng nguy kịch (Sốt cao >= 38.5°C + Tim >= 115 bpm + SpO2 < 90%) -> 90%
-  if (temp >= 38.5 && hr >= 115 && spo2 > 0 && spo2 < 90) return 90;
+  // A. KỊCH BẢN 10: Tam chứng nguy kịch (Sốt >= 38.5°C + Tim >= 115 bpm + SpO2 < 90%) -> 90 điểm
+  if (temp != null && temp >= 38.5 && hr >= 115 && spo2 != null && spo2 < 90) return 90;
 
-  // B. KỊCH BẢN 8: Quá tải tim phổi khi gắng sức (Tim >= 115 bpm + SpO2 tụt < 90%) -> 85%
-  if (hr >= 115 && spo2 > 0 && spo2 < 90) return 85;
+  // B. KỊCH BẢN 8: Quá tải tim phổi khi gắng sức (Tim >= 115 bpm + SpO2 < 90%) -> 85 điểm
+  if (hr >= 115 && spo2 != null && spo2 < 90) return 85;
 
-  // C. KỊCH BẢN 6: Trụy tim mạch / Tụt huyết áp tư thế (Tim chậm <= 50 bpm + Huyết áp tụt < 90 mmHg) -> 85%
-  if (bp > 0 && bp < 90 && hr <= 50) return 85;
+  // C. KỊCH BẢN 6: Nghi ngờ nhịp chậm kèm tụt huyết áp, nguy cơ ngất (Tim <= 50 bpm + HA tâm thu < 90 mmHg) -> 85 điểm
+  if (bp != null && bp < 90 && hr <= 50) return 85;
 
-  // 4. BIẾN ĐỘNG CHỈ SỐ ĐƠN LẺ VÀ NGỮ CẢNH:
-  // A. Nhịp tim:
+  // D. Nhịp tim cực chậm đơn độc (<= 44 bpm) ngay cả khi không có đo huyết áp -> Nguy cơ giảm tưới máu não cấp 80 điểm
+  if (hr <= 44) return 80;
+
+  // 4. TÍNH ĐIỂM CỘNG DỒN NỘI SUY TUYẾN TÍNH (PIECEWISE LINEAR INTERPOLATION):
+  let risk = 5; // Mức nền sinh hoạt an toàn bình thường (Kịch bản 1: 5 điểm)
+
+  // A. Biến động Nhịp tim (HR):
   if (hr >= 140) {
-    // KỊCH BẢN 5: Nhịp tim tăng vọt nguy hiểm (>= 140 bpm, nguy cơ nhịp nhanh kịch phát / choáng)
+    // KỊCH BẢN 5: Nhịp tim tăng vọt nguy hiểm (nguy cơ nhịp nhanh kịch phát / choáng)
     risk += 50;
-  } else if (hr >= 120) {
-    // KỊCH BẢN 2 (Vận động thể dục sinh lý: chỉ tăng nhẹ 15%) vs KỊCH BẢN 4 (Ngồi yên mà tim nhanh: +35%)
-    risk += (isExercising && spo2 >= 95) ? 15 : 35;
   } else if (hr >= 100) {
-    risk += (isExercising && spo2 >= 95) ? 10 : 20;
-  } else if (hr <= 45) {
-    // Nhịp tim quá chậm (<= 45 bpm, nguy cơ ngất cấp syncope do giảm tưới máu não)
-    risk += 60;
-  } else if (hr <= 55) {
-    risk += 35;
+    // Dải 100 -> 140 bpm: Nội suy mượt theo tốc độ tăng
+    const ratio = (hr - 100) / 40; // 0.0 -> 1.0
+    if (isExercising && spo2 != null && spo2 >= 95) {
+      // Vận động thể dục sinh lý có bù trừ: tăng nhẹ từ +10 lên +25
+      risk += 10 + ratio * 15;
+    } else {
+      // Ngồi yên mà tim đập nhanh: tăng liên tục từ +20 lên +50
+      risk += 20 + ratio * 30;
+    }
+  } else if (hr <= 58) {
+    // Dải nhịp chậm 44 -> 58 bpm: Nội suy mượt tăng từ +25 lên +60
+    const ratio = Math.max(0, Math.min(1, (58 - hr) / 14));
+    risk += 25 + ratio * 35;
   }
 
-  // B. KỊCH BẢN 7: Tụt oxy máu SpO2 đơn lẻ (Thiếu oxy tế bào não, hoa mắt mất thăng bằng):
-  if (spo2 > 0) {
-    if (spo2 < 88) risk += 35;
-    else if (spo2 < 92) risk += 20;
+  // B. Tụt Oxy máu (SpO2):
+  if (spo2 != null && spo2 < 95) {
+    // Dải 88% -> 95%: Nội suy mượt từ 0 lên +35 điểm (SpO2 <= 88% đạt tối đa +35)
+    const ratio = Math.max(0, Math.min(1, (95 - spo2) / 7));
+    risk += ratio * 35;
   }
 
   // C. Tụt huyết áp tâm thu (< 90 mmHg):
-  if (bp > 0 && bp < 90) risk += 25;
+  if (bp != null && bp < 90) {
+    const ratio = Math.max(0, Math.min(1, (90 - bp) / 30));
+    risk += 15 + ratio * 15; // +15 đến +30 điểm
+  }
 
-  // D. KỊCH BẢN 9: Sốt cao (>= 38.5°C run rẩy, yếu cơ, lú lẫn):
-  if (temp >= 38.5) risk += 20;
+  // D. Thân nhiệt cao (Sốt >= 38.0°C):
+  if (temp != null && temp >= 38.0) {
+    const ratio = Math.max(0, Math.min(1, (temp - 38.0) / 2.0));
+    risk += 10 + ratio * 15; // +10 đến +25 điểm
+  }
 
-  return Math.min(95, Math.max(0, risk));
+  return Math.min(95, Math.max(0, Math.round(risk)));
 };
 
 export const DashboardPage: React.FC = () => {
@@ -719,7 +743,7 @@ export const DashboardPage: React.FC = () => {
                   }`}
                 >
                   <span className={`w-2 h-2 rounded-full mr-1.5 ${activeMetrics.fallRisk ? 'bg-[#E9A23B] shadow-[0_0_5px_#E9A23B]' : 'bg-slate-400'}`} />
-                  Nguy cơ ngã (%)
+                  Nguy cơ ngã (Điểm)
                 </button>
 
                 {/* Thân nhiệt */}
@@ -790,8 +814,8 @@ export const DashboardPage: React.FC = () => {
                         if (name.includes('Thân nhiệt')) return [`${value} °C`, name];
                         if (name.includes('Nguy cơ ngã')) {
                           const fMax = item?.payload?.fallMax;
-                          const peakInfo = fMax && fMax > value ? ` (Đỉnh điểm sự cố: ${fMax}%)` : '';
-                          return [`${value}%${peakInfo}`, name];
+                          const peakInfo = fMax && fMax > value ? ` (Đỉnh điểm sự cố: ${fMax} điểm)` : '';
+                          return [`${value} điểm${peakInfo}`, name];
                         }
                         return [value, name];
                       }}
@@ -842,7 +866,7 @@ export const DashboardPage: React.FC = () => {
                       <Area
                         type="monotone"
                         dataKey="fallRisk"
-                        name="Nguy cơ ngã (%)"
+                        name="Nguy cơ ngã (Điểm)"
                         stroke="#E9A23B"
                         strokeWidth={2}
                         dot={{ r: 3, strokeWidth: 1.5 }}
