@@ -164,6 +164,18 @@ class NativeNotificationModule(private val reactContext: ReactApplicationContext
                 }
             }
 
+            // Icon thông báo: Ưu tiên R.drawable.ic_notification, fallback sang icon hệ thống
+            val iconRes = try {
+                val resId = reactContext.resources.getIdentifier("ic_notification", "drawable", reactContext.packageName)
+                if (resId != 0) resId else android.R.drawable.ic_dialog_alert
+            } catch (_: Exception) {
+                android.R.drawable.ic_dialog_alert
+            }
+
+            // ID thông báo và Request Code luôn là số nguyên dương hợp lệ
+            val notifId = ((System.currentTimeMillis() % 1000000L).toInt() + 1000).let { if (it < 0) -it else it }
+            val reqCode = (System.currentTimeMillis() % 100000L).toInt().let { if (it < 0) -it else it }
+
             // Intent khi người dùng bấm vào thông báo -> Mở app và dừng chuông/rung
             val intent = Intent(reactContext, MainActivity::class.java).apply {
                 flags = Intent.FLAG_ACTIVITY_SINGLE_TOP or Intent.FLAG_ACTIVITY_CLEAR_TOP
@@ -171,7 +183,7 @@ class NativeNotificationModule(private val reactContext: ReactApplicationContext
             }
             val pendingIntent = PendingIntent.getActivity(
                 reactContext,
-                System.currentTimeMillis().toInt(),
+                reqCode,
                 intent,
                 PendingIntent.FLAG_UPDATE_CURRENT or (if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.M) PendingIntent.FLAG_IMMUTABLE else 0)
             )
@@ -182,7 +194,7 @@ class NativeNotificationModule(private val reactContext: ReactApplicationContext
             }
             val deletePendingIntent = PendingIntent.getBroadcast(
                 reactContext,
-                System.currentTimeMillis().toInt(),
+                reqCode + 1,
                 dismissIntent,
                 PendingIntent.FLAG_UPDATE_CURRENT or (if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.M) PendingIntent.FLAG_IMMUTABLE else 0)
             )
@@ -193,7 +205,7 @@ class NativeNotificationModule(private val reactContext: ReactApplicationContext
             val chosenChannelId = if (isEmergency) EMERGENCY_CHANNEL_ID else CHANNEL_ID
 
             val builder = NotificationCompat.Builder(reactContext, chosenChannelId)
-                .setSmallIcon(R.drawable.ic_notification)
+                .setSmallIcon(iconRes)
                 .setContentTitle(title)
                 .setContentText(message)
                 .setStyle(NotificationCompat.BigTextStyle().bigText(message))
@@ -207,12 +219,19 @@ class NativeNotificationModule(private val reactContext: ReactApplicationContext
                 .setContentIntent(pendingIntent)
                 .setDeleteIntent(deletePendingIntent)
 
-            if (isEmergency) {
-                builder.setFullScreenIntent(pendingIntent, true)
+            // Hiển thị trực tiếp lên thanh thông báo hệ thống (Notification Drawer / Status Bar)
+            try {
+                if (isEmergency) {
+                    builder.setFullScreenIntent(pendingIntent, true)
+                }
+                manager.notify(notifId, builder.build())
+                Log.d(TAG, "Đã gửi thông báo thành công lên thanh trạng thái: $title (ID: $notifId)")
+            } catch (se: SecurityException) {
+                // Trên Android 14+ nếu chưa có quyền đặc biệt USE_FULL_SCREEN_INTENT, fallback gửi thông báo tiêu chuẩn
+                Log.w(TAG, "Không có quyền fullScreenIntent trên Android 14, gửi lại thông báo tiêu chuẩn: ${se.message}")
+                builder.setFullScreenIntent(null, false)
+                manager.notify(notifId, builder.build())
             }
-
-            manager.notify(System.currentTimeMillis().toInt(), builder.build())
-            Log.d(TAG, "Đã gửi thông báo thành công lên thanh trạng thái: $title")
 
             if (isEmergency) {
                 // 1. Phát âm thanh chuông báo động
