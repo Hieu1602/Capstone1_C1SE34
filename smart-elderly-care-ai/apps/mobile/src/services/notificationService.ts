@@ -100,19 +100,41 @@ class NotificationService {
    */
   async triggerEmergencyNotification(payload: NotificationPayload): Promise<void> {
     const { title, body, data } = payload;
+    const alertType = data?.alert_type || data?.type || '';
+    const isCritical =
+      alertType === 'FALL_DETECTED' ||
+      alertType === 'HIGH_HEART_RATE' ||
+      alertType === 'LOW_HEART_RATE' ||
+      alertType === 'CRITICAL_TRIAD' ||
+      alertType === 'LOW_SPO2' ||
+      alertType === 'CARDIO_COLLAPSE' ||
+      alertType === 'EXERTION_HYPOXIA' ||
+      title.includes('🚨') ||
+      title.includes('💓') ||
+      title.includes('KHẨN CẤP') ||
+      title.includes('BÁO ĐỘNG') ||
+      title.includes('NGUY CẤP');
 
     if (Platform.OS !== 'web') {
-      // 1. Kích hoạt rung điện thoại ngay lập tức
+      // 1. Kích hoạt rung điện thoại: Nếu khẩn cấp -> Rung liên tục (repeat = true)
       try {
-        Vibration.vibrate([0, 500, 200, 500], false);
+        if (isCritical) {
+          Vibration.vibrate([0, 1000, 400, 1000, 400, 1000, 800], true);
+        } else {
+          Vibration.vibrate([0, 500, 250, 500], false);
+        }
       } catch (vibErr) {
         console.warn('[NotificationService] Lỗi rung thiết bị:', vibErr);
       }
 
-      // 2. Bắn thông báo lên thanh trạng thái (Notification Drawer) qua Android Native Module
-      if (Platform.OS === 'android' && NativeNotificationModule?.showNotification) {
+      // 2. Bắn thông báo lên thanh trạng thái qua NativeNotificationModule
+      if (Platform.OS === 'android' && NativeNotificationModule) {
         try {
-          NativeNotificationModule.showNotification(title, body);
+          if (NativeNotificationModule.triggerEmergencyAlarm) {
+            NativeNotificationModule.triggerEmergencyAlarm(title, body, isCritical);
+          } else if (NativeNotificationModule.showNotification) {
+            NativeNotificationModule.showNotification(title, body);
+          }
           console.log('[NotificationService] Đã gửi thông báo qua NativeNotificationModule:', title);
           return;
         } catch (nativeErr) {
@@ -157,6 +179,26 @@ class NotificationService {
             new Notification(title, { body, icon: '/favicon.png' });
           }
         });
+      }
+    }
+  }
+
+  /**
+   * Dừng chuông báo động và ngắt rung liên tục
+   */
+  stopEmergencyAlarm(): void {
+    if (Platform.OS !== 'web') {
+      try {
+        Vibration.cancel();
+      } catch (e) {
+        console.warn('[NotificationService] Lỗi huỷ rung:', e);
+      }
+      if (Platform.OS === 'android' && NativeNotificationModule?.stopAlarm) {
+        try {
+          NativeNotificationModule.stopAlarm();
+        } catch (e) {
+          console.warn('[NotificationService] Native stopAlarm error:', e);
+        }
       }
     }
   }

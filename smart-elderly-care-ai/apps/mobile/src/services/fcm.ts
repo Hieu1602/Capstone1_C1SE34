@@ -162,7 +162,15 @@ class FCMService {
           LocalizedAlert.alert(
             title,
             body,
-            [{ text: 'Đã hiểu', style: 'default' }]
+            [
+              {
+                text: 'Đã hiểu / Tắt chuông',
+                style: 'default',
+                onPress: () => {
+                  notificationService.stopEmergencyAlarm();
+                },
+              },
+            ]
           );
         },
       );
@@ -174,9 +182,9 @@ class FCMService {
   private _triggerVibrationPattern(level: AlertLevel): void {
     if (Platform.OS === 'web') return;
     if (level === 'CRITICAL') {
-      Vibration.vibrate([0, 1000, 500, 1000, 500, 1000], false);
+      Vibration.vibrate([0, 1000, 400, 1000, 400, 1000, 800], true);
     } else {
-      Vibration.vibrate([0, 500, 200, 500], false);
+      Vibration.vibrate([0, 800, 400, 800], true);
     }
   }
 

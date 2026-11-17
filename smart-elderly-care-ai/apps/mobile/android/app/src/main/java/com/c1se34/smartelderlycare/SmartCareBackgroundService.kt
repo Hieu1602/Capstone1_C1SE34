@@ -83,6 +83,13 @@ class SmartCareBackgroundService : Service() {
             notificationManager.createNotificationChannel(serviceChannel)
 
             // Kênh cảnh báo khẩn cấp (rung mạnh, chuông to, nổi bật trên màn hình)
+            val soundUri = android.media.RingtoneManager.getDefaultUri(android.media.RingtoneManager.TYPE_ALARM)
+                ?: android.media.RingtoneManager.getDefaultUri(android.media.RingtoneManager.TYPE_NOTIFICATION)
+            val audioAttributes = android.media.AudioAttributes.Builder()
+                .setContentType(android.media.AudioAttributes.CONTENT_TYPE_SONIFICATION)
+                .setUsage(android.media.AudioAttributes.USAGE_ALARM)
+                .build()
+
             val alertChannel = NotificationChannel(
                 ALERT_CHANNEL_ID,
                 ALERT_CHANNEL_NAME,
@@ -91,7 +98,8 @@ class SmartCareBackgroundService : Service() {
                 description = "Cảnh báo sự cố té ngã, nhịp tim bất thường và nguy cấp"
                 enableLights(true)
                 enableVibration(true)
-                vibrationPattern = longArrayOf(0, 800, 400, 800, 400, 800)
+                vibrationPattern = longArrayOf(0, 1000, 400, 1000, 400, 1000, 800)
+                setSound(soundUri, audioAttributes)
                 lockscreenVisibility = NotificationCompat.VISIBILITY_PUBLIC
             }
             notificationManager.createNotificationChannel(alertChannel)
@@ -114,7 +122,8 @@ class SmartCareBackgroundService : Service() {
             .setContentTitle("SmartCare AI đang bảo vệ người cao tuổi")
             .setContentText("Hệ thống giám sát sinh tồn & sự cố té ngã 24/7 đang hoạt động trong nền")
             .setPriority(NotificationCompat.PRIORITY_LOW)
-            .setOngoing(true)
+            .setOngoing(false) // Cho phép người dùng vuốt xóa thông báo trên thanh trạng thái
+            .setAutoCancel(true)
             .setContentIntent(pendingIntent)
             .build()
     }
@@ -214,8 +223,22 @@ class SmartCareBackgroundService : Service() {
             PendingIntent.FLAG_UPDATE_CURRENT or (if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.M) PendingIntent.FLAG_IMMUTABLE else 0)
         )
 
+        // DeleteIntent khi người dùng vuốt xóa thông báo cảnh báo -> Dừng rung & chuông
+        val dismissIntent = Intent(this, AlarmDismissReceiver::class.java).apply {
+            action = "com.c1se34.smartelderlycare.ACTION_DISMISS_ALARM"
+        }
+        val deletePendingIntent = PendingIntent.getBroadcast(
+            this,
+            System.currentTimeMillis().toInt(),
+            dismissIntent,
+            PendingIntent.FLAG_UPDATE_CURRENT or (if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.M) PendingIntent.FLAG_IMMUTABLE else 0)
+        )
+
         val notificationManager =
             getSystemService(Context.NOTIFICATION_SERVICE) as NotificationManager
+
+        val soundUri = android.media.RingtoneManager.getDefaultUri(android.media.RingtoneManager.TYPE_ALARM)
+            ?: android.media.RingtoneManager.getDefaultUri(android.media.RingtoneManager.TYPE_NOTIFICATION)
 
         val notification = NotificationCompat.Builder(this, ALERT_CHANNEL_ID)
             .setSmallIcon(R.drawable.ic_notification)
@@ -225,25 +248,45 @@ class SmartCareBackgroundService : Service() {
             .setPriority(NotificationCompat.PRIORITY_MAX)
             .setCategory(NotificationCompat.CATEGORY_ALARM)
             .setDefaults(NotificationCompat.DEFAULT_ALL)
+            .setSound(soundUri)
             .setAutoCancel(true)
+            .setOngoing(false) // Không ghim thông báo cảnh báo, cho phép xóa
             .setContentIntent(pendingIntent)
+            .setDeleteIntent(deletePendingIntent)
             .setFullScreenIntent(pendingIntent, true)
             .build()
 
         notificationManager.notify(System.currentTimeMillis().toInt(), notification)
 
-        // Rung mạnh điện thoại ngay cả khi tắt màn hình
+        // Rung mạnh liên tục điện thoại và phát âm thanh chuông
         triggerAlarmVibration()
     }
 
     private fun triggerAlarmVibration() {
         try {
-            val pattern = longArrayOf(0, 800, 400, 800, 400, 800)
+            // Phát âm thanh chuông báo động
+            try {
+                val soundUri = android.media.RingtoneManager.getDefaultUri(android.media.RingtoneManager.TYPE_ALARM)
+                    ?: android.media.RingtoneManager.getDefaultUri(android.media.RingtoneManager.TYPE_NOTIFICATION)
+                val ringtone = android.media.RingtoneManager.getRingtone(this, soundUri)
+                if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.LOLLIPOP) {
+                    ringtone.audioAttributes = android.media.AudioAttributes.Builder()
+                        .setContentType(android.media.AudioAttributes.CONTENT_TYPE_SONIFICATION)
+                        .setUsage(android.media.AudioAttributes.USAGE_ALARM)
+                        .build()
+                }
+                ringtone.play()
+            } catch (eSound: Exception) {
+                eSound.printStackTrace()
+            }
+
+            // Rung liên tục (repeatIndex = 0)
+            val pattern = longArrayOf(0, 1000, 400, 1000, 400, 1000, 800)
             if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.S) {
                 val vibratorManager =
                     getSystemService(Context.VIBRATOR_MANAGER_SERVICE) as? VibratorManager
                 vibratorManager?.defaultVibrator?.vibrate(
-                    VibrationEffect.createWaveform(pattern, -1)
+                    VibrationEffect.createWaveform(pattern, 0)
                 )
             } else {
                 @Suppress("DEPRECATION")
@@ -251,10 +294,10 @@ class SmartCareBackgroundService : Service() {
                 @Suppress("DEPRECATION")
                 if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
                     vibrator?.vibrate(
-                        VibrationEffect.createWaveform(pattern, -1)
+                        VibrationEffect.createWaveform(pattern, 0)
                     )
                 } else {
-                    vibrator?.vibrate(pattern, -1)
+                    vibrator?.vibrate(pattern, 0)
                 }
             }
         } catch (e: Exception) {

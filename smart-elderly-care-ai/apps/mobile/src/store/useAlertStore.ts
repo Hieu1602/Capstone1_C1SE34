@@ -179,7 +179,15 @@ export const useAlertStore = create<AlertState>()((set, get) => ({
 
   cancelAlarmSnooze: () => set({ alarmSnooze: { ...DEFAULT_SNOOZE } }),
 
-  setSirenActive: (active: boolean) => set({ sirenActive: active }),
+  setSirenActive: (active: boolean) => {
+    set({ sirenActive: active });
+    if (!active) {
+      try {
+        const { notificationService } = require('../services/notificationService');
+        notificationService.stopEmergencyAlarm();
+      } catch {}
+    }
+  },
 
   resetAlertStore: () =>
     set({
