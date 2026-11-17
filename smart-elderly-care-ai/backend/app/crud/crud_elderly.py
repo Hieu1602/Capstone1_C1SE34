@@ -8,24 +8,16 @@ Vị trí: backend/app/crud/crud_elderly.py
 
 
 
-from typing import Optional
-
+from typing import List, Optional
 from uuid import UUID
-
 from datetime import datetime
 
-
-
-from sqlalchemy import select
-
+from sqlalchemy import delete, select, update
 from sqlalchemy.ext.asyncio import AsyncSession
-
 from sqlalchemy.orm import selectinload
 
-
-
+from app.models.device import Device
 from app.models.elderly_profile import ElderlyProfile
-
 from app.models.house import House
 
 from app.schemas.patient import (
@@ -122,48 +114,90 @@ class CRUDElderly:
 
 
     async def get_or_create_default(
-
         self, db: AsyncSession, house_id: UUID
-
     ) -> ElderlyProfile:
-
         result = await db.execute(
-
             select(ElderlyProfile)
-
             .options(selectinload(ElderlyProfile.devices))
-
             .where(ElderlyProfile.house_id == house_id)
+            .order_by(ElderlyProfile.created_at.asc())
+        )
+        profile = result.scalars().first()
+        if not profile:
+            profile = ElderlyProfile(
+                house_id=house_id,
+                full_name="",
+                birth_year=None,
+                gender=None,
+                medical_history="",
+                emergency_contact_phone="",
+            )
+            db.add(profile)
+            await db.flush()
+            await db.refresh(profile)
+        return profile
 
+    async def list_by_house(
+        self, db: AsyncSession, house_id: UUID
+    ) -> List[ElderlyProfile]:
+        """Lấy danh sách tất cả người cao tuổi trong một căn nhà."""
+        result = await db.execute(
+            select(ElderlyProfile)
+            .options(selectinload(ElderlyProfile.devices))
+            .where(ElderlyProfile.house_id == house_id)
+            .order_by(ElderlyProfile.created_at.asc())
+        )
+        return list(result.scalars().all())
+
+    async def create_profile(
+        self, db: AsyncSession, house_id: UUID, data: dict
+    ) -> ElderlyProfile:
+        """Tạo thêm hồ sơ người cao tuổi mới cho căn nhà (> 1 người cao tuổi/nhà)."""
+        clean_data = {
+            "house_id": house_id,
+            "full_name": data.get("full_name") or data.get("name") or "Người cao tuổi mới",
+            "birth_year": data.get("birth_year"),
+            "gender": data.get("gender") or "Nam",
+            "blood_type": data.get("blood_type"),
+            "height_cm": data.get("height_cm"),
+            "weight_kg": data.get("weight_kg"),
+            "medical_history": data.get("medical_history") or "",
+            "conditions_json": data.get("conditions_json"),
+            "drug_allergies": data.get("drug_allergies"),
+            "food_allergies": data.get("food_allergies"),
+            "dietary_notes": data.get("dietary_notes"),
+            "emergency_contact_phone": data.get("emergency_contact_phone") or "",
+            "avatar_url": data.get("avatar_url"),
+        }
+        profile = ElderlyProfile(**clean_data)
+        db.add(profile)
+        await db.flush()
+        await db.refresh(profile)
+        return profile
+
+    async def delete_profile(
+        self, db: AsyncSession, profile_id: UUID
+    ) -> bool:
+        """
+        Xóa hồ sơ người cao tuổi (khi qua đời hoặc không còn chăm sóc).
+        Tự động giải phóng các thiết bị gắn liền (devices.elderly_id = NULL)
+        và dọn dẹp các lịch hẹn/dữ liệu liên quan.
+        """
+        profile = await db.get(ElderlyProfile, profile_id)
+        if not profile:
+            return False
+
+        # 1. Giải phóng các thiết bị đang gán cho người cao tuổi này
+        await db.execute(
+            update(Device)
+            .where(Device.elderly_id == profile_id)
+            .values(elderly_id=None)
         )
 
-        profile = result.scalar_one_or_none()
-
-        if not profile:
-
-            profile = ElderlyProfile(
-
-                house_id=house_id,
-
-                full_name="",
-
-                birth_year=None,
-
-                gender=None,
-
-                medical_history="",
-
-                emergency_contact_phone="",
-
-            )
-
-            db.add(profile)
-
-            await db.flush()
-
-            await db.refresh(profile)
-
-        return profile
+        # 2. Xóa bản ghi người cao tuổi
+        await db.delete(profile)
+        await db.flush()
+        return True
 
 
 
@@ -208,15 +242,17 @@ class CRUDElderly:
                 select(ElderlyProfile)
                 .options(selectinload(ElderlyProfile.devices))
                 .where(ElderlyProfile.house_id == house_id)
+                .order_by(ElderlyProfile.created_at.asc())
             )
-            profile = res_house.scalar_one_or_none()
+            profile = res_house.scalars().first()
         elif not profile:
             res_first = await db.execute(
                 select(ElderlyProfile)
                 .options(selectinload(ElderlyProfile.devices))
+                .order_by(ElderlyProfile.created_at.asc())
                 .limit(1)
             )
-            profile = res_first.scalar_one_or_none()
+            profile = res_first.scalars().first()
 
 
 
