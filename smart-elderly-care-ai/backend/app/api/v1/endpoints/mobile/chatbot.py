@@ -273,13 +273,13 @@ async def chat(
             first_message=request.message,
         )
 
-        # Lấy tối đa 6 tin nhắn gần nhất của phiên này để phục vụ đối đáp liên tục (bỏ qua nếu phiên mới)
+        # Lấy tối đa 6 tin nhắn lâm sàng hợp lệ gần nhất (loại bỏ các tin nhắn bị từ chối / lỗi ở is_error=True)
         history_msgs = []
         if request.session_id:
             try:
                 hist_stmt = (
                     select(ChatMessage)
-                    .where(ChatMessage.session_id == session.id)
+                    .where(ChatMessage.session_id == session.id, ChatMessage.is_error.is_(False))
                     .order_by(ChatMessage.created_at.desc())
                     .limit(request.context_window or 6)
                 )
@@ -302,19 +302,21 @@ async def chat(
             chat_history=history_msgs,
         )
 
-        # Lưu tin nhắn user
+        is_rejected = bool(res.get("is_rejected_turn", False))
+
+        # Lưu tin nhắn user (đánh dấu is_error=True nếu là câu chửi tục/vô nghĩa để không bị nối ngữ cảnh lần sau)
         db.add(ChatMessage(
             session_id=session.id,
             sender="user",
             text=request.message,
-            is_error=False,
+            is_error=is_rejected,
         ))
         # Lưu phản hồi AI
         db.add(ChatMessage(
             session_id=session.id,
             sender="ai",
             text=res.get("answer", ""),
-            is_error=False,
+            is_error=is_rejected,
         ))
         session.updated_at = datetime.now(timezone.utc)
         await db.commit()

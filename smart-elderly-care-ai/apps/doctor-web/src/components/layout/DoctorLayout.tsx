@@ -5,6 +5,7 @@ import React, { useEffect, useState } from 'react';
 import { Outlet } from 'react-router-dom';
 import { DoctorNavbar } from './DoctorNavbar';
 import { DoctorSidebar } from './DoctorSidebar';
+import { AdminMarqueeBanner } from './AdminMarqueeBanner';
 import { doctorWebSocket } from '../../services/websocket';
 import { useDoctorDataStore } from '../../store/useDoctorDataStore';
 import { AlertCircle, X } from 'lucide-react';
@@ -55,6 +56,9 @@ export const DoctorLayout: React.FC = () => {
 
         {/* Content Area: phân vùng nội dung duy nhất cuộn theo chiều dọc */}
         <main className="flex-1 min-w-0 p-6 lg:p-8 overflow-y-auto">
+          {/* Thanh thông báo chữ chạy từ trái sang phải chuẩn như Mobile App */}
+          <AdminMarqueeBanner />
+
           {/* Banner thông báo thời gian thực nếu có sự cố */}
           {realtimeAlert && (
             <div className="mb-6 flex items-center justify-between rounded-2xl border border-rose-200 bg-rose-50/95 p-4 shadow-sm backdrop-blur-sm animate-in fade-in duration-200">

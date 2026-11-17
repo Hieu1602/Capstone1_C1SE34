@@ -4,7 +4,7 @@
 
 import React, { useState, useEffect, useCallback, useMemo } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { doctorApi, householdApi, incidentsApi } from '../services/api';
+import { doctorApi, householdApi, incidentsApi, systemNotificationsApi } from '../services/api';
 import { doctorWebSocket } from '../services/websocket';
 import { useDoctorDataStore } from '../store/useDoctorDataStore';
 import { removeVietnameseTones } from '../utils/text';
@@ -20,7 +20,7 @@ import {
   SyncPayload,
 } from '../utils/notificationSync';
 import { NotificationDetailModal, UnifiedNotification } from '../components/clinical/NotificationDetailModal';
-import type { Incident, AppointmentItem, DoctorPatientCard } from '../types';
+import type { Incident, AppointmentItem, DoctorPatientCard, SystemNotification } from '../types';
 import {
   Bell,
   CheckCheck,
@@ -36,9 +36,10 @@ import {
   Inbox,
   X,
   RotateCcw,
+  Megaphone,
 } from 'lucide-react';
 
-type TabType = 'ALL' | 'UNREAD' | 'ALERTS' | 'APPOINTMENTS' | 'OTHERS';
+type TabType = 'ALL' | 'UNREAD' | 'ADMIN' | 'ALERTS' | 'APPOINTMENTS' | 'OTHERS';
 type SeverityType = 'ALL' | 'CRITICAL' | 'WARNING';
 
 const PAGE_SIZE = 10;
@@ -156,8 +157,8 @@ export const NotificationsPage: React.FC = () => {
     };
   }, []);
 
-  // 2. Chuyển đổi dữ liệu thống nhất (Incidents, Sinh hiệu cảnh báo, Lịch khám)
-  const buildItems = useCallback((incs: Incident[], pats: DoctorPatientCard[], apts: AppointmentItem[], readSet: Set<string>) => {
+  // 2. Chuyển đổi dữ liệu thống nhất (Incidents, Sinh hiệu cảnh báo, Lịch khám, Thông báo Admin)
+  const buildItems = useCallback((incs: Incident[], pats: DoctorPatientCard[], apts: AppointmentItem[], sysList: SystemNotification[] = [], readSet: Set<string> = new Set()) => {
     const list: Item[] = [];
 
     // A. Incidents
@@ -295,29 +296,76 @@ export const NotificationsPage: React.FC = () => {
       }
     });
 
+    // D. Thông báo phát sóng toàn hệ thống từ Web Admin
+    sysList?.forEach((sys) => {
+      const dg = getDateGroup(sys.published_at || sys.created_at);
+      const timeOnly = formatTime(sys.published_at || sys.created_at);
+      const sysId = `sys_${sys.id}`;
+      const isRead = Boolean(readSet.has(sysId) || readSet.has(sys.id));
+
+      let label = 'Thông báo Admin';
+      let color = 'text-sky-700 bg-sky-50 border-sky-200 dark:bg-sky-900/50 dark:text-sky-300';
+      if (sys.type === 'system_maintenance') {
+        label = 'Bảo trì hệ thống';
+        color = 'text-amber-700 bg-amber-50 border-amber-200 dark:bg-amber-950/60 dark:text-amber-300';
+      } else if (sys.type === 'emergency') {
+        label = 'Khẩn cấp Admin';
+        color = 'text-rose-700 bg-rose-50 border-rose-200 dark:bg-rose-950/60 dark:text-rose-300';
+      } else if (sys.type === 'feature_update') {
+        label = 'Cập nhật tính năng';
+        color = 'text-blue-700 bg-blue-50 border-blue-200 dark:bg-blue-900/50 dark:text-blue-300';
+      } else if (sys.type === 'health_tip') {
+        label = 'Chỉ dẫn y tế';
+        color = 'text-emerald-700 bg-emerald-50 border-emerald-200 dark:bg-emerald-950/60 dark:text-emerald-300';
+      }
+
+      list.push({
+        id: sysId,
+        type: 'ADMIN',
+        title: sys.title,
+        subtitle: sys.body,
+        cleanTitle: sys.title,
+        cleanDesc: sys.body,
+        timeStr: dg.label === 'Hôm nay' ? timeOnly : `${dg.label} ${timeOnly}`,
+        timeOnly,
+        dateKey: dg.key,
+        dateLabel: dg.label,
+        sortTimestamp: dg.timestamp,
+        badgeLabel: label,
+        badgeColor: color,
+        badgeBg: 'bg-sky-50',
+        isRead,
+        targetUrl: '/notifications',
+        patientName: 'Ban Quản Trị Hệ Thống (Admin)',
+        adminNotification: sys,
+      });
+    });
+
     return list.sort((a, b) => b.sortTimestamp - a.sortTimestamp);
   }, []);
 
   // Tải dữ liệu từ cache (0ms) rồi revalidate ngầm
   useEffect(() => {
     if (cachedIncidents.length || cachedPatients.length || cachedAppointments.length) {
-      setNotifications(buildItems(cachedIncidents, cachedPatients, cachedAppointments, readIds));
+      setNotifications(buildItems(cachedIncidents, cachedPatients, cachedAppointments, [], readIds));
     }
   }, [cachedIncidents, cachedPatients, cachedAppointments, buildItems, readIds]);
 
   const loadData = useCallback(async () => {
     setLoading(true);
     try {
-      const [iRes, pRes, aRes] = await Promise.allSettled([
+      const [iRes, pRes, aRes, sRes] = await Promise.allSettled([
         incidentsApi.list(undefined, 100),
         doctorApi.getPatients(),
         doctorApi.getAppointments(),
+        systemNotificationsApi.getActiveBroadcasts('doctors'),
       ]);
       const currentRead = getStoredReadIds();
       const incs = iRes.status === 'fulfilled' && Array.isArray(iRes.value) ? iRes.value : [];
       const pats = pRes.status === 'fulfilled' && Array.isArray(pRes.value) ? pRes.value : [];
       const apts = aRes.status === 'fulfilled' && Array.isArray(aRes.value) ? aRes.value : [];
-      setNotifications(buildItems(incs, pats, apts, currentRead));
+      const sysList = sRes.status === 'fulfilled' && Array.isArray(sRes.value) ? sRes.value : [];
+      setNotifications(buildItems(incs, pats, apts, sysList, currentRead));
     } finally {
       setLoading(false);
     }
@@ -411,6 +459,7 @@ export const NotificationsPage: React.FC = () => {
     const qNorm = removeVietnameseTones(search.trim());
     return notifications.filter((item) => {
       if (activeTab === 'UNREAD' && item.isRead) return false;
+      if (activeTab === 'ADMIN' && item.type !== 'ADMIN') return false;
       if (activeTab === 'ALERTS' && item.type !== 'ALERT') return false;
       if (activeTab === 'APPOINTMENTS' && item.type !== 'APPOINTMENT') return false;
       if (activeTab === 'OTHERS' && item.type !== 'INVITE' && item.badgeLabel !== 'Hồ sơ y tế') return false;
@@ -501,6 +550,7 @@ export const NotificationsPage: React.FC = () => {
           {[
             { k: 'ALL', l: 'Tất cả', c: notifications.length },
             { k: 'UNREAD', l: 'Chưa đọc', c: unreadCount, badge: unreadCount > 0 },
+            { k: 'ADMIN', l: 'Từ Admin', c: notifications.filter((n) => n.type === 'ADMIN').length },
             { k: 'ALERTS', l: 'Cảnh báo y tế', c: notifications.filter((n) => n.type === 'ALERT').length },
             { k: 'APPOINTMENTS', l: 'Lịch khám', c: notifications.filter((n) => n.type === 'APPOINTMENT').length },
             { k: 'OTHERS', l: 'Lời mời & Hồ sơ', c: notifications.filter((n) => n.type === 'INVITE' || n.badgeLabel === 'Hồ sơ y tế').length },
@@ -562,15 +612,18 @@ export const NotificationsPage: React.FC = () => {
 
               <div className="divide-y divide-slate-100 rounded-2xl border border-slate-200/90 bg-white shadow-xs overflow-hidden dark:divide-slate-800 dark:border-slate-800 dark:bg-slate-900">
                 {g.items.map((item) => {
+                  const isAdmin = item.type === 'ADMIN';
                   const isCrit = item.alertLevel === 'CRITICAL' || item.alertType === 'FALL_DETECTED' || item.badgeLabel === 'Khẩn cấp';
                   const isWarn = !isCrit && (item.alertLevel === 'WARNING' || item.badgeLabel === 'Cảnh báo');
-                  const borderL = isCrit
-                    ? 'border-l-4 border-l-rose-500 bg-rose-50/20 dark:bg-rose-950/20'
-                    : isWarn
-                      ? 'border-l-4 border-l-amber-400 bg-amber-50/15 dark:bg-amber-950/10'
-                      : !item.isRead
-                        ? 'border-l-4 border-l-blue-500 bg-blue-50/20 dark:bg-blue-950/20'
-                        : 'border-l-4 border-l-transparent bg-white dark:bg-slate-900';
+                  const borderL = isAdmin
+                    ? 'border-l-4 border-l-sky-500 bg-sky-50/20 dark:bg-sky-950/20'
+                    : isCrit
+                      ? 'border-l-4 border-l-rose-500 bg-rose-50/20 dark:bg-rose-950/20'
+                      : isWarn
+                        ? 'border-l-4 border-l-amber-400 bg-amber-50/15 dark:bg-amber-950/10'
+                        : !item.isRead
+                          ? 'border-l-4 border-l-blue-500 bg-blue-50/20 dark:bg-blue-950/20'
+                          : 'border-l-4 border-l-transparent bg-white dark:bg-slate-900';
 
                   return (
                     <div
@@ -580,9 +633,27 @@ export const NotificationsPage: React.FC = () => {
                     >
                       <div className="flex items-start space-x-3 min-w-0 flex-1">
                         <div className={`flex h-8 w-8 shrink-0 items-center justify-center rounded-xl relative shadow-2xs mt-0.5 ${
-                          item.type === 'APPOINTMENT' ? 'bg-sky-50 text-sky-600' : item.type === 'INVITE' ? 'bg-emerald-50 text-emerald-600' : isCrit ? 'bg-rose-50 text-rose-600' : 'bg-amber-50 text-amber-600'
+                          isAdmin
+                            ? 'bg-sky-50 text-sky-600 dark:bg-sky-900/50 dark:text-sky-300'
+                            : item.type === 'APPOINTMENT'
+                              ? 'bg-sky-50 text-sky-600'
+                              : item.type === 'INVITE'
+                                ? 'bg-emerald-50 text-emerald-600'
+                                : isCrit
+                                  ? 'bg-rose-50 text-rose-600'
+                                  : 'bg-amber-50 text-amber-600'
                         }`}>
-                          {item.type === 'APPOINTMENT' ? <Calendar className="h-4 w-4" /> : item.type === 'INVITE' ? <Sparkles className="h-4 w-4" /> : isCrit ? <ShieldAlert className="h-4 w-4 text-rose-600" /> : <AlertTriangle className="h-4 w-4 text-amber-600" />}
+                          {isAdmin ? (
+                            <Megaphone className="h-4 w-4" />
+                          ) : item.type === 'APPOINTMENT' ? (
+                            <Calendar className="h-4 w-4" />
+                          ) : item.type === 'INVITE' ? (
+                            <Sparkles className="h-4 w-4" />
+                          ) : isCrit ? (
+                            <ShieldAlert className="h-4 w-4 text-rose-600" />
+                          ) : (
+                            <AlertTriangle className="h-4 w-4 text-amber-600" />
+                          )}
                           {!item.isRead && <span className="absolute -top-0.5 -right-0.5 h-2 w-2 rounded-full bg-blue-600 ring-2 ring-white dark:ring-slate-900" />}
                         </div>
 

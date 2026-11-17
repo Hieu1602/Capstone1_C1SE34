@@ -36,6 +36,7 @@ export default function DevicesScreen({ navigation, route }: any) {
     has_house,
     assigned_house,
     household_id,
+    fetchMyPermissions,
   } = useAuthStore();
   const {
     house,
@@ -148,8 +149,7 @@ export default function DevicesScreen({ navigation, route }: any) {
     dev.name.toLowerCase().includes('smartband') ||
     dev.name.toLowerCase().includes('đồng hồ');
 
-  // Giả lập quét thành công mã QR
-  const handleSimulateQrScan = (type: 'camera' | 'watch') => {
+  const handleQrScan = async (type: 'camera' | 'watch', deviceId: string) => {
     setShowQrModal(false);
     if (!canManageDevices) {
       LocalizedAlert.alert(
@@ -160,8 +160,8 @@ export default function DevicesScreen({ navigation, route }: any) {
     }
     if (type === 'camera') {
       const newCam: IoTDeviceItem = {
-        id: 'cam-qr-' + Date.now(),
-        name: 'SECA_001 (QR Config)',
+        id: deviceId,
+        name: `${deviceId} (QR Config)`,
         sub: 'Camera an ninh AI • Quét QR nhanh • 1080p FHD',
         type: 'camera',
         status: 'Trực tuyến • Đang ghi hình',
@@ -170,15 +170,22 @@ export default function DevicesScreen({ navigation, route }: any) {
         color: '#EA580C',
         location: 'Phòng khách',
       };
-      addIoTDevice(newCam);
+      const createdId = await addIoTDevice(newCam);
+      if (!createdId) {
+        LocalizedAlert.alert('Không thể đăng ký thiết bị', 'Không thể lưu thiết bị lên máy chủ. Vui lòng kiểm tra kết nối và thử lại.');
+        return;
+      }
+      if (!hasLinkedHouse) await fetchMyPermissions();
       LocalizedAlert.alert(
-        'Quét QR Thành Công',
-        'Đã nhận diện thiết bị Camera SECA_001 và kích hoạt kết nối nhanh!'
+        'Quét mã thành công',
+        hasLinkedHouse
+          ? 'Đã nhận diện camera và kích hoạt kết nối nhanh!'
+          : 'Đã đăng ký camera, tạo Nhà của tôi và cấp quyền Chủ hộ cho bạn!'
       );
     } else {
       const newWatch: IoTDeviceItem = {
-        id: 'watch-qr-' + Date.now(),
-        name: 'Vòng đeo tay BLE Smartband',
+        id: deviceId,
+        name: `Vòng đeo tay BLE ${deviceId}`,
         sub: 'Bluetooth BLE • Nhịp tim & SpO2 • MPU6050',
         type: 'band',
         status: 'Trực tuyến • Pin 98%',
@@ -187,7 +194,12 @@ export default function DevicesScreen({ navigation, route }: any) {
         color: '#10B981',
         location: 'Cụ Ông',
       };
-      addIoTDevice(newWatch);
+      const createdId = await addIoTDevice(newWatch);
+      if (!createdId) {
+        LocalizedAlert.alert('Không thể đăng ký thiết bị', 'Không thể lưu thiết bị lên máy chủ. Vui lòng kiểm tra kết nối và thử lại.');
+        return;
+      }
+      if (!hasLinkedHouse) await fetchMyPermissions();
       LocalizedAlert.alert(
         'Quét QR Thành Công',
         'Đã nhận diện Vòng đeo tay thông minh BLE và hoàn tất ghép đôi!'
@@ -727,7 +739,7 @@ export default function DevicesScreen({ navigation, route }: any) {
       <DeviceQrScannerModal
         visible={showQrModal}
         onClose={() => setShowQrModal(false)}
-        onSimulateScan={handleSimulateQrScan}
+        onScan={handleQrScan}
       />
 
       {/* Modal 3: Menu Tùy chọn Nhóm (3 chấm) */}

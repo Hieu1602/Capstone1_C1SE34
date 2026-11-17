@@ -18,13 +18,15 @@ import {
   Check,
   ChevronRight,
   Stethoscope,
+  Megaphone,
+  Shield,
 } from 'lucide-react';
-import type { Incident } from '../../types';
+import type { Incident, SystemNotification } from '../../types';
 
 export interface UnifiedNotification {
   id: string;
   rawIncidentId?: string;
-  type: 'ALERT' | 'APPOINTMENT' | 'INVITE';
+  type: 'ALERT' | 'APPOINTMENT' | 'INVITE' | 'ADMIN';
   title: string;
   subtitle: string;
   timeStr: string;
@@ -41,6 +43,7 @@ export interface UnifiedNotification {
   alertLevel?: string;
   alertType?: string;
   rawIncident?: Incident;
+  adminNotification?: SystemNotification;
 }
 
 interface NotificationDetailModalProps {
@@ -63,6 +66,16 @@ export const NotificationDetailModal: React.FC<NotificationDetailModalProps> = (
   const [processing, setProcessing] = useState(false);
   const [handled, setHandled] = useState(false);
 
+  // Hỗ trợ phím Escape đóng modal
+  React.useEffect(() => {
+    if (!isOpen) return;
+    const handleKeyDown = (e: KeyboardEvent) => {
+      if (e.key === 'Escape') onClose();
+    };
+    window.addEventListener('keydown', handleKeyDown);
+    return () => window.removeEventListener('keydown', handleKeyDown);
+  }, [isOpen, onClose]);
+
   if (!isOpen || !notif) return null;
 
   const isCritical =
@@ -78,6 +91,7 @@ export const NotificationDetailModal: React.FC<NotificationDetailModalProps> = (
 
   const isInvite = notif.type === 'INVITE';
   const isAppointment = notif.type === 'APPOINTMENT';
+  const isAdmin = notif.type === 'ADMIN';
 
   const isAlreadyHandled =
     handled ||
@@ -121,6 +135,9 @@ export const NotificationDetailModal: React.FC<NotificationDetailModalProps> = (
 
   // Khuyến nghị chuyên môn lâm sàng dựa trên loại cảnh báo
   const getClinicalAdvice = () => {
+    if (isAdmin) {
+      return 'Thông báo chỉ đạo nghiệp vụ, bảo trì hoặc hướng dẫn y tế từ Quản trị viên hệ thống SECA. Bác sĩ vui lòng lưu ý để phục vụ công tác chăm sóc người cao tuổi.';
+    }
     if (isCritical) {
       return 'Khẩn cấp: Phát hiện nguy cơ té ngã hoặc suy giảm sinh hiệu nghiêm trọng. Bác sĩ hoặc nhân viên y tế cần liên hệ ngay số khẩn cấp của gia đình hoặc điều phối sơ cứu 115.';
     }
@@ -157,28 +174,34 @@ export const NotificationDetailModal: React.FC<NotificationDetailModalProps> = (
         {/* Header Modal - Cố định ở đầu modal */}
         <div
           className={`shrink-0 flex items-center justify-between border-b px-6 py-4 ${
-            isCritical
-              ? 'bg-rose-50/90 border-rose-100 dark:bg-rose-950/40 dark:border-rose-900/40'
-              : isWarning
-                ? 'bg-amber-50/90 border-amber-100 dark:bg-amber-950/40 dark:border-amber-900/40'
-                : isInvite
-                  ? 'bg-emerald-50/90 border-emerald-100 dark:bg-emerald-950/40 dark:border-emerald-900/40'
-                  : 'bg-blue-50/90 border-blue-100 dark:bg-blue-950/40 dark:border-blue-900/40'
+            isAdmin
+              ? 'bg-sky-50/90 border-sky-100 dark:bg-sky-950/40 dark:border-sky-900/40'
+              : isCritical
+                ? 'bg-rose-50/90 border-rose-100 dark:bg-rose-950/40 dark:border-rose-900/40'
+                : isWarning
+                  ? 'bg-amber-50/90 border-amber-100 dark:bg-amber-950/40 dark:border-amber-900/40'
+                  : isInvite
+                    ? 'bg-emerald-50/90 border-emerald-100 dark:bg-emerald-950/40 dark:border-emerald-900/40'
+                    : 'bg-blue-50/90 border-blue-100 dark:bg-blue-950/40 dark:border-blue-900/40'
           }`}
         >
           <div className="flex items-center space-x-3">
             <div
               className={`flex h-11 w-11 items-center justify-center rounded-2xl shadow-xs shrink-0 ${
-                isCritical
-                  ? 'bg-rose-600 text-white'
-                  : isWarning
-                    ? 'bg-amber-500 text-white'
-                    : isInvite
-                      ? 'bg-emerald-600 text-white'
-                      : 'bg-blue-600 text-white'
+                isAdmin
+                  ? 'bg-sky-600 text-white'
+                  : isCritical
+                    ? 'bg-rose-600 text-white'
+                    : isWarning
+                      ? 'bg-amber-500 text-white'
+                      : isInvite
+                        ? 'bg-emerald-600 text-white'
+                        : 'bg-blue-600 text-white'
               }`}
             >
-              {isCritical ? (
+              {isAdmin ? (
+                <Megaphone className="h-6 w-6" />
+              ) : isCritical ? (
                 <ShieldAlert className="h-6 w-6 animate-pulse" />
               ) : isWarning ? (
                 <AlertTriangle className="h-6 w-6" />
@@ -192,16 +215,18 @@ export const NotificationDetailModal: React.FC<NotificationDetailModalProps> = (
               <div className="flex items-center space-x-2">
                 <span
                   className={`inline-flex items-center rounded-full px-2.5 py-0.5 text-[10.5px] font-bold tracking-wide uppercase border ${
-                    isCritical
-                      ? 'bg-rose-100 text-rose-800 border-rose-200 dark:bg-rose-900/60 dark:text-rose-200'
-                      : isWarning
-                        ? 'bg-amber-100 text-amber-800 border-amber-200 dark:bg-amber-900/60 dark:text-amber-200'
-                        : isInvite
-                          ? 'bg-emerald-100 text-emerald-800 border-emerald-200 dark:bg-emerald-900/60 dark:text-emerald-200'
-                          : 'bg-blue-100 text-blue-800 border-blue-200 dark:bg-blue-900/60 dark:text-blue-200'
+                    isAdmin
+                      ? 'bg-sky-100 text-sky-800 border-sky-200 dark:bg-sky-900/60 dark:text-sky-200'
+                      : isCritical
+                        ? 'bg-rose-100 text-rose-800 border-rose-200 dark:bg-rose-900/60 dark:text-rose-200'
+                        : isWarning
+                          ? 'bg-amber-100 text-amber-800 border-amber-200 dark:bg-amber-900/60 dark:text-amber-200'
+                          : isInvite
+                            ? 'bg-emerald-100 text-emerald-800 border-emerald-200 dark:bg-emerald-900/60 dark:text-emerald-200'
+                            : 'bg-blue-100 text-blue-800 border-blue-200 dark:bg-blue-900/60 dark:text-blue-200'
                   }`}
                 >
-                  {notif.badgeLabel || (isCritical ? 'Khẩn cấp' : 'Thông báo')}
+                  {notif.badgeLabel || (isAdmin ? 'Thông báo Admin' : isCritical ? 'Khẩn cấp' : 'Thông báo')}
                 </span>
                 {isAlreadyHandled ? (
                   <span className="inline-flex items-center gap-1 rounded-full bg-emerald-100 px-2 py-0.5 text-[10.5px] font-semibold text-emerald-700 dark:bg-emerald-900/40 dark:text-emerald-300">
@@ -209,12 +234,12 @@ export const NotificationDetailModal: React.FC<NotificationDetailModalProps> = (
                   </span>
                 ) : (
                   <span className="inline-flex items-center gap-1 rounded-full bg-slate-200/80 px-2 py-0.5 text-[10.5px] font-semibold text-slate-700 dark:bg-slate-700 dark:text-slate-300">
-                    Chờ tiếp nhận
+                    {isAdmin ? 'Thông báo mở' : 'Chờ tiếp nhận'}
                   </span>
                 )}
               </div>
               <h3 className="mt-0.5 text-base font-bold text-slate-900 dark:text-white">
-                Chi tiết Thông Báo Lâm Sàng
+                {isAdmin ? 'Thông Báo Từ Quản Trị Viên Hệ Thống' : 'Chi tiết Thông Báo Lâm Sàng'}
               </h3>
             </div>
           </div>
@@ -251,8 +276,41 @@ export const NotificationDetailModal: React.FC<NotificationDetailModalProps> = (
             </div>
           </div>
 
+          {/* Thẻ phát hành Admin (chỉ hiển thị khi là thông báo từ Admin) */}
+          {isAdmin && (
+            <div className="rounded-2xl border border-sky-100 bg-sky-50/50 p-4 dark:border-sky-900/30 dark:bg-sky-950/20">
+              <p className="text-[11px] font-bold uppercase tracking-wider text-sky-700 dark:text-sky-300 mb-2 flex items-center gap-1.5">
+                <Shield className="h-3.5 w-3.5" /> Thông tin phát hành từ Quản trị viên
+              </p>
+              <div className="space-y-1.5 text-xs">
+                <div className="flex items-center justify-between">
+                  <span className="text-slate-500 dark:text-slate-400">Đơn vị gửi:</span>
+                  <span className="font-bold text-slate-900 dark:text-white">
+                    Ban Quản Trị Hệ Thống SECA (System Admin)
+                  </span>
+                </div>
+                <div className="flex items-center justify-between">
+                  <span className="text-slate-500 dark:text-slate-400">Nhóm đối tượng nhận:</span>
+                  <span className="font-semibold text-sky-700 dark:text-sky-300">
+                    {notif.adminNotification?.target_audience === 'doctors'
+                      ? 'Bác sĩ Gia đình'
+                      : notif.adminNotification?.target_audience === 'caregivers'
+                        ? 'Gia đình & Người chăm sóc'
+                        : 'Toàn bộ hệ thống & Bác sĩ'}
+                  </span>
+                </div>
+                <div className="flex items-center justify-between">
+                  <span className="text-slate-500 dark:text-slate-400">Kênh phát hành:</span>
+                  <span className="font-semibold text-emerald-600 dark:text-emerald-400">
+                    Phát sóng trực tiếp (Active Broadcast)
+                  </span>
+                </div>
+              </div>
+            </div>
+          )}
+
           {/* Thẻ bệnh nhân & địa chỉ (nếu có thông tin) */}
-          {(notif.patientName || notif.patientAddress || notif.patientId) && (
+          {!isAdmin && (notif.patientName || notif.patientAddress || notif.patientId) && (
             <div className="rounded-2xl border border-blue-100 bg-blue-50/40 p-4 dark:border-blue-900/30 dark:bg-blue-950/20">
               <p className="text-[11px] font-bold uppercase tracking-wider text-blue-700 dark:text-blue-400 mb-2 flex items-center gap-1.5">
                 <User className="h-3.5 w-3.5" /> Thông tin bệnh nhân phụ trách
@@ -322,83 +380,87 @@ export const NotificationDetailModal: React.FC<NotificationDetailModalProps> = (
             </div>
           )}
 
-          {/* Hướng dẫn xử lý lâm sàng */}
-          <div className="rounded-2xl border border-slate-200/80 bg-slate-50/80 p-4 dark:border-slate-700/80 dark:bg-slate-800/60">
-            <div className="flex items-start gap-2.5">
-              <Stethoscope className="h-4 w-4 text-blue-600 dark:text-blue-400 shrink-0 mt-0.5" />
-              <div>
-                <p className="text-xs font-bold text-slate-900 dark:text-white">
-                  Khuyến nghị chuyên môn Bác sĩ
-                </p>
-                <p className="mt-1 text-xs text-slate-600 dark:text-slate-300 leading-relaxed">
-                  {getClinicalAdvice()}
-                </p>
+          {/* Hướng dẫn xử lý lâm sàng (chỉ hiển thị cho cảnh báo y khoa, ẩn khi là thông báo Admin) */}
+          {!isAdmin && (
+            <div className="rounded-2xl border border-slate-200/80 bg-slate-50/80 p-4 dark:border-slate-700/80 dark:bg-slate-800/60">
+              <div className="flex items-start gap-2.5">
+                <Stethoscope className="h-4 w-4 text-blue-600 dark:text-blue-400 shrink-0 mt-0.5" />
+                <div>
+                  <p className="text-xs font-bold text-slate-900 dark:text-white">
+                    Khuyến nghị chuyên môn Bác sĩ
+                  </p>
+                  <p className="mt-1 text-xs text-slate-600 dark:text-slate-300 leading-relaxed">
+                    {getClinicalAdvice()}
+                  </p>
+                </div>
               </div>
             </div>
-          </div>
+          )}
         </div>
 
-        {/* Footer Actions - Cố định ở cuối modal */}
-        <div className="shrink-0 border-t border-slate-100 bg-slate-50/80 px-6 py-4 dark:border-slate-800 dark:bg-slate-900/90 flex flex-wrap items-center justify-between gap-3">
-          <div className="text-xs text-slate-500 dark:text-slate-400">
-            {isAlreadyHandled ? (
-              <span className="text-emerald-600 font-semibold flex items-center gap-1">
-                <Check className="h-3.5 w-3.5" /> Bác sĩ đã xác nhận &amp; xử lý
-              </span>
-            ) : (
-              <span>Cần xác nhận xử lý y khoa</span>
-            )}
-          </div>
+        {/* Footer Actions - Cố định ở cuối modal (chỉ dành cho cảnh báo y tế / lâm sàng / lời mời) */}
+        {!isAdmin && (
+          <div className="shrink-0 border-t border-slate-100 bg-slate-50/80 px-6 py-4 dark:border-slate-800 dark:bg-slate-900/90 flex flex-wrap items-center justify-between gap-3">
+            <div className="text-xs text-slate-500 dark:text-slate-400">
+              {isAlreadyHandled ? (
+                <span className="text-emerald-600 font-semibold flex items-center gap-1">
+                  <Check className="h-3.5 w-3.5" /> Bác sĩ đã xác nhận &amp; xử lý
+                </span>
+              ) : (
+                <span>Cần xác nhận xử lý y khoa</span>
+              )}
+            </div>
 
-          <div className="flex items-center gap-2">
-            {isInvite && !isAlreadyHandled && (
-              <>
+            <div className="flex items-center gap-2">
+              {isInvite && !isAlreadyHandled && (
+                <>
+                  <button
+                    onClick={() => handleInviteAction('reject')}
+                    disabled={processing}
+                    className="rounded-xl border border-rose-200 bg-white px-3.5 py-2 text-xs font-semibold text-rose-700 hover:bg-rose-50 transition-colors dark:border-rose-800 dark:bg-slate-800 dark:text-rose-300"
+                  >
+                    Từ chối
+                  </button>
+                  <button
+                    onClick={() => handleInviteAction('accept')}
+                    disabled={processing}
+                    className="rounded-xl bg-emerald-600 px-4 py-2 text-xs font-bold text-white hover:bg-emerald-700 shadow-sm transition-all"
+                  >
+                    Đồng ý phụ trách
+                  </button>
+                </>
+              )}
+
+              {!isInvite && !isAlreadyHandled && notif.rawIncidentId && (
                 <button
-                  onClick={() => handleInviteAction('reject')}
+                  onClick={handleAcknowledgeClick}
                   disabled={processing}
-                  className="rounded-xl border border-rose-200 bg-white px-3.5 py-2 text-xs font-semibold text-rose-700 hover:bg-rose-50 transition-colors dark:border-rose-800 dark:bg-slate-800 dark:text-rose-300"
+                  className="flex items-center gap-1.5 rounded-xl bg-blue-600 px-4 py-2 text-xs font-bold text-white hover:bg-blue-700 shadow-sm transition-all disabled:opacity-50"
                 >
-                  Từ chối
+                  <Check className="h-3.5 w-3.5" />
+                  {processing ? 'Đang xác nhận...' : 'Xác nhận đã xử lý'}
                 </button>
+              )}
+
+              {notif.targetUrl && (
                 <button
-                  onClick={() => handleInviteAction('accept')}
-                  disabled={processing}
-                  className="rounded-xl bg-emerald-600 px-4 py-2 text-xs font-bold text-white hover:bg-emerald-700 shadow-sm transition-all"
+                  onClick={handleJumpToDetails}
+                  className="flex items-center gap-1 rounded-xl border border-slate-200 bg-white px-3.5 py-2 text-xs font-semibold text-slate-700 hover:bg-slate-100 transition-colors dark:border-slate-700 dark:bg-slate-800 dark:text-slate-200"
                 >
-                  Đồng ý phụ trách
+                  <span>Xem chi tiết</span>
+                  <ChevronRight className="h-3.5 w-3.5" />
                 </button>
-              </>
-            )}
+              )}
 
-            {!isInvite && !isAlreadyHandled && notif.rawIncidentId && (
               <button
-                onClick={handleAcknowledgeClick}
-                disabled={processing}
-                className="flex items-center gap-1.5 rounded-xl bg-blue-600 px-4 py-2 text-xs font-bold text-white hover:bg-blue-700 shadow-sm transition-all disabled:opacity-50"
+                onClick={onClose}
+                className="rounded-xl border border-transparent bg-slate-200/80 px-3.5 py-2 text-xs font-semibold text-slate-700 hover:bg-slate-300/80 transition-colors dark:bg-slate-800 dark:text-slate-300"
               >
-                <Check className="h-3.5 w-3.5" />
-                {processing ? 'Đang xác nhận...' : 'Xác nhận đã xử lý'}
+                Đóng
               </button>
-            )}
-
-            {notif.targetUrl && (
-              <button
-                onClick={handleJumpToDetails}
-                className="flex items-center gap-1 rounded-xl border border-slate-200 bg-white px-3.5 py-2 text-xs font-semibold text-slate-700 hover:bg-slate-100 transition-colors dark:border-slate-700 dark:bg-slate-800 dark:text-slate-200"
-              >
-                <span>Xem chi tiết</span>
-                <ChevronRight className="h-3.5 w-3.5" />
-              </button>
-            )}
-
-            <button
-              onClick={onClose}
-              className="rounded-xl border border-transparent bg-slate-200/80 px-3.5 py-2 text-xs font-semibold text-slate-700 hover:bg-slate-300/80 transition-colors dark:bg-slate-800 dark:text-slate-300"
-            >
-              Đóng
-            </button>
+            </div>
           </div>
-        </div>
+        )}
       </div>
     </div>,
     document.body

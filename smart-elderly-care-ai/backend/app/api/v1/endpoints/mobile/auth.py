@@ -487,6 +487,14 @@ async def _record_login_background(
                 text("UPDATE users SET last_login_at = :now WHERE id = :uid"),
                 {"now": datetime.now(timezone.utc), "uid": str(user_id)},
             )
+            platform_desc = ""
+            if client_platform == "DOCTOR_WEB":
+                platform_desc = "Cổng Web Bác sĩ "
+            elif client_platform == "WEB_ADMIN":
+                platform_desc = "Cổng Web Admin "
+            elif client_platform == "MOBILE_APP":
+                platform_desc = "Ứng dụng Di động "
+
             await session.execute(
                 text("""
                     INSERT INTO audit_logs (event, user_name, ip_address, severity, details)
@@ -495,7 +503,7 @@ async def _record_login_background(
                 {
                     "u": f"{user_name} ({user_role})",
                     "ip": client_ip,
-                    "d": f"Đăng nhập thành công qua {user_agent[:40]}.",
+                    "d": f"Đăng nhập thành công {platform_desc}qua {user_agent[:40]}.",
                 },
             )
             await session.commit()
@@ -1049,12 +1057,21 @@ async def logout(
 
     client_ip = get_client_ip(request)
     user_agent = get_user_agent(request)
+    client_platform = request.headers.get("x-client-platform")
+
+    platform_desc = ""
+    if client_platform == "DOCTOR_WEB":
+        platform_desc = "Cổng Web Bác sĩ "
+    elif client_platform == "WEB_ADMIN":
+        platform_desc = "Cổng Web Admin "
+    elif client_platform == "MOBILE_APP":
+        platform_desc = "Ứng dụng Di động "
 
     await record_audit_log(
         db=db,
         event="ĐĂNG XUẤT",
         user_name=u_name,
-        details=f"Đăng xuất khỏi hệ thống qua {user_agent}.",
+        details=f"Đăng xuất khỏi {platform_desc or 'hệ thống '}qua {user_agent}.",
         severity="low",
         ip_address=client_ip,
     )

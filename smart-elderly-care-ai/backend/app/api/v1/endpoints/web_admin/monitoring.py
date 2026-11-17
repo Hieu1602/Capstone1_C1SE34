@@ -159,6 +159,24 @@ async def get_services_health(db: AsyncSession = Depends(get_db)) -> List[Dict[s
         "description": "Lưu trữ ảnh snapshot sự cố té ngã, video bằng chứng & vector khuôn mặt người cao tuổi",
     })
 
+    # 6. Doctor Web Portal (Port 3001)
+    probe_doctor = await _probe_tcp_port("127.0.0.1", 3001, timeout=0.8)
+    services.append({
+        "id": "srv-6",
+        "name": "Doctor Web Portal (Bác sĩ gia đình)",
+        "category": "Clinical & Healthcare Portal",
+        "port": 3001,
+        "status": probe_doctor["status"],
+        "uptime": "99.99%",
+        "cpu_usage": 2.1,
+        "memory_usage": 65,
+        "latency_ms": probe_doctor["latency_ms"] or 3.0,
+        "connections": 4,
+        "last_check": "Vừa xong",
+        "version": "Vite React + Tailwind (Clinical)",
+        "description": "Cổng Bác sĩ gia đình theo dõi bệnh án, kê đơn thuốc và quản lý lịch khám lâm sàng",
+    })
+
     return services
 
 
