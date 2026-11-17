@@ -82,28 +82,30 @@ async def lifespan(app: FastAPI):
                         if dev_uuid:
                             payload["device_id"] = dev_uuid
 
-                    # Tự động đẩy video clip & ảnh sự cố lên Supabase Storage
+                    # Tự động đẩy video clip & ảnh sự cố lên AWS S3 Object Storage
                     clip_path = payload.get("clip_path")
                     if clip_path:
                         try:
-                            from app.services.storage.supabase_storage import supabase_storage
+                            import asyncio
+                            from app.services.storage.object_storage import object_storage
                             event_name = f"{payload.get('id', 'incident')}.mp4"
-                            cloud_url = await supabase_storage.upload_file(clip_path, event_name, "video/mp4")
+                            cloud_url = await asyncio.to_thread(object_storage.upload_file, clip_path, event_name, "video/mp4")
                             if cloud_url:
                                 payload["video_clip_url"] = cloud_url
                         except Exception as up_err:
-                            logger.warning("[Lifespan] Không thể upload clip lên Supabase: %s", up_err)
+                            logger.warning("[Lifespan] Không thể upload clip lên AWS S3: %s", up_err)
 
                     thumb_path = payload.get("thumbnail_path")
                     if thumb_path:
                         try:
-                            from app.services.storage.supabase_storage import supabase_storage
+                            import asyncio
+                            from app.services.storage.object_storage import object_storage
                             thumb_name = f"{payload.get('id', 'incident')}.jpg"
-                            cloud_thumb = await supabase_storage.upload_file(thumb_path, thumb_name, "image/jpeg")
+                            cloud_thumb = await asyncio.to_thread(object_storage.upload_file, thumb_path, thumb_name, "image/jpeg")
                             if cloud_thumb:
                                 payload["thumbnail_url"] = cloud_thumb
                         except Exception as up_err:
-                            logger.warning("[Lifespan] Không thể upload ảnh lên Supabase: %s", up_err)
+                            logger.warning("[Lifespan] Không thể upload ảnh lên AWS S3: %s", up_err)
 
                     incident = await crud_incident.create_from_edge(session, payload)
                     await session.commit()
@@ -185,7 +187,7 @@ async def lifespan(app: FastAPI):
     await appointment_scheduler_service.start()
     logger.info("✅ AppointmentSchedulerService started.")
 
-    # Background task: Tự động đồng bộ các avatar dạng static file cục bộ lên Base64 trong Supabase
+    # Background task: Tự động đồng bộ các avatar dạng static file cục bộ lên Base64 trong database
     async def _sync_local_avatars_to_cloud():
         try:
             import io, base64
