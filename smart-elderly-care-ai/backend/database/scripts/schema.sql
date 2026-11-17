@@ -1,7 +1,6 @@
 -- =================================================================
 -- SMART ELDERLY CARE AI (SECA) - DATABASE SCHEMA & FULL SEED DATA
--- PostgreSQL 16 + TimescaleDB (Docker Local) & Supabase Cloud PG17
--- Đồng bộ tự động từ Supabase lúc: 2026-10-23 16:33:37
+-- PostgreSQL 16/17 (AWS RDS & Local)
 -- =================================================================
 
 -- PHẦN 1: KÍCH HOẠT EXTENSIONS
@@ -487,7 +486,7 @@ EXCEPTION WHEN OTHERS THEN
 END $$;
 
 -- =================================================================
--- PHẦN 7: DỮ LIỆU ĐỒNG BỘ TỪ SUPABASE (SEED DATA TỪ A ĐẾN Z)
+-- PHẦN 7: DỮ LIỆU BAN ĐẦU (SEED DATA TỪ A ĐẾN Z)
 -- =================================================================
 
 -- Dữ liệu bảng users (3 rows)

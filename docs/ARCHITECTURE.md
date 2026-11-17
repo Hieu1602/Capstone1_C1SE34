@@ -177,7 +177,7 @@ flowchart TB
     %% MANAGED CLOUD & THIRD-PARTY SERVICES
     %% =======================================================
     subgraph MANAGED_SERVICES["🗄️ 3. Managed Cloud Services & External APIs"]
-        SUPABASE["🐘 Supabase Cloud Managed PostgreSQL 17<br/>(db.lwvoaznmrciezcwktmlg.supabase.co)<br/>Users, Houses, Devices, Vitals, Incidents"]
+        RDS["🐘 AWS RDS Managed PostgreSQL 17<br/>(seca.cdeea4mcuj3h.ap-southeast-2.rds.amazonaws.com)<br/>Users, Houses, Devices, Vitals, Incidents"]
         FCM["🔥 Google Firebase Cloud Messaging (FCM)<br/>Push Notification (High Priority Còi hú SOS)"]
         GEMINI["🧠 Google Gemini API (LLM 1.5/2.0 Flash)<br/>Bác sĩ AI, RAG Y tế & Tóm tắt sinh hiệu"]
         FB_HOSTING["🌐 Google Firebase Hosting CDN<br/>(smart-elderly-care-ai-cap1.web.app)<br/>Phân phối mã nguồn Web Admin tĩnh toàn cầu"]
@@ -198,7 +198,7 @@ flowchart TB
     DISPATCHER -->|HTTPS Multi-part Upload Video 5s| S3_BUCKET
     GO2RTC -.->|WebRTC P2P / WSS Signaling| MOBILE
 
-    BACKEND <-->|SQLAlchemy + asyncpg over TLS :5432| SUPABASE
+    BACKEND <-->|SQLAlchemy + asyncpg over TLS :5432| RDS
     BACKEND -->|Firebase Admin SDK :443| FCM
     BACKEND -->|Google GenAI Client SDK :443| GEMINI
 
@@ -224,7 +224,7 @@ flowchart TB
 | **Cloud REST & WebSocket Backend** | Container `elderly_care_backend` | AWS EC2 `t3.micro` (`16.178.128.42`) | HTTP/REST & WSS (Port `8000:8000`) | DMZ / Security Group mở port `8000` |
 | **IoT Message Broker** | Container `elderly_care_emqx` | AWS EC2 `t3.micro` | MQTT TCP `1883`, TLS `8883`, HTTP `18083` | Mở port `1883/8883` đón Edge Gateway |
 | **In-Memory Cache & Pub/Sub** | Container `elderly_care_redis` | AWS EC2 `t3.micro` | Redis Protocol (Port `6379`) | Nội bộ mạng `elderly_care_net` (Isolate) |
-| **Managed Relational DB** | PostgreSQL 17 Cloud Instance | Supabase Cloud Global Infrastructure | PostgreSQL Wire Protocol over TLS (`5432`) | Cloud SaaS, yêu cầu SSL (`sslmode=require`) |
+| **Managed Relational DB** | PostgreSQL 17 Cloud Instance | AWS RDS PostgreSQL 17 (ap-southeast-2) | PostgreSQL Wire Protocol over TLS (`5432`) | Cloud SaaS, yêu cầu SSL (`ssl=require`) |
 | **Incident Video & Thumbnails** | Cloud Object Store | AWS S3 Bucket `elderly-care-incidents-c1se34` | HTTPS REST (Virtual-hosted S3 URL) | AWS IAM Credentials (Write), Public Read |
 | **Alert Dispatch Service (FCM)** | Firebase Admin SDK Integration | Google Cloud FCM Gateway | HTTPS REST (Port `443`) | Google Service Account Key (OAuth2) |
 | **Medical Chatbot & RAG Engine** | Gemini Python SDK Integration | Google Gemini API Server | HTTPS REST (Port `443`) | API Key bảo mật (`GEMINI_API_KEY`) |
@@ -241,9 +241,9 @@ flowchart TB
 | **Video & Ảnh bằng chứng té ngã** | AWS S3 Object Storage | AWS Region `ap-southeast-2` | Upload ngay khi kết thúc ghi hình sự cố, lưu trữ vĩnh viễn hoặc theo chính sách lưu trữ. |
 | **Trạng thái kết nối & Heartbeat** | Redis In-Memory Key-Value | Container Redis trên AWS EC2 | TTL: 60 giây (tự động đánh dấu Offline nếu thiết bị mất kết nối). |
 | **Kênh điều phối thời gian thực** | Redis Pub/Sub Channels | Container Redis trên AWS EC2 | Transient (chuyển tiếp tức thì đến WebSocket clients, không lưu đĩa). |
-| **Hồ sơ người dùng & Quan hệ hộ gia đình** | PostgreSQL Tables (`users`, `houses`) | Supabase Cloud Managed DB | Lưu trữ quan hệ vĩnh viễn, ràng buộc toàn vẹn khóa ngoại (FK constraints). |
-| **Nhật ký sinh hiệu (Vitals Time-Series)** | PostgreSQL Partitioned / Time-series | Supabase Cloud Managed DB | Ghi nhận liên tục từ Smartband, lưu lịch sử phục vụ biểu đồ và phân tích xu hướng y tế. |
-| **Lịch sử sự cố & Cảnh báo (Incidents)** | PostgreSQL Tables (`incidents`) | Supabase Cloud Managed DB | Lưu kèm URL video S3, mức độ nghiêm trọng, trạng thái xác nhận và còi hú. |
+| **Hồ sơ người dùng & Quan hệ hộ gia đình** | PostgreSQL Tables (`users`, `houses`) | AWS RDS PostgreSQL 17 | Lưu trữ quan hệ vĩnh viễn, ràng buộc toàn vẹn khóa ngoại (FK constraints). |
+| **Nhật ký sinh hiệu (Vitals Time-Series)** | PostgreSQL Partitioned / Time-series | AWS RDS PostgreSQL 17 | Ghi nhận liên tục từ Smartband, lưu lịch sử phục vụ biểu đồ và phân tích xu hướng y tế. |
+| **Lịch sử sự cố & Cảnh báo (Incidents)** | PostgreSQL Tables (`incidents`) | AWS RDS PostgreSQL 17 | Lưu kèm URL video S3, mức độ nghiêm trọng, trạng thái xác nhận và còi hú. |
 | **Cấu hình cục bộ & Token trên App** | `AsyncStorage` / Secure Storage | Bộ nhớ trong Smartphone Android | Lưu JWT token, ngôn ngữ, cấu hình dark mode và thông tin đăng nhập thiết bị. |
 
 ---

@@ -1,20 +1,20 @@
-# ☁️ Kiến Trúc Hạ Tầng Đám Mây Đa Nền Tảng (Multi-Cloud Infrastructure)
+# ☁️ Kiến Trúc Hạ Tầng Đám Mây (Cloud Infrastructure)
 ## Smart Elderly Care AI — Hệ Thống Chăm Sóc Người Cao Tuổi Thông Minh
 > **Mã đồ án:** C1SE.34  
-> **Cập nhật:** 10/2026  
-> **Mô hình triển khai:** Multi-Cloud Architecture kết hợp giữa **AWS (EC2 & S3)**, **Supabase Cloud (PostgreSQL 17)** và **Google Firebase (Hosting & FCM)**
+> **Cập nhật:** 2026  
+> **Mô hình triển khai:** Cloud Architecture kết hợp giữa **Amazon Web Services (AWS EC2, RDS, S3)** và **Google Firebase (Hosting & FCM)**
 
 ---
 
 ## 📌 1. Tổng Quan Kiến Trúc Đám Mây (Cloud Architecture Overview)
 
-Hệ thống **Smart Elderly Care AI** áp dụng mô hình điện toán đám mây đa nền tảng (Multi-Cloud / Hybrid Cloud) nhằm phân tách triệt để các tầng nghiệp vụ: **Compute (Tính toán)**, **Object Storage (Lưu trữ tệp đa phương tiện)**, **Managed Database (Cơ sở dữ liệu đám mây)** và **Client Delivery (Phân phối ứng dụng & thông báo)**.
+Hệ thống **Smart Elderly Care AI** áp dụng mô hình điện toán đám mây tối ưu hóa tài nguyên nhằm phân tách triệt để các tầng nghiệp vụ: **Compute (Tính toán)**, **Object Storage (Lưu trữ tệp đa phương tiện)**, **Managed Database (Cơ sở dữ liệu đám mây)** và **Client Delivery (Phân phối ứng dụng & thông báo)**.
 
 Kiến trúc gồm 4 trụ cột chính:
 * **AWS EC2 (Elastic Compute Cloud):** Đóng vai trò là **"Bộ não điều phối & xử lý thời gian thực" (Core Compute & Real-time Engine)** — Chạy các container dịch vụ cốt lõi gồm Backend FastAPI, Redis Cache/PubSub và EMQX MQTT Broker tiếp nhận dữ liệu từ các thiết bị IoT tại nhà.
 * **AWS S3 (Simple Storage Service):** Đóng vai trò là **"Kho lưu trữ tệp đa phương tiện độ tin cậy cao" (Cloud Object Storage)** — Chuyên dụng lưu trữ các video clip ghi nhận sự cố (5s trước và sau té ngã), hình ảnh trích xuất (thumbnails), tệp ghi âm SOS và dữ liệu backup.
-* **Supabase Cloud (Managed PostgreSQL 17):** Đóng vai trò là **"Cơ sở dữ liệu tập trung an toàn" (Managed Cloud Relational Database)** — Lưu trữ toàn bộ dữ liệu quan hệ và lịch sử vận hành (người dùng, hồ sơ người cao tuổi, thiết bị, sinh hiệu, nhật ký sự cố). Giúp giảm tải hoàn toàn tài nguyên RAM/CPU cho máy chủ EC2 và đảm bảo dữ liệu toàn vẹn, độc lập.
-* **Google Firebase (Hosting & FCM):** Đóng vai trò là **"Cầu nối người dùng & cảnh báo khẩn cấp" (Global CDN & Real-time Alert Delivery)** — Firebase Hosting phân phối Web Admin Portal qua mạng lưới CDN toàn cầu; Firebase Cloud Messaging (FCM) chuyển phát tức thời (1-2s) thông báo còi hú SOS đến điện thoại của người thân và bác sĩ.
+* **AWS RDS (Relational Database Service - PostgreSQL 17):** Đóng vai trò là **"Cơ sở dữ liệu tập trung an toàn" (Managed Cloud Relational Database)** — Lưu trữ toàn bộ dữ liệu quan hệ và lịch sử vận hành (người dùng, hồ sơ người cao tuổi, thiết bị, sinh hiệu, nhật ký sự cố). Đảm bảo dữ liệu toàn vẹn, độc lập và bảo mật cao qua kết nối mã hóa SSL.
+* **Google Firebase (Hosting & FCM):** Đóng vai trò là **"Cầu nối người dùng & cảnh báo khẩn cấp" (Global CDN & Real-time Alert Delivery)** — Firebase Hosting phân phối Web Admin & Doctor Web qua mạng lưới CDN toàn cầu; Firebase Cloud Messaging (FCM) chuyển phát tức thời (1-2s) thông báo còi hú SOS đến điện thoại của người thân và bác sĩ.
 
 ```
                            ┌──────────────────────────────────────────────┐
@@ -71,9 +71,9 @@ Kiến trúc gồm 4 trụ cột chính:
                                                │ Truy vấn / Lưu trữ dữ liệu quan hệ
                                                ▼
                          ┌─────────────────────────────────────────────┐
-                         │               SUPABASE CLOUD                │
-                         │          Managed PostgreSQL 17              │
-                         │  (db.lwvoaznmrciezcwktmlg.supabase.co)      │
+                         │            AWS RDS POSTGRESQL 17            │
+                         │          Managed Relational Database        │
+                         │(seca.cdeea4mcuj3h.ap-southeast-2.rds.amz...)│
                          │  - Users, Houses, Patients, Devices         │
                          │  - Vitals Time-series & Incident Logs       │
                          └─────────────────────────────────────────────┘
@@ -120,15 +120,15 @@ AWS đảm nhiệm hai tầng trọng yếu nhất: tầng tính toán máy ch�
 
 ---
 
-## 🗄️ 3. Trụ Cột Supabase Cloud — Managed Database & High Availability
+## 🗄️ 3. Trụ Cột AWS RDS — Managed Database & High Availability
 
-Thay vì lưu cơ sở dữ liệu trên ổ cứng cục bộ của EC2, hệ thống sử dụng dịch vụ cơ sở dữ liệu đám mây **Supabase Cloud**:
+Thay vì lưu cơ sở dữ liệu trên ổ cứng cục bộ của EC2, hệ thống sử dụng dịch vụ cơ sở dữ liệu đám mây **AWS RDS PostgreSQL**:
 
-* **Máy chủ cơ sở dữ liệu:** `db.lwvoaznmrciezcwktmlg.supabase.co` (PostgreSQL 17.x kèm giao thức mã hóa SSL `sslmode=require`).
+* **Máy chủ cơ sở dữ liệu:** `seca.cdeea4mcuj3h.ap-southeast-2.rds.amazonaws.com` (PostgreSQL 17.x kèm giao thức mã hóa SSL `ssl=require`).
 * **Vai trò trong hệ thống:**
   1. **Nguồn dữ liệu chân lý duy nhất (Single Source of Truth):** Toàn bộ dữ liệu quan hệ gồm tài khoản người dùng, hộ gia đình, hồ sơ sức khỏe người cao tuổi, danh mục thiết bị IoT và lịch sử sự cố được quản lý tập trung.
-  2. **Đồng bộ tuyệt đối giữa Local & Cloud:** Cả môi trường phát triển cục bộ của lập trình viên và máy chủ AWS EC2 trên môi trường thực tế đều trỏ chung về cơ sở dữ liệu Supabase thông qua biến môi trường `DATABASE_URL`.
-  3. **Không lo mất mát dữ liệu (Data Persistence & Zero-loss):** Việc khởi động lại máy chủ EC2, cập nhật mã nguồn hoặc thay đổi phiên bản Docker không làm ảnh hưởng đến cơ sở dữ liệu. Supabase cung cấp cơ chế sao lưu tự động định kỳ (Point-in-Time Recovery).
+  2. **Đồng bộ tuyệt đối giữa Local & Cloud:** Cả môi trường phát triển cục bộ của lập trình viên và máy chủ AWS EC2 trên môi trường thực tế đều trỏ chung về cơ sở dữ liệu AWS RDS thông qua biến môi trường `DATABASE_URL`.
+  3. **Không lo mất mát dữ liệu (Data Persistence & Zero-loss):** Việc khởi động lại máy chủ EC2, cập nhật mã nguồn hoặc thay đổi phiên bản Docker không làm ảnh hưởng đến cơ sở dữ liệu. AWS RDS cung cấp cơ chế sao lưu tự động định kỳ (Automated Backups & Snapshots).
   4. **Tối ưu tài nguyên máy chủ EC2:** Giảm bớt 400MB - 600MB dung lượng RAM mà một container PostgreSQL/TimescaleDB cục bộ thông thường chiếm dụng.
 
 ---
@@ -157,13 +157,13 @@ Firebase đảm nhận toàn bộ các dịch vụ tương tác đầu cuối (C
 
 ## 📊 5. Bảng Ma Trận Phân Chia Trách Nhiệm (Responsibility Matrix)
 
-| Hạng mục / Tính năng | AWS EC2 (Compute) | AWS S3 (Storage) | Supabase (Database) | Firebase (Hosting / FCM) | Ghi chú kiến trúc |
+| Hạng mục / Tính năng | AWS EC2 (Compute) | AWS S3 (Storage) | AWS RDS (Database) | Firebase (Hosting / FCM) | Ghi chú kiến trúc |
 | :--- | :---: | :---: | :---: | :---: | :--- |
 | **Giao diện Web Admin (Dashboard)** | ❌ | ❌ | ❌ | ✅ *(Hosting)* | Chạy trên CDN Firebase, tiết kiệm 100% CPU/RAM cho máy chủ EC2. |
 | **Xử lý REST API & WebSockets** | ✅ *(FastAPI)* | ❌ | ❌ | ❌ | EC2 tiếp nhận và phản hồi toàn bộ logic nghiệp vụ, tính toán cảnh báo. |
 | **Trạm thu phát IoT MQTT** | ✅ *(EMQX)* | ❌ | ❌ | ❌ | Tiếp nhận dữ liệu cảm biến & camera với độ trễ cực thấp trên port 1883. |
 | **Bộ đệm & Pub/Sub thời gian thực** | ✅ *(Redis)* | ❌ | ❌ | ❌ | Lưu cache trạng thái online, kiểm soát rate limit và phiên người dùng. |
-| **Cơ sở dữ liệu người dùng & Bệnh nhân** | ❌ | ❌ | ✅ *(PostgreSQL)* | ❌ | Dữ liệu quan hệ lưu an toàn, tự động backup trên Supabase Cloud. |
+| **Cơ sở dữ liệu người dùng & Bệnh nhân** | ❌ | ❌ | ✅ *(PostgreSQL)* | ❌ | Dữ liệu quan hệ lưu an toàn, tự động backup trên AWS RDS. |
 | **Lưu lịch sử sinh hiệu & Nhật ký sự cố** | ❌ | ❌ | ✅ *(PostgreSQL)* | ❌ | Lưu vết toàn bộ chỉ số nhịp tim, SpO2, gia tốc kế và log sự cố. |
 | **Lưu trữ Video Clip 5s & Ảnh sự cố** | ❌ | ✅ *(S3 Bucket)* | ❌ | ❌ | Bucket `elderly-care-incidents-c1se34` lưu trữ video bằng chứng té ngã. |
 | **Gửi Push Notification SOS đến Mobile** | 🔄 *(Kích hoạt)* | ❌ | ❌ | ✅ *(Vận chuyển)* | Backend EC2 phát lệnh ➡️ Firebase FCM gửi thông báo còi hú đến máy người nhà. |
@@ -194,7 +194,7 @@ Firebase đảm nhận toàn bộ các dịch vụ tương tác đầu cuối (C
        │ (1) Ghi DB   │ (2) Gửi lệnh Push FCM
        ▼              ▼
 ┌──────────────┐ ┌───────────────────────────┐
-│SUPABASE CLOUD│ │     GOOGLE FIREBASE       │
+│AWS RDS PG17  │ │     GOOGLE FIREBASE       │
 │ PostgreSQL 17│ │Firebase Cloud Messaging   │
 └──────────────┘ └─────────────┬─────────────┘
                                │
@@ -213,7 +213,7 @@ Firebase đảm nhận toàn bộ các dịch vụ tương tác đầu cuối (C
    * **(B) Kênh đa phương tiện (S3 Upload):** Edge Gateway trích xuất đoạn video 5 giây (trước và sau khi ngã) tải trực tiếp lên **AWS S3 Bucket** `elderly-care-incidents-c1se34`.
 3. **Xử lý nghiệp vụ tại AWS Backend:**
    * Backend FastAPI tiếp nhận sự kiện, liên kết bản ghi sự cố với đường dẫn video trên S3.
-   * Ghi nhận tức thời sự cố vào cơ sở dữ liệu **Supabase Cloud**.
+   * Ghi nhận tức thời sự cố vào cơ sở dữ liệu **AWS RDS PostgreSQL**.
    * Tra cứu danh sách người thân và bác sĩ quản lý của hộ gia đình.
    * Gọi `fcm_service.send_alert(...)` chuyển tiếp thông tin cảnh báo đến **Google Firebase FCM API**.
 4. **Báo động khẩn cấp tới Điện thoại (Firebase FCM ➡️ Mobile App):**
@@ -230,7 +230,7 @@ Firebase đảm nhận toàn bộ các dịch vụ tương tác đầu cuối (C
   * Tuyệt đối không lưu trữ các file khóa bí mật trên Git repository:
     * `firebase-service-account.json` (Khóa quản trị Firebase Admin SDK)
     * `google-services.json` (Khóa cấu hình Mobile App)
-    * `.env` chứa `DATABASE_URL` (Supabase connection string), `MINIO_ACCESS_KEY`, `MINIO_SECRET_KEY` (AWS IAM credentials), `GEMINI_API_KEY`.
+    * `.env` chứa `DATABASE_URL` (AWS RDS connection string), `MINIO_ACCESS_KEY`, `MINIO_SECRET_KEY` (AWS IAM credentials), `GEMINI_API_KEY`.
 * **Cấu hình CORS (Cross-Origin Resource Sharing):**
   * Backend FastAPI trên AWS EC2 cho phép các yêu cầu an toàn từ domain Firebase Hosting (`https://smart-elderly-care-ai-cap1.web.app`) và môi trường di động qua cấu hình regex `allow_origin_regex=r"^https?://.*$"`.
 * **Quyền hạn IAM AWS tối thiểu (Least Privilege):**
