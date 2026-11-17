@@ -1,7 +1,7 @@
 import React from 'react';
 import { View, StyleSheet, TouchableOpacity, Modal, TouchableWithoutFeedback } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
-import { Shadows } from '../../../../theme/colors';
+import { Colors, Shadows } from '../../../../theme/colors';
 import { LocalizedText } from '../../../../i18n/LocalizedComponents';
 
 export interface DeleteGroupConfirmModalProps {
@@ -51,7 +51,7 @@ export const DeleteGroupConfirmModal: React.FC<DeleteGroupConfirmModalProps> = (
                 Các thiết bị trong nhóm sẽ{' '}
                 <LocalizedText style={{ fontWeight: '700', color: '#16A34A' }}>không bị xóa</LocalizedText> mà
                 được tự động chuyển về trạng thái{' '}
-                <LocalizedText style={{ fontWeight: '700', color: '#7C3AED' }}>"Chưa nhóm"</LocalizedText>.
+                <LocalizedText style={{ fontWeight: '700', color: Colors.primary }}>"Chưa nhóm"</LocalizedText>.
               </LocalizedText>
 
               <View style={styles.confirmModalActions}>

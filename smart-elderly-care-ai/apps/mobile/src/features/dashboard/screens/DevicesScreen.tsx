@@ -596,7 +596,7 @@ export default function DevicesScreen({ navigation, route }: any) {
                 <LocalizedText
                   style={[
                     styles.subGroupChipText,
-                    isDarkMode && selectedGroupFilter !== 'Tất cả' && { color: '#C084FC' },
+                    isDarkMode && selectedGroupFilter !== 'Tất cả' && { color: '#FB923C' },
                     selectedGroupFilter === 'Tất cả' && styles.subGroupChipTextActive,
                   ]}
                 >
@@ -605,10 +605,14 @@ export default function DevicesScreen({ navigation, route }: any) {
               </TouchableOpacity>
 
               {groups.map((g) => {
-                const count = iotDevices.filter(
+                const groupDevices = iotDevices.filter(
                   (d) => d.location?.toLowerCase() === g.toLowerCase()
-                ).length;
+                );
+                const count = groupDevices.length;
                 const isSelected = selectedGroupFilter === g;
+                const chipIconName = groupDevices.length > 0
+                  ? (groupDevices[0].icon || (groupDevices[0].type === 'camera' ? 'videocam-outline' : 'watch-outline'))
+                  : 'folder-outline';
                 return (
                   <TouchableOpacity
                     key={g}
@@ -621,15 +625,15 @@ export default function DevicesScreen({ navigation, route }: any) {
                     activeOpacity={0.8}
                   >
                     <Ionicons
-                      name="folder-outline"
+                      name={chipIconName as any}
                       size={13}
-                      color={isSelected ? '#FFF' : '#7C3AED'}
+                      color={isSelected ? '#FFF' : Colors.primary}
                       style={{ marginRight: 4 }}
                     />
                     <LocalizedText
                       style={[
                         styles.subGroupChipText,
-                        isDarkMode && !isSelected && { color: '#C084FC' },
+                        isDarkMode && !isSelected && { color: '#FB923C' },
                         isSelected && styles.subGroupChipTextActive,
                       ]}
                     >
@@ -934,7 +938,7 @@ const styles = StyleSheet.create({
     padding: 14,
     borderRadius: 16,
     borderWidth: 1,
-    borderColor: '#EDE9FE',
+    borderColor: '#FED7AA',
     marginBottom: 12,
     ...Shadows.sm,
   },
@@ -945,17 +949,17 @@ const styles = StyleSheet.create({
   groupHeaderTitle: {
     fontSize: 15,
     fontWeight: '800',
-    color: '#1E1B4B',
+    color: '#0F172A',
   },
   groupHeaderSub: {
     fontSize: 11,
-    color: '#7C3AED',
+    color: '#EA580C',
     marginTop: 2,
   },
   createGroupHeaderBtn: {
     flexDirection: 'row',
     alignItems: 'center',
-    backgroundColor: '#7C3AED',
+    backgroundColor: Colors.primary,
     paddingHorizontal: 12,
     paddingVertical: 8,
     borderRadius: 10,
@@ -984,17 +988,17 @@ const styles = StyleSheet.create({
     borderRadius: 20,
     backgroundColor: '#FFFFFF',
     borderWidth: 1,
-    borderColor: '#EDE9FE',
+    borderColor: '#FED7AA',
     ...Shadows.sm,
   },
   subGroupChipActive: {
-    backgroundColor: '#7C3AED',
-    borderColor: '#7C3AED',
+    backgroundColor: Colors.primary,
+    borderColor: Colors.primary,
   },
   subGroupChipText: {
     fontSize: 12,
     fontWeight: '600',
-    color: '#7C3AED',
+    color: '#EA580C',
   },
   subGroupChipTextActive: {
     color: '#FFFFFF',
