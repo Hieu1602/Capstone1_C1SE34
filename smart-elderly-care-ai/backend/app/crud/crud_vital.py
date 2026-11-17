@@ -418,12 +418,46 @@ class CRUDVital:
                         2
                     ))
 
+                # 5. LỌC & HỢP NHẤT CẢNH BÁO: Đảm bảo CHỈ 1 THÔNG BÁO DUY NHẤT cho mỗi lần đo
+                if alerts_to_create:
+                    types_in_alerts = [a[0] for a in alerts_to_create]
+                    # Nếu vừa có nhịp tim cao vừa có nhảy vọt đột ngột -> Gộp lại thành 1 thông báo duy nhất
+                    if "HIGH_HEART_RATE" in types_in_alerts and "SUDDEN_HR_SPIKE" in types_in_alerts:
+                        spike_alert = next((a for a in alerts_to_create if a[0] == "SUDDEN_HR_SPIKE"), None)
+                        merged_msg = f"Cảnh báo: Nhịp tim đo được từ {dev_name} tăng cao ({hr} bpm)! Vượt ngưỡng an toàn ({hr_high_limit} bpm)."
+                        if spike_alert and "➔" in spike_alert[2]:
+                            merged_msg = spike_alert[2].replace("Cảnh báo loạn nhịp:", "Cảnh báo khẩn cấp:") + f" Vượt ngưỡng an toàn ({hr_high_limit} bpm)."
+                        alerts_to_create = [a for a in alerts_to_create if a[0] not in ("HIGH_HEART_RATE", "SUDDEN_HR_SPIKE")]
+                        alerts_to_create.insert(0, ("HIGH_HEART_RATE", "CRITICAL" if hr >= 120 else "HIGH", merged_msg, 5))
+
+                    if "LOW_HEART_RATE" in types_in_alerts and "SUDDEN_HR_DROP" in types_in_alerts:
+                        drop_alert = next((a for a in alerts_to_create if a[0] == "SUDDEN_HR_DROP"), None)
+                        merged_msg = f"Cảnh báo: Nhịp tim đo được từ {dev_name} quá thấp ({hr} bpm)! Dưới ngưỡng an toàn ({hr_low_limit} bpm)."
+                        if drop_alert and "➔" in drop_alert[2]:
+                            merged_msg = drop_alert[2].replace("Cảnh báo loạn nhịp:", "Cảnh báo khẩn cấp:") + f" Dưới ngưỡng an toàn ({hr_low_limit} bpm)."
+                        alerts_to_create = [a for a in alerts_to_create if a[0] not in ("LOW_HEART_RATE", "SUDDEN_HR_DROP")]
+                        alerts_to_create.insert(0, ("LOW_HEART_RATE", "CRITICAL" if hr < 45 else "HIGH", merged_msg, 5))
+
+                    # Nếu vẫn còn nhiều hơn 1 cảnh báo, chỉ giữ lại 1 cảnh báo duy nhất có mức nguy cấp cao nhất
+                    if len(alerts_to_create) > 1:
+                        severity_prio = {"CRITICAL": 3, "HIGH": 2, "MEDIUM": 1, "LOW": 0}
+                        alerts_to_create.sort(key=lambda x: severity_prio.get(x[1], 0), reverse=True)
+                        alerts_to_create = [alerts_to_create[0]]
+
                 for alert_type, alert_level, alert_msg, dedup_mins in alerts_to_create:
                     recent_limit = datetime.now(timezone.utc) - timedelta(minutes=dedup_mins)
+
+                    # Lọc chống spam thông báo nhịp tim cùng loại trong khoảng thời gian dedup_mins
+                    hr_group = {"HIGH_HEART_RATE", "LOW_HEART_RATE", "SUDDEN_HR_SPIKE", "SUDDEN_HR_DROP", "ARRHYTHMIA_RECURRENT", "ARRHYTHMIA_SUSPECT"}
+                    if alert_type in hr_group:
+                        dup_filter = Incident.alert_type.in_(hr_group)
+                    else:
+                        dup_filter = (Incident.alert_type == alert_type)
+
                     dup_res = await db.execute(
                         select(Incident.id).where(
                             Incident.device_id == uuid_val,
-                            Incident.alert_type == alert_type,
+                            dup_filter,
                             Incident.is_acknowledged == False,
                             Incident.created_at >= recent_limit,
                         ).limit(1)

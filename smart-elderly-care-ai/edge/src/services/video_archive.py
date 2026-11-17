@@ -205,8 +205,8 @@ class VideoArchive:
                 client_kwargs["aws_access_key_id"] = access_key
                 client_kwargs["aws_secret_access_key"] = secret_key
                 if os.getenv("AWS_SESSION_TOKEN"):
-                    client_kwargs["aws_session_token"] = os.getenv("AWS_SESSION_TOKEN")
-            self._client = boto3.client("s3", **client_kwargs)
+                    client_kwargs["aws_session_token"] = os.getenv("AWS_SESSION_TOKEN") or ""
+            self._client = boto3.client("s3", **client_kwargs)  # type: ignore[call-overload]
         if not manifest.get("uploaded"):
             self._client.upload_file(str(path), self.bucket, data["object_key"],
                 ExtraArgs={"ContentType": "image/jpeg" if data["kind"] == "snapshot" else "video/mp2t" if path.suffix == ".ts" else "video/mp4",

@@ -530,15 +530,15 @@ async def _fetch_user_and_house_row(
 ):
     from app.models.house import House, HouseMember
     from app.models.device import Device
-    from sqlalchemy import func, and_, or_, select, cast, String
+    from sqlalchemy import func, and_, or_, select, cast, String, literal
 
     where_clause = (
         (User.id == user_id)
         if user_id is not None
         else or_(
             User.phone.in_(phone_variants or []),
-            (User.phone == "Admin123") if is_admin_alias else False,
-            (User.role == "admin") if is_admin_alias else False,
+            (User.phone == "Admin123") if is_admin_alias else literal(False),
+            (User.role == "admin") if is_admin_alias else literal(False),
         )
     )
 
@@ -589,8 +589,8 @@ def _build_login_success_token(
     client_ip = request.client.host if request.client else "127.0.0.1"
     user_agent = request.headers.get("user-agent", "")
     user_id = user.id
-    user_name = user.full_name or user.phone
-    user_role = user.role or "user"
+    user_name: str = user.full_name or user.phone or "unknown"
+    user_role: str = user.role or "user"
 
     # Lấy vị trí client
     client_location = request.headers.get("x-client-location")
@@ -760,7 +760,7 @@ async def login(
             )
 
         # KIỂM TRA LUỒNG XÁC MINH 2 BƯỚC (2FA QUA SMS OTP)
-        if getattr(user, "two_factor_enabled", False):
+        if getattr(user, "two_factor_enabled", False) and user.phone:
             # Gửi mã OTP xác thực đăng nhập qua SMS
             try:
                 await run_in_threadpool(send_otp, user.phone, "login_2fa")
