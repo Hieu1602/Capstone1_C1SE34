@@ -25,6 +25,7 @@ import {
   Sun,
   RotateCcw,
   Megaphone,
+  X,
 } from 'lucide-react';
 import { NotificationDetailModal, UnifiedNotification } from '../clinical/NotificationDetailModal';
 import {
@@ -39,7 +40,7 @@ import {
   SyncPayload,
 } from '../../utils/notificationSync';
 
-type TabType = 'ALL' | 'UNREAD' | 'ADMIN' | 'ALERTS' | 'APPOINTMENTS';
+type TabType = 'ALL' | 'CRITICAL' | 'APPOINTMENTS';
 
 const READ_STORAGE_KEY = '@doctor_web_read_notifs';
 
@@ -227,23 +228,21 @@ export const DoctorNavbar: React.FC = () => {
       }
 
       // 1. Cảnh báo và sự cố từ Backend API /notifications (Đồng bộ thời gian thực với Mobile App và CSDL)
+      // 1. Cảnh báo và sự cố từ Backend API /notifications (Đồng bộ thời gian thực có lọc chống Alert Fatigue)
       if (incRes.status === 'fulfilled' && Array.isArray(incRes.value)) {
+        const patList = (patRes.status === 'fulfilled' && Array.isArray(patRes.value)) ? patRes.value : [];
+
         incRes.value.forEach((inc: Incident) => {
-          const isCritical = inc.alert_level === 'CRITICAL' || inc.alert_type === 'FALL_DETECTED';
           const rawMsg = cleanNotificationText(inc.message || '');
           const msgLower = rawMsg.toLowerCase();
-          const isRead = Boolean(inc.is_acknowledged || savedReadIds.has(inc.id) || savedReadIds.has(`inc_${inc.id}`));
-          const timeStr = formatDate(inc.created_at);
 
-          let type: UnifiedNotification['type'] = 'ALERT';
-          let title = rawMsg;
-          let subtitle = timeStr;
-          let badgeLabel = isCritical ? 'Khẩn cấp' : 'Cảnh báo';
-          let badgeColor = isCritical ? 'text-rose-700 bg-rose-50 border-rose-200' : 'text-amber-700 bg-amber-50 border-amber-200';
-          let badgeBg = isCritical ? 'bg-rose-50' : 'bg-amber-50';
-          let targetUrl = '/patients';
-          let finalRead = isRead;
+          // Lọc tầng UI: Tuyệt đối ẩn cảnh báo vận hành thiết bị (pin, sạc, mất kết nối)
+          const isDeviceOp =
+            ['pin', 'sạc', 'mất kết nối', 'ngắt kết nối', 'ngoại tuyến', 'offline', 'mất tín hiệu'].some((k) => msgLower.includes(k)) ||
+            Boolean(inc.alert_type?.startsWith('BATTERY_') || inc.alert_type?.startsWith('DEVICE_'));
+          if (isDeviceOp) return;
 
+          const isCritical = inc.alert_level === 'CRITICAL' || inc.alert_type === 'FALL_DETECTED' || inc.alert_type === 'LOW_SPO2';
           const isHouseInvite =
             inc.alert_type === 'HOUSE_INVITE_PENDING' ||
             Boolean(inc.notes?.includes('HOUSE_INVITE_PENDING')) ||
@@ -255,6 +254,28 @@ export const DoctorNavbar: React.FC = () => {
           const isMedicalRecordMsg =
             inc.alert_type === 'MEDICAL_RECORD_UPDATED' ||
             ['bệnh án', 'dị ứng', 'dinh dưỡng'].some((k) => msgLower.includes(k));
+
+          // Chống tự làm phiền (No Self-Notification khi bác sĩ tự cập nhật hồ sơ)
+          if (isMedicalRecordMsg && (inc.acknowledged_by === user?.id || (user?.id && inc.notes?.includes(user.id)))) {
+            return;
+          }
+
+          // Tuyệt đối ẩn dao động nhẹ; Bác sĩ chỉ nhận Cảnh báo Nguy cấp HOẶC Lịch khám / Lời mời
+          if (!isCritical && !isHouseInvite && !isAppointmentMsg && !isAssignmentMsg) {
+            return;
+          }
+
+          const isRead = Boolean(inc.is_acknowledged || savedReadIds.has(inc.id) || savedReadIds.has(`inc_${inc.id}`));
+          const timeStr = formatDate(inc.created_at);
+
+          let type: UnifiedNotification['type'] = 'ALERT';
+          let title = rawMsg;
+          let subtitle = timeStr;
+          let badgeLabel = isCritical ? 'Khẩn cấp' : 'Cảnh báo';
+          let badgeColor = isCritical ? 'text-rose-700 bg-rose-50 border-rose-200' : 'text-amber-700 bg-amber-50 border-amber-200';
+          let badgeBg = isCritical ? 'bg-rose-50' : 'bg-amber-50';
+          let targetUrl = '/patients';
+          let finalRead = isRead;
 
           if (isHouseInvite) {
             type = 'INVITE';
@@ -299,9 +320,12 @@ export const DoctorNavbar: React.FC = () => {
             title = isCritical ? 'Cảnh báo sự cố té ngã khẩn cấp' : 'Cảnh báo y tế';
           }
 
-          const matchedPat = (patRes.status === 'fulfilled' && Array.isArray(patRes.value))
-            ? patRes.value.find((p: DoctorPatientCard) => p.id === (inc as any).elderly_id || (inc.notes && inc.notes.includes(p.id))) || patRes.value[0]
-            : undefined;
+          const patIdx = patList.findIndex((p: DoctorPatientCard) => p.id === (inc as any).elderly_id || (inc.notes && inc.notes.includes(p.id)));
+          const matchedPat = patIdx >= 0 ? patList[patIdx] : patList[0];
+          const mrCode = patIdx >= 0 ? `MR-${String(patIdx + 1).padStart(3, '0')}` : 'MR-001';
+          const pName = matchedPat?.name || (isHouseInvite ? 'Hộ gia đình mới' : 'Người cao tuổi');
+          const repeatCount = inc.repeat_count || 1;
+          const repeatBadge = inc.repeat_badge || (repeatCount > 1 ? `Lặp lại ${repeatCount} lần trong 15 phút qua` : undefined);
 
           unifiedList.push({
             id: `inc_${inc.id}`,
@@ -317,7 +341,10 @@ export const DoctorNavbar: React.FC = () => {
             targetUrl,
             rawIncident: inc,
             patientId: matchedPat?.id,
-            patientName: matchedPat?.name || (isHouseInvite ? 'Hộ gia đình mới' : 'Người cao tuổi'),
+            patientName: pName,
+            patientMrCode: mrCode,
+            repeatCount,
+            repeatBadge,
             patientAddress: matchedPat?.house_address || matchedPat?.house_name,
             heartRate: (matchedPat?.heart_rate && matchedPat.heart_rate > 0) ? matchedPat.heart_rate : undefined,
             spo2: (matchedPat?.spo2 && matchedPat.spo2 > 0) ? matchedPat.spo2 : undefined,
@@ -327,33 +354,32 @@ export const DoctorNavbar: React.FC = () => {
         });
       }
 
-      // 2. Bệnh nhân có trạng thái sinh hiệu cảnh báo (WARNING / DANGER)
+      // 2. Bệnh nhân có trạng thái sinh hiệu NGUY CẤP (DANGER)
       if (patRes.status === 'fulfilled' && Array.isArray(patRes.value)) {
-        patRes.value.forEach((p: DoctorPatientCard) => {
+        patRes.value.forEach((p: DoctorPatientCard, idx: number) => {
           const isDanger = p.health_status === 'DANGER';
-          const isWarn = p.health_status === 'WARNING' || isDanger;
-          if (isWarn) {
+          if (isDanger) {
             const pId = `pat_${p.id}`;
             if (!unifiedList.some((item) => item.id === pId)) {
+              const mrCode = `MR-${String(idx + 1).padStart(3, '0')}`;
               unifiedList.push({
                 id: pId,
                 type: 'ALERT',
-                title: `${p.name} - Cần chú ý theo dõi`,
+                title: `${p.name} - Nguy cơ suy giảm sinh hiệu nghiêm trọng`,
                 subtitle: `Nhịp tim: ${p.heart_rate || '--'} bpm • SpO2: ${p.spo2 || '--'}% • ${p.house_address || p.house_name || 'Nhà riêng'}`,
                 timeStr: 'Hôm nay',
-                badgeLabel: isDanger ? 'Nguy cấp' : 'Cần chú ý',
-                badgeColor: isDanger
-                  ? 'text-rose-700 bg-rose-50 border-rose-200'
-                  : 'text-amber-700 bg-amber-50 border-amber-200',
-                badgeBg: isDanger ? 'bg-rose-50' : 'bg-amber-50',
+                badgeLabel: 'Nguy cấp',
+                badgeColor: 'text-rose-700 bg-rose-50 border-rose-200',
+                badgeBg: 'bg-rose-50',
                 isRead: savedReadIds.has(pId),
                 targetUrl: `/patients?search=${encodeURIComponent(p.name)}`,
                 patientId: p.id,
                 patientName: p.name,
+                patientMrCode: mrCode,
                 patientAddress: p.house_address || p.house_name,
                 heartRate: p.heart_rate,
                 spo2: p.spo2,
-                alertLevel: isDanger ? 'CRITICAL' : 'WARNING',
+                alertLevel: 'CRITICAL',
               });
             }
           }
@@ -507,12 +533,42 @@ export const DoctorNavbar: React.FC = () => {
     }
     const next = markAsRead(item.id, item.rawIncidentId);
     setReadIds(next);
+    const doctorName = user?.full_name ? `BS. ${user.full_name}` : 'Bác sĩ phụ trách';
     setNotifications((prev) =>
       prev.map((n) =>
-        n.id === item.id || n.rawIncidentId === item.rawIncidentId
-          ? { ...n, isRead: true, badgeLabel: 'Đã xử lý' }
+        n.id === item.id || (n.rawIncidentId && n.rawIncidentId === item.rawIncidentId)
+          ? {
+              ...n,
+              isRead: true,
+              badgeLabel: 'Đã xử lý',
+              rawIncident: n.rawIncident
+                ? {
+                    ...n.rawIncident,
+                    is_acknowledged: true,
+                    acknowledged_by_name: doctorName,
+                    acknowledged_at: new Date().toISOString(),
+                  }
+                : undefined,
+            }
           : n
       )
+    );
+    setSelectedNotif((curr) =>
+      curr && (curr.id === item.id || (curr.rawIncidentId && curr.rawIncidentId === item.rawIncidentId))
+        ? {
+            ...curr,
+            isRead: true,
+            badgeLabel: 'Đã xử lý',
+            rawIncident: curr.rawIncident
+              ? {
+                  ...curr.rawIncident,
+                  is_acknowledged: true,
+                  acknowledged_by_name: doctorName,
+                  acknowledged_at: new Date().toISOString(),
+                }
+              : undefined,
+          }
+        : curr
     );
   };
 
@@ -543,43 +599,36 @@ export const DoctorNavbar: React.FC = () => {
   };
 
   const unreadCount = notifications.filter((n) => !n.isRead).length;
-  const adminCount = notifications.filter((n) => n.type === 'ADMIN').length;
-  const alertsCount = notifications.filter((n) => n.type === 'ALERT' || n.type === 'INVITE').length;
-  const aptsCount = notifications.filter((n) => n.type === 'APPOINTMENT').length;
+  const criticalCount = notifications.filter((n) => n.type === 'ALERT' && (n.badgeLabel === 'Khẩn cấp' || n.badgeLabel === 'Nguy cấp' || n.alertLevel === 'CRITICAL')).length;
+  const aptsCount = notifications.filter((n) => n.type === 'APPOINTMENT' || n.type === 'INVITE').length;
 
   const filteredNotifs = notifications.filter((item) => {
-    if (notifTab === 'UNREAD') return !item.isRead;
-    if (notifTab === 'ADMIN') return item.type === 'ADMIN';
-    if (notifTab === 'ALERTS') return item.type === 'ALERT' || item.type === 'INVITE';
-    if (notifTab === 'APPOINTMENTS') return item.type === 'APPOINTMENT';
+    if (notifTab === 'CRITICAL') {
+      return item.type === 'ALERT' && (item.badgeLabel === 'Khẩn cấp' || item.badgeLabel === 'Nguy cấp' || item.alertLevel === 'CRITICAL');
+    }
+    if (notifTab === 'APPOINTMENTS') {
+      return item.type === 'APPOINTMENT' || item.type === 'INVITE';
+    }
     return true;
   });
 
   const emptyConfig: Record<TabType, { title: string; sub: string }> = {
-    UNREAD: {
-      title: 'Tuyệt vời! Không còn thông báo chưa đọc',
-      sub: 'Bác sĩ đã xem và xử lý toàn bộ các thông báo y tế.',
-    },
-    ADMIN: {
-      title: 'Chưa có thông báo nào từ Quản trị viên',
-      sub: 'Các thông báo bảo trì hoặc chỉ đạo y tế từ Admin sẽ hiển thị ở đây.',
-    },
-    ALERTS: {
-      title: 'Không có cảnh báo bất thường',
-      sub: 'Tất cả các bệnh nhân đều đang có sinh hiệu bình thường.',
-    },
-    APPOINTMENTS: {
-      title: 'Không có lịch khám mới',
-      sub: 'Bác sĩ có thể chủ động đặt lịch thăm khám định kỳ cho các cụ.',
-    },
     ALL: {
       title: 'Mọi thứ đều ổn định',
       sub: 'Hiện không có cảnh báo sức khỏe khẩn cấp hay lịch hẹn nào cần xử lý.',
     },
+    CRITICAL: {
+      title: 'Không có cảnh báo khẩn cấp',
+      sub: 'Tất cả các bệnh nhân đang có sinh hiệu ổn định, an toàn.',
+    },
+    APPOINTMENTS: {
+      title: 'Không có lịch khám mới',
+      sub: 'Chưa có lịch khám lâm sàng hoặc lời mời phụ trách mới cần phản hồi.',
+    },
   };
 
   return (
-    <header className="sticky top-0 z-30 flex h-16 w-full items-center justify-between gap-4 border-b border-slate-200/80 bg-white/95 px-6 backdrop-blur-md dark:border-slate-800 dark:bg-slate-900/95 shrink-0">
+    <header className="sticky top-0 z-30 flex h-16 w-full items-center justify-between gap-4 border-b border-slate-200/80 bg-white/95 px-6 backdrop-blur-md dark:border-slate-800/80 dark:bg-[#131C31]/95 shrink-0">
       {/* Bên trái: Brand & Định danh Bác sĩ gia đình */}
       <div
         onClick={() => navigate('/')}
@@ -597,9 +646,6 @@ export const DoctorNavbar: React.FC = () => {
             <span className="font-heading text-base font-bold tracking-tight text-slate-900 dark:text-white">
               SmartCare AI
             </span>
-            <span className="rounded-full bg-blue-50 px-2.5 py-0.5 text-[11px] font-semibold text-blue-700 border border-blue-200/60 dark:bg-blue-900/40 dark:text-blue-300 dark:border-blue-800">
-              Bác sĩ Gia đình
-            </span>
           </div>
           <p className="text-xs text-slate-500 dark:text-slate-400 hidden sm:block">
             Phân hệ Chăm sóc & Theo dõi Sức khỏe Người cao tuổi
@@ -607,7 +653,7 @@ export const DoctorNavbar: React.FC = () => {
         </div>
       </div>
 
-      {/* Chính giữa: Thanh tìm kiếm nhanh toàn hệ thống (⌘K) */}
+      {/* Chính giữa: Thanh tìm kiếm nhanh toàn hệ thống */}
       <form
         onSubmit={handleQuickSearchSubmit}
         className="hidden lg:flex flex-1 max-w-md items-center relative"
@@ -619,11 +665,21 @@ export const DoctorNavbar: React.FC = () => {
           value={quickSearch}
           onChange={(e) => setQuickSearch(e.target.value)}
           placeholder="Tìm nhanh bệnh nhân, lịch khám, hồ sơ y tế..."
-          className="w-full rounded-xl border border-slate-200/90 bg-[#F4F7FE]/80 py-2 pl-10 pr-14 text-xs font-medium text-slate-800 placeholder-slate-400 transition focus:border-blue-500 focus:bg-white focus:outline-none focus:ring-2 focus:ring-blue-100 dark:bg-slate-800 dark:border-slate-700 dark:text-slate-100 dark:placeholder-slate-500"
+          className="w-full rounded-xl border border-slate-200/90 bg-[#F4F7FE]/80 py-2 pl-10 pr-10 text-xs font-medium text-slate-800 placeholder-slate-400 transition focus:border-blue-500 focus:bg-white focus:outline-none focus:ring-2 focus:ring-blue-100 dark:bg-slate-800 dark:border-slate-700 dark:text-slate-100 dark:placeholder-slate-500"
         />
-        <kbd className="pointer-events-none absolute right-2.5 inline-flex items-center gap-0.5 rounded-md border border-slate-200 bg-white px-1.5 py-0.5 text-[10px] font-bold text-slate-400 shadow-2xs dark:bg-slate-700 dark:border-slate-600 dark:text-slate-300">
-          ⌘K
-        </kbd>
+        {quickSearch && (
+          <button
+            type="button"
+            onClick={() => {
+              setQuickSearch('');
+              searchInputRef.current?.focus();
+            }}
+            title="Xóa từ khóa"
+            className="absolute right-2.5 flex h-5 w-5 items-center justify-center rounded-full text-slate-400 hover:bg-slate-200/70 hover:text-slate-600 dark:hover:bg-slate-700 dark:hover:text-slate-200 transition-colors cursor-pointer"
+          >
+            <X className="h-3.5 w-3.5" />
+          </button>
+        )}
       </form>
 
       {/* Bên phải: Nền tối, Chuông thông báo & Hồ sơ Bác sĩ */}
@@ -662,9 +718,9 @@ export const DoctorNavbar: React.FC = () => {
 
           {/* Popover Bảng thông báo Bác sĩ (Đồng bộ 100% với Mobile App) */}
           {showNotifMenu && (
-            <div className="absolute right-0 mt-2 w-[460px] max-w-[95vw] rounded-2xl border border-slate-200 bg-white shadow-2xl shadow-slate-300/60 overflow-hidden animate-in fade-in slide-in-from-top-2 duration-150 z-50 dark:border-slate-700 dark:bg-slate-900 dark:shadow-slate-950/80">
+            <div className="absolute right-0 mt-2 w-[460px] max-w-[95vw] rounded-2xl border border-slate-200 bg-white shadow-2xl shadow-slate-300/60 overflow-hidden animate-in fade-in slide-in-from-top-2 duration-150 z-50 dark:border-slate-800/80 dark:bg-[#131C31] dark:shadow-slate-950/80">
               {/* Header Popover */}
-              <div className="flex items-center justify-between border-b border-slate-100 bg-slate-50/90 px-4 py-3 dark:border-slate-800 dark:bg-slate-800/80">
+              <div className="flex items-center justify-between border-b border-slate-100 bg-slate-50/90 px-4 py-3 dark:border-slate-800/80 dark:bg-slate-900/90">
                 <div className="flex items-center space-x-2">
                   <Bell className="h-4 w-4 text-blue-600" />
                   <h4 className="text-xs font-extrabold uppercase tracking-wider text-slate-900 dark:text-white">
@@ -705,26 +761,22 @@ export const DoctorNavbar: React.FC = () => {
                 </div>
               </div>
 
-              {/* Tabs lọc thông báo chuẩn như App: Tất cả, Chưa đọc, Từ Admin, Cảnh báo, Lịch khám */}
-              <div className="flex border-b border-slate-100 px-4 pt-2 bg-white gap-4 text-xs font-bold dark:border-slate-800 dark:bg-slate-900 overflow-x-auto">
+              {/* Tabs lọc thông báo: 3 tab vừa khít chiều ngang */}
+              <div className="grid grid-cols-3 border-b border-slate-100 bg-white text-xs font-bold dark:border-slate-800/80 dark:bg-[#131C31]">
                 {[
                   { key: 'ALL' as const, label: `Tất cả (${notifications.length})` },
-                  { key: 'UNREAD' as const, label: `Chưa đọc (${unreadCount})` },
-                  { key: 'ADMIN' as const, label: `Từ Admin (${adminCount})` },
-                  { key: 'ALERTS' as const, label: `Cảnh báo (${alertsCount})` },
+                  { key: 'CRITICAL' as const, label: `Khẩn cấp (${criticalCount})` },
                   { key: 'APPOINTMENTS' as const, label: `Lịch khám (${aptsCount})` },
                 ].map((t) => (
                   <button
                     key={t.key}
                     onClick={() => setNotifTab(t.key)}
-                    className={`pb-2.5 border-b-2 whitespace-nowrap transition-colors ${
+                    className={`py-2.5 text-center border-b-2 transition-colors cursor-pointer ${
                       notifTab === t.key
-                        ? t.key === 'ALERTS'
+                        ? t.key === 'CRITICAL'
                           ? 'border-rose-600 text-rose-600 dark:border-rose-500 dark:text-rose-400'
-                          : t.key === 'ADMIN'
-                            ? 'border-sky-600 text-sky-600 dark:border-sky-400 dark:text-sky-400'
-                            : 'border-blue-600 text-blue-600 dark:border-blue-400 dark:text-blue-400'
-                        : 'border-transparent text-slate-400 hover:text-slate-700 dark:text-slate-500 dark:hover:text-slate-300'
+                          : 'border-blue-600 text-blue-600 dark:border-blue-400 dark:text-blue-400'
+                        : 'border-transparent text-slate-400 hover:text-slate-700 dark:text-slate-400 dark:hover:text-slate-200'
                     }`}
                   >
                     {t.label}
@@ -733,7 +785,7 @@ export const DoctorNavbar: React.FC = () => {
               </div>
 
               {/* Danh sách thông báo */}
-              <div className="max-h-[380px] overflow-y-auto divide-y divide-slate-100 dark:divide-slate-800">
+              <div className="max-h-[380px] overflow-y-auto divide-y divide-slate-100 dark:divide-slate-800/80">
                 {filteredNotifs.length === 0 ? (
                   <div className="p-8 text-center text-xs text-slate-400">
                     <Check className="mx-auto h-8 w-8 text-emerald-500 mb-2" />
@@ -757,8 +809,8 @@ export const DoctorNavbar: React.FC = () => {
                         onClick={() => handleNotificationClick(item)}
                         className={`flex items-start gap-3 p-3.5 cursor-pointer transition-colors ${
                           !item.isRead
-                            ? 'bg-blue-50/40 hover:bg-blue-50/70 dark:bg-slate-800/80 dark:hover:bg-slate-800'
-                            : 'bg-white hover:bg-slate-50 dark:bg-slate-900 dark:hover:bg-slate-800/50'
+                            ? 'bg-blue-50/40 hover:bg-blue-50/70 dark:bg-blue-950/20 dark:hover:bg-blue-950/40'
+                            : 'bg-white hover:bg-slate-50 dark:bg-[#131C31] dark:hover:bg-slate-800/60'
                         }`}
                       >
                         {/* Icon Box */}
@@ -790,6 +842,19 @@ export const DoctorNavbar: React.FC = () => {
 
                         {/* Nội dung thông báo */}
                         <div className="flex-1 min-w-0 pr-1">
+                          {/* Thẻ định danh bệnh nhân & Nhãn lặp lại */}
+                          {item.type !== 'ADMIN' && item.patientName && (
+                            <div className="flex items-center gap-1.5 mb-1 flex-wrap">
+                              <span className="inline-flex items-center px-1.5 py-0.5 rounded text-[10px] font-bold bg-slate-100 text-slate-700 dark:bg-slate-800 dark:text-slate-200 border border-slate-200 dark:border-slate-700">
+                                {item.patientName} • {item.patientMrCode || 'MR-001'}
+                              </span>
+                              {item.repeatBadge && (
+                                <span className="inline-flex items-center px-1.5 py-0.5 rounded text-[9.5px] font-bold bg-rose-100 text-rose-700 border border-rose-200 dark:bg-rose-950/60 dark:text-rose-300">
+                                  {item.repeatBadge}
+                                </span>
+                              )}
+                            </div>
+                          )}
                           <div className="flex items-start gap-1.5">
                             {!item.isRead && (
                               <span className="mt-1 h-2 w-2 shrink-0 rounded-full bg-blue-600 ring-2 ring-blue-100 dark:ring-blue-900" />
@@ -843,8 +908,13 @@ export const DoctorNavbar: React.FC = () => {
                 )}
               </div>
 
+              {/* Dòng chú thích tự động lọc chống Alert Fatigue */}
+              <div className="border-t border-slate-100 bg-slate-50/90 px-3.5 py-2 text-center text-[10.5px] text-slate-500 dark:border-slate-800/80 dark:bg-[#0F172A] dark:text-slate-400">
+                Hệ thống tự động lọc bỏ các cảnh báo thiết bị (pin yếu, mất tín hiệu) và dao động nhẹ; các mục này được chuyển trực tiếp tới Gia đình.
+              </div>
+
               {/* Footer điều hướng sang trang Tất cả thông báo */}
-              <div className="border-t border-slate-100 bg-slate-50 p-2.5 text-center dark:border-slate-800 dark:bg-slate-800/60">
+              <div className="border-t border-slate-100 bg-white p-2.5 text-center dark:border-slate-800/80 dark:bg-[#131C31]">
                 <button
                   onClick={() => {
                     setShowNotifMenu(false);
@@ -867,7 +937,7 @@ export const DoctorNavbar: React.FC = () => {
               setShowProfileMenu(!showProfileMenu);
               setShowNotifMenu(false);
             }}
-            className="flex items-center space-x-3 rounded-xl p-1.5 transition-colors hover:bg-slate-50 border border-transparent hover:border-slate-200 dark:hover:bg-slate-800 dark:hover:border-slate-700"
+            className="flex items-center space-x-3 rounded-xl p-1.5 transition-colors hover:bg-slate-50 border border-transparent hover:border-slate-200 dark:hover:bg-slate-800/60 dark:hover:border-slate-700"
           >
             {/* Avatar Bác sĩ có chấm xanh Online (Chữ "M" nền xanh chuẩn như bên App) */}
             <div className="relative inline-block shrink-0">
@@ -888,7 +958,7 @@ export const DoctorNavbar: React.FC = () => {
 
           {/* Dropdown Menu */}
           {showProfileMenu && (
-            <div className="absolute right-0 mt-2 w-60 rounded-2xl border border-slate-200 bg-white p-2 shadow-xl shadow-slate-200/60 animate-in fade-in slide-in-from-top-2 duration-150 dark:border-slate-700 dark:bg-slate-900 dark:shadow-slate-950/80">
+            <div className="absolute right-0 mt-2 w-60 rounded-2xl border border-slate-200 bg-white p-2 shadow-xl shadow-slate-200/60 animate-in fade-in slide-in-from-top-2 duration-150 dark:border-slate-800/80 dark:bg-[#131C31] dark:shadow-slate-950/80">
               <div className="flex items-center space-x-3 px-3 py-2.5 border-b border-slate-100 dark:border-slate-800">
                 <div className="relative inline-block shrink-0">
                   <div className="flex h-10 w-10 items-center justify-center rounded-full bg-blue-600 text-base font-extrabold text-white shadow-sm overflow-hidden">

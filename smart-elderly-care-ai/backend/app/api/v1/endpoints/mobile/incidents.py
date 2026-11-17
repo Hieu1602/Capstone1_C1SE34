@@ -24,18 +24,20 @@ router = APIRouter()
 async def list_incidents(
     device_id: str | None = Query(default=None),
     alert_level: str | None = Query(default=None),
+    target_role: str | None = Query(default=None, description="Lọc đối tượng nhận: doctor | family | caregiver"),
     limit: int = Query(default=20, le=100),
     offset: int = Query(default=0),
     db: AsyncSession = Depends(get_db),
     current_user: User | None = Depends(get_current_user_optional),
 ):
     """
-    Lấy danh sách sự kiện cảnh báo.
-    Có thể lọc theo device_id (chuỗi hoặc UUID) và alert_level.
-    Tích hợp Redis In-Memory Cache (độ trễ < 1ms) cho danh sách thông báo cũ.
+    Lấy danh sách sự kiện cảnh báo có phân tuyến thông minh (Smart Alert Routing).
+    - Bác sĩ (Doctor Portal): Chỉ nhận Cảnh báo Nguy cấp (CRITICAL) và Lịch khám/Lời mời, kèm Cooldown 15-30 phút chống spam.
+    - Gia đình (Family App): Nhận 100% sự kiện bao gồm tình trạng thiết bị (pin, kết nối) và cảnh báo sinh hiệu.
     """
     curr_uid = current_user.id if current_user else None
-    cache_key = f"cache:incidents:u_{str(curr_uid)}:d_{device_id or 'all'}:l_{alert_level or 'all'}:lim_{limit}:off_{offset}"
+    effective_target_role = target_role or ("doctor" if (current_user and current_user.role == "doctor") else None)
+    cache_key = f"cache:incidents:u_{str(curr_uid)}:r_{effective_target_role or 'all'}:d_{device_id or 'all'}:l_{alert_level or 'all'}:lim_{limit}:off_{offset}"
 
     # 1. Thử lấy từ Redis Cache (< 1ms)
     from app.services.redis import redis_service
@@ -58,6 +60,7 @@ async def list_incidents(
         limit=limit,
         offset=offset,
         current_user_id=curr_uid,
+        target_role=effective_target_role,
     )
 
     # 2. Lưu vào Redis Cache (TTL = 180s)
@@ -134,6 +137,38 @@ async def acknowledge_incident(
             )
         except Exception as notify_err:
             logger.warning("[acknowledge_incident] Lỗi kích hoạt notify_doctor_appointment_confirmed: %s", notify_err)
+
+    # Lấy tên hiển thị của người xử lý
+    handler_name = incident.acknowledged_by_name
+    if not handler_name and current_user:
+        handler_name = current_user.full_name or current_user.phone
+    if not handler_name:
+        handler_name = "Bác sĩ phụ trách"
+
+    # Broadcast WebSocket INCIDENT_RESOLVED tới tất cả client (Mobile + Web Bác sĩ + Web Admin)
+    try:
+        from app.api.websockets.vitals_ws import alert_clients
+        import json
+        ack_ws_payload = json.dumps({
+            "type": "INCIDENT_RESOLVED",
+            "incident_id": str(incident.id),
+            "data": {
+                "id": str(incident.id),
+                "is_acknowledged": True,
+                "acknowledged_by": str(incident.acknowledged_by) if incident.acknowledged_by else str(ack_by or ""),
+                "acknowledged_by_name": handler_name,
+                "acknowledged_at": incident.acknowledged_at.isoformat() if incident.acknowledged_at else None,
+                "note": resolved_note or "Đã xác nhận xử lý",
+            }
+        }, ensure_ascii=False)
+        for client_ws in list(alert_clients):
+            try:
+                await client_ws.send_text(ack_ws_payload)
+            except Exception:
+                if client_ws in alert_clients:
+                    alert_clients.remove(client_ws)
+    except Exception as ws_err:
+        logger.warning("[acknowledge_incident] WS broadcast error: %s", ws_err)
 
     try:
         from app.services.redis import redis_service

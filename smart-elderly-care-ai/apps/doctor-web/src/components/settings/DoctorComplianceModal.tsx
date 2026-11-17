@@ -31,13 +31,13 @@ export const DoctorComplianceModal: React.FC<DoctorComplianceModalProps> = ({ on
 
   return createPortal(
     <div className="fixed inset-0 top-0 left-0 right-0 bottom-0 w-screen h-screen z-[100] !mt-0 flex items-center justify-center bg-slate-900/50 p-4 backdrop-blur-sm">
-      <div className="relative z-[101] w-full max-w-lg rounded-2xl bg-white p-6 shadow-2xl">
-        <div className="flex items-center justify-between border-b border-slate-100 pb-3 mb-4">
+      <div className="relative z-[101] w-full max-w-lg rounded-2xl bg-white dark:bg-[#131C31] dark:border dark:border-slate-800/80 p-6 shadow-2xl">
+        <div className="flex items-center justify-between border-b border-slate-100 dark:border-slate-800 pb-3 mb-4">
           <div className="flex items-center gap-2">
-            <ShieldCheck className="h-5 w-5 text-emerald-600" />
-            <h3 className="text-base font-extrabold text-slate-900">Chính sách bảo mật dữ liệu</h3>
+            <ShieldCheck className="h-5 w-5 text-emerald-600 dark:text-emerald-400" />
+            <h3 className="text-base font-extrabold text-slate-900 dark:text-white">Chính sách bảo mật dữ liệu</h3>
           </div>
-          <button type="button" onClick={onClose} className="text-slate-400 hover:text-slate-600">
+          <button type="button" onClick={onClose} className="text-slate-400 hover:text-slate-600 dark:hover:text-slate-200 cursor-pointer">
             <X className="h-5 w-5" />
           </button>
         </div>
@@ -45,8 +45,8 @@ export const DoctorComplianceModal: React.FC<DoctorComplianceModalProps> = ({ on
         <div className="space-y-4 max-h-80 overflow-y-auto mb-5">
           {COMPLIANCE_SECTIONS.map((item) => (
             <div key={item.title}>
-              <p className="text-xs font-bold text-slate-900 mb-1">{item.title}</p>
-              <p className="text-xs leading-relaxed text-slate-600">{item.desc}</p>
+              <p className="text-xs font-bold text-slate-900 dark:text-white mb-1">{item.title}</p>
+              <p className="text-xs leading-relaxed text-slate-600 dark:text-slate-300">{item.desc}</p>
             </div>
           ))}
         </div>

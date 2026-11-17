@@ -24,6 +24,8 @@ class IncidentOut(BaseModel):
     acknowledged_by_name: Optional[str] = None
     acknowledged_at: Optional[datetime] = None
     notes: Optional[str] = None
+    repeat_count: Optional[int] = 1
+    repeat_badge: Optional[str] = None
     created_at: datetime
 
     model_config = {"from_attributes": True}

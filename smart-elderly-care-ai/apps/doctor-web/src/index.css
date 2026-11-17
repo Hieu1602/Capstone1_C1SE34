@@ -4,7 +4,7 @@
 
 @layer base {
   body {
-    @apply bg-[#F8FAFC] text-slate-800 antialiased font-sans selection:bg-blue-100 selection:text-blue-700;
+    @apply bg-[#F8FAFC] text-slate-800 antialiased font-sans selection:bg-blue-100 selection:text-blue-700 dark:bg-[#0B1120] dark:text-slate-100;
   }
 }
 
@@ -18,13 +18,25 @@
   background: #F1F5F9;
 }
 
+.dark ::-webkit-scrollbar-track {
+  background: #0B1120;
+}
+
 ::-webkit-scrollbar-thumb {
   background: #CBD5E1;
   border-radius: 9999px;
 }
 
+.dark ::-webkit-scrollbar-thumb {
+  background: #1E293B;
+}
+
 ::-webkit-scrollbar-thumb:hover {
   background: #94A3B8;
+}
+
+.dark ::-webkit-scrollbar-thumb:hover {
+  background: #334155;
 }
 
 /* Keyframes cho hiệu ứng trôi nổi 3D & sóng nhịp tim ECG trên trang Login */

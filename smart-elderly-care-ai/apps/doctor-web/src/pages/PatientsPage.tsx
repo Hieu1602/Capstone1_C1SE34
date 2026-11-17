@@ -17,7 +17,7 @@ import { PrescriptionModal } from '../components/clinical/PrescriptionModal';
 import { MedicalRecordModal } from '../components/clinical/MedicalRecordModal';
 import { NewAppointmentModal } from '../components/clinical/NewAppointmentModal';
 import { PatientCard, PatientDetailDrawer, FamilyContactModal } from '../components/clinical';
-import { Search, RefreshCw, X, Users, AlertTriangle, Watch, ArrowUpRight } from 'lucide-react';
+import { Search, RefreshCw, X, Users, AlertTriangle, Watch } from 'lucide-react';
 
 export const PatientsPage: React.FC = () => {
   const [searchParams, setSearchParams] = useSearchParams();
@@ -134,8 +134,8 @@ export const PatientsPage: React.FC = () => {
       sub: 'Hồ sơ người cao tuổi đang phụ trách',
       badge: '100% Hồ sơ',
       icon: Users,
-      circleBg: 'bg-blue-50 text-blue-600',
-      badgeBg: 'bg-blue-50 text-blue-700',
+      circleBg: 'bg-blue-50 text-blue-600 dark:bg-blue-950/40 dark:text-blue-400',
+      badgeBg: 'bg-blue-50 text-blue-700 dark:bg-blue-950/40 dark:text-blue-300',
     },
     {
       key: 'WARNING' as const,
@@ -144,8 +144,8 @@ export const PatientsPage: React.FC = () => {
       sub: 'Nhịp tim hoặc SpO2 cần theo dõi sát',
       badge: stats.warning > 0 ? 'Cần chú ý' : 'An toàn',
       icon: AlertTriangle,
-      circleBg: 'bg-amber-50 text-amber-600',
-      badgeBg: 'bg-amber-50 text-amber-700',
+      circleBg: 'bg-amber-50 text-amber-600 dark:bg-amber-950/40 dark:text-amber-400',
+      badgeBg: 'bg-amber-50 text-amber-700 dark:bg-amber-950/40 dark:text-amber-300',
     },
     {
       key: 'ONLINE' as const,
@@ -154,8 +154,8 @@ export const PatientsPage: React.FC = () => {
       sub: 'Thiết bị đeo tay truyền tín hiệu IoT',
       badge: 'Trực tuyến',
       icon: Watch,
-      circleBg: 'bg-emerald-50 text-emerald-600',
-      badgeBg: 'bg-emerald-50 text-emerald-700',
+      circleBg: 'bg-emerald-50 text-emerald-600 dark:bg-emerald-950/40 dark:text-emerald-400',
+      badgeBg: 'bg-emerald-50 text-emerald-700 dark:bg-emerald-950/40 dark:text-emerald-300',
     },
   ];
 
@@ -185,17 +185,17 @@ export const PatientsPage: React.FC = () => {
       {/* 1. Header */}
       <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
         <div>
-          <h1 className="text-xl lg:text-2xl font-extrabold text-slate-900 font-heading">
+          <h1 className="text-xl lg:text-2xl font-extrabold text-slate-900 dark:text-white font-heading">
             Danh Sách Bệnh Nhân Người Cao Tuổi
           </h1>
-          <p className="mt-1 text-xs text-slate-500">
+          <p className="mt-1 text-xs text-slate-500 dark:text-slate-400">
             Quản lý hồ sơ bệnh án điện tử, giám sát chỉ số sinh hiệu thời gian thực và phác đồ điều trị
           </p>
         </div>
         <button
           onClick={() => loadPatients(true)}
           disabled={isRevalidating}
-          className="flex items-center space-x-2 self-start sm:self-auto rounded-xl border border-slate-200 bg-white px-4 py-2.5 text-xs font-semibold text-slate-700 shadow-xs hover:bg-slate-50 transition-all cursor-pointer"
+          className="flex items-center space-x-2 self-start sm:self-auto rounded-xl border border-slate-200 bg-white px-4 py-2.5 text-xs font-semibold text-slate-700 shadow-xs hover:bg-slate-50 transition-all cursor-pointer dark:border-slate-700 dark:bg-slate-800/80 dark:text-slate-200 dark:hover:bg-slate-700"
         >
           <RefreshCw className={`h-3.5 w-3.5 ${isRevalidating ? 'animate-spin text-blue-600' : ''}`} />
           <span>Làm mới dữ liệu</span>
@@ -211,8 +211,8 @@ export const PatientsPage: React.FC = () => {
             <div
               key={card.key}
               onClick={() => setStatusFilter(card.key)}
-              className={`cursor-pointer rounded-2xl border bg-white p-5 transition-all shadow-xs hover:shadow-md ${
-                active ? 'border-blue-600 ring-2 ring-blue-100' : 'border-slate-200/80 hover:border-blue-200'
+              className={`cursor-pointer rounded-2xl border bg-white dark:bg-[#131C31] p-5 transition-all shadow-xs hover:shadow-md ${
+                active ? 'border-blue-500 ring-2 ring-blue-500/10 dark:border-blue-500 dark:ring-blue-500/20' : 'border-slate-200/80 dark:border-slate-800/80 hover:border-blue-200 dark:hover:border-slate-700'
               }`}
             >
               <div className="flex items-start justify-between">
@@ -221,12 +221,12 @@ export const PatientsPage: React.FC = () => {
                     <Icon className="h-6 w-6" />
                   </div>
                   <div>
-                    <p className="text-xs font-bold text-slate-500">{card.title}</p>
+                    <p className="text-xs font-bold text-slate-500 dark:text-slate-400">{card.title}</p>
                     <div className="mt-1 flex items-baseline space-x-2">
                       {isLoadingPatients && patients.length === 0 ? (
-                        <div className="h-7 w-12 rounded-lg bg-slate-200 animate-pulse my-0.5" />
+                        <div className="h-7 w-12 rounded-lg bg-slate-200 dark:bg-slate-700 animate-pulse my-0.5" />
                       ) : (
-                        <span className="text-2xl font-extrabold text-slate-900">{card.value}</span>
+                        <span className="text-2xl font-extrabold text-slate-900 dark:text-white">{card.value}</span>
                       )}
                       <span className={`rounded-full px-2 py-0.5 text-[10px] font-bold ${card.badgeBg}`}>
                         {card.badge}
@@ -234,9 +234,6 @@ export const PatientsPage: React.FC = () => {
                     </div>
                   </div>
                 </div>
-                <span className="flex h-8 w-8 items-center justify-center rounded-xl bg-slate-50 text-slate-400">
-                  <ArrowUpRight className="h-4 w-4" />
-                </span>
               </div>
               <p className="mt-3 text-[11px] text-slate-400 font-medium">{card.sub}</p>
             </div>
@@ -245,7 +242,7 @@ export const PatientsPage: React.FC = () => {
       </div>
 
       {/* 3. Thanh tìm kiếm & Bộ lọc dạng Pill */}
-      <div className="flex flex-col lg:flex-row lg:items-center lg:justify-between gap-3 rounded-2xl border border-slate-200/80 bg-white p-3.5 shadow-xs">
+      <div className="flex flex-col lg:flex-row lg:items-center lg:justify-between gap-3 rounded-2xl border border-slate-200/80 bg-white dark:bg-[#131C31] dark:border-slate-800/80 p-3.5 shadow-xs">
         <div className="flex flex-wrap items-center gap-2">
           {pillFilters.map((b) => {
             const active = statusFilter === b.key;
@@ -253,10 +250,10 @@ export const PatientsPage: React.FC = () => {
               <button
                 key={b.key}
                 onClick={() => setStatusFilter(b.key)}
-                className={`rounded-full px-4 py-1.5 text-xs font-bold transition-all ${
+                className={`cursor-pointer rounded-full px-4 py-1.5 text-xs font-bold transition-all ${
                   active
                     ? 'bg-blue-600 text-white shadow-sm shadow-blue-500/20'
-                    : 'bg-slate-100 text-slate-600 hover:bg-slate-200/80 hover:text-slate-900'
+                    : 'bg-slate-100 text-slate-600 hover:bg-slate-200/80 hover:text-slate-900 dark:bg-slate-800/80 dark:text-slate-300 dark:hover:bg-slate-700 dark:hover:text-white'
                 }`}
               >
                 {b.label}
@@ -272,12 +269,12 @@ export const PatientsPage: React.FC = () => {
             value={searchQuery}
             onChange={(e) => handleSearchChange(e.target.value)}
             placeholder="Tìm theo tên bệnh nhân (vd: Nguyễn Văn A, van a), SĐT, hộ gia đình..."
-            className="w-full rounded-xl border border-slate-200 bg-slate-50/70 py-2 pl-9 pr-9 text-xs font-medium text-slate-800 placeholder-slate-400 focus:border-blue-500 focus:bg-white focus:outline-hidden"
+            className="w-full rounded-xl border border-slate-200 bg-slate-50/70 py-2 pl-9 pr-9 text-xs font-medium text-slate-800 placeholder-slate-400 focus:border-blue-500 focus:bg-white focus:outline-hidden dark:border-slate-700/60 dark:bg-[#0F172A] dark:text-slate-100 dark:placeholder-slate-500 dark:focus:border-blue-500 dark:focus:bg-[#0F172A]"
           />
           {searchQuery && (
             <button
               onClick={() => handleSearchChange('')}
-              className="absolute right-2.5 top-1/2 -translate-y-1/2 p-1 text-slate-400 hover:text-slate-600 rounded-md"
+              className="absolute right-2.5 top-1/2 -translate-y-1/2 p-1 text-slate-400 hover:text-slate-600 dark:hover:text-slate-200 rounded-md"
               title="Xóa tìm kiếm"
             >
               <X className="h-3.5 w-3.5" />
@@ -292,33 +289,33 @@ export const PatientsPage: React.FC = () => {
           {Array.from({ length: 6 }).map((_, idx) => (
             <div
               key={idx}
-              className="rounded-2xl border border-slate-200/80 bg-white p-5 shadow-xs animate-pulse space-y-4"
+              className="rounded-2xl border border-slate-200/80 bg-white dark:bg-[#131C31] dark:border-slate-800/80 p-5 shadow-xs animate-pulse space-y-4"
             >
               <div className="flex items-center justify-between">
                 <div className="flex items-center space-x-3">
-                  <div className="h-12 w-12 rounded-full bg-slate-200 shrink-0" />
+                  <div className="h-12 w-12 rounded-full bg-slate-200 dark:bg-slate-700 shrink-0" />
                   <div className="space-y-2">
-                    <div className="h-4 w-32 rounded bg-slate-200" />
-                    <div className="h-3 w-20 rounded bg-slate-100" />
+                    <div className="h-4 w-32 rounded bg-slate-200 dark:bg-slate-700" />
+                    <div className="h-3 w-20 rounded bg-slate-100 dark:bg-slate-800" />
                   </div>
                 </div>
-                <div className="h-6 w-16 rounded-full bg-slate-100" />
+                <div className="h-6 w-16 rounded-full bg-slate-100 dark:bg-slate-800" />
               </div>
               <div className="space-y-2 pt-2">
-                <div className="h-3 w-full rounded bg-slate-100" />
-                <div className="h-3 w-4/5 rounded bg-slate-100" />
+                <div className="h-3 w-full rounded bg-slate-100 dark:bg-slate-800" />
+                <div className="h-3 w-4/5 rounded bg-slate-100 dark:bg-slate-800" />
               </div>
-              <div className="flex items-center justify-between pt-3 border-t border-slate-100">
-                <div className="h-4 w-24 rounded bg-slate-200" />
-                <div className="h-4 w-16 rounded bg-slate-200" />
+              <div className="flex items-center justify-between pt-3 border-t border-slate-100 dark:border-slate-800">
+                <div className="h-4 w-24 rounded bg-slate-200 dark:bg-slate-700" />
+                <div className="h-4 w-16 rounded bg-slate-200 dark:bg-slate-700" />
               </div>
             </div>
           ))}
         </div>
       ) : filteredPatients.length === 0 ? (
-        <div className="rounded-2xl border border-slate-200/80 bg-white p-12 text-center shadow-xs">
-          <Users className="mx-auto h-10 w-10 text-slate-300 mb-2" />
-          <p className="text-sm font-bold text-slate-700">Không tìm thấy bệnh nhân phù hợp</p>
+        <div className="rounded-2xl border border-slate-200/80 bg-white dark:bg-[#131C31] dark:border-slate-800/80 p-12 text-center shadow-xs">
+          <Users className="mx-auto h-10 w-10 text-slate-300 dark:text-slate-600 mb-2" />
+          <p className="text-sm font-bold text-slate-700 dark:text-slate-200">Không tìm thấy bệnh nhân phù hợp</p>
           <p className="mt-1 text-xs text-slate-400">
             Thử thay đổi từ khóa tìm kiếm hoặc chuyển sang bộ lọc "Tất cả".
           </p>

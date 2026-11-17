@@ -357,7 +357,26 @@ export default function DoctorHomeScreen() {
             </TouchableOpacity>
           </View>
 
-          {nextAppointment ? (
+          {loading && !nextAppointment && patients.length === 0 ? (
+            <View
+              style={[
+                styles.scheduleBannerCard,
+                {
+                  backgroundColor: isDarkMode ? '#1E293B' : '#E2E8F0',
+                  justifyContent: 'space-between',
+                  alignItems: 'center',
+                  padding: 16,
+                },
+              ]}
+            >
+              <View style={{ flex: 1, gap: 10, justifyContent: 'center', paddingRight: 12 }}>
+                <View style={{ width: '70%', height: 16, borderRadius: 8, backgroundColor: isDarkMode ? '#334155' : '#CBD5E1' }} />
+                <View style={{ width: '90%', height: 12, borderRadius: 6, backgroundColor: isDarkMode ? '#334155' : '#CBD5E1' }} />
+                <View style={{ width: 110, height: 30, borderRadius: 12, backgroundColor: isDarkMode ? '#334155' : '#CBD5E1', marginTop: 4 }} />
+              </View>
+              <View style={{ width: 96, height: '100%', borderRadius: 14, backgroundColor: isDarkMode ? '#334155' : '#CBD5E1' }} />
+            </View>
+          ) : nextAppointment ? (
             <TouchableOpacity style={styles.scheduleBannerCard} activeOpacity={0.92} onPress={() => setDetailModalVisible(true)}>
               <View style={styles.cardGradientLayer} />
               <View style={styles.bannerLeftContent}>
@@ -385,8 +404,8 @@ export default function DoctorHomeScreen() {
             <View style={styles.scheduleBannerCard}>
               <View style={styles.cardGradientLayer} />
               <View style={styles.bannerLeftContent}>
-                <LocalizedText style={styles.emptyCardTitle}>Hôm nay không có lịch khám nào</LocalizedText>
-                <LocalizedText style={styles.emptyCardSub}>
+                <LocalizedText style={styles.emptyCardTitle} numberOfLines={2}>Hôm nay không có lịch khám nào</LocalizedText>
+                <LocalizedText style={styles.emptyCardSub} numberOfLines={2}>
                   Bác sĩ có thể chủ động lên lịch thăm khám định kỳ cho các bệnh nhân.
                 </LocalizedText>
                 <TouchableOpacity style={styles.btnWhiteAddSchedule} activeOpacity={0.85} onPress={() => navigation.navigate('DoctorAppointments')}>
@@ -490,7 +509,10 @@ export default function DoctorHomeScreen() {
                 return (
                   <TouchableOpacity
                     key={p.id}
-                    onPress={() => setSelectedPatientId(p.id)}
+                    onPress={() => {
+                      setSelectedPatientId(p.id);
+                      navigation.navigate('DoctorPatientDetail', { patientId: p.id });
+                    }}
                     style={[
                       styles.avatarPillItem,
                       isSelected && {
@@ -527,18 +549,6 @@ export default function DoctorHomeScreen() {
                   </TouchableOpacity>
                 );
               })}
-
-              {/* Nút Thêm bệnh nhân */}
-              <TouchableOpacity
-                style={[styles.avatarPillItem, styles.addPatientPill, { borderColor: isDarkMode ? '#334155' : '#CBD5E1' }]}
-                onPress={() => navigation.navigate('DoctorPatients')}
-                activeOpacity={0.7}
-              >
-                <View style={[styles.stripAddCircle, { backgroundColor: isDarkMode ? '#334155' : '#EEF2F6' }]}>
-                  <Ionicons name="add" size={20} color="#2563EB" />
-                </View>
-                <Text style={[styles.stripPatientName, { color: '#2563EB', fontWeight: '600' }]}>Thêm</Text>
-              </TouchableOpacity>
             </ScrollView>
           </View>
         )}
@@ -867,11 +877,13 @@ const styles = StyleSheet.create({
 
   // Schedule Banner Card
   scheduleBannerCard: {
-    borderRadius: 22,
+    borderRadius: 20,
     backgroundColor: '#1D4ED8',
     overflow: 'hidden',
     position: 'relative',
-    minHeight: 142,
+    height: 156,
+    minHeight: 148,
+    maxHeight: 168,
     flexDirection: 'row',
     shadowColor: '#1D4ED8',
     shadowOffset: { width: 0, height: 4 },
@@ -896,8 +908,8 @@ const styles = StyleSheet.create({
   bannerReasonText: { color: 'rgba(255,255,255,0.85)', fontSize: 11.5, marginBottom: 8 },
   bannerTimeContainer: { flexDirection: 'row', alignItems: 'center' },
   bannerTimeText: { color: '#FFFFFF', fontSize: 12, fontWeight: '700' },
-  bannerRightImageWrap: { width: 110, position: 'relative' },
-  doctorBannerImage: { width: '100%', height: '100%' },
+  bannerRightImageWrap: { width: 115, height: '100%', position: 'relative', overflow: 'hidden', flexShrink: 0 },
+  doctorBannerImage: { width: 115, height: '100%' },
   imageFadeOverlay: { position: 'absolute', top: 0, left: 0, right: 0, bottom: 0, backgroundColor: 'rgba(29, 78, 216, 0.25)' },
   emptyCardTitle: { color: '#FFFFFF', fontSize: 14, fontWeight: '800', marginBottom: 2 },
   emptyCardSub: { color: 'rgba(255,255,255,0.85)', fontSize: 11, marginBottom: 10, lineHeight: 15 },

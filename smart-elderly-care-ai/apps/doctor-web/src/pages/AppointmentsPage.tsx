@@ -1,7 +1,7 @@
 // src/pages/AppointmentsPage.tsx
 // Quản lý Lịch khám & Tái khám định kỳ dành cho Bác sĩ gia đình
 
-import React, { useEffect, useState, useMemo } from 'react';
+import React, { useEffect, useState, useMemo, useRef } from 'react';
 import { doctorApi } from '../services/api';
 import { useDoctorDataStore } from '../store/useDoctorDataStore';
 import { AppointmentItem } from '../types';
@@ -28,6 +28,7 @@ import {
   Stethoscope,
   CalendarDays,
   BellRing,
+  X,
 } from 'lucide-react';
 
 const WEEKDAY_LABELS = ['T2', 'T3', 'T4', 'T5', 'T6', 'T7', 'CN'];
@@ -47,7 +48,83 @@ export const AppointmentsPage: React.FC = () => {
   const [cancellingApt, setCancellingApt] = useState<AppointmentItem | null>(null);
   const [weekOffset, setWeekOffset] = useState(0);
   const [selectedDateStr, setSelectedDateStr] = useState<string | null>(null);
+  const [showMonthPicker, setShowMonthPicker] = useState(false);
+  const [pickerMonth, setPickerMonth] = useState(() => {
+    const now = new Date();
+    return { year: now.getFullYear(), month: now.getMonth() };
+  });
+  const monthPickerRef = useRef<HTMLDivElement | null>(null);
   const [toastMsg, setToastMsg] = useState<string | null>(null);
+
+  useEffect(() => {
+    if (!showMonthPicker) return;
+    const handleClickOutside = (e: MouseEvent) => {
+      if (monthPickerRef.current && !monthPickerRef.current.contains(e.target as Node)) {
+        setShowMonthPicker(false);
+      }
+    };
+    document.addEventListener('mousedown', handleClickOutside);
+    return () => document.removeEventListener('mousedown', handleClickOutside);
+  }, [showMonthPicker]);
+
+  const handlePickCalendarDate = (targetDate: Date, isoDate: string) => {
+    const getMonday = (d: Date) => {
+      const copy = new Date(d.getFullYear(), d.getMonth(), d.getDate());
+      const day = copy.getDay();
+      const diff = day === 0 ? -6 : 1 - day;
+      copy.setDate(copy.getDate() + diff);
+      return copy;
+    };
+    const nowMonday = getMonday(new Date());
+    const targetMonday = getMonday(targetDate);
+    const diffWeeks = Math.round(
+      (targetMonday.getTime() - nowMonday.getTime()) / (7 * 24 * 60 * 60 * 1000)
+    );
+    setWeekOffset(diffWeeks);
+    setSelectedDateStr(isoDate);
+    setShowMonthPicker(false);
+  };
+
+  const pickerCells = useMemo(() => {
+    const { year, month } = pickerMonth;
+    const firstDay = new Date(year, month, 1);
+    const startOffset = firstDay.getDay() === 0 ? 6 : firstDay.getDay() - 1;
+    const daysInMonth = new Date(year, month + 1, 0).getDate();
+    const todayIso = new Date().toISOString().slice(0, 10);
+
+    const cells: Array<{
+      day: number | null;
+      dateObj?: Date;
+      isoDate?: string;
+      isToday?: boolean;
+      hasUpcoming?: boolean;
+      hasCompleted?: boolean;
+    }> = [];
+
+    for (let i = 0; i < startOffset; i++) {
+      cells.push({ day: null });
+    }
+    for (let day = 1; day <= daysInMonth; day++) {
+      const d = new Date(year, month, day);
+      const isoDate = `${year}-${String(month + 1).padStart(2, '0')}-${String(day).padStart(2, '0')}`;
+      const dayApts = appointments.filter((apt) => {
+        try {
+          return new Date(apt.scheduled_at).toDateString() === d.toDateString();
+        } catch {
+          return false;
+        }
+      });
+      cells.push({
+        day,
+        dateObj: d,
+        isoDate,
+        isToday: isoDate === todayIso,
+        hasUpcoming: dayApts.some((a) => a.status === 'UPCOMING'),
+        hasCompleted: dayApts.some((a) => a.status === 'COMPLETED'),
+      });
+    }
+    return cells;
+  }, [pickerMonth, appointments]);
 
   const showToast = (msg: string) => {
     setToastMsg(msg);
@@ -181,10 +258,10 @@ export const AppointmentsPage: React.FC = () => {
       {/* 1. Header Trang */}
       <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
         <div>
-          <h1 className="text-xl lg:text-2xl font-extrabold text-slate-900 font-heading">
+          <h1 className="text-xl lg:text-2xl font-extrabold text-slate-900 dark:text-white font-heading">
             Lịch Khám
           </h1>
-          <p className="mt-1 text-xs text-slate-500">
+          <p className="mt-1 text-xs text-slate-500 dark:text-slate-400">
             Điều phối lịch thăm khám tại nhà, tư vấn từ xa và đồng bộ nhắc nhở tự động qua Loa thông minh Hub
           </p>
         </div>
@@ -193,14 +270,14 @@ export const AppointmentsPage: React.FC = () => {
           <button
             onClick={() => fetchAllData(true)}
             disabled={isRevalidating}
-            className="flex items-center space-x-1.5 rounded-xl border border-slate-200 bg-white px-3.5 py-2.5 text-xs font-semibold text-slate-700 shadow-xs hover:bg-slate-50 transition-all cursor-pointer"
+            className="flex items-center space-x-1.5 rounded-xl border border-slate-200 bg-white px-3.5 py-2.5 text-xs font-semibold text-slate-700 shadow-xs hover:bg-slate-50 transition-all cursor-pointer dark:border-slate-700 dark:bg-slate-800/80 dark:text-slate-200 dark:hover:bg-slate-700"
           >
             <RefreshCw className={`h-3.5 w-3.5 ${isRevalidating ? 'animate-spin text-blue-600' : ''}`} />
             <span>Làm mới</span>
           </button>
           <button
             onClick={() => setShowCreateModal(true)}
-            className="flex items-center space-x-2 rounded-xl bg-blue-600 px-4 py-2.5 text-xs font-bold text-white shadow-md shadow-blue-500/25 hover:bg-blue-700 transition-all"
+            className="flex items-center space-x-2 rounded-xl bg-blue-600 px-4 py-2.5 text-xs font-bold text-white shadow-md shadow-blue-500/25 hover:bg-blue-700 transition-all cursor-pointer"
           >
             <Plus className="h-4 w-4" />
             <span>Đặt lịch mới</span>
@@ -209,48 +286,164 @@ export const AppointmentsPage: React.FC = () => {
       </div>
 
       {/* 2. Thanh Chọn Ngày Theo Tuần (Horizontal Week Strip - Cảm hứng Ảnh 4) */}
-      <div className="rounded-2xl border border-slate-200/80 bg-white p-5 shadow-xs">
+      <div className="rounded-2xl border border-slate-200/80 bg-white p-5 shadow-xs dark:border-slate-800/80 dark:bg-[#131C31]">
         <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3 mb-4">
-          <div className="flex items-center space-x-2.5">
-            <div className="flex h-9 w-9 items-center justify-center rounded-xl bg-blue-50 text-blue-600">
+          <div className="relative flex items-center space-x-2.5" ref={monthPickerRef}>
+            <button
+              type="button"
+              onClick={() => setShowMonthPicker((v) => !v)}
+              title="Chọn ngày từ lịch tháng"
+              className={`flex h-9 w-9 items-center justify-center rounded-xl transition-colors cursor-pointer ${
+                showMonthPicker
+                  ? 'bg-blue-600 text-white shadow-sm'
+                  : 'bg-blue-50 text-blue-600 hover:bg-blue-100 dark:bg-blue-950/50 dark:text-blue-400 dark:hover:bg-blue-900/60'
+              }`}
+            >
               <CalendarDays className="h-5 w-5" />
-            </div>
+            </button>
             <div>
-              <h2 className="text-sm font-extrabold text-slate-900">Lịch trình trong tuần</h2>
-              <p className="text-[11px] text-slate-500">
+              <h2 className="text-sm font-extrabold text-slate-900 dark:text-white">Lịch trình trong tuần</h2>
+              <p className="text-[11px] text-slate-500 dark:text-slate-400">
                 Chọn một ngày cụ thể để lọc hoặc xem toàn bộ lịch hẹn
               </p>
             </div>
+
+            {/* Calendar Date-Picker Popover */}
+            {showMonthPicker && (
+              <div className="absolute left-0 top-11 z-40 w-72 rounded-2xl border border-slate-200 bg-white p-4 shadow-xl animate-in fade-in slide-in-from-top-2 duration-150 dark:border-slate-800/80 dark:bg-[#131C31] dark:shadow-slate-950/80">
+                {/* Header Tháng / Năm */}
+                <div className="flex items-center justify-between mb-3">
+                  <span className="text-xs font-extrabold text-slate-900 dark:text-white">
+                    Tháng {pickerMonth.month + 1} / {pickerMonth.year}
+                  </span>
+                  <div className="flex items-center space-x-1">
+                    <button
+                      type="button"
+                      onClick={() =>
+                        setPickerMonth((prev) =>
+                          prev.month === 0
+                            ? { year: prev.year - 1, month: 11 }
+                            : { year: prev.year, month: prev.month - 1 }
+                        )
+                      }
+                      className="rounded-lg p-1 text-slate-500 hover:bg-slate-100 hover:text-slate-900 dark:text-slate-400 dark:hover:bg-slate-800 dark:hover:text-white cursor-pointer"
+                      title="Tháng trước"
+                    >
+                      <ChevronLeft className="h-4 w-4" />
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() =>
+                        setPickerMonth((prev) =>
+                          prev.month === 11
+                            ? { year: prev.year + 1, month: 0 }
+                            : { year: prev.year, month: prev.month + 1 }
+                        )
+                      }
+                      className="rounded-lg p-1 text-slate-500 hover:bg-slate-100 hover:text-slate-900 dark:text-slate-400 dark:hover:bg-slate-800 dark:hover:text-white cursor-pointer"
+                      title="Tháng sau"
+                    >
+                      <ChevronRight className="h-4 w-4" />
+                    </button>
+                  </div>
+                </div>
+
+                {/* Tên thứ trong tuần */}
+                <div className="grid grid-cols-7 gap-1 mb-1 text-center">
+                  {WEEKDAY_LABELS.map((w) => (
+                    <span
+                      key={w}
+                      className="text-[10px] font-bold uppercase text-slate-400 py-1"
+                    >
+                      {w}
+                    </span>
+                  ))}
+                </div>
+
+                {/* Lưới ngày trong tháng */}
+                <div className="grid grid-cols-7 gap-1 text-center">
+                  {pickerCells.map((cell, i) => {
+                    if (cell.day === null) {
+                      return <div key={`empty-${i}`} className="h-8" />;
+                    }
+                    const isSelected = selectedDateStr === cell.isoDate;
+                    return (
+                      <button
+                        key={cell.isoDate}
+                        type="button"
+                        onClick={() => handlePickCalendarDate(cell.dateObj!, cell.isoDate!)}
+                        className={`relative flex flex-col items-center justify-center h-8 rounded-lg text-xs transition cursor-pointer ${
+                          isSelected
+                            ? 'bg-blue-600 text-white font-bold shadow-xs'
+                            : cell.isToday
+                              ? 'ring-1 ring-blue-500 text-blue-600 font-bold hover:bg-blue-50 dark:text-blue-400 dark:hover:bg-blue-950/40'
+                              : 'text-slate-700 font-medium hover:bg-slate-100 dark:text-slate-300 dark:hover:bg-slate-800'
+                        }`}
+                      >
+                        <span>{cell.day}</span>
+                        {(cell.hasUpcoming || cell.hasCompleted) && (
+                          <span
+                            className={`absolute bottom-0.5 h-1 w-1 rounded-full ${
+                              isSelected
+                                ? 'bg-white'
+                                : cell.hasUpcoming
+                                  ? 'bg-amber-400'
+                                  : 'bg-emerald-500'
+                            }`}
+                          />
+                        )}
+                      </button>
+                    );
+                  })}
+                </div>
+
+                {/* Footer Popover */}
+                <div className="mt-3 pt-2.5 border-t border-slate-100 dark:border-slate-800/80 flex items-center justify-between gap-2">
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setSelectedDateStr(null);
+                      setWeekOffset(0);
+                      setShowMonthPicker(false);
+                    }}
+                    className="flex-1 flex items-center justify-center gap-1 rounded-lg border border-slate-200 bg-slate-50 py-1.5 text-[11px] font-bold text-slate-600 hover:bg-slate-100 dark:border-slate-700/60 dark:bg-[#0F172A] dark:text-slate-300 dark:hover:bg-slate-800 transition cursor-pointer"
+                  >
+                    <X className="h-3 w-3" />
+                    <span>Xóa lọc / Tất cả các ngày</span>
+                  </button>
+                </div>
+              </div>
+            )}
           </div>
 
           <div className="flex items-center space-x-2">
             <button
               onClick={() => setSelectedDateStr(null)}
-              className={`rounded-xl px-3 py-1.5 text-xs font-bold transition-all ${
+              className={`rounded-xl px-3 py-1.5 text-xs font-bold transition-all cursor-pointer ${
                 selectedDateStr === null
                   ? 'bg-blue-600 text-white shadow-xs'
-                  : 'border border-slate-200 bg-slate-50 text-slate-600 hover:bg-slate-100'
+                  : 'border border-slate-200 bg-slate-50 text-slate-600 hover:bg-slate-100 dark:border-slate-700/60 dark:bg-[#0F172A] dark:text-slate-300 dark:hover:bg-slate-800'
               }`}
             >
               Tất cả các ngày
             </button>
-            <div className="flex items-center rounded-xl border border-slate-200 bg-slate-50 p-0.5">
+            <div className="flex items-center rounded-xl border border-slate-200 bg-slate-50 p-0.5 dark:border-slate-700/60 dark:bg-[#0F172A]">
               <button
                 onClick={() => setWeekOffset((w) => w - 1)}
-                className="rounded-lg p-1.5 text-slate-500 hover:bg-white hover:text-slate-900 transition"
+                className="rounded-lg p-1.5 text-slate-500 hover:bg-white hover:text-slate-900 transition dark:text-slate-400 dark:hover:bg-slate-800 dark:hover:text-slate-100"
                 title="Tuần trước"
               >
                 <ChevronLeft className="h-4 w-4" />
               </button>
               <button
                 onClick={() => setWeekOffset(0)}
-                className="px-2.5 py-1 text-[11px] font-bold text-slate-700 hover:text-blue-600"
+                className="px-2.5 py-1 text-[11px] font-bold text-slate-700 hover:text-blue-600 dark:text-slate-300 dark:hover:text-blue-400"
               >
                 Tuần này
               </button>
               <button
                 onClick={() => setWeekOffset((w) => w + 1)}
-                className="rounded-lg p-1.5 text-slate-500 hover:bg-white hover:text-slate-900 transition"
+                className="rounded-lg p-1.5 text-slate-500 hover:bg-white hover:text-slate-900 transition dark:text-slate-400 dark:hover:bg-slate-800 dark:hover:text-slate-100"
                 title="Tuần kế tiếp"
               >
                 <ChevronRight className="h-4 w-4" />
@@ -269,22 +462,22 @@ export const AppointmentsPage: React.FC = () => {
                 onClick={() =>
                   setSelectedDateStr((prev) => (prev === d.isoDate ? null : d.isoDate))
                 }
-                className={`group flex flex-col items-center justify-center rounded-2xl py-3.5 px-2 transition-all border ${
+                className={`group flex flex-col items-center justify-center rounded-2xl py-3.5 px-2 transition-all border cursor-pointer ${
                   isActive
                     ? 'bg-blue-600 text-white border-blue-600 shadow-lg shadow-blue-500/25 -translate-y-0.5'
-                    : 'bg-slate-50/70 text-slate-700 border-slate-200/70 hover:bg-blue-50/50 hover:border-blue-200'
+                    : 'bg-slate-50/70 text-slate-700 border-slate-200/70 hover:bg-blue-50/50 hover:border-blue-200 dark:bg-[#0F172A] dark:text-slate-300 dark:border-slate-800/80 dark:hover:bg-slate-800/70 dark:hover:border-slate-700'
                 }`}
               >
                 <span
                   className={`text-[11px] font-bold uppercase tracking-wider ${
-                    isActive ? 'text-blue-100' : 'text-slate-400 group-hover:text-blue-600'
+                    isActive ? 'text-blue-100' : 'text-slate-400 group-hover:text-blue-600 dark:group-hover:text-blue-400'
                   }`}
                 >
                   {d.label}
                 </span>
                 <span
                   className={`mt-1 text-lg sm:text-xl font-extrabold ${
-                    isActive ? 'text-white' : 'text-slate-900'
+                    isActive ? 'text-white' : 'text-slate-900 dark:text-white'
                   }`}
                 >
                   {d.dayNum}
@@ -317,7 +510,7 @@ export const AppointmentsPage: React.FC = () => {
                   ) : (
                     <span
                       className={`h-1 w-1 rounded-full ${
-                        isActive ? 'bg-blue-400' : 'bg-slate-300'
+                        isActive ? 'bg-blue-400' : 'bg-slate-300 dark:bg-slate-700'
                       }`}
                     />
                   )}
@@ -329,7 +522,7 @@ export const AppointmentsPage: React.FC = () => {
       </div>
 
       {/* 3. Thanh Tab Lọc có Icon & Thanh Tìm Kiếm (Cảm hứng Ảnh 3) */}
-      <div className="flex flex-col lg:flex-row lg:items-center lg:justify-between gap-4 border-b border-slate-200 bg-white px-5 pt-3 rounded-t-2xl shadow-xs">
+      <div className="flex flex-col lg:flex-row lg:items-center lg:justify-between gap-4 border-b border-slate-200 bg-white px-5 pt-3 rounded-t-2xl shadow-xs dark:border-slate-800/80 dark:bg-[#131C31]">
         <div className="flex items-center space-x-2 sm:space-x-6 overflow-x-auto">
           {filterTabs.map((tab) => {
             const Icon = tab.icon;
@@ -338,15 +531,15 @@ export const AppointmentsPage: React.FC = () => {
               <button
                 key={tab.key}
                 onClick={() => setStatusFilter(tab.key)}
-                className={`group relative flex items-center space-x-2 pb-3.5 pt-1 text-xs font-bold whitespace-nowrap transition-all border-b-2 ${
+                className={`group relative flex items-center space-x-2 pb-3.5 pt-1 text-xs font-bold whitespace-nowrap transition-all border-b-2 cursor-pointer ${
                   active
-                    ? 'border-blue-600 text-blue-600'
-                    : 'border-transparent text-slate-500 hover:text-slate-800'
+                    ? 'border-blue-600 text-blue-600 dark:text-blue-400 dark:border-blue-400'
+                    : 'border-transparent text-slate-500 hover:text-slate-800 dark:text-slate-400 dark:hover:text-slate-200'
                 }`}
               >
                 <Icon
                   className={`h-4 w-4 transition-colors ${
-                    active ? 'text-blue-600' : 'text-slate-400 group-hover:text-slate-600'
+                    active ? 'text-blue-600 dark:text-blue-400' : 'text-slate-400 group-hover:text-slate-600 dark:group-hover:text-slate-300'
                   }`}
                 />
                 <span>{tab.label}</span>
@@ -354,11 +547,11 @@ export const AppointmentsPage: React.FC = () => {
                   className={`rounded-full px-2 py-0.5 text-[10px] font-extrabold transition-colors ${
                     active
                       ? 'bg-blue-600 text-white'
-                      : 'bg-slate-100 text-slate-600 group-hover:bg-slate-200'
+                      : 'bg-slate-100 text-slate-600 group-hover:bg-slate-200 dark:bg-slate-800 dark:text-slate-300 dark:group-hover:bg-slate-700'
                   }`}
                 >
                   {isLoadingAppointments && appointments.length === 0 ? (
-                    <span className="inline-block h-2 w-3 rounded-full bg-slate-300 animate-pulse" />
+                    <span className="inline-block h-2 w-3 rounded-full bg-slate-300 dark:bg-slate-700 animate-pulse" />
                   ) : (
                     tab.count
                   )}
@@ -375,7 +568,7 @@ export const AppointmentsPage: React.FC = () => {
             value={searchQuery}
             onChange={(e) => setSearchQuery(e.target.value)}
             placeholder="Tìm bệnh nhân, triệu chứng, địa điểm..."
-            className="w-full rounded-xl border border-slate-200 bg-slate-50/70 py-2 pl-9 pr-4 text-xs font-medium text-slate-800 placeholder-slate-400 focus:border-blue-500 focus:bg-white focus:outline-hidden"
+            className="w-full rounded-xl border border-slate-200 bg-slate-50/70 py-2 pl-9 pr-4 text-xs font-medium text-slate-800 placeholder-slate-400 focus:border-blue-500 focus:bg-white focus:outline-hidden dark:border-slate-700/60 dark:bg-[#0F172A] dark:text-slate-100 dark:placeholder-slate-500 dark:focus:border-blue-500 dark:focus:bg-[#0F172A]"
           />
         </div>
       </div>
@@ -389,39 +582,39 @@ export const AppointmentsPage: React.FC = () => {
               {Array.from({ length: 4 }).map((_, i) => (
                 <div
                   key={i}
-                  className="rounded-2xl border border-slate-200/80 bg-white p-5 shadow-xs animate-pulse"
+                  className="rounded-2xl border border-slate-200/80 bg-white p-5 shadow-xs animate-pulse dark:border-slate-800/80 dark:bg-[#131C31]"
                 >
                   <div className="flex flex-col sm:flex-row sm:items-start gap-4">
-                    <div className="h-16 w-16 rounded-2xl bg-slate-200 shrink-0" />
+                    <div className="h-16 w-16 rounded-2xl bg-slate-200 dark:bg-slate-800 shrink-0" />
                     <div className="flex-1 space-y-2.5">
                       <div className="flex flex-wrap items-center gap-2">
-                        <div className="h-5 w-40 rounded bg-slate-200" />
-                        <div className="h-4 w-20 rounded-full bg-slate-100" />
-                        <div className="h-4 w-32 rounded bg-slate-100" />
+                        <div className="h-5 w-40 rounded bg-slate-200 dark:bg-slate-800" />
+                        <div className="h-4 w-20 rounded-full bg-slate-100 dark:bg-slate-800" />
+                        <div className="h-4 w-32 rounded bg-slate-100 dark:bg-slate-800" />
                       </div>
-                      <div className="h-3.5 w-3/4 rounded bg-slate-100" />
-                      <div className="h-3 w-1/2 rounded bg-slate-100" />
+                      <div className="h-3.5 w-3/4 rounded bg-slate-100 dark:bg-slate-800" />
+                      <div className="h-3 w-1/2 rounded bg-slate-100 dark:bg-slate-800" />
                     </div>
                   </div>
                 </div>
               ))}
             </div>
           ) : filteredAppointments.length === 0 ? (
-            <div className="rounded-2xl border border-slate-200/80 bg-white p-10 text-center shadow-xs">
-              <div className="mx-auto mb-4 flex h-20 w-20 items-center justify-center rounded-full bg-gradient-to-br from-blue-50 via-cyan-50 to-indigo-50 border border-blue-100 shadow-inner">
-                <Stethoscope className="h-10 w-10 text-blue-600" />
+            <div className="rounded-2xl border border-slate-200/80 bg-white p-10 text-center shadow-xs dark:border-slate-800/80 dark:bg-[#131C31]">
+              <div className="mx-auto mb-4 flex h-20 w-20 items-center justify-center rounded-full bg-gradient-to-br from-blue-50 via-cyan-50 to-indigo-50 border border-blue-100 shadow-inner dark:from-blue-950/40 dark:via-cyan-950/30 dark:to-indigo-950/40 dark:border-blue-900/40">
+                <Stethoscope className="h-10 w-10 text-blue-600 dark:text-blue-400" />
               </div>
-              <h3 className="text-base font-extrabold text-slate-900">
+              <h3 className="text-base font-extrabold text-slate-900 dark:text-white">
                 Chưa có lịch hẹn khám nào trong mục này
               </h3>
-              <p className="mx-auto mt-1.5 max-w-md text-xs text-slate-500 leading-relaxed">
+              <p className="mx-auto mt-1.5 max-w-md text-xs text-slate-500 dark:text-slate-400 leading-relaxed">
                 Bác sĩ có thể tạo lịch khám định kỳ tại nhà, tư vấn từ xa hoặc đặt lịch nhắc nhở tự động phát qua loa thông minh Hub cho người cao tuổi.
               </p>
               <div className="mt-6 flex flex-wrap items-center justify-center gap-3">
                 {selectedDateStr && (
                   <button
                     onClick={() => setSelectedDateStr(null)}
-                    className="rounded-xl border border-slate-200 bg-slate-50 px-4 py-2.5 text-xs font-bold text-slate-700 hover:bg-slate-100 transition cursor-pointer"
+                    className="rounded-xl border border-slate-200 bg-slate-50 px-4 py-2.5 text-xs font-bold text-slate-700 hover:bg-slate-100 transition cursor-pointer dark:border-slate-700 dark:bg-slate-800/80 dark:text-slate-200 dark:hover:bg-slate-700"
                   >
                     Xem tất cả các ngày
                   </button>
@@ -456,31 +649,31 @@ export const AppointmentsPage: React.FC = () => {
               return (
                 <div
                   key={apt.id}
-                  className="rounded-2xl border border-slate-200/80 bg-white p-5 shadow-xs transition-all hover:border-blue-300 hover:shadow-md"
+                  className="rounded-2xl border border-slate-200/80 bg-white p-5 shadow-xs transition-all hover:border-blue-300 hover:shadow-md dark:border-slate-800/80 dark:bg-[#131C31] dark:hover:border-slate-700"
                 >
                   <div className="flex flex-col sm:flex-row sm:items-start sm:justify-between gap-4">
                     <div className="flex items-start space-x-4">
                       {/* Khối Giờ khám nổi bật */}
-                      <div className="flex flex-col items-center justify-center rounded-2xl bg-blue-50/90 border border-blue-100 px-3.5 py-2.5 text-center min-w-[76px]">
-                        <Clock className="h-4 w-4 text-blue-600 mb-1" />
-                        <span className="text-sm font-extrabold text-blue-700">{timeStr}</span>
-                        <span className="text-[10px] font-semibold text-slate-500 mt-0.5">
+                      <div className="flex flex-col items-center justify-center rounded-2xl bg-blue-50/90 border border-blue-100 px-3.5 py-2.5 text-center min-w-[76px] dark:bg-blue-950/40 dark:border-blue-900/50">
+                        <Clock className="h-4 w-4 text-blue-600 dark:text-blue-400 mb-1" />
+                        <span className="text-sm font-extrabold text-blue-700 dark:text-blue-300">{timeStr}</span>
+                        <span className="text-[10px] font-semibold text-slate-500 dark:text-slate-400 mt-0.5">
                           {dateStr.split(',')[1] || dateStr}
                         </span>
                       </div>
 
                       <div className="space-y-1.5">
                         <div className="flex flex-wrap items-center gap-2">
-                          <h3 className="font-extrabold text-slate-900 text-base">
+                          <h3 className="font-extrabold text-slate-900 dark:text-white text-base">
                             {apt.patient_name || 'Bệnh nhân'}
                           </h3>
                           <span
                             className={`rounded-full px-2.5 py-0.5 text-[10px] font-bold ${
                               apt.status === 'COMPLETED'
-                                ? 'bg-emerald-100 text-emerald-800'
+                                ? 'bg-emerald-100 text-emerald-800 dark:bg-emerald-950/60 dark:text-emerald-300'
                                 : apt.status === 'CANCELLED'
-                                  ? 'bg-rose-100 text-rose-800'
-                                  : 'bg-blue-100 text-blue-800'
+                                  ? 'bg-rose-100 text-rose-800 dark:bg-rose-950/60 dark:text-rose-300'
+                                  : 'bg-blue-100 text-blue-800 dark:bg-blue-950/60 dark:text-blue-300'
                             }`}
                           >
                             {apt.status === 'COMPLETED'
@@ -492,8 +685,8 @@ export const AppointmentsPage: React.FC = () => {
                           <span
                             className={`inline-flex items-center space-x-1 rounded-lg px-2.5 py-0.5 text-[10px] font-bold ${
                               isClinic
-                                ? 'bg-indigo-50 text-indigo-700 border border-indigo-100'
-                                : 'bg-teal-50 text-teal-700 border border-teal-100'
+                                ? 'bg-indigo-50 text-indigo-700 border border-indigo-100 dark:bg-indigo-950/40 dark:text-indigo-300 dark:border-indigo-900/40'
+                                : 'bg-teal-50 text-teal-700 border border-teal-100 dark:bg-teal-950/40 dark:text-teal-300 dark:border-teal-900/40'
                             }`}
                           >
                             {isClinic ? (
@@ -505,18 +698,18 @@ export const AppointmentsPage: React.FC = () => {
                           </span>
                         </div>
 
-                        <p className="text-xs text-slate-600 leading-relaxed">
-                          <span className="font-bold text-slate-700">Triệu chứng / Ghi chú: </span>
+                        <p className="text-xs text-slate-600 dark:text-slate-300 leading-relaxed">
+                          <span className="font-bold text-slate-700 dark:text-slate-200">Triệu chứng / Ghi chú: </span>
                           {apt.clinical_notes || 'Khám sức khỏe định kỳ, kiểm tra huyết áp và tim mạch'}
                         </p>
 
-                        <div className="flex flex-wrap items-center gap-3 pt-1 text-[11px] text-slate-500">
+                        <div className="flex flex-wrap items-center gap-3 pt-1 text-[11px] text-slate-500 dark:text-slate-400">
                           <div className="flex items-center space-x-1">
                             <MapPin className="h-3.5 w-3.5 text-slate-400" />
                             <span>{apt.location || 'Tại nhà bệnh nhân'}</span>
                           </div>
                           {apt.enable_speaker_reminder !== false && (
-                            <div className="inline-flex items-center space-x-1 rounded-full bg-emerald-50 border border-emerald-200/70 px-2.5 py-0.5 text-[10px] font-bold text-emerald-700">
+                            <div className="inline-flex items-center space-x-1 rounded-full bg-emerald-50 border border-emerald-200/70 px-2.5 py-0.5 text-[10px] font-bold text-emerald-700 dark:bg-emerald-950/40 dark:border-emerald-800/50 dark:text-emerald-300">
                               <Volume2 className="h-3 w-3" />
                               <span>Đã đồng bộ Loa Hub (Nhắc 24h & 2h)</span>
                             </div>
@@ -527,10 +720,10 @@ export const AppointmentsPage: React.FC = () => {
                   </div>
 
                   {/* Hàng nút thao tác nhanh */}
-                  <div className="mt-4 flex flex-wrap items-center justify-between gap-2 border-t border-slate-100 pt-3.5">
+                  <div className="mt-4 flex flex-wrap items-center justify-between gap-2 border-t border-slate-100 dark:border-slate-800/80 pt-3.5">
                     <button
                       onClick={() => handleBroadcastReminder(apt)}
-                      className="inline-flex items-center space-x-1.5 rounded-xl border border-cyan-200 bg-cyan-50/70 px-3 py-1.5 text-xs font-bold text-cyan-700 hover:bg-cyan-100 transition"
+                      className="inline-flex items-center space-x-1.5 rounded-xl border border-cyan-200 bg-cyan-50/70 px-3 py-1.5 text-xs font-bold text-cyan-700 hover:bg-cyan-100 transition cursor-pointer dark:border-cyan-800/50 dark:bg-cyan-950/30 dark:text-cyan-300 dark:hover:bg-cyan-900/40"
                     >
                       <Volume2 className="h-3.5 w-3.5" />
                       <span>Phát nhắc nhở</span>
@@ -540,21 +733,21 @@ export const AppointmentsPage: React.FC = () => {
                       <div className="flex flex-wrap items-center gap-2">
                         <button
                           onClick={() => handleReschedule(apt)}
-                          className="inline-flex items-center space-x-1.5 rounded-xl border border-slate-200 bg-white px-3 py-1.5 text-xs font-semibold text-slate-700 hover:bg-slate-50 transition"
+                          className="inline-flex items-center space-x-1.5 rounded-xl border border-slate-200 bg-white px-3 py-1.5 text-xs font-semibold text-slate-700 hover:bg-slate-50 transition cursor-pointer dark:border-slate-700 dark:bg-slate-800/80 dark:text-slate-200 dark:hover:bg-slate-700"
                         >
-                          <CalendarIcon className="h-3.5 w-3.5 text-slate-500" />
+                          <CalendarIcon className="h-3.5 w-3.5 text-slate-500 dark:text-slate-400" />
                           <span>Dời lịch</span>
                         </button>
                         <button
                           onClick={() => handleCancel(apt)}
-                          className="inline-flex items-center space-x-1.5 rounded-xl border border-rose-200 bg-white px-3 py-1.5 text-xs font-semibold text-rose-600 hover:bg-rose-50 transition"
+                          className="inline-flex items-center space-x-1.5 rounded-xl border border-rose-200 bg-white px-3 py-1.5 text-xs font-semibold text-rose-600 hover:bg-rose-50 transition cursor-pointer dark:border-rose-900/60 dark:bg-rose-950/30 dark:text-rose-400 dark:hover:bg-rose-950/50"
                         >
                           <XCircle className="h-3.5 w-3.5" />
                           <span>Hủy lịch</span>
                         </button>
                         <button
                           onClick={() => handleComplete(apt)}
-                          className="inline-flex items-center space-x-1.5 rounded-xl bg-blue-600 px-4 py-1.5 text-xs font-bold text-white shadow-xs hover:bg-blue-700 transition"
+                          className="inline-flex items-center space-x-1.5 rounded-xl bg-blue-600 px-4 py-1.5 text-xs font-bold text-white shadow-xs hover:bg-blue-700 transition cursor-pointer"
                         >
                           <CheckCircle2 className="h-3.5 w-3.5" />
                           <span>Bắt đầu khám / Hoàn tất</span>
@@ -571,24 +764,24 @@ export const AppointmentsPage: React.FC = () => {
         {/* Cột phải: Tóm tắt & Nhắc nhở Loa Hub (4 cột) */}
         <div className="lg:col-span-4 space-y-5">
           {/* Thẻ 1: Thống kê tỷ lệ hoàn thành khám trong tuần */}
-          <div className="rounded-2xl border border-slate-200/80 bg-white p-5 shadow-xs">
+          <div className="rounded-2xl border border-slate-200/80 bg-white p-5 shadow-xs dark:border-slate-800/80 dark:bg-[#131C31]">
             <div className="flex items-center justify-between mb-3">
               <div className="flex items-center space-x-2">
-                <div className="flex h-8 w-8 items-center justify-center rounded-xl bg-blue-50 text-blue-600">
+                <div className="flex h-8 w-8 items-center justify-center rounded-xl bg-blue-50 text-blue-600 dark:bg-blue-950/40 dark:text-blue-400">
                   <Sparkles className="h-4 w-4" />
                 </div>
-                <h3 className="text-sm font-extrabold text-slate-900">Hiệu suất Khám trong Tuần</h3>
+                <h3 className="text-sm font-extrabold text-slate-900 dark:text-white">Hiệu suất Khám trong Tuần</h3>
               </div>
-              <span className="rounded-full bg-emerald-50 px-2.5 py-0.5 text-xs font-extrabold text-emerald-700">
+              <span className="rounded-full bg-emerald-50 px-2.5 py-0.5 text-xs font-extrabold text-emerald-700 dark:bg-emerald-950/40 dark:text-emerald-400">
                 {completionRate}%
               </span>
             </div>
 
-            <p className="text-xs text-slate-500 mb-3">
+            <p className="text-xs text-slate-500 dark:text-slate-400 mb-3">
               Tỷ lệ hoàn thành lịch hẹn và tái khám định kỳ cho người cao tuổi
             </p>
 
-            <div className="h-2.5 w-full overflow-hidden rounded-full bg-slate-100 mb-4">
+            <div className="h-2.5 w-full overflow-hidden rounded-full bg-slate-100 dark:bg-slate-800 mb-4">
               <div
                 className="h-full rounded-full bg-gradient-to-r from-blue-600 to-cyan-500 transition-all duration-500"
                 style={{ width: `${Math.min(100, Math.max(15, completionRate))}%` }}
@@ -596,54 +789,54 @@ export const AppointmentsPage: React.FC = () => {
             </div>
 
             <div className="grid grid-cols-3 gap-2 text-center">
-              <div className="rounded-xl bg-blue-50/70 p-2.5 border border-blue-100">
-                <span className="text-lg font-extrabold text-blue-700">{counts.UPCOMING}</span>
-                <span className="block text-[10px] font-semibold text-slate-500 mt-0.5">Sắp tới</span>
+              <div className="rounded-xl bg-blue-50/70 p-2.5 border border-blue-100 dark:bg-blue-950/30 dark:border-blue-900/40">
+                <span className="text-lg font-extrabold text-blue-700 dark:text-blue-300">{counts.UPCOMING}</span>
+                <span className="block text-[10px] font-semibold text-slate-500 dark:text-slate-400 mt-0.5">Sắp tới</span>
               </div>
-              <div className="rounded-xl bg-emerald-50/70 p-2.5 border border-emerald-100">
-                <span className="text-lg font-extrabold text-emerald-700">{counts.COMPLETED}</span>
-                <span className="block text-[10px] font-semibold text-slate-500 mt-0.5">Đã khám</span>
+              <div className="rounded-xl bg-emerald-50/70 p-2.5 border border-emerald-100 dark:bg-emerald-950/30 dark:border-emerald-900/40">
+                <span className="text-lg font-extrabold text-emerald-700 dark:text-emerald-300">{counts.COMPLETED}</span>
+                <span className="block text-[10px] font-semibold text-slate-500 dark:text-slate-400 mt-0.5">Đã khám</span>
               </div>
-              <div className="rounded-xl bg-rose-50/70 p-2.5 border border-rose-100">
-                <span className="text-lg font-extrabold text-rose-700">{counts.CANCELLED}</span>
-                <span className="block text-[10px] font-semibold text-slate-500 mt-0.5">Đã hủy</span>
+              <div className="rounded-xl bg-rose-50/70 p-2.5 border border-rose-100 dark:bg-rose-950/30 dark:border-rose-900/40">
+                <span className="text-lg font-extrabold text-rose-700 dark:text-rose-300">{counts.CANCELLED}</span>
+                <span className="block text-[10px] font-semibold text-slate-500 dark:text-slate-400 mt-0.5">Đã hủy</span>
               </div>
             </div>
           </div>
 
           {/* Thẻ 2: Trạng thái Đồng bộ Loa Thông minh Hub Gia đình */}
-          <div className="rounded-2xl border border-slate-200/80 bg-white p-5 shadow-xs">
+          <div className="rounded-2xl border border-slate-200/80 bg-white p-5 shadow-xs dark:border-slate-800/80 dark:bg-[#131C31]">
             <div className="flex items-center justify-between mb-3">
               <div className="flex items-center space-x-2">
-                <div className="flex h-8 w-8 items-center justify-center rounded-xl bg-cyan-50 text-cyan-600">
+                <div className="flex h-8 w-8 items-center justify-center rounded-xl bg-cyan-50 text-cyan-600 dark:bg-cyan-950/40 dark:text-cyan-400">
                   <Radio className="h-4 w-4" />
                 </div>
                 <div>
-                  <h3 className="text-sm font-extrabold text-slate-900">Nhắc nhở Loa Hub Gia đình</h3>
+                  <h3 className="text-sm font-extrabold text-slate-900 dark:text-white">Nhắc nhở Loa Hub Gia đình</h3>
                 </div>
               </div>
-              <span className="inline-flex items-center space-x-1 rounded-full bg-emerald-50 px-2.5 py-0.5 text-[10px] font-bold text-emerald-700 border border-emerald-200">
+              <span className="inline-flex items-center space-x-1 rounded-full bg-emerald-50 px-2.5 py-0.5 text-[10px] font-bold text-emerald-700 border border-emerald-200 dark:bg-emerald-950/40 dark:text-emerald-400 dark:border-emerald-800/60">
                 <span className="h-1.5 w-1.5 rounded-full bg-emerald-500 animate-pulse" />
                 <span>Trực tuyến</span>
               </span>
             </div>
 
-            <p className="text-xs text-slate-500 leading-relaxed mb-4">
+            <p className="text-xs text-slate-500 dark:text-slate-400 leading-relaxed mb-4">
               Hệ thống tự động phát thông báo giọng nói tiếng Việt qua thiết bị <strong>SmartCare Hub</strong> đặt tại nhà bệnh nhân trước giờ khám <strong>24 giờ</strong> và <strong>2 giờ</strong>.
             </p>
 
-            <div className="space-y-2.5 rounded-xl bg-slate-50 p-3.5 border border-slate-100 mb-4 text-xs">
+            <div className="space-y-2.5 rounded-xl bg-slate-50 p-3.5 border border-slate-100 mb-4 text-xs dark:bg-[#0F172A] dark:border-slate-700/60">
               <div className="flex items-center justify-between">
-                <span className="text-slate-500 font-medium">Ca khám bật Loa nhắc:</span>
-                <span className="font-extrabold text-slate-900">{hubEnabledCount} / {counts.ALL} ca</span>
+                <span className="text-slate-500 dark:text-slate-400 font-medium">Ca khám bật Loa nhắc:</span>
+                <span className="font-extrabold text-slate-900 dark:text-white">{hubEnabledCount} / {counts.ALL} ca</span>
               </div>
               <div className="flex items-center justify-between">
-                <span className="text-slate-500 font-medium">Khung giờ phát tự động:</span>
-                <span className="font-bold text-blue-600">08:00 & Trước 2h</span>
+                <span className="text-slate-500 dark:text-slate-400 font-medium">Khung giờ phát tự động:</span>
+                <span className="font-bold text-blue-600 dark:text-blue-400">08:00 & Trước 2h</span>
               </div>
               <div className="flex items-center justify-between">
-                <span className="text-slate-500 font-medium">Âm lượng Loa Hub chuẩn:</span>
-                <span className="font-bold text-emerald-600">80% (Rõ ràng cho NCT)</span>
+                <span className="text-slate-500 dark:text-slate-400 font-medium">Âm lượng Loa Hub chuẩn:</span>
+                <span className="font-bold text-emerald-600 dark:text-emerald-400">80% (Rõ ràng cho NCT)</span>
               </div>
             </div>
 
@@ -651,7 +844,7 @@ export const AppointmentsPage: React.FC = () => {
               onClick={() =>
                 showToast('Đã gửi tín hiệu kiểm tra âm thanh tới Loa thông minh Hub tại nhà bệnh nhân!')
               }
-              className="flex w-full items-center justify-center space-x-2 rounded-xl border border-blue-200 bg-blue-50/80 py-2.5 text-xs font-bold text-blue-700 hover:bg-blue-100 transition"
+              className="flex w-full items-center justify-center space-x-2 rounded-xl border border-blue-200 bg-blue-50/80 py-2.5 text-xs font-bold text-blue-700 hover:bg-blue-100 transition cursor-pointer dark:border-blue-900/50 dark:bg-blue-950/40 dark:text-blue-300 dark:hover:bg-blue-900/40"
             >
               <BellRing className="h-4 w-4" />
               <span>Phát thử thông báo Loa Hub</span>
