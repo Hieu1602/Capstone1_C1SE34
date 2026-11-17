@@ -21,6 +21,9 @@ services:
             dockerfile: Dockerfile
         container_name: elderly_care_backend
         restart: unless-stopped
+        dns:
+            - 8.8.8.8
+            - 1.1.1.1
         env_file:
             - .env
             - path: .env.camera

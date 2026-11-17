@@ -352,19 +352,44 @@ class AlertsWebSocket {
       const incData = event.data || {};
       const alertType = incData.type || event.alert_type || 'FALL_DETECTED';
       const isBatteryAlert = alertType === 'LOW_BATTERY' || alertType === 'DEVICE_BATTERY_DEAD';
+      const getDefaultAlertMessage = (type: string) => {
+        switch (type) {
+          case 'DEVICE_BATTERY_DEAD':
+            return '🪫 Vòng đeo tay thông minh đã cạn pin (0%) và ngắt kết nối!';
+          case 'LOW_BATTERY':
+            return '🔋 Cảnh báo: Pin đồng hồ thông minh sắp hết (< 20%)!';
+          case 'HIGH_HEART_RATE':
+            return '💓 Cảnh báo: Nhịp tim đo được từ vòng đeo tay tăng cao bất thường!';
+          case 'LOW_HEART_RATE':
+            return '💓 Cảnh báo: Nhịp tim đo được từ vòng đeo tay quá thấp!';
+          case 'SUDDEN_HR_SPIKE':
+            return '💓 Cảnh báo loạn nhịp: Nhịp tim tăng vọt đột ngột!';
+          case 'SUDDEN_HR_DROP':
+            return '💓 Cảnh báo loạn nhịp: Nhịp tim tụt đột ngột!';
+          case 'LOW_SPO2':
+            return '⚠️ Cảnh báo: Nồng độ oxy trong máu (SpO₂) tụt sâu dưới ngưỡng an toàn!';
+          case 'CRITICAL_TRIAD':
+            return '🚨 BÁO ĐỘNG ĐỎ: Tam chứng nguy kịch (Sốt cao + Tim nhanh + SpO₂ tụt)!';
+          case 'EXERTION_HYPOXIA':
+            return '🚨 Cảnh báo: Quá tải tim phổi khi gắng sức!';
+          case 'FEVER_TACHYCARDIA':
+            return '⚠️ Cảnh báo: Thân nhiệt cao kèm nhịp tim nhanh!';
+          case 'CARDIO_COLLAPSE':
+            return '🚨 BÁO ĐỘNG SINH TỬ: Nhịp tim tụt nguy kịch kèm thiếu oxy!';
+          case 'HIGH_FEVER':
+            return '🌡️ Cảnh báo: Thân nhiệt của cụ tăng cao (dấu hiệu sốt cao)!';
+          case 'FALL_DETECTED':
+          default:
+            return '🚨 Cảnh báo té ngã khẩn cấp (Phát hiện bởi Edge AI)';
+        }
+      };
+
       const newIncident: Incident = {
         id: incData.id || `inc-${Date.now()}`,
         device_id: incData.device_id || 'BLE_BAND_001',
         alert_type: alertType,
-        alert_level: incData.alert_level || (alertType === 'DEVICE_BATTERY_DEAD' ? 'CRITICAL' : alertType === 'LOW_BATTERY' ? 'HIGH' : 'CRITICAL'),
-        message:
-          incData.message ||
-          incData.description ||
-          (alertType === 'DEVICE_BATTERY_DEAD'
-            ? '🪫 Vòng đeo tay thông minh đã cạn pin (0%) và ngắt kết nối!'
-            : isBatteryAlert
-              ? '🔋 Cảnh báo: Pin đồng hồ thông minh sắp hết (< 15%)!'
-              : '🚨 Cảnh báo té ngã khẩn cấp (Phát hiện bởi Edge AI)'),
+        alert_level: incData.alert_level || (alertType === 'DEVICE_BATTERY_DEAD' || alertType === 'CRITICAL_TRIAD' || alertType === 'CARDIO_COLLAPSE' ? 'CRITICAL' : 'HIGH'),
+        message: incData.message || incData.description || getDefaultAlertMessage(alertType),
         video_clip_url: incData.video_clip_url || null,
         thumbnail_url: incData.thumbnail_url || null,
         is_acknowledged: false,
@@ -380,16 +405,42 @@ class AlertsWebSocket {
           body: newIncident.message,
           data: { incident_id: newIncident.id, alert_type: newIncident.alert_type },
         });
-      } else {
+      } else if (alertType === 'FALL_DETECTED') {
         store.setVitals({
           fall_detected: true,
           acoustic_status: 'Phát hiện sự cố té ngã!',
         });
         store.setSirenActive(true);
 
-        // Bắn thông báo khẩn cấp cục bộ (Feature 5)
+        // Bắn thông báo khẩn cấp cục bộ té ngã
         notificationService.triggerEmergencyNotification({
           title: '🚨 CẢNH BÁO TÉ NGÃ KHẨN CẤP',
+          body: newIncident.message,
+          data: { incident_id: newIncident.id, alert_type: newIncident.alert_type },
+        });
+      } else {
+        // Cảnh báo sinh hiệu: Nhịp tim, SpO2, Sốt cao, Loạn nhịp
+        let alertTitle = '⚠️ CẢNH BÁO SINH TỒN BẤT THƯỜNG';
+        if (alertType === 'HIGH_HEART_RATE') {
+          alertTitle = '💓 CẢNH BÁO NHỊP TIM CAO BẤT THƯỜNG';
+          store.setSirenActive(true);
+        } else if (alertType === 'LOW_HEART_RATE') {
+          alertTitle = '💓 CẢNH BÁO NHỊP TIM QUÁ THẤP';
+          store.setSirenActive(true);
+        } else if (alertType === 'SUDDEN_HR_SPIKE' || alertType === 'SUDDEN_HR_DROP') {
+          alertTitle = '💓 CẢNH BÁO LOẠN NHỊP TIM ĐỘT NGỘT';
+        } else if (alertType === 'LOW_SPO2') {
+          alertTitle = '⚠️ CẢNH BÁO OXY MÁU (SPO2) TỤT SÂU';
+          store.setSirenActive(true);
+        } else if (alertType === 'CRITICAL_TRIAD' || alertType === 'CARDIO_COLLAPSE') {
+          alertTitle = '🚨 BÁO ĐỘNG ĐỎ: TÌNH TRẠNG NGUY KỊCH';
+          store.setSirenActive(true);
+        } else if (alertType === 'HIGH_FEVER' || alertType === 'FEVER_TACHYCARDIA') {
+          alertTitle = '🌡️ CẢNH BÁO THÂN NHIỆT SỐT CAO';
+        }
+
+        notificationService.triggerEmergencyNotification({
+          title: alertTitle,
           body: newIncident.message,
           data: { incident_id: newIncident.id, alert_type: newIncident.alert_type },
         });
