@@ -317,6 +317,8 @@ export const remindersApi = {
 // 4. Patients & Medical Record API
 export const patientApi = {
   list: () => api.get<any[]>('/patients'),
+  create: (data: any) => api.post('/patients', data),
+  delete: (patientId: string | number) => api.delete(`/patients/${patientId}`),
   getMedicalRecord: (patientId: number | string = 1, target_date?: string) =>
     api.get(`/patients/${patientId}/medical-record`, { params: { target_date } }),
   updateMedicalRecord: (patientId: number | string = 1, data: any) =>
