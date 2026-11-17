@@ -97,13 +97,23 @@ export const CancelAppointmentModal: React.FC<CancelAppointmentModalProps> = ({
 
   const isHomeVisit = appointment.visit_type === 'HOME_VISIT';
 
+  useEffect(() => {
+    if (!isOpen) return;
+    document.body.classList.add('overflow-hidden');
+    return () => {
+      document.body.classList.remove('overflow-hidden');
+    };
+  }, [isOpen]);
+
+  if (!isOpen) return null;
+
   return createPortal(
     <div
-      className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-900/50 backdrop-blur-xs animate-in fade-in duration-150"
+      className="fixed inset-0 top-0 left-0 right-0 bottom-0 w-screen h-screen z-[100] !mt-0 flex items-center justify-center p-4 bg-slate-900/50 backdrop-blur-sm animate-in fade-in duration-150"
       onClick={onClose}
     >
       <div
-        className="relative w-full max-w-md rounded-2xl border border-slate-100 bg-white p-6 shadow-2xl animate-in zoom-in-95 duration-150 dark:border-slate-800 dark:bg-slate-900"
+        className="relative z-[101] w-full max-w-md rounded-2xl border border-slate-100 bg-white p-6 shadow-2xl animate-in zoom-in-95 duration-150 dark:border-slate-800 dark:bg-slate-900"
         onClick={(e) => e.stopPropagation()}
       >
         {/* Nút đóng X ở góc phải */}

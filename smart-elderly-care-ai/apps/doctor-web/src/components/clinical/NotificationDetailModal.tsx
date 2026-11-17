@@ -2,7 +2,7 @@
 // Modal chi tiết thông báo lâm sàng & cảnh báo y tế dành cho Bác sĩ gia đình
 // Tích hợp đồng bộ dữ liệu tức thời qua WebSocket Backend
 
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { createPortal } from 'react-dom';
 import {
   X,
@@ -161,16 +161,23 @@ export const NotificationDetailModal: React.FC<NotificationDetailModalProps> = (
       isCritical ||
       isWarning);
 
+  useEffect(() => {
+    document.body.classList.add('overflow-hidden');
+    return () => {
+      document.body.classList.remove('overflow-hidden');
+    };
+  }, []);
+
   return createPortal(
     <div
       role="dialog"
       aria-modal="true"
-      className="fixed inset-0 z-[9999] flex items-center justify-center bg-slate-900/60 p-4 backdrop-blur-xs animate-in fade-in duration-200"
+      className="fixed inset-0 top-0 left-0 right-0 bottom-0 w-screen h-screen z-[100] !mt-0 flex items-center justify-center bg-slate-900/60 p-4 backdrop-blur-sm animate-in fade-in duration-200"
     >
       {/* Backdrop click to close */}
       <div className="absolute inset-0" onClick={onClose} />
 
-      <div className="relative flex max-h-[88vh] w-full max-w-lg flex-col rounded-3xl bg-white shadow-2xl border border-slate-100 overflow-hidden dark:bg-slate-900 dark:border-slate-800 my-auto">
+      <div className="relative z-[101] flex max-h-[88vh] w-full max-w-lg flex-col rounded-3xl bg-white shadow-2xl border border-slate-100 overflow-hidden dark:bg-slate-900 dark:border-slate-800 my-auto">
         {/* Header Modal - Cố định ở đầu modal */}
         <div
           className={`shrink-0 flex items-center justify-between border-b px-6 py-4 ${

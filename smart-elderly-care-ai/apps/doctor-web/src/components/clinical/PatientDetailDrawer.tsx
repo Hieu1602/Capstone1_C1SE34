@@ -1,4 +1,5 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
+import { createPortal } from 'react-dom';
 import {
   Home,
   PhoneCall,
@@ -91,9 +92,16 @@ export const PatientDetailDrawer: React.FC<PatientDetailDrawerProps> = ({
     { key: 'APPOINTMENTS', label: 'Lịch khám', icon: Calendar, count: patientAppointments.length },
   ];
 
-  return (
-    <div className="fixed inset-0 z-40 flex justify-end bg-slate-900/40 backdrop-blur-xs animate-in fade-in duration-200">
-      <div className="flex h-full w-full max-w-2xl flex-col bg-white shadow-2xl overflow-hidden animate-in slide-in-from-right duration-200">
+  useEffect(() => {
+    document.body.classList.add('overflow-hidden');
+    return () => {
+      document.body.classList.remove('overflow-hidden');
+    };
+  }, []);
+
+  return createPortal(
+    <div className="fixed inset-0 top-0 left-0 right-0 bottom-0 w-screen h-screen z-[100] !mt-0 flex justify-end bg-slate-900/50 backdrop-blur-sm animate-in fade-in duration-200">
+      <div className="relative z-[101] flex h-full w-full max-w-2xl flex-col bg-white shadow-2xl overflow-hidden animate-in slide-in-from-right duration-200">
         {/* 1. Rich Clinical Header */}
         <div className="border-b border-slate-200/80 bg-slate-50/80 px-6 py-4">
           <div className="flex items-start justify-between gap-4">
@@ -678,6 +686,7 @@ export const PatientDetailDrawer: React.FC<PatientDetailDrawerProps> = ({
           </div>
         </div>
       </div>
-    </div>
+    </div>,
+    document.body
   );
 };

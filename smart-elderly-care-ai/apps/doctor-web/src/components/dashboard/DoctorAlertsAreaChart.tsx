@@ -192,22 +192,22 @@ export const DoctorAlertsAreaChart: React.FC<DoctorAlertsAreaChartProps> = ({
       {/* 3. Smooth Area Chart */}
       <div className="h-64 w-full">
         <ResponsiveContainer width="100%" height="100%">
-          <AreaChart data={data} margin={{ top: 10, right: 8, left: 0, bottom: 0 }}>
+          <AreaChart data={data} margin={{ top: 12, right: 16, left: -12, bottom: 0 }}>
             <defs>
               <linearGradient id="gradFall" x1="0" y1="0" x2="0" y2="1">
-                <stop offset="5%" stopColor="#F43F5E" stopOpacity={0.22} />
+                <stop offset="5%" stopColor="#F43F5E" stopOpacity={0.28} />
                 <stop offset="95%" stopColor="#F43F5E" stopOpacity={0.0} />
               </linearGradient>
               <linearGradient id="gradHeart" x1="0" y1="0" x2="0" y2="1">
-                <stop offset="5%" stopColor="#2563EB" stopOpacity={0.22} />
-                <stop offset="95%" stopColor="#2563EB" stopOpacity={0.0} />
+                <stop offset="5%" stopColor="#2563EB" stopOpacity={0.32} />
+                <stop offset="95%" stopColor="#2563EB" stopOpacity={0.02} />
               </linearGradient>
               <linearGradient id="gradSpo2" x1="0" y1="0" x2="0" y2="1">
-                <stop offset="5%" stopColor="#F59E0B" stopOpacity={0.22} />
+                <stop offset="5%" stopColor="#F59E0B" stopOpacity={0.28} />
                 <stop offset="95%" stopColor="#F59E0B" stopOpacity={0.0} />
               </linearGradient>
               <linearGradient id="gradSos" x1="0" y1="0" x2="0" y2="1">
-                <stop offset="5%" stopColor="#8B5CF6" stopOpacity={0.22} />
+                <stop offset="5%" stopColor="#8B5CF6" stopOpacity={0.28} />
                 <stop offset="95%" stopColor="#8B5CF6" stopOpacity={0.0} />
               </linearGradient>
             </defs>
@@ -217,14 +217,23 @@ export const DoctorAlertsAreaChart: React.FC<DoctorAlertsAreaChartProps> = ({
 
             <XAxis
               dataKey="label"
+              padding={{ left: 16, right: 16 }}
               tick={{ fontSize: 11, fill: '#64748B', fontWeight: 600 }}
               axisLine={false}
               tickLine={false}
               dy={4}
             />
 
-            {/* Ẩn trục dọc Y bên trái để giao diện thoáng mắt */}
-            <YAxis hide={true} domain={[0, 'auto']} />
+            {/* Hiển thị nhãn số nguyên trên trục tung Y thẳng hàng với lưới ngang */}
+            <YAxis
+              hide={false}
+              axisLine={false}
+              tickLine={false}
+              allowDecimals={false}
+              tick={{ fontSize: 11, fill: '#94A3B8', fontWeight: 500 }}
+              domain={[0, 'auto']}
+              width={28}
+            />
 
             <Tooltip
               content={<CustomAreaTooltip />}

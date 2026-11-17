@@ -1,7 +1,8 @@
 // src/components/clinical/NewAppointmentModal.tsx
 // Modal Tạo Lịch Khám & Tái Khám Mới cho Bác sĩ gia đình
 
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
+import { createPortal } from 'react-dom';
 import { DoctorPatientCard } from '../../types';
 import { doctorApi } from '../../services/api';
 import { Calendar, X, AlertCircle, Loader2, Volume2 } from 'lucide-react';
@@ -67,9 +68,16 @@ export const NewAppointmentModal: React.FC<NewAppointmentModalProps> = ({
     }
   };
 
-  return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-900/50 p-4 backdrop-blur-xs animate-in fade-in duration-150">
-      <div className="flex max-h-[90vh] w-full max-w-lg flex-col rounded-3xl bg-white shadow-2xl border border-slate-100 overflow-hidden">
+  useEffect(() => {
+    document.body.classList.add('overflow-hidden');
+    return () => {
+      document.body.classList.remove('overflow-hidden');
+    };
+  }, []);
+
+  return createPortal(
+    <div className="fixed inset-0 top-0 left-0 right-0 bottom-0 w-screen h-screen z-[100] !mt-0 flex items-center justify-center bg-slate-900/50 p-4 backdrop-blur-sm animate-in fade-in duration-150">
+      <div className="relative z-[101] flex max-h-[90vh] w-full max-w-lg flex-col rounded-3xl bg-white shadow-2xl border border-slate-100 overflow-hidden">
         <div className="flex items-center justify-between border-b border-slate-100 px-6 py-4 bg-slate-50/50">
           <div className="flex items-center space-x-3">
             <div className="flex h-10 w-10 items-center justify-center rounded-xl bg-blue-100 text-blue-600">
@@ -190,6 +198,7 @@ export const NewAppointmentModal: React.FC<NewAppointmentModalProps> = ({
           </div>
         </form>
       </div>
-    </div>
+    </div>,
+    document.body
   );
 };
