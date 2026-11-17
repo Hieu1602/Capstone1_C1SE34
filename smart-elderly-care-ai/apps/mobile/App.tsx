@@ -39,21 +39,52 @@ LogBox.ignoreLogs([
 ]);
 
 if (Platform.OS === "web") {
-    const isIgnoredWebLog = (msg: unknown) => {
-        if (typeof msg !== "string") return false;
+    // Ngăn chặn lỗi không đồng bộ DOM giữa React 19 và react-native-web khi unmount Portal / Modal / Style tag
+    if (typeof Node !== "undefined" && Node.prototype) {
+        const originalRemoveChild = Node.prototype.removeChild;
+        Node.prototype.removeChild = function <T extends Node>(child: T): T {
+            try {
+                return originalRemoveChild.call(this, child) as T;
+            } catch (err: any) {
+                if (err?.name === "NotFoundError" || String(err?.message || "").includes("not a child")) {
+                    return child;
+                }
+                throw err;
+            }
+        };
+    }
+
+    const isIgnoredWebLog = (...args: unknown[]) => {
+        const fullMsg = args
+            .map((a) => {
+                if (typeof a === "string") return a;
+                if (a instanceof Error) return `${a.message} ${a.stack || ""}`;
+                try {
+                    return JSON.stringify(a);
+                } catch {
+                    return String(a);
+                }
+            })
+            .join(" ");
+
         return (
-            msg.includes("style props are deprecated") ||
-            msg.includes("pointerEvents is deprecated") ||
-            msg.includes("does not recognize the") ||
-            msg.includes("Unknown event handler property") ||
-            msg.includes("Invalid DOM property") ||
-            msg.includes("Failed prop type")
+            fullMsg.includes("Warning:") ||
+            fullMsg.includes("style props are deprecated") ||
+            fullMsg.includes("pointerEvents is deprecated") ||
+            fullMsg.includes("does not recognize the") ||
+            fullMsg.includes("Unknown event handler property") ||
+            fullMsg.includes("Invalid DOM property") ||
+            fullMsg.includes("Failed prop type") ||
+            fullMsg.includes("Failed to execute 'removeChild'") ||
+            fullMsg.includes("removeChild") ||
+            fullMsg.includes("createRoot") ||
+            fullMsg.includes("defaultProps")
         );
     };
 
     const originalWarn = console.warn;
     console.warn = (...args: any[]) => {
-        if (isIgnoredWebLog(args[0])) {
+        if (isIgnoredWebLog(...args)) {
             return;
         }
         originalWarn(...args);
@@ -61,7 +92,7 @@ if (Platform.OS === "web") {
 
     const originalError = console.error;
     console.error = (...args: any[]) => {
-        if (isIgnoredWebLog(args[0])) {
+        if (isIgnoredWebLog(...args)) {
             return;
         }
         originalError(...args);
