@@ -7,6 +7,9 @@ AWS_RDS_DATABASE_URL = "postgresql+asyncpg://postgres:Seca2026@seca.cdeea4mcuj3h
 
 REQUIRED_VARS = {
     "DATABASE_URL": AWS_RDS_DATABASE_URL,
+    "CAMERA_SERVICE_URL": "https://specs-estimate-road-amazing.trycloudflare.com",
+    "CAMERA_HTTP_USERNAME": "viewer",
+    "CAMERA_HTTP_PASSWORD": "123456",
     "OTP_MODE": "esms",
     "ESMS_API_KEY": "33071FCC017F6B71E3CD85E57E9D42",
     "ESMS_SECRET_KEY": "FE6A70755A9DC8C802FCC389E5DDA9",
@@ -25,6 +28,8 @@ def main():
                 stripped = line.strip()
                 if "=" in stripped and not stripped.startswith("#"):
                     k = stripped.split("=", 1)[0].strip()
+                    if k.startswith("SUPABASE_"):
+                        continue
                     if k in REQUIRED_VARS:
                         lines.append(f"{k}={REQUIRED_VARS[k]}\n")
                         existing_keys.add(k)

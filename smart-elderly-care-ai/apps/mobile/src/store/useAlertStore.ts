@@ -75,8 +75,14 @@ export const useAlertStore = create<AlertState>()((set, get) => ({
     try {
       const res = await incidentsApi.list();
       if (res.data && Array.isArray(res.data)) {
-        set({ incidents: res.data });
-        return res.data;
+        const seen = new Set<string>();
+        const unique = res.data.filter((item: Incident) => {
+          if (!item.id || seen.has(item.id)) return false;
+          seen.add(item.id);
+          return true;
+        });
+        set({ incidents: unique });
+        return unique;
       }
     } catch (e) {
       console.warn('fetchNotifications API fallback:', e);
@@ -87,10 +93,32 @@ export const useAlertStore = create<AlertState>()((set, get) => ({
   setIncidents: (incidents: Incident[]) => set({ incidents }),
 
   addIncident: (incident: Incident) =>
-    set((state) => ({
-      incidents: [incident, ...state.incidents].slice(0, 100),
-      sirenActive: incident.alert_level === 'CRITICAL' ? true : state.sirenActive,
-    })),
+    set((state) => {
+      // 1. Chống trùng lặp theo ID
+      if (state.incidents.some((i) => i.id === incident.id)) {
+        return state;
+      }
+      // 2. Chống trùng lặp theo nhóm sinh hiệu/thiết bị trong vòng 30 giây
+      const now = Date.now();
+      const isDuplicateRecent = state.incidents.some((i) => {
+        if (i.device_id && incident.device_id && i.device_id !== incident.device_id) return false;
+        const diffMs = Math.abs(now - new Date(i.created_at).getTime());
+        if (diffMs > 30000) return false;
+        const hrGroup = ['HIGH_HEART_RATE', 'LOW_HEART_RATE', 'SUDDEN_HR_SPIKE', 'SUDDEN_HR_DROP'];
+        if (hrGroup.includes(i.alert_type) && hrGroup.includes(incident.alert_type)) {
+          return true;
+        }
+        return i.alert_type === incident.alert_type;
+      });
+
+      if (isDuplicateRecent) {
+        return state;
+      }
+      return {
+        incidents: [incident, ...state.incidents].slice(0, 100),
+        sirenActive: incident.alert_level === 'CRITICAL' ? true : state.sirenActive,
+      };
+    }),
 
   acknowledgeIncident: async (incidentId: string, note?: string, user: string = 'Demo User') => {
     // 1. Optimistic Update tức thời trong RAM (0ms)

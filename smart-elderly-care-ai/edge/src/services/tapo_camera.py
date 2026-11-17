@@ -234,38 +234,6 @@ def get_mqtt_client():
         return None
 
 
-def _upload_to_supabase(file_path: Path, object_name: str, content_type: str) -> str | None:
-    """Tải file ảnh hoặc video clip sự cố trực tiếp lên Supabase Storage bucket."""
-    supabase_url = os.getenv("SUPABASE_URL", "").rstrip("/")
-    service_key = os.getenv("SUPABASE_SERVICE_ROLE_KEY", "")
-    bucket = os.getenv("SUPABASE_STORAGE_BUCKET_INCIDENTS", "incidents")
-    if not supabase_url or not service_key:
-        return None
-    try:
-        import urllib.request
-        if not file_path.exists():
-            return None
-        with open(file_path, "rb") as f:
-            data = f.read()
-        req = urllib.request.Request(
-            f"{supabase_url}/storage/v1/object/{bucket}/{object_name}",
-            data=data,
-            headers={
-                "Authorization": f"Bearer {service_key}",
-                "apikey": service_key,
-                "Content-Type": content_type,
-                "x-upsert": "true",
-            },
-            method="POST",
-        )
-        with urllib.request.urlopen(req, timeout=15) as resp:
-            if resp.status in (200, 201):
-                url = f"{supabase_url}/storage/v1/object/public/{bucket}/{object_name}"
-                LOG.info("Đã tải %s lên Supabase Cloud: %s", object_name, url)
-                return url
-    except Exception as exc:
-        LOG.warning("Không thể tải %s lên Supabase (%s); dùng URL cục bộ.", object_name, exc)
-    return None
 
 
 class CameraFallDetector:
@@ -374,9 +342,9 @@ class CameraFallDetector:
         self.latest_clip = clip_name
         await asyncio.to_thread(self._save_clip, frames, clip_path)
 
-        # 3. Tự động đẩy trực tiếp lên Cloud Supabase Storage Bucket
-        cloud_thumb = await asyncio.to_thread(_upload_to_supabase, thumb_path, thumb_name, "image/jpeg")
-        cloud_video = await asyncio.to_thread(_upload_to_supabase, clip_path, clip_name, "video/mp4")
+        # 3. Đám mây video archive (AWS S3)
+        cloud_thumb = None
+        cloud_video = None
 
         # Đẩy sự cố sang cloud video archive nếu có cấu hình
         archive = getattr(self.camera, "archive", None)

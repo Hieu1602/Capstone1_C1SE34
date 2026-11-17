@@ -22,6 +22,13 @@ class MainActivity : ReactActivity() {
     setTheme(R.style.AppTheme);
     super.onCreate(null)
     hideSystemNavigationBar()
+
+    // Tự động kiểm tra và yêu cầu cấp quyền hiển thị thông báo trên thanh thông báo Android 13+ (API 33+)
+    if (Build.VERSION.SDK_INT >= 33) {
+      if (checkSelfPermission(android.Manifest.permission.POST_NOTIFICATIONS) != android.content.pm.PackageManager.PERMISSION_GRANTED) {
+        requestPermissions(arrayOf(android.Manifest.permission.POST_NOTIFICATIONS), 101)
+      }
+    }
   }
 
   override fun onWindowFocusChanged(hasFocus: Boolean) {

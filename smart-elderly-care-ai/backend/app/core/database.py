@@ -25,11 +25,6 @@ def _async_database_url(database_url: str):
     if url.drivername in {"postgres", "postgresql"}:
         url = url.set(drivername="postgresql+asyncpg")
 
-    # Supabase pooler cổng 5432 hoạt động ở Session Mode (giới hạn 15 clients).
-    # Tự động chuyển sang cổng 6543 (Transaction Mode) để hỗ trợ đồng thời hàng nghìn kết nối.
-    if url.host and "pooler.supabase.com" in url.host and url.port == 5432:
-        url = url.set(port=6543)
-
     if url.drivername == "postgresql+asyncpg":
         query = dict(url.query)
         sslmode = query.pop("sslmode", None)
@@ -38,7 +33,7 @@ def _async_database_url(database_url: str):
         if (
             not query.get("ssl")
             and url.host
-            and (url.host.endswith(".supabase.co") or url.host.endswith(".pooler.supabase.com") or url.host.endswith(".rds.amazonaws.com"))
+            and (url.host.endswith(".rds.amazonaws.com") or url.host.endswith(".amazonaws.com"))
         ):
             query["ssl"] = "require"
         if query != dict(url.query):
@@ -48,10 +43,6 @@ def _async_database_url(database_url: str):
 
 
 _parsed_db_url = _async_database_url(settings.DATABASE_URL)
-_is_supabase_pooler = (
-    bool(_parsed_db_url.host and "pooler.supabase.com" in _parsed_db_url.host)
-    or _parsed_db_url.port == 6543
-)
 
 _connect_args: dict = {
     "timeout": 20,
@@ -63,11 +54,6 @@ _connect_args: dict = {
         "tcp_keepalives_count": "5",
     },
 }
-if _is_supabase_pooler:
-    _connect_args.update({
-        "statement_cache_size": 0,
-        "prepared_statement_cache_size": 0,
-    })
 
 engine = create_async_engine(
     _parsed_db_url,

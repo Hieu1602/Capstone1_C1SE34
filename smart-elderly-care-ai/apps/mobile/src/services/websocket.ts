@@ -225,7 +225,6 @@ class AlertsWebSocket {
         };
 
         store.addIncident(newDocIncident);
-        useAlertStore.getState().addIncident(newDocIncident);
 
         notificationService.triggerEmergencyNotification({
           title: '🗓️ GIA ĐÌNH ĐÃ XÁC NHẬN LỊCH KHÁM',
@@ -329,7 +328,6 @@ class AlertsWebSocket {
       };
 
       store.addIncident(newIncident);
-      useAlertStore.getState().addIncident(newIncident);
       useAuthStore.getState().fetchMyPermissions?.().catch(() => {});
       useVitalStore.getState().syncAllWithBackend?.().catch(() => {});
 
@@ -398,7 +396,6 @@ class AlertsWebSocket {
       };
 
       store.addIncident(newIncident);
-      useAlertStore.getState().addIncident(newIncident);
 
       if (isBatteryAlert) {
         notificationService.triggerEmergencyNotification({
