@@ -369,8 +369,8 @@ class CameraFallDetector:
     def _save_clip(self, frames, path: Path):
         if not frames:
             return
+        h, w = frames[0].shape[:2]
         try:
-            h, w = frames[0].shape[:2]
             subprocess.run([
                 "ffmpeg", "-hide_banner", "-loglevel", "error", "-nostdin", "-y",
                 "-f", "rawvideo", "-pix_fmt", "bgr24", "-s", f"{w}x{h}",
@@ -380,7 +380,7 @@ class CameraFallDetector:
             ], input=b"".join(f.tobytes() for f in frames), stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL, timeout=15, check=True)
         except Exception:
             try:
-                fourcc = cv2.VideoWriter_fourcc(*'mp4v')
+                fourcc = cv2.VideoWriter_fourcc(*'mp4v')  # type: ignore[attr-defined]
                 writer = cv2.VideoWriter(str(path), fourcc, 15.0, (w, h))
                 for f in frames:
                     writer.write(f)
