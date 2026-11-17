@@ -14,7 +14,7 @@ from datetime import datetime, timedelta, timezone
 from typing import List, Optional, Union
 from uuid import UUID
 
-from sqlalchemy import func, or_, select
+from sqlalchemy import func, or_, select, text
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.models.device import Device, DeviceType
@@ -719,6 +719,67 @@ class CRUDVital:
             spo2_avg=float(row.spo2_avg) if row.spo2_avg is not None else None,
             fall_count=row.fall_count or 0,
         )
+
+    async def get_daily_summary(
+        self,
+        db: AsyncSession,
+        days: int = 30,
+        device_id: Optional[Union[str, UUID]] = None,
+    ) -> List[dict]:
+        """
+        Tổng hợp chỉ số sinh hiệu trung bình theo từng ngày (dành cho biểu đồ 7 ngày / 30 ngày).
+        Sử dụng trực tiếp aggregation trong database để tối ưu hiệu năng và bao quát trọn vẹn toàn bộ dữ liệu.
+        """
+        uuid_val = None
+        if device_id:
+            uuid_val = await self.resolve_device_uuid(db, device_id)
+        if not uuid_val:
+            res_band = await db.execute(
+                select(Device.id)
+                .where(Device.device_type == DeviceType.SMARTBAND)
+                .order_by(Device.created_at.desc())
+                .limit(1)
+            )
+            uuid_val = res_band.scalar_one_or_none()
+
+        safe_days = max(1, min(int(days), 90))
+        where_clauses = [f"time >= NOW() - INTERVAL '{safe_days} days'"]
+        params: dict = {}
+        if uuid_val:
+            where_clauses.append("device_id = :device_id")
+            params["device_id"] = uuid_val
+
+        where_sql = " AND ".join(where_clauses)
+        sql = f"""
+        SELECT 
+            TO_CHAR(time AT TIME ZONE 'Asia/Ho_Chi_Minh', 'YYYY-MM-DD') as day_str,
+            ROUND(AVG(heart_rate)) as avg_hr,
+            ROUND(AVG(spo2)) as avg_spo2,
+            ROUND(AVG(bp_systolic)) as avg_bp,
+            ROUND(AVG(skin_temp_max)::numeric, 1) as avg_temp,
+            MAX(CASE WHEN fall_detected = true THEN 95 ELSE 0 END) as max_fall_risk,
+            COUNT(CASE WHEN fall_detected = true THEN 1 END) as alert_count,
+            COUNT(*) as record_count
+        FROM vital_signs
+        WHERE {where_sql}
+        GROUP BY day_str
+        ORDER BY day_str ASC;
+        """
+        result = await db.execute(text(sql), params)
+        summary = []
+        for row in result.fetchall():
+            summary.append({
+                "date": row.day_str,
+                "heartRate": int(row.avg_hr) if row.avg_hr is not None else None,
+                "spo2": int(row.avg_spo2) if row.avg_spo2 is not None else None,
+                "bloodPressure": int(row.avg_bp) if row.avg_bp is not None else None,
+                "temperature": float(row.avg_temp) if row.avg_temp is not None else None,
+                "fallRisk": int(row.max_fall_risk) if row.max_fall_risk is not None else 0,
+                "fallMax": int(row.max_fall_risk) if row.max_fall_risk is not None else 0,
+                "alerts": int(row.alert_count) if row.alert_count is not None else 0,
+                "recordCount": int(row.record_count) if row.record_count is not None else 0,
+            })
+        return summary
 
     async def get_current_for_user(
         self, db: AsyncSession, user_id: UUID
