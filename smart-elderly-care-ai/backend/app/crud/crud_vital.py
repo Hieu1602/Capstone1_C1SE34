@@ -355,7 +355,7 @@ class CRUDVital:
                                                 f"Cảnh báo loạn nhịp: Nhịp tim từ {dev_name} tăng vọt bất thường ({prev_hr} ➔ {hr} bpm) trong {int(t_diff)}s! Nghi ngờ cơn nhịp nhanh kịch phát.",
                                                 5
                                             ))
-                                        elif delta_hr <= -35:
+                                        elif delta_hr <= -35 and hr <= hr_high_limit:
                                             alerts_to_create.append((
                                                 "SUDDEN_HR_DROP",
                                                 "HIGH",
@@ -487,6 +487,7 @@ class CRUDVital:
                         try:
                             from app.services.redis import redis_service
                             await redis_service.push_recent_alert(alert_payload_dict)
+                            await redis_service.invalidate_incidents_cache()
                         except Exception:
                             pass
 

@@ -1,14 +1,14 @@
 # 🏥 Smart Elderly Care AI — Hệ Thống Chăm Sóc Người Cao Tuổi Thông Minh
 ### Đồ Án Capstone 1 — Nhóm C1SE.34 | Nghiên Cứu Khoa Học (NCKH 2026)
 
-> **Hệ thống giám sát, phát hiện té ngã, theo dõi sinh hiệu 24/7 và cảnh báo khẩn cấp thời gian thực cho người cao tuổi ứng dụng AI Edge Computing kết hợp Hạ tầng Đám mây Đa nền tảng (Multi-Cloud: AWS, Supabase, Firebase).**
+> **Hệ thống giám sát, phát hiện té ngã, theo dõi sinh hiệu 24/7 và cảnh báo khẩn cấp thời gian thực cho người cao tuổi ứng dụng AI Edge Computing kết hợp Hạ tầng Đám mây (AWS Cloud & Google Firebase).**
 
 ---
 
 <p align="center">
   <img src="https://img.shields.io/badge/Repository-Capstone1__C1SE34-1E88E5?style=for-the-badge&logo=github&logoColor=white" alt="Repo" />
-  <img src="https://img.shields.io/badge/Architecture-Multi--Cloud-FF9900?style=for-the-badge&logo=amazonaws&logoColor=white" alt="Multi-Cloud" />
-  <img src="https://img.shields.io/badge/Database-Supabase%20PG17-3ECF8E?style=for-the-badge&logo=supabase&logoColor=white" alt="Supabase" />
+  <img src="https://img.shields.io/badge/Architecture-AWS%20Cloud-FF9900?style=for-the-badge&logo=amazonaws&logoColor=white" alt="AWS Cloud" />
+  <img src="https://img.shields.io/badge/Database-AWS%20RDS%20PG17-527FFF?style=for-the-badge&logo=amazonrds&logoColor=white" alt="AWS RDS" />
   <img src="https://img.shields.io/badge/Frontend-Firebase%20Hosting-FFCA28?style=for-the-badge&logo=firebase&logoColor=black" alt="Firebase" />
   <img src="https://img.shields.io/badge/Backend-FastAPI%20%26%20Python%203.11-009688?style=for-the-badge&logo=fastapi&logoColor=white" alt="FastAPI" />
   <img src="https://img.shields.io/badge/Mobile-React%20Native%20Expo-61DAFB?style=for-the-badge&logo=react&logoColor=black" alt="React Native" />
@@ -46,9 +46,9 @@
 
 ---
 
-## ☁️ Kiến Trúc Hạ Tầng Đám Mây (Multi-Cloud Architecture)
+## ☁️ Kiến Trúc Hạ Tầng Đám Mây (Cloud Architecture)
 
-Hệ thống áp dụng mô hình điện toán đám mây đa nền tảng tối ưu hóa tài nguyên giữa **AWS**, **Supabase Cloud** và **Google Firebase**:
+Hệ thống áp dụng mô hình điện toán đám mây tối ưu hóa tài nguyên giữa **Amazon Web Services (AWS)** và **Google Firebase**:
 
 ```
                          ┌──────────────────────────────────────────────┐
@@ -76,40 +76,31 @@ Hệ thống áp dụng mô hình điện toán đám mây đa nền tảng tố
 │   │  - FastAPI Backend (:8000)                                                             │   │
 │   │  - Redis In-Memory Cache & Pub/Sub (:6379)                                             │   │
 │   │  - EMQX MQTT Broker (:1883 / :8883 / :18083)                                           │   │
-│   └────────────────────────────┬──────────────────────────────┬────────────────────────────┘   │
-│                                │                              │                                │
-│                                │                              ▼                                │
-│                                │             ┌───────────────────────────────────┐             │
-│                                │             │  AWS S3 (Simple Storage Service)  │             │
-│                                │             │  Region: ap-southeast-2 Sydney    │             │
-│                                │             │  Bucket: elderly-care-incidents...│             │
-│                                │             │  (Video sự cố 5s, Thumbnails)     │             │
-│                                │             └───────────────────────────────────┘             │
-└────────────────────────────────┼──────────────────────────────▲────────────────────────────────┘
-                                 │                              │
-                                 │ MQTT Telemetry & Alerts      │ Upload Video Clip 5s
-                                 │ (Port 1883)                  │ (S3 SDK)
-                   ┌─────────────┴──────────────────────────────┴──────┐
-                   │        EDGE GATEWAY (Orange Pi / AI Camera)       │
-                   └─────────────────────────────┬─────────────────────┘
-                                                 │
-                                                 │ Kết nối cơ sở dữ liệu quan hệ
-                                                 ▼
-                   ┌───────────────────────────────────────────────────┐
-                   │                  SUPABASE CLOUD                   │
-                   │              Managed PostgreSQL 17                │
-                   │       (db.lwvoaznmrciezcwktmlg.supabase.co)       │
-                   │       - Users, Houses, Patients, Devices          │
-                   │       - Vitals Time-series & Incident Logs        │
-                   └───────────────────────────────────────────────────┘
+│   └─────────────┬──────────────────────────────┬──────────────────────────────┬────────────┘   │
+│                 │                              │                              │                │
+│                 │ Kết nối PostgreSQL over TLS  │                              ▼                │
+│                 ▼                              │             ┌────────────────────────────────┐│
+│   ┌───────────────────────────┐                │             │AWS S3 (Simple Storage Service) ││
+│   │   AWS RDS PostgreSQL 17   │                │             │Region: ap-southeast-2 Sydney   ││
+│   │   (seca.cdeea4mcuj3h.     │                │             │Bucket: elderly-care-incidents  ││
+│   │    ap-southeast-2.rds)    │                │             │(Video sự cố 5s, Thumbnails)    ││
+│   │   - Users, Houses, Vitals │                │             └────────────────────────────────┘│
+│   └───────────────────────────┘                │                                               │
+└────────────────────────────────────────────────┼──────────────────────────────▲────────────────┘
+                                                 │                              │
+                                                 │ MQTT Telemetry & Alerts      │ Upload Video Clip 5s
+                                                 │ (Port 1883)                  │ (S3 SDK)
+                                   ┌─────────────┴──────────────────────────────┴──────┐
+                                   │        EDGE GATEWAY (Orange Pi / AI Camera)       │
+                                   └───────────────────────────────────────────────────┘
 ```
 
 | Dịch vụ Cloud | Thành phần đảm nhiệm | Trách nhiệm chính trong hệ thống |
 | :--- | :--- | :--- |
 | **AWS EC2** | `FastAPI`, `Redis`, `EMQX` | Máy chủ tính toán trung tâm, xử lý API nghiệp vụ, điều phối dữ liệu thời gian thực và trạm thu phát MQTT. |
+| **AWS RDS** | `Managed PostgreSQL 17` | Nguồn dữ liệu quan hệ duy nhất (Single Source of Truth), quản lý người dùng, hồ sơ người cao tuổi, thiết bị và sinh hiệu. |
 | **AWS S3** | `elderly-care-incidents-c1se34` | Lưu trữ video clip 5 giây trước khi ngã, ảnh trích xuất hiện trường và file âm thanh bằng chứng. |
-| **Supabase Cloud**| `Managed PostgreSQL 17` | Nguồn dữ liệu duy nhất (Single Source of Truth), tự động sao lưu, lưu trữ toàn vẹn hồ sơ bệnh nhân và sinh hiệu. |
-| **Firebase** | `Hosting` & `FCM` | Phân phối Web Admin Portal toàn cầu qua CDN tốc độ cao và chuyển phát thông báo còi hú khẩn cấp đến Mobile App. |
+| **Firebase** | `Hosting` & `FCM` | Phân phối Web Admin & Doctor Web toàn cầu qua CDN tốc độ cao và chuyển phát thông báo còi hú khẩn cấp đến Mobile App. |
 
 ---
 
@@ -133,7 +124,7 @@ Capstone1_C1SE34/
 │   ├── backend/                # Máy chủ Backend API (FastAPI, Python 3.11)
 │   │   ├── app/api/v1/         # 13 REST API endpoints chuẩn hóa
 │   │   ├── app/core/           # Cấu hình config, database, security, JWT
-│   │   ├── app/models/         # SQLAlchemy ORM Models (Supabase PostgreSQL 17)
+│   │   ├── app/models/         # SQLAlchemy ORM Models (AWS RDS PostgreSQL 17)
 │   │   ├── app/services/       # Business logic (chatbot Gemini, storage S3, mqtt, redis...)
 │   │   ├── Dockerfile          # Containerization cho máy chủ EC2
 │   │   └── requirements.txt    # Danh mục thư viện Python Backend
@@ -156,7 +147,7 @@ Capstone1_C1SE34/
 
 Các tài liệu thiết kế hệ thống chi tiết được lưu trữ tại thư mục [`docs/`](docs/):
 
-* 📘 [Kiến Trúc Hạ Tầng Đám Mây Đa Nền Tảng (CLOUD_INFRASTRUCTURE.md)](docs/CLOUD_INFRASTRUCTURE.md): Chi tiết cấu hình AWS EC2, AWS S3, Supabase Cloud, Firebase Hosting và Firebase Cloud Messaging.
+* 📘 [Kiến Trúc Hạ Tầng Đám Mây (CLOUD_INFRASTRUCTURE.md)](docs/CLOUD_INFRASTRUCTURE.md): Chi tiết cấu hình AWS EC2, AWS RDS, AWS S3, Firebase Hosting và Firebase Cloud Messaging.
 * 📗 [Kiến Trúc Phần Mềm Toàn Hệ Thống (ARCHITECTURE.md)](docs/ARCHITECTURE.md): Phân tích nguyên tắc Clean Architecture (Edge), Layered Architecture (Backend) và Feature-Sliced Design (Mobile).
 * 📙 [Kiến Trúc Bộ Nhớ Đệm & Pub/Sub (REDIS_ARCHITECTURE.md)](docs/REDIS_ARCHITECTURE.md): Chiến lược lưu cache, kiểm soát rate limit và trung chuyển gói tin WebSocket thời gian thực.
 
@@ -175,7 +166,7 @@ Sao chép file cấu hình mẫu và cập nhật các thông số bảo mật:
 cd smart-elderly-care-ai
 cp .env.example .env
 ```
-*(Cập nhật chuỗi kết nối Supabase `DATABASE_URL`, AWS S3 Credentials, Firebase Service Account và Gemini API Key)*.
+*(Cập nhật chuỗi kết nối AWS RDS `DATABASE_URL`, AWS S3 Credentials, Firebase Service Account và Gemini API Key)*.
 
 ---
 
@@ -244,7 +235,7 @@ Dự án áp dụng quy trình tích hợp và triển khai liên tục (**CI/CD
      ```bash
      docker compose up -d --build backend
      ```
-  3. 📦 **Dữ liệu & Tệp Đa Phương Tiện:** Tự động liên kết liên tục đến **Supabase Cloud Database** và **AWS S3 Bucket** mà không gây gián đoạn dịch vụ.
+  3. 📦 **Dữ liệu & Tệp Đa Phương Tiện:** Tự động liên kết liên tục đến **AWS RDS PostgreSQL** và **AWS S3 Bucket** mà không gây gián đoạn dịch vụ.
 
 ---
 
@@ -253,7 +244,7 @@ Dự án áp dụng quy trình tích hợp và triển khai liên tục (**CI/CD
 | STT | Họ và Tên | Vai trò chính |
 | :---: | :--- | :--- |
 | 1 | **Dương Văn Hiếu** | **Trưởng nhóm (Team Leader)** — Kiến trúc hệ thống, Backend Cloud & AI Integration |
-| 2 | **Nguyễn Hữu Nghĩa** | Phát triển Hạ tầng Đám mây (AWS, Supabase, Firebase) & Backend Service |
+| 2 | **Nguyễn Hữu Nghĩa** | Phát triển Hạ tầng Đám mây (AWS EC2/RDS/S3, Firebase) & Backend Service |
 | 3 | **Trần Văn Duy** | Phát triển Ứng dụng Di động Mobile App (React Native Expo) & Giao diện người dùng |
 | 4 | **Ngô Lê Vĩnh** | Phát triển Module Biên Edge Computing (YOLOv8-Pose, Sensor Fusion, Hardware) |
 | 5 | **Phan Nguyễn Giang My** | Phát triển Cổng Quản trị Web Admin Portal, Tài liệu y khoa & Báo cáo đề tài |

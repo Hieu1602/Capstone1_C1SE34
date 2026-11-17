@@ -172,7 +172,7 @@ class AppleWatchService {
         timestamp: data.timestamp,
       });
 
-      // 2. Gửi về Backend FastAPI để lưu vào TimescaleDB / Supabase
+      // 2. Gửi về Backend FastAPI để lưu vào AWS RDS PostgreSQL
       await vitalsApi.createVital({
         device_id: this.deviceIdentifier,
         heart_rate: data.heartRate,

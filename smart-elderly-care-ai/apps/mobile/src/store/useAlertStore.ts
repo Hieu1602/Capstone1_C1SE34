@@ -75,8 +75,14 @@ export const useAlertStore = create<AlertState>()((set, get) => ({
     try {
       const res = await incidentsApi.list();
       if (res.data && Array.isArray(res.data)) {
-        set({ incidents: res.data });
-        return res.data;
+        const seen = new Set<string>();
+        const unique = res.data.filter((item: Incident) => {
+          if (!item.id || seen.has(item.id)) return false;
+          seen.add(item.id);
+          return true;
+        });
+        set({ incidents: unique });
+        return unique;
       }
     } catch (e) {
       console.warn('fetchNotifications API fallback:', e);
@@ -108,7 +114,6 @@ export const useAlertStore = create<AlertState>()((set, get) => ({
       if (isDuplicateRecent) {
         return state;
       }
-
       return {
         incidents: [incident, ...state.incidents].slice(0, 100),
         sirenActive: incident.alert_level === 'CRITICAL' ? true : state.sirenActive,

@@ -29,7 +29,7 @@ from app.models.user import User
 logger = logging.getLogger(__name__)
 
 # Bộ nhớ đệm thông tin lâm sàng tĩnh (Hồ sơ cụ, Bác sĩ, Lịch khám) TTL 60s
-# Giúp cắt giảm 3 lượt truy vấn mạng tuần tự tới Supabase trên mỗi tin nhắn chat
+# Giúp cắt giảm 3 lượt truy vấn mạng tuần tự tới database trên mỗi tin nhắn chat
 _STATIC_CARE_CACHE: Dict[str, Any] = {
     "patient": {},
     "doctor": None,
