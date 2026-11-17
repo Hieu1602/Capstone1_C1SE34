@@ -2,6 +2,7 @@
  * Vẽ bộ icon nét viền dùng cho thao tác camera, ghi hình và đàm thoại.
  */
 import React from "react";
+import { Platform } from "react-native";
 import { Ionicons } from "@expo/vector-icons";
 import Svg, { Circle, Path } from "react-native-svg";
 
@@ -24,6 +25,10 @@ interface Props {
  * @returns Cây giao diện React theo props và theme hiện tại.
  */
 export default function CameraControlIcon({ name, size = 32, color }: Props) {
+    if (Platform.OS === "web") {
+        return <Ionicons name={name} size={size} color={color} />;
+    }
+
     let shape: React.ReactNode;
     switch (name) {
         case "camera":

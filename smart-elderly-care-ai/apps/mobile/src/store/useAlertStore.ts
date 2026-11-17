@@ -75,8 +75,14 @@ export const useAlertStore = create<AlertState>()((set, get) => ({
     try {
       const res = await incidentsApi.list();
       if (res.data && Array.isArray(res.data)) {
-        set({ incidents: res.data });
-        return res.data;
+        const seen = new Set<string>();
+        const unique = res.data.filter((item: Incident) => {
+          if (!item.id || seen.has(item.id)) return false;
+          seen.add(item.id);
+          return true;
+        });
+        set({ incidents: unique });
+        return unique;
       }
     } catch (e) {
       console.warn('fetchNotifications API fallback:', e);
@@ -87,10 +93,15 @@ export const useAlertStore = create<AlertState>()((set, get) => ({
   setIncidents: (incidents: Incident[]) => set({ incidents }),
 
   addIncident: (incident: Incident) =>
-    set((state) => ({
-      incidents: [incident, ...state.incidents].slice(0, 100),
-      sirenActive: incident.alert_level === 'CRITICAL' ? true : state.sirenActive,
-    })),
+    set((state) => {
+      if (state.incidents.some((i) => i.id === incident.id)) {
+        return state;
+      }
+      return {
+        incidents: [incident, ...state.incidents].slice(0, 100),
+        sirenActive: incident.alert_level === 'CRITICAL' ? true : state.sirenActive,
+      };
+    }),
 
   acknowledgeIncident: async (incidentId: string, note?: string, user: string = 'Demo User') => {
     // 1. Optimistic Update tức thời trong RAM (0ms)
