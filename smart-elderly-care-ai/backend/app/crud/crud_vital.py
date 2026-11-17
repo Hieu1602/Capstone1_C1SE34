@@ -318,6 +318,41 @@ class CRUDVital:
                                     5
                                 ))
 
+                            # D. Kiểm tra biến thiên đột ngột (Sudden HR Delta / Loạn nhịp kịch phát)
+                            try:
+                                prev_res = await db.execute(
+                                    select(VitalSign.heart_rate, VitalSign.time)
+                                    .where(VitalSign.device_id == uuid_val, VitalSign.id != obj.id, VitalSign.heart_rate.is_not(None))
+                                    .order_by(VitalSign.time.desc())
+                                    .limit(1)
+                                )
+                                prev_row = prev_res.first()
+                                if prev_row and prev_row[0] and prev_row[0] > 0:
+                                    prev_hr = prev_row[0]
+                                    prev_time = prev_row[1]
+                                    t1 = obj.time if (obj.time and obj.time.tzinfo) else (obj.time.replace(tzinfo=timezone.utc) if obj.time else datetime.now(timezone.utc))
+                                    t0 = prev_time if (prev_time and prev_time.tzinfo) else (prev_time.replace(tzinfo=timezone.utc) if prev_time else t1)
+                                    t_diff = abs((t1 - t0).total_seconds())
+
+                                    if 0 < t_diff <= 90 and not is_exercising:
+                                        delta_hr = hr - prev_hr
+                                        if delta_hr >= 35:
+                                            alerts_to_create.append((
+                                                "SUDDEN_HR_SPIKE",
+                                                "HIGH",
+                                                f"Cảnh báo loạn nhịp: Nhịp tim từ {dev_name} tăng vọt bất thường ({prev_hr} ➔ {hr} bpm) trong {int(t_diff)}s! Nghi ngờ cơn nhịp nhanh kịch phát.",
+                                                5
+                                            ))
+                                        elif delta_hr <= -35:
+                                            alerts_to_create.append((
+                                                "SUDDEN_HR_DROP",
+                                                "HIGH",
+                                                f"Cảnh báo loạn nhịp: Nhịp tim từ {dev_name} tụt đột ngột ({prev_hr} ➔ {hr} bpm) trong {int(t_diff)}s! Nguy cơ tụt huyết áp tư thế hoặc suy nút xoang.",
+                                                5
+                                            ))
+                            except Exception as e_delta:
+                                logger.warning(f"[CRUDVital] Lỗi kiểm tra biến thiên nhịp tim: {e_delta}")
+
                         # B. SpO2 đơn lẻ tụt sâu:
                         if spo2 and 0 < spo2 < 90:
                             alerts_to_create.append((
@@ -368,6 +403,8 @@ class CRUDVital:
                         alert_payload_dict = {
                             "id": str(inc.id),
                             "device_id": str(uuid_val),
+                            "device_name": dev_name,
+                            "location": dev.location if dev and dev.location else "Trong nhà",
                             "alert_type": alert_type,
                             "alert_level": alert_level,
                             "message": alert_msg,

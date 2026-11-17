@@ -23,123 +23,150 @@ import sys
 import time
 from urllib import error, request
 
+try:
+    import msvcrt
+except ImportError:
+    msvcrt = None
+
 
 def generate_vitals(step: int, mode: str = "normal", current_battery: int = 85):
-    """Tạo chỉ số sinh hiệu, mức pin, trạng thái đeo và hoạt động theo kịch bản."""
+    """Tạo chỉ số sinh hiệu đầy đủ (Tim, SpO2, Thân nhiệt, Huyết áp) đồng bộ sinh lý theo từng kịch bản."""
     wave = math.sin(step * 0.2)
     is_worn = True
+    fall = False
 
     if mode == "exercise":
-        # KỊCH BẢN 2: Vận động thể dục sinh lý (Nhịp tim tăng dần 80 -> 105 -> 120 bpm)
-        # Điểm mấu chốt: SpO2 vẫn tốt >= 96%, Activity = "Vận động / Đi lại" -> CHỐNG BÁO ĐỘNG GIẢ
-        hr = min(122, int(82 + step * 4.5 + wave * 2 + random.randint(-1, 1)))
-        spo2 = int(97 + random.choice([-1, 0, 1]))
-        temp = round(36.8 + wave * 0.1, 1)
-        fall = False
-        activity = "Vận động / Đi lại"
+        # KỊCH BẢN 2: VẬN ĐỘNG THỂ DỤC SINH LÝ
+        # - Nhịp tim tăng dần: 82 -> 95 -> 108 -> 120 bpm
+        # - Thân nhiệt tăng do cơ bắp sinh nhiệt: 36.6°C -> 37.1°C -> 37.4°C
+        # - Huyết áp tâm thu tăng do cung lượng tim: 120 -> 130 -> 142 mmHg
+        # - SpO2 dao động nhẹ (96 - 98%), hô hấp đáp ứng tốt -> CHỐNG BÁO ĐỘNG GIẢ
+        hr = min(122, int(82 + min(step * 3.5, 36.0) + wave * 2 + random.randint(-1, 1)))
+        spo2 = max(95, min(99, int(98 - min(step * 0.25, 2.0) + wave * 0.5)))
+        temp = round(min(37.4, 36.6 + min(step * 0.08, 0.7) + wave * 0.08), 1)
+        bp_sys = min(144, int(120 + min(step * 2.2, 22.0) + wave * 2))
+        bp_dia = int(80 + wave * 2)
+        activity = "Vận động thể dục (Đi bộ / Dưỡng sinh)"
         battery = max(0, current_battery - (1 if step % 15 == 0 else 0))
 
     elif mode == "tachy":
-        # KỊCH BẢN 3: Nhịp tim tăng cao lúc NGHỈ NGƠI (122 - 132 bpm)
+        # KỊCH BẢN 4: Nhịp tim tăng cao lúc NGHỈ NGƠI (~126 bpm)
         hr = int(126 + wave * 4 + random.randint(-2, 2))
         spo2 = int(96 + random.choice([0, 1]))
-        temp = round(36.8 + random.uniform(-0.1, 0.1), 1)
-        fall = False
-        activity = "Ngồi nghỉ"
+        temp = round(36.9 + random.uniform(-0.1, 0.1), 1)
+        bp_sys = int(134 + wave * 3)
+        bp_dia = int(86 + wave * 2)
+        activity = "Ngồi nghỉ (Nhịp nhanh lúc nghỉ)"
         battery = max(0, current_battery - (1 if step % 10 == 0 else 0))
 
     elif mode == "tachy_critical":
-        # KỊCH BẢN 4: Nhịp tim tăng vọt nguy hiểm (>= 140 bpm)
+        # KỊCH BẢN 5: Nhịp tim tăng vọt nguy hiểm (>= 145 bpm)
+        # Huyết áp tăng vọt 160 mmHg, thân nhiệt sốt ruột 37.3°C, SpO2 giảm nhẹ do tim bóp quá nhanh
         hr = int(146 + wave * 4 + random.randint(-2, 2))
-        spo2 = 95
-        temp = 37.0
-        fall = False
-        activity = "Nằm nghỉ"
+        spo2 = int(94 + random.choice([-1, 0, 1]))
+        temp = round(37.3 + wave * 0.1, 1)
+        bp_sys = int(162 + wave * 4)
+        bp_dia = int(98 + wave * 2)
+        activity = "Nằm nghỉ (Cơn nhịp nhanh kịch phát)"
         battery = max(0, current_battery - (1 if step % 10 == 0 else 0))
 
     elif mode == "brady":
-        # KỊCH BẢN 5: Nhịp tim tụt quá thấp (< 50 bpm)
+        # KỊCH BẢN 6: Nhịp tim tụt quá thấp (< 50 bpm)
+        # Huyết áp tụt sâu (82/50 mmHg), thân nhiệt hạ 36.0°C (lạnh ngoại vi), SpO2 93%
         hr = int(44 + wave * 2 + random.randint(-1, 1))
-        spo2 = 95
-        temp = 36.2
-        fall = False
-        activity = "Nghỉ ngơi"
+        spo2 = int(93 + random.choice([0, 1]))
+        temp = round(36.0 + wave * 0.1, 1)
+        bp_sys = int(84 + wave * 3)
+        bp_dia = int(52 + wave * 2)
+        activity = "Nghỉ ngơi (Nhịp tim chậm nguy hiểm)"
         battery = max(0, current_battery - (1 if step % 10 == 0 else 0))
 
     elif mode == "hypoxia":
-        # KỊCH BẢN 6: Thiếu oxy SpO2 tụt đơn lẻ (< 90%)
-        hr = int(92 + wave * 3 + random.randint(-1, 1))
+        # KỊCH BẢN 7: Tụt Oxy SpO2 (< 90%)
+        # Tim đập nhanh bù trừ (102 bpm), huyết áp tăng nhẹ 132 mmHg
+        hr = int(102 + wave * 3 + random.randint(-1, 2))
         spo2 = int(87 + wave * 1.5 + random.choice([-1, 0]))
-        temp = 36.5
-        fall = False
-        activity = "Nghỉ ngơi"
+        temp = round(36.5 + wave * 0.1, 1)
+        bp_sys = int(132 + wave * 2)
+        bp_dia = int(84 + wave * 2)
+        activity = "Nghỉ ngơi (Suy hô hấp / Tụt SpO2)"
         battery = max(0, current_battery - (1 if step % 10 == 0 else 0))
 
     elif mode == "exertion_hypoxia":
-        # KỊCH BẢN 7: Quá tải tim phổi khi gắng sức (Tim nhanh + Oxy tụt)
-        hr = int(120 + wave * 3 + random.randint(-1, 2))
-        spo2 = int(88 + random.choice([-1, 0, 1]))
-        temp = 36.7
-        fall = False
-        activity = "Vận động"
+        # KỊCH BẢN 8: Quá tải tim phổi khi gắng sức (Tim > 118 bpm + SpO2 < 90%)
+        hr = int(124 + wave * 3 + random.randint(-1, 2))
+        spo2 = int(87 + random.choice([-1, 0, 1]))
+        temp = round(37.3 + wave * 0.1, 1)
+        bp_sys = int(150 + wave * 3)
+        bp_dia = int(92 + wave * 2)
+        activity = "Vận động quá sức (Quá tải tim phổi)"
         battery = max(0, current_battery - (1 if step % 10 == 0 else 0))
 
     elif mode == "fever":
-        # KỊCH BẢN 8: Sốt cao kèm tim đập nhanh
-        hr = int(108 + wave * 3 + random.randint(-1, 2))
-        spo2 = 96
-        temp = round(38.5 + wave * 0.15 + random.uniform(-0.05, 0.05), 1)
-        fall = False
-        activity = "Nằm nghỉ"
+        # KỊCH BẢN 9: Sốt cao kèm tim đập nhanh
+        # Thân nhiệt 38.6 - 38.9°C, tim đập nhanh 110 bpm theo sinh lý sốt
+        hr = int(110 + wave * 3 + random.randint(-1, 2))
+        spo2 = int(95 + random.choice([0, 1]))
+        temp = round(38.6 + min(step * 0.04, 0.4) + wave * 0.08, 1)
+        bp_sys = int(130 + wave * 2)
+        bp_dia = int(82 + wave * 2)
+        activity = "Nằm sốt cao"
         battery = max(0, current_battery - (1 if step % 10 == 0 else 0))
 
     elif mode == "critical_triad":
-        # KỊCH BẢN 9: Tam chứng nguy kịch (Sốt cao + Tim nhanh + Oxy tụt)
-        hr = int(126 + wave * 3 + random.randint(-2, 2))
-        spo2 = int(86 + random.choice([-1, 0]))
-        temp = round(38.9 + wave * 0.1, 1)
-        fall = False
-        activity = "Nằm nghỉ"
+        # KỊCH BẢN 10: TAM CHỨNG NGUY KỊCH (Sốt 39°C + Tim 128 bpm + SpO2 85%)
+        hr = int(128 + wave * 3 + random.randint(-2, 2))
+        spo2 = int(85 + random.choice([-1, 0]))
+        temp = round(39.0 + wave * 0.1, 1)
+        bp_sys = int(144 + wave * 3)
+        bp_dia = int(88 + wave * 2)
+        activity = "Hôn mê / Nguy kịch (Tam chứng)"
         battery = max(0, current_battery - (1 if step % 10 == 0 else 0))
 
     elif mode == "fall":
-        # KỊCH BẢN 10: Sự cố té ngã
-        hr = int(105 + random.randint(-2, 5))
-        spo2 = 96
+        # KỊCH BẢN 11: Sự cố té ngã khẩn cấp
+        # Sau cú ngã: Tim đập nhanh 115 bpm (hoảng loạn/đau), huyết áp 145 mmHg, Fall = True
+        hr = int(115 + random.randint(-2, 4))
+        spo2 = 95
         temp = 36.5
+        bp_sys = 145
+        bp_dia = 90
         fall = True
-        activity = "Té ngã"
+        activity = "🚨 TÉ NGÃ TRÊN SÀN (FALL DETECTED)"
         battery = max(0, current_battery - (1 if step % 10 == 0 else 0))
 
     elif mode == "off_wrist":
-        # KỊCH BẢN 11: Tháo vòng tay / Cắm sạc (is_worn=False -> Không báo ngưng tim giả)
+        # KỊCH BẢN 3: Tháo vòng tay / Cắm sạc (is_worn=False -> Không báo ngưng tim giả)
         hr = 0
         spo2 = 0
-        temp = 28.0
-        fall = False
-        activity = "Tháo vòng tay / Sạc pin"
+        temp = 26.0
+        bp_sys = 0
+        bp_dia = 0
+        activity = "Tháo vòng tay / Cắm sạc"
         is_worn = False
         battery = 100
 
     elif mode in ("drain", "battery_drain", "low_battery"):
-        # KỊCH BẢN 12: Chế độ xả pin nhanh: từ 21% giảm dần về 0%
-        hr = int(75 + wave * 3 + random.randint(-1, 1))
+        # KỊCH BẢN 12: Xả pin nhanh: từ 21% giảm dần về 0%
+        hr = int(74 + wave * 2)
         spo2 = 98
         temp = 36.5
-        fall = False
-        activity = "Sinh hoạt"
+        bp_sys = 120
+        bp_dia = 80
+        activity = "Sinh hoạt bình thường"
         battery = max(0, current_battery - 3)
 
     else:
-        # KỊCH BẢN 1: Bình thường: Nhịp tim 70 - 78 bpm, SpO2 97 - 99%, Thân nhiệt 36.5 - 36.7°C
-        hr = int(74 + wave * 3 + random.randint(-1, 1))
-        spo2 = int(98 + random.choice([-1, 0, 1]))
-        temp = round(36.5 + (wave * 0.1) + random.uniform(-0.05, 0.05), 1)
-        fall = False
-        activity = "Sinh hoạt"
+        # KỊCH BẢN 1: Bình thường: Tim 72-76 bpm, SpO2 98-99%, HA 120/80 mmHg, Thân nhiệt 36.5-36.7°C
+        hr = int(74 + wave * 2 + random.randint(-1, 1))
+        spo2 = int(98 + random.choice([0, 1]))
+        temp = round(36.6 + (wave * 0.08) + random.uniform(-0.03, 0.03), 1)
+        bp_sys = int(120 + wave * 2)
+        bp_dia = int(80 + wave * 1)
+        activity = "Sinh hoạt / Nghỉ ngơi"
         battery = max(0, current_battery - (1 if step % 15 == 0 else 0))
 
-    return hr, spo2, temp, fall, battery, activity, is_worn
+    return hr, spo2, temp, bp_sys, bp_dia, fall, battery, activity, is_worn
 
 
 def send_vital(
@@ -148,6 +175,8 @@ def send_vital(
     hr: int,
     spo2: int,
     temp: float,
+    bp_sys: int,
+    bp_dia: int,
     fall: bool,
     battery: int,
     activity: str,
@@ -158,6 +187,8 @@ def send_vital(
         "heart_rate": hr,
         "spo2": spo2,
         "skin_temp_max": temp,
+        "bp_systolic": bp_sys,
+        "bp_diastolic": bp_dia,
         "fall_detected": fall,
         "bracelet_battery": battery,
         "battery_level": battery,
@@ -227,25 +258,53 @@ def main():
         "drain": "🪫 Xả pin nhanh (21% -> 15% pin yếu -> 0% cạn pin)",
     }
 
-    desc = mode_descs.get(args.mode, args.mode.upper())
+    KEY_MODE_MAP = {
+        "1": "normal",
+        "2": "exercise",
+        "3": "off_wrist",
+        "4": "tachy",
+        "5": "tachy_critical",
+        "6": "brady",
+        "7": "hypoxia",
+        "8": "exertion_hypoxia",
+        "9": "fever",
+        "0": "critical_triad",
+        "f": "fall",
+        "F": "fall",
+        "d": "drain",
+        "D": "drain",
+    }
+
+    def print_menu():
+        print("-" * 75)
+        print("⌨️  BẤM PHÍM BẤT KỲ ĐỂ ĐỔI CHẾ ĐỘ TỨC THÌ (KHÔNG CẦN DỪNG LỆNH):")
+        print("   [1] Bình thường       [2] Thể dục (chống ảo)   [3] Tháo vòng (chống ảo)")
+        print("   [4] Tim cao (vàng)    [5] Tim vọt (đỏ)         [6] Tim chậm")
+        print("   [7] Tụt SpO2 (đỏ)     [8] Quá tải gắng sức     [9] Sốt cao")
+        print("   [0] Tam chứng         [F] Té ngã               [D] Xả pin")
+        print("   [M] Xem lại menu      [Q] Thoát")
+        print("-" * 75)
+
+    current_mode = args.mode
+    desc = mode_descs.get(current_mode, current_mode.upper())
 
     print("=" * 75)
     print("⌚ SECA VIRTUAL SMARTWATCH - ĐỒNG HỒ ẢO MÔ PHỎNG & KIỂM THỬ THÔNG MINH")
     print(f"📡 Backend Endpoint: {endpoint}")
     print(f"🏷️  Device ID:        {args.device}")
     print(f"⏱️  Chu kỳ cập nhật:  {args.interval} giây")
-    print(f"🩺 Kịch bản:         {desc}")
+    print(f"🩺 Kịch bản ban đầu: {desc}")
     print(f"🔋 Mức pin khởi tạo: {current_bat}%")
     print("=" * 75)
-    print("Đang phát dữ liệu thời gian thực tới Mobile App & Web Dashboard...")
-    print("Nhấn Ctrl + C để dừng đồng hồ ảo.\n")
+    print_menu()
+    print("Đang phát dữ liệu thời gian thực tới Mobile App & Web Dashboard...\n")
 
     step = 0
     try:
         while True:
             step += 1
-            hr, spo2, temp, fall, current_bat, activity, is_worn = generate_vitals(
-                step, args.mode, current_bat
+            hr, spo2, temp, bp_sys, bp_dia, fall, current_bat, activity, is_worn = generate_vitals(
+                step, current_mode, current_bat
             )
             ok = send_vital(
                 endpoint,
@@ -253,6 +312,8 @@ def main():
                 hr,
                 spo2,
                 temp,
+                bp_sys,
+                bp_dia,
                 fall,
                 current_bat,
                 activity,
@@ -270,10 +331,13 @@ def main():
             else:
                 bat_str = f" | 🔋 Pin: {current_bat}%"
 
+            bp_str = f"🩸 {bp_sys:3d}/{bp_dia:2d} mmHg | " if is_worn else "🩸 --/-- mmHg | "
+
             print(
                 f"[{time.strftime('%H:%M:%S')}] {status_icon} "
                 f"💓 {hr:3d} bpm | "
                 f"🫁 {spo2:2d}% | "
+                f"{bp_str}"
                 f"🌡️ {temp:.1f}°C | "
                 f"🏃 {activity}"
                 f"{bat_str}{worn_str}{fall_str}"
@@ -281,7 +345,29 @@ def main():
 
             if args.count > 0 and step >= args.count:
                 break
-            time.sleep(args.interval)
+
+            # Chờ chu kỳ tiếp theo kèm lắng nghe phím bấm đổi chế độ tức thì
+            end_time = time.time() + args.interval
+            while time.time() < end_time:
+                if msvcrt and msvcrt.kbhit():
+                    ch = msvcrt.getch().decode("utf-8", errors="ignore")
+                    if ch in ("q", "Q", "\x03", "\x1b"):
+                        raise KeyboardInterrupt
+                    if ch in KEY_MODE_MAP:
+                        new_mode = KEY_MODE_MAP[ch]
+                        if new_mode != current_mode:
+                            current_mode = new_mode
+                            step = 0
+                            if current_mode == "drain":
+                                current_bat = 21
+                            elif current_bat <= 0:
+                                current_bat = 85
+                            new_desc = mode_descs.get(current_mode, current_mode.upper())
+                            print(f"\n🔄 [ĐỔI CHẾ ĐỘ THÀNH CÔNG] ➔ {new_desc}\n")
+                            break
+                    elif ch in ("m", "M", "?", "h", "H"):
+                        print_menu()
+                time.sleep(0.05)
     except KeyboardInterrupt:
         print("\n⏹️ Đã dừng Đồng hồ ảo.")
 

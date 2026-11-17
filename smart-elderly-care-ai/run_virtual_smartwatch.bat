@@ -1,12 +1,14 @@
 @echo off
+setlocal
 title SECA Virtual Smartwatch Simulator
 cd /d "%~dp0"
+
 echo =========================================================================
 echo       DONG HO THONG MINH AO - SECA VIRTUAL SMARTWATCH SIMULATOR
 echo =========================================================================
 echo Chon kich ban muon mo phong kiem thu:
 echo.
-echo   --- NHOM CHUAN & CHONG BAO DONG GIA (ANTI-FALSE ALARMS) ---
+echo   --- NHOM CHUAN VA CHONG BAO DONG GIA (ANTI-FALSE ALARMS) ---
 echo   [1] Binh thuong (Nhip tim 74 bpm, SpO2 98%%, 36.5C - Khong bao dong)
 echo   [2] VAN DONG THE DUC SINH LY (Tim tang dan 82 -^> 120 bpm, SpO2 97%% -^> KHONG BAO DONG GIA)
 echo   [3] Thao vong tay / Cam sac (is_worn=False, HR=0 -^> KHONG BAO NGUNG TIM GIA)
@@ -26,44 +28,26 @@ echo   --- NHOM SU CO KHAC ---
 echo   [11] Su co te nga khan cap (Fall Detected = True)
 echo   [12] Xa pin nhanh (Pin yeu 15%% -^> Can pin 0%%)
 echo.
-set /p opt="Nhap lua chon (1-12, mac dinh 1): "
+set "opt=1"
+set /p "opt=Nhap lua chon (1-12, mac dinh 1): "
 
-if "%opt%"=="2" (
-    echo Dang khoi dong che do Van dong the duc (Chong bao dong gia)...
-    backend\.venv\Scripts\python.exe backend\database\scripts\virtual_smartwatch.py --mode exercise
-) else if "%opt%"=="3" (
-    echo Dang khoi dong che do Thao vong tay / Cam sac (Chong bao ngung tim gia)...
-    backend\.venv\Scripts\python.exe backend\database\scripts\virtual_smartwatch.py --mode off_wrist
-) else if "%opt%"=="4" (
-    echo Dang khoi dong che do Nhip tim cao luc nghi ngoi...
-    backend\.venv\Scripts\python.exe backend\database\scripts\virtual_smartwatch.py --mode tachy
-) else if "%opt%"=="5" (
-    echo Dang khoi dong che do Nhip tim tang vot nguy hiem (^>= 145 bpm)...
-    backend\.venv\Scripts\python.exe backend\database\scripts\virtual_smartwatch.py --mode tachy_critical
-) else if "%opt%"=="6" (
-    echo Dang khoi dong che do Nhip tim tut thap (^< 50 bpm)...
-    backend\.venv\Scripts\python.exe backend\database\scripts\virtual_smartwatch.py --mode brady
-) else if "%opt%"=="7" (
-    echo Dang khoi dong che do Tut Oxy SpO2 (^< 90%%)...
-    backend\.venv\Scripts\python.exe backend\database\scripts\virtual_smartwatch.py --mode hypoxia
-) else if "%opt%"=="8" (
-    echo Dang khoi dong che do Qua tai tim phoi khi gang suc (Tim nhanh + Oxy tut)...
-    backend\.venv\Scripts\python.exe backend\database\scripts\virtual_smartwatch.py --mode exertion_hypoxia
-) else if "%opt%"=="9" (
-    echo Dang khoi dong che do Sot cao kem tim nhanh...
-    backend\.venv\Scripts\python.exe backend\database\scripts\virtual_smartwatch.py --mode fever
-) else if "%opt%"=="10" (
-    echo Dang khoi dong che do TAM CHUNG NGUY KICH...
-    backend\.venv\Scripts\python.exe backend\database\scripts\virtual_smartwatch.py --mode critical_triad
-) else if "%opt%"=="11" (
-    echo Dang khoi dong che do Te nga khan cap...
-    backend\.venv\Scripts\python.exe backend\database\scripts\virtual_smartwatch.py --mode fall
-) else if "%opt%"=="12" (
-    echo Dang khoi dong che do Xa pin nhanh...
-    backend\.venv\Scripts\python.exe backend\database\scripts\virtual_smartwatch.py --mode drain
-) else (
-    echo Dang khoi dong che do Binh thuong...
-    backend\.venv\Scripts\python.exe backend\database\scripts\virtual_smartwatch.py --mode normal
-)
+set "MODE=normal"
+if "%opt%"=="2" set "MODE=exercise"
+if "%opt%"=="3" set "MODE=off_wrist"
+if "%opt%"=="4" set "MODE=tachy"
+if "%opt%"=="5" set "MODE=tachy_critical"
+if "%opt%"=="6" set "MODE=brady"
+if "%opt%"=="7" set "MODE=hypoxia"
+if "%opt%"=="8" set "MODE=exertion_hypoxia"
+if "%opt%"=="9" set "MODE=fever"
+if "%opt%"=="10" set "MODE=critical_triad"
+if "%opt%"=="11" set "MODE=fall"
+if "%opt%"=="12" set "MODE=drain"
+
+echo.
+echo =========================================================================
+echo Dang khoi dong mo phong che do: %MODE%
+echo =========================================================================
+backend\.venv\Scripts\python.exe backend\database\scripts\virtual_smartwatch.py --mode %MODE%
 
 pause
