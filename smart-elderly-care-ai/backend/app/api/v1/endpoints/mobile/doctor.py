@@ -367,7 +367,7 @@ async def create_doctor_appointment(
                 alert_level="LOW",
                 message=notify_msg,
                 is_acknowledged=False,
-                notes=str(root_apt.id),
+                notes=f"APT:{root_apt.id}|PATIENT:{root_apt.patient_id}|NAME:{patient_name}",
             )
             db.add(new_incident)
             await db.commit()
@@ -385,6 +385,9 @@ async def create_doctor_appointment(
                         "alert_level": "LOW",
                         "message": new_incident.message,
                         "appointment_id": str(root_apt.id),
+                        "patient_id": str(root_apt.patient_id),
+                        "patient_name": patient_name,
+                        "notes": new_incident.notes,
                         "created_at": new_incident.created_at.isoformat() if new_incident.created_at else None,
                     }
                 }, ensure_ascii=False)

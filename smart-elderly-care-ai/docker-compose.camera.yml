@@ -53,10 +53,12 @@ services:
       timeout: 5s
       start_period: 20s
   camera-tunnel:
-    image: cloudflare/cloudflared:latest
+    image: ngrok/ngrok:latest
     container_name: elderly_care_camera_tunnel
     restart: unless-stopped
-    command: tunnel --no-autoupdate --url http://tapo-camera:8090
+    command: http tapo-camera:8090 --url=https://reggae-request-yesterday.ngrok-free.dev
+    environment:
+      NGROK_AUTHTOKEN: "${NGROK_AUTHTOKEN:-3MGUkOlfqTVJFPfvh9gniY6tJ8V_7SyhTWBVpf1BSJc7ws7Kx}"
     networks:
       - elderly_care_net
 volumes:

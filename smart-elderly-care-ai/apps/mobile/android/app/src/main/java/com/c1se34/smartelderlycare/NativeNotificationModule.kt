@@ -1,5 +1,6 @@
 package com.c1se34.smartelderlycare
 
+import android.Manifest
 import android.app.NotificationChannel
 import android.app.NotificationManager
 import android.app.PendingIntent
@@ -9,9 +10,11 @@ import android.content.pm.PackageManager
 import android.media.AudioAttributes
 import android.media.Ringtone
 import android.media.RingtoneManager
+import android.net.Uri
 import android.os.Build
 import android.os.Handler
 import android.os.Looper
+import android.os.VibrationAttributes
 import android.os.VibrationEffect
 import android.os.Vibrator
 import android.os.VibratorManager
@@ -30,8 +33,8 @@ class NativeNotificationModule(private val reactContext: ReactApplicationContext
 
     companion object {
         private const val TAG = "NativeNotificationModule"
-        private const val CHANNEL_ID = "smartcare_alert_v2"
-        private const val EMERGENCY_CHANNEL_ID = "emergency_alerts"
+        private const val CHANNEL_ID = "smartcare_alert_v4"
+        private const val EMERGENCY_CHANNEL_ID = "emergency_alerts_v4"
         private const val CHANNEL_NAME = "Thông báo cảnh báo SmartCare AI"
         private const val EMERGENCY_CHANNEL_NAME = "Cảnh báo khẩn cấp SmartCare AI"
 
@@ -102,10 +105,34 @@ class NativeNotificationModule(private val reactContext: ReactApplicationContext
                     lockscreenVisibility = NotificationCompat.VISIBILITY_PUBLIC
                     setSound(soundUri, audioAttributes)
                     setShowBadge(true)
+                    try {
+                        setBypassDnd(true)
+                    } catch (_: Exception) {}
                 }
                 manager.createNotificationChannel(emergencyChannel)
                 Log.d(TAG, "Đã tạo kênh khẩn cấp: $EMERGENCY_CHANNEL_ID")
             }
+        }
+    }
+
+    @ReactMethod
+    fun openNotificationSettings() {
+        try {
+            val intent = Intent().apply {
+                if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
+                    action = android.provider.Settings.ACTION_APP_NOTIFICATION_SETTINGS
+                    putExtra(android.provider.Settings.EXTRA_APP_PACKAGE, reactContext.packageName)
+                } else {
+                    action = "android.settings.APP_NOTIFICATION_SETTINGS"
+                    putExtra("app_package", reactContext.packageName)
+                    putExtra("app_uid", reactContext.applicationInfo.uid)
+                }
+                flags = Intent.FLAG_ACTIVITY_NEW_TASK
+            }
+            reactContext.startActivity(intent)
+            Log.d(TAG, "Đã mở trang cài đặt thông báo cho ứng dụng.")
+        } catch (e: Exception) {
+            Log.e(TAG, "Lỗi mở trang cài đặt thông báo: ${e.message}")
         }
     }
 
@@ -266,8 +293,19 @@ class NativeNotificationModule(private val reactContext: ReactApplicationContext
                     val repeatIndex = if (isCritical) 0 else -1
 
                     vibrator?.cancel()
-                    if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
-                        vibrator?.vibrate(VibrationEffect.createWaveform(pattern, repeatIndex))
+                    val effect = VibrationEffect.createWaveform(pattern, repeatIndex)
+                    if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
+                        val vibAttrs = VibrationAttributes.Builder()
+                            .setUsage(VibrationAttributes.USAGE_ALARM)
+                            .build()
+                        vibrator?.vibrate(effect, vibAttrs)
+                    } else if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
+                        val alarmAudioAttrs = AudioAttributes.Builder()
+                            .setContentType(AudioAttributes.CONTENT_TYPE_SONIFICATION)
+                            .setUsage(AudioAttributes.USAGE_ALARM)
+                            .build()
+                        @Suppress("DEPRECATION")
+                        vibrator?.vibrate(effect, alarmAudioAttrs)
                     } else {
                         @Suppress("DEPRECATION")
                         vibrator?.vibrate(pattern, repeatIndex)
@@ -379,6 +417,40 @@ class NativeNotificationModule(private val reactContext: ReactApplicationContext
         } catch (e: Exception) {
             Log.e(TAG, "Lỗi mở Zalo: ${e.message}", e)
             promise.resolve(false)
+        }
+    }
+
+    /**
+     * Thực hiện cuộc gọi khẩn cấp trực tiếp qua Intent.ACTION_CALL nếu đã được cấp quyền CALL_PHONE.
+     * Nếu chưa có quyền, fallback sang ACTION_DIAL để mở trình quay số an toàn.
+     */
+    @ReactMethod
+    fun placeEmergencyCall(phone: String, promise: Promise) {
+        try {
+            val sanitized = phone.trim()
+            if (sanitized.isEmpty()) {
+                promise.resolve("INVALID")
+                return
+            }
+            val telUri = Uri.parse("tel:$sanitized")
+            val hasCallPermission = ContextCompat.checkSelfPermission(
+                reactContext,
+                Manifest.permission.CALL_PHONE
+            ) == PackageManager.PERMISSION_GRANTED
+
+            val intent = Intent(
+                if (hasCallPermission) Intent.ACTION_CALL else Intent.ACTION_DIAL,
+                telUri
+            ).apply {
+                addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
+            }
+            reactContext.startActivity(intent)
+            val mode = if (hasCallPermission) "CALLED" else "DIALED"
+            Log.d(TAG, "placeEmergencyCall($sanitized) -> $mode")
+            promise.resolve(mode)
+        } catch (e: Exception) {
+            Log.e(TAG, "Lỗi placeEmergencyCall: ${e.message}", e)
+            promise.resolve("ERROR")
         }
     }
 }
