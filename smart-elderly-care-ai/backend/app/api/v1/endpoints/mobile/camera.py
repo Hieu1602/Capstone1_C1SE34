@@ -1,11 +1,13 @@
 """Proxy camera cố định; không nhận URL upstream/credential từ điện thoại."""
 import asyncio
+import base64
 import os
 import json
 import hmac
 import re
 import socket
 import time
+from urllib.parse import urlparse
 from uuid import UUID
 from typing import Literal
 
@@ -212,40 +214,38 @@ class ProbeRequest(BaseModel):
     stream_url: str = Field(min_length=3, max_length=512)
 
 
-async def probe_single_ip(ip: str, port: int = 554, timeout: float = 0.25):
+async def probe_single_ip(ip: str, port: int = 554, timeout: float = 0.4):
     try:
         reader, writer = await asyncio.wait_for(asyncio.open_connection(ip, port), timeout=timeout)
     except Exception:
         return None
     try:
-        writer.write(b"OPTIONS rtsp://" + ip.encode() + b":554 RTSP/1.0\r\nCSeq: 1\r\n\r\n")
+        req = f"DESCRIBE rtsp://{ip}:{port}/stream1 RTSP/1.0\r\nCSeq: 1\r\nUser-Agent: SmartElderlyCare\r\n\r\n"
+        writer.write(req.encode())
         await writer.drain()
         data = await asyncio.wait_for(reader.read(1024), timeout=0.8)
         writer.close()
         await writer.wait_closed()
-        resp = data.decode("utf-8", errors="ignore")
+        resp = data.decode("utf-8", errors="ignore").lower()
 
         brand = "Camera IP (RTSP)"
         channel_path = "/stream1"
-        if "hikvision" in resp.lower() or "webs" in resp.lower() or "404" in resp:
-            try:
-                r2, w2 = await asyncio.wait_for(asyncio.open_connection(ip, port), timeout=0.5)
-                w2.write(b"DESCRIBE rtsp://" + ip.encode() + b":554/Streaming/Channels/101 RTSP/1.0\r\nCSeq: 2\r\n\r\n")
-                await w2.drain()
-                d2 = await asyncio.wait_for(r2.read(512), timeout=0.5)
-                w2.close()
-                await w2.wait_closed()
-                if b"401" in d2 or b"200" in d2:
-                    brand = "Hikvision"
-                    channel_path = "/Streaming/Channels/101"
-            except Exception:
-                pass
-        elif "tapo" in resp.lower():
+
+        if "tp-link" in resp or "tapo" in resp:
             brand = "TP-Link Tapo"
             channel_path = "/stream1"
-        elif "dahua" in resp.lower():
+        elif "hikvision" in resp or "webs" in resp or "404" in resp:
+            brand = "Hikvision"
+            channel_path = "/Streaming/Channels/101"
+        elif "dahua" in resp or "imou" in resp:
             brand = "Dahua / Imou"
             channel_path = "/cam/realmonitor?channel=1&subtype=0"
+        elif "ezviz" in resp:
+            brand = "EZVIZ"
+            channel_path = "/h264/ch1/main/av_stream"
+        elif "yoosee" in resp or "onvif" in resp:
+            brand = "Yoosee"
+            channel_path = "/onvif1"
         else:
             try:
                 _, w2020 = await asyncio.wait_for(asyncio.open_connection(ip, 2020), timeout=0.3)
@@ -278,44 +278,96 @@ async def probe_single_ip(ip: str, port: int = 554, timeout: float = 0.25):
 @router.get("/discover")
 async def discover_cameras(
     request: Request,
-    subnet: str | None = Query(None, description="Subnet tùy chọn cần dò (vd: 192.168.10.)"),
+    subnet: str | None = Query(None, description="Subnet tùy chọn cần dò (vd: 192.168.1.)"),
     _=Depends(authenticated),
 ):
-    """Dò quét camera RTSP/ONVIF trong mạng nội bộ."""
-    subnets = ["192.168.10.", "192.168.1.", "192.168.0.", "192.168.31.", "192.168.2.", "192.168.100."]
+    """Dò quét camera RTSP/ONVIF trong mạng nội bộ một cách nhanh chóng và chính xác."""
+    try:
+        remote_res = await forward("/discover")
+        if isinstance(remote_res, dict) and remote_res.get("found"):
+            return remote_res
+        if isinstance(remote_res, list) and remote_res:
+            return {"found": remote_res}
+    except Exception:
+        pass
+
+    primary_subnets: list[str] = []
+    secondary_subnets: list[str] = ["192.168.1.", "192.168.0.", "192.168.10.", "192.168.31.", "192.168.2.", "192.168.100."]
+
     if subnet:
         clean_sub = subnet.strip()
         if not clean_sub.endswith("."):
             clean_sub += "."
-        if clean_sub not in subnets:
-            subnets.insert(0, clean_sub)
-
-    client_ip = getattr(request.client, "host", "") if request.client else ""
-    if client_ip and re.match(r"^(192\.168\.\d+|10\.\d+\.\d+|172\.(1[6-9]|2\d|3[01])\.\d+)\.\d+$", client_ip):
-        client_sub = ".".join(client_ip.split(".")[:3]) + "."
-        if client_sub not in subnets:
-            subnets.insert(0, client_sub)
+        primary_subnets.append(clean_sub)
 
     configured_host = os.getenv("TAPO_HOST", "").strip()
-    ips = [f"{sub}{i}" for sub in subnets for i in range(1, 255)]
-    if configured_host and configured_host not in ips:
-        ips.insert(0, configured_host)
+    if configured_host and re.match(r"^\d{1,3}\.\d{1,3}\.\d{1,3}\.\d{1,3}$", configured_host):
+        host_sub = ".".join(configured_host.split(".")[:3]) + "."
+        if host_sub not in primary_subnets:
+            primary_subnets.append(host_sub)
 
-    sem = asyncio.Semaphore(100)
+    for s in ["192.168.1.", "192.168.0."]:
+        if s not in primary_subnets:
+            primary_subnets.append(s)
 
-    async def _sem_probe(ip: str):
+    candidate_subnets = [
+        s for s in (primary_subnets + [s for s in secondary_subnets if s not in primary_subnets])
+        if not (s.startswith("172.") and any(s.startswith(f"172.{i}.") for i in range(16, 32)))
+    ]
+
+    sem = asyncio.Semaphore(128)
+
+    async def _fast_check(ip: str) -> str | None:
         async with sem:
-            return await probe_single_ip(ip)
+            try:
+                _, writer = await asyncio.wait_for(asyncio.open_connection(ip, 554), timeout=0.35)
+                writer.close()
+                await writer.wait_closed()
+                return ip
+            except Exception:
+                return None
 
-    tasks = [_sem_probe(ip) for ip in ips]
-    results = await asyncio.gather(*tasks)
-    found = [c for c in results if c is not None]
+    priority_ips = []
+    if configured_host and configured_host not in priority_ips:
+        priority_ips.append(configured_host)
+
+    for sub in primary_subnets[:2]:
+        for i in range(1, 255):
+            ip_str = f"{sub}{i}"
+            if ip_str not in priority_ips:
+                priority_ips.append(ip_str)
+
+    found_ips = [ip for ip in await asyncio.gather(*[_fast_check(ip) for ip in priority_ips]) if ip]
+
+    if not found_ips:
+        remaining_ips = [
+            f"{sub}{i}"
+            for sub in candidate_subnets[2:]
+            for i in range(1, 255)
+            if f"{sub}{i}" not in priority_ips
+        ]
+        if remaining_ips:
+            found_ips = [ip for ip in await asyncio.gather(*[_fast_check(ip) for ip in remaining_ips]) if ip]
+
+    found = []
+    if found_ips:
+        probe_tasks = [probe_single_ip(ip) for ip in dict.fromkeys(found_ips)]
+        probed = await asyncio.gather(*probe_tasks)
+        found = [c for c in probed if c is not None]
+
     return {"found": found}
 
 
 @router.post("/probe")
 async def probe_camera(body: ProbeRequest, _=Depends(authenticated)):
-    """Kiểm tra kết nối trực tiếp đến luồng RTSP của Camera."""
+    """Kiểm tra kết nối trực tiếp đến luồng RTSP của Camera kèm xác thực tài khoản."""
+    try:
+        remote_res = await forward("/probe", payload={"stream_url": body.stream_url})
+        if isinstance(remote_res, dict) and "reachable" in remote_res:
+            return remote_res
+    except Exception:
+        pass
+
     url = body.stream_url.strip()
     match = re.search(r"@?([0-9]{1,3}\.[0-9]{1,3}\.[0-9]{1,3}\.[0-9]{1,3})(?::([0-9]{1,5}))?", url)
     if not match:
@@ -326,31 +378,69 @@ async def probe_camera(body: ProbeRequest, _=Depends(authenticated)):
     host = match.group(1)
     port = int(match.group(2)) if match.group(2) else 554
 
+    parsed = urlparse(url)
+    username = parsed.username or ""
+    password = parsed.password or ""
+    path = parsed.path or "/stream1"
+    if not path.startswith("/"):
+        path = "/" + path
+
     try:
         reader, writer = await asyncio.wait_for(asyncio.open_connection(host, port), timeout=2.0)
-        writer.write(b"OPTIONS rtsp://" + host.encode() + b":" + str(port).encode() + b" RTSP/1.0\r\nCSeq: 1\r\n\r\n")
+        auth_header = ""
+        has_credentials = bool(username or password)
+        if has_credentials:
+            token = base64.b64encode(f"{username}:{password}".encode()).decode()
+            auth_header = f"Authorization: Basic {token}\r\n"
+
+        req = f"DESCRIBE rtsp://{host}:{port}{path} RTSP/1.0\r\nCSeq: 1\r\nUser-Agent: SmartElderlyCare\r\n{auth_header}\r\n"
+        writer.write(req.encode())
         await writer.drain()
-        data = await asyncio.wait_for(reader.read(512), timeout=1.5)
+        data = await asyncio.wait_for(reader.read(1024), timeout=1.5)
         writer.close()
         await writer.wait_closed()
         resp = data.decode("utf-8", errors="ignore")
-        brand = "Hikvision" if ("hikvision" in resp.lower() or "webs" in resp.lower() or "404" in resp) else "Camera IP"
-        if "tapo" in resp.lower():
+        resp_lower = resp.lower()
+
+        brand = "Camera IP"
+        if "tp-link" in resp_lower or "tapo" in resp_lower:
             brand = "TP-Link Tapo"
-        elif brand == "Camera IP":
-            try:
-                _, w2020 = await asyncio.wait_for(asyncio.open_connection(host, 2020), timeout=0.3)
-                w2020.close()
-                await w2020.wait_closed()
-                brand = "TP-Link Tapo"
-            except Exception:
-                pass
-        return {
-            "success": True,
-            "reachable": True,
-            "message": f"Sẵn sàng: Cổng RTSP {port} trên {host} đang mở, luồng video phản hồi tốt.",
-            "brand": brand,
-        }
+        elif "hikvision" in resp_lower or "webs" in resp_lower:
+            brand = "Hikvision"
+        elif "dahua" in resp_lower or "imou" in resp_lower:
+            brand = "Dahua / Imou"
+        elif "ezviz" in resp_lower:
+            brand = "EZVIZ"
+
+        if "200 ok" in resp_lower:
+            return {
+                "success": True,
+                "reachable": True,
+                "message": f"Kết nối và xác thực thành công! Camera {brand} đã sẵn sàng truyền luồng.",
+                "brand": brand,
+            }
+        elif "401 unauthorized" in resp_lower:
+            if has_credentials:
+                return {
+                    "success": False,
+                    "reachable": True,
+                    "message": "Sai tài khoản hoặc mật khẩu camera (HTTP 401 Unauthorized). Vui lòng kiểm tra lại.",
+                    "brand": brand,
+                }
+            else:
+                return {
+                    "success": True,
+                    "reachable": True,
+                    "message": f"Cổng RTSP đang mở ({brand}). Vui lòng nhập tài khoản và mật khẩu của camera.",
+                    "brand": brand,
+                }
+        else:
+            return {
+                "success": True,
+                "reachable": True,
+                "message": f"Cổng RTSP {port} trên {host} đang mở ({brand}).",
+                "brand": brand,
+            }
     except Exception:
         return {
             "success": False,

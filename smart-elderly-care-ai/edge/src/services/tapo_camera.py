@@ -789,6 +789,65 @@ def create_app(camera=None, control=None, recorder=None, fall_detector=None) -> 
         fall_detector.enabled = data["enabled"]
         return web.json_response({"enabled": fall_detector.enabled})
 
+    async def discover(request):
+        """Dò quét camera RTSP trong mạng nội bộ của Edge."""
+        from src.drivers.tapo import discover_tapo_host
+        loop = asyncio.get_running_loop()
+        found_ip = await loop.run_in_executor(None, discover_tapo_host)
+        cams = []
+        if found_ip:
+            cams.append({
+                "ip": found_ip,
+                "port": 554,
+                "name": f"Camera TP-Link Tapo ({found_ip})",
+                "brand": "TP-Link Tapo",
+                "status": "Sẵn sàng: cổng RTSP đang mở.",
+                "rtsp_url": f"rtsp://{found_ip}:554/stream1",
+            })
+        return web.json_response({"found": cams})
+
+    async def probe(request):
+        """Kiểm tra kết nối RTSP và tài khoản từ phía Edge nội bộ."""
+        import base64
+        from urllib.parse import urlparse
+        data = await body(request)
+        url = data.get("stream_url", "").strip()
+        match = re.search(r"@?([0-9]{1,3}\.[0-9]{1,3}\.[0-9]{1,3}\.[0-9]{1,3})(?::([0-9]{1,5}))?", url)
+        if not match:
+            match = re.search(r"://(?:[^@]+@)?([^:/]+)(?::([0-9]{1,5}))?", url)
+        if not match:
+            return web.json_response({"success": False, "reachable": False, "message": "Địa chỉ URL không hợp lệ"})
+        host = match.group(1)
+        port = int(match.group(2)) if match.group(2) else 554
+        parsed = urlparse(url)
+        username = parsed.username or ""
+        password = parsed.password or ""
+        path = parsed.path or "/stream1"
+        if not path.startswith("/"):
+            path = "/" + path
+        try:
+            reader, writer = await asyncio.wait_for(asyncio.open_connection(host, port), timeout=2.0)
+            auth_header = ""
+            if username or password:
+                token = base64.b64encode(f"{username}:{password}".encode()).decode()
+                auth_header = f"Authorization: Basic {token}\r\n"
+            req = f"DESCRIBE rtsp://{host}:{port}{path} RTSP/1.0\r\nCSeq: 1\r\nUser-Agent: SmartElderlyCare\r\n{auth_header}\r\n"
+            writer.write(req.encode())
+            await writer.drain()
+            raw = await asyncio.wait_for(reader.read(1024), timeout=1.5)
+            writer.close()
+            await writer.wait_closed()
+            resp_str = raw.decode("utf-8", errors="ignore").lower()
+            brand = "TP-Link Tapo" if "tp-link" in resp_str or "tapo" in resp_str else "Camera IP"
+            if "200 ok" in resp_str:
+                return web.json_response({"success": True, "reachable": True, "message": f"Kết nối và xác thực thành công ({brand})!", "brand": brand})
+            elif "401 unauthorized" in resp_str:
+                msg = "Sai tài khoản hoặc mật khẩu camera (HTTP 401 Unauthorized)." if (username or password) else f"Cổng RTSP đang mở ({brand}). Vui lòng nhập tài khoản/mật khẩu."
+                return web.json_response({"success": not (username or password), "reachable": True, "message": msg, "brand": brand})
+            return web.json_response({"success": True, "reachable": True, "message": f"Cổng RTSP {port} trên {host} đang mở ({brand}).", "brand": brand})
+        except Exception as e:
+            return web.json_response({"success": False, "reachable": False, "message": f"Không thể kết nối đến {host}:{port}: {e}"})
+
     async def lifecycle(app):
         """Gắn vòng đời driver, recorder và AI fall detector với ứng dụng.
 
@@ -798,7 +857,7 @@ def create_app(camera=None, control=None, recorder=None, fall_detector=None) -> 
         Returns:
             Async generator. Tác động: mở camera khi chạy, đóng recorder/driver khi dừng.
         """
-        if camera.source != 0 or os.getenv("CAMERA_SOURCE") or os.getenv("TAPO_HOST"):
+        if camera.source != 0 or os.getenv("CAMERA_SOURCE") or os.getenv("TAPO_HOST") or os.getenv("TAPO_USERNAME"):
             camera.start()
         fall_detector.start()
         recorder.start_cleanup()
@@ -823,6 +882,7 @@ def create_app(camera=None, control=None, recorder=None, fall_detector=None) -> 
         web.get("/recordings", recordings), web.post("/recordings", recordings),
         web.get("/recordings/{name}", download),
         web.get("/fall-detection", get_fall), web.post("/fall-detection", set_fall),
+        web.get("/discover", discover), web.post("/probe", probe),
     ])
     return app
 

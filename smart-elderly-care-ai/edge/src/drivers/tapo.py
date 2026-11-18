@@ -1,25 +1,117 @@
 """Cấu hình RTSP và điều khiển Tapo; không ghi credential vào log."""
+import concurrent.futures
+import logging
 import os
+import re
+import socket
 import threading
 from urllib.parse import quote
 
+logger = logging.getLogger(__name__)
 
-def rtsp_url() -> str:
-    """Tạo URL RTSP từ Camera Account, khác tài khoản cloud.
+
+def discover_tapo_host(timeout: float = 0.35) -> str | None:
+    """Tự động quét mạng LAN tìm địa chỉ IP của camera Tapo khi không có hoặc mất kết nối IP cũ."""
+    # 1. Kiểm tra nhanh nếu IP hiện tại đang phản hồi cổng 554 RTSP
+    current_host = os.environ.get("TAPO_HOST", "").strip()
+    if current_host and not any(c in current_host for c in "/@ :?#"):
+        s = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
+        s.settimeout(0.2)
+        try:
+            if s.connect_ex((current_host, 554)) == 0:
+                return current_host
+        except Exception:
+            pass
+        finally:
+            s.close()
+
+    # 2. Xây dựng dải IP cần quét: ưu tiên 192.168.1.x và 192.168.0.x
+    primary_subnets = ["192.168.1.", "192.168.0."]
+    if current_host and re.match(r"^\d{1,3}\.\d{1,3}\.\d{1,3}\.\d{1,3}$", current_host):
+        cur_sub = ".".join(current_host.split(".")[:3]) + "."
+        if cur_sub not in primary_subnets:
+            primary_subnets.insert(0, cur_sub)
+
+    secondary_subnets = ["192.168.10.", "192.168.31.", "192.168.2.", "192.168.100."]
+
+    def _check_port(ip: str) -> str | None:
+        sock = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
+        sock.settimeout(timeout)
+        try:
+            if sock.connect_ex((ip, 554)) == 0:
+                return ip
+        except Exception:
+            pass
+        finally:
+            sock.close()
+        return None
+
+    def _is_tapo(ip: str) -> bool:
+        sock = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
+        sock.settimeout(0.8)
+        try:
+            sock.connect((ip, 554))
+            sock.sendall(f"DESCRIBE rtsp://{ip}:554/stream1 RTSP/1.0\r\nCSeq: 1\r\n\r\n".encode())
+            resp = sock.recv(512).decode("utf-8", errors="ignore").lower()
+            if "tp-link" in resp or "tapo" in resp:
+                return True
+        except Exception:
+            pass
+        finally:
+            sock.close()
+        # Fallback kiểm tra cổng ONVIF / Tapo port 2020
+        sock2 = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
+        sock2.settimeout(0.4)
+        try:
+            if sock2.connect_ex((ip, 2020)) == 0:
+                return True
+        except Exception:
+            pass
+        finally:
+            sock2.close()
+        return False
+
+    def _scan_subnets(subnets: list[str]) -> str | None:
+        ips = [f"{sub}{i}" for sub in subnets for i in range(1, 255)]
+        with concurrent.futures.ThreadPoolExecutor(max_workers=64) as ex:
+            results = list(ex.map(_check_port, ips))
+        candidates = [ip for ip in results if ip]
+        for ip in candidates:
+            if _is_tapo(ip):
+                return ip
+        return None
+
+    found = _scan_subnets(primary_subnets)
+    if not found:
+        found = _scan_subnets(secondary_subnets)
+
+    if found:
+        logger.info("Auto-Discovery: Đã tự động phát hiện camera Tapo tại IP: %s", found)
+        os.environ["TAPO_HOST"] = found
+        return found
+
+    return None
+
+
+def rtsp_url(host: str | None = None) -> str:
+    """Tạo URL RTSP từ Camera Account, tự động phát hiện IP nếu chưa có.
 
     Returns:
         URL có credential đã encode; không ghi URL này vào log.
     """
-    host = os.environ.get("TAPO_HOST", "").strip()
+    target_host = (host or os.environ.get("TAPO_HOST", "")).strip()
+    if not target_host:
+        target_host = discover_tapo_host() or ""
+
     user = os.environ.get("TAPO_USERNAME", "")
     password = os.environ.get("TAPO_PASSWORD", "")
     stream = os.getenv("TAPO_STREAM", "stream1")
-    if not host or any(c in host for c in "/@ :?#"):
+    if not target_host or any(c in target_host for c in "/@ :?#"):
         raise ValueError("TAPO_HOST phải là IPv4 hoặc hostname không kèm cổng")
     if not user or not password or stream not in ("stream1", "stream2"):
         raise ValueError("Thiếu Camera Account hoặc TAPO_STREAM không hợp lệ")
     # Encode từng credential để @, :, / trong mật khẩu không phá URL.
-    return f"rtsp://{quote(user, safe='')}:{quote(password, safe='')}@{host}:554/{stream}"
+    return f"rtsp://{quote(user, safe='')}:{quote(password, safe='')}@{target_host}:554/{stream}"
 
 
 def onvif_move(host: str, user: str, password: str, x: int, y: int, duration: float = 0.35) -> dict:
@@ -102,7 +194,9 @@ class TapoControl:
         # pytapo đồng bộ và tái sử dụng session; tuần tự hóa các lệnh.
         """Gọi pytapo dưới khóa; tự động fallback sang ONVIF khi TPAP yêu cầu tài khoản cloud."""
         with self._lock:
-            target_host = self.host or os.environ.get("TAPO_HOST", "")
+            target_host = self.host or os.environ.get("TAPO_HOST", "").strip()
+            if not target_host:
+                target_host = discover_tapo_host() or ""
             target_user = self.user or os.getenv("TAPO_CONTROL_USERNAME") or os.environ.get("TAPO_USERNAME", "")
             target_pass = self.password or os.getenv("TAPO_CONTROL_PASSWORD") or os.environ.get("TAPO_PASSWORD", "")
             try:
