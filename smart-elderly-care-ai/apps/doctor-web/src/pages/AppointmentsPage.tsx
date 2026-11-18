@@ -34,6 +34,7 @@ export const AppointmentsPage: React.FC = () => {
   const [statusFilter, setStatusFilter] = useState<'UPCOMING' | 'COMPLETED' | 'CANCELLED' | 'ALL'>('UPCOMING');
   const [searchQuery, setSearchQuery] = useState('');
   const [showCreateModal, setShowCreateModal] = useState(false);
+  const [reschedulingApt, setReschedulingApt] = useState<AppointmentItem | null>(null);
   const [cancellingApt, setCancellingApt] = useState<AppointmentItem | null>(null);
   const [selectedDateStr, setSelectedDateStr] = useState<string | null>(null);
   const [toastMsg, setToastMsg] = useState<string | null>(null);
@@ -68,7 +69,7 @@ export const AppointmentsPage: React.FC = () => {
   };
 
   const handleReschedule = (apt: AppointmentItem) => {
-    showToast(`Đang mở khung cập nhật lịch hẹn cho ${apt.patient_name || 'bệnh nhân'}...`);
+    setReschedulingApt(apt);
     setShowCreateModal(true);
   };
 
@@ -146,7 +147,10 @@ export const AppointmentsPage: React.FC = () => {
             <span>Làm mới</span>
           </button>
           <button
-            onClick={() => setShowCreateModal(true)}
+            onClick={() => {
+              setReschedulingApt(null);
+              setShowCreateModal(true);
+            }}
             className="flex items-center space-x-2 rounded-xl bg-blue-600 px-4 py-2.5 text-xs font-bold text-white shadow-md shadow-blue-500/25 hover:bg-blue-700 transition-all cursor-pointer"
           >
             <Plus className="h-4 w-4" />
@@ -294,7 +298,18 @@ export const AppointmentsPage: React.FC = () => {
       </div>
 
       {showCreateModal && (
-        <NewAppointmentModal patients={patients} onClose={() => setShowCreateModal(false)} onSuccess={() => fetchAllData(true)} />
+        <NewAppointmentModal
+          patients={patients}
+          initialAppointment={reschedulingApt}
+          onClose={() => {
+            setShowCreateModal(false);
+            setReschedulingApt(null);
+          }}
+          onSuccess={() => {
+            showToast(reschedulingApt ? 'Đã cập nhật & dời lịch hẹn thành công!' : 'Đã tạo lịch hẹn khám mới!');
+            fetchAllData(true);
+          }}
+        />
       )}
 
       <CancelAppointmentModal

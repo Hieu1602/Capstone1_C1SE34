@@ -3,39 +3,59 @@
 
 import React, { useState, useEffect } from 'react';
 import { createPortal } from 'react-dom';
-import { DoctorPatientCard } from '../../types';
+import { AppointmentItem, DoctorPatientCard } from '../../types';
 import { doctorApi } from '../../services/api';
 import { Calendar, X, AlertCircle, Loader2, Volume2 } from 'lucide-react';
 
 interface NewAppointmentModalProps {
   patients: DoctorPatientCard[];
   initialPatientId?: string;
+  initialAppointment?: AppointmentItem | null;
   onClose: () => void;
   onSuccess: () => void;
 }
 
 const inputCls = 'w-full rounded-xl border border-slate-200 px-3 py-2 text-xs focus:border-blue-500 focus:outline-hidden bg-white dark:border-slate-700/60 dark:bg-[#0F172A] dark:text-slate-100 dark:placeholder-slate-500';
 
+const toLocalDatetimeInput = (iso?: string): string => {
+  const d = iso ? new Date(iso) : new Date();
+  if (!iso) {
+    d.setDate(d.getDate() + 1);
+    d.setHours(9, 0, 0, 0);
+  }
+  const pad = (n: number) => String(n).padStart(2, '0');
+  return `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}T${pad(d.getHours())}:${pad(d.getMinutes())}`;
+};
+
 export const NewAppointmentModal: React.FC<NewAppointmentModalProps> = ({
   patients,
   initialPatientId,
+  initialAppointment,
   onClose,
   onSuccess,
 }) => {
+  const isReschedule = Boolean(initialAppointment);
   const [saving, setSaving] = useState(false);
   const [errorMsg, setErrorMsg] = useState<string | null>(null);
 
-  const [patientId, setPatientId] = useState(initialPatientId || patients[0]?.id || '');
-  const [visitType, setVisitType] = useState<'CLINIC' | 'HOME_VISIT'>('CLINIC');
-  const [scheduledAt, setScheduledAt] = useState(() => {
-    const tmr = new Date();
-    tmr.setDate(tmr.getDate() + 1);
-    tmr.setHours(9, 0, 0, 0);
-    return tmr.toISOString().slice(0, 16);
-  });
-  const [location, setLocation] = useState('Phòng khám Bác sĩ Gia đình');
-  const [clinicalNotes, setClinicalNotes] = useState('Khám định kỳ & đánh giá đáp ứng phác đồ thuốc');
-  const [enableSpeaker, setEnableSpeaker] = useState(true);
+  const [patientId, setPatientId] = useState(
+    initialAppointment?.patient_id || initialPatientId || patients[0]?.id || ''
+  );
+  const [visitType, setVisitType] = useState<'CLINIC' | 'HOME_VISIT'>(
+    initialAppointment?.visit_type === 'HOME_VISIT' ? 'HOME_VISIT' : 'CLINIC'
+  );
+  const [scheduledAt, setScheduledAt] = useState(() =>
+    toLocalDatetimeInput(initialAppointment?.scheduled_at)
+  );
+  const [location, setLocation] = useState(
+    initialAppointment?.location || 'Phòng khám Bác sĩ Gia đình'
+  );
+  const [clinicalNotes, setClinicalNotes] = useState(
+    initialAppointment?.clinical_notes ?? 'Khám định kỳ & đánh giá đáp ứng phác đồ thuốc'
+  );
+  const [enableSpeaker, setEnableSpeaker] = useState(
+    initialAppointment ? initialAppointment.enable_speaker_reminder !== false : true
+  );
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -48,21 +68,36 @@ export const NewAppointmentModal: React.FC<NewAppointmentModalProps> = ({
     setErrorMsg(null);
     try {
       const p = patients.find((item) => item.id === patientId);
-      await doctorApi.createAppointment({
-        patient_id: patientId,
-        patient_name: p?.name,
-        house_id: p?.house_id || undefined,
-        visit_type: visitType,
-        scheduled_at: new Date(scheduledAt).toISOString(),
-        duration_minutes: 30,
-        location: location.trim(),
-        clinical_notes: clinicalNotes.trim(),
-        enable_speaker_reminder: enableSpeaker,
-      });
+      if (isReschedule && initialAppointment) {
+        await doctorApi.updateAppointment(initialAppointment.id, {
+          visit_type: visitType,
+          scheduled_at: new Date(scheduledAt).toISOString(),
+          location: location.trim(),
+          clinical_notes: clinicalNotes.trim(),
+          enable_speaker_reminder: enableSpeaker,
+        });
+      } else {
+        await doctorApi.createAppointment({
+          patient_id: patientId,
+          patient_name: p?.name,
+          house_id: p?.house_id || undefined,
+          visit_type: visitType,
+          scheduled_at: new Date(scheduledAt).toISOString(),
+          duration_minutes: 30,
+          location: location.trim(),
+          clinical_notes: clinicalNotes.trim(),
+          enable_speaker_reminder: enableSpeaker,
+        });
+      }
       onSuccess();
       onClose();
     } catch (err: any) {
-      setErrorMsg(err.response?.data?.detail || 'Không thể tạo lịch hẹn. Vui lòng kiểm tra lại.');
+      setErrorMsg(
+        err.response?.data?.detail ||
+          (isReschedule
+            ? 'Không thể dời lịch hẹn. Vui lòng kiểm tra lại.'
+            : 'Không thể tạo lịch hẹn. Vui lòng kiểm tra lại.')
+      );
     } finally {
       setSaving(false);
     }
@@ -84,8 +119,14 @@ export const NewAppointmentModal: React.FC<NewAppointmentModalProps> = ({
               <Calendar className="h-5 w-5" />
             </div>
             <div>
-              <h3 className="text-base font-bold text-slate-900 dark:text-white">Lên Lịch Khám Mới</h3>
-              <p className="text-xs text-slate-500 dark:text-slate-400">Thiết lập cuộc hẹn và hẹn giờ nhắc nhở qua loa</p>
+              <h3 className="text-base font-bold text-slate-900 dark:text-white">
+                {isReschedule ? 'Dời Lịch / Cập Nhật Lịch Hẹn' : 'Lên Lịch Khám Mới'}
+              </h3>
+              <p className="text-xs text-slate-500 dark:text-slate-400">
+                {isReschedule
+                  ? 'Điều chỉnh thời gian, địa điểm và tự động đồng bộ lại nhắc nhở qua loa'
+                  : 'Thiết lập cuộc hẹn và hẹn giờ nhắc nhở qua loa'}
+              </p>
             </div>
           </div>
           <button onClick={onClose} className="rounded-xl p-2 text-slate-400 hover:bg-slate-100 hover:text-slate-600 dark:hover:bg-slate-800 dark:hover:text-slate-200 transition-colors cursor-pointer">
@@ -105,13 +146,14 @@ export const NewAppointmentModal: React.FC<NewAppointmentModalProps> = ({
             <label className="block text-xs font-semibold text-slate-700 dark:text-slate-300 mb-1">Chọn bệnh nhân phụ trách *</label>
             <select
               value={patientId}
+              disabled={isReschedule}
               onChange={(e) => {
                 const selId = e.target.value;
                 setPatientId(selId);
                 const p = patients.find((item) => item.id === selId);
                 if (visitType === 'HOME_VISIT' && p?.house_address) setLocation(p.house_address);
               }}
-              className={inputCls}
+              className={`${inputCls} ${isReschedule ? 'opacity-70 cursor-not-allowed' : ''}`}
             >
               {patients.map((p) => (
                 <option key={p.id} value={p.id} className="dark:bg-[#0F172A] dark:text-slate-100">
@@ -193,7 +235,7 @@ export const NewAppointmentModal: React.FC<NewAppointmentModalProps> = ({
               className="flex items-center space-x-1.5 rounded-xl bg-blue-600 px-5 py-2 text-xs font-bold text-white shadow-xs hover:bg-blue-700 transition-colors disabled:opacity-50 cursor-pointer"
             >
               {saving && <Loader2 className="h-4 w-4 animate-spin" />}
-              <span>Tạo lịch hẹn & Gửi thông báo</span>
+              <span>{isReschedule ? 'Lưu thay đổi lịch hẹn' : 'Tạo lịch hẹn & Gửi thông báo'}</span>
             </button>
           </div>
         </form>

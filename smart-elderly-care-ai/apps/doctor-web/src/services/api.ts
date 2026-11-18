@@ -196,6 +196,11 @@ export const doctorApi = {
     return res.data;
   },
 
+  updateAppointment: async (appointmentId: string, data: any): Promise<AppointmentItem> => {
+    const res = await api.put(`/doctor/appointments/${appointmentId}`, data);
+    return res.data;
+  },
+
   cancelAppointment: async (appointmentId: string, reason: string) => {
     const res = await api.post(`/doctor/appointments/${appointmentId}/cancel`, { cancellation_reason: reason });
     return res.data;
