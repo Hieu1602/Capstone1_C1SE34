@@ -276,7 +276,6 @@ export default function PatientsListScreen({ navigation }: any) {
             const pAge = patient.age ? `${patient.age} tuổi` : (patient.birth_year ? `${calculateAgeFromYear(String(patient.birth_year))} tuổi` : 'Cao tuổi');
             const pGender = patient.gender || 'Nam';
             const pBlood = patient.blood_type || 'A+';
-            const pHouse = patient.house_name || 'Gia đình người cao tuổi';
             const avatarUri = patient.avatar_url
               ? (patient.avatar_url.startsWith('http') ? patient.avatar_url : `${BASE_URL.replace('/api/v1', '')}${patient.avatar_url}`)
               : null;
@@ -295,9 +294,8 @@ export default function PatientsListScreen({ navigation }: any) {
                 onPress={() => handleSelectPatient(patient)}
                 activeOpacity={0.82}
               >
-                {/* Phần trên: Avatar, Mã MR, Tên, Badge Ổn định, Thông số */}
+                {/* Thông tin thẻ: Avatar, Mã MR, Tên, Badge Ổn định, Thông số */}
                 <View style={styles.cardTopRow}>
-                  {/* Avatar tròn với chấm Online xanh lá không bị clip */}
                   <View style={styles.avatarWrapper}>
                     <View style={[styles.avatarBox, { backgroundColor: isDarkMode ? '#1E3A8A' : '#DBEAFE' }]}>
                       {avatarUri ? (
@@ -306,7 +304,6 @@ export default function PatientsListScreen({ navigation }: any) {
                         <Text style={[styles.avatarInitial, { color: Colors.primary }]}>{initial}</Text>
                       )}
                     </View>
-                    <View style={[styles.onlineDot, { borderColor: bgCard }]} />
                   </View>
 
                   {/* Thông tin chính */}
@@ -331,21 +328,6 @@ export default function PatientsListScreen({ navigation }: any) {
                     <Text style={[styles.metaSubText, { color: textSub }]}>
                       {pAge} • {pGender} • Nhóm máu {pBlood}
                     </Text>
-                  </View>
-                </View>
-
-                {/* Phần dưới: Hộ gia đình & Trực tuyến */}
-                <View style={[styles.cardBottomRow, { borderTopColor: isDarkMode ? '#334155' : '#F1F5F9' }]}>
-                  <View style={styles.houseNameRow}>
-                    <Ionicons name="home-outline" size={15} color="#64748B" />
-                    <Text style={[styles.houseNameText, { color: isDarkMode ? '#CBD5E1' : '#334155' }]} numberOfLines={1}>
-                      {pHouse}
-                    </Text>
-                  </View>
-
-                  <View style={styles.onlineBadge}>
-                    <View style={styles.onlineBadgeDot} />
-                    <Text style={styles.onlineBadgeText}>Trực tuyến</Text>
                   </View>
                 </View>
               </TouchableOpacity>
