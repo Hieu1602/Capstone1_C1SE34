@@ -266,6 +266,40 @@ class ChatbotRAGService:
         disclaimer = STANDARD_DISCLAIMER_EN if is_en else STANDARD_DISCLAIMER_VI
         patients = context.get("patients") or []
 
+        # Nếu tài khoản chưa gán vào ngôi nhà nào hoặc chưa có hồ sơ người cao tuổi
+        if not patients:
+            if is_en:
+                answer = (
+                    "There are no vital signs available to analyze as your account has not been assigned "
+                    "to any household or elderly profile yet.\n\n"
+                    "Please create or join a household and add an elderly profile to start tracking vital signs."
+                )
+                suggested_actions = ["Add elderly profile", "Connect wearable", "General health guidance"]
+            else:
+                answer = (
+                    "Dạ, **chưa có chỉ số nào để phân tích** do tài khoản của bạn hiện chưa được gán vào ngôi nhà nào "
+                    "(hoặc chưa có hồ sơ người cao tuổi trong hệ thống).\n\n"
+                    "Bạn vui lòng thêm hồ sơ người cao tuổi và kết nối thiết bị đo sinh hiệu để SmartCare có thể theo dõi "
+                    "và phân tích sức khỏe cho gia đình nhé!"
+                )
+                suggested_actions = ["Thêm hồ sơ người cao tuổi", "Kết nối vòng đeo tay", "Tư vấn sức khỏe tổng quát"]
+
+            return {
+                "status": "success",
+                "question": question,
+                "answer": answer,
+                "sources": [],
+                "engine": "SmartCare Account Scope Guard",
+                "timestamp": now_str,
+                "vitals_snapshot": None,
+                "disclaimer": disclaimer,
+                "triage_level": "GREEN",
+                "is_emergency": False,
+                "suggested_actions": suggested_actions,
+                "suggested_questions": suggested_actions,
+                "is_rejected_turn": False,
+            }
+
         if is_en:
             patient_list_str = ""
             if patients:
@@ -372,8 +406,14 @@ class ChatbotRAGService:
             return "Dạ, hiện tại cụ không có lịch khám bệnh nào sắp tới trong hệ thống."
 
         vital_terms = ["nhịp tim", "spo2", "oxy", "sinh hiệu", "thân nhiệt", "nhiệt độ", "té ngã", "ngã",
-                       "heart rate", "oxygen", "vital", "temperature", "fall"]
+                       "heart rate", "oxygen", "vital", "temperature", "fall", "chỉ số", "chi so"]
         if any(term in q_lower for term in vital_terms):
+            patients = context.get("patients") if context else []
+            if not patients:
+                if is_en:
+                    return "There are no vital signs available to analyze as your account has not been assigned to a household or elderly profile."
+                return "Dạ, **chưa có chỉ số nào để phân tích** do tài khoản của bạn hiện chưa được gán vào ngôi nhà nào (hoặc chưa có hồ sơ người cao tuổi trong hệ thống)."
+
             vitals_text = self.context_builder.format_vitals_summary(vitals, language=language)
             # Nếu người dùng chỉ tra cứu/kiểm tra chỉ số sinh hiệu (không hỏi xin tư vấn sâu, cách xử lý, dùng thuốc)
             consult_terms = ["cách", "làm sao", "làm gì", "uống thuốc", "chữa", "điều trị", "nguyên nhân", "tại sao", "thuốc", "bệnh gì", "tư vấn", "hướng dẫn", "phải làm"]
