@@ -47,7 +47,7 @@ export default function AlertsListScreen({ navigation, route }: any) {
   const { isDarkMode, colors } = useTheme();
 
   const { incidents, setIncidents, fetchNotifications, acknowledgeIncident, acknowledgeAll } = useAlertStore();
-  const { patientRecord, todayReminders, markMedicationTaken, snoozeMedication, fetchReminders } = usePatientStore();
+  const { patientRecord, patientsList, fetchPatientsList, todayReminders, markMedicationTaken, snoozeMedication, fetchReminders } = usePatientStore();
   const { userName, userId, userRole, role, permissions, fetchMyPermissions } = useAuthStore();
   const { house, fetchHouseFromBackend, fetchDevicesFromBackend } = useDeviceStore();
 
@@ -69,6 +69,7 @@ export default function AlertsListScreen({ navigation, route }: any) {
   const [refreshing, setRefreshing] = useState(false);
   const [familyAppointmentsModalVisible, setFamilyAppointmentsModalVisible] = useState(false);
   const [selectedAppointmentPatientId, setSelectedAppointmentPatientId] = useState<string | number | null>(null);
+  const [selectedAppointmentPatientName, setSelectedAppointmentPatientName] = useState<string | null>(null);
   const initialFilterParam = route?.params?.initialFilter || route?.params?.filter;
   const [filterType, setFilterType] = useState<FilterType>(
     initialFilterParam && ['ALL', 'CRITICAL', 'VITAL', 'MEDICATION', 'APPOINTMENT'].includes(initialFilterParam)
@@ -96,6 +97,7 @@ export default function AlertsListScreen({ navigation, route }: any) {
       await Promise.allSettled([
         fetchNotifications(),
         fetchReminders(),
+        fetchPatientsList?.(),
         fetchMyPermissions?.(),
         fetchHouseFromBackend?.(),
         fetchDevicesFromBackend?.(),
@@ -120,6 +122,7 @@ export default function AlertsListScreen({ navigation, route }: any) {
       await Promise.allSettled([
         fetchNotifications(),
         fetchReminders(),
+        fetchPatientsList?.(),
         fetchMyPermissions?.(),
         fetchHouseFromBackend?.(),
         fetchDevicesFromBackend?.(),
@@ -399,8 +402,35 @@ export default function AlertsListScreen({ navigation, route }: any) {
       return;
     }
     if (['APPOINTMENT_SCHEDULED', 'APPOINTMENT_REQUESTED', 'APPOINTMENT_CONFIRMED', 'APPOINTMENT_CANCELLED'].includes(item.alert_type)) {
-      const pid = item.device_id && !isNaN(Number(item.device_id)) ? item.device_id : (patientRecord?.patient_id || 1);
-      setSelectedAppointmentPatientId(pid);
+      let pid: any = null;
+      let pname: string | null = null;
+
+      if (item.notes?.includes('PATIENT:')) {
+        pid = item.notes.split('PATIENT:')[1].split('|')[0].trim();
+      }
+      if (item.notes?.includes('NAME:')) {
+        pname = item.notes.split('NAME:')[1].split('|')[0].trim();
+      }
+      if (!pname && item.message) {
+        const match = item.message.match(/cho\s+([^,]+?)\s+vào\s+/i);
+        if (match && match[1]) pname = match[1].trim();
+      }
+
+      const pList = (patientsList && patientsList.length > 0) ? patientsList : (usePatientStore.getState().patientsList || []);
+      if (pname && !pid) {
+        const found = pList.find((p: any) => (p.name || p.full_name)?.toLowerCase().trim() === pname?.toLowerCase().trim());
+        if (found) pid = found.id || found.elderly_id;
+      }
+      if (pid && !pname) {
+        const found = pList.find((p: any) => p.id === pid || p.elderly_id === pid);
+        if (found) pname = found.name || found.full_name;
+      }
+
+      const finalPid = pid || (item.device_id && !isNaN(Number(item.device_id)) ? item.device_id : (patientRecord?.patient_id || 1));
+      const finalPname = pname || (pid && pList.find((p: any) => p.id === pid || p.elderly_id === pid)?.name) || patientRecord?.name || 'Bệnh nhân';
+
+      setSelectedAppointmentPatientId(finalPid);
+      setSelectedAppointmentPatientName(finalPname);
       setFamilyAppointmentsModalVisible(true);
       return;
     }
@@ -587,9 +617,10 @@ export default function AlertsListScreen({ navigation, route }: any) {
       <FamilyAppointmentsModal
         visible={familyAppointmentsModalVisible}
         patientId={selectedAppointmentPatientId || patientRecord?.patient_id || 1}
-        patientName={patientRecord?.name}
+        patientName={selectedAppointmentPatientName || patientRecord?.name}
         onClose={() => {
           setFamilyAppointmentsModalVisible(false);
+          setSelectedAppointmentPatientName(null);
           fetchNotifications();
         }}
       />

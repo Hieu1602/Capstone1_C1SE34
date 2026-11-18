@@ -139,7 +139,7 @@ export const TelemetryChartCard: React.FC<TelemetryChartCardProps> = ({
         <div className="h-64 w-full">
           {telemetryData.length > 0 ? (
             <ResponsiveContainer width="100%" height="100%">
-              <AreaChart data={telemetryData}>
+              <AreaChart data={telemetryData} margin={{ top: 10, right: 30, left: -10, bottom: 0 }}>
                 <defs>
                   {METRIC_CONFIGS.map((m) => (
                     <linearGradient key={m.gradientId} id={m.gradientId} x1="0" y1="0" x2="0" y2="1">

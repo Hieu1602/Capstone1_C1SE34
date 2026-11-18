@@ -16,12 +16,11 @@ import { useTheme } from '../../../store/useThemeStore';
 import { systemApi } from '../../../services/api';
 import { alertsWS } from '../../../services/websocket';
 import { MedicationReminderWidget } from '../components/MedicationReminderWidget';
-import { VitalsSummaryCard } from '../components/VitalsSummaryCard';
-import { HealthTrendsCard } from '../components/HealthTrendsCard';
 import { AlarmSnoozeModal } from '../components/AlarmSnoozeModal';
 import { FamilyAppointmentsModal } from '../components/FamilyAppointmentsModal';
 import { HomeAppointmentBanner, HomeStatusBanner, HomeSosCard } from '../components/home/HomeBanners';
 import { HomeCameraSection } from '../components/home/HomeCameraSection';
+import { HomeVitalsSection } from '../components/home/HomeVitalsSection';
 import { HomeEmptyState } from '../components/home/HomeEmptyState';
 import { usePatientStore } from '../../../store/usePatientStore';
 import AdminMarqueeBanner from '../../../components/AdminMarqueeBanner';
@@ -33,7 +32,7 @@ export default function HomeScreen({ navigation }: any) {
     currentVitals, incidents, activeDevice, alarmSnooze, setAlarmSnooze,
     cancelAlarmSnooze, todayReminders, markMedicationTaken, fetchVitals,
     fetchSystemMode, fetchReminders, fetchNotifications, syncAllWithBackend,
-    iotDevices,
+    iotDevices, patientsList, fetchPatientsList,
   } = useVitalStore();
 
   const {
@@ -108,6 +107,7 @@ export default function HomeScreen({ navigation }: any) {
         fetchReminders(),
         fetchNotifications(),
         fetchPatientRecord?.(),
+        fetchPatientsList?.(),
         syncAllWithBackend?.(),
       ];
       if (force || !permissions) {
@@ -117,7 +117,7 @@ export default function HomeScreen({ navigation }: any) {
     } finally {
       isLoadingRef.current = false;
     }
-  }, [fetchVitals, fetchSystemMode, fetchReminders, fetchNotifications, fetchPatientRecord, syncAllWithBackend, fetchMyPermissions]);
+  }, [fetchVitals, fetchSystemMode, fetchReminders, fetchNotifications, fetchPatientRecord, fetchPatientsList, syncAllWithBackend, fetchMyPermissions]);
 
   const handleRefreshData = async () => {
     setIsRefreshing(true);
@@ -207,6 +207,35 @@ export default function HomeScreen({ navigation }: any) {
       !i.is_acknowledged &&
       (i.alert_type === 'APPOINTMENT_SCHEDULED' || i.alert_type === 'APPOINTMENT_REQUESTED')
   );
+
+  const appointmentPatientInfo = React.useMemo(() => {
+    if (!pendingAppointmentNotice) return { id: patientRecord?.patient_id || 1, name: patientRecord?.name };
+    let pid: any = null;
+    let pname: string | null = null;
+    if (pendingAppointmentNotice.notes?.includes('PATIENT:')) {
+      pid = pendingAppointmentNotice.notes.split('PATIENT:')[1].split('|')[0].trim();
+    }
+    if (pendingAppointmentNotice.notes?.includes('NAME:')) {
+      pname = pendingAppointmentNotice.notes.split('NAME:')[1].split('|')[0].trim();
+    }
+    if (!pname && pendingAppointmentNotice.message) {
+      const match = pendingAppointmentNotice.message.match(/cho\s+([^,]+?)\s+vào\s+/i);
+      if (match && match[1]) pname = match[1].trim();
+    }
+    const pList = (patientsList && patientsList.length > 0) ? patientsList : (usePatientStore.getState().patientsList || []);
+    if (pname && !pid) {
+      const found = pList.find((p: any) => (p.name || p.full_name)?.toLowerCase().trim() === pname?.toLowerCase().trim());
+      if (found) pid = found.id || found.elderly_id;
+    }
+    if (pid && !pname) {
+      const found = pList.find((p: any) => p.id === pid || p.elderly_id === pid);
+      if (found) pname = found.name || found.full_name;
+    }
+    return {
+      id: pid || (pendingAppointmentNotice.device_id && !isNaN(Number(pendingAppointmentNotice.device_id)) ? pendingAppointmentNotice.device_id : (patientRecord?.patient_id || 1)),
+      name: pname || (pid && pList.find((p: any) => p.id === pid || p.elderly_id === pid)?.name) || patientRecord?.name || 'Bệnh nhân',
+    };
+  }, [pendingAppointmentNotice, patientsList, patientRecord]);
 
   const handleConfirmSnooze = async () => {
     if (!isOwnerOrAdmin) {
@@ -500,13 +529,19 @@ export default function HomeScreen({ navigation }: any) {
             )}
 
             {canViewHealth && (
-              <>
-                <VitalsSummaryCard
-                  currentVitals={currentVitals} isEdgeHubOnline={isEdgeHubOnline} braceletBattery={braceletBattery}
-                  isAcousticAlarm={isAcousticAlarm} isDarkMode={isDarkMode} colors={colors} navigation={navigation}
-                />
-                <HealthTrendsCard currentVitals={currentVitals} isDarkMode={isDarkMode} colors={colors} navigation={navigation} />
-              </>
+              <HomeVitalsSection
+                patientsList={patientsList}
+                patientRecord={patientRecord}
+                iotDevices={iotDevices}
+                currentVitals={currentVitals}
+                isEdgeHubOnline={isEdgeHubOnline}
+                braceletBattery={braceletBattery}
+                isAcousticAlarm={isAcousticAlarm}
+                cardWidth={cardWidth}
+                isDarkMode={isDarkMode}
+                colors={colors}
+                navigation={navigation}
+              />
             )}
           </>
         )}
@@ -522,8 +557,8 @@ export default function HomeScreen({ navigation }: any) {
 
       <FamilyAppointmentsModal
         visible={familyAppointmentsModalVisible}
-        patientId={pendingAppointmentNotice?.device_id && !isNaN(Number(pendingAppointmentNotice.device_id)) ? pendingAppointmentNotice.device_id : (patientRecord?.patient_id || 1)}
-        patientName={patientRecord?.name}
+        patientId={appointmentPatientInfo.id}
+        patientName={appointmentPatientInfo.name}
         onClose={() => { setFamilyAppointmentsModalVisible(false); fetchNotifications(); }}
       />
     </SafeAreaView>

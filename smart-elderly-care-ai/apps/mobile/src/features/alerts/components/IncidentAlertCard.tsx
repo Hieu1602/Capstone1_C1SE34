@@ -156,20 +156,9 @@ export const IncidentAlertCard: React.FC<IncidentAlertCardProps> = ({
           </Text>
         </View>
 
-        {!inc.is_acknowledged && (
+        {!inc.is_acknowledged && isHouseRequestOrInvite && (
           <View style={styles.cardQuickActionRow}>
-            {isHouseRequestOrInvite ? (
-              renderHouseActionRow()
-            ) : (
-              <TouchableOpacity
-                style={styles.cardQuickAckBtn}
-                onPress={(e) => onQuickAcknowledge(inc, e)}
-                activeOpacity={0.7}
-              >
-                <Ionicons name="checkmark-done" size={13} color="#15803D" />
-                <Text style={styles.cardQuickAckText}>Đánh dấu đã xử lý</Text>
-              </TouchableOpacity>
-            )}
+            {renderHouseActionRow()}
           </View>
         )}
 
@@ -236,8 +225,6 @@ const styles = StyleSheet.create({
   dotSeparator: { fontSize: 10, color: '#CBD5E1', marginHorizontal: 2 },
   deviceLocationText: { fontSize: 11, color: '#94A3B8', fontWeight: '500', flexShrink: 1 },
   cardQuickActionRow: { flexDirection: 'row', alignItems: 'center', marginTop: 8 },
-  cardQuickAckBtn: { flexDirection: 'row', alignItems: 'center', gap: 4, backgroundColor: '#ECFDF5', borderWidth: 1, borderColor: '#A7F3D0', borderRadius: 6, paddingHorizontal: 8, paddingVertical: 4 },
-  cardQuickAckText: { fontSize: 11, fontWeight: '700', color: '#15803D' },
   actionBtnAccept: { flexDirection: 'row', alignItems: 'center', gap: 4, backgroundColor: '#16A34A', paddingHorizontal: 10, paddingVertical: 5, borderRadius: 8 },
   actionBtnAcceptText: { fontSize: 12, fontWeight: '700', color: '#FFFFFF' },
   actionBtnReject: { flexDirection: 'row', alignItems: 'center', gap: 4, backgroundColor: '#FEE2E2', borderWidth: 1, borderColor: '#FCA5A5', paddingHorizontal: 10, paddingVertical: 5, borderRadius: 8 },

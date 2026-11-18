@@ -442,7 +442,7 @@ class AlertsWebSocket {
         } else if (alertType === 'LOW_SPO2') {
           alertTitle = '⚠️ CẢNH BÁO OXY MÁU (SPO2) TỤT SÂU';
           store.setSirenActive(true);
-        } else if (alertType === 'CRITICAL_TRIAD' || alertType === 'CARDIO_COLLAPSE') {
+        } else if (alertType === 'CRITICAL_TRIAD' || alertType === 'CARDIO_COLLAPSE' || Boolean(incData.escalation_seconds)) {
           alertTitle = '🚨 BÁO ĐỘNG ĐỎ: TÌNH TRẠNG NGUY KỊCH';
           store.setSirenActive(true);
           useEscalationStore.getState().triggerEscalation({
@@ -493,12 +493,21 @@ class AlertsWebSocket {
       }
     }
 
-    // 2b. Sự cố đã tự động leo thang gọi cấp cứu 115 (ESCALATED_AUTO_CALL)
+    // 2b. Sự cố đã tự động leo thang gọi điện khẩn cấp (ESCALATED_AUTO_CALL)
     else if (event.type === 'INCIDENT_ESCALATED') {
       const incId = event.incident_id || event.data?.id;
       if (incId) {
         useEscalationStore.getState().markEscalated(incId);
       }
+    }
+
+    // 2c. Sự cố đã tự hồi phục an toàn sau RECHECK (STOOD_DOWN)
+    else if (event.type === 'INCIDENT_STOOD_DOWN') {
+      const incId = event.incident_id || event.data?.id;
+      if (incId) {
+        useEscalationStore.getState().clearEscalation(incId);
+      }
+      store.setSirenActive(false);
     }
 
     // 3. Chỉ số sinh hiệu mô phỏng thời gian thực (Feature 3)

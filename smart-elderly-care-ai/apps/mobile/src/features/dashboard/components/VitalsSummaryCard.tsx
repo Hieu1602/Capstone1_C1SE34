@@ -30,6 +30,8 @@ interface VitalsSummaryCardProps {
   isDarkMode: boolean;
   colors: any;
   navigation: any;
+  patient?: any;
+  patientDevice?: any;
 }
 
 export const VitalsSummaryCard: React.FC<VitalsSummaryCardProps> = ({
@@ -40,22 +42,32 @@ export const VitalsSummaryCard: React.FC<VitalsSummaryCardProps> = ({
   isDarkMode,
   colors,
   navigation,
+  patient,
+  patientDevice,
 }) => {
-  // Kiểm tra tính tươi mới của dữ liệu (chỉ hiển thị nếu ghi nhận trong vòng 2 phút gần nhất)
+  // Kiểm tra tính tươi mới của dữ liệu
   const isLiveFresh = (() => {
-    const vTime = currentVitals?.time || currentVitals?.recorded_at || currentVitals?.timestamp;
-    if (!vTime) return false;
-    const timeMs = typeof vTime === 'number' ? vTime : new Date(vTime).getTime();
-    if (isNaN(timeMs)) return false;
-    return Math.abs(Date.now() - timeMs) <= 2 * 60 * 1000;
+    if (currentVitals?.heart_rate || currentVitals?.spo2) {
+      const vTime = currentVitals?.time || currentVitals?.recorded_at || currentVitals?.timestamp;
+      if (!vTime) return true;
+      const timeMs = typeof vTime === 'number' ? vTime : new Date(vTime).getTime();
+      if (isNaN(timeMs)) return true;
+      return Math.abs(Date.now() - timeMs) <= 15 * 60 * 1000 || Boolean(currentVitals?.bracelet_connected);
+    }
+    return false;
   })();
 
   // Kiểm tra các chỉ số sinh hiệu có dữ liệu thực từ cảm biến hay đang rỗng (null)
-  const hasHR = isLiveFresh && currentVitals.heart_rate !== null && currentVitals.heart_rate !== undefined;
-  const hasSpO2 = isLiveFresh && currentVitals.spo2 !== null && currentVitals.spo2 !== undefined;
-  const hasTemp = isLiveFresh && currentVitals.skin_temp_max !== null && currentVitals.skin_temp_max !== undefined;
+  const hasHR = Boolean(patientDevice && isLiveFresh && currentVitals?.heart_rate !== null && currentVitals?.heart_rate !== undefined);
+  const hasSpO2 = Boolean(patientDevice && isLiveFresh && currentVitals?.spo2 !== null && currentVitals?.spo2 !== undefined);
+  const hasTemp = Boolean(patientDevice && isLiveFresh && currentVitals?.skin_temp_max !== null && currentVitals?.skin_temp_max !== undefined);
   // Kiểm tra thiết bị vòng đeo tay BLE có đang kết nối thực tế hay không
-  const isBraceletConnected = Boolean(isLiveFresh && currentVitals?.bracelet_connected && (hasHR || hasSpO2 || hasTemp));
+  // BẮT BUỘC: 1 đồng hồ chỉ kết nối với 1 cụ. Nếu cụ chưa gán vòng -> không kết nối
+  const isBraceletConnected = Boolean(
+    patientDevice &&
+    (currentVitals?.bracelet_connected !== false) &&
+    (hasHR || hasSpO2 || hasTemp || currentVitals?.heart_rate)
+  );
   const isBatteryDead = isBraceletConnected && braceletBattery === 0;
   const isBatteryLow = isBraceletConnected && braceletBattery !== null && braceletBattery !== undefined && braceletBattery > 0 && braceletBattery <= 20;
 
@@ -63,13 +75,28 @@ export const VitalsSummaryCard: React.FC<VitalsSummaryCardProps> = ({
     <View style={[styles.vitalsSummaryCard, isDarkMode && { backgroundColor: colors.card, borderColor: colors.border }]}>
       {/* Header Card */}
       <View style={styles.vitalsSummaryHeader}>
-        <View style={{ flexDirection: 'row', alignItems: 'center' }}>
+        <View style={{ flexDirection: 'row', alignItems: 'center', flex: 1, gap: 8, marginRight: 8 }}>
           <View style={[styles.livePulseDot, !isBraceletConnected && { backgroundColor: '#94A3B8' }]} />
-          <Text style={[styles.vitalsSummaryTitle, isDarkMode && { color: colors.textPrimary }]}>Chỉ số sinh hiệu</Text>
+          <View style={{ flex: 1 }}>
+            <Text style={[styles.vitalsSummaryTitle, isDarkMode && { color: colors.textPrimary }]} numberOfLines={1}>
+              {patient?.full_name || patient?.name ? `Sinh hiệu • ${patient.full_name || patient.name}` : 'Chỉ số sinh hiệu'}
+            </Text>
+            {(patient?.age || patient?.gender || patientDevice !== undefined) && (
+              <Text style={{ fontSize: 11, color: isDarkMode ? '#94A3B8' : '#64748B', fontWeight: '600', marginTop: 1 }} numberOfLines={1}>
+                {patient?.age ? `${patient.age} tuổi` : ''}
+                {patient?.age && patient?.gender ? ' • ' : ''}
+                {patient?.gender ? `${patient.gender}` : ''}
+                {patientDevice ? ` • ${patientDevice.name || 'Vòng Smartband'}` : ' • Chưa gán vòng tay'}
+              </Text>
+            )}
+          </View>
         </View>
         <TouchableOpacity
           style={[styles.vitalsDetailChip, isDarkMode && { backgroundColor: 'rgba(255, 122, 0, 0.15)', borderColor: 'rgba(255, 122, 0, 0.3)' }]}
-          onPress={() => navigation.navigate('HealthDetail')}
+          onPress={() => navigation.navigate('HealthDetail', {
+            patientId: patient?.id || patient?.elderly_id,
+            patientName: patient?.full_name || patient?.name,
+          })}
           activeOpacity={0.7}
         >
           <Text style={styles.vitalsDetailChipText}>Chi tiết</Text>
@@ -103,42 +130,50 @@ export const VitalsSummaryCard: React.FC<VitalsSummaryCardProps> = ({
         <View style={styles.deviceStatusItem}>
           <Ionicons
             name={
-              isBatteryDead
-                ? "battery-dead"
-                : isBatteryLow
-                  ? "battery-half"
-                  : isBraceletConnected
-                    ? (braceletBattery !== null && braceletBattery !== undefined ? "battery-full" : "bluetooth")
-                    : "bluetooth-outline"
+              !patientDevice
+                ? "alert-circle-outline"
+                : isBatteryDead
+                  ? "battery-dead"
+                  : isBatteryLow
+                    ? "battery-half"
+                    : isBraceletConnected
+                      ? (braceletBattery !== null && braceletBattery !== undefined ? "battery-full" : "bluetooth")
+                      : "bluetooth-outline"
             }
             size={15}
             color={
-              isBatteryDead
-                ? Colors.danger
-                : isBatteryLow
-                  ? '#D97706'
-                  : isBraceletConnected
-                    ? Colors.aiBlue
-                    : (isDarkMode ? '#64748B' : '#94A3B8')
+              !patientDevice
+                ? (isDarkMode ? '#64748B' : '#94A3B8')
+                : isBatteryDead
+                  ? Colors.danger
+                  : isBatteryLow
+                    ? '#D97706'
+                    : isBraceletConnected
+                      ? Colors.aiBlue
+                      : (isDarkMode ? '#64748B' : '#94A3B8')
             }
           />
           <Text style={[styles.deviceStatusText, isDarkMode && { color: colors.textSecondary }]}>
             Vòng BLE:{' '}
             <Text
               style={{
-                color: isBatteryDead
-                  ? Colors.danger
-                  : isBatteryLow
-                    ? '#D97706'
-                    : isBraceletConnected
-                      ? (isDarkMode ? colors.textPrimary : Colors.textPrimary)
-                      : (isDarkMode ? '#94A3B8' : '#64748B'),
+                color: !patientDevice
+                  ? (isDarkMode ? '#64748B' : '#94A3B8')
+                  : isBatteryDead
+                    ? Colors.danger
+                    : isBatteryLow
+                      ? '#D97706'
+                      : isBraceletConnected
+                        ? (isDarkMode ? colors.textPrimary : Colors.textPrimary)
+                        : (isDarkMode ? '#94A3B8' : '#64748B'),
                 fontWeight: '700',
               }}
             >
-              {isBraceletConnected
-                ? (braceletBattery !== null && braceletBattery !== undefined ? `${braceletBattery}% Pin` : 'Đang đo')
-                : (isBatteryDead ? 'Hết pin' : 'Chưa kết nối')}
+              {!patientDevice
+                ? 'Chưa gán vòng'
+                : isBraceletConnected
+                  ? (braceletBattery !== null && braceletBattery !== undefined ? `${braceletBattery}% Pin` : 'Đang đo')
+                  : (isBatteryDead ? 'Hết pin' : 'Chưa kết nối')}
             </Text>
           </Text>
         </View>
