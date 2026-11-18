@@ -30,6 +30,7 @@ class VitalOut(BaseModel):
 
 class VitalCreate(BaseModel):
     device_id: Optional[str] = None
+    time: Optional[datetime] = None
     heart_rate: Optional[int] = None
     spo2: Optional[int] = None
     bp_systolic: Optional[int] = None

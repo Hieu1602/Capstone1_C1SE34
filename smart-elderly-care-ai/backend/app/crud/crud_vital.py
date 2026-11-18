@@ -14,7 +14,7 @@ from datetime import datetime, timedelta, timezone
 from typing import List, Optional, Union
 from uuid import UUID
 
-from sqlalchemy import func, or_, select, text
+from sqlalchemy import func, or_, select, text, update
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.models.device import Device, DeviceType
@@ -47,13 +47,12 @@ class CRUDVital:
         except ValueError:
             pass
 
-        # Tra cứu theo device_id (mã serial) hoặc tên thiết bị
+        # Tra cứu chính xác theo device_id (mã serial) hoặc tên thiết bị
         result = await db.execute(
             select(Device.id).where(
                 or_(
                     Device.device_id == clean_str,
                     Device.name == clean_str,
-                    Device.device_id.ilike(f"%{clean_str}%"),
                 )
             ).limit(1)
         )
@@ -61,26 +60,17 @@ class CRUDVital:
         if found_id:
             return found_id
 
-        # Nếu là vòng CooSpo HW706 hoặc BLE Band, tự động ánh xạ vào Smartband sẵn có
-        if any(k in clean_str.upper() for k in ["HW706", "COOSPO", "BAND", "BLE"]):
-            band_res = await db.execute(
-                select(Device.id).where(Device.device_type == DeviceType.SMARTBAND).limit(1)
-            )
-            band_id = band_res.scalar_one_or_none()
-            if band_id:
-                return band_id
-
-        # Tự động tạo bản ghi Device để đáp ứng ràng buộc khóa ngoại (Foreign Key)
+        # Tự động tạo bản ghi Device riêng biệt để đáp ứng ràng buộc khóa ngoại (Foreign Key)
         try:
             from app.models.house import House
             house_res = await db.execute(select(House.id, House.owner_id).limit(1))
             house_row = house_res.first()
-            is_band = any(k in clean_str.lower() for k in ["band", "watch", "ble", "miband", "mi_band"])
+            is_band = any(k in clean_str.lower() for k in ["band", "watch", "ble", "miband", "mi_band", "hw706", "coospo"])
             new_dev = Device(
                 device_id=clean_str,
-                name="Xiaomi Mi Band" if "mi" in clean_str.lower() or "band" in clean_str.lower() else f"Thiết bị {clean_str}",
+                name=f"Vòng đeo tay {clean_str}" if is_band else f"Thiết bị {clean_str}",
                 device_type=DeviceType.SMARTBAND if is_band else DeviceType.CAMERA,
-                sub_title="Kết nối qua App Bridge (Notify for Mi Band / Webhook)",
+                sub_title="Kết nối qua App Bridge / Đồng hồ ảo",
                 status="ONLINE",
                 is_online=True,
                 house_id=house_row[0] if house_row else None,
@@ -89,7 +79,7 @@ class CRUDVital:
             db.add(new_dev)
             await db.flush()
             await db.refresh(new_dev)
-            logger.info("[CRUDVital] Tự động khởi tạo Device '%s' (UUID: %s)", clean_str, new_dev.id)
+            logger.info("[CRUDVital] Tự động khởi tạo Device riêng '%s' (UUID: %s)", clean_str, new_dev.id)
             return new_dev.id
         except Exception as err:
             logger.warning("[CRUDVital] Không thể tự động tạo Device '%s': %s", clean_str, err)
@@ -143,10 +133,10 @@ class CRUDVital:
             try:
                 from datetime import time as dt_time
                 dt = datetime.strptime(target_date.strip(), "%Y-%m-%d").date()
-                # Bao quát cả múi giờ Việt Nam UTC+7
+                # Chuẩn hóa múi giờ Việt Nam (UTC+7: 00:00 - 23:59 VN tương ứng 17:00 UTC hôm trước - 17:00 UTC hôm nay)
                 start_of_day = datetime.combine(dt, dt_time.min, tzinfo=timezone.utc) - timedelta(hours=7)
-                end_of_day = datetime.combine(dt, dt_time.max, tzinfo=timezone.utc)
-                query = query.where(VitalSign.time >= start_of_day, VitalSign.time <= end_of_day)
+                end_of_day = start_of_day + timedelta(days=1)
+                query = query.where(VitalSign.time >= start_of_day, VitalSign.time < end_of_day)
                 # Lấy các mốc mới nhất của ngày đó, sau đó đảo ngược để vẽ biểu đồ theo thứ tự thời gian
                 query = query.order_by(VitalSign.time.desc())
             except Exception as e:
@@ -266,17 +256,55 @@ class CRUDVital:
                             f"Pin đồng hồ thông minh ({dev_name}) sắp hết (còn {battery}%). Hãy sạc pin cho cụ sớm!",
                             15
                         ))
+                    elif battery >= 25:
+                        # Khi vòng tay đã được sạc phục hồi (>= 25%), tự động giải quyết các sự cố pin cũ
+                        try:
+                            await db.execute(
+                                update(Incident)
+                                .where(
+                                    Incident.device_id == uuid_val,
+                                    Incident.alert_type.in_(["LOW_BATTERY", "DEVICE_BATTERY_DEAD"]),
+                                    Incident.is_acknowledged == False,
+                                )
+                                .values(
+                                    is_acknowledged=True,
+                                    acknowledged_at=datetime.now(timezone.utc),
+                                    notes="Tự động giải quyết: Vòng tay đã được cắm sạc phục hồi",
+                                )
+                            )
+                        except Exception as e_bat_res:
+                            logger.warning(f"[CRUDVital] Lỗi tự động giải quyết sự cố pin cũ: {e_bat_res}")
 
-                # LỌC TẦNG 2: NẾU THIẾT BỊ ĐÃ THÁO RA KHỎI TAY HOẶC CẠN PIN -> BỎ QUA CẢNH BÁO SINH TỒN GIẢ
+                # LỌC TẦNG 0: BỎ QUA CẢNH BÁO CHO MẪU ĐỒNG BỘ TRỄ TỪ QUÁ KHỨ (STALE / BATCH SYNC)
+                sample_time = obj.time
+                if isinstance(sample_time, str):
+                    try:
+                        sample_time = datetime.fromisoformat(sample_time.replace("Z", "+00:00"))
+                    except Exception:
+                        sample_time = None
+                if sample_time and not sample_time.tzinfo:
+                    sample_time = sample_time.replace(tzinfo=timezone.utc)
+
+                is_stale = False
+                if sample_time:
+                    age_seconds = (datetime.now(timezone.utc) - sample_time).total_seconds()
+                    # Mẫu cũ hơn 3 phút (180s) -> Xem như dữ liệu đồng bộ lịch sử, không kích hoạt cảnh báo thời gian thực
+                    if age_seconds > 180:
+                        is_stale = True
+
+                # LỌC TẦNG 2: NẾU DỮ LIỆU ĐỒNG BỘ TRỄ, THIẾT BỊ ĐÃ THÁO RA KHỎI TAY HOẶC CẠN PIN -> BỎ QUA CẢNH BÁO
                 is_worn = data.get("is_worn", True)
-                if is_battery_dead or is_worn is False:
+                if is_stale:
+                    logger.info(f"[CRUDVital] Mẫu sinh hiệu từ {dev_name} là dữ liệu lịch sử đo cách đây {int(age_seconds)}s -> Bỏ qua cảnh báo thời gian thực.")
+                    alerts_to_create = []
+                elif is_battery_dead or is_worn is False:
                     logger.info(f"[CRUDVital] Vòng tay {dev_name} đang tháo ra hoặc hết pin -> Bỏ qua toàn bộ cảnh báo sinh tồn giả.")
                 else:
                     hr = obj.heart_rate
                     spo2 = obj.spo2
                     temp = obj.skin_temp_max
                     activity = str(data.get("activity_state") or data.get("activity") or "").lower()
-                    is_exercising = any(k in activity for k in ["vận động", "đi lại", "chạy", "tập", "exercise", "walk"])
+                    is_exercising = bool(data.get("is_exercising")) or any(k in activity for k in ["vận động", "đi lại", "chạy", "tập", "exercise", "walk"])
 
                     # 2. KIỂM TRA TỔ HỢP ĐA YẾU TỐ (MULTI-VITAL SYNDROMES) - ƯU TIÊN CAO NHẤT
                     # A. Tam chứng nguy kịch: Sốt cao + Tim nhanh + SpO2 tụt
@@ -334,10 +362,11 @@ class CRUDVital:
                                     f"Khẩn cấp: Nhịp tim đo được từ {dev_name} tăng vọt nguy hiểm ({hr} bpm)! Nguy cơ nhịp nhanh kịch phát.",
                                     5
                                 ))
-                            elif hr > 120 or hr > hr_high_limit:
-                                # LỌC TẦNG 3: Nếu đang tập thể dục / đi lại và SpO2 tốt >= 95% -> Vận động thể lực bình thường
-                                if is_exercising and spo2 and spo2 >= 95 and hr <= 125 and hr_high_limit >= 120:
-                                    logger.info(f"[CRUDVital] Nhịp tim {hr} bpm trong lúc vận động thể dục sinh lý -> Bỏ qua báo động giả.")
+                            elif hr > hr_high_limit:
+                                # LỌC TẦNG 3: Vận động thể lực sinh lý (Tập thể dục, đi bộ, dưỡng sinh)
+                                # Nhịp tim người cao tuổi tăng sinh lý trong khoảng 100 - 130 bpm khi vận động là bình thường nếu SpO2 tốt (>= 92%)
+                                if is_exercising and (spo2 is None or spo2 >= 92) and hr <= 130:
+                                    logger.info(f"[CRUDVital] Nhịp tim {hr} bpm trong lúc vận động thể dục sinh lý (SpO2: {spo2}%) -> Bỏ qua báo động giả.")
                                 else:
                                     alerts_to_create.append((
                                         "HIGH_HEART_RATE",
@@ -417,8 +446,8 @@ class CRUDVital:
                                 bp_sys=obj.bp_systolic,
                                 skin_temp=obj.skin_temp_max,
                                 is_worn=is_worn,
-                                sqi=float(data.get("sqi", 1.0)),
-                                is_exercising=data.get("is_exercising"),
+                                sqi=float(data["sqi"]) if data.get("sqi") is not None else 1.0,
+                                is_exercising=is_exercising,
                                 activity_state=activity,
                             )
                             st_alert = await vital_state_machine.process_sample(str(uuid_val), v_sample)
@@ -433,7 +462,7 @@ class CRUDVital:
                             logger.warning(f"[CRUDVital] Lỗi VitalStateMachine: {e_sm}")
 
                 # 4. Cảnh báo té ngã từ vòng đeo tay
-                if obj.fall_detected:
+                if obj.fall_detected and not is_stale:
                     alerts_to_create.append((
                         "FALL_DETECTED",
                         "CRITICAL",
@@ -461,59 +490,118 @@ class CRUDVital:
                         alerts_to_create = [a for a in alerts_to_create if a[0] not in ("LOW_HEART_RATE", "SUDDEN_HR_DROP")]
                         alerts_to_create.insert(0, ("LOW_HEART_RATE", "CRITICAL" if hr < 45 else "HIGH", merged_msg, 5))
 
-                    # Nếu vẫn còn nhiều hơn 1 cảnh báo, chỉ giữ lại 1 cảnh báo duy nhất có mức nguy cấp cao nhất
+                    # Ưu tiên sự cố khẩn cấp (té ngã và hội chứng đa chỉ số luôn được ưu tiên cao nhất)
+                    ALERT_PRIORITY = {
+                        "FALL_DETECTED": 100,
+                        "AI_FALL_DETECTED": 100,
+                        "CRITICAL_TRIAD": 95,
+                        "CARDIO_COLLAPSE": 95,
+                        "EXERTION_HYPOXIA": 90,
+                        "HIGH_HEART_RATE": 85,
+                        "ARRHYTHMIA_RECURRENT": 80,
+                        "ARRHYTHMIA_SUSPECT": 75,
+                        "LOW_SPO2": 70,
+                        "LOW_HEART_RATE": 70,
+                        "SUDDEN_HR_SPIKE": 65,
+                        "SUDDEN_HR_DROP": 65,
+                        "HIGH_FEVER": 60,
+                        "DEVICE_BATTERY_DEAD": 50,
+                        "LOW_BATTERY": 40,
+                    }
                     if len(alerts_to_create) > 1:
-                        severity_prio = {"CRITICAL": 3, "HIGH": 2, "MEDIUM": 1, "LOW": 0}
-                        alerts_to_create.sort(key=lambda x: severity_prio.get(x[1], 0), reverse=True)
+                        alerts_to_create.sort(key=lambda x: ALERT_PRIORITY.get(x[0], 0), reverse=True)
                         alerts_to_create = [alerts_to_create[0]]
 
                 for alert_type, alert_level, alert_msg, dedup_mins in alerts_to_create:
-                    recent_limit = datetime.now(timezone.utc) - timedelta(minutes=dedup_mins)
+                    # 1. Chống lặp thông báo PIN (LOW_BATTERY / DEVICE_BATTERY_DEAD):
+                    # Nếu sự cố pin tương ứng trên thiết bị đang chưa xử lý, TUYỆT ĐỐI không tạo mới lặp lại
+                    if alert_type == "DEVICE_BATTERY_DEAD":
+                        dead_res = await db.execute(
+                            select(Incident.id).where(
+                                Incident.device_id == uuid_val,
+                                Incident.alert_type == "DEVICE_BATTERY_DEAD",
+                                Incident.is_acknowledged == False,
+                            ).limit(1)
+                        )
+                        if dead_res.scalar_one_or_none():
+                            continue
 
-                    # Lọc chống spam thông báo nhịp tim cùng loại trong khoảng thời gian dedup_mins
-                    hr_group = {"HIGH_HEART_RATE", "LOW_HEART_RATE", "SUDDEN_HR_SPIKE", "SUDDEN_HR_DROP", "ARRHYTHMIA_RECURRENT", "ARRHYTHMIA_SUSPECT"}
-                    if alert_type in hr_group:
-                        dup_filter = Incident.alert_type.in_(hr_group)
+                        # Tự động đóng các cảnh báo pin yếu cũ khi thiết bị đã cạn 0% pin
+                        try:
+                            await db.execute(
+                                update(Incident)
+                                .where(
+                                    Incident.device_id == uuid_val,
+                                    Incident.alert_type == "LOW_BATTERY",
+                                    Incident.is_acknowledged == False,
+                                )
+                                .values(
+                                    is_acknowledged=True,
+                                    acknowledged_at=datetime.now(timezone.utc),
+                                    notes="Tự động đóng: Vòng tay đã chuyển sang trạng thái cạn pin (0%)",
+                                )
+                            )
+                        except Exception:
+                            pass
+                    elif alert_type == "LOW_BATTERY":
+                        low_res = await db.execute(
+                            select(Incident.id).where(
+                                Incident.device_id == uuid_val,
+                                Incident.alert_type.in_(["LOW_BATTERY", "DEVICE_BATTERY_DEAD"]),
+                                Incident.is_acknowledged == False,
+                            ).limit(1)
+                        )
+                        if low_res.scalar_one_or_none():
+                            continue
                     else:
-                        dup_filter = (Incident.alert_type == alert_type)
+                        recent_limit = datetime.now(timezone.utc) - timedelta(minutes=dedup_mins)
 
-                    dup_res = await db.execute(
-                        select(Incident.id).where(
-                            Incident.device_id == uuid_val,
-                            dup_filter,
-                            Incident.is_acknowledged == False,
-                            Incident.created_at >= recent_limit,
-                        ).limit(1)
-                    )
-                    if not dup_res.scalar_one_or_none():
-                        inc = await crud_incident.create(db, data={
-                            "device_id": uuid_val,
-                            "alert_type": alert_type,
-                            "alert_level": alert_level,
-                            "message": alert_msg,
-                            "is_acknowledged": False,
-                        })
-                        await db.flush()
+                        # Lọc chống spam thông báo nhịp tim cùng loại trong khoảng thời gian dedup_mins
+                        hr_group = {"HIGH_HEART_RATE", "LOW_HEART_RATE", "SUDDEN_HR_SPIKE", "SUDDEN_HR_DROP", "ARRHYTHMIA_RECURRENT", "ARRHYTHMIA_SUSPECT"}
+                        if alert_type in hr_group:
+                            dup_filter = Incident.alert_type.in_(hr_group)
+                        else:
+                            dup_filter = (Incident.alert_type == alert_type)
 
-                        alert_payload_dict = {
-                            "id": str(inc.id),
-                            "device_id": str(uuid_val),
-                            "device_name": dev_name,
-                            "location": dev.location if dev and dev.location else "Trong nhà",
-                            "alert_type": alert_type,
-                            "alert_level": alert_level,
-                            "message": alert_msg,
-                            "created_at": datetime.now(timezone.utc).isoformat(),
-                        }
+                        dup_res = await db.execute(
+                            select(Incident.id).where(
+                                Incident.device_id == uuid_val,
+                                dup_filter,
+                                Incident.is_acknowledged == False,
+                                Incident.created_at >= recent_limit,
+                            ).limit(1)
+                        )
+                        if dup_res.scalar_one_or_none():
+                            continue
 
-                        # Kích hoạt bộ đếm ngược Leo thang Khẩn cấp Tự động (45s) cho sự cố té ngã / nguy kịch
-                        if alert_type in ("FALL_DETECTED", "AI_FALL_DETECTED", "CRITICAL_TRIAD", "CARDIO_COLLAPSE"):
-                            try:
-                                from app.services.escalation_service import schedule_auto_escalation, DEFAULT_ESCALATION_DELAY_SECONDS
-                                schedule_auto_escalation(new_incident.id, DEFAULT_ESCALATION_DELAY_SECONDS)
-                                alert_payload_dict["escalation_seconds"] = DEFAULT_ESCALATION_DELAY_SECONDS
-                            except Exception:
-                                pass
+                    inc = await crud_incident.create(db, data={
+                        "device_id": uuid_val,
+                        "alert_type": alert_type,
+                        "alert_level": alert_level,
+                        "message": alert_msg,
+                        "is_acknowledged": False,
+                    })
+                    await db.flush()
+
+                    alert_payload_dict = {
+                        "id": str(inc.id),
+                        "device_id": str(uuid_val),
+                        "device_name": dev_name,
+                        "location": dev.location if dev and dev.location else "Trong nhà",
+                        "alert_type": alert_type,
+                        "alert_level": alert_level,
+                        "message": alert_msg,
+                        "created_at": datetime.now(timezone.utc).isoformat(),
+                    }
+
+                    # Kích hoạt bộ đếm ngược Leo thang Khẩn cấp Tự động (45s) cho sự cố té ngã / nguy kịch
+                    if alert_type in ("FALL_DETECTED", "AI_FALL_DETECTED", "CRITICAL_TRIAD", "CARDIO_COLLAPSE"):
+                        try:
+                            from app.services.escalation_service import schedule_auto_escalation, DEFAULT_ESCALATION_DELAY_SECONDS
+                            schedule_auto_escalation(inc.id, DEFAULT_ESCALATION_DELAY_SECONDS)
+                            alert_payload_dict["escalation_seconds"] = DEFAULT_ESCALATION_DELAY_SECONDS
+                        except Exception as e_esc:
+                            logger.exception(f"[CRUDVital] Lỗi kích hoạt auto escalation: {e_esc}")
 
                         # Lưu vào hàng đợi RAM Redis cho Doctor Web & Mobile tải tức thời
                         try:
@@ -692,12 +780,12 @@ class CRUDVital:
 
         result = await db.execute(
             select(
-                func.min(VitalSign.heart_rate).label("hr_min"),
-                func.max(VitalSign.heart_rate).label("hr_max"),
-                func.avg(VitalSign.heart_rate).label("hr_avg"),
-                func.min(VitalSign.spo2).label("spo2_min"),
-                func.max(VitalSign.spo2).label("spo2_max"),
-                func.avg(VitalSign.spo2).label("spo2_avg"),
+                func.min(VitalSign.heart_rate).filter(VitalSign.heart_rate > 0).label("hr_min"),
+                func.max(VitalSign.heart_rate).filter(VitalSign.heart_rate > 0).label("hr_max"),
+                func.avg(VitalSign.heart_rate).filter(VitalSign.heart_rate > 0).label("hr_avg"),
+                func.min(VitalSign.spo2).filter(VitalSign.spo2 > 0).label("spo2_min"),
+                func.max(VitalSign.spo2).filter(VitalSign.spo2 > 0).label("spo2_max"),
+                func.avg(VitalSign.spo2).filter(VitalSign.spo2 > 0).label("spo2_avg"),
                 func.count().filter(VitalSign.fall_detected.is_(True)).label("fall_count"),
             ).where(
                 VitalSign.device_id == uuid_val,
