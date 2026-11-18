@@ -178,6 +178,10 @@ export const evaluateVitalFallRisk = (v: any): number => {
     } else {
       risk += 20 + ratio * 30;
     }
+  } else if (hr >= 85) {
+    // Nhịp tim tăng khi nghỉ ở người cao tuổi (85 - 100 bpm) -> Tăng nguy cơ chóng mặt/té ngã
+    const ratio = (hr - 85) / 15;
+    risk += Math.round(5 + ratio * 10);
   } else if (hr <= 58) {
     const ratio = Math.max(0, Math.min(1, (58 - hr) / 14));
     risk += 25 + ratio * 35;
@@ -296,35 +300,67 @@ export const buildTelemetryData = (
   const days = timeRange === 'week' ? 7 : 30;
   const dayMap = new Map<string, BucketAccumulator>();
 
+  const toKey = (d: Date): string => {
+    const y = d.getFullYear();
+    const m = String(d.getMonth() + 1).padStart(2, '0');
+    const day = String(d.getDate()).padStart(2, '0');
+    return `${y}-${m}-${day}`;
+  };
+
   // 1. Tải dữ liệu tổng hợp hàng ngày chính xác từ DB
   for (const s of dailySummary) {
     if (!s.date) continue;
-    dayMap.set(s.date, {
+    const cleanDate = String(s.date).split('T')[0];
+    const shortKey = cleanDate.length >= 10 ? cleanDate.slice(5, 10) : cleanDate;
+
+    // Đánh giá chỉ số bất ổn sinh hiệu & nguy cơ ngã tổng hợp đồng nhất cho toàn bộ các ngày:
+    // Nếu ngày có cảnh báo té ngã (fallMax >= 90) -> 95;
+    // Ngược lại, tính toán đồng bộ theo chỉ số sinh hiệu (HR, SpO2, Huyết áp, Thân nhiệt)
+    const evaluatedFall = (s.fallMax ?? 0) >= 90 || (s.fallRisk ?? 0) >= 90
+      ? 95
+      : evaluateVitalFallRisk({
+          heart_rate: s.heartRate,
+          spo2: s.spo2,
+          bp_systolic: s.bloodPressure,
+          skin_temp_max: s.temperature,
+          fall_detected: false,
+          is_worn: true,
+        });
+
+    const bucket: BucketAccumulator = {
       hrSum: s.heartRate ?? 0, hrCnt: s.heartRate != null ? 1 : 0,
       spo2Sum: s.spo2 ?? 0, spo2Cnt: s.spo2 != null ? 1 : 0,
       bpSum: s.bloodPressure ?? 0, bpCnt: s.bloodPressure != null ? 1 : 0,
       tempSum: s.temperature ?? 0, tempCnt: s.temperature != null ? 1 : 0,
-      fallSum: s.fallRisk ?? 0, fallCnt: s.fallRisk != null ? 1 : 0,
-      fallMax: s.fallMax ?? 0,
+      fallSum: evaluatedFall, fallCnt: 1,
+      fallMax: Math.max(s.fallMax ?? 0, evaluatedFall),
       alerts: s.alerts ?? 0,
-    });
+    };
+    dayMap.set(cleanDate, bucket);
+    dayMap.set(shortKey, bucket);
   }
 
   // 2. Dự phòng hoặc bù đắp từ rawVitals nếu ngày chưa có trong dailySummary
   for (const v of rawVitals) {
-    if (!v.time) continue;
-    const dKey = new Date(v.time).toISOString().slice(5, 10);
-    const cur = dayMap.get(dKey) || createBucket();
+    const rawTime = v.time || v.recorded_at;
+    if (!rawTime) continue;
+    const vd = new Date(rawTime);
+    if (isNaN(vd.getTime())) continue;
+    const key = toKey(vd);
+    const shortKey = `${String(vd.getMonth() + 1).padStart(2, '0')}-${String(vd.getDate()).padStart(2, '0')}`;
+    const cur = dayMap.get(key) || dayMap.get(shortKey) || createBucket();
     accumulateVital(cur, v, 35);
-    dayMap.set(dKey, cur);
+    dayMap.set(key, cur);
+    dayMap.set(shortKey, cur);
   }
 
   const points: TelemetryPoint[] = [];
   for (let i = days - 1; i >= 0; i--) {
-    const d = new Date(now.getTime() - i * 86400 * 1000);
+    const d = new Date(now.getFullYear(), now.getMonth(), now.getDate() - i);
+    const fullKey = toKey(d);
+    const shortKey = `${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
     const dateLabel = `${String(d.getDate()).padStart(2, '0')}/${String(d.getMonth() + 1).padStart(2, '0')}`;
-    const dKey = d.toISOString().slice(5, 10);
-    const rec = dayMap.get(dKey);
+    const rec = dayMap.get(fullKey) || dayMap.get(shortKey);
 
     const hasHr = Boolean(rec && rec.hrCnt > 0);
     const hasSpo2 = Boolean(rec && rec.spo2Cnt > 0);

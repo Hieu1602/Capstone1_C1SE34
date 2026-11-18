@@ -358,7 +358,7 @@ export default function IncidentDetailScreen({ route, navigation }: any) {
         {!incident.is_acknowledged ? (
           <TouchableOpacity style={styles.ackBtn} onPress={() => setConfirmModal('ACK')} activeOpacity={0.8}>
             <Ionicons name="checkmark-circle" size={20} color="#FFF" />
-            <Text style={styles.ackBtnText}>Đánh dấu đã xử lý</Text>
+            <Text style={styles.ackBtnText}>Xác nhận đã xử lý sự cố</Text>
           </TouchableOpacity>
         ) : (
           <View style={{ gap: 10, marginTop: 8 }}>
