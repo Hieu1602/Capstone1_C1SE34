@@ -208,6 +208,35 @@ export default function HomeScreen({ navigation }: any) {
       (i.alert_type === 'APPOINTMENT_SCHEDULED' || i.alert_type === 'APPOINTMENT_REQUESTED')
   );
 
+  const appointmentPatientInfo = React.useMemo(() => {
+    if (!pendingAppointmentNotice) return { id: patientRecord?.patient_id || 1, name: patientRecord?.name };
+    let pid: any = null;
+    let pname: string | null = null;
+    if (pendingAppointmentNotice.notes?.includes('PATIENT:')) {
+      pid = pendingAppointmentNotice.notes.split('PATIENT:')[1].split('|')[0].trim();
+    }
+    if (pendingAppointmentNotice.notes?.includes('NAME:')) {
+      pname = pendingAppointmentNotice.notes.split('NAME:')[1].split('|')[0].trim();
+    }
+    if (!pname && pendingAppointmentNotice.message) {
+      const match = pendingAppointmentNotice.message.match(/cho\s+([^,]+?)\s+vào\s+/i);
+      if (match && match[1]) pname = match[1].trim();
+    }
+    const pList = (patientsList && patientsList.length > 0) ? patientsList : (usePatientStore.getState().patientsList || []);
+    if (pname && !pid) {
+      const found = pList.find((p: any) => (p.name || p.full_name)?.toLowerCase().trim() === pname?.toLowerCase().trim());
+      if (found) pid = found.id || found.elderly_id;
+    }
+    if (pid && !pname) {
+      const found = pList.find((p: any) => p.id === pid || p.elderly_id === pid);
+      if (found) pname = found.name || found.full_name;
+    }
+    return {
+      id: pid || (pendingAppointmentNotice.device_id && !isNaN(Number(pendingAppointmentNotice.device_id)) ? pendingAppointmentNotice.device_id : (patientRecord?.patient_id || 1)),
+      name: pname || (pid && pList.find((p: any) => p.id === pid || p.elderly_id === pid)?.name) || patientRecord?.name || 'Bệnh nhân',
+    };
+  }, [pendingAppointmentNotice, patientsList, patientRecord]);
+
   const handleConfirmSnooze = async () => {
     if (!isOwnerOrAdmin) {
       Alert.alert('Quyền truy cập bị giới hạn', 'Tài khoản Thành viên chỉ có quyền xem dữ liệu, không thể thay đổi cài đặt chuông báo động.');
@@ -528,8 +557,8 @@ export default function HomeScreen({ navigation }: any) {
 
       <FamilyAppointmentsModal
         visible={familyAppointmentsModalVisible}
-        patientId={pendingAppointmentNotice?.device_id && !isNaN(Number(pendingAppointmentNotice.device_id)) ? pendingAppointmentNotice.device_id : (patientRecord?.patient_id || 1)}
-        patientName={patientRecord?.name}
+        patientId={appointmentPatientInfo.id}
+        patientName={appointmentPatientInfo.name}
         onClose={() => { setFamilyAppointmentsModalVisible(false); fetchNotifications(); }}
       />
     </SafeAreaView>

@@ -67,7 +67,7 @@ export const CriticalEscalationModal: React.FC = () => {
   // Bộ đếm ngược an toàn mỗi 1 giây
   useEffect(() => {
     if (!activeEscalation || !autoCallEnabled) return;
-    if (activeEscalation.status === 'ESCALATED' || hasAutoCalled) return;
+    if (hasAutoCalled) return;
 
     const timer = setInterval(() => {
       setSecondsLeft((prev) => {
@@ -80,25 +80,28 @@ export const CriticalEscalationModal: React.FC = () => {
     }, 1000);
 
     return () => clearInterval(timer);
-  }, [activeEscalation, autoCallEnabled, hasAutoCalled]);
+  }, [activeEscalation?.incidentId, autoCallEnabled, hasAutoCalled]);
 
-  // Tự động kích hoạt gọi cấp cứu khi đếm ngược về 0
+  // Tự động kích hoạt gọi số khẩn cấp khi đếm ngược về 0 HOẶC khi nhận tín hiệu ESCALATED từ server
   useEffect(() => {
     if (!activeEscalation || !autoCallEnabled) return;
-    if (secondsLeft === 0 && !hasAutoCalled) {
+    const isTimeToCall = secondsLeft === 0 || activeEscalation.status === 'ESCALATED';
+    if (isTimeToCall && !hasAutoCalled) {
       setHasAutoCalled(true);
-      markEscalated(activeEscalation.incidentId);
+      if (activeEscalation.status !== 'ESCALATED') {
+        markEscalated(activeEscalation.incidentId);
+      }
       // Gửi API báo server đã tự động kích hoạt gọi cấp cứu
       incidentsApi
         .escalate(
           activeEscalation.incidentId,
-          'Hệ thống đã tự động kích hoạt gọi cấp cứu 115 sau khi hết thời gian chờ'
+          'Hệ thống đã tự động kích hoạt gọi số khẩn cấp sau khi hết thời gian chờ'
         )
         .catch(() => {});
       // Tự động gọi qua Native ACTION_CALL trên Android APK (fallback tel: trên Web/iOS)
       void dialEmergencyNumber(EMERGENCY_TEST_PHONE).catch(() => {});
     }
-  }, [secondsLeft, activeEscalation, autoCallEnabled, hasAutoCalled, markEscalated]);
+  }, [secondsLeft, activeEscalation?.status, activeEscalation?.incidentId, autoCallEnabled, hasAutoCalled, markEscalated]);
 
   if (!activeEscalation) {
     return null;
@@ -173,8 +176,8 @@ export const CriticalEscalationModal: React.FC = () => {
             {!autoCallEnabled
               ? 'Đang chờ người nhà xác nhận hỗ trợ tại chỗ'
               : isEscalatedState
-                ? 'Đang tự động kết nối cấp cứu 115...'
-                : `Tự động gọi cấp cứu 115 sau ${secondsLeft}s...`}
+                ? `Đang tự động quay số khẩn cấp (${EMERGENCY_TEST_PHONE})...`
+                : `Tự động gọi khẩn cấp (${EMERGENCY_TEST_PHONE}) sau ${secondsLeft}s...`}
           </Text>
 
           {/* Khối thông tin bệnh nhân & vị trí */}

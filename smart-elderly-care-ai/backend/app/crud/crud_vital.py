@@ -594,12 +594,15 @@ class CRUDVital:
                         "created_at": datetime.now(timezone.utc).isoformat(),
                     }
 
-                    # Kích hoạt bộ đếm ngược Leo thang Khẩn cấp Tự động (45s) cho sự cố té ngã / nguy kịch
-                    if alert_type in ("FALL_DETECTED", "AI_FALL_DETECTED", "CRITICAL_TRIAD", "CARDIO_COLLAPSE"):
+                    # Kích hoạt bộ đếm ngược Leo thang Khẩn cấp Tự động (15s) cho sự cố té ngã / nguy kịch
+                    if alert_type in ("FALL_DETECTED", "AI_FALL_DETECTED", "CRITICAL_TRIAD", "CARDIO_COLLAPSE", "HIGH_HEART_RATE", "LOW_HEART_RATE") or alert_level == "CRITICAL":
                         try:
-                            from app.services.escalation_service import schedule_auto_escalation, DEFAULT_ESCALATION_DELAY_SECONDS
-                            schedule_auto_escalation(inc.id, DEFAULT_ESCALATION_DELAY_SECONDS)
-                            alert_payload_dict["escalation_seconds"] = DEFAULT_ESCALATION_DELAY_SECONDS
+                            from app.services.escalation_service import schedule_auto_escalation, check_recent_stood_down, DEFAULT_ESCALATION_DELAY_SECONDS
+                            is_relapse = check_recent_stood_down(uuid_val)
+                            # Nếu tái phát trong 5 phút sau STOOD_DOWN -> Kích hoạt gọi ngay lập tức (delay = 0)
+                            delay_sec = 0 if is_relapse else DEFAULT_ESCALATION_DELAY_SECONDS
+                            schedule_auto_escalation(inc.id, delay_seconds=delay_sec)
+                            alert_payload_dict["escalation_seconds"] = delay_sec
                         except Exception as e_esc:
                             logger.exception(f"[CRUDVital] Lỗi kích hoạt auto escalation: {e_esc}")
 

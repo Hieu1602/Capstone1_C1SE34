@@ -505,8 +505,9 @@ def _run_scenario(args, name: str, spec: dict) -> bool:
         print("(dry-run: bỏ qua kiểm tra incident)")
         return True
     host = args.host.rstrip("/")
+    inc_url = args.incidents_url or (f"{host}/api/v1/incidents" if multi else f"{host}/api/v1/incidents?device_id={args.device}")
     try:
-        incidents = fetch_incidents(args.incidents_url or f"{host}/api/v1/incidents", args.token, start)
+        incidents = fetch_incidents(inc_url, args.token, start)
     except Exception as e:
         print(f"KHÔNG ĐỌC ĐƯỢC incident ({e}). Kiểm tra --incidents-url / --token.")
         return False
@@ -600,7 +601,7 @@ def run_interactive(args):
 
 def main():
     ap = argparse.ArgumentParser(description="SECA Virtual Smartwatch v2")
-    ap.add_argument("--host", default="http://localhost:8000")
+    ap.add_argument("--host", default="http://127.0.0.1:8000")
     ap.add_argument("--device", default="BLE_BAND_001")
     ap.add_argument("--device-b", default="BLE_BAND_002", help="Thiết bị thứ hai (kịch bản two_devices_isolated)")
     ap.add_argument("--devices-url", default="", help="Mặc định {host}/api/v1/devices")
