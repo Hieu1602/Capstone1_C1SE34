@@ -111,21 +111,46 @@ class ChatbotContextBuilder:
         if (now_ts - cached_ts) < cached_ttl and _STATIC_CARE_CACHE.get("patient"):
             # Tái sử dụng ngữ cảnh tĩnh từ bộ nhớ đệm
             context["patient"] = _STATIC_CARE_CACHE.get("patient", {})
+            context["patients"] = _STATIC_CARE_CACHE.get("patients", [])
             context["doctor"] = _STATIC_CARE_CACHE.get("doctor")
             context["appointment"] = _STATIC_CARE_CACHE.get("appointment")
         else:
-            # 3. Hồ sơ người cao tuổi
+            # 3. Hồ sơ người cao tuổi trong gia đình (Hỗ trợ đa người cao tuổi)
             try:
-                res = await db.execute(select(ElderlyProfile).limit(1))
-                profile = res.scalar_one_or_none()
-                if profile:
-                    context["patient"] = {
-                        "full_name": profile.full_name or "Người cao tuổi",
-                        "birth_year": profile.birth_year,
-                        "gender": profile.gender,
-                        "medical_history": profile.medical_history or "Chưa ghi nhận bệnh nền",
-                        "emergency_contact": profile.emergency_contact_phone or "Chưa cập nhật",
-                    }
+                target_house_ids = []
+                if effective_user_id:
+                    hm_res = await db.execute(
+                        select(HouseMember.house_id).where(HouseMember.user_id == effective_user_id)
+                    )
+                    target_house_ids = list(hm_res.scalars().all())
+
+                if target_house_ids:
+                    p_stmt = (
+                        select(ElderlyProfile)
+                        .where(ElderlyProfile.house_id.in_(target_house_ids))
+                        .order_by(ElderlyProfile.created_at.asc())
+                    )
+                else:
+                    p_stmt = select(ElderlyProfile).order_by(ElderlyProfile.created_at.asc())
+
+                res = await db.execute(p_stmt)
+                profiles = list(res.scalars().all())
+                if profiles:
+                    context["patients"] = [
+                        {
+                            "id": str(p.id),
+                            "full_name": p.full_name or "Người cao tuổi",
+                            "birth_year": p.birth_year,
+                            "gender": p.gender or "Chưa rõ",
+                            "medical_history": p.medical_history or "Chưa ghi nhận bệnh nền",
+                            "emergency_contact": p.emergency_contact_phone or "Chưa cập nhật",
+                        }
+                        for p in profiles
+                    ]
+                    context["patient"] = context["patients"][0]
+                else:
+                    context["patients"] = []
+                    context["patient"] = {}
             except Exception as e:
                 logger.warning("Lỗi truy vấn hồ sơ người cao tuổi từ DB: %s", e)
 
@@ -172,6 +197,7 @@ class ChatbotContextBuilder:
 
             # Lưu vào cache 60s
             _STATIC_CARE_CACHE["patient"] = context["patient"]
+            _STATIC_CARE_CACHE["patients"] = context.get("patients", [])
             _STATIC_CARE_CACHE["doctor"] = context["doctor"]
             _STATIC_CARE_CACHE["appointment"] = context["appointment"]
             _STATIC_CARE_CACHE["timestamp"] = now_ts
