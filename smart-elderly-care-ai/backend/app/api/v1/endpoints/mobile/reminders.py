@@ -17,7 +17,7 @@ import uuid
 from datetime import datetime
 from typing import Any, Dict, List, Optional
 
-from fastapi import APIRouter, Depends, HTTPException, status
+from fastapi import APIRouter, Depends, HTTPException, Query, status
 from pydantic import BaseModel, Field
 from redis.asyncio import Redis
 
@@ -37,6 +37,7 @@ class ReminderItemIn(BaseModel):
     dose: str = Field(default="", description="Liều lượng (VD: 1 viên sau ăn)")
     purpose: str = Field(default="", description="Mục đích sử dụng hoặc bệnh nền liên quan")
     category: str = Field(default="MEDICATION", description="MEDICATION, VITALS, ACTIVITY, REST")
+    patient_id: Optional[str] = Field(default=None, description="ID người cao tuổi")
 
 
 class MedicationItemIn(BaseModel):
@@ -52,26 +53,29 @@ class PrescriptionCreateIn(BaseModel):
     start_date: str = Field(..., description="Ngày bắt đầu uống (YYYY-MM-DD)")
     end_date: str = Field(..., description="Ngày kết thúc đợt thuốc (YYYY-MM-DD)")
     medications: List[MedicationItemIn] = Field(..., description="Danh sách các loại thuốc trong đơn")
+    patient_id: Optional[str] = Field(default=None, description="ID người cao tuổi")
 
 
-def _get_redis_key(user_id: Optional[str], date_str: str) -> str:
-    uid = user_id or "default_user"
+def _get_redis_key(target_id: Optional[str], date_str: str) -> str:
+    uid = target_id or "default_user"
     return f"reminders:{uid}:{date_str}"
 
 
 @router.get("/today", summary="Lấy danh sách nhắc nhở hôm nay của cụ")
 async def get_today_reminders(
+    patient_id: Optional[str] = Query(None, description="Lọc theo ID người cao tuổi"),
     current_user: Optional[User] = Depends(get_current_user_optional),
     redis: Redis = Depends(get_redis),
 ) -> Dict[str, Any]:
     """
     Trả về dữ liệu lịch nhắc nhở thực tế trong ngày:
     - Nếu chưa có cữ thuốc nào được tạo: trả về danh sách rỗng (Zero Fake Data).
-    - Đồng bộ theo ngày hiện tại và tài khoản người dùng.
+    - Đồng bộ theo ngày hiện tại, tài khoản người dùng và ID người cao tuổi.
     """
     today_str = datetime.now().strftime("%Y-%m-%d")
     user_id_str = str(current_user.id) if current_user else None
-    redis_key = _get_redis_key(user_id_str, today_str)
+    target_id = patient_id or user_id_str
+    redis_key = _get_redis_key(target_id, today_str)
 
     medications: List[Dict[str, Any]] = []
     meals: List[Dict[str, Any]] = []
@@ -88,15 +92,60 @@ async def get_today_reminders(
     except Exception as exc:
         logger.warning("[Reminders] Lỗi khi truy vấn nhắc nhở từ Redis: %s", exc)
 
+    # Nạp danh sách đơn thuốc từ Bác sĩ (nếu có)
+    doctor_prescriptions: List[Dict[str, Any]] = []
+    if patient_id:
+        try:
+            from app.crud.crud_doctor import crud_doctor
+            rxs = crud_doctor.get_prescriptions(patient_id)
+            for rx in rxs:
+                rx_dict = {
+                    "id": rx.id,
+                    "patient_id": rx.patient_id,
+                    "medication_name": rx.medication_name,
+                    "dosage": rx.dosage,
+                    "quantity": rx.quantity,
+                    "frequency": rx.frequency,
+                    "schedule_times": rx.schedule_times,
+                    "instructions": rx.instructions,
+                    "doctor_name": rx.doctor_name,
+                    "enable_speaker_reminder": rx.enable_speaker_reminder,
+                    "created_at": rx.created_at,
+                }
+                doctor_prescriptions.append(rx_dict)
+
+                # Nếu trong Redis chưa có cữ nào, tự động điền các cữ từ đơn thuốc Bác sĩ
+                if not raw_data:
+                    times = rx.schedule_times or ["08:00"]
+                    for t in times:
+                        session = "MORNING" if t < "11:00" else ("NOON" if t < "14:00" else "EVENING")
+                        medications.append({
+                            "id": f"rx-med-{rx.id}-{t.replace(':', '')}",
+                            "name": rx.medication_name,
+                            "time": t,
+                            "session": session,
+                            "dose": f"{rx.dosage}{f' ({rx.instructions})' if rx.instructions else ''}",
+                            "purpose": f"Chỉ định bởi {rx.doctor_name or 'Bác sĩ'}",
+                            "category": "MEDICATION",
+                            "taken": False,
+                            "from_doctor": True,
+                            "doctor_name": rx.doctor_name,
+                            "created_at": rx.created_at or today_str,
+                        })
+        except Exception as doc_err:
+            logger.warning("[Reminders] Lỗi khi nạp đơn thuốc bác sĩ: %s", doc_err)
+
     completed_count = sum(1 for m in medications if m.get("taken", False))
 
     return {
         "date": today_str,
+        "patient_id": patient_id,
         "total_medications": len(medications),
         "completed_medications": completed_count,
         "hub_voice_reminder_enabled": True,
         "medications": medications,
         "meals": meals,
+        "doctor_prescriptions": doctor_prescriptions,
     }
 
 
@@ -109,7 +158,8 @@ async def create_reminder(
     """Thêm một cữ thuốc hoặc hoạt động nhắc nhở thực tế cho người cao tuổi."""
     today_str = datetime.now().strftime("%Y-%m-%d")
     user_id_str = str(current_user.id) if current_user else None
-    redis_key = _get_redis_key(user_id_str, today_str)
+    target_id = item_in.patient_id or user_id_str
+    redis_key = _get_redis_key(target_id, today_str)
 
     medications: List[Dict[str, Any]] = []
     meals: List[Dict[str, Any]] = []
@@ -134,6 +184,7 @@ async def create_reminder(
         "dose": item_in.dose,
         "purpose": item_in.purpose,
         "category": item_in.category,
+        "patient_id": item_in.patient_id,
         "taken": False,
         "created_at": datetime.now().isoformat(),
     }
@@ -163,7 +214,8 @@ async def create_prescription(
     """
     today_str = datetime.now().strftime("%Y-%m-%d")
     user_id_str = str(current_user.id) if current_user else None
-    redis_key = _get_redis_key(user_id_str, today_str)
+    target_id = prescription_in.patient_id or user_id_str
+    redis_key = _get_redis_key(target_id, today_str)
 
     medications: List[Dict[str, Any]] = []
     meals: List[Dict[str, Any]] = []
@@ -205,6 +257,7 @@ async def create_prescription(
                 "start_date": prescription_in.start_date,
                 "end_date": prescription_in.end_date,
                 "diagnosis": prescription_in.diagnosis,
+                "patient_id": prescription_in.patient_id,
                 "taken": False,
                 "created_at": datetime.now().isoformat(),
             }
@@ -217,10 +270,11 @@ async def create_prescription(
     }
     await redis.set(redis_key, json.dumps(data_to_store), ex=7 * 86400)
 
-    # Lưu đơn thuốc theo tài khoản
-    rx_key = f"prescriptions:{user_id_str or 'default_user'}"
+    # Lưu đơn thuốc theo tài khoản hoặc người cao tuổi
+    rx_key = f"prescriptions:{target_id or 'default_user'}"
     rx_entry = {
         "id": f"rx-{uuid.uuid4().hex[:8]}",
+        "patient_id": prescription_in.patient_id,
         "diagnosis": prescription_in.diagnosis,
         "start_date": prescription_in.start_date,
         "end_date": prescription_in.end_date,
@@ -247,13 +301,15 @@ async def create_prescription(
 @router.put("/{reminder_id}/toggle", summary="Đánh dấu đã uống hoặc chưa uống thuốc")
 async def toggle_reminder(
     reminder_id: str,
+    patient_id: Optional[str] = Query(None, description="Lọc theo ID người cao tuổi"),
     current_user: Optional[User] = Depends(get_current_user_optional),
     redis: Redis = Depends(get_redis),
 ) -> Dict[str, Any]:
     """Cập nhật trạng thái đã uống thuốc / hoàn thành một cữ nhắc nhở."""
     today_str = datetime.now().strftime("%Y-%m-%d")
     user_id_str = str(current_user.id) if current_user else None
-    redis_key = _get_redis_key(user_id_str, today_str)
+    target_id = patient_id or user_id_str
+    redis_key = _get_redis_key(target_id, today_str)
 
     try:
         raw_data = await redis.get(redis_key)
@@ -288,13 +344,15 @@ async def toggle_reminder(
 @router.delete("/{reminder_id}", summary="Xóa một mục nhắc nhở")
 async def delete_reminder(
     reminder_id: str,
+    patient_id: Optional[str] = Query(None, description="Lọc theo ID người cao tuổi"),
     current_user: Optional[User] = Depends(get_current_user_optional),
     redis: Redis = Depends(get_redis),
 ) -> Dict[str, Any]:
     """Xóa một cữ thuốc khỏi lịch nhắc nhở hôm nay."""
     today_str = datetime.now().strftime("%Y-%m-%d")
     user_id_str = str(current_user.id) if current_user else None
-    redis_key = _get_redis_key(user_id_str, today_str)
+    target_id = patient_id or user_id_str
+    redis_key = _get_redis_key(target_id, today_str)
 
     try:
         raw_data = await redis.get(redis_key)

@@ -68,6 +68,7 @@ export interface RemindersData {
   hub_voice_reminder_enabled: boolean;
   medications: ReminderItem[];
   meals: Array<{ name: string; time: string; completed: boolean; note: string }>;
+  doctor_prescriptions?: any[];
 }
 
 export const DEFAULT_MEDICATIONS: ReminderItem[] = [];
@@ -82,8 +83,8 @@ interface PatientState {
   isLoadingList: boolean;
 
   // Actions
-  fetchReminders: () => Promise<RemindersData | null>;
-  markMedicationTaken: (idOrName: string, taken?: boolean, takenAt?: string) => Promise<void>;
+  fetchReminders: (patientId?: string | number) => Promise<RemindersData | null>;
+  markMedicationTaken: (idOrName: string, taken?: boolean, takenAt?: string, patientId?: string | number) => Promise<void>;
   snoozeMedication: (idOrName: string, minutes?: number) => void;
   fetchPatientsList: () => Promise<any[]>;
   setActivePatientId: (patientId: string | number) => void;
@@ -168,10 +169,11 @@ export const usePatientStore = create<PatientState>()((set, get) => ({
     return false;
   },
 
-  fetchReminders: async () => {
+  fetchReminders: async (patientId?: string | number) => {
     set({ isLoadingReminders: true });
     try {
-      const res = await remindersApi.getToday();
+      const targetId = patientId || get().activePatientId || undefined;
+      const res = await remindersApi.getToday(targetId);
       if (res.data) {
         const meds = Array.isArray(res.data.medications) ? res.data.medications : [];
         const completed = meds.filter((m: any) => m.taken).length;
@@ -201,7 +203,7 @@ export const usePatientStore = create<PatientState>()((set, get) => ({
     return null;
   },
 
-  markMedicationTaken: async (idOrName: string, taken: boolean = true, takenAt?: string) => {
+  markMedicationTaken: async (idOrName: string, taken: boolean = true, takenAt?: string, patientId?: string | number) => {
     const timeStr = takenAt || new Date().toLocaleTimeString('vi-VN', { hour: '2-digit', minute: '2-digit' });
     set((state) => {
       const currentList = state.todayReminders?.medications || [];
@@ -232,7 +234,7 @@ export const usePatientStore = create<PatientState>()((set, get) => ({
 
     try {
       if (idOrName && !idOrName.startsWith('med-')) {
-        await remindersApi.toggle(idOrName);
+        await remindersApi.toggle(idOrName, patientId || get().activePatientId || undefined);
       }
     } catch {
       // offline fallback

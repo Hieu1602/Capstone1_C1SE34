@@ -309,11 +309,14 @@ export const vitalsApi = {
 
 // 3. Reminders API
 export const remindersApi = {
-  getToday: () => api.get('/reminders/today'),
+  getToday: (patientId?: string | number) =>
+    api.get('/reminders/today', { params: patientId ? { patient_id: patientId } : undefined }),
   create: (data: any) => api.post('/reminders', data),
   createPrescription: (data: any) => api.post('/reminders/prescription', data),
-  toggle: (reminderId: string) => api.put(`/reminders/${reminderId}/toggle`),
-  delete: (reminderId: string) => api.delete(`/reminders/${reminderId}`),
+  toggle: (reminderId: string, patientId?: string | number) =>
+    api.put(`/reminders/${reminderId}/toggle`, null, { params: patientId ? { patient_id: patientId } : undefined }),
+  delete: (reminderId: string, patientId?: string | number) =>
+    api.delete(`/reminders/${reminderId}`, { params: patientId ? { patient_id: patientId } : undefined }),
 };
 
 // 4. Patients & Medical Record API
